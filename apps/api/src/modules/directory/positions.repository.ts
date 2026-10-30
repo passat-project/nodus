@@ -20,6 +20,17 @@ export class PositionsRepository {
     return this.prisma.position.findUnique({ where: { id } });
   }
 
+  /** Ссылка-должность (валидация оргструктуры #441): вид и активность. */
+  async findRef(
+    id: string,
+    tx?: TransactionClient,
+  ): Promise<{ id: string; kind: 'management' | 'legal'; isActive: boolean } | null> {
+    return (tx ?? this.prisma).position.findUnique({
+      where: { id },
+      select: { id: true, kind: true, isActive: true },
+    });
+  }
+
   async create(data: Prisma.PositionUncheckedCreateInput, tx?: TransactionClient) {
     const client = tx ?? this.prisma;
     return client.position.create({ data });

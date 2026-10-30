@@ -30,6 +30,9 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.AUTH_INVALID_CREDENTIALS]: HttpStatus.UNAUTHORIZED,
   [ErrorCode.AUTH_SESSION_INVALID]: HttpStatus.UNAUTHORIZED,
   [ErrorCode.DIRECTORY_EMAIL_TAKEN]: HttpStatus.CONFLICT,
+  // Ссылка оргструктуры (руководитель/подразделение/должность) негодна — 400
+  // с details { field, reason } (#441).
+  [ErrorCode.DIRECTORY_REFERENCE_INVALID]: HttpStatus.BAD_REQUEST,
   // Удаление единственной личной стадии «Моего плана» — конфликт состояния.
   [ErrorCode.TASK_LAST_STAGE]: HttpStatus.CONFLICT,
   // Маршрут задачи (ADR-0020): переход недоступен / гейт не пройден — конфликт

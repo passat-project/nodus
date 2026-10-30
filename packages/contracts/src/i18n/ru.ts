@@ -32,6 +32,8 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.AUTH_INVALID_CREDENTIALS]: 'Неверный email или пароль',
   [ErrorCode.AUTH_SESSION_INVALID]: 'Сессия завершена, войдите снова',
   [ErrorCode.DIRECTORY_EMAIL_TAKEN]: 'Пользователь с таким email уже существует',
+  [ErrorCode.DIRECTORY_REFERENCE_INVALID]:
+    'Выбранный объект не существует, неактивен или не подходит по виду структуры',
   [ErrorCode.TASK_LAST_STAGE]: 'Единственную стадию удалить нельзя',
   [ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED]: 'Такой переход сейчас недоступен',
   [ErrorCode.WORKFLOW_TRANSITION_BLOCKED]: 'Переход заблокирован: не выполнены условия',

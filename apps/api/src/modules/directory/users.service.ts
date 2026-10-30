@@ -21,6 +21,7 @@ import { DomainException } from '../../core/errors/domain-exception.js';
 import { EventBus } from '../../core/events/event-bus.js';
 import { AVATAR_PROCESSOR, type AvatarProcessor } from '../../core/ports/avatar-processor.port.js';
 import { avatarUrlOf as signAvatarUrl } from './avatar-url.js';
+import { ReferenceGuard } from './reference-guard.service.js';
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
 import { RolesRepository } from './roles.repository.js';
 import { UsersRepository, type UserCardRow } from './users.repository.js';
@@ -49,6 +50,7 @@ export class UsersService {
     private readonly eventBus: EventBus,
     private readonly signedUrls: SignedUrlService,
     private readonly guard: RoleAssignmentGuard,
+    private readonly references: ReferenceGuard,
     @Inject(AVATAR_PROCESSOR) private readonly avatars: AvatarProcessor,
   ) {}
 
@@ -82,6 +84,13 @@ export class UsersService {
       throw new DomainException(ErrorCode.DIRECTORY_EMAIL_TAKEN, 'Email already registered');
     }
     await this.ensureRolesExist(dto.roleIds);
+    // Ссылки оргструктуры (#441): руководитель, подразделения и должности —
+    // только существующие активные объекты своего вида структуры.
+    await this.references.ensureActiveUser(dto.managerId, 'managerId');
+    await this.references.ensureDepartment(dto.departmentId, 'management', 'departmentId');
+    await this.references.ensurePosition(dto.positionId, 'management', 'positionId');
+    await this.references.ensureDepartment(dto.legalDepartmentId, 'legal', 'legalDepartmentId');
+    await this.references.ensurePosition(dto.legalPositionId, 'legal', 'legalPositionId');
     const passwordHash = await this.passwords.hash(dto.password);
 
     return this.tx.run(async (tx) => {
@@ -125,6 +134,13 @@ export class UsersService {
     if (dto.roleIds) {
       await this.ensureRolesExist(dto.roleIds);
     }
+    // Ссылки оргструктуры (#441): undefined — не трогаем, null — очистка.
+    this.references.ensureNotSelf(id, dto.managerId, 'managerId');
+    await this.references.ensureActiveUser(dto.managerId, 'managerId');
+    await this.references.ensureDepartment(dto.departmentId, 'management', 'departmentId');
+    await this.references.ensurePosition(dto.positionId, 'management', 'positionId');
+    await this.references.ensureDepartment(dto.legalDepartmentId, 'legal', 'legalDepartmentId');
+    await this.references.ensurePosition(dto.legalPositionId, 'legal', 'legalPositionId');
 
     const names = {
       lastName: dto.lastName ?? before.lastName,

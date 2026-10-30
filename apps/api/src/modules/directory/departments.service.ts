@@ -16,6 +16,7 @@ import {
 import { DomainException } from '../../core/errors/domain-exception.js';
 import { EventBus } from '../../core/events/event-bus.js';
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
+import { ReferenceGuard } from './reference-guard.service.js';
 import { DepartmentsRepository, type DepartmentRow } from './departments.repository.js';
 import { UsersRepository } from './users.repository.js';
 
@@ -48,6 +49,7 @@ export class DepartmentsService {
     private readonly departments: DepartmentsRepository,
     private readonly users: UsersRepository,
     private readonly guard: RoleAssignmentGuard,
+    private readonly references: ReferenceGuard,
     private readonly tx: TransactionRunner,
     private readonly eventBus: EventBus,
   ) {}
@@ -78,6 +80,10 @@ export class DepartmentsService {
     if (dto.parentId) {
       await this.ensureExists(dto.parentId);
     }
+    // Руководитель и зам (#441): только существующие активные сотрудники —
+    // иначе висячая ссылка (дерево покажет headName: null).
+    await this.references.ensureActiveUser(dto.headId, 'headId');
+    await this.references.ensureActiveUser(dto.deputyId, 'deputyId');
     return this.tx.run(async (tx) => {
       const created = await this.departments.create(dto, tx);
       await this.eventBus.emit(
@@ -106,6 +112,9 @@ export class DepartmentsService {
         });
       }
     }
+    // Руководитель и зам (#441): undefined — не трогаем, null — очистка.
+    await this.references.ensureActiveUser(dto.headId, 'headId');
+    await this.references.ensureActiveUser(dto.deputyId, 'deputyId');
     return this.tx.run(async (tx) => {
       // bind (#490): перенос меняет роли сотрудников поддерева. Снимок «до» —
       // до смены родителя; отказ проверки после мутации откатывает перенос.

@@ -35,6 +35,9 @@ export const ErrorCode = {
   AUTH_SESSION_INVALID: 'AUTH_SESSION_INVALID',
   /** Пользователь с таким email уже существует. */
   DIRECTORY_EMAIL_TAKEN: 'DIRECTORY_EMAIL_TAKEN',
+  /** Ссылка оргструктуры на несуществующий/неактивный объект или чужой вид
+   *  структуры (руководитель, подразделение, должность) — 400, details.field. */
+  DIRECTORY_REFERENCE_INVALID: 'DIRECTORY_REFERENCE_INVALID',
   /** Удаление единственной личной стадии «Моего плана» запрещено (ADR-0008). */
   TASK_LAST_STAGE: 'TASK_LAST_STAGE',
   /** Перехода в целевую стадию нет в маршруте или условия «кто» не пройдены

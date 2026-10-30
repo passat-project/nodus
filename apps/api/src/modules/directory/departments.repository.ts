@@ -96,4 +96,15 @@ export class DepartmentsRepository {
     }
     return ids;
   }
+
+  /** Ссылка-подразделение (валидация оргструктуры #441): вид и активность. */
+  async findRef(
+    id: string,
+    tx?: TransactionClient,
+  ): Promise<{ id: string; kind: 'management' | 'legal'; isActive: boolean } | null> {
+    return (tx ?? this.prisma).department.findUnique({
+      where: { id },
+      select: { id: true, kind: true, isActive: true },
+    });
+  }
 }

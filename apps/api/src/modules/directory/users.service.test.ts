@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ErrorCode, Permission, type AuthUser, type CreateUserDto } from '@nodus/contracts';
 
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
+import { ReferenceGuard } from './reference-guard.service.js';
 import { UsersService } from './users.service.js';
 
 const CREATE_DTO: CreateUserDto = {
@@ -67,7 +68,10 @@ describe('UsersService: создание и правка сотрудника', 
     create: vi.fn(),
     update: vi.fn(),
     setRoles: vi.fn(),
+    findRef: vi.fn(),
   };
+  const departments = { findRef: vi.fn() };
+  const positions = { findRef: vi.fn() };
   const roles = {
     countByIds: vi.fn(),
     permissionsByIds: vi.fn(),
@@ -84,10 +88,11 @@ describe('UsersService: создание и правка сотрудника', 
   let service: UsersService;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     membership.effectiveRoleIds.mockResolvedValue([]);
     roles.lockByCodeForUpdate.mockResolvedValue(null);
     const guard = new RoleAssignmentGuard(roles as never, membership as never);
+    const references = new ReferenceGuard(users as never, departments as never, positions as never);
     service = new UsersService(
       users as never,
       roles as never,
@@ -96,6 +101,7 @@ describe('UsersService: создание и правка сотрудника', 
       eventBus as never,
       { fileContentUrl: vi.fn((id: string) => `/files/${id}/content`) } as never,
       guard,
+      references,
       { process: vi.fn() } as never,
     );
   });
@@ -151,9 +157,37 @@ describe('UsersService: создание и правка сотрудника', 
       });
     });
 
+    it('ссылка на несуществующего руководителя → 400 DIRECTORY_REFERENCE_INVALID', async () => {
+      users.emailExists.mockResolvedValue(false);
+      roles.countByIds.mockResolvedValue(1);
+      users.findRef.mockResolvedValue(null);
+
+      await expect(
+        service.createUser({ ...CREATE_DTO, managerId: 'ghost' }, actor()),
+      ).rejects.toMatchObject({
+        code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
+        details: { field: 'managerId', reason: 'not_found' },
+      });
+      expect(users.create).not.toHaveBeenCalled();
+    });
+
+    it('подразделение чужого вида структуры → 400 kind_mismatch (#441)', async () => {
+      users.emailExists.mockResolvedValue(false);
+      roles.countByIds.mockResolvedValue(1);
+      departments.findRef.mockResolvedValue({ id: 'dep-1', kind: 'legal', isActive: true });
+
+      await expect(
+        service.createUser({ ...CREATE_DTO, departmentId: 'dep-1' }, actor()),
+      ).rejects.toMatchObject({
+        code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
+        details: { field: 'departmentId', reason: 'kind_mismatch' },
+      });
+    });
+
     it('bind (#490): явная роль с правами, которых нет у актора → 403 ROLE_PERMISSION_NOT_HELD', async () => {
       users.emailExists.mockResolvedValue(false);
       roles.countByIds.mockResolvedValue(1);
+      users.create.mockResolvedValue(cardRow());
       // Порт после вставки возвращает назначенные прямые роли сотрудника.
       membership.effectiveRoleIds.mockResolvedValue(['role-1']);
       roles.permissionsByIds.mockResolvedValue(new Map([['role-1', [Permission.WORKFLOW_MANAGE]]]));
@@ -174,6 +208,7 @@ describe('UsersService: создание и правка сотрудника', 
       users.emailExists.mockResolvedValue(false);
       roles.countByIds.mockResolvedValue(0);
       users.create.mockResolvedValue(cardRow({ departmentId: 'dep-1' }));
+      departments.findRef.mockResolvedValue({ id: 'dep-1', kind: 'management', isActive: true });
       // Прямых ролей нет (roleIds: []), подразделение добавляет связанную.
       membership.effectiveRoleIds.mockResolvedValue(['role-dept']);
       roles.permissionsByIds.mockResolvedValue(new Map([['role-dept', [Permission.CRM_MANAGE]]]));
@@ -243,6 +278,7 @@ describe('UsersService: создание и правка сотрудника', 
 
     it('bind (#490): перевод в подразделение с привязанной ролью → 403', async () => {
       users.findCardById.mockResolvedValue(cardRow());
+      departments.findRef.mockResolvedValue({ id: 'dep-1', kind: 'management', isActive: true });
       // «До» — без ролей, «после» перевода подразделение добавляет свою роль.
       membership.effectiveRoleIds.mockResolvedValueOnce([]).mockResolvedValueOnce(['role-dept']);
       roles.permissionsByIds.mockResolvedValue(new Map([['role-dept', [Permission.CRM_MANAGE]]]));
@@ -254,6 +290,7 @@ describe('UsersService: создание и правка сотрудника', 
 
     it('перевод в подразделение, роль которого у сотрудника уже есть — разрешён', async () => {
       users.findCardById.mockResolvedValue(cardRow());
+      departments.findRef.mockResolvedValue({ id: 'dep-1', kind: 'management', isActive: true });
       membership.effectiveRoleIds.mockResolvedValue(['role-dept']);
       roles.permissionsByIds.mockResolvedValue(new Map([['role-dept', [Permission.CRM_MANAGE]]]));
 
@@ -288,6 +325,45 @@ describe('UsersService: создание и правка сотрудника', 
       await service.updateUser('user-1', { roleIds: [] }, actor([Permission.CORE_ADMIN]));
 
       expect(eventBus.emit).toHaveBeenCalled();
+    });
+
+    it('руководитель — сам сотрудник → 400 self (#441)', async () => {
+      users.findCardById.mockResolvedValue(cardRow());
+
+      await expect(
+        service.updateUser('user-1', { managerId: 'user-1' }, actor()),
+      ).rejects.toMatchObject({
+        code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
+        details: { field: 'managerId', reason: 'self' },
+      });
+      expect(users.update).not.toHaveBeenCalled();
+    });
+
+    it('неактивная должность → 400 inactive (#441)', async () => {
+      users.findCardById.mockResolvedValue(cardRow());
+      positions.findRef.mockResolvedValue({ id: 'pos-1', kind: 'management', isActive: false });
+
+      await expect(
+        service.updateUser('user-1', { positionId: 'pos-1' }, actor()),
+      ).rejects.toMatchObject({
+        code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
+        details: { field: 'positionId', reason: 'inactive' },
+      });
+    });
+
+    it('очистка ссылок (null) проходит без проверок (#441)', async () => {
+      users.findCardById.mockResolvedValue(cardRow());
+
+      await service.updateUser(
+        'user-1',
+        { managerId: null, departmentId: null, positionId: null },
+        actor(),
+      );
+
+      expect(users.findRef).not.toHaveBeenCalled();
+      expect(departments.findRef).not.toHaveBeenCalled();
+      expect(positions.findRef).not.toHaveBeenCalled();
+      expect(users.update).toHaveBeenCalled();
     });
   });
 });
