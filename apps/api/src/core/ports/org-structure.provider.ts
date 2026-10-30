@@ -78,8 +78,11 @@ export class OrgStructureProvider implements OrgStructureReader {
    * Цепочка руководителей вверх (#441, ADR-0025 §3) — один рекурсивный CTE:
    * `dept_heads` для каждого подразделения даёт ближайшего руководителя вверх
    * по активной управленческой цепочке (уровень 0 — сам отдел); `walk` шагает
-   * вверх: `manager_id`, иначе ближайший руководитель подразделения; `visited`
-   * защищает от циклов, глубина ≤ 32. Сам сотрудник в цепочку не входит.
+   * вверх: `manager_id`, иначе ближайший руководитель подразделения (пропуская
+   * самого сотрудника — руководитель своего отдела поднимается к родительскому);
+   * `visited` защищает от циклов, глубина ≤ 32. Наружу отдаются только АКТИВНЫЕ
+   * руководители (уволенный не может быть решающим — шаг идёт выше), сам
+   * сотрудник в цепочку не входит.
    */
   async managerChainOf(userId: string, tx?: TransactionClient): Promise<string[]> {
     const rows = await this.db(tx).$queryRaw<{ id: string }[]>(Prisma.sql`
@@ -93,7 +96,7 @@ export class OrgStructureProvider implements OrgStructureReader {
           FROM dept_heads dh
           JOIN departments cur ON cur.id = dh.current_id
           JOIN departments p ON p.id = cur.parent_id
-          WHERE dh.head_id IS NULL AND dh.depth < ${MAX_DEPTH}
+          WHERE dh.depth < ${MAX_DEPTH}
             AND p.is_active AND p.kind = 'management'
         ),
         walk(id, manager_id, department_id, depth, visited) AS (
@@ -107,11 +110,15 @@ export class OrgStructureProvider implements OrgStructureReader {
             w.manager_id,
             (SELECT dh.head_id FROM dept_heads dh
               WHERE dh.start_id = w.department_id AND dh.head_id IS NOT NULL
+                AND dh.head_id <> w.id
               ORDER BY dh.depth LIMIT 1)
           )
           WHERE w.depth < ${MAX_DEPTH} AND NOT (u2.id = ANY(w.visited))
         )
-      SELECT id FROM walk WHERE depth > 0 ORDER BY depth
+      SELECT w.id FROM walk w
+      JOIN users u ON u.id = w.id AND u.status = 'active'
+      WHERE w.depth > 0
+      ORDER BY w.depth
     `);
     return rows.map((row) => row.id);
   }

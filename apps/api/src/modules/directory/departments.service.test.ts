@@ -165,6 +165,11 @@ describe('DepartmentsService', () => {
     it('валидная смена родителя → update + событие в транзакции', async () => {
       departments.findById.mockResolvedValue(row('dep', null));
       departments.findParentChain.mockResolvedValue(['new-parent']);
+      departments.findRef.mockResolvedValue({
+        id: 'new-parent',
+        kind: 'management',
+        isActive: true,
+      });
       departments.findSubtreeIds.mockResolvedValue(['dep']);
       users.findActiveIdsByDepartmentIds.mockResolvedValue([]); // поддерево без сотрудников
       departments.update.mockResolvedValue(row('dep', 'new-parent'));
@@ -198,6 +203,11 @@ describe('DepartmentsService', () => {
     it('bind (#490): перенос выдаёт сотруднику роль сверх прав актора → 403', async () => {
       departments.findById.mockResolvedValue(row('dep', null));
       departments.findParentChain.mockResolvedValue(['new-parent']);
+      departments.findRef.mockResolvedValue({
+        id: 'new-parent',
+        kind: 'management',
+        isActive: true,
+      });
       departments.findSubtreeIds.mockResolvedValue(['dep', 'child']);
       users.findActiveIdsByDepartmentIds.mockResolvedValue(['u-1', 'u-2']);
       // Снимок «до» (u-1, u-2) — без ролей; «после» переноса u-1 получает роль.
@@ -217,6 +227,11 @@ describe('DepartmentsService', () => {
     it('bind (#490): перенос, добавляющий роль из прав актора — разрешён', async () => {
       departments.findById.mockResolvedValue(row('dep', null));
       departments.findParentChain.mockResolvedValue(['new-parent']);
+      departments.findRef.mockResolvedValue({
+        id: 'new-parent',
+        kind: 'management',
+        isActive: true,
+      });
       departments.findSubtreeIds.mockResolvedValue(['dep']);
       users.findActiveIdsByDepartmentIds.mockResolvedValue(['u-1']);
       membership.effectiveRoleIds

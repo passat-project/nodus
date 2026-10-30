@@ -146,6 +146,42 @@ describe('Ссылки оргструктуры (#441)', () => {
     expect(body.details).toMatchObject({ field: 'headId', reason: 'not_found' });
   });
 
+  it('PATCH /directory/departments/:id: родитель чужого вида структуры → 400 kind_mismatch', async () => {
+    const managementDep = await department('management');
+    const legalDep = await department('legal');
+    const response = await chat.api(manager, 'PATCH', `/directory/departments/${managementDep}`, {
+      key: randomUUID(),
+      body: { parentId: legalDep },
+    });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as {
+      code: string;
+      details: { field: string; reason: string };
+    };
+    expect(body.code).toBe(ErrorCode.DIRECTORY_REFERENCE_INVALID);
+    expect(body.details).toMatchObject({ field: 'parentId', reason: 'kind_mismatch' });
+  });
+
+  it('PATCH /directory/positions/:id: kind неизменяем после создания (#441)', async () => {
+    const created = await chat.api(manager, 'POST', '/directory/positions', {
+      key: randomUUID(),
+      body: { name: `Позиция ${chat.runId}`, kind: 'management' },
+    });
+    expect(created.status).toBe(201);
+    const position = (await created.json()) as { id: string; kind: string };
+
+    const patched = await chat.api(manager, 'PATCH', `/directory/positions/${position.id}`, {
+      key: randomUUID(),
+      body: { name: `Позиция ${chat.runId} (изм.)`, kind: 'legal' },
+    });
+
+    expect(patched.status).toBe(200);
+    const updated = (await patched.json()) as { kind: string; name: string };
+    expect(updated.kind).toBe('management');
+    expect(updated.name).toBe(`Позиция ${chat.runId} (изм.)`);
+  });
+
   it('PATCH /directory/users/:id: валидный руководитель → 200', async () => {
     const response = await chat.api(manager, 'PATCH', `/directory/users/${employee.id}`, {
       key: randomUUID(),

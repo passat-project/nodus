@@ -84,16 +84,22 @@ export class UsersService {
       throw new DomainException(ErrorCode.DIRECTORY_EMAIL_TAKEN, 'Email already registered');
     }
     await this.ensureRolesExist(dto.roleIds);
-    // Ссылки оргструктуры (#441): руководитель, подразделения и должности —
-    // только существующие активные объекты своего вида структуры.
-    await this.references.ensureActiveUser(dto.managerId, 'managerId');
-    await this.references.ensureDepartment(dto.departmentId, 'management', 'departmentId');
-    await this.references.ensurePosition(dto.positionId, 'management', 'positionId');
-    await this.references.ensureDepartment(dto.legalDepartmentId, 'legal', 'legalDepartmentId');
-    await this.references.ensurePosition(dto.legalPositionId, 'legal', 'legalPositionId');
     const passwordHash = await this.passwords.hash(dto.password);
 
     return this.tx.run(async (tx) => {
+      // Ссылки оргструктуры (#441): руководитель, подразделения и должности —
+      // только существующие активные объекты своего вида структуры. Внутри
+      // транзакции — без окна TOCTOU между проверкой и записью.
+      await this.references.ensureActiveUser(dto.managerId, 'managerId', tx);
+      await this.references.ensureDepartment(dto.departmentId, 'management', 'departmentId', tx);
+      await this.references.ensurePosition(dto.positionId, 'management', 'positionId', tx);
+      await this.references.ensureDepartment(
+        dto.legalDepartmentId,
+        'legal',
+        'legalDepartmentId',
+        tx,
+      );
+      await this.references.ensurePosition(dto.legalPositionId, 'legal', 'legalPositionId', tx);
       const created = await this.users.create(
         {
           email: dto.email,
@@ -134,14 +140,6 @@ export class UsersService {
     if (dto.roleIds) {
       await this.ensureRolesExist(dto.roleIds);
     }
-    // Ссылки оргструктуры (#441): undefined — не трогаем, null — очистка.
-    this.references.ensureNotSelf(id, dto.managerId, 'managerId');
-    await this.references.ensureActiveUser(dto.managerId, 'managerId');
-    await this.references.ensureDepartment(dto.departmentId, 'management', 'departmentId');
-    await this.references.ensurePosition(dto.positionId, 'management', 'positionId');
-    await this.references.ensureDepartment(dto.legalDepartmentId, 'legal', 'legalDepartmentId');
-    await this.references.ensurePosition(dto.legalPositionId, 'legal', 'legalPositionId');
-
     const names = {
       lastName: dto.lastName ?? before.lastName,
       firstName: dto.firstName ?? before.firstName,
@@ -151,6 +149,19 @@ export class UsersService {
     const membershipChanges = roleIds !== undefined || dto.departmentId !== undefined;
 
     return this.tx.run(async (tx) => {
+      // Ссылки оргструктуры (#441): undefined — не трогаем, null — очистка.
+      // Внутри транзакции — без окна TOCTOU между проверкой и записью.
+      this.references.ensureNotSelf(id, dto.managerId, 'managerId');
+      await this.references.ensureActiveUser(dto.managerId, 'managerId', tx);
+      await this.references.ensureDepartment(dto.departmentId, 'management', 'departmentId', tx);
+      await this.references.ensurePosition(dto.positionId, 'management', 'positionId', tx);
+      await this.references.ensureDepartment(
+        dto.legalDepartmentId,
+        'legal',
+        'legalDepartmentId',
+        tx,
+      );
+      await this.references.ensurePosition(dto.legalPositionId, 'legal', 'legalPositionId', tx);
       // Замок строки admin (#490): решение о «последнем администраторе» —
       // по составу, прочитанному ПОД замком, не по снимку вне транзакции
       // (иначе параллельная выдача роли проходит мимо защиты).

@@ -81,6 +81,10 @@ describe('Порт оргструктуры: решающие (#441)', () => {
 
   it('managerChainOf: managerId → managerId (ближайший первым)', async () => {
     await chat.prisma.user.update({
+      where: { id: chat.users.c.id },
+      data: { status: 'active', managerId: null },
+    });
+    await chat.prisma.user.update({
       where: { id: chat.users.a.id },
       data: { managerId: chat.users.b.id },
     });
@@ -130,5 +134,37 @@ describe('Порт оргструктуры: решающие (#441)', () => {
     });
 
     expect(await port.managerChainOf(chat.users.c.id)).toEqual([]);
+  });
+
+  it('managerChainOf: руководитель своего отдела поднимается к родительскому', async () => {
+    const parent = await department('Верх', chat.users.d.id);
+    const dep = await department('Свой отдел', chat.users.c.id, parent);
+    await chat.prisma.user.update({
+      where: { id: chat.users.c.id },
+      data: { managerId: null, departmentId: dep },
+    });
+    await chat.prisma.user.update({
+      where: { id: chat.users.d.id },
+      data: { managerId: null, departmentId: null },
+    });
+
+    expect(await port.managerChainOf(chat.users.c.id)).toEqual([chat.users.d.id]);
+  });
+
+  it('managerChainOf: уволенный руководитель пропускается, шаг идёт выше', async () => {
+    await chat.prisma.user.update({
+      where: { id: chat.users.a.id },
+      data: { managerId: chat.users.b.id, departmentId: null },
+    });
+    await chat.prisma.user.update({
+      where: { id: chat.users.b.id },
+      data: { managerId: chat.users.c.id, status: 'deactivated' },
+    });
+    await chat.prisma.user.update({
+      where: { id: chat.users.c.id },
+      data: { managerId: null, departmentId: null },
+    });
+
+    expect(await port.managerChainOf(chat.users.a.id)).toEqual([chat.users.c.id]);
   });
 });

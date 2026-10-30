@@ -80,11 +80,13 @@ export class DepartmentsService {
     if (dto.parentId) {
       await this.ensureExists(dto.parentId);
     }
-    // Руководитель и зам (#441): только существующие активные сотрудники —
-    // иначе висячая ссылка (дерево покажет headName: null).
-    await this.references.ensureActiveUser(dto.headId, 'headId');
-    await this.references.ensureActiveUser(dto.deputyId, 'deputyId');
     return this.tx.run(async (tx) => {
+      // Ссылки оргструктуры (#441): руководитель/зам — только активные
+      // сотрудники, родитель — подразделение того же вида структуры. Внутри
+      // транзакции — без окна TOCTOU между проверкой и записью.
+      await this.references.ensureActiveUser(dto.headId, 'headId', tx);
+      await this.references.ensureActiveUser(dto.deputyId, 'deputyId', tx);
+      await this.references.ensureDepartment(dto.parentId, dto.kind, 'parentId', tx);
       const created = await this.departments.create(dto, tx);
       await this.eventBus.emit(
         tx,
@@ -112,10 +114,14 @@ export class DepartmentsService {
         });
       }
     }
-    // Руководитель и зам (#441): undefined — не трогаем, null — очистка.
-    await this.references.ensureActiveUser(dto.headId, 'headId');
-    await this.references.ensureActiveUser(dto.deputyId, 'deputyId');
     return this.tx.run(async (tx) => {
+      // Ссылки оргструктуры (#441): руководитель/зам — только активные
+      // сотрудники; родитель — подразделение того же вида структуры, что и
+      // узел (иначе поддерево выпадает из дерева своего вида). Внутри
+      // транзакции — без окна TOCTOU между проверкой и записью.
+      await this.references.ensureActiveUser(dto.headId, 'headId', tx);
+      await this.references.ensureActiveUser(dto.deputyId, 'deputyId', tx);
+      await this.references.ensureDepartment(dto.parentId, current.kind, 'parentId', tx);
       // bind (#490): перенос меняет роли сотрудников поддерева. Снимок «до» —
       // до смены родителя; отказ проверки после мутации откатывает перенос.
       // Строка под `FOR UPDATE`, состояние перечитывается в транзакции:
