@@ -11,11 +11,11 @@ import type { MailClient } from './mail-client.port.js';
 const FIXTURES = join(import.meta.dirname, 'fixtures');
 
 interface StorageFake {
-  saved: { fileId: string; name: string; mime: string; size: number }[];
+  saved: { fileId: string; name: string; mime: string; size: number; bytes: number }[];
   removed: string[];
   save(
     input: { name: string; mime: string; size: number },
-    _content: Readable,
+    content: Readable,
   ): Promise<{ fileId: string }>;
   remove(fileIds: string[]): Promise<void>;
 }
@@ -27,9 +27,17 @@ function makeFakes(takenMessageIds: string[] = []) {
   const storage: StorageFake = {
     saved: [],
     removed: [],
-    async save(input) {
+    async save(input, content) {
+      // Порт обязан прочитать поток до ответа (file-storage.port.ts: байты
+      // контента должны попасть в хранилище — так и делает putObject).
+      // Неконсумированный ReadStream переживает тест, а rm временного каталога
+      // обгоняет его асинхронный open — поздний ENOENT приходит unhandled (#537).
+      let bytes = 0;
+      for await (const chunk of content) {
+        bytes += typeof chunk === 'string' ? Buffer.byteLength(chunk) : (chunk as Buffer).length;
+      }
       const fileId = `file-${storage.saved.length + 1}`;
-      storage.saved.push({ fileId, ...input });
+      storage.saved.push({ fileId, ...input, bytes });
       return { fileId };
     },
     async remove(fileIds) {
@@ -175,6 +183,10 @@ describe('MailLetterWriter: письмо из исходника (#56, Р3)', ()
     expect(roles).toEqual(['attachment', 'attachment', 'body', 'source']);
     const inline = rows.create.find((row) => row.inline);
     expect(inline?.contentId).toBe('logo@psm-partner');
+    // Хранилище дочитало каждый поток (драен фейка): байты = заявленному size,
+    // исходник .eml доехал, а не остался висеть открытым до rm каталога (#537).
+    expect(fakes.storage.saved.every((row) => row.bytes === row.size)).toBe(true);
+    expect(fakes.storage.saved.some((row) => row.name === 'Исходное письмо.eml')).toBe(true);
     // Авто-связь по цепочке (Р5) — в той же транзакции создания.
     expect(fakes.links[0]?.relatedLetterId).toBe('letter-out');
     expect(fakes.links[0]?.source).toBe('auto');
