@@ -39,6 +39,7 @@ describe('DepartmentsService', () => {
     findAllByKind: vi.fn(),
     findById: vi.fn(),
     lockForUpdate: vi.fn(),
+    lockTree: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     findParentChain: vi.fn(),
@@ -123,6 +124,20 @@ describe('DepartmentsService', () => {
       await expect(service.update('dep', { parentId: 'parent' }, actor())).rejects.toMatchObject({
         code: ErrorCode.CONFLICT,
       });
+      // #544: проверка цепи — под advisory-локом дерева, в транзакции.
+      expect(departments.lockTree).toHaveBeenCalledWith('tx-handle');
+      expect(departments.findParentChain).toHaveBeenCalledWith('parent', 'tx-handle');
+      expect(departments.update).not.toHaveBeenCalled();
+    });
+
+    it('родитель не найден → 404, мутации нет', async () => {
+      departments.findById.mockImplementation(async (foundId: string) =>
+        foundId === 'dep' ? row('dep', null) : null,
+      );
+
+      await expect(service.update('dep', { parentId: 'missing' }, actor())).rejects.toMatchObject({
+        code: ErrorCode.NOT_FOUND,
+      });
       expect(departments.update).not.toHaveBeenCalled();
     });
 
@@ -148,6 +163,9 @@ describe('DepartmentsService', () => {
 
       // В репозиторий уходит ровно присланное — без подставленных дефолтов.
       expect(departments.update).toHaveBeenCalledWith('dep', { name: 'Новое имя' }, 'tx-handle');
+      // Переименование не меняет структуру — дерево не лочится и цепь не читается.
+      expect(departments.lockTree).not.toHaveBeenCalled();
+      expect(departments.findParentChain).not.toHaveBeenCalled();
       expect(eventBus.emit).toHaveBeenCalledWith(
         'tx-handle',
         'directory.department.updated',
@@ -183,8 +201,8 @@ describe('DepartmentsService', () => {
         { parentId: 'new-parent' },
         'tx-handle',
       );
-      // Новый родитель под замком ДО записи (гонка с архивацией, #441):
-      // порядок «родитель → узел», как в create.
+      // Порядок замков: дерево (advisory, #544) → родитель → узел (#441).
+      expect(departments.lockTree).toHaveBeenCalledWith('tx-handle');
       expect(departments.lockForUpdate).toHaveBeenNthCalledWith(1, 'new-parent', 'tx-handle');
       expect(departments.lockForUpdate).toHaveBeenNthCalledWith(2, 'dep', 'tx-handle');
       expect(eventBus.emit).toHaveBeenCalledWith(
@@ -260,6 +278,8 @@ describe('DepartmentsService', () => {
 
       await service.update('dep', { parentId: null }, actor());
 
+      expect(departments.lockTree).toHaveBeenCalledWith('tx-handle');
+      expect(departments.findParentChain).not.toHaveBeenCalled();
       expect(eventBus.emit).toHaveBeenCalled();
       expect(roles.permissionsByIds).not.toHaveBeenCalled();
     });

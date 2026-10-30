@@ -103,34 +103,36 @@ export class DepartmentsService {
   }
 
   async update(id: string, dto: UpdateDepartmentDto, actor: AuthUser): Promise<DepartmentNode> {
-    const current = await this.departments.findById(id);
-    if (!current) {
-      throw DomainException.notFound('Department not found');
-    }
-    if (dto.parentId !== undefined && dto.parentId !== null) {
-      await this.ensureExists(dto.parentId);
-      // Защита от цикла: новый родитель не должен быть потомком узла.
-      const chain = await this.departments.findParentChain(dto.parentId);
-      if (chain.includes(id)) {
-        throw new DomainException(ErrorCode.CONFLICT, 'Department tree cycle', {
-          id,
-          parentId: dto.parentId,
-        });
-      }
-    }
     return this.tx.run(async (tx) => {
-      // Ссылки оргструктуры (#441): руководитель/зам — только активные
-      // сотрудники; родитель — подразделение того же вида структуры, что и
-      // узел (иначе поддерево выпадает из дерева своего вида). Внутри
-      // транзакции — без окна TOCTOU между проверкой и записью. Новый родитель
-      // берётся под FOR UPDATE (порядок: родитель → узел), иначе архивация
-      // может закоммититься между проверкой isActive и записью parentId.
+      // #544: смена parentId сериализуется advisory-локом дерева — проверка
+      // цикла и мутация видят зафиксированное состояние конкурента. Строчный
+      // FOR UPDATE не спасает: параллельные переносы лочат РАЗНЫЕ строки.
+      if (dto.parentId !== undefined) await this.departments.lockTree(tx);
+      const current = await this.departments.findById(id, tx);
+      if (!current) {
+        throw DomainException.notFound('Department not found');
+      }
+      // #441: ссылки оргструктуры — руководитель/зам только активные
+      // сотрудники; родитель — подразделение того же вида структуры (иначе
+      // поддерево выпадает из дерева своего вида). Новый родитель берётся под
+      // FOR UPDATE (порядок: дерево → родитель → узел), чтобы архивация не
+      // закоммитилась между проверкой isActive и записью parentId.
       if (dto.parentId) {
         await this.departments.lockForUpdate(dto.parentId, tx);
       }
       await this.references.ensureActiveUser(dto.headId, 'headId', tx);
       await this.references.ensureActiveUser(dto.deputyId, 'deputyId', tx);
       await this.references.ensureDepartment(dto.parentId, current.kind, 'parentId', tx);
+      // #544: цикл — под локом дерева и в той же транзакции (чтение через tx).
+      if (dto.parentId !== undefined && dto.parentId !== null) {
+        const chain = await this.departments.findParentChain(dto.parentId, tx);
+        if (chain.includes(id)) {
+          throw new DomainException(ErrorCode.CONFLICT, 'Department tree cycle', {
+            id,
+            parentId: dto.parentId,
+          });
+        }
+      }
       // bind (#490): перенос меняет роли сотрудников поддерева. Снимок «до» —
       // до смены родителя; отказ проверки после мутации откатывает перенос.
       // Строка под `FOR UPDATE`, состояние перечитывается в транзакции:

@@ -47,6 +47,14 @@ export class DepartmentsRepository {
     return rows.length === 1;
   }
 
+  /** Всё дерево подразделений под advisory-локом транзакции (#544): проверка
+   *  цикла и смена parentId сериализуются с другими переносами. Построчный
+   *  `FOR UPDATE` лочит РАЗНЫЕ строки переносимых узлов — цикл A↔B им не
+   *  ловится; дерево задач защищено тем же приёмом (`TasksRepository.lockTree`). */
+  async lockTree(tx: TransactionClient): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('nodus:departments:tree'))`;
+  }
+
   async create(
     data: Prisma.DepartmentUncheckedCreateInput,
     tx?: TransactionClient,
@@ -64,12 +72,19 @@ export class DepartmentsRepository {
     return client.department.update({ where: { id }, data, include: departmentInclude });
   }
 
-  /** Цепочка родителей (для проверки циклов при смене parentId). */
-  async findParentChain(startId: string | null, maxDepth = 50): Promise<string[]> {
+  /** Цепочка родителей (для проверки циклов при смене parentId). Внутри
+   *  транзакции передаётся `tx` — под lockTree проверка видит зафиксированное
+   *  состояние конкурента (#544). */
+  async findParentChain(
+    startId: string | null,
+    tx?: TransactionClient,
+    maxDepth = 50,
+  ): Promise<string[]> {
+    const client = tx ?? this.prisma;
     const chain: string[] = [];
     let currentId = startId;
     for (let depth = 0; currentId && depth < maxDepth; depth += 1) {
-      const row = await this.prisma.department.findUnique({
+      const row = await client.department.findUnique({
         where: { id: currentId },
         select: { id: true, parentId: true },
       });
