@@ -173,6 +173,8 @@ export function DepartmentPanel({
                       managerId: null,
                       departmentId: null,
                       legalDepartmentId: null,
+                      positionId: null,
+                      legalPositionId: null,
                     },
                   )
                 ) : (
@@ -196,6 +198,8 @@ export function DepartmentPanel({
                       managerId: null,
                       departmentId: null,
                       legalDepartmentId: null,
+                      positionId: null,
+                      legalPositionId: null,
                     },
                   )}
                 </section>

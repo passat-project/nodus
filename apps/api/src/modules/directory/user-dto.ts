@@ -69,6 +69,8 @@ export function toListItem(
     managerId: row.managerId,
     departmentId: row.departmentId,
     legalDepartmentId: row.legalDepartmentId,
+    positionId: row.positionId,
+    legalPositionId: row.legalPositionId,
     positionName: row.position?.name ?? null,
     departmentName: row.department?.name ?? null,
   };

@@ -48,6 +48,8 @@ describe('mergeMentionCandidates', () => {
       managerId: null,
       departmentId: null,
       legalDepartmentId: null,
+      positionId: null,
+      legalPositionId: null,
     },
     {
       id: UUID_B,
@@ -60,6 +62,8 @@ describe('mergeMentionCandidates', () => {
       managerId: null,
       departmentId: null,
       legalDepartmentId: null,
+      positionId: null,
+      legalPositionId: null,
     },
   ];
 

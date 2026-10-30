@@ -39,6 +39,8 @@ function person(id: string, managerId: string | null): UserListItem {
     managerId,
     departmentId: null,
     legalDepartmentId: null,
+    positionId: null,
+    legalPositionId: null,
   };
 }
 

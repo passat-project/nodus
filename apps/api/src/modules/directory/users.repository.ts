@@ -20,6 +20,8 @@ const userListSelect = {
   managerId: true,
   departmentId: true,
   legalDepartmentId: true,
+  positionId: true,
+  legalPositionId: true,
   position: { select: { name: true } },
   department: { select: { name: true } },
 } satisfies Prisma.UserSelect;

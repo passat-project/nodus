@@ -88,6 +88,10 @@ export const userListItemSchema = z.object({
   departmentId: z.uuid().nullable(),
   /** Юридическое подразделение (по трудовой) — вид «Подразделения» в режиме legal. */
   legalDepartmentId: z.uuid().nullable(),
+  /** Должность управленческой структуры (#441: отчёт «должности без сотрудников»). */
+  positionId: z.uuid().nullable(),
+  /** Юридическая должность (#441). */
+  legalPositionId: z.uuid().nullable(),
 });
 
 export type UserListItem = z.infer<typeof userListItemSchema>;

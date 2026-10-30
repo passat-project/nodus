@@ -21,6 +21,7 @@ import { ConversationPane } from '../../../shared/chat/conversation-pane.js';
 import { openTaskCreate } from '../../../shared/tasks/task-create-store.js';
 import { MIN_CHAT_W, useChatWidth } from '../../../shared/ui/use-chat-width.js';
 import { useEmployeePresence, useUserCard, useUsersList } from '../api/directory-api.js';
+import { useCanManageDirectory } from '../lib/use-can-manage-directory.js';
 import { EmployeeCardSkeleton } from './employee-card-skeleton.js';
 import { EmployeeProjectsTab, EmployeeTasksTab } from './employee-journal-tabs.js';
 import { EmployeeProfileTab } from './employee-profile-tab.js';
@@ -78,6 +79,7 @@ export function EmployeeCard({ userId }: { userId: string }) {
   const tasks = tasksQuery.data?.items ?? [];
   const projects = projectsQuery.data?.items ?? [];
   const presenceStatus = useEmployeePresence(userId);
+  const canManage = useCanManageDirectory();
 
   if (isLoading || !card || !listItem) {
     return <EmployeeCardSkeleton chatW={columnW} />;
@@ -147,7 +149,9 @@ export function EmployeeCard({ userId }: { userId: string }) {
                   manager={manager}
                   subordinates={subordinates}
                   presenceStatus={presenceStatus}
+                  users={items}
                   canEditAvatar={card.id === meId}
+                  canManage={canManage}
                 />
               ) : null}
 

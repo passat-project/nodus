@@ -1,8 +1,9 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PresenceStatus, UserCard, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
+import { Button } from '@nodus/ui/components/button';
 import { NodeChip } from '@nodus/ui/components/node-chip';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import {
@@ -18,6 +19,7 @@ import { EntityFields } from '../../../shared/ui/entity-fields.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { useRemoveMyAvatar, useSetMyAvatar } from '../api/directory-api.js';
 import { employeeProfileDefs } from '../lib/employee-profile-fields.js';
+import { EmployeeEditDialog } from './employee-edit-dialog.js';
 
 const VISIBILITY_KEY = 'nodus-employee-fields-v1';
 
@@ -47,20 +49,27 @@ export function EmployeeProfileTab({
   manager,
   subordinates,
   presenceStatus,
+  users,
   canEditAvatar = false,
+  canManage = false,
 }: {
   card: UserCard;
   listItem: UserListItem;
   manager: UserListItem | undefined;
   subordinates: UserListItem[];
   presenceStatus: PresenceStatus;
+  /** Полный список сотрудников — для выбора руководителя (#441). */
+  users: UserListItem[];
   /** Своя карточка (#186): фото кликабельно — загрузка/смена/удаление. */
   canEditAvatar?: boolean;
+  /** Право `directory.manage` (#441): правка подразделения/должности/руководителя. */
+  canManage?: boolean;
 }) {
   const openCard = useOpenCard();
   const setAvatar = useSetMyAvatar();
   const removeAvatar = useRemoveMyAvatar();
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   function onAvatarPicked(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -146,6 +155,13 @@ export function EmployeeProfileTab({
             </NodeChip>
           </div>
           <div className="min-w-0 flex-1 basis-[30rem]">
+            {canManage ? (
+              <div className="mb-2 flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                  {ui.employees.editEmployee}
+                </Button>
+              </div>
+            ) : null}
             <EntityFields
               defs={employeeProfileDefs({ card, listItem, manager, openCard })}
               storageKey={VISIBILITY_KEY}
@@ -175,6 +191,9 @@ export function EmployeeProfileTab({
           ))}
         </div>
       </div>
+      {canManage ? (
+        <EmployeeEditDialog open={editOpen} onOpenChange={setEditOpen} card={card} users={users} />
+      ) : null}
     </div>
   );
 }

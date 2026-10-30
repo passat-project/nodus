@@ -21,6 +21,7 @@ import { ListToolbar } from '../../../shared/views/list-toolbar.js';
 import { useFilteredList, useListToolbar } from '../../../shared/views/use-list-toolbar.js';
 import { ViewSettings } from '../../../shared/views/view-settings.js';
 import { useDepartmentTree, useUsersList } from '../api/directory-api.js';
+import { DataCheckDialog } from '../components/data-check-dialog.js';
 import { DepartmentDialog } from '../components/department-dialog.js';
 import { DepartmentPanel } from '../components/department-panel.js';
 import { DivisionsView } from '../components/divisions-view.js';
@@ -29,6 +30,7 @@ import { StructureKindSwitcher } from '../components/structure-kind-switcher.js'
 import { SubordinationView } from '../components/subordination-view.js';
 import { findDepartment } from '../lib/department-tree.js';
 import { employeeListFields } from '../lib/employee-fields.js';
+import { useCanManageDirectory } from '../lib/use-can-manage-directory.js';
 
 type StructureView = 'divisions' | 'subordination' | 'list';
 
@@ -57,6 +59,8 @@ export function EmployeesPage() {
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
   const [deptQuery, setDeptQuery] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [dataCheckOpen, setDataCheckOpen] = useState(false);
+  const canManage = useCanManageDirectory();
   const [deptDialog, setDeptDialog] = useState<{
     open: boolean;
     parentId: string | null;
@@ -152,6 +156,11 @@ export function EmployeesPage() {
               <UserPlus data-icon="inline-start" />
               {ui.employees.invite}
             </Button>
+            {canManage && (
+              <Button variant="outline" size="sm" onClick={() => setDataCheckOpen(true)}>
+                {ui.employees.dataCheck}
+              </Button>
+            )}
             {view === 'divisions' && (
               // Поиск гибкий (flex-1 с пределами): при открытой панели шапка
               // сжимается, не пряча «Найти меня» под панель.
@@ -178,6 +187,15 @@ export function EmployeesPage() {
                 <Skeleton className="h-20 w-60" />
                 <Skeleton className="h-20 w-60" />
               </div>
+            </div>
+          ) : tree.isError ? (
+            // Ошибка загрузки дерева — не пустой канвас (#441): сообщение и
+            // повтор вместо молчаливой пустоты.
+            <div className="flex h-full flex-col items-center justify-center gap-3">
+              <p className="text-sm text-muted-foreground">{ui.common.loadError}</p>
+              <Button variant="outline" size="sm" onClick={() => void tree.refetch()}>
+                {ui.employees.loadErrorRetry}
+              </Button>
             </div>
           ) : (
             <>
@@ -218,6 +236,7 @@ export function EmployeesPage() {
         )}
       </div>
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} />
+      <DataCheckDialog open={dataCheckOpen} onOpenChange={setDataCheckOpen} />
       <DepartmentDialog
         open={deptDialog.open}
         onOpenChange={(open) => setDeptDialog((prev) => ({ ...prev, open }))}

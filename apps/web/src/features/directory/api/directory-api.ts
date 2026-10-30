@@ -4,9 +4,11 @@ import type {
   Department,
   DepartmentNode,
   OrgUnitKind,
+  Position,
   PresenceEntry,
   PresenceStatus,
   UpdateDepartmentDto,
+  UpdateUserDto,
   UserCard,
 } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -109,6 +111,45 @@ export function useUserCard(id: string) {
   return useQuery({
     queryKey: directoryKeys.userCard(id),
     queryFn: () => api<UserCard>(`/directory/users/${id}`),
+  });
+}
+
+/** Справочник должностей вида (GET /directory/positions?kind=, #441):
+ *  выбор должности при правке сотрудника и отчёт «должности без сотрудников». */
+export function usePositions(kind: OrgUnitKind) {
+  return useQuery({
+    queryKey: [...directoryKeys.all, 'positions', kind] as const,
+    queryFn: () => api<Position[]>(`/directory/positions?kind=${kind}`),
+  });
+}
+
+/** Правка оргструктурных полей сотрудника (#441, право directory.manage):
+ *  подразделение, должность, руководитель (свободная ссылка — кейс ГИПов).
+ *  Оптимистичный патч карточки (I4), откат при ошибке, инвалидация дерева и
+ *  списков после ответа (имена/счётчики считает сервер). */
+export function useUpdateUser(id: string) {
+  const queryClient = useQueryClient();
+  const cardKey = directoryKeys.userCard(id);
+  return useMutation({
+    mutationFn: (body: UpdateUserDto) =>
+      api<UserCard>(`/directory/users/${id}`, { method: 'PATCH', body }),
+    onMutate: async (body) => {
+      await queryClient.cancelQueries({ queryKey: cardKey });
+      const previous = queryClient.getQueryData<UserCard>(cardKey);
+      if (previous) queryClient.setQueryData(cardKey, { ...previous, ...body });
+      return { previous };
+    },
+    onError: (_error, _body, context) => {
+      if (context?.previous) queryClient.setQueryData(cardKey, context.previous);
+      toast.error(ui.common.saveError);
+    },
+    onSuccess: (card) => {
+      queryClient.setQueryData(cardKey, card);
+      toast.success(ui.employees.editSaved);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: directoryKeys.all });
+    },
   });
 }
 
