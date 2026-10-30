@@ -183,6 +183,10 @@ describe('DepartmentsService', () => {
         { parentId: 'new-parent' },
         'tx-handle',
       );
+      // Новый родитель под замком ДО записи (гонка с архивацией, #441):
+      // порядок «родитель → узел», как в create.
+      expect(departments.lockForUpdate).toHaveBeenNthCalledWith(1, 'new-parent', 'tx-handle');
+      expect(departments.lockForUpdate).toHaveBeenNthCalledWith(2, 'dep', 'tx-handle');
       expect(eventBus.emit).toHaveBeenCalledWith(
         'tx-handle',
         'directory.department.updated',

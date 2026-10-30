@@ -59,6 +59,9 @@ type StructureView = 'divisions' | 'subordination' | 'list';
  * и «Список» (каноническая таблица shared/views, ключ `directory.employees`).
  * Виды — вкладки топбара (search-параметр view, nav-registry). Открытие
  * карточки сотрудника — стек карточек из rect источника (ADR-0009).
+ * Страница >300 значимых строк (I5): композиция трёх видов + адаптивная шапка;
+ * геометрия вынесена в `useHeaderGeometry`; дальнейшее дробление — со
+ * следующим визуальным скоупом.
  */
 export function EmployeesPage() {
   const search = useSearch({ strict: false }) as { view?: string };

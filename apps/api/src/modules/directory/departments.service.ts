@@ -122,7 +122,12 @@ export class DepartmentsService {
       // Ссылки оргструктуры (#441): руководитель/зам — только активные
       // сотрудники; родитель — подразделение того же вида структуры, что и
       // узел (иначе поддерево выпадает из дерева своего вида). Внутри
-      // транзакции — без окна TOCTOU между проверкой и записью.
+      // транзакции — без окна TOCTOU между проверкой и записью. Новый родитель
+      // берётся под FOR UPDATE (порядок: родитель → узел), иначе архивация
+      // может закоммититься между проверкой isActive и записью parentId.
+      if (dto.parentId) {
+        await this.departments.lockForUpdate(dto.parentId, tx);
+      }
       await this.references.ensureActiveUser(dto.headId, 'headId', tx);
       await this.references.ensureActiveUser(dto.deputyId, 'deputyId', tx);
       await this.references.ensureDepartment(dto.parentId, current.kind, 'parentId', tx);

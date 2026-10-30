@@ -121,7 +121,7 @@ export class DepartmentsController {
     schema: { type: 'string', format: 'uuid' },
   })
   @ApiNoContentResponse({ description: 'Подразделение архивировано' })
-  @ApiErrors(401, 403, 404)
+  @ApiErrors(401, 403, 404, 409)
   @ApiIdempotencyKey()
   archive(@Param('id') id: string, @GetUser() actor: AuthUser): Promise<void> {
     return this.departmentsService.archive(id, actor.id);
