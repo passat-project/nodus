@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 import { EventDispatcher } from '../../src/core/events/event-dispatcher.js';
 import { TokenService } from '../../src/modules/auth/token.service.js';
-import { dispatchOwnEvent } from './outbox-test-utils.js';
+import { dispatchOwnEvent, quiesceOutbox } from './outbox-test-utils.js';
 import { setupChatFixture, type ChatTestFixture, type ChatUser } from './chat-fixtures.js';
 
 /**
@@ -141,6 +141,10 @@ export async function setupCorrespondenceFixture(): Promise<CorrespondenceFixtur
       });
     },
     async cleanup() {
+      // #528: фоновая доставка letter.* (counterparty_usages) может приземлиться
+      // между удалением usages и контрагентов — FK роняет teardown. Гасим
+      // поллер и дожидаемся прохода ДО уборки, а не надеемся на пустой хвост.
+      await quiesceOutbox(fixture.dispatcher);
       const userIds = Object.values(fx.users).map((user) => user.id);
       const letters = await fx.prisma.letter.findMany({
         where: { createdBy: { in: userIds } },
