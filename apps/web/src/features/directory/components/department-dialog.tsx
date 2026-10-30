@@ -9,9 +9,30 @@ import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@nodus/ui/components/dialog';
 import { Input } from '@nodus/ui/components/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@nodus/ui/components/select';
 
+import type { DepartmentOption } from '../../../shared/api/departments-list.js';
 import { useCreateDepartment, useUpdateDepartment } from '../api/directory-api.js';
 import { EmployeeCombobox } from './employee-combobox.js';
+
+/** Sentinel Radix Select для «без родителя» (пустая строка запрещена). */
+const NO_PARENT = '__none__';
+
+/** Id узла и всего его поддерева — при переносе исключаем из кандидатов
+ *  родителей (узел не может стать потомком сам себя; сервер тоже защищает). */
+function collectSubtreeIds(node: DepartmentNode): Set<string> {
+  const ids = new Set<string>([node.id]);
+  for (const child of node.children) {
+    for (const id of collectSubtreeIds(child)) ids.add(id);
+  }
+  return ids;
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -36,20 +57,24 @@ export function DepartmentDialog({
   parentId,
   editing,
   users,
+  departmentOptions,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   kind: OrgUnitKind;
-  /** Для создания: родитель (null — корень). Для правки игнорируется. */
+  /** Для создания: родитель по умолчанию (null — корень). */
   parentId: string | null;
   editing: DepartmentNode | null;
   users: UserListItem[];
+  /** Плоское дерево ТЕКУЩЕГО вида (отступы depth) — выбор родителя/перенос. */
+  departmentOptions: DepartmentOption[];
 }) {
   const create = useCreateDepartment(kind);
   const update = useUpdateDepartment(kind);
   const [name, setName] = useState('');
   const [headId, setHeadId] = useState<string | null>(null);
   const [deputyId, setDeputyId] = useState<string | null>(null);
+  const [parentDraft, setParentDraft] = useState<string | null>(null);
 
   // Черновик сбрасывается/наполняется на каждом открытии (рендер-тайм, #45).
   const [prevOpen, setPrevOpen] = useState(open);
@@ -59,6 +84,7 @@ export function DepartmentDialog({
       setName(editing?.name ?? '');
       setHeadId(editing?.headId ?? null);
       setDeputyId(editing?.deputyId ?? null);
+      setParentDraft(editing ? editing.parentId : parentId);
     }
   }
 
@@ -67,6 +93,10 @@ export function DepartmentDialog({
   // Кандидаты — только активные: уволенного сервер не примет (валидация
   // ссылок #441). Текущие значения правки не сбрасываются — их видно в полях.
   const activeUsers = users.filter((user) => user.status === 'active');
+  // Перенос: узел не может стать потомком сам себя — исключаем своё поддерево
+  // (сервер дополнительно защищает от циклов).
+  const excluded = editing ? collectSubtreeIds(editing) : new Set<string>();
+  const parentOptions = departmentOptions.filter((option) => !excluded.has(option.id));
 
   function submit() {
     if (!valid || pending) return;
@@ -77,6 +107,7 @@ export function DepartmentDialog({
       if (name.trim() !== editing.name) patch.name = name.trim();
       if (headId !== editing.headId) patch.headId = headId;
       if (deputyId !== editing.deputyId) patch.deputyId = deputyId;
+      if (parentDraft !== editing.parentId) patch.parentId = parentDraft;
       if (Object.keys(patch).length === 0) {
         onOpenChange(false);
         return;
@@ -85,7 +116,7 @@ export function DepartmentDialog({
       return;
     }
     create.mutate(
-      { name: name.trim(), kind, parentId, headId, deputyId, sortOrder: 0 },
+      { name: name.trim(), kind, parentId: parentDraft, headId, deputyId, sortOrder: 0 },
       { onSuccess: () => onOpenChange(false) },
     );
   }
@@ -110,6 +141,24 @@ export function DepartmentDialog({
               onChange={(e) => setName(e.target.value)}
               className="h-8 text-sm"
             />
+          </Field>
+          <Field label={ui.employees.parentDepartment}>
+            <Select
+              value={parentDraft ?? NO_PARENT}
+              onValueChange={(value) => setParentDraft(value === NO_PARENT ? null : value)}
+            >
+              <SelectTrigger size="sm" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_PARENT}>{ui.employees.noParent}</SelectItem>
+                {parentOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {`${'— '.repeat(option.depth)}${option.name}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <Field label={ui.employees.fieldHead}>
             <EmployeeCombobox

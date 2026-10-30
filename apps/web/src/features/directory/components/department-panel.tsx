@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { DepartmentNode, OrgUnitKind, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@nodus/ui/components/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +16,7 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
+import { useArchiveDepartment } from '../api/directory-api.js';
 
 /**
  * Правая панель выбранного подразделения (#84, референс — правая колонка окна
@@ -51,6 +53,8 @@ export function DepartmentPanel({
   onEdit: (node: DepartmentNode) => void;
 }) {
   const openCard = useOpenCard();
+  const archive = useArchiveDepartment(kind);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [search, setSearch] = useState('');
   // Кэш последнего узла: контент не мигает пустотой на схлопывании.
   const [cached, setCached] = useState<DepartmentNode | null>(node);
@@ -150,6 +154,12 @@ export function DepartmentPanel({
                   <DropdownMenuItem onClick={() => onEdit(shown)}>
                     {ui.employees.editDepartmentAction}
                   </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setArchiveOpen(true)}
+                  >
+                    {ui.employees.archiveDepartment}
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               {/* Крестик закрытия панели — У КРАЯ справа (вердикт 24.09). */}
@@ -243,6 +253,34 @@ export function DepartmentPanel({
           </>
         )}
       </div>
+      <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
+        <DialogContent className="w-full bg-card sm:max-w-sm">
+          <DialogTitle className="text-base font-semibold text-foreground">
+            {ui.employees.archiveDepartmentTitle}
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground">{ui.employees.archiveDepartmentText}</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setArchiveOpen(false)}>
+              {ui.common.cancel}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={archive.isPending}
+              onClick={() => {
+                if (!shown) return;
+                archive.mutate(shown.id, {
+                  onSuccess: () => {
+                    setArchiveOpen(false);
+                    onClose();
+                  },
+                });
+              }}
+            >
+              {ui.employees.archiveConfirm}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

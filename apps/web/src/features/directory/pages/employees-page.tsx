@@ -36,6 +36,7 @@ import { ListToolbar } from '../../../shared/views/list-toolbar.js';
 import { useFilteredList, useListToolbar } from '../../../shared/views/use-list-toolbar.js';
 import { ViewSettings } from '../../../shared/views/view-settings.js';
 import { useDepartmentTree, useUsersList } from '../api/directory-api.js';
+import { flattenDepartments } from '../../../shared/api/departments-list.js';
 import { DataCheckDialog } from '../components/data-check-dialog.js';
 import { DepartmentDialog } from '../components/department-dialog.js';
 import { DepartmentPanel } from '../components/department-panel.js';
@@ -365,6 +366,7 @@ export function EmployeesPage() {
         parentId={deptDialog.parentId}
         editing={deptDialog.editing}
         users={items}
+        departmentOptions={flattenDepartments(roots)}
       />
     </div>
   );

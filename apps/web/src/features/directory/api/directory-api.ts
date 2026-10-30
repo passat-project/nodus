@@ -198,6 +198,21 @@ export function useArchivePosition(kind: OrgUnitKind) {
   });
 }
 
+/** Архивация подразделения (#441, I15: не удаление): дерево вида рефечится —
+ *  поддерево уходит из структуры, история и привязки ролей сохраняются. */
+export function useArchiveDepartment(kind: OrgUnitKind) {
+  const queryClient = useQueryClient();
+  const key = directoryKeys.departments(kind);
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<void>(`/directory/departments/${id}/archive`, { method: 'POST' }),
+    onError: (error) => toastApiError(error),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: key });
+    },
+  });
+}
+
 /** Аватар СВОЕГО профиля (#186): multipart (квадратизация на сервере),
  *  чужие карточки — только просмотр. Инвалидация — вся ветка directory
  *  (карточка + списки/пикеры, где аватар тоже виден). */

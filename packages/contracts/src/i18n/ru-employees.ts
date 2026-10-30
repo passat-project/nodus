@@ -79,6 +79,13 @@ export const employeesStrings = {
   positionAdd: 'Добавить',
   positionNamePlaceholder: 'Название должности',
   positionArchive: 'В архив',
+  archiveDepartment: 'Архивировать подразделение',
+  archiveDepartmentTitle: 'Архивировать подразделение?',
+  archiveDepartmentText:
+    'Подразделение уйдёт из дерева оргструктуры; сотрудники, история и привязки ролей сохранятся.',
+  archiveConfirm: 'Архивировать',
+  parentDepartment: 'Родительское подразделение',
+  noParent: 'Без родителя (корень)',
   renamePosition: 'Переименовать',
   noPositions: 'Должностей пока нет',
   managerPlaceholder: 'Начните вводить имя',
