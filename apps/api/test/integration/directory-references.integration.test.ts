@@ -71,9 +71,9 @@ describe('Ссылки оргструктуры (#441)', () => {
     }
   });
 
-  const department = async (kind: 'management' | 'legal') => {
+  const department = async (kind: 'management' | 'legal', parentId?: string) => {
     const created = await chat.prisma.department.create({
-      data: { name: `refs-${kind}-${chat.runId}`, kind },
+      data: { name: `refs-${kind}-${chat.runId}`, kind, parentId },
       select: { id: true },
     });
     departmentIds.push(created.id);
@@ -161,6 +161,38 @@ describe('Ссылки оргструктуры (#441)', () => {
     };
     expect(body.code).toBe(ErrorCode.DIRECTORY_REFERENCE_INVALID);
     expect(body.details).toMatchObject({ field: 'parentId', reason: 'kind_mismatch' });
+  });
+
+  it('архивация непустого подразделения → 409 has_children; лист архивируется (#441)', async () => {
+    const parent = await department('management');
+    const child = await department('management', parent);
+
+    const blocked = await chat.api(manager, 'POST', `/directory/departments/${parent}/archive`, {
+      key: randomUUID(),
+    });
+    expect(blocked.status).toBe(409);
+    const body = (await blocked.json()) as {
+      code: string;
+      details: { reason: string };
+    };
+    expect(body.code).toBe(ErrorCode.CONFLICT);
+    expect(body.details.reason).toBe('has_children');
+
+    const childArchived = await chat.api(
+      manager,
+      'POST',
+      `/directory/departments/${child}/archive`,
+      { key: randomUUID() },
+    );
+    expect(childArchived.status).toBe(204);
+
+    const parentArchived = await chat.api(
+      manager,
+      'POST',
+      `/directory/departments/${parent}/archive`,
+      { key: randomUUID() },
+    );
+    expect(parentArchived.status).toBe(204);
   });
 
   it('PATCH /directory/positions/:id: kind неизменяем после создания (#441)', async () => {

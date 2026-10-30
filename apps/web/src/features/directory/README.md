@@ -92,7 +92,7 @@
   `GET /directory/departments/tree?kind=` (лес корней DepartmentNode; единая
   константа `DEPARTMENTS_TREE_PATH` + страж-тест, моки синхронизированы),
   `POST/PATCH /directory/departments`, `GET/POST/PATCH/archive
-  /directory/positions`.
+  `/directory/positions`.
   Ссылки оргструктуры валидирует сервер (#441): руководитель/зам подразделения,
   `managerId/departmentId/positionId/legal*` сотрудника — только активные
   объекты своего вида; `kind` подразделения и должности неизменяем после

@@ -83,7 +83,7 @@ export function useCreateDepartment(kind: OrgUnitKind) {
       toastApiError(_error);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: key });
+      void queryClient.invalidateQueries({ queryKey: directoryKeys.all });
     },
   });
 }
@@ -106,7 +106,7 @@ export function useUpdateDepartment(kind: OrgUnitKind) {
       toastApiError(_error);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: key });
+      void queryClient.invalidateQueries({ queryKey: directoryKeys.all });
     },
   });
 }
@@ -162,38 +162,40 @@ export function useUpdateUser(id: string) {
  *  архивация (I15: удаления нет). Инвалидация справочника и отчёта данных. */
 export function useCreatePosition(kind: OrgUnitKind) {
   const queryClient = useQueryClient();
-  const key = [...directoryKeys.all, 'positions', kind] as const;
   return useMutation({
     mutationFn: (body: CreatePositionDto) =>
       api<Position>('/directory/positions', { method: 'POST', body }),
     onError: (error) => toastApiError(error),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: key });
+      void queryClient.invalidateQueries({ queryKey: [...directoryKeys.all, 'positions', kind] });
+      // Список сотрудников несёт денормализованный positionName — освежаем.
+      void queryClient.invalidateQueries({ queryKey: directoryKeys.users() });
     },
   });
 }
 
 export function useUpdatePosition(kind: OrgUnitKind) {
   const queryClient = useQueryClient();
-  const key = [...directoryKeys.all, 'positions', kind] as const;
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: UpdatePositionDto }) =>
       api<Position>(`/directory/positions/${id}`, { method: 'PATCH', body: patch }),
     onError: (error) => toastApiError(error),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: key });
+      void queryClient.invalidateQueries({ queryKey: [...directoryKeys.all, 'positions', kind] });
+      // Переименование должности видно в «Списке» и панели (positionName).
+      void queryClient.invalidateQueries({ queryKey: directoryKeys.users() });
     },
   });
 }
 
 export function useArchivePosition(kind: OrgUnitKind) {
   const queryClient = useQueryClient();
-  const key = [...directoryKeys.all, 'positions', kind] as const;
   return useMutation({
     mutationFn: (id: string) => api<void>(`/directory/positions/${id}/archive`, { method: 'POST' }),
     onError: (error) => toastApiError(error),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: key });
+      void queryClient.invalidateQueries({ queryKey: [...directoryKeys.all, 'positions', kind] });
+      void queryClient.invalidateQueries({ queryKey: directoryKeys.users() });
     },
   });
 }
@@ -202,13 +204,14 @@ export function useArchivePosition(kind: OrgUnitKind) {
  *  поддерево уходит из структуры, история и привязки ролей сохраняются. */
 export function useArchiveDepartment(kind: OrgUnitKind) {
   const queryClient = useQueryClient();
-  const key = directoryKeys.departments(kind);
   return useMutation({
     mutationFn: (id: string) =>
       api<void>(`/directory/departments/${id}/archive`, { method: 'POST' }),
     onError: (error) => toastApiError(error),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: key });
+      void queryClient.invalidateQueries({ queryKey: directoryKeys.departments(kind) });
+      // Список сотрудников несёт денормализованный departmentName.
+      void queryClient.invalidateQueries({ queryKey: directoryKeys.users() });
     },
   });
 }

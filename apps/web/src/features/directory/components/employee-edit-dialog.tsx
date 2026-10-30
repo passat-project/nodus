@@ -63,7 +63,11 @@ export function EmployeeEditDialog({
     }
   }
 
-  const managerCandidates = users.filter((user) => user.id !== card.id && user.status === 'active');
+  // Текущий руководитель может быть уволен — оставляем его в кандидатах,
+  // чтобы имя не «пропадало» из поля (отправка идёт только при изменении).
+  const managerCandidates = users.filter(
+    (user) => user.id !== card.id && (user.status === 'active' || user.id === card.managerId),
+  );
   const pending = update.isPending;
 
   function submit() {
@@ -106,6 +110,11 @@ export function EmployeeEditDialog({
                   отступами, а не дефисами в тексте. */}
               <SelectContent position="popper" sideOffset={4}>
                 <SelectItem value={NONE}>{ui.employees.notSelected}</SelectItem>
+                {departmentId && !departments.some((d) => d.id === departmentId) && (
+                  <SelectItem value={departmentId} disabled>
+                    {ui.employees.archivedValue}
+                  </SelectItem>
+                )}
                 {departments.map((department) => (
                   <SelectItem
                     key={department.id}
@@ -128,6 +137,11 @@ export function EmployeeEditDialog({
               </SelectTrigger>
               <SelectContent position="popper" sideOffset={4}>
                 <SelectItem value={NONE}>{ui.employees.notSelected}</SelectItem>
+                {positionId && !positions.some((p) => p.id === positionId) && (
+                  <SelectItem value={positionId} disabled>
+                    {ui.employees.archivedValue}
+                  </SelectItem>
+                )}
                 {positions.map((position) => (
                   <SelectItem key={position.id} value={position.id}>
                     {position.name}

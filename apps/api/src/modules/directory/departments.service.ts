@@ -83,7 +83,11 @@ export class DepartmentsService {
     return this.tx.run(async (tx) => {
       // Ссылки оргструктуры (#441): руководитель/зам — только активные
       // сотрудники, родитель — подразделение того же вида структуры. Внутри
-      // транзакции — без окна TOCTOU между проверкой и записью.
+      // транзакции — без окна TOCTOU между проверкой и записью. Замок
+      // родителя сериализует с архивацией (непустой узел не архивируется).
+      if (dto.parentId) {
+        await this.departments.lockForUpdate(dto.parentId, tx);
+      }
       await this.references.ensureActiveUser(dto.headId, 'headId', tx);
       await this.references.ensureActiveUser(dto.deputyId, 'deputyId', tx);
       await this.references.ensureDepartment(dto.parentId, dto.kind, 'parentId', tx);
@@ -151,10 +155,23 @@ export class DepartmentsService {
     });
   }
 
-  /** Архивация (не удаление — связи сотрудников и история сохраняются, I15). */
+  /** Архивация (не удаление — связи сотрудников и история сохраняются, I15).
+   *  Непустой узел не архивируется (409 `has_children`): активные дети
+   *  archived-родителя выпадают из дерева вида (родитель не в выборке, а дети
+   *  не корни) — сначала архивируются/переносятся дети. Замок строки
+   *  сериализует с созданием ребёнка (create лочит родителя до проверки). */
   async archive(id: string, actorId: string): Promise<void> {
     await this.ensureExists(id);
     await this.tx.run(async (tx) => {
+      if (!(await this.departments.lockForUpdate(id, tx))) {
+        throw DomainException.notFound('Department not found');
+      }
+      if ((await this.departments.countActiveChildren(id, tx)) > 0) {
+        throw new DomainException(ErrorCode.CONFLICT, 'Department has active children', {
+          departmentId: id,
+          reason: 'has_children',
+        });
+      }
       await this.departments.update(id, { isActive: false }, tx);
       await this.eventBus.emit(
         tx,

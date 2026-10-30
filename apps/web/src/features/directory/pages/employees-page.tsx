@@ -1,5 +1,5 @@
 import { AlertCircle, MoreHorizontal, Network, Search, UserPlus } from 'lucide-react';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearch, useRouterState } from '@tanstack/react-router';
 import type { DepartmentNode, OrgUnitKind, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -22,7 +22,7 @@ import { Input } from '@nodus/ui/components/input';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { measureCircuit } from '../../../app/shell/circuit-geometry.js';
+import { useHeaderGeometry } from '../lib/use-header-geometry.js';
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { DataTable } from '../../../shared/views/data-table.js';
@@ -85,31 +85,10 @@ export function EmployeesPage() {
     editing: DepartmentNode | null;
   }>({ open: false, parentId: null, editing: null });
 
-  // Верх панели подразделения — В ОДНУ ГОРИЗОНТАЛЬ с осью контура (связь
-  // модуль→разделы): мера из того же источника, что рисует контур
-  // (measureCircuit.axisY), минус верх корня страницы = сдвиг верха панели;
-  // пересчёт на resize. Ширина корня — для адаптивной шапки (ниже).
+  // Верх панели — в одну горизонталь с осью контура, ширина корня — для
+  // адаптивной шапки (хук `useHeaderGeometry`, #441).
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const rootRef = useRef<HTMLDivElement>(null);
-  const [topShift, setTopShift] = useState(0);
-  const [rowWidth, setRowWidth] = useState(0);
-  useLayoutEffect(() => {
-    const el = rootRef.current;
-    const update = () => {
-      const axisY = measureCircuit(pathname, false)?.axisY;
-      const rootTop = el?.getBoundingClientRect().top;
-      setTopShift(axisY !== undefined && rootTop !== undefined ? axisY - rootTop : 0);
-      setRowWidth(el?.clientWidth ?? 0);
-    };
-    update();
-    const observer = el ? new ResizeObserver(update) : null;
-    if (el) observer?.observe(el);
-    window.addEventListener('resize', update);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', update);
-    };
-  }, [pathname]);
+  const { rootRef, topShift, rowWidth } = useHeaderGeometry(pathname);
 
   const toolbar = useListToolbar('directory.employees');
   const filterDefs = useEmployeeFilterDefs();
@@ -332,6 +311,7 @@ export function EmployeesPage() {
                 onInvite={() => setInviteOpen(true)}
                 onCreateChild={(parentId) => setDeptDialog({ open: true, parentId, editing: null })}
                 onEdit={(node) => setDeptDialog({ open: true, parentId: null, editing: node })}
+                canManage={canManage}
               />
             </>
           )

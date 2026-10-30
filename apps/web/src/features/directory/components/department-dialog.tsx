@@ -92,7 +92,11 @@ export function DepartmentDialog({
   const pending = create.isPending || update.isPending;
   // Кандидаты — только активные: уволенного сервер не примет (валидация
   // ссылок #441). Текущие значения правки не сбрасываются — их видно в полях.
-  const activeUsers = users.filter((user) => user.status === 'active');
+  // Текущий руководитель/зам может быть уволен — показываем его в кандидатах,
+  // чтобы имя не «пропадало» из поля (отправка идёт только при изменении).
+  const headCandidates = users.filter(
+    (user) => user.status === 'active' || user.id === headId || user.id === deputyId,
+  );
   // Перенос: узел не может стать потомком сам себя — исключаем своё поддерево
   // (сервер дополнительно защищает от циклов).
   const excluded = editing ? collectSubtreeIds(editing) : new Set<string>();
@@ -166,7 +170,7 @@ export function DepartmentDialog({
               onChange={setHeadId}
               ariaLabel={ui.employees.fieldHead}
               placeholder={ui.employees.managerPlaceholder}
-              users={activeUsers}
+              users={headCandidates}
             />
           </Field>
           <Field label={ui.employees.fieldDeputy}>
@@ -175,7 +179,7 @@ export function DepartmentDialog({
               onChange={setDeputyId}
               ariaLabel={ui.employees.fieldDeputy}
               placeholder={ui.employees.managerPlaceholder}
-              users={activeUsers}
+              users={headCandidates}
             />
           </Field>
         </div>

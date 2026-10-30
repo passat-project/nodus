@@ -107,4 +107,12 @@ export class DepartmentsRepository {
       select: { id: true, kind: true, isActive: true },
     });
   }
+
+  /** Активные дочерние узлы (#441): непустое подразделение не архивируется —
+   *  активные дети archived-родителя выпали бы из дерева вида. */
+  async countActiveChildren(id: string, tx?: TransactionClient): Promise<number> {
+    return (tx ?? this.prisma).department.count({
+      where: { parentId: id, isActive: true },
+    });
+  }
 }

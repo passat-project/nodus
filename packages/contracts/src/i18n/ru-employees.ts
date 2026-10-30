@@ -86,6 +86,7 @@ export const employeesStrings = {
   archiveConfirm: 'Архивировать',
   parentDepartment: 'Родительское подразделение',
   noParent: 'Без родителя (корень)',
+  archivedValue: 'Текущее значение (архив)',
   renamePosition: 'Переименовать',
   noPositions: 'Должностей пока нет',
   managerPlaceholder: 'Начните вводить имя',

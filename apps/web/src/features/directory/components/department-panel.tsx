@@ -37,6 +37,7 @@ export function DepartmentPanel({
   onInvite,
   onCreateChild,
   onEdit,
+  canManage,
 }: {
   kind: OrgUnitKind;
   node: DepartmentNode | null;
@@ -51,6 +52,8 @@ export function DepartmentPanel({
   onInvite: () => void;
   onCreateChild: (parentId: string) => void;
   onEdit: (node: DepartmentNode) => void;
+  /** Право `directory.manage`: админ-действия панели (без права — просмотр). */
+  canManage: boolean;
 }) {
   const openCard = useOpenCard();
   const archive = useArchiveDepartment(kind);
@@ -133,35 +136,41 @@ export function DepartmentPanel({
                   {kind === 'management' ? ui.employees.kindManagement : ui.employees.kindLegal}
                 </span>
               </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground hover:text-foreground"
-                    aria-label={ui.employees.departmentActions}
-                  >
-                    <MoreHorizontal className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={onInvite}>
-                    {ui.employees.inviteToDepartment}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onCreateChild(shown.id)}>
-                    {ui.employees.addSubdepartment}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onEdit(shown)}>
-                    {ui.employees.editDepartmentAction}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={() => setArchiveOpen(true)}
-                  >
-                    {ui.employees.archiveDepartment}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {canManage && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label={ui.employees.departmentActions}
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={onInvite}>
+                      {ui.employees.inviteToDepartment}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onCreateChild(shown.id)}>
+                      {ui.employees.addSubdepartment}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onEdit(shown)}>
+                      {ui.employees.editDepartmentAction}
+                    </DropdownMenuItem>
+                    {/* Непустой узел не архивируется (409 has_children): активные
+                        дети archived-родителя выпали бы из дерева вида. */}
+                    {shown.children.length === 0 && (
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => setArchiveOpen(true)}
+                      >
+                        {ui.employees.archiveDepartment}
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               {/* Крестик закрытия панели — У КРАЯ справа (вердикт 24.09). */}
               <Button
                 variant="ghost"
