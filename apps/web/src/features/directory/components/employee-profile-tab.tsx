@@ -95,7 +95,7 @@ export function EmployeeProfileTab({
   return (
     <div className="h-full overflow-y-auto p-6">
       <div className="mx-auto w-full max-w-4xl">
-        <div className="flex flex-wrap items-start gap-8">
+        <div className="flex flex-wrap items-start gap-x-8 gap-y-5">
           {/* Большое фото профиля (реф — карточка фото в профиле Битрикс24):
               Ø176, инициалы крупно, когда фото нет; presence — чипом под
               фото (точка + подпись). СВОЯ карточка (#186): клик — выбрать
@@ -153,15 +153,16 @@ export function EmployeeProfileTab({
               />
               {presenceLabel(presenceStatus)}
             </NodeChip>
+            {/* Правка оргструктуры — под идентичностью (фото + presence), а не
+                отдельной строкой над полями: в узкой зоне поля уходят под фото,
+                и кнопка «в воздухе» отрывалась от действия (ось 4). */}
+            {canManage ? (
+              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                {ui.employees.editEmployee}
+              </Button>
+            ) : null}
           </div>
           <div className="min-w-0 flex-1 basis-[30rem]">
-            {canManage ? (
-              <div className="mb-2 flex justify-end">
-                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-                  {ui.employees.editEmployee}
-                </Button>
-              </div>
-            ) : null}
             <EntityFields
               defs={employeeProfileDefs({ card, listItem, manager, openCard })}
               storageKey={VISIBILITY_KEY}

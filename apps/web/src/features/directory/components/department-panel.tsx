@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@nodus/ui/components/dropdown-menu';
 import { Input } from '@nodus/ui/components/input';
+import { NodeLabel } from '@nodus/ui/components/node-label';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
@@ -86,12 +87,12 @@ export function DepartmentPanel({
         onClick={(e) =>
           openCard({ kind: 'employee', id: person.id }, e.currentTarget.getBoundingClientRect())
         }
-        className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-accent"
+        className="flex items-center gap-2.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-accent"
       >
         <PersonAvatar
           name={person.displayName}
           avatarUrl={person.avatarUrl}
-          className="size-7 shrink-0"
+          className="size-6 shrink-0"
         />
         <span className="min-w-0">
           <span className="block truncate text-sm">{person.displayName}</span>
@@ -133,6 +134,7 @@ export function DepartmentPanel({
                   <Button
                     variant="ghost"
                     size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
                     aria-label={ui.employees.departmentActions}
                   >
                     <MoreHorizontal className="size-4" />
@@ -146,12 +148,18 @@ export function DepartmentPanel({
                     {ui.employees.addSubdepartment}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => onEdit(shown)}>
-                    {ui.employees.editDepartment}
+                    {ui.employees.editDepartmentAction}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               {/* Крестик закрытия панели — У КРАЯ справа (вердикт 24.09). */}
-              <Button variant="ghost" size="icon-sm" aria-label={ui.common.close} onClick={onClose}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-foreground"
+                aria-label={ui.common.close}
+                onClick={onClose}
+              >
                 <X className="size-4" />
               </Button>
             </div>
@@ -206,16 +214,13 @@ export function DepartmentPanel({
               )}
             </div>
             <section className="flex min-h-0 flex-1 flex-col gap-2">
-              <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                {ui.employees.panelMembers}
-                <span className="font-mono tabular-nums">{members.length}</span>
-              </span>
+              <NodeLabel label={ui.employees.panelMembers} count={members.length} />
               <div className="relative">
                 <Search className="absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder={ui.common.search}
+                  placeholder={ui.employees.searchMembers}
                   className="h-8 pl-7 text-sm"
                 />
               </div>
@@ -223,17 +228,15 @@ export function DepartmentPanel({
                 {members.length > 0 ? (
                   <div className="flex flex-col gap-0.5">{members.map(personRow)}</div>
                 ) : (
-                  <span className="px-2 text-xs text-muted-foreground">
+                  <span className="px-2 text-sm text-muted-foreground">
                     {ui.employees.emptyDepartment}
                   </span>
                 )}
               </div>
             </section>
             {reports.length > 0 && (
-              <section className="flex shrink-0 flex-col gap-1">
-                <span className="text-xs font-medium text-muted-foreground">
-                  {ui.employees.panelReports}
-                </span>
+              <section className="flex shrink-0 flex-col gap-1.5">
+                <NodeLabel label={ui.employees.panelReports} count={reports.length} />
                 <div className="flex flex-col gap-0.5">{reports.map(personRow)}</div>
               </section>
             )}

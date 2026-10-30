@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { UpdateUserDto, UserCard, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@nodus/ui/components/dialog';
 import {
   Select,
   SelectContent,
@@ -83,7 +83,13 @@ export function EmployeeEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full sm:max-w-md bg-card">
+      <DialogContent
+        className="w-full bg-card sm:max-w-md"
+        // Форма с несохранёнными значениями: мимо-клик не должен её терять
+        // (канон окон с заполняемыми данными); закрытие — «Отмена» или Esc.
+        showCloseButton={false}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
         <DialogTitle className="text-base font-semibold text-foreground">
           {ui.employees.editEmployeeTitle}
         </DialogTitle>
@@ -93,14 +99,20 @@ export function EmployeeEditDialog({
               value={departmentId ?? NONE}
               onValueChange={(value) => setDepartmentId(value === NONE ? null : value)}
             >
-              <SelectTrigger size="sm" className="w-full">
+              <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              {/* Список — вниз от поля (не поверх подписи): дерево читается
+                  отступами, а не дефисами в тексте. */}
+              <SelectContent position="popper" sideOffset={4}>
                 <SelectItem value={NONE}>{ui.employees.notSelected}</SelectItem>
                 {departments.map((department) => (
-                  <SelectItem key={department.id} value={department.id}>
-                    {`${'— '.repeat(department.depth)}${department.name}`}
+                  <SelectItem
+                    key={department.id}
+                    value={department.id}
+                    style={{ paddingLeft: `${0.5 + department.depth * 0.8}rem` }}
+                  >
+                    {department.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -111,10 +123,10 @@ export function EmployeeEditDialog({
               value={positionId ?? NONE}
               onValueChange={(value) => setPositionId(value === NONE ? null : value)}
             >
-              <SelectTrigger size="sm" className="w-full">
+              <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" sideOffset={4}>
                 <SelectItem value={NONE}>{ui.employees.notSelected}</SelectItem>
                 {positions.map((position) => (
                   <SelectItem key={position.id} value={position.id}>
@@ -129,18 +141,19 @@ export function EmployeeEditDialog({
               value={managerId}
               onChange={setManagerId}
               ariaLabel={ui.employees.fieldManager}
+              placeholder={ui.employees.managerPlaceholder}
               users={managerCandidates}
             />
           </Field>
         </div>
-        <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {ui.common.cancel}
           </Button>
-          <Button size="sm" disabled={pending} onClick={submit}>
+          <Button disabled={pending} onClick={submit}>
             {ui.common.save}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

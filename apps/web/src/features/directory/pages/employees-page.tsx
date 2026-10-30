@@ -1,11 +1,26 @@
-import { Search, UserPlus } from 'lucide-react';
+import { AlertCircle, MoreHorizontal, Network, Search, UserPlus } from 'lucide-react';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSearch, useRouterState } from '@tanstack/react-router';
 import type { DepartmentNode, OrgUnitKind, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@nodus/ui/components/dropdown-menu';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@nodus/ui/components/empty';
 import { Input } from '@nodus/ui/components/input';
 import { Skeleton } from '@nodus/ui/components/skeleton';
+import { cn } from '@nodus/ui/lib/utils';
 
 import { measureCircuit } from '../../../app/shell/circuit-geometry.js';
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
@@ -72,19 +87,27 @@ export function EmployeesPage() {
   // Верх панели подразделения — В ОДНУ ГОРИЗОНТАЛЬ с осью контура (связь
   // модуль→разделы): мера из того же источника, что рисует контур
   // (measureCircuit.axisY), минус верх корня страницы = сдвиг верха панели;
-  // пересчёт на resize. Панель в потоке ряда — правый край внутри мягкой рамы.
+  // пересчёт на resize. Ширина корня — для адаптивной шапки (ниже).
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const rootRef = useRef<HTMLDivElement>(null);
   const [topShift, setTopShift] = useState(0);
+  const [rowWidth, setRowWidth] = useState(0);
   useLayoutEffect(() => {
+    const el = rootRef.current;
     const update = () => {
       const axisY = measureCircuit(pathname, false)?.axisY;
-      const rootTop = rootRef.current?.getBoundingClientRect().top;
+      const rootTop = el?.getBoundingClientRect().top;
       setTopShift(axisY !== undefined && rootTop !== undefined ? axisY - rootTop : 0);
+      setRowWidth(el?.clientWidth ?? 0);
     };
     update();
+    const observer = el ? new ResizeObserver(update) : null;
+    if (el) observer?.observe(el);
     window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', update);
+    };
   }, [pathname]);
 
   const toolbar = useListToolbar('directory.employees');
@@ -105,9 +128,32 @@ export function EmployeesPage() {
 
   const roots = tree.data ?? [];
   const selectedNode = selectedDeptId ? findDepartment(roots, selectedDeptId) : null;
+  // Панель живёт только в «Подразделениях»: при уходе на другую вкладку
+  // выбранный узел не должен оставлять резерв шапке (иначе шапка «Списка»
+  // сдвигается влево без панели).
+  const panelOpen = view === 'divisions' && selectedNode !== null;
+  // Резерв шапки под панель (вердикт 24.09: инструменты не прячутся под неё).
+  // Если места на полный ряд физически нет (узкое окно), резерв снимается —
+  // панель ложится поверх шапки, как в окне структуры Битрикса; иначе
+  // инструменты вылезали бы за мягкую раму. Порог 780 — ширина полного ряда
+  // инструментов без поиска (наименьший неразрывный набор).
+  const panelReserve = 424;
+  const headerReserve = panelOpen ? (rowWidth - panelReserve >= 780 ? panelReserve : 24) : 24;
+  // Узкая шапка: «Должности» и «Проверка данных» уезжают в тихое меню
+  // (иначе ряд инструментов вылезает под панель/за раму).
+  const compactActions = rowWidth - headerReserve < 1030;
+  // Совсем узко: резерв под панель не помещается, панель ложится поверх шапки
+  // (модель Битрикса) — тогда прячем инструменты, которые всё равно окажутся
+  // под ней, вместо обрезанных полей. Остаются название и переключатель
+  // структуры; поиск сотрудников и приглашение — в самой панели.
+  const headerMinimal = panelOpen && rowWidth - panelReserve < 780;
 
   function openEmployee(user: UserListItem, rowEl: HTMLElement) {
     openCard({ kind: 'employee', id: user.id }, rowEl.getBoundingClientRect());
+  }
+
+  function openEmployeeById(id: string, source: DOMRect) {
+    openCard({ kind: 'employee', id }, source);
   }
 
   return (
@@ -118,7 +164,7 @@ export function EmployeesPage() {
         // Резерв ТОЛЬКО шапки: её инструменты не прячутся под панель, а канвас
         // остаётся во всю ширину — структура не двигается, панель перекрывает
         // её поверх (вердикт 24.09).
-        style={{ paddingRight: selectedNode ? 424 : 24 }}
+        style={{ paddingRight: headerReserve }}
         className="flex h-14 shrink-0 items-center gap-3 pl-6 transition-[padding] duration-200 ease-out"
       >
         <h1 className="shrink-0 text-xl font-semibold text-balance text-foreground">
@@ -143,8 +189,8 @@ export function EmployeesPage() {
         ) : (
           <>
             {/* Образец шапки корреспонденции (вердикт 24.09): переключатель
-                пилюлей + кнопка создания СЛЕВА в строке инструментов, правый
-                угол шапки свободен. */}
+                пилюлей + поиск рядом с ним, действия — справа (primary
+                «Пригласить» крайний). */}
             {view === 'divisions' && (
               <StructureKindSwitcher
                 kind={kind}
@@ -154,55 +200,115 @@ export function EmployeesPage() {
                 }}
               />
             )}
-            <Button onClick={() => setInviteOpen(true)}>
-              <UserPlus data-icon="inline-start" />
-              {ui.employees.invite}
-            </Button>
-            {canManage && (
-              <>
-                <Button variant="outline" size="sm" onClick={() => setPositionsOpen(true)}>
-                  {ui.employees.positions}
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setDataCheckOpen(true)}>
-                  {ui.employees.dataCheck}
-                </Button>
-              </>
-            )}
-            {view === 'divisions' && (
-              // Поиск гибкий (flex-1 с пределами): при открытой панели шапка
-              // сжимается, не пряча «Найти меня» под панель.
-              <div className="relative max-w-64 min-w-32 flex-1">
+            {view === 'divisions' && !headerMinimal && (
+              // Поиск — фиксированной ширины с правом сжиматься (до min-w-24):
+              // при открытой панели шапка отдаёт место действиям, а не прячет их.
+              <div className={cn('relative w-64 min-w-24 shrink', compactActions && 'max-w-48')}>
                 <Search className="absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={deptQuery}
                   onChange={(e) => setDeptQuery(e.target.value)}
-                  placeholder={ui.employees.searchDepartments}
+                  placeholder={ui.common.search}
                   className="h-8 pl-7 text-sm"
                 />
               </div>
             )}
             <span className="flex-1" />
+            {!headerMinimal && (
+              <>
+                {canManage &&
+                  (compactActions ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={ui.employees.structureActions}
+                          title={ui.employees.structureActions}
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setPositionsOpen(true)}>
+                          {ui.employees.positions}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setDataCheckOpen(true)}>
+                          {ui.employees.dataCheck}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    <>
+                      <Button variant="outline" onClick={() => setPositionsOpen(true)}>
+                        {ui.employees.positions}
+                      </Button>
+                      <Button variant="outline" onClick={() => setDataCheckOpen(true)}>
+                        {ui.employees.dataCheck}
+                      </Button>
+                    </>
+                  ))}
+                <Button onClick={() => setInviteOpen(true)}>
+                  <UserPlus data-icon="inline-start" />
+                  {ui.employees.invite}
+                </Button>
+              </>
+            )}
           </>
         )}
       </div>
       <div className="min-h-0 flex-1">
         {view === 'divisions' ? (
           isLoading || tree.isLoading ? (
-            <div className="flex flex-col items-center gap-6 p-6">
-              <Skeleton className="h-20 w-60" />
+            <div className="flex flex-col items-center gap-10 p-6">
+              <Skeleton className="h-28 w-60" />
               <div className="flex gap-4">
-                <Skeleton className="h-20 w-60" />
-                <Skeleton className="h-20 w-60" />
+                <Skeleton className="h-28 w-60" />
+                <Skeleton className="h-28 w-60" />
               </div>
             </div>
           ) : tree.isError ? (
             // Ошибка загрузки дерева — не пустой канвас (#441): сообщение и
             // повтор вместо молчаливой пустоты.
-            <div className="flex h-full flex-col items-center justify-center gap-3">
-              <p className="text-sm text-muted-foreground">{ui.common.loadError}</p>
-              <Button variant="outline" size="sm" onClick={() => void tree.refetch()}>
-                {ui.employees.loadErrorRetry}
-              </Button>
+            <div className="flex h-full items-center justify-center p-6">
+              <Empty className="max-w-sm">
+                <EmptyMedia variant="icon">
+                  <AlertCircle className="size-4" />
+                </EmptyMedia>
+                <EmptyHeader>
+                  <EmptyTitle>{ui.employees.departmentsLoadError}</EmptyTitle>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button variant="outline" size="sm" onClick={() => void tree.refetch()}>
+                    {ui.employees.loadErrorRetry}
+                  </Button>
+                </EmptyContent>
+              </Empty>
+            </div>
+          ) : roots.length === 0 ? (
+            // Пустая структура (свежая установка): объясняем, что делать,
+            // вместо пустого канваса.
+            <div className="flex h-full items-center justify-center p-6">
+              <Empty className="max-w-sm">
+                <EmptyMedia variant="icon">
+                  <Network className="size-4" />
+                </EmptyMedia>
+                <EmptyHeader>
+                  <EmptyTitle>{ui.employees.noDepartments}</EmptyTitle>
+                  <EmptyDescription>{ui.employees.noDepartmentsHint}</EmptyDescription>
+                </EmptyHeader>
+                {canManage ? (
+                  <EmptyContent>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDeptDialog({ open: true, parentId: null, editing: null })}
+                    >
+                      {ui.employees.createDepartment}
+                    </Button>
+                  </EmptyContent>
+                ) : null}
+              </Empty>
             </div>
           ) : (
             <>
@@ -243,7 +349,14 @@ export function EmployeesPage() {
         )}
       </div>
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} />
-      <DataCheckDialog open={dataCheckOpen} onOpenChange={setDataCheckOpen} />
+      <DataCheckDialog
+        open={dataCheckOpen}
+        onOpenChange={setDataCheckOpen}
+        onOpenEmployee={(id, source) => {
+          setDataCheckOpen(false);
+          openEmployeeById(id, source);
+        }}
+      />
       <PositionsDialog open={positionsOpen} onOpenChange={setPositionsOpen} />
       <DepartmentDialog
         open={deptDialog.open}

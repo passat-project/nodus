@@ -7,7 +7,7 @@ import type {
 } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@nodus/ui/components/dialog';
 import { Input } from '@nodus/ui/components/input';
 
 import { useCreateDepartment, useUpdateDepartment } from '../api/directory-api.js';
@@ -92,9 +92,15 @@ export function DepartmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full sm:max-w-md bg-card">
+      <DialogContent
+        className="w-full bg-card sm:max-w-md"
+        // Форма с несохранёнными значениями: мимо-клик не должен её терять
+        // (канон окон с заполняемыми данными); закрытие — «Отмена» или Esc.
+        showCloseButton={false}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
         <DialogTitle className="text-base font-semibold text-foreground">
-          {editing ? ui.employees.editDepartment : ui.employees.createDepartment}
+          {editing ? ui.employees.editDepartmentTitle : ui.employees.createDepartment}
         </DialogTitle>
         <div className="flex flex-col gap-3">
           <Field label={ui.employees.fieldDepartmentName}>
@@ -110,6 +116,7 @@ export function DepartmentDialog({
               value={headId}
               onChange={setHeadId}
               ariaLabel={ui.employees.fieldHead}
+              placeholder={ui.employees.managerPlaceholder}
               users={activeUsers}
             />
           </Field>
@@ -118,18 +125,19 @@ export function DepartmentDialog({
               value={deputyId}
               onChange={setDeputyId}
               ariaLabel={ui.employees.fieldDeputy}
+              placeholder={ui.employees.managerPlaceholder}
               users={activeUsers}
             />
           </Field>
         </div>
-        <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {ui.common.cancel}
           </Button>
-          <Button size="sm" disabled={!valid || pending} onClick={submit}>
+          <Button disabled={!valid || pending} onClick={submit}>
             {ui.common.save}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

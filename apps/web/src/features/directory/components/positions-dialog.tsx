@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Archive, Check, Pencil, X } from 'lucide-react';
+import { Archive, Check, Pencil, Plus, X } from 'lucide-react';
 import type { OrgUnitKind } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
@@ -61,11 +61,23 @@ export function PositionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full sm:max-w-md bg-card">
+      <DialogContent
+        className="w-full bg-card sm:max-w-md"
+        // Esc в режиме переименования отменяет строку, а не закрывает окно
+        // (Radix ловит Esc на document раньше input — гасим на контенте).
+        onEscapeKeyDown={(event) => {
+          if (editingId) {
+            event.preventDefault();
+            setEditingId(null);
+          }
+        }}
+      >
         <DialogTitle className="text-base font-semibold text-foreground">
           {ui.employees.positions}
         </DialogTitle>
-        <StructureKindSwitcher kind={kind} onChange={setKind} />
+        {/* Переключатель структуры — компактной пилюлей в левом краю, как в
+            шапке раздела (не растягиваем на всю ширину окна). */}
+        <StructureKindSwitcher kind={kind} onChange={setKind} className="justify-self-start" />
         <div className="flex items-center gap-2">
           <Input
             value={draft}
@@ -76,13 +88,22 @@ export function PositionsDialog({
               if (event.key === 'Enter') add();
             }}
           />
-          <Button size="sm" disabled={!draft.trim() || pending} onClick={add}>
+          <Button disabled={!draft.trim() || pending} onClick={add}>
+            <Plus data-icon="inline-start" />
             {ui.employees.positionAdd}
           </Button>
         </div>
-        <ul className="flex max-h-72 flex-col overflow-y-auto rounded-md border border-border">
+        <ul className="flex max-h-72 flex-col overflow-y-auto rounded-lg border border-border">
+          {active.length === 0 ? (
+            <li className="flex h-24 items-center justify-center px-3 text-sm text-muted-foreground">
+              {ui.employees.noPositions}
+            </li>
+          ) : null}
           {active.map((position) => (
-            <li key={position.id} className="flex items-center gap-2 px-2.5 py-1.5">
+            <li
+              key={position.id}
+              className="flex items-center gap-2 px-3 py-2 transition-colors hover:bg-accent/30"
+            >
               {editingId === position.id ? (
                 <>
                   <Input
@@ -92,12 +113,18 @@ export function PositionsDialog({
                     className="h-7 flex-1 text-sm"
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') saveRename(position.id);
-                      if (event.key === 'Escape') setEditingId(null);
+                      if (event.key === 'Escape') {
+                        // Esc отменяет переименование, а не закрывает всё окно
+                        // (Radix ловит Esc на document — гасим всплытие).
+                        event.stopPropagation();
+                        setEditingId(null);
+                      }
                     }}
                   />
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
                     aria-label={ui.common.save}
                     title={ui.common.save}
                     disabled={pending}
@@ -107,7 +134,8 @@ export function PositionsDialog({
                   </Button>
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
                     aria-label={ui.common.cancel}
                     title={ui.common.cancel}
                     onClick={() => setEditingId(null)}
@@ -120,9 +148,10 @@ export function PositionsDialog({
                   <span className="min-w-0 flex-1 truncate text-sm">{position.name}</span>
                   <Button
                     variant="ghost"
-                    size="sm"
-                    aria-label={ui.employees.editDepartment}
-                    title={ui.employees.editDepartment}
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={ui.employees.renamePosition}
+                    title={ui.employees.renamePosition}
                     onClick={() => {
                       setEditingId(position.id);
                       setEditingName(position.name);
@@ -132,7 +161,8 @@ export function PositionsDialog({
                   </Button>
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
                     aria-label={ui.employees.positionArchive}
                     title={ui.employees.positionArchive}
                     disabled={pending}
