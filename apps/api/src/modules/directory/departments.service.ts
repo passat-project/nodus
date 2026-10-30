@@ -91,22 +91,28 @@ export class DepartmentsService {
   }
 
   async update(id: string, dto: UpdateDepartmentDto, actor: AuthUser): Promise<DepartmentNode> {
-    const current = await this.departments.findById(id);
-    if (!current) {
-      throw DomainException.notFound('Department not found');
-    }
-    if (dto.parentId !== undefined && dto.parentId !== null) {
-      await this.ensureExists(dto.parentId);
-      // Защита от цикла: новый родитель не должен быть потомком узла.
-      const chain = await this.departments.findParentChain(dto.parentId);
-      if (chain.includes(id)) {
-        throw new DomainException(ErrorCode.CONFLICT, 'Department tree cycle', {
-          id,
-          parentId: dto.parentId,
-        });
-      }
-    }
     return this.tx.run(async (tx) => {
+      // #544: смена parentId сериализуется advisory-локом дерева — проверка
+      // цикла и мутация видят зафиксированное состояние конкурента. Строчный
+      // FOR UPDATE не спасает: параллельные переносы лочат РАЗНЫЕ строки.
+      if (dto.parentId !== undefined) await this.departments.lockTree(tx);
+      const current = await this.departments.findById(id, tx);
+      if (!current) {
+        throw DomainException.notFound('Department not found');
+      }
+      if (dto.parentId !== undefined && dto.parentId !== null) {
+        // Новый родитель существует и не является потомком узла (цикл).
+        if (!(await this.departments.findById(dto.parentId, tx))) {
+          throw DomainException.notFound('Department not found');
+        }
+        const chain = await this.departments.findParentChain(dto.parentId, tx);
+        if (chain.includes(id)) {
+          throw new DomainException(ErrorCode.CONFLICT, 'Department tree cycle', {
+            id,
+            parentId: dto.parentId,
+          });
+        }
+      }
       // bind (#490): перенос меняет роли сотрудников поддерева. Снимок «до» —
       // до смены родителя; отказ проверки после мутации откатывает перенос.
       // Строка под `FOR UPDATE`, состояние перечитывается в транзакции:
