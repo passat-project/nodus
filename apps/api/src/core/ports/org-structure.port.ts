@@ -10,6 +10,12 @@ export interface DepartmentRef {
   isActive: boolean;
 }
 
+/** Сотрудник — минимальная ссылка для портов (решающие, выбор в поле). */
+export interface OrgUserRef {
+  id: string;
+  displayName: string;
+}
+
 /**
  * Порт чтения оргструктуры (ADR-0012): модулю задач нужно «кто мои
  * подчинённые» для видимости задач (канон Битрикса: руководитель видит
@@ -30,6 +36,21 @@ export interface OrgStructureReader {
 
   /** Подразделения по id — пачкой для DTO (Р6); отсутствующие пропущены. */
   departmentRefs(ids: readonly string[], tx?: TransactionClient): Promise<DepartmentRef[]>;
+
+  /** Держатели должности (#441, ADR-0025 §3): активные сотрудники на
+   *  должности нужного вида структуры (management — `positionId`,
+   *  legal — `legalPositionId`); порядок — по ФИО. */
+  holdersOfPosition(
+    positionId: string,
+    kind?: 'management' | 'legal',
+    tx?: TransactionClient,
+  ): Promise<OrgUserRef[]>;
+
+  /** Цепочка руководителей вверх (#441, ADR-0025 §3): `managerId`, иначе
+   *  руководитель подразделения (management), иначе руководитель родительского
+   *  — без циклов и самоссылки, глубина ≤ 32; ближайший руководитель первым,
+   *  сам сотрудник в цепочку не входит. */
+  managerChainOf(userId: string, tx?: TransactionClient): Promise<string[]>;
 }
 
 export const ORG_STRUCTURE_READER: InjectionToken = 'ORG_STRUCTURE_READER';
