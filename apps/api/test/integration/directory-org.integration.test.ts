@@ -75,7 +75,7 @@ describe('оргструктура: частичная правка (#492)', () 
   });
 
   it('переименование дочернего подразделения сохраняет родителя, руководителя, зама, вид и порядок', async () => {
-    const parent = await createDepartment({ name: `Орг-родитель ${f.runId}` });
+    const parent = await createDepartment({ name: `Орг-родитель ${f.runId}`, kind: 'legal' });
     const child = await createDepartment({
       name: `Орг-ребёнок ${f.runId}`,
       parentId: parent.id,
@@ -108,7 +108,7 @@ describe('оргструктура: частичная правка (#492)', () 
   });
 
   it('явные null переносят в корень и снимают руководителя, не трогая вид и порядок', async () => {
-    const parent = await createDepartment({ name: `Орг-корень ${f.runId}` });
+    const parent = await createDepartment({ name: `Орг-корень ${f.runId}`, kind: 'legal' });
     const child = await createDepartment({
       name: `Орг-перенос ${f.runId}`,
       parentId: parent.id,

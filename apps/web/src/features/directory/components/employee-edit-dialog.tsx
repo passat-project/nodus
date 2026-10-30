@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { UserCard, UserListItem } from '@nodus/contracts';
+import type { UpdateUserDto, UserCard, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
@@ -63,15 +63,22 @@ export function EmployeeEditDialog({
     }
   }
 
-  const managerCandidates = users.filter((user) => user.id !== card.id);
+  const managerCandidates = users.filter((user) => user.id !== card.id && user.status === 'active');
   const pending = update.isPending;
 
   function submit() {
     if (pending) return;
-    update.mutate(
-      { departmentId, positionId, managerId },
-      { onSuccess: () => onOpenChange(false) },
-    );
+    // Шлём ТОЛЬКО изменённые поля: неизменённые архивные/уволенные ссылки
+    // (сервер их не примет при повторной отправке) не мешают сохранить правку.
+    const patch: UpdateUserDto = {};
+    if (departmentId !== card.departmentId) patch.departmentId = departmentId;
+    if (positionId !== card.positionId) patch.positionId = positionId;
+    if (managerId !== card.managerId) patch.managerId = managerId;
+    if (Object.keys(patch).length === 0) {
+      onOpenChange(false);
+      return;
+    }
+    update.mutate(patch, { onSuccess: () => onOpenChange(false) });
   }
 
   return (

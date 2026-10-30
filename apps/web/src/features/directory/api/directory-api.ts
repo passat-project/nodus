@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateDepartmentDto,
+  CreatePositionDto,
   Department,
   DepartmentNode,
   OrgUnitKind,
@@ -8,6 +9,7 @@ import type {
   PresenceEntry,
   PresenceStatus,
   UpdateDepartmentDto,
+  UpdatePositionDto,
   UpdateUserDto,
   UserCard,
 } from '@nodus/contracts';
@@ -15,7 +17,9 @@ import { ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api } from '../../../shared/api-client.js';
+import { toastApiError } from '../../../shared/api/error-toast.js';
 import { isDomainMocked } from '../../../shared/api/api-mock-config.js';
+import { DEPARTMENTS_TREE_PATH } from '../../../shared/api/departments-list.js';
 import { uploadAvatar } from '../../../shared/chat/avatar-upload.js';
 import { useIsOnline } from '../../../shared/socket/presence-store.js';
 import { insertDepartment, patchDepartment } from '../lib/department-tree.js';
@@ -33,14 +37,15 @@ export const directoryKeys = {
 };
 
 /**
- * Дерево оргструктуры вида (контракт GET /directory/departments/tree?kind=, #84):
- * лес корней DepartmentNode. Вид «Подразделения» и панель рисуются из него;
- * бэкенд-агент воспроизводит эндпоинт по контракту и мокам.
+ * Дерево оргструктуры вида (#84, #540): лес корней DepartmentNode по
+ * контрактному пути `/directory/departments/tree` (единая константа
+ * `DEPARTMENTS_TREE_PATH`, страж-тест). Вид «Подразделения» и панель рисуются
+ * из него.
  */
 export function useDepartmentTree(kind: OrgUnitKind) {
   return useQuery({
     queryKey: directoryKeys.departments(kind),
-    queryFn: () => api<DepartmentNode[]>(`/directory/departments/tree?kind=${kind}`),
+    queryFn: () => api<DepartmentNode[]>(`${DEPARTMENTS_TREE_PATH}?kind=${kind}`),
   });
 }
 
@@ -75,7 +80,7 @@ export function useCreateDepartment(kind: OrgUnitKind) {
     },
     onError: (_error, _body, context) => {
       if (context?.previous) queryClient.setQueryData(key, context.previous);
-      toast.error(ui.common.saveError);
+      toastApiError(_error);
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: key });
@@ -98,7 +103,7 @@ export function useUpdateDepartment(kind: OrgUnitKind) {
     },
     onError: (_error, _variables, context) => {
       if (context?.previous) queryClient.setQueryData(key, context.previous);
-      toast.error(ui.common.saveError);
+      toastApiError(_error);
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: key });
@@ -141,7 +146,7 @@ export function useUpdateUser(id: string) {
     },
     onError: (_error, _body, context) => {
       if (context?.previous) queryClient.setQueryData(cardKey, context.previous);
-      toast.error(ui.common.saveError);
+      toastApiError(_error);
     },
     onSuccess: (card) => {
       queryClient.setQueryData(cardKey, card);
@@ -149,6 +154,46 @@ export function useUpdateUser(id: string) {
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: directoryKeys.all });
+    },
+  });
+}
+
+/** Должности вида — мутации администратора (#441): создание, переименование,
+ *  архивация (I15: удаления нет). Инвалидация справочника и отчёта данных. */
+export function useCreatePosition(kind: OrgUnitKind) {
+  const queryClient = useQueryClient();
+  const key = [...directoryKeys.all, 'positions', kind] as const;
+  return useMutation({
+    mutationFn: (body: CreatePositionDto) =>
+      api<Position>('/directory/positions', { method: 'POST', body }),
+    onError: (error) => toastApiError(error),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: key });
+    },
+  });
+}
+
+export function useUpdatePosition(kind: OrgUnitKind) {
+  const queryClient = useQueryClient();
+  const key = [...directoryKeys.all, 'positions', kind] as const;
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdatePositionDto }) =>
+      api<Position>(`/directory/positions/${id}`, { method: 'PATCH', body: patch }),
+    onError: (error) => toastApiError(error),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: key });
+    },
+  });
+}
+
+export function useArchivePosition(kind: OrgUnitKind) {
+  const queryClient = useQueryClient();
+  const key = [...directoryKeys.all, 'positions', kind] as const;
+  return useMutation({
+    mutationFn: (id: string) => api<void>(`/directory/positions/${id}/archive`, { method: 'POST' }),
+    onError: (error) => toastApiError(error),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: key });
     },
   });
 }

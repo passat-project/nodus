@@ -26,6 +26,7 @@ import { DepartmentDialog } from '../components/department-dialog.js';
 import { DepartmentPanel } from '../components/department-panel.js';
 import { DivisionsView } from '../components/divisions-view.js';
 import { InviteDialog } from '../components/invite-dialog.js';
+import { PositionsDialog } from '../components/positions-dialog.js';
 import { StructureKindSwitcher } from '../components/structure-kind-switcher.js';
 import { SubordinationView } from '../components/subordination-view.js';
 import { findDepartment } from '../lib/department-tree.js';
@@ -60,6 +61,7 @@ export function EmployeesPage() {
   const [deptQuery, setDeptQuery] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
   const [dataCheckOpen, setDataCheckOpen] = useState(false);
+  const [positionsOpen, setPositionsOpen] = useState(false);
   const canManage = useCanManageDirectory();
   const [deptDialog, setDeptDialog] = useState<{
     open: boolean;
@@ -157,9 +159,14 @@ export function EmployeesPage() {
               {ui.employees.invite}
             </Button>
             {canManage && (
-              <Button variant="outline" size="sm" onClick={() => setDataCheckOpen(true)}>
-                {ui.employees.dataCheck}
-              </Button>
+              <>
+                <Button variant="outline" size="sm" onClick={() => setPositionsOpen(true)}>
+                  {ui.employees.positions}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setDataCheckOpen(true)}>
+                  {ui.employees.dataCheck}
+                </Button>
+              </>
             )}
             {view === 'divisions' && (
               // Поиск гибкий (flex-1 с пределами): при открытой панели шапка
@@ -237,6 +244,7 @@ export function EmployeesPage() {
       </div>
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} />
       <DataCheckDialog open={dataCheckOpen} onOpenChange={setDataCheckOpen} />
+      <PositionsDialog open={positionsOpen} onOpenChange={setPositionsOpen} />
       <DepartmentDialog
         open={deptDialog.open}
         onOpenChange={(open) => setDeptDialog((prev) => ({ ...prev, open }))}

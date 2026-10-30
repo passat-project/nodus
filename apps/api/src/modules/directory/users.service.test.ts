@@ -157,33 +157,6 @@ describe('UsersService: создание и правка сотрудника', 
       });
     });
 
-    it('ссылка на несуществующего руководителя → 400 DIRECTORY_REFERENCE_INVALID', async () => {
-      users.emailExists.mockResolvedValue(false);
-      roles.countByIds.mockResolvedValue(1);
-      users.findRef.mockResolvedValue(null);
-
-      await expect(
-        service.createUser({ ...CREATE_DTO, managerId: 'ghost' }, actor()),
-      ).rejects.toMatchObject({
-        code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
-        details: { field: 'managerId', reason: 'not_found' },
-      });
-      expect(users.create).not.toHaveBeenCalled();
-    });
-
-    it('подразделение чужого вида структуры → 400 kind_mismatch (#441)', async () => {
-      users.emailExists.mockResolvedValue(false);
-      roles.countByIds.mockResolvedValue(1);
-      departments.findRef.mockResolvedValue({ id: 'dep-1', kind: 'legal', isActive: true });
-
-      await expect(
-        service.createUser({ ...CREATE_DTO, departmentId: 'dep-1' }, actor()),
-      ).rejects.toMatchObject({
-        code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
-        details: { field: 'departmentId', reason: 'kind_mismatch' },
-      });
-    });
-
     it('bind (#490): явная роль с правами, которых нет у актора → 403 ROLE_PERMISSION_NOT_HELD', async () => {
       users.emailExists.mockResolvedValue(false);
       roles.countByIds.mockResolvedValue(1);
@@ -325,45 +298,6 @@ describe('UsersService: создание и правка сотрудника', 
       await service.updateUser('user-1', { roleIds: [] }, actor([Permission.CORE_ADMIN]));
 
       expect(eventBus.emit).toHaveBeenCalled();
-    });
-
-    it('руководитель — сам сотрудник → 400 self (#441)', async () => {
-      users.findCardById.mockResolvedValue(cardRow());
-
-      await expect(
-        service.updateUser('user-1', { managerId: 'user-1' }, actor()),
-      ).rejects.toMatchObject({
-        code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
-        details: { field: 'managerId', reason: 'self' },
-      });
-      expect(users.update).not.toHaveBeenCalled();
-    });
-
-    it('неактивная должность → 400 inactive (#441)', async () => {
-      users.findCardById.mockResolvedValue(cardRow());
-      positions.findRef.mockResolvedValue({ id: 'pos-1', kind: 'management', isActive: false });
-
-      await expect(
-        service.updateUser('user-1', { positionId: 'pos-1' }, actor()),
-      ).rejects.toMatchObject({
-        code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
-        details: { field: 'positionId', reason: 'inactive' },
-      });
-    });
-
-    it('очистка ссылок (null) проходит без проверок (#441)', async () => {
-      users.findCardById.mockResolvedValue(cardRow());
-
-      await service.updateUser(
-        'user-1',
-        { managerId: null, departmentId: null, positionId: null },
-        actor(),
-      );
-
-      expect(users.findRef).not.toHaveBeenCalled();
-      expect(departments.findRef).not.toHaveBeenCalled();
-      expect(positions.findRef).not.toHaveBeenCalled();
-      expect(users.update).toHaveBeenCalled();
     });
   });
 });

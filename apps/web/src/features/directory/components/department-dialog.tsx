@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import type { DepartmentNode, OrgUnitKind, UserListItem } from '@nodus/contracts';
+import type {
+  DepartmentNode,
+  OrgUnitKind,
+  UpdateDepartmentDto,
+  UserListItem,
+} from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
@@ -59,14 +64,24 @@ export function DepartmentDialog({
 
   const valid = name.trim().length > 0;
   const pending = create.isPending || update.isPending;
+  // Кандидаты — только активные: уволенного сервер не примет (валидация
+  // ссылок #441). Текущие значения правки не сбрасываются — их видно в полях.
+  const activeUsers = users.filter((user) => user.status === 'active');
 
   function submit() {
     if (!valid || pending) return;
     if (editing) {
-      update.mutate(
-        { id: editing.id, patch: { name: name.trim(), headId, deputyId } },
-        { onSuccess: () => onOpenChange(false) },
-      );
+      // Только изменённые поля: неизменённая архивная ссылка не блокирует
+      // переименование (сервер валидирует лишь присланное).
+      const patch: UpdateDepartmentDto = {};
+      if (name.trim() !== editing.name) patch.name = name.trim();
+      if (headId !== editing.headId) patch.headId = headId;
+      if (deputyId !== editing.deputyId) patch.deputyId = deputyId;
+      if (Object.keys(patch).length === 0) {
+        onOpenChange(false);
+        return;
+      }
+      update.mutate({ id: editing.id, patch }, { onSuccess: () => onOpenChange(false) });
       return;
     }
     create.mutate(
@@ -95,7 +110,7 @@ export function DepartmentDialog({
               value={headId}
               onChange={setHeadId}
               ariaLabel={ui.employees.fieldHead}
-              users={users}
+              users={activeUsers}
             />
           </Field>
           <Field label={ui.employees.fieldDeputy}>
@@ -103,7 +118,7 @@ export function DepartmentDialog({
               value={deputyId}
               onChange={setDeputyId}
               ariaLabel={ui.employees.fieldDeputy}
-              users={users}
+              users={activeUsers}
             />
           </Field>
         </div>
