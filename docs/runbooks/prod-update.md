@@ -53,6 +53,22 @@ Release) — навык `nodus-release`; этот runbook — шаги выка�
 3. Дождаться итога смока в выводе. Красный смок = выкатка не принята, скрипт
    печатает команду отката.
 
+**Первый переход с локальной сборки** (один раз на хост): `up -d` пересоздаёт
+только сервисы с изменившимся конфигом, поэтому инфраструктурные контейнеры
+(postgres, redis, minio, documentserver, cloudflared) могут остаться с меткой
+старого каталога. После успешного `prod-deploy` пересоздать их из прод-каталога
+тем же kit'ом, чтобы весь прод жил из одного места:
+
+```bash
+docker compose -p nodus --project-directory D:/NodusProd --env-file D:/NodusProd/.env \
+  -f D:/NodusProd/kit/vX.Y.Z/docker-compose.yml -f D:/NodusProd/kit/vX.Y.Z/compose.prod.yaml \
+  --profile office --profile tunnel up -d --force-recreate postgres redis minio minio-init documentserver cloudflared
+```
+
+Проверка: у всех `nodus_*`, кроме `nodus_gotenberg_sandbox` (артефакт dev-дерева),
+`com.docker.compose.project.working_dir` = `D:\NodusProd`. Данные в томах не
+теряются; простой — секунды-минута.
+
 Миграции БД применяет api при старте (`prisma migrate deploy` в CMD образа) —
 отдельной команды нет.
 
