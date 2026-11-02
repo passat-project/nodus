@@ -74,6 +74,10 @@ conv-комнату (троттл-ключ включает root): индика�
 `type_created / type_updated / type_archived / published / layout_changed`) → комната
 `presence` (схемы видят все); список явный, а не префикс: у ADR-0025 будут
 некаталожные `workflow.*` со своей адресацией.
+`custom_field.definition_changed`, `dictionary.*` (#431) и `project.node_kind_changed`
+(#556, ADR-0030 «Реализация») — каталожные: комната `presence`, явные списки
+`CUSTOM_FIELD_CATALOG_EVENTS`/`DICTIONARY_CATALOG_EVENTS`/`PROJECT_CATALOG_EVENTS`;
+виды папок без персональных данных, узлы проекта по-прежнему без реалтайма.
 `chat.sticker_*` (#318, беседы нет): установка/снятие пака → `user:{userId}`;
 содержимое пака — корпоративный → комната `presence` (все аутентифицированные
 сокеты), личный → user-комнаты `payload.audience` (владелец + установившие).
