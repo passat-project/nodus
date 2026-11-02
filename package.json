@@ -15,6 +15,7 @@
     "typecheck": "turbo typecheck",
     "test": "turbo test --filter=!@nodus/e2e",
     "test:e2e": "pnpm --filter @nodus/e2e test",
+    "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "lint": "eslint . --max-warnings 39",
     "live-stack": "node scripts/live-stack.mjs",
     "format": "prettier --write .",
