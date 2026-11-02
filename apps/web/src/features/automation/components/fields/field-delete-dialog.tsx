@@ -41,6 +41,9 @@ export function FieldDeleteDialog({
     .map((target, index) => ({ target, workflows: usage[index]?.data?.workflows ?? [] }))
     .filter((entry) => entry.workflows.length > 0);
   const values = usage.reduce((sum, query) => sum + (query.data?.valueCount ?? 0), 0);
+  const kindNames = [
+    ...new Set(usage.flatMap((query) => (query.data?.nodeKinds ?? []).map((kind) => kind.name))),
+  ];
   const single = targets.length === 1;
 
   function confirm() {
@@ -119,6 +122,11 @@ export function FieldDeleteDialog({
                 ui.customFields.delete.valuesNone
               )}
             </p>
+            {kindNames.length > 0 ? (
+              <p className="text-secondary-foreground">
+                {ui.customFields.delete.nodeKinds} {kindNames.join(', ')}
+              </p>
+            ) : null}
             <p className="text-muted-foreground">{ui.customFields.delete.irreversible}</p>
           </div>
         )}

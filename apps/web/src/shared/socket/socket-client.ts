@@ -7,6 +7,10 @@ import {
   CHAT_EVENTS,
   TASK_EVENTS,
   chatMessageSentPayloadSchema,
+  CUSTOM_FIELD_CATALOG_EVENTS,
+  DICTIONARY_CATALOG_EVENTS,
+  PROJECT_CATALOG_EVENTS,
+  WORKFLOW_CATALOG_EVENTS,
 } from '@nodus/contracts';
 
 import { isDomainMocked } from '../api/api-mock-config.js';
@@ -75,6 +79,13 @@ export const DOMAIN_EVENTS = [
   // Живые задачи (#311): весь каталог task.* (fanout в user-комнаты
   // аудитории задачи) — доски/карточки/счётчик комментариев без F5.
   ...Object.values(TASK_EVENTS),
+  // Каталоги «Полей», справочников, процессов и видов папок (#431/#428/#556):
+  // gateway рассылает их всем в presence, но без строки здесь событие до
+  // роутера инвалидаций не доходит и молча теряется (F6, gotcha #311).
+  ...CUSTOM_FIELD_CATALOG_EVENTS,
+  ...DICTIONARY_CATALOG_EVENTS,
+  ...WORKFLOW_CATALOG_EVENTS,
+  ...PROJECT_CATALOG_EVENTS,
 ] as const;
 
 let socket: Socket | null = null;

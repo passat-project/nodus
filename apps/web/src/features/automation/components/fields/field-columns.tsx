@@ -1,9 +1,10 @@
 import { EyeOff, Info } from 'lucide-react';
-import type { CustomFieldDefinition } from '@nodus/contracts';
-import { SystemDictionary, typeIdsOf, ui } from '@nodus/contracts';
+import type { CustomFieldDefinition, CustomFieldScope } from '@nodus/contracts';
+import { nodeKindFormOf, SystemDictionary, typeIdsOf, ui } from '@nodus/contracts';
 
 import { CustomFieldTypeIcon } from '../../../../shared/custom-fields/field-type-icon.js';
 import { CustomFieldValueView, refsById } from '../../../../shared/custom-fields/value-view.js';
+import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
 import { useDictionaryItems } from '../../../../shared/dictionaries/queries.js';
 import { useProcessTypes } from '../../api/automation-api.js';
 import { formatDateTimeShort, plural } from '../../../../shared/lib/format.js';
@@ -68,10 +69,29 @@ function DefaultCell({ definition }: { definition: CustomFieldDefinition }) {
   );
 }
 
+/** Виды папок, в форме которых стоит атрибут (#556): колонка «Виды папок»
+ *  области «Папки» — обратная сторона формы вида (привязки нет). */
+function NodeKindsCell({ definition }: { definition: CustomFieldDefinition }) {
+  const { data: kinds } = useNodeKinds();
+  const names = (kinds ?? [])
+    .filter((kind) => nodeKindFormOf(kind).fields.some((slot) => slot.fieldId === definition.id))
+    .map((kind) => kind.name);
+  if (names.length === 0) return <span className={muted}>{ui.customFields.bind.nodeNone}</span>;
+  const shown = names.slice(0, 2).join(', ');
+  const rest = names.length - 2;
+  return (
+    <span className="truncate text-sm text-secondary-foreground" title={names.join(', ')}>
+      {shown}
+      {rest > 0 ? ` ${ui.customFields.bind.moreTypes} ${rest}` : ''}
+    </span>
+  );
+}
+
 /** Типы, которым принадлежит атрибут (#432, В2): пусто — «Нигде не
  *  показывается» (приглушённо). У проектов и контрагентов типов нет. */
 function TypesCell({ definition }: { definition: CustomFieldDefinition }) {
   const { data: types } = useProcessTypes();
+  if (definition.scope === 'node') return <NodeKindsCell definition={definition} />;
   if (definition.scope !== 'task' && definition.scope !== 'letter') {
     return <span className={muted}>{ui.customFields.cells.allEntities}</span>;
   }
@@ -206,3 +226,13 @@ export const fieldColumns: DataTableField<CustomFieldDefinition>[] = [
     sortValue: (definition) => definition.updatedAt,
   },
 ];
+
+/** Колонки реестра для области: у «Папок» колонка «Типы» называется
+ *  «Виды папок» (#556) — id колонки и пресет вида те же. */
+export function fieldColumnsFor(scope: CustomFieldScope): DataTableField<CustomFieldDefinition>[] {
+  return scope === 'node'
+    ? fieldColumns.map((field) =>
+        field.id === 'types' ? { ...field, label: ui.customFields.bind.nodeColumn } : field,
+      )
+    : fieldColumns;
+}

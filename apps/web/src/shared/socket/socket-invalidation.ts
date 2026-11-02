@@ -18,6 +18,7 @@ import { notificationsKeys } from '../notifications-keys.js';
 import { bumpCommentsOnce, useCommentsLive } from '../tasks/comments-live.js';
 import { createKeyBatcher, type KeyBatcher } from './invalidation-batcher.js';
 import { pushCustomFieldKeys } from './custom-fields-invalidation.js';
+import { pushNodeKindKeys } from './node-kinds-invalidation.js';
 import { pushTaskKeys } from './task-invalidation.js';
 import { pushWorkflowKeys } from './workflow-invalidation.js';
 
@@ -223,6 +224,7 @@ export function createRealtimeInvalidator(queryClient: QueryClient): RealtimeInv
           if (envelope.type.startsWith('task.'))
             pushTaskKeys(batcher, queryClient, envelope.type, payload);
           else if (pushCustomFieldKeys(batcher, queryClient, envelope.type)) return;
+          else if (pushNodeKindKeys(batcher, queryClient, envelope.type)) return;
           else pushWorkflowKeys(batcher, queryClient, envelope.type, payload);
           return;
       }
