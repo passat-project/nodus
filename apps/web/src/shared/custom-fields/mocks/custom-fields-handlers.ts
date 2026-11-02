@@ -20,6 +20,7 @@ import { projectsAvailable } from '../../api/projects-available.js';
 import { dictionaryById } from '../../mocks/data/dictionaries.js';
 import { demoCustomFieldDefinitions, demoFieldById } from '../../mocks/data/custom-fields.js';
 import { demoRefsForValues } from '../../mocks/data/custom-fields-refs.js';
+import { demoNodeKinds, demoNodeRows } from '../../mocks/data/project-nodes.js';
 import { demoSubtasks, demoTasks } from '../../mocks/data/tasks.js';
 import { mockTypes } from '../../mocks/data/process-types-store.js';
 import { workflowsUsingField } from '../../mocks/data/workflows-store.js';
@@ -29,7 +30,7 @@ import { workflowsUsingField } from '../../mocks/data/workflows-store.js';
  *  справочник неизменен, «Проект» доступен только в мок-мире проектов,
  *  удаление запрещено, пока атрибут стоит в маршрутах процессов. */
 
-const SCOPE_ORDER: CustomFieldScope[] = ['task', 'letter', 'project', 'counterparty'];
+const SCOPE_ORDER: CustomFieldScope[] = ['task', 'letter', 'project', 'node', 'counterparty'];
 
 function dto(definition: CustomFieldDefinition): CustomFieldDefinition {
   const dictionary = definition.settings.dictionaryId
@@ -71,12 +72,22 @@ function scopeCount(scope: CustomFieldScope): number {
   return demoCustomFieldDefinitions.filter((entry) => entry.scope === scope).length;
 }
 
-/** Сущности со значением атрибута (мок хранит значения только у задач). */
+/** Сущности со значением атрибута: задачи (включая подзадачи) и папки. */
 function entitiesWithValue(definition: CustomFieldDefinition) {
+  if (definition.scope === 'node') {
+    return demoNodeRows.filter((node) => node.customFields[definition.id] !== undefined);
+  }
   if (definition.scope !== 'task') return [];
   return [...demoTasks, ...Object.values(demoSubtasks).flat()].filter(
     (task) => task.customFields?.[definition.id] !== undefined,
   );
+}
+
+/** Виды папок, в форме которых стоит атрибут (usage области node, #556). */
+function kindsUsingField(fieldId: string) {
+  return demoNodeKinds
+    .filter((kind) => kind.form.fields.some((slot) => slot.fieldId === fieldId))
+    .map((kind) => ({ id: kind.id, name: kind.name }));
 }
 
 export const customFieldsHandlers = [
@@ -243,6 +254,7 @@ export const customFieldsHandlers = [
     const usage: CustomFieldUsage = {
       valueCount: entitiesWithValue(definition).length,
       workflows: workflowsUsingField(definition.id),
+      nodeKinds: definition.scope === 'node' ? kindsUsingField(definition.id) : [],
     };
     return HttpResponse.json(usage);
   }),
@@ -256,10 +268,17 @@ export const customFieldsHandlers = [
         workflows,
       });
     }
+    // Уборка значений (Р11): задачи и папки; формы видов теряют атрибут.
     for (const task of entitiesWithValue(definition)) {
       const next = { ...task.customFields };
       delete next[definition.id];
       task.customFields = next;
+    }
+    for (const kind of demoNodeKinds) {
+      kind.form = {
+        ...kind.form,
+        fields: kind.form.fields.filter((slot) => slot.fieldId !== definition.id),
+      };
     }
     demoCustomFieldDefinitions.splice(demoCustomFieldDefinitions.indexOf(definition), 1);
     return new HttpResponse(null, { status: 204 });

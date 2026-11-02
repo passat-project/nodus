@@ -1,20 +1,24 @@
 import type { NodeKind, ProjectNode, ProjectNodeRollup } from '@nodus/contracts';
 import { isCompletedState, isOpenState, NODE_LIMITS } from '@nodus/contracts';
 
+import { KOMPLEKT_KIND_ID, MARKA_FIELD_ID, SET_MARK_OV_ID } from './set-marks.js';
+
 import { isoAgo } from './dates.js';
 import { nodeIds } from './project-node-ids.js';
 import { demoTasks } from './tasks.js';
 import { projectRefs } from './task-item-factory.js';
 
-/** Структура демо-проектов (#467, ADR-0030): виды уровней (справочник
- *  «Автоматизации», посев по ТКП 45-1.02-295) и узлы-папки демо-проекта p4.
- *  Rollup-агрегаты узла считаются по ПРЯМЫМ задачам (tasks.nodeId) при каждом
- *  чтении — структура всегда отвечает свежим срезом мок-мира. Порядок
- *  сиблингов = порядок строк в массиве (move переставляет splice'ом). */
+/** Структура демо-проектов (#467, #556): виды папок (справочник
+ *  «Автоматизации», посев по ТКП 45-1.02-295 + «Комплект») и папки
+ *  демо-проекта p4. Rollup-агрегаты папки считаются по ПРЯМЫМ задачам
+ *  (tasks.nodeId) при каждом чтении — структура всегда отвечает свежим
+ *  срезом мок-мира. Порядок сиблингов = порядок строк в массиве. */
 
 const kindId = (n: number): string => `44000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
-/** Виды уровней — ярлыки узлов (значок + цвет). */
+const defaultForm = { code: 'optional' as const, fields: [] };
+
+/** Виды папок — настраиваемые типы (#556): форма и возможности. */
 export const nodeKindIds = {
   stage: kindId(1),
   queue: kindId(2),
@@ -22,17 +26,36 @@ export const nodeKindIds = {
   building: kindId(4),
   section: kindId(5),
   phase: kindId(6),
+  komplekt: KOMPLEKT_KIND_ID,
 } as const;
 
 export const demoNodeKinds: NodeKind[] = [
-  { id: nodeKindIds.stage, name: 'Стадия', icon: 'layers', color: 'amber', archivedAt: null },
-  { id: nodeKindIds.queue, name: 'Очередь', icon: 'route', color: 'blue', archivedAt: null },
+  {
+    id: nodeKindIds.stage,
+    name: 'Стадия',
+    icon: 'layers',
+    color: 'amber',
+    archivedAt: null,
+    form: defaultForm,
+    capabilities: [],
+  },
+  {
+    id: nodeKindIds.queue,
+    name: 'Очередь',
+    icon: 'route',
+    color: 'blue',
+    archivedAt: null,
+    form: defaultForm,
+    capabilities: [],
+  },
   {
     id: nodeKindIds.startup,
     name: 'Пусковой комплекс',
     icon: 'milestone',
     color: 'green',
     archivedAt: null,
+    form: defaultForm,
+    capabilities: [],
   },
   {
     id: nodeKindIds.building,
@@ -40,9 +63,41 @@ export const demoNodeKinds: NodeKind[] = [
     icon: 'building',
     color: 'sky',
     archivedAt: null,
+    form: defaultForm,
+    capabilities: [],
   },
-  { id: nodeKindIds.section, name: 'Раздел', icon: 'listTree', color: 'pink', archivedAt: null },
-  { id: nodeKindIds.phase, name: 'Этап', icon: 'flag', color: 'terra', archivedAt: null },
+  {
+    id: nodeKindIds.section,
+    name: 'Раздел',
+    icon: 'listTree',
+    color: 'pink',
+    archivedAt: null,
+    form: defaultForm,
+    capabilities: [],
+  },
+  {
+    id: nodeKindIds.phase,
+    name: 'Этап',
+    icon: 'flag',
+    color: 'terra',
+    archivedAt: null,
+    form: defaultForm,
+    capabilities: [],
+  },
+  // Посевной «Комплект» (#556): шифр обязателен (В1), «Марка» обязательна,
+  // все три возможности включены. Мок повторяет миграцию Б.
+  {
+    id: nodeKindIds.komplekt,
+    name: 'Комплект',
+    icon: 'fileText',
+    color: 'blue',
+    archivedAt: null,
+    form: {
+      code: 'required',
+      fields: [{ fieldId: MARKA_FIELD_ID, state: 'required' }],
+    },
+    capabilities: ['document_changes', 'pulse_row', 'schema_row'],
+  },
 ];
 
 /** Строка узла мок-мира (до гидратации rollup). */
@@ -53,11 +108,16 @@ export interface DemoNodeRow {
   kindId: string;
   name: string;
   code: string | null;
+  customFields: Record<
+    string,
+    string | number | boolean | string[] | { amount: number; currencyId: string }
+  >;
   createdAt: string;
 }
 
 /** Дерево демо-проекта p4 «Главный корпус галургической фабрики»:
- *  Здание 1 → разделы АР/КР/ИОС, Здание 2 → АР (модель «папки в проводнике»). */
+ *  Здание 1 → разделы АР/КР/ИОС + комплект ОВ1.1, Здание 2 → АР (модель
+ *  «папки в проводнике»). «Комплект» (#556) — папка-документ с маркой. */
 export const demoNodeRows: DemoNodeRow[] = [
   {
     id: nodeIds.b1,
@@ -66,6 +126,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     kindId: nodeKindIds.building,
     name: 'Здание 1',
     code: null,
+    customFields: {},
     createdAt: isoAgo(80),
   },
   {
@@ -75,6 +136,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     kindId: nodeKindIds.section,
     name: 'Архитектурные решения',
     code: 'АР',
+    customFields: {},
     createdAt: isoAgo(79),
   },
   {
@@ -84,6 +146,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     kindId: nodeKindIds.section,
     name: 'Конструктивные решения',
     code: 'КР',
+    customFields: {},
     createdAt: isoAgo(78),
   },
   {
@@ -93,7 +156,18 @@ export const demoNodeRows: DemoNodeRow[] = [
     kindId: nodeKindIds.section,
     name: 'Инженерное обеспечение',
     code: 'ИОС',
+    customFields: {},
     createdAt: isoAgo(77),
+  },
+  {
+    id: nodeIds.ov11,
+    projectId: projectRefs.p4.id,
+    parentId: nodeIds.b1ios,
+    kindId: nodeKindIds.komplekt,
+    name: 'ОВ1.1',
+    code: 'ОВ1.1',
+    customFields: { [MARKA_FIELD_ID]: SET_MARK_OV_ID },
+    createdAt: isoAgo(76),
   },
   {
     id: nodeIds.b2,
@@ -102,6 +176,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     kindId: nodeKindIds.building,
     name: 'Здание 2',
     code: null,
+    customFields: {},
     createdAt: isoAgo(50),
   },
   {
@@ -111,6 +186,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     kindId: nodeKindIds.section,
     name: 'Архитектурные решения',
     code: 'АР',
+    customFields: {},
     createdAt: isoAgo(49),
   },
 ];
@@ -157,6 +233,7 @@ export function projectNodeDto(row: DemoNodeRow): ProjectNode {
     kindId: row.kindId,
     name: row.name,
     code: row.code,
+    customFields: row.customFields,
     rollup: rollupOfNode(row.id),
     createdAt: row.createdAt,
   };
