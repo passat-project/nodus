@@ -9,7 +9,7 @@ import { ArrowDown, ArrowUp, Plus } from 'lucide-react';
 import { useRouteDocStore } from '../../../model/route-doc-store.js';
 import { AddTransitionPopover } from '../add-transition-popover.js';
 import { ProcessPreview } from '../process-preview.js';
-import { PanelAction, PanelField, SectionLink } from './panel-kit.js';
+import { PanelAction, PanelField, SectionLink } from '../../../../../shared/ui/panel/panel-kit.js';
 
 const bySortOrder = (a: WorkflowDraftTransition, b: WorkflowDraftTransition) =>
   a.sortOrder - b.sortOrder;

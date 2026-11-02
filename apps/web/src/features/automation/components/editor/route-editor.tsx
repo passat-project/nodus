@@ -23,7 +23,7 @@ import {
   StaleDraftBanner,
 } from './editor-parts.js';
 import { EditorPanel } from './panel/editor-panel.js';
-import { SIDE_PANEL_WIDTH } from './panel/side-panel.js';
+import { SIDE_PANEL_WIDTH } from '../../../../shared/ui/panel/side-panel.js';
 import { PublishDialog } from './publish-dialog.js';
 import { RouteCanvas } from './route-canvas.js';
 import { RouteToolbar } from './route-toolbar.js';

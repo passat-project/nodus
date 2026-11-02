@@ -16,7 +16,7 @@ import { useCanManageFields } from '../../../../../shared/custom-fields/use-can-
 import { useBindFieldType } from '../../../api/custom-fields-api.js';
 import { unusedKeys } from '../../../model/creation-form.js';
 import { FieldDialog } from '../../fields/field-dialog.js';
-import { PanelAction } from './panel-kit.js';
+import { PanelAction } from '../../../../../shared/ui/panel/panel-kit.js';
 
 const c = ui.automation.creation;
 

@@ -8,7 +8,7 @@ import { Check, Plus, X } from 'lucide-react';
 
 import { useRoles } from '../../../../../shared/api/roles.js';
 import { useUpdateProcessType, useUpdateProcessTypeConfig } from '../../../api/automation-api.js';
-import { ModeChoices, PanelField, PanelNote } from './panel-kit.js';
+import { ModeChoices, PanelField, PanelNote } from '../../../../../shared/ui/panel/panel-kit.js';
 
 /** Режим списка доступа: «всем» (`null` в конфигурации) или роли. */
 type ViewMode = 'all' | 'roles';

@@ -4,8 +4,8 @@ import { CircleAlert } from 'lucide-react';
 
 import { SlotControl } from '../../../../../shared/tasks/task-create-fields.js';
 import { initialPreset, type SlotPatch } from '../../../model/creation-form.js';
-import { CommitInput } from './commit-field.js';
-import { PanelDanger, PanelField, SwitchRow } from './panel-kit.js';
+import { CommitInput } from '../../../../../shared/ui/panel/commit-field.js';
+import { PanelDanger, PanelField, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
 
 const c = ui.automation.creation;
 

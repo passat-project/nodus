@@ -18,9 +18,9 @@ import {
   numberingSummary,
   roleLabelsSummary,
 } from '../../lib/type-settings-summary.js';
-import { CommitInput, CommitTextarea } from '../editor/panel/commit-field.js';
-import { PanelField, SectionLink } from '../editor/panel/panel-kit.js';
-import { SidePanel } from '../editor/panel/side-panel.js';
+import { CommitInput, CommitTextarea } from '../../../../shared/ui/panel/commit-field.js';
+import { PanelField, SectionLink } from '../../../../shared/ui/panel/panel-kit.js';
+import { SidePanel } from '../../../../shared/ui/panel/side-panel.js';
 import { TypeAccessSection } from '../editor/panel/type-settings-access.js';
 import { TypeBlocksSection, TypeRoleLabelsSection } from '../editor/panel/type-settings-card.js';
 

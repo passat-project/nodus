@@ -2,8 +2,8 @@ import type { ProcessType, TaskCardBlock, TaskRoleKey } from '@nodus/contracts';
 import { taskCardBlockOrder, taskRoleKeySchema, typeConfigOf, ui } from '@nodus/contracts';
 
 import { useUpdateProcessTypeConfig } from '../../../api/automation-api.js';
-import { CommitInput } from './commit-field.js';
-import { PanelField, SwitchRow } from './panel-kit.js';
+import { CommitInput } from '../../../../../shared/ui/panel/commit-field.js';
+import { PanelField, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
 
 const t = ui.automation.typeSettings.card;
 
