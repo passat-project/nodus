@@ -7,20 +7,25 @@
 //   node scripts/desktop-publish.mjs --run <id> --dest <dir> [--dry-run]
 //   node scripts/desktop-publish.mjs --from <dir> --dest <dir> [--dry-run]
 //
-// --run забирает артефакт прогона desktop-release.yml (gh run download),
-// --from берёт уже скачанный каталог. Раскладка: <dest>/releases/<версия>/ +
-// <dest>/latest.json (атомарно: tmp → rename). Версия не перезаписывается:
-// новая версия — новый каталог и поднятая версия в tauri.conf.json.
+// --run забирает артефакт прогона desktop-release.yml (gh run download) и
+// сверяет, что это действительно успешный прогон релизного workflow с main:
+// скачать артефакт любого прогона репозитория — не то же самое, что выпустить
+// релиз. --from берёт уже скачанный каталог. Раскладка: <dest>/releases/<версия>/
+// (каталог собирается в staging и переименовывается целиком) + <dest>/latest.json
+// (tmp → rename). Версия не перезаписывается: новая версия — новый каталог и
+// поднятая версия в tauri.conf.json.
 
 import { execFileSync } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   renameSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
@@ -28,7 +33,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { validateRelease } from './lib/desktop-release.mjs';
+import { releaseFileNames, validateRelease } from './lib/desktop-release.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = parseArgs(process.argv.slice(2));
@@ -43,13 +48,13 @@ function publish({ run, from, dest, dryRun }) {
   if (!dest) fail('укажите --dest <каталог раздачи>, например D:/NodusProd/desktop');
   const destDir = resolve(String(dest));
   const sourceDir = resolveSource({ run, from });
-  const { manifest, files, sigs } = readRelease(sourceDir);
+  const { manifest, files, sigs, contents } = readRelease(sourceDir);
   const pubkeyB64 = JSON.parse(
     readFileSync(resolve(repoRoot, 'apps/desktop/src-tauri/tauri.conf.json'), 'utf8'),
   ).plugins.updater.pubkey;
   const currentVersion = readCurrentVersion(destDir);
 
-  const errors = validateRelease({ manifest, files, sigs, pubkeyB64, currentVersion });
+  const errors = validateRelease({ manifest, files, sigs, pubkeyB64, currentVersion, contents });
   if (errors.length > 0) {
     console.error(`desktop-publish: выпуск отвергнут (${errors.length}):`);
     for (const error of errors) console.error(`  ✗ ${error}`);
@@ -57,6 +62,7 @@ function publish({ run, from, dest, dryRun }) {
   }
 
   const version = manifest.version;
+  const names = releaseFileNames(manifest);
   const releaseDir = join(destDir, 'releases', version);
   if (existsSync(releaseDir)) {
     fail(`версия ${version} уже выпущена (${releaseDir}) — поднимите version в tauri.conf.json`);
@@ -64,24 +70,36 @@ function publish({ run, from, dest, dryRun }) {
 
   if (dryRun) {
     console.log(`desktop-publish: проверки пройдены (dry-run), версия ${version}`);
-    console.log(`  файлы: ${installerNames(manifest).join(', ')}`);
+    console.log(`  файлы: ${names.join(', ')}`);
     console.log(`  будет создан ${releaseDir} и обновлён ${join(destDir, 'latest.json')}`);
     return;
   }
 
-  mkdirSync(releaseDir, { recursive: true });
-  for (const name of installerNames(manifest)) {
-    for (const file of [name, `${name}.sig`]) {
-      const target = join(releaseDir, file);
-      copyFileSync(join(sourceDir, file), target);
-      const expected = files[file] ?? statSync(join(sourceDir, file)).size;
-      const actual = statSync(target).size;
-      if (actual !== expected) fail(`копия ${file} повреждена: ${actual} байт вместо ${expected}`);
+  // Каталог версии собирается в staging и переименовывается целиком: обрыв
+  // копирования не оставляет «полувыпущенную» версию, которую потом нельзя
+  // перезаписать (версии неизменяемы).
+  const stagingDir = join(destDir, 'releases', `.${version}.staging`);
+  rmSync(stagingDir, { recursive: true, force: true });
+  mkdirSync(stagingDir, { recursive: true });
+  try {
+    for (const name of names) {
+      for (const file of [name, `${name}.sig`]) {
+        const target = join(stagingDir, file);
+        copyFileSync(join(sourceDir, file), target);
+        const expected = files[file] ?? statSync(join(sourceDir, file)).size;
+        const actual = statSync(target).size;
+        if (actual !== expected)
+          fail(`копия ${file} повреждена: ${actual} байт вместо ${expected}`);
+      }
     }
+    renameSync(stagingDir, releaseDir);
+  } catch (error) {
+    rmSync(stagingDir, { recursive: true, force: true });
+    throw error;
   }
 
   // Байты источника без переформатирования: nginx sub_filter ждёт минифицированный JSON.
-  const tmpManifest = join(destDir, 'latest.json.tmp');
+  const tmpManifest = join(releaseDir, '.latest.json.tmp');
   writeFileSync(tmpManifest, readFileSync(join(sourceDir, 'latest.json')));
   renameSync(tmpManifest, join(destDir, 'latest.json'));
 
@@ -98,6 +116,7 @@ function resolveSource({ run, from }) {
     if (!existsSync(dir)) fail(`каталог выпуска не найден: ${dir}`);
     return dir;
   }
+  verifyRun(String(run));
   const tmp = mkdtempSync(join(tmpdir(), 'nodus-desktop-'));
   execFileSync('gh', ['run', 'download', String(run), '-D', tmp], { stdio: 'inherit' });
   const dirs = readdirSync(tmp, { withFileTypes: true })
@@ -107,6 +126,30 @@ function resolveSource({ run, from }) {
     fail(`в прогоне ${run} ожидался один артефакт nodus-desktop-release-*, найдено ${dirs.length}`);
   }
   return join(tmp, dirs[0]);
+}
+
+function verifyRun(runId) {
+  let meta;
+  try {
+    meta = JSON.parse(
+      execFileSync('gh', ['run', 'view', runId, '--json', 'workflowName,headBranch,conclusion'], {
+        encoding: 'utf8',
+      }),
+    );
+  } catch (error) {
+    fail(`не удалось прочитать прогон ${runId}: ${error.message}`);
+  }
+  if (meta.workflowName !== 'desktop-release') {
+    fail(
+      `прогон ${runId} — «${meta.workflowName}», а не desktop-release: чужой артефакт не выкладываем`,
+    );
+  }
+  if (meta.headBranch !== 'main') {
+    fail(`прогон ${runId} с ветки «${meta.headBranch}» — выпуск разрешён только с main`);
+  }
+  if (meta.conclusion !== 'success') {
+    fail(`прогон ${runId} не успешен (${meta.conclusion ?? 'идёт'}) — дождитесь success`);
+  }
 }
 
 function readRelease(sourceDir) {
@@ -120,14 +163,20 @@ function readRelease(sourceDir) {
   }
   const files = {};
   const sigs = {};
+  const contents = {};
   for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
-    if (!entry.isFile() || entry.name === 'latest.json') continue;
-    files[entry.name] = statSync(join(sourceDir, entry.name)).size;
-    if (entry.name.endsWith('.sig')) {
-      sigs[entry.name] = readFileSync(join(sourceDir, entry.name), 'utf8');
+    if (entry.name === 'latest.json') continue;
+    if (entry.isSymbolicLink()) {
+      fail(`в выпуске симлинк «${entry.name}» — в раздачу кладутся только настоящие файлы`);
     }
+    if (!entry.isFile()) continue;
+    const path = join(sourceDir, entry.name);
+    files[entry.name] = lstatSync(path).size;
+    const bytes = readFileSync(path);
+    contents[entry.name] = bytes;
+    if (entry.name.endsWith('.sig')) sigs[entry.name] = bytes.toString('utf8');
   }
-  return { manifest, files, sigs };
+  return { manifest, files, sigs, contents };
 }
 
 function readCurrentVersion(destDir) {
@@ -138,11 +187,6 @@ function readCurrentVersion(destDir) {
   } catch (error) {
     fail(`текущий ${path} не разбирается: ${error.message}`);
   }
-}
-
-function installerNames(manifest) {
-  const urls = Object.values(manifest.platforms ?? {}).map((entry) => String(entry?.url ?? ''));
-  return [...new Set(urls.map((url) => url.split('/').pop()).filter(Boolean))];
 }
 
 function parseArgs(argv) {

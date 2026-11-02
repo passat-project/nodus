@@ -1,39 +1,68 @@
-// Тесты проверок выпуска (#562). Подписи синтетические: установщики в git не
-// лежат (infra/desktop-dist в .gitignore), а проверяем мы не криптографию, а
-// структуру .sig и соответствие манифесту. Публичный ключ — настоящий, из
-// tauri.conf.json: именно с ним сверяется id ключа подписи.
+// Тесты проверок выпуска (#562). Установщики в git не лежат (infra/desktop-dist
+// в .gitignore), поэтому фикстуры строятся здесь же: генерируется настоящая
+// пара Ed25519, файл подписывается по формату minisign (prehashed BLAKE2b-512 +
+// global-подпись trusted comment). Так проверяется не только структура .sig, но
+// и криптографическая сверка — подделка с публичным keyId не проходит.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { randomFillSync } from 'node:crypto';
+import { createHash, generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { compareSemver, parseSig, pubkeyId, validateRelease } from './desktop-release.mjs';
+import {
+  compareSemver,
+  parseSig,
+  pubkeyId,
+  releaseFileNames,
+  validateRelease,
+  verifySignature,
+} from './desktop-release.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const tauriConf = JSON.parse(
   readFileSync(resolve(repoRoot, 'apps/desktop/src-tauri/tauri.conf.json'), 'utf8'),
 );
-const pubkeyB64 = tauriConf.plugins.updater.pubkey;
-const KEY_ID = pubkeyId(pubkeyB64);
+const realPubkeyB64 = tauriConf.plugins.updater.pubkey;
+
 const VERSION = '1.0.10';
 const EXE = `Nodus_${VERSION}_x64-setup.exe`;
 const MSI = `Nodus_${VERSION}_x64_ru-RU.msi`;
 
-function makeSig({ file = EXE, version = VERSION, keyId = KEY_ID, withVersion = true } = {}) {
-  const blob = Buffer.alloc(74);
-  blob.write('ED', 0, 'ascii');
-  Buffer.from(keyId, 'hex').copy(blob, 2);
-  randomFillSync(blob, 10, 64);
+// Своя пара ключей для фикстур: приватного ключа оболочки у теста нет и быть не должно.
+const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+const KEY_ID = '0011223344556677';
+const rawPublicKey = publicKey.export({ format: 'der', type: 'spki' }).subarray(12);
+const pubkeyB64 = Buffer.from(
+  [
+    'untrusted comment: minisign public key: 0011223344556677',
+    Buffer.concat([Buffer.from('Ed'), Buffer.from(KEY_ID, 'hex'), rawPublicKey]).toString('base64'),
+    '',
+  ].join('\n'),
+  'utf8',
+).toString('base64');
+
+function makeSig(
+  fileBytes,
+  { file = EXE, version = VERSION, keyId = KEY_ID, withVersion = true } = {},
+) {
+  const signature = cryptoSign(
+    null,
+    createHash('blake2b512').update(fileBytes).digest(),
+    privateKey,
+  );
+  const blob = Buffer.concat([Buffer.from('ED'), Buffer.from(keyId, 'hex'), signature]);
   const trusted = [
     'trusted comment: timestamp:1792611930',
     `file:${file}`,
     ...(withVersion ? [`version:${version}`] : []),
   ].join('\t');
-  const global = Buffer.alloc(64);
-  randomFillSync(global, 0, 64);
+  const global = cryptoSign(
+    null,
+    Buffer.concat([signature, Buffer.from(trusted.slice('trusted comment: '.length))]),
+    privateKey,
+  );
   return Buffer.from(
     [
       'untrusted comment: signature from tauri secret key',
@@ -47,21 +76,25 @@ function makeSig({ file = EXE, version = VERSION, keyId = KEY_ID, withVersion = 
 }
 
 function buildRelease({ withMsi = false } = {}) {
-  const nsisSig = makeSig({ file: EXE });
+  const exeBytes = Buffer.alloc(4096, 7);
+  const nsisSig = makeSig(exeBytes, { file: EXE });
   const platforms = {
     'windows-x86_64-nsis': { signature: nsisSig, url: `/desktop/releases/${VERSION}/${EXE}` },
     'windows-x86_64': { signature: nsisSig, url: `/desktop/releases/${VERSION}/${EXE}` },
   };
-  const files = { [EXE]: 4064139 };
+  const files = { [EXE]: exeBytes.length };
   const sigs = { [`${EXE}.sig`]: nsisSig };
+  const contents = { [EXE]: exeBytes };
   if (withMsi) {
-    const msiSig = makeSig({ file: MSI });
+    const msiBytes = Buffer.alloc(8192, 9);
+    const msiSig = makeSig(msiBytes, { file: MSI });
     platforms['windows-x86_64-msi'] = {
       signature: msiSig,
       url: `/desktop/releases/${VERSION}/${MSI}`,
     };
-    files[MSI] = 6115328;
+    files[MSI] = msiBytes.length;
     sigs[`${MSI}.sig`] = msiSig;
+    contents[MSI] = msiBytes;
   }
   return {
     manifest: {
@@ -72,6 +105,7 @@ function buildRelease({ withMsi = false } = {}) {
     },
     files,
     sigs,
+    contents,
     pubkeyB64,
   };
 }
@@ -94,12 +128,13 @@ test('валидный выпуск с подписанным MSI проходи
 test('неподписанный MSI рядом с выпуском не мешает', () => {
   const release = buildRelease();
   release.files[MSI] = 6115328;
+  release.contents[MSI] = Buffer.alloc(6115328, 1);
   assert.deepEqual(validateRelease(release), []);
 });
 
 test('подпись без version отвергается (класс инцидента 1.0.7/1.0.8)', () => {
   const release = buildRelease();
-  setNsisSignature(release, makeSig({ withVersion: false }));
+  setNsisSignature(release, makeSig(release.contents[EXE], { withVersion: false }));
   const errors = validateRelease(release);
   assert.ok(
     errors.some((error) => error.includes('version:')),
@@ -109,11 +144,35 @@ test('подпись без version отвергается (класс инци�
 
 test('подпись чужим ключом отвергается', () => {
   const release = buildRelease();
-  setNsisSignature(release, makeSig({ keyId: '0011223344556677' }));
+  setNsisSignature(release, makeSig(release.contents[EXE], { keyId: 'ffeeddccbbaa9988' }));
   const errors = validateRelease(release);
   assert.ok(
     errors.some((error) => error.includes(KEY_ID)),
     `ожидалась ошибка про ключ ${KEY_ID}, получено: ${errors.join(' | ')}`,
+  );
+});
+
+test('подмена байтов установщика отвергается криптографией', () => {
+  const release = buildRelease();
+  release.contents[EXE] = Buffer.alloc(4096, 8);
+  const errors = validateRelease(release);
+  assert.ok(
+    errors.some((error) => error.includes('не сходится')),
+    `ожидалась криптографическая ошибка, получено: ${errors.join(' | ')}`,
+  );
+});
+
+test('подделка trusted comment отвергается global-подписью', () => {
+  const release = buildRelease();
+  const text = Buffer.from(release.sigs[`${EXE}.sig`], 'base64').toString('utf8');
+  const forged = Buffer.from(text.replace('version:1.0.10', 'version:1.0.11'), 'utf8').toString(
+    'base64',
+  );
+  setNsisSignature(release, forged);
+  const errors = validateRelease(release);
+  assert.ok(
+    errors.some((error) => error.includes('global-подпись')),
+    `ожидалась ошибка global-подписи, получено: ${errors.join(' | ')}`,
   );
 });
 
@@ -129,6 +188,18 @@ test('плоский URL вне releases/<версия>/ отвергается'
   );
 });
 
+test('вложенный путь в URL отвергается (иначе файл ляжет не туда)', () => {
+  const release = buildRelease();
+  const url = `/desktop/releases/${VERSION}/sub/${EXE}`;
+  release.manifest.platforms['windows-x86_64-nsis'].url = url;
+  release.manifest.platforms['windows-x86_64'].url = url;
+  const errors = validateRelease(release);
+  assert.ok(
+    errors.some((error) => error.includes('ровно')),
+    `ожидалась ошибка про точный URL, получено: ${errors.join(' | ')}`,
+  );
+});
+
 test('имя файла не своей версии отвергается', () => {
   const release = buildRelease();
   const url = `/desktop/releases/${VERSION}/Nodus_1.0.9_x64-setup.exe`;
@@ -138,6 +209,19 @@ test('имя файла не своей версии отвергается', ()
   assert.ok(
     errors.some((error) => error.includes('не соответствует версии')),
     `ожидалась ошибка про имя файла, получено: ${errors.join(' | ')}`,
+  );
+});
+
+test('неизвестная платформа в манифесте отвергается', () => {
+  const release = buildRelease();
+  release.manifest.platforms['linux-x86_64'] = {
+    signature: release.sigs[`${EXE}.sig`],
+    url: `/desktop/releases/${VERSION}/${EXE}`,
+  };
+  const errors = validateRelease(release);
+  assert.ok(
+    errors.some((error) => error.includes('неизвестная платформа')),
+    `ожидалась ошибка про платформу, получено: ${errors.join(' | ')}`,
   );
 });
 
@@ -159,7 +243,11 @@ test('понижение версии отвергается', () => {
 
 test('расхождение signature в манифесте и .sig отвергается', () => {
   const release = buildRelease();
-  release.manifest.platforms['windows-x86_64-nsis'].signature = makeSig();
+  // Ed25519 детерминирован: другая подпись получается только над другим сообщением.
+  release.manifest.platforms['windows-x86_64-nsis'].signature = makeSig(release.contents[EXE], {
+    file: EXE,
+    version: '1.0.9',
+  });
   const errors = validateRelease(release);
   assert.ok(
     errors.some((error) => error.includes('не совпадает')),
@@ -193,12 +281,27 @@ test('версия не в форме X.Y.Z отвергается', () => {
   assert.deepEqual(validateRelease(release), ['манифест: version «1.0.10-beta» не в форме X.Y.Z']);
 });
 
+test('releaseFileNames берёт только установщики, без fallback-дублей', () => {
+  assert.deepEqual(releaseFileNames(buildRelease().manifest), [EXE]);
+  assert.deepEqual(releaseFileNames(buildRelease({ withMsi: true }).manifest), [EXE, MSI]);
+});
+
+test('verifySignature принимает настоящую подпись и отвергает чужую', () => {
+  const bytes = Buffer.alloc(1024, 3);
+  const sig = makeSig(bytes);
+  assert.equal(verifySignature({ fileBytes: bytes, sigText: sig, pubkeyB64 }), true);
+  assert.throws(
+    () => verifySignature({ fileBytes: Buffer.alloc(1024, 4), sigText: sig, pubkeyB64 }),
+    /не сходится/,
+  );
+});
+
 test('pubkeyId текущего ключа оболочки', () => {
-  assert.equal(KEY_ID, '773fec9b09efa8a5');
+  assert.equal(pubkeyId(realPubkeyB64), '773fec9b09efa8a5');
 });
 
 test('parseSig читает id ключа и поля trusted comment', () => {
-  const parsed = parseSig(makeSig());
+  const parsed = parseSig(makeSig(Buffer.alloc(16, 1)));
   assert.equal(parsed.keyId, KEY_ID);
   assert.equal(parsed.fields.file, EXE);
   assert.equal(parsed.fields.version, VERSION);

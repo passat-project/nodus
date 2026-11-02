@@ -2,14 +2,23 @@
 // сети и процессов, чтобы правила проверялись юнит-тестами без windows-сборки.
 // Используется scripts/desktop-publish.mjs при выкладке и самопроверке CI.
 //
-// Криптографию подписи здесь НЕ проверяем: целостность установщика проверяет
-// сам tauri-plugin-updater при установке. Наша задача — не выпустить наружу
-// подпись, которую оболочка отвергнет: чужой ключ, подпись без version:,
-// URL вне версионного каталога, повтор или понижение версии.
+// Подпись проверяется КРИПТОГРАФИЧЕСКИ, а не только по форме (security-review
+// #562): id ключа minisign публичен, поэтому структурная сверка обходится
+// подделкой .sig. Формат minisign:
+//   строка 0 — untrusted comment;
+//   строка 1 — блоб 74 байта: alg(2) + keyId(8) + подпись(64);
+//   строка 2 — trusted comment (timestamp / file / version через \t);
+//   строка 3 — global-подпись 64 байта.
+// alg «ED» — подпись над BLAKE2b-512 файла (prehashed), «Ed» — над файлом;
+// global-подпись — над «сырая подпись(64) + trusted comment без префикса».
+
+import { createHash, createPublicKey, verify as cryptoVerify } from 'node:crypto';
 
 const SEMVER = /^\d+\.\d+\.\d+$/;
 const TRUSTED_PREFIX = 'trusted comment: ';
 const SIGNATURE_BLOB_BYTES = 74;
+const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
+const KNOWN_PLATFORMS = new Set(['windows-x86_64-nsis', 'windows-x86_64-msi', 'windows-x86_64']);
 
 /** id ключа minisign (hex) из base64-публичного ключа Tauri. */
 export function pubkeyId(pubkeyB64) {
@@ -36,6 +45,35 @@ export function parseSig(sigFileText) {
   return { keyId: blob.subarray(2, 10).toString('hex'), fields };
 }
 
+/**
+ * Криптографическая проверка подписи установщика публичным ключом оболочки.
+ * Бросает исключение, если подпись не сходится (файл подменён или подписан
+ * чужим ключом) либо если подделана global-подпись trusted comment.
+ */
+export function verifySignature({ fileBytes, sigText, pubkeyB64 }) {
+  const lines = decodeText(sigText, '.sig').split('\n');
+  const blob = decodeBase64((lines[1] ?? '').trim(), '.sig');
+  if (blob.length !== SIGNATURE_BLOB_BYTES) {
+    throw new Error(`.sig: блоб подписи ${blob.length} байт вместо ${SIGNATURE_BLOB_BYTES}`);
+  }
+  const trustedLine = lines.find((line) => line.startsWith(TRUSTED_PREFIX));
+  if (!trustedLine) throw new Error('.sig: нет trusted comment');
+  const trusted = trustedLine.slice(TRUSTED_PREFIX.length);
+  const globalSig = decodeBase64((lines[3] ?? '').trim(), '.sig');
+  const key = publicKeyObject(pubkeyB64);
+  const rawSig = blob.subarray(10, SIGNATURE_BLOB_BYTES);
+
+  const alg = blob.subarray(0, 2).toString('ascii');
+  const message = alg === 'ED' ? createHash('blake2b512').update(fileBytes).digest() : fileBytes;
+  if (!cryptoVerify(null, message, key, rawSig)) {
+    throw new Error('подпись файла не сходится с публичным ключом оболочки');
+  }
+  if (!cryptoVerify(null, Buffer.concat([rawSig, Buffer.from(trusted)]), key, globalSig)) {
+    throw new Error('global-подпись trusted comment не сходится с публичным ключом');
+  }
+  return true;
+}
+
 /** Сравнение версий X.Y.Z: -1 / 0 / 1. Не semver — исключение. */
 export function compareSemver(a, b) {
   const pa = semverParts(a);
@@ -46,11 +84,21 @@ export function compareSemver(a, b) {
   return 0;
 }
 
+/** Имена установщиков, которые выпуск обязан содержать (NSIS + подписанный MSI). */
+export function releaseFileNames(manifest) {
+  const platforms = manifest?.platforms ?? {};
+  const urls = ['windows-x86_64-nsis', 'windows-x86_64-msi']
+    .map((platform) => platforms[platform]?.url)
+    .filter(Boolean);
+  return [...new Set(urls.map((url) => String(url).split('/').pop()).filter(Boolean))];
+}
+
 /**
  * Все нарушения правил выпуска (#562, Р6). Пустой массив — выпуск годен.
- * files — имя → размер в байтах; sigs — имя `.sig` → его текст.
+ * files — имя → размер; sigs — имя `.sig` → текст; contents — имя → байты
+ * (если переданы, подпись проверяется криптографически).
  */
-export function validateRelease({ manifest, files, sigs, pubkeyB64, currentVersion }) {
+export function validateRelease({ manifest, files, sigs, pubkeyB64, currentVersion, contents }) {
   const version = manifest?.version;
   if (!version || !SEMVER.test(String(version))) {
     return [`манифест: version «${version ?? ''}» не в форме X.Y.Z`];
@@ -65,6 +113,14 @@ export function validateRelease({ manifest, files, sigs, pubkeyB64, currentVersi
   }
 
   const platforms = manifest.platforms ?? {};
+  for (const platform of Object.keys(platforms)) {
+    if (!KNOWN_PLATFORMS.has(platform)) {
+      errors.push(
+        `манифест: неизвестная платформа «${platform}» — раскладка раздачи её не обслуживает`,
+      );
+    }
+  }
+
   const nsis = platforms['windows-x86_64-nsis'];
   const msi = platforms['windows-x86_64-msi'];
   if (!nsis)
@@ -96,14 +152,14 @@ export function validateRelease({ manifest, files, sigs, pubkeyB64, currentVersi
 
   for (const [platform, entry, nameRe] of entries) {
     const url = String(entry?.url ?? '');
-    if (!url.startsWith(prefix)) {
-      errors.push(
-        `${platform}: url «${url}» не начинается с «${prefix}» — версии обязаны лежать в releases/<версия>/`,
-      );
-    }
     const base = url.split('/').pop() ?? '';
     if (!nameRe.test(base)) {
       errors.push(`${platform}: имя файла «${base}» не соответствует версии ${version}`);
+    }
+    if (url !== `${prefix}${base}`) {
+      errors.push(
+        `${platform}: url «${url}» должен быть ровно «${prefix}${base}» — версии лежат в releases/<версия>/ без вложенных путей`,
+      );
     }
     if (!files?.[base]) errors.push(`${platform}: файла «${base}» нет в выпуске или он пуст`);
 
@@ -138,6 +194,13 @@ export function validateRelease({ manifest, files, sigs, pubkeyB64, currentVersi
         `${platform}: в trusted comment version:${parsed.fields.version ?? '—'}, ожидалось ${version} (класс инцидента 1.0.7/1.0.8)`,
       );
     }
+    if (contents?.[base]) {
+      try {
+        verifySignature({ fileBytes: contents[base], sigText, pubkeyB64 });
+      } catch (error) {
+        errors.push(`${platform}: ${error.message}`);
+      }
+    }
   }
 
   if (currentVersion !== undefined && currentVersion !== null && currentVersion !== '') {
@@ -153,6 +216,17 @@ export function validateRelease({ manifest, files, sigs, pubkeyB64, currentVersi
   }
 
   return errors;
+}
+
+function publicKeyObject(pubkeyB64) {
+  const lines = decodeText(pubkeyB64, 'публичный ключ').split('\n');
+  const blob = decodeBase64((lines[1] ?? '').trim(), 'публичный ключ');
+  if (blob.length < 42) throw new Error('публичный ключ: блоб короче 42 байт');
+  return createPublicKey({
+    key: Buffer.concat([ED25519_SPKI_PREFIX, blob.subarray(10, 42)]),
+    format: 'der',
+    type: 'spki',
+  });
 }
 
 function semverParts(value) {
