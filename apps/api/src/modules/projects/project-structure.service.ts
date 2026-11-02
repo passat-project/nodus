@@ -67,7 +67,12 @@ export class ProjectStructureService {
       this.kinds.list(),
     ]);
     const byNode = new Map(rollups.map((rollup) => [rollup.nodeId, rollup]));
-    return { nodes: rows.map((row) => nodeToDto(row, byNode.get(row.id) ?? null)), kinds };
+    return {
+      nodes: rows.map((row) => nodeToDto(row, byNode.get(row.id) ?? null)),
+      kinds,
+      // #556 UI-пакет: заглушка — пачка ссылок значений появится в пакете 2.
+      customFieldRefs: [],
+    };
   }
 
   async create(

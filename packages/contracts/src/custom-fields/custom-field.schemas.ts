@@ -14,8 +14,9 @@ import { customFieldRefSchema } from './custom-field-refs.js';
  * переименование безопасно, ключ — id.
  */
 
-/** Область применения. `node` зарезервирована под поля узлов — в enum НЕТ. */
-export const customFieldScopeSchema = z.enum(['task', 'letter', 'project', 'counterparty']);
+/** Область применения. `node` («Папки») активирована #556: атрибуты видов
+ *  папок структуры проекта (ADR-0030 «Дополнение (02.11)»). */
+export const customFieldScopeSchema = z.enum(['task', 'letter', 'project', 'node', 'counterparty']);
 export type CustomFieldScope = z.infer<typeof customFieldScopeSchema>;
 
 /** Тип поля (Р1). UI показывает 13 семейств — модификаторы типа («Многострочный»,
@@ -123,6 +124,10 @@ export type ListCustomFieldsQuery = z.infer<typeof listCustomFieldsQuerySchema>;
 export const customFieldUsageSchema = z.object({
   valueCount: z.number().int().min(0),
   workflows: z.array(z.object({ id: z.uuid(), name: z.string().min(1) })),
+  /** Виды папок, в форме которых стоит атрибут (область `node`; у других
+   *  областей — пусто). Архивные виды тоже перечисляются; удаление
+   *  использование видами НЕ блокирует — значения стираются (Р11). */
+  nodeKinds: z.array(z.object({ id: z.uuid(), name: z.string().min(1) })),
 });
 export type CustomFieldUsage = z.infer<typeof customFieldUsageSchema>;
 

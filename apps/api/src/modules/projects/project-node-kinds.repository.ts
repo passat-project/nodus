@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { NodeKind, NodeKindIcon, ProjectColor } from '@nodus/contracts';
+import {
+  DEFAULT_NODE_KIND_FORM,
+  type NodeKind,
+  type NodeKindIcon,
+  type ProjectColor,
+} from '@nodus/contracts';
 
 import { PrismaService } from '../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../core/database/transaction-runner.js';
@@ -32,6 +37,9 @@ export class NodeKindsRepository {
       icon: row.icon as NodeKindIcon,
       color: row.color as ProjectColor,
       archivedAt: row.archivedAt?.toISOString() ?? null,
+      // #556 UI-пакет: заглушка — конфигурация вида появится в пакете 2.
+      form: DEFAULT_NODE_KIND_FORM,
+      capabilities: [],
     };
   }
 

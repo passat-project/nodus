@@ -1,4 +1,4 @@
-import { ArrowRightLeft, Files, FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, Files, FolderPlus, Plus, Settings2, Trash2 } from 'lucide-react';
 import { Fragment } from 'react';
 import type { ProjectNode } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -20,17 +20,26 @@ import type { RowMenuItem } from '../../../../shared/views/row-menu.js';
 export interface StructureMenuActions {
   createInside: (parent: ProjectNode) => void;
   addTask: (node: ProjectNode) => void;
-  rename: (node: ProjectNode) => void;
+  /** «Свойства» — правая панель; доступна всем, кто видит структуру. */
+  properties: (node: ProjectNode) => void;
   moveNode: (node: ProjectNode) => void;
   deleteNode: (node: ProjectNode) => void;
 }
 
+/** Пункты меню папки: неруководству — только «Свойства» (просмотр, В5);
+ *  руководству — создание внутри, задача, свойства, перенос и удаление. */
 export function nodeMenuItems(
   node: ProjectNode,
   a: StructureMenuActions,
   canManage: boolean,
 ): RowMenuItem[] {
-  if (!canManage) return [];
+  const properties = {
+    id: 'properties',
+    icon: <Settings2 className="size-3.5" />,
+    label: ui.structure.properties,
+    onSelect: () => a.properties(node),
+  };
+  if (!canManage) return [properties];
   return [
     {
       id: 'create-inside',
@@ -45,11 +54,8 @@ export function nodeMenuItems(
       onSelect: () => a.addTask(node),
     },
     {
-      id: 'rename',
-      icon: <Pencil className="size-3.5" />,
+      ...properties,
       separatorBefore: true,
-      label: ui.structure.rename,
-      onSelect: () => a.rename(node),
     },
     {
       id: 'move',

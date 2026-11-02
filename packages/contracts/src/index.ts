@@ -48,6 +48,7 @@ export * from './events/dictionary-events.js';
 export * from './events/crm-events.js';
 export * from './events/correspondence-events.js';
 export * from './projects/project.schemas.js';
+export * from './projects/node-kind.schemas.js';
 export * from './projects/structure.schemas.js';
 export * from './counterparties/counterparty.schemas.js';
 export * from './correspondence/letter.schemas.js';

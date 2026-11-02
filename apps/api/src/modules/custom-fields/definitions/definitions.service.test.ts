@@ -190,6 +190,8 @@ describe('DefinitionsService.remove и usage (#431)', () => {
     expect(await service.usage(ROW.id)).toEqual({
       valueCount: 3,
       workflows: [{ id: 'w-1', name: 'Стандартный' }],
+      // #556: виды папок появятся в пакете 2 (заглушка пустая).
+      nodeKinds: [],
     });
   });
 

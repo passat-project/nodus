@@ -20,6 +20,8 @@ export function nodeToDto(row: ProjectNodeRow, rollup: ProjectNodeRollup | null)
     kindId: row.kindId,
     name: row.name,
     code: row.code,
+    // #556 UI-пакет: заглушка — значения папки появятся в пакете 2.
+    customFields: {},
     rollup: rollup ?? EMPTY_ROLLUP,
     createdAt: row.createdAt.toISOString(),
   };

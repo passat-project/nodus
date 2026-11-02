@@ -1,7 +1,14 @@
+import { useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import type { NodeKind, ProjectNode } from '@nodus/contracts';
-import { NODE_LIMITS, ui } from '@nodus/contracts';
+import type { CustomFieldRef, CustomFieldValue, CustomFieldValues, NodeKind } from '@nodus/contracts';
+import {
+  effectiveNodeForm,
+  ErrorCode,
+  missingNodeFields,
+  NODE_LIMITS,
+  ui,
+} from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
   Dialog,
@@ -12,73 +19,64 @@ import {
 } from '@nodus/ui/components/dialog';
 import { Input } from '@nodus/ui/components/input';
 import { NodeLabel } from '@nodus/ui/components/node-label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@nodus/ui/components/select';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { ApiError } from '../../../../shared/api-client.js';
+import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { useBatchCreateNodes, useCreateNode } from '../api/structure-api.js';
-import { NodeKindGlyph } from '../lib/node-kind-icon.js';
-
-/** Селект вида узла: значок + имя (ярлык узла, вердикт владельца 30.10). */
-function KindSelect({
-  kinds,
-  value,
-  onChange,
-}: {
-  kinds: NodeKind[];
-  value: string;
-  onChange: (id: string) => void;
-}) {
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger aria-label={ui.structure.nodeKind} className="w-full">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent position="popper">
-        {kinds.map((kind) => (
-          <SelectItem key={kind.id} value={kind.id}>
-            <NodeKindGlyph icon={kind.icon} className="size-3.5 shrink-0" />
-            {kind.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
+import { useRefreshNodeKinds } from '../../node-kinds/api/node-kinds-api.js';
+import { NodeBatchFields } from './node-batch-fields.js';
+import { NodeCreateFields } from './node-form-fields.js';
+import { NodeKindSelect } from './node-create-kind-select.js';
 
 /**
- * Окно создания узла («Создать узел» тулбара / «Создать узел внутри» меню):
- * название, шифр, вид узла; родитель задан входом (null — корень проекта).
- * «Пакетное создание» — не отдельная кнопка тулбара, а шеврон, который
- * раскрывает это же окно в режим «Здания: поз. 1–3» (вердикт владельца).
+ * Окно «Создать папку» (#556, §4c): вид первым → название → шифр по форме
+ * вида → атрибуты слотами «по желанию / обязательно». «Создать» неактивна,
+ * пока не заполнены обязательные; сервер проверяет то же (422 подсвечивает
+ * поля). Пачка — шеврон этого же окна, недоступна у вида с обязательным
+ * шифром: у каждой папки свой шифр (В1). Скрытые в «Атрибутах» и «скрыто»
+ * в форме не спрашиваются.
  */
 export function NodeCreateDialog({
   projectId,
   parent,
   kinds,
+  canSetup,
   onClose,
 }: {
   projectId: string;
-  parent: ProjectNode | null;
+  parent: { id: string; name: string } | null;
   kinds: NodeKind[];
+  canSetup: boolean;
   onClose: () => void;
 }) {
+  const navigate = useNavigate();
   const active = kinds.filter((kind) => kind.archivedAt === null);
+  const definitions = useCustomFieldDefinitions('node');
   const create = useCreateNode(projectId);
   const batch = useBatchCreateNodes(projectId);
+  const refreshKinds = useRefreshNodeKinds();
+
+  const [kindId, setKindId] = useState(active[0]?.id ?? '');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
-  const [kindId, setKindId] = useState(active[0]?.id ?? '');
+  const [values, setValues] = useState<CustomFieldValues>({});
+  const [refs, setRefs] = useState<CustomFieldRef[]>([]);
+  const [errors, setErrors] = useState<ReadonlySet<string>>(new Set());
   const [batchOpen, setBatchOpen] = useState(false);
   const [prefix, setPrefix] = useState('');
   const [from, setFrom] = useState('1');
   const [to, setTo] = useState('3');
 
+  const kind = active.find((entry) => entry.id === kindId) ?? active[0] ?? null;
+  const form = useMemo(
+    () => (kind ? effectiveNodeForm(kind, definitions.data ?? []) : null),
+    [kind, definitions.data],
+  );
+  const codeRequired = form?.code === 'required';
+  const missing = form
+    ? missingNodeFields(form, { code: code.trim() || null, customFields: values })
+    : [];
   const names = useMemo(() => {
     if (!batchOpen) return [];
     const start = Number.parseInt(from, 10);
@@ -91,25 +89,67 @@ export function NodeCreateDialog({
     );
   }, [batchOpen, prefix, from, to]);
 
-  const canSubmit = batchOpen
-    ? names.length > 0 && kindId.length > 0
-    : name.trim().length > 0 && kindId.length > 0;
+  const canSubmit = kind
+    ? batchOpen
+      ? names.length > 0 && missing.length === 0
+      : name.trim().length > 0 && missing.length === 0
+    : false;
   const pending = create.isPending || batch.isPending;
 
+  function onChange(fieldId: string, value: CustomFieldValue | null, picked?: CustomFieldRef[]) {
+    setValues((prev) => {
+      const next = { ...prev };
+      if (value === null) delete next[fieldId];
+      else next[fieldId] = value;
+      return next;
+    });
+    if (picked?.length) {
+      setRefs((prev) => {
+        const map = new Map(prev.map((ref) => [`${ref.kind}:${ref.id}`, ref]));
+        for (const ref of picked) map.set(`${ref.kind}:${ref.id}`, ref);
+        return [...map.values()];
+      });
+    }
+    setErrors((prev) => {
+      if (!prev.has(fieldId)) return prev;
+      const next = new Set(prev);
+      next.delete(fieldId);
+      return next;
+    });
+  }
+
+  function onRuleError(error: unknown) {
+    if (!(error instanceof ApiError)) return;
+    if (error.code === ErrorCode.PROJECT_NODE_FIELDS_REQUIRED) {
+      const fields = (error.details?.fields as string[] | undefined) ?? [];
+      setErrors(new Set(fields.map((key) => (key === 'code' ? 'code' : key.slice('cf.'.length)))));
+      refreshKinds();
+    }
+  }
+
   function submit() {
-    if (!canSubmit) return;
+    if (!canSubmit || !kind) return;
     if (batchOpen) {
-      batch.mutate({ parentId: parent?.id ?? null, kindId, names }, { onSuccess: onClose });
+      batch.mutate(
+        {
+          parentId: parent?.id ?? null,
+          kindId: kind.id,
+          names,
+          ...(Object.keys(values).length > 0 ? { customFields: values } : {}),
+        },
+        { onSuccess: onClose, onError: onRuleError },
+      );
       return;
     }
     create.mutate(
       {
         parentId: parent?.id ?? null,
-        kindId,
+        kindId: kind.id,
         name: name.trim(),
         ...(code.trim() ? { code: code.trim() } : {}),
+        ...(Object.keys(values).length > 0 ? { customFields: values } : {}),
       },
-      { onSuccess: onClose },
+      { onSuccess: onClose, onError: onRuleError },
     );
   }
 
@@ -133,11 +173,36 @@ export function NodeCreateDialog({
             />
           </div>
 
+          <div className="flex flex-col gap-1">
+            <NodeLabel label={ui.structure.nodeKind} />
+            <NodeKindSelect
+              kinds={active}
+              value={kind?.id ?? ''}
+              canSetup={canSetup}
+              onChange={(id) => {
+                setKindId(id);
+                setErrors(new Set());
+              }}
+              onSetup={() => {
+                onClose();
+                void navigate({
+                  to: '/automation',
+                  search: { tab: 'project-types', kind: kind?.id },
+                });
+              }}
+            />
+            {active.length === 0 ? (
+              <p className="text-xs text-muted-foreground">{ui.structure.kindsEmpty}</p>
+            ) : null}
+          </div>
+
           <button
             type="button"
             onClick={() => setBatchOpen((prev) => !prev)}
             aria-expanded={batchOpen}
-            className="flex h-8 items-center gap-1.5 self-start rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            disabled={codeRequired}
+            title={codeRequired ? ui.structure.batchBlocked : undefined}
+            className="flex h-8 items-center gap-1.5 self-start rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
           >
             <ChevronDown
               className={cn('size-3.5 transition-transform', batchOpen && 'rotate-180')}
@@ -147,73 +212,48 @@ export function NodeCreateDialog({
           </button>
 
           {batchOpen ? (
-            <>
-              <label className="flex flex-col gap-1">
-                <NodeLabel label={ui.structure.batchPrefix} />
-                <Input
-                  autoFocus
-                  value={prefix}
-                  onChange={(e) => setPrefix(e.target.value)}
-                  placeholder={ui.structure.kindsNamePlaceholder}
-                />
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="flex flex-col gap-1">
-                  <NodeLabel label={ui.structure.batchFrom} />
-                  <Input
-                    inputMode="numeric"
-                    value={from}
-                    onChange={(e) => setFrom(e.target.value)}
-                  />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <NodeLabel label={ui.structure.batchTo} />
-                  <Input inputMode="numeric" value={to} onChange={(e) => setTo(e.target.value)} />
-                </label>
-              </div>
-              {names.length > 0 ? (
-                <div className="flex flex-col gap-1">
-                  <NodeLabel label={`${ui.structure.batchPreview}: ${names.length}`} />
-                  <ul className="max-h-32 overflow-y-auto text-sm text-muted-foreground">
-                    {names.map((n) => (
-                      <li key={n} className="truncate">
-                        {n}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </>
+            <NodeBatchFields
+              prefix={prefix}
+              from={from}
+              to={to}
+              names={names}
+              onPrefix={setPrefix}
+              onFrom={setFrom}
+              onTo={setTo}
+            />
           ) : (
-            <>
-              <label className="flex flex-col gap-1">
-                <NodeLabel label={ui.structure.nodeName} />
-                <Input
-                  autoFocus
-                  value={name}
-                  maxLength={NODE_LIMITS.nameLength}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && submit()}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <NodeLabel label={ui.structure.nodeCode} />
-                <Input
-                  value={code}
-                  maxLength={NODE_LIMITS.codeLength}
-                  onChange={(e) => setCode(e.target.value)}
-                />
-              </label>
-            </>
+            <label className="flex flex-col gap-1">
+              <NodeLabel label={ui.structure.nodeName} />
+              <Input
+                autoFocus
+                value={name}
+                maxLength={NODE_LIMITS.nameLength}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && submit()}
+              />
+            </label>
           )}
 
-          <div className="flex flex-col gap-1">
-            <NodeLabel label={ui.structure.nodeKind} />
-            <KindSelect kinds={active} value={kindId} onChange={setKindId} />
-            {active.length === 0 ? (
-              <p className="text-xs text-muted-foreground">{ui.structure.kindsEmpty}</p>
-            ) : null}
-          </div>
+          {kind && form ? (
+            <NodeCreateFields
+              kind={kind}
+              definitions={definitions.data ?? []}
+              code={code}
+              onCode={(value) => {
+                setCode(value);
+                setErrors((prev) => {
+                  if (!prev.has('code')) return prev;
+                  const next = new Set(prev);
+                  next.delete('code');
+                  return next;
+                });
+              }}
+              values={values}
+              refs={refs}
+              errors={errors}
+              onChange={onChange}
+            />
+          ) : null}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>

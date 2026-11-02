@@ -224,7 +224,8 @@ export class DefinitionsService {
       this.values.countValues(scope, id),
       this.workflows.workflowsUsingField(scope, id),
     ]);
-    return { valueCount, workflows };
+    // #556 UI-пакет: заглушка — виды папок в окне удаления появятся в пакете 2.
+    return { valueCount, workflows, nodeKinds: [] };
   }
 
   /**
