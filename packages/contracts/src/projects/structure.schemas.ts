@@ -30,8 +30,6 @@ export const NODE_LIMITS = {
   batch: 50,
   nameLength: 200,
   codeLength: 64,
-  /** Видов папок в подсказке типа проекта. */
-  levelKindsPerType: 10,
 } as const;
 
 /** Агрегаты ПРЯМЫХ задач узла (группировка по node_id на сервере, порт

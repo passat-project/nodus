@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-import { customFieldChangeSchema } from '../custom-fields/custom-field-values.js';
+import {
+  CUSTOM_FIELD_LIMITS,
+  customFieldChangeSchema,
+} from '../custom-fields/custom-field-values.js';
 import { projectStatusSchema, projectVisibilitySchema } from '../projects/project.schemas.js';
 
 /**
@@ -96,7 +99,7 @@ export const projectNodeUpdatedPayloadSchema = z.object({
   code: z.string().nullable().optional(),
   kindId: z.uuid().optional(),
   /** Изменения значений атрибутов (≤ 50): потребитель #38 — правила схемы. */
-  customFieldChanges: z.array(customFieldChangeSchema).optional(),
+  customFieldChanges: z.array(customFieldChangeSchema).max(CUSTOM_FIELD_LIMITS.changes).optional(),
 });
 export type ProjectNodeUpdatedPayload = z.infer<typeof projectNodeUpdatedPayloadSchema>;
 
