@@ -1,0 +1,27 @@
+# Прод-оверлей (ADR-0036, #565): готовые образы по версии, без сборки на хосте.
+# Запуск — только через scripts/prod-deploy.mjs:
+#   docker compose -f docker-compose.yml -f compose.prod.yaml … up -d
+#
+# Почему так: прод, собранный из рабочего дерева, разъезжается с конфигом и
+# ломается молча (#560 — кнопка десктопа, #561 — конвертер). Здесь на хосте
+# ничего не собирается: тег версии собрал CI один раз, хост забирает готовое.
+# `!reset null` убирает build-секцию базового compose (Compose ≥ 2.24).
+services:
+  web:
+    build: !reset null
+    image: ${NODUS_REGISTRY:-ghcr.io/passat-project}/nodus-web:${NODUS_VERSION:?задайте NODUS_VERSION в .env прода}
+    pull_policy: missing
+    # Путь раздачи десктопа обязателен и абсолютен: дефолт базового compose
+    # относительный и уже один раз молча указал в пустую папку (#560).
+    volumes: !override
+      - '${NODUS_DESKTOP_DIR:?задайте абсолютный NODUS_DESKTOP_DIR в .env прода}:/usr/share/nginx/desktop:ro'
+
+  api:
+    build: !reset null
+    image: ${NODUS_REGISTRY:-ghcr.io/passat-project}/nodus-api:${NODUS_VERSION:?задайте NODUS_VERSION в .env прода}
+    pull_policy: missing
+
+  gateway:
+    build: !reset null
+    image: ${NODUS_REGISTRY:-ghcr.io/passat-project}/nodus-gateway:${NODUS_VERSION:?задайте NODUS_VERSION в .env прода}
+    pull_policy: missing
