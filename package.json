@@ -19,7 +19,8 @@
     "live-stack": "node scripts/live-stack.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "plan:check": "node scripts/check-plan.mjs"
   },
   "devDependencies": {
     "@nodus/config": "workspace:*",
