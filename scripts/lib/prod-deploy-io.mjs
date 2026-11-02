@@ -32,7 +32,7 @@ export function resolveTagCommit(repoDir, tag, { offline = false } = {}) {
   try {
     commit = gitOut(repoDir, ['rev-parse', `${tag}^{commit}`]);
   } catch {
-    execFileSync('git', ['-C', repoDir, 'fetch', 'origin', `refs/tags/${tag}:refs/tags/${tag}`], {
+    execFileSync('git', ['-C', repoDir, 'fetch', REPO_URL, `refs/tags/${tag}:refs/tags/${tag}`], {
       stdio: 'inherit',
     });
     commit = gitOut(repoDir, ['rev-parse', `${tag}^{commit}`]);
@@ -89,10 +89,6 @@ export function sanitizeEnv(base = process.env) {
     'TMP',
     'COMSPEC',
     'PATHEXT',
-    'DOCKER_HOST',
-    'DOCKER_CONFIG',
-    'DOCKER_TLS_VERIFY',
-    'DOCKER_CERT_PATH',
   ];
   const out = {};
   for (const key of keep) {

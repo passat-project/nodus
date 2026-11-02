@@ -148,7 +148,7 @@ function deploy({ version, current, prodDir, repo, dryRun, smokeBase }) {
     );
   }
 
-  const smokeArgs = [smokePath ?? join(repoDir, 'scripts/prod-smoke.mjs')];
+  const smokeArgs = [smokePath];
   if (smokeBase) smokeArgs.push('--base', String(smokeBase));
   try {
     execFileSync('node', smokeArgs, { stdio: 'inherit', cwd: repoDir });
@@ -222,9 +222,16 @@ function showOptional(repoDir, tag, file) {
 }
 
 function materializeSmoke(kitDir, smoke) {
-  if (!smoke) return null;
+  // Смок обязан приехать из тега: проверять поставку скриптом из рабочего
+  // дерева — значит доверять дереву больше, чем тегу. Тег без смока — аномалия.
+  if (!smoke) fail('в теге нет scripts/prod-smoke.mjs — смок нечем проверить выкатку');
   const path = join(kitDir, 'prod-smoke.mjs');
-  if (!existsSync(path) || !readFileSync(path).equals(smoke)) writeFileSync(path, smoke);
+  if (existsSync(path) && !readFileSync(path).equals(smoke)) {
+    fail(
+      `kit ${kitDir} расходится с тегом (prod-smoke.mjs) — каталог kit не редактируется вручную`,
+    );
+  }
+  if (!existsSync(path)) writeFileSync(path, smoke);
   return path;
 }
 
@@ -237,7 +244,12 @@ function verifyPinnedDigests({ kitDir, registry, target }) {
   if (!pinned) return;
   const actual = repoDigests(registry, target, SERVICES);
   for (const { image } of SERVICES) {
-    if (pinned[image] && actual[image] && pinned[image] !== actual[image]) {
+    if (!pinned[image] || !actual[image]) {
+      fail(
+        `digest ${image}:${target} не прочитан (пин «${pinned[image] || '—'}», сейчас «${actual[image] || '—'}») — сверка невозможна, выкатка остановлена`,
+      );
+    }
+    if (digestHash(pinned[image]) !== digestHash(actual[image])) {
       fail(
         `образ ${image}:${target} подменён в registry (${actual[image]} вместо ${pinned[image]}) — выкатка остановлена`,
       );
@@ -247,10 +259,18 @@ function verifyPinnedDigests({ kitDir, registry, target }) {
 
 function pinDigests(kitDir, registry, target) {
   if (readPinnedDigests(kitDir)) return;
-  writeFileSync(
-    join(kitDir, 'digests.json'),
-    `${JSON.stringify(repoDigests(registry, target, SERVICES), null, 2)}\n`,
-  );
+  const actual = repoDigests(registry, target, SERVICES);
+  const missing = SERVICES.filter(({ image }) => !actual[image]).map(({ image }) => image);
+  if (missing.length > 0) {
+    fail(`digest образов не прочитан (${missing.join(', ')}) — пин не записан, выкатка не принята`);
+  }
+  writeFileSync(join(kitDir, 'digests.json'), `${JSON.stringify(actual, null, 2)}\n`);
+}
+
+// Один образ может иметь несколько RepoDigests (теги/зеркала) в произвольном
+// порядке — сверяем только хеш содержимого.
+function digestHash(value) {
+  return String(value).split('@').pop();
 }
 
 function readPinnedDigests(kitDir) {
