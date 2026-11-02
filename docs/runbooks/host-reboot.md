@@ -19,7 +19,8 @@
 1. Дождаться демона Docker: `docker ps` отвечает без ошибки (если Docker
    Desktop не стартовал сам — запустить его и дождаться готовности).
 2. Поднять стек ВМЕСТЕ с туннелем:
-   `docker compose --profile tunnel up -d`
+   `node scripts/prod-deploy.mjs --current` (готовые образы версии из
+   `D:\NodusProd\.env`, профили `office,tunnel`; сборки нет)
 3. Дождаться здоровья: `docker ps` — `nodus_web`, `nodus_api`,
    `nodus_gateway`, `nodus_postgres`, `nodus_redis`, `nodus_minio`,
    `nodus_cloudflared` в статусе healthy/running.

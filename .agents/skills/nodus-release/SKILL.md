@@ -114,8 +114,10 @@ node .agents/skills/nodus-release/scripts/release-changes.mjs --to v0.2.0 --chan
 
 ### 6. Выкатить — `docs/runbooks/prod-update.md`
 
-Коротко: дерево на `main` == тег → `docker compose --profile tunnel up -d
---build` → миграции БД применяет сам api при старте. Сборка ~3–6 мин.
+Коротко: по тегу CI собрал образы (workflow `images`, три образа в GHCR) →
+`node scripts/prod-deploy.mjs --version X.Y.Z` → миграции БД применяет сам api
+при старте. На хосте ничего не собирается (ADR-0036), выкатка — `pull` + `up`,
+откат — та же команда с предыдущей версией.
 
 ### 7. Смок (только чтение — пробы и создание данных на проде запрещены)
 

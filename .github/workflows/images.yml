@@ -1,0 +1,124 @@
+name: images
+
+# Образы портала по тегу (#565, ADR-0036): собираются ОДИН раз и публикуются
+# в GHCR. Прод забирает готовое (scripts/prod-deploy.mjs) и ничего не собирает
+# на хосте — так конфиг прода перестаёт зависеть от того, из какого каталога
+# его запустили (#560, #561). Перезапись опубликованной версии запрещена:
+# тег версии — неизменяемая ссылка на конкретную сборку.
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег версии для сборки (например v0.5.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: images-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Образ ${{ matrix.svc }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        svc: [web, api, gateway]
+    steps:
+      # Пины actions/* — полный SHA + комментарий версии (supply-chain, #412).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          # Полная история: проверка «коммит тега — предок origin/main»
+          # в shallow-клоне отвергла бы легальный тег.
+          fetch-depth: 0
+
+      - name: Версия и ревизия
+        id: meta
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          # Ручной запуск принимает свободную строку: без проверки в registry
+          # уехал бы «:main» и инвариант «тег образа = выпущенный git-тег» размылся.
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::«$TAG» не в форме vX.Y.Z — образы собираются только по выпускному тегу"
+            exit 1
+          fi
+          git fetch origin main --quiet
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::коммит тега $TAG не на main — выпускные образы только с main"
+            exit 1
+          fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "rev=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Оверлей проверяется до сборки: сломанный compose.prod.yaml должен
+      # падать здесь, а не на проде в момент выкатки.
+      - name: Проверка прод-оверлея
+        env:
+          NODUS_VERSION: ${{ steps.meta.outputs.version }}
+          NODUS_DESKTOP_DIR: /tmp/desktop
+          POSTGRES_USER: check
+          POSTGRES_PASSWORD: check
+          POSTGRES_DB: check
+          REDIS_PASSWORD: check
+          JWT_SECRET: check
+          STORAGE_ACCESS_KEY: check
+          STORAGE_SECRET_KEY: check
+          STORAGE_URL_SECRET: check
+          MINIO_ROOT_USER: check
+          MINIO_ROOT_PASSWORD: check
+          NODUS_TUNNEL_TOKEN: check
+        run: docker compose -f docker-compose.yml -f compose.prod.yaml config --quiet
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Неизменяемость: версия уже опубликована — стоп. Иначе «та же версия»
+      # в проде может оказаться другой сборкой.
+      - name: Запрет перезаписи версии
+        env:
+          SVC: ${{ matrix.svc }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          if docker manifest inspect "ghcr.io/passat-project/nodus-${SVC}:${VERSION}" >/dev/null 2>&1; then
+            echo "::error::версия ${VERSION} уже опубликована — поднимите версию выпуска"
+            exit 1
+          fi
+
+      - name: Сборка и публикация
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/${{ matrix.svc }}/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/passat-project/nodus-${{ matrix.svc }}:${{ steps.meta.outputs.version }}
+            ghcr.io/passat-project/nodus-${{ matrix.svc }}:sha-${{ steps.meta.outputs.short }}
+          # Web собирается в боевом режиме: моки только для демо-контура.
+          build-args: ${{ matrix.svc == 'web' && 'VITE_API_MOCK=false' || '' }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/passat-project/nodus
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ steps.meta.outputs.rev }}
+          cache-from: type=gha,scope=${{ matrix.svc }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.svc }}
+
+      - name: Digest в summary
+        run: |
+          echo "nodus-${{ matrix.svc }}:${{ steps.meta.outputs.version }} ${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
