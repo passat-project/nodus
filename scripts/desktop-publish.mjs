@@ -38,17 +38,23 @@ import { releaseFileNames, validateRelease } from './lib/desktop-release.mjs';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = parseArgs(process.argv.slice(2));
 
+// Временный каталог под скачанный артефакт живёт до конца команды: иначе на
+// сервере прода копится по ~15 МБ с каждого выпуска.
+let tempDir = null;
 try {
-  publish(args);
+  tempDir = publish(args);
 } catch (error) {
-  fail(error.message);
+  console.error(`desktop-publish: ${error.message}`);
+  process.exitCode = 1;
+} finally {
+  if (tempDir) rmSync(tempDir, { recursive: true, force: true });
 }
 
 function publish({ run, from, dest, dryRun }) {
   if (!dest) fail('укажите --dest <каталог раздачи>, например D:/NodusProd/desktop');
   const destDir = resolve(String(dest));
-  const sourceDir = resolveSource({ run, from });
-  const { manifest, files, sigs, contents } = readRelease(sourceDir);
+  const source = resolveSource({ run, from });
+  const { manifest, files, sigs, contents } = readRelease(source.dir);
   const pubkeyB64 = JSON.parse(
     readFileSync(resolve(repoRoot, 'apps/desktop/src-tauri/tauri.conf.json'), 'utf8'),
   ).plugins.updater.pubkey;
@@ -58,7 +64,8 @@ function publish({ run, from, dest, dryRun }) {
   if (errors.length > 0) {
     console.error(`desktop-publish: выпуск отвергнут (${errors.length}):`);
     for (const error of errors) console.error(`  ✗ ${error}`);
-    process.exit(1);
+    process.exitCode = 1;
+    return source.tempDir;
   }
 
   const version = manifest.version;
@@ -72,26 +79,28 @@ function publish({ run, from, dest, dryRun }) {
     console.log(`desktop-publish: проверки пройдены (dry-run), версия ${version}`);
     console.log(`  файлы: ${names.join(', ')}`);
     console.log(`  будет создан ${releaseDir} и обновлён ${join(destDir, 'latest.json')}`);
-    return;
+    return source.tempDir;
   }
 
   // Каталог версии собирается в staging и переименовывается целиком: обрыв
   // копирования не оставляет «полувыпущенную» версию, которую потом нельзя
-  // перезаписать (версии неизменяемы).
-  const stagingDir = join(destDir, 'releases', `.${version}.staging`);
+  // перезаписать (версии неизменяемы). Staging — dot-каталог вне releases/:
+  // nginx не отдаёт dot-пути раздачи наружу (infra/nginx/web.conf).
+  const stagingDir = join(destDir, '.staging', version);
   rmSync(stagingDir, { recursive: true, force: true });
   mkdirSync(stagingDir, { recursive: true });
   try {
     for (const name of names) {
       for (const file of [name, `${name}.sig`]) {
         const target = join(stagingDir, file);
-        copyFileSync(join(sourceDir, file), target);
-        const expected = files[file] ?? statSync(join(sourceDir, file)).size;
+        copyFileSync(join(source.dir, file), target);
+        const expected = files[file] ?? statSync(join(source.dir, file)).size;
         const actual = statSync(target).size;
         if (actual !== expected)
           fail(`копия ${file} повреждена: ${actual} байт вместо ${expected}`);
       }
     }
+    mkdirSync(join(destDir, 'releases'), { recursive: true });
     renameSync(stagingDir, releaseDir);
   } catch (error) {
     rmSync(stagingDir, { recursive: true, force: true });
@@ -100,12 +109,13 @@ function publish({ run, from, dest, dryRun }) {
 
   // Байты источника без переформатирования: nginx sub_filter ждёт минифицированный JSON.
   const tmpManifest = join(releaseDir, '.latest.json.tmp');
-  writeFileSync(tmpManifest, readFileSync(join(sourceDir, 'latest.json')));
+  writeFileSync(tmpManifest, readFileSync(join(source.dir, 'latest.json')));
   renameSync(tmpManifest, join(destDir, 'latest.json'));
 
   console.log(`desktop-publish: версия ${version} выложена в ${releaseDir}`);
   console.log(`  манифест: ${join(destDir, 'latest.json')}`);
   console.log('  дальше: node scripts/prod-smoke.mjs --desktop-version ' + version);
+  return source.tempDir;
 }
 
 function resolveSource({ run, from }) {
@@ -114,18 +124,21 @@ function resolveSource({ run, from }) {
   if (from) {
     const dir = resolve(String(from));
     if (!existsSync(dir)) fail(`каталог выпуска не найден: ${dir}`);
-    return dir;
+    return { dir, tempDir: null };
   }
   verifyRun(String(run));
   const tmp = mkdtempSync(join(tmpdir(), 'nodus-desktop-'));
-  execFileSync('gh', ['run', 'download', String(run), '-D', tmp], { stdio: 'inherit' });
+  execFileSync('gh', ['run', 'download', String(run), '-D', tmp], {
+    stdio: 'inherit',
+    cwd: repoRoot,
+  });
   const dirs = readdirSync(tmp, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && /^nodus-desktop-release-/.test(entry.name))
     .map((entry) => entry.name);
   if (dirs.length !== 1) {
     fail(`в прогоне ${run} ожидался один артефакт nodus-desktop-release-*, найдено ${dirs.length}`);
   }
-  return join(tmp, dirs[0]);
+  return { dir: join(tmp, dirs[0]), tempDir: tmp };
 }
 
 function verifyRun(runId) {
@@ -134,6 +147,7 @@ function verifyRun(runId) {
     meta = JSON.parse(
       execFileSync('gh', ['run', 'view', runId, '--json', 'workflowName,headBranch,conclusion'], {
         encoding: 'utf8',
+        cwd: repoRoot,
       }),
     );
   } catch (error) {
@@ -205,6 +219,5 @@ function parseArgs(argv) {
 }
 
 function fail(message) {
-  console.error(`desktop-publish: ${message}`);
-  process.exit(1);
+  throw new Error(message);
 }

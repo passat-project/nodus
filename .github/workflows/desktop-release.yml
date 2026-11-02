@@ -122,4 +122,7 @@ jobs:
           name: nodus-desktop-release-${{ steps.version.outputs.version }}
           path: ${{ runner.temp }}/desktop-release/
           if-no-files-found: error
-          retention-days: 90
+          # Артефакт — только транспорт «CI → сервер портала». Репозиторий
+          # публичный, артефакты прогонов доступны любому залогиненному
+          # пользователю GitHub: держим минимальное окно (#562, security-review).
+          retention-days: 14
