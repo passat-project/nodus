@@ -8,15 +8,21 @@ const REPO_URL = 'https://github.com/passat-project/nodus';
 
 /** Вывод git-команды без хвостовых переводов строки. */
 export function gitOut(repoDir, args) {
-  return execFileSync('git', ['-C', repoDir, ...args], { encoding: 'utf8' }).trim();
+  return execFileSync('git', ['-C', repoDir, ...args], {
+    encoding: 'utf8',
+    env: sanitizeEnv(),
+  }).trim();
 }
 
 /** Коммит тега на origin (для annotated-тега — разыменованный). */
 export function remoteTagCommit(repoDir, tag) {
   // Фиксированный URL, а не имя remote: у чужого клона `--repo` «origin»
-  // указывает на его репозиторий, и сверка прошла бы сама с собой.
-  const deref = gitOut(repoDir, ['ls-remote', REPO_URL, `refs/tags/${tag}^{}`]);
-  const plain = deref || gitOut(repoDir, ['ls-remote', REPO_URL, `refs/tags/${tag}`]);
+  // указывает на его репозиторий, и сверка прошла бы сама с собой. Правило
+  // insteadOf на точный URL перекрывает короткие вражеские префиксы из
+  // .git/config (longest match wins).
+  const pin = ['-c', `url.${REPO_URL}.insteadOf=${REPO_URL}`];
+  const deref = gitOut(repoDir, [...pin, 'ls-remote', REPO_URL, `refs/tags/${tag}^{}`]);
+  const plain = deref || gitOut(repoDir, [...pin, 'ls-remote', REPO_URL, `refs/tags/${tag}`]);
   return plain ? plain.split(/\s+/)[0] : '';
 }
 
@@ -34,6 +40,7 @@ export function resolveTagCommit(repoDir, tag, { offline = false } = {}) {
   } catch {
     execFileSync('git', ['-C', repoDir, 'fetch', REPO_URL, `refs/tags/${tag}:refs/tags/${tag}`], {
       stdio: 'inherit',
+      env: sanitizeEnv(),
     });
     commit = gitOut(repoDir, ['rev-parse', `${tag}^{commit}`]);
   }
@@ -104,6 +111,7 @@ export function imageLabel(ref, name) {
     ['image', 'inspect', ref, '--format', `{{index .Config.Labels "${name}}"}}`],
     {
       encoding: 'utf8',
+      env: sanitizeEnv(),
     },
   ).trim();
 }
@@ -122,7 +130,7 @@ export function repoDigests(registry, target, services) {
           '--format',
           '{{index .RepoDigests 0}}',
         ],
-        { encoding: 'utf8' },
+        { encoding: 'utf8', env: sanitizeEnv() },
       ).trim();
     } catch {
       out[image] = '';
@@ -148,7 +156,7 @@ export function health(name) {
         '--format',
         '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}',
       ],
-      { encoding: 'utf8' },
+      { encoding: 'utf8', env: sanitizeEnv() },
     ).trim();
   } catch {
     return 'missing';

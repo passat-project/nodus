@@ -123,6 +123,9 @@ function deploy({ version, current, prodDir, repo, dryRun, smokeBase }) {
     }
     verifyImages({ registry, target, tag, commit });
     verifyPinnedDigests({ kitDir, registry, target });
+    // Пин digest — до up: если образ без RepoDigest, выкатка падает, не
+    // переключив прод, и журнал не теряет факт выкатки.
+    pinDigests(kitDir, registry, target);
     compose(['up', '-d']);
   } catch (error) {
     if (current !== true && previous) restoreVersion(envPath, previous);
@@ -159,7 +162,6 @@ function deploy({ version, current, prodDir, repo, dryRun, smokeBase }) {
     );
   }
 
-  pinDigests(kitDir, registry, target);
   logDeploy(prod, {
     version: target,
     previous,
