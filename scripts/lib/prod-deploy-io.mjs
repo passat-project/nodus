@@ -3,6 +3,9 @@
 
 import { execFileSync } from 'node:child_process';
 
+// Якорь доверия: фиксированный URL репозитория, а не имя remote клона.
+const REPO_URL = 'https://github.com/passat-project/nodus';
+
 /** Вывод git-команды без хвостовых переводов строки. */
 export function gitOut(repoDir, args) {
   return execFileSync('git', ['-C', repoDir, ...args], { encoding: 'utf8' }).trim();
@@ -10,16 +13,21 @@ export function gitOut(repoDir, args) {
 
 /** Коммит тега на origin (для annotated-тега — разыменованный). */
 export function remoteTagCommit(repoDir, tag) {
-  const deref = gitOut(repoDir, ['ls-remote', 'origin', `refs/tags/${tag}^{}`]);
-  const plain = deref || gitOut(repoDir, ['ls-remote', 'origin', `refs/tags/${tag}`]);
+  // Фиксированный URL, а не имя remote: у чужого клона `--repo` «origin»
+  // указывает на его репозиторий, и сверка прошла бы сама с собой.
+  const deref = gitOut(repoDir, ['ls-remote', REPO_URL, `refs/tags/${tag}^{}`]);
+  const plain = deref || gitOut(repoDir, ['ls-remote', REPO_URL, `refs/tags/${tag}`]);
   return plain ? plain.split(/\s+/)[0] : '';
 }
 
 /**
  * Коммит локального тега с проверкой, что на origin он не перемещён:
  * перемещённый тег разводит kit (compose-файлы) и образы, собранные CI.
+ * `offline: true` (перезапуск текущей версии после перезагрузки) — сетевая
+ * сверка best-effort: kit уже сверен с `.env` побайтово, образы проверяются
+ * по локальным label; без сети прод всё равно должен подняться.
  */
-export function resolveTagCommit(repoDir, tag) {
+export function resolveTagCommit(repoDir, tag, { offline = false } = {}) {
   let commit;
   try {
     commit = gitOut(repoDir, ['rev-parse', `${tag}^{commit}`]);
@@ -29,8 +37,21 @@ export function resolveTagCommit(repoDir, tag) {
     });
     commit = gitOut(repoDir, ['rev-parse', `${tag}^{commit}`]);
   }
-  const remote = remoteTagCommit(repoDir, tag);
-  if (remote && remote !== commit) {
+  let remote;
+  try {
+    remote = remoteTagCommit(repoDir, tag);
+  } catch (error) {
+    if (!offline) throw error;
+    console.warn(`prod-deploy: origin недоступен (${error.message}) — сверка тега пропущена`);
+    return commit;
+  }
+  if (!remote) {
+    if (offline) return commit;
+    throw new Error(
+      `тег ${tag} не найден на ${REPO_URL} — сверка целостности невозможна, выкатка остановлена`,
+    );
+  }
+  if (remote !== commit) {
     throw new Error(
       `тег ${tag} на origin указывает на ${remote}, а локально на ${commit}: тег перемещён — kit и образы могут разойтись, выкатка остановлена`,
     );
@@ -42,6 +63,11 @@ export function resolveTagCommit(repoDir, tag) {
  * Окружение для `docker compose`: только системные ключи. Shell-env
  * приоритетнее `--env-file`, поэтому экспортированные NODUS_… и COMPOSE_…
  * у оператора молча увели бы на прод другую версию или registry.
+ *
+ * ProgramFiles обязателен: Docker CLI ищет cli-plugins в
+ * `%ProgramFiles%\Docker\cli-plugins`, и без него на Windows-хосте
+ * `docker compose` отвечает «unknown command: docker compose» (проверено
+ * живым прогоном на хосте прода, code-review #565).
  */
 export function sanitizeEnv(base = process.env) {
   const keep = [
@@ -50,6 +76,15 @@ export function sanitizeEnv(base = process.env) {
     'USERPROFILE',
     'SystemRoot',
     'SYSTEMROOT',
+    'SystemDrive',
+    'WINDIR',
+    'ProgramFiles',
+    'ProgramFiles(x86)',
+    'ProgramW6432',
+    'ProgramData',
+    'APPDATA',
+    'LOCALAPPDATA',
+    'PUBLIC',
     'TEMP',
     'TMP',
     'COMSPEC',
@@ -77,28 +112,33 @@ export function imageLabel(ref, name) {
   ).trim();
 }
 
+/** RepoDigest трёх образов версии: `{ web, api, gateway }` (для журнала и сверки). */
+export function repoDigests(registry, target, services) {
+  const out = {};
+  for (const { image } of services) {
+    try {
+      out[image] = execFileSync(
+        'docker',
+        [
+          'image',
+          'inspect',
+          `${registry}/nodus-${image}:${target}`,
+          '--format',
+          '{{index .RepoDigests 0}}',
+        ],
+        { encoding: 'utf8' },
+      ).trim();
+    } catch {
+      out[image] = '';
+    }
+  }
+  return out;
+}
+
 /** Строка журнала: digest трёх образов версии. */
 export function digests(registry, target, services) {
-  return services
-    .map(({ image }) => {
-      try {
-        const digest = execFileSync(
-          'docker',
-          [
-            'image',
-            'inspect',
-            `${registry}/nodus-${image}:${target}`,
-            '--format',
-            '{{index .RepoDigests 0}}',
-          ],
-          { encoding: 'utf8' },
-        ).trim();
-        return `${image}=${digest}`;
-      } catch {
-        return `${image}=?`;
-      }
-    })
-    .join(' ');
+  const map = repoDigests(registry, target, services);
+  return services.map(({ image }) => `${image}=${map[image] || '?'}`).join(' ');
 }
 
 /** Статус health контейнера: healthy / starting / unhealthy / missing. */

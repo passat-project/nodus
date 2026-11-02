@@ -26,6 +26,7 @@ import {
 import {
   digests,
   imageLabel,
+  repoDigests,
   resolveTagCommit,
   sanitizeEnv,
   waitHealthy,
@@ -79,7 +80,12 @@ function deploy({ version, current, prodDir, repo, dryRun, smokeBase }) {
   const previous = current === true ? target : (env.NODUS_VERSION ?? '');
   const registry = String(env.NODUS_REGISTRY || 'ghcr.io/passat-project').replace(/\/+$/, '');
 
-  const { kitDir, commit } = ensureKit({ repoDir, prod, tag });
+  const { kitDir, commit, smokePath } = ensureKit({
+    repoDir,
+    prod,
+    tag,
+    offline: current === true,
+  });
   const composeArgs = buildComposeArgs({ prodDir: prod, kitDir, profiles });
   // Окружение оператора не протекает в compose: shell-env приоритетнее
   // --env-file, и экспортированный NODUS_VERSION/NODUS_REGISTRY/COMPOSE_PROFILES
@@ -116,6 +122,7 @@ function deploy({ version, current, prodDir, repo, dryRun, smokeBase }) {
       compose(['pull', 'web', 'api', 'gateway']);
     }
     verifyImages({ registry, target, tag, commit });
+    verifyPinnedDigests({ kitDir, registry, target });
     compose(['up', '-d']);
   } catch (error) {
     if (current !== true && previous) restoreVersion(envPath, previous);
@@ -141,7 +148,7 @@ function deploy({ version, current, prodDir, repo, dryRun, smokeBase }) {
     );
   }
 
-  const smokeArgs = [join(repoDir, 'scripts/prod-smoke.mjs')];
+  const smokeArgs = [smokePath ?? join(repoDir, 'scripts/prod-smoke.mjs')];
   if (smokeBase) smokeArgs.push('--base', String(smokeBase));
   try {
     execFileSync('node', smokeArgs, { stdio: 'inherit', cwd: repoDir });
@@ -152,6 +159,7 @@ function deploy({ version, current, prodDir, repo, dryRun, smokeBase }) {
     );
   }
 
+  pinDigests(kitDir, registry, target);
   logDeploy(prod, {
     version: target,
     previous,
@@ -164,10 +172,12 @@ function deploy({ version, current, prodDir, repo, dryRun, smokeBase }) {
 // Kit — единственная часть поставки без своего хеша: перемещённый тег увёз бы
 // на прод чужой compose с боевыми секретами. Поэтому сверяем тег на origin
 // (resolveTagCommit) и привязываем образы к тому же коммиту (verifyImages).
-function ensureKit({ repoDir, prod, tag }) {
+// Смок материализуется из тега рядом с compose: проверять поставку скриптом
+// из рабочего дерева — значит доверять дереву больше, чем тегу.
+function ensureKit({ repoDir, prod, tag, offline }) {
   const kitDir = join(prod, 'kit', tag);
   const files = ['docker-compose.yml', 'compose.prod.yaml'];
-  const commit = resolveTagCommit(repoDir, tag);
+  const commit = resolveTagCommit(repoDir, tag, { offline });
   const sources = new Map();
   for (const file of files) {
     try {
@@ -184,6 +194,7 @@ function ensureKit({ repoDir, prod, tag }) {
       );
     }
   }
+  const smoke = showOptional(repoDir, tag, 'scripts/prod-smoke.mjs');
   if (existsSync(kitDir)) {
     for (const file of files) {
       if (!readFileSync(join(kitDir, file)).equals(sources.get(file))) {
@@ -192,11 +203,64 @@ function ensureKit({ repoDir, prod, tag }) {
         );
       }
     }
-    return { kitDir, commit };
+    return { kitDir, commit, smokePath: materializeSmoke(kitDir, smoke) };
   }
   mkdirSync(kitDir, { recursive: true });
   for (const file of files) writeFileSync(join(kitDir, file), sources.get(file));
-  return { kitDir, commit };
+  return { kitDir, commit, smokePath: materializeSmoke(kitDir, smoke) };
+}
+
+function showOptional(repoDir, tag, file) {
+  try {
+    return execFileSync('git', ['-C', repoDir, 'show', `${tag}:${file}`], {
+      encoding: 'buffer',
+      maxBuffer: 16 * 1024 * 1024,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function materializeSmoke(kitDir, smoke) {
+  if (!smoke) return null;
+  const path = join(kitDir, 'prod-smoke.mjs');
+  if (!existsSync(path) || !readFileSync(path).equals(smoke)) writeFileSync(path, smoke);
+  return path;
+}
+
+// Digest-якорь на повторные выкатки: registry-теги мутабельны, поэтому первая
+// успешная выкатка версии запоминает RepoDigest, а повторная (откат) обязана
+// увидеть те же байты. Подмену registry на первой выкатке это не ловит —
+// граница доверия остаётся `.env` + origin (см. ADR-0036).
+function verifyPinnedDigests({ kitDir, registry, target }) {
+  const pinned = readPinnedDigests(kitDir);
+  if (!pinned) return;
+  const actual = repoDigests(registry, target, SERVICES);
+  for (const { image } of SERVICES) {
+    if (pinned[image] && actual[image] && pinned[image] !== actual[image]) {
+      fail(
+        `образ ${image}:${target} подменён в registry (${actual[image]} вместо ${pinned[image]}) — выкатка остановлена`,
+      );
+    }
+  }
+}
+
+function pinDigests(kitDir, registry, target) {
+  if (readPinnedDigests(kitDir)) return;
+  writeFileSync(
+    join(kitDir, 'digests.json'),
+    `${JSON.stringify(repoDigests(registry, target, SERVICES), null, 2)}\n`,
+  );
+}
+
+function readPinnedDigests(kitDir) {
+  const path = join(kitDir, 'digests.json');
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    fail(`файл ${path} не разбирается — удалите его и выкатите версию заново`);
+  }
 }
 
 function verifyImages({ registry, target, tag, commit }) {
@@ -219,11 +283,14 @@ function verifyImages({ registry, target, tag, commit }) {
 function writeVersion(envPath, envText, version) {
   const next = replaceEnvValue(envText, 'NODUS_VERSION', version);
   const tmp = `${envPath}.tmp`;
-  writeFileSync(tmp, next);
+  // mode при создании: на Linux tmp не должен быть доступен шире владельца.
+  // Windows ACL наследуется от каталога прод-данных — D:\NodusProd держим
+  // доступным только администратору (runbook prod-update.md).
+  writeFileSync(tmp, next, { mode: 0o600 });
   try {
     chmodSync(tmp, 0o600);
   } catch {
-    // Windows: chmod не задаёт ACL — права наследуются от каталога прод-данных.
+    // Windows: chmod не задаёт ACL.
   }
   renameSync(tmp, envPath);
 }
