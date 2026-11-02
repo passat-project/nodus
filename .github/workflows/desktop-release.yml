@@ -92,6 +92,10 @@ jobs:
           NOTES: ${{ inputs.notes }}
           VERSION: ${{ steps.version.outputs.version }}
           OUT: ${{ runner.temp }}/desktop-release
+          # Git Bash на windows-раннере переписывает аргументы, начинающиеся с
+          # «/», в пути вида C:/Program Files/Git/desktop/... — префикс URL
+          # приезжает в скрипт искажённым и валит проверку формата.
+          MSYS_NO_PATHCONV: '1'
         run: |
           node scripts/desktop-manifest.mjs --notes "$NOTES" --url-prefix "/desktop/releases/$VERSION/" --out "$OUT/latest.json"
           B=apps/desktop/src-tauri/target/release/bundle
