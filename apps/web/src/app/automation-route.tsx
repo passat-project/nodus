@@ -2,7 +2,7 @@ import { useSearch } from '@tanstack/react-router';
 
 import { FieldDialog } from '../features/automation/components/fields/field-dialog.js';
 import { AutomationPage } from '../features/automation/pages/automation-page.js';
-import { ProjectTypesPage } from '../features/projects/pages/project-types-page.js';
+import { ProjectSchemasPage } from '../features/projects/pages/project-schemas-page.js';
 import { useCustomFieldDefinitions } from '../shared/custom-fields/queries.js';
 import { useCanManageFields } from '../shared/custom-fields/use-can-manage-fields.js';
 
@@ -15,14 +15,14 @@ import { useCanManageFields } from '../shared/custom-fields/use-can-manage-field
  */
 export function AutomationRoute() {
   const search = useSearch({ strict: false }) as { tab?: string };
-  return search.tab === 'project-types' ? <ProjectTypesRoute /> : <AutomationPage />;
+  return search.tab === 'project-schemas' ? <ProjectSchemasRoute /> : <AutomationPage />;
 }
 
-function ProjectTypesRoute() {
+function ProjectSchemasRoute() {
   const definitions = useCustomFieldDefinitions();
   const canManage = useCanManageFields();
   return (
-    <ProjectTypesPage
+    <ProjectSchemasPage
       renderCreateField={(slot) => (
         <FieldDialog
           mode={{ kind: 'create', scope: 'node' }}

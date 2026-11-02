@@ -279,3 +279,18 @@ export function clearedNodeFields(
 ): NodeFormKey[] {
   return requiredKeys.filter((key) => key in values && !isCustomFieldValueFilled(values[key]));
 }
+
+/** Виды папок, допустимые типу проекта (#556): `null` — все, массив — только
+ *  перечисленные (порядок справочника). Одна функция для панели типа, окна
+ *  создания папки и серверной проверки. */
+export function allowedNodeKinds(
+  kindIds: readonly string[] | null,
+  kinds: readonly NodeKind[],
+): NodeKind[] {
+  return kindIds === null ? [...kinds] : kinds.filter((kind) => kindIds.includes(kind.id));
+}
+
+/** Разрешён ли вид папки типу проекта (сервер — 422 KIND_NOT_ALLOWED). */
+export function kindAllowedByType(kindIds: readonly string[] | null, kindId: string): boolean {
+  return kindIds === null || kindIds.includes(kindId);
+}

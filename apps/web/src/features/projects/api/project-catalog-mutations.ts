@@ -44,8 +44,10 @@ export function useCreateProjectType() {
       const temp: ProjectType = {
         id: `temp-${crypto.randomUUID()}`,
         name,
+        icon: 'file-text',
+        color: 'blue',
         codeField: 'optional',
-        levelKindIds: null,
+        kindIds: null,
         archivedAt: null,
       };
       patchTypes(queryClient, (items) => [...items, temp]);
@@ -67,8 +69,8 @@ export function useCreateProjectType() {
   });
 }
 
-/** Правка типа проекта: имя, политика системного поля «Шифр», виды-подсказки
- *  структуры (#467). */
+/** Правка типа проекта: имя, политика системного поля «Шифр», допустимые
+ *  виды папок (#556). */
 export function useUpdateProjectType() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -77,8 +79,10 @@ export function useUpdateProjectType() {
         method: 'PATCH',
         body: {
           ...(vars.name ? { name: vars.name } : {}),
+          ...(vars.icon ? { icon: vars.icon } : {}),
+          ...(vars.color ? { color: vars.color } : {}),
           ...(vars.codeField ? { codeField: vars.codeField } : {}),
-          ...(vars.levelKindIds !== undefined ? { levelKindIds: vars.levelKindIds } : {}),
+          ...(vars.kindIds !== undefined ? { kindIds: vars.kindIds } : {}),
         },
       }),
     onMutate: async (vars) => {
@@ -91,8 +95,10 @@ export function useUpdateProjectType() {
             ? {
                 ...row,
                 ...(vars.name ? { name: vars.name } : {}),
+                ...(vars.icon ? { icon: vars.icon } : {}),
+                ...(vars.color ? { color: vars.color } : {}),
                 ...(vars.codeField ? { codeField: vars.codeField } : {}),
-                ...(vars.levelKindIds !== undefined ? { levelKindIds: vars.levelKindIds } : {}),
+                ...(vars.kindIds !== undefined ? { kindIds: vars.kindIds } : {}),
               }
             : row,
         ),

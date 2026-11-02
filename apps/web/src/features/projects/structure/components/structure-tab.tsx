@@ -6,8 +6,9 @@ import { Permission, ui } from '@nodus/contracts';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 
 import { useOpenCard } from '../../../../app/shell/use-card-stack.js';
+import { allowedNodeKinds } from '@nodus/contracts';
 import { useAuthStore } from '../../../../shared/auth-store.js';
-import { projectsKeys } from '../../../../shared/api/projects-list.js';
+import { projectsKeys, useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { tasksKeys } from '../../../../shared/api/tasks-keys.js';
 import { openTaskCreate } from '../../../../shared/tasks/task-create-store.js';
@@ -17,6 +18,7 @@ import { DataTableHeader } from '../../../../shared/views/data-table-header.js';
 import { useAutoFitColumn } from '../../../../shared/views/use-autofit-column.js';
 import { structureKeys, useMoveNode } from '../api/structure-api.js';
 import { useMoveTaskNode, useSetTasksNode } from '../api/structure-task-mutations.js';
+import { useProjectDetail } from '../../api/projects-api.js';
 import { useStructureModel } from '../lib/use-structure-model.js';
 import { useStructureDnd } from '../lib/use-structure-dnd.js';
 import { StructureBulkIsland } from './structure-bulk-island.js';
@@ -52,7 +54,15 @@ export function StructureTab({
   const canSetup = (permissions ?? []).includes(Permission.PROJECT_SETUP_MANAGE);
   const canEdit = canManage && !readOnly;
   const model = useStructureModel(projectId);
+  const project = useProjectDetail(projectId);
+  const projectTypes = useProjectTypes(true);
   const definitions = useCustomFieldDefinitions('node');
+  // Виды папок, допустимые типу проекта (#556): окно создания и смена вида
+  // предлагают только их; сервер проверяет то же (422 KIND_NOT_ALLOWED).
+  const allowedKinds = allowedNodeKinds(
+    projectTypes.data?.find((type) => type.id === project.data?.type?.id)?.kindIds ?? null,
+    model.kinds,
+  );
   const [dialog, setDialog] = useState<StructureDialog | null>(null);
   const [propertiesId, setPropertiesId] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
@@ -235,7 +245,7 @@ export function StructureTab({
           <StructureDialogHost
             projectId={projectId}
             dialog={dialog}
-            kinds={model.kinds}
+            kinds={allowedKinds}
             nodes={model.nodes}
             canSetup={canSetup}
             onClose={() => setDialog(null)}
@@ -246,7 +256,7 @@ export function StructureTab({
       <NodePropertiesPanel
         projectId={projectId}
         node={propertiesNode}
-        kinds={model.kinds}
+        kinds={allowedKinds}
         definitions={definitions.data ?? []}
         refs={model.customFieldRefs}
         canEdit={canEdit}

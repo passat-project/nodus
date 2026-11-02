@@ -186,7 +186,7 @@ export function NodeCreateDialog({
                 onClose();
                 void navigate({
                   to: '/automation',
-                  search: { tab: 'project-types', kind: kind?.id },
+                  search: { tab: 'project-schemas', type: undefined, kind: kind?.id },
                 });
               }}
             />

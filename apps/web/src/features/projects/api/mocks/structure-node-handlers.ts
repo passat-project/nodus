@@ -32,6 +32,7 @@ import {
   conflict,
   guardResponse,
   invalid,
+  kindAllowedForProject,
   kindOf,
   manageableProject,
   nodeNotFound,
@@ -93,6 +94,12 @@ export const structureNodeHandlers = [
     const kind = kindOf(body.kindId);
     const archived = assertKindAlive(kind);
     if (archived) return archived;
+    if (!kindAllowedForProject(guard.row.id, body.kindId)) {
+      return HttpResponse.json(
+        { code: ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED, message: 'Kind is not allowed' },
+        { status: 422 },
+      );
+    }
     const rule = ruleResponse(
       createIssues(kind!, { code: body.code ?? null, customFields: body.customFields }),
     );
@@ -130,6 +137,12 @@ export const structureNodeHandlers = [
     const kind = kindOf(body.kindId);
     const archived = assertKindAlive(kind);
     if (archived) return archived;
+    if (!kindAllowedForProject(guard.row.id, body.kindId)) {
+      return HttpResponse.json(
+        { code: ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED, message: 'Kind is not allowed' },
+        { status: 422 },
+      );
+    }
     // Пачка при обязательном шифре вида невозможна: у каждой папки свой шифр (В1).
     if (formOfKind(kind!).code === 'required') {
       return HttpResponse.json(
@@ -173,6 +186,12 @@ export const structureNodeHandlers = [
     const kind = kindOf(body.kindId ?? node.kindId);
     const archived = assertKindAlive(kind);
     if (archived) return archived;
+    if (!kindAllowedForProject(guard.row.id, body.kindId ?? node.kindId)) {
+      return HttpResponse.json(
+        { code: ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED, message: 'Kind is not allowed' },
+        { status: 422 },
+      );
+    }
     const rule = ruleResponse(
       updateIssues(
         kind!,

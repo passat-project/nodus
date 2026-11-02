@@ -62,8 +62,10 @@ export const projectCatalogHandlers = [
     const type: ProjectType = {
       id: crypto.randomUUID(),
       name: parsed.data.name,
+      icon: parsed.data.icon ?? 'file-text',
+      color: parsed.data.color ?? 'blue',
       codeField: 'optional',
-      levelKindIds: null,
+      kindIds: null,
       archivedAt: null,
     };
     demoProjectTypes.push(type);
@@ -83,8 +85,10 @@ export const projectCatalogHandlers = [
       return conflict();
     }
     if (parsed.data.name) type.name = parsed.data.name;
+    if (parsed.data.icon) type.icon = parsed.data.icon;
+    if (parsed.data.color) type.color = parsed.data.color;
     if (parsed.data.codeField) type.codeField = parsed.data.codeField;
-    if (parsed.data.levelKindIds !== undefined) type.levelKindIds = parsed.data.levelKindIds;
+    if (parsed.data.kindIds !== undefined) type.kindIds = parsed.data.kindIds;
     return HttpResponse.json(type);
   }),
 

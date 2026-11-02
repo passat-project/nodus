@@ -13,7 +13,7 @@ describe('реестр навигации: вкладка «Права дост�
     expect(automation.tabs.map((tab) => tab.id)).toEqual([
       'processes',
       'fields',
-      'project-types',
+      'project-schemas',
       'access',
     ]);
     const access = automation.tabs.at(-1)!;

@@ -8,7 +8,7 @@ import {
   canSeeProject,
   myMembershipOf,
 } from '../../../../shared/mocks/data/project-views.js';
-import { findDemoProjectRow } from '../../../../shared/mocks/data/projects.js';
+import { demoProjectTypes, findDemoProjectRow } from '../../../../shared/mocks/data/projects.js';
 import {
   demoNodeKinds,
   demoNodeRows,
@@ -90,4 +90,16 @@ export function assertKindAlive(kind: NodeKind | undefined) {
 export function subtreeHeight(row: DemoNodeRow): number {
   const children = demoNodeRows.filter((entry) => entry.parentId === row.id);
   return 1 + Math.max(0, ...children.map((child) => subtreeHeight(child)));
+}
+
+/** Допустимые виды папок типа проекта (#556): null — все. */
+export function typeKindIdsOf(projectId: string): string[] | null {
+  const project = findDemoProjectRow(projectId);
+  return demoProjectTypes.find((type) => type.id === project?.typeId)?.kindIds ?? null;
+}
+
+/** Вид разрешён типу проекта? 422 PROJECT_NODE_KIND_NOT_ALLOWED иначе. */
+export function kindAllowedForProject(projectId: string, kindId: string): boolean {
+  const kindIds = typeKindIdsOf(projectId);
+  return kindIds === null || kindIds.includes(kindId);
 }

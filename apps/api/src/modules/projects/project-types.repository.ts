@@ -24,9 +24,13 @@ export class ProjectTypesRepository {
     return {
       id: row.id,
       name: row.name,
+      // #556 UI-пакет: заглушка — колонки icon/color появятся в миграции Б.
+      icon: 'file-text',
+      color: 'blue',
       codeField: row.codeField as ProjectCodeField,
-      // JSONB-массив id видов узлов (#467); битое значение читается как «нет».
-      levelKindIds: Array.isArray(row.levelKindIds) ? (row.levelKindIds as string[]) : null,
+      // Допустимые виды папок типа (#556): null — все, массив — только эти.
+      // Колонка БД переименуется в kind_ids миграцией Б (пакет 2).
+      kindIds: Array.isArray(row.levelKindIds) ? (row.levelKindIds as string[]) : null,
       archivedAt: row.archivedAt?.toISOString() ?? null,
     };
   }
@@ -80,11 +84,9 @@ export class ProjectTypesRepository {
     const data: Prisma.ProjectTypeUpdateInput = {};
     if (patch.name !== undefined) data.name = patch.name;
     if (patch.codeField !== undefined) data.codeField = patch.codeField;
-    if (patch.levelKindIds !== undefined) {
+    if (patch.kindIds !== undefined) {
       data.levelKindIds =
-        patch.levelKindIds === null
-          ? Prisma.JsonNull
-          : (patch.levelKindIds as Prisma.InputJsonValue);
+        patch.kindIds === null ? Prisma.JsonNull : (patch.kindIds as Prisma.InputJsonValue);
     }
     const result = await tx.projectType.updateMany({ where: { id }, data });
     if (result.count === 0) return null;

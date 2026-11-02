@@ -106,6 +106,7 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN]: 'Вид папки с таким названием уже есть',
   [ErrorCode.PROJECT_NODE_FIELDS_REQUIRED]: 'Заполните обязательные поля папки',
   [ErrorCode.PROJECT_NODE_KIND_FORM_INVALID]: 'Форма вида ссылается на негодные атрибуты',
+  [ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED]: 'Этот вид папки не назначен типу проекта',
 };
 
 /**

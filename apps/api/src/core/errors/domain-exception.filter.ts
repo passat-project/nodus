@@ -135,6 +135,9 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   // с состоянием (#556).
   [ErrorCode.PROJECT_NODE_FIELDS_REQUIRED]: HttpStatus.UNPROCESSABLE_ENTITY,
   [ErrorCode.PROJECT_NODE_KIND_FORM_INVALID]: HttpStatus.UNPROCESSABLE_ENTITY,
+  // Вид не входит в допустимые виды типа проекта — 422 (как not_in_type
+  // атрибутов): запрос корректен, но вид этому типу не назначен (#556).
+  [ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED]: HttpStatus.UNPROCESSABLE_ENTITY,
 };
 
 /** Код для HTTP-исключений Nest/Fastify (400 у нас — всегда валидация входа). */

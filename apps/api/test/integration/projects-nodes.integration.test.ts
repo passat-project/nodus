@@ -195,27 +195,25 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: структура #467 �
       await s.expectError(res, 409, ErrorCode.PROJECT_NODE_KIND_ARCHIVED);
     });
 
-    it('тип проекта: levelKindIds — подсказка живых видов; негодный id — 422', async () => {
+    it('тип проекта: kindIds — допустимые виды папок; негодный id — 422', async () => {
       const res = await s.fx.api(s.alice, 'PATCH', `/projects/types/${s.typeId}`, {
-        body: { levelKindIds: [s.kindId] },
+        body: { kindIds: [s.kindId] },
         key: `tp-${s.unique('k')}`,
       });
       expect(res.status).toBe(200);
-      expect(((await res.json()) as { levelKindIds: string[] | null }).levelKindIds).toEqual([
-        s.kindId,
-      ]);
+      expect(((await res.json()) as { kindIds: string[] | null }).kindIds).toEqual([s.kindId]);
 
       const bad = await s.fx.api(s.alice, 'PATCH', `/projects/types/${s.typeId}`, {
-        body: { levelKindIds: [crypto.randomUUID()] },
+        body: { kindIds: [crypto.randomUUID()] },
         key: `tp-${s.unique('k')}`,
       });
       await s.expectError(bad, 422, ErrorCode.PROJECT_NODE_INVALID);
 
       const cleanup = await s.fx.api(s.alice, 'PATCH', `/projects/types/${s.typeId}`, {
-        body: { levelKindIds: null },
+        body: { kindIds: null },
         key: `tp-${s.unique('k')}`,
       });
-      expect(((await cleanup.json()) as { levelKindIds: string[] | null }).levelKindIds).toBeNull();
+      expect(((await cleanup.json()) as { kindIds: string[] | null }).kindIds).toBeNull();
     });
 
     it('каталог сеет «Комплект»/«Изменение» — линейный маршрут 8 стадий Вашурова', async () => {

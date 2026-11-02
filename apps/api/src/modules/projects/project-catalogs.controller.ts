@@ -126,11 +126,11 @@ export class ProjectCatalogsController {
       if (dto.name !== undefined && (await this.types.nameTaken(dto.name, id))) {
         throw DomainException.conflict('Project type name is already taken');
       }
-      // Подсказка видов узлов (#467): id существуют и живые, иначе 422
+      // Допустимые виды папок типа (#556): id существуют и живые, иначе 422
       // (без оракула — не раскрываем, какой именно вид исчез).
-      if (dto.levelKindIds !== undefined && dto.levelKindIds !== null) {
-        const alive = await this.nodeKinds.activeByIds(dto.levelKindIds);
-        if (alive.length !== new Set(dto.levelKindIds).size) {
+      if (dto.kindIds !== undefined && dto.kindIds !== null) {
+        const alive = await this.nodeKinds.activeByIds(dto.kindIds);
+        if (alive.length !== new Set(dto.kindIds).size) {
           throw new DomainException(ErrorCode.PROJECT_NODE_INVALID, 'Node kind is not available', {
             typeId: id,
           });

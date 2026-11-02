@@ -172,6 +172,8 @@ export const ErrorCode = {
   PROJECT_NODE_KIND_ARCHIVED: 'PROJECT_NODE_KIND_ARCHIVED',
   /** Название вида папки уже занято (409; #467). */
   PROJECT_NODE_KIND_NAME_TAKEN: 'PROJECT_NODE_KIND_NAME_TAKEN',
+  /** Вид папки не входит в допустимые виды типа проекта (422; #556). */
+  PROJECT_NODE_KIND_NOT_ALLOWED: 'PROJECT_NODE_KIND_NOT_ALLOWED',
   /** Обязательные поля формы вида не заполнены: создание, смена вида или
    *  очистка (`details.reason`: create | kind_change | clear; 422; #556). */
   PROJECT_NODE_FIELDS_REQUIRED: 'PROJECT_NODE_FIELDS_REQUIRED',
