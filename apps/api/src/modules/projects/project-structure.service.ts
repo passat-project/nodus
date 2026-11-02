@@ -129,7 +129,7 @@ export class ProjectStructureService {
     return this.txRunner.run(async (tx) => {
       await this.nodes.lockStructure(tx, projectId);
       const tree = await this.nodes.listByProject(projectId, tx);
-      const kind = await assertKindAlive(this.kinds, this.types, project.typeId, body.kindId);
+      const kind = await assertKindAlive(this.kinds, this.types, tx, project.typeId, body.kindId);
       const parent = assertParent(tree, body.parentId);
       if (body.names.length > NODE_LIMITS.nodesPerProject - tree.length) {
         throw limitError('nodes_per_project', NODE_LIMITS.nodesPerProject);
@@ -198,8 +198,8 @@ export class ProjectStructureService {
       if (!node) throw nodeInvalid(nodeId);
       const kindChanged = body.kindId !== undefined && body.kindId !== node.kindId;
       const kind = kindChanged
-        ? await assertKindAlive(this.kinds, this.types, project.typeId, body.kindId!)
-        : await kindOf(this.kinds, node.kindId);
+        ? await assertKindAlive(this.kinds, this.types, tx, project.typeId, body.kindId!)
+        : await kindOf(this.kinds, tx, node.kindId);
       const patch: {
         name?: string;
         code?: string | null;

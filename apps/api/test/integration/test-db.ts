@@ -6,6 +6,9 @@ import { assertIsolatedTestEnv } from '@nodus/config/test-env';
  *  (например, `nodus_test_556`) задаётся env `TEST_DB_NAME` — параллельные
  *  сессии не ломают друг другу прогоны. */
 export const TEST_DB_NAME = process.env.TEST_DB_NAME ?? 'nodus_test';
+if (!/^[a-z_][a-z0-9_]*$/i.test(TEST_DB_NAME)) {
+  throw new Error(`TEST_DB_NAME «${TEST_DB_NAME}» — недопустимое имя базы (буквы, цифры, _)`);
+}
 
 /** URL тестовой БД (nodus_test) на том же сервере, что и DATABASE_URL. */
 export function testDatabaseUrl(): string {

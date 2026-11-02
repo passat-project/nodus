@@ -93,6 +93,19 @@ export class NodeKindsRepository {
     return row ? this.toDto(row) : null;
   }
 
+  /** Живой вид с блокировкой строки до конца транзакции (`FOR SHARE`):
+   *  создание папки и смена вида не разойдутся с параллельной архивацией
+   *  вида — архив ждёт коммита, а не наоборот (узкая гонка Р7). */
+  async findActiveForShare(tx: TransactionClient, id: string): Promise<NodeKind | null> {
+    const rows = await tx.$queryRaw<KindRow[]>(Prisma.sql`
+      SELECT id, name, icon, color, config, archived_at AS "archivedAt"
+      FROM node_kinds
+      WHERE id = ${id}::uuid AND archived_at IS NULL
+      FOR SHARE
+    `);
+    return rows[0] ? this.toDto(rows[0]) : null;
+  }
+
   /** Живые виды по id (валидация подсказки типа проекта). */
   async activeByIds(ids: readonly string[]): Promise<NodeKind[]> {
     if (ids.length === 0) return [];
