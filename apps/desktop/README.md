@@ -53,7 +53,10 @@ apps/desktop/
 «обновите приложение» (гейт `NODUS_MIN_SHELL_VERSION`). Каналы обновлений не
 пересекаются: манифест несёт target-ключи `windows-x86_64-nsis`/`-msi`,
 апдейтер выбирает по типу своей установки (`upgradeCode` зафиксирован в
-`tauri.conf.json`). Раздача и выпуск — runbook `docs/runbooks/desktop-deploy.md`.
+`tauri.conf.json`). Раздача и выпуск — runbook `docs/runbooks/desktop-deploy.md`:
+подписанный выпуск собирает CI (`.github/workflows/desktop-release.yml`, ключ в
+окружении `desktop-signing`, запуск после Approve владельца), на сервер файлы
+кладёт `scripts/desktop-publish.mjs` в версионные каталоги `releases/<версия>/`.
 
 ## Безопасность (границы, ADR-0019)
 
