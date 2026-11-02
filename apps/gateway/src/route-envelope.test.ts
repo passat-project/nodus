@@ -66,6 +66,22 @@ describe('routeEnvelope', () => {
     expect(calls.map((c) => c.room)).toEqual(['presence', 'presence']);
   });
 
+  it('каталог видов папок (#556): всем аутентифицированным (presence)', async () => {
+    const { io, calls } = fakeIo();
+    const store: MembershipStore = { isMember: vi.fn(), memberIds: vi.fn(), userRef: vi.fn() };
+    await routeEnvelope(
+      io,
+      store,
+      envelope('project.node_kind_changed', {
+        kindId: USER_A,
+        change: 'updated',
+        fields: ['form'],
+      }),
+    );
+    expect(calls.map((c) => c.room)).toEqual(['presence']);
+    expect(calls[0]?.type).toBe('project.node_kind_changed');
+  });
+
   it('message_sent: комната беседы + user-комнаты участников (список бесед)', async () => {
     const { io, calls } = fakeIo();
     const store: MembershipStore = {

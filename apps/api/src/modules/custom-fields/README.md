@@ -19,10 +19,11 @@
 
 ```ts
 CUSTOM_FIELD_REGISTRY: CustomFieldRegistry {
-  definitions(scope, { typeId? }, tx?)                       // определения области (с typeId — привязанные к типу)
-  prepareCreate(scope, { input, authorId, typeId? }, tx?)    // умолчания привязанных + ввод (ввод важнее) + проверка
-  prepareUpdate(scope, { current, patch, typeId? }, tx?)     // null удаляет ключ; запись непривязанного — not_in_type
-  refs(scope, values, tx?)                                   // имена/аватары/архивность для DTO детали
+  definitions(scope, { typeId? | fieldIds? }, tx?)           // определения области: тип процесса ИЛИ форма вида папки
+  prepareCreate(scope, { input, authorId, typeId? | fieldIds? }, tx?)  // умолчания + ввод (ввод важнее) + проверка
+  prepareUpdate(scope, { current, patch, typeId? | fieldIds? }, tx?)   // null удаляет ключ; запись вне скоупа — not_in_type
+  refs(scope, values, actor, tx?)                            // имена/аватары/архивность для DTO детали
+  refsMany(scope, valuesList, actor, tx?)                    // пачка по списку карт значений (#556, О2)
 }
 ```
 
@@ -30,20 +31,22 @@ CUSTOM_FIELD_REGISTRY: CustomFieldRegistry {
 
 **Привязка к типам (#432, ADR-0029 «Дополнение»):** с `typeId` порт работает только с привязанными определениями — умолчания не «протекают» в чужой тип, запись значения непривязанного атрибута отвергается `not_in_type` (очистка `null` разрешена всегда), неизвестный ключ остаётся `unknown`.
 
+**Форма вида папки (#556, ADR-0030 «Реализация»):** скоупинг `fieldIds` — атрибуты формы вида (`node_kinds.config.form.fields`); `typeId` и `fieldIds` вместе — ошибка программиста. Порядок определений — реестра, не списка. У видов папок нет таблицы привязок: форма вида и есть привязка (О1).
+
 Ссылки проверяются пачками через порты владельцев данных: `USER_PROFILE_READER`, `ORG_STRUCTURE_READER`, `DICTIONARY_READER`, `COUNTERPARTY_READER`. Умолчание со ссылкой, ставшей неактивной, тихо пропускается с warn в лог — создание сущности не ломается.
 
 ## Эндпоинты (`/api/v1/custom-fields`)
 
-| Маршрут                                 | Права                 | Назначение                                                                                                            |
-| --------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `GET /definitions?scope=&typeId=`       | auth                  | Реестр (массив, без курсора — О9: ≤ 100 на область); `typeId` — только привязанные к типу                             |
-| `POST /definitions`                     | `custom_field.manage` | 201; 409 имя/лимит; 422 недоступный тип; `typeIds` — привязка при создании                                            |
-| `PUT /definitions/:id/types/:typeId`    | `custom_field.manage` | Привязка к типу (#432), идемпотентна; 422 `CUSTOM_FIELD_BINDING_INVALID` (чужая категория/архив), 404 неизвестный тип |
-| `DELETE /definitions/:id/types/:typeId` | `custom_field.manage` | Снятие привязки, идемпотентно; 409 `CUSTOM_FIELD_IN_USE`, если атрибут работает в опубликованном маршруте типа        |
-| `PUT /definitions/order`                | `custom_field.manage` | `ids` = ровно все атрибуты области, иначе 409 `CONFLICT`                                                              |
-| `PATCH /definitions/:id`                | `custom_field.manage` | 200; 409 тип/имя; 422 форма настроек                                                                                  |
-| `DELETE /definitions/:id`               | `custom_field.manage` | 204; 409 `CUSTOM_FIELD_IN_USE` со списком процессов                                                                   |
-| `GET /definitions/:id/usage`            | auth                  | `{ valueCount, workflows: [{id, name}] }`                                                                             |
+| Маршрут                                 | Права                 | Назначение                                                                                                                                             |
+| --------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /definitions?scope=&typeId=`       | auth                  | Реестр (массив, без курсора — О9: ≤ 100 на область); `typeId` — только привязанные к типу                                                              |
+| `POST /definitions`                     | `custom_field.manage` | 201; 409 имя/лимит; 422 недоступный тип; `typeIds` — привязка при создании                                                                             |
+| `PUT /definitions/:id/types/:typeId`    | `custom_field.manage` | Привязка к типу (#432), идемпотентна; 422 `CUSTOM_FIELD_BINDING_INVALID` (чужая категория/архив), 404 неизвестный тип                                  |
+| `DELETE /definitions/:id/types/:typeId` | `custom_field.manage` | Снятие привязки, идемпотентно; 409 `CUSTOM_FIELD_IN_USE`, если атрибут работает в опубликованном маршруте типа                                         |
+| `PUT /definitions/order`                | `custom_field.manage` | `ids` = ровно все атрибуты области, иначе 409 `CONFLICT`                                                                                               |
+| `PATCH /definitions/:id`                | `custom_field.manage` | 200; 409 тип/имя; 422 форма настроек                                                                                                                   |
+| `DELETE /definitions/:id`               | `custom_field.manage` | 204; 409 `CUSTOM_FIELD_IN_USE` со списком процессов                                                                                                    |
+| `GET /definitions/:id/usage`            | auth                  | `{ valueCount, workflows: [{id, name}], nodeKinds: [{id, name}] }` — значения проектов/папок через `PROJECT_FIELD_USAGE_READER`, виды — из форм (#556) |
 
 Правила: имя уникально в области без учёта регистра (`lower(btrim(name))`, выраженный уникальный индекс + проверка под `pg_advisory_xact_lock(431, hashtext(scope))`); лимит 100 на область считается по всем атрибутам, включая скрытые; `sortOrder = max+1` при создании; `reorder` — по всем атрибутам области.
 
@@ -55,7 +58,9 @@ CUSTOM_FIELD_REGISTRY: CustomFieldRegistry {
 
 `custom_field.definition_changed {definitionId, scope, change: created|updated|deleted|reordered, fields?}` — каталожное (gateway рассылает в presence-комнату): клиенты инвалидируют реестр, блок «Атрибуты» карточек и подписи вариантов.
 
-Значение атрибута в отдельном событии не ездит: изменение — в событии сущности (`task.updated` c `customFieldChanges[{fieldId, from, to}]`, ≤ 50, `long_text` обрезан до 500, ключи `cf.<id>` в `fields`).
+Значение атрибута в отдельном событии не ездит: изменение — в событии сущности (`task.updated` / `project.node_updated` c `customFieldChanges[{fieldId, from, to}]`, ≤ 50, `long_text` обрезан до 500, ключи `cf.<id>` в `fields`).
+
+**Уборка значений удалённого атрибута** (#556): обработчики-владельцы — `CustomFieldValuesCleanupHandler` (задачи) и `ProjectFieldValuesCleanupHandler` (проекты и папки, области `project` и `node`; дополнительно убирает слот из форм видов и эмитит `project.node_kind_changed`). Имена классов обработчиков уникальны: диспетчер различает их по имени класса (gotcha backend.md).
 
 ## Умолчания (Р5)
 

@@ -59,7 +59,7 @@ export class ProjectStructureController {
   @Get('structure')
   @ApiParam({ name: 'id', description: 'UUID проекта', schema: { type: 'string', format: 'uuid' } })
   @ApiOperation({
-    summary: 'Структура проекта: узлы (плоско, по порядку) + агрегаты задач + виды уровней',
+    summary: 'Структура проекта: папки (плоско, по порядку) + агрегаты задач + виды папок',
   })
   @ApiOkResponse({ standardSchema: projectStructureResponseSchema })
   @ApiErrors(400, 401, 404)
@@ -73,7 +73,7 @@ export class ProjectStructureController {
   @Post('nodes')
   @Audit({ action: 'project.node_create', entity: 'project_node' })
   @ApiParam({ name: 'id', description: 'UUID проекта', schema: { type: 'string', format: 'uuid' } })
-  @ApiOperation({ summary: 'Создать узел структуры (руководство проекта или project.manage)' })
+  @ApiOperation({ summary: 'Создать папку структуры (руководство проекта или project.manage)' })
   @ApiCreatedResponse({ standardSchema: projectNodeSchema })
   @ApiErrors(400, 401, 403, 404, 409, 422)
   @ApiIdempotencyKey()
@@ -92,7 +92,9 @@ export class ProjectStructureController {
   @Post('nodes/batch')
   @Audit({ action: 'project.node_batch_create', entity: 'project_node' })
   @ApiParam({ name: 'id', description: 'UUID проекта', schema: { type: 'string', format: 'uuid' } })
-  @ApiOperation({ summary: 'Пакетное создание узлов («Здания: поз. 1–3», ≤50 имён)' })
+  @ApiOperation({
+    summary: 'Пакетное создание папок («Здания: поз. 1–3», ≤50 имён, общие значения)',
+  })
   @ApiCreatedResponse({ standardSchema: batchCreateProjectNodesResponseSchema })
   @ApiErrors(400, 401, 403, 404, 409, 422)
   @ApiIdempotencyKey()
@@ -110,6 +112,7 @@ export class ProjectStructureController {
         parentId: dto.parentId ?? null,
         kindId: dto.kindId,
         names: dto.names,
+        customFields: dto.customFields,
       })
       .then((nodes) => ({ nodes }));
   }
@@ -122,7 +125,7 @@ export class ProjectStructureController {
     description: 'UUID узла',
     schema: { type: 'string', format: 'uuid' },
   })
-  @ApiOperation({ summary: 'Правка узла: имя, шифр (null — очистить), вид-ярлык' })
+  @ApiOperation({ summary: 'Правка папки: имя, шифр (null — очистить), вид, значения атрибутов' })
   @ApiOkResponse({ standardSchema: projectNodeSchema })
   @ApiErrors(400, 401, 403, 404, 409, 422)
   @ApiIdempotencyKey()
@@ -149,7 +152,7 @@ export class ProjectStructureController {
     schema: { type: 'string', format: 'uuid' },
   })
   @ApiOperation({
-    summary: 'Перенос узла: родитель (null — корень) + якорь позиции (beforeId/afterId)',
+    summary: 'Перенос папки: родитель (null — корень) + якорь позиции (beforeId/afterId)',
   })
   @ApiOkResponse({ standardSchema: projectNodeSchema })
   @ApiErrors(400, 401, 403, 404, 409, 422)
@@ -177,7 +180,7 @@ export class ProjectStructureController {
     schema: { type: 'string', format: 'uuid' },
   })
   @ApiOperation({
-    summary: 'Удалить ПУСТОЙ узел (в нём задачи или дети — 409; архивации узлов нет)',
+    summary: 'Удалить ПУСТУЮ папку (в ней задачи или дети — 409; архивации папок нет)',
   })
   @ApiNoContentResponse()
   @ApiErrors(400, 401, 403, 404, 409)

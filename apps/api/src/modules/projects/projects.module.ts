@@ -20,6 +20,9 @@ import { ProjectsRepository } from './projects.repository.js';
 import { ProjectsQueryService } from './projects-query.service.js';
 import { ProjectsService } from './projects.service.js';
 import { NodeKindsRepository } from './project-node-kinds.repository.js';
+import { NodeKindsService } from './node-kinds.service.js';
+import { NodeFormPolicy } from './node-form.policy.js';
+import { ProjectFieldValuesCleanupHandler } from './events/project-field-values-cleanup.handler.js';
 import { ProjectNodesRepository } from './project-nodes.repository.js';
 import { ProjectStructureController } from './project-structure.controller.js';
 import { ProjectStructureService } from './project-structure.service.js';
@@ -62,9 +65,13 @@ import {
     ProjectsQueryService,
     ProjectLifecycleService,
     NodeKindsRepository,
+    NodeKindsService,
+    NodeFormPolicy,
     ProjectNodesRepository,
     ProjectStructureService,
     ProjectStructureMoveService,
+    // Уборка значений удалённого атрибута (#556, Р11): событие custom-fields.
+    ProjectFieldValuesCleanupHandler,
     // Проекция участия «из задач» (Р2): события task.*.
     TaskParticipantsProjectionRunner,
     TaskCreatedProjectHandler,

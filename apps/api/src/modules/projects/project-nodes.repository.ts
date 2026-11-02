@@ -13,6 +13,7 @@ export const nodeSelect = {
   kindId: true,
   name: true,
   code: true,
+  customFields: true,
   order: true,
   createdAt: true,
 } as const;
@@ -26,12 +27,14 @@ export interface NewProjectNode {
   name: string;
   code: string | null;
   order: string;
+  customFields: Prisma.InputJsonValue;
 }
 
 export interface ProjectNodePatch {
   name?: string;
   code?: string | null;
   kindId?: string;
+  customFields?: Prisma.InputJsonValue;
   parentId?: string | null;
   order?: string;
 }
@@ -59,9 +62,15 @@ export class ProjectNodesRepository {
     return row;
   }
 
-  /** Узел проекта (без оракула чужих: не тот проект — null). */
-  async findInProject(projectId: string, nodeId: string): Promise<ProjectNodeRow | null> {
-    const row = await this.prisma.projectNode.findFirst({
+  /** Узел проекта (без оракула чужих: не тот проект — null). Чтение под
+   *  локом структуры идёт через `tx` (F2: иначе правка пишет поверх чужого
+   *  изменения значений). */
+  async findInProject(
+    projectId: string,
+    nodeId: string,
+    tx?: TransactionClient,
+  ): Promise<ProjectNodeRow | null> {
+    const row = await (tx ?? this.prisma).projectNode.findFirst({
       select: nodeSelect,
       where: { id: nodeId, projectId },
     });
@@ -104,5 +113,16 @@ export class ProjectNodesRepository {
     await tx.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('nodus:project_nodes:' || ${projectId}::text))`,
     );
+  }
+
+  /** Уборка значений удалённого атрибута (#556, Р11): `custom_fields - key`
+   *  только по строкам, где ключ ещё есть — повторная доставка события
+   *  безвредна (идемпотентность). */
+  async removeCustomFieldValues(tx: TransactionClient, fieldId: string): Promise<number> {
+    return tx.$executeRaw(Prisma.sql`
+      UPDATE project_nodes
+      SET custom_fields = custom_fields - ${fieldId}::text
+      WHERE custom_fields ? ${fieldId}::text
+    `);
   }
 }

@@ -1,4 +1,4 @@
-import type { ProjectNode, ProjectNodeRollup } from '@nodus/contracts';
+import type { CustomFieldValues, ProjectNode, ProjectNodeRollup } from '@nodus/contracts';
 
 import type { ProjectNodeRow } from './project-nodes.repository.js';
 
@@ -12,7 +12,9 @@ export const EMPTY_ROLLUP: ProjectNodeRollup = {
   latestDeadline: null,
 };
 
-/** Строка БД → DTO узла (rollup=null → пустой агрегат). */
+/** Строка БД → DTO узла (rollup=null → пустой агрегат). `customFields` —
+ *  ВСЕ хранимые значения, включая скрытые сменой вида (Р5): форма вида
+ *  фильтрует помощником nodeFormValues. */
 export function nodeToDto(row: ProjectNodeRow, rollup: ProjectNodeRollup | null): ProjectNode {
   return {
     id: row.id,
@@ -20,8 +22,7 @@ export function nodeToDto(row: ProjectNodeRow, rollup: ProjectNodeRollup | null)
     kindId: row.kindId,
     name: row.name,
     code: row.code,
-    // #556 UI-пакет: заглушка — значения папки появятся в пакете 2.
-    customFields: {},
+    customFields: (row.customFields ?? {}) as CustomFieldValues,
     rollup: rollup ?? EMPTY_ROLLUP,
     createdAt: row.createdAt.toISOString(),
   };

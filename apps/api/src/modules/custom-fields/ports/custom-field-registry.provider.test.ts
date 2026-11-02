@@ -42,7 +42,7 @@ function makeRegistry(definitions: CustomFieldDefinition[]) {
       async () => ({}),
     ),
   };
-  const hydrator = { hydrate: vi.fn(async () => []) };
+  const hydrator = { hydrate: vi.fn(async (): Promise<unknown[]> => []) };
   const logger = { setContext: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
   const registry = new CustomFieldRegistryProvider(
     repository as never,

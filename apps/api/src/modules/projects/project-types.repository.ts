@@ -9,8 +9,10 @@ import type { TransactionClient } from '../../core/database/transaction-runner.j
 const typeSelect = {
   id: true,
   name: true,
+  icon: true,
+  color: true,
   codeField: true,
-  levelKindIds: true,
+  kindIds: true,
   archivedAt: true,
 } as const;
 type Row = Prisma.ProjectTypeGetPayload<{ select: typeof typeSelect }>;
@@ -24,13 +26,11 @@ export class ProjectTypesRepository {
     return {
       id: row.id,
       name: row.name,
-      // #556 UI-пакет: заглушка — колонки icon/color появятся в миграции Б.
-      icon: 'file-text',
-      color: 'blue',
+      icon: row.icon as ProjectType['icon'],
+      color: row.color as ProjectType['color'],
       codeField: row.codeField as ProjectCodeField,
       // Допустимые виды папок типа (#556): null — все, массив — только эти.
-      // Колонка БД переименуется в kind_ids миграцией Б (пакет 2).
-      kindIds: Array.isArray(row.levelKindIds) ? (row.levelKindIds as string[]) : null,
+      kindIds: Array.isArray(row.kindIds) ? (row.kindIds as string[]) : null,
       archivedAt: row.archivedAt?.toISOString() ?? null,
     };
   }
@@ -66,16 +66,19 @@ export class ProjectTypesRepository {
     return row !== null;
   }
 
-  async create(tx: TransactionClient, name: string): Promise<ProjectType> {
+  async create(
+    tx: TransactionClient,
+    data: { name: string; icon?: string; color?: string },
+  ): Promise<ProjectType> {
     const row = await tx.projectType.create({
       select: typeSelect,
-      data: { id: randomUUID(), name },
+      data: { id: randomUUID(), ...data },
     });
     return this.toDto(row);
   }
 
-  /** Правка типа: имя, политика «Шифра» и подсказка видов узлов (null —
-   *  подсказки нет; #467). Валидность id видов — контроллер каталога. */
+  /** Правка типа: имя, значок, цвет, политика «Шифра» и допустимые виды
+   *  папок (null — все; #556). Валидность id видов — контроллер каталога. */
   async update(
     tx: TransactionClient,
     id: string,
@@ -83,9 +86,11 @@ export class ProjectTypesRepository {
   ): Promise<ProjectType | null> {
     const data: Prisma.ProjectTypeUpdateInput = {};
     if (patch.name !== undefined) data.name = patch.name;
+    if (patch.icon !== undefined) data.icon = patch.icon;
+    if (patch.color !== undefined) data.color = patch.color;
     if (patch.codeField !== undefined) data.codeField = patch.codeField;
     if (patch.kindIds !== undefined) {
-      data.levelKindIds =
+      data.kindIds =
         patch.kindIds === null ? Prisma.JsonNull : (patch.kindIds as Prisma.InputJsonValue);
     }
     const result = await tx.projectType.updateMany({ where: { id }, data });

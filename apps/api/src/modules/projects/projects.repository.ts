@@ -201,6 +201,16 @@ export class ProjectsRepository {
     await tx.project.updateMany({ where: { id }, data: { updatedAt: new Date() } });
   }
 
+  /** Уборка значений удалённого атрибута области `project` (#556, F1, Р11):
+   *  идемпотентна, журнал не поднимает (администраторская гигиена данных). */
+  async removeCustomFieldValues(tx: TransactionClient, fieldId: string): Promise<number> {
+    return tx.$executeRaw(Prisma.sql`
+      UPDATE projects
+      SET custom_fields = custom_fields - ${fieldId}::text
+      WHERE custom_fields ? ${fieldId}::text
+    `);
+  }
+
   /** Id проектов, где актёр участвует (любой источник). */
   async participantProjectIds(userId: string): Promise<string[]> {
     const rows = await this.prisma.projectParticipant.findMany({

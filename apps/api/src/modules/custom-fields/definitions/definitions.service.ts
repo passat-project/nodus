@@ -28,6 +28,11 @@ import {
   type CustomFieldValuesReader,
 } from '../../tasks/ports/custom-field-values.port.js';
 import {
+  PROJECT_FIELD_USAGE_READER,
+  type ProjectFieldScope,
+  type ProjectFieldUsageReader,
+} from '../../projects/ports/project-field-usage.port.js';
+import {
   PROCESS_CATALOG_READER,
   type ProcessCatalogReader,
 } from '../../workflows/ports/process-catalog-reader.port.js';
@@ -62,6 +67,7 @@ export class DefinitionsService {
     private readonly eventBus: EventBus,
     @Inject(DICTIONARY_READER) private readonly dictionaries: DictionaryReader,
     @Inject(CUSTOM_FIELD_VALUES_READER) private readonly values: CustomFieldValuesReader,
+    @Inject(PROJECT_FIELD_USAGE_READER) private readonly projectUsage: ProjectFieldUsageReader,
     @Inject(WORKFLOW_FIELD_USAGE_READER) private readonly workflows: WorkflowFieldUsageReader,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
     private readonly logger: PinoLogger,
@@ -216,16 +222,19 @@ export class DefinitionsService {
     });
   }
 
-  /** Где используется: число заполненных карточек и маршруты процессов. */
+  /** Где используется: число заполненных карточек, маршруты процессов и
+   *  виды папок, держащие атрибут в форме (#556, Р11). Читатель значений —
+   *  по области: проекты и папки живут в модуле projects (порт). */
   async usage(id: string): Promise<CustomFieldUsage> {
     const definition = await this.requireDefinition(id);
     const scope = definition.scope as CustomFieldScope;
-    const [valueCount, workflows] = await Promise.all([
-      this.values.countValues(scope, id),
+    const projectScope = isProjectScope(scope);
+    const [valueCount, workflows, nodeKinds] = await Promise.all([
+      projectScope ? this.projectUsage.countValues(scope, id) : this.values.countValues(scope, id),
       this.workflows.workflowsUsingField(scope, id),
+      scope === 'node' ? this.projectUsage.nodeKindsUsing(id) : Promise.resolve([]),
     ]);
-    // #556 UI-пакет: заглушка — виды папок в окне удаления появятся в пакете 2.
-    return { valueCount, workflows, nodeKinds: [] };
+    return { valueCount, workflows, nodeKinds };
   }
 
   /**
@@ -326,4 +335,9 @@ export class DefinitionsService {
 
 function nameTaken(name: string): DomainException {
   return new DomainException(ErrorCode.CUSTOM_FIELD_NAME_TAKEN, 'Field name is taken', { name });
+}
+
+/** Области, значения которых читает модуль projects (#556, Р11). */
+function isProjectScope(scope: CustomFieldScope): scope is ProjectFieldScope {
+  return scope === 'project' || scope === 'node';
 }

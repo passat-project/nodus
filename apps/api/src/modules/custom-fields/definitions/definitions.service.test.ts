@@ -90,6 +90,7 @@ function makeService(overrides: { workflows?: { id: string; name: string }[] } =
     eventBus as never,
     dictionaries as never,
     values as never,
+    { countValues: vi.fn(async () => 0), nodeKindsUsing: vi.fn(async () => []) } as never,
     workflows as never,
     catalog as never,
     logger as never,
@@ -183,7 +184,6 @@ describe('DefinitionsService.update (#431, Р3)', () => {
     });
   });
 });
-
 describe('DefinitionsService.remove и usage (#431)', () => {
   it('использование отдаёт число карточек и маршруты', async () => {
     const { service } = makeService({ workflows: [{ id: 'w-1', name: 'Стандартный' }] });

@@ -3,27 +3,41 @@ import {
   ErrorCode,
   NODE_LIMITS,
   PROJECT_EVENTS,
+  nodeFormKey,
   type AuthUser,
   type CreateProjectNodeBody,
+  type CustomFieldValues,
   type ProjectNode,
   type ProjectStructureResponse,
   type UpdateProjectNodeBody,
 } from '@nodus/contracts';
 
-import {
-  TransactionRunner,
-  type TransactionClient,
-} from '../../core/database/transaction-runner.js';
+import { Prisma } from '../../generated/prisma/client.js';
+import { TransactionRunner } from '../../core/database/transaction-runner.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
 import { EventBus } from '../../core/events/event-bus.js';
+import {
+  CUSTOM_FIELD_REGISTRY,
+  type CustomFieldRegistry,
+  type RegistryFieldChange,
+} from '../custom-fields/ports/custom-field-registry.port.js';
 import {
   TASK_PROJECT_READER,
   type TaskProjectReader,
 } from '../tasks/ports/task-project-reader.port.js';
+import { NodeFormPolicy } from './node-form.policy.js';
 import { loadForStructureManage } from './project-structure.access.js';
+import {
+  assertCodeFree,
+  assertKindAlive,
+  assertParent,
+  kindOf,
+} from './project-structure.guards.js';
 import { nodeToDto } from './project-structure.mapper.js';
+import { eventValue, valuesOf } from './project-structure.values.js';
 import { NodeKindsRepository } from './project-node-kinds.repository.js';
 import { ProjectNodesRepository, type ProjectNodeRow } from './project-nodes.repository.js';
+import { ProjectTypesRepository } from './project-types.repository.js';
 import { ProjectsService } from './projects.service.js';
 import {
   childrenByParent,
@@ -32,20 +46,19 @@ import {
   nodeInvalid,
   orderKeyFor,
   parentOf,
-  type TreeNodeLike,
 } from './project-structure.tree.js';
 
 /**
- * Дерево проекта (#467, ADR-0030 «Дополнение»): узлы-папки со свободной
- * вложенностью, задачи — листья (tasks.nodeId, агрегаты — порт
- * TASK_PROJECT_READER). Права — как у правки полей проекта (руководство или
- * project.manage, ProjectsService.loadForManage); архив — заморозка (400).
- * Все мутации — под advisory-локом структуры проекта; события project.node_*
- * — outbox в той же транзакции (I9). Срез узлов без курсора (≤1000) —
- * легализованное исключение (дополнение ADR-0030).
+ * Дерево проекта (#467, #556; ADR-0030 «Дополнение»): папки со свободной
+ * вложенностью, задачи — листья (порт TASK_PROJECT_READER). Права — как у
+ * правки полей (руководство или project.manage), архив — 400. Мутации — под
+ * advisory-локом структуры, события project.node_* — outbox в той же tx (I9);
+ * срез папок без курсора (≤1000) — исключение ADR-0030.
  *
- * Перенос узла — ProjectStructureMoveService (I5); доступ — access-гард;
- * DTO — mapper; чистые расчёты — project-structure.tree.ts.
+ * Значения атрибутов папки: форма и проверка — NodeFormPolicy (одна точка),
+ * ссылки — одна пачка `refsMany` на срез (О2); папка для правки читается
+ * ВНУТРИ транзакции после лока (F2). Перенос — ProjectStructureMoveService,
+ * DTO — mapper, чистые расчёты — project-structure.tree.ts.
  */
 @Injectable()
 export class ProjectStructureService {
@@ -55,10 +68,14 @@ export class ProjectStructureService {
     private readonly projects: ProjectsService,
     private readonly nodes: ProjectNodesRepository,
     private readonly kinds: NodeKindsRepository,
+    private readonly types: ProjectTypesRepository,
+    private readonly policy: NodeFormPolicy,
+    @Inject(CUSTOM_FIELD_REGISTRY) private readonly registry: CustomFieldRegistry,
     @Inject(TASK_PROJECT_READER) private readonly taskReader: TaskProjectReader,
   ) {}
 
-  /** GET /projects/:id/structure: узлы (плоско, по order) + rollups + виды. */
+  /** GET /projects/:id/structure: папки (плоско, по order) + rollups + виды +
+   *  ссылки значений одной пачкой (О2). */
   async structure(user: AuthUser, projectId: string): Promise<ProjectStructureResponse> {
     await this.projects.assertVisible(user, projectId);
     const [rows, rollups, kinds] = await Promise.all([
@@ -67,11 +84,15 @@ export class ProjectStructureService {
       this.kinds.list(),
     ]);
     const byNode = new Map(rollups.map((rollup) => [rollup.nodeId, rollup]));
+    const customFieldRefs = await this.registry.refsMany(
+      'node',
+      rows.map((row) => valuesOf(row)),
+      user,
+    );
     return {
       nodes: rows.map((row) => nodeToDto(row, byNode.get(row.id) ?? null)),
       kinds,
-      // #556 UI-пакет: заглушка — пачка ссылок значений появится в пакете 2.
-      customFieldRefs: [],
+      customFieldRefs,
     };
   }
 
@@ -85,11 +106,14 @@ export class ProjectStructureService {
       kindId: body.kindId,
       names: [body.name],
       code: body.code,
+      customFields: body.customFields,
     });
     return created[0]!;
   }
 
-  /** Пакетное создание («Здания: поз. 1–3»): лимиты — на пакет целиком. */
+  /** Пакетное создание («Здания: поз. 1–3»): лимиты — на пакет целиком.
+   *  Значения атрибутов общие; шифр у пачки один (первая папка) — при
+   *  обязательном шифре вида пачка отклоняется (422, В1). */
   async createMany(
     user: AuthUser,
     projectId: string,
@@ -98,14 +122,15 @@ export class ProjectStructureService {
       kindId: string;
       names: string[];
       code?: string;
+      customFields?: CustomFieldValues;
     },
   ): Promise<ProjectNode[]> {
-    await loadForStructureManage(this.projects, user, projectId);
+    const { row: project } = await loadForStructureManage(this.projects, user, projectId);
     return this.txRunner.run(async (tx) => {
       await this.nodes.lockStructure(tx, projectId);
       const tree = await this.nodes.listByProject(projectId, tx);
-      const kind = await this.assertKindAlive(body.kindId);
-      const parent = this.assertParent(tree, body.parentId);
+      const kind = await assertKindAlive(this.kinds, this.types, project.typeId, body.kindId);
+      const parent = assertParent(tree, body.parentId);
       if (body.names.length > NODE_LIMITS.nodesPerProject - tree.length) {
         throw limitError('nodes_per_project', NODE_LIMITS.nodesPerProject);
       }
@@ -116,8 +141,16 @@ export class ProjectStructureService {
       const depth = parent ? nodeDepth(parentOf(tree), parent.id) + 1 : 1;
       if (depth > NODE_LIMITS.depth) throw limitError('depth', NODE_LIMITS.depth);
       if (body.code !== undefined && body.code !== null) {
-        await this.assertCodeFree(tx, projectId, body.code, null);
+        await assertCodeFree(this.nodes, tx, projectId, body.code, null);
       }
+      // Умолчания формы и обязательные (шифр + атрибуты) — одна точка (Р6).
+      const values = await this.policy.prepareCreate(
+        kind,
+        { code: body.code ?? null, customFields: body.customFields },
+        user.id,
+        user,
+        tx,
+      );
       const meta = { actorId: user.id, aggregateType: 'project_node' };
       const created: ProjectNodeRow[] = [];
       for (const name of body.names) {
@@ -129,6 +162,7 @@ export class ProjectStructureService {
           name,
           code: created.length === 0 ? (body.code ?? null) : null,
           order: orderKeyFor(orders, null, 'end'),
+          customFields: values as Prisma.InputJsonValue,
         });
         created.push(node);
         await this.eventBus.emit(
@@ -148,33 +182,57 @@ export class ProjectStructureService {
     });
   }
 
-  /** Правка узла: имя/код(null очищает)/вид-ярлык. */
+  /** Правка папки: имя/шифр(null очищает)/вид/значения атрибутов. Смена вида
+   *  значения прежнего вида не стирает — они скрываются (Р6, В10). */
   async update(
     user: AuthUser,
     projectId: string,
     nodeId: string,
     body: UpdateProjectNodeBody,
   ): Promise<ProjectNode> {
-    await loadForStructureManage(this.projects, user, projectId);
+    const { row: project } = await loadForStructureManage(this.projects, user, projectId);
     return this.txRunner.run(async (tx) => {
       await this.nodes.lockStructure(tx, projectId);
-      const node = await this.nodes.findInProject(projectId, nodeId);
+      // Чтение ВНУТРИ tx после лока (F2): гонка двух PATCH сериализуется.
+      const node = await this.nodes.findInProject(projectId, nodeId, tx);
       if (!node) throw nodeInvalid(nodeId);
-      const patch: { name?: string; code?: string | null; kindId?: string } = {};
+      const kindChanged = body.kindId !== undefined && body.kindId !== node.kindId;
+      const kind = kindChanged
+        ? await assertKindAlive(this.kinds, this.types, project.typeId, body.kindId!)
+        : await kindOf(this.kinds, node.kindId);
+      const patch: {
+        name?: string;
+        code?: string | null;
+        kindId?: string;
+        customFields?: Prisma.InputJsonValue;
+      } = {};
       const fields: string[] = [];
+      let changes: RegistryFieldChange[] = [];
+      if (body.code !== undefined || body.customFields !== undefined || kindChanged) {
+        const prepared = await this.policy.prepareUpdate(
+          kind,
+          { code: node.code, customFields: valuesOf(node) },
+          { code: body.code, customFields: body.customFields },
+          { authorId: user.id, actor: user, kindChanged },
+          tx,
+        );
+        patch.customFields = prepared.values as Prisma.InputJsonValue;
+        changes = prepared.changes;
+        fields.push(...changes.map((change) => nodeFormKey(change.fieldId)));
+      }
       if (body.name !== undefined) {
         patch.name = body.name;
         fields.push('name');
       }
       if (body.code !== undefined) {
         if (body.code !== null && body.code !== node.code) {
-          await this.assertCodeFree(tx, projectId, body.code, node.id);
+          await assertCodeFree(this.nodes, tx, projectId, body.code, node.id);
         }
         patch.code = body.code;
         fields.push('code');
       }
-      if (body.kindId !== undefined && body.kindId !== node.kindId) {
-        patch.kindId = (await this.assertKindAlive(body.kindId)).id;
+      if (kindChanged) {
+        patch.kindId = kind.id;
         fields.push('kindId');
       }
       await this.nodes.update(tx, node.id, patch);
@@ -188,6 +246,15 @@ export class ProjectStructureService {
           ...(patch.name !== undefined ? { name: patch.name } : {}),
           ...(patch.code !== undefined ? { code: patch.code } : {}),
           ...(patch.kindId !== undefined ? { kindId: patch.kindId } : {}),
+          ...(changes.length > 0
+            ? {
+                customFieldChanges: changes.map((change) => ({
+                  fieldId: change.fieldId,
+                  from: eventValue(change.from),
+                  to: eventValue(change.to),
+                })),
+              }
+            : {}),
         },
         { actorId: user.id, aggregateType: 'project_node', aggregateId: node.id },
       );
@@ -195,12 +262,12 @@ export class ProjectStructureService {
     });
   }
 
-  /** Удаление пустого узла насовсем (архивации узлов нет, вердикт 30.10). */
+  /** Удаление пустой папки насовсем (архивации папок нет, вердикт 30.10). */
   async remove(user: AuthUser, projectId: string, nodeId: string): Promise<void> {
     await loadForStructureManage(this.projects, user, projectId);
     await this.txRunner.run(async (tx) => {
       await this.nodes.lockStructure(tx, projectId);
-      const node = await this.nodes.findInProject(projectId, nodeId);
+      const node = await this.nodes.findInProject(projectId, nodeId, tx);
       if (!node) throw nodeInvalid(nodeId);
       const tree = await this.nodes.listByProject(projectId, tx);
       if ((childrenByParent(tree).get(node.id) ?? []).length > 0) {
@@ -220,42 +287,5 @@ export class ProjectStructureService {
         { actorId: user.id, aggregateType: 'project_node', aggregateId: node.id },
       );
     });
-  }
-
-  // ===== Общее =====
-
-  private async assertKindAlive(kindId: string) {
-    const kind = await this.kinds.findActive(kindId);
-    if (kind) return kind;
-    if (await this.kinds.findById(kindId)) {
-      throw new DomainException(ErrorCode.PROJECT_NODE_KIND_ARCHIVED, 'Node kind is archived', {
-        kindId,
-      });
-    }
-    throw new DomainException(ErrorCode.PROJECT_NODE_INVALID, 'Node kind is not available', {
-      kindId,
-    });
-  }
-
-  private assertParent(tree: readonly TreeNodeLike[], parentId: string | null) {
-    if (parentId === null) return null;
-    const parent = tree.find((entry) => entry.id === parentId);
-    if (!parent) throw nodeInvalid(parentId);
-    return parent;
-  }
-
-  private async assertCodeFree(
-    tx: TransactionClient,
-    projectId: string,
-    code: string,
-    excludeId: string | null,
-  ): Promise<void> {
-    if (await this.nodes.codeTaken(projectId, code, excludeId, tx)) {
-      throw new DomainException(
-        ErrorCode.PROJECT_NODE_CODE_TAKEN,
-        'Node code is already taken in this project',
-        { code },
-      );
-    }
   }
 }

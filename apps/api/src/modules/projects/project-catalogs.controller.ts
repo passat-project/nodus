@@ -87,7 +87,7 @@ export class ProjectCatalogsController {
   @Post('projects/types')
   @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
   @Audit({ action: 'project.type_create', entity: 'project_type' })
-  @ApiOperation({ summary: 'Новый тип проекта' })
+  @ApiOperation({ summary: 'Новый тип проекта (название, значок, цвет)' })
   @ApiCreatedResponse({ standardSchema: projectTypeSchema })
   @ApiErrors(400, 401, 403, 409)
   @ApiIdempotencyKey()
@@ -102,7 +102,7 @@ export class ProjectCatalogsController {
       if (await this.types.nameTaken(dto.name)) {
         throw DomainException.conflict('Project type name is already taken');
       }
-      return this.types.create(tx, dto.name);
+      return this.types.create(tx, dto);
     });
   }
 
@@ -110,7 +110,9 @@ export class ProjectCatalogsController {
   @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
   @Audit({ action: 'project.type_update', entity: 'project_type' })
   @ApiParam({ name: 'id', description: 'UUID типа', schema: { type: 'string', format: 'uuid' } })
-  @ApiOperation({ summary: 'Правка типа проекта: имя и политика поля «Шифр»' })
+  @ApiOperation({
+    summary: 'Правка типа проекта: имя, значок, цвет, поле «Шифр», виды папок',
+  })
   @ApiOkResponse({ standardSchema: projectTypeSchema })
   @ApiErrors(400, 401, 403, 404, 409)
   @ApiIdempotencyKey()

@@ -29,7 +29,21 @@ export interface RegistryFieldChange {
   to: CustomFieldValue | null;
 }
 
-export interface PrepareCreateArgs {
+/**
+ * Скоупинг реестра (#432, #556): тип процесса ИЛИ список атрибутов вида
+ * папки. У видов папок нет публикуемого маршрута и таблицы привязок —
+ * привязка живёт формой вида (`form.fields`), поэтому реестр фильтруется
+ * множеством id. Оба скоупа одновременно — ошибка программиста
+ * (`typeId and fieldIds are exclusive`): смешать привязки нельзя.
+ */
+export interface RegistryScoping {
+  /** Тип процесса (#432): только атрибуты, привязанные к типу. */
+  typeId?: string;
+  /** Вид папки (#556): только атрибуты формы вида (порядок реестра). */
+  fieldIds?: readonly string[];
+}
+
+export interface PrepareCreateArgs extends RegistryScoping {
   /** Значения, пришедшие от клиента (могут быть неполными). */
   input: CustomFieldValues;
   /** Автор сущности — источник умолчания «подразделение автора» (Р5). */
@@ -37,27 +51,20 @@ export interface PrepareCreateArgs {
   /** Актёр запроса (#52): значения-ссылки на проекты проверяются на
    *  видимость актёру (секретный проект нельзя поставить значением). */
   actor: ProjectActor;
-  /** Тип создаваемой сущности (#432, Р8): умолчания — только привязанных
-   *  атрибутов, значение непривязанного — 422 `not_in_type`. */
-  typeId?: string;
 }
 
-export interface PrepareUpdateArgs {
+export interface PrepareUpdateArgs extends RegistryScoping {
   /** Текущие значения сущности (JSONB как есть). */
   current: CustomFieldValues;
   /** Патч: `null` удаляет ключ; непустые — проверяются. */
   patch: Record<string, CustomFieldValue | null>;
   /** Актёр запроса (#52): проверка видимости значений-ссылок на проекты. */
   actor: ProjectActor;
-  /** Тип сущности (#432, Р8): запись непривязанного — 422 `not_in_type`,
-   *  очистка (`null`) разрешена всегда. */
-  typeId?: string;
 }
 
-/** Что читать из реестра: `typeId` — только привязанные к типу (#432). */
-export interface RegistryQuery {
-  typeId?: string;
-}
+/** Что читать из реестра: `typeId` — привязанные к типу (#432), `fieldIds` —
+ *  атрибуты формы вида папки (#556). */
+export type RegistryQuery = RegistryScoping;
 
 export interface CustomFieldRegistry {
   /** Определения области (включая скрытые — служебные значения пишет
@@ -88,6 +95,16 @@ export interface CustomFieldRegistry {
   refs(
     scope: CustomFieldScope,
     values: CustomFieldValues,
+    actor: ProjectActor,
+    tx?: TransactionClient,
+  ): Promise<CustomFieldRef[]>;
+
+  /** Ссылки пачкой по списку карт значений (#556, Р4): срез структуры
+   *  проекта отдаёт значения всех папок одним набором ссылок (О2) — одна
+   *  пачка запросов на вид ссылки вместо N+1 по папкам. Дедуп `kind:id`. */
+  refsMany(
+    scope: CustomFieldScope,
+    valuesList: readonly CustomFieldValues[],
     actor: ProjectActor,
     tx?: TransactionClient,
   ): Promise<CustomFieldRef[]>;

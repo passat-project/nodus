@@ -9,35 +9,36 @@ import {
 } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
-  ErrorCode,
   Permission,
   nodeKindCreateBodySchema,
   nodeKindListSchema,
   nodeKindSchema,
   nodeKindUpdateBodySchema,
+  type AuthUser,
   type NodeKind,
   type NodeKindCreateBody,
   type NodeKindUpdateBody,
 } from '@nodus/contracts';
 
 import { Audit } from '../../core/decorators/audit.decorator.js';
+import { GetUser } from '../../core/decorators/get-user.decorator.js';
 import { RequireFeature } from '../../core/decorators/require-feature.decorator.js';
 import { RequirePermissions } from '../../core/decorators/require-permissions.decorator.js';
-import { DomainException } from '../../core/errors/domain-exception.js';
 import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../core/openapi/api-idempotency.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
-import { TransactionRunner } from '../../core/database/transaction-runner.js';
-import { NodeKindsRepository } from './project-node-kinds.repository.js';
+import { NodeKindsService } from './node-kinds.service.js';
 
 const idParamSchema = z.uuid();
 
 /**
- * Справочник видов уровней структуры (#467, ADR-0030 «Дополнение»): ярлык
- * узла — значок + цвет; создание/правка/архивация — `project.setup.manage`
- * («Автоматизация → Типы проектов»). Удаление = архивация: узлы архивного
- * вида не создаются, существующие живут. Имя уникально без учёта регистра
- * и пробелов (lower(btrim(name))). Статический маршрут `projects/node-kinds`
+ * Справочник видов папок структуры (#467, #556, ADR-0030 «Дополнение»):
+ * ярлык (значок + цвет) и конфигурация вида (форма создания + возможности);
+ * создание/правка/архивация — `project.setup.manage` («Автоматизация →
+ * Схемы проектов»). Удаление = архивация: папки архивного вида не создаются,
+ * существующие живут. Имя уникально без учёта регистра и пробелов
+ * (lower(btrim(name))). Логика — NodeKindsService (лок, события); здесь —
+ * аудит, права и OpenAPI. Статический маршрут `projects/node-kinds`
  * фармуется раньше параметрических `projects/:id`.
  */
 @ApiTags('projects')
@@ -45,13 +46,10 @@ const idParamSchema = z.uuid();
 @RequireFeature('projects')
 @Controller()
 export class ProjectNodeKindsController {
-  constructor(
-    private readonly nodeKinds: NodeKindsRepository,
-    private readonly txRunner: TransactionRunner,
-  ) {}
+  constructor(private readonly nodeKinds: NodeKindsService) {}
 
   @Get('projects/node-kinds')
-  @ApiOperation({ summary: 'Виды уровней узлов (живые по имени, архивные в конце)' })
+  @ApiOperation({ summary: 'Виды папок: форма, возможности, архивные в конце' })
   @ApiOkResponse({ standardSchema: nodeKindListSchema })
   @ApiErrors(400, 401)
   nodeKindsList(): Promise<NodeKind[]> {
@@ -61,7 +59,7 @@ export class ProjectNodeKindsController {
   @Post('projects/node-kinds')
   @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
   @Audit({ action: 'project.node_kind_create', entity: 'node_kind' })
-  @ApiOperation({ summary: 'Новый вид уровня (ярлык узла: значок + цвет)' })
+  @ApiOperation({ summary: 'Новый вид папки (ярлык: значок + цвет)' })
   @ApiCreatedResponse({ standardSchema: nodeKindSchema })
   @ApiErrors(400, 401, 403, 409)
   @ApiIdempotencyKey()
@@ -71,26 +69,20 @@ export class ProjectNodeKindsController {
       pipes: [new ZodValidationPipe(nodeKindCreateBodySchema)],
     })
     dto: NodeKindCreateBody,
+    @GetUser() user: AuthUser,
   ): Promise<NodeKind> {
-    return this.txRunner.run(async (tx) => {
-      if (await this.nodeKinds.nameTaken(dto.name, null)) {
-        throw new DomainException(
-          ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN,
-          'Node kind name is already taken',
-          { name: dto.name },
-        );
-      }
-      return this.nodeKinds.create(tx, dto);
-    });
+    return this.nodeKinds.create(dto, user.id);
   }
 
   @Patch('projects/node-kinds/:id')
   @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
   @Audit({ action: 'project.node_kind_update', entity: 'node_kind' })
   @ApiParam({ name: 'id', description: 'UUID вида', schema: { type: 'string', format: 'uuid' } })
-  @ApiOperation({ summary: 'Правка вида уровня: имя, значок, цвет' })
+  @ApiOperation({
+    summary: 'Правка вида папки: имя, значок, цвет, форма (раздел целиком), возможности',
+  })
   @ApiOkResponse({ standardSchema: nodeKindSchema })
-  @ApiErrors(400, 401, 403, 404, 409)
+  @ApiErrors(400, 401, 403, 404, 409, 422)
   @ApiIdempotencyKey()
   nodeKindUpdate(
     @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
@@ -99,55 +91,37 @@ export class ProjectNodeKindsController {
       pipes: [new ZodValidationPipe(nodeKindUpdateBodySchema)],
     })
     dto: NodeKindUpdateBody,
+    @GetUser() user: AuthUser,
   ): Promise<NodeKind> {
-    return this.txRunner.run(async (tx) => {
-      if (dto.name !== undefined && (await this.nodeKinds.nameTaken(dto.name, id))) {
-        throw new DomainException(
-          ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN,
-          'Node kind name is already taken',
-          { name: dto.name },
-        );
-      }
-      const updated = await this.nodeKinds.update(tx, id, dto);
-      if (!updated) throw DomainException.notFound('Node kind not found');
-      return updated;
-    });
+    return this.nodeKinds.update(id, dto, user.id);
   }
 
   @Delete('projects/node-kinds/:id')
   @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
   @Audit({ action: 'project.node_kind_archive', entity: 'node_kind' })
   @ApiParam({ name: 'id', description: 'UUID вида', schema: { type: 'string', format: 'uuid' } })
-  @ApiOperation({
-    summary: 'Архивировать вид уровня (узлы такого вида больше не создаются)',
-  })
+  @ApiOperation({ summary: 'Архивировать вид папки (папки такого вида больше не создаются)' })
   @ApiOkResponse({ standardSchema: nodeKindSchema })
   @ApiErrors(400, 401, 403, 404)
   nodeKindArchive(
     @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @GetUser() user: AuthUser,
   ): Promise<NodeKind> {
-    return this.txRunner.run(async (tx) => {
-      const archived = await this.nodeKinds.setArchived(tx, id, true);
-      if (!archived) throw DomainException.notFound('Node kind not found');
-      return archived;
-    });
+    return this.nodeKinds.archive(id, user.id);
   }
 
   @Post('projects/node-kinds/:id/restore')
   @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
   @Audit({ action: 'project.node_kind_restore', entity: 'node_kind' })
   @ApiParam({ name: 'id', description: 'UUID вида', schema: { type: 'string', format: 'uuid' } })
-  @ApiOperation({ summary: 'Вернуть вид уровня из архива' })
+  @ApiOperation({ summary: 'Вернуть вид папки из архива' })
   @ApiOkResponse({ standardSchema: nodeKindSchema })
   @ApiErrors(400, 401, 403, 404)
   @ApiIdempotencyKey()
   nodeKindRestore(
     @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @GetUser() user: AuthUser,
   ): Promise<NodeKind> {
-    return this.txRunner.run(async (tx) => {
-      const restored = await this.nodeKinds.setArchived(tx, id, false);
-      if (!restored) throw DomainException.notFound('Node kind not found');
-      return restored;
-    });
+    return this.nodeKinds.restore(id, user.id);
   }
 }
