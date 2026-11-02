@@ -21,6 +21,10 @@ Release) — навык `nodus-release`; этот runbook — шаги выка�
   уедет на прод;
 - `.env` заполнен, `NODUS_WEB_MOCK=false` (боевой режим web — build-arg,
   gotchas «VITE_* — build-time»);
+- `NODUS_DESKTOP_DIR` задан **абсолютным** путём вне git-деревьев
+  (`D:/NodusProd/desktop`): относительный резолвится от каталога
+  compose-проекта и молча гасит кнопку «Скачать приложение» и автообновление
+  оболочки (инцидент 02.11, #560);
 - выпуск содержит миграции — сначала бэкап БД: `docker exec nodus_postgres
   pg_dump -U <pguser> nodus | gzip > ../nodus-backup-$(date +%Y%m%d-%H%M).sql.gz`
   (файл вне репо); «No pending migrations» в логе — не доказательство:
@@ -52,10 +56,16 @@ Release) — навык `nodus-release`; этот runbook — шаги выка�
 ```bash
 curl -fsS http://localhost:3001/api/v1/health          # api жив, JSON 200
 curl -fsS -o /dev/null -w "%{http_code}\n" https://nodus.by/   # 200 через туннель
+node scripts/prod-smoke.mjs                            # главная, api, манифест оболочки, установщик
 docker exec nodus_web sh -c "grep -l 'releases/X.Y.Z.json' /usr/share/nginx/html/assets/*.js" \
   | head -1                                             # бандл несёт новый выпуск
 docker logs --since 5m nodus_api 2>&1 | grep -iE "error|migrat" | tail -20
 ```
+
+`prod-smoke.mjs` — обязательный шаг: он проверяет то, чего старый чеклист не
+видел, — что `/desktop/latest.json` отдаётся, версия в нём совпадает с
+выпущенной, URL установщика абсолютный и файл скачивается. Красный смок =
+выкатка не принята (портал без раздачи оболочки — флаг `--allow-no-desktop`).
 
 Последняя команда — только у выпусков с текстами «Что нового» (технический
 выпуск JSON не добавляет). Логи api: применённые миграции и отсутствие
