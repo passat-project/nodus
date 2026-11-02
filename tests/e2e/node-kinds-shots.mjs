@@ -2,8 +2,9 @@ import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 
 /**
- * Кадры UI-чекпоинта #556 («Виды папок»): группа и панель вида, окно
- * «Создать папку», панель «Свойства папки», «Атрибуты → Папки». Обе темы.
+ * Кадры UI-чекпоинта #556: вкладка «Схемы проектов» (канвас, меню типа,
+ * настройки типа, виды папок, панель вида), «Атрибуты → Папки», «Свойства
+ * папки», окно «Создать папку». Обе темы.
  *   NODUS_BASE_URL=http://localhost:5173 node node-kinds-shots.mjs [outDir]
  * Мок-мир (`VITE_API_MOCK=true`): посевной «Комплект» и папка «ОВ1.1».
  */
@@ -47,24 +48,52 @@ for (const theme of ['light', 'dark']) {
   }
   await page.waitForTimeout(1400);
 
-  // 1. «Схемы проектов»: слева типы, справа виды папок типа + панель «Комплект».
-  await page.goto(`${base}/automation?tab=project-schemas&type=${DOGOVOR}&kind=${KOMPLEKT}`);
-  await shot('01-kind-panel');
+  // 1. «Схемы проектов»: слева типы, справа канвас будущей схемы.
+  await page.goto(`${base}/automation?tab=project-schemas&type=${DOGOVOR}`);
+  await shot('01-canvas');
 
-  // 2. Раздел «При создании папки».
+  // 2. Меню строки типа — «Настройки типа».
+  await page
+    .getByRole('button', { name: /Договор/ })
+    .first()
+    .hover();
+  await page.getByRole('button', { name: 'Действия строки' }).first().click();
+  await shot('02-type-menu', 400);
+  await page.getByRole('menuitem', { name: 'Настройки типа' }).click();
+  await shot('03-type-settings');
+
+  // 3. Страница «Виды папок» поверх панели настроек.
+  await page.getByRole('button', { name: /Виды папок/ }).click();
+  await shot('04-type-kinds');
+
+  // 4. Панель вида — из строки «Комплект».
+  await page
+    .getByRole('button', { name: /Комплект/ })
+    .first()
+    .click();
+  await shot('05-kind-panel');
+
+  // 5. Раздел «При создании папки».
   await page.getByRole('button', { name: /При создании папки/ }).click();
-  await shot('02-kind-form');
+  await shot('06-kind-form');
 
-  // 3. Раздел «Возможности» (из раздела формы — «назад»).
+  // 6. Раздел «Возможности» (из раздела формы — «назад»).
   await page.getByRole('button', { name: 'Назад' }).click();
   await page.getByRole('button', { name: /Возможности/ }).click();
-  await shot('03-kind-capabilities');
+  await shot('07-kind-capabilities');
 
-  // 4. «Атрибуты → Папки».
+  // 7. «Шифр проекта»: назад в корень вида, назад в «Виды папок», назад в корень типа.
+  await page.getByRole('button', { name: 'Назад' }).click();
+  await page.getByRole('button', { name: 'Назад' }).click();
+  await page.getByRole('button', { name: 'Назад' }).click();
+  await page.getByRole('button', { name: /Шифр проекта/ }).click();
+  await shot('08-code');
+
+  // 8. «Атрибуты → Папки».
   await page.goto(`${base}/automation?tab=fields&scope=node`);
-  await shot('04-fields-node');
+  await shot('09-fields-node');
 
-  // 5. Структура проекта: панель «Свойства папки» у «ОВ1.1».
+  // 9. Структура проекта: панель «Свойства папки» у «ОВ1.1».
   await page.goto(`${base}/projects?cards=project:${PROJECT}`);
   await page.waitForTimeout(1600);
   await page.getByRole('tab', { name: 'Структура' }).click();
@@ -73,15 +102,19 @@ for (const theme of ['light', 'dark']) {
   if (await row.count()) {
     await row.click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Свойства' }).click();
-    await shot('05-node-properties');
+    await shot('10-node-properties');
   } else {
     errors.push(`${theme} SKIP: строка «ОВ1.1» не найдена в структуре`);
   }
 
-  // 6. Окно «Создать папку» с видом «Комплект».
+  // 10. Окно «Создать папку» с видом «Комплект».
   await page.getByRole('button', { name: 'Создать папку' }).first().click();
-  await shot('06-node-create');
+  await shot('11-node-create');
   await page.getByRole('button', { name: 'Отмена' }).click();
+
+  // 11. Глубокая ссылка на панель вида (проверка маршрута).
+  await page.goto(`${base}/automation?tab=project-schemas&type=${DOGOVOR}&kind=${KOMPLEKT}`);
+  await shot('12-kind-deeplink');
 
   await ctx.close();
 }

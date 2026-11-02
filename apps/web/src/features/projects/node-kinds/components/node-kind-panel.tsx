@@ -33,6 +33,7 @@ export function NodeKindPanel({
   canSetup,
   canCreateField,
   onClose,
+  onBackToType,
   renderCreateField,
 }: {
   kind: NodeKind | null;
@@ -40,6 +41,9 @@ export function NodeKindPanel({
   /** Право `custom_field.manage` — «Создать атрибут…» в форме вида. */
   canCreateField: boolean;
   onClose: () => void;
+  /** Вид открыт из «Настроек типа»: «назад» в корне возвращает в «Виды
+   *  папок» (страница поверх панели типа, грамматика #432). */
+  onBackToType?: () => void;
   renderCreateField?: RenderCreateField;
 }) {
   const update = useUpdateNodeKind();
@@ -75,7 +79,7 @@ export function NodeKindPanel({
       }
       leading={<NodeKindTile icon={kind.icon} color={kind.color} />}
       onClose={onClose}
-      onBack={section === 'root' ? undefined : () => setSection('root')}
+      onBack={section === 'root' ? onBackToType : () => setSection('root')}
     >
       {section === 'root' ? (
         <KindRoot

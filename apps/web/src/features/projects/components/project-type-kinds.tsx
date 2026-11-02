@@ -1,25 +1,27 @@
 import { useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, RotateCcw } from 'lucide-react';
 import type { NodeKind, ProjectType } from '@nodus/contracts';
 import { allowedNodeKinds, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
+import { Input } from '@nodus/ui/components/input';
 import { NodeChip } from '@nodus/ui/components/node-chip';
-import { NodeLabel } from '@nodus/ui/components/node-label';
-import { Popover, PopoverContent, PopoverTrigger } from '@nodus/ui/components/popover';
+import { Switch } from '@nodus/ui/components/switch';
 
+import { PanelAction, PanelNote } from '../../../shared/ui/panel/panel-kit.js';
 import { useUpdateProjectType } from '../api/project-catalog-mutations.js';
+import { kindIdsAfterToggle, visibleTypeKinds } from '../lib/project-type-summary.js';
 import { useCreateNodeKind } from '../node-kinds/api/node-kinds-api.js';
-import { fieldsCountLabel } from '../node-kinds/components/node-kind-summary.js';
+import { kindRowSummary } from '../node-kinds/components/node-kind-summary.js';
 import { NodeKindTile } from '../structure/lib/node-kind-icon.js';
 
 /**
- * Рабочая зона типа в «Схемах проектов» (#556): раздел «Виды папок» —
- * какие виды справочника доступны папкам проектов этого типа. `null` в
- * `kindIds` — «все виды»; снятие вида делает список явным, возврат к полному
- * набору снова пишет `null`. Клик по виду открывает правую панель настройки
- * вида (форма, возможности). Снятый вид не ломает уже созданные папки.
+ * Раздел «Виды папок» настроек типа (#556) — какие виды справочника доступны
+ * папкам проектов этого типа. `null` в `kindIds` — все виды; снятие вида
+ * делает список явным, возврат к полному набору снова пишет `null`. Снятый
+ * вид не ломает уже созданные папки. Клик по строке открывает панель вида
+ * (форма, возможности) поверх этой; тумблер — только доступность типу.
  */
-export function ProjectTypeKinds({
+export function ProjectTypeKindsSection({
   type,
   kinds,
   canSetup,
@@ -32,26 +34,19 @@ export function ProjectTypeKinds({
 }) {
   const update = useUpdateProjectType();
   const createKind = useCreateNodeKind();
-  const [adding, setAdding] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
 
-  const alive = kinds.filter((kind) => kind.archivedAt === null || type.kindIds?.includes(kind.id));
-  const allowed = allowedNodeKinds(type.kindIds, alive);
+  const visible = visibleTypeKinds(type, kinds);
+  const allowed = allowedNodeKinds(type.kindIds, visible);
   const allowedIds = allowed.map((kind) => kind.id);
-  const unbound = alive.filter((kind) => !allowedIds.includes(kind.id));
-  const allBound = allowedIds.length === alive.length;
+  const explicit = type.kindIds !== null;
 
-  function saveKindIds(next: string[]) {
-    const normalized = next.length === alive.length ? null : next;
-    update.mutate({ id: type.id, kindIds: normalized });
-  }
-
-  function unbind(kindId: string) {
-    saveKindIds(allowedIds.filter((id) => id !== kindId));
-  }
-
-  function bind(kindId: string) {
-    saveKindIds([...allowedIds, kindId]);
+  function toggle(kindId: string, bound: boolean) {
+    update.mutate({
+      id: type.id,
+      kindIds: kindIdsAfterToggle(type.kindIds, visible, kindId, bound),
+    });
   }
 
   function createAndBind() {
@@ -61,139 +56,111 @@ export function ProjectTypeKinds({
       { name, icon: 'folder', color: 'blue' },
       {
         onSuccess: (kind) => {
+          // При «все виды» новый вид уже разрешён — явный список не нужен.
+          if (type.kindIds !== null) {
+            update.mutate({
+              id: type.id,
+              kindIds: kindIdsAfterToggle(type.kindIds, visible, kind.id, true),
+            });
+          }
           setNewName('');
-          setAdding(false);
-          saveKindIds([...allowedIds, kind.id]);
+          setCreating(false);
         },
       },
     );
   }
 
   return (
-    <section className="flex min-w-0 flex-col gap-3">
-      <div className="flex min-w-0 items-start gap-2">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <NodeLabel label={ui.projects.schemasKinds} count={allowed.length} />
-          <p className="text-xs break-words text-muted-foreground">
-            {ui.projects.schemasKindsSectionHint}
-          </p>
-        </div>
-        {allBound ? <NodeChip tone="muted">{ui.projects.schemasKindsAll}</NodeChip> : null}
-      </div>
+    <>
+      <PanelNote>{ui.projects.schemasKindsSectionHint}</PanelNote>
 
-      {allowed.length === 0 ? (
-        <p className="rounded-lg bg-accent/40 px-3 py-2 text-xs text-muted-foreground">
-          {ui.projects.schemasKindsEmpty}
-        </p>
-      ) : (
-        <ul className="flex flex-col gap-0.5">
-          {allowed.map((kind) => (
-            <li key={kind.id}>
-              <div className="group flex min-h-10 min-w-0 items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-accent/40">
+      {allowed.length === 0 ? <PanelNote>{ui.projects.schemasKindsEmpty}</PanelNote> : null}
+
+      {visible.length > 0 ? (
+        <div className="flex min-w-0 flex-col">
+          {visible.map((kind) => {
+            const bound = allowedIds.includes(kind.id);
+            const archived = kind.archivedAt !== null;
+            return (
+              <div
+                key={kind.id}
+                className="group/kind -mx-2 flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent/60"
+              >
                 <button
                   type="button"
                   onClick={() => onOpenKind(kind.id)}
-                  className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                  className="flex min-w-0 flex-1 items-center gap-2.5 py-0.5 text-left"
                 >
                   <NodeKindTile icon={kind.icon} color={kind.color} />
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-sm">{kind.name}</span>
-                    {kind.capabilities.length > 0 ? (
-                      <span className="flex items-center gap-1">
-                        {kind.capabilities.map((capability) => (
-                          <NodeChip key={capability} tone="muted">
-                            {ui.nodeKinds.capabilityChip[capability]}
-                          </NodeChip>
-                        ))}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
-                    {fieldsCountLabel(kind)}
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-sm">{kind.name}</span>
+                      {archived ? (
+                        <NodeChip tone="muted" className="shrink-0">
+                          {ui.projects.schemasKindArchived}
+                        </NodeChip>
+                      ) : null}
+                    </span>
+                    <span
+                      className="truncate text-xs text-muted-foreground"
+                      title={kindRowSummary(kind)}
+                    >
+                      {kindRowSummary(kind)}
+                    </span>
                   </span>
                 </button>
-                {canSetup ? (
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={ui.projects.schemasUnbindKind}
-                    title={ui.projects.schemasUnbindKind}
-                    className="shrink-0 text-muted-foreground"
-                    onClick={() => unbind(kind.id)}
-                  >
-                    <X className="size-3.5" strokeWidth={2} />
-                  </Button>
-                ) : null}
+                <Switch
+                  checked={bound}
+                  disabled={!canSetup}
+                  aria-label={`${kind.name}: ${ui.projects.schemasKindAvailable}`}
+                  onCheckedChange={(checked) => toggle(kind.id, checked)}
+                />
               </div>
-            </li>
-          ))}
-        </ul>
-      )}
+            );
+          })}
+        </div>
+      ) : null}
 
       {canSetup ? (
-        <Popover
-          open={adding}
-          onOpenChange={(next) => {
-            setAdding(next);
-            if (!next) setNewName('');
-          }}
-        >
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="-ml-2 self-start text-muted-foreground"
-            >
-              <Plus className="size-3.5" strokeWidth={1.75} />
-              {ui.projects.schemasAddKind}
+        creating ? (
+          <div className="flex items-center gap-1.5">
+            <Input
+              autoFocus
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') createAndBind();
+                if (event.key === 'Escape') {
+                  setCreating(false);
+                  setNewName('');
+                }
+              }}
+              placeholder={ui.nodeKinds.createPlaceholder}
+              aria-label={ui.projects.schemasCreateKind}
+              className="h-8 min-w-0 flex-1 text-sm"
+            />
+            <Button size="sm" disabled={!newName.trim()} onClick={createAndBind}>
+              {ui.common.create}
             </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="flex w-72 flex-col gap-1 p-1.5">
-            <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
-              {unbound.length === 0 ? (
-                <p className="px-2 py-2 text-xs text-muted-foreground">
-                  {ui.projects.schemasKindPickerEmpty}
-                </p>
-              ) : (
-                unbound.map((kind) => (
-                  <button
-                    key={kind.id}
-                    type="button"
-                    onClick={() => {
-                      bind(kind.id);
-                      setAdding(false);
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/60"
-                  >
-                    <NodeKindTile icon={kind.icon} color={kind.color} />
-                    <span className="min-w-0 flex-1 truncate">{kind.name}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {fieldsCountLabel(kind)}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-            <div className="my-1 h-px bg-border" />
-            <div className="flex items-center gap-1.5">
-              <input
-                value={newName}
-                onChange={(event) => setNewName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') createAndBind();
-                }}
-                placeholder={ui.projects.schemasCreateKind}
-                aria-label={ui.projects.schemasCreateKind}
-                className="h-8 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring"
-              />
-              <Button size="sm" disabled={!newName.trim()} onClick={createAndBind}>
-                {ui.common.create}
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
+          </div>
+        ) : (
+          <PanelAction
+            icon={Plus}
+            onClick={() => {
+              setNewName('');
+              setCreating(true);
+            }}
+          >
+            {ui.projects.schemasCreateKind}
+          </PanelAction>
+        )
       ) : null}
-    </section>
+
+      {canSetup && explicit && allowed.length < visible.length ? (
+        <PanelAction icon={RotateCcw} onClick={() => update.mutate({ id: type.id, kindIds: null })}>
+          {ui.projects.schemasResetKinds}
+        </PanelAction>
+      ) : null}
+    </>
   );
 }

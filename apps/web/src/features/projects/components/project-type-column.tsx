@@ -1,174 +1,211 @@
 import { useMemo, useState } from 'react';
-import { Plus, Search } from 'lucide-react';
-import type { ProjectType } from '@nodus/contracts';
+import type { NodeKind, ProjectType } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
-import { Button } from '@nodus/ui/components/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@nodus/ui/components/dropdown-menu';
 import { Input } from '@nodus/ui/components/input';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 import { cn } from '@nodus/ui/lib/utils';
+import { Archive, ArchiveRestore, MoreHorizontal, Plus, Search, Settings2, X } from 'lucide-react';
 
 import { identityTone } from '../../../shared/ui/identity-tone.js';
 import { ProcessTypeGlyph } from '../../../shared/workflow/process-type-icon.js';
-import { useCreateProjectType } from '../api/project-catalog-mutations.js';
+import { useSetProjectTypeArchived } from '../api/project-catalog-mutations.js';
+import { typeMeta } from '../lib/project-type-summary.js';
+import { ProjectTypeCreateDialog } from './project-type-create-dialog.js';
 
 /**
- * Левая колонка «Схем проектов» (#556, каркас #38): типы проектов —
- * грамматика списка «Процессов» (шапка h-14 с поиском и «+», строки
- * «название + политика шифра»), архивные — свёрнутой группой внизу.
- * Название раздела не дублируется — вкладка в топбаре.
+ * Левая колонка «Схем проектов» (#556, каркас #38) — грамматика списка
+ * «Процессов»: шапка h-14 с поиском и «+», строки «плитка-значок + название
+ * + мета», меню «⋯» по ховеру (настройки типа / архив), архивные — свёрнутой
+ * группой внизу. Клик по строке выбирает тип: справа его канвас, настройки —
+ * командой «⋯ → Настройки типа». Название раздела не дублируется (вкладка в
+ * топбаре).
  */
 export function ProjectTypeColumn({
   types,
+  kinds,
   isLoading,
   selectedId,
+  canSetup,
   onSelect,
+  onOpenSettings,
 }: {
   types: ProjectType[];
+  kinds: NodeKind[];
   isLoading: boolean;
   selectedId: string | null;
+  /** Право `project.setup.manage` — создание, настройки, архив. */
+  canSetup: boolean;
   onSelect: (id: string) => void;
+  onOpenSettings: (id: string) => void;
 }) {
-  const create = useCreateProjectType();
   const [query, setQuery] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [name, setName] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const archive = useSetProjectTypeArchived();
 
-  const alive = useMemo(() => types.filter((type) => type.archivedAt === null), [types]);
-  const archived = useMemo(() => types.filter((type) => type.archivedAt !== null), [types]);
   const q = query.trim().toLowerCase();
-  const shown = q ? alive.filter((type) => type.name.toLowerCase().includes(q)) : alive;
+  const alive = useMemo(
+    () =>
+      types.filter(
+        (type) => type.archivedAt === null && (!q || type.name.toLowerCase().includes(q)),
+      ),
+    [types, q],
+  );
+  const archived = useMemo(
+    () =>
+      types.filter(
+        (type) => type.archivedAt !== null && (!q || type.name.toLowerCase().includes(q)),
+      ),
+    [types, q],
+  );
 
-  function submit() {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    create.mutate(trimmed, {
-      onSuccess: (type) => {
-        setName('');
-        setCreating(false);
-        onSelect(type.id);
-      },
-    });
-  }
+  const row = (type: ProjectType) => {
+    const selected = type.id === selectedId;
+    const rowArchived = type.archivedAt !== null;
+    return (
+      <div key={type.id} className="group/row relative">
+        <button
+          type="button"
+          onClick={() => !rowArchived && onSelect(type.id)}
+          aria-current={selected || undefined}
+          className={cn(
+            'flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors',
+            !rowArchived && 'cursor-pointer',
+            selected ? 'bg-accent' : !rowArchived && 'hover:bg-accent/40',
+            rowArchived && 'text-muted-foreground',
+          )}
+        >
+          <span
+            aria-hidden
+            className={cn(
+              'flex size-9 shrink-0 items-center justify-center rounded-lg border',
+              identityTone[type.color].tile,
+            )}
+          >
+            <ProcessTypeGlyph icon={type.icon} className="size-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium">{type.name}</span>
+            <span className="mt-0.5 block truncate text-label-sm text-muted-foreground">
+              {typeMeta(type, kinds)}
+            </span>
+          </span>
+        </button>
+        {canSetup ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label={ui.common.rowMenu}
+              className={cn(
+                'absolute top-1/2 right-1.5 -translate-y-1/2 rounded-lg p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100',
+                selected && 'opacity-100',
+              )}
+            >
+              <MoreHorizontal className="size-4" strokeWidth={1.75} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              {!rowArchived ? (
+                <>
+                  <DropdownMenuItem onSelect={() => onOpenSettings(type.id)}>
+                    <Settings2 className="size-3.5" />
+                    {ui.projects.schemasTypeSettings}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              ) : null}
+              <DropdownMenuItem
+                onSelect={() => archive.mutate({ id: type.id, archived: !rowArchived })}
+              >
+                {rowArchived ? (
+                  <ArchiveRestore className="size-3.5" />
+                ) : (
+                  <Archive className="size-3.5" />
+                )}
+                {rowArchived ? ui.projects.typesRestore : ui.projects.typesArchive}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-card">
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
+    <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-card">
+      <div className="flex h-14 shrink-0 items-center border-b border-border px-2">
         <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={ui.projects.schemasTypesSearch}
             aria-label={ui.projects.schemasTypesSearch}
-            className="h-8 pl-7 text-sm"
+            className="h-8 pr-7 pl-8 text-sm"
           />
+          {query ? (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              aria-label={ui.filters.reset}
+              className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3.5" strokeWidth={1.75} />
+            </button>
+          ) : null}
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={ui.projects.typesCreate}
-          title={ui.projects.typesCreate}
-          onClick={() => setCreating((prev) => !prev)}
-        >
-          <Plus className="size-4" strokeWidth={1.75} />
-        </Button>
+        {canSetup ? (
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            aria-label={ui.projects.typesCreate}
+            title={ui.projects.typesCreate}
+            className="ml-1.5 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Plus className="size-4" strokeWidth={1.75} />
+          </button>
+        ) : null}
       </div>
 
-      {creating ? (
-        <div className="flex items-center gap-1.5 border-b border-border px-3 py-2">
-          <Input
-            autoFocus
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') submit();
-              if (event.key === 'Escape') setCreating(false);
-            }}
-            placeholder={ui.projects.typesNamePlaceholder}
-            aria-label={ui.projects.typesCreate}
-            className="h-8 min-w-0 flex-1 text-sm"
-          />
-          <Button size="sm" disabled={!name.trim()} onClick={submit}>
-            {ui.common.create}
-          </Button>
-        </div>
-      ) : null}
-
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-1.5">
         {isLoading ? (
           <div className="flex flex-col gap-1.5 p-1">
             {[0, 1, 2].map((index) => (
-              <Skeleton key={index} className="h-9 w-full" />
+              <Skeleton key={index} className="h-11 w-full" />
             ))}
           </div>
-        ) : shown.length === 0 ? (
-          <p className="px-2 py-3 text-xs text-muted-foreground">{ui.projects.typesEmpty}</p>
+        ) : alive.length > 0 ? (
+          alive.map(row)
         ) : (
-          <ul className="flex flex-col gap-0.5">
-            {shown.map((type) => (
-              <li key={type.id}>
-                <button
-                  type="button"
-                  onClick={() => onSelect(type.id)}
-                  aria-pressed={selectedId === type.id}
-                  className={cn(
-                    'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
-                    selectedId === type.id ? 'bg-accent' : 'hover:bg-accent/50',
-                  )}
-                >
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'flex size-6 shrink-0 items-center justify-center rounded border',
-                      identityTone[type.color].tile,
-                    )}
-                  >
-                    <ProcessTypeGlyph icon={type.icon} className="size-3.5" />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm">{type.name}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {ui.projects.codeField[type.codeField]}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className="px-2 py-2 text-sm text-muted-foreground">{ui.projects.typesEmpty}</div>
         )}
-
         {archived.length > 0 ? (
-          <div className="mt-3 border-t border-border pt-2">
+          <div className="mt-1">
             <button
               type="button"
-              onClick={() => setShowArchived((prev) => !prev)}
-              aria-expanded={showArchived}
-              className="flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-accent/40"
+              onClick={() => setArchiveOpen((value) => !value)}
+              aria-expanded={archiveOpen}
+              className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-accent/40"
             >
-              <span>{ui.projects.status.archived}</span>
-              <span className="font-mono tabular-nums">{archived.length}</span>
+              <Archive className="size-3.5" strokeWidth={1.75} />
+              {ui.projects.status.archived} · {archived.length}
             </button>
-            {showArchived ? (
-              <ul className="mt-1 flex flex-col gap-0.5">
-                {archived.map((type) => (
-                  <li key={type.id}>
-                    <button
-                      type="button"
-                      onClick={() => onSelect(type.id)}
-                      className={cn(
-                        'flex w-full min-w-0 items-center rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground line-through transition-colors',
-                        selectedId === type.id ? 'bg-accent/60' : 'hover:bg-accent/40',
-                      )}
-                    >
-                      <span className="min-w-0 flex-1 truncate">{type.name}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+            {archiveOpen ? archived.map(row) : null}
           </div>
         ) : null}
       </div>
+
+      {createOpen ? (
+        <ProjectTypeCreateDialog
+          onClose={() => setCreateOpen(false)}
+          onCreated={(id) => onSelect(id)}
+        />
+      ) : null}
     </aside>
   );
 }

@@ -1,38 +1,27 @@
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { Settings2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import type { ProjectType } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
-import { Button } from '@nodus/ui/components/button';
-import { cn } from '@nodus/ui/lib/utils';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@nodus/ui/components/select';
+import { Permission, ui } from '@nodus/contracts';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 
 import { useNodeKinds } from '../../../shared/api/node-kinds.js';
 import { useProjectTypes } from '../../../shared/api/projects-list.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { useCanManageFields } from '../../../shared/custom-fields/use-can-manage-fields.js';
-import { Permission } from '@nodus/contracts';
-import { useUpdateProjectType } from '../api/project-catalog-mutations.js';
-import { identityTone } from '../../../shared/ui/identity-tone.js';
-import { ProcessTypeGlyph } from '../../../shared/workflow/process-type-icon.js';
+import { ProjectSchemaCanvas } from '../components/project-schema-canvas.js';
 import { ProjectTypeColumn } from '../components/project-type-column.js';
-import { ProjectTypeKinds } from '../components/project-type-kinds.js';
-import { ProjectTypePanel } from '../components/project-type-panel.js';
+import {
+  ProjectTypeSettingsPanel,
+  type ProjectTypeSection,
+} from '../components/project-type-settings.js';
 import { NodeKindPanel } from '../node-kinds/components/node-kind-panel.js';
 import type { RenderCreateField } from '../node-kinds/types.js';
 
 /**
  * «Автоматизация → Схемы проектов» (#556 — каркас, #38 — схема/форма/доступ):
- * окно-сплит как «Процессы». Слева — типы проектов, справа — рабочая зона
- * выбранного типа; сейчас в ней раздел «Виды папок»: какие виды доступны
- * папкам этого типа и их настройка (правая панель вида — форма, возможности).
+ * окно-сплит как «Процессы». Слева — типы проектов с плитками значков, справа
+ * канвас выбранного типа (место будущей схемы проекта), правая панель —
+ * «Настройки типа»: название, значок, цвет и страницы-разделы поверх панели
+ * («Виды папок» — какие виды доступны папкам этого типа, «Шифр проекта»).
  * Портфели сюда не входят: они группируют список проектов и живут в модуле
  * «Проекты» (#559). Глубокие ссылки: `?tab=project-schemas&type=&kind=`.
  */
@@ -49,48 +38,99 @@ export function ProjectSchemasPage({
   const canCreateField = useCanManageFields();
   const typesQuery = useProjectTypes(true);
   const kindsQuery = useNodeKinds();
-  // Две панели справа — типа и вида: открыта не больше одной; глубокая
-  // ссылка ?kind= открывает панель вида сразу.
-  const [panel, setPanel] = useState<'type' | 'kind' | null>(() => (search.kind ? 'kind' : null));
 
   const types = useMemo(() => typesQuery.data ?? [], [typesQuery.data]);
   const kinds = useMemo(() => kindsQuery.data ?? [], [kindsQuery.data]);
   const alive = useMemo(() => types.filter((type) => type.archivedAt === null), [types]);
   const selectedType = useMemo(
-    () => types.find((type) => type.id === search.type) ?? alive[0] ?? null,
+    () =>
+      types.find((type) => type.id === search.type && type.archivedAt === null) ?? alive[0] ?? null,
     [types, alive, search.type],
   );
-  const selectedKind = kinds.find((kind) => kind.id === search.kind) ?? null;
 
-  const selectType = (id: string) =>
+  // Одна правая панель за раз: страницы типа (root/kinds/code) и панель вида.
+  // Панель принадлежит типу, для которого открыта: архив этого типа её
+  // закрывает, чужой тип в неё не подставляется.
+  const [typePanel, setTypePanel] = useState<ProjectTypeSection | null>(null);
+  const [panelTypeId, setPanelTypeId] = useState<string | null>(null);
+  const panelType = useMemo(
+    () =>
+      panelTypeId
+        ? (types.find((type) => type.id === panelTypeId && type.archivedAt === null) ?? null)
+        : null,
+    [types, panelTypeId],
+  );
+  // Панель вида, открытая ИЗ настроек типа: «назад» возвращает в «Виды папок».
+  const [kindBackToKinds, setKindBackToKinds] = useState(false);
+  const kindId = search.kind ?? null;
+  const selectedKind = useMemo(
+    () => (kindId ? (kinds.find((kind) => kind.id === kindId) ?? null) : null),
+    [kinds, kindId],
+  );
+
+  const go = (patch: { type?: string; kind?: string | undefined }) =>
     void navigate({
       to: '/automation',
-      search: (prev) => ({ ...prev, tab: 'project-schemas', type: id, kind: undefined }),
+      search: (prev) => ({ ...prev, tab: 'project-schemas', ...patch }),
     });
-  const selectKind = (id: string | null) => {
-    setPanel(id ? 'kind' : null);
-    void navigate({
-      to: '/automation',
-      search: (prev) => ({ ...prev, tab: 'project-schemas', kind: id ?? undefined }),
-    });
+
+  const selectType = (id: string) => {
+    setTypePanel(null);
+    setPanelTypeId(null);
+    setKindBackToKinds(false);
+    go({ type: id, kind: undefined });
+  };
+
+  const openTypePanel = (id: string, section: ProjectTypeSection = 'root') => {
+    setPanelTypeId(id);
+    setTypePanel(section);
+    setKindBackToKinds(false);
+    if (kindId) go({ kind: undefined });
+  };
+
+  /** Открыть настройки строки типа: выбранный тип — сразу, иначе сначала
+   *  выбираем его одной навигацией (две подряд перетёрли бы `type`). */
+  const openSettingsOf = (id: string) => {
+    if (id !== selectedType?.id) {
+      selectType(id);
+    } else if (kindId) {
+      go({ kind: undefined });
+    }
+    setPanelTypeId(id);
+    setTypePanel('root');
+    setKindBackToKinds(false);
+  };
+
+  const openKind = (id: string) => {
+    setTypePanel(null);
+    setKindBackToKinds(true);
+    go({ kind: id });
+  };
+
+  const closeKind = (backToKinds: boolean) => {
+    setKindBackToKinds(false);
+    if (kindId) go({ kind: undefined });
+    if (backToKinds) setTypePanel('kinds');
   };
 
   return (
-    <div className="@container flex h-full">
+    <div className="@container flex h-full min-h-0">
       <ProjectTypeColumn
         types={types}
+        kinds={kinds}
         isLoading={typesQuery.isLoading}
         selectedId={selectedType?.id ?? null}
+        canSetup={canSetup}
         onSelect={selectType}
+        onOpenSettings={openSettingsOf}
       />
-      <div className="flex min-w-0 flex-1 flex-col">
+
+      <main className="flex min-w-0 flex-1 flex-col">
         {selectedType ? (
-          <TypeWorkspace
+          <ProjectSchemaCanvas
             type={selectedType}
-            kinds={kinds}
             canSetup={canSetup}
-            onOpenKind={selectKind}
-            onOpenSettings={() => setPanel('type')}
+            onOpenSettings={() => openTypePanel(selectedType.id, 'root')}
           />
         ) : typesQuery.isLoading ? (
           <div className="flex flex-col gap-2 p-6">
@@ -103,102 +143,30 @@ export function ProjectSchemasPage({
             {ui.projects.typesEmpty}
           </div>
         )}
-      </div>
-      <ProjectTypePanel
-        type={selectedType}
-        open={panel === 'type'}
+      </main>
+
+      <ProjectTypeSettingsPanel
+        type={panelType}
+        kinds={kinds}
+        open={typePanel !== null && panelType !== null}
+        section={typePanel ?? 'root'}
         canSetup={canSetup}
-        onClose={() => setPanel(null)}
+        onSection={setTypePanel}
+        onClose={() => {
+          setTypePanel(null);
+          setPanelTypeId(null);
+        }}
+        onOpenKind={openKind}
       />
+
       <NodeKindPanel
-        kind={panel === 'kind' ? selectedKind : null}
+        kind={selectedKind}
         canSetup={canSetup}
         canCreateField={canCreateField}
-        onClose={() => selectKind(null)}
+        onClose={() => closeKind(false)}
+        onBackToType={kindBackToKinds ? () => closeKind(true) : undefined}
         renderCreateField={renderCreateField}
       />
     </div>
-  );
-}
-
-/** Шапка типа (имя, политика шифра, архив) + раздел «Виды папок». */
-function TypeWorkspace({
-  type,
-  kinds,
-  canSetup,
-  onOpenKind,
-  onOpenSettings,
-}: {
-  type: ProjectType;
-  kinds: Parameters<typeof ProjectTypeKinds>[0]['kinds'];
-  canSetup: boolean;
-  onOpenKind: (id: string) => void;
-  onOpenSettings: () => void;
-}) {
-  const update = useUpdateProjectType();
-  const archived = type.archivedAt !== null;
-
-  return (
-    <>
-      <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-6">
-        <span
-          aria-hidden
-          className={cn(
-            'flex size-7 shrink-0 items-center justify-center rounded border',
-            identityTone[type.color].tile,
-          )}
-        >
-          <ProcessTypeGlyph icon={type.icon} className="size-4" />
-        </span>
-        <h1 className="min-w-0 flex-1 truncate text-xl font-semibold text-foreground">
-          {type.name}
-        </h1>
-        {canSetup ? (
-          <Select
-            value={type.codeField}
-            onValueChange={(value) =>
-              update.mutate({ id: type.id, codeField: value as ProjectType['codeField'] })
-            }
-          >
-            <SelectTrigger
-              className="h-8 w-40 shrink-0 text-xs"
-              aria-label={ui.projects.codeFieldLabel}
-              title={ui.projects.codeFieldLabel}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent position="popper" className="nokey">
-              {(['hidden', 'optional', 'required'] as const).map((value) => (
-                <SelectItem key={value} value={value}>
-                  {ui.projects.codeField[value]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : null}
-        {canSetup ? (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="shrink-0 text-muted-foreground"
-            aria-label={ui.projects.schemasTypes}
-            title={ui.projects.schemasTypes}
-            onClick={onOpenSettings}
-          >
-            <Settings2 className="size-4" strokeWidth={1.75} />
-          </Button>
-        ) : null}
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        <div className="mx-auto flex max-w-3xl flex-col gap-6">
-          {archived ? (
-            <p className="rounded-lg bg-accent/50 px-3 py-2 text-xs text-muted-foreground">
-              {ui.projects.status.archived}
-            </p>
-          ) : null}
-          <ProjectTypeKinds type={type} kinds={kinds} canSetup={canSetup} onOpenKind={onOpenKind} />
-        </div>
-      </div>
-    </>
   );
 }

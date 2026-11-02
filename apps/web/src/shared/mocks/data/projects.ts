@@ -58,7 +58,9 @@ export const demoProjectTypes: ProjectType[] = [
     icon: 'file-text',
     color: 'blue',
     codeField: 'required',
-    kindIds: [...Object.values(nodeKindIds)],
+    // «Договору» доступны все виды справочника (null): новый вид попадёт
+    // типу сам — явный список только там, где набор сужен («Тема»).
+    kindIds: null,
     archivedAt: null,
   },
   {

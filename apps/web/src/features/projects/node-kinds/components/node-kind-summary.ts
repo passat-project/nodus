@@ -34,6 +34,13 @@ export function fieldsCountLabel(kind: NodeKind): string {
   return `${count} ${plural(count, ui.nodeKinds.fieldsCount)}`;
 }
 
+/** Компактная сводка строки вида в «Настройках типа»: «1 атрибут · шифр
+ *  обязателен» — длинная `formSummary` в узкую строку панели не влезает. */
+export function kindRowSummary(kind: NodeKind): string {
+  const code = ui.nodeKinds.panel.codeSummary[nodeKindFormOf(kind).code].toLowerCase();
+  return `${fieldsCountLabel(kind)} · ${code}`;
+}
+
 /** Тот же счётчик коротко для узкой строки вида: «1 атр.». */
 export function fieldsCountShort(kind: NodeKind): string {
   return `${nodeKindFormOf(kind).fields.length} ${ui.nodeKinds.fieldsCountShort}`;

@@ -3,6 +3,7 @@ import type {
   PortalSettings,
   ProjectGroup,
   ProjectType,
+  ProjectTypeCreateBody,
   ProjectTypeUpdateBody,
 } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -31,21 +32,22 @@ function patchGroups(
   );
 }
 
-/** Новый тип проекта («Автоматизация» → «Типы проектов»). */
+/** Новый тип проекта («Автоматизация» → «Схемы проектов»): название,
+ *  значок и цвет — грамматика создания типа процесса. */
 export function useCreateProjectType() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) =>
-      api<ProjectType>('/projects/types', { method: 'POST', body: { name } }),
-    onMutate: async (name) => {
+    mutationFn: (body: ProjectTypeCreateBody) =>
+      api<ProjectType>('/projects/types', { method: 'POST', body }),
+    onMutate: async (body) => {
       const snapshot = queryClient.getQueriesData<ProjectType[]>({
         queryKey: [...projectsKeys.all, 'types'],
       });
       const temp: ProjectType = {
         id: `temp-${crypto.randomUUID()}`,
-        name,
-        icon: 'file-text',
-        color: 'blue',
+        name: body.name,
+        icon: body.icon ?? 'file-text',
+        color: body.color ?? 'blue',
         codeField: 'optional',
         kindIds: null,
         archivedAt: null,
@@ -53,11 +55,11 @@ export function useCreateProjectType() {
       patchTypes(queryClient, (items) => [...items, temp]);
       return { snapshot, tempId: temp.id };
     },
-    onError: (error, _name, context) => {
+    onError: (error, _body, context) => {
       for (const [key, data] of context?.snapshot ?? []) queryClient.setQueryData(key, data);
       toastApiError(error);
     },
-    onSuccess: (type, _name, context) => {
+    onSuccess: (type, _body, context) => {
       patchTypes(queryClient, (items) =>
         items.map((row) => (row.id === context.tempId ? type : row)),
       );

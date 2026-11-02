@@ -136,23 +136,32 @@ export const projectsStrings = {
   // Автоматизация: «Схемы проектов» (#38, каркас — #556)
   schemasTitle: 'Схемы проектов',
   /** Левая колонка — типы проектов (грамматика списка «Процессов»). */
-  schemasTypes: 'Типы проектов',
   schemasTypesSearch: 'Найти тип',
-  /** Рабочая зона выбранного типа: раздел «Виды папок» (#556). */
+  /** Центральная панель — канвас будущей схемы проекта (#38). */
+  schemasCanvasTitle: 'Схема проекта',
+  schemasCanvasHint:
+    'Схема типа: папки-комплекты, работы и связи между ними. Виды папок и их форма настраиваются в «Настройках типа»',
+  /** Правая панель типа: шапка, разделы и строки-ссылки. */
+  schemasTypeSettings: 'Настройки типа',
   schemasKinds: 'Виды папок',
-  schemasKindsAll: 'Все виды',
-  schemasKindsAllHint: 'Типу доступны все виды справочника',
   schemasKindsEmpty: 'Типу не назначено ни одного вида — папки создавать нельзя',
-  schemasAddKind: 'Добавить вид',
-  schemasUnbindKind: 'Убрать из типа',
   schemasCreateKind: 'Новый вид папки',
-  schemasKindPickerEmpty: 'Все виды уже назначены',
   schemasKindsSectionHint:
     'Виды папок, из которых создаются папки проектов этого типа. Снятый вид остаётся у уже созданных папок',
+  schemasKindsSummaryAll: 'Все виды · {count}',
+  schemasKindsSummary: '{allowed} из {total}',
+  /** Счётчик видов в мете строки левой колонки («7 видов»). */
+  schemasKindsCount: ['вид', 'вида', 'видов'] as const,
+  schemasResetKinds: 'Включить все виды',
+  schemasKindArchived: 'в архиве',
+  schemasKindAvailable: 'Доступен типу',
+  schemasCodeSection: 'Шифр проекта',
+  schemasCodeHint: 'Поле «Шифр» в окне создания проекта этого типа',
   // Автоматизация: типы проектов
-  typesTitle: 'Типы проектов',
   typesCreate: 'Новый тип',
+  typesCreateTitle: 'Новый тип проекта',
   typesNamePlaceholder: 'Например: Тендер',
+  typesNameTaken: 'Тип с таким названием уже есть',
   typesEmpty: 'Типов пока нет',
   typesArchive: 'Архивировать тип',
   typesRestore: 'Вернуть тип',
