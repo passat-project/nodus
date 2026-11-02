@@ -13,6 +13,9 @@ import { ErrorCode, type ApiErrorResponse } from '@nodus/contracts';
 import { Prisma } from '../../generated/prisma/client.js';
 import { DomainException } from './domain-exception.js';
 
+/** Единый текст 5xx наружу: реальные детали — только в лог (api-conventions, I7; #538). */
+const INTERNAL_ERROR_MESSAGE = 'Internal server error';
+
 /** HTTP-статус для системного кода (канон формата — api-conventions.md). */
 const CODE_TO_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.VALIDATION_FAILED]: HttpStatus.BAD_REQUEST,
@@ -199,7 +202,7 @@ export class DomainExceptionFilter implements ExceptionFilter {
           status: HttpStatus.INTERNAL_SERVER_ERROR,
           body: {
             code: ErrorCode.INTERNAL_ERROR,
-            message: 'Internal server error',
+            message: INTERNAL_ERROR_MESSAGE,
             traceId,
           },
         };
@@ -268,31 +271,43 @@ export class DomainExceptionFilter implements ExceptionFilter {
     }
 
     // Ошибки Fastify-плагинов (например @fastify/rate-limit): не Nest-исключения,
-    // но несут statusCode — маппим в единый формат, а не в 500.
+    // но несут statusCode — маппим в единый формат, а не в 500. Для 5xx наружу
+    // только единый текст: message плагина может содержать внутренности (#538).
     if (this.isFastifyError(exception)) {
       const status = exception.statusCode;
-      const code =
-        status >= HttpStatus.INTERNAL_SERVER_ERROR
-          ? ErrorCode.INTERNAL_ERROR
-          : (STATUS_TO_CODE[status] ?? ErrorCode.VALIDATION_FAILED);
+      const serverError = status >= HttpStatus.INTERNAL_SERVER_ERROR;
+      const code = serverError
+        ? ErrorCode.INTERNAL_ERROR
+        : (STATUS_TO_CODE[status] ?? ErrorCode.VALIDATION_FAILED);
+      if (serverError) {
+        this.logger.error({ traceId, err: exception }, exception.message);
+      }
       return {
         status,
-        body: { code, message: exception.message, traceId },
+        body: {
+          code,
+          message: serverError ? INTERNAL_ERROR_MESSAGE : exception.message,
+          traceId,
+        },
       };
     }
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
-      const code =
-        status >= HttpStatus.INTERNAL_SERVER_ERROR
-          ? ErrorCode.INTERNAL_ERROR
-          : (STATUS_TO_CODE[status] ?? ErrorCode.VALIDATION_FAILED);
-      if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      const serverError = status >= HttpStatus.INTERNAL_SERVER_ERROR;
+      const code = serverError
+        ? ErrorCode.INTERNAL_ERROR
+        : (STATUS_TO_CODE[status] ?? ErrorCode.VALIDATION_FAILED);
+      if (serverError) {
         this.logger.error({ traceId, err: exception }, exception.message);
       }
       return {
         status,
-        body: { code, message: exception.message, traceId },
+        body: {
+          code,
+          message: serverError ? INTERNAL_ERROR_MESSAGE : exception.message,
+          traceId,
+        },
       };
     }
 
@@ -302,7 +317,7 @@ export class DomainExceptionFilter implements ExceptionFilter {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       body: {
         code: ErrorCode.INTERNAL_ERROR,
-        message: 'Internal server error',
+        message: INTERNAL_ERROR_MESSAGE,
         traceId,
       },
     };
