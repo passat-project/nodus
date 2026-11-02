@@ -67,6 +67,8 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
     create: vi.fn(),
     update: vi.fn(),
     findRef: vi.fn(),
+    managerChainIds: vi.fn(),
+    lockManagerTree: vi.fn(),
   };
   const roles = { countByIds: vi.fn() };
   const departments = { findRef: vi.fn() };
@@ -81,6 +83,7 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     membership.effectiveRoleIds.mockResolvedValue([]);
+    users.managerChainIds.mockResolvedValue([]);
     const guard = new RoleAssignmentGuard(roles as never, membership as never);
     const references = new ReferenceGuard(users as never, departments as never, positions as never);
     service = new UsersService(
@@ -159,6 +162,45 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
     expect(users.findRef).not.toHaveBeenCalled();
     expect(departments.findRef).not.toHaveBeenCalled();
     expect(positions.findRef).not.toHaveBeenCalled();
+    expect(users.lockManagerTree).not.toHaveBeenCalled();
+    expect(users.update).toHaveBeenCalled();
+  });
+
+  it('updateUser: цикл руководителей A→B→A → 400 cycle', async () => {
+    users.findCardById.mockResolvedValue(cardRow());
+    // Цепочка от нового руководителя уже содержит сотрудника — кольцо.
+    users.managerChainIds.mockResolvedValue(['user-2', 'user-1']);
+
+    await expect(
+      service.updateUser('user-1', { managerId: 'user-2' }, actor()),
+    ).rejects.toMatchObject({
+      code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
+      details: { field: 'managerId', reason: 'cycle' },
+    });
+    expect(users.lockManagerTree).toHaveBeenCalledWith('tx-handle');
+    expect(users.update).not.toHaveBeenCalled();
+  });
+
+  it('updateUser: длинная цепь с кольцом (3+) → 400 cycle', async () => {
+    users.findCardById.mockResolvedValue(cardRow());
+    users.managerChainIds.mockResolvedValue(['user-2', 'user-3', 'user-1']);
+
+    await expect(
+      service.updateUser('user-1', { managerId: 'user-2' }, actor()),
+    ).rejects.toMatchObject({
+      code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
+      details: { field: 'managerId', reason: 'cycle' },
+    });
+  });
+
+  it('updateUser: валидная цепь руководителей проходит', async () => {
+    users.findCardById.mockResolvedValue(cardRow());
+    users.managerChainIds.mockResolvedValue(['user-2', 'user-3']);
+    users.findRef.mockResolvedValue({ id: 'user-2', status: 'active' });
+    users.update.mockResolvedValue(cardRow());
+
+    await service.updateUser('user-1', { managerId: 'user-2' }, actor());
+
     expect(users.update).toHaveBeenCalled();
   });
 });

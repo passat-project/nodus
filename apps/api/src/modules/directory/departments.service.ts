@@ -119,6 +119,9 @@ export class DepartmentsService {
       // закоммитилась между проверкой isActive и записью parentId.
       if (dto.parentId) {
         await this.departments.lockForUpdate(dto.parentId, tx);
+        if (!(await this.departments.findById(dto.parentId, tx))) {
+          throw DomainException.notFound('Department not found');
+        }
       }
       await this.references.ensureActiveUser(dto.headId, 'headId', tx);
       await this.references.ensureActiveUser(dto.deputyId, 'deputyId', tx);

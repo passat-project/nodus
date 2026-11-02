@@ -119,6 +119,7 @@ describe('DepartmentsService', () => {
   describe('update', () => {
     it('цикл в дереве (родитель — собственный потомок) → CONFLICT', async () => {
       departments.findById.mockResolvedValue(row('dep', null));
+      departments.findRef.mockResolvedValue({ id: 'parent', kind: 'management', isActive: true });
       departments.findParentChain.mockResolvedValue(['parent', 'dep']); // dep — предок parent
 
       await expect(service.update('dep', { parentId: 'parent' }, actor())).rejects.toMatchObject({

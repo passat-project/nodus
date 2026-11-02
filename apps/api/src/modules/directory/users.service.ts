@@ -151,7 +151,14 @@ export class UsersService {
     return this.tx.run(async (tx) => {
       // Ссылки оргструктуры (#441): undefined — не трогаем, null — очистка.
       // Внутри транзакции — без окна TOCTOU между проверкой и записью.
+      // Гонка циклов руководителей: проверка цепи и запись сериализуются
+      // advisory-локом графа (как дерево подразделений в #544) — построчные
+      // замки не мешают двум встречным PATCH создать кольцо A↔B.
+      if (dto.managerId !== undefined && dto.managerId !== null) {
+        await this.users.lockManagerTree(tx);
+      }
       this.references.ensureNotSelf(id, dto.managerId, 'managerId');
+      await this.references.ensureNoManagerCycle(id, dto.managerId, tx);
       await this.references.ensureActiveUser(dto.managerId, 'managerId', tx);
       await this.references.ensureDepartment(dto.departmentId, 'management', 'departmentId', tx);
       await this.references.ensurePosition(dto.positionId, 'management', 'positionId', tx);

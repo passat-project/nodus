@@ -224,4 +224,91 @@ describe('Ссылки оргструктуры (#441)', () => {
     const card = (await response.json()) as { managerId: string | null };
     expect(card.managerId).toBe(manager.id);
   });
+
+  it('параллельные PATCH A↔B: один 200, один 400 cycle — кольца нет (#441)', async () => {
+    await chat.prisma.user.updateMany({
+      where: { id: { in: [manager.id, employee.id] } },
+      data: { managerId: null },
+    });
+
+    // Держим advisory-лок графа отдельной транзакцией: оба PATCH доходят до
+    // lockManagerTree и встают в очередь — гонка воспроизводится детерминированно.
+    let release!: () => void;
+    let acquired!: () => void;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ready = new Promise<void>((resolve) => {
+      acquired = resolve;
+    });
+    const holder = chat.prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('nodus:users:manager-graph'))`;
+        acquired();
+        await hold;
+      },
+      { timeout: 30_000 },
+    );
+    await ready;
+
+    const requests = Promise.all([
+      chat.api(manager, 'PATCH', `/directory/users/${manager.id}`, {
+        key: randomUUID(),
+        body: { managerId: employee.id },
+      }),
+      chat.api(manager, 'PATCH', `/directory/users/${employee.id}`, {
+        key: randomUUID(),
+        body: { managerId: manager.id },
+      }),
+    ]);
+
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const rows = await chat.prisma.$queryRaw<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM pg_locks
+        WHERE locktype = 'advisory' AND NOT granted
+      `;
+      if ((rows[0]?.count ?? 0) >= 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    release();
+    const [first, second] = await requests;
+    await holder;
+
+    const statuses = [first.status, second.status].sort((x, y) => x - y);
+    expect(statuses).toEqual([200, 400]);
+    const rejected = first.status === 400 ? first : second;
+    expect(((await rejected.json()) as { code: string }).code).toBe(
+      ErrorCode.DIRECTORY_REFERENCE_INVALID,
+    );
+
+    const [storedManager, storedEmployee] = await Promise.all([
+      chat.prisma.user.findUniqueOrThrow({ where: { id: manager.id } }),
+      chat.prisma.user.findUniqueOrThrow({ where: { id: employee.id } }),
+    ]);
+    const oneWay = storedManager.managerId === employee.id && storedEmployee.managerId === null;
+    const otherWay = storedEmployee.managerId === manager.id && storedManager.managerId === null;
+    expect(oneWay || otherWay).toBe(true);
+  });
+
+  it('PATCH /directory/users/:id: цикл руководителей A→B→A → 400 cycle', async () => {
+    // B уже руководитель A (из предыдущего сценария или явно).
+    await chat.prisma.user.update({
+      where: { id: employee.id },
+      data: { managerId: manager.id },
+    });
+
+    const denied = await chat.api(manager, 'PATCH', `/directory/users/${manager.id}`, {
+      key: randomUUID(),
+      body: { managerId: employee.id },
+    });
+
+    expect(denied.status).toBe(400);
+    const body = (await denied.json()) as {
+      code: string;
+      details: { field: string; reason: string };
+    };
+    expect(body.code).toBe(ErrorCode.DIRECTORY_REFERENCE_INVALID);
+    expect(body.details).toMatchObject({ field: 'managerId', reason: 'cycle' });
+  });
 });
