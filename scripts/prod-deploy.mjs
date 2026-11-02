@@ -23,11 +23,22 @@ import {
   parseEnv,
   replaceEnvValue,
 } from './lib/prod-deploy.mjs';
+import {
+  digests,
+  imageLabel,
+  resolveTagCommit,
+  sanitizeEnv,
+  waitHealthy,
+} from './lib/prod-deploy-io.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = parseArgs(process.argv.slice(2));
 const SEMVER = /^\d+\.\d+\.\d+$/;
-const SERVICES = ['nodus_web', 'nodus_api', 'nodus_gateway'];
+const SERVICES = [
+  { container: 'nodus_web', image: 'web' },
+  { container: 'nodus_api', image: 'api' },
+  { container: 'nodus_gateway', image: 'gateway' },
+];
 const HEALTH_TIMEOUT_MS = 180_000;
 
 try {
@@ -66,21 +77,25 @@ function deploy({ version, current, prodDir, repo, dryRun, smokeBase }) {
   }
   const tag = `v${target}`;
   const previous = current === true ? target : (env.NODUS_VERSION ?? '');
+  const registry = String(env.NODUS_REGISTRY || 'ghcr.io/passat-project').replace(/\/+$/, '');
 
-  const kitDir = ensureKit({ repoDir, prod, tag });
+  const { kitDir, commit } = ensureKit({ repoDir, prod, tag });
   const composeArgs = buildComposeArgs({ prodDir: prod, kitDir, profiles });
+  // Окружение оператора не протекает в compose: shell-env приоритетнее
+  // --env-file, и экспортированный NODUS_VERSION/NODUS_REGISTRY/COMPOSE_PROFILES
+  // молча увёл бы на прод не ту версию или чужой registry (security-review #565).
   const compose = (rest, extraEnv = {}) =>
     execFileSync('docker', ['compose', ...composeArgs, ...rest], {
       stdio: 'inherit',
       cwd: prod,
-      env: { ...process.env, ...extraEnv },
+      env: { ...sanitizeEnv(), NODUS_VERSION: target, ...extraEnv },
     });
 
   if (dryRun) {
     console.log(`prod-deploy: dry-run версии ${target}`);
     console.log(`  kit: ${kitDir}`);
     console.log(`  профили: ${profiles.join(', ')}`);
-    compose(['config', '--quiet'], { NODUS_VERSION: target });
+    compose(['config', '--quiet']);
     console.log('  config --quiet: ок');
     return;
   }
@@ -89,17 +104,31 @@ function deploy({ version, current, prodDir, repo, dryRun, smokeBase }) {
 
   try {
     compose(['config', '--quiet']);
-    compose(['pull', 'web', 'api', 'gateway']);
+    if (current === true) {
+      // После перезагрузки хоста сети может не быть: локальные образы уже
+      // есть, pull_policy: missing поднимет их без registry.
+      try {
+        compose(['pull', 'web', 'api', 'gateway']);
+      } catch {
+        console.warn('prod-deploy: pull недоступен — поднимаю локальные образы (--current)');
+      }
+    } else {
+      compose(['pull', 'web', 'api', 'gateway']);
+    }
+    verifyImages({ registry, target, tag, commit });
     compose(['up', '-d']);
   } catch (error) {
-    if (current !== true && previous) restoreVersion(envPath, target, previous);
+    if (current !== true && previous) restoreVersion(envPath, previous);
     logDeploy(prod, { version: target, previous, status: 'fail', note: 'config/pull/up' });
     fail(
       `выкатка ${target} не удалась: ${error.message}. Откат: --version ${previous || '<прежняя>'}`,
     );
   }
 
-  const unhealthy = waitHealthy();
+  const unhealthy = waitHealthy(
+    SERVICES.map((service) => service.container),
+    HEALTH_TIMEOUT_MS,
+  );
   if (unhealthy.length > 0) {
     logDeploy(prod, {
       version: target,
@@ -123,21 +152,23 @@ function deploy({ version, current, prodDir, repo, dryRun, smokeBase }) {
     );
   }
 
-  logDeploy(prod, { version: target, previous, status: 'ok', note: digests() });
+  logDeploy(prod, {
+    version: target,
+    previous,
+    status: 'ok',
+    note: digests(registry, target, SERVICES),
+  });
   console.log(`prod-deploy: версия ${target} на проде`);
 }
 
+// Kit — единственная часть поставки без своего хеша: перемещённый тег увёз бы
+// на прод чужой compose с боевыми секретами. Поэтому сверяем тег на origin
+// (resolveTagCommit) и привязываем образы к тому же коммиту (verifyImages).
 function ensureKit({ repoDir, prod, tag }) {
   const kitDir = join(prod, 'kit', tag);
   const files = ['docker-compose.yml', 'compose.prod.yaml'];
+  const commit = resolveTagCommit(repoDir, tag);
   const sources = new Map();
-  try {
-    execFileSync('git', ['-C', repoDir, 'cat-file', '-e', `${tag}^{commit}`], { stdio: 'ignore' });
-  } catch {
-    execFileSync('git', ['-C', repoDir, 'fetch', 'origin', `refs/tags/${tag}:refs/tags/${tag}`], {
-      stdio: 'inherit',
-    });
-  }
   for (const file of files) {
     try {
       sources.set(
@@ -155,18 +186,34 @@ function ensureKit({ repoDir, prod, tag }) {
   }
   if (existsSync(kitDir)) {
     for (const file of files) {
-      const current = readFileSync(join(kitDir, file));
-      if (!current.equals(sources.get(file))) {
+      if (!readFileSync(join(kitDir, file)).equals(sources.get(file))) {
         fail(
           `kit ${kitDir} расходится с тегом ${tag} (${file}) — каталог kit не редактируется вручную`,
         );
       }
     }
-    return kitDir;
+    return { kitDir, commit };
   }
   mkdirSync(kitDir, { recursive: true });
   for (const file of files) writeFileSync(join(kitDir, file), sources.get(file));
-  return kitDir;
+  return { kitDir, commit };
+}
+
+function verifyImages({ registry, target, tag, commit }) {
+  for (const { image } of SERVICES) {
+    const ref = `${registry}/nodus-${image}:${target}`;
+    let revision;
+    try {
+      revision = imageLabel(ref, 'org.opencontainers.image.revision');
+    } catch (error) {
+      fail(`не удалось прочитать образ ${ref}: ${error.message}`);
+    }
+    if (revision !== commit) {
+      fail(
+        `образ ${ref} собран из «${revision || '—'}», а тег ${tag} указывает на ${commit}: образы и kit разошлись, выкатка остановлена`,
+      );
+    }
+  }
 }
 
 function writeVersion(envPath, envText, version) {
@@ -176,64 +223,14 @@ function writeVersion(envPath, envText, version) {
   try {
     chmodSync(tmp, 0o600);
   } catch {
-    // Windows: права через chmod не задаются — не критично для локального прода.
+    // Windows: chmod не задаёт ACL — права наследуются от каталога прод-данных.
   }
   renameSync(tmp, envPath);
 }
 
-function restoreVersion(envPath, version, previous) {
+function restoreVersion(envPath, previous) {
   writeVersion(envPath, readFileSync(envPath, 'utf8'), previous);
-  console.warn(`prod-deploy: .env возвращён на ${previous} (выкатка ${version} не дошла до up)`);
-}
-
-function waitHealthy() {
-  const deadline = Date.now() + HEALTH_TIMEOUT_MS;
-  let unhealthy = SERVICES.slice();
-  while (Date.now() < deadline) {
-    unhealthy = SERVICES.filter((name) => health(name) !== 'healthy');
-    if (unhealthy.length === 0) return [];
-    sleep(5_000);
-  }
-  return unhealthy;
-}
-
-function health(name) {
-  try {
-    return execFileSync(
-      'docker',
-      [
-        'inspect',
-        name,
-        '--format',
-        '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}',
-      ],
-      { encoding: 'utf8' },
-    ).trim();
-  } catch {
-    return 'missing';
-  }
-}
-
-function digests() {
-  return SERVICES.map((name) => {
-    const image = { nodus_web: 'web', nodus_api: 'api', nodus_gateway: 'gateway' }[name];
-    try {
-      const digest = execFileSync(
-        'docker',
-        [
-          'image',
-          'inspect',
-          `ghcr.io/passat-project/nodus-${image}`,
-          '--format',
-          '{{index .RepoDigests 0}}',
-        ],
-        { encoding: 'utf8' },
-      ).trim();
-      return `${image}=${digest}`;
-    } catch {
-      return `${image}=?`;
-    }
-  }).join(' ');
+  console.warn(`prod-deploy: .env возвращён на ${previous} (выкатка не дошла до up)`);
 }
 
 function logDeploy(prod, { version, previous, status, note }) {
@@ -244,10 +241,6 @@ function logDeploy(prod, { version, previous, status, note }) {
   } catch (error) {
     console.warn(`prod-deploy: не удалось записать deployments.log: ${error.message}`);
   }
-}
-
-function sleep(ms) {
-  execFileSync('node', ['-e', `setTimeout(()=>{}, ${ms})`]);
 }
 
 function parseArgs(argv) {

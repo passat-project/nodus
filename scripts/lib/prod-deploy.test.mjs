@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildComposeArgs, isAbsoluteHostPath, parseEnv, replaceEnvValue } from './prod-deploy.mjs';
+import { sanitizeEnv } from './prod-deploy-io.mjs';
 
 test('parseEnv читает ключи, снимает кавычки и пропускает комментарии', () => {
   const env = parseEnv(
@@ -41,6 +42,25 @@ test('isAbsoluteHostPath принимает Windows и POSIX, отвергает
   assert.equal(isAbsoluteHostPath('./infra/desktop-dist'), false);
   assert.equal(isAbsoluteHostPath('infra/desktop-dist'), false);
   assert.equal(isAbsoluteHostPath(''), false);
+});
+
+test('sanitizeEnv не пропускает прод-переменные и секреты оператора', () => {
+  const env = sanitizeEnv({
+    PATH: '/usr/bin',
+    HOME: '/home/agent',
+    NODUS_VERSION: '9.9.9',
+    NODUS_REGISTRY: 'evil.example',
+    COMPOSE_PROFILES: 'sandbox',
+    JWT_SECRET: 'secret',
+    POSTGRES_PASSWORD: 'secret',
+  });
+  assert.equal(env.PATH, '/usr/bin');
+  assert.equal(env.HOME, '/home/agent');
+  assert.equal(env.NODUS_VERSION, undefined);
+  assert.equal(env.NODUS_REGISTRY, undefined);
+  assert.equal(env.COMPOSE_PROFILES, undefined);
+  assert.equal(env.JWT_SECRET, undefined);
+  assert.equal(env.POSTGRES_PASSWORD, undefined);
 });
 
 test('buildComposeArgs собирает оверлей, env-файл и профили', () => {

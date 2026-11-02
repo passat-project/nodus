@@ -43,6 +43,17 @@ jobs:
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
+          # Ручной запуск принимает свободную строку: без проверки в registry
+          # уехал бы «:main» и инвариант «тег образа = выпущенный git-тег» размылся.
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::«$TAG» не в форме vX.Y.Z — образы собираются только по выпускному тегу"
+            exit 1
+          fi
+          git fetch origin main --quiet
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::коммит тега $TAG не на main — выпускные образы только с main"
+            exit 1
+          fi
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
           echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           echo "rev=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"

@@ -42,9 +42,12 @@ Release) — навык `nodus-release`; этот runbook — шаги выка�
    ```
    Что происходит: kit `D:\NodusProd\kit\vX.Y.Z` собирается из тега
    (`git show`, рабочее дерево не трогается) → `NODUS_VERSION` пишется в
-   `.env` → `config --quiet` → `pull web api gateway` → `up -d` → ожидание
+   `.env` → `config --quiet` → `pull web api gateway` → ожидание
    `healthy` (до 180 с) → обязательный смок → строка в `deployments.log` с
-   digest. Сборки на хосте нет.
+   digest. Сборки на хосте нет. Перед `up` скрипт сверяет, что тег на `origin`
+   не перемещён, а образы собраны из того же коммита (label
+   `org.opencontainers.image.revision`): kit и образы обязаны быть одной
+   поставкой.
 3. Дождаться итога смока в выводе. Красный смок = выкатка не принята, скрипт
    печатает команду отката.
 
