@@ -5,6 +5,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { Notification, NotificationPage } from '@nodus/contracts';
 
+import { api } from '../../../shared/api-client.js';
+import { useNotificationDetailStore } from '../model/detail-store.js';
+import { NotificationReader } from './notification-reader.js';
+
+// #533: статические импорты — Vite-transform не входит в бюджет testTimeout.
+// vi.mock хоистится выше импортов (Vitest docs), фабрики применяются и к ним.
 vi.mock('../../../app/router.js', () => ({
   router: { state: { location: { pathname: '/home' } }, navigate: vi.fn() },
 }));
@@ -40,7 +46,6 @@ describe('NotificationReader: авто-прочтение при открыти�
     };
     const page = (): NotificationPage => ({ items: [item], nextCursor: null, lastSeq: item.seq });
 
-    const { api } = await import('../../../shared/api-client.js');
     vi.mocked(api).mockImplementation(async (url) => {
       if (typeof url === 'string' && url.endsWith('/read')) {
         item.readAt = new Date().toISOString();
@@ -49,8 +54,6 @@ describe('NotificationReader: авто-прочтение при открыти�
       return page();
     });
 
-    const { useNotificationDetailStore } = await import('../model/detail-store.js');
-    const { NotificationReader } = await import('./notification-reader.js');
     useNotificationDetailStore.getState().open(item.id);
 
     const queryClient = new QueryClient({

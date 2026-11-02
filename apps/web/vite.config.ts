@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
@@ -53,6 +54,13 @@ export default defineConfig(({ command, mode }) => {
         ? { 'import.meta.env.VITE_API_MOCK': JSON.stringify('false') }
         : undefined,
     plugins: [tailwindcss(), react()],
+    // #533: компонентные jsdom-тесты под параллельным `turbo test` (api+web+
+    // contracts одновременно) упирались в дефолтные 5 с — notification-reader
+    // изолированно идёт ~3 с. 15 с — потолок на холодный старт под нагрузкой,
+    // а не оправдание медленным ассертам (Vitest: testTimeout default 5000).
+    test: {
+      testTimeout: 15_000,
+    },
     server: {
       port: Number(env.NODUS_WEB_DEV_PORT ?? 5173),
       // Канон одного dev-сервера (#91): без strictPort vite тихо уезжает на
