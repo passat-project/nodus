@@ -49,8 +49,9 @@ export function ProjectSchemasPage({
   const canCreateField = useCanManageFields();
   const typesQuery = useProjectTypes(true);
   const kindsQuery = useNodeKinds();
-  // Две панели справа — типа и вида: открыта не больше одной.
-  const [panel, setPanel] = useState<'type' | 'kind' | null>(null);
+  // Две панели справа — типа и вида: открыта не больше одной; глубокая
+  // ссылка ?kind= открывает панель вида сразу.
+  const [panel, setPanel] = useState<'type' | 'kind' | null>(() => (search.kind ? 'kind' : null));
 
   const types = useMemo(() => typesQuery.data ?? [], [typesQuery.data]);
   const kinds = useMemo(() => kindsQuery.data ?? [], [kindsQuery.data]);

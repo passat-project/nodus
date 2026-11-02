@@ -89,20 +89,24 @@ export function ProjectTypeKinds({
         <ul className="flex flex-col gap-0.5">
           {allowed.map((kind) => (
             <li key={kind.id}>
-              <div className="group flex h-10 min-w-0 items-center gap-2 rounded-md px-2 transition-colors hover:bg-accent/40">
+              <div className="group flex min-h-10 min-w-0 items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-accent/40">
                 <button
                   type="button"
                   onClick={() => onOpenKind(kind.id)}
                   className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
                 >
                   <NodeKindTile icon={kind.icon} color={kind.color} />
-                  <span className="min-w-0 flex-1 truncate text-sm">{kind.name}</span>
-                  <span className="hidden shrink-0 items-center gap-1 @min-[48rem]:flex">
-                    {kind.capabilities.map((capability) => (
-                      <NodeChip key={capability} tone="muted">
-                        {ui.nodeKinds.capabilityChip[capability]}
-                      </NodeChip>
-                    ))}
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-sm">{kind.name}</span>
+                    {kind.capabilities.length > 0 ? (
+                      <span className="flex items-center gap-1">
+                        {kind.capabilities.map((capability) => (
+                          <NodeChip key={capability} tone="muted">
+                            {ui.nodeKinds.capabilityChip[capability]}
+                          </NodeChip>
+                        ))}
+                      </span>
+                    ) : null}
                   </span>
                   <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
                     {fieldsCountLabel(kind)}

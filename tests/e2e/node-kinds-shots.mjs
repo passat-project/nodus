@@ -13,6 +13,7 @@ mkdirSync(out, { recursive: true });
 
 const PROJECT = '40000000-0000-4000-8000-000000000004';
 const KOMPLEKT = '33333333-3333-4333-8333-333333333307';
+const DOGOVOR = '41000000-0000-4000-8000-000000000001';
 
 const browser = await chromium.launch();
 const errors = [];
@@ -46,8 +47,8 @@ for (const theme of ['light', 'dark']) {
   }
   await page.waitForTimeout(1400);
 
-  // 1. Группа «Виды папок» + панель «Комплект».
-  await page.goto(`${base}/automation?tab=project-types&kind=${KOMPLEKT}`);
+  // 1. «Схемы проектов»: слева типы, справа виды папок типа + панель «Комплект».
+  await page.goto(`${base}/automation?tab=project-schemas&type=${DOGOVOR}&kind=${KOMPLEKT}`);
   await shot('01-kind-panel');
 
   // 2. Раздел «При создании папки».
