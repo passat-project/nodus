@@ -12,6 +12,7 @@ import {
   demoDepartments,
   departmentOfUser,
 } from '../../../../shared/mocks/data/departments.js';
+import { DEPARTMENTS_TREE_PATH } from '../../../../shared/api/departments-list.js';
 import {
   demoPresence,
   demoUserCards,
@@ -42,7 +43,7 @@ export const directoryHandlers = [
     }
     return HttpResponse.json({ items, nextCursor: null });
   }),
-  http.get('/api/v1/directory/departments/tree', ({ request }) => {
+  http.get(`/api/v1${DEPARTMENTS_TREE_PATH}`, ({ request }) => {
     const url = new URL(request.url);
     const query = departmentTreeQuerySchema.safeParse(Object.fromEntries(url.searchParams));
     const kind = query.success ? query.data.kind : 'management';

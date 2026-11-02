@@ -1,5 +1,6 @@
 import type { OrgUnitKind } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
+import { cn } from '@nodus/ui/lib/utils';
 import { SegmentedControl } from '../../../shared/ui/segmented-control.js';
 
 /**
@@ -12,9 +13,11 @@ import { SegmentedControl } from '../../../shared/ui/segmented-control.js';
 export function StructureKindSwitcher({
   kind,
   onChange,
+  className,
 }: {
   kind: OrgUnitKind;
   onChange: (kind: OrgUnitKind) => void;
+  className?: string;
 }) {
   return (
     <SegmentedControl
@@ -25,8 +28,9 @@ export function StructureKindSwitcher({
       ]}
       onChange={onChange}
       ariaLabel={ui.employees.structure}
-      className="shrink-0"
+      className={cn('w-max shrink-0', className)}
       size="sm"
+      layout="grid"
       activeClassName="bg-accent text-foreground"
     />
   );

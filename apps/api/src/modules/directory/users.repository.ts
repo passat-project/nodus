@@ -20,6 +20,8 @@ const userListSelect = {
   managerId: true,
   departmentId: true,
   legalDepartmentId: true,
+  positionId: true,
+  legalPositionId: true,
   position: { select: { name: true } },
   department: { select: { name: true } },
 } satisfies Prisma.UserSelect;
@@ -137,5 +139,46 @@ export class UsersRepository {
       orderBy: { id: 'asc' },
     });
     return rows.map((row) => row.id);
+  }
+
+  /** Ссылка-сотрудник (валидация оргструктуры #441): статус без карточки. */
+  async findRef(
+    id: string,
+    tx?: TransactionClient,
+  ): Promise<{ id: string; status: 'active' | 'deactivated' } | null> {
+    return (tx ?? this.prisma).user.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+  }
+
+  /** Цепочка `managerId` вверх от сотрудника (валидация циклов руководителей
+   *  #441): только прямые ссылки (без fallback на подразделения), защита от
+   *  зацикливания visited-множеством. Глубина — системный предел 32 (тот же в
+   *  `managerChainOf` и ролевом CTE): данные глубже — вне поддерживаемого
+   *  инварианта и не проверяются. */
+  async managerChainIds(startUserId: string, tx?: TransactionClient): Promise<string[]> {
+    const client = tx ?? this.prisma;
+    const chain: string[] = [];
+    const visited = new Set<string>();
+    let currentId: string | null = startUserId;
+    while (currentId && !visited.has(currentId) && chain.length < 32) {
+      visited.add(currentId);
+      chain.push(currentId);
+      const row: { managerId: string | null } | null = await client.user.findUnique({
+        where: { id: currentId },
+        select: { managerId: true },
+      });
+      currentId = row?.managerId ?? null;
+    }
+    return chain;
+  }
+
+  /** Граф руководителей под advisory-локом транзакции (#441): проверка циклов
+   *  `managerId` и запись сериализуются с другими правками руководителя —
+   *  построчные замки не мешают двум встречным PATCH создать кольцо A↔B
+   *  (тот же приём, что `lockTree` дерева подразделений, #544). */
+  async lockManagerTree(tx: TransactionClient): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('nodus:users:manager-graph'))`;
   }
 }

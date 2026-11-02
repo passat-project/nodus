@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ErrorCode, Permission, type AuthUser } from '@nodus/contracts';
 
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
+import { ReferenceGuard } from './reference-guard.service.js';
 import { DepartmentsService } from './departments.service.js';
 
 const actor = (permissions: string[] = []): AuthUser => ({
@@ -43,8 +44,11 @@ describe('DepartmentsService', () => {
     update: vi.fn(),
     findParentChain: vi.fn(),
     findSubtreeIds: vi.fn(),
+    findRef: vi.fn(),
+    countActiveChildren: vi.fn(),
   };
-  const users = { findActiveIdsByDepartmentIds: vi.fn() };
+  const users = { findActiveIdsByDepartmentIds: vi.fn(), findRef: vi.fn() };
+  const positions = { findRef: vi.fn() };
   const roles = { permissionsByIds: vi.fn(), lockForUpdate: vi.fn(), lockByCodeForUpdate: vi.fn() };
   const membership = { effectiveRoleIds: vi.fn() };
   const tx = { run: vi.fn((cb: (t: string) => unknown) => cb('tx-handle')) };
@@ -53,14 +57,17 @@ describe('DepartmentsService', () => {
   let service: DepartmentsService;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     membership.effectiveRoleIds.mockResolvedValue([]);
     departments.lockForUpdate.mockResolvedValue(true);
+    departments.countActiveChildren.mockResolvedValue(0);
     const guard = new RoleAssignmentGuard(roles as never, membership as never);
+    const references = new ReferenceGuard(users as never, departments as never, positions as never);
     service = new DepartmentsService(
       departments as never,
       users as never,
       guard,
+      references,
       tx as never,
       eventBus as never,
     );
@@ -85,9 +92,34 @@ describe('DepartmentsService', () => {
     });
   });
 
+  describe('create', () => {
+    it('руководитель не найден → 400 DIRECTORY_REFERENCE_INVALID (#441)', async () => {
+      users.findRef.mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          {
+            name: 'Новый отдел',
+            kind: 'management',
+            parentId: null,
+            headId: 'ghost',
+            deputyId: null,
+            sortOrder: 0,
+          },
+          'admin-1',
+        ),
+      ).rejects.toMatchObject({
+        code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
+        details: { field: 'headId', reason: 'not_found' },
+      });
+      expect(departments.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('update', () => {
     it('цикл в дереве (родитель — собственный потомок) → CONFLICT', async () => {
       departments.findById.mockResolvedValue(row('dep', null));
+      departments.findRef.mockResolvedValue({ id: 'parent', kind: 'management', isActive: true });
       departments.findParentChain.mockResolvedValue(['parent', 'dep']); // dep — предок parent
 
       await expect(service.update('dep', { parentId: 'parent' }, actor())).rejects.toMatchObject({
@@ -154,6 +186,11 @@ describe('DepartmentsService', () => {
     it('валидная смена родителя → update + событие в транзакции', async () => {
       departments.findById.mockResolvedValue(row('dep', null));
       departments.findParentChain.mockResolvedValue(['new-parent']);
+      departments.findRef.mockResolvedValue({
+        id: 'new-parent',
+        kind: 'management',
+        isActive: true,
+      });
       departments.findSubtreeIds.mockResolvedValue(['dep']);
       users.findActiveIdsByDepartmentIds.mockResolvedValue([]); // поддерево без сотрудников
       departments.update.mockResolvedValue(row('dep', 'new-parent'));
@@ -165,7 +202,10 @@ describe('DepartmentsService', () => {
         { parentId: 'new-parent' },
         'tx-handle',
       );
+      // Порядок замков: дерево (advisory, #544) → родитель → узел (#441).
       expect(departments.lockTree).toHaveBeenCalledWith('tx-handle');
+      expect(departments.lockForUpdate).toHaveBeenNthCalledWith(1, 'new-parent', 'tx-handle');
+      expect(departments.lockForUpdate).toHaveBeenNthCalledWith(2, 'dep', 'tx-handle');
       expect(eventBus.emit).toHaveBeenCalledWith(
         'tx-handle',
         'directory.department.updated',
@@ -188,6 +228,11 @@ describe('DepartmentsService', () => {
     it('bind (#490): перенос выдаёт сотруднику роль сверх прав актора → 403', async () => {
       departments.findById.mockResolvedValue(row('dep', null));
       departments.findParentChain.mockResolvedValue(['new-parent']);
+      departments.findRef.mockResolvedValue({
+        id: 'new-parent',
+        kind: 'management',
+        isActive: true,
+      });
       departments.findSubtreeIds.mockResolvedValue(['dep', 'child']);
       users.findActiveIdsByDepartmentIds.mockResolvedValue(['u-1', 'u-2']);
       // Снимок «до» (u-1, u-2) — без ролей; «после» переноса u-1 получает роль.
@@ -207,6 +252,11 @@ describe('DepartmentsService', () => {
     it('bind (#490): перенос, добавляющий роль из прав актора — разрешён', async () => {
       departments.findById.mockResolvedValue(row('dep', null));
       departments.findParentChain.mockResolvedValue(['new-parent']);
+      departments.findRef.mockResolvedValue({
+        id: 'new-parent',
+        kind: 'management',
+        isActive: true,
+      });
       departments.findSubtreeIds.mockResolvedValue(['dep']);
       users.findActiveIdsByDepartmentIds.mockResolvedValue(['u-1']);
       membership.effectiveRoleIds
@@ -234,6 +284,27 @@ describe('DepartmentsService', () => {
       expect(eventBus.emit).toHaveBeenCalled();
       expect(roles.permissionsByIds).not.toHaveBeenCalled();
     });
+
+    it('зам подразделения неактивен → 400 inactive (#441)', async () => {
+      departments.findById.mockResolvedValue(row('dep', null));
+      users.findRef.mockResolvedValue({ id: 'u-1', status: 'deactivated' });
+
+      await expect(service.update('dep', { deputyId: 'u-1' }, actor())).rejects.toMatchObject({
+        code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
+        details: { field: 'deputyId', reason: 'inactive' },
+      });
+      expect(departments.update).not.toHaveBeenCalled();
+    });
+
+    it('очистка руководителя (null) проходит без проверки ссылки (#441)', async () => {
+      departments.findById.mockResolvedValue(row('dep', null));
+      departments.update.mockResolvedValue(row('dep', null));
+
+      await service.update('dep', { headId: null }, actor());
+
+      expect(users.findRef).not.toHaveBeenCalled();
+      expect(departments.update).toHaveBeenCalled();
+    });
   });
 
   describe('archive', () => {
@@ -249,6 +320,18 @@ describe('DepartmentsService', () => {
         { departmentId: 'dep' },
         expect.objectContaining({ actorId: 'admin-1' }),
       );
+    });
+
+    it('непустой узел → 409 CONFLICT has_children, без записи и события (#441)', async () => {
+      departments.findById.mockResolvedValue(row('dep', null));
+      departments.countActiveChildren.mockResolvedValue(2);
+
+      await expect(service.archive('dep', 'admin-1')).rejects.toMatchObject({
+        code: ErrorCode.CONFLICT,
+        details: { reason: 'has_children' },
+      });
+      expect(departments.update).not.toHaveBeenCalled();
+      expect(eventBus.emit).not.toHaveBeenCalled();
     });
   });
 });

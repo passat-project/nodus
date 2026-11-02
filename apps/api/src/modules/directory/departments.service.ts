@@ -16,6 +16,7 @@ import {
 import { DomainException } from '../../core/errors/domain-exception.js';
 import { EventBus } from '../../core/events/event-bus.js';
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
+import { ReferenceGuard } from './reference-guard.service.js';
 import { DepartmentsRepository, type DepartmentRow } from './departments.repository.js';
 import { UsersRepository } from './users.repository.js';
 
@@ -48,6 +49,7 @@ export class DepartmentsService {
     private readonly departments: DepartmentsRepository,
     private readonly users: UsersRepository,
     private readonly guard: RoleAssignmentGuard,
+    private readonly references: ReferenceGuard,
     private readonly tx: TransactionRunner,
     private readonly eventBus: EventBus,
   ) {}
@@ -79,6 +81,16 @@ export class DepartmentsService {
       await this.ensureExists(dto.parentId);
     }
     return this.tx.run(async (tx) => {
+      // Ссылки оргструктуры (#441): руководитель/зам — только активные
+      // сотрудники, родитель — подразделение того же вида структуры. Внутри
+      // транзакции — без окна TOCTOU между проверкой и записью. Замок
+      // родителя сериализует с архивацией (непустой узел не архивируется).
+      if (dto.parentId) {
+        await this.departments.lockForUpdate(dto.parentId, tx);
+      }
+      await this.references.ensureActiveUser(dto.headId, 'headId', tx);
+      await this.references.ensureActiveUser(dto.deputyId, 'deputyId', tx);
+      await this.references.ensureDepartment(dto.parentId, dto.kind, 'parentId', tx);
       const created = await this.departments.create(dto, tx);
       await this.eventBus.emit(
         tx,
@@ -100,11 +112,22 @@ export class DepartmentsService {
       if (!current) {
         throw DomainException.notFound('Department not found');
       }
-      if (dto.parentId !== undefined && dto.parentId !== null) {
-        // Новый родитель существует и не является потомком узла (цикл).
+      // #441: ссылки оргструктуры — руководитель/зам только активные
+      // сотрудники; родитель — подразделение того же вида структуры (иначе
+      // поддерево выпадает из дерева своего вида). Новый родитель берётся под
+      // FOR UPDATE (порядок: дерево → родитель → узел), чтобы архивация не
+      // закоммитилась между проверкой isActive и записью parentId.
+      if (dto.parentId) {
+        await this.departments.lockForUpdate(dto.parentId, tx);
         if (!(await this.departments.findById(dto.parentId, tx))) {
           throw DomainException.notFound('Department not found');
         }
+      }
+      await this.references.ensureActiveUser(dto.headId, 'headId', tx);
+      await this.references.ensureActiveUser(dto.deputyId, 'deputyId', tx);
+      await this.references.ensureDepartment(dto.parentId, current.kind, 'parentId', tx);
+      // #544: цикл — под локом дерева и в той же транзакции (чтение через tx).
+      if (dto.parentId !== undefined && dto.parentId !== null) {
         const chain = await this.departments.findParentChain(dto.parentId, tx);
         if (chain.includes(id)) {
           throw new DomainException(ErrorCode.CONFLICT, 'Department tree cycle', {
@@ -142,10 +165,23 @@ export class DepartmentsService {
     });
   }
 
-  /** Архивация (не удаление — связи сотрудников и история сохраняются, I15). */
+  /** Архивация (не удаление — связи сотрудников и история сохраняются, I15).
+   *  Непустой узел не архивируется (409 `has_children`): активные дети
+   *  archived-родителя выпадают из дерева вида (родитель не в выборке, а дети
+   *  не корни) — сначала архивируются/переносятся дети. Замок строки
+   *  сериализует с созданием ребёнка (create лочит родителя до проверки). */
   async archive(id: string, actorId: string): Promise<void> {
     await this.ensureExists(id);
     await this.tx.run(async (tx) => {
+      if (!(await this.departments.lockForUpdate(id, tx))) {
+        throw DomainException.notFound('Department not found');
+      }
+      if ((await this.departments.countActiveChildren(id, tx)) > 0) {
+        throw new DomainException(ErrorCode.CONFLICT, 'Department has active children', {
+          departmentId: id,
+          reason: 'has_children',
+        });
+      }
       await this.departments.update(id, { isActive: false }, tx);
       await this.eventBus.emit(
         tx,

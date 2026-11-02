@@ -3,7 +3,10 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { TransactionClient } from '../database/transaction-runner.js';
-import type { DepartmentRef, OrgStructureReader } from './org-structure.port.js';
+import type { DepartmentRef, OrgStructureReader, OrgUserRef } from './org-structure.port.js';
+
+/** Предохранитель глубины: дерево подразделений на порядок мельче. */
+const MAX_DEPTH = 32;
 
 /**
  * Реализация OrgStructureReader (ADR-0012): рекурсивные CTE по users
@@ -53,6 +56,71 @@ export class OrgStructureProvider implements OrgStructureReader {
       where: { id: { in: [...ids] } },
       select: { id: true, name: true, isActive: true },
     });
+  }
+
+  /** Держатели должности (#441): активные сотрудники на должности своего вида. */
+  async holdersOfPosition(
+    positionId: string,
+    kind: 'management' | 'legal' = 'management',
+    tx?: TransactionClient,
+  ): Promise<OrgUserRef[]> {
+    return this.db(tx).user.findMany({
+      where:
+        kind === 'legal'
+          ? { legalPositionId: positionId, status: 'active' }
+          : { positionId, status: 'active' },
+      select: { id: true, displayName: true },
+      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /**
+   * Цепочка руководителей вверх (#441, ADR-0025 §3) — один рекурсивный CTE:
+   * `dept_heads` для каждого подразделения даёт ближайшего руководителя вверх
+   * по активной управленческой цепочке (уровень 0 — сам отдел); `walk` шагает
+   * вверх: `manager_id`, иначе ближайший руководитель подразделения (пропуская
+   * самого сотрудника — руководитель своего отдела поднимается к родительскому);
+   * `visited` защищает от циклов, глубина ≤ 32. Наружу отдаются только АКТИВНЫЕ
+   * руководители (уволенный не может быть решающим — шаг идёт выше), сам
+   * сотрудник в цепочку не входит.
+   */
+  async managerChainOf(userId: string, tx?: TransactionClient): Promise<string[]> {
+    const rows = await this.db(tx).$queryRaw<{ id: string }[]>(Prisma.sql`
+      WITH RECURSIVE
+        dept_heads(start_id, current_id, head_id, depth) AS (
+          SELECT d.id, d.id, d.head_id, 0
+          FROM departments d
+          WHERE d.is_active AND d.kind = 'management'
+          UNION ALL
+          SELECT dh.start_id, p.id, p.head_id, dh.depth + 1
+          FROM dept_heads dh
+          JOIN departments cur ON cur.id = dh.current_id
+          JOIN departments p ON p.id = cur.parent_id
+          WHERE dh.depth < ${MAX_DEPTH}
+            AND p.is_active AND p.kind = 'management'
+        ),
+        walk(id, manager_id, department_id, depth, visited) AS (
+          SELECT u.id, u.manager_id, u.department_id, 0, ARRAY[u.id]
+          FROM users u
+          WHERE u.id = ${userId}::uuid
+          UNION ALL
+          SELECT u2.id, u2.manager_id, u2.department_id, w.depth + 1, w.visited || u2.id
+          FROM walk w
+          JOIN users u2 ON u2.id = COALESCE(
+            w.manager_id,
+            (SELECT dh.head_id FROM dept_heads dh
+              WHERE dh.start_id = w.department_id AND dh.head_id IS NOT NULL
+                AND dh.head_id <> w.id
+              ORDER BY dh.depth LIMIT 1)
+          )
+          WHERE w.depth < ${MAX_DEPTH} AND NOT (u2.id = ANY(w.visited))
+        )
+      SELECT w.id FROM walk w
+      JOIN users u ON u.id = w.id AND u.status = 'active'
+      WHERE w.depth > 0
+      ORDER BY w.depth
+    `);
+    return rows.map((row) => row.id);
   }
 
   private db(tx?: TransactionClient) {

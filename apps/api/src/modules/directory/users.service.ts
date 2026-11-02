@@ -21,6 +21,7 @@ import { DomainException } from '../../core/errors/domain-exception.js';
 import { EventBus } from '../../core/events/event-bus.js';
 import { AVATAR_PROCESSOR, type AvatarProcessor } from '../../core/ports/avatar-processor.port.js';
 import { avatarUrlOf as signAvatarUrl } from './avatar-url.js';
+import { ReferenceGuard } from './reference-guard.service.js';
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
 import { RolesRepository } from './roles.repository.js';
 import { UsersRepository, type UserCardRow } from './users.repository.js';
@@ -49,6 +50,7 @@ export class UsersService {
     private readonly eventBus: EventBus,
     private readonly signedUrls: SignedUrlService,
     private readonly guard: RoleAssignmentGuard,
+    private readonly references: ReferenceGuard,
     @Inject(AVATAR_PROCESSOR) private readonly avatars: AvatarProcessor,
   ) {}
 
@@ -85,6 +87,19 @@ export class UsersService {
     const passwordHash = await this.passwords.hash(dto.password);
 
     return this.tx.run(async (tx) => {
+      // Ссылки оргструктуры (#441): руководитель, подразделения и должности —
+      // только существующие активные объекты своего вида структуры. Внутри
+      // транзакции — без окна TOCTOU между проверкой и записью.
+      await this.references.ensureActiveUser(dto.managerId, 'managerId', tx);
+      await this.references.ensureDepartment(dto.departmentId, 'management', 'departmentId', tx);
+      await this.references.ensurePosition(dto.positionId, 'management', 'positionId', tx);
+      await this.references.ensureDepartment(
+        dto.legalDepartmentId,
+        'legal',
+        'legalDepartmentId',
+        tx,
+      );
+      await this.references.ensurePosition(dto.legalPositionId, 'legal', 'legalPositionId', tx);
       const created = await this.users.create(
         {
           email: dto.email,
@@ -125,7 +140,6 @@ export class UsersService {
     if (dto.roleIds) {
       await this.ensureRolesExist(dto.roleIds);
     }
-
     const names = {
       lastName: dto.lastName ?? before.lastName,
       firstName: dto.firstName ?? before.firstName,
@@ -135,6 +149,26 @@ export class UsersService {
     const membershipChanges = roleIds !== undefined || dto.departmentId !== undefined;
 
     return this.tx.run(async (tx) => {
+      // Ссылки оргструктуры (#441): undefined — не трогаем, null — очистка.
+      // Внутри транзакции — без окна TOCTOU между проверкой и записью.
+      // Гонка циклов руководителей: проверка цепи и запись сериализуются
+      // advisory-локом графа (как дерево подразделений в #544) — построчные
+      // замки не мешают двум встречным PATCH создать кольцо A↔B.
+      if (dto.managerId !== undefined && dto.managerId !== null) {
+        await this.users.lockManagerTree(tx);
+      }
+      this.references.ensureNotSelf(id, dto.managerId, 'managerId');
+      await this.references.ensureNoManagerCycle(id, dto.managerId, tx);
+      await this.references.ensureActiveUser(dto.managerId, 'managerId', tx);
+      await this.references.ensureDepartment(dto.departmentId, 'management', 'departmentId', tx);
+      await this.references.ensurePosition(dto.positionId, 'management', 'positionId', tx);
+      await this.references.ensureDepartment(
+        dto.legalDepartmentId,
+        'legal',
+        'legalDepartmentId',
+        tx,
+      );
+      await this.references.ensurePosition(dto.legalPositionId, 'legal', 'legalPositionId', tx);
       // Замок строки admin (#490): решение о «последнем администраторе» —
       // по составу, прочитанному ПОД замком, не по снимку вне транзакции
       // (иначе параллельная выдача роли проходит мимо защиты).

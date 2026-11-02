@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ErrorCode, Permission, type AuthUser, type CreateUserDto } from '@nodus/contracts';
 
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
+import { ReferenceGuard } from './reference-guard.service.js';
 import { UsersService } from './users.service.js';
 
 const CREATE_DTO: CreateUserDto = {
@@ -67,7 +68,10 @@ describe('UsersService: создание и правка сотрудника', 
     create: vi.fn(),
     update: vi.fn(),
     setRoles: vi.fn(),
+    findRef: vi.fn(),
   };
+  const departments = { findRef: vi.fn() };
+  const positions = { findRef: vi.fn() };
   const roles = {
     countByIds: vi.fn(),
     permissionsByIds: vi.fn(),
@@ -84,10 +88,11 @@ describe('UsersService: создание и правка сотрудника', 
   let service: UsersService;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     membership.effectiveRoleIds.mockResolvedValue([]);
     roles.lockByCodeForUpdate.mockResolvedValue(null);
     const guard = new RoleAssignmentGuard(roles as never, membership as never);
+    const references = new ReferenceGuard(users as never, departments as never, positions as never);
     service = new UsersService(
       users as never,
       roles as never,
@@ -96,6 +101,7 @@ describe('UsersService: создание и правка сотрудника', 
       eventBus as never,
       { fileContentUrl: vi.fn((id: string) => `/files/${id}/content`) } as never,
       guard,
+      references,
       { process: vi.fn() } as never,
     );
   });
@@ -154,6 +160,7 @@ describe('UsersService: создание и правка сотрудника', 
     it('bind (#490): явная роль с правами, которых нет у актора → 403 ROLE_PERMISSION_NOT_HELD', async () => {
       users.emailExists.mockResolvedValue(false);
       roles.countByIds.mockResolvedValue(1);
+      users.create.mockResolvedValue(cardRow());
       // Порт после вставки возвращает назначенные прямые роли сотрудника.
       membership.effectiveRoleIds.mockResolvedValue(['role-1']);
       roles.permissionsByIds.mockResolvedValue(new Map([['role-1', [Permission.WORKFLOW_MANAGE]]]));
@@ -174,6 +181,7 @@ describe('UsersService: создание и правка сотрудника', 
       users.emailExists.mockResolvedValue(false);
       roles.countByIds.mockResolvedValue(0);
       users.create.mockResolvedValue(cardRow({ departmentId: 'dep-1' }));
+      departments.findRef.mockResolvedValue({ id: 'dep-1', kind: 'management', isActive: true });
       // Прямых ролей нет (roleIds: []), подразделение добавляет связанную.
       membership.effectiveRoleIds.mockResolvedValue(['role-dept']);
       roles.permissionsByIds.mockResolvedValue(new Map([['role-dept', [Permission.CRM_MANAGE]]]));
@@ -243,6 +251,7 @@ describe('UsersService: создание и правка сотрудника', 
 
     it('bind (#490): перевод в подразделение с привязанной ролью → 403', async () => {
       users.findCardById.mockResolvedValue(cardRow());
+      departments.findRef.mockResolvedValue({ id: 'dep-1', kind: 'management', isActive: true });
       // «До» — без ролей, «после» перевода подразделение добавляет свою роль.
       membership.effectiveRoleIds.mockResolvedValueOnce([]).mockResolvedValueOnce(['role-dept']);
       roles.permissionsByIds.mockResolvedValue(new Map([['role-dept', [Permission.CRM_MANAGE]]]));
@@ -254,6 +263,7 @@ describe('UsersService: создание и правка сотрудника', 
 
     it('перевод в подразделение, роль которого у сотрудника уже есть — разрешён', async () => {
       users.findCardById.mockResolvedValue(cardRow());
+      departments.findRef.mockResolvedValue({ id: 'dep-1', kind: 'management', isActive: true });
       membership.effectiveRoleIds.mockResolvedValue(['role-dept']);
       roles.permissionsByIds.mockResolvedValue(new Map([['role-dept', [Permission.CRM_MANAGE]]]));
 

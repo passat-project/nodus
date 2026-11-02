@@ -3,6 +3,12 @@ import type { DepartmentNode } from '@nodus/contracts';
 
 import { api } from '../api-client.js';
 
+/** Контрактный путь дерева оргструктуры (#540): единый источник для всех
+ *  потребителей web — вид «Подразделения», пикеры полей, состав роли.
+ *  API-маршрут: `apps/api/src/modules/directory/departments.controller.ts`
+ *  (`@Get('tree')`); страж — `departments-list.test.ts`. */
+export const DEPARTMENTS_TREE_PATH = '/directory/departments/tree';
+
 /** Ключ СОВПАДАЕТ с `directoryKeys.departments('management')` (фича
  *  directory) — общий кэш дерева, как `usersListKey`: пикер подразделений
  *  в полях не платит вторым запросом. */
@@ -12,7 +18,7 @@ export const departmentsListKey = ['directory', 'departments', 'management'] as 
 export function useDepartmentTreeManagement() {
   return useQuery({
     queryKey: departmentsListKey,
-    queryFn: () => api<DepartmentNode[]>('/directory/departments/tree?kind=management'),
+    queryFn: () => api<DepartmentNode[]>(`${DEPARTMENTS_TREE_PATH}?kind=management`),
     staleTime: 60_000,
   });
 }

@@ -48,21 +48,17 @@ describe('PositionsService', () => {
     expect(updated.sortOrder).toBe(7);
   });
 
-  it('изменение вида и порядка — только эти ключи в changedFields', async () => {
+  it('изменение порядка — только этот ключ в changedFields (вид неизменяем, #441)', async () => {
     positions.findById.mockResolvedValue(position());
-    positions.update.mockResolvedValue(position({ kind: 'management', sortOrder: 1 }));
+    positions.update.mockResolvedValue(position({ sortOrder: 1 }));
 
-    await service.update('pos-1', { kind: 'management', sortOrder: 1 }, 'admin-1');
+    await service.update('pos-1', { sortOrder: 1 }, 'admin-1');
 
-    expect(positions.update).toHaveBeenCalledWith(
-      'pos-1',
-      { kind: 'management', sortOrder: 1 },
-      'tx-handle',
-    );
+    expect(positions.update).toHaveBeenCalledWith('pos-1', { sortOrder: 1 }, 'tx-handle');
     expect(eventBus.emit).toHaveBeenCalledWith(
       'tx-handle',
       'directory.position.updated',
-      { positionId: 'pos-1', changedFields: ['kind', 'sortOrder'] },
+      { positionId: 'pos-1', changedFields: ['sortOrder'] },
       expect.objectContaining({ actorId: 'admin-1' }),
     );
   });

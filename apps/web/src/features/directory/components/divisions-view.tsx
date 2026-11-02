@@ -1,7 +1,8 @@
-import { ChevronDown, ChevronUp, Folder, Users } from 'lucide-react';
+import { ChevronDown, ChevronUp, Folder, UserRound, Users } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DepartmentNode } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
+import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { cn } from '@nodus/ui/lib/utils';
 
@@ -64,6 +65,17 @@ export function DivisionsView({
 
   const { segments, ports, portRadius } = useTreeEdges(rootRef, nodeRefs, links);
 
+  // Поиск без совпадений — не пустой канвас: сообщаем, что веток нет.
+  if (searching && visible.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <Empty className="max-w-sm">
+          <EmptyTitle>{ui.employees.searchNoResults}</EmptyTitle>
+        </Empty>
+      </div>
+    );
+  }
+
   function toggle(node: DepartmentNode) {
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -100,20 +112,31 @@ export function DivisionsView({
             className="block w-full px-3 py-2.5 pr-9 text-left"
           >
             <span className="block truncate text-sm font-medium">{node.name}</span>
-            {node.headName && (
+            {node.headName ? (
               <span className="mt-1.5 flex items-center gap-1.5">
                 <PersonAvatar name={node.headName} avatarUrl={null} className="size-5 shrink-0" />
                 <span className="truncate text-xs text-muted-foreground">{node.headName}</span>
               </span>
+            ) : (
+              <span className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <UserRound className="size-5 shrink-0" strokeWidth={1.5} aria-hidden />
+                <span className="truncate">{ui.employees.noHead}</span>
+              </span>
             )}
             <span className="mt-2 flex items-center gap-3 font-mono text-label-sm text-muted-foreground tabular-nums">
-              <span className="flex items-center gap-1">
-                <Users className="size-3.5" strokeWidth={1.75} />
+              <span
+                className="flex items-center gap-1"
+                title={`${ui.employees.employeesCount}: ${total}`}
+              >
+                <Users className="size-3.5" strokeWidth={1.75} aria-hidden />
                 {total}
               </span>
               {node.children.length > 0 && (
-                <span className="flex items-center gap-1">
-                  <Folder className="size-3.5" strokeWidth={1.75} />
+                <span
+                  className="flex items-center gap-1"
+                  title={`${ui.employees.subdepartmentsCount}: ${node.children.length}`}
+                >
+                  <Folder className="size-3.5" strokeWidth={1.75} aria-hidden />
                   {node.children.length}
                 </span>
               )}

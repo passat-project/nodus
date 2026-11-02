@@ -41,6 +41,8 @@ function mk(
     managerId: manager === null ? null : uid(manager),
     departmentId: departmentIds[department],
     legalDepartmentId: departmentIds[legalDepartment],
+    positionId: null,
+    legalPositionId: null,
   };
 }
 

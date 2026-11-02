@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ErrorCode, type AuthUser } from '@nodus/contracts';
 
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
+import { ReferenceGuard } from './reference-guard.service.js';
 import { UsersService } from './users.service.js';
 
 const actor = (permissions: string[] = []): AuthUser => ({
@@ -63,10 +64,15 @@ describe('UsersService: деактивация сотрудника', () => {
   let service: UsersService;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     membership.effectiveRoleIds.mockResolvedValue([]);
     roles.lockByCodeForUpdate.mockResolvedValue(null);
     const guard = new RoleAssignmentGuard(roles as never, membership as never);
+    const references = new ReferenceGuard(
+      users as never,
+      { findRef: vi.fn() } as never,
+      { findRef: vi.fn() } as never,
+    );
     service = new UsersService(
       users as never,
       roles as never,
@@ -75,6 +81,7 @@ describe('UsersService: деактивация сотрудника', () => {
       eventBus as never,
       { fileContentUrl: vi.fn() } as never,
       guard,
+      references,
       { process: vi.fn() } as never,
     );
   });

@@ -80,17 +80,35 @@
   `useMemberProjects`): I6 запрещает фичам импортировать друг друга, поэтому
   хуки на публичные list-ресурсы — в shared-слое.
 - Контракты: `UserListItem` (+`departmentId`/`legalDepartmentId` — принадлежность
-  обеим структурам), `UserCard` (полный профиль), `PresenceEntry`,
-  `DepartmentNode`/`departmentTreeQuerySchema`/create-update DTO подразделений;
-  query `/tasks` (+`assigneeId`), `/projects` (+`memberId`). Семантика фильтра
+  обеим структурам, `positionId`/`legalPositionId` — для отчёта проверки данных),
+  `UserCard` (полный профиль), `PresenceEntry`, `DepartmentNode`/
+  `departmentTreeQuerySchema`/create-update DTO подразделений, `Position`/
+  create-update DTO должностей. Семантика фильтра
   `GET /directory/users?departmentId=`: принадлежность в ТОЙ структуре, к которой
   относится само подразделение (kind сервер берёт из подразделения).
-- Эндпоинты (моки): `GET /directory/users?limit=50` (+`departmentId`),
-  `GET /directory/users/:id` (UserCard), `GET /directory/presence`,
-  `GET /directory/departments/tree?kind=` (лес корней DepartmentNode),
-  `POST /directory/departments`, `PATCH /directory/departments/:id`.
-  Бэкенд: users-эндпоинты живые (`apps/api/src/modules/directory`, kind-осознанный
-  фильтр подразделения реализован), endpoints подразделений — контракт-ТЗ для
-  бэкенд-агента: UI сверстан по контрактам и мокам (ADR-0001).
+- Эндпоинты — живые (`apps/api/src/modules/directory`): `GET /directory/users?limit=100`
+  (курсор, `fetchAllUsers` листает все страницы), `GET /directory/users/:id`
+  (UserCard), `GET /directory/presence` (только моки — presence эфемерный, WS),
+  `GET /directory/departments/tree?kind=` (лес корней DepartmentNode; единая
+  константа `DEPARTMENTS_TREE_PATH` + страж-тест, моки синхронизированы),
+  `POST/PATCH /directory/departments`, `GET/POST/PATCH/archive
+`/directory/positions`.
+Ссылки оргструктуры валидирует сервер (#441): руководитель/зам подразделения,
+`managerId/departmentId/positionId/legal*`сотрудника — только активные
+объекты своего вида;`kind`подразделения и должности неизменяем после
+создания. UI сверен с контрактами и моками (ADR-0001). Связи сотрудника —`shared/api/user-relations.ts` (`useAssigneeTasks`, `useMemberProjects`):
+query `/tasks` (+`assigneeId`), `/projects` (+`memberId`).
+- Администрирование (#441, право `directory.manage`): форма сотрудника
+  (`employee-edit-dialog`: подразделение, должность, руководитель — свободная
+  ссылка, кейс «группа ГИПов»; шлются только изменённые поля), диалог
+  подразделения (`department-dialog`: создание, переименование, **перенос**
+  родителя с исключением своего поддерева, руководитель, зам), архивация
+  подразделения из меню панели (подтверждение; I15 — не удаление), управление
+  должностями (`positions-dialog`: создание/переименование/архив по видам
+  структуры), отчёт проверки данных (`data-check-dialog` + чистая
+  `lib/data-check.ts`: должности без сотрудников, сотрудники без
+  руководителя/подразделения). Состояние ошибки загрузки дерева — сообщение +
+  «Повторить» вместо пустого канваса; шапка адаптивна (при открытой панели
+  действия уходят в «…»), строки отчёта ведут в карточку сотрудника.
 - Открытие карточки — shared-element из rect узла графа/строки списка/строки
   панели; закрытие сохраняет вид (`view`).

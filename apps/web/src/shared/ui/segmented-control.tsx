@@ -26,6 +26,7 @@ export function SegmentedControl<T extends string>({
   className,
   activeClassName,
   size = 'md',
+  layout = 'flex',
 }: {
   value: T;
   options: readonly { value: T; label: string }[];
@@ -37,12 +38,19 @@ export function SegmentedControl<T extends string>({
   activeClassName?: string;
   /** sm — компактные переключатели шапок (px-2 py-0.5). */
   size?: 'sm' | 'md';
+  /** grid — равные сегменты по ширине САМОЙ ДЛИННОЙ подписи (w-max):
+   *  длинные подписи («Управленческая») не обрезаются в узкой шапке. */
+  layout?: 'flex' | 'grid';
 }) {
   return (
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className={cn('flex min-w-0 border border-border', className)}
+      className={cn(
+        layout === 'grid' ? 'grid w-max auto-cols-fr grid-flow-col' : 'flex',
+        'min-w-0 border border-border',
+        className,
+      )}
       style={{ borderRadius: SEGMENTED_OUTER_RADIUS, padding: SEGMENTED_PADDING }}
     >
       {options.map((option) => (

@@ -19,12 +19,17 @@ export function EmployeeCombobox({
   ariaLabel,
   users,
   className,
+  placeholder,
 }: {
   value: string | null;
   onChange: (id: string | null) => void;
   ariaLabel: string;
   users: UserListItem[];
   className?: string;
+  /** Подсказка в пустом поле; по умолчанию — aria-label (в форме лучше
+   *  передать действие: «Начните вводить имя», иначе placeholder дублирует
+   *  подпись поля). */
+  placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
@@ -66,13 +71,13 @@ export function EmployeeCombobox({
           <Input
             aria-label={ariaLabel}
             value={open ? text : (selected?.displayName ?? '')}
-            placeholder={ariaLabel}
+            placeholder={placeholder ?? ariaLabel}
             onChange={(e) => {
               setText(e.target.value);
               setOpen(true);
             }}
             onFocus={() => setOpen(true)}
-            className="h-8 text-sm"
+            className={cn('h-8 text-sm', selected && !open && 'pr-8')}
           />
         </PopoverAnchor>
         {selected && !open && (

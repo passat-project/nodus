@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { DepartmentNode, OrgUnitKind, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@nodus/ui/components/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,10 +11,12 @@ import {
   DropdownMenuTrigger,
 } from '@nodus/ui/components/dropdown-menu';
 import { Input } from '@nodus/ui/components/input';
+import { NodeLabel } from '@nodus/ui/components/node-label';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
+import { useArchiveDepartment } from '../api/directory-api.js';
 
 /**
  * Правая панель выбранного подразделения (#84, референс — правая колонка окна
@@ -34,6 +37,7 @@ export function DepartmentPanel({
   onInvite,
   onCreateChild,
   onEdit,
+  canManage,
 }: {
   kind: OrgUnitKind;
   node: DepartmentNode | null;
@@ -48,8 +52,12 @@ export function DepartmentPanel({
   onInvite: () => void;
   onCreateChild: (parentId: string) => void;
   onEdit: (node: DepartmentNode) => void;
+  /** Право `directory.manage`: админ-действия панели (без права — просмотр). */
+  canManage: boolean;
 }) {
   const openCard = useOpenCard();
+  const archive = useArchiveDepartment(kind);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [search, setSearch] = useState('');
   // Кэш последнего узла: контент не мигает пустотой на схлопывании.
   const [cached, setCached] = useState<DepartmentNode | null>(node);
@@ -86,12 +94,12 @@ export function DepartmentPanel({
         onClick={(e) =>
           openCard({ kind: 'employee', id: person.id }, e.currentTarget.getBoundingClientRect())
         }
-        className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-accent"
+        className="flex items-center gap-2.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-accent"
       >
         <PersonAvatar
           name={person.displayName}
           avatarUrl={person.avatarUrl}
-          className="size-7 shrink-0"
+          className="size-6 shrink-0"
         />
         <span className="min-w-0">
           <span className="block truncate text-sm">{person.displayName}</span>
@@ -128,30 +136,49 @@ export function DepartmentPanel({
                   {kind === 'management' ? ui.employees.kindManagement : ui.employees.kindLegal}
                 </span>
               </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={ui.employees.departmentActions}
-                  >
-                    <MoreHorizontal className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={onInvite}>
-                    {ui.employees.inviteToDepartment}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onCreateChild(shown.id)}>
-                    {ui.employees.addSubdepartment}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onEdit(shown)}>
-                    {ui.employees.editDepartment}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {canManage && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label={ui.employees.departmentActions}
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={onInvite}>
+                      {ui.employees.inviteToDepartment}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onCreateChild(shown.id)}>
+                      {ui.employees.addSubdepartment}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onEdit(shown)}>
+                      {ui.employees.editDepartmentAction}
+                    </DropdownMenuItem>
+                    {/* Непустой узел не архивируется (409 has_children): активные
+                        дети archived-родителя выпали бы из дерева вида. */}
+                    {shown.children.length === 0 && (
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => setArchiveOpen(true)}
+                      >
+                        {ui.employees.archiveDepartment}
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               {/* Крестик закрытия панели — У КРАЯ справа (вердикт 24.09). */}
-              <Button variant="ghost" size="icon-sm" aria-label={ui.common.close} onClick={onClose}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-foreground"
+                aria-label={ui.common.close}
+                onClick={onClose}
+              >
                 <X className="size-4" />
               </Button>
             </div>
@@ -173,6 +200,8 @@ export function DepartmentPanel({
                       managerId: null,
                       departmentId: null,
                       legalDepartmentId: null,
+                      positionId: null,
+                      legalPositionId: null,
                     },
                   )
                 ) : (
@@ -196,22 +225,21 @@ export function DepartmentPanel({
                       managerId: null,
                       departmentId: null,
                       legalDepartmentId: null,
+                      positionId: null,
+                      legalPositionId: null,
                     },
                   )}
                 </section>
               )}
             </div>
             <section className="flex min-h-0 flex-1 flex-col gap-2">
-              <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                {ui.employees.panelMembers}
-                <span className="font-mono tabular-nums">{members.length}</span>
-              </span>
+              <NodeLabel label={ui.employees.panelMembers} count={members.length} />
               <div className="relative">
                 <Search className="absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder={ui.common.search}
+                  placeholder={ui.employees.searchMembers}
                   className="h-8 pl-7 text-sm"
                 />
               </div>
@@ -219,23 +247,49 @@ export function DepartmentPanel({
                 {members.length > 0 ? (
                   <div className="flex flex-col gap-0.5">{members.map(personRow)}</div>
                 ) : (
-                  <span className="px-2 text-xs text-muted-foreground">
+                  <span className="px-2 text-sm text-muted-foreground">
                     {ui.employees.emptyDepartment}
                   </span>
                 )}
               </div>
             </section>
             {reports.length > 0 && (
-              <section className="flex shrink-0 flex-col gap-1">
-                <span className="text-xs font-medium text-muted-foreground">
-                  {ui.employees.panelReports}
-                </span>
+              <section className="flex shrink-0 flex-col gap-1.5">
+                <NodeLabel label={ui.employees.panelReports} count={reports.length} />
                 <div className="flex flex-col gap-0.5">{reports.map(personRow)}</div>
               </section>
             )}
           </>
         )}
       </div>
+      <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
+        <DialogContent className="w-full bg-card sm:max-w-sm">
+          <DialogTitle className="text-base font-semibold text-foreground">
+            {ui.employees.archiveDepartmentTitle}
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground">{ui.employees.archiveDepartmentText}</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setArchiveOpen(false)}>
+              {ui.common.cancel}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={archive.isPending}
+              onClick={() => {
+                if (!shown) return;
+                archive.mutate(shown.id, {
+                  onSuccess: () => {
+                    setArchiveOpen(false);
+                    onClose();
+                  },
+                });
+              }}
+            >
+              {ui.employees.archiveConfirm}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
