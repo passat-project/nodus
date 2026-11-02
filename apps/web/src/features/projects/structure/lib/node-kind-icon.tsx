@@ -4,6 +4,7 @@ import {
   Building,
   Building2,
   Factory,
+  FileText,
   Flag,
   Folder,
   FolderTree,
@@ -35,6 +36,7 @@ const ICONS: Record<NodeKindIcon, LucideIcon> = {
   factory: Factory,
   route: Route,
   squareStack: SquareStack,
+  fileText: FileText,
 };
 
 export function NodeKindGlyph({ icon, className }: { icon: NodeKindIcon; className?: string }) {

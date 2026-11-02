@@ -1,18 +1,12 @@
 import type { NodeKind, ProjectNode } from '@nodus/contracts';
 
 import { NodeCreateDialog } from './node-create-dialog.js';
-import {
-  NodeBulkMoveDialog,
-  NodeDeleteDialog,
-  NodeMoveDialog,
-  NodeRenameDialog,
-} from './node-edit-dialog.js';
+import { NodeBulkMoveDialog, NodeDeleteDialog, NodeMoveDialog } from './node-edit-dialog.js';
 import { TaskMoveDialog } from './task-move-dialog.js';
 
 /** Состояние окон вкладки «Структура»: какое окно открыто и над чем. */
 export type StructureDialog =
   | { kind: 'create'; parent: ProjectNode | null }
-  | { kind: 'rename'; node: ProjectNode }
   | { kind: 'moveNode'; node: ProjectNode }
   | { kind: 'moveNodes'; nodeIds: string[] }
   | { kind: 'delete'; node: ProjectNode }
@@ -25,6 +19,7 @@ export function StructureDialogHost({
   dialog,
   kinds,
   nodes,
+  canSetup,
   onClose,
   onMoveTasks,
 }: {
@@ -32,6 +27,7 @@ export function StructureDialogHost({
   dialog: StructureDialog;
   kinds: NodeKind[];
   nodes: ProjectNode[];
+  canSetup: boolean;
   onClose: () => void;
   onMoveTasks: (taskIds: string[], nodeId: string | null) => void;
 }) {
@@ -42,15 +38,7 @@ export function StructureDialogHost({
           projectId={projectId}
           parent={dialog.parent}
           kinds={kinds}
-          onClose={onClose}
-        />
-      );
-    case 'rename':
-      return (
-        <NodeRenameDialog
-          projectId={projectId}
-          node={dialog.node}
-          kinds={kinds}
+          canSetup={canSetup}
           onClose={onClose}
         />
       );

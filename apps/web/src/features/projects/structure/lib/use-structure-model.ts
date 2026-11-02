@@ -42,6 +42,7 @@ export function useStructureModel(projectId: string) {
   const nodes = useMemo<ProjectNode[]>(() => structure?.nodes ?? [], [structure]);
   const kinds = useMemo<NodeKind[]>(() => structure?.kinds ?? [], [structure]);
   const kindById = useMemo(() => new Map(kinds.map((l) => [l.id, l])), [kinds]);
+  const customFieldRefs = useMemo(() => structure?.customFieldRefs ?? [], [structure]);
   const rows = useMemo(() => buildStructureRows(nodes, tasks), [nodes, tasks]);
   const filtered = useMemo(() => filterStructureRows(rows, toolbar.query), [rows, toolbar.query]);
   const visible = useMemo(
@@ -110,6 +111,7 @@ export function useStructureModel(projectId: string) {
     nodes,
     kinds,
     kindById,
+    customFieldRefs,
     rows,
     filtered,
     treeRows,

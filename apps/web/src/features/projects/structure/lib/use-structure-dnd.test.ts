@@ -18,6 +18,7 @@ const node = (id: string, parentId: string | null = null): ProjectNode => ({
   kindId: 'kind-1',
   name: id,
   code: null,
+  customFields: {},
   rollup: EMPTY,
   createdAt: '2026-09-01T00:00:00Z',
 });

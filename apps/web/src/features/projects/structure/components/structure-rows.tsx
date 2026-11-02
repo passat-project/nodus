@@ -39,6 +39,7 @@ export function StructureNodeRowView({
   onToggle,
   selected,
   onToggleSelected,
+  onSelect,
   items,
   zone,
   invalid,
@@ -54,6 +55,8 @@ export function StructureNodeRowView({
   onToggle: () => void;
   selected: boolean;
   onToggleSelected: () => void;
+  /** Клик по строке — выбор папки для панели «Свойства» (#556). */
+  onSelect: () => void;
   items: RowMenuItem[];
   /** Зона дропа над этой строкой (индикация). */
   zone: 'before' | 'into' | 'after' | null;
@@ -81,6 +84,10 @@ export function StructureNodeRowView({
         role="row"
         tabIndex={0}
         aria-expanded={row.hasChildren ? !collapsed : undefined}
+        onClick={(e) => {
+          if ((e.target as HTMLElement).closest('button,a,input,[role=button]')) return;
+          onSelect();
+        }}
         onDoubleClick={(e) => {
           if ((e.target as HTMLElement).closest('button,a,input,[role=button]')) return;
           if (row.hasChildren) onToggle();
