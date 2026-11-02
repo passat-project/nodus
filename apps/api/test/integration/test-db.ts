@@ -2,7 +2,10 @@ import { execSync } from 'node:child_process';
 import pg from 'pg';
 import { assertIsolatedTestEnv } from '@nodus/config/test-env';
 
-export const TEST_DB_NAME = 'nodus_test';
+/** Имя тестовой БД: по умолчанию общая `nodus_test`; отдельная копия
+ *  (например, `nodus_test_556`) задаётся env `TEST_DB_NAME` — параллельные
+ *  сессии не ломают друг другу прогоны. */
+export const TEST_DB_NAME = process.env.TEST_DB_NAME ?? 'nodus_test';
 
 /** URL тестовой БД (nodus_test) на том же сервере, что и DATABASE_URL. */
 export function testDatabaseUrl(): string {
