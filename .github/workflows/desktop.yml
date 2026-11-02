@@ -2,11 +2,11 @@ name: desktop
 
 # Десктоп-оболочка (#254, ADR-0019): build-гейт на windows-runner — сборка
 # установщиков проверяется на каждый мерж, артефакты лежат в прогонах
-# (retention 30 дней). НИКАКОЙ публикации установщиков на GitHub: релизы
-# отсутствуют, единственный канал раздачи — свой сервер (NODUS_DESKTOP_DIR,
-# /desktop/); подпись и манифест — локально при выпуске (runbook
-# docs/runbooks/desktop-deploy.md). Решение владельца 16.10 (#300): релизная
-# джоба и теги desktop-v* выпилены.
+# (retention 30 дней). Подписи и манифеста здесь НЕТ: ключ подписи живёт в
+# окружении desktop-signing и выдаётся только подписанному выпуску
+# (.github/workflows/desktop-release.yml) после подтверждения владельца.
+# НИКАКОЙ публикации установщиков на GitHub: единственный канал раздачи —
+# свой сервер (#300, NODUS_DESKTOP_DIR → /desktop/).
 
 on:
   push:
@@ -65,23 +65,11 @@ jobs:
           pnpm --filter @nodus/contracts build
           pnpm --filter @nodus/desktop build
 
-      - name: Сборка установщиков (подписанные при наличии ключа)
+      - name: Сборка установщиков
         shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           cd apps/desktop
-          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            pnpm exec tauri build --config '{"bundle":{"createUpdaterArtifacts":true}}'
-          else
-            echo "::warning::Секрет TAURI_SIGNING_PRIVATE_KEY не задан — updater-артефакты пропущены (см. docs/runbooks/desktop-deploy.md)"
-            pnpm exec tauri build
-          fi
-
-      - name: Манифест раздачи latest.json (#263)
-        shell: bash
-        run: node scripts/desktop-manifest.mjs --optional
+          pnpm exec tauri build
 
       - name: Артефакты сборки
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -90,8 +78,5 @@ jobs:
           path: |
             apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
             apps/desktop/src-tauri/target/release/bundle/msi/*.msi
-            apps/desktop/src-tauri/target/release/bundle/nsis/*.sig
-            apps/desktop/src-tauri/target/release/bundle/msi/*.sig
-            apps/desktop/src-tauri/target/release/bundle/latest.json
           if-no-files-found: warn
           retention-days: 30
