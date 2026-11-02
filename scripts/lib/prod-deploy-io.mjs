@@ -104,16 +104,17 @@ export function sanitizeEnv(base = process.env) {
   return out;
 }
 
+/** Формат `docker image inspect` для чтения метки (отдельно — чтобы был тест). */
+export function imageLabelFormat(name) {
+  return '{{index .Config.Labels "' + name + '"}}';
+}
+
 /** Значение label образа (например, revision сборки). */
 export function imageLabel(ref, name) {
-  return execFileSync(
-    'docker',
-    ['image', 'inspect', ref, '--format', `{{index .Config.Labels "${name}}"}}`],
-    {
-      encoding: 'utf8',
-      env: sanitizeEnv(),
-    },
-  ).trim();
+  return execFileSync('docker', ['image', 'inspect', ref, '--format', imageLabelFormat(name)], {
+    encoding: 'utf8',
+    env: sanitizeEnv(),
+  }).trim();
 }
 
 /** RepoDigest трёх образов версии: `{ web, api, gateway }` (для журнала и сверки). */

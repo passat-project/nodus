@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildComposeArgs, isAbsoluteHostPath, parseEnv, replaceEnvValue } from './prod-deploy.mjs';
-import { sanitizeEnv } from './prod-deploy-io.mjs';
+import { imageLabelFormat, sanitizeEnv } from './prod-deploy-io.mjs';
 
 test('parseEnv читает ключи, снимает кавычки и пропускает комментарии', () => {
   const env = parseEnv(
@@ -42,6 +42,15 @@ test('isAbsoluteHostPath принимает Windows и POSIX, отвергает
   assert.equal(isAbsoluteHostPath('./infra/desktop-dist'), false);
   assert.equal(isAbsoluteHostPath('infra/desktop-dist'), false);
   assert.equal(isAbsoluteHostPath(''), false);
+});
+
+test('imageLabelFormat — ровно Go-шаблон без лишних символов', () => {
+  // Регрессия #570: лишние кавычки/скобки в формате давали пустую метку,
+  // и выкатка падала «образ собран из —» при правильном образе.
+  assert.equal(
+    imageLabelFormat('org.opencontainers.image.revision'),
+    '{{index .Config.Labels "org.opencontainers.image.revision"}}',
+  );
 });
 
 test('sanitizeEnv не пропускает прод-переменные и секреты оператора', () => {
