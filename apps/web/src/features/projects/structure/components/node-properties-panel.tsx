@@ -21,7 +21,8 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { useFrameReady } from '../../../../shared/ui/use-frame-ready.js';
 import { CommitInput } from '../../../../shared/ui/panel/commit-field.js';
-import { NodeKindGlyph } from '../lib/node-kind-icon.js';
+import { PanelField } from '../../../../shared/ui/panel/panel-kit.js';
+import { NodeKindTile } from '../lib/node-kind-icon.js';
 import { useUpdateNode } from '../api/structure-api.js';
 import { NodeKindChangeStep } from './node-kind-change-step.js';
 import { NodePanelFields } from './node-form-fields.js';
@@ -104,15 +105,14 @@ export function NodePropertiesPanel({
     >
       <aside className="flex h-full w-80 flex-col border-l border-border bg-card">
         <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
-          {kind ? (
-            <span className="flex size-6 shrink-0 items-center justify-center rounded border border-border text-muted-foreground">
-              <NodeKindGlyph icon={kind.icon} className="size-3.5" />
-            </span>
-          ) : null}
+          {kind ? <NodeKindTile icon={kind.icon} color={kind.color} /> : null}
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
             {node?.name ?? ui.structure.propertiesEmpty}
           </span>
-          {node?.code ? (
+          {/* Шифр в шапке — только когда он ДОБАВЛЯЕТ информацию: у папки
+              «ОВ1.1» с шифром «ОВ1.1» он дублировал название (замечание
+              владельца). Поле «Шифр папки» ниже есть всегда. */}
+          {node?.code && node.code !== node.name ? (
             <span className="shrink-0 font-mono text-xs text-muted-foreground">{node.code}</span>
           ) : null}
           <Button
@@ -128,26 +128,28 @@ export function NodePropertiesPanel({
 
         {node ? (
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-4 *:min-w-0">
-            <label className="flex flex-col gap-1">
-              <NodeLabel label={ui.structure.nodeName} />
+            {/* Метки полей — той же ступенью, что в панели вида папки
+                (13px muted, не капсом): капс остаётся заголовку раздела
+                «Атрибуты» ниже. */}
+            <PanelField label={ui.structure.nodeName}>
               <CommitInput
                 value={node.name}
                 required
                 disabled={!canEdit}
+                aria-label={ui.structure.nodeName}
                 onCommit={(name) => update.mutate({ nodeId: node.id, name })}
                 className="h-8 text-sm"
               />
-            </label>
+            </PanelField>
 
             {kind ? (
-              <div className="flex flex-col gap-1">
-                <NodeLabel label={ui.structure.nodeKind} />
+              <PanelField label={ui.structure.nodeKind}>
                 <Select
                   value={pendingKindId ?? node.kindId}
                   disabled={!canEdit}
                   onValueChange={chooseKind}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="h-8 w-full text-sm" aria-label={ui.structure.nodeKind}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper">
@@ -155,13 +157,17 @@ export function NodePropertiesPanel({
                       .filter((entry) => entry.archivedAt === null || entry.id === node.kindId)
                       .map((entry) => (
                         <SelectItem key={entry.id} value={entry.id}>
-                          <NodeKindGlyph icon={entry.icon} className="size-3.5 shrink-0" />
+                          <NodeKindTile
+                            icon={entry.icon}
+                            color={entry.color}
+                            className="size-5 rounded"
+                          />
                           {entry.name}
                         </SelectItem>
                       ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </PanelField>
             ) : null}
 
             {targetKind ? (
@@ -180,21 +186,27 @@ export function NodePropertiesPanel({
               />
             ) : null}
 
-            <section className="flex flex-col gap-1">
-              <NodeLabel label={ui.structure.propertiesAttributes} />
-              {kind ? (
-                <NodePanelFields
-                  kind={kind}
-                  definitions={definitions}
-                  code={node.code ?? ''}
-                  disabled={!canEdit}
-                  values={node.customFields}
-                  refs={refs}
-                  onCode={(code) => update.mutate({ nodeId: node.id, code: code.trim() || null })}
-                  onChange={patchValue}
-                />
-              ) : null}
-            </section>
+            {/* Пока идёт шаг смены вида, блок «Атрибуты» СКРЫТ: он описывает
+                ПРЕЖНИЙ вид («У этого вида нет атрибутов») и противоречил бы
+                шагу, который спрашивает обязательные НОВОГО (замечание вкуса:
+                два ответа на один вопрос в одной панели). */}
+            {targetKind ? null : (
+              <section className="flex flex-col gap-1">
+                <NodeLabel label={ui.structure.propertiesAttributes} />
+                {kind ? (
+                  <NodePanelFields
+                    kind={kind}
+                    definitions={definitions}
+                    code={node.code ?? ''}
+                    disabled={!canEdit}
+                    values={node.customFields}
+                    refs={refs}
+                    onCode={(code) => update.mutate({ nodeId: node.id, code: code.trim() || null })}
+                    onChange={patchValue}
+                  />
+                ) : null}
+              </section>
+            )}
           </div>
         ) : null}
       </aside>

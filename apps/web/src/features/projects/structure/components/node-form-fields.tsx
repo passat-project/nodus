@@ -34,9 +34,12 @@ function slotDefinitions(
   });
 }
 
+/** Метка обязательности у метки поля: слово, а не звёздочка-загадка —
+ *  состояние «обязательно» читается (вердикт владельца, #556). Точка-разделитель
+ *  отделяет метку от названия поля. */
 function RequiredMark() {
   return (
-    <span className="text-xs font-normal text-muted-foreground">{ui.structure.requiredMark}</span>
+    <span className="text-xs font-normal text-muted-foreground">· {ui.structure.requiredMark}</span>
   );
 }
 
@@ -140,14 +143,17 @@ export function NodePanelFields({
     <div className="flex flex-col">
       {form.code === 'hidden' ? null : (
         <FieldRow
+          stacked
           icon={<CustomFieldTypeIcon type="text" className="size-3.5" />}
           label={ui.structure.nodeCode}
           required={form.code === 'required'}
+          requiredText={ui.structure.requiredMark}
         >
           <Input
             value={code}
             maxLength={NODE_LIMITS.codeLength}
             disabled={disabled}
+            aria-label={ui.structure.nodeCode}
             onChange={(event) => onCode(event.target.value)}
             className="h-7 text-sm"
           />
@@ -161,10 +167,12 @@ export function NodePanelFields({
         slots.map(({ slot, definition }) => (
           <FieldRow
             key={definition.id}
+            stacked
             icon={<CustomFieldTypeIcon type={definition.type} className="size-3.5" />}
             label={definition.name}
             hint={definition.hint}
             required={slot.state === 'required'}
+            requiredText={ui.structure.requiredMark}
             wide={definition.type === 'long_text'}
           >
             <CustomFieldEditor

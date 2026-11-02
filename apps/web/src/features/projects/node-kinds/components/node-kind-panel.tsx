@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { RotateCcw } from 'lucide-react';
 import type { NodeKind, NodeKindIcon } from '@nodus/contracts';
 import { projectColorSchema, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
@@ -11,7 +12,11 @@ import { useArchiveNodeKind, useUpdateNodeKind } from '../api/node-kinds-api.js'
 import type { RenderCreateField } from '../types.js';
 import { NodeKindCapabilitiesSection } from './node-kind-capabilities-section.js';
 import { NodeKindFormSection } from './node-kind-form-section.js';
-import { NODE_KIND_ICON_KEYS, NodeKindGlyph } from '../../structure/lib/node-kind-icon.js';
+import {
+  NODE_KIND_ICON_KEYS,
+  NodeKindGlyph,
+  NodeKindTile,
+} from '../../structure/lib/node-kind-icon.js';
 import { capabilitiesSummary, formSummary } from './node-kind-summary.js';
 
 type Section = 'root' | 'form' | 'capabilities';
@@ -49,7 +54,7 @@ export function NodeKindPanel({
 
   if (!kind) {
     return (
-      <SidePanel open={false} title={ui.nodeKinds.title} onClose={onClose}>
+      <SidePanel open={false} title={ui.nodeKinds.panel.title} onClose={onClose}>
         {null}
       </SidePanel>
     );
@@ -58,7 +63,17 @@ export function NodeKindPanel({
   return (
     <SidePanel
       open
-      title={section === 'root' ? kind.name : ui.nodeKinds.title}
+      // Шапка — ПРЕДМЕТ панели, а не имя вида (как «Настройки типа» у типа
+      // процесса, #432): имя живёт полем «Название», капсом оно читалось
+      // рубрикой. Плитка вида даёт идентичность с первого взгляда.
+      title={
+        section === 'root'
+          ? ui.nodeKinds.panel.title
+          : section === 'form'
+            ? ui.nodeKinds.panel.formSection
+            : ui.nodeKinds.panel.capabilitiesSection
+      }
+      leading={<NodeKindTile icon={kind.icon} color={kind.color} />}
       onClose={onClose}
       onBack={section === 'root' ? undefined : () => setSection('root')}
     >
@@ -128,7 +143,10 @@ function KindRoot({
       </PanelField>
 
       <PanelField label={ui.nodeKinds.panel.icon}>
-        <div className="grid grid-cols-7 gap-1">
+        {/* Та же сетка значков, что у настроек типа процесса (#432): восемь
+            долей ширины панели, ячейки квадратные — 15 значков встают в два
+            ряда без наездов. */}
+        <div className="grid grid-cols-8 gap-1">
           {NODE_KIND_ICON_KEYS.map((icon) => (
             <button
               key={icon}
@@ -139,10 +157,10 @@ function KindRoot({
               title={ui.structure.iconNames[icon]}
               aria-pressed={kind.icon === icon}
               className={cn(
-                'flex size-8 items-center justify-center rounded-md border transition-colors',
+                'flex aspect-square min-w-0 items-center justify-center rounded-lg border transition-colors disabled:cursor-default',
                 kind.icon === icon
-                  ? 'border-primary bg-primary/10 text-foreground'
-                  : 'border-border text-muted-foreground enabled:hover:bg-accent/60',
+                  ? 'border-ring bg-accent text-foreground'
+                  : 'border-border text-muted-foreground enabled:hover:border-input enabled:hover:text-foreground',
               )}
             >
               <NodeKindGlyph icon={icon} className="size-4" />
@@ -152,7 +170,9 @@ function KindRoot({
       </PanelField>
 
       <PanelField label={ui.nodeKinds.panel.color}>
-        <div className="flex gap-1.5">
+        {/* Свотчи — круги цвета-идентичности, выбранный обведён тоном
+            основного текста (грамматика «Настроек типа», #432). */}
+        <div className="flex flex-wrap gap-2">
           {projectColorSchema.options.map((color) => (
             <button
               key={color}
@@ -163,14 +183,11 @@ function KindRoot({
               title={ui.structure.colorNames[color]}
               aria-pressed={kind.color === color}
               className={cn(
-                'flex size-7 items-center justify-center rounded-md border transition-colors',
-                kind.color === color
-                  ? 'border-primary'
-                  : 'border-transparent enabled:hover:bg-accent',
+                'size-6 rounded-full border-2 transition-colors disabled:cursor-default',
+                identityTone[color].dot,
+                kind.color === color ? 'border-foreground' : 'border-transparent',
               )}
-            >
-              <span aria-hidden className={cn('size-4 rounded-full', identityTone[color].dot)} />
-            </button>
+            />
           ))}
         </div>
       </PanelField>
@@ -188,7 +205,9 @@ function KindRoot({
 
       {canSetup ? (
         archived ? (
-          <PanelDanger onClick={onRestore}>{ui.nodeKinds.panel.restore}</PanelDanger>
+          <PanelDanger icon={RotateCcw} onClick={onRestore}>
+            {ui.nodeKinds.panel.restore}
+          </PanelDanger>
         ) : (
           <PanelDanger onClick={onArchive}>{ui.nodeKinds.panel.archive}</PanelDanger>
         )

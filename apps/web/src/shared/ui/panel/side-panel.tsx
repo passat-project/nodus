@@ -30,12 +30,15 @@ function overlayOpen(): boolean {
 export function SidePanel({
   open,
   title,
+  leading,
   onClose,
   onBack,
   children,
 }: {
   open: boolean;
   title: string;
+  /** Плитка идентичности перед заголовком (значок сущности в цвете). */
+  leading?: React.ReactNode;
   onClose: () => void;
   /** Раздел внутри панели: стрелка «назад» в шапке (и первый Esc). */
   onBack?: () => void;
@@ -80,6 +83,7 @@ export function SidePanel({
               <ArrowLeft />
             </Button>
           ) : null}
+          {leading ? <span className="shrink-0">{leading}</span> : null}
           <NodeLabel label={title} className="min-w-0 truncate pl-1" />
           <Button
             variant="ghost"

@@ -7,7 +7,7 @@ import { NodeChip } from '@nodus/ui/components/node-chip';
 
 import { CustomFieldTypeIcon } from '../../../../shared/custom-fields/field-type-icon.js';
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
-import { Segmented } from '../../../../shared/ui/panel/panel-kit.js';
+import { PanelField, Segmented } from '../../../../shared/ui/panel/panel-kit.js';
 import type { RenderCreateField } from '../types.js';
 import { NodeKindFieldPicker } from './node-kind-field-picker.js';
 import { stateOptions } from './node-kind-summary.js';
@@ -64,20 +64,24 @@ export function NodeKindFormSection({
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm">{ui.nodeKinds.form.codeLabel}</span>
+      {/* Шифр — системное поле формы: та же грамматика «метка над контролом»,
+          что у атрибутов ниже. Сегменты — на всю ширину панели: в строке с
+          меткой подписи «По желанию»/«Обязательно» обрезались («По жела…»). */}
+      <PanelField label={ui.nodeKinds.form.codeLabel}>
         <Segmented
+          layout="grid"
+          className="w-full"
           value={form.code}
           options={stateOptions()}
           disabled={!canSetup}
           onChange={setCode}
         />
-      </div>
+      </PanelField>
 
       {form.fields.length === 0 ? (
         <p className="text-xs break-words text-muted-foreground">{ui.nodeKinds.form.empty}</p>
       ) : (
-        <ul className="flex flex-col gap-1">
+        <ul className="flex flex-col gap-2">
           {form.fields.map((slot) => {
             const definition = byId.get(slot.fieldId);
             const hidden = definition?.hidden ?? false;
@@ -119,6 +123,8 @@ export function NodeKindFormSection({
                   ) : null}
                 </div>
                 <Segmented
+                  layout="grid"
+                  className="w-full"
                   value={slot.state}
                   options={stateOptions()}
                   disabled={!canSetup || hidden}

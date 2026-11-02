@@ -290,7 +290,7 @@ export function FieldTypesPicker({
 /** Область «Папки» (#556): привязки «атрибут × вид» нет — виды добавляют
  *  атрибут в СВОЮ форму, поэтому в окне атрибута только сводка (чтение). */
 export function NodeKindsSummary({ fieldId }: { fieldId?: string }) {
-  const { data: kinds } = useNodeKinds();
+  const { data: kinds, isLoading } = useNodeKinds();
   const names = (kinds ?? [])
     .filter(
       (kind) =>
@@ -302,7 +302,7 @@ export function NodeKindsSummary({ fieldId }: { fieldId?: string }) {
     <div className="flex flex-col gap-1.5">
       <span className="text-label text-muted-foreground">{ui.customFields.bind.nodeColumn}</span>
       <span className="text-sm text-secondary-foreground">
-        {names.length > 0 ? names.join(', ') : ui.customFields.bind.nodeNone}
+        {isLoading ? '…' : names.length > 0 ? names.join(', ') : ui.customFields.bind.nodeNone}
       </span>
       <span className="text-xs break-words text-muted-foreground">
         {ui.customFields.bind.nodeHint}

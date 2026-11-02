@@ -56,15 +56,17 @@ export function NodeKindChangeStep({
         {ui.structure.kindChangeFill.replace('{name}', kind.name)}
       </span>
       {keys.has('code') ? (
-        <Input
-          autoFocus
-          value={code}
-          maxLength={NODE_LIMITS.codeLength}
-          aria-label={ui.structure.nodeCode}
-          placeholder={ui.structure.nodeCode}
-          onChange={(event) => setCode(event.target.value)}
-          className="h-8 text-sm"
-        />
+        <div className="flex flex-col gap-1">
+          <NodeLabel label={ui.structure.nodeCode} />
+          <Input
+            autoFocus
+            value={code}
+            maxLength={NODE_LIMITS.codeLength}
+            aria-label={ui.structure.nodeCode}
+            onChange={(event) => setCode(event.target.value)}
+            className="h-8 text-sm"
+          />
+        </div>
       ) : null}
       {[...keys]
         .filter((key) => key !== 'code')

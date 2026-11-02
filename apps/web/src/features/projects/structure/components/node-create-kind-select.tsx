@@ -9,7 +9,7 @@ import {
   SelectValue,
 } from '@nodus/ui/components/select';
 
-import { NodeKindGlyph } from '../lib/node-kind-icon.js';
+import { NodeKindTile } from '../lib/node-kind-icon.js';
 
 const SETUP_VALUE = '__setup';
 
@@ -39,7 +39,7 @@ export function NodeKindSelect({
       <SelectContent position="popper">
         {kinds.map((kind) => (
           <SelectItem key={kind.id} value={kind.id}>
-            <NodeKindGlyph icon={kind.icon} className="size-3.5 shrink-0" />
+            <NodeKindTile icon={kind.icon} color={kind.color} className="size-5 rounded" />
             {kind.name}
           </SelectItem>
         ))}

@@ -206,23 +206,41 @@ export function Segmented<T extends string>({
   value,
   options,
   disabled,
+  layout,
+  className,
   onChange,
 }: {
   value: T;
   options: readonly { value: T; label: string }[];
   disabled?: boolean;
+  /** `grid` + `className="w-full"` — равные сегменты на всю ширину панели:
+   *  длинные подписи («По желанию», «Обязательно») не обрезаются. */
+  layout?: 'flex' | 'grid';
+  className?: string;
   onChange: (value: T) => void;
 }) {
   return (
-    <SegmentedControl value={value} options={options} disabled={disabled} onChange={onChange} />
+    <SegmentedControl
+      value={value}
+      options={options}
+      disabled={disabled}
+      layout={layout}
+      className={className}
+      onChange={onChange}
+    />
   );
 }
 
+/** Опасное/необратимое действие внизу панели. Значок по умолчанию —
+ *  корзина; возврат из архива передаёт свой (`RotateCcw`): корзина у
+ *  «Вернуть» читалась как удаление. */
 export function PanelDanger({
   onClick,
+  icon: Icon = Trash2,
   children,
 }: {
   onClick: () => void;
+  icon?: LucideIcon;
   children: React.ReactNode;
 }) {
   return (
@@ -231,7 +249,7 @@ export function PanelDanger({
       className="mt-auto h-auto min-h-8 justify-start py-1.5 text-left whitespace-normal text-danger hover:text-danger"
       onClick={onClick}
     >
-      <Trash2 className="size-3.5 shrink-0" />
+      <Icon className="size-3.5 shrink-0" />
       <span className="min-w-0">{children}</span>
     </Button>
   );

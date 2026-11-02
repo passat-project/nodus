@@ -13,15 +13,32 @@ import type { DataTableField } from '../../../../shared/views/data-table.js';
 
 const muted = 'truncate text-sm text-muted-foreground';
 
-/** Варианты списка в ячейке «Настройки»: первые подписи через запятую и
- *  счётчик в подсказке (кэш справочника общий с окном и карточками). */
+/** Заглушка загрузки ячейки: «нет» и «—» до ответа — ложное утверждение
+ *  («ни в одном виде папок», «настроек нет») на глазах пользователя. */
+function CellLoading() {
+  return <span className={muted}>…</span>;
+}
+
+/** Варианты списка в ячейке «Настройки»: короткий справочник — подписями,
+ *  длинный (45 марок СТБ, #556) — счётчиком: перечисление в строку таблицы
+ *  не читается, а колонка «Настройки» отвечает на вопрос «сколько».
+ *  Полный список — в окне атрибута. */
 function OptionsSummary({ code }: { code: string }) {
-  const { data: items = [] } = useDictionaryItems(code);
+  const { data: items = [], isLoading } = useDictionaryItems(code);
+  if (isLoading) return <CellLoading />;
   if (items.length === 0) return <span className={muted}>—</span>;
+  const count = `${items.length} ${plural(items.length, ui.customFields.cells.options)}`;
+  if (items.length > 4) {
+    return (
+      <span className="truncate text-sm text-secondary-foreground tabular-nums" title={count}>
+        {count}
+      </span>
+    );
+  }
   return (
     <span
       className="truncate text-sm text-secondary-foreground"
-      title={`${items.length} ${plural(items.length, ui.customFields.cells.options)}`}
+      title={items.map((i) => i.name).join(', ')}
     >
       {items.map((item) => item.name).join(', ')}
     </span>
@@ -72,7 +89,8 @@ function DefaultCell({ definition }: { definition: CustomFieldDefinition }) {
 /** Виды папок, в форме которых стоит атрибут (#556): колонка «Виды папок»
  *  области «Папки» — обратная сторона формы вида (привязки нет). */
 function NodeKindsCell({ definition }: { definition: CustomFieldDefinition }) {
-  const { data: kinds } = useNodeKinds();
+  const { data: kinds, isLoading } = useNodeKinds();
+  if (isLoading) return <CellLoading />;
   const names = (kinds ?? [])
     .filter((kind) => nodeKindFormOf(kind).fields.some((slot) => slot.fieldId === definition.id))
     .map((kind) => kind.name);

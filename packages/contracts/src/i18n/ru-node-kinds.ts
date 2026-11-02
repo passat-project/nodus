@@ -13,6 +13,10 @@ export const nodeKindsStrings = {
   createPlaceholder: 'Например: Комплект',
   /** Счётчик атрибутов формы в строке вида («1 атрибут»). */
   fieldsCount: ['атрибут', 'атрибута', 'атрибутов'] as const,
+  /** Короткий счётчик строки вида («1 атр.») — узкая колонка карточки. */
+  fieldsCountShort: 'атр.',
+  /** Возврат архивного вида из списка (короткая подпись строки). */
+  restore: 'Вернуть',
   /** Короткие чипы возможностей в строке вида. */
   capabilityChip: {
     document_changes: 'Документ',
@@ -36,6 +40,9 @@ export const nodeKindsStrings = {
   },
   /** Панель вида справа. */
   panel: {
+    /** Шапка панели: предмет, а не имя вида — имя живёт полем «Название»
+     *  (как «Настройки типа» у типа процесса, #432). */
+    title: 'Вид папки',
     name: 'Название',
     icon: 'Значок',
     color: 'Цвет',
@@ -49,7 +56,7 @@ export const nodeKindsStrings = {
       optional: 'Шифр по желанию',
       required: 'Шифр обязателен',
     },
-    fieldsSummary: 'атрибутов {count}, обязательных {required}',
+    fieldsRequired: 'обязательных: {count}',
     formSummaryEmpty: 'Папки этого вида спрашивают только название',
     capabilitiesSummaryNone: 'Нет',
     capabilitiesSummary: 'Включено: {count}',

@@ -1,14 +1,13 @@
 import { useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
-import type { CustomFieldRef, CustomFieldValue, CustomFieldValues, NodeKind } from '@nodus/contracts';
-import {
-  effectiveNodeForm,
-  ErrorCode,
-  missingNodeFields,
-  NODE_LIMITS,
-  ui,
+import { ChevronDown, Folder } from 'lucide-react';
+import type {
+  CustomFieldRef,
+  CustomFieldValue,
+  CustomFieldValues,
+  NodeKind,
 } from '@nodus/contracts';
+import { effectiveNodeForm, ErrorCode, missingNodeFields, NODE_LIMITS, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
   Dialog,
@@ -165,13 +164,13 @@ export function NodeCreateDialog({
           <DialogTitle>{ui.structure.createNode}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <NodeLabel
-              label={
-                parent ? `${ui.structure.nodeParent}: ${parent.name}` : ui.structure.rootParent
-              }
-            />
-          </div>
+          {/* Куда создаём — строка контекста, а не метка без значения:
+              «КОРЕНЬ ПРОЕКТА» капсом висело над полями как осиротевший
+              заголовок (замечание вкуса). */}
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Folder className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            {parent ? `${ui.structure.nodeParent}: ${parent.name}` : ui.structure.rootParent}
+          </p>
 
           <div className="flex flex-col gap-1">
             <NodeLabel label={ui.structure.nodeKind} />
@@ -195,21 +194,6 @@ export function NodeCreateDialog({
               <p className="text-xs text-muted-foreground">{ui.structure.kindsEmpty}</p>
             ) : null}
           </div>
-
-          <button
-            type="button"
-            onClick={() => setBatchOpen((prev) => !prev)}
-            aria-expanded={batchOpen}
-            disabled={codeRequired}
-            title={codeRequired ? ui.structure.batchBlocked : undefined}
-            className="flex h-8 items-center gap-1.5 self-start rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-          >
-            <ChevronDown
-              className={cn('size-3.5 transition-transform', batchOpen && 'rotate-180')}
-              strokeWidth={1.75}
-            />
-            {ui.structure.createNodesBatch}
-          </button>
 
           {batchOpen ? (
             <NodeBatchFields
@@ -254,6 +238,24 @@ export function NodeCreateDialog({
               onChange={onChange}
             />
           ) : null}
+
+          {/* Пакетное создание — режим окна, а не поле: стоит ПОСЛЕ полей
+              (владелец: вид → название → шифр → атрибуты → пачка), не
+              разрывая связку «вид → название». */}
+          <button
+            type="button"
+            onClick={() => setBatchOpen((prev) => !prev)}
+            aria-expanded={batchOpen}
+            disabled={codeRequired}
+            title={codeRequired ? ui.structure.batchBlocked : undefined}
+            className="-ml-2 flex h-8 items-center gap-1.5 self-start rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+          >
+            <ChevronDown
+              className={cn('size-3.5 transition-transform', batchOpen && 'rotate-180')}
+              strokeWidth={1.75}
+            />
+            {ui.structure.createNodesBatch}
+          </button>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>

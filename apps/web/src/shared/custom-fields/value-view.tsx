@@ -22,21 +22,35 @@ function RefName({
   refs,
   id,
   withAvatar,
+  wrap = false,
 }: {
   refs: ReadonlyMap<string, CustomFieldRef>;
   id: string;
   withAvatar: boolean;
+  /** Имя переносится по словам (строка значения в узкой панели), а не
+   *  обрезается многоточием. */
+  wrap?: boolean;
 }) {
   const ref = refs.get(id);
   if (!ref || ref.name === null) {
     return <span className="text-muted-foreground">{ui.customFields.block.unavailable}</span>;
   }
   return (
-    <span className={cn('inline-flex min-w-0 items-center gap-1.5', ref.archived && 'opacity-60')}>
+    <span
+      className={cn(
+        'inline-flex min-w-0 max-w-full items-center gap-1.5',
+        ref.archived && 'opacity-60',
+      )}
+    >
       {withAvatar ? (
         <PersonAvatar name={ref.name} avatarUrl={ref.avatarUrl} className="size-5" />
       ) : null}
-      <span className="truncate">{ref.name}</span>
+      {/* max-w-full у обёртки + title: длинное имя справочника («ОВ — Отопление,
+          вентиляция и кондиционирование воздуха») не уезжает под край узкой
+          панели: переносится по словам либо обрезается многоточием (#556). */}
+      <span className={wrap ? 'min-w-0 break-words' : 'truncate'} title={ref.name}>
+        {ref.name}
+      </span>
     </span>
   );
 }
@@ -72,6 +86,7 @@ export function CustomFieldValueView({
   refs,
   compact = false,
   interactive = true,
+  wrap = false,
 }: {
   definition: CustomFieldDefinition;
   value: CustomFieldValue | undefined;
@@ -80,6 +95,9 @@ export function CustomFieldValueView({
   /** false — без ссылки и кнопки копирования: значение внутри триггера
    *  редактора (кнопка в кнопке запрещена, React DOM nesting). */
   interactive?: boolean;
+  /** Имена ссылок переносятся по словам (не обрезаются) — строка значения в
+   *  узкой правой панели. */
+  wrap?: boolean;
 }) {
   const empty = value === undefined || value === null;
   if (empty) return <span className="text-muted-foreground">{ui.customFields.value.empty}</span>;
@@ -135,17 +153,28 @@ export function CustomFieldValueView({
     case 'project':
     case 'counterparty':
       return (
-        <span className={cn(line, 'inline-flex')}>
-          <RefName refs={refs} id={String(value)} withAvatar={definition.type === 'user'} />
+        <span className={cn(line, 'inline-flex max-w-full')}>
+          <RefName
+            refs={refs}
+            id={String(value)}
+            withAvatar={definition.type === 'user'}
+            wrap={wrap}
+          />
         </span>
       );
     case 'multienum':
     case 'users': {
       const ids = Array.isArray(value) ? value : [];
       return (
-        <span className={cn(line, 'inline-flex flex-wrap items-center gap-x-3 gap-y-1')}>
+        <span className={cn(line, 'inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1')}>
           {ids.map((id) => (
-            <RefName key={id} refs={refs} id={id} withAvatar={definition.type === 'users'} />
+            <RefName
+              key={id}
+              refs={refs}
+              id={id}
+              withAvatar={definition.type === 'users'}
+              wrap={wrap}
+            />
           ))}
         </span>
       );
