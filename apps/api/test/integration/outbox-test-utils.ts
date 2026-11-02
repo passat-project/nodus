@@ -38,6 +38,21 @@ export async function dispatchOwnEvent(
   );
 }
 
+/**
+ * Погасить фоновый поллер outbox перед уборкой фикстуры (#528).
+ *
+ * `EventDispatcher` тикает раз в секунду, а подписчики `letter.*`/`project.*`
+ * пишут проекции (`counterparty_usages`) уже после HTTP-ответа теста. Если
+ * уборка удаляет usages → counterparty, а тик приземляется между шагами,
+ * FK-проверка роняет teardown (воспроизведено 1/10 полных прогонов).
+ * Здесь: останавливаем таймер и дожидаемся текущего прохода — `dispatchPending`
+ * ждёт чужой проход и делает свой, поэтому после возврата новых доставок нет.
+ */
+export async function quiesceOutbox(dispatcher: EventDispatcher): Promise<void> {
+  dispatcher.onModuleDestroy();
+  await dispatcher.dispatchPending();
+}
+
 /** id события агрегата по типу — что именно ждать в `dispatchOwnEvent`. */
 export async function eventIdOf(
   prisma: PrismaService,

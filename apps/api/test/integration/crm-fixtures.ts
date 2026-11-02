@@ -1,9 +1,11 @@
 import { expect } from 'vitest';
 import { Permission, counterpartyCardSchema, type CounterpartyCard } from '@nodus/contracts';
 
+import { EventDispatcher } from '../../src/core/events/event-dispatcher.js';
 import { FeatureFlagService } from '../../src/core/feature-flags/feature-flag.service.js';
 import { TokenService } from '../../src/modules/auth/token.service.js';
 import { setupChatFixture, type ChatTestFixture, type ChatUser } from './chat-fixtures.js';
+import { quiesceOutbox } from './outbox-test-utils.js';
 
 /**
  * Фикстура интеграционных тестов CRM (#460): живое приложение на общей
@@ -62,6 +64,8 @@ export async function setupCrmFixture(): Promise<CrmTestFixture> {
       return card;
     },
     async cleanup() {
+      // #528: та же гонка usages → counterparty при позднем letter.*/project.*.
+      await quiesceOutbox(fx.app.get(EventDispatcher));
       await fx.prisma.counterpartyUsage.deleteMany({ where: { counterpartyId: { in: created } } });
       await fx.prisma.contactPerson.deleteMany({ where: { counterpartyId: { in: created } } });
       await fx.prisma.counterparty.deleteMany({ where: { id: { in: created } } });

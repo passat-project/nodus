@@ -12,9 +12,11 @@ import {
 
 import { AppModule } from '../../src/app.module.js';
 import { PrismaService } from '../../src/core/database/prisma.service.js';
+import { EventDispatcher } from '../../src/core/events/event-dispatcher.js';
 import { registerCoreFastifyPlugins } from '../../src/core/http/register-fastify-plugins.js';
 import { REDIS_CLIENT } from '../../src/core/redis/redis.module.js';
 import { TokenService } from '../../src/modules/auth/token.service.js';
+import { quiesceOutbox } from './outbox-test-utils.js';
 import { ensureTestDatabase } from './test-db.js';
 
 /**
@@ -181,6 +183,9 @@ export async function setupChatFixture<T extends string>(
     },
     async cleanup() {
       try {
+        // #528: до удаления данных гасим фоновый outbox — иначе поздние
+        // подписчики пишут проекции в уже убранные строки (FK на teardown).
+        await quiesceOutbox(app.get(EventDispatcher));
         // Sweep по пользователям покрывает все беседы прогона (создатель direct/group).
         await deleteUserData(prisma, userIds);
       } finally {

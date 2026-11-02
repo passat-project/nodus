@@ -18,6 +18,7 @@ git clone https://github.com/passat-project/nodus.git && cd nodus
 
 # Локальная разработка (приложения на хосте, горячая перезагрузка)
 pnpm install
+cp .env.example .env   # заполните секреты/пароли (JWT_SECRET, DATABASE_URL, REDIS_URL…)
 pnpm dev        # web :5173 (прокси /api, /socket.io), api :3001, gateway :3002
 
 # Окружение целиком в Docker (web :3000, api :3001, gateway :3002

@@ -10,7 +10,7 @@
     "pnpm": ">=11.0.0"
   },
   "scripts": {
-    "dev": "turbo dev",
+    "dev": "node --env-file=.env ./node_modules/turbo/bin/turbo dev",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "test": "turbo test --filter=!@nodus/e2e",
@@ -19,7 +19,8 @@
     "live-stack": "node scripts/live-stack.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "plan:check": "node scripts/check-plan.mjs"
   },
   "devDependencies": {
     "@nodus/config": "workspace:*",

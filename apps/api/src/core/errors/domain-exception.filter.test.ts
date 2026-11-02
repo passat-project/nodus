@@ -1,4 +1,4 @@
-import type { ArgumentsHost } from '@nestjs/common';
+import { HttpException, type ArgumentsHost } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { ZodError } from 'zod';
 import { ErrorCode } from '@nodus/contracts';
@@ -144,8 +144,8 @@ describe('DomainExceptionFilter', () => {
     });
   });
 
-  it('фреймворк-ошибка ≥500 (Fastify-плагин) → INTERNAL_ERROR без деталей наружу (#535)', () => {
-    const { filter } = createFilter();
+  it('фреймворк-ошибка ≥500 (Fastify-плагин) → INTERNAL_ERROR, сырой message только в лог (#538)', () => {
+    const { filter, logger } = createFilter();
     const { host, status, send } = createHost();
 
     const upstreamDown = Object.assign(new Error('upstream connection reset'), {
@@ -156,8 +156,24 @@ describe('DomainExceptionFilter', () => {
     expect(status).toHaveBeenCalledWith(502);
     expect(send).toHaveBeenCalledWith({
       code: 'INTERNAL_ERROR',
-      message: 'upstream connection reset',
+      message: 'Internal server error',
       traceId: 'req-1',
     });
+    expect(logger.error).toHaveBeenCalledOnce();
+  });
+
+  it('HttpException ≥500 → INTERNAL_ERROR, сырой message только в лог (#538)', () => {
+    const { filter, logger } = createFilter();
+    const { host, status, send } = createHost();
+
+    filter.catch(new HttpException('db password leaked', 503), host);
+
+    expect(status).toHaveBeenCalledWith(503);
+    expect(send).toHaveBeenCalledWith({
+      code: 'INTERNAL_ERROR',
+      message: 'Internal server error',
+      traceId: 'req-1',
+    });
+    expect(logger.error).toHaveBeenCalledOnce();
   });
 });
