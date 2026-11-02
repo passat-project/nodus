@@ -92,13 +92,12 @@
   `GET /directory/departments/tree?kind=` (лес корней DepartmentNode; единая
   константа `DEPARTMENTS_TREE_PATH` + страж-тест, моки синхронизированы),
   `POST/PATCH /directory/departments`, `GET/POST/PATCH/archive
-  `/directory/positions`.
-  Ссылки оргструктуры валидирует сервер (#441): руководитель/зам подразделения,
-  `managerId/departmentId/positionId/legal*` сотрудника — только активные
-  объекты своего вида; `kind` подразделения и должности неизменяем после
-  создания. UI сверен с контрактами и моками (ADR-0001). Связи сотрудника —
-  `shared/api/user-relations.ts` (`useAssigneeTasks`, `useMemberProjects`):
-  query `/tasks` (+`assigneeId`), `/projects` (+`memberId`).
+`/directory/positions`.
+Ссылки оргструктуры валидирует сервер (#441): руководитель/зам подразделения,
+`managerId/departmentId/positionId/legal*`сотрудника — только активные
+объекты своего вида;`kind`подразделения и должности неизменяем после
+создания. UI сверен с контрактами и моками (ADR-0001). Связи сотрудника —`shared/api/user-relations.ts` (`useAssigneeTasks`, `useMemberProjects`):
+query `/tasks` (+`assigneeId`), `/projects` (+`memberId`).
 - Администрирование (#441, право `directory.manage`): форма сотрудника
   (`employee-edit-dialog`: подразделение, должность, руководитель — свободная
   ссылка, кейс «группа ГИПов»; шлются только изменённые поля), диалог
