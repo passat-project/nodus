@@ -15,4 +15,8 @@ const runOn = (commands) => (files) => {
 export default {
   '*.{ts,tsx,mts,cts,js,mjs,cjs}': runOn(['eslint --fix', 'prettier --write']),
   '*.{json,md,yml,yaml,css,html}': runOn(['prettier --write']),
+  // Инкубатор — очередь идей с жёстким бюджетом: лимиты и обязательные поля
+  // проверяются до коммита, чтобы файл не разрастался незаметно.
+  'docs/product/{incubator.md,incubator-archive.md,incubator/*.md}': () =>
+    'node scripts/check-incubator.mjs',
 };

@@ -57,6 +57,7 @@
 | Допущение | безопасный дефолт, обратим, не меняет модель | в план с пометкой «допущение», назвать в отчёте |
 
 Порядок поиска отвеченного: `docs/mvp/process-model-plan*.md` → `docs/product/incubator.md`
+(индекс) и `docs/product/incubator/` (карточки; закрытые — `incubator-archive.md`)
 → `docs/product/interviews/` (включая `full/`) → комментарии эпика и соседних issues →
 `docs/mvp/plans/` → продуктивные указания владельца вне репо (память агента) → глоссарий
 и `north-star.md`.

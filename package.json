@@ -21,7 +21,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
-    "plan:check": "node scripts/check-plan.mjs"
+    "plan:check": "node scripts/check-plan.mjs",
+    "incubator:check": "node scripts/check-incubator.mjs"
   },
   "devDependencies": {
     "@nodus/config": "workspace:*",
