@@ -168,10 +168,18 @@ export const ErrorCode = {
   /** Лимит структуры достигнут: узлов в проекте / детей у узла / глубина /
    *  размер пакета (409; #467). */
   PROJECT_NODE_LIMIT_REACHED: 'PROJECT_NODE_LIMIT_REACHED',
-  /** Вид уровня в архиве — создавать узлы такого вида нельзя (409; #467). */
-  PROJECT_NODE_LEVEL_ARCHIVED: 'PROJECT_NODE_LEVEL_ARCHIVED',
-  /** Название вида уровня уже занято (409; #467). */
-  PROJECT_NODE_LEVEL_NAME_TAKEN: 'PROJECT_NODE_LEVEL_NAME_TAKEN',
+  /** Вид папки в архиве — создавать папки такого вида нельзя (409; #467). */
+  PROJECT_NODE_KIND_ARCHIVED: 'PROJECT_NODE_KIND_ARCHIVED',
+  /** Название вида папки уже занято (409; #467). */
+  PROJECT_NODE_KIND_NAME_TAKEN: 'PROJECT_NODE_KIND_NAME_TAKEN',
+  /** Вид папки не входит в допустимые виды типа проекта (422; #556). */
+  PROJECT_NODE_KIND_NOT_ALLOWED: 'PROJECT_NODE_KIND_NOT_ALLOWED',
+  /** Обязательные поля формы вида не заполнены: создание, смена вида или
+   *  очистка (`details.reason`: create | kind_change | clear; 422; #556). */
+  PROJECT_NODE_FIELDS_REQUIRED: 'PROJECT_NODE_FIELDS_REQUIRED',
+  /** Форма вида ссылается на негодные атрибуты (`details.reason`:
+   *  unknown_field | hidden_field; 422; #556). */
+  PROJECT_NODE_KIND_FORM_INVALID: 'PROJECT_NODE_KIND_FORM_INVALID',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

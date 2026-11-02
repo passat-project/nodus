@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+import {
+  CUSTOM_FIELD_LIMITS,
+  customFieldChangeSchema,
+} from '../custom-fields/custom-field-values.js';
 import { projectStatusSchema, projectVisibilitySchema } from '../projects/project.schemas.js';
 
 /**
@@ -18,9 +22,19 @@ export const PROJECT_EVENTS = {
   NODE_UPDATED: 'project.node_updated',
   NODE_MOVED: 'project.node_moved',
   NODE_DELETED: 'project.node_deleted',
+  /** Каталог видов папок (#556): форма и возможности вида изменились.
+   *  Каталожное событие — gateway рассылает всем в presence (О6). */
+  NODE_KIND_CHANGED: 'project.node_kind_changed',
 } as const;
 
 export type ProjectEventType = (typeof PROJECT_EVENTS)[keyof typeof PROJECT_EVENTS];
+
+/** Каталожные события проектов (ADR-0030 «Дополнение (#556)»): справочные
+ *  данные без персональных данных и без привязки к проекту — рассылаются
+ *  всем, как каталог атрибутов (`custom_field.*`). */
+export const PROJECT_CATALOG_EVENTS = [PROJECT_EVENTS.NODE_KIND_CHANGED] as const;
+
+export type ProjectCatalogEventType = (typeof PROJECT_CATALOG_EVENTS)[number];
 
 export const projectCreatedPayloadSchema = z.object({
   projectId: z.uuid(),
@@ -69,19 +83,23 @@ export const projectNodeCreatedPayloadSchema = z.object({
   projectId: z.uuid(),
   nodeId: z.uuid(),
   parentId: z.uuid().nullable(),
-  levelId: z.uuid(),
+  kindId: z.uuid(),
   name: z.string(),
 });
 export type ProjectNodeCreatedPayload = z.infer<typeof projectNodeCreatedPayloadSchema>;
 
-/** Правка узла: имя/код/вид-ярлык; fields — изменённые ключи. */
+/** Правка узла: имя/код/вид/значения; fields — изменённые ключи, включая
+ *  `cf.<id>` изменённых атрибутов (канон ADR-0029: значения — в событии
+ *  изменения сущности, `long_text` обрезан до 500). */
 export const projectNodeUpdatedPayloadSchema = z.object({
   projectId: z.uuid(),
   nodeId: z.uuid(),
   fields: z.array(z.string()),
   name: z.string().optional(),
   code: z.string().nullable().optional(),
-  levelId: z.uuid().optional(),
+  kindId: z.uuid().optional(),
+  /** Изменения значений атрибутов (≤ 50): потребитель #38 — правила схемы. */
+  customFieldChanges: z.array(customFieldChangeSchema).max(CUSTOM_FIELD_LIMITS.changes).optional(),
 });
 export type ProjectNodeUpdatedPayload = z.infer<typeof projectNodeUpdatedPayloadSchema>;
 
@@ -101,3 +119,13 @@ export const projectNodeDeletedPayloadSchema = z.object({
   parentId: z.uuid().nullable(),
 });
 export type ProjectNodeDeletedPayload = z.infer<typeof projectNodeDeletedPayloadSchema>;
+
+/** Вид папки изменился (#556, Р10): форма или возможности. `fields` —
+ *  изменённые ключи (`form`, `capabilities`, `name`, `icon`, `color`,
+ *  `archivedAt`); `form` — для переписи обработчиком удаления атрибута. */
+export const projectNodeKindChangedPayloadSchema = z.object({
+  kindId: z.uuid(),
+  change: z.enum(['created', 'updated', 'archived', 'restored']),
+  fields: z.array(z.string()),
+});
+export type ProjectNodeKindChangedPayload = z.infer<typeof projectNodeKindChangedPayloadSchema>;

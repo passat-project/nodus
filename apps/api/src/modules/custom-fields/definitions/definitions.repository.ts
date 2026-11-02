@@ -5,8 +5,9 @@ import { PrismaService } from '../../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import type { FieldDefinitionRow } from './definition.mapper.js';
 
-/** Порядок областей в выдаче реестра (Р4): задачи, письма, проекты, контрагенты. */
-const SCOPE_ORDER = ['task', 'letter', 'project', 'counterparty'] as const;
+/** Порядок областей в выдаче реестра (Р4): задачи, письма, проекты, папки,
+ *  контрагенты. */
+const SCOPE_ORDER = ['task', 'letter', 'project', 'node', 'counterparty'] as const;
 
 const definitionSelect = {
   id: true,
@@ -49,16 +50,18 @@ export class DefinitionsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Реестр области (или всех) в порядке карточки и фильтров. С `typeId` —
-   *  только атрибуты, привязанные к типу (#432, Р8). */
+   *  только атрибуты, привязанные к типу (#432, Р8); с `fieldIds` — только
+   *  атрибуты формы вида папки (#556, Р4). */
   async list(
     scope: string | null,
     tx?: TransactionClient,
-    opts: { typeId?: string } = {},
+    opts: { typeId?: string; fieldIds?: readonly string[] } = {},
   ): Promise<FieldDefinitionRow[]> {
     const rows = await this.db(tx).fieldDefinition.findMany({
       where: {
         ...(scope ? { scope } : {}),
         ...(opts.typeId ? { typeBindings: { some: { processTypeId: opts.typeId } } } : {}),
+        ...(opts.fieldIds ? { id: { in: [...opts.fieldIds] } } : {}),
       },
       select: definitionSelect,
     });
@@ -189,16 +192,6 @@ export class DefinitionsRepository {
     await tx.$executeRaw(Prisma.sql`
       SELECT pg_advisory_xact_lock(431, hashtext(${scope}::text))
     `);
-  }
-
-  /** Число сущностей области со значением атрибута (usage, окно удаления). */
-  async countValues(scope: string, definitionId: string): Promise<number> {
-    if (scope !== 'task') return 0;
-    const rows = await this.prisma.$queryRaw<{ count: bigint }[]>(Prisma.sql`
-      SELECT count(*)::bigint AS count FROM tasks
-      WHERE deleted_at IS NULL AND custom_fields ? ${definitionId}
-    `);
-    return Number(rows[0]?.count ?? 0);
   }
 
   private db(tx?: TransactionClient) {

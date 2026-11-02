@@ -6,38 +6,38 @@ import { Permission, ui } from '@nodus/contracts';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 
 import { useOpenCard } from '../../../../app/shell/use-card-stack.js';
+import { allowedNodeKinds } from '@nodus/contracts';
 import { useAuthStore } from '../../../../shared/auth-store.js';
-import { projectsKeys } from '../../../../shared/api/projects-list.js';
+import { projectsKeys, useProjectTypes } from '../../../../shared/api/projects-list.js';
+import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { tasksKeys } from '../../../../shared/api/tasks-keys.js';
 import { openTaskCreate } from '../../../../shared/tasks/task-create-store.js';
 import { EdgeHints } from '../../../../shared/ui/board/board-scroller.js';
 import { useBoardEdgeScroll } from '../../../../shared/ui/board/use-board-edge-scroll.js';
 import { DataTableHeader } from '../../../../shared/views/data-table-header.js';
 import { useAutoFitColumn } from '../../../../shared/views/use-autofit-column.js';
-import {
-  structureKeys,
-  useMoveNode,
-  useMoveTaskNode,
-  useSetTasksNode,
-} from '../api/structure-api.js';
+import { structureKeys, useMoveNode } from '../api/structure-api.js';
+import { useMoveTaskNode, useSetTasksNode } from '../api/structure-task-mutations.js';
+import { useProjectDetail } from '../../api/projects-api.js';
 import { useStructureModel } from '../lib/use-structure-model.js';
 import { useStructureDnd } from '../lib/use-structure-dnd.js';
 import { StructureBulkIsland } from './structure-bulk-island.js';
 import { StructureDragPlate } from './structure-drag-plate.js';
 import { StructureDialogHost, type StructureDialog } from './structure-dialog-host.js';
-import { NodeLevelsDialog } from './node-levels-dialog.js';
+import { NodePropertiesPanel } from './node-properties-panel.js';
 import { StructureRowList } from './structure-row-list.js';
 import type { StructureMenuActions } from './structure-menus.js';
 import { StructureEmpty, StructureSearchEmpty, StructureToolbar } from './structure-toolbar.js';
 
 /**
- * Вкладка «Структура» карточки проекта (#467, ADR-0030): дерево узлов-папок
- * с задачами-листьями и агрегатами поддерева (часы план/факт, сроки,
- * прогресс), секция «Без узла». Каркас — единый список портала: тулбар
- * `ListToolbar`, шапка `DataTableHeader`, горизонтальный скролл с подводом к
- * краю, ведущая колонка «чекбокс + шашка» как в «Задачах». Вложенность —
- * SVG-контур (как дерево задач), двойной клик раскрывает папку. DnD: зоны
- * четверти, линия вставки, подсветка папки, авто-раскрытие; строки статичны.
+ * Вкладка «Структура» карточки проекта (#467, ADR-0030): дерево папок с
+ * задачами-листьями и агрегатами поддерева (часы план/факт, сроки, прогресс),
+ * секция «Без папки». Каркас — единый список портала: тулбар `ListToolbar`,
+ * шапка `DataTableHeader`, горизонтальный скролл с подводом к краю, ведущая
+ * колонка «чекбокс + шашка» как в «Задачах». DnD: зоны четверти, линия
+ * вставки, подсветка папки, авто-раскрытие; строки статичны. Справа —
+ * вталкивающая панель «Свойства папки» (#556): открывается пунктом меню и
+ * следует за кликом по папке.
  */
 export function StructureTab({
   projectId,
@@ -54,8 +54,17 @@ export function StructureTab({
   const canSetup = (permissions ?? []).includes(Permission.PROJECT_SETUP_MANAGE);
   const canEdit = canManage && !readOnly;
   const model = useStructureModel(projectId);
+  const project = useProjectDetail(projectId);
+  const projectTypes = useProjectTypes(true);
+  const definitions = useCustomFieldDefinitions('node');
+  // Виды папок, допустимые типу проекта (#556): окно создания и смена вида
+  // предлагают только их; сервер проверяет то же (422 KIND_NOT_ALLOWED).
+  const allowedKinds = allowedNodeKinds(
+    projectTypes.data?.find((type) => type.id === project.data?.type?.id)?.kindIds ?? null,
+    model.kinds,
+  );
   const [dialog, setDialog] = useState<StructureDialog | null>(null);
-  const [levelsOpen, setLevelsOpen] = useState(false);
+  const [propertiesId, setPropertiesId] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
   const moveNode = useMoveNode(projectId);
   const moveTask = useMoveTaskNode(projectId);
@@ -91,6 +100,10 @@ export function StructureTab({
     mounted: !model.isLoading && model.nodes.length > 0,
   });
 
+  const propertiesNode = propertiesId
+    ? (model.nodes.find((node) => node.id === propertiesId) ?? null)
+    : null;
+
   function moveTasks(taskIds: string[], nodeId: string | null) {
     if (taskIds.length === 1) moveTask.mutate({ taskId: taskIds[0]!, nodeId });
     else setTasksNode.mutate({ taskIds, nodeId });
@@ -121,7 +134,7 @@ export function StructureTab({
   const actions: StructureMenuActions = {
     createInside: (node) => setDialog({ kind: 'create', parent: node }),
     addTask: addTaskToNode,
-    rename: (node) => setDialog({ kind: 'rename', node }),
+    properties: (node) => setPropertiesId(node.id),
     moveNode: (node) => setDialog({ kind: 'moveNode', node }),
     deleteNode: (node) => setDialog({ kind: 'delete', node }),
   };
@@ -139,109 +152,115 @@ export function StructureTab({
   const target = dnd.dropTarget;
 
   return (
-    <div className="flex h-full flex-col">
-      <StructureToolbar
-        toolbar={model.toolbar}
-        canEdit={canEdit}
-        canSetup={canSetup}
-        onCreateNode={() => setDialog({ kind: 'create', parent: null })}
-        onExpandAll={() => model.setCollapsed(new Set())}
-        onCollapseAll={() => model.setCollapsed(new Set(model.branchIds))}
-        onLevels={() => setLevelsOpen(true)}
-      />
-      <DndContext {...dnd.context}>
-        <div
-          className="relative min-h-0 flex-1"
-          onPointerEnter={() => setHovered(true)}
-          onPointerLeave={() => setHovered(false)}
-        >
-          <div
-            ref={containerRef}
-            role="table"
-            aria-label={ui.projects.tabStructure}
-            className="h-full overflow-auto"
-            {...edge.handlers}
-          >
-            {model.nodes.length === 0 ? (
-              <StructureEmpty onCreateNode={() => setDialog({ kind: 'create', parent: null })} />
-            ) : model.filtered.length === 0 ? (
-              <StructureSearchEmpty onReset={() => model.toolbar.setQuery('')} />
-            ) : (
-              <>
-                <DataTableHeader
-                  fields={model.visibleFields}
-                  sort={model.sort}
-                  headerChecked={model.selection.headerChecked}
-                  hasActions={false}
-                  showSelection={canEdit}
-                  style={{ gridTemplateColumns: model.gridTemplateColumns }}
-                  onToggleAll={model.selection.toggleAll}
-                  onResize={model.setWidth}
-                  onAutoFit={autoFitColumn}
-                  onCycleSort={model.cycleSort}
-                  onReorder={model.commitOrder}
-                />
-                <StructureRowList
-                  treeRows={model.treeRows}
-                  noNodeRow={model.noNodeRow}
-                  noNodeTasks={model.noNodeTasks}
-                  levelById={model.levelById}
-                  collapsed={model.collapsed}
-                  noNodeCollapsed={model.noNodeCollapsed}
-                  fields={model.visibleFields}
-                  grid={{ templateColumns: model.gridTemplateColumns }}
-                  selection={model.selection}
-                  dnd={dnd}
-                  target={target}
-                  actions={actions}
-                  canEdit={canEdit}
-                  onToggleBranch={toggleBranch}
-                  onToggleNoNode={() => model.setNoNodeCollapsed((prev) => !prev)}
-                  onOpenTask={(id, anchor) =>
-                    openCard({ kind: 'task', id }, anchor?.getBoundingClientRect())
-                  }
-                  onMoveTasks={(ids) => setDialog({ kind: 'moveTasks', taskIds: ids })}
-                  onRemoveFromStructure={(id) => moveTasks([id], null)}
-                />
-                {model.selection.selected.size > 0 ? <div aria-hidden className="h-24" /> : null}
-              </>
-            )}
-          </div>
-          <EdgeHints room={edge.room} hot={edge.hot} show={hovered} />
-          <StructureBulkIsland
-            selectedNodeIds={model.selectedNodeIds}
-            selectedTaskIds={model.selectedTaskIds}
-            pending={moveNode.isPending || moveTask.isPending || setTasksNode.isPending}
-            onClear={model.selection.clear}
-            onMoveTasks={(ids) => setDialog({ kind: 'moveTasks', taskIds: ids })}
-            onMoveNodes={(ids) => setDialog({ kind: 'moveNodes', nodeIds: ids })}
-          />
-        </div>
-        <DragOverlay>
-          {dnd.active ? (
-            <StructureDragPlate
-              active={dnd.active}
-              nodes={model.nodes}
-              levels={model.levels}
-              tasks={model.tasks}
-            />
-          ) : null}
-        </DragOverlay>
-      </DndContext>
-      {dialog ? (
-        <StructureDialogHost
-          projectId={projectId}
-          dialog={dialog}
-          levels={model.levels}
-          nodes={model.nodes}
-          onClose={() => setDialog(null)}
-          onMoveTasks={moveTasks}
+    <div className="flex h-full">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <StructureToolbar
+          toolbar={model.toolbar}
+          canEdit={canEdit}
+          onCreateNode={() => setDialog({ kind: 'create', parent: null })}
+          onExpandAll={() => model.setCollapsed(new Set())}
+          onCollapseAll={() => model.setCollapsed(new Set(model.branchIds))}
         />
-      ) : null}
-      <NodeLevelsDialog
-        open={levelsOpen}
-        canManage={canSetup}
-        onClose={() => setLevelsOpen(false)}
+        <DndContext {...dnd.context}>
+          <div
+            className="relative min-h-0 flex-1"
+            onPointerEnter={() => setHovered(true)}
+            onPointerLeave={() => setHovered(false)}
+          >
+            <div
+              ref={containerRef}
+              role="table"
+              aria-label={ui.projects.tabStructure}
+              className="h-full overflow-auto"
+              {...edge.handlers}
+            >
+              {model.nodes.length === 0 ? (
+                <StructureEmpty onCreateNode={() => setDialog({ kind: 'create', parent: null })} />
+              ) : model.filtered.length === 0 ? (
+                <StructureSearchEmpty onReset={() => model.toolbar.setQuery('')} />
+              ) : (
+                <>
+                  <DataTableHeader
+                    fields={model.visibleFields}
+                    sort={model.sort}
+                    headerChecked={model.selection.headerChecked}
+                    hasActions={false}
+                    showSelection={canEdit}
+                    style={{ gridTemplateColumns: model.gridTemplateColumns }}
+                    onToggleAll={model.selection.toggleAll}
+                    onResize={model.setWidth}
+                    onAutoFit={autoFitColumn}
+                    onCycleSort={model.cycleSort}
+                    onReorder={model.commitOrder}
+                  />
+                  <StructureRowList
+                    treeRows={model.treeRows}
+                    noNodeRow={model.noNodeRow}
+                    noNodeTasks={model.noNodeTasks}
+                    kindById={model.kindById}
+                    collapsed={model.collapsed}
+                    noNodeCollapsed={model.noNodeCollapsed}
+                    fields={model.visibleFields}
+                    grid={{ templateColumns: model.gridTemplateColumns }}
+                    selection={model.selection}
+                    dnd={dnd}
+                    target={target}
+                    actions={actions}
+                    canEdit={canEdit}
+                    onToggleBranch={toggleBranch}
+                    onSelectNode={setPropertiesId}
+                    onToggleNoNode={() => model.setNoNodeCollapsed((prev) => !prev)}
+                    onOpenTask={(id, anchor) =>
+                      openCard({ kind: 'task', id }, anchor?.getBoundingClientRect())
+                    }
+                    onMoveTasks={(ids) => setDialog({ kind: 'moveTasks', taskIds: ids })}
+                    onRemoveFromStructure={(id) => moveTasks([id], null)}
+                  />
+                  {model.selection.selected.size > 0 ? <div aria-hidden className="h-24" /> : null}
+                </>
+              )}
+            </div>
+            <EdgeHints room={edge.room} hot={edge.hot} show={hovered} />
+            <StructureBulkIsland
+              selectedNodeIds={model.selectedNodeIds}
+              selectedTaskIds={model.selectedTaskIds}
+              pending={moveNode.isPending || moveTask.isPending || setTasksNode.isPending}
+              onClear={model.selection.clear}
+              onMoveTasks={(ids) => setDialog({ kind: 'moveTasks', taskIds: ids })}
+              onMoveNodes={(ids) => setDialog({ kind: 'moveNodes', nodeIds: ids })}
+            />
+          </div>
+          <DragOverlay>
+            {dnd.active ? (
+              <StructureDragPlate
+                active={dnd.active}
+                nodes={model.nodes}
+                kinds={model.kinds}
+                tasks={model.tasks}
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+        {dialog ? (
+          <StructureDialogHost
+            projectId={projectId}
+            dialog={dialog}
+            kinds={allowedKinds}
+            nodes={model.nodes}
+            canSetup={canSetup}
+            onClose={() => setDialog(null)}
+            onMoveTasks={moveTasks}
+          />
+        ) : null}
+      </div>
+      <NodePropertiesPanel
+        projectId={projectId}
+        node={propertiesNode}
+        kinds={allowedKinds}
+        definitions={definitions.data ?? []}
+        refs={model.customFieldRefs}
+        canEdit={canEdit}
+        onClose={() => setPropertiesId(null)}
       />
     </div>
   );

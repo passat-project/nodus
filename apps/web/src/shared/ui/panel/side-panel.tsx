@@ -5,9 +5,9 @@ import { NodeLabel } from '@nodus/ui/components/node-label';
 import { cn } from '@nodus/ui/lib/utils';
 import { ArrowLeft, X } from 'lucide-react';
 
-import { useFrameReady } from '../../../../../shared/ui/use-frame-ready.js';
+import { useFrameReady } from '../use-frame-ready.js';
 
-/** Ширина правой панели редактора. */
+/** Ширина правой панели окна-сплита (общий канон). */
 export const SIDE_PANEL_WIDTH = 384;
 
 /** Открыт ли сейчас оверлей Radix (меню, поповер, список, диалог) — Esc его. */
@@ -30,12 +30,15 @@ function overlayOpen(): boolean {
 export function SidePanel({
   open,
   title,
+  leading,
   onClose,
   onBack,
   children,
 }: {
   open: boolean;
   title: string;
+  /** Плитка идентичности перед заголовком (значок сущности в цвете). */
+  leading?: React.ReactNode;
   onClose: () => void;
   /** Раздел внутри панели: стрелка «назад» в шапке (и первый Esc). */
   onBack?: () => void;
@@ -74,12 +77,13 @@ export function SidePanel({
               size="icon"
               className="shrink-0 hover:bg-accent"
               onClick={onBack}
-              aria-label={ui.automation.panel.back}
-              title={ui.automation.panel.back}
+              aria-label={ui.common.back}
+              title={ui.common.back}
             >
               <ArrowLeft />
             </Button>
           ) : null}
+          {leading ? <span className="shrink-0">{leading}</span> : null}
           <NodeLabel label={title} className="min-w-0 truncate pl-1" />
           <Button
             variant="ghost"

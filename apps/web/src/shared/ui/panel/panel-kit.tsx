@@ -3,10 +3,10 @@ import { Button } from '@nodus/ui/components/button';
 import { Switch } from '@nodus/ui/components/switch';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { SegmentedControl } from '../../../../../shared/ui/segmented-control.js';
+import { SegmentedControl } from '../segmented-control.js';
 
 /**
- * Примитивы правой панели редактора (#378 ред. 2) — ОДНА грамматика для
+ * Примитивы правой панели окна-сплита (#378 ред. 2; общий кит, #556) — грамматика для
  * панелей статуса, кнопки, окна создания и настроек типа: поле с подписью,
  * строка-переключатель, строка «Название ›» со сводкой (раздел или
  * связанный элемент — переход внутрь, модель Трекера), выбор режима
@@ -206,23 +206,41 @@ export function Segmented<T extends string>({
   value,
   options,
   disabled,
+  layout,
+  className,
   onChange,
 }: {
   value: T;
   options: readonly { value: T; label: string }[];
   disabled?: boolean;
+  /** `grid` + `className="w-full"` — равные сегменты на всю ширину панели:
+   *  длинные подписи («По желанию», «Обязательно») не обрезаются. */
+  layout?: 'flex' | 'grid';
+  className?: string;
   onChange: (value: T) => void;
 }) {
   return (
-    <SegmentedControl value={value} options={options} disabled={disabled} onChange={onChange} />
+    <SegmentedControl
+      value={value}
+      options={options}
+      disabled={disabled}
+      layout={layout}
+      className={className}
+      onChange={onChange}
+    />
   );
 }
 
+/** Опасное/необратимое действие внизу панели. Значок по умолчанию —
+ *  корзина; возврат из архива передаёт свой (`RotateCcw`): корзина у
+ *  «Вернуть» читалась как удаление. */
 export function PanelDanger({
   onClick,
+  icon: Icon = Trash2,
   children,
 }: {
   onClick: () => void;
+  icon?: LucideIcon;
   children: React.ReactNode;
 }) {
   return (
@@ -231,7 +249,7 @@ export function PanelDanger({
       className="mt-auto h-auto min-h-8 justify-start py-1.5 text-left whitespace-normal text-danger hover:text-danger"
       onClick={onClick}
     >
-      <Trash2 className="size-3.5 shrink-0" />
+      <Icon className="size-3.5 shrink-0" />
       <span className="min-w-0">{children}</span>
     </Button>
   );

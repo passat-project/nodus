@@ -133,10 +133,35 @@ export const projectsStrings = {
       endDate: 'Крайний срок',
     },
   },
+  // Автоматизация: «Схемы проектов» (#38, каркас — #556)
+  schemasTitle: 'Схемы проектов',
+  /** Левая колонка — типы проектов (грамматика списка «Процессов»). */
+  schemasTypesSearch: 'Найти тип',
+  /** Центральная панель — канвас будущей схемы проекта (#38). */
+  schemasCanvasTitle: 'Схема проекта',
+  schemasCanvasHint:
+    'Схема типа: папки-комплекты, работы и связи между ними. Виды папок и их форма настраиваются в «Настройках типа»',
+  /** Правая панель типа: шапка, разделы и строки-ссылки. */
+  schemasTypeSettings: 'Настройки типа',
+  schemasKinds: 'Виды папок',
+  schemasKindsEmpty: 'Типу не назначено ни одного вида — папки создавать нельзя',
+  schemasCreateKind: 'Новый вид папки',
+  schemasKindsSectionHint:
+    'Виды папок, из которых создаются папки проектов этого типа. Снятый вид остаётся у уже созданных папок',
+  schemasKindsSummaryAll: 'Все виды · {count}',
+  schemasKindsSummary: '{allowed} из {total}',
+  /** Счётчик видов в мете строки левой колонки («7 видов»). */
+  schemasKindsCount: ['вид', 'вида', 'видов'] as const,
+  schemasResetKinds: 'Включить все виды',
+  schemasKindArchived: 'в архиве',
+  schemasKindAvailable: 'Доступен типу',
+  schemasCodeSection: 'Шифр проекта',
+  schemasCodeHint: 'Поле «Шифр» в окне создания проекта этого типа',
   // Автоматизация: типы проектов
-  typesTitle: 'Типы проектов',
   typesCreate: 'Новый тип',
+  typesCreateTitle: 'Новый тип проекта',
   typesNamePlaceholder: 'Например: Тендер',
+  typesNameTaken: 'Тип с таким названием уже есть',
   typesEmpty: 'Типов пока нет',
   typesArchive: 'Архивировать тип',
   typesRestore: 'Вернуть тип',

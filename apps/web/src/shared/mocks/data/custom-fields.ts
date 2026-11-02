@@ -8,6 +8,7 @@ import type {
 import { SystemDictionary } from '@nodus/contracts';
 
 import { currencyIds, dictionaryByCode, itemsOf, workKindIds } from './dictionaries.js';
+import { MARKA_FIELD_ID } from './set-marks.js';
 import { departmentIds } from './org-ids.js';
 import { processTypeIds } from './process-type-ids.js';
 import { projectRefs, tid } from './task-item-factory.js';
@@ -43,6 +44,8 @@ export const fieldIds = {
   letterObjectCode: fid(21),
   letterReplyRequired: fid(22),
   counterpartyErp: fid(31),
+  /** Атрибут области «Папка» (#556): марка комплекта — посев миграции Б. */
+  marka: MARKA_FIELD_ID,
 };
 
 const STAMP = '2026-10-20T09:00:00.000Z';
@@ -160,6 +163,13 @@ export const demoCustomFieldDefinitions: CustomFieldDefinition[] = [
     typeIds: [processTypeIds.letterIncoming],
   }),
   definition(fieldIds.counterpartyErp, 'counterparty', 'text', 'Код 1С', 0),
+  // Область «Папка» (#556): марка комплекта из справочника марок СТБ 2255.
+  // Привязка к виду — форма вида (node_kinds.config.form), typeIds пуст.
+  definition(fieldIds.marka, 'node', 'enum', 'Марка', 0, {
+    hint: 'Марка комплекта по СТБ 2255',
+    settings: { dictionaryId: dictionaryByCode('set-mark')!.id },
+    dictionary: dictionaryRef('set-mark'),
+  }),
 ];
 
 export function demoFieldById(id: string): CustomFieldDefinition | undefined {

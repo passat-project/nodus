@@ -35,7 +35,7 @@ import {
   toggleValidator,
   validatorOf,
 } from '../../../model/transition-rules.js';
-import { PanelField, SwitchRow } from './panel-kit.js';
+import { PanelField, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
 import { CustomFieldChecks } from './custom-fields-checks.js';
 
 /**

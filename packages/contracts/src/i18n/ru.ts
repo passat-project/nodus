@@ -11,6 +11,7 @@ import { filesStrings } from './ru-files.js';
 import { notificationsStrings } from './ru-notifications.js';
 import { taskCreateStrings } from './ru-task-create.js';
 import { tasksStrings } from './ru-tasks.js';
+import { nodeKindsStrings } from './ru-node-kinds.js';
 import { structureStrings } from './ru-structure.js';
 import { projectsStrings } from './ru-projects.js';
 import { whatsNewStrings } from './ru-whats-new.js';
@@ -101,8 +102,11 @@ export const errorMessages: Record<ErrorCode, string> = {
     'Узел не пустой — сначала перенесите из него задачи и дочерние узлы',
   [ErrorCode.PROJECT_NODE_CODE_TAKEN]: 'Шифр уже занят другим узлом этого проекта',
   [ErrorCode.PROJECT_NODE_LIMIT_REACHED]: 'Достигнут предел структуры проекта',
-  [ErrorCode.PROJECT_NODE_LEVEL_ARCHIVED]: 'Этот вид уровня в архиве — выберите другой',
-  [ErrorCode.PROJECT_NODE_LEVEL_NAME_TAKEN]: 'Вид уровня с таким названием уже есть',
+  [ErrorCode.PROJECT_NODE_KIND_ARCHIVED]: 'Этот вид папки в архиве — выберите другой',
+  [ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN]: 'Вид папки с таким названием уже есть',
+  [ErrorCode.PROJECT_NODE_FIELDS_REQUIRED]: 'Заполните обязательные поля папки',
+  [ErrorCode.PROJECT_NODE_KIND_FORM_INVALID]: 'Форма вида ссылается на негодные атрибуты',
+  [ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED]: 'Этот вид папки не назначен типу проекта',
 };
 
 /**
@@ -273,6 +277,8 @@ export const ui = {
   taskCreate: taskCreateStrings,
   /** Дерево проекта (#467, ADR-0030) — своя секция: вкладка «Структура». */
   structure: structureStrings,
+  /** Виды папок как настраиваемые типы (#556) — панель и группа. */
+  nodeKinds: nodeKindsStrings,
   automation: automationStrings,
   access: accessStrings,
   customFields: customFieldsStrings,

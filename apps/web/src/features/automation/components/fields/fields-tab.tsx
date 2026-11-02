@@ -15,13 +15,19 @@ import { useRowSelection } from '../../../../shared/views/use-row-selection.js';
 import { ViewSettings } from '../../../../shared/views/view-settings.js';
 import { useReorderCustomFields, useUpdateCustomField } from '../../api/custom-fields-api.js';
 import { FieldBulkIsland } from './field-bulk-island.js';
-import { fieldColumns } from './field-columns.js';
+import { fieldColumnsFor } from './field-columns.js';
 import { FieldDeleteDialog } from './field-delete-dialog.js';
 import { FieldDialog, type FieldDialogMode } from './field-dialog.js';
 import { fieldRowMenu } from './field-row-menu.js';
 
 const FIELD_SCOPES = customFieldScopeSchema.options;
 const VIEW_KEY = 'custom-fields.list';
+
+/** Подсказка области, значения которой ещё не пишутся (О5, #556): только
+ *  контрагенты; задачи, письма, проекты и папки работают. */
+function pendingHint(scope: CustomFieldScope): string | undefined {
+  return (ui.customFields.scopePending as Partial<Record<CustomFieldScope, string>>)[scope];
+}
 
 /**
  * Вкладка «Атрибуты» «Автоматизации» (#431, ревизия UI 25.10.2026 —
@@ -40,6 +46,7 @@ export function FieldsTab() {
   const canManage = useCanManageFields();
   const toolbar = useListToolbar(VIEW_KEY);
   const query = useCustomFieldDefinitions();
+  const columns = useMemo(() => fieldColumnsFor(scope), [scope]);
   const all = useMemo(() => query.data ?? [], [query.data]);
   const inScope = useMemo(
     () =>
@@ -130,18 +137,18 @@ export function FieldsTab() {
               </Button>
             ) : undefined
           }
-          right={<ViewSettings viewKey={VIEW_KEY} defs={fieldColumns} />}
+          right={<ViewSettings viewKey={VIEW_KEY} defs={columns} />}
         />
       </div>
-      {scope !== 'task' ? (
+      {scope !== 'task' && pendingHint(scope) ? (
         <p className="-mt-1 shrink-0 px-6 pb-2 text-xs text-muted-foreground">
-          {ui.customFields.scopePending[scope]}
+          {pendingHint(scope)}
         </p>
       ) : null}
       <div className="min-h-0 flex-1">
         <DataTable
           viewKey={VIEW_KEY}
-          defs={fieldColumns}
+          defs={columns}
           rows={rows}
           rowKey={(definition) => definition.id}
           selection={selection}

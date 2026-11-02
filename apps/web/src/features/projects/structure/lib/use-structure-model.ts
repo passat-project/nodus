@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { NodeLevel, ProjectNode } from '@nodus/contracts';
+import type { NodeKind, ProjectNode } from '@nodus/contracts';
 
 import { useListToolbar } from '../../../../shared/views/use-list-toolbar.js';
 import { useRowSelection } from '../../../../shared/views/use-row-selection.js';
@@ -40,8 +40,9 @@ export function useStructureModel(projectId: string) {
     [tasksQuery.data],
   );
   const nodes = useMemo<ProjectNode[]>(() => structure?.nodes ?? [], [structure]);
-  const levels = useMemo<NodeLevel[]>(() => structure?.levels ?? [], [structure]);
-  const levelById = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
+  const kinds = useMemo<NodeKind[]>(() => structure?.kinds ?? [], [structure]);
+  const kindById = useMemo(() => new Map(kinds.map((l) => [l.id, l])), [kinds]);
+  const customFieldRefs = useMemo(() => structure?.customFieldRefs ?? [], [structure]);
   const rows = useMemo(() => buildStructureRows(nodes, tasks), [nodes, tasks]);
   const filtered = useMemo(() => filterStructureRows(rows, toolbar.query), [rows, toolbar.query]);
   const visible = useMemo(
@@ -108,8 +109,9 @@ export function useStructureModel(projectId: string) {
     commitOrder,
     tasks,
     nodes,
-    levels,
-    levelById,
+    kinds,
+    kindById,
+    customFieldRefs,
     rows,
     filtered,
     treeRows,

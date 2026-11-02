@@ -22,7 +22,13 @@ import {
   routeIfOf,
   validatorOf,
 } from '../../../model/transition-rules.js';
-import { PanelDanger, PanelField, SectionLink, Segmented, focusName } from './panel-kit.js';
+import {
+  PanelDanger,
+  PanelField,
+  SectionLink,
+  Segmented,
+  focusName,
+} from '../../../../../shared/ui/panel/panel-kit.js';
 
 export type TransitionSection = 'root' | 'roles' | 'conditions' | 'rules' | 'window';
 

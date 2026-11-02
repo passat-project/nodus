@@ -1,6 +1,8 @@
 import type { Dictionary, DictionaryItem } from '@nodus/contracts';
 import { RECEIPT_METHOD_CODES, SystemDictionary, type ReceiptMethodCode } from '@nodus/contracts';
 
+import { SET_MARK_DICTIONARY_ID, SET_MARKS, setMarkItemId } from './set-marks.js';
+
 /** Демо-справочники (#431, Р10): системные `currency`, `document-kind`,
  *  `receipt-method` (способы поступления писем, #55 Р14) и пользовательские
  *  «Виды работ», «Объекты». Значения полей ссылаются на id элементов (I15). */
@@ -14,6 +16,7 @@ export const dictionaryIds = {
   workKind: did(3),
   object: did(4),
   receiptMethod: did(5),
+  setMark: SET_MARK_DICTIONARY_ID,
 };
 
 const kid = (n: number): string => `e0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -83,6 +86,13 @@ export const demoDictionaries: Dictionary[] = [
     hierarchical: false,
     isSystem: false,
   },
+  {
+    id: dictionaryIds.setMark,
+    code: 'set-mark',
+    name: 'Марки комплектов',
+    hierarchical: false,
+    isSystem: false,
+  },
 ];
 
 function item(
@@ -145,6 +155,18 @@ export const demoDictionaryItems: DictionaryItem[] = [
   item(objectIds.main, dictionaryIds.object, 'Главный корпус', 0),
   item(objectIds.warehouse, dictionaryIds.object, 'Склад готовой продукции', 1),
   item(objectIds.admin, dictionaryIds.object, 'Административный корпус', 2),
+  // Марки комплектов (#556): код элемента — марка СТБ 2255 (разбор колонки
+  // штампа в #468), имя — «ОВ — Отопление, вентиляция…» (В2).
+  ...SET_MARKS.map((mark, index) =>
+    item(
+      setMarkItemId(index),
+      dictionaryIds.setMark,
+      `${mark.code} — ${mark.name}`,
+      index * 10,
+      true,
+      mark.code,
+    ),
+  ),
 ];
 
 export function dictionaryByCode(code: string): Dictionary | undefined {

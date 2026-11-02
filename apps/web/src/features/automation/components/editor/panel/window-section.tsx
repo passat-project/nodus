@@ -27,7 +27,12 @@ import {
   toggleWindowField,
 } from '../../../model/transition-form.js';
 import { setMinFiles, validatorOf } from '../../../model/transition-rules.js';
-import { ModeChoices, PanelAction, PanelField, SwitchRow } from './panel-kit.js';
+import {
+  ModeChoices,
+  PanelAction,
+  PanelField,
+  SwitchRow,
+} from '../../../../../shared/ui/panel/panel-kit.js';
 import { CustomFieldChecks } from './custom-fields-checks.js';
 import { GateCheck, RequiredCheck, SectionToggle } from './window-section-rows.js';
 import { WindowPreview } from './window-preview.js';

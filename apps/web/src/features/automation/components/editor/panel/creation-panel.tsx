@@ -56,7 +56,12 @@ import {
 import { CreationFieldPicker } from './creation-field-picker.js';
 import { CreationSlotRow } from './creation-slot-row.js';
 import { CreationSlotSection } from './creation-slot-section.js';
-import { PanelAction, PanelField, PanelNote, SwitchRow } from './panel-kit.js';
+import {
+  PanelAction,
+  PanelField,
+  PanelNote,
+  SwitchRow,
+} from '../../../../../shared/ui/panel/panel-kit.js';
 
 const c = ui.automation.creation;
 

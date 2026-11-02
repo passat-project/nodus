@@ -1,10 +1,10 @@
 import { Files } from 'lucide-react';
-import type { NodeLevel, ProjectNode } from '@nodus/contracts';
+import type { NodeKind, ProjectNode } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
 import { plural } from '../../../../shared/lib/format.js';
 import { identityTone } from '../../../../shared/ui/identity-tone.js';
-import { NodeLevelGlyph } from '../lib/node-level-icon.js';
+import { NodeKindGlyph } from '../lib/node-kind-icon.js';
 import type { DragPayload } from '../lib/use-structure-dnd.js';
 
 /** Плашка DragOverlay дерева структуры: узел с ярлыком вида, название
@@ -13,20 +13,20 @@ import type { DragPayload } from '../lib/use-structure-dnd.js';
 export function StructureDragPlate({
   active,
   nodes,
-  levels,
+  kinds,
   tasks,
 }: {
   active: DragPayload;
   nodes: ProjectNode[];
-  levels: NodeLevel[];
+  kinds: NodeKind[];
   tasks: { id: string; title: string }[];
 }) {
   let text: string;
-  let level: NodeLevel | undefined;
+  let kind: NodeKind | undefined;
   if (active.kind === 'node') {
     const node = nodes.find((n) => n.id === active.nodeId);
     text = node?.name ?? '';
-    level = node ? levels.find((l) => l.id === node.levelId) : undefined;
+    kind = node ? kinds.find((l) => l.id === node.kindId) : undefined;
   } else if (active.taskIds.length > 1) {
     text = `${active.taskIds.length} ${plural(active.taskIds.length, ui.structure.taskForms)}`;
   } else {
@@ -38,10 +38,10 @@ export function StructureDragPlate({
         <span
           aria-hidden
           className={`flex size-6 shrink-0 items-center justify-center rounded border ${
-            level ? identityTone[level.color].tile : 'border-border bg-accent/40'
+            kind ? identityTone[kind.color].tile : 'border-border bg-accent/40'
           }`}
         >
-          <NodeLevelGlyph icon={level?.icon ?? 'folder'} className="size-3.5" />
+          <NodeKindGlyph icon={kind?.icon ?? 'folder'} className="size-3.5" />
         </span>
       ) : active.taskIds.length > 1 ? (
         <Files className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />

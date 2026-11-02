@@ -11,7 +11,7 @@ import type {
 
 import { counterpartyIds } from './counterparties.js';
 import { isoAgo, isoDateIn } from './dates.js';
-import { nodeLevelIds } from './project-nodes.js';
+import { nodeKindIds } from './project-nodes.js';
 import { projectRefs } from './task-item-factory.js';
 import { userIds } from './users.js';
 
@@ -55,16 +55,31 @@ export const demoProjectTypes: ProjectType[] = [
   {
     id: typeId(1),
     name: 'Договор',
+    icon: 'file-text',
+    color: 'blue',
     codeField: 'required',
-    levelKindIds: [...Object.values(nodeLevelIds)],
+    // «Договору» доступны все виды справочника (null): новый вид попадёт
+    // типу сам — явный список только там, где набор сужен («Тема»).
+    kindIds: null,
     archivedAt: null,
   },
-  { id: typeId(2), name: 'Тема', codeField: 'hidden', levelKindIds: null, archivedAt: null },
+  {
+    id: typeId(2),
+    name: 'Тема',
+    icon: 'star',
+    color: 'amber',
+    codeField: 'hidden',
+    // «Теме» комплекты не нужны — только разделы и этапы (ADR-0030).
+    kindIds: [nodeKindIds.section, nodeKindIds.phase],
+    archivedAt: null,
+  },
   {
     id: typeId(3),
     name: 'Госзакупки',
+    icon: 'shield-check',
+    color: 'green',
     codeField: 'optional',
-    levelKindIds: null,
+    kindIds: null,
     archivedAt: isoAgo(90),
   },
 ];

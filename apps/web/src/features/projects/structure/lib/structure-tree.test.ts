@@ -43,9 +43,10 @@ function node(
   return {
     id,
     parentId,
-    levelId: 'level-1',
+    kindId: 'kind-1',
     name: `Узел ${id}`,
     code: null,
+    customFields: {},
     rollup: rollup(),
     createdAt: '2026-09-01T00:00:00Z',
     ...over,

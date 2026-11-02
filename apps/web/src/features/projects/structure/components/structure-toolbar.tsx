@@ -1,4 +1,4 @@
-import { ChevronsDownUp, ChevronsUpDown, FolderCog, FolderPlus, SearchX } from 'lucide-react';
+import { ChevronsDownUp, ChevronsUpDown, FolderPlus, SearchX } from 'lucide-react';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
@@ -17,23 +17,20 @@ import { STRUCTURE_VIEW_KEY, structureFields } from '../lib/structure-fields.js'
 
 /** Строка инструментов структуры — тот же `ListToolbar`, что у «Задач»
  *  (одинаковая высота и калибр кнопок): создание, поиск, свернуть/развернуть
- *  справа, виды узлов и шестерёнка колонок. */
+ *  справа, шестерёнка колонок. Виды папок настраиваются в «Автоматизации»
+ *  (#556) — шестерёнки справочника здесь больше нет. */
 export function StructureToolbar({
   toolbar,
   canEdit,
-  canSetup,
   onCreateNode,
   onExpandAll,
   onCollapseAll,
-  onLevels,
 }: {
   toolbar: ListToolbarState;
   canEdit: boolean;
-  canSetup: boolean;
   onCreateNode: () => void;
   onExpandAll: () => void;
   onCollapseAll: () => void;
-  onLevels: () => void;
 }) {
   return (
     <ListToolbar
@@ -69,18 +66,6 @@ export function StructureToolbar({
           >
             <ChevronsDownUp className="size-3.5" strokeWidth={1.75} />
           </Button>
-          {canSetup ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              title={ui.structure.levelsTitle}
-              aria-label={ui.structure.levelsTitle}
-              onClick={onLevels}
-            >
-              <FolderCog className="size-3.5" strokeWidth={1.75} />
-            </Button>
-          ) : null}
           <ViewSettings viewKey={STRUCTURE_VIEW_KEY} defs={structureFields} />
         </>
       }

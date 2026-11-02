@@ -8,6 +8,7 @@ import {
   customFieldValuesSchema,
 } from '../custom-fields/custom-field-values.js';
 import { userRefSchema } from '../directory/user-ref.schema.js';
+import { processTypeIconSchema } from '../workflows/process-type.schemas.js';
 import { cursorQuerySchema } from '../pagination/paginated.schema.js';
 
 /**
@@ -307,10 +308,17 @@ export type ProjectHistoryEntry = z.infer<typeof projectHistoryEntrySchema>;
 export const projectTypeSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1),
+  /** Значок и цвет типа — грамматика «Процессов» (#556, вердикт владельца
+   *  02.11): тип узнаётся по плитке в левом списке «Схем проектов». */
+  icon: processTypeIconSchema,
+  color: projectColorSchema,
   codeField: projectCodeFieldSchema,
-  /** Подсказка дефолтного вида узла при создании (#467, вердикт 30.10:
-   *  НЕ жёсткий порядок уровней — только подсказка); null — нет подсказки. */
-  levelKindIds: z.array(z.uuid()).nullable(),
+  /** Допустимые виды папок проекта этого типа (#556, вердикт владельца
+   *  02.11): `null` — все виды справочника; массив — только перечисленные.
+   *  Создание папки и смена вида вне списка — 422
+   *  PROJECT_NODE_KIND_NOT_ALLOWED; существующие папки не ломаются (снятый
+   *  с типа вид живёт у уже созданных папок). */
+  kindIds: z.array(z.uuid()).max(50).nullable(),
   archivedAt: z.iso.datetime().nullable(),
 });
 
@@ -318,6 +326,8 @@ export type ProjectType = z.infer<typeof projectTypeSchema>;
 
 export const projectTypeCreateBodySchema = z.object({
   name: z.string().trim().min(1).max(120),
+  icon: processTypeIconSchema.optional(),
+  color: projectColorSchema.optional(),
 });
 
 export type ProjectTypeCreateBody = z.infer<typeof projectTypeCreateBodySchema>;
@@ -325,9 +335,11 @@ export type ProjectTypeCreateBody = z.infer<typeof projectTypeCreateBodySchema>;
 export const projectTypeUpdateBodySchema = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
+    icon: processTypeIconSchema.optional(),
+    color: projectColorSchema.optional(),
     codeField: projectCodeFieldSchema.optional(),
-    /** Подсказка дефолтного вида узла (#467): null — подсказки нет. */
-    levelKindIds: z.array(z.uuid()).max(10).nullable().optional(),
+    /** Допустимые виды папок типа (#556): null — все, массив — только эти. */
+    kindIds: z.array(z.uuid()).max(50).nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'empty update' });
 

@@ -27,7 +27,7 @@ function node(id: string, parentId: string | null, orderIndex: number): TreeNode
 /** Цепочка root → c1 → c2 → … заданной длины (индексы порядка по siblings). */
 function chain(depth: number): TreeNodeLike[] {
   const nodes: TreeNodeLike[] = [node('root', null, 0)];
-  for (let level = 1; level < depth; level++) nodes.push(node(`c${level}`, nodes.at(-1)!.id, 0));
+  for (let kind = 1; kind < depth; kind++) nodes.push(node(`c${kind}`, nodes.at(-1)!.id, 0));
   return nodes;
 }
 

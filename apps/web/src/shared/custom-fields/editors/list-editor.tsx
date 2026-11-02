@@ -73,11 +73,16 @@ export function ListEditor(props: EditorProps) {
           disabled={props.disabled}
           ariaLabel={props.definition.name}
           open={open}
+          // Правка по месту — без обрезки значения: длинное имя варианта
+          // («ОВ — Отопление, вентиляция и кондиционирование воздуха»)
+          // переносится строкой ниже, а не уезжает под край узкой панели.
+          multiline={props.variant === 'inline' && !multiple}
         >
           <CustomFieldValueView
             definition={props.definition}
             value={props.value}
             refs={refsById(props.refs)}
+            wrap={props.variant === 'inline' && !multiple}
           />
         </EditorTrigger>
       </PopoverTrigger>

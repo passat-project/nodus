@@ -1493,10 +1493,15 @@ model ProjectType {
   /// обязателен, «Тема» — поля нет. Мост к формам типов «Автоматизации»
   /// (#38/#468): полный набор полей типа придёт схемой формы.
   codeField  String    @default("optional") @map("code_field")
-  /// Подсказка дефолтных видов узлов структуры (#467, вердикт 30.10: НЕ
-  /// жёсткий порядок уровней — только подсказка вида первого узла); null —
-  /// подсказки нет. id строк node_levels, ≤10 — контракт.
-  levelKindIds Json?   @map("level_kind_ids")
+  /// Значок и цвет плитки типа (#556, вердикт 02.11) — ключи закрытых
+  /// реестров contracts (processTypeIconSchema, projectColorSchema).
+  icon       String    @default("file-text")
+  color      String    @default("blue")
+  /// Допустимые виды папок типа (#556): null — все виды справочника,
+  /// массив — только перечисленные (id строк node_kinds, ≤50 — контракт).
+  /// Снятый с типа вид живёт у уже созданных папок; создание/смена вида
+  /// вне списка — 422 PROJECT_NODE_KIND_NOT_ALLOWED.
+  kindIds    Json?     @map("kind_ids")
   archivedAt DateTime? @map("archived_at") @db.Timestamptz()
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
@@ -1603,25 +1608,31 @@ model ProjectParticipant {
   @@map("project_participants")
 }
 
-/// Вид уровня узла структуры (#467): ярлык узла (значок + цвет).
-/// Справочник «Автоматизации»; удаление = архивация (узлы архивного вида
+/// Вид папки структуры (#467, #556): настраиваемый тип папки — ярлык
+/// (значок + цвет) и конфигурация (форма создания + возможности).
+/// Справочник «Автоматизации»; удаление = архивация (папки архивного вида
 /// создавать нельзя, существующие живут). Уникальность имени без учёта
 /// регистра и краёв — lower(btrim(name)) индексом в миграции (Prisma это
 /// не выражает). Посев 6 видов — миграцией (ТКП 45-1.02-295).
-model NodeLevel {
+model NodeKind {
   id         String    @id @default(uuid()) @db.Uuid
   name       String
-  /// Ключ закрытого реестра contracts (nodeLevelIconSchema, I15).
+  /// Ключ закрытого реестра contracts (nodeKindIconSchema, I15).
   icon       String
   /// Тон ярлыка (projectColorSchema).
   color      String
+  /// Конфигурация вида (#556, Р2): {form:{code, fields:[{fieldId,state}]},
+  /// capabilities:[…]}. Закрытая zod-схема, толерантное чтение
+  /// (normalizeNodeKindConfig); `{}` — умолчания. Форма вида И ЕСТЬ привязка
+  /// атрибутов области `node` (Р3) — отдельной таблицы нет.
+  config     Json      @default("{}")
   archivedAt DateTime? @map("archived_at") @db.Timestamptz()
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
 
   nodes ProjectNode[]
 
-  @@map("node_levels")
+  @@map("node_kinds")
 }
 
 /// Узел структуры проекта (#467): папка-агрегат со свободной вложенностью
@@ -1635,20 +1646,25 @@ model ProjectNode {
   id        String   @id @default(uuid()) @db.Uuid
   projectId String   @map("project_id") @db.Uuid
   parentId  String?  @map("parent_id") @db.Uuid
-  levelId   String   @map("level_id") @db.Uuid
+  kindId   String   @map("kind_id") @db.Uuid
   name      String
   code      String?
   order     String
+  /// Кастомные атрибуты области `node` (#556, ADR-0029): значения по id
+  /// определения. Хранятся ВСЕ значения, включая скрытые сменой вида; форма
+  /// фильтрует помощником nodeFormValues. GIN — в миграции.
+  customFields Json  @default("{}") @map("custom_fields")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   parent   ProjectNode? @relation("NodeTree", fields: [parentId], references: [id], onDelete: Restrict)
   children ProjectNode[] @relation("NodeTree")
-  level    NodeLevel    @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  kind     NodeKind    @relation(fields: [kindId], references: [id], onDelete: Restrict)
 
   @@index([projectId, parentId])
   @@index([projectId, order])
+  @@index([customFields(ops: JsonbPathOps)], type: Gin, map: "project_nodes_custom_fields_gin")
   @@map("project_nodes")
 }
 

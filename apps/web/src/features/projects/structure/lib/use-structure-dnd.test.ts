@@ -15,9 +15,10 @@ const EMPTY = {
 const node = (id: string, parentId: string | null = null): ProjectNode => ({
   id,
   parentId,
-  levelId: 'level-1',
+  kindId: 'kind-1',
   name: id,
   code: null,
+  customFields: {},
   rollup: EMPTY,
   createdAt: '2026-09-01T00:00:00Z',
 });

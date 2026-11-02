@@ -4,6 +4,7 @@ import {
   CUSTOM_FIELD_CATALOG_EVENTS,
   DICTIONARY_CATALOG_EVENTS,
   DIRECTORY_EVENTS,
+  PROJECT_CATALOG_EVENTS,
   WORKFLOW_CATALOG_EVENTS,
   type RealtimeEnvelope,
 } from '@nodus/contracts';
@@ -36,6 +37,11 @@ const CUSTOM_FIELD_CATALOG = new Set<string>([
   ...CUSTOM_FIELD_CATALOG_EVENTS,
   ...DICTIONARY_CATALOG_EVENTS,
 ]);
+
+/** Каталог видов папок (#556, О6): справочные данные без персональных
+ *  данных и без привязки к проекту — широковещательно в presence, как
+ *  каталог атрибутов. Узлы проекта по-прежнему без реалтайма. */
+const PROJECT_CATALOG = new Set<string>(PROJECT_CATALOG_EVENTS);
 
 /** События, меняющие список бесед (lastMessage/unread/название/аватар) → дублируем в user-комнаты участников. */
 const LIST_EVENTS = new Set([
@@ -95,7 +101,11 @@ export async function routeEnvelope(
 
   // Каталожные события «Процессов» (#428): схемы и типы видят все —
   // широковещательно в комнату presence (все аутентифицированные сокеты).
-  if (WORKFLOW_CATALOG.has(envelope.type) || CUSTOM_FIELD_CATALOG.has(envelope.type)) {
+  if (
+    WORKFLOW_CATALOG.has(envelope.type) ||
+    CUSTOM_FIELD_CATALOG.has(envelope.type) ||
+    PROJECT_CATALOG.has(envelope.type)
+  ) {
     io.to(PRESENCE_ROOM).emit(envelope.type, envelope);
     return;
   }

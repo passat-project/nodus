@@ -7,6 +7,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@nodus/ui/components/po
 import { Separator } from '@nodus/ui/components/separator';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
+import { nodeKindFormOf } from '@nodus/contracts';
 import { useProcessTypes } from '../../api/automation-api.js';
 import { ProcessTypeGlyph } from '../../../../shared/workflow/process-type-icon.js';
 
@@ -281,6 +283,30 @@ export function FieldTypesPicker({
           </PopoverContent>
         </Popover>
       )}
+    </div>
+  );
+}
+
+/** Область «Папки» (#556): привязки «атрибут × вид» нет — виды добавляют
+ *  атрибут в СВОЮ форму, поэтому в окне атрибута только сводка (чтение). */
+export function NodeKindsSummary({ fieldId }: { fieldId?: string }) {
+  const { data: kinds, isLoading } = useNodeKinds();
+  const names = (kinds ?? [])
+    .filter(
+      (kind) =>
+        fieldId !== undefined &&
+        nodeKindFormOf(kind).fields.some((slot) => slot.fieldId === fieldId),
+    )
+    .map((kind) => kind.name);
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-label text-muted-foreground">{ui.customFields.bind.nodeColumn}</span>
+      <span className="text-sm text-secondary-foreground">
+        {isLoading ? '…' : names.length > 0 ? names.join(', ') : ui.customFields.bind.nodeNone}
+      </span>
+      <span className="text-xs break-words text-muted-foreground">
+        {ui.customFields.bind.nodeHint}
+      </span>
     </div>
   );
 }

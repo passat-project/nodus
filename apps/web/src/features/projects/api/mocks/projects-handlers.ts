@@ -6,7 +6,7 @@ import { structureHandlers } from './structure-handlers.js';
 /**
  * Агрегат мок-хендлеров модуля проектов (#52, #467). Порядок важен:
  * справочники и структура (`/projects/types`, `/projects/groups`,
- * `/projects/node-levels`) — ДО параметрического `/projects/:id`
+ * `/projects/node-kinds`) — ДО параметрического `/projects/:id`
  * (MSW матчит по порядку массива — gotcha msw-query).
  */
 export const projectsHandlers = [

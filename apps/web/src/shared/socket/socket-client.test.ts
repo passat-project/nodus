@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { CHAT_EVENTS, TASK_EVENTS } from '@nodus/contracts';
+import {
+  CHAT_EVENTS,
+  CUSTOM_FIELD_CATALOG_EVENTS,
+  DICTIONARY_CATALOG_EVENTS,
+  PROJECT_CATALOG_EVENTS,
+  TASK_EVENTS,
+  WORKFLOW_CATALOG_EVENTS,
+} from '@nodus/contracts';
 
 import { DOMAIN_EVENTS, isFirstDelivery } from './socket-client.js';
 
@@ -80,6 +87,20 @@ describe('DOMAIN_EVENTS: подписка клиента (gotcha #311, #318)', (
     const missing = [...Object.values(CHAT_EVENTS), ...Object.values(TASK_EVENTS)].filter(
       (type) => !subscribed.has(type),
     );
+    expect(missing).toEqual([]);
+  });
+
+  // F6 (#556): каталожные события «Атрибутов», справочников, «Процессов» и
+  // видов папок gateway рассылает всем, но до роутера инвалидаций они не
+  // доходили — подписки не было.
+  it('каждое каталожное событие (атрибуты, справочники, процессы, виды папок) подписано', () => {
+    const subscribed = new Set<string>(DOMAIN_EVENTS);
+    const missing = [
+      ...CUSTOM_FIELD_CATALOG_EVENTS,
+      ...DICTIONARY_CATALOG_EVENTS,
+      ...WORKFLOW_CATALOG_EVENTS,
+      ...PROJECT_CATALOG_EVENTS,
+    ].filter((type) => !subscribed.has(type));
     expect(missing).toEqual([]);
   });
 });

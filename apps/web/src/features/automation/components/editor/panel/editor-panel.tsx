@@ -4,7 +4,7 @@ import { effectiveCreationForm, ui } from '@nodus/contracts';
 
 import { useRouteDocStore, type SelectionRef } from '../../../model/route-doc-store.js';
 import { CreationPanel } from './creation-panel.js';
-import { SidePanel } from './side-panel.js';
+import { SidePanel } from '../../../../../shared/ui/panel/side-panel.js';
 import { StageButtonsSection } from './stage-buttons-section.js';
 import { StagePanel } from './stage-panel.js';
 import { TransitionPanel, type TransitionSection } from './transition-panel.js';

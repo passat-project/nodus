@@ -3,6 +3,7 @@ import type {
   PortalSettings,
   ProjectGroup,
   ProjectType,
+  ProjectTypeCreateBody,
   ProjectTypeUpdateBody,
 } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -31,31 +32,34 @@ function patchGroups(
   );
 }
 
-/** Новый тип проекта («Автоматизация» → «Типы проектов»). */
+/** Новый тип проекта («Автоматизация» → «Схемы проектов»): название,
+ *  значок и цвет — грамматика создания типа процесса. */
 export function useCreateProjectType() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) =>
-      api<ProjectType>('/projects/types', { method: 'POST', body: { name } }),
-    onMutate: async (name) => {
+    mutationFn: (body: ProjectTypeCreateBody) =>
+      api<ProjectType>('/projects/types', { method: 'POST', body }),
+    onMutate: async (body) => {
       const snapshot = queryClient.getQueriesData<ProjectType[]>({
         queryKey: [...projectsKeys.all, 'types'],
       });
       const temp: ProjectType = {
         id: `temp-${crypto.randomUUID()}`,
-        name,
+        name: body.name,
+        icon: body.icon ?? 'file-text',
+        color: body.color ?? 'blue',
         codeField: 'optional',
-        levelKindIds: null,
+        kindIds: null,
         archivedAt: null,
       };
       patchTypes(queryClient, (items) => [...items, temp]);
       return { snapshot, tempId: temp.id };
     },
-    onError: (error, _name, context) => {
+    onError: (error, _body, context) => {
       for (const [key, data] of context?.snapshot ?? []) queryClient.setQueryData(key, data);
       toastApiError(error);
     },
-    onSuccess: (type, _name, context) => {
+    onSuccess: (type, _body, context) => {
       patchTypes(queryClient, (items) =>
         items.map((row) => (row.id === context.tempId ? type : row)),
       );
@@ -67,8 +71,8 @@ export function useCreateProjectType() {
   });
 }
 
-/** Правка типа проекта: имя, политика системного поля «Шифр», виды-подсказки
- *  структуры (#467). */
+/** Правка типа проекта: имя, политика системного поля «Шифр», допустимые
+ *  виды папок (#556). */
 export function useUpdateProjectType() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -77,8 +81,10 @@ export function useUpdateProjectType() {
         method: 'PATCH',
         body: {
           ...(vars.name ? { name: vars.name } : {}),
+          ...(vars.icon ? { icon: vars.icon } : {}),
+          ...(vars.color ? { color: vars.color } : {}),
           ...(vars.codeField ? { codeField: vars.codeField } : {}),
-          ...(vars.levelKindIds !== undefined ? { levelKindIds: vars.levelKindIds } : {}),
+          ...(vars.kindIds !== undefined ? { kindIds: vars.kindIds } : {}),
         },
       }),
     onMutate: async (vars) => {
@@ -91,8 +97,10 @@ export function useUpdateProjectType() {
             ? {
                 ...row,
                 ...(vars.name ? { name: vars.name } : {}),
+                ...(vars.icon ? { icon: vars.icon } : {}),
+                ...(vars.color ? { color: vars.color } : {}),
                 ...(vars.codeField ? { codeField: vars.codeField } : {}),
-                ...(vars.levelKindIds !== undefined ? { levelKindIds: vars.levelKindIds } : {}),
+                ...(vars.kindIds !== undefined ? { kindIds: vars.kindIds } : {}),
               }
             : row,
         ),

@@ -9,8 +9,10 @@ import type { TransactionClient } from '../../core/database/transaction-runner.j
 const typeSelect = {
   id: true,
   name: true,
+  icon: true,
+  color: true,
   codeField: true,
-  levelKindIds: true,
+  kindIds: true,
   archivedAt: true,
 } as const;
 type Row = Prisma.ProjectTypeGetPayload<{ select: typeof typeSelect }>;
@@ -24,9 +26,11 @@ export class ProjectTypesRepository {
     return {
       id: row.id,
       name: row.name,
+      icon: row.icon as ProjectType['icon'],
+      color: row.color as ProjectType['color'],
       codeField: row.codeField as ProjectCodeField,
-      // JSONB-массив id видов узлов (#467); битое значение читается как «нет».
-      levelKindIds: Array.isArray(row.levelKindIds) ? (row.levelKindIds as string[]) : null,
+      // Допустимые виды папок типа (#556): null — все, массив — только эти.
+      kindIds: Array.isArray(row.kindIds) ? (row.kindIds as string[]) : null,
       archivedAt: row.archivedAt?.toISOString() ?? null,
     };
   }
@@ -62,16 +66,19 @@ export class ProjectTypesRepository {
     return row !== null;
   }
 
-  async create(tx: TransactionClient, name: string): Promise<ProjectType> {
+  async create(
+    tx: TransactionClient,
+    data: { name: string; icon?: string; color?: string },
+  ): Promise<ProjectType> {
     const row = await tx.projectType.create({
       select: typeSelect,
-      data: { id: randomUUID(), name },
+      data: { id: randomUUID(), ...data },
     });
     return this.toDto(row);
   }
 
-  /** Правка типа: имя, политика «Шифра» и подсказка видов узлов (null —
-   *  подсказки нет; #467). Валидность id видов — контроллер каталога. */
+  /** Правка типа: имя, значок, цвет, политика «Шифра» и допустимые виды
+   *  папок (null — все; #556). Валидность id видов — контроллер каталога. */
   async update(
     tx: TransactionClient,
     id: string,
@@ -79,12 +86,12 @@ export class ProjectTypesRepository {
   ): Promise<ProjectType | null> {
     const data: Prisma.ProjectTypeUpdateInput = {};
     if (patch.name !== undefined) data.name = patch.name;
+    if (patch.icon !== undefined) data.icon = patch.icon;
+    if (patch.color !== undefined) data.color = patch.color;
     if (patch.codeField !== undefined) data.codeField = patch.codeField;
-    if (patch.levelKindIds !== undefined) {
-      data.levelKindIds =
-        patch.levelKindIds === null
-          ? Prisma.JsonNull
-          : (patch.levelKindIds as Prisma.InputJsonValue);
+    if (patch.kindIds !== undefined) {
+      data.kindIds =
+        patch.kindIds === null ? Prisma.JsonNull : (patch.kindIds as Prisma.InputJsonValue);
     }
     const result = await tx.projectType.updateMany({ where: { id }, data });
     if (result.count === 0) return null;

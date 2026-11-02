@@ -39,7 +39,7 @@ import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../core/openapi/api-idempotency.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { TransactionRunner } from '../../core/database/transaction-runner.js';
-import { NodeLevelsRepository } from './project-node-levels.repository.js';
+import { NodeKindsRepository } from './project-node-kinds.repository.js';
 import { ProjectGroupsRepository } from './project-groups.repository.js';
 import { ProjectTypesRepository } from './project-types.repository.js';
 import { ProjectsService } from './projects.service.js';
@@ -53,7 +53,7 @@ const listQuerySchema = z.object({ includeArchived: z.enum(['true', 'false']).de
  * (#467 — то же право), портфели (создание — `project.create`, архивация —
  * `project.manage`) и настройки портала (дефолт видимости новых проектов —
  * `project.setup.manage`, Р7). Статические маршруты (`projects/types`,
- * `projects/node-levels`) фармуруются раньше параметрических `projects/:id`
+ * `projects/node-kinds`) фармуруются раньше параметрических `projects/:id`
  * — роутер Fastify отдаёт статике приоритет.
  */
 @ApiTags('projects')
@@ -64,7 +64,7 @@ export class ProjectCatalogsController {
   constructor(
     private readonly types: ProjectTypesRepository,
     private readonly groups: ProjectGroupsRepository,
-    private readonly nodeLevels: NodeLevelsRepository,
+    private readonly nodeKinds: NodeKindsRepository,
     private readonly settings: ProjectsService,
     private readonly txRunner: TransactionRunner,
   ) {}
@@ -87,7 +87,7 @@ export class ProjectCatalogsController {
   @Post('projects/types')
   @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
   @Audit({ action: 'project.type_create', entity: 'project_type' })
-  @ApiOperation({ summary: 'Новый тип проекта' })
+  @ApiOperation({ summary: 'Новый тип проекта (название, значок, цвет)' })
   @ApiCreatedResponse({ standardSchema: projectTypeSchema })
   @ApiErrors(400, 401, 403, 409)
   @ApiIdempotencyKey()
@@ -102,7 +102,7 @@ export class ProjectCatalogsController {
       if (await this.types.nameTaken(dto.name)) {
         throw DomainException.conflict('Project type name is already taken');
       }
-      return this.types.create(tx, dto.name);
+      return this.types.create(tx, dto);
     });
   }
 
@@ -110,7 +110,9 @@ export class ProjectCatalogsController {
   @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
   @Audit({ action: 'project.type_update', entity: 'project_type' })
   @ApiParam({ name: 'id', description: 'UUID типа', schema: { type: 'string', format: 'uuid' } })
-  @ApiOperation({ summary: 'Правка типа проекта: имя и политика поля «Шифр»' })
+  @ApiOperation({
+    summary: 'Правка типа проекта: имя, значок, цвет, поле «Шифр», виды папок',
+  })
   @ApiOkResponse({ standardSchema: projectTypeSchema })
   @ApiErrors(400, 401, 403, 404, 409)
   @ApiIdempotencyKey()
@@ -126,12 +128,12 @@ export class ProjectCatalogsController {
       if (dto.name !== undefined && (await this.types.nameTaken(dto.name, id))) {
         throw DomainException.conflict('Project type name is already taken');
       }
-      // Подсказка видов узлов (#467): id существуют и живые, иначе 422
+      // Допустимые виды папок типа (#556): id существуют и живые, иначе 422
       // (без оракула — не раскрываем, какой именно вид исчез).
-      if (dto.levelKindIds !== undefined && dto.levelKindIds !== null) {
-        const alive = await this.nodeLevels.activeByIds(dto.levelKindIds);
-        if (alive.length !== new Set(dto.levelKindIds).size) {
-          throw new DomainException(ErrorCode.PROJECT_NODE_INVALID, 'Node level is not available', {
+      if (dto.kindIds !== undefined && dto.kindIds !== null) {
+        const alive = await this.nodeKinds.activeByIds(dto.kindIds);
+        if (alive.length !== new Set(dto.kindIds).size) {
+          throw new DomainException(ErrorCode.PROJECT_NODE_INVALID, 'Node kind is not available', {
             typeId: id,
           });
         }

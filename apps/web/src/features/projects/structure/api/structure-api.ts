@@ -1,15 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { InfiniteData } from '@tanstack/react-query';
 import type {
   BatchCreateProjectNodesBody,
   BatchCreateProjectNodesResponse,
   CreateProjectNodeBody,
+  CustomFieldRef,
+  CustomFieldValue,
   MoveProjectNodeBody,
-  Paginated,
   ProjectNode,
   ProjectStructureResponse,
-  TaskBulkResult,
-  TaskListItem,
   UpdateProjectNodeBody,
 } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -18,16 +16,14 @@ import { toast } from 'sonner';
 import { api } from '../../../../shared/api-client.js';
 import { toastApiError } from '../../../../shared/api/error-toast.js';
 import { projectsKeys } from '../../../../shared/api/projects-list.js';
-import { mapTaskInPages, tasksKeys } from '../../../../shared/api/tasks-keys.js';
 import { applyNodeMove } from '../lib/structure-tree.js';
 
 export { useProjectStructure } from '../../../../shared/api/project-structure.js';
 
 /** Ключи кэша структуры (#467): под префиксом `projects` — инвалидации
- *  модуля достают и дерево, и справочник видов уровней. */
+ *  модуля достают дерево. Виды папок — `nodeKindsKeys` (shared/api). */
 export const structureKeys = {
   of: (projectId: string) => projectsKeys.structure(projectId),
-  nodeLevels: () => [...projectsKeys.all, 'node-levels'] as const,
 };
 
 type QueryClient = ReturnType<typeof useQueryClient>;
@@ -52,6 +48,26 @@ function rollback(
   snapshot: ProjectStructureResponse | null,
 ) {
   if (snapshot) queryClient.setQueryData(structureKeys.of(projectId), snapshot);
+}
+
+/** Слияние патча значений: `null` удаляет ключ (канон JSONB-значений). */
+function mergeValues(
+  current: Record<string, CustomFieldValue>,
+  patch: Record<string, CustomFieldValue | null>,
+): Record<string, CustomFieldValue> {
+  const next = { ...current };
+  for (const [fieldId, value] of Object.entries(patch)) {
+    if (value === null) delete next[fieldId];
+    else next[fieldId] = value;
+  }
+  return next;
+}
+
+/** Ссылки выбора — дедуп по `kind:id`, свежие поверх старых. */
+function mergeRefs(current: readonly CustomFieldRef[], added: readonly CustomFieldRef[]) {
+  const refs = new Map(current.map((ref) => [`${ref.kind}:${ref.id}`, ref]));
+  for (const ref of added) refs.set(`${ref.kind}:${ref.id}`, ref);
+  return [...refs.values()];
 }
 
 const zeroRollup = {
@@ -80,9 +96,10 @@ export function useCreateNode(projectId: string) {
           {
             id: tempId,
             parentId: body.parentId ?? null,
-            levelId: body.levelId,
+            kindId: body.kindId,
             name: body.name,
             code: body.code ?? null,
+            customFields: body.customFields ?? {},
             rollup: { ...zeroRollup },
             createdAt: new Date().toISOString(),
           },
@@ -127,9 +144,10 @@ export function useBatchCreateNodes(projectId: string) {
           ...body.names.map((name, index) => ({
             id: `${prefix}-${index}`,
             parentId: body.parentId ?? null,
-            levelId: body.levelId,
+            kindId: body.kindId,
             name,
             code: null,
+            customFields: body.customFields ?? {},
             rollup: { ...zeroRollup },
             createdAt: new Date().toISOString(),
           })),
@@ -158,12 +176,18 @@ export function useBatchCreateNodes(projectId: string) {
   });
 }
 
-/** Правка узла: имя/код/вид-ярлык (порядок и родитель — move). */
+/** Правка папки: имя/шифр/вид/значения (порядок и родитель — move).
+ *  Оптимистично: значения сливаются (`null` удаляет ключ), ссылки выбора
+ *  дописываются в `customFieldRefs` — имя марки видно до ответа (I4, Р17). */
 export function useUpdateNode(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { nodeId: string } & UpdateProjectNodeBody) => {
-      const { nodeId, ...body } = vars;
+    mutationFn: (
+      vars: { nodeId: string } & UpdateProjectNodeBody & { refs?: CustomFieldRef[] },
+    ) => {
+      const { nodeId, refs, ...body } = vars;
+      // refs нужны только оптимистичному кэшу (onMutate), в тело не уходят.
+      void refs;
       return api<ProjectNode>(`/projects/${projectId}/nodes/${nodeId}`, {
         method: 'PATCH',
         body,
@@ -171,19 +195,26 @@ export function useUpdateNode(projectId: string) {
     },
     onMutate: async (vars) => {
       const snapshot = snapshotOf(queryClient, projectId);
-      patchStructure(queryClient, projectId, (data) => ({
-        ...data,
-        nodes: data.nodes.map((node) =>
-          node.id === vars.nodeId
-            ? {
-                ...node,
-                ...(vars.name !== undefined ? { name: vars.name } : {}),
-                ...(vars.code !== undefined ? { code: vars.code } : {}),
-                ...(vars.levelId !== undefined ? { levelId: vars.levelId } : {}),
-              }
-            : node,
-        ),
-      }));
+      patchStructure(queryClient, projectId, (data) => {
+        const refs = mergeRefs(data.customFieldRefs, vars.refs ?? []);
+        return {
+          ...data,
+          customFieldRefs: refs,
+          nodes: data.nodes.map((node) =>
+            node.id === vars.nodeId
+              ? {
+                  ...node,
+                  ...(vars.name !== undefined ? { name: vars.name } : {}),
+                  ...(vars.code !== undefined ? { code: vars.code } : {}),
+                  ...(vars.kindId !== undefined ? { kindId: vars.kindId } : {}),
+                  ...(vars.customFields !== undefined
+                    ? { customFields: mergeValues(node.customFields, vars.customFields) }
+                    : {}),
+                }
+              : node,
+          ),
+        };
+      });
       return { snapshot };
     },
     onError: (error, _vars, context) => {
@@ -254,95 +285,6 @@ export function useDeleteNode(projectId: string) {
     },
     onSuccess: () => toast.success(ui.projects.savedDone),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: structureKeys.of(projectId) });
-      void queryClient.invalidateQueries({ queryKey: projectsKeys.detail(projectId) });
-    },
-  });
-}
-
-/** Одиночный перенос задачи в узел — PATCH /tasks/:id (контракт
- *  `taskUpdateBodySchema.nodeId`). Bulk set_node остаётся для мультиселекта:
- *  одиночный DnD не должен ходить массовой операцией (#467). */
-export function useMoveTaskNode(projectId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: { taskId: string; nodeId: string | null }) =>
-      api<TaskListItem>(`/tasks/${vars.taskId}`, {
-        method: 'PATCH',
-        body: { nodeId: vars.nodeId },
-      }),
-    onMutate: async (vars) => {
-      const snapshots = queryClient.getQueriesData({
-        queryKey: tasksKeys.listPages(),
-      });
-      for (const [key] of snapshots) {
-        queryClient.setQueryData(key, (data) =>
-          mapTaskInPages(data as Parameters<typeof mapTaskInPages>[0], vars.taskId, (task) => ({
-            ...task,
-            nodeId: vars.nodeId,
-          })),
-        );
-      }
-      return { snapshots };
-    },
-    onError: (error, _vars, context) => {
-      for (const [key, data] of context?.snapshots ?? []) queryClient.setQueryData(key, data);
-      toastApiError(error);
-    },
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.all });
-      void queryClient.invalidateQueries({ queryKey: structureKeys.of(projectId) });
-      void queryClient.invalidateQueries({ queryKey: projectsKeys.detail(projectId) });
-    },
-  });
-}
-
-/** Массовый перенос задач в узел / «Без узла» (мультиселект): bulk set_node.
- *  Одиночный перенос идёт PATCH-ем (`useMoveTaskNode`), bulk — только для
- *  пачки (#467). Оптимистично патчит страницы фида задач; агрегаты узлов
- *  пересчитает сервер. */
-export function useSetTasksNode(projectId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: { taskIds: string[]; nodeId: string | null }) =>
-      api<TaskBulkResult>('/tasks/bulk', {
-        method: 'POST',
-        body: { taskIds: vars.taskIds, action: { kind: 'set_node', nodeId: vars.nodeId } },
-      }),
-    onMutate: async (vars) => {
-      const snapshots = queryClient.getQueriesData({
-        queryKey: tasksKeys.listPages(),
-      }) as [readonly unknown[], InfiniteData<Paginated<TaskListItem>> | undefined][];
-      const ids = new Set(vars.taskIds);
-      for (const [key] of snapshots) {
-        queryClient.setQueryData<InfiniteData<Paginated<TaskListItem>>>(key, (data) =>
-          data
-            ? {
-                ...data,
-                pages: data.pages.map((page) => ({
-                  ...page,
-                  items: page.items.map((task) =>
-                    ids.has(task.id) ? { ...task, nodeId: vars.nodeId } : task,
-                  ),
-                })),
-              }
-            : data,
-        );
-      }
-      return { snapshots };
-    },
-    onError: (error, _vars, context) => {
-      for (const [key, data] of context?.snapshots ?? []) queryClient.setQueryData(key, data);
-      toastApiError(error);
-    },
-    onSuccess: ({ results }) => {
-      const ok = results.filter((r) => r.ok).length;
-      if (ok > 0) toast.success(ui.structure.movedTasks);
-      const failed = results.length - ok;
-      if (failed > 0) toast.error(`${ui.tasks.bulkSkipped} ${failed}`);
-    },
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.all });
       void queryClient.invalidateQueries({ queryKey: structureKeys.of(projectId) });
       void queryClient.invalidateQueries({ queryKey: projectsKeys.detail(projectId) });
     },

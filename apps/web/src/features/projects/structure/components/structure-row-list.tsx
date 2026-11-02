@@ -1,4 +1,4 @@
-import type { NodeLevel } from '@nodus/contracts';
+import type { NodeKind } from '@nodus/contracts';
 import type { RowSelection } from '../../../../shared/views/use-row-selection.js';
 import type { StructureField } from './structure-cells.js';
 import {
@@ -17,7 +17,7 @@ export function StructureRowList({
   treeRows,
   noNodeRow,
   noNodeTasks,
-  levelById,
+  kindById,
   collapsed,
   noNodeCollapsed,
   fields,
@@ -28,6 +28,7 @@ export function StructureRowList({
   actions,
   canEdit,
   onToggleBranch,
+  onSelectNode,
   onToggleNoNode,
   onOpenTask,
   onMoveTasks,
@@ -36,7 +37,7 @@ export function StructureRowList({
   treeRows: StructureRow[];
   noNodeRow: Extract<StructureRow, { kind: 'noNode' }> | null;
   noNodeTasks: StructureRow[];
-  levelById: Map<string, NodeLevel>;
+  kindById: Map<string, NodeKind>;
   collapsed: ReadonlySet<string>;
   noNodeCollapsed: boolean;
   fields: readonly StructureField[];
@@ -47,6 +48,8 @@ export function StructureRowList({
   actions: StructureMenuActions;
   canEdit: boolean;
   onToggleBranch: (id: string) => void;
+  /** Выбор папки для панели «Свойства» (клик по строке). */
+  onSelectNode: (id: string) => void;
   onToggleNoNode: () => void;
   onOpenTask: (id: string, anchor?: HTMLElement) => void;
   onMoveTasks: (ids: string[]) => void;
@@ -99,11 +102,12 @@ export function StructureRowList({
               <StructureNodeRowView
                 key={row.node.id}
                 row={row}
-                level={levelById.get(row.node.levelId)}
+                kind={kindById.get(row.node.kindId)}
                 collapsed={collapsed.has(row.node.id)}
                 onToggle={() => onToggleBranch(row.node.id)}
                 selected={selection.selected.has(`n:${row.node.id}`)}
                 onToggleSelected={() => selection.toggle(`n:${row.node.id}`)}
+                onSelect={() => onSelectNode(row.node.id)}
                 items={nodeMenuItems(row.node, actions, canEdit)}
                 zone={zoneOf(row.node.id)}
                 invalid={target?.overId === `node:${row.node.id}` && target.invalid}

@@ -52,6 +52,17 @@ export class CustomFieldRefsHydrator {
     actor: ProjectActor | undefined,
     tx?: TransactionClient,
   ): Promise<CustomFieldRef[]> {
+    return this.hydrateMany(definitions, [values], actor, tx);
+  }
+
+  /** Пачка по списку карт значений (#556, Р4): id собираются одним проходом,
+   *  запросы к справочникам — по одной пачке на вид ссылки (дедуп `kind:id`). */
+  async hydrateMany(
+    definitions: ReadonlyArray<Pick<CustomFieldDefinition, 'id' | 'type'>>,
+    valuesList: readonly CustomFieldValues[],
+    actor: ProjectActor | undefined,
+    tx?: TransactionClient,
+  ): Promise<CustomFieldRef[]> {
     const byId = new Map(definitions.map((definition) => [definition.id, definition]));
     const userIds = new Set<string>();
     const departmentIds = new Set<string>();
@@ -62,32 +73,34 @@ export class CustomFieldRefsHydrator {
     const scalarIds = (value: unknown): string[] =>
       Array.isArray(value) ? (value as string[]) : [String(value)];
 
-    for (const [fieldId, value] of Object.entries(values)) {
-      const definition = byId.get(fieldId);
-      if (!definition || !isCustomFieldValueFilled(value)) continue;
-      switch (definition.type) {
-        case 'user':
-        case 'users':
-          for (const id of scalarIds(value)) userIds.add(id);
-          break;
-        case 'department':
-          departmentIds.add(String(value));
-          break;
-        case 'enum':
-        case 'multienum':
-          for (const id of scalarIds(value)) itemIds.add(id);
-          break;
-        case 'money':
-          itemIds.add((value as { currencyId: string }).currencyId);
-          break;
-        case 'counterparty':
-          counterpartyIds.add(String(value));
-          break;
-        case 'project':
-          projectIds.add(String(value));
-          break;
-        default:
-          break;
+    for (const values of valuesList) {
+      for (const [fieldId, value] of Object.entries(values)) {
+        const definition = byId.get(fieldId);
+        if (!definition || !isCustomFieldValueFilled(value)) continue;
+        switch (definition.type) {
+          case 'user':
+          case 'users':
+            for (const id of scalarIds(value)) userIds.add(id);
+            break;
+          case 'department':
+            departmentIds.add(String(value));
+            break;
+          case 'enum':
+          case 'multienum':
+            for (const id of scalarIds(value)) itemIds.add(id);
+            break;
+          case 'money':
+            itemIds.add((value as { currencyId: string }).currencyId);
+            break;
+          case 'counterparty':
+            counterpartyIds.add(String(value));
+            break;
+          case 'project':
+            projectIds.add(String(value));
+            break;
+          default:
+            break;
+        }
       }
     }
 

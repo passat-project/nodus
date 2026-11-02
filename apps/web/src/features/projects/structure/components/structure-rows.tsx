@@ -1,7 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import type { NodeLevel } from '@nodus/contracts';
+import type { NodeKind } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
@@ -34,11 +34,12 @@ const combineRefs =
 
 export function StructureNodeRowView({
   row,
-  level,
+  kind,
   collapsed,
   onToggle,
   selected,
   onToggleSelected,
+  onSelect,
   items,
   zone,
   invalid,
@@ -49,11 +50,13 @@ export function StructureNodeRowView({
   readOnly,
 }: {
   row: StructureNodeRow;
-  level: NodeLevel | undefined;
+  kind: NodeKind | undefined;
   collapsed: boolean;
   onToggle: () => void;
   selected: boolean;
   onToggleSelected: () => void;
+  /** Клик по строке — выбор папки для панели «Свойства» (#556). */
+  onSelect: () => void;
   items: RowMenuItem[];
   /** Зона дропа над этой строкой (индикация). */
   zone: 'before' | 'into' | 'after' | null;
@@ -81,6 +84,10 @@ export function StructureNodeRowView({
         role="row"
         tabIndex={0}
         aria-expanded={row.hasChildren ? !collapsed : undefined}
+        onClick={(e) => {
+          if ((e.target as HTMLElement).closest('button,a,input,[role=button]')) return;
+          onSelect();
+        }}
         onDoubleClick={(e) => {
           if ((e.target as HTMLElement).closest('button,a,input,[role=button]')) return;
           if (row.hasChildren) onToggle();
@@ -124,7 +131,7 @@ export function StructureNodeRowView({
                 ) : (
                   <span className="size-5 shrink-0" />
                 )}
-                {nodeCell(row, field.id, level)}
+                {nodeCell(row, field.id, kind)}
                 {collapsed && row.descendantCount > 0 ? (
                   <span className="shrink-0 font-mono text-label-sm text-muted-foreground tabular-nums">
                     +{row.descendantCount}
@@ -132,7 +139,7 @@ export function StructureNodeRowView({
                 ) : null}
               </>
             ) : (
-              nodeCell(row, field.id, level)
+              nodeCell(row, field.id, kind)
             )}
           </span>
         ))}

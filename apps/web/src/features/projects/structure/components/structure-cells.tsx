@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react';
-import type { NodeLevel, TaskListItem } from '@nodus/contracts';
+import type { NodeKind, TaskListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Checkbox } from '@nodus/ui/components/checkbox';
 import { cn } from '@nodus/ui/lib/utils';
@@ -11,7 +11,7 @@ import { TaskStatusBadge } from '../../../../shared/ui/task-status-badge.js';
 import { RowMenu, type RowMenuItem } from '../../../../shared/views/row-menu.js';
 import type { FieldDef, ViewField } from '../../../../shared/views/use-view-fields.js';
 import { ProcessTypeGlyph } from '../../../../shared/workflow/process-type-icon.js';
-import { NodeLevelGlyph } from '../lib/node-level-icon.js';
+import { NodeKindGlyph } from '../lib/node-kind-icon.js';
 import type { StructureNodeRow } from '../lib/structure-tree.js';
 
 /** Общие ячейки строк структуры: значок/номер, прогресс, часы, срок,
@@ -71,7 +71,7 @@ export function TimeCell({ minutes }: { minutes: number | null | undefined }) {
   );
 }
 
-export function nodeCell(row: StructureNodeRow, fieldId: string, level: NodeLevel | undefined) {
+export function nodeCell(row: StructureNodeRow, fieldId: string, kind: NodeKind | undefined) {
   switch (fieldId) {
     case 'name':
       return (
@@ -80,13 +80,13 @@ export function nodeCell(row: StructureNodeRow, fieldId: string, level: NodeLeve
             aria-hidden
             className={cn(
               'flex size-6 shrink-0 items-center justify-center rounded border',
-              level
-                ? identityTone[level.color].tile
+              kind
+                ? identityTone[kind.color].tile
                 : 'border-border bg-accent/40 text-muted-foreground',
             )}
-            title={level?.name}
+            title={kind?.name}
           >
-            <NodeLevelGlyph icon={level?.icon ?? 'folder'} className="size-3.5" />
+            <NodeKindGlyph icon={kind?.icon ?? 'folder'} className="size-3.5" />
           </span>
           <span className="truncate text-sm font-semibold" title={row.node.name}>
             {row.node.name}

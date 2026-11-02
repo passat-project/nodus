@@ -24,7 +24,7 @@ import {
   Segmented,
   SwitchRow,
   focusName,
-} from './panel-kit.js';
+} from '../../../../../shared/ui/panel/panel-kit.js';
 import { stageButtonsSummary } from './stage-buttons-section.js';
 
 const GROUPS: readonly TaskSystemState[] = ['backlog', 'active', 'paused', 'done', 'closed'];

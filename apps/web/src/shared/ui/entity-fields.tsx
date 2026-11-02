@@ -60,7 +60,9 @@ export function FieldRow({
   hint,
   hintId,
   wide = false,
+  stacked = false,
   required = false,
+  requiredText,
   children,
 }: {
   icon: ReactNode;
@@ -68,19 +70,27 @@ export function FieldRow({
   hint?: string | null;
   hintId?: string;
   wide?: boolean;
+  /** Узкая зона (правая панель 320px): метка над значением, а не в колонке
+   *  w-44 — иначе метка стоит одна в пустой строке. */
+  stacked?: boolean;
   required?: boolean;
+  /** Подпись обязательности словами («обязательно») вместо звёздочки —
+   *  форма папки (#556): состояние поля читается, а не угадывается. */
+  requiredText?: string;
   children: ReactNode;
 }) {
   return (
     <div
       className={cn(
-        '-mx-2 flex flex-wrap items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-accent/40',
+        '-mx-2 flex rounded-md px-2 py-2 transition-colors hover:bg-accent/40',
+        stacked ? 'flex-col items-stretch gap-1' : 'flex-wrap items-center gap-3',
         wide && 'items-start @min-[55rem]:col-span-2',
       )}
     >
       <span
         className={cn(
-          'flex w-44 shrink-0 items-center gap-2 text-xs font-medium text-muted-foreground',
+          'flex shrink-0 items-center gap-2 text-xs font-medium text-muted-foreground',
+          stacked ? 'w-full' : 'w-44',
           wide && 'min-h-7',
         )}
         title={hint ?? undefined}
@@ -89,9 +99,13 @@ export function FieldRow({
           {icon}
         </span>
         <span className="truncate">{label}</span>
-        {/* Обязательное поле — тонкая метка-звёздочка в тоне действия; прижата
-            к слову (gap-2 метки оставлял бы её «висящей» отдельно). */}
-        {required ? (
+        {/* Обязательное поле: слово-метка (#556) или тонкая звёздочка в тоне
+            действия; прижата к слову (gap-2 метки оставляла бы её «висящей»). */}
+        {required && requiredText ? (
+          <span className="-ml-1 shrink-0 text-[11px] font-normal text-muted-foreground">
+            · {requiredText}
+          </span>
+        ) : required ? (
           <span aria-hidden className="-ml-1 shrink-0 text-primary">
             *
           </span>
@@ -102,7 +116,8 @@ export function FieldRow({
       </span>
       <span
         className={cn(
-          'flex min-h-8 min-w-[10rem] flex-1 items-center gap-2 text-sm',
+          'flex min-h-8 items-center gap-2 text-sm',
+          stacked ? 'w-full' : 'min-w-[10rem] flex-1',
           wide && 'items-start',
         )}
         aria-describedby={hint && hintId ? hintId : undefined}
