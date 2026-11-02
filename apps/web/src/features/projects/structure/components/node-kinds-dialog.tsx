@@ -2,12 +2,12 @@ import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@nodus/ui/components/dialog';
 
-import { NodeLevelsSection } from '../../components/node-levels-section.js';
+import { NodeKindsSection } from '../../components/node-kinds-section.js';
 
 /** Справочник видов узлов — в «Структуре», не в «Автоматизации» (вердикт
  *  владельца): шестерёнка тулбара открывает это окно. Справочник глобальный,
  *  правит его носитель права `project.setup.manage`; остальные видят список. */
-export function NodeLevelsDialog({
+export function NodeKindsDialog({
   open,
   canManage,
   onClose,
@@ -24,8 +24,8 @@ export function NodeLevelsDialog({
         onInteractOutside={(e) => e.preventDefault()}
         aria-describedby={undefined}
       >
-        <DialogTitle className="sr-only">{ui.structure.levelsTitle}</DialogTitle>
-        <NodeLevelsSection canManage={canManage} embedded />
+        <DialogTitle className="sr-only">{ui.structure.kindsTitle}</DialogTitle>
+        <NodeKindsSection canManage={canManage} embedded />
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
             {ui.common.close}

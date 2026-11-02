@@ -25,7 +25,7 @@ import { useStructureDnd } from '../lib/use-structure-dnd.js';
 import { StructureBulkIsland } from './structure-bulk-island.js';
 import { StructureDragPlate } from './structure-drag-plate.js';
 import { StructureDialogHost, type StructureDialog } from './structure-dialog-host.js';
-import { NodeLevelsDialog } from './node-levels-dialog.js';
+import { NodeKindsDialog } from './node-kinds-dialog.js';
 import { StructureRowList } from './structure-row-list.js';
 import type { StructureMenuActions } from './structure-menus.js';
 import { StructureEmpty, StructureSearchEmpty, StructureToolbar } from './structure-toolbar.js';
@@ -55,7 +55,7 @@ export function StructureTab({
   const canEdit = canManage && !readOnly;
   const model = useStructureModel(projectId);
   const [dialog, setDialog] = useState<StructureDialog | null>(null);
-  const [levelsOpen, setLevelsOpen] = useState(false);
+  const [kindsOpen, setKindsOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const moveNode = useMoveNode(projectId);
   const moveTask = useMoveTaskNode(projectId);
@@ -147,7 +147,7 @@ export function StructureTab({
         onCreateNode={() => setDialog({ kind: 'create', parent: null })}
         onExpandAll={() => model.setCollapsed(new Set())}
         onCollapseAll={() => model.setCollapsed(new Set(model.branchIds))}
-        onLevels={() => setLevelsOpen(true)}
+        onKinds={() => setKindsOpen(true)}
       />
       <DndContext {...dnd.context}>
         <div
@@ -185,7 +185,7 @@ export function StructureTab({
                   treeRows={model.treeRows}
                   noNodeRow={model.noNodeRow}
                   noNodeTasks={model.noNodeTasks}
-                  levelById={model.levelById}
+                  kindById={model.kindById}
                   collapsed={model.collapsed}
                   noNodeCollapsed={model.noNodeCollapsed}
                   fields={model.visibleFields}
@@ -222,7 +222,7 @@ export function StructureTab({
             <StructureDragPlate
               active={dnd.active}
               nodes={model.nodes}
-              levels={model.levels}
+              kinds={model.kinds}
               tasks={model.tasks}
             />
           ) : null}
@@ -232,17 +232,13 @@ export function StructureTab({
         <StructureDialogHost
           projectId={projectId}
           dialog={dialog}
-          levels={model.levels}
+          kinds={model.kinds}
           nodes={model.nodes}
           onClose={() => setDialog(null)}
           onMoveTasks={moveTasks}
         />
       ) : null}
-      <NodeLevelsDialog
-        open={levelsOpen}
-        canManage={canSetup}
-        onClose={() => setLevelsOpen(false)}
-      />
+      <NodeKindsDialog open={kindsOpen} canManage={canSetup} onClose={() => setKindsOpen(false)} />
     </div>
   );
 }

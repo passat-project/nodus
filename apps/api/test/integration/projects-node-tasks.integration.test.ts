@@ -29,7 +29,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('rollups: счётчики, часы, done по канону (closed && не cancelled), сроки', async () => {
       const project = await s.createProject(s.alice, { name: s.unique('Rollups') });
-      const root = await s.node(s.alice, project.id, { levelId: s.levelId, name: 'Корень' });
+      const root = await s.node(s.alice, project.id, { kindId: s.kindId, name: 'Корень' });
       const late = new Date('2027-01-15T00:00:00.000Z');
       const soon = new Date('2026-12-01T00:00:00.000Z');
       const mid = new Date('2026-12-20T00:00:00.000Z');
@@ -97,7 +97,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('список задач проекта отдаёт плановое время задачи (колонка «План»)', async () => {
       const project = await s.createProject(s.alice, { name: s.unique('План') });
-      const root = await s.node(s.alice, project.id, { levelId: s.levelId, name: 'Корень' });
+      const root = await s.node(s.alice, project.id, { kindId: s.kindId, name: 'Корень' });
       const withPlan = await s.createTask(s.alice, {
         projectId: project.id,
         nodeId: root.id,
@@ -120,7 +120,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('structureSummary карточки: hasTaskNodes флипается задачей в узле', async () => {
       const withNodes = await s.createProject(s.alice, { name: s.unique('Сводка') });
-      const root = await s.node(s.alice, withNodes.id, { levelId: s.levelId, name: 'Корень' });
+      const root = await s.node(s.alice, withNodes.id, { kindId: s.kindId, name: 'Корень' });
       await s.createTask(s.alice, { projectId: withNodes.id, nodeId: root.id });
       const detail = projectDetailSchema.parse(
         await (await s.fx.api(s.alice, 'GET', `/projects/${withNodes.id}`)).json(),
@@ -129,7 +129,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       // узлы без задач: hasTaskNodes=false, nodeCount учитывает узлы
       const nodeless = await s.createProject(s.alice, { name: s.unique('Узлы без задач') });
-      await s.node(s.alice, nodeless.id, { levelId: s.levelId, name: 'Пустой узел' });
+      await s.node(s.alice, nodeless.id, { kindId: s.kindId, name: 'Пустой узел' });
       const nodelessDetail = projectDetailSchema.parse(
         await (await s.fx.api(s.alice, 'GET', `/projects/${nodeless.id}`)).json(),
       );
@@ -145,7 +145,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it('nodeId без projectId — 400; узел чужого проекта — 422; смена projectId обнуляет node_id', async () => {
       const a = await s.createProject(s.alice, { name: s.unique('Проект А') });
       const b = await s.createProject(s.alice, { name: s.unique('Проект Б') });
-      const nodeA = await s.node(s.alice, a.id, { levelId: s.levelId, name: 'Узел А' });
+      const nodeA = await s.node(s.alice, a.id, { kindId: s.kindId, name: 'Узел А' });
 
       const orphan = await s.fx.api(s.alice, 'POST', '/tasks', {
         body: { title: s.unique('Без проекта'), nodeId: nodeA.id },
@@ -181,8 +181,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it('совмещённый PATCH projectId+nodeId не оставляет узел чужого проекта', async () => {
       const a = await s.createProject(s.alice, { name: s.unique('PATCH A') });
       const b = await s.createProject(s.alice, { name: s.unique('PATCH B') });
-      const nodeA = await s.node(s.alice, a.id, { levelId: s.levelId, name: 'Узел A' });
-      const nodeB = await s.node(s.alice, b.id, { levelId: s.levelId, name: 'Узел B' });
+      const nodeA = await s.node(s.alice, a.id, { kindId: s.kindId, name: 'Узел A' });
+      const nodeB = await s.node(s.alice, b.id, { kindId: s.kindId, name: 'Узел B' });
       const task = await s.createTask(s.alice, { projectId: a.id });
 
       const foreign = await s.fx.api(s.alice, 'PATCH', `/tasks/${task.id}`, {
@@ -208,7 +208,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('архивный проект: перенос в узел заморожен, снятие узла разрешено', async () => {
       const project = await s.createProject(s.alice, { name: s.unique('Архив') });
-      const root = await s.node(s.alice, project.id, { levelId: s.levelId, name: 'Корень' });
+      const root = await s.node(s.alice, project.id, { kindId: s.kindId, name: 'Корень' });
       const task = await s.createTask(s.alice, { projectId: project.id, nodeId: root.id });
 
       const archived = await s.fx.api(s.alice, 'POST', `/projects/${project.id}/status`, {
@@ -237,7 +237,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('задача коллеги видна в дереве: scope=all, но не в scope=mine', async () => {
       const project = await s.createProject(s.alice, { name: s.unique('Дерево коллеги') });
-      const root = await s.node(s.alice, project.id, { levelId: s.levelId, name: 'Корень' });
+      const root = await s.node(s.alice, project.id, { kindId: s.kindId, name: 'Корень' });
       const colleagueTask = await s.createTask(s.carol, {
         projectId: project.id,
         nodeId: root.id,
@@ -265,7 +265,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('подзадача наследует проект и узел родителя', async () => {
       const project = await s.createProject(s.alice, { name: s.unique('Наследование') });
-      const root = await s.node(s.alice, project.id, { levelId: s.levelId, name: 'Корень' });
+      const root = await s.node(s.alice, project.id, { kindId: s.kindId, name: 'Корень' });
       const parent = await s.createTask(s.alice, { projectId: project.id, nodeId: root.id });
 
       const res = await s.fx.api(s.alice, 'POST', `/tasks/${parent.id}/subtasks`, {
@@ -283,7 +283,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('bulk set_node раскладывает задачи (права индивидуально), null — «Без узла»', async () => {
       const project = await s.createProject(s.alice, { name: s.unique('Bulk') });
-      const root = await s.node(s.alice, project.id, { levelId: s.levelId, name: 'Корень' });
+      const root = await s.node(s.alice, project.id, { kindId: s.kindId, name: 'Корень' });
       // вторая задача — чужого постановщика: руководство проекта — уровень
       // постановщика (Р12), перенос проходит
       const t1 = await s.createTask(s.alice, { projectId: project.id });

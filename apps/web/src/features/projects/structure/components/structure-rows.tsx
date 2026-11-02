@@ -1,7 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import type { NodeLevel } from '@nodus/contracts';
+import type { NodeKind } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
@@ -34,7 +34,7 @@ const combineRefs =
 
 export function StructureNodeRowView({
   row,
-  level,
+  kind,
   collapsed,
   onToggle,
   selected,
@@ -49,7 +49,7 @@ export function StructureNodeRowView({
   readOnly,
 }: {
   row: StructureNodeRow;
-  level: NodeLevel | undefined;
+  kind: NodeKind | undefined;
   collapsed: boolean;
   onToggle: () => void;
   selected: boolean;
@@ -124,7 +124,7 @@ export function StructureNodeRowView({
                 ) : (
                   <span className="size-5 shrink-0" />
                 )}
-                {nodeCell(row, field.id, level)}
+                {nodeCell(row, field.id, kind)}
                 {collapsed && row.descendantCount > 0 ? (
                   <span className="shrink-0 font-mono text-label-sm text-muted-foreground tabular-nums">
                     +{row.descendantCount}
@@ -132,7 +132,7 @@ export function StructureNodeRowView({
                 ) : null}
               </>
             ) : (
-              nodeCell(row, field.id, level)
+              nodeCell(row, field.id, kind)
             )}
           </span>
         ))}

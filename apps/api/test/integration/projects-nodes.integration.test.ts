@@ -23,11 +23,11 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: структура #467 �
   describe('создание и права', () => {
     it('РП создаёт корень (node_created); обычный сотрудник — 403; помощник — ок', async () => {
       const project = await s.createProject(s.alice, { name: s.unique('Права') });
-      const root = await s.node(s.alice, project.id, { levelId: s.levelId, name: 'Корень' });
+      const root = await s.node(s.alice, project.id, { kindId: s.kindId, name: 'Корень' });
       expect(root.parentId).toBeNull();
       expect(root.rollup).toMatchObject({ taskCount: 0, doneCount: 0 });
 
-      const denied = await s.createNode(s.carol, project.id, { levelId: s.levelId, name: 'Чужой' });
+      const denied = await s.createNode(s.carol, project.id, { kindId: s.kindId, name: 'Чужой' });
       await s.expectError(denied, 403, ErrorCode.FORBIDDEN);
 
       const assisted = await s.createProject(s.alice, {
@@ -35,7 +35,7 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: структура #467 �
         assistantIds: [s.bob.id],
       });
       const byAssistant = await s.node(s.bob, assisted.id, {
-        levelId: s.levelId,
+        kindId: s.kindId,
         name: 'Узел помощника',
       });
       expect(byAssistant.parentId).toBeNull();
@@ -47,7 +47,7 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: структура #467 �
         projectId: project.id,
         nodeId: root.id,
         parentId: null,
-        levelId: s.levelId,
+        kindId: s.kindId,
         name: 'Корень',
       });
     });
@@ -55,7 +55,7 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: структура #467 �
     it('пакет: каждое имя — узел, порядок по списку, событие на каждый', async () => {
       const project = await s.createProject(s.alice, { name: s.unique('Пакет') });
       const res = await s.fx.api(s.alice, 'POST', `/projects/${project.id}/nodes/batch`, {
-        body: { levelId: s.levelId, names: ['Поз. 1', 'Поз. 2', 'Поз. 3'] },
+        body: { kindId: s.kindId, names: ['Поз. 1', 'Поз. 2', 'Поз. 3'] },
         key: `bt-${s.unique('k')}`,
       });
       expect(res.status).toBe(201);
@@ -77,16 +77,16 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: структура #467 �
     it('родитель чужого проекта и несуществующий вид — 422 PROJECT_NODE_INVALID', async () => {
       const a = await s.createProject(s.alice, { name: s.unique('Родитель А') });
       const b = await s.createProject(s.alice, { name: s.unique('Родитель Б') });
-      const foreign = await s.node(s.alice, b.id, { levelId: s.levelId, name: 'Чужой корень' });
+      const foreign = await s.node(s.alice, b.id, { kindId: s.kindId, name: 'Чужой корень' });
       const wrong = await s.createNode(s.alice, a.id, {
-        levelId: s.levelId,
+        kindId: s.kindId,
         parentId: foreign.id,
         name: 'Под чужим',
       });
       await s.expectError(wrong, 422, ErrorCode.PROJECT_NODE_INVALID);
 
       const ghost = await s.createNode(s.alice, a.id, {
-        levelId: crypto.randomUUID(),
+        kindId: crypto.randomUUID(),
         name: 'Призрак вида',
       });
       await s.expectError(ghost, 422, ErrorCode.PROJECT_NODE_INVALID);
@@ -99,30 +99,30 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: структура #467 �
       for (let page = 0; page < 2; page++) {
         const res = await s.fx.api(s.alice, 'POST', `/projects/${project.id}/nodes/batch`, {
           body: {
-            levelId: s.levelId,
+            kindId: s.kindId,
             names: Array.from({ length: 50 }, (_, i) => `Здание ${page * 50 + i + 1}`),
           },
           key: `lim-${s.unique('k')}`,
         });
         expect(res.status).toBe(201);
       }
-      const extra = await s.createNode(s.alice, project.id, { levelId: s.levelId, name: '101-й' });
+      const extra = await s.createNode(s.alice, project.id, { kindId: s.kindId, name: '101-й' });
       await s.expectError(extra, 409, ErrorCode.PROJECT_NODE_LIMIT_REACHED);
     });
 
     it('глубина ≤10: цепочка из 10 — ок, 11-й уровень — 409', async () => {
       const project = await s.createProject(s.alice, { name: s.unique('Глубина') });
       let parentId: string | null = null;
-      for (let level = 1; level <= 10; level++) {
+      for (let kind = 1; kind <= 10; kind++) {
         const created = await s.node(s.alice, project.id, {
-          levelId: s.levelId,
+          kindId: s.kindId,
           ...(parentId ? { parentId } : {}),
-          name: `Уровень ${level}`,
+          name: `Уровень ${kind}`,
         });
         parentId = created.id;
       }
       const eleventh = await s.createNode(s.alice, project.id, {
-        levelId: s.levelId,
+        kindId: s.kindId,
         parentId,
         name: 'Одиннадцатый',
       });
@@ -133,10 +133,10 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: структура #467 �
       const a = await s.createProject(s.alice, { name: s.unique('Шифр А') });
       const b = await s.createProject(s.alice, { name: s.unique('Шифр Б') });
       const code = s.unique('K-1');
-      await s.node(s.alice, a.id, { levelId: s.levelId, name: 'Первый', code });
-      const clash = await s.createNode(s.alice, a.id, { levelId: s.levelId, name: 'Второй', code });
+      await s.node(s.alice, a.id, { kindId: s.kindId, name: 'Первый', code });
+      const clash = await s.createNode(s.alice, a.id, { kindId: s.kindId, name: 'Второй', code });
       await s.expectError(clash, 409, ErrorCode.PROJECT_NODE_CODE_TAKEN);
-      await s.node(s.alice, b.id, { levelId: s.levelId, name: 'Сосед', code });
+      await s.node(s.alice, b.id, { kindId: s.kindId, name: 'Сосед', code });
 
       const tree = await s.structure(s.alice, a.id);
       const first = tree.nodes.find((n) => n.code === code)!;
@@ -148,8 +148,8 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: структура #467 �
       expect(((await patched.json()) as { code: string | null }).code).toBeNull();
     });
 
-    it('архивный вид уровня — 409 NODE_LEVEL_ARCHIVED', async () => {
-      const archived = await s.fx.prisma.nodeLevel.create({
+    it('архивный вид уровня — 409 NODE_KIND_ARCHIVED', async () => {
+      const archived = await s.fx.prisma.nodeKind.create({
         data: {
           name: s.unique('Архивный вид'),
           icon: 'box',
@@ -157,52 +157,52 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: структура #467 �
           archivedAt: new Date(),
         },
       });
-      s.nodeLevelIds.push(archived.id);
+      s.nodeKindIds.push(archived.id);
       const project = await s.createProject(s.alice, { name: s.unique('Арх вид') });
       const res = await s.createNode(s.alice, project.id, {
-        levelId: archived.id,
+        kindId: archived.id,
         name: 'Не выйдет',
       });
-      await s.expectError(res, 409, ErrorCode.PROJECT_NODE_LEVEL_ARCHIVED);
+      await s.expectError(res, 409, ErrorCode.PROJECT_NODE_KIND_ARCHIVED);
     });
   });
 
   describe('справочник видов и типы', () => {
     it('имя вида уникально lower(btrim) — 409 NAME_TAKEN; архивация закрывает создание узлов', async () => {
-      const created = await s.fx.api(s.alice, 'POST', '/projects/node-levels', {
+      const created = await s.fx.api(s.alice, 'POST', '/projects/node-kinds', {
         body: { name: `  Вид ${s.fx.runId}  `, icon: 'box', color: 'terra' },
         key: `nl-${s.unique('k')}`,
       });
       expect(created.status).toBe(201);
-      const level = (await created.json()) as { id: string };
-      s.nodeLevelIds.push(level.id);
+      const kind = (await created.json()) as { id: string };
+      s.nodeKindIds.push(kind.id);
 
-      const clash = await s.fx.api(s.alice, 'POST', '/projects/node-levels', {
+      const clash = await s.fx.api(s.alice, 'POST', '/projects/node-kinds', {
         body: { name: `ВИД ${s.fx.runId}`, icon: 'box', color: 'terra' },
         key: `nl-${s.unique('k')}`,
       });
-      await s.expectError(clash, 409, ErrorCode.PROJECT_NODE_LEVEL_NAME_TAKEN);
+      await s.expectError(clash, 409, ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN);
 
-      const rename = await s.fx.api(s.alice, 'PATCH', `/projects/node-levels/${level.id}`, {
+      const rename = await s.fx.api(s.alice, 'PATCH', `/projects/node-kinds/${kind.id}`, {
         body: { icon: 'flag' },
         key: `nl-${s.unique('k')}`,
       });
       expect(rename.status).toBe(200);
 
-      await s.fx.api(s.alice, 'DELETE', `/projects/node-levels/${level.id}`);
+      await s.fx.api(s.alice, 'DELETE', `/projects/node-kinds/${kind.id}`);
       const project = await s.createProject(s.alice, { name: s.unique('После архивации') });
-      const res = await s.createNode(s.alice, project.id, { levelId: level.id, name: 'Узел' });
-      await s.expectError(res, 409, ErrorCode.PROJECT_NODE_LEVEL_ARCHIVED);
+      const res = await s.createNode(s.alice, project.id, { kindId: kind.id, name: 'Узел' });
+      await s.expectError(res, 409, ErrorCode.PROJECT_NODE_KIND_ARCHIVED);
     });
 
     it('тип проекта: levelKindIds — подсказка живых видов; негодный id — 422', async () => {
       const res = await s.fx.api(s.alice, 'PATCH', `/projects/types/${s.typeId}`, {
-        body: { levelKindIds: [s.levelId] },
+        body: { levelKindIds: [s.kindId] },
         key: `tp-${s.unique('k')}`,
       });
       expect(res.status).toBe(200);
       expect(((await res.json()) as { levelKindIds: string[] | null }).levelKindIds).toEqual([
-        s.levelId,
+        s.kindId,
       ]);
 
       const bad = await s.fx.api(s.alice, 'PATCH', `/projects/types/${s.typeId}`, {

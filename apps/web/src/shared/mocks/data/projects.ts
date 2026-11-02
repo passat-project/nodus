@@ -11,7 +11,7 @@ import type {
 
 import { counterpartyIds } from './counterparties.js';
 import { isoAgo, isoDateIn } from './dates.js';
-import { nodeLevelIds } from './project-nodes.js';
+import { nodeKindIds } from './project-nodes.js';
 import { projectRefs } from './task-item-factory.js';
 import { userIds } from './users.js';
 
@@ -56,7 +56,7 @@ export const demoProjectTypes: ProjectType[] = [
     id: typeId(1),
     name: 'Договор',
     codeField: 'required',
-    levelKindIds: [...Object.values(nodeLevelIds)],
+    levelKindIds: [...Object.values(nodeKindIds)],
     archivedAt: null,
   },
   { id: typeId(2), name: 'Тема', codeField: 'hidden', levelKindIds: null, archivedAt: null },

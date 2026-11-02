@@ -1,4 +1,4 @@
-import type { NodeLevel, ProjectNode } from '@nodus/contracts';
+import type { NodeKind, ProjectNode } from '@nodus/contracts';
 
 import { NodeCreateDialog } from './node-create-dialog.js';
 import {
@@ -23,14 +23,14 @@ export type StructureDialog =
 export function StructureDialogHost({
   projectId,
   dialog,
-  levels,
+  kinds,
   nodes,
   onClose,
   onMoveTasks,
 }: {
   projectId: string;
   dialog: StructureDialog;
-  levels: NodeLevel[];
+  kinds: NodeKind[];
   nodes: ProjectNode[];
   onClose: () => void;
   onMoveTasks: (taskIds: string[], nodeId: string | null) => void;
@@ -41,7 +41,7 @@ export function StructureDialogHost({
         <NodeCreateDialog
           projectId={projectId}
           parent={dialog.parent}
-          levels={levels}
+          kinds={kinds}
           onClose={onClose}
         />
       );
@@ -50,7 +50,7 @@ export function StructureDialogHost({
         <NodeRenameDialog
           projectId={projectId}
           node={dialog.node}
-          levels={levels}
+          kinds={kinds}
           onClose={onClose}
         />
       );

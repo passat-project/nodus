@@ -15,12 +15,12 @@ import {
   SquareStack,
   type LucideIcon,
 } from 'lucide-react';
-import type { NodeLevelIcon } from '@nodus/contracts';
+import type { NodeKindIcon } from '@nodus/contracts';
 
 /** Реестр значков видов уровней (#467): закрытый набор ключей lucide из
- *  контракта `nodeLevelIconSchema`; новая иконка = расширение набора там и
+ *  контракта `nodeKindIconSchema`; новая иконка = расширение набора там и
  *  здесь (рассинхрон — ошибка типов). Паттерн process-type-icon.tsx. */
-const ICONS: Record<NodeLevelIcon, LucideIcon> = {
+const ICONS: Record<NodeKindIcon, LucideIcon> = {
   folder: Folder,
   folderTree: FolderTree,
   layers: Layers,
@@ -37,10 +37,10 @@ const ICONS: Record<NodeLevelIcon, LucideIcon> = {
   squareStack: SquareStack,
 };
 
-export function NodeLevelGlyph({ icon, className }: { icon: NodeLevelIcon; className?: string }) {
+export function NodeKindGlyph({ icon, className }: { icon: NodeKindIcon; className?: string }) {
   const Icon = ICONS[icon];
   return <Icon className={className} strokeWidth={1.75} aria-hidden />;
 }
 
 /** Ключи реестра для селектов (иконка вида в окнах структуры/справочника). */
-export const NODE_LEVEL_ICON_KEYS = Object.keys(ICONS) as NodeLevelIcon[];
+export const NODE_KIND_ICON_KEYS = Object.keys(ICONS) as NodeKindIcon[];

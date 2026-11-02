@@ -78,7 +78,7 @@ TEXT COLLATE "C" (канон 20261016180000, ключи — `core/lib/fractional
 все мутации — под advisory-локом структуры проекта (сериализация проверок
 лимитов/циклов и записи).
 
-- **Вид уровня** (`node_levels`) — ярлык узла (значок + цвет), справочник
+- **Вид уровня** (`node_kinds`) — ярлык узла (значок + цвет), справочник
   «Автоматизации»; удаление = архивация (узлы архивного вида создавать
   нельзя — 409, существующие живут); имя уникально lower(btrim) — выраженный
   индекс в миграции, посев 6 видов (стадия, очередь, пусковой комплекс,
@@ -117,7 +117,7 @@ node_moved / node_deleted`; мутации — аудит (`project.node_*`) и
 | `GET/PUT /settings/portal`                                            | PUT: `project.setup.manage`      | дефолт видимости новых проектов (окно «Настройки портала»)                                              |
 | `GET/POST /types`, `PATCH /types/:id` (+archive/restore)              | `project.setup.manage`           | типы проектов: имя + `codeField` + `levelKindIds` (подсказка живых видов узлов #467; негодный id — 422) |
 | `GET/POST /groups`, `PATCH /groups/:id` (+archive/restore)            | `project.manage`                 | портфели (плоский список)                                                                               |
-| `GET /projects/node-levels`; POST/PATCH/архивация/restore             | мутации: `project.setup.manage`  | виды уровней (ярлыки узлов, #467); имя уникально lower(btrim) — 409                                     |
+| `GET /projects/node-kinds`; POST/PATCH/архивация/restore              | мутации: `project.setup.manage`  | виды уровней (ярлыки узлов, #467); имя уникально lower(btrim) — 409                                     |
 | `GET /:id/structure`                                                  | —                                | дерево: узлы (плоско, по order) + rollups + виды уровней (#467)                                         |
 | `POST /:id/nodes` · `POST /:id/nodes/batch` (≤50 имён)                | руководство или `project.manage` | создание узлов/пакета (лимиты на пакет целиком); архив проекта — 400                                    |
 | `PATCH /:id/nodes/:nodeId`                                            | руководство или `project.manage` | имя / шифр (null очищает) / вид-ярлык                                                                   |
@@ -159,7 +159,7 @@ project-participants.repository.ts  project_participants: страницы, си
                                 идемпотентный replaceTaskSource, roster
 project-types.repository.ts     project_types (архив, не удаление; levelKindIds #467)
 project-groups.repository.ts    project_groups (портфели)
-project-node-levels.repository.ts  node_levels: виды-ярлыки узлов, lower(btrim) имени
+project-node-kinds.repository.ts  node_kinds: виды-ярлыки узлов, lower(btrim) имени
 project-nodes.repository.ts     project_nodes: узлы дерева, advisory-лок структуры
 project-access.ts               чистые функции прав: myMembership, projectAccess (I8)
 project-structure.tree.ts       чистые расчёты дерева: дети/родители, глубина/циклы,

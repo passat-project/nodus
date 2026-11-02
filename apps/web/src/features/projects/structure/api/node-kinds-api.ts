@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { NodeLevel, NodeLevelCreateBody, NodeLevelUpdateBody } from '@nodus/contracts';
+import type { NodeKind, NodeKindCreateBody, NodeKindUpdateBody } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
@@ -14,71 +14,71 @@ import { structureKeys } from './structure-api.js';
  *  сразу (архивные — с `archivedAt`), параметра фильтра нет. */
 
 type QueryClient = ReturnType<typeof useQueryClient>;
-const levelsPrefix = [...projectsKeys.all, 'node-levels'] as const;
+const kindsPrefix = [...projectsKeys.all, 'node-kinds'] as const;
 
-export function useNodeLevels() {
+export function useNodeKinds() {
   return useQuery({
-    queryKey: structureKeys.nodeLevels(),
-    queryFn: () => api<NodeLevel[]>('/projects/node-levels'),
+    queryKey: structureKeys.nodeKinds(),
+    queryFn: () => api<NodeKind[]>('/projects/node-kinds'),
   });
 }
 
-function patchLevels(queryClient: QueryClient, update: (levels: NodeLevel[]) => NodeLevel[]) {
-  queryClient.setQueriesData<NodeLevel[]>({ queryKey: levelsPrefix }, (data) =>
+function patchKinds(queryClient: QueryClient, update: (kinds: NodeKind[]) => NodeKind[]) {
+  queryClient.setQueriesData<NodeKind[]>({ queryKey: kindsPrefix }, (data) =>
     data ? update(data) : data,
   );
 }
 
-function levelsSnapshot(queryClient: QueryClient) {
-  return queryClient.getQueriesData<NodeLevel[]>({ queryKey: levelsPrefix });
+function kindsSnapshot(queryClient: QueryClient) {
+  return queryClient.getQueriesData<NodeKind[]>({ queryKey: kindsPrefix });
 }
 
-function restore(queryClient: QueryClient, snapshot: ReturnType<typeof levelsSnapshot>) {
+function restore(queryClient: QueryClient, snapshot: ReturnType<typeof kindsSnapshot>) {
   for (const [key, data] of snapshot) queryClient.setQueryData(key, data);
 }
 
-function invalidateLevels(queryClient: QueryClient) {
-  void queryClient.invalidateQueries({ queryKey: levelsPrefix });
+function invalidateKinds(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({ queryKey: kindsPrefix });
   // Виды уровней вшиты в ответ структуры — дерево перекрасится тоже.
   void queryClient.invalidateQueries({ queryKey: [...projectsKeys.all, 'structure'] });
 }
 
-export function useCreateNodeLevel() {
+export function useCreateNodeKind() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: NodeLevelCreateBody) =>
-      api<NodeLevel>('/projects/node-levels', { method: 'POST', body }),
+    mutationFn: (body: NodeKindCreateBody) =>
+      api<NodeKind>('/projects/node-kinds', { method: 'POST', body }),
     onMutate: async (body) => {
-      const snapshot = levelsSnapshot(queryClient);
-      const temp: NodeLevel = { id: `temp-${crypto.randomUUID()}`, archivedAt: null, ...body };
-      patchLevels(queryClient, (levels) => [...levels, temp]);
+      const snapshot = kindsSnapshot(queryClient);
+      const temp: NodeKind = { id: `temp-${crypto.randomUUID()}`, archivedAt: null, ...body };
+      patchKinds(queryClient, (kinds) => [...kinds, temp]);
       return { snapshot, tempId: temp.id };
     },
     onError: (error, _body, context) => {
       restore(queryClient, context?.snapshot ?? []);
       toastApiError(error);
     },
-    onSuccess: (level, _body, context) => {
-      patchLevels(queryClient, (levels) =>
-        levels.map((entry) => (entry.id === context?.tempId ? level : entry)),
+    onSuccess: (kind, _body, context) => {
+      patchKinds(queryClient, (kinds) =>
+        kinds.map((entry) => (entry.id === context?.tempId ? kind : entry)),
       );
       toast.success(ui.projects.savedDone);
     },
-    onSettled: () => invalidateLevels(queryClient),
+    onSettled: () => invalidateKinds(queryClient),
   });
 }
 
-export function useUpdateNodeLevel() {
+export function useUpdateNodeKind() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { id: string } & NodeLevelUpdateBody) => {
+    mutationFn: (vars: { id: string } & NodeKindUpdateBody) => {
       const { id, ...body } = vars;
-      return api<NodeLevel>(`/projects/node-levels/${id}`, { method: 'PATCH', body });
+      return api<NodeKind>(`/projects/node-kinds/${id}`, { method: 'PATCH', body });
     },
     onMutate: async (vars) => {
-      const snapshot = levelsSnapshot(queryClient);
-      patchLevels(queryClient, (levels) =>
-        levels.map((entry) =>
+      const snapshot = kindsSnapshot(queryClient);
+      patchKinds(queryClient, (kinds) =>
+        kinds.map((entry) =>
           entry.id === vars.id
             ? {
                 ...entry,
@@ -96,20 +96,20 @@ export function useUpdateNodeLevel() {
       toastApiError(error);
     },
     onSuccess: () => toast.success(ui.projects.savedDone),
-    onSettled: () => invalidateLevels(queryClient),
+    onSettled: () => invalidateKinds(queryClient),
   });
 }
 
 /** Архивация вида (возврата нет — как у системных справочников; новые узлы
  *  архивного вида создавать нельзя, существующие живут). */
-export function useArchiveNodeLevel() {
+export function useArchiveNodeKind() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api<NodeLevel>(`/projects/node-levels/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => api<NodeKind>(`/projects/node-kinds/${id}`, { method: 'DELETE' }),
     onMutate: async (id) => {
-      const snapshot = levelsSnapshot(queryClient);
-      patchLevels(queryClient, (levels) =>
-        levels.map((entry) =>
+      const snapshot = kindsSnapshot(queryClient);
+      patchKinds(queryClient, (kinds) =>
+        kinds.map((entry) =>
           entry.id === id ? { ...entry, archivedAt: new Date().toISOString() } : entry,
         ),
       );
@@ -120,6 +120,6 @@ export function useArchiveNodeLevel() {
       toastApiError(error);
     },
     onSuccess: () => toast.success(ui.projects.savedDone),
-    onSettled: () => invalidateLevels(queryClient),
+    onSettled: () => invalidateKinds(queryClient),
   });
 }

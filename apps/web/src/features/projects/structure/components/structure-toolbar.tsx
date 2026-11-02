@@ -25,7 +25,7 @@ export function StructureToolbar({
   onCreateNode,
   onExpandAll,
   onCollapseAll,
-  onLevels,
+  onKinds,
 }: {
   toolbar: ListToolbarState;
   canEdit: boolean;
@@ -33,7 +33,7 @@ export function StructureToolbar({
   onCreateNode: () => void;
   onExpandAll: () => void;
   onCollapseAll: () => void;
-  onLevels: () => void;
+  onKinds: () => void;
 }) {
   return (
     <ListToolbar
@@ -74,9 +74,9 @@ export function StructureToolbar({
               type="button"
               variant="ghost"
               size="icon-sm"
-              title={ui.structure.levelsTitle}
-              aria-label={ui.structure.levelsTitle}
-              onClick={onLevels}
+              title={ui.structure.kindsTitle}
+              aria-label={ui.structure.kindsTitle}
+              onClick={onKinds}
             >
               <FolderCog className="size-3.5" strokeWidth={1.75} />
             </Button>

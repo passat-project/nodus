@@ -12,9 +12,9 @@ import { projectColorSchema } from './project.schemas.js';
  */
 
 /** Значки видов уровней — закрытый список ключей (I15); веб-реестр
- *  `node-level-icon.tsx` отображает ключ на lucide-иконку (рассинхрон ключа и
+ *  `node-kind-icon.tsx` отображает ключ на lucide-иконку (рассинхрон ключа и
  *  реестра = ошибка типов, паттерн process-type-icon.tsx). */
-export const nodeLevelIconSchema = z.enum([
+export const nodeKindIconSchema = z.enum([
   'folder',
   'folderTree',
   'layers',
@@ -30,7 +30,7 @@ export const nodeLevelIconSchema = z.enum([
   'route',
   'squareStack',
 ]);
-export type NodeLevelIcon = z.infer<typeof nodeLevelIconSchema>;
+export type NodeKindIcon = z.infer<typeof nodeKindIconSchema>;
 
 /** Лимиты структуры (допущения техплана #467). */
 export const NODE_LIMITS = {
@@ -52,37 +52,37 @@ export const NODE_LIMITS = {
  *  удаление = архивация (узлы архивного вида создавать нельзя, существующие
  *  живут). Посев миграцией: стадия, очередь, пусковой комплекс, здание по
  *  генплану, раздел, этап (ТКП 45-1.02-295). */
-export const nodeLevelSchema = z.object({
+export const nodeKindSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1).max(120),
-  icon: nodeLevelIconSchema,
+  icon: nodeKindIconSchema,
   color: projectColorSchema,
   archivedAt: z.iso.datetime().nullable(),
 });
 
-export type NodeLevel = z.infer<typeof nodeLevelSchema>;
+export type NodeKind = z.infer<typeof nodeKindSchema>;
 
-export const nodeLevelListSchema = z.array(nodeLevelSchema);
-export type NodeLevelList = z.infer<typeof nodeLevelListSchema>;
+export const nodeKindListSchema = z.array(nodeKindSchema);
+export type NodeKindList = z.infer<typeof nodeKindListSchema>;
 
 /** Название вида уникально без учёта регистра и пробелов (lower(btrim(name))). */
-export const nodeLevelCreateBodySchema = z.object({
+export const nodeKindCreateBodySchema = z.object({
   name: z.string().trim().min(1).max(120),
-  icon: nodeLevelIconSchema,
+  icon: nodeKindIconSchema,
   color: projectColorSchema,
 });
 
-export type NodeLevelCreateBody = z.infer<typeof nodeLevelCreateBodySchema>;
+export type NodeKindCreateBody = z.infer<typeof nodeKindCreateBodySchema>;
 
-export const nodeLevelUpdateBodySchema = z
+export const nodeKindUpdateBodySchema = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
-    icon: nodeLevelIconSchema.optional(),
+    icon: nodeKindIconSchema.optional(),
     color: projectColorSchema.optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'empty update' });
 
-export type NodeLevelUpdateBody = z.infer<typeof nodeLevelUpdateBodySchema>;
+export type NodeKindUpdateBody = z.infer<typeof nodeKindUpdateBodySchema>;
 
 /** Агрегаты ПРЯМЫХ задач узла (группировка по node_id на сервере, порт
  *  TASK_PROJECT_READER.nodeRollups); суммы поддерева клиент собирает по
@@ -108,7 +108,7 @@ export type ProjectNodeRollup = z.infer<typeof projectNodeRollupSchema>;
 export const projectNodeSchema = z.object({
   id: z.uuid(),
   parentId: z.uuid().nullable(),
-  levelId: z.uuid(),
+  kindId: z.uuid(),
   name: z.string().min(1).max(NODE_LIMITS.nameLength),
   /** Шифр узла (уникален в проекте, nullable — не задан). */
   code: z.string().min(1).max(NODE_LIMITS.codeLength).nullable(),
@@ -123,14 +123,14 @@ export type ProjectNode = z.infer<typeof projectNodeSchema>;
  *  GET /tasks?projectId= (ADR-0030 п.7, сборка дерева на клиенте). */
 export const projectStructureResponseSchema = z.object({
   nodes: z.array(projectNodeSchema),
-  levels: nodeLevelListSchema,
+  kinds: nodeKindListSchema,
 });
 
 export type ProjectStructureResponse = z.infer<typeof projectStructureResponseSchema>;
 
 export const createProjectNodeBodySchema = z.object({
   parentId: z.uuid().nullable().optional(),
-  levelId: z.uuid(),
+  kindId: z.uuid(),
   name: z.string().trim().min(1).max(NODE_LIMITS.nameLength),
   code: z.string().trim().min(1).max(NODE_LIMITS.codeLength).optional(),
 });
@@ -141,7 +141,7 @@ export type CreateProjectNodeBody = z.infer<typeof createProjectNodeBodySchema>;
  *  принимает готовый список (≤ NODE_LIMITS.batch). */
 export const batchCreateProjectNodesBodySchema = z.object({
   parentId: z.uuid().nullable().optional(),
-  levelId: z.uuid(),
+  kindId: z.uuid(),
   names: z
     .array(z.string().trim().min(1).max(NODE_LIMITS.nameLength))
     .min(1)
@@ -161,7 +161,7 @@ export const updateProjectNodeBodySchema = z
   .object({
     name: z.string().trim().min(1).max(NODE_LIMITS.nameLength).optional(),
     code: z.string().trim().min(1).max(NODE_LIMITS.codeLength).nullable().optional(),
-    levelId: z.uuid().optional(),
+    kindId: z.uuid().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'empty update' });
 

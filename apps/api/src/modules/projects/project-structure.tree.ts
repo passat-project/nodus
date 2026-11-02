@@ -46,16 +46,16 @@ export function nodeDepth(parents: Map<string, string | null>, id: string): numb
 /** Высота поддерева (сам узел = 1); предохранитель от циклов. */
 export function subtreeHeight(children: Map<string | null, TreeNodeLike[]>, id: string): number {
   let max = 1;
-  const stack: { id: string; level: number }[] = [{ id, level: 1 }];
+  const stack: { id: string; kind: number }[] = [{ id, kind: 1 }];
   const seen = new Set<string>([id]);
   while (stack.length > 0) {
-    const { id: current, level } = stack.pop()!;
-    max = Math.max(max, level);
-    if (level >= NODE_LIMITS.depth) continue;
+    const { id: current, kind } = stack.pop()!;
+    max = Math.max(max, kind);
+    if (kind >= NODE_LIMITS.depth) continue;
     for (const child of children.get(current) ?? []) {
       if (seen.has(child.id)) continue;
       seen.add(child.id);
-      stack.push({ id: child.id, level: level + 1 });
+      stack.push({ id: child.id, kind: kind + 1 });
     }
   }
   return max;

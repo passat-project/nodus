@@ -60,7 +60,7 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'GET /projects/:id/history': PROJECT_VISIBILITY,
   'GET /projects/types': PROJECTS_CATALOG,
   'GET /projects/groups': PROJECTS_CATALOG,
-  'GET /projects/node-levels': PROJECTS_CATALOG,
+  'GET /projects/node-kinds': PROJECTS_CATALOG,
   'GET /settings/portal': PORTAL_SETTINGS,
   'GET /projects/:id/members': PROJECT_MEMBERSHIP,
   // Действия с проверкой в сервисе (#52)

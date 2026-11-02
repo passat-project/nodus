@@ -17,7 +17,7 @@ export function nodeToDto(row: ProjectNodeRow, rollup: ProjectNodeRollup | null)
   return {
     id: row.id,
     parentId: row.parentId,
-    levelId: row.levelId,
+    kindId: row.kindId,
     name: row.name,
     code: row.code,
     rollup: rollup ?? EMPTY_ROLLUP,

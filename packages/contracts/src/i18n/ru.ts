@@ -101,8 +101,8 @@ export const errorMessages: Record<ErrorCode, string> = {
     'Узел не пустой — сначала перенесите из него задачи и дочерние узлы',
   [ErrorCode.PROJECT_NODE_CODE_TAKEN]: 'Шифр уже занят другим узлом этого проекта',
   [ErrorCode.PROJECT_NODE_LIMIT_REACHED]: 'Достигнут предел структуры проекта',
-  [ErrorCode.PROJECT_NODE_LEVEL_ARCHIVED]: 'Этот вид уровня в архиве — выберите другой',
-  [ErrorCode.PROJECT_NODE_LEVEL_NAME_TAKEN]: 'Вид уровня с таким названием уже есть',
+  [ErrorCode.PROJECT_NODE_KIND_ARCHIVED]: 'Этот вид уровня в архиве — выберите другой',
+  [ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN]: 'Вид уровня с таким названием уже есть',
 };
 
 /**

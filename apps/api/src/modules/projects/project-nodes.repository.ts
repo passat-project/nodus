@@ -10,7 +10,7 @@ export const nodeSelect = {
   id: true,
   projectId: true,
   parentId: true,
-  levelId: true,
+  kindId: true,
   name: true,
   code: true,
   order: true,
@@ -22,7 +22,7 @@ export type ProjectNodeRow = Prisma.ProjectNodeGetPayload<{ select: typeof nodeS
 export interface NewProjectNode {
   projectId: string;
   parentId: string | null;
-  levelId: string;
+  kindId: string;
   name: string;
   code: string | null;
   order: string;
@@ -31,7 +31,7 @@ export interface NewProjectNode {
 export interface ProjectNodePatch {
   name?: string;
   code?: string | null;
-  levelId?: string;
+  kindId?: string;
   parentId?: string | null;
   order?: string;
 }

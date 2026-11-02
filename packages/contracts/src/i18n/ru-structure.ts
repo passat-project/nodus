@@ -71,11 +71,11 @@ export const structureStrings = {
   // Плашка перетаскивания задач: «3 задачи»
   taskForms: ['задача', 'задачи', 'задач'] as const,
   // Справочник видов узлов («Структура → Виды узлов»)
-  levelsTitle: 'Виды узлов',
-  levelsCreate: 'Новый вид',
-  levelsNamePlaceholder: 'Например: Очередь строительства',
-  levelsEmpty: 'Видов пока нет',
-  levelsArchive: 'Архивировать вид',
+  kindsTitle: 'Виды узлов',
+  kindsCreate: 'Новый вид',
+  kindsNamePlaceholder: 'Например: Очередь строительства',
+  kindsEmpty: 'Видов пока нет',
+  kindsArchive: 'Архивировать вид',
   fieldIcon: 'Значок',
   fieldColor: 'Цвет',
   /** Названия значков видов (закрытый enum контракта). */

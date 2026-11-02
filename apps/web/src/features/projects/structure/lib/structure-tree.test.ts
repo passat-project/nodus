@@ -43,7 +43,7 @@ function node(
   return {
     id,
     parentId,
-    levelId: 'level-1',
+    kindId: 'kind-1',
     name: `Узел ${id}`,
     code: null,
     rollup: rollup(),

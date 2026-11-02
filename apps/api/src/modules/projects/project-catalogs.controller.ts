@@ -39,7 +39,7 @@ import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../core/openapi/api-idempotency.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { TransactionRunner } from '../../core/database/transaction-runner.js';
-import { NodeLevelsRepository } from './project-node-levels.repository.js';
+import { NodeKindsRepository } from './project-node-kinds.repository.js';
 import { ProjectGroupsRepository } from './project-groups.repository.js';
 import { ProjectTypesRepository } from './project-types.repository.js';
 import { ProjectsService } from './projects.service.js';
@@ -53,7 +53,7 @@ const listQuerySchema = z.object({ includeArchived: z.enum(['true', 'false']).de
  * (#467 — то же право), портфели (создание — `project.create`, архивация —
  * `project.manage`) и настройки портала (дефолт видимости новых проектов —
  * `project.setup.manage`, Р7). Статические маршруты (`projects/types`,
- * `projects/node-levels`) фармуруются раньше параметрических `projects/:id`
+ * `projects/node-kinds`) фармуруются раньше параметрических `projects/:id`
  * — роутер Fastify отдаёт статике приоритет.
  */
 @ApiTags('projects')
@@ -64,7 +64,7 @@ export class ProjectCatalogsController {
   constructor(
     private readonly types: ProjectTypesRepository,
     private readonly groups: ProjectGroupsRepository,
-    private readonly nodeLevels: NodeLevelsRepository,
+    private readonly nodeKinds: NodeKindsRepository,
     private readonly settings: ProjectsService,
     private readonly txRunner: TransactionRunner,
   ) {}
@@ -129,9 +129,9 @@ export class ProjectCatalogsController {
       // Подсказка видов узлов (#467): id существуют и живые, иначе 422
       // (без оракула — не раскрываем, какой именно вид исчез).
       if (dto.levelKindIds !== undefined && dto.levelKindIds !== null) {
-        const alive = await this.nodeLevels.activeByIds(dto.levelKindIds);
+        const alive = await this.nodeKinds.activeByIds(dto.levelKindIds);
         if (alive.length !== new Set(dto.levelKindIds).size) {
-          throw new DomainException(ErrorCode.PROJECT_NODE_INVALID, 'Node level is not available', {
+          throw new DomainException(ErrorCode.PROJECT_NODE_INVALID, 'Node kind is not available', {
             typeId: id,
           });
         }

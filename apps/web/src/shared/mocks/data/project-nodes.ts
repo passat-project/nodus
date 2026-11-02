@@ -1,4 +1,4 @@
-import type { NodeLevel, ProjectNode, ProjectNodeRollup } from '@nodus/contracts';
+import type { NodeKind, ProjectNode, ProjectNodeRollup } from '@nodus/contracts';
 import { isCompletedState, isOpenState, NODE_LIMITS } from '@nodus/contracts';
 
 import { isoAgo } from './dates.js';
@@ -12,37 +12,37 @@ import { projectRefs } from './task-item-factory.js';
  *  чтении — структура всегда отвечает свежим срезом мок-мира. Порядок
  *  сиблингов = порядок строк в массиве (move переставляет splice'ом). */
 
-const levelId = (n: number): string => `44000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const kindId = (n: number): string => `44000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 /** Виды уровней — ярлыки узлов (значок + цвет). */
-export const nodeLevelIds = {
-  stage: levelId(1),
-  queue: levelId(2),
-  startup: levelId(3),
-  building: levelId(4),
-  section: levelId(5),
-  phase: levelId(6),
+export const nodeKindIds = {
+  stage: kindId(1),
+  queue: kindId(2),
+  startup: kindId(3),
+  building: kindId(4),
+  section: kindId(5),
+  phase: kindId(6),
 } as const;
 
-export const demoNodeLevels: NodeLevel[] = [
-  { id: nodeLevelIds.stage, name: 'Стадия', icon: 'layers', color: 'amber', archivedAt: null },
-  { id: nodeLevelIds.queue, name: 'Очередь', icon: 'route', color: 'blue', archivedAt: null },
+export const demoNodeKinds: NodeKind[] = [
+  { id: nodeKindIds.stage, name: 'Стадия', icon: 'layers', color: 'amber', archivedAt: null },
+  { id: nodeKindIds.queue, name: 'Очередь', icon: 'route', color: 'blue', archivedAt: null },
   {
-    id: nodeLevelIds.startup,
+    id: nodeKindIds.startup,
     name: 'Пусковой комплекс',
     icon: 'milestone',
     color: 'green',
     archivedAt: null,
   },
   {
-    id: nodeLevelIds.building,
+    id: nodeKindIds.building,
     name: 'Здание по генплану',
     icon: 'building',
     color: 'sky',
     archivedAt: null,
   },
-  { id: nodeLevelIds.section, name: 'Раздел', icon: 'listTree', color: 'pink', archivedAt: null },
-  { id: nodeLevelIds.phase, name: 'Этап', icon: 'flag', color: 'terra', archivedAt: null },
+  { id: nodeKindIds.section, name: 'Раздел', icon: 'listTree', color: 'pink', archivedAt: null },
+  { id: nodeKindIds.phase, name: 'Этап', icon: 'flag', color: 'terra', archivedAt: null },
 ];
 
 /** Строка узла мок-мира (до гидратации rollup). */
@@ -50,7 +50,7 @@ export interface DemoNodeRow {
   id: string;
   projectId: string;
   parentId: string | null;
-  levelId: string;
+  kindId: string;
   name: string;
   code: string | null;
   createdAt: string;
@@ -63,7 +63,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     id: nodeIds.b1,
     projectId: projectRefs.p4.id,
     parentId: null,
-    levelId: nodeLevelIds.building,
+    kindId: nodeKindIds.building,
     name: 'Здание 1',
     code: null,
     createdAt: isoAgo(80),
@@ -72,7 +72,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     id: nodeIds.b1ar,
     projectId: projectRefs.p4.id,
     parentId: nodeIds.b1,
-    levelId: nodeLevelIds.section,
+    kindId: nodeKindIds.section,
     name: 'Архитектурные решения',
     code: 'АР',
     createdAt: isoAgo(79),
@@ -81,7 +81,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     id: nodeIds.b1kr,
     projectId: projectRefs.p4.id,
     parentId: nodeIds.b1,
-    levelId: nodeLevelIds.section,
+    kindId: nodeKindIds.section,
     name: 'Конструктивные решения',
     code: 'КР',
     createdAt: isoAgo(78),
@@ -90,7 +90,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     id: nodeIds.b1ios,
     projectId: projectRefs.p4.id,
     parentId: nodeIds.b1,
-    levelId: nodeLevelIds.section,
+    kindId: nodeKindIds.section,
     name: 'Инженерное обеспечение',
     code: 'ИОС',
     createdAt: isoAgo(77),
@@ -99,7 +99,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     id: nodeIds.b2,
     projectId: projectRefs.p4.id,
     parentId: null,
-    levelId: nodeLevelIds.building,
+    kindId: nodeKindIds.building,
     name: 'Здание 2',
     code: null,
     createdAt: isoAgo(50),
@@ -108,7 +108,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     id: nodeIds.b2ar,
     projectId: projectRefs.p4.id,
     parentId: nodeIds.b2,
-    levelId: nodeLevelIds.section,
+    kindId: nodeKindIds.section,
     name: 'Архитектурные решения',
     code: 'АР',
     createdAt: isoAgo(49),
@@ -154,7 +154,7 @@ export function projectNodeDto(row: DemoNodeRow): ProjectNode {
   return {
     id: row.id,
     parentId: row.parentId,
-    levelId: row.levelId,
+    kindId: row.kindId,
     name: row.name,
     code: row.code,
     rollup: rollupOfNode(row.id),

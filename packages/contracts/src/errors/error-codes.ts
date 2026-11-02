@@ -169,9 +169,9 @@ export const ErrorCode = {
    *  размер пакета (409; #467). */
   PROJECT_NODE_LIMIT_REACHED: 'PROJECT_NODE_LIMIT_REACHED',
   /** Вид уровня в архиве — создавать узлы такого вида нельзя (409; #467). */
-  PROJECT_NODE_LEVEL_ARCHIVED: 'PROJECT_NODE_LEVEL_ARCHIVED',
+  PROJECT_NODE_KIND_ARCHIVED: 'PROJECT_NODE_KIND_ARCHIVED',
   /** Название вида уровня уже занято (409; #467). */
-  PROJECT_NODE_LEVEL_NAME_TAKEN: 'PROJECT_NODE_LEVEL_NAME_TAKEN',
+  PROJECT_NODE_KIND_NAME_TAKEN: 'PROJECT_NODE_KIND_NAME_TAKEN',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

@@ -24,9 +24,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe('перенос', () => {
       it('цикл (в потомка/в себя) — 409 CYCLE; якорь чужого родителя — 422', async () => {
         const project = await s.createProject(s.alice, { name: s.unique('Цикл') });
-        const root = await s.node(s.alice, project.id, { levelId: s.levelId, name: 'Корень' });
+        const root = await s.node(s.alice, project.id, { kindId: s.kindId, name: 'Корень' });
         const child = await s.node(s.alice, project.id, {
-          levelId: s.levelId,
+          kindId: s.kindId,
           parentId: root.id,
           name: 'Ребёнок',
         });
@@ -51,7 +51,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         );
         await s.expectError(self, 409, ErrorCode.PROJECT_NODE_CYCLE);
 
-        const other = await s.node(s.alice, project.id, { levelId: s.levelId, name: 'Сосед' });
+        const other = await s.node(s.alice, project.id, { kindId: s.kindId, name: 'Сосед' });
         const badAnchor = await s.fx.api(
           s.alice,
           'POST',
@@ -63,9 +63,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it('якорь before переставляет порядок; NODE_MOVED несёт прежнего родителя', async () => {
         const project = await s.createProject(s.alice, { name: s.unique('Якорь') });
-        const a = await s.node(s.alice, project.id, { levelId: s.levelId, name: 'A' });
-        const b = await s.node(s.alice, project.id, { levelId: s.levelId, name: 'B' });
-        const c = await s.node(s.alice, project.id, { levelId: s.levelId, name: 'C' });
+        const a = await s.node(s.alice, project.id, { kindId: s.kindId, name: 'A' });
+        const b = await s.node(s.alice, project.id, { kindId: s.kindId, name: 'B' });
+        const c = await s.node(s.alice, project.id, { kindId: s.kindId, name: 'C' });
         const res = await s.fx.api(s.alice, 'POST', `/projects/${project.id}/nodes/${c.id}/move`, {
           body: { parentId: null, beforeId: a.id },
           key: `mv-${s.unique('k')}`,
@@ -75,7 +75,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(tree.nodes.filter((n) => !n.parentId).map((n) => n.name)).toEqual(['C', 'A', 'B']);
 
         const childOfA = await s.node(s.alice, project.id, {
-          levelId: s.levelId,
+          kindId: s.kindId,
           parentId: a.id,
           name: 'A1',
         });
@@ -104,9 +104,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe('удаление и заморозка', () => {
       it('пустой узел — 204; с ребёнком или задачей — 409; NODE_DELETED; повтор — 422', async () => {
         const project = await s.createProject(s.alice, { name: s.unique('Удаление') });
-        const root = await s.node(s.alice, project.id, { levelId: s.levelId, name: 'Корень' });
+        const root = await s.node(s.alice, project.id, { kindId: s.kindId, name: 'Корень' });
         const child = await s.node(s.alice, project.id, {
-          levelId: s.levelId,
+          kindId: s.kindId,
           parentId: root.id,
           name: 'Ребёнок',
         });
@@ -153,7 +153,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
         expect(archive.status).toBe(200);
         const frozen = await s.createNode(s.alice, project.id, {
-          levelId: s.levelId,
+          kindId: s.kindId,
           name: 'Не выйдет',
         });
         await s.expectError(frozen, 400, ErrorCode.VALIDATION_FAILED);

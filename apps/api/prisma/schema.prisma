@@ -1495,7 +1495,7 @@ model ProjectType {
   codeField  String    @default("optional") @map("code_field")
   /// Подсказка дефолтных видов узлов структуры (#467, вердикт 30.10: НЕ
   /// жёсткий порядок уровней — только подсказка вида первого узла); null —
-  /// подсказки нет. id строк node_levels, ≤10 — контракт.
+  /// подсказки нет. id строк node_kinds, ≤10 — контракт.
   levelKindIds Json?   @map("level_kind_ids")
   archivedAt DateTime? @map("archived_at") @db.Timestamptz()
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz()
@@ -1608,10 +1608,10 @@ model ProjectParticipant {
 /// создавать нельзя, существующие живут). Уникальность имени без учёта
 /// регистра и краёв — lower(btrim(name)) индексом в миграции (Prisma это
 /// не выражает). Посев 6 видов — миграцией (ТКП 45-1.02-295).
-model NodeLevel {
+model NodeKind {
   id         String    @id @default(uuid()) @db.Uuid
   name       String
-  /// Ключ закрытого реестра contracts (nodeLevelIconSchema, I15).
+  /// Ключ закрытого реестра contracts (nodeKindIconSchema, I15).
   icon       String
   /// Тон ярлыка (projectColorSchema).
   color      String
@@ -1621,7 +1621,7 @@ model NodeLevel {
 
   nodes ProjectNode[]
 
-  @@map("node_levels")
+  @@map("node_kinds")
 }
 
 /// Узел структуры проекта (#467): папка-агрегат со свободной вложенностью
@@ -1635,7 +1635,7 @@ model ProjectNode {
   id        String   @id @default(uuid()) @db.Uuid
   projectId String   @map("project_id") @db.Uuid
   parentId  String?  @map("parent_id") @db.Uuid
-  levelId   String   @map("level_id") @db.Uuid
+  kindId   String   @map("kind_id") @db.Uuid
   name      String
   code      String?
   order     String
@@ -1645,7 +1645,7 @@ model ProjectNode {
   project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   parent   ProjectNode? @relation("NodeTree", fields: [parentId], references: [id], onDelete: Restrict)
   children ProjectNode[] @relation("NodeTree")
-  level    NodeLevel    @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  kind     NodeKind    @relation(fields: [kindId], references: [id], onDelete: Restrict)
 
   @@index([projectId, parentId])
   @@index([projectId, order])

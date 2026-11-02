@@ -19,7 +19,7 @@ import { setupChatFixture, type ChatTestFixture, type ChatUser } from './chat-fi
  * Общая фикстура интеграционных наборов дерева проекта (#467): пользователи
  * (РП alice с project.setup.manage, помощник bob, сотрудник carol/dave),
  * флаги, сид-тип и вид уровня + мини-хелперы HTTP. Уборка — по трекингу
- * projectIds/taskIds/nodeLevelIds (файлы последовательны, гонок нет).
+ * projectIds/taskIds/nodeKindIds (файлы последовательны, гонок нет).
  */
 export interface ProjectNodeFixture {
   fx: ChatTestFixture<'alice' | 'bob' | 'carol' | 'dave'>;
@@ -28,10 +28,10 @@ export interface ProjectNodeFixture {
   carol: ChatUser;
   dave: ChatUser;
   typeId: string;
-  levelId: string;
+  kindId: string;
   projectIds: string[];
   taskIds: string[];
-  nodeLevelIds: string[];
+  nodeKindIds: string[];
   seq: number;
   unique(prefix: string): string;
   createProject(actor: ChatUser, body?: Record<string, unknown>): Promise<ProjectDetail>;
@@ -70,11 +70,11 @@ export async function setupProjectNodeFixture(): Promise<ProjectNodeFixture> {
 
   const types = (await (await fx.api(alice, 'GET', '/projects/types')).json()) as { id: string }[];
   const typeId = types[0]!.id;
-  const levels = (await (await fx.api(alice, 'GET', '/projects/node-levels')).json()) as {
+  const kinds = (await (await fx.api(alice, 'GET', '/projects/node-kinds')).json()) as {
     id: string;
   }[];
-  expect(levels.length).toBeGreaterThanOrEqual(6);
-  const levelId = levels[0]!.id;
+  expect(kinds.length).toBeGreaterThanOrEqual(6);
+  const kindId = kinds[0]!.id;
 
   const state: ProjectNodeFixture = {
     fx,
@@ -83,10 +83,10 @@ export async function setupProjectNodeFixture(): Promise<ProjectNodeFixture> {
     carol,
     dave,
     typeId,
-    levelId,
+    kindId,
     projectIds: [],
     taskIds: [],
-    nodeLevelIds: [],
+    nodeKindIds: [],
     seq: 0,
     unique(prefix: string): string {
       return `${prefix}-${fx.runId}-${state.seq++}`;
@@ -137,11 +137,11 @@ export async function setupProjectNodeFixture(): Promise<ProjectNodeFixture> {
     },
     async cleanup() {
       const userIds = Object.values(fx.users).map((u) => u.id);
-      if (state.nodeLevelIds.length > 0) {
+      if (state.nodeKindIds.length > 0) {
         await fx.prisma.projectNode.deleteMany({
-          where: { levelId: { in: state.nodeLevelIds } },
+          where: { kindId: { in: state.nodeKindIds } },
         });
-        await fx.prisma.nodeLevel.deleteMany({ where: { id: { in: state.nodeLevelIds } } });
+        await fx.prisma.nodeKind.deleteMany({ where: { id: { in: state.nodeKindIds } } });
       }
       if (state.taskIds.length > 0) {
         // Подзадачи, созданные через API, в трекинге не лежат: снимаем

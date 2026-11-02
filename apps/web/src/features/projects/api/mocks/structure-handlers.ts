@@ -6,10 +6,10 @@ import {
   batchCreateProjectNodesBodySchema,
   createProjectNodeBodySchema,
   moveProjectNodeBodySchema,
-  nodeLevelCreateBodySchema,
-  nodeLevelUpdateBodySchema,
+  nodeKindCreateBodySchema,
+  nodeKindUpdateBodySchema,
   updateProjectNodeBodySchema,
-  type NodeLevel,
+  type NodeKind,
   type ProjectNode,
 } from '@nodus/contracts';
 
@@ -22,7 +22,7 @@ import {
 import { findDemoProjectRow } from '../../../../shared/mocks/data/projects.js';
 import {
   childNodeRows,
-  demoNodeLevels,
+  demoNodeKinds,
   demoNodeRows,
   descendantIdsOf,
   directTasksOf,
@@ -36,7 +36,7 @@ import {
 
 /** Моки структуры проекта (#467): дерево узлов демо-мира и справочник видов
  *  уровней. Узлы БЕЗ архивации: пустой удаляется, непустой — 409. Регистрация
- *  в projects-handlers ДО projectReadHandlers: буквальный /projects/node-levels
+ *  в projects-handlers ДО projectReadHandlers: буквальный /projects/node-kinds
  *  иначе уйдёт в параметрический /projects/:id (gotcha порядка MSW). */
 
 const invalid = () =>
@@ -75,8 +75,8 @@ function checkedParent(projectId: string, parentId: string | null | undefined) {
   return { parent };
 }
 
-function levelOf(levelId: string): NodeLevel | undefined {
-  return demoNodeLevels.find((level) => level.id === levelId);
+function kindOf(kindId: string): NodeKind | undefined {
+  return demoNodeKinds.find((kind) => kind.id === kindId);
 }
 
 /** Лимит глубины с учётом высоты переносимого поддерева. */
@@ -88,7 +88,7 @@ function subtreeHeight(row: DemoNodeRow): number {
 function appendNode(
   projectId: string,
   parentId: string | null,
-  levelId: string,
+  kindId: string,
   name: string,
   code: string | null,
 ): DemoNodeRow {
@@ -96,7 +96,7 @@ function appendNode(
     id: crypto.randomUUID(),
     projectId,
     parentId,
-    levelId,
+    kindId,
     name,
     code,
     createdAt: new Date().toISOString(),
@@ -108,56 +108,55 @@ function appendNode(
 export const structureHandlers = [
   // ===== Виды уровней (справочник «Автоматизации», право project.setup.manage) =====
 
-  http.get('/api/v1/projects/node-levels', ({ request }) => {
+  http.get('/api/v1/projects/node-kinds', ({ request }) => {
     const includeArchived = new URL(request.url).searchParams.get('includeArchived') === 'true';
     return HttpResponse.json(
-      demoNodeLevels.filter((level) => includeArchived || level.archivedAt === null),
+      demoNodeKinds.filter((kind) => includeArchived || kind.archivedAt === null),
     );
   }),
 
-  http.post('/api/v1/projects/node-levels', async ({ request }) => {
+  http.post('/api/v1/projects/node-kinds', async ({ request }) => {
     if (!getMockActor().permissions.includes(Permission.PROJECT_SETUP_MANAGE)) return forbidden();
-    const parsed = nodeLevelCreateBodySchema.safeParse(await request.json().catch(() => null));
+    const parsed = nodeKindCreateBodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return invalid();
     const key = (name: string) => name.trim().toLowerCase();
-    if (demoNodeLevels.some((level) => key(level.name) === key(parsed.data.name))) {
-      return conflict(ErrorCode.PROJECT_NODE_LEVEL_NAME_TAKEN, 'Level name is already taken');
+    if (demoNodeKinds.some((kind) => key(kind.name) === key(parsed.data.name))) {
+      return conflict(ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN, 'Kind name is already taken');
     }
-    const level: NodeLevel = { id: crypto.randomUUID(), archivedAt: null, ...parsed.data };
-    demoNodeLevels.push(level);
-    return HttpResponse.json(level, { status: 201 });
+    const kind: NodeKind = { id: crypto.randomUUID(), archivedAt: null, ...parsed.data };
+    demoNodeKinds.push(kind);
+    return HttpResponse.json(kind, { status: 201 });
   }),
 
-  http.patch('/api/v1/projects/node-levels/:id', async ({ params, request }) => {
+  http.patch('/api/v1/projects/node-kinds/:id', async ({ params, request }) => {
     if (!getMockActor().permissions.includes(Permission.PROJECT_SETUP_MANAGE)) return forbidden();
-    const parsed = nodeLevelUpdateBodySchema.safeParse(await request.json().catch(() => null));
+    const parsed = nodeKindUpdateBodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return invalid();
-    const level = demoNodeLevels.find((entry) => entry.id === String(params.id));
-    if (!level) return nodeNotFound();
+    const kind = demoNodeKinds.find((entry) => entry.id === String(params.id));
+    if (!kind) return nodeNotFound();
     const nextName = parsed.data.name;
     if (
       nextName &&
-      demoNodeLevels.some(
+      demoNodeKinds.some(
         (entry) =>
-          entry.id !== level.id &&
-          entry.name.trim().toLowerCase() === nextName.trim().toLowerCase(),
+          entry.id !== kind.id && entry.name.trim().toLowerCase() === nextName.trim().toLowerCase(),
       )
     ) {
-      return conflict(ErrorCode.PROJECT_NODE_LEVEL_NAME_TAKEN, 'Level name is already taken');
+      return conflict(ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN, 'Kind name is already taken');
     }
-    if (nextName) level.name = nextName;
-    if (parsed.data.icon) level.icon = parsed.data.icon;
-    if (parsed.data.color) level.color = parsed.data.color;
-    return HttpResponse.json(level);
+    if (nextName) kind.name = nextName;
+    if (parsed.data.icon) kind.icon = parsed.data.icon;
+    if (parsed.data.color) kind.color = parsed.data.color;
+    return HttpResponse.json(kind);
   }),
 
   /** Архивация вида (узлы архивного вида создавать нельзя, существующие живут). */
-  http.delete('/api/v1/projects/node-levels/:id', ({ params }) => {
+  http.delete('/api/v1/projects/node-kinds/:id', ({ params }) => {
     if (!getMockActor().permissions.includes(Permission.PROJECT_SETUP_MANAGE)) return forbidden();
-    const level = demoNodeLevels.find((entry) => entry.id === String(params.id));
-    if (!level) return nodeNotFound();
-    level.archivedAt = new Date().toISOString();
-    return HttpResponse.json(level);
+    const kind = demoNodeKinds.find((entry) => entry.id === String(params.id));
+    if (!kind) return nodeNotFound();
+    kind.archivedAt = new Date().toISOString();
+    return HttpResponse.json(kind);
   }),
 
   // ===== Дерево узлов проекта =====
@@ -168,7 +167,7 @@ export const structureHandlers = [
     if (!row || !canSeeProject(row, actor)) return nodeNotFound();
     return HttpResponse.json({
       nodes: nodesOfProject(row.id).map(projectNodeDto),
-      levels: demoNodeLevels,
+      kinds: demoNodeKinds,
     });
   }),
 
@@ -180,10 +179,10 @@ export const structureHandlers = [
     const body = parsed.data;
     const parent = checkedParent(guard.row.id, body.parentId);
     if (typeof parent === 'string') return nodeNotFound();
-    const level = levelOf(body.levelId);
-    if (!level) return nodeNotFound();
-    if (level.archivedAt) {
-      return conflict(ErrorCode.PROJECT_NODE_LEVEL_ARCHIVED, 'Level is archived');
+    const kind = kindOf(body.kindId);
+    if (!kind) return nodeNotFound();
+    if (kind.archivedAt) {
+      return conflict(ErrorCode.PROJECT_NODE_KIND_ARCHIVED, 'Kind is archived');
     }
     if (body.code && nodeCodeTaken(body.code, guard.row.id, null)) {
       return conflict(ErrorCode.PROJECT_NODE_CODE_TAKEN, 'Node code is already taken');
@@ -197,7 +196,7 @@ export const structureHandlers = [
     const row = appendNode(
       guard.row.id,
       body.parentId ?? null,
-      body.levelId,
+      body.kindId,
       body.name,
       body.code ?? null,
     );
@@ -214,16 +213,16 @@ export const structureHandlers = [
     const body = parsed.data;
     const parent = checkedParent(guard.row.id, body.parentId);
     if (typeof parent === 'string') return nodeNotFound();
-    const level = levelOf(body.levelId);
-    if (!level) return nodeNotFound();
-    if (level.archivedAt) {
-      return conflict(ErrorCode.PROJECT_NODE_LEVEL_ARCHIVED, 'Level is archived');
+    const kind = kindOf(body.kindId);
+    if (!kind) return nodeNotFound();
+    if (kind.archivedAt) {
+      return conflict(ErrorCode.PROJECT_NODE_KIND_ARCHIVED, 'Kind is archived');
     }
     if (nodesOfProject(guard.row.id).length + body.names.length > NODE_LIMITS.nodesPerProject) {
       return conflict(ErrorCode.PROJECT_NODE_LIMIT_REACHED, 'Node limit reached');
     }
     const nodes: ProjectNode[] = body.names.map((name) =>
-      projectNodeDto(appendNode(guard.row.id, body.parentId ?? null, body.levelId, name, null)),
+      projectNodeDto(appendNode(guard.row.id, body.parentId ?? null, body.kindId, name, null)),
     );
     return HttpResponse.json({ nodes }, { status: 201 });
   }),
@@ -236,13 +235,13 @@ export const structureHandlers = [
     const body = parsed.data;
     const node = findDemoNodeRow(String(params.nodeId));
     if (!node || node.projectId !== guard.row.id) return nodeNotFound();
-    if (body.levelId) {
-      const level = levelOf(body.levelId);
-      if (!level) return nodeNotFound();
-      if (level.archivedAt) {
-        return conflict(ErrorCode.PROJECT_NODE_LEVEL_ARCHIVED, 'Level is archived');
+    if (body.kindId) {
+      const kind = kindOf(body.kindId);
+      if (!kind) return nodeNotFound();
+      if (kind.archivedAt) {
+        return conflict(ErrorCode.PROJECT_NODE_KIND_ARCHIVED, 'Kind is archived');
       }
-      node.levelId = body.levelId;
+      node.kindId = body.kindId;
     }
     if (body.name) node.name = body.name;
     if (body.code !== undefined) {

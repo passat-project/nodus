@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import type { NodeLevel, ProjectNode } from '@nodus/contracts';
+import type { NodeKind, ProjectNode } from '@nodus/contracts';
 import { NODE_LIMITS, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
@@ -22,15 +22,15 @@ import {
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useBatchCreateNodes, useCreateNode } from '../api/structure-api.js';
-import { NodeLevelGlyph } from '../lib/node-level-icon.js';
+import { NodeKindGlyph } from '../lib/node-kind-icon.js';
 
 /** Селект вида узла: значок + имя (ярлык узла, вердикт владельца 30.10). */
-function LevelSelect({
-  levels,
+function KindSelect({
+  kinds,
   value,
   onChange,
 }: {
-  levels: NodeLevel[];
+  kinds: NodeKind[];
   value: string;
   onChange: (id: string) => void;
 }) {
@@ -40,10 +40,10 @@ function LevelSelect({
         <SelectValue />
       </SelectTrigger>
       <SelectContent position="popper">
-        {levels.map((level) => (
-          <SelectItem key={level.id} value={level.id}>
-            <NodeLevelGlyph icon={level.icon} className="size-3.5 shrink-0" />
-            {level.name}
+        {kinds.map((kind) => (
+          <SelectItem key={kind.id} value={kind.id}>
+            <NodeKindGlyph icon={kind.icon} className="size-3.5 shrink-0" />
+            {kind.name}
           </SelectItem>
         ))}
       </SelectContent>
@@ -60,20 +60,20 @@ function LevelSelect({
 export function NodeCreateDialog({
   projectId,
   parent,
-  levels,
+  kinds,
   onClose,
 }: {
   projectId: string;
   parent: ProjectNode | null;
-  levels: NodeLevel[];
+  kinds: NodeKind[];
   onClose: () => void;
 }) {
-  const active = levels.filter((level) => level.archivedAt === null);
+  const active = kinds.filter((kind) => kind.archivedAt === null);
   const create = useCreateNode(projectId);
   const batch = useBatchCreateNodes(projectId);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
-  const [levelId, setLevelId] = useState(active[0]?.id ?? '');
+  const [kindId, setKindId] = useState(active[0]?.id ?? '');
   const [batchOpen, setBatchOpen] = useState(false);
   const [prefix, setPrefix] = useState('');
   const [from, setFrom] = useState('1');
@@ -92,20 +92,20 @@ export function NodeCreateDialog({
   }, [batchOpen, prefix, from, to]);
 
   const canSubmit = batchOpen
-    ? names.length > 0 && levelId.length > 0
-    : name.trim().length > 0 && levelId.length > 0;
+    ? names.length > 0 && kindId.length > 0
+    : name.trim().length > 0 && kindId.length > 0;
   const pending = create.isPending || batch.isPending;
 
   function submit() {
     if (!canSubmit) return;
     if (batchOpen) {
-      batch.mutate({ parentId: parent?.id ?? null, levelId, names }, { onSuccess: onClose });
+      batch.mutate({ parentId: parent?.id ?? null, kindId, names }, { onSuccess: onClose });
       return;
     }
     create.mutate(
       {
         parentId: parent?.id ?? null,
-        levelId,
+        kindId,
         name: name.trim(),
         ...(code.trim() ? { code: code.trim() } : {}),
       },
@@ -154,7 +154,7 @@ export function NodeCreateDialog({
                   autoFocus
                   value={prefix}
                   onChange={(e) => setPrefix(e.target.value)}
-                  placeholder={ui.structure.levelsNamePlaceholder}
+                  placeholder={ui.structure.kindsNamePlaceholder}
                 />
               </label>
               <div className="grid grid-cols-2 gap-3">
@@ -209,9 +209,9 @@ export function NodeCreateDialog({
 
           <div className="flex flex-col gap-1">
             <NodeLabel label={ui.structure.nodeKind} />
-            <LevelSelect levels={active} value={levelId} onChange={setLevelId} />
+            <KindSelect kinds={active} value={kindId} onChange={setKindId} />
             {active.length === 0 ? (
-              <p className="text-xs text-muted-foreground">{ui.structure.levelsEmpty}</p>
+              <p className="text-xs text-muted-foreground">{ui.structure.kindsEmpty}</p>
             ) : null}
           </div>
         </div>

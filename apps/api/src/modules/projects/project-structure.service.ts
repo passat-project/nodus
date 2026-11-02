@@ -22,7 +22,7 @@ import {
 } from '../tasks/ports/task-project-reader.port.js';
 import { loadForStructureManage } from './project-structure.access.js';
 import { nodeToDto } from './project-structure.mapper.js';
-import { NodeLevelsRepository } from './project-node-levels.repository.js';
+import { NodeKindsRepository } from './project-node-kinds.repository.js';
 import { ProjectNodesRepository, type ProjectNodeRow } from './project-nodes.repository.js';
 import { ProjectsService } from './projects.service.js';
 import {
@@ -54,20 +54,20 @@ export class ProjectStructureService {
     private readonly eventBus: EventBus,
     private readonly projects: ProjectsService,
     private readonly nodes: ProjectNodesRepository,
-    private readonly levels: NodeLevelsRepository,
+    private readonly kinds: NodeKindsRepository,
     @Inject(TASK_PROJECT_READER) private readonly taskReader: TaskProjectReader,
   ) {}
 
   /** GET /projects/:id/structure: узлы (плоско, по order) + rollups + виды. */
   async structure(user: AuthUser, projectId: string): Promise<ProjectStructureResponse> {
     await this.projects.assertVisible(user, projectId);
-    const [rows, rollups, levels] = await Promise.all([
+    const [rows, rollups, kinds] = await Promise.all([
       this.nodes.listByProject(projectId),
       this.taskReader.nodeRollups(projectId),
-      this.levels.list(),
+      this.kinds.list(),
     ]);
     const byNode = new Map(rollups.map((rollup) => [rollup.nodeId, rollup]));
-    return { nodes: rows.map((row) => nodeToDto(row, byNode.get(row.id) ?? null)), levels };
+    return { nodes: rows.map((row) => nodeToDto(row, byNode.get(row.id) ?? null)), kinds };
   }
 
   async create(
@@ -77,7 +77,7 @@ export class ProjectStructureService {
   ): Promise<ProjectNode> {
     const created = await this.createMany(user, projectId, {
       parentId: body.parentId ?? null,
-      levelId: body.levelId,
+      kindId: body.kindId,
       names: [body.name],
       code: body.code,
     });
@@ -90,7 +90,7 @@ export class ProjectStructureService {
     projectId: string,
     body: {
       parentId: string | null;
-      levelId: string;
+      kindId: string;
       names: string[];
       code?: string;
     },
@@ -99,7 +99,7 @@ export class ProjectStructureService {
     return this.txRunner.run(async (tx) => {
       await this.nodes.lockStructure(tx, projectId);
       const tree = await this.nodes.listByProject(projectId, tx);
-      const level = await this.assertLevelAlive(body.levelId);
+      const kind = await this.assertKindAlive(body.kindId);
       const parent = this.assertParent(tree, body.parentId);
       if (body.names.length > NODE_LIMITS.nodesPerProject - tree.length) {
         throw limitError('nodes_per_project', NODE_LIMITS.nodesPerProject);
@@ -120,7 +120,7 @@ export class ProjectStructureService {
         const node = await this.nodes.create(tx, {
           projectId,
           parentId: parent?.id ?? null,
-          levelId: level.id,
+          kindId: kind.id,
           name,
           code: created.length === 0 ? (body.code ?? null) : null,
           order: orderKeyFor(orders, null, 'end'),
@@ -133,7 +133,7 @@ export class ProjectStructureService {
             projectId,
             nodeId: node.id,
             parentId: node.parentId,
-            levelId: node.levelId,
+            kindId: node.kindId,
             name: node.name,
           },
           { ...meta, aggregateId: node.id },
@@ -155,7 +155,7 @@ export class ProjectStructureService {
       await this.nodes.lockStructure(tx, projectId);
       const node = await this.nodes.findInProject(projectId, nodeId);
       if (!node) throw nodeInvalid(nodeId);
-      const patch: { name?: string; code?: string | null; levelId?: string } = {};
+      const patch: { name?: string; code?: string | null; kindId?: string } = {};
       const fields: string[] = [];
       if (body.name !== undefined) {
         patch.name = body.name;
@@ -168,9 +168,9 @@ export class ProjectStructureService {
         patch.code = body.code;
         fields.push('code');
       }
-      if (body.levelId !== undefined && body.levelId !== node.levelId) {
-        patch.levelId = (await this.assertLevelAlive(body.levelId)).id;
-        fields.push('levelId');
+      if (body.kindId !== undefined && body.kindId !== node.kindId) {
+        patch.kindId = (await this.assertKindAlive(body.kindId)).id;
+        fields.push('kindId');
       }
       await this.nodes.update(tx, node.id, patch);
       await this.eventBus.emit(
@@ -182,7 +182,7 @@ export class ProjectStructureService {
           fields,
           ...(patch.name !== undefined ? { name: patch.name } : {}),
           ...(patch.code !== undefined ? { code: patch.code } : {}),
-          ...(patch.levelId !== undefined ? { levelId: patch.levelId } : {}),
+          ...(patch.kindId !== undefined ? { kindId: patch.kindId } : {}),
         },
         { actorId: user.id, aggregateType: 'project_node', aggregateId: node.id },
       );
@@ -219,16 +219,16 @@ export class ProjectStructureService {
 
   // ===== Общее =====
 
-  private async assertLevelAlive(levelId: string) {
-    const level = await this.levels.findActive(levelId);
-    if (level) return level;
-    if (await this.levels.findById(levelId)) {
-      throw new DomainException(ErrorCode.PROJECT_NODE_LEVEL_ARCHIVED, 'Node level is archived', {
-        levelId,
+  private async assertKindAlive(kindId: string) {
+    const kind = await this.kinds.findActive(kindId);
+    if (kind) return kind;
+    if (await this.kinds.findById(kindId)) {
+      throw new DomainException(ErrorCode.PROJECT_NODE_KIND_ARCHIVED, 'Node kind is archived', {
+        kindId,
       });
     }
-    throw new DomainException(ErrorCode.PROJECT_NODE_INVALID, 'Node level is not available', {
-      levelId,
+    throw new DomainException(ErrorCode.PROJECT_NODE_INVALID, 'Node kind is not available', {
+      kindId,
     });
   }
 

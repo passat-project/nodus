@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import type { NodeLevel, ProjectNode } from '@nodus/contracts';
+import type { NodeKind, ProjectNode } from '@nodus/contracts';
 import { NODE_LIMITS, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
@@ -23,25 +23,25 @@ import {
 
 import { plural } from '../../../../shared/lib/format.js';
 import { useDeleteNode, useMoveNode, useUpdateNode } from '../api/structure-api.js';
-import { NodeLevelGlyph } from '../lib/node-level-icon.js';
+import { NodeKindGlyph } from '../lib/node-kind-icon.js';
 import { nodeOptions, subtreeNodeIds } from '../lib/structure-tree.js';
 
 /** Переименование узла: имя / шифр / вид уровня (контракт update). */
 export function NodeRenameDialog({
   projectId,
   node,
-  levels,
+  kinds,
   onClose,
 }: {
   projectId: string;
   node: ProjectNode;
-  levels: NodeLevel[];
+  kinds: NodeKind[];
   onClose: () => void;
 }) {
   const update = useUpdateNode(projectId);
   const [name, setName] = useState(node.name);
   const [code, setCode] = useState(node.code ?? '');
-  const [levelId, setLevelId] = useState(node.levelId);
+  const [kindId, setKindId] = useState(node.kindId);
 
   function submit() {
     const trimmed = name.trim();
@@ -49,7 +49,7 @@ export function NodeRenameDialog({
     const body: Parameters<typeof update.mutate>[0] = { nodeId: node.id };
     if (trimmed !== node.name) body.name = trimmed;
     if (code.trim() !== (node.code ?? '')) body.code = code.trim() || null;
-    if (levelId !== node.levelId) body.levelId = levelId;
+    if (kindId !== node.kindId) body.kindId = kindId;
     if (Object.keys(body).length <= 1) {
       onClose();
       return;
@@ -89,15 +89,15 @@ export function NodeRenameDialog({
           </label>
           <div className="flex flex-col gap-1">
             <NodeLabel label={ui.structure.nodeKind} />
-            <Select value={levelId} onValueChange={setLevelId}>
+            <Select value={kindId} onValueChange={setKindId}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent position="popper">
-                {levels.map((level) => (
-                  <SelectItem key={level.id} value={level.id}>
-                    <NodeLevelGlyph icon={level.icon} className="size-3.5 shrink-0" />
-                    {level.name}
+                {kinds.map((kind) => (
+                  <SelectItem key={kind.id} value={kind.id}>
+                    <NodeKindGlyph icon={kind.icon} className="size-3.5 shrink-0" />
+                    {kind.name}
                   </SelectItem>
                 ))}
               </SelectContent>

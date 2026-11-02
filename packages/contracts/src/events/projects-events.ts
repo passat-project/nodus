@@ -69,7 +69,7 @@ export const projectNodeCreatedPayloadSchema = z.object({
   projectId: z.uuid(),
   nodeId: z.uuid(),
   parentId: z.uuid().nullable(),
-  levelId: z.uuid(),
+  kindId: z.uuid(),
   name: z.string(),
 });
 export type ProjectNodeCreatedPayload = z.infer<typeof projectNodeCreatedPayloadSchema>;
@@ -81,7 +81,7 @@ export const projectNodeUpdatedPayloadSchema = z.object({
   fields: z.array(z.string()),
   name: z.string().optional(),
   code: z.string().nullable().optional(),
-  levelId: z.uuid().optional(),
+  kindId: z.uuid().optional(),
 });
 export type ProjectNodeUpdatedPayload = z.infer<typeof projectNodeUpdatedPayloadSchema>;
 

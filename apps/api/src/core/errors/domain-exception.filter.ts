@@ -128,8 +128,8 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.PROJECT_NODE_NOT_EMPTY]: HttpStatus.CONFLICT,
   [ErrorCode.PROJECT_NODE_CODE_TAKEN]: HttpStatus.CONFLICT,
   [ErrorCode.PROJECT_NODE_LIMIT_REACHED]: HttpStatus.CONFLICT,
-  [ErrorCode.PROJECT_NODE_LEVEL_ARCHIVED]: HttpStatus.CONFLICT,
-  [ErrorCode.PROJECT_NODE_LEVEL_NAME_TAKEN]: HttpStatus.CONFLICT,
+  [ErrorCode.PROJECT_NODE_KIND_ARCHIVED]: HttpStatus.CONFLICT,
+  [ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN]: HttpStatus.CONFLICT,
 };
 
 /** Код для HTTP-исключений Nest/Fastify (400 у нас — всегда валидация входа). */

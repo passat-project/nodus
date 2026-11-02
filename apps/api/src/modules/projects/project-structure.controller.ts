@@ -108,7 +108,7 @@ export class ProjectStructureController {
     return this.structure
       .createMany(user, id, {
         parentId: dto.parentId ?? null,
-        levelId: dto.levelId,
+        kindId: dto.kindId,
         names: dto.names,
       })
       .then((nodes) => ({ nodes }));

@@ -101,9 +101,9 @@
   `project.manage`); архив — не удаление. У типа — политика системного поля
   «Шифр» (`hidden | optional | required`), которую читают окна проекта.
   Виды узлов структуры живут в карточке проекта («Структура» → «Виды узлов»,
-  `structure/components/node-levels-dialog.tsx`); поле модели `levelKindIds`
+  `structure/components/node-kinds-dialog.tsx`); поле модели `levelKindIds`
   остаётся до переделки «Типов проектов» отдельным issue (#552), UI-редактор
-  к нему не подключён (мёртвая подсказка `type-levels-hint` удалена).
+  к нему не подключён (мёртвая подсказка `type-kinds-hint` удалена).
 - Окно «Настройки портала» (`portal-settings-dialog.tsx`, хост в оболочке,
   входы — меню профиля и шапка вкладки типов): раздел «Проекты» — видимость
   новых проектов по умолчанию (`GET/PUT /settings/portal`). Полный дом общих
@@ -125,8 +125,8 @@
   `detail`, `members`, `history`. Инвалидация модуля — префиксом `projects`.
 - `structure/api/structure-api.ts` — дерево и мутации узлов (создание/пачка/
   правка/перенос/удаление — оптимистично по `projects.structure.<id>`),
-  перенос задач `set_node`; `structure/api/node-levels-api.ts` — справочник
-  видов уровней (ключ `projects.node-levels`).
+  перенос задач `set_node`; `structure/api/node-kinds-api.ts` — справочник
+  видов уровней (ключ `projects.node-kinds`).
 - `shared/api/projects-available.ts` — «Проект» в задачах/письмах доступен,
   когда миры совпадают: оба на моках ИЛИ оба живые и флаг `projects` включён
   (`/auth/me.modules`).
@@ -142,7 +142,7 @@
 с теми же отказами (409 дубль шифра, 403 права, 422 состав/видимость);
 `project-catalog-handlers.ts` — типы/портфели/настройки; `structure-handlers.ts`
 — дерево узлов (валидация контрактами; 409 не-пустой узел/шифр/цикл/лимиты;
-`/projects/node-levels` — ДО `/projects/:id`); канал проекта —
+`/projects/node-kinds` — ДО `/projects/:id`); канал проекта —
 `features/chat/api/mocks/project-conversation-handlers.ts`. Демо-мир:
 `shared/mocks/data/projects.ts` (данные), `project-views.ts` (DTO/видимость),
 `project-store.ts` (мутации), `project-events.ts` (журнал истории),

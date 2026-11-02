@@ -11,13 +11,13 @@ import { z } from 'zod';
 import {
   ErrorCode,
   Permission,
-  nodeLevelCreateBodySchema,
-  nodeLevelListSchema,
-  nodeLevelSchema,
-  nodeLevelUpdateBodySchema,
-  type NodeLevel,
-  type NodeLevelCreateBody,
-  type NodeLevelUpdateBody,
+  nodeKindCreateBodySchema,
+  nodeKindListSchema,
+  nodeKindSchema,
+  nodeKindUpdateBodySchema,
+  type NodeKind,
+  type NodeKindCreateBody,
+  type NodeKindUpdateBody,
 } from '@nodus/contracts';
 
 import { Audit } from '../../core/decorators/audit.decorator.js';
@@ -28,7 +28,7 @@ import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../core/openapi/api-idempotency.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { TransactionRunner } from '../../core/database/transaction-runner.js';
-import { NodeLevelsRepository } from './project-node-levels.repository.js';
+import { NodeKindsRepository } from './project-node-kinds.repository.js';
 
 const idParamSchema = z.uuid();
 
@@ -37,116 +37,116 @@ const idParamSchema = z.uuid();
  * узла — значок + цвет; создание/правка/архивация — `project.setup.manage`
  * («Автоматизация → Типы проектов»). Удаление = архивация: узлы архивного
  * вида не создаются, существующие живут. Имя уникально без учёта регистра
- * и пробелов (lower(btrim(name))). Статический маршрут `projects/node-levels`
+ * и пробелов (lower(btrim(name))). Статический маршрут `projects/node-kinds`
  * фармуется раньше параметрических `projects/:id`.
  */
 @ApiTags('projects')
 @ApiBearerAuth()
 @RequireFeature('projects')
 @Controller()
-export class ProjectNodeLevelsController {
+export class ProjectNodeKindsController {
   constructor(
-    private readonly nodeLevels: NodeLevelsRepository,
+    private readonly nodeKinds: NodeKindsRepository,
     private readonly txRunner: TransactionRunner,
   ) {}
 
-  @Get('projects/node-levels')
+  @Get('projects/node-kinds')
   @ApiOperation({ summary: 'Виды уровней узлов (живые по имени, архивные в конце)' })
-  @ApiOkResponse({ standardSchema: nodeLevelListSchema })
+  @ApiOkResponse({ standardSchema: nodeKindListSchema })
   @ApiErrors(400, 401)
-  nodeLevelsList(): Promise<NodeLevel[]> {
-    return this.nodeLevels.list();
+  nodeKindsList(): Promise<NodeKind[]> {
+    return this.nodeKinds.list();
   }
 
-  @Post('projects/node-levels')
+  @Post('projects/node-kinds')
   @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
-  @Audit({ action: 'project.node_level_create', entity: 'node_level' })
+  @Audit({ action: 'project.node_kind_create', entity: 'node_kind' })
   @ApiOperation({ summary: 'Новый вид уровня (ярлык узла: значок + цвет)' })
-  @ApiCreatedResponse({ standardSchema: nodeLevelSchema })
+  @ApiCreatedResponse({ standardSchema: nodeKindSchema })
   @ApiErrors(400, 401, 403, 409)
   @ApiIdempotencyKey()
-  nodeLevelCreate(
+  nodeKindCreate(
     @Body({
-      schema: nodeLevelCreateBodySchema,
-      pipes: [new ZodValidationPipe(nodeLevelCreateBodySchema)],
+      schema: nodeKindCreateBodySchema,
+      pipes: [new ZodValidationPipe(nodeKindCreateBodySchema)],
     })
-    dto: NodeLevelCreateBody,
-  ): Promise<NodeLevel> {
+    dto: NodeKindCreateBody,
+  ): Promise<NodeKind> {
     return this.txRunner.run(async (tx) => {
-      if (await this.nodeLevels.nameTaken(dto.name, null)) {
+      if (await this.nodeKinds.nameTaken(dto.name, null)) {
         throw new DomainException(
-          ErrorCode.PROJECT_NODE_LEVEL_NAME_TAKEN,
-          'Node level name is already taken',
+          ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN,
+          'Node kind name is already taken',
           { name: dto.name },
         );
       }
-      return this.nodeLevels.create(tx, dto);
+      return this.nodeKinds.create(tx, dto);
     });
   }
 
-  @Patch('projects/node-levels/:id')
+  @Patch('projects/node-kinds/:id')
   @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
-  @Audit({ action: 'project.node_level_update', entity: 'node_level' })
+  @Audit({ action: 'project.node_kind_update', entity: 'node_kind' })
   @ApiParam({ name: 'id', description: 'UUID вида', schema: { type: 'string', format: 'uuid' } })
   @ApiOperation({ summary: 'Правка вида уровня: имя, значок, цвет' })
-  @ApiOkResponse({ standardSchema: nodeLevelSchema })
+  @ApiOkResponse({ standardSchema: nodeKindSchema })
   @ApiErrors(400, 401, 403, 404, 409)
   @ApiIdempotencyKey()
-  nodeLevelUpdate(
+  nodeKindUpdate(
     @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
     @Body({
-      schema: nodeLevelUpdateBodySchema,
-      pipes: [new ZodValidationPipe(nodeLevelUpdateBodySchema)],
+      schema: nodeKindUpdateBodySchema,
+      pipes: [new ZodValidationPipe(nodeKindUpdateBodySchema)],
     })
-    dto: NodeLevelUpdateBody,
-  ): Promise<NodeLevel> {
+    dto: NodeKindUpdateBody,
+  ): Promise<NodeKind> {
     return this.txRunner.run(async (tx) => {
-      if (dto.name !== undefined && (await this.nodeLevels.nameTaken(dto.name, id))) {
+      if (dto.name !== undefined && (await this.nodeKinds.nameTaken(dto.name, id))) {
         throw new DomainException(
-          ErrorCode.PROJECT_NODE_LEVEL_NAME_TAKEN,
-          'Node level name is already taken',
+          ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN,
+          'Node kind name is already taken',
           { name: dto.name },
         );
       }
-      const updated = await this.nodeLevels.update(tx, id, dto);
-      if (!updated) throw DomainException.notFound('Node level not found');
+      const updated = await this.nodeKinds.update(tx, id, dto);
+      if (!updated) throw DomainException.notFound('Node kind not found');
       return updated;
     });
   }
 
-  @Delete('projects/node-levels/:id')
+  @Delete('projects/node-kinds/:id')
   @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
-  @Audit({ action: 'project.node_level_archive', entity: 'node_level' })
+  @Audit({ action: 'project.node_kind_archive', entity: 'node_kind' })
   @ApiParam({ name: 'id', description: 'UUID вида', schema: { type: 'string', format: 'uuid' } })
   @ApiOperation({
     summary: 'Архивировать вид уровня (узлы такого вида больше не создаются)',
   })
-  @ApiOkResponse({ standardSchema: nodeLevelSchema })
+  @ApiOkResponse({ standardSchema: nodeKindSchema })
   @ApiErrors(400, 401, 403, 404)
-  nodeLevelArchive(
+  nodeKindArchive(
     @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
-  ): Promise<NodeLevel> {
+  ): Promise<NodeKind> {
     return this.txRunner.run(async (tx) => {
-      const archived = await this.nodeLevels.setArchived(tx, id, true);
-      if (!archived) throw DomainException.notFound('Node level not found');
+      const archived = await this.nodeKinds.setArchived(tx, id, true);
+      if (!archived) throw DomainException.notFound('Node kind not found');
       return archived;
     });
   }
 
-  @Post('projects/node-levels/:id/restore')
+  @Post('projects/node-kinds/:id/restore')
   @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
-  @Audit({ action: 'project.node_level_restore', entity: 'node_level' })
+  @Audit({ action: 'project.node_kind_restore', entity: 'node_kind' })
   @ApiParam({ name: 'id', description: 'UUID вида', schema: { type: 'string', format: 'uuid' } })
   @ApiOperation({ summary: 'Вернуть вид уровня из архива' })
-  @ApiOkResponse({ standardSchema: nodeLevelSchema })
+  @ApiOkResponse({ standardSchema: nodeKindSchema })
   @ApiErrors(400, 401, 403, 404)
   @ApiIdempotencyKey()
-  nodeLevelRestore(
+  nodeKindRestore(
     @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
-  ): Promise<NodeLevel> {
+  ): Promise<NodeKind> {
     return this.txRunner.run(async (tx) => {
-      const restored = await this.nodeLevels.setArchived(tx, id, false);
-      if (!restored) throw DomainException.notFound('Node level not found');
+      const restored = await this.nodeKinds.setArchived(tx, id, false);
+      if (!restored) throw DomainException.notFound('Node kind not found');
       return restored;
     });
   }

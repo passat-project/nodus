@@ -27,7 +27,7 @@ export { useProjectStructure } from '../../../../shared/api/project-structure.js
  *  модуля достают и дерево, и справочник видов уровней. */
 export const structureKeys = {
   of: (projectId: string) => projectsKeys.structure(projectId),
-  nodeLevels: () => [...projectsKeys.all, 'node-levels'] as const,
+  nodeKinds: () => [...projectsKeys.all, 'node-kinds'] as const,
 };
 
 type QueryClient = ReturnType<typeof useQueryClient>;
@@ -80,7 +80,7 @@ export function useCreateNode(projectId: string) {
           {
             id: tempId,
             parentId: body.parentId ?? null,
-            levelId: body.levelId,
+            kindId: body.kindId,
             name: body.name,
             code: body.code ?? null,
             rollup: { ...zeroRollup },
@@ -127,7 +127,7 @@ export function useBatchCreateNodes(projectId: string) {
           ...body.names.map((name, index) => ({
             id: `${prefix}-${index}`,
             parentId: body.parentId ?? null,
-            levelId: body.levelId,
+            kindId: body.kindId,
             name,
             code: null,
             rollup: { ...zeroRollup },
@@ -179,7 +179,7 @@ export function useUpdateNode(projectId: string) {
                 ...node,
                 ...(vars.name !== undefined ? { name: vars.name } : {}),
                 ...(vars.code !== undefined ? { code: vars.code } : {}),
-                ...(vars.levelId !== undefined ? { levelId: vars.levelId } : {}),
+                ...(vars.kindId !== undefined ? { kindId: vars.kindId } : {}),
               }
             : node,
         ),
