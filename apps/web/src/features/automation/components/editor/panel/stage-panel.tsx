@@ -23,7 +23,6 @@ import {
   SectionLink,
   Segmented,
   SwitchRow,
-  focusName,
 } from '../../../../../shared/ui/panel/panel-kit.js';
 import { stageButtonsSummary } from './stage-buttons-section.js';
 import { StageNameField } from './stage-name-field.js';

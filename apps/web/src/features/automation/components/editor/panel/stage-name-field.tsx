@@ -7,7 +7,7 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { useActiveOption } from '../../../../../shared/ui/use-active-option.js';
 import { pluralRu } from '../../../lib/plural-ru.js';
-import { focusName } from './panel-kit.js';
+import { focusName } from '../../../../../shared/ui/panel/panel-kit.js';
 
 /**
  * Имя статуса с мягкими подсказками (#430, ADR-0024 п.7): имена того же
