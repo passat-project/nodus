@@ -24,15 +24,6 @@ import {
   type DictionaryReader,
 } from '../../dictionaries/ports/dictionary-reader.port.js';
 import {
-  CUSTOM_FIELD_VALUES_READER,
-  type CustomFieldValuesReader,
-} from '../../tasks/ports/custom-field-values.port.js';
-import {
-  PROJECT_FIELD_USAGE_READER,
-  type ProjectFieldScope,
-  type ProjectFieldUsageReader,
-} from '../../projects/ports/project-field-usage.port.js';
-import {
   PROCESS_CATALOG_READER,
   type ProcessCatalogReader,
 } from '../../workflows/ports/process-catalog-reader.port.js';
@@ -41,21 +32,17 @@ import {
   type WorkflowFieldUsageReader,
 } from '../../workflows/ports/workflow-field-usage.port.js';
 import { DefinitionMapper, type FieldDefinitionRow } from './definition.mapper.js';
+import { DefinitionsUsageService } from './definitions-usage.service.js';
 import { emitDefinitionChanged } from './definition-events.js';
 import { assertBindable, assertUnbindable } from './type-bindings.js';
 import { DefinitionsRepository, type FieldDefinitionWriteData } from './definitions.repository.js';
 import { CustomFieldValueValidator } from '../values/value-validator.js';
-
 /**
  * Реестр определений атрибутов (#431, ADR-0029): CRUD, удаление с проверкой
- * использования, порядок. Каждая мутация — транзакция + outbox-событие
- * `custom_field.definition_changed` (I9); аудит — контроллером (@Audit).
- *
- * Правила (Р3/Р4): имя уникально в области без учёта регистра под
- * advisory-локом области; лимит 100 на область; смена типа — только
- * расширяющая (text→long_text, enum→multienum, user→users); справочник
- * списка после создания неизменен. Скрытие (`hidden`) заменяет архив:
- * имя и лимит считаются по ВСЕМ атрибутам области.
+ * использования, порядок; мутации — транзакция + outbox `custom_field.
+ * definition_changed` (I9), аудит — контроллером. Имя уникально в области
+ * под advisory-локом; лимит 100; смена типа — только расширяющая; справочник
+ * списка неизменен; `hidden` заменяет архив.
  */
 @Injectable()
 export class DefinitionsService {
@@ -66,10 +53,9 @@ export class DefinitionsService {
     private readonly txRunner: TransactionRunner,
     private readonly eventBus: EventBus,
     @Inject(DICTIONARY_READER) private readonly dictionaries: DictionaryReader,
-    @Inject(CUSTOM_FIELD_VALUES_READER) private readonly values: CustomFieldValuesReader,
-    @Inject(PROJECT_FIELD_USAGE_READER) private readonly projectUsage: ProjectFieldUsageReader,
     @Inject(WORKFLOW_FIELD_USAGE_READER) private readonly workflows: WorkflowFieldUsageReader,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
+    private readonly usageReader: DefinitionsUsageService,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(DefinitionsService.name);
@@ -222,19 +208,9 @@ export class DefinitionsService {
     });
   }
 
-  /** Где используется: число заполненных карточек, маршруты процессов и
-   *  виды папок, держащие атрибут в форме (#556, Р11). Читатель значений —
-   *  по области: проекты и папки живут в модуле projects (порт). */
+  /** Где используется: значения — порт владельца области, маршруты и виды папок (#556). */
   async usage(id: string): Promise<CustomFieldUsage> {
-    const definition = await this.requireDefinition(id);
-    const scope = definition.scope as CustomFieldScope;
-    const projectScope = isProjectScope(scope);
-    const [valueCount, workflows, nodeKinds] = await Promise.all([
-      projectScope ? this.projectUsage.countValues(scope, id) : this.values.countValues(scope, id),
-      this.workflows.workflowsUsingField(scope, id),
-      scope === 'node' ? this.projectUsage.nodeKindsUsing(id) : Promise.resolve([]),
-    ]);
-    return { valueCount, workflows, nodeKinds };
+    return this.usageReader.usage(await this.requireDefinition(id));
   }
 
   /**
@@ -335,9 +311,4 @@ export class DefinitionsService {
 
 function nameTaken(name: string): DomainException {
   return new DomainException(ErrorCode.CUSTOM_FIELD_NAME_TAKEN, 'Field name is taken', { name });
-}
-
-/** Области, значения которых читает модуль projects (#556, Р11). */
-function isProjectScope(scope: CustomFieldScope): scope is ProjectFieldScope {
-  return scope === 'project' || scope === 'node';
 }
