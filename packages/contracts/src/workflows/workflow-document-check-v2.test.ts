@@ -176,4 +176,18 @@ describe('checkWorkflowDocument: правила v2 (#430)', () => {
       expect.objectContaining({ code: 'approver_rule_unresolvable', transitionId: 't-complete' }),
     );
   });
+
+  it('approver_rule_unresolvable — обязательное окно основной кнопки', () => {
+    const doc = baseDocument();
+    doc.transitions.find((t) => t.id === 't-complete')!.rules.postFunctions = [
+      { kind: 'route_if', when: 'approver_is_actor', toStageId: 's5' },
+    ];
+    doc.transitions.find((t) => t.id === 't-accept')!.form = {
+      enabled: true,
+      sections: [{ kind: 'comment', label: 'Протокол', required: true }],
+    };
+    expect(checkWorkflowDocument(doc)).toContainEqual(
+      expect.objectContaining({ code: 'approver_rule_unresolvable', transitionId: 't-complete' }),
+    );
+  });
 });

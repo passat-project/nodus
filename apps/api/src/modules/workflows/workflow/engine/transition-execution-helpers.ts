@@ -11,7 +11,6 @@ export const EMPTY_APPLIED: WorkflowFormApplied = {
 export const hasApplied = (applied: WorkflowFormApplied): boolean =>
   Object.keys(applied.fields).length > 0 || applied.timeEntryId !== null || applied.result !== null;
 
-/** Кнопка без обязательного окна не блокирует жест DnD/«Мой план». */
 /** Подпись раздела «Причина / комментарий» окна (для блока в чате). */
 export function commentLabelOf(t: TransitionDef): string | undefined {
   const section = t.form?.enabled ? t.form.sections.find((s) => s.kind === 'comment') : undefined;

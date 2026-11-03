@@ -1,5 +1,6 @@
 import type { TaskSystemState } from './workflow-primitives.schemas.js';
 import type { WorkflowDraftDocument, WorkflowProblem } from './workflow-document.schemas.js';
+import { effectiveWindowSections, requiredWindowSections } from './transition-window.js';
 
 /**
  * Дополнительные предупреждения документа маршрута (#430): мягкий каталог
@@ -69,8 +70,15 @@ export function checkExtraRules(
       const primaries = approvalStage
         ? transitions.filter((x) => x.fromStageId === approvalStage.id && x.display === 'primary')
         : [];
+      const required =
+        primaries.length === 1 && primaries[0]!.form?.enabled
+          ? requiredWindowSections(
+              effectiveWindowSections(primaries[0]!.form ?? null, primaries[0]!.rules),
+            )
+          : [];
       const unresolvable =
-        primaries.length === 0 || (primaries.length === 1 && primaries[0]!.intent !== 'action');
+        primaries.length === 0 ||
+        (primaries.length === 1 && (primaries[0]!.intent !== 'action' || required.length > 0));
       if (unresolvable) {
         problems.push(warning('approver_rule_unresolvable', { transitionId: t.id }));
       }

@@ -26,7 +26,7 @@ export class WorkflowStageNamesController {
 
   @Get('stage-names')
   @RequirePermissions(Permission.WORKFLOW_MANAGE)
-  @ApiOperation({ summary: 'Имена статусов опубликованных маршрутов для подсказок' })
+  @ApiOperation({ summary: 'Имена статусов для подсказок редактора' })
   @ApiOkResponse({ standardSchema: workflowStageNamesSchema })
   @ApiErrors(400, 401, 403)
   list(

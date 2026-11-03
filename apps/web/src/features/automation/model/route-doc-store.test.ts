@@ -133,6 +133,26 @@ describe('route-doc-store: рабочая копия маршрута (#378)', (
     expect(store.getState().document.stages.length).toBe(4);
   });
 
+  it('умный дефолт intent: пауза → service, смена цели пересчитывает, ручной выбор сохраняется (#430)', () => {
+    const store = freshStore();
+    const pausedId = store.getState().addStage('paused');
+    const transitionId = store.getState().addTransition(S2, pausedId)!;
+    const transition = () =>
+      store.getState().document.transitions.find((t) => t.id === transitionId)!;
+
+    expect(transition().intent).toBe('service');
+
+    // Дефолт старой цели (service) не переопределён — новая цель active
+    // пересчитывает на action.
+    store.getState().patchTransition(transitionId, { toStageId: S3 });
+    expect(transition().intent).toBe('action');
+
+    // Ручной service сохраняется при следующей смене цели.
+    store.getState().patchTransition(transitionId, { intent: 'service' });
+    store.getState().patchTransition(transitionId, { toStageId: S2 });
+    expect(transition().intent).toBe('service');
+  });
+
   it('соединение портов создаёт кнопку; петля в свой статус отвергается', () => {
     const store = freshStore();
     const created = store.getState().addTransition(S2, S3);

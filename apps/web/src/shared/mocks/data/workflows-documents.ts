@@ -71,7 +71,7 @@ export const standardDocument: WorkflowDocument = {
           // «№ накладной» задачи.
           { kind: 'fields_required', fields: [`cf.${fieldIds.invoiceNumber}`] },
         ],
-        postFunctions: [{ kind: 'route_if', when: 'creator_is_assignee', toStageId: stageDone.id }],
+        postFunctions: [{ kind: 'route_if', when: 'approver_is_actor', toStageId: stageDone.id }],
       },
       // Окно «Завершение» показывает поле процесса в разделе «Поля» (#431).
       form: {
@@ -91,7 +91,7 @@ export const standardDocument: WorkflowDocument = {
       fromStageId: stageInProgress.id,
       toStageId: stagePaused.id,
       display: 'button',
-      intent: 'action',
+      intent: 'service',
       sortOrder: 1,
       rules: { conditions: [doers], validators: [], postFunctions: [] },
       form: { enabled: false, sections: [] },
@@ -115,7 +115,7 @@ export const standardDocument: WorkflowDocument = {
       fromStageId: stagePaused.id,
       toStageId: stagePostponed.id,
       display: 'button',
-      intent: 'action',
+      intent: 'service',
       sortOrder: 1,
       rules: { conditions: [owners], validators: [], postFunctions: [] },
       form: { enabled: false, sections: [] },
@@ -175,7 +175,7 @@ export const standardDocument: WorkflowDocument = {
       fromStageId: null,
       toStageId: stageCancelled.id,
       display: 'menu',
-      intent: 'action',
+      intent: 'service',
       sortOrder: 0,
       rules: { conditions: [creator], validators: [], postFunctions: [] },
       form: { enabled: false, sections: [] },

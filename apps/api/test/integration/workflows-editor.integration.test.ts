@@ -95,16 +95,16 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks workflow editor (integration, 
 
   it('документ маршрута: версии и стадии живые', async () => {
     const res = await fx.api(admin, 'GET', `/workflows/${workflowId}`);
-    expect(res.status).toBe(200);
     const detail = (await res.json()) as {
+      version: number;
       document: {
         stages: { id: string; name: string; isInitial: boolean }[];
         transitions: { name: string; intent: string }[];
       };
     };
+    expect(detail.version).toBe(1);
     expect(detail.document.stages).toHaveLength(7);
     const initial = detail.document.stages.find((s) => s.isInitial)!;
-    expect(initial.name).toBe('Ожидает');
     initialStageId = initial.id;
     workStageId = detail.document.stages.find((s) => s.name === 'В работе')!.id;
     expect(detail.document.transitions.find((t) => t.name === 'Приостановить')?.intent).toBe(

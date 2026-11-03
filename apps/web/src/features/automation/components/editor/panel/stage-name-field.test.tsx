@@ -14,8 +14,8 @@ describe('StageNameField: мягкие подсказки имён (#430)', () =
         value="В раб"
         systemState="active"
         suggestions={[
-          { systemState: 'active', name: 'В работе', routes: 4 },
-          { systemState: 'closed', name: 'Завершена', routes: 2 },
+          { systemState: 'active', name: 'В работе', routes: 4, published: true },
+          { systemState: 'closed', name: 'Завершена', routes: 2, published: true },
         ]}
         loading={false}
         readOnly={false}
@@ -35,7 +35,7 @@ describe('StageNameField: мягкие подсказки имён (#430)', () =
       <StageNameField
         value=""
         systemState="active"
-        suggestions={[{ systemState: 'active', name: 'В работе', routes: 4 }]}
+        suggestions={[{ systemState: 'active', name: 'В работе', routes: 4, published: true }]}
         loading={false}
         readOnly={false}
         autoFocus={false}

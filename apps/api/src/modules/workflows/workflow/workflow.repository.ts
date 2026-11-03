@@ -157,7 +157,7 @@ export class WorkflowRepository {
   async stageNames(
     category: ProcessCategory,
     excludeWorkflowId?: string,
-  ): Promise<{ systemState: string; name: string; routes: number }[]> {
+  ): Promise<{ systemState: string; name: string; routes: number; published: boolean }[]> {
     const rows = await this.prisma.workflowStage.findMany({
       where: {
         archivedAt: null,
@@ -170,11 +170,16 @@ export class WorkflowRepository {
           ...(excludeWorkflowId ? { id: { not: excludeWorkflowId } } : {}),
         },
       },
-      select: { name: true, systemState: true, workflowId: true },
+      select: {
+        name: true,
+        systemState: true,
+        workflowId: true,
+        workflow: { select: { code: true, publishedAt: true } },
+      },
     });
     const groups = new Map<
       string,
-      { systemState: string; name: string; workflowIds: Set<string> }
+      { systemState: string; name: string; workflowIds: Set<string>; published: boolean }
     >();
     for (const row of rows) {
       const name = row.name.trim();
@@ -184,8 +189,12 @@ export class WorkflowRepository {
         systemState: row.systemState,
         name,
         workflowIds: new Set<string>(),
+        published: false,
       };
       group.workflowIds.add(row.workflowId);
+      // Системный каталог даёт подсказку, но не считается «опубликованным
+      // пользовательским» для warning-ов имён.
+      if (!row.workflow.code && row.workflow.publishedAt !== null) group.published = true;
       groups.set(key, group);
     }
     return [...groups.values()]
