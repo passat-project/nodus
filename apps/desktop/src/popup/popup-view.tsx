@@ -189,7 +189,7 @@ export function PopupView() {
   return (
     <div
       ref={cardRef}
-      className={`group bg-card text-card-foreground relative flex h-screen w-screen flex-col overflow-clip rounded-xl border px-3 pt-2 pb-3.5 font-sans ${fadeClass}`}
+      className={`group bg-card text-card-foreground relative flex h-screen w-screen flex-col overflow-clip rounded-xl border p-2 font-sans ${fadeClass}`}
       onMouseEnter={() => void invoke('popup_set_hover', { hover: true })}
       onMouseLeave={() => void invoke('popup_set_hover', { hover: false })}
       onKeyDown={(e) => {
@@ -208,12 +208,15 @@ export function PopupView() {
         <button
           type="button"
           onClick={openConversation}
-          className="flex min-w-0 shrink-0 cursor-pointer items-start gap-2.5 pr-6 text-left"
+          className="flex min-w-0 shrink-0 cursor-pointer items-start gap-2.5 text-left"
           title={t.popupOpen}
         >
           <Avatar url={data.avatarUrl} name={data.title} />
-          <span className="mt-px min-w-0 flex-1">
-            <span className="flex items-center gap-1.5">
+          <span className="min-w-0 flex-1">
+            {/* Отступ под крестик — только у строки заголовка: превью ниже
+             *  крестика и может использовать всю ширину (короткая фраза
+             *  не уезжает на вторую строку из-за лишнего запаса). */}
+            <span className="flex items-center gap-1.5 pr-6">
               <span className="truncate text-[13px] leading-4 font-semibold">{data.title}</span>
               {data.urgent ? (
                 <span className="bg-warning-soft text-warning rounded px-1 py-px text-[10px] leading-3 font-medium">
@@ -301,13 +304,15 @@ export function PopupView() {
   );
 }
 
-/** Аватар автора крупный (Telegram): удалённая картинка, сбой — заглушка. */
+/** Аватар автора крупный (Telegram): кружок почти во всю высоту карточки —
+ *  он задаёт её высоту (референс владельца 03.11), имя и превью прижаты к
+ *  верху рядом с ним. Удалённая картинка/сбой — заглушка с инициалом. */
 function Avatar({ url, name }: { url?: string; name: string }) {
   const [failed, setFailed] = useState(false);
   const initial = name.trim().charAt(0).toUpperCase() || 'N';
   if (!url || failed) {
     return (
-      <div className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-full text-base font-semibold">
+      <div className="bg-muted text-muted-foreground flex size-14 shrink-0 items-center justify-center rounded-full text-lg font-semibold">
         {initial}
       </div>
     );
@@ -317,7 +322,7 @@ function Avatar({ url, name }: { url?: string; name: string }) {
       src={url}
       alt=""
       onError={() => setFailed(true)}
-      className="size-10 shrink-0 rounded-full object-cover"
+      className="size-14 shrink-0 rounded-full object-cover"
     />
   );
 }
