@@ -165,7 +165,7 @@ function TypeBasics({ type, readOnly }: { type: ProcessType; readOnly: boolean }
       </PanelField>
 
       <PanelField label={ui.automation.fieldColor}>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid w-fit grid-cols-5 gap-2">
           {stageColorOrder.map((tone: StageColor) => (
             <button
               key={tone}

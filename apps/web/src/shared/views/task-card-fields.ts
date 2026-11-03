@@ -15,6 +15,7 @@ export function makeTaskCardFields({
   return [
     { id: 'parent', label: ui.tasks.subtaskOf, defaultVisible: true },
     { id: 'number', label: ui.tasks.fieldNumber, defaultVisible: true },
+    { id: 'type', label: ui.tasks.fieldType, defaultVisible: true },
     { id: 'source', label: ui.tasks.fieldSource, defaultVisible: true },
     { id: 'deadline', label: ui.tasks.deadline, defaultVisible: true },
     { id: 'project', label: ui.tasks.project, defaultVisible: projectVisible },

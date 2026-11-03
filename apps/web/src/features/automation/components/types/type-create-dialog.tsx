@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { ui } from '@nodus/contracts';
+import { ui, type StageColor } from '@nodus/contracts';
 import { processTypeIconSchema, type ProcessTypeIcon } from '@nodus/contracts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@nodus/ui/components/dialog';
 import { Button } from '@nodus/ui/components/button';
@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 
 import { useCreateProcessType, useProcessTypes } from '../../api/automation-api.js';
 import { useCanManageWorkflows } from '../../lib/use-can-manage-workflows.js';
-import { stageColorOrder } from '../../../../shared/ui/board/stage-tone.js';
+import { stageColorOrder, stageTone } from '../../../../shared/ui/board/stage-tone.js';
 import { ProcessTypeGlyph } from '../../../../shared/workflow/process-type-icon.js';
 
 const ICONS = processTypeIconSchema.options;
@@ -42,9 +42,7 @@ export function ProcessTypeCreateDialog({
 
   const [name, setName] = useState('');
   const [icon, setIcon] = useState<ProcessTypeIcon>('square-check');
-  const [color, setColor] = useState<'neutral' | 'info' | 'success' | 'warning' | 'danger'>(
-    'neutral',
-  );
+  const [color, setColor] = useState<StageColor>('neutral');
   const [base, setBase] = useState<{ kind: 'copy'; typeId: string } | { kind: 'simple' }>(
     defaultBaseTypeId ? { kind: 'copy', typeId: defaultBaseTypeId } : { kind: 'simple' },
   );
@@ -135,7 +133,7 @@ export function ProcessTypeCreateDialog({
                   onClick={() => setColor(tone)}
                   className={cn(
                     'size-6 rounded-full border-2 transition-colors',
-                    colorTone(tone),
+                    stageTone[tone].swatch,
                     color === tone ? 'border-foreground' : 'border-transparent',
                   )}
                 />
@@ -176,15 +174,4 @@ export function ProcessTypeCreateDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-function colorTone(tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger'): string {
-  const tones = {
-    neutral: 'bg-muted-foreground',
-    info: 'bg-info',
-    success: 'bg-success',
-    warning: 'bg-warning',
-    danger: 'bg-danger',
-  } as const;
-  return tones[tone];
 }

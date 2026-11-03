@@ -204,7 +204,7 @@ export const automationStrings = {
     kindStage: 'Статус',
     kindTransition: 'Кнопка перехода',
     stageGroup: 'Группа статуса',
-    stageGroupWhy: 'От группы зависят просрочка, колонки «Моего плана» и отчёты',
+    stageGroupWhy: 'От группы зависят просрочка, колонки «Канбана» и отчёты',
     canAnyFrom: 'Можно перейти из любого статуса',
     canAnyFromHint: 'На схеме — метка «Любой статус» со стрелкой в этот статус',
     anyButtonSummary: 'Кнопка из любого статуса',
@@ -293,7 +293,7 @@ export const automationStrings = {
   publishCreationChanged: 'изменена форма создания',
   publishNothingChanged: 'Изменений нет',
   publishMigrateTo: 'перенести в',
-  publishRestateNote: '«Мой план» сотрудников обновится',
+  publishRestateNote: '«Канбан» сотрудников обновится',
   publishedToast: 'Маршрут опубликован',
   movingTasksToast: 'Переносим карточки…',
   /** 422 WORKFLOW_MIGRATION_REQUIRED: задачи появились после открытия редактора. */

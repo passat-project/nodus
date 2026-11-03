@@ -4,12 +4,29 @@ import { NodeChip } from '@nodus/ui/components/node-chip';
 import { cn } from '@nodus/ui/lib/utils';
 
 /** Цвет стадии маршрута → тон чипа «Инструмента» (I15: только токены). */
-const chipTone: Record<StageColor, 'muted' | 'info' | 'success' | 'warning' | 'danger'> = {
+const chipTone: Record<
+  StageColor,
+  | 'muted'
+  | 'info'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'violet'
+  | 'teal'
+  | 'orange'
+  | 'pink'
+  | 'cyan'
+> = {
   neutral: 'muted',
   info: 'info',
   success: 'success',
   warning: 'warning',
   danger: 'danger',
+  violet: 'violet',
+  teal: 'teal',
+  orange: 'orange',
+  pink: 'pink',
+  cyan: 'cyan',
 };
 
 /** Чип стадии по её ЦВЕТУ из маршрута (письма #55: «Ошибочно

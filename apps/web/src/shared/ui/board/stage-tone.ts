@@ -9,7 +9,9 @@ export const stageTone: Record<
   neutral: {
     chip: 'border-border bg-accent/40 text-secondary-foreground',
     dot: 'bg-muted-foreground',
-    tint: 'bg-muted/40',
+    /* Нейтральная колонка — ступень поверхности, а не тинт: `--muted` в тёмной
+       теме почти равен карточке, и тело колонки сливалось с фоном доски (§403). */
+    tint: 'bg-foreground/[0.04]',
     swatch: 'bg-muted-foreground',
   },
   info: {
@@ -36,6 +38,47 @@ export const stageTone: Record<
     tint: 'bg-danger-soft/40',
     swatch: 'bg-danger',
   },
+  violet: {
+    chip: 'border-tone-violet/40 bg-tone-violet-soft/60 text-tone-violet',
+    dot: 'bg-tone-violet',
+    tint: 'bg-tone-violet-soft/40',
+    swatch: 'bg-tone-violet',
+  },
+  teal: {
+    chip: 'border-tone-teal/40 bg-tone-teal-soft/60 text-tone-teal',
+    dot: 'bg-tone-teal',
+    tint: 'bg-tone-teal-soft/40',
+    swatch: 'bg-tone-teal',
+  },
+  orange: {
+    chip: 'border-tone-orange/40 bg-tone-orange-soft/60 text-tone-orange',
+    dot: 'bg-tone-orange',
+    tint: 'bg-tone-orange-soft/40',
+    swatch: 'bg-tone-orange',
+  },
+  pink: {
+    chip: 'border-tone-pink/40 bg-tone-pink-soft/60 text-tone-pink',
+    dot: 'bg-tone-pink',
+    tint: 'bg-tone-pink-soft/40',
+    swatch: 'bg-tone-pink',
+  },
+  cyan: {
+    chip: 'border-tone-cyan/40 bg-tone-cyan-soft/60 text-tone-cyan',
+    dot: 'bg-tone-cyan',
+    tint: 'bg-tone-cyan-soft/40',
+    swatch: 'bg-tone-cyan',
+  },
 };
 
-export const stageColorOrder: StageColor[] = ['neutral', 'info', 'success', 'warning', 'danger'];
+export const stageColorOrder: StageColor[] = [
+  'neutral',
+  'info',
+  'success',
+  'warning',
+  'danger',
+  'violet',
+  'teal',
+  'orange',
+  'pink',
+  'cyan',
+];

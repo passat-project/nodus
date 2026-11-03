@@ -8,6 +8,7 @@ import { useCommentsCount } from '../../tasks/comments-live.js';
 import { PersonAvatar } from '../person-avatar.js';
 import { DeadlineChip } from '../deadline-chip.js';
 import { identityTone } from '../identity-tone.js';
+import { ProcessTypeGlyph } from '../../workflow/process-type-icon.js';
 
 /** Карточка задачи канбан-доски (общая оболочка борда, второй потребитель —
  *  проектная доска): node-панель; отображаемые поля настраиваются шестерёнкой
@@ -56,7 +57,7 @@ export function BoardTaskCard({
           {ui.tasks.subtaskOf} · {parentNumber}
         </span>
       ) : null}
-      {isVisible('number') || isVisible('source') ? (
+      {isVisible('number') || isVisible('source') || isVisible('type') ? (
         <span className="flex items-center justify-between gap-2">
           {isVisible('number') ? (
             <span className="font-mono text-label-sm text-muted-foreground tabular-nums">
@@ -65,12 +66,28 @@ export function BoardTaskCard({
           ) : (
             <span />
           )}
-          {isVisible('source') && task.source === 'letter' ? (
-            <Mail className="size-3.5 text-info/70" aria-label={ui.tasks.fromLetter} />
-          ) : null}
-          {isVisible('source') && task.source === 'chat_message' ? (
-            <MessageSquare className="size-3.5 text-info/70" aria-label={ui.tasks.fromChat} />
-          ) : null}
+          {/* Приметы карточки — одним кластером справа: тип (значок, название
+              по наведению) и источник. Отдельной строкой значок типа читался
+              чекбоксом-контролом и зря съедал строку; в левом верхнем углу
+              карточки он спорил с местом отметки о выполнении (§403). */}
+          <span className="flex shrink-0 items-center gap-1.5">
+            {isVisible('type') ? (
+              <span
+                role="img"
+                className="flex items-center text-muted-foreground"
+                title={task.type.name}
+                aria-label={task.type.name}
+              >
+                <ProcessTypeGlyph icon={task.type.icon} className="size-3.5 shrink-0" />
+              </span>
+            ) : null}
+            {isVisible('source') && task.source === 'letter' ? (
+              <Mail className="size-3.5 text-info/70" aria-label={ui.tasks.fromLetter} />
+            ) : null}
+            {isVisible('source') && task.source === 'chat_message' ? (
+              <MessageSquare className="size-3.5 text-info/70" aria-label={ui.tasks.fromChat} />
+            ) : null}
+          </span>
         </span>
       ) : null}
       <span className="line-clamp-2 text-sm font-medium">{task.title}</span>
