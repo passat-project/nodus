@@ -13,7 +13,7 @@
 | [desktop.md](desktop.md) | Tauri-оболочка, WebView2, установщики |
 | [frontend.md](frontend.md) | React 19, Radix, Tailwind 4, анимации, dnd, холсты, пиксельные каноны |
 | [windows-host.md](windows-host.md) | Хост разработки Windows, Git Bash |
-| [agent-tools.md](agent-tools.md) | Инструменты агента (OpenCode, ZCode) |
+| [agent-tools.md](agent-tools.md) | Инструменты агента (Devin, OpenCode, ZCode) |
 | [process-docs.md](process-docs.md) | Процесс, документация, GitHub |
 | [msw-query.md](msw-query.md) | Моки MSW, TanStack Query, zustand |
 | [sandbox.md](sandbox.md) | Изоляция песочницы, live-stack, пробы, e2e-креды |

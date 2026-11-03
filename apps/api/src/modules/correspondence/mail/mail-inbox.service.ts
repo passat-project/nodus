@@ -53,6 +53,8 @@ export class MailInboxService implements OnModuleInit, OnModuleDestroy {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private debounceTimer: NodeJS.Timeout | null = null;
   private flagTimer: NodeJS.Timeout | null = null;
+  /** Состояние «вооружено» для лога переходов: таймер 30 с не должен спамить. */
+  private armedState: boolean | null = null;
 
   constructor(
     @Inject(MAIL_CLIENT) private readonly client: MailClient,
@@ -98,12 +100,12 @@ export class MailInboxService implements OnModuleInit, OnModuleDestroy {
   private async ensureConnection(): Promise<void> {
     if (this.stopped || this.running) return;
     if (!(await this.armed())) {
-      if (this.client.connected) {
-        this.logger.info('Приём выключен (флаг): соединение разорвано');
-        await this.client.close();
-      }
+      const wasConnected = this.client.connected;
+      this.reportDisarmed();
+      if (wasConnected) await this.client.close();
       return;
     }
+    this.armedState = true;
     if (!this.client.connected) {
       try {
         await this.client.connect();
@@ -125,6 +127,20 @@ export class MailInboxService implements OnModuleInit, OnModuleDestroy {
         this.scheduleReconnect();
       }
     }
+  }
+
+  /** Одна строка на переход «вооружён → выключен» (#577): иначе отсутствие
+   *  кред в проде выглядит как тишина — ни писем, ни ошибок. */
+  private reportDisarmed(): void {
+    if (this.armedState === false) return;
+    this.armedState = false;
+    if (!this.config.imapReady) {
+      this.logger.warn(
+        'Приём почты выключен: не заданы MAIL_IMAP_HOST/USER/PASSWORD — письма не приходят',
+      );
+      return;
+    }
+    this.logger.warn('Приём почты выключен флагом mail-reception — письма не приходят');
   }
 
   private scheduleIdleSync(): void {

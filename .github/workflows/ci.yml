@@ -163,19 +163,26 @@ jobs:
       - name: Typecheck (strict)
         run: pnpm typecheck
 
-      - name: Тесты (unit + тест-кейсы правил линтера)
+      - name: Тесты с покрытием (unit + тест-кейсы правил линтера)
         # PR — affected-only по дифу с base-веткой (turbo учитывает граф зависимостей:
         # правка contracts запускает и тесты зависимых пакетов). Push в main — всегда
         # полный прогон: main проверен целиком (issue #23).
+        # Пороги покрытия живут в vitest-конфигах пакетов (#593): падение ниже
+        # храповика валит этот шаг, а не остаётся «зелёной галочкой».
         # BASE_REF через env — не интерполяцией в shell (script-injection, security #412).
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            pnpm turbo test --filter='!@nodus/e2e' --filter="[origin/${BASE_REF}...HEAD]"
+            pnpm turbo test:coverage --filter='!@nodus/e2e' --filter="[origin/${BASE_REF}...HEAD]"
           else
-            pnpm test
+            pnpm test:coverage
           fi
+
+      - name: Сводка покрытия
+        # Всегда: даже при красных тестах видно, где просело покрытие.
+        if: always()
+        run: node scripts/coverage-summary.mjs
 
       - name: Тесты скриптов выпуска
         # Чистые проверки выпуска оболочки (#562): подпись без version, чужой
@@ -191,7 +198,7 @@ jobs:
           timeout 30 bash -c 'until curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null; do sleep 1; done'
 
       - name: Интеграционные тесты (outbox, идемпотентность, контракт ошибок — реальные PG/Redis)
-        run: pnpm --filter @nodus/api test:integration
+        run: pnpm --filter @nodus/api test:integration:coverage
         env:
           DATABASE_URL: postgresql://nodus:nodus_ci_password@localhost:5432/nodus
           REDIS_URL: redis://localhost:6379
@@ -209,11 +216,21 @@ jobs:
       # WS-gateway #104: сквозной контур (auth-хендшейк, комнаты, fanout из
       # Redis Stream, typing, presence) на тех же сервисах PG/Redis.
       - name: Интеграционные тесты gateway (WS)
-        run: pnpm --filter @nodus/gateway test:integration
+        run: pnpm --filter @nodus/gateway test:integration:coverage
         env:
           DATABASE_URL: postgresql://nodus:nodus_ci_password@localhost:5432/nodus
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: ci-integration-test-secret-min-32-chars
+
+      - name: Покрытие изменённых строк (diff coverage)
+        # PR-only, после unit + integration: объединённый lcov не даёт ложно
+        # краснеть коду, покрытому только интеграционными тестами.
+        # Гейт на новый/изменённый код (80%), а не на общий процент: студент
+        # не протащит непокрытую фичу на фоне «хорошего» среднего.
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: node scripts/diff-coverage.mjs --base "origin/${BASE_REF}" --threshold 80
 
       - name: Build
         run: pnpm build
@@ -267,7 +284,7 @@ jobs:
         run: pnpm turbo test build --filter=@nodus/web
 
   e2e:
-    name: 'E2E (Playwright — критичный путь: логин)'
+    name: 'E2E (Playwright — критичные потоки)'
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
@@ -382,8 +399,11 @@ jobs:
           fi
 
       - name: E2E-тесты
-        # Критичные пути (DoD): логин (моки), живой чат двух сессий (#104) и
+        # Критичные готовые пути (DoD): логин (моки), живой чат двух сессий (#104),
         # живые вложения чата (#57 — upload→send→download на реальном MinIO).
+        # letters-live временно не в CI: найден баг редактора темы (#599),
+        # вернуть спеку после фикса. Полный «письмо → резолюция → поручение»
+        # тоже пока не включаем: модули резолюций и поручений не готовы.
         # graph-stress.spec — perf-харнесс для локального прогона, в CI не входит.
         run: pnpm --filter @nodus/e2e test specs/auth.spec.ts specs/chat-two-sessions-live.spec.ts specs/chat-attachments-live.spec.ts
         env:
