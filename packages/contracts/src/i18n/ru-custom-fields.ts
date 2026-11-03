@@ -151,6 +151,9 @@ export const customFieldsStrings = {
     optionsEmpty: 'Добавьте хотя бы один вариант',
     optionsDuplicate: 'Названия вариантов повторяются',
     optionsDeleteHint: 'Удалённые варианты исчезнут из уже заполненных значений',
+    /** Без `dictionary.manage` варианты списка — только чтение (#491). */
+    dictionaryReadOnly:
+      'Варианты доступны только для чтения: нужно право «Управлять справочниками»',
     optionReorder: 'Перетащить',
     defaultValue: 'Значение по умолчанию',
     defaultNone: 'Нет',
@@ -204,6 +207,8 @@ export const customFieldsStrings = {
   /** Тип недоступен (Р11). */
   typeUnavailable: {
     project: 'Тип «Проект» появится вместе с модулем проектов',
+    /** Списки живут справочниками: без права их не создать (#491). */
+    dictionaries: 'Нужно право «Управлять справочниками»',
   },
   /** Причины отказа сервера в значениях (details.issues[].reason). */
   issues: {

@@ -18,11 +18,14 @@ export function FieldTypePicker({
   value,
   locked,
   disabled,
+  canManageDictionaries,
   onChange,
 }: {
   value: FieldFamily | null;
   locked: boolean;
   disabled: boolean;
+  /** Право `dictionary.manage`: без него списки не создать (#491). */
+  canManageDictionaries: boolean;
   onChange: (family: FieldFamily) => void;
 }) {
   const projectsReady = projectsAvailable();
@@ -35,7 +38,13 @@ export function FieldTypePicker({
         className="-mx-1 flex min-h-0 flex-col gap-0.5 overflow-y-auto px-1"
       >
         {FIELD_FAMILIES.map((family) => {
-          const unavailable = family === 'project' && !projectsReady;
+          const unavailableReason: keyof typeof ui.customFields.typeUnavailable | null =
+            family === 'project' && !projectsReady
+              ? 'project'
+              : family === 'list' && !canManageDictionaries
+                ? 'dictionaries'
+                : null;
+          const unavailable = unavailableReason !== null;
           const active = value === family;
           const off = disabled || unavailable || (locked && !active);
           return (
@@ -46,8 +55,8 @@ export function FieldTypePicker({
               aria-checked={active}
               disabled={off}
               title={
-                unavailable
-                  ? ui.customFields.typeUnavailable.project
+                unavailableReason
+                  ? ui.customFields.typeUnavailable[unavailableReason]
                   : locked && !active
                     ? ui.customFields.dialog.typeLocked
                     : ui.customFields.familyHints[family]

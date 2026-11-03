@@ -169,4 +169,19 @@ describe('черновик окна атрибута (#431, ревизия UI)',
     });
     expect(updateCustomFieldBodySchema.safeParse(body).success).toBe(true);
   });
+
+  it('правка списка без права на справочники не теряет умолчание (#491)', () => {
+    const saved = definition({
+      type: 'enum',
+      settings: { dictionaryId: DICT },
+      dictionary: { id: DICT, code: 'list-1', name: 'Вид', isSystem: false },
+      defaultValue: { kind: 'static', value: ITEM_B },
+    });
+    const draft = draftOf(saved, items);
+    // Варианты только для чтения; пользователь меняет лишь название.
+    const renamed = { ...draft, name: 'Новое название' };
+    // id вариантов уже серверные — умолчание вычисляется без маппинга.
+    const defaultValue = listDefault(renamed, 'enum', new Map());
+    expect(patchBody(saved, renamed, defaultValue)).toEqual({ name: 'Новое название' });
+  });
 });
