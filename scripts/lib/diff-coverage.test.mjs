@@ -117,11 +117,20 @@ describe('diff-coverage (#596)', () => {
     assert.equal(result.pct, 0);
   });
 
-  it('исключает тесты, моки, generated и packages/ui', () => {
+  it('исключает тесты, моки, generated, пакетные test/, entrypoint и packages/ui', () => {
     assert.equal(isCoverageSource('apps/api/src/a.ts'), true);
+    assert.equal(isCoverageSource('apps/api/src/modules/projects/projects.service.ts'), true);
     assert.equal(isCoverageSource('apps/api/src/a.test.ts'), false);
     assert.equal(isCoverageSource('apps/api/src/mocks/handlers.ts'), false);
     assert.equal(isCoverageSource('apps/api/src/generated/prisma/client.ts'), false);
+    assert.equal(isCoverageSource('apps/api/test/integration/test-db.ts'), false);
+    assert.equal(isCoverageSource('apps/api/test/integration/chat-fixtures.ts'), false);
+    assert.equal(isCoverageSource('apps/gateway/test/integration/test-db.ts'), false);
+    assert.equal(isCoverageSource('apps/web/src/app/mocks-handlers.ts'), false);
+    assert.equal(isCoverageSource('apps/web/src/app/msw-browser.ts'), false);
+    assert.equal(isCoverageSource('apps/web/src/main.tsx'), false);
+    assert.equal(isCoverageSource('apps/api/src/main.ts'), false);
+    assert.equal(isCoverageSource('apps/api/src/scripts/backfill-thumbnails.ts'), false);
     assert.equal(isCoverageSource('packages/ui/src/components/button.tsx'), false);
     assert.equal(isCoverageSource('apps/api/prisma/seed.ts'), false);
   });

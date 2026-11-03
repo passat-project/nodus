@@ -10,14 +10,19 @@ const EXCLUDED = [
   /(^|\/)generated\//,
   /(^|\/)mocks\//,
   /(^|\/)fixtures\//,
+  // Пакетные test/ (интеграционные фикстуры) и корневой tests/.
+  /(^|\/)tests?\//,
+  /(^|\/)scripts?\//,
   /^packages\/ui\//,
   /^apps\/desktop\//,
-  /^tests\//,
-  /^scripts\//,
   /^docs\//,
   /^\.github\//,
   /(^|\/)prisma\//,
   /\.config\.(ts|tsx|mjs|cjs)$/,
+  // Точки входа и dev-обвязка MSW — вне coverage include своих пакетов.
+  /(^|\/)main\.(ts|tsx)$/,
+  /^apps\/web\/src\/app\/msw-browser\.ts$/,
+  /^apps\/web\/src\/app\/mocks-handlers\.ts$/,
 ];
 
 /** Добавленные/изменённые строки нового файла из `git diff --unified=0`. */

@@ -1,6 +1,7 @@
 node_modules
 dist
 coverage
+coverage-integration
 .turbo
 pnpm-lock.yaml
 tests/lint/fixtures
