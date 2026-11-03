@@ -56,6 +56,7 @@ export function RouteEditor(props: RouteEditorProps) {
 
 function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: RouteEditorProps) {
   const doc = useRouteDocStore((s) => s.document);
+  const baseline = useRouteDocStore((s) => s.baseline);
   const dirty = useRouteDocStore((s) => s.dirty);
   const selection = useRouteDocStore((s) => s.selection);
   const draftSavedAt = useRouteDocStore((s) => s.draftSavedAt);
@@ -116,6 +117,13 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
     () => (type.isSystem ? [] : stageNames.map(({ systemState, name }) => ({ systemState, name }))),
     [stageNames, type.isSystem],
   );
+  // Warning-и имён — только для новых и переименованных статусов (#430):
+  // копия каталога и неизменённые статусы не шумят.
+  const stageNameStageIds = useMemo(() => {
+    if (type.isSystem) return new Set<string>();
+    const before = new Map(baseline.stages.map((s) => [s.id, s.name.trim()]));
+    return new Set(doc.stages.filter((s) => before.get(s.id) !== s.name.trim()).map((s) => s.id));
+  }, [baseline, doc.stages, type.isSystem]);
   const problems = useMemo(
     () =>
       checkWorkflowDocument(doc, {
@@ -124,8 +132,9 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
         definitions,
         projectsAvailable: projectsAvailable(),
         stageNameFacts,
+        stageNameStageIds,
       }),
-    [doc, customFieldFacts, definitions, type.category, stageNameFacts],
+    [doc, customFieldFacts, definitions, type.category, stageNameFacts, stageNameStageIds],
   );
   const problemStageIds = useMemo(
     () => new Set(problems.filter((p) => p.stageId).map((p) => p.stageId as string)),

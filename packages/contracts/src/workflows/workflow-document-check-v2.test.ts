@@ -158,6 +158,24 @@ describe('checkWorkflowDocument: правила v2 (#430)', () => {
     );
   });
 
+  it('stage_name_* — только для новых/переименованных стадий (scope)', () => {
+    const facts = { stageNameFacts: [{ systemState: 'active' as const, name: 'В работе' }] };
+    // Неизменённый статус вне scope: копия каталога не шумит.
+    const untouched = checkWorkflowDocument(baseDocument(), {
+      ...facts,
+      stageNameStageIds: new Set(['s3']),
+    });
+    expect(untouched.some((p) => p.code === 'stage_name_shared')).toBe(false);
+    // Переименованный статус в scope: предупреждение остаётся.
+    const renamed = checkWorkflowDocument(baseDocument(), {
+      ...facts,
+      stageNameStageIds: new Set(['s2']),
+    });
+    expect(renamed).toContainEqual(
+      expect.objectContaining({ code: 'stage_name_shared', stageId: 's2' }),
+    );
+  });
+
   it('duplicate_transition_target — две кнопки из одного статуса в один', () => {
     const doc = baseDocument();
     doc.transitions.push(mkTransition('t-pause-2', 'Ещё пауза', 's2', 's3'));

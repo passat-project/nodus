@@ -55,6 +55,8 @@ export interface WorkflowCheckOptions {
     systemState: WorkflowDraftStage['systemState'];
     name: string;
   }[];
+  /** Ограничить проверку имён новыми/переименованными стадиями (#430). */
+  stageNameStageIds?: ReadonlySet<string>;
 }
 
 function error(
@@ -355,7 +357,11 @@ export function checkWorkflowDocument(
   }
 
   // #430: имена статусов, дубли целей и разрешимость approver_is_actor.
-  checkExtraRules(doc, { stageNameFacts: opts.stageNameFacts }, problems);
+  checkExtraRules(
+    doc,
+    { stageNameFacts: opts.stageNameFacts, stageNameStageIds: opts.stageNameStageIds },
+    problems,
+  );
 
   return problems;
 }

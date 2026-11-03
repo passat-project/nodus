@@ -10,6 +10,9 @@ import { effectiveWindowSections, requiredWindowSections } from './transition-wi
  */
 export interface ExtraCheckOptions {
   stageNameFacts?: readonly { systemState: TaskSystemState; name: string }[];
+  /** Проверять имена только этих стадий (новые/переименованные в черновике):
+   *  неизменённые копии каталога не должны шуметь предупреждениями (#430). */
+  stageNameStageIds?: ReadonlySet<string>;
 }
 
 const warning = (
@@ -34,6 +37,7 @@ export function checkExtraRules(
   // опубликованного маршрута — норма (одна колонка на доске); похожее после
   // нормализации — отдельная колонка, предупреждаем.
   for (const s of stages) {
+    if (opts.stageNameStageIds && !opts.stageNameStageIds.has(s.id)) continue;
     const name = s.name.trim();
     if (name.length === 0) continue;
     const others = (opts.stageNameFacts ?? []).filter((f) => f.systemState === s.systemState);
