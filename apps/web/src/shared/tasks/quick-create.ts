@@ -59,9 +59,8 @@ export function useQuickCreate() {
             error.code === ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID)
         ) {
           // Создание в колонке не обходит условия кнопки (#402): показываем
-          // причину, а форму предлагаем заполнить в обычном окне создания.
+          // причину; окно создания с тем же prefill повторило бы отказ.
           toast.error(transitionErrorText(error));
-          openTaskCreate(prefill);
           return;
         }
         toast.error(

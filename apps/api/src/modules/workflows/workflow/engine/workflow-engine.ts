@@ -283,9 +283,8 @@ export class WorkflowEngine implements WorkflowEnginePort {
     if ('stageId' in choice) return target === choice.stageId;
     const stage = this.stage(workflow, target);
     if (stage.systemState !== choice.systemState) return false;
-    // Итог колонки (#402): «Завершённые» не подменяются «Отменой»; для
-    // старых вызовов без outcome — прежнее поведение по состоянию.
-    return choice.outcome === undefined || (stage.outcome ?? null) === (choice.outcome ?? null);
+    // Итог колонки (#402): «Завершённые» не подменяются «Отменой».
+    return (stage.outcome ?? null) === choice.outcome;
   }
 
   private options(workflow: LoadedWorkflow, subject: EngineSubject): WorkflowTransition[] {

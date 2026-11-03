@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   ErrorCode,
+  isOpenState,
   TASK_EVENTS,
   type AuthUser,
   type CreateTaskBody,
@@ -147,26 +148,33 @@ export class TasksService {
     const personalColumn = body.personalStageId
       ? await this.personalColumn(user.id, body.personalStageId)
       : null;
-    // Новая задача рождается в начальной стадии. Колонка (глобальная или
-    // «Моего плана») задаёт цель, но не обходит условия кнопки: переход
-    // выполняется в той же транзакции после создания (#402). Нет перехода —
-    // отказ с причинами, а не тихая подмена стадии.
-    const initial = workflowStages.find((s) => s.isInitial) ?? workflowStages[0];
-    if (!initial) throw DomainException.notFound('Stage not found');
+    // Новая задача рождается только в открытой стадии (backlog/active/paused):
+    // «начальной» может оказаться утверждение или итог — тогда берём первую
+    // открытую, как раньше (security-гейт #37). Колонка задаёт цель, но не
+    // обходит условия кнопки: переход выполняется в той же транзакции после
+    // создания (#402). Нет перехода — отказ с причинами, а не подмена стадии.
+    const openStages = workflowStages.filter((s) => isOpenState(s.systemState));
+    const initial = openStages.find((s) => s.isInitial) ?? openStages[0];
+    if (!initial) throw DomainException.conflict('Workflow has no open stage');
+    const personalTarget = personalColumn
+      ? (workflowStages.find(
+          (s) =>
+            s.systemState === personalColumn.systemState &&
+            (s.outcome ?? null) === (personalColumn.outcome ?? null),
+        ) ?? null)
+      : null;
+    if (personalColumn && !personalTarget) {
+      throw new DomainException(
+        ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED,
+        'No stage for personal column',
+        { fromStageName: initial.name },
+      );
+    }
     const requested: { stageId: string } | { systemState: string; outcome: string | null } | null =
       body.stageId
         ? (workflowStages.find((s) => s.id === body.stageId) ?? null)
-        : personalColumn
-          ? workflowStages.find(
-              (s) =>
-                s.systemState === personalColumn.systemState &&
-                (s.outcome ?? null) === (personalColumn.outcome ?? null),
-            )
-            ? {
-                systemState: personalColumn.systemState,
-                outcome: personalColumn.outcome ?? null,
-              }
-            : null
+        : personalTarget
+          ? { systemState: personalTarget.systemState, outcome: personalTarget.outcome ?? null }
           : null;
     if (body.stageId && !requested) throw DomainException.notFound('Stage not found');
     const targetIsInitial =

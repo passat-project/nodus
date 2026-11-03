@@ -22,7 +22,18 @@ const ACTIVE = {
   color: 'success',
   sortOrder: 1,
   systemState: 'active',
+  outcome: null,
   isInitial: false,
+  archivedAt: null,
+};
+const CLOSED_INITIAL = {
+  id: 's-closed',
+  name: 'Завершена',
+  color: 'info',
+  sortOrder: 2,
+  systemState: 'closed',
+  outcome: 'success',
+  isInitial: true,
   archivedAt: null,
 };
 
@@ -186,6 +197,25 @@ describe('TasksService', () => {
       stageId: 'p-active',
       sortOrder: 'k0',
     });
+  });
+
+  it('закрытая «начальная» стадия не создаёт закрытую задачу — берётся открытая (#402)', async () => {
+    const { service, repo, catalog } = setup();
+    catalog.liveStages.mockResolvedValue([CLOSED_INITIAL, STAGE, ACTIVE]);
+    await service.create(USER, { title: 'Т' } as never);
+    expect(repo.create.mock.calls[0]![0]).toMatchObject({
+      stageId: 's-new',
+      systemState: 'backlog',
+    });
+  });
+
+  it('колонка без стадии маршрута — 409, задача не создаётся (#402)', async () => {
+    const { service, repo, boards } = setup();
+    boards.findColumn.mockResolvedValue({ id: 'p-paused', systemState: 'paused', outcome: null });
+    await expect(
+      service.create(USER, { title: 'Т', personalStageId: 'p-paused' } as never),
+    ).rejects.toMatchObject({ code: 'WORKFLOW_TRANSITION_NOT_ALLOWED' });
+    expect(repo.create).not.toHaveBeenCalled();
   });
 
   it('тип резолвится портом «Процессов» с актором: явный выбор — с проверкой создания', async () => {
