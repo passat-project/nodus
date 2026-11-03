@@ -14,6 +14,7 @@
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "test": "turbo test --filter=!@nodus/e2e",
+    "test:coverage": "turbo test:coverage --filter=!@nodus/e2e",
     "test:e2e": "pnpm --filter @nodus/e2e test",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "lint": "eslint . --max-warnings 39",
@@ -27,6 +28,7 @@
   "devDependencies": {
     "@nodus/config": "workspace:*",
     "@types/node": "^24.19.2",
+    "@vitest/coverage-v8": "4.1.12",
     "eslint": "^10.13.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",

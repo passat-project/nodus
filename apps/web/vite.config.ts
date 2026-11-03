@@ -60,6 +60,27 @@ export default defineConfig(({ command, mode }) => {
     // а не оправдание медленным ассертам (Vitest: testTimeout default 5000).
     test: {
       testTimeout: 15_000,
+      // Покрытие (#593): пороги — храповик на замерах 03.11.2026, ниже — CI красный.
+      // Моки MSW — dev-инфраструктура, не продуктовый рантайм: из покрытия исключены.
+      coverage: {
+        provider: 'v8',
+        include: ['src/**/*.{ts,tsx}'],
+        exclude: [
+          'src/**/*.test.{ts,tsx}',
+          'src/**/*.d.ts',
+          'src/**/mocks/**',
+          'src/main.tsx',
+          'src/app/msw-browser.ts',
+          'src/app/mocks-handlers.ts',
+        ],
+        reporter: ['text-summary', 'json-summary', 'lcov'],
+        thresholds: {
+          statements: 34,
+          branches: 29,
+          functions: 27,
+          lines: 34,
+        },
+      },
     },
     server: {
       port: Number(env.NODUS_WEB_DEV_PORT ?? 5173),
