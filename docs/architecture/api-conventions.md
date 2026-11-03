@@ -128,7 +128,7 @@ INTERNAL_ERROR      # непредвиденное (без деталей нар
 - **`GET /tasks/:id` → `layout`** = `{hiddenBlocks, roleLabels, requiredKeys}` — собирает сервер из типа (работает и для невидимого зрителю типа).
 - **Привязки атрибутов** — `PUT`/`DELETE /custom-fields/definitions/:id/types/:typeId`, идемпотентны, аудит `custom_field.bind` / `custom_field.unbind`, событие `custom_field.definition_changed {fields: ['typeIds']}`; снятие при использовании в опубликованном маршруте типа — 409 `CUSTOM_FIELD_IN_USE`.
 - **Каталог стадий** (`GET /tasks/stages`) не раскрывает типы, невидимые смотрящему (О11).
-- **Подсказки имён статусов** — `GET /workflows/stage-names?category=task|letter&excludeWorkflowId=`: под `workflow.manage`, имена неархивных стадий системного каталога (по `code`) и опубликованных маршрутов, число маршрутов и флаг `published` (warning-и имён — только по опубликованным); это подсказка редактора, не жёсткий справочник.
+- **Подсказки имён статусов** — `GET /workflows/stage-names?category=task|letter&excludeWorkflowId=`: под `workflow.manage`, имена неархивных стадий системного каталога (по `code`) и опубликованных маршрутов, число маршрутов; warning-и имён — для пользовательских маршрутов; это подсказка редактора, не жёсткий справочник.
 - **Смысл кнопки** — `intent: action | service` в DTO перехода и документе маршрута; `service` — пауза/отмена, не попадает в «Мои действия» (ADR-0026); умный дефолт `smartIntent`.
 
 ### Корреспонденция (#55)

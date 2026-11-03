@@ -13,9 +13,6 @@ export const workflowStageNameSchema = z.object({
   systemState: taskSystemStateSchema,
   name: z.string().min(1).max(40),
   routes: z.number().int().min(1),
-  /** Есть хотя бы один опубликованный пользовательский маршрут с этим именем.
-   *  Системный каталог даёт подсказки, но не участвует в warning-ах. */
-  published: z.boolean(),
 });
 export type WorkflowStageName = z.infer<typeof workflowStageNameSchema>;
 

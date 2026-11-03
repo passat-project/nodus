@@ -19,7 +19,6 @@ export class WorkflowStageNamesService {
       systemState: row.systemState as TaskSystemState,
       name: row.name,
       routes: row.routes,
-      published: row.published,
     }));
   }
 }

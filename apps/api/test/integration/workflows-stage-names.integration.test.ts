@@ -37,12 +37,7 @@ describe.skipIf(!process.env.DATABASE_URL)('workflow stage names (integration, #
   it('с правом — массив имён опубликованных маршрутов', async () => {
     const res = await fx.api(admin, 'GET', '/workflows/stage-names?category=task');
     expect(res.status).toBe(200);
-    const names = (await res.json()) as {
-      systemState: string;
-      name: string;
-      routes: number;
-      published: boolean;
-    }[];
+    const names = (await res.json()) as { systemState: string; name: string; routes: number }[];
     expect(Array.isArray(names)).toBe(true);
     // Системный каталог входит в подсказки (code IS NOT NULL), поэтому в
     // свежей БД имена уже есть.
@@ -51,7 +46,6 @@ describe.skipIf(!process.env.DATABASE_URL)('workflow stage names (integration, #
       names.every(
         (n) =>
           n.routes >= 1 &&
-          typeof n.published === 'boolean' &&
           ['backlog', 'active', 'paused', 'done', 'closed'].includes(n.systemState),
       ),
     ).toBe(true);

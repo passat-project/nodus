@@ -113,9 +113,8 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
     canManage,
   );
   const stageNameFacts = useMemo(
-    () =>
-      stageNames.filter((s) => s.published).map(({ systemState, name }) => ({ systemState, name })),
-    [stageNames],
+    () => (type.isSystem ? [] : stageNames.map(({ systemState, name }) => ({ systemState, name }))),
+    [stageNames, type.isSystem],
   );
   const problems = useMemo(
     () =>
