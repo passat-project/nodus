@@ -112,6 +112,7 @@ export class ProcessCatalogReaderProvider implements ProcessCatalogReader {
         name: t.name,
         category: t.category as ProcessCategory,
         icon: t.icon as ProcessTypeIcon,
+        color: t.color as ProcessType['color'],
       }));
   }
 

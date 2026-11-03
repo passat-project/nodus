@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import type { TaskListItem, TaskStage } from '@nodus/contracts';
 
 import {
@@ -17,6 +17,7 @@ const systemProcessType = {
   name: 'Задача',
   category: 'task',
   icon: 'square-check',
+  color: 'info',
 } as const;
 
 const STAGE_A: TaskStage = {

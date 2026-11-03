@@ -9,6 +9,7 @@ import { PersonAvatar } from '../person-avatar.js';
 import { DeadlineChip } from '../deadline-chip.js';
 import { identityTone } from '../identity-tone.js';
 import { ProcessTypeGlyph } from '../../workflow/process-type-icon.js';
+import { stageTone } from './stage-tone.js';
 
 /** Карточка задачи канбан-доски (общая оболочка борда, второй потребитель —
  *  проектная доска): node-панель; отображаемые поля настраиваются шестерёнкой
@@ -46,11 +47,17 @@ export function BoardTaskCard({
       onPointerEnter={() => onHover?.(task)}
       onClick={(e) => onOpen(task, e.currentTarget.getBoundingClientRect())}
       className={cn(
-        'node-panel flex w-full flex-col gap-2 p-3 text-left transition-colors hover:border-input',
+        'node-panel relative flex w-full flex-col gap-2 overflow-hidden p-3 text-left transition-colors hover:border-input',
         overlay && 'cursor-grabbing border-input shadow-[0_0_12px_var(--glow)] hover:border-input',
         placeholder && 'border-dashed opacity-60 hover:border-input',
       )}
     >
+      {isVisible('type') ? (
+        <span
+          aria-hidden
+          className={cn('absolute inset-x-0 top-0 h-0.5', stageTone[task.type.color].dot)}
+        />
+      ) : null}
       {isVisible('parent') && parentNumber !== undefined ? (
         <span className="flex items-center gap-1.5 text-label-sm font-medium tracking-wide text-muted-foreground uppercase">
           <CornerDownRight className="size-3" />
@@ -90,7 +97,7 @@ export function BoardTaskCard({
           </span>
         </span>
       ) : null}
-      <span className="line-clamp-2 text-sm font-medium">{task.title}</span>
+      <span className="line-clamp-2 text-sm font-medium">{task.title}</span>{' '}
       {isVisible('deadline') ? (
         <DeadlineChip deadline={task.deadline} state={task.stage.systemState} />
       ) : null}

@@ -164,6 +164,7 @@ export function letterDetailOf(letter: DemoLetter, actor: LetterActor): LetterDe
       name: type.name,
       category: type.category,
       icon: type.icon,
+      color: type.color,
     },
     signer: letter.signer,
     registrar: letter.registrar,

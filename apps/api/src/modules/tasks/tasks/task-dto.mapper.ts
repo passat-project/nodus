@@ -46,6 +46,7 @@ const UNKNOWN_TYPE = (id: string): ProcessTypeRef => ({
   name: '—',
   category: 'task',
   icon: 'file-text',
+  color: 'neutral',
 });
 
 const UNKNOWN_STAGE = (id: string): CatalogStage => ({

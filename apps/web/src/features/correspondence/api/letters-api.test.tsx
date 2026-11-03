@@ -53,6 +53,7 @@ function detail(patch: Partial<LetterDetail> = {}): LetterDetail {
       name: 'Входящее письмо',
       category: 'letter',
       icon: 'send',
+      color: 'info',
     },
     signer: null,
     registrar: null,

@@ -99,7 +99,14 @@ describe('ProcessCatalogReader (#428)', () => {
   it('typeRefs и stagesByIds — пачкой, пустые списки без запросов', async () => {
     const { reader, types, workflows } = setup();
     await expect(reader.typeRefs([TYPE.id])).resolves.toEqual([
-      { id: TYPE.id, code: TYPE.code, name: TYPE.name, category: 'task', icon: TYPE.icon },
+      {
+        id: TYPE.id,
+        code: TYPE.code,
+        name: TYPE.name,
+        category: 'task',
+        icon: TYPE.icon,
+        color: TYPE.color,
+      },
     ]);
     await expect(reader.stagesByIds(['s1'])).resolves.toHaveLength(1);
     const typeCalls = types.findByIds.mock.calls.length;

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 
 import {
   createLetterFieldsSchema,
@@ -49,6 +49,7 @@ describe('письмо v3 (#55)', () => {
         name: 'Входящее письмо',
         category: 'letter',
         icon: 'send',
+        color: 'info',
       },
       signer: null,
       registrar: null,
@@ -128,6 +129,7 @@ describe('письмо v3 (#55)', () => {
         name: 'Входящее письмо',
         category: 'letter',
         icon: 'send',
+        color: 'info',
       },
       signer: null,
       registrar: null,

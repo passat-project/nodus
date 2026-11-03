@@ -15,7 +15,14 @@ const task = {
   assignee: null,
   commentsCount: 0,
   spentMinutes: 0,
-  type: { id: 'type', code: 'task', name: 'Стандартный', category: 'task', icon: 'square-check' },
+  type: {
+    id: 'type',
+    code: 'task',
+    name: 'Стандартный',
+    category: 'task',
+    icon: 'square-check',
+    color: 'info',
+  },
   stage: { systemState: 'backlog' },
 } as unknown as TaskListItem;
 

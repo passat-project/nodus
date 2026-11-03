@@ -201,6 +201,7 @@ export const tasksListHandlers = [
         name: type.name,
         category: type.category,
         icon: type.icon,
+        color: type.color,
       },
       stage,
       personalStageId,

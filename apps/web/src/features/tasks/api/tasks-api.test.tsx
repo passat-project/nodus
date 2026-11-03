@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { act, renderHook, waitFor } from '@testing-library/react';
 import {
   QueryClient,
@@ -18,6 +18,7 @@ const systemProcessType = {
   name: 'Задача',
   category: 'task',
   icon: 'square-check',
+  color: 'info',
 } as const;
 
 const TASK_ID = '30000000-0000-4000-8000-000000000002';
