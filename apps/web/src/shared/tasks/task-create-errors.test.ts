@@ -42,6 +42,12 @@ describe('createFailureOf', () => {
     expect(failure.message).toContain('подзадач');
   });
 
+  it('окно перехода при создании — инструкция без «откройте карточку»', () => {
+    expect(createFailureOf(apiError(ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID)).message).toBe(
+      ui.taskCreate.columnWindowRequired,
+    );
+  });
+
   it('устаревшее скрытое значение и прочие сбои — текстом', () => {
     expect(createFailureOf(apiError(ErrorCode.PROCESS_TYPE_PRESET_INVALID)).message).toBe(
       ui.taskCreate.presetInvalid,

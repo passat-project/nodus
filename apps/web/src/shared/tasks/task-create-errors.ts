@@ -42,10 +42,12 @@ export function createFailureOf(error: unknown): CreateFailure {
       return fail(ui.taskCreate.presetInvalid);
     case ErrorCode.WORKFLOW_TRANSITION_BLOCKED:
     case ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED:
-    case ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID:
       // Создание в колонке проходит через переход (#402): окно показывает
       // причину отказа кнопки, а не общий «повторите».
       return fail(transitionErrorText(error));
+    case ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID:
+      // Задачи ещё нет — инструкция «откройте карточку» невыполнима.
+      return fail(ui.taskCreate.columnWindowRequired);
     default:
       return fail(ui.taskCreate.submitFailed);
   }

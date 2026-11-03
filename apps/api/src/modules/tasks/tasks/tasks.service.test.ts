@@ -218,6 +218,24 @@ describe('TasksService', () => {
     expect(repo.create).not.toHaveBeenCalled();
   });
 
+  it('явный stageId передаётся движку как стадия, даже если состояние совпадает (#402)', async () => {
+    const { service, repo, catalog, engine } = setup();
+    const secondBacklog = {
+      id: 's-new-2',
+      name: 'Вторая',
+      color: 'neutral',
+      sortOrder: 1,
+      systemState: 'backlog',
+      outcome: null,
+      isInitial: false,
+      archivedAt: null,
+    };
+    catalog.liveStages.mockResolvedValue([STAGE, secondBacklog]);
+    await service.create(USER, { title: 'Т', stageId: 's-new-2' } as never);
+    expect(repo.create.mock.calls[0]![0]).toMatchObject({ stageId: 's-new' });
+    expect(engine.execute).toHaveBeenCalledWith(TX, 't1', 'task', USER, { stageId: 's-new-2' });
+  });
+
   it('тип резолвится портом «Процессов» с актором: явный выбор — с проверкой создания', async () => {
     const { service, catalog } = setup();
     await service.create(USER, { title: 'Т' } as never);

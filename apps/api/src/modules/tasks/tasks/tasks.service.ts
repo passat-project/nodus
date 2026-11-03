@@ -170,13 +170,16 @@ export class TasksService {
         { fromStageName: initial.name },
       );
     }
+    const stageById = body.stageId
+      ? (workflowStages.find((s) => s.id === body.stageId) ?? null)
+      : null;
+    if (body.stageId && !stageById) throw DomainException.notFound('Stage not found');
     const requested: { stageId: string } | { systemState: string; outcome: string | null } | null =
-      body.stageId
-        ? (workflowStages.find((s) => s.id === body.stageId) ?? null)
+      stageById
+        ? { stageId: stageById.id }
         : personalTarget
           ? { systemState: personalTarget.systemState, outcome: personalTarget.outcome ?? null }
           : null;
-    if (body.stageId && !requested) throw DomainException.notFound('Stage not found');
     const targetIsInitial =
       requested === null ||
       ('stageId' in requested

@@ -13,7 +13,8 @@ import { useCreatableProcessTypes } from '../api/process-types-api.js';
 import { DEFAULT_TASK_TYPE_CODE } from '@nodus/contracts';
 import { buildCreateBody, emptyDraft, type TaskCreatePrefill } from './task-create-draft.js';
 import { openTaskCreate } from './task-create-store.js';
-import { transitionErrorText } from './transition-error.js';
+import { ApiError } from '../api-client.js';
+import { createFailureOf } from './task-create-errors.js';
 
 /**
  * Быстрые входы (#432, Р10): плюсик колонки, плюсик доски проекта, строка
@@ -59,8 +60,17 @@ export function useQuickCreate() {
             error.code === ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID)
         ) {
           // Создание в колонке не обходит условия кнопки (#402): показываем
-          // причину; окно создания с тем же prefill повторило бы отказ.
-          toast.error(transitionErrorText(error));
+          // причину; гейт, который можно закрыть полями, даём добрать в окне
+          // создания, остальные отказы — только тост (форма их не исправит).
+          const failure = createFailureOf(error);
+          if (failure.message) toast.error(failure.message);
+          const reasons = (error.details?.reasons ?? []) as { kind: string }[];
+          if (
+            error.code === ErrorCode.WORKFLOW_TRANSITION_BLOCKED &&
+            reasons.some((r) => r.kind === 'fields_required')
+          ) {
+            openTaskCreate(prefill);
+          }
           return;
         }
         toast.error(

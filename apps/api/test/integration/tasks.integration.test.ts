@@ -20,6 +20,10 @@ import { setupChatFixture, type ChatTestFixture, type ChatUser } from './chat-fi
  * (контракт + outbox task.created с audience + «Мой план»), идемпотентность
  * Idempotency-Key, видимость (чужой = 404), гейт DoD подзадач (409 с
  * причинами), переход маршрута с автоперемещением личной доски.
+ *
+ * Файл 300–500 строк — осознанно (I5): один сценарий общей фикстуры
+ * alice/bob/carol; вынос #402-кейсов в отдельный файл дублировал бы setup
+ * и порядок создания задач, от которого зависят id в соседних тестах.
  */
 describe.skipIf(!process.env.DATABASE_URL)('tasks (integration)', () => {
   let fx: ChatTestFixture<'alice' | 'bob' | 'carol'>;
