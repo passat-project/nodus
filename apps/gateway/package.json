@@ -15,7 +15,7 @@
   "dependencies": {
     "@nodus/contracts": "workspace:*",
     "ioredis": "^6.0.0",
-    "jose": "^6.2.13",
+    "jose": "^6.2.14",
     "pg": "^8.23.1",
     "socket.io": "^4.8.4",
     "zod": "^4.6.7"
