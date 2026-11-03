@@ -27,8 +27,11 @@ import {
   evaluateValidators,
   outgoingTransitions,
   passesConditions,
+  type TargetContext,
   type TransitionDef,
 } from '../transition-rules.js';
+import { approverContext } from './approver-context.js';
+import * as exec from './transition-execution-helpers.js';
 import { checkFormInput, windowOf } from '../transition-form.js';
 import { WorkflowEntityRegistry } from './entity-adapter.registry.js';
 import { TransitionRecordsRepository } from './transition-records.repository.js';
@@ -46,17 +49,6 @@ import { WorkflowRepository, type LoadedWorkflow, type StageRow } from '../workf
 /** Субъект адаптера + права актора: движок заполняет `permissions` сам —
  *  условия `permission` проверяются одинаково в `available` и `execute`. */
 type EngineSubject = WorkflowActorSubject & { permissions: readonly string[] };
-
-const EMPTY_APPLIED: WorkflowFormApplied = { fields: {}, timeEntryId: null, result: null };
-
-const hasApplied = (applied: WorkflowFormApplied): boolean =>
-  Object.keys(applied.fields).length > 0 || applied.timeEntryId !== null || applied.result !== null;
-
-/** Кнопка без обязательного окна не блокирует жест DnD/«Мой план». */
-function requiresWindow(t: TransitionDef): boolean {
-  return windowOf(t.form, t.rules).required.length > 0;
-}
-
 @Injectable()
 export class WorkflowEngine implements WorkflowEnginePort {
   constructor(
@@ -73,7 +65,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
     actor: WorkflowActor,
   ): Promise<WorkflowTransition[]> {
     const { workflow, subject } = await this.context(tx, entityId, category, actor);
-    return this.options(workflow, subject);
+    return this.options(workflow, subject, approverContext(workflow, subject));
   }
 
   async execute(
@@ -88,9 +80,15 @@ export class WorkflowEngine implements WorkflowEnginePort {
     await adapter.lock(tx, entityId);
     const subject0 = await this.subjectWithPermissions(tx, entityId, category, actor);
     const workflow = await this.workflows.load(subject0.workflowId, tx);
-    const candidates = outgoingTransitions(workflow.transitions, subject0.facts, workflow.stages)
+    const targetCtx = approverContext(workflow, subject0);
+    const candidates = outgoingTransitions(
+      workflow.transitions,
+      subject0.facts,
+      workflow.stages,
+      targetCtx,
+    )
       .filter((t) => passesConditions(t.rules, subject0))
-      .filter((t) => this.matches(t, choice, subject0, workflow));
+      .filter((t) => this.matches(t, choice, subject0, workflow, targetCtx));
     if (candidates.length === 0) {
       // Имя текущего статуса — клиент собирает понятную строку (I15):
       // «Из статуса «В работе» так перейти нельзя» (перенос в «Моём плане»).
@@ -109,9 +107,12 @@ export class WorkflowEngine implements WorkflowEnginePort {
     // Гейты видят факты ПОСЛЕ окна (Р2): смена исполнителя в окне не отнимает
     // право нажать (условия «кто» проверены по состоянию до окна), а
     // дозаполненные поля/итог снимают блокировку.
-    const subject1 = hasApplied(applied)
+    const subject1 = exec.hasApplied(applied)
       ? await this.subjectWithPermissions(tx, entityId, category, actor)
       : subject0;
+    // Контекст акторного пропуска — по фактам ПОСЛЕ окна (#430): если окно
+    // дозаполнило результат/поля, гейты кнопки утверждения видят их.
+    const targetCtx1 = approverContext(workflow, subject1);
     // Выбранная кнопка — первой: DnD предпочёл кандидата без обязательного
     // окна, и гейты не должны «переиграть» выбор на другую кнопку.
     const ordered = [picked, ...candidates.filter((t) => t.id !== picked.id)];
@@ -122,7 +123,10 @@ export class WorkflowEngine implements WorkflowEnginePort {
     const pick = scored.find((s) => s.reasons.length === 0) ?? scored[0]!;
     if (pick.reasons.length > 0) this.assertOverride(pick.reasons, subject1, opts);
 
-    const target = this.stage(workflow, effectiveTargetId(pick.t, subject1.facts, workflow.stages));
+    const target = this.stage(
+      workflow,
+      effectiveTargetId(pick.t, subject1.facts, workflow.stages, targetCtx1),
+    );
     // Пост-действие «Присвоить номер» (#55, Р1): номер выдаётся в этой же
     // транзакции ДО смены стадии — откат перехода не сдвигает счётчик.
     const numbering = await this.assignNumber(tx, subject1, pick.t);
@@ -139,7 +143,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
       transitionName: pick.t.name,
       fromStageName: fromStage?.name,
       comment: opts.form?.comment,
-      commentLabel: this.commentLabelOf(pick.t),
+      commentLabel: exec.commentLabelOf(pick.t),
       result: applied.result ?? undefined,
       ...(numbering ? { numbering } : {}),
     } satisfies WorkflowStageChangeMeta);
@@ -188,10 +192,10 @@ export class WorkflowEngine implements WorkflowEnginePort {
       return picked;
     }
     const ordered = [...candidates].sort(
-      (a, b) => Number(requiresWindow(a)) - Number(requiresWindow(b)),
+      (a, b) => Number(exec.requiresWindow(a)) - Number(exec.requiresWindow(b)),
     );
     const picked = ordered[0]!;
-    if (requiresWindow(picked)) {
+    if (exec.requiresWindow(picked)) {
       const { sections } = windowOf(picked.form, picked.rules);
       const { missing } = checkFormInput(sections, {});
       throw new DomainException(
@@ -224,7 +228,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
     t: TransitionDef,
     form: TransitionFormInput | undefined,
   ): Promise<WorkflowFormApplied> {
-    if (!form || Object.keys(form).length === 0) return EMPTY_APPLIED;
+    if (!form || Object.keys(form).length === 0) return exec.EMPTY_APPLIED;
     // Раздел «Трудозатраты» режима «если ещё не списаны»: сервер решает по
     // факту, а не по вере клиента (запись времени не задваивается).
     if (form.time && t.form?.enabled) {
@@ -234,17 +238,12 @@ export class WorkflowEngine implements WorkflowEnginePort {
         if (subject.facts.spentMinutes > 0) {
           const rest = { ...form };
           delete rest.time;
-          if (Object.keys(rest).length === 0) return EMPTY_APPLIED;
+          if (Object.keys(rest).length === 0) return exec.EMPTY_APPLIED;
           return adapter.applyForm(tx, entityId, actor, rest);
         }
       }
     }
     return adapter.applyForm(tx, entityId, actor, form);
-  }
-
-  private commentLabelOf(t: TransitionDef): string | undefined {
-    const section = t.form?.enabled ? t.form.sections.find((s) => s.kind === 'comment') : undefined;
-    return section?.kind === 'comment' ? section.label : undefined;
   }
 
   private assertOverride(
@@ -277,9 +276,10 @@ export class WorkflowEngine implements WorkflowEnginePort {
     choice: TransitionChoice,
     subject: WorkflowActorSubject,
     workflow: LoadedWorkflow,
+    ctx: TargetContext,
   ): boolean {
     if ('transitionId' in choice) return t.id === choice.transitionId;
-    const target = effectiveTargetId(t, subject.facts, workflow.stages);
+    const target = effectiveTargetId(t, subject.facts, workflow.stages, ctx);
     if ('stageId' in choice) return target === choice.stageId;
     const stage = this.stage(workflow, target);
     if (stage.systemState !== choice.systemState) return false;
@@ -287,11 +287,18 @@ export class WorkflowEngine implements WorkflowEnginePort {
     return (stage.outcome ?? null) === choice.outcome;
   }
 
-  private options(workflow: LoadedWorkflow, subject: EngineSubject): WorkflowTransition[] {
-    return outgoingTransitions(workflow.transitions, subject.facts, workflow.stages)
+  private options(
+    workflow: LoadedWorkflow,
+    subject: EngineSubject,
+    ctx: TargetContext,
+  ): WorkflowTransition[] {
+    return outgoingTransitions(workflow.transitions, subject.facts, workflow.stages, ctx)
       .filter((t) => passesConditions(t.rules, subject))
       .map((t) => {
-        const target = this.stage(workflow, effectiveTargetId(t, subject.facts, workflow.stages));
+        const target = this.stage(
+          workflow,
+          effectiveTargetId(t, subject.facts, workflow.stages, ctx),
+        );
         return {
           id: t.id,
           name: t.name,
@@ -302,6 +309,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
           toStageColor: target.color as WorkflowTransition['toStageColor'],
           toStageOrder: target.sortOrder,
           display: t.display,
+          intent: t.intent,
           blockedBy: evaluateValidators(t.rules, subject.facts),
           canOverride: subject.canOverrideGates,
           form: t.form?.enabled ? t.form : null,

@@ -27,15 +27,17 @@ import {
   defaultRouteIfTarget,
   rolesOf,
   routeIfOf,
+  routeIfWhenOf,
   setAllowReview,
   setMinFiles,
   setRouteIf,
+  setRouteIfWhen,
   toggleField,
   toggleRole,
   toggleValidator,
   validatorOf,
 } from '../../../model/transition-rules.js';
-import { PanelField, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
+import { ModeChoices, PanelField, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
 import { CustomFieldChecks } from './custom-fields-checks.js';
 
 /**
@@ -267,6 +269,28 @@ export function RulesSection({
           )
         }
       />
+      {target !== null ? (
+        <PanelField label={ui.automation.panel.routeIfCondition}>
+          <ModeChoices<'approver_is_actor' | 'creator_is_assignee'>
+            value={routeIfWhenOf(transition.rules) ?? 'approver_is_actor'}
+            disabled={readOnly}
+            ariaLabel={ui.automation.panel.routeIfCondition}
+            options={[
+              {
+                value: 'approver_is_actor',
+                label: ui.automation.panel.routeIfConditionApprover,
+                hint: ui.automation.panel.routeIfConditionHints.approver_is_actor,
+              },
+              {
+                value: 'creator_is_assignee',
+                label: ui.automation.panel.routeIfConditionCreator,
+                hint: ui.automation.panel.routeIfConditionHints.creator_is_assignee,
+              },
+            ]}
+            onChange={(when) => patch(setRouteIfWhen(transition.rules, when))}
+          />
+        </PanelField>
+      ) : null}
       {target !== null ? (
         <PanelField label={ui.automation.panel.routeIfTarget}>
           <Select

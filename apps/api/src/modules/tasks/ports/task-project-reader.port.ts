@@ -35,7 +35,7 @@ export interface TaskProjectReader {
 
   /** Агрегаты прямых задач по узлам структуры проекта (#467): счётчики,
    *  часы и крайние сроки; завершённость — канон isCompletedState (closed &&
-   *  outcome ≠ cancelled). Один GROUP BY, узлы без задач — нули (сервис
+   *  outcome не cancelled/rejected, #430). Один GROUP BY, узлы без задач — нули (сервис
    *  дефолтит). */
   nodeRollups(projectId: string): Promise<TaskNodeRollup[]>;
 

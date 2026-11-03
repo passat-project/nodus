@@ -74,6 +74,7 @@ export function buildQuickWorkflow(stages: {
         from: 'in_progress',
         to: 'paused',
         display: 'button',
+        intent: 'service',
         rules: { conditions: [{ kind: 'role_in', roles: ['assignee', 'coexecutor'] }] },
         form: commentWindow('Причина приостановки', true),
       },
@@ -91,6 +92,7 @@ export function buildQuickWorkflow(stages: {
         from: 'paused',
         to: 'postponed',
         display: 'button',
+        intent: 'service',
         rules: { conditions: [{ kind: 'role_in', roles: ['assignee', 'creator'] }] },
       },
       {
@@ -117,6 +119,7 @@ export function buildQuickWorkflow(stages: {
         from: null,
         to: 'cancelled',
         display: 'menu',
+        intent: 'service',
         rules: { conditions: [{ kind: 'role_in', roles: ['creator'] }] },
         form: commentWindow('Причина отмены', true),
       },

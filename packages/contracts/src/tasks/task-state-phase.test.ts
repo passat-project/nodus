@@ -41,6 +41,7 @@ describe('фазы системного состояния (ADR-0020, допол
     expect(isCompletedState('closed', 'success')).toBe(true);
     expect(isCompletedState('closed', null)).toBe(true);
     expect(isCompletedState('closed', 'cancelled')).toBe(false);
+    expect(isCompletedState('closed', 'rejected')).toBe(false);
     expect(isCompletedState('done', 'success')).toBe(false);
     expect(isCompletedState('active', undefined)).toBe(false);
   });

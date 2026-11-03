@@ -11,7 +11,7 @@ import { workflowKeys } from '../../../../shared/workflow/workflow-api.js';
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { projectsAvailable } from '../../../../shared/api/projects-available.js';
 import { ROUTE_GEOMETRY } from '../../../../shared/flow/route-layout.js';
-import { usePublishWorkflow } from '../../api/automation-api.js';
+import { usePublishWorkflow, useStageNames } from '../../api/automation-api.js';
 import { useCanManageWorkflows } from '../../lib/use-can-manage-workflows.js';
 import { useRouteDocStore } from '../../model/route-doc-store.js';
 import { useLayoutAutosave } from '../../model/use-layout-autosave.js';
@@ -106,6 +106,16 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
       })),
     [customFieldDefinitions],
   );
+  // Мягкий каталог имён статусов (#430): подсказки и warning-и имён.
+  const { data: stageNames = [], isLoading: stageNamesLoading } = useStageNames(
+    type.category,
+    workflow.id,
+    canManage,
+  );
+  const stageNameFacts = useMemo(
+    () => stageNames.map(({ systemState, name }) => ({ systemState, name })),
+    [stageNames],
+  );
   const problems = useMemo(
     () =>
       checkWorkflowDocument(doc, {
@@ -113,8 +123,9 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
         category: type.category,
         definitions,
         projectsAvailable: projectsAvailable(),
+        stageNameFacts,
       }),
-    [doc, customFieldFacts, definitions, type.category],
+    [doc, customFieldFacts, definitions, type.category, stageNameFacts],
   );
   const problemStageIds = useMemo(
     () => new Set(problems.filter((p) => p.stageId).map((p) => p.stageId as string)),
@@ -200,7 +211,12 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
           }}
           onProblemClick={onProblemClick}
           onDiscard={() => useRouteDocStore.getState().discard()}
-          onPublish={() => setPublishOpen(true)}
+          onPublish={() => {
+            // Счётчики предпросмотра — свежие: staleTime detail 30 с не
+            // должен решать, сколько задач «в полёте».
+            void queryClient.invalidateQueries({ queryKey: workflowKeys.detail(workflow.id) });
+            setPublishOpen(true);
+          }}
         />
 
         <div ref={canvasRef} className="relative min-h-0 flex-1 overflow-hidden">
@@ -218,7 +234,14 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
         </div>
       </div>
 
-      <EditorPanel workflow={workflow} type={type} scope={type.category} readOnly={!canManage} />
+      <EditorPanel
+        workflow={workflow}
+        type={type}
+        scope={type.category}
+        readOnly={!canManage}
+        stageNameSuggestions={stageNames}
+        stageNameLoading={stageNamesLoading}
+      />
       {settings}
       <NavigationGuard dirty={dirty} />
 
@@ -230,6 +253,7 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
           baseline={useRouteDocStore.getState().baseline}
           document={doc}
           baseVersion={useRouteDocStore.getState().baseVersion}
+          problems={problems}
           publish={publish}
           onPublished={() => useRouteDocStore.getState().markPublished()}
           onConflictLoad={() => {

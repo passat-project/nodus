@@ -7,7 +7,7 @@ import type {
   WorkflowLayout,
   WorkflowLayoutTransition,
 } from '@nodus/contracts';
-import { flowHandleIdSchema } from '@nodus/contracts';
+import { flowHandleIdSchema, smartIntent } from '@nodus/contracts';
 
 import { layoutRoute } from '../../../shared/flow/route-layout.js';
 import { newId, normalize } from './route-doc-helpers.js';
@@ -104,6 +104,7 @@ function newTransition(
     fromStageId: from,
     toStageId: to,
     display: 'button',
+    intent: smartIntent(doc.stages.find((s) => s.id === to)),
     sortOrder: Math.max(0, ...doc.transitions.map((t) => t.sortOrder)) + 1,
     rules: {
       conditions: [{ kind: 'role_in', roles: ['assignee'] }],

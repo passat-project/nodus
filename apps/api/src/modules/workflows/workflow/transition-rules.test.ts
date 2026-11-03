@@ -67,6 +67,7 @@ function transition(partial: Partial<TransitionDef>): TransitionDef {
     fromStageId: '00000000-0000-4000-8000-000000000001',
     toStageId: '00000000-0000-4000-8000-000000000003',
     display: 'button',
+    intent: 'action',
     sortOrder: 0,
     rules: parseRules({}),
     form: parseForm({}),

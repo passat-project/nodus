@@ -144,7 +144,7 @@ export class TasksRepository {
   ): Promise<{ stageId: string; count: number }[]> {
     const rows = await (tx ?? this.prisma).task.groupBy({
       by: ['stageId'],
-      where: { stageId: { in: [...stageIds] } },
+      where: { stageId: { in: [...stageIds] }, deletedAt: null },
       _count: { _all: true },
     });
     return rows.map((row) => ({ stageId: row.stageId, count: row._count._all }));

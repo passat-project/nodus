@@ -20,6 +20,7 @@ import {
   VALIDATOR_KINDS,
   rolesOf,
   routeIfOf,
+  routeIfWhenOf,
   validatorOf,
 } from '../../../model/transition-rules.js';
 import {
@@ -34,6 +35,7 @@ export type TransitionSection = 'root' | 'roles' | 'conditions' | 'rules' | 'win
 
 const ANY = 'any';
 const DISPLAYS: readonly TransitionDisplay[] = ['primary', 'button', 'menu'];
+const INTENTS = ['action', 'service'] as const;
 
 /** Сводки разделов (строка под названием раздела). */
 export function sectionSummaries(
@@ -69,7 +71,11 @@ export function sectionSummaries(
         : ui.automation.panel.noConditions,
     rules:
       routeIf !== null
-        ? `${ui.automation.panel.routeIfSummary} ${doc.stages.find((s) => s.id === routeIf)?.name ?? ''}`
+        ? `${
+            routeIfWhenOf(transition.rules) === 'approver_is_actor'
+              ? ui.automation.panel.routeIfSummaryApprover
+              : ui.automation.panel.routeIfSummaryCreator
+          } ${doc.stages.find((s) => s.id === routeIf)?.name ?? ''}`
         : ui.automation.panel.noRules,
     window: windowSummary,
   };
@@ -102,6 +108,8 @@ export function TransitionPanel({
   const store = useRouteDocStore.getState;
   const patch = (value: Partial<WorkflowDraftTransition>) => store().patchTransition(t.id, value);
   const summaries = sectionSummaries(t, doc, category);
+  const stageName = (id: string | null) =>
+    id === null ? ui.automation.anyStatus : (doc.stages.find((s) => s.id === id)?.name ?? '');
 
   return (
     <>
@@ -112,7 +120,11 @@ export function TransitionPanel({
             disabled={readOnly}
             onValueChange={(value) => patch({ fromStageId: value === ANY ? null : value })}
           >
-            <SelectTrigger className="w-full min-w-0" aria-label={ui.automation.fromStage}>
+            <SelectTrigger
+              className="w-full min-w-0 [&_[data-slot=select-value]]:block [&_[data-slot=select-value]]:truncate"
+              aria-label={ui.automation.fromStage}
+              title={stageName(t.fromStageId)}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent position="popper" className="nokey">
@@ -134,7 +146,11 @@ export function TransitionPanel({
             disabled={readOnly}
             onValueChange={(value) => patch({ toStageId: value })}
           >
-            <SelectTrigger className="w-full min-w-0" aria-label={ui.automation.toStage}>
+            <SelectTrigger
+              className="w-full min-w-0 [&_[data-slot=select-value]]:block [&_[data-slot=select-value]]:truncate"
+              aria-label={ui.automation.toStage}
+              title={stageName(t.toStageId)}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent position="popper" className="nokey">
@@ -175,6 +191,26 @@ export function TransitionPanel({
           onChange={(display) =>
             display === 'primary' ? store().setTransitionPrimary(t.id) : patch({ display })
           }
+        />
+      </PanelField>
+
+      <PanelField
+        label={ui.automation.panel.intent}
+        hint={
+          t.intent === 'action'
+            ? ui.automation.panel.intentActionHint
+            : ui.automation.panel.intentServiceHint
+        }
+      >
+        {' '}
+        <Segmented
+          value={t.intent}
+          disabled={readOnly}
+          options={INTENTS.map((intent) => ({
+            value: intent,
+            label: ui.automation.panel.intentSegments[intent],
+          }))}
+          onChange={(intent) => patch({ intent })}
         />
       </PanelField>
 

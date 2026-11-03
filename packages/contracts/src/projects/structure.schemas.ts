@@ -35,7 +35,7 @@ export const NODE_LIMITS = {
 /** Агрегаты ПРЯМЫХ задач узла (группировка по node_id на сервере, порт
  *  TASK_PROJECT_READER.nodeRollups); суммы поддерева клиент собирает по
  *  дереву (узлов ≤ 1000 — точный пересчёт на клиенте). Завершённость — канон
- *  isCompletedState (closed && outcome IS DISTINCT FROM 'cancelled').
+ *  isCompletedState (closed && outcome не cancelled/rejected, #430).
  *  nearestDeadline — MIN(deadline) открытых задач; latestDeadline — MAX(deadline)
  *  всех задач узла (ближайший «горящий» и поздний «крайний»). */
 export const projectNodeRollupSchema = z.object({

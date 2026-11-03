@@ -77,6 +77,7 @@ export function letterTransitionsOf(letter: DemoLetter, actor: LetterActor): Wor
         toStageColor: target.color,
         toStageOrder: target.sortOrder,
         display: t.display,
+        intent: t.intent,
         blockedBy: [],
         canOverride: false,
         form: t.form.enabled ? t.form : null,

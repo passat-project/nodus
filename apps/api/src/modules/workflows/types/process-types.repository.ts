@@ -186,6 +186,7 @@ export class ProcessTypesRepository {
           fromStageId: transition.fromStageId ? (idMap.get(transition.fromStageId) ?? null) : null,
           toStageId: idMap.get(transition.toStageId) ?? transition.toStageId,
           display: transition.display,
+          intent: transition.intent,
           sortOrder: transition.sortOrder,
           rules: { ...rules, postFunctions } as Prisma.InputJsonValue,
           // Окно при нажатии — часть документа маршрута (#380): копия типа
@@ -282,6 +283,7 @@ const SIMPLE_WORKFLOW: LoadedWorkflow = {
       fromStageId: 's-new',
       toStageId: 's-wip',
       display: 'primary',
+      intent: 'action',
       sortOrder: 0,
       rules: parseRules({ conditions: [{ kind: 'role_in', roles: ['assignee', 'coexecutor'] }] }),
       form: parseForm({}),
@@ -292,6 +294,7 @@ const SIMPLE_WORKFLOW: LoadedWorkflow = {
       fromStageId: 's-wip',
       toStageId: 's-done',
       display: 'primary',
+      intent: 'action',
       sortOrder: 1,
       rules: parseRules({
         conditions: [{ kind: 'role_in', roles: ['assignee'] }],

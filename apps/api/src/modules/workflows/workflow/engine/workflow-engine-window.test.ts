@@ -40,6 +40,7 @@ function transition(partial: Partial<TransitionDef>): TransitionDef {
     fromStageId: ACTIVE,
     toStageId: DONE,
     display: 'primary',
+    intent: 'action',
     sortOrder: 0,
     rules: parseRules({ conditions: [{ kind: 'role_in', roles: ['assignee'] }] }),
     form: parseForm({}),

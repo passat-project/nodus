@@ -47,6 +47,7 @@ const detail = (): WorkflowDetail => ({
         fromStageId: S1,
         toStageId: S2,
         display: 'primary',
+        intent: 'action',
         sortOrder: 0,
         rules: {
           conditions: [{ kind: 'role_in', roles: ['assignee'] }],
@@ -80,6 +81,7 @@ function detailWithGlobalOrder(): WorkflowDetail {
           fromStageId: S2,
           toStageId: S3,
           display: 'button',
+          intent: 'action',
           sortOrder: 2,
         },
       ],

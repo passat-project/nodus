@@ -59,6 +59,7 @@ function transitionsOf(task: TaskListItem): WorkflowTransition[] {
       toStageColor: target.color,
       toStageOrder: target.sortOrder,
       display: t.display,
+      intent: t.intent,
       blockedBy: blockedByOf(task, route, t.id),
       canOverride: true,
       form: t.form.enabled ? t.form : null,

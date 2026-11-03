@@ -35,6 +35,7 @@ const back = (id: string, from: string, sortOrder: number) => ({
   fromStageId: from,
   toStageId: A,
   display: 'button' as const,
+  intent: 'action' as const,
   sortOrder,
   rules,
   form: { enabled: false, sections: [] },

@@ -100,6 +100,8 @@ export const StatusNode = memo(function StatusNode({
               <Check className="size-3.5 text-success" aria-label={ui.automation.outcomeSuccess} />
             ) : data.outcome === 'cancelled' ? (
               <X className="size-3.5 text-danger" aria-label={ui.automation.outcomeCancelled} />
+            ) : data.outcome === 'rejected' ? (
+              <X className="size-3.5 text-danger" aria-label={ui.automation.outcomeRejected} />
             ) : null}
             {data.hasProblem ? <CircleAlert className="size-3.5 text-danger" aria-hidden /> : null}
           </span>

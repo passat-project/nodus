@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   rolesOf,
   routeIfOf,
+  routeIfWhenOf,
   setAllowReview,
   setRouteIf,
+  setRouteIfWhen,
   toggleField,
   toggleRole,
   toggleValidator,
@@ -52,6 +54,16 @@ describe('transition-rules: правки правил кнопки (#378)', () =
     const on = setRouteIf(base, 'stage-done');
     expect(routeIfOf(on)).toBe('stage-done');
     expect(routeIfOf(setRouteIf(on, null))).toBeNull();
+  });
+
+  it('условие пропуска: новое — акторное, старое сохраняется при смене цели (#430)', () => {
+    const on = setRouteIf(base, 'stage-done');
+    expect(routeIfWhenOf(on)).toBe('approver_is_actor');
+    const legacy = setRouteIfWhen(on, 'creator_is_assignee');
+    expect(routeIfWhenOf(legacy)).toBe('creator_is_assignee');
+    expect(routeIfWhenOf(setRouteIf(legacy, 'stage-other'))).toBe('creator_is_assignee');
+    expect(routeIfOf(setRouteIf(legacy, 'stage-other'))).toBe('stage-other');
+    expect(routeIfWhenOf(setRouteIfWhen(legacy, 'approver_is_actor'))).toBe('approver_is_actor');
   });
 });
 

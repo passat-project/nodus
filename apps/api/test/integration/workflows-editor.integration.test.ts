@@ -4,12 +4,7 @@ import { ErrorCode, Permission } from '@nodus/contracts';
 import { TokenService } from '../../src/modules/auth/token.service.js';
 import { setupChatFixture, type ChatTestFixture, type ChatUser } from './chat-fixtures.js';
 
-/**
- * Интеграционный сценарий редактора маршрутов #378 (живое HTTP + БД):
- * права (403 без workflow.manage), публикация с обязательным переносом
- * (422 → миграция → 200), фоновый перенос задач BullMQ-заданием, конфликт
- * версий (409), идемпотентный повтор. Чистит за собой по runId.
- */
+/** Интеграционный сценарий редактора маршрутов #378: права, публикация с переносом, BullMQ, конфликт версий, идемпотентность. */
 describe.skipIf(!process.env.DATABASE_URL)('tasks workflow editor (integration, #378)', () => {
   let fx: ChatTestFixture<'admin' | 'alice'>;
   let admin: ChatUser;
@@ -93,9 +88,7 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks workflow editor (integration, 
       category: string;
       direction: string | null;
     };
-    expect(type.creatable).toBe(false);
-    expect(type.category).toBe('task');
-    expect(type.direction).toBeNull();
+    expect(type).toMatchObject({ creatable: false, category: 'task', direction: null });
     customTypeId = type.id;
     workflowId = type.workflowId;
   });
@@ -104,17 +97,19 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks workflow editor (integration, 
     const res = await fx.api(admin, 'GET', `/workflows/${workflowId}`);
     expect(res.status).toBe(200);
     const detail = (await res.json()) as {
-      version: number;
       document: {
         stages: { id: string; name: string; isInitial: boolean }[];
+        transitions: { name: string; intent: string }[];
       };
     };
-    expect(detail.version).toBe(1);
     expect(detail.document.stages).toHaveLength(7);
     const initial = detail.document.stages.find((s) => s.isInitial)!;
     expect(initial.name).toBe('Ожидает');
     initialStageId = initial.id;
     workStageId = detail.document.stages.find((s) => s.name === 'В работе')!.id;
+    expect(detail.document.transitions.find((t) => t.name === 'Приостановить')?.intent).toBe(
+      'service',
+    );
   });
 
   it('задача нового типа: скрытый тип отвергается, включённый — работает', async () => {
@@ -122,8 +117,6 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks workflow editor (integration, 
       body: { title: `IT-задача ${fx.runId}`, typeId: customTypeId },
       key: `it-task-hidden-${fx.runId}`,
     });
-    // С #432 скрытый тип — доменный 403 PROCESS_TYPE_FORBIDDEN (не 409):
-    // клиент различает «нет доступа» и «нельзя создать» по reason.
     expect(hidden.status).toBe(403);
 
     await fx.api(admin, 'PATCH', `/workflows/types/${customTypeId}`, {

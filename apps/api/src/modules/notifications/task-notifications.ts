@@ -51,6 +51,11 @@ export function taskNotices(type: string, p: Payload, actorId: string | null): T
         if (str(p.toStageOutcome) === 'cancelled') {
           add(str(p.assigneeId), 'task.cancelled');
           for (const id of ids(p.coexecutorIds)) add(id, 'task.cancelled');
+        } else if (str(p.toStageOutcome) === 'rejected') {
+          // Отказ утверждающего (#430): автору и исполнителю; нажавший
+          // (утверждающий) исключается общим правилом add.
+          add(str(p.creatorId), 'task.rejected');
+          add(str(p.assigneeId), 'task.rejected');
         } else if (isReviewState(from)) {
           add(str(p.assigneeId), 'task.approved');
         } else {

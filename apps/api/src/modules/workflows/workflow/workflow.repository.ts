@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 
-import type { ProcessCategory, TransitionDisplay } from '@nodus/contracts';
+import type {
+  ProcessCategory,
+  TransitionDisplay,
+  WorkflowTransitionIntent,
+} from '@nodus/contracts';
 import { PrismaService } from '../../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { parseRules, type StageDef, type TransitionDef } from './transition-rules.js';
@@ -52,6 +56,7 @@ export class WorkflowRepository {
         fromStageId: t.fromStageId,
         toStageId: t.toStageId,
         display: t.display as TransitionDisplay,
+        intent: t.intent as WorkflowTransitionIntent,
         sortOrder: t.sortOrder,
         rules: parseRules(t.rules),
         form: parseForm(t.form),
@@ -143,6 +148,49 @@ export class WorkflowRepository {
       select: { processType: { select: { direction: true } } },
     });
     return entry?.processType.direction ?? null;
+  }
+
+  /** Имена статусов маршрутов категории (#430): для комбо-подсказок и
+   *  warning-ов публикации. Входят системный каталог (`workflows.code` задан,
+   *  даже если `published_at` NULL) и опубликованные пользовательские
+   *  маршруты; черновики без `code` — нет. */
+  async stageNames(
+    category: ProcessCategory,
+    excludeWorkflowId?: string,
+  ): Promise<{ systemState: string; name: string; routes: number }[]> {
+    const rows = await this.prisma.workflowStage.findMany({
+      where: {
+        archivedAt: null,
+        workflow: {
+          kind: category,
+          // Опубликованные пользовательские маршруты + системный каталог
+          // (у него published_at = NULL, но code задан): иначе в свежей
+          // установке подсказок нет вообще.
+          OR: [{ publishedAt: { not: null } }, { code: { not: null } }],
+          ...(excludeWorkflowId ? { id: { not: excludeWorkflowId } } : {}),
+        },
+      },
+      select: { name: true, systemState: true, workflowId: true },
+    });
+    const groups = new Map<
+      string,
+      { systemState: string; name: string; workflowIds: Set<string> }
+    >();
+    for (const row of rows) {
+      const name = row.name.trim();
+      if (name.length === 0) continue;
+      const key = `${row.systemState}\u0000${name}`;
+      const group = groups.get(key) ?? {
+        systemState: row.systemState,
+        name,
+        workflowIds: new Set<string>(),
+      };
+      group.workflowIds.add(row.workflowId);
+      groups.set(key, group);
+    }
+    return [...groups.values()]
+      .map(({ workflowIds, ...group }) => ({ ...group, routes: workflowIds.size }))
+      .sort((a, b) => b.routes - a.routes || a.name.localeCompare(b.name, 'ru'));
   }
 
   async categoryOf(workflowId: string, tx?: TransactionClient): Promise<ProcessCategory> {

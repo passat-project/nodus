@@ -9,6 +9,8 @@ export interface TransitionRow {
   fromStageId: string | null;
   toStageId: string;
   display: string;
+  /** Смысл кнопки (#430): action | service. */
+  intent: string;
   sortOrder: number;
   rules: Prisma.InputJsonValue;
   /** Окно при нажатии (#380) — часть документа маршрута. */

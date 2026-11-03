@@ -73,7 +73,7 @@ export class StageMover {
         toStageName: target.name,
         fromState: task.systemState,
         toState: target.systemState,
-        toStageOutcome: target.outcome as 'success' | 'cancelled' | null,
+        toStageOutcome: target.outcome as 'success' | 'cancelled' | 'rejected' | null,
         transitionId: meta.transitionId,
         creatorId: task.creatorId,
         assigneeId: task.assigneeId,

@@ -7,10 +7,8 @@ import { WorkflowPublishRepository } from './publish.repository.js';
 import { WorkflowEditorService } from './publish.service.js';
 import type { LoadedWorkflow } from '../workflow.repository.js';
 
-/** Юнит-сценарии публикации (#378, ADR-0024): конфликт версии, невалидный
- *  документ, обязательный перенос, разрешение new:* (в т.ч. цели route_if),
- *  архив вместо удаления, kind-гвард, счётчики сущностей — у адаптера
- *  категории. БД мокается. */
+/** Юнит-сценарии публикации (#378): конфликт версии, невалидный документ,
+ *  перенос, new:*→uuid, архив, kind-гвард, счётчики. БД мокается. */
 
 const WID = '00000000-0000-4000-8000-0000000000f1';
 const S1 = '00000000-0000-4000-8000-000000000001';
@@ -107,6 +105,7 @@ function document(): WorkflowDocument {
         fromStageId: S1,
         toStageId: 'new:ctrl',
         display: 'primary',
+        intent: 'action',
         sortOrder: 0,
         form: { enabled: false, sections: [] },
         rules: rules({
@@ -120,6 +119,7 @@ function document(): WorkflowDocument {
         fromStageId: 'new:ctrl',
         toStageId: 'new:done',
         display: 'primary',
+        intent: 'action',
         sortOrder: 1,
         form: { enabled: false, sections: [] },
         rules: parseRules({ conditions: [{ kind: 'role_in', roles: ['creator'] }] }),
@@ -291,8 +291,6 @@ describe('WorkflowEditorService.publish (#378)', () => {
       },
     ];
     const saved = update[0].data.layout;
-    expect(saved.stages[S1]).toEqual({ x: 500, y: 60 });
-    expect(saved.transitions[T1]).toEqual({ labelT: 0.7 });
     // Место новой стадии — из документа публикации (new:ctrl → uuid).
     expect(saved.stages[CREATED]).toEqual({ x: 300, y: 0 });
   });

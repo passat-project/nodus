@@ -1,6 +1,6 @@
 import { AlertTriangle, Plus } from 'lucide-react';
 import type { TaskDetail } from '@nodus/contracts';
-import { isFinalState, ui } from '@nodus/contracts';
+import { isCompletedState, ui } from '@nodus/contracts';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { cn } from '@nodus/ui/lib/utils';
 
@@ -23,7 +23,9 @@ import { InlineAddRow } from './inline-add-row.js';
 export function TaskSubtasks({ task, onOpen }: { task: TaskDetail; onOpen: (id: string) => void }) {
   const quick = useQuickCreate();
   const total = task.subtasks.length;
-  const closed = task.subtasks.filter((s) => isFinalState(s.stage.systemState)).length;
+  const closed = task.subtasks.filter((s) =>
+    isCompletedState(s.stage.systemState, s.stage.outcome),
+  ).length;
   const parentDeadline = task.deadline ? Date.parse(task.deadline) : null;
 
   if (total === 0 && !task.access.canEdit) return null;
@@ -44,7 +46,7 @@ export function TaskSubtasks({ task, onOpen }: { task: TaskDetail; onOpen: (id: 
             parentDeadline !== null &&
             s.deadline !== null &&
             Date.parse(s.deadline) > parentDeadline;
-          const done = isFinalState(s.stage.systemState);
+          const done = isCompletedState(s.stage.systemState, s.stage.outcome);
           const pending = isTempId(s.id);
           return (
             <button

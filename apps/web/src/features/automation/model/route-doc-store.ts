@@ -10,7 +10,7 @@ import type {
   WorkflowDraftTransition,
   WorkflowLayout,
 } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { smartIntent, ui } from '@nodus/contracts';
 import { clearDraft, persistDraft } from './route-draft-storage.js';
 import {
   newId,
@@ -259,13 +259,27 @@ export function createRouteDocStore(workflowId: string) {
 
       patchTransition: (id, patch) => {
         const doc = get().document;
+        const current = doc.transitions.find((t) => t.id === id);
+        let nextPatch = patch;
+        // Умный дефолт (#430): смена цели пересчитывает смысл кнопки, только
+        // если пользователь не выбрал его вручную (текущий равен дефолту
+        // старой цели).
+        if (current && patch.toStageId !== undefined && patch.toStageId !== current.toStageId) {
+          const oldDefault = smartIntent(doc.stages.find((s) => s.id === current.toStageId));
+          if ((patch.intent ?? current.intent) === oldDefault) {
+            nextPatch = {
+              ...patch,
+              intent: smartIntent(doc.stages.find((s) => s.id === patch.toStageId)),
+            };
+          }
+        }
         commit(
           {
             ...doc,
-            transitions: doc.transitions.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+            transitions: doc.transitions.map((t) => (t.id === id ? { ...t, ...nextPatch } : t)),
           },
           {},
-          nameKey(id, patch),
+          nameKey(id, nextPatch),
         );
       },
 

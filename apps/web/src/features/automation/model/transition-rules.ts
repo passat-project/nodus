@@ -137,15 +137,36 @@ export function routeIfOf(rules: Rules): string | null {
   return rule && rule.kind === 'route_if' ? rule.toStageId : null;
 }
 
-/** Особое правило: цель или выкл (null). */
+/** Условие пропуска (#430): по полям (старое) или по актору (новое). */
+export function routeIfWhenOf(rules: Rules): 'creator_is_assignee' | 'approver_is_actor' | null {
+  const rule = rules.postFunctions.find((p) => p.kind === 'route_if');
+  return rule && rule.kind === 'route_if' ? rule.when : null;
+}
+
+/** Особое правило: цель или выкл (null). Новое правило по умолчанию —
+ *  акторное; существующее условие сохраняется при правке цели. */
 export function setRouteIf(rules: Rules, toStageId: string | null): Rules {
   const rest = rules.postFunctions.filter((p) => p.kind !== 'route_if');
+  const when = routeIfWhenOf(rules) ?? 'approver_is_actor';
   return {
     ...rules,
-    postFunctions:
-      toStageId === null
-        ? rest
-        : [...rest, { kind: 'route_if', when: 'creator_is_assignee', toStageId }],
+    postFunctions: toStageId === null ? rest : [...rest, { kind: 'route_if', when, toStageId }],
+  };
+}
+
+/** Сменить условие пропуска, сохранив цель. */
+export function setRouteIfWhen(
+  rules: Rules,
+  when: 'creator_is_assignee' | 'approver_is_actor',
+): Rules {
+  const target = routeIfOf(rules);
+  if (target === null) return rules;
+  return {
+    ...rules,
+    postFunctions: [
+      ...rules.postFunctions.filter((p) => p.kind !== 'route_if'),
+      { kind: 'route_if', when, toStageId: target },
+    ],
   };
 }
 

@@ -10,6 +10,8 @@ import { ProcessTypesService } from './types/process-types.service.js';
 import { WorkflowEditorController } from './workflow/editor/workflow-editor.controller.js';
 import { WorkflowEditorService } from './workflow/editor/publish.service.js';
 import { WorkflowPublishRepository } from './workflow/editor/publish.repository.js';
+import { WorkflowStageNamesController } from './workflow/editor/stage-names.controller.js';
+import { WorkflowStageNamesService } from './workflow/editor/stage-names.service.js';
 import { WorkflowSyncJob } from './workflow/editor/workflow-sync.job.js';
 import { WorkflowsPortsModule } from './workflows-ports.module.js';
 import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.module.js';
@@ -27,7 +29,7 @@ import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.mo
   // Реестр атрибутов (#431): публикация проверяет ключи `cf.<id>` окна и
   // гейтов по определениям области маршрута.
   imports: [WorkflowsPortsModule, CustomFieldsPortsModule],
-  controllers: [ProcessTypesController, WorkflowEditorController],
+  controllers: [ProcessTypesController, WorkflowEditorController, WorkflowStageNamesController],
   providers: [
     UserProfileProvider,
     { provide: USER_PROFILE_READER, useClass: UserProfileProvider },
@@ -37,6 +39,7 @@ import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.mo
     CatalogBootstrap,
     ProcessTypesService,
     WorkflowEditorService,
+    WorkflowStageNamesService,
     WorkflowSyncJob,
     // Фоновый перенос сущностей публикации ставится из outbox (at-least-once).
     WorkflowPublishedHandler,

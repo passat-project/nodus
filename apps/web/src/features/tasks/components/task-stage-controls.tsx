@@ -45,7 +45,9 @@ function transitionIcon(t: WorkflowTransition): LucideIcon | typeof PauseGlyph {
   if (t.toStageState === 'active') return Play;
   if (t.toStageState === 'paused') return PauseGlyph;
   if (isReviewState(t.toStageState)) return Send;
-  if (isFinalState(t.toStageState)) return t.toStageOutcome === 'cancelled' ? X : Check;
+  if (isFinalState(t.toStageState)) {
+    return t.toStageOutcome === 'success' ? Check : X;
+  }
   return Undo2;
 }
 
@@ -81,6 +83,8 @@ export function TaskActionBar({
   const { primary, visible, menu } = groupProcessButtons(transitions);
   const closed = isFinalState(task.stage.systemState);
   const cancelled = closed && task.stage.outcome === 'cancelled';
+  const rejected = closed && task.stage.outcome === 'rejected';
+  const negative = cancelled || rejected;
 
   const renderButton = (t: WorkflowTransition, main: boolean) => {
     const blocked = t.blockedBy.length > 0;
@@ -126,10 +130,10 @@ export function TaskActionBar({
         <span
           className={cn(
             'inline-flex h-8 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium',
-            cancelled ? stageTone.danger.chip : stageTone.success.chip,
+            negative ? stageTone.danger.chip : stageTone.success.chip,
           )}
         >
-          {cancelled ? (
+          {negative ? (
             <X className="size-4" strokeWidth={2} />
           ) : (
             <Check className="size-4" strokeWidth={2} />

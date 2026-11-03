@@ -89,6 +89,24 @@ describe('taskNotices', () => {
     ).toMatchObject([{ userId: 'cr', kind: 'task.completed' }]);
   });
 
+  it('отклонена — автору и исполнителю, не «работа принята» (#430)', () => {
+    const base = { number: 7, toStageName: 'Отклонена', creatorId: 'cr', assigneeId: 'as' };
+    expect(
+      taskNotices(
+        'task.stage_changed',
+        { ...base, fromState: 'done', toState: 'closed', toStageOutcome: 'rejected' },
+        'cr',
+      ),
+    ).toMatchObject([{ userId: 'as', kind: 'task.rejected' }]);
+    expect(
+      taskNotices(
+        'task.stage_changed',
+        { ...base, fromState: 'done', toState: 'closed', toStageOutcome: 'rejected' },
+        'as',
+      ),
+    ).toMatchObject([{ userId: 'cr', kind: 'task.rejected' }]);
+  });
+
   it('утверждение (с «Утверждения» в итог «выполнена») — исполнителю «работа принята»', () => {
     const base = { number: 6, toStageName: 'Завершена', creatorId: 'cr', assigneeId: 'as' };
     expect(

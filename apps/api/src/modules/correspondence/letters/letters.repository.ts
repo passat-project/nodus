@@ -350,7 +350,7 @@ export class LettersRepository {
     if (stageIds.length === 0) return {};
     const rows = await this.prisma.letter.groupBy({
       by: ['stageId'],
-      where: { stageId: { in: [...stageIds] } },
+      where: { stageId: { in: [...stageIds] }, deletedAt: null },
       _count: { _all: true },
     });
     const counts: Record<string, number> = {};

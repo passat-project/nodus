@@ -47,10 +47,10 @@ export function isFinalState(state: string): boolean {
   return PHASES.get(state) === 'final';
 }
 
-/** Выполнена: итог с исходом «выполнена» (отменённая — не выполнена; итог
- *  без исхода — данные до #378 — считается выполненным). */
+/** Выполнена: итог с исходом «выполнена» (отменённая и отклонённая — не
+ *  выполнены; итог без исхода — данные до #378 — считается выполненным). */
 export function isCompletedState(state: string, outcome: string | null | undefined): boolean {
-  return isFinalState(state) && outcome !== 'cancelled';
+  return isFinalState(state) && outcome !== 'cancelled' && outcome !== 'rejected';
 }
 
 /** Состояния фазы в порядке оси — новый массив (фильтры `IN (...)` запросов). */

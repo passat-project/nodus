@@ -35,6 +35,7 @@ const transition = (patch: Partial<WorkflowTransition>): WorkflowTransition => (
   toStageColor: 'info',
   toStageOrder: 1,
   display: 'primary',
+  intent: 'action',
   blockedBy: [],
   canOverride: false,
   form: null,

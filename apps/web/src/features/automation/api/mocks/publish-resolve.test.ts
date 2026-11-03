@@ -38,6 +38,7 @@ describe('resolvePublishedDocument — мок публикации как сер
           fromStageId: OLD,
           toStageId: 'new:a',
           display: 'primary',
+          intent: 'action',
           sortOrder: 0,
           rules: {
             conditions: [],

@@ -44,6 +44,26 @@ function findTask(id: unknown) {
 export const automationHandlers = [
   ...automationTypeHandlers,
 
+  http.get('/api/v1/workflows/stage-names', ({ request }) => {
+    const exclude = new URL(request.url).searchParams.get('excludeWorkflowId');
+    const groups = new Map<string, { systemState: string; name: string; routes: number }>();
+    for (const [id, detail] of mockWorkflows) {
+      if (id === exclude) continue;
+      for (const stage of detail.document.stages) {
+        const name = stage.name.trim();
+        if (!name) continue;
+        const key = `${stage.systemState}\u0000${name}`;
+        const current = groups.get(key);
+        if (current) current.routes += 1;
+        else groups.set(key, { systemState: stage.systemState, name, routes: 1 });
+      }
+    }
+    return HttpResponse.json(
+      [...groups.values()].sort(
+        (a, b) => b.routes - a.routes || a.name.localeCompare(b.name, 'ru'),
+      ),
+    );
+  }),
   http.get('/api/v1/workflows/:id', ({ params }) => {
     const detail = mockWorkflows.get(String(params.id));
     return detail ? HttpResponse.json(structuredClone(detail)) : notFound();

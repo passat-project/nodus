@@ -3,6 +3,7 @@ import type {
   CustomFieldValues,
   ProcessTypeRef,
   StageColor,
+  StageOutcome,
   TaskChainNode,
   TaskListItem,
   TaskPriority,
@@ -75,7 +76,7 @@ export function stageDto(s: {
     order: s.sortOrder,
     systemState: s.systemState as TaskSystemState,
     color: s.color as StageColor,
-    ...(s.outcome ? { outcome: s.outcome as 'success' | 'cancelled' } : {}),
+    ...(s.outcome ? { outcome: s.outcome as StageOutcome } : {}),
   };
 }
 

@@ -13,8 +13,11 @@ import { WorkflowEngine } from './workflow-engine.js';
 
 const TX = { tx: true };
 const STAGE_ACTIVE = '00000000-0000-4000-8000-000000000001';
+const STAGE_REVIEW = '00000000-0000-4000-8000-000000000002';
 const STAGE_DONE = '00000000-0000-4000-8000-000000000003';
 const TRANSITION = '00000000-0000-4000-8000-000000000011';
+const SUBMIT = '00000000-0000-4000-8000-000000000012';
+const ACCEPT = '00000000-0000-4000-8000-000000000013';
 const USER: WorkflowActor = { id: 'bob', permissions: [] };
 
 const workflow = {
@@ -52,6 +55,7 @@ const workflow = {
       fromStageId: STAGE_ACTIVE,
       toStageId: STAGE_DONE,
       display: 'primary' as const,
+      intent: 'action' as const,
       sortOrder: 0,
       rules: { conditions: [], validators: [], postFunctions: [] },
     },
@@ -72,6 +76,82 @@ const facts = {
   assigneeId: 'bob',
   plannedMinutes: null,
   hasResult: false,
+};
+
+/** Маршрут с утверждением: сдача ACTIVE → REVIEW, утверждение REVIEW → DONE.
+ *  Правило `approver_is_actor` стоит на сдаче (#430). */
+const approvalWorkflow = {
+  id: 'wf-approval',
+  stages: [
+    {
+      id: STAGE_ACTIVE,
+      code: null,
+      name: 'В работе',
+      systemState: 'active',
+      archivedAt: null,
+      workflowId: 'wf-approval',
+      color: 'success',
+      sortOrder: 0,
+      isInitial: true,
+      outcome: null,
+    },
+    {
+      id: STAGE_REVIEW,
+      code: null,
+      name: 'На утверждении',
+      systemState: 'done',
+      archivedAt: null,
+      workflowId: 'wf-approval',
+      color: 'warning',
+      sortOrder: 1,
+      isInitial: false,
+      outcome: null,
+    },
+    {
+      id: STAGE_DONE,
+      code: null,
+      name: 'Завершена',
+      systemState: 'closed',
+      archivedAt: null,
+      workflowId: 'wf-approval',
+      color: 'info',
+      sortOrder: 2,
+      isInitial: false,
+      outcome: 'success',
+    },
+  ],
+  transitions: [
+    {
+      id: SUBMIT,
+      name: 'Сдать работу',
+      fromStageId: STAGE_ACTIVE,
+      toStageId: STAGE_REVIEW,
+      display: 'primary' as const,
+      intent: 'action' as const,
+      sortOrder: 0,
+      rules: {
+        conditions: [{ kind: 'role_in' as const, roles: ['assignee', 'creator', 'coexecutor'] }],
+        validators: [],
+        postFunctions: [
+          { kind: 'route_if' as const, when: 'approver_is_actor' as const, toStageId: STAGE_DONE },
+        ],
+      },
+    },
+    {
+      id: ACCEPT,
+      name: 'Утвердить',
+      fromStageId: STAGE_REVIEW,
+      toStageId: STAGE_DONE,
+      display: 'primary' as const,
+      intent: 'action' as const,
+      sortOrder: 0,
+      rules: {
+        conditions: [{ kind: 'role_in' as const, roles: ['creator' as const] }],
+        validators: [],
+        postFunctions: [],
+      },
+    },
+  ],
 };
 
 function makeEngine(subject: Partial<WorkflowActorSubject> = {}) {
@@ -120,6 +200,37 @@ describe('WorkflowEngine (#428, ADR-0024)', () => {
       toStageState: 'closed',
     });
     expect(adapter.lock).not.toHaveBeenCalled();
+  });
+
+  it('available: approver_is_actor — создатель видит сразу «Завершена» (#430)', async () => {
+    const { engine, workflows } = makeEngine({
+      roles: new Set(['creator']),
+      actsWithoutConditions: false,
+    });
+    workflows.load.mockResolvedValueOnce(structuredClone(approvalWorkflow) as never);
+    const buttons = await engine.available(TX as never, 't1', 'task', USER);
+    expect(buttons.find((b) => b.id === SUBMIT)?.toStageId).toBe(STAGE_DONE);
+  });
+
+  it('available: approver_is_actor — соисполнитель видит «На утверждении» (#430)', async () => {
+    const { engine, workflows } = makeEngine({
+      roles: new Set(['coexecutor']),
+      actsWithoutConditions: false,
+    });
+    workflows.load.mockResolvedValueOnce(structuredClone(approvalWorkflow) as never);
+    const buttons = await engine.available(TX as never, 't1', 'task', USER);
+    expect(buttons.find((b) => b.id === SUBMIT)?.toStageId).toBe(STAGE_REVIEW);
+  });
+
+  it('available: approver_is_actor — обход не делает админа утверждающим (#430)', async () => {
+    const { engine, workflows } = makeEngine({
+      roles: new Set(['assignee']),
+      bypassConditions: true,
+      actsWithoutConditions: false,
+    });
+    workflows.load.mockResolvedValueOnce(structuredClone(approvalWorkflow) as never);
+    const buttons = await engine.available(TX as never, 't1', 'task', USER);
+    expect(buttons.find((b) => b.id === SUBMIT)?.toStageId).toBe(STAGE_REVIEW);
   });
 
   it('execute: замок → субъект → смена стадии адаптером в той же tx', async () => {

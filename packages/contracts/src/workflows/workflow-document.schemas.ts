@@ -8,6 +8,7 @@ import {
   stageOutcomeSchema,
   taskSystemStateSchema,
   transitionDisplaySchema,
+  workflowTransitionIntentSchema,
 } from './workflow-primitives.schemas.js';
 import { workflowTransitionRulesSchema } from './workflow.schemas.js';
 
@@ -47,6 +48,9 @@ export const workflowDraftTransitionSchema = z.object({
   fromStageId: docIdSchema.nullable(),
   toStageId: docIdSchema,
   display: transitionDisplaySchema,
+  /** Смысл кнопки (#430): action — ждёт действия человека, service —
+   *  служебная. `default('action')` — старые черновики и моки без поля. */
+  intent: workflowTransitionIntentSchema.default('action'),
   sortOrder: z.number().int().min(0),
   rules: workflowTransitionRulesSchema,
   /** Окно при нажатии (#380): публикуется вместе с кнопкой (ADR-0021). */
@@ -240,6 +244,20 @@ export const workflowProblemCodeSchema = z.enum([
   'post_function_not_in_category',
   'numbering_not_configured',
   'registration_without_number',
+  /** Кнопка-действие без условий «кто видит» (#430): в «Мои действия»
+   *  держателем станет ответственный — предупреждение, не ошибка. */
+  'action_without_visibility',
+  /** Имя статуса совпадает с именем того же этапа в другом опубликованном
+   *  маршруте (#430): на доске это одна колонка — норма, предупреждение. */
+  'stage_name_shared',
+  /** Имя статуса похоже на имя из другого маршрута после нормализации
+   *  (регистр, ё/е, пробелы) — на доске будет отдельная колонка. */
+  'stage_name_similar',
+  /** Две кнопки из одного статуса ведут в один статус (#430) — дубль. */
+  'duplicate_transition_target',
+  /** Правило `approver_is_actor` не сможет определить утверждающего:
+   *  у целевого статуса нет единственной основной action-кнопки с условиями. */
+  'approver_rule_unresolvable',
 ]);
 export type WorkflowProblemCode = z.infer<typeof workflowProblemCodeSchema>;
 
