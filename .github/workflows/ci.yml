@@ -163,19 +163,26 @@ jobs:
       - name: Typecheck (strict)
         run: pnpm typecheck
 
-      - name: Тесты (unit + тест-кейсы правил линтера)
+      - name: Тесты с покрытием (unit + тест-кейсы правил линтера)
         # PR — affected-only по дифу с base-веткой (turbo учитывает граф зависимостей:
         # правка contracts запускает и тесты зависимых пакетов). Push в main — всегда
         # полный прогон: main проверен целиком (issue #23).
+        # Пороги покрытия живут в vitest-конфигах пакетов (#593): падение ниже
+        # храповика валит этот шаг, а не остаётся «зелёной галочкой».
         # BASE_REF через env — не интерполяцией в shell (script-injection, security #412).
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            pnpm turbo test --filter='!@nodus/e2e' --filter="[origin/${BASE_REF}...HEAD]"
+            pnpm turbo test:coverage --filter='!@nodus/e2e' --filter="[origin/${BASE_REF}...HEAD]"
           else
-            pnpm test
+            pnpm test:coverage
           fi
+
+      - name: Сводка покрытия
+        # Всегда: даже при красных тестах видно, где просело покрытие.
+        if: always()
+        run: node scripts/coverage-summary.mjs
 
       - name: Тесты скриптов выпуска
         # Чистые проверки выпуска оболочки (#562): подпись без version, чужой
