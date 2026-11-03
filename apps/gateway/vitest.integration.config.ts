@@ -21,5 +21,13 @@ export default defineConfig({
     maxWorkers: 1,
     maxConcurrency: 1,
     sequence: { concurrent: false },
+    // Отдельный отчёт (#596): diff coverage объединяет unit + integration.
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/**/*.d.ts'],
+      reporter: ['text-summary', 'json-summary', 'lcov'],
+      reportsDirectory: 'coverage-integration',
+    },
   },
 });

@@ -73,7 +73,7 @@ export default defineConfig(({ command, mode }) => {
           'src/app/msw-browser.ts',
           'src/app/mocks-handlers.ts',
         ],
-        reporter: ['text-summary', 'json-summary'],
+        reporter: ['text-summary', 'json-summary', 'lcov'],
         thresholds: {
           statements: 34,
           branches: 29,

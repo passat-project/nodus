@@ -20,6 +20,7 @@ apps/api/src/generated/
 
 # --- Тесты и отчёты ---
 coverage/
+coverage-integration/
 playwright-report/
 test-results/
 k6-results/
