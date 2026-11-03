@@ -198,7 +198,7 @@ jobs:
           timeout 30 bash -c 'until curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null; do sleep 1; done'
 
       - name: Интеграционные тесты (outbox, идемпотентность, контракт ошибок — реальные PG/Redis)
-        run: pnpm --filter @nodus/api test:integration
+        run: pnpm --filter @nodus/api test:integration:coverage
         env:
           DATABASE_URL: postgresql://nodus:nodus_ci_password@localhost:5432/nodus
           REDIS_URL: redis://localhost:6379
@@ -216,11 +216,21 @@ jobs:
       # WS-gateway #104: сквозной контур (auth-хендшейк, комнаты, fanout из
       # Redis Stream, typing, presence) на тех же сервисах PG/Redis.
       - name: Интеграционные тесты gateway (WS)
-        run: pnpm --filter @nodus/gateway test:integration
+        run: pnpm --filter @nodus/gateway test:integration:coverage
         env:
           DATABASE_URL: postgresql://nodus:nodus_ci_password@localhost:5432/nodus
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: ci-integration-test-secret-min-32-chars
+
+      - name: Покрытие изменённых строк (diff coverage)
+        # PR-only, после unit + integration: объединённый lcov не даёт ложно
+        # краснеть коду, покрытому только интеграционными тестами.
+        # Гейт на новый/изменённый код (80%), а не на общий процент: студент
+        # не протащит непокрытую фичу на фоне «хорошего» среднего.
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: node scripts/diff-coverage.mjs --base "origin/${BASE_REF}" --threshold 80
 
       - name: Build
         run: pnpm build
@@ -274,7 +284,7 @@ jobs:
         run: pnpm turbo test build --filter=@nodus/web
 
   e2e:
-    name: 'E2E (Playwright — критичный путь: логин)'
+    name: 'E2E (Playwright — критичные потоки)'
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
@@ -389,10 +399,13 @@ jobs:
           fi
 
       - name: E2E-тесты
-        # Критичные пути (DoD): логин (моки), живой чат двух сессий (#104) и
-        # живые вложения чата (#57 — upload→send→download на реальном MinIO).
+        # Критичные готовые пути (DoD): логин (моки), живой чат двух сессий (#104),
+        # живые вложения чата (#57 — upload→send→download на реальном MinIO) и
+        # регистрация письма канцелярией (#56, ADMIN/SECOND из CI-сида).
+        # Полный «письмо → резолюция → поручение» не включён: модули резолюций
+        # и поручений ещё не готовы — добавим сквозной сценарий, когда появятся.
         # graph-stress.spec — perf-харнесс для локального прогона, в CI не входит.
-        run: pnpm --filter @nodus/e2e test specs/auth.spec.ts specs/chat-two-sessions-live.spec.ts specs/chat-attachments-live.spec.ts
+        run: pnpm --filter @nodus/e2e test specs/auth.spec.ts specs/chat-two-sessions-live.spec.ts specs/chat-attachments-live.spec.ts specs/letters-live.spec.ts
         env:
           NODUS_BASE_URL: http://localhost:4173
           E2E_LIVE_API: '1'
