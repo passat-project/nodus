@@ -15,7 +15,7 @@ interface SourceRow {
   lastError: string | null;
 }
 
-function fakes(uids: bigint[], opts: { flagOn?: boolean } = {}) {
+function fakes(uids: bigint[], opts: { flagOn?: boolean; imapConfigured?: boolean } = {}) {
   const source: SourceRow = {
     id: 'src-1',
     code: 'chancery',
@@ -100,12 +100,24 @@ function fakes(uids: bigint[], opts: { flagOn?: boolean } = {}) {
     },
   };
   const flags = { isEnabled: async () => opts.flagOn ?? true };
-  const config = new MailReceptionConfig({
-    MAIL_IMAP_HOST: 'imap.test',
-    MAIL_IMAP_USER: 'u',
-    MAIL_IMAP_PASSWORD: 'p',
-  });
-  const logger = { setContext() {}, info() {}, warn() {}, error() {} };
+  const config = new MailReceptionConfig(
+    opts.imapConfigured === false
+      ? {}
+      : {
+          MAIL_IMAP_HOST: 'imap.test',
+          MAIL_IMAP_USER: 'u',
+          MAIL_IMAP_PASSWORD: 'p',
+        },
+  );
+  const warns: unknown[][] = [];
+  const logger = {
+    setContext() {},
+    info() {},
+    warn: (...args: unknown[]) => {
+      warns.push(args);
+    },
+    error() {},
+  };
   const sourcesRepo = {
     ensure: async () => source,
     initializeCursor: async (_id: string, uidValidity: bigint, lastUid: bigint) => {
@@ -146,7 +158,14 @@ function fakes(uids: bigint[], opts: { flagOn?: boolean } = {}) {
     eventBus as never,
     logger as never,
   );
-  return { service, source, writes, emitted, state, uidValidity, client, prisma };
+  return { service, source, writes, emitted, state, uidValidity, client, prisma, warns };
+}
+
+/** Текстовые части warn-вызова: pino кладёт объект первым, сообщение — строкой. */
+function warnMessages(warns: unknown[][]): string[] {
+  return warns.map((args) =>
+    args.filter((arg): arg is string => typeof arg === 'string').join(' '),
+  );
 }
 
 describe('MailInboxService: цикл приёма на фейке порта (#56, Р3/Р4)', () => {
@@ -208,9 +227,23 @@ describe('MailInboxService: цикл приёма на фейке порта (#5
   });
 
   it('выключенный рубильник: цикл пропущен, соединение разорвано (I10)', async () => {
-    const { service, state } = fakes([5n], { flagOn: false });
+    const { service, state, warns } = fakes([5n], { flagOn: false });
     const result = await service.sync('poll');
     expect(result.ran).toBe(false);
     expect(state.connected).toBe(false);
+    // Причина видна в логе один раз, а не тишина (#577).
+    const messages = warnMessages(warns);
+    expect(messages.filter((m) => m.includes('mail-reception'))).toHaveLength(1);
+  });
+
+  it('нет MAIL_IMAP_*: в логе названа причина, соединения нет (#577)', async () => {
+    const { service, state, warns } = fakes([5n], { imapConfigured: false });
+    const result = await service.sync('poll');
+    expect(result.ran).toBe(false);
+    expect(state.connected).toBe(false);
+    // Таймер перепроверяет состояние каждые 30 с — спама быть не должно.
+    await service.sync('poll');
+    const messages = warnMessages(warns);
+    expect(messages.filter((m) => m.includes('MAIL_IMAP_'))).toHaveLength(1);
   });
 });

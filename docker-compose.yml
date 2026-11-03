@@ -72,6 +72,22 @@ services:
       OFFICE_API_INTERNAL_URL: http://nodus-api:3001
       # Конвейер производных #139 (PDF-копии офисных): Gotenberg в сети.
       GOTENBERG_URL: ${GOTENBERG_URL:-http://gotenberg:3000}
+      # Почта (#56, ADR-0035, #577): ключи .env НЕ попадают в контейнер сами —
+      # compose подставляет их только в этот файл. Без явной проводки api в
+      # проде не видит креды, и приём молча спит (письма «не приходят»).
+      # Пустые значения = подсистема выключена; рубильник — флаг mail-reception.
+      MAIL_IMAP_HOST: ${MAIL_IMAP_HOST:-}
+      MAIL_IMAP_PORT: ${MAIL_IMAP_PORT:-993}
+      MAIL_IMAP_USER: ${MAIL_IMAP_USER:-}
+      MAIL_IMAP_PASSWORD: ${MAIL_IMAP_PASSWORD:-}
+      MAIL_POLL_MINUTES: ${MAIL_POLL_MINUTES:-10}
+      MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-}
+      MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-587}
+      MAIL_SMTP_USER: ${MAIL_SMTP_USER:-}
+      MAIL_SMTP_PASSWORD: ${MAIL_SMTP_PASSWORD:-}
+      # .env владельца исторически использует короткое MAIL_FROM (контур Kerio).
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
     ports:
       # 127.0.0.1: api/gateway доступны хосту (k6, dev-таргет) и nginx web-контейнера
       # по внутренней сети; в LAN не торчат (аудит #123, вердикт 27.09).
