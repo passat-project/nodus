@@ -7,7 +7,7 @@
 ## Что здесь, а что — нет
 
 - **Здесь:** определения (область, тип, настройки, умолчание, скрытие, порядок), их CRUD, проверка использования перед удалением, порт `CUSTOM_FIELD_REGISTRY` для модулей-владельцев сущностей.
-- **Не здесь:** значения. Они живут в JSONB-колонке сущности-владельца (`tasks.custom_fields`, письма/проекты/контрагенты — #55/#52/Н2) по id определения. Чужой таблицы модуль не читает и не пишет (I3): «сколько карточек заполнено» и уборку значений после удаления выполняет владелец — через порт `CUSTOM_FIELD_VALUES_READER` и обработчик события `custom_field.definition_changed` (`change='deleted'`).
+- **Не здесь:** значения. Они живут в JSONB-колонке сущности-владельца (`tasks.custom_fields`, письма/проекты/контрагенты — #55/#52/Н2) по id определения. Чужой таблицы модуль не читает и не пишет (I3): «сколько карточек заполнено» и уборку значений после удаления выполняет владелец — через порты `CUSTOM_FIELD_VALUES_READER` (задачи), `LETTER_FIELD_VALUES_READER` (#575, письма), `PROJECT_FIELD_USAGE_READER` (проекты/папки) и обработчик события `custom_field.definition_changed` (`change='deleted'`).
 
 ## Типы (16 в 13 семействах интерфейса)
 
@@ -37,16 +37,16 @@ CUSTOM_FIELD_REGISTRY: CustomFieldRegistry {
 
 ## Эндпоинты (`/api/v1/custom-fields`)
 
-| Маршрут                                 | Права                 | Назначение                                                                                                                                             |
-| --------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GET /definitions?scope=&typeId=`       | auth                  | Реестр (массив, без курсора — О9: ≤ 100 на область); `typeId` — только привязанные к типу                                                              |
-| `POST /definitions`                     | `custom_field.manage` | 201; 409 имя/лимит; 422 недоступный тип; `typeIds` — привязка при создании                                                                             |
-| `PUT /definitions/:id/types/:typeId`    | `custom_field.manage` | Привязка к типу (#432), идемпотентна; 422 `CUSTOM_FIELD_BINDING_INVALID` (чужая категория/архив), 404 неизвестный тип                                  |
-| `DELETE /definitions/:id/types/:typeId` | `custom_field.manage` | Снятие привязки, идемпотентно; 409 `CUSTOM_FIELD_IN_USE`, если атрибут работает в опубликованном маршруте типа                                         |
-| `PUT /definitions/order`                | `custom_field.manage` | `ids` = ровно все атрибуты области, иначе 409 `CONFLICT`                                                                                               |
-| `PATCH /definitions/:id`                | `custom_field.manage` | 200; 409 тип/имя; 422 форма настроек                                                                                                                   |
-| `DELETE /definitions/:id`               | `custom_field.manage` | 204; 409 `CUSTOM_FIELD_IN_USE` со списком процессов                                                                                                    |
-| `GET /definitions/:id/usage`            | auth                  | `{ valueCount, workflows: [{id, name}], nodeKinds: [{id, name}] }` — значения проектов/папок через `PROJECT_FIELD_USAGE_READER`, виды — из форм (#556) |
+| Маршрут                                 | Права                 | Назначение                                                                                                                                                                                         |
+| --------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /definitions?scope=&typeId=`       | auth                  | Реестр (массив, без курсора — О9: ≤ 100 на область); `typeId` — только привязанные к типу                                                                                                          |
+| `POST /definitions`                     | `custom_field.manage` | 201; 409 имя/лимит; 422 недоступный тип; `typeIds` — привязка при создании                                                                                                                         |
+| `PUT /definitions/:id/types/:typeId`    | `custom_field.manage` | Привязка к типу (#432), идемпотентна; 422 `CUSTOM_FIELD_BINDING_INVALID` (чужая категория/архив), 404 неизвестный тип                                                                              |
+| `DELETE /definitions/:id/types/:typeId` | `custom_field.manage` | Снятие привязки, идемпотентно; 409 `CUSTOM_FIELD_IN_USE`, если атрибут работает в опубликованном маршруте типа                                                                                     |
+| `PUT /definitions/order`                | `custom_field.manage` | `ids` = ровно все атрибуты области, иначе 409 `CONFLICT`                                                                                                                                           |
+| `PATCH /definitions/:id`                | `custom_field.manage` | 200; 409 тип/имя; 422 форма настроек                                                                                                                                                               |
+| `DELETE /definitions/:id`               | `custom_field.manage` | 204; 409 `CUSTOM_FIELD_IN_USE` со списком процессов                                                                                                                                                |
+| `GET /definitions/:id/usage`            | `custom_field.manage` | `{ valueCount, workflows: [{id, name}], nodeKinds: [{id, name}] }` — значения задач/писем (порты tasks/correspondence, #575); проектов/папок — `PROJECT_FIELD_USAGE_READER`; виды — из форм (#556) |
 
 Правила: имя уникально в области без учёта регистра (`lower(btrim(name))`, выраженный уникальный индекс + проверка под `pg_advisory_xact_lock(431, hashtext(scope))`); лимит 100 на область считается по всем атрибутам, включая скрытые; `sortOrder = max+1` при создании; `reorder` — по всем атрибутам области.
 

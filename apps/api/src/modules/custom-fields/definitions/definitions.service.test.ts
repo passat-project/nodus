@@ -5,12 +5,7 @@ import { ErrorCode } from '@nodus/contracts';
 import { DefinitionsService } from './definitions.service.js';
 import type { FieldDefinitionRow } from './definition.mapper.js';
 
-/**
- * Сервис реестра (#431, Р3/Р4): лимит области, уникальность имени под
- * advisory-локом, белый список смены типа, удаление с проверкой маршрутов,
- * порядок области. Репозиторий и порты — моки: логика без БД.
- */
-
+/** Сервис реестра (#431): лимит, уникальность, смена типа, удаление, порядок; порты — моки. */
 const ROW: FieldDefinitionRow = {
   id: '11111111-1111-4111-8111-111111111111',
   scope: 'task',
@@ -74,7 +69,9 @@ function makeService(overrides: { workflows?: { id: string; name: string }[] } =
     ),
     activeItemRef: vi.fn(),
   };
-  const values = { countValues: vi.fn(async () => 3) };
+  const usageReader = {
+    usage: vi.fn(async () => ({ valueCount: 0, workflows: [], nodeKinds: [] })),
+  };
   const workflows = { workflowsUsingField: vi.fn(async () => overrides.workflows ?? []) };
   const catalog = {
     typeRefs: vi.fn(async (ids: string[]) =>
@@ -89,15 +86,13 @@ function makeService(overrides: { workflows?: { id: string; name: string }[] } =
     txRunner as never,
     eventBus as never,
     dictionaries as never,
-    values as never,
-    { countValues: vi.fn(async () => 0), nodeKindsUsing: vi.fn(async () => []) } as never,
     workflows as never,
     catalog as never,
+    usageReader as never,
     logger as never,
   );
-  return { service, definitions, eventBus, workflows, validator, dictionaries, values, catalog };
+  return { service, definitions, eventBus, workflows, validator, dictionaries, catalog };
 }
-
 describe('DefinitionsService.create (#431, Р4)', () => {
   it('новый атрибут встаёт в конец и эмитит событие created', async () => {
     const { service, definitions, eventBus } = makeService();
@@ -184,17 +179,7 @@ describe('DefinitionsService.update (#431, Р3)', () => {
     });
   });
 });
-describe('DefinitionsService.remove и usage (#431)', () => {
-  it('использование отдаёт число карточек и маршруты', async () => {
-    const { service } = makeService({ workflows: [{ id: 'w-1', name: 'Стандартный' }] });
-    expect(await service.usage(ROW.id)).toEqual({
-      valueCount: 3,
-      workflows: [{ id: 'w-1', name: 'Стандартный' }],
-      // #556: виды папок появятся в пакете 2 (заглушка пустая).
-      nodeKinds: [],
-    });
-  });
-
+describe('DefinitionsService.remove (#431)', () => {
   it('маршрут ссылается — удаление запрещено (409 CUSTOM_FIELD_IN_USE)', async () => {
     const { service, definitions } = makeService({
       workflows: [{ id: 'w-1', name: 'Стандартный' }],
