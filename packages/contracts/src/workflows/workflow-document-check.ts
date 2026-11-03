@@ -355,7 +355,7 @@ export function checkWorkflowDocument(
   }
 
   // #430: имена статусов, дубли целей и разрешимость approver_is_actor.
-  checkExtraRules(doc, { stageNameFacts: opts.stageNameFacts, category: opts.category }, problems);
+  checkExtraRules(doc, { stageNameFacts: opts.stageNameFacts }, problems);
 
   return problems;
 }

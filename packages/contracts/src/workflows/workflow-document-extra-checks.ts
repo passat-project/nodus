@@ -9,7 +9,6 @@ import type { WorkflowDraftDocument, WorkflowProblem } from './workflow-document
  */
 export interface ExtraCheckOptions {
   stageNameFacts?: readonly { systemState: TaskSystemState; name: string }[];
-  category?: 'task' | 'letter';
 }
 
 const warning = (
