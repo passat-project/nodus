@@ -112,11 +112,6 @@ export class TasksRepository {
     return row.stageId;
   }
 
-  async systemStateOf(tx: TransactionClient, id: string): Promise<string> {
-    const row = await tx.task.findUniqueOrThrow({ where: { id }, select: { systemState: true } });
-    return row.systemState;
-  }
-
   async numberOf(tx: TransactionClient, id: string): Promise<number> {
     const row = await tx.task.findUniqueOrThrow({ where: { id }, select: { number: true } });
     return row.number;

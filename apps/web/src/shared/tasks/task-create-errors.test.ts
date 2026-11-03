@@ -33,6 +33,15 @@ describe('createFailureOf', () => {
     expect(failure.refetchTypes).toBe(false);
   });
 
+  it('отказ перехода при создании в колонке — причина кнопки (#402)', () => {
+    const failure = createFailureOf(
+      apiError(ErrorCode.WORKFLOW_TRANSITION_BLOCKED, {
+        reasons: [{ kind: 'no_open_subtasks', count: 1 }],
+      }),
+    );
+    expect(failure.message).toContain('подзадач');
+  });
+
   it('устаревшее скрытое значение и прочие сбои — текстом', () => {
     expect(createFailureOf(apiError(ErrorCode.PROCESS_TYPE_PRESET_INVALID)).message).toBe(
       ui.taskCreate.presetInvalid,

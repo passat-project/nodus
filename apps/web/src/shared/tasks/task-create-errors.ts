@@ -2,6 +2,7 @@ import type { CreationFieldKey } from '@nodus/contracts';
 import { ErrorCode, ui } from '@nodus/contracts';
 
 import { ApiError } from '../api-client.js';
+import { transitionErrorText } from './transition-error.js';
 
 /** Что окно создания показывает на отказ сервера (#432, Р9): текст в окне,
  *  подсветка полей и нужно ли перечитать типы (права и формы могли
@@ -39,6 +40,12 @@ export function createFailureOf(error: unknown): CreateFailure {
     }
     case ErrorCode.PROCESS_TYPE_PRESET_INVALID:
       return fail(ui.taskCreate.presetInvalid);
+    case ErrorCode.WORKFLOW_TRANSITION_BLOCKED:
+    case ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED:
+    case ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID:
+      // Создание в колонке проходит через переход (#402): окно показывает
+      // причину отказа кнопки, а не общий «повторите».
+      return fail(transitionErrorText(error));
     default:
       return fail(ui.taskCreate.submitFailed);
   }

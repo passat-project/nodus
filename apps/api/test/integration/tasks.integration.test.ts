@@ -292,6 +292,53 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks (integration)', () => {
     expect(after.stage.systemState).toBe('active');
   });
 
+  it('постановщик не может утащить чужую задачу в «Завершённые» (#402)', async () => {
+    const taskId = await createTask('Чужая работа', 'it-402-foreign');
+    await press(bob, taskId, 'Взять в работу', 'it-402-foreign-start');
+    const closed = (await personalStages(alice)).find(
+      (s) => s.systemState === 'closed' && s.outcome === 'success',
+    )!;
+    const moved = await fx.api(alice, 'PATCH', `/tasks/${taskId}`, {
+      body: { personalStageId: closed.id, index: 0 },
+    });
+    expect(moved.status).toBe(409);
+    expect(apiErrorResponseSchema.parse(await moved.json()).code).toBe(
+      ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED,
+    );
+    const after = taskDetailSchema.parse(
+      await (await fx.api(alice, 'GET', `/tasks/${taskId}`)).json(),
+    );
+    expect(after.stage.systemState).toBe('active');
+  });
+
+  it('перестановка отменённой карточки в той же колонке не вызывает переход (#402)', async () => {
+    const created = await fx.api(alice, 'POST', '/tasks', {
+      body: { title: `Отменённая ${fx.runId}`, assigneeId: alice.id },
+      key: `it-402-cancel-${fx.runId}`,
+    });
+    expect(created.status).toBe(201);
+    const task = taskListItemSchema.parse(await created.json());
+    taskIds.push(task.id);
+    const buttons = z
+      .array(workflowTransitionSchema)
+      .parse(await (await fx.api(alice, 'GET', `/tasks/${task.id}/transitions`)).json());
+    const cancel = buttons.find((t) => t.name === 'Отменить')!;
+    const needsComment = cancel.form?.sections.some((s) => s.kind === 'comment' && s.required);
+    const cancelled = await fx.api(alice, 'POST', `/tasks/${task.id}/transitions/${cancel.id}`, {
+      body: needsComment ? { form: { comment: `Причина ${fx.runId}` } } : {},
+      key: `it-402-cancel-go-${fx.runId}`,
+    });
+    expect(cancelled.status).toBe(200);
+    const afterCancel = executeTransitionResultSchema.parse(await cancelled.json()).task;
+    const closed = afterCancel.personalStageId!;
+    // Перестановка внутри той же колонки — не переход и не 409.
+    const moved = await fx.api(alice, 'PATCH', `/tasks/${task.id}`, {
+      body: { personalStageId: closed, index: 0 },
+    });
+    expect(moved.status).toBe(200);
+    expect(taskListItemSchema.parse(await moved.json()).personalStageId).toBe(closed);
+  });
+
   it('создание в колонке «В работе» проходит переход, а не обходит условия (#402)', async () => {
     const active = (await personalStages(bob)).find((s) => s.systemState === 'active')!;
     const created = await fx.api(bob, 'POST', '/tasks', {

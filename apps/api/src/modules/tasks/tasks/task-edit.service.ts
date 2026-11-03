@@ -212,8 +212,9 @@ export class TaskEditService {
     const current = await this.catalog.findLiveStage(currentStageId);
     if (!current) throw DomainException.notFound('Stage not found');
     if (
-      current.systemState !== column.systemState ||
-      (current.outcome ?? null) !== (column.outcome ?? null)
+      placement.stageId !== stageId &&
+      (current.systemState !== column.systemState ||
+        (current.outcome ?? null) !== (column.outcome ?? null))
     ) {
       await this.engine.execute(tx, row.id, 'task', user, {
         systemState: column.systemState,
