@@ -183,11 +183,14 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
         });
         (label, slot)
     };
-    // Невидимое окно: позицию даст reposition_all (кумулятив по стеку).
+    // Окно рождается сразу в правом нижнем углу (позиция билдера) — системный
+    // каскад в левом верхнем углу не показывается даже при неудачной
+    // раскладке; дальше позицию уточнит reposition_all (кумулятив по стеку).
     // Показ — ТОЛЬКО по готовности (#305): мини-UI применит тему из payload
     // и отрисует карточку, позовёт popup_ready; не успел за таймаут —
     // fallback показывает как есть. Кражу фокуса подавляет WS_EX_NOACTIVATE.
-    let win = build_popup_window(app, &label, POPUP_H);
+    let position = crate::anchor::initial_position(app);
+    let win = build_popup_window(app, &label, POPUP_H, position);
     crate::layout::reposition_all(app);
     if win.is_some() {
         spawn_ready_fallback(app, &label);
@@ -229,12 +232,15 @@ pub fn popup_ready(app: AppHandle, window: WebviewWindow) {
 /// РУЕМОЕ (WS_EX_NOACTIVATE, канон Telegram и Raymond Chen / Old New Thing):
 /// показ и клики НЕ крадут фокус у портала — супер-курсор композера живёт.
 /// Для печати в поле ответа флаг снимается (popup_set_expanded → allow_focus).
+/// `position` — логические px правого нижнего угла рабочей области (#588):
+/// окно создаётся уже на своём месте, не на системном каскаде.
 pub(crate) fn build_popup_window(
     app: &AppHandle,
     label: &str,
     height: f64,
+    position: Option<(f64, f64)>,
 ) -> Option<WebviewWindow> {
-    let win = match WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
+    let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
         .title("Nodus")
         .decorations(false)
         .always_on_top(true)
@@ -248,9 +254,11 @@ pub(crate) fn build_popup_window(
         // Прозрачное окно: скруглённые углы и тень рисует карточка (CSS).
         .transparent(true)
         .shadow(false)
-        .additional_browser_args(crate::WEBVIEW2_BROWSER_ARGS)
-        .build()
-    {
+        .additional_browser_args(crate::WEBVIEW2_BROWSER_ARGS);
+    if let Some((x, y)) = position {
+        builder = builder.position(x, y);
+    }
+    let win = match builder.build() {
         Ok(win) => win,
         Err(e) => {
             log::error!("попап не создан: {e}");
@@ -386,9 +394,6 @@ pub fn popup_set_hover(app: AppHandle, window: WebviewWindow, hover: bool) {
         }
     }
 }
-
-/// Плашка «Скрыть все» над стеком: см. place_hide_all (вызывается из
-/// reposition_all).
 
 /// Payload попапа — pull-моделью после загрузки окна (без гонки со маунтом).
 /// Плашке «Скрыть все» данных не надо — отдаём только тему (#305).
