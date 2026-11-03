@@ -40,6 +40,7 @@ docker compose up
 | `pnpm lint`                             | ESLint: границы модулей, размер файлов                    |
 | `pnpm typecheck`                        | строгий tsc по всем пакетам                               |
 | `pnpm test`                             | unit-тесты (Vitest) + тест-кейсы правил линтера           |
+| `pnpm test:coverage`                    | unit-тесты с покрытием и порогами (гейт CI)               |
 | `pnpm test:e2e`                         | e2e (нужен живой стек)                                    |
 | `pnpm format`                           | Prettier по репозиторию                                   |
 | `docker compose up`                     | dev/демо-окружение в Docker                               |

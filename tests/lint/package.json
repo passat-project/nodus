@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run --testTimeout=30000",
+    "test:coverage": "vitest run --testTimeout=30000",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

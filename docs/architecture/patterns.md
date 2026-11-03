@@ -127,6 +127,7 @@ list(@Query({ schema: listUsersQuerySchema, pipes: [new ZodValidationPipe(listUs
 ## Тесты
 
 - **Unit (Vitest):** рядом с кодом (`<сущность>.test.ts`), AAA (arrange/act/assert), бизнес-правила сервисов — с моком репозитория. Новая логика = тест в том же коммите.
+- **Покрытие (Vitest v8, #593):** `pnpm test:coverage` — per-package пороги-храповики в `vitest.config.ts`/`vite.config.ts`; CI job `quality` гоняет тесты с покрытием, падение ниже порога валит прогон, сводка по пакетам — в summary прогона. Порог повышается осознанно вместе с тестами, не автоматически; генерируемый Prisma-клиент, декларации и моки MSW из покрытия исключены.
 - **Детерминированный тест оптимистичности:** мутация применена к кэшу клиента до resolve ответа сервера (без миллисекундных ожиданий — через контролируемый deferred).
 - **E2E (Playwright):** только критичные пути (`docs/product/core-flows.md`), селекторы — role-based (`getByRole`), не CSS-классы; агент работает через `@playwright/cli`, тесты в CI — `npx playwright test`.
 - **Интеграционные (API):** контрактные по OpenAPI, outbox, идемпотентность — на реальной тестовой БД (docker), не моках.
