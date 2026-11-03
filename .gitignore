@@ -44,9 +44,10 @@ temp/
 tests/e2e/shots/
 tests/e2e/shots-*/
 
-# --- ZCode harness (локальные планы сессий; субагенты — версионируются) ---
+# --- ZCode harness (локальные планы сессий; субагенты и ZCode-only навыки — версионируются) ---
 .zcode/*
 !.zcode/agents/
+!.zcode/skills/
 .issue132.json
 
 # --- Песочница агента (live-stack): PID-файл и логи сервисов ветки ---
