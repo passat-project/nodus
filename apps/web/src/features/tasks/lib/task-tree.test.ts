@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { TaskListItem, TaskStage } from '@nodus/contracts';
 
 import { buildTaskRows, filterVisibleRows } from './task-tree.js';

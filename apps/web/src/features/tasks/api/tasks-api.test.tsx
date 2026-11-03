@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { act, renderHook, waitFor } from '@testing-library/react';
 import {
   QueryClient,

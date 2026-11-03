@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { ProjectNode, ProjectNodeRollup, TaskListItem } from '@nodus/contracts';
 
 import {

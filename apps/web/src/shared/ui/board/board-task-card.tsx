@@ -97,7 +97,7 @@ export function BoardTaskCard({
           </span>
         </span>
       ) : null}
-      <span className="line-clamp-2 text-sm font-medium">{task.title}</span>{' '}
+      <span className="line-clamp-2 text-sm font-medium">{task.title}</span>
       {isVisible('deadline') ? (
         <DeadlineChip deadline={task.deadline} state={task.stage.systemState} />
       ) : null}
