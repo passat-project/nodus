@@ -13,7 +13,6 @@ import { useCreatableProcessTypes } from '../api/process-types-api.js';
 import { DEFAULT_TASK_TYPE_CODE } from '@nodus/contracts';
 import { buildCreateBody, emptyDraft, type TaskCreatePrefill } from './task-create-draft.js';
 import { openTaskCreate } from './task-create-store.js';
-import { ApiError } from '../api-client.js';
 import { createFailureOf } from './task-create-errors.js';
 
 /**
