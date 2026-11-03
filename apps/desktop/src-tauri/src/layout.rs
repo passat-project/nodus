@@ -9,12 +9,17 @@
 //! set_size+set_position давала промежуточный кадр, в котором контент уже
 //! вырос, а окно ещё нет — фокус поля ответа успевал прокрутить карточку
 //! (`overflow:hidden` — это scroll container) и унести крестик за край (#406).
+//!
+//! Монитор раскладки выбирает `anchor` (#588): курсор → главное окно →
+//! первичный монитор; попап рождается сразу на своём месте (позиция билдера),
+//! поэтому системный каскад в левом верхнем углу не показывается никогда.
 
 use tauri::{AppHandle, Manager};
 
+use crate::anchor::{remember_anchor, resolve_anchor, Anchor};
 use crate::popups::{
     build_popup_window, spawn_ready_fallback, stack, ActivePopup, GAP, HIDE_ALL_H, HIDE_ALL_LABEL,
-    MARGIN, MAX_STACK, POPUP_MAX_H, POPUP_MIN_H, POPUP_W,
+    MAX_STACK, POPUP_MAX_H, POPUP_MIN_H, POPUP_W,
 };
 
 /// Готовая раскладка одного окна: координаты и размер — физические px.
@@ -24,6 +29,19 @@ struct Placement {
     y: i32,
     width: i32,
     height: i32,
+    /// Масштаб монитора — для логической позиции билдера окна.
+    scale: f64,
+}
+
+impl Placement {
+    /// Позиция для билдера `WebviewWindow` (логические px, tao переведёт её
+    /// обратно по DPI монитора).
+    fn logical_position(&self) -> (f64, f64) {
+        (
+            f64::from(self.x) / self.scale,
+            f64::from(self.y) / self.scale,
+        )
+    }
 }
 
 /// Вертикальная раскладка столбика: `heights` — в порядке «новейший первым»
@@ -48,23 +66,19 @@ fn column(bottom: i32, heights: &[f64], scale: f64, gap: f64) -> Vec<(i32, i32)>
 /// фактическим высотам, «Скрыть все» только над ПОЛНЫМ столбиком
 /// (смысл — быстро убрать 3 попапа; фидбек 08.10 п.4).
 pub(crate) fn reposition_all(app: &AppHandle) {
+    let Some(anchor) = resolve_anchor(app) else {
+        return;
+    };
+    remember_anchor(app, &anchor);
     let plan: Vec<Placement> = {
-        let cursor = app.cursor_position().ok();
-        let monitor = cursor
-            .and_then(|c| app.monitor_from_point(c.x, c.y).ok())
-            .flatten();
-        let Some(monitor) = monitor else { return };
-        let scale = monitor.scale_factor();
-        let wa = monitor.work_area();
-        let px = |v: f64| (v * scale).round() as i32;
-        let x = wa.position.x + wa.size.width as i32 - px(POPUP_W) - px(MARGIN);
+        let x = anchor.right();
         // Низ стека — над панелью задач; идём снизу вверх: новейший первым.
-        let bottom = wa.position.y + wa.size.height as i32 - px(MARGIN);
+        let bottom = anchor.bottom();
         let mut s = stack(app);
         let mut order: Vec<&mut ActivePopup> = s.active.iter_mut().collect();
-        order.sort_by(|a, b| b.counter.cmp(&a.counter));
+        order.sort_by_key(|p| std::cmp::Reverse(p.counter));
         let heights: Vec<f64> = order.iter().map(|p| p.height).collect();
-        let placed = column(bottom, &heights, scale, GAP);
+        let placed = column(bottom, &heights, anchor.scale, GAP);
         let mut plan = Vec::with_capacity(order.len());
         for (index, (p, (y, height))) in order.iter_mut().zip(placed).enumerate() {
             p.slot = index as u32;
@@ -72,8 +86,9 @@ pub(crate) fn reposition_all(app: &AppHandle) {
                 label: p.label.clone(),
                 x,
                 y,
-                width: px(POPUP_W),
+                width: anchor.px(POPUP_W),
                 height,
+                scale: anchor.scale,
             });
         }
         plan
@@ -83,7 +98,7 @@ pub(crate) fn reposition_all(app: &AppHandle) {
             place_window(&w, p);
         }
     }
-    place_hide_all(app);
+    place_hide_all(app, &anchor);
 }
 
 /// Атомарно переставить и изменить размер окна: позиция+размер одним
@@ -118,27 +133,17 @@ fn place_window(win: &tauri::WebviewWindow, p: &Placement) {
 /// hide_all_live УЖЕ истинным — флаг никто не поднимал, плашка не создавалась
 /// никогда. Теперь флаг = «стек полон», создание — окно отсутствует.
 /// Показ — только ready-gate (popup_ready/fallback), как у попапов.
-fn place_hide_all(app: &AppHandle) {
+fn place_hide_all(app: &AppHandle, anchor: &Anchor) {
     let action: Option<(bool, Placement)> = {
-        let cursor = app.cursor_position().ok();
-        let Some(monitor) = cursor
-            .and_then(|c| app.monitor_from_point(c.x, c.y).ok())
-            .flatten()
-        else {
-            return;
-        };
-        let scale = monitor.scale_factor();
-        let wa = monitor.work_area();
-        let px = |v: f64| (v * scale).round() as i32;
-        let width = px(POPUP_W);
-        let height = px(HIDE_ALL_H);
-        let x = wa.position.x + wa.size.width as i32 - width - px(MARGIN);
-        let bottom = wa.position.y + wa.size.height as i32 - px(MARGIN);
+        let width = anchor.px(POPUP_W);
+        let height = anchor.px(HIDE_ALL_H);
         let mut s = stack(app);
         let mut order: Vec<&mut ActivePopup> = s.active.iter_mut().collect();
-        order.sort_by(|a, b| b.counter.cmp(&a.counter));
+        order.sort_by_key(|p| std::cmp::Reverse(p.counter));
         let heights: Vec<f64> = order.iter().map(|p| p.height).collect();
-        let top = column(bottom, &heights, scale, GAP).last().map(|(y, _)| *y);
+        let top = column(anchor.bottom(), &heights, anchor.scale, GAP)
+            .last()
+            .map(|(y, _)| *y);
         let full = s.active.len() >= MAX_STACK as usize;
         s.hide_all_live = full;
         if !full {
@@ -150,10 +155,11 @@ fn place_hide_all(app: &AppHandle) {
             top.map(|top| {
                 let placement = Placement {
                     label: HIDE_ALL_LABEL.to_string(),
-                    x,
-                    y: top - px(GAP) - height,
+                    x: anchor.right(),
+                    y: top - anchor.px(GAP) - height,
                     width,
                     height,
+                    scale: anchor.scale,
                 };
                 (window_absent, placement)
             })
@@ -171,8 +177,9 @@ fn place_hide_all(app: &AppHandle) {
             // а WebviewWindowBuilder в sync-контексте дедлокит WebView2
             // (gotchas «Десктоп», #254; security-ревью #305).
             let app = app.clone();
+            let position = placement.logical_position();
             tauri::async_runtime::spawn(async move {
-                build_popup_window(&app, HIDE_ALL_LABEL, HIDE_ALL_H);
+                build_popup_window(&app, HIDE_ALL_LABEL, HIDE_ALL_H, Some(position));
                 // Новый цикл жизни плашки — показ снова ждёт готовности.
                 stack(&app).hide_all_shown = false;
                 spawn_ready_fallback(&app, HIDE_ALL_LABEL);
@@ -226,5 +233,20 @@ mod tests {
         let column = column(1000, &[10.0, 1000.0], 1.25, GAP);
         assert_eq!(column[0].1, (POPUP_MIN_H * 1.25).round() as i32);
         assert_eq!(column[1].1, (POPUP_MAX_H * 1.25).round() as i32);
+    }
+
+    #[test]
+    fn логическая_позиция_делится_на_масштаб() {
+        let placement = Placement {
+            label: "popup-1".into(),
+            x: 1452,
+            y: 952,
+            width: 450,
+            height: 110,
+            scale: 1.25,
+        };
+        let (x, y) = placement.logical_position();
+        assert!((x - 1161.6).abs() < 1e-9);
+        assert!((y - 761.6).abs() < 1e-9);
     }
 }

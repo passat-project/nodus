@@ -1,4 +1,5 @@
 mod activity;
+mod anchor;
 mod badge;
 mod bridge;
 mod deep_link;
