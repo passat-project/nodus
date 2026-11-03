@@ -12,9 +12,10 @@ import type {
 } from '../../../core/ports/workflow-entity.port.js';
 
 /** Чем выбран переход: кнопкой, колонкой глобальной доски или колонкой
- *  «Моего плана» (системное состояние). */
+ *  «Моего плана» (системное состояние + итог; закрытая колонка «Завершённые»
+ *  не подменяется «Отменой», #402). */
 export type TransitionChoice =
-  { transitionId: string } | { stageId: string } | { systemState: string };
+  { transitionId: string } | { stageId: string } | { systemState: string; outcome?: string | null };
 
 /** Итог выполнения перехода: целевая стадия и строка журнала (#380). */
 export interface TransitionExecution {

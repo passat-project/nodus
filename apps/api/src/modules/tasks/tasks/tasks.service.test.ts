@@ -16,6 +16,15 @@ const STAGE = {
   isInitial: true,
   archivedAt: null,
 };
+const ACTIVE = {
+  id: 's-active',
+  name: 'В работе',
+  color: 'success',
+  sortOrder: 1,
+  systemState: 'active',
+  isInitial: false,
+  archivedAt: null,
+};
 
 function setup() {
   const repo = {
@@ -79,6 +88,9 @@ function setup() {
     taskDiscussion: vi.fn(),
   };
   const eventBus = { emit: vi.fn() };
+  const engine = {
+    execute: vi.fn(async () => ({ stage: ACTIVE, recordId: 'rec-1' })),
+  };
   const customFields = {
     prepareCreate: vi
       .fn()
@@ -93,6 +105,7 @@ function setup() {
     placementsRepo as never,
     boards as never,
     catalog as never,
+    engine as never,
     placements as never,
     query as never,
     mapper as never,
@@ -106,7 +119,7 @@ function setup() {
     customFields as never,
     new TaskCreatePolicy(profiles as never),
   );
-  return { service, repo, placements, placementsRepo, txRunner, eventBus, catalog };
+  return { service, repo, placements, placementsRepo, txRunner, eventBus, catalog, boards, engine };
 }
 
 describe('TasksService', () => {
@@ -134,7 +147,7 @@ describe('TasksService', () => {
   });
 
   it('обычное создание: ключ начала колонки, стартовый чек-лист, размещения', async () => {
-    const { service, repo, placements, placementsRepo } = setup();
+    const { service, repo, placements, placementsRepo, engine } = setup();
     await service.create(USER, {
       title: 'Т',
       checklist: ['a'],
@@ -148,6 +161,29 @@ describe('TasksService', () => {
       taskId: 't1',
       userId: 'alice',
       stageId: 'p-new',
+      sortOrder: 'k0',
+    });
+    expect(engine.execute).not.toHaveBeenCalled();
+  });
+
+  it('создание в колонке «В работе» — переход в той же транзакции (#402)', async () => {
+    const { service, repo, boards, catalog, engine, placementsRepo } = setup();
+    catalog.liveStages.mockResolvedValue([STAGE, ACTIVE]);
+    boards.findColumn.mockResolvedValue({ id: 'p-active', systemState: 'active', outcome: null });
+    await service.create(USER, { title: 'Т', personalStageId: 'p-active' } as never);
+    // Строка рождается в начальной стадии, цель колонки — переходом.
+    expect(repo.create.mock.calls[0]![0]).toMatchObject({
+      stageId: 's-new',
+      systemState: 'backlog',
+    });
+    expect(engine.execute).toHaveBeenCalledWith(TX, 't1', 'task', USER, {
+      systemState: 'active',
+      outcome: null,
+    });
+    expect(placementsRepo.move).toHaveBeenCalledWith(TX, {
+      taskId: 't1',
+      userId: 'alice',
+      stageId: 'p-active',
       sortOrder: 'k0',
     });
   });

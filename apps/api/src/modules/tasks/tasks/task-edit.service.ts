@@ -18,6 +18,10 @@ import {
   WORKFLOW_ENGINE,
   type WorkflowEnginePort,
 } from '../../workflows/ports/workflow-engine.port.js';
+import {
+  PROCESS_CATALOG_READER,
+  type ProcessCatalogReader,
+} from '../../workflows/ports/process-catalog-reader.port.js';
 import { actorRoles, planHolderIds, taskAccess } from '../access/task-access.js';
 import { TaskProjectRights } from '../access/task-project-rights.js';
 import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
@@ -67,6 +71,7 @@ export class TaskEditService {
     private readonly projectRights: TaskProjectRights,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
+    @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
   ) {}
 
   async update(user: AuthUser, id: string, body: TaskEditBody): Promise<TaskListItem> {
@@ -203,9 +208,17 @@ export class TaskEditService {
     if (!column) throw DomainException.notFound('Stage not found');
     const placement = await this.placementsRepo.findOne(tx, row.id, user.id);
     if (!placement) throw DomainException.notFound('Task is not in your plan');
-    const systemState = await this.repo.systemStateOf(tx, row.id);
-    if (systemState !== column.systemState) {
-      await this.engine.execute(tx, row.id, 'task', user, { systemState: column.systemState });
+    const currentStageId = await this.repo.stageIdOf(tx, row.id);
+    const current = await this.catalog.findLiveStage(currentStageId);
+    if (!current) throw DomainException.notFound('Stage not found');
+    if (
+      current.systemState !== column.systemState ||
+      (current.outcome ?? null) !== (column.outcome ?? null)
+    ) {
+      await this.engine.execute(tx, row.id, 'task', user, {
+        systemState: column.systemState,
+        outcome: column.outcome,
+      });
     }
     const sortOrder = await this.placementsRepo.keyAt(tx, user.id, stageId, index ?? 0, row.id);
     await this.placementsRepo.move(tx, { taskId: row.id, userId: user.id, stageId, sortOrder });

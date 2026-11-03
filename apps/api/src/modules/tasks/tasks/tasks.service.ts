@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   ErrorCode,
-  isOpenState,
   TASK_EVENTS,
   type AuthUser,
   type CreateTaskBody,
@@ -26,6 +25,10 @@ import {
   PROCESS_CATALOG_READER,
   type ProcessCatalogReader,
 } from '../../workflows/ports/process-catalog-reader.port.js';
+import {
+  WORKFLOW_ENGINE,
+  type WorkflowEnginePort,
+} from '../../workflows/ports/workflow-engine.port.js';
 import {
   CUSTOM_FIELD_REGISTRY,
   type CustomFieldRegistry,
@@ -55,6 +58,7 @@ export class TasksService {
     private readonly placementsRepo: PlacementsRepository,
     private readonly boards: PersonalBoardsRepository,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
+    @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
     private readonly placements: Placements,
     private readonly query: TasksQueryService,
     private readonly mapper: TaskDtoMapper,
@@ -143,19 +147,34 @@ export class TasksService {
     const personalColumn = body.personalStageId
       ? await this.personalColumn(user.id, body.personalStageId)
       : null;
-    // Новая задача стартует только в фазе open (backlog/active/paused):
-    // создание сразу «на утверждении» или «завершённой» обходило бы гейты
-    // DoD (security-гейт #37). Колонка «Моего плана» открытого состояния
-    // задаёт стадию (плюсик в «В работе» = задача в работе); колонка
-    // утверждения или итога — начальная стадия.
-    const starts = workflowStages.filter((s) => isOpenState(s.systemState));
-    const initial = starts.find((s) => s.isInitial) ?? starts[0];
-    const stage = body.stageId
-      ? starts.find((s) => s.id === body.stageId)
-      : personalColumn && isOpenState(personalColumn.systemState)
-        ? (starts.find((s) => s.systemState === personalColumn.systemState) ?? initial)
-        : initial;
-    if (!stage) throw DomainException.notFound('Stage not found');
+    // Новая задача рождается в начальной стадии. Колонка (глобальная или
+    // «Моего плана») задаёт цель, но не обходит условия кнопки: переход
+    // выполняется в той же транзакции после создания (#402). Нет перехода —
+    // отказ с причинами, а не тихая подмена стадии.
+    const initial = workflowStages.find((s) => s.isInitial) ?? workflowStages[0];
+    if (!initial) throw DomainException.notFound('Stage not found');
+    const requested: { stageId: string } | { systemState: string; outcome: string | null } | null =
+      body.stageId
+        ? (workflowStages.find((s) => s.id === body.stageId) ?? null)
+        : personalColumn
+          ? workflowStages.find(
+              (s) =>
+                s.systemState === personalColumn.systemState &&
+                (s.outcome ?? null) === (personalColumn.outcome ?? null),
+            )
+            ? {
+                systemState: personalColumn.systemState,
+                outcome: personalColumn.outcome ?? null,
+              }
+            : null
+          : null;
+    if (body.stageId && !requested) throw DomainException.notFound('Stage not found');
+    const targetIsInitial =
+      requested === null ||
+      ('stageId' in requested
+        ? requested.stageId === initial.id
+        : requested.systemState === initial.systemState &&
+          (requested.outcome ?? null) === (initial.outcome ?? null));
     const holders = planHolderIds({ creatorId: user.id, assigneeId, participants });
     await this.placements.prepare(holders);
 
@@ -184,9 +203,9 @@ export class TasksService {
             description: body.description ?? '',
             typeId,
             workflowId,
-            stageId: stage.id,
-            systemState: stage.systemState,
-            stageOrder: await this.repo.stageKeyAt(tx, stage.id, 0),
+            stageId: initial.id,
+            systemState: initial.systemState,
+            stageOrder: await this.repo.stageKeyAt(tx, initial.id, 0),
             priority: body.priority ?? 'normal',
             deadline: body.deadline ? new Date(body.deadline) : null,
             plannedMinutes: body.plannedMinutes ?? null,
@@ -207,7 +226,16 @@ export class TasksService {
         );
         await this.checklist.createInitial(tx, task.id, body.checklist ?? []);
         await this.placements.sync(tx, task, holders, user.id);
-        if (personalColumn?.systemState === task.systemState) {
+        let finalStage: { id: string; systemState: string; outcome: string | null } = initial;
+        if (!targetIsInitial && requested) {
+          const execution = await this.engine.execute(tx, task.id, 'task', user, requested);
+          finalStage = execution.stage;
+        }
+        if (
+          personalColumn &&
+          personalColumn.systemState === finalStage.systemState &&
+          (personalColumn.outcome ?? null) === (finalStage.outcome ?? null)
+        ) {
           await this.placeInColumn(tx, task.id, user.id, personalColumn.id);
         }
         await this.eventBus.emit(
