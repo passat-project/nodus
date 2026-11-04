@@ -4,6 +4,8 @@ import { ui, type OfficeSession } from '@nodus/contracts';
 
 import { Spinner } from '@nodus/ui/components/spinner';
 
+import { ViewerFullscreenButton } from './viewer-fullscreen-button.js';
+
 declare global {
   interface Window {
     /** api.js экспортирует ОБЪЕКТ с конструктором: new DocsAPI.DocEditor(...). */
@@ -52,6 +54,7 @@ export function OfficeViewer({
   onOutdated,
   onEngineError,
   onRequestRefresh,
+  onFullscreen,
 }: {
   session: OfficeSession;
   onOutdated: () => void;
@@ -60,6 +63,8 @@ export function OfficeViewer({
    * refreshFile обновляет документ БЕЗ перезагрузки редактора (замена
    * тоста «Версия файла была изменена», репро владельца 02.10). */
   onRequestRefresh: () => Promise<OfficeSession | null>;
+  /** «На весь экран» во вкладке-файле (у нижнего зума ONLYOFFICE). */
+  onFullscreen?: () => void;
 }) {
   // УНИКАЛЬНЫЙ id на каждый инстанс: DocsAPI держит реестр редакторов по
   // id плейсхолдера; повторное открытие модалки с тем же id (useId стабилен
@@ -149,6 +154,9 @@ export function OfficeViewer({
   return (
     <div className="relative size-full">
       <div id={holderId} className="size-full" />
+      {onFullscreen ? (
+        <ViewerFullscreenButton onClick={onFullscreen} className="absolute right-3 bottom-9 z-10" />
+      ) : null}
       {!ready ? (
         <div className="absolute inset-0 grid place-items-center bg-card">
           <div className="flex items-center gap-3 text-sm text-muted-foreground">

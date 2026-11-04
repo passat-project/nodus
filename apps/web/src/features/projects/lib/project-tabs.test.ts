@@ -4,20 +4,20 @@ import { PROJECT_TAB_IDS, primaryTab, readHiddenTabs, visibleTabs } from './proj
 
 describe('вкладки карточки проекта', () => {
   it('без памяти видны все вкладки в порядке реестра, «Структура» — первой', () => {
-    expect(visibleTabs(PROJECT_TAB_IDS, readHiddenTabs(null, 'tasks'), 'tasks')).toEqual([
+    expect(visibleTabs(PROJECT_TAB_IDS, readHiddenTabs(null, 'structure'), 'structure')).toEqual([
       ...PROJECT_TAB_IDS,
     ]);
     expect(PROJECT_TAB_IDS[0]).toBe('structure');
   });
 
   it('скрытые вкладки читаются из памяти, мусор и неизвестные ключи отбрасываются', () => {
-    expect(readHiddenTabs('["history","nope",42]', 'tasks')).toEqual(['history']);
-    expect(readHiddenTabs('не json', 'tasks')).toEqual([]);
-    expect(readHiddenTabs('{"history":true}', 'tasks')).toEqual([]);
+    expect(readHiddenTabs('["history","nope",42]', 'structure')).toEqual(['history']);
+    expect(readHiddenTabs('не json', 'structure')).toEqual([]);
+    expect(readHiddenTabs('{"history":true}', 'structure')).toEqual([]);
   });
 
-  it('первичная вкладка не скрывается: hasTaskNodes → «Структура» нескрываема', () => {
-    const primary = primaryTab(true);
+  it('первичная вкладка всегда «Структура»: её нельзя скрыть', () => {
+    const primary = primaryTab();
     expect(primary).toBe('structure');
     expect(readHiddenTabs('["structure","channel"]', primary)).toEqual(['channel']);
     const visible = visibleTabs(
@@ -29,12 +29,11 @@ describe('вкладки карточки проекта', () => {
     expect(visible).toContain('structure');
   });
 
-  it('без узлов с задачами первичная — «Задачи», «Структура» скрывается', () => {
-    const primary = primaryTab(false);
-    expect(primary).toBe('tasks');
-    expect(readHiddenTabs('["tasks","structure"]', primary)).toEqual(['structure']);
-    const visible = visibleTabs(PROJECT_TAB_IDS, ['structure'], primary);
-    expect(visible).not.toContain('structure');
-    expect(visible).toContain('tasks');
+  it('«Задачи» скрываются, «Структура» остаётся', () => {
+    const primary = primaryTab();
+    expect(readHiddenTabs('["tasks","structure"]', primary)).toEqual(['tasks']);
+    const visible = visibleTabs(PROJECT_TAB_IDS, ['tasks'], primary);
+    expect(visible).not.toContain('tasks');
+    expect(visible).toContain('structure');
   });
 });

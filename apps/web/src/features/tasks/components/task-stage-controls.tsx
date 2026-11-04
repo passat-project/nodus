@@ -112,7 +112,12 @@ export function TaskActionBar({
       >
         <Icon className={cn('size-4 shrink-0', running && 'animate-spin')} strokeWidth={1.75} />
         {/* Узкая левая зона: вторичная кнопка — только значок с подсказкой. */}
-        <span className={cn('max-w-36 min-w-0 truncate', !main && '@max-[420px]:hidden')}>
+        <span
+          className={cn(
+            'max-w-36 min-w-0 truncate @max-[420px]:max-w-24',
+            !main && '@max-[420px]:hidden',
+          )}
+        >
           {t.name}
         </span>
       </button>

@@ -11,6 +11,7 @@ import { CHAT_PANEL_W, ChatSidePanel } from '../../../../shared/chat/chat-side-p
 import { ApiError } from '../../../../shared/api-client.js';
 import { lettersKeys } from '../../../../shared/api/letters-keys.js';
 import { useReadEntityNotifications } from '../../../../shared/api/read-entity-notifications.js';
+import { CardDataColumn } from '../../../../shared/ui/entity-card/card-data-column.js';
 import { uiPx } from '../../../../shared/ui/ui-scale.js';
 import {
   MIN_CHAT_W,
@@ -34,7 +35,6 @@ import { SpamConfirmDialog } from '../spam-confirm-dialog.js';
 import { InviteParticipantDialog } from './invite-participant-dialog.js';
 import { LetterActionBar } from './letter-action-bar.js';
 import { LetterAttributes } from './letter-attributes.js';
-import { LetterCardChainBar } from './letter-card-chain-bar.js';
 import { LetterCardSkeleton } from './letter-card-skeleton.js';
 import { LetterFieldsBoard } from './letter-fields-board.js';
 import { LetterFilesBlock } from './letter-files-block.js';
@@ -58,8 +58,9 @@ function defaultTabOf(letter: LetterDetail): LetterTabId {
  *  (вердикт владельца 28.10). */
 
 /**
- * Карточка письма (#55, U7; редизайн #56, стек ADR-0009, `?cards=letter:<id>`)
- * — анатомия карточки задачи: полоса цепочки «ПИСЬМО · Вх-…» со статусом;
+ * Карточка письма (#55, U7; редизайн #56, стек ADR-0009, `?cards=letter:<id>`;
+ * выравнивание с задачей/проектом — 04.11.2026): полосы цепочки над зонами
+ * НЕТ, вкладки правой зоны — на верхнем уровне (общая `CardTabStrip`);
  * слева — доска реквизитов (незарегистрированное — ФОРМА: поля по месту,
  * обязательные помечены), атрибуты типа и «Файлы», и
  * замоноличенный бар h-16 («Зарегистрировать» при заполненных полях идёт
@@ -167,23 +168,21 @@ export function LetterCard({ letterId }: { letterId: string }) {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <LetterCardChainBar letter={letter} />
       <div className="relative flex min-h-0 flex-1">
         {/* Левая зона: скроллится только контент, бар h-16 замоноличен (его
             верхняя линия — одна горизонталь с композером чата). border-r —
             структурная граница с панелью; ручка — оверлей поверх неё.
-            @container — сетка полей и бар перестраиваются от ширины зоны. */}
+            @container — сетка полей и бар перестраиваются от ширины зоны;
+            колонка данных — общая с задачей/проектом (`CardDataColumn`). */}
         <div
           className="relative flex min-h-0 min-w-0 flex-1 flex-col border-r border-border @container"
           style={{ minWidth: MIN_MAIN_W }}
         >
-          <div className="content-fade min-h-0 flex-1 overflow-y-auto p-6">
-            <div className="mx-auto max-w-4xl pb-4">
-              <LetterFieldsBoard letter={letter} />
-              <LetterAttributes letter={letter} />
-              <LetterFilesBlock letter={letter} activeId={activeFileId} onOpen={openAttachment} />
-            </div>
-          </div>
+          <CardDataColumn>
+            <LetterFieldsBoard letter={letter} />
+            <LetterAttributes letter={letter} />
+            <LetterFilesBlock letter={letter} activeId={activeFileId} onOpen={openAttachment} />
+          </CardDataColumn>
           <div className="flex h-16 shrink-0 items-center border-t border-border px-5">
             <LetterActionBar
               letter={letter}

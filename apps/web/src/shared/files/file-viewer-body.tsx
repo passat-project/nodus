@@ -11,6 +11,7 @@ import { MediaViewer } from './media-viewer.jsx';
 import { OfficeViewer } from './office-viewer.jsx';
 import { PdfViewer } from './pdf-viewer.jsx';
 import { TextViewer } from './text-viewer.js';
+import { ViewerFullscreenButton } from './viewer-fullscreen-button.js';
 import { resolveViewerRoute, type ViewerRoute } from './viewer-registry.js';
 import type { ViewerTarget } from './viewer-store.js';
 
@@ -46,6 +47,7 @@ export function FileViewerBody({
   mode = 'view',
   fit,
   onEngineError,
+  onFullscreen,
 }: {
   target: ViewerTarget;
   mode?: 'view' | 'edit';
@@ -53,6 +55,8 @@ export function FileViewerBody({
   fit?: 'width';
   /** Движок ONLYOFFICE упал — хост прячет «Редактировать». */
   onEngineError?: () => void;
+  /** «На весь экран» внутри вкладки-файла (у зума вложения); без — кнопки нет. */
+  onFullscreen?: () => void;
 }) {
   const queryClient = useQueryClient();
   const [engineFailed, setEngineFailed] = useState(false);
@@ -104,26 +108,43 @@ export function FileViewerBody({
             return null;
           }
         }}
+        onFullscreen={onFullscreen}
       />
     );
   }
   if (route.kind === 'pdf') {
     return url && !pdfFailed ? (
-      <PdfViewer url={url} fileName={target.name} fit={fit} onFailed={() => setPdfFailed(true)} />
+      <PdfViewer
+        url={url}
+        fileName={target.name}
+        fit={fit}
+        onFailed={() => setPdfFailed(true)}
+        onFullscreen={onFullscreen}
+      />
     ) : (
       download('unsupported', url)
     );
   }
   if (route.kind === 'media') {
     return url ? (
-      <MediaViewer url={url} mime={target.mime} name={target.name} fit={fit} autoFocus={!fit} />
+      <div className="relative size-full">
+        <MediaViewer url={url} mime={target.mime} name={target.name} fit={fit} autoFocus={!fit} />
+        {onFullscreen ? (
+          <ViewerFullscreenButton onClick={onFullscreen} className="absolute top-3 right-3 z-10" />
+        ) : null}
+      </div>
     ) : (
       download('unsupported', null)
     );
   }
   if (route.kind === 'text') {
     return url ? (
-      <TextViewer url={url} name={target.name} size={target.size} fit={fit} />
+      <div className="relative size-full">
+        <TextViewer url={url} name={target.name} size={target.size} fit={fit} />
+        {onFullscreen ? (
+          <ViewerFullscreenButton onClick={onFullscreen} className="absolute top-3 right-3 z-10" />
+        ) : null}
+      </div>
     ) : (
       download('unsupported', null)
     );

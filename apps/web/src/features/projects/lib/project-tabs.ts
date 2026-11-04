@@ -18,10 +18,10 @@ export const PROJECT_TAB_IDS: readonly ProjectTabId[] = [
 
 const STORAGE_KEY = 'nodus-project-tabs-v2';
 
-/** Первичная вкладка (вердикт владельца 07.11): если в структуре есть узлы с
- *  задачами — «Структура», иначе — «Задачи». */
-export function primaryTab(hasTaskNodes: boolean): ProjectTabId {
-  return hasTaskNodes ? 'structure' : 'tasks';
+/** Первичная вкладка (вердикт владельца 04.11.2026): всегда «Структура» —
+ *  первая вкладка реестра; карточка проекта открывается на ней. */
+export function primaryTab(): ProjectTabId {
+  return 'structure';
 }
 
 function isTabId(value: unknown): value is ProjectTabId {
@@ -52,7 +52,7 @@ export function visibleTabs(
 
 /** Персональная видимость вкладок (память в localStorage, как у полей
  *  паспорта): «+» в полосе вкладок управляет набором. */
-export function useProjectTabs(primary: ProjectTabId = 'tasks') {
+export function useProjectTabs(primary: ProjectTabId = 'structure') {
   const [hidden, setHidden] = useState<ProjectTabId[]>(() =>
     readHiddenTabs(localStorage.getItem(STORAGE_KEY), primary),
   );

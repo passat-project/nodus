@@ -59,13 +59,14 @@ export const TaskAboutDrawer = memo(function TaskAboutDrawer({
   const [favorite, setFavorite] = useState(false);
 
   return (
-    // Геометрия Битрикс24 (вердикт владельца 15.09.2026): панель —
-    // ПОЛНОВЫСОТНАЯ колонка-сиблинг, занимает ВЕРХНИЙ БАР карточки тоже;
-    // верхняя строка (название слева, избранное и крестик У КРАЯ справа) —
-    // на высоте бара, border-b продолжает линию бара; внутренних перегородок
-    // нет, единственная вертикаль — структурная левая граница колонки.
+    // Геометрия панели беседы (вердикт владельца 15.09.2026; редизайн
+    // 04.11.2026): панель — ПОЛНОВЫСОТНАЯ колонка-сиблинг, её шапка h-10
+    // продолжает полосу вкладок правой зоны; верхняя строка (название слева,
+    // избранное и крестик У КРАЯ справа) — на высоте полосы, border-b
+    // продолжает линию; внутренних перегородок нет, единственная вертикаль —
+    // структурная левая граница колонки.
     <aside className="relative flex h-full w-[22.5rem] flex-col border-l border-border bg-card">
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
         {membersOpen ? (
           <Button
             variant="ghost"

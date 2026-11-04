@@ -109,8 +109,8 @@ TEXT COLLATE "C" (канон 20261016180000, ключи — `core/lib/fractional
   поздний срок) — порт `TASK_PROJECT_READER.nodeRollups` (один GROUP BY у
   владельца данных, I3); завершённость — канон `isCompletedState`;
   суммы поддерева клиент собирает по дереву (узлов ≤1000). Карточка проекта
-  несёт `structureSummary {nodeCount, hasTaskNodes}` — дефолт вкладки
-  («Структура» первична, когда есть узлы с задачами, вердикт 07.11).
+  несёт `structureSummary {nodeCount, hasTaskNodes}` — сводку дерева для
+  карточки; первичная вкладка всегда «Структура» (вердикт 04.11.2026).
 - События (outbox в той же tx, I9; gateway не маршрутизирует узлы — реалтайма
   структуры до пилота нет): `project.node_created / node_updated /
 node_moved / node_deleted`; `node_updated` несёт `customFieldChanges` и
