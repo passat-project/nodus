@@ -287,6 +287,53 @@ describe('WorkflowEngine (#428, ADR-0024)', () => {
     );
   });
 
+  it('execute: legacy creator_is_assignee не обходится окном (#430)', async () => {
+    const { engine, adapter, workflows } = makeEngine();
+    const before = {
+      workflowId: 'wf-approval',
+      typeId: 'type',
+      stageId: STAGE_ACTIVE,
+      roles: new Set(['assignee']),
+      bypassConditions: false,
+      canOverrideGates: false,
+      actsWithoutConditions: true,
+      facts: { ...facts, creatorIsAssignee: false },
+    };
+    const after = {
+      ...before,
+      facts: { ...before.facts, creatorIsAssignee: true, assigneeId: USER.id },
+    };
+    adapter.subject.mockReset();
+    adapter.subject.mockResolvedValueOnce(before as never).mockResolvedValueOnce(after as never);
+    const legacy = structuredClone(approvalWorkflow);
+    const submit = legacy.transitions.find((t) => t.id === SUBMIT)!;
+    Object.assign(submit, {
+      form: { enabled: true, sections: [{ kind: 'fields', fields: ['assignee'] }] },
+      rules: {
+        ...submit.rules,
+        postFunctions: [{ kind: 'route_if', when: 'creator_is_assignee', toStageId: STAGE_DONE }],
+      },
+    });
+    workflows.load.mockResolvedValueOnce(legacy as never);
+
+    await engine.execute(
+      TX as never,
+      't1',
+      'task',
+      USER,
+      { transitionId: SUBMIT },
+      { form: { fields: { assigneeId: '00000000-0000-4000-8000-000000000021' } } },
+    );
+
+    expect(adapter.applyStage).toHaveBeenCalledWith(
+      TX,
+      't1',
+      expect.objectContaining({ id: STAGE_REVIEW }),
+      USER.id,
+      expect.anything(),
+    );
+  });
+
   it('execute: окно «если ещё не списаны» не дублирует время (#430)', async () => {
     const { engine, adapter, workflows } = makeEngine({
       facts: { ...facts, spentMinutes: 10 },

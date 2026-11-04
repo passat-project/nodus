@@ -74,15 +74,23 @@ export function checkExtraRules(
       const primaries = approvalStage
         ? transitions.filter((x) => x.fromStageId === approvalStage.id && x.display === 'primary')
         : [];
+      const conditions = primaries.length === 1 ? primaries[0]!.rules.conditions : [];
       const required =
         primaries.length === 1 && primaries[0]!.form?.enabled
           ? requiredWindowSections(
               effectiveWindowSections(primaries[0]!.form ?? null, primaries[0]!.rules),
             )
           : [];
+      // Пропуск имеет смысл только на этапе утверждения (done) и только когда
+      // основная кнопка различает людей по роли, а не по одному праву.
       const unresolvable =
+        !approvalStage ||
+        approvalStage.systemState !== 'done' ||
         primaries.length === 0 ||
-        (primaries.length === 1 && (primaries[0]!.intent !== 'action' || required.length > 0));
+        (primaries.length === 1 &&
+          (primaries[0]!.intent !== 'action' ||
+            required.length > 0 ||
+            conditions.every((condition) => condition.kind === 'permission')));
       if (unresolvable) {
         problems.push(warning('approver_rule_unresolvable', { transitionId: t.id }));
       }

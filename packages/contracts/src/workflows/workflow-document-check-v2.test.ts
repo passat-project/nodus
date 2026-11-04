@@ -208,4 +208,31 @@ describe('checkWorkflowDocument: правила v2 (#430)', () => {
       expect.objectContaining({ code: 'approver_rule_unresolvable', transitionId: 't-complete' }),
     );
   });
+
+  it('approver_rule_unresolvable — цель не этап утверждения', () => {
+    const doc = baseDocument();
+    const complete = doc.transitions.find((t) => t.id === 't-complete')!;
+    complete.toStageId = 's3';
+    complete.rules.postFunctions = [
+      { kind: 'route_if', when: 'approver_is_actor', toStageId: 's5' },
+    ];
+    expect(checkWorkflowDocument(doc)).toContainEqual(
+      expect.objectContaining({ code: 'approver_rule_unresolvable', transitionId: 't-complete' }),
+    );
+  });
+
+  it('approver_rule_unresolvable — основная кнопка только с правом', () => {
+    const doc = baseDocument();
+    doc.transitions.find((t) => t.id === 't-complete')!.rules.postFunctions = [
+      { kind: 'route_if', when: 'approver_is_actor', toStageId: 's5' },
+    ];
+    doc.transitions.find((t) => t.id === 't-accept')!.rules = {
+      conditions: [{ kind: 'permission', permission: Permission.WORKFLOW_MANAGE }],
+      validators: [],
+      postFunctions: [],
+    };
+    expect(checkWorkflowDocument(doc)).toContainEqual(
+      expect.objectContaining({ code: 'approver_rule_unresolvable', transitionId: 't-complete' }),
+    );
+  });
 });

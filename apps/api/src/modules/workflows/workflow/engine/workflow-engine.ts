@@ -128,9 +128,15 @@ export class WorkflowEngine implements WorkflowEnginePort {
     const pick = scored.find((s) => s.reasons.length === 0) ?? scored[0]!;
     if (pick.reasons.length > 0) this.assertOverride(pick.reasons, subject1, opts);
 
+    const targetFacts = {
+      ...subject1.facts,
+      // Личность «постановщик = исполнитель» фиксируем до окна: окно может
+      // сменить исполнителя и обойти legacy-правило creator_is_assignee.
+      creatorIsAssignee: subject0.facts.creatorIsAssignee,
+    };
     const target = this.stage(
       workflow,
-      effectiveTargetId(pick.t, subject1.facts, workflow.stages, targetCtx1),
+      effectiveTargetId(pick.t, targetFacts, workflow.stages, targetCtx1),
     );
     // Пост-действие «Присвоить номер» (#55, Р1): номер выдаётся в этой же
     // транзакции ДО смены стадии — откат перехода не сдвигает счётчик.
