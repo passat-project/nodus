@@ -31,6 +31,7 @@ log = "0.4"
 # Avest CSP перехватывает InitializeSecurityContextW через AppInit_DLLs и
 # роняет процесс на первом рукопожатии (#586, docs/gotchas/desktop.md).
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider"] }
+# Держать на той же линии rustls, что у reqwest/updater (CI проверяет одну версию).
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 # Детектор активности пользователя (#254, модель Telegram): WH_KEYBOARD_LL +
