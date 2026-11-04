@@ -52,6 +52,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          # Шаг «Rust fmt и clippy» (#606) требует этих компонентов: action
+          # ставит --profile minimal и не должен зависеть от состава образа.
+          components: clippy, rustfmt
 
       - uses: swatinem/rust-cache@v2
         with:
