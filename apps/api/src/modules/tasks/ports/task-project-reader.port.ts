@@ -40,6 +40,6 @@ export interface TaskProjectReader {
   nodeRollups(projectId: string): Promise<TaskNodeRollup[]>;
 
   /** Есть ли в узлах проекта хотя бы одна живая задача (structureSummary
-   *  карточки: дефолт вкладки «Структура», #467). */
+   *  карточки: сводка дерева, #467). */
   hasNodeTasks(projectId: string): Promise<boolean>;
 }

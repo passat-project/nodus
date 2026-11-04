@@ -23,7 +23,8 @@ import {
 } from './vault-list.js';
 import { useConversationVault, vaultItems } from './vault-api.js';
 import { ImageLightbox } from './image-lightbox.js';
-import { useViewerStore } from '../files/viewer-store.js';
+import { useViewerHost } from '../files/viewer-host.js';
+import { useViewerStore, type ViewerTarget } from '../files/viewer-store.js';
 import { useJumpStore } from './jump-store.js';
 
 /**
@@ -54,6 +55,7 @@ export function VaultWindow({
   const openedRef = useRef<VaultItemType | null>(null);
   if (type !== null) openedRef.current = type;
   const ready = useFrameReady();
+  const viewer = useViewerHost();
   const opened = openedRef.current;
   // Esc закрывает ОКНО категории, а не карточку/слайдер под ним (#252):
   // document-слушатель срабатывает раньше window-слушателя слайдера, тот
@@ -121,6 +123,10 @@ export function VaultWindow({
               isLoading={cardMode ? false : query.isLoading}
               scrollRef={scrollRef}
               sentinelRef={sentinelRef}
+              onOpenFile={(target) => {
+                viewer.open(target);
+                if (viewer.embedded) onClose();
+              }}
             />
           </>
         ) : null}
@@ -141,6 +147,7 @@ function VaultWindowBody({
   isLoading,
   scrollRef,
   sentinelRef,
+  onOpenFile,
 }: {
   conversationId: string;
   type: VaultItemType;
@@ -148,6 +155,7 @@ function VaultWindowBody({
   isLoading: boolean;
   scrollRef: RefObject<HTMLDivElement | null>;
   sentinelRef: RefObject<HTMLDivElement | null>;
+  onOpenFile: (target: ViewerTarget) => void;
 }) {
   const [lightbox, setLightbox] = useState<number | null>(null);
   const groups = useMemo(() => groupByDay(items), [items]);
@@ -219,9 +227,7 @@ function VaultWindowBody({
                           conversationId={conversationId}
                           messageId={item.messageId}
                           threadRootId={item.threadRootId}
-                          onOpen={() =>
-                            useViewerStore.getState().open(toViewerTarget(item.attachment))
-                          }
+                          onOpen={() => onOpenFile(toViewerTarget(item.attachment))}
                         />,
                       ],
                 )

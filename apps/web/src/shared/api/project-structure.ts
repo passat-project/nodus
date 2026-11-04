@@ -15,21 +15,6 @@ export function useProjectStructure(projectId: string | null | undefined) {
   });
 }
 
-/** Путь узла от корня проекта: «Здание 1 → АР → Комплект АР-1». */
-export function projectNodePath(nodes: ProjectNode[], nodeId: string | null): string[] {
-  if (!nodeId) return [];
-  const byId = new Map(nodes.map((node) => [node.id, node]));
-  const path: string[] = [];
-  const seen = new Set<string>();
-  let current = byId.get(nodeId);
-  while (current && !seen.has(current.id)) {
-    seen.add(current.id);
-    path.unshift(current.name);
-    current = current.parentId ? byId.get(current.parentId) : undefined;
-  }
-  return path;
-}
-
 /** Плоский список узлов с полным путём («Здание 1 / АР / Комплект АР-1») —
  *  компактный выбор структуры в окне создания задачи. */
 export function projectNodePathOptions(nodes: ProjectNode[]): { id: string; label: string }[] {

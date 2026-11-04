@@ -108,6 +108,8 @@ pub fn normalize_address(input: &str) -> Result<String, &'static str> {
 /// GET /api/v1/desktop/config (ADR-0019). Ответ любого кода = сервер жив
 /// (404 на старом портале → толерантные дефолты); сетевая ошибка = офлайн.
 async fn fetch_config(root: &str) -> Result<DesktopConfig, String> {
+    // Провайдер rustls один на процесс; ошибка = уже установлен (updater).
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .build()

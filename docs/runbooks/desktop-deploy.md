@@ -162,7 +162,7 @@ nginx web-контейнера отдаёт каталог как `/desktop/`: `
 
 ## Поддержка
 
-- Логи оболочки: `%APPDATA%\by.nodus.desktop\logs\nodus-desktop.log`
+- Логи оболочки: `%LOCALAPPDATA%\by.nodus.desktop\logs\nodus-desktop.log`
   (ротация 8 МБ). Адрес портала: `%APPDATA%\by.nodus.desktop\portal.json`.
 - «Нет связи с сервером» на экране подключения — проверьте адрес/сеть;
   кнопка «Повторить» ходит в `GET /api/v1/desktop/config`.

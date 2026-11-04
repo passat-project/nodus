@@ -1,9 +1,10 @@
 use std::sync::Mutex;
 
 /// Фаза подключения к порталу — источник истины экрана «Адрес портала».
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Phase {
     /// Адреса нет (первый запуск или после смены сервера).
+    #[default]
     Idle,
     Connecting,
     /// Сервер не отвечает — офлайн-заглушка с повтором.
@@ -33,10 +34,4 @@ pub struct ShellInner {
     /// Deep link, пришедший до готовности портала (холодный старт/офлайн):
     /// доставляется в веб-приложение по сигналу `shell_ready`.
     pub pending_deep_link: Option<String>,
-}
-
-impl Default for Phase {
-    fn default() -> Self {
-        Self::Idle
-    }
 }

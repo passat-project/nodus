@@ -12,7 +12,7 @@ import {
 } from '@nodus/ui/components/attachment';
 
 import { FileTypeIcon } from '../files/file-type-icon.js';
-import { useViewerStore } from '../files/viewer-store.js';
+import { useViewerHost } from '../files/viewer-host.js';
 import { formatBytes } from '../lib/format.js';
 import { messageSurface } from './message-surface.js';
 
@@ -43,14 +43,14 @@ export function AttachmentCard({
   onOpenImage?: () => void;
 }) {
   const surface = messageSurface(mine);
-  const openViewer = useViewerStore((s) => s.open);
+  const viewer = useViewerHost();
   const isImage = attachment.kind === 'image';
   const open = () => {
     if (isImage) {
       onOpenImage?.();
       return;
     }
-    openViewer({
+    viewer.open({
       fileId: attachment.fileId,
       name: attachment.name,
       mime: attachment.mime,
