@@ -104,15 +104,11 @@ export class WorkflowEngine implements WorkflowEnginePort {
 
     const picked = this.pick(candidates, choice, opts.form);
     const applied = await this.applyForm(adapter, category, tx, entityId, actor, picked, opts.form);
-    // Гейты видят факты ПОСЛЕ окна (Р2): смена исполнителя в окне не отнимает
-    // право нажать (условия «кто» проверены по состоянию до окна), а
-    // дозаполненные поля/итог снимают блокировку.
+    // Гейты видят факты после окна; условия «кто» — по состоянию до окна.
     const subject1 = exec.hasApplied(applied)
       ? await this.subjectWithPermissions(tx, entityId, category, actor)
       : subject0;
-    // Контекст акторного пропуска: роли/права — ДО окна (окно не должно
-    // делать актора утверждающим), факты — ПОСЛЕ (дозаполненные поля/итог
-    // видны гейтам кнопки утверждения).
+    // Роли/права — до окна (окно не делает актора утверждающим), факты — после.
     const targetCtx1 = approverContext(workflow, {
       ...subject1,
       roles: subject0.roles,
@@ -127,11 +123,8 @@ export class WorkflowEngine implements WorkflowEnginePort {
     }));
     const pick = scored.find((s) => s.reasons.length === 0) ?? scored[0]!;
     if (pick.reasons.length > 0) this.assertOverride(pick.reasons, subject1, opts);
-
     const targetFacts = {
       ...subject1.facts,
-      // Личность «постановщик = исполнитель» фиксируем до окна: окно может
-      // сменить исполнителя и обойти legacy-правило creator_is_assignee.
       creatorIsAssignee: subject0.facts.creatorIsAssignee,
     };
     const target = this.stage(
@@ -140,7 +133,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
     );
     // Пост-действие «Присвоить номер» (#55, Р1): номер выдаётся в этой же
     // транзакции ДО смены стадии — откат перехода не сдвигает счётчик.
-    const numbering = await this.assignNumber(tx, subject1, pick.t);
+    const numbering = await exec.assignNumber(this.numbers, tx, subject1, pick.t);
     const recordId = randomUUID();
     const fromStage =
       workflow.stages.find((s) => s.id === subject0.stageId) ??
@@ -177,17 +170,6 @@ export class WorkflowEngine implements WorkflowEnginePort {
       timeEntryId: applied.timeEntryId,
     });
     return { stage: target, recordId };
-  }
-
-  /** Пост-функция `assign_number`: номер из серии типа сущности. Тип без
-   *  серии — 409 (маршрут с нумерацией без конфигурации неисполним). */
-  private async assignNumber(
-    tx: TransactionClient,
-    subject: WorkflowActorSubject,
-    t: TransitionDef,
-  ): Promise<WorkflowStageChangeMeta['numbering']> {
-    if (!t.rules.postFunctions.some((pf) => pf.kind === 'assign_number')) return undefined;
-    return this.numbers.nextForType(tx, subject.typeId);
   }
 
   /** Выбор кнопки: явная — она; DnD/«Мой план» — первая без обязательного

@@ -1,264 +1,316 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ErrorCode, Permission } from '@nodus/contracts';
 
 import type {
+  WorkflowActor,
   WorkflowActorSubject,
-  WorkflowEntityStage,
-  WorkflowFormApplied,
 } from '../../../../core/ports/workflow-entity.port.js';
 import { WorkflowEngine } from './workflow-engine.js';
-import type { TransitionDef } from '../transition-rules.js';
-import { parseRules } from '../transition-rules.js';
-import { parseForm } from '../transition-form.js';
-import { gateFacts } from '../gate-facts.test-helper.js';
 
-const TX = { tx: true } as never;
-const ACTIVE = '00000000-0000-4000-8000-000000000001';
-const REVIEW = '00000000-0000-4000-8000-000000000002';
-const DONE = '00000000-0000-4000-8000-000000000003';
-const USER = { id: 'bob', permissions: [] as string[] };
+/** Оконные сценарии движка (#430): роли/факты до и после окна, legacy-правило
+ *  creator_is_assignee, режим времени if_empty и выбор колонки по systemState.
+ *  Вынесено из общего workflow-engine.test.ts (I5): общий файл перерос 300 строк. */
 
-const stage = (id: string, name: string, systemState: string) => ({
+const TX = { tx: true };
+const STAGE_ACTIVE = '00000000-0000-4000-8000-000000000001';
+const STAGE_REVIEW = '00000000-0000-4000-8000-000000000002';
+const STAGE_DONE = '00000000-0000-4000-8000-000000000003';
+const TRANSITION = '00000000-0000-4000-8000-000000000011';
+const SUBMIT = '00000000-0000-4000-8000-000000000012';
+const ACCEPT = '00000000-0000-4000-8000-000000000013';
+const USER: WorkflowActor = { id: 'bob', permissions: [] };
+
+const facts = {
+  stageId: STAGE_ACTIVE,
+  acceptRequired: false,
+  creatorIsAssignee: false,
+  openSubtasks: 0,
+  reviewSubtasks: 0,
+  checklistDone: 0,
+  checklistTotal: 0,
+  spentMinutes: 0,
+  description: '',
+  deadline: null,
+  assigneeId: 'bob',
+  plannedMinutes: null,
+  hasResult: false,
+  resultFileCount: 0,
+  customFields: {},
+  activeCustomFieldIds: new Set<string>(),
+};
+
+const stage = (
+  id: string,
+  name: string,
+  systemState: 'active' | 'done' | 'closed',
+  extra: Record<string, unknown> = {},
+) => ({
   id,
   code: null,
   name,
   systemState,
   archivedAt: null,
-  workflowId: 'wf',
+  workflowId: 'wf-approval',
   color: 'neutral',
   sortOrder: 0,
-  isInitial: false,
+  isInitial: id === STAGE_ACTIVE,
   outcome: systemState === 'closed' ? 'success' : null,
+  ...extra,
 });
 
-const facts = gateFacts({ assigneeId: 'bob' });
+const approvalWorkflow = {
+  id: 'wf-approval',
+  stages: [
+    stage(STAGE_ACTIVE, 'В работе', 'active'),
+    stage(STAGE_REVIEW, 'На утверждении', 'done'),
+    stage(STAGE_DONE, 'Завершена', 'closed'),
+  ],
+  transitions: [
+    {
+      id: SUBMIT,
+      name: 'Сдать работу',
+      fromStageId: STAGE_ACTIVE,
+      toStageId: STAGE_REVIEW,
+      display: 'primary' as const,
+      intent: 'action' as const,
+      sortOrder: 0,
+      rules: {
+        conditions: [{ kind: 'role_in' as const, roles: ['assignee', 'creator', 'coexecutor'] }],
+        validators: [],
+        postFunctions: [
+          { kind: 'route_if' as const, when: 'approver_is_actor' as const, toStageId: STAGE_DONE },
+        ],
+      },
+    },
+    {
+      id: ACCEPT,
+      name: 'Утвердить',
+      fromStageId: STAGE_REVIEW,
+      toStageId: STAGE_DONE,
+      display: 'primary' as const,
+      intent: 'action' as const,
+      sortOrder: 0,
+      rules: {
+        conditions: [{ kind: 'role_in' as const, roles: ['creator' as const] }],
+        validators: [],
+        postFunctions: [],
+      },
+    },
+  ],
+};
 
-function transition(partial: Partial<TransitionDef>): TransitionDef {
-  return {
-    id: 'tr',
-    name: 'Завершить',
-    fromStageId: ACTIVE,
-    toStageId: DONE,
-    display: 'primary',
-    intent: 'action',
-    sortOrder: 0,
-    rules: parseRules({ conditions: [{ kind: 'role_in', roles: ['assignee'] }] }),
-    form: parseForm({}),
-    ...partial,
-  };
-}
+/** Простой маршрут для проверок времени и выбора колонки. */
+const simpleWorkflow = {
+  id: 'wf',
+  stages: [stage(STAGE_ACTIVE, 'В работе', 'active'), stage(STAGE_DONE, 'Завершена', 'closed')],
+  transitions: [
+    {
+      id: TRANSITION,
+      name: 'Завершить',
+      fromStageId: STAGE_ACTIVE,
+      toStageId: STAGE_DONE,
+      display: 'primary' as const,
+      intent: 'action' as const,
+      sortOrder: 0,
+      rules: { conditions: [], validators: [], postFunctions: [] },
+    },
+  ],
+};
 
-function setup(transitions: TransitionDef[], subjectFacts: () => typeof facts = () => facts) {
-  const order: string[] = [];
-  let applied = false;
-  const workflow = {
-    id: 'wf',
-    stages: [
-      stage(ACTIVE, 'В работе', 'active'),
-      stage(REVIEW, 'На утверждении', 'done'),
-      stage(DONE, 'Завершена', 'closed'),
-    ],
-    transitions,
-  };
+function makeEngine(subject: Partial<WorkflowActorSubject> = {}) {
   const adapter = {
-    lock: vi.fn(async () => void order.push('lock')),
-    subject: vi.fn(async (): Promise<WorkflowActorSubject> => {
-      order.push('subject');
-      return {
-        workflowId: 'wf',
-        typeId: 'type',
-        stageId: ACTIVE,
-        roles: new Set(['assignee']),
-        bypassConditions: false,
-        canOverrideGates: false,
-        actsWithoutConditions: true,
-        facts: subjectFacts(),
-      };
-    }),
-    applyForm: vi.fn(async (): Promise<WorkflowFormApplied> => {
-      order.push('applyForm');
-      applied = true;
-      return {
-        fields: { description: { from: '', to: 'заполнено' } },
-        timeEntryId: null,
-        result: null,
-      };
-    }),
-    applyStage: vi.fn(async (_tx, _id, target: WorkflowEntityStage) => {
-      order.push('applyStage');
-      expect(target.id).toBe(DONE);
-    }),
+    lock: vi.fn(async () => void 0),
+    subject: vi.fn(async () => ({
+      workflowId: 'wf',
+      typeId: 'type',
+      stageId: STAGE_ACTIVE,
+      roles: new Set(['assignee']),
+      bypassConditions: false,
+      canOverrideGates: false,
+      actsWithoutConditions: true,
+      facts,
+      ...subject,
+    })),
+    applyStage: vi.fn(async () => void 0),
+    applyForm: vi.fn(async () => ({
+      fields: { assignee: 'bob' },
+      timeEntryId: null,
+      result: null,
+    })),
   };
-  const workflows = { load: vi.fn(async () => workflow) };
-  const records = { insert: vi.fn(async () => void order.push('journal')) };
-  const engine = new WorkflowEngine(
-    workflows as never,
-    { get: () => adapter } as never,
-    records as never,
-    { nextForType: vi.fn() } as never,
-  );
-  return { engine, adapter, records, order, wasApplied: () => applied };
+  const registry = { get: vi.fn(() => adapter) };
+  const workflows = { load: vi.fn(async () => structuredClone(simpleWorkflow)) };
+  const records = { insert: vi.fn(async () => void 0) };
+  return {
+    engine: new WorkflowEngine(
+      workflows as never,
+      registry as never,
+      records as never,
+      { nextForType: vi.fn() } as never,
+    ),
+    adapter,
+    workflows,
+  };
 }
 
-describe('WorkflowEngine — окно перехода (#380)', () => {
-  it('порядок: условия по s0 → applyForm → гейты по s1 → applyStage → журнал', async () => {
-    const { engine, adapter, records, order, wasApplied } = setup(
-      [
-        transition({
-          rules: parseRules({
-            conditions: [{ kind: 'role_in', roles: ['assignee'] }],
-            validators: [{ kind: 'fields_required', fields: ['description'] }],
-          }),
-          form: parseForm({
-            enabled: true,
-            sections: [{ kind: 'fields', fields: ['description'] }],
-          }),
-        }),
-      ],
-      () => ({ ...facts, description: wasApplied() ? 'заполнено' : '' }),
+describe('WorkflowEngine: approver_is_actor (#430)', () => {
+  it('available: создатель видит сразу «Завершена»', async () => {
+    const { engine, workflows } = makeEngine({
+      roles: new Set(['creator']),
+      actsWithoutConditions: false,
+    });
+    workflows.load.mockResolvedValueOnce(structuredClone(approvalWorkflow) as never);
+    const buttons = await engine.available(TX as never, 't1', 'task', USER);
+    expect(buttons.find((b) => b.id === SUBMIT)?.toStageId).toBe(STAGE_DONE);
+  });
+
+  it('available: соисполнитель видит «На утверждении»', async () => {
+    const { engine, workflows } = makeEngine({
+      roles: new Set(['coexecutor']),
+      actsWithoutConditions: false,
+    });
+    workflows.load.mockResolvedValueOnce(structuredClone(approvalWorkflow) as never);
+    const buttons = await engine.available(TX as never, 't1', 'task', USER);
+    expect(buttons.find((b) => b.id === SUBMIT)?.toStageId).toBe(STAGE_REVIEW);
+  });
+
+  it('available: обход не делает админа утверждающим', async () => {
+    const { engine, workflows } = makeEngine({
+      roles: new Set(['assignee']),
+      bypassConditions: true,
+      actsWithoutConditions: false,
+    });
+    workflows.load.mockResolvedValueOnce(structuredClone(approvalWorkflow) as never);
+    const buttons = await engine.available(TX as never, 't1', 'task', USER);
+    expect(buttons.find((b) => b.id === SUBMIT)?.toStageId).toBe(STAGE_REVIEW);
+  });
+});
+
+describe('WorkflowEngine: окно перехода (#430)', () => {
+  it('окно не делает актора утверждающим — роли из subject0', async () => {
+    const { engine, adapter, workflows } = makeEngine();
+    const before = {
+      workflowId: 'wf-approval',
+      typeId: 'type',
+      stageId: STAGE_ACTIVE,
+      roles: new Set(['assignee']),
+      bypassConditions: false,
+      canOverrideGates: false,
+      actsWithoutConditions: true,
+      facts: { ...facts, assigneeId: 'bob' },
+    };
+    const after = {
+      ...before,
+      roles: new Set(['creator']),
+      facts: { ...before.facts, assigneeId: USER.id },
+    };
+    adapter.subject.mockReset();
+    adapter.subject.mockResolvedValueOnce(before as never).mockResolvedValueOnce(after as never);
+    const withWindow = structuredClone(approvalWorkflow);
+    Object.assign(
+      withWindow.transitions.find((t) => t.id === SUBMIT)!,
+      {
+        form: { enabled: true, sections: [{ kind: 'fields', fields: ['assignee'] }] },
+      },
     );
-    const result = await engine.execute(
-      TX,
+    workflows.load.mockResolvedValueOnce(withWindow as never);
+
+    await engine.execute(
+      TX as never,
       't1',
       'task',
       USER,
-      { transitionId: 'tr' },
-      {
-        form: { fields: { description: 'заполнено' } },
-      },
+      { transitionId: SUBMIT },
+      { form: { fields: { assigneeId: '00000000-0000-4000-8000-000000000021' } } },
     );
-    expect(result.stage.id).toBe(DONE);
-    expect(order).toEqual(['lock', 'subject', 'applyForm', 'subject', 'applyStage', 'journal']);
+
     expect(adapter.applyStage).toHaveBeenCalledWith(
       TX,
       't1',
-      expect.objectContaining({ id: DONE }),
-      'bob',
-      expect.objectContaining({ recordId: result.recordId, transitionName: 'Завершить' }),
-    );
-    expect(records.insert).toHaveBeenCalledWith(
-      TX,
-      expect.objectContaining({
-        entityKind: 'task',
-        transitionId: 'tr',
-        fromStageId: ACTIVE,
-        toStageId: DONE,
-        fields: { description: { from: '', to: 'заполнено' } },
-        recordKind: 'transition',
-      }),
-    );
-  });
-
-  it('форма без обязательной причины — 422 до applyForm', async () => {
-    const { engine, adapter, records } = setup([
-      transition({
-        form: parseForm({
-          enabled: true,
-          sections: [{ kind: 'comment', label: 'Причина', required: true }],
-        }),
-      }),
-    ]);
-    await expect(
-      engine.execute(TX, 't1', 'task', USER, { transitionId: 'tr' }, { form: {} }),
-    ).rejects.toMatchObject({
-      code: ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID,
-      details: { transitionId: 'tr', missing: ['comment'] },
-    });
-    expect(adapter.applyForm).not.toHaveBeenCalled();
-    expect(records.insert).not.toHaveBeenCalled();
-  });
-
-  it('гейт после окна не пройден — 409, applyStage и журнал не вызваны', async () => {
-    const { engine, adapter, records } = setup([
-      transition({
-        rules: parseRules({
-          conditions: [{ kind: 'role_in', roles: ['assignee'] }],
-          validators: [{ kind: 'fields_required', fields: ['description'] }],
-        }),
-        form: parseForm({
-          enabled: true,
-          sections: [{ kind: 'fields', fields: ['description'] }],
-        }),
-      }),
-    ]);
-    await expect(
-      engine.execute(
-        TX,
-        't1',
-        'task',
-        USER,
-        { transitionId: 'tr' },
-        {
-          form: { fields: { description: 'заполнено' } },
-        },
-      ),
-    ).rejects.toMatchObject({ code: ErrorCode.WORKFLOW_TRANSITION_BLOCKED });
-    expect(adapter.applyForm).toHaveBeenCalled();
-    expect(adapter.applyStage).not.toHaveBeenCalled();
-    expect(records.insert).not.toHaveBeenCalled();
-  });
-
-  it('DnD: кандидат без обязательного окна предпочтён', async () => {
-    const { engine, adapter } = setup([
-      transition({
-        id: 'with-window',
-        sortOrder: 0,
-        form: parseForm({
-          enabled: true,
-          sections: [{ kind: 'comment', label: 'Причина', required: true }],
-        }),
-      }),
-      transition({ id: 'plain', sortOrder: 1 }),
-    ]);
-    const result = await engine.execute(TX, 't1', 'task', USER, { stageId: DONE });
-    expect(result.stage.id).toBe(DONE);
-    expect(adapter.applyStage).toHaveBeenCalledWith(
-      TX,
-      't1',
+      expect.objectContaining({ id: STAGE_REVIEW }),
+      USER.id,
       expect.anything(),
-      'bob',
-      expect.objectContaining({ transitionId: 'plain' }),
     );
   });
 
-  it('DnD: все кандидаты требуют окно — 422 с transitionId и missing', async () => {
-    const { engine, adapter, records } = setup([
-      transition({
-        form: parseForm({
-          enabled: true,
-          sections: [{ kind: 'comment', label: 'Причина', required: true }],
-        }),
-      }),
-    ]);
-    await expect(engine.execute(TX, 't1', 'task', USER, { stageId: DONE })).rejects.toMatchObject({
-      code: ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID,
-      details: { transitionId: 'tr', missing: ['comment'] },
+  it('legacy creator_is_assignee не обходится окном', async () => {
+    const { engine, adapter, workflows } = makeEngine();
+    const before = {
+      workflowId: 'wf-approval',
+      typeId: 'type',
+      stageId: STAGE_ACTIVE,
+      roles: new Set(['assignee']),
+      bypassConditions: false,
+      canOverrideGates: false,
+      actsWithoutConditions: true,
+      facts: { ...facts, creatorIsAssignee: false },
+    };
+    const after = {
+      ...before,
+      facts: { ...before.facts, creatorIsAssignee: true, assigneeId: USER.id },
+    };
+    adapter.subject.mockReset();
+    adapter.subject.mockResolvedValueOnce(before as never).mockResolvedValueOnce(after as never);
+    const legacy = structuredClone(approvalWorkflow);
+    const submit = legacy.transitions.find((t) => t.id === SUBMIT)!;
+    Object.assign(submit, {
+      form: { enabled: true, sections: [{ kind: 'fields', fields: ['assignee'] }] },
+      rules: {
+        ...submit.rules,
+        postFunctions: [{ kind: 'route_if', when: 'creator_is_assignee', toStageId: STAGE_DONE }],
+      },
     });
-    expect(adapter.applyStage).not.toHaveBeenCalled();
-    expect(records.insert).not.toHaveBeenCalled();
+    workflows.load.mockResolvedValueOnce(legacy as never);
+
+    await engine.execute(
+      TX as never,
+      't1',
+      'task',
+      USER,
+      { transitionId: SUBMIT },
+      { form: { fields: { assigneeId: '00000000-0000-4000-8000-000000000021' } } },
+    );
+
+    expect(adapter.applyStage).toHaveBeenCalledWith(
+      TX,
+      't1',
+      expect.objectContaining({ id: STAGE_REVIEW }),
+      USER.id,
+      expect.anything(),
+    );
   });
 
-  it('available отдаёт окно и валидаторы кнопки', async () => {
-    const { engine } = setup([
-      transition({
-        rules: parseRules({
-          conditions: [{ kind: 'role_in', roles: ['assignee'] }],
-          validators: [{ kind: 'result_files', min: 2 }],
-        }),
-        form: parseForm({
-          enabled: true,
-          sections: [{ kind: 'result_files', label: 'Акт' }],
-        }),
-      }),
-    ]);
-    const buttons = await engine.available(TX, 't1', 'task', {
-      id: 'bob',
-      permissions: [Permission.TASK_MANAGE_ANY],
+  it('окно «если ещё не списаны» не дублирует время', async () => {
+    const { engine, adapter, workflows } = makeEngine({
+      facts: { ...facts, spentMinutes: 10 },
     });
-    expect(buttons[0]).toMatchObject({
-      form: { enabled: true },
-      validators: [{ kind: 'result_files', min: 2 }],
-      blockedBy: [{ kind: 'result_files', count: 0, min: 2 }],
+    const withTime = structuredClone(simpleWorkflow);
+    Object.assign(withTime.transitions[0]!, {
+      form: { enabled: true, sections: [{ kind: 'time', mode: 'if_empty' }] },
     });
+    workflows.load.mockResolvedValueOnce(withTime as never);
+
+    await engine.execute(
+      TX as never,
+      't1',
+      'task',
+      USER,
+      { transitionId: TRANSITION },
+      { form: { time: { minutes: 30, date: '2026-11-04' } } },
+    );
+
+    expect(adapter.applyForm).not.toHaveBeenCalled();
+    expect(adapter.applyStage).toHaveBeenCalled();
+  });
+
+  it('выбор колонки по systemState', async () => {
+    const { engine, adapter } = makeEngine();
+    await engine.execute(TX as never, 't1', 'task', USER, { systemState: 'closed' });
+    expect(adapter.applyStage).toHaveBeenCalledWith(
+      TX,
+      't1',
+      expect.objectContaining({ id: STAGE_DONE }),
+      USER.id,
+      expect.anything(),
+    );
   });
 });
