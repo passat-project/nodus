@@ -27,14 +27,14 @@ export function useLetterBranch(letterId: string) {
     [letterId, replaceTopCard],
   );
 
+  // Переход — вне updater'а состояния: updater обязан быть чистым (StrictMode
+  // зовёт его дважды — двойная замена карточки).
   const back = useCallback(() => {
-    setHistory((prev) => {
-      const previous = prev[prev.length - 1];
-      if (!previous) return prev;
-      replaceTopCard({ kind: 'letter', id: previous });
-      return prev.slice(0, -1);
-    });
-  }, [replaceTopCard]);
+    const previous = history[history.length - 1];
+    if (!previous) return;
+    setHistory(history.slice(0, -1));
+    replaceTopCard({ kind: 'letter', id: previous });
+  }, [history, replaceTopCard]);
 
   const toggle = useCallback(() => {
     setMounted(true);

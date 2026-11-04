@@ -85,9 +85,10 @@ export function useLinkLetterRelation(rootId: string) {
       }
       return { previous };
     },
-    onError: (error, _vars, context) => {
+    // Отказ показывает окно связи — под полем (422) или переходом в замену
+    // (`already_linked`); тост дублировал бы его.
+    onError: (_error, _vars, context) => {
       if (context?.previous) queryClient.setQueryData(treeKey, context.previous);
-      toast.error(relationErrorText(error));
     },
     onSuccess: (letter) => {
       applyLetter(queryClient, letter);

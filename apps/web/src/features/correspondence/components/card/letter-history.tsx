@@ -31,7 +31,9 @@ function changeLabel(field: string, definitions: readonly CustomFieldDefinition[
 function changeValue(change: LetterHistoryChange, value: string | null): string {
   if (value === null || value === '') return events.empty;
   // Флаг конфиденциальности (#461): сервер пишет булево строкой.
-  if (change.field === 'confidential') return value === 'true' ? 'Да' : 'Нет';
+  if (change.field === 'confidential') {
+    return value === 'true' ? ui.letters.confidential.on : ui.letters.confidential.off;
+  }
   return DATE_FIELDS.has(change.field) ? formatIsoDate(value) : value;
 }
 
@@ -59,7 +61,9 @@ function entryTitle(entry: LetterHistoryEntry): string {
           ? ui.letters.relations.kindNestedIn
           : ui.letters.relations.kindReplyTo;
       const ref = entry.relatedLetter.regNumber ?? ui.letters.noNumber;
-      return `${action} · ${kind} ${ref}`;
+      // «Связано: ответ на Вх-2026/2» — действие и вид связи читаются одной
+      // фразой (вид в истории — строчными, как реквизит, не заголовок).
+      return `${action}: ${kind.toLowerCase()} ${ref}`;
     }
   }
 }

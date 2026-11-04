@@ -40,12 +40,41 @@ export function treeNodeOf(target: {
   };
 }
 
+/** Ветка без вхождений письма `id` по связи вида `kind` (у письма одна
+ *  связь каждого вида; по второй связи оно остаётся на своём месте —
+ *  письмо с двумя связями стоит в дереве дважды). */
+function withoutLink(
+  current: LetterTreeNode,
+  id: string,
+  kind: LetterRelationKind,
+): LetterTreeNode {
+  return {
+    ...current,
+    children: current.children
+      .filter((child) => child.id !== id || child.relationKind !== kind)
+      .map((child) => withoutLink(child, id, kind)),
+  };
+}
+
+/** Узел `id` получает ребёнка `child` (дети: вложенные, затем ответы —
+ *  порядок сервера). */
+function withChild(current: LetterTreeNode, id: string, child: LetterTreeNode): LetterTreeNode {
+  if (current.id === id) {
+    const children = [...current.children, child];
+    const order = (node: LetterTreeNode) => (node.relationKind === 'nested_in' ? 0 : 1);
+    return { ...current, children: children.sort((a, b) => order(a) - order(b)) };
+  }
+  return { ...current, children: current.children.map((next) => withChild(next, id, child)) };
+}
+
 /** Связь поставлена: в дереве дети узла — письма, у которых на него
  *  `reply_to`/`nested_in`, поэтому ЦЕЛЬ становится родителем источника.
- *  Источник переподчиняется под цель, цель — новый верх цепочки (её
- *  собственные родители из строки списка неизвестны; рефетч уточнит).
- *  Старая связь источника того же вида отпадает — у письма одна связь
- *  каждого вида. Источника нет в дереве — оптимистично ничего не меняем. */
+ *  Цель уже в дереве — источник с поддеревом переезжает под неё (остальная
+ *  цепочка на месте, без вспышки «пустого» дерева); источник — верх
+ *  цепочки, а цели в дереве нет — цель становится новым верхом. Прочее
+ *  (источник в середине, цель снаружи) оптимистично не трогаем: где
+ *  встанет ветка, решает сервер (конверт приоритетнее ответа) — рефетч.
+ *  Цель внутри ветки источника — круг, сервер откажет (422): не трогаем. */
 export function withRelation(
   tree: LetterTreeResponse,
   sourceId: string,
@@ -54,15 +83,51 @@ export function withRelation(
 ): LetterTreeResponse {
   const source = findTreeNode(tree.root, sourceId);
   if (!source || target.id === sourceId) return tree;
+  const moved: LetterTreeNode = { ...source, relationKind: kind, relationId: null };
+  if (findTreeNode(source, target.id)) return tree;
+  if (findTreeNode(tree.root, target.id)) {
+    return { ...tree, root: withChild(withoutLink(tree.root, sourceId, kind), target.id, moved) };
+  }
+  if (sourceId !== tree.root.id) return tree;
   return {
     ...tree,
-    root: {
-      ...target,
-      relationKind: null,
-      relationId: null,
-      children: [{ ...source, relationKind: kind, relationId: null }],
-    },
+    root: { ...target, relationKind: null, relationId: null, children: [moved] },
   };
+}
+
+/** Строка «ёлочки» в плоском порядке отрисовки (DFS) — геометрия графа. */
+export interface LetterTreeRow {
+  node: LetterTreeNode;
+  /** Ключ строки: id связи с родителем (письмо с двумя связями стоит в
+   *  дереве дважды — id письма не уникален), у корня — `root`. */
+  key: string;
+  depth: number;
+  hasChildren: boolean;
+  /** Всего потомков — счётчик свёрнутой ветки. */
+  descendants: number;
+}
+
+/** Плоский список видимых строк с учётом свёрнутых веток (ключи строк). */
+export function flattenLetterTree(
+  root: LetterTreeNode,
+  collapsed: ReadonlySet<string>,
+): LetterTreeRow[] {
+  const rows: LetterTreeRow[] = [];
+  const walk = (node: LetterTreeNode, depth: number, hidden: boolean) => {
+    const key = node.relationId ?? 'root';
+    const row: LetterTreeRow = {
+      node,
+      key,
+      depth,
+      hasChildren: node.children.length > 0,
+      descendants: treeNodeCount(node) - 1,
+    };
+    if (!hidden) rows.push(row);
+    const childrenHidden = hidden || collapsed.has(key);
+    for (const child of node.children) walk(child, depth + 1, childrenHidden);
+  };
+  walk(root, 0, false);
+  return rows;
 }
 
 /** Связь снята: узел с этим relationId уходит вместе с поддеревом. */

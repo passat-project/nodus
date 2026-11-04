@@ -13,13 +13,12 @@ import {
 import { memo } from 'react';
 import type { LetterDetail, UpdateLetterBody } from '@nodus/contracts';
 import { LETTER_LIMITS, isFinalState, ui } from '@nodus/contracts';
+import { Switch } from '@nodus/ui/components/switch';
 import { toast } from 'sonner';
 
 import { projectsAvailable } from '../../../../shared/api/projects-available.js';
 import { useProjectsList } from '../../../../shared/api/projects-list.js';
 import { useUsersSearch } from '../../../../shared/api/users-list.js';
-import { Switch } from '@nodus/ui/components/switch';
-
 import { EntityFields, type EntityFieldDef } from '../../../../shared/ui/entity-fields.js';
 import { ResponseDeadline } from '../../../../shared/views/letter-table-fields.js';
 import { useUpdateLetter } from '../../api/letters-mutations.js';
@@ -153,13 +152,15 @@ export const LetterFieldsBoard = memo(function LetterFieldsBoard({
     },
     // «Конфиденциально» (#461, Р4, В3): флаг в карточке — канцелярия.
     // Включение закрывает письмо, чат, файлы и поручения до участников;
-    // строка-подсказка объясняет последствие, пока флаг включён.
+    // строка-подсказка объясняет последствие, пока флаг включён — В СТРОКЕ
+    // рядом с переключателем (канон форм: текст под контролом ломает
+    // горизонталь «метка — поле»).
     {
       key: 'confidential',
       icon: <Lock className="size-3.5" />,
       label: ui.letters.confidential.label,
       render: () => (
-        <div className="flex min-w-0 flex-col gap-0.5">
+        <div className="flex min-h-8 min-w-0 items-center gap-2.5">
           <Switch
             checked={letter.confidential}
             disabled={!editable}
@@ -167,7 +168,9 @@ export const LetterFieldsBoard = memo(function LetterFieldsBoard({
             onCheckedChange={(confidential) => save({ confidential }, { confidential })}
           />
           {letter.confidential ? (
-            <span className="text-xs text-muted-foreground">{ui.letters.confidential.hint}</span>
+            <span className="min-w-0 truncate text-xs text-muted-foreground">
+              {ui.letters.confidential.hint}
+            </span>
           ) : null}
         </div>
       ),
