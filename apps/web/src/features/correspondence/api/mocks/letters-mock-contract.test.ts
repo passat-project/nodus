@@ -156,7 +156,7 @@ describe('мок-мир писем v3 (#55, §7.6) парсится контра
     const envelope = demoLetters.find((l) => l.regNumber === 'Вх-2026/115')!;
     const detail = letterDetailOf(envelope, { id: userIds.klimovich, permissions: [] });
     expect(detail.attachedRefs.map((ref) => ref.number)).toEqual(['0359-КЖ/147', '78']);
-    expect(detail.attachedRefs[1]?.orgText).toBe('Беларуськалий');
+    expect(detail.attachedRefs[1]?.counterparty.name).toBe('АО «Галургия»');
     expect(detail.canManageRelations).toBe(false);
     expect(
       letterDetailOf(envelope, {

@@ -260,7 +260,7 @@ describe('письмо v3 (#55)', () => {
   });
 
   it('правка приложенных писем и флага — через PATCH (#461)', () => {
-    const ref = { number: '456', counterpartyId: id(), orgText: null, date: '2026-10-01' };
+    const ref = { number: '456', counterpartyId: id(), date: '2026-10-01' };
     expect(updateLetterBodySchema.parse({ attachedRefs: [ref] }).attachedRefs).toEqual([ref]);
     expect(updateLetterBodySchema.parse({ confidential: true }).confidential).toBe(true);
     expect(updateLetterBodySchema.safeParse({ attachedRefs: [] }).success).toBe(true);

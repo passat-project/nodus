@@ -46,12 +46,12 @@ export interface RegistrationDraft {
   attachedRefs: AttachedRefDraft[];
 }
 
-/** Строка «приложенных писем» в черновике: ссылка хранится целиком (имя
- *  видно до ответа сервера), в тело уходит `counterpartyId`. */
+/** Строка «приложенных писем» в черновике: организация — контрагент
+ *  справочника (единственный источник, вердикт 05.11.2026); ссылка хранится
+ *  целиком (имя видно до ответа сервера), в тело уходит `counterpartyId`. */
 export interface AttachedRefDraft {
   number: string;
   counterparty: CounterpartyRef | null;
-  orgText: string;
   date: string | null;
 }
 
@@ -143,7 +143,6 @@ export function initialDraft(
     attachedRefs: letter.attachedRefs.map((ref) => ({
       number: ref.number,
       counterparty: ref.counterparty,
-      orgText: ref.orgText ?? '',
       date: ref.date,
     })),
   };
@@ -209,12 +208,20 @@ export function registrationInputOf(
     confidential: draft.confidential,
     ...(draft.attachedRefs.length > 0
       ? {
-          attachedRefs: draft.attachedRefs.map((ref) => ({
-            number: ref.number.trim(),
-            counterpartyId: ref.counterparty?.id ?? null,
-            orgText: ref.counterparty ? null : ref.orgText.trim() || null,
-            date: ref.date,
-          })),
+          // Строки без контрагента в тело не уходят: схема требует
+          // контрагента (вердикт 05.11.2026), а недозаполненная строка
+          // отсекается ещё в окне строки.
+          attachedRefs: draft.attachedRefs.flatMap((ref) =>
+            ref.counterparty
+              ? [
+                  {
+                    number: ref.number.trim(),
+                    counterpartyId: ref.counterparty.id,
+                    date: ref.date,
+                  },
+                ]
+              : [],
+          ),
         }
       : {}),
     ...(draft.linkReply && draft.suggestedReply

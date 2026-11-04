@@ -102,13 +102,13 @@ export const letterRelationActionSchema = z.enum(['linked', 'unlinked', 'replace
 export type LetterRelationAction = z.infer<typeof letterRelationActionSchema>;
 
 /** Строка «приложенных писем» в карточке (#461, Р3): № листа, организация
- *  (контрагент справочника или текст на бумаге) и дата. Вложения-файлы сюда
- *  не входят — это реестр вложенных ДОКУМЕНТОВ письма. */
+ *  (контрагент справочника — единственный источник, вердикт владельца
+ *  05.11.2026) и дата. Вложения-файлы сюда не входят — это реестр вложенных
+ *  ДОКУМЕНТОВ письма. */
 export const letterAttachedRefSchema = z.object({
   id: z.uuid(),
   number: z.string().min(1),
-  counterparty: counterpartyRefSchema.nullable(),
-  orgText: z.string().nullable(),
+  counterparty: counterpartyRefSchema,
   date: z.iso.date().nullable(),
 });
 export type LetterAttachedRef = z.infer<typeof letterAttachedRefSchema>;

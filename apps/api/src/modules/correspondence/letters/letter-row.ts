@@ -58,7 +58,6 @@ export const letterAttachedRefSelect = {
   id: true,
   number: true,
   counterpartyId: true,
-  orgText: true,
   letterDate: true,
   sortOrder: true,
 } as const;

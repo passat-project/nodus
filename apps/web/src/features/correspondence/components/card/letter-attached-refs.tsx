@@ -26,8 +26,7 @@ export function LetterAttachedRefsBlock({ letter }: { letter: LetterDetail }) {
       body: {
         attachedRefs: next.map((ref) => ({
           number: ref.number,
-          counterpartyId: ref.counterparty?.id ?? null,
-          orgText: ref.orgText,
+          counterpartyId: ref.counterparty.id,
           date: ref.date,
         })),
       },
@@ -36,13 +35,11 @@ export function LetterAttachedRefsBlock({ letter }: { letter: LetterDetail }) {
 
   const commit = (index: number | null, draft: RefDraft) => {
     const number = draft.number.trim();
-    const orgText = draft.orgText.trim();
-    if (!number || (!draft.counterparty && !orgText)) return;
+    if (!number || !draft.counterparty) return;
     const row: LetterAttachedRef = {
       id: (index !== null ? refs[index]?.id : undefined) ?? crypto.randomUUID(),
       number,
       counterparty: draft.counterparty,
-      orgText: draft.counterparty ? null : orgText,
       date: draft.date,
     };
     save(index !== null ? refs.map((ref, at) => (at === index ? row : ref)) : [...refs, row]);
@@ -50,18 +47,17 @@ export function LetterAttachedRefsBlock({ letter }: { letter: LetterDetail }) {
 
   return (
     <section className="mt-6">
-      <NodeLabel label={ui.letters.attached.title} count={refs.length} />
+      <NodeLabel label={ui.letters.attached.title} />
       <div className="mt-1.5">
         <AttachedRefsList
           rows={refs.map((ref) => ({
             key: ref.id,
             number: ref.number,
-            org: ref.counterparty?.name ?? ref.orgText ?? '',
+            org: ref.counterparty.name,
             date: ref.date,
             draft: draftOf(ref),
           }))}
           editable={editable}
-          empty={ui.letters.attached.empty}
           onCommit={commit}
           onRemove={(index) => save(refs.filter((_, at) => at !== index))}
         />

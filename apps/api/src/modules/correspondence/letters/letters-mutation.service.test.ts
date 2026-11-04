@@ -105,10 +105,10 @@ describe('правка реквизитов (редизайн #56 — карто
 });
 
 describe('«Приложенные письма» в PATCH (#461, Р3)', () => {
+  const CP = '00000000-0000-4000-8000-000000000410';
   const ref = {
     number: '456',
-    counterpartyId: null,
-    orgText: 'ОАО «Беларуськалий»',
+    counterpartyId: CP,
     letterDate: new Date('2026-11-01T00:00:00.000Z'),
     sortOrder: 0,
   };
@@ -119,7 +119,7 @@ describe('«Приложенные письма» в PATCH (#461, Р3)', () => {
     attachedValidator.validate.mockResolvedValueOnce([{ ...ref }]);
     await service.update(REGISTRAR, LETTER, {
       subject: 'Оферт',
-      attachedRefs: [{ number: '456', counterpartyId: null, orgText: ref.orgText, date: null }],
+      attachedRefs: [{ number: '456', counterpartyId: CP, date: null }],
     });
     expect(attached.replace).not.toHaveBeenCalled();
     // Изменений нет вовсе — ни записи, ни события (ранний выход по changes).
@@ -131,7 +131,7 @@ describe('«Приложенные письма» в PATCH (#461, Р3)', () => {
     attached.attachedRefs.mockResolvedValueOnce([ref]);
     attachedValidator.validate.mockResolvedValueOnce([{ ...ref }, { ...ref, number: '78' }]);
     await service.update(REGISTRAR, LETTER, {
-      attachedRefs: [{ number: '78', counterpartyId: null, orgText: ref.orgText, date: null }],
+      attachedRefs: [{ number: '78', counterpartyId: CP, date: null }],
     });
     expect(attached.replace).toHaveBeenCalled();
   });

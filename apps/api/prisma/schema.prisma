@@ -1928,18 +1928,18 @@ model LetterRelation {
 
 /// Строка «приложенных писем» (#461, Р3): конверт-матрёшка — письмо
 /// пришло пачкой вложенных документов («№ 456, Беларуськалий, 18.10.2026»).
-/// Организация — контрагент справочника ИЛИ текст с листа (у бумажного
-/// письма контрагента может не быть); `counterparty_id` — plain UUID без FK
-/// (I3: CRM — чужой модуль, как `letters.counterparty_id`). Вложения-файлы
-/// сюда не входят — это реестр вложенных ДОКУМЕНТОВ.
+/// Организация — ВСЕГДА контрагент справочника (вердикт владельца 05.11.2026:
+/// свободного текста нет — нет организации вне CRM, лишних «одноразовых»
+/// строк и расхождений с карточкой); нет нужного контрагента — его заводят
+/// из окна строки. `counterparty_id` — plain UUID без FK (I3: CRM — чужой
+/// модуль, как `letters.counterparty_id`). Вложения-файлы сюда не входят —
+/// это реестр вложенных ДОКУМЕНТОВ.
 model LetterAttachedRef {
   id             String    @id @default(uuid()) @db.Uuid
   letterId       String    @map("letter_id") @db.Uuid
   /// № приложенного письма — ключ поиска по реестрам (кап 64).
   number         String
-  counterpartyId String?   @map("counterparty_id") @db.Uuid
-  /// Организация текстом, когда контрагента нет в справочнике (кап 160).
-  orgText        String?   @map("org_text")
+  counterpartyId String    @map("counterparty_id") @db.Uuid
   letterDate     DateTime? @map("letter_date") @db.Date
   sortOrder      Int       @default(0) @map("sort_order")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz()

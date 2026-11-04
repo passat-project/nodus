@@ -27,7 +27,7 @@ export function AttachedRefsSection({
         rows={value.map((ref, index) => ({
           key: `${index}-${ref.number}`,
           number: ref.number,
-          org: ref.counterparty?.name ?? ref.orgText,
+          org: ref.counterparty?.name ?? '',
           date: ref.date,
           draft: { ...ref },
         }))}
@@ -37,10 +37,9 @@ export function AttachedRefsSection({
           const row: AttachedRefDraft = {
             number: draft.number.trim(),
             counterparty: draft.counterparty,
-            orgText: draft.counterparty ? '' : draft.orgText.trim(),
             date: draft.date,
           };
-          if (!row.number || (!row.counterparty && !row.orgText)) return;
+          if (!row.number || !row.counterparty) return;
           onChange(
             index !== null ? value.map((ref, at) => (at === index ? row : ref)) : [...value, row],
           );

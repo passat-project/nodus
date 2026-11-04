@@ -155,18 +155,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('приложенные письма: строки в карточке, поиск по номеру, история и дубль', async () => {
+      // Организация — только контрагент справочника (вердикт 05.11.2026).
+      const cp = (await c.registrationPayload()).counterpartyId as string;
       const letter = await registered({
         attachedRefs: [
           {
             number: `456-${c.fx.runId.slice(0, 4)}`,
-            counterpartyId: null,
-            orgText: 'Беларуськалий',
+            counterpartyId: cp,
             date: '2026-10-18',
           },
           {
             number: `78-${c.fx.runId.slice(0, 4)}`,
-            counterpartyId: null,
-            orgText: 'Беларуськалий',
+            counterpartyId: cp,
             date: null,
           },
         ],
@@ -175,7 +175,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         `456-${c.fx.runId.slice(0, 4)}`,
         `78-${c.fx.runId.slice(0, 4)}`,
       ]);
-      expect(letter.attachedRefs[0]?.orgText).toBe('Беларуськалий');
+      expect(letter.attachedRefs[0]?.counterparty?.id).toBe(cp);
 
       // Поиск по номеру приложенного письма находит конверт (Р8).
       const found = await c.api(
@@ -193,17 +193,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
           attachedRefs: [
             {
               number: `456-${c.fx.runId.slice(0, 4)}`,
-              counterpartyId: null,
-              orgText: 'Беларуськалий',
+              counterpartyId: cp,
               date: '2026-10-18',
             },
             {
               number: `78-${c.fx.runId.slice(0, 4)}`,
-              counterpartyId: null,
-              orgText: 'Беларуськалий',
+              counterpartyId: cp,
               date: null,
             },
-            { number: '90', counterpartyId: null, orgText: 'Беларуськалий', date: null },
+            { number: '90', counterpartyId: cp, date: null },
           ],
         },
         key: `it-att-${crypto.randomUUID()}`,
@@ -224,8 +222,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const duplicate = await c.api(c.registrar, 'PATCH', `/letters/${letter.id}`, {
         body: {
           attachedRefs: [
-            { number: '90', counterpartyId: null, orgText: 'Беларуськалий', date: null },
-            { number: '90', counterpartyId: null, orgText: 'Беларуськалий', date: null },
+            { number: '90', counterpartyId: cp, date: null },
+            { number: '90', counterpartyId: cp, date: null },
           ],
         },
         key: `it-att-dup-${crypto.randomUUID()}`,

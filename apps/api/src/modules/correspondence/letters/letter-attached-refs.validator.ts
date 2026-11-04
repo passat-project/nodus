@@ -21,7 +21,7 @@ const fail = (issue: LetterRegistrationIssue): never => {
   );
 };
 
-/** Наборы «приложенных писем» совпадают (номер + организация + дата). */
+/** Наборы «приложенных писем» совпадают (номер + контрагент + дата). */
 export function sameAttachedRefs(
   before: readonly AttachedRefWrite[],
   after: readonly AttachedRefWrite[],
@@ -29,8 +29,7 @@ export function sameAttachedRefs(
   const key = (ref: AttachedRefWrite) =>
     [
       ref.number,
-      ref.counterpartyId ?? '',
-      ref.orgText ?? '',
+      ref.counterpartyId,
       ref.letterDate ? ref.letterDate.toISOString().slice(0, 10) : '',
     ].join('|');
   return (
@@ -40,9 +39,9 @@ export function sameAttachedRefs(
 
 /**
  * Строки «приложенных писем» (#461, Р3): одна проверка для окна регистрации
- * и правки карточки. Организация обязательна (контрагент справочника ИЛИ
- * текст с листа), контрагент — живой, точный дубль строки (номер +
- * организация + дата) — 422 `duplicate`. Лимиты строк/номеров — контракт
+ * и правки карточки. Организация — только контрагент справочника (вердикт
+ * владельца 05.11.2026), он должен быть живым; точный дубль строки (номер +
+ * контрагент + дата) — 422 `duplicate`. Лимиты строк/номеров — контракт
  * (`LETTER_LIMITS`), их держит zod.
  */
 @Injectable()
@@ -53,25 +52,14 @@ export class LetterAttachedRefsValidator {
     const seen = new Set<string>();
     const rows: AttachedRefWrite[] = [];
     for (const input of inputs) {
-      if (!input.counterpartyId && !input.orgText) {
-        fail({ field: 'attachedRefs', reason: 'required' });
-      }
-      if (input.counterpartyId) {
-        const ref = await this.counterparties.activeRef(input.counterpartyId);
-        if (!ref) fail({ field: 'attachedRefs', reason: 'not_found' });
-      }
-      const key = [
-        input.number.toLowerCase(),
-        input.counterpartyId ?? '',
-        (input.orgText ?? '').toLowerCase(),
-        input.date ?? '',
-      ].join('|');
+      const ref = await this.counterparties.activeRef(input.counterpartyId);
+      if (!ref) fail({ field: 'attachedRefs', reason: 'not_found' });
+      const key = [input.number.toLowerCase(), input.counterpartyId, input.date ?? ''].join('|');
       if (seen.has(key)) fail({ field: 'attachedRefs', reason: 'duplicate' });
       seen.add(key);
       rows.push({
         number: input.number,
         counterpartyId: input.counterpartyId,
-        orgText: input.orgText,
         letterDate: asDate(input.date),
       });
     }

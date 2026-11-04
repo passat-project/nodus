@@ -156,8 +156,7 @@ function registered(o: RegisteredLetter): DemoLetter {
     attachedRefs: (o.attachedRefs ?? []).map((ref) => ({
       id: crypto.randomUUID(),
       number: ref.number,
-      counterparty: ref.counterparty ? cp(ref.counterparty) : null,
-      orgText: ref.orgText ?? null,
+      counterparty: cp(ref.counterparty!),
       date: ref.date ?? null,
     })),
   };

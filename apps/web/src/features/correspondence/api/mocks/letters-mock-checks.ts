@@ -122,25 +122,18 @@ export function attachedRefsOf(
   const seen = new Set<string>();
   const refs: LetterAttachedRef[] = [];
   for (const input of inputs) {
-    const counterparty = input.counterpartyId
-      ? demoCounterpartyById(input.counterpartyId)
-      : undefined;
-    if (input.counterpartyId && !counterparty) {
+    // Организация — только контрагент справочника (вердикт 05.11.2026).
+    const counterparty = demoCounterpartyById(input.counterpartyId);
+    if (!counterparty) {
       return { issue: { field: 'attachedRefs', reason: 'not_found' } };
     }
-    if (!counterparty && !input.orgText) {
-      return { issue: { field: 'attachedRefs', reason: 'required' } };
-    }
-    const key = [input.number, input.counterpartyId ?? '', input.orgText ?? '', input.date ?? '']
-      .join('|')
-      .toLowerCase();
+    const key = [input.number, input.counterpartyId, input.date ?? ''].join('|').toLowerCase();
     if (seen.has(key)) return { issue: { field: 'attachedRefs', reason: 'duplicate' } };
     seen.add(key);
     refs.push({
       id: crypto.randomUUID(),
       number: input.number,
-      counterparty: counterparty ? { id: counterparty.id, name: counterparty.shortName } : null,
-      orgText: counterparty ? null : input.orgText,
+      counterparty: { id: counterparty.id, name: counterparty.shortName },
       date: input.date,
     });
   }

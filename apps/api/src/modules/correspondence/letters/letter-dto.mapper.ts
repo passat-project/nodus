@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   attachmentPreviewKind,
   isPdfDerivativeCandidate,
+  ui,
   type ContactRef,
   type CounterpartyRef,
   type LetterAccess,
@@ -252,14 +253,10 @@ export class LetterDtoMapper {
       };
     });
     const values = (row.customFields ?? {}) as LetterDetail['customFields'];
-    // «Приложенные письма» (#461, Р3): организация — контрагент справочника
-    // или текст с листа; ссылки гидрируются пачкой (один запрос).
+    // «Приложенные письма» (#461, Р3): организация — всегда контрагент
+    // справочника (вердикт 05.11.2026); ссылки гидрируются пачкой.
     const attachedCounterpartyIds = [
-      ...new Set(
-        extra.attachedRefs
-          .map((ref) => ref.counterpartyId)
-          .filter((id): id is string => id !== null),
-      ),
+      ...new Set(extra.attachedRefs.map((ref) => ref.counterpartyId)),
     ];
     const attachedCounterparties = new Map(
       (await this.counterparties.refs(attachedCounterpartyIds)).map((ref) => [ref.id, ref]),
@@ -295,10 +292,12 @@ export class LetterDtoMapper {
       attachedRefs: extra.attachedRefs.map((ref) => ({
         id: ref.id,
         number: ref.number,
-        counterparty: ref.counterpartyId
-          ? (attachedCounterparties.get(ref.counterpartyId) ?? null)
-          : null,
-        orgText: ref.orgText,
+        // Контрагент удалён/архивирован после записи строки — имя-заглушка,
+        // строка не исчезает из реестра письма.
+        counterparty: attachedCounterparties.get(ref.counterpartyId) ?? {
+          id: ref.counterpartyId,
+          name: ui.counterparties.archivedBadge,
+        },
         date: dateOnly(ref.letterDate),
       })),
       canManageRelations: canRegisterLetters(actor),

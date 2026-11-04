@@ -39,19 +39,16 @@ export const LETTER_LIMITS = {
   attachedRefs: 20,
   /** № приложенного письма (#461) — зеркало theirNumber: ключ поиска. */
   attachedNumber: 64,
-  /** Организация приложенного письма текстом, когда нет контрагента (#461). */
-  attachedOrg: 160,
 } as const;
 
 /** Строка «приложенных писем» на вводе (#461, Р3): № + организация
- *  (контрагент справочника ИЛИ текст на бумаге) + дата листа. Пустая
- *  организация допустима схемой — сервер отказывает 422 с полем
- *  `attachedRefs` (одна грамматика отказа для веба, моков и сервера). */
+ *  (контрагент справочника — вердикт владельца 05.11.2026: свободного текста
+ *  нет) + дата листа. Контрагент обязателен: нет нужного — его заводят из
+ *  окна строки, справочник остаётся единственным источником организаций. */
 export const letterAttachedRefInputSchema = z
   .object({
     number: z.string().trim().min(1).max(LETTER_LIMITS.attachedNumber),
-    counterpartyId: z.uuid().nullable(),
-    orgText: z.string().trim().min(1).max(LETTER_LIMITS.attachedOrg).nullable(),
+    counterpartyId: z.uuid(),
     date: z.iso.date().nullable(),
   })
   .strict();

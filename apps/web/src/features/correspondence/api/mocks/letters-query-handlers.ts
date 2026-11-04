@@ -53,7 +53,7 @@ function matchesSearch(letter: DemoLetter, search: string | undefined): boolean 
     // Поиск по номеру любого приложенного письма (#461, Р8): «456» находит
     // конверт, в котором лежит лист № 456.
     ...letter.attachedRefs.map((ref) => ref.number),
-    ...letter.attachedRefs.map((ref) => ref.orgText ?? ref.counterparty?.name ?? null),
+    ...letter.attachedRefs.map((ref) => ref.counterparty.name),
   ]
     .filter((value): value is string => Boolean(value))
     .some((value) => value.toLowerCase().includes(q));

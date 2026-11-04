@@ -4,11 +4,10 @@ import { PrismaService } from '../../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { letterAttachedRefSelect, type LetterAttachedRefRow } from './letter-row.js';
 
-/** Строка «приложенных писем» на записи (№ + организация + дата). */
+/** Строка «приложенных писем» на записи (№ + контрагент + дата). */
 export interface LetterAttachedRefInput {
   number: string;
-  counterpartyId: string | null;
-  orgText: string | null;
+  counterpartyId: string;
   letterDate: Date | null;
 }
 

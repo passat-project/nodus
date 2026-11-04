@@ -115,10 +115,10 @@ describe('черновик регистрации (#55, U5)', () => {
         {
           number: ' 456 ',
           counterparty: { id: 'd0000000-0000-4000-8000-000000000001', name: 'АО «Галургия»' },
-          orgText: '',
           date: '2026-10-01',
         },
-        { number: '78', counterparty: null, orgText: ' Беларуськалий ', date: null },
+        // Строка без контрагента в тело не уходит (схема требует контрагента).
+        { number: '78', counterparty: null, date: null },
       ],
     });
     const body = registrationInputOf(withRows, '2026-10-26');
@@ -127,10 +127,8 @@ describe('черновик регистрации (#55, U5)', () => {
       {
         number: '456',
         counterpartyId: 'd0000000-0000-4000-8000-000000000001',
-        orgText: null,
         date: '2026-10-01',
       },
-      { number: '78', counterpartyId: null, orgText: 'Беларуськалий', date: null },
     ]);
     // Пустой набор — ключа нет (тело не раздувается).
     expect(registrationInputOf(complete(), '2026-10-26')).not.toHaveProperty('attachedRefs');

@@ -7,8 +7,8 @@ import { PanelAction } from '../../../shared/ui/panel/panel-kit.js';
 import { formatIsoDate } from '../lib/letter-format.js';
 import { AttachedRefDialog, draftOf, type RefDraft } from './attached-ref-dialog.js';
 
-/** Строка реестра приложенных в отображении: организация — имя контрагента
- *  или текст с листа. */
+/** Строка реестра приложенных в отображении: организация — контрагент
+ *  справочника (единственный источник, вердикт 05.11.2026). */
 export interface AttachedRefView {
   key: string;
   number: string;
@@ -34,17 +34,18 @@ export function AttachedRefsList({
 }: {
   rows: readonly AttachedRefView[];
   editable: boolean;
-  /** Подпись пустого реестра (в окне регистрации — приглашение). */
-  empty: string;
+  /** Подпись пустого реестра (окно регистрации — приглашение). Не задана —
+   *  пустой реестр молчит: заголовок и действие сами говорят, что тут пусто. */
+  empty?: string;
   onCommit: (index: number | null, draft: RefDraft) => void;
   onRemove: (index: number) => void;
 }) {
   const [editing, setEditing] = useState<{ index: number | null; draft: RefDraft } | null>(null);
   return (
     <div className="flex min-w-0 flex-col">
-      {rows.length === 0 ? (
+      {rows.length === 0 && empty ? (
         <p className="py-1 text-sm text-muted-foreground">{empty}</p>
-      ) : (
+      ) : rows.length === 0 ? null : (
         <ul className="flex min-w-0 flex-col">
           {rows.map((row, index) => (
             <li
