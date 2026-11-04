@@ -3,7 +3,7 @@ import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useProjectConversation } from '../../../shared/chat/chat-queries.js';
-import { useChatSidePanel } from '../../../shared/chat/chat-side-panel.js';
+import { ChatSidePanel, useChatSidePanel } from '../../../shared/chat/chat-side-panel.js';
 import { useSplitWidth } from '../../../shared/ui/use-split-width.js';
 import { uiPx } from '../../../shared/ui/ui-scale.js';
 import { useProjectDetail } from '../api/projects-api.js';
@@ -81,9 +81,7 @@ export function ProjectCard({ projectId }: { projectId: string }) {
           )}
           style={{ ...split.style, flexShrink: 1 }}
         >
-          <div className="content-fade min-h-0 flex-1 overflow-hidden">
-            <ProjectAboutPanel project={project} />
-          </div>
+          <ProjectAboutPanel project={project} />
           <div className="flex h-16 shrink-0 items-center border-t border-border px-5">
             <ProjectActionBar project={project} />
           </div>
@@ -130,11 +128,7 @@ export function ProjectCard({ projectId }: { projectId: string }) {
             ) : null}
             {visited.includes('channel') ? (
               <TabPanel active={tab === 'channel'}>
-                <ProjectChannelTab
-                  project={project}
-                  conversationId={conversationId}
-                  panel={channelPanel}
-                />
+                <ProjectChannelTab project={project} conversationId={conversationId} />
               </TabPanel>
             ) : null}
             {visited.includes('members') ? (
@@ -149,6 +143,21 @@ export function ProjectCard({ projectId }: { projectId: string }) {
             ) : null}
           </div>
         </div>
+        {/* Панель «О канале» — ПОЛНОВЫСОТНАЯ колонка-сиблинг карточки, как в
+            задаче и письме: её шапка h-10 продолжает полосу вкладок, панель
+            занимает ширину за счёт рабочей зоны (вкладки не «уезжают» под
+            топбар — при нехватке места полоса вкладок скроллится оверлеем).
+            Открыта только на вкладке «Канал». */}
+        {conversation ? (
+          <ChatSidePanel
+            conversationId={conversation.id}
+            conversation={conversation}
+            open={channelPanel.open && tab === 'channel'}
+            onClose={channelPanel.close}
+            title={ui.chat.aboutProject}
+            headerClass="h-10"
+          />
+        ) : null}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { NodeLabel } from '@nodus/ui/components/node-label';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { CustomFieldsBlock } from '../../../shared/custom-fields/custom-fields-block.js';
+import { CardDataColumn } from '../../../shared/ui/entity-card/card-data-column.js';
 import { EntityFields } from '../../../shared/ui/entity-fields.js';
 import { useUpdateProjectCustomField } from '../api/project-member-mutations.js';
 import { projectPassportDefs } from '../lib/project-passport.js';
@@ -22,28 +23,26 @@ export function ProjectAboutPanel({ project }: { project: ProjectDetail }) {
   const updateField = useUpdateProjectCustomField(project.id);
 
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="mx-auto w-full max-w-3xl">
-        <NodeLabel label={ui.projects.fieldDescription} />
-        <p className="mt-1 text-sm whitespace-pre-wrap text-foreground">
-          {project.description || <span className="text-muted-foreground">{ui.common.notSet}</span>}
-        </p>
+    <CardDataColumn>
+      <NodeLabel label={ui.projects.fieldDescription} />
+      <p className="mt-1 text-sm whitespace-pre-wrap text-foreground">
+        {project.description || <span className="text-muted-foreground">{ui.common.notSet}</span>}
+      </p>
 
-        <EntityFields
-          defs={projectPassportDefs(project, openCard)}
-          storageKey="nodus-project-fields-v2"
-        />
+      <EntityFields
+        defs={projectPassportDefs(project, openCard)}
+        storageKey="nodus-project-fields-v2"
+      />
 
-        <CustomFieldsBlock
-          scope="project"
-          values={project.customFields}
-          refs={project.customFieldRefs}
-          canEdit={project.access.canManage}
-          onChange={(fieldId, value: CustomFieldValue | null) =>
-            updateField.mutate({ fieldId, value })
-          }
-        />
-      </div>
-    </div>
+      <CustomFieldsBlock
+        scope="project"
+        values={project.customFields}
+        refs={project.customFieldRefs}
+        canEdit={project.access.canManage}
+        onChange={(fieldId, value: CustomFieldValue | null) =>
+          updateField.mutate({ fieldId, value })
+        }
+      />
+    </CardDataColumn>
   );
 }
