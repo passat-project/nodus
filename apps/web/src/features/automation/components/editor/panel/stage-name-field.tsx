@@ -131,6 +131,13 @@ export function StageNameField({
             ))
           )}
         </div>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="w-full rounded-md px-1.5 py-1 text-left text-sm text-secondary-foreground hover:bg-accent/60"
+        >
+          {ui.automation.stageNameSuggestCreate}
+        </button>
         <p className="px-1.5 pt-1.5 pb-0.5 text-xs text-muted-foreground">
           {ui.automation.stageNameSuggestFree}
         </p>

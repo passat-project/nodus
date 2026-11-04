@@ -259,6 +259,7 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
           open
           onClose={() => setPublishOpen(false)}
           workflow={workflow}
+          category={type.category}
           baseline={useRouteDocStore.getState().baseline}
           document={doc}
           baseVersion={useRouteDocStore.getState().baseVersion}

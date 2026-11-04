@@ -41,7 +41,7 @@ const valueChip =
 
 /** Иконка кнопки — по этапу цели (#378): вперёд/пауза/на утверждение/
  *  итог (✓ выполнена, ✕ отменена)/возврат в ожидание. */
-function transitionIcon(t: WorkflowTransition): LucideIcon | typeof PauseGlyph {
+export function transitionIcon(t: WorkflowTransition): LucideIcon | typeof PauseGlyph {
   if (t.toStageState === 'active') return Play;
   if (t.toStageState === 'paused') return PauseGlyph;
   if (isReviewState(t.toStageState)) return Send;

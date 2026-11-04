@@ -18,5 +18,6 @@ export const publishPreviewStrings = {
   stageNameSuggestEmpty: 'В этом этапе пока нет других имён',
   stageNameSuggestLoading: 'Загружаем имена…',
   stageNameSuggestFree: 'Можно ввести своё имя',
+  stageNameSuggestCreate: 'Создать новое имя',
   stageNameSuggestRoutes: ['маршрут', 'маршрута', 'маршрутов'],
 } as const;

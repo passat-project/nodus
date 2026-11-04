@@ -76,6 +76,9 @@ const facts = {
   assigneeId: 'bob',
   plannedMinutes: null,
   hasResult: false,
+  resultFileCount: 0,
+  customFields: {},
+  activeCustomFieldIds: new Set<string>(),
 };
 
 /** Маршрут с утверждением: сдача ACTIVE → REVIEW, утверждение REVIEW → DONE.
@@ -169,6 +172,11 @@ function makeEngine(subject: Partial<WorkflowActorSubject> = {}) {
       ...subject,
     })),
     applyStage: vi.fn(async () => void 0),
+    applyForm: vi.fn(async () => ({
+      fields: { assignee: 'bob' },
+      timeEntryId: null,
+      result: null,
+    })),
   };
   const registry = { get: vi.fn(() => adapter) };
   const workflows = { load: vi.fn(async () => structuredClone(workflow)) };
@@ -231,6 +239,89 @@ describe('WorkflowEngine (#428, ADR-0024)', () => {
     workflows.load.mockResolvedValueOnce(structuredClone(approvalWorkflow) as never);
     const buttons = await engine.available(TX as never, 't1', 'task', USER);
     expect(buttons.find((b) => b.id === SUBMIT)?.toStageId).toBe(STAGE_REVIEW);
+  });
+
+  it('execute: окно не делает актора утверждающим — роли из subject0 (#430)', async () => {
+    const { engine, adapter, workflows } = makeEngine();
+    const before = {
+      workflowId: 'wf-approval',
+      typeId: 'type',
+      stageId: STAGE_ACTIVE,
+      roles: new Set(['assignee']),
+      bypassConditions: false,
+      canOverrideGates: false,
+      actsWithoutConditions: true,
+      facts: { ...facts, assigneeId: 'bob' },
+    };
+    const after = {
+      ...before,
+      roles: new Set(['creator']),
+      facts: { ...before.facts, assigneeId: USER.id },
+    };
+    adapter.subject.mockReset();
+    adapter.subject.mockResolvedValueOnce(before as never).mockResolvedValueOnce(after as never);
+    const withWindow = structuredClone(approvalWorkflow);
+    Object.assign(
+      withWindow.transitions.find((t) => t.id === SUBMIT)!,
+      {
+        form: { enabled: true, sections: [{ kind: 'fields', fields: ['assignee'] }] },
+      },
+    );
+    workflows.load.mockResolvedValueOnce(withWindow as never);
+
+    await engine.execute(
+      TX as never,
+      't1',
+      'task',
+      USER,
+      { transitionId: SUBMIT },
+      { form: { fields: { assigneeId: '00000000-0000-4000-8000-000000000021' } } },
+    );
+
+    expect(adapter.applyStage).toHaveBeenCalledWith(
+      TX,
+      't1',
+      expect.objectContaining({ id: STAGE_REVIEW }),
+      USER.id,
+      expect.anything(),
+    );
+  });
+
+  it('execute: окно «если ещё не списаны» не дублирует время (#430)', async () => {
+    const { engine, adapter, workflows } = makeEngine({
+      facts: { ...facts, spentMinutes: 10 },
+    });
+    const withTime = structuredClone(workflow);
+    Object.assign(withTime.transitions[0]!, {
+      form: { enabled: true, sections: [{ kind: 'time', mode: 'if_empty' }] },
+    });
+    workflows.load.mockResolvedValueOnce(withTime as never);
+
+    await engine.execute(
+      TX as never,
+      't1',
+      'task',
+      USER,
+      { transitionId: TRANSITION },
+      { form: { time: { minutes: 30, date: '2026-11-04' } } },
+    );
+
+    expect(adapter.applyForm).not.toHaveBeenCalled();
+    expect(adapter.applyStage).toHaveBeenCalled();
+  });
+
+  it('execute: выбор колонки по systemState', async () => {
+    const { engine, adapter } = makeEngine();
+    await engine.execute(TX as never, 't1', 'task', USER, {
+      systemState: 'closed',
+    });
+    expect(adapter.applyStage).toHaveBeenCalledWith(
+      TX,
+      't1',
+      expect.objectContaining({ id: STAGE_DONE }),
+      USER.id,
+      expect.anything(),
+    );
   });
 
   it('execute: замок → субъект → смена стадии адаптером в той же tx', async () => {

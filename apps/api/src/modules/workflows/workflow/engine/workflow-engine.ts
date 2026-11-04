@@ -110,9 +110,14 @@ export class WorkflowEngine implements WorkflowEnginePort {
     const subject1 = exec.hasApplied(applied)
       ? await this.subjectWithPermissions(tx, entityId, category, actor)
       : subject0;
-    // Контекст акторного пропуска — по фактам ПОСЛЕ окна (#430): если окно
-    // дозаполнило результат/поля, гейты кнопки утверждения видят их.
-    const targetCtx1 = approverContext(workflow, subject1);
+    // Контекст акторного пропуска: роли/права — ДО окна (окно не должно
+    // делать актора утверждающим), факты — ПОСЛЕ (дозаполненные поля/итог
+    // видны гейтам кнопки утверждения).
+    const targetCtx1 = approverContext(workflow, {
+      ...subject1,
+      roles: subject0.roles,
+      permissions: subject0.permissions,
+    });
     // Выбранная кнопка — первой: DnD предпочёл кандидата без обязательного
     // окна, и гейты не должны «переиграть» выбор на другую кнопку.
     const ordered = [picked, ...candidates.filter((t) => t.id !== picked.id)];

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type {
+  ProcessCategory,
   PublishWorkflowResult,
   WorkflowDetail,
   WorkflowDraftDocument,
@@ -108,6 +109,7 @@ export function PublishDialog({
   open,
   onClose,
   workflow,
+  category: typeCategory,
   baseline,
   document: doc,
   baseVersion,
@@ -119,6 +121,8 @@ export function PublishDialog({
   open: boolean;
   onClose: () => void;
   workflow: WorkflowDetail;
+  /** Категория типа — фолбэк, если у маршрута ещё нет типов (#430). */
+  category: ProcessCategory;
   baseline: WorkflowDraftDocument;
   document: WorkflowDraftDocument;
   baseVersion: number;
@@ -134,12 +138,15 @@ export function PublishDialog({
   const countOf = (stageId: string) =>
     serverCounts[stageId] ?? workflow.stageEntityCounts[stageId] ?? 0;
   const { data: types = [] } = useProcessTypes('include');
-  const affectedTypes = types.filter((t) => workflow.typeIds.includes(t.id));
-  const category = affectedTypes[0]?.category ?? 'task';
-  const inFlight = doc.stages.reduce(
-    (sum, s) => (s.systemState === 'closed' ? sum : sum + (workflow.stageEntityCounts[s.id] ?? 0)),
-    0,
+  const affectedTypes = types.filter(
+    (t) => t.archivedAt === null && workflow.typeIds.includes(t.id),
   );
+  const category = affectedTypes[0]?.category ?? typeCategory;
+  const inFlightStageIds = new Set([...baseline.stages, ...doc.stages].map((s) => s.id));
+  const inFlight = [...inFlightStageIds].reduce((sum, id) => {
+    const stage = doc.stages.find((s) => s.id === id) ?? baseline.stages.find((s) => s.id === id);
+    return stage?.systemState === 'closed' ? sum : sum + countOf(id);
+  }, 0);
   const liveWarnings = problems.filter((p) => p.severity === 'warning');
   const removed = baseline.stages.filter((s) => !doc.stages.some((n) => n.id === s.id));
   const removedWithTasks = removed.filter((s) => countOf(s.id) > 0);

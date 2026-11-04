@@ -7,7 +7,8 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
 import { automationKeys } from '../../../shared/api/automation-keys.js';
-import { useUpdateProcessType } from './automation-api.js';
+import { workflowKeys } from '../../../shared/workflow/workflow-api.js';
+import { useStageNames, useUpdateProcessType } from './automation-api.js';
 
 /** Детерминированный тест оптимистичной правки свойств типа (I4, #378):
  *  creatable меняется в кэше ДО ответа сервера (контролируемый deferred);
@@ -93,6 +94,34 @@ describe('useUpdateProcessType: оптимистичность (#378)', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     // Снапшот возвращён: в кэше прежнее значение.
     expect(client.getQueryData<ProcessType[]>(automationKeys.types())?.[0]?.creatable).toBe(false);
+    server.close();
+  });
+});
+
+describe('useStageNames: подсказки имён статусов (#430)', () => {
+  it('запрашивает каталог с категорией и исключением текущего маршрута', async () => {
+    server.use(
+      http.get('/api/v1/workflows/stage-names', () =>
+        HttpResponse.json([{ systemState: 'active', name: 'В работе', routes: 2 }]),
+      ),
+    );
+    server.listen({ onUnhandledRequest: 'error' });
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useStageNames('task', 'wf-1'), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual([{ systemState: 'active', name: 'В работе', routes: 2 }]);
+    expect(workflowKeys.stageNames('task', 'wf-1')).toEqual([
+      'workflows',
+      'stage-names',
+      'task',
+      'wf-1',
+    ]);
     server.close();
   });
 });

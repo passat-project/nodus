@@ -26,7 +26,12 @@ describe.skipIf(!process.env.DATABASE_URL)('workflow stage names (integration, #
   }, 120_000);
 
   afterAll(async () => {
-    if (fx) await fx.cleanup();
+    if (fx) {
+      await fx.prisma.workflow.deleteMany({
+        where: { name: { startsWith: `IT-${fx.runId}` } },
+      });
+      await fx.cleanup();
+    }
   });
 
   it('без workflow.manage — 403', async () => {
@@ -49,5 +54,61 @@ describe.skipIf(!process.env.DATABASE_URL)('workflow stage names (integration, #
           ['backlog', 'active', 'paused', 'done', 'closed'].includes(n.systemState),
       ),
     ).toBe(true);
+  });
+
+  it('excludeWorkflowId убирает текущий маршрут, personal не попадает', async () => {
+    const suffix = fx.runId;
+    const taskWorkflow = await fx.prisma.workflow.create({
+      data: {
+        name: `IT-${suffix}-task`,
+        kind: 'task',
+        publishedAt: new Date(),
+        stages: {
+          create: [
+            {
+              name: `Этап ${suffix}`,
+              color: 'info',
+              systemState: 'active',
+              sortOrder: 0,
+              isInitial: true,
+            },
+          ],
+        },
+      },
+    });
+    await fx.prisma.workflow.create({
+      data: {
+        name: `IT-${suffix}-personal`,
+        kind: 'personal',
+        ownerId: admin.id,
+        publishedAt: new Date(),
+        stages: {
+          create: [
+            {
+              name: `Этап ${suffix}`,
+              color: 'neutral',
+              systemState: 'active',
+              sortOrder: 0,
+              isInitial: true,
+            },
+          ],
+        },
+      },
+    });
+
+    const withoutExclude = await fx.api(admin, 'GET', '/workflows/stage-names?category=task');
+    expect(withoutExclude.status).toBe(200);
+    const all = (await withoutExclude.json()) as { name: string; routes: number }[];
+    // Личный маршрут не считается: иначе routes было бы 2.
+    expect(all.find((n) => n.name === `Этап ${suffix}`)?.routes).toBe(1);
+
+    const withExclude = await fx.api(
+      admin,
+      'GET',
+      `/workflows/stage-names?category=task&excludeWorkflowId=${taskWorkflow.id}`,
+    );
+    expect(withExclude.status).toBe(200);
+    const filtered = (await withExclude.json()) as { name: string }[];
+    expect(filtered.some((n) => n.name === `Этап ${suffix}`)).toBe(false);
   });
 });
