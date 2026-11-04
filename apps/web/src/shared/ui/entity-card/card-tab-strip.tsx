@@ -57,6 +57,7 @@ export function CardTabStrip({
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef(new Map<string, HTMLDivElement>());
   // Оверлейный индикатор прокрутки: нативный скроллбар скрыт (data-no-scrollbar),
   // поэтому его появление НЕ съедает высоту полосы — вкладки не подпрыгивают.
   const [scroll, setScroll] = useState({ thumb: 0, left: 0, overflow: false });
@@ -92,6 +93,17 @@ export function CardTabStrip({
   useEffect(() => {
     updateScroll();
   }, [tabs.length, updateScroll]);
+  // Активная вкладка всегда видна: при нехватке места (панель беседы/файлы)
+  // полоса подкручивается к ней, а не оставляет её за краем.
+  useEffect(() => {
+    const el = tabRefs.current.get(active);
+    if (!el || typeof el.scrollIntoView !== 'function') return;
+    el.scrollIntoView({
+      inline: 'nearest',
+      block: 'nearest',
+      behavior: 'smooth',
+    });
+  }, [active, tabs.length]);
 
   return (
     <div className="flex h-10 shrink-0 items-center border-b border-border bg-card">
@@ -109,6 +121,10 @@ export function CardTabStrip({
             return (
               <div
                 key={tab.id}
+                ref={(el) => {
+                  if (el) tabRefs.current.set(tab.id, el);
+                  else tabRefs.current.delete(tab.id);
+                }}
                 className={cn(
                   'flex h-10 shrink-0 items-center border-b-2 transition-colors',
                   isActive
