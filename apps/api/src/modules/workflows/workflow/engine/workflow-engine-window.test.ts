@@ -153,7 +153,7 @@ function makeEngine(subject: Partial<WorkflowActorSubject> = {}) {
 }
 
 describe('WorkflowEngine: approver_is_actor (#430)', () => {
-  it('available: создатель видит сразу «Завершена»', async () => {
+  it('available: approver_is_actor — создатель видит сразу «Завершена» (#430)', async () => {
     const { engine, workflows } = makeEngine({
       roles: new Set(['creator']),
       actsWithoutConditions: false,
@@ -163,7 +163,7 @@ describe('WorkflowEngine: approver_is_actor (#430)', () => {
     expect(buttons.find((b) => b.id === SUBMIT)?.toStageId).toBe(STAGE_DONE);
   });
 
-  it('available: соисполнитель видит «На утверждении»', async () => {
+  it('available: approver_is_actor — соисполнитель видит «На утверждении» (#430)', async () => {
     const { engine, workflows } = makeEngine({
       roles: new Set(['coexecutor']),
       actsWithoutConditions: false,
@@ -173,7 +173,7 @@ describe('WorkflowEngine: approver_is_actor (#430)', () => {
     expect(buttons.find((b) => b.id === SUBMIT)?.toStageId).toBe(STAGE_REVIEW);
   });
 
-  it('available: обход не делает админа утверждающим', async () => {
+  it('available: approver_is_actor — обход не делает админа утверждающим (#430)', async () => {
     const { engine, workflows } = makeEngine({
       roles: new Set(['assignee']),
       bypassConditions: true,
@@ -186,7 +186,7 @@ describe('WorkflowEngine: approver_is_actor (#430)', () => {
 });
 
 describe('WorkflowEngine: окно перехода (#430)', () => {
-  it('окно не делает актора утверждающим — роли из subject0', async () => {
+  it('execute: окно не делает актора утверждающим — роли из subject0 (#430)', async () => {
     const { engine, adapter, workflows } = makeEngine();
     const before = {
       workflowId: 'wf-approval',
@@ -232,7 +232,7 @@ describe('WorkflowEngine: окно перехода (#430)', () => {
     );
   });
 
-  it('legacy creator_is_assignee не обходится окном', async () => {
+  it('execute: legacy creator_is_assignee не обходится окном (#430)', async () => {
     const { engine, adapter, workflows } = makeEngine();
     const before = {
       workflowId: 'wf-approval',
@@ -279,7 +279,7 @@ describe('WorkflowEngine: окно перехода (#430)', () => {
     );
   });
 
-  it('окно «если ещё не списаны» не дублирует время', async () => {
+  it('execute: окно «если ещё не списаны» не дублирует время (#430)', async () => {
     const { engine, adapter, workflows } = makeEngine({
       facts: { ...facts, spentMinutes: 10 },
     });
@@ -302,7 +302,7 @@ describe('WorkflowEngine: окно перехода (#430)', () => {
     expect(adapter.applyStage).toHaveBeenCalled();
   });
 
-  it('выбор колонки по systemState', async () => {
+  it('execute: выбор колонки по systemState', async () => {
     const { engine, adapter } = makeEngine();
     await engine.execute(TX as never, 't1', 'task', USER, { systemState: 'closed' });
     expect(adapter.applyStage).toHaveBeenCalledWith(
