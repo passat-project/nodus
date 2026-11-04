@@ -199,6 +199,55 @@ describe('WorkflowEngine (#428, ADR-0024)', () => {
     expect(adapter.applyStage).toHaveBeenCalled();
   });
 
+  it('колонка «Итог» не подменяет итог: заблокированная «Завершить» не уходит в «Отмену» (#402)', async () => {
+    const { engine, adapter, workflows } = makeEngine();
+    const gated = structuredClone(workflow);
+    const cancelledStage = '00000000-0000-4000-8000-000000000002';
+    gated.stages.push({
+      id: cancelledStage,
+      code: 'cancelled',
+      name: 'Отменена',
+      systemState: 'closed',
+      archivedAt: null,
+      workflowId: 'wf',
+      color: 'danger',
+      sortOrder: 2,
+      isInitial: false,
+      outcome: 'cancelled',
+    } as never);
+    gated.transitions.push({
+      id: '00000000-0000-4000-8000-000000000012',
+      name: 'Отменить',
+      fromStageId: STAGE_ACTIVE,
+      toStageId: cancelledStage,
+      display: 'button',
+      sortOrder: 1,
+      rules: { conditions: [], validators: [], postFunctions: [] },
+    } as never);
+    gated.transitions[0]!.rules = {
+      conditions: [],
+      validators: [{ kind: 'result_present' }],
+      postFunctions: [],
+    } as never;
+    workflows.load.mockResolvedValue(gated);
+
+    await expect(
+      engine.execute(TX as never, 't1', 'task', USER, {
+        systemState: 'closed',
+        outcome: 'success',
+      }),
+    ).rejects.toMatchObject({ code: ErrorCode.WORKFLOW_TRANSITION_BLOCKED });
+    expect(adapter.applyStage).not.toHaveBeenCalled();
+
+    // Та же колонка, но итог «отменена» — своя кнопка, подмена не нужна.
+    await expect(
+      engine.execute(TX as never, 't1', 'task', USER, {
+        systemState: 'closed',
+        outcome: 'cancelled',
+      }),
+    ).resolves.toMatchObject({ stage: { id: cancelledStage, outcome: 'cancelled' } });
+  });
+
   it('нет перехода из статуса — 409 WORKFLOW_TRANSITION_NOT_ALLOWED', async () => {
     const { engine } = makeEngine();
     await expect(

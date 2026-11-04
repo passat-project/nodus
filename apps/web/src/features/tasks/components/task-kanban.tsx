@@ -144,8 +144,8 @@ export function TaskKanban({
                   title,
                   personalStageId: stageId,
                   onCreated: (task) => {
-                    // Колонку назначает сервер (закрытая колонка — задача
-                    // встаёт в начальную): вставка — туда, где она живёт.
+                    // Колонку назначает сервер: удачный переход ведёт в цель
+                    // колонки, отказ — 409 без создания; вставляем по факту.
                     const column = task.personalStageId ?? stageId;
                     board.insertNewTask(column, task);
                     setCountDelta((prev) => ({

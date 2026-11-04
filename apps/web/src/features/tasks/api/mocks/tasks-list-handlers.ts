@@ -35,11 +35,9 @@ const archivedTypeIds = new Set(
   demoProcessTypes.filter((t) => t.archivedAt).map((t) => t.workflowId),
 );
 
-/** Стадия новой задачи — как `TasksService.create` API: только фаза open
- *  (security-гейт #37: создание сразу «на утверждении» или «завершённой»
- *  обходило бы гейты DoD). Явная stageId — только открытая; личная колонка
- *  открытого состояния — первая стадия схемы того же состояния; иначе —
- *  начальная стадия маршрута. */
+/** Мок-приближение к `TasksService.create`: API создаёт задачу в начальной
+ *  стадии и в той же транзакции проводит переход в стадию колонки с проверкой
+ *  условий и гейтов (#402); мок ставит стадию напрямую, без движка. */
 function initialStageFor(stageId: string | undefined, column: TaskStage | undefined) {
   const starts = demoStages.filter((s) => isOpenState(s.systemState));
   const initial = starts[0];
