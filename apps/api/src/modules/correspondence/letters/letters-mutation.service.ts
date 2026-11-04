@@ -88,13 +88,16 @@ export class LettersMutationService {
     // строк, только если набор реально изменился.
     let attachedRows: LetterAttachedRefInput[] | null = null;
     if (body.attachedRefs !== undefined) {
-      attachedRows = await this.attachedValidator.validate(body.attachedRefs);
+      const next = await this.attachedValidator.validate(body.attachedRefs);
       const before = await this.attached.attachedRefs(id);
-      if (!sameAttachedRefs(before, attachedRows)) {
+      // Набор не изменился (правились другие поля, окно прислало то же) —
+      // строки не пересоздаём: delete+insert менял бы id и писал лишнее.
+      if (!sameAttachedRefs(before, next)) {
+        attachedRows = next;
         changes.push({
           field: 'attachedRefs',
           from: String(before.length),
-          to: String(attachedRows.length),
+          to: String(next.length),
         });
       }
     }

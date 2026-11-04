@@ -99,7 +99,8 @@ export function withRelation(
 export interface LetterTreeRow {
   node: LetterTreeNode;
   /** Ключ строки: id связи с родителем (письмо с двумя связями стоит в
-   *  дереве дважды — id письма не уникален), у корня — `root`. */
+   *  дереве дважды — id письма не уникален) + id письма. У корня и у
+   *  оптимистично перемещённого узла связи ещё нет — ключи всё равно разные. */
   key: string;
   depth: number;
   hasChildren: boolean;
@@ -114,7 +115,7 @@ export function flattenLetterTree(
 ): LetterTreeRow[] {
   const rows: LetterTreeRow[] = [];
   const walk = (node: LetterTreeNode, depth: number, hidden: boolean) => {
-    const key = node.relationId ?? 'root';
+    const key = `${node.relationId ?? 'root'}:${node.id}`;
     const row: LetterTreeRow = {
       node,
       key,

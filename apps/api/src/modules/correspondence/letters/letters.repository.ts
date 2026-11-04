@@ -206,6 +206,8 @@ export class LettersRepository {
   async visibilityByFile(fileId: string): Promise<
     {
       registeredAt: Date | null;
+      /** Надгробие: файл удалённого письма закрыт для всех (Р13). */
+      deletedAt: Date | null;
       confidential: boolean;
       registrarId: string | null;
       addresseeId: string | null;
@@ -219,6 +221,7 @@ export class LettersRepository {
           select: {
             id: true,
             registeredAt: true,
+            deletedAt: true,
             confidential: true,
             registrarId: true,
             addresseeId: true,
@@ -232,6 +235,7 @@ export class LettersRepository {
     const participants = await this.participantsOf(confidentialIds);
     return rows.map(({ letter }) => ({
       registeredAt: letter.registeredAt,
+      deletedAt: letter.deletedAt,
       confidential: letter.confidential,
       registrarId: letter.registrarId,
       addresseeId: letter.addresseeId,

@@ -9,6 +9,8 @@ interface GraphNode {
   id: string;
   parent?: string;
   kind?: 'reply_to' | 'nested_in';
+  /** Второй родитель (у письма бывает и конверт, и «ответ на»). */
+  extraParents?: { id: string; kind?: 'reply_to' | 'nested_in' }[];
   confidential?: boolean;
   registered?: boolean;
 }
@@ -39,9 +41,17 @@ function setup(graph: GraphNode[], visibleIds: string[] = graph.map((node) => no
     parentLinks: vi.fn(async (ids: readonly string[]) =>
       ids.flatMap((id) => {
         const node = byId.get(id);
-        return node?.parent
-          ? [{ letterId: id, relatedLetterId: node.parent, kind: node.kind ?? 'reply_to' }]
-          : [];
+        if (!node) return [];
+        return [
+          ...(node.parent
+            ? [{ letterId: id, relatedLetterId: node.parent, kind: node.kind ?? 'reply_to' }]
+            : []),
+          ...(node.extraParents ?? []).map((parent) => ({
+            letterId: id,
+            relatedLetterId: parent.id,
+            kind: parent.kind ?? 'reply_to',
+          })),
+        ];
       }),
     ),
     childLinks: vi.fn(async (ids: readonly string[]) =>
@@ -127,6 +137,27 @@ describe('дерево «ёлочки» (#461, Р2)', () => {
     const tree = await service.tree(USER, 'root');
     expect(tree.root.children).toHaveLength(200);
     expect(tree.truncated).toBe(true);
+  });
+
+  it('невидимый конверт не рвёт подъём: пробуем видимого родителя второго вида', async () => {
+    // X лежит в конфиденциальном конверте Env (невидим зрителю) и отвечает
+    // на видимое Root: цепочку Root ← X зритель видеть может — её и строим.
+    const { service } = setup(
+      [
+        { id: 'Root' },
+        { id: 'Env', confidential: true },
+        {
+          id: 'X',
+          parent: 'Root',
+          kind: 'reply_to',
+          extraParents: [{ id: 'Env', kind: 'nested_in' }],
+        },
+      ],
+      ['Root', 'X'],
+    );
+    const tree = await service.tree(USER, 'X');
+    expect(tree.root.id).toBe('Root');
+    expect(ids(tree.root.children)).toEqual(['X']);
   });
 
   it('корень-невидимое письмо — 404 (visibleRow)', async () => {

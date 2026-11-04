@@ -63,18 +63,24 @@ export class LettersTreeService {
   }
 
   /** Верх цепочки: подъём по родителям (конверт приоритетнее ответа) до
-   *  корня; невидимый или удалённый родитель обрывает подъём. */
+   *  корня. Родитель выбранного вида невидим — пробуем родителя второго вида
+   *  (у письма бывает и конверт, и «ответ на»): цепочку, которую зритель
+   *  видеть может, терять нельзя. Ни один родитель не виден — обрыв. */
   private async rootOf(user: AuthUser, letterId: string): Promise<string> {
     let current = letterId;
     for (let step = 0; step < MAX_UP; step += 1) {
       const links = await this.relations.parentLinks([current]);
-      const link =
-        links.find((item) => item.kind === 'nested_in') ??
-        links.find((item) => item.kind === 'reply_to');
+      if (links.length === 0) return current;
+      const ordered = [
+        ...links.filter((item) => item.kind === 'nested_in'),
+        ...links.filter((item) => item.kind === 'reply_to'),
+      ];
+      const visible = await this.visibleRows(
+        user,
+        ordered.map((item) => item.relatedLetterId),
+      );
+      const link = ordered.find((item) => visible.has(item.relatedLetterId));
       if (!link) return current;
-      if (!(await this.visibleRows(user, [link.relatedLetterId])).has(link.relatedLetterId)) {
-        return current;
-      }
       current = link.relatedLetterId;
     }
     return current;

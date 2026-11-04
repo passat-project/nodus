@@ -90,9 +90,12 @@ export function useLinkLetterRelation(rootId: string) {
     onError: (_error, _vars, context) => {
       if (context?.previous) queryClient.setQueryData(treeKey, context.previous);
     },
-    onSuccess: (letter) => {
+    onSuccess: (letter, vars) => {
       applyLetter(queryClient, letter);
       toast.success(uiText.linked);
+      // История источника: запись `relation_changed` видна сразу, а не через
+      // staleTime вкладки (у снятия связи инвалидация была, у постановки — нет).
+      void queryClient.invalidateQueries({ queryKey: lettersKeys.history(vars.sourceId) });
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: treeKey });

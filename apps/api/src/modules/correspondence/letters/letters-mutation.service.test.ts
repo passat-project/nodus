@@ -57,21 +57,22 @@ function setup(letter: LetterDetailRow) {
   const eventBus = { emit: vi.fn(async () => void 0) };
   const profiles = { filterActiveUserIds: vi.fn(async (ids: string[]) => ids) };
   const attached = {
-    attachedRefs: vi.fn(async () => []),
+    attachedRefs: vi.fn(async (): Promise<unknown[]> => []),
     replace: vi.fn(async () => void 0),
   };
+  const attachedValidator = { validate: vi.fn(async (): Promise<unknown[]> => []) };
   const service = new LettersMutationService(
     repo as never,
     query as never,
     validator as never,
     attached as never,
-    { validate: vi.fn(async () => []) } as never,
+    attachedValidator as never,
     { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
     eventBus as never,
     {} as never,
     profiles as never,
   );
-  return { service, repo, query, validator, eventBus, profiles };
+  return { service, repo, query, validator, eventBus, profiles, attached, attachedValidator };
 }
 
 describe('правка реквизитов (редизайн #56 — карточка = форма)', () => {
@@ -100,6 +101,39 @@ describe('правка реквизитов (редизайн #56 — карто
     const { service, validator } = setup(row(null));
     await service.update(REGISTRAR, LETTER, { addresseeId: COLLEAGUE });
     expect(validator.patch).toHaveBeenCalled();
+  });
+});
+
+describe('«Приложенные письма» в PATCH (#461, Р3)', () => {
+  const ref = {
+    number: '456',
+    counterpartyId: null,
+    orgText: 'ОАО «Беларуськалий»',
+    letterDate: new Date('2026-11-01T00:00:00.000Z'),
+    sortOrder: 0,
+  };
+
+  it('набор не изменился — строки не пересоздаются и история не пишется', async () => {
+    const { service, attached, attachedValidator, eventBus } = setup(row(null));
+    attached.attachedRefs.mockResolvedValueOnce([ref]);
+    attachedValidator.validate.mockResolvedValueOnce([{ ...ref }]);
+    await service.update(REGISTRAR, LETTER, {
+      subject: 'Оферт',
+      attachedRefs: [{ number: '456', counterpartyId: null, orgText: ref.orgText, date: null }],
+    });
+    expect(attached.replace).not.toHaveBeenCalled();
+    // Изменений нет вовсе — ни записи, ни события (ранний выход по changes).
+    expect(eventBus.emit).not.toHaveBeenCalled();
+  });
+
+  it('набор изменился — строки пересоздаются, история счётчиком', async () => {
+    const { service, attached, attachedValidator } = setup(row(null));
+    attached.attachedRefs.mockResolvedValueOnce([ref]);
+    attachedValidator.validate.mockResolvedValueOnce([{ ...ref }, { ...ref, number: '78' }]);
+    await service.update(REGISTRAR, LETTER, {
+      attachedRefs: [{ number: '78', counterpartyId: null, orgText: ref.orgText, date: null }],
+    });
+    expect(attached.replace).toHaveBeenCalled();
   });
 });
 
