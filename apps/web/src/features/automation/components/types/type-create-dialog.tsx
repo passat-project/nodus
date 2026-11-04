@@ -129,6 +129,7 @@ export function ProcessTypeCreateDialog({
                 <button
                   key={tone}
                   type="button"
+                  aria-label={ui.tasks.stageColors[tone]}
                   aria-pressed={color === tone}
                   onClick={() => setColor(tone)}
                   className={cn(
