@@ -25,6 +25,7 @@ import { userRef } from '../../../../shared/mocks/data/users.js';
 import { actorUserRef, getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import {
   apiError,
+  attachedRefsOf,
   contactRefOf,
   letterFieldsIssue,
   letterRelationIssue,
@@ -187,9 +188,16 @@ export const lettersTransitionHandlers = [
       });
     }
     const registration = body.form?.registration;
+    let attached: ReturnType<typeof attachedRefsOf> | null = null;
     if (registration) {
       const issue = await letterFieldsIssue(registration, request);
       if (issue) return apiError(422, 'LETTER_REGISTRATION_INVALID', issue);
+      if (registration.attachedRefs !== undefined) {
+        attached = attachedRefsOf(registration.attachedRefs);
+        if ('issue' in attached) {
+          return apiError(422, 'LETTER_REGISTRATION_INVALID', attached.issue);
+        }
+      }
       if (registration.replyToLetterId) {
         const relationIssue = letterRelationIssue(letter, registration.replyToLetterId);
         if (relationIssue) return apiError(422, 'LETTER_RELATION_INVALID', relationIssue);
@@ -226,6 +234,9 @@ export const lettersTransitionHandlers = [
           ? applyDemoPatch('letter', letter.customFields, registration.customFields).next
           : letter.customFields,
         registrar: actorUserRef(),
+        // #461: флаг и строки приложенных приходят тем же окном регистрации.
+        confidential: registration.confidential ?? letter.confidential,
+        attachedRefs: attached && 'refs' in attached ? attached.refs : letter.attachedRefs,
       });
       if (assigns) {
         letter.regNumber = nextLetterNumber(letter.direction, now);

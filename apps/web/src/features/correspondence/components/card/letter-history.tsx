@@ -30,6 +30,8 @@ function changeLabel(field: string, definitions: readonly CustomFieldDefinition[
 
 function changeValue(change: LetterHistoryChange, value: string | null): string {
   if (value === null || value === '') return events.empty;
+  // Флаг конфиденциальности (#461): сервер пишет булево строкой.
+  if (change.field === 'confidential') return value === 'true' ? 'Да' : 'Нет';
   return DATE_FIELDS.has(change.field) ? formatIsoDate(value) : value;
 }
 
@@ -45,6 +47,20 @@ function entryTitle(entry: LetterHistoryEntry): string {
       return `${entry.transitionName}: ${entry.fromStageName} → ${entry.toStageName}`;
     case 'participant_joined':
       return events.participantJoined;
+    case 'relation_changed': {
+      const action =
+        entry.action === 'linked'
+          ? events.relationLinked
+          : entry.action === 'unlinked'
+            ? events.relationUnlinked
+            : events.relationReplaced;
+      const kind =
+        entry.relationKind === 'nested_in'
+          ? ui.letters.relations.kindNestedIn
+          : ui.letters.relations.kindReplyTo;
+      const ref = entry.relatedLetter.regNumber ?? ui.letters.noNumber;
+      return `${action} · ${kind} ${ref}`;
+    }
   }
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { Waypoints } from 'lucide-react';
 import type { LetterDetail } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
@@ -9,7 +9,6 @@ import { useCloseCard } from '../../../../app/shell/use-card-stack.js';
 import { useLetterConversation } from '../../../../shared/chat/chat-queries.js';
 import { CHAT_PANEL_W, ChatSidePanel } from '../../../../shared/chat/chat-side-panel.js';
 import { ApiError } from '../../../../shared/api-client.js';
-import { lettersKeys } from '../../../../shared/api/letters-keys.js';
 import { useReadEntityNotifications } from '../../../../shared/api/read-entity-notifications.js';
 import { CardDataColumn } from '../../../../shared/ui/entity-card/card-data-column.js';
 import { uiPx } from '../../../../shared/ui/ui-scale.js';
@@ -35,16 +34,22 @@ import { SpamConfirmDialog } from '../spam-confirm-dialog.js';
 import { InviteParticipantDialog } from './invite-participant-dialog.js';
 import { LetterActionBar } from './letter-action-bar.js';
 import { LetterAttributes } from './letter-attributes.js';
+import { LetterAttachedRefsBlock } from './letter-attached-refs.js';
 import { LetterCardSkeleton } from './letter-card-skeleton.js';
 import { LetterFieldsBoard } from './letter-fields-board.js';
 import { LetterFilesBlock } from './letter-files-block.js';
+import { LetterRelationsDrawer } from './letter-relations-drawer.js';
 import { LetterSideTabs } from './letter-side-tabs.js';
+import { useCloseAfterRegistration } from '../../lib/use-close-after-registration.js';
+import { useLetterBranch } from '../../lib/use-letter-branch.js';
 // Побочный эффект: превью ссылок на письма в чате (link-previews); карточка —
 // eager-импорт стека, поэтому реестр заполнен на старте.
 import '../letter-link-preview.js';
 
 /** Левая зона не уже этого: дальше сужается правая панель до своего пола. */
 const MIN_MAIN_W = uiPx(320);
+/** Ширина панели «Связи» — «ёлочки» (#461): зеркало ветки задачи (300px). */
+const BRANCH_W = uiPx(300);
 
 /** Стартовая вкладка: «Письмо»; у письма без документа (текста-PDF ещё
  *  нет или отказ конвертера) участнику — сразу «Чат». */
@@ -80,7 +85,8 @@ export function LetterCard({ letterId }: { letterId: string }) {
   const join = useJoinLetter(letterId);
   const deleteSpam = useDeleteSpamLetter();
   const closeCard = useCloseCard();
-  const queryClient = useQueryClient();
+  // «Ёлочка» (#461, В1): выдвижная колонка слева, зеркало ветки задачи.
+  const branch = useLetterBranch(letterId);
   const [spamOpen, setSpamOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   // Вкладки — до первого действия производные от письма (стартовая вкладка).
@@ -97,41 +103,20 @@ export function LetterCard({ letterId }: { letterId: string }) {
   const sideRef = useRef<HTMLDivElement>(null);
   const railShrink = useRailShrink();
   const panelShrink = panelOpen ? CHAT_PANEL_W : 0;
+  const branchShrink = branch.open ? BRANCH_W : 0;
   const chatFloor = panelOpen ? MIN_CHAT_WITH_PANEL : MIN_CHAT_W;
   const { chatW, onDividerDown, dragging } = useChatWidth(
     sideRef,
-    railShrink + panelShrink,
+    railShrink + panelShrink + branchShrink,
     chatFloor,
   );
-  const sideW = Math.max(chatW - railShrink - panelShrink, chatFloor);
+  const sideW = Math.max(chatW - railShrink - panelShrink - branchShrink, chatFloor);
 
-  // Письмо было «новым» и зарегистрировалось (окном или кнопкой без окна) —
-  // обновляем списки, чтобы строка ушла из «Новые» и пришла во «Входящие»
-  // без перезагрузки страницы. Карточку НЕ меняем (вердикт владельца 28.10).
-  const wasNew = useRef<boolean | null>(null);
-
+  useCloseAfterRegistration(letter, closeCard);
   useEffect(() => {
     setTabsState(null);
     setPanelOpen(false);
-    wasNew.current = null;
   }, [letterId]);
-
-  useEffect(() => {
-    if (!letter) return;
-    if (wasNew.current === null) {
-      wasNew.current = letter.registeredAt === null;
-      return;
-    }
-    if (!wasNew.current || letter.registeredAt === null) {
-      wasNew.current = letter.registeredAt === null;
-      return;
-    }
-    wasNew.current = false;
-    void queryClient.invalidateQueries({ queryKey: lettersKeys.lists() });
-    // Вердикт владельца 28.10: после регистрации карточка закрывается —
-    // секретарь возвращается к списку «Новых» и сама выбирает следующее.
-    closeCard();
-  }, [letter, queryClient, closeCard]);
 
   if (!letter && error instanceof ApiError && error.status === 404) {
     return (
@@ -169,6 +154,29 @@ export function LetterCard({ letterId }: { letterId: string }) {
   return (
     <div className="flex h-full min-w-0 flex-col">
       <div className="relative flex min-h-0 flex-1">
+        {/* Панель «Связи» — «ёлочка» (#461, В1): выдвижная колонка 0↔300px
+            ПЕРЕД зоной данных (зеркало ветки задачи), монтируется раз и
+            живёт при навигации — состояние (раскрытия, сессия переходов)
+            не теряется. */}
+        <div
+          className={cn(
+            'min-h-0 overflow-hidden',
+            !dragging && 'transition-[width] duration-200 ease-out',
+          )}
+          style={{ width: branchShrink }}
+        >
+          {branch.mounted ? (
+            <LetterRelationsDrawer
+              rootId={branch.rootId}
+              currentId={letterId}
+              canManage={letter.canManageRelations}
+              canBack={branch.canBack}
+              onBack={branch.back}
+              onNavigate={branch.navigate}
+              onClose={branch.close}
+            />
+          ) : null}
+        </div>
         {/* Левая зона: скроллится только контент, бар h-16 замоноличен (его
             верхняя линия — одна горизонталь с композером чата). border-r —
             структурная граница с панелью; ручка — оверлей поверх неё.
@@ -178,9 +186,25 @@ export function LetterCard({ letterId }: { letterId: string }) {
           className="relative flex min-h-0 min-w-0 flex-1 flex-col border-r border-border @container"
           style={{ minWidth: MIN_MAIN_W }}
         >
-          <CardDataColumn>
+          <CardDataColumn
+            gutter={
+              <button
+                type="button"
+                onClick={branch.toggle}
+                aria-label={ui.letters.relations.toggle}
+                title={ui.letters.relations.toggle}
+                className={cn(
+                  'rounded-lg p-1.5 transition-colors hover:bg-accent',
+                  branch.open ? 'text-foreground' : 'text-muted-foreground',
+                )}
+              >
+                <Waypoints className="size-4" strokeWidth={1.75} />
+              </button>
+            }
+          >
             <LetterFieldsBoard letter={letter} />
             <LetterAttributes letter={letter} />
+            <LetterAttachedRefsBlock letter={letter} />
             <LetterFilesBlock letter={letter} activeId={activeFileId} onOpen={openAttachment} />
           </CardDataColumn>
           <div className="flex h-16 shrink-0 items-center border-t border-border px-5">

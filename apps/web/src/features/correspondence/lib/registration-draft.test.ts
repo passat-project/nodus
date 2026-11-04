@@ -41,6 +41,8 @@ const letter = {
   customFields: {},
   attachments: [],
   body: { kind: 'none' },
+  attachedRefs: [],
+  confidential: false,
 } as unknown as LetterDetail;
 
 const complete = (patch: Partial<RegistrationDraft> = {}): RegistrationDraft => ({
@@ -93,6 +95,7 @@ describe('черновик регистрации (#55, U5)', () => {
       projectId: null,
       addresseeId: '00000000-0000-4000-8000-000000000007',
       responseDeadline: null,
+      confidential: false,
     });
     expect(registrationInputOf(initialDraft(letter, METHODS), '2026-10-26')).toBeNull();
     const future = complete({ theirDate: '2026-10-27' });
@@ -103,6 +106,34 @@ describe('черновик регистрации (#55, U5)', () => {
     expect(
       registrationInputOf(complete({ responseDeadline: '2026-10-25' }), '2026-10-26'),
     ).toBeNull();
+  });
+
+  it('конфиденциальность и приложенные письма (#461): флаг всегда, строки — при наличии', () => {
+    const withRows = complete({
+      confidential: true,
+      attachedRefs: [
+        {
+          number: ' 456 ',
+          counterparty: { id: 'd0000000-0000-4000-8000-000000000001', name: 'АО «Галургия»' },
+          orgText: '',
+          date: '2026-10-01',
+        },
+        { number: '78', counterparty: null, orgText: ' Беларуськалий ', date: null },
+      ],
+    });
+    const body = registrationInputOf(withRows, '2026-10-26');
+    expect(body?.confidential).toBe(true);
+    expect(body?.attachedRefs).toEqual([
+      {
+        number: '456',
+        counterpartyId: 'd0000000-0000-4000-8000-000000000001',
+        orgText: null,
+        date: '2026-10-01',
+      },
+      { number: '78', counterpartyId: null, orgText: 'Беларуськалий', date: null },
+    ]);
+    // Пустой набор — ключа нет (тело не раздувается).
+    expect(registrationInputOf(complete(), '2026-10-26')).not.toHaveProperty('attachedRefs');
   });
 
   it('подтверждение подсказки «ответ на» (#56, Р5): уходит в тело только с галочкой', () => {

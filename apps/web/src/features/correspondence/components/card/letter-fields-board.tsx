@@ -18,6 +18,8 @@ import { toast } from 'sonner';
 import { projectsAvailable } from '../../../../shared/api/projects-available.js';
 import { useProjectsList } from '../../../../shared/api/projects-list.js';
 import { useUsersSearch } from '../../../../shared/api/users-list.js';
+import { Switch } from '@nodus/ui/components/switch';
+
 import { EntityFields, type EntityFieldDef } from '../../../../shared/ui/entity-fields.js';
 import { ResponseDeadline } from '../../../../shared/views/letter-table-fields.js';
 import { useUpdateLetter } from '../../api/letters-mutations.js';
@@ -147,6 +149,27 @@ export const LetterFieldsBoard = memo(function LetterFieldsBoard({
           empty={notSet}
           onCommit={(addressee) => save({ addresseeId: addressee?.id ?? null }, { addressee })}
         />
+      ),
+    },
+    // «Конфиденциально» (#461, Р4, В3): флаг в карточке — канцелярия.
+    // Включение закрывает письмо, чат, файлы и поручения до участников;
+    // строка-подсказка объясняет последствие, пока флаг включён.
+    {
+      key: 'confidential',
+      icon: <Lock className="size-3.5" />,
+      label: ui.letters.confidential.label,
+      render: () => (
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <Switch
+            checked={letter.confidential}
+            disabled={!editable}
+            aria-label={ui.letters.confidential.label}
+            onCheckedChange={(confidential) => save({ confidential }, { confidential })}
+          />
+          {letter.confidential ? (
+            <span className="text-xs text-muted-foreground">{ui.letters.confidential.hint}</span>
+          ) : null}
+        </div>
       ),
     },
     {

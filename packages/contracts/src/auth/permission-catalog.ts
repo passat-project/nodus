@@ -60,6 +60,7 @@ const PERMISSION_MODULE = {
   'task.override_gate': 'tasks',
   'correspondence.register': 'correspondence',
   'correspondence.resolve': 'correspondence',
+  'correspondence.view_confidential': 'correspondence',
   'project.create': 'projects',
   'project.manage': 'projects',
   'project.channel.post': 'projects',

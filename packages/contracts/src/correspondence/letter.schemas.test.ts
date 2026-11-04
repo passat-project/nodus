@@ -6,6 +6,8 @@ import {
   letterDetailSchema,
   letterHistoryEntrySchema,
   letterRefSchema,
+  letterRelationCreateBodySchema,
+  letterTreeResponseSchema,
   listLettersQuerySchema,
   updateLetterBodySchema,
 } from './letter.schemas.js';
@@ -35,6 +37,7 @@ const listItem = {
   replyTo: null,
   attachmentCount: 1,
   viewed: false,
+  confidential: false,
 };
 
 describe('письмо v3 (#55)', () => {
@@ -74,6 +77,8 @@ describe('письмо v3 (#55)', () => {
       body: { kind: 'document', attachmentId },
       customFields: {},
       customFieldRefs: [],
+      attachedRefs: [],
+      canManageRelations: false,
       access: { canEdit: false, canDeleteSpam: true, canJoin: true, isParticipant: false },
     });
     expect(detail.subject).toBeNull();
@@ -161,6 +166,8 @@ describe('письмо v3 (#55)', () => {
       body: { kind: 'document', attachmentId: id() },
       customFields: {},
       customFieldRefs: [],
+      attachedRefs: [],
+      canManageRelations: false,
       access: { canEdit: false, canDeleteSpam: true, canJoin: true, isParticipant: false },
     });
     expect(detail.mail?.messageId).toBe('<abc@silium.by>');
@@ -186,5 +193,76 @@ describe('письмо v3 (#55)', () => {
         changes: [{ field: 'subject', from: 'Старая', to: 'Новая' }],
       }).kind,
     ).toBe('updated');
+  });
+
+  it('связь писем в истории: действие, вид и номер второй стороны (#461)', () => {
+    const base = { id: id(), at: '2026-10-26T08:00:00.000Z', actor: null };
+    const entry = letterHistoryEntrySchema.parse({
+      ...base,
+      kind: 'relation_changed',
+      action: 'linked',
+      relationKind: 'nested_in',
+      relatedLetter: { id: id(), regNumber: 'Вх-2026/456', subject: null },
+    });
+    expect(entry.kind).toBe('relation_changed');
+    expect(
+      letterHistoryEntrySchema.safeParse({ ...base, kind: 'relation_changed', action: 'linked' })
+        .success,
+    ).toBe(false);
+  });
+
+  it('связи: вид и тело создания; дерево — рекурсивный узел с детьми (#461)', () => {
+    expect(
+      letterRelationCreateBodySchema.parse({ relatedLetterId: id(), kind: 'reply_to' }),
+    ).toEqual({ relatedLetterId: expect.any(String), kind: 'reply_to' });
+    expect(
+      letterRelationCreateBodySchema.safeParse({ relatedLetterId: id(), kind: 'duplicate' })
+        .success,
+    ).toBe(false);
+    expect(
+      letterRelationCreateBodySchema.safeParse({
+        relatedLetterId: id(),
+        kind: 'nested_in',
+        replace: true,
+      }).success,
+    ).toBe(true);
+
+    const tree = letterTreeResponseSchema.parse({
+      truncated: true,
+      root: {
+        id: id(),
+        regNumber: 'Вх-2026/1',
+        theirNumber: '456',
+        subject: 'Конверт',
+        direction: 'incoming',
+        systemState: 'active',
+        confidential: true,
+        relationId: null,
+        relationKind: null,
+        children: [
+          {
+            id: id(),
+            regNumber: null,
+            theirNumber: null,
+            subject: null,
+            direction: 'outgoing',
+            systemState: 'done',
+            confidential: false,
+            relationId: id(),
+            relationKind: 'nested_in',
+            children: [],
+          },
+        ],
+      },
+    });
+    expect(tree.root.children).toHaveLength(1);
+    expect(tree.root.children[0]?.children).toEqual([]);
+  });
+
+  it('правка приложенных писем и флага — через PATCH (#461)', () => {
+    const ref = { number: '456', counterpartyId: id(), orgText: null, date: '2026-10-01' };
+    expect(updateLetterBodySchema.parse({ attachedRefs: [ref] }).attachedRefs).toEqual([ref]);
+    expect(updateLetterBodySchema.parse({ confidential: true }).confidential).toBe(true);
+    expect(updateLetterBodySchema.safeParse({ attachedRefs: [] }).success).toBe(true);
   });
 });

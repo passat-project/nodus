@@ -3,6 +3,7 @@ import type {
   CounterpartyRef,
   CustomFieldValues,
   LetterAccess,
+  LetterAttachedRef,
   LetterAttachment,
   LetterBody,
   LetterBox,
@@ -50,6 +51,13 @@ export interface DemoLetter {
   mail: LetterMailInfo | null;
   /** Авто-связь «ответ на» по цепочке (Р5); подтверждённая галочкой — сюда же. */
   replyTo: LetterRef | null;
+  /** «Вложено в» (#461): письмо физически лежит в конверте другого —
+   *  матрёшка, связывает канцелярия. */
+  nestedIn: LetterRef | null;
+  /** Строки «приложенных писем» (#461, Р3): № + организация + дата. */
+  attachedRefs: LetterAttachedRef[];
+  /** «Конфиденциально» (#461, Р4): видят только участники. */
+  confidential: boolean;
   /** Нечёткая подсказка по теме (Р5); показывается, пока replyTo нет. */
   replySuggestion: LetterRef | null;
   attachments: LetterAttachment[];
@@ -70,10 +78,20 @@ export function canRegisterLetters(actor: LetterActor): boolean {
   return actor.permissions.includes(Permission.CORRESPONDENCE_REGISTER);
 }
 
-/** Видимость (Р7): зарегистрированное — всем, незарегистрированное —
- *  держателям `correspondence.register`; невидимое — 404 без оракула. */
+/** Видимость (Р7; #461 — конфиденциальность): зарегистрированное — всем,
+ *  незарегистрированное — держателям `correspondence.register`; у
+ *  конфиденциального круг сужается до участников (регистратор, адресат,
+ *  приглашённые) и держателей `correspondence.view_confidential`; невидимое
+ *  — 404 без оракула. */
 export function canSeeLetter(letter: DemoLetter, actor: LetterActor): boolean {
-  return letter.registeredAt !== null || canRegisterLetters(actor);
+  if (letter.registeredAt === null) return canRegisterLetters(actor);
+  if (!letter.confidential) return true;
+  if (actor.permissions.includes(Permission.CORRESPONDENCE_VIEW_CONFIDENTIAL)) return true;
+  return (
+    letter.registrar?.id === actor.id ||
+    letter.addressee?.id === actor.id ||
+    letter.participantIds.includes(actor.id)
+  );
 }
 
 /** Вкладка письма: «Новые» — незарегистрированные в начальной стадии;
@@ -121,6 +139,7 @@ export function letterListItemOf(
     replyTo: letter.replyTo,
     attachmentCount: letter.attachments.filter((a) => a.role !== 'source' && !a.inline).length,
     viewed,
+    confidential: letter.confidential,
   };
 }
 
@@ -143,13 +162,19 @@ function accessOf(letter: DemoLetter, actor: LetterActor): LetterAccess {
   // Зеркало серверного letter-access (редизайн #56): правка реквизитов —
   // канцелярия (и незарегистрированного — форма по месту в карточке),
   // «Присоединиться» — канцелярия может начать обсуждение до регистрации.
+  // У конфиденциального (#461, Р4) присоединиться может только регистратор
+  // ЭТОГО письма или держатель права: остальным письмо невидимо (404).
   const register = canRegisterLetters(actor);
   const registered = letter.registeredAt !== null;
   const isParticipant = letterMemberIds(letter).includes(actor.id);
+  const confidentialJoin =
+    !letter.confidential ||
+    letter.registrar?.id === actor.id ||
+    actor.permissions.includes(Permission.CORRESPONDENCE_VIEW_CONFIDENTIAL);
   return {
     canEdit: register,
     canDeleteSpam: !registered && !isFinalState(letter.stage.systemState) && register,
-    canJoin: !isParticipant && (registered || register),
+    canJoin: !isParticipant && (registered || register) && confidentialJoin,
     isParticipant,
   };
 }
@@ -176,6 +201,8 @@ export function letterDetailOf(letter: DemoLetter, actor: LetterActor): LetterDe
     body: letter.body,
     customFields: letter.customFields,
     customFieldRefs: [],
+    attachedRefs: letter.attachedRefs,
+    canManageRelations: canRegisterLetters(actor),
     access: accessOf(letter, actor),
   };
 }

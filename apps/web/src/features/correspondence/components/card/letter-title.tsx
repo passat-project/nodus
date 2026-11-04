@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Lock } from 'lucide-react';
 import { LETTER_LIMITS, ui } from '@nodus/contracts';
 
 import { useUpdateLetter } from '../../api/letters-mutations.js';
@@ -17,10 +18,24 @@ export function LetterTitle({ letterId }: { letterId: string }) {
 
   if (!letter) return <>{ui.letters.letter}</>;
   const shown = letter.subject ?? ui.letters.noSubject;
+  // Замок конфиденциального (#461, Р4): бейдж только видящим письмо —
+  // остальным строки и карточки нет вовсе (не оракул).
+  const lock = letter.confidential ? (
+    <Lock
+      aria-label={ui.letters.confidential.badge}
+      className="mr-1.5 inline size-3.5 shrink-0 align-middle text-muted-foreground"
+      strokeWidth={1.75}
+    />
+  ) : null;
   const subjectMissing =
     letter.subject === null && letter.registeredAt === null && letter.access.canEdit;
   if (!letter.access.canEdit) {
-    return <span className={letter.subject ? undefined : 'text-muted-foreground'}>{shown}</span>;
+    return (
+      <span className={letter.subject ? undefined : 'text-muted-foreground'}>
+        {lock}
+        {shown}
+      </span>
+    );
   }
 
   function commit() {
@@ -63,6 +78,7 @@ export function LetterTitle({ letterId }: { letterId: string }) {
         subjectMissing ? 'text-warning' : letter.subject ? '' : 'text-muted-foreground'
       }`}
     >
+      {lock}
       {shown}
     </button>
   );

@@ -29,6 +29,7 @@ import { demoUserListItems } from '../../../../shared/mocks/data/users.js';
 import { actorUserRef, getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import {
   apiError,
+  attachedRefsOf,
   contactRefOf,
   letterFieldsIssue,
   notFound,
@@ -112,6 +113,9 @@ export const lettersMutationHandlers = [
       registrar: null,
       mail: null,
       replyTo: null,
+      nestedIn: null,
+      attachedRefs: [],
+      confidential: false,
       replySuggestion: null,
       attachments,
       body: { kind: 'document', attachmentId: main.id },
@@ -172,6 +176,11 @@ export const lettersMutationHandlers = [
         reason: 'inactive',
       });
     }
+    // «Приложенные письма» (#461): организация обязательна, дубли — 422.
+    const attached = body.attachedRefs !== undefined ? attachedRefsOf(body.attachedRefs) : null;
+    if (attached && 'issue' in attached) {
+      return apiError(422, 'LETTER_REGISTRATION_INVALID', attached.issue);
+    }
     const next = {
       counterparty: counterpartyRefById(counterpartyId) ?? letter.counterparty,
       signer: contactRefOf(counterpartyId, signerId),
@@ -200,6 +209,8 @@ export const lettersMutationHandlers = [
       customFields: body.customFields
         ? applyDemoPatch('letter', letter.customFields, body.customFields).next
         : letter.customFields,
+      confidential: body.confidential ?? letter.confidential,
+      attachedRefs: attached && 'refs' in attached ? attached.refs : letter.attachedRefs,
     });
     if (changes.length > 0) {
       pushLetterHistory(letter.id, {

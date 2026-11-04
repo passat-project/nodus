@@ -62,6 +62,50 @@ describe('ввод регистрации письма (#55, Р1)', () => {
       false,
     );
   });
+
+  it('конфиденциальность и приложенные письма — новые поля регистрации (#461)', () => {
+    const parsed = letterRegistrationInputSchema.parse({
+      ...input,
+      confidential: true,
+      attachedRefs: [
+        { number: ' 456 ', counterpartyId: null, orgText: 'Беларуськалий', date: '2026-10-01' },
+        { number: '78', counterpartyId: id(), orgText: null, date: null },
+      ],
+    });
+    expect(parsed.confidential).toBe(true);
+    expect(parsed.attachedRefs?.[0]).toEqual({
+      number: '456',
+      counterpartyId: null,
+      orgText: 'Беларуськалий',
+      date: '2026-10-01',
+    });
+    // Лимит строк и номера — контракт (20 / 64 / 160).
+    expect(
+      letterRegistrationInputSchema.safeParse({
+        ...input,
+        attachedRefs: Array.from({ length: 21 }, (_, index) => ({
+          number: String(index + 1),
+          counterpartyId: null,
+          orgText: 'Организация',
+          date: null,
+        })),
+      }).success,
+    ).toBe(false);
+    expect(
+      letterRegistrationInputSchema.safeParse({
+        ...input,
+        attachedRefs: [{ number: '1'.repeat(65), counterpartyId: null, orgText: 'О', date: null }],
+      }).success,
+    ).toBe(false);
+    expect(
+      letterRegistrationInputSchema.safeParse({
+        ...input,
+        attachedRefs: [{ number: '1', counterpartyId: null, orgText: 'О'.repeat(161), date: null }],
+      }).success,
+    ).toBe(false);
+    // Старое тело без новых полей остаётся валидным (аддитивность).
+    expect(letterRegistrationInputSchema.parse(input).confidential).toBeUndefined();
+  });
 });
 
 describe('checkLetterDates (одна грамматика веба, моков и сервера)', () => {

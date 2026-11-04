@@ -26,6 +26,10 @@ export interface RegisteredLetter {
   participants?: string[];
   customFields?: DemoLetter['customFields'];
   stage?: TaskStage;
+  /** «Конфиденциально» (#461): демо — Вх-2026/115 виден участникам. */
+  confidential?: boolean;
+  /** Строки «приложенных писем» (#461): конверт-матрёшка на бумаге. */
+  attachedRefs?: { number: string; counterparty?: string; orgText?: string; date?: string }[];
 }
 
 const replyRequired = { [fieldIds.letterReplyRequired]: true };
@@ -79,6 +83,16 @@ export const registeredLetterSpecs: RegisteredLetter[] = [
     deadline: -1,
     participants: [userIds.vinnichek, userIds.matorin],
     customFields: { [fieldIds.letterObjectCode]: '0359', ...replyRequired },
+    // Демо конфиденциальности (#461): «Замечания по КЖ» видит адресат
+    // (Климович), регистратор, участники и держатели права — остальным
+    // строки в списках нет, карточка 404.
+    confidential: true,
+    // Конверт-матрёшка: заказчик прислал пачку писем вложением — строки
+    // «№ + организация + дата»; поиск по «78» находит это письмо.
+    attachedRefs: [
+      { number: '0359-КЖ/147', counterparty: galurgiya, date: '2026-10-20' },
+      { number: '78', orgText: 'Беларуськалий', date: '2026-10-18' },
+    ],
   },
   {
     n: 8,

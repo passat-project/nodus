@@ -1,5 +1,7 @@
 import type {
   CustomFieldValue,
+  LetterAttachedRef,
+  LetterAttachedRefInput,
   LetterHistoryChange,
   LetterRegistrationIssue,
   ProjectRef,
@@ -111,6 +113,40 @@ export function letterRelationIssue(
   return null;
 }
 
+/** Строки «приложенных писем» (#461, Р3): организация обязательна (контрагент
+ *  или текст), точный дубль строки — 422 `duplicate`, контрагент — из
+ *  справочника. Возвращает готовые строки или поле-причину отказа. */
+export function attachedRefsOf(
+  inputs: readonly LetterAttachedRefInput[],
+): { refs: LetterAttachedRef[] } | { issue: LetterRegistrationIssue } {
+  const seen = new Set<string>();
+  const refs: LetterAttachedRef[] = [];
+  for (const input of inputs) {
+    const counterparty = input.counterpartyId
+      ? demoCounterpartyById(input.counterpartyId)
+      : undefined;
+    if (input.counterpartyId && !counterparty) {
+      return { issue: { field: 'attachedRefs', reason: 'not_found' } };
+    }
+    if (!counterparty && !input.orgText) {
+      return { issue: { field: 'attachedRefs', reason: 'required' } };
+    }
+    const key = [input.number, input.counterpartyId ?? '', input.orgText ?? '', input.date ?? '']
+      .join('|')
+      .toLowerCase();
+    if (seen.has(key)) return { issue: { field: 'attachedRefs', reason: 'duplicate' } };
+    seen.add(key);
+    refs.push({
+      id: crypto.randomUUID(),
+      number: input.number,
+      counterparty: counterparty ? { id: counterparty.id, name: counterparty.shortName } : null,
+      orgText: counterparty ? null : input.orgText,
+      date: input.date,
+    });
+  }
+  return { refs };
+}
+
 export function projectRefOf(id: string | null | undefined): ProjectRef | null {
   if (!id) return null;
   const project = demoProjects.find((entry) => entry.id === id);
@@ -169,6 +205,16 @@ export function patchChanges(
   }
   if (body.responseDeadline !== undefined) {
     push('responseDeadline', letter.responseDeadline, body.responseDeadline);
+  }
+  if (body.confidential !== undefined) {
+    push(
+      'confidential',
+      letter.confidential ? 'true' : 'false',
+      body.confidential ? 'true' : 'false',
+    );
+  }
+  if (body.attachedRefs !== undefined) {
+    push('attachedRefs', String(letter.attachedRefs.length), String(body.attachedRefs.length));
   }
   for (const [id, value] of Object.entries(body.customFields ?? {})) {
     push(`cf.${id}`, cfDisplay(letter.customFields[id]), cfDisplay(value));

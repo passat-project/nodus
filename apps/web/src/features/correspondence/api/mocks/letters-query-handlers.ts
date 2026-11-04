@@ -18,6 +18,7 @@ import {
   letterDetailOf,
   letterHistory,
   letterListItemOf,
+  letterTreeOf,
   viewedLetterIds,
   type DemoLetter,
 } from '../../../../shared/mocks/data/letters.js';
@@ -44,7 +45,16 @@ function page<T>(items: T[], cursor: string | null | undefined, limit: number): 
 function matchesSearch(letter: DemoLetter, search: string | undefined): boolean {
   const q = search?.toLowerCase();
   if (!q) return true;
-  return [letter.subject, letter.regNumber, letter.theirNumber, letter.counterparty?.name]
+  return [
+    letter.subject,
+    letter.regNumber,
+    letter.theirNumber,
+    letter.counterparty?.name,
+    // Поиск по номеру любого приложенного письма (#461, Р8): «456» находит
+    // конверт, в котором лежит лист № 456.
+    ...letter.attachedRefs.map((ref) => ref.number),
+    ...letter.attachedRefs.map((ref) => ref.orgText ?? ref.counterparty?.name ?? null),
+  ]
     .filter((value): value is string => Boolean(value))
     .some((value) => value.toLowerCase().includes(q));
 }
@@ -61,9 +71,9 @@ export const lettersQueryHandlers = [
     const actor = getMockActor();
     // «Новые» — только канцелярии (Р7): без права — 403, не пустой список.
     if (box === 'new' && !canRegisterLetters(actor)) return apiError(403, 'FORBIDDEN');
-    let items = demoLetters.filter((letter) =>
-      box ? boxOf(letter) === box : letter.registeredAt !== null,
-    );
+    let items = demoLetters
+      .filter((letter) => canSeeLetter(letter, actor))
+      .filter((letter) => (box ? boxOf(letter) === box : letter.registeredAt !== null));
     if (counterpartyId) {
       const matches = await counterpartyMatcher(counterpartyId, request);
       items = items.filter((letter) => matches(letter.counterparty));
@@ -112,6 +122,15 @@ export const lettersQueryHandlers = [
     const actor = getMockActor();
     if (!letter || !canSeeLetter(letter, actor)) return notFound();
     return HttpResponse.json(letterDetailOf(letter, actor));
+  }),
+
+  /** Дерево «ёлочки» (#461, Р2): корень — верх цепочки, текущее письмо
+   *  подсвечивает клиент; невидимое письмо — 404 без оракула. */
+  http.get('/api/v1/letters/:id/tree', ({ params }) => {
+    const actor = getMockActor();
+    const tree = letterTreeOf(String(params.id), actor);
+    if (!tree) return notFound();
+    return HttpResponse.json(tree);
   }),
 
   http.get('/api/v1/letters/:id/history', ({ params, request }) => {

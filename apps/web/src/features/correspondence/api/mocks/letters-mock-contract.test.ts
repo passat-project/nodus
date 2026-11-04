@@ -8,6 +8,7 @@ import {
   letterDetailSchema,
   letterHistoryEntrySchema,
   letterListItemSchema,
+  letterTreeResponseSchema,
   workflowDocumentSchema,
 } from '@nodus/contracts';
 
@@ -18,12 +19,16 @@ import {
 } from '../../../../shared/mocks/data/letter-catalog.js';
 import {
   boxOf,
+  canSeeLetter,
   demoLetters,
   letterDetailOf,
   letterHistory,
   letterListItemOf,
+  letterTreeOf,
+  lettersCountOf,
   nextLetterNumber,
 } from '../../../../shared/mocks/data/letters.js';
+import { userIds } from '../../../../shared/mocks/data/users.js';
 import { registrationIssueOf } from './letters-mock-checks.js';
 import { letterTransitionsOf } from './letters-transition-handlers.js';
 
@@ -108,6 +113,57 @@ describe('мок-мир писем v3 (#55, §7.6) парсится контра
     expect(names).toEqual(['Зарегистрировать', 'Закрыть без регистрации']);
     expect(letterTransitionsOf(fresh, employee)).toEqual([]);
     expect(letterDetailOf(fresh, registrar).access.canDeleteSpam).toBe(true);
+  });
+
+  it('конфиденциальное письмо (#461, Р4): видно участникам, чужому — 404', () => {
+    const secret = demoLetters.find((l) => l.regNumber === 'Вх-2026/115')!;
+    expect(secret.confidential).toBe(true);
+    const addressee = { id: userIds.klimovich, permissions: [] };
+    const office = { id: userIds.karpovich, permissions: [Permission.CORRESPONDENCE_REGISTER] };
+    expect(canSeeLetter(secret, addressee)).toBe(true);
+    expect(canSeeLetter(secret, office)).toBe(true);
+    expect(canSeeLetter(secret, employee)).toBe(false);
+    // Бейдж и строки — только у видящих: элемент списка несёт флаг.
+    expect(letterListItemOf(secret).confidential).toBe(true);
+    // CRM-счётчик считается тем же правилом видимости (без +1 у чужого).
+    const total = demoLetters.filter(
+      (l) => l.registeredAt !== null && l.counterparty?.id === secret.counterparty?.id,
+    ).length;
+    expect(lettersCountOf(secret.counterparty!.id, employee)).toBe(total - 1);
+    expect(lettersCountOf(secret.counterparty!.id, addressee)).toBe(total);
+  });
+
+  it('дерево «ёлочки» (#461, Р2): конверт раскрывает вложенное письмо', () => {
+    const envelope = demoLetters.find((l) => l.regNumber === 'Вх-2026/115')!;
+    const nested = demoLetters.find((l) => l.subject?.includes('О корректировке сроков'))!;
+    // Канцелярия видит и конверт (регистратор), и незарегистрированное вложенное.
+    const office = { id: userIds.karpovich, permissions: [Permission.CORRESPONDENCE_REGISTER] };
+    expect(nested.nestedIn?.id).toBe(envelope.id);
+    const tree = letterTreeOf(nested.id, office);
+    expect(tree).not.toBeNull();
+    expect(letterTreeResponseSchema.parse(tree)).toBeTruthy();
+    expect(tree!.root.id).toBe(envelope.id);
+    expect(tree!.root.children.map((child) => child.id)).toContain(nested.id);
+    expect(tree!.root.children[0]?.relationKind).toBe('nested_in');
+    expect(tree!.root.children[0]?.relationId).toBeTruthy();
+    // Невидимое письмо — дерева нет (404 без оракула); чужой видит вложенное
+    // письмо, но не конфиденциальный конверт: цепочка обрывается на нём.
+    expect(letterTreeOf(envelope.id, employee)).toBeNull();
+    expect(letterTreeOf(nested.id, employee)).toBeNull();
+  });
+
+  it('приложенные письма (#461, Р3): строки в карточке и поиск по номеру', () => {
+    const envelope = demoLetters.find((l) => l.regNumber === 'Вх-2026/115')!;
+    const detail = letterDetailOf(envelope, { id: userIds.klimovich, permissions: [] });
+    expect(detail.attachedRefs.map((ref) => ref.number)).toEqual(['0359-КЖ/147', '78']);
+    expect(detail.attachedRefs[1]?.orgText).toBe('Беларуськалий');
+    expect(detail.canManageRelations).toBe(false);
+    expect(
+      letterDetailOf(envelope, {
+        id: userIds.karpovich,
+        permissions: [Permission.CORRESPONDENCE_REGISTER],
+      }).canManageRelations,
+    ).toBe(true);
   });
 
   it('ошибка схемы регистрации → поле и причина 422', () => {
