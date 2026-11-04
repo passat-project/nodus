@@ -1,13 +1,14 @@
 import { Maximize2 } from 'lucide-react';
 import { ui } from '@nodus/contracts';
-import { cn } from '@nodus/ui/lib/utils';
+import { Button } from '@nodus/ui/components/button';
 
 /**
  * «Открыть на весь экран» внутри вкладки-просмотрщика (вердикт владельца
  * 04.11.2026): кнопка живёт у зума вложения (панель PDF, нижний правый угол
- * ONLYOFFICE, поверх медиа/текста), а не на общей полосе карточки. Подложка
- * карточки + hairline-бордюр — чтобы читалась на белом документе обеих тем;
- * заливка — тихая (действие вторичное).
+ * ONLYOFFICE, поверх медиа/текста), а не на общей полосе карточки.
+ * Оформление — ТАКОЕ ЖЕ, как у «+»/«−» зума: ghost-иконка без подложки и
+ * рамки (вердикт 04.11.2026: «чисто значок»), чтобы не читалась отдельной
+ * кнопкой на тёмной панели.
  */
 export function ViewerFullscreenButton({
   onClick,
@@ -17,17 +18,16 @@ export function ViewerFullscreenButton({
   className?: string;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="icon-sm"
       onClick={onClick}
       aria-label={ui.files.fullscreen}
       title={ui.files.fullscreen}
-      className={cn(
-        'rounded-lg border border-border bg-card p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-        className,
-      )}
+      className={className}
     >
-      <Maximize2 className="size-4" strokeWidth={1.75} />
-    </button>
+      <Maximize2 />
+    </Button>
   );
 }

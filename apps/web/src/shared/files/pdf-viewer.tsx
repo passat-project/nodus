@@ -121,7 +121,7 @@ export function PdfViewer({
           <Button variant="ghost" size="icon-sm" onClick={zoomIn} aria-label={ui.files.zoomIn}>
             <Plus />
           </Button>
-          {onFullscreen ? <ViewerFullscreenButton onClick={onFullscreen} /> : null}
+          {onFullscreen ? <ViewerFullscreenButton onClick={onFullscreen} className="ml-1" /> : null}
         </div>
       </div>
       <div ref={containerRef} className="min-h-0 flex-1 overflow-auto bg-muted/40 px-4 py-4">

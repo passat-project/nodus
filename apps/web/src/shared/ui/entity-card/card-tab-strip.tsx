@@ -81,12 +81,22 @@ export function CardTabStrip({
     const el = listRef.current;
     if (!el) return;
     updateScroll();
+    // Колесо мыши по полосе листает вкладки по горизонтали (нативный
+    // скроллбар скрыт): вертикальный deltaY переводим в scrollLeft.
+    const onWheel = (event: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth) return;
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+      event.preventDefault();
+      el.scrollLeft += event.deltaY;
+    };
     el.addEventListener('scroll', updateScroll, { passive: true });
+    el.addEventListener('wheel', onWheel, { passive: false });
     const observer =
       typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateScroll);
     observer?.observe(el);
     return () => {
       el.removeEventListener('scroll', updateScroll);
+      el.removeEventListener('wheel', onWheel);
       observer?.disconnect();
     };
   }, [updateScroll]);
