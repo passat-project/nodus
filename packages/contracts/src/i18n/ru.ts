@@ -122,6 +122,7 @@ export const ui = {
     save: 'Сохранить',
     cancel: 'Отмена',
     close: 'Закрыть',
+    closeTab: 'Закрыть вкладку',
     back: 'Назад',
     you: 'Вы',
     search: 'Поиск',

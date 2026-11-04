@@ -7,9 +7,9 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@nodus/ui/components/dropdown-menu';
-import { cn } from '@nodus/ui/lib/utils';
 
 import { ChatPanelToggle } from '../../../shared/chat/chat-side-panel.js';
+import { CardTabStrip, type CardTabDef } from '../../../shared/ui/entity-card/card-tab-strip.js';
 import { useProjectTabs, type ProjectTabId } from '../lib/project-tabs.js';
 
 const TAB_DEFS: { id: ProjectTabId; label: string; icon: LucideIcon }[] = [
@@ -21,12 +21,10 @@ const TAB_DEFS: { id: ProjectTabId; label: string; icon: LucideIcon }[] = [
 ];
 
 /**
- * Полоса вкладок рабочей зоны: вкладки живут в ПРАВОЙ части карточки — их
- * левый край начинается от границы панели «О проекте», поэтому при
- * перетаскивании перегородки полоса едет вместе с зоной. «+» управляет
- * набором вкладок (личная память); первичная вкладка («Структура» при узлах
- * с задачами, иначе «Задачи», #467) не скрывается. Персональный порядок
- * перетаскиванием — следом.
+ * Полоса вкладок рабочей зоны проекта на общей полосе карточек
+ * (`CardTabStrip`): «Структура / Задачи / Канал / Участники / История» +
+ * «+» (личный набор, память); первичная — «Структура» (вердикт 04.11.2026),
+ * не скрывается. Тоггл панели «О канале» — в правом слоте полосы.
  */
 export function ProjectTabStrip({
   tab,
@@ -46,71 +44,51 @@ export function ProjectTabStrip({
   channelPanel?: { open: boolean; onToggle: () => void } | null;
 }) {
   const { toggle, visible } = useProjectTabs(primary);
+  const tabs: CardTabDef[] = TAB_DEFS.filter((def) => visible.includes(def.id)).map((def) => ({
+    id: def.id,
+    label: def.label,
+    icon: <def.icon className="size-3.5 shrink-0 opacity-80" strokeWidth={1.75} />,
+    badge: def.id === 'channel' ? unread : undefined,
+  }));
 
   return (
-    <div
-      role="tablist"
-      aria-label={ui.projects.tabsLabel}
-      className="content-fade flex h-10 shrink-0 items-center gap-1 overflow-x-auto overflow-y-hidden border-b border-border px-3"
-    >
-      {TAB_DEFS.filter((def) => visible.includes(def.id)).map((def) => {
-        const active = def.id === tab;
-        return (
-          <button
-            key={def.id}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => onTab(def.id)}
-            className={cn(
-              'flex h-10 shrink-0 items-center gap-1.5 rounded-none border-b-2 px-2.5 text-body-xs font-medium transition-colors',
-              active
-                ? 'border-port text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground/80',
-            )}
-          >
-            <def.icon className="size-3.5 shrink-0 opacity-80" strokeWidth={1.75} />
-            <span className="truncate">{def.label}</span>
-            {def.id === 'channel' && unread && !active ? (
-              <span className="font-mono text-label-sm text-port tabular-nums">{unread}</span>
-            ) : null}
-          </button>
-        );
-      })}
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label={ui.projects.tabsManage}
-            title={ui.projects.tabsManage}
-            className="ml-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <Plus className="size-3.5" strokeWidth={1.75} />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-52">
-          {TAB_DEFS.map((def) => (
-            <DropdownMenuCheckboxItem
-              key={def.id}
-              checked={visible.includes(def.id)}
-              disabled={def.id === primary}
-              onCheckedChange={() => toggle(def.id)}
-              onSelect={(event) => event.preventDefault()}
+    <CardTabStrip
+      label={ui.projects.tabsLabel}
+      tabs={tabs}
+      active={tab}
+      onActivate={(id) => onTab(id as ProjectTabId)}
+      trailing={
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={ui.projects.tabsManage}
+              title={ui.projects.tabsManage}
+              className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
-              {def.label}
-            </DropdownMenuCheckboxItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {/* Тоггл панели «О канале» — ВСЕГДА у правого края полосы: «+» остаётся
-          сразу за вкладками и не улетает вправо (вердикт владельца 07.11.2026). */}
-      {channelPanel ? (
-        <div className="ml-auto flex h-10 shrink-0 items-center pr-1">
+              <Plus className="size-3.5" strokeWidth={1.75} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-52">
+            {TAB_DEFS.map((def) => (
+              <DropdownMenuCheckboxItem
+                key={def.id}
+                checked={visible.includes(def.id)}
+                disabled={def.id === primary}
+                onCheckedChange={() => toggle(def.id)}
+                onSelect={(event) => event.preventDefault()}
+              >
+                {def.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      }
+      actions={
+        channelPanel ? (
           <ChatPanelToggle open={channelPanel.open} onToggle={channelPanel.onToggle} />
-        </div>
-      ) : null}
-    </div>
+        ) : null
+      }
+    />
   );
 }
