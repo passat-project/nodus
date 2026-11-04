@@ -118,6 +118,20 @@ export class LetterFormApplier {
     return { fields, timeEntryId: null, result: null };
   }
 
+  private async visibleToActor(
+    actor: { id: string; permissions: readonly string[] },
+    letterId: string,
+  ): Promise<boolean> {
+    const row = await this.letters.findDetailById(letterId);
+    if (!row || row.deletedAt !== null) return false;
+    const members = row.confidential
+      ? new Set(
+          (await this.letters.participants(letterId)).map((participant) => participant.userId),
+        )
+      : undefined;
+    return canViewLetter(actor, row, members);
+  }
+
   /** Галочка Вики подтверждает подсказку — цель обязана быть свежей
    *  подсказкой сервера (зарегистрированное исходящее по теме). */
   private async confirmReplyTo(
@@ -144,6 +158,12 @@ export class LetterFormApplier {
     }
     const existing = await this.letters.hasReplyTo(tx, letter.id);
     const suggestion = await this.threading.suggestionBySubject(letter.subject, today);
+    // Невидимая регистратору подсказка (конфиденциальное исходящее вне
+    // участия) не участвует в сверке — иначе ответ различал бы её
+    // существование (`suggestion_mismatch` вместо `not_found`, #461).
+    if (suggestion && !(await this.visibleToActor(actor, suggestion.id))) {
+      throw relationFail('not_found');
+    }
     if (existing || suggestion?.id !== replyToLetterId) {
       throw relationFail('suggestion_mismatch');
     }

@@ -12,8 +12,9 @@ function setup(
   detail: Record<string, unknown> | null = null,
 ) {
   const letters = {
-    chatRoster: vi.fn(async () => row),
-    findDetailById: vi.fn(async () => detail),
+    // Prisma-строка всегда несёт deletedAt; надгробие спама чат не открывает.
+    chatRoster: vi.fn(async () => (row ? { ...row, deletedAt: null } : null)),
+    findDetailById: vi.fn(async () => (detail ? { ...detail, deletedAt: null } : null)),
     participants: vi.fn(
       async (): Promise<{ userId: string; role: string; createdAt: Date }[]> => [],
     ),

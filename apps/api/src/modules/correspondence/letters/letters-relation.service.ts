@@ -75,6 +75,12 @@ export class LettersRelationService {
       if (await this.reaches(tx, target.id, letterId)) relationFail('cycle');
       const existing = await this.relations.relationOf(tx, letterId, body.kind);
       if (existing?.relatedLetterId === target.id) return;
+      // Существующая связь на невидимую актору цель (авто-связь на
+      // конфиденциальное) не раскрывается: ни «уже связана», ни молчаливой
+      // заменой — для актора её «нет» (404-семантика, #461, Р4).
+      if (existing && !(await this.visibleToActor(user, existing.relatedLetterId))) {
+        relationFail('not_found');
+      }
       if (existing && !body.replace) relationFail('already_linked');
       const action = existing ? 'replaced' : 'linked';
       if (existing) await this.relations.replaceRelation(tx, existing.id, target.id);
@@ -120,6 +126,16 @@ export class LettersRelationService {
         { actorId: user.id, aggregateType: 'letter', aggregateId: letterId },
       );
     });
+  }
+
+  /** Видимо ли письмо актору (конфиденциальные — по участникам). */
+  private async visibleToActor(user: AuthUser, id: string): Promise<boolean> {
+    const row = await this.repo.findDetailById(id);
+    if (!row || row.deletedAt !== null) return false;
+    const members = row.confidential
+      ? new Set((await this.repo.participants(id)).map((participant) => participant.userId))
+      : undefined;
+    return canViewLetter(user, row, members);
   }
 
   /** Цель связи: живое зарегистрированное письмо, видимое актору (поиск и

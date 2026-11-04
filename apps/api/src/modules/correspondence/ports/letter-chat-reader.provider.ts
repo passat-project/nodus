@@ -23,7 +23,7 @@ export class LetterChatReaderProvider implements LetterChatReader {
 
   async roster(letterId: string): Promise<LetterChatRoster | null> {
     const row = await this.letters.chatRoster(letterId);
-    if (!row) return null;
+    if (!row || row.deletedAt !== null) return null;
     if (row.registeredAt !== null) {
       // Зарегистрированное: владелец — адресат (без адресата беседы нет).
       if (!row.addresseeId) return null;
@@ -54,7 +54,8 @@ export class LetterChatReaderProvider implements LetterChatReader {
 
   async canView(letterId: string, viewer: LetterViewer): Promise<boolean> {
     const row = await this.letters.findDetailById(letterId);
-    if (!row) return false;
+    // Надгробие спама невидимо никому — карточка уже 404 (Р13, #461).
+    if (!row || row.deletedAt !== null) return false;
     // Конфиденциальное (#461): участник обсуждения видит чат так же, как
     // карточку, — состав читается ДО проверки (техплан Р4).
     const participants = row.confidential

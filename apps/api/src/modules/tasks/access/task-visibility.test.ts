@@ -54,11 +54,15 @@ describe('visibleTasksWhere (#37 + #52 Р3)', () => {
 
   it('task.view_all — все живые задачи, кроме конфиденциальных и скрытых проектов', () => {
     const viewAll = { ...viewer, permissions: [Permission.TASK_VIEW_ALL] };
-    // скрытых нет — весь фонд, конфиденциальные вне участия не раскрываются
-    expect(visibleTasksWhere(viewAll, 'all')).toEqual({ deletedAt: null, confidential: false });
+    // Скрытых нет — весь фонд; СВОЁ участие отдельной веткой (участник видит
+    // свою конфиденциальную задачу и с правом «все задачи» — #461, Р5).
+    const all = visibleTasksWhere(viewAll, 'all');
+    expect(all.deletedAt).toBeNull();
+    expect(all.OR).toHaveLength(2);
+    expect(all.OR![1]).toEqual({ confidential: false });
     // скрытые есть — гейты остаются и у админа (не ранний return)
-    expect(visibleTasksWhere({ ...viewAll, hiddenProjectIds: ['secret-1'] }, 'all')).toEqual({
-      deletedAt: null,
+    const hidden = visibleTasksWhere({ ...viewAll, hiddenProjectIds: ['secret-1'] }, 'all');
+    expect(hidden.OR![1]).toEqual({
       AND: [
         { OR: [{ projectId: null }, { projectId: { notIn: ['secret-1'] } }] },
         { confidential: false },

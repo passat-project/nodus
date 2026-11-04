@@ -23,6 +23,8 @@ export class LetterVisibilityProvider implements LetterVisibilityReader {
     const participants = await this.letters.participantsOf(confidentialIds);
     const visible = new Set<string>();
     for (const row of rows) {
+      // Надгробия не считаются: число совпадает со списком (Р13, #461).
+      if (row.deletedAt !== null) continue;
       const members = new Set(
         participants
           .filter((participant) => participant.letterId === row.id)

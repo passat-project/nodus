@@ -73,7 +73,10 @@ export function visibleTasksWhere(viewer: Viewer, scope: 'mine' | 'all'): Prisma
   if (viewer.permissions.includes(Permission.TASK_VIEW_ALL)) {
     // Не ранний return: task.view_all не открывает чужие секретные проекты
     // (Т1) и конфиденциальные задачи (#461) — гейты остаются и у админа.
-    return gate ? { deletedAt: null, AND: [gate, openOnly] } : { deletedAt: null, ...openOnly };
+    // СВОЁ участие сохраняется отдельной веткой: участник конфиденциальной
+    // задачи видит её и с task.view_all (иначе деталь/чат отдают 404).
+    const rest = gate ? { AND: [gate, openOnly] } : openOnly;
+    return { deletedAt: null, OR: [mineGated, rest] };
   }
   return { deletedAt: null, OR: or };
 }

@@ -260,12 +260,14 @@ export class LettersRepository {
   }
 
   /** Состав чата: адресат + участники (регистратор в чат не входит — В2). */
-  async chatRoster(
-    letterId: string,
-  ): Promise<{ addresseeId: string | null; registeredAt: Date | null } | null> {
+  async chatRoster(letterId: string): Promise<{
+    addresseeId: string | null;
+    registeredAt: Date | null;
+    deletedAt: Date | null;
+  } | null> {
     return this.prisma.letter.findUnique({
       where: { id: letterId },
-      select: { addresseeId: true, registeredAt: true },
+      select: { addresseeId: true, registeredAt: true, deletedAt: true },
     });
   }
 
