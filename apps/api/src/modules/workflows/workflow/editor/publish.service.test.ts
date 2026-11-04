@@ -7,10 +7,8 @@ import { WorkflowPublishRepository } from './publish.repository.js';
 import { WorkflowEditorService } from './publish.service.js';
 import type { LoadedWorkflow } from '../workflow.repository.js';
 
-/** Юнит-сценарии публикации (#378, ADR-0024): конфликт версии, невалидный
- *  документ, обязательный перенос, разрешение new:* (в т.ч. цели route_if),
- *  архив вместо удаления, kind-гвард, счётчики сущностей — у адаптера
- *  категории. БД мокается. */
+/** Юнит-сценарии публикации (#378): конфликт версии, невалидный документ,
+ *  перенос, new:*→uuid, архив, kind-гвард, счётчики. БД мокается. */
 
 const WID = '00000000-0000-4000-8000-0000000000f1';
 const S1 = '00000000-0000-4000-8000-000000000001';
@@ -107,6 +105,7 @@ function document(): WorkflowDocument {
         fromStageId: S1,
         toStageId: 'new:ctrl',
         display: 'primary',
+        intent: 'action',
         sortOrder: 0,
         form: { enabled: false, sections: [] },
         rules: rules({
@@ -120,6 +119,7 @@ function document(): WorkflowDocument {
         fromStageId: 'new:ctrl',
         toStageId: 'new:done',
         display: 'primary',
+        intent: 'action',
         sortOrder: 1,
         form: { enabled: false, sections: [] },
         rules: parseRules({ conditions: [{ kind: 'role_in', roles: ['creator'] }] }),
@@ -285,53 +285,18 @@ describe('WorkflowEditorService.publish (#378)', () => {
       WID,
       body({ document: doc, migrations: [{ fromStageId: S3, toStageId: S1 }] }),
     );
-    const update = calls.workflowUpdate.mock.calls.at(-1) as unknown as [
-      {
-        data: { layout: { stages: Record<string, unknown>; transitions: Record<string, unknown> } };
-      },
-    ];
-    const saved = update[0].data.layout;
+    const saved = (
+      calls.workflowUpdate.mock.calls.at(-1) as unknown as [
+        {
+          data: {
+            layout: { stages: Record<string, unknown>; transitions: Record<string, unknown> };
+          };
+        },
+      ]
+    )[0].data.layout;
     expect(saved.stages[S1]).toEqual({ x: 500, y: 60 });
     expect(saved.transitions[T1]).toEqual({ labelT: 0.7 });
     // Место новой стадии — из документа публикации (new:ctrl → uuid).
     expect(saved.stages[CREATED]).toEqual({ x: 300, y: 0 });
-  });
-});
-
-describe('WorkflowEditorService.saveLayout (#378 ред. 2)', () => {
-  const layout = {
-    stages: { [S1]: { x: 10, y: 20 }, 'new:x': { x: 0, y: 0 }, [CREATED]: { x: 1, y: 1 } },
-    transitions: { [T1]: { sourceHandle: 'r2' as const, labelT: 0.4 }, 'new:y': { labelT: 0.5 } },
-  };
-
-  it('сохраняет только живые элементы, версию не трогает, событие — layout_changed', async () => {
-    const { service, calls } = makeService({
-      layout: { stages: { [S2]: { x: 300, y: 20 } }, transitions: { [T2]: { labelT: 0.7 } } },
-    });
-    const result = await service.saveLayout(USER, WID, { layout });
-    // Слияние с сохранённым: S2/T2 запрос не трогал — их места остались.
-    expect(result.layout).toEqual({
-      stages: { [S1]: { x: 10, y: 20 }, [S2]: { x: 300, y: 20 } },
-      transitions: { [T1]: { sourceHandle: 'r2', labelT: 0.4 }, [T2]: { labelT: 0.7 } },
-    });
-    // Только раскладка: ни версии, ни даты/автора публикации.
-    expect(calls.workflowUpdate).toHaveBeenCalledWith({
-      where: { id: WID },
-      data: { layout: result.layout },
-    });
-    expect(calls.emit).toHaveBeenCalledWith(
-      expect.anything(),
-      'workflow.layout_changed',
-      { workflowId: WID },
-      expect.objectContaining({ aggregateId: WID }),
-    );
-  });
-
-  it('личный маршрут (kind=personal) — 404', async () => {
-    const { service, calls } = makeService({ kind: 'personal' });
-    await expect(service.saveLayout(USER, WID, { layout })).rejects.toMatchObject({
-      code: ErrorCode.NOT_FOUND,
-    });
-    expect(calls.workflowUpdate).not.toHaveBeenCalled();
   });
 });

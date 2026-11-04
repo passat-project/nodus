@@ -1005,8 +1005,8 @@ model WorkflowStage {
   /// backlog | active | paused | done | closed (скрытая ось, ADR-0008);
   /// фазы open / review (done = «Утверждение») / final — ADR-0020 доп. 2.
   systemState String    @map("system_state")
-  /// Итог закрытой стадии (#378): success | cancelled; только у этапа
-  /// «Итог» (CHECK в миграции: (system_state = 'closed') = (outcome NOT NULL)).
+  /// Итог закрытой стадии (#378, #430): success | cancelled | rejected;
+  /// только у этапа «Итог» (CHECK в миграции: (system_state = 'closed') = (outcome NOT NULL)).
   outcome     String?
   /// Начальная стадия маршрута (новые задачи без колонки).
   isInitial   Boolean   @default(false) @map("is_initial")
@@ -1036,6 +1036,8 @@ model WorkflowTransition {
   toStageId   String    @map("to_stage_id") @db.Uuid
   /// Показ кнопки (#378): primary | button | menu.
   display     String    @default("button")
+  /// Смысл кнопки (#430): action | service; служебные не попадают в «Мои действия».
+  intent      String    @default("action")
   /// Удаление в редакторе = архивация: история и события ссылаются (#378).
   archivedAt  DateTime? @map("archived_at") @db.Timestamptz()
   sortOrder   Int       @default(0) @map("sort_order")

@@ -89,9 +89,9 @@ export const taskStageChangedPayloadSchema = taskEventBaseSchema.extend({
   toStageName: z.string(),
   fromState: z.string(),
   toState: z.string(),
-  /** Итог целевой стадии, если она в этапе «Итог» (#378; optional — старые
-   *  события журнала не несут поля). */
-  toStageOutcome: z.enum(['success', 'cancelled']).nullable().optional(),
+  /** Итог целевой стадии, если она в этапе «Итог» (#378/#430; optional —
+   *  старые события журнала не несут поля). */
+  toStageOutcome: z.enum(['success', 'cancelled', 'rejected']).nullable().optional(),
   /** Почему сменилась стадия: кнопка маршрута / перенос публикации /
    *  смена типа (#378, ADR-0021). */
   cause: z.enum(['transition', 'workflow_migration', 'type_change']).optional(),

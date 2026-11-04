@@ -116,6 +116,7 @@ export function previewTransition(
     toStageColor: target?.color ?? 'neutral',
     toStageOrder: target?.sortOrder ?? 0,
     display: t.display,
+    intent: t.intent,
     blockedBy: [],
     canOverride: false,
     form: t.form.enabled ? t.form : null,

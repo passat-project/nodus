@@ -13,6 +13,7 @@ const t = (id: string, display: WorkflowTransition['display']): WorkflowTransiti
   toStageColor: 'success',
   toStageOrder: 1,
   display,
+  intent: 'action',
   blockedBy: [],
   canOverride: false,
   form: null,
@@ -30,6 +31,7 @@ const doc = (
   fromStageId: '00000000-0000-4000-8000-000000000001',
   toStageId: '00000000-0000-4000-8000-000000000002',
   display,
+  intent: 'action',
   sortOrder: 0,
   rules: {
     conditions: roles.length > 0 ? [{ kind: 'role_in', roles }] : [],

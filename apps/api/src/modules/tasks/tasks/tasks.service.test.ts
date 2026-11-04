@@ -231,9 +231,28 @@ describe('TasksService', () => {
       archivedAt: null,
     };
     catalog.liveStages.mockResolvedValue([STAGE, secondBacklog]);
+    engine.execute.mockResolvedValueOnce({ stage: secondBacklog, recordId: 'rec-1' } as never);
     await service.create(USER, { title: 'Т', stageId: 's-new-2' } as never);
     expect(repo.create.mock.calls[0]![0]).toMatchObject({ stageId: 's-new' });
     expect(engine.execute).toHaveBeenCalledWith(TX, 't1', 'task', USER, { stageId: 's-new-2' });
+  });
+
+  it('явный stageId: движок ушёл в другую стадию — NOT_ALLOWED', async () => {
+    const { service, catalog } = setup();
+    const secondBacklog = {
+      id: 's-new-2',
+      name: 'Вторая',
+      color: 'neutral',
+      sortOrder: 1,
+      systemState: 'backlog',
+      outcome: null,
+      isInitial: false,
+      archivedAt: null,
+    };
+    catalog.liveStages.mockResolvedValue([STAGE, secondBacklog]);
+    await expect(
+      service.create(USER, { title: 'Т', stageId: 's-new-2' } as never),
+    ).rejects.toMatchObject({ code: 'WORKFLOW_TRANSITION_NOT_ALLOWED' });
   });
 
   it('тип резолвится портом «Процессов» с актором: явный выбор — с проверкой создания', async () => {

@@ -3,9 +3,9 @@ import type {
   TaskSystemState,
   WorkflowDraftDocument,
   WorkflowDraftStage,
+  WorkflowStageName,
 } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
-import { Input } from '@nodus/ui/components/input';
 import {
   Select,
   SelectContent,
@@ -23,9 +23,9 @@ import {
   SectionLink,
   Segmented,
   SwitchRow,
-  focusName,
 } from '../../../../../shared/ui/panel/panel-kit.js';
 import { stageButtonsSummary } from './stage-buttons-section.js';
+import { StageNameField } from './stage-name-field.js';
 
 const GROUPS: readonly TaskSystemState[] = ['backlog', 'active', 'paused', 'done', 'closed'];
 
@@ -51,6 +51,8 @@ export function StagePanel({
   readOnly,
   autoFocusName,
   onOpenButtons,
+  stageNameSuggestions = [],
+  stageNameLoading = false,
 }: {
   stage: WorkflowDraftStage;
   document: WorkflowDraftDocument;
@@ -58,6 +60,8 @@ export function StagePanel({
   readOnly: boolean;
   autoFocusName: boolean;
   onOpenButtons: () => void;
+  stageNameSuggestions?: readonly WorkflowStageName[];
+  stageNameLoading?: boolean;
 }) {
   const store = useRouteDocStore.getState;
   const patch = (value: Partial<WorkflowDraftStage>) => store().patchStage(stage.id, value);
@@ -66,13 +70,14 @@ export function StagePanel({
   return (
     <>
       <PanelField label={ui.automation.stageName}>
-        <Input
-          key={stage.id}
+        <StageNameField
           value={stage.name}
-          maxLength={40}
+          systemState={stage.systemState}
+          suggestions={stageNameSuggestions}
+          loading={stageNameLoading}
           readOnly={readOnly}
-          ref={autoFocusName ? focusName : undefined}
-          onChange={(event) => patch({ name: event.target.value })}
+          autoFocus={autoFocusName}
+          onChange={(name) => patch({ name })}
         />
       </PanelField>
 
@@ -123,13 +128,17 @@ export function StagePanel({
       </PanelField>
 
       {stage.systemState === 'closed' ? (
-        <PanelField label={ui.automation.stageOutcome}>
+        <PanelField
+          label={ui.automation.stageOutcome}
+          hint={ui.automation.outcomeHints[stage.outcome ?? 'success']}
+        >
           <Segmented
             value={stage.outcome ?? 'success'}
             disabled={readOnly}
             options={[
               { value: 'success', label: ui.automation.outcomeSuccess },
               { value: 'cancelled', label: ui.automation.outcomeCancelled },
+              { value: 'rejected', label: ui.automation.outcomeRejected },
             ]}
             onChange={(outcome) => patch({ outcome })}
           />

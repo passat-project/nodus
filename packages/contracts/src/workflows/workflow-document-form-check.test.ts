@@ -24,6 +24,7 @@ function transition(
     fromStageId: S1,
     toStageId: S2,
     display: 'primary',
+    intent: 'action',
     sortOrder: 0,
     rules: rules(validators),
     form,

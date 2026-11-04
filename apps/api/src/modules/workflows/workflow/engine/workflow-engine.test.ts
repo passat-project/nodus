@@ -52,6 +52,7 @@ const workflow = {
       fromStageId: STAGE_ACTIVE,
       toStageId: STAGE_DONE,
       display: 'primary' as const,
+      intent: 'action' as const,
       sortOrder: 0,
       rules: { conditions: [], validators: [], postFunctions: [] },
     },
@@ -72,6 +73,9 @@ const facts = {
   assigneeId: 'bob',
   plannedMinutes: null,
   hasResult: false,
+  resultFileCount: 0,
+  customFields: {},
+  activeCustomFieldIds: new Set<string>(),
 };
 
 function makeEngine(subject: Partial<WorkflowActorSubject> = {}) {
@@ -89,23 +93,28 @@ function makeEngine(subject: Partial<WorkflowActorSubject> = {}) {
       ...subject,
     })),
     applyStage: vi.fn(async () => void 0),
+    applyForm: vi.fn(async () => ({
+      fields: { assignee: 'bob' },
+      timeEntryId: null,
+      result: null,
+    })),
   };
   const registry = { get: vi.fn(() => adapter) };
   const workflows = { load: vi.fn(async () => structuredClone(workflow)) };
   const records = { insert: vi.fn(async () => void 0) };
+  const numbers = { nextForType: vi.fn() };
   return {
     engine: new WorkflowEngine(
       workflows as never,
       registry as never,
       records as never,
-      {
-        nextForType: vi.fn(),
-      } as never,
+      numbers as never,
     ),
     adapter,
     registry,
     workflows,
     records,
+    numbers,
   };
 }
 
@@ -132,6 +141,29 @@ describe('WorkflowEngine (#428, ADR-0024)', () => {
       expect.objectContaining({ id: STAGE_DONE }),
       'bob',
       expect.objectContaining({ transitionId: TRANSITION, cause: 'transition' }),
+    );
+  });
+
+  it('execute: assign_number выдаёт номер до смены стадии', async () => {
+    const { engine, adapter, workflows, numbers } = makeEngine();
+    numbers.nextForType.mockResolvedValueOnce({ display: 'T-1' } as never);
+    const numbered = structuredClone(workflow);
+    numbered.transitions[0]!.rules = {
+      conditions: [],
+      validators: [],
+      postFunctions: [{ kind: 'assign_number' }],
+    } as never;
+    workflows.load.mockResolvedValueOnce(numbered);
+
+    await engine.execute(TX as never, 't1', 'task', USER, { transitionId: TRANSITION });
+
+    expect(numbers.nextForType).toHaveBeenCalledWith(TX, 'type');
+    expect(adapter.applyStage).toHaveBeenCalledWith(
+      TX,
+      't1',
+      expect.objectContaining({ id: STAGE_DONE }),
+      USER.id,
+      expect.objectContaining({ numbering: { display: 'T-1' } }),
     );
   });
 

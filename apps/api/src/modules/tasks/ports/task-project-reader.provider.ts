@@ -71,15 +71,17 @@ export class TaskProjectReaderProvider implements TaskProjectReader {
 
   async nodeRollups(projectId: string): Promise<TaskNodeRollup[]> {
     // Прямые задачи узлов проекта одним GROUP BY (#467). Завершённость —
-    // канон isCompletedState: закрытая стадия && outcome ≠ 'cancelled';
-    // исход стадии — в workflow_stages (tasks денормализуют только state).
+    // канон isCompletedState: закрытая стадия && outcome не cancelled/rejected
+    // (#430); исход стадии — в workflow_stages (tasks денормализуют только state).
     // nearest — MIN(deadline) фазы open (backlog/active/paused — канон
     // statesOfPhase('open')), latest — MAX(deadline) всех задач узла.
     const rows = await this.prisma.$queryRaw<RollupRow[]>`
       SELECT n.id AS node_id,
              COUNT(t.id)::int AS task_count,
              (COUNT(*) FILTER (
-               WHERE ws.system_state = 'closed' AND ws.outcome IS DISTINCT FROM 'cancelled'
+               WHERE ws.system_state = 'closed'
+                 AND ws.outcome IS DISTINCT FROM 'cancelled'
+                 AND ws.outcome IS DISTINCT FROM 'rejected'
              ))::int AS done_count,
              COALESCE(SUM(t.planned_minutes), 0)::int AS planned_minutes,
              COALESCE(SUM(t.spent_minutes), 0)::int AS spent_minutes,

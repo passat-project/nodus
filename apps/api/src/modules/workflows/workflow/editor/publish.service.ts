@@ -281,6 +281,7 @@ export class WorkflowEditorService {
         fromStageId: t.fromStageId,
         toStageId: t.toStageId,
         display: t.display,
+        intent: t.intent,
         sortOrder: t.sortOrder,
         rules: t.rules,
         form: t.form,
@@ -313,6 +314,7 @@ export class WorkflowEditorService {
       fromStageId: write.fromStageId === null ? null : (resolve(write.fromStageId) ?? null),
       toStageId: resolve(write.toStageId)!,
       display: write.display,
+      intent: write.intent,
       sortOrder: write.sortOrder,
       rules: resolveRules(
         document.transitions.find((t) => t.id === write.id)?.rules ?? NO_RULES,

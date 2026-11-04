@@ -1,9 +1,14 @@
 import { creationStrings, typeSettingsStrings } from './ru-automation-forms.js';
+import { intentStrings } from './ru-automation-intent.js';
+import { outcomeStrings } from './ru-automation-outcome.js';
+import { publishPreviewStrings } from './ru-automation-publish.js';
 
 /** UI-строки раздела «Автоматизация» (#378, эпик #377; «Процессы» — #428,
  *  ADR-0024): библиотека типов процессов, редактор маршрутов на холсте,
  *  публикация. Секция вынесена из ru.ts (лимит строк, I5). */
 export const automationStrings = {
+  ...outcomeStrings,
+  ...publishPreviewStrings,
   /** Вкладки раздела; «Права доступа» — общая матрица прав (#379, ADR-0034). */
   tabProcesses: 'Процессы',
   /** Реестр атрибутов — кастомных полей сущностей (#431, ADR-0029). */
@@ -60,7 +65,7 @@ export const automationStrings = {
     active: 'идёт работа',
     paused: 'работа начата и стоит / отложена',
     done: 'работа сдана и ждёт утверждения — ещё не завершена',
-    closed: 'итог: выполнена или отменена',
+    closed: 'итог: выполнена, отменена или отклонена',
   },
   addStage: 'Добавить статус',
   newStageName: 'Новый статус',
@@ -96,11 +101,6 @@ export const automationStrings = {
   problemsChip: 'Проблемы',
   problemsFixFirst: 'Исправьте проблемы:',
   /** Инспектор статуса. */
-  stageName: 'Название',
-  stageColor: 'Цвет',
-  stageOutcome: 'Итог',
-  outcomeSuccess: 'Выполнена',
-  outcomeCancelled: 'Отменена',
   isInitial: 'Начальный статус',
   isInitialHint: 'Новая карточка создаётся в этом статусе',
   addTransitionTitle: 'Новая кнопка перехода',
@@ -199,6 +199,7 @@ export const automationStrings = {
   creation: creationStrings,
   /** Правая панель редактора (#378 ред. 2): разделы с переходом внутрь. */
   panel: {
+    ...intentStrings,
     back: 'Назад',
     /** Шапка панели — вид элемента (название — первое поле, не дублируется). */
     kindStage: 'Статус',
@@ -240,10 +241,18 @@ export const automationStrings = {
       fields_required: 'Выбранные поля карточки заполнены',
       result_files: 'К итогу приложено не меньше файлов, чем задано в окне',
     },
-    routeIfToggle: 'Если постановщик сам себе исполнитель',
-    routeIfHint: 'Задача сразу перейдёт в выбранный статус — утверждать самому себе не нужно',
+    routeIfToggle: 'Пропускать утверждение',
+    routeIfHint: 'Кнопка сразу перейдёт в выбранный статус, когда условие выполнено',
+    routeIfCondition: 'Условие пропуска',
+    routeIfConditionCreator: 'Постановщик сам исполнитель',
+    routeIfConditionApprover: 'Утверждающий сам сдал работу',
+    routeIfConditionHints: {
+      approver_is_actor: 'Работу сдал тот, кто должен утверждать, — шаг утверждения пропускается',
+      creator_is_assignee: 'Постановщик и исполнитель — один сотрудник',
+    },
     routeIfTarget: 'Сразу перейти в',
-    routeIfSummary: 'Постановщик = исполнитель →',
+    routeIfSummaryCreator: 'Постановщик = исполнитель →',
+    routeIfSummaryApprover: 'Утверждающий сам сдал →',
   },
   /** Тексты проблем схемы (код → строка; UI — чип и список). */
   problems: {
@@ -284,10 +293,20 @@ export const automationStrings = {
     post_function_not_in_category: 'Особое правило не работает в этой категории процесса',
     numbering_not_configured: 'Кнопка присваивает номер, а у типа нет серии номеров',
     registration_without_number: 'Окно регистрации без присвоения номера — номер не выдастся',
+    action_without_visibility:
+      'Кнопка-действие без условий «кто видит» — в «Мои действия» попадёт ответственному',
+    stage_name_shared:
+      'Такое имя уже есть в этом этапе другого маршрута — на доске это одна колонка, это нормально',
+    stage_name_similar:
+      'Похожее имя уже есть в этом этапе (отличается регистром, ё/е или пробелами) — на доске будет отдельная колонка',
+    duplicate_transition_target: 'Две кнопки из одного статуса ведут в один статус',
+    approver_rule_unresolvable:
+      'Для пропуска по актору цель должна быть этапом «Утверждение», а у него — одна главная кнопка-действие с ролевым условием «кто видит» (не только право)',
   },
   /** Публикация. */
   publishTitle: 'Публикация маршрута',
   buttonsChangedForms: ['кнопка изменена', 'кнопки изменены', 'кнопок изменено'],
+  stagesChangedForms: ['статус изменён', 'статуса изменены', 'статусов изменено'],
   publishLayoutChanged: 'изменена расстановка',
   /** Публикация формы создания типа (#432): отдельная строка сводки. */
   publishCreationChanged: 'изменена форма создания',

@@ -9,6 +9,9 @@ import { api } from '../api-client.js';
 export const workflowKeys = {
   all: ['workflows'] as const,
   detail: (id: string) => [...workflowKeys.all, 'detail', id] as const,
+  /** Подсказки имён статусов (#430): категория + исключённый маршрут. */
+  stageNames: (category: string, excludeWorkflowId: string) =>
+    [...workflowKeys.all, 'stage-names', category, excludeWorkflowId] as const,
 };
 
 /** Загрузка одного маршрута (queryFn реестра и префетча меты списка типов). */

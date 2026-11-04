@@ -53,6 +53,7 @@ export const KIND_PRIORITY: Record<NotificationKind, NotificationPriority> = {
   // мусорная (исполнитель теряет задачу).
   'task.awaiting_approval': 'medium',
   'task.cancelled': 'medium',
+  'task.rejected': 'medium',
   'task.approved': 'medium',
   // #56 (Р8): почтовые события канцелярии — обычный приоритет у всех:
   // письмо пришло — Вике видно в журнале, порог — не срочный; отказы

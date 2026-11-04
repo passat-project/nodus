@@ -215,6 +215,7 @@ export class CatalogBootstrap implements OnApplicationBootstrap {
       fromStageId: t.from === null ? null : stageIds.get(t.from)!,
       toStageId: stageIds.get(t.to)!,
       display: t.display,
+      intent: t.intent ?? 'action',
       sortOrder: index,
       rules: parseRules({
         ...t.rules,

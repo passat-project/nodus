@@ -11,7 +11,7 @@ import { workflowKeys } from '../../../../shared/workflow/workflow-api.js';
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { projectsAvailable } from '../../../../shared/api/projects-available.js';
 import { ROUTE_GEOMETRY } from '../../../../shared/flow/route-layout.js';
-import { usePublishWorkflow } from '../../api/automation-api.js';
+import { usePublishWorkflow, useStageNames } from '../../api/automation-api.js';
 import { useCanManageWorkflows } from '../../lib/use-can-manage-workflows.js';
 import { useRouteDocStore } from '../../model/route-doc-store.js';
 import { useLayoutAutosave } from '../../model/use-layout-autosave.js';
@@ -56,6 +56,7 @@ export function RouteEditor(props: RouteEditorProps) {
 
 function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: RouteEditorProps) {
   const doc = useRouteDocStore((s) => s.document);
+  const baseline = useRouteDocStore((s) => s.baseline);
   const dirty = useRouteDocStore((s) => s.dirty);
   const selection = useRouteDocStore((s) => s.selection);
   const draftSavedAt = useRouteDocStore((s) => s.draftSavedAt);
@@ -106,6 +107,23 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
       })),
     [customFieldDefinitions],
   );
+  // Мягкий каталог имён статусов (#430): подсказки и warning-и имён.
+  const { data: stageNames = [], isLoading: stageNamesLoading } = useStageNames(
+    type.category,
+    workflow.id,
+    canManage,
+  );
+  const stageNameFacts = useMemo(
+    () => (type.isSystem ? [] : stageNames.map(({ systemState, name }) => ({ systemState, name }))),
+    [stageNames, type.isSystem],
+  );
+  // Warning-и имён — только для новых и переименованных статусов (#430):
+  // копия каталога и неизменённые статусы не шумят.
+  const stageNameStageIds = useMemo(() => {
+    if (type.isSystem) return new Set<string>();
+    const before = new Map(baseline.stages.map((s) => [s.id, s.name.trim()]));
+    return new Set(doc.stages.filter((s) => before.get(s.id) !== s.name.trim()).map((s) => s.id));
+  }, [baseline, doc.stages, type.isSystem]);
   const problems = useMemo(
     () =>
       checkWorkflowDocument(doc, {
@@ -113,8 +131,10 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
         category: type.category,
         definitions,
         projectsAvailable: projectsAvailable(),
+        stageNameFacts,
+        stageNameStageIds,
       }),
-    [doc, customFieldFacts, definitions, type.category],
+    [doc, customFieldFacts, definitions, type.category, stageNameFacts, stageNameStageIds],
   );
   const problemStageIds = useMemo(
     () => new Set(problems.filter((p) => p.stageId).map((p) => p.stageId as string)),
@@ -200,7 +220,12 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
           }}
           onProblemClick={onProblemClick}
           onDiscard={() => useRouteDocStore.getState().discard()}
-          onPublish={() => setPublishOpen(true)}
+          onPublish={() => {
+            // Счётчики предпросмотра — свежие: staleTime detail 30 с не
+            // должен решать, сколько задач «в полёте».
+            void queryClient.invalidateQueries({ queryKey: workflowKeys.detail(workflow.id) });
+            setPublishOpen(true);
+          }}
         />
 
         <div ref={canvasRef} className="relative min-h-0 flex-1 overflow-hidden">
@@ -218,7 +243,14 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
         </div>
       </div>
 
-      <EditorPanel workflow={workflow} type={type} scope={type.category} readOnly={!canManage} />
+      <EditorPanel
+        workflow={workflow}
+        type={type}
+        scope={type.category}
+        readOnly={!canManage}
+        stageNameSuggestions={stageNames}
+        stageNameLoading={stageNamesLoading}
+      />
       {settings}
       <NavigationGuard dirty={dirty} />
 
@@ -227,9 +259,11 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
           open
           onClose={() => setPublishOpen(false)}
           workflow={workflow}
+          category={type.category}
           baseline={useRouteDocStore.getState().baseline}
           document={doc}
           baseVersion={useRouteDocStore.getState().baseVersion}
+          problems={problems}
           publish={publish}
           onPublished={() => useRouteDocStore.getState().markPublished()}
           onConflictLoad={() => {

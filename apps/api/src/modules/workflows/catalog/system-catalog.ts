@@ -1,8 +1,10 @@
 import type {
+  StageOutcome,
   TransitionDisplay,
   TransitionForm,
   WorkflowCondition,
   WorkflowPostFunction,
+  WorkflowTransitionIntent,
   WorkflowTransitionRules,
   WorkflowValidator,
 } from '@nodus/contracts';
@@ -30,7 +32,7 @@ export interface CatalogStage {
   name: string;
   color: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
   systemState: 'backlog' | 'active' | 'paused' | 'done' | 'closed';
-  outcome?: 'success' | 'cancelled';
+  outcome?: StageOutcome;
   isInitial?: boolean;
 }
 
@@ -41,9 +43,13 @@ export interface CatalogTransition {
   from: string | null;
   to: string;
   display: TransitionDisplay;
+  /** Смысл кнопки (#430): action по умолчанию, service — пауза/отмена. */
+  intent?: WorkflowTransitionIntent;
   rules: Partial<WorkflowTransitionRules>;
   /** Цель пост-функции route_if (код стадии; резолвится при посеве). */
   routeTo?: string;
+  /** Условие route_if (#430): по полям (старое) или по актору (новое). */
+  routeWhen?: 'creator_is_assignee' | 'approver_is_actor';
   /** Окно при нажатии (#380, ревизия 4); пусто — окно выключено. */
   form?: TransitionForm;
   /** Пост-действия сверх route_if (#55: `assign_number` у регистрации). */
@@ -146,6 +152,7 @@ const cancel = (): CatalogTransition => ({
   from: null,
   to: 'cancelled',
   display: 'menu',
+  intent: 'service',
   rules: { conditions: [creator] },
   form: commentWindow('Причина отмены', true),
 });
@@ -203,6 +210,7 @@ const STANDARD_WORKFLOW: CatalogWorkflow = {
       // Постановщик сам себе исполнитель — сразу «Завершена».
       rules: { conditions: [assignee], validators: [noOpenSubtasks] },
       routeTo: 'done',
+      routeWhen: 'approver_is_actor',
       form: resultWindow(),
     },
     {
@@ -211,6 +219,7 @@ const STANDARD_WORKFLOW: CatalogWorkflow = {
       from: 'in_progress',
       to: 'paused',
       display: 'button',
+      intent: 'service',
       rules: { conditions: [doers] },
       form: commentWindow('Причина приостановки', true),
     },
@@ -228,6 +237,7 @@ const STANDARD_WORKFLOW: CatalogWorkflow = {
       from: 'paused',
       to: 'postponed',
       display: 'button',
+      intent: 'service',
       rules: { conditions: [owners] },
     },
     {
@@ -304,5 +314,12 @@ export function catalogPostFunctions(
   if (!t.routeTo) return [...explicit];
   const target = stageIdByCode.get(t.routeTo);
   if (!target) return [...explicit];
-  return [...explicit, { kind: 'route_if', when: 'creator_is_assignee', toStageId: target }];
+  return [
+    ...explicit,
+    {
+      kind: 'route_if',
+      when: t.routeWhen ?? 'creator_is_assignee',
+      toStageId: target,
+    },
+  ];
 }

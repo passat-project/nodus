@@ -46,6 +46,7 @@ const mkTransition = (
   fromStageId: from,
   toStageId: to,
   display: 'button',
+  intent: 'action',
   sortOrder: 0,
   rules: roles('assignee'),
   form: { enabled: false, sections: [] },

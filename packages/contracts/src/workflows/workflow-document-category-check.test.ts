@@ -42,6 +42,7 @@ function letterDoc(patch: Partial<WorkflowDraftTransition> = {}): WorkflowDraftD
         fromStageId: 'new:new',
         toStageId: 'new:resolution',
         display: 'primary',
+        intent: 'action',
         sortOrder: 0,
         rules: {
           conditions: permission,
@@ -58,6 +59,7 @@ function letterDoc(patch: Partial<WorkflowDraftTransition> = {}): WorkflowDraftD
         fromStageId: 'new:new',
         toStageId: 'new:unregistered',
         display: 'button',
+        intent: 'action',
         sortOrder: 1,
         rules: { conditions: permission, validators: [], postFunctions: [] },
         form: { enabled: true, sections: [{ kind: 'comment', label: 'Причина', required: true }] },
@@ -69,6 +71,7 @@ function letterDoc(patch: Partial<WorkflowDraftTransition> = {}): WorkflowDraftD
         fromStageId: 'new:resolution',
         toStageId: 'new:mistake',
         display: 'menu',
+        intent: 'action',
         sortOrder: 0,
         rules: { conditions: permission, validators: [], postFunctions: [] },
         form: { enabled: true, sections: [{ kind: 'comment', label: 'Причина', required: true }] },

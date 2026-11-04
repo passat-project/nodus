@@ -20,10 +20,18 @@ export type TaskSystemState = z.infer<typeof taskSystemStateSchema>;
 export const stageColorSchema = z.enum(['neutral', 'info', 'success', 'warning', 'danger']);
 export type StageColor = z.infer<typeof stageColorSchema>;
 
-/** Итог статуса — только у этапа «Итог» (closed): выполнена / отменена;
- *  от него зависят уведомления и аналитика (ADR-0020 дополнение, #378). */
-export const stageOutcomeSchema = z.enum(['success', 'cancelled']);
+/** Итог статуса — только у этапа «Итог» (closed): выполнена / отменена /
+ *  отклонена; от него зависят уведомления и аналитика (ADR-0020 дополнение,
+ *  ADR-0025 п.1, #430). Отклонена — отказ утверждающего, отличимый от
+ *  отзыва инициатором. */
+export const stageOutcomeSchema = z.enum(['success', 'cancelled', 'rejected']);
 export type StageOutcome = z.infer<typeof stageOutcomeSchema>;
+
+/** Смысл кнопки перехода (#430, ADR-0024 п.6): «ждёт действия человека»
+ *  (action) или служебная (service) — служебные не попадают в «Мои
+ *  действия» (ADR-0026). Умный дефолт — `smartIntent` в workflow-intent.ts. */
+export const workflowTransitionIntentSchema = z.enum(['action', 'service']);
+export type WorkflowTransitionIntent = z.infer<typeof workflowTransitionIntentSchema>;
 
 /** Показ кнопки перехода в панели процесса карточки: главная (залитая,
  *  одна на статус) / видна / в меню «Ещё» (#378). */

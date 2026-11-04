@@ -1,5 +1,10 @@
 import { useCallback, useState } from 'react';
-import type { CustomFieldScope, ProcessType, WorkflowDetail } from '@nodus/contracts';
+import type {
+  CustomFieldScope,
+  ProcessType,
+  WorkflowDetail,
+  WorkflowStageName,
+} from '@nodus/contracts';
 import { effectiveCreationForm, ui } from '@nodus/contracts';
 
 import { useRouteDocStore, type SelectionRef } from '../../../model/route-doc-store.js';
@@ -40,6 +45,8 @@ export function EditorPanel({
   type,
   scope,
   readOnly,
+  stageNameSuggestions = [],
+  stageNameLoading = false,
 }: {
   workflow: WorkflowDetail;
   /** Тип процесса: категория полей, форма создания, названия ролей (#432). */
@@ -47,6 +54,9 @@ export function EditorPanel({
   /** Область кастомных полей по категории маршрута (#431, Р7). */
   scope: CustomFieldScope;
   readOnly: boolean;
+  /** Подсказки имён статусов из опубликованных маршрутов (#430). */
+  stageNameSuggestions?: readonly WorkflowStageName[];
+  stageNameLoading?: boolean;
 }) {
   const selection = useRouteDocStore((s) => s.selection);
   const doc = useRouteDocStore((s) => s.document);
@@ -122,6 +132,8 @@ export function EditorPanel({
           readOnly={readOnly}
           autoFocusName={freshId === stage.id}
           onOpenButtons={() => setSection('buttons')}
+          stageNameSuggestions={stageNameSuggestions}
+          stageNameLoading={stageNameLoading}
         />
       ) : null}
       {stage && section === 'buttons' ? (

@@ -11,6 +11,7 @@ import {
   stageOutcomeSchema,
   taskSystemStateSchema,
   transitionDisplaySchema,
+  workflowTransitionIntentSchema,
 } from './workflow-primitives.schemas.js';
 
 /**
@@ -113,12 +114,15 @@ export const workflowPostFunctionSchema = z.discriminatedUnion('kind', [
    *  архивных переходах истории — новые маршруты его не несут. */
   z.object({ kind: z.literal('route_if_accept_required'), stageCode: z.string().min(1) }),
   /** Если условие выполнено, цель подменяется стадией `toStageId` —
-   *  утверждение пропускается, когда постановщик сам себе исполнитель (#378).
-   *  docId: в черновике цель может быть новой стадией `new:*` (разрешается
-   *  в uuid при публикации); uuid-only рвал rehydrate черновика. */
+   *  утверждение пропускается. `creator_is_assignee` — старое правило по
+   *  полям (совместимость каталога); `approver_is_actor` — по актору (#430,
+   *  ADR-0025 п.2): пропуск, только если нажавший сам является утверждающим
+   *  целевого статуса. docId: в черновике цель может быть новой стадией
+   *  `new:*` (разрешается в uuid при публикации); uuid-only рвал rehydrate
+   *  черновика. */
   z.object({
     kind: z.literal('route_if'),
-    when: z.literal('creator_is_assignee'),
+    when: z.enum(['creator_is_assignee', 'approver_is_actor']),
     toStageId: docIdSchema,
   }),
   /** Присвоить номер серии типа (#55, Р1/O8): движок берёт серию из
@@ -195,6 +199,9 @@ export const workflowTransitionSchema = z.object({
   toStageOrder: z.number().int().min(0),
   /** Показ в панели процесса: главная / видна / в меню «Ещё» (#378). */
   display: transitionDisplaySchema,
+  /** Смысл кнопки (#430): ждёт действия человека или служебная; служебные
+   *  не попадают в «Мои действия» (ADR-0026). */
+  intent: workflowTransitionIntentSchema,
   blockedBy: z.array(transitionBlockReasonSchema),
   /** Можно ли пройти гейт с причиной (право task.override_gate). */
   canOverride: z.boolean(),

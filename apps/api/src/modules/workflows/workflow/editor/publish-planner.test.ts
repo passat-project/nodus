@@ -55,6 +55,7 @@ function snapshot(overrides: Partial<PlannerSnapshot> = {}): PlannerSnapshot {
         fromStageId: S1,
         toStageId: S2,
         display: 'primary',
+        intent: 'action',
         sortOrder: 0,
         rules: RULES,
         form: { enabled: false, sections: [] },
@@ -80,6 +81,7 @@ function doc(
     fromStageId: string | null;
     toStageId: string;
     display?: string;
+    intent?: string;
     rules?: unknown;
     form?: unknown;
   }[] = [],
@@ -156,6 +158,32 @@ describe('planWorkflowPublish (#378)', () => {
     expect(plan.stageUpdates).toHaveLength(0);
     expect(plan.stageArchives).toHaveLength(0);
     expect(plan.transitionArchives).toHaveLength(0);
+  });
+
+  it('смысл кнопки — часть плана публикации (#430)', () => {
+    const plan = planWorkflowPublish(
+      snapshot(),
+      doc(
+        [
+          { id: S1, name: 'Ожидает', color: 'neutral', systemState: 'backlog', isInitial: true },
+          { id: S2, name: 'В работе', color: 'success', systemState: 'active' },
+          { id: S3, name: 'Завершена', color: 'info', systemState: 'closed', outcome: 'success' },
+        ],
+        [
+          {
+            id: T1,
+            name: 'Взять в работу',
+            fromStageId: S1,
+            toStageId: S2,
+            display: 'primary',
+            intent: 'service',
+          },
+        ],
+      ),
+      [],
+    );
+    expect(plan.transitionUpdates).toHaveLength(1);
+    expect(plan.transitionUpdates[0]!.intent).toBe('service');
   });
 
   it('новая стадия (new:*) — в создание; изменение имени — в обновление', () => {

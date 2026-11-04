@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateProcessTypeBody,
+  ProcessCategory,
   PublishWorkflowBody,
   PublishWorkflowResult,
   SaveWorkflowLayoutResult,
@@ -8,6 +9,7 @@ import type {
   UpdateProcessTypeBody,
   UpdateProcessTypeConfigBody,
   WorkflowLayout,
+  WorkflowStageName,
 } from '@nodus/contracts';
 import { typeConfigOf, ui } from '@nodus/contracts';
 import { toast } from 'sonner';
@@ -28,6 +30,24 @@ export function useProcessTypes(archived?: 'include' | 'only') {
       const search = archived ? `?archived=${archived}` : '';
       return api<ProcessType[]>(`/workflows/types${search}`);
     },
+    staleTime: 60_000,
+  });
+}
+
+/** Мягкий каталог имён статусов (#430): подсказки редактора; текущий
+ *  маршрут исключён, системные (неопубликованные) маршруты не отдаются. */
+export function useStageNames(
+  category: ProcessCategory,
+  excludeWorkflowId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: workflowKeys.stageNames(category, excludeWorkflowId),
+    queryFn: () =>
+      api<WorkflowStageName[]>(
+        `/workflows/stage-names?category=${category}&excludeWorkflowId=${excludeWorkflowId}`,
+      ),
+    enabled,
     staleTime: 60_000,
   });
 }

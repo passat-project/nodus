@@ -105,6 +105,7 @@ export const incomingLetterDocument: WorkflowDocument = {
       fromStageId: letterStages.new.id,
       toStageId: letterStages.onResolution.id,
       display: 'primary',
+      intent: 'action',
       sortOrder: 0,
       rules: {
         conditions: [registrar],
@@ -120,6 +121,7 @@ export const incomingLetterDocument: WorkflowDocument = {
       fromStageId: letterStages.new.id,
       toStageId: letterStages.notRegistered.id,
       display: 'button',
+      intent: 'service',
       sortOrder: 1,
       rules: { conditions: [registrar], validators: [], postFunctions: [] },
       form: { enabled: true, sections: [reason] },
@@ -131,6 +133,7 @@ export const incomingLetterDocument: WorkflowDocument = {
       fromStageId: letterStages.onResolution.id,
       toStageId: letterStages.registeredByMistake.id,
       display: 'menu',
+      intent: 'service',
       sortOrder: 0,
       rules: { conditions: [registrar], validators: [], postFunctions: [] },
       form: { enabled: true, sections: [reason] },
@@ -151,6 +154,7 @@ export const outgoingLetterDocument: WorkflowDocument = {
       fromStageId: letterStages.draft.id,
       toStageId: letterStages.cancelled.id,
       display: 'menu',
+      intent: 'service',
       sortOrder: 0,
       rules: {
         conditions: [{ kind: 'role_in', roles: ['author'] }],

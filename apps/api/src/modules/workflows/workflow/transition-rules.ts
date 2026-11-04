@@ -8,6 +8,7 @@ import {
   type TransitionForm,
   type WorkflowFieldKey,
   type WorkflowRequirableField,
+  type WorkflowTransitionIntent,
   type WorkflowTransitionRules,
 } from '@nodus/contracts';
 import type {
@@ -31,6 +32,8 @@ export interface TransitionDef {
   fromStageId: string | null;
   toStageId: string;
   display: TransitionDisplay;
+  /** Смысл кнопки (#430): action — ждёт человека, service — служебная. */
+  intent: WorkflowTransitionIntent;
   sortOrder: number;
   rules: WorkflowTransitionRules;
   /** Окно при нажатии (#380); выключенное — `{ enabled: false, sections: [] }`.
@@ -128,6 +131,13 @@ export function evaluateValidators(
   return reasons;
 }
 
+/** Контекст вычисления фактической цели: нужен новому правилу
+ *  `approver_is_actor` (#430) — актор является утверждающим статуса?
+ *  Старое `creator_is_assignee` контекста не требует. */
+export interface TargetContext {
+  isActorApprover?: (stageId: string) => boolean;
+}
+
 /** Фактическая цель перехода: пост-функции route_if подменяют цель при
  *  совпадении условия (цель мертва — игнор и warn вызывающему; маршрут
  *  проверяет принадлежность при публикации). Устаревший
@@ -136,9 +146,18 @@ export function effectiveTargetId(
   transition: TransitionDef,
   facts: Pick<WorkflowGateFacts, 'acceptRequired' | 'creatorIsAssignee'>,
   stages: readonly StageDef[],
+  ctx?: TargetContext,
 ): string {
   for (const pf of transition.rules.postFunctions) {
-    if (pf.kind === 'route_if' && facts.creatorIsAssignee) {
+    if (pf.kind === 'route_if') {
+      // #430: по актору — пропуск, только если нажавший сам утверждающий
+      // обычной цели перехода (статуса утверждения). Старое правило — по
+      // полям задачи, остаётся для совместимости.
+      const matches =
+        pf.when === 'creator_is_assignee'
+          ? facts.creatorIsAssignee
+          : (ctx?.isActorApprover?.(transition.toStageId) ?? false);
+      if (!matches) continue;
       const target = stages.find((s) => s.id === pf.toStageId && !s.archivedAt);
       if (target) return target.id;
     }
@@ -148,6 +167,57 @@ export function effectiveTargetId(
     }
   }
   return transition.toStageId;
+}
+
+/** Потенциальная цель перехода без проверки акторного пропуска: нужна DnD,
+ *  чтобы показать причину гейта, а не «перехода нет» (#402/#430). */
+export function potentialTargetId(
+  transition: TransitionDef,
+  facts: Pick<WorkflowGateFacts, 'acceptRequired' | 'creatorIsAssignee'>,
+  stages: readonly StageDef[],
+): string {
+  for (const pf of transition.rules.postFunctions) {
+    if (pf.kind === 'route_if') {
+      if (pf.when === 'creator_is_assignee' && !facts.creatorIsAssignee) continue;
+      const target = stages.find((s) => s.id === pf.toStageId && !s.archivedAt);
+      if (target) return target.id;
+    }
+    if (pf.kind === 'route_if_accept_required' && facts.acceptRequired) {
+      const target = stages.find((s) => s.code === pf.stageCode && !s.archivedAt);
+      if (target) return target.id;
+    }
+  }
+  return transition.toStageId;
+}
+
+/** Совпадение перехода с выбором: id кнопки, id стадии или системный этап+итог.
+ *  Для DnD в колонку учитывается и потенциальная цель — чтобы вернуть причину
+ *  гейта, а не «перехода нет». */
+export function matchesChoice(
+  transition: TransitionDef,
+  choice:
+    | { transitionId: string }
+    | { stageId: string }
+    | { systemState: string; outcome: string | null },
+  facts: WorkflowGateFacts,
+  stages: readonly StageDef[],
+  ctx: TargetContext,
+  stageOf: (id: string) => { systemState: string; outcome?: string | null },
+): boolean {
+  if ('transitionId' in choice) return transition.id === choice.transitionId;
+  const target = effectiveTargetId(transition, facts, stages, ctx);
+  if ('stageId' in choice) {
+    if (target === choice.stageId) return true;
+    return potentialTargetId(transition, facts, stages) === choice.stageId;
+  }
+  const stage = stageOf(target);
+  if (stage.systemState === choice.systemState && (stage.outcome ?? null) === choice.outcome) {
+    return true;
+  }
+  const potential = stageOf(potentialTargetId(transition, facts, stages));
+  return (
+    potential.systemState === choice.systemState && (potential.outcome ?? null) === choice.outcome
+  );
 }
 
 /** Живая стадия по id (архивная — как отсутствующая). */
@@ -164,6 +234,7 @@ export function outgoingTransitions(
   transitions: readonly TransitionDef[],
   facts: Pick<WorkflowGateFacts, 'stageId' | 'acceptRequired' | 'creatorIsAssignee'>,
   stages: readonly StageDef[],
+  ctx?: TargetContext,
 ): TransitionDef[] {
   const current = stages.find((s) => s.id === facts.stageId);
   const currentFinal = current !== undefined && isFinalState(current.systemState);
@@ -174,11 +245,11 @@ export function outgoingTransitions(
     .filter((t) => t.fromStageId === null)
     .filter((t) => {
       if (!currentFinal) return true;
-      const target = liveStage(stages, effectiveTargetId(t, facts, stages));
+      const target = liveStage(stages, effectiveTargetId(t, facts, stages, ctx));
       return target === undefined || !isFinalState(target.systemState);
     })
     .sort((a, b) => a.sortOrder - b.sortOrder);
   return [...fromStage, ...fromAny].filter(
-    (t) => effectiveTargetId(t, facts, stages) !== facts.stageId,
+    (t) => effectiveTargetId(t, facts, stages, ctx) !== facts.stageId,
   );
 }

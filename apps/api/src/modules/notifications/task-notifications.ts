@@ -44,13 +44,18 @@ export function taskNotices(type: string, p: Payload, actorId: string | null): T
       const from = str(p.fromState) ?? '';
       const to = str(p.toState) ?? '';
       // Вход в «Итог» из незавершённого (add исключает нажавшего):
-      // «отменена» — исполнителю и соисполнителям; утверждение (с этапа
-      // «Утверждение») — исполнителю «работа принята»; «выполнена» без
-      // утверждения — постановщику.
+      // «отменена» — исполнителю и соисполнителям; «отклонена» — автору и
+      // исполнителю (#430); утверждение (с этапа «Утверждение») — исполнителю
+      // «работа принята»; «выполнена» без утверждения — постановщику.
       if (isFinalState(to) && !isFinalState(from)) {
         if (str(p.toStageOutcome) === 'cancelled') {
           add(str(p.assigneeId), 'task.cancelled');
           for (const id of ids(p.coexecutorIds)) add(id, 'task.cancelled');
+        } else if (str(p.toStageOutcome) === 'rejected') {
+          // Отказ утверждающего (#430): автору и исполнителю; нажавший
+          // (утверждающий) исключается общим правилом add.
+          add(str(p.creatorId), 'task.rejected');
+          add(str(p.assigneeId), 'task.rejected');
         } else if (isReviewState(from)) {
           add(str(p.assigneeId), 'task.approved');
         } else {

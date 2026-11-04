@@ -3,6 +3,7 @@ import type { CustomFieldDefinition } from '../custom-fields/custom-field.schema
 import { checkCreationForm } from './creation-form.js';
 import type { ProcessCategory } from './process-type.schemas.js';
 import { checkCategoryDictionary } from './workflow-document-category-check.js';
+import { checkExtraRules } from './workflow-document-extra-checks.js';
 import type {
   WorkflowDraftDocument,
   WorkflowDraftStage,
@@ -47,6 +48,15 @@ export interface WorkflowCheckOptions {
   projectsAvailable?: boolean;
   /** Живые сотрудники — пресеты «ответственный/соисполнители/наблюдатели». */
   activeUserIds?: ReadonlySet<string>;
+  /** Имена статусов других опубликованных маршрутов (#430), уже без
+   *  текущего маршрута: для warning-ов `stage_name_shared` и
+   *  `stage_name_similar`. Без факта проверки имён пропускаются. */
+  stageNameFacts?: readonly {
+    systemState: WorkflowDraftStage['systemState'];
+    name: string;
+  }[];
+  /** Ограничить проверку имён новыми/переименованными стадиями (#430). */
+  stageNameStageIds?: ReadonlySet<string>;
 }
 
 function error(
@@ -130,6 +140,17 @@ export function checkWorkflowDocument(
     }
     if (t.rules.conditions.length === 0) {
       problems.push(error('no_roles', { transitionId: t.id }));
+    }
+    // Кнопка-действие, у которой «кто видит» задан только правом (#430):
+    // в «Мои действия» держателем станет ответственный — предупреждаем.
+    // У писем «Моих действий» нет — не шумим на системном маршруте письма.
+    if (
+      opts.category !== 'letter' &&
+      t.intent === 'action' &&
+      t.rules.conditions.length > 0 &&
+      t.rules.conditions.every((c) => c.kind === 'permission')
+    ) {
+      problems.push(warning('action_without_visibility', { transitionId: t.id }));
     }
   }
 
@@ -334,6 +355,13 @@ export function checkWorkflowDocument(
       problems.push(warning('duplicate_with_any', { transitionId: t.id }));
     }
   }
+
+  // #430: имена статусов, дубли целей и разрешимость approver_is_actor.
+  checkExtraRules(
+    doc,
+    { stageNameFacts: opts.stageNameFacts, stageNameStageIds: opts.stageNameStageIds },
+    problems,
+  );
 
   return problems;
 }

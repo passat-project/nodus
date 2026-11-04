@@ -1,4 +1,8 @@
-import type { WorkflowDocument, WorkflowMigration } from '@nodus/contracts';
+import type {
+  WorkflowDocument,
+  WorkflowMigration,
+  WorkflowTransitionIntent,
+} from '@nodus/contracts';
 
 /**
  * Планировщик публикации маршрута (#378, ADR-0021) — чистая функция: снимок
@@ -23,6 +27,8 @@ export interface PlannerTransition {
   fromStageId: string | null;
   toStageId: string;
   display: string;
+  /** Смысл кнопки (#430). */
+  intent?: WorkflowTransitionIntent;
   sortOrder: number;
   /** Разобранные правила (кто видит, условия, особые правила). */
   rules: unknown;
@@ -66,6 +72,8 @@ export interface TransitionWrite {
   fromStageId: string | null;
   toStageId: string;
   display: string;
+  /** Смысл кнопки (#430): action | service. */
+  intent: WorkflowTransitionIntent;
   sortOrder: number;
   /** Окно при нажатии (#380) — часть документа, пишется вместе с кнопкой. */
   form: unknown;
@@ -148,6 +156,7 @@ export function planWorkflowPublish(
       fromStageId: t.fromStageId,
       toStageId: t.toStageId,
       display: t.display,
+      intent: t.intent ?? 'action',
       sortOrder: t.sortOrder,
       form: t.form,
     };
@@ -161,6 +170,7 @@ export function planWorkflowPublish(
       existing.fromStageId === write.fromStageId &&
       existing.toStageId === write.toStageId &&
       existing.display === write.display &&
+      (existing.intent ?? 'action') === write.intent &&
       existing.sortOrder === write.sortOrder &&
       sameRules(existing.rules, t.rules) &&
       sameForm(existing.form, write.form);

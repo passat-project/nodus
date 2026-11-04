@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type {
+  ProcessCategory,
   PublishWorkflowResult,
   WorkflowDetail,
   WorkflowDraftDocument,
@@ -18,8 +19,10 @@ import {
 
 import { ApiError } from '../../../../shared/api-client.js';
 import { pluralRu } from '../../lib/plural-ru.js';
-import type { usePublishWorkflow } from '../../api/automation-api.js';
+import { useProcessTypes, type usePublishWorkflow } from '../../api/automation-api.js';
 import { flushLayoutAutosave } from '../../model/use-layout-autosave.js';
+import { PublishAffected } from './publish-affected.js';
+import { PublishWarnings } from './publish-warnings.js';
 
 /** Дефолт переноса: первый живой статус того же этапа, иначе начальный. */
 function defaultTargetOf(
@@ -52,6 +55,10 @@ export function publishSummary(
   const removedTransitions = baseline.transitions.filter(
     (t) => !next.transitions.some((n) => n.id === t.id),
   ).length;
+  const changedStages = next.stages.filter((s) => {
+    const before = baseline.stages.find((b) => b.id === s.id);
+    return before && JSON.stringify(before) !== JSON.stringify(s);
+  }).length;
   const changedTransitions = next.transitions.filter((t) => {
     const before = baseline.transitions.find((b) => b.id === t.id);
     return before && JSON.stringify(before) !== JSON.stringify(t);
@@ -61,6 +68,8 @@ export function publishSummary(
   if (addedStages) parts.push(`+${addedStages} ${pluralRu(addedStages, ui.automation.statStages)}`);
   if (removedStages)
     parts.push(`−${removedStages} ${pluralRu(removedStages, ui.automation.statStages)}`);
+  if (changedStages)
+    parts.push(`${changedStages} ${pluralRu(changedStages, ui.automation.stagesChangedForms)}`);
   if (addedTransitions)
     parts.push(`+${addedTransitions} ${pluralRu(addedTransitions, ui.automation.statButtons)}`);
   if (removedTransitions)
@@ -100,9 +109,11 @@ export function PublishDialog({
   open,
   onClose,
   workflow,
+  category: typeCategory,
   baseline,
   document: doc,
   baseVersion,
+  problems = [],
   publish,
   onPublished,
   onConflictLoad,
@@ -110,9 +121,13 @@ export function PublishDialog({
   open: boolean;
   onClose: () => void;
   workflow: WorkflowDetail;
+  /** Категория типа — фолбэк, если у маршрута ещё нет типов (#430). */
+  category: ProcessCategory;
   baseline: WorkflowDraftDocument;
   document: WorkflowDraftDocument;
   baseVersion: number;
+  /** Live-проверки редактора (#430): warnings не блокируют публикацию. */
+  problems?: readonly WorkflowProblem[];
   publish: ReturnType<typeof usePublishWorkflow>;
   onPublished: (result: PublishWorkflowResult) => void;
   /** 409: загрузить свежую версию (локальные правки сбрасываются). */
@@ -122,6 +137,17 @@ export function PublishDialog({
   const [serverCounts, setServerCounts] = useState<Record<string, number>>({});
   const countOf = (stageId: string) =>
     serverCounts[stageId] ?? workflow.stageEntityCounts[stageId] ?? 0;
+  const { data: types = [] } = useProcessTypes('include');
+  const affectedTypes = types.filter(
+    (t) => t.archivedAt === null && workflow.typeIds.includes(t.id),
+  );
+  const category = affectedTypes[0]?.category ?? typeCategory;
+  const inFlightStageIds = new Set([...baseline.stages, ...doc.stages].map((s) => s.id));
+  const inFlight = [...inFlightStageIds].reduce((sum, id) => {
+    const stage = doc.stages.find((s) => s.id === id) ?? baseline.stages.find((s) => s.id === id);
+    return stage?.systemState === 'closed' ? sum : sum + countOf(id);
+  }, 0);
+  const liveWarnings = problems.filter((p) => p.severity === 'warning');
   const removed = baseline.stages.filter((s) => !doc.stages.some((n) => n.id === s.id));
   const removedWithTasks = removed.filter((s) => countOf(s.id) > 0);
   const restates = baseline.stages
@@ -204,6 +230,16 @@ export function PublishDialog({
           <DialogTitle>{ui.automation.publishTitle}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">{publishSummary(baseline, doc)}</p>
+
+        <PublishAffected
+          typeNames={affectedTypes.map((t) => t.name)}
+          inFlight={inFlight}
+          category={category}
+        />
+
+        {liveWarnings.length > 0 ? (
+          <PublishWarnings problems={liveWarnings} document={doc} />
+        ) : null}
 
         {Object.keys(serverCounts).length > 0 ? (
           <p role="alert" className="text-sm text-warning">
