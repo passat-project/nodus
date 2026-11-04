@@ -53,9 +53,13 @@ export function BoardTaskCard({
       )}
     >
       {isVisible('type') ? (
+        /* 4px literal (как мини-бейджи): 0.125rem = 2.5px — дробная толщина
+           на полу-пиксельных позициях карточек растриризуется то в 3, то в 4
+           физических пикселя (масштаб 125%), полоса «прыгает» по толщине;
+           4px цел на 100/125/150/200% (§403, замечание владельца 04.11). */
         <span
           aria-hidden
-          className={cn('absolute inset-x-0 top-0 h-0.5', stageTone[task.type.color].dot)}
+          className={cn('absolute inset-x-0 top-0 h-[4px]', stageTone[task.type.color].dot)}
         />
       ) : null}
       {isVisible('parent') && parentNumber !== undefined ? (
