@@ -231,10 +231,33 @@ describe.skipIf(!process.env.DATABASE_URL)('crm: реестр и жизненн�
     ).toBe(403);
   });
 
-  it('проекция счётчиков: строка counterparty_usages даёт lettersCount в реестре и карточке', async () => {
+  it('проекция счётчиков: живое письмо в counterparty_usages даёт lettersCount', async () => {
     const card = await create({ fullName: name('Счётчики'), shortName: name('Счётчики') });
+    // Счётчик считает ТОЛЬКО видимые письма (#461, Р4): проекция без живой
+    // строки `letters` — мусор, а не письмо. Создаём зарегистрированное
+    // письмо (plain UUID движка, без FK — I3) и строку проекции.
+    const letter = await fx.prisma.letter.create({
+      data: {
+        typeId: crypto.randomUUID(),
+        workflowId: crypto.randomUUID(),
+        stageId: crypto.randomUUID(),
+        systemState: 'active',
+        direction: 'incoming',
+        source: 'manual',
+        createdBy: employee.id,
+        // CHECK полноты регистрации: номер и его состав заполняются вместе.
+        regNumber: `ИТ-${crypto.randomUUID().slice(0, 8)}`,
+        regSeriesId: crypto.randomUUID(),
+        regYear: 2026,
+        regSeq: 1,
+        regDate: new Date(),
+        registeredAt: new Date(),
+        registrarId: employee.id,
+        counterpartyId: card.id,
+      },
+    });
     await fx.prisma.counterpartyUsage.create({
-      data: { sourceKind: 'letter', sourceId: crypto.randomUUID(), counterpartyId: card.id },
+      data: { sourceKind: 'letter', sourceId: letter.id, counterpartyId: card.id },
     });
 
     const read = counterpartyCardSchema.parse(
