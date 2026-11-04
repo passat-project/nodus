@@ -199,7 +199,8 @@ export function FieldDialogForm({
             options={draft.options}
             defaultIds={draft.defaultOptionIds}
             multiple={type === 'multienum'}
-            disabled={disabled || optionsReadOnly}
+            disabled={disabled}
+            optionsReadOnly={optionsReadOnly}
             onChange={(options) => onChange({ options })}
             onDefaultChange={(defaultOptionIds) => onChange({ defaultOptionIds })}
           />
