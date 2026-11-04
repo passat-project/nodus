@@ -71,6 +71,10 @@ resume). Секреты — только `.env` владельца/песочн�
 - **Письмо — сущность движка** (ADR-0024): тип, маршрут и стадия — plain UUID
   без FK; категория типа `letter`. Адаптер регистрируется DiscoveryService по
   `static readonly workflowCategory = 'letter'`.
+- **Уборка значений удалённого атрибута** (#582): событие
+  `custom_field.definition_changed` (`change='deleted'`, `scope='letter'`)
+  убирает ключ из `letters.custom_fields` пачками и идемпотентно; мягко
+  удалённые письма тоже чистит — восстановление не воскрешает значение.
 - **Регистрация — переход** `register` маршрута входящего: окно
   `{kind:'registration'}` + пост-действие `assign_number`. Номер выдаёт движок
   в той же транзакции (`NumberSeriesService`), откат перехода не сдвигает

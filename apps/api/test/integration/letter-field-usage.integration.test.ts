@@ -6,6 +6,7 @@ import {
   letterDetailSchema,
 } from '@nodus/contracts';
 
+import { EventDispatcher } from '../../src/core/events/event-dispatcher.js';
 import { TokenService } from '../../src/modules/auth/token.service.js';
 import {
   setupCorrespondenceFixture,
@@ -35,6 +36,22 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const res = await c.createLetter(c.registrar, [FILE]);
       expect(res.status, await res.clone().text()).toBe(201);
       return letterDetailSchema.parse(await res.json()).id;
+    }
+
+    async function adminActor() {
+      const tokens = c.fx.app.get(TokenService);
+      return {
+        ...c.registrar,
+        token: await tokens.signAccessToken(
+          {
+            id: c.registrar.id,
+            email: c.registrar.email,
+            displayName: c.registrar.displayName,
+            permissions: [Permission.CUSTOM_FIELD_MANAGE],
+          },
+          'integration-test-session',
+        ),
+      };
     }
 
     it('считает живые письма, не считает спам; очистка значения обнуляет', async () => {
@@ -88,6 +105,40 @@ describe.skipIf(!process.env.DATABASE_URL)(
         key: `it-cf-letter-del-${c.fx.runId}`,
       });
       expect(removed.status, await removed.clone().text()).toBe(204);
+    });
+
+    it('удаление определения чистит ключ из letters.custom_fields (#582)', async () => {
+      const admin = await adminActor();
+      const created = await c.api(admin, 'POST', '/custom-fields/definitions', {
+        body: {
+          scope: 'letter',
+          type: 'text',
+          name: `Проба ${c.fx.runId} очистка`,
+          typeIds: [c.incomingTypeId],
+        },
+        key: `it-cf-letter-clean-${c.fx.runId}`,
+      });
+      expect(created.status, await created.clone().text()).toBe(201);
+      const field = customFieldDefinitionSchema.parse(await created.json());
+
+      const letterId = await newLetter();
+      await c.fx.prisma.letter.update({
+        where: { id: letterId },
+        data: { customFields: { [field.id]: 'значение', keep: 'да' } },
+      });
+
+      const removed = await c.api(admin, 'DELETE', `/custom-fields/definitions/${field.id}`, {
+        key: `it-cf-letter-clean-del-${c.fx.runId}`,
+      });
+      expect(removed.status, await removed.clone().text()).toBe(204);
+      await c.fx.app.get(EventDispatcher).dispatchPending();
+
+      const row = await c.fx.prisma.letter.findUnique({
+        where: { id: letterId },
+        select: { customFields: true, deletedAt: true },
+      });
+      expect(row?.deletedAt).toBeNull();
+      expect(row?.customFields).toEqual({ keep: 'да' });
     });
   },
 );
