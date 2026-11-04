@@ -12,8 +12,12 @@ import { LetterRelationsRepository } from './letter-relations.repository.js';
 import { LettersQueryService } from './letters-query.service.js';
 import { LettersRepository } from './letters.repository.js';
 
-/** Капы дерева (#461, Р2): матрёшки 5–6 уровней, цепочки ответов — до
- *  десятков; 8/200 — с запасом без «простыни»; обрезка → truncated. */
+/** Капы дерева (#461, Р2, ред. 05.11.2026): глубина считается по ВЕТВЛЕНИЮ,
+ *  а не по длине переписки — линейный ответ продолжает цепочку на том же
+ *  уровне (модель «цепочка + ветки»: Gmail/Outlook-flat, mixed-model
+ *  Venolia & Neustaedter). Иначе переписка в 100 писем упиралась бы в кап.
+ *  8 уровней — это 8 вложенных матрёшек/веток; узлов — 200; обрезка →
+ *  truncated. */
 const MAX_DEPTH = 8;
 const MAX_NODES = 200;
 const MAX_UP = 64;
@@ -86,7 +90,10 @@ export class LettersTreeService {
     return current;
   }
 
-  /** Дети узла (видимые, порядок: вложенные, затем ответы) с рекурсией DFS. */
+  /** Дети узла (видимые, порядок: вложенные, затем ответы) с рекурсией DFS.
+   *  Уровень растёт только на ВЕТВЛЕНИИ: единственный ответ продолжает
+   *  цепочку на том же уровне (плоский ствол), два и больше ответов —
+   *  ветка; «вложено в» — всегда уровень внутрь (матрёшка). */
   private async childrenOf(
     user: AuthUser,
     parent: NodeRow,
@@ -103,6 +110,9 @@ export class LettersTreeService {
       user,
       links.map((link) => link.letterId),
     );
+    // Ветвление считаем по ВИДИМЫМ зрителю ответам: два ответа, один из
+    // которых скрыт конфиденциальностью, — для него это цепочка.
+    const replies = links.filter((link) => link.kind === 'reply_to' && visible.has(link.letterId));
     const rows = new Map(
       (await this.repo.nodesByIds([...visible])).map((row) => [row.id, row] as const),
     );
@@ -118,7 +128,9 @@ export class LettersTreeService {
         break;
       }
       const node = toNode(row, link);
-      node.children = await this.childrenOf(user, row, depth + 1, state);
+      // Единственный ответ — ствол цепочки (тот же уровень), иначе — ветка.
+      const chain = link.kind === 'reply_to' && replies.length === 1;
+      node.children = await this.childrenOf(user, row, chain ? depth : depth + 1, state);
       children.push(node);
     }
     return children;

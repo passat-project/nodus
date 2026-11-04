@@ -277,9 +277,12 @@ export function LetterCard({ letterId }: { letterId: string }) {
             сужений (рельса), во время drag снят — ширина идёт императивно. */}
         <div
           ref={sideRef}
+          // transition — только для ПРОГРАММНЫХ сужений (рельса, открытие
+          // панели): во время любой тяги (чат ИЛИ «ёлочка») он снят — иначе
+          // колонка чата «пружинит» за перегородкой (в задаче так же).
           className={cn(
             'min-h-0 overflow-hidden',
-            !dragging && 'transition-[width] duration-200 ease-out',
+            !resizing && 'transition-[width] duration-200 ease-out',
           )}
           style={{
             width: sideW,

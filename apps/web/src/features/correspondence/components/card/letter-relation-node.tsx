@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Layers, Link2Off, Lock, Reply } from 'lucide-react';
+import { ArrowLeftRight, Layers, Link2Off, Lock, Plus, Reply } from 'lucide-react';
 import type { LetterTreeNode } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { orthPath, snapPx } from '@nodus/ui/components/node-edge';
@@ -28,11 +28,15 @@ export const nodeNumber = (node: LetterTreeNode): string =>
 
 /**
  * Рёбра «ёлочки» — единый SVG поверх строк (одна система координат,
- * hairline-snap): ствол ветки — один путь от порта родителя до последнего
- * ребёнка со скруглённым локтем, отводы остальных детей — горизонтали от
- * ствола (Т-стык), каждое ребро рисуется ровно один раз. Порт текущего
- * письма — активный узел: заливка `--port` и свечение (канон: glow — только
- * активному узлу).
+ * hairline-snap). Две грамматики (ред. 05.11.2026):
+ *  - **ствол цепочки**: ответ на ответ идёт ПЛОСКО — вертикальная линия от
+ *    порта родителя к порту ребёнка на том же уровне (переписка не уезжает
+ *    вправо);
+ *  - **ветка/матрёшка**: локоть со скруглением от порта родителя вниз и в
+ *    сторону — только когда на письмо ответили двое или письмо вложено в
+ *    конверт.
+ * Каждое ребро рисуется ровно один раз. Порт текущего письма — активный
+ * узел: заливка `--port` и свечение (канон: glow — только активному узлу).
  */
 export function LetterTreeEdges({
   rows,
@@ -43,36 +47,32 @@ export function LetterTreeEdges({
 }) {
   const paths: string[] = [];
   const midY = (index: number) => index * TREE_ROW_H + MID;
+  const indexOf = new Map(rows.map((row, index) => [row.key, index] as const));
   rows.forEach((row, index) => {
-    const children: number[] = [];
-    for (let j = index + 1; j < rows.length; j += 1) {
-      const below = rows[j];
-      if (!below || below.depth <= row.depth) break;
-      if (below.depth === row.depth + 1) children.push(j);
+    if (!row.parentKey) return;
+    const parentIndex = indexOf.get(row.parentKey);
+    if (parentIndex === undefined) return;
+    const parent = rows[parentIndex]!;
+    const px = snapPx(graphX(parent.depth));
+    const stop = row.hasChildren ? BRANCH_GAP : LEAF_GAP;
+    const y = snapPx(midY(index));
+    const top = snapPx(midY(parentIndex) + stop);
+    if (row.depth === parent.depth) {
+      // Ствол цепочки: вертикаль без локтя.
+      paths.push(`M${px},${top} L${px},${y - stop}`);
+      return;
     }
-    if (children.length === 0) return;
-    const px = snapPx(graphX(row.depth));
-    const stopOf = (childIndex: number) => {
-      const child = rows[childIndex];
-      return child?.hasChildren ? BRANCH_GAP : LEAF_GAP;
-    };
-    const lastIndex = children[children.length - 1] ?? index;
-    const lastY = snapPx(midY(lastIndex));
-    const childX = (childIndex: number) => snapPx(graphX(row.depth + 1) - stopOf(childIndex));
+    const childX = snapPx(graphX(row.depth) - stop);
     paths.push(
       orthPath(
         [
-          { x: px, y: snapPx(midY(index) + BRANCH_GAP) },
-          { x: px, y: lastY },
-          { x: childX(lastIndex), y: lastY },
+          { x: px, y: top },
+          { x: px, y },
+          { x: childX, y },
         ],
         ELBOW,
       ),
     );
-    for (const childIndex of children.slice(0, -1)) {
-      const y = snapPx(midY(childIndex));
-      paths.push(`M${px},${y} L${childX(childIndex)},${y}`);
-    }
   });
   const height = rows.length * TREE_ROW_H;
   const width = graphX(Math.max(0, ...rows.map((row) => row.depth))) + uiPx(12);
@@ -117,6 +117,7 @@ export function LetterRelationNode({
   canManage,
   onToggle,
   onNavigate,
+  onAdd,
   onReplace,
   onUnlink,
 }: {
@@ -126,6 +127,9 @@ export function LetterRelationNode({
   canManage: boolean;
   onToggle: (key: string) => void;
   onNavigate: (id: string) => void;
+  /** Связь к ЭТОМУ письму, а не к текущему: в длинной цепочке не нужно
+   *  уходить в карточку письма, чтобы что-то к нему привязать. */
+  onAdd: (node: LetterTreeNode) => void;
   onReplace: (node: LetterTreeNode) => void;
   onUnlink: (node: LetterTreeNode) => void;
 }) {
@@ -138,24 +142,34 @@ export function LetterRelationNode({
       : node.relationKind === 'reply_to'
         ? { icon: Reply, label: ui.letters.relations.nodeReplyTo }
         : null;
-  const menu: RowMenuItem[] =
-    canManage && node.relationId
-      ? [
-          {
-            id: 'replace',
-            icon: <ArrowLeftRight className="size-3.5" strokeWidth={1.75} />,
-            label: ui.letters.relations.menuReplace,
-            onSelect: () => onReplace(node),
-          },
-          {
-            id: 'unlink',
-            icon: <Link2Off className="size-3.5" strokeWidth={1.75} />,
-            label: ui.letters.relations.menuUnlink,
-            danger: true,
-            onSelect: () => onUnlink(node),
-          },
-        ]
-      : [];
+  const menu: RowMenuItem[] = canManage
+    ? [
+        {
+          id: 'add',
+          icon: <Plus className="size-3.5" strokeWidth={1.75} />,
+          label: ui.letters.relations.add,
+          onSelect: () => onAdd(node),
+        },
+        ...(node.relationId
+          ? [
+              {
+                id: 'replace',
+                icon: <ArrowLeftRight className="size-3.5" strokeWidth={1.75} />,
+                label: ui.letters.relations.menuReplace,
+                separatorBefore: true,
+                onSelect: () => onReplace(node),
+              },
+              {
+                id: 'unlink',
+                icon: <Link2Off className="size-3.5" strokeWidth={1.75} />,
+                label: ui.letters.relations.menuUnlink,
+                danger: true,
+                onSelect: () => onUnlink(node),
+              },
+            ]
+          : []),
+      ]
+    : [];
 
   return (
     <div className="relative" style={{ height: TREE_ROW_H }}>
@@ -224,11 +238,37 @@ export function LetterRelationNode({
                 {kind.label}
               </span>
             ) : null}
-            {collapsed && row.descendants > 0 ? (
-              <span className="ml-auto shrink-0 font-mono tabular-nums">+{row.descendants}</span>
-            ) : null}
           </span>
         </button>
+        {/* Счётчики узла — СВОЙ слот фиксированной ширины у правого края
+            плашки: «на письмо ответили N» и «в конверт вложили N» стоят
+            колонкой друг под другом у всех строк, а не плывут за подписью
+            вида связи (у корня её нет — чип уезжал влево). */}
+        {row.replies > 0 || row.nested > 0 || (collapsed && row.descendants > 0) ? (
+          <span className="flex w-11 shrink-0 flex-col items-end gap-0.5 pr-1 text-label-sm leading-none text-muted-foreground tabular-nums">
+            {row.replies > 0 ? (
+              <span
+                className="flex items-center gap-1"
+                title={ui.letters.relations.repliesCount(row.replies)}
+              >
+                <Reply aria-hidden className="size-3 shrink-0" strokeWidth={1.75} />
+                {row.replies}
+              </span>
+            ) : null}
+            {row.nested > 0 ? (
+              <span
+                className="flex items-center gap-1"
+                title={ui.letters.relations.nestedCount(row.nested)}
+              >
+                <Layers aria-hidden className="size-3 shrink-0" strokeWidth={1.75} />
+                {row.nested}
+              </span>
+            ) : null}
+            {collapsed && row.descendants > 0 ? (
+              <span className="font-mono">+{row.descendants}</span>
+            ) : null}
+          </span>
+        ) : null}
         {menu.length > 0 ? (
           <span className="mr-1 shrink-0 opacity-0 transition-opacity group-hover/node:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
             <RowMenu items={menu} />

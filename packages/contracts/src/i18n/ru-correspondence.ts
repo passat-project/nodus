@@ -275,6 +275,9 @@ export const lettersStrings = {
     nodeNestedIn: 'вложено',
     /** Счётчик писем в «ёлочке» — шапка панели. */
     count: (count: number): string => `Писем в цепочке: ${count}`,
+    /** Чипы узла: на письмо ответили / в конверт вложили. */
+    repliesCount: (count: number): string => `Ответов: ${count}`,
+    nestedCount: (count: number): string => `Вложенных писем: ${count}`,
     linkedToast: 'Связь добавлена',
     unlinkedToast: 'Связь снята',
     /** Дерево обрезано капом глубины/узлов (Р2): «показаны не все». */

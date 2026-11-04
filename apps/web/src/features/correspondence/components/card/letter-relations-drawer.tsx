@@ -196,6 +196,7 @@ export const LetterRelationsDrawer = memo(function LetterRelationsDrawer({
                   canManage={canManage}
                   onToggle={toggle}
                   onNavigate={onNavigate}
+                  onAdd={(node) => openDialog(node)}
                   onReplace={(node) => openDialog(node, node.relationKind ?? undefined)}
                   onUnlink={setUnlinking}
                 />

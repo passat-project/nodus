@@ -3,6 +3,7 @@ import type { LetterTreeNode, LetterTreeResponse } from '@nodus/contracts';
 
 import {
   findTreeNode,
+  flattenLetterTree,
   treeNodeCount,
   treeNodeOf,
   withRelation,
@@ -94,6 +95,56 @@ describe('дерево «ёлочки» (#461, Р2): оптимистичные 
     expect(next.root.children.map((child) => child.id)).toEqual(['c']);
     expect(findTreeNode(next.root, 'd')).toBeNull();
     expect(findTreeNode(next.root, 'c')?.id).toBe('c');
+  });
+
+  it('«цепочка + ветки»: линейные ответы плоско, отступ — на ветвлении и матрёшке', () => {
+    // A ← B ← C (линейная переписка), у A два вложенных письма N1/N2,
+    // у C — ветвление: два ответа D1/D2.
+    const base = tree(
+      node('a', [
+        { ...node('n1'), relationKind: 'nested_in', relationId: 'r-n1' },
+        { ...node('n2'), relationKind: 'nested_in', relationId: 'r-n2' },
+        {
+          ...node('b', [
+            {
+              ...node('c', [
+                { ...node('d1'), relationKind: 'reply_to', relationId: 'r-d1' },
+                { ...node('d2'), relationKind: 'reply_to', relationId: 'r-d2' },
+              ]),
+              relationKind: 'reply_to',
+              relationId: 'r-c',
+            },
+          ]),
+          relationKind: 'reply_to',
+          relationId: 'r-b',
+        },
+      ]),
+    );
+    const rows = flattenLetterTree(base.root, new Set());
+    expect(rows.map((row) => `${row.node.id}:${row.depth}`)).toEqual([
+      'a:0',
+      'n1:1',
+      'n2:1',
+      'b:0', // ответ продолжает ствол — без отступа
+      'c:0',
+      'd1:1', // ветвление — отступ
+      'd2:1',
+    ]);
+    // Порядок — старые сверху: родитель выше своего ответа.
+    const order = rows.map((row) => row.node.id);
+    expect(order.indexOf('a')).toBeLessThan(order.indexOf('b'));
+    expect(order.indexOf('b')).toBeLessThan(order.indexOf('c'));
+    // Чипы: у A — два вложенных, у C — два ответа.
+    expect(rows.find((row) => row.node.id === 'a')?.nested).toBe(2);
+    expect(rows.find((row) => row.node.id === 'c')?.replies).toBe(2);
+    // Ребро ствола знает родителя.
+    expect(rows.find((row) => row.node.id === 'b')?.parentKey).toBe(rows[0]?.key);
+  });
+
+  it('свёрнутая ветка прячет продолжение цепочки и поддерево', () => {
+    const base = tree(node('a', [{ ...node('b', [node('c')]), relationId: 'r-b' }]));
+    const rows = flattenLetterTree(base.root, new Set([`r-b:b`]));
+    expect(rows.map((row) => row.node.id)).toEqual(['a', 'b']);
   });
 
   it('счётчик узлов и поиск узла', () => {

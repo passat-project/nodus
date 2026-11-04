@@ -111,10 +111,29 @@ describe('дерево «ёлочки» (#461, Р2)', () => {
     expect(JSON.stringify(tree)).not.toContain('"E"');
   });
 
-  it('глубина режется капом 8 — truncated', async () => {
+  it('линейная цепочка ответов не урезается: 12 писем — один ствол', async () => {
+    // Модель «цепочка + ветки» (ред. 05.11.2026): единственный ответ
+    // продолжает цепочку на том же уровне — глубина не растёт.
     const chain: GraphNode[] = [{ id: 'n0' }];
     for (let index = 1; index <= 12; index += 1) {
       chain.push({ id: `n${index}`, parent: `n${index - 1}` });
+    }
+    const { service } = setup(chain);
+    const tree = await service.tree(USER, 'n0');
+    let count = 1;
+    let node: LetterTreeNode | undefined = tree.root;
+    while (node?.children[0]) {
+      count += 1;
+      node = node.children[0];
+    }
+    expect(count).toBe(13);
+    expect(tree.truncated).toBe(false);
+  });
+
+  it('глубина ветвления/матрёшки режется капом 8 — truncated', async () => {
+    const chain: GraphNode[] = [{ id: 'n0' }];
+    for (let index = 1; index <= 12; index += 1) {
+      chain.push({ id: `n${index}`, parent: `n${index - 1}`, kind: 'nested_in' });
     }
     const { service } = setup(chain);
     const tree = await service.tree(USER, 'n0');

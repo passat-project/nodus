@@ -102,32 +102,63 @@ export interface LetterTreeRow {
    *  дереве дважды — id письма не уникален) + id письма. У корня и у
    *  оптимистично перемещённого узла связи ещё нет — ключи всё равно разные. */
   key: string;
+  /** Уровень отступа: растёт ТОЛЬКО на ветвлении и на «вложено в» —
+   *  линейный ответ продолжает цепочку на том же уровне (ред. 05.11.2026). */
   depth: number;
+  /** Ключ строки-родителя (для ребра графа); у корня null. */
+  parentKey: string | null;
   hasChildren: boolean;
   /** Всего потомков — счётчик свёрнутой ветки. */
   descendants: number;
+  /** Ответов на это письмо — чип «на что ответили». */
+  replies: number;
+  /** Вложенных писем (матрёшка конверта). */
+  nested: number;
 }
 
-/** Плоский список видимых строк с учётом свёрнутых веток (ключи строк). */
+const repliesOf = (node: LetterTreeNode): LetterTreeNode[] =>
+  node.children.filter((child) => child.relationKind === 'reply_to');
+const nestedOf = (node: LetterTreeNode): LetterTreeNode[] =>
+  node.children.filter((child) => child.relationKind !== 'reply_to');
+
+/**
+ * Плоский список видимых строк с учётом свёрнутых веток (ключи строк).
+ *
+ * Модель «цепочка + ветки» (вердикт владельца 05.11.2026, по мировой
+ * практике Gmail/Outlook-flat и mixed-model Venolia & Neustaedter): ответ,
+ * у которого ровно один ответ-продолжение, идёт ПЛОСКО — ствол переписки не
+ * уезжает вправо на каждое письмо; отступ появляется на ветвлении (на письмо
+ * ответили двое и обсуждения пошли параллельно) и у «вложено в» (матрёшка
+ * конверта). Порядок — старые сверху, читаем вниз.
+ */
 export function flattenLetterTree(
   root: LetterTreeNode,
   collapsed: ReadonlySet<string>,
 ): LetterTreeRow[] {
   const rows: LetterTreeRow[] = [];
-  const walk = (node: LetterTreeNode, depth: number, hidden: boolean) => {
+  const walk = (node: LetterTreeNode, depth: number, parentKey: string | null, hidden: boolean) => {
     const key = `${node.relationId ?? 'root'}:${node.id}`;
-    const row: LetterTreeRow = {
-      node,
-      key,
-      depth,
-      hasChildren: node.children.length > 0,
-      descendants: treeNodeCount(node) - 1,
-    };
-    if (!hidden) rows.push(row);
+    const replies = repliesOf(node);
+    const nested = nestedOf(node);
+    if (!hidden) {
+      rows.push({
+        node,
+        key,
+        depth,
+        parentKey,
+        hasChildren: node.children.length > 0,
+        descendants: treeNodeCount(node) - 1,
+        replies: replies.length,
+        nested: nested.length,
+      });
+    }
     const childrenHidden = hidden || collapsed.has(key);
-    for (const child of node.children) walk(child, depth + 1, childrenHidden);
+    // Матрёшка — всегда внутрь; ответы — стволом, если он один.
+    for (const child of nested) walk(child, depth + 1, key, childrenHidden);
+    if (replies.length === 1) walk(replies[0]!, depth, key, childrenHidden);
+    else for (const child of replies) walk(child, depth + 1, key, childrenHidden);
   };
-  walk(root, 0, false);
+  walk(root, 0, null, false);
   return rows;
 }
 
