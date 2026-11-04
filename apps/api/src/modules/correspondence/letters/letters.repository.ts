@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { LetterBox, LetterRef } from '@nodus/contracts';
 
-import type { Prisma } from '../../../generated/prisma/client.js';
+import { Prisma } from '../../../generated/prisma/client.js';
 import { PrismaService } from '../../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import {
@@ -381,5 +381,23 @@ export class LettersRepository {
       data: { systemState, stateChangedAt: new Date() },
     });
     return result.count;
+  }
+
+  /** Уборка значений удалённого атрибута (#582): ключ убирается из
+   *  `custom_fields` пачками, идемпотентно. Мягко удалённые письма тоже
+   *  чистим — восстановление не должно воскрешать значение удалённого
+   *  атрибута. Другие ключи не трогаются. */
+  async removeCustomFieldValues(fieldId: string, batch = 500): Promise<number> {
+    let removed = 0;
+    for (;;) {
+      const affected = await this.prisma.$executeRaw(Prisma.sql`
+        UPDATE letters SET custom_fields = custom_fields - ${fieldId}::text
+        WHERE id IN (
+          SELECT id FROM letters WHERE custom_fields ? ${fieldId}::text LIMIT ${batch}::int
+        )
+      `);
+      removed += affected;
+      if (affected === 0) return removed;
+    }
   }
 }

@@ -218,7 +218,8 @@ export class DefinitionsService {
    * архива — тестовый мусор должен удаляться). Запрещено, пока атрибут стоит
    * в окне перехода или условии «Заполнены поля» опубликованного маршрута:
    * 409 `CUSTOM_FIELD_IN_USE` со списком процессов. Значения стираются
-   * владельцами по событию `change='deleted'` (tasks — своим обработчиком).
+   * владельцами по событию `change='deleted'` (tasks/projects/letters — своими
+   * обработчиками).
    */
   async remove(id: string, actorId: string): Promise<void> {
     const definition = await this.requireDefinition(id);
