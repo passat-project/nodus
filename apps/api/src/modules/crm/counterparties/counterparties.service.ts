@@ -3,6 +3,7 @@ import { PinoLogger } from 'nestjs-pino';
 import {
   CRM_EVENTS,
   ErrorCode,
+  type AuthUser,
   type CounterpartyBulkAction,
   type CounterpartyBulkResult,
   type CounterpartyCard,
@@ -68,7 +69,7 @@ export class CounterpartiesService {
     this.logger.setContext(CounterpartiesService.name);
   }
 
-  async create(dto: CreateCounterpartyBody, actorId: string): Promise<CounterpartyCard> {
+  async create(dto: CreateCounterpartyBody, actor: AuthUser): Promise<CounterpartyCard> {
     const data: CounterpartyWriteData = {
       shortName: dto.shortName,
       fullName: dto.fullName,
@@ -85,9 +86,9 @@ export class CounterpartiesService {
           tx,
           CRM_EVENTS.COUNTERPARTY_CREATED,
           { counterpartyId: created.id, shortName: created.shortName, unp: created.unp },
-          { actorId, aggregateType: 'counterparty', aggregateId: created.id },
+          { actorId: actor.id, aggregateType: 'counterparty', aggregateId: created.id },
         );
-        return this.queries.buildCard(created, tx);
+        return this.queries.buildCard(created, tx, actor);
       });
     } catch (error) {
       // Гонка двух созданий с одним УНП: unique-индекс откатил транзакцию —
@@ -100,7 +101,7 @@ export class CounterpartiesService {
   async update(
     id: string,
     dto: UpdateCounterpartyBody,
-    actorId: string,
+    actor: AuthUser,
   ): Promise<CounterpartyCard> {
     const before = await this.counterparties.findById(id);
     if (!before) throw DomainException.notFound('Counterparty not found');
@@ -110,7 +111,7 @@ export class CounterpartiesService {
     const changed = Object.entries(candidate).filter(
       ([field, value]) => before[field as keyof CounterpartyRow] !== value,
     );
-    if (changed.length === 0) return this.queries.buildCard(before);
+    if (changed.length === 0) return this.queries.buildCard(before, undefined, actor);
 
     if (candidate.unp) {
       const taken = await this.counterparties.findByUnp(candidate.unp);
@@ -127,9 +128,9 @@ export class CounterpartiesService {
           tx,
           CRM_EVENTS.COUNTERPARTY_UPDATED,
           { counterpartyId: id, fields: changed.map(([field]) => field) },
-          { actorId, aggregateType: 'counterparty', aggregateId: id },
+          { actorId: actor.id, aggregateType: 'counterparty', aggregateId: id },
         );
-        return this.queries.buildCard(updated, tx);
+        return this.queries.buildCard(updated, tx, actor);
       });
     } catch (error) {
       if (isUniqueViolation(error) && candidate.unp) {
@@ -141,10 +142,12 @@ export class CounterpartiesService {
   }
 
   /** Архив (`archived: true`) и возврат (`false`) — идемпотентно. */
-  async setArchived(id: string, archived: boolean, actorId: string): Promise<CounterpartyCard> {
+  async setArchived(id: string, archived: boolean, actor: AuthUser): Promise<CounterpartyCard> {
     const before = await this.counterparties.findById(id);
     if (!before) throw DomainException.notFound('Counterparty not found');
-    if ((before.archivedAt !== null) === archived) return this.queries.buildCard(before);
+    if ((before.archivedAt !== null) === archived) {
+      return this.queries.buildCard(before, undefined, actor);
+    }
 
     return this.txRunner.run(async (tx) => {
       const updated = await this.counterparties.setArchivedAt(id, archived ? new Date() : null, tx);
@@ -152,9 +155,9 @@ export class CounterpartiesService {
         tx,
         archived ? CRM_EVENTS.COUNTERPARTY_ARCHIVED : CRM_EVENTS.COUNTERPARTY_RESTORED,
         { counterpartyId: id },
-        { actorId, aggregateType: 'counterparty', aggregateId: id },
+        { actorId: actor.id, aggregateType: 'counterparty', aggregateId: id },
       );
-      return this.queries.buildCard(updated, tx);
+      return this.queries.buildCard(updated, tx, actor);
     });
   }
 
@@ -206,13 +209,13 @@ export class CounterpartiesService {
   async bulk(
     ids: readonly string[],
     action: CounterpartyBulkAction,
-    actorId: string,
+    actor: AuthUser,
   ): Promise<CounterpartyBulkResult> {
     const results: CounterpartyBulkResult['results'] = [];
     for (const id of new Set(ids)) {
       try {
-        if (action.kind === 'delete') await this.remove(id, actorId);
-        else await this.setArchived(id, action.kind === 'archive', actorId);
+        if (action.kind === 'delete') await this.remove(id, actor.id);
+        else await this.setArchived(id, action.kind === 'archive', actor);
         results.push({ counterpartyId: id, ok: true });
       } catch (error) {
         if (!(error instanceof DomainException)) {

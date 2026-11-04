@@ -117,6 +117,23 @@ describe('OfficeSessionService (#138)', () => {
     );
   });
 
+  it('явное вето контекста закрывает файл ДАЖЕ владельцу (конфиденциальное письмо, #461)', async () => {
+    // Владение файлом не обходит круг участников: канцелярия загрузила скан,
+    // письмо зарегистрировали конфиденциальным без неё — сессия офиса и
+    // версии закрыты (иначе ownerId = обход видимости).
+    const contributor: FileAccessContributor = {
+      fileAccessContext: 'letter',
+      check: vi.fn(async () => ({ canView: false, canEdit: false, deny: true })),
+    };
+    const { service } = makeService(makeFile(), {}, [contributor]);
+    await expect(service.createSession(FILE_ID, makeUser(USER_ID), 'view')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(service.listVersions(FILE_ID, USER_ID)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
   it('edit без права контекста деградирует в view (не 403)', async () => {
     const contributor: FileAccessContributor = {
       fileAccessContext: 'chat',

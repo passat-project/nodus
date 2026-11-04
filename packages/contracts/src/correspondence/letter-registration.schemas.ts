@@ -34,12 +34,33 @@ export const LETTER_LIMITS = {
   resolvers: 100,
   /** Изменений в одной записи истории (`letter_updated`). */
   changes: 20,
+  /** Строк «приложенных писем» в одном письме (#461, Р3): конверт-матрёшка
+   *  — до десятков листов, 20 строк с запасом. */
+  attachedRefs: 20,
+  /** № приложенного письма (#461) — зеркало theirNumber: ключ поиска. */
+  attachedNumber: 64,
 } as const;
+
+/** Строка «приложенных писем» на вводе (#461, Р3): № + организация
+ *  (контрагент справочника — вердикт владельца 05.11.2026: свободного текста
+ *  нет) + дата листа. Контрагент обязателен: нет нужного — его заводят из
+ *  окна строки, справочник остаётся единственным источником организаций. */
+export const letterAttachedRefInputSchema = z
+  .object({
+    number: z.string().trim().min(1).max(LETTER_LIMITS.attachedNumber),
+    counterpartyId: z.uuid(),
+    date: z.iso.date().nullable(),
+  })
+  .strict();
+export type LetterAttachedRefInput = z.infer<typeof letterAttachedRefInputSchema>;
 
 /** Ввод регистрации (`form.registration` тела перехода, Р1): адресат
  *  обязателен (В1), подписант — контакт корреспондента или пусто.
  *  `replyToLetterId` — подтверждение подсказки «ответ на» галочкой (#56,
- *  Р5): ровно свежая подсказка сервера, произвольные связи — #461. */
+ *  Р5): ровно свежая подсказка сервера, произвольные связи — #461.
+ *  `confidential` — флаг «Конфиденциально» (#461, Р4): письмо, чат, файлы и
+ *  поручения видят только участники; `attachedRefs` — строки «приложенных
+ *  писем» конверта-матрёшки (#461, Р3). */
 export const letterRegistrationInputSchema = z
   .object({
     counterpartyId: z.uuid(),
@@ -52,6 +73,8 @@ export const letterRegistrationInputSchema = z
     addresseeId: z.uuid(),
     responseDeadline: z.iso.date().nullable(),
     replyToLetterId: z.uuid().nullable().optional(),
+    confidential: z.boolean().optional(),
+    attachedRefs: z.array(letterAttachedRefInputSchema).max(LETTER_LIMITS.attachedRefs).optional(),
     customFields: customFieldValuesInputSchema.optional(),
   })
   .strict();
@@ -74,25 +97,33 @@ export const letterRegistrationFieldSchema = z.enum([
   'addresseeId',
   'responseDeadline',
   'replyToLetterId',
+  'confidential',
+  'attachedRefs',
   'customFields',
   'mainDocument',
 ]);
 export type LetterRegistrationField = z.infer<typeof letterRegistrationFieldSchema>;
 
-/** Причина отказа `422 LETTER_RELATION_INVALID` (подтверждение связи
- *  «ответ на», #56, Р5): цель не найдена/не видна, не исходящее
- *  зарегистрированное письмо, не совпадает со свежей подсказкой. */
+/** Причина отказа `422 LETTER_RELATION_INVALID` (связи «ответ на» /
+ *  «вложено в», #56/#461): цель не найдена/не видна, не зарегистрирована,
+ *  не исходящее зарегистрированное (галочка регистрации), не совпадает со
+ *  свежей подсказкой, связь уже есть (нужен `replace`), цель — в цепочке
+ *  самого письма (цикл). */
 export const letterRelationReasonSchema = z.enum([
   'not_found',
   'not_outgoing_registered',
+  'not_registered',
   'suggestion_mismatch',
+  'already_linked',
+  'cycle',
 ]);
 export type LetterRelationReason = z.infer<typeof letterRelationReasonSchema>;
 
 /** Причина отказа поля (`422 LETTER_REGISTRATION_INVALID`, `details {field,
  *  reason}`): пусто, неверный формат, дата в будущем/прошлом, ссылка не
  *  найдена/неактивна (уволенный адресат, архивный контрагент), подписант не
- *  из контактов корреспондента. */
+ *  из контактов корреспондента, точный дубль строки приложенных писем
+ *  (#461, Р3). */
 export const letterRegistrationReasonSchema = z.enum([
   'required',
   'invalid',
@@ -101,6 +132,7 @@ export const letterRegistrationReasonSchema = z.enum([
   'not_found',
   'inactive',
   'not_of_counterparty',
+  'duplicate',
 ]);
 export type LetterRegistrationReason = z.infer<typeof letterRegistrationReasonSchema>;
 

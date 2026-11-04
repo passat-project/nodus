@@ -200,13 +200,49 @@ export class LettersRepository {
   }
 
   /** Письма, в которых лежит файл, — видимость для контрибьютора прав
-   *  файлов (#55, B5). Файл может быть приложен к нескольким письмам. */
-  async visibilityByFile(fileId: string): Promise<{ registeredAt: Date | null }[]> {
+   *  файлов (#55, B5; #461 — конфиденциальность). Файл может быть приложен
+   *  к нескольким письмам; состав обсуждения читается только для
+   *  конфиденциальных (иначе — лишний запрос на каждый файл). */
+  async visibilityByFile(fileId: string): Promise<
+    {
+      registeredAt: Date | null;
+      /** Надгробие: файл удалённого письма закрыт для всех (Р13). */
+      deletedAt: Date | null;
+      confidential: boolean;
+      registrarId: string | null;
+      addresseeId: string | null;
+      participants: string[];
+    }[]
+  > {
     const rows = await this.prisma.letterAttachment.findMany({
       where: { fileId },
-      select: { letter: { select: { registeredAt: true } } },
+      select: {
+        letter: {
+          select: {
+            id: true,
+            registeredAt: true,
+            deletedAt: true,
+            confidential: true,
+            registrarId: true,
+            addresseeId: true,
+          },
+        },
+      },
     });
-    return rows.map((row) => row.letter);
+    const confidentialIds = rows
+      .filter((row) => row.letter.confidential)
+      .map((row) => row.letter.id);
+    const participants = await this.participantsOf(confidentialIds);
+    return rows.map(({ letter }) => ({
+      registeredAt: letter.registeredAt,
+      deletedAt: letter.deletedAt,
+      confidential: letter.confidential,
+      registrarId: letter.registrarId,
+      addresseeId: letter.addresseeId,
+      participants: participants
+        .filter((participant) => participant.letterId === letter.id)
+        .map((participant) => participant.userId),
+    }));
   }
 
   /** Файлы письма для удаления объектов хранилища (спам, Р12). */
@@ -228,12 +264,14 @@ export class LettersRepository {
   }
 
   /** Состав чата: адресат + участники (регистратор в чат не входит — В2). */
-  async chatRoster(
-    letterId: string,
-  ): Promise<{ addresseeId: string | null; registeredAt: Date | null } | null> {
+  async chatRoster(letterId: string): Promise<{
+    addresseeId: string | null;
+    registeredAt: Date | null;
+    deletedAt: Date | null;
+  } | null> {
     return this.prisma.letter.findUnique({
       where: { id: letterId },
-      select: { addresseeId: true, registeredAt: true },
+      select: { addresseeId: true, registeredAt: true, deletedAt: true },
     });
   }
 
@@ -294,7 +332,14 @@ export class LettersRepository {
   replyTargetById(tx: TransactionClient, id: string) {
     return tx.letter.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true, direction: true, registeredAt: true },
+      select: {
+        id: true,
+        direction: true,
+        registeredAt: true,
+        confidential: true,
+        registrarId: true,
+        addresseeId: true,
+      },
     });
   }
 
@@ -381,6 +426,66 @@ export class LettersRepository {
       data: { systemState, stateChangedAt: new Date() },
     });
     return result.count;
+  }
+
+  /** Строки видимости пачкой (счётчик CRM, дерево): без файлов и атрибутов. */
+  visibilityRows(letterIds: readonly string[]): Promise<
+    {
+      id: string;
+      registeredAt: Date | null;
+      confidential: boolean;
+      registrarId: string | null;
+      addresseeId: string | null;
+      deletedAt: Date | null;
+    }[]
+  > {
+    if (letterIds.length === 0) return Promise.resolve([]);
+    return this.prisma.letter.findMany({
+      where: { id: { in: [...letterIds] } },
+      select: {
+        id: true,
+        registeredAt: true,
+        confidential: true,
+        registrarId: true,
+        addresseeId: true,
+        deletedAt: true,
+      },
+    });
+  }
+
+  /** Узлы дерева пачкой: реквизиты строки и состояние стадии. */
+  nodesByIds(letterIds: readonly string[]): Promise<
+    {
+      id: string;
+      regNumber: string | null;
+      theirNumber: string | null;
+      subject: string | null;
+      direction: string;
+      systemState: string;
+      confidential: boolean;
+      registeredAt: Date | null;
+      registrarId: string | null;
+      addresseeId: string | null;
+      deletedAt: Date | null;
+    }[]
+  > {
+    if (letterIds.length === 0) return Promise.resolve([]);
+    return this.prisma.letter.findMany({
+      where: { id: { in: [...letterIds] } },
+      select: {
+        id: true,
+        regNumber: true,
+        theirNumber: true,
+        subject: true,
+        direction: true,
+        systemState: true,
+        confidential: true,
+        registeredAt: true,
+        registrarId: true,
+        addresseeId: true,
+        deletedAt: true,
+      },
+    });
   }
 
   /** Уборка значений удалённого атрибута (#582): ключ убирается из

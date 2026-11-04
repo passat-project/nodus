@@ -1,13 +1,8 @@
-import { randomUUID } from 'node:crypto';
-import { createReadStream } from 'node:fs';
-
 import { Inject, Injectable } from '@nestjs/common';
 import {
   CORRESPONDENCE_EVENTS,
   ErrorCode,
-  LETTER_LIMITS,
   type AuthUser,
-  type CreateLetterFields,
   type LetterDetail,
   type UpdateLetterBody,
 } from '@nodus/contracts';
@@ -21,30 +16,23 @@ import {
   type UserProfileReader,
 } from '../../../core/ports/user-profile.port.js';
 import { companyDate } from '../../../core/time/company-time.js';
-import {
-  PROCESS_CATALOG_READER,
-  type ProcessCatalogReader,
-} from '../../workflows/ports/process-catalog-reader.port.js';
 import { canRegisterLetters, letterAccessOf } from '../access/letter-access.js';
+import {
+  LetterAttachedRefsRepository,
+  type LetterAttachedRefInput,
+} from './letter-attached-refs.repository.js';
+import { LetterAttachedRefsValidator, sameAttachedRefs } from './letter-attached-refs.validator.js';
 import { LetterFieldsValidator } from './letter-fields.validator.js';
 import { LettersQueryService } from './letters-query.service.js';
 import { LettersRepository } from './letters.repository.js';
 
-/** Файл ручного создания: контроллер уже сохранил часть во временный файл. */
-export interface UploadedLetterFile {
-  name: string;
-  mime: string;
-  size: number;
-  path: string;
-}
-
 /**
- * Мутации писем (#55): ручное создание (multipart, атомарно с файлами),
- * правка реквизитов (В3; редизайн #56 — и незарегистрированного по месту в
- * карточке), удаление спама (Р12), присоединение к обсуждению (Р10),
- * приглашение коллеги и личный признак «просмотрено» (редизайн #56). Все —
- * в транзакциях вызывающего слоя; файлы пишутся до транзакции и убираются
- * при её откате.
+ * Мутации писем (#55): правка реквизитов (В3; редизайн #56 — и
+ * незарегистрированного по месту в карточке; #461 — флаг конфиденциальности
+ * и строки приложенных), удаление спама (Р12), присоединение к обсуждению
+ * (Р10), приглашение коллеги и личный признак «просмотрено» (редизайн #56).
+ * Все — в транзакциях вызывающего слоя; ручное создание с файлами —
+ * `LettersManualCreateService`.
  */
 @Injectable()
 export class LettersMutationService {
@@ -52,102 +40,13 @@ export class LettersMutationService {
     private readonly repo: LettersRepository,
     private readonly query: LettersQueryService,
     private readonly validator: LetterFieldsValidator,
+    private readonly attached: LetterAttachedRefsRepository,
+    private readonly attachedValidator: LetterAttachedRefsValidator,
     private readonly txRunner: TransactionRunner,
     private readonly eventBus: EventBus,
     @Inject(FILE_STORAGE) private readonly storage: FileStorage,
-    @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
     @Inject(USER_PROFILE_READER) private readonly profiles: UserProfileReader,
   ) {}
-
-  /** `POST /letters` — ручное письмо (скан бумаги) сразу в «Новые». */
-  async create(
-    user: AuthUser,
-    fields: CreateLetterFields,
-    parts: readonly UploadedLetterFile[],
-  ): Promise<LetterDetail> {
-    if (parts.length === 0) {
-      throw new DomainException(ErrorCode.VALIDATION_FAILED, 'At least one file is required');
-    }
-    if (parts.length > LETTER_LIMITS.files) {
-      throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Too many files', {
-        max: LETTER_LIMITS.files,
-      });
-    }
-    if (fields.mainIndex >= parts.length) {
-      throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
-        'Main document index is out of range',
-        {
-          mainIndex: fields.mainIndex,
-          files: parts.length,
-        },
-      );
-    }
-    const type = await this.catalog.resolveType(fields.typeId, {
-      category: 'letter',
-      requireCreatable: true,
-      actorId: user.id,
-    });
-    if (type.direction !== 'incoming') {
-      throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
-        'Manual creation is only for incoming letters',
-      );
-    }
-    const stages = await this.catalog.liveStages(type.workflowId);
-    const initial = stages.find((stage) => stage.isInitial);
-    if (!initial) throw new DomainException(ErrorCode.CONFLICT, 'Workflow has no initial stage');
-
-    const saved: string[] = [];
-    try {
-      const attachments: { fileId: string; role: string; sortOrder: number }[] = [];
-      for (const [index, part] of parts.entries()) {
-        const { fileId } = await this.storage.save(
-          { ownerId: user.id, name: part.name, mime: part.mime, size: part.size },
-          createReadStream(part.path),
-        );
-        saved.push(fileId);
-        attachments.push({
-          fileId,
-          role: index === fields.mainIndex ? 'main' : 'attachment',
-          sortOrder: index,
-        });
-      }
-      const letterId = randomUUID();
-      await this.txRunner.run(async (tx) => {
-        await this.repo.create(tx, {
-          id: letterId,
-          typeId: type.id,
-          workflowId: type.workflowId,
-          stageId: initial.id,
-          systemState: initial.systemState,
-          direction: 'incoming',
-          source: 'manual',
-          createdBy: user.id,
-          receivedAt: new Date(),
-          attachments: { create: attachments },
-        });
-        await this.eventBus.emit(
-          tx,
-          CORRESPONDENCE_EVENTS.LETTER_RECEIVED,
-          {
-            letterId,
-            typeId: type.id,
-            direction: 'incoming',
-            source: 'manual',
-            subject: null,
-            fileIds: attachments.map((attachment) => attachment.fileId),
-          },
-          { actorId: user.id, aggregateType: 'letter', aggregateId: letterId },
-        );
-      });
-      return await this.query.detail(user, letterId);
-    } catch (error) {
-      // Письмо не создалось — объекты хранилища не должны остаться сиротами.
-      await this.storage.remove(saved).catch(() => undefined);
-      throw error;
-    }
-  }
 
   /** `PATCH /letters/:id` — правка реквизитов письма канцелярией по месту в
    *  карточке (редизайн #56): незарегистрированное заполняется до регистрации,
@@ -185,13 +84,42 @@ export class LettersMutationService {
       companyDate(new Date()),
       user,
     );
+    // «Приложенные письма» (#461, Р3): правка набором; история — счётчиком
+    // строк, только если набор реально изменился.
+    let attachedRows: LetterAttachedRefInput[] | null = null;
+    if (body.attachedRefs !== undefined) {
+      const next = await this.attachedValidator.validate(body.attachedRefs);
+      const before = await this.attached.attachedRefs(id);
+      // Набор не изменился (правились другие поля, окно прислало то же) —
+      // строки не пересоздаём: delete+insert менял бы id и писал лишнее.
+      if (!sameAttachedRefs(before, next)) {
+        attachedRows = next;
+        changes.push({
+          field: 'attachedRefs',
+          from: String(before.length),
+          to: String(next.length),
+        });
+      }
+    }
+    // «Конфиденциально» (#461, Р4): флаг в карточке; история — «Да/Нет».
+    if (body.confidential !== undefined && body.confidential !== row.confidential) {
+      changes.push({
+        field: 'confidential',
+        from: String(row.confidential),
+        to: String(body.confidential),
+      });
+    }
     if (changes.length === 0) return this.query.detail(user, id);
     // Эффективный подписант: смена корреспондента могла сбросить его в null
     // (валидатор), и проекция CRM не должна оставить чужой контакт.
     const signerChange = changes.find((change) => change.field === 'signerId');
     await this.txRunner.run(async (tx) => {
       await this.repo.lock(tx, id);
-      await this.repo.update(tx, id, data);
+      await this.repo.update(tx, id, {
+        ...data,
+        ...(body.confidential === undefined ? {} : { confidential: body.confidential }),
+      });
+      if (attachedRows !== null) await this.attached.replace(tx, id, attachedRows);
       await this.eventBus.emit(
         tx,
         CORRESPONDENCE_EVENTS.LETTER_UPDATED,
@@ -236,8 +164,15 @@ export class LettersMutationService {
    *  остальным — только зарегистрированное письмо. */
   async join(user: AuthUser, id: string): Promise<LetterDetail> {
     const row = await this.query.visibleRow(user, id);
-    if (row.registeredAt === null && !canRegisterLetters(user)) {
-      throw DomainException.notFound('Letter is not registered');
+    const participants = await this.repo.participants(id);
+    const isParticipant =
+      participants.some((participant) => participant.userId === user.id) ||
+      row.addresseeId === user.id;
+    // У конфиденциального «Присоединиться» может только регистратор ЭТОГО
+    // письма или держатель права (#461, Р4): прочая канцелярия письма не
+    // видит, а участнику присоединяться незачем.
+    if (!letterAccessOf(user, row, isParticipant).canJoin) {
+      throw DomainException.notFound('Letter is not joinable');
     }
     await this.addOneParticipant(user, id, user.id);
     return this.query.detail(user, id);

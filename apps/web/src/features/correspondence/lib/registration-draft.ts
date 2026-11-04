@@ -40,6 +40,19 @@ export interface RegistrationDraft {
   /** Подсказка «ответ на» (Р5); подтверждение — `linkReply`. */
   suggestedReply: LetterRef | null;
   linkReply: boolean;
+  /** «Конфиденциально» (#461, Р4): письмо, чат, файлы и поручения — участникам. */
+  confidential: boolean;
+  /** Строки «приложенных писем» конверта-матрёшки (#461, Р3). */
+  attachedRefs: AttachedRefDraft[];
+}
+
+/** Строка «приложенных писем» в черновике: организация — контрагент
+ *  справочника (единственный источник, вердикт 05.11.2026); ссылка хранится
+ *  целиком (имя видно до ответа сервера), в тело уходит `counterpartyId`. */
+export interface AttachedRefDraft {
+  number: string;
+  counterparty: CounterpartyRef | null;
+  date: string | null;
 }
 
 /** Обязательные поля в порядке формы — и порядок «Enter → следующее пустое». */
@@ -63,6 +76,8 @@ export const registrationFieldLabel: Record<LetterRegistrationField, string> = {
   addresseeId: ui.letters.fields.addressee,
   responseDeadline: ui.letters.fields.responseDeadline,
   replyToLetterId: ui.letters.pipeline.replyBadge,
+  confidential: ui.letters.fields.confidential,
+  attachedRefs: ui.letters.fields.attachedRefs,
   customFields: ui.letters.form.attributes,
   mainDocument: ui.letters.fields.mainDocument,
 };
@@ -75,13 +90,17 @@ export const registrationReasonText: Record<LetterRegistrationIssue['reason'], s
   not_found: ui.letters.form.notFound,
   inactive: ui.letters.form.inactive,
   not_of_counterparty: ui.letters.form.notOfCounterparty,
+  duplicate: ui.letters.attached.duplicate,
 };
 
 /** Причины 422 связи «ответ на» (#56, Р5). */
 export const relationReasonText: Record<LetterRelationReason, string> = {
   not_found: ui.letters.form.replyInvalid.not_found,
   not_outgoing_registered: ui.letters.form.replyInvalid.not_outgoing_registered,
+  not_registered: ui.letters.relations.invalid.not_registered,
   suggestion_mismatch: ui.letters.form.replyInvalid.suggestion_mismatch,
+  already_linked: ui.letters.relations.invalid.already_linked,
+  cycle: ui.letters.relations.invalid.cycle,
 };
 
 /** Текст ошибки сервера по полю+причине (регистрация и связь «ответ на»). */
@@ -120,6 +139,12 @@ export function initialDraft(
     customFields: { ...letter.customFields },
     suggestedReply: letter.replySuggestion,
     linkReply: false,
+    confidential: letter.confidential,
+    attachedRefs: letter.attachedRefs.map((ref) => ({
+      number: ref.number,
+      counterparty: ref.counterparty,
+      date: ref.date,
+    })),
   };
 }
 
@@ -180,6 +205,25 @@ export function registrationInputOf(
     projectId: draft.projectId,
     addresseeId: draft.addressee!.id,
     responseDeadline: draft.responseDeadline,
+    confidential: draft.confidential,
+    ...(draft.attachedRefs.length > 0
+      ? {
+          // Строки без контрагента в тело не уходят: схема требует
+          // контрагента (вердикт 05.11.2026), а недозаполненная строка
+          // отсекается ещё в окне строки.
+          attachedRefs: draft.attachedRefs.flatMap((ref) =>
+            ref.counterparty
+              ? [
+                  {
+                    number: ref.number.trim(),
+                    counterpartyId: ref.counterparty.id,
+                    date: ref.date,
+                  },
+                ]
+              : [],
+          ),
+        }
+      : {}),
     ...(draft.linkReply && draft.suggestedReply
       ? { replyToLetterId: draft.suggestedReply.id }
       : {}),

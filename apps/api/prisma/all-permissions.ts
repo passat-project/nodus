@@ -27,6 +27,8 @@ export const ALL_PERMISSIONS = [
   // #55: права корреспонденции v3; админу — миграцией 20261031120000_correspondence_permissions.
   'correspondence.register',
   'correspondence.resolve',
+  // #461: конфиденциальные письма — каталог, никому по умолчанию (В3).
+  'correspondence.view_confidential',
   'sticker.manage',
   'chat.moderate',
   'settings.uiDefaults',
@@ -44,8 +46,13 @@ export const ALL_PERMISSIONS = [
 ] as const;
 
 /** Не входит в дефолт «Администратора»: системный надзор — отдельная роль,
- *  публикация в канал проекта — руководство/точечная выдача. */
-export const ADMIN_EXCLUDED_PERMISSIONS = ['project.view_secret', 'project.channel.post'] as const;
+ *  публикация в канал проекта — руководство/точечная выдача, конфиденциальные
+ *  письма — «никто, даже админ» (вердикт владельца 04.11, #461 В3). */
+export const ADMIN_EXCLUDED_PERMISSIONS = [
+  'project.view_secret',
+  'project.channel.post',
+  'correspondence.view_confidential',
+] as const;
 
 /** Что сид выдаёт роли admin: каталог минус исключения надзора. */
 export const GRANTED_ADMIN_PERMISSIONS: readonly string[] = ALL_PERMISSIONS.filter(

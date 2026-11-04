@@ -43,13 +43,17 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  overlay = true,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
+  /** Затемняющий задник окна. `false` — окно ПОВЕРХ окна (вложенный лист:
+   *  родительское окно остаётся читаемым, второй blur его не съедает). */
+  overlay?: boolean;
 }) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      {overlay ? <DialogOverlay /> : null}
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(

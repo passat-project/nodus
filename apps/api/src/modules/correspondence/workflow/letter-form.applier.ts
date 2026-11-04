@@ -5,7 +5,10 @@ import type { Prisma } from '../../../generated/prisma/client.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import type { WorkflowFormApplied } from '../../../core/ports/workflow-entity.port.js';
+import { canViewLetter } from '../access/letter-access.js';
 import { companyDate } from '../../../core/time/company-time.js';
+import { LetterAttachedRefsRepository } from '../letters/letter-attached-refs.repository.js';
+import { LetterAttachedRefsValidator } from '../letters/letter-attached-refs.validator.js';
 import type { LetterDetailRow } from '../letters/letter-row.js';
 import { LetterThreadingService } from '../letters/letter-threading.service.js';
 import { LettersRepository } from '../letters/letters.repository.js';
@@ -37,6 +40,8 @@ export class LetterFormApplier {
     private readonly letters: LettersRepository,
     private readonly validator: LetterFieldsValidator,
     private readonly threading: LetterThreadingService,
+    private readonly attached: LetterAttachedRefsRepository,
+    private readonly attachedValidator: LetterAttachedRefsValidator,
   ) {}
 
   async apply(
@@ -47,7 +52,7 @@ export class LetterFormApplier {
   ): Promise<WorkflowFormApplied> {
     if (!input.registration) return EMPTY;
     const today = companyDate(new Date());
-    const { values, customFields } = await this.validator.registration(
+    const { values, extra, customFields } = await this.validator.registration(
       letter.typeId,
       input.registration,
       actor,
@@ -86,6 +91,12 @@ export class LetterFormApplier {
     diff('addresseeId', letter.addresseeId, values.addresseeId);
     diff('responseDeadline', isoOf(letter.responseDeadline), values.responseDeadline);
 
+    // «Приложенные письма» и флаг (#461): строки валидируются и пишутся
+    // набором в этой же транзакции; не переданное поле не трогает карточку.
+    const attachedRows =
+      extra.attachedRefs === null
+        ? null
+        : await this.attachedValidator.validate(extra.attachedRefs);
     await this.letters.update(tx, letter.id, {
       counterpartyId: values.counterpartyId,
       signerId: values.signerId,
@@ -97,12 +108,28 @@ export class LetterFormApplier {
       addresseeId: values.addresseeId,
       responseDeadline: asDate(values.responseDeadline),
       customFields: customFields as Prisma.InputJsonValue,
+      ...(extra.confidential === null ? {} : { confidential: extra.confidential }),
     });
+    if (attachedRows !== null) await this.attached.replace(tx, letter.id, attachedRows);
 
     if (values.replyToLetterId) {
-      await this.confirmReplyTo(tx, letter, values.replyToLetterId, today);
+      await this.confirmReplyTo(tx, letter, values.replyToLetterId, today, actor);
     }
     return { fields, timeEntryId: null, result: null };
+  }
+
+  private async visibleToActor(
+    actor: { id: string; permissions: readonly string[] },
+    letterId: string,
+  ): Promise<boolean> {
+    const row = await this.letters.findDetailById(letterId);
+    if (!row || row.deletedAt !== null) return false;
+    const members = row.confidential
+      ? new Set(
+          (await this.letters.participants(letterId)).map((participant) => participant.userId),
+        )
+      : undefined;
+    return canViewLetter(actor, row, members);
   }
 
   /** Галочка Вики подтверждает подсказку — цель обязана быть свежей
@@ -112,14 +139,30 @@ export class LetterFormApplier {
     letter: LetterDetailRow,
     replyToLetterId: string,
     today: string,
+    actor: { id: string; permissions: readonly string[] },
   ): Promise<void> {
     const target = await this.letters.replyTargetById(tx, replyToLetterId);
     if (!target) throw relationFail('not_found');
+    // Конфиденциальное исходящее вне участия регистратора не связывается и не
+    // подтверждается: подсказка такого письма не показывается (#461, Р4).
+    const members = target.confidential
+      ? new Set(
+          (await this.letters.participants(replyToLetterId)).map(
+            (participant) => participant.userId,
+          ),
+        )
+      : undefined;
+    if (!canViewLetter(actor, target, members)) throw relationFail('not_found');
     if (target.direction !== 'outgoing' || target.registeredAt === null) {
       throw relationFail('not_outgoing_registered');
     }
     const existing = await this.letters.hasReplyTo(tx, letter.id);
-    const suggestion = await this.threading.suggestionBySubject(letter.subject, today);
+    const raw = await this.threading.suggestionBySubject(letter.subject, today);
+    // Невидимая регистратору подсказка (конфиденциальное исходящее вне
+    // участия) считается ОТСУТСТВУЮЩЕЙ: ответы «подсказки нет» и «подсказка
+    // невидима» обязаны совпадать — иначе 1-битный оракул существования
+    // конфиденциального исходящего (#461, Р4).
+    const suggestion = raw && (await this.visibleToActor(actor, raw.id)) ? raw : null;
     if (existing || suggestion?.id !== replyToLetterId) {
       throw relationFail('suggestion_mismatch');
     }

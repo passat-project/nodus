@@ -62,6 +62,57 @@ describe('ввод регистрации письма (#55, Р1)', () => {
       false,
     );
   });
+
+  it('конфиденциальность и приложенные письма — новые поля регистрации (#461)', () => {
+    const attachedOrg = id();
+    const parsed = letterRegistrationInputSchema.parse({
+      ...input,
+      confidential: true,
+      attachedRefs: [
+        { number: ' 456 ', counterpartyId: attachedOrg, date: '2026-10-01' },
+        { number: '78', counterpartyId: id(), date: null },
+      ],
+    });
+    expect(parsed.confidential).toBe(true);
+    expect(parsed.attachedRefs?.[0]).toEqual({
+      number: '456',
+      counterpartyId: attachedOrg,
+      date: '2026-10-01',
+    });
+    // Организация — только контрагент справочника (вердикт 05.11.2026):
+    // строки без контрагента и свободный текст отклоняются схемой.
+    expect(
+      letterRegistrationInputSchema.safeParse({
+        ...input,
+        attachedRefs: [{ number: '456', counterpartyId: null, date: null }],
+      }).success,
+    ).toBe(false);
+    expect(
+      letterRegistrationInputSchema.safeParse({
+        ...input,
+        attachedRefs: [{ number: '456', counterpartyId: id(), orgText: 'Текст', date: null }],
+      }).success,
+    ).toBe(false);
+    // Лимит строк и номера — контракт (20 / 64).
+    expect(
+      letterRegistrationInputSchema.safeParse({
+        ...input,
+        attachedRefs: Array.from({ length: 21 }, (_, index) => ({
+          number: String(index + 1),
+          counterpartyId: id(),
+          date: null,
+        })),
+      }).success,
+    ).toBe(false);
+    expect(
+      letterRegistrationInputSchema.safeParse({
+        ...input,
+        attachedRefs: [{ number: '1'.repeat(65), counterpartyId: id(), date: null }],
+      }).success,
+    ).toBe(false);
+    // Старое тело без новых полей остаётся валидным (аддитивность).
+    expect(letterRegistrationInputSchema.parse(input).confidential).toBeUndefined();
+  });
 });
 
 describe('checkLetterDates (одна грамматика веба, моков и сервера)', () => {

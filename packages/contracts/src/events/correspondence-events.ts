@@ -1,7 +1,11 @@
 import { z } from 'zod';
 
 import { LETTER_LIMITS } from '../correspondence/letter-registration.schemas.js';
-import { letterSourceSchema } from '../correspondence/letter.schemas.js';
+import {
+  letterRelationActionSchema,
+  letterRelationKindSchema,
+  letterSourceSchema,
+} from '../correspondence/letter.schemas.js';
 import { letterDirectionSchema } from '../workflows/process-type.schemas.js';
 import {
   stageOutcomeSchema,
@@ -27,6 +31,9 @@ export const CORRESPONDENCE_EVENTS = {
   LETTER_UPDATED: 'correspondence.letter_updated',
   /** Состав участников письма (присоединение, адресат) — мост чата. */
   LETTER_PARTICIPANTS_CHANGED: 'correspondence.letter_participants_changed',
+  /** Связь писем поставлена/заменена/снята (#461, Р6): история карточки
+   *  (`relation_changed`), будущий граф #453. Актор — в meta, не в payload. */
+  LETTER_RELATIONS_CHANGED: 'correspondence.letter_relations_changed',
   /** Удалено как спам (Р12). */
   LETTER_DELETED: 'correspondence.letter_deleted',
   /** Почтовый ящик не читается после нескольких неудачных попыток
@@ -120,6 +127,16 @@ export const letterParticipantsChangedPayloadSchema = z.object({
 export type LetterParticipantsChangedPayload = z.infer<
   typeof letterParticipantsChangedPayloadSchema
 >;
+
+/** Связь писем (#461, Р6): вид, вторая сторона и действие; подробности
+ *  (номера, темы) читаются GET /letters/:id/tree. */
+export const letterRelationsChangedPayloadSchema = z.object({
+  letterId: z.uuid(),
+  relatedLetterId: z.uuid(),
+  kind: letterRelationKindSchema,
+  action: letterRelationActionSchema,
+});
+export type LetterRelationsChangedPayload = z.infer<typeof letterRelationsChangedPayloadSchema>;
 
 export const letterDeletedPayloadSchema = z.object({ letterId: z.uuid() });
 export type LetterDeletedPayload = z.infer<typeof letterDeletedPayloadSchema>;

@@ -53,6 +53,9 @@ const base = {
   direction: 'incoming' as const,
   signer: null,
   registrar: null,
+  nestedIn: null,
+  attachedRefs: [],
+  confidential: false,
   regNumber: null,
   regDate: null,
   registeredAt: null,
@@ -149,6 +152,13 @@ function registered(o: RegisteredLetter): DemoLetter {
     customFields: o.customFields ?? {},
     participantIds: o.participants ?? [],
     mail: envelopeOfCounterparty(o.counterparty, `<reg-${o.n}@demo>`),
+    confidential: o.confidential ?? false,
+    attachedRefs: (o.attachedRefs ?? []).map((ref) => ({
+      id: crypto.randomUUID(),
+      number: ref.number,
+      counterparty: cp(ref.counterparty!),
+      date: ref.date ?? null,
+    })),
   };
 }
 
@@ -185,6 +195,16 @@ export function seedLetters(): DemoLetter[] {
       'О корректировке сроков выдачи раздела КЖ (этап 0359)',
       [f.galurgiyaPdf, f.galurgiyaText],
       envelope('Лукашевич Анна Викторовна', 'a.lukashevich@galurgiya.by', '<kzh-152@galurgiya.by>'),
+      // Матрёшка (#461): письмо лежит в конверте зарегистрированного
+      // Вх-2026/115 (тот же этап и корреспондент) — «вложено в» ставит
+      // канцелярия; в «ёлочке» конверт раскрывается шевроном.
+      {
+        nestedIn: {
+          id: lid(3),
+          regNumber: 'Вх-2026/115',
+          subject: 'Замечания по разделу КЖ главного корпуса (этап 0359)',
+        },
+      },
     ),
     fresh(
       22,

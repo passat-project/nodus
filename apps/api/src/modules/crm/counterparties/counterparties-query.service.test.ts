@@ -30,15 +30,24 @@ describe('CounterpartiesQueryService (#460)', () => {
     countsByIds: vi.fn(),
     findById: vi.fn(),
     findSimilar: vi.fn(),
+    letterUsages: vi.fn(),
   };
   const contacts = { countActiveByCounterparties: vi.fn(), findByCounterparty: vi.fn() };
+  const letters = { visibleLetterIds: vi.fn(async () => new Set<string>()) };
+  const viewer = { id: 'u1', permissions: [] as string[] };
   let service: CounterpartiesQueryService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     counterparties.countsByIds.mockResolvedValue(new Map());
+    counterparties.letterUsages.mockResolvedValue([]);
     contacts.countActiveByCounterparties.mockResolvedValue(new Map());
-    service = new CounterpartiesQueryService(counterparties as never, contacts as never);
+    letters.visibleLetterIds.mockResolvedValue(new Set<string>());
+    service = new CounterpartiesQueryService(
+      counterparties as never,
+      contacts as never,
+      letters as never,
+    );
   });
 
   describe('list', () => {
@@ -52,7 +61,7 @@ describe('CounterpartiesQueryService (#460)', () => {
       );
       contacts.countActiveByCounterparties.mockResolvedValue(new Map([[ID, 2]]));
 
-      const page = await service.list({ limit: 1, includeArchived: false });
+      const page = await service.list({ limit: 1, includeArchived: false }, viewer);
 
       expect(page.items).toHaveLength(1);
       expect(page.items[0]).toMatchObject({
@@ -68,12 +77,15 @@ describe('CounterpartiesQueryService (#460)', () => {
 
     it('фильтр архива и поиск уходят в репозиторий; курсор декодируется в (shortName, id)', async () => {
       counterparties.findPage.mockResolvedValue([]);
-      await service.list({
-        limit: 50,
-        includeArchived: true,
-        search: 'галургия',
-        cursor: encodeCursor({ shortName: 'АО «Галургия»', id: ID }),
-      });
+      await service.list(
+        {
+          limit: 50,
+          includeArchived: true,
+          search: 'галургия',
+          cursor: encodeCursor({ shortName: 'АО «Галургия»', id: ID }),
+        },
+        viewer,
+      );
       expect(counterparties.findPage).toHaveBeenCalledWith(
         { search: 'галургия', includeArchived: true },
         { shortName: 'АО «Галургия»', id: ID },
@@ -83,16 +95,39 @@ describe('CounterpartiesQueryService (#460)', () => {
 
     it('битый курсор → VALIDATION_FAILED', async () => {
       await expect(
-        service.list({ limit: 50, includeArchived: false, cursor: encodeCursor({ id: ID }) }),
+        service.list(
+          { limit: 50, includeArchived: false, cursor: encodeCursor({ id: ID }) },
+          viewer,
+        ),
       ).rejects.toMatchObject({ code: ErrorCode.VALIDATION_FAILED });
       expect(counterparties.findPage).not.toHaveBeenCalled();
+    });
+
+    it('конфиденциальное письмо вне участия не считается (#461, Р4)', async () => {
+      counterparties.findPage.mockResolvedValue([row()]);
+      counterparties.countsByIds.mockResolvedValue(
+        new Map([[ID, { lettersCount: 2, projectsCount: 0 }]]),
+      );
+      counterparties.letterUsages.mockResolvedValue([
+        { counterpartyId: ID, sourceId: 'letter-visible' },
+        { counterpartyId: ID, sourceId: 'letter-secret' },
+      ]);
+      letters.visibleLetterIds.mockResolvedValue(new Set(['letter-visible']));
+
+      const page = await service.list({ limit: 50, includeArchived: false }, viewer);
+
+      expect(page.items[0]?.lettersCount).toBe(1);
+      expect(letters.visibleLetterIds).toHaveBeenCalledWith(
+        ['letter-visible', 'letter-secret'],
+        viewer,
+      );
     });
   });
 
   describe('card', () => {
     it('нет записи → NOT_FOUND', async () => {
       counterparties.findById.mockResolvedValue(null);
-      await expect(service.card(ID)).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
+      await expect(service.card(ID, viewer)).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
     });
 
     it('карточка: customFields, ISO-даты, контакты и счётчики', async () => {
@@ -113,7 +148,7 @@ describe('CounterpartiesQueryService (#460)', () => {
         },
       ]);
 
-      const card = await service.card(ID);
+      const card = await service.card(ID, viewer);
 
       expect(card).toMatchObject({
         id: ID,

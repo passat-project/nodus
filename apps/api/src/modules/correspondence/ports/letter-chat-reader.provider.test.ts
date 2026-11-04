@@ -7,9 +7,15 @@ const ADDRESSEE = '00000000-0000-4000-8000-000000000302';
 const REGISTRAR = '00000000-0000-4000-8000-000000000303';
 const COLLEAGUE = '00000000-0000-4000-8000-000000000304';
 
-function setup(row: { addresseeId: string | null; registeredAt: Date | null } | null) {
+function setup(
+  row: { addresseeId: string | null; registeredAt: Date | null } | null,
+  detail: Record<string, unknown> | null = null,
+  deletedAt: Date | null = null,
+) {
   const letters = {
-    chatRoster: vi.fn(async () => row),
+    // Prisma-строка всегда несёт deletedAt; надгробие спама чат не открывает.
+    chatRoster: vi.fn(async () => (row ? { ...row, deletedAt } : null)),
+    findDetailById: vi.fn(async () => (detail ? { ...detail, deletedAt } : null)),
     participants: vi.fn(
       async (): Promise<{ userId: string; role: string; createdAt: Date }[]> => [],
     ),
@@ -62,5 +68,52 @@ describe('состав беседы письма (#55, Р10; редизайн #5
   it('зарегистрированное без адресата — null', async () => {
     const { provider } = setup({ addresseeId: null, registeredAt: new Date() });
     expect(await provider.roster(LETTER)).toBeNull();
+  });
+});
+
+describe('видимость чата письма (#461, Р4)', () => {
+  it('конфиденциальное: участник обсуждения чат видит, посторонний — нет', async () => {
+    const { provider, letters } = setup(null, {
+      registeredAt: new Date('2026-10-01T08:00:00Z'),
+      confidential: true,
+      registrarId: REGISTRAR,
+      addresseeId: ADDRESSEE,
+    });
+    letters.participants.mockResolvedValue([participant(COLLEAGUE, new Date())]);
+    expect(await provider.canView(LETTER, { id: COLLEAGUE, permissions: [] })).toBe(true);
+    expect(await provider.canView(LETTER, { id: 'stranger', permissions: [] })).toBe(false);
+    expect(await provider.canView(LETTER, { id: REGISTRAR, permissions: [] })).toBe(true);
+  });
+
+  it('неконфиденциальное зарегистрированное видят все; нет письма — false', async () => {
+    const open = setup(null, {
+      registeredAt: new Date('2026-10-01T08:00:00Z'),
+      confidential: false,
+      registrarId: REGISTRAR,
+      addresseeId: ADDRESSEE,
+    });
+    expect(await open.provider.canView(LETTER, { id: 'stranger', permissions: [] })).toBe(true);
+    expect(await setup(null).provider.canView(LETTER, { id: 'stranger', permissions: [] })).toBe(
+      false,
+    );
+  });
+});
+
+describe('надгробие спама (#461)', () => {
+  it('беседа и видимость письма закрыты, как карточка (Р13)', async () => {
+    const deleted = setup(
+      { addresseeId: ADDRESSEE, registeredAt: new Date() },
+      null,
+      new Date('2026-10-30T10:00:00Z'),
+    );
+    expect(await deleted.provider.roster(LETTER)).toBeNull();
+    const detail = setup(null, {
+      registeredAt: new Date('2026-10-01T08:00:00Z'),
+      confidential: false,
+      registrarId: REGISTRAR,
+      addresseeId: ADDRESSEE,
+    });
+    // canView читает findDetailById (надгробие — false).
+    expect(await detail.provider.canView(LETTER, { id: 'stranger', permissions: [] })).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { CalendarClock, Paperclip } from 'lucide-react';
+import { CalendarClock, Lock, Paperclip } from 'lucide-react';
 import type { LetterBox, LetterListItem, TaskSystemState } from '@nodus/contracts';
 import { isOpenState, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
@@ -177,6 +177,15 @@ export function makeLetterTableFields({
         const unread = fresh && !letter.viewed;
         return (
           <span className="min-w-0 truncate text-sm" title={letter.subject ?? undefined}>
+            {/* «Конфиденциально» (#461): бейдж-замок только видящим письмо —
+                остальным строки нет вовсе (списки фильтрует сервер). */}
+            {letter.confidential ? (
+              <Lock
+                aria-label={ui.letters.confidential.badge}
+                className="mr-1.5 inline size-3 shrink-0 align-middle text-muted-foreground"
+                strokeWidth={1.75}
+              />
+            ) : null}
             {unread ? (
               <span
                 title={ui.letters.list.unreadDot}

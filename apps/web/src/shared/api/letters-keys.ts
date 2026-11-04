@@ -28,6 +28,8 @@ export const lettersKeys = {
   detail: (id: string) => [...lettersKeys.all, 'detail', id] as const,
   transitions: (id: string) => [...lettersKeys.all, 'transitions', id] as const,
   history: (id: string) => [...lettersKeys.all, 'history', id] as const,
+  /** Дерево «ёлочки» (#461): корень — верх цепочки от письма. */
+  tree: (id: string) => [...lettersKeys.all, 'tree', id] as const,
   /** Держатели `correspondence.resolve` — группа «Принимают решения». */
   resolvers: () => [...lettersKeys.all, 'resolvers'] as const,
   /** Типы писем (`/workflows/types?category=letter`): префикс номера, выбор типа. */

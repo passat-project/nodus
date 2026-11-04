@@ -47,6 +47,7 @@ function detail(patch: Partial<LetterDetail> = {}): LetterDetail {
     attachmentCount: 1,
     // Карточка открыта — «я открывал» (редизайн #56).
     viewed: true,
+    confidential: false,
     type: {
       id: '20000000-0000-4000-8000-000000000910',
       code: 'letter-incoming',
@@ -71,6 +72,8 @@ function detail(patch: Partial<LetterDetail> = {}): LetterDetail {
     body: { kind: 'none' },
     customFields: {},
     customFieldRefs: [],
+    attachedRefs: [],
+    canManageRelations: true,
     access: { canEdit: true, canDeleteSpam: false, canJoin: false, isParticipant: true },
     ...patch,
   };

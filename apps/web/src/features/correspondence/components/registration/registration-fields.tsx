@@ -2,7 +2,6 @@ import { useId, useRef, type ReactNode } from 'react';
 import type { LetterDetail, LetterRegistrationField } from '@nodus/contracts';
 import { typeIdsOf, ui } from '@nodus/contracts';
 import { Input } from '@nodus/ui/components/input';
-import { NodeLabel } from '@nodus/ui/components/node-label';
 import {
   Select,
   SelectContent,
@@ -10,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@nodus/ui/components/select';
+import { Switch } from '@nodus/ui/components/switch';
 import { Textarea } from '@nodus/ui/components/textarea';
 import { cn } from '@nodus/ui/lib/utils';
 
@@ -19,7 +19,6 @@ import {
   useCustomFieldDefinitions,
   visibleDefinitions,
 } from '../../../../shared/custom-fields/queries.js';
-import { CustomFieldEditor } from '../../../../shared/custom-fields/value-editor.js';
 import { ProjectPicker } from '../../../../shared/ui/project-picker.js';
 import { useReceiptMethods } from '../../api/letters-queries.js';
 import {
@@ -28,25 +27,14 @@ import {
   registrationFieldLabel,
   type RegistrationDraft,
 } from '../../lib/registration-draft.js';
+import { focusRegistrationField } from '../../lib/registration-focus.js';
 import { useSuggestedCounterparty } from '../../lib/registration-suggestion.js';
 import { AddresseeField } from './addressee-field.js';
+import { AttachedRefsSection } from './attached-refs-section.js';
+import { RegistrationAttributes } from './registration-attributes.js';
 import { DateInput } from './date-input.js';
 import { ReplySuggestion } from './reply-suggestion.js';
 import { SignerField } from './signer-field.js';
-
-/** Фокус в поле формы по ключу (Enter → следующее пустое, «Не хватает»). */
-export function focusRegistrationField(
-  root: HTMLElement | null,
-  field: LetterRegistrationField | null,
-): void {
-  if (!root || !field) return;
-  const el = root.querySelector<HTMLElement>(
-    `[data-reg-field="${field}"] :is(input, textarea, button):not([disabled])`,
-  );
-  if (!el) return;
-  el.focus({ preventScroll: true });
-  el.scrollIntoView({ block: 'nearest' });
-}
 
 /**
  * Форма регистрации (#55, U5) — ОДНА в конвейере «Новые» и в окне
@@ -81,7 +69,6 @@ export function RegistrationFields({
 
   // Подстановка контрагента/подписанта по адресу отправителя (Р6, В2).
   const { fromSuggestion } = useSuggestedCounterparty(letter, value, onChange);
-
   const fieldId = (field: LetterRegistrationField) => `${prefix}-${field}`;
   const errorId = (field: LetterRegistrationField) =>
     invalidKeys[field] ? `${prefix}-${field}-error` : undefined;
@@ -257,6 +244,26 @@ export function RegistrationFields({
         )}
       </div>
       {row(
+        'confidential',
+        <div className="flex min-h-8 items-center gap-2.5">
+          <Switch
+            id={fieldId('confidential')}
+            checked={value.confidential}
+            aria-describedby={errorId('confidential')}
+            onCheckedChange={(confidential) => set({ confidential })}
+          />
+          {value.confidential ? (
+            <span className="text-xs text-muted-foreground">{ui.letters.confidential.hint}</span>
+          ) : null}
+        </div>,
+      )}
+      <AttachedRefsSection
+        value={value.attachedRefs}
+        onChange={(attachedRefs) => set({ attachedRefs })}
+        invalid={invalidKeys.attachedRefs}
+        errorId={errorId('attachedRefs')}
+      />
+      {row(
         'addresseeId',
         <AddresseeField
           id={fieldId('addresseeId')}
@@ -278,29 +285,13 @@ export function RegistrationFields({
           )
         : null}
       {attributes.length > 0 ? (
-        <div data-reg-field="customFields" className="mt-2 flex flex-col gap-2">
-          <NodeLabel label={ui.letters.form.attributes} count={attributes.length} />
-          {attributes.map((definition) => (
-            <div key={definition.id} className="flex min-w-0 flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground">{definition.name}</span>
-              <CustomFieldEditor
-                definition={definition}
-                value={value.customFields[definition.id]}
-                refs={letter.customFieldRefs}
-                variant="form"
-                onCommit={(next) => {
-                  const customFields = { ...value.customFields };
-                  if (next === null) delete customFields[definition.id];
-                  else customFields[definition.id] = next;
-                  set({ customFields });
-                }}
-              />
-            </div>
-          ))}
-          {invalidKeys.customFields ? (
-            <p className="text-xs text-danger">{invalidKeys.customFields}</p>
-          ) : null}
-        </div>
+        <RegistrationAttributes
+          letter={letter}
+          definitions={attributes}
+          values={value.customFields}
+          onChange={(customFields) => set({ customFields })}
+          invalid={invalidKeys.customFields}
+        />
       ) : null}
     </div>
   );

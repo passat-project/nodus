@@ -38,6 +38,7 @@ export class OfficeSessionService {
     let canView = file.ownerId === userId;
     let canEdit = file.ownerId === userId;
     let immutable = false;
+    let denied = false;
     for (const contributor of this.fileAccess.contributors()) {
       const decision = await contributor.check(fileId, userId);
       if (decision) {
@@ -46,9 +47,13 @@ export class OfficeSessionService {
         // Неизменяемость контекста — вето поверх владения (#55): файл письма
         // не правит даже тот, кто его загрузил.
         immutable ||= decision.immutable === true;
+        // Явный отказ контекста — вето и на просмотр (#461): владение файлом
+        // не обходит круг участников конфиденциального письма.
+        denied ||= decision.deny === true;
       }
     }
-    if (immutable) canEdit = false;
+    if (denied) canView = false;
+    if (immutable || denied) canEdit = false;
     if (!canView) throw DomainException.notFound('File not found');
     return { file, canEdit };
   }

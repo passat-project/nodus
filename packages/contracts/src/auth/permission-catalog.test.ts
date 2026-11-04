@@ -59,15 +59,17 @@ describe('каталог прав (#379)', () => {
     ]);
   });
 
-  it('«Письма» — регистрация и решения; права v2 удалены (#55, Р13/O6)', () => {
+  it('«Письма» — регистрация, решения и конфиденциальные; права v2 удалены (#55, #461)', () => {
     const letters = permissionsOfModule('correspondence');
     expect(letters.map((entry) => entry.permission)).toEqual([
       Permission.CORRESPONDENCE_REGISTER,
       Permission.CORRESPONDENCE_RESOLVE,
+      Permission.CORRESPONDENCE_VIEW_CONFIDENTIAL,
     ]);
     expect(letters.map((entry) => entry.label)).toEqual([
       'Регистрировать письма',
       'Принимать решения по письмам',
+      'Видеть конфиденциальные письма',
     ]);
     expect(letters[0]?.description).toContain('Вкладка «Новые»');
     expect(Object.values(Permission)).not.toContain('correspondence.create');

@@ -22,7 +22,9 @@ import {
   DICTIONARY_READER,
   type DictionaryReader,
 } from '../../dictionaries/ports/dictionary-reader.port.js';
+import { canViewLetter } from '../access/letter-access.js';
 import { LettersQueryService } from '../letters/letters-query.service.js';
+import { LettersRepository } from '../letters/letters.repository.js';
 import { LetterHistoryRepository } from './letter-history.repository.js';
 
 const cursorSchema = z.object({ seq: z.string().regex(/^\d+$/) });
@@ -43,6 +45,7 @@ interface RawChange {
 export class LetterHistoryService {
   constructor(
     private readonly repo: LetterHistoryRepository,
+    private readonly letters: LettersRepository,
     private readonly query: LettersQueryService,
     @Inject(USER_PROFILE_READER) private readonly profiles: UserProfileReader,
     @Inject(COUNTERPARTY_READER) private readonly counterparties: CounterpartyReader,
@@ -67,6 +70,7 @@ export class LetterHistoryService {
       await Promise.all(
         page.map((row) =>
           this.toEntry(
+            user,
             row.id,
             row.type,
             row.actorId ? (actors.get(row.actorId) ?? null) : null,
@@ -84,6 +88,7 @@ export class LetterHistoryService {
   }
 
   private async toEntry(
+    user: AuthUser,
     id: string,
     type: string,
     actor: UserRef | null,
@@ -111,6 +116,31 @@ export class LetterHistoryService {
           toStageName: String(payload.toStageName ?? '—'),
           ...(payload.comment ? { comment: String(payload.comment) } : {}),
         };
+      case CORRESPONDENCE_EVENTS.LETTER_RELATIONS_CHANGED: {
+        // Связь поставлена/заменена/снята (#461, Р6): вторая сторона —
+        // ссылкой (номер и тема гидратируются, как у превью).
+        const relatedLetterId = String(payload.relatedLetterId ?? '');
+        // Цель связи-конфиденциальное вне участия не раскрывается (#461, Р4):
+        // запись истории молча пропускается — номер и тема цели не оракулят.
+        const target = (await this.letters.visibilityRows([relatedLetterId]))[0];
+        if (!target || target.deletedAt !== null) return null;
+        const members = target.confidential
+          ? new Set(
+              (await this.letters.participants(relatedLetterId)).map(
+                (participant) => participant.userId,
+              ),
+            )
+          : undefined;
+        if (!canViewLetter(user, target, members)) return null;
+        const related = (await this.letters.refs([relatedLetterId]))[0];
+        return {
+          ...base,
+          kind: 'relation_changed',
+          action: payload.action as 'linked' | 'unlinked' | 'replaced',
+          relationKind: payload.kind as 'reply_to' | 'nested_in',
+          relatedLetter: related ?? { id: relatedLetterId, regNumber: null, subject: null },
+        };
+      }
       case CORRESPONDENCE_EVENTS.LETTER_PARTICIPANTS_CHANGED: {
         // В историю идёт только личное присоединение (актор = добавленный);
         // синхронизация состава при регистрации — не событие карточки.

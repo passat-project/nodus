@@ -47,6 +47,10 @@ export const Permission = {
   /** Принимает решения по письмам (#55, Р13): первым в списке адресатов при
    *  регистрации; кнопки резолюции — #463. */
   CORRESPONDENCE_RESOLVE: 'correspondence.resolve',
+  /** Видеть конфиденциальные письма вне состава участников (#461, Р4, В3):
+   *  по умолчанию не выдаётся никому — даже «Администратору» (как
+   *  `project.view_secret`); выдача — точечно матрицей «Права доступа». */
+  CORRESPONDENCE_VIEW_CONFIDENTIAL: 'correspondence.view_confidential',
   /** Общие настройки UI компании (порядок модулей/вкладок «Для всех») — admin. */
   SETTINGS_UI_DEFAULTS: 'settings.uiDefaults',
   /** Создать контрагента (в т.ч. «на лету» при регистрации письма) и

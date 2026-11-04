@@ -52,6 +52,7 @@ export function listItemOf(letter: LetterDetail): LetterListItem {
     attachmentCount: letter.attachmentCount,
     // Карточку открыли — письмо просмотрено (карточка всегда «я открывал»).
     viewed: letter.viewed,
+    confidential: letter.confidential,
   };
 }
 

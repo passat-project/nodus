@@ -5,6 +5,7 @@ import {
   type AuthUser,
   type LetterDetail,
   type LetterListItem,
+  type LetterRef,
   type ListLettersQuery,
   type Paginated,
   type UserRef,
@@ -26,7 +27,13 @@ import {
   COUNTERPARTY_READER,
   type CounterpartyReader,
 } from '../../crm/ports/counterparty-reader.port.js';
-import { canRegisterLetters, canViewLetter, letterAccessOf } from '../access/letter-access.js';
+import {
+  canRegisterLetters,
+  canViewConfidential,
+  canViewLetter,
+  letterAccessOf,
+} from '../access/letter-access.js';
+import { LetterAttachedRefsRepository } from './letter-attached-refs.repository.js';
 import { LetterDtoMapper } from './letter-dto.mapper.js';
 import { LetterThreadingService } from './letter-threading.service.js';
 import type { LetterCursor, LetterDetailRow } from './letter-row.js';
@@ -48,6 +55,7 @@ const SEARCH_COUNTERPARTIES = 50;
 export class LettersQueryService {
   constructor(
     private readonly repo: LettersRepository,
+    private readonly attached: LetterAttachedRefsRepository,
     private readonly mapper: LetterDtoMapper,
     private readonly threading: LetterThreadingService,
     @Inject(COUNTERPARTY_READER) private readonly counterparties: CounterpartyReader,
@@ -63,6 +71,9 @@ export class LettersQueryService {
       AND: [
         this.boxWhere(q),
         ...(q.counterpartyId ? [{ counterpartyId: q.counterpartyId }] : []),
+        // Конфиденциальные вне круга зрителя строки не дают (#461, Р4):
+        // фильтр тот же, что у карточки, — по индексам адресата и участников.
+        ...(q.box === 'new' ? [] : [this.confidentialityWhere(user)]),
         ...(await this.searchWhere(q.search)),
       ],
     };
@@ -75,8 +86,9 @@ export class LettersQueryService {
       // Личный индикатор «я ещё не открывал» (редизайн #56).
       this.repo.viewedLetterIds(user.id, ids),
     ]);
-    // Бейджи «Ответ на …» в строке очереди «Новые» (#56, Р5).
-    const replyTos = await this.repo.replyTos(ids);
+    // Бейджи «Ответ на …» в строке очереди «Новые» (#56, Р5); цель-конфиденциальное
+    // вне участия не показывается (#461, Р4): плоская ссылка — тот же сток, что дерево.
+    const replyTos = await this.visibleReplyTos(user, ids);
     const last = page[page.length - 1];
     const axis = listOrderOf(q.box);
     return {
@@ -101,12 +113,20 @@ export class LettersQueryService {
     const isParticipant =
       participants.some((p) => p.userId === user.id) || row.addresseeId === user.id;
     const attachments = await this.repo.attachments(id);
-    const replyTo = await this.repo.replyTo(id);
+    const attachedRefs = await this.attached.attachedRefs(id);
+    const linked = await this.repo.replyTo(id);
+    // Связь «ответ на» конфиденциальное письмо вне участия не раскрывает:
+    // номер и тема цели — тот же секрет, что карточка (#461, Р4).
+    const replyTo =
+      linked && (await this.visibleIds(user, [linked.id])).has(linked.id) ? linked : null;
+    const suggestion =
+      linked || row.registeredAt
+        ? null
+        : await this.threading.suggestionBySubject(row.subject, today);
     const [replySuggestion, counterpartySuggestion] = await Promise.all([
-      // Подсказка живёт, только пока связи нет; актуальна до регистрации.
-      replyTo || row.registeredAt
-        ? Promise.resolve(null)
-        : this.threading.suggestionBySubject(row.subject, today),
+      suggestion && (await this.visibleIds(user, [suggestion.id])).has(suggestion.id)
+        ? suggestion
+        : null,
       row.counterpartyId || !row.mailFromAddress
         ? Promise.resolve(null)
         : this.counterpartySuggestionOf(row.mailFromAddress),
@@ -115,16 +135,69 @@ export class LettersQueryService {
       replyTo,
       replySuggestion,
       counterpartySuggestion,
+      attachedRefs,
     });
   }
 
-  /** Письмо, видимое сотруднику, или 404 (невидимое = «не найдено», Р7). */
+  /** Письмо, видимое сотруднику, или 404 (невидимое = «не найдено», Р7).
+   *  У конфиденциального состав обсуждения читается ДО проверки (#461, Р4):
+   *  участник видит письмо, прочий сотрудник — 404 без оракула. */
   async visibleRow(user: AuthUser, id: string): Promise<LetterDetailRow> {
     const row = await this.repo.findDetailById(id);
-    if (!row || row.deletedAt !== null || !canViewLetter(user, row)) {
+    if (!row || row.deletedAt !== null) throw DomainException.notFound('Letter not found');
+    const participants = row.confidential
+      ? new Set((await this.repo.participants(id)).map((participant) => participant.userId))
+      : undefined;
+    if (!canViewLetter(user, row, participants)) {
       throw DomainException.notFound('Letter not found');
     }
     return row;
+  }
+
+  /** Фильтр реестров: конфиденциальные — только участникам и держателям
+   *  права (#461, Р4). У держателя фильтра нет — видит всё. */
+  private confidentialityWhere(user: AuthUser) {
+    if (canViewConfidential(user)) return {};
+    return {
+      OR: [
+        { confidential: false },
+        { registrarId: user.id },
+        { addresseeId: user.id },
+        { participants: { some: { userId: user.id } } },
+      ],
+    };
+  }
+
+  /** Бейджи «Ответ на» страницы, отфильтрованные видимостью зрителя (#461). */
+  private async visibleReplyTos(
+    user: AuthUser,
+    letterIds: readonly string[],
+  ): Promise<Map<string, LetterRef>> {
+    const refs = await this.repo.replyTos(letterIds);
+    const visible = await this.visibleIds(
+      user,
+      [...refs.values()].map((ref) => ref.id),
+    );
+    return new Map([...refs].filter(([, ref]) => visible.has(ref.id)));
+  }
+
+  /** Из переданных писем — видимые сотруднику (конфиденциальные — участникам
+   *  и держателям права; надгробия не видны). Один батч на ссылки. */
+  async visibleIds(user: AuthUser, letterIds: readonly string[]): Promise<ReadonlySet<string>> {
+    const rows = await this.repo.visibilityRows([...new Set(letterIds)]);
+    const confidentialIds = rows.filter((row) => row.confidential).map((row) => row.id);
+    const participants = await this.repo.participantsOf(confidentialIds);
+    const visible = new Set<string>();
+    for (const row of rows) {
+      if (row.deletedAt !== null) continue;
+      const members = new Set(
+        participants
+          .filter((participant) => participant.letterId === row.id)
+          .map((participant) => participant.userId),
+      );
+      if (canViewLetter(user, row, members)) visible.add(row.id);
+    }
+    return visible;
   }
 
   /** Подстановка по адресу отправителя (Р6, В2): ровно один активный
@@ -176,6 +249,13 @@ export class LettersQueryService {
           { subject: { contains: search, mode: 'insensitive' as const } },
           { regNumber: { contains: search, mode: 'insensitive' as const } },
           { theirNumber: { contains: search, mode: 'insensitive' as const } },
+          // Поиск по номеру любого приложенного письма (#461, Р8): «456»
+          // находит конверт, в котором лежит лист № 456.
+          {
+            attachedRefs: {
+              some: { number: { contains: search, mode: 'insensitive' as const } },
+            },
+          },
           ...(counterpartyIds.length > 0 ? [{ counterpartyId: { in: counterpartyIds } }] : []),
         ],
       },

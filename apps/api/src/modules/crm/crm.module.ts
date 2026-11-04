@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { CorrespondencePortsModule } from '../correspondence/correspondence-ports.module.js';
 import { ContactsController } from './contacts/contacts.controller.js';
 import { ContactsRepository } from './contacts/contacts.repository.js';
 import { ContactsService } from './contacts/contacts.service.js';
@@ -26,6 +27,9 @@ import {
  * сервисы и репозитории не экспортируются (I3/I6).
  */
 @Module({
+  // Видимость писем (#461, Р4): счётчик «Писем» карточки — по тому же
+  // правилу, что реестр (read-порт владельца данных, ADR-0012).
+  imports: [CorrespondencePortsModule],
   controllers: [CounterpartiesController, ContactsController],
   providers: [
     CounterpartiesRepository,

@@ -8,6 +8,7 @@ import {
   demoCounterpartyList,
 } from '../../mocks/data/counterparties.js';
 import { lettersCountOf } from '../../mocks/data/letters.js';
+import { getMockActor } from '../../mocks/mock-actor.js';
 
 /** ЧТЕНИЕ справочника контрагентов для UI-чекпоинтов (#431 — пикер поля
  *  «Контрагент», #55 — регистрация письма): живой API CRM (#460) — основной,
@@ -22,7 +23,7 @@ export const crmReadHandlers = [
     const search = (url.searchParams.get('search') ?? '').trim().toLowerCase();
     const includeArchived = url.searchParams.get('includeArchived') === 'true';
     const items = demoCounterpartyList()
-      .map((item) => ({ ...item, lettersCount: lettersCountOf(item.id) }))
+      .map((item) => ({ ...item, lettersCount: lettersCountOf(item.id, getMockActor()) }))
       .filter((item) => includeArchived || item.archivedAt === null)
       .filter(
         (item: CounterpartyListItem) =>
@@ -42,7 +43,7 @@ export const crmReadHandlers = [
         { status: 404 },
       );
     }
-    return HttpResponse.json({ ...card, lettersCount: lettersCountOf(card.id) });
+    return HttpResponse.json({ ...card, lettersCount: lettersCountOf(card.id, getMockActor()) });
   }),
 ];
 

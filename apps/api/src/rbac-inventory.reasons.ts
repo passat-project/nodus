@@ -111,6 +111,9 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'GET /letters/:id/transitions': LETTER_VISIBLE_ONE,
   'POST /letters/:id/transitions/:transitionId': LETTER_VISIBLE_ONE,
   'GET /letters/:id/history': LETTER_VISIBLE_ONE,
+  // Дерево «ёлочки» (#461, Р2): видимость письма в сервисе, невидимый корень —
+  // 404 без оракула; дочерние узлы фильтруются той же функцией.
+  'GET /letters/:id/tree': LETTER_VISIBLE_ONE,
   'GET /chat/favorites': OWN_FAVORITES,
   'GET /chat/favorites/labels': OWN_FAVORITES,
   'GET /chat/favorites/sources': OWN_FAVORITES,

@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   attachmentPreviewKind,
   isPdfDerivativeCandidate,
+  ui,
   type ContactRef,
   type CounterpartyRef,
   type LetterAccess,
@@ -49,7 +50,13 @@ import {
   type CatalogStage,
   type ProcessCatalogReader,
 } from '../../workflows/ports/process-catalog-reader.port.js';
-import type { LetterAttachmentRow, LetterDetailRow, LetterListRow } from './letter-row.js';
+import { canRegisterLetters } from '../access/letter-access.js';
+import type {
+  LetterAttachedRefRow,
+  LetterAttachmentRow,
+  LetterDetailRow,
+  LetterListRow,
+} from './letter-row.js';
 
 /** Ссылки страницы: гидратация пачками — один запрос на вид ссылки (Р6). */
 export interface LetterRefs {
@@ -177,6 +184,7 @@ export class LetterDtoMapper {
       replyTo,
       attachmentCount,
       viewed,
+      confidential: row.confidential,
     };
   }
 
@@ -211,6 +219,7 @@ export class LetterDtoMapper {
       replyTo: LetterRef | null;
       replySuggestion: LetterRef | null;
       counterpartySuggestion: LetterCounterpartySuggestion | null;
+      attachedRefs: readonly LetterAttachedRefRow[];
     },
   ): Promise<LetterDetail> {
     const refs = await this.refsOf([row], {
@@ -244,6 +253,14 @@ export class LetterDtoMapper {
       };
     });
     const values = (row.customFields ?? {}) as LetterDetail['customFields'];
+    // «Приложенные письма» (#461, Р3): организация — всегда контрагент
+    // справочника (вердикт 05.11.2026); ссылки гидрируются пачкой.
+    const attachedCounterpartyIds = [
+      ...new Set(extra.attachedRefs.map((ref) => ref.counterpartyId)),
+    ];
+    const attachedCounterparties = new Map(
+      (await this.counterparties.refs(attachedCounterpartyIds)).map((ref) => [ref.id, ref]),
+    );
     return {
       ...this.toListItem(
         row,
@@ -272,6 +289,18 @@ export class LetterDtoMapper {
       body: bodyOf(files),
       customFields: values,
       customFieldRefs: await this.customFields.refs('letter', values, actor),
+      attachedRefs: extra.attachedRefs.map((ref) => ({
+        id: ref.id,
+        number: ref.number,
+        // Контрагент удалён/архивирован после записи строки — имя-заглушка,
+        // строка не исчезает из реестра письма.
+        counterparty: attachedCounterparties.get(ref.counterpartyId) ?? {
+          id: ref.counterpartyId,
+          name: ui.counterparties.archivedBadge,
+        },
+        date: dateOnly(ref.letterDate),
+      })),
+      canManageRelations: canRegisterLetters(actor),
       access,
     };
   }

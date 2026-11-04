@@ -8,7 +8,7 @@ import { ErrorCode, LETTER_LIMITS } from '@nodus/contracts';
 import type { FastifyRequest } from 'fastify';
 
 import { DomainException } from '../../../core/errors/domain-exception.js';
-import type { UploadedLetterFile } from './letters-mutation.service.js';
+import type { UploadedLetterFile } from './letters-manual-create.service.js';
 
 /** Суммарный потолок запроса ручного создания: 20×100 МБ по отдельности
  *  дали бы 2 ГБ временных файлов на один запрос (security-ревью #55). */

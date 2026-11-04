@@ -1165,8 +1165,12 @@ model Task {
   commentsCount     Int       @default(0) @map("comments_count")
   /// Кастомные поля (FieldDefinition, data-model.md); GIN — в миграции.
   customFields      Json      @default("{}") @map("custom_fields")
-  /// Крючок под будущий режим «конфиденциально» (ИИ-агент не читает; на
-  /// видимость пока НЕ влияет — правило появится вместе с потребителем).
+  /// «Конфиденциально» (#461, Р5): задача видна ТОЛЬКО участникам (создатель,
+  /// ответственный, соисполнители, наблюдатели) — без руководителей по
+  /// оргструктуре, видимых проектов и `task.view_all`; список/карточка/ветка/
+  /// поиск/счётчики наследуют правило через `visibleTasksWhere`. Пишется
+  /// поручениями из конфиденциального письма (#463); интерфейс-переключатель
+  /// у задач — там же.
   confidential      Boolean   @default(false)
   /// Ключ внешней системы (импорт из Битрикса: «b24:12345»).
   externalRef       String?   @unique @map("external_ref")
@@ -1812,7 +1816,15 @@ model Letter {
   /// переимпорт удалённого не возвращает его в «Новые». Списки/GET фильтруют.
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
 
+  /// «Конфиденциально» (#461, Р4, В3): письмо, его чат, файлы и созданные из
+  /// него поручения видят ТОЛЬКО участники (регистратор, адресат, участники
+  /// обсуждения) и держатели `correspondence.view_confidential` — ни списки,
+  /// ни поиск, ни ссылка чужому не отдают письмо (404 без оракула). По
+  /// умолчанию флаг никому не выдаётся, даже администратору.
+  confidential Boolean @default(false)
+
   attachments  LetterAttachment[]
+  attachedRefs LetterAttachedRef[]
   participants LetterParticipant[]
   views        LetterView[]
   relations    LetterRelation[] @relation("LetterRelationsFrom")
@@ -1897,7 +1909,10 @@ model LetterRelation {
   id              String   @id @default(uuid()) @db.Uuid
   letterId        String   @map("letter_id") @db.Uuid
   relatedLetterId String   @map("related_letter_id") @db.Uuid
-  /// reply_to (CHECK в миграции; nested_in и другие — #461).
+  /// reply_to — «ответ на» (авто по почтовой цепочке или ручная связь);
+  /// nested_in — «вложено в» (матрёшка: письмо лежит в конверте другого).
+  /// CHECK списка и запрет самосвязи — в миграции; частичные unique «один
+  /// reply_to» и «один nested_in» — там же (#461, Р1).
   kind            String
   /// auto | manual (CHECK в миграции).
   source          String
@@ -1909,6 +1924,32 @@ model LetterRelation {
   @@index([letterId])
   @@index([relatedLetterId])
   @@map("letter_relations")
+}
+
+/// Строка «приложенных писем» (#461, Р3): конверт-матрёшка — письмо
+/// пришло пачкой вложенных документов («№ 456, Беларуськалий, 18.10.2026»).
+/// Организация — ВСЕГДА контрагент справочника (вердикт владельца 05.11.2026:
+/// свободного текста нет — нет организации вне CRM, лишних «одноразовых»
+/// строк и расхождений с карточкой); нет нужного контрагента — его заводят
+/// из окна строки. `counterparty_id` — plain UUID без FK (I3: CRM — чужой
+/// модуль, как `letters.counterparty_id`). Вложения-файлы сюда не входят —
+/// это реестр вложенных ДОКУМЕНТОВ.
+model LetterAttachedRef {
+  id             String    @id @default(uuid()) @db.Uuid
+  letterId       String    @map("letter_id") @db.Uuid
+  /// № приложенного письма — ключ поиска по реестрам (кап 64).
+  number         String
+  counterpartyId String    @map("counterparty_id") @db.Uuid
+  letterDate     DateTime? @map("letter_date") @db.Date
+  sortOrder      Int       @default(0) @map("sort_order")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  letter Letter @relation(fields: [letterId], references: [id], onDelete: Cascade)
+
+  @@index([letterId, sortOrder])
+  /// Поиск «найди письмо с приложенным № 456» (Р8): подстрока по номеру.
+  @@index([number])
+  @@map("letter_attached_refs")
 }
 
 /// Ящик-источник почты (#56, ADR-0035; ADR-0027 «ящики, курсор

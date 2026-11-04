@@ -55,6 +55,16 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks (integration)', () => {
     alice = await withCreate(fx.users.alice);
     bob = await withCreate(fx.users.bob);
     carol = await withCreate(fx.users.carol);
+    // Детерминизм против прошлых прогонов/оборванных сессий (#461): соседние
+    // наборы настраивают окна системных кнопок и могут не успеть восстановить
+    // их — сброс форм в начале набора, тесты настраивают нужные сами.
+    const standard = await fx.prisma.workflow.findUnique({ where: { code: 'task.default' } });
+    if (standard) {
+      await fx.prisma.workflowTransition.updateMany({
+        where: { workflowId: standard.id },
+        data: { form: {} },
+      });
+    }
   }, 120_000);
 
   afterAll(async () => {

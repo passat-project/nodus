@@ -48,8 +48,9 @@ describe('каталог прав и миграции', () => {
     const granted = grantedPermissions();
     /** Права, намеренно не выданные ни одной роли по умолчанию (#52:
      *  project.channel.post — пишут руководство проекта + точечная выдача в
-     *  матрице, Slack announcement-паттерн). Список только сокращается. */
-    const ungrantedByDesign = new Set(['project.channel.post']);
+     *  матрице, Slack announcement-паттерн; #461: конфиденциальные письма —
+     *  «никто, даже админ» В3). Список только сокращается. */
+    const ungrantedByDesign = new Set(['project.channel.post', 'correspondence.view_confidential']);
     const missing = Object.values(Permission).filter(
       (permission) => !granted.has(permission) && !ungrantedByDesign.has(permission),
     );
