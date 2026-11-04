@@ -186,6 +186,7 @@ export const automationHandlers = [
       name: type.name,
       category: type.category,
       icon: type.icon,
+      color: type.color,
     };
     task.stage = {
       id: stageDoc.id,

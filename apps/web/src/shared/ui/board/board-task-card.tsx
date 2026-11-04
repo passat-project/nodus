@@ -8,6 +8,8 @@ import { useCommentsCount } from '../../tasks/comments-live.js';
 import { PersonAvatar } from '../person-avatar.js';
 import { DeadlineChip } from '../deadline-chip.js';
 import { identityTone } from '../identity-tone.js';
+import { ProcessTypeGlyph } from '../../workflow/process-type-icon.js';
+import { stageTone } from './stage-tone.js';
 
 /** Карточка задачи канбан-доски (общая оболочка борда, второй потребитель —
  *  проектная доска): node-панель; отображаемые поля настраиваются шестерёнкой
@@ -45,18 +47,28 @@ export function BoardTaskCard({
       onPointerEnter={() => onHover?.(task)}
       onClick={(e) => onOpen(task, e.currentTarget.getBoundingClientRect())}
       className={cn(
-        'node-panel flex w-full flex-col gap-2 p-3 text-left transition-colors hover:border-input',
+        'node-panel relative flex w-full flex-col gap-2 overflow-hidden p-3 text-left transition-colors hover:border-input',
         overlay && 'cursor-grabbing border-input shadow-[0_0_12px_var(--glow)] hover:border-input',
         placeholder && 'border-dashed opacity-60 hover:border-input',
       )}
     >
+      {isVisible('type') ? (
+        /* 4px literal (как мини-бейджи): 0.125rem = 2.5px — дробная толщина
+           на полу-пиксельных позициях карточек растриризуется то в 3, то в 4
+           физических пикселя (масштаб 125%), полоса «прыгает» по толщине;
+           4px цел на 100/125/150/200% (§403, замечание владельца 04.11). */
+        <span
+          aria-hidden
+          className={cn('absolute inset-x-0 top-0 h-[4px]', stageTone[task.type.color].dot)}
+        />
+      ) : null}
       {isVisible('parent') && parentNumber !== undefined ? (
         <span className="flex items-center gap-1.5 text-label-sm font-medium tracking-wide text-muted-foreground uppercase">
           <CornerDownRight className="size-3" />
           {ui.tasks.subtaskOf} · {parentNumber}
         </span>
       ) : null}
-      {isVisible('number') || isVisible('source') ? (
+      {isVisible('number') || isVisible('source') || isVisible('type') ? (
         <span className="flex items-center justify-between gap-2">
           {isVisible('number') ? (
             <span className="font-mono text-label-sm text-muted-foreground tabular-nums">
@@ -65,12 +77,28 @@ export function BoardTaskCard({
           ) : (
             <span />
           )}
-          {isVisible('source') && task.source === 'letter' ? (
-            <Mail className="size-3.5 text-info/70" aria-label={ui.tasks.fromLetter} />
-          ) : null}
-          {isVisible('source') && task.source === 'chat_message' ? (
-            <MessageSquare className="size-3.5 text-info/70" aria-label={ui.tasks.fromChat} />
-          ) : null}
+          {/* Приметы карточки — одним кластером справа: тип (значок, название
+              по наведению) и источник. Отдельной строкой значок типа читался
+              чекбоксом-контролом и зря съедал строку; в левом верхнем углу
+              карточки он спорил с местом отметки о выполнении (§403). */}
+          <span className="flex shrink-0 items-center gap-1.5">
+            {isVisible('type') ? (
+              <span
+                role="img"
+                className="flex items-center text-muted-foreground"
+                title={task.type.name}
+                aria-label={task.type.name}
+              >
+                <ProcessTypeGlyph icon={task.type.icon} className="size-3.5 shrink-0" />
+              </span>
+            ) : null}
+            {isVisible('source') && task.source === 'letter' ? (
+              <Mail className="size-3.5 text-info/70" aria-label={ui.tasks.fromLetter} />
+            ) : null}
+            {isVisible('source') && task.source === 'chat_message' ? (
+              <MessageSquare className="size-3.5 text-info/70" aria-label={ui.tasks.fromChat} />
+            ) : null}
+          </span>
         </span>
       ) : null}
       <span className="line-clamp-2 text-sm font-medium">{task.title}</span>

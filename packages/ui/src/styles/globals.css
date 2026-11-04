@@ -94,6 +94,16 @@
   --color-danger-soft: var(--danger-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+  --color-tone-violet: var(--tone-violet);
+  --color-tone-violet-soft: var(--tone-violet-soft);
+  --color-tone-teal: var(--tone-teal);
+  --color-tone-teal-soft: var(--tone-teal-soft);
+  --color-tone-orange: var(--tone-orange);
+  --color-tone-orange-soft: var(--tone-orange-soft);
+  --color-tone-pink: var(--tone-pink);
+  --color-tone-pink-soft: var(--tone-pink-soft);
+  --color-tone-cyan: var(--tone-cyan);
+  --color-tone-cyan-soft: var(--tone-cyan-soft);
   --color-bubble-in: var(--bubble-in);
   --color-bubble-in-foreground: var(--bubble-in-foreground);
   --color-bubble-out: var(--bubble-out);
@@ -220,6 +230,18 @@
   --danger-soft: #f9e3df;
   --info: #3d6ba6;
   --info-soft: #e2eaf4;
+  /* Палитра тонов стадий/типов (#403): данные, не хром; пары «текст/чип +
+     пастель» читаются в обеих темах и не сливаются с фоном. */
+  --tone-violet: #6a4fb3;
+  --tone-violet-soft: #ece8f7;
+  --tone-teal: #16736f;
+  --tone-teal-soft: #def1ee;
+  --tone-orange: #a8541a;
+  --tone-orange-soft: #f8e8da;
+  --tone-pink: #a63c6f;
+  --tone-pink-soft: #f7e5ee;
+  --tone-cyan: #1c6f91;
+  --tone-cyan-soft: #ddeef5;
   /* Кольцо выделения сообщений (#155): светлую тему владелец одобрил в --info;
      отдельный токен — чтобы тёмная могла быть ярче (контраст на тёмных
      пузырях/ленте). */
@@ -360,6 +382,18 @@
   --danger-soft: #2c1a18;
   --info: #7a93b2;
   --info-soft: #1a2230;
+  /* Палитра тонов стадий/типов (#403): осветлённые производные, пастель —
+     глубже фона карточки, чтобы чип и тинт не пропадали на тёмной теме. */
+  --tone-violet: #b0a0f0;
+  --tone-violet-soft: #262038;
+  --tone-teal: #6fc6c2;
+  --tone-teal-soft: #142b2a;
+  --tone-orange: #e0a06a;
+  --tone-orange-soft: #2d2016;
+  --tone-pink: #e29ab9;
+  --tone-pink-soft: #2d1a24;
+  --tone-cyan: #78c2dd;
+  --tone-cyan-soft: #14262e;
   /* Кольцо выделения в dark: приглушённый --info на тёмных пузырях почти
      неразличим (репро владельца 29.09) — яркий светло-синий tdesktop-hue. */
   --selection-ring: #a6cdf3;

@@ -17,7 +17,18 @@ export const taskSystemStateSchema = z.enum(['backlog', 'active', 'paused', 'don
 export type TaskSystemState = z.infer<typeof taskSystemStateSchema>;
 
 /** Цвет стадии/типа — ключ палитры тонов темы (не hex: тема подменяет значения). */
-export const stageColorSchema = z.enum(['neutral', 'info', 'success', 'warning', 'danger']);
+export const stageColorSchema = z.enum([
+  'neutral',
+  'info',
+  'success',
+  'warning',
+  'danger',
+  'violet',
+  'teal',
+  'orange',
+  'pink',
+  'cyan',
+]);
 export type StageColor = z.infer<typeof stageColorSchema>;
 
 /** Итог статуса — только у этапа «Итог» (closed): выполнена / отменена /

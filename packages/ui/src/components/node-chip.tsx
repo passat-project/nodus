@@ -8,6 +8,11 @@ const tones = {
   warning: 'border-warning/40 text-warning',
   danger: 'border-danger/40 text-danger',
   info: 'border-info/40 text-info',
+  violet: 'border-tone-violet/40 text-tone-violet',
+  teal: 'border-tone-teal/40 text-tone-teal',
+  orange: 'border-tone-orange/40 text-tone-orange',
+  pink: 'border-tone-pink/40 text-tone-pink',
+  cyan: 'border-tone-cyan/40 text-tone-cyan',
 } as const;
 
 /** Чип статуса/значения: SANS 11px (раунд 2 #60: статусы — слова, не код;

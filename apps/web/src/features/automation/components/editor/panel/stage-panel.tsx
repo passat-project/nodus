@@ -107,7 +107,9 @@ export function StagePanel({
       </PanelField>
 
       <PanelField label={ui.automation.stageColor}>
-        <div className="flex flex-wrap gap-2">
+        {/* 10 тонов — ровными рядами по пять: при произвольном переносе
+            последний ряд оставался сиротой из двух кружков (§403). */}
+        <div className="grid w-fit grid-cols-5 gap-2">
           {stageColorOrder.map((tone: StageColor) => (
             <button
               key={tone}
