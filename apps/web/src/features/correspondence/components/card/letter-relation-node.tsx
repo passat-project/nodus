@@ -115,6 +115,7 @@ export function LetterRelationNode({
   currentId,
   collapsed,
   canManage,
+  showKind,
   onToggle,
   onNavigate,
   onAdd,
@@ -124,6 +125,8 @@ export function LetterRelationNode({
   row: LetterTreeRow;
   currentId: string;
   collapsed: boolean;
+  /** Строка выше — не родитель: вид связи надо подписать. */
+  showKind: boolean;
   canManage: boolean;
   onToggle: (key: string) => void;
   onNavigate: (id: string) => void;
@@ -136,10 +139,14 @@ export function LetterRelationNode({
   const { node, depth } = row;
   const isCurrent = node.id === currentId;
   const subject = node.subject ?? ui.letters.noSubject;
+  // Вид связи подписываем, только когда он РАЗЛИЧАЕТ: «вложено» (матрёшка —
+  // другая сущность) и «ответ» там, где строка выше — не родитель (ответ идёт
+  // после блока вложенных). В стволе подпись — шум: линия уже говорит
+  // «продолжение цепочки».
   const kind =
     node.relationKind === 'nested_in'
       ? { icon: Layers, label: ui.letters.relations.nodeNestedIn }
-      : node.relationKind === 'reply_to'
+      : node.relationKind === 'reply_to' && showKind
         ? { icon: Reply, label: ui.letters.relations.nodeReplyTo }
         : null;
   const menu: RowMenuItem[] = canManage
@@ -240,35 +247,6 @@ export function LetterRelationNode({
             ) : null}
           </span>
         </button>
-        {/* Счётчики узла — СВОЙ слот фиксированной ширины у правого края
-            плашки: «на письмо ответили N» и «в конверт вложили N» стоят
-            колонкой друг под другом у всех строк, а не плывут за подписью
-            вида связи (у корня её нет — чип уезжал влево). */}
-        {row.replies > 0 || row.nested > 0 || (collapsed && row.descendants > 0) ? (
-          <span className="flex w-11 shrink-0 flex-col items-end gap-0.5 pr-1 text-label-sm leading-none text-muted-foreground tabular-nums">
-            {row.replies > 0 ? (
-              <span
-                className="flex items-center gap-1"
-                title={ui.letters.relations.repliesCount(row.replies)}
-              >
-                <Reply aria-hidden className="size-3 shrink-0" strokeWidth={1.75} />
-                {row.replies}
-              </span>
-            ) : null}
-            {row.nested > 0 ? (
-              <span
-                className="flex items-center gap-1"
-                title={ui.letters.relations.nestedCount(row.nested)}
-              >
-                <Layers aria-hidden className="size-3 shrink-0" strokeWidth={1.75} />
-                {row.nested}
-              </span>
-            ) : null}
-            {collapsed && row.descendants > 0 ? (
-              <span className="font-mono">+{row.descendants}</span>
-            ) : null}
-          </span>
-        ) : null}
         {menu.length > 0 ? (
           <span className="mr-1 shrink-0 opacity-0 transition-opacity group-hover/node:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
             <RowMenu items={menu} />

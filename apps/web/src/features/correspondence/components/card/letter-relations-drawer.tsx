@@ -187,12 +187,13 @@ export const LetterRelationsDrawer = memo(function LetterRelationsDrawer({
         ) : (
           <>
             <div className="relative" style={{ height: rows.length * TREE_ROW_H }}>
-              {rows.map((row) => (
+              {rows.map((row, index) => (
                 <LetterRelationNode
                   key={row.key}
                   row={row}
                   currentId={currentId}
                   collapsed={collapsed.has(row.key)}
+                  showKind={rows[index - 1]?.key !== row.parentKey}
                   canManage={canManage}
                   onToggle={toggle}
                   onNavigate={onNavigate}
