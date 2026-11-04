@@ -57,6 +57,16 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri
 
+      # Avest CSP перехватывает Schannel и роняет процесс (#586,
+      # docs/gotchas/desktop.md): в оболочке TLS только через rustls.
+      - name: Нет Schannel в оболочке
+        shell: bash
+        run: |
+          cd apps/desktop/src-tauri
+          if cargo tree -e normal --prefix none | grep -E '^(native-tls|schannel) '; then
+            echo "schannel/native-tls в дереве оболочки запрещён (#586)"; exit 1
+          fi
+
       - name: Установка зависимостей
         run: pnpm install --frozen-lockfile
 
