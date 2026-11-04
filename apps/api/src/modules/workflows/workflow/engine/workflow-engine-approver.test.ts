@@ -304,7 +304,10 @@ describe('WorkflowEngine: окно перехода (#430)', () => {
 
   it('execute: выбор колонки по systemState', async () => {
     const { engine, adapter } = makeEngine();
-    await engine.execute(TX as never, 't1', 'task', USER, { systemState: 'closed' });
+    await engine.execute(TX as never, 't1', 'task', USER, {
+      systemState: 'closed',
+      outcome: 'success',
+    });
     expect(adapter.applyStage).toHaveBeenCalledWith(
       TX,
       't1',
