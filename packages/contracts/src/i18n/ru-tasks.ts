@@ -62,6 +62,11 @@ export const tasksStrings = {
   participants: 'Соисполнители',
   subtasks: 'Подзадачи',
   subtaskPlaceholder: 'Новая подзадача — Enter, чтобы создать',
+  /** Вкладки правой зоны карточки (редизайн 04.11.2026): «Чат» — постоянная. */
+  tabsLabel: 'Содержимое задачи',
+  tabChat: 'Чат',
+  closeTab: 'Закрыть вкладку',
+  openFullscreen: 'Открыть на весь экран',
   aboutTask: 'О задаче',
   history: 'История',
   favorite: 'В избранное',

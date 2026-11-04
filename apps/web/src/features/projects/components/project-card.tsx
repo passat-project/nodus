@@ -29,28 +29,22 @@ const MIN_WORK_W = uiPx(420);
  * идентичность, описание, паспорт, атрибуты) с нижним баром действий, как в
  * задачах и письмах; СПРАВА — рабочая зона с вкладками «Структура / Задачи /
  * Канал / Участники / История» и «+» (личный набор; первичная вкладка —
- * «Структура», когда в дереве есть узлы с задачами, #467; «Чат проекта»
- * появится вместе с пространством проекта, #456). Перегородка тянется с
- * памятью — полоса вкладок едет за границей левой панели. Вкладки
- * монтируются при первом показе и дальше живут скрытыми (`invisible` +
- * `inert`): прокрутка, фильтры и черновик чата не теряются при переключении.
+ * «Структура», вердикт владельца 04.11.2026; «Чат проекта» появится вместе с
+ * пространством проекта, #456). Перегородка тянется с памятью — полоса
+ * вкладок едет за границей левой панели. Вкладки монтируются при первом
+ * показе и дальше живут скрытыми (`invisible` + `inert`): прокрутка, фильтры
+ * и черновик чата не теряются при переключении.
  */
 export function ProjectCard({ projectId }: { projectId: string }) {
   const { data: project, isLoading } = useProjectDetail(projectId);
   const participant = project ? isProjectParticipant(project) : false;
   const { data: conversation } = useProjectConversation(projectId, participant);
   const channelPanel = useChatSidePanel();
-  // Дефолт вкладки (#467): узлы с задачами → «Структура», иначе «Задачи».
-  // Пока карточка грузится — «Задачи»; после загрузки дефолт доносится
-  // derive-during-render, если пользователь ещё не выбирал сам.
-  const primary = primaryTab(project?.structureSummary.hasTaskNodes ?? false);
-  const [tab, setTab] = useState<ProjectTabId>('tasks');
-  const [picked, setPicked] = useState(false);
-  const [visited, setVisited] = useState<ProjectTabId[]>(['tasks']);
-  if (!picked && project !== undefined && tab !== primary) {
-    setTab(primary);
-    setVisited([primary]);
-  }
+  // Дефолт вкладки (вердикт владельца 04.11.2026): всегда первая
+  // «Структура»; карточка не ждёт загрузки дерева, чтобы выбрать вкладку.
+  const primary = primaryTab();
+  const [tab, setTab] = useState<ProjectTabId>('structure');
+  const [visited, setVisited] = useState<ProjectTabId[]>(['structure']);
   const aboutRef = useRef<HTMLDivElement>(null);
   const split = useSplitWidth(aboutRef, {
     storeKey: 'nodus-project-card-split-v1',
@@ -60,7 +54,6 @@ export function ProjectCard({ projectId }: { projectId: string }) {
   });
 
   function activate(next: ProjectTabId) {
-    setPicked(true);
     setTab(next);
     setVisited((prev) => (prev.includes(next) ? prev : [...prev, next]));
   }
