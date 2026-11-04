@@ -30,12 +30,14 @@ function setup(
     target?: LetterDetailRow;
     existing?: { id: string; relatedLetterId: string } | null;
     parents?: Record<string, string[]>;
+    rows?: Record<string, LetterDetailRow>;
   } = {},
 ) {
   const repo = {
-    findDetailById: vi.fn(async (id: string) =>
-      id === LETTER ? row(LETTER) : (options.target ?? row(TARGET)),
-    ),
+    findDetailById: vi.fn(async (id: string) => {
+      if (options.rows?.[id]) return options.rows[id];
+      return id === LETTER ? row(LETTER) : (options.target ?? row(TARGET));
+    }),
     participants: vi.fn(async () => []),
   };
   const relations = {
@@ -103,6 +105,17 @@ describe('связи писем (#461, Р1/Р1а)', () => {
     expect(relations.linkRelation).not.toHaveBeenCalled();
     expect(relations.replaceRelation).not.toHaveBeenCalled();
     expect(eventBus.emit).not.toHaveBeenCalled();
+  });
+
+  it('существующая связь на невидимую цель — 422 not_found, без already_linked', async () => {
+    const { service } = setup({
+      existing: { id: 'r1', relatedLetterId: OTHER },
+      rows: { [OTHER]: row(OTHER, { confidential: true }) },
+    });
+    await expect(service.link(REGISTRAR, LETTER, body())).rejects.toMatchObject({
+      code: 'LETTER_RELATION_INVALID',
+      details: { reason: 'not_found' },
+    });
   });
 
   it('другая цель без replace — 422 already_linked', async () => {

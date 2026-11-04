@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ErrorCode } from '@nodus/contracts';
+import { ErrorCode, Permission } from '@nodus/contracts';
 
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { LetterFormApplier } from './letter-form.applier.js';
@@ -105,5 +105,76 @@ describe('регистрация требует основной докумен�
       .apply({} as never, row, { id: 'u', permissions: [] }, { registration: {} })
       .catch((e) => e);
     expect(error).toBeInstanceOf(DomainException);
+  });
+});
+
+describe('подсказка «ответ на» (#461, Р4): невидимое = отсутствующее', () => {
+  it('невидимая конфиденциальная подсказка даёт suggestion_mismatch, не not_found', async () => {
+    const visibleTarget = '00000000-0000-4000-8000-0000000000e2';
+    const secret = '00000000-0000-4000-8000-0000000000e3';
+    const repo = {
+      attachments: vi.fn(async () => []),
+      update: vi.fn(async () => undefined),
+      hasReplyTo: vi.fn(async () => false),
+      replyTargetById: vi.fn(async () => ({
+        id: visibleTarget,
+        direction: 'outgoing',
+        registeredAt: new Date('2026-10-01T08:00:00Z'),
+        confidential: false,
+        registrarId: null,
+        addresseeId: null,
+      })),
+      findDetailById: vi.fn(async (id: string) =>
+        id === secret
+          ? {
+              id,
+              registeredAt: new Date('2026-10-01T08:00:00Z'),
+              confidential: true,
+              registrarId: 'other',
+              addresseeId: null,
+              deletedAt: null,
+            }
+          : {
+              id,
+              registeredAt: new Date('2026-10-01T08:00:00Z'),
+              confidential: false,
+              registrarId: null,
+              addresseeId: null,
+              deletedAt: null,
+            },
+      ),
+      participants: vi.fn(async () => []),
+      linkReplyTo: vi.fn(async () => true),
+    };
+    const validator = {
+      registration: vi.fn(async () => ({
+        values: { ...registration, replyToLetterId: visibleTarget },
+        extra: { confidential: null, attachedRefs: null },
+        customFields: {},
+      })),
+    };
+    const threading = {
+      suggestionBySubject: vi.fn(async () => ({
+        id: secret,
+        regNumber: 'Исх-2026/9',
+        subject: 'Секрет',
+      })),
+    };
+    const applier = new LetterFormApplier(
+      repo as never,
+      validator as never,
+      threading as never,
+      { replace: vi.fn() } as never,
+      { validate: vi.fn(async () => []) } as never,
+    );
+    await expect(
+      applier.apply(
+        {} as never,
+        row,
+        { id: 'u', permissions: [Permission.CORRESPONDENCE_REGISTER] },
+        { registration: {} },
+      ),
+    ).rejects.toMatchObject({ details: { reason: 'suggestion_mismatch' } });
+    expect(repo.linkReplyTo).not.toHaveBeenCalled();
   });
 });

@@ -157,13 +157,12 @@ export class LetterFormApplier {
       throw relationFail('not_outgoing_registered');
     }
     const existing = await this.letters.hasReplyTo(tx, letter.id);
-    const suggestion = await this.threading.suggestionBySubject(letter.subject, today);
+    const raw = await this.threading.suggestionBySubject(letter.subject, today);
     // Невидимая регистратору подсказка (конфиденциальное исходящее вне
-    // участия) не участвует в сверке — иначе ответ различал бы её
-    // существование (`suggestion_mismatch` вместо `not_found`, #461).
-    if (suggestion && !(await this.visibleToActor(actor, suggestion.id))) {
-      throw relationFail('not_found');
-    }
+    // участия) считается ОТСУТСТВУЮЩЕЙ: ответы «подсказки нет» и «подсказка
+    // невидима» обязаны совпадать — иначе 1-битный оракул существования
+    // конфиденциального исходящего (#461, Р4).
+    const suggestion = raw && (await this.visibleToActor(actor, raw.id)) ? raw : null;
     if (existing || suggestion?.id !== replyToLetterId) {
       throw relationFail('suggestion_mismatch');
     }

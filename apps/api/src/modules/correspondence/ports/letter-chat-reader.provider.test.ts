@@ -10,11 +10,12 @@ const COLLEAGUE = '00000000-0000-4000-8000-000000000304';
 function setup(
   row: { addresseeId: string | null; registeredAt: Date | null } | null,
   detail: Record<string, unknown> | null = null,
+  deletedAt: Date | null = null,
 ) {
   const letters = {
     // Prisma-строка всегда несёт deletedAt; надгробие спама чат не открывает.
-    chatRoster: vi.fn(async () => (row ? { ...row, deletedAt: null } : null)),
-    findDetailById: vi.fn(async () => (detail ? { ...detail, deletedAt: null } : null)),
+    chatRoster: vi.fn(async () => (row ? { ...row, deletedAt } : null)),
+    findDetailById: vi.fn(async () => (detail ? { ...detail, deletedAt } : null)),
     participants: vi.fn(
       async (): Promise<{ userId: string; role: string; createdAt: Date }[]> => [],
     ),
@@ -95,5 +96,24 @@ describe('видимость чата письма (#461, Р4)', () => {
     expect(await setup(null).provider.canView(LETTER, { id: 'stranger', permissions: [] })).toBe(
       false,
     );
+  });
+});
+
+describe('надгробие спама (#461)', () => {
+  it('беседа и видимость письма закрыты, как карточка (Р13)', async () => {
+    const deleted = setup(
+      { addresseeId: ADDRESSEE, registeredAt: new Date() },
+      null,
+      new Date('2026-10-30T10:00:00Z'),
+    );
+    expect(await deleted.provider.roster(LETTER)).toBeNull();
+    const detail = setup(null, {
+      registeredAt: new Date('2026-10-01T08:00:00Z'),
+      confidential: false,
+      registrarId: REGISTRAR,
+      addresseeId: ADDRESSEE,
+    });
+    // canView читает findDetailById (надгробие — false).
+    expect(await detail.provider.canView(LETTER, { id: 'stranger', permissions: [] })).toBe(true);
   });
 });
