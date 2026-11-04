@@ -123,4 +123,4 @@ Dev-режим: адрес портала вводится на экране п�
   только при смене самой себя (скачивается тихо, ставится по решению
   пользователя, подписано).
 - Вкладки/несколько окон портала — вне MVP (инкубатор, И-021).
-- Фон log: `%APPDATA%\by.nodus.desktop\logs/`; адрес: `…/portal.json`.
+- Фон log: `%LOCALAPPDATA%\by.nodus.desktop\logs/`; адрес: `%APPDATA%\by.nodus.desktop\portal.json`.

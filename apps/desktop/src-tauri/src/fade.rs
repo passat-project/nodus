@@ -100,7 +100,6 @@ fn tick_fade(app: &AppHandle) {
     }
     if let Some(payload) = queued {
         show(app, payload);
-        return;
     } else if had_closes {
         reposition_all(app);
     }
