@@ -12,10 +12,18 @@ import { lettersKeys } from '../../../shared/api/letters-keys.js';
  */
 export function useCloseAfterRegistration(
   letter: LetterDetail | undefined,
+  letterId: string,
   closeCard: () => void,
 ): void {
   const queryClient = useQueryClient();
   const wasNew = useRef<boolean | null>(null);
+
+  // Карточка при навигации «ёлочкой» НЕ ремаунтится (replaceTopCard) —
+  // смена письма сбрасывает признак «было новым», иначе переход из «Новых»
+  // в зарегистрированное родительское письмо закрыл бы карточку.
+  useEffect(() => {
+    wasNew.current = null;
+  }, [letterId]);
 
   useEffect(() => {
     if (!letter) return;

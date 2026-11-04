@@ -112,7 +112,7 @@ export function LetterCard({ letterId }: { letterId: string }) {
   );
   const sideW = Math.max(chatW - railShrink - panelShrink - branchShrink, chatFloor);
 
-  useCloseAfterRegistration(letter, closeCard);
+  useCloseAfterRegistration(letter, letterId, closeCard);
   useEffect(() => {
     setTabsState(null);
     setPanelOpen(false);

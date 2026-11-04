@@ -282,6 +282,31 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .lettersCount;
       expect(registrarCount).toBe(employeeCount + 1);
 
+      // Плоские ссылки не оракулят (#461, Р4): видимое письмо R со связью
+      // «ответ на» конфиденциальное S не показывает чужому ни номер, ни тему.
+      const visible = await registered();
+      expect(
+        (await link(visible.id, { relatedLetterId: secret.id, kind: 'reply_to' })).status,
+      ).toBe(200);
+      const forEmployee = letterDetailSchema.parse(
+        await (await c.api(c.employee, 'GET', `/letters/${visible.id}`)).json(),
+      );
+      expect(forEmployee.replyTo).toBeNull();
+      const forRegistrar = letterDetailSchema.parse(
+        await (await c.api(c.registrar, 'GET', `/letters/${visible.id}`)).json(),
+      );
+      expect(forRegistrar.replyTo?.id).toBe(secret.id);
+      // Бейдж в списке — тот же фильтр.
+      const listForEmployee = (await (
+        await c.api(c.employee, 'GET', '/letters?box=incoming&limit=50')
+      ).json()) as { items: { id: string; replyTo: { id: string } | null }[] };
+      expect(listForEmployee.items.find((item) => item.id === visible.id)?.replyTo).toBeNull();
+      // История: запись о связи с невидимой целью молча пропускается.
+      const visibleHistory = historyPage.parse(
+        await (await c.api(c.employee, 'GET', `/letters/${visible.id}/history`)).json(),
+      );
+      expect(visibleHistory.items.some((entry) => entry.kind === 'relation_changed')).toBe(false);
+
       // Снятие флага канцелярией: письмо возвращается в общие списки, история знает.
       const open = await c.api(c.registrar, 'PATCH', `/letters/${secret.id}`, {
         body: { confidential: false },

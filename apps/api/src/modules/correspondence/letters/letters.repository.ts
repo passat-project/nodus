@@ -326,7 +326,14 @@ export class LettersRepository {
   replyTargetById(tx: TransactionClient, id: string) {
     return tx.letter.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true, direction: true, registeredAt: true },
+      select: {
+        id: true,
+        direction: true,
+        registeredAt: true,
+        confidential: true,
+        registrarId: true,
+        addresseeId: true,
+      },
     });
   }
 
@@ -423,6 +430,7 @@ export class LettersRepository {
       confidential: boolean;
       registrarId: string | null;
       addresseeId: string | null;
+      deletedAt: Date | null;
     }[]
   > {
     if (letterIds.length === 0) return Promise.resolve([]);
@@ -434,6 +442,7 @@ export class LettersRepository {
         confidential: true,
         registrarId: true,
         addresseeId: true,
+        deletedAt: true,
       },
     });
   }

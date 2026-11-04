@@ -80,7 +80,7 @@ export function useLinkLetterRelation(rootId: string) {
       if (previous) {
         queryClient.setQueryData<LetterTreeResponse>(
           treeKey,
-          withRelation(previous, vars.sourceId, treeNodeOf(vars.target), vars.kind, vars.replace),
+          withRelation(previous, vars.sourceId, treeNodeOf(vars.target), vars.kind),
         );
       }
       return { previous };

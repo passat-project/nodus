@@ -22,6 +22,7 @@ import {
   DICTIONARY_READER,
   type DictionaryReader,
 } from '../../dictionaries/ports/dictionary-reader.port.js';
+import { canViewLetter } from '../access/letter-access.js';
 import { LettersQueryService } from '../letters/letters-query.service.js';
 import { LettersRepository } from '../letters/letters.repository.js';
 import { LetterHistoryRepository } from './letter-history.repository.js';
@@ -69,6 +70,7 @@ export class LetterHistoryService {
       await Promise.all(
         page.map((row) =>
           this.toEntry(
+            user,
             row.id,
             row.type,
             row.actorId ? (actors.get(row.actorId) ?? null) : null,
@@ -86,6 +88,7 @@ export class LetterHistoryService {
   }
 
   private async toEntry(
+    user: AuthUser,
     id: string,
     type: string,
     actor: UserRef | null,
@@ -117,6 +120,18 @@ export class LetterHistoryService {
         // Связь поставлена/заменена/снята (#461, Р6): вторая сторона —
         // ссылкой (номер и тема гидратируются, как у превью).
         const relatedLetterId = String(payload.relatedLetterId ?? '');
+        // Цель связи-конфиденциальное вне участия не раскрывается (#461, Р4):
+        // запись истории молча пропускается — номер и тема цели не оракулят.
+        const target = (await this.letters.visibilityRows([relatedLetterId]))[0];
+        if (!target || target.deletedAt !== null) return null;
+        const members = target.confidential
+          ? new Set(
+              (await this.letters.participants(relatedLetterId)).map(
+                (participant) => participant.userId,
+              ),
+            )
+          : undefined;
+        if (!canViewLetter(user, target, members)) return null;
         const related = (await this.letters.refs([relatedLetterId]))[0];
         return {
           ...base,

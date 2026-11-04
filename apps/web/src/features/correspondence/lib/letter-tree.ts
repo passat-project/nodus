@@ -40,28 +40,29 @@ export function treeNodeOf(target: {
   };
 }
 
-/** Связь поставлена: узел встаёт ребёнком источника; при `replace` прежняя
- *  связь того же вида отсекается (у письма одна связь каждого вида). */
+/** Связь поставлена: в дереве дети узла — письма, у которых на него
+ *  `reply_to`/`nested_in`, поэтому ЦЕЛЬ становится родителем источника.
+ *  Источник переподчиняется под цель, цель — новый верх цепочки (её
+ *  собственные родители из строки списка неизвестны; рефетч уточнит).
+ *  Старая связь источника того же вида отпадает — у письма одна связь
+ *  каждого вида. Источника нет в дереве — оптимистично ничего не меняем. */
 export function withRelation(
   tree: LetterTreeResponse,
   sourceId: string,
-  node: LetterTreeNode,
+  target: LetterTreeNode,
   kind: LetterRelationKind,
-  replace: boolean,
 ): LetterTreeResponse {
-  const attach = (current: LetterTreeNode): LetterTreeNode => {
-    if (current.id === sourceId) {
-      const kept = replace
-        ? current.children.filter((child) => child.relationKind !== kind)
-        : current.children;
-      return {
-        ...current,
-        children: [...kept, { ...node, relationKind: kind }],
-      };
-    }
-    return { ...current, children: current.children.map(attach) };
+  const source = findTreeNode(tree.root, sourceId);
+  if (!source || target.id === sourceId) return tree;
+  return {
+    ...tree,
+    root: {
+      ...target,
+      relationKind: null,
+      relationId: null,
+      children: [{ ...source, relationKind: kind, relationId: null }],
+    },
   };
-  return { ...tree, root: attach(tree.root) };
 }
 
 /** Связь снята: узел с этим relationId уходит вместе с поддеревом. */

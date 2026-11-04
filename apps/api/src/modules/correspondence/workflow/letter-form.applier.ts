@@ -5,6 +5,7 @@ import type { Prisma } from '../../../generated/prisma/client.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import type { WorkflowFormApplied } from '../../../core/ports/workflow-entity.port.js';
+import { canViewLetter } from '../access/letter-access.js';
 import { companyDate } from '../../../core/time/company-time.js';
 import { LetterAttachedRefsRepository } from '../letters/letter-attached-refs.repository.js';
 import { LetterAttachedRefsValidator } from '../letters/letter-attached-refs.validator.js';
@@ -112,7 +113,7 @@ export class LetterFormApplier {
     if (attachedRows !== null) await this.attached.replace(tx, letter.id, attachedRows);
 
     if (values.replyToLetterId) {
-      await this.confirmReplyTo(tx, letter, values.replyToLetterId, today);
+      await this.confirmReplyTo(tx, letter, values.replyToLetterId, today, actor);
     }
     return { fields, timeEntryId: null, result: null };
   }
@@ -124,9 +125,20 @@ export class LetterFormApplier {
     letter: LetterDetailRow,
     replyToLetterId: string,
     today: string,
+    actor: { id: string; permissions: readonly string[] },
   ): Promise<void> {
     const target = await this.letters.replyTargetById(tx, replyToLetterId);
     if (!target) throw relationFail('not_found');
+    // Конфиденциальное исходящее вне участия регистратора не связывается и не
+    // подтверждается: подсказка такого письма не показывается (#461, Р4).
+    const members = target.confidential
+      ? new Set(
+          (await this.letters.participants(replyToLetterId)).map(
+            (participant) => participant.userId,
+          ),
+        )
+      : undefined;
+    if (!canViewLetter(actor, target, members)) throw relationFail('not_found');
     if (target.direction !== 'outgoing' || target.registeredAt === null) {
       throw relationFail('not_outgoing_registered');
     }

@@ -54,6 +54,12 @@ export class LetterChatReaderProvider implements LetterChatReader {
 
   async canView(letterId: string, viewer: LetterViewer): Promise<boolean> {
     const row = await this.letters.findDetailById(letterId);
-    return Boolean(row && canViewLetter(viewer, row));
+    if (!row) return false;
+    // Конфиденциальное (#461): участник обсуждения видит чат так же, как
+    // карточку, — состав читается ДО проверки (техплан Р4).
+    const participants = row.confidential
+      ? new Set((await this.letters.participants(letterId)).map((item) => item.userId))
+      : undefined;
+    return canViewLetter(viewer, row, participants);
   }
 }

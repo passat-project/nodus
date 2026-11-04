@@ -44,15 +44,21 @@ describe('дерево «ёлочки» (#461, Р2): оптимистичные 
     });
   });
 
-  it('связь встаёт ребёнком источника; замена отсекает прежнюю того же вида', () => {
-    const base = tree(node('a', [{ ...node('b'), relationKind: 'reply_to', relationId: 'r1' }]));
-    const linked = withRelation(base, 'a', treeNodeOf(listItem('c')), 'nested_in', false);
-    expect(linked.root.children.map((child) => child.id)).toEqual(['b', 'c']);
-    expect(linked.root.children[1]?.relationKind).toBe('nested_in');
+  it('связь переподчиняет ИСТОЧНИК под цель: цель — новый верх цепочки', () => {
+    // Дерево: A ← B (B отвечает на A). Связываем B → C: C становится
+    // родителем B, A из отображаемой цепочки уходит (у B одна связь вида).
+    const base = tree(
+      node('a', [{ ...node('b', [node('d')]), relationKind: 'reply_to', relationId: 'r1' }]),
+    );
+    const linked = withRelation(base, 'b', treeNodeOf(listItem('c')), 'reply_to');
+    expect(linked.root.id).toBe('c');
+    expect(linked.root.children.map((child) => child.id)).toEqual(['b']);
+    expect(linked.root.children[0]?.relationKind).toBe('reply_to');
+    // Дети источника сохраняются под ним.
+    expect(linked.root.children[0]?.children.map((child) => child.id)).toEqual(['d']);
 
-    const replaced = withRelation(base, 'a', treeNodeOf(listItem('c')), 'reply_to', true);
-    expect(replaced.root.children.map((child) => child.id)).toEqual(['c']);
-    expect(replaced.root.children[0]?.relationKind).toBe('reply_to');
+    // Источника нет в дереве — оптимистично ничего не меняем (рефетч уточнит).
+    expect(withRelation(base, 'zzz', treeNodeOf(listItem('c')), 'nested_in')).toEqual(base);
   });
 
   it('снятие убирает узел с поддеревом, соседей не трогает', () => {

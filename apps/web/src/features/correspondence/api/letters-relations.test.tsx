@@ -129,9 +129,11 @@ describe('связи писем — оптимистичны (#461, I4)', () => 
         replace: false,
       });
     });
+    // Цель становится родителем источника: новый верх — цель, источник — её ребёнок.
     const optimistic = client.getQueryData<LetterTreeResponse>(lettersKeys.tree(ROOT));
-    expect(optimistic?.root.children.map((child) => child.id)).toEqual([CHILD, TARGET]);
-    expect(optimistic?.root.children[1]?.relationKind).toBe('nested_in');
+    expect(optimistic?.root.id).toBe(TARGET);
+    expect(optimistic?.root.children.map((child) => child.id)).toEqual([ROOT]);
+    expect(optimistic?.root.children[0]?.relationKind).toBe('nested_in');
 
     await act(async () => gate.resolve(json(200, detail(ROOT))));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
