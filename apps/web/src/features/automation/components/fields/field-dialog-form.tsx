@@ -51,6 +51,7 @@ export function FieldDialogForm({
   definition,
   shared,
   disabled,
+  optionsReadOnly,
   errors,
   issues,
   currencyFallback,
@@ -62,6 +63,8 @@ export function FieldDialogForm({
   definition: CustomFieldDefinition | null;
   shared: boolean;
   disabled: boolean;
+  /** Без `dictionary.manage` варианты списка — только чтение (#491). */
+  optionsReadOnly: boolean;
   errors: { name?: string; options?: string };
   issues: readonly DraftIssue[];
   currencyFallback: string | null;
@@ -187,11 +190,17 @@ export function FieldDialogForm({
           {shared ? (
             <p className="text-xs text-muted-foreground">{ui.customFields.dialog.optionsShared}</p>
           ) : null}
+          {optionsReadOnly ? (
+            <p className="text-xs text-muted-foreground">
+              {ui.customFields.dialog.dictionaryReadOnly}
+            </p>
+          ) : null}
           <FieldOptionsEditor
             options={draft.options}
             defaultIds={draft.defaultOptionIds}
             multiple={type === 'multienum'}
             disabled={disabled}
+            optionsReadOnly={optionsReadOnly}
             onChange={(options) => onChange({ options })}
             onDefaultChange={(defaultOptionIds) => onChange({ defaultOptionIds })}
           />

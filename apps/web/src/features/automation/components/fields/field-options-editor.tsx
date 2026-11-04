@@ -36,17 +36,23 @@ export function FieldOptionsEditor({
   defaultIds,
   multiple,
   disabled,
+  optionsReadOnly,
   onChange,
   onDefaultChange,
 }: {
   options: readonly OptionDraft[];
   defaultIds: readonly string[];
   multiple: boolean;
+  /** Нет права `custom_field.manage` — окно целиком только для чтения. */
   disabled: boolean;
+  /** Нет права `dictionary.manage` — сами варианты менять нельзя, но
+   *  умолчание атрибута (не справочника) остаётся доступным (#491). */
+  optionsReadOnly: boolean;
   onChange: (options: OptionDraft[]) => void;
   onDefaultChange: (ids: string[]) => void;
 }) {
   const [draft, setDraft] = useState('');
+  const locked = disabled || optionsReadOnly;
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -90,7 +96,8 @@ export function FieldOptionsEditor({
               <OptionRow
                 key={option.id}
                 option={option}
-                disabled={disabled}
+                locked={locked}
+                defaultDisabled={disabled}
                 isDefault={defaultIds.includes(option.id)}
                 onRename={(name) =>
                   onChange(
@@ -110,7 +117,7 @@ export function FieldOptionsEditor({
         </SortableContext>
       </DndContext>
 
-      {!disabled ? (
+      {!locked ? (
         <div className="flex items-center gap-1.5 pl-6">
           <Input
             value={draft}
@@ -144,14 +151,18 @@ export function FieldOptionsEditor({
 
 function OptionRow({
   option,
-  disabled,
+  locked,
+  defaultDisabled,
   isDefault,
   onRename,
   onToggleDefault,
   onDelete,
 }: {
   option: OptionDraft;
-  disabled: boolean;
+  /** Переименование/удаление/перетаскивание — операция со справочником. */
+  locked: boolean;
+  /** Отметка «По умолчанию» — настройка атрибута, не справочника. */
+  defaultDisabled: boolean;
   isDefault: boolean;
   onRename: (name: string) => void;
   onToggleDefault: () => void;
@@ -159,7 +170,7 @@ function OptionRow({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: option.id,
-    disabled,
+    disabled: locked,
   });
 
   return (
@@ -173,7 +184,7 @@ function OptionRow({
     >
       <button
         type="button"
-        disabled={disabled}
+        disabled={locked}
         aria-label={ui.customFields.dialog.optionReorder}
         title={ui.customFields.dialog.optionReorder}
         className="flex w-4.5 shrink-0 cursor-grab touch-none justify-center text-muted-foreground opacity-50 transition-opacity group-hover/option:opacity-100 focus-visible:opacity-100 active:cursor-grabbing disabled:invisible"
@@ -185,7 +196,7 @@ function OptionRow({
       <Input
         value={option.name}
         maxLength={120}
-        disabled={disabled}
+        disabled={locked}
         aria-label={ui.customFields.dialog.options}
         aria-invalid={option.name.trim().length === 0 || undefined}
         onChange={(e) => onRename(e.target.value)}
@@ -194,7 +205,7 @@ function OptionRow({
       <span className="flex w-[4.5rem] shrink-0 justify-center">
         <Checkbox
           checked={isDefault}
-          disabled={disabled}
+          disabled={defaultDisabled}
           aria-label={ui.customFields.dialog.optionDefault}
           onCheckedChange={onToggleDefault}
         />
@@ -202,7 +213,7 @@ function OptionRow({
       <button
         type="button"
         onClick={onDelete}
-        disabled={disabled}
+        disabled={locked}
         aria-label={ui.customFields.dialog.optionDelete}
         title={ui.customFields.dialog.optionDelete}
         className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:invisible"

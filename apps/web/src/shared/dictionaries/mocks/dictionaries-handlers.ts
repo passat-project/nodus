@@ -12,10 +12,12 @@ import {
   createDictionaryItemBodySchema,
   ErrorCode,
   PAGINATION_MAX_LIMIT,
+  Permission,
   reorderDictionaryItemsBodySchema,
   updateDictionaryItemBodySchema,
 } from '@nodus/contracts';
 
+import { useAuthStore } from '../../auth-store.js';
 import {
   demoDictionaries,
   demoDictionaryItems,
@@ -31,6 +33,16 @@ import { demoSubtasks, demoTasks } from '../../mocks/data/tasks.js';
 
 function error(code: string, message: string, status: number) {
   return HttpResponse.json({ code, message }, { status });
+}
+
+/** Мок повторяет серверную проверку `dictionary.manage` (#491): без права
+ *  создание справочника и правка вариантов — 403, а не тихий успех. */
+function canManageDictionaries(): boolean {
+  return (useAuthStore.getState().user?.permissions ?? []).includes(Permission.DICTIONARY_MANAGE);
+}
+
+function forbidden() {
+  return error(ErrorCode.FORBIDDEN, 'Forbidden', 403);
 }
 
 function itemsOfDictionary(dictionaryId: string, includeArchived: boolean): DictionaryItem[] {
@@ -62,6 +74,7 @@ export const dictionariesHandlers = [
   }),
 
   http.post('/api/v1/dictionaries', async ({ request }) => {
+    if (!canManageDictionaries()) return forbidden();
     const parsed = createDictionaryBodySchema.safeParse(await request.json());
     if (!parsed.success) return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 422);
     const body: CreateDictionaryBody = parsed.data;
@@ -88,6 +101,7 @@ export const dictionariesHandlers = [
   }),
 
   http.patch('/api/v1/dictionaries/:code', async ({ params, request }) => {
+    if (!canManageDictionaries()) return forbidden();
     const dictionary = dictionaryByCode(String(params.code));
     if (!dictionary) return error(ErrorCode.NOT_FOUND, 'Dictionary not found', 404);
     if (dictionary.isSystem) {
@@ -109,6 +123,7 @@ export const dictionariesHandlers = [
   }),
 
   http.post('/api/v1/dictionaries/:code/items', async ({ params, request }) => {
+    if (!canManageDictionaries()) return forbidden();
     const dictionary = dictionaryByCode(String(params.code));
     if (!dictionary) return error(ErrorCode.NOT_FOUND, 'Dictionary not found', 404);
     const parsed = createDictionaryItemBodySchema.safeParse(await request.json());
@@ -138,6 +153,7 @@ export const dictionariesHandlers = [
 
   // Буквальный 'order' раньше ':id' (gotcha msw-query).
   http.put('/api/v1/dictionaries/:code/items/order', async ({ params, request }) => {
+    if (!canManageDictionaries()) return forbidden();
     const dictionary = dictionaryByCode(String(params.code));
     if (!dictionary) return error(ErrorCode.NOT_FOUND, 'Dictionary not found', 404);
     const parsed = reorderDictionaryItemsBodySchema.safeParse(await request.json());
@@ -157,6 +173,7 @@ export const dictionariesHandlers = [
   }),
 
   http.patch('/api/v1/dictionaries/:code/items/:id', async ({ params, request }) => {
+    if (!canManageDictionaries()) return forbidden();
     const item = itemById(String(params.id));
     if (!item) return error(ErrorCode.NOT_FOUND, 'Item not found', 404);
     const parsed = updateDictionaryItemBodySchema.safeParse(await request.json());
@@ -173,6 +190,7 @@ export const dictionariesHandlers = [
   // 25.10.2026: у вариантов атрибутов архива нет). Значения с ним читаются
   // пустыми — терпимое чтение; мок чистит ссылки у демо-задач, как сервер.
   http.delete('/api/v1/dictionaries/:code/items/:id', ({ params }) => {
+    if (!canManageDictionaries()) return forbidden();
     const dictionary = dictionaryByCode(String(params.code));
     const item = itemById(String(params.id));
     if (!dictionary || !item || item.dictionaryId !== dictionary.id) {

@@ -13,6 +13,7 @@ import {
 } from '@nodus/ui/components/dialog';
 
 import { ApiError } from '../../../../shared/api-client.js';
+import { useCanManageDictionaries } from '../../../../shared/custom-fields/use-can-manage-dictionaries.js';
 import {
   fetchDictionaryItems,
   useDictionaryItems,
@@ -106,6 +107,10 @@ export function FieldDialog({
   const [pending, setPending] = useState(false);
 
   const readOnly = !canManage;
+  // Списки живут справочниками: без `dictionary.manage` сервер откажет и в
+  // создании, и в правке вариантов (#491). Сервер — истина (I8), здесь —
+  // честный UX: тип недоступен, варианты только для чтения.
+  const canManageDictionaries = useCanManageDictionaries();
   const keptIds = new Set(draft?.options.map((option) => option.id));
   const removedOptions = (items.data ?? []).filter((item) => !keptIds.has(item.id)).length;
   const shared =
@@ -134,6 +139,16 @@ export function FieldDialog({
 
   async function save() {
     if (!draft || !canSave) return;
+    if (!canManageDictionaries && isListFamily(draft.family)) {
+      // Создание списка без права невозможно; правка существующего списка
+      // допустима, только если варианты не менялись (иначе сервер откажет).
+      const optionsChanged =
+        JSON.stringify(draft.options) !== JSON.stringify(initial?.options ?? []);
+      if (!definition || optionsChanged) {
+        setErrors({ form: ui.customFields.dialog.dictionaryReadOnly });
+        return;
+      }
+    }
     if (nameTakenLocally(draft.name)) {
       setErrors({ name: errorMessages[ErrorCode.CUSTOM_FIELD_NAME_TAKEN] });
       return;
@@ -168,9 +183,15 @@ export function FieldDialog({
       }
       let defaultValue = scalarDefault(draft);
       if (code && isListFamily(draft.family)) {
-        const ids = await commitOptionDrafts(code, items.data ?? [], draft.options);
-        defaultValue = listDefault(draft, type, ids);
-        invalidateDictionaries(queryClient);
+        if (canManageDictionaries) {
+          const ids = await commitOptionDrafts(code, items.data ?? [], draft.options);
+          defaultValue = listDefault(draft, type, ids);
+          invalidateDictionaries(queryClient);
+        } else {
+          // Без права варианты только для чтения: id уже серверные —
+          // умолчание сохраняем, иначе PATCH молча сотрёт его (#491).
+          defaultValue = listDefault(draft, type, new Map());
+        }
       }
       const body = patchBody(definition, draft, defaultValue);
       if (body) await updateField.mutateAsync({ id: definition.id, body });
@@ -221,6 +242,7 @@ export function FieldDialog({
               value={draft?.family ?? null}
               locked={definition !== null}
               disabled={readOnly || pending}
+              canManageDictionaries={canManageDictionaries}
               onChange={(family) =>
                 setDraft((current) => {
                   const next = withFamily(current ?? emptyDraft, family);
@@ -240,6 +262,7 @@ export function FieldDialog({
               definition={definition}
               shared={shared}
               disabled={readOnly || pending}
+              optionsReadOnly={!canManageDictionaries}
               errors={errors}
               issues={issues}
               currencyFallback={currencyFallback}
