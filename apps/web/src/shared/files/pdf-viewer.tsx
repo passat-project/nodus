@@ -9,6 +9,8 @@ import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Spinner } from '@nodus/ui/components/spinner';
 
+import { ViewerFullscreenButton } from './viewer-fullscreen-button.js';
+
 /** Тёмный показ PDF (тема портала = тёмный документ, вердикт владельца
  *  28.10): канвас страницы инвертируется CSS-правилом темы в globals.css —
  *  shared не тянет app (направление слоёв). */
@@ -37,6 +39,7 @@ export function PdfViewer({
   fileName,
   fit,
   onFailed,
+  onFullscreen,
 }: {
   url: string;
   fileName: string;
@@ -44,6 +47,8 @@ export function PdfViewer({
   /** Документ не открылся (битый файл, 404): хост решает, чем заменить
    *  тупик «Не удалось открыть документ» (например, карточкой скачивания). */
   onFailed?: () => void;
+  /** «На весь экран» — в панели зума вложения. */
+  onFullscreen?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Колбэк в ref: инлайн-стрелка хоста не должна перезапускать загрузку PDF
@@ -116,6 +121,7 @@ export function PdfViewer({
           <Button variant="ghost" size="icon-sm" onClick={zoomIn} aria-label={ui.files.zoomIn}>
             <Plus />
           </Button>
+          {onFullscreen ? <ViewerFullscreenButton onClick={onFullscreen} /> : null}
         </div>
       </div>
       <div ref={containerRef} className="min-h-0 flex-1 overflow-auto bg-muted/40 px-4 py-4">

@@ -221,7 +221,17 @@ export function TaskCard({ taskId }: { taskId: string }) {
                   <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-port/60 opacity-0 transition-opacity group-hover:opacity-100" />
                 </div>
               ) : null}
-              <TaskCardDataPanel task={task} layout={layout} onOpenSubtask={navigateInCard} />
+              <TaskCardDataPanel
+                task={task}
+                layout={layout}
+                onOpenSubtask={navigateInCard}
+                showBranch={showBranch}
+                branchOpen={branchOpen}
+                onToggleBranch={() => {
+                  setBranchMounted(true);
+                  setBranchOpen((v) => !v);
+                }}
+              />
 
               {/* Ручка ресайза правой зоны: невидимый оверлей ПОВЕРХ структурной
                 границы (border-r зоны) — hit-area 12px центрирована на линии,
@@ -260,16 +270,10 @@ export function TaskCard({ taskId }: { taskId: string }) {
                 task={task}
                 tabs={tabs}
                 conversation={conversation}
-                branchOpen={branchOpen}
                 aboutOpen={aboutOpen}
-                showBranch={showBranch}
                 showAbout={showChat}
                 onActivate={activateTab}
                 onClose={closeFile}
-                onToggleBranch={() => {
-                  setBranchMounted(true);
-                  setBranchOpen((v) => !v);
-                }}
                 onToggleAbout={() => {
                   setAboutMounted(true);
                   setAboutOpen((v) => !v);

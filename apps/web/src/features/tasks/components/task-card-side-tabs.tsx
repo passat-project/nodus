@@ -1,4 +1,4 @@
-import { Maximize2, MessageSquare, PanelRight, Waypoints, X } from 'lucide-react';
+import { MessageSquare, PanelRight, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ConversationListItem, TaskDetail } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -9,15 +9,16 @@ import { FileTypeIcon } from '../../../shared/files/file-type-icon.js';
 import { useViewerStore } from '../../../shared/files/viewer-store.js';
 import { TaskCardMenu } from './task-card-menu.js';
 import { TaskDiscussion } from './task-discussion.js';
-import { fileIdOf, fileTabId, type TaskTabId, type TaskTabsState } from '../lib/task-tabs.js';
+import { fileTabId, type TaskTabId, type TaskTabsState } from '../lib/task-tabs.js';
 
 /**
  * Правая зона карточки задачи (редизайн 04.11.2026): полоса вкладок на
  * верхнем уровне — как в карточке проекта (h-10, иконка + подпись, активная
- * `border-port`). «Чат» — постоянная вкладка по умолчанию; вложения —
- * закрываемые вкладки, открытые просмотрщиком ONLYOFFICE (`FileViewerBody`),
- * с действием «Открыть на весь экран» (общая модалка). Утилиты прежней
- * полосы цепочки (ветка, меню, «О задаче») — у правого края полосы.
+ * `border-port`, фон карточки, а не тёмная зона чата). «Чат» — постоянная
+ * вкладка по умолчанию; вложения — закрываемые вкладки, открытые
+ * просмотрщиком ONLYOFFICE (`FileViewerBody`); «Открыть на весь экран» —
+ * ВНУТРИ вкладки-файла, у зума вложения (вердикт владельца 04.11.2026), а не
+ * на общей полосе. Меню карточки и «О задаче» — у правого края полосы.
  * Содержимое вкладки монтируется при первом показе и живёт скрытым
  * (`invisible` + `inert`): лента, страница и масштаб документа не теряются.
  */
@@ -25,36 +26,28 @@ export function TaskCardSideTabs({
   task,
   tabs,
   conversation,
-  branchOpen,
   aboutOpen,
-  showBranch,
   showAbout,
   onActivate,
   onClose,
-  onToggleBranch,
   onToggleAbout,
 }: {
   task: TaskDetail;
   tabs: TaskTabsState;
   /** Беседа задачи — счётчик непрочитанного на «Чате». */
   conversation?: ConversationListItem;
-  branchOpen: boolean;
   aboutOpen: boolean;
-  /** Скрыты и подзадачи, и связи — переключателя навигатора нет (#432, Р7). */
-  showBranch: boolean;
   /** Скрыт чат — нет тоггла панели «О задаче» (Р7). */
   showAbout: boolean;
   onActivate: (tab: TaskTabId) => void;
   onClose: (fileId: string) => void;
-  onToggleBranch: () => void;
   onToggleAbout: () => void;
 }) {
   const openFullscreen = useViewerStore((s) => s.open);
-  const activeFile = tabs.files.find((file) => file.fileId === fileIdOf(tabs.active)) ?? null;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      <div className="flex h-10 shrink-0 items-center border-b border-border">
+      <div className="flex h-10 shrink-0 items-center border-b border-border bg-card">
         <div
           role="tablist"
           aria-label={ui.tasks.tabsLabel}
@@ -80,21 +73,6 @@ export function TaskCardSideTabs({
           ))}
         </div>
         <div className="flex h-10 shrink-0 items-center gap-1 pr-2">
-          {showBranch ? (
-            <UtilityButton
-              label={ui.tasks.branch}
-              active={branchOpen}
-              onClick={onToggleBranch}
-              icon={<Waypoints className="size-4" strokeWidth={1.75} />}
-            />
-          ) : null}
-          {activeFile ? (
-            <UtilityButton
-              label={ui.tasks.openFullscreen}
-              onClick={() => openFullscreen(activeFile)}
-              icon={<Maximize2 className="size-4" strokeWidth={1.75} />}
-            />
-          ) : null}
           <TaskCardMenu task={task} />
           {showAbout ? (
             <UtilityButton
@@ -112,7 +90,7 @@ export function TaskCardSideTabs({
         </TaskTabPanel>
         {tabs.files.map((file) => (
           <TaskTabPanel key={file.fileId} active={tabs.active === fileTabId(file.fileId)}>
-            <FileViewerBody target={file} fit="width" />
+            <FileViewerBody target={file} fit="width" onFullscreen={() => openFullscreen(file)} />
           </TaskTabPanel>
         ))}
       </div>

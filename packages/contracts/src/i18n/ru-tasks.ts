@@ -66,7 +66,6 @@ export const tasksStrings = {
   tabsLabel: 'Содержимое задачи',
   tabChat: 'Чат',
   closeTab: 'Закрыть вкладку',
-  openFullscreen: 'Открыть на весь экран',
   aboutTask: 'О задаче',
   history: 'История',
   favorite: 'В избранное',
