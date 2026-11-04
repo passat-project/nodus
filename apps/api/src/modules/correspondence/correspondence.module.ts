@@ -7,6 +7,7 @@ import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.mo
 import { DictionariesPortsModule } from '../dictionaries/dictionaries-ports.module.js';
 import { WorkflowsPortsModule } from '../workflows/workflows-ports.module.js';
 import { LetterFileAccess } from './access/letter-file-access.js';
+import { LetterFieldValuesCleanupHandler } from './events/letter-field-values-cleanup.handler.js';
 import { LetterHistoryRepository } from './history/letter-history.repository.js';
 import { LetterHistoryService } from './history/letter-history.service.js';
 import { LetterDtoMapper } from './letters/letter-dto.mapper.js';
@@ -60,6 +61,8 @@ import { LetterWorkflowAdapter } from './workflow/letter-workflow.adapter.js';
     { provide: USER_PROFILE_READER, useClass: UserProfileProvider },
     // Репозитории — единственная точка доступа к таблицам модуля (patterns.md).
     LettersRepository,
+    // Уборка значений удалённого атрибута (#582): событие custom_field.definition_changed.
+    LetterFieldValuesCleanupHandler,
     LetterFileAccess,
     LetterHistoryRepository,
     LetterDtoMapper,
