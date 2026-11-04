@@ -206,7 +206,10 @@ export function matchesChoice(
 ): boolean {
   if ('transitionId' in choice) return transition.id === choice.transitionId;
   const target = effectiveTargetId(transition, facts, stages, ctx);
-  if ('stageId' in choice) return target === choice.stageId;
+  if ('stageId' in choice) {
+    if (target === choice.stageId) return true;
+    return potentialTargetId(transition, facts, stages) === choice.stageId;
+  }
   const stage = stageOf(target);
   if (stage.systemState === choice.systemState && (stage.outcome ?? null) === choice.outcome) {
     return true;

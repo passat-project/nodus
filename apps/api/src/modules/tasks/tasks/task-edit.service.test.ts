@@ -130,4 +130,15 @@ describe('TaskEditService.movePersonal (#402)', () => {
     );
     expect(placementsRepo.move).not.toHaveBeenCalled();
   });
+
+  it('stageId DnD: переход ушёл не в целевую стадию — NOT_ALLOWED', async () => {
+    const { service, engine } = setup();
+    engine.execute.mockResolvedValueOnce({
+      stage: { id: 's3', systemState: 'closed', outcome: 'success' },
+      recordId: 'r',
+    } as never);
+    await expect(service.update(USER, 't1', { stageId: 's2', index: 0 })).rejects.toMatchObject({
+      code: 'WORKFLOW_TRANSITION_NOT_ALLOWED',
+    });
+  });
 });

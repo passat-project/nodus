@@ -185,7 +185,15 @@ export class TaskEditService {
   ): Promise<void> {
     const currentStageId = await this.repo.stageIdOf(tx, row.id);
     if (currentStageId !== stageId) {
-      await this.engine.execute(tx, row.id, 'task', user, { stageId });
+      const execution = await this.engine.execute(tx, row.id, 'task', user, { stageId });
+      if (execution.stage.id !== stageId) {
+        const current = await this.catalog.findLiveStage(currentStageId);
+        throw new DomainException(
+          ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED,
+          'Transition not allowed',
+          { ...(current ? { fromStageName: current.name } : {}) },
+        );
+      }
     } else if (!canEdit) {
       throw DomainException.forbidden('Reorder not allowed');
     }

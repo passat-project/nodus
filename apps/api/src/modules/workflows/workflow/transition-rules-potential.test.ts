@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { WorkflowPostFunction } from '@nodus/contracts';
 
 import {
+  matchesChoice,
   parseRules,
   potentialTargetId,
   type StageDef,
@@ -52,6 +53,16 @@ describe('potentialTargetId: DnD в колонку (#402/#430)', () => {
     expect(
       potentialTargetId(complete, { acceptRequired: false, creatorIsAssignee: false }, stages),
     ).toBe(stages[2]!.id);
+    expect(
+      matchesChoice(
+        complete,
+        { stageId: stages[2]!.id },
+        { acceptRequired: false, creatorIsAssignee: false } as never,
+        stages,
+        { isActorApprover: () => false },
+        (id) => stages.find((s) => s.id === id)!,
+      ),
+    ).toBe(true);
   });
 
   it('creator_is_assignee без совпадения оставляет базовую цель', () => {
