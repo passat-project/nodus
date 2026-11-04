@@ -218,10 +218,20 @@ export class TaskEditService {
       (current.systemState !== column.systemState ||
         (current.outcome ?? null) !== (column.outcome ?? null))
     ) {
-      await this.engine.execute(tx, row.id, 'task', user, {
+      const execution = await this.engine.execute(tx, row.id, 'task', user, {
         systemState: column.systemState,
         outcome: column.outcome,
       });
+      if (
+        execution.stage.systemState !== column.systemState ||
+        (execution.stage.outcome ?? null) !== (column.outcome ?? null)
+      ) {
+        throw new DomainException(
+          ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED,
+          'Transition not allowed',
+          { fromStageName: current.name },
+        );
+      }
     }
     const sortOrder = await this.placementsRepo.keyAt(tx, user.id, stageId, index ?? 0, row.id);
     await this.placementsRepo.move(tx, { taskId: row.id, userId: user.id, stageId, sortOrder });

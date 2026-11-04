@@ -169,6 +169,54 @@ export function effectiveTargetId(
   return transition.toStageId;
 }
 
+/** Потенциальная цель перехода без проверки акторного пропуска: нужна DnD,
+ *  чтобы показать причину гейта, а не «перехода нет» (#402/#430). */
+export function potentialTargetId(
+  transition: TransitionDef,
+  facts: Pick<WorkflowGateFacts, 'acceptRequired' | 'creatorIsAssignee'>,
+  stages: readonly StageDef[],
+): string {
+  for (const pf of transition.rules.postFunctions) {
+    if (pf.kind === 'route_if') {
+      if (pf.when === 'creator_is_assignee' && !facts.creatorIsAssignee) continue;
+      const target = stages.find((s) => s.id === pf.toStageId && !s.archivedAt);
+      if (target) return target.id;
+    }
+    if (pf.kind === 'route_if_accept_required' && facts.acceptRequired) {
+      const target = stages.find((s) => s.code === pf.stageCode && !s.archivedAt);
+      if (target) return target.id;
+    }
+  }
+  return transition.toStageId;
+}
+
+/** Совпадение перехода с выбором: id кнопки, id стадии или системный этап+итог.
+ *  Для DnD в колонку учитывается и потенциальная цель — чтобы вернуть причину
+ *  гейта, а не «перехода нет». */
+export function matchesChoice(
+  transition: TransitionDef,
+  choice:
+    | { transitionId: string }
+    | { stageId: string }
+    | { systemState: string; outcome: string | null },
+  facts: WorkflowGateFacts,
+  stages: readonly StageDef[],
+  ctx: TargetContext,
+  stageOf: (id: string) => { systemState: string; outcome?: string | null },
+): boolean {
+  if ('transitionId' in choice) return transition.id === choice.transitionId;
+  const target = effectiveTargetId(transition, facts, stages, ctx);
+  if ('stageId' in choice) return target === choice.stageId;
+  const stage = stageOf(target);
+  if (stage.systemState === choice.systemState && (stage.outcome ?? null) === choice.outcome) {
+    return true;
+  }
+  const potential = stageOf(potentialTargetId(transition, facts, stages));
+  return (
+    potential.systemState === choice.systemState && (potential.outcome ?? null) === choice.outcome
+  );
+}
+
 /** Живая стадия по id (архивная — как отсутствующая). */
 export function liveStage(stages: readonly StageDef[], id: string): StageDef | undefined {
   return stages.find((s) => s.id === id && !s.archivedAt);

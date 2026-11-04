@@ -25,6 +25,7 @@ import { NumberSeriesService } from '../../numbering/number-series.service.js';
 import {
   effectiveTargetId,
   evaluateValidators,
+  matchesChoice,
   outgoingTransitions,
   passesConditions,
   type TargetContext,
@@ -271,13 +272,9 @@ export class WorkflowEngine implements WorkflowEnginePort {
     workflow: LoadedWorkflow,
     ctx: TargetContext,
   ): boolean {
-    if ('transitionId' in choice) return t.id === choice.transitionId;
-    const target = effectiveTargetId(t, subject.facts, workflow.stages, ctx);
-    if ('stageId' in choice) return target === choice.stageId;
-    const stage = this.stage(workflow, target);
-    if (stage.systemState !== choice.systemState) return false;
-    // Итог колонки (#402): «Завершённые» не подменяются «Отменой».
-    return (stage.outcome ?? null) === choice.outcome;
+    return matchesChoice(t, choice, subject.facts, workflow.stages, ctx, (id) =>
+      this.stage(workflow, id),
+    );
   }
 
   private options(

@@ -242,11 +242,17 @@ export class TasksService {
           const execution = await this.engine.execute(tx, task.id, 'task', user, requested);
           finalStage = execution.stage;
         }
-        if (
-          personalColumn &&
-          personalColumn.systemState === finalStage.systemState &&
-          (personalColumn.outcome ?? null) === (finalStage.outcome ?? null)
-        ) {
+        if (personalColumn) {
+          if (
+            personalColumn.systemState !== finalStage.systemState ||
+            (personalColumn.outcome ?? null) !== (finalStage.outcome ?? null)
+          ) {
+            throw new DomainException(
+              ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED,
+              'Transition not allowed',
+              { fromStageName: initial.name },
+            );
+          }
           await this.placeInColumn(tx, task.id, user.id, personalColumn.id);
         }
         await this.eventBus.emit(

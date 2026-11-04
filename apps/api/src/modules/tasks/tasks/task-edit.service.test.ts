@@ -16,7 +16,12 @@ const ROW = {
 };
 
 function setup(opts: { placementStage?: string } = {}) {
-  const engine = { execute: vi.fn(async () => ({ stage: { id: 's2' }, recordId: 'r' })) };
+  const engine = {
+    execute: vi.fn(async () => ({
+      stage: { id: 's2', systemState: 'active', outcome: null },
+      recordId: 'r',
+    })),
+  };
   const boards = {
     findColumn: vi.fn(async () => ({ id: 'p2', systemState: 'active', outcome: null })),
   };
@@ -78,11 +83,33 @@ describe('TaskEditService.movePersonal (#402)', () => {
       systemState: 'closed',
       outcome: 'cancelled',
     } as never);
+    engine.execute.mockResolvedValueOnce({
+      stage: { id: 's2', systemState: 'closed', outcome: 'success' },
+      recordId: 'r',
+    } as never);
     await service.update(USER, 't1', { personalStageId: 'p2', index: 0 });
     expect(engine.execute).toHaveBeenCalledWith(TX, 't1', 'task', USER, {
       systemState: 'closed',
       outcome: 'success',
     });
+  });
+
+  it('переход ушёл не в ту колонку — NOT_ALLOWED без размещения', async () => {
+    const { service, boards, catalog, placementsRepo } = setup({ placementStage: 'p1' });
+    boards.findColumn.mockResolvedValue({
+      id: 'p2',
+      systemState: 'closed',
+      outcome: 'success',
+    } as never);
+    catalog.findLiveStage.mockResolvedValue({
+      id: 's1',
+      systemState: 'closed',
+      outcome: 'cancelled',
+    } as never);
+    await expect(
+      service.update(USER, 't1', { personalStageId: 'p2', index: 0 }),
+    ).rejects.toMatchObject({ code: 'WORKFLOW_TRANSITION_NOT_ALLOWED' });
+    expect(placementsRepo.move).not.toHaveBeenCalled();
   });
 
   it('отказ движка (409) пробрасывается, размещение не двигается', async () => {
