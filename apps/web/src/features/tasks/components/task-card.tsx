@@ -4,6 +4,8 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { useReplaceTopCard } from '../../../app/shell/use-card-stack.js';
 import { useRailShrink } from '../../../app/shell/right-rail.js';
+import { useTaskConversation } from '../../../shared/chat/chat-queries.js';
+import { ViewerHostProvider } from '../../../shared/files/viewer-host.js';
 import {
   useChatWidth,
   MIN_CHAT_WITH_PANEL,
@@ -15,17 +17,9 @@ import { useReadEntityNotifications } from '../../../shared/api/read-entity-noti
 import { useTaskDetail } from '../api/tasks-api.js';
 import { TaskAboutDrawer } from './task-about-drawer.js';
 import { TaskBranchDrawer } from './task-branch-drawer.js';
-import { TaskCardChainBar } from './task-card-chain-bar.js';
+import { TaskCardDataPanel } from './task-card-data-panel.js';
+import { TaskCardSideTabs } from './task-card-side-tabs.js';
 import { TaskCardSkeleton } from './task-card-skeleton.js';
-import { TaskChecklist } from './task-checklist.js';
-import { TaskDescription } from './task-description.js';
-import { TaskResultSection } from './task-result.js';
-import { TaskSubtasks } from './task-subtasks.js';
-import { TaskDiscussion } from './task-discussion.js';
-import { TaskTitle } from './task-title.js';
-import { TaskCustomFields } from './task-custom-fields.js';
-import { TaskFields } from './task-fields.js';
-import { TaskActionBar } from './task-stage-controls.js';
 import {
   MIN_TASK_MAIN_W,
   SHRINK_ORDER,
@@ -34,27 +28,31 @@ import {
 } from '../lib/task-card-layout.js';
 import { useBranchWidth } from '../lib/use-branch-width.js';
 import { useTaskCardLayout } from '../lib/task-card-type-layout.js';
+import { useTaskTabs } from '../lib/use-task-tabs.js';
 
-/** Ширина панели «О задаче»: на неё же сужается чат по общему канону буфера
- *  (ниже — пол чата, дальше двигается левая зона); панель полновысотная и
- *  занимает верхний бар, геометрия Битрикс24 15.09.2026. */
+/** Ширина панели «О задаче»: на неё же сужается правая зона по общему канону
+ *  буфера (ниже — пол, дальше двигается левая зона); панель полновысотная,
+ *  её шапка h-10 продолжает полосу вкладок правой зоны (редизайн 04.11.2026). */
 const ABOUT_W = uiPx(360);
 
 /**
- * Карточка задачи (универсальный слайдер-слой): шапка — доменная цепочка
- * происхождения (Письмо → Резолюция → Поручение → Задача; само-узел — только
- * «ТИП · №», БЕЗ повтора названия — оно один раз в главном заголовке) и
- * кнопки панелей «Ветка»/«О задаче»; слева — название (в панели данных над
- * описанием), описание, доска полей, подзадачи и чек-лист + замоноличенный
- * нижний бар действий; справа —
- * постоянная колонка обсуждения; «О задаче» — вталкивающая колонка справа.
- * Полоса цепочки — `task-card-chain-bar.tsx`; здесь — раскладка зон и канон
- * «чат — буфер сужений».
+ * Карточка задачи (универсальный слайдер-слой; редизайн 04.11.2026): слева —
+ * панель данных на всю высоту карточки (название — в хроме слайдера, в теле
+ * не дублируется: описание, поля, атрибуты, чек-лист, подзадачи, результат +
+ * замоноличенный нижний бар действий); справа — рабочая зона с полосой вкладок
+ * на верхнем уровне: постоянный «Чат» (обсуждение задачи — обычная беседа
+ * мессенджера) и закрываемые вкладки вложений (ONLYOFFICE, фулскрин — общей
+ * модалкой). Утилиты прежней полосы цепочки — у правого края полосы вкладок;
+ * «О задаче» — вталкивающая колонка справа. Доменная цепочка (граф связей)
+ * пока не показывается — отдельного верхнего бара нет.
+ * Раскладка зон и канон «чат — буфер сужений» — `task-card-layout.ts`.
  */
 export function TaskCard({ taskId }: { taskId: string }) {
   const { data: task, isLoading, error } = useTaskDetail(taskId);
   // Открыл задачу — её уведомления прочитаны (#252: «Требуют внимания» не вечные).
   useReadEntityNotifications('task', taskId);
+  // Беседа задачи — одна на карточку: счётчик «Чата» и панель «О задаче».
+  const { data: conversation } = useTaskConversation(taskId);
   const [aboutOpen, setAboutOpen] = useState(false);
   // Панель «О задаче» монтируется раз и остаётся: колонка анимируется
   // 0↔360px (плавный пуш), состояние (избранное, скролл) не теряется.
@@ -63,6 +61,8 @@ export function TaskCard({ taskId }: { taskId: string }) {
   // Навигатор ветки монтируется раз и остаётся: колонка сетки анимируется
   // 0↔300px (плавный пуш контента), состояние панели не теряется.
   const [branchMounted, setBranchMounted] = useState(false);
+  // Вкладки правой зоны: «Чат» по умолчанию + вложения.
+  const { tabs, openFile, closeFile, activateTab } = useTaskTabs(taskId);
   const replaceTopCard = useReplaceTopCard();
   // Сессия навигации ветки (режим «Навигация», вердикт владельца 2026-09-11):
   // корень — СТАРТОВАЯ задача карточки (неизменен — карта дерева стабильна);
@@ -148,178 +148,153 @@ export function TaskCard({ taskId }: { taskId: string }) {
   return (
     // Панель «О задаче» — ПОЛНОВЫСОТНЫЙ сиблинг всей карточки (геометрия
     // Битрикс24, вердикт владельца 15.09.2026): занимает верхнюю полосу
-    // карточки тоже, её шапка продолжает бар, тоггл уезжает влево.
-    <div className="flex h-full min-w-0">
-      <div className="flex h-full min-w-0 flex-1 flex-col">
-        {/* Полоса цепочки: бордюр — структура (с первого кадра роста), контент — fade */}
-        <TaskCardChainBar
-          task={task}
-          branchOpen={branchOpen}
-          aboutOpen={aboutOpen}
-          showBranch={showBranch}
-          showAbout={showChat}
-          onToggleBranch={() => {
-            setBranchMounted(true);
-            setBranchOpen((v) => !v);
-          }}
-          onToggleAbout={() => {
-            setAboutMounted(true);
-            setAboutOpen((v) => !v);
-          }}
-        />
-
-        {/* Ряд «навигатор | данные задачи | чат» (#365): хватает места — центр
-          забирает остаток (канон буфера сужений); не хватает — CSS сам ужимает
-          навигатор, затем чат до пола (SHRINK_ORDER); минимумы колонок —
-          rowMinWidthsCss (центр ≥ MIN_TASK_MAIN_W, пока ряд вмещает). Без
-          замеров и setState на кадр; drag перегородок — императивно в rAF без
-          transition (gotchas). min-width — тем же темпом, что ширина. */}
-        <div ref={rowRef} className="relative flex min-h-0 flex-1">
-          <div
-            ref={branchRef}
-            className={cn(
-              'min-h-0 overflow-hidden',
-              !resizing && 'transition-[width,min-width] duration-200 ease-out',
-            )}
-            style={{
-              width: branchColumnW,
-              minWidth: rowMins.branch,
-              flexShrink: SHRINK_ORDER.branch,
-            }}
-          >
-            {branchMounted ? (
-              <TaskBranchDrawer
-                rootId={rootId}
-                currentId={taskId}
-                canBack={history.length > 0}
-                onBack={navigateBack}
-                onNavigate={navigateInCard}
-                onClose={closeBranch}
+    // карточки тоже, её шапка продолжает полосу вкладок, тоггл уезжает влево.
+    // Вся карточка — хост просмотра вложений: файл из чата/витрины/результата
+    // открывается вкладкой правой зоны, а не модалкой поверх.
+    <ViewerHostProvider open={openFile}>
+      <div className="flex h-full min-w-0">
+        <div className="flex h-full min-w-0 flex-1 flex-col">
+          {/* Ряд «навигатор | данные задачи | вкладки» (#365): хватает места —
+            центр забирает остаток (канон буфера сужений); не хватает — CSS сам
+            ужимает навигатор, затем правую зону до пола (SHRINK_ORDER);
+            минимумы колонок — rowMinWidthsCss (центр ≥ MIN_TASK_MAIN_W, пока
+            ряд вмещает). Без замеров и setState на кадр; drag перегородок —
+            императивно в rAF без transition (gotchas). min-width — тем же
+            темпом, что ширина. */}
+          <div ref={rowRef} className="relative flex min-h-0 flex-1">
+            <div
+              ref={branchRef}
+              className={cn(
+                'min-h-0 overflow-hidden',
+                !resizing && 'transition-[width,min-width] duration-200 ease-out',
+              )}
+              style={{
+                width: branchColumnW,
+                minWidth: rowMins.branch,
+                flexShrink: SHRINK_ORDER.branch,
+              }}
+            >
+              {branchMounted ? (
+                <TaskBranchDrawer
+                  rootId={rootId}
+                  currentId={taskId}
+                  canBack={history.length > 0}
+                  onBack={navigateBack}
+                  onNavigate={navigateInCard}
+                  onClose={closeBranch}
+                />
+              ) : null}
+            </div>
+            {/* Левая зона: начинается от ВЕРХА карточки (полосы цепочки нет),
+              скроллится только контент; нижний бар действий замоноличен (не
+              двигается скроллом — модель Битрикса). border-r — СТРУКТУРНАЯ
+              вертикальная граница с правой зоной: горизонтальные линии бара
+              действий и композера упираются ровно в неё (вердикт владельца о
+              несходящихся линиях). Ручка ресайза — оверлей поверх границы
+              (внутри этой зоны, не съедает трек).
+              @container — сетка полей перестраивается от ширины зоны (ресайз). */}
+            <div
+              className={cn(
+                'relative flex min-h-0 flex-col border-r border-border @container',
+                !resizing && 'transition-[min-width] duration-200 ease-out',
+              )}
+              style={{
+                flex: `1 ${SHRINK_ORDER.main} ${MIN_TASK_MAIN_W}px`,
+                minWidth: rowMins.main,
+              }}
+            >
+              {/* Перегородка навигатора ветки (#365): оверлей поверх его границы
+                (border-r панели = левый край этой зоны), механика ручки чата;
+                двойной клик — дефолтная ширина. */}
+              {branchOpen ? (
+                <div
+                  onPointerDown={(e) =>
+                    branch.onDividerDown(e, { floor: chatFloor, widthFor: chatWidthFor })
+                  }
+                  onDoubleClick={branch.onDividerReset}
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label={ui.common.resizePanel}
+                  title={ui.common.resizePanel}
+                  className="group absolute top-0 left-0 z-10 h-full w-3 -translate-x-1/2 cursor-col-resize"
+                >
+                  <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-port/60 opacity-0 transition-opacity group-hover:opacity-100" />
+                </div>
+              ) : null}
+              <TaskCardDataPanel
+                task={task}
+                layout={layout}
+                onOpenSubtask={navigateInCard}
+                showBranch={showBranch}
+                branchOpen={branchOpen}
+                onToggleBranch={() => {
+                  setBranchMounted(true);
+                  setBranchOpen((v) => !v);
+                }}
               />
-            ) : null}
-          </div>
-          {/* Левая зона: скроллится только контент; нижний бар действий
-            замоноличен (не двигается скроллом — модель Битрикса).
-            border-r — СТРУКТУРНАЯ вертикальная граница с чатом: горизонтальные
-            линии бара действий и композера упираются ровно в неё (вердикт
-            владельца о несходящихся линиях). Ручка ресайза — оверлей поверх
-            границы (внутри этой зоны, не съедает трек).
-            @container — сетка полей перестраивается от ширины зоны (ресайз чата) */}
-          <div
-            className={cn(
-              'relative flex min-h-0 flex-col border-r border-border @container',
-              !resizing && 'transition-[min-width] duration-200 ease-out',
-            )}
-            style={{ flex: `1 ${SHRINK_ORDER.main} ${MIN_TASK_MAIN_W}px`, minWidth: rowMins.main }}
-          >
-            {/* Перегородка навигатора ветки (#365): оверлей поверх его границы
-              (border-r панели = левый край этой зоны), механика ручки чата;
-              двойной клик — дефолтная ширина. */}
-            {branchOpen ? (
+
+              {/* Ручка ресайза правой зоны: невидимый оверлей ПОВЕРХ структурной
+                границы (border-r зоны) — hit-area 12px центрирована на линии,
+                трека в сетке нет, линии зон сходятся в одну вертикаль */}
               <div
-                onPointerDown={(e) =>
-                  branch.onDividerDown(e, { floor: chatFloor, widthFor: chatWidthFor })
-                }
-                onDoubleClick={branch.onDividerReset}
+                onPointerDown={onDividerDown}
                 role="separator"
                 aria-orientation="vertical"
                 aria-label={ui.common.resizePanel}
                 title={ui.common.resizePanel}
-                className="group absolute top-0 left-0 z-10 h-full w-3 -translate-x-1/2 cursor-col-resize"
+                className="group absolute top-0 right-0 z-10 h-full w-3 translate-x-1/2 cursor-col-resize"
               >
                 <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-port/60 opacity-0 transition-opacity group-hover:opacity-100" />
               </div>
-            ) : null}
-            <div className="content-fade min-h-0 flex-1 overflow-y-auto p-6">
-              {/* Колонка контента — max-w-4xl, ОДНА вертикаль с сеткой полей
-                (#311, вердикт «огромные широкие пункты на широком экране»):
-                описание, чек-лист, подзадачи и результат не растягиваются
-                на всю зону. Название — в хроме слайдера (вердикт владельца),
-                в теле не дублируется: тело начинается с описания. Секции
-                разделяются отступами, без висячих линий-сепараторов. */}
-              <div className="mx-auto max-w-4xl pb-4">
-                <div className="mb-4 text-lg font-semibold">
-                  <TaskTitle taskId={taskId} />
-                </div>
-                {layout.blockVisible('description') ? <TaskDescription task={task} /> : null}
-                <TaskFields task={task} layout={layout} onOpenSubtask={navigateInCard} />
-                {/* Поля процесса (#431) — сразу после системных полей: тот же
-                    реестр-грамматика, своя секция с настройкой. */}
-                <TaskCustomFields task={task} />
-                {/* Чек-лист — сразу после полей, ДО подзадач (вердикт
-                  владельца 15.09.2026: «чек-листам — важное место»). */}
-                {layout.blockVisible('checklist') ? <TaskChecklist task={task} /> : null}
-                {layout.blockVisible('subtasks') ? (
-                  <TaskSubtasks task={task} onOpen={navigateInCard} />
-                ) : null}
-                {layout.blockVisible('result') ? <TaskResultSection task={task} /> : null}
-              </div>
             </div>
 
-            {/* Замоноличенный нижний бар: главные кнопки движения/завершения
-              всегда под рукой, не уезжают со скроллом (модель Битрикса).
-              Высота h-16 = высоте композера чата: их верхние линии образуют
-              ОДНУ горизонталь через границу зон (вердикт владельца) */}
-            <div className="flex h-16 shrink-0 items-center border-t border-border px-5">
-              <TaskActionBar
-                task={task}
-                showTime={layout.blockVisible('time')}
-                onOpenSubtask={navigateInCard}
-              />
-            </div>
-
-            {/* Ручка ресайза чата: невидимый оверлей ПОВЕРХ структурной
-              границы (border-r зоны) — hit-area 12px центрирована на линии,
-              трека в сетке нет, линии зон сходятся в одну вертикаль */}
+            {/* Правая зона — вкладки «Чат» (постоянная) и вложения. Тёмный фон
+              зоны — структура (виден с первого кадра роста, НЕ появляется
+              вместе с контентом — иначе читается как смена цвета в середине
+              раскрытия). БУФЕР СУЖЕНИЙ (issue #63): рельса/ветка/«О задаче»
+              сужают ЭТУ колонку (chatColumnW, те же 200мс ease-out, что у
+              источника сужения) — левая зона и разделитель стоят на месте;
+              после упора в минимум (MIN_CHAT_W, при открытой панели —
+              MIN_CHAT_WITH_PANEL) — порядок уступок ряда. */}
             <div
-              onPointerDown={onDividerDown}
-              role="separator"
-              aria-orientation="vertical"
-              aria-label={ui.common.resizePanel}
-              title={ui.common.resizePanel}
-              className="group absolute top-0 right-0 z-10 h-full w-3 translate-x-1/2 cursor-col-resize"
+              ref={chatRef}
+              className={cn(
+                'min-h-0 overflow-hidden',
+                // transition — ТОЛЬКО для программного toggle панелей;
+                // во время ручного drag — снят, ширина идёт императивно (gotchas)
+                !resizing && 'transition-[width,min-width] duration-200 ease-out',
+              )}
+              style={{ width: chatColumnW, minWidth: chatFloor, flexShrink: SHRINK_ORDER.chat }}
             >
-              <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-port/60 opacity-0 transition-opacity group-hover:opacity-100" />
-            </div>
-          </div>
-
-          {/* Зона чата: тёмный фон — структура (виден с первого кадра роста,
-            НЕ появляется вместе с контентом — иначе читается как смена цвета
-            в середине раскрытия); fade — только содержимое обсуждения.
-            БУФЕР СУЖЕНИЙ (issue #63): рельса/ветка/«О задаче» сужают ЭТУ
-            колонку (chatColumnW, те же 200мс ease-out, что у источника
-            сужения) — левая зона и разделитель стоят на месте; после упора
-            чата в его минимум (MIN_CHAT_W, при открытой панели —
-            MIN_CHAT_WITH_PANEL) — порядок уступок ряда. */}
-          <div
-            ref={chatRef}
-            className={cn(
-              'min-h-0 overflow-hidden',
-              // transition — ТОЛЬКО для программного toggle панелей;
-              // во время ручного drag — снят, ширина идёт императивно (gotchas)
-              !resizing && 'transition-[width,min-width] duration-200 ease-out',
-            )}
-            style={{ width: chatColumnW, minWidth: chatFloor, flexShrink: SHRINK_ORDER.chat }}
-          >
-            <div className="h-full w-full bg-background">
-              <div className="content-fade h-full">
-                <TaskDiscussion taskId={taskId} />
-              </div>
+              <TaskCardSideTabs
+                task={task}
+                tabs={tabs}
+                conversation={conversation}
+                aboutOpen={aboutOpen}
+                showAbout={showChat}
+                onActivate={activateTab}
+                onClose={closeFile}
+                onToggleAbout={() => {
+                  setAboutMounted(true);
+                  setAboutOpen((v) => !v);
+                }}
+              />
             </div>
           </div>
         </div>
-      </div>
-      {/* Панель «О задаче» — полновысотная вталкивающая колонка справа (не
+        {/* Панель «О задаче» — полновысотная вталкивающая колонка справа (не
           оверлей: чат и кнопка отправки остаются доступны — вердикт владельца;
-          занимает верхний бар карточки, шапка панели продолжает бар). */}
-      <div
-        className={cn(
-          'h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-out',
-          aboutOpen ? 'w-[22.5rem]' : 'w-0',
-        )}
-      >
-        {aboutMounted ? <TaskAboutDrawer task={task} onClose={closeAbout} /> : null}
+          занимает верхнюю полосу карточки, шапка панели продолжает полосу
+          вкладок). */}
+        <div
+          className={cn(
+            'h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-out',
+            aboutOpen ? 'w-[22.5rem]' : 'w-0',
+          )}
+        >
+          {aboutMounted ? <TaskAboutDrawer task={task} onClose={closeAbout} /> : null}
+        </div>
       </div>
-    </div>
+    </ViewerHostProvider>
   );
 }

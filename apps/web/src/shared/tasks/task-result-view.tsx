@@ -5,7 +5,7 @@ import { ui } from '@nodus/contracts';
 import { LinkifiedText } from '../chat/message-text.js';
 import { useMessagesLookup } from '../chat/message-lookup-api.js';
 import { toViewerTarget } from '../chat/vault-list.js';
-import { useViewerStore } from '../files/viewer-store.js';
+import { useViewerHost } from '../files/viewer-host.js';
 import { plural } from '../lib/format.js';
 
 /** Данные ревизии итога для показа (общая форма DTO задачи и блока сдачи). */
@@ -73,11 +73,12 @@ export function TaskResultView({
 }
 
 function ResultAttachment({ attachment }: { attachment: MessageAttachment }) {
+  const viewer = useViewerHost();
   const isImage = attachment.kind === 'image';
   return (
     <button
       type="button"
-      onClick={() => useViewerStore.getState().open(toViewerTarget(attachment))}
+      onClick={() => viewer.open(toViewerTarget(attachment))}
       className="group flex max-w-44 min-w-0 items-center gap-2 rounded-lg border border-border bg-background/60 p-1.5 text-left transition-colors hover:bg-accent"
       title={attachment.name}
     >

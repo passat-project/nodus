@@ -14,8 +14,8 @@ import { subscribeMessengerThread, takeMessengerThread } from '../../shared/chat
 import { useProjectDetail } from '../../features/projects/api/projects-api.js';
 import { ProjectCard } from '../../features/projects/components/project-card.js';
 import { ProjectTitle } from '../../features/projects/components/project-title.js';
-import { TaskBreadcrumbs } from '../../features/tasks/components/task-breadcrumbs.js';
 import { TaskCard } from '../../features/tasks/components/task-card.js';
+import { TaskTitle } from '../../features/tasks/components/task-title.js';
 import type { CardRef } from './card-stack.js';
 import { SliderPanel, type SourceRect } from './slider-panel.js';
 import { useShellStore } from './shell-store.js';
@@ -45,7 +45,7 @@ interface EntryProps {
 function TaskEntry({ id, source, onClose, dormant }: EntryProps) {
   return (
     <SliderPanel
-      title={<TaskBreadcrumbs taskId={id} />}
+      title={<TaskTitle taskId={id} />}
       onClose={onClose}
       sourceRect={source}
       fadeContent={false}

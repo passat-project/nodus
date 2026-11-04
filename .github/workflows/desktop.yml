@@ -52,10 +52,30 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          # Шаг «Rust fmt и clippy» (#606) требует этих компонентов: action
+          # ставит --profile minimal и не должен зависеть от состава образа.
+          components: clippy, rustfmt
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri
+
+      # Avest CSP перехватывает Schannel и роняет процесс (#586,
+      # docs/gotchas/desktop.md): в оболочке TLS только через rustls.
+      - name: Нет Schannel в оболочке
+        shell: bash
+        run: |
+          cd apps/desktop/src-tauri
+          tree=$(cargo tree -e normal --prefix none)
+          if echo "$tree" | grep -E '^(native-tls|schannel) '; then
+            echo "schannel/native-tls в дереве оболочки запрещён (#586)"; exit 1
+          fi
+          # Провайдер ставится в прямой rustls: две версии = reqwest без
+          # провайдера = паника в Client::build.
+          if [ "$(echo "$tree" | grep -oE '^rustls v[^ ]+' | sort -u | wc -l)" -ne 1 ]; then
+            echo "$tree" | grep -oE '^rustls v[^ ]+' | sort -u
+            echo "в дереве должна быть ровно одна версия rustls (#586)"; exit 1
+          fi
 
       - name: Установка зависимостей
         run: pnpm install --frozen-lockfile
@@ -64,6 +84,14 @@ jobs:
         run: |
           pnpm --filter @nodus/contracts build
           pnpm --filter @nodus/desktop build
+
+      # После мини-UI: generate_context! требует собранный frontendDist (#606).
+      - name: Rust fmt и clippy
+        shell: bash
+        run: |
+          cd apps/desktop/src-tauri
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
 
       - name: Сборка установщиков
         shell: bash

@@ -25,9 +25,14 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 semver = "1"
 log = "0.4"
-# Конфиг-эндпоинт портала до навигации (экран подключения). native-tls =
-# schannel: доверяет хранилищу сертификатов Windows, включая внутренний CA.
-reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls"] }
+# Конфиг-эндпоинт портала до навигации (экран подключения). rustls + ring —
+# тот же стек, что у tauri-plugin-updater; проверка цепочки — platform-verifier
+# по хранилищу Windows (внутренний CA доверяется). НЕ native-tls/Schannel:
+# Avest CSP перехватывает InitializeSecurityContextW через AppInit_DLLs и
+# роняет процесс на первом рукопожатии (#586, docs/gotchas/desktop.md).
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider"] }
+# Держать на той же линии rustls, что у reqwest/updater (CI проверяет одну версию).
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 # Детектор активности пользователя (#254, модель Telegram): WH_KEYBOARD_LL +
 # WH_MOUSE_LL — клики и клавиши БЕЗ движения мыши (GetLastInputInfo движение

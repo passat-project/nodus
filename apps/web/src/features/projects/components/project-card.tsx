@@ -3,7 +3,7 @@ import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useProjectConversation } from '../../../shared/chat/chat-queries.js';
-import { useChatSidePanel } from '../../../shared/chat/chat-side-panel.js';
+import { ChatSidePanel, useChatSidePanel } from '../../../shared/chat/chat-side-panel.js';
 import { useSplitWidth } from '../../../shared/ui/use-split-width.js';
 import { uiPx } from '../../../shared/ui/ui-scale.js';
 import { useProjectDetail } from '../api/projects-api.js';
@@ -29,28 +29,22 @@ const MIN_WORK_W = uiPx(420);
  * идентичность, описание, паспорт, атрибуты) с нижним баром действий, как в
  * задачах и письмах; СПРАВА — рабочая зона с вкладками «Структура / Задачи /
  * Канал / Участники / История» и «+» (личный набор; первичная вкладка —
- * «Структура», когда в дереве есть узлы с задачами, #467; «Чат проекта»
- * появится вместе с пространством проекта, #456). Перегородка тянется с
- * памятью — полоса вкладок едет за границей левой панели. Вкладки
- * монтируются при первом показе и дальше живут скрытыми (`invisible` +
- * `inert`): прокрутка, фильтры и черновик чата не теряются при переключении.
+ * «Структура», вердикт владельца 04.11.2026; «Чат проекта» появится вместе с
+ * пространством проекта, #456). Перегородка тянется с памятью — полоса
+ * вкладок едет за границей левой панели. Вкладки монтируются при первом
+ * показе и дальше живут скрытыми (`invisible` + `inert`): прокрутка, фильтры
+ * и черновик чата не теряются при переключении.
  */
 export function ProjectCard({ projectId }: { projectId: string }) {
   const { data: project, isLoading } = useProjectDetail(projectId);
   const participant = project ? isProjectParticipant(project) : false;
   const { data: conversation } = useProjectConversation(projectId, participant);
   const channelPanel = useChatSidePanel();
-  // Дефолт вкладки (#467): узлы с задачами → «Структура», иначе «Задачи».
-  // Пока карточка грузится — «Задачи»; после загрузки дефолт доносится
-  // derive-during-render, если пользователь ещё не выбирал сам.
-  const primary = primaryTab(project?.structureSummary.hasTaskNodes ?? false);
-  const [tab, setTab] = useState<ProjectTabId>('tasks');
-  const [picked, setPicked] = useState(false);
-  const [visited, setVisited] = useState<ProjectTabId[]>(['tasks']);
-  if (!picked && project !== undefined && tab !== primary) {
-    setTab(primary);
-    setVisited([primary]);
-  }
+  // Дефолт вкладки (вердикт владельца 04.11.2026): всегда первая
+  // «Структура»; карточка не ждёт загрузки дерева, чтобы выбрать вкладку.
+  const primary = primaryTab();
+  const [tab, setTab] = useState<ProjectTabId>('structure');
+  const [visited, setVisited] = useState<ProjectTabId[]>(['structure']);
   const aboutRef = useRef<HTMLDivElement>(null);
   const split = useSplitWidth(aboutRef, {
     storeKey: 'nodus-project-card-split-v1',
@@ -60,7 +54,6 @@ export function ProjectCard({ projectId }: { projectId: string }) {
   });
 
   function activate(next: ProjectTabId) {
-    setPicked(true);
     setTab(next);
     setVisited((prev) => (prev.includes(next) ? prev : [...prev, next]));
   }
@@ -88,9 +81,7 @@ export function ProjectCard({ projectId }: { projectId: string }) {
           )}
           style={{ ...split.style, flexShrink: 1 }}
         >
-          <div className="content-fade min-h-0 flex-1 overflow-hidden">
-            <ProjectAboutPanel project={project} />
-          </div>
+          <ProjectAboutPanel project={project} />
           <div className="flex h-16 shrink-0 items-center border-t border-border px-5">
             <ProjectActionBar project={project} />
           </div>
@@ -137,11 +128,7 @@ export function ProjectCard({ projectId }: { projectId: string }) {
             ) : null}
             {visited.includes('channel') ? (
               <TabPanel active={tab === 'channel'}>
-                <ProjectChannelTab
-                  project={project}
-                  conversationId={conversationId}
-                  panel={channelPanel}
-                />
+                <ProjectChannelTab project={project} conversationId={conversationId} />
               </TabPanel>
             ) : null}
             {visited.includes('members') ? (
@@ -156,6 +143,21 @@ export function ProjectCard({ projectId }: { projectId: string }) {
             ) : null}
           </div>
         </div>
+        {/* Панель «О канале» — ПОЛНОВЫСОТНАЯ колонка-сиблинг карточки, как в
+            задаче и письме: её шапка h-10 продолжает полосу вкладок, панель
+            занимает ширину за счёт рабочей зоны (вкладки не «уезжают» под
+            топбар — при нехватке места полоса вкладок скроллится оверлеем).
+            Открыта только на вкладке «Канал». */}
+        {conversation ? (
+          <ChatSidePanel
+            conversationId={conversation.id}
+            conversation={conversation}
+            open={channelPanel.open && tab === 'channel'}
+            onClose={channelPanel.close}
+            title={ui.chat.aboutProject}
+            headerClass="h-10"
+          />
+        ) : null}
       </div>
     </div>
   );
