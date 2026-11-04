@@ -16,6 +16,26 @@ const STAGE = {
   isInitial: true,
   archivedAt: null,
 };
+const ACTIVE = {
+  id: 's-active',
+  name: 'В работе',
+  color: 'success',
+  sortOrder: 1,
+  systemState: 'active',
+  outcome: null,
+  isInitial: false,
+  archivedAt: null,
+};
+const CLOSED_INITIAL = {
+  id: 's-closed',
+  name: 'Завершена',
+  color: 'info',
+  sortOrder: 2,
+  systemState: 'closed',
+  outcome: 'success',
+  isInitial: true,
+  archivedAt: null,
+};
 
 function setup() {
   const repo = {
@@ -79,6 +99,9 @@ function setup() {
     taskDiscussion: vi.fn(),
   };
   const eventBus = { emit: vi.fn() };
+  const engine = {
+    execute: vi.fn(async () => ({ stage: ACTIVE, recordId: 'rec-1' })),
+  };
   const customFields = {
     prepareCreate: vi
       .fn()
@@ -93,6 +116,7 @@ function setup() {
     placementsRepo as never,
     boards as never,
     catalog as never,
+    engine as never,
     placements as never,
     query as never,
     mapper as never,
@@ -106,7 +130,7 @@ function setup() {
     customFields as never,
     new TaskCreatePolicy(profiles as never),
   );
-  return { service, repo, placements, placementsRepo, txRunner, eventBus, catalog };
+  return { service, repo, placements, placementsRepo, txRunner, eventBus, catalog, boards, engine };
 }
 
 describe('TasksService', () => {
@@ -134,7 +158,7 @@ describe('TasksService', () => {
   });
 
   it('обычное создание: ключ начала колонки, стартовый чек-лист, размещения', async () => {
-    const { service, repo, placements, placementsRepo } = setup();
+    const { service, repo, placements, placementsRepo, engine } = setup();
     await service.create(USER, {
       title: 'Т',
       checklist: ['a'],
@@ -150,6 +174,66 @@ describe('TasksService', () => {
       stageId: 'p-new',
       sortOrder: 'k0',
     });
+    expect(engine.execute).not.toHaveBeenCalled();
+  });
+
+  it('создание в колонке «В работе» — переход в той же транзакции (#402)', async () => {
+    const { service, repo, boards, catalog, engine, placementsRepo } = setup();
+    catalog.liveStages.mockResolvedValue([STAGE, ACTIVE]);
+    boards.findColumn.mockResolvedValue({ id: 'p-active', systemState: 'active', outcome: null });
+    await service.create(USER, { title: 'Т', personalStageId: 'p-active' } as never);
+    // Строка рождается в начальной стадии, цель колонки — переходом.
+    expect(repo.create.mock.calls[0]![0]).toMatchObject({
+      stageId: 's-new',
+      systemState: 'backlog',
+    });
+    expect(engine.execute).toHaveBeenCalledWith(TX, 't1', 'task', USER, {
+      systemState: 'active',
+      outcome: null,
+    });
+    expect(placementsRepo.move).toHaveBeenCalledWith(TX, {
+      taskId: 't1',
+      userId: 'alice',
+      stageId: 'p-active',
+      sortOrder: 'k0',
+    });
+  });
+
+  it('закрытая «начальная» стадия не создаёт закрытую задачу — берётся открытая (#402)', async () => {
+    const { service, repo, catalog } = setup();
+    catalog.liveStages.mockResolvedValue([CLOSED_INITIAL, STAGE, ACTIVE]);
+    await service.create(USER, { title: 'Т' } as never);
+    expect(repo.create.mock.calls[0]![0]).toMatchObject({
+      stageId: 's-new',
+      systemState: 'backlog',
+    });
+  });
+
+  it('колонка без стадии маршрута — 409, задача не создаётся (#402)', async () => {
+    const { service, repo, boards } = setup();
+    boards.findColumn.mockResolvedValue({ id: 'p-paused', systemState: 'paused', outcome: null });
+    await expect(
+      service.create(USER, { title: 'Т', personalStageId: 'p-paused' } as never),
+    ).rejects.toMatchObject({ code: 'WORKFLOW_TRANSITION_NOT_ALLOWED' });
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('явный stageId передаётся движку как стадия, даже если состояние совпадает (#402)', async () => {
+    const { service, repo, catalog, engine } = setup();
+    const secondBacklog = {
+      id: 's-new-2',
+      name: 'Вторая',
+      color: 'neutral',
+      sortOrder: 1,
+      systemState: 'backlog',
+      outcome: null,
+      isInitial: false,
+      archivedAt: null,
+    };
+    catalog.liveStages.mockResolvedValue([STAGE, secondBacklog]);
+    await service.create(USER, { title: 'Т', stageId: 's-new-2' } as never);
+    expect(repo.create.mock.calls[0]![0]).toMatchObject({ stageId: 's-new' });
+    expect(engine.execute).toHaveBeenCalledWith(TX, 't1', 'task', USER, { stageId: 's-new-2' });
   });
 
   it('тип резолвится портом «Процессов» с актором: явный выбор — с проверкой создания', async () => {

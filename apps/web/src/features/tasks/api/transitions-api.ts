@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
 import type {
-  ErrorCode,
   ExecuteTransitionBody,
   ExecuteTransitionResult,
   TaskDetail,
@@ -10,39 +9,15 @@ import type {
   WorkflowTransition,
   TransitionBlockReason,
 } from '@nodus/contracts';
-import { errorMessages, ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api, ApiError } from '../../../shared/api-client.js';
 import { markFreshFromMutation } from '../../../shared/api/fresh-from-mutation.js';
 import { projectsKeys } from '../../../shared/api/projects-list.js';
 import { mapTaskInPages, tasksKeys } from '../../../shared/api/tasks-keys.js';
+import { transitionErrorText } from '../../../shared/tasks/transition-error.js';
 
-/** Причины блокировки гейтов одной строкой (подпись кнопки и тост). */
-export function gateReasonsText(reasons: readonly TransitionBlockReason[]): string {
-  return reasons.map((r) => ui.tasks.gate[r.kind]).join('; ');
-}
-
-/** Текст ошибки переноса/перехода: гейт — его причины; «нет такой кнопки»
- *  — с именем текущего статуса (перенос в «Моём плане»); иначе русская
- *  строка по коду (I15) или общий фолбэк «вернули на прежнюю стадию». */
-export function transitionErrorText(error: unknown): string {
-  if (error instanceof ApiError) {
-    if (error.code === 'WORKFLOW_TRANSITION_FORM_INVALID') return ui.tasks.transitionNeedsWindow;
-    const reasons = (error.details?.reasons ?? []) as TransitionBlockReason[];
-    if (reasons.length > 0)
-      return `${errorMessages[error.code as ErrorCode]}: ${gateReasonsText(reasons)}`;
-    const from = error.details?.fromStageName;
-    if (error.code === 'WORKFLOW_TRANSITION_NOT_ALLOWED' && typeof from === 'string') {
-      return `${ui.tasks.transitionNotAllowedFrom} «${from}» ${ui.tasks.transitionNotAllowedTail}`;
-    }
-    const known = errorMessages[error.code as ErrorCode];
-    if (known && (error.code.startsWith('TASK_') || error.code.startsWith('WORKFLOW_'))) {
-      return known;
-    }
-  }
-  return ui.tasks.stageMoveError;
-}
+export { gateReasonsText, transitionErrorText } from '../../../shared/tasks/transition-error.js';
 
 /** Доступные текущему пользователю переходы маршрута (ADR-0020): кнопки бара
  *  и список поля «Стадия» — сервер решает, кому какие (условия «кто»).

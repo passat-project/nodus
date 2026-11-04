@@ -7,6 +7,7 @@ import {
   taskDetailSchema,
   taskListItemSchema,
   taskBranchSchema,
+  taskStageWithCountSchema,
   workflowTransitionSchema,
 } from '@nodus/contracts';
 import { z } from 'zod';
@@ -19,6 +20,10 @@ import { setupChatFixture, type ChatTestFixture, type ChatUser } from './chat-fi
  * (контракт + outbox task.created с audience + «Мой план»), идемпотентность
  * Idempotency-Key, видимость (чужой = 404), гейт DoD подзадач (409 с
  * причинами), переход маршрута с автоперемещением личной доски.
+ *
+ * Файл 300–500 строк — осознанно (I5): один сценарий общей фикстуры
+ * alice/bob/carol; вынос #402-кейсов в отдельный файл дублировал бы setup
+ * и порядок создания задач, от которого зависят id в соседних тестах.
  */
 describe.skipIf(!process.env.DATABASE_URL)('tasks (integration)', () => {
   let fx: ChatTestFixture<'alice' | 'bob' | 'carol'>;
@@ -233,4 +238,143 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks (integration)', () => {
       systemState: null,
     });
   });
+
+  it('перенос «Ожидает» → «Завершённые» не отменяет задачу (#402)', async () => {
+    const created = await fx.api(alice, 'POST', '/tasks', {
+      body: { title: `Своя задача ${fx.runId}`, assigneeId: alice.id },
+      key: `it-402-own-${fx.runId}`,
+    });
+    expect(created.status).toBe(201);
+    const task = taskListItemSchema.parse(await created.json());
+    taskIds.push(task.id);
+    const closed = (await personalStages(alice)).find(
+      (s) => s.systemState === 'closed' && s.outcome === 'success',
+    )!;
+    const moved = await fx.api(alice, 'PATCH', `/tasks/${task.id}`, {
+      body: { personalStageId: closed.id, index: 0 },
+    });
+    expect(moved.status).toBe(409);
+    expect(apiErrorResponseSchema.parse(await moved.json()).code).toBe(
+      ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED,
+    );
+    const after = taskDetailSchema.parse(
+      await (await fx.api(alice, 'GET', `/tasks/${task.id}`)).json(),
+    );
+    expect(after.stage.systemState).toBe('backlog');
+  });
+
+  it('перенос в «Завершённые» при открытой подзадаче — 409 с причинами гейта (#402)', async () => {
+    // Своя задача: «Завершить» пропускает утверждение (route_if) и ведёт
+    // прямо в «Итог», поэтому гейт подзадач — единственная причина отказа.
+    const created = await fx.api(alice, 'POST', '/tasks', {
+      body: { title: `Блок завершения ${fx.runId}`, assigneeId: alice.id },
+      key: `it-402-gate-${fx.runId}`,
+    });
+    expect(created.status).toBe(201);
+    const taskId = taskListItemSchema.parse(await created.json()).id;
+    taskIds.push(taskId);
+    await press(alice, taskId, 'Взять в работу', 'it-402-gate-start');
+    const sub = await fx.api(alice, 'POST', `/tasks/${taskId}/subtasks`, {
+      body: { title: `Открытая подзадача ${fx.runId}`, assigneeId: alice.id },
+      key: `it-402-sub-${fx.runId}`,
+    });
+    expect(sub.status).toBe(201);
+    taskIds.push(taskListItemSchema.parse(await sub.json()).id);
+    const closed = (await personalStages(alice)).find(
+      (s) => s.systemState === 'closed' && s.outcome === 'success',
+    )!;
+    const moved = await fx.api(alice, 'PATCH', `/tasks/${taskId}`, {
+      body: { personalStageId: closed.id, index: 0 },
+    });
+    expect(moved.status).toBe(409);
+    const error = apiErrorResponseSchema.parse(await moved.json());
+    expect(error.code).toBe(ErrorCode.WORKFLOW_TRANSITION_BLOCKED);
+    expect(error.details?.reasons).toEqual([{ kind: 'no_open_subtasks', count: 1 }]);
+    const after = taskDetailSchema.parse(
+      await (await fx.api(alice, 'GET', `/tasks/${taskId}`)).json(),
+    );
+    expect(after.stage.systemState).toBe('active');
+  });
+
+  it('постановщик не может утащить чужую задачу в «Завершённые» (#402)', async () => {
+    const taskId = await createTask('Чужая работа', 'it-402-foreign');
+    await press(bob, taskId, 'Взять в работу', 'it-402-foreign-start');
+    const closed = (await personalStages(alice)).find(
+      (s) => s.systemState === 'closed' && s.outcome === 'success',
+    )!;
+    const moved = await fx.api(alice, 'PATCH', `/tasks/${taskId}`, {
+      body: { personalStageId: closed.id, index: 0 },
+    });
+    expect(moved.status).toBe(409);
+    expect(apiErrorResponseSchema.parse(await moved.json()).code).toBe(
+      ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED,
+    );
+    const after = taskDetailSchema.parse(
+      await (await fx.api(alice, 'GET', `/tasks/${taskId}`)).json(),
+    );
+    expect(after.stage.systemState).toBe('active');
+  });
+
+  it('перестановка отменённой карточки в той же колонке не вызывает переход (#402)', async () => {
+    const created = await fx.api(alice, 'POST', '/tasks', {
+      body: { title: `Отменённая ${fx.runId}`, assigneeId: alice.id },
+      key: `it-402-cancel-${fx.runId}`,
+    });
+    expect(created.status).toBe(201);
+    const task = taskListItemSchema.parse(await created.json());
+    taskIds.push(task.id);
+    const buttons = z
+      .array(workflowTransitionSchema)
+      .parse(await (await fx.api(alice, 'GET', `/tasks/${task.id}/transitions`)).json());
+    const cancel = buttons.find((t) => t.name === 'Отменить')!;
+    const needsComment = cancel.form?.sections.some((s) => s.kind === 'comment' && s.required);
+    const cancelled = await fx.api(alice, 'POST', `/tasks/${task.id}/transitions/${cancel.id}`, {
+      body: needsComment ? { form: { comment: `Причина ${fx.runId}` } } : {},
+      key: `it-402-cancel-go-${fx.runId}`,
+    });
+    expect(cancelled.status).toBe(200);
+    const afterCancel = executeTransitionResultSchema.parse(await cancelled.json()).task;
+    const closed = afterCancel.personalStageId!;
+    // Перестановка внутри той же колонки — не переход и не 409.
+    const moved = await fx.api(alice, 'PATCH', `/tasks/${task.id}`, {
+      body: { personalStageId: closed, index: 0 },
+    });
+    expect(moved.status).toBe(200);
+    expect(taskListItemSchema.parse(await moved.json()).personalStageId).toBe(closed);
+  });
+
+  it('создание в колонке «В работе» проходит переход, а не обходит условия (#402)', async () => {
+    const active = (await personalStages(bob)).find((s) => s.systemState === 'active')!;
+    const created = await fx.api(bob, 'POST', '/tasks', {
+      body: { title: `Сразу в работе ${fx.runId}`, assigneeId: bob.id, personalStageId: active.id },
+      key: `it-402-create-${fx.runId}`,
+    });
+    expect(created.status).toBe(201);
+    const task = taskListItemSchema.parse(await created.json());
+    taskIds.push(task.id);
+    expect(task.stage.systemState).toBe('active');
+    expect(task.personalStageId).toBe(active.id);
+
+    // Постановщик не исполнитель: «Взять в работу» ему не видна — отказ,
+    // а не тихая стадия «В работе».
+    const ownActive = (await personalStages(alice)).find((s) => s.systemState === 'active')!;
+    const denied = await fx.api(alice, 'POST', '/tasks', {
+      body: {
+        title: `Чужая работа ${fx.runId}`,
+        assigneeId: bob.id,
+        personalStageId: ownActive.id,
+      },
+      key: `it-402-denied-${fx.runId}`,
+    });
+    expect(denied.status).toBe(409);
+    expect(apiErrorResponseSchema.parse(await denied.json()).code).toBe(
+      ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED,
+    );
+  });
+
+  async function personalStages(user: ChatUser) {
+    return z
+      .array(taskStageWithCountSchema)
+      .parse(await (await fx.api(user, 'GET', '/tasks/personal-stages')).json());
+  }
 });
