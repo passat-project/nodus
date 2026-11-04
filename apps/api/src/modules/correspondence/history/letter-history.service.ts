@@ -23,6 +23,7 @@ import {
   type DictionaryReader,
 } from '../../dictionaries/ports/dictionary-reader.port.js';
 import { LettersQueryService } from '../letters/letters-query.service.js';
+import { LettersRepository } from '../letters/letters.repository.js';
 import { LetterHistoryRepository } from './letter-history.repository.js';
 
 const cursorSchema = z.object({ seq: z.string().regex(/^\d+$/) });
@@ -43,6 +44,7 @@ interface RawChange {
 export class LetterHistoryService {
   constructor(
     private readonly repo: LetterHistoryRepository,
+    private readonly letters: LettersRepository,
     private readonly query: LettersQueryService,
     @Inject(USER_PROFILE_READER) private readonly profiles: UserProfileReader,
     @Inject(COUNTERPARTY_READER) private readonly counterparties: CounterpartyReader,
@@ -111,6 +113,19 @@ export class LetterHistoryService {
           toStageName: String(payload.toStageName ?? '—'),
           ...(payload.comment ? { comment: String(payload.comment) } : {}),
         };
+      case CORRESPONDENCE_EVENTS.LETTER_RELATIONS_CHANGED: {
+        // Связь поставлена/заменена/снята (#461, Р6): вторая сторона —
+        // ссылкой (номер и тема гидратируются, как у превью).
+        const relatedLetterId = String(payload.relatedLetterId ?? '');
+        const related = (await this.letters.refs([relatedLetterId]))[0];
+        return {
+          ...base,
+          kind: 'relation_changed',
+          action: payload.action as 'linked' | 'unlinked' | 'replaced',
+          relationKind: payload.kind as 'reply_to' | 'nested_in',
+          relatedLetter: related ?? { id: relatedLetterId, regNumber: null, subject: null },
+        };
+      }
       case CORRESPONDENCE_EVENTS.LETTER_PARTICIPANTS_CHANGED: {
         // В историю идёт только личное присоединение (актор = добавленный);
         // синхронизация состава при регистрации — не событие карточки.

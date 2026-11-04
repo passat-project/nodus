@@ -72,8 +72,9 @@ export class CounterpartiesController {
       pipes: [new ZodValidationPipe(listCounterpartiesQuerySchema)],
     })
     query: ListCounterpartiesQuery,
+    @GetUser() actor: AuthUser,
   ): Promise<Paginated<CounterpartyListItem>> {
-    return this.queries.list(query);
+    return this.queries.list(query, actor);
   }
 
   // Статический сегмент объявлен раньше `:id`: Fastify матчит его первым.
@@ -107,7 +108,7 @@ export class CounterpartiesController {
     dto: BulkCounterpartiesBody,
     @GetUser() actor: AuthUser,
   ): Promise<CounterpartyBulkResult> {
-    return this.counterparties.bulk(dto.counterpartyIds, dto.action, actor.id);
+    return this.counterparties.bulk(dto.counterpartyIds, dto.action, actor);
   }
 
   @Get(':id')
@@ -119,8 +120,11 @@ export class CounterpartiesController {
   })
   @ApiOkResponse({ standardSchema: counterpartyCardSchema })
   @ApiErrors(400, 401, 404)
-  card(@Param('id', new ZodValidationPipe(idParamSchema)) id: string): Promise<CounterpartyCard> {
-    return this.queries.card(id);
+  card(
+    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @GetUser() actor: AuthUser,
+  ): Promise<CounterpartyCard> {
+    return this.queries.card(id, actor);
   }
 
   @Post()
@@ -138,7 +142,7 @@ export class CounterpartiesController {
     dto: CreateCounterpartyBody,
     @GetUser() actor: AuthUser,
   ): Promise<CounterpartyCard> {
-    return this.counterparties.create(dto, actor.id);
+    return this.counterparties.create(dto, actor);
   }
 
   @Patch(':id')
@@ -162,7 +166,7 @@ export class CounterpartiesController {
     dto: UpdateCounterpartyBody,
     @GetUser() actor: AuthUser,
   ): Promise<CounterpartyCard> {
-    return this.counterparties.update(id, dto, actor.id);
+    return this.counterparties.update(id, dto, actor);
   }
 
   @Post(':id/archive')
@@ -182,7 +186,7 @@ export class CounterpartiesController {
     @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
     @GetUser() actor: AuthUser,
   ): Promise<CounterpartyCard> {
-    return this.counterparties.setArchived(id, true, actor.id);
+    return this.counterparties.setArchived(id, true, actor);
   }
 
   @Delete(':id')
@@ -221,6 +225,6 @@ export class CounterpartiesController {
     @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
     @GetUser() actor: AuthUser,
   ): Promise<CounterpartyCard> {
-    return this.counterparties.setArchived(id, false, actor.id);
+    return this.counterparties.setArchived(id, false, actor);
   }
 }

@@ -26,7 +26,13 @@ import {
   COUNTERPARTY_READER,
   type CounterpartyReader,
 } from '../../crm/ports/counterparty-reader.port.js';
-import { canRegisterLetters, canViewLetter, letterAccessOf } from '../access/letter-access.js';
+import {
+  canRegisterLetters,
+  canViewConfidential,
+  canViewLetter,
+  letterAccessOf,
+} from '../access/letter-access.js';
+import { LetterAttachedRefsRepository } from './letter-attached-refs.repository.js';
 import { LetterDtoMapper } from './letter-dto.mapper.js';
 import { LetterThreadingService } from './letter-threading.service.js';
 import type { LetterCursor, LetterDetailRow } from './letter-row.js';
@@ -48,6 +54,7 @@ const SEARCH_COUNTERPARTIES = 50;
 export class LettersQueryService {
   constructor(
     private readonly repo: LettersRepository,
+    private readonly attached: LetterAttachedRefsRepository,
     private readonly mapper: LetterDtoMapper,
     private readonly threading: LetterThreadingService,
     @Inject(COUNTERPARTY_READER) private readonly counterparties: CounterpartyReader,
@@ -63,6 +70,9 @@ export class LettersQueryService {
       AND: [
         this.boxWhere(q),
         ...(q.counterpartyId ? [{ counterpartyId: q.counterpartyId }] : []),
+        // Конфиденциальные вне круга зрителя строки не дают (#461, Р4):
+        // фильтр тот же, что у карточки, — по индексам адресата и участников.
+        ...(q.box === 'new' ? [] : [this.confidentialityWhere(user)]),
         ...(await this.searchWhere(q.search)),
       ],
     };
@@ -101,6 +111,7 @@ export class LettersQueryService {
     const isParticipant =
       participants.some((p) => p.userId === user.id) || row.addresseeId === user.id;
     const attachments = await this.repo.attachments(id);
+    const attachedRefs = await this.attached.attachedRefs(id);
     const replyTo = await this.repo.replyTo(id);
     const [replySuggestion, counterpartySuggestion] = await Promise.all([
       // Подсказка живёт, только пока связи нет; актуальна до регистрации.
@@ -115,16 +126,37 @@ export class LettersQueryService {
       replyTo,
       replySuggestion,
       counterpartySuggestion,
+      attachedRefs,
     });
   }
 
-  /** Письмо, видимое сотруднику, или 404 (невидимое = «не найдено», Р7). */
+  /** Письмо, видимое сотруднику, или 404 (невидимое = «не найдено», Р7).
+   *  У конфиденциального состав обсуждения читается ДО проверки (#461, Р4):
+   *  участник видит письмо, прочий сотрудник — 404 без оракула. */
   async visibleRow(user: AuthUser, id: string): Promise<LetterDetailRow> {
     const row = await this.repo.findDetailById(id);
-    if (!row || row.deletedAt !== null || !canViewLetter(user, row)) {
+    if (!row || row.deletedAt !== null) throw DomainException.notFound('Letter not found');
+    const participants = row.confidential
+      ? new Set((await this.repo.participants(id)).map((participant) => participant.userId))
+      : undefined;
+    if (!canViewLetter(user, row, participants)) {
       throw DomainException.notFound('Letter not found');
     }
     return row;
+  }
+
+  /** Фильтр реестров: конфиденциальные — только участникам и держателям
+   *  права (#461, Р4). У держателя фильтра нет — видит всё. */
+  private confidentialityWhere(user: AuthUser) {
+    if (canViewConfidential(user)) return {};
+    return {
+      OR: [
+        { confidential: false },
+        { registrarId: user.id },
+        { addresseeId: user.id },
+        { participants: { some: { userId: user.id } } },
+      ],
+    };
   }
 
   /** Подстановка по адресу отправителя (Р6, В2): ровно один активный
@@ -176,6 +208,13 @@ export class LettersQueryService {
           { subject: { contains: search, mode: 'insensitive' as const } },
           { regNumber: { contains: search, mode: 'insensitive' as const } },
           { theirNumber: { contains: search, mode: 'insensitive' as const } },
+          // Поиск по номеру любого приложенного письма (#461, Р8): «456»
+          // находит конверт, в котором лежит лист № 456.
+          {
+            attachedRefs: {
+              some: { number: { contains: search, mode: 'insensitive' as const } },
+            },
+          },
           ...(counterpartyIds.length > 0 ? [{ counterpartyId: { in: counterpartyIds } }] : []),
         ],
       },

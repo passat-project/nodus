@@ -5,6 +5,7 @@ import {
   letterRegistrationInputSchema,
   letterRegistrationIssueSchema,
   SystemDictionary,
+  type LetterAttachedRefInput,
   type LetterRegistrationField,
   type LetterRegistrationInput,
   type LetterRegistrationIssue,
@@ -46,6 +47,14 @@ export interface RegistrationValues {
   responseDeadline: string | null;
   /** Подтверждение подсказки «ответ на» (#56, Р5): семантика — в апликере. */
   replyToLetterId: string | null;
+}
+
+/** Поля регистрации вне карточки-формы (#461): флаг и строки приложенных —
+ *  апликер валидирует строки и пишет их набором в той же транзакции.
+ *  null — поле не передано (не трогаем уже сохранённое карточкой). */
+export interface RegistrationExtra {
+  confidential: boolean | null;
+  attachedRefs: LetterAttachedRefInput[] | null;
 }
 
 /** Изменение поля для события/истории (значения — сырые: id, ISO-дата). */
@@ -90,7 +99,11 @@ export class LetterFieldsValidator {
     input: unknown,
     actor: { id: string; permissions: readonly string[] },
     today: string,
-  ): Promise<{ values: RegistrationValues; customFields: Record<string, unknown> }> {
+  ): Promise<{
+    values: RegistrationValues;
+    extra: RegistrationExtra;
+    customFields: Record<string, unknown>;
+  }> {
     const parsed = letterRegistrationInputSchema.safeParse(input);
     if (!parsed.success) {
       const issue = parsed.error.issues[0]!;
@@ -124,6 +137,10 @@ export class LetterFieldsValidator {
         addresseeId: value.addresseeId,
         responseDeadline: value.responseDeadline,
         replyToLetterId: value.replyToLetterId ?? null,
+      },
+      extra: {
+        confidential: value.confidential ?? null,
+        attachedRefs: value.attachedRefs ?? null,
       },
       customFields,
     };

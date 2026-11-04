@@ -27,6 +27,8 @@ export const letterListSelect = {
   // Конверт почты (#56): строка очереди «Новые» — отправитель и бейдж связи.
   mailFromAddress: true,
   mailFromName: true,
+  // «Конфиденциально» (#461, Р4): бейдж-замок в строке реестра.
+  confidential: true,
 } as const;
 
 export const letterDetailSelect = {
@@ -50,6 +52,20 @@ export const letterDetailSelect = {
 
 export type LetterListRow = Prisma.LetterGetPayload<{ select: typeof letterListSelect }>;
 export type LetterDetailRow = Prisma.LetterGetPayload<{ select: typeof letterDetailSelect }>;
+
+/** Строка «приложенных писем» (#461, Р3). */
+export const letterAttachedRefSelect = {
+  id: true,
+  number: true,
+  counterpartyId: true,
+  orgText: true,
+  letterDate: true,
+  sortOrder: true,
+} as const;
+
+export type LetterAttachedRefRow = Prisma.LetterAttachedRefGetPayload<{
+  select: typeof letterAttachedRefSelect;
+}>;
 
 export const letterAttachmentSelect = {
   id: true,

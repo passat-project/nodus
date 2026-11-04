@@ -10,13 +10,20 @@ import { LetterFileAccess } from './access/letter-file-access.js';
 import { LetterFieldValuesCleanupHandler } from './events/letter-field-values-cleanup.handler.js';
 import { LetterHistoryRepository } from './history/letter-history.repository.js';
 import { LetterHistoryService } from './history/letter-history.service.js';
+import { LetterAttachedRefsRepository } from './letters/letter-attached-refs.repository.js';
+import { LetterAttachedRefsValidator } from './letters/letter-attached-refs.validator.js';
 import { LetterDtoMapper } from './letters/letter-dto.mapper.js';
 import { LetterFieldsValidator } from './letters/letter-fields.validator.js';
+import { LetterRelationsController } from './letters/letter-relations.controller.js';
+import { LetterRelationsRepository } from './letters/letter-relations.repository.js';
 import { LettersController } from './letters/letters.controller.js';
+import { LettersManualCreateService } from './letters/letters-manual-create.service.js';
 import { LettersMainDocumentService } from './letters/letters-main-document.service.js';
 import { LettersMutationService } from './letters/letters-mutation.service.js';
 import { LettersQueryService } from './letters/letters-query.service.js';
+import { LettersRelationService } from './letters/letters-relation.service.js';
 import { LettersRepository } from './letters/letters.repository.js';
+import { LettersTreeService } from './letters/letters-tree.service.js';
 import { LetterThreadingService } from './letters/letter-threading.service.js';
 import { LetterBodyPdfQueue } from './mail/body-pdf/letter-body-pdf.queue.js';
 import { LetterBodyPdfService } from './mail/body-pdf/letter-body-pdf.service.js';
@@ -55,24 +62,30 @@ import { LetterWorkflowAdapter } from './workflow/letter-workflow.adapter.js';
     ProjectsPortsModule,
     MailModule,
   ],
-  controllers: [LettersController],
+  controllers: [LettersController, LetterRelationsController],
   providers: [
     UserProfileProvider,
     { provide: USER_PROFILE_READER, useClass: UserProfileProvider },
     // Репозитории — единственная точка доступа к таблицам модуля (patterns.md).
     LettersRepository,
+    LetterRelationsRepository,
+    LetterAttachedRefsRepository,
     // Уборка значений удалённого атрибута (#582): событие custom_field.definition_changed.
     LetterFieldValuesCleanupHandler,
     LetterFileAccess,
     LetterHistoryRepository,
     LetterDtoMapper,
     LettersQueryService,
+    LettersTreeService,
+    LettersRelationService,
     LetterFieldsValidator,
+    LetterAttachedRefsValidator,
     LetterThreadingService,
     LetterFormApplier,
     LetterStageMover,
     LetterWorkflowAdapter,
     LettersMutationService,
+    LettersManualCreateService,
     LettersMainDocumentService,
     LetterTransitionsService,
     LetterHistoryService,

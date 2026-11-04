@@ -42,9 +42,20 @@ function applierWith(attachments: { id: string; role: string; inline: boolean }[
     linkReplyTo: vi.fn(),
   };
   const validator = {
-    registration: vi.fn(async () => ({ values: registration, customFields: {} })),
+    registration: vi.fn(async () => ({
+      values: registration,
+      extra: { confidential: null, attachedRefs: null },
+      customFields: {},
+    })),
   };
-  const applier = new LetterFormApplier(repo as never, validator as never, {} as never);
+  const attached = { replace: vi.fn(async () => void 0) };
+  const applier = new LetterFormApplier(
+    repo as never,
+    validator as never,
+    {} as never,
+    attached as never,
+    { validate: vi.fn(async () => []) } as never,
+  );
   return { applier, repo };
 }
 

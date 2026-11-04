@@ -43,10 +43,18 @@ function notHiddenProjectIds(hidden: readonly string[]): Prisma.TaskWhereInput |
  * участия (админы секретных не видят, вердикт 29.10). scope=mine — только
  * собственное участие. Подчинённые секретные проекты не раскрывают: их
  * ветка гейтится скрытыми проектами.
+ *
+ * Конфиденциальные задачи (#461, Р5) видят ТОЛЬКО участники: ветки
+ * руководителей, видимых проектов и task.view_all гейтятся
+ * `confidential = false`, прямое участие (mine) — нет. Поручения из
+ * конфиденциального письма ставит #463; поле до тех пор не пишется.
  */
 export function visibleTasksWhere(viewer: Viewer, scope: 'mine' | 'all'): Prisma.TaskWhereInput {
   const mine = involves([viewer.id]);
   const gate = notHiddenProjectIds(viewer.hiddenProjectIds);
+  // Конфиденциальное вне прямого участия не раскрывается ни оргструктурой,
+  // ни проектом, ни task.view_all (#461, Р5; вердикт В3 — «никто, даже админ»).
+  const openOnly: Prisma.TaskWhereInput = { confidential: false };
   // «Моё участие» тоже гейтится скрытыми секретными: исключённый из проекта
   // (removeManual, open→secret) не сохраняет доступ к его задачам через
   // роль постановщика/ответственного (вердикт 29.10).
@@ -56,16 +64,16 @@ export function visibleTasksWhere(viewer: Viewer, scope: 'mine' | 'all'): Prisma
   if (viewer.subordinateIds.length > 0) {
     const subordinateTasks: Prisma.TaskWhereInput = { OR: involves(viewer.subordinateIds) };
     // Подчинённый — участник секретного проекта не раскрывает его задачи
-    // начальнику: ветка гейтится скрытыми проектами (Т1).
-    or.push(gate ? { AND: [subordinateTasks, gate] } : subordinateTasks);
+    // начальнику: ветка гейтится скрытыми проектами (Т1) и конфиденциальными.
+    or.push({ AND: [subordinateTasks, openOnly, ...(gate ? [gate] : [])] });
   }
   if (viewer.visibleProjectIds.length > 0) {
-    or.push({ projectId: { in: [...viewer.visibleProjectIds] } });
+    or.push({ AND: [{ projectId: { in: [...viewer.visibleProjectIds] } }, openOnly] });
   }
   if (viewer.permissions.includes(Permission.TASK_VIEW_ALL)) {
     // Не ранний return: task.view_all не открывает чужие секретные проекты
-    // (Т1) — гейт скрытых остаётся и у админа.
-    return gate ? { deletedAt: null, AND: [gate] } : { deletedAt: null };
+    // (Т1) и конфиденциальные задачи (#461) — гейты остаются и у админа.
+    return gate ? { deletedAt: null, AND: [gate, openOnly] } : { deletedAt: null, ...openOnly };
   }
   return { deletedAt: null, OR: or };
 }

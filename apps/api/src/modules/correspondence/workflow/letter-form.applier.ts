@@ -6,6 +6,8 @@ import type { TransactionClient } from '../../../core/database/transaction-runne
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import type { WorkflowFormApplied } from '../../../core/ports/workflow-entity.port.js';
 import { companyDate } from '../../../core/time/company-time.js';
+import { LetterAttachedRefsRepository } from '../letters/letter-attached-refs.repository.js';
+import { LetterAttachedRefsValidator } from '../letters/letter-attached-refs.validator.js';
 import type { LetterDetailRow } from '../letters/letter-row.js';
 import { LetterThreadingService } from '../letters/letter-threading.service.js';
 import { LettersRepository } from '../letters/letters.repository.js';
@@ -37,6 +39,8 @@ export class LetterFormApplier {
     private readonly letters: LettersRepository,
     private readonly validator: LetterFieldsValidator,
     private readonly threading: LetterThreadingService,
+    private readonly attached: LetterAttachedRefsRepository,
+    private readonly attachedValidator: LetterAttachedRefsValidator,
   ) {}
 
   async apply(
@@ -47,7 +51,7 @@ export class LetterFormApplier {
   ): Promise<WorkflowFormApplied> {
     if (!input.registration) return EMPTY;
     const today = companyDate(new Date());
-    const { values, customFields } = await this.validator.registration(
+    const { values, extra, customFields } = await this.validator.registration(
       letter.typeId,
       input.registration,
       actor,
@@ -86,6 +90,12 @@ export class LetterFormApplier {
     diff('addresseeId', letter.addresseeId, values.addresseeId);
     diff('responseDeadline', isoOf(letter.responseDeadline), values.responseDeadline);
 
+    // «Приложенные письма» и флаг (#461): строки валидируются и пишутся
+    // набором в этой же транзакции; не переданное поле не трогает карточку.
+    const attachedRows =
+      extra.attachedRefs === null
+        ? null
+        : await this.attachedValidator.validate(extra.attachedRefs);
     await this.letters.update(tx, letter.id, {
       counterpartyId: values.counterpartyId,
       signerId: values.signerId,
@@ -97,7 +107,9 @@ export class LetterFormApplier {
       addresseeId: values.addresseeId,
       responseDeadline: asDate(values.responseDeadline),
       customFields: customFields as Prisma.InputJsonValue,
+      ...(extra.confidential === null ? {} : { confidential: extra.confidential }),
     });
+    if (attachedRows !== null) await this.attached.replace(tx, letter.id, attachedRows);
 
     if (values.replyToLetterId) {
       await this.confirmReplyTo(tx, letter, values.replyToLetterId, today);

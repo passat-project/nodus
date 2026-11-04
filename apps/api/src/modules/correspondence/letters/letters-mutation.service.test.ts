@@ -23,11 +23,15 @@ const row = (registeredAt: Date | null): LetterDetailRow =>
     registeredAt,
     addresseeId: null,
     counterpartyId: null,
+    registrarId: null,
+    confidential: false,
+    systemState: 'active',
   }) as unknown as LetterDetailRow;
 
 function setup(letter: LetterDetailRow) {
   const repo = {
     lock: vi.fn(async () => void 0),
+    participants: vi.fn(async () => []),
     addParticipant: vi.fn(async () => true),
     markViewed: vi.fn(async () => void 0),
     update: vi.fn(async () => void 0),
@@ -52,13 +56,18 @@ function setup(letter: LetterDetailRow) {
   const validator = { patch: vi.fn(async () => ({ data: {}, changes: [] })) };
   const eventBus = { emit: vi.fn(async () => void 0) };
   const profiles = { filterActiveUserIds: vi.fn(async (ids: string[]) => ids) };
+  const attached = {
+    attachedRefs: vi.fn(async () => []),
+    replace: vi.fn(async () => void 0),
+  };
   const service = new LettersMutationService(
     repo as never,
     query as never,
     validator as never,
+    attached as never,
+    { validate: vi.fn(async () => []) } as never,
     { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
     eventBus as never,
-    {} as never,
     {} as never,
     profiles as never,
   );

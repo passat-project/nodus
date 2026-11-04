@@ -170,6 +170,18 @@ export class CounterpartiesRepository {
     return counts;
   }
 
+  /** Строки «письмо контрагента» страницы (#461, Р4): счётчик фильтруется
+   *  правилом видимости писем — число совпадает со вкладкой «Письма». */
+  async letterUsages(
+    counterpartyIds: readonly string[],
+  ): Promise<{ counterpartyId: string; sourceId: string }[]> {
+    if (counterpartyIds.length === 0) return [];
+    return this.prisma.counterpartyUsage.findMany({
+      where: { counterpartyId: { in: [...counterpartyIds] }, sourceKind: 'letter' },
+      select: { counterpartyId: true, sourceId: true },
+    });
+  }
+
   /** Есть ли ссылки из писем/проектов (удаление связанной записи запрещено). */
   async hasUsages(id: string): Promise<boolean> {
     const row = await this.prisma.counterpartyUsage.findFirst({

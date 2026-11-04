@@ -62,6 +62,7 @@ import { DomainException } from '../../../core/errors/domain-exception.js';
 import { ErrorCode } from '@nodus/contracts';
 import { LetterHistoryService } from '../history/letter-history.service.js';
 import { LettersMainDocumentService } from './letters-main-document.service.js';
+import { LettersManualCreateService } from './letters-manual-create.service.js';
 import { LettersMutationService } from './letters-mutation.service.js';
 import { LettersQueryService } from './letters-query.service.js';
 import { readLetterMultipart } from './letter-upload.js';
@@ -78,8 +79,9 @@ const historyQuery = z.object({
  * карточка, ручное создание (multipart), правка реквизитов (редизайн #56 —
  * и незарегистрированного по месту в карточке), спам, присоединение к
  * обсуждению и приглашение коллег, личный признак «просмотрено», кнопки
- * маршрута и история. Модуль за флагом `correspondence` (I10); мутации —
- * идемпотентные и аудируемые.
+ * маршрута и история. Связи «ответ на»/«вложено в» и дерево «ёлочки» (#461) —
+ * отдельный `LetterRelationsController` того же префикса. Модуль за флагом
+ * `correspondence` (I10).
  */
 @ApiTags('correspondence')
 @ApiBearerAuth()
@@ -89,6 +91,7 @@ export class LettersController {
   constructor(
     private readonly query: LettersQueryService,
     private readonly mutations: LettersMutationService,
+    private readonly manualCreate: LettersManualCreateService,
     private readonly mainDocument: LettersMainDocumentService,
     private readonly transitions: LetterTransitionsService,
     private readonly history: LetterHistoryService,
@@ -134,7 +137,7 @@ export class LettersController {
         });
       }
       const fields: CreateLetterFields = parsed.data;
-      return await this.mutations.create(user, fields, body.files);
+      return await this.manualCreate.create(user, fields, body.files);
     } finally {
       await body.cleanup();
     }
