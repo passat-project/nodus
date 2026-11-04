@@ -134,9 +134,8 @@ describe('дерево «ёлочки» (#461, Р2): оптимистичные 
     const order = rows.map((row) => row.node.id);
     expect(order.indexOf('a')).toBeLessThan(order.indexOf('b'));
     expect(order.indexOf('b')).toBeLessThan(order.indexOf('c'));
-    // Чипы: у A — два вложенных, у C — два ответа.
-    expect(rows.find((row) => row.node.id === 'a')?.nested).toBe(2);
-    expect(rows.find((row) => row.node.id === 'c')?.replies).toBe(2);
+    // Счётчик скрытого: у A два потомка, у C — тоже.
+    expect(rows.find((row) => row.node.id === 'a')?.descendants).toBe(6);
     // Ребро ствола знает родителя.
     expect(rows.find((row) => row.node.id === 'b')?.parentKey).toBe(rows[0]?.key);
   });

@@ -102,9 +102,10 @@ export function letterParentOf(letter: DemoLetter): {
 export function letterChildrenOf(
   letterId: string,
   actor: LetterActor,
+  letters: readonly DemoLetter[] = demoLetters,
 ): { letter: DemoLetter; kind: LetterRelationKind }[] {
   const children: { letter: DemoLetter; kind: LetterRelationKind }[] = [];
-  for (const letter of demoLetters) {
+  for (const letter of letters) {
     if (!canSeeLetter(letter, actor)) continue;
     if (letter.nestedIn?.id === letterId) children.push({ letter, kind: 'nested_in' });
     else if (letter.replyTo?.id === letterId) children.push({ letter, kind: 'reply_to' });
@@ -119,13 +120,19 @@ const TREE_MAX_UP = 64;
 /** Дерево «ёлочки» от корня цепочки (#461, Р2): вверх по родителям до корня,
  *  вниз DFS с капами; невидимые узлы исключаются молча (поддерево скрытого
  *  промежуточного не всплывает). null — письмо невидимо/не существует. */
-export function letterTreeOf(letterId: string, actor: LetterActor): LetterTreeResponse | null {
-  const requested = findLetter(letterId);
+export function letterTreeOf(
+  letterId: string,
+  actor: LetterActor,
+  /** Демо-мир (тесты подставляют свою цепочку; по умолчанию — общий). */
+  letters: readonly DemoLetter[] = demoLetters,
+): LetterTreeResponse | null {
+  const find = (id: string) => letters.find((letter) => letter.id === id);
+  const requested = find(letterId);
   if (!requested || !canSeeLetter(requested, actor)) return null;
   let root = requested;
   for (let step = 0; step < TREE_MAX_UP; step += 1) {
     const parent = letterParentOf(root);
-    const parentLetter = parent ? findLetter(parent.ref.id) : undefined;
+    const parentLetter = parent ? find(parent.ref.id) : undefined;
     if (!parentLetter || !canSeeLetter(parentLetter, actor)) break;
     root = parentLetter;
   }
@@ -142,16 +149,21 @@ export function letterTreeOf(letterId: string, actor: LetterActor): LetterTreeRe
       return null;
     }
     const children: LetterTreeNode[] = [];
+    const kids = letterChildrenOf(letter.id, actor, letters);
+    // Зеркало сервера (ред. 05.11.2026): глубина растёт только на ветвлении —
+    // ЕДИНСТВЕННЫЙ ответ продолжает ствол цепочки на том же уровне.
+    const replies = kids.filter((child) => child.kind === 'reply_to').length;
     if (depth < TREE_MAX_DEPTH) {
-      for (const child of letterChildrenOf(letter.id, actor)) {
+      for (const child of kids) {
+        const chain = child.kind === 'reply_to' && replies === 1;
         const node = build(
           child.letter,
           { id: relationIdOf(child.letter.id, child.kind), kind: child.kind },
-          depth + 1,
+          chain ? depth : depth + 1,
         );
         if (node) children.push(node);
       }
-    } else if (letterChildrenOf(letter.id, actor).length > 0) {
+    } else if (kids.length > 0) {
       truncated = true;
     }
     return {

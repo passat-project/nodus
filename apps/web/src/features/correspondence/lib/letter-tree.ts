@@ -108,12 +108,8 @@ export interface LetterTreeRow {
   /** Ключ строки-родителя (для ребра графа); у корня null. */
   parentKey: string | null;
   hasChildren: boolean;
-  /** Всего потомков — счётчик свёрнутой ветки. */
+  /** Всего потомков — «+N» у свёрнутой ветки (видно, сколько скрыто). */
   descendants: number;
-  /** Ответов на это письмо — чип «на что ответили». */
-  replies: number;
-  /** Вложенных писем (матрёшка конверта). */
-  nested: number;
 }
 
 const repliesOf = (node: LetterTreeNode): LetterTreeNode[] =>
@@ -148,8 +144,6 @@ export function flattenLetterTree(
         parentKey,
         hasChildren: node.children.length > 0,
         descendants: treeNodeCount(node) - 1,
-        replies: replies.length,
-        nested: nested.length,
       });
     }
     const childrenHidden = hidden || collapsed.has(key);

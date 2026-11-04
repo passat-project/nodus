@@ -29,11 +29,35 @@ import {
   nextLetterNumber,
 } from '../../../../shared/mocks/data/letters.js';
 import { userIds } from '../../../../shared/mocks/data/users.js';
+import { flattenLetterTree } from '../../lib/letter-tree.js';
 import { registrationIssueOf } from './letters-mock-checks.js';
 import { letterTransitionsOf } from './letters-transition-handlers.js';
 
 const registrar = { id: 'u-office', permissions: [Permission.CORRESPONDENCE_REGISTER] };
 const employee = { id: 'u-employee', permissions: [Permission.DIRECTORY_READ] };
+
+describe('мок-дерево повторяет модель «цепочка + ветки» (#461)', () => {
+  it('линейная переписка из 10 писем — один ствол, без truncated', () => {
+    // Зеркало сервера (ред. 05.11.2026): глубина растёт только на ветвлении.
+    const base = demoLetters[0]!;
+    const chain = Array.from({ length: 10 }, (_, index) => ({
+      ...base,
+      id: `chain-${index}`,
+      regNumber: `Ц-${index}`,
+      replyTo:
+        index === 0
+          ? null
+          : { id: `chain-${index - 1}`, regNumber: `Ц-${index - 1}`, subject: null },
+      nestedIn: null,
+    }));
+    const tree = letterTreeOf('chain-9', registrar, chain);
+    expect(tree?.truncated).toBe(false);
+    // Уровни считает та же функция, что рисует панель: ствол — без отступов.
+    const rows = flattenLetterTree(tree!.root, new Set());
+    expect(rows).toHaveLength(10);
+    expect(new Set(rows.map((row) => row.depth))).toEqual(new Set([0]));
+  });
+});
 
 describe('мок-мир писем v3 (#55, §7.6) парсится контрактами', () => {
   it('каждое письмо — валидный элемент списка и карточка', () => {

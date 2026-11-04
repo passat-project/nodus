@@ -101,7 +101,17 @@ export class LettersTreeService {
     state: { nodes: number; truncated: boolean },
   ): Promise<LetterTreeNode[]> {
     if (depth >= MAX_DEPTH) {
-      if ((await this.relations.childLinks([parent.id])).length > 0) state.truncated = true;
+      // «Показаны не все» — только если за капом есть ВИДИМЫЕ зрителю дети:
+      // скрытые/удалённые не должны ни обрезать честную ветку, ни выдавать
+      // факт своего существования (Р2: невидимые исключаются молча).
+      const beyond = await this.relations.childLinks([parent.id]);
+      if (beyond.length > 0) {
+        const visibleBeyond = await this.visibleRows(
+          user,
+          beyond.map((link) => link.letterId),
+        );
+        if (visibleBeyond.size > 0) state.truncated = true;
+      }
       return [];
     }
     const links = await this.relations.childLinks([parent.id]);

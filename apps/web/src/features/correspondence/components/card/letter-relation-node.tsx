@@ -247,6 +247,12 @@ export function LetterRelationNode({
             ) : null}
           </span>
         </button>
+        {/* Свёрнутая ветка: сколько строк скрыто — «+N» у правого края. */}
+        {collapsed && row.descendants > 0 ? (
+          <span className="shrink-0 pr-1 font-mono text-label-sm text-muted-foreground tabular-nums">
+            +{row.descendants}
+          </span>
+        ) : null}
         {menu.length > 0 ? (
           <span className="mr-1 shrink-0 opacity-0 transition-opacity group-hover/node:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
             <RowMenu items={menu} />
