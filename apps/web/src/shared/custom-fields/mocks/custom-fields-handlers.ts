@@ -312,7 +312,10 @@ export const customFieldsHandlers = [
     if (!parsed.success) {
       return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 422, parsed.error.issues);
     }
-    if (!customFieldValueSchemaOf(definition).safeParse(parsed.data.value).success) {
+    if (
+      parsed.data.value !== null &&
+      !customFieldValueSchemaOf(definition).safeParse(parsed.data.value).success
+    ) {
       return error(ErrorCode.CUSTOM_FIELD_VALUE_INVALID, 'Value does not match field type', 422);
     }
     definition.companyValue = parsed.data.value;

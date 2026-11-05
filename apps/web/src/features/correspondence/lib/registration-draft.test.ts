@@ -19,6 +19,7 @@ const method = (id: string, code: string): DictionaryItem => ({
   parentId: null,
   code,
   name: code,
+  color: null,
   sortOrder: 0,
   isActive: true,
 });

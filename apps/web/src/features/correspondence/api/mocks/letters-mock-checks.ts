@@ -72,7 +72,7 @@ export async function letterFieldsIssue(
   const [dateIssue] = checkLetterDates(input, localIsoDate());
   if (dateIssue) return dateIssue;
   if (input.customFields) {
-    const { issues } = applyDemoPatch('letter', {}, input.customFields);
+    const { issues } = applyDemoPatch({}, input.customFields);
     if (issues.length > 0) return { field: 'customFields', reason: 'invalid' };
   }
   return null;

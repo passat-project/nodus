@@ -1,15 +1,17 @@
 import type {
   CreateCustomFieldBody,
+  CustomFieldBindings,
   CustomFieldDefault,
   CustomFieldDefinition,
   CustomFieldRef,
-  CustomFieldScope,
   CustomFieldSettings,
   CustomFieldType,
+  CustomFieldValue,
   DictionaryItem,
+  StageColor,
   UpdateCustomFieldBody,
 } from '@nodus/contracts';
-import { typeIdsOf } from '@nodus/contracts';
+import { EMPTY_CUSTOM_FIELD_BINDINGS } from '@nodus/contracts';
 
 import {
   baseTypeOf,
@@ -21,19 +23,22 @@ import {
 } from './field-type-families.js';
 
 /**
- * Черновик окна атрибута (#431, ревизия UI 25.10.2026): окно правит
- * черновик, сервер получает изменения только по «Создать»/«Сохранить»
- * (раньше — автосохранение по уходу фокуса). Здесь — чистые функции:
- * начальный черновик, тип из семейства и модификатора, тела API, проверка.
- * Умолчание списка — отметка на варианте (модель Битрикс24 «По умолч.»),
- * для остальных типов — значение редактором карточки.
+ * Черновик окна атрибута (#431, ревизия #631): окно правит черновик, сервер
+ * получает изменения только по «Создать»/«Сохранить». Здесь — чистые
+ * функции: начальный черновик, тип из семейства и модификатора, тела API,
+ * проверка. Умолчание списка — отметка на варианте (модель Битрикс24 «По
+ * умолч.»), для остальных типов — значение редактором карточки.
+ * Привязки «Где используется» и вид «Атрибут записей / Глобальная
+ * переменная» — часть черновика (Р3/Р7).
  */
 
 /** Вариант списка в черновике: id сервера или временный (`draft:`);
- *  удалённый вариант просто исчезает из массива. */
+ *  удалённый вариант просто исчезает из массива. `color` — тон палитры
+ *  темы (Р6 #631): при создании не назначается, задаётся редактором. */
 export interface OptionDraft {
   id: string;
   name: string;
+  color: StageColor | null;
 }
 
 export const DRAFT_PREFIX = 'draft:';
@@ -56,11 +61,13 @@ export interface FieldDraft {
   defaultRefs: CustomFieldRef[];
   options: OptionDraft[];
   defaultOptionIds: string[];
-  hidden: boolean;
+  /** Глобальная переменная (Р7): привязок нет, значение одно на компанию. */
+  isCompany: boolean;
+  /** Значение глобальной переменной (грамматика типа); null — не задано. */
+  companyValue: CustomFieldValue | null;
   reportIndexed: boolean;
-  /** Типы процессов, которым принадлежит атрибут (#432, В2): пусто — нигде
-   *  не показывается. У проектов и контрагентов поля нет — список остаётся пустым. */
-  typeIds: string[];
+  /** «Где используется» (Р3): типы задач/писем, типы проектов, виды папок. */
+  bindings: CustomFieldBindings;
 }
 
 export const emptyDraft: FieldDraft = {
@@ -74,9 +81,10 @@ export const emptyDraft: FieldDraft = {
   defaultRefs: [],
   options: [],
   defaultOptionIds: [],
-  hidden: false,
+  isCompany: false,
+  companyValue: null,
   reportIndexed: false,
-  typeIds: [],
+  bindings: EMPTY_CUSTOM_FIELD_BINDINGS,
 };
 
 export function isListFamily(family: FieldFamily | null): boolean {
@@ -115,7 +123,7 @@ export function draftOf(
     defaultMode: list ? 'none' : (definition.defaultValue?.kind ?? 'none'),
     defaultValue: list ? null : definition.defaultValue,
     defaultRefs: definition.defaultRefs,
-    options: items.map((item) => ({ id: item.id, name: item.name })),
+    options: items.map((item) => ({ id: item.id, name: item.name, color: item.color })),
     defaultOptionIds: !list
       ? []
       : Array.isArray(value)
@@ -123,9 +131,14 @@ export function draftOf(
         : typeof value === 'string'
           ? [value]
           : [],
-    hidden: definition.hidden,
+    isCompany: definition.isCompany,
+    companyValue: definition.companyValue,
     reportIndexed: definition.reportIndexed,
-    typeIds: typeIdsOf(definition),
+    bindings: {
+      processTypeIds: [...definition.bindings.processTypeIds],
+      projectTypeIds: [...definition.bindings.projectTypeIds],
+      nodeKindIds: [...definition.bindings.nodeKindIds],
+    },
   };
 }
 
@@ -146,10 +159,10 @@ export function withFamily(draft: FieldDraft, family: FieldFamily): FieldDraft {
   };
 }
 
-/** Временное определение для редактора умолчания (та же грамматика, что в карточке). */
+/** Временное определение для редактора умолчания и глобального значения
+ *  (та же грамматика, что в карточке). */
 export function draftDefinition(
   draft: FieldDraft,
-  scope: CustomFieldScope,
   currencyFallback: string | null,
 ): CustomFieldDefinition | null {
   const type = draftType(draft);
@@ -157,7 +170,7 @@ export function draftDefinition(
   const now = new Date(0).toISOString();
   return {
     id: '00000000-0000-4000-8000-000000000000',
-    scope,
+    number: 0,
     type,
     name: draft.name || '—',
     hint: null,
@@ -171,8 +184,9 @@ export function draftDefinition(
     defaultValue: null,
     defaultRefs: [],
     reportIndexed: false,
-    hidden: false,
-    typeIds: draft.typeIds,
+    isCompany: false,
+    companyValue: null,
+    bindings: EMPTY_CUSTOM_FIELD_BINDINGS,
     sortOrder: 0,
     createdAt: now,
     updatedAt: now,
@@ -219,21 +233,19 @@ function settingsOf(draft: FieldDraft, type: CustomFieldType): CustomFieldSettin
 
 export function createBody(
   draft: FieldDraft,
-  scope: CustomFieldScope,
   extra: { dictionaryId?: string; defaultValue?: CustomFieldDefault | null },
 ): CreateCustomFieldBody {
   const type = draftType(draft)!;
   const hint = draft.hint.trim();
   return {
-    scope,
     type,
     name: draft.name.trim(),
     ...(hint ? { hint } : {}),
     settings: extra.dictionaryId ? { dictionaryId: extra.dictionaryId } : settingsOf(draft, type),
     defaultValue: extra.defaultValue !== undefined ? extra.defaultValue : scalarDefault(draft),
     reportIndexed: draft.reportIndexed,
-    hidden: draft.hidden,
-    ...(draft.typeIds.length > 0 ? { typeIds: draft.typeIds } : {}),
+    isCompany: draft.isCompany,
+    ...(draft.isCompany ? {} : { bindings: draft.bindings }),
   };
 }
 
@@ -256,9 +268,16 @@ export function patchBody(
     body.settings = { currencyId: draft.settings.currencyId ?? null };
   if (JSON.stringify(defaultValue) !== JSON.stringify(definition.defaultValue))
     body.defaultValue = defaultValue;
-  if (draft.hidden !== definition.hidden) body.hidden = draft.hidden;
-  if (JSON.stringify(draft.typeIds) !== JSON.stringify(typeIdsOf(definition)))
-    body.typeIds = draft.typeIds;
+  if (
+    !definition.isCompany &&
+    JSON.stringify(draft.bindings) !== JSON.stringify(definition.bindings)
+  )
+    body.bindings = draft.bindings;
   if (draft.reportIndexed !== definition.reportIndexed) body.reportIndexed = draft.reportIndexed;
   return Object.keys(body).length > 0 ? body : null;
+}
+
+/** Изменилось ли значение глобальной переменной (отдельный PUT, Р7). */
+export function companyValueChanged(definition: CustomFieldDefinition, draft: FieldDraft): boolean {
+  return JSON.stringify(draft.companyValue) !== JSON.stringify(definition.companyValue);
 }

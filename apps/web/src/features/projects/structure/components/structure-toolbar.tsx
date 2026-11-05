@@ -1,4 +1,5 @@
 import { ChevronsDownUp, ChevronsUpDown, FolderPlus, SearchX } from 'lucide-react';
+import type { ProjectNode } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
@@ -11,22 +12,26 @@ import {
 } from '@nodus/ui/components/empty';
 
 import { ListToolbar } from '../../../../shared/views/list-toolbar.js';
+import type { FilterFieldDef } from '../../../../shared/views/list-filters.js';
 import type { ListToolbarState } from '../../../../shared/views/use-list-toolbar.js';
 import { ViewSettings } from '../../../../shared/views/view-settings.js';
 import { STRUCTURE_VIEW_KEY, structureFields } from '../lib/structure-fields.js';
 
 /** Строка инструментов структуры — тот же `ListToolbar`, что у «Задач»
  *  (одинаковая высота и калибр кнопок): создание, поиск, свернуть/развернуть
- *  справа, шестерёнка колонок. Виды папок настраиваются в «Автоматизации»
- *  (#556) — шестерёнки справочника здесь больше нет. */
+ *  справа, шестерёнка колонок. Панель фильтра несёт группу «Атрибуты» —
+ *  атрибуты папок из реестра (#631). Виды папок настраиваются в
+ *  «Автоматизации» (#556) — шестерёнки справочника здесь нет. */
 export function StructureToolbar({
   toolbar,
+  defs,
   canEdit,
   onCreateNode,
   onExpandAll,
   onCollapseAll,
 }: {
   toolbar: ListToolbarState;
+  defs: FilterFieldDef<ProjectNode>[];
   canEdit: boolean;
   onCreateNode: () => void;
   onExpandAll: () => void;
@@ -35,7 +40,7 @@ export function StructureToolbar({
   return (
     <ListToolbar
       toolbar={toolbar}
-      defs={[]}
+      defs={defs}
       left={
         canEdit ? (
           <Button type="button" onClick={onCreateNode}>

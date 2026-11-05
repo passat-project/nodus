@@ -25,11 +25,12 @@ function ProjectSchemasRoute() {
     <ProjectSchemasPage
       renderCreateField={(slot) => (
         <FieldDialog
-          mode={{ kind: 'create', scope: 'node' }}
+          mode={{ kind: 'create' }}
           definitions={definitions.data ?? []}
           canManage={canManage}
           onClose={slot.onClose}
           onSaved={slot.onCreated}
+          onOpenDefinition={slot.onCreated}
         />
       )}
     />

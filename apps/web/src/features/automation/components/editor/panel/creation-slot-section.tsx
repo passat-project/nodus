@@ -15,8 +15,8 @@ const c = ui.automation.creation;
  * «Обязательно при создании», «Скрыть и заполнить значением» с редактором
  * значения (тот же контрол, что увидит сотрудник), «Убрать из формы» внизу.
  * Правила — общая грамматика contracts: у ответственного и приоритета нет
- * обязательности, у срока — скрытого значения, скрытый атрибут реестра
- * бывает только скрытым полем; скрытое и обязательное взаимоисключающи.
+ * обязательности, у срока — скрытого значения; скрытое и обязательное
+ * взаимоисключающи.
  */
 export function CreationSlotSection({
   slot,
@@ -31,7 +31,7 @@ export function CreationSlotSection({
   slot: CreationFieldSlot;
   /** Название без своего (роль типа или стандартное) — подсказка в поле. */
   standardLabel: string;
-  /** Определение атрибута (для `cf.<id>`), включая скрытые реестра. */
+  /** Определение атрибута (для `cf.<id>`). */
   definition?: CustomFieldDefinition;
   /** Скрытое значение текстом — для просмотра без права правки. */
   presetLabel: string | null;
@@ -41,14 +41,13 @@ export function CreationSlotSection({
   onRemove: () => void;
 }) {
   const hidden = slot.preset !== null;
-  const hiddenAttribute = definition?.hidden === true;
   const canHide = presetAllowed(slot.key);
   const requiredHint = !requiredAllowed(slot.key)
     ? c.requiredAlways
     : hidden
       ? ui.automation.problems.creation_hidden_required
       : c.requiredHint;
-  const hideHint = !canHide ? c.hideNotAllowed : hiddenAttribute ? c.hideAttributeOnly : c.hideHint;
+  const hideHint = !canHide ? c.hideNotAllowed : c.hideHint;
 
   return (
     <>
@@ -91,7 +90,7 @@ export function CreationSlotSection({
           title={c.hideTitle}
           hint={hideHint}
           checked={hidden}
-          disabled={readOnly || !canHide || (hiddenAttribute && hidden)}
+          disabled={readOnly || !canHide}
           onChange={(hide) => onChange({ preset: hide ? initialPreset(slot.key) : null })}
         />
         {hidden ? (

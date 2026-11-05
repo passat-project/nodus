@@ -1,27 +1,52 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { NodeKind } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import type { CustomFieldDefinition, NodeKind } from '@nodus/contracts';
+import { SYSTEM_FIELD_IDS, ui } from '@nodus/contracts';
 
-const { createMutate, batchMutate, MARKA_ID, LONG_MARK } = vi.hoisted(() => ({
+const { createMutate, batchMutate, KIND_ID, MARKA_ID, LONG_MARK } = vi.hoisted(() => ({
   createMutate: vi.fn(),
   batchMutate: vi.fn(),
+  KIND_ID: '33333333-3333-4333-8333-333333333307',
   MARKA_ID: '35560000-0000-4000-8000-000000000001',
   LONG_MARK: 'АТД — Автоматика и телемеханика движения поездов (СЦБ)',
 }));
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
 
+function definition(
+  id: string,
+  type: CustomFieldDefinition['type'],
+  name: string,
+  extra: Partial<CustomFieldDefinition> = {},
+): CustomFieldDefinition {
+  return {
+    id,
+    number: 1,
+    type,
+    name,
+    hint: null,
+    settings: {},
+    dictionary: null,
+    defaultValue: null,
+    defaultRefs: [],
+    reportIndexed: false,
+    isCompany: false,
+    companyValue: null,
+    bindings: { processTypeIds: [], projectTypeIds: [], nodeKindIds: [KIND_ID] },
+    sortOrder: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...extra,
+  };
+}
+
 vi.mock('../../../../shared/custom-fields/queries.js', () => ({
   useCustomFieldDefinitions: () => ({
     data: [
-      {
-        id: MARKA_ID,
-        scope: 'node',
-        type: 'enum',
-        name: 'Марка',
-        hint: null,
+      // Код папки — обычный атрибут реестра (SYSTEM_FIELD_IDS.nodeCode, #631).
+      definition(SYSTEM_FIELD_IDS.nodeCode, 'text', 'Код'),
+      definition(MARKA_ID, 'enum', 'Марка', {
         settings: { dictionaryId: '35560000-0000-4000-8000-0000000000a1' },
         dictionary: {
           id: '35560000-0000-4000-8000-0000000000a1',
@@ -29,15 +54,7 @@ vi.mock('../../../../shared/custom-fields/queries.js', () => ({
           name: 'Марки',
           isSystem: false,
         },
-        defaultValue: null,
-        defaultRefs: [],
-        reportIndexed: false,
-        hidden: false,
-        typeIds: [],
-        sortOrder: 0,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      },
+      }),
     ],
   }),
 }));
@@ -60,12 +77,17 @@ vi.mock('../../node-kinds/api/node-kinds-api.js', () => ({
 import { NodeCreateDialog } from './node-create-dialog.js';
 
 const KOMPLEKT: NodeKind = {
-  id: '33333333-3333-4333-8333-333333333307',
+  id: KIND_ID,
   name: 'Комплект',
   icon: 'fileText',
   color: 'blue',
   archivedAt: null,
-  form: { code: 'required', fields: [{ fieldId: MARKA_ID, state: 'required' }] },
+  form: {
+    fields: [
+      { fieldId: SYSTEM_FIELD_IDS.nodeCode, state: 'required' },
+      { fieldId: MARKA_ID, state: 'required' },
+    ],
+  },
   capabilities: [],
 };
 
@@ -75,7 +97,7 @@ describe('NodeCreateDialog: длинная марка не ломает форм
     vi.clearAllMocks();
   });
 
-  it('выбранная длинная марка уходит в создание, полное имя доступно в title', async () => {
+  it('код уходит атрибутом «Код», длинная марка доступна в title', async () => {
     render(
       <NodeCreateDialog
         projectId="project"
@@ -89,9 +111,12 @@ describe('NodeCreateDialog: длинная марка не ломает форм
     fireEvent.change(screen.getByLabelText(ui.structure.nodeName), {
       target: { value: 'Корпус 1' },
     });
-    fireEvent.change(screen.getByLabelText(ui.structure.nodeCode, { exact: false }), {
+    // «Код» — TextEditor атрибута: фиксируется Enter (в старом тесте поле
+    // было контролем окна и коммитилось каждым символом).
+    fireEvent.change(screen.getByLabelText('Код'), {
       target: { value: 'ОВ1.1' },
     });
+    fireEvent.keyDown(screen.getByLabelText('Код'), { key: 'Enter' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Марка' }));
     fireEvent.click(await screen.findByRole('button', { name: LONG_MARK }));
@@ -107,14 +132,15 @@ describe('NodeCreateDialog: длинная марка не ломает форм
     );
 
     fireEvent.click(screen.getByRole('button', { name: ui.common.create }));
+    // Код — значение атрибута SYSTEM_FIELD_IDS.nodeCode, отдельного поля
+    // `code` в мутации больше нет (ревизия #631).
     expect(createMutate).toHaveBeenCalledWith(
-      expect.objectContaining({
+      {
         parentId: null,
         kindId: KOMPLEKT.id,
         name: 'Корпус 1',
-        code: 'ОВ1.1',
-        customFields: { [MARKA_ID]: 'mark-long' },
-      }),
+        customFields: { [SYSTEM_FIELD_IDS.nodeCode]: 'ОВ1.1', [MARKA_ID]: 'mark-long' },
+      },
       expect.anything(),
     );
   });

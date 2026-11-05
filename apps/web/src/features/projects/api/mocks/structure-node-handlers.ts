@@ -2,9 +2,11 @@ import { http, HttpResponse } from 'msw';
 import {
   ErrorCode,
   NODE_LIMITS,
+  SYSTEM_FIELD_IDS,
   batchCreateProjectNodesBodySchema,
   createProjectNodeBodySchema,
   moveProjectNodeBodySchema,
+  nodeFormKey,
   updateProjectNodeBodySchema,
   type ProjectNode,
 } from '@nodus/contracts';
@@ -41,9 +43,16 @@ import {
 } from './structure-mock-kit.js';
 import { createIssues, formOfKind, updateIssues } from './node-form-rules.js';
 
-/** Дерево папок проекта в мок-мире (#467, #556): создание, пачка, правка
- *  (имя/шифр/вид/значения), перенос, удаление пустой. Правила формы вида —
- *  помощники контрактов (`node-form-rules.ts`), отказ мока = отказ сервера. */
+/** Дерево папок проекта в мок-мире (#467, #556; ревизия #631): создание,
+ *  пачка, правка (имя/вид/значения), перенос, удаление пустой. Код папки —
+ *  атрибут «Код» (SYSTEM_FIELD_IDS.nodeCode): DTO-колонка `code` синхрон-
+ *  зируется со значением атрибута. Правила формы вида — помощники
+ *  контрактов (`node-form-rules.ts`), отказ мока = отказ сервера. */
+
+/** Код папки из значения атрибута «Код» (непустая строка или null). */
+function codeOfValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
 
 function appendNode(
   projectId: string,
@@ -100,11 +109,11 @@ export const structureNodeHandlers = [
         { status: 422 },
       );
     }
-    const rule = ruleResponse(
-      createIssues(kind!, { code: body.code ?? null, customFields: body.customFields }),
-    );
+    const rule = ruleResponse(createIssues(kind!, { customFields: body.customFields }));
     if (rule) return rule;
-    if (body.code && nodeCodeTaken(body.code, guard.row.id, null)) {
+    // Код — атрибут «Код»; явный `body.code` (старый путь) важнее.
+    const code = body.code ?? codeOfValue(body.customFields?.[SYSTEM_FIELD_IDS.nodeCode]);
+    if (code && nodeCodeTaken(code, guard.row.id, null)) {
       return conflict(ErrorCode.PROJECT_NODE_CODE_TAKEN, 'Node code is already taken');
     }
     if (nodesOfProject(guard.row.id).length >= NODE_LIMITS.nodesPerProject) {
@@ -118,7 +127,7 @@ export const structureNodeHandlers = [
       body.parentId ?? null,
       body.kindId,
       body.name,
-      body.code ?? null,
+      code,
       body.customFields ?? {},
     );
     return HttpResponse.json(projectNodeDto(row), { status: 201 });
@@ -143,18 +152,26 @@ export const structureNodeHandlers = [
         { status: 422 },
       );
     }
-    // Пачка при обязательном шифре вида невозможна: у каждой папки свой шифр (В1).
-    if (formOfKind(kind!).code === 'required') {
+    // Пачка при обязательном «Коде» вида невозможна: у каждой папки свой код (В1).
+    if (
+      formOfKind(kind!).fields.some(
+        (slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode && slot.state === 'required',
+      )
+    ) {
       return HttpResponse.json(
         {
           code: 'PROJECT_NODE_FIELDS_REQUIRED',
           message: 'Required node fields are missing',
-          details: { kindId: kind!.id, fields: ['code'], reason: 'create' },
+          details: {
+            kindId: kind!.id,
+            fields: [nodeFormKey(SYSTEM_FIELD_IDS.nodeCode)],
+            reason: 'create',
+          },
         },
         { status: 422 },
       );
     }
-    const rule = ruleResponse(createIssues(kind!, { code: null, customFields: body.customFields }));
+    const rule = ruleResponse(createIssues(kind!, { customFields: body.customFields }));
     if (rule) return rule;
     if (nodesOfProject(guard.row.id).length + body.names.length > NODE_LIMITS.nodesPerProject) {
       return conflict(ErrorCode.PROJECT_NODE_LIMIT_REACHED, 'Node limit reached');
@@ -195,17 +212,21 @@ export const structureNodeHandlers = [
     const rule = ruleResponse(
       updateIssues(
         kind!,
-        { code: node.code, customFields: node.customFields },
-        { code: body.code, customFields: body.customFields },
+        { customFields: node.customFields },
+        { customFields: body.customFields },
         kindChanged,
       ),
     );
     if (rule) return rule;
-    if (body.code !== undefined) {
-      if (body.code !== null && nodeCodeTaken(body.code, guard.row.id, node.id)) {
+    // Код — атрибут «Код»: DTO-колонка следует за значением (или явным
+    // `body.code` старого пути, он важнее).
+    const patchCode = body.customFields?.[SYSTEM_FIELD_IDS.nodeCode];
+    if (body.code !== undefined || patchCode !== undefined) {
+      const nextCode = body.code !== undefined ? body.code : codeOfValue(patchCode);
+      if (nextCode !== null && nodeCodeTaken(nextCode, guard.row.id, node.id)) {
         return conflict(ErrorCode.PROJECT_NODE_CODE_TAKEN, 'Node code is already taken');
       }
-      node.code = body.code;
+      node.code = nextCode;
     }
     if (kindChanged) node.kindId = body.kindId!;
     if (body.name) node.name = body.name;

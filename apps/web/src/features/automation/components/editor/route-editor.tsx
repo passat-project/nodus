@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { checkWorkflowDocument, typeIdsOf } from '@nodus/contracts';
+import { bindingsOf, checkWorkflowDocument } from '@nodus/contracts';
 import type { ProcessType, WorkflowDetail, WorkflowProblem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
@@ -83,17 +83,18 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
   useLayoutAutosave(workflow.id, canManage);
 
   // Атрибуты в окне, гейтах и форме создания (#431, #432): неизвестный —
-  // ошибка публикации, скрытый в окне — предупреждение, чужой типу — ошибка;
-  // факты — из реестра области и привязок типа.
+  // ошибка публикации, чужой типу — ошибка; факты — из реестра атрибутов
+  // и привязок типа.
   const { data: customFieldDefinitions } = useCustomFieldDefinitions(type.category);
   const customFieldFacts = useMemo(
     () =>
       customFieldDefinitions
         ? {
             active: new Set(customFieldDefinitions.map((d) => d.id)),
-            hidden: new Set(customFieldDefinitions.filter((d) => d.hidden).map((d) => d.id)),
             inType: new Set(
-              customFieldDefinitions.filter((d) => typeIdsOf(d).includes(type.id)).map((d) => d.id),
+              customFieldDefinitions
+                .filter((d) => bindingsOf(d).processTypeIds.includes(type.id))
+                .map((d) => d.id),
             ),
           }
         : undefined,
@@ -105,7 +106,6 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
         id: d.id,
         type: d.type,
         settings: d.settings,
-        hidden: d.hidden,
       })),
     [customFieldDefinitions],
   );

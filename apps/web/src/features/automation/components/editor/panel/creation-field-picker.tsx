@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CreationFieldKey,
   CreationForm,
   CustomFieldDefinition,
   ProcessType,
 } from '@nodus/contracts';
-import { TASK_CREATION_SYSTEM_KEYS, customFieldKey, typeIdsOf, ui } from '@nodus/contracts';
+import { TASK_CREATION_SYSTEM_KEYS, bindingsOf, customFieldKey, ui } from '@nodus/contracts';
 import { Popover, PopoverContent, PopoverTrigger } from '@nodus/ui/components/popover';
 import { Plus } from 'lucide-react';
 
@@ -13,7 +13,7 @@ import { projectsAvailable } from '../../../../../shared/api/projects-available.
 import { CustomFieldTypeIcon } from '../../../../../shared/custom-fields/field-type-icon.js';
 import { useCustomFieldDefinitions } from '../../../../../shared/custom-fields/queries.js';
 import { useCanManageFields } from '../../../../../shared/custom-fields/use-can-manage-fields.js';
-import { useBindFieldType } from '../../../api/custom-fields-api.js';
+import { useBindFieldTarget } from '../../../api/custom-fields-api.js';
 import { unusedKeys } from '../../../model/creation-form.js';
 import { FieldDialog } from '../../fields/field-dialog.js';
 import { PanelAction } from '../../../../../shared/ui/panel/panel-kit.js';
@@ -40,15 +40,18 @@ export function CreationFieldPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  /** Атрибут, созданный из пикера (или выбранный из дублей имён): после
+   *  закрытия окна — привязать к типу и выбрать в форму (BindAndPick). */
+  const [resolvedId, setResolvedId] = useState<string | null>(null);
   const { data: definitions } = useCustomFieldDefinitions(type.category);
   const canManageFields = useCanManageFields();
 
   const inType = useMemo(
-    () => (definitions ?? []).filter((d) => typeIdsOf(d).includes(type.id) && !d.hidden),
+    () => (definitions ?? []).filter((d) => bindingsOf(d).processTypeIds.includes(type.id)),
     [definitions, type.id],
   );
   const notInType = useMemo(
-    () => (definitions ?? []).filter((d) => !typeIdsOf(d).includes(type.id) && !d.hidden),
+    () => (definitions ?? []).filter((d) => !bindingsOf(d).processTypeIds.includes(type.id)),
     [definitions, type.id],
   );
   const freeSystem = unusedKeys(
@@ -138,18 +141,59 @@ export function CreationFieldPicker({
 
       {createOpen ? (
         <FieldDialog
-          mode={{ kind: 'create', scope: type.category, presetTypeId: type.id }}
+          mode={{ kind: 'create' }}
           definitions={definitions ?? []}
           canManage={canManageFields}
           onClose={() => setCreateOpen(false)}
           onSaved={(id) => {
             setCreateOpen(false);
-            onPick(customFieldKey(id));
+            setResolvedId(id);
           }}
+          onOpenDefinition={(definitionId) => {
+            setCreateOpen(false);
+            setResolvedId(definitionId);
+          }}
+        />
+      ) : null}
+
+      {resolvedId ? (
+        <BindAndPick
+          definitionId={resolvedId}
+          typeId={type.id}
+          onPick={() => onPick(customFieldKey(resolvedId))}
+          onDone={() => setResolvedId(null)}
         />
       ) : null}
     </>
   );
+}
+
+/** Созданный из пикера (или выбранный из дублей имён) атрибут: привязать
+ *  к типу и выбрать в форму — тот же быстрый путь, что у «Добавить в тип»
+ *  (Р8: непривязанный атрибут публикация отклонила бы). Привязка
+ *  идемпотентна: повторная, если атрибут уже привязан в окне атрибута,
+ *  безвредна. Id известен только после сохранения — хук на монтировании. */
+function BindAndPick({
+  definitionId,
+  typeId,
+  onPick,
+  onDone,
+}: {
+  definitionId: string;
+  typeId: string;
+  onPick: () => void;
+  onDone: () => void;
+}) {
+  const bind = useBindFieldTarget(definitionId);
+  const picked = useRef(false);
+  useEffect(() => {
+    if (picked.current) return;
+    picked.current = true;
+    bind.mutate({ kind: 'process-type', targetId: typeId });
+    onPick();
+    onDone();
+  }, [bind, typeId, onPick, onDone]);
+  return null;
 }
 
 /** Строка «Добавить в тип»: привязка атрибута к типу и сразу выбор в форму.
@@ -163,12 +207,12 @@ function BindRow({
   typeId: string;
   onBound: () => void;
 }) {
-  const bind = useBindFieldType(definition.id);
+  const bind = useBindFieldTarget(definition.id);
   return (
     <Row
       definition={definition}
       onClick={() => {
-        bind.mutate(typeId);
+        bind.mutate({ kind: 'process-type', targetId: typeId });
         onBound();
       }}
     >

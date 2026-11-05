@@ -73,7 +73,6 @@ describe('useUpdateNodeKind: оптимистичная правка вида (I
     const { result } = renderHook(() => useUpdateNodeKind(), { wrapper: makeWrapper(client) });
 
     const form = {
-      code: 'required' as const,
       fields: [{ fieldId: MARKA, state: 'required' as const }],
     };
     await act(async () => {

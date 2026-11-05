@@ -146,7 +146,9 @@ export function useReorderCustomFields() {
       const previous = definitionLists(queryClient);
       const order = new Map(ids.map((id, index) => [id, index]));
       patchLists(queryClient, (definition) =>
-        order.has(definition.id) ? { ...definition, sortOrder: order.get(definition.id)! } : definition,
+        order.has(definition.id)
+          ? { ...definition, sortOrder: order.get(definition.id)! }
+          : definition,
       );
       return { previous };
     },
@@ -258,7 +260,7 @@ export function useSetCompanyValue() {
   const queryClient = useQueryClient();
   return useMutation({
     scope: { id: 'company-value' },
-    mutationFn: (vars: { fieldId: string; value: CustomFieldValue }) =>
+    mutationFn: (vars: { fieldId: string; value: CustomFieldValue | null }) =>
       api<CustomFieldDefinition>(`/custom-fields/definitions/${vars.fieldId}/company-value`, {
         method: 'PUT',
         body: { value: vars.value },

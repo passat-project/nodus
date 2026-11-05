@@ -5,6 +5,8 @@ import { Input } from '@nodus/ui/components/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@nodus/ui/components/popover';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { stageTone } from '../../ui/board/stage-tone.js';
+
 import { useDictionaryItems } from '../../dictionaries/queries.js';
 import { CustomFieldValueView, refsById } from '../value-view.js';
 import { EditorTrigger, type EditorProps } from './editor-kit.js';
@@ -124,6 +126,12 @@ export function ListEditor(props: EditorProps) {
                     on ? 'text-port' : 'text-secondary-foreground',
                   )}
                 >
+                  {item.color ? (
+                    <span
+                      className={cn('size-2 shrink-0 rounded-full', stageTone[item.color].dot)}
+                      aria-hidden
+                    />
+                  ) : null}
                   <span className="min-w-0 flex-1 truncate">{item.name}</span>
                   {on ? <Check className="size-3.5 shrink-0" strokeWidth={1.75} /> : null}
                 </button>

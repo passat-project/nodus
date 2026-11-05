@@ -29,8 +29,9 @@ import { NodePanelFields } from './node-form-fields.js';
 
 /**
  * Правая панель «Свойства папки» (#556, В5, §4c): вталкивающая колонка
- * «Структуры» (обёртка монтирована всегда, ширина 200 мс). Название, шифр,
- * вид и атрибуты формы с правкой на месте — оптимистично. Смена вида:
+ * «Структуры» (обёртка монтирована всегда, ширина 200 мс). Название, вид
+ * и атрибуты формы с правкой на месте — код папки слотом «Код» (ревизия
+ * #631), оптимистично. Смена вида:
  * недостающие обязательные нового вида собираются встроенным шагом «Для
  * вида «Комплект» заполните: …» и уходят ОДНИМ PATCH (Р6). Неруководству —
  * только просмотр. Пока панель открыта, клик по другой папке переключает её;
@@ -89,7 +90,7 @@ export function NodePropertiesPanel({
     const next = kinds.find((entry) => entry.id === nextId);
     if (!next) return;
     const form = effectiveNodeForm(next, definitions);
-    const missing = missingNodeFields(form, { code: node.code, customFields: node.customFields });
+    const missing = missingNodeFields(form, { customFields: node.customFields });
     if (missing.length === 0) update.mutate({ nodeId: node.id, kindId: next.id });
     else setPendingKindId(next.id);
   }
@@ -109,9 +110,9 @@ export function NodePropertiesPanel({
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
             {node?.name ?? ui.structure.propertiesEmpty}
           </span>
-          {/* Шифр в шапке — только когда он ДОБАВЛЯЕТ информацию: у папки
-              «ОВ1.1» с шифром «ОВ1.1» он дублировал название (замечание
-              владельца). Поле «Шифр папки» ниже есть всегда. */}
+          {/* Код в шапке — только когда он ДОБАВЛЯЕТ информацию: у папки
+              «ОВ1.1» с кодом «ОВ1.1» он дублировал название (замечание
+              владельца). Правится ниже — слотом атрибута «Код». */}
           {node?.code && node.code !== node.name ? (
             <span className="shrink-0 font-mono text-xs text-muted-foreground">{node.code}</span>
           ) : null}
@@ -197,11 +198,9 @@ export function NodePropertiesPanel({
                   <NodePanelFields
                     kind={kind}
                     definitions={definitions}
-                    code={node.code ?? ''}
                     disabled={!canEdit}
                     values={node.customFields}
                     refs={refs}
-                    onCode={(code) => update.mutate({ nodeId: node.id, code: code.trim() || null })}
                     onChange={patchValue}
                   />
                 ) : null}

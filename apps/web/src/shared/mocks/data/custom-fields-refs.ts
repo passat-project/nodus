@@ -61,6 +61,7 @@ export function demoRefsForValues(values: CustomFieldValues): CustomFieldRef[] {
               name: entry.name,
               avatarUrl: null,
               archived: !entry.isActive,
+              color: entry.color,
             });
           }
         }
@@ -76,6 +77,7 @@ export function demoRefsForValues(values: CustomFieldValues): CustomFieldRef[] {
             name: currency.name,
             avatarUrl: null,
             archived: !currency.isActive,
+            color: currency.color,
           });
         }
         break;

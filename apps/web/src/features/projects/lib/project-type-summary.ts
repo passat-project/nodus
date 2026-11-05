@@ -1,12 +1,12 @@
 import type { NodeKind, ProjectType } from '@nodus/contracts';
-import { allowedNodeKinds, ui } from '@nodus/contracts';
+import { allowedNodeKinds, projectTypeFormOf, ui } from '@nodus/contracts';
 
 import { plural } from '../../../shared/lib/format.js';
 
 /**
- * Сводки типа проекта для «Схем проектов» (#556): мета строки левой
- * колонки и строка-ссылка «Виды папок» правой панели. Чистые функции —
- * те же числа в списке и в панели, без расхождений.
+ * Сводки типа проекта для «Схем проектов» (#556, форма атрибутов — #631):
+ * мета строки левой колонки и строки-ссылки «Виды папок» / «Атрибуты»
+ * правой панели. Чистые функции — те же числа в списке и в панели.
  */
 
 /** Виды, которые тип видит в настройках: живые справочника + уже
@@ -23,6 +23,22 @@ export function allowedTypeKinds(type: ProjectType, kinds: readonly NodeKind[]):
 /** «7 видов» — счётчик меты строки левой колонки. */
 export function kindsCountLabel(count: number): string {
   return `${count} ${plural(count, ui.projects.schemasKindsCount)}`;
+}
+
+/** «Атрибутов нет» — отдельная константа: строка и панели, и теста. */
+const PROJECT_TYPE_FIELDS_EMPTY = 'Атрибутов нет';
+
+/** Сводка строки-ссылки «Атрибуты» (Р10 #631): «2 атрибута · обязательных: 1»
+ *  или «Атрибутов нет» — счётчики слотов формы типа, как у вида папки. */
+export function fieldsSummary(type: ProjectType): string {
+  const form = projectTypeFormOf(type);
+  if (form.fields.length === 0) return PROJECT_TYPE_FIELDS_EMPTY;
+  const required = form.fields.filter((slot) => slot.state === 'required').length;
+  const parts = [`${form.fields.length} ${plural(form.fields.length, ui.nodeKinds.fieldsCount)}`];
+  if (required > 0) {
+    parts.push(ui.nodeKinds.panel.fieldsRequired.replace('{count}', String(required)));
+  }
+  return parts.join(' · ');
 }
 
 /** Мета строки типа — грамматика «7 статусов · 128 задач» из «Процессов»:

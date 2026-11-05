@@ -1,6 +1,22 @@
 import { useState, type ReactNode } from 'react';
-import type { CounterpartyRef, ProjectType, ProjectVisibility } from '@nodus/contracts';
-import { createProjectBodySchema, ErrorCode, errorMessages, ui } from '@nodus/contracts';
+import type {
+  CounterpartyRef,
+  CustomFieldRef,
+  CustomFieldValue,
+  CustomFieldValues,
+  ProjectType,
+  ProjectVisibility,
+} from '@nodus/contracts';
+import {
+  createProjectBodySchema,
+  DEFAULT_PROJECT_TYPE_FORM,
+  ErrorCode,
+  errorMessages,
+  missingProjectFields,
+  projectTypeFormOf,
+  SYSTEM_FIELD_IDS,
+  ui,
+} from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
 import { Input } from '@nodus/ui/components/input';
@@ -17,13 +33,15 @@ import { Textarea } from '@nodus/ui/components/textarea';
 import { ApiError } from '../../../shared/api-client.js';
 import { usePortalSettings, useProjectTypes } from '../../../shared/api/projects-list.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
-import { CounterpartyCombobox } from '../../../shared/counterparties/counterparty-combobox.js';
 import type { ProjectCreatePrefill } from '../../../shared/projects/project-create-store.js';
 import { useCreateProject } from '../api/project-mutations.js';
 import {
+  counterpartyRefOf,
+  mergeFieldRefs,
   PeopleMultiField,
   ManagerField,
   PortfolioField,
+  ProjectAttributeRows,
   ProjectDeadlineField,
   VisibilityField,
 } from './project-form-fields.js';
@@ -36,22 +54,14 @@ function FieldLabel({ children }: { children: ReactNode }) {
   );
 }
 
-/** Звёздочка обязательного поля — тон действия, прижата к метке. */
-function RequiredMark() {
-  return (
-    <span aria-hidden className="text-primary">
-      *
-    </span>
-  );
-}
-
 /**
  * Окно «Новый проект» (Р14 #52): тип — ПЕРВЫМ после названия (вердикт
- * владельца 07.11.2026: как в задачах, набор полей зависит от типа и будет
- * настраиваться формой типа в «Автоматизации» — #38/#468), шифр показывается
- * только у типов, где он есть («Договор» — обязателен, «Тема» — нет).
- * Подсказок под полями нет — метки и контролы стоят на одной линии.
- * Окно заполняемое: клик мимо не закрывает, отмена — кнопка или Esc.
+ * владельца 07.11.2026: как в задачах, набор полей зависит от типа),
+ * атрибуты — слотами формы выбранного типа (Р10 #631: «Шифр» и «Заказчик»
+ * стали обычными атрибутами, значения едут в customFields). Обязательные
+ * слоты блокируют «Создать». Подсказок под полями нет — метки и контролы
+ * стоят на одной линии. Окно заполняемое: клик мимо не закрывает, отмена —
+ * кнопка или Esc.
  */
 export function ProjectCreateDialog({
   prefill,
@@ -65,55 +75,64 @@ export function ProjectCreateDialog({
   const settings = usePortalSettings();
   const create = useCreateProject();
   const [name, setName] = useState('');
-  const [code, setCode] = useState('');
   const [description, setDescription] = useState('');
   const [typeId, setTypeId] = useState(prefill.typeId ?? '');
   const [managerId, setManagerId] = useState(me?.id ?? '');
   const [assistantIds, setAssistantIds] = useState<string[]>([]);
   const [observerIds, setObserverIds] = useState<string[]>([]);
   const [portfolioId, setPortfolioId] = useState<string | null>(prefill.portfolioId ?? null);
-  const [client, setClient] = useState<CounterpartyRef | null>(null);
   const [visibility, setVisibility] = useState<ProjectVisibility | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
+  const [values, setValues] = useState<CustomFieldValues>({});
+  const [refs, setRefs] = useState<CustomFieldRef[]>([]);
+  const [client, setClient] = useState<CounterpartyRef | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const defaultVisibility = settings.data?.projects.defaultVisibility ?? 'open';
   const effectiveVisibility = visibility ?? defaultVisibility;
   const liveTypes = types.data ?? [];
   const selectedType: ProjectType | null = liveTypes.find((type) => type.id === typeId) ?? null;
-  // Поля типа появляются вместе с типом: до выбора тип неизвестен — шифр не
-  // показываем (иначе поле мелькало бы у «Темы», где его нет).
-  const codeField = selectedType?.codeField ?? 'hidden';
-  const codeShown = selectedType !== null && codeField !== 'hidden';
+  const form = selectedType ? projectTypeFormOf(selectedType) : DEFAULT_PROJECT_TYPE_FORM;
+  const missing = missingProjectFields(form, { customFields: values });
   const canSubmit =
     name.trim().length > 0 &&
     typeId.length > 0 &&
     !create.isPending &&
     liveTypes.length > 0 &&
-    (codeField !== 'required' || code.trim().length > 0);
+    missing.length === 0;
 
-  function selectType(next: string) {
-    setTypeId(next);
-    const nextType = liveTypes.find((type) => type.id === next);
-    if (nextType?.codeField === 'hidden') setCode('');
+  function onField(fieldId: string, value: CustomFieldValue | null, picked?: CustomFieldRef[]) {
+    setValues((prev) => {
+      const next = { ...prev };
+      if (value === null) delete next[fieldId];
+      else next[fieldId] = value;
+      return next;
+    });
+    if (picked?.length) setRefs((prev) => mergeFieldRefs(prev, picked));
+    if (fieldId === SYSTEM_FIELD_IDS.projectClient) setClient(counterpartyRefOf(picked?.[0]));
   }
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!canSubmit) return;
     setError(null);
+    // В тело идут только значения слотов выбранного типа: пережитки смены
+    // типа сервер режет как «не привязан к типу» (422 not_in_type).
+    const formIds = new Set(form.fields.map((slot) => slot.fieldId));
+    const customFields = Object.fromEntries(
+      Object.entries(values).filter(([fieldId]) => formIds.has(fieldId)),
+    );
     const parsed = createProjectBodySchema.safeParse({
       name: name.trim(),
-      code: codeShown ? code.trim() || undefined : undefined,
       description: description.trim() || undefined,
       typeId,
       portfolioId,
-      clientId: client?.id ?? null,
       managerId: managerId || undefined,
       assistantIds,
       observers: observerIds,
       visibility: effectiveVisibility,
       endDate,
+      ...(Object.keys(customFields).length > 0 ? { customFields } : {}),
     });
     if (!parsed.success) {
       setError(errorMessages[ErrorCode.VALIDATION_FAILED]);
@@ -158,14 +177,14 @@ export function ProjectCreateDialog({
             <div className="grid grid-cols-[7.5rem_1fr] items-center gap-x-3 gap-y-3">
               {/* Тип — ПЕРВОЕ поле формы сразу после названия и обычной
                   строкой сетки (label слева, селект справа — как «Тип задачи»):
-                  от типа зависит набор полей (схема типа — #38/#468). */}
+                  от типа зависит набор атрибутов (форма типа — Р10 #631). */}
               <FieldLabel>{ui.projects.fieldType}</FieldLabel>
               {types.isLoading ? (
                 <Skeleton className="h-8 w-full" />
               ) : liveTypes.length === 0 ? (
                 <span className="text-xs text-muted-foreground">{ui.projects.typesEmpty}</span>
               ) : (
-                <Select value={typeId} onValueChange={selectType}>
+                <Select value={typeId} onValueChange={setTypeId}>
                   <SelectTrigger className="h-8 w-full" aria-label={ui.projects.fieldType}>
                     <SelectValue placeholder={ui.projects.typePlaceholder} />
                   </SelectTrigger>
@@ -179,22 +198,14 @@ export function ProjectCreateDialog({
                 </Select>
               )}
 
-              {codeShown ? (
-                <>
-                  <FieldLabel>
-                    {ui.projects.fieldCode}
-                    {codeField === 'required' ? <RequiredMark /> : null}
-                  </FieldLabel>
-                  <Input
-                    value={code}
-                    onChange={(event) => setCode(event.target.value)}
-                    placeholder={ui.projects.codePlaceholder}
-                    aria-label={ui.projects.fieldCode}
-                    aria-required={codeField === 'required'}
-                    className="h-8 font-mono text-label-lg tabular-nums"
-                  />
-                </>
-              ) : null}
+              {/* Атрибуты слотов формы выбранного типа (после типа — как
+                  поля типа в задачах); до выбора типа не спрашиваются. */}
+              <ProjectAttributeRows
+                type={selectedType}
+                values={values}
+                refs={refs}
+                onChange={onField}
+              />
 
               <FieldLabel>{ui.projects.manager}</FieldLabel>
               <ManagerField
@@ -230,15 +241,6 @@ export function ProjectCreateDialog({
                 value={portfolioId}
                 label={ui.projects.filterPortfolio}
                 onChange={setPortfolioId}
-              />
-
-              <FieldLabel>{ui.projects.fieldClient}</FieldLabel>
-              <CounterpartyCombobox
-                value={client}
-                onChange={setClient}
-                ariaLabel={ui.projects.fieldClient}
-                className="h-8"
-                openOnFocus={false}
               />
 
               <FieldLabel>{ui.projects.fieldVisibility}</FieldLabel>

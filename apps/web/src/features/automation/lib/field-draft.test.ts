@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CustomFieldDefinition } from '@nodus/contracts';
+import type { CustomFieldDefinition, DictionaryItem } from '@nodus/contracts';
 import { createCustomFieldBodySchema, updateCustomFieldBodySchema } from '@nodus/contracts';
 
 import {
@@ -23,7 +23,7 @@ const ITEM_B = '50000000-0000-4000-8000-00000000000b';
 function definition(partial: Partial<CustomFieldDefinition>): CustomFieldDefinition {
   return {
     id: ID,
-    scope: 'task',
+    number: 1,
     type: 'text',
     name: 'Атрибут',
     hint: null,
@@ -32,8 +32,9 @@ function definition(partial: Partial<CustomFieldDefinition>): CustomFieldDefinit
     defaultValue: null,
     defaultRefs: [],
     reportIndexed: false,
-    hidden: false,
-    typeIds: [],
+    isCompany: false,
+    companyValue: null,
+    bindings: { processTypeIds: [], projectTypeIds: [], nodeKindIds: [] },
     sortOrder: 0,
     createdAt: '2026-10-25T00:00:00.000Z',
     updatedAt: '2026-10-25T00:00:00.000Z',
@@ -48,6 +49,7 @@ const items = [
     parentId: null,
     code: null,
     name: 'А',
+    color: null,
     sortOrder: 0,
     isActive: true,
   },
@@ -57,10 +59,11 @@ const items = [
     parentId: null,
     code: null,
     name: 'Б',
+    color: null,
     sortOrder: 1,
     isActive: true,
   },
-];
+] as const satisfies readonly DictionaryItem[];
 
 describe('черновик окна атрибута (#431, ревизия UI)', () => {
   it('тип — из семейства и модификатора', () => {
@@ -98,8 +101,8 @@ describe('черновик окна атрибута (#431, ревизия UI)',
     const draft = {
       ...withFamily(emptyDraft, 'list'),
       options: [
-        { id: ITEM_A, name: 'А' },
-        { id: tmp, name: 'Новый' },
+        { id: ITEM_A, name: 'А', color: null },
+        { id: tmp, name: 'Новый', color: null },
       ],
       defaultOptionIds: [tmp, 'удалённый'],
     };
@@ -127,22 +130,36 @@ describe('черновик окна атрибута (#431, ревизия UI)',
     expect(scalarDefault({ ...draft, defaultMode: 'static' })).toEqual(draft.defaultValue);
   });
 
-  it('тело создания проходит схему контракта (скрытый, подсказка, точность)', () => {
+  it('тело создания проходит схему контракта (привязки, подсказка, точность)', () => {
     const draft = {
       ...withFamily(emptyDraft, 'number'),
       name: ' Площадь ',
       hint: '  м² ',
-      hidden: true,
       settings: { precision: 2 },
+      bindings: { processTypeIds: [ID], projectTypeIds: [], nodeKindIds: [] },
     };
-    const body = createBody(draft, 'task', {});
+    const body = createBody(draft, {});
     expect(createCustomFieldBodySchema.safeParse(body).success).toBe(true);
     expect(body).toMatchObject({
       name: 'Площадь',
       hint: 'м²',
-      hidden: true,
       settings: { precision: 2 },
+      bindings: { processTypeIds: [ID], projectTypeIds: [], nodeKindIds: [] },
     });
+  });
+
+  it('глобальная переменная создаётся без привязок (Р7)', () => {
+    const draft = {
+      ...withFamily(emptyDraft, 'number'),
+      name: 'Срок мобализации, дней',
+      isCompany: true,
+      companyValue: 14,
+      bindings: { processTypeIds: [ID], projectTypeIds: [], nodeKindIds: [] },
+    };
+    const body = createBody(draft, {});
+    expect(createCustomFieldBodySchema.safeParse(body).success).toBe(true);
+    expect(body.isCompany).toBe(true);
+    expect(body.bindings).toBeUndefined();
   });
 
   it('черновик сохранённого списка и правка — только изменённые ключи', () => {
@@ -154,17 +171,21 @@ describe('черновик окна атрибута (#431, ревизия UI)',
     });
     const draft = draftOf(saved, items);
     expect(draft.options).toEqual([
-      { id: ITEM_A, name: 'А' },
-      { id: ITEM_B, name: 'Б' },
+      { id: ITEM_A, name: 'А', color: null },
+      { id: ITEM_B, name: 'Б', color: null },
     ]);
     expect(draft.defaultOptionIds).toEqual([ITEM_B]);
     expect(patchBody(saved, draft, saved.defaultValue)).toBeNull();
 
-    const next = { ...draft, modifier: true, hidden: true };
+    const next = {
+      ...draft,
+      modifier: true,
+      bindings: { processTypeIds: [ID], projectTypeIds: [], nodeKindIds: [] },
+    };
     const body = patchBody(saved, next, listDefault(next, 'multienum', new Map()));
     expect(body).toEqual({
       type: 'multienum',
-      hidden: true,
+      bindings: { processTypeIds: [ID], projectTypeIds: [], nodeKindIds: [] },
       defaultValue: { kind: 'static', value: [ITEM_B] },
     });
     expect(updateCustomFieldBodySchema.safeParse(body).success).toBe(true);

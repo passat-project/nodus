@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import type {
-  CustomFieldScope,
+  CustomFieldModule,
   ProcessType,
   WorkflowDetail,
   WorkflowStageName,
@@ -55,7 +55,7 @@ export function EditorPanel({
   /** Тип процесса: категория полей, форма создания, названия ролей (#432). */
   type: ProcessType;
   /** Область кастомных полей по категории маршрута (#431, Р7). */
-  scope: CustomFieldScope;
+  scope: CustomFieldModule;
   readOnly: boolean;
   /** Подсказки имён статусов из опубликованных маршрутов (#430). */
   stageNameSuggestions?: readonly WorkflowStageName[];

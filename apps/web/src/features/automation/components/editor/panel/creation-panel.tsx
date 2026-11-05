@@ -25,12 +25,12 @@ import type {
 } from '@nodus/contracts';
 import {
   CREATION_FORM_LIMITS,
+  bindingsOf,
   checkWorkflowDocument,
   customFieldIdOfKey,
   effectiveCreationForm,
   slotLabel,
   typeConfigOf,
-  typeIdsOf,
   ui,
 } from '@nodus/contracts';
 import { Eye } from 'lucide-react';
@@ -91,12 +91,8 @@ export function CreationPanel({
   const doc = useRouteDocStore((s) => s.document);
   const [previewOpen, setPreviewOpen] = useState(false);
   const { data: definitions } = useCustomFieldDefinitions(type.category);
-  // Все определения области, включая скрытые: скрытый атрибут бывает
-  // скрытым полем формы — его имя и редактор значения нужны и здесь.
-  const scoped = useMemo(
-    () => (definitions ?? []).filter((entry) => entry.scope === type.category),
-    [definitions, type.category],
-  );
+  // Определения уже отфильтрованы по модулю запросом (`?module=`).
+  const scoped = useMemo(() => definitions ?? [], [definitions]);
   const form = effectiveCreationForm(doc.creation, type.category);
   // `workflow.version` — подсказки пересчитываются после публикации.
   const problems = useMemo(
@@ -251,16 +247,16 @@ function creationProblems(
     category: type.category,
     customFields: {
       active: new Set(scoped.map((entry) => entry.id)),
-      hidden: new Set(scoped.filter((entry) => entry.hidden).map((entry) => entry.id)),
       inType: new Set(
-        scoped.filter((entry) => typeIdsOf(entry).includes(type.id)).map((entry) => entry.id),
+        scoped
+          .filter((entry) => bindingsOf(entry).processTypeIds.includes(type.id))
+          .map((entry) => entry.id),
       ),
     },
     definitions: scoped.map((entry) => ({
       id: entry.id,
       type: entry.type,
       settings: entry.settings,
-      hidden: entry.hidden,
     })),
     projectsAvailable: projectsAvailable(),
   }).filter((problem) => problem.code.startsWith('creation_') || problem.creationField);

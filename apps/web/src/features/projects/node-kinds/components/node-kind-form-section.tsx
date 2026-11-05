@@ -3,21 +3,19 @@ import { useState } from 'react';
 import type { NodeKind, NodeKindFieldState, NodeKindForm } from '@nodus/contracts';
 import { nodeKindFormOf, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
-import { NodeChip } from '@nodus/ui/components/node-chip';
 
 import { CustomFieldTypeIcon } from '../../../../shared/custom-fields/field-type-icon.js';
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
-import { PanelField, Segmented } from '../../../../shared/ui/panel/panel-kit.js';
+import { Segmented } from '../../../../shared/ui/panel/panel-kit.js';
 import type { RenderCreateField } from '../types.js';
 import { NodeKindFieldPicker } from './node-kind-field-picker.js';
 import { stateOptions } from './node-kind-summary.js';
 
 /**
- * Раздел «При создании папки» (#556, §4c): шифр и атрибуты области «Папка»
- * в состояниях «Скрыто / По желанию / Обязательно». Раздел сохраняется
- * целиком при каждом изменении (как форма типа процесса). Слот скрытого в
- * «Атрибутах» определения — приглушён с меткой и не редактируется
- * (сервер не пустит смену состояния), но сохраняется и убирается «×».
+ * Раздел «При создании папки» (#556, §4c): атрибуты, привязанные к виду, в
+ * состояниях «Скрыто / По желанию / Обязательно» — код папки идёт обычным
+ * атрибутом «Код» (ревизия #631). Раздел сохраняется целиком при каждом
+ * изменении (как форма типа процесса); привязка живёт в реестре атрибутов.
  */
 export function NodeKindFormSection({
   kind,
@@ -42,10 +40,6 @@ export function NodeKindFormSection({
     onSave(next);
   }
 
-  function setCode(code: NodeKindFieldState) {
-    save({ ...form, code });
-  }
-
   function setState(fieldId: string, state: NodeKindFieldState) {
     save({
       ...form,
@@ -64,27 +58,12 @@ export function NodeKindFormSection({
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      {/* Шифр — системное поле формы: та же грамматика «метка над контролом»,
-          что у атрибутов ниже. Сегменты — на всю ширину панели: в строке с
-          меткой подписи «По желанию»/«Обязательно» обрезались («По жела…»). */}
-      <PanelField label={ui.nodeKinds.form.codeLabel}>
-        <Segmented
-          layout="grid"
-          className="w-full"
-          value={form.code}
-          options={stateOptions()}
-          disabled={!canSetup}
-          onChange={setCode}
-        />
-      </PanelField>
-
       {form.fields.length === 0 ? (
         <p className="text-xs break-words text-muted-foreground">{ui.nodeKinds.form.empty}</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {form.fields.map((slot) => {
             const definition = byId.get(slot.fieldId);
-            const hidden = definition?.hidden ?? false;
             return (
               <li
                 key={slot.fieldId}
@@ -97,18 +76,9 @@ export function NodeKindFormSection({
                       className="size-3.5 shrink-0 text-muted-foreground"
                     />
                   ) : null}
-                  <span
-                    className={
-                      hidden
-                        ? 'min-w-0 flex-1 truncate text-sm text-muted-foreground'
-                        : 'min-w-0 flex-1 truncate text-sm'
-                    }
-                  >
+                  <span className="min-w-0 flex-1 truncate text-sm">
                     {definition?.name ?? ui.customFields.issues.unknown}
                   </span>
-                  {hidden ? (
-                    <NodeChip tone="muted">{ui.nodeKinds.form.hiddenInRegistry}</NodeChip>
-                  ) : null}
                   {canSetup ? (
                     <Button
                       variant="ghost"
@@ -127,7 +97,7 @@ export function NodeKindFormSection({
                   className="w-full"
                   value={slot.state}
                   options={stateOptions()}
-                  disabled={!canSetup || hidden}
+                  disabled={!canSetup}
                   onChange={(state) => setState(slot.fieldId, state)}
                 />
               </li>

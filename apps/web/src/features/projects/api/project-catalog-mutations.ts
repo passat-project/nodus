@@ -6,7 +6,7 @@ import type {
   ProjectTypeCreateBody,
   ProjectTypeUpdateBody,
 } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { DEFAULT_PROJECT_TYPE_FORM, ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api } from '../../../shared/api-client.js';
@@ -48,7 +48,7 @@ export function useCreateProjectType() {
         name: body.name,
         icon: body.icon ?? 'file-text',
         color: body.color ?? 'blue',
-        codeField: 'optional',
+        form: body.form ?? DEFAULT_PROJECT_TYPE_FORM,
         kindIds: null,
         archivedAt: null,
       };
@@ -71,8 +71,8 @@ export function useCreateProjectType() {
   });
 }
 
-/** Правка типа проекта: имя, политика системного поля «Шифр», допустимые
- *  виды папок (#556). */
+/** Правка типа проекта: имя, значок, цвет, форма атрибутов (слоты, замена
+ *  целиком — Р10 #631), допустимые виды папок (#556). */
 export function useUpdateProjectType() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -83,7 +83,7 @@ export function useUpdateProjectType() {
           ...(vars.name ? { name: vars.name } : {}),
           ...(vars.icon ? { icon: vars.icon } : {}),
           ...(vars.color ? { color: vars.color } : {}),
-          ...(vars.codeField ? { codeField: vars.codeField } : {}),
+          ...(vars.form !== undefined ? { form: vars.form } : {}),
           ...(vars.kindIds !== undefined ? { kindIds: vars.kindIds } : {}),
         },
       }),
@@ -99,7 +99,7 @@ export function useUpdateProjectType() {
                 ...(vars.name ? { name: vars.name } : {}),
                 ...(vars.icon ? { icon: vars.icon } : {}),
                 ...(vars.color ? { color: vars.color } : {}),
-                ...(vars.codeField ? { codeField: vars.codeField } : {}),
+                ...(vars.form !== undefined ? { form: vars.form } : {}),
                 ...(vars.kindIds !== undefined ? { kindIds: vars.kindIds } : {}),
               }
             : row,

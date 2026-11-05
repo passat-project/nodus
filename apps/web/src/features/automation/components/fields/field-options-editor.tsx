@@ -17,12 +17,29 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Plus, X } from 'lucide-react';
 import { useState } from 'react';
+import type { StageColor } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Checkbox } from '@nodus/ui/components/checkbox';
 import { Input } from '@nodus/ui/components/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@nodus/ui/components/popover';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { stageTone } from '../../../../shared/ui/board/stage-tone.js';
 import { DRAFT_PREFIX, type OptionDraft } from '../../lib/field-draft.js';
+
+/** Тоны палитры темы (порядок = порядок палитры редактора маршрутов). */
+const TONES: readonly StageColor[] = [
+  'neutral',
+  'info',
+  'success',
+  'warning',
+  'danger',
+  'violet',
+  'teal',
+  'orange',
+  'pink',
+  'cyan',
+];
 
 /**
  * Варианты списка в окне атрибута — ЧЕРНОВИК (сервер получит по
@@ -61,7 +78,7 @@ export function FieldOptionsEditor({
   function add() {
     const name = draft.trim();
     if (!name) return;
-    onChange([...options, { id: `${DRAFT_PREFIX}${crypto.randomUUID()}`, name }]);
+    onChange([...options, { id: `${DRAFT_PREFIX}${crypto.randomUUID()}`, name, color: null }]);
     setDraft('');
   }
 
@@ -102,6 +119,11 @@ export function FieldOptionsEditor({
                 onRename={(name) =>
                   onChange(
                     options.map((entry) => (entry.id === option.id ? { ...entry, name } : entry)),
+                  )
+                }
+                onColor={(color) =>
+                  onChange(
+                    options.map((entry) => (entry.id === option.id ? { ...entry, color } : entry)),
                   )
                 }
                 onToggleDefault={() => toggleDefault(option.id)}
@@ -155,16 +177,18 @@ function OptionRow({
   defaultDisabled,
   isDefault,
   onRename,
+  onColor,
   onToggleDefault,
   onDelete,
 }: {
   option: OptionDraft;
-  /** Переименование/удаление/перетаскивание — операция со справочником. */
+  /** Переименование/удаление/перетаскивание/цвет — операция со справочником. */
   locked: boolean;
   /** Отметка «По умолчанию» — настройка атрибута, не справочника. */
   defaultDisabled: boolean;
   isDefault: boolean;
   onRename: (name: string) => void;
+  onColor: (color: StageColor | null) => void;
   onToggleDefault: () => void;
   onDelete: () => void;
 }) {
@@ -202,6 +226,7 @@ function OptionRow({
         onChange={(e) => onRename(e.target.value)}
         className="h-8 flex-1 text-sm"
       />
+      <ColorDot color={option.color} locked={locked} onPick={onColor} />
       <span className="flex w-[4.5rem] shrink-0 justify-center">
         <Checkbox
           checked={isDefault}
@@ -221,5 +246,68 @@ function OptionRow({
         <X className="size-4" strokeWidth={1.75} />
       </button>
     </div>
+  );
+}
+
+/** Точка-палитра варианта (Р6 #631): тон палитры темы или «без цвета».
+ *  Новый вариант создаётся без цвета — администратор выбирает сам
+ *  (случайный цвет новых вариантов, как у Jira TMP, отклонён). */
+function ColorDot({
+  color,
+  locked,
+  onPick,
+}: {
+  color: StageColor | null;
+  locked: boolean;
+  onPick: (color: StageColor | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={locked}
+          aria-label={ui.customFields.dialog.optionColor}
+          title={ui.customFields.dialog.optionColor}
+          className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {color ? (
+            <span className={cn('size-3 rounded-full', stageTone[color].dot)} aria-hidden />
+          ) : (
+            <span className="size-3 rounded-full border border-dashed border-input" aria-hidden />
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto p-2">
+        <div className="flex items-center gap-1">
+          {[null, ...TONES].map((tone) => (
+            <button
+              key={tone ?? 'none'}
+              type="button"
+              aria-label={tone ?? ui.customFields.dialog.optionNoColor}
+              title={tone ?? ui.customFields.dialog.optionNoColor}
+              onClick={() => {
+                onPick(tone);
+                setOpen(false);
+              }}
+              className={cn(
+                'flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent',
+                tone === color && 'bg-accent',
+              )}
+            >
+              {tone ? (
+                <span className={cn('size-3 rounded-full', stageTone[tone].dot)} aria-hidden />
+              ) : (
+                <span
+                  className="size-3 rounded-full border border-dashed border-input"
+                  aria-hidden
+                />
+              )}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

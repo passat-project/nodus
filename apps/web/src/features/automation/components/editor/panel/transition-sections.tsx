@@ -1,5 +1,5 @@
 import type {
-  CustomFieldScope,
+  CustomFieldModule,
   ProcessCategory,
   WorkflowDraftDocument,
   WorkflowDraftTransition,
@@ -59,7 +59,7 @@ export function ConditionsSection({
   category = 'task',
 }: {
   transition: WorkflowDraftTransition;
-  scope: CustomFieldScope;
+  scope: CustomFieldModule;
   /** Тип процесса: в гейт выбираются только его атрибуты (#432, Р8). */
   typeId?: string;
   readOnly: boolean;
@@ -138,7 +138,6 @@ export function ConditionsSection({
                 disabled={readOnly}
                 limit={CUSTOM_FIELD_LIMITS.gateFields}
                 limitHint={ui.automation.panel.gateFieldsLimit}
-                includeHidden
                 onToggle={(key) => patch(toggleField(rules, key))}
               />
             </>

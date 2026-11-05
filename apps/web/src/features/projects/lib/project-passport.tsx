@@ -1,11 +1,9 @@
 import {
   Activity,
-  Building2,
   CalendarClock,
   CalendarPlus,
   Eye,
   FolderOpen,
-  Hash,
   Lock,
   Tag,
   User,
@@ -50,10 +48,11 @@ function personLink(
 /**
  * Паспорт проекта — ВСЯ информация полями-реестром (вердикт владельца
  * 07.11.2026: шапки-витрины в панели «О проекте» нет, название живёт в хроме
- * карточки и правится кликом). Поля: статус, видимость, шифр, тип, портфель,
- * руководство, заказчик, крайний срок, состав, создатель, активность.
+ * карточки и правится кликом). Поля: статус, видимость, тип, портфель,
+ * руководство, крайний срок, состав, создатель, активность. Шифр и заказчик
+ * — атрибуты: живут в блоке «Атрибуты» панели (#631), не в паспорте.
  * «Начала» проекта нет — есть крайний срок (тот же вердикт). Ссылки на
- * сотрудников/контрагента открываются карточками стека (ADR-0009).
+ * сотрудников открываются карточками стека (ADR-0009).
  */
 export function projectPassportDefs(
   project: ProjectDetail,
@@ -71,12 +70,6 @@ export function projectPassportDefs(
       icon: <Lock className="size-3.5" />,
       label: ui.projects.fieldVisibility,
       render: () => <ProjectVisibilityChip project={project} />,
-    },
-    {
-      key: 'code',
-      icon: <Hash className="size-3.5" />,
-      label: ui.projects.fieldCode,
-      render: () => <span className={monoValue}>{project.code ?? ui.projects.noCode}</span>,
     },
     {
       key: 'type',
@@ -109,23 +102,6 @@ export function projectPassportDefs(
               <span key={assistant.id}>{personLink(assistant, openCard)}</span>
             ))}
           </span>
-        ),
-    },
-    {
-      key: 'client',
-      icon: <Building2 className="size-3.5" />,
-      label: ui.projects.fieldClient,
-      render: () =>
-        project.client ? (
-          <button
-            type="button"
-            onClick={() => openCard({ kind: 'counterparty', id: project.client?.id ?? '' })}
-            className="min-w-0 truncate hover:underline"
-          >
-            {project.client.name}
-          </button>
-        ) : (
-          ui.common.notSet
         ),
     },
     {

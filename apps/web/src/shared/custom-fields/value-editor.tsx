@@ -13,6 +13,7 @@ import { ListEditor } from './editors/list-editor.js';
 import { NumberEditor } from './editors/number-editor.js';
 import { PeopleEditor } from './editors/people-editor.js';
 import { ProjectEditor } from './editors/project-editor.js';
+import { LetterEditor, NodeEditor, TaskEditor } from './editors/record-editors.js';
 import { TextEditor } from './editors/text-editor.js';
 
 export interface CustomFieldEditorProps {
@@ -84,6 +85,12 @@ export function CustomFieldEditor(props: CustomFieldEditorProps) {
       return <ProjectEditor {...editorProps} />;
     case 'counterparty':
       return <CounterpartyEditor {...editorProps} />;
+    case 'task':
+      return <TaskEditor {...editorProps} />;
+    case 'letter':
+      return <LetterEditor {...editorProps} />;
+    case 'node':
+      return <NodeEditor {...editorProps} />;
     case 'link':
       return <LinkEditor {...editorProps} />;
   }

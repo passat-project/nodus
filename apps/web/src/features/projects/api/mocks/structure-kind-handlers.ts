@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import {
   ErrorCode,
+  DEFAULT_NODE_KIND_FORM,
   nodeKindCreateBodySchema,
   nodeKindUpdateBodySchema,
   normalizeNodeKindCapabilities,
@@ -37,7 +38,7 @@ export const structureKindHandlers = [
     const kind: NodeKind = {
       id: crypto.randomUUID(),
       archivedAt: null,
-      form: { code: 'optional', fields: [] },
+      form: DEFAULT_NODE_KIND_FORM,
       capabilities: [],
       ...parsed.data,
     };
@@ -62,7 +63,7 @@ export const structureKindHandlers = [
       return conflict(ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN, 'Kind name is already taken');
     }
     if (parsed.data.form) {
-      const issues = kindFormIssues(parsed.data.form, kind.form);
+      const issues = kindFormIssues(kind, parsed.data.form);
       const response = issues.length > 0 ? ruleResponse(kindFormInvalidIssue(issues)) : null;
       if (response) return response;
       kind.form = parsed.data.form;

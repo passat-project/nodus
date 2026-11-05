@@ -7,7 +7,14 @@ import type {
   CustomFieldValues,
   NodeKind,
 } from '@nodus/contracts';
-import { effectiveNodeForm, ErrorCode, missingNodeFields, NODE_LIMITS, ui } from '@nodus/contracts';
+import {
+  effectiveNodeForm,
+  ErrorCode,
+  missingNodeFields,
+  NODE_LIMITS,
+  SYSTEM_FIELD_IDS,
+  ui,
+} from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
   Dialog,
@@ -29,12 +36,12 @@ import { NodeCreateFields } from './node-form-fields.js';
 import { NodeKindSelect } from './node-create-kind-select.js';
 
 /**
- * Окно «Создать папку» (#556, §4c): вид первым → название → шифр по форме
- * вида → атрибуты слотами «по желанию / обязательно». «Создать» неактивна,
- * пока не заполнены обязательные; сервер проверяет то же (422 подсвечивает
- * поля). Пачка — шеврон этого же окна, недоступна у вида с обязательным
- * шифром: у каждой папки свой шифр (В1). Скрытые в «Атрибутах» и «скрыто»
- * в форме не спрашиваются.
+ * Окно «Создать папку» (#556, §4c; ревизия #631): вид первым → название →
+ * атрибуты формы слотами «по желанию / обязательно» — код папки идёт
+ * обычным атрибутом «Код». «Создать» неактивна, пока не заполнены
+ * обязательные; сервер проверяет то же (422 подсвечивает поля). Пачка —
+ * шеврон этого же окна, недоступна у вида с обязательным «Кодом»: у каждой
+ * папки свой код (В1). Состояние «скрыто» не спрашивается.
  */
 export function NodeCreateDialog({
   projectId,
@@ -58,7 +65,6 @@ export function NodeCreateDialog({
 
   const [kindId, setKindId] = useState(active[0]?.id ?? '');
   const [name, setName] = useState('');
-  const [code, setCode] = useState('');
   const [values, setValues] = useState<CustomFieldValues>({});
   const [refs, setRefs] = useState<CustomFieldRef[]>([]);
   const [errors, setErrors] = useState<ReadonlySet<string>>(new Set());
@@ -72,10 +78,10 @@ export function NodeCreateDialog({
     () => (kind ? effectiveNodeForm(kind, definitions.data ?? []) : null),
     [kind, definitions.data],
   );
-  const codeRequired = form?.code === 'required';
-  const missing = form
-    ? missingNodeFields(form, { code: code.trim() || null, customFields: values })
-    : [];
+  const codeRequired = form?.fields.some(
+    (slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode && slot.state === 'required',
+  );
+  const missing = form ? missingNodeFields(form, { customFields: values }) : [];
   const names = useMemo(() => {
     if (!batchOpen) return [];
     const start = Number.parseInt(from, 10);
@@ -121,7 +127,7 @@ export function NodeCreateDialog({
     if (!(error instanceof ApiError)) return;
     if (error.code === ErrorCode.PROJECT_NODE_FIELDS_REQUIRED) {
       const fields = (error.details?.fields as string[] | undefined) ?? [];
-      setErrors(new Set(fields.map((key) => (key === 'code' ? 'code' : key.slice('cf.'.length)))));
+      setErrors(new Set(fields.map((key) => key.slice('cf.'.length))));
       refreshKinds();
     }
   }
@@ -145,7 +151,6 @@ export function NodeCreateDialog({
         parentId: parent?.id ?? null,
         kindId: kind.id,
         name: name.trim(),
-        ...(code.trim() ? { code: code.trim() } : {}),
         ...(Object.keys(values).length > 0 ? { customFields: values } : {}),
       },
       { onSuccess: onClose, onError: onRuleError },
@@ -222,16 +227,6 @@ export function NodeCreateDialog({
             <NodeCreateFields
               kind={kind}
               definitions={definitions.data ?? []}
-              code={code}
-              onCode={(value) => {
-                setCode(value);
-                setErrors((prev) => {
-                  if (!prev.has('code')) return prev;
-                  const next = new Set(prev);
-                  next.delete('code');
-                  return next;
-                });
-              }}
               values={values}
               refs={refs}
               errors={errors}
@@ -240,8 +235,8 @@ export function NodeCreateDialog({
           ) : null}
 
           {/* Пакетное создание — режим окна, а не поле: стоит ПОСЛЕ полей
-              (владелец: вид → название → шифр → атрибуты → пачка), не
-              разрывая связку «вид → название». */}
+              (владелец: вид → название → атрибуты → пачка), не разрывая
+              связку «вид → название». */}
           <button
             type="button"
             onClick={() => setBatchOpen((prev) => !prev)}

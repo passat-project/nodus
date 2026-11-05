@@ -116,11 +116,12 @@ export type CreateDictionaryItemBody = z.infer<typeof createDictionaryItemBodySc
 
 export const updateDictionaryItemBodySchema = z
   .object({
-    name: z.string().trim().min(1).max(120),
+    name: z.string().trim().min(1).max(120).optional(),
     /** Цвет варианта (Р6 #631): null — убрать цвет. */
     color: stageColorSchema.nullable().optional(),
   })
-  .strict();
+  .strict()
+  .refine((v) => Object.keys(v).length > 0, { message: 'empty update' });
 export type UpdateDictionaryItemBody = z.infer<typeof updateDictionaryItemBodySchema>;
 
 /** Порядок вариантов — перетаскиванием: ids = ровно активные элементы. */

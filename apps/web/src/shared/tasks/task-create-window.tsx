@@ -13,7 +13,7 @@ import { automationKeys } from '../api/automation-keys.js';
 import { defaultTaskType, useCreatableProcessTypes } from '../api/process-types-api.js';
 import { useCreateTask } from '../api/task-create.js';
 import { useCanManageWorkflows } from '../api/use-can-manage-workflows.js';
-import { useCustomFieldDefinitions, visibleDefinitions } from '../custom-fields/queries.js';
+import { useCustomFieldDefinitions } from '../custom-fields/queries.js';
 import { ProcessTypeField } from './process-type-field.js';
 import { TaskChecklistSheet } from './task-checklist-sheet.js';
 import { TaskCreateChips } from './task-create-chips.js';
@@ -118,7 +118,7 @@ export function TaskCreateWindow({
     !missingStructure &&
     !structure.loading &&
     shownType !== undefined;
-  const fieldDefs = useMemo(() => visibleDefinitions(definitions), [definitions]);
+  const fieldDefs = useMemo(() => definitions ?? [], [definitions]);
   const roleLabels = shownType ? typeConfigOf(shownType).card.roleLabels : undefined;
   const missingText = [
     missingTextOf(missing, form, roleLabels, fieldDefs),

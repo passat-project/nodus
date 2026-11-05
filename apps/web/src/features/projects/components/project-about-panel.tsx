@@ -13,10 +13,11 @@ import { projectPassportDefs } from '../lib/project-passport.js';
  * ЛЕВАЯ панель карточки проекта — «О проекте» (вердикты владельца 07.11.2026:
  * главная панель без вкладки, рабочая зона — справа). Витрины-шапки НЕТ:
  * название живёт в хроме карточки и правится кликом (`ProjectTitle`), вся
- * остальная информация — полями-реестром паспорта (статус, видимость, шифр,
- * тип, портфель, руководство, заказчик, крайний срок, состав, создатель,
- * активность) и блоком «Атрибуты» области `project`. Действия проекта —
- * в нижнем баре панели (`ProjectActionBar`), как в задачах и письмах.
+ * остальная информация — полями-реестром паспорта (статус, видимость, тип,
+ * портфель, руководство, крайний срок, состав, создатель, активность) и
+ * блоком «Атрибуты» типа проекта (шифр и заказчик — среди них, #631).
+ * Действия проекта — в нижнем баре панели (`ProjectActionBar`), как в
+ * задачах и письмах.
  */
 export function ProjectAboutPanel({ project }: { project: ProjectDetail }) {
   const openCard = useOpenCard();
@@ -35,7 +36,8 @@ export function ProjectAboutPanel({ project }: { project: ProjectDetail }) {
       />
 
       <CustomFieldsBlock
-        scope="project"
+        module="project"
+        targetId={project.type?.id ?? undefined}
         values={project.customFields}
         refs={project.customFieldRefs}
         canEdit={project.access.canManage}

@@ -207,7 +207,7 @@ export const lettersMutationHandlers = [
       responseDeadline:
         body.responseDeadline !== undefined ? body.responseDeadline : letter.responseDeadline,
       customFields: body.customFields
-        ? applyDemoPatch('letter', letter.customFields, body.customFields).next
+        ? applyDemoPatch(letter.customFields, body.customFields).next
         : letter.customFields,
       confidential: body.confidential ?? letter.confidential,
       attachedRefs: attached && 'refs' in attached ? attached.refs : letter.attachedRefs,

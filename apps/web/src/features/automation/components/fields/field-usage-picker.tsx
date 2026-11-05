@@ -1,0 +1,235 @@
+import { useState } from 'react';
+import { Check, ChevronDown, Minus } from 'lucide-react';
+import type { CustomFieldBindings } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
+import { cn } from '@nodus/ui/lib/utils';
+
+import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
+import { useProjectTypes } from '../../../../shared/api/projects-list.js';
+import { useProcessTypes } from '../../api/automation-api.js';
+
+/**
+ * «Где используется» окна атрибута (#631, Р11): галочки модулей с
+ * раскрытием до конкретных типов и видов. Та же привязка видна и ставится
+ * из формы типа или вида — механизм один (Р3). Глобальная переменная
+ * привязок не имеет — пикер скрыт (Р7).
+ */
+
+interface Target {
+  id: string;
+  name: string;
+}
+
+/** Индикатор выбора — ведущий, у самого названия (как в FieldTypesPicker). */
+function Mark({ state }: { state: 'on' | 'off' | 'some' }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'flex size-4 shrink-0 items-center justify-center rounded-[0.25rem] border transition-colors',
+        state === 'off' ? 'border-input' : 'border-primary bg-primary text-primary-foreground',
+      )}
+    >
+      {state === 'on' ? <Check className="size-3" strokeWidth={2.5} /> : null}
+      {state === 'some' ? <Minus className="size-3" strokeWidth={2.5} /> : null}
+    </span>
+  );
+}
+
+function Group({
+  label,
+  targets,
+  selected,
+  expanded,
+  onToggleExpand,
+  onToggleAll,
+  onToggleOne,
+  emptyText,
+  disabled,
+}: {
+  label: string;
+  targets: readonly Target[];
+  selected: ReadonlySet<string>;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  onToggleAll: () => void;
+  onToggleOne: (id: string) => void;
+  emptyText?: string;
+  disabled: boolean;
+}) {
+  const chosen = targets.filter((target) => selected.has(target.id));
+  const state = chosen.length === 0 ? 'off' : chosen.length === targets.length ? 'on' : 'some';
+  return (
+    <div className="rounded-lg border border-input">
+      <div className="flex items-center">
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={state === 'some' ? 'mixed' : state === 'on'}
+          disabled={disabled || targets.length === 0}
+          onClick={onToggleAll}
+          className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left text-sm text-secondary-foreground transition-colors hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Mark state={state} />
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+            {chosen.length}/{targets.length}
+          </span>
+        </button>
+        {targets.length > 0 ? (
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            aria-expanded={expanded}
+            aria-label={label}
+            className="flex size-8 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ChevronDown
+              className={cn('size-3.5 transition-transform', expanded && 'rotate-180')}
+              strokeWidth={1.75}
+            />
+          </button>
+        ) : null}
+      </div>
+      {expanded && targets.length > 0 ? (
+        <div className="flex flex-col gap-0.5 border-t px-1.5 py-1.5">
+          {targets.map((target) => {
+            const on = selected.has(target.id);
+            return (
+              <button
+                key={target.id}
+                type="button"
+                role="checkbox"
+                aria-checked={on}
+                disabled={disabled}
+                onClick={() => onToggleOne(target.id)}
+                className={cn(
+                  'flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60',
+                  on ? 'text-foreground' : 'text-secondary-foreground',
+                  disabled && 'cursor-not-allowed opacity-60',
+                )}
+              >
+                <Mark state={on ? 'on' : 'off'} />
+                <span className="min-w-0 flex-1 truncate">{target.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      {expanded && targets.length === 0 && emptyText ? (
+        <p className="border-t px-2.5 py-2 text-xs text-muted-foreground">{emptyText}</p>
+      ) : null}
+    </div>
+  );
+}
+
+export function FieldUsagePicker({
+  bindings,
+  disabled,
+  onChange,
+}: {
+  bindings: CustomFieldBindings;
+  disabled: boolean;
+  onChange: (bindings: CustomFieldBindings) => void;
+}) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const { data: processTypes } = useProcessTypes();
+  const { data: projectTypes } = useProjectTypes(true);
+  const { data: nodeKinds } = useNodeKinds();
+
+  const taskTypes: Target[] = (processTypes ?? [])
+    .filter((type) => type.category === 'task' && !type.archivedAt)
+    .map((type) => ({ id: type.id, name: type.name }));
+  const letterTypes: Target[] = (processTypes ?? [])
+    .filter((type) => type.category === 'letter' && !type.archivedAt)
+    .map((type) => ({ id: type.id, name: type.name }));
+  const types: Target[] = (projectTypes ?? [])
+    .filter((type) => type.archivedAt === null)
+    .map((type) => ({ id: type.id, name: type.name }));
+  const kinds: Target[] = (nodeKinds ?? []).map((kind) => ({ id: kind.id, name: kind.name }));
+
+  const toggleList = (current: string[], all: readonly Target[]): string[] => {
+    const set = new Set(current);
+    const chosen = all.filter((target) => set.has(target.id)).length;
+    const selectAll = chosen !== all.length;
+    for (const target of all) {
+      if (selectAll) set.add(target.id);
+      else set.delete(target.id);
+    }
+    return [...set];
+  };
+
+  const toggleOne = (current: string[], id: string): string[] =>
+    current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+
+  const groups: Array<{
+    key: string;
+    label: string;
+    targets: readonly Target[];
+    selected: string[];
+    list: 'processTypeIds' | 'projectTypeIds' | 'nodeKindIds';
+    emptyText?: string;
+  }> = [
+    {
+      key: 'task',
+      label: ui.customFields.bind.groupTaskTypes,
+      targets: taskTypes,
+      selected: bindings.processTypeIds.filter((id) => taskTypes.some((t) => t.id === id)),
+      list: 'processTypeIds',
+    },
+    {
+      key: 'letter',
+      label: ui.customFields.bind.groupLetterTypes,
+      targets: letterTypes,
+      selected: bindings.processTypeIds.filter((id) => letterTypes.some((t) => t.id === id)),
+      list: 'processTypeIds',
+    },
+    {
+      key: 'project',
+      label: ui.customFields.bind.groupProjectTypes,
+      targets: types,
+      selected: bindings.projectTypeIds,
+      list: 'projectTypeIds',
+      emptyText: ui.customFields.bind.projectTypesEmpty,
+    },
+    {
+      key: 'node',
+      label: ui.customFields.bind.groupNodeKinds,
+      targets: kinds,
+      selected: bindings.nodeKindIds,
+      list: 'nodeKindIds',
+      emptyText: ui.customFields.bind.nodeKindsEmpty,
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5">
+        {groups.map((group) => (
+          <Group
+            key={group.key}
+            label={group.label}
+            targets={group.targets}
+            selected={new Set(group.selected)}
+            expanded={expanded[group.key] ?? false}
+            onToggleExpand={() =>
+              setExpanded((current) => ({ ...current, [group.key]: !current[group.key] }))
+            }
+            onToggleAll={() =>
+              onChange({
+                ...bindings,
+                [group.list]: toggleList(bindings[group.list], group.targets),
+              })
+            }
+            onToggleOne={(id) =>
+              onChange({ ...bindings, [group.list]: toggleOne(bindings[group.list], id) })
+            }
+            emptyText={group.emptyText}
+            disabled={disabled}
+          />
+        ))}
+      </div>
+      <p className="text-xs break-words text-muted-foreground">{ui.customFields.bind.usageHint}</p>
+    </div>
+  );
+}

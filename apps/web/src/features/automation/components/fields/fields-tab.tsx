@@ -1,71 +1,140 @@
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { Plus } from 'lucide-react';
+import { Check, ChevronDown, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import type { CustomFieldDefinition, CustomFieldScope } from '@nodus/contracts';
-import { customFieldScopeSchema, ui } from '@nodus/contracts';
+import type { CustomFieldDefinition, CustomFieldModule } from '@nodus/contracts';
+import { customFieldModuleSchema, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@nodus/ui/components/dropdown-menu';
+import { cn } from '@nodus/ui/lib/utils';
 
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { useCanManageFields } from '../../../../shared/custom-fields/use-can-manage-fields.js';
-import { SegmentedControl } from '../../../../shared/ui/segmented-control.js';
+import { useProcessTypes } from '../../api/automation-api.js';
+import { useReorderCustomFields, useSetCompanyValue } from '../../api/custom-fields-api.js';
 import { DataTable } from '../../../../shared/views/data-table.js';
 import { ListToolbar } from '../../../../shared/views/list-toolbar.js';
 import { useListToolbar } from '../../../../shared/views/use-list-toolbar.js';
 import { useRowSelection } from '../../../../shared/views/use-row-selection.js';
 import { ViewSettings } from '../../../../shared/views/view-settings.js';
-import { useReorderCustomFields, useUpdateCustomField } from '../../api/custom-fields-api.js';
 import { FieldBulkIsland } from './field-bulk-island.js';
-import { fieldColumnsFor } from './field-columns.js';
+import { fieldColumns, FIELD_MODULES } from './field-columns.js';
 import { FieldDeleteDialog } from './field-delete-dialog.js';
 import { FieldDialog, type FieldDialogMode } from './field-dialog.js';
 import { fieldRowMenu } from './field-row-menu.js';
 
-const FIELD_SCOPES = customFieldScopeSchema.options;
 const VIEW_KEY = 'custom-fields.list';
 
-/** Подсказка области, значения которой ещё не пишутся (О5, #556): только
- *  контрагенты; задачи, письма, проекты и папки работают. */
-function pendingHint(scope: CustomFieldScope): string | undefined {
-  return (ui.customFields.scopePending as Partial<Record<CustomFieldScope, string>>)[scope];
+/** Фильтр модуля — выпадающий чип (Р11): Все / Задачи / Письма / Проекты /
+ *  Папки / Глобальные. «Реестры» добавит #636 (В6). */
+function ModuleFilter({
+  value,
+  onChange,
+}: {
+  value: CustomFieldModule | 'all';
+  onChange: (next: CustomFieldModule | 'all') => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 shrink-0 gap-1.5 text-sm">
+          <span className="text-muted-foreground">{ui.customFields.page.moduleFilter}:</span>
+          <span>{ui.customFields.modules[value]}</span>
+          <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={1.75} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {FIELD_MODULES.map((module) => (
+          <DropdownMenuItem
+            key={module}
+            onSelect={() => onChange(module)}
+            className={cn(module === value && 'font-medium')}
+          >
+            <span className="flex-1">{ui.customFields.modules[module]}</span>
+            {module === value ? (
+              <Check className="size-3.5 text-muted-foreground" strokeWidth={1.75} />
+            ) : null}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 /**
- * Вкладка «Атрибуты» «Автоматизации» (#431, ревизия UI 25.10.2026 —
- * вердикт владельца: «список по центру, как обычные сущности, как в
- * Битриксе»): шапка реестра по образцу журналов (заголовок + счётчик,
- * переключатель сущности пилюлей, «Создать» слева от поиска, шестерёнка
- * колонок), по центру — каноническая таблица `shared/views` с меню строки и
- * островком массовых действий. Клик по строке — окно атрибута. Порядок
- * строк = порядок атрибутов в карточке. Маршрут —
- * `/automation?tab=fields[&scope=<сущность>][&field=<id>]` (field — открыть окно).
+ * Вкладка «Атрибуты» «Автоматизации» (#431, ревизия #631 — один атрибут на
+ * весь портал): ОДНА таблица всех атрибутов портала с колонкой «Где
+ * используется» и фильтром-модулем вместо переключателя областей; порядок
+ * строк = порядок атрибутов в карточках (глобальный sortOrder, «Поднять/
+ * Опустить» и массовое удаление как раньше). Клик по строке — окно
+ * атрибута. Маршрут — `/automation?tab=fields[&module=<модуль>][&field=<id>]`
+ * (field — открыть окно, module — фильтр реестра).
  */
 export function FieldsTab() {
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { scope?: string; field?: string };
-  const scope: CustomFieldScope = customFieldScopeSchema.safeParse(search.scope).data ?? 'task';
+  const search = useSearch({ strict: false }) as { module?: string; field?: string };
+  const module = customFieldModuleSchema.safeParse(search.module).data ?? 'all';
   const canManage = useCanManageFields();
   const toolbar = useListToolbar(VIEW_KEY);
   const query = useCustomFieldDefinitions();
-  const columns = useMemo(() => fieldColumnsFor(scope), [scope]);
+  const { data: processTypes } = useProcessTypes();
   const all = useMemo(() => query.data ?? [], [query.data]);
-  const inScope = useMemo(
+  const setCompanyValue = useSetCompanyValue();
+  const columns = useMemo(
     () =>
-      all
-        .filter((definition) => definition.scope === scope)
-        .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id)),
-    [all, scope],
+      fieldColumns(canManage, (definition, value) =>
+        setCompanyValue.mutate({ fieldId: definition.id, value }),
+      ),
+    [canManage, setCompanyValue],
   );
+
+  // Задачи и письма делят processTypeIds — разбивку дают категории типов.
+  const typeCategories = useMemo(
+    () => ({
+      taskTypeIds: new Set(
+        (processTypes ?? []).filter((type) => type.category === 'task').map((type) => type.id),
+      ),
+      letterTypeIds: new Set(
+        (processTypes ?? []).filter((type) => type.category === 'letter').map((type) => type.id),
+      ),
+    }),
+    [processTypes],
+  );
+  const inModuleRows = useMemo(() => {
+    const matches = (definition: CustomFieldDefinition): boolean => {
+      if (module === 'all') return true;
+      if (module === 'company') return definition.isCompany;
+      const { processTypeIds, projectTypeIds, nodeKindIds } = definition.bindings;
+      switch (module) {
+        case 'task':
+          return processTypeIds.some((id) => typeCategories.taskTypeIds.has(id));
+        case 'letter':
+          return processTypeIds.some((id) => typeCategories.letterTypeIds.has(id));
+        case 'project':
+          return projectTypeIds.length > 0;
+        case 'node':
+          return nodeKindIds.length > 0;
+      }
+    };
+    return all
+      .filter(matches)
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
+  }, [all, module, typeCategories]);
   const q = toolbar.query.trim().toLowerCase();
   const rows = useMemo(
     () =>
       q
-        ? inScope.filter(
+        ? inModuleRows.filter(
             (definition) =>
               definition.name.toLowerCase().includes(q) ||
               (definition.hint ?? '').toLowerCase().includes(q),
           )
-        : inScope,
-    [inScope, q],
+        : inModuleRows,
+    [inModuleRows, q],
   );
   const rowKeys = useMemo(() => rows.map((row) => row.id), [rows]);
   const selection = useRowSelection(rowKeys);
@@ -73,31 +142,24 @@ export function FieldsTab() {
 
   const [creating, setCreating] = useState(false);
   const [deleteTargets, setDeleteTargets] = useState<CustomFieldDefinition[]>([]);
-  const update = useUpdateCustomField();
   const reorder = useReorderCustomFields();
   const editing = all.find((definition) => definition.id === search.field) ?? null;
   const dialog: FieldDialogMode | null = editing
     ? { kind: 'edit', definition: editing }
     : creating
-      ? { kind: 'create', scope }
+      ? { kind: 'create' }
       : null;
 
-  const setSearch = (next: { scope?: CustomFieldScope; field?: string }) =>
+  const setSearch = (next: { module?: string; field?: string }) =>
     void navigate({ to: '/automation', search: (prev) => ({ ...prev, tab: 'fields', ...next }) });
 
   function move(row: CustomFieldDefinition, delta: -1 | 1) {
-    const ids = inScope.map((definition) => definition.id);
+    const ids = all.map((definition) => definition.id);
     const from = ids.indexOf(row.id);
     const to = from + delta;
     if (from < 0 || to < 0 || to >= ids.length) return;
     [ids[from], ids[to]] = [ids[to]!, ids[from]!];
-    reorder.mutate({ scope, ids });
-  }
-
-  function setHidden(targets: readonly CustomFieldDefinition[], hidden: boolean) {
-    for (const target of targets) {
-      if (target.hidden !== hidden) update.mutate({ id: target.id, body: { hidden } });
-    }
+    reorder.mutate({ ids });
   }
 
   return (
@@ -106,24 +168,10 @@ export function FieldsTab() {
         <h1 className="flex shrink-0 items-baseline gap-2 text-xl font-semibold text-balance text-foreground">
           {ui.customFields.page.title}
           <span className="inline-block min-w-8 font-mono text-label-lg font-normal text-muted-foreground tabular-nums">
-            {inScope.length}
+            {all.length}
           </span>
         </h1>
-        <SegmentedControl
-          value={scope}
-          options={FIELD_SCOPES.map((value) => ({
-            value,
-            label: ui.customFields.scopes[value],
-          }))}
-          onChange={(value) => {
-            selection.clear();
-            setSearch({ scope: value, field: undefined });
-          }}
-          ariaLabel={ui.customFields.page.scopeSwitch}
-          className="shrink-0 [&>button]:flex-none"
-          size="sm"
-          activeClassName="bg-accent text-foreground"
-        />
+        <ModuleFilter value={module} onChange={(value) => setSearch({ module: value })} />
         <ListToolbar
           className="min-w-0 flex-1 px-0"
           toolbar={toolbar}
@@ -140,11 +188,6 @@ export function FieldsTab() {
           right={<ViewSettings viewKey={VIEW_KEY} defs={columns} />}
         />
       </div>
-      {scope !== 'task' && pendingHint(scope) ? (
-        <p className="-mt-1 shrink-0 px-6 pb-2 text-xs text-muted-foreground">
-          {pendingHint(scope)}
-        </p>
-      ) : null}
       <div className="min-h-0 flex-1">
         <DataTable
           viewKey={VIEW_KEY}
@@ -154,16 +197,21 @@ export function FieldsTab() {
           selection={selection}
           isLoading={query.isLoading}
           onOpenRow={(definition) => setSearch({ field: definition.id })}
-          emptyTitle={q ? ui.customFields.page.emptySearch : ui.customFields.page.empty}
+          emptyTitle={
+            q
+              ? ui.customFields.page.emptySearch
+              : module === 'company'
+                ? ui.customFields.page.emptyCompany
+                : ui.customFields.page.empty
+          }
           rowMenu={(definition) =>
             fieldRowMenu({
               row: definition,
-              index: q ? -1 : inScope.indexOf(definition),
-              total: inScope.length,
+              index: q ? -1 : inModuleRows.indexOf(definition),
+              total: inModuleRows.length,
               canManage,
               onEdit: (row) => setSearch({ field: row.id }),
               onMove: move,
-              onSetHidden: (row, hidden) => setHidden([row], hidden),
               onDelete: (row) => setDeleteTargets([row]),
             })
           }
@@ -173,10 +221,6 @@ export function FieldsTab() {
       <FieldBulkIsland
         count={selectedRows.length}
         visible={canManage && selectedRows.length > 0}
-        hasVisible={selectedRows.some((row) => !row.hidden)}
-        hasHidden={selectedRows.some((row) => row.hidden)}
-        pending={update.isPending}
-        onSetHidden={(hidden) => setHidden(selectedRows, hidden)}
         onDelete={() => setDeleteTargets(selectedRows)}
         onClear={selection.clear}
       />
@@ -194,6 +238,10 @@ export function FieldsTab() {
           onSaved={() => {
             setCreating(false);
             if (editing) setSearch({ field: undefined });
+          }}
+          onOpenDefinition={(definitionId) => {
+            setCreating(false);
+            setSearch({ field: definitionId });
           }}
         />
       ) : null}

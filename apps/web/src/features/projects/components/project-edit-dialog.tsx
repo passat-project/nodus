@@ -1,17 +1,36 @@
 import { useState, type ReactNode } from 'react';
-import type { CounterpartyRef, ProjectDetail, ProjectVisibility } from '@nodus/contracts';
-import { errorMessages, ErrorCode, ui, updateProjectBodySchema } from '@nodus/contracts';
+import type {
+  CounterpartyRef,
+  CustomFieldRef,
+  CustomFieldValue,
+  CustomFieldValues,
+  ProjectDetail,
+  ProjectType,
+  ProjectVisibility,
+} from '@nodus/contracts';
+import {
+  errorMessages,
+  ErrorCode,
+  missingProjectFields,
+  projectTypeFormOf,
+  SYSTEM_FIELD_IDS,
+  ui,
+  updateProjectBodySchema,
+} from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
 import { Input } from '@nodus/ui/components/input';
 import { Textarea } from '@nodus/ui/components/textarea';
 
 import { ApiError } from '../../../shared/api-client.js';
-import { CounterpartyCombobox } from '../../../shared/counterparties/counterparty-combobox.js';
+import { useProjectTypes } from '../../../shared/api/projects-list.js';
 import { useUpdateProject } from '../api/project-mutations.js';
 import {
+  counterpartyRefOf,
+  mergeFieldRefs,
   PeopleMultiField,
   PortfolioField,
+  ProjectAttributeRows,
   ProjectDeadlineField,
   VisibilityField,
 } from './project-form-fields.js';
@@ -24,20 +43,13 @@ function FieldLabel({ children }: { children: ReactNode }) {
   );
 }
 
-/** Звёздочка обязательного поля — тон действия, прижата к метке. */
-function RequiredMark() {
-  return (
-    <span aria-hidden className="text-primary">
-      *
-    </span>
-  );
-}
-
 /**
  * «Поля проекта»: правка системных полей руководством (руководитель,
- * помощники, project.manage). Передача руководства и статусы — отдельные
- * действия карточки; смена видимости на секретный доступна только
- * руководителю (сервер — истина, I8).
+ * помощники, project.manage). Атрибуты — слотами формы типа проекта
+ * (Р10 #631: шифр и заказчик среди них, значения едут в customFields),
+ * обязательные слоты блокируют «Сохранить». Передача руководства и статусы
+ * — отдельные действия карточки; смена видимости на секретный доступна
+ * только руководителю (сервер — истина, I8).
  */
 export function ProjectEditDialog({
   project,
@@ -47,10 +59,17 @@ export function ProjectEditDialog({
   onClose: () => void;
 }) {
   const update = useUpdateProject(project.id);
+  // Форма типа проекта: ссылка карточки — только id, слоты берём из
+  // справочника (вместе с архивными — тип могли убрать после создания).
+  const types = useProjectTypes(true);
+  const type: ProjectType | null =
+    types.data?.find((entry) => entry.id === project.type?.id) ?? null;
+  const form = projectTypeFormOf(type ?? {});
   const [name, setName] = useState(project.name);
-  const [code, setCode] = useState(project.code ?? '');
   const [description, setDescription] = useState(project.description);
   const [portfolioId, setPortfolioId] = useState(project.portfolio?.id ?? null);
+  const [values, setValues] = useState<CustomFieldValues>({ ...project.customFields });
+  const [refs, setRefs] = useState<CustomFieldRef[]>([...project.customFieldRefs]);
   const [client, setClient] = useState<CounterpartyRef | null>(project.client);
   const [assistantIds, setAssistantIds] = useState<string[]>(
     project.assistants.map((assistant) => assistant.id),
@@ -60,33 +79,51 @@ export function ProjectEditDialog({
   const [error, setError] = useState<string | null>(null);
 
   const canMakeSecret = project.access.canTransfer || project.visibility === 'secret';
-  const codeField = project.type?.codeField ?? 'optional';
-  const codeShown = codeField !== 'hidden';
-  const canSubmit =
-    name.trim().length > 0 &&
-    !update.isPending &&
-    (codeField !== 'required' || code.trim().length > 0);
+  const missing = missingProjectFields(form, { customFields: values });
+  const canSubmit = name.trim().length > 0 && !update.isPending && missing.length === 0;
+
+  function onField(fieldId: string, value: CustomFieldValue | null, picked?: CustomFieldRef[]) {
+    setValues((prev) => {
+      const next = { ...prev };
+      if (value === null) delete next[fieldId];
+      else next[fieldId] = value;
+      return next;
+    });
+    if (picked?.length) setRefs((prev) => mergeFieldRefs(prev, picked));
+    if (fieldId === SYSTEM_FIELD_IDS.projectClient) setClient(counterpartyRefOf(picked?.[0]));
+  }
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!canSubmit) return;
     setError(null);
+    // Патч значений — только изменившиеся ключи (null очищает): нетронутое
+    // не едет, скрытые слоты формы типа не трогаются.
+    const customFields: Record<string, CustomFieldValue | null> = {};
+    for (const fieldId of new Set([...Object.keys(values), ...Object.keys(project.customFields)])) {
+      const next = values[fieldId];
+      if (next !== project.customFields[fieldId]) customFields[fieldId] = next ?? null;
+    }
     const parsed = updateProjectBodySchema.safeParse({
       name: name.trim(),
-      code: codeShown ? code.trim() || null : undefined,
       description: description.trim() || null,
       portfolioId,
-      clientId: client?.id ?? null,
       assistantIds,
       visibility,
       endDate,
+      ...(Object.keys(customFields).length > 0 ? { customFields } : {}),
     });
     if (!parsed.success) {
       setError(errorMessages[ErrorCode.VALIDATION_FAILED]);
       return;
     }
+    // Заказчик виден строке журнала: ссылку обновляем, только если поле
+    // вообще есть в форме типа (нет — не трогаем витрину).
+    const clientShown = form.fields.some(
+      (slot) => slot.fieldId === SYSTEM_FIELD_IDS.projectClient && slot.state !== 'hidden',
+    );
     update.mutate(
-      { body: parsed.data, client },
+      { body: parsed.data, client: clientShown ? client : undefined },
       {
         onSuccess: onClose,
         onError: (failure) =>
@@ -122,22 +159,9 @@ export function ProjectEditDialog({
             />
 
             <div className="grid grid-cols-[7.5rem_1fr] items-center gap-x-3 gap-y-3">
-              {codeShown ? (
-                <>
-                  <FieldLabel>
-                    {ui.projects.fieldCode}
-                    {codeField === 'required' ? <RequiredMark /> : null}
-                  </FieldLabel>
-                  <Input
-                    value={code}
-                    onChange={(event) => setCode(event.target.value)}
-                    placeholder={ui.projects.codePlaceholder}
-                    aria-label={ui.projects.fieldCode}
-                    aria-required={codeField === 'required'}
-                    className="h-8 font-mono text-label-lg tabular-nums"
-                  />
-                </>
-              ) : null}
+              {/* Атрибуты слотов формы типа проекта — на месте бывших спец-полей
+                  «Шифр»/«Заказчик» (Р10 #631). */}
+              <ProjectAttributeRows type={type} values={values} refs={refs} onChange={onField} />
 
               <FieldLabel>{ui.projects.assistants}</FieldLabel>
               <PeopleMultiField
@@ -152,15 +176,6 @@ export function ProjectEditDialog({
                 value={portfolioId}
                 label={ui.projects.filterPortfolio}
                 onChange={setPortfolioId}
-              />
-
-              <FieldLabel>{ui.projects.fieldClient}</FieldLabel>
-              <CounterpartyCombobox
-                value={client}
-                onChange={setClient}
-                ariaLabel={ui.projects.fieldClient}
-                className="h-8"
-                openOnFocus={false}
               />
 
               <FieldLabel>{ui.projects.fieldVisibility}</FieldLabel>

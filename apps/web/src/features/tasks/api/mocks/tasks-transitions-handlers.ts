@@ -144,7 +144,7 @@ export const tasksTransitionsHandlers = [
     // Поля процесса (#431): проверка значений до применения окна.
     const customPatch = parsed.data.form?.fields?.customFields;
     if (customPatch) {
-      const { issues } = applyDemoPatch('task', task.customFields, customPatch);
+      const { issues } = applyDemoPatch(task.customFields, customPatch);
       if (issues.length > 0) {
         return HttpResponse.json(
           {

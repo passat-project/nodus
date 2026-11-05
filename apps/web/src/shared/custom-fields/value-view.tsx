@@ -1,9 +1,16 @@
 import { Copy, ExternalLink } from 'lucide-react';
-import type { CustomFieldDefinition, CustomFieldRef, CustomFieldValue } from '@nodus/contracts';
+import type {
+  CustomFieldDefinition,
+  CustomFieldRef,
+  CustomFieldRefKind,
+  CustomFieldValue,
+} from '@nodus/contracts';
 import { linkKindOf, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 import { toast } from 'sonner';
 
+import { openCardViaBridge } from '../lib/card-bridge.js';
+import { stageTone } from '../ui/board/stage-tone.js';
 import { PersonAvatar } from '../ui/person-avatar.js';
 import {
   formatDuration,
@@ -18,11 +25,16 @@ export function refsById(refs: readonly CustomFieldRef[]): ReadonlyMap<string, C
   return new Map(refs.map((ref) => [ref.id, ref]));
 }
 
+/** Ссылка открывает карточку записи (стек карточек, ADR-0009): задача,
+ *  письмо, проект, контрагент. Папки карточки не имеют — имя без перехода. */
+const OPENABLE_KINDS = new Set<CustomFieldRefKind>(['task', 'letter', 'project', 'counterparty']);
+
 function RefName({
   refs,
   id,
   withAvatar,
   wrap = false,
+  interactive = true,
 }: {
   refs: ReadonlyMap<string, CustomFieldRef>;
   id: string;
@@ -30,10 +42,33 @@ function RefName({
   /** Имя переносится по словам (строка значения в узкой панели), а не
    *  обрезается многоточием. */
   wrap?: boolean;
+  /** false — без перехода к записи (значение внутри триггера редактора:
+   *  кнопка в кнопке запрещена, React DOM nesting). */
+  interactive?: boolean;
 }) {
   const ref = refs.get(id);
   if (!ref || ref.name === null) {
     return <span className="text-muted-foreground">{ui.customFields.block.unavailable}</span>;
+  }
+  const openable = interactive && !ref.archived && OPENABLE_KINDS.has(ref.kind);
+  const name = (
+    <span className={wrap ? 'min-w-0 break-words' : 'truncate'} title={ref.name}>
+      {ref.name}
+    </span>
+  );
+  if (openable) {
+    return (
+      <button
+        type="button"
+        onClick={() => openCardViaBridge({ kind: ref.kind, id: ref.id })}
+        className={cn(
+          'inline-flex min-w-0 max-w-full items-center gap-1.5 rounded text-left underline-offset-2 hover:underline',
+          ref.archived && 'opacity-60',
+        )}
+      >
+        {name}
+      </button>
+    );
   }
   return (
     <span
@@ -48,8 +83,37 @@ function RefName({
       {/* max-w-full у обёртки + title: длинное имя справочника («ОВ — Отопление,
           вентиляция и кондиционирование воздуха») не уезжает под край узкой
           панели: переносится по словам либо обрезается многоточием (#556). */}
-      <span className={wrap ? 'min-w-0 break-words' : 'truncate'} title={ref.name}>
-        {ref.name}
+      {name}
+    </span>
+  );
+}
+
+/** Чип варианта списка с цветом темы (Р6 #631): тон из `color` элемента
+ *  справочника; без цвета — нейтральная строка как раньше. */
+function EnumChip({ ref: item, wrap }: { ref: CustomFieldRef; wrap: boolean }) {
+  const tone = item.color ?? null;
+  if (!tone) {
+    return (
+      <span
+        className={cn('inline-flex min-w-0 max-w-full items-center', item.archived && 'opacity-60')}
+      >
+        <span className={wrap ? 'min-w-0 break-words' : 'truncate'} title={item.name ?? undefined}>
+          {item.name}
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span
+      className={cn(
+        'inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-xs',
+        stageTone[tone].chip,
+        item.archived && 'opacity-60',
+      )}
+    >
+      <span className={cn('size-1.5 shrink-0 rounded-full', stageTone[tone].dot)} aria-hidden />
+      <span className={wrap ? 'min-w-0 break-words' : 'truncate'} title={item.name ?? undefined}>
+        {item.name}
       </span>
     </span>
   );
@@ -147,11 +211,25 @@ export function CustomFieldValueView({
       );
     case 'bool':
       return <span className={line}>{ui.customFields.value.yes}</span>;
-    case 'enum':
+    case 'enum': {
+      const item = refs.get(String(value));
+      return (
+        <span className={cn(line, 'inline-flex max-w-full')}>
+          {item?.name ? (
+            <EnumChip ref={item} wrap={wrap} />
+          ) : (
+            <span className="text-muted-foreground">{ui.customFields.block.unavailable}</span>
+          )}
+        </span>
+      );
+    }
     case 'user':
     case 'department':
     case 'project':
     case 'counterparty':
+    case 'task':
+    case 'letter':
+    case 'node':
       return (
         <span className={cn(line, 'inline-flex max-w-full')}>
           <RefName
@@ -159,6 +237,7 @@ export function CustomFieldValueView({
             id={String(value)}
             withAvatar={definition.type === 'user'}
             wrap={wrap}
+            interactive={interactive}
           />
         </span>
       );
@@ -167,15 +246,20 @@ export function CustomFieldValueView({
       const ids = Array.isArray(value) ? value : [];
       return (
         <span className={cn(line, 'inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1')}>
-          {ids.map((id) => (
-            <RefName
-              key={id}
-              refs={refs}
-              id={id}
-              withAvatar={definition.type === 'users'}
-              wrap={wrap}
-            />
-          ))}
+          {ids.map((id) =>
+            definition.type === 'multienum' && refs.get(id)?.name ? (
+              <EnumChip key={id} ref={refs.get(id)!} wrap={wrap} />
+            ) : (
+              <RefName
+                key={id}
+                refs={refs}
+                id={id}
+                withAvatar={definition.type === 'users'}
+                wrap={wrap}
+                interactive={interactive}
+              />
+            ),
+          )}
         </span>
       );
     }

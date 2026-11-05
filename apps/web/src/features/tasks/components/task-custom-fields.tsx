@@ -15,8 +15,8 @@ export function TaskCustomFields({ task }: { task: TaskDetail }) {
 
   return (
     <CustomFieldsBlock
-      scope="task"
-      typeId={task.type.id}
+      module="task"
+      targetId={task.type.id}
       values={customFieldValuesOf(task)}
       refs={task.customFieldRefs ?? []}
       canEdit={task.access.canEdit}

@@ -342,9 +342,9 @@ export const customFieldBindingKindSchema = z.enum(['process-type', 'project-typ
 export type CustomFieldBindingKind = z.infer<typeof customFieldBindingKindSchema>;
 
 /** `PUT /custom-fields/definitions/:id/company-value` — значение глобальной
- *  переменной (Р7): грамматика типа; для не-глобального атрибута — 422.
- *  Идемпотентно (Idempotency-Key). */
+ *  переменной (Р7): грамматика типа, null — очистить (не задано); для
+ *  не-глобального атрибута — 422. Идемпотентно (Idempotency-Key). */
 export const customFieldCompanyValueBodySchema = z
-  .object({ value: customFieldValueSchema })
+  .object({ value: customFieldValueSchema.nullable() })
   .strict();
 export type CustomFieldCompanyValueBody = z.infer<typeof customFieldCompanyValueBodySchema>;

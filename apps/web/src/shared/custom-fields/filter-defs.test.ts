@@ -14,7 +14,7 @@ function definition(
 ) {
   return {
     id: FIELD,
-    scope: 'task',
+    number: 1,
     type,
     name: 'Поле',
     hint: null,
@@ -23,8 +23,9 @@ function definition(
     defaultValue: null,
     defaultRefs: [],
     reportIndexed: false,
-    hidden: false,
-    typeIds: [],
+    isCompany: false,
+    companyValue: null,
+    bindings: { processTypeIds: [], projectTypeIds: [], nodeKindIds: [] },
     sortOrder: 0,
     createdAt: '2026-10-25T00:00:00.000Z',
     updatedAt: '2026-10-25T00:00:00.000Z',

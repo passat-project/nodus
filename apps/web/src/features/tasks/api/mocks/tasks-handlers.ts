@@ -180,7 +180,7 @@ export const tasksHandlers = [
       // Кастомные поля (#431): слияние по ключам, null удаляет; проверяются
       // только изменившиеся значения — правила те же, что у сервера (Р2).
       if (body.customFields) {
-        const { next, issues } = applyDemoPatch('task', task.customFields, body.customFields);
+        const { next, issues } = applyDemoPatch(task.customFields, body.customFields);
         if (issues.length > 0) {
           return HttpResponse.json(
             {
