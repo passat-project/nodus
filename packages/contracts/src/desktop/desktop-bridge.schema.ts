@@ -10,27 +10,36 @@ import { z } from 'zod';
  * (apps/desktop/src-tauri/src/bridge.rs — рассинхрон = баг).
  */
 
-/** Запрос оболочке показать попап уведомления (стек право-низ, ADR-0019 п.4). */
-export const popupPayloadSchema = z.object({
-  /** Ключ дедупликации: id сообщения или уведомления журнала. */
-  id: z.string().min(1).max(200),
-  /** Беседа для «Открыть»/быстрого ответа (uuid). */
-  conversationId: z.string().uuid(),
-  /** Попап об ответе в трэде — корень трэда; клик раскрывает окно трэда (#300). */
-  threadRootId: z.string().uuid().nullable().optional(),
-  /** Заголовок попапа: имя автора или название беседы. */
-  title: z.string().min(1).max(200),
-  /** Аватар автора (абсолютный URL портала); пусто — графитовая заглушка. */
-  avatarUrl: z.string().max(2000).optional(),
-  /** Превью текста сообщения/уведомления. */
-  preview: z.string().max(500),
-  /** Превью — метка вложения («Фотография», #254): попап красит её акцентом. */
-  previewAttachment: z.boolean().optional(),
-  /** Важное (ADR-0016): попап висит до реакции, мигание критичное. */
-  urgent: z.boolean(),
-  /** Разрешён ли быстрый ответ из попапа (только личные/групповые беседы). */
-  canReply: z.boolean(),
-});
+/** Запрос оболочке показать попап уведомления (стек право-низ, ADR-0019 п.4).
+ *  Цель попапа — ровно ОДНА: беседа (сообщение чата) или письмо (#618:
+ *  «Поступило письмо» канцелярии); клик открывает её в портале. */
+export const popupPayloadSchema = z
+  .object({
+    /** Ключ дедупликации: id сообщения или уведомления журнала. */
+    id: z.string().min(1).max(200),
+    /** Беседа для «Открыть»/быстрого ответа (uuid). */
+    conversationId: z.string().uuid().nullable().optional(),
+    /** Письмо («Поступило письмо»): клик открывает карточку письма (#618). */
+    letterId: z.string().uuid().nullable().optional(),
+    /** Попап об ответе в трэде — корень трэда; клик раскрывает окно трэда (#300). */
+    threadRootId: z.string().uuid().nullable().optional(),
+    /** Заголовок попапа: имя автора или название беседы. */
+    title: z.string().min(1).max(200),
+    /** Аватар автора (абсолютный URL портала); пусто — графитовая заглушка. */
+    avatarUrl: z.string().max(2000).optional(),
+    /** Превью текста сообщения/уведомления. */
+    preview: z.string().max(500),
+    /** Превью — метка вложения («Фотография», #254): попап красит её акцентом. */
+    previewAttachment: z.boolean().optional(),
+    /** Важное (ADR-0016): попап висит до реакции, мигание критичное. */
+    urgent: z.boolean(),
+    /** Разрешён ли быстрый ответ из попапа (только личные/групповые беседы). */
+    canReply: z.boolean(),
+  })
+  .refine((p) => Boolean(p.conversationId) !== Boolean(p.letterId), {
+    message: 'цель попапа ровно одна: conversationId или letterId',
+    path: ['conversationId'],
+  });
 export type PopupPayload = z.infer<typeof popupPayloadSchema>;
 
 /** Информация об оболочке для веб-приложения (диагностика, поддержка). */
@@ -55,6 +64,13 @@ export const openConversationEventSchema = z.object({
   threadRootId: z.string().uuid().nullable().optional(),
 });
 export type OpenConversationEvent = z.infer<typeof openConversationEventSchema>;
+
+/** Событие «оболочка → веб»: открыть письмо (клик по попапу «Поступило
+ *  письмо», #618) — карточка письма поверх текущего раздела. */
+export const openLetterEventSchema = z.object({
+  letterId: z.string().uuid(),
+});
+export type OpenLetterEvent = z.infer<typeof openLetterEventSchema>;
 
 /**
  * Событие «оболочка → веб»: видимость окна (скрытие в трей может не менять
@@ -83,6 +99,7 @@ export type ShellUpdateState = z.infer<typeof shellUpdateStateSchema>;
 export const DESKTOP_BRIDGE_EVENTS = {
   popupReply: 'popup-reply',
   openConversation: 'open-conversation',
+  openLetter: 'open-letter',
   shellVisibility: 'shell-visibility',
   updateState: 'update-state',
 } as const;
