@@ -60,6 +60,8 @@ describe('ConversationsService', () => {
   const repo = {
     listForUser: vi.fn(),
     findListItem: vi.fn(),
+    findListItemAsReader: vi.fn(),
+    findTaskId: vi.fn(),
     findMembership: vi.fn(),
     findOrCreateDirect: vi.fn(),
     createGroup: vi.fn(),
@@ -67,6 +69,7 @@ describe('ConversationsService', () => {
     listMembers: vi.fn(),
     putDraft: vi.fn(),
   };
+  const taskChat = { isDecider: vi.fn(async () => false) };
   const items = { toItem: vi.fn(), toItems: vi.fn() };
   const txRunner = { run: vi.fn((cb: (tx: string) => unknown) => cb(TX)) };
   const eventBus = { emit: vi.fn() };
@@ -102,7 +105,7 @@ describe('ConversationsService', () => {
       eventBus as never,
       avatars as never,
       userProfiles as never,
-      { isDecider: vi.fn(async () => false) } as never,
+      taskChat as never,
     );
   });
 
@@ -387,6 +390,27 @@ describe('ConversationsService', () => {
 
       repo.putDraft.mockResolvedValue(null);
       expect(await service.putDraft('me-1', 'conv-1', '')).toBeNull();
+    });
+  });
+  describe('item — читатель-решающий (#433)', () => {
+    it('не участник-решающий получает read-only строку, посторонний — 404', async () => {
+      repo.findListItem.mockResolvedValue(null);
+      repo.findTaskId.mockResolvedValue('task-1');
+      items.toItem.mockImplementation(
+        async (row: { id: string; readerAccess?: boolean }) =>
+          ({ id: row.id, readOnly: row.readerAccess === true }) as never,
+      );
+      repo.findListItemAsReader.mockResolvedValue(makeListRow({ readerAccess: true }) as never);
+      repo.listMembers.mockResolvedValue([]);
+      taskChat.isDecider.mockResolvedValue(true);
+
+      const item = await service.item('conv-1', 'me-1');
+      expect(item).toMatchObject({ readOnly: true });
+      expect(repo.findListItemAsReader).toHaveBeenCalledWith('conv-1', 'me-1');
+
+      taskChat.isDecider.mockResolvedValue(false);
+      await expect(service.item('conv-1', 'me-2')).rejects.toThrow();
+      expect(repo.findListItemAsReader).toHaveBeenCalledTimes(1);
     });
   });
 });

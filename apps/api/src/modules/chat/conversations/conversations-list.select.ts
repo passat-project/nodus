@@ -150,7 +150,7 @@ export const LIST_SELECT_AS_READER = (userId: string, conversationId: string): P
     SELECT ${userId}::uuid AS user_id, 'member'::text AS role, false AS pinned,
            false AS muted, false AS snoozed,
            COALESCE((SELECT c2.last_seq FROM conversations c2 WHERE c2.id = ${conversationId}::uuid), 0)::bigint AS last_read_seq,
-           NULL::timestamptz AS last_read_at
+           'infinity'::timestamptz AS last_read_at
   ) cm
   JOIN conversations c ON c.id = ${conversationId}::uuid
   LEFT JOIN conversation_drafts d ON false

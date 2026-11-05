@@ -44,9 +44,11 @@ export class HistoryService {
     const last = page[page.length - 1];
     return {
       items: page.map((r) => {
-        // Адресаты доставки — служебное поле gateway, в историю не отдаём.
+        // Адресаты доставки — служебные поля gateway, в историю не отдаём
+        // (#433: deciderIds — тот же класс служебной адресации).
         const payload = { ...(r.payload as Record<string, unknown>) };
         delete payload.audience;
+        delete payload.deciderIds;
         return {
           id: r.id,
           type: r.type,

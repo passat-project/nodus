@@ -122,7 +122,7 @@ export const tasksStrings = {
     time_logged: 'Не внесено затраченное время',
     result_present: 'Не указан результат',
     result_files: 'Нет файлов итога',
-    decider_vacant: 'На должности нет сотрудника — нужен обход с причиной',
+    decider_vacant: 'Ни один решающий не найден — нужен обход с причиной',
   },
   overrideGate: 'Выполнить всё равно',
   overrideReason: 'Причина (попадёт в историю)',

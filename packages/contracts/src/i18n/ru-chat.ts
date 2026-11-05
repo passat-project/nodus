@@ -120,6 +120,7 @@ export const chatStrings = {
   tabChats: 'Чаты',
   tabTaskChats: 'Чаты задач и писем',
   taskChat: 'Чат задачи',
+  readOnlyChat: 'Чат доступен только для чтения — вы решающий по шагу',
   letterChat: 'Чат письма',
   openTask: 'Открыть задачу',
   openLetter: 'Открыть письмо',

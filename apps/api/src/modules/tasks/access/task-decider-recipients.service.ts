@@ -106,7 +106,9 @@ export class TaskDeciderRecipients {
       }
       case 'project_role': {
         if (!task.projectId) return [];
-        return this.projects.usersWithRoles(task.projectId, [source.role], tx);
+        const ids = await this.projects.usersWithRoles(task.projectId, [source.role], tx);
+        // Уволенный участник не держит ожидание (вакансия = «никого живого»).
+        return this.profiles.filterActiveUserIds(ids, tx);
       }
     }
   }

@@ -141,7 +141,11 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
     return new Map(
       (positionsQuery.data ?? []).map((position) => [
         position.id,
-        { isActive: position.isActive, holders: holders.get(position.id) ?? 0 },
+        {
+          kind: position.kind,
+          isActive: position.isActive,
+          holders: holders.get(position.id) ?? 0,
+        },
       ]),
     );
   }, [positionsQuery.data, usersQuery.data]);
