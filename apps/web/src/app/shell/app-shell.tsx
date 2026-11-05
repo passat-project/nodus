@@ -1,5 +1,6 @@
-import { Suspense, useEffect } from 'react';
+import { Suspense, useCallback, useEffect } from 'react';
 import { Outlet } from '@tanstack/react-router';
+import type { OpenLetterEvent } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 import { Toaster } from '@nodus/ui/components/sonner';
@@ -70,10 +71,14 @@ export function AppShell() {
   // (N) Nodus в заголовке вкладки (#124): сигнал фоновой вкладке.
   useUnreadTitle();
   // Мост десктоп-оболочки (#254): попапы-ответы, deep link, видимость трея.
-  // Открытие письма из попапа (#618) — через стек карточек (app-слой).
-  useDesktopBridge({
-    onOpenLetter: ({ letterId }) => openCard({ kind: 'letter', id: letterId }),
-  });
+  // Открытие письма из попапа (#618) — через стек карточек (app-слой);
+  // колбэк стабилен (useCallback): ре-бинд слушателей моста — только на
+  // монтировании, лишний shellReady/запрос проверки обновлений не летит.
+  const openLetterFromPopup = useCallback(
+    ({ letterId }: OpenLetterEvent) => openCard({ kind: 'letter', id: letterId }),
+    [openCard],
+  );
+  useDesktopBridge({ onOpenLetter: openLetterFromPopup });
   // Тосты уведомлений (#100): поверх карточек (z-[70] внутри хоста).
   const stressMode =
     typeof window !== 'undefined' &&
