@@ -525,7 +525,11 @@ pub fn popup_open(
     }
     crate::show_main(&app);
     if let Some(letter_id) = letter {
-        bridge::push_to_portal(&app, "open-letter", &serde_json::json!({ "letterId": letter_id }));
+        bridge::push_to_portal(
+            &app,
+            "open-letter",
+            &serde_json::json!({ "letterId": letter_id }),
+        );
     } else {
         bridge::push_to_portal(
             &app,
