@@ -167,4 +167,58 @@ describe('Порт оргструктуры: решающие (#441)', () => {
 
     expect(await port.managerChainOf(chat.users.a.id)).toEqual([chat.users.c.id]);
   });
+
+  it('positionsOf: обе должности сотрудника, включая архивную (#433)', async () => {
+    const management = await chat.prisma.position.create({
+      data: { name: `Упр. ${chat.runId}`, kind: 'management', isActive: false },
+      select: { id: true },
+    });
+    const legal = await chat.prisma.position.create({
+      data: { name: `Юр. ${chat.runId}`, kind: 'legal' },
+      select: { id: true },
+    });
+    positionIds.push(management.id, legal.id);
+    await chat.prisma.user.update({
+      where: { id: chat.users.d.id },
+      data: { positionId: management.id, legalPositionId: legal.id },
+    });
+
+    expect(await port.positionsOf(chat.users.d.id)).toEqual([
+      { positionId: management.id, kind: 'management' },
+      { positionId: legal.id, kind: 'legal' },
+    ]);
+    expect(await port.positionsOf(chat.users.d.id)).toHaveLength(2);
+  });
+
+  it('managersOf: ближайший активный на каждого, уволенный пропускается (#433)', async () => {
+    // a → b (уволен) → c: ближайший активный для a — c.
+    const managers = await port.managersOf([chat.users.a.id, chat.users.c.id]);
+    expect(managers.get(chat.users.a.id)).toBe(chat.users.c.id);
+    expect(managers.has(chat.users.c.id)).toBe(false);
+    expect(await port.managersOf([])).toEqual(new Map());
+  });
+
+  it('positionFacts: активность и число живых держателей (#433)', async () => {
+    const management = await chat.prisma.position.create({
+      data: { name: `Факты ${chat.runId}`, kind: 'management' },
+      select: { id: true },
+    });
+    positionIds.push(management.id);
+    await chat.prisma.user.update({
+      where: { id: chat.users.a.id },
+      data: { positionId: management.id },
+    });
+    await chat.prisma.user.update({
+      where: { id: chat.users.b.id },
+      data: { positionId: management.id },
+    });
+    await chat.prisma.user.update({
+      where: { id: chat.users.c.id },
+      data: { positionId: management.id, status: 'deactivated' },
+    });
+
+    const facts = await port.positionFacts([management.id]);
+    expect(facts.get(management.id)).toEqual({ isActive: true, holders: 2 });
+    expect((await port.positionFacts([])).size).toBe(0);
+  });
 });
