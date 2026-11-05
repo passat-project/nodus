@@ -109,11 +109,14 @@ pub fn is_valid_conversation(s: &str) -> bool {
 }
 
 /// Зеркало contracts `popupPayloadSchema` (desktop-bridge.schema.ts).
+/// Цель попапа — ровно одна: беседа или письмо (#618).
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PopupPayload {
     pub id: String,
-    pub conversation_id: String,
+    pub conversation_id: Option<String>,
+    /// Письмо («Поступило письмо», #618): клик открывает карточку письма.
+    pub letter_id: Option<String>,
     /// Корень трэда (попап об ответе в трэде): клик раскрывает окно трэда (#300).
     pub thread_root_id: Option<String>,
     pub title: String,
@@ -123,6 +126,17 @@ pub struct PopupPayload {
     pub preview_attachment: Option<bool>,
     pub urgent: bool,
     pub can_reply: bool,
+}
+
+impl PopupPayload {
+    /// Ключ гашения попапов источника: портал зовёт dismiss по открытии
+    /// беседы/письма (модель Telegram unlinkHistory) — одна строка на цель.
+    pub fn dismiss_key(&self) -> &str {
+        self.conversation_id
+            .as_deref()
+            .or(self.letter_id.as_deref())
+            .unwrap_or("")
+    }
 }
 
 /// Зеркало contracts `popupReplyEventSchema`.
@@ -140,9 +154,18 @@ pub struct PopupReply {
 #[tauri::command]
 pub async fn notify_popup(app: AppHandle, payload: PopupPayload) -> Result<(), String> {
     // Граница контракта на Rust-стороне (security-аудит #254, подозрение 5).
+    // Цель — ровно одна (#618): беседа ИЛИ письмо, обе/ни одной — отказ.
+    let target_ok = match (
+        payload.conversation_id.as_deref(),
+        payload.letter_id.as_deref(),
+    ) {
+        (Some(c), None) => is_valid_conversation(c),
+        (None, Some(l)) => is_valid_conversation(l),
+        _ => false,
+    };
     if payload.id.is_empty()
         || payload.id.len() > 200
-        || !is_valid_conversation(&payload.conversation_id)
+        || !target_ok
         || payload
             .thread_root_id
             .as_deref()
@@ -207,15 +230,15 @@ pub fn set_ui_theme(app: AppHandle, theme: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Погасить попапы беседы: портал зовёт при открытии беседы (модель
-/// Telegram — открыл чат, его уведомления не висят устаревшими). Только
-/// закрывает окна/вычищает очередь, ничего не создаёт — sync безопасен.
+/// Погасить попапы источника: портал зовёт при открытии беседы ИЛИ письма
+/// (#618, модель Telegram — открыл источник, его уведомления не висят
+/// устаревшими). Только закрывает окна/вычищает очередь, ничего не создаёт.
 #[tauri::command]
 pub fn dismiss_popups(app: AppHandle, conversation_id: String) -> Result<(), String> {
     if !is_valid_conversation(&conversation_id) {
         return Err("invalid_payload".into());
     }
-    popups::dismiss_for_conversation(&app, &conversation_id);
+    popups::dismiss_for_target(&app, &conversation_id);
     Ok(())
 }
 

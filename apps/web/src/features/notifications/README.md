@@ -66,7 +66,9 @@ urgent/high/medium/low — ось важности, независимая от 
   сценарий, что в ленте (поповер закрывается); число важного / точка низкого.
 - `components/notification-toasts.tsx` — тост-контур: стак личного (≤4,
   «+1» при повторе автора ≤60 с, автоскрытие ~8 с, hover-пауза), сводная
-  карточка среднего приоритета (персистентная), aria-live=polite, z-[70].
+  карточка среднего приоритета (персистентная, пока журнал требует
+  внимания — гаснет по сводке `attention: 0`, #616), aria-live=polite,
+  z-[70].
 - `model/toast-store.ts` — подавления: низкий никогда; DND кроме важного;
   muted/snoozed; открытый активный чат (B3–B8, F2/F4/F6).
 - `model/use-pause-escalation.ts` — эскалация по паузам (Ф4): idle ≥30 с /
@@ -74,7 +76,10 @@ urgent/high/medium/low — ось важности, независимая от 
 - `model/group-notifications.ts` — группировка по источнику (Telegram-канон),
   сортировка приоритетов (PRIORITY_ORDER), cap «999+» — чистые функции (unit).
 - `model/use-notification-sink.ts` — приём WS-будил через shared-мост
-  `shared/socket/notification-bridge.ts` (паттерн card-bridge).
+  `shared/socket/notification-bridge.ts` (паттерн card-bridge). В
+  десктоп-оболочке тост не всплывает — почтовое будило `letter.arrived`
+  уходит в попап оболочки (`shared/desktop/letter-popup.ts`, #618), клик
+  по попапу открывает карточку письма.
 
 ## Интеграционные точки (вне фичи)
 
