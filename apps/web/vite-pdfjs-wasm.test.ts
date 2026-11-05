@@ -14,12 +14,20 @@ interface FakeServer {
   handler: ((req: unknown, res: unknown, next: () => void) => void) | null;
 }
 
+/** Vite 8 hook = function | { handler }: распаковка для вызова в тесте. */
+function hookOf(h: unknown): ((...args: never[]) => unknown) | undefined {
+  if (typeof h === 'function') return h as (...args: never[]) => unknown;
+  const handler = (h as { handler?: unknown } | null | undefined)?.handler;
+  return typeof handler === 'function' ? (handler as (...args: never[]) => unknown) : undefined;
+}
+
 function mount(): FakeServer {
   const server: FakeServer = { middlewares: { use: () => undefined }, handler: null };
   server.middlewares.use = (fn) => {
     server.handler = fn;
   };
-  pdfjsWasmAssets().configureServer?.(server as never);
+  const configureServer = hookOf(pdfjsWasmAssets().configureServer);
+  configureServer?.(server as never);
   return server;
 }
 
@@ -90,7 +98,8 @@ describe('pdfjsWasmAssets (#617)', () => {
   it('build: все файлы пакета эмитятся в pdfjs-wasm/, лицензии — нет', () => {
     const plugin = pdfjsWasmAssets();
     const emitted: { fileName: string; source: Buffer }[] = [];
-    plugin.generateBundle?.call(
+    const generateBundle = hookOf(plugin.generateBundle);
+    generateBundle?.call(
       {
         emitFile: (f: { fileName: string; source: Buffer }) => {
           emitted.push({ fileName: f.fileName, source: f.source });
