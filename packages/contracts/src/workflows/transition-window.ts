@@ -103,6 +103,8 @@ export function gateFixableBy(
       return 'result_files';
     case 'no_open_subtasks':
     case 'checklist_complete':
+    case 'decider_vacant':
+      // Вакансия решающего (#433): окно не чинит — нужен обход с причиной.
       return null;
   }
 }

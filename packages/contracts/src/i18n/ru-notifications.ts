@@ -57,6 +57,7 @@ export const notificationsStrings = {
     'action.assignment': 'Поручение',
     'action.approval': 'Согласование',
     'action.deadline': 'Срок',
+    'action.decision': 'Ждёт вашего решения',
     'task.completed': 'Задача выполнена',
     'task.returned': 'Возврат в работу',
     'task.awaiting_approval': 'Ждёт утверждения',

@@ -258,6 +258,12 @@ export const workflowProblemCodeSchema = z.enum([
   /** Правило `approver_is_actor` не сможет определить утверждающего:
    *  у целевого статуса нет единственной основной action-кнопки с условиями. */
   'approver_rule_unresolvable',
+  /** Решающие (#433). */
+  'decider_not_in_category',
+  'decider_field_not_user',
+  'decider_position_missing',
+  'decider_position_empty',
+  'decider_window_needs_rights',
 ]);
 export type WorkflowProblemCode = z.infer<typeof workflowProblemCodeSchema>;
 

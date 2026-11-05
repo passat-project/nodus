@@ -22,6 +22,7 @@ export const tasksStrings = {
     assignee: 'Я — ответственный',
     creator: 'Я — постановщик',
     participant: 'Я — соисполнитель',
+    decider: 'Ждут моего решения',
   },
   systemState: 'Состояние',
   overdueField: 'Просроченные',
@@ -121,6 +122,7 @@ export const tasksStrings = {
     time_logged: 'Не внесено затраченное время',
     result_present: 'Не указан результат',
     result_files: 'Нет файлов итога',
+    decider_vacant: 'На должности нет сотрудника — нужен обход с причиной',
   },
   overrideGate: 'Выполнить всё равно',
   overrideReason: 'Причина (попадёт в историю)',
@@ -217,6 +219,8 @@ export const tasksStrings = {
   changeTypeSubmit: 'Сменить',
   /** Пресет «Ждут моего утверждения» (#378): роль постановщик × этап «Утверждение». */
   presetAwaiting: 'Ждут моего утверждения',
+  /** Пресет «Ждут моего решения» (#433): задачи, где я держатель шага. */
+  presetDecisions: 'Ждут моего решения',
   /** Окно перехода (#380): диалог по центру с разделами настройки кнопки. */
   window: {
     stageArrow: '→',

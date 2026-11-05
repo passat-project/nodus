@@ -3,6 +3,7 @@ import type { CustomFieldDefinition } from '../custom-fields/custom-field.schema
 import { checkCreationForm } from './creation-form.js';
 import type { ProcessCategory } from './process-type.schemas.js';
 import { checkCategoryDictionary } from './workflow-document-category-check.js';
+import { checkDeciderRules, type WorkflowPositionFact } from './workflow-document-deciders.js';
 import { checkExtraRules } from './workflow-document-extra-checks.js';
 import type {
   WorkflowDraftDocument,
@@ -57,6 +58,9 @@ export interface WorkflowCheckOptions {
   }[];
   /** Ограничить проверку имён новыми/переименованными стадиями (#430). */
   stageNameStageIds?: ReadonlySet<string>;
+  /** Факты должностей для источников решающих (#433): активность и число
+   *  живых держателей. Без факта проверки должности пропускаются. */
+  positions?: ReadonlyMap<string, WorkflowPositionFact>;
 }
 
 function error(
@@ -236,8 +240,28 @@ export function checkWorkflowDocument(
           for (const key of validator.fields) checkKey(key, { transitionId: t.id }, false);
         }
       }
+      // Источник «поле» у решающих (#433): тот же контроль удалённых и
+      // непривязанных к типу атрибутов, что у окна и гейтов.
+      for (const condition of t.rules.conditions) {
+        if (condition.kind === 'decider_in' && condition.source.kind === 'field') {
+          checkKey(condition.source.field, { transitionId: t.id }, false);
+        }
+      }
     }
   }
+
+  // --- Решающие (#433): источники, должности, окно без прав участника -------
+
+  checkDeciderRules(
+    doc,
+    {
+      definitions: opts.definitions,
+      activeFieldIds: fields?.active,
+      inTypeFieldIds: fields?.inType,
+      positions: opts.positions,
+    },
+    problems,
+  );
 
   // --- Словарь категории (#55, Р6) и форма создания (#432) ---------------
 

@@ -394,8 +394,9 @@ export const listTasksQuerySchema = cursorQuerySchema.extend({
   /** mine — задачи, где я постановщик/ответственный/соисполнитель/наблюдатель;
    *  all — всё, что мне видно (подчинённые по оргструктуре, task.view_all). */
   scope: z.enum(['mine', 'all']).default('mine'),
-  /** Уточнение «моих» по роли («делаю», «поручил», «помогаю», «наблюдаю»). */
-  role: z.enum(['assignee', 'creator', 'coexecutor', 'observer']).optional(),
+  /** Уточнение «моих» по роли («делаю», «поручил», «помогаю», «наблюдаю»);
+   *  `decider` — задачи, где я держатель шага (#433), серверный фильтр. */
+  role: z.enum(['assignee', 'creator', 'coexecutor', 'observer', 'decider']).optional(),
   /** Только просроченные (deadline < now, состояние ∉ done/closed). */
   overdue: z
     .enum(['true', 'false'])
