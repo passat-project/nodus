@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import {
   ErrorCode,
+  matchesDecider,
   type ProcessCategory,
   type TransitionFormInput,
   type WorkflowTransition,
@@ -88,7 +89,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
       workflow.stages,
       targetCtx,
     )
-      .filter((t) => passesConditions(t.rules, subject0))
+      .filter((t) => this.canShow(t, subject0))
       .filter((t) => this.matches(t, choice, subject0, workflow, targetCtx));
     if (candidates.length === 0) {
       // Имя текущего статуса — клиент собирает понятную строку (I15):
@@ -114,13 +115,20 @@ export class WorkflowEngine implements WorkflowEnginePort {
       ...subject1,
       roles: subject0.roles,
       permissions: subject0.permissions,
+      // Решающие (#433): состояние ДО окна — окно не делает актора решающим
+      // и не снимает вакансию.
+      deciderFacts: subject0.deciderFacts,
+      vacantDeciderTransitionIds: subject0.vacantDeciderTransitionIds,
     });
     // Выбранная кнопка — первой: DnD предпочёл кандидата без обязательного
     // окна, и гейты не должны «переиграть» выбор на другую кнопку.
     const ordered = [picked, ...candidates.filter((t) => t.id !== picked.id)];
     const scored = ordered.map((t) => ({
       t,
-      reasons: evaluateValidators(t.rules, subject1.facts),
+      reasons: [
+        ...evaluateValidators(t.rules, subject1.facts),
+        ...this.vacancyReasons(t, subject1),
+      ],
     }));
     const pick = scored.find((s) => s.reasons.length === 0) ?? scored[0]!;
     if (pick.reasons.length > 0) this.assertOverride(pick.reasons, subject1, opts);
@@ -144,6 +152,13 @@ export class WorkflowEngine implements WorkflowEnginePort {
       cause: 'transition',
       overriddenGates: pick.reasons.map((r) => r.kind),
       overrideReason: pick.reasons.length > 0 ? opts.reason?.trim() : undefined,
+      wasDeciderOfTransition:
+        subject0.deciderFacts !== undefined &&
+        pick.t.rules.conditions.some(
+          (condition) =>
+            condition.kind === 'decider_in' &&
+            matchesDecider(condition.source, subject0.deciderFacts!),
+        ),
       recordId,
       transitionName: pick.t.name,
       fromStageName: fromStage?.name,
@@ -283,7 +298,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
     ctx: TargetContext,
   ): WorkflowTransition[] {
     return outgoingTransitions(workflow.transitions, subject.facts, workflow.stages, ctx)
-      .filter((t) => passesConditions(t.rules, subject))
+      .filter((t) => this.canShow(t, subject))
       .map((t) => {
         const target = this.stage(
           workflow,
@@ -300,12 +315,48 @@ export class WorkflowEngine implements WorkflowEnginePort {
           toStageOrder: target.sortOrder,
           display: t.display,
           intent: t.intent,
-          blockedBy: evaluateValidators(t.rules, subject.facts),
+          blockedBy: [
+            ...evaluateValidators(t.rules, subject.facts),
+            ...this.vacancyReasons(t, subject),
+          ],
           canOverride: subject.canOverrideGates,
           form: t.form?.enabled ? t.form : null,
           validators: t.rules.validators,
         };
       });
+  }
+
+  /** Условия «кто» без админского обхода: нужно, чтобы отличить «актор не
+   *  совпал» от «никого нет» (#433). */
+  private conditionsWithoutBypass(
+    rules: Parameters<typeof passesConditions>[0],
+    subject: EngineSubject,
+  ): boolean {
+    return passesConditions(rules, { ...subject, bypassConditions: false });
+  }
+
+  /** Переход с пустыми источниками решающих (#433): показать может только
+   *  право обхода — с причиной. Если актор проходит по другому условию —
+   *  блокировки нет. */
+  private vacancyReasons(
+    transition: { id: string; rules: Parameters<typeof passesConditions>[0] },
+    subject: EngineSubject,
+  ): { kind: 'decider_vacant' }[] {
+    if (!subject.vacantDeciderTransitionIds?.has(transition.id)) return [];
+    return this.conditionsWithoutBypass(transition.rules, subject)
+      ? []
+      : [{ kind: 'decider_vacant' }];
+  }
+
+  /** Кнопка попадает в выдачу: условия прошли (с обходом или без), либо
+   *  переход вакантен и у актора есть право обхода. */
+  private canShow(
+    transition: { id: string; rules: Parameters<typeof passesConditions>[0] },
+    subject: EngineSubject,
+  ): boolean {
+    if (this.conditionsWithoutBypass(transition.rules, subject)) return true;
+    if (subject.vacantDeciderTransitionIds?.has(transition.id)) return subject.canOverrideGates;
+    return subject.bypassConditions;
   }
 
   private stage(workflow: LoadedWorkflow, id: string): StageRow {

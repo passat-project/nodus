@@ -111,9 +111,13 @@ export async function routeEnvelope(
   }
 
   // Задачи (#37): адресаты — payload.audience (участники задачи, при снятии —
-  // и снятый), user-комнаты; клиент инвалидирует кэш задач.
+  // и снятый) + решающие нового статуса (#433), user-комнаты; клиент
+  // инвалидирует кэш задач.
   if (envelope.type.startsWith('task.')) {
-    emitToUsers(io, envelope, memberIdsOf(payload.audience));
+    const deciderIds = Array.isArray(payload.deciderIds)
+      ? payload.deciderIds.filter((id): id is string => typeof id === 'string')
+      : [];
+    emitToUsers(io, envelope, [...new Set([...memberIdsOf(payload.audience), ...deciderIds])]);
     return;
   }
 

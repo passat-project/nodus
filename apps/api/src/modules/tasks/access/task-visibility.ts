@@ -7,6 +7,7 @@ import {
   type OrgStructureReader,
 } from '../../../core/ports/org-structure.port.js';
 import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
+import { TaskDeciders } from './task-deciders.service.js';
 
 /** Кто смотрит: id + права (из JWT) + подчинённые по оргструктуре +
  *  множества проектов (Р3: видимые — задачи открытых и моих секретных). */
@@ -16,6 +17,9 @@ export interface Viewer {
   subordinateIds: readonly string[];
   visibleProjectIds: readonly string[];
   hiddenProjectIds: readonly string[];
+  /** Задачи, где актор — решающий текущего шага (#433). Необязательно:
+   *  старые фикстуры и тесты не обязаны заполнять. */
+  deciderTaskIds?: readonly string[];
 }
 
 function involves(userIds: readonly string[]): Prisma.TaskWhereInput[] {
@@ -61,6 +65,13 @@ export function visibleTasksWhere(viewer: Viewer, scope: 'mine' | 'all'): Prisma
   const mineGated: Prisma.TaskWhereInput = gate ? { AND: [{ OR: mine }, gate] } : { OR: mine };
   if (scope === 'mine') return { deletedAt: null, ...mineGated };
   const or: Prisma.TaskWhereInput[] = [mineGated];
+  // Решающий видит задачу, даже не участвуя (#433): только не конфиденциальную
+  // и не из скрытого секретного проекта — те же гейты, что у руководителей.
+  const deciderIds = viewer.deciderTaskIds ?? [];
+  const deciderBranch: Prisma.TaskWhereInput | null =
+    deciderIds.length > 0
+      ? { AND: [{ id: { in: [...deciderIds] } }, openOnly, ...(gate ? [gate] : [])] }
+      : null;
   if (viewer.subordinateIds.length > 0) {
     const subordinateTasks: Prisma.TaskWhereInput = { OR: involves(viewer.subordinateIds) };
     // Подчинённый — участник секретного проекта не раскрывает его задачи
@@ -70,13 +81,17 @@ export function visibleTasksWhere(viewer: Viewer, scope: 'mine' | 'all'): Prisma
   if (viewer.visibleProjectIds.length > 0) {
     or.push({ AND: [{ projectId: { in: [...viewer.visibleProjectIds] } }, openOnly] });
   }
+  if (deciderBranch) or.push(deciderBranch);
   if (viewer.permissions.includes(Permission.TASK_VIEW_ALL)) {
     // Не ранний return: task.view_all не открывает чужие секретные проекты
     // (Т1) и конфиденциальные задачи (#461) — гейты остаются и у админа.
     // СВОЁ участие сохраняется отдельной веткой: участник конфиденциальной
     // задачи видит её и с task.view_all (иначе деталь/чат отдают 404).
     const rest = gate ? { AND: [gate, openOnly] } : openOnly;
-    return { deletedAt: null, OR: [mineGated, rest] };
+    return {
+      deletedAt: null,
+      OR: [mineGated, rest, ...(deciderBranch ? [deciderBranch] : [])],
+    };
   }
   return { deletedAt: null, OR: or };
 }
@@ -86,12 +101,14 @@ export class ViewerResolver {
   constructor(
     @Inject(ORG_STRUCTURE_READER) private readonly org: OrgStructureReader,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
+    private readonly deciders: TaskDeciders,
   ) {}
 
   async resolve(user: { id: AuthUser['id']; permissions: readonly string[] }): Promise<Viewer> {
-    const [subordinateIds, scope] = await Promise.all([
+    const [subordinateIds, scope, deciderTaskIds] = await Promise.all([
       this.org.subordinateIds(user.id),
       this.projects.viewScopeFor(user),
+      this.deciders.taskIdsFor(user.id),
     ]);
     return {
       id: user.id,
@@ -99,6 +116,7 @@ export class ViewerResolver {
       subordinateIds,
       visibleProjectIds: scope.visibleProjectIds,
       hiddenProjectIds: scope.hiddenProjectIds,
+      deciderTaskIds,
     };
   }
 }

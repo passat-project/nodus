@@ -101,6 +101,8 @@ export interface WorkflowStageChangeMeta {
   /** Актор был решающим ЭТОГО перехода по состоянию до окна (#433):
    *  адаптер добавляет его наблюдателем без звука. */
   wasDeciderOfTransition?: boolean;
+  /** Решающие нового статуса (#433): payload `task.stage_changed`. */
+  deciderIds?: readonly string[];
   /** Строка общего журнала (#380): блок в чате пишется только с ней. */
   recordId?: string;
   /** Названия кнопки и исходного статуса — для блока перехода в чате. */

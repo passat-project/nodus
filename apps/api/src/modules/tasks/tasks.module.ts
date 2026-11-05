@@ -9,6 +9,8 @@ import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.mo
 import { WorkflowsPortsModule } from '../workflows/workflows-ports.module.js';
 import { TaskProjectRights } from './access/task-project-rights.js';
 import { ViewerResolver } from './access/task-visibility.js';
+import { TaskDeciders } from './access/task-deciders.service.js';
+import { TaskDecidersRepository } from './access/task-deciders.repository.js';
 import { HistoryRepository } from './activity/history.repository.js';
 import { HistoryService } from './activity/history.service.js';
 import { RelationsRepository } from './activity/relations.repository.js';
@@ -92,6 +94,9 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
     HistoryRepository,
     ViewerResolver,
     TaskProjectRights,
+    // Решающие (#433): факты актора, вакансии, видимость и адресаты.
+    TaskDecidersRepository,
+    TaskDeciders,
     StageMover,
     // Общие писатели полей/времени/итога (#380): окно перехода и PATCH
     // правят задачу одной доменной логикой, а не копиями.

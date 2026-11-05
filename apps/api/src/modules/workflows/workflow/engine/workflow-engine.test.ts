@@ -118,6 +118,121 @@ function makeEngine(subject: Partial<WorkflowActorSubject> = {}) {
   };
 }
 
+describe('WorkflowEngine — решающие (#433)', () => {
+  const DECIDER = {
+    userId: 'bob',
+    creatorManagerId: null,
+    assigneeManagerId: null,
+    positionKeys: new Set<string>(),
+    projectRole: null,
+    fieldUserIds: {},
+    userFieldIds: new Set<string>(),
+  };
+  const deciderWorkflow = () => {
+    const copy = structuredClone(workflow);
+    copy.transitions[0]!.rules = {
+      conditions: [{ kind: 'decider_in', source: { kind: 'employees', userIds: ['alice'] } }],
+      validators: [],
+      postFunctions: [],
+    } as never;
+    return copy;
+  };
+
+  it('источник не совпал — кнопки нет', async () => {
+    const { engine, workflows } = makeEngine({
+      actsWithoutConditions: false,
+      deciderFacts: DECIDER,
+    });
+    workflows.load.mockResolvedValueOnce(deciderWorkflow());
+    expect(await engine.available(TX as never, 't1', 'task', USER)).toHaveLength(0);
+  });
+
+  it('источник совпал — кнопка видна и переход проходит', async () => {
+    const { engine, adapter, workflows } = makeEngine({
+      actsWithoutConditions: false,
+      deciderFacts: { ...DECIDER, fieldUserIds: {}, userId: 'bob' },
+    });
+    // bob в списке сотрудников источника.
+    const doc = deciderWorkflow();
+    (doc.transitions[0]!.rules as never as { conditions: unknown[] }).conditions = [
+      { kind: 'decider_in', source: { kind: 'employees', userIds: ['bob'] } },
+    ];
+    workflows.load.mockResolvedValue(doc);
+    const buttons = await engine.available(TX as never, 't1', 'task', USER);
+    expect(buttons).toHaveLength(1);
+    await engine.execute(TX as never, 't1', 'task', USER, { transitionId: TRANSITION });
+    expect(adapter.applyStage).toHaveBeenCalledWith(
+      TX,
+      't1',
+      expect.objectContaining({ id: STAGE_DONE }),
+      'bob',
+      expect.objectContaining({ wasDeciderOfTransition: true }),
+    );
+  });
+
+  it('вакансия: без обхода кнопки нет, с обходом — блок и причина', async () => {
+    const withoutOverride = makeEngine({
+      actsWithoutConditions: false,
+      bypassConditions: true,
+      canOverrideGates: false,
+      vacantDeciderTransitionIds: new Set([TRANSITION]),
+    });
+    withoutOverride.workflows.load.mockResolvedValueOnce(deciderWorkflow());
+    expect(await withoutOverride.engine.available(TX as never, 't1', 'task', USER)).toHaveLength(0);
+
+    const { engine, workflows, adapter } = makeEngine({
+      actsWithoutConditions: false,
+      bypassConditions: true,
+      canOverrideGates: true,
+      vacantDeciderTransitionIds: new Set([TRANSITION]),
+    });
+    workflows.load.mockResolvedValueOnce(deciderWorkflow());
+    const buttons = await engine.available(TX as never, 't1', 'task', USER);
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]!.blockedBy).toEqual([{ kind: 'decider_vacant' }]);
+
+    workflows.load.mockResolvedValueOnce(deciderWorkflow());
+    await expect(
+      engine.execute(TX as never, 't1', 'task', USER, { transitionId: TRANSITION }),
+    ).rejects.toMatchObject({ code: 'WORKFLOW_TRANSITION_BLOCKED' });
+
+    workflows.load.mockResolvedValueOnce(deciderWorkflow());
+    await engine.execute(
+      TX as never,
+      't1',
+      'task',
+      USER,
+      { transitionId: TRANSITION },
+      { override: true, reason: 'зам в отпуске' },
+    );
+    expect(adapter.applyStage).toHaveBeenCalledWith(
+      TX,
+      't1',
+      expect.objectContaining({ id: STAGE_DONE }),
+      'bob',
+      expect.objectContaining({
+        overriddenGates: ['decider_vacant'],
+        overrideReason: 'зам в отпуске',
+      }),
+    );
+  });
+
+  it('актор проходит по другому условию — вакансия не блокирует', async () => {
+    const { engine, workflows } = makeEngine({
+      actsWithoutConditions: false,
+      vacantDeciderTransitionIds: new Set([TRANSITION]),
+    });
+    const doc = deciderWorkflow();
+    (doc.transitions[0]!.rules as never as { conditions: unknown[] }).conditions = [
+      { kind: 'role_in', roles: ['assignee'] },
+      { kind: 'decider_in', source: { kind: 'employees', userIds: ['alice'] } },
+    ];
+    workflows.load.mockResolvedValueOnce(doc);
+    const buttons = await engine.available(TX as never, 't1', 'task', USER);
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]!.blockedBy).toEqual([]);
+  });
+});
 describe('WorkflowEngine (#428, ADR-0024)', () => {
   it('available: кнопки несут показ и итог цели, замок не берётся', async () => {
     const { engine, adapter } = makeEngine();

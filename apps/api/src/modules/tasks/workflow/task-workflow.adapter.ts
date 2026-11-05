@@ -1,10 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ErrorCode, Permission, type TransitionFormInput } from '@nodus/contracts';
+import { ErrorCode, Permission, TASK_EVENTS, type TransitionFormInput } from '@nodus/contracts';
 
 import {
   TransactionRunner,
   type TransactionClient,
 } from '../../../core/database/transaction-runner.js';
+import { EventBus } from '../../../core/events/event-bus.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import type {
   WorkflowActor,
@@ -19,7 +20,8 @@ import {
   CUSTOM_FIELD_REGISTRY,
   type CustomFieldRegistry,
 } from '../../custom-fields/ports/custom-field-registry.port.js';
-import { actorRoles, planHolderIds } from '../access/task-access.js';
+import { actorRoles, audienceIds, planHolderIds } from '../access/task-access.js';
+import { TaskDeciders } from '../access/task-deciders.service.js';
 import { TaskProjectRights } from '../access/task-project-rights.js';
 import { Placements } from '../personal/placements.js';
 import { TaskFactsRepository } from '../tasks/task-facts.repository.js';
@@ -53,6 +55,8 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
     @Inject(CHAT_MESSAGE_ACCESS) private readonly messages: ChatMessageAccess,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
     private readonly projectRights: TaskProjectRights,
+    private readonly deciders: TaskDeciders,
+    private readonly events: EventBus,
   ) {}
 
   lock(tx: TransactionClient, taskId: string): Promise<void> {
@@ -76,6 +80,22 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
     // какие ключи `cf.<id>` существуют. Скрытые входят — условие процесса
     // видит служебные значения, а несуществующий ключ не блокирует переход.
     const definitions = await this.customFields.definitions('task', {}, tx);
+    // Решающие (#433): факты актора и вакансии переходов текущей стадии.
+    // Нет `decider_in` в маршруте — контекст undefined, лишних запросов нет.
+    const deciderContext = await this.deciders.contextFor(
+      tx,
+      {
+        id: task.id,
+        workflowId: task.workflowId,
+        stageId: task.stageId,
+        systemState: task.systemState,
+        creatorId: task.creatorId,
+        assigneeId: task.assigneeId,
+        projectId: task.projectId,
+        customFields: task.customFields as Record<string, unknown>,
+      },
+      actor.id,
+    );
     return {
       workflowId: task.workflowId,
       typeId: task.typeId,
@@ -84,6 +104,12 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
       bypassConditions: actor.permissions.includes(Permission.TASK_MANAGE_ANY),
       canOverrideGates: actor.permissions.includes(Permission.TASK_OVERRIDE_GATE),
       actsWithoutConditions: roles.has('creator') || roles.has('assignee'),
+      ...(deciderContext
+        ? {
+            deciderFacts: deciderContext.facts,
+            vacantDeciderTransitionIds: deciderContext.vacantTransitionIds,
+          }
+        : {}),
       facts: {
         ...gateFacts,
         activeCustomFieldIds: new Set(definitions.map((definition) => definition.id)),
@@ -119,7 +145,44 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
     meta: WorkflowStageChangeMeta,
   ): Promise<void> {
     const task = await this.tasks.findWithParticipants(taskId, tx);
-    await this.mover.apply(tx, task, target, actorId, meta);
+    const deciderTask = {
+      id: task.id,
+      workflowId: task.workflowId,
+      stageId: task.stageId,
+      systemState: task.systemState,
+      creatorId: task.creatorId,
+      assigneeId: task.assigneeId,
+      projectId: task.projectId,
+      customFields: task.customFields as Record<string, unknown>,
+    };
+    // Кого ждёт новый статус (#433): адресаты «Ждёт вашего решения» —
+    // считаем до смены стадии, событие унесёт список в payload.
+    const deciderIds = actorId ? await this.deciders.idsForStage(tx, deciderTask, target.id) : [];
+    await this.mover.apply(tx, task, target, actorId, {
+      ...meta,
+      ...(deciderIds.length > 0 ? { deciderIds } : {}),
+    });
+    // После решения решающий остаётся наблюдателем без звука (В2).
+    if (meta.wasDeciderOfTransition && actorId) {
+      const added = await this.deciders.insertObserverIfAbsent(tx, deciderTask, actorId);
+      if (added) {
+        const fresh = await this.tasks.findWithParticipants(taskId, tx);
+        await this.events.emit(
+          tx,
+          TASK_EVENTS.PARTICIPANTS_CHANGED,
+          {
+            taskId: fresh.id,
+            number: fresh.number,
+            projectId: fresh.projectId,
+            audience: audienceIds(fresh),
+            title: fresh.title,
+            added: [{ userId: actorId, role: 'observer' }],
+            removed: [],
+          },
+          { actorId, aggregateType: 'task', aggregateId: fresh.id },
+        );
+      }
+    }
   }
 
   async countByStages(

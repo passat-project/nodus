@@ -72,6 +72,8 @@ import {
 } from './task-chat/task-chat.handlers.js';
 import { TaskChatRepository } from './task-chat/task-chat.repository.js';
 import { TaskChatService } from './task-chat/task-chat.service.js';
+import { TaskDeciderFileAccess } from './access/task-decider-file-access.js';
+import { TaskDeciderFileAccessRepository } from './file-access/task-decider-file-access.repository.js';
 import { TaskTransitionBlockHandler } from './task-chat/task-transition-block.handler.js';
 import { TaskTransitionBlockService } from './task-chat/task-transition-block.service.js';
 import { FavoritesController } from './favorites/favorites.controller.js';
@@ -127,6 +129,10 @@ import {
     ProjectChatController,
   ],
   providers: [
+    // Вложения задачи решающему вне задачи (#433): read-only, тот же маркер
+    // контекста `chat`; реестр прав файлов объединяет решения по OR.
+    TaskDeciderFileAccess,
+    TaskDeciderFileAccessRepository,
     // Агрегат Conversation по ответственности (I5): чтение / запись беседы /
     // запись участия / черновики.
     ConversationsRepository,

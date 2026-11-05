@@ -58,6 +58,11 @@ function makeAdapter() {
   const forms = { apply: vi.fn() };
   const messages = { countAttachments: vi.fn(async () => 0) };
   const customFields = { definitions: vi.fn(async () => []) };
+  const deciders = {
+    contextFor: vi.fn(async () => undefined),
+    idsForStage: vi.fn(async () => [] as string[]),
+    insertObserverIfAbsent: vi.fn(async () => false),
+  };
   const adapter = new TaskWorkflowAdapter(
     { run: vi.fn(async (fn: (t: unknown) => unknown) => fn({})) } as never,
     tasks as never,
@@ -68,6 +73,8 @@ function makeAdapter() {
     messages as never,
     customFields as never,
     { supplement: vi.fn(async (roles: Set<string>) => roles) } as never,
+    deciders as never,
+    { emit: vi.fn() } as never,
   );
   return { adapter, mover, tasks, placements };
 }

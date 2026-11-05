@@ -1,8 +1,12 @@
 import { Module } from '@nestjs/common';
 
 import { ProjectsPortsModule } from '../projects/projects-ports.module.js';
+import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.module.js';
+import { WorkflowsPortsModule } from '../workflows/workflows-ports.module.js';
 import { ORG_STRUCTURE_READER } from '../../core/ports/org-structure.port.js';
 import { OrgStructureProvider } from '../../core/ports/org-structure.provider.js';
+import { TaskDeciders } from './access/task-deciders.service.js';
+import { TaskDecidersRepository } from './access/task-deciders.repository.js';
 import { ViewerResolver } from './access/task-visibility.js';
 import { CUSTOM_FIELD_VALUES_READER } from './ports/custom-field-values.port.js';
 import { TaskCustomFieldValuesProvider } from './ports/custom-field-values.provider.js';
@@ -19,11 +23,13 @@ import { TasksQueryRepository } from './tasks/tasks-query.repository.js';
  * импорта; доменные сервисы задач не экспортируются.
  */
 @Module({
-  imports: [ProjectsPortsModule],
+  imports: [ProjectsPortsModule, CustomFieldsPortsModule, WorkflowsPortsModule],
   providers: [
     OrgStructureProvider,
     { provide: ORG_STRUCTURE_READER, useClass: OrgStructureProvider },
     ViewerResolver,
+    TaskDecidersRepository,
+    TaskDeciders,
     TasksQueryRepository,
     TaskChatReaderProvider,
     { provide: TASK_CHAT_READER, useClass: TaskChatReaderProvider },

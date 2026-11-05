@@ -43,4 +43,13 @@ export class ChatFileAccessRepository {
     `);
     return rows[0]?.role ?? null;
   }
+
+  /** Задача беседы (#433): читателю-решающему вложения открываются read-only. */
+  async taskIdByConversationId(conversationId: string): Promise<string | null> {
+    const row = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { taskId: true },
+    });
+    return row?.taskId ?? null;
+  }
 }
