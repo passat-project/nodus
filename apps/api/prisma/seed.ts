@@ -19,7 +19,7 @@ import * as argon2 from 'argon2';
 import { randomBytes } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 
-import { PrismaClient } from '../src/generated/prisma/client.js';
+import { Prisma, PrismaClient } from '../src/generated/prisma/client.js';
 import { GRANTED_ADMIN_PERMISSIONS } from './all-permissions.js';
 
 const connectionString = process.env.DATABASE_URL;
@@ -442,6 +442,90 @@ async function main(): Promise<void> {
     where: { id: NEWS_CHANNEL_ID, lastSeq: { lt: 3n } },
     data: { lastSeq: 3n, lastMessageAt: new Date() },
   });
+
+  // ===== Атрибуты портала (#631): демо-мир песочницы =====
+  // Цвета вариантов «Марки» (Р6): палитра темы по порядку справочника —
+  // только строкам без цвета (администраторские правки не трогаем).
+  const markDictionary = await prisma.dictionary.findUnique({
+    where: { code: 'set-mark' },
+    select: { id: true },
+  });
+  if (markDictionary) {
+    const PALETTE = [
+      'info',
+      'warning',
+      'success',
+      'pink',
+      'neutral',
+      'danger',
+      'violet',
+      'teal',
+      'orange',
+      'cyan',
+    ] as const;
+    const items = await prisma.dictionaryItem.findMany({
+      where: { dictionaryId: markDictionary.id, color: null, isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      select: { id: true },
+      take: PALETTE.length,
+    });
+    for (const [index, item] of items.entries()) {
+      await prisma.dictionaryItem.update({
+        where: { id: item.id },
+        data: { color: PALETTE[index] },
+      });
+    }
+  }
+
+  // Глобальная переменная (Р7): «Срок мобилизации, дней» со значением 14 —
+  // сеем только под свободным именем (администратор мог занять своим).
+  const globalTaken = await prisma.fieldDefinition.findFirst({
+    where: { name: { equals: 'Срок мобилизации, дней', mode: 'insensitive' } },
+    select: { id: true },
+  });
+  if (!globalTaken) {
+    const [{ n }] = await prisma.$queryRaw<{ n: bigint }[]>(
+      Prisma.sql`SELECT nextval('field_definitions_number_seq') AS n`,
+    );
+    await prisma.fieldDefinition.create({
+      data: {
+        number: Number(n),
+        type: 'number',
+        name: 'Срок мобилизации, дней',
+        settings: {},
+        isCompany: true,
+        sortOrder: 100,
+        companyValue: { create: { value: 14 } },
+      },
+    });
+  }
+
+  // Демо-проект со шифром (Р9): «Шифр» и «Заказчик» — атрибуты, значение
+  // живёт в customFields; колонки code/client_id заморожены. Только при
+  // пустом журнале проектов (ре-сид живого стенда ничего не добавляет).
+  const projectCount = await prisma.project.count();
+  const admin = await prisma.user.findFirst({
+    where: { email: 'admin@nodus.by' },
+    select: { id: true },
+  });
+  const contractType = await prisma.projectType.findUnique({
+    where: { id: '11111111-1111-4111-8111-111111111111' },
+    select: { id: true },
+  });
+  if (projectCount === 0 && admin && contractType) {
+    await prisma.project.create({
+      data: {
+        name: 'Демо-договор «Пассат»',
+        typeId: contractType.id,
+        managerId: admin.id,
+        creatorId: admin.id,
+        visibility: 'open',
+        customFields: {
+          '4b91bbe0-2d81-5ba2-8c51-93beb41da2cf': 'ПР-2026-01',
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
 
   const users = await prisma.user.count();
   const departments = await prisma.department.count();
