@@ -2,6 +2,8 @@ import { useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 
+import type { OpenLetterEvent } from '@nodus/contracts';
+
 import { api } from '../api-client.js';
 import { enqueueSend } from '../chat/send-queue.js';
 import { bindDesktopShellEvents, isDesktopShell } from './desktop-bridge.js';
@@ -9,9 +11,14 @@ import { bindDesktopShellEvents, isDesktopShell } from './desktop-bridge.js';
 /**
  * Хост моста оболочки (монтируется в app-shell рядом с useUnreadTitle):
  * слушает события «оболочка → веб» и сигналит готовность (shellReady —
- * оболочка доставляет отложенный deep link только после него).
+ * оболочка доставляет отложенный deep link только после него). Открытие
+ * письма из попапа (#618) — колбэк app-слоя (стек карточек): shared не
+ * импортирует app (направление слоёв).
  */
-export function useDesktopBridge(): void {
+export function useDesktopBridge(handlers: {
+  /** Клик по попапу «Поступило письмо»: открыть карточку письма. */
+  onOpenLetter: (payload: OpenLetterEvent) => void;
+}): void {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -55,6 +62,9 @@ export function useDesktopBridge(): void {
       // «Открыть» из попапа и deep link nodus://chat/<id>; трэд — окном трэда.
       onOpenConversation: ({ conversationId, threadRootId }) =>
         openConversation(conversationId, threadRootId ?? null),
+      // Клик по попапу «Поступило письмо» (#618): карточка письма поверх
+      // текущего раздела — тем же стеком, что клик по уведомлению журнала.
+      onOpenLetter: handlers.onOpenLetter,
     });
-  }, [queryClient, openConversation]);
+  }, [queryClient, openConversation, handlers.onOpenLetter]);
 }

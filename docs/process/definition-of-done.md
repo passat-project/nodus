@@ -31,6 +31,7 @@
 - [ ] Изменён `.github/workflows/**` → YAML прогнан парсером локально (`python -c "import yaml,glob; [yaml.safe_load(open(f, encoding='utf-8')) for f in glob.glob('.github/workflows/*.yml')]"`) — двоеточие в незакавыченной строке ломает весь workflow молча до пуша.
 - [ ] Изменён `Dockerfile`/`docker-compose.yml` → `docker compose build <сервис>` + поднятие локально (в runner-стадии нет глобальных CLI — см. gotchas).
 - [ ] Изменён состав задач turbo/скриптов (`test`, `build`) → прогнана именно CI-комбинация команд локально (`pnpm test`, `pnpm build` — они включают все пакеты workspace, новый пакет с test-скриптом влетает и в CI).
+- [ ] PR меняет исходники (не docs-only) → после `pnpm test:coverage` прогнан `pnpm diff-coverage` — тот же гейт, что в CI (изменённые строки ≥ 80%); `lint/typecheck/test` его НЕ покрывают, а файлы вне `coverage.include` (плагины в корне пакета) считаются 0% даже с живым тестом (урок PR #624: зелёные локальные гейты, CI — 13.4%).
 - [ ] Добавлен пакет с особыми рантайм-требованиями (браузеры Playwright, живой стек) → он исключён из дефолтного `turbo test` фильтром и имеет отдельную команду/джобу.
 
 ## Документация (I12)
