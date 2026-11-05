@@ -71,7 +71,7 @@ function make(transition: Partial<WorkflowDeciderTransition>, task: Partial<Deci
     recipients,
     repository as never,
   );
-  return { service, org, projects, repository, task: { ...TASK, ...task } };
+  return { service, org, projects, repository, recipients, task: { ...TASK, ...task } };
 }
 
 describe('TaskDeciders (#433)', () => {
@@ -120,7 +120,7 @@ describe('TaskDeciders (#433)', () => {
       sources: [{ kind: 'project_role', role: 'participant' }],
     });
     task.projectId = 'p-1';
-    projects.rolesIn.mockResolvedValue({ 'p-1': ['participant'] as never });
+    projects.rolesIn.mockResolvedValue({ 'p-1': ['participant'] } as never);
     expect(await service.isDeciderNow(undefined, task, 'creator')).toBe(true);
     projects.rolesIn.mockResolvedValue({});
     expect(await service.isDeciderNow(undefined, task, 'creator')).toBe(false);
@@ -161,5 +161,103 @@ describe('TaskDeciders (#433)', () => {
     repository.findParticipant.mockResolvedValue(false);
     expect(await service.insertObserverIfAbsent({} as never, task, 'boss')).toBe(true);
     expect(repository.insertObserver).toHaveBeenCalledWith({}, 'task-1', 'boss');
+  });
+
+  it('idsForStage: сотрудники, поле и руководитель — адресаты уведомления', async () => {
+    const byField = make({ sources: [{ kind: 'field', field: `cf.${FIELD_ID}` }] });
+    byField.task.customFields = { [FIELD_ID]: 'boss' };
+    expect(
+      await byField.recipients.idsForStage({} as never, byField.task, {
+        id: 'stage-active',
+        systemState: 'active',
+      }),
+    ).toEqual(['boss']);
+
+    const byManager = make({ sources: [{ kind: 'manager_of', of: 'creator' }] });
+    expect(
+      await byManager.recipients.idsForStage({} as never, byManager.task, {
+        id: 'stage-active',
+        systemState: 'active',
+      }),
+    ).toEqual(['boss']);
+
+    const byEmployees = make({ sources: [{ kind: 'employees', userIds: ['boss'] }] });
+    expect(
+      await byEmployees.recipients.idsForStage({} as never, byEmployees.task, {
+        id: 'stage-active',
+        systemState: 'active',
+      }),
+    ).toEqual(['boss']);
+  });
+
+  it('idsForStage: роль проекта и фильтр живых сотрудников', async () => {
+    const { recipients, projects, task } = make({
+      sources: [{ kind: 'project_role', role: 'participant' }],
+    });
+    task.projectId = 'p-1';
+    projects.usersWithRoles.mockResolvedValue(['boss', 'gone'] as never);
+    expect(
+      await recipients.idsForStage({} as never, task, {
+        id: 'stage-active',
+        systemState: 'active',
+      }),
+    ).toEqual(['boss', 'gone']);
+  });
+
+  it('адресаты не утекают в конфиденциальную задачу и секретный проект', async () => {
+    const confidential = make({ sources: [{ kind: 'employees', userIds: ['stranger'] }] });
+    confidential.task.confidential = true;
+    expect(
+      await confidential.recipients.idsForStage({} as never, confidential.task, {
+        id: 'stage-active',
+        systemState: 'active',
+      }),
+    ).toEqual([]);
+
+    const secret = make({ sources: [{ kind: 'employees', userIds: ['stranger'] }] });
+    secret.task.projectId = 'p-1';
+    secret.projects.visibilityOf.mockResolvedValue('secret');
+    expect(
+      await secret.recipients.idsForStage({} as never, secret.task, {
+        id: 'stage-active',
+        systemState: 'active',
+      }),
+    ).toEqual([]);
+  });
+
+  it('участник секретного проекта читает задачу как решающий', async () => {
+    const { service, projects, task } = make({
+      sources: [{ kind: 'employees', userIds: ['boss'] }],
+    });
+    task.projectId = 'p-1';
+    projects.visibilityOf.mockResolvedValue('secret');
+    projects.rolesIn.mockResolvedValue({ 'p-1': ['participant'] } as never);
+    expect(await service.isDeciderNow(undefined, task, 'boss')).toBe(true);
+  });
+
+  it('переход «из любого» между итогами и self-loop не делают держателем', async () => {
+    const { service, task } = make({
+      sources: [{ kind: 'employees', userIds: ['boss'] }],
+      fromStageId: null,
+      toStageId: 'stage-closed',
+      toStageSystemState: 'closed',
+    });
+    task.systemState = 'closed';
+    task.stageId = 'stage-closed';
+    expect(await service.isDeciderNow(undefined, task, 'boss')).toBe(false);
+  });
+
+  it('taskIdsFor: кандидаты по источникам, кэш на актора', async () => {
+    const { service, repository } = make({
+      sources: [{ kind: 'employees', userIds: ['boss'] }],
+    });
+    repository.findCandidates.mockResolvedValue([
+      { ...TASK, id: 'task-1' },
+      { ...TASK, id: 'task-2' },
+    ] as never);
+    await expect(service.taskIdsFor('boss')).resolves.toEqual(['task-1', 'task-2']);
+    await service.taskIdsFor('boss');
+    expect(repository.findCandidates).toHaveBeenCalledTimes(1);
+    await expect(service.taskIdsFor('stranger')).resolves.toEqual([]);
   });
 });

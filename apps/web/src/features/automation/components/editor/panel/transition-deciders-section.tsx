@@ -15,6 +15,7 @@ import { useUsersList } from '../../../../../shared/api/users-list.js';
 import { useCustomFieldDefinitions } from '../../../../../shared/custom-fields/queries.js';
 import { PanelField } from '../../../../../shared/ui/panel/panel-kit.js';
 import { PeoplePicker } from '../../../../../shared/ui/people-picker.js';
+import { defaultDeciderSource } from '../../../model/decider-sources.js';
 import {
   addDeciderSource,
   deciderSourcesOf,
@@ -52,42 +53,12 @@ export function DecidersSection({
   const patch = (rules: Rules) => patchTransition(transition.id, { rules });
 
   const add = (kind: DeciderSource['kind']) => {
-    switch (kind) {
-      case 'position': {
-        const position = positions[0];
-        if (position) {
-          patch(
-            addDeciderSource(transition.rules, {
-              kind: 'position',
-              positionId: position.id,
-              positionKind: position.kind,
-            }),
-          );
-        }
-        return;
-      }
-      case 'manager_of':
-        patch(addDeciderSource(transition.rules, { kind: 'manager_of', of: 'creator' }));
-        return;
-      case 'employees':
-        patch(addDeciderSource(transition.rules, { kind: 'employees', userIds: [] }));
-        return;
-      case 'field': {
-        const definition = userFields[0];
-        if (definition) {
-          patch(
-            addDeciderSource(transition.rules, {
-              kind: 'field',
-              field: `cf.${definition.id}` as CustomFieldKey,
-            }),
-          );
-        }
-        return;
-      }
-      case 'project_role':
-        patch(addDeciderSource(transition.rules, { kind: 'project_role', role: 'manager' }));
-        return;
-    }
+    const source = defaultDeciderSource(
+      kind,
+      positions,
+      userFields.map((definition) => definition.id),
+    );
+    if (source) patch(addDeciderSource(transition.rules, source));
   };
 
   const update = (index: number, source: DeciderSource) =>

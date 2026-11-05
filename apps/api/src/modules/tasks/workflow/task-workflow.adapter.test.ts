@@ -63,6 +63,7 @@ function makeAdapter() {
     idsForStage: vi.fn(async () => [] as string[]),
     insertObserverIfAbsent: vi.fn(async () => false),
   };
+  const events = { emit: vi.fn(async () => void 0) };
   const adapter = new TaskWorkflowAdapter(
     { run: vi.fn(async (fn: (t: unknown) => unknown) => fn({})) } as never,
     tasks as never,
@@ -74,9 +75,9 @@ function makeAdapter() {
     customFields as never,
     { supplement: vi.fn(async (roles: Set<string>) => roles) } as never,
     deciders as never,
-    { emit: vi.fn() } as never,
+    events as never,
   );
-  return { adapter, mover, tasks, placements };
+  return { adapter, mover, tasks, placements, deciders, events };
 }
 
 describe('TaskWorkflowAdapter (#428, ADR-0024)', () => {
@@ -117,6 +118,44 @@ describe('TaskWorkflowAdapter (#428, ADR-0024)', () => {
       'u2',
       { transitionId: 'tr', cause: 'transition' },
     );
+  });
+
+  it('решающий после нажатия — наблюдатель без звука и событие состава (#433)', async () => {
+    const { adapter, mover, deciders, events } = makeAdapter();
+    deciders.insertObserverIfAbsent.mockResolvedValue(true);
+    const target = { id: TO, name: 'Готово', systemState: 'closed', outcome: 'success' };
+    await adapter.applyStage({} as never, TASK, target, 'u9', {
+      transitionId: 'tr',
+      cause: 'transition',
+      wasDeciderOfTransition: true,
+    } as never);
+    expect(mover.apply).toHaveBeenCalled();
+    expect(deciders.insertObserverIfAbsent).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ id: TASK }),
+      'u9',
+    );
+    expect(events.emit).toHaveBeenCalledWith(
+      {},
+      'task.participants_changed',
+      expect.objectContaining({ added: [{ userId: 'u9', role: 'observer' }] }),
+      expect.objectContaining({ actorId: 'u9' }),
+    );
+  });
+
+  it('не решающий — наблюдателем не становится', async () => {
+    const { adapter, deciders } = makeAdapter();
+    await adapter.applyStage(
+      {} as never,
+      TASK,
+      { id: TO, name: 'Готово', systemState: 'closed', outcome: 'success' },
+      'u9',
+      {
+        transitionId: 'tr',
+        cause: 'transition',
+      } as never,
+    );
+    expect(deciders.insertObserverIfAbsent).not.toHaveBeenCalled();
   });
 
   it('счётчики по стадиям', async () => {
