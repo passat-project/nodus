@@ -40,7 +40,8 @@ import {
 import { assertLetterCatalogEditable } from '../../catalog/letter-lock.js';
 import { documentOf } from './document-of.js';
 import { liveLayout, resolveLayout } from './layout.js';
-import { checkDocumentForPublish, serverChecksOf } from './publish-checks.js';
+import { assertPublishable } from './publish-checks.js';
+import { publishSnapshot } from './publish-snapshot.js';
 import {
   missingMigrations,
   planWorkflowPublish,
@@ -141,22 +142,18 @@ export class WorkflowEditorService {
       // ссылается на атрибуты, привязанные к типу, а пресеты — на живых.
       const typeIds = await this.workflows.typeIdsOf(workflowId, tx);
       const typeRow = typeIds[0] ? (await this.types.findByIds([typeIds[0]]))[0] : undefined;
-      await checkDocumentForPublish(
-        {
-          registry: this.customFields,
-          profiles: this.profiles,
-          org: this.org,
-        },
+      const loaded = await assertPublishable(
+        { registry: this.customFields, profiles: this.profiles, org: this.org },
         {
           document: body.document,
           category,
           typeId: typeIds[0],
           numberingConfigured: Boolean(normalizeTypeConfig(typeRow?.config).numbering),
+          migrations: body.migrations,
           tx,
+          load: () => this.workflows.load(workflowId, tx),
         },
       );
-      const loaded = await this.workflows.load(workflowId, tx);
-      serverChecksOf(loaded, body.document, body.migrations);
 
       const snapshot = await this.snapshotOf(tx, loaded, category);
       const plan = planWorkflowPublish(snapshot, body.document, body.migrations);
@@ -268,38 +265,13 @@ export class WorkflowEditorService {
     });
   }
 
-  /** Снимок живого маршрута для планировщика (с правилами кнопок). */
-  private async snapshotOf(
+  /** Снимок живого маршрута для планировщика — вынесен в publish-snapshot.ts. */
+  private snapshotOf(
     tx: TransactionClient,
     loaded: LoadedWorkflow,
     category: Awaited<ReturnType<WorkflowRepository['categoryOf']>>,
   ): Promise<PlannerSnapshot> {
-    return {
-      stages: loaded.stages.map((s) => ({
-        id: s.id,
-        name: s.name,
-        color: s.color,
-        systemState: s.systemState,
-        outcome: s.outcome,
-        isInitial: s.isInitial,
-        sortOrder: s.sortOrder,
-      })),
-      transitions: loaded.transitions.map((t) => ({
-        id: t.id,
-        name: t.name,
-        fromStageId: t.fromStageId,
-        toStageId: t.toStageId,
-        display: t.display,
-        intent: t.intent,
-        sortOrder: t.sortOrder,
-        rules: t.rules,
-        form: t.form,
-      })),
-      taskCounts: await this.adapters.get(category).countByStages(
-        loaded.stages.map((s) => s.id),
-        tx,
-      ),
-    };
+    return publishSnapshot(tx, loaded, category, this.adapters);
   }
 
   /** Применение плана: создание (new:* → uuid), правки, архив. */

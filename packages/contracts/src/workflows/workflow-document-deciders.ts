@@ -5,10 +5,13 @@ import type { WorkflowDraftDocument, WorkflowProblem } from './workflow-document
  * Проверки источников решающих (#433): ошибки запрещают публикацию,
  * предупреждения — нет. Чистая функция без I/O (как остальные проверки
  * документа, ADR-0021): факты должностей и типов атрибутов приходят снаружи.
+ * Удалённость и привязка атрибутов к типу проверяются общим `checkKey`
+ * документа — здесь только то, чего он не знает.
  */
 
-/** Факт должности для проверки: активна и сколько живых держателей. */
+/** Факт должности для проверки: вид, активность и число живых держателей. */
 export interface WorkflowPositionFact {
+  kind?: 'management' | 'legal';
   isActive: boolean;
   holders: number;
 }
@@ -16,10 +19,6 @@ export interface WorkflowPositionFact {
 export interface DeciderCheckOptions {
   /** Определения атрибутов области: тип нужен для «поле-Сотрудник(и)». */
   definitions?: readonly { id: string; type: string }[];
-  /** id живых атрибутов (для `custom_field_unknown`). */
-  activeFieldIds?: ReadonlySet<string>;
-  /** id атрибутов, привязанных к типу (для `custom_field_not_in_type`). */
-  inTypeFieldIds?: ReadonlySet<string>;
   /** Факты должностей; без них проверки должности пропускаются (старые вызовы). */
   positions?: ReadonlyMap<string, WorkflowPositionFact>;
 }
@@ -60,11 +59,7 @@ export function checkDeciderRules(
       if (source.kind === 'field') {
         const fieldId = customFieldIdOfKey(source.field);
         if (fieldId === null) continue;
-        if (opts.activeFieldIds && !opts.activeFieldIds.has(fieldId)) {
-          problems.push(error('custom_field_unknown', t.id));
-        } else if (opts.inTypeFieldIds && !opts.inTypeFieldIds.has(fieldId)) {
-          problems.push(error('custom_field_not_in_type', t.id));
-        } else if (definitions.size > 0) {
+        if (definitions.size > 0) {
           const type = definitions.get(fieldId);
           if (type !== 'user' && type !== 'users') {
             problems.push(error('decider_field_not_user', t.id));
@@ -73,11 +68,15 @@ export function checkDeciderRules(
       }
       if (source.kind === 'position' && opts.positions) {
         const position = opts.positions.get(source.positionId);
-        if (!position || !position.isActive) {
+        const kindMismatch = position?.kind !== undefined && position.kind !== source.positionKind;
+        if (!position || !position.isActive || kindMismatch) {
           problems.push(error('decider_position_missing', t.id));
         } else if (position.holders === 0) {
           problems.push(warning('decider_position_empty', t.id));
         }
+      }
+      if (source.kind === 'employees' && source.userIds.length === 0) {
+        problems.push(error('decider_source_empty', t.id));
       }
     }
 

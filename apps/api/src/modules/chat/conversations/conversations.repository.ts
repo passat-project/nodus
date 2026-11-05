@@ -151,7 +151,10 @@ export class ConversationsRepository {
     const rows = await this.prisma.$queryRaw<ConversationListRow[]>(
       LIST_SELECT_AS_READER(userId, conversationId),
     );
-    return rows[0] ?? null;
+    const row = rows[0];
+    // Читатель без членства (#433): интерфейс не показывает отправку —
+    // сервер всё равно ответит 404 (членства нет).
+    return row ? { ...row, readerAccess: true } : null;
   }
 
   /** Задача беседы (#433): по ней проверяется «решающий ли зритель». */

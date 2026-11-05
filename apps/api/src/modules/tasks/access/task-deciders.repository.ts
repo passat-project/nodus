@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../../core/database/prisma.service.js';
-import type { DeciderTaskRow } from './task-deciders.service.js';
+import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import type { DeciderTaskRow } from './task-decider-facts.js';
 
 /**
  * Таблицы задач для расчёта решающих (#433): кандидаты в статусах с
- * `decider_in`, минимальная строка задачи и живые сотрудники. Prisma —
- * только здесь (patterns.md: repository pattern), сервис работает с данными.
+ * `decider_in`, минимальная строка задачи, участие и вставка наблюдателя.
+ * Prisma — только здесь (patterns.md: repository pattern), сервис работает
+ * с данными.
  */
 @Injectable()
 export class TaskDecidersRepository {
@@ -35,6 +37,7 @@ export class TaskDecidersRepository {
         creatorId: true,
         assigneeId: true,
         projectId: true,
+        confidential: true,
         customFields: true,
       },
       take: TaskDecidersRepository.MAX_TASKS,
@@ -54,18 +57,34 @@ export class TaskDecidersRepository {
         creatorId: true,
         assigneeId: true,
         projectId: true,
+        confidential: true,
         customFields: true,
       },
     }) as Promise<DeciderTaskRow | null>;
   }
 
-  /** Живые сотрудники из набора (вакантность источников и адресаты). */
-  async activeUserIds(ids: readonly string[]): Promise<string[]> {
-    if (ids.length === 0) return [];
-    const rows = await this.prisma.user.findMany({
-      where: { id: { in: [...new Set(ids)] }, status: 'active' },
-      select: { id: true },
+  /** Участники задачи (постановщик/ответственный/соисполнители/наблюдатели). */
+  async participantIds(taskId: string, tx?: TransactionClient): Promise<string[]> {
+    const rows = await (tx ?? this.prisma).taskParticipant.findMany({
+      where: { taskId },
+      select: { userId: true },
     });
-    return rows.map((row) => row.id);
+    return rows.map((row) => row.userId);
+  }
+
+  /** Есть ли строка участия (для идемпотентного наблюдателя). */
+  async findParticipant(tx: TransactionClient, taskId: string, userId: string): Promise<boolean> {
+    const row = await tx.taskParticipant.findUnique({
+      where: { taskId_userId: { taskId, userId } },
+      select: { userId: true },
+    });
+    return row !== null;
+  }
+
+  /** Наблюдатель без звука (#433): только вставка — coexecutor не понижается. */
+  async insertObserver(tx: TransactionClient, taskId: string, userId: string): Promise<void> {
+    await tx.taskParticipant.create({
+      data: { taskId, userId, role: 'observer', muted: true },
+    });
   }
 }

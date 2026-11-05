@@ -116,6 +116,20 @@ describe('checkDeciderRules (#433)', () => {
     expect(empty?.severity).toBe('warning');
   });
 
+  it('должность другого вида — ошибка (иначе кнопку никто не увидит)', () => {
+    const doc = taskDoc({ kind: 'position', positionId: POSITION, positionKind: 'management' });
+    const problems = checkWorkflowDocument(doc, {
+      category: 'task',
+      positions: new Map([[POSITION, { kind: 'legal' as const, isActive: true, holders: 3 }]]),
+    });
+    expect(problems.map((p) => p.code)).toContain('decider_position_missing');
+  });
+
+  it('пустой список сотрудников — ошибка публикации', () => {
+    const doc = taskDoc({ kind: 'employees', userIds: [] });
+    expect(codes(doc)).toContain('decider_source_empty');
+  });
+
   it('поле не «Сотрудник(и)» — ошибка', () => {
     const doc = taskDoc({ kind: 'field', field: `cf.${FIELD}` });
     const result = codes(doc, { definitions: [{ id: FIELD, type: 'text' }] });

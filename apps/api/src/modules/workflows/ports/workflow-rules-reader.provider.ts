@@ -16,6 +16,8 @@ interface DeciderRuleRow {
   workflowId: string;
   transitionId: string;
   fromStageId: string | null;
+  toStageId: string | null;
+  toStageSystemState: string | null;
   intent: string;
   rules: unknown;
 }
@@ -39,10 +41,13 @@ export class WorkflowRulesReaderProvider implements WorkflowRulesReader {
       SELECT t.workflow_id AS "workflowId",
              t.id AS "transitionId",
              t.from_stage_id AS "fromStageId",
+             t.to_stage_id AS "toStageId",
+             s.system_state AS "toStageSystemState",
              t.intent AS "intent",
              t.rules AS "rules"
       FROM workflow_transitions t
       JOIN workflows w ON w.id = t.workflow_id
+      LEFT JOIN workflow_stages s ON s.id = t.to_stage_id
       WHERE t.archived_at IS NULL
         AND w.kind = ${category}
         AND t.rules->'conditions' @> '[{"kind":"decider_in"}]'::jsonb
@@ -65,6 +70,8 @@ export class WorkflowRulesReaderProvider implements WorkflowRulesReader {
         workflowId: row.workflowId,
         transitionId: row.transitionId,
         fromStageId: row.fromStageId,
+        toStageId: row.toStageId,
+        toStageSystemState: row.toStageSystemState,
         intent: row.intent === 'service' ? 'service' : 'action',
         sources,
       });

@@ -15,7 +15,7 @@ function facts(patch: Partial<WorkflowDeciderFacts> = {}): WorkflowDeciderFacts 
     creatorManagerId: null,
     assigneeManagerId: null,
     positionKeys: new Set(),
-    projectRole: null,
+    projectRoles: new Set(),
     fieldUserIds: {},
     userFieldIds: new Set(),
     ...patch,
@@ -86,10 +86,16 @@ describe('matchesDecider (#433)', () => {
 
   it('роль в проекте', () => {
     expect(
-      matchesDecider({ kind: 'project_role', role: 'manager' }, facts({ projectRole: 'manager' })),
+      matchesDecider(
+        { kind: 'project_role', role: 'manager' },
+        facts({ projectRoles: new Set(['manager']) }),
+      ),
     ).toBe(true);
     expect(
-      matchesDecider({ kind: 'project_role', role: 'observer' }, facts({ projectRole: 'manager' })),
+      matchesDecider(
+        { kind: 'project_role', role: 'observer' },
+        facts({ projectRoles: new Set(['manager']) }),
+      ),
     ).toBe(false);
     expect(matchesDecider({ kind: 'project_role', role: 'observer' }, facts())).toBe(false);
   });

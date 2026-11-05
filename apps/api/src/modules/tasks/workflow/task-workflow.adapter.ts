@@ -92,6 +92,7 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
         creatorId: task.creatorId,
         assigneeId: task.assigneeId,
         projectId: task.projectId,
+        confidential: task.confidential,
         customFields: task.customFields as Record<string, unknown>,
       },
       actor.id,
@@ -153,11 +154,19 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
       creatorId: task.creatorId,
       assigneeId: task.assigneeId,
       projectId: task.projectId,
+      confidential: task.confidential,
       customFields: task.customFields as Record<string, unknown>,
     };
     // Кого ждёт новый статус (#433): адресаты «Ждёт вашего решения» —
     // считаем до смены стадии, событие унесёт список в payload.
-    const deciderIds = actorId ? await this.deciders.idsForStage(tx, deciderTask, target.id) : [];
+    const deciderIds = actorId
+      ? (
+          await this.deciders.idsForStage(tx, deciderTask, {
+            id: target.id,
+            systemState: target.systemState,
+          })
+        ).slice(0, 200)
+      : [];
     await this.mover.apply(tx, task, target, actorId, {
       ...meta,
       ...(deciderIds.length > 0 ? { deciderIds } : {}),

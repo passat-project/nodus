@@ -212,18 +212,19 @@ function routeStickerEvent(
 }
 
 /**
- * `audience` — служебное поле адресации (task.*, chat.sticker_*): клиенту
- * не нужно и может раскрывать лишнее (кто ещё установил чужой личный пак,
- * текущий состав задачи для снятого участника). Доменные составы
+ * `audience` и `deciderIds` — служебные поля адресации (task.*): клиенту не
+ * нужно и может раскрывать лишнее (кто ещё установил чужой личный пак,
+ * текущий состав задачи, кто ещё ждёт решения — #433). Доменные составы
  * (`memberIds`/`userIds` событий беседы) — данные события, их видят и так.
  */
 function withoutAudience(
   envelope: RealtimeEnvelope,
   payload: Record<string, unknown>,
 ): RealtimeEnvelope {
-  if (!('audience' in payload)) return envelope;
+  if (!('audience' in payload) && !('deciderIds' in payload)) return envelope;
   const visible = { ...payload };
   delete visible.audience;
+  delete visible.deciderIds;
   return { ...envelope, payload: visible };
 }
 

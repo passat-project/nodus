@@ -5,7 +5,10 @@ import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.mo
 import { WorkflowsPortsModule } from '../workflows/workflows-ports.module.js';
 import { ORG_STRUCTURE_READER } from '../../core/ports/org-structure.port.js';
 import { OrgStructureProvider } from '../../core/ports/org-structure.provider.js';
+import { USER_PROFILE_READER } from '../../core/ports/user-profile.port.js';
+import { UserProfileProvider } from '../../core/ports/user-profile.provider.js';
 import { TaskDeciders } from './access/task-deciders.service.js';
+import { TaskDeciderRecipients } from './access/task-decider-recipients.service.js';
 import { TaskDecidersRepository } from './access/task-deciders.repository.js';
 import { ViewerResolver } from './access/task-visibility.js';
 import { CUSTOM_FIELD_VALUES_READER } from './ports/custom-field-values.port.js';
@@ -27,8 +30,11 @@ import { TasksQueryRepository } from './tasks/tasks-query.repository.js';
   providers: [
     OrgStructureProvider,
     { provide: ORG_STRUCTURE_READER, useClass: OrgStructureProvider },
+    UserProfileProvider,
+    { provide: USER_PROFILE_READER, useClass: UserProfileProvider },
     ViewerResolver,
     TaskDecidersRepository,
+    TaskDeciderRecipients,
     TaskDeciders,
     TasksQueryRepository,
     TaskChatReaderProvider,

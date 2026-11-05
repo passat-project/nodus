@@ -206,6 +206,7 @@ export class OrgStructureProvider implements OrgStructureReader {
       where: { id: { in: [...new Set(ids)] } },
       select: {
         id: true,
+        kind: true,
         isActive: true,
         _count: {
           select: {
@@ -218,7 +219,11 @@ export class OrgStructureProvider implements OrgStructureReader {
     return new Map(
       rows.map((row) => [
         row.id,
-        { isActive: row.isActive, holders: row._count.users + row._count.legalUsers },
+        {
+          kind: row.kind as 'management' | 'legal',
+          isActive: row.isActive,
+          holders: row._count.users + row._count.legalUsers,
+        },
       ]),
     );
   }

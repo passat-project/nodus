@@ -71,7 +71,14 @@ function deadlineMatch(item: TaskListItem, value: FilterValue): boolean {
 export function useTaskFilterDefs({
   projectVisible = true,
   assigneeVisible = true,
-}: { projectVisible?: boolean; assigneeVisible?: boolean } = {}): FilterFieldDef<TaskListItem>[] {
+  deciderVisible = false,
+}: {
+  projectVisible?: boolean;
+  assigneeVisible?: boolean;
+  /** Пресет «Ждут моего решения» (#433) — только список задач: серверный
+   *  срез существует лишь там, в чужих фидах фильтр был бы обманкой. */
+  deciderVisible?: boolean;
+} = {}): FilterFieldDef<TaskListItem>[] {
   const { data: stages } = useTaskStages();
   const { data: users } = useUsersList();
   const { data: projects } = useProjectsList({ enabled: projectVisible });
@@ -113,7 +120,7 @@ export function useTaskFilterDefs({
           { value: 'assignee', label: ui.tasks.roles.assignee },
           { value: 'creator', label: ui.tasks.roles.creator },
           { value: 'participant', label: ui.tasks.roles.participant },
-          { value: 'decider', label: ui.tasks.roles.decider },
+          ...(deciderVisible ? [{ value: 'decider', label: ui.tasks.roles.decider }] : []),
         ],
         match: (t, v) =>
           v === 'assignee'
@@ -178,5 +185,5 @@ export function useTaskFilterDefs({
       });
     }
     return [...defs, ...customDefs];
-  }, [stages, users, projects, meId, projectVisible, assigneeVisible, customDefs]);
+  }, [stages, users, projects, meId, projectVisible, assigneeVisible, deciderVisible, customDefs]);
 }

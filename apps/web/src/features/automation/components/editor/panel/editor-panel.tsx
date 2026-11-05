@@ -13,7 +13,8 @@ import { SidePanel } from '../../../../../shared/ui/panel/side-panel.js';
 import { StageButtonsSection } from './stage-buttons-section.js';
 import { StagePanel } from './stage-panel.js';
 import { TransitionPanel, type TransitionSection } from './transition-panel.js';
-import { ConditionsSection, RolesSection, RulesSection } from './transition-sections.js';
+import { ConditionsSection, RulesSection } from './transition-sections.js';
+import { RolesSection } from './transition-roles-section.js';
 import { DecidersSection } from './transition-deciders-section.js';
 import { WindowSection } from './window-section.js';
 

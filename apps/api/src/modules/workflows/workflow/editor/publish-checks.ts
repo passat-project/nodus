@@ -135,3 +135,19 @@ export async function checkDocumentForPublish(
     });
   }
 }
+
+/** Полная серверная приёмка документа публикации (#433): проверки документа
+ *  (включая должности решающих) + сверка ссылок с живым маршрутом. Возвращает
+ *  загруженный маршрут — он нужен плану публикации. */
+export async function assertPublishable(
+  deps: Parameters<typeof checkDocumentForPublish>[0],
+  ctx: Parameters<typeof checkDocumentForPublish>[1] & {
+    migrations: readonly WorkflowMigration[];
+    load: () => Promise<LoadedWorkflow>;
+  },
+): Promise<LoadedWorkflow> {
+  await checkDocumentForPublish(deps, ctx);
+  const loaded = await ctx.load();
+  serverChecksOf(loaded, ctx.document, ctx.migrations);
+  return loaded;
+}

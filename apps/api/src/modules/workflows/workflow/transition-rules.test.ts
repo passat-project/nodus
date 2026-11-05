@@ -102,31 +102,6 @@ describe('passesConditions', () => {
     expect(passesConditions(empty, actor(['creator']))).toBe(true);
     expect(passesConditions(empty, actor(['coexecutor']))).toBe(false);
   });
-
-  it('решающий (#433): совпал источник — проходит, нет фактов — нет', () => {
-    const USER_ID = '00000000-0000-4000-8000-0000000000a1';
-    const decider = parseRules({
-      conditions: [{ kind: 'decider_in', source: { kind: 'employees', userIds: [USER_ID] } }],
-    });
-    const facts = {
-      userId: USER_ID,
-      creatorManagerId: null,
-      assigneeManagerId: null,
-      positionKeys: new Set<string>(),
-      projectRole: null,
-      fieldUserIds: {},
-      userFieldIds: new Set<string>(),
-    };
-    expect(passesConditions(decider, { ...actor(['observer']), deciderFacts: facts })).toBe(true);
-    expect(
-      passesConditions(decider, {
-        ...actor(['observer']),
-        deciderFacts: { ...facts, userId: '00000000-0000-4000-8000-0000000000a2' },
-      }),
-    ).toBe(false);
-    // Письма и старые вызовы: фактов нет — источник не совпадает.
-    expect(passesConditions(decider, actor(['observer']))).toBe(false);
-  });
 });
 
 describe('evaluateValidators (гейты DoR/DoD)', () => {

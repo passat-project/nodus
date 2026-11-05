@@ -131,8 +131,10 @@ export function DecidersSection({
                       ...source,
                       positionKind: value === 'legal' ? 'legal' : 'management',
                       positionId:
-                        positions.find((p) => p.id === source.positionId && p.kind === value)?.id ??
+                        positions.find((p) => p.kind === value && p.id === source.positionId)?.id ??
                         positions.find((p) => p.kind === value)?.id ??
+                        // Нет должностей нужного вида — оставляем id: проверка
+                        // публикации поймает несовпадение вида (диплом-факт).
                         source.positionId,
                     })
                   }
@@ -288,6 +290,7 @@ export function DecidersSection({
           {ui.automation.deciders.addSource}
         </span>
         <Select
+          key={sources.length}
           value={undefined}
           disabled={readOnly}
           onValueChange={(value) => add(value as DeciderSource['kind'])}

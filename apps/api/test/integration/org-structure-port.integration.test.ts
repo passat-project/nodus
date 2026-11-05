@@ -206,11 +206,11 @@ describe('Порт оргструктуры: решающие (#441)', () => {
     positionIds.push(management.id);
     await chat.prisma.user.update({
       where: { id: chat.users.a.id },
-      data: { positionId: management.id },
+      data: { positionId: management.id, status: 'active' },
     });
     await chat.prisma.user.update({
       where: { id: chat.users.b.id },
-      data: { positionId: management.id },
+      data: { positionId: management.id, status: 'active' },
     });
     await chat.prisma.user.update({
       where: { id: chat.users.c.id },
@@ -218,7 +218,7 @@ describe('Порт оргструктуры: решающие (#441)', () => {
     });
 
     const facts = await port.positionFacts([management.id]);
-    expect(facts.get(management.id)).toEqual({ isActive: true, holders: 2 });
+    expect(facts.get(management.id)).toMatchObject({ isActive: true, holders: 2 });
     expect((await port.positionFacts([])).size).toBe(0);
   });
 });

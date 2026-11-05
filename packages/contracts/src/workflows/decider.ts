@@ -55,8 +55,9 @@ export interface WorkflowDeciderFacts {
   assigneeManagerId: string | null;
   /** Должности актора: `deciderPositionKey(kind, positionId)`. */
   positionKeys: ReadonlySet<string>;
-  /** Роль актора в проекте задачи (null — не участвует или проекта нет). */
-  projectRole: ProjectRole | null;
+  /** Все роли актора в проекте задачи (participant объединяет task|member;
+   *  менеджер с дополнительной строкой `task` остаётся и participant). */
+  projectRoles: ReadonlySet<ProjectRole>;
   /** Значения user-полей задачи: id определения → id сотрудников. */
   fieldUserIds: Readonly<Record<string, readonly string[]>>;
   /** id определений типа `user`/`users` — только они годятся в источник «поле». */
@@ -81,6 +82,6 @@ export function matchesDecider(source: DeciderSource, facts: WorkflowDeciderFact
       return (facts.fieldUserIds[fieldId] ?? []).includes(facts.userId);
     }
     case 'project_role':
-      return facts.projectRole === source.role;
+      return facts.projectRoles.has(source.role);
   }
 }

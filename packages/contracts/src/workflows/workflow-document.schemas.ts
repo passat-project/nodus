@@ -264,6 +264,7 @@ export const workflowProblemCodeSchema = z.enum([
   'decider_position_missing',
   'decider_position_empty',
   'decider_window_needs_rights',
+  'decider_source_empty',
 ]);
 export type WorkflowProblemCode = z.infer<typeof workflowProblemCodeSchema>;
 

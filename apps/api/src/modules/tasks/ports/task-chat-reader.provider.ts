@@ -48,8 +48,11 @@ export class TaskChatReaderProvider implements TaskChatReader {
   }
 
   /** Решающий текущего шага (#433): видимость уже включает его, но чат и
-   *  файлы открываются только по этому признаку, не по любому view_all. */
+   *  файлы открываются только по этому признаку, не по любому view_all.
+   *  Двойной гейт: видимость задачи (те же правила, что список) + источник. */
   async isDecider(taskId: string, userId: string): Promise<boolean> {
+    const viewer = await this.viewers.resolve({ id: userId, permissions: [] });
+    if (!(await this.reads.isVisible(taskId, visibleTasksWhere(viewer, 'all')))) return false;
     const task = await this.deciderTasks.findTask(taskId);
     if (!task) return false;
     return this.deciders.isDeciderNow(undefined, task, userId);

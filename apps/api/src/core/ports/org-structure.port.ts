@@ -22,9 +22,10 @@ export interface OrgPositionRef {
   kind: 'management' | 'legal';
 }
 
-/** Факт должности для проверок публикации (#433): активна и сколько живых
- *  держателей (0 — вакансия, кнопку сможет нажать только обход). */
+/** Факт должности для проверок публикации (#433): вид, активность и число
+ *  живых держателей (0 — вакансия, кнопку сможет нажать только обход). */
 export interface OrgPositionFact {
+  kind?: 'management' | 'legal';
   isActive: boolean;
   holders: number;
 }

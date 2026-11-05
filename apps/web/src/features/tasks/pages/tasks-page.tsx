@@ -53,7 +53,10 @@ function TasksSection({ view, overdueTotal }: { view: 'list' | 'kanban'; overdue
   // доска, журналы проектов/сотрудника — чужие фиды, серверного среза там нет.
   const presets = view === 'list' ? taskListPresets : taskBuiltinPresets;
   const toolbar = useListToolbar(viewKey, presets);
-  const defs = useTaskFilterDefs({ projectVisible: projectsAvailable() });
+  const defs = useTaskFilterDefs({
+    projectVisible: projectsAvailable(),
+    deciderVisible: view === 'list',
+  });
   const filter = useMemo<ActiveListFilter<TaskListItem>>(
     () => ({ defs, state: toolbar.filters, query: toolbar.query, searchText: taskSearchText }),
     [defs, toolbar.filters, toolbar.query],

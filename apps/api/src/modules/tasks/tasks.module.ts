@@ -10,6 +10,7 @@ import { WorkflowsPortsModule } from '../workflows/workflows-ports.module.js';
 import { TaskProjectRights } from './access/task-project-rights.js';
 import { ViewerResolver } from './access/task-visibility.js';
 import { TaskDeciders } from './access/task-deciders.service.js';
+import { TaskDeciderRecipients } from './access/task-decider-recipients.service.js';
 import { TaskDecidersRepository } from './access/task-deciders.repository.js';
 import { HistoryRepository } from './activity/history.repository.js';
 import { HistoryService } from './activity/history.service.js';
@@ -96,6 +97,7 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
     TaskProjectRights,
     // Решающие (#433): факты актора, вакансии, видимость и адресаты.
     TaskDecidersRepository,
+    TaskDeciderRecipients,
     TaskDeciders,
     StageMover,
     // Общие писатели полей/времени/итога (#380): окно перехода и PATCH

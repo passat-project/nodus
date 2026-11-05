@@ -28,11 +28,11 @@ import {
   evaluateValidators,
   matchesChoice,
   outgoingTransitions,
-  passesConditions,
   type TargetContext,
   type TransitionDef,
 } from '../transition-rules.js';
 import { approverContext } from './approver-context.js';
+import { canShow, transitionOptions, vacancyReasons } from './transition-availability.js';
 import * as exec from './transition-execution-helpers.js';
 import { checkFormInput, windowOf } from '../transition-form.js';
 import { WorkflowEntityRegistry } from './entity-adapter.registry.js';
@@ -89,7 +89,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
       workflow.stages,
       targetCtx,
     )
-      .filter((t) => this.canShow(t, subject0))
+      .filter((t) => canShow(t, subject0))
       .filter((t) => this.matches(t, choice, subject0, workflow, targetCtx));
     if (candidates.length === 0) {
       // Имя текущего статуса — клиент собирает понятную строку (I15):
@@ -125,10 +125,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
     const ordered = [picked, ...candidates.filter((t) => t.id !== picked.id)];
     const scored = ordered.map((t) => ({
       t,
-      reasons: [
-        ...evaluateValidators(t.rules, subject1.facts),
-        ...this.vacancyReasons(t, subject1),
-      ],
+      reasons: [...evaluateValidators(t.rules, subject1.facts), ...vacancyReasons(t, subject1)],
     }));
     const pick = scored.find((s) => s.reasons.length === 0) ?? scored[0]!;
     if (pick.reasons.length > 0) this.assertOverride(pick.reasons, subject1, opts);
@@ -297,67 +294,11 @@ export class WorkflowEngine implements WorkflowEnginePort {
     subject: EngineSubject,
     ctx: TargetContext,
   ): WorkflowTransition[] {
-    return outgoingTransitions(workflow.transitions, subject.facts, workflow.stages, ctx)
-      .filter((t) => this.canShow(t, subject))
-      .map((t) => {
-        const target = this.stage(
-          workflow,
-          effectiveTargetId(t, subject.facts, workflow.stages, ctx),
-        );
-        return {
-          id: t.id,
-          name: t.name,
-          toStageId: target.id,
-          toStageName: target.name,
-          toStageState: target.systemState as WorkflowTransition['toStageState'],
-          toStageOutcome: (target.outcome ?? null) as WorkflowTransition['toStageOutcome'],
-          toStageColor: target.color as WorkflowTransition['toStageColor'],
-          toStageOrder: target.sortOrder,
-          display: t.display,
-          intent: t.intent,
-          blockedBy: [
-            ...evaluateValidators(t.rules, subject.facts),
-            ...this.vacancyReasons(t, subject),
-          ],
-          canOverride: subject.canOverrideGates,
-          form: t.form?.enabled ? t.form : null,
-          validators: t.rules.validators,
-        };
-      });
+    return transitionOptions(workflow, subject, ctx, (id) => this.stage(workflow, id));
   }
 
-  /** Условия «кто» без админского обхода: нужно, чтобы отличить «актор не
-   *  совпал» от «никого нет» (#433). */
-  private conditionsWithoutBypass(
-    rules: Parameters<typeof passesConditions>[0],
-    subject: EngineSubject,
-  ): boolean {
-    return passesConditions(rules, { ...subject, bypassConditions: false });
-  }
-
-  /** Переход с пустыми источниками решающих (#433): показать может только
-   *  право обхода — с причиной. Если актор проходит по другому условию —
-   *  блокировки нет. */
-  private vacancyReasons(
-    transition: { id: string; rules: Parameters<typeof passesConditions>[0] },
-    subject: EngineSubject,
-  ): { kind: 'decider_vacant' }[] {
-    if (!subject.vacantDeciderTransitionIds?.has(transition.id)) return [];
-    return this.conditionsWithoutBypass(transition.rules, subject)
-      ? []
-      : [{ kind: 'decider_vacant' }];
-  }
-
-  /** Кнопка попадает в выдачу: условия прошли (с обходом или без), либо
-   *  переход вакантен и у актора есть право обхода. */
-  private canShow(
-    transition: { id: string; rules: Parameters<typeof passesConditions>[0] },
-    subject: EngineSubject,
-  ): boolean {
-    if (this.conditionsWithoutBypass(transition.rules, subject)) return true;
-    if (subject.vacantDeciderTransitionIds?.has(transition.id)) return subject.canOverrideGates;
-    return subject.bypassConditions;
-  }
+  /** Условия «кто» без обхода, вакансия и видимость кнопки — в
+   *  transition-availability.ts (#433): движок только применяет. */
 
   private stage(workflow: LoadedWorkflow, id: string): StageRow {
     const stage = workflow.stages.find((s) => s.id === id);

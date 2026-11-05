@@ -13,6 +13,10 @@ export interface WorkflowDeciderTransition {
   workflowId: string;
   transitionId: string;
   fromStageId: string | null;
+  /** Цель перехода и её состояние: правило «из любого» не действует
+   *  между двумя «Итогами», self-loop держателя не создаёт. */
+  toStageId: string | null;
+  toStageSystemState: string | null;
   /** Кнопку жмёт человек (`action`) или служебная (`service`) — решающих
    *  интересуют только action-кнопки. */
   intent: 'action' | 'service';

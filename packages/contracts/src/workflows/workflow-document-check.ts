@@ -256,8 +256,6 @@ export function checkWorkflowDocument(
     doc,
     {
       definitions: opts.definitions,
-      activeFieldIds: fields?.active,
-      inTypeFieldIds: fields?.inType,
       positions: opts.positions,
     },
     problems,
