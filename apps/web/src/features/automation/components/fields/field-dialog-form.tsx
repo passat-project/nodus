@@ -204,19 +204,16 @@ export function FieldDialogForm({
         {draft.isCompany
           ? preview && (
               <Labeled label={ui.customFields.dialog.companyValue}>
-                <div className="rounded-lg border border-input bg-muted/30 px-2.5 py-1.5">
-                  <CustomFieldEditor
-                    definition={preview}
-                    value={draft.companyValue ?? undefined}
-                    refs={[]}
-                    disabled={disabled}
-                    variant="form"
-                    onCommit={(value) => onChange({ companyValue: value })}
-                  />
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  {ui.customFields.dialog.companyValueHint}
-                </span>
+                {/* Редактор form-варианта — сам контрол с рамкой: обёртка
+                    давала двойной бордюр (рамка в рамке). */}
+                <CustomFieldEditor
+                  definition={preview}
+                  value={draft.companyValue ?? undefined}
+                  refs={[]}
+                  disabled={disabled}
+                  variant="form"
+                  onCommit={(value) => onChange({ companyValue: value })}
+                />
               </Labeled>
             )
           : null}

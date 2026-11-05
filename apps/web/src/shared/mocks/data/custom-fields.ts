@@ -254,7 +254,7 @@ export const demoCustomFieldDefinitions: CustomFieldDefinition[] = [
   definition(
     fieldIds.mobilizationDays,
     'number',
-    'Срок мобализации, дней',
+    'Срок мобилизации, дней',
     {},
     {
       isCompany: true,

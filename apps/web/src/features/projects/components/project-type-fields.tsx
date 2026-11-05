@@ -10,9 +10,6 @@ import { useUpdateProjectType } from '../api/project-catalog-mutations.js';
 import { stateOptions } from '../node-kinds/components/node-kind-summary.js';
 import { ProjectTypeFieldPicker } from './project-type-field-picker.js';
 
-/** Пустая форма типа — литерал (своего ключа в ui.projects нет). */
-const FIELDS_EMPTY = 'Атрибутов нет';
-
 /**
  * Раздел «Атрибуты» типа проекта (#631, Р10): слоты формы типа — атрибут ×
  * состояние «Скрыто / По желанию / Обязательно», грамматика раздела «При
@@ -57,9 +54,11 @@ export function ProjectTypeFieldsSection({
   return (
     <div className="flex min-w-0 flex-col gap-4">
       {form.fields.length === 0 ? (
-        <p className="text-xs break-words text-muted-foreground">{FIELDS_EMPTY}</p>
+        <p className="text-xs break-words text-muted-foreground">
+          {ui.customFields.typeForm.empty}
+        </p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-3">
           {form.fields.map((slot) => {
             const definition = byId.get(slot.fieldId);
             return (

@@ -15,6 +15,7 @@ import { Skeleton } from '@nodus/ui/components/skeleton';
 import { toast } from 'sonner';
 
 import { useCustomFieldUsage, useDeleteCustomFields } from '../../api/custom-fields-api.js';
+import { plural } from '../../../../shared/lib/format.js';
 
 /** Одна группа последствий (Р8): заголовок + строки. Пустая группа
  *  скрывается — окно перечисляет только реальный урон. */
@@ -68,12 +69,12 @@ export function FieldDeleteDialog({
   const valuesLines = usage.flatMap((query) => {
     const values = query.data?.values;
     if (!values) return [];
+    const e = ui.customFields.delete.entities;
     const parts: string[] = [];
-    if (values.task > 0) parts.push(`${values.task} ${ui.customFields.delete.entities.task}`);
-    if (values.letter > 0) parts.push(`${values.letter} ${ui.customFields.delete.entities.letter}`);
-    if (values.project > 0)
-      parts.push(`${values.project} ${ui.customFields.delete.entities.project}`);
-    if (values.node > 0) parts.push(`${values.node} ${ui.customFields.delete.entities.node}`);
+    if (values.task > 0) parts.push(`${values.task} ${plural(values.task, e.task)}`);
+    if (values.letter > 0) parts.push(`${values.letter} ${plural(values.letter, e.letter)}`);
+    if (values.project > 0) parts.push(`${values.project} ${plural(values.project, e.project)}`);
+    if (values.node > 0) parts.push(`${values.node} ${plural(values.node, e.node)}`);
     return parts;
   });
   const formsLines = usage.flatMap((query) =>
@@ -153,9 +154,10 @@ export function FieldDeleteDialog({
               }
             />
             {companyFilled ? (
-              <p className="text-sm text-secondary-foreground">
-                {ui.customFields.delete.groupCompany}
-              </p>
+              <Group
+                title={ui.customFields.delete.groupCompany}
+                lines={[ui.customFields.delete.companyLine]}
+              />
             ) : null}
             <p className="text-muted-foreground">{ui.customFields.delete.irreversible}</p>
           </div>
@@ -170,7 +172,8 @@ export function FieldDeleteDialog({
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               placeholder={ui.customFields.delete.typeToConfirmPlaceholder}
-              aria-invalid={!confirmed || undefined}
+              // Ошибка — только после попытки: пустое поле не «провинилось».
+              aria-invalid={typed.trim() !== '' && !confirmed ? true : undefined}
               className="h-8 text-sm"
               autoFocus
             />

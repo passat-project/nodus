@@ -111,10 +111,16 @@ function UsageCell({ definition }: { definition: CustomFieldDefinition }) {
     (processTypes ?? []).filter((type) => type.category === 'letter').map((type) => type.id),
   );
   const parts: string[] = [];
+  const places = ui.customFields.cells.places;
   const taskCount = bindings.processTypeIds.filter((id) => taskTypeIds.has(id)).length;
   const letterCount = bindings.processTypeIds.filter((id) => letterTypeIds.has(id)).length;
-  if (taskCount > 0) parts.push(`${ui.customFields.moduleNames.task} · ${taskCount}`);
-  if (letterCount > 0) parts.push(`${ui.customFields.moduleNames.letter} · ${letterCount}`);
+  // Счётчик с единицей измерения: «Задачи · 1 место», а не криптозапись «Задачи · 1».
+  if (taskCount > 0)
+    parts.push(`${ui.customFields.moduleNames.task} · ${taskCount} ${plural(taskCount, places)}`);
+  if (letterCount > 0)
+    parts.push(
+      `${ui.customFields.moduleNames.letter} · ${letterCount} ${plural(letterCount, places)}`,
+    );
   if (bindings.projectTypeIds.length > 0) {
     const names = bindings.projectTypeIds
       .map((id) => (projectTypes ?? []).find((type) => type.id === id)?.name)
@@ -261,7 +267,6 @@ export function fieldColumns(
   ];
 }
 
-/** Инлайн-редактор значения глобальной: коммит уходит мутацией реестра. */
 /** Инлайн-редактор значения глобальной (Р7): коммит уходит мутацией реестра
  *  (useSetCompanyValue в fields-tab), оптимистичный показ — из кэша. */
 function CompanyValueEditor({

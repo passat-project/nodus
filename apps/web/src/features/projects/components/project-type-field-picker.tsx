@@ -7,10 +7,6 @@ import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries
 import { CustomFieldTypeIcon } from '../../../shared/custom-fields/field-type-icon.js';
 import { PanelAction } from '../../../shared/ui/panel/panel-kit.js';
 
-/** Заголовок поповера: атрибуты области «Проекты» (аналог «Атрибуты папок»
- *  у вида папки; своего ключа в ui.projects нет — литерал). */
-const PICKER_TITLE = 'Атрибуты проектов';
-
 /**
  * Поповер добавления атрибута в форму типа проекта (#631, Р10): атрибуты
  * области «Проекты», которых ещё нет в форме. Добавленный слот получает
@@ -40,7 +36,9 @@ export function ProjectTypeFieldPicker({
         </PanelAction>
       </PopoverTrigger>
       <PopoverContent align="start" className="flex w-72 flex-col gap-0.5 p-1.5">
-        <span className="px-2 py-1 text-xs text-muted-foreground">{PICKER_TITLE}</span>
+        <span className="px-2 py-1 text-xs text-muted-foreground">
+          {ui.customFields.typeForm.pickerTitle}
+        </span>
         <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto" role="listbox">
           {options.length === 0 ? (
             <p className="px-2 py-3 text-center text-xs text-muted-foreground">
