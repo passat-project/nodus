@@ -46,7 +46,9 @@ pub(crate) struct ActivePopup {
     /// Монотонный номер показа — жёсткий порядок «новейший внизу»
     /// (Instant имеет грубое разрешение на Windows, counter — нет).
     pub(crate) counter: u64,
-    conversation_id: String,
+    /// Ключ гашения источника: conversationId беседы ИЛИ letterId письма
+    /// (#618) — портал гасит попапы по открытии источника (Telegram).
+    dismiss_key: String,
     pub(crate) created_ms: u64,
     /// Фактическая высота окна (логические px): мини-UI измерил контент и
     /// прислал `popup_set_height`. Стек раскладывается по ЭТИМ высотам —
@@ -125,6 +127,7 @@ fn payload_to_json(payload: &PopupPayload, theme: &str) -> serde_json::Value {
     serde_json::json!({
         "id": payload.id,
         "conversationId": payload.conversation_id,
+        "letterId": payload.letter_id,
         "threadRootId": payload.thread_root_id,
         "title": payload.title,
         "avatarUrl": payload.avatar_url,
@@ -144,7 +147,7 @@ pub(crate) fn stack(app: &AppHandle) -> std::sync::MutexGuard<'_, PopupStack> {
 /// в синхронном контексте дедлокит WebView2 (см. bridge::notify_popup).
 pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
     let payload_json = payload_to_json(&payload, bridge::ui_theme());
-    let conversation_id = payload.conversation_id.clone();
+    let dismiss_key = payload.dismiss_key().to_string();
     let (label, _slot) = {
         let mut s = stack(app);
         // Полный стек: новое вытесняет старейший спокойный (очередь-сдвиг);
@@ -172,7 +175,7 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
             label: label.clone(),
             slot,
             counter,
-            conversation_id,
+            dismiss_key,
             created_ms: activity::monotonic_ms(),
             height: POPUP_H,
             fading: None,
@@ -341,15 +344,16 @@ pub fn on_popup_destroyed(app: &AppHandle, label: &str) {
     });
 }
 
-/// Погасить попапы беседы: портал зовёт при открытии беседы (модель
-/// Telegram unlinkHistory — открыл чат, его уведомления больше не висят).
-pub fn dismiss_for_conversation(app: &AppHandle, conversation_id: &str) {
+/// Погасить попапы источника: портал зовёт при открытии беседы ИЛИ письма
+/// (#618) — ключ один и тот же (модель Telegram unlinkHistory: открыл
+/// источник, его уведомления больше не висят).
+pub fn dismiss_for_target(app: &AppHandle, key: &str) {
     let labels: Vec<String> = {
         let mut s = stack(app);
-        s.pending.retain(|p| p.conversation_id != conversation_id);
+        s.pending.retain(|p| p.dismiss_key() != key);
         s.active
             .iter()
-            .filter(|p| p.conversation_id == conversation_id)
+            .filter(|p| p.dismiss_key == key)
             .map(|p| p.label.clone())
             .collect()
     };
@@ -491,23 +495,44 @@ pub fn popup_submit_reply(
 pub fn popup_open(
     app: AppHandle,
     window: WebviewWindow,
-    conversation_id: String,
+    conversation_id: Option<String>,
     thread_root_id: Option<String>,
+    letter_id: Option<String>,
 ) -> Result<(), String> {
-    if !bridge::is_valid_conversation(&conversation_id)
-        || thread_root_id
-            .as_deref()
-            .is_some_and(|t| !bridge::is_valid_conversation(t))
-    {
+    // Цель — ровно одна (#618): письмо открывается событием open-letter,
+    // беседа — как раньше (трэд — окно трэда, #300).
+    let bad_thread = thread_root_id
+        .as_deref()
+        .is_some_and(|t| !bridge::is_valid_conversation(t));
+    let letter = match (conversation_id.as_deref(), letter_id.as_deref()) {
+        (Some(c), None) => {
+            if !bridge::is_valid_conversation(c) {
+                return Err("invalid_payload".into());
+            }
+            None
+        }
+        (None, Some(l)) => {
+            if !bridge::is_valid_conversation(l) {
+                return Err("invalid_payload".into());
+            }
+            Some(l.to_string())
+        }
+        // Ни цели, или сразу две — отказ (контракт: ровно одна).
+        (None, None) | (Some(_), Some(_)) => return Err("invalid_payload".into()),
+    };
+    if bad_thread {
         return Err("invalid_payload".into());
     }
     crate::show_main(&app);
-    // Трэд (попап об ответе в трэде, #300) — портал открывает окно трэда.
-    bridge::push_to_portal(
-        &app,
-        "open-conversation",
-        &serde_json::json!({ "conversationId": conversation_id, "threadRootId": thread_root_id }),
-    );
+    if let Some(letter_id) = letter {
+        bridge::push_to_portal(&app, "open-letter", &serde_json::json!({ "letterId": letter_id }));
+    } else {
+        bridge::push_to_portal(
+            &app,
+            "open-conversation",
+            &serde_json::json!({ "conversationId": conversation_id, "threadRootId": thread_root_id }),
+        );
+    }
     let _ = window.close();
     Ok(())
 }
@@ -519,7 +544,8 @@ mod tests {
     fn payload(id: &str, conversation_id: &str) -> PopupPayload {
         PopupPayload {
             id: id.into(),
-            conversation_id: conversation_id.into(),
+            conversation_id: Some(conversation_id.into()),
+            letter_id: None,
             thread_root_id: None,
             title: "Автор".into(),
             avatar_url: None,
@@ -527,6 +553,16 @@ mod tests {
             preview_attachment: None,
             urgent: false,
             can_reply: true,
+        }
+    }
+
+    /** Попап письма (#618): цель — letterId, ключ гашения — он же. */
+    fn letter_payload(id: &str, letter_id: &str) -> PopupPayload {
+        PopupPayload {
+            conversation_id: None,
+            letter_id: Some(letter_id.into()),
+            can_reply: false,
+            ..payload(id, "unused")
         }
     }
 
@@ -538,7 +574,7 @@ mod tests {
                 label: format!("popup-{k}"),
                 slot,
                 counter: k as u64,
-                conversation_id: format!("conv-{k}"),
+                dismiss_key: format!("conv-{k}"),
                 created_ms: 0,
                 height: POPUP_H,
                 fading: None,
@@ -577,8 +613,19 @@ mod tests {
         let mut s = PopupStack::default();
         s.pending.push_back(payload("m1", "conv-1"));
         s.pending.push_back(payload("m2", "conv-2"));
-        s.pending.retain(|p| p.conversation_id != "conv-1");
+        s.pending.retain(|p| p.dismiss_key() != "conv-1");
         assert_eq!(s.pending.pop_front().map(|p| p.id), Some("m2".into()));
+    }
+
+    /** Письмо (#618): ключ гашения попапов — letterId, чат не задет. */
+    #[test]
+    fn письмо_гасится_своим_ключом() {
+        let mut s = PopupStack::default();
+        s.pending.push_back(letter_payload("l1", "letter-9"));
+        s.pending.push_back(payload("m1", "conv-1"));
+        // Открытие письма гасит только попапы письма, чат остаётся.
+        s.pending.retain(|p| p.dismiss_key() != "letter-9");
+        assert_eq!(s.pending.pop_front().map(|p| p.id), Some("m1".into()));
     }
 
     #[test]
@@ -607,5 +654,14 @@ mod tests {
         let json = payload_to_json(&payload("m1", "conv-1"), "light");
         assert_eq!(json["theme"], "light");
         assert_eq!(json["conversationId"], "conv-1");
+        assert!(json["letterId"].is_null());
+    }
+
+    #[test]
+    fn payload_письма_несёт_цель() {
+        let json = payload_to_json(&letter_payload("l1", "letter-9"), "dark");
+        assert_eq!(json["letterId"], "letter-9");
+        assert!(json["conversationId"].is_null());
+        assert_eq!(json["canReply"], false);
     }
 }
