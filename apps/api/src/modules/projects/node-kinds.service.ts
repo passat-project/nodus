@@ -122,7 +122,7 @@ export class NodeKindsService {
     const known = new Set(definitions.map((definition) => definition.id));
     const issues = form.fields
       .filter((slot) => !known.has(slot.fieldId))
-      .map((fieldId) => ({ fieldId, reason: 'unknown_field' as const }));
+      .map((slot) => ({ fieldId: slot.fieldId, reason: 'unknown_field' as const }));
     if (issues.length > 0) {
       throw new DomainException(
         ErrorCode.PROJECT_NODE_KIND_FORM_INVALID,

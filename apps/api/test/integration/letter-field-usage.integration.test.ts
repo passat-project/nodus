@@ -70,10 +70,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       };
       const created = await c.api(admin, 'POST', '/custom-fields/definitions', {
         body: {
-          scope: 'letter',
           type: 'text',
           name: `Проба ${c.fx.runId} письмо`,
-          typeIds: [c.incomingTypeId],
+          bindings: { processTypeIds: [c.incomingTypeId] },
         },
         key: `it-cf-letter-${c.fx.runId}`,
       });
@@ -93,13 +92,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
         customFieldUsageSchema.parse(
           await (await c.api(admin, 'GET', `/custom-fields/definitions/${field.id}/usage`)).json(),
         );
-      expect((await usage()).valueCount).toBe(2);
+      expect((await usage()).values.letter).toBe(2);
 
       await c.fx.prisma.letter.update({ where: { id: spam }, data: { deletedAt: new Date() } });
-      expect((await usage()).valueCount).toBe(1);
+      expect((await usage()).values.letter).toBe(1);
 
       await c.fx.prisma.letter.update({ where: { id: live }, data: { customFields: {} } });
-      expect((await usage()).valueCount).toBe(0);
+      expect((await usage()).values.letter).toBe(0);
 
       const removed = await c.api(admin, 'DELETE', `/custom-fields/definitions/${field.id}`, {
         key: `it-cf-letter-del-${c.fx.runId}`,
@@ -111,10 +110,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const admin = await adminActor();
       const created = await c.api(admin, 'POST', '/custom-fields/definitions', {
         body: {
-          scope: 'letter',
           type: 'text',
           name: `Проба ${c.fx.runId} очистка`,
-          typeIds: [c.incomingTypeId],
+          bindings: { processTypeIds: [c.incomingTypeId] },
         },
         key: `it-cf-letter-clean-${c.fx.runId}`,
       });

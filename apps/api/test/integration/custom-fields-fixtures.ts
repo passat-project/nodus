@@ -104,8 +104,23 @@ export async function setupCustomFieldsFixture(): Promise<CustomFieldsFixture> {
     dictionaryIds: [],
     departmentIds: [],
     async createField(body) {
+      // Привязка к «Стандартному» типу задач по умолчанию (#631 Р3): без
+      // неё атрибут нигде не виден и не принимает значения; явные bindings
+      // тела сливаются по массивам.
+      const { bindings: _bodyBindings, ...rest } = body;
+      // Глобальной переменной (isCompany) привязки запрещены контрактом —
+      // дефолтную привязку к типу не добавляем.
+      const incoming = (Array.isArray(_bodyBindings) ? {} : _bodyBindings) ?? {};
+      const bindings = rest.isCompany
+        ? { processTypeIds: [], projectTypeIds: [], nodeKindIds: [] }
+        : {
+            processTypeIds: [standardType.id],
+            projectTypeIds: [],
+            nodeKindIds: [],
+            ...incoming,
+          };
       const res = await fx.api(admin, 'POST', '/custom-fields/definitions', {
-        body: { typeIds: [standardType.id], ...body },
+        body: { bindings, ...rest },
         key: `it-cf-${crypto.randomUUID()}`,
       });
       expect(res.status, await res.clone().text()).toBe(201);

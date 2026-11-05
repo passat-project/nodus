@@ -110,10 +110,9 @@ describe('NodeKindsService (#556 Р7, #631)', () => {
     ).rejects.toMatchObject({
       code: ErrorCode.PROJECT_NODE_KIND_FORM_INVALID,
       details: {
-        // FIXME src-баг #631 (в отчёте): assertForm кладёт в fieldIds слот
         // ЦЕЛИКОМ вместо slot.fieldId — здесь зафиксировано текущее
         // поведение; после починки ожидание — { fieldId: 'missing', ... }.
-        fieldIds: [{ fieldId: { fieldId: 'missing', state: 'optional' }, reason: 'unknown_field' }],
+        fieldIds: [{ fieldId: 'missing', reason: 'unknown_field' }],
         reason: 'unknown_field',
       },
     });

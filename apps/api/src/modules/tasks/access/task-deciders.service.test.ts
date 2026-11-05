@@ -44,9 +44,12 @@ function make(transition: Partial<WorkflowDeciderTransition>, task: Partial<Deci
     visibilityOf: vi.fn(async (): Promise<'open' | 'secret' | null> => 'open'),
     usersWithRoles: vi.fn(async () => []),
   };
+  // Реестр атрибутов сервисы берут лениво через ModuleRef (#631: разрыв
+  // DI-цикла tasks↔custom-fields) — в тестах это простой заглушечный get().
   const customFields = {
-    definitions: vi.fn(async () => [{ id: FIELD_ID, type: 'user', settings: {}, hidden: false }]),
+    definitions: vi.fn(async () => [{ id: FIELD_ID, type: 'user', settings: {} }]),
   };
+  const moduleRef = { get: vi.fn(() => customFields) };
   const profiles = { filterActiveUserIds: vi.fn(async (ids: string[]) => ids) };
   const repository = {
     findCandidates: vi.fn(async () => []),
@@ -59,7 +62,7 @@ function make(transition: Partial<WorkflowDeciderTransition>, task: Partial<Deci
     org as never,
     projects as never,
     { deciderTransitions: vi.fn(async () => rules) } as never,
-    customFields as never,
+    moduleRef as never,
     profiles as never,
     repository as never,
   );
@@ -67,7 +70,7 @@ function make(transition: Partial<WorkflowDeciderTransition>, task: Partial<Deci
     org as never,
     projects as never,
     { deciderTransitions: vi.fn(async () => rules) } as never,
-    customFields as never,
+    moduleRef as never,
     recipients,
     repository as never,
   );

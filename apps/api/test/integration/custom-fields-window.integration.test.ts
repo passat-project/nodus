@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   apiErrorResponseSchema,
-  customFieldDefinitionSchema,
   customFieldUsageSchema,
   dictionaryItemSchema,
   dictionarySchema,
@@ -33,10 +32,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await cf?.cleanup();
     });
 
-    it('удаление: маршрут блокирует, значения стираются, событие убирает ключ', async () => {
+    it('удаление: разрешено всегда (204), usage показывает последствия, значения стирает обработчик', async () => {
       const { fx, admin } = cf;
       const field = await cf.createField({
-        scope: 'task',
         type: 'text',
         name: `Проба ${fx.runId} удаляемый`,
       });
@@ -50,14 +48,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         key: `it-cf-del-value-${fx.runId}`,
       });
 
-      const usage = await fx.api(admin, 'GET', `/custom-fields/definitions/${field.id}/usage`);
-      expect(usage.status).toBe(200);
-      expect(customFieldUsageSchema.parse(await usage.json())).toMatchObject({
-        valueCount: 1,
-        workflows: [],
-      });
-
-      // Атрибут в окне перехода опубликованного маршрута — удаление запрещено.
+      // Атрибут в окне перехода опубликованного маршрута — usage видит
+      // маршрут, но удаление больше не блокирует (О3/Р8 #631).
       const transition = await fx.prisma.workflowTransition.findFirstOrThrow({
         where: { workflowId, name: 'Завершить', archivedAt: null },
       });
@@ -70,20 +62,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
           } as never,
         },
       });
-      const blocked = await fx.api(admin, 'DELETE', `/custom-fields/definitions/${field.id}`, {
-        key: `it-cf-del-blocked-${fx.runId}`,
-      });
-      expect(blocked.status).toBe(409);
-      const blockedError = apiErrorResponseSchema.parse(await blocked.json());
-      expect(blockedError.code).toBe(ErrorCode.CUSTOM_FIELD_IN_USE);
-      expect((blockedError.details as { workflows: { id: string }[] }).workflows[0]?.id).toBe(
-        workflowId,
-      );
 
-      await fx.prisma.workflowTransition.update({
-        where: { id: transition.id },
-        data: { form: {} as never },
+      const usage = await fx.api(admin, 'GET', `/custom-fields/definitions/${field.id}/usage`);
+      expect(usage.status).toBe(200);
+      expect(customFieldUsageSchema.parse(await usage.json())).toMatchObject({
+        values: { task: 1, letter: 0, project: 0, node: 0 },
+        workflows: [{ id: workflowId }],
+        bindings: { processTypes: [expect.objectContaining({ name: expect.any(String) })] },
+        companyValue: false,
       });
+
       const removed = await fx.api(admin, 'DELETE', `/custom-fields/definitions/${field.id}`, {
         key: `it-cf-del-${fx.runId}`,
       });
@@ -102,10 +90,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(row.customFields).not.toHaveProperty(field.id);
     });
 
-    it('окно и гейт: поле процесса разблокирует переход, скрытое — не видно', async () => {
+    it('окно и гейт: поле процесса разблокирует переход', async () => {
       const { fx, admin } = cf;
       const field = await cf.createField({
-        scope: 'task',
         type: 'text',
         name: `Проба ${fx.runId} поле окна`,
       });
@@ -154,13 +141,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
       expect(record.fields).toMatchObject({ [key]: { to: 'Заполнено окном' } });
 
-      // Скрытие: атрибут пропадает из карточки, но значения остаются.
-      const hidden = await fx.api(admin, 'PATCH', `/custom-fields/definitions/${field.id}`, {
-        body: { hidden: true },
-        key: `it-cf-hidden-${fx.runId}`,
-      });
-      expect(hidden.status).toBe(200);
-      expect(customFieldDefinitionSchema.parse(await hidden.json()).hidden).toBe(true);
+      // Глобального скрытия больше нет (О2 #631): видимость регулирует слот
+      // формы места, значения в карточке остаются после окна.
       const card = taskDetailSchema.parse(
         await (await fx.api(admin, 'GET', `/tasks/${taskId}`)).json(),
       );
@@ -200,7 +182,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       // Атрибут-список на этом справочнике; значение удалённого варианта — 422.
       const field = await cf.createField({
-        scope: 'task',
         type: 'enum',
         name: `Проба ${fx.runId} вид работ`,
         settings: { dictionaryId: dictionary.id },

@@ -77,11 +77,14 @@ export class ProjectDtoMapper {
       for (const id of toFacts(row).assistantIds) userIds.add(id);
       for (const id of [...new Set(participants.map((p) => p.userId))].slice(0, 5)) userIds.add(id);
     }
+    const clientIds = [
+      ...new Set(
+        inputs.map((i) => clientOf(i.row.customFields)).filter((id): id is string => id !== null),
+      ),
+    ];
     const [userRefs, clientRefs] = await Promise.all([
       this.profiles.findRefs([...userIds]),
-      this.counterparties.refs([
-        ...new Set(inputs.map((i) => i.row.clientId).filter((id): id is string => !!id)),
-      ]),
+      this.counterparties.refs(clientIds),
     ]);
     const users = new Map(userRefs.map((ref) => [ref.id, ref]));
     const clients = new Map(clientRefs.map((ref) => [ref.id, ref]));

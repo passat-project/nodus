@@ -2,6 +2,7 @@ import { expect } from 'vitest';
 import {
   ErrorCode,
   Permission,
+  SYSTEM_FIELD_IDS,
   apiErrorResponseSchema,
   customFieldDefinitionSchema,
   nodeKindSchema,
@@ -88,8 +89,10 @@ export async function setupNodeKindsFixture(): Promise<NodeKindsFixture> {
     typeIds,
     key,
     async createDefinition(type, name) {
+      // Привязку создаёт слот формы вида (syncPlaceBindings), а не тело
+      // определения (слот и есть привязка, Р3 #631).
       const res = await fx.fx.api(admin, 'POST', '/custom-fields/definitions', {
-        body: { scope: 'node', type, name },
+        body: { type, name },
         key: key('cf'),
       });
       expect(res.status, await res.clone().text()).toBe(201);
@@ -119,7 +122,8 @@ export async function setupNodeKindsFixture(): Promise<NodeKindsFixture> {
       return nodeKindSchema.array().parse(await res.json());
     },
     async definitions() {
-      const res = await fx.fx.api(admin, 'GET', '/custom-fields/definitions?scope=node');
+      // module=node: атрибуты, привязанные к видам папок (Р11 #631).
+      const res = await fx.fx.api(admin, 'GET', '/custom-fields/definitions?module=node');
       expect(res.status).toBe(200);
       return customFieldDefinitionSchema.array().parse(await res.json());
     },
@@ -167,14 +171,21 @@ export async function setupNodeKindsFixture(): Promise<NodeKindsFixture> {
   fixture.textField = await fixture.createDefinition('text', `Проба 556 текст ${fx.fx.runId}`);
   fixture.userField = await fixture.createDefinition('user', `Проба 556 сотрудник ${fx.fx.runId}`);
 
+  // «Код» — посевной атрибут SYSTEM_FIELD_IDS.nodeCode в слоте формы (#631):
+  // системного слота code больше нет, привязка вида создаётся слотом.
   fixture.kindA = await fixture.createKind(`Проба 556 вид А ${fx.fx.runId}`, {
-    form: { code: 'optional', fields: [{ fieldId: fixture.textField, state: 'required' }] },
+    form: {
+      fields: [
+        { fieldId: SYSTEM_FIELD_IDS.nodeCode, state: 'optional' },
+        { fieldId: fixture.textField, state: 'required' },
+      ],
+    },
     capabilities: ['pulse_row'],
   });
   fixture.kindB = await fixture.createKind(`Проба 556 вид Б ${fx.fx.runId}`, {
     form: {
-      code: 'required',
       fields: [
+        { fieldId: SYSTEM_FIELD_IDS.nodeCode, state: 'required' },
         { fieldId: fixture.textField, state: 'optional' },
         { fieldId: fixture.userField, state: 'optional' },
       ],

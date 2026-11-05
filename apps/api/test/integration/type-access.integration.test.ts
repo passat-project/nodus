@@ -129,25 +129,30 @@ describe.skipIf(!process.env.DATABASE_URL)('type access and bindings (integratio
     expect(stages.some((stage) => stage.typeName === `IT-форма ${cf.fx.runId}`)).toBe(false);
   });
 
-  it('привязки: повтор идемпотентен, снятие используемой — 409, событие и аудит', async () => {
+  it('привязки: повтор идемпотентен, снятие разрешено всегда, событие и аудит', async () => {
     const again = await cf.fx.api(
       cf.admin,
       'PUT',
-      `/custom-fields/definitions/${cf.fieldBound}/types/${cf.typeId}`,
+      `/custom-fields/definitions/${cf.fieldBound}/bindings/process-type/${cf.typeId}`,
       { key: `it-432-bind-${cf.fx.runId}` },
     );
-    expect(again.status).toBe(200);
-    expect(((await again.json()) as { typeIds: string[] }).typeIds).toEqual([cf.typeId]);
+    expect(again.status, await again.clone().text()).toBe(200);
+    expect(
+      ((await again.json()) as { bindings: { processTypeIds: string[] } }).bindings,
+    ).toMatchObject({ processTypeIds: [cf.typeId] });
 
-    // Атрибут стоит в опубликованной форме создания — снять привязку нельзя.
-    const denied = await cf.fx.api(
+    // Атрибут стоит в опубликованной форме создания, но снятие привязки
+    // разрешено ВСЕГДА (О3 #631): 409 CUSTOM_FIELD_IN_USE больше нет.
+    const removed = await cf.fx.api(
       cf.admin,
       'DELETE',
-      `/custom-fields/definitions/${cf.fieldBound}/types/${cf.typeId}`,
+      `/custom-fields/definitions/${cf.fieldBound}/bindings/process-type/${cf.typeId}`,
       { key: `it-432-unbind-${cf.fx.runId}` },
     );
-    expect(denied.status).toBe(409);
-    expect(await denied.json()).toMatchObject({ code: ErrorCode.CUSTOM_FIELD_IN_USE });
+    expect(removed.status, await removed.clone().text()).toBe(200);
+    expect(
+      ((await removed.json()) as { bindings: { processTypeIds: string[] } }).bindings,
+    ).toMatchObject({ processTypeIds: [] });
 
     const audit = await waitForAudit(() =>
       cf.fx.prisma.auditLog.findFirst({
@@ -162,6 +167,6 @@ describe.skipIf(!process.env.DATABASE_URL)('type access and bindings (integratio
       orderBy: { seq: 'desc' },
       take: 1,
     });
-    expect(events[0]?.payload).toMatchObject({ change: 'updated', fields: ['typeIds'] });
+    expect(events[0]?.payload).toMatchObject({ change: 'updated', fields: ['bindings'] });
   });
 });
