@@ -4,7 +4,7 @@ import { quickDocument, simpleDocument, standardDocument } from './workflows-doc
 import { letterProcessTypes, letterWorkflowDetails } from './letter-catalog.js';
 
 import { quickProcessType, systemProcessType } from './task-stages.js';
-import { fieldIds } from './custom-fields.js';
+import { fieldIds } from './field-ids.js';
 import { processTypeIds } from './process-type-ids.js';
 import { demoRoleIds } from './roles.js';
 

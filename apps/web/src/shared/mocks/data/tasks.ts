@@ -19,9 +19,17 @@ export * from './personal-stages.js';
 export * from './task-items.js';
 
 /** Заполненные кастомные поля демо-задач (#431): у части задач есть
- *  значения, у остальных — `{}` (блок «Атрибуты» показывает «Не задано»). */
+ *  значения, у остальных — `{}` (блок «Атрибуты» показывает «Не задано»).
+ *  Ленивый геттер вместо присваивания на module-eval: мок-данные образуют
+ *  цикл (tasks → custom-fields → project-nodes → tasks), на момент оценки
+ *  этого модуля карта значений ещё не готова — читается при первом
+ *  обращении обработчика, когда весь мир загружен. */
 for (const task of demoTasks) {
-  task.customFields = demoTaskCustomFields[task.id] ?? {};
+  Object.defineProperty(task, 'customFields', {
+    get: () => demoTaskCustomFields[task.id] ?? {},
+    enumerable: true,
+    configurable: true,
+  });
 }
 
 export function makeSubtask(parent: TaskListItem, title: string): TaskListItem {

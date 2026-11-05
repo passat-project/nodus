@@ -1,6 +1,6 @@
 import type { WorkflowCondition, WorkflowDocument, WorkflowValidator } from '@nodus/contracts';
 
-import { fieldIds } from './custom-fields.js';
+import { fieldIds } from './field-ids.js';
 import {
   stageCancelled,
   stageDone,
