@@ -44,6 +44,10 @@ interface NotificationsToastState {
   dismissPersonal: (key: string) => void;
   clearPersonal: () => void;
   dismissActions: () => void;
+  /** Синхронизация сводной карточки с журналом (#616): внимание угасло —
+   *  карточка «Требуют внимания» больше не актуальна (сервер — истина,
+   *  локальный счётчик жил сам по себе и висел бесконечно). */
+  syncWithAttention: (attention: number) => void;
   setConversationFlags: (flags: {
     muted: ReadonlySet<string>;
     snoozed: ReadonlySet<string>;
@@ -153,6 +157,11 @@ export const useNotificationsToastStore = create<NotificationsToastState>((set, 
   dismissPersonal: (key) => set((s) => ({ personal: s.personal.filter((t) => t.key !== key) })),
   clearPersonal: () => set({ personal: [] }),
   dismissActions: () => set({ actions: { count: 0, latest: null } }),
+  syncWithAttention: (attention) => {
+    if (attention > 0) return;
+    const { actions } = get();
+    if (actions.count > 0) set({ actions: { count: 0, latest: null } });
+  },
   setConversationFlags: (flags) =>
     set({ mutedConversations: flags.muted, snoozedConversations: flags.snoozed }),
   setDnd: (dnd) => set({ dnd }),
