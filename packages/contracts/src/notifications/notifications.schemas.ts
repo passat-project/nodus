@@ -32,6 +32,8 @@ export const notificationKindSchema = z.enum([
   'action.assignment',
   'action.approval',
   'action.deadline',
+  /** Задача ждёт решения решающего (#433): держатель шага вне задачи. */
+  'action.decision',
   /** Задача выполнена без утверждения (из работы сразу в «Итог») —
    *  постановщику (#37). */
   'task.completed',

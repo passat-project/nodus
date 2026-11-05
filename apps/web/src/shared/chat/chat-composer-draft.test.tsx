@@ -21,6 +21,10 @@ import { useComposerInputActions } from './composer-input-utils.js';
 const CONV_A = '11111111-1111-4111-8111-111111111111';
 const CONV_B = '22222222-2222-4222-8222-222222222222';
 
+// Валидный ответ политики важных: queryFn не имеет права резолвиться в
+// undefined — запрос падает в retry-цикл за границей teardown jsdom (#627).
+const URGENT_POLICY = { remaining: 3, limit: 3, resetAt: null, groupMax: 20 };
+
 // useGrown композера слушает textarea — ResizeObserver в jsdom нет.
 class ResizeObserverStub {
   observe(): void {}
@@ -31,7 +35,11 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
 function renderComposer(client: QueryClient, focusId: string, conversationId: string) {
   const events: string[] = [];
-  apiMock.mockImplementation(() => {
+  apiMock.mockImplementation((path: string) => {
+    // Политика важных грузится на маунте композера (ревизия 05.10) — путь
+    // обязан жить и в этом моке: затирание его undefined-ответом роняет
+    // запрос в retry-цикл после teardown (#627).
+    if (path === '/chat/urgent/policy') return Promise.resolve(URGENT_POLICY);
     events.push('put');
     return Promise.resolve(undefined);
   });
@@ -65,12 +73,12 @@ describe('ChatComposer — черновик при переключении бе
     // Политика важных (#177) грузится на монтировании композера — отдаём
     // валидный ответ, чтобы queryFn не резолвился в undefined.
     apiMock.mockImplementation((path: string) =>
-      path === '/chat/urgent/policy'
-        ? Promise.resolve({ remaining: 3, limit: 3, resetAt: null, groupMax: 20 })
-        : Promise.resolve(undefined),
+      path === '/chat/urgent/policy' ? Promise.resolve(URGENT_POLICY) : Promise.resolve(undefined),
     );
     useChatDrafts.setState({ drafts: {} });
-    client = new QueryClient();
+    // retry: false — дефолтные 3 повтора с бэкоффом 1с/2с/4с переживают
+    // teardown jsdom и красят прогон unhandled-ошибкой (#627).
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   });
   afterEach(() => {
     cleanup();
@@ -135,7 +143,7 @@ describe('ChatComposer — черновик при переключении бе
 
 describe('ChatComposer — каретка в конец восстановленного черновика', () => {
   it('смена focusId с непустым черновиком новой беседы → фокус ставит каретку в КОНЕЦ текста', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     useChatDrafts.setState({
       drafts: {
         [`conversation:${CONV_B}`]: {

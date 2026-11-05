@@ -183,6 +183,7 @@ function makeService(
     { findRefs: vi.fn(async () => []) } as never,
     { definitions: vi.fn(async () => []) } as never,
     { effectiveRoles: vi.fn(async () => []) } as never,
+    { positionFacts: vi.fn(async () => new Map()) } as never,
     { findByIds: vi.fn(async () => []) } as never,
   );
   return { service, calls };

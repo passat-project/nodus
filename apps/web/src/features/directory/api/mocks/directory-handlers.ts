@@ -18,6 +18,7 @@ import {
   demoUserCards,
   demoUserListItems,
 } from '../../../../shared/mocks/data/users.js';
+import { demoPositions } from '../../../../shared/mocks/data/positions.js';
 
 /**
  * MSW-слой справочника (ADR-0001): контракты — источник формы ответов.
@@ -32,6 +33,13 @@ import {
 let departmentState = demoDepartments;
 
 export const directoryHandlers = [
+  // Должности (#441/#433): редактор маршрутов считает держателей должности
+  // и показывает предупреждение «на должности никого нет».
+  http.get('/api/v1/directory/positions', ({ request }) => {
+    const url = new URL(request.url);
+    const kind = url.searchParams.get('kind') === 'legal' ? 'legal' : 'management';
+    return HttpResponse.json(demoPositions.filter((position) => position.kind === kind));
+  }),
   http.get('/api/v1/directory/users', ({ request }) => {
     const url = new URL(request.url);
     const query = listUsersQuerySchema.safeParse(Object.fromEntries(url.searchParams));

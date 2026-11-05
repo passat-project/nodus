@@ -18,6 +18,7 @@ import { ArrowRight } from 'lucide-react';
 import { useRouteDocStore } from '../../../model/route-doc-store.js';
 import {
   VALIDATOR_KINDS,
+  deciderSourcesOf,
   rolesOf,
   routeIfOf,
   routeIfWhenOf,
@@ -31,7 +32,7 @@ import {
   focusName,
 } from '../../../../../shared/ui/panel/panel-kit.js';
 
-export type TransitionSection = 'root' | 'roles' | 'conditions' | 'rules' | 'window';
+export type TransitionSection = 'root' | 'roles' | 'deciders' | 'conditions' | 'rules' | 'window';
 
 const ANY = 'any';
 const DISPLAYS: readonly TransitionDisplay[] = ['primary', 'button', 'menu'];
@@ -44,6 +45,7 @@ export function sectionSummaries(
   category: ProcessCategory = 'task',
 ) {
   const roles = rolesOf(transition.rules);
+  const deciderSources = deciderSourcesOf(transition.rules);
   const roleOrder = WORKFLOW_ROLES_BY_CATEGORY[category];
   const validatorOrder = WORKFLOW_VALIDATORS_BY_CATEGORY[category] as readonly string[];
   const validators = VALIDATOR_KINDS.filter(
@@ -64,7 +66,30 @@ export function sectionSummaries(
             .filter((r) => roles.has(r))
             .map((r) => ui.automation.roles[r])
             .join(', ')
-        : ui.automation.panel.nobody,
+        : deciderSources.length > 0
+          ? ui.automation.deciders.rolesOnlyDeciders
+          : ui.automation.panel.nobody,
+    deciders:
+      deciderSources.length === 0
+        ? ui.automation.deciders.summaryEmpty
+        : deciderSources
+            .map((source) => {
+              switch (source.kind) {
+                case 'position':
+                  return ui.automation.deciders.sources.position;
+                case 'manager_of':
+                  return source.of === 'creator'
+                    ? ui.automation.deciders.managerOf.creator
+                    : ui.automation.deciders.managerOf.assignee;
+                case 'employees':
+                  return `${ui.automation.deciders.sources.employees} (${source.userIds.length})`;
+                case 'field':
+                  return ui.automation.deciders.sources.field;
+                case 'project_role':
+                  return `${ui.automation.deciders.sources.project_role}: ${ui.automation.deciders.projectRole[source.role]}`;
+              }
+            })
+            .join(', '),
     conditions:
       validators.length > 0
         ? validators.map((kind) => ui.automation.validators[kind]).join(', ')
@@ -220,6 +245,13 @@ export function TransitionPanel({
           summary={summaries.roles}
           onClick={() => onOpenSection('roles')}
         />
+        {category === 'task' ? (
+          <SectionLink
+            title={ui.automation.deciders.sectionTitle}
+            summary={summaries.deciders}
+            onClick={() => onOpenSection('deciders')}
+          />
+        ) : null}
         {category === 'task' ? (
           <SectionLink
             title={ui.automation.panel.sectionConditions}

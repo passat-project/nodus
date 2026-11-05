@@ -163,7 +163,7 @@ export function NodeCreateDialog({
         <DialogHeader>
           <DialogTitle>{ui.structure.createNode}</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-3">
+        <div className="flex min-w-0 flex-col gap-3">
           {/* Куда создаём — строка контекста, а не метка без значения:
               «КОРЕНЬ ПРОЕКТА» капсом висело над полями как осиротевший
               заголовок (замечание вкуса). */}
@@ -206,7 +206,7 @@ export function NodeCreateDialog({
               onTo={setTo}
             />
           ) : (
-            <label className="flex flex-col gap-1">
+            <label className="flex min-w-0 flex-col gap-1">
               <NodeLabel label={ui.structure.nodeName} />
               <Input
                 autoFocus

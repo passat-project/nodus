@@ -6,7 +6,7 @@ import { tasksKeys } from '../../../shared/api/tasks-keys.js';
 import { BoardScroller } from '../../../shared/ui/board/board-scroller.js';
 import { BoardSortableCard } from '../../../shared/ui/board/board-sortable-card.js';
 import { KanbanSkeleton } from '../../../shared/ui/board/kanban-skeleton.js';
-import { KANBAN_FEED_LIMIT, useKanbanBoard } from '../../../shared/ui/board/use-kanban-board.js';
+import { useKanbanBoard } from '../../../shared/ui/board/use-kanban-board.js';
 import { isFilteringActive, type ActiveListFilter } from '../../../shared/views/list-filters.js';
 import { makeTaskCardFields } from '../../../shared/views/task-card-fields.js';
 import { useFilteredList } from '../../../shared/views/use-list-toolbar.js';
@@ -66,8 +66,8 @@ export function TaskKanban({
     axis: personalAxis,
     stages,
     queryKey: tasksKeys.kanban('personal'),
-    feedUrl: (stageId, cursor) =>
-      `/tasks?personalStageId=${stageId}&limit=${KANBAN_FEED_LIMIT}${cursor ? `&cursor=${cursor}` : ''}`,
+    feedUrl: (stageId, cursor, limit) =>
+      `/tasks?personalStageId=${stageId}&limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`,
     onMove: (vars, opts) =>
       updatePersonalStage.mutate(
         { taskId: vars.taskId, personalStageId: vars.stageId, index: vars.index },

@@ -1,4 +1,4 @@
-import type { TransitionFormInput } from '@nodus/contracts';
+import type { TransitionFormInput, WorkflowDeciderFacts } from '@nodus/contracts';
 
 import type { TransactionClient } from '../database/transaction-runner.js';
 
@@ -67,6 +67,12 @@ export interface WorkflowActorSubject {
    *  одинаково в `available` и `execute`; заполняет движок (адаптер прав
    *  портала не знает), поэтому поле необязательно у адаптера. */
   permissions?: readonly string[];
+  /** Факты решающих (#433): кто актор вне задачи для этой сущности. Нет
+   *  фактов — источники `decider_in` не совпадают (письма, чужие маршруты). */
+  deciderFacts?: WorkflowDeciderFacts;
+  /** Переходы текущей стадии, у которых ВСЕ источники решающих пусты (#433):
+   *  показываются только с правом обхода и причиной. */
+  vacantDeciderTransitionIds?: ReadonlySet<string>;
   facts: WorkflowGateFacts;
 }
 
@@ -92,6 +98,11 @@ export interface WorkflowStageChangeMeta {
   overriddenGates?: string[];
   /** Текст причины обхода гейта (обязателен на API при обходе). */
   overrideReason?: string;
+  /** Актор был решающим ЭТОГО перехода по состоянию до окна (#433):
+   *  адаптер добавляет его наблюдателем без звука. */
+  wasDeciderOfTransition?: boolean;
+  /** Решающие нового статуса (#433): payload `task.stage_changed`. */
+  deciderIds?: readonly string[];
   /** Строка общего журнала (#380): блок в чате пишется только с ней. */
   recordId?: string;
   /** Названия кнопки и исходного статуса — для блока перехода в чате. */

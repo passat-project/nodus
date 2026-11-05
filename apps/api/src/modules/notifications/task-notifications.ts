@@ -41,6 +41,9 @@ export function taskNotices(type: string, p: Payload, actorId: string | null): T
     case 'task.stage_changed': {
       // Фоновый перенос публикации маршрута — не действие человека: без звука.
       if (p.cause === 'workflow_migration') break;
+      // Решающие нового статуса (#433): «Ждёт вашего решения» — первыми,
+      // чтобы их kind побеждал при совпадении с другими адресатами.
+      for (const id of ids(p.deciderIds)) add(id, 'action.decision');
       const from = str(p.fromState) ?? '';
       const to = str(p.toState) ?? '';
       // Вход в «Итог» из незавершённого (add исключает нажавшего):

@@ -176,11 +176,17 @@ export const PROJECT_LIMITS = {
   descriptionLength: 2000,
 } as const;
 
+/** Бизнес-роль сотрудника в проекте (не источник `ProjectParticipant.source`):
+ *  `participant` объединяет `task` и `member`. Один словарь на журнал проектов,
+ *  фильтры и источники решающих (#433). */
+export const projectRoleSchema = z.enum(['manager', 'assistant', 'participant', 'observer']);
+export type ProjectRole = z.infer<typeof projectRoleSchema>;
+
 export const listProjectsQuerySchema = cursorQuerySchema.extend({
   scope: z.enum(['mine', 'all']).default('mine'),
   search: z.string().trim().min(1).max(128).optional(),
   /** «Моя роль»: руководитель / помощник / участник / наблюдатель. */
-  role: z.enum(['manager', 'assistant', 'participant', 'observer']).optional(),
+  role: projectRoleSchema.optional(),
   visibility: projectVisibilitySchema.optional(),
   status: projectStatusSchema.optional(),
   portfolioId: z.uuid().optional(),

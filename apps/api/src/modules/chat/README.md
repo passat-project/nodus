@@ -304,7 +304,7 @@ member, наблюдатель добавляется без звука (Бит�
 остальными; выбывший участник теряет членство (история остаётся). Ручные
 мутации состава/инфо по типу недоступны — состав ведёт задача.
 Синхронизация идемпотентна: обработчики `task.created|assigned|
-participants_changed` и `GET /chat/conversations/by-task/:taskId`
+participants_changed` и `GET /chat/conversations/by-task/:taskId (участник задачи или её решающий — read-only, #433)`
 (find-or-create при первом открытии; задача не видна или пользователь не
 участник — 404). Переименование задачи (`task.updated` с `title`) —
 `chat.conversation_updated`. Вкладки мессенджера — серверный фильтр

@@ -1,4 +1,5 @@
 import type {
+  DeciderSource,
   WorkflowActorRole,
   WorkflowFieldKey,
   WorkflowRequirableField,
@@ -44,6 +45,38 @@ export function rolesOf(rules: Rules): Set<WorkflowActorRole> {
   return new Set(rules.conditions.flatMap((c) => (c.kind === 'role_in' ? c.roles : [])));
 }
 
+/** Источники решающих кнопки (#433): порядок = порядок условий в документе. */
+export function deciderSourcesOf(rules: Rules): DeciderSource[] {
+  return rules.conditions.flatMap((c) => (c.kind === 'decider_in' ? [c.source] : []));
+}
+
+/** Заменить все источники решающих (остальные условия сохраняются). */
+export function setDeciderSources(rules: Rules, sources: readonly DeciderSource[]): Rules {
+  const others = rules.conditions.filter((c) => c.kind !== 'decider_in');
+  return {
+    ...rules,
+    conditions: [...others, ...sources.map((source) => ({ kind: 'decider_in' as const, source }))],
+  };
+}
+
+export function addDeciderSource(rules: Rules, source: DeciderSource): Rules {
+  return setDeciderSources(rules, [...deciderSourcesOf(rules), source]);
+}
+
+export function updateDeciderSource(rules: Rules, index: number, source: DeciderSource): Rules {
+  return setDeciderSources(
+    rules,
+    deciderSourcesOf(rules).map((current, i) => (i === index ? source : current)),
+  );
+}
+
+export function removeDeciderSource(rules: Rules, index: number): Rules {
+  return setDeciderSources(
+    rules,
+    deciderSourcesOf(rules).filter((_, i) => i !== index),
+  );
+}
+
 /** Роль вкл/выкл; последнюю снять нельзя (кнопку должен кто-то видеть).
  *  `allowed` — словарь ролей категории (Р6): у письма свои роли, чужие из
  *  документа не переживают правку. */
@@ -55,7 +88,12 @@ export function toggleRole(
   const roles = rolesOf(rules);
   if (roles.has(role)) roles.delete(role);
   else roles.add(role);
-  if (roles.size === 0) return rules;
+  if (roles.size === 0) {
+    // Последнюю роль снять можно, если кнопку держат решающие (#433):
+    // иначе кнопку не увидит никто.
+    if (deciderSourcesOf(rules).length === 0) return rules;
+    return { ...rules, conditions: rules.conditions.filter((c) => c.kind !== 'role_in') };
+  }
   const list = allowed.filter((r) => roles.has(r));
   const others = rules.conditions.filter((c) => c.kind !== 'role_in');
   return { ...rules, conditions: [{ kind: 'role_in', roles: list }, ...others] };

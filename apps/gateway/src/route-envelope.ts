@@ -111,9 +111,13 @@ export async function routeEnvelope(
   }
 
   // Задачи (#37): адресаты — payload.audience (участники задачи, при снятии —
-  // и снятый), user-комнаты; клиент инвалидирует кэш задач.
+  // и снятый) + решающие нового статуса (#433), user-комнаты; клиент
+  // инвалидирует кэш задач.
   if (envelope.type.startsWith('task.')) {
-    emitToUsers(io, envelope, memberIdsOf(payload.audience));
+    const deciderIds = Array.isArray(payload.deciderIds)
+      ? payload.deciderIds.filter((id): id is string => typeof id === 'string')
+      : [];
+    emitToUsers(io, envelope, [...new Set([...memberIdsOf(payload.audience), ...deciderIds])]);
     return;
   }
 
@@ -208,18 +212,19 @@ function routeStickerEvent(
 }
 
 /**
- * `audience` — служебное поле адресации (task.*, chat.sticker_*): клиенту
- * не нужно и может раскрывать лишнее (кто ещё установил чужой личный пак,
- * текущий состав задачи для снятого участника). Доменные составы
+ * `audience` и `deciderIds` — служебные поля адресации (task.*): клиенту не
+ * нужно и может раскрывать лишнее (кто ещё установил чужой личный пак,
+ * текущий состав задачи, кто ещё ждёт решения — #433). Доменные составы
  * (`memberIds`/`userIds` событий беседы) — данные события, их видят и так.
  */
 function withoutAudience(
   envelope: RealtimeEnvelope,
   payload: Record<string, unknown>,
 ): RealtimeEnvelope {
-  if (!('audience' in payload)) return envelope;
+  if (!('audience' in payload) && !('deciderIds' in payload)) return envelope;
   const visible = { ...payload };
   delete visible.audience;
+  delete visible.deciderIds;
   return { ...envelope, payload: visible };
 }
 

@@ -55,6 +55,12 @@ export function checkCategoryDictionary(
     );
     if (foreignRole) problems.push({ code: 'role_not_in_category', severity: 'error', ...refs });
 
+    // Решающие (#433) поддерживаются только задачами: у писем другая модель
+    // акторов (регистратор/адресат). Ошибка публикации, не молчаливый игнор.
+    if (category !== 'task' && t.rules.conditions.some((c) => c.kind === 'decider_in')) {
+      problems.push({ code: 'decider_not_in_category', severity: 'error', ...refs });
+    }
+
     const windowSections = t.form?.enabled ? t.form.sections : [];
     if (windowSections.some((s) => !sections.includes(s.kind))) {
       problems.push({ code: 'section_not_in_category', severity: 'error', ...refs });

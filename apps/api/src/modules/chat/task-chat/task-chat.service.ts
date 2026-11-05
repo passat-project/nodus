@@ -125,10 +125,11 @@ export class TaskChatService {
     });
   }
 
-  /** Беседа задачи для карточки: задача видна И пользователь — её
-   *  участник. Руководитель по оргструктуре и `task.view_all` видят задачу,
-   *  но обсуждение не читают и записи (find-or-create) не вызывают — 404
-   *  тем же текстом, что и для невидимой задачи (без оракула). */
+  /** Беседа задачи для карточки: задача видна И пользователь — её участник
+   *  ЛИБО решающий текущего шага (#433): решающему чат открывается read-only
+   *  (sync не добавляет его в состав, писать он не сможет). Руководитель по
+   *  оргструктуре и `task.view_all` видят задачу, но обсуждение не читают —
+   *  404 тем же текстом (без оракула). */
   async openForUser(
     taskId: string,
     user: { id: string; permissions: readonly string[] },
@@ -136,9 +137,10 @@ export class TaskChatService {
     const roster = (await this.tasks.canView(taskId, user))
       ? await this.tasks.roster(taskId)
       : null;
-    const id = roster?.members.some((m) => m.userId === user.id)
-      ? await this.sync(taskId, user.id)
-      : null;
+    if (!roster) throw DomainException.notFound('Task not found');
+    const isMember = roster.members.some((member) => member.userId === user.id);
+    const allowed = isMember || (await this.tasks.isDecider(taskId, user.id));
+    const id = allowed ? await this.sync(taskId, user.id) : null;
     if (!id) throw DomainException.notFound('Task not found');
     return id;
   }

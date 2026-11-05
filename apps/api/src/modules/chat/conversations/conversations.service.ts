@@ -32,6 +32,7 @@ import { ConversationsRepository } from './conversations.repository.js';
 import { ConversationsWriteRepository } from './conversations-write.repository.js';
 import { ConversationMembersRepository } from './conversation-members.repository.js';
 import { ConversationDraftsRepository } from './conversation-drafts.repository.js';
+import { TASK_CHAT_READER, type TaskChatReader } from '../../tasks/ports/task-chat-reader.port.js';
 
 const conversationCursorSchema = z.object({
   at: z.string().nullable(),
@@ -57,6 +58,7 @@ export class ConversationsService {
     private readonly eventBus: EventBus,
     @Inject(AVATAR_PROCESSOR) private readonly avatars: AvatarProcessor,
     @Inject(USER_PROFILE_READER) private readonly userProfiles: UserProfileReader,
+    @Inject(TASK_CHAT_READER) private readonly taskChat: TaskChatReader,
   ) {}
 
   async list(
@@ -285,11 +287,23 @@ export class ConversationsService {
     return this.getItemOrThrow(conversationId, userId);
   }
 
+  /** Может ли пользователь читать беседу как решающий (#433): только беседа
+   *  задачи и только если он держатель её текущего шага. */
+  async canReadAsDecider(conversationId: string, userId: string): Promise<boolean> {
+    const taskId = await this.repo.findTaskId(conversationId);
+    return taskId !== null && (await this.taskChat.isDecider(taskId, userId));
+  }
+
   private async getItemOrThrow(
     conversationId: string,
     userId: string,
   ): Promise<ConversationListItem> {
-    const row = await this.repo.findListItem(conversationId, userId);
+    let row = await this.repo.findListItem(conversationId, userId);
+    if (!row && (await this.canReadAsDecider(conversationId, userId))) {
+      // Решающий вне задачи (#433): беседа задачи открывается read-only,
+      // без членства и без права писать. Остальным — 404 (не палим наличие).
+      row = await this.repo.findListItemAsReader(conversationId, userId);
+    }
     if (!row) throw DomainException.notFound('Conversation not found');
     const members = await this.repo.listMembers([conversationId]);
     return this.items.toItem(row, { viewerId: userId, members });

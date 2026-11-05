@@ -4,13 +4,7 @@ import type {
   WorkflowDraftDocument,
   WorkflowDraftTransition,
 } from '@nodus/contracts';
-import {
-  CUSTOM_FIELD_LIMITS,
-  WORKFLOW_ROLES_BY_CATEGORY,
-  WORKFLOW_VALIDATORS_BY_CATEGORY,
-  ui,
-} from '@nodus/contracts';
-import { Checkbox } from '@nodus/ui/components/checkbox';
+import { CUSTOM_FIELD_LIMITS, WORKFLOW_VALIDATORS_BY_CATEGORY, ui } from '@nodus/contracts';
 import { Input } from '@nodus/ui/components/input';
 import {
   Select,
@@ -25,7 +19,6 @@ import {
   REQUIRABLE_FIELDS,
   VALIDATOR_KINDS,
   defaultRouteIfTarget,
-  rolesOf,
   routeIfOf,
   routeIfWhenOf,
   setAllowReview,
@@ -33,12 +26,12 @@ import {
   setRouteIf,
   setRouteIfWhen,
   toggleField,
-  toggleRole,
   toggleValidator,
   validatorOf,
 } from '../../../model/transition-rules.js';
 import { ModeChoices, PanelField, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
 import { CustomFieldChecks } from './custom-fields-checks.js';
+import { CheckRow } from './transition-roles-section.js';
 
 /**
  * Разделы панели кнопки (#378 ред. 2, «переход внутрь» как в Трекере):
@@ -56,71 +49,6 @@ function usePatchRules(transition: WorkflowDraftTransition) {
       useRouteDocStore.getState().patchTransition(transition.id, { rules: next });
     }
   };
-}
-
-function CheckRow({
-  checked,
-  disabled,
-  title,
-  hint,
-  onChange,
-  children,
-}: {
-  checked: boolean;
-  disabled: boolean;
-  title: string;
-  hint?: string;
-  onChange: (checked: boolean) => void;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <label className="flex min-w-0 items-start gap-2.5">
-        <Checkbox
-          className="mt-0.5"
-          checked={checked}
-          disabled={disabled}
-          onCheckedChange={(value) => onChange(value === true)}
-        />
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-sm">{title}</span>
-          {hint ? <span className="text-xs break-words text-muted-foreground">{hint}</span> : null}
-        </span>
-      </label>
-      {children ? <div className="flex min-w-0 flex-col gap-2 pl-6.5">{children}</div> : null}
-    </div>
-  );
-}
-
-export function RolesSection({
-  transition,
-  readOnly,
-  category = 'task',
-}: {
-  transition: WorkflowDraftTransition;
-  readOnly: boolean;
-  /** Словарь ролей категории (Р6): у письма — регистратор, адресат,
-   *  исполнитель, расписавший, автор, участник. */
-  category?: ProcessCategory;
-}) {
-  const patch = usePatchRules(transition);
-  const roles = rolesOf(transition.rules);
-  const allowed = WORKFLOW_ROLES_BY_CATEGORY[category];
-  return (
-    <>
-      {allowed.map((role) => (
-        <CheckRow
-          key={role}
-          checked={roles.has(role)}
-          // Последнюю роль снять нельзя — кнопку должен кто-то видеть.
-          disabled={readOnly || (roles.has(role) && roles.size === 1)}
-          title={ui.automation.roles[role]}
-          onChange={() => patch(toggleRole(transition.rules, role, allowed))}
-        />
-      ))}
-      <p className="text-xs break-words text-muted-foreground">{ui.automation.whoSeesHint}</p>
-    </>
-  );
 }
 
 export function ConditionsSection({

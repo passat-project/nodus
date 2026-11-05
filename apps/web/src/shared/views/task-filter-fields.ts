@@ -39,6 +39,18 @@ export const taskBuiltinPresets: FilterPreset[] = [
   { id: 'done', name: ui.tasks.stageStates.closed, state: { systemState: 'closed' } },
 ];
 
+/** Пресеты СПИСКА задач: «Ждут моего решения» живёт только здесь (#433).
+ *  В канбане («Мой план») и в журналах проектов/сотрудника его нет: личная
+ *  доска и чужие фиды не серверный срез решающих. */
+export const taskListPresets: FilterPreset[] = [
+  ...taskBuiltinPresets,
+  {
+    id: 'mine-decisions',
+    name: ui.tasks.presetDecisions,
+    state: { role: 'decider' },
+  },
+];
+
 /** Крайний срок в диапазоне дат (ISO-дата срезается до YYYY-MM-DD). */
 function deadlineMatch(item: TaskListItem, value: FilterValue): boolean {
   if (typeof value !== 'object' || value === undefined) return true;
@@ -59,7 +71,14 @@ function deadlineMatch(item: TaskListItem, value: FilterValue): boolean {
 export function useTaskFilterDefs({
   projectVisible = true,
   assigneeVisible = true,
-}: { projectVisible?: boolean; assigneeVisible?: boolean } = {}): FilterFieldDef<TaskListItem>[] {
+  deciderVisible = false,
+}: {
+  projectVisible?: boolean;
+  assigneeVisible?: boolean;
+  /** Пресет «Ждут моего решения» (#433) — только список задач: серверный
+   *  срез существует лишь там, в чужих фидах фильтр был бы обманкой. */
+  deciderVisible?: boolean;
+} = {}): FilterFieldDef<TaskListItem>[] {
   const { data: stages } = useTaskStages();
   const { data: users } = useUsersList();
   const { data: projects } = useProjectsList({ enabled: projectVisible });
@@ -101,6 +120,7 @@ export function useTaskFilterDefs({
           { value: 'assignee', label: ui.tasks.roles.assignee },
           { value: 'creator', label: ui.tasks.roles.creator },
           { value: 'participant', label: ui.tasks.roles.participant },
+          ...(deciderVisible ? [{ value: 'decider', label: ui.tasks.roles.decider }] : []),
         ],
         match: (t, v) =>
           v === 'assignee'
@@ -109,7 +129,8 @@ export function useTaskFilterDefs({
               ? t.creator.id === meId
               : v === 'participant'
                 ? t.participants.some((p) => p.id === meId)
-                : true,
+                : // Решающего клиент не знает: список уже отфильтрован сервером.
+                  true,
       },
       {
         id: 'creator',
@@ -164,5 +185,5 @@ export function useTaskFilterDefs({
       });
     }
     return [...defs, ...customDefs];
-  }, [stages, users, projects, meId, projectVisible, assigneeVisible, customDefs]);
+  }, [stages, users, projects, meId, projectVisible, assigneeVisible, deciderVisible, customDefs]);
 }

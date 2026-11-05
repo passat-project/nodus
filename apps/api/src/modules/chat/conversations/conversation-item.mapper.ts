@@ -112,6 +112,7 @@ export class ConversationItemMapper {
         // Аватар — файл-дериват (#186): подписная ссылка отдачи files.
         avatarUrl: row.avatar_file_id ? this.signedUrls.fileContentUrl(row.avatar_file_id) : null,
         myRole: row.role as ConversationListItem['myRole'],
+        ...(row.readerAccess ? { readOnly: true } : {}),
         permissions: parsePermissions(row.permissions) as ConversationPermissions,
         draft:
           row.draft_text !== null
