@@ -155,7 +155,10 @@ pub struct PopupReply {
 pub async fn notify_popup(app: AppHandle, payload: PopupPayload) -> Result<(), String> {
     // Граница контракта на Rust-стороне (security-аудит #254, подозрение 5).
     // Цель — ровно одна (#618): беседа ИЛИ письмо, обе/ни одной — отказ.
-    let target_ok = match (payload.conversation_id.as_deref(), payload.letter_id.as_deref()) {
+    let target_ok = match (
+        payload.conversation_id.as_deref(),
+        payload.letter_id.as_deref(),
+    ) {
         (Some(c), None) => is_valid_conversation(c),
         (None, Some(l)) => is_valid_conversation(l),
         _ => false,
