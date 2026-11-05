@@ -46,7 +46,10 @@ export function workflowsUsingField(fieldId: string): { id: string; name: string
         (t) =>
           (t.form.enabled &&
             t.form.sections.some((s) => s.kind === 'fields' && s.fields.includes(key))) ||
-          t.rules.validators.some((v) => v.kind === 'fields_required' && v.fields.includes(key)),
+          t.rules.validators.some((v) => v.kind === 'fields_required' && v.fields.includes(key)) ||
+          t.rules.conditions.some(
+            (c) => c.kind === 'decider_in' && c.source.kind === 'field' && c.source.field === key,
+          ),
       );
     if (!used) continue;
     const type = demoProcessTypes.find((entry) => entry.workflowId === detail.id);

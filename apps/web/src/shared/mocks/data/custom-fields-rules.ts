@@ -1,21 +1,24 @@
-import type {
-  CustomFieldDefinition,
-  CustomFieldScope,
-  CustomFieldValue,
-  CustomFieldValues,
-} from '@nodus/contracts';
+import type { CustomFieldDefinition, CustomFieldValue, CustomFieldValues } from '@nodus/contracts';
 import { customFieldValueSchemaOf } from '@nodus/contracts';
 
 import { demoCounterpartyById } from './counterparties.js';
-import { demoAuthorDepartment, demoFieldById, demoFieldsOfScope } from './custom-fields.js';
+import {
+  demoAuthorDepartment,
+  demoCustomFieldDefinitions,
+  demoFieldById,
+} from './custom-fields.js';
 import { itemById } from './dictionaries.js';
 import { demoDepartments } from './departments.js';
+import { demoNodeRows } from './project-nodes.js';
 import { projectRefs } from './task-item-factory.js';
+import { demoSubtasks, demoTasks } from './tasks.js';
+import { demoLetters } from './letters.js';
 import { demoUserListItems } from './users.js';
 
-/** Правила значений в моке — те же, что у сервера (#431, Р2): неизвестный
- *  атрибут, неверный тип, неактивная ссылка. Скрытый атрибут принимает
- *  значения (служебные значения ставит автоматика). Мок обязан совпадать с API. */
+/** Правила значений в моке — те же, что у сервера (#431/#631, Р2/Р5):
+ *  неизвестный атрибут, неверный тип, неактивная или недоступная ссылка.
+ *  Мок обязан совпадать с API. Привязку к типу проверяет вызывающий
+ *  (множество bound), здесь — грамматика и существование цели. */
 export interface DemoFieldIssue {
   fieldId: string;
   reason: 'unknown' | 'invalid' | 'not_found' | 'inactive';
@@ -23,8 +26,8 @@ export interface DemoFieldIssue {
 }
 
 export function checkDemoValues(
-  scope: CustomFieldScope,
   values: CustomFieldValues,
+  bound?: ReadonlySet<string>,
 ): DemoFieldIssue[] {
   const issues: DemoFieldIssue[] = [];
   if (Object.keys(values).length > 50) {
@@ -32,7 +35,7 @@ export function checkDemoValues(
   }
   for (const [fieldId, value] of Object.entries(values)) {
     const definition = demoFieldById(fieldId);
-    if (!definition || definition.scope !== scope) {
+    if (!definition || definition.isCompany || (bound && !bound.has(fieldId))) {
       issues.push({ fieldId, reason: 'unknown', message: 'Unknown custom field' });
       continue;
     }
@@ -100,6 +103,20 @@ function checkReference(
       }
       return null;
     }
+    case 'task': {
+      const known = [...demoTasks, ...Object.values(demoSubtasks).flat()].some(
+        (task) => task.id === value,
+      );
+      return known ? null : { reason: 'not_found', message: 'Task not found' };
+    }
+    case 'letter':
+      return demoLetters.some((letter) => letter.id === value)
+        ? null
+        : { reason: 'not_found', message: 'Letter not found' };
+    case 'node':
+      return demoNodeRows.some((node) => node.id === value)
+        ? null
+        : { reason: 'not_found', message: 'Node not found' };
     default:
       return null;
   }
@@ -107,16 +124,16 @@ function checkReference(
 
 /** Патч значений: `null` удаляет ключ, проверяются только изменившиеся (Р2). */
 export function applyDemoPatch(
-  scope: CustomFieldScope,
   current: CustomFieldValues,
   patch: Record<string, CustomFieldValue | null>,
+  bound?: ReadonlySet<string>,
 ): { next: CustomFieldValues; issues: DemoFieldIssue[] } {
   const changed: CustomFieldValues = {};
   for (const [fieldId, value] of Object.entries(patch)) {
     if (value === null) continue;
     if (JSON.stringify(current[fieldId]) !== JSON.stringify(value)) changed[fieldId] = value;
   }
-  const issues = checkDemoValues(scope, changed);
+  const issues = checkDemoValues(changed, bound);
   const next: CustomFieldValues = { ...current };
   for (const [fieldId, value] of Object.entries(patch)) {
     if (value === null) delete next[fieldId];
@@ -127,16 +144,16 @@ export function applyDemoPatch(
 
 /** Умолчания при создании: статическое значение и «подразделение автора»;
  *  явное значение важнее (Р5). Невалидное умолчание тихо пропускается.
- *  `bound` — id атрибутов, привязанных к типу создаваемой задачи (#432):
- *  умолчания чужих типов не подставляются. */
+ *  `bound` — id атрибутов, привязанных к типу создаваемой записи (#432):
+ *  умолчания непривязанных атрибутов не подставляются. */
 export function demoDefaults(
-  scope: CustomFieldScope,
   input: CustomFieldValues,
-  bound?: ReadonlySet<string>,
+  bound: ReadonlySet<string>,
 ): CustomFieldValues {
   const values: CustomFieldValues = {};
-  for (const definition of demoFieldsOfScope(scope)) {
-    if (bound && !bound.has(definition.id)) continue;
+  for (const definition of demoCustomFieldDefinitions) {
+    if (definition.isCompany) continue;
+    if (!bound.has(definition.id)) continue;
     if (definition.defaultValue === null) continue;
     if (input[definition.id] !== undefined) continue;
     if (definition.defaultValue.kind === 'author_department') {

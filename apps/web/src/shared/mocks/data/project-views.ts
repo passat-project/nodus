@@ -1,4 +1,5 @@
 import type {
+  CustomFieldValues,
   ProjectAccess,
   ProjectDetail,
   ProjectHistoryEntry,
@@ -9,7 +10,7 @@ import type {
   ProjectRef,
   UserRef,
 } from '@nodus/contracts';
-import { Permission } from '@nodus/contracts';
+import { Permission, SYSTEM_FIELD_IDS } from '@nodus/contracts';
 
 import { counterpartyRefById } from './counterparties.js';
 import {
@@ -109,7 +110,7 @@ export function listItemOf(row: DemoProjectRow, actor: DemoActor): ProjectListIt
     myMembership: membership,
     visibility: row.visibility,
     status: row.status,
-    type: type ? { id: type.id, name: type.name, codeField: type.codeField } : null,
+    type: type ? { id: type.id, name: type.name } : null,
     portfolio: portfolio ? { id: portfolio.id, name: portfolio.name } : null,
     client: row.clientId ? (counterpartyRefById(row.clientId) ?? null) : null,
     membersCount: members.length,
@@ -117,6 +118,15 @@ export function listItemOf(row: DemoProjectRow, actor: DemoActor): ProjectListIt
     endDate: row.endDate,
     activityAt: row.updatedAt,
   };
+}
+
+/** Значения атрибутов проекта мок-мира: системные «Шифр»/«Заказчик»
+ *  переехали в customFields (Р9 #631), row.code/clientId — производные. */
+export function projectCustomFieldsOf(row: DemoProjectRow): CustomFieldValues {
+  const values: CustomFieldValues = { ...row.customFields };
+  if (row.code) values[SYSTEM_FIELD_IDS.projectCode] ??= row.code;
+  if (row.clientId) values[SYSTEM_FIELD_IDS.projectClient] ??= row.clientId;
+  return values;
 }
 
 export function detailOf(row: DemoProjectRow, actor: DemoActor): ProjectDetail {
@@ -136,7 +146,7 @@ export function detailOf(row: DemoProjectRow, actor: DemoActor): ProjectDetail {
     startDate: row.startDate,
     completedAt: row.completedAt,
     archivedAt: row.archivedAt,
-    customFields: row.customFields,
+    customFields: projectCustomFieldsOf(row),
     customFieldRefs: [],
     access: accessOf(row, membership, actor.permissions),
     structureSummary: structureSummaryOf(row.id),

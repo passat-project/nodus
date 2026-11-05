@@ -1,6 +1,7 @@
 import type { NodeKind, ProjectNode, ProjectNodeRollup } from '@nodus/contracts';
 import { isCompletedState, isOpenState, NODE_LIMITS } from '@nodus/contracts';
 
+import { SYSTEM_FIELD_IDS } from '@nodus/contracts';
 import { KOMPLEKT_KIND_ID, MARKA_FIELD_ID, SET_MARK_OV_ID } from './set-marks.js';
 
 import { isoAgo } from './dates.js';
@@ -16,7 +17,7 @@ import { projectRefs } from './task-item-factory.js';
 
 const kindId = (n: number): string => `44000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
-const defaultForm = { code: 'optional' as const, fields: [] };
+const defaultForm = { fields: [] };
 
 /** Виды папок — настраиваемые типы (#556): форма и возможности. */
 export const nodeKindIds = {
@@ -92,9 +93,12 @@ export const demoNodeKinds: NodeKind[] = [
     icon: 'fileText',
     color: 'blue',
     archivedAt: null,
+    // «Код» — посевной атрибут в слоте (бывший form.code, Р9 #631).
     form: {
-      code: 'required',
-      fields: [{ fieldId: MARKA_FIELD_ID, state: 'required' }],
+      fields: [
+        { fieldId: SYSTEM_FIELD_IDS.nodeCode, state: 'required' },
+        { fieldId: MARKA_FIELD_ID, state: 'required' },
+      ],
     },
     capabilities: ['document_changes', 'pulse_row', 'schema_row'],
   },
@@ -136,7 +140,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     kindId: nodeKindIds.section,
     name: 'Архитектурные решения',
     code: 'АР',
-    customFields: {},
+    customFields: { [SYSTEM_FIELD_IDS.nodeCode]: 'АР' },
     createdAt: isoAgo(79),
   },
   {
@@ -146,7 +150,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     kindId: nodeKindIds.section,
     name: 'Конструктивные решения',
     code: 'КР',
-    customFields: {},
+    customFields: { [SYSTEM_FIELD_IDS.nodeCode]: 'КР' },
     createdAt: isoAgo(78),
   },
   {
@@ -156,7 +160,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     kindId: nodeKindIds.section,
     name: 'Инженерное обеспечение',
     code: 'ИОС',
-    customFields: {},
+    customFields: { [SYSTEM_FIELD_IDS.nodeCode]: 'ИОС' },
     createdAt: isoAgo(77),
   },
   {
@@ -166,7 +170,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     kindId: nodeKindIds.komplekt,
     name: 'ОВ1.1',
     code: 'ОВ1.1',
-    customFields: { [MARKA_FIELD_ID]: SET_MARK_OV_ID },
+    customFields: { [MARKA_FIELD_ID]: SET_MARK_OV_ID, [SYSTEM_FIELD_IDS.nodeCode]: 'ОВ1.1' },
     createdAt: isoAgo(76),
   },
   {
@@ -186,7 +190,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     kindId: nodeKindIds.section,
     name: 'Архитектурные решения',
     code: 'АР',
-    customFields: {},
+    customFields: { [SYSTEM_FIELD_IDS.nodeCode]: 'АР' },
     createdAt: isoAgo(49),
   },
 ];

@@ -1,11 +1,10 @@
 import { useQueries } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import type { CustomFieldDefinition, CustomFieldScope, CustomFieldValues } from '@nodus/contracts';
+import type { CustomFieldDefinition, CustomFieldModule, CustomFieldValues } from '@nodus/contracts';
 import {
   customFieldKey,
   isCustomFieldValueFilled,
   readCustomFieldValue,
-  typeIdsOf,
   ui,
 } from '@nodus/contracts';
 
@@ -15,27 +14,23 @@ import { useProjectsList } from '../api/projects-list.js';
 import { useUsersList } from '../api/users-list.js';
 import { dictionariesKeys, fetchDictionaryItems } from '../dictionaries/queries.js';
 import type { FilterFieldDef, FilterOption } from '../views/list-filters.js';
-import { visibleDefinitions, useCustomFieldDefinitions } from './queries.js';
+import { useCustomFieldDefinitions } from './queries.js';
 
 /**
- * Фильтры по кастомным полям области (#431, Р8) — в группе «Атрибуты» панели
- * фильтра: «содержит» для текстов и ссылок, диапазоны чисел/денег/
- * продолжительности/дат, выбор для списков и подразделений, сотрудник.
- * Клиентские, по загруженным страницам — как все фильтры списков (О4);
- * серверные `filter[cf.<id>]` — #435.
+ * Фильтры по атрибутам (#431/#631) — в группе «Атрибуты» панели фильтра:
+ * «содержит» для текстов и ссылок, диапазоны чисел/денег/продолжительности/
+ * дат, выбор для списков и подразделений, сотрудник. Клиентские, по
+ * загруженным страницам — как все фильтры списков (О4); серверные
+ * `filter[cf.<id>]` — #435. Группа строится из атрибутов, привязанных
+ * к модулю (module=task/letter/project/node) — список уже отфильтрован
+ * сервером по привязкам.
  */
 export function useCustomFieldFilterDefs<T>(
-  scope: CustomFieldScope,
+  module: Exclude<CustomFieldModule, 'company'>,
   valuesOf: (item: T) => CustomFieldValues,
 ): FilterFieldDef<T>[] {
-  const { data } = useCustomFieldDefinitions(scope);
-  // #432 (Р8): группа «Атрибуты» — только атрибуты, привязанные хотя бы к
-  // одному типу процесса. У проектов и контрагентов типов нет — поле
-  // действует на всех, список не режется.
-  const typed = scope === 'task' || scope === 'letter';
-  const definitions = visibleDefinitions(data).filter(
-    (definition) => !typed || typeIdsOf(definition).length > 0,
-  );
+  const { data } = useCustomFieldDefinitions(module);
+  const definitions = useMemo(() => data ?? [], [data]);
   const { data: users } = useUsersList();
   const departments = useDepartmentsList();
   const projectsAvailableNow = projectsAvailable();
@@ -249,9 +244,13 @@ export function customFieldFilterDef<T>(
           match: (item, value) => (typeof value === 'string' ? read(item) === value : true),
         },
       ];
-    // «Контрагент» — фильтра нет до #435 (Р1); «Проект» без модуля — пустой
-    // список вариантов, поле не появляется.
+    // Ссылки на записи (задача/письмо/папка) и «Контрагент» — фильтра нет
+    // до #435; «Проект» без модуля — пустой список вариантов, поле не
+    // появляется.
     case 'counterparty':
+    case 'task':
+    case 'letter':
+    case 'node':
       return [];
   }
 }

@@ -336,3 +336,15 @@ export const reorderCustomFieldsBodySchema = z
   })
   .strict();
 export type ReorderCustomFieldsBody = z.infer<typeof reorderCustomFieldsBodySchema>;
+
+/** Вид места привязки в пути API (`PUT/DELETE .../bindings/:kind/:targetId`). */
+export const customFieldBindingKindSchema = z.enum(['process-type', 'project-type', 'node-kind']);
+export type CustomFieldBindingKind = z.infer<typeof customFieldBindingKindSchema>;
+
+/** `PUT /custom-fields/definitions/:id/company-value` — значение глобальной
+ *  переменной (Р7): грамматика типа; для не-глобального атрибута — 422.
+ *  Идемпотентно (Idempotency-Key). */
+export const customFieldCompanyValueBodySchema = z
+  .object({ value: customFieldValueSchema })
+  .strict();
+export type CustomFieldCompanyValueBody = z.infer<typeof customFieldCompanyValueBodySchema>;

@@ -1,22 +1,27 @@
 import type {
+  CustomFieldBindings,
   CustomFieldDefinition,
-  CustomFieldScope,
+  CustomFieldModule,
   CustomFieldSettings,
   CustomFieldType,
   CustomFieldValues,
 } from '@nodus/contracts';
-import { SystemDictionary } from '@nodus/contracts';
+import { SystemDictionary, SYSTEM_FIELD_IDS } from '@nodus/contracts';
 
 import { currencyIds, dictionaryByCode, itemsOf, workKindIds } from './dictionaries.js';
 import { MARKA_FIELD_ID } from './set-marks.js';
 import { departmentIds } from './org-ids.js';
 import { processTypeIds } from './process-type-ids.js';
+import { demoProjectTypeIds } from './projects.js';
+import { nodeKindIds } from './project-nodes.js';
 import { projectRefs, tid } from './task-item-factory.js';
 import { userIds } from './users.js';
 
-/** Демо-реестр кастомных полей (#431) — по полю каждого типа для задач,
- *  поля писем и контрагентов; один скрытый (служебный). Определения живут
- *  массивом: мок-хендлеры создают, правят и удаляют их как сервер. */
+/** Демо-реестр атрибутов портала (#631): одно определение — много мест.
+ *  Посев повторяет миграцию: системные «Шифр»/«Заказчик»/«Код» (детермини-
+ *  рованные id), сквозная «Марка» (вид папки + тип задачи), глобальная
+ *  переменная, ссылки на записи. Определения живут массивом: мок-хендлеры
+ *  создают, правят и удаляют их как сервер. */
 
 const fid = (n: number): string => `c0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -43,24 +48,33 @@ export const fieldIds = {
   /** Атрибуты «Входящего письма» (#55): шифр объекта и отметка «нужен ответ». */
   letterObjectCode: fid(21),
   letterReplyRequired: fid(22),
+  /** Ссылка на задачу в атрибутах письма (#631, Р5). */
+  letterTask: fid(23),
   counterpartyErp: fid(31),
-  /** Атрибут области «Папка» (#556): марка комплекта — посев миграции Б. */
+  /** Глобальная переменная (#631, Р7): срок мобализации для будущих формул. */
+  mobilizationDays: fid(41),
+  /** Сквозная «Марка» (#631): вид папки «Комплект» + тип «Стандартный». */
   marka: MARKA_FIELD_ID,
+  /** Системные поля, посеянные как атрибуты (#631, Р9). */
+  projectCode: SYSTEM_FIELD_IDS.projectCode,
+  projectClient: SYSTEM_FIELD_IDS.projectClient,
+  nodeCode: SYSTEM_FIELD_IDS.nodeCode,
 };
 
 const STAMP = '2026-10-20T09:00:00.000Z';
 
+let nextNumber = 1;
+
 function definition(
   id: string,
-  scope: CustomFieldScope,
   type: CustomFieldType,
   name: string,
-  sortOrder: number,
+  bindings: Partial<CustomFieldBindings>,
   extra: Partial<CustomFieldDefinition> = {},
 ): CustomFieldDefinition {
   return {
     id,
-    scope,
+    number: nextNumber++,
     type,
     name,
     hint: null,
@@ -69,9 +83,14 @@ function definition(
     defaultValue: null,
     defaultRefs: [],
     reportIndexed: false,
-    hidden: false,
-    typeIds: [],
-    sortOrder,
+    isCompany: false,
+    companyValue: null,
+    bindings: {
+      processTypeIds: bindings.processTypeIds ?? [],
+      projectTypeIds: bindings.projectTypeIds ?? [],
+      nodeKindIds: bindings.nodeKindIds ?? [],
+    },
+    sortOrder: 0,
     createdAt: STAMP,
     updatedAt: STAMP,
     ...extra,
@@ -92,93 +111,206 @@ function dictionaryRef(code: string) {
 
 const moneySettings: CustomFieldSettings = { currencyId: currencyIds.byn };
 
-/** Привязка атрибута к типам (#432, В2): стандарт и переработка — основные
+/** Привязка к типам (#432, В2): стандарт и переработка — основные
  *  демо-типы задач; «Сайт заказчика» и «Проект-источник» намеренно без
- *  типов — проверка правила «атрибут без типов нигде не показывается». */
+ *  мест — проверка правила «атрибут без привязок нигде не показывается». */
 const STD = [processTypeIds.standard];
 const STD_OVT = [processTypeIds.standard, processTypeIds.overtime];
 
-/** Определения в порядке реестра (области: task, letter, project, counterparty). */
+/** Все демо-типы проектов и виды папок (посев миграции #631, Р9). */
+const ALL_PROJECT_TYPES = [demoProjectTypeIds.contract, demoProjectTypeIds.topic];
+const ALL_NODE_KINDS = [nodeKindIds.section, nodeKindIds.komplekt];
+
+/** Определения в порядке реестра (sortOrder назначает файл-фабрика ниже). */
 export const demoCustomFieldDefinitions: CustomFieldDefinition[] = [
-  definition(fieldIds.invoiceNumber, 'task', 'text', '№ накладной', 0, {
-    hint: 'Номер из накладной поставщика',
-    typeIds: STD,
+  definition(
+    fieldIds.projectCode,
+    'text',
+    'Шифр',
+    { projectTypeIds: ALL_PROJECT_TYPES },
+    {
+      hint: 'Шифр договора, например 22-01',
+    },
+  ),
+  definition(fieldIds.projectClient, 'counterparty', 'Заказчик', {
+    projectTypeIds: ALL_PROJECT_TYPES,
   }),
-  definition(fieldIds.handoverDate, 'task', 'date', 'Дата передачи', 1, { typeIds: STD }),
-  definition(fieldIds.customer, 'task', 'user', 'Сотрудник-заказчик', 2, { typeIds: STD }),
-  definition(fieldIds.contractAmount, 'task', 'money', 'Сумма договора', 3, {
-    settings: moneySettings,
-    dictionary: dictionaryRef(SystemDictionary.CURRENCY),
-    typeIds: STD,
+  definition(
+    fieldIds.nodeCode,
+    'text',
+    'Код',
+    { nodeKindIds: ALL_NODE_KINDS },
+    {
+      hint: 'Код папки в структуре проекта',
+    },
+  ),
+  definition(
+    fieldIds.invoiceNumber,
+    'text',
+    '№ накладной',
+    { processTypeIds: STD },
+    {
+      hint: 'Номер из накладной поставщика',
+    },
+  ),
+  definition(fieldIds.handoverDate, 'date', 'Дата передачи', { processTypeIds: STD }),
+  definition(fieldIds.customer, 'user', 'Сотрудник-заказчик', { processTypeIds: STD }),
+  definition(
+    fieldIds.contractAmount,
+    'money',
+    'Сумма договора',
+    { processTypeIds: STD },
+    {
+      settings: moneySettings,
+      dictionary: dictionaryRef(SystemDictionary.CURRENCY),
+    },
+  ),
+  definition(
+    fieldIds.workKind,
+    'enum',
+    'Вид работ',
+    { processTypeIds: STD },
+    {
+      settings: { dictionaryId: dictionaryByCode('work-kind')!.id },
+      dictionary: dictionaryRef('work-kind'),
+      defaultValue: { kind: 'static', value: workKindIds.design },
+    },
+  ),
+  definition(
+    fieldIds.objects,
+    'multienum',
+    'Объекты',
+    { processTypeIds: STD },
+    {
+      settings: { dictionaryId: dictionaryByCode('object')!.id },
+      dictionary: dictionaryRef('object'),
+    },
+  ),
+  definition(fieldIds.overtime, 'duration', 'Часы переработки', {
+    processTypeIds: STD_OVT,
   }),
-  definition(fieldIds.workKind, 'task', 'enum', 'Вид работ', 4, {
-    settings: { dictionaryId: dictionaryByCode('work-kind')!.id },
-    dictionary: dictionaryRef('work-kind'),
-    defaultValue: { kind: 'static', value: workKindIds.design },
-    typeIds: STD,
+  definition(fieldIds.overtimeDate, 'date', 'Дата переработки', {
+    processTypeIds: [processTypeIds.overtime],
   }),
-  definition(fieldIds.objects, 'task', 'multienum', 'Объекты', 5, {
-    settings: { dictionaryId: dictionaryByCode('object')!.id },
-    dictionary: dictionaryRef('object'),
-    typeIds: STD,
+  definition(fieldIds.approved, 'bool', 'Согласовано с заказчиком', { processTypeIds: STD }),
+  definition(
+    fieldIds.projectFolder,
+    'link',
+    'Папка проекта',
+    { processTypeIds: STD },
+    {
+      hint: 'Путь в общем хранилище',
+    },
+  ),
+  definition(fieldIds.customerSite, 'link', 'Сайт заказчика', {}),
+  definition(
+    fieldIds.applicantDepartment,
+    'department',
+    'Подразделение заявителя',
+    { processTypeIds: STD },
+    { defaultValue: { kind: 'author_department' } },
+  ),
+  definition(
+    fieldIds.area,
+    'number',
+    'Площадь, м²',
+    { processTypeIds: STD },
+    {
+      settings: { precision: 2 },
+    },
+  ),
+  definition(fieldIds.customerComment, 'long_text', 'Комментарий заказчика', {
+    processTypeIds: STD,
   }),
-  definition(fieldIds.overtime, 'task', 'duration', 'Часы переработки', 6, {
-    typeIds: STD_OVT,
+  definition(fieldIds.customerObservers, 'users', 'Наблюдатели заказчика', { processTypeIds: STD }),
+  definition(fieldIds.sourceProject, 'project', 'Проект-источник', {}),
+  definition(fieldIds.contractor, 'counterparty', 'Подрядчик', { processTypeIds: STD }),
+  // Бывший «скрытый»: глобального скрытия нет (О2) — атрибут без привязок,
+  // значения живы, процессы читают; «спрятать» = снять привязки.
+  definition(
+    fieldIds.legacyCode,
+    'text',
+    'Шифр сметы (служебный)',
+    {},
+    {
+      hint: 'Заполняет автоматика из сметной программы',
+    },
+  ),
+  definition(
+    fieldIds.letterObjectCode,
+    'text',
+    'Шифр объекта',
+    { processTypeIds: [processTypeIds.letterIncoming] },
+    { hint: 'Шифр проекта или объекта из письма корреспондента' },
+  ),
+  definition(fieldIds.letterReplyRequired, 'bool', 'Требуется ответ', {
+    processTypeIds: [processTypeIds.letterIncoming],
   }),
-  definition(fieldIds.overtimeDate, 'task', 'date', 'Дата переработки', 7, {
-    typeIds: [processTypeIds.overtime],
+  definition(fieldIds.letterTask, 'task', 'Задача по письму', {
+    processTypeIds: [processTypeIds.letterIncoming],
   }),
-  definition(fieldIds.approved, 'task', 'bool', 'Согласовано с заказчиком', 8, { typeIds: STD }),
-  definition(fieldIds.projectFolder, 'task', 'link', 'Папка проекта', 9, {
-    hint: 'Путь в общем хранилище',
-    typeIds: STD,
-  }),
-  definition(fieldIds.customerSite, 'task', 'link', 'Сайт заказчика', 10),
-  definition(fieldIds.applicantDepartment, 'task', 'department', 'Подразделение заявителя', 11, {
-    defaultValue: { kind: 'author_department' },
-    typeIds: STD,
-  }),
-  definition(fieldIds.area, 'task', 'number', 'Площадь, м²', 12, {
-    settings: { precision: 2 },
-    typeIds: STD,
-  }),
-  definition(fieldIds.customerComment, 'task', 'long_text', 'Комментарий заказчика', 13, {
-    typeIds: STD,
-  }),
-  definition(fieldIds.customerObservers, 'task', 'users', 'Наблюдатели заказчика', 14, {
-    typeIds: STD,
-  }),
-  definition(fieldIds.sourceProject, 'task', 'project', 'Проект-источник', 15),
-  definition(fieldIds.contractor, 'task', 'counterparty', 'Подрядчик', 16, { typeIds: STD }),
-  definition(fieldIds.legacyCode, 'task', 'text', 'Шифр сметы (служебный)', 17, {
-    hint: 'Заполняет автоматика из сметной программы',
-    hidden: true,
-    typeIds: STD,
-  }),
-  definition(fieldIds.letterObjectCode, 'letter', 'text', 'Шифр объекта', 0, {
-    hint: 'Шифр проекта или объекта из письма корреспондента',
-    typeIds: [processTypeIds.letterIncoming],
-  }),
-  definition(fieldIds.letterReplyRequired, 'letter', 'bool', 'Требуется ответ', 1, {
-    typeIds: [processTypeIds.letterIncoming],
-  }),
-  definition(fieldIds.counterpartyErp, 'counterparty', 'text', 'Код 1С', 0),
-  // Область «Папка» (#556): марка комплекта из справочника марок СТБ 2255.
-  // Привязка к виду — форма вида (node_kinds.config.form), typeIds пуст.
-  definition(fieldIds.marka, 'node', 'enum', 'Марка', 0, {
-    hint: 'Марка комплекта по СТБ 2255',
-    settings: { dictionaryId: dictionaryByCode('set-mark')!.id },
-    dictionary: dictionaryRef('set-mark'),
-  }),
+  definition(fieldIds.counterpartyErp, 'text', 'Код 1С', {}),
+  // Глобальная переменная (Р7): значение одно на компанию, правит админ.
+  definition(
+    fieldIds.mobilizationDays,
+    'number',
+    'Срок мобализации, дней',
+    {},
+    {
+      isCompany: true,
+      companyValue: 14,
+      hint: 'Глобальная переменная для процессов',
+    },
+  ),
+  // Сквозная «Марка» (критерий приёмки 1): один атрибут — вид папки
+  // «Комплект» и тип «Стандартный»; фильтры каждой сущности свои.
+  definition(
+    fieldIds.marka,
+    'enum',
+    'Марка',
+    { processTypeIds: STD, nodeKindIds: [nodeKindIds.komplekt] },
+    {
+      hint: 'Марка комплекта по СТБ 2255',
+      settings: { dictionaryId: dictionaryByCode('set-mark')!.id },
+      dictionary: dictionaryRef('set-mark'),
+    },
+  ),
 ];
+
+// Глобальный порядок реестра (sortOrder): по порядку массива.
+demoCustomFieldDefinitions.forEach((entry, index) => {
+  entry.sortOrder = index;
+});
 
 export function demoFieldById(id: string): CustomFieldDefinition | undefined {
   return demoCustomFieldDefinitions.find((entry) => entry.id === id);
 }
 
-export function demoFieldsOfScope(scope: CustomFieldScope): CustomFieldDefinition[] {
+/** Следующий внутренний номер (мок «сервер»): sequence не откатывается. */
+export function nextFieldNumber(): number {
+  return nextNumber++;
+}
+
+/** Атрибуты модуля «Где используется» (семантика GET ?module=). */
+export function demoFieldsOfModule(
+  module: CustomFieldModule,
+  typeCategories: { taskTypeIds: ReadonlySet<string>; letterTypeIds: ReadonlySet<string> },
+): CustomFieldDefinition[] {
   return demoCustomFieldDefinitions
-    .filter((entry) => entry.scope === scope)
+    .filter((entry) => {
+      if (module === 'company') return entry.isCompany;
+      const { processTypeIds, projectTypeIds, nodeKindIds } = entry.bindings;
+      switch (module) {
+        case 'task':
+          return processTypeIds.some((id) => typeCategories.taskTypeIds.has(id));
+        case 'letter':
+          return processTypeIds.some((id) => typeCategories.letterTypeIds.has(id));
+        case 'project':
+          return projectTypeIds.length > 0;
+        case 'node':
+          return nodeKindIds.length > 0;
+      }
+    })
     .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
 }
 
@@ -202,6 +334,7 @@ export const demoTaskCustomFields: Record<string, CustomFieldValues> = {
     [fieldIds.sourceProject]: projectRefs.p4.id,
     [fieldIds.contractor]: 'd0000000-0000-4000-8000-000000000001',
     [fieldIds.legacyCode]: 'СМ-0359-14',
+    [fieldIds.marka]: itemsOf('set-mark')[0]!.id,
   },
   [tid(5)]: {
     [fieldIds.invoiceNumber]: '№ 77',

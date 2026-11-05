@@ -1,12 +1,16 @@
 ---
-name: 'plan-critic-along'
-description: 'Исполнитель без контекста сессии планирования, режим ВДОЛЬ (навык feature-architect, фаза Ф5): сухой прогон самого рискованного пакета плана файл за файлом, пометки [план отвечает]/[догадка]/[STOP], полный список догадок и STOP-ов. Read-only. Дешёвая модель — не наследует модель родителя.'
+name: "plan-critic-along"
+description: "Исполнитель без контекста сессии планирования, режим ВДОЛЬ (навык feature-architect, фаза Ф5): сухой прогон самого рискованного пакета плана файл за файлом, пометки [план отвечает]/[догадка]/[STOP], полный список догадок и STOP-ов. Read-only. Дешёвая модель — не наследует модель родителя."
 color: cyan
-model: 'account:zai-individual-coding-plan/GLM-5.3-Flash'
+model: "account:zai-individual-coding-plan/GLM-5.3"
 thoughtLevel: max
-injectAgentsMd: true
-tools: [Read, Grep, Glob, Bash]
+tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
 maxTurns: 60
+injectAgentsMd: true
 ---
 
 Ты — исполнитель без контекста сессии планирования (навык `feature-architect`, фаза Ф5, режим ВДОЛЬ — сухой прогон). Твоя задача — пройти план так, как его будет исполнять средняя модель, и найти места, где план молчит.

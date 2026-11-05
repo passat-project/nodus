@@ -1,9 +1,10 @@
 import type { CustomFieldType } from '@nodus/contracts';
 
 /**
- * Семейства типов полей (#431, Р1): 16 типов → 13 плиток «Нового поля».
- * Модификаторы («Многострочный», «Несколько значений») — односторонние
- * расширения одного семейства (Р3): обратно только новым полем.
+ * Семейства типов полей (#431, Р1; ссылки на записи — #631 Р5): 19 типов →
+ * 16 плиток «Нового поля». Модификаторы («Многострочный», «Несколько
+ * значений») — односторонние расширения одного семейства (Р3): обратно
+ * только новым полем.
  */
 export const FIELD_FAMILIES = [
   'text',
@@ -18,6 +19,9 @@ export const FIELD_FAMILIES = [
   'department',
   'project',
   'counterparty',
+  'task',
+  'letter',
+  'node',
   'link',
 ] as const;
 
@@ -37,6 +41,9 @@ const BASE_TYPE: Record<FieldFamily, CustomFieldType> = {
   department: 'department',
   project: 'project',
   counterparty: 'counterparty',
+  task: 'task',
+  letter: 'letter',
+  node: 'node',
   link: 'link',
 };
 

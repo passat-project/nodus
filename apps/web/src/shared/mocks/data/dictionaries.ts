@@ -102,11 +102,26 @@ function item(
   sortOrder: number,
   isActive = true,
   code: string | null = null,
+  color: DictionaryItem['color'] = null,
 ): DictionaryItem {
-  return { id, dictionaryId, parentId: null, code, name, sortOrder, isActive };
+  return { id, dictionaryId, parentId: null, code, name, color, sortOrder, isActive };
 }
 
 const documentKinds = ['Письмо', 'Договор', 'Приказ', 'Запрос', 'Акт'];
+
+/** Цвета основных марок (демо раскраски чипов, Р6 #631). */
+const SET_MARK_COLORS: Partial<Record<string, DictionaryItem['color']>> = {
+  ГП: 'neutral',
+  АР: 'warning',
+  КР: 'danger',
+  ИОС: 'info',
+  ОВ: 'info',
+  ЭОМ: 'violet',
+  КЖ: 'teal',
+  КМ: 'orange',
+  СС: 'pink',
+  АУС: 'cyan',
+};
 
 export const demoDictionaryItems: DictionaryItem[] = [
   item(currencyIds.byn, dictionaryIds.currency, 'BYN', 0),
@@ -156,7 +171,8 @@ export const demoDictionaryItems: DictionaryItem[] = [
   item(objectIds.warehouse, dictionaryIds.object, 'Склад готовой продукции', 1),
   item(objectIds.admin, dictionaryIds.object, 'Административный корпус', 2),
   // Марки комплектов (#556): код элемента — марка СТБ 2255 (разбор колонки
-  // штампа в #468), имя — «ОВ — Отопление, вентиляция…» (В2).
+  // штампа в #468), имя — «ОВ — Отопление, вентиляция…» (В2). Цвета
+  // основных марок — палитра темы (Р6 #631), остальные — без цвета.
   ...SET_MARKS.map((mark, index) =>
     item(
       setMarkItemId(index),
@@ -165,6 +181,7 @@ export const demoDictionaryItems: DictionaryItem[] = [
       index * 10,
       true,
       mark.code,
+      SET_MARK_COLORS[mark.code] ?? null,
     ),
   ),
 ];

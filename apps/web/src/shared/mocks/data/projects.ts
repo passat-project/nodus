@@ -1,4 +1,5 @@
 import type {
+  CustomFieldValues,
   PortalSettings,
   ProjectColor,
   ProjectGroup,
@@ -8,6 +9,7 @@ import type {
   ProjectType,
   ProjectVisibility,
 } from '@nodus/contracts';
+import { SYSTEM_FIELD_IDS } from '@nodus/contracts';
 
 import { counterpartyIds } from './counterparties.js';
 import { isoAgo, isoDateIn } from './dates.js';
@@ -33,7 +35,7 @@ export interface DemoProjectRow {
   endDate: string | null;
   completedAt: string | null;
   archivedAt: string | null;
-  customFields: Record<string, never>;
+  customFields: CustomFieldValues;
   creatorId: string;
   createdAt: string;
   updatedAt: string;
@@ -49,36 +51,56 @@ export interface DemoParticipantRow {
 }
 
 const typeId = (n: number): string => `41000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+
+/** id демо-типов проектов (посев #631 привязывает системные атрибуты). */
+export const demoProjectTypeIds = {
+  contract: typeId(1),
+  topic: typeId(2),
+  procurement: typeId(3),
+} as const;
 const groupId = (n: number): string => `42000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 export const demoProjectTypes: ProjectType[] = [
   {
-    id: typeId(1),
+    id: demoProjectTypeIds.contract,
     name: 'Договор',
     icon: 'file-text',
     color: 'blue',
-    codeField: 'required',
+    // Слоты формы типа (Р10 #631): «Шифр» — бывшая политика codeField
+    // required, «Заказчик» — всегда по желанию.
+    form: {
+      fields: [
+        { fieldId: SYSTEM_FIELD_IDS.projectCode, state: 'required' },
+        { fieldId: SYSTEM_FIELD_IDS.projectClient, state: 'optional' },
+      ],
+    },
     // «Договору» доступны все виды справочника (null): новый вид попадёт
     // типу сам — явный список только там, где набор сужен («Тема»).
     kindIds: null,
     archivedAt: null,
   },
   {
-    id: typeId(2),
+    id: demoProjectTypeIds.topic,
     name: 'Тема',
     icon: 'star',
     color: 'amber',
-    codeField: 'hidden',
+    // У «Темы» шифра нет (бывший codeField hidden): слот «Шифр» отсутствует.
+    form: { fields: [{ fieldId: SYSTEM_FIELD_IDS.projectClient, state: 'optional' }] },
     // «Теме» комплекты не нужны — только разделы и этапы (ADR-0030).
     kindIds: [nodeKindIds.section, nodeKindIds.phase],
     archivedAt: null,
   },
   {
-    id: typeId(3),
+    id: demoProjectTypeIds.procurement,
     name: 'Госзакупки',
     icon: 'shield-check',
     color: 'green',
-    codeField: 'optional',
+    form: {
+      fields: [
+        { fieldId: SYSTEM_FIELD_IDS.projectCode, state: 'optional' },
+        { fieldId: SYSTEM_FIELD_IDS.projectClient, state: 'optional' },
+      ],
+    },
     kindIds: null,
     archivedAt: isoAgo(90),
   },

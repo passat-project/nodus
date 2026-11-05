@@ -5,6 +5,11 @@ import {
   effectiveCreationForm,
   type CreationForm,
 } from './creation-form.js';
+import {
+  customFieldBindingsSchema,
+  EMPTY_CUSTOM_FIELD_BINDINGS,
+  type CustomFieldBindings,
+} from '../custom-fields/custom-field.schemas.js';
 
 /**
  * Конфигурация типа процесса (#432, В6): состав карточки и доступ к типу.
@@ -214,9 +219,12 @@ export function typeViewerOf(type: {
   return type.viewer ?? { canView: true, canCreate: type.creatable };
 }
 
-/** Привязки атрибута к типам; старый API поля не отдаёт — пусто. */
-export function typeIdsOf(definition: { typeIds?: readonly string[] }): string[] {
-  return [...(definition.typeIds ?? [])];
+/** Привязки атрибута к местам; старый API поля не отдаёт — пусто. */
+export function bindingsOf(definition: {
+  bindings?: CustomFieldBindings | unknown;
+}): CustomFieldBindings {
+  const parsed = customFieldBindingsSchema.safeParse(definition.bindings);
+  return parsed.success ? parsed.data : EMPTY_CUSTOM_FIELD_BINDINGS;
 }
 
 /** Состав карточки задачи; старый API `layout` не отдаёт — карточка полная. */
