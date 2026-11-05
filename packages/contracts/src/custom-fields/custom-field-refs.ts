@@ -3,8 +3,10 @@ import { z } from 'zod';
 /**
  * Ссылки для показа значений (Р6): деталь сущности несёт `customFieldRefs`,
  * заполненные пачками через порты (сотрудники, подразделения, элементы
- * справочников, контрагенты). `name: null` — «Запись недоступна» (например,
- * проекты до #52). Строка списка несёт только значения.
+ * справочников, контрагенты, задачи, письма, папки). `name: null` —
+ * «Запись недоступна» (актёр не видит цель — Р5) или цель удалена
+ * (`archived: true` — «Запись удалена», значение не инвалидируется).
+ * Строка списка несёт только значения.
  */
 export const customFieldRefKindSchema = z.enum([
   'user',
@@ -12,6 +14,9 @@ export const customFieldRefKindSchema = z.enum([
   'dictionary_item',
   'project',
   'counterparty',
+  'task',
+  'letter',
+  'node',
 ]);
 export type CustomFieldRefKind = z.infer<typeof customFieldRefKindSchema>;
 

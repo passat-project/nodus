@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { cursorQuerySchema } from '../pagination/paginated.schema.js';
+import { stageColorSchema } from '../workflows/workflow-primitives.schemas.js';
 
 /**
  * Справочники (dictionaries, ядро, I15): бизнес-списки живут данными, а не
@@ -64,6 +65,10 @@ export const dictionaryItemSchema = z.object({
   /** Необязательный машинный ключ элемента (уникален в справочнике). */
   code: z.string().min(1).nullable(),
   name: z.string().min(1),
+  /** Цвет варианта списка (Р6 #631): ключ палитры тонов темы (как стадии
+   *  маршрутов); null — нейтральный чип без подкраски. Назначается
+   *  администратором в редакторе вариантов атрибута. */
+  color: stageColorSchema.nullable(),
   sortOrder: z.number().int(),
   isActive: z.boolean(),
 });
@@ -110,7 +115,11 @@ export const createDictionaryItemBodySchema = z
 export type CreateDictionaryItemBody = z.infer<typeof createDictionaryItemBodySchema>;
 
 export const updateDictionaryItemBodySchema = z
-  .object({ name: z.string().trim().min(1).max(120) })
+  .object({
+    name: z.string().trim().min(1).max(120),
+    /** Цвет варианта (Р6 #631): null — убрать цвет. */
+    color: stageColorSchema.nullable().optional(),
+  })
   .strict();
 export type UpdateDictionaryItemBody = z.infer<typeof updateDictionaryItemBodySchema>;
 

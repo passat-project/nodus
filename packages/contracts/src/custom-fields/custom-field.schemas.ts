@@ -8,19 +8,21 @@ import {
 import { customFieldRefSchema } from './custom-field-refs.js';
 
 /**
- * Реестр определений кастомных полей (#431, ADR-0029): область (задача,
- * письмо, проект, контрагент), тип, настройки типа, умолчание. Значения
- * живут в JSONB сущности по id определения; `code` у поля нет (Р10):
- * переименование безопасно, ключ — id.
+ * Реестр определений атрибутов портала (#631, ADR-0037 п.2): одно
+ * определение на весь портал — много мест. Название уникально глобально
+ * (без учёта регистра), адресация — стабильный `id` (значения JSONB) и
+ * внутренний `number` (формулы #632, людям не показывается). Привязки
+ * «Где используется» — к типам процессов, типам проектов и видам папок.
  */
 
-/** Область применения. `node` («Папки») активирована #556: атрибуты видов
- *  папок структуры проекта (ADR-0030 «Дополнение (02.11)»). */
-export const customFieldScopeSchema = z.enum(['task', 'letter', 'project', 'node', 'counterparty']);
-export type CustomFieldScope = z.infer<typeof customFieldScopeSchema>;
+/** Модуль-фильтр реестра: где атрибут используется. `company` — глобальные
+ *  переменные; «Реестры» добавит #636, до него не показываются (В6). */
+export const customFieldModuleSchema = z.enum(['task', 'letter', 'project', 'node', 'company']);
+export type CustomFieldModule = z.infer<typeof customFieldModuleSchema>;
 
-/** Тип поля (Р1). UI показывает 13 семейств — модификаторы типа («Многострочный»,
- *  «Несколько значений») включаются односторонне (Р3). */
+/** Тип поля (Р1). UI показывает семейства — модификаторы типа («Многострочный»,
+ *  «Несколько значений») включаются односторонне (Р3). Ссылки на записи
+ *  (`task`, `letter`, `node`) — #631 Р5; «строка реестра» добавит #636. */
 export const customFieldTypeSchema = z.enum([
   'text',
   'long_text',
@@ -37,6 +39,9 @@ export const customFieldTypeSchema = z.enum([
   'department',
   'project',
   'counterparty',
+  'task',
+  'letter',
+  'node',
   'link',
 ]);
 export type CustomFieldType = z.infer<typeof customFieldTypeSchema>;
@@ -78,9 +83,31 @@ export const customFieldDictionaryRefSchema = z
   .strict();
 export type CustomFieldDictionaryRef = z.infer<typeof customFieldDictionaryRefSchema>;
 
+/** «Где используется» (Р3): привязки определения к местам. Глобальная
+ *  переменная (isCompany) привязок не имеет — все списки пусты. */
+export const customFieldBindingsSchema = z
+  .object({
+    /** Типы задач и писем (формы создания, карточки, окна переходов). */
+    processTypeIds: z.array(z.uuid()).max(200),
+    /** Типы проектов (форма типа проекта, диалоги проекта). */
+    projectTypeIds: z.array(z.uuid()).max(200),
+    /** Виды папок (форма вида, окно создания папки). */
+    nodeKindIds: z.array(z.uuid()).max(200),
+  })
+  .strict();
+export type CustomFieldBindings = z.infer<typeof customFieldBindingsSchema>;
+
+export const EMPTY_CUSTOM_FIELD_BINDINGS: CustomFieldBindings = {
+  processTypeIds: [],
+  projectTypeIds: [],
+  nodeKindIds: [],
+};
+
 export const customFieldDefinitionSchema = z.object({
   id: z.uuid(),
-  scope: customFieldScopeSchema,
+  /** Внутренний номер (Р2): выдаётся системой при создании, не переиспользуется,
+   *  в интерфейсе не показывается; адрес атрибута в формулах #632. */
+  number: z.number().int().min(1),
   type: customFieldTypeSchema,
   name: z.string().min(1).max(60),
   hint: z.string().max(300).nullable(),
@@ -92,42 +119,60 @@ export const customFieldDefinitionSchema = z.object({
   defaultRefs: z.array(customFieldRefSchema),
   /** Флаг «индексировать для отчётов» (Р9): материализация — по триггеру (Н4). */
   reportIndexed: z.boolean(),
-  /** Скрытый (служебный) атрибут: значения живут и доступны процессам,
-   *  автоматизации и отчётам, но в карточках, фильтрах и окнах переходов
-   *  его не видит никто (вердикт владельца 25.10.2026 — замена архива). */
-  hidden: z.boolean(),
-  /** Типы процессов, которым принадлежит атрибут (#432, В2): карточка,
-   *  форма создания, окна и условия показывают только свои атрибуты.
-   *  Пусто — атрибут нигде не показывается. У проектов и контрагентов
-   *  типов процессов нет: там список пуст и не настраивается. */
-  typeIds: z.array(z.uuid()).max(50),
+  /** Глобальная переменная (Р7, категория «Глобальная переменная» — как в
+   *  Битриксе): значений у записей не принимает, привязок не имеет; значение
+   *  одно на компанию, правит администратор из реестра атрибутов. */
+  isCompany: z.boolean(),
+  /** Значение глобальной переменной (грамматика типа); у обычных атрибутов —
+   *  null. Изменение — событие definition_changed {fields:['companyValue']}. */
+  companyValue: customFieldValueSchema.nullable(),
+  bindings: customFieldBindingsSchema,
   sortOrder: z.number().int().min(0),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
 export type CustomFieldDefinition = z.infer<typeof customFieldDefinitionSchema>;
 
-/** `GET /custom-fields/definitions` — массив без курсора (О9: ≤ 100 на область). */
+/** `GET /custom-fields/definitions?module=` — массив без курсора (О9 ADR-0029,
+ *  потолок портала держит размер); `module` — фильтр по привязке/категории. */
 export const listCustomFieldsQuerySchema = z.object({
-  scope: customFieldScopeSchema.optional(),
+  module: customFieldModuleSchema.optional(),
 });
 export type ListCustomFieldsQuery = z.infer<typeof listCustomFieldsQuerySchema>;
 
 /**
- * `GET /custom-fields/definitions/:id/usage` — где используется атрибут
- * (окно удаления): число сущностей со значением и маршруты процессов,
- * ссылающиеся на `cf.<id>` в окне перехода или условии опубликованной
- * версии (`id` — маршрут, `name` — название его типа процесса). Непустой
- * `workflows` блокирует удаление (409 CUSTOM_FIELD_IN_USE с тем же списком
- * в details); `DELETE /custom-fields/definitions/:id` → 204.
+ * `GET /custom-fields/definitions/:id/usage` — агрегат последствий удаления
+ * (окно «Что удалится», Р8): значения по видам сущностей, формы создания,
+ * маршруты (окна, гейты, условия решающих), привязки, глобальное значение.
+ * Удаление разрешено всегда — usage информирует, не блокирует.
  */
 export const customFieldUsageSchema = z.object({
-  valueCount: z.number().int().min(0),
-  workflows: z.array(z.object({ id: z.uuid(), name: z.string().min(1) })),
-  /** Виды папок, в форме которых стоит атрибут (область `node`; у других
-   *  областей — пусто). Архивные виды тоже перечисляются; удаление
-   *  использование видами НЕ блокирует — значения стираются (Р11). */
-  nodeKinds: z.array(z.object({ id: z.uuid(), name: z.string().min(1) })),
+  /** Число записей со значением по видам сущностей. */
+  values: z.object({
+    task: z.number().int().min(0),
+    letter: z.number().int().min(0),
+    project: z.number().int().min(0),
+    node: z.number().int().min(0),
+  }),
+  /** Формы создания типов, где атрибут стоит слотом. */
+  forms: z.array(
+    z
+      .object({
+        kind: z.enum(['task', 'letter']),
+        name: z.string().min(1),
+      })
+      .strict(),
+  ),
+  /** Опубликованные маршруты с `cf.<id>` в окне, гейте или условии решающего. */
+  workflows: z.array(z.object({ id: z.uuid(), name: z.string().min(1) }).strict()),
+  /** Места привязки (типы задач/писем, типы проектов, виды папок). */
+  bindings: z.object({
+    processTypes: z.array(z.object({ id: z.uuid(), name: z.string().min(1) }).strict()),
+    projectTypes: z.array(z.object({ id: z.uuid(), name: z.string().min(1) }).strict()),
+    nodeKinds: z.array(z.object({ id: z.uuid(), name: z.string().min(1) }).strict()),
+  }),
+  /** Заполнено ли глобальное значение (для isCompany). */
+  companyValue: z.boolean(),
 });
 export type CustomFieldUsage = z.infer<typeof customFieldUsageSchema>;
 
@@ -236,20 +281,35 @@ function refineShape(
 
 export const createCustomFieldBodySchema = z
   .object({
-    scope: customFieldScopeSchema,
     type: customFieldTypeSchema,
     name: z.string().trim().min(1).max(60),
     hint: z.string().trim().max(300).optional(),
     settings: customFieldSettingsSchema.default({}),
     defaultValue: customFieldDefaultSchema.nullable().optional(),
     reportIndexed: z.boolean().default(false),
-    hidden: z.boolean().default(false),
-    /** Типы процессов, которым принадлежит атрибут (#432): живые типы
-     *  своей категории (проверяет сервер — 422 CUSTOM_FIELD_BINDING_INVALID). */
-    typeIds: z.array(z.uuid()).max(50).optional(),
+    isCompany: z.boolean().default(false),
+    /** Привязки сразу (диалог одношаговый): живые цели своих видов
+     *  (проверяет сервер — 422 CUSTOM_FIELD_BINDING_INVALID). Глобальной
+     *  переменной привязки запрещены (422). */
+    bindings: customFieldBindingsSchema.optional(),
   })
   .strict()
-  .superRefine(refineShape);
+  .superRefine((body, ctx) => {
+    refineShape(body, ctx);
+    if (body.isCompany && body.bindings) {
+      const bound =
+        body.bindings.processTypeIds.length > 0 ||
+        body.bindings.projectTypeIds.length > 0 ||
+        body.bindings.nodeKindIds.length > 0;
+      if (bound) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['bindings'],
+          message: 'company variable cannot have bindings',
+        });
+      }
+    }
+  });
 export type CreateCustomFieldBody = z.infer<typeof createCustomFieldBodySchema>;
 
 export const updateCustomFieldBodySchema = z
@@ -260,26 +320,19 @@ export const updateCustomFieldBodySchema = z
     settings: customFieldSettingsPatchSchema.optional(),
     defaultValue: customFieldDefaultSchema.nullable().optional(),
     reportIndexed: z.boolean().optional(),
-    hidden: z.boolean().optional(),
-    /** Полный список типов (замена целиком); точечные привязки —
-     *  PUT/DELETE .../types/:typeId. */
-    typeIds: z.array(z.uuid()).max(50).optional(),
+    /** Полный набор привязок (замена целиком); точечные привязки —
+     *  PUT/DELETE .../bindings/:kind/:targetId. */
+    bindings: customFieldBindingsSchema.optional(),
   })
   .strict()
   .refine((v) => Object.keys(v).length > 0, { message: 'empty update' });
 export type UpdateCustomFieldBody = z.infer<typeof updateCustomFieldBodySchema>;
 
-/** Порядок атрибутов области (карточка, фильтры, окна): ids = ровно все
- *  атрибуты области. */
+/** Порядок атрибутов портала (реестр, карточки, фильтры, окна): ids = ровно
+ *  все атрибуты портала (продуктового лимита нет, В7 — потолок-страховка). */
 export const reorderCustomFieldsBodySchema = z
   .object({
-    scope: customFieldScopeSchema,
-    ids: z.array(z.uuid()).min(1).max(CUSTOM_FIELD_LIMITS.perScope),
+    ids: z.array(z.uuid()).min(1).max(CUSTOM_FIELD_LIMITS.portal),
   })
   .strict();
 export type ReorderCustomFieldsBody = z.infer<typeof reorderCustomFieldsBodySchema>;
-
-/** Сколько атрибутов осталось до лимита области (подсказка формы). */
-export function customFieldLimitLeft(activeInScope: number): number {
-  return Math.max(0, CUSTOM_FIELD_LIMITS.perScope - activeInScope);
-}

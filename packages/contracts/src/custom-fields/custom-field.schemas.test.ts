@@ -46,14 +46,12 @@ describe('форма определения поля', () => {
   it('тело создания: strict, чужие ключи и настройки отвергаются', () => {
     expect(
       createCustomFieldBodySchema.safeParse({
-        scope: 'task',
         type: 'text',
         name: '  № накладной ',
       }).data?.name,
     ).toBe('№ накладной');
     expect(
       createCustomFieldBodySchema.safeParse({
-        scope: 'task',
         type: 'text',
         name: 'Поле',
         extra: true,
@@ -61,7 +59,6 @@ describe('форма определения поля', () => {
     ).toBe(false);
     expect(
       createCustomFieldBodySchema.safeParse({
-        scope: 'task',
         type: 'text',
         name: 'Поле',
         settings: { precision: 2 },
@@ -69,7 +66,6 @@ describe('форма определения поля', () => {
     ).toBe(false);
     expect(
       createCustomFieldBodySchema.safeParse({
-        scope: 'task',
         type: 'money',
         name: 'Сумма',
       }).success,

@@ -23,13 +23,13 @@ import type {
 const MAX_STAGES = 20;
 const MAX_TRANSITIONS = 80;
 
-/** Факты атрибутов для проверки ссылок (#431, Р7): все id области и id
- *  скрытых. Без `customFields` проверки пропускаются (старые вызовы и
- *  тесты остаются валидными). С #432 — ещё и привязка к типу: атрибут,
- *  которого нет у типа, не выбирается в его форме, окнах и условиях. */
+/** Факты атрибутов для проверки ссылок (#431, Р7): все id реестра. Без
+ *  `customFields` проверки пропускаются (старые вызовы и тесты остаются
+ *  валидными). Привязка к типу: атрибут, которого нет у типа, не
+ *  выбирается в его форме, окнах и условиях. Глобального скрытия нет
+ *  (О2 #631) — видимость регулирует место. */
 export interface WorkflowCustomFieldFacts {
   active: ReadonlySet<string>;
-  hidden: ReadonlySet<string>;
   /** id атрибутов, привязанных к типу процесса (Р8); без набора проверка
    *  привязки пропускается. */
   inType?: ReadonlySet<string>;
@@ -43,8 +43,8 @@ export interface WorkflowCheckOptions {
   category?: ProcessCategory;
   /** У типа настроена серия номеров (#55) — для `numbering_not_configured`. */
   numberingConfigured?: boolean;
-  /** Определения области — тип и настройки для проверки пресетов. */
-  definitions?: readonly Pick<CustomFieldDefinition, 'id' | 'type' | 'settings' | 'hidden'>[];
+  /** Определения — тип и настройки для проверки пресетов. */
+  definitions?: readonly Pick<CustomFieldDefinition, 'id' | 'type' | 'settings'>[];
   /** Модуль проектов включён (поле «Проект» доступно в форме). */
   projectsAvailable?: boolean;
   /** Живые сотрудники — пресеты «ответственный/соисполнители/наблюдатели». */
@@ -211,13 +211,7 @@ export function checkWorkflowDocument(
 
   const fields = opts.customFields;
   if (fields) {
-    // Скрытый атрибут в ОКНЕ — предупреждение: окно его не покажет, заполнить
-    // нечем. В условии скрытый допустим (служебные значения ставит автоматика).
-    const checkKey = (
-      key: string,
-      refs: Pick<WorkflowProblem, 'transitionId'>,
-      inWindow: boolean,
-    ): void => {
+    const checkKey = (key: string, refs: Pick<WorkflowProblem, 'transitionId'>): void => {
       const id = customFieldIdOfKey(key);
       if (id === null) return;
       if (!fields.active.has(id)) {
@@ -225,26 +219,24 @@ export function checkWorkflowDocument(
       } else if (fields.inType && !fields.inType.has(id)) {
         // Атрибут чужого типа не выбирается в его окнах и условиях (#432, Р8).
         problems.push(error('custom_field_not_in_type', refs));
-      } else if (inWindow && fields.hidden.has(id)) {
-        problems.push(warning('custom_field_hidden', refs));
       }
     };
     for (const t of transitions) {
       for (const section of t.form?.enabled ? t.form.sections : []) {
         if (section.kind === 'fields') {
-          for (const key of section.fields) checkKey(key, { transitionId: t.id }, true);
+          for (const key of section.fields) checkKey(key, { transitionId: t.id });
         }
       }
       for (const validator of t.rules.validators) {
         if (validator.kind === 'fields_required') {
-          for (const key of validator.fields) checkKey(key, { transitionId: t.id }, false);
+          for (const key of validator.fields) checkKey(key, { transitionId: t.id });
         }
       }
       // Источник «поле» у решающих (#433): тот же контроль удалённых и
       // непривязанных к типу атрибутов, что у окна и гейтов.
       for (const condition of t.rules.conditions) {
         if (condition.kind === 'decider_in' && condition.source.kind === 'field') {
-          checkKey(condition.source.field, { transitionId: t.id }, false);
+          checkKey(condition.source.field, { transitionId: t.id });
         }
       }
     }
@@ -277,7 +269,6 @@ export function checkWorkflowDocument(
         category: opts.category,
         customFields: {
           active: fields.active,
-          hidden: fields.hidden,
           inType: fields.inType ?? new Set(fields.active),
         },
         definitions: opts.definitions,

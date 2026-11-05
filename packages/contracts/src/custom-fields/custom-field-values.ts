@@ -45,8 +45,10 @@ export const customFieldValuesPatchSchema = z
 
 /** Лимиты модуля (значения — контракт, UI берёт подсказки отсюда). */
 export const CUSTOM_FIELD_LIMITS = {
-  /** Атрибутов на область (скрытые считаются). */
-  perScope: 100,
+  /** Технический потолок атрибутов на портал (страховка от зацикленного
+   *  скрипта: реестр грузится массивом целиком); продуктового лимита нет
+   *  (В7) — в UI не светится. */
+  portal: 1000,
   /** Элементов «Списка (несколько)» и «Сотрудников (несколько)». */
   multi: 50,
   /** Текст (одна строка). */
@@ -137,6 +139,9 @@ export function customFieldValueSchemaOf(
     case 'department':
     case 'project':
     case 'counterparty':
+    case 'task':
+    case 'letter':
+    case 'node':
       return z.uuid();
     case 'multienum':
     case 'users':

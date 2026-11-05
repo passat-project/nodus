@@ -22,6 +22,8 @@ export * from './home/home-summary.schemas.js';
 export * from './tasks/task.schemas.js';
 export * from './tasks/task-create-form.js';
 export * from './custom-fields/custom-field.schemas.js';
+export * from './custom-fields/field-form.schemas.js';
+export * from './custom-fields/system-fields.js';
 export * from './custom-fields/custom-field-values.js';
 export * from './custom-fields/custom-field-key.js';
 export * from './custom-fields/custom-field-refs.js';

@@ -30,7 +30,6 @@ const facts = (over: Partial<CreationFormFacts> = {}): CreationFormFacts => ({
   category: 'task',
   customFields: {
     active: new Set(['11111111-1111-4111-8111-111111111111']),
-    hidden: new Set(),
     inType: new Set(['11111111-1111-4111-8111-111111111111']),
   },
   projectsAvailable: true,
@@ -39,11 +38,10 @@ const facts = (over: Partial<CreationFormFacts> = {}): CreationFormFacts => ({
 
 const definition = (
   over: Partial<CustomFieldDefinition> = {},
-): Pick<CustomFieldDefinition, 'id' | 'type' | 'settings' | 'hidden'> => ({
+): Pick<CustomFieldDefinition, 'id' | 'type' | 'settings'> => ({
   id: '11111111-1111-4111-8111-111111111111',
   type: 'text',
   settings: {},
-  hidden: false,
   ...over,
 });
 
@@ -163,29 +161,13 @@ describe('checkCreationForm', () => {
     ]);
   });
 
-  it('скрытый атрибут годится только скрытым полем', () => {
-    const id = '11111111-1111-4111-8111-111111111111';
-    const hiddenFacts = facts({
-      customFields: { active: new Set([id]), hidden: new Set([id]), inType: new Set([id]) },
-    });
-    expect(
-      checkCreationForm({ fields: [slot(`cf.${id}`)], chips: [] }, hiddenFacts).map((p) => p.code),
-    ).toEqual(['creation_hidden_attribute_visible']);
-    expect(
-      checkCreationForm(
-        { fields: [slot(`cf.${id}`, { preset: 'служебное' })], chips: [] },
-        hiddenFacts,
-      ),
-    ).toEqual([]);
-  });
-
   it('атрибут вне типа и неизвестный атрибут', () => {
     const id = '11111111-1111-4111-8111-111111111111';
     const other = '33333333-3333-4333-8333-333333333333';
     expect(
       checkCreationForm(
         { fields: [slot(`cf.${id}`)], chips: [] },
-        facts({ customFields: { active: new Set([id]), hidden: new Set(), inType: new Set() } }),
+        facts({ customFields: { active: new Set([id]), inType: new Set() } }),
       ).map((p) => p.code),
     ).toEqual(['custom_field_not_in_type']);
     expect(
