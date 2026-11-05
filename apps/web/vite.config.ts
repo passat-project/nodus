@@ -68,7 +68,10 @@ export default defineConfig(({ command, mode }) => {
       // Моки MSW — dev-инфраструктура, не продуктовый рантайм: из покрытия исключены.
       coverage: {
         provider: 'v8',
-        include: ['src/**/*.{ts,tsx}'],
+        // vite-pdfjs-wasm.ts — плагин в корне пакета, вне src/**: без явного
+        // include не попадает в lcov, и CI diff-coverage считает его 0%
+        // при живом тесте (PR #624).
+        include: ['src/**/*.{ts,tsx}', 'vite-pdfjs-wasm.ts'],
         exclude: [
           'src/**/*.test.{ts,tsx}',
           'src/**/*.d.ts',

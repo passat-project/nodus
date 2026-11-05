@@ -17,6 +17,7 @@
     "test:coverage": "turbo test:coverage --filter=!@nodus/e2e",
     "test:e2e": "pnpm --filter @nodus/e2e test",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
+    "diff-coverage": "node scripts/diff-coverage.mjs --base origin/main --threshold 80",
     "lint": "eslint . --max-warnings 39",
     "live-stack": "node scripts/live-stack.mjs",
     "format": "prettier --write .",

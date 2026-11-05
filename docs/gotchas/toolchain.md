@@ -1,4 +1,6 @@
 # Монорепо и toolchain (pnpm, turbo, TS, ESLint)
+- **CI-гейт diff-coverage (изменённые строки ≥ 80%) НЕ входит в локальные `pnpm lint/typecheck/test/build`** — зелёные локальные гейты не гарантируют PR: перед пушем прогонять `pnpm test:coverage` + `pnpm diff-coverage` (тот же скрипт, что в CI, читает lcov после coverage-прогона). Файлы вне `coverage.include` своего пакета (например, vite-плагины в корне пакета) в lcov не попадают и считаются 0% при живых тестах — включать явно (воспроизведено PR #624: 13.4% при зелёных локальных гейтах, починено include + тестами обвязки).
+
 - **pnpm 10 НЕ читает поле `pnpm` в package.json** («The pnpm field is no longer read»): настройки (auditConfig.ignoreGhsas, overrides, onlyBuiltDependencies…) живут в **pnpm-workspace.yaml** (подтверждено docs.pnpm.io/settings, 03.10.2026 #187: ignoreGhsas в package.json молча игнорировался и аудит продолжал падать).
 
 - pnpm 11 блокирует install-скрипты зависимостей: пакеты с бинарниками (esbuild, unrs-resolver) — в `allowBuilds` в `pnpm-workspace.yaml`, иначе падают в рантайме с невнятной ошибкой (в pnpm 10 механизм был `onlyBuiltDependencies`).
