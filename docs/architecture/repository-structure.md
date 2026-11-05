@@ -59,7 +59,7 @@ nodus/
 │   └── agents/                # роли субагентов для рантайма Devin (зеркало .zcode/agents/ для ZCode: тело роли идентично и правится парой, шапки у каждого рантайма свои)
 ├── .zcode/
 │   ├── agents/                # роли субагентов ZCode (зеркало .agents/agents/: тело идентично, шапки свои)
-│   └── skills/                # ZCode-only навыки (core-forge): Devin и другие рантаймы не видят
+│   └── skills/                # навыки ZCode; core-forge — зеркало .agents/skills/core-forge (Devin)
 ├── infra/                     # конфиги инфраструктуры: nginx/web.conf, desktop-dist/ (Caddy/мониторинг — к пилоту)
 ├── docs/
 │   ├── product/               # видение, roadmap (мастер-план), глоссарий, UX-принципы, потоки
