@@ -22,6 +22,7 @@ import {
  */
 
 const CONV = '00000000-0000-4000-8000-0000000000c1';
+const LETTER = '00000000-0000-4000-8000-0000000000e1';
 
 function installBridge() {
   const listeners = new Map<string, ((payload: unknown) => void)[]>();
@@ -152,16 +153,26 @@ describe('видимость оболочки', () => {
     const { emit } = installBridge();
     const onReply = vi.fn();
     const onOpen = vi.fn();
-    const un = bindDesktopShellEvents({ onPopupReply: onReply, onOpenConversation: onOpen });
+    const onLetter = vi.fn();
+    const un = bindDesktopShellEvents({
+      onPopupReply: onReply,
+      onOpenConversation: onOpen,
+      onOpenLetter: onLetter,
+    });
 
     emit('popup-reply', { id: 'm1', conversationId: CONV, text: 'Ответ' });
     emit('popup-reply', { id: 'm2', conversationId: 'не-uuid', text: 'мусор' });
     emit('open-conversation', { conversationId: CONV });
+    // Письмо (#618): валидный letterId проходит, мусор фильтруется.
+    emit('open-letter', { letterId: LETTER });
+    emit('open-letter', { letterId: 'не-uuid' });
     emit('shell-visibility', { visible: false });
     emit('shell-visibility', 'не объект');
 
     expect(onReply).toHaveBeenCalledTimes(1);
     expect(onOpen).toHaveBeenCalledWith({ conversationId: CONV });
+    expect(onLetter).toHaveBeenCalledTimes(1);
+    expect(onLetter).toHaveBeenCalledWith({ letterId: LETTER });
     expect(isPortalBackground()).toBe(true);
 
     emit('shell-visibility', { visible: true });
@@ -174,7 +185,11 @@ describe('видимость оболочки', () => {
 
   it('bind сигналит оболочке shellReady', () => {
     const { bridge } = installBridge();
-    bindDesktopShellEvents({ onPopupReply: vi.fn(), onOpenConversation: vi.fn() });
+    bindDesktopShellEvents({
+      onPopupReply: vi.fn(),
+      onOpenConversation: vi.fn(),
+      onOpenLetter: vi.fn(),
+    });
     expect(bridge.shellReady).toHaveBeenCalled();
   });
 });
