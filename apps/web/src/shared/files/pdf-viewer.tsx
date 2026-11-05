@@ -9,6 +9,7 @@ import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Spinner } from '@nodus/ui/components/spinner';
 
+import { PDFJS_WASM_BASE } from './pdfjs-wasm-url.js';
 import { ViewerFullscreenButton } from './viewer-fullscreen-button.js';
 
 /** Тёмный показ PDF (тема портала = тёмный документ, вердикт владельца
@@ -62,7 +63,10 @@ export function PdfViewer({
 
   useEffect(() => {
     let cancelled = false;
-    const task = pdfjs.getDocument({ url });
+    // wasmUrl (#617): pdf.js 6.x грузит декодеры сканов (JBIG2/CCITT/JPX)
+    // из WASM-файлов ПО ТРЕБОВАНИЮ — без базы битональные сканы рендерятся
+    // мусором (текст письма-скана пропадает, DCT-подпись видна).
+    const task = pdfjs.getDocument({ url, wasmUrl: PDFJS_WASM_BASE });
     task.promise
       .then((loaded) => {
         if (!cancelled) setDoc(loaded);

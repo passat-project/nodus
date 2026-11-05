@@ -78,3 +78,38 @@ describe('toast-store push', () => {
     expect(useNotificationsToastStore.getState().personal).toHaveLength(2);
   });
 });
+
+describe('toast-store syncWithAttention (#616)', () => {
+  beforeEach(() => {
+    useNotificationsToastStore.setState({
+      personal: [],
+      actions: { count: 0, latest: null },
+      mutedConversations: new Set(),
+      snoozedConversations: new Set(),
+      dnd: { enabled: false, start: '22:00', end: '08:00' },
+    });
+  });
+
+  it('внимание угасло — сводная карточка гаснет (не висит бесконечно)', () => {
+    const s = useNotificationsToastStore.getState();
+    s.push(snap(1, { priority: 'medium', kind: 'letter.arrived', conversationId: null }), 0);
+    expect(useNotificationsToastStore.getState().actions.count).toBe(1);
+    // Письмо открыли: журнал больше не требует внимания.
+    s.syncWithAttention(0);
+    expect(useNotificationsToastStore.getState().actions.count).toBe(0);
+  });
+
+  it('внимание осталось — карточка живёт', () => {
+    const s = useNotificationsToastStore.getState();
+    s.push(snap(1, { priority: 'medium', kind: 'letter.arrived', conversationId: null }), 0);
+    s.syncWithAttention(1);
+    expect(useNotificationsToastStore.getState().actions.count).toBe(1);
+  });
+
+  it('пустая сводка — no-op (лишних ре-рендеров нет)', () => {
+    const s = useNotificationsToastStore.getState();
+    const before = useNotificationsToastStore.getState().actions;
+    s.syncWithAttention(0);
+    expect(useNotificationsToastStore.getState().actions).toBe(before);
+  });
+});
