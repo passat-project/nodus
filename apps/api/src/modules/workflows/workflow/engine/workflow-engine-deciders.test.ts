@@ -80,6 +80,8 @@ const facts = {
 
 const deciderFacts = (userId: string) => ({
   userId,
+  creatorId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  assigneeId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   creatorManagerId: null,
   assigneeManagerId: null,
   positionKeys: new Set<string>(),

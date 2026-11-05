@@ -12,6 +12,8 @@ import { workflowConditionSchema } from './workflow.schemas.js';
 function facts(patch: Partial<WorkflowDeciderFacts> = {}): WorkflowDeciderFacts {
   return {
     userId: '11111111-1111-4111-8111-111111111111',
+    creatorId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    assigneeId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     creatorManagerId: null,
     assigneeManagerId: null,
     positionKeys: new Set(),
@@ -82,6 +84,23 @@ describe('matchesDecider (#433)', () => {
         facts({ fieldUserIds: { [FIELD_ID]: [ownId()] } }),
       ),
     ).toBe(false);
+  });
+
+  it('поле: постановщик и ответственный не становятся решающими сами (В7)', () => {
+    const creatorId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const creator = facts({
+      userId: creatorId,
+      userFieldIds: new Set([FIELD_ID]),
+      fieldUserIds: { [FIELD_ID]: [creatorId] },
+    });
+    expect(matchesDecider({ kind: 'field', field: `cf.${FIELD_ID}` }, creator)).toBe(false);
+    const assigneeId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const assignee = facts({
+      userId: assigneeId,
+      userFieldIds: new Set([FIELD_ID]),
+      fieldUserIds: { [FIELD_ID]: [assigneeId] },
+    });
+    expect(matchesDecider({ kind: 'field', field: `cf.${FIELD_ID}` }, assignee)).toBe(false);
   });
 
   it('роль в проекте', () => {

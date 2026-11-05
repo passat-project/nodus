@@ -71,6 +71,8 @@ export class TaskDeciders {
     const userFieldIds = userFieldIdsOf(definitions);
     const facts: WorkflowDeciderFacts = {
       userId: actorId,
+      creatorId: task.creatorId,
+      assigneeId: task.assigneeId,
       creatorManagerId: managers.get(task.creatorId) ?? null,
       assigneeManagerId: managers.get(task.assigneeId) ?? null,
       positionKeys: new Set(positions.map((position) => `${position.kind}:${position.positionId}`)),
@@ -140,6 +142,8 @@ export class TaskDeciders {
       if (transitionsOfTask.length === 0) continue;
       const facts: WorkflowDeciderFacts = {
         userId: actorId,
+        creatorId: task.creatorId,
+        assigneeId: task.assigneeId,
         creatorManagerId: managers.get(task.creatorId) ?? null,
         assigneeManagerId: managers.get(task.assigneeId) ?? null,
         positionKeys,

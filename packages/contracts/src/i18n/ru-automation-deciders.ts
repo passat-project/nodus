@@ -29,6 +29,7 @@ export const deciderStrings = {
     employeesEmpty: 'Выберите сотрудников',
     fieldEmpty: 'Выберите поле',
     fieldNotUser: 'Поле не типа «Сотрудник(и)» — решающего по нему не определить',
+    fieldSelfExcluded: 'Постановщик и ответственный не могут быть решающими по этому полю',
     projectRole: {
       manager: 'Руководитель проекта',
       assistant: 'Помощник руководителя',

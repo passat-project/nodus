@@ -49,6 +49,10 @@ export function deciderPositionKey(kind: DeciderPositionKind, positionId: string
  */
 export interface WorkflowDeciderFacts {
   userId: string;
+  /** Постановщик и ответственный задачи: не могут быть решающими по полю —
+   *  иначе автор сам впишет себя и нажмёт свою кнопку (В7). */
+  creatorId: string;
+  assigneeId: string;
   /** Ближайший активный руководитель автора задачи (null — нет). */
   creatorManagerId: string | null;
   /** Ближайший активный руководитель исполнителя задачи (null — нет). */
@@ -77,6 +81,9 @@ export function matchesDecider(source: DeciderSource, facts: WorkflowDeciderFact
     case 'employees':
       return source.userIds.includes(facts.userId);
     case 'field': {
+      // Автор/ответственный правят поля задачи — по полю они не решающие,
+      // иначе самопровозглашение (решение владельца 05.11.2026).
+      if (facts.userId === facts.creatorId || facts.userId === facts.assigneeId) return false;
       const fieldId = customFieldIdOfKey(source.field);
       if (fieldId === null || !facts.userFieldIds.has(fieldId)) return false;
       return (facts.fieldUserIds[fieldId] ?? []).includes(facts.userId);

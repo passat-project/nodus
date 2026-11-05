@@ -234,7 +234,11 @@ export function DecidersSection({
           {source.kind === 'field' ? (
             <PanelField
               label={ui.automation.deciders.sources.field}
-              hint={userFields.length === 0 ? ui.automation.deciders.fieldNotUser : undefined}
+              hint={
+                userFields.length === 0
+                  ? ui.automation.deciders.fieldNotUser
+                  : ui.automation.deciders.fieldSelfExcluded
+              }
             >
               <Select
                 value={source.field}
