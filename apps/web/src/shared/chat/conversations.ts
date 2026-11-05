@@ -103,6 +103,7 @@ const ROLE_RANK: Record<ConversationListItem['myRole'], number> = { member: 0, a
 /** Право публиковать КОРНЕВЫЕ посты в ленту канала/беседы (матрица прав,
  *  #91/#58: ответы в тредах открыты всем участникам независимо от post). */
 export function canPostFeed(conversation: ConversationListItem): boolean {
+  if (conversation.readOnly) return false;
   return ROLE_RANK[conversation.myRole] >= ROLE_RANK[conversation.permissions.post];
 }
 

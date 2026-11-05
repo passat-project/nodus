@@ -103,6 +103,7 @@ function makeServices() {
     eventBus as never,
     avatars as never,
     userProfiles as never,
+    { isDecider: vi.fn(async () => false) } as never,
   );
   const members = new ConversationMembersService(
     repo as never,

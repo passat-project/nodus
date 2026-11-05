@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { ErrorCode, Permission, type ProjectRef } from '@nodus/contracts';
+import { ErrorCode, Permission, type ProjectRef, type ProjectRole } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { FeatureFlagService } from '../../../core/feature-flags/feature-flag.service.js';
-import { ProjectParticipantsRepository } from '../project-participants.repository.js';
+import {
+  ProjectParticipantsRepository,
+  type ParticipantSource,
+} from '../project-participants.repository.js';
 import { ProjectNodesRepository } from '../project-nodes.repository.js';
 import { ProjectsRepository } from '../projects.repository.js';
 import type {
@@ -17,6 +20,22 @@ import type {
 const EMPTY_SCOPE: ProjectViewScope = { visibleProjectIds: [], hiddenProjectIds: [] };
 /** TTL кэша множеств видимости (Р3): паттерн feature-flag.service.ts. */
 const SCOPE_TTL_MS = 5_000;
+
+/** Бизнес-роль проекта → источники проекции `ProjectParticipant.source`.
+ *  `participant` объединяет динамический `task` и ручной `member` (ADR-0030). */
+const SOURCES_BY_ROLE: Record<ProjectRole, readonly ParticipantSource[]> = {
+  manager: ['manager'],
+  assistant: ['assistant'],
+  participant: ['task', 'member'],
+  observer: ['observer'],
+};
+const ROLE_BY_SOURCE: Record<ParticipantSource, ProjectRole> = {
+  manager: 'manager',
+  assistant: 'assistant',
+  task: 'participant',
+  member: 'participant',
+  observer: 'observer',
+};
 
 /**
  * Реализация read-портов проектов (ADR-0012). Флаг `projects` выключен —
@@ -180,6 +199,34 @@ export class ProjectReaderProvider implements ProjectReader, ProjectChatReader {
     if (!(await this.enabled())) return null;
     const project = await this.projects.findById(projectId);
     return project ? (project.visibility as 'open' | 'secret') : null;
+  }
+
+  /** Роли сотрудника в проектах (#433): источник решающих «роль в проекте». */
+  async rolesIn(
+    userId: string,
+    projectIds: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<Record<string, ProjectRole[]>> {
+    if (!(await this.enabled()) || projectIds.length === 0) return {};
+    const rows = await this.participants.rolesByProject(tx, userId, projectIds);
+    const result: Record<string, ProjectRole[]> = {};
+    for (const row of rows) {
+      const role = ROLE_BY_SOURCE[row.source];
+      const list = (result[row.projectId] ??= []);
+      if (!list.includes(role)) list.push(role);
+    }
+    return result;
+  }
+
+  /** Кто держит роль в проекте (#433): адресаты уведомлений. */
+  async usersWithRoles(
+    projectId: string,
+    roles: readonly ProjectRole[],
+    tx?: TransactionClient,
+  ): Promise<string[]> {
+    if (!(await this.enabled()) || roles.length === 0) return [];
+    const sources = [...new Set(roles.flatMap((role) => SOURCES_BY_ROLE[role]))];
+    return this.participants.userIdsBySources(tx, projectId, sources);
   }
 
   // ===== ProjectChatReader (Р8) =====

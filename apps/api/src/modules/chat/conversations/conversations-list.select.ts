@@ -52,6 +52,8 @@ export interface ConversationListRow {
   lm_edited_at: Date | null;
   lm_deleted_at: Date | null;
   lm_created_at: Date | null;
+  /** Строка читателя без членства (#433): интерфейс прячет отправку. */
+  readerAccess?: boolean;
 }
 
 /** Курсор списка бесед: keyset по (last_activity_at NULLS LAST, id) — та же
@@ -101,7 +103,7 @@ export const UNREAD_COUNT_EXPR = (userId: string): Prisma.Sql => Prisma.sql`
                 AND um.seq > tp.last_read_seq)))
 `;
 
-export const LIST_SELECT = (userId: string): Prisma.Sql => Prisma.sql`
+const LIST_COLUMNS = (userId: string): Prisma.Sql => Prisma.sql`
   SELECT
     c.id, c.type, c.title, c.description, c.visibility, c.permissions, c.avatar_file_id,
     c.task_id,
@@ -120,13 +122,37 @@ export const LIST_SELECT = (userId: string): Prisma.Sql => Prisma.sql`
     lm.fwd_conversation_id AS lm_fwd_conversation_id, lm.fwd_message_id AS lm_fwd_message_id,
     lm.fwd_author_id AS lm_fwd_author_id, lm.fwd_thread_root_id AS lm_fwd_thread_root_id,
     lm.edited_at AS lm_edited_at, lm.deleted_at AS lm_deleted_at, lm.created_at AS lm_created_at
-  FROM conversation_members cm
-  JOIN conversations c ON c.id = cm.conversation_id
-  LEFT JOIN conversation_drafts d ON d.conversation_id = c.id AND d.user_id = ${userId}::uuid
+`;
+
+const LAST_MESSAGE_JOIN = Prisma.sql`
   LEFT JOIN LATERAL (
     SELECT m.* FROM messages m
     WHERE m.conversation_id = c.id AND m.thread_root_id IS NULL AND NOT m.obliterated
     ORDER BY m.seq DESC
     LIMIT 1
   ) lm ON true
+`;
+
+export const LIST_SELECT = (userId: string): Prisma.Sql => Prisma.sql`
+  ${LIST_COLUMNS(userId)}
+  FROM conversation_members cm
+  JOIN conversations c ON c.id = cm.conversation_id
+  LEFT JOIN conversation_drafts d ON d.conversation_id = c.id AND d.user_id = ${userId}::uuid
+  ${LAST_MESSAGE_JOIN}
+`;
+
+/** Строка беседы для ЧИТАТЕЛЯ без членства (#433): решающий видит чат задачи,
+ *  но не получает ни непрочитанных, ни черновика, ни закрепления. */
+export const LIST_SELECT_AS_READER = (userId: string, conversationId: string): Prisma.Sql =>
+  Prisma.sql`
+  ${LIST_COLUMNS(userId)}
+  FROM (
+    SELECT ${userId}::uuid AS user_id, 'member'::text AS role, false AS pinned,
+           false AS muted, false AS snoozed,
+           COALESCE((SELECT c2.last_seq FROM conversations c2 WHERE c2.id = ${conversationId}::uuid), 0)::bigint AS last_read_seq,
+           'infinity'::timestamptz AS last_read_at
+  ) cm
+  JOIN conversations c ON c.id = ${conversationId}::uuid
+  LEFT JOIN conversation_drafts d ON false
+  ${LAST_MESSAGE_JOIN}
 `;

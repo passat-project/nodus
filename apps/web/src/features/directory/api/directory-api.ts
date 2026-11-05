@@ -120,13 +120,9 @@ export function useUserCard(id: string) {
 }
 
 /** Справочник должностей вида (GET /directory/positions?kind=, #441):
- *  выбор должности при правке сотрудника и отчёт «должности без сотрудников». */
-export function usePositions(kind: OrgUnitKind) {
-  return useQuery({
-    queryKey: [...directoryKeys.all, 'positions', kind] as const,
-    queryFn: () => api<Position[]>(`/directory/positions?kind=${kind}`),
-  });
-}
+ *  выбор должности при правке сотрудника и отчёт «должности без сотрудников».
+ *  Хук живёт в shared (#433): его использует и редактор маршрутов. */
+export { usePositions } from '../../../shared/api/positions.js';
 
 /** Правка оргструктурных полей сотрудника (#441, право directory.manage):
  *  подразделение, должность, руководитель (свободная ссылка — кейс ГИПов).

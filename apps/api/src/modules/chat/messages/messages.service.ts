@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
@@ -31,6 +31,7 @@ import {
   PROJECT_CHAT_READER,
   type ProjectChatReader,
 } from '../../projects/ports/project-reader.port.js';
+import { TASK_CHAT_READER, type TaskChatReader } from '../../tasks/ports/task-chat-reader.port.js';
 import {
   MessageDtoMapper,
   readEverMentionedUserIds,
@@ -94,6 +95,9 @@ export class MessagesService {
     private readonly vault: VaultWriteRepository,
     private readonly thumbnailQueue: ThumbnailQueue,
     @Inject(PROJECT_CHAT_READER) private readonly projectChat: ProjectChatReader,
+    // #433: необязателен для юнит-тестов сообщений; в приложении ChatModule
+    // импортирует TasksPortsModule и токен есть.
+    @Optional() @Inject(TASK_CHAT_READER) private readonly taskChat?: TaskChatReader,
   ) {}
 
   // ===== Чтение =====
@@ -107,7 +111,13 @@ export class MessagesService {
     query: ListMessagesQuery,
   ): Promise<Paginated<ChatMessage>> {
     const membership = await this.conversations.findMembership(conversationId, userId);
-    if (!membership) throw DomainException.notFound('Conversation not found');
+    if (!membership) {
+      // Читатель-решающий (#433) видит ленту, но не становится участником.
+      const taskId = await this.conversations.findTaskId(conversationId);
+      if (!taskId || !this.taskChat || !(await this.taskChat.isDecider(taskId, userId))) {
+        throw DomainException.notFound('Conversation not found');
+      }
+    }
     const beforeSeq = query.cursor
       ? BigInt(decodeCursor(query.cursor, messageCursorSchema).s)
       : null;

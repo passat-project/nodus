@@ -95,3 +95,27 @@
 - **Пропуск по актору** — `route_if: approver_is_actor`: контекст `engine/approver-context.ts` считает актора утверждающим, если он проходит условия единственной основной action-кнопки целевого статуса без обхода, её гейты выполнены, условие «кто видит» непустое и нет обязательных разделов окна. `creator_is_assignee` остаётся для старых документов.
 - **Подсказки имён** — `GET /workflows/stage-names` (`workflow.manage`): имена неархивных стадий системного каталога (по `code`) и опубликованных маршрутов категории с числом маршрутов; подсказки показывают все, warning-и имён включены для пользовательских маршрутов (системные не шумят). В редакторе — комбоподсказки; публикация даёт warning-и `stage_name_shared`/`stage_name_similar`.
 - **Проверки публикации** — `workflow-document-extra-checks.ts`: имена, дубли целей (`duplicate_transition_target`), разрешимость `approver_is_actor` (`approver_rule_unresolvable`); `action_without_visibility` — для задач, не для писем. Warnings не блокируют публикацию; сервер отдаёт только 422 при ошибках, live-список показывает веб.
+
+## Решающие вне задачи (#433)
+
+- `decider_in` — третье условие «кто»: `{ kind: 'decider_in', source }`,
+  источники — должность, ближайший руководитель автора/исполнителя,
+  сотрудники, поле «Сотрудник(и)», роль в проекте. `role_in` и `permission`
+  остаются как были; несколько условий — «любой из».
+- Единая точка правды — `matchesDecider(source, facts)` в
+  `@nodus/contracts` (`workflows/decider.ts`): её используют движок,
+  видимость задач и будущая проекция #438.
+- Факты актора в контексте задачи собирает адаптер сущности через
+  `TaskDeciders` (`WorkflowActorSubject.deciderFacts`); движок БД не знает.
+  `targetCtx1` берёт факты из состояния ДО окна: окно не делает актора
+  решающим.
+- Вакансия перехода (`vacantDeciderTransitionIds`): все источники пусты →
+  кнопку видит только `task.override_gate`, в `blockedBy` — `decider_vacant`,
+  причина обязательна.
+- Read-порт `WORKFLOW_RULES_READER` (`ports/workflow-rules-reader.port.ts`)
+  отдаёт живые переходы с `decider_in` (+ `intent`), битую строку правил
+  пропускает с warn — чужой маршрут не роняет чтение задач.
+- Публикация проверяет источники: поле не user/users (`decider_field_not_user`),
+  удалённая должность (`decider_position_missing`), вакансия — warning
+  (`decider_position_empty`), письма — `decider_not_in_category`, кнопка
+  только для решающих с полями/временем/итогом — `decider_window_needs_rights`.

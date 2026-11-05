@@ -1,4 +1,4 @@
-import type { ProjectRef } from '@nodus/contracts';
+import type { ProjectRef, ProjectRole } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 
@@ -65,6 +65,22 @@ export interface ProjectReader {
 
   /** Видимость проекта (для гейта выноса задачи из секретного). */
   visibilityOf(projectId: string): Promise<'open' | 'secret' | null>;
+
+  /** Роли сотрудника в проектах (#433): источник решающих «роль в проекте».
+   *  `participant` объединяет `task` и `member`; нет строки — роли нет. */
+  rolesIn(
+    userId: string,
+    projectIds: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<Record<string, ProjectRole[]>>;
+
+  /** Кто держит роль в проекте (#433): обратное направление для адресатов
+   *  уведомлений «Ждёт вашего решения». */
+  usersWithRoles(
+    projectId: string,
+    roles: readonly ProjectRole[],
+    tx?: TransactionClient,
+  ): Promise<string[]>;
 }
 
 /**

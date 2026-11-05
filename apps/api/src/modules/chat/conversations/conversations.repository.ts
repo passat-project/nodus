@@ -5,6 +5,7 @@ import type { TransactionClient } from '../../../core/database/transaction-runne
 import {
   ACTIVITY_EXPR,
   LIST_SELECT,
+  LIST_SELECT_AS_READER,
   UNREAD_COUNT_EXPR,
   type ConversationListCursor,
   type ConversationListRow,
@@ -139,6 +140,30 @@ export class ConversationsRepository {
       LIMIT 1
     `);
     return rows[0] ?? null;
+  }
+
+  /** Строка беседы для читателя без членства (#433): решающий видит чат
+   *  задачи read-only, без непрочитанных, черновика и закрепления. */
+  async findListItemAsReader(
+    conversationId: string,
+    userId: string,
+  ): Promise<ConversationListRow | null> {
+    const rows = await this.prisma.$queryRaw<ConversationListRow[]>(
+      LIST_SELECT_AS_READER(userId, conversationId),
+    );
+    const row = rows[0];
+    // Читатель без членства (#433): интерфейс не показывает отправку —
+    // сервер всё равно ответит 404 (членства нет).
+    return row ? { ...row, readerAccess: true } : null;
+  }
+
+  /** Задача беседы (#433): по ней проверяется «решающий ли зритель». */
+  async findTaskId(conversationId: string): Promise<string | null> {
+    const row = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { taskId: true },
+    });
+    return row?.taskId ?? null;
   }
 
   async findTypeAndPermissions(

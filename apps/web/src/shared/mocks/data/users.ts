@@ -2,6 +2,7 @@ import { Permission } from '@nodus/contracts';
 import type { AuthUser, PresenceEntry, UserCard, UserListItem, UserRef } from '@nodus/contracts';
 
 import { departmentIds } from './org-ids.js';
+import { demoPositions } from './positions.js';
 
 /** Демо-справочник сотрудников (ПассатПроект, 10 человек для концепта). */
 
@@ -62,6 +63,14 @@ export const demoUserListItems: UserListItem[] = [
   mk(9, 'Полина Винничек', 'Главный архитектор', 'Проектное', 7, 'project', 'legalGip'),
   mk(10, 'Михаил Акулич', 'Инженер-проектировщик', 'Проектное', 9, 'project', 'legalGip'),
 ];
+
+// Должности демо-справочника (#433): id по имени — редактор маршрутов
+// считает держателей и предупреждает о вакансии.
+const positionIdByName = new Map(demoPositions.map((position) => [position.name, position.id]));
+for (const user of demoUserListItems) {
+  const positionId = user.positionName ? positionIdByName.get(user.positionName) : undefined;
+  if (positionId) user.positionId = positionId;
+}
 
 /** Профильные поля карточки (контактный блок UserCard, модель M2 #18):
  *  ключ — порядковый номер демо-пользователя. */

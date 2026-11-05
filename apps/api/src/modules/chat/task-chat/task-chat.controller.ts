@@ -27,7 +27,8 @@ export class TaskChatController {
 
   @Get('by-task/:taskId')
   @ApiOperation({
-    summary: 'Беседа задачи (создаётся при первом открытии); не участник задачи — 404',
+    summary:
+      'Беседа задачи (создаётся при первом открытии); участник или решающий шага (#433, read-only) — иначе 404',
   })
   @ApiOkResponse({ standardSchema: conversationListItemSchema })
   @ApiErrors(400, 401, 404)

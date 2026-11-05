@@ -175,4 +175,44 @@ describe('taskNotices', () => {
       ),
     ).toEqual([]);
   });
+
+  it('решающие нового статуса — «Ждёт вашего решения», нажавший исключён (#433)', () => {
+    expect(
+      taskNotices(
+        'task.stage_changed',
+        {
+          number: 7,
+          title: 'Заявка',
+          fromState: 'active',
+          toState: 'active',
+          creatorId: 'c',
+          assigneeId: 'a',
+          deciderIds: ['d1', 'd2', 'c'],
+        },
+        'd1',
+      ),
+    ).toEqual([
+      { userId: 'd2', kind: 'action.decision', preview: 'ПП-7 · Заявка' },
+      { userId: 'c', kind: 'action.decision', preview: 'ПП-7 · Заявка' },
+    ]);
+  });
+
+  it('фоновый перенос публикации не уведомляет решающих (#433)', () => {
+    expect(
+      taskNotices(
+        'task.stage_changed',
+        {
+          number: 7,
+          toStageName: 'Ждёт',
+          fromState: 'backlog',
+          toState: 'active',
+          creatorId: 'c',
+          assigneeId: 'a',
+          cause: 'workflow_migration',
+          deciderIds: ['d1'],
+        },
+        null,
+      ),
+    ).toEqual([]);
+  });
 });

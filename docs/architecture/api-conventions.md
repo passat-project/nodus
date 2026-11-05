@@ -143,3 +143,7 @@ INTERNAL_ERROR      # непредвиденное (без деталей нар
 - `POST /letters/:id/participants` — пригласить коллег в обсуждение (`{ userIds }`: массив 1–20): только `correspondence.register`, письмо в любом состоянии, идемпотентно; событие и аудит — те же, что у join.
 - `GET /letters/resolvers` — держатели `correspondence.resolve` («Принимают решения»); литеральный путь объявлен ДО `/letters/:id`.
 - Коды: `LETTER_REGISTRATION_INVALID` (`details {field, reason}` — подсветка поля), `LETTER_ALREADY_REGISTERED` (`details.regNumber`), `WORKFLOW_NUMBERING_NOT_CONFIGURED`.
+
+- **Список задач, роль решающего (#433):** `GET /tasks?role=decider` —
+  серверный срез «Ждут моего решения» (scope принудительно `all`); остальные
+  значения `role` (`assignee`/`creator`/`coexecutor`/`observer`) — как раньше.

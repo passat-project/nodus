@@ -413,6 +413,7 @@ function ConversationFeed({
         attachmentsEnabled
         onEditLast={handleEditLast}
         selection={selectionComposerProps(conversationId, selection)}
+        disabledPlaceholder={conversation?.readOnly ? ui.chat.readOnlyChat : null}
         onSubmit={handleSubmit}
         className={composerClassName}
       />

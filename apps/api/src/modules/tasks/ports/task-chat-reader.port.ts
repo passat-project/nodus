@@ -30,4 +30,8 @@ export interface TaskChatReader {
 
   /** Видна ли задача пользователю (та же функция видимости модуля задач). */
   canView(taskId: string, user: { id: string; permissions: readonly string[] }): Promise<boolean>;
+
+  /** Решающий ли пользователь текущего шага (#433): только ему чат задачи
+   *  открывается read-only, остальным невидимым — нет. */
+  isDecider(taskId: string, userId: string): Promise<boolean>;
 }

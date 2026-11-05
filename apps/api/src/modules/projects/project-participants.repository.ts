@@ -204,4 +204,33 @@ export class ProjectParticipantsRepository {
     `;
     return rows.map((row) => row.user_id);
   }
+
+  /** Строки участия сотрудника в пачке проектов (#433): источник → роль. */
+  async rolesByProject(
+    tx: TransactionClient | undefined,
+    userId: string,
+    projectIds: readonly string[],
+  ): Promise<{ projectId: string; source: ParticipantSource }[]> {
+    if (projectIds.length === 0) return [];
+    return (tx ?? this.prisma).projectParticipant.findMany({
+      where: { userId, projectId: { in: [...projectIds] } },
+      select: { projectId: true, source: true },
+    }) as Promise<{ projectId: string; source: ParticipantSource }[]>;
+  }
+
+  /** Сотрудники проекта с указанными источниками (#433): обратный резолв
+   *  «кто держит роль» для адресатов уведомлений. */
+  async userIdsBySources(
+    tx: TransactionClient | undefined,
+    projectId: string,
+    sources: readonly ParticipantSource[],
+  ): Promise<string[]> {
+    if (sources.length === 0) return [];
+    const rows = await (tx ?? this.prisma).projectParticipant.findMany({
+      where: { projectId, source: { in: [...sources] } },
+      select: { userId: true },
+      distinct: ['userId'],
+    });
+    return rows.map((row) => row.userId);
+  }
 }

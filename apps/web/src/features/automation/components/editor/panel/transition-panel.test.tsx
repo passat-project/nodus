@@ -69,4 +69,40 @@ describe('TransitionPanel: смысл кнопки и сводка правил 
     );
     expect(patchTransition).toHaveBeenCalledWith('t1', { intent: 'service' });
   });
+
+  it('сводка «Кто жмёт» перечисляет все источники (#433)', () => {
+    const withDeciders = {
+      ...transition,
+      rules: {
+        ...transition.rules,
+        conditions: [
+          {
+            kind: 'decider_in',
+            source: {
+              kind: 'position',
+              positionId: '00000000-0000-4000-8000-0000000000a1',
+              positionKind: 'management',
+            },
+          },
+          { kind: 'decider_in', source: { kind: 'manager_of', of: 'creator' } },
+          {
+            kind: 'decider_in',
+            source: { kind: 'employees', userIds: ['00000000-0000-4000-8000-0000000000b1'] },
+          },
+          {
+            kind: 'decider_in',
+            source: { kind: 'field', field: 'cf.00000000-0000-4000-8000-0000000000f1' },
+          },
+          { kind: 'decider_in', source: { kind: 'project_role', role: 'manager' } },
+        ],
+      },
+    } as unknown as WorkflowDraftTransition;
+    const summaries = sectionSummaries(withDeciders, document);
+    expect(summaries.deciders).toContain(ui.automation.deciders.sources.position);
+    expect(summaries.deciders).toContain(ui.automation.deciders.managerOf.creator);
+    expect(summaries.deciders).toContain(ui.automation.deciders.sources.employees);
+    expect(summaries.deciders).toContain(ui.automation.deciders.sources.field);
+    expect(summaries.deciders).toContain(ui.automation.deciders.projectRole.manager);
+    expect(summaries.roles).toBe(ui.automation.deciders.rolesOnlyDeciders);
+  });
 });
