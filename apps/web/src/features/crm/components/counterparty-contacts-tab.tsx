@@ -150,7 +150,6 @@ export function CounterpartyContactsTab({
         />
       </div>
 
-      {selectedRows.length > 0 ? <div aria-hidden className="h-24 shrink-0" /> : null}
       <ContactBulkIsland
         counterpartyId={counterpartyId}
         selectedIds={selectedRows.map((contact) => contact.id)}

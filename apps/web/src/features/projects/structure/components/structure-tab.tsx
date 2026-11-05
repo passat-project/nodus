@@ -255,7 +255,6 @@ export function StructureTab({
                     onMoveTasks={(ids) => setDialog({ kind: 'moveTasks', taskIds: ids })}
                     onRemoveFromStructure={(id) => moveTasks([id], null)}
                   />
-                  {model.selection.selected.size > 0 ? <div aria-hidden className="h-24" /> : null}
                 </>
               )}
             </div>

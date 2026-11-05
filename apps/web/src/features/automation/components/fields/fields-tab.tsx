@@ -41,13 +41,22 @@ function ModuleFilter({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 shrink-0 gap-1.5 text-sm">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-auto shrink-0 justify-start gap-1.5 px-2 text-sm"
+        >
           <span className="text-muted-foreground">{ui.customFields.page.moduleFilter}:</span>
           <span>{ui.customFields.modules[value]}</span>
           <ChevronDown className="size-3.5 text-muted-foreground" strokeWidth={1.75} />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
+      {/* Ширина списка = ширина чипа (минимум ради самого длинного пункта),
+          выравнивание по чипу — канон селектов. */}
+      <DropdownMenuContent
+        align="start"
+        className="w-(--radix-dropdown-menu-trigger-width) min-w-36"
+      >
         {FIELD_MODULES.map((module) => (
           <DropdownMenuItem
             key={module}
@@ -217,7 +226,9 @@ export function FieldsTab() {
           }
         />
       </div>
-      {selectedRows.length > 0 ? <div aria-hidden className="h-24 shrink-0" /> : null}
+      {/* Островок массовых действий всплывает ПОВЕРХ списка (как в журнале
+          задач) — без резерва места под ним: резервная полоса под таблицей
+          читалась чужой заливкой (вердикт владельца 06.11, чекпоинт #631). */}
       <FieldBulkIsland
         count={selectedRows.length}
         visible={canManage && selectedRows.length > 0}

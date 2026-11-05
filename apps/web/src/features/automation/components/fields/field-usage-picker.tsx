@@ -59,40 +59,48 @@ function Group({
 }) {
   const chosen = targets.filter((target) => selected.has(target.id));
   const state = chosen.length === 0 ? 'off' : chosen.length === targets.length ? 'on' : 'some';
+  const expandable = targets.length > 0;
   return (
     <div className="rounded-lg border border-input">
-      <div className="flex items-center">
+      {/* Строка группы: чекбокс «все» — сам по себе (клик по нему не
+          раскрывает и не сбрасывает выбор), клик по остальной строке —
+          раскрытие/сворачивание (вердикт владельца 06.11: случайный клик по
+          строке не должен терять выбранные типы). Ховер раскрытия — до
+          правого края, включая шеврон. */}
+      <div className="flex items-stretch">
         <button
           type="button"
           role="checkbox"
           aria-checked={state === 'some' ? 'mixed' : state === 'on'}
-          disabled={disabled || targets.length === 0}
+          aria-label={label}
+          disabled={disabled || !expandable}
           onClick={onToggleAll}
-          className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left text-sm text-secondary-foreground transition-colors hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex w-9 shrink-0 items-center justify-center rounded-l-lg text-secondary-foreground transition-colors hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Mark state={state} />
+        </button>
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          disabled={!expandable}
+          aria-expanded={expanded}
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-r-lg py-2 pr-1.5 pl-0.5 text-left text-sm text-secondary-foreground transition-colors hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+        >
           <span className="min-w-0 flex-1 truncate">{label}</span>
           <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
             {chosen.length}/{targets.length}
           </span>
+          <ChevronDown
+            className={cn(
+              'size-3.5 shrink-0 text-muted-foreground transition-transform',
+              expanded && 'rotate-180',
+            )}
+            strokeWidth={1.75}
+          />
         </button>
-        {targets.length > 0 ? (
-          <button
-            type="button"
-            onClick={onToggleExpand}
-            aria-expanded={expanded}
-            aria-label={label}
-            className="flex size-8 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ChevronDown
-              className={cn('size-3.5 transition-transform', expanded && 'rotate-180')}
-              strokeWidth={1.75}
-            />
-          </button>
-        ) : null}
       </div>
-      {expanded && targets.length > 0 ? (
-        <div className="flex flex-col gap-0.5 border-t px-1.5 py-1.5">
+      {expanded && expandable ? (
+        <div className="flex flex-col gap-0.5 border-t py-1.5">
           {targets.map((target) => {
             const on = selected.has(target.id);
             return (
@@ -104,7 +112,7 @@ function Group({
                 disabled={disabled}
                 onClick={() => onToggleOne(target.id)}
                 className={cn(
-                  'flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60',
+                  'mx-1.5 flex w-[calc(100%-0.75rem)] items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60',
                   on ? 'text-foreground' : 'text-secondary-foreground',
                   disabled && 'cursor-not-allowed opacity-60',
                 )}

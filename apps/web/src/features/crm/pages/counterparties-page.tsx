@@ -139,7 +139,6 @@ export function CounterpartiesPage() {
           }
         />
       </div>
-      {selectedRows.length > 0 ? <div aria-hidden className="h-24" /> : null}
       <CounterpartyBulkIsland
         selectedIds={selectedRows.map((row) => row.id)}
         hasActive={hasActive}
