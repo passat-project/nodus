@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import type { Paginated, TaskListItem, TaskStage } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { PAGINATION_MAX_LIMIT, ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api } from '../../api-client.js';
@@ -24,9 +24,15 @@ interface UseKanbanFeedsParams {
   stageList: TaskStage[];
   /** Ключ доски (см. UseKanbanBoardParams.queryKey); колонка — `kanbanColumnKey`. */
   queryKey: readonly unknown[];
-  feedUrl: (stageId: string, cursor: string | null) => string;
+  /** URL фида колонки: `limit` — сколько карточек запросить (первая страница
+   *  и перезапрос после WS-события — на всю загруженную глубину, #330). */
+  feedUrl: (stageId: string, cursor: string | null, limit: number) => string;
+  /** Размер страницы фида (sentinel-догрузка следующих страниц). */
+  feedLimit: number;
   /** Идёт перенос: свежие страницы не применяются до дропа. */
   draggingRef: RefObject<boolean>;
+  /** Текущий борд: по нему считается загруженная глубина колонки (#330). */
+  boardRef: RefObject<TaskListItem[] | null>;
   /** Сеттер борда движка (фиды наполняют его, dnd — переставляет). */
   setBoard: Dispatch<SetStateAction<TaskListItem[] | null>>;
 }
@@ -39,13 +45,21 @@ interface UseKanbanFeedsParams {
  * только затронутые (`shared/socket/task-invalidation.ts`): одна карточка
  * у коллеги = 1–2 запроса, а не по запросу на каждую колонку. Пересборка
  * точечная: обновлённые колонки заменяются, догрузки остальных живут.
+ *
+ * Колонка перезапрашивается на ВСЮ загруженную глубину (#330): свежая первая
+ * страница выбрасывала догруженный sentinel-ом хвост — колонка становилась
+ * короче, прокрутка прыгала вверх, а переименования/удаления карточек хвоста
+ * не доезжали до UI. `limit` = сколько уже загружено (≤ 100), ответ заменяет
+ * колонку целиком; курсор — из ответа, дальше работает sentinel.
  */
 export function useKanbanFeeds({
   axis,
   stageList,
   queryKey,
   feedUrl,
+  feedLimit,
   draggingRef,
+  boardRef,
   setBoard,
 }: UseKanbanFeedsParams) {
   const [cursors, setCursors] = useState<Record<string, string | null>>({});
@@ -69,7 +83,15 @@ export function useKanbanFeeds({
   const columns = useQueries({
     queries: stageList.map((s) => ({
       queryKey: kanbanColumnKey(queryKey, s.id),
-      queryFn: () => api<Paginated<TaskListItem>>(feedUrlRef.current(s.id, null)),
+      queryFn: () => {
+        // Перезапрос после WS-события — на всю загруженную глубину колонки
+        // (#330): иначе свежая первая страница выбрасывает хвост.
+        const loaded = (boardRef.current ?? []).filter(
+          (task) => axisRef.current.keyOf(task) === s.id,
+        ).length;
+        const limit = Math.min(Math.max(feedLimit, loaded), PAGINATION_MAX_LIMIT);
+        return api<Paginated<TaskListItem>>(feedUrlRef.current(s.id, null, limit));
+      },
       staleTime: 30_000,
     })),
   });
@@ -130,7 +152,7 @@ export function useKanbanFeeds({
         setLoadingMore((prev) => ({ ...prev, [stageId]: false }));
         loadingMoreRef.current = { ...loadingMoreRef.current, [stageId]: false };
       };
-      api<Paginated<TaskListItem>>(feedUrlRef.current(stageId, cursor)).then(
+      api<Paginated<TaskListItem>>(feedUrlRef.current(stageId, cursor, feedLimit)).then(
         (page) => {
           setBoard((prev) => [...(prev ?? []), ...page.items]);
           setCursors((prev) => ({ ...prev, [stageId]: page.nextCursor }));
@@ -150,7 +172,7 @@ export function useKanbanFeeds({
         },
       );
     },
-    [setBoard],
+    [feedLimit, setBoard],
   );
 
   return { cursors, loadingMore, loadMore };

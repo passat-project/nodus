@@ -13,7 +13,7 @@ import { BoardScroller } from '../../../shared/ui/board/board-scroller.js';
 import { BoardSortableCard } from '../../../shared/ui/board/board-sortable-card.js';
 import { BoardTaskCard } from '../../../shared/ui/board/board-task-card.js';
 import { KanbanSkeleton } from '../../../shared/ui/board/kanban-skeleton.js';
-import { KANBAN_FEED_LIMIT, useKanbanBoard } from '../../../shared/ui/board/use-kanban-board.js';
+import { useKanbanBoard } from '../../../shared/ui/board/use-kanban-board.js';
 import { isFilteringActive, type ActiveListFilter } from '../../../shared/views/list-filters.js';
 import { makeTaskCardFields } from '../../../shared/views/task-card-fields.js';
 import { useFilteredList } from '../../../shared/views/use-list-toolbar.js';
@@ -55,8 +55,7 @@ export function ProjectKanban({
     axis: globalAxis,
     stages,
     queryKey: tasksKeys.kanban(`project:${projectId}`),
-    feedUrl: (stageId, cursor) =>
-      projectKanbanFeedUrl(projectId, stageId, cursor, KANBAN_FEED_LIMIT),
+    feedUrl: (stageId, cursor, limit) => projectKanbanFeedUrl(projectId, stageId, cursor, limit),
     onMove: (vars, opts) =>
       move.mutate(
         { taskId: vars.taskId, stageId: vars.stageId, index: vars.index },
