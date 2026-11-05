@@ -1,18 +1,15 @@
 import { CheckCheck, X, Zap } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
-import type { NotificationSummary } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
-import { api } from '../../../shared/api-client.js';
 import { useConversations } from '../../../shared/chat/chat-queries.js';
 import { MentionSnippet } from '../../../shared/chat/mention-chip.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
-import { notificationsKeys } from '../../../shared/notifications-keys.js';
 import { useNotificationsToastStore } from '../model/toast-store.js';
 import { PERSONAL_TOAST_TTL_MS } from '../model/toast-store.js';
 import { openNotificationReader, openSourceCard } from '../model/open-notification.js';
+import { useNotificationSummary } from '../api/notifications-api.js';
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { usePauseEscalation } from '../model/use-pause-escalation.js';
 
@@ -206,10 +203,7 @@ function ActionsToast() {
  */
 function useActionsFollowJournal(): void {
   const syncWithAttention = useNotificationsToastStore((s) => s.syncWithAttention);
-  const { data: summary } = useQuery({
-    queryKey: notificationsKeys.summary(),
-    queryFn: () => api<NotificationSummary>('/notifications/summary'),
-  });
+  const { data: summary } = useNotificationSummary();
   useEffect(() => {
     if (summary) syncWithAttention(summary.attention);
   }, [summary, syncWithAttention]);
