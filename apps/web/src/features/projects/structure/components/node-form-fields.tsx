@@ -71,7 +71,7 @@ export function NodeCreateFields({
   return (
     <>
       {form.code === 'hidden' ? null : (
-        <label className="flex flex-col gap-1">
+        <label className="flex min-w-0 flex-col gap-1">
           <span className="flex items-center gap-2">
             <NodeLabel label={ui.structure.nodeCode} />
             {codeRequired ? <RequiredMark /> : null}
@@ -90,7 +90,7 @@ export function NodeCreateFields({
         const required = slot.state === 'required';
         const missing = required && !isCustomFieldValueFilled(values[definition.id]);
         return (
-          <div key={definition.id} className="flex flex-col gap-1">
+          <div key={definition.id} className="flex min-w-0 flex-col gap-1">
             <span className="flex items-center gap-2">
               <CustomFieldTypeIcon
                 type={definition.type}

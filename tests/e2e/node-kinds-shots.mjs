@@ -110,6 +110,37 @@ for (const theme of ['light', 'dark']) {
   // 10. Окно «Создать папку» с видом «Комплект».
   await page.getByRole('button', { name: 'Создать папку' }).first().click();
   await shot('11-node-create');
+
+  // 10b. Длинная марка не распирает окно (#615): колонка DialogContent
+  // фиксирована, значение обрезается, «Создать» остаётся внутри карточки.
+  const createDialog = page.getByRole('dialog', { name: 'Создать папку' });
+  await createDialog.getByRole('combobox', { name: 'Вид папки' }).click();
+  await page.getByRole('option', { name: /Комплект/ }).click();
+  await createDialog.getByRole('button', { name: 'Марка' }).click();
+  await page
+    .getByRole('button', { name: 'АТД — Автоматика и телемеханика движения поездов (СЦБ)' })
+    .click();
+  const geometry = await createDialog.evaluate((el) => {
+    const dialogRect = el.getBoundingClientRect();
+    const create = [...el.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Создать',
+    );
+    const createRect = create?.getBoundingClientRect();
+    return {
+      overflow: el.scrollWidth - el.clientWidth,
+      buttonInside: createRect
+        ? createRect.right <= dialogRect.right + 1 && createRect.left >= dialogRect.left - 1
+        : false,
+    };
+  });
+  if (geometry.overflow > 1) {
+    errors.push(`${theme} OVERFLOW node-create mark: +${geometry.overflow}px`);
+  }
+  if (!geometry.buttonInside) {
+    errors.push(`${theme} OVERFLOW node-create: кнопка «Создать» вне границ окна`);
+  }
+  await shot('11b-node-create-long-mark');
+
   await page.getByRole('button', { name: 'Отмена' }).click();
 
   // 11. Глубокая ссылка на панель вида (проверка маршрута).
