@@ -48,7 +48,13 @@ export function TaskList({
   onCreate?: () => void;
   scope?: 'mine' | 'all';
 }) {
-  const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useTasksPages(scope);
+  // Пресет «Ждут моего решения» (#433) — серверный срез: role=decider,
+  // scope принудительно all. Клиентский фильтр по странице соврёт на пагинации.
+  const deciderOnly = filter?.state.role === 'decider';
+  const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useTasksPages(
+    scope,
+    deciderOnly ? 'decider' : undefined,
+  );
   const openCard = useOpenCard();
   const prefetch = usePrefetchTask();
   // Удаление из журнала (канон меню строки, 25.10.2026): пункт виден тому, кому

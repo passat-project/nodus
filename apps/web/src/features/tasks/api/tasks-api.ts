@@ -35,14 +35,19 @@ export { mapTaskInPages, tasksKeys } from '../../../shared/api/tasks-keys.js';
  * у dna контейнера (industry-паттерн: целиком на клиент крупные списки не
  * живут). Дерево строится из загруженного; родитель старше окна страницы
  * отображается корнем (известное ограничение до серверного lazy-дерева). */
-export function useTasksPages(scope: 'mine' | 'all' = 'mine') {
+export function useTasksPages(scope: 'mine' | 'all' = 'mine', role?: 'decider') {
   return useInfiniteQuery({
     // «Мои» — канонический ключ (оптимистичные патчи бьют в него точно);
-    // «Все доступные» — свой ключ под тем же префиксом (инвалидации общие).
-    queryKey: scope === 'all' ? tasksKeys.listPages({ scope }) : tasksKeys.listPages(),
+    // «Все доступные» и «Ждут моего решения» — свои ключи под тем же
+    // префиксом (инвалидации общие, страницы не смешиваются).
+    queryKey: tasksKeys.listPages(
+      role ? { scope: 'all', role } : scope === 'all' ? { scope } : undefined,
+    ),
     queryFn: ({ pageParam }) =>
       api<Paginated<TaskListItem>>(
-        `/tasks?view=list&scope=${scope}&limit=100${pageParam ? `&cursor=${pageParam}` : ''}`,
+        `/tasks?view=list&scope=${role ? 'all' : scope}&limit=100${
+          role ? `&role=${role}` : ''
+        }${pageParam ? `&cursor=${pageParam}` : ''}`,
       ),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,

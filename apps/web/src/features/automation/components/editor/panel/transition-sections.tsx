@@ -22,6 +22,7 @@ import {
 
 import { useRouteDocStore } from '../../../model/route-doc-store.js';
 import {
+  deciderSourcesOf,
   REQUIRABLE_FIELDS,
   VALIDATOR_KINDS,
   defaultRouteIfTarget,
@@ -105,6 +106,7 @@ export function RolesSection({
 }) {
   const patch = usePatchRules(transition);
   const roles = rolesOf(transition.rules);
+  const hasDeciders = deciderSourcesOf(transition.rules).length > 0;
   const allowed = WORKFLOW_ROLES_BY_CATEGORY[category];
   return (
     <>
@@ -112,8 +114,8 @@ export function RolesSection({
         <CheckRow
           key={role}
           checked={roles.has(role)}
-          // Последнюю роль снять нельзя — кнопку должен кто-то видеть.
-          disabled={readOnly || (roles.has(role) && roles.size === 1)}
+          // Последнюю роль снять нельзя, если кнопку не держат решающие (#433).
+          disabled={readOnly || (roles.has(role) && roles.size === 1 && !hasDeciders)}
           title={ui.automation.roles[role]}
           onChange={() => patch(toggleRole(transition.rules, role, allowed))}
         />

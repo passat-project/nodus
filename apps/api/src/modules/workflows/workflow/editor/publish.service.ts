@@ -26,6 +26,10 @@ import {
   type RoleMembershipReader,
 } from '../../../../core/ports/role-membership.port.js';
 import {
+  ORG_STRUCTURE_READER,
+  type OrgStructureReader,
+} from '../../../../core/ports/org-structure.port.js';
+import {
   USER_PROFILE_READER,
   type UserProfileReader,
 } from '../../../../core/ports/user-profile.port.js';
@@ -72,6 +76,7 @@ export class WorkflowEditorService {
     @Inject(USER_PROFILE_READER) private readonly profiles: UserProfileReader,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
     @Inject(ROLE_MEMBERSHIP_READER) private readonly membership: RoleMembershipReader,
+    @Inject(ORG_STRUCTURE_READER) private readonly org: OrgStructureReader,
     private readonly types: ProcessTypesRepository,
   ) {}
 
@@ -137,7 +142,11 @@ export class WorkflowEditorService {
       const typeIds = await this.workflows.typeIdsOf(workflowId, tx);
       const typeRow = typeIds[0] ? (await this.types.findByIds([typeIds[0]]))[0] : undefined;
       await checkDocumentForPublish(
-        { registry: this.customFields, profiles: this.profiles },
+        {
+          registry: this.customFields,
+          profiles: this.profiles,
+          org: this.org,
+        },
         {
           document: body.document,
           category,

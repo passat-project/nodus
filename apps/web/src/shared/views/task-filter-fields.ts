@@ -39,6 +39,18 @@ export const taskBuiltinPresets: FilterPreset[] = [
   { id: 'done', name: ui.tasks.stageStates.closed, state: { systemState: 'closed' } },
 ];
 
+/** Пресеты СПИСКА задач: «Ждут моего решения» живёт только здесь (#433).
+ *  В канбане («Мой план») и в журналах проектов/сотрудника его нет: личная
+ *  доска и чужие фиды не серверный срез решающих. */
+export const taskListPresets: FilterPreset[] = [
+  ...taskBuiltinPresets,
+  {
+    id: 'mine-decisions',
+    name: ui.tasks.presetDecisions,
+    state: { role: 'decider' },
+  },
+];
+
 /** Крайний срок в диапазоне дат (ISO-дата срезается до YYYY-MM-DD). */
 function deadlineMatch(item: TaskListItem, value: FilterValue): boolean {
   if (typeof value !== 'object' || value === undefined) return true;
@@ -101,6 +113,7 @@ export function useTaskFilterDefs({
           { value: 'assignee', label: ui.tasks.roles.assignee },
           { value: 'creator', label: ui.tasks.roles.creator },
           { value: 'participant', label: ui.tasks.roles.participant },
+          { value: 'decider', label: ui.tasks.roles.decider },
         ],
         match: (t, v) =>
           v === 'assignee'
@@ -109,7 +122,8 @@ export function useTaskFilterDefs({
               ? t.creator.id === meId
               : v === 'participant'
                 ? t.participants.some((p) => p.id === meId)
-                : true,
+                : // Решающего клиент не знает: список уже отфильтрован сервером.
+                  true,
       },
       {
         id: 'creator',

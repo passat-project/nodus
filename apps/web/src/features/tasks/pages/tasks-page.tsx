@@ -15,6 +15,7 @@ import { projectsAvailable } from '../../../shared/api/projects-available.js';
 import { makeTaskCardFields } from '../../../shared/views/task-card-fields.js';
 import {
   taskBuiltinPresets,
+  taskListPresets,
   taskSearchText,
   useTaskFilterDefs,
 } from '../../../shared/views/task-filter-fields.js';
@@ -48,13 +49,17 @@ export function TasksPage() {
 
 function TasksSection({ view, overdueTotal }: { view: 'list' | 'kanban'; overdueTotal: number }) {
   const viewKey = view === 'list' ? 'tasks.list' : 'tasks.kanban';
-  const toolbar = useListToolbar(viewKey, taskBuiltinPresets);
+  // «Ждут моего решения» — только в списке (#433): канбан «Мой план» — личная
+  // доска, журналы проектов/сотрудника — чужие фиды, серверного среза там нет.
+  const presets = view === 'list' ? taskListPresets : taskBuiltinPresets;
+  const toolbar = useListToolbar(viewKey, presets);
   const defs = useTaskFilterDefs({ projectVisible: projectsAvailable() });
   const filter = useMemo<ActiveListFilter<TaskListItem>>(
     () => ({ defs, state: toolbar.filters, query: toolbar.query, searchText: taskSearchText }),
     [defs, toolbar.filters, toolbar.query],
   );
   const overdueActive = toolbar.filters.overdue === 'yes';
+  const deciderActive = toolbar.filters.role === 'decider';
   const [scope, setScope] = useListScope();
 
   return (
@@ -67,7 +72,7 @@ function TasksSection({ view, overdueTotal }: { view: 'list' | 'kanban'; overdue
           className="min-w-0 flex-1 px-0"
           toolbar={toolbar}
           defs={defs}
-          builtinPresets={taskBuiltinPresets}
+          builtinPresets={presets}
           left={
             // Закон кнопки создания (вердикт 15.09.2026): label всегда
             // «Создать» (без уточнения — кнопка не раздувается), высота =
@@ -79,7 +84,9 @@ function TasksSection({ view, overdueTotal }: { view: 'list' | 'kanban'; overdue
           }
           right={
             <>
-              {view === 'list' ? <ScopeSwitch scope={scope} onChange={setScope} /> : null}
+              {view === 'list' && !deciderActive ? (
+                <ScopeSwitch scope={scope} onChange={setScope} />
+              ) : null}
               {overdueTotal > 0 ? (
                 <button
                   type="button"

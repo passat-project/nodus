@@ -55,9 +55,16 @@ function holdsRole(letter: DemoLetter, actor: LetterActor, role: string): boolea
 }
 
 function passes(condition: WorkflowCondition, letter: DemoLetter, actor: LetterActor): boolean {
-  return condition.kind === 'permission'
-    ? actor.permissions.includes(condition.permission)
-    : condition.roles.some((role) => holdsRole(letter, actor, role));
+  switch (condition.kind) {
+    case 'permission':
+      return actor.permissions.includes(condition.permission);
+    case 'role_in':
+      return condition.roles.some((role) => holdsRole(letter, actor, role));
+    // Письма источников решающих не поддерживают (#433): публикация их
+    // запрещает, в демо-маршрутах их нет.
+    case 'decider_in':
+      return false;
+  }
 }
 
 export function letterTransitionsOf(letter: DemoLetter, actor: LetterActor): WorkflowTransition[] {

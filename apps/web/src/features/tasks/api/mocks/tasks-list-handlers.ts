@@ -57,8 +57,12 @@ export const tasksListHandlers = [
     const projectId = url.searchParams.get('projectId');
     const assigneeId = url.searchParams.get('assigneeId');
     const search = url.searchParams.get('search')?.trim().toLowerCase() ?? '';
+    const role = url.searchParams.get('role');
     const cursor = url.searchParams.get('cursor');
     const limit = Math.min(Number(url.searchParams.get('limit') ?? 50) || 50, 100);
+    // Пресет «Ждут моего решения» (#433): в демо-мире источников решающих
+    // нет — честный пустой список, чтобы не показывать чужие задачи.
+    if (role === 'decider') return HttpResponse.json({ items: [], nextCursor: null });
     let filtered = stageId ? demoTasks.filter((t) => t.stage.id === stageId) : demoTasks;
     if (personalStageId) {
       filtered = demoTasks.filter((t) => t.personalStageId === personalStageId);

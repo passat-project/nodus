@@ -54,9 +54,19 @@ export function previewForRole(
     if (conditions.length === 0) {
       return roles.includes('creator') || roles.includes('assignee');
     }
-    return conditions.some((c) =>
-      c.kind === 'role_in' ? c.roles.some((role) => roles.includes(role)) : true,
-    );
+    return conditions.some((c) => {
+      switch (c.kind) {
+        case 'role_in':
+          return c.roles.some((role) => roles.includes(role));
+        // Права в превью проходят: их носитель — не роль.
+        case 'permission':
+          return true;
+        // Решающие в превью ролей не участвуют: кнопку увидит человек вне
+        // задачи, и обещать её каждой роли нельзя (#433).
+        case 'decider_in':
+          return false;
+      }
+    });
   });
 }
 
