@@ -21,6 +21,8 @@ import {
 import { z } from 'zod';
 import {
   createCustomFieldBodySchema,
+  customFieldBindingKindSchema,
+  customFieldCompanyValueBodySchema,
   customFieldDefinitionSchema,
   customFieldUsageSchema,
   listCustomFieldsQuerySchema,
@@ -28,13 +30,14 @@ import {
   reorderCustomFieldsBodySchema,
   updateCustomFieldBodySchema,
   type CreateCustomFieldBody,
+  type CustomFieldCompanyValueBody,
   type CustomFieldDefinition,
   type CustomFieldUsage,
   type ListCustomFieldsQuery,
   type ReorderCustomFieldsBody,
   type UpdateCustomFieldBody,
 } from '@nodus/contracts';
-import type { AuthUser } from '@nodus/contracts';
+import type { AuthUser, CustomFieldBindingKind } from '@nodus/contracts';
 
 import { Audit } from '../../../core/decorators/audit.decorator.js';
 import { GetUser } from '../../../core/decorators/get-user.decorator.js';
@@ -46,12 +49,13 @@ import { DefinitionsBindingService } from './definitions-binding.service.js';
 import { DefinitionsService } from './definitions.service.js';
 
 const idParamSchema = z.uuid();
+const targetIdParamSchema = z.uuid();
 
 /**
- * Реестр атрибутов (`/api/v1/custom-fields/definitions`, ADR-0029, #431).
- * Чтение — всем аутентифицированным (карточки, фильтры, окна переходов
- * нужны каждому); создание, правка, порядок и удаление — правом
- * `custom_field.manage` (по умолчанию администратор, I8).
+ * Реестр атрибутов портала (`/api/v1/custom-fields/definitions`, ADR-0029,
+ * #631). Чтение — всем аутентифицированным (карточки, фильтры, окна
+ * переходов нужны каждому); управление — правом `custom_field.manage`
+ * (по умолчанию администратор, I8).
  */
 @ApiTags('custom-fields')
 @ApiBearerAuth()
@@ -63,7 +67,7 @@ export class DefinitionsController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Реестр атрибутов (область — необязательный фильтр)' })
+  @ApiOperation({ summary: 'Реестр атрибутов портала (module — фильтр мест использования)' })
   @ApiOkResponse({ standardSchema: z.array(customFieldDefinitionSchema) })
   @ApiErrors(400, 401)
   list(
@@ -73,13 +77,15 @@ export class DefinitionsController {
     })
     query: ListCustomFieldsQuery,
   ): Promise<CustomFieldDefinition[]> {
-    return this.definitions.list(query.scope ?? null);
+    return this.definitions.list(query.module ?? null);
   }
 
   @Post()
   @RequirePermissions(Permission.CUSTOM_FIELD_MANAGE)
   @Audit({ action: 'custom_field.create', entity: 'field_definition' })
-  @ApiOperation({ summary: 'Новый атрибут области (имя уникально, лимит 100)' })
+  @ApiOperation({
+    summary: 'Новый атрибут портала (имя глобально уникально; 409 — с suggestion)',
+  })
   @ApiCreatedResponse({ standardSchema: customFieldDefinitionSchema })
   @ApiErrors(400, 401, 403, 409, 422)
   @ApiIdempotencyKey()
@@ -99,7 +105,7 @@ export class DefinitionsController {
   @HttpCode(204)
   @RequirePermissions(Permission.CUSTOM_FIELD_MANAGE)
   @Audit({ action: 'custom_field.reorder', entity: 'field_definition' })
-  @ApiOperation({ summary: 'Порядок атрибутов области (ids = ровно все атрибуты)' })
+  @ApiOperation({ summary: 'Порядок атрибутов портала (ids = ровно все атрибуты)' })
   @ApiErrors(400, 401, 403, 409)
   @ApiIdempotencyKey()
   async reorder(
@@ -115,7 +121,7 @@ export class DefinitionsController {
 
   @Get(':id/usage')
   @RequirePermissions(Permission.CUSTOM_FIELD_MANAGE)
-  @ApiOperation({ summary: 'Где используется атрибут: заполненные карточки и процессы' })
+  @ApiOperation({ summary: 'Где используется атрибут: значения, формы, маршруты, привязки' })
   @ApiParam({
     name: 'id',
     description: 'UUID атрибута',
@@ -127,20 +133,26 @@ export class DefinitionsController {
     return this.definitions.usage(id);
   }
 
-  // Привязка атрибута к типу процесса (#432, Р8): идемпотентна, ответ — DTO.
-  @Put(':id/types/:typeId')
+  // Привязка «Где используется» (Р3 #631): идемпотентна, ответ — DTO.
+  // Буквальный сегмент `bindings` объявлен раньше `:id`.
+  @Put(':id/bindings/:kind/:targetId')
   @HttpCode(200)
   @RequirePermissions(Permission.CUSTOM_FIELD_MANAGE)
   @Audit({ action: 'custom_field.bind', entity: 'field_definition' })
-  @ApiOperation({ summary: 'Привязать атрибут к типу процесса (повтор — без изменений)' })
+  @ApiOperation({ summary: 'Привязать атрибут к месту (повтор — без изменений)' })
   @ApiParam({
     name: 'id',
     description: 'UUID атрибута',
     schema: { type: 'string', format: 'uuid' },
   })
   @ApiParam({
-    name: 'typeId',
-    description: 'UUID типа',
+    name: 'kind',
+    description: 'process-type | project-type | node-kind',
+    schema: { type: 'string', enum: ['process-type', 'project-type', 'node-kind'] },
+  })
+  @ApiParam({
+    name: 'targetId',
+    description: 'UUID цели (тип процесса/проекта или вид папки)',
     schema: { type: 'string', format: 'uuid' },
   })
   @ApiOkResponse({ standardSchema: customFieldDefinitionSchema })
@@ -148,36 +160,70 @@ export class DefinitionsController {
   @ApiIdempotencyKey()
   bind(
     @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
-    @Param('typeId', new ZodValidationPipe(idParamSchema)) typeId: string,
+    @Param('kind', new ZodValidationPipe(customFieldBindingKindSchema))
+    kind: CustomFieldBindingKindParam,
+    @Param('targetId', new ZodValidationPipe(targetIdParamSchema)) targetId: string,
     @GetUser() actor: AuthUser,
   ): Promise<CustomFieldDefinition> {
-    return this.bindings.bind(id, typeId, actor.id);
+    return this.bindings.bind(id, kind, targetId, actor.id);
   }
 
-  @Delete(':id/types/:typeId')
+  @Delete(':id/bindings/:kind/:targetId')
   @HttpCode(200)
   @RequirePermissions(Permission.CUSTOM_FIELD_MANAGE)
   @Audit({ action: 'custom_field.unbind', entity: 'field_definition' })
-  @ApiOperation({ summary: 'Снять привязку атрибута к типу (409, если работает в маршруте)' })
+  @ApiOperation({ summary: 'Снять привязку атрибута с места (разрешено всегда)' })
   @ApiParam({
     name: 'id',
     description: 'UUID атрибута',
     schema: { type: 'string', format: 'uuid' },
   })
   @ApiParam({
-    name: 'typeId',
-    description: 'UUID типа',
+    name: 'kind',
+    description: 'process-type | project-type | node-kind',
+    schema: { type: 'string', enum: ['process-type', 'project-type', 'node-kind'] },
+  })
+  @ApiParam({
+    name: 'targetId',
+    description: 'UUID цели (тип процесса/проекта или вид папки)',
     schema: { type: 'string', format: 'uuid' },
   })
   @ApiOkResponse({ standardSchema: customFieldDefinitionSchema })
-  @ApiErrors(400, 401, 403, 404, 409)
+  @ApiErrors(400, 401, 403, 404)
   @ApiIdempotencyKey()
   unbind(
     @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
-    @Param('typeId', new ZodValidationPipe(idParamSchema)) typeId: string,
+    @Param('kind', new ZodValidationPipe(customFieldBindingKindSchema))
+    kind: CustomFieldBindingKindParam,
+    @Param('targetId', new ZodValidationPipe(targetIdParamSchema)) targetId: string,
     @GetUser() actor: AuthUser,
   ): Promise<CustomFieldDefinition> {
-    return this.bindings.unbind(id, typeId, actor.id);
+    return this.bindings.unbind(id, kind, targetId, actor.id);
+  }
+
+  @Put(':id/company-value')
+  @HttpCode(200)
+  @RequirePermissions(Permission.CUSTOM_FIELD_MANAGE)
+  @Audit({ action: 'custom_field.company_value', entity: 'field_definition' })
+  @ApiOperation({ summary: 'Значение глобальной переменной (null — очистить)' })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID атрибута',
+    schema: { type: 'string', format: 'uuid' },
+  })
+  @ApiOkResponse({ standardSchema: customFieldDefinitionSchema })
+  @ApiErrors(400, 401, 403, 404, 422)
+  @ApiIdempotencyKey()
+  companyValue(
+    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @Body({
+      schema: customFieldCompanyValueBodySchema,
+      pipes: [new ZodValidationPipe(customFieldCompanyValueBodySchema)],
+    })
+    dto: CustomFieldCompanyValueBody,
+    @GetUser() actor: AuthUser,
+  ): Promise<CustomFieldDefinition> {
+    return this.definitions.setCompanyValue(id, dto.value, actor.id);
   }
 
   @Patch(':id')
@@ -208,13 +254,13 @@ export class DefinitionsController {
   @HttpCode(204)
   @RequirePermissions(Permission.CUSTOM_FIELD_MANAGE)
   @Audit({ action: 'custom_field.delete', entity: 'field_definition' })
-  @ApiOperation({ summary: 'Удаление атрибута (запрещено, пока стоит в процессах)' })
+  @ApiOperation({ summary: 'Удаление атрибута (разрешено всегда; окно последствий — usage)' })
   @ApiParam({
     name: 'id',
     description: 'UUID атрибута',
     schema: { type: 'string', format: 'uuid' },
   })
-  @ApiErrors(401, 403, 404, 409)
+  @ApiErrors(400, 401, 403, 404)
   @ApiIdempotencyKey()
   async remove(
     @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
@@ -223,3 +269,5 @@ export class DefinitionsController {
     await this.definitions.remove(id, actor.id);
   }
 }
+
+type CustomFieldBindingKindParam = CustomFieldBindingKind;

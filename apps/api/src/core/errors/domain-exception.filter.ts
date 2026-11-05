@@ -111,7 +111,7 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.CUSTOM_FIELD_NAME_TAKEN]: HttpStatus.CONFLICT,
   [ErrorCode.CUSTOM_FIELD_TYPE_CHANGE_INCOMPATIBLE]: HttpStatus.CONFLICT,
   [ErrorCode.CUSTOM_FIELD_LIMIT_REACHED]: HttpStatus.CONFLICT,
-  [ErrorCode.CUSTOM_FIELD_IN_USE]: HttpStatus.CONFLICT,
+  [ErrorCode.PROJECT_FIELDS_REQUIRED]: HttpStatus.UNPROCESSABLE_ENTITY,
   [ErrorCode.DICTIONARY_SYSTEM_LOCKED]: HttpStatus.CONFLICT,
   [ErrorCode.DICTIONARY_ITEM_NAME_TAKEN]: HttpStatus.CONFLICT,
   // Права доступа модулей (#379, ADR-0034): неизменяемая роль администратора —

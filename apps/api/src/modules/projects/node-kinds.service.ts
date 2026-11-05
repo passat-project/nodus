@@ -64,7 +64,15 @@ export class NodeKindsService {
       if (dto.name !== undefined && (await this.kinds.nameTaken(dto.name, id, tx))) {
         throw nameTaken(dto.name);
       }
-      if (dto.form !== undefined) await this.assertForm(tx, dto.form, current.form);
+      if (dto.form !== undefined) {
+        await this.assertForm(tx, dto.form);
+        // Слот — привязка (Р3): набор слотов формы и есть набор привязок вида.
+        await this.registry.syncPlaceBindings(
+          { kind: 'node_kind', id },
+          dto.form.fields.map((slot) => slot.fieldId),
+          tx,
+        );
+      }
 
       const updated = await this.kinds.update(tx, id, {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
@@ -106,32 +114,22 @@ export class NodeKindsService {
     });
   }
 
-  /** Слоты формы — определения области `node`; скрытые — по правилу Р7. */
-  private async assertForm(
-    tx: TransactionClient,
-    form: NodeKindForm,
-    previous: NodeKindForm,
-  ): Promise<void> {
-    const definitions = await this.registry.definitions('node', {}, tx);
-    const byId = new Map(definitions.map((definition) => [definition.id, definition]));
-    const before = new Map(previous.fields.map((slot) => [slot.fieldId, slot.state]));
-    const issues: { fieldId: string; reason: 'unknown_field' | 'hidden_field' }[] = [];
-    for (const slot of form.fields) {
-      const definition = byId.get(slot.fieldId);
-      if (!definition) {
-        issues.push({ fieldId: slot.fieldId, reason: 'unknown_field' });
-        continue;
-      }
-      if (definition.hidden && slot.state !== 'hidden' && before.get(slot.fieldId) !== slot.state) {
-        issues.push({ fieldId: slot.fieldId, reason: 'hidden_field' });
-      }
+  /** Слоты формы — существующие определения (глобального hidden нет, О2
+   *  #631: видимость регулирует слот). Слот И ЕСТЬ привязка — форма
+   *  синхронизирует привязки вида (Р3). */
+  private async assertForm(tx: TransactionClient, form: NodeKindForm): Promise<void> {
+    const definitions = await this.registry.definitions({}, tx);
+    const known = new Set(definitions.map((definition) => definition.id));
+    const issues = form.fields
+      .filter((slot) => !known.has(slot.fieldId))
+      .map((fieldId) => ({ fieldId, reason: 'unknown_field' as const }));
+    if (issues.length > 0) {
+      throw new DomainException(
+        ErrorCode.PROJECT_NODE_KIND_FORM_INVALID,
+        'Node kind form is invalid',
+        { fieldIds: issues, reason: 'unknown_field' },
+      );
     }
-    if (issues.length === 0) return;
-    throw new DomainException(
-      ErrorCode.PROJECT_NODE_KIND_FORM_INVALID,
-      'Node kind form is invalid',
-      { fieldIds: issues, reason: issues[0]!.reason },
-    );
   }
 
   private async emit(

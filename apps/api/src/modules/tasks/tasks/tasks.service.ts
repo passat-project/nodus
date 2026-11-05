@@ -195,8 +195,12 @@ export class TasksService {
         // ссылок портом реестра — до записи строки, в той же транзакции.
         // С #432 — только привязанные к типу задачи (Р8).
         const customFields = await this.customFields.prepareCreate(
-          'task',
-          { input: body.customFields ?? {}, authorId: user.id, actor: user, typeId },
+          {
+            input: body.customFields ?? {},
+            authorId: user.id,
+            actor: user,
+            target: { kind: 'process_type', id: typeId },
+          },
           tx,
         );
         // Обязательные поля — после умолчаний: если сервер заполнил значение

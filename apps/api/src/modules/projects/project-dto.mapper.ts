@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { SYSTEM_FIELD_IDS } from '@nodus/contracts';
 import type {
   ProjectDetail,
   ProjectListItem,
@@ -98,7 +99,7 @@ export class ProjectDtoMapper {
       ),
     ];
     const [refs, creatorRefs, observerRefs] = await Promise.all([
-      this.customFields.refs('project', row.customFields as Record<string, never>, viewer),
+      this.customFields.refs(row.customFields as Record<string, never>, viewer),
       this.profiles.findRefs([row.creatorId]),
       this.profiles.findRefs(observerIds),
     ]);
@@ -143,7 +144,7 @@ export class ProjectDtoMapper {
     const fallback = (id: string): UserRef => ({ id, displayName: '', avatarUrl: null });
     return {
       id: row.id,
-      code: row.code,
+      code: codeOf(row.customFields),
       name: row.name,
       color: row.color as ProjectListItem['color'],
       manager: row.managerId ? (users.get(row.managerId) ?? fallback(row.managerId)) : null,
@@ -151,15 +152,12 @@ export class ProjectDtoMapper {
       myMembership: membership,
       visibility: facts.visibility,
       status: facts.status,
-      type: row.type
-        ? ({
-            id: row.type.id,
-            name: row.type.name,
-            codeField: row.type.codeField as ProjectTypeRef['codeField'],
-          } satisfies ProjectTypeRef)
-        : null,
+      type: row.type ? ({ id: row.type.id, name: row.type.name } satisfies ProjectTypeRef) : null,
       portfolio: row.portfolio ? { id: row.portfolio.id, name: row.portfolio.name } : null,
-      client: row.clientId ? (clients.get(row.clientId) ?? null) : null,
+      client: (() => {
+        const clientId = clientOf(row.customFields);
+        return clientId ? (clients.get(clientId) ?? null) : null;
+      })(),
       // «Участники» — roster БЕЗ наблюдателей: наблюдатель видит проект без
       // прав правки и живёт отдельным полем карточки (вердикт 07.11.2026).
       membersCount: new Set(roster.map((p) => p.userId)).size,
@@ -170,4 +168,18 @@ export class ProjectDtoMapper {
       activityAt: row.updatedAt.toISOString(),
     };
   }
+}
+
+/** Шифр проекта из значений атрибутов (системный «Шифр», Р9 #631). */
+function codeOf(customFields: unknown): string | null {
+  if (customFields === null || typeof customFields !== 'object') return null;
+  const value = (customFields as Record<string, unknown>)[SYSTEM_FIELD_IDS.projectCode];
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+/** Заказчик проекта из значений атрибутов (системный «Заказчик», Р9 #631). */
+function clientOf(customFields: unknown): string | null {
+  if (customFields === null || typeof customFields !== 'object') return null;
+  const value = (customFields as Record<string, unknown>)[SYSTEM_FIELD_IDS.projectClient];
+  return typeof value === 'string' && value !== '' ? value : null;
 }

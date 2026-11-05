@@ -138,15 +138,31 @@ export class DictionaryItemsService {
       await this.dictionaries.lockDictionary(dictionary.id, tx);
       const item = await this.dictionaries.findItemById(itemId, tx);
       if (!item || item.dictionaryId !== dictionary.id) throw itemNotFound(itemId);
-      if (item.name === dto.name) return item;
-      if (await this.dictionaries.findActiveItemByName(dictionary.id, dto.name, item.id, tx)) {
-        throw nameTaken(dto.name);
+      const rename = dto.name !== undefined && dto.name !== item.name;
+      if (
+        rename &&
+        (await this.dictionaries.findActiveItemByName(dictionary.id, dto.name!, item.id, tx))
+      ) {
+        throw nameTaken(dto.name!);
       }
-      const updated = await this.dictionaries.renameItem(item.id, dto.name, tx);
+      if (!rename && dto.color === undefined) return item;
+      if (!rename && dto.color === item.color) return item;
+      const updated = await this.dictionaries.updateItem(
+        item.id,
+        {
+          ...(rename ? { name: dto.name } : {}),
+          ...(dto.color !== undefined ? { color: dto.color } : {}),
+        },
+        tx,
+      );
       await this.eventBus.emit(
         tx,
         DICTIONARY_EVENTS.ITEM_UPDATED,
-        { dictionaryId: dictionary.id, itemId: item.id, fields: ['name'] },
+        {
+          dictionaryId: dictionary.id,
+          itemId: item.id,
+          fields: [...(rename ? ['name'] : []), ...(dto.color !== undefined ? ['color'] : [])],
+        },
         { actorId, aggregateType: 'dictionary', aggregateId: dictionary.id },
       );
       return updated;

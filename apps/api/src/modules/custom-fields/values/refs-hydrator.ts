@@ -24,15 +24,23 @@ import {
   type ProjectActor,
   type ProjectReader,
 } from '../../projects/ports/project-reader.port.js';
+import { TASK_REF_READER, type TaskRefReader } from '../../tasks/ports/task-ref-reader.port.js';
+import {
+  LETTER_REF_READER,
+  type LetterRefReader,
+} from '../../correspondence/ports/letter-ref-reader.port.js';
+import { NODE_REF_READER, type NodeRefReader } from '../../projects/ports/node-ref-reader.port.js';
 
 /**
- * Ссылки для показа значений (#431, Р6): деталь сущности несёт
- * `customFieldRefs`, чтобы карточка не ходила в справочники за каждым именем.
- * Пачки по видам ссылок (сотрудники, подразделения, элементы справочников и
- * валюта денег, контрагенты), дедуп по `kind:id`.
+ * Ссылки для показа значений (#431 Р6; #631 Р5 — задачи/письма/папки):
+ * деталь сущности несёт `customFieldRefs`, чтобы карточка не ходила в
+ * справочники за каждым именем. Пачки по видам ссылок, дедуп `kind:id`.
  *
- * `name: null` — «Запись недоступна»: невидимые актёру проекты (#52) и
- * удалённые записи. Архивные читаются с пометкой `archived`.
+ * `name: null` — «Запись недоступна»: невидимые актёру цели (проекты,
+ * конфиденциальные задачи/письма) и удалённые записи; удалённая цель —
+ * ещё и `archived: true` («запись удалена», значение не инвалидируется).
+ * Архивные читаются с пометкой `archived`. Цвет — только у вариантов
+ * списков (Р6 #631).
  */
 @Injectable()
 export class CustomFieldRefsHydrator {
@@ -42,6 +50,9 @@ export class CustomFieldRefsHydrator {
     @Inject(DICTIONARY_READER) private readonly dictionaries: DictionaryReader,
     @Inject(COUNTERPARTY_READER) private readonly counterparties: CounterpartyReader,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
+    @Inject(TASK_REF_READER) private readonly tasks: TaskRefReader,
+    @Inject(LETTER_REF_READER) private readonly letters: LetterRefReader,
+    @Inject(NODE_REF_READER) private readonly nodes: NodeRefReader,
   ) {}
 
   async hydrate(
@@ -69,6 +80,9 @@ export class CustomFieldRefsHydrator {
     const itemIds = new Set<string>();
     const counterpartyIds = new Set<string>();
     const projectIds = new Set<string>();
+    const taskIds = new Set<string>();
+    const letterIds = new Set<string>();
+    const nodeIds = new Set<string>();
 
     const scalarIds = (value: unknown): string[] =>
       Array.isArray(value) ? (value as string[]) : [String(value)];
@@ -98,6 +112,15 @@ export class CustomFieldRefsHydrator {
           case 'project':
             projectIds.add(String(value));
             break;
+          case 'task':
+            taskIds.add(String(value));
+            break;
+          case 'letter':
+            letterIds.add(String(value));
+            break;
+          case 'node':
+            nodeIds.add(String(value));
+            break;
           default:
             break;
         }
@@ -112,6 +135,12 @@ export class CustomFieldRefsHydrator {
       counterpartyRefs,
       activeCounterparties,
       projectRefs,
+      taskRefs,
+      letterRefs,
+      nodeRefs,
+      visibleTasks,
+      visibleLetters,
+      visibleNodes,
     ] = await Promise.all([
       this.users.findRefs([...userIds], tx),
       this.users.filterActiveUserIds([...userIds], tx),
@@ -120,6 +149,18 @@ export class CustomFieldRefsHydrator {
       this.counterparties.refs([...counterpartyIds]),
       Promise.all([...counterpartyIds].map((id) => this.counterparties.activeRef(id))),
       actor ? this.projects.refsFor(actor, [...projectIds]) : Promise.resolve([]),
+      this.tasks.refs([...taskIds]),
+      this.letters.refs([...letterIds]),
+      this.nodes.refs([...nodeIds]),
+      actor
+        ? this.visibleOf(taskIds, (id) => this.tasks.visibleFor(id, actor))
+        : Promise.resolve(new Set<string>()),
+      actor
+        ? this.visibleOf(letterIds, (id) => this.letters.visibleFor(id, actor))
+        : Promise.resolve(new Set<string>()),
+      actor
+        ? this.visibleOf(nodeIds, (id) => this.nodes.visibleFor(id, actor))
+        : Promise.resolve(new Set<string>()),
     ]);
 
     const refs = new Map<string, CustomFieldRef>();
@@ -153,6 +194,7 @@ export class CustomFieldRefsHydrator {
         name: item.name,
         avatarUrl: null,
         archived: !item.isActive,
+        color: item.color ?? null,
       });
     }
     const activeCounterpartyIds = new Set(
@@ -180,7 +222,54 @@ export class CustomFieldRefsHydrator {
         archived: false,
       });
     }
+    // Задачи/письма/папки (Р5 #631): имя — только видимые актёру; удалённая
+    // цель — name null + archived (история значения живёт).
+    const taskById = new Map(taskRefs.map((ref) => [ref.id, ref]));
+    for (const id of taskIds) {
+      const task = taskById.get(id);
+      const visible = task !== undefined && !task.deleted && visibleTasks.has(id);
+      add({
+        kind: 'task',
+        id,
+        name: visible ? task!.name : null,
+        avatarUrl: null,
+        archived: task?.deleted ?? false,
+      });
+    }
+    const letterById = new Map(letterRefs.map((ref) => [ref.id, ref]));
+    for (const id of letterIds) {
+      const letter = letterById.get(id);
+      const visible = letter !== undefined && !letter.deleted && visibleLetters.has(id);
+      add({
+        kind: 'letter',
+        id,
+        name: visible ? letter!.name : null,
+        avatarUrl: null,
+        archived: letter?.deleted ?? false,
+      });
+    }
+    const nodeById = new Map(nodeRefs.map((ref) => [ref.id, ref]));
+    for (const id of nodeIds) {
+      const node = nodeById.get(id);
+      const visible = node !== undefined && visibleNodes.has(id);
+      add({
+        kind: 'node',
+        id,
+        name: visible ? node!.name : null,
+        avatarUrl: null,
+        archived: node === undefined,
+      });
+    }
 
     return [...refs.values()];
+  }
+
+  /** Параллельная видимость ссылок одного вида (пачка мелких проверок). */
+  private async visibleOf(
+    ids: ReadonlySet<string>,
+    visibleFor: (id: string) => Promise<boolean>,
+  ): Promise<Set<string>> {
+    const checks = await Promise.all([...ids].map((id) => visibleFor(id)));
+    return new Set([...ids].filter((_, index) => checks[index]));
   }
 }

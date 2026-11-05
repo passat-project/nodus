@@ -57,7 +57,7 @@ export class TaskDeciderRecipients {
     if (transitions.length === 0) return [];
 
     const managers = await this.org.managersOf([task.creatorId, task.assigneeId], tx);
-    const definitions = await this.customFields.definitions('task', {}, tx);
+    const definitions = await this.customFields.definitions({}, tx);
     const userFieldIds = new Set(
       definitions
         .filter((definition) => definition.type === 'user' || definition.type === 'users')

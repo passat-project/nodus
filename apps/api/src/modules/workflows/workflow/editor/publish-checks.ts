@@ -96,11 +96,10 @@ export async function checkDocumentForPublish(
     tx: TransactionClient;
   },
 ): Promise<void> {
-  const customFields = await customFieldFactsOf(deps.registry, ctx.category, ctx.tx, ctx.typeId);
+  const customFields = await customFieldFactsOf(deps.registry, ctx.tx, ctx.typeId);
   const creation = await creationFactsOf(
     deps.registry,
     deps.profiles,
-    ctx.category,
     ctx.document.creation,
     ctx.tx,
   );

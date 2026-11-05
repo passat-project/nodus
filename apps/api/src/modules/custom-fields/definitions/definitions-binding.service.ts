@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
-import type { CustomFieldDefinition, CustomFieldScope } from '@nodus/contracts';
+import type { CustomFieldDefinition } from '@nodus/contracts';
+import { ErrorCode } from '@nodus/contracts';
 
 import {
   TransactionRunner,
@@ -13,20 +14,28 @@ import {
   type ProcessCatalogReader,
 } from '../../workflows/ports/process-catalog-reader.port.js';
 import {
-  WORKFLOW_FIELD_USAGE_READER,
-  type WorkflowFieldUsageReader,
-} from '../../workflows/ports/workflow-field-usage.port.js';
+  FIELD_BINDING_TARGET_READER,
+  type FieldBindingTargetReader,
+} from '../../projects/ports/field-binding-targets.port.js';
 import { DefinitionMapper, type FieldDefinitionRow } from './definition.mapper.js';
 import { emitDefinitionChanged } from './definition-events.js';
+import {
+  assertTargetsBindable,
+  bindingRowKind,
+  type BindingTargetKind,
+} from './binding-targets.js';
 import { DefinitionsRepository } from './definitions.repository.js';
-import { assertBindable, assertUnbindable } from './type-bindings.js';
 
 /**
- * Привязка атрибута к типам процессов (#432, Р8): точечные PUT/DELETE.
- * Вынесено из `DefinitionsService`, чтобы реестр оставался в лимите строк
- * (I5), а правило «снятие не ломает работающий маршрут» жило рядом с
- * привязкой. Обе операции идемпотентны: повтор — не ошибка (клиент мог не
- * получить ответ), событие всё равно уходит — кэши владельцев сходятся.
+ * Точечные привязки «Где используется» (Р3 #631): PUT/DELETE
+ * `/definitions/:id/bindings/:kind/:targetId`. Вынесено из DefinitionsService,
+ * чтобы реестр оставался в лимите строк (I5). Обе операции идемпотентны:
+ * повтор — не ошибка, событие всё равно уходит — кэши владельцев сходятся.
+ *
+ * Снятие привязки разрешено ВСЕГДА (О3 #631): заполненные значения не
+ * стираются, опубликованные маршруты с ключом продолжают работать
+ * (толерантность unknown-ключа), повторная публикация с непривязанным
+ * ключом — ошибка `custom_field_not_in_type` как раньше.
  */
 @Injectable()
 export class DefinitionsBindingService {
@@ -35,33 +44,39 @@ export class DefinitionsBindingService {
     private readonly mapper: DefinitionMapper,
     private readonly txRunner: TransactionRunner,
     private readonly eventBus: EventBus,
-    @Inject(WORKFLOW_FIELD_USAGE_READER) private readonly workflows: WorkflowFieldUsageReader,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
+    @Inject(FIELD_BINDING_TARGET_READER) private readonly targets: FieldBindingTargetReader,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(DefinitionsBindingService.name);
   }
 
-  async bind(id: string, typeId: string, actorId: string): Promise<CustomFieldDefinition> {
+  async bind(
+    id: string,
+    kind: BindingTargetKind,
+    targetId: string,
+    actorId: string,
+  ): Promise<CustomFieldDefinition> {
     const definition = await this.require(id);
-    await assertBindable(this.catalog, definition.scope, [typeId]);
+    assertNotCompany(definition);
+    await assertTargetsBindable(this.catalog, this.targets, kind, [targetId]);
     return this.txRunner.run(async (tx) => {
-      await this.definitions.lockScope(definition.scope, tx);
-      await this.definitions.bindType(id, typeId, tx);
+      await this.definitions.bindTarget(id, bindingRowKind(kind), targetId, tx);
       return this.afterChange(tx, id, actorId);
     });
   }
 
-  /** Снятие блокируется, пока атрибут работает в опубликованном маршруте
-   *  этого типа (окно перехода, условие, форма создания) — иначе публикация
-   *  уже работающего маршрута стала бы невалидной (409 со списком процессов). */
-  async unbind(id: string, typeId: string, actorId: string): Promise<CustomFieldDefinition> {
+  async unbind(
+    id: string,
+    kind: BindingTargetKind,
+    targetId: string,
+    actorId: string,
+  ): Promise<CustomFieldDefinition> {
     const definition = await this.require(id);
-    const scope = definition.scope as CustomFieldScope;
-    await assertUnbindable(this.workflows, scope, id, [typeId]);
+    assertNotCompany(definition);
+    await assertTargetsBindable(this.catalog, this.targets, kind, [targetId]);
     return this.txRunner.run(async (tx) => {
-      await this.definitions.lockScope(scope, tx);
-      await this.definitions.unbindType(id, typeId, tx);
+      await this.definitions.unbindTarget(id, bindingRowKind(kind), targetId, tx);
       return this.afterChange(tx, id, actorId);
     });
   }
@@ -85,8 +100,14 @@ export class DefinitionsBindingService {
       row,
       'updated',
       actorId,
-      ['typeIds'],
+      ['bindings'],
     );
     return this.mapper.toDto(row, tx);
+  }
+}
+
+function assertNotCompany(definition: FieldDefinitionRow): void {
+  if (definition.isCompany) {
+    throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Company variable cannot have bindings');
   }
 }

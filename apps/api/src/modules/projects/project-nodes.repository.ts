@@ -25,7 +25,6 @@ export interface NewProjectNode {
   parentId: string | null;
   kindId: string;
   name: string;
-  code: string | null;
   order: string;
   customFields: Prisma.InputJsonValue;
 }
@@ -82,18 +81,6 @@ export class ProjectNodesRepository {
   }
 
   /** Шифр занят другим узлом проекта (зеркало частичного unique). */
-  async codeTaken(
-    projectId: string,
-    code: string,
-    excludeId: string | null,
-    tx?: TransactionClient,
-  ): Promise<boolean> {
-    const row = await (tx ?? this.prisma).projectNode.findFirst({
-      select: { id: true },
-      where: { projectId, code, ...(excludeId ? { id: { not: excludeId } } : {}) },
-    });
-    return row !== null;
-  }
 
   create(tx: TransactionClient, data: NewProjectNode): Promise<ProjectNodeRow> {
     return tx.projectNode.create({ select: nodeSelect, data: { id: randomUUID(), ...data } });

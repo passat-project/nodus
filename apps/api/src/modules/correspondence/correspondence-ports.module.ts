@@ -5,6 +5,8 @@ import { LetterChatReaderProvider } from './ports/letter-chat-reader.provider.js
 import { LETTER_CHAT_READER } from './ports/letter-chat-reader.port.js';
 import { LetterFieldValuesProvider } from './ports/letter-field-values.provider.js';
 import { LETTER_FIELD_VALUES_READER } from './ports/letter-field-values.port.js';
+import { LetterRefReaderProvider } from './ports/letter-ref-reader.provider.js';
+import { LETTER_REF_READER } from './ports/letter-ref-reader.port.js';
 import { LetterVisibilityProvider } from './ports/letter-visibility.provider.js';
 import { LETTER_VISIBILITY_READER } from './ports/letter-visibility.port.js';
 
@@ -26,7 +28,14 @@ import { LETTER_VISIBILITY_READER } from './ports/letter-visibility.port.js';
     { provide: LETTER_FIELD_VALUES_READER, useExisting: LetterFieldValuesProvider },
     LetterVisibilityProvider,
     { provide: LETTER_VISIBILITY_READER, useExisting: LetterVisibilityProvider },
+    LetterRefReaderProvider,
+    { provide: LETTER_REF_READER, useExisting: LetterRefReaderProvider },
   ],
-  exports: [LETTER_CHAT_READER, LETTER_FIELD_VALUES_READER, LETTER_VISIBILITY_READER],
+  exports: [
+    LETTER_CHAT_READER,
+    LETTER_FIELD_VALUES_READER,
+    LETTER_VISIBILITY_READER,
+    LETTER_REF_READER,
+  ],
 })
 export class CorrespondencePortsModule {}

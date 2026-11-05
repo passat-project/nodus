@@ -2,7 +2,6 @@ import type { InjectionToken } from '@nestjs/common';
 import type {
   CustomFieldDefinition,
   CustomFieldRef,
-  CustomFieldScope,
   CustomFieldValue,
   CustomFieldValues,
 } from '@nodus/contracts';
@@ -30,17 +29,19 @@ export interface RegistryFieldChange {
 }
 
 /**
- * Скоупинг реестра (#432, #556): тип процесса ИЛИ список атрибутов вида
- * папки. У видов папок нет публикуемого маршрута и таблицы привязок —
- * привязка живёт формой вида (`form.fields`), поэтому реестр фильтруется
- * множеством id. Оба скоупа одновременно — ошибка программиста
- * (`typeId and fieldIds are exclusive`): смешать привязки нельзя.
+ * Место сущности — критерий скопинга реестра (Р3 #631): тип процесса
+ * (задачи/письма), тип проекта или вид папки. Реестр отдаёт только
+ * атрибуты, привязанные к этому месту («Где используется»); XOR с пустым —
+ * весь реестр (старые вызовы). Отдельной ветки `fieldIds` больше нет:
+ * привязка вида папки — та же строка `field_bindings`.
  */
+export interface RegistryTarget {
+  kind: 'process_type' | 'project_type' | 'node_kind';
+  id: string;
+}
+
 export interface RegistryScoping {
-  /** Тип процесса (#432): только атрибуты, привязанные к типу. */
-  typeId?: string;
-  /** Вид папки (#556): только атрибуты формы вида (порядок реестра). */
-  fieldIds?: readonly string[];
+  target?: RegistryTarget;
 }
 
 export interface PrepareCreateArgs extends RegistryScoping {
@@ -48,8 +49,8 @@ export interface PrepareCreateArgs extends RegistryScoping {
   input: CustomFieldValues;
   /** Автор сущности — источник умолчания «подразделение автора» (Р5). */
   authorId: string;
-  /** Актёр запроса (#52): значения-ссылки на проекты проверяются на
-   *  видимость актёру (секретный проект нельзя поставить значением). */
+  /** Актёр запроса (#52, Р5 #631): значения-ссылки на записи проверяются
+   *  на видимость актёру (скрытая цель = несуществующая). */
   actor: ProjectActor;
 }
 
@@ -58,42 +59,30 @@ export interface PrepareUpdateArgs extends RegistryScoping {
   current: CustomFieldValues;
   /** Патч: `null` удаляет ключ; непустые — проверяются. */
   patch: Record<string, CustomFieldValue | null>;
-  /** Актёр запроса (#52): проверка видимости значений-ссылок на проекты. */
+  /** Актёр запроса (#52, Р5 #631): проверка видимости значений-ссылок. */
   actor: ProjectActor;
 }
 
-/** Что читать из реестра: `typeId` — привязанные к типу (#432), `fieldIds` —
- *  атрибуты формы вида папки (#556). */
+/** Что читать из реестра: без `target` — весь реестр (карточки, фильтры). */
 export type RegistryQuery = RegistryScoping;
 
 export interface CustomFieldRegistry {
-  /** Определения области (включая скрытые — служебные значения пишет
-   *  автоматика). Порядок — карточки и фильтров. */
-  definitions(
-    scope: CustomFieldScope,
-    opts?: RegistryQuery,
-    tx?: TransactionClient,
-  ): Promise<CustomFieldDefinition[]>;
+  /** Определения (весь реестр или место сущности). Порядок — карточки. */
+  definitions(opts?: RegistryQuery, tx?: TransactionClient): Promise<CustomFieldDefinition[]>;
 
   /** Создание сущности: умолчания (невалидные пропускаются) + ввод
    *  (явное значение важнее) + проверка. Ошибка — 422 со списком полей. */
-  prepareCreate(
-    scope: CustomFieldScope,
-    args: PrepareCreateArgs,
-    tx?: TransactionClient,
-  ): Promise<CustomFieldValues>;
+  prepareCreate(args: PrepareCreateArgs, tx?: TransactionClient): Promise<CustomFieldValues>;
 
   /** Правка: `null` удаляет ключ, проверяются ТОЛЬКО изменённые значения. */
   prepareUpdate(
-    scope: CustomFieldScope,
     args: PrepareUpdateArgs,
     tx?: TransactionClient,
   ): Promise<{ next: CustomFieldValues; changes: RegistryFieldChange[] }>;
 
   /** Ссылки для показа значений детали (Р6): имена, аватары, архивность.
-   *  actor (#52): ссылки-проекты скрываются, если проект не виден актёру. */
+   *  actor (#52, Р5 #631): невидимые цели — name null. */
   refs(
-    scope: CustomFieldScope,
     values: CustomFieldValues,
     actor: ProjectActor,
     tx?: TransactionClient,
@@ -103,9 +92,19 @@ export interface CustomFieldRegistry {
    *  проекта отдаёт значения всех папок одним набором ссылок (О2) — одна
    *  пачка запросов на вид ссылки вместо N+1 по папкам. Дедуп `kind:id`. */
   refsMany(
-    scope: CustomFieldScope,
     valuesList: readonly CustomFieldValues[],
     actor: ProjectActor,
     tx?: TransactionClient,
   ): Promise<CustomFieldRef[]>;
+
+  /** Слот формы места — привязка (Р3/Р10 #631): запись формы вида/типа
+   *  синхронизирует привязки атрибутов этого места с набором слотов
+   *  (слот добавлен — привязка появляется, убран — снимается; значения
+   *  не трогаются). project_type | node_kind — у типов процессов форм-слотов
+   *  нет (окно создания живёт в маршруте). */
+  syncPlaceBindings(
+    target: RegistryTarget,
+    fieldIds: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<void>;
 }

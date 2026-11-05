@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
-import type { ProjectCodeField, ProjectType, ProjectTypeUpdateBody } from '@nodus/contracts';
+import type { ProjectType, ProjectTypeForm, ProjectTypeUpdateBody } from '@nodus/contracts';
 
 import { PrismaService } from '../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../core/database/transaction-runner.js';
@@ -12,12 +12,13 @@ const typeSelect = {
   icon: true,
   color: true,
   codeField: true,
+  form: true,
   kindIds: true,
   archivedAt: true,
 } as const;
 type Row = Prisma.ProjectTypeGetPayload<{ select: typeof typeSelect }>;
 
-/** Справочник типов проектов «Автоматизации» (#52; шаблоны — следующие issues). */
+/** Справочник типов проектов «Автоматизации» (#52; форма типа — Р10 #631). */
 @Injectable()
 export class ProjectTypesRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -28,8 +29,9 @@ export class ProjectTypesRepository {
       name: row.name,
       icon: row.icon as ProjectType['icon'],
       color: row.color as ProjectType['color'],
-      codeField: row.codeField as ProjectCodeField,
-      // Допустимые виды папок типа (#556): null — все, массив — только эти.
+      // Слоты атрибутов типа (Р10 #631): слот «Шифр» занял место политики
+      // codeField; колонка code_field заморожена (не читается).
+      form: (row.form ?? { fields: [] }) as ProjectTypeForm,
       kindIds: Array.isArray(row.kindIds) ? (row.kindIds as string[]) : null,
       archivedAt: row.archivedAt?.toISOString() ?? null,
     };
@@ -68,17 +70,21 @@ export class ProjectTypesRepository {
 
   async create(
     tx: TransactionClient,
-    data: { name: string; icon?: string; color?: string },
+    data: { name: string; icon?: string; color?: string; form?: ProjectTypeForm },
   ): Promise<ProjectType> {
     const row = await tx.projectType.create({
       select: typeSelect,
-      data: { id: randomUUID(), ...data },
+      data: {
+        id: randomUUID(),
+        ...data,
+        ...(data.form ? { form: data.form as Prisma.InputJsonValue } : {}),
+      },
     });
     return this.toDto(row);
   }
 
-  /** Правка типа: имя, значок, цвет, политика «Шифра» и допустимые виды
-   *  папок (null — все; #556). Валидность id видов — контроллер каталога. */
+  /** Правка типа: имя, значок, цвет, форма (слоты атрибутов, Р10) и
+   *  допустимые виды папок (#556). Валидность id видов — контроллер каталога. */
   async update(
     tx: TransactionClient,
     id: string,
@@ -88,7 +94,7 @@ export class ProjectTypesRepository {
     if (patch.name !== undefined) data.name = patch.name;
     if (patch.icon !== undefined) data.icon = patch.icon;
     if (patch.color !== undefined) data.color = patch.color;
-    if (patch.codeField !== undefined) data.codeField = patch.codeField;
+    if (patch.form !== undefined) data.form = patch.form as Prisma.InputJsonValue;
     if (patch.kindIds !== undefined) {
       data.kindIds =
         patch.kindIds === null ? Prisma.JsonNull : (patch.kindIds as Prisma.InputJsonValue);

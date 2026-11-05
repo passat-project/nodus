@@ -1,4 +1,5 @@
 import type { InjectionToken } from '@nestjs/common';
+import type { CustomFieldRef } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 
@@ -27,6 +28,8 @@ export interface DictionaryItemRef {
   dictionaryId: string;
   name: string;
   isActive: boolean;
+  /** Тон варианта списка (Р6 #631): ключ stageColorSchema, null — без цвета. */
+  color: NonNullable<CustomFieldRef['color']> | null;
 }
 
 export interface DictionaryReader {

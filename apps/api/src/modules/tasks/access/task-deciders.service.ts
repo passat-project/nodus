@@ -63,7 +63,7 @@ export class TaskDeciders {
     const [positions, managers, definitions, roles] = await Promise.all([
       this.org.positionsOf(actorId, tx),
       this.org.managersOf([task.creatorId, task.assigneeId], tx),
-      this.customFields.definitions('task', {}, tx),
+      this.customFields.definitions({}, tx),
       task.projectId
         ? this.projects.rolesIn(actorId, [task.projectId], tx)
         : Promise.resolve<Record<string, ProjectRole[]>>({}),
@@ -124,7 +124,7 @@ export class TaskDeciders {
     const [positions, managers, definitions, roles] = await Promise.all([
       this.org.positionsOf(actorId),
       this.org.managersOf([...new Set(tasks.flatMap((task) => [task.creatorId, task.assigneeId]))]),
-      this.customFields.definitions('task', {}),
+      this.customFields.definitions({}),
       this.projects.rolesIn(actorId, [
         ...new Set(tasks.map((task) => task.projectId).filter((id): id is string => id !== null)),
       ]),

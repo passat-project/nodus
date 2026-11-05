@@ -4,8 +4,13 @@ import {
   Permission,
   PROJECT_EVENTS,
   PROJECT_LIMITS,
+  SYSTEM_FIELD_IDS,
+  missingProjectFields,
+  clearedProjectFields,
+  projectTypeFormOf,
   type AuthUser,
   type CreateProjectBody,
+  type CustomFieldValue,
   type ProjectDetail,
   type UpdateProjectBody,
 } from '@nodus/contracts';
@@ -17,15 +22,10 @@ import { DomainException } from '../../core/errors/domain-exception.js';
 import { EventBus } from '../../core/events/event-bus.js';
 import { USER_PROFILE_READER, type UserProfileReader } from '../../core/ports/user-profile.port.js';
 import {
-  COUNTERPARTY_READER,
-  type CounterpartyReader,
-} from '../crm/ports/counterparty-reader.port.js';
-import {
   CUSTOM_FIELD_REGISTRY,
   type CustomFieldRegistry,
 } from '../custom-fields/ports/custom-field-registry.port.js';
 import type { ProjectFacts } from './project-access.js';
-import { assertCodePolicy } from './project-code-policy.js';
 import { ProjectsQueryService } from './projects-query.service.js';
 import { ProjectGroupsRepository } from './project-groups.repository.js';
 import { ProjectMembersService } from './project-members.service.js';
@@ -58,7 +58,6 @@ export class ProjectsService {
     private readonly members: ProjectMembersService,
     private readonly queries: ProjectsQueryService,
     @Inject(USER_PROFILE_READER) private readonly profiles: UserProfileReader,
-    @Inject(COUNTERPARTY_READER) private readonly counterparties: CounterpartyReader,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
   ) {}
 
@@ -79,30 +78,44 @@ export class ProjectsService {
     }
     const type = await this.types.findActive(body.typeId);
     if (!type) throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Unknown project type');
-    assertCodePolicy(type.codeField, body.code ?? null);
     if (body.portfolioId && !(await this.groups.findActive(body.portfolioId))) {
       throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Unknown portfolio');
     }
-    await this.assertClientSettable(body.clientId ?? null);
-    if (body.code && (await this.repo.codeTaken(body.code, null))) {
-      throw DomainException.conflict('Project code is already taken');
-    }
     const visibility = body.visibility ?? (await this.defaultVisibility());
     const id = await this.txRunner.run(async (tx) => {
+      // Шифр/заказчик — атрибуты (Р9 #631): legacy-поля тела переводятся в
+      // значения системных атрибутов (десктоп), явное customFields важнее.
+      const input = legacyToAttributes(body, body.customFields ?? {});
       const customFields = await this.customFields.prepareCreate(
-        'project',
-        { input: body.customFields ?? {}, authorId: user.id, actor: user },
+        {
+          input,
+          authorId: user.id,
+          actor: user,
+          target: { kind: 'project_type', id: body.typeId },
+        },
         tx,
       );
+      // Обязательные слоты формы типа — после умолчаний (Р10): сервер —
+      // истина, как у задач и папок.
+      const missing = missingProjectFields(projectTypeFormOf(type), { customFields });
+      if (missing.length > 0) {
+        throw new DomainException(
+          ErrorCode.PROJECT_FIELDS_REQUIRED,
+          'Required project fields are missing',
+          {
+            typeId: type.id,
+            fields: missing,
+            reason: 'create',
+          },
+        );
+      }
       const row = await this.repo.create(
         {
-          code: body.code ?? null,
           name: body.name,
           description: body.description ?? '',
           color: body.color ?? 'blue',
           typeId: body.typeId,
           portfolioId: body.portfolioId ?? null,
-          clientId: body.clientId ?? null,
           managerId,
           assistantIds: assistantIds as Prisma.InputJsonValue,
           visibility,
@@ -164,16 +177,6 @@ export class ProjectsService {
     const facts = this.factsOf(row);
     const patch: ProjectFieldsPatch = {};
     const fields: string[] = [];
-    if (body.code !== undefined) {
-      const next = body.code ?? null;
-      const type = await this.types.findById(row.typeId);
-      assertCodePolicy(type?.codeField ?? 'optional', next);
-      if (next && (await this.repo.codeTaken(next, id))) {
-        throw DomainException.conflict('Project code is already taken');
-      }
-      patch.code = next;
-      fields.push('code');
-    }
     if (body.name !== undefined) {
       patch.name = body.name;
       fields.push('name');
@@ -192,11 +195,6 @@ export class ProjectsService {
       }
       patch.portfolioId = body.portfolioId ?? null;
       fields.push('portfolioId');
-    }
-    if (body.clientId !== undefined) {
-      await this.assertClientSettable(body.clientId ?? null);
-      patch.clientId = body.clientId ?? null;
-      fields.push('clientId');
     }
     if (body.visibility !== undefined && body.visibility !== row.visibility) {
       // Смена видимости на секретный — только действующий руководитель
@@ -234,14 +232,52 @@ export class ProjectsService {
       patch.assistantIds = assistantIds as Prisma.InputJsonValue;
       fields.push('assistantIds');
     }
-    if (body.customFields && Object.keys(body.customFields).length > 0) {
-      const prepared = await this.customFields.prepareUpdate('project', {
+    if (
+      (body.customFields && Object.keys(body.customFields).length > 0) ||
+      body.code !== undefined ||
+      body.clientId !== undefined
+    ) {
+      // Шифр/заказчик — атрибуты: legacy-поля тела и customFields сливаются
+      // в один патч (явное customFields важнее), затем общий конвейер.
+      const patchBody = legacyPatchToAttributes(body, body.customFields ?? {});
+      const type = await this.types.findById(row.typeId);
+      const form = type ? projectTypeFormOf(type) : { fields: [] };
+      const prepared = await this.customFields.prepareUpdate({
         current: row.customFields as CustomFieldValues,
-        patch: body.customFields,
+        patch: patchBody,
         actor: user,
+        target: { kind: 'project_type', id: row.typeId },
       });
+      const cleared = clearedProjectFields(
+        form.fields.filter((slot) => slot.state === 'required').map((slot) => slot.fieldId),
+        patchBody,
+      );
+      if (cleared.length > 0) {
+        throw new DomainException(
+          ErrorCode.PROJECT_FIELDS_REQUIRED,
+          'Required project fields cannot be cleared',
+          {
+            typeId: row.typeId,
+            fields: cleared,
+            reason: 'clear',
+          },
+        );
+      }
       patch.customFields = prepared.next as Prisma.InputJsonValue;
-      fields.push(...prepared.changes.map((change) => `cf.${change.fieldId}`));
+      const changedFields = [...prepared.changes.map((change) => `cf.${change.fieldId}`)];
+      if (
+        body.code !== undefined &&
+        !changedFields.includes(`cf.${SYSTEM_FIELD_IDS.projectCode}`)
+      ) {
+        changedFields.push(`cf.${SYSTEM_FIELD_IDS.projectCode}`);
+      }
+      if (
+        body.clientId !== undefined &&
+        !changedFields.includes(`cf.${SYSTEM_FIELD_IDS.projectClient}`)
+      ) {
+        changedFields.push(`cf.${SYSTEM_FIELD_IDS.projectClient}`);
+      }
+      fields.push(...changedFields);
     }
     await this.txRunner.run(async (tx) => {
       const next = await this.repo.update(tx, id, patch);
@@ -261,8 +297,13 @@ export class ProjectsService {
           projectId: id,
           fields,
           ...(patch.name !== undefined ? { name: patch.name } : {}),
-          ...(patch.clientId !== undefined
-            ? { clientId: patch.clientId ?? null, previousClientId: row.clientId ?? null }
+          ...(fields.some((field) => field === `cf.${SYSTEM_FIELD_IDS.projectClient}`)
+            ? {
+                clientId: clientOf(
+                  (patch.customFields as Prisma.JsonValue | undefined) ?? row.customFields,
+                ),
+                previousClientId: clientOf(row.customFields),
+              }
             : {}),
         },
         { actorId: user.id, aggregateType: 'project', aggregateId: id },
@@ -321,10 +362,52 @@ export class ProjectsService {
     }
     return { row };
   }
+}
 
-  private async assertClientSettable(clientId: string | null): Promise<void> {
-    if (!clientId) return;
-    const client = await this.counterparties.activeRef(clientId);
-    if (!client) throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Unknown counterparty');
+/** Шифр проекта из значений атрибутов (системный «Шифр», Р9 #631). */
+export function codeOf(customFields: unknown): string | null {
+  const value = attributeValue(customFields, SYSTEM_FIELD_IDS.projectCode);
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+/** Заказчик проекта из значений атрибутов (системный «Заказчик», Р9 #631). */
+export function clientOf(customFields: unknown): string | null {
+  const value = attributeValue(customFields, SYSTEM_FIELD_IDS.projectClient);
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+function attributeValue(customFields: unknown, fieldId: string): unknown {
+  if (customFields === null || typeof customFields !== 'object') return null;
+  return (customFields as Record<string, unknown>)[fieldId] ?? null;
+}
+
+/** Legacy-поля создания → значения системных атрибутов (десктоп ещё шлёт
+ *  code/clientId сверху; явное customFields важнее — Class А #631). */
+function legacyToAttributes(
+  body: { code?: string; clientId?: string | null },
+  customFields: CustomFieldValues,
+): CustomFieldValues {
+  const next = { ...customFields };
+  if (body.code && next[SYSTEM_FIELD_IDS.projectCode] === undefined) {
+    next[SYSTEM_FIELD_IDS.projectCode] = body.code;
   }
+  if (body.clientId && next[SYSTEM_FIELD_IDS.projectClient] === undefined) {
+    next[SYSTEM_FIELD_IDS.projectClient] = body.clientId;
+  }
+  return next;
+}
+
+/** Legacy-поля правки → патч атрибутов: null очищает (канон custom-fields). */
+function legacyPatchToAttributes(
+  body: { code?: string | null; clientId?: string | null },
+  customFields: Record<string, CustomFieldValue | null>,
+): Record<string, CustomFieldValue | null> {
+  const next = { ...customFields };
+  if (body.code !== undefined && next[SYSTEM_FIELD_IDS.projectCode] === undefined) {
+    next[SYSTEM_FIELD_IDS.projectCode] = body.code;
+  }
+  if (body.clientId !== undefined && next[SYSTEM_FIELD_IDS.projectClient] === undefined) {
+    next[SYSTEM_FIELD_IDS.projectClient] = body.clientId;
+  }
+  return next;
 }

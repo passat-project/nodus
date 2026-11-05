@@ -174,6 +174,9 @@ export const ErrorCode = {
   /** Обязательные поля формы вида не заполнены: создание, смена вида или
    *  очистка (`details.reason`: create | kind_change | clear; 422; #556). */
   PROJECT_NODE_FIELDS_REQUIRED: 'PROJECT_NODE_FIELDS_REQUIRED',
+  /** Обязательные слоты формы типа проекта не заполнены/очищаются
+   *  (`details.reason`: create | clear; 422; #631 Р10). */
+  PROJECT_FIELDS_REQUIRED: 'PROJECT_FIELDS_REQUIRED',
   /** Форма вида ссылается на негодные атрибуты (`details.reason`:
    *  unknown_field | hidden_field; 422; #556). */
   PROJECT_NODE_KIND_FORM_INVALID: 'PROJECT_NODE_KIND_FORM_INVALID',

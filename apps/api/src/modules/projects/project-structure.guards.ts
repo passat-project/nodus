@@ -3,7 +3,6 @@ import { ErrorCode, kindAllowedByType, type NodeKind } from '@nodus/contracts';
 import type { TransactionClient } from '../../core/database/transaction-runner.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
 import type { NodeKindsRepository } from './project-node-kinds.repository.js';
-import type { ProjectNodesRepository } from './project-nodes.repository.js';
 import type { ProjectTypesRepository } from './project-types.repository.js';
 import { nodeInvalid, type TreeNodeLike } from './project-structure.tree.js';
 
@@ -66,21 +65,4 @@ export function assertParent(
   const parent = tree.find((entry) => entry.id === parentId);
   if (!parent) throw nodeInvalid(parentId);
   return parent;
-}
-
-/** Шифр папки уникален в проекте (зеркало частичного unique). */
-export async function assertCodeFree(
-  nodes: ProjectNodesRepository,
-  tx: TransactionClient,
-  projectId: string,
-  code: string,
-  excludeId: string | null,
-): Promise<void> {
-  if (await nodes.codeTaken(projectId, code, excludeId, tx)) {
-    throw new DomainException(
-      ErrorCode.PROJECT_NODE_CODE_TAKEN,
-      'Node code is already taken in this project',
-      { code },
-    );
-  }
 }

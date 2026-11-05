@@ -79,7 +79,7 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
     // Реестр атрибутов области (#431, Р7): гейт «Заполнены поля» знает,
     // какие ключи `cf.<id>` существуют. Скрытые входят — условие процесса
     // видит служебные значения, а несуществующий ключ не блокирует переход.
-    const definitions = await this.customFields.definitions('task', {}, tx);
+    const definitions = await this.customFields.definitions({}, tx);
     // Решающие (#433): факты актора и вакансии переходов текущей стадии.
     // Нет `decider_in` в маршруте — контекст undefined, лишних запросов нет.
     const deciderContext = await this.deciders.contextFor(
