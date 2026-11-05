@@ -56,8 +56,8 @@ interface UseKanbanBoardParams<S extends TaskStage> {
    *  пересобирает все колонки (перенос степпером, CRUD колонок), колонки —
    *  только её (WS-событие задачи). */
   queryKey: readonly unknown[];
-  /** URL фида колонки (cursor=null — первая страница). */
-  feedUrl: (stageId: string, cursor: string | null) => string;
+  /** URL фида колонки (cursor=null — первая страница; limit — глубина, #330). */
+  feedUrl: (stageId: string, cursor: string | null, limit: number) => string;
   /** Персист переноса (мутация фичи); onError обязателен — хук откатывает
    *  борд к снапшоту dragStart (I4). */
   onMove: (vars: KanbanMoveVars, opts: { onError: () => void }) => void;
@@ -89,6 +89,9 @@ export function useKanbanBoard<S extends TaskStage>({
   onMoveRolledBack,
 }: UseKanbanBoardParams<S>) {
   const [board, setBoard] = useState<TaskListItem[] | null>(null);
+  // Свежий борд для фидов: по нему считается догруженный хвост колонки (#330).
+  const boardRef = useRef<TaskListItem[] | null>(null);
+  boardRef.current = board;
   const [activeTask, setActiveTask] = useState<TaskListItem | null>(null);
   const [activeParent, setActiveParent] = useState<number | undefined>(undefined);
   const snapshotRef = useRef<TaskListItem[] | null>(null);
@@ -105,7 +108,9 @@ export function useKanbanBoard<S extends TaskStage>({
     stageList,
     queryKey,
     feedUrl,
+    feedLimit: KANBAN_FEED_LIMIT,
     draggingRef,
+    boardRef,
     setBoard,
   });
 
