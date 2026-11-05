@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   useInfiniteQuery,
   useQuery,
@@ -13,6 +14,7 @@ import type {
   ThreadStateList,
   UrgentPolicy,
 } from '@nodus/contracts';
+import { PAGINATION_MAX_LIMIT } from '@nodus/contracts';
 
 import { api, ApiError } from '../api-client.js';
 import { isDomainMocked } from '../api/api-mock-config.js';
@@ -120,6 +122,104 @@ export function useScopedConversations(scope: ConversationScope) {
     refetchInterval: livePoll(LIVE_CHAT_POLL.conversations, socketConnected),
     refetchIntervalInBackground: false,
   });
+}
+
+/** Потолок поиска беседы по deep-link (#225): 5 страниц по 100. */
+const CONVERSATION_LOOKUP_PAGES = 5;
+
+/**
+ * Поиск беседы по id за пределами загруженных страниц списка (#225): deep-link
+ * `/chat/<id>` на старую беседу не должен упираться в «Выберите беседу».
+ * Листает scope=all по 100 до нахождения; потолок — 5 страниц (500 бесед).
+ * Включается только когда id нет в загруженных списках — иначе лишний запрос.
+ */
+export function useConversationLookup(conversationId: string, enabled: boolean) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: chatKeys.conversationLookup(conversationId),
+    queryFn: async () => {
+      let cursor: string | null = null;
+      for (let page = 0; page < CONVERSATION_LOOKUP_PAGES; page += 1) {
+        const suffix: string = cursor ? `&cursor=${cursor}` : '';
+        const url: string = `/chat/conversations?limit=${PAGINATION_MAX_LIMIT}${suffix}`;
+        const result = await api<Paginated<ConversationListItem>>(url);
+        const hit = result.items.find((c) => c.id === conversationId);
+        if (hit) {
+          // Найденная строка дописывается в первую страницу списка: остальные
+          // потребители (просмотры, модерация, тред) ищут беседу в кэше списка,
+          // а не в собственном ключе поиска (#225).
+          queryClient.setQueryData<Paginated<ConversationListItem>>(
+            chatKeys.conversations(),
+            (old) => {
+              if (!old || old.items.some((c) => c.id === hit.id)) return old;
+              return { ...old, items: [...old.items, hit] };
+            },
+          );
+          return hit;
+        }
+        if (!result.nextCursor) return null;
+        cursor = result.nextCursor;
+      }
+      return null;
+    },
+    enabled: enabled && conversationId.length > 0,
+    retry: false,
+  });
+}
+
+/**
+ * Активная беседа мессенджера (#225): сначала загруженные списки (вкладка и
+ * первая страница scope=all), при промахе — поиск по страницам. Вынесено из
+ * `MessengerBody`, чтобы deep-link-фолбэк был покрыт тестом, а не только
+ * разметкой хоста.
+ */
+export function useActiveConversation(
+  conversationId: string | undefined,
+  tabItems: readonly ConversationListItem[],
+  loaded: readonly ConversationListItem[] | undefined,
+  /** Список завершил первую загрузку (успех ИЛИ ошибка): до этого не сканируем. */
+  listReady: boolean,
+) {
+  const queryClient = useQueryClient();
+  // Поиск терминальный В ПРЕДЕЛАХ БЕСЕДЫ: успех/промах фиксируется для id и
+  // больше не перезапускается. Иначе рефеч списка (поллинг/WS/квитанции
+  // чтения) стирает дописанную строку, гейт снова true — и каждое событие
+  // листает 1–5 страниц. Состояние — по id, а не по инстансу хука: хозяева
+  // меняют conversationId без ремаунта (страница/карточка), и следующий
+  // deep-link на другую дальнюю беседу обязан искать заново (#225).
+  const [settledId, setSettledId] = useState<string | null>(null);
+  const inLoaded =
+    Boolean(conversationId) &&
+    (tabItems.some((c) => c.id === conversationId) ||
+      (loaded?.some((c) => c.id === conversationId) ?? false));
+  // Терминальность — только пока результат жив в кэше (gcTime): после
+  // выпадения запроса из кэша повторный deep-link обязан искать заново.
+  const lookupKey = chatKeys.conversationLookup(conversationId ?? '');
+  const cachedResult = queryClient.getQueryData<ConversationListItem | null>(lookupKey);
+  const cachedError = queryClient.getQueryState(lookupKey)?.status === 'error';
+  const terminal = settledId === conversationId && (cachedResult !== undefined || cachedError);
+  const lookup = useConversationLookup(
+    conversationId ?? '',
+    Boolean(conversationId) && listReady && !inLoaded && !terminal,
+  );
+  useEffect(() => {
+    if (lookup.isSuccess || lookup.isError) setSettledId(conversationId ?? null);
+  }, [lookup.isSuccess, lookup.isError, conversationId]);
+  // Дописанная в первую страницу строка живёт до ближайшего рефеча списка —
+  // возвращаем её, чтобы просмотры/модерация/тред видели беседу (#225).
+  const hit = lookup.data;
+  useEffect(() => {
+    if (!hit) return;
+    queryClient.setQueryData<Paginated<ConversationListItem>>(chatKeys.conversations(), (old) => {
+      if (!old || old.items.some((c) => c.id === hit.id)) return old;
+      return { ...old, items: [...old.items, hit] };
+    });
+  }, [hit, loaded, queryClient]);
+  return (
+    tabItems.find((c) => c.id === conversationId) ??
+    loaded?.find((c) => c.id === conversationId) ??
+    hit
+  );
 }
 
 /** Чат задачи (#252) — обычная беседа мессенджера: find-or-create на

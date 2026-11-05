@@ -32,6 +32,10 @@ export const chatKeys = {
   members: (id: string) => [...chatKeys.all, 'members', id] as const,
   /** Политика важных (#177): счётчик дневного лимита попапа молнии. */
   urgentPolicy: () => [...chatKeys.all, 'urgentPolicy'] as const,
+  /** Deep-link на беседу за пределами первой страницы (#225): поиск по
+   *  страницам списка; под префиксом conversations() — WS-инвалидации списка
+   *  сбрасывают и его (найденная строка дописывается в первую страницу). */
+  conversationLookup: (id: string) => [...chatKeys.conversations(), 'lookup', id] as const,
   /** Сообщения по id (окно перехода, #380): файлы/сообщения итога вне
    *  загруженной ленты. Под chatKeys.all — WS-события сообщений её сбрасывают. */
   lookup: (id: string, ids: readonly string[]) =>

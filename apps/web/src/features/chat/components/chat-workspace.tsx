@@ -138,6 +138,7 @@ export function ChatWorkspace({
               <ConversationPane
                 conversationId={conversation.id}
                 showAuthor={conversation.type !== 'direct'}
+                conversation={conversation}
               />
             )}
           </div>

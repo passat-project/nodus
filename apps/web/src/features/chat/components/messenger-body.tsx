@@ -16,7 +16,10 @@ import { api } from '../../../shared/api-client.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { useUsersList } from '../../../shared/api/users-list.js';
 import { chatKeys } from '../../../shared/chat/chat-keys.js';
-import { useScopedConversations } from '../../../shared/chat/chat-queries.js';
+import {
+  useActiveConversation,
+  useScopedConversations,
+} from '../../../shared/chat/chat-queries.js';
 import { ChatHostNavigationContext } from '../../../shared/chat/chat-host.js';
 import { ConversationOpenResponder } from '../../../shared/chat/conversation-open-responder.js';
 import { withoutPatronymic } from '../../../shared/lib/format.js';
@@ -69,7 +72,7 @@ export function MessengerBody({
 }) {
   // Общий список (scope=all) — для поиска активной беседы, открытой ссылкой
   // из другой вкладки; строки вкладки — свой серверный фильтр (#252).
-  const { data } = useConversations();
+  const { data, isError } = useConversations();
   const tabQuery = useScopedConversations(tab === 'tasks' ? 'entities' : 'chats');
   const tabItems = useMemo(
     () => tabQuery.data?.pages.flatMap((p) => p.items) ?? [],
@@ -145,9 +148,14 @@ export function MessengerBody({
       conversationTitle(c, meId).toLowerCase().includes(q) ||
       conversationSubtitle(c).toLowerCase().includes(q),
   );
-  const active =
-    tabItems.find((c) => c.id === conversationId) ??
-    data?.items.find((c) => c.id === conversationId);
+  // Deep-link на беседу за пределами загруженных страниц (#225): ищем по
+  // страницам списка, а не показываем «Выберите беседу».
+  const active = useActiveConversation(
+    conversationId,
+    tabItems,
+    data?.items,
+    data !== undefined || isError,
+  );
 
   // Внутренняя навигация мессенджера (вердикт 25.09): переход по пересланному
   // ведёт беседу ВНУТРИ хозяина — слайдер из мессенджера не вызывается.
