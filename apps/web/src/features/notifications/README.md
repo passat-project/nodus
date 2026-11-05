@@ -74,7 +74,10 @@ urgent/high/medium/low — ось важности, независимая от 
 - `model/group-notifications.ts` — группировка по источнику (Telegram-канон),
   сортировка приоритетов (PRIORITY_ORDER), cap «999+» — чистые функции (unit).
 - `model/use-notification-sink.ts` — приём WS-будил через shared-мост
-  `shared/socket/notification-bridge.ts` (паттерн card-bridge).
+  `shared/socket/notification-bridge.ts` (паттерн card-bridge). В
+  десктоп-оболочке тост не всплывает — почтовое будило `letter.arrived`
+  уходит в попап оболочки (`shared/desktop/letter-popup.ts`, #618), клик
+  по попапу открывает карточку письма.
 
 ## Интеграционные точки (вне фичи)
 

@@ -38,6 +38,11 @@ apps/desktop/
   **рассинхрон = баг** (тесты протокола: `apps/web/src/shared/desktop/`).
   Попап об ответе в трэде несёт `threadRootId` (#300): клик «Открыть»
   (событие `open-conversation`) раскрывает окно трэда в портале.
+  Цель попапа — ровно одна: беседа (`conversationId`) или письмо
+  (`letterId`, #618: «Поступило письмо» канцелярии, без быстрого ответа);
+  клик по попапу письма шлёт событие `open-letter` → портал открывает
+  карточку письма; гашение попапов (`dismiss_popups`) — по ключу цели
+  (беседа или письмо, модель Telegram unlinkHistory).
 - Обновления: `GET <портал>/desktop/latest.json` + установщики (`/desktop/`
   статика nginx, env `NODUS_DESKTOP_DIR`); pubkey зашит в `tauri.conf.json`.
 

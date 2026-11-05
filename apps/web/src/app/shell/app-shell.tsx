@@ -70,7 +70,10 @@ export function AppShell() {
   // (N) Nodus в заголовке вкладки (#124): сигнал фоновой вкладке.
   useUnreadTitle();
   // Мост десктоп-оболочки (#254): попапы-ответы, deep link, видимость трея.
-  useDesktopBridge();
+  // Открытие письма из попапа (#618) — через стек карточек (app-слой).
+  useDesktopBridge({
+    onOpenLetter: ({ letterId }) => openCard({ kind: 'letter', id: letterId }),
+  });
   // Тосты уведомлений (#100): поверх карточек (z-[70] внутри хоста).
   const stressMode =
     typeof window !== 'undefined' &&
