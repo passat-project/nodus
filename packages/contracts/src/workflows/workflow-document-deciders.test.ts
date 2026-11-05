@@ -9,6 +9,7 @@ import type { DeciderSource } from './decider.js';
 
 const POSITION = '22222222-2222-4222-8222-222222222222';
 const FIELD = '33333333-3333-4333-8333-333333333333';
+const EMPTY_FORM = { enabled: false, sections: [] };
 
 function taskDoc(
   decider: DeciderSource,
@@ -30,7 +31,7 @@ function taskDoc(
         id: 's:work',
         code: 'work',
         name: 'В работе',
-        color: 'blue',
+        color: 'info',
         systemState: 'active',
         outcome: null,
         isInitial: false,
@@ -40,7 +41,7 @@ function taskDoc(
         id: 's:done',
         code: 'done',
         name: 'Завершена',
-        color: 'green',
+        color: 'success',
         systemState: 'closed',
         outcome: 'success',
         isInitial: false,
@@ -62,7 +63,7 @@ function taskDoc(
           validators: [],
           postFunctions: [],
         },
-        form: null,
+        form: EMPTY_FORM,
         ...patch,
       },
       {
@@ -79,7 +80,7 @@ function taskDoc(
           validators: [],
           postFunctions: [],
         },
-        form: null,
+        form: EMPTY_FORM,
       },
     ],
   };
