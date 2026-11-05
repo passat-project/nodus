@@ -82,4 +82,28 @@ describe('validateEnv', () => {
       expect(parseTrustProxy('')).toBeNull();
     });
   });
+
+  describe('OFFICE_JWT_SECRET (#580)', () => {
+    it('пустая строка при выключенном офисе = секрет не задан', () => {
+      const env = validateEnv({ ...VALID, OFFICE_ENABLED: 'false', OFFICE_JWT_SECRET: '' });
+      expect(env.OFFICE_JWT_SECRET).toBeUndefined();
+      // Пробелы из .env — тоже «не задано», а не короткий секрет.
+      expect(
+        validateEnv({ ...VALID, OFFICE_ENABLED: 'false', OFFICE_JWT_SECRET: '   ' })
+          .OFFICE_JWT_SECRET,
+      ).toBeUndefined();
+    });
+
+    it('пустая строка при включённом офисе — понятная ошибка', () => {
+      expect(() =>
+        validateEnv({ ...VALID, OFFICE_ENABLED: 'true', OFFICE_JWT_SECRET: '' }),
+      ).toThrow(/OFFICE_JWT_SECRET обязателен при OFFICE_ENABLED/);
+    });
+
+    it('валидный секрет при включённом офисе проходит', () => {
+      const secret = 'office-jwt-secret-min-32-chars-long';
+      const env = validateEnv({ ...VALID, OFFICE_ENABLED: 'true', OFFICE_JWT_SECRET: secret });
+      expect(env.OFFICE_JWT_SECRET).toBe(secret);
+    });
+  });
 });
