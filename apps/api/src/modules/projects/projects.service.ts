@@ -152,10 +152,10 @@ export class ProjectsService {
         {
           projectId: row.id,
           name: row.name,
-          code: row.code,
+          code: codeOf(customFields),
           managerId,
           assistantIds,
-          clientId: row.clientId,
+          clientId: clientOf(customFields),
           visibility,
           typeId: row.typeId,
           observerIds,

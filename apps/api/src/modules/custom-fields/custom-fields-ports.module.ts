@@ -26,8 +26,9 @@ import { CustomFieldValueValidator } from './values/value-validator.js';
  *
  * Источники ссылок — порты владельцев данных (I3): профили сотрудников,
  * оргструктура, справочники, контрагенты, проекты, задачи, письма, папки
- * (Р3/Р5 #631). TasksPortsModule — встречный импорт (decider-Recipients
- * задач инжектит реестр) — разорван forwardRef'ом.
+ * (Р3/Р5 #631). Встречный импорт tasks (decider-Recipients) — ESM-цикл
+ * обоих модулей разорван forwardRef'ами; реестр там разрешается лениво
+ * через ModuleRef (конструкторского цикла инстанцирования нет).
  */
 @Module({
   imports: [

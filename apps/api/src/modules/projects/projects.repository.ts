@@ -250,10 +250,17 @@ export class ProjectsRepository {
   ): Promise<{ id: string; code: string | null; name: string; color: ProjectRef['color'] }[]> {
     if (ids.length === 0) return [];
     const rows = await this.prisma.project.findMany({
-      select: { id: true, code: true, name: true, color: true },
+      // Шифр — атрибут (Р9 #631): производное из customFields; колонка
+      // code заморожена (палитра/пикер/чаты задач показывают шифр ссылки).
+      select: { id: true, customFields: true, name: true, color: true },
       where: { id: { in: [...ids] } },
     });
-    return rows.map((row) => ({ ...row, color: row.color as ProjectRef['color'] }));
+    return rows.map((row) => ({
+      id: row.id,
+      code: codeOfAttributes(row.customFields),
+      name: row.name,
+      color: row.color as ProjectRef['color'],
+    }));
   }
 
   // ===== Настройки портала (Р7) =====
@@ -270,4 +277,11 @@ export class ProjectsRepository {
       create: { key, value },
     });
   }
+}
+
+/** Шифр проекта из значений атрибутов (системный «Шифр», Р9 #631). */
+function codeOfAttributes(customFields: Prisma.JsonValue): string | null {
+  if (customFields === null || typeof customFields !== 'object') return null;
+  const value = (customFields as Record<string, unknown>)[SYSTEM_FIELD_IDS.projectCode];
+  return typeof value === 'string' && value !== '' ? value : null;
 }

@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { matchesDecider, type ProjectRole, type WorkflowDeciderFacts } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
@@ -40,11 +41,18 @@ const CACHE_TTL_MS = 5_000;
 export class TaskDeciders {
   private readonly cache = new Map<string, { expiresAt: number; ids: string[] }>();
 
+  /** Реестр атрибутов — лениво (ModuleRef): разрывает цикл инстанцирования
+   *  TasksPortsModule ↔ CustomFieldsPortsModule (реестр читает ссылки задач
+   *  через TASK_REF_READER, решающие — атрибуты через реестр). */
+  private get customFields(): CustomFieldRegistry {
+    return this.moduleRef.get(CUSTOM_FIELD_REGISTRY, { strict: false });
+  }
+
   constructor(
     @Inject(ORG_STRUCTURE_READER) private readonly org: OrgStructureReader,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     @Inject(WORKFLOW_RULES_READER) private readonly rules: WorkflowRulesReader,
-    @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
+    @Inject(ModuleRef) private readonly moduleRef: ModuleRef,
     private readonly recipients: TaskDeciderRecipients,
     private readonly repository: TaskDecidersRepository,
   ) {}

@@ -5,9 +5,9 @@ import { ErrorCode } from '@nodus/contracts';
 import { CustomFieldRegistryProvider } from './custom-field-registry.provider.js';
 
 /**
- * Скоупинг реестра `fieldIds` и пачка ссылок `refsMany` (#556, Р4): форма
- * вида папки — единственная привязка атрибутов, поэтому реестр фильтруется
- * множеством id; `typeId` и `fieldIds` вместе — ошибка программиста; ссылки
+ * Скоупинг реестра по месту сущности и пачка ссылок `refsMany` (#631, Р3;
+ * #556, Р4): реестр фильтруется строкой field_bindings (тип процесса, тип
+ * проекта, вид папки); умолчания и ввод — только атрибутов места; ссылки
  * среза структуры считаются одной пачкой.
  */
 
@@ -15,7 +15,7 @@ const definition = (
   overrides: Partial<CustomFieldDefinition> & Pick<CustomFieldDefinition, 'id' | 'type'>,
 ): CustomFieldDefinition =>
   ({
-    scope: 'node',
+    number: 1,
     name: 'Поле',
     hint: null,
     settings: {},
@@ -23,18 +23,22 @@ const definition = (
     defaultValue: null,
     defaultRefs: [],
     reportIndexed: false,
-    hidden: false,
+    isCompany: false,
+    companyValue: null,
+    bindings: { processTypeIds: [], projectTypeIds: [], nodeKindIds: [] },
     sortOrder: 0,
-    typeIds: [],
-    createdAt: '2026-11-03T00:00:00.000Z',
-    updatedAt: '2026-11-03T00:00:00.000Z',
+    createdAt: '2026-11-06T00:00:00.000Z',
+    updatedAt: '2026-11-06T00:00:00.000Z',
     ...overrides,
   }) as CustomFieldDefinition;
 
 const ACTOR = { id: 'author-1', permissions: [] };
 
 function makeRegistry(definitions: CustomFieldDefinition[]) {
-  const repository = { list: vi.fn(async () => []) };
+  const repository = {
+    list: vi.fn(async () => []),
+    syncTargets: vi.fn(async () => undefined),
+  };
   const mapper = { toDtos: vi.fn(async () => definitions), toDto: vi.fn() };
   const validator = { validate: vi.fn(async () => []) };
   const defaults = {
@@ -65,26 +69,63 @@ function makeRegistry(definitions: CustomFieldDefinition[]) {
   return { registry, defaults, hydrator };
 }
 
-describe('CustomFieldRegistry: скоупинг fieldIds (#556)', () => {
-  it('умолчания считаются только у атрибутов формы вида', async () => {
+describe('CustomFieldRegistry: реестр места (#631, Р3)', () => {
+  it('definitions(target): только атрибуты места; без target — весь реестр', async () => {
+    const definitions = [
+      definition({
+        id: 'f-proc',
+        type: 'text',
+        bindings: { processTypeIds: ['t-1'], projectTypeIds: [], nodeKindIds: [] },
+      }),
+      definition({
+        id: 'f-proj',
+        type: 'text',
+        bindings: { processTypeIds: [], projectTypeIds: ['pt-1'], nodeKindIds: [] },
+      }),
+      definition({
+        id: 'f-kind',
+        type: 'text',
+        bindings: { processTypeIds: [], projectTypeIds: [], nodeKindIds: ['nk-1'] },
+      }),
+      definition({ id: 'f-free', type: 'text' }),
+    ];
+    const { registry } = makeRegistry(definitions);
+    const ids = (list: CustomFieldDefinition[]) => list.map((entry) => entry.id);
+    expect(
+      ids(await registry.definitions({ target: { kind: 'process_type', id: 't-1' } })),
+    ).toEqual(['f-proc']);
+    expect(
+      ids(await registry.definitions({ target: { kind: 'project_type', id: 'pt-1' } })),
+    ).toEqual(['f-proj']);
+    expect(ids(await registry.definitions({ target: { kind: 'node_kind', id: 'nk-1' } }))).toEqual([
+      'f-kind',
+    ]);
+    // Чужой тип процесса — пусто: место не совпало.
+    expect(await registry.definitions({ target: { kind: 'process_type', id: 't-2' } })).toEqual([]);
+    expect(ids(await registry.definitions())).toEqual(['f-proc', 'f-proj', 'f-kind', 'f-free']);
+  });
+
+  it('умолчания при создании папки — только атрибуты формы вида', async () => {
     const definitions = [
       definition({
         id: 'f-in-form',
         type: 'text',
+        bindings: { processTypeIds: [], projectTypeIds: [], nodeKindIds: ['nk-1'] },
         defaultValue: { kind: 'static', value: 'своё' },
       }),
       definition({
         id: 'f-not-in-form',
         type: 'text',
+        bindings: { processTypeIds: [], projectTypeIds: [], nodeKindIds: ['nk-2'] },
         defaultValue: { kind: 'static', value: 'чужое' },
       }),
     ];
     const { registry, defaults } = makeRegistry(definitions);
-    const values = await registry.prepareCreate('node', {
+    const values = await registry.prepareCreate({
       input: {},
       authorId: ACTOR.id,
       actor: ACTOR,
-      fieldIds: ['f-in-form'],
+      target: { kind: 'node_kind', id: 'nk-1' },
     });
     expect(values).toEqual({ 'f-in-form': 'своё' });
     expect(defaults.resolve).toHaveBeenCalledWith(
@@ -96,27 +137,28 @@ describe('CustomFieldRegistry: скоупинг fieldIds (#556)', () => {
 
   it('значение существующего, но не входящего в форму вида — not_in_type', async () => {
     const { registry } = makeRegistry([
-      definition({ id: 'f-in-form', type: 'text' }),
-      definition({ id: 'f-other', type: 'text' }),
+      definition({
+        id: 'f-in-form',
+        type: 'text',
+        bindings: { processTypeIds: [], projectTypeIds: [], nodeKindIds: ['nk-1'] },
+      }),
+      definition({
+        id: 'f-other',
+        type: 'text',
+        bindings: { processTypeIds: [], projectTypeIds: [], nodeKindIds: ['nk-2'] },
+      }),
     ]);
     await expect(
-      registry.prepareCreate('node', {
+      registry.prepareCreate({
         input: { 'f-other': 'v' },
         authorId: ACTOR.id,
         actor: ACTOR,
-        fieldIds: ['f-in-form'],
+        target: { kind: 'node_kind', id: 'nk-1' },
       }),
     ).rejects.toMatchObject({
       code: ErrorCode.CUSTOM_FIELD_VALUE_INVALID,
       details: { issues: [{ fieldId: 'f-other', reason: 'not_in_type' }] },
     });
-  });
-
-  it('typeId и fieldIds вместе — ошибка программиста, а не пользователя', async () => {
-    const { registry } = makeRegistry([definition({ id: 'f-a', type: 'text' })]);
-    await expect(
-      registry.definitions('node', { typeId: 't-1', fieldIds: ['f-a'] }),
-    ).rejects.toThrow('typeId and fieldIds are exclusive');
   });
 });
 
@@ -126,7 +168,7 @@ describe('CustomFieldRegistry.refsMany (#556, Р4)', () => {
     hydrator.hydrateMany.mockResolvedValue([
       { kind: 'user', id: 'u-1', name: 'Иван', avatarUrl: null, archived: false },
     ]);
-    const refs = await registry.refsMany('node', [{}, { 'f-a': 'u-1' }, { 'f-a': 'u-1' }], ACTOR);
+    const refs = await registry.refsMany([{}, { 'f-a': 'u-1' }, { 'f-a': 'u-1' }], ACTOR);
     expect(hydrator.hydrateMany).toHaveBeenCalledTimes(1);
     expect(hydrator.hydrateMany).toHaveBeenCalledWith(
       [expect.objectContaining({ id: 'f-a' })],
@@ -139,13 +181,13 @@ describe('CustomFieldRegistry.refsMany (#556, Р4)', () => {
 
   it('все карты пусты — гидратор не зовётся', async () => {
     const { registry, hydrator } = makeRegistry([definition({ id: 'f-a', type: 'text' })]);
-    expect(await registry.refsMany('node', [{}, {}], ACTOR)).toEqual([]);
+    expect(await registry.refsMany([{}, {}], ACTOR)).toEqual([]);
     expect(hydrator.hydrateMany).not.toHaveBeenCalled();
   });
 
   it('refs делегирует пачке', async () => {
     const { registry, hydrator } = makeRegistry([definition({ id: 'f-a', type: 'text' })]);
-    await registry.refs('task', { 'f-a': 'v' }, ACTOR);
+    await registry.refs({ 'f-a': 'v' }, ACTOR);
     expect(hydrator.hydrateMany).toHaveBeenCalledWith(
       expect.anything(),
       [{ 'f-a': 'v' }],
