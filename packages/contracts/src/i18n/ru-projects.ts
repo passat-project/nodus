@@ -155,8 +155,6 @@ export const projectsStrings = {
   schemasResetKinds: 'Включить все виды',
   schemasKindArchived: 'в архиве',
   schemasKindAvailable: 'Доступен типу',
-  schemasCodeSection: 'Шифр проекта',
-  schemasCodeHint: 'Поле «Шифр» в окне создания проекта этого типа',
   // Автоматизация: типы проектов
   typesCreate: 'Новый тип',
   typesCreateTitle: 'Новый тип проекта',
@@ -165,14 +163,6 @@ export const projectsStrings = {
   typesEmpty: 'Типов пока нет',
   typesArchive: 'Архивировать тип',
   typesRestore: 'Вернуть тип',
-  /** Политика системного поля «Шифр» у типа проекта (окно создания
-   *  показывает поле только там, где оно есть у типа). */
-  codeFieldLabel: 'Поле «Шифр»',
-  codeField: {
-    hidden: 'Без шифра',
-    optional: 'По желанию',
-    required: 'Обязателен',
-  },
   // Настройки портала
   settingsTitle: 'Настройки портала',
   settingsProjects: 'Проекты',

@@ -89,8 +89,8 @@ describe('черновик окна атрибута (#431, ревизия UI)',
     const dup = {
       ...list,
       options: [
-        { id: 'draft:1', name: 'А' },
-        { id: 'draft:2', name: ' а ' },
+        { id: 'draft:1', name: 'А', color: null },
+        { id: 'draft:2', name: ' а ', color: null },
       ],
     };
     expect(draftIssues(dup)).toEqual(['optionsDuplicate']);

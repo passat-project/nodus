@@ -181,10 +181,10 @@ export const dictionariesHandlers = [
     const parsed = updateDictionaryItemBodySchema.safeParse(await request.json());
     if (!parsed.success) return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 422);
     const body: UpdateDictionaryItemBody = parsed.data;
-    if (nameTaken(item.dictionaryId, body.name, item.id)) {
+    if (body.name !== undefined && nameTaken(item.dictionaryId, body.name, item.id)) {
       return error(ErrorCode.DICTIONARY_ITEM_NAME_TAKEN, 'Item name is taken', 409);
     }
-    item.name = body.name;
+    if (body.name !== undefined) item.name = body.name;
     if (body.color !== undefined) item.color = body.color;
     return HttpResponse.json(item);
   }),
