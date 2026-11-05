@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 
 import { USER_PROFILE_READER } from '../../core/ports/user-profile.port.js';
 import { UserProfileProvider } from '../../core/ports/user-profile.provider.js';
+import { ORG_STRUCTURE_READER } from '../../core/ports/org-structure.port.js';
+import { OrgStructureProvider } from '../../core/ports/org-structure.provider.js';
 import { CatalogBootstrap } from './catalog/catalog.bootstrap.js';
 import { CatalogRepository } from './catalog/catalog.repository.js';
 import { WorkflowPublishedHandler } from './events/workflow-published.handler.js';
@@ -33,6 +35,9 @@ import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.mo
   providers: [
     UserProfileProvider,
     { provide: USER_PROFILE_READER, useClass: UserProfileProvider },
+    // Оргструктура нужна публикации (#433): проверка должностей решающих.
+    OrgStructureProvider,
+    { provide: ORG_STRUCTURE_READER, useClass: OrgStructureProvider },
     // Репозитории — единственная точка доступа к таблицам модуля (patterns.md).
     CatalogRepository,
     WorkflowPublishRepository,

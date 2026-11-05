@@ -13,7 +13,9 @@ import { SidePanel } from '../../../../../shared/ui/panel/side-panel.js';
 import { StageButtonsSection } from './stage-buttons-section.js';
 import { StagePanel } from './stage-panel.js';
 import { TransitionPanel, type TransitionSection } from './transition-panel.js';
-import { ConditionsSection, RolesSection, RulesSection } from './transition-sections.js';
+import { ConditionsSection, RulesSection } from './transition-sections.js';
+import { RolesSection } from './transition-roles-section.js';
+import { DecidersSection } from './transition-deciders-section.js';
 import { WindowSection } from './window-section.js';
 
 /** Раздел панели: корень или переход внутрь (у кнопки — три раздела, у
@@ -22,6 +24,7 @@ type PanelSection = TransitionSection | 'buttons';
 
 const SECTION_TITLE: Record<Exclude<PanelSection, 'root'>, string> = {
   roles: ui.automation.panel.sectionWhoSees,
+  deciders: ui.automation.deciders.sectionTitle,
   conditions: ui.automation.panel.sectionConditions,
   rules: ui.automation.panel.sectionRules,
   window: ui.automation.panel.sectionWindow,
@@ -152,6 +155,9 @@ export function EditorPanel({
       ) : null}
       {transition && section === 'roles' ? (
         <RolesSection transition={transition} readOnly={readOnly} category={type.category} />
+      ) : null}
+      {transition && section === 'deciders' && type.category === 'task' ? (
+        <DecidersSection transition={transition} readOnly={readOnly} />
       ) : null}
       {transition && section === 'conditions' ? (
         <ConditionsSection

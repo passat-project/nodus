@@ -166,9 +166,14 @@ export function PopupView() {
       .catch(() => setSending(false));
   }
 
-  function openConversation() {
+  function openTarget() {
     if (!data) return;
-    // Трэд (попап об ответе в трэде, #300): портал раскроет окно трэда.
+    // Письмо (#618): своя цель — карточка письма (событие open-letter);
+    // трэд (попап об ответе в трэде, #300) — портал раскроет окно трэда.
+    if (data.letterId) {
+      void invoke('popup_open', { letterId: data.letterId }).then(close);
+      return;
+    }
     void invoke('popup_open', {
       conversationId: data.conversationId,
       threadRootId: data.threadRootId ?? null,
@@ -204,10 +209,11 @@ export function PopupView() {
     >
       {/* Контент — естественная высота: оболочка узнаёт её и растит окно. */}
       <div ref={contentRef} className="flex shrink-0 flex-col">
-        {/* Клик по карточке — открыть беседу (как клик по уведомлению в Telegram). */}
+        {/* Клик по карточке — открыть источник (как клик по уведомлению в Telegram):
+         *  беседу (#300) или карточку письма (#618). */}
         <button
           type="button"
-          onClick={openConversation}
+          onClick={openTarget}
           className="flex min-w-0 shrink-0 cursor-pointer items-start gap-2.5 text-left"
           title={t.popupOpen}
         >

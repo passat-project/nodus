@@ -36,6 +36,7 @@ function setup(opts: {
     roster,
     refs: vi.fn(),
     canView: vi.fn().mockResolvedValue(opts.canView ?? true),
+    isDecider: vi.fn().mockResolvedValue(false),
   };
   const txRunner = { run: (fn: (tx: unknown) => unknown) => fn(TX) };
   const service = new TaskChatService(

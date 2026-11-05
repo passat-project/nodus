@@ -105,6 +105,10 @@ export const taskStageChangedPayloadSchema = taskEventBaseSchema.extend({
   assigneeId: z.uuid(),
   /** Соисполнители — адресаты «задача отменена» (наблюдатели — без звука). */
   coexecutorIds: z.array(z.uuid()).optional(),
+  /** Решающие нового статуса (#433) — адресаты «Ждёт вашего решения» и
+   *  получатели realtime-инвалидации; уже отфильтрованы по видимости.
+   *  Потолок — предохранитель от раздувания события. */
+  deciderIds: z.array(z.uuid()).max(200).optional(),
   /** Журнал перехода (#380): id строки `transition_records`; блок в чате
    *  пишется только для событий с ним (старые события его не несут). */
   recordId: z.uuid().optional(),

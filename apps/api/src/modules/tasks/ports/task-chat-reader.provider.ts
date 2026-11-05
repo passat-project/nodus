@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { TaskRef } from '@nodus/contracts';
 
+import { TaskDecidersRepository } from '../access/task-deciders.repository.js';
+import { TaskDeciders } from '../access/task-deciders.service.js';
 import { ViewerResolver, visibleTasksWhere } from '../access/task-visibility.js';
 import { TasksQueryRepository } from '../tasks/tasks-query.repository.js';
 import type { TaskChatReader, TaskChatRoster } from './task-chat-reader.port.js';
@@ -11,7 +13,9 @@ import type { TaskChatReader, TaskChatRoster } from './task-chat-reader.port.js'
 export class TaskChatReaderProvider implements TaskChatReader {
   constructor(
     private readonly reads: TasksQueryRepository,
+    private readonly deciderTasks: TaskDecidersRepository,
     private readonly viewers: ViewerResolver,
+    private readonly deciders: TaskDeciders,
   ) {}
 
   async roster(taskId: string): Promise<TaskChatRoster | null> {
@@ -41,5 +45,16 @@ export class TaskChatReaderProvider implements TaskChatReader {
   ): Promise<boolean> {
     const viewer = await this.viewers.resolve(user);
     return this.reads.isVisible(taskId, visibleTasksWhere(viewer, 'all'));
+  }
+
+  /** Решающий текущего шага (#433): видимость уже включает его, но чат и
+   *  файлы открываются только по этому признаку, не по любому view_all.
+   *  Двойной гейт: видимость задачи (те же правила, что список) + источник. */
+  async isDecider(taskId: string, userId: string): Promise<boolean> {
+    const viewer = await this.viewers.resolve({ id: userId, permissions: [] });
+    if (!(await this.reads.isVisible(taskId, visibleTasksWhere(viewer, 'all')))) return false;
+    const task = await this.deciderTasks.findTask(taskId);
+    if (!task) return false;
+    return this.deciders.isDeciderNow(undefined, task, userId);
   }
 }

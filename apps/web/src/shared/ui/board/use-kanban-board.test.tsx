@@ -70,7 +70,8 @@ function renderBoard(
         axis: globalAxis,
         stages: [A, B],
         queryKey: ['test-board'],
-        feedUrl: (stageId, cursor) => `/feed?stage=${stageId}${cursor ? `&cursor=${cursor}` : ''}`,
+        feedUrl: (stageId, cursor, limit) =>
+          `/feed?stage=${stageId}&limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`,
         onMove,
       }),
     { wrapper: makeWrapper(client) },
@@ -176,7 +177,7 @@ describe('useKanbanBoard', () => {
         'b1',
       ]),
     );
-    expect(urls).toEqual(['/api/v1/feed?stage=b']);
+    expect(urls).toEqual(['/api/v1/feed?stage=b&limit=30']);
     expect(result.current.items.filter((t) => t.stage.id === 'a').map((t) => t.id)).toEqual(['t2']);
     expect(result.current.items.filter((t) => t.id === 't1')).toHaveLength(1);
   });

@@ -47,6 +47,8 @@ export const KIND_PRIORITY: Record<NotificationKind, NotificationPriority> = {
   'action.assignment': 'medium',
   'action.approval': 'medium',
   'action.deadline': 'medium',
+  // Шаг ждёт решения: блокирует движение задачи, но не срочнее чата (В3 #433).
+  'action.decision': 'medium',
   'task.completed': 'medium',
   'task.returned': 'medium',
   // #378: утверждение — наравне с выполнением; отмена — фоновая, но не

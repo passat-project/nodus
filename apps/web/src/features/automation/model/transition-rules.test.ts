@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  addDeciderSource,
+  deciderSourcesOf,
+  removeDeciderSource,
   rolesOf,
   routeIfOf,
   routeIfWhenOf,
@@ -10,6 +13,7 @@ import {
   toggleField,
   toggleRole,
   toggleValidator,
+  updateDeciderSource,
   validatorOf,
 } from './transition-rules.js';
 
@@ -24,6 +28,34 @@ describe('transition-rules: правки правил кнопки (#378)', () =
     const both = toggleRole(base, 'creator');
     expect([...rolesOf(both)]).toEqual(['creator', 'assignee']);
     expect(toggleRole(base, 'assignee')).toBe(base);
+  });
+
+  it('решающие (#433): источник добавляется, обновляется и снимается', () => {
+    const withPosition = addDeciderSource(base, {
+      kind: 'position',
+      positionId: '00000000-0000-4000-8000-000000000001',
+      positionKind: 'management',
+    });
+    expect(deciderSourcesOf(withPosition)).toHaveLength(1);
+    const withManager = addDeciderSource(withPosition, { kind: 'manager_of', of: 'creator' });
+    expect(deciderSourcesOf(withManager).map((s) => s.kind)).toEqual(['position', 'manager_of']);
+    const updated = updateDeciderSource(withManager, 0, {
+      kind: 'position',
+      positionId: '00000000-0000-4000-8000-000000000002',
+      positionKind: 'legal',
+    });
+    expect(deciderSourcesOf(updated)[0]).toMatchObject({ positionKind: 'legal' });
+    const removed = removeDeciderSource(updated, 1);
+    expect(deciderSourcesOf(removed).map((s) => s.kind)).toEqual(['position']);
+    // Роли сохраняются при правке источников.
+    expect(rolesOf(removed).has('assignee')).toBe(true);
+  });
+
+  it('последнюю роль можно снять, если кнопку держат решающие (#433)', () => {
+    const deciderOnly = addDeciderSource(base, { kind: 'manager_of', of: 'assignee' });
+    const noRoles = toggleRole(deciderOnly, 'assignee');
+    expect(rolesOf(noRoles).size).toBe(0);
+    expect(deciderSourcesOf(noRoles)).toHaveLength(1);
   });
 
   it('гейт подзадач: строгий по умолчанию, галочка — мягкий', () => {

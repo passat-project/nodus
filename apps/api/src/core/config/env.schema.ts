@@ -107,8 +107,13 @@ const envSchema = z
     OFFICE_ENABLED: z.stringbool().optional(),
     /** Правка в редакторе — отдельный флаг (пилот: сначала просмотр). */
     OFFICE_EDIT_ENABLED: z.stringbool().optional(),
-    /** Общий секрет JWT с документ-сервером (требуется при OFFICE_ENABLED). */
-    OFFICE_JWT_SECRET: z.string().min(32).optional(),
+    /** Общий секрет JWT с документ-сервером (требуется при OFFICE_ENABLED).
+     *  Пустая строка из compose (`${OFFICE_JWT_SECRET:-}`) = «не задано»:
+     *  иначе выключенный офис роняет api на старте (#580). */
+    OFFICE_JWT_SECRET: z.preprocess(
+      (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+      z.string().min(32).optional(),
+    ),
     /** Как api обращается к документ-серверу (скачивание сохранённых файлов). */
     OFFICE_INTERNAL_URL: z.url().default('http://127.0.0.1:3013'),
     /** Как документ-сервер обращается к api (document.url + callbackUrl):

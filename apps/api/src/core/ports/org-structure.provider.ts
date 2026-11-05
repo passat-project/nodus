@@ -3,7 +3,13 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { TransactionClient } from '../database/transaction-runner.js';
-import type { DepartmentRef, OrgStructureReader, OrgUserRef } from './org-structure.port.js';
+import type {
+  DepartmentRef,
+  OrgPositionFact,
+  OrgPositionRef,
+  OrgStructureReader,
+  OrgUserRef,
+} from './org-structure.port.js';
 
 /** Предохранитель глубины: дерево подразделений на порядок мельче. */
 const MAX_DEPTH = 32;
@@ -121,6 +127,105 @@ export class OrgStructureProvider implements OrgStructureReader {
       ORDER BY w.depth
     `);
     return rows.map((row) => row.id);
+  }
+
+  /** Должности сотрудника (#433, Р5): включая архивные — архивная должность
+   *  не должна мгновенно лишать человека права решать. */
+  async positionsOf(userId: string, tx?: TransactionClient): Promise<OrgPositionRef[]> {
+    const user = await this.db(tx).user.findUnique({
+      where: { id: userId },
+      select: { positionId: true, legalPositionId: true },
+    });
+    if (!user) return [];
+    const result: OrgPositionRef[] = [];
+    if (user.positionId) result.push({ positionId: user.positionId, kind: 'management' });
+    if (user.legalPositionId) result.push({ positionId: user.legalPositionId, kind: 'legal' });
+    return result;
+  }
+
+  /**
+   * Ближайший активный руководитель пачки сотрудников (#433, В4): та же
+   * логика, что `managerChainOf` (прямой `managerId` → активный руководитель
+   * подразделения → родительского, пропуская самого сотрудника), но одной
+   * рекурсией с `origin` — возвращается только первый активный на каждого.
+   * Нет пары — руководителя нет (источник `manager_of` вакантен).
+   */
+  async managersOf(
+    userIds: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<Map<string, string>> {
+    if (userIds.length === 0) return new Map();
+    const ids = [...new Set(userIds)];
+    const rows = await this.db(tx).$queryRaw<{ origin: string; managerId: string }[]>(Prisma.sql`
+      WITH RECURSIVE
+        dept_heads(start_id, current_id, head_id, depth) AS (
+          SELECT d.id, d.id, d.head_id, 0
+          FROM departments d
+          WHERE d.is_active AND d.kind = 'management'
+          UNION ALL
+          SELECT dh.start_id, p.id, p.head_id, dh.depth + 1
+          FROM dept_heads dh
+          JOIN departments cur ON cur.id = dh.current_id
+          JOIN departments p ON p.id = cur.parent_id
+          WHERE dh.depth < ${MAX_DEPTH}
+            AND p.is_active AND p.kind = 'management'
+        ),
+        walk(origin, id, manager_id, department_id, depth, visited) AS (
+          SELECT u.id, u.id, u.manager_id, u.department_id, 0, ARRAY[u.id]
+          FROM users u
+          WHERE u.id = ANY(ARRAY[${Prisma.join(ids)}]::uuid[])
+          UNION ALL
+          SELECT w.origin, u2.id, u2.manager_id, u2.department_id, w.depth + 1, w.visited || u2.id
+          FROM walk w
+          JOIN users u2 ON u2.id = COALESCE(
+            w.manager_id,
+            (SELECT dh.head_id FROM dept_heads dh
+              WHERE dh.start_id = w.department_id AND dh.head_id IS NOT NULL
+                AND dh.head_id <> w.id
+              ORDER BY dh.depth LIMIT 1)
+          )
+          WHERE w.depth < ${MAX_DEPTH} AND NOT (u2.id = ANY(w.visited))
+        )
+      SELECT DISTINCT ON (w.origin) w.origin AS "origin", w.id AS "managerId"
+      FROM walk w
+      JOIN users u ON u.id = w.id AND u.status = 'active'
+      WHERE w.depth > 0
+      ORDER BY w.origin, w.depth
+    `);
+    return new Map(rows.map((row) => [row.origin, row.managerId]));
+  }
+
+  /** Факты должностей пачкой (#433, Р18): активность и число живых
+   *  держателей своего вида (management — `position_id`, legal — `legal_position_id`). */
+  async positionFacts(
+    ids: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<Map<string, OrgPositionFact>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.db(tx).position.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      select: {
+        id: true,
+        kind: true,
+        isActive: true,
+        _count: {
+          select: {
+            users: { where: { status: 'active' } },
+            legalUsers: { where: { status: 'active' } },
+          },
+        },
+      },
+    });
+    return new Map(
+      rows.map((row) => [
+        row.id,
+        {
+          kind: row.kind as 'management' | 'legal',
+          isActive: row.isActive,
+          holders: row._count.users + row._count.legalUsers,
+        },
+      ]),
+    );
   }
 
   private db(tx?: TransactionClient) {

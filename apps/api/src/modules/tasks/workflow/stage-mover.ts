@@ -89,6 +89,7 @@ export class StageMover {
         ...(meta.comment ? { comment: meta.comment.slice(0, 2000) } : {}),
         ...(meta.commentLabel ? { commentLabel: meta.commentLabel.slice(0, 60) } : {}),
         ...(meta.result ? { result: meta.result } : {}),
+        ...(meta.deciderIds?.length ? { deciderIds: [...meta.deciderIds] } : {}),
       },
       meta2,
     );

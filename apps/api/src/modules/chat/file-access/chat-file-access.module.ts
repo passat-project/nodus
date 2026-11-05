@@ -10,6 +10,10 @@ import { ChatFileAccessRepository } from './chat-file-access.repository.js';
  * (свой репозиторий на PrismaService из @Global DatabaseModule) —
  * провайдеров ChatModule не тянет.
  *
+ * #433: доступ решающего к вложениям задачи — отдельный контрибьютор в
+ * ChatModule (`TaskDeciderFileAccess`): здесь нельзя зависеть от TasksPorts,
+ * иначе модуль перестаёт быть самодостаточным.
+ *
  * exports ОБЯЗАТЕЛЕН: глобальны только ЭКСПОРТИРОВАННЫЕ провайдеры @Global-
  * модуля (урок 29.09: без exports реестр не видел контрибьютора и доступ
  * падал до owner-only — Regress-замок в chat-file-access.module.test.ts).

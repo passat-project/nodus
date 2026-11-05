@@ -84,4 +84,31 @@ describe('visibleTasksWhere (#37 + #52 Р3)', () => {
     expect(where.OR).toHaveLength(1);
     expect((where.OR![0] as { OR: unknown[] }).OR).toHaveLength(3);
   });
+
+  it('решающий (#433): ветка под гейтом секретных и конфиденциальных', () => {
+    const where = visibleTasksWhere(
+      { ...viewer, deciderTaskIds: ['t-1'], hiddenProjectIds: ['secret-1'] },
+      'all',
+    );
+    const branch = where.OR!.at(-1) as { AND: unknown[] };
+    expect(branch.AND[0]).toEqual({ id: { in: ['t-1'] } });
+    expect(branch.AND[1]).toEqual({ confidential: false });
+    expect(branch.AND[2]).toMatchObject({
+      OR: [{ projectId: null }, { projectId: { notIn: ['secret-1'] } }],
+    });
+  });
+
+  it('решающий не расширяет scope=mine (пресет запрашивает all)', () => {
+    const where = visibleTasksWhere({ ...viewer, deciderTaskIds: ['t-1'] }, 'mine');
+    expect(JSON.stringify(where)).not.toContain('t-1');
+  });
+
+  it('task.view_all сохраняет ветку решающего', () => {
+    const where = visibleTasksWhere(
+      { ...viewer, permissions: [Permission.TASK_VIEW_ALL], deciderTaskIds: ['t-1'] },
+      'all',
+    );
+    expect(where.OR).toHaveLength(3);
+    expect(JSON.stringify(where.OR)).toContain('t-1');
+  });
 });

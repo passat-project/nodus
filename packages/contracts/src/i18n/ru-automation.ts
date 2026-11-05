@@ -1,4 +1,6 @@
 import { creationStrings, typeSettingsStrings } from './ru-automation-forms.js';
+import { deciderStrings } from './ru-automation-deciders.js';
+import { problemStrings } from './ru-automation-problems.js';
 import { intentStrings } from './ru-automation-intent.js';
 import { outcomeStrings } from './ru-automation-outcome.js';
 import { publishPreviewStrings } from './ru-automation-publish.js';
@@ -128,6 +130,8 @@ export const automationStrings = {
     author: 'Автор',
     participant: 'Участники',
   },
+  /** Решающие (#433): строки вынесены в ru-automation-deciders.ts. */
+  ...deciderStrings,
   /** Пост-действия кнопки (#55, O8). */
   postFunctions: {
     assign_number: 'Присвоить номер',
@@ -255,55 +259,7 @@ export const automationStrings = {
     routeIfSummaryApprover: 'Утверждающий сам сдал →',
   },
   /** Тексты проблем схемы (код → строка; UI — чип и список). */
-  problems: {
-    no_initial: 'Не задан начальный статус',
-    multiple_initial: 'Начальных статусов больше одного',
-    unreachable_stage: 'До статуса нельзя дойти от начального',
-    dead_end_stage: 'Из статуса нет ни одной кнопки — задача застрянет',
-    no_closed_stage: 'Задачу нельзя закрыть',
-    empty_name: 'Пустое название статуса или кнопки',
-    duplicate_stage_name: 'Два статуса с одним названием',
-    duplicate_button_name: 'Две видимые кнопки с одним названием из одного статуса',
-    self_loop: 'Кнопка ведёт в свой же статус',
-    no_roles: 'Кнопку никто не видит',
-    multiple_primary: 'В статусе больше одной главной кнопки',
-    route_if_invalid: 'Цель особого случая не существует или совпадает с целью кнопки',
-    outcome_mismatch: 'Итог задан не у этапа «Итог» или не задан у этапа «Итог»',
-    too_many_stages: 'Больше 20 статусов',
-    too_many_transitions: 'Больше 80 кнопок',
-    no_primary: 'В статусе есть кнопки, но нет главной',
-    closed_without_exit: 'Из итогового статуса нельзя вернуть задачу',
-    duplicate_with_any: 'В одну цель ведут обычная кнопка и кнопка «из любого»',
-    form_empty_label: 'У раздела окна пустая подпись',
-    form_useless_section: 'Раздел окна ничего не делает без итога или условия',
-    form_duplicate_section: 'Два одинаковых раздела в окне',
-    custom_field_unknown: 'В окне или условии выбран удалённый атрибут',
-    custom_field_hidden: 'В окне выбран скрытый атрибут — окно его не покажет',
-    custom_field_not_in_type: 'Атрибут не привязан к типу — уберите его из окна, условия или формы',
-    creation_duplicate_field: 'Поле добавлено в форму дважды',
-    creation_required_not_allowed: 'Это поле всегда заполнено — обязательным его не сделать',
-    creation_preset_not_allowed: 'У этого поля не бывает скрытого значения',
-    creation_preset_invalid: 'Скрытое значение не подходит полю или устарело',
-    creation_hidden_required: 'Скрытое поле нельзя сделать обязательным',
-    creation_hidden_attribute_visible: 'Скрытый атрибут можно только скрытым полем',
-    creation_field_unavailable: 'Поле недоступно — модуль проектов ещё не подключён',
-    role_not_in_category: 'В условии роль другой категории процесса',
-    section_not_in_category: 'В окне раздел, которого у этой категории процесса нет',
-    gate_not_in_category: 'Условие перехода не работает в этой категории процесса',
-    post_function_not_in_category: 'Особое правило не работает в этой категории процесса',
-    numbering_not_configured: 'Кнопка присваивает номер, а у типа нет серии номеров',
-    registration_without_number: 'Окно регистрации без присвоения номера — номер не выдастся',
-    action_without_visibility:
-      'Кнопка-действие без условий «кто видит» — в «Мои действия» попадёт ответственному',
-    stage_name_shared:
-      'Такое имя уже есть в этом этапе другого маршрута — на доске это одна колонка, это нормально',
-    stage_name_similar:
-      'Похожее имя уже есть в этом этапе (отличается регистром, ё/е или пробелами) — на доске будет отдельная колонка',
-    duplicate_transition_target: 'Две кнопки из одного статуса ведут в один статус',
-    approver_rule_unresolvable:
-      'Для пропуска по актору цель должна быть этапом «Утверждение», а у него — одна главная кнопка-действие с ролевым условием «кто видит» (не только право)',
-  },
-  /** Публикация. */
+  problems: problemStrings /** Публикация. */,
   publishTitle: 'Публикация маршрута',
   buttonsChangedForms: ['кнопка изменена', 'кнопки изменены', 'кнопок изменено'],
   stagesChangedForms: ['статус изменён', 'статуса изменены', 'статусов изменено'],

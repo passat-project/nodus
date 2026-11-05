@@ -2,10 +2,12 @@ import {
   customFieldIdOfKey,
   isCustomFieldValueFilled,
   isFinalState,
+  matchesDecider,
   workflowTransitionRulesSchema,
   type TransitionBlockReason,
   type TransitionDisplay,
   type TransitionForm,
+  type WorkflowDeciderFacts,
   type WorkflowFieldKey,
   type WorkflowRequirableField,
   type WorkflowTransitionIntent,
@@ -62,15 +64,23 @@ export function passesConditions(
   rules: WorkflowTransitionRules,
   subject: Pick<WorkflowActorSubject, 'roles' | 'bypassConditions' | 'actsWithoutConditions'> & {
     permissions: readonly string[];
+    deciderFacts?: WorkflowDeciderFacts;
   },
 ): boolean {
   if (subject.bypassConditions) return true;
   if (rules.conditions.length === 0) return subject.actsWithoutConditions;
-  return rules.conditions.some((c) =>
-    c.kind === 'role_in'
-      ? c.roles.some((role) => subject.roles.has(role))
-      : subject.permissions.includes(c.permission),
-  );
+  return rules.conditions.some((c) => {
+    switch (c.kind) {
+      case 'role_in':
+        return c.roles.some((role) => subject.roles.has(role));
+      case 'permission':
+        return subject.permissions.includes(c.permission);
+      // Решающий вне задачи (#433): без фактов источник не совпадает —
+      // письма и старые вызовы ведут себя как раньше.
+      case 'decider_in':
+        return subject.deciderFacts ? matchesDecider(c.source, subject.deciderFacts) : false;
+    }
+  });
 }
 
 function missingFields(fields: WorkflowFieldKey[], facts: WorkflowGateFacts): WorkflowFieldKey[] {

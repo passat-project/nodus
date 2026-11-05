@@ -13,6 +13,8 @@ import { PROCESS_CATALOG_READER } from './ports/process-catalog-reader.port.js';
 import { WorkflowFieldUsageProvider } from './ports/workflow-field-usage.provider.js';
 import { WORKFLOW_FIELD_USAGE_READER } from './ports/workflow-field-usage.port.js';
 import { WORKFLOW_ENGINE } from './ports/workflow-engine.port.js';
+import { WorkflowRulesReaderProvider } from './ports/workflow-rules-reader.provider.js';
+import { WORKFLOW_RULES_READER } from './ports/workflow-rules-reader.port.js';
 import { ProcessTypesRepository } from './types/process-types.repository.js';
 
 /**
@@ -47,11 +49,14 @@ import { ProcessTypesRepository } from './types/process-types.repository.js';
     { provide: PROCESS_CATALOG_READER, useExisting: ProcessCatalogReaderProvider },
     WorkflowFieldUsageProvider,
     { provide: WORKFLOW_FIELD_USAGE_READER, useExisting: WorkflowFieldUsageProvider },
+    WorkflowRulesReaderProvider,
+    { provide: WORKFLOW_RULES_READER, useExisting: WorkflowRulesReaderProvider },
   ],
   exports: [
     WORKFLOW_ENGINE,
     PROCESS_CATALOG_READER,
     WORKFLOW_FIELD_USAGE_READER,
+    WORKFLOW_RULES_READER,
     ROLE_MEMBERSHIP_READER,
     WorkflowEntityRegistry,
     WorkflowRepository,

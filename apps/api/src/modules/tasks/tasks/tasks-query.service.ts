@@ -17,6 +17,7 @@ import { normalizeTypeConfig, requiredCreateKeys } from '@nodus/contracts';
 
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { decodeCursor, encodeCursor } from '../../../core/pagination/cursor.util.js';
+import type { Prisma } from '../../../generated/prisma/client.js';
 import { actorRoles, taskAccess } from '../access/task-access.js';
 import { ViewerResolver, visibleTasksWhere, type Viewer } from '../access/task-visibility.js';
 import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
@@ -90,8 +91,19 @@ export class TasksQueryService {
     const viewer = await this.viewer(user);
     const me = user.id;
     const order = this.order(q, me);
+    // Пресет «Ждут моего решения» (#433): серверный фильтр по держателям шага;
+    // scope принудительно all — при default mine задачи вне участия отсеклись бы.
+    const scope = q.role === 'decider' ? 'all' : q.scope;
+    const deciderWhere: Prisma.TaskWhereInput[] =
+      q.role === 'decider' ? [{ id: { in: [...(viewer.deciderTaskIds ?? [])] } }] : [];
     const { rows, sortKeys } = await this.reads.list(
-      { AND: [visibleTasksWhere(viewer, q.scope), ...this.reads.feedFilters(q, me, new Date())] },
+      {
+        AND: [
+          visibleTasksWhere(viewer, scope),
+          ...deciderWhere,
+          ...this.reads.feedFilters(q, me, new Date()),
+        ],
+      },
       order,
       q.limit,
       me,

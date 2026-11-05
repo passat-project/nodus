@@ -1,12 +1,14 @@
 import {
   DESKTOP_BRIDGE_EVENTS,
   openConversationEventSchema,
+  openLetterEventSchema,
   popupPayloadSchema,
   popupReplyEventSchema,
   shellInfoSchema,
   shellUpdateStateSchema,
   shellVisibilityEventSchema,
   type OpenConversationEvent,
+  type OpenLetterEvent,
   type PopupReplyEvent,
   type ShellUpdateState,
 } from '@nodus/contracts';
@@ -203,6 +205,7 @@ export function onDesktopEvent<T>(
 export function bindDesktopShellEvents(handlers: {
   onPopupReply: (payload: PopupReplyEvent) => void;
   onOpenConversation: (payload: OpenConversationEvent) => void;
+  onOpenLetter: (payload: OpenLetterEvent) => void;
 }): () => void {
   const unsubs = [
     onDesktopEvent(DESKTOP_BRIDGE_EVENTS.popupReply, popupReplyEventSchema, handlers.onPopupReply),
@@ -211,6 +214,8 @@ export function bindDesktopShellEvents(handlers: {
       openConversationEventSchema,
       handlers.onOpenConversation,
     ),
+    // Клик по попапу «Поступило письмо» (#618) — карточка письма.
+    onDesktopEvent(DESKTOP_BRIDGE_EVENTS.openLetter, openLetterEventSchema, handlers.onOpenLetter),
     // Скрытие в трей: WebView2 может не трогать document.hidden — сигнал
     // оболочки переключает портал в «фон» для гейтов уведомлений.
     onDesktopEvent(DESKTOP_BRIDGE_EVENTS.shellVisibility, shellVisibilityEventSchema, (payload) =>
