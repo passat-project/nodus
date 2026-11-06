@@ -1,77 +1,27 @@
-import type {
-  CustomFieldBindings,
-  CustomFieldDefinition,
-  CustomFieldModule,
-  CustomFieldSettings,
-  CustomFieldType,
-  CustomFieldValues,
-} from '@nodus/contracts';
+import type { CustomFieldDefinition, CustomFieldModule, CustomFieldValues } from '@nodus/contracts';
 import { SystemDictionary } from '@nodus/contracts';
 
 import { currencyIds, dictionaryByCode, itemsOf, workKindIds } from './dictionaries.js';
+import { fieldIds } from './field-ids.js';
+import { definition, dictionaryRef, moneySettings } from './custom-field-demo-factory.js';
+import { formulaDemoFields } from './formula-demo-fields.js';
 import { departmentIds } from './org-ids.js';
 import { processTypeIds } from './process-type-ids.js';
 import { demoProjectTypeIds } from './projects.js';
 import { nodeKindIds } from './project-nodes.js';
 import { projectRefs, tid } from './task-item-factory.js';
-import { fieldIds } from './field-ids.js';
 import { userIds } from './users.js';
 
 /** Демо-реестр атрибутов портала (#631): одно определение — много мест.
  *  Посев повторяет миграцию: системные «Шифр»/«Заказчик»/«Код» (детермини-
  *  рованные id), сквозная «Марка» (вид папки + тип задачи), глобальная
  *  переменная, ссылки на записи. Определения живут массивом: мок-хендлеры
- *  создают, правят и удаляют их как сервер. */
-
-const STAMP = '2026-10-20T09:00:00.000Z';
-
-let nextNumber = 1;
-
-function definition(
-  id: string,
-  type: CustomFieldType,
-  name: string,
-  bindings: Partial<CustomFieldBindings>,
-  extra: Partial<CustomFieldDefinition> = {},
-): CustomFieldDefinition {
-  return {
-    id,
-    number: nextNumber++,
-    type,
-    name,
-    hint: null,
-    settings: {},
-    dictionary: null,
-    defaultValue: null,
-    defaultRefs: [],
-    reportIndexed: false,
-    isCompany: false,
-    companyValue: null,
-    bindings: {
-      processTypeIds: bindings.processTypeIds ?? [],
-      projectTypeIds: bindings.projectTypeIds ?? [],
-      nodeKindIds: bindings.nodeKindIds ?? [],
-    },
-    sortOrder: 0,
-    createdAt: STAMP,
-    updatedAt: STAMP,
-    ...extra,
-  };
-}
-
-function dictionaryRef(code: string) {
-  const dictionary = dictionaryByCode(code);
-  return dictionary
-    ? {
-        id: dictionary.id,
-        code: dictionary.code,
-        name: dictionary.name,
-        isSystem: dictionary.isSystem,
-      }
-    : null;
-}
-
-const moneySettings: CustomFieldSettings = { currencyId: currencyIds.byn };
+ *  создают, правят и удаляют их как сервер.
+ *
+ *  I5 (>300 строк): файл — ДАННЫЕ посева (определения реестра и значения
+ *  демо-задач), не god-object: одна ответственность «демо-мир атрибутов»,
+ *  логика живёт в хендлерах и `custom-fields-rules.ts`. Разделять определения
+ *  и значения по файлам нет смысла — они правятся вместе при смене посева. */
 
 /** Привязка к типам (#432, В2): стандарт и переработка — основные
  *  демо-типы задач; «Сайт заказчика» и «Проект-источник» намеренно без
@@ -236,13 +186,17 @@ export const demoCustomFieldDefinitions: CustomFieldDefinition[] = [
     fieldIds.marka,
     'enum',
     'Марка',
-    { processTypeIds: STD, nodeKindIds: [nodeKindIds.komplekt] },
+    {
+      processTypeIds: [...STD, processTypeIds.komplekt],
+      nodeKindIds: [nodeKindIds.komplekt],
+    },
     {
       hint: 'Марка комплекта по СТБ 2255',
       settings: { dictionaryId: dictionaryByCode('set-mark')!.id },
       dictionary: dictionaryRef('set-mark'),
     },
   ),
+  ...formulaDemoFields,
 ];
 
 // Глобальный порядок реестра (sortOrder): по порядку массива.
@@ -255,9 +209,7 @@ export function demoFieldById(id: string): CustomFieldDefinition | undefined {
 }
 
 /** Следующий внутренний номер (мок «сервер»): sequence не откатывается. */
-export function nextFieldNumber(): number {
-  return nextNumber++;
-}
+export { nextFieldNumber } from './field-sequence.js';
 
 /** Атрибуты модуля «Где используется» (семантика GET ?module=). */
 export function demoFieldsOfModule(
@@ -280,6 +232,11 @@ export function demoFieldsOfModule(
       }
     })
     .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
+}
+
+/** id варианта справочника марок по коду СТБ (демо-значения комплектов). */
+function markIdOf(code: string): string {
+  return itemsOf('set-mark').find((item) => item.code === code)!.id;
 }
 
 /** Значения демо-задач: часть задач заполнена, остальные — `{}`. */
@@ -315,6 +272,17 @@ export const demoTaskCustomFields: Record<string, CustomFieldValues> = {
     [fieldIds.invoiceNumber]: '№ 121',
     [fieldIds.objects]: [itemsOf('object')[2]!.id],
     [fieldIds.approved]: true,
+  },
+  // Демо формул (#632): два комплекта типа «Комплект». Своего «Шифра
+  // комплекта» у них нет — его считает формула типа из шифра проекта,
+  // «№ по ГП» папки-здания, марки и номера комплекта.
+  [tid(14)]: {
+    [fieldIds.marka]: markIdOf('КЖ'),
+    [fieldIds.komplektNumber]: 1,
+  },
+  [tid(15)]: {
+    [fieldIds.marka]: markIdOf('КМ'),
+    [fieldIds.komplektNumber]: 2,
   },
 };
 

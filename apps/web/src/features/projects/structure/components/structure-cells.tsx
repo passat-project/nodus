@@ -1,6 +1,11 @@
 import { ChevronRight } from 'lucide-react';
-import type { NodeKind, TaskListItem } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import type {
+  CustomFieldDefinition,
+  CustomFieldRef,
+  NodeKind,
+  TaskListItem,
+} from '@nodus/contracts';
+import { isCustomFieldValueFilled, ui } from '@nodus/contracts';
 import { Checkbox } from '@nodus/ui/components/checkbox';
 import { cn } from '@nodus/ui/lib/utils';
 
@@ -8,6 +13,12 @@ import { formatDate, formatMinutes } from '../../../../shared/lib/format.js';
 import { identityTone } from '../../../../shared/ui/identity-tone.js';
 import { monoCell, PersonCell } from '../../../../shared/ui/person-cell.js';
 import { TaskStatusBadge } from '../../../../shared/ui/task-status-badge.js';
+import {
+  attributeFitsModule,
+  attributeRenderCell,
+  attributeValue,
+  isAttributeFieldId,
+} from '../../../../shared/views/attribute-fields.js';
 import { RowMenu, type RowMenuItem } from '../../../../shared/views/row-menu.js';
 import type { FieldDef, ViewField } from '../../../../shared/views/use-view-fields.js';
 import { ProcessTypeGlyph } from '../../../../shared/workflow/process-type-icon.js';
@@ -16,9 +27,16 @@ import type { StructureNodeRow } from '../lib/structure-tree.js';
 
 /** Общие ячейки строк структуры: значок/номер, прогресс, часы, срок,
  *  ведущая ячейка и кнопка ветки. Вынесены из строк (I5) и переиспользуются
- *  узлом и задачей — одна грамматика значений. */
+ *  узлом и задачей — одна грамматика значений.
+ *
+ *  Атрибутные ячейки (#632): поле `cf.<id>` рисует значение из
+ *  `customFields` строки (папка или задача — свой носитель) по грамматике
+ *  типа определения; определения и ссылки приходят картами от модели вида. */
 
 export type StructureField = ViewField<FieldDef>;
+
+/** Карта определений атрибутных колонок по id поля (`cf.<id>`). */
+export type StructureAttributeDefs = ReadonlyMap<string, CustomFieldDefinition>;
 
 export const rowBase =
   'group/row relative grid h-12 w-max min-w-full items-stretch gap-3 border-b border-border/60 px-4 select-none transition-colors [contain-intrinsic-size:auto_3rem] [content-visibility:auto] focus-visible:outline-2 focus-visible:outline-ring';
@@ -71,7 +89,23 @@ export function TimeCell({ minutes }: { minutes: number | null | undefined }) {
   );
 }
 
-export function nodeCell(row: StructureNodeRow, fieldId: string, kind: NodeKind | undefined) {
+export function nodeCell(
+  row: StructureNodeRow,
+  fieldId: string,
+  kind: NodeKind | undefined,
+  attributes: StructureAttributeDefs,
+  refs: ReadonlyMap<string, CustomFieldRef>,
+) {
+  // Атрибут вида папки (#632): значение папки. Определения нет или атрибут
+  // не про папки (колонка сквозная для задач и папок) — пустая ячейка, как
+  // любая неприменимая в этой строке.
+  if (isAttributeFieldId(fieldId)) {
+    const definition = attributes.get(fieldId);
+    if (!definition || !attributeFitsModule(definition, 'node')) return null;
+    const value = attributeValue(row.node, definition);
+    if (!isCustomFieldValueFilled(value)) return null;
+    return attributeRenderCell(definition, value, refs);
+  }
   switch (fieldId) {
     case 'name':
       return (
@@ -114,7 +148,22 @@ export function nodeCell(row: StructureNodeRow, fieldId: string, kind: NodeKind 
   }
 }
 
-export function taskCell(task: TaskListItem, fieldId: string) {
+export function taskCell(
+  task: TaskListItem,
+  fieldId: string,
+  attributes: StructureAttributeDefs,
+  refs: ReadonlyMap<string, CustomFieldRef>,
+) {
+  // Атрибут задачи (#632): значение задачи-листа; ссылки — её собственные
+  // (срез списка задач, не структуры). Атрибут папок в строке задачи —
+  // пустая ячейка.
+  if (isAttributeFieldId(fieldId)) {
+    const definition = attributes.get(fieldId);
+    if (!definition || !attributeFitsModule(definition, 'task')) return null;
+    const value = attributeValue(task, definition);
+    if (!isCustomFieldValueFilled(value)) return null;
+    return attributeRenderCell(definition, value, refs);
+  }
   switch (fieldId) {
     case 'name':
       return (

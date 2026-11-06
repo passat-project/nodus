@@ -13,6 +13,8 @@ import {
 } from '@nodus/contracts';
 
 import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
+import { nodeWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
+import { removeOwnFormula } from '../../../../shared/custom-fields/formula/formula-mocks.js';
 import {
   invalidMockValues,
   withStaticDefaults,
@@ -56,7 +58,11 @@ export const structureNodeHandlers = [
     const row = findDemoProjectRow(String(params.id));
     const actor = getMockActor();
     if (!row || !canSeeProject(row, actor)) return nodeNotFound();
-    const nodes = nodesOfProject(row.id).map(projectNodeDto);
+    // Формулы вида папки (#632) считаются на чтении: DTO клонируется,
+    // хранимые строки структуры не мутируются.
+    const nodes = nodesOfProject(row.id).map((nodeRow) =>
+      nodeWithFormulas(projectNodeDto(nodeRow), nodeRow.kindId),
+    );
     return HttpResponse.json({
       nodes,
       kinds: demoNodeKinds,
@@ -223,6 +229,10 @@ export const structureNodeHandlers = [
       ),
     );
     if (rule) return rule;
+    // Ручная правка ячейки снимает свою формулу папки (Р5, #632).
+    for (const [fieldId, value] of Object.entries(patchValues)) {
+      if (value !== null) removeOwnFormula('node', node.id, fieldId);
+    }
     if (kindChanged) node.kindId = body.kindId!;
     if (body.name) node.name = body.name;
     if (Object.keys(patchValues).length > 0) {
@@ -234,7 +244,7 @@ export const structureNodeHandlers = [
       node.customFields = next;
       node.code = codeOfValue(next[SYSTEM_FIELD_IDS.nodeCode]);
     }
-    return HttpResponse.json(projectNodeDto(node));
+    return HttpResponse.json(nodeWithFormulas(projectNodeDto(node), node.kindId));
   }),
 
   http.post('/api/v1/projects/:id/nodes/:nodeId/move', async ({ params, request }) => {
