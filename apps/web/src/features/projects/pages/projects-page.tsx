@@ -19,7 +19,7 @@ import {
   projectBuiltinPresets,
   useProjectFilterDefs,
 } from '../../../shared/views/project-filter-fields.js';
-import { projectListFields } from '../../../shared/views/project-table-fields.js';
+import { useProjectTableFields } from '../../../shared/views/project-table-fields.js';
 import { ViewSettings } from '../../../shared/views/view-settings.js';
 import { useProjectStatus } from '../api/project-mutations.js';
 import { useProjectsJournal } from '../api/projects-api.js';
@@ -54,6 +54,8 @@ function useJournalScope(): ['all' | 'mine', (scope: 'all' | 'mine') => void] {
 export function ProjectsPage() {
   const [scope, setScope] = useJournalScope();
   const toolbar = useListToolbar('projects.journal', projectBuiltinPresets);
+  // Реестр колонок — хук: атрибуты портала (#632) приходят с сервера.
+  const fields = useProjectTableFields();
   const filterDefs = useProjectFilterDefs();
   const search = useDeferredValue(toolbar.query);
   const filters = useMemo<ProjectJournalFilters>(() => {
@@ -151,7 +153,7 @@ export function ProjectsPage() {
                 activeClassName="bg-accent text-foreground"
                 className="w-32 shrink-0"
               />
-              <ViewSettings viewKey="projects.list" defs={projectListFields} />
+              <ViewSettings viewKey="projects.list" defs={fields} />
             </>
           }
         />
@@ -159,7 +161,7 @@ export function ProjectsPage() {
       <div className="min-h-0 flex-1">
         <DataTable
           viewKey="projects.list"
-          defs={projectListFields}
+          defs={fields}
           rows={items}
           rowKey={(project) => project.id}
           isLoading={isLoading}

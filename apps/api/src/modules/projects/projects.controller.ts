@@ -1,4 +1,15 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -12,6 +23,8 @@ import {
   Permission,
   createProjectBodySchema,
   cursorQuerySchema,
+  formulaBodySchema,
+  formulaResponseSchema,
   listProjectsQuerySchema,
   paginatedSchema,
   projectDetailSchema,
@@ -23,6 +36,8 @@ import {
   type AuthUser,
   type CreateProjectBody,
   type CursorQuery,
+  type FormulaBody,
+  type FormulaResponse,
   type ListProjectsQuery,
   type Paginated,
   type ProjectDetail,
@@ -41,6 +56,7 @@ import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../core/openapi/api-idempotency.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { ProjectLifecycleService } from './project-lifecycle.service.js';
+import { ProjectFormulaService } from './project-formula.service.js';
 import { ProjectsQueryService } from './projects-query.service.js';
 import { ProjectsService } from './projects.service.js';
 
@@ -63,6 +79,7 @@ export class ProjectsController {
     private readonly queries: ProjectsQueryService,
     private readonly projects: ProjectsService,
     private readonly lifecycle: ProjectLifecycleService,
+    private readonly formulas: ProjectFormulaService,
   ) {}
 
   @Get()
@@ -112,6 +129,52 @@ export class ProjectsController {
     @GetUser() user: AuthUser,
   ): Promise<ProjectDetail> {
     return this.queries.detail(user, id);
+  }
+
+  @Get(':id/custom-fields/:fieldId/formula')
+  @ApiParam({ name: 'id', description: 'UUID проекта', schema: { type: 'string', format: 'uuid' } })
+  @ApiOperation({ summary: 'Эффективная формула ячейки атрибута проекта (своя или типа)' })
+  @ApiOkResponse({ standardSchema: formulaResponseSchema })
+  @ApiErrors(400, 401, 404)
+  formula(
+    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @Param('fieldId', new ZodValidationPipe(idParamSchema)) fieldId: string,
+    @GetUser() user: AuthUser,
+  ): Promise<FormulaResponse> {
+    return this.formulas.read(user, id, fieldId);
+  }
+
+  @Put(':id/custom-fields/:fieldId/formula')
+  @HttpCode(200)
+  @Audit({ action: 'custom_field.formula_set', entity: 'project' })
+  @ApiParam({ name: 'id', description: 'UUID проекта', schema: { type: 'string', format: 'uuid' } })
+  @ApiOperation({ summary: 'Поставить формулу в ячейку атрибута проекта' })
+  @ApiOkResponse({ standardSchema: formulaResponseSchema })
+  @ApiErrors(400, 401, 403, 404, 422)
+  @ApiIdempotencyKey()
+  setFormula(
+    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @Param('fieldId', new ZodValidationPipe(idParamSchema)) fieldId: string,
+    @Body({ schema: formulaBodySchema, pipes: [new ZodValidationPipe(formulaBodySchema)] })
+    body: FormulaBody,
+    @GetUser() user: AuthUser,
+  ): Promise<FormulaResponse> {
+    return this.formulas.save(user, id, fieldId, body.ast);
+  }
+
+  @Delete(':id/custom-fields/:fieldId/formula')
+  @HttpCode(204)
+  @Audit({ action: 'custom_field.formula_remove', entity: 'project' })
+  @ApiParam({ name: 'id', description: 'UUID проекта', schema: { type: 'string', format: 'uuid' } })
+  @ApiOperation({ summary: 'Снять формулу проекта (значение-снимок остаётся)' })
+  @ApiErrors(400, 401, 403, 404)
+  @ApiIdempotencyKey()
+  removeFormula(
+    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @Param('fieldId', new ZodValidationPipe(idParamSchema)) fieldId: string,
+    @GetUser() user: AuthUser,
+  ): Promise<void> {
+    return this.formulas.remove(user, id, fieldId);
   }
 
   @Get(':id/history')

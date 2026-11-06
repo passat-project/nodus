@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -13,6 +13,8 @@ import {
   batchCreateProjectNodesBodySchema,
   batchCreateProjectNodesResponseSchema,
   createProjectNodeBodySchema,
+  formulaBodySchema,
+  formulaResponseSchema,
   moveProjectNodeBodySchema,
   projectNodeSchema,
   projectStructureResponseSchema,
@@ -21,6 +23,8 @@ import {
   type BatchCreateProjectNodesBody,
   type BatchCreateProjectNodesResponse,
   type CreateProjectNodeBody,
+  type FormulaBody,
+  type FormulaResponse,
   type MoveProjectNodeBody,
   type ProjectNode,
   type ProjectStructureResponse,
@@ -33,6 +37,7 @@ import { RequireFeature } from '../../core/decorators/require-feature.decorator.
 import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../core/openapi/api-idempotency.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
+import { ProjectFormulaService } from './project-formula.service.js';
 import { ProjectStructureMoveService } from './project-structure-move.service.js';
 import { ProjectStructureService } from './project-structure.service.js';
 
@@ -54,6 +59,7 @@ export class ProjectStructureController {
   constructor(
     private readonly structure: ProjectStructureService,
     private readonly moves: ProjectStructureMoveService,
+    private readonly formulas: ProjectFormulaService,
   ) {}
 
   @Get('structure')
@@ -140,6 +146,70 @@ export class ProjectStructureController {
     @GetUser() user: AuthUser,
   ): Promise<ProjectNode> {
     return this.structure.update(user, id, nodeId, dto);
+  }
+
+  @Get('nodes/:nodeId/custom-fields/:fieldId/formula')
+  @ApiParam({ name: 'id', description: 'UUID проекта', schema: { type: 'string', format: 'uuid' } })
+  @ApiParam({
+    name: 'nodeId',
+    description: 'UUID узла',
+    schema: { type: 'string', format: 'uuid' },
+  })
+  @ApiOperation({ summary: 'Эффективная формула ячейки атрибута папки (своя или вида)' })
+  @ApiOkResponse({ standardSchema: formulaResponseSchema })
+  @ApiErrors(400, 401, 404, 422)
+  nodeFormula(
+    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @Param('nodeId', new ZodValidationPipe(nodeIdParamSchema)) nodeId: string,
+    @Param('fieldId', new ZodValidationPipe(nodeIdParamSchema)) fieldId: string,
+    @GetUser() user: AuthUser,
+  ): Promise<FormulaResponse> {
+    return this.formulas.readNode(user, id, nodeId, fieldId);
+  }
+
+  @Put('nodes/:nodeId/custom-fields/:fieldId/formula')
+  @HttpCode(200)
+  @Audit({ action: 'custom_field.formula_set', entity: 'project_node' })
+  @ApiParam({ name: 'id', description: 'UUID проекта', schema: { type: 'string', format: 'uuid' } })
+  @ApiParam({
+    name: 'nodeId',
+    description: 'UUID узла',
+    schema: { type: 'string', format: 'uuid' },
+  })
+  @ApiOperation({ summary: 'Поставить формулу в ячейку атрибута папки' })
+  @ApiOkResponse({ standardSchema: formulaResponseSchema })
+  @ApiErrors(400, 401, 403, 404, 422)
+  @ApiIdempotencyKey()
+  setNodeFormula(
+    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @Param('nodeId', new ZodValidationPipe(nodeIdParamSchema)) nodeId: string,
+    @Param('fieldId', new ZodValidationPipe(nodeIdParamSchema)) fieldId: string,
+    @Body({ schema: formulaBodySchema, pipes: [new ZodValidationPipe(formulaBodySchema)] })
+    body: FormulaBody,
+    @GetUser() user: AuthUser,
+  ): Promise<FormulaResponse> {
+    return this.formulas.saveNode(user, id, nodeId, fieldId, body.ast);
+  }
+
+  @Delete('nodes/:nodeId/custom-fields/:fieldId/formula')
+  @HttpCode(204)
+  @Audit({ action: 'custom_field.formula_remove', entity: 'project_node' })
+  @ApiParam({ name: 'id', description: 'UUID проекта', schema: { type: 'string', format: 'uuid' } })
+  @ApiParam({
+    name: 'nodeId',
+    description: 'UUID узла',
+    schema: { type: 'string', format: 'uuid' },
+  })
+  @ApiOperation({ summary: 'Снять формулу папки (значение-снимок остаётся)' })
+  @ApiErrors(400, 401, 403, 404, 422)
+  @ApiIdempotencyKey()
+  removeNodeFormula(
+    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @Param('nodeId', new ZodValidationPipe(nodeIdParamSchema)) nodeId: string,
+    @Param('fieldId', new ZodValidationPipe(nodeIdParamSchema)) fieldId: string,
+    @GetUser() user: AuthUser,
+  ): Promise<void> {
+    return this.formulas.removeNode(user, id, nodeId, fieldId);
   }
 
   @Post('nodes/:nodeId/move')

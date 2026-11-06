@@ -23,6 +23,7 @@ import {
 } from './letter-attached-refs.repository.js';
 import { LetterAttachedRefsValidator, sameAttachedRefs } from './letter-attached-refs.validator.js';
 import { LetterFieldsValidator, type RegistrationValues } from './letter-fields.validator.js';
+import { LetterFieldsWriter } from './letter-fields.writer.js';
 import { LettersQueryService } from './letters-query.service.js';
 import { LettersRepository } from './letters.repository.js';
 import type { LetterDetailRow } from './letter-row.js';
@@ -60,6 +61,7 @@ export class LettersMutationService {
     private readonly repo: LettersRepository,
     private readonly query: LettersQueryService,
     private readonly validator: LetterFieldsValidator,
+    private readonly fields: LetterFieldsWriter,
     private readonly attached: LetterAttachedRefsRepository,
     private readonly attachedValidator: LetterAttachedRefsValidator,
     private readonly txRunner: TransactionRunner,
@@ -91,6 +93,9 @@ export class LettersMutationService {
       if (body.addresseeId !== undefined && fresh.registeredAt !== null) {
         throw new DomainException(ErrorCode.LETTER_NOT_EDITABLE, 'Addressee is not editable');
       }
+      // Вписанное руками значение снимает формулу ячейки в той же tx
+      // (Р5 #632): «зафиксировать» = вписать значение, «как у типа» = очистить.
+      await this.fields.releaseFormulas(tx, id, Object.keys(body.customFields ?? {}));
       const { data, changes } = await this.validator.patch(
         registrationValuesOf(fresh),
         (fresh.customFields ?? {}) as Record<string, unknown>,

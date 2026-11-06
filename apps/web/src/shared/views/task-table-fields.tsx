@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { CustomFieldDefinition, TaskListItem, TaskPriority } from '@nodus/contracts';
-import { isCustomFieldValueFilled, ui } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 import { NodeChip } from '@nodus/ui/components/node-chip';
 
 import { useCustomFieldDefinitions } from '../custom-fields/queries.js';
@@ -9,13 +9,7 @@ import { DeadlineChip } from '../ui/deadline-chip.js';
 import { identityTone } from '../ui/identity-tone.js';
 import { monoCell, PersonCell } from '../ui/person-cell.js';
 import { TaskStatusBadge } from '../ui/task-status-badge.js';
-import {
-  attributeFieldDefs,
-  attributeFormula,
-  attributeRefs,
-  attributeRenderCell,
-  attributeValue,
-} from './attribute-fields.js';
+import { attributeColumnFields } from './attribute-fields.js';
 import type { DataTableField } from './data-table.js';
 import { CommentsCount } from '../tasks/comments-count.js';
 
@@ -171,24 +165,9 @@ export function makeTaskTableFields({
       sortValue: (task) => task.updatedAt,
     },
     // Атрибутные колонки (#632) — после системных, скрыты по умолчанию:
-    // значение по грамматике типа, имена ссылок — из среза списка. Пустое
-    // значение — пустая ячейка (таблица не пестрит «Не задано»: колонку
-    // включают осознанно, а заполнены атрибуты редко).
-    ...attributeFieldDefs({ definitions, module: 'task' }).map((field) => ({
-      ...field,
-      render: (task: TaskListItem) => {
-        const definition = field.attribute;
-        if (!definition) return null;
-        const value = attributeValue(task, definition);
-        const formula = attributeFormula(task, definition);
-        // Ячейка формульной ошибки: значения нет, но бейдж «!» обязан быть
-        // виден — иначе колонка молчит о сломанной формуле.
-        if (!isCustomFieldValueFilled(value) && !formula?.error) return null;
-        return attributeRenderCell(definition, value, attributeRefs(task), { formula });
-      },
-      // Сортировка по атрибуту не предлагается: sortValue не задан — хедер
-      // рисует заголовок без ↑/↓ (data-table-header).
-    })),
+    // общая фабрика видов (значение по грамматике типа, fx/«!», без
+    // сортировки — клиентская сортировка по вычисленным значениям отдельно).
+    ...attributeColumnFields<TaskListItem>({ definitions, module: 'task' }),
   ];
 }
 

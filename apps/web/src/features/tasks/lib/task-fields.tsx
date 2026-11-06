@@ -1,20 +1,14 @@
 import { useMemo, type ReactNode } from 'react';
 import { Mail, MessageSquare } from 'lucide-react';
 import type { TaskListItem } from '@nodus/contracts';
-import { isCustomFieldValueFilled, ui } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 import { NodeChip } from '@nodus/ui/components/node-chip';
 
 import { formatDateTime, formatMinutes } from '../../../shared/lib/format.js';
 import { DeadlineChip } from '../../../shared/ui/deadline-chip.js';
 import { monoCell, PersonCell } from '../../../shared/ui/person-cell.js';
 import { priorityTone } from '../../../shared/views/task-table-fields.js';
-import {
-  attributeFieldDefs,
-  attributeFormula,
-  attributeRefs,
-  attributeRenderCell,
-  attributeValue,
-} from '../../../shared/views/attribute-fields.js';
+import { attributeColumnFields } from '../../../shared/views/attribute-fields.js';
 import type { FieldDef } from '../../../shared/views/use-view-fields.js';
 import { TaskStatusBadge } from '../../../shared/ui/task-status-badge.js';
 import { CommentsCount } from '../../../shared/tasks/comments-count.js';
@@ -182,22 +176,11 @@ export const taskListFields: ListFieldDef[] = [
  */
 export function useTaskListFields(): ListFieldDef[] {
   const definitions = useCustomFieldDefinitions('task');
-  return useMemo(() => {
-    const attributes = attributeFieldDefs({ definitions: definitions.data, module: 'task' });
-    return [
+  return useMemo(
+    () => [
       ...taskListFields,
-      ...attributes.map((field): ListFieldDef => ({
-        ...field,
-        render: (task) => {
-          if (!field.attribute) return null;
-          const value = attributeValue(task, field.attribute);
-          const formula = attributeFormula(task, field.attribute);
-          // Ошибка формулы видна и без значения (бейдж «!»), иначе колонка
-          // молчала бы о сломанной формуле.
-          if (!isCustomFieldValueFilled(value) && !formula?.error) return null;
-          return attributeRenderCell(field.attribute, value, attributeRefs(task), { formula });
-        },
-      })),
-    ];
-  }, [definitions.data]);
+      ...attributeColumnFields<TaskListItem>({ definitions: definitions.data, module: 'task' }),
+    ],
+    [definitions.data],
+  );
 }

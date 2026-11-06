@@ -14,7 +14,7 @@ import { TransactionRunner } from '../../../core/database/transaction-runner.js'
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import { ProjectNodesRepository } from '../project-nodes.repository.js';
-import { ProjectFormulaService } from '../project-formula.service.js';
+import { ProjectFormulaRecalcService } from '../project-formula-recalc.service.js';
 
 /** Номера атрибутов из ключей `cf.<uuid>` события хоста. */
 async function numbersOf(
@@ -56,7 +56,7 @@ export class ProjectFormulaRecalcHandler {
 
   constructor(
     private readonly txRunner: TransactionRunner,
-    private readonly formulas: ProjectFormulaService,
+    private readonly formulas: ProjectFormulaRecalcService,
     @Inject(FORMULA_CELLS) private readonly cells: FormulaCells,
     private readonly logger: PinoLogger,
   ) {
@@ -91,7 +91,7 @@ export class ProjectNodeFormulaRecalcHandler {
 
   constructor(
     private readonly txRunner: TransactionRunner,
-    private readonly formulas: ProjectFormulaService,
+    private readonly formulas: ProjectFormulaRecalcService,
     @Inject(FORMULA_CELLS) private readonly cells: FormulaCells,
     private readonly logger: PinoLogger,
   ) {
@@ -131,7 +131,7 @@ export class ProjectStructureFormulaRecalcHandler {
 
   constructor(
     private readonly txRunner: TransactionRunner,
-    private readonly formulas: ProjectFormulaService,
+    private readonly formulas: ProjectFormulaRecalcService,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(ProjectStructureFormulaRecalcHandler.name);
@@ -162,7 +162,7 @@ export class ProjectNodeDeletedFormulaHandler {
 
   constructor(
     private readonly txRunner: TransactionRunner,
-    private readonly formulas: ProjectFormulaService,
+    private readonly formulas: ProjectFormulaRecalcService,
     @Inject(FORMULA_CELLS) private readonly cells: FormulaCells,
     private readonly logger: PinoLogger,
   ) {
@@ -195,7 +195,7 @@ export class ProjectNodeKindFormulaHandler {
 
   constructor(
     private readonly txRunner: TransactionRunner,
-    private readonly formulas: ProjectFormulaService,
+    private readonly formulas: ProjectFormulaRecalcService,
     private readonly nodes: ProjectNodesRepository,
     private readonly logger: PinoLogger,
   ) {

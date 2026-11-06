@@ -15,7 +15,7 @@ import {
   projectSearchText,
   useProjectFilterDefs,
 } from '../../../shared/views/project-filter-fields.js';
-import { projectListFields } from '../../../shared/views/project-table-fields.js';
+import { useProjectTableFields } from '../../../shared/views/project-table-fields.js';
 import {
   taskBuiltinPresets,
   taskSearchText,
@@ -100,6 +100,8 @@ export function EmployeeProjectsTab({
 }) {
   const openCard = useOpenCard();
   const toolbar = useListToolbar('directory.projects', projectBuiltinPresets);
+  // Реестр колонок — хук: атрибуты портала (#632) приходят с сервера.
+  const fields = useProjectTableFields();
   const defs = useProjectFilterDefs();
   const filter = useMemo<ActiveListFilter<ProjectListItem>>(
     () => ({ defs, state: toolbar.filters, query: toolbar.query, searchText: projectSearchText }),
@@ -114,12 +116,12 @@ export function EmployeeProjectsTab({
         toolbar={toolbar}
         defs={defs}
         builtinPresets={projectBuiltinPresets}
-        right={<ViewSettings viewKey="directory.projects" defs={projectListFields} />}
+        right={<ViewSettings viewKey="directory.projects" defs={fields} />}
       />
       <div className="min-h-0 flex-1">
         <DataTable
           viewKey="directory.projects"
-          defs={projectListFields}
+          defs={fields}
           rows={rows}
           rowKey={(project) => project.id}
           isLoading={isLoading}

@@ -13,7 +13,7 @@ import {
   letterBuiltinPresets,
   useLetterFilterDefs,
 } from '../../../shared/views/letter-filter-fields.js';
-import { makeLetterTableFields } from '../../../shared/views/letter-table-fields.js';
+import { useLetterTableFields } from '../../../shared/views/letter-table-fields.js';
 import type { ActiveListFilter } from '../../../shared/views/list-filters.js';
 import { ListToolbar } from '../../../shared/views/list-toolbar.js';
 import { useFilteredList, useListToolbar } from '../../../shared/views/use-list-toolbar.js';
@@ -65,7 +65,8 @@ export function LettersTable({ box }: { box: LetterBox }) {
   const search = useDebouncedValue(toolbar.query.trim(), 250);
   const query = useLettersInfinite(box, { search: search || undefined });
   const serverRows = useMemo(() => letterRows(query.data), [query.data]);
-  const fields = useMemo(() => makeLetterTableFields({ box }), [box]);
+  // Реестр колонок — хук: атрибуты писем (#632) приходят с сервера.
+  const fields = useLetterTableFields({ box });
   const defs = useLetterFilterDefs(serverRows, { box });
   // Запрос уже применил сервер — локально только поля фильтра (иначе
   // совпадения по «их №» отсеялись бы клиентской подстрокой).

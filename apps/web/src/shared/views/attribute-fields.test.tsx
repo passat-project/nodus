@@ -1,10 +1,13 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { CustomFieldDefinition, CustomFieldRef, CustomFieldType } from '@nodus/contracts';
 
 import {
   attributeFieldDefs,
   attributeFieldId,
   attributeFitsModule,
+  attributeFormula,
   attributeRefs,
   attributeRenderCell,
   attributeValue,
@@ -14,7 +17,7 @@ import { refsById } from '../custom-fields/value-view.js';
 
 /** Атрибутные колонки видов (#632): фильтр по месту показа (категория типа
  *  процесса, вид папки, тип проекта), id `cf.<uuid>`, ширины по типу,
- *  значения и ссылки из строки списка. */
+ *  значения и ссылки из строки списка, формульное состояние ячейки. */
 
 const TASK_TYPE = '31000000-0000-4000-8000-000000000001';
 const LETTER_TYPE = '31000000-0000-4000-8000-000000000002';
@@ -89,6 +92,8 @@ const ALL = [
   companyVariable,
   unboundAttribute,
 ];
+
+afterEach(cleanup);
 
 describe('attributeFieldDefs: какие атрибуты становятся полями вида (#632)', () => {
   it('задачи — только атрибуты категории «задача», письма — «письмо»', () => {
@@ -201,5 +206,67 @@ describe('значение и ссылки атрибута в строке сп
     const cell = attributeRenderCell(taskAttribute, 'АР-1', new Map());
     expect(cell).toBeTruthy();
     expect(typeof cell).toBe('object');
+  });
+});
+
+describe('формульное состояние ячейки атрибута (#632, O4)', () => {
+  it('состояние — из customFieldFormulas строки по id определения', () => {
+    expect(
+      attributeFormula({ customFieldFormulas: { [FIELD]: { origin: 'own' } } }, taskAttribute),
+    ).toEqual({ origin: 'own' });
+    // Строка без формул (письма/проекты до расширения DTO) — состояния нет.
+    expect(attributeFormula({}, taskAttribute)).toBeUndefined();
+    expect(attributeFormula({ customFieldFormulas: {} }, taskAttribute)).toBeUndefined();
+  });
+
+  it('своя формула — значок fx, значение рядом', () => {
+    render(
+      <span>
+        {attributeRenderCell(taskAttribute, 'АР-1', new Map(), { formula: { origin: 'own' } })}
+      </span>,
+    );
+    expect(screen.getByText('fx')).toBeTruthy();
+    expect(screen.getByText('АР-1')).toBeTruthy();
+    cleanup();
+  });
+
+  it('формула типа — тоже fx (тихой пометкой), вписанное значение — без пометки', () => {
+    render(
+      <span>
+        {attributeRenderCell(taskAttribute, 'АР-1', new Map(), { formula: { origin: 'type' } })}
+      </span>,
+    );
+    expect(screen.getByText('fx').getAttribute('title')).toBe('Формула типа');
+    cleanup();
+
+    render(
+      <span>
+        {attributeRenderCell(taskAttribute, 'АР-1', new Map(), { formula: { origin: 'value' } })}
+      </span>,
+    );
+    expect(screen.queryByText('fx')).toBeNull();
+    cleanup();
+  });
+
+  it('ошибка ячейки — бейдж «!» с подсказкой, даже без значения', () => {
+    render(
+      <span>
+        {attributeRenderCell(taskAttribute, undefined, new Map(), {
+          formula: { origin: 'type', error: { code: 'type_mismatch', message: 'не тот тип' } },
+        })}
+      </span>,
+    );
+    const badge = screen.getByLabelText('Ошибка формулы');
+    expect(badge.getAttribute('title')).toBe(
+      'Ошибка формулы: Результат не подходит к типу атрибута',
+    );
+  });
+
+  it('без формулы ячейка — только значение (колонки вне формул)', () => {
+    const { container } = render(
+      <span>{attributeRenderCell(taskAttribute, 'АР-1', new Map())}</span>,
+    );
+    expect(container.textContent).toBe('АР-1');
+    expect(screen.queryByText('fx')).toBeNull();
   });
 });

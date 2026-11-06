@@ -78,6 +78,8 @@ import { FormulaValuesService } from './formulas/formula-values.service.js';
     FORMULA_CELLS,
     RECORD_VALUES_READER,
     FormulaMetaService,
+    FormulaContextService,
+    FormulaValuesService,
   ],
 })
 export class CustomFieldsPortsModule {}

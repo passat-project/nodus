@@ -152,7 +152,7 @@ export function BoardTaskCard({
             <span className="min-w-0 text-foreground/90 line-clamp-1">
               {attributeRenderCell(definition, value, refs, {
                 interactive: false,
-                formula: attributeFormula(task, definition),
+                formula,
               })}
             </span>
           </span>

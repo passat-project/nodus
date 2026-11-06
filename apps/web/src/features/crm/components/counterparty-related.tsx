@@ -11,10 +11,10 @@ import {
   letterBuiltinPresets,
   useLetterFilterDefs,
 } from '../../../shared/views/letter-filter-fields.js';
-import { makeLetterTableFields } from '../../../shared/views/letter-table-fields.js';
+import { useLetterTableFields } from '../../../shared/views/letter-table-fields.js';
 import { ListToolbar } from '../../../shared/views/list-toolbar.js';
 import type { ActiveListFilter, FilterFieldDef } from '../../../shared/views/list-filters.js';
-import { projectListFields } from '../../../shared/views/project-table-fields.js';
+import { useProjectTableFields } from '../../../shared/views/project-table-fields.js';
 import { useFilteredList, useListToolbar } from '../../../shared/views/use-list-toolbar.js';
 import { ViewSettings } from '../../../shared/views/view-settings.js';
 
@@ -65,7 +65,7 @@ export function CounterpartyLettersTab({
     { enabled },
   );
   const serverRows = useMemo(() => letterRows(query.data), [query.data]);
-  const fields = useMemo(() => makeLetterTableFields({ counterpartyVisible: false }), []);
+  const fields = useLetterTableFields({ counterpartyVisible: false });
   const defs = useLetterFilterDefs(serverRows, { counterpartyVisible: false });
   const filter = useMemo<ActiveListFilter<LetterListItem>>(
     () => ({ defs, state: toolbar.filters, query: '' }),
@@ -106,9 +106,9 @@ export function CounterpartyLettersTab({
 
 /**
  * Вкладка «Проекты» карточки контрагента (#460) — проекты, где организация —
- * заказчик; единый реестр колонок проектов (`projectListFields`, память
- * колонок — своя). Проекты здесь не создаются: это редкое действие
- * руководителя в модуле «Проекты», заказчик — поле проекта.
+ * заказчик; единый реестр колонок проектов (память колонок — своя). Проекты
+ * здесь не создаются: это редкое действие руководителя в модуле «Проекты»,
+ * заказчик — поле проекта.
  */
 export function CounterpartyProjectsTab({
   projects,
@@ -118,18 +118,20 @@ export function CounterpartyProjectsTab({
   isLoading: boolean;
 }) {
   const openCard = useOpenCard();
+  // Реестр колонок — хук: атрибуты портала (#632) приходят с сервера.
+  const fields = useProjectTableFields();
   const { toolbar, rows } = useSearch(PROJECTS_VIEW, projects, noProjectDefs, projectSearchText);
   return (
     <div className="flex h-full flex-col">
       <ListToolbar
         toolbar={toolbar}
         defs={noProjectDefs}
-        right={<ViewSettings viewKey={PROJECTS_VIEW} defs={projectListFields} />}
+        right={<ViewSettings viewKey={PROJECTS_VIEW} defs={fields} />}
       />
       <div className="min-h-0 flex-1">
         <DataTable
           viewKey={PROJECTS_VIEW}
-          defs={projectListFields}
+          defs={fields}
           rows={rows}
           rowKey={(project) => project.id}
           isLoading={isLoading}

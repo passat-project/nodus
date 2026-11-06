@@ -183,6 +183,11 @@ export const projectListItemSchema = z.object({
   endDate: z.iso.date().nullable(),
   /** Последняя активность (для сортировки журнала). */
   activityAt: z.iso.datetime(),
+  /** Атрибуты строки списка (#632, Р9): значения, ссылки и формулы — колонки
+   *  журнала проектов показывают их без отдельных запросов. */
+  customFields: customFieldValuesSchema.optional(),
+  customFieldRefs: z.array(customFieldRefSchema).optional(),
+  customFieldFormulas: customFieldFormulasSchema.optional(),
 });
 
 export type ProjectListItem = z.infer<typeof projectListItemSchema>;

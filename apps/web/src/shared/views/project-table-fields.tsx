@@ -1,13 +1,16 @@
+import { useMemo } from 'react';
 import { Lock } from 'lucide-react';
-import type { ProjectListItem } from '@nodus/contracts';
+import type { CustomFieldDefinition, ProjectListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { NodeChip } from '@nodus/ui/components/node-chip';
 
+import { useCustomFieldDefinitions } from '../custom-fields/queries.js';
 import { formatDate, formatDateTimeShort } from '../lib/format.js';
 import { primaryProjectRole } from '../lib/project-role.js';
 import { PersonAvatar } from '../ui/person-avatar.js';
 import { monoCell, PersonCell } from '../ui/person-cell.js';
 import { ProjectIdentityIcon } from '../ui/project-identity-icon.js';
+import { attributeColumnFields } from './attribute-fields.js';
 import type { DataTableField } from './data-table.js';
 
 /** Роль текущего пользователя — чип: руководитель — success, помощник —
@@ -63,12 +66,12 @@ function MemberPreview({ project }: { project: ProjectListItem }) {
 }
 
 /**
- * ЕДИНЫЙ реестр колонок списка проектов (стандарт списков): журнал проектов
+ * Системные колонки списка проектов (стандарт списков): журнал проектов
  * (`projects.list`) и проекты сотрудника/контрагента в их карточках — реестр
  * один, память колонок раздельная. Новое поле модуля = +1 запись здесь
  * (шестерёнка + ручка ресайза).
  */
-export const projectListFields: DataTableField<ProjectListItem>[] = [
+const projectSystemFields: DataTableField<ProjectListItem>[] = [
   {
     id: 'code',
     label: ui.projects.fieldCode,
@@ -236,3 +239,31 @@ export const projectListFields: DataTableField<ProjectListItem>[] = [
     sortValue: (project) => project.activityAt,
   },
 ];
+
+/**
+ * ЕДИНЫЙ реестр колонок списка проектов (#632): системные поля модуля плюс
+ * атрибуты портала. `definitions` — реестр атрибутов модуля «Проекты»:
+ * атрибуты, привязанные к типам проектов, идут колонками после системных,
+ * скрыты по умолчанию (включаются шестерёнкой в группе «Атрибуты»),
+ * сортировки не имеют (серверная — #435). Значения — из строки списка
+ * (`customFields`/`customFieldRefs`/`customFieldFormulas`), пустое значение —
+ * пустая ячейка.
+ */
+export function makeProjectTableFields({
+  definitions,
+}: { definitions?: readonly CustomFieldDefinition[] } = {}): DataTableField<ProjectListItem>[] {
+  return [
+    ...projectSystemFields,
+    // Атрибутные колонки (#632, Р9) — после системных, скрыты по умолчанию
+    // (общая фабрика с задачами и письмами: одна семантика ячейки).
+    ...attributeColumnFields<ProjectListItem>({ definitions, module: 'project' }),
+  ];
+}
+
+/** Реестр колонок списка проектов с атрибутами портала (#632, Р9):
+ *  определения грузятся один раз на операцию (кэш query), колонки —
+ *  мемо-производная. Потребители вызывают хук в компоненте. */
+export function useProjectTableFields(): DataTableField<ProjectListItem>[] {
+  const { data } = useCustomFieldDefinitions('project');
+  return useMemo(() => makeProjectTableFields({ definitions: data }), [data]);
+}

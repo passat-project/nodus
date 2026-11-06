@@ -9,7 +9,7 @@ import {
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import { ProjectNodesRepository } from '../project-nodes.repository.js';
-import { ProjectFormulaService } from '../project-formula.service.js';
+import { ProjectFormulaRecalcService } from '../project-formula-recalc.service.js';
 
 /**
  * Пересчёт формул проектов и папок по событиям реестра (#632, Р13):
@@ -25,7 +25,7 @@ export class ProjectFormulaDefinitionHandler {
 
   constructor(
     private readonly txRunner: TransactionRunner,
-    private readonly formulas: ProjectFormulaService,
+    private readonly formulas: ProjectFormulaRecalcService,
     private readonly nodes: ProjectNodesRepository,
     @Inject(FORMULA_CELLS) private readonly cells: FormulaCells,
     private readonly logger: PinoLogger,

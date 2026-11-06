@@ -1,14 +1,18 @@
 import { http, HttpResponse } from 'msw';
-import { ErrorCode, listProjectsQuerySchema, type ProjectListItem } from '@nodus/contracts';
+import { ErrorCode, listProjectsQuerySchema } from '@nodus/contracts';
 
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
-import { projectWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
+import {
+  projectListItemWithFormulas,
+  projectWithFormulas,
+} from '../../../../shared/custom-fields/formula/formula-dto.js';
 import {
   canSeeProject,
   demoProjectMembersFor,
   detailOf,
   historyEntryOf,
   listItemOf,
+  projectCustomFieldsOf,
   visibleProjectRows,
 } from '../../../../shared/mocks/data/project-views.js';
 import { demoProjectEvents } from '../../../../shared/mocks/data/project-events.js';
@@ -80,7 +84,11 @@ export const projectReadHandlers = [
       }
     }
     const page = rows.slice(0, query.limit);
-    const items: ProjectListItem[] = page.map((row) => listItemOf(row, actor));
+    // Строка журнала несёт значения атрибутов, имена ссылок и формульное
+    // состояние (#632, Р9): колонки атрибутов и значок fx в списке.
+    const items = page.map((row) =>
+      projectListItemWithFormulas(listItemOf(row, actor), projectCustomFieldsOf(row)),
+    );
     const last = page[page.length - 1];
     return HttpResponse.json({
       items,

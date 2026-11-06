@@ -10,6 +10,7 @@ import { canViewLetter } from '../access/letter-access.js';
 import { companyDate } from '../../../core/time/company-time.js';
 import { LetterAttachedRefsRepository } from '../letters/letter-attached-refs.repository.js';
 import { LetterAttachedRefsValidator } from '../letters/letter-attached-refs.validator.js';
+import { LetterFieldsWriter } from '../letters/letter-fields.writer.js';
 import type { LetterDetailRow } from '../letters/letter-row.js';
 import { LetterThreadingService } from '../letters/letter-threading.service.js';
 import { LettersRepository } from '../letters/letters.repository.js';
@@ -27,6 +28,14 @@ const relationFail = (reason: 'not_found' | 'not_outgoing_registered' | 'suggest
     reason,
   });
 
+/** Ключи атрибутов, реально переданные окном регистрации (ввод невалиден —
+ *  пустой список: проверку формы делает валидатор, здесь только семантика
+ *  «вписано руками» для снятия формулы, Р5 #632). */
+function explicitCustomFieldKeys(input: unknown): string[] {
+  const values = (input as { customFields?: unknown } | null | undefined)?.customFields;
+  return values && typeof values === 'object' ? Object.keys(values) : [];
+}
+
 /**
  * Применение окна «Регистрация» (#55, Р1; #56 — связь «ответ на»): проверка
  * тех же полей, что у формы, и запись реквизитов в письмо. Номер письма здесь
@@ -40,6 +49,7 @@ export class LetterFormApplier {
   constructor(
     private readonly letters: LettersRepository,
     private readonly validator: LetterFieldsValidator,
+    private readonly fields: LetterFieldsWriter,
     private readonly threading: LetterThreadingService,
     private readonly attached: LetterAttachedRefsRepository,
     private readonly attachedValidator: LetterAttachedRefsValidator,
@@ -53,6 +63,10 @@ export class LetterFormApplier {
   ): Promise<WorkflowFormApplied> {
     if (!input.registration) return EMPTY;
     const today = companyDate(new Date());
+    // Значения, вписанные в окно, снимают формулу ячейки в той же tx
+    // (Р5 #632); умолчания формы — не вписанные руками значения и формулу
+    // не трогают, поэтому берутся только ключи из ввода окна.
+    await this.fields.releaseFormulas(tx, letter.id, explicitCustomFieldKeys(input.registration));
     const { values, extra, customFields } = await this.validator.registration(
       letter.typeId,
       input.registration,

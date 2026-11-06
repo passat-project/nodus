@@ -98,6 +98,8 @@ export function makeProjectsServiceKit() {
   };
   const txRunner = { run: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})) };
   const eventBus: Mocks<'emit'> = { emit: vi.fn() };
+  // Снятие формулы ячейки при обычной записи значения (Р5 #632).
+  const formulaCells: Mocks<'release'> = { release: vi.fn() };
   const kit = {
     repo,
     types,
@@ -107,6 +109,7 @@ export function makeProjectsServiceKit() {
     queries,
     profiles,
     customFields,
+    formulaCells,
     eventBus,
     service: undefined as unknown as ProjectsService,
     /** Аналог beforeEach исходного файла: чистка моков, дефолты, сервис. */
@@ -146,6 +149,7 @@ export function makeProjectsServiceKit() {
         queries as never,
         profiles as never,
         customFields as never,
+        formulaCells as never,
       );
     },
   };

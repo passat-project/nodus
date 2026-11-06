@@ -104,10 +104,11 @@ export class ProjectDtoMapper {
         participants.filter((entry) => entry.source === 'observer').map((entry) => entry.userId),
       ),
     ];
-    const [refs, creatorRefs, observerRefs] = await Promise.all([
+    const [refs, creatorRefs, observerRefs, formulas] = await Promise.all([
       this.customFields.refs(row.customFields as Record<string, never>, viewer),
       this.profiles.findRefs([row.creatorId]),
       this.profiles.findRefs(observerIds),
+      this.formulas.stateFor('project', [row.id]),
     ]);
     const membership = myMembership(participants, viewer.id);
     // Сводка структуры (#467): дефолт вкладки — «Структура», когда есть
@@ -115,6 +116,7 @@ export class ProjectDtoMapper {
     // запрос не нужен.
     const nodeCount = await this.nodes.countByProject(row.id);
     const hasTaskNodes = nodeCount > 0 ? await this.taskReader.hasNodeTasks(row.id) : false;
+    const state = formulas.get(row.id);
     return {
       ...item!,
       description: row.description,
@@ -129,8 +131,14 @@ export class ProjectDtoMapper {
       startDate: row.startedAt?.toISOString().slice(0, 10) ?? null,
       completedAt: row.completedAt?.toISOString() ?? null,
       archivedAt: row.archivedAt?.toISOString() ?? null,
-      customFields: row.customFields as Record<string, never>,
+      // Значения формулы типа/вида считаны на чтении и наложены поверх
+      // хранимых (Р6); формулы ячеек — в customFieldFormulas (Р9).
+      customFields: {
+        ...(row.customFields as Record<string, never>),
+        ...((state?.values ?? {}) as Record<string, never>),
+      },
       customFieldRefs: refs,
+      ...(state ? { customFieldFormulas: state.formulas } : {}),
       access: projectAccess(toFacts(row), membership, viewer.permissions),
       structureSummary: { nodeCount, hasTaskNodes },
       createdAt: row.createdAt.toISOString(),

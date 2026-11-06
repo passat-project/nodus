@@ -1,14 +1,22 @@
+import { useMemo } from 'react';
 import { CalendarClock, Lock, Paperclip } from 'lucide-react';
-import type { LetterBox, LetterListItem, TaskSystemState } from '@nodus/contracts';
+import type {
+  CustomFieldDefinition,
+  LetterBox,
+  LetterListItem,
+  TaskSystemState,
+} from '@nodus/contracts';
 import { isOpenState, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { projectsAvailable } from '../api/projects-available.js';
+import { useCustomFieldDefinitions } from '../custom-fields/queries.js';
 import { formatIsoDate, toIsoDate } from '../custom-fields/value-format.js';
 import { formatDateTimeShort } from '../lib/format.js';
 import { monoCell, PersonCell } from '../ui/person-cell.js';
 import { ProjectIdentityIcon } from '../ui/project-identity-icon.js';
 import { StageChip } from '../ui/stage-chip.js';
+import { attributeColumnFields } from './attribute-fields.js';
 import type { DataTableField } from './data-table.js';
 
 const dash = <span className={monoCell}>—</span>;
@@ -80,11 +88,23 @@ export function ResponseDeadline({
  * (в журналах её нет). Сортировка № — по моменту регистрации (порядок
  * выдачи номеров серии; строковая «Вх-2026/99» > «…/108» врала бы).
  * `counterpartyVisible: false` — внутри карточки контрагента контекст очевиден.
+ *
+ * `definitions` — реестр атрибутов модуля «Письма» (#632, Р9): атрибуты,
+ * привязанные к типам процессов категории `letter`, идут колонками после
+ * системных, скрыты по умолчанию (включаются шестерёнкой в группе
+ * «Атрибуты»), сортировки не имеют (серверная — #435). Значения — из строки
+ * списка (`customFields`/`customFieldRefs`/`customFieldFormulas`), пустое
+ * значение — пустая ячейка.
  */
 export function makeLetterTableFields({
   counterpartyVisible = true,
   box,
-}: { counterpartyVisible?: boolean; box?: LetterBox } = {}): DataTableField<LetterListItem>[] {
+  definitions,
+}: {
+  counterpartyVisible?: boolean;
+  box?: LetterBox;
+  definitions?: readonly CustomFieldDefinition[];
+} = {}): DataTableField<LetterListItem>[] {
   const fresh = box === 'new';
   const fields: DataTableField<LetterListItem>[] = [
     {
@@ -326,5 +346,22 @@ export function makeLetterTableFields({
       sortValue: (letter) => letter.project?.code ?? null,
     });
   }
-  return fields;
+  // Атрибутные колонки (#632, Р9) — после системных, скрыты по умолчанию:
+  // значение по грамматике типа, имена ссылок — из среза списка, формульное
+  // состояние — значком fx и бейджем ошибки (общая фабрика с задачами).
+  return [...fields, ...attributeColumnFields<LetterListItem>({ definitions, module: 'letter' })];
+}
+
+/** Реестр колонок списка писем с атрибутами портала (#632, Р9): определения
+ *  грузятся один раз на операцию (кэш query), колонки — мемо-производная,
+ *  поэтому реестр живёт вместе с реестром атрибутов. */
+export function useLetterTableFields({
+  counterpartyVisible = true,
+  box,
+}: { counterpartyVisible?: boolean; box?: LetterBox } = {}): DataTableField<LetterListItem>[] {
+  const { data } = useCustomFieldDefinitions('letter');
+  return useMemo(
+    () => makeLetterTableFields({ counterpartyVisible, box, definitions: data }),
+    [counterpartyVisible, box, data],
+  );
 }

@@ -49,14 +49,16 @@ function applierWith(attachments: { id: string; role: string; inline: boolean }[
     })),
   };
   const attached = { replace: vi.fn(async () => void 0) };
+  const fields = { releaseFormulas: vi.fn(async () => void 0) };
   const applier = new LetterFormApplier(
     repo as never,
     validator as never,
+    fields as never,
     {} as never,
     attached as never,
     { validate: vi.fn(async () => []) } as never,
   );
-  return { applier, repo, validator };
+  return { applier, repo, validator, fields };
 }
 
 describe('регистрация требует основной документ («Основной документ письма» #56)', () => {
@@ -126,6 +128,26 @@ describe('значения атрибутов, поставленные до р�
   });
 });
 
+describe('формулы ячеек в окне регистрации (#632, Р5)', () => {
+  it('вписанные в окно значения снимают формулу, умолчания — нет', async () => {
+    const { applier, fields } = applierWith([{ id: 'm1', role: 'main', inline: false }]);
+    const fieldId = '00000000-0000-4000-8000-0000000000e4';
+    await applier.apply(
+      {} as never,
+      row,
+      { id: 'u', permissions: [] },
+      { registration: { customFields: { [fieldId]: 'вписано' } } },
+    );
+    expect(fields.releaseFormulas).toHaveBeenCalledWith(expect.anything(), row.id, [fieldId]);
+  });
+
+  it('окно без атрибутов формулу не трогает', async () => {
+    const { applier, fields } = applierWith([{ id: 'm1', role: 'main', inline: false }]);
+    await applier.apply({} as never, row, { id: 'u', permissions: [] }, { registration: {} });
+    expect(fields.releaseFormulas).toHaveBeenCalledWith(expect.anything(), row.id, []);
+  });
+});
+
 describe('подсказка «ответ на» (#461, Р4): невидимое = отсутствующее', () => {
   it('невидимая конфиденциальная подсказка даёт suggestion_mismatch, не not_found', async () => {
     const visibleTarget = '00000000-0000-4000-8000-0000000000e2';
@@ -181,6 +203,7 @@ describe('подсказка «ответ на» (#461, Р4): невидимое
     const applier = new LetterFormApplier(
       repo as never,
       validator as never,
+      { releaseFormulas: vi.fn(async () => void 0) } as never,
       threading as never,
       { replace: vi.fn() } as never,
       { validate: vi.fn(async () => []) } as never,

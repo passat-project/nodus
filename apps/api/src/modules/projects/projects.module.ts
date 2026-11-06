@@ -32,6 +32,8 @@ import {
   ProjectStructureFormulaRecalcHandler,
 } from './events/formula-recalc.handler.js';
 import { ProjectNodesRepository } from './project-nodes.repository.js';
+import { ProjectFormulaEvents } from './project-formula-events.js';
+import { ProjectFormulaRecalcService } from './project-formula-recalc.service.js';
 import { ProjectFormulaService } from './project-formula.service.js';
 import { ProjectStructureController } from './project-structure.controller.js';
 import { ProjectStructureService } from './project-structure.service.js';
@@ -48,9 +50,11 @@ import {
 
 /**
  * Модуль «Проекты» (#52, ADR-0030): журнал/карточка/создание, двухрежимное
- * участие, типы, портфели, настройки портала. За фичефлагом `projects`
- * (I10): выключенный модуль отвечает 404, порты нейтральны. Чужие модули
- * видят только ProjectsPortsModule (I3/I6).
+ * участие, типы, портфели, настройки портала, дерево структуры и формулы
+ * ячеек атрибутов проекта/папки (#632, Р10 — мутации у владельца хоста).
+ * За фичефлагом `projects` (I10): выключенный модуль отвечает 404, порты
+ * остаются живыми и нейтральными. Чужие модули видят только
+ * ProjectsPortsModule (I3/I6).
  */
 @Module({
   imports: [CrmPortsModule, CustomFieldsPortsModule, TasksPortsModule],
@@ -83,7 +87,9 @@ import {
     // Формулы ячеек атрибутов (#632): сервис формул проекта/папки и писатель
     // значений (материализация результата — штатным путём, Р4).
     ProjectValuesWriter,
+    ProjectFormulaEvents,
     ProjectFormulaService,
+    ProjectFormulaRecalcService,
     // Уборка значений удалённого атрибута (#556, Р11): событие custom-fields.
     ProjectFieldValuesCleanupHandler,
     // Пересчёт формул по зависимостям (#632, Р4/Р8): события хостов и реестра.

@@ -1,6 +1,11 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { CUSTOM_FIELD_CATALOG_EVENTS, DICTIONARY_CATALOG_EVENTS } from '@nodus/contracts';
+import {
+  CUSTOM_FIELD_CATALOG_EVENTS,
+  CUSTOM_FIELD_EVENTS,
+  DICTIONARY_CATALOG_EVENTS,
+} from '@nodus/contracts';
 
+import { lettersKeys } from '../api/letters-keys.js';
 import { customFieldsKeys } from '../custom-fields/queries.js';
 import { dictionariesKeys } from '../dictionaries/keys.js';
 import { nodeKindsKeys } from '../api/node-kinds.js';
@@ -16,13 +21,25 @@ const CATALOG_EVENTS = new Set<string>([
   ...DICTIONARY_CATALOG_EVENTS,
 ]);
 
-/** Ключи кэша по событию `custom_field.*` / `dictionary.*`. true — событие
- *  обработано здесь, false — не наше (роутер пробует дальше). */
+/**
+ * Ключи кэша по событию `custom_field.*` / `dictionary.*`. true — событие
+ * обработано здесь, false — не наше (роутер пробует дальше).
+ *
+ * `custom_field.formula_changed` (#632, O4) — АДРЕСНОЕ событие с аудиторией
+ * хоста (приходит только тем, кто запись видит): перечитываем деталь и списки
+ * хоста, чтобы значок fx и бейдж ошибки приехали с DTO. Значений в payload
+ * нет — только `hostKind`/`hostId`/`fieldId`/`hasError`.
+ */
 export function pushCustomFieldKeys(
   batcher: KeyBatcher,
   queryClient: QueryClient,
   type: string,
+  payload: Record<string, unknown> = {},
 ): boolean {
+  if (type === CUSTOM_FIELD_EVENTS.FORMULA_CHANGED) {
+    pushFormulaChangedKeys(batcher, payload);
+    return true;
+  }
   if (!CATALOG_EVENTS.has(type)) return false;
   batcher.push(customFieldsKeys.all, 'list');
   batcher.push(dictionariesKeys.all, 'list');
@@ -34,4 +51,38 @@ export function pushCustomFieldKeys(
   batcher.push(tasksKeys.detailsAll(), 'list');
   batcher.push(tasksKeys.listPages(), 'list');
   return true;
+}
+
+/**
+ * Инвалидации по `custom_field.formula_changed` (#632): формула ячейки
+ * поставлена/снята или сменилось её состояние ошибки — значения не меняются,
+ * но DTO несёт `customFieldFormulas` (fx/«!»), поэтому деталь хоста и списки,
+ * где он виден, перечитываются.
+ *
+ * Папка живёт в дереве проекта, а `projectId` в событии нет (payload без
+ * значений и адресов чужих записей) — перечитываем деревья префиксом.
+ */
+function pushFormulaChangedKeys(batcher: KeyBatcher, payload: Record<string, unknown>): void {
+  const hostId = typeof payload.hostId === 'string' ? payload.hostId : null;
+  if (!hostId) return;
+  switch (payload.hostKind) {
+    case 'task':
+      batcher.push(tasksKeys.detail(hostId), 'list');
+      batcher.push(tasksKeys.listPages(), 'list');
+      return;
+    case 'letter':
+      batcher.push(lettersKeys.detail(hostId), 'list');
+      batcher.push(lettersKeys.lists(), 'list');
+      return;
+    case 'project':
+      batcher.push(projectsKeys.detail(hostId), 'list');
+      batcher.push(projectsKeys.journals(), 'list');
+      return;
+    case 'node':
+      batcher.push(projectsKeys.structures(), 'list');
+      return;
+    default:
+      // Неизвестный вид хоста — событие наше, но перечитывать нечего.
+      return;
+  }
 }

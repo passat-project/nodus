@@ -207,6 +207,11 @@ export const letterListItemSchema = z.object({
    *  только участники (и держатели `correspondence.view_confidential`).
    *  Строка в списках есть только у видящих — бейдж не оракул. */
   confidential: z.boolean(),
+  /** Атрибуты строки списка (#632, Р9): значения, имена ссылок и формульное
+   *  состояние — колонки видов показывают их без отдельных запросов. */
+  customFields: customFieldValuesSchema.optional(),
+  customFieldRefs: z.array(customFieldRefSchema).optional(),
+  customFieldFormulas: customFieldFormulasSchema.optional(),
 });
 export type LetterListItem = z.infer<typeof letterListItemSchema>;
 

@@ -7,11 +7,12 @@ import type {
   CustomFieldType,
   CustomFieldValue,
 } from '@nodus/contracts';
-import { bindingsOf, customFieldKey, ui } from '@nodus/contracts';
+import { bindingsOf, customFieldKey, isCustomFieldValueFilled, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import type { AttributeCarrier } from '../custom-fields/attribute-carrier.js';
 import { CustomFieldValueView, refsById } from '../custom-fields/value-view.js';
+import type { DataTableField } from './data-table.js';
 import type { FieldDef } from './use-view-fields.js';
 
 /**
@@ -122,6 +123,36 @@ export function attributeFieldDefs({
       attribute: definition,
       locked: false,
     }));
+}
+
+/**
+ * Колонки-атрибуты для реестра таблицы вида (#632, Р9): поля из
+ * `attributeFieldDefs` + рендер ячейки по грамматике типа с формульными
+ * пометками (fx/«!»). Одна фабрика на все реестры (задачи, письма,
+ * проекты) — «модули не отличаются»: семантика ячейки не расходится.
+ *
+ * Пустое значение без ошибки формулы — пустая ячейка: список не пестрит
+ * «Не задано», колонку включают осознанно. Сортировки нет (`sortValue` не
+ * задан) — хедер рисует заголовок без ↑/↓, серверная сортировка в #435.
+ */
+export function attributeColumnFields<T extends object>({
+  definitions,
+  module,
+}: {
+  definitions?: readonly CustomFieldDefinition[];
+  module: AttributeModule;
+}): DataTableField<T>[] {
+  return attributeFieldDefs({ definitions, module }).map((field) => ({
+    ...field,
+    render: (row: T) => {
+      const definition = field.attribute;
+      if (!definition) return null;
+      const value = attributeValue(row, definition);
+      const formula = attributeFormula(row, definition);
+      if (!isCustomFieldValueFilled(value) && !formula?.error) return null;
+      return attributeRenderCell(definition, value, attributeRefs(row), { formula });
+    },
+  }));
 }
 
 /** Значение атрибута у сущности (задача, папка, проект, письмо) — по id

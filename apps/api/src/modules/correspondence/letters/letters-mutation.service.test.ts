@@ -65,6 +65,7 @@ function setup(letter: LetterDetailRow) {
     detail: vi.fn(async () => ({ id: LETTER })),
   };
   const validator = { patch: vi.fn(async () => ({ data: {}, changes: [] })) };
+  const fields = { releaseFormulas: vi.fn(async () => void 0) };
   const eventBus = { emit: vi.fn(async () => void 0) };
   const profiles = { filterActiveUserIds: vi.fn(async (ids: string[]) => ids) };
   const attached = {
@@ -76,6 +77,7 @@ function setup(letter: LetterDetailRow) {
     repo as never,
     query as never,
     validator as never,
+    fields as never,
     attached as never,
     attachedValidator as never,
     { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
@@ -83,7 +85,17 @@ function setup(letter: LetterDetailRow) {
     {} as never,
     profiles as never,
   );
-  return { service, repo, query, validator, eventBus, profiles, attached, attachedValidator };
+  return {
+    service,
+    repo,
+    query,
+    validator,
+    fields,
+    eventBus,
+    profiles,
+    attached,
+    attachedValidator,
+  };
 }
 
 describe('правка реквизитов (редизайн #56 — карточка = форма)', () => {
@@ -112,6 +124,19 @@ describe('правка реквизитов (редизайн #56 — карто
     const { service, validator } = setup(row(null));
     await service.update(REGISTRAR, LETTER, { addresseeId: COLLEAGUE });
     expect(validator.patch).toHaveBeenCalled();
+  });
+
+  it('вписанное значение снимает формулу ячейки в той же tx (#632, Р5)', async () => {
+    const { service, fields } = setup(row(null));
+    const fieldId = '00000000-0000-4000-8000-000000000420';
+    await service.update(REGISTRAR, LETTER, { customFields: { [fieldId]: 'руками' } });
+    expect(fields.releaseFormulas).toHaveBeenCalledWith(expect.anything(), LETTER, [fieldId]);
+  });
+
+  it('правка без атрибутов формулу не трогает', async () => {
+    const { service, fields } = setup(row(null));
+    await service.update(REGISTRAR, LETTER, { subject: 'Оферт' });
+    expect(fields.releaseFormulas).toHaveBeenCalledWith(expect.anything(), LETTER, []);
   });
 });
 
