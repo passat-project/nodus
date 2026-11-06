@@ -8,7 +8,8 @@ import { nodeKindIds } from './project-nodes.js';
  *  («Шифр», «Заказчик») и доступные виды узлов. Вынесено из projects.ts
  *  ради лимита строк файла (I5); данные прежние. */
 
-export const typeId = (n: number): string => `41000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+export const typeId = (n: number): string =>
+  `41000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 /** id демо-типов проектов (посев #631 привязывает системные атрибуты). */
 export const demoProjectTypeIds = {
