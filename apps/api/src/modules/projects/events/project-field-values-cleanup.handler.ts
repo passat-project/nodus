@@ -13,6 +13,7 @@ import { NodeKindsRepository } from '../project-node-kinds.repository.js';
 import { ProjectNodesRepository } from '../project-nodes.repository.js';
 import { ProjectTypesRepository } from '../project-types.repository.js';
 import { ProjectsRepository } from '../projects.repository.js';
+import { emitProjectTypeChanged } from '../project-type-events.js';
 
 /**
  * Уборка значений удалённого атрибута в проектах и папках (#556, Р11):
@@ -64,8 +65,20 @@ export class ProjectFieldValuesCleanupHandler {
     await this.txRunner.run(async (tx) => {
       await this.types.lockForms(tx);
       const removed = await this.types.removeFieldFromForms(tx, definitionId);
+      // Форма типа изменилась внешним путём — каталожное событие, иначе
+      // открытая панель типа сохранит мёртвый слот и получит 422 (#646).
+      for (const type of removed) {
+        await emitProjectTypeChanged(
+          this.eventBus,
+          tx,
+          type.id,
+          'updated',
+          ['form'],
+          event.actorId,
+        );
+      }
       this.logger.debug(
-        { fieldId: definitionId, removed },
+        { fieldId: definitionId, removed: removed.length },
         'Слоты удалённого атрибута убраны из форм типов проектов',
       );
     });

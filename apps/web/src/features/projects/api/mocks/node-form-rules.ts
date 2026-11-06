@@ -24,9 +24,10 @@ import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom
  * больше нет. Мок повторяет сервер (ADR-0001): отказ мока = отказ сервера.
  */
 
-/** Эффективная форма вида: слоты атрибутов, привязанных к этому виду (Р3). */
+/** Эффективная форма вида: слоты существующих определений (зеркало
+ *  серверного `effectiveNodeForm`); привязка — отдельный слой. */
 export function formOfKind(kind: NodeKind): NodeKindForm {
-  return effectiveNodeForm(kind, definitionsForTarget(demoCustomFieldDefinitions, 'node', kind.id));
+  return effectiveNodeForm(kind, demoCustomFieldDefinitions);
 }
 
 export interface NodeRuleIssue {
@@ -57,9 +58,15 @@ export function foreignValueIssue(
   values: Record<string, CustomFieldValue | null> | undefined,
 ): NodeRuleIssue | null {
   if (!values) return null;
-  const inForm = new Set(formOfKind(kind).fields.map((slot) => slot.fieldId));
+  // Сервер разрешает значение ПРИВЯЗАННОГО атрибута, даже если слота нет:
+  // привязка = доступность, слот = видимость (Р3/#646).
+  const bound = new Set(
+    definitionsForTarget(demoCustomFieldDefinitions, 'node', kind.id).map(
+      (definition) => definition.id,
+    ),
+  );
   const issues = Object.entries(values)
-    .filter(([fieldId, value]) => value !== null && value !== undefined && !inForm.has(fieldId))
+    .filter(([fieldId, value]) => value !== null && value !== undefined && !bound.has(fieldId))
     .map(([fieldId]) => ({
       fieldId,
       reason: 'not_in_type' as const,
@@ -114,21 +121,21 @@ export function updateIssues(
   return cleared.length > 0 ? requiredIssue(kind.id, cleared, 'clear') : null;
 }
 
-/** Форма вида при PATCH: каждый слот — атрибут, привязанный к этому виду
- *  (иначе 422 `unknown_field`); привязка живёт в реестре («Где
- *  используется»), форма задаёт только состояния (Р3 #631). */
+/** Форма вида при PATCH: каждый слот — существующий атрибут портала, не
+ *  глобальная переменная. Предварительная привязка НЕ требуется: сервер
+ *  сам создаёт её из слота (`syncPlaceBindings`). */
 export function kindFormIssues(
-  kind: NodeKind,
+  _kind: NodeKind,
   form: NodeKindForm,
-): { fieldId: string; reason: 'unknown_field' }[] {
-  const bound = new Set(
-    definitionsForTarget(demoCustomFieldDefinitions, 'node', kind.id).map(
-      (definition) => definition.id,
-    ),
-  );
-  return form.fields
-    .filter((slot) => !bound.has(slot.fieldId))
-    .map((slot) => ({ fieldId: slot.fieldId, reason: 'unknown_field' as const }));
+): { fieldId: string; reason: 'unknown_field' | 'not_bindable' }[] {
+  const byId = new Map(demoCustomFieldDefinitions.map((definition) => [definition.id, definition]));
+  const issues: { fieldId: string; reason: 'unknown_field' | 'not_bindable' }[] = [];
+  for (const slot of form.fields) {
+    const definition = byId.get(slot.fieldId);
+    if (!definition) issues.push({ fieldId: slot.fieldId, reason: 'unknown_field' });
+    else if (definition.isCompany) issues.push({ fieldId: slot.fieldId, reason: 'not_bindable' });
+  }
+  return issues;
 }
 
 export function kindFormInvalidIssue(

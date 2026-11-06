@@ -93,10 +93,11 @@ function missingFields(fields: WorkflowFieldKey[], facts: WorkflowGateFacts): Wo
   };
   return fields.filter((f) => {
     const fieldId = customFieldIdOfKey(f);
-    // Атрибут (#431, Р7): неизвестный/удалённый ключ не блокирует переход —
-    // маршрут не должен ломаться из-за удалённого поля (публикация такое
-    // ловит ошибкой `custom_field_unknown`, но старые документы живут).
-    // Скрытый атрибут блокирует: условие процесса видит служебные значения.
+    // Атрибут (#431, Р7): неизвестный/удалённый/снятый с типа ключ не
+    // блокирует переход — маршрут не должен ломаться из-за поля, которого
+    // нет в карточке (публикация ловит unknown/not_in_type, старые документы
+    // живут). Слот `hidden` — не то же самое: атрибут привязан и правится в
+    // карточке, поэтому гейт на нём законен.
     if (fieldId !== null) {
       if (!facts.activeCustomFieldIds.has(fieldId)) return false;
       return !isCustomFieldValueFilled(facts.customFields[fieldId]);

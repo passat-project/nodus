@@ -63,7 +63,7 @@ export class DefinitionsBindingService {
     actorId: string,
   ): Promise<CustomFieldDefinition> {
     const definition = await this.require(id);
-    assertNotCompany(definition);
+    assertNotCompany(definition, kind, targetId);
     await assertTargetsBindable(this.catalog, this.targets, kind, [targetId]);
     return this.txRunner.run(async (tx) => {
       await this.definitions.bindTarget(id, bindingRowKind(kind), targetId, tx);
@@ -78,7 +78,7 @@ export class DefinitionsBindingService {
     actorId: string,
   ): Promise<CustomFieldDefinition> {
     const definition = await this.require(id);
-    assertNotCompany(definition);
+    assertNotCompany(definition, kind, targetId);
     // Снятие разрешено ВСЕГДА (О3): цель могла быть заархивирована или
     // удалена — привязка-сирота не должна блокировать уборку (N-5 #646).
     return this.txRunner.run(async (tx) => {
@@ -121,8 +121,16 @@ export class DefinitionsBindingService {
   }
 }
 
-function assertNotCompany(definition: FieldDefinitionRow): void {
+function assertNotCompany(
+  definition: FieldDefinitionRow,
+  kind: BindingTargetKind,
+  targetId: string,
+): void {
   if (definition.isCompany) {
-    throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Company variable cannot have bindings');
+    throw new DomainException(
+      ErrorCode.CUSTOM_FIELD_BINDING_INVALID,
+      'Company variable cannot have bindings',
+      { targetKind: kind, targetId },
+    );
   }
 }

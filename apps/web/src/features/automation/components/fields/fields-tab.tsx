@@ -205,6 +205,9 @@ export function FieldsTab() {
           rowKey={(definition) => definition.id}
           selection={selection}
           isLoading={query.isLoading}
+          isError={query.isError}
+          onRetry={() => void query.refetch()}
+          label={ui.customFields.page.title}
           onOpenRow={(definition) => setSearch({ field: definition.id })}
           emptyTitle={
             q

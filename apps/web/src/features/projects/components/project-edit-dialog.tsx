@@ -11,8 +11,8 @@ import type {
 import {
   errorMessages,
   ErrorCode,
+  effectiveProjectTypeForm,
   missingProjectFields,
-  projectTypeFormOf,
   SYSTEM_FIELD_IDS,
   ui,
   updateProjectBodySchema,
@@ -24,6 +24,8 @@ import { Textarea } from '@nodus/ui/components/textarea';
 
 import { ApiError } from '../../../shared/api-client.js';
 import { useProjectTypes } from '../../../shared/api/projects-list.js';
+import { definitionsForTarget } from '../../../shared/custom-fields/module-target.js';
+import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries.js';
 import { useUpdateProject } from '../api/project-mutations.js';
 import {
   counterpartyRefOf,
@@ -64,7 +66,11 @@ export function ProjectEditDialog({
   const types = useProjectTypes(true);
   const type: ProjectType | null =
     types.data?.find((entry) => entry.id === project.type?.id) ?? null;
-  const form = projectTypeFormOf(type ?? {});
+  const definitions = useCustomFieldDefinitions('project');
+  const boundDefinitions = definitionsForTarget(definitions.data, 'project', project.type?.id);
+  const form = type
+    ? effectiveProjectTypeForm(type, boundDefinitions)
+    : effectiveProjectTypeForm({}, boundDefinitions);
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description);
   const [portfolioId, setPortfolioId] = useState(project.portfolio?.id ?? null);

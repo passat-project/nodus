@@ -52,6 +52,7 @@ describe('ProjectMembersService (#52, Р2 — двухрежимное учас�
     });
     // Руководитель — участник: assertVisible секретного проекта проходит.
     participants.hasRow.mockResolvedValue(true);
+    participants.rowsOfProject.mockResolvedValue([]);
     tasks.membersOf.mockResolvedValue([]);
     tasks.roleHolderIds.mockResolvedValue([]);
     profiles.filterActiveUserIds.mockImplementation(async (ids: string[]) => ids);
@@ -75,7 +76,7 @@ describe('ProjectMembersService (#52, Р2 — двухрежимное учас�
       expect(eventBus.emit).toHaveBeenCalledWith(
         {},
         PROJECT_EVENTS.PARTICIPANTS_CHANGED,
-        { projectId: ID, changedUserIds: [OUTSIDER] },
+        { projectId: ID, changedUserIds: [OUTSIDER], audience: expect.any(Array) },
         expect.anything(),
       );
       expect(projects.touch).toHaveBeenCalledWith({}, ID);
@@ -219,7 +220,7 @@ describe('ProjectMembersService (#52, Р2 — двухрежимное учас�
       expect(eventBus.emit).toHaveBeenCalledWith(
         {},
         PROJECT_EVENTS.PARTICIPANTS_CHANGED,
-        { projectId: ID, changedUserIds: [WORKER] },
+        { projectId: ID, changedUserIds: [WORKER], audience: expect.any(Array) },
         expect.anything(),
       );
     });

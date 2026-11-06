@@ -68,7 +68,7 @@ CUSTOM_FIELD_REGISTRY: CustomFieldRegistry {
 
 Значение атрибута в отдельном событии не ездит: изменение — в событии сущности (`task.updated` / `project.node_updated` c `customFieldChanges[{fieldId, from, to}]`, ≤ 50, `long_text` обрезан до 500, ключи `cf.<id>` в `fields`).
 
-**Уборка значений удалённого атрибута**: обработчики-владельцы — `CustomFieldValuesCleanupHandler` (задачи), `LetterFieldValuesCleanupHandler` (письма), `ProjectFieldValuesCleanupHandler` (проекты и папки; дополнительно убирает слот из форм видов и эмитит `project.node_kind_changed`). Все чистят безусловно по `definitionId` (без областей, идемпотентно). Имена классов обработчиков уникальны: диспетчер различает их по имени класса (gotcha backend.md).
+**Уборка значений удалённого атрибута**: обработчики-владельцы — `CustomFieldValuesCleanupHandler` (задачи), `LetterFieldValuesCleanupHandler` (письма), `CounterpartyFieldValuesCleanupHandler` (контрагенты, #646), `ProjectFieldValuesCleanupHandler` (проекты и папки; дополнительно убирает слоты из форм типов проектов и видов папок и эмитит `project.type_changed` / `project.node_kind_changed`). Все чистят безусловно по `definitionId` (без областей, идемпотентно). Имена классов обработчиков уникальны: диспетчер различает их по имени класса (gotcha backend.md).
 
 ## Умолчания (Р5)
 

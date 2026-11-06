@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
-import type { ProjectType, ProjectTypeForm, ProjectTypeUpdateBody } from '@nodus/contracts';
+import {
+  projectTypeFormOf,
+  type ProjectType,
+  type ProjectTypeForm,
+  type ProjectTypeUpdateBody,
+} from '@nodus/contracts';
 
 import { PrismaService } from '../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../core/database/transaction-runner.js';
@@ -29,8 +34,9 @@ export class ProjectTypesRepository {
       icon: row.icon as ProjectType['icon'],
       color: row.color as ProjectType['color'],
       // Слоты атрибутов типа (Р10 #631): слот «Шифр» занял место политики
-      // codeField; колонка code_field заморожена (не читается).
-      form: (row.form ?? { fields: [] }) as ProjectTypeForm,
+      // codeField; колонка code_field заморожена (не читается). Чтение
+      // толерантное: битая форма → умолчание, а не TypeError (#646).
+      form: projectTypeFormOf(row),
       kindIds: Array.isArray(row.kindIds) ? (row.kindIds as string[]) : null,
       archivedAt: row.archivedAt?.toISOString() ?? null,
     };
@@ -134,9 +140,13 @@ export class ProjectTypesRepository {
   }
 
   /** Убрать атрибут из форм всех типов (удаление определения, #631):
-   *  идемпотентно, возвращает число изменённых типов. */
-  async removeFieldFromForms(tx: TransactionClient, fieldId: string): Promise<number> {
-    const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
+   *  идемпотентно, возвращает изменённые типы (id + имя) — обработчик
+   *  эмитит `project.type_changed` на каждый (#646). */
+  async removeFieldFromForms(
+    tx: TransactionClient,
+    fieldId: string,
+  ): Promise<{ id: string; name: string }[]> {
+    return tx.$queryRaw<{ id: string; name: string }[]>(Prisma.sql`
       UPDATE "project_types"
       SET "form" = jsonb_set(COALESCE("form", '{}'::jsonb), '{fields}', (
         SELECT COALESCE(jsonb_agg(e ORDER BY ord), '[]'::jsonb)
@@ -146,9 +156,8 @@ export class ProjectTypesRepository {
       ))
       WHERE COALESCE("form"->'fields', '[]'::jsonb)
             @> jsonb_build_array(jsonb_build_object('fieldId', ${fieldId}::text))
-      RETURNING "id"
+      RETURNING "id", "name"
     `);
-    return rows.length;
   }
 
   async setArchived(

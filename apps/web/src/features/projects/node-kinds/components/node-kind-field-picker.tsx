@@ -5,15 +5,15 @@ import { nodeKindFormOf, ui } from '@nodus/contracts';
 import { Popover, PopoverContent, PopoverTrigger } from '@nodus/ui/components/popover';
 
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
-import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
 import { CustomFieldTypeIcon } from '../../../../shared/custom-fields/field-type-icon.js';
 import { PanelAction } from '../../../../shared/ui/panel/panel-kit.js';
 
 /**
- * Поповер «Атрибуты папок» (#556, §4c; ревизия #631): атрибуты, привязанные
- * к этому виду («Где используется» реестра) и ещё не стоящие в форме.
- * Внизу — «Создать атрибут…» (слот app-композиции, только при праве
- * `custom_field.manage`). Новый слот — «По желанию».
+ * Поповер «Атрибуты папок» (#556, §4c; ревизия #631): все атрибуты портала,
+ * которых ещё нет в форме; глобальные переменные не предлагаются (привязок
+ * не имеют). Добавленный слот сервер вместе с привязкой создаёт
+ * (`syncPlaceBindings`), поэтому предварительная привязка не нужна.
+ * Внизу — «Создать атрибут…» (только при праве `custom_field.manage`).
  */
 export function NodeKindFieldPicker({
   kind,
@@ -29,10 +29,10 @@ export function NodeKindFieldPicker({
   onCreateField?: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const query = useCustomFieldDefinitions('node');
+  const query = useCustomFieldDefinitions();
   const inForm = new Set(nodeKindFormOf(kind).fields.map((slot) => slot.fieldId));
-  const options = definitionsForTarget(query.data, 'node', kind.id).filter(
-    (definition) => !inForm.has(definition.id),
+  const options = (query.data ?? []).filter(
+    (definition) => !definition.isCompany && !inForm.has(definition.id),
   );
 
   return (

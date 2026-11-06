@@ -12,6 +12,7 @@ import { TransactionRunner } from '../../core/database/transaction-runner.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
 import { EventBus } from '../../core/events/event-bus.js';
 import { USER_PROFILE_READER, type UserProfileReader } from '../../core/ports/user-profile.port.js';
+import { projectAudience } from './project-audience.js';
 import { ProjectMembersService } from './project-members.service.js';
 import { ProjectParticipantsRepository } from './project-participants.repository.js';
 import { ProjectsRepository, type ProjectFieldsPatch } from './projects.repository.js';
@@ -62,7 +63,12 @@ export class ProjectLifecycleService {
       await this.eventBus.emit(
         tx,
         PROJECT_EVENTS.UPDATED,
-        { projectId: id, fields: ['status'], status },
+        {
+          projectId: id,
+          fields: ['status'],
+          status,
+          audience: await projectAudience(this.participantsRepo, row),
+        },
         { actorId: user.id, aggregateType: 'project', aggregateId: id },
       );
     });
@@ -105,7 +111,17 @@ export class ProjectLifecycleService {
       await this.eventBus.emit(
         tx,
         PROJECT_EVENTS.UPDATED,
-        { projectId: id, fields: ['managerId', 'assistantIds'] },
+        {
+          projectId: id,
+          fields: ['managerId', 'assistantIds'],
+          audience: [
+            ...new Set([
+              ...(await projectAudience(this.participantsRepo, row)),
+              managerId,
+              user.id,
+            ]),
+          ],
+        },
         { actorId: user.id, aggregateType: 'project', aggregateId: id },
       );
     });

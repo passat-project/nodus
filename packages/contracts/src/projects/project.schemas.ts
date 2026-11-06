@@ -94,6 +94,18 @@ export function projectTypeFormOf(type: { form?: unknown }): ProjectTypeForm {
   return parsed.success ? parsed.data : DEFAULT_PROJECT_TYPE_FORM;
 }
 
+/** Эффективная форма типа: только слоты существующих определений (#646).
+ *  Зеркало `effectiveNodeForm`: удалённый атрибут не должен блокировать
+ *  создание проекта required-слотом, которого нет в форме. */
+export function effectiveProjectTypeForm(
+  type: { form?: unknown },
+  definitions: readonly { id: string }[],
+): ProjectTypeForm {
+  const form = projectTypeFormOf(type);
+  const known = new Set(definitions.map((definition) => definition.id));
+  return { fields: form.fields.filter((slot) => known.has(slot.fieldId)) };
+}
+
 /** Обязательные слоты формы типа (id атрибутов). */
 export function requiredProjectFields(form: ProjectTypeForm): string[] {
   return form.fields.filter((slot) => slot.state === 'required').map((slot) => slot.fieldId);

@@ -12,7 +12,7 @@ export function emitProjectTypeChanged(
   typeId: string,
   change: 'created' | 'updated' | 'archived' | 'restored',
   fields: string[],
-  actorId: string,
+  actorId: string | null,
 ): Promise<void> {
   return eventBus.emit(
     tx,

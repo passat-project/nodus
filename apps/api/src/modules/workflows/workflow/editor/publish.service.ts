@@ -141,14 +141,20 @@ export class WorkflowEditorService {
       // Форма создания проверяется против типа этого маршрута (#432): форма
       // ссылается на атрибуты, привязанные к типу, а пресеты — на живых.
       const typeIds = await this.workflows.typeIdsOf(workflowId, tx);
-      const typeRow = typeIds[0] ? (await this.types.findByIds([typeIds[0]]))[0] : undefined;
+      const typeRows = typeIds.length > 0 ? await this.types.findByIds(typeIds) : [];
+      // Маршрут может обслуживать несколько типов: привязки проверяются по
+      // всем (пересечение), нумерация нужна каждому типу, который реально
+      // пойдёт по маршруту (#646).
+      const numberingConfigured =
+        typeRows.length > 0 &&
+        typeRows.every((row) => Boolean(normalizeTypeConfig(row.config).numbering));
       const loaded = await assertPublishable(
         { registry: this.customFields, profiles: this.profiles, org: this.org },
         {
           document: body.document,
           category,
-          typeId: typeIds[0],
-          numberingConfigured: Boolean(normalizeTypeConfig(typeRow?.config).numbering),
+          typeIds,
+          numberingConfigured,
           migrations: body.migrations,
           tx,
           load: () => this.workflows.load(workflowId, tx),

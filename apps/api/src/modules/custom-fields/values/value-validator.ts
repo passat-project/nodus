@@ -122,6 +122,24 @@ export class CustomFieldValueValidator {
     tx?: TransactionClient,
     actor?: ProjectActor,
   ): Promise<CustomFieldIssue[]> {
+    // Ссылки-записи без актёра (умолчания, глобальные значения) отвергаем,
+    // но НЕ выходим сразу: остальные виды ссылок в той же пачке обязаны
+    // быть проверены (#646). Иначе битый контрагент/вариант проскакивал,
+    // если рядом стояла запись-ссылка.
+    const recordKinds = ['task', 'letter', 'node', 'project'] as const;
+    const recordIssues: CustomFieldIssue[] = [];
+    const checkable = accepted.filter(({ definition }) => {
+      if (!(recordKinds as readonly string[]).includes(definition.type)) return true;
+      if (actor) return true;
+      recordIssues.push({
+        fieldId: definition.id,
+        reason: 'not_found',
+        message: 'Record not found or not visible',
+      });
+      return false;
+    });
+    if (checkable.length === 0) return recordIssues;
+
     const userIds = new Set<string>();
     const departmentIds = new Set<string>();
     const itemIds = new Set<string>();
@@ -135,7 +153,7 @@ export class CustomFieldValueValidator {
     const scalarIds = (value: CustomFieldValue): string[] =>
       Array.isArray(value) ? value : [String(value)];
 
-    for (const { definition, value } of accepted) {
+    for (const { definition, value } of checkable) {
       switch (definition.type) {
         case 'user':
         case 'users':
@@ -182,24 +200,7 @@ export class CustomFieldValueValidator {
       letterIds.size === 0 &&
       nodeIds.size === 0
     ) {
-      return []; // ссылок нет — порты не нужны
-    }
-
-    // Видимость ссылок-записей актёру (#52 Р13, Р5 #631): без актёра
-    // значения-записи не принимаются (умолчания и глобальные значения —
-    // не ручной ввод актёра; их ссылки не записи).
-    const recordKinds = ['task', 'letter', 'node', 'project'] as const;
-    if (
-      recordKinds.some((kind) => accepted.some(({ definition }) => definition.type === kind)) &&
-      !actor
-    ) {
-      return accepted
-        .filter(({ definition }) => (recordKinds as readonly string[]).includes(definition.type))
-        .map(({ definition }) => ({
-          fieldId: definition.id,
-          reason: 'not_found' as const,
-          message: 'Record not found or not visible',
-        }));
+      return recordIssues; // не-ссылочных проверок нет — порты не нужны
     }
 
     const [
@@ -264,11 +265,11 @@ export class CustomFieldValueValidator {
     };
 
     const issues: CustomFieldIssue[] = [];
-    for (const { definition, value } of accepted) {
+    for (const { definition, value } of checkable) {
       const issue = checkOne({ definition, value, ...facts });
       if (issue) issues.push({ fieldId: definition.id, ...issue });
     }
-    return issues;
+    return [...recordIssues, ...issues];
   }
 
   private async visibleProjectIds(actor: ProjectActor | undefined): Promise<ReadonlySet<string>> {

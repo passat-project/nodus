@@ -1,14 +1,15 @@
 import type { AuthUser, CustomFieldValues, UpdateProjectBody } from '@nodus/contracts';
 import {
   clearedProjectFields,
+  effectiveProjectTypeForm,
   ErrorCode,
   Permission,
-  projectTypeFormOf,
   PROJECT_LIMITS,
   SYSTEM_FIELD_IDS,
 } from '@nodus/contracts';
 
 import type { Prisma } from '../../generated/prisma/client.js';
+import type { TransactionClient } from '../../core/database/transaction-runner.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
 import type { UserProfileReader } from '../../core/ports/user-profile.port.js';
 import type { CustomFieldRegistry } from '../custom-fields/ports/custom-field-registry.port.js';
@@ -36,6 +37,7 @@ export async function buildUpdatePatch(
   row: ProjectRow,
   facts: ProjectFacts,
   body: UpdateProjectBody,
+  tx?: TransactionClient,
 ): Promise<{ patch: ProjectFieldsPatch; fields: string[]; assistantIds: string[] | null }> {
   const patch: ProjectFieldsPatch = {};
   const fields: string[] = [];
@@ -102,13 +104,22 @@ export async function buildUpdatePatch(
     // в один патч (явное customFields важнее), затем общий конвейер.
     const patchBody = legacyPatchToAttributes(body, body.customFields ?? {});
     const type = await ctx.types.findById(row.typeId);
-    const form = type ? projectTypeFormOf(type) : { fields: [] };
-    const prepared = await ctx.customFields.prepareUpdate({
-      current: row.customFields as CustomFieldValues,
-      patch: patchBody,
-      actor: user,
-      target: { kind: 'project_type', id: row.typeId },
-    });
+    // Эффективная форма: удалённый атрибут не должен требовать очистки
+    // несуществующего слота (#646). Значения — в транзакции писателя.
+    const definitions = await ctx.customFields.definitions(
+      { target: { kind: 'project_type', id: row.typeId } },
+      tx,
+    );
+    const form = type ? effectiveProjectTypeForm(type, definitions) : { fields: [] };
+    const prepared = await ctx.customFields.prepareUpdate(
+      {
+        current: row.customFields as CustomFieldValues,
+        patch: patchBody,
+        actor: user,
+        target: { kind: 'project_type', id: row.typeId },
+      },
+      tx,
+    );
     const cleared = clearedProjectFields(
       form.fields.filter((slot) => slot.state === 'required').map((slot) => slot.fieldId),
       patchBody,

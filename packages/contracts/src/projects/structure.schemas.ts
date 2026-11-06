@@ -60,7 +60,8 @@ export const projectNodeSchema = z.object({
   parentId: z.uuid().nullable(),
   kindId: z.uuid(),
   name: z.string().min(1).max(NODE_LIMITS.nameLength),
-  /** Шифр папки (уникален в проекте, nullable — не задан). */
+  /** Код папки — производная атрибута «Код» (nullable — не задан;
+   *  уникальность снята В2 #631). */
   code: z.string().min(1).max(NODE_LIMITS.codeLength).nullable(),
   customFields: customFieldValuesSchema,
   rollup: projectNodeRollupSchema,

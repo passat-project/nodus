@@ -103,3 +103,43 @@ export function kindAllowedForProject(projectId: string, kindId: string): boolea
   const kindIds = typeKindIdsOf(projectId);
   return kindIds === null || kindIds.includes(kindId);
 }
+
+/** Код папки из значения атрибута «Код» (непустая строка или null). */
+export function codeOfValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+/** 422 по грамматике значений (зеркало CUSTOM_FIELD_VALUE_INVALID). */
+export function valuesInvalid(fieldIds: string[]): Response {
+  return HttpResponse.json(
+    {
+      code: ErrorCode.CUSTOM_FIELD_VALUE_INVALID,
+      message: 'Custom field values are invalid',
+      details: { issues: fieldIds.map((fieldId) => ({ fieldId, reason: 'invalid' })) },
+    },
+    { status: 422 },
+  );
+}
+
+/** Новая строка папки мок-мира (код — производная атрибута «Код»). */
+export function appendNode(
+  projectId: string,
+  parentId: string | null,
+  kindId: string,
+  name: string,
+  code: string | null,
+  customFields: DemoNodeRow['customFields'],
+): DemoNodeRow {
+  const row: DemoNodeRow = {
+    id: crypto.randomUUID(),
+    projectId,
+    parentId,
+    kindId,
+    name,
+    code,
+    customFields,
+    createdAt: new Date().toISOString(),
+  };
+  demoNodeRows.push(row);
+  return row;
+}

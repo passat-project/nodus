@@ -60,7 +60,9 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
     // Весь реестр — чтобы отличить «нет такого атрибута» от «есть, но не
     // привязан к месту» (Р8/Р3): второе — отдельная причина.
     const all = await this.definitions({}, tx);
-    const definitions = boundList(all, args);
+    // Глобальная переменная не принимает значений у записей — даже если
+    // скопинг не задан (target-less вызов не должен открывать эту дверь).
+    const definitions = boundList(all, args).filter((definition) => !definition.isCompany);
     const unbound = unboundIssues(all, definitions, args.input);
     if (unbound.length > 0) throw invalidValues(unbound);
     if (definitions.length === 0) {
@@ -94,7 +96,7 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
     }
 
     const all = await this.definitions({}, tx);
-    const definitions = boundList(all, args);
+    const definitions = boundList(all, args).filter((definition) => !definition.isCompany);
     // Запись непривязанного — ошибка; очистка (`null`) разрешена всегда:
     // снятие привязки не должно блокировать уборку старого значения (Р8).
     const unbound = unboundIssues(all, definitions, changed);

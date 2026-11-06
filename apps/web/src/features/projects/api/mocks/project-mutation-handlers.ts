@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import {
   clearedProjectFields,
+  effectiveProjectTypeForm,
   ErrorCode,
   missingProjectFields,
   Permission,
@@ -9,7 +10,6 @@ import {
   projectMemberAddBodySchema,
   projectStatusBodySchema,
   projectTransferBodySchema,
-  projectTypeFormOf,
   requiredProjectFields,
   updateProjectBodySchema,
 } from '@nodus/contracts';
@@ -18,6 +18,12 @@ import type { CustomFieldValues } from '@nodus/contracts';
 import { demoUserListItems } from '../../../../shared/mocks/data/users.js';
 import { counterpartyRefById } from '../../../../shared/mocks/data/counterparties.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
+import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
+import {
+  invalidMockValues,
+  withStaticDefaults,
+} from '../../../../shared/custom-fields/mocks/custom-fields-mock-utils.js';
+import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
 import { accessOf, detailOf, myMembershipOf } from '../../../../shared/mocks/data/project-views.js';
 import {
   addDemoProjectMember,
@@ -38,7 +44,7 @@ import {
 const invalid = () =>
   HttpResponse.json(
     { code: ErrorCode.VALIDATION_FAILED, message: 'Invalid body' },
-    { status: 422 },
+    { status: 400 },
   );
 const forbidden = () =>
   HttpResponse.json({ code: ErrorCode.FORBIDDEN, message: 'Forbidden' }, { status: 403 });
@@ -97,15 +103,19 @@ export const projectMutationHandlers = [
       if (!portfolio || portfolio.archivedAt !== null) return invalid();
     }
     if (body.clientId && !counterpartyRefById(body.clientId)) return invalid();
-    const form = projectTypeFormOf(type);
-    const values = valuesOfBody(body);
+    // Значение разрешает ПРИВЯЗКА (binding), а не слот формы: слот — только
+    // видимость. Форма для required — эффективная (удалённые слоты не в счёт).
+    const boundDefinitions = definitionsForTarget(demoCustomFieldDefinitions, 'project', type.id);
+    const form = effectiveProjectTypeForm(type, boundDefinitions);
+    const bound = new Set(boundDefinitions.map((definition) => definition.id));
+    const values = withStaticDefaults(boundDefinitions, valuesOfBody(body) as CustomFieldValues);
     const unknown = Object.keys(values).filter(
-      (fieldId) => !form.fields.some((slot) => slot.fieldId === fieldId),
+      (fieldId) => values[fieldId] !== null && !bound.has(fieldId),
     );
     if (unknown.length > 0) return valuesInvalid(unknown);
-    const missing = missingProjectFields(form, {
-      customFields: values as CustomFieldValues,
-    });
+    const malformed = invalidMockValues(boundDefinitions, values);
+    if (malformed.length > 0) return valuesInvalid(malformed);
+    const missing = missingProjectFields(form, { customFields: values });
     if (missing.length > 0) return fieldsRequired(type.id, missing, 'create');
     const row = createDemoProject({ ...body, customFields: values as CustomFieldValues }, actor);
     return HttpResponse.json(detailOf(row, actor), { status: 201 });
@@ -117,6 +127,9 @@ export const projectMutationHandlers = [
     if (!row) return notFound();
     const membership = myMembershipOf(row.id, actor.id);
     if (!accessOf(row, membership, actor.permissions).canManage) return forbidden();
+    if (row.status === 'archived' && !actor.permissions.includes(Permission.PROJECT_MANAGE)) {
+      return forbidden();
+    }
     const parsed = updateProjectBodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return invalid();
     const body = parsed.data;
@@ -135,12 +148,19 @@ export const projectMutationHandlers = [
     if (body.clientId && !counterpartyRefById(body.clientId)) return invalid();
     const type = demoProjectTypes.find((entry) => entry.id === row.typeId);
     if (!type) return invalid();
-    const form = projectTypeFormOf(type);
+    const boundDefinitions = definitionsForTarget(demoCustomFieldDefinitions, 'project', type.id);
+    const form = effectiveProjectTypeForm(type, boundDefinitions);
+    const bound = new Set(boundDefinitions.map((definition) => definition.id));
     const values = valuesOfBody(body);
+    // `null` — очистка: разрешена всегда, даже для снятого с типа атрибута.
+    if (body.code === null) values[SYSTEM_FIELD_IDS.projectCode] = null;
+    if (body.clientId === null) values[SYSTEM_FIELD_IDS.projectClient] = null;
     const unknown = Object.keys(values).filter(
-      (fieldId) => !form.fields.some((slot) => slot.fieldId === fieldId),
+      (fieldId) => values[fieldId] !== null && !bound.has(fieldId),
     );
     if (unknown.length > 0) return valuesInvalid(unknown);
+    const malformed = invalidMockValues(boundDefinitions, values as CustomFieldValues);
+    if (malformed.length > 0) return valuesInvalid(malformed);
     const cleared = clearedProjectFields(requiredProjectFields(form), values);
     if (cleared.length > 0) return fieldsRequired(type.id, cleared, 'clear');
     const updated = updateDemoProject(row.id, body, actor.id);

@@ -4,6 +4,7 @@ import {
   CUSTOM_FIELD_CATALOG_EVENTS,
   DICTIONARY_CATALOG_EVENTS,
   DIRECTORY_EVENTS,
+  PROJECT_AUDIENCE_EVENTS,
   PROJECT_CATALOG_EVENTS,
   WORKFLOW_CATALOG_EVENTS,
   type RealtimeEnvelope,
@@ -42,6 +43,10 @@ const CUSTOM_FIELD_CATALOG = new Set<string>([
  *  данных и без привязки к проекту — широковещательно в presence, как
  *  каталог атрибутов. Узлы проекта по-прежнему без реалтайма. */
 const PROJECT_CATALOG = new Set<string>(PROJECT_CATALOG_EVENTS);
+
+/** Адресные события проекта (#646): только участникам, не в общий presence —
+ *  имя/шифр секретного проекта не должны утекать всем. */
+const PROJECT_AUDIENCE = new Set<string>(PROJECT_AUDIENCE_EVENTS);
 
 /** События, меняющие список бесед (lastMessage/unread/название/аватар) → дублируем в user-комнаты участников. */
 const LIST_EVENTS = new Set([
@@ -118,6 +123,12 @@ export async function routeEnvelope(
       ? payload.deciderIds.filter((id): id is string => typeof id === 'string')
       : [];
     emitToUsers(io, envelope, [...new Set([...memberIdsOf(payload.audience), ...deciderIds])]);
+    return;
+  }
+
+  // Проект (#646): адресаты — участники проекта (payload.audience), не все.
+  if (PROJECT_AUDIENCE.has(envelope.type)) {
+    emitToUsers(io, envelope, memberIdsOf(payload.audience));
     return;
   }
 

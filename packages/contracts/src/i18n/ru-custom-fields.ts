@@ -81,7 +81,6 @@ export const customFieldsStrings = {
     letter: 'Письма',
     project: 'Проекты',
     node: 'Папки',
-    company: 'Глобальная',
   },
   /** Блок «Атрибуты» карточки сущности. */
   block: {
@@ -150,6 +149,9 @@ export const customFieldsStrings = {
     kindCompanyHint:
       'Одно значение на всю компанию — как в Битриксе. Правит администратор, читают процессы',
     companyValue: 'Значение',
+    companyValueAfterSave:
+      'Значение можно задать после сохранения — варианты списка создаются вместе с атрибутом',
+    dictionaryLoadError: 'Не удалось загрузить варианты списка',
     /** Дубль имени (В3): предложение открыть существующий. */
     nameTaken: 'Атрибут с таким названием уже есть:',
     openExisting: 'Открыть существующий',
@@ -287,8 +289,6 @@ export const customFieldsStrings = {
     groupLetterTypes: 'Письма',
     groupProjectTypes: 'Проекты',
     groupNodeKinds: 'Папки',
-    projectTypesEmpty: 'Типов проектов пока нет',
-    nodeKindsEmpty: 'Видов папок пока нет',
     /** Пометка архивной цели, оставшейся в привязках (#646). */
     archived: 'архив',
     /** Подсказка у «Где используется» в окне. */

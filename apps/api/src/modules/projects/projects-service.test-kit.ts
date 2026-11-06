@@ -63,8 +63,11 @@ export function row(overrides: Record<string, unknown> = {}): ProjectRow {
 type Mocks<K extends string> = Record<K, Mock>;
 
 export function makeProjectsServiceKit() {
-  const repo: Mocks<'findById' | 'create' | 'update' | 'touch' | 'settingValue' | 'putSetting'> = {
+  const repo: Mocks<
+    'findById' | 'lockForUpdate' | 'create' | 'update' | 'touch' | 'settingValue' | 'putSetting'
+  > = {
     findById: vi.fn(),
+    lockForUpdate: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     touch: vi.fn(),
@@ -88,7 +91,8 @@ export function makeProjectsServiceKit() {
   };
   const queries: Mocks<'detail'> = { detail: vi.fn() };
   const profiles: Mocks<'filterActiveUserIds'> = { filterActiveUserIds: vi.fn() };
-  const customFields: Mocks<'prepareCreate' | 'prepareUpdate'> = {
+  const customFields: Mocks<'definitions' | 'prepareCreate' | 'prepareUpdate'> = {
+    definitions: vi.fn(),
     prepareCreate: vi.fn(),
     prepareUpdate: vi.fn(),
   };
@@ -111,10 +115,15 @@ export function makeProjectsServiceKit() {
       repo.settingValue.mockResolvedValue(null);
       repo.create.mockImplementation(async (data: Record<string, unknown>) => row(data));
       repo.findById.mockResolvedValue(row());
+      repo.lockForUpdate.mockResolvedValue({ id: ID, visibility: 'open', status: 'active' });
       types.findActive.mockResolvedValue(typeRow());
       types.findById.mockResolvedValue(typeRow());
       groups.findActive.mockResolvedValue({ id: 'g-1' });
+      participantsRepo.rowsOfProject.mockResolvedValue([]);
       profiles.filterActiveUserIds.mockImplementation(async (ids: string[]) => ids);
+      // Слоты формы типа по умолчанию — системные «Шифр»/«Заказчик»:
+      // эффективная форма должна знать эти определения.
+      customFields.definitions.mockResolvedValue([{ id: CODE }, { id: CLIENT }]);
       customFields.prepareCreate.mockImplementation(
         async (args: { input: Record<string, unknown> }) => ({ ...args.input }),
       );

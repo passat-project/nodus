@@ -90,9 +90,11 @@ export async function updateProjectType(
   dto: ProjectTypeUpdateBody,
   actorId: string,
 ): Promise<ProjectType> {
+  // Лок справочника — на любой PATCH: имя, форма и привязки сериализуются
+  // между собой (как у видов папок; #646).
+  await deps.types.lockForms(tx);
   let previousFormIds: string[] = [];
   if (dto.form !== undefined) {
-    await deps.types.lockForms(tx);
     await assertProjectTypeForm(deps.registry, tx, dto.form);
     const current = await deps.types.findById(id);
     previousFormIds = current?.form.fields.map((slot) => slot.fieldId) ?? [];

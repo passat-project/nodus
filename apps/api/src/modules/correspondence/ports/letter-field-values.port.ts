@@ -9,6 +9,7 @@ import type { InjectionToken } from '@nestjs/common';
 export const LETTER_FIELD_VALUES_READER: InjectionToken = 'LETTER_FIELD_VALUES_READER';
 
 export interface LetterFieldValuesReader {
-  /** Число живых писем, у которых ключ атрибута заполнен. */
+  /** Число писем с ключом атрибута, включая мягко удалённые: счётчик
+   *  равен реальному объёму уборки (cleanup чистит и надгробия). */
   countValues(fieldId: string): Promise<number>;
 }

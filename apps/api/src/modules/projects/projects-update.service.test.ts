@@ -101,6 +101,7 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
           patch: { [CODE]: null },
           target: { kind: 'project_type', id: TYPE },
         }),
+        expect.anything(),
       );
     });
 

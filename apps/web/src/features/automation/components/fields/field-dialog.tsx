@@ -26,6 +26,7 @@ import {
 import {
   commitOptionDrafts,
   invalidateDictionaries,
+  updateDictionaryItem,
   useCreateDictionary,
 } from '../../api/dictionaries-api.js';
 import {
@@ -180,6 +181,13 @@ export function FieldDialog({
           });
           const created = await fetchDictionaryItems(dictionary.code);
           const ids = new Map(draft.options.map((option, i) => [option.id, created[i]?.id ?? '']));
+          // Цвета новых вариантов: POST справочника принимает только имена.
+          for (const [index, option] of draft.options.entries()) {
+            const item = created[index];
+            if (item && option.color) {
+              await updateDictionaryItem(dictionary.code, item.id, { color: option.color });
+            }
+          }
           dictionaryId = dictionary.id;
           defaultValue = listDefault(draft, type, ids);
         }
@@ -248,9 +256,7 @@ export function FieldDialog({
       <DialogContent
         showCloseButton={false}
         onInteractOutside={(event) => event.preventDefault()}
-        // Габарит — по содержимому с нижней границей «самая высокая обычная
-        // форма»: обычные типы окно не меняет, у списка с вариантами оно
-        // подрастает до 92vh, а не прокручивается (вердикт 25.10.2026).
+        // Габарит — по содержимому: у списка с вариантами окно растёт до 92vh.
         className="flex max-h-[92vh] min-h-[min(34rem,88vh)] max-w-[56rem] flex-col gap-5 overflow-hidden p-5 sm:max-w-[56rem]"
       >
         <DialogHeader className="shrink-0">
@@ -278,20 +284,35 @@ export function FieldDialog({
           {/* overflow-x-hidden: вертикальная прокрутка иначе включает
               горизонтальную полосу от долей пикселя (баг 25.10.2026). */}
           <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-1">
-            <FieldDialogForm
-              draft={draft}
-              definition={definition}
-              shared={shared}
-              disabled={readOnly || pending}
-              optionsReadOnly={!canManageDictionaries}
-              errors={errors}
-              issues={issues}
-              currencyFallback={currencyFallback}
-              removedOptions={removedOptions}
-              suggestion={suggestion}
-              onOpenSuggestion={onOpenDefinition}
-              onChange={update}
-            />
+            {items.isError ? (
+              <div className="flex flex-col gap-2 p-4 text-sm">
+                <span className="text-muted-foreground">
+                  {ui.customFields.dialog.dictionaryLoadError}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void items.refetch()}
+                  className="w-fit text-xs font-medium text-info underline-offset-2 hover:underline"
+                >
+                  {ui.customFields.block.retry}
+                </button>
+              </div>
+            ) : (
+              <FieldDialogForm
+                draft={draft}
+                definition={definition}
+                shared={shared}
+                disabled={readOnly || pending}
+                optionsReadOnly={!canManageDictionaries}
+                errors={errors}
+                issues={issues}
+                currencyFallback={currencyFallback}
+                removedOptions={removedOptions}
+                suggestion={suggestion}
+                onOpenSuggestion={onOpenDefinition}
+                onChange={update}
+              />
+            )}
           </div>
         </div>
 

@@ -111,7 +111,7 @@ describe('DefinitionsService.update (#631, Р3)', () => {
     definitions.findById.mockResolvedValue(row({ isCompany: true }));
     await expect(
       service.update(ROW.id, { bindings: { processTypeIds: ['t-1'] } } as never, 'actor-1'),
-    ).rejects.toMatchObject({ code: ErrorCode.VALIDATION_FAILED });
+    ).rejects.toMatchObject({ code: ErrorCode.CUSTOM_FIELD_BINDING_INVALID });
   });
 });
 
@@ -221,11 +221,17 @@ describe('DefinitionsService.list (#631, Р11 — фильтр по модулю
     const { service, mapper, definitions } = makeService();
     definitions.list.mockResolvedValue(rows());
     await service.list('company');
-    expect(mapper.toDtos).toHaveBeenCalledWith([
-      expect.objectContaining({ id: fCompanyId, isCompany: true }),
-    ]);
+    expect(mapper.toDtos).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: fCompanyId, isCompany: true })],
+      undefined,
+      undefined,
+    );
     await service.list('project');
-    expect(mapper.toDtos).toHaveBeenCalledWith([expect.objectContaining({ id: fProjectId })]);
+    expect(mapper.toDtos).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: fProjectId })],
+      undefined,
+      undefined,
+    );
   });
 
   it('task/letter — привязка к живому типу своей категории (не чужой, не архиву)', async () => {
@@ -235,14 +241,22 @@ describe('DefinitionsService.list (#631, Р11 — фильтр по модулю
     await service.list('task');
     // Живые типы спрашиваются одной пачкой с {live: true}.
     expect(catalog.typeRefs).toHaveBeenCalledWith(['t-task', 't-letter', 't-arch'], { live: true });
-    expect(mapper.toDtos).toHaveBeenCalledWith([expect.objectContaining({ id: fTask })]);
+    expect(mapper.toDtos).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: fTask })],
+      undefined,
+      undefined,
+    );
     await service.list('letter');
-    expect(mapper.toDtos).toHaveBeenCalledWith([expect.objectContaining({ id: fLetter })]);
+    expect(mapper.toDtos).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: fLetter })],
+      undefined,
+      undefined,
+    );
   });
 
   it('без модуля — весь реестр', async () => {
     const { service, mapper } = makeService();
     await service.list(null);
-    expect(mapper.toDtos).toHaveBeenCalledWith([ROW]);
+    expect(mapper.toDtos).toHaveBeenCalledWith([ROW], undefined, undefined);
   });
 });

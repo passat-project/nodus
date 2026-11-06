@@ -87,7 +87,7 @@ describe('DefinitionsService.setCompanyValue (#631, Р7)', () => {
     definitions.findById.mockResolvedValue({ ...ROW, isCompany: false });
     await expect(
       service.setCompanyValue(ROW.id, 'значение' as CustomFieldValue, ACTOR),
-    ).rejects.toMatchObject({ code: ErrorCode.VALIDATION_FAILED });
+    ).rejects.toMatchObject({ code: ErrorCode.CUSTOM_FIELD_VALUE_INVALID });
     expect(definitions.putCompanyValue).not.toHaveBeenCalled();
   });
 

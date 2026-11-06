@@ -75,8 +75,9 @@ export const ErrorCode = {
   /** Скрытое значение формы стало недействительным — уволенный сотрудник,
    *  удалённый вариант (#432, Р4); details — { typeId, fields }. */
   PROCESS_TYPE_PRESET_INVALID: 'PROCESS_TYPE_PRESET_INVALID',
-  /** Привязка неверна (#631, Р3): цель не существует, архивный тип или
-   *  привязка у глобальной переменной; details — { targetKind, targetId }. */
+  /** Привязка неверна (#631, Р3): архивный тип процесса или привязка у
+   *  глобальной переменной; details — { targetKind, targetId } (неизвестная
+   *  цель — 404, чтобы не раскрывать чужие справочники). */
   CUSTOM_FIELD_BINDING_INVALID: 'CUSTOM_FIELD_BINDING_INVALID',
   /** Название типа процесса уже занято живым типом (#378, #428). */
   PROCESS_TYPE_NAME_TAKEN: 'PROCESS_TYPE_NAME_TAKEN',
@@ -131,8 +132,7 @@ export const ErrorCode = {
   /** Значение кастомного поля не прошло проверку (#431, ADR-0029):
    *  details.issues[] — { fieldId, reason: unknown|invalid|not_found|inactive|not_in_type, message }. */
   CUSTOM_FIELD_VALUE_INVALID: 'CUSTOM_FIELD_VALUE_INVALID',
-  /** Тип атрибута недоступен: «Проект» до модуля проектов (#431, Р11). */
-  /** Имя занято атрибутом той же области; details — { definitionId } (#431). */
+  /** Имя занято атрибутом портала; details — { suggestion: {definitionId, name} } (#431, В3). */
   CUSTOM_FIELD_NAME_TAKEN: 'CUSTOM_FIELD_NAME_TAKEN',
   /** Смена типа несовместима с хранимыми значениями; details — { from, to } (#431, Р3). */
   CUSTOM_FIELD_TYPE_CHANGE_INCOMPATIBLE: 'CUSTOM_FIELD_TYPE_CHANGE_INCOMPATIBLE',

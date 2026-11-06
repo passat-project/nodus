@@ -11,14 +11,14 @@ import {
   reorderCustomFieldsBodySchema,
 } from '@nodus/contracts';
 
-import { dictionaryById } from '../../mocks/data/dictionaries.js';
+import { dictionaryById, dictionaryIds, itemById } from '../../mocks/data/dictionaries.js';
 import {
   demoCustomFieldDefinitions,
   demoFieldById,
   nextFieldNumber,
 } from '../../mocks/data/custom-fields.js';
 import {
-  bindingTargetExists,
+  bindingTargetState,
   dto,
   error,
   nameTaken,
@@ -59,11 +59,17 @@ export const registryHandlers = [
   http.post('/api/v1/custom-fields/definitions', async ({ request }) => {
     const parsed = createCustomFieldBodySchema.safeParse(await request.json());
     if (!parsed.success) {
-      return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 422, parsed.error.issues);
+      return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400, parsed.error.issues);
     }
     const body: CreateCustomFieldBody = parsed.data;
     if (body.settings.dictionaryId && !dictionaryById(body.settings.dictionaryId)) {
-      return error(ErrorCode.VALIDATION_FAILED, 'Dictionary not found', 422);
+      return error(ErrorCode.VALIDATION_FAILED, 'Dictionary not found', 400);
+    }
+    if (body.settings.currencyId) {
+      const currency = itemById(body.settings.currencyId);
+      if (!currency || !currency.isActive || currency.dictionaryId !== dictionaryIds.currency) {
+        return error(ErrorCode.VALIDATION_FAILED, 'Currency not found', 400);
+      }
     }
     const existing = nameTaken(body.name);
     if (existing) {
@@ -82,29 +88,33 @@ export const registryHandlers = [
           projectTypeIds: body.bindings?.projectTypeIds ?? [],
           nodeKindIds: body.bindings?.nodeKindIds ?? [],
         };
-    for (const targetId of bindings.processTypeIds) {
-      if (!bindingTargetExists('process-type', targetId)) {
-        return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Process type not found', 422, {
-          targetKind: 'process-type',
+    const targetError = (kind: 'process-type' | 'project-type' | 'node-kind', targetId: string) => {
+      const state = bindingTargetState(kind, targetId);
+      if (state === 'missing') {
+        return error(ErrorCode.NOT_FOUND, 'Binding target not found', 404, {
+          targetKind: kind,
           targetId,
         });
       }
+      if (state === 'archived') {
+        return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Target is archived', 422, {
+          targetKind: kind,
+          targetId,
+        });
+      }
+      return null;
+    };
+    for (const targetId of bindings.processTypeIds) {
+      const failure = targetError('process-type', targetId);
+      if (failure) return failure;
     }
     for (const targetId of bindings.projectTypeIds) {
-      if (!bindingTargetExists('project-type', targetId)) {
-        return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Project type not found', 422, {
-          targetKind: 'project-type',
-          targetId,
-        });
-      }
+      const failure = targetError('project-type', targetId);
+      if (failure) return failure;
     }
     for (const targetId of bindings.nodeKindIds) {
-      if (!bindingTargetExists('node-kind', targetId)) {
-        return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Node kind not found', 422, {
-          targetKind: 'node-kind',
-          targetId,
-        });
-      }
+      const failure = targetError('node-kind', targetId);
+      if (failure) return failure;
     }
     const now = new Date().toISOString();
     const maxOrder = Math.max(-1, ...demoCustomFieldDefinitions.map((entry) => entry.sortOrder));
@@ -134,11 +144,15 @@ export const registryHandlers = [
   http.put('/api/v1/custom-fields/definitions/order', async ({ request }) => {
     const parsed = reorderCustomFieldsBodySchema.safeParse(await request.json());
     if (!parsed.success) {
-      return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 422, parsed.error.issues);
+      return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400, parsed.error.issues);
     }
     const body: ReorderCustomFieldsBody = parsed.data;
     const ids = new Set(demoCustomFieldDefinitions.map((entry) => entry.id));
-    if (body.ids.length !== ids.size || body.ids.some((id) => !ids.has(id))) {
+    if (
+      body.ids.length !== ids.size ||
+      new Set(body.ids).size !== body.ids.length ||
+      body.ids.some((id) => !ids.has(id))
+    ) {
       return error(ErrorCode.CONFLICT, 'Order is stale', 409);
     }
     body.ids.forEach((id, index) => {

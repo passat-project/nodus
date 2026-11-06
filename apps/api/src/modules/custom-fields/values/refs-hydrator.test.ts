@@ -207,7 +207,7 @@ describe('CustomFieldRefsHydrator (#431, Р6)', () => {
       id: TASK_DELETED,
       name: null,
       avatarUrl: null,
-      archived: true,
+      archived: false,
     });
     // Без доступа (не удалена): имя скрыто, архивности нет.
     expect(mixed.find((ref) => ref.id === TASK_HIDDEN)).toEqual({
@@ -253,7 +253,7 @@ describe('CustomFieldRefsHydrator (#431, Р6)', () => {
       ACTOR,
     );
     expect(refs).toEqual([
-      { kind: 'node', id: NODE_GONE, name: null, avatarUrl: null, archived: true },
+      { kind: 'node', id: NODE_GONE, name: null, avatarUrl: null, archived: false },
     ]);
     expect(nodes.refs).toHaveBeenCalledWith([NODE_GONE]);
   });

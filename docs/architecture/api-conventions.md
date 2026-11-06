@@ -71,10 +71,10 @@ crm.counterparty_created / counterparty_updated / counterparty_archived / counte
 correspondence.letter_received / letter_registered / letter_closed_unregistered / letter_stage_changed / letter_updated / letter_sent  # ADR-0027
 correspondence.assignments_requested        # «Расписать сразу»: черновики поручений с id → модуль задач создаёт задачи (source=letter), идемпотентно
 correspondence.relation_changed / confidentiality_changed
-custom_field.definition_changed  # #431: {definitionId, scope, change: created|updated|deleted|reordered, fields?} — каталожное; значение атрибута — в событии изменения сущности (task.updated.customFieldChanges[{fieldId, from, to}], ≤ 50, long_text обрезан до 500)
+custom_field.definition_changed  # #431/#631: {definitionId, change: created|updated|deleted|reordered, fields?} — каталожное, без scope (одно определение на портал); значение атрибута — в событии изменения сущности (task.updated.customFieldChanges[{fieldId, from, to}], ≤ 50, long_text обрезан до 500)
 ```
 
-Поле `audience` в payload событий (`task.*`, `chat.sticker_*`) — служебная адресация для gateway (user-комнаты); клиенту не доставляется — gateway вырезает его до отправки (#328).
+Поле `audience` в payload событий (`task.*`, `chat.sticker_*`, `project.created/updated/participants_changed`) — служебная адресация для gateway (user-комнаты); клиенту не доставляется — gateway вырезает его до отправки (#328, #646). Проектные события адресные: имя/шифр секретного проекта не уходят в общий presence.
 
 **Каталожные события** — `workflow.type_created / type_updated / type_archived / published / layout_changed`, `custom_field.definition_changed`, `dictionary.*`, `project.node_kind_changed` и `project.type_changed` (реестр атрибутов, справочники, виды папок и типы проектов видят все — gateway рассылает в presence-комнату, явные списки `CUSTOM_FIELD_CATALOG_EVENTS`/`DICTIONARY_CATALOG_EVENTS`/`PROJECT_CATALOG_EVENTS`) (модуль «Процессы», #428; прежде — `task.type_* / task.workflow_*`, #378) — БЕЗ `audience` (`workflow.layout_changed` — сохранена расстановка холста без новой версии: клиент перечитывает только документ этого маршрута, кнопки задач не трогает): каталог типов и маршрутов виден всем, gateway рассылает их всем авторизованным сокетам (комната presence, паттерн корпоративных стикерпаков). Список каталожных событий у gateway — **явный** (`WORKFLOW_CATALOG_EVENTS`), а не префикс `workflow.`: у ADR-0025 будут некаталожные `workflow.*` со своей адресацией. Клиент инвалидирует типы/статусы/маршруты. Доменные данные события (составы `memberIds`/`userIds` событий беседы) уходят клиенту как есть.
 
@@ -118,7 +118,7 @@ INTERNAL_ERROR      # непредвиденное (без деталей нар
 422 PROCESS_TYPE_FIELDS_REQUIRED {typeId, fields: CreationFieldKey[], reason: 'create' | 'clear'}
 422 PROCESS_TYPE_PRESET_INVALID  {typeId, fields: CreationFieldKey[]}  # пресет ссылается на уволенного
 422 CUSTOM_FIELD_VALUE_INVALID   {issues: [{fieldId, reason: 'not_in_type' | ...}]}
-422 CUSTOM_FIELD_BINDING_INVALID {typeIds}                          # привязка к чужой категории/архиву
+422 CUSTOM_FIELD_BINDING_INVALID {targetKind, targetId}             # привязка к архиву/глобальной переменной; неизвестная цель — 404
 ```
 
 - **`clear`** приходит из трёх мест: `PATCH /tasks/:id` (срок, описание, атрибут), окно перехода (тот же писатель полей) и снятие последнего участника обязательной роли (`DELETE /tasks/:id/participants/:userId`).
@@ -127,7 +127,7 @@ INTERNAL_ERROR      # непредвиденное (без деталей нар
 - **`GET /workflows/types`** отдаёт `config`, `creationForm` (эффективная форма опубликованного маршрута) и `viewer`; без `workflow.manage` — только видимые типы (О11). Мутации типов отвечают DTO типа.
 - **`PATCH /workflows/types/:id/config`** — разделы заменяются целиком (без `.default()`: gotcha Zod 4), событие `workflow.type_updated` с полями `config.card` / `config.access`.
 - **`GET /tasks/:id` → `layout`** = `{hiddenBlocks, roleLabels, requiredKeys}` — собирает сервер из типа (работает и для невидимого зрителю типа).
-- **Привязки атрибутов** — `PUT`/`DELETE /custom-fields/definitions/:id/types/:typeId`, идемпотентны, аудит `custom_field.bind` / `custom_field.unbind`, событие `custom_field.definition_changed {fields: ['typeIds']}`; снятие при использовании в опубликованном маршруте типа — 409 `CUSTOM_FIELD_IN_USE`.
+- **Привязки атрибутов** — `PUT`/`DELETE /custom-fields/definitions/:id/bindings/:kind/:targetId` (`kind`: `process-type|project-type|node-kind`), идемпотентны, аудит `custom_field.bind` / `custom_field.unbind`, событие `custom_field.definition_changed {fields: ['bindings']}`; снятие разрешено всегда (значения не стираются, опубликованные маршруты толерантны), bind к архивному типу процесса — 422. Полный набор привязок — `PATCH /custom-fields/definitions/:id {bindings}`.
 - **Каталог стадий** (`GET /tasks/stages`) не раскрывает типы, невидимые смотрящему (О11).
 - **Подсказки имён статусов** — `GET /workflows/stage-names?category=task|letter&excludeWorkflowId=`: под `workflow.manage`, имена неархивных стадий системного каталога (по `code`) и опубликованных маршрутов, число маршрутов; warning-и имён — для пользовательских маршрутов; это подсказка редактора, не жёсткий справочник.
 - **Смысл кнопки** — `intent: action | service` в DTO перехода и документе маршрута; `service` — пауза/отмена, не попадает в «Мои действия» (ADR-0026); умный дефолт `smartIntent`.

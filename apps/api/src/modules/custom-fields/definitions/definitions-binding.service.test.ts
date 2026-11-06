@@ -152,7 +152,7 @@ describe('DefinitionsBindingService.bind (#631, Р3)', () => {
     const { service, definitions } = makeService();
     definitions.findById.mockResolvedValue(row({ isCompany: true }));
     await expect(service.bind(ROW.id, 'process-type', 't-1', 'actor-1')).rejects.toMatchObject({
-      code: ErrorCode.VALIDATION_FAILED,
+      code: ErrorCode.CUSTOM_FIELD_BINDING_INVALID,
     });
     expect(definitions.bindTarget).not.toHaveBeenCalled();
   });

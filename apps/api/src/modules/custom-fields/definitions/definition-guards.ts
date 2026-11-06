@@ -1,4 +1,8 @@
-import type { CustomFieldDefinition, UpdateCustomFieldBody } from '@nodus/contracts';
+import type {
+  CustomFieldBindings,
+  CustomFieldDefinition,
+  UpdateCustomFieldBody,
+} from '@nodus/contracts';
 import {
   checkDefinitionShape,
   ErrorCode,
@@ -13,6 +17,8 @@ import type { FieldBindingTargetReader } from '../../projects/ports/field-bindin
 import { assertTargetsBindable } from './binding-targets.js';
 import type { DefinitionMapper, FieldDefinitionRow } from './definition.mapper.js';
 import type { DefinitionsRepository } from './definitions.repository.js';
+import type { FieldBindingFormCleaner } from '../../projects/ports/field-binding-form-cleaner.port.js';
+import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import type { CustomFieldValueValidator } from '../values/value-validator.js';
 
 /**
@@ -67,6 +73,27 @@ export async function replaceBindings(
   await definitions.replaceTargets(id, 'process_type', bindings.processTypeIds, tx);
   await definitions.replaceTargets(id, 'project_type', bindings.projectTypeIds, tx);
   await definitions.replaceTargets(id, 'node_kind', bindings.nodeKindIds, tx);
+}
+
+/** Статическое умолчание проверяется тем же валидатором, что и значения:
+ *  грамматика типа + существование/видимость ссылок. На создании это
+ *  отдельный вызов — id определения ещё нет (#646). */
+export async function assertDefaultUsable(
+  validator: CustomFieldValueValidator,
+  definitionId: string,
+  type: CustomFieldDefinition['type'],
+  settings: CustomFieldDefinition['settings'],
+  defaultValue: CustomFieldDefinition['defaultValue'],
+): Promise<void> {
+  if (defaultValue?.kind !== 'static') return;
+  const issues = await validator.validate([{ id: definitionId, type, settings }], {
+    [definitionId]: defaultValue.value,
+  });
+  if (issues.length > 0) {
+    throw new DomainException(ErrorCode.CUSTOM_FIELD_VALUE_INVALID, 'Default value is invalid', {
+      issues,
+    });
+  }
 }
 
 /** Справочник списка и валюта денег обязаны существовать и быть активными. */
@@ -149,8 +176,9 @@ export async function assertUpdateAllowed(
   if (dto.bindings !== undefined) {
     if (current.isCompany) {
       throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
+        ErrorCode.CUSTOM_FIELD_BINDING_INVALID,
         'Company variable cannot have bindings',
+        { reason: 'company' },
       );
     }
     // Архивный тип процесса, уже привязанный к атрибуту, не блокирует
@@ -183,4 +211,29 @@ export function nameTaken(definitionId: string, name: string): DomainException {
   return new DomainException(ErrorCode.CUSTOM_FIELD_NAME_TAKEN, 'Field name is taken', {
     suggestion: { definitionId, name },
   });
+}
+
+/** Снятие привязки полным набором: слоты форм мест убираются синхронно
+ *  (#646), чтобы required-слот удалённого/снятого атрибута не блокировал
+ *  создание записи в окне outbox. */
+export async function cleanRemovedFormSlots(
+  formCleaner: FieldBindingFormCleaner,
+  current: FieldDefinitionRow,
+  next: CustomFieldBindings,
+  actorId: string,
+  tx: TransactionClient,
+): Promise<void> {
+  const removed = current.bindings.filter(
+    (binding) =>
+      (binding.targetKind === 'project_type' && !next.projectTypeIds.includes(binding.targetId)) ||
+      (binding.targetKind === 'node_kind' && !next.nodeKindIds.includes(binding.targetId)),
+  );
+  for (const binding of removed) {
+    await formCleaner.removeFieldFromForm(
+      { kind: binding.targetKind as 'project_type' | 'node_kind', id: binding.targetId },
+      current.id,
+      actorId,
+      tx,
+    );
+  }
 }

@@ -126,6 +126,10 @@ export const customFieldDefinitionSchema = z.object({
   /** Значение глобальной переменной (грамматика типа); у обычных атрибутов —
    *  null. Изменение — событие definition_changed {fields:['companyValue']}. */
   companyValue: customFieldValueSchema.nullable(),
+  /** Ссылки значения глобальной переменной (имена для показа): сервер
+   *  гидрирует их глазами актёра. Поле производное — старые моки/клиенты
+   *  могут его не присылать (пусто = имени нет). */
+  companyRefs: z.array(customFieldRefSchema).optional(),
   bindings: customFieldBindingsSchema,
   sortOrder: z.number().int().min(0),
   createdAt: z.iso.datetime(),

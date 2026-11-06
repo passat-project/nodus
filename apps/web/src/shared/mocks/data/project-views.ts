@@ -13,6 +13,7 @@ import type {
 import { Permission, SYSTEM_FIELD_IDS } from '@nodus/contracts';
 
 import { counterpartyRefById } from './counterparties.js';
+import { demoRefsForValues } from './custom-fields-refs.js';
 import {
   demoParticipantRowsOf,
   demoProjectGroups,
@@ -100,9 +101,13 @@ export function listItemOf(row: DemoProjectRow, actor: DemoActor): ProjectListIt
   const members = participantIdsOf(row.id);
   const type = demoProjectTypes.find((entry) => entry.id === row.typeId);
   const portfolio = demoProjectGroups.find((entry) => entry.id === row.portfolioId);
+  // Шифр/заказчик — производные системных атрибутов (как серверный DTO).
+  const values = projectCustomFieldsOf(row);
+  const code = values[SYSTEM_FIELD_IDS.projectCode];
+  const clientId = values[SYSTEM_FIELD_IDS.projectClient];
   return {
     id: row.id,
-    code: row.code,
+    code: typeof code === 'string' && code !== '' ? code : null,
     name: row.name,
     color: row.color,
     manager: row.managerId ? safeUserRef(row.managerId) : null,
@@ -112,7 +117,10 @@ export function listItemOf(row: DemoProjectRow, actor: DemoActor): ProjectListIt
     status: row.status,
     type: type ? { id: type.id, name: type.name } : null,
     portfolio: portfolio ? { id: portfolio.id, name: portfolio.name } : null,
-    client: row.clientId ? (counterpartyRefById(row.clientId) ?? null) : null,
+    client:
+      typeof clientId === 'string' && clientId !== ''
+        ? (counterpartyRefById(clientId) ?? null)
+        : null,
     membersCount: members.length,
     membersPreview: members.slice(0, 5).map(safeUserRef),
     endDate: row.endDate,
@@ -147,7 +155,7 @@ export function detailOf(row: DemoProjectRow, actor: DemoActor): ProjectDetail {
     completedAt: row.completedAt,
     archivedAt: row.archivedAt,
     customFields: projectCustomFieldsOf(row),
-    customFieldRefs: [],
+    customFieldRefs: demoRefsForValues(projectCustomFieldsOf(row)),
     access: accessOf(row, membership, actor.permissions),
     structureSummary: structureSummaryOf(row.id),
     createdAt: row.createdAt,

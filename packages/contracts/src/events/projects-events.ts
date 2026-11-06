@@ -42,6 +42,18 @@ export const PROJECT_CATALOG_EVENTS = [
 
 export type ProjectCatalogEventType = (typeof PROJECT_CATALOG_EVENTS)[number];
 
+/** События проекта с адресной аудиторией (#646): gateway рассылает их в
+ *  user-комнаты участников, а не в общий presence — имя/шифр секретного
+ *  проекта не должны утекать всем. `audience` — служебное поле, клиенту
+ *  не уходит (снимает gateway). */
+export const PROJECT_AUDIENCE_EVENTS = [
+  PROJECT_EVENTS.CREATED,
+  PROJECT_EVENTS.UPDATED,
+  PROJECT_EVENTS.PARTICIPANTS_CHANGED,
+] as const;
+
+export type ProjectAudienceEventType = (typeof PROJECT_AUDIENCE_EVENTS)[number];
+
 export const projectCreatedPayloadSchema = z.object({
   projectId: z.uuid(),
   name: z.string(),
@@ -55,6 +67,8 @@ export const projectCreatedPayloadSchema = z.object({
   typeId: z.uuid(),
   /** Наблюдатели, заданные при создании (просмотр без прав правки). */
   observerIds: z.array(z.uuid()).optional(),
+  /** Кому доставить событие (участники проекта); gateway снимает. */
+  audience: z.array(z.uuid()).optional(),
 });
 export type ProjectCreatedPayload = z.infer<typeof projectCreatedPayloadSchema>;
 
@@ -65,10 +79,14 @@ export const projectUpdatedPayloadSchema = z.object({
   projectId: z.uuid(),
   fields: z.array(z.string()),
   name: z.string().optional(),
+  /** Производный шифр (системный атрибут) — для колонок журнала/палитры. */
+  code: z.string().nullable().optional(),
   status: projectStatusSchema.optional(),
   clientId: z.uuid().nullable().optional(),
   /** Прежний заказчик — crm убирает строку использования при смене/снятии. */
   previousClientId: z.uuid().nullable().optional(),
+  /** Кому доставить событие (участники проекта); gateway снимает. */
+  audience: z.array(z.uuid()).optional(),
 });
 export type ProjectUpdatedPayload = z.infer<typeof projectUpdatedPayloadSchema>;
 
@@ -77,6 +95,8 @@ export type ProjectUpdatedPayload = z.infer<typeof projectUpdatedPayloadSchema>;
 export const projectParticipantsChangedPayloadSchema = z.object({
   projectId: z.uuid(),
   changedUserIds: z.array(z.uuid()),
+  /** Кому доставить событие (участники проекта); gateway снимает. */
+  audience: z.array(z.uuid()).optional(),
 });
 export type ProjectParticipantsChangedPayload = z.infer<
   typeof projectParticipantsChangedPayloadSchema

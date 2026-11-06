@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import type { CustomFieldUsage, UpdateCustomFieldBody } from '@nodus/contracts';
 import {
+  checkDefinitionShape,
   customFieldCompanyValueBodySchema,
   customFieldValueSchemaOf,
   ErrorCode,
@@ -14,37 +15,15 @@ import { demoProjectTypes } from '../../mocks/data/projects.js';
 import { mockTypes } from '../../mocks/data/process-types-store.js';
 import { workflowsUsingField } from '../../mocks/data/workflows-store.js';
 import {
-  bindingTargetExists,
+  bindingTargetState,
   dto,
   entitiesWithValue,
   error,
   formsUsingField,
   nameTaken,
+  removeFormSlot,
+  validateBindingTargets,
 } from './custom-fields-mock-utils.js';
-
-/** Снять слот атрибута из формы места в мок-мире (#646): unbind чистит
- *  форму так же, как сервер — инвариант «слот = привязка» в обе стороны. */
-function removeFormSlot(kind: string, targetId: string, fieldId: string): void {
-  if (kind === 'project-type') {
-    const type = demoProjectTypes.find((entry) => entry.id === targetId);
-    if (type) {
-      type.form = {
-        ...type.form,
-        fields: type.form.fields.filter((slot) => slot.fieldId !== fieldId),
-      };
-    }
-    return;
-  }
-  if (kind === 'node-kind') {
-    const nodeKind = demoNodeKinds.find((entry) => entry.id === targetId);
-    if (nodeKind) {
-      nodeKind.form = {
-        ...nodeKind.form,
-        fields: nodeKind.form.fields.filter((slot) => slot.fieldId !== fieldId),
-      };
-    }
-  }
-}
 
 /** Хендлеры одного атрибута реестра (#631): точечные привязки
  *  (идемпотентны, снятие всегда разрешено), значение глобальной
@@ -61,8 +40,16 @@ export const definitionHandlers = [
     if (!definition) return error(ErrorCode.NOT_FOUND, 'Field not found', 404);
     const kind = String(params.kind);
     const targetId = String(params.targetId);
-    if (!bindingTargetExists(kind, targetId)) {
-      return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Binding target not found', 422, {
+    const state = bindingTargetState(kind, targetId);
+    if (state === 'missing') {
+      // Сервер не раскрывает чужие справочники: неизвестная цель — 404.
+      return error(ErrorCode.NOT_FOUND, 'Binding target not found', 404, {
+        targetKind: kind,
+        targetId,
+      });
+    }
+    if (state === 'archived') {
+      return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Target is archived', 422, {
         targetKind: kind,
         targetId,
       });
@@ -93,7 +80,7 @@ export const definitionHandlers = [
     const definition = demoFieldById(String(params.id));
     if (!definition) return error(ErrorCode.NOT_FOUND, 'Field not found', 404);
     if (definition.isCompany) {
-      return error(ErrorCode.VALIDATION_FAILED, 'Company variable has no bindings', 422);
+      return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Company variable has no bindings', 422);
     }
     const kind = String(params.kind);
     const targetId = String(params.targetId);
@@ -110,7 +97,7 @@ export const definitionHandlers = [
         (id) => id !== targetId,
       );
     } else {
-      return error(ErrorCode.VALIDATION_FAILED, 'Unknown binding kind', 422);
+      return error(ErrorCode.VALIDATION_FAILED, 'Unknown binding kind', 400);
     }
     removeFormSlot(kind, targetId, definition.id);
     definition.updatedAt = new Date().toISOString();
@@ -126,7 +113,7 @@ export const definitionHandlers = [
     }
     const parsed = customFieldCompanyValueBodySchema.safeParse(await request.json());
     if (!parsed.success) {
-      return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 422, parsed.error.issues);
+      return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400, parsed.error.issues);
     }
     if (
       parsed.data.value !== null &&
@@ -144,7 +131,7 @@ export const definitionHandlers = [
     if (!definition) return error(ErrorCode.NOT_FOUND, 'Field not found', 404);
     const parsed = updateCustomFieldBodySchema.safeParse(await request.json());
     if (!parsed.success) {
-      return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 422, parsed.error.issues);
+      return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400, parsed.error.issues);
     }
     const body: UpdateCustomFieldBody = parsed.data;
     if (body.type && !isCompatibleTypeChange(definition.type, body.type)) {
@@ -166,45 +153,46 @@ export const definitionHandlers = [
         });
       }
     }
-    if (body.name !== undefined) definition.name = body.name;
-    if (body.hint !== undefined) definition.hint = body.hint;
-    if (body.type !== undefined) definition.type = body.type;
-    if (body.reportIndexed !== undefined) definition.reportIndexed = body.reportIndexed;
-    if (body.defaultValue !== undefined) definition.defaultValue = body.defaultValue;
-    if (body.settings !== undefined)
-      definition.settings = { ...definition.settings, ...body.settings };
+    // Всё валидируем ДО мутации: отказ не должен оставлять частичных правок
+    // (сервер делает это в транзакции).
+    const nextType = body.type ?? definition.type;
+    const nextSettings = { ...definition.settings, ...(body.settings ?? {}) };
+    const nextDefault =
+      body.defaultValue !== undefined ? body.defaultValue : definition.defaultValue;
+    const shape = checkDefinitionShape(nextType, nextSettings, nextDefault);
+    if (shape.length > 0) {
+      return error(ErrorCode.VALIDATION_FAILED, 'Invalid custom field shape', 400, {
+        issues: shape,
+      });
+    }
+    if (
+      nextDefault?.kind === 'static' &&
+      !customFieldValueSchemaOf({ type: nextType, settings: nextSettings }).safeParse(
+        nextDefault.value,
+      ).success
+    ) {
+      return error(ErrorCode.CUSTOM_FIELD_VALUE_INVALID, 'Default value is invalid', 422);
+    }
     if (body.bindings !== undefined) {
       if (definition.isCompany) {
         return error(
           ErrorCode.CUSTOM_FIELD_BINDING_INVALID,
           'Company variable has no bindings',
           422,
+          { reason: 'company' },
         );
       }
-      for (const targetId of body.bindings.processTypeIds) {
-        if (!bindingTargetExists('process-type', targetId)) {
-          return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Process type not found', 422, {
-            targetKind: 'process-type',
-            targetId,
-          });
-        }
-      }
-      for (const targetId of body.bindings.projectTypeIds) {
-        if (!bindingTargetExists('project-type', targetId)) {
-          return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Project type not found', 422, {
-            targetKind: 'project-type',
-            targetId,
-          });
-        }
-      }
-      for (const targetId of body.bindings.nodeKindIds) {
-        if (!bindingTargetExists('node-kind', targetId)) {
-          return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Node kind not found', 422, {
-            targetKind: 'node-kind',
-            targetId,
-          });
-        }
-      }
+      const invalidTargets = validateBindingTargets(definition, body.bindings);
+      if (invalidTargets) return invalidTargets;
+    }
+
+    if (body.name !== undefined) definition.name = body.name;
+    if (body.hint !== undefined) definition.hint = body.hint;
+    if (body.type !== undefined) definition.type = body.type;
+    if (body.reportIndexed !== undefined) definition.reportIndexed = body.reportIndexed;
+    if (body.defaultValue !== undefined) definition.defaultValue = body.defaultValue;
+    if (body.settings !== undefined) definition.settings = nextSettings;
+    if (body.bindings !== undefined) {
       const before = definition.bindings;
       for (const targetId of before.projectTypeIds) {
         if (!body.bindings.projectTypeIds.includes(targetId)) {

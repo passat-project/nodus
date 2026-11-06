@@ -16,6 +16,10 @@ SELECT "id" FROM "field_definitions" WHERE "hidden";
 CREATE TEMP TABLE "_ex_project_defs" ON COMMIT DROP AS
 SELECT "id" FROM "field_definitions"
 WHERE "scope" = 'project' AND NOT "hidden";
+-- Канонические определения, поглотившие бывший project-атрибут (#646):
+-- они обязаны получить привязки ко всем типам проектов, иначе значения
+-- переехали, а место использования пропало.
+CREATE TEMP TABLE "_project_canonicals" ("id" UUID PRIMARY KEY) ON COMMIT DROP;
 
 -- ===== 0. Additive: колонки и таблицы конечной модели =====
 ALTER TABLE "field_definitions" ADD COLUMN "number" INTEGER,
@@ -69,30 +73,58 @@ ALTER TABLE "company_values"
 -- поглощаемых теряются (остаётся умолчание канонического) — осознанно.
 -- jsonb_exists() вместо `?` — функциональная запись того же оператора
 -- (миграции исполняются драйвером, где `?` — плейсхолдер).
-UPDATE "field_definitions" f
-SET "name" = f."name" || ' (' || (
-      CASE f."scope" WHEN 'task' THEN 'Задачи' WHEN 'letter' THEN 'Письма'
-                     WHEN 'project' THEN 'Проекты' WHEN 'node' THEN 'Папки'
-                     ELSE 'Контрагенты' END) || ')'
-WHERE f."id" IN (
-  SELECT loser."id"
-  FROM (
-    SELECT d."id",
-           row_number() OVER (PARTITION BY lower(btrim(d."name"))
-             ORDER BY CASE d."scope" WHEN 'task' THEN 1 WHEN 'letter' THEN 2
-                                      WHEN 'project' THEN 3 WHEN 'node' THEN 4 ELSE 5 END,
-                      d."created_at", d."id") AS rn
-    FROM "field_definitions" d
-    JOIN (
-      SELECT lower(btrim("name")) AS key
-      FROM "field_definitions"
-      GROUP BY 1
-      HAVING count(*) > 1
-         AND (count(DISTINCT "type") > 1 OR count(DISTINCT "settings") > 1)
-    ) conflict ON conflict.key = lower(btrim(d."name"))
-  ) loser
-  WHERE loser.rn > 1
-);
+-- Переименование младших членов конфликтных групп. Имя-суффикс может быть
+-- занято существующим определением другого scope (старый per-scope unique его
+-- пропускал) — тогда берём первый свободный «Имя (Область) 2», «… 3»; иначе
+-- глобальный unique-индекс ниже уронил бы всю миграцию (#646). Видимые
+-- определения идут раньше скрытых: видимая строка должна сохранить имя.
+DO $$
+DECLARE
+  loser RECORD;
+  area TEXT;
+  suffix TEXT;
+  candidate TEXT;
+  suffix_no INT;
+BEGIN
+  FOR loser IN
+    SELECT l."id", l."name", l."scope"
+    FROM (
+      SELECT d."id", d."name", d."scope",
+             row_number() OVER (PARTITION BY lower(btrim(d."name"))
+               ORDER BY d."hidden",
+                        CASE d."scope" WHEN 'task' THEN 1 WHEN 'letter' THEN 2
+                                       WHEN 'project' THEN 3 WHEN 'node' THEN 4 ELSE 5 END,
+                        d."created_at", d."id") AS rn
+      FROM "field_definitions" d
+      JOIN (
+        SELECT lower(btrim("name")) AS key
+        FROM "field_definitions"
+        GROUP BY 1
+        HAVING count(*) > 1
+           AND (count(DISTINCT "type") > 1 OR count(DISTINCT "settings") > 1)
+      ) conflict ON conflict.key = lower(btrim(d."name"))
+    ) l
+    WHERE l.rn > 1
+  LOOP
+    area := CASE loser."scope" WHEN 'task' THEN 'Задачи' WHEN 'letter' THEN 'Письма'
+                               WHEN 'project' THEN 'Проекты' WHEN 'node' THEN 'Папки'
+                               ELSE 'Контрагенты' END;
+    suffix := ' (' || area || ')';
+    -- Контрактное имя ≤ 60: длинное имя обрезаем, чтобы суффикс влез.
+    candidate := left(loser."name", GREATEST(1, 60 - length(suffix))) || suffix;
+    suffix_no := 1;
+    WHILE EXISTS (
+      SELECT 1 FROM "field_definitions"
+      WHERE lower(btrim("name")) = lower(btrim(candidate))
+        AND "id" <> loser."id"
+    ) LOOP
+      suffix_no := suffix_no + 1;
+      suffix := ' (' || area || ') ' || suffix_no::text;
+      candidate := left(loser."name", GREATEST(1, 60 - length(suffix))) || suffix;
+    END LOOP;
+    UPDATE "field_definitions" SET "name" = candidate WHERE "id" = loser."id";
+  END LOOP;
+END $$;
 
 DO $$
 DECLARE
@@ -104,7 +136,8 @@ BEGIN
     FROM (
       SELECT d."id", lower(btrim(d."name")) AS key,
              row_number() OVER (PARTITION BY lower(btrim(d."name"))
-               ORDER BY CASE d."scope" WHEN 'task' THEN 1 WHEN 'letter' THEN 2
+               ORDER BY d."hidden",
+                        CASE d."scope" WHEN 'task' THEN 1 WHEN 'letter' THEN 2
                                         WHEN 'project' THEN 3 WHEN 'node' THEN 4 ELSE 5 END,
                         d."created_at", d."id") AS rn
       FROM "field_definitions" d
@@ -120,13 +153,20 @@ BEGIN
       SELECT c."id"
       FROM "field_definitions" c
       WHERE lower(btrim(c."name")) = loser.key
-      ORDER BY CASE c."scope" WHEN 'task' THEN 1 WHEN 'letter' THEN 2
+      ORDER BY c."hidden",
+               CASE c."scope" WHEN 'task' THEN 1 WHEN 'letter' THEN 2
                               WHEN 'project' THEN 3 WHEN 'node' THEN 4 ELSE 5 END,
                c."created_at", c."id"
       LIMIT 1
     ) canon ON true
     WHERE loser.rn > 1
   LOOP
+    -- Поглощённый бывший project-атрибут передаёт каноническому своё место
+    -- использования: привязки ко всем типам проектов создаются в Р9 (#646).
+    IF absorbed IN (SELECT "id" FROM "_ex_project_defs") THEN
+      INSERT INTO "_project_canonicals" ("id") VALUES (canonical)
+      ON CONFLICT DO NOTHING;
+    END IF;
     -- Значения JSONB (5 таблиц сущностей): ключ uuid → канонический.
     -- Если у записи уже есть значение канонического определения, оно
     -- ПОБЕЖДАЕТ (канонический — тот, кто выжил; N-10 #646): поглощённый
@@ -174,10 +214,12 @@ BEGIN
                    CASE WHEN e->>'fieldId' = absorbed::text
                         THEN jsonb_set(e, '{fieldId}', to_jsonb(canonical::text)) ELSE e END
                    ORDER BY ord), '[]'::jsonb)
-          FROM jsonb_array_elements(COALESCE(k."config"->'form'->'fields', '[]'::jsonb))
+          FROM jsonb_array_elements(k."config"->'form'->'fields')
                WITH ORDINALITY AS t(e, ord)
         ))
-    WHERE k."config"->'form'->'fields'
+    WHERE jsonb_typeof(k."config") = 'object'
+      AND jsonb_typeof(k."config"->'form'->'fields') = 'array'
+      AND k."config"->'form'->'fields'
           @> jsonb_build_array(jsonb_build_object('fieldId', absorbed::text));
 
     -- Ключи cf.<uuid> в маршрутах: форма создания + документы переходов
@@ -254,26 +296,38 @@ FROM "field_definition_types" dt
 WHERE dt."definition_id" NOT IN (SELECT "id" FROM "_hidden_defs")
 ON CONFLICT DO NOTHING;
 
--- Из слотов форм видов папок (#556): слот И ЕСТЬ привязка. Полу-join по
--- определениям: сиротский слот (определение удалено до миграции) привязку
--- не создаёт, FK не нарушается.
+-- Из слотов форм видов папок (#556): слот создаёт привязку (обратное не
+-- обязательно — привязка без слота законна, #646). Полу-join по определениям:
+-- сиротский слот (определение удалено до миграции) привязку не создаёт,
+-- FK не нарушается.
 INSERT INTO "field_bindings" ("id", "definition_id", "target_kind", "target_id")
-SELECT DISTINCT gen_random_uuid(), (slot->>'fieldId')::uuid, 'node_kind', k."id"
+SELECT gen_random_uuid(), (slot->>'fieldId')::uuid, 'node_kind', k."id"
 FROM "node_kinds" k,
-     jsonb_array_elements(COALESCE(k."config"->'form'->'fields', '[]'::jsonb)) slot
-WHERE slot->>'fieldId' IS NOT NULL
+     jsonb_array_elements(
+       CASE WHEN jsonb_typeof(k."config") = 'object'
+                 AND jsonb_typeof(k."config"->'form'->'fields') = 'array'
+            THEN k."config"->'form'->'fields' ELSE '[]'::jsonb END
+     ) slot
+WHERE slot->>'fieldId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
   AND slot->>'fieldId' NOT IN (SELECT "id"::text FROM "_hidden_defs")
   AND (slot->>'fieldId')::uuid IN (SELECT "id" FROM "field_definitions")
 ON CONFLICT DO NOTHING;
 
--- Слоты скрытых определений вычищаются из форм видов.
+-- Слоты скрытых определений вычищаются из форм видов (только те виды, где
+-- такие слоты реально есть; битый config не трогаем — толерантное чтение).
 UPDATE "node_kinds" k
 SET "config" = jsonb_set(k."config", '{form,fields}', (
       SELECT COALESCE(jsonb_agg(e ORDER BY ord), '[]'::jsonb)
-      FROM jsonb_array_elements(COALESCE(k."config"->'form'->'fields', '[]'::jsonb))
+      FROM jsonb_array_elements(k."config"->'form'->'fields')
            WITH ORDINALITY AS t(e, ord)
       WHERE NOT (e->>'fieldId' IN (SELECT "id"::text FROM "_hidden_defs"))
-    ));
+    ))
+WHERE jsonb_typeof(k."config") = 'object'
+  AND jsonb_typeof(k."config"->'form'->'fields') = 'array'
+  AND EXISTS (
+    SELECT 1 FROM jsonb_array_elements(k."config"->'form'->'fields') e
+    WHERE e->>'fieldId' IN (SELECT "id"::text FROM "_hidden_defs")
+  );
 
 DROP TABLE "field_definition_types";
 
@@ -338,10 +392,12 @@ BEGIN
                      CASE WHEN e->>'fieldId' = existing_id::text
                           THEN jsonb_set(e, '{fieldId}', to_jsonb(sys_id::text)) ELSE e END
                      ORDER BY ord), '[]'::jsonb)
-            FROM jsonb_array_elements(COALESCE(k."config"->'form'->'fields', '[]'::jsonb))
+            FROM jsonb_array_elements(k."config"->'form'->'fields')
                  WITH ORDINALITY AS t(e, ord)
           ))
-      WHERE k."config"->'form'->'fields'
+      WHERE jsonb_typeof(k."config") = 'object'
+        AND jsonb_typeof(k."config"->'form'->'fields') = 'array'
+        AND k."config"->'form'->'fields'
             @> jsonb_build_array(jsonb_build_object('fieldId', existing_id::text));
       UPDATE "field_bindings" SET "definition_id" = sys_id WHERE "definition_id" = existing_id;
       UPDATE "workflows" SET "creation" = REPLACE("creation"::text,
@@ -395,15 +451,16 @@ BEGIN
 
   -- Привязки: «Шифр»/«Заказчик» — все типы проектов, «Код» — все виды папок;
   -- все уцелевшие определения бывшей области project — ко всем типам
-  -- проектов (сохранение «атрибуты проектов видны всем»); поглощённые id
-  -- из захвата отфильтрованы (их строки уже переписаны на системные id).
+  -- проектов (сохранение «атрибуты проектов видны всем»); канонические
+  -- определения, поглотившие project-атрибут при слиянии Р13, — тоже (#646).
   INSERT INTO "field_bindings" ("id", "definition_id", "target_kind", "target_id")
   SELECT gen_random_uuid(), d."definition_id", 'project_type', pt."id"
   FROM "project_types" pt,
        (SELECT '4b91bbe0-2d81-5ba2-8c51-93beb41da2cf'::uuid AS definition_id
         UNION ALL SELECT 'd5298cff-e488-514b-b9c8-ecaafd624b26'
         UNION ALL SELECT "id" FROM "_ex_project_defs"
-        WHERE "id" IN (SELECT "id" FROM "field_definitions")) d
+        WHERE "id" IN (SELECT "id" FROM "field_definitions")
+        UNION ALL SELECT "id" FROM "_project_canonicals") d
   ON CONFLICT DO NOTHING;
   INSERT INTO "field_bindings" ("id", "definition_id", "target_kind", "target_id")
   SELECT gen_random_uuid(), '6ebf0f32-ff97-582e-a1b3-095558c317fa', 'node_kind', k."id"
@@ -431,29 +488,40 @@ BEGIN
   SET "config" = jsonb_set(k."config", '{form,fields}', (
         SELECT COALESCE(jsonb_agg(
                  CASE WHEN e->>'fieldId' = '6ebf0f32-ff97-582e-a1b3-095558c317fa'
+                           AND k."config"->'form'->>'code' IN ('hidden', 'optional', 'required')
                       THEN jsonb_set(e, '{state}', to_jsonb(k."config"->'form'->>'code'))
                       ELSE e END
                  ORDER BY ord), '[]'::jsonb)
-        FROM jsonb_array_elements(COALESCE(k."config"->'form'->'fields', '[]'::jsonb))
+        FROM jsonb_array_elements(k."config"->'form'->'fields')
              WITH ORDINALITY AS t(e, ord)
       ))
-  WHERE jsonb_exists(k."config"->'form', 'code')
+  WHERE jsonb_typeof(k."config") = 'object'
+    AND jsonb_typeof(k."config"->'form') = 'object'
+    AND jsonb_typeof(k."config"->'form'->'fields') = 'array'
+    AND jsonb_exists(k."config"->'form', 'code')
     AND k."config"->'form'->'fields'
         @> jsonb_build_array(jsonb_build_object(
             'fieldId', '6ebf0f32-ff97-582e-a1b3-095558c317fa'));
   UPDATE "node_kinds" k
   SET "config" = jsonb_set(k."config", '{form,fields}',
-        COALESCE(k."config"->'form'->'fields', '[]'::jsonb)
+        (CASE WHEN jsonb_typeof(k."config"->'form'->'fields') = 'array'
+              THEN k."config"->'form'->'fields' ELSE '[]'::jsonb END)
         || jsonb_build_array(jsonb_build_object(
             'fieldId', '6ebf0f32-ff97-582e-a1b3-095558c317fa',
             'state', k."config"->'form'->>'code')))
-  WHERE jsonb_exists(k."config"->'form', 'code')
-    AND NOT (k."config"->'form'->'fields')
-        @> jsonb_build_array(jsonb_build_object(
-            'fieldId', '6ebf0f32-ff97-582e-a1b3-095558c317fa'));
+  WHERE jsonb_typeof(k."config") = 'object'
+    AND jsonb_typeof(k."config"->'form') = 'object'
+    AND jsonb_exists(k."config"->'form', 'code')
+    AND k."config"->'form'->>'code' IN ('hidden', 'optional', 'required')
+    AND (jsonb_typeof(k."config"->'form'->'fields') <> 'array'
+         OR NOT (k."config"->'form'->'fields')
+            @> jsonb_build_array(jsonb_build_object(
+                'fieldId', '6ebf0f32-ff97-582e-a1b3-095558c317fa')));
   UPDATE "node_kinds" k
   SET "config" = jsonb_set(k."config", '{form}', (k."config"->'form') - 'code')
-  WHERE jsonb_exists(k."config"->'form', 'code');
+  WHERE jsonb_typeof(k."config") = 'object'
+    AND jsonb_typeof(k."config"->'form') = 'object'
+    AND jsonb_exists(k."config"->'form', 'code');
 END $$;
 
 -- ===== Дубли шифров/кодов больше не проверяются (В2) =====

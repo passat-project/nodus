@@ -205,7 +205,11 @@ export function useUpdateProjectCustomField(id: string) {
     },
     onSuccess: (project) => queryClient.setQueryData(projectsKeys.detail(id), project),
     onSettled: () => {
+      // Шифр/заказчик — производные: журнал и пикеры тоже перечитываются,
+      // иначе колонка «Шифр» показывает старое значение до полного рефеча.
       void queryClient.invalidateQueries({ queryKey: projectsKeys.detail(id) });
+      void queryClient.invalidateQueries({ queryKey: projectsKeys.journals() });
+      void queryClient.invalidateQueries({ queryKey: projectsKeys.options() });
     },
   });
 }

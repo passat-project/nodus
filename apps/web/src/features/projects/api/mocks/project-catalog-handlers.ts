@@ -13,6 +13,7 @@ import {
 } from '@nodus/contracts';
 
 import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
+import { demoNodeKinds } from '../../../../shared/mocks/data/project-nodes.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import {
   demoPortalSettings,
@@ -23,6 +24,31 @@ import {
 const invalid = () =>
   HttpResponse.json(
     { code: ErrorCode.VALIDATION_FAILED, message: 'Invalid body' },
+    { status: 400 },
+  );
+
+/** Слоты формы типа — существующие определения, не глобальные переменные
+ *  (зеркало `assertProjectTypeForm`). */
+function projectTypeFormIssues(form: {
+  fields: readonly { fieldId: string }[];
+}): { fieldId: string; reason: 'unknown_field' | 'not_bindable' }[] {
+  const byId = new Map(demoCustomFieldDefinitions.map((definition) => [definition.id, definition]));
+  const issues: { fieldId: string; reason: 'unknown_field' | 'not_bindable' }[] = [];
+  for (const slot of form.fields) {
+    const definition = byId.get(slot.fieldId);
+    if (!definition) issues.push({ fieldId: slot.fieldId, reason: 'unknown_field' });
+    else if (definition.isCompany) issues.push({ fieldId: slot.fieldId, reason: 'not_bindable' });
+  }
+  return issues;
+}
+
+const formInvalid = (fieldIds: { fieldId: string; reason: string }[]) =>
+  HttpResponse.json(
+    {
+      code: ErrorCode.PROJECT_TYPE_FORM_INVALID,
+      message: 'Project type form is invalid',
+      details: { fieldIds, reason: fieldIds[0]?.reason ?? 'unknown_field' },
+    },
     { status: 422 },
   );
 const forbidden = () =>
@@ -87,6 +113,10 @@ export const projectCatalogHandlers = [
     const parsed = projectTypeCreateBodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return invalid();
     if (demoProjectTypes.some((entry) => entry.name === parsed.data.name)) return conflict();
+    if (parsed.data.form) {
+      const issues = projectTypeFormIssues(parsed.data.form);
+      if (issues.length > 0) return formInvalid(issues);
+    }
     const type: ProjectType = {
       id: crypto.randomUUID(),
       name: parsed.data.name,
@@ -116,6 +146,21 @@ export const projectCatalogHandlers = [
       demoProjectTypes.some((entry) => entry.id !== type.id && entry.name === parsed.data.name)
     ) {
       return conflict();
+    }
+    if (parsed.data.form) {
+      const issues = projectTypeFormIssues(parsed.data.form);
+      if (issues.length > 0) return formInvalid(issues);
+    }
+    if (parsed.data.kindIds !== undefined && parsed.data.kindIds !== null) {
+      const alive = new Set(
+        demoNodeKinds.filter((kind) => kind.archivedAt === null).map((kind) => kind.id),
+      );
+      if (parsed.data.kindIds.some((id) => !alive.has(id))) {
+        return HttpResponse.json(
+          { code: ErrorCode.PROJECT_NODE_INVALID, message: 'Node kind is not available' },
+          { status: 422 },
+        );
+      }
     }
     if (parsed.data.name) type.name = parsed.data.name;
     if (parsed.data.icon) type.icon = parsed.data.icon;

@@ -20,7 +20,7 @@ function makeHandler() {
   };
   const types = {
     lockForms: vi.fn(async () => undefined),
-    removeFieldFromForms: vi.fn(async () => 1),
+    removeFieldFromForms: vi.fn(async () => [{ id: 'type-1', name: 'Договор' }]),
   };
   const txRunner = { run: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})) };
   const eventBus = { emit: vi.fn(async () => undefined) };
@@ -60,6 +60,12 @@ describe('ProjectFieldValuesCleanupHandler (#556, Р11; #631 — без обла
     expect(types.removeFieldFromForms).toHaveBeenCalledWith({}, FIELD);
     expect(eventBus.emit).toHaveBeenCalledWith(
       {},
+      PROJECT_EVENTS.TYPE_CHANGED,
+      { typeId: 'type-1', change: 'updated', fields: ['form'] },
+      { actorId: 'admin-1', aggregateType: 'project_type', aggregateId: 'type-1' },
+    );
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      {},
       PROJECT_EVENTS.NODE_KIND_CHANGED,
       { kindId: 'kind-1', change: 'updated', fields: ['form'] },
       { actorId: 'admin-1', aggregateType: 'node_kind', aggregateId: 'kind-1' },
@@ -84,8 +90,9 @@ describe('ProjectFieldValuesCleanupHandler (#556, Р11; #631 — без обла
   });
 
   it('повторная доставка идемпотентна: те же запросы, событий нет без изменённых видов', async () => {
-    const { handler, kinds, eventBus } = makeHandler();
+    const { handler, kinds, types, eventBus } = makeHandler();
     kinds.removeFieldFromForms.mockResolvedValue([]);
+    types.removeFieldFromForms.mockResolvedValue([]);
     await handler.handle(event({ definitionId: FIELD, change: 'deleted' }));
     await handler.handle(event({ definitionId: FIELD, change: 'deleted' }));
     expect(kinds.removeFieldFromForms).toHaveBeenCalledTimes(2);
