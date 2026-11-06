@@ -182,8 +182,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
         url: string,
         init?: Record<string, unknown>,
-      ) =>
-        cf.fx.api(pm, method, url, init);
+      ) => cf.fx.api(pm, method, url, init);
 
       // Тип с обязательным «Шифром» (слот системного атрибута).
       const type = await cf.fx.prisma.projectType.create({
