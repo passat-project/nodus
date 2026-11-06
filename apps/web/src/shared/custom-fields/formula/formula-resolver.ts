@@ -10,7 +10,7 @@ import type { FormulaRecord, FormulaResolver, FormulaValue } from '@nodus/formul
 import { demoCustomFieldDefinitions } from '../../mocks/data/custom-fields.js';
 import { itemById } from '../../mocks/data/dictionaries.js';
 import { findLetter } from '../../mocks/data/letters.js';
-import { findDemoNodeRow } from '../../mocks/data/project-nodes.js';
+import { demoNodeKinds, findDemoNodeRow } from '../../mocks/data/project-nodes.js';
 import { findDemoProjectRow } from '../../mocks/data/projects.js';
 import { canSeeProject, projectCustomFieldsOf } from '../../mocks/data/project-views.js';
 import { demoSubtasks, demoTasks } from '../../mocks/data/tasks.js';
@@ -60,7 +60,10 @@ export function toFormulaValue(
   }
 }
 
-function valuesRecord(values: CustomFieldValues): FormulaRecord {
+function valuesRecord(
+  values: CustomFieldValues,
+  system?: (key: string) => FormulaValue | undefined,
+): FormulaRecord {
   return {
     value: (number) => {
       const definition = fieldByNumber(number);
@@ -69,11 +72,89 @@ function valuesRecord(values: CustomFieldValues): FormulaRecord {
       if (raw === undefined || raw === null) return undefined;
       return toFormulaValue(definition, raw);
     },
+    ...(system ? { system } : {}),
   };
 }
 
-function taskRecord(task: { customFields?: CustomFieldValues }): FormulaRecord {
-  return valuesRecord(task.customFields ?? {});
+function systemReader(
+  entries: Record<string, FormulaValue | undefined>,
+): (key: string) => FormulaValue | undefined {
+  return (key) => entries[key];
+}
+
+function taskSystem(task: {
+  title?: string;
+  number?: number;
+  deadline?: string | null;
+  createdAt?: string;
+  stage?: { name?: string };
+  assignee?: { id: string } | null;
+  creator?: { id: string } | null;
+}): (key: string) => FormulaValue | undefined {
+  return systemReader({
+    title: task.title,
+    number: task.number,
+    deadline: task.deadline ?? null,
+    createdAt: task.createdAt,
+    stage: task.stage?.name,
+    assignee: task.assignee?.id ?? null,
+    creator: task.creator?.id ?? null,
+  });
+}
+
+function letterSystem(letter: {
+  subject?: string | null;
+  regNumber?: string | null;
+  regDate?: string | null;
+  receivedAt?: string;
+  correspondent?: { id: string } | null;
+  theirNumber?: string | null;
+  theirDate?: string | null;
+}): (key: string) => FormulaValue | undefined {
+  return systemReader({
+    subject: letter.subject ?? null,
+    regNumber: letter.regNumber ?? null,
+    regDate: letter.regDate ?? null,
+    receivedAt: letter.receivedAt,
+    correspondent: letter.correspondent?.id ?? null,
+    theirNumber: letter.theirNumber ?? null,
+    theirDate: letter.theirDate ?? null,
+  });
+}
+
+function projectSystem(row: {
+  name?: string;
+  status?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  managerId?: string;
+}): (key: string) => FormulaValue | undefined {
+  return systemReader({
+    name: row.name,
+    status: row.status,
+    startDate: row.startDate ?? null,
+    endDate: row.endDate ?? null,
+    manager: row.managerId ?? null,
+  });
+}
+
+function nodeSystem(row: {
+  name?: string;
+  kindId?: string;
+  createdAt?: string;
+}): (key: string) => FormulaValue | undefined {
+  const kind = demoNodeKinds.find((entry) => entry.id === row.kindId);
+  return systemReader({
+    name: row.name,
+    kind: kind?.name,
+    createdAt: row.createdAt,
+  });
+}
+
+function taskRecord(
+  task: { customFields?: CustomFieldValues } & Parameters<typeof taskSystem>[0],
+): FormulaRecord {
+  return valuesRecord(task.customFields ?? {}, taskSystem(task));
 }
 
 /** Задача видна формуле: без признака конфиденциальности и в видимом
@@ -90,7 +171,7 @@ function projectRecord(projectId: string | null): FormulaRecord | null {
   if (!projectId) return null;
   const row = findDemoProjectRow(projectId);
   if (!row || !canSeeProject(row, currentAuthUser)) return null;
-  return valuesRecord(projectCustomFieldsOf(row));
+  return valuesRecord(projectCustomFieldsOf(row), projectSystem(row));
 }
 
 /** Глобальные переменные компании (Р7) — одним срезом значений. */
@@ -111,7 +192,7 @@ function nearestFolderRecord(host: DemoFormulaHost, kindId: string): FormulaReco
   while (currentId) {
     const row = findDemoNodeRow(currentId);
     if (!row) return null;
-    if (row.kindId === kindId) return valuesRecord(row.customFields);
+    if (row.kindId === kindId) return valuesRecord(row.customFields, nodeSystem(row));
     currentId = row.parentId;
   }
   return null;
@@ -126,7 +207,7 @@ function folderChainRecords(host: DemoFormulaHost, kindId: string): FormulaRecor
   while (currentId) {
     const row = findDemoNodeRow(currentId);
     if (!row) break;
-    if (row.kindId === kindId) chain.push(valuesRecord(row.customFields));
+    if (row.kindId === kindId) chain.push(valuesRecord(row.customFields, nodeSystem(row)));
     currentId = row.parentId;
   }
   return chain.reverse();
@@ -159,7 +240,7 @@ function refFieldRecord(host: DemoFormulaHost, number: number): FormulaRecord | 
       const letter = findLetter(targetId);
       // Конфиденциальные письма исключены ДЛЯ ВСЕХ (вердикт В1 06.11).
       if (!letter || letter.confidential) return null;
-      return valuesRecord(letter.customFields);
+      return valuesRecord(letter.customFields, letterSystem(letter));
     }
     case 'project':
       return projectRecord(targetId);
@@ -168,11 +249,39 @@ function refFieldRecord(host: DemoFormulaHost, number: number): FormulaRecord | 
       if (!row) return null;
       const project = findDemoProjectRow(row.projectId);
       return project && canSeeProject(project, currentAuthUser)
-        ? valuesRecord(row.customFields)
+        ? valuesRecord(row.customFields, nodeSystem(row))
         : null;
     }
     default:
       return null;
+  }
+}
+
+/** Запись самого хоста (self): значения + системные поля сущности. */
+function hostRecord(host: DemoFormulaHost): FormulaRecord {
+  switch (host.kind) {
+    case 'task': {
+      const task = findDemoTask(host.id);
+      return task ? taskRecord(task) : valuesRecord(host.customFields);
+    }
+    case 'letter': {
+      const letter = findLetter(host.id);
+      return letter
+        ? valuesRecord(letter.customFields, letterSystem(letter))
+        : valuesRecord(host.customFields);
+    }
+    case 'project': {
+      const row = findDemoProjectRow(host.id);
+      return row
+        ? valuesRecord(projectCustomFieldsOf(row), projectSystem(row))
+        : valuesRecord(host.customFields);
+    }
+    case 'node': {
+      const row = findDemoNodeRow(host.id);
+      return row
+        ? valuesRecord(row.customFields, nodeSystem(row))
+        : valuesRecord(host.customFields);
+    }
   }
 }
 
@@ -184,7 +293,7 @@ export function demoResolver(kind: FormulaHostKind, hostId: string): FormulaReso
     single(source) {
       switch (source.kind) {
         case 'self':
-          return valuesRecord(host.customFields);
+          return hostRecord(host);
         case 'parent_task': {
           if (kind !== 'task' || !host.parentId) return null;
           const parent = findDemoTask(host.parentId);

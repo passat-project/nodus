@@ -10,7 +10,7 @@ import { http, HttpResponse } from 'msw';
 
 import { demoFieldById } from '../../mocks/data/custom-fields.js';
 
-import { readOwnFormula, removeOwnFormula, saveOwnFormula } from './formula-mocks.js';
+import { effectiveFormula, removeOwnFormula, saveOwnFormula } from './formula-mocks.js';
 import { demoResolver } from './formula-resolver.js';
 import { demoFormulaMeta, findFormulaHost } from './formula-state.js';
 
@@ -60,9 +60,7 @@ function hostFormulaHandlers(opts: {
     http.get(opts.path, ({ params }) => {
       const target = resolve(params);
       if (target instanceof Response) return target;
-      return HttpResponse.json({
-        ast: readOwnFormula(opts.kind, target.hostId, target.fieldId),
-      });
+      return HttpResponse.json(effectiveFormula(opts.kind, target.hostId, target.fieldId));
     }),
 
     http.put(opts.path, async ({ params, request }) => {

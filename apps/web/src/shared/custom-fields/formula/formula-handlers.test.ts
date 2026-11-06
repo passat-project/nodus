@@ -45,25 +45,30 @@ const json = (method: string, body?: unknown) => ({
 const literal: FormulaNode = { kind: 'literal', value: 'КЖ-1' };
 
 describe('мок формул ячейки (#632)', () => {
-  it('GET без формулы — null, PUT сохраняет и материализует значение', async () => {
+  it('GET отдаёт формулу привязки, PUT сохраняет свою и материализует значение', async () => {
     const empty = await fetch(cipherUrl);
     expect(empty.status).toBe(200);
-    expect(await empty.json()).toEqual({ ast: null });
+    const inherited = (await empty.json()) as { ast: unknown; origin: string };
+    expect(inherited.origin).toBe('type');
+    expect(inherited.ast).toBeTruthy();
 
     const put = await fetch(cipherUrl, json('PUT', { ast: literal }));
     expect(put.status, await put.clone().text()).toBe(200);
     expect(await put.json()).toEqual({ ast: literal });
     expect(komplektTask.customFields[fieldIds.komplektCipher]).toBe('КЖ-1');
 
-    const read = await fetch(cipherUrl);
-    expect(await read.json()).toEqual({ ast: literal });
+    const read = (await (await fetch(cipherUrl)).json()) as { ast: unknown; origin: string };
+    expect(read).toEqual({ ast: literal, origin: 'own' });
   });
 
   it('DELETE снимает формулу, значение-снимок остаётся (Р5)', async () => {
     await fetch(cipherUrl, json('PUT', { ast: literal }));
     const remove = await fetch(cipherUrl, { method: 'DELETE' });
     expect(remove.status).toBe(204);
-    expect(await (await fetch(cipherUrl)).json()).toEqual({ ast: null });
+    // Своя формула снята, но значение-снимок подавляет формулу типа.
+    const after = (await (await fetch(cipherUrl)).json()) as { ast: unknown; origin: string };
+    expect(after.origin).toBe('value');
+    expect(after.ast).toBeTruthy();
     expect(komplektTask.customFields[fieldIds.komplektCipher]).toBe('КЖ-1');
   });
 

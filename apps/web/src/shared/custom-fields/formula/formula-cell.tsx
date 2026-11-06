@@ -133,9 +133,9 @@ export function FormulaCell({
               <MoreHorizontal className="size-3.5" strokeWidth={1.75} />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuContent align="end" sideOffset={4} className="w-auto min-w-36">
             <DropdownMenuItem onClick={() => setEditorOpen(true)}>
-              {own ? ui.formulas.cell.edit : ui.formulas.editor.title}
+              {info ? ui.formulas.cell.edit : ui.formulas.editor.title}
             </DropdownMenuItem>
             {own ? (
               <DropdownMenuItem onClick={() => setEditing(true)}>

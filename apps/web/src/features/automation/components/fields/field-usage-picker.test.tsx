@@ -59,7 +59,16 @@ const EMPTY: CustomFieldBindings = { processTypeIds: [], projectTypeIds: [], nod
 
 function renderPicker(bindings: CustomFieldBindings, disabled = false) {
   const onChange = vi.fn();
-  render(<FieldUsagePicker bindings={bindings} disabled={disabled} onChange={onChange} />);
+  render(
+    <FieldUsagePicker
+      definition={null}
+      bindings={bindings}
+      bindingFormulas={{}}
+      onBindingFormulasChange={() => undefined}
+      disabled={disabled}
+      onChange={onChange}
+    />,
+  );
   return onChange;
 }
 
@@ -67,7 +76,16 @@ function renderPicker(bindings: CustomFieldBindings, disabled = false) {
 function renderLivePicker(initial: CustomFieldBindings) {
   function Harness() {
     const [bindings, setBindings] = useState(initial);
-    return <FieldUsagePicker bindings={bindings} disabled={false} onChange={setBindings} />;
+    return (
+      <FieldUsagePicker
+        definition={null}
+        bindings={bindings}
+        bindingFormulas={{}}
+        onBindingFormulasChange={() => undefined}
+        disabled={false}
+        onChange={setBindings}
+      />
+    );
   }
   render(<Harness />);
 }

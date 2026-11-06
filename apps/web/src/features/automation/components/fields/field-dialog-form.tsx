@@ -202,7 +202,10 @@ export function FieldDialogForm({
       {!draft.isCompany ? (
         <Section label={ui.customFields.bind.field}>
           <FieldUsagePicker
+            definition={preview}
             bindings={draft.bindings}
+            bindingFormulas={draft.bindingFormulas}
+            onBindingFormulasChange={(bindingFormulas) => onChange({ bindingFormulas })}
             disabled={disabled}
             onChange={(bindings) => onChange({ bindings })}
           />

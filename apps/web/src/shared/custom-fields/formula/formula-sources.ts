@@ -1,11 +1,12 @@
 import type {
   CustomFieldDefinition,
   FormulaAggregate,
+  FormulaEntity,
   FormulaHostKind,
   FormulaSource,
   NodeKind,
 } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { FORMULA_SYSTEM_FIELDS, ui } from '@nodus/contracts';
 
 import type { FormulaHost } from './formula-api.js';
 
@@ -18,7 +19,10 @@ const REF_FIELD_TYPES = new Set(['project', 'counterparty', 'task', 'letter', 'n
 export interface SourceLeaf {
   key: string;
   label: string;
-  definition: CustomFieldDefinition;
+  /** Атрибут (для плашки атрибута). */
+  definition?: CustomFieldDefinition;
+  /** Системное поле сущности (#632): название, срок, рег. номер… */
+  system?: { entity: FormulaEntity; key: string };
   source: FormulaSource;
 }
 
@@ -43,6 +47,24 @@ export interface SourceGroup {
 
 function byName(left: CustomFieldDefinition, right: CustomFieldDefinition): number {
   return left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'ru');
+}
+
+function systemLeavesFor(
+  entity: FormulaEntity,
+  source: FormulaSource,
+  keyPrefix: string,
+): SourceNode[] {
+  const labels = ui.formulas.systemFields as Record<string, Record<string, string>>;
+  return FORMULA_SYSTEM_FIELDS.filter((field) => field.entity === entity).map((field) => ({
+    key: `${keyPrefix}:sys:${field.key}`,
+    label: labels[entity]?.[field.key] ?? field.key,
+    leaf: {
+      key: `${keyPrefix}:sys:${field.key}`,
+      label: labels[entity]?.[field.key] ?? field.key,
+      source,
+      system: { entity, key: field.key },
+    },
+  }));
 }
 
 function leavesFor(
@@ -72,6 +94,7 @@ export function formulaSourceGroups({
   kinds,
   hasParent,
   hasProject,
+  typeDefault = false,
 }: {
   host: FormulaHost;
   ownDefinitions: readonly CustomFieldDefinition[];
@@ -79,6 +102,8 @@ export function formulaSourceGroups({
   kinds: readonly NodeKind[];
   hasParent: boolean;
   hasProject: boolean;
+  /** Формула типа/вида: связанные записи и цепочка папок запрещены (Р6). */
+  typeDefault?: boolean;
 }): SourceGroup[] {
   const hostKind: FormulaHostKind = host.kind;
   const normal = allDefinitions.filter((definition) => !definition.isCompany);
@@ -91,7 +116,10 @@ export function formulaSourceGroups({
   groups.push({
     key: 'self',
     label: ui.formulas.sourceGroups.self,
-    items: leavesFor(ownDefinitions, () => ({ kind: 'self' }), 'self'),
+    items: [
+      ...leavesFor(ownDefinitions, () => ({ kind: 'self' }), 'self'),
+      ...systemLeavesFor(host.kind, { kind: 'self' }, 'self'),
+    ],
   });
 
   if (hostKind === 'task') {
@@ -99,7 +127,10 @@ export function formulaSourceGroups({
       key: 'parent',
       label: ui.formulas.sourceGroups.parent,
       items: hasParent
-        ? leavesFor(normal, () => ({ kind: 'parent_task' }), 'parent')
+        ? [
+            ...leavesFor(normal, () => ({ kind: 'parent_task' }), 'parent'),
+            ...systemLeavesFor('task', { kind: 'parent_task' }, 'parent'),
+          ]
         : [
             {
               key: 'parent:none',
@@ -118,6 +149,11 @@ export function formulaSourceGroups({
         ...leavesFor(
           normal.filter((definition) => definition.bindings.nodeKindIds.includes(kind.id)),
           () => ({ kind: 'folder_nearest', kindId: kind.id }),
+          `folder-nearest:${kind.id}`,
+        ),
+        ...systemLeavesFor(
+          'node',
+          { kind: 'folder_nearest', kindId: kind.id },
           `folder-nearest:${kind.id}`,
         ),
         {
@@ -146,7 +182,10 @@ export function formulaSourceGroups({
       key: 'project',
       label: ui.formulas.sourceGroups.project,
       items: hasProject
-        ? leavesFor(projectDefinitions, () => ({ kind: 'project' }), 'project')
+        ? [
+            ...leavesFor(projectDefinitions, () => ({ kind: 'project' }), 'project'),
+            ...systemLeavesFor('project', { kind: 'project' }, 'project'),
+          ]
         : [
             {
               key: 'project:none',
@@ -172,11 +211,22 @@ export function formulaSourceGroups({
         ? refFields.map((definition) => ({
             key: `ref:${definition.number}`,
             label: definition.name,
-            children: leavesFor(
-              normal.filter((entry) => entry.number !== definition.number),
-              () => ({ kind: 'ref_field', field: definition.number }),
-              `ref-${definition.number}`,
-            ),
+            children: [
+              ...leavesFor(
+                normal.filter((entry) => entry.number !== definition.number),
+                () => ({ kind: 'ref_field', field: definition.number }),
+                `ref-${definition.number}`,
+              ),
+              ...(['task', 'letter', 'project', 'node'] as const)
+                .filter((entity) => entity === definition.type)
+                .flatMap((entity) =>
+                  systemLeavesFor(
+                    entity,
+                    { kind: 'ref_field', field: definition.number },
+                    `ref-${definition.number}`,
+                  ),
+                ),
+            ],
           }))
         : [{ key: 'ref:none', label: ui.formulas.sources.noRefField }],
   });
@@ -238,5 +288,22 @@ export function formulaSourceGroups({
     });
   }
 
-  return groups.filter((group) => group.items.length > 0);
+  const filtered = typeDefault
+    ? groups
+        .filter((group) => group.key !== 'related')
+        .map((group) => ({
+          ...group,
+          items: group.items
+            .map((item) =>
+              item.children
+                ? {
+                    ...item,
+                    children: item.children.filter((child) => child.aggregate === undefined),
+                  }
+                : item,
+            )
+            .filter((item) => item.children === undefined || item.children.length > 0),
+        }))
+    : groups;
+  return filtered.filter((group) => group.items.length > 0);
 }

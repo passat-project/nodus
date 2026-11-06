@@ -1,18 +1,11 @@
-import type {
-  CreationForm,
-  FormulaNode,
-  ProcessType,
-  ProcessTypeRef,
-  WorkflowDetail,
-} from '@nodus/contracts';
+import type { CreationForm, ProcessType, ProcessTypeRef, WorkflowDetail } from '@nodus/contracts';
 import { customFieldKey } from '@nodus/contracts';
 
 import { quickDocument, simpleDocument, standardDocument } from './workflows-documents.js';
 import { letterProcessTypes, letterWorkflowDetails } from './letter-catalog.js';
 
 import { quickProcessType, systemProcessType } from './task-stages.js';
-import { FORMULA_DEMO_NUMBERS, fieldIds } from './field-ids.js';
-import { nodeKindSeedIds } from './node-kind-ids.js';
+import { fieldIds } from './field-ids.js';
 import { processTypeIds } from './process-type-ids.js';
 import { demoRoleIds } from './roles.js';
 
@@ -156,39 +149,6 @@ export const komplektTypeRef: ProcessTypeRef = {
   color: komplektType.color,
 };
 
-/** Формула шифра комплекта (#632, Р6): шифр проекта — № по ГП ближайшей
- *  папки «Здание по генплану» — марка и номер комплекта. Источники только
- *  однозначные (`related`/цепочка папок формулам типа запрещены).
- *  AST собран статически: адресация — внутренними номерами атрибутов (Р2),
- *  имена — снимок для редактора. */
-export const komplektCipherFormula: FormulaNode = {
-  kind: 'op',
-  op: 'concat',
-  args: [
-    {
-      kind: 'field',
-      source: { kind: 'project' },
-      number: FORMULA_DEMO_NUMBERS.projectCode,
-      name: 'Шифр',
-    },
-    { kind: 'literal', value: '-' },
-    {
-      kind: 'field',
-      source: { kind: 'folder_nearest', kindId: nodeKindSeedIds.building },
-      number: FORMULA_DEMO_NUMBERS.buildingGp,
-      name: '№ по ГП',
-    },
-    { kind: 'literal', value: '-' },
-    { kind: 'field', source: { kind: 'self' }, number: FORMULA_DEMO_NUMBERS.marka, name: 'Марка' },
-    {
-      kind: 'field',
-      source: { kind: 'self' },
-      number: FORMULA_DEMO_NUMBERS.komplektNumber,
-      name: 'Номер комплекта',
-    },
-  ],
-};
-
 /** Форма создания «Комплекта»: марка и номер обязательны, шифр считает
  *  формула (человек может поправить — тогда значение подавляет формулу). */
 export const komplektCreationForm: CreationForm = {
@@ -205,7 +165,6 @@ export const komplektCreationForm: CreationForm = {
       label: 'Шифр комплекта',
       required: false,
       preset: null,
-      formula: komplektCipherFormula,
     },
     { key: 'project', label: null, required: false, preset: null },
   ],

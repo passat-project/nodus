@@ -46,6 +46,12 @@ export function extractDeps(ast: FormulaNode): FormulaDependency[] {
       case 'field':
         add(sourceDep(node.source, node.number));
         return;
+      case 'system':
+        add({
+          kind: 'system',
+          ...(node.source.kind === 'ref_field' ? { refField: node.source.field } : {}),
+        });
+        return;
       case 'op':
       case 'call':
         node.args.forEach(visit);

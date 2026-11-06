@@ -17,6 +17,12 @@ import { z } from 'zod';
 export const formulaHostKindSchema = z.enum(['task', 'letter', 'node', 'project']);
 export type FormulaHostKind = z.infer<typeof formulaHostKindSchema>;
 
+/** Сущность, у которой читается системное поле (#632): задача, письмо,
+ *  проект, папка. Системные поля — название, номер, срок, рег. номер и т.п.;
+ *  список — `FORMULA_SYSTEM_FIELDS` в каталоге. */
+export const formulaEntitySchema = formulaHostKindSchema;
+export type FormulaEntity = z.infer<typeof formulaEntitySchema>;
+
 /** Тип значения формулы (статический тайпинг до вычисления). `ref` — id
  *  записи/сотрудника/подразделения/контрагента, `list` — массив id. */
 export const formulaValueTypeSchema = z.enum([
@@ -131,7 +137,12 @@ export type FormulaFunctionId = z.infer<typeof formulaFunctionIdSchema>;
 /** Узел AST. `registry_lookup` (#636) — зарезервирован: добавится
  *  расширением union, когда появятся реестры (расширение не ломающее). */
 export type FormulaNode =
-  FormulaLiteral | FormulaFieldRef | FormulaOperation | FormulaCall | FormulaAggregate;
+  | FormulaLiteral
+  | FormulaFieldRef
+  | FormulaSystemField
+  | FormulaOperation
+  | FormulaCall
+  | FormulaAggregate;
 
 export interface FormulaLiteral {
   kind: 'literal';
@@ -145,6 +156,16 @@ export interface FormulaFieldRef {
   number: number;
   /** Снимок имени на момент вставки плашки: переименование не ломает
    *  формулу, а удалённый атрибут показывается в редакторе своим именем. */
+  name?: string;
+}
+
+export interface FormulaSystemField {
+  kind: 'system';
+  source: FormulaSource;
+  entity: FormulaEntity;
+  /** Ключ системного поля (`title`, `deadline`, `regNumber`…). */
+  key: string;
+  /** Снимок подписи для плашки редактора. */
   name?: string;
 }
 
@@ -192,6 +213,16 @@ const fieldRefSchema = z
   })
   .strict();
 
+const systemFieldSchema = z
+  .object({
+    kind: z.literal('system'),
+    source: z.lazy(() => formulaSourceSchema),
+    entity: formulaEntitySchema,
+    key: z.string().min(1).max(40),
+    name: z.string().min(1).max(60).optional(),
+  })
+  .strict();
+
 const operationSchema = z
   .object({
     kind: z.literal('op'),
@@ -224,5 +255,12 @@ const aggregateSchema = z
 /** Рекурсивная схема узла: глубина и размер проверяются `checkFormulaShape`
  *  (zod не умеет считать глубину без рекурсивного refine). */
 export const formulaNodeSchema: z.ZodType<FormulaNode> = z.lazy(() =>
-  z.union([literalSchema, fieldRefSchema, operationSchema, callSchema, aggregateSchema]),
+  z.union([
+    literalSchema,
+    fieldRefSchema,
+    systemFieldSchema,
+    operationSchema,
+    callSchema,
+    aggregateSchema,
+  ]),
 );

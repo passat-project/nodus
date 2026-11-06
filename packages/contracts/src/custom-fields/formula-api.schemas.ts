@@ -15,8 +15,15 @@ import { formulaHostKindSchema, formulaNodeSchema, formulaValueTypeSchema } from
 export const formulaBodySchema = z.object({ ast: formulaNodeSchema }).strict();
 export type FormulaBody = z.infer<typeof formulaBodySchema>;
 
-/** Ответ чтения формулы ячейки (GET у владельца хоста): null — формулы нет. */
-export const formulaResponseSchema = z.object({ ast: formulaNodeSchema.nullable() }).strict();
+/** Ответ чтения формулы ячейки (GET у владельца хоста): null — формулы нет.
+ *  `origin` — откуда эффективная формула: своя ячейка или формула типа/вида
+ *  (редактор показывает её как основу для своей правки, не меняя тип). */
+export const formulaResponseSchema = z
+  .object({
+    ast: formulaNodeSchema.nullable(),
+    origin: z.enum(['own', 'type', 'value']).nullable().optional(),
+  })
+  .strict();
 export type FormulaResponse = z.infer<typeof formulaResponseSchema>;
 
 /** Ошибка ячейки-формулы (runtime, не блокирует работу): каталог закрыт,

@@ -1,4 +1,4 @@
-import type { CustomFieldDefinition, CustomFieldType } from '@nodus/contracts';
+import type { CustomFieldDefinition, CustomFieldType, FormulaNode } from '@nodus/contracts';
 
 import { FORMULA_DEMO_NUMBERS, fieldIds } from './field-ids.js';
 import { nodeKindSeedIds } from './node-kind-ids.js';
@@ -18,6 +18,7 @@ function demoField(
   name: string,
   hint: string,
   bindings: { processTypeIds?: string[]; nodeKindIds?: string[] },
+  bindingFormulas?: Record<string, FormulaNode>,
 ): CustomFieldDefinition {
   return {
     id,
@@ -40,8 +41,39 @@ function demoField(
     sortOrder: 0,
     createdAt: STAMP,
     updatedAt: STAMP,
+    ...(bindingFormulas ? { bindingFormulas } : {}),
   };
 }
+
+/** Формула типа «Комплект»: шифр проекта — № по ГП здания — марка — номер.
+ *  Живёт на привязке «Шифр комплекта × Комплект», а не на атрибуте. */
+const komplektCipherFormula: FormulaNode = {
+  kind: 'op',
+  op: 'concat',
+  args: [
+    {
+      kind: 'field',
+      source: { kind: 'project' },
+      number: FORMULA_DEMO_NUMBERS.projectCode,
+      name: 'Шифр',
+    },
+    { kind: 'literal', value: '-' },
+    {
+      kind: 'field',
+      source: { kind: 'folder_nearest', kindId: nodeKindSeedIds.building },
+      number: FORMULA_DEMO_NUMBERS.buildingGp,
+      name: '№ по ГП',
+    },
+    { kind: 'literal', value: '-' },
+    { kind: 'field', source: { kind: 'self' }, number: FORMULA_DEMO_NUMBERS.marka, name: 'Марка' },
+    {
+      kind: 'field',
+      source: { kind: 'self' },
+      number: FORMULA_DEMO_NUMBERS.komplektNumber,
+      name: 'Номер комплекта',
+    },
+  ],
+};
 
 export const formulaDemoFields: CustomFieldDefinition[] = [
   demoField(
@@ -59,6 +91,7 @@ export const formulaDemoFields: CustomFieldDefinition[] = [
     'Шифр комплекта',
     'Считается формулой типа: шифр проекта — № по ГП — марка номер',
     { processTypeIds: [processTypeIds.komplekt] },
+    { [processTypeIds.komplekt]: komplektCipherFormula },
   ),
   demoField(
     fieldIds.buildingGp,

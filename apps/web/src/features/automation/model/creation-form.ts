@@ -37,7 +37,9 @@ export function withSlotAdded(form: CreationForm, key: CreationFieldKey): Creati
   return { ...form, fields: [...form.fields, emptySlot(key)] };
 }
 
-export type SlotPatch = Partial<Pick<CreationFieldSlot, 'label' | 'required' | 'preset'>>;
+export type SlotPatch = Partial<
+  Pick<CreationFieldSlot, 'label' | 'required' | 'preset' | 'formula'>
+>;
 
 /** Правка слота: подпись (пустая строка → null), обязательность, пресет.
  *  Скрытое значение и обязательность взаимоисключающи (Р2): включение

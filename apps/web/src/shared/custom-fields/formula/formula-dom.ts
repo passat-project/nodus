@@ -1,6 +1,7 @@
 import {
   aggregateChipLabel,
   chipLabel,
+  systemChipLabel,
   type FormulaChip,
   type FormulaToken,
 } from './formula-text.js';
@@ -71,7 +72,12 @@ export function createChipElement(
   element.contentEditable = 'false';
   element.dataset.chipId = chip.key;
   element.className = chip.type === 'field' ? CHIP_CLASS : AGGREGATE_CHIP_CLASS;
-  element.textContent = chip.type === 'field' ? chipLabel(chip) : aggregateChipLabel(chip);
+  element.textContent =
+    chip.type === 'field'
+      ? chipLabel(chip)
+      : chip.type === 'system'
+        ? systemChipLabel(chip)
+        : aggregateChipLabel(chip);
   element.title = element.textContent;
   chips.set(chip.key, chip);
   if (chip.type === 'aggregate') {

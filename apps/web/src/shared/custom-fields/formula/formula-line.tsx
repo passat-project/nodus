@@ -1,6 +1,6 @@
 import type { RefObject } from 'react';
 import type { CustomFieldDefinition, FormulaValidationIssue } from '@nodus/contracts';
-import { FORMULA_LIMITS, ui } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 import { CircleAlert } from 'lucide-react';
 
@@ -110,8 +110,7 @@ export function FormulaLine({
         </div>
       </div>
 
-      {/* Статус: результат слева, лимиты справа (моно-данные, тихо);
-          ошибка — плашкой вместо результата. */}
+      {/* Статус: результат слева; ошибка — плашкой вместо результата. */}
       <div className="mt-1.5 flex min-h-6 min-w-0 items-start gap-3 px-1">
         {error ? (
           <div className="flex min-w-0 items-start gap-2 rounded-lg bg-danger/10 px-2 py-1 text-xs text-danger">
@@ -131,12 +130,6 @@ export function FormulaLine({
             </span>
           </p>
         )}
-        <p className="ml-auto shrink-0 text-label-xs text-muted-foreground/80">
-          {`${ui.formulas.editor.limitsLabel}: `}
-          <span className="font-mono tabular-nums">
-            {`${FORMULA_LIMITS.nodes} / ${FORMULA_LIMITS.sources}`}
-          </span>
-        </p>
       </div>
       {issues.length > 0 ? (
         <p

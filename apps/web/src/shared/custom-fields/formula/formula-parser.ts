@@ -136,6 +136,15 @@ class Parser {
         const chip = this.chips[token.index];
         if (!chip) throw new SyntaxProblem(ui.formulas.editor.syntaxError);
         if (chip.type === 'aggregate') return chip.aggregate;
+        if (chip.type === 'system') {
+          return {
+            kind: 'system',
+            source: chip.source,
+            entity: chip.entity,
+            key: chip.fieldKey,
+            ...(chip.name ? { name: chip.name } : {}),
+          };
+        }
         return {
           kind: 'field',
           source: chip.source,

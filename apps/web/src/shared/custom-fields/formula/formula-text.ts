@@ -1,6 +1,7 @@
 import {
   ui,
   type FormulaAggregate,
+  type FormulaEntity,
   type FormulaFunctionId,
   type FormulaNode,
   type FormulaOperator,
@@ -24,13 +25,22 @@ export interface FormulaFieldChip {
   source: FormulaSource;
 }
 
+export interface FormulaSystemChip {
+  type: 'system';
+  key: string;
+  entity: FormulaEntity;
+  fieldKey: string;
+  name?: string;
+  source: FormulaSource;
+}
+
 export interface FormulaAggregateChip {
   type: 'aggregate';
   key: string;
   aggregate: FormulaAggregate;
 }
 
-export type FormulaChip = FormulaFieldChip | FormulaAggregateChip;
+export type FormulaChip = FormulaFieldChip | FormulaSystemChip | FormulaAggregateChip;
 export type FormulaToken = FormulaChip | { type: 'text'; text: string };
 
 let chipSeq = 0;
@@ -81,6 +91,18 @@ function printNode(node: FormulaNode, tokens: FormulaToken[], parentPrecedence: 
   switch (node.kind) {
     case 'literal':
       return printLiteral(node.value);
+    case 'system': {
+      const chip: FormulaSystemChip = {
+        type: 'system',
+        key: nextChipKey(),
+        entity: node.entity,
+        fieldKey: node.key,
+        source: node.source,
+        ...(node.name ? { name: node.name } : {}),
+      };
+      tokens.push(chip);
+      return `${tokens.length - 1}`;
+    }
     case 'field': {
       const chip: FormulaFieldChip = {
         type: 'field',
@@ -155,6 +177,29 @@ export function astToTokens(ast: FormulaNode): FormulaToken[] {
 }
 
 /** Подпись плашки атрибута: «Проект · Шифр» (источник + имя-снимок). */
+export function systemChipLabel(chip: FormulaSystemChip): string {
+  const labels = ui.formulas.systemFields as Record<string, Record<string, string>>;
+  const label = labels[chip.entity]?.[chip.fieldKey] ?? chip.name ?? chip.fieldKey;
+  return chip.source.kind === 'self' ? label : `${chipLabelSource(chip.source)} · ${label}`;
+}
+
+function chipLabelSource(source: FormulaSource): string {
+  switch (source.kind) {
+    case 'parent_task':
+      return ui.formulas.chipPrefix.parent;
+    case 'folder_nearest':
+      return ui.formulas.chipPrefix.folder;
+    case 'project':
+      return ui.formulas.chipPrefix.project;
+    case 'company':
+      return ui.formulas.chipPrefix.company;
+    case 'ref_field':
+      return ui.formulas.chipPrefix.ref;
+    default:
+      return '';
+  }
+}
+
 export function chipLabel(chip: FormulaFieldChip): string {
   const name = chip.name ?? `#${chip.number}`;
   switch (chip.source.kind) {

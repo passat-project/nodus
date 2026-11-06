@@ -5,6 +5,7 @@ import {
   FORMULA_RELATED_MATRIX,
   FORMULA_SINGLE_VALUE_SOURCES,
   FORMULA_SOURCE_MATRIX,
+  FORMULA_SYSTEM_FIELD_BY_KEY,
   FORMULA_TYPE_FORBIDDEN_SOURCES,
 } from './formula-catalog.js';
 import { formulaNodeSchema, type FormulaHostKind, type FormulaNode } from './formula.js';
@@ -88,6 +89,49 @@ function walk(
             message: `selector ${node.source.selector.kind} is not available for ${hostKind}`,
           });
         }
+      }
+      return;
+    }
+    case 'system': {
+      counters.sources += 1;
+      if (!FORMULA_SINGLE_VALUE_SOURCES.includes(node.source.kind)) {
+        issues.push({
+          code: 'source_forbidden',
+          path,
+          message: 'system field needs a single record',
+        });
+        return;
+      }
+      if (!FORMULA_SOURCE_MATRIX[hostKind].includes(node.source.kind)) {
+        issues.push({
+          code: 'source_forbidden',
+          path,
+          message: `source ${node.source.kind} is not available for ${hostKind}`,
+        });
+      }
+      if (!FORMULA_SYSTEM_FIELD_BY_KEY.has(`${node.entity}:${node.key}`)) {
+        issues.push({
+          code: 'ast_invalid',
+          path,
+          message: `unknown system field ${node.entity}:${node.key}`,
+        });
+      }
+      const expectedEntity: Partial<Record<string, string>> = {
+        self: hostKind,
+        parent_task: 'task',
+        folder_nearest: 'node',
+        project: 'project',
+      };
+      const expected = expectedEntity[node.source.kind];
+      if (expected !== undefined && expected !== node.entity) {
+        issues.push({
+          code: 'source_forbidden',
+          path,
+          message: `system field ${node.entity} does not match source ${node.source.kind}`,
+        });
+      }
+      if (node.source.kind === 'company') {
+        issues.push({ code: 'source_forbidden', path, message: 'company has no system fields' });
       }
       return;
     }
@@ -208,6 +252,7 @@ export function checkFormulaShape(
 function containsForbiddenTypeSource(node: FormulaNode): boolean {
   switch (node.kind) {
     case 'field':
+    case 'system':
       return FORMULA_TYPE_FORBIDDEN_SOURCES.includes(node.source.kind);
     case 'op':
     case 'call':
@@ -231,6 +276,9 @@ export function formulaAttributeNumbers(ast: FormulaNode): number[] {
     switch (node.kind) {
       case 'field':
         numbers.add(node.number);
+        if (node.source.kind === 'ref_field') numbers.add(node.source.field);
+        return;
+      case 'system':
         if (node.source.kind === 'ref_field') numbers.add(node.source.field);
         return;
       case 'op':

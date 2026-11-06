@@ -47,6 +47,8 @@ export function formulaToText(
         return typeof node.value === 'string' ? `"${node.value}"` : String(node.value);
       case 'field':
         return `${sourcePrefix(node.source)}{${labelOf(node.number, node.name)}}`;
+      case 'system':
+        return `${sourcePrefix(node.source)}{${node.entity}.${node.key}}`;
       case 'op': {
         const symbol: Record<FormulaOperator, string> = {
           add: '+',

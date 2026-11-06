@@ -7,20 +7,21 @@ import type {
   FormulaNode,
   FormulaValidationIssue,
 } from '@nodus/contracts';
-import { ErrorCode, customFieldIdOfKey, customFieldValueSchemaOf } from '@nodus/contracts';
+import { ErrorCode, customFieldValueSchemaOf } from '@nodus/contracts';
 import { evaluate, validateFormula } from '@nodus/formula-engine';
 import type { FormulaValue } from '@nodus/formula-engine';
 
-import { demoFieldById } from '../../mocks/data/custom-fields.js';
+import { demoCustomFieldDefinitions, demoFieldById } from '../../mocks/data/custom-fields.js';
 import { demoDictionaryItems } from '../../mocks/data/dictionaries.js';
-import { demoNodeKinds } from '../../mocks/data/project-nodes.js';
-import { demoProjectTypes } from '../../mocks/data/projects.js';
-import { creationFormOf, mockTypes } from '../../mocks/data/process-types-store.js';
+import { findDemoNodeRow } from '../../mocks/data/project-nodes.js';
+import { findLetter } from '../../mocks/data/letters.js';
+import { findDemoProjectRow } from '../../mocks/data/projects.js';
 
 import { demoResolver } from './formula-resolver.js';
 import {
   demoFormulaMeta,
   dropFormulaCell,
+  findDemoTask,
   findFormulaHost,
   ownCellsOf,
   readFormulaCell,
@@ -41,35 +42,18 @@ export interface FormulaSlot {
   formula: FormulaNode;
 }
 
-/** Слоты-формулы места: `placeId` — тип процесса/проекта или вид папки. */
+/** Формулы места (#632, Р6): формула живёт на привязке «атрибут × место»
+ *  (`field_bindings.default_formula`), поэтому у одного атрибута в разных
+ *  типах/видах разные формулы. */
 export function typeFormulaSlots(
-  kind: FormulaHostKind,
+  _kind: FormulaHostKind,
   placeId: string | null | undefined,
 ): FormulaSlot[] {
   if (!placeId) return [];
-  switch (kind) {
-    case 'task':
-    case 'letter': {
-      const type = mockTypes.find((entry) => entry.id === placeId);
-      if (!type) return [];
-      return creationFormOf(type).fields.flatMap((slot) => {
-        const fieldId = customFieldIdOfKey(slot.key);
-        return fieldId !== null && slot.formula ? [{ fieldId, formula: slot.formula }] : [];
-      });
-    }
-    case 'node': {
-      const nodeKind = demoNodeKinds.find((entry) => entry.id === placeId);
-      return (nodeKind?.form.fields ?? []).flatMap((slot) =>
-        slot.formula ? [{ fieldId: slot.fieldId, formula: slot.formula }] : [],
-      );
-    }
-    case 'project': {
-      const projectType = demoProjectTypes.find((entry) => entry.id === placeId);
-      return (projectType?.form.fields ?? []).flatMap((slot) =>
-        slot.formula ? [{ fieldId: slot.fieldId, formula: slot.formula }] : [],
-      );
-    }
-  }
+  return demoCustomFieldDefinitions.flatMap((definition) => {
+    const formula = definition.bindingFormulas?.[placeId];
+    return formula ? [{ fieldId: definition.id, formula }] : [];
+  });
 }
 
 /** Вариант справочника по ПОДПИСИ (формула отдаёт подпись, хранится id). */
@@ -214,6 +198,41 @@ export function saveOwnFormula(
     value: materialized,
   });
   return { ok: true };
+}
+
+/** id места записи (тип процесса/проекта, вид папки) для формулы типа. */
+function placeIdOf(kind: FormulaHostKind, hostId: string): string | null {
+  switch (kind) {
+    case 'task':
+      return findDemoTask(hostId)?.type.id ?? null;
+    case 'letter':
+      return findLetter(hostId)?.typeId ?? null;
+    case 'node':
+      return findDemoNodeRow(hostId)?.kindId ?? null;
+    case 'project':
+      return findDemoProjectRow(hostId)?.typeId ?? null;
+  }
+}
+
+/** Эффективная формула ячейки для редактора (GET): своя, иначе формула
+ *  типа/вида как основа для правки; `origin` объясняет, откуда она. */
+export function effectiveFormula(
+  kind: FormulaHostKind,
+  hostId: string,
+  fieldId: string,
+): { ast: FormulaNode | null; origin: 'own' | 'type' | 'value' | null } {
+  const own = readOwnFormula(kind, hostId, fieldId);
+  if (own) return { ast: own, origin: 'own' };
+  const host = findFormulaHost(kind, hostId);
+  if (!host) return { ast: null, origin: null };
+  const slot = typeFormulaSlots(kind, placeIdOf(kind, hostId)).find(
+    (entry) => entry.fieldId === fieldId,
+  );
+  if (!slot) return { ast: null, origin: null };
+  return {
+    ast: slot.formula,
+    origin: host.customFields[fieldId] === undefined ? 'type' : 'value',
+  };
 }
 
 /** Своя формула ячейки (GET): null — формулы нет. */

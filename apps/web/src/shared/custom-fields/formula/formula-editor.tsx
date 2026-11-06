@@ -83,6 +83,9 @@ export function FormulaEditor({
     handleSave,
     handleRemove,
   } = useFormulaEditor({ open, host, fieldId, ownDefinitions, hostContext, onClose });
+  // Формула типа/вида приходит как основа для правки: сохранение создаст
+  // собственную формулу записи, тип не меняется (Р6).
+  const origin = cell.data?.origin ?? null;
 
   // Ошибка строки — одна плашка: разбор сильнее оценки (нераспознанная
   // формула не считается вовсе). Проблемы структуры (issues) блокируют
@@ -144,6 +147,11 @@ export function FormulaEditor({
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+              {origin === 'type' || origin === 'value' ? (
+                <p className="rounded-lg border border-info/30 bg-info/10 px-3 py-2 text-xs text-info">
+                  {origin === 'type' ? ui.formulas.editor.typeBase : ui.formulas.editor.valueBase}
+                </p>
+              ) : null}
               <FormulaLine
                 rootRef={rootRef}
                 empty={empty}
@@ -181,7 +189,7 @@ export function FormulaEditor({
               type="button"
               variant="ghost"
               className="mr-auto text-danger hover:text-danger"
-              disabled={remove.isPending || cell.data?.ast == null}
+              disabled={remove.isPending || origin !== 'own'}
               onClick={handleRemove}
             >
               <Trash2 className="size-3.5" strokeWidth={1.75} />

@@ -1,6 +1,7 @@
 import type { CustomFieldType } from './custom-field.schemas.js';
 import type {
   FormulaAggregateFn,
+  FormulaEntity,
   FormulaFunctionId,
   FormulaHostKind,
   FormulaSelector,
@@ -235,3 +236,41 @@ export const FORMULA_LIMITS = {
   selection: 500,
   cascadeDepth: 8,
 } as const;
+
+/** Системные поля, доступные формулам (#632): адресуются `entity:key` и
+ *  читаются у записи-источника (self, родитель, папка, проект, ссылка).
+ *  Список закрыт и расширяется вместе с DTO сущностей. */
+export interface FormulaSystemFieldSpec {
+  entity: FormulaEntity;
+  key: string;
+  type: FormulaValueType;
+}
+
+export const FORMULA_SYSTEM_FIELDS: readonly FormulaSystemFieldSpec[] = [
+  { entity: 'task', key: 'title', type: 'string' },
+  { entity: 'task', key: 'number', type: 'number' },
+  { entity: 'task', key: 'deadline', type: 'datetime' },
+  { entity: 'task', key: 'createdAt', type: 'datetime' },
+  { entity: 'task', key: 'stage', type: 'string' },
+  { entity: 'task', key: 'assignee', type: 'ref' },
+  { entity: 'task', key: 'creator', type: 'ref' },
+  { entity: 'letter', key: 'subject', type: 'string' },
+  { entity: 'letter', key: 'regNumber', type: 'string' },
+  { entity: 'letter', key: 'regDate', type: 'date' },
+  { entity: 'letter', key: 'receivedAt', type: 'datetime' },
+  { entity: 'letter', key: 'correspondent', type: 'ref' },
+  { entity: 'letter', key: 'theirNumber', type: 'string' },
+  { entity: 'letter', key: 'theirDate', type: 'date' },
+  { entity: 'project', key: 'name', type: 'string' },
+  { entity: 'project', key: 'status', type: 'string' },
+  { entity: 'project', key: 'startDate', type: 'date' },
+  { entity: 'project', key: 'endDate', type: 'date' },
+  { entity: 'project', key: 'manager', type: 'ref' },
+  { entity: 'node', key: 'name', type: 'string' },
+  { entity: 'node', key: 'kind', type: 'string' },
+  { entity: 'node', key: 'createdAt', type: 'datetime' },
+];
+
+export const FORMULA_SYSTEM_FIELD_BY_KEY: ReadonlyMap<string, FormulaSystemFieldSpec> = new Map(
+  FORMULA_SYSTEM_FIELDS.map((field) => [`${field.entity}:${field.key}`, field]),
+);

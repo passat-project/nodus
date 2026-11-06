@@ -1,6 +1,7 @@
 import {
   FORMULA_AGGREGATE_BY_ID,
   FORMULA_FUNCTION_BY_ID,
+  FORMULA_SYSTEM_FIELD_BY_KEY,
   type CustomFieldType,
   type FormulaNode,
   type FormulaValueType,
@@ -143,6 +144,17 @@ function inferNode(
         );
       }
       return formulaTypeOfField(field.type);
+    }
+    case 'system': {
+      const spec = FORMULA_SYSTEM_FIELD_BY_KEY.get(`${node.entity}:${node.key}`);
+      if (!spec)
+        return issue(
+          issues,
+          'type_mismatch',
+          path,
+          `unknown system field ${node.entity}:${node.key}`,
+        );
+      return spec.type;
     }
     case 'op': {
       const types = node.args.map((arg, index) =>

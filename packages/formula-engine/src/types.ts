@@ -15,6 +15,8 @@ export type FormulaValue = number | string | boolean | MoneyValue | string[] | n
 export interface FormulaRecord {
   /** Значение атрибута по внутреннему номеру; null/undefined — пусто. */
   value(number: number): FormulaValue | undefined;
+  /** Системное поле сущности (`title`, `deadline`, `regNumber`…, #632). */
+  system?(key: string): FormulaValue | undefined;
 }
 
 /** Источники одного значения (многозначные — только в агрегатах). */
@@ -114,7 +116,16 @@ export interface FormulaValidationResult {
  *  в ключи `formula_deps.dep_key` (`v:<kind>:<uuid>:<number>`, `company:…`,
  *  `tree:…`, `rel:…`, `nodetasks:…`) в контексте конкретного хоста. */
 export interface FormulaDependency {
-  kind: 'value' | 'company' | 'parent' | 'project' | 'ref' | 'folder' | 'related' | 'node_tasks';
+  kind:
+    | 'value'
+    | 'company'
+    | 'parent'
+    | 'project'
+    | 'ref'
+    | 'folder'
+    | 'related'
+    | 'node_tasks'
+    | 'system';
   number?: number;
   /** Номер атрибута-ссылки (для `ref`). */
   refField?: number;

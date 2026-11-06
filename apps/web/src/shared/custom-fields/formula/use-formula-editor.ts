@@ -35,6 +35,7 @@ import {
   type FormulaAggregateChip,
   type FormulaChip,
   type FormulaFieldChip,
+  type FormulaSystemChip,
 } from './formula-text.js';
 import type { FormulaHostContext } from './formula-editor.js';
 
@@ -176,6 +177,18 @@ export function useFormulaEditor({
   };
 
   const insertField = (leaf: SourceLeaf) => {
+    if (leaf.system) {
+      const chip: FormulaSystemChip = {
+        type: 'system',
+        key: nextChipKey(),
+        entity: leaf.system.entity,
+        fieldKey: leaf.system.key,
+        source: leaf.source,
+      };
+      insertChip(chip);
+      return;
+    }
+    if (!leaf.definition) return;
     const chip: FormulaFieldChip = {
       type: 'field',
       key: nextChipKey(),

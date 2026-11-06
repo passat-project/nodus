@@ -60,6 +60,15 @@ function evaluateNode(node: FormulaNode, resolver: FormulaResolver): FormulaValu
       const value = record.value(node.number);
       return value === undefined ? null : value;
     }
+    case 'system': {
+      if (node.source.kind === 'related' || node.source.kind === 'folder_chain') {
+        fail('source_unavailable', 'system field needs a single record');
+      }
+      const record = resolver.single(node.source);
+      if (!record) fail('source_unavailable', 'formula source is not available');
+      const value = record.system?.(node.key);
+      return value === undefined ? null : value;
+    }
     case 'op':
       return evaluateOperation(node, resolver);
     case 'call':
