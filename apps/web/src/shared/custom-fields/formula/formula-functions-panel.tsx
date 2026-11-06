@@ -17,7 +17,6 @@ const OPERATOR_BUTTONS: { symbol: string; insert: string }[] = [
   { symbol: '−', insert: ' - ' },
   { symbol: '×', insert: ' * ' },
   { symbol: '÷', insert: ' / ' },
-  { symbol: '&', insert: ' & ' },
   { symbol: '=', insert: ' = ' },
   { symbol: '≠', insert: ' <> ' },
   { symbol: '<', insert: ' < ' },

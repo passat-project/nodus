@@ -131,7 +131,7 @@ function printNode(node: FormulaNode, tokens: FormulaToken[], parentPrecedence: 
       const precedence = PRECEDENCE[node.op];
       if (node.op === 'concat') {
         const parts = node.args.map((arg) => printNode(arg, tokens, precedence + 1));
-        const text = parts.join(' & ');
+        const text = parts.join(' ');
         return precedence < parentPrecedence ? `(${text})` : text;
       }
       const left = node.args[0];

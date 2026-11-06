@@ -63,7 +63,9 @@ export function formulaToText(
           gt: '>',
           ge: '≥',
         };
-        return node.args.map(render).join(` ${symbol[node.op]} `);
+        return node.op === 'concat'
+          ? node.args.map(render).join(' ')
+          : node.args.map(render).join(` ${symbol[node.op]} `);
       }
       case 'call':
         return `${node.fn}(${node.args.map(render).join('; ')})`;
