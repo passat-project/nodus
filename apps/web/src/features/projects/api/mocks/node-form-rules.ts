@@ -14,7 +14,10 @@ import {
 } from '@nodus/contracts';
 
 import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
-import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
+import {
+  demoCustomFieldDefinitions,
+  demoFieldById,
+} from '../../../../shared/mocks/data/custom-fields.js';
 
 /**
  * Правила формы вида в мок-мире (#556, ревизия #631): те же помощники
@@ -31,7 +34,10 @@ export function formOfKind(kind: NodeKind): NodeKindForm {
 }
 
 export interface NodeRuleIssue {
-  code: 'PROJECT_NODE_FIELDS_REQUIRED' | 'PROJECT_NODE_KIND_FORM_INVALID' | 'VALIDATION_FAILED';
+  code:
+    | 'PROJECT_NODE_FIELDS_REQUIRED'
+    | 'PROJECT_NODE_KIND_FORM_INVALID'
+    | 'CUSTOM_FIELD_VALUE_INVALID';
   status: 400 | 422;
   message: string;
   details: Record<string, unknown>;
@@ -65,16 +71,22 @@ export function foreignValueIssue(
       (definition) => definition.id,
     ),
   );
-  const issues = Object.entries(values)
-    .filter(([fieldId, value]) => value !== null && value !== undefined && !bound.has(fieldId))
-    .map(([fieldId]) => ({
-      fieldId,
-      reason: 'not_in_type' as const,
-      message: 'Field is not bound to this type',
-    }));
+  const issues: { fieldId: string; reason: 'unknown' | 'not_in_type'; message: string }[] = [];
+  for (const [fieldId, value] of Object.entries(values)) {
+    if (value === null || value === undefined) continue;
+    if (!demoFieldById(fieldId)) {
+      issues.push({ fieldId, reason: 'unknown', message: 'Unknown custom field' });
+    } else if (!bound.has(fieldId)) {
+      issues.push({
+        fieldId,
+        reason: 'not_in_type',
+        message: 'Field is not bound to this type',
+      });
+    }
+  }
   if (issues.length === 0) return null;
   return {
-    code: 'VALIDATION_FAILED',
+    code: 'CUSTOM_FIELD_VALUE_INVALID',
     status: 422,
     message: 'Custom field value is invalid',
     details: { issues },

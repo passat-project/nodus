@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import {
   clearedProjectFields,
+  customFieldKey,
   effectiveProjectTypeForm,
   ErrorCode,
   missingProjectFields,
@@ -55,7 +56,7 @@ const fieldsRequired = (typeId: string, fields: string[], reason: 'create' | 'cl
     {
       code: ErrorCode.PROJECT_FIELDS_REQUIRED,
       message: 'Required project fields are missing',
-      details: { typeId, fields, reason },
+      details: { typeId, fields: fields.map(customFieldKey), reason },
     },
     { status: 422 },
   );
@@ -64,7 +65,13 @@ const valuesInvalid = (fieldIds: string[]) =>
     {
       code: ErrorCode.CUSTOM_FIELD_VALUE_INVALID,
       message: 'Custom field values are invalid',
-      details: { issues: fieldIds.map((fieldId) => ({ fieldId, code: 'not_in_type' })) },
+      details: {
+        issues: fieldIds.map((fieldId) => ({
+          fieldId,
+          reason: 'not_in_type',
+          message: 'Field is not bound to this place',
+        })),
+      },
     },
     { status: 422 },
   );

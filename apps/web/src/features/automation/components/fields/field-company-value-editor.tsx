@@ -1,9 +1,11 @@
-import type { CustomFieldDefinition, CustomFieldValue } from '@nodus/contracts';
+import type { CustomFieldDefinition, CustomFieldRef, CustomFieldValue } from '@nodus/contracts';
 
 import { CustomFieldEditor } from '../../../../shared/custom-fields/value-editor.js';
 
 /** Инлайн-редактор значения глобальной (Р7): коммит уходит мутацией реестра
- *  (useSetCompanyValue в fields-tab), оптимистичный показ — из кэша. */
+ *  (useSetCompanyValue в fields-tab), оптимистичный показ — из кэша.
+ *  Выбранная ссылка едет вместе со значением: иначе до ответа сервера
+ *  свежая ссылка показывает «Запись недоступна» (#646). */
 export function CompanyValueEditor({
   definition,
   canManage,
@@ -11,7 +13,11 @@ export function CompanyValueEditor({
 }: {
   definition: CustomFieldDefinition;
   canManage: boolean;
-  onCommit: (definition: CustomFieldDefinition, value: CustomFieldValue | null) => void;
+  onCommit: (
+    definition: CustomFieldDefinition,
+    value: CustomFieldValue | null,
+    refs?: readonly CustomFieldRef[],
+  ) => void;
 }) {
   return (
     <span
@@ -25,7 +31,7 @@ export function CompanyValueEditor({
         refs={definition.companyRefs ?? []}
         disabled={!canManage}
         variant="inline"
-        onCommit={(value) => onCommit(definition, value)}
+        onCommit={(value, picked) => onCommit(definition, value, picked)}
       />
     </span>
   );

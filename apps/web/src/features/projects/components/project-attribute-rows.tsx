@@ -5,7 +5,7 @@ import type {
   CustomFieldValues,
   ProjectType,
 } from '@nodus/contracts';
-import { projectTypeFormOf } from '@nodus/contracts';
+import { projectTypeFormOf, ui } from '@nodus/contracts';
 
 import { CustomFieldTypeIcon } from '../../../shared/custom-fields/field-type-icon.js';
 import { definitionsForTarget } from '../../../shared/custom-fields/module-target.js';
@@ -33,11 +33,16 @@ export function ProjectAttributeRows({
   type,
   values,
   refs,
+  errors,
   onChange,
 }: {
   type: ProjectType | null;
   values: CustomFieldValues;
   refs: readonly CustomFieldRef[];
+  /** Обязательные слоты, которые пользователь оставил пустыми (#646):
+   *  ошибка показывается у поля, как у папок, а не молчаливой блокировкой
+   *  кнопки (§4c плана #631). */
+  errors?: ReadonlySet<string>;
   onChange: (fieldId: string, value: CustomFieldValue | null, picked?: CustomFieldRef[]) => void;
 }) {
   const query = useCustomFieldDefinitions('project');
@@ -68,13 +73,20 @@ export function ProjectAttributeRows({
           </span>
         );
         const editor = (
-          <CustomFieldEditor
-            definition={definition}
-            value={values[definition.id]}
-            refs={refs}
-            variant="form"
-            onCommit={(value, picked) => onChange(definition.id, value, picked)}
-          />
+          <div className="flex min-w-0 flex-col gap-1">
+            <CustomFieldEditor
+              definition={definition}
+              value={values[definition.id]}
+              refs={refs}
+              variant="form"
+              onCommit={(value, picked) => onChange(definition.id, value, picked)}
+            />
+            {errors?.has(definition.id) ? (
+              <p role="alert" className="text-xs text-destructive">
+                {ui.structure.requiredEmpty}
+              </p>
+            ) : null}
+          </div>
         );
         return definition.type === 'long_text' ? (
           <div key={definition.id} className="col-span-2 flex flex-col gap-1.5">

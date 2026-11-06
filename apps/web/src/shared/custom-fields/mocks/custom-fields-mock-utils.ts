@@ -1,7 +1,9 @@
 import { HttpResponse } from 'msw';
 import type { CustomFieldDefinition, CustomFieldValues } from '@nodus/contracts';
-import { ErrorCode } from '@nodus/contracts';
+import { ErrorCode, Permission } from '@nodus/contracts';
 import { customFieldKey, customFieldValueSchemaOf } from '@nodus/contracts';
+
+import { getMockActor } from '../../mocks/mock-actor.js';
 
 import { dictionaryById } from '../../mocks/data/dictionaries.js';
 import { demoCustomFieldDefinitions } from '../../mocks/data/custom-fields.js';
@@ -31,9 +33,18 @@ function dto(definition: CustomFieldDefinition): CustomFieldDefinition {
     definition.defaultValue?.kind === 'static'
       ? demoRefsForValues({ [definition.id]: definition.defaultValue.value })
       : [];
+  // Имена ссылок глобального значения (#646): сервер гидрирует глазами
+  // актёра; мок-мир — теми же демо-справочниками.
+  const companyRefs =
+    definition.isCompany &&
+    definition.companyValue !== null &&
+    definition.companyValue !== undefined
+      ? demoRefsForValues({ [definition.id]: definition.companyValue })
+      : [];
   return {
     ...definition,
     defaultRefs,
+    companyRefs,
     dictionary: dictionary
       ? {
           id: dictionary.id,
@@ -47,6 +58,16 @@ function dto(definition: CustomFieldDefinition): CustomFieldDefinition {
 
 function error(code: string, message: string, status: number, details?: unknown) {
   return HttpResponse.json({ code, message, ...(details ? { details } : {}) }, { status });
+}
+
+/** Право реестра атрибутов (#631, Р15): мок отвечает 403 так же, как сервер. */
+export function canManageFields(): boolean {
+  return getMockActor().permissions.includes(Permission.CUSTOM_FIELD_MANAGE);
+}
+
+/** 403 мок-мира (общий формат доменной ошибки). */
+export function forbidden(): ReturnType<typeof error> {
+  return error(ErrorCode.FORBIDDEN, 'Forbidden', 403);
 }
 
 function nameTaken(name: string, exceptId?: string) {

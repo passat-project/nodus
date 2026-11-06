@@ -1,4 +1,4 @@
-import type { CustomFieldValue, ProjectDetail } from '@nodus/contracts';
+import type { ProjectDetail } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 
@@ -41,9 +41,7 @@ export function ProjectAboutPanel({ project }: { project: ProjectDetail }) {
         values={project.customFields}
         refs={project.customFieldRefs}
         canEdit={project.access.canManage}
-        onChange={(fieldId, value: CustomFieldValue | null) =>
-          updateField.mutate({ fieldId, value })
-        }
+        onChange={(fieldId, value, refs) => updateField.mutate({ fieldId, value, refs })}
       />
     </CardDataColumn>
   );

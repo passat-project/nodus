@@ -19,8 +19,10 @@ import {
 } from '../../mocks/data/custom-fields.js';
 import {
   bindingTargetState,
+  canManageFields,
   dto,
   error,
+  forbidden,
   nameTaken,
   typeCategorySets,
 } from './custom-fields-mock-utils.js';
@@ -33,6 +35,10 @@ export const registryHandlers = [
   http.get('/api/v1/custom-fields/definitions', ({ request }) => {
     const url = new URL(request.url);
     const module = url.searchParams.get('module');
+    // Неизвестный модуль — 400, как у серверной схемы (не «весь реестр»).
+    if (module !== null && !['company', 'task', 'letter', 'project', 'node'].includes(module)) {
+      return error(ErrorCode.VALIDATION_FAILED, 'Unknown module', 400);
+    }
     const { taskTypeIds, letterTypeIds } = typeCategorySets();
     const items = demoCustomFieldDefinitions
       .filter((entry) => {
@@ -57,6 +63,7 @@ export const registryHandlers = [
   }),
 
   http.post('/api/v1/custom-fields/definitions', async ({ request }) => {
+    if (!canManageFields()) return forbidden();
     const parsed = createCustomFieldBodySchema.safeParse(await request.json());
     if (!parsed.success) {
       return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400, parsed.error.issues);
@@ -142,6 +149,7 @@ export const registryHandlers = [
 
   // Порядок — ДО '/definitions/:id' (gotcha msw-query: буквальный путь раньше).
   http.put('/api/v1/custom-fields/definitions/order', async ({ request }) => {
+    if (!canManageFields()) return forbidden();
     const parsed = reorderCustomFieldsBodySchema.safeParse(await request.json());
     if (!parsed.success) {
       return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400, parsed.error.issues);

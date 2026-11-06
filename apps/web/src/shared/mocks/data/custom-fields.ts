@@ -79,8 +79,14 @@ const moneySettings: CustomFieldSettings = { currencyId: currencyIds.byn };
 const STD = [processTypeIds.standard];
 const STD_OVT = [processTypeIds.standard, processTypeIds.overtime];
 
-/** Все демо-типы проектов и виды папок (посев миграции #631, Р9). */
-const ALL_PROJECT_TYPES = [demoProjectTypeIds.contract, demoProjectTypeIds.topic];
+/** Все демо-типы проектов и виды папок (посев миграции #631, Р9).
+ *  Архивный «Госзакупки» тоже: миграция привязывает системные поля ко всем
+ *  строкам project_types без фильтра архива (#646). */
+const ALL_PROJECT_TYPES = [
+  demoProjectTypeIds.contract,
+  demoProjectTypeIds.topic,
+  demoProjectTypeIds.procurement,
+];
 const ALL_NODE_KINDS = [nodeKindIds.section, nodeKindIds.komplekt];
 
 /** Определения в порядке реестра (sortOrder назначает файл-фабрика ниже). */

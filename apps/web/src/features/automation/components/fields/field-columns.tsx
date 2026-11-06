@@ -1,5 +1,10 @@
 import { Info } from 'lucide-react';
-import type { CustomFieldDefinition, CustomFieldModule, CustomFieldValue } from '@nodus/contracts';
+import type {
+  CustomFieldDefinition,
+  CustomFieldModule,
+  CustomFieldRef,
+  CustomFieldValue,
+} from '@nodus/contracts';
 import { SystemDictionary, ui } from '@nodus/contracts';
 
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
@@ -158,7 +163,11 @@ function UsageCell({ definition }: { definition: CustomFieldDefinition }) {
  */
 export function fieldColumns(
   canManage: boolean,
-  onCompanyValueCommit: (definition: CustomFieldDefinition, value: CustomFieldValue | null) => void,
+  onCompanyValueCommit: (
+    definition: CustomFieldDefinition,
+    value: CustomFieldValue | null,
+    refs?: readonly CustomFieldRef[],
+  ) => void,
 ): DataTableField<CustomFieldDefinition>[] {
   return [
     {

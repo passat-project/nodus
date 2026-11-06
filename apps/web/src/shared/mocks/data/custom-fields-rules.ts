@@ -1,5 +1,5 @@
 import type { CustomFieldDefinition, CustomFieldValue, CustomFieldValues } from '@nodus/contracts';
-import { customFieldValueSchemaOf } from '@nodus/contracts';
+import { bindingsOf, customFieldValueSchemaOf } from '@nodus/contracts';
 
 import { demoCounterpartyById } from './counterparties.js';
 import {
@@ -7,10 +7,10 @@ import {
   demoCustomFieldDefinitions,
   demoFieldById,
 } from './custom-fields.js';
-import { itemById } from './dictionaries.js';
+import { dictionaryIds, itemById } from './dictionaries.js';
 import { demoDepartments } from './departments.js';
 import { demoNodeRows } from './project-nodes.js';
-import { projectRefs } from './task-item-factory.js';
+import { demoProjectRows } from './projects.js';
 import { demoSubtasks, demoTasks } from './tasks.js';
 import { demoLetters } from './letters.js';
 import { demoUserListItems } from './users.js';
@@ -21,8 +21,18 @@ import { demoUserListItems } from './users.js';
  *  (множество bound), здесь — грамматика и существование цели. */
 export interface DemoFieldIssue {
   fieldId: string;
-  reason: 'unknown' | 'invalid' | 'not_found' | 'inactive';
+  reason: 'unknown' | 'invalid' | 'not_found' | 'inactive' | 'not_in_type';
   message: string;
+}
+
+/** id атрибутов, привязанных к типу процесса (#631): bound-сет мока —
+ *  запись значения непривязанного атрибута сервер отвергает not_in_type. */
+export function boundFieldIds(typeId: string): ReadonlySet<string> {
+  return new Set(
+    demoCustomFieldDefinitions
+      .filter((definition) => bindingsOf(definition).processTypeIds.includes(typeId))
+      .map((definition) => definition.id),
+  );
 }
 
 export function checkDemoValues(
@@ -35,8 +45,13 @@ export function checkDemoValues(
   }
   for (const [fieldId, value] of Object.entries(values)) {
     const definition = demoFieldById(fieldId);
-    if (!definition || definition.isCompany || (bound && !bound.has(fieldId))) {
+    if (!definition || definition.isCompany) {
       issues.push({ fieldId, reason: 'unknown', message: 'Unknown custom field' });
+      continue;
+    }
+    // Непривязанный к типу — отдельная причина (сервер: not_in_type, #631).
+    if (bound && !bound.has(fieldId)) {
+      issues.push({ fieldId, reason: 'not_in_type', message: 'Field is not bound to this place' });
       continue;
     }
     if (!customFieldValueSchemaOf(definition).safeParse(value).success) {
@@ -69,10 +84,11 @@ function checkReference(
         ? null
         : { reason: 'inactive', message: 'User is deactivated' };
     }
-    case 'department':
-      return demoDepartments.some((entry) => entry.id === value && entry.isActive)
-        ? null
-        : { reason: 'not_found', message: 'Department not found' };
+    case 'department': {
+      const department = demoDepartments.find((entry) => entry.id === value);
+      if (!department) return { reason: 'not_found', message: 'Department not found' };
+      return department.isActive ? null : { reason: 'inactive', message: 'Department is archived' };
+    }
     case 'enum':
     case 'multienum': {
       const list = ids ?? [String(value)];
@@ -88,20 +104,24 @@ function checkReference(
     case 'money': {
       const money = value as { currencyId?: string };
       const currency = money.currencyId ? itemById(money.currencyId) : undefined;
-      if (!currency) return { reason: 'not_found', message: 'Currency not found' };
+      // Валюта — элемент ИМЕННО системного справочника currency (Р10):
+      // вариант чужого справочника значением денег не принимается.
+      if (!currency || currency.dictionaryId !== dictionaryIds.currency) {
+        return { reason: 'not_found', message: 'Currency not found' };
+      }
       return currency.isActive ? null : { reason: 'inactive', message: 'Currency archived' };
     }
     case 'project':
-      return Object.values(projectRefs).some((entry) => entry.id === value)
+      return demoProjectRows.some((entry) => entry.id === value)
         ? null
         : { reason: 'not_found', message: 'Project not found' };
     case 'counterparty': {
       const counterparty = demoCounterpartyById(String(value));
-      if (!counterparty) return { reason: 'not_found', message: 'Counterparty not found' };
-      if (counterparty.archivedAt !== null) {
-        return { reason: 'inactive', message: 'Counterparty archived' };
-      }
-      return null;
+      // Архивный контрагент для сервера — «не найден» (activeRef → null):
+      // значение на архивную цель не ставится.
+      return counterparty && counterparty.archivedAt === null
+        ? null
+        : { reason: 'not_found', message: 'Counterparty not found' };
     }
     case 'task': {
       const known = [...demoTasks, ...Object.values(demoSubtasks).flat()].some(

@@ -308,6 +308,7 @@ describe('колонки реестра атрибутов (#631)', () => {
     expect(spies.onCompanyValueCommit).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'c0000000-0000-4000-8000-0000000000aa' }),
       null,
+      undefined,
     );
   });
 

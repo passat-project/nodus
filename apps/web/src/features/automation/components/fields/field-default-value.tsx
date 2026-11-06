@@ -35,9 +35,15 @@ export function FieldDefaultValue({
   onModeChange: (mode: Mode) => void;
   onChange: (value: CustomFieldDefault | null, refs: CustomFieldRef[]) => void;
 }) {
+  // Умолчание-ссылка на запись запрещено (Р5 #631): умолчания применяются
+  // без актёра видимости, такая ссылка не прошла бы проверку и молча
+  // отбрасывалась. Не предлагаем режим, который сервер отвергнет.
+  const recordRef = ['task', 'letter', 'node', 'project'].includes(definition.type);
   const options: { value: Mode; label: string }[] = [
     { value: 'none', label: ui.customFields.dialog.defaultNone },
-    { value: 'static', label: ui.customFields.dialog.defaultStatic },
+    ...(recordRef
+      ? []
+      : [{ value: 'static' as const, label: ui.customFields.dialog.defaultStatic }]),
     ...(definition.type === 'department'
       ? [
           {
@@ -65,7 +71,10 @@ export function FieldDefaultValue({
           if (next === 'author_department') onChange({ kind: 'author_department' }, []);
         }}
       />
-      {mode === 'static' ? (
+      {mode === 'static' && recordRef ? (
+        <p className="text-xs text-muted-foreground">{ui.customFields.dialog.defaultRecordHint}</p>
+      ) : null}
+      {mode === 'static' && !recordRef ? (
         <CustomFieldEditor
           definition={definition}
           value={staticValue}

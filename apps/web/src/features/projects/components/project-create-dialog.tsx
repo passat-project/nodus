@@ -89,6 +89,9 @@ export function ProjectCreateDialog({
   const [refs, setRefs] = useState<CustomFieldRef[]>([]);
   const [client, setClient] = useState<CounterpartyRef | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Попытка отправки: обязательные слоты показывают ошибку у поля (§4c),
+  // а не молчаливую блокировку кнопки (#646).
+  const [attempted, setAttempted] = useState(false);
 
   const defaultVisibility = settings.data?.projects.defaultVisibility ?? 'open';
   const effectiveVisibility = visibility ?? defaultVisibility;
@@ -101,11 +104,7 @@ export function ProjectCreateDialog({
     : DEFAULT_PROJECT_TYPE_FORM;
   const missing = missingProjectFields(form, { customFields: values });
   const canSubmit =
-    name.trim().length > 0 &&
-    typeId.length > 0 &&
-    !create.isPending &&
-    liveTypes.length > 0 &&
-    missing.length === 0;
+    name.trim().length > 0 && typeId.length > 0 && !create.isPending && liveTypes.length > 0;
 
   function onField(fieldId: string, value: CustomFieldValue | null, picked?: CustomFieldRef[]) {
     setValues((prev) => {
@@ -121,6 +120,8 @@ export function ProjectCreateDialog({
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!canSubmit) return;
+    setAttempted(true);
+    if (missing.length > 0) return;
     setError(null);
     // В тело идут только значения слотов выбранного типа: пережитки смены
     // типа сервер режет как «не привязан к типу» (422 not_in_type).
@@ -210,6 +211,7 @@ export function ProjectCreateDialog({
                 type={selectedType}
                 values={values}
                 refs={refs}
+                errors={attempted ? new Set(missing) : undefined}
                 onChange={onField}
               />
 

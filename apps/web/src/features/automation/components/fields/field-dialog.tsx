@@ -45,25 +45,12 @@ import {
   type FieldDraft,
 } from '../../lib/field-draft.js';
 import { FieldDialogForm } from './field-dialog-form.js';
+import { suggestionOf, type Errors } from './field-dialog-errors.js';
 import { useDefaultCurrencyId } from './field-settings.js';
 import { FieldTypePicker } from './field-type-picker.js';
 
 export type FieldDialogMode =
   { kind: 'create' } | { kind: 'edit'; definition: CustomFieldDefinition };
-
-interface Errors {
-  name?: string;
-  options?: string;
-  form?: string;
-}
-
-/** details 409 CUSTOM_FIELD_NAME_TAKEN: существующий атрибут (В3). */
-function suggestionOf(error: unknown): { definitionId: string; name: string } | null {
-  if (!(error instanceof ApiError)) return null;
-  const suggestion = (error.details as { suggestion?: { definitionId: string; name: string } })
-    ?.suggestion;
-  return suggestion ?? null;
-}
 
 /**
  * Окно атрибута (#431, ревизия #631): ОДНО окно на создание и правку

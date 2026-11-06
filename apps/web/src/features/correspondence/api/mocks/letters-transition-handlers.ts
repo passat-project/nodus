@@ -197,7 +197,7 @@ export const lettersTransitionHandlers = [
     const registration = body.form?.registration;
     let attached: ReturnType<typeof attachedRefsOf> | null = null;
     if (registration) {
-      const issue = await letterFieldsIssue(registration, request);
+      const issue = await letterFieldsIssue({ ...registration, typeId: letter.typeId }, request);
       if (issue) return apiError(422, 'LETTER_REGISTRATION_INVALID', issue);
       if (registration.attachedRefs !== undefined) {
         attached = attachedRefsOf(registration.attachedRefs);

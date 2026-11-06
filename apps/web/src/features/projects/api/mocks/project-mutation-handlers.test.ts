@@ -64,6 +64,6 @@ describe('мок POST /projects (#631)', () => {
     expect(res.status).toBe(422);
     const error = (await res.json()) as { code: string; details: { fields: string[] } };
     expect(error.code).toBe(ErrorCode.PROJECT_FIELDS_REQUIRED);
-    expect(error.details.fields).toContain(SYSTEM_FIELD_IDS.projectCode);
+    expect(error.details.fields).toContain(`cf.${SYSTEM_FIELD_IDS.projectCode}`);
   });
 });

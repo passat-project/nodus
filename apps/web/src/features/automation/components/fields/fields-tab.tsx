@@ -95,8 +95,8 @@ export function FieldsTab() {
   const setCompanyValue = useSetCompanyValue();
   const columns = useMemo(
     () =>
-      fieldColumns(canManage, (definition, value) =>
-        setCompanyValue.mutate({ fieldId: definition.id, value }),
+      fieldColumns(canManage, (definition, value, refs) =>
+        setCompanyValue.mutate({ fieldId: definition.id, value, refs }),
       ),
     [canManage, setCompanyValue],
   );

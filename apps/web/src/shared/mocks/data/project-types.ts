@@ -42,8 +42,14 @@ export const demoProjectTypes: ProjectType[] = [
     name: 'Тема',
     icon: 'star',
     color: 'amber',
-    // У «Темы» шифра нет (бывший codeField hidden): слот «Шифр» отсутствует.
-    form: { fields: [{ fieldId: SYSTEM_FIELD_IDS.projectClient, state: 'optional' }] },
+    // У «Темы» шифра нет (бывший codeField hidden): миграция #631 всё равно
+    // сеет слот «Шифр» состоянием hidden (реальная БД) — мок повторяет.
+    form: {
+      fields: [
+        { fieldId: SYSTEM_FIELD_IDS.projectCode, state: 'hidden' },
+        { fieldId: SYSTEM_FIELD_IDS.projectClient, state: 'optional' },
+      ],
+    },
     // «Теме» комплекты не нужны — только разделы и этапы (ADR-0030).
     kindIds: [nodeKindIds.section, nodeKindIds.phase],
     archivedAt: null,

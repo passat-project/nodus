@@ -18,7 +18,7 @@
 | `value-editor.tsx`                | диспетчер редактора по типу; `disabled` — строка значения                                                                                                                                                                  |
 | `editors/*`                       | по файлу на семейство: text, number (число и деньги), date, duration, bool, list, people, department, project, counterparty, link; общий `editor-kit.tsx` (`EditorTrigger`, `EditorError`, габарит ввода = габарит строки) |
 | `custom-fields-block.tsx`         | блок «Атрибуты» карточки: `NodeLabel`, сетка `FieldRow` 1→2 колонки (многострочный — на всю ширину), слоты `hidden` не рендерятся, скелеты/ошибка с повтором                                                               |
-| `filter-defs.ts`                  | `useCustomFieldFilterDefs(scope, valuesOf)` — группа «Атрибуты» панели фильтра (клиентские, по загруженным страницам, О4)                                                                                                  |
+| `filter-defs.ts`                  | `useCustomFieldFilterDefs(module, valuesOf)` — группа «Атрибуты» панели фильтра (клиентские, по загруженным страницам, О4)                                                                                                 |
 | `mocks/custom-fields-handlers.ts` | MSW-реестр определений: правила те же, что у сервера (имя, лимит, смена типа, справочник неизменен, удаление и «где используется»)                                                                                         |
 
 ## Правила

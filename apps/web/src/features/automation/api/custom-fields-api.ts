@@ -2,6 +2,7 @@ import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateCustomFieldBody,
   CustomFieldDefinition,
+  CustomFieldRef,
   CustomFieldUsage,
   CustomFieldValue,
   CustomFieldBindingKind,
@@ -260,17 +261,28 @@ export function useSetCompanyValue() {
   const queryClient = useQueryClient();
   return useMutation({
     scope: { id: 'company-value' },
-    mutationFn: (vars: { fieldId: string; value: CustomFieldValue | null }) =>
+    mutationFn: (vars: {
+      fieldId: string;
+      value: CustomFieldValue | null;
+      refs?: readonly CustomFieldRef[];
+    }) =>
       api<CustomFieldDefinition>(`/custom-fields/definitions/${vars.fieldId}/company-value`, {
         method: 'PUT',
         body: { value: vars.value },
       }),
-    onMutate: async ({ fieldId, value }) => {
+    onMutate: async ({ fieldId, value, refs }) => {
       await queryClient.cancelQueries({ queryKey: customFieldsKeys.all });
       const previous = definitionLists(queryClient);
-      patchLists(queryClient, (definition) =>
-        definition.id === fieldId ? { ...definition, companyValue: value } : definition,
-      );
+      patchLists(queryClient, (definition) => {
+        if (definition.id !== fieldId) return definition;
+        // Свежая ссылка — сразу в companyRefs: сервер вернёт имена, но до
+        // ответа значение не должно показывать «Запись недоступна» (#646).
+        const merged = new Map(
+          (definition.companyRefs ?? []).map((ref) => [`${ref.kind}:${ref.id}`, ref]),
+        );
+        for (const ref of refs ?? []) merged.set(`${ref.kind}:${ref.id}`, ref);
+        return { ...definition, companyValue: value, companyRefs: [...merged.values()] };
+      });
       return { previous };
     },
     onError: (_error, _vars, context) => {
