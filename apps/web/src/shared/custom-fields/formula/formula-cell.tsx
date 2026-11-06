@@ -25,10 +25,11 @@ import { FormulaRemoveDialog } from './formula-remove-dialog.js';
 
 /**
  * Ячейка атрибута с формулой (#632, §4c): значение + мини-значок fx,
- * меню «Изменить формулу / Вписать значение / Убрать формулу / Как у типа»,
- * бейдж ошибки. Своя формула делает значение read-only (правка = снять
- * формулу, Р5); формула типа показывается значком, правка значения её
- * подавляет — сервер вернёт origin `value`, и появится «Как у типа».
+ * меню «Изменить формулу / Убрать формулу / Как у типа», бейдж ошибки.
+ * Своя формула делает значение read-only ВСЕГДА: вписать значение можно
+ * только после «Убрать формулу» (Р5). Формула типа показывается значком,
+ * правка значения её подавляет — сервер вернёт origin `value`, и появится
+ * «Как у типа».
  */
 export function FormulaCell({
   definition,
@@ -57,7 +58,6 @@ export function FormulaCell({
 }) {
   const remove = useRemoveFormula(host);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const origin = info?.origin ?? null;
   const own = origin === 'own';
@@ -65,10 +65,7 @@ export function FormulaCell({
   const suppressed = origin === 'value';
 
   useEffect(() => {
-    if (!own) {
-      setEditing(false);
-      setRemoveOpen(false);
-    }
+    if (!own) setRemoveOpen(false);
   }, [own]);
 
   return (
@@ -116,7 +113,7 @@ export function FormulaCell({
         </button>
       ) : null}
       <div className="min-w-0 flex-1">
-        {own && !editing ? (
+        {own ? (
           <CustomFieldEditor
             definition={definition}
             value={value}
@@ -148,11 +145,6 @@ export function FormulaCell({
             <DropdownMenuItem onClick={() => setEditorOpen(true)}>
               {info ? ui.formulas.cell.edit : ui.formulas.editor.title}
             </DropdownMenuItem>
-            {own ? (
-              <DropdownMenuItem onClick={() => setEditing(true)}>
-                {ui.formulas.cell.writeValue}
-              </DropdownMenuItem>
-            ) : null}
             {suppressed ? (
               <DropdownMenuItem onClick={() => onChange(definition.id, null)}>
                 {ui.formulas.cell.asType}
