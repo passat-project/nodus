@@ -206,6 +206,27 @@ export class CounterpartiesRepository {
     });
   }
 
+  /** Число контрагентов (включая архивных) со значением атрибута (#646):
+   *  честный счётчик окна удаления — колонка `custom_fields` живёт здесь,
+   *  миграция #631 переписывает её ключи (Р13/Р9). */
+  async countCustomFieldValues(fieldId: string): Promise<number> {
+    const rows = await this.prisma.$queryRaw<{ count: bigint }[]>(Prisma.sql`
+      SELECT count(*)::bigint AS count FROM counterparties
+      WHERE custom_fields ? ${fieldId}::text
+    `);
+    return Number(rows[0]?.count ?? 0n);
+  }
+
+  /** Уборка значений удалённого атрибута (#646): идемпотентна, архивные
+   *  тоже чистим — восстановление не должно воскрешать значение удалённого
+   *  определения. */
+  async removeCustomFieldValues(fieldId: string): Promise<number> {
+    return this.prisma.$executeRaw(Prisma.sql`
+      UPDATE counterparties SET custom_fields = custom_fields - ${fieldId}::text
+      WHERE custom_fields ? ${fieldId}::text
+    `);
+  }
+
   /** Id живых контрагентов по подстроке названия (#55, поиск писем). */
   async searchIds(query: string, limit: number): Promise<string[]> {
     const rows = await this.prisma.counterparty.findMany({

@@ -1418,7 +1418,8 @@ model Counterparty {
   address      String?
   email        String?
   phone        String?
-  /// Кастомные поля области `counterparty` (ADR-0029); запись — с #431.
+  /// Кастомные поля области `counterparty` (ADR-0029); запись — Н2 CRM,
+  /// уборка удалённого определения — #646.
   customFields Json      @default("{}") @map("custom_fields")
   archivedAt   DateTime? @map("archived_at") @db.Timestamptz()
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()

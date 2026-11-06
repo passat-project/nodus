@@ -29,6 +29,8 @@ export interface CustomFieldsFixture {
   taskIds: string[];
   dictionaryIds: string[];
   departmentIds: string[];
+  /** Контрагенты прогона (#646): значения атрибутов в custom_fields. */
+  counterpartyIds: string[];
   /** Создать определение (создаёт и запоминает id). */
   createField(body: Record<string, unknown>): Promise<z.infer<typeof customFieldDefinitionSchema>>;
   /** Создать задачу прогона (создаёт и запоминает id). */
@@ -103,6 +105,7 @@ export async function setupCustomFieldsFixture(): Promise<CustomFieldsFixture> {
     taskIds: [],
     dictionaryIds: [],
     departmentIds: [],
+    counterpartyIds: [],
     async createField(body) {
       // Привязка к «Стандартному» типу задач по умолчанию (#631 Р3): без
       // неё атрибут нигде не виден и не принимает значения; явные bindings
@@ -168,6 +171,9 @@ export async function setupCustomFieldsFixture(): Promise<CustomFieldsFixture> {
       }
       if (fixture.taskIds.length > 0) {
         await fx.prisma.task.deleteMany({ where: { id: { in: fixture.taskIds } } });
+      }
+      if (fixture.counterpartyIds.length > 0) {
+        await fx.prisma.counterparty.deleteMany({ where: { id: { in: fixture.counterpartyIds } } });
       }
       await fx.prisma.event.deleteMany({
         where: { aggregateType: 'field_definition', aggregateId: { in: fixture.definitionIds } },

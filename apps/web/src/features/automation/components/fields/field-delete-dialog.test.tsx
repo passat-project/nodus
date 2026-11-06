@@ -47,7 +47,7 @@ const state = vi.hoisted(() => ({
 
 function usageOf(extra: Partial<CustomFieldUsage>): CustomFieldUsage {
   return {
-    values: { task: 0, letter: 0, project: 0, node: 0 },
+    values: { task: 0, letter: 0, counterparty: 0, project: 0, node: 0 },
     forms: [],
     workflows: [],
     bindings: { processTypes: [], projectTypes: [], nodeKinds: [] },
@@ -121,7 +121,7 @@ describe('окно удаления атрибута: последствия и 
 
   it('агрегат последствий: значения, формы, маршруты, привязки, глобальное', () => {
     state.usage[FIELD.id] = {
-      values: { task: 2, letter: 5, project: 1, node: 0 },
+      values: { task: 2, letter: 5, counterparty: 4, project: 1, node: 0 },
       forms: [{ kind: 'task', name: 'Задание сметчикам' }],
       workflows: [{ id: '90000000-0000-4000-8000-000000000001', name: 'Стандартный маршрут' }],
       bindings: {
@@ -138,6 +138,7 @@ describe('окно удаления атрибута: последствия и 
 
     expect(screen.getByText('2 задачи')).toBeTruthy();
     expect(screen.getByText('5 писем')).toBeTruthy();
+    expect(screen.getByText('4 контрагента')).toBeTruthy();
     expect(screen.getByText('1 проект')).toBeTruthy();
     expect(screen.getByText('Задание сметчикам (Задачи)')).toBeTruthy();
     expect(screen.getByText('Стандартный маршрут')).toBeTruthy();

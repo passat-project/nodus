@@ -147,12 +147,16 @@ export type ListCustomFieldsQuery = z.infer<typeof listCustomFieldsQuerySchema>;
  * Удаление разрешено всегда — usage информирует, не блокирует.
  */
 export const customFieldUsageSchema = z.object({
-  /** Число записей со значением по видам сущностей. */
+  /** Число записей со значением по видам сущностей. Контрагенты — пятый
+   *  носитель (колонка `counterparties.custom_fields` живёт с #431, пути
+   *  записи — Н2 CRM; миграция #631 переписывает её ключи, поэтому честный
+   *  счётчик и уборка обязательны уже сейчас). */
   values: z.object({
     task: z.number().int().min(0),
     letter: z.number().int().min(0),
     project: z.number().int().min(0),
     node: z.number().int().min(0),
+    counterparty: z.number().int().min(0),
   }),
   /** Формы создания типов, где атрибут стоит слотом. */
   forms: z.array(

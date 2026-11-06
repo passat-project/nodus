@@ -39,6 +39,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
         name: `Проба ${fx.runId} удаляемый`,
       });
       const taskId = await cf.createTask();
+      const counterparty = await fx.prisma.counterparty.create({
+        data: {
+          shortName: `Проба ${fx.runId} контрагент`,
+          fullName: `ООО «Проба ${fx.runId}»`,
+          customFields: { [field.id]: 'значение контрагента' },
+        },
+      });
+      cf.counterpartyIds.push(counterparty.id);
       const detail = taskDetailSchema.parse(
         await (await fx.api(admin, 'GET', `/tasks/${taskId}`)).json(),
       );
@@ -66,7 +74,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const usage = await fx.api(admin, 'GET', `/custom-fields/definitions/${field.id}/usage`);
       expect(usage.status).toBe(200);
       expect(customFieldUsageSchema.parse(await usage.json())).toMatchObject({
-        values: { task: 1, letter: 0, project: 0, node: 0 },
+        values: { task: 1, letter: 0, counterparty: 1, project: 0, node: 0 },
         workflows: [{ id: workflowId }],
         bindings: { processTypes: [expect.objectContaining({ name: expect.any(String) })] },
         companyValue: false,
@@ -88,6 +96,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
         select: { customFields: true },
       });
       expect(row.customFields).not.toHaveProperty(field.id);
+
+      // Контрагенты — пятый носитель (#646): обработчик crm чистит ключ.
+      const counterpartyRow = await fx.prisma.counterparty.findUniqueOrThrow({
+        where: { id: counterparty.id },
+        select: { customFields: true },
+      });
+      expect(counterpartyRow.customFields).not.toHaveProperty(field.id);
     });
 
     it('окно и гейт: поле процесса разблокирует переход', async () => {

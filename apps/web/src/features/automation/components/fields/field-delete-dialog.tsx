@@ -73,6 +73,9 @@ export function FieldDeleteDialog({
     const parts: string[] = [];
     if (values.task > 0) parts.push(`${values.task} ${plural(values.task, e.task)}`);
     if (values.letter > 0) parts.push(`${values.letter} ${plural(values.letter, e.letter)}`);
+    if (values.counterparty > 0) {
+      parts.push(`${values.counterparty} ${plural(values.counterparty, e.counterparty)}`);
+    }
     if (values.project > 0) parts.push(`${values.project} ${plural(values.project, e.project)}`);
     if (values.node > 0) parts.push(`${values.node} ${plural(values.node, e.node)}`);
     return parts;

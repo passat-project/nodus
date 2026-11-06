@@ -192,6 +192,9 @@ export const definitionHandlers = [
       values: {
         task: values.task.length,
         letter: values.letter.length,
+        // Значения контрагентов мок-мир не заводит (пути записи — Н2 CRM),
+        // но контракт usage требует честный счётчик (#646).
+        counterparty: 0,
         project: values.project.length,
         node: values.node.length,
       },

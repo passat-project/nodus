@@ -9,6 +9,7 @@ import { CounterpartiesQueryService } from './counterparties/counterparties-quer
 import { CounterpartiesRepository } from './counterparties/counterparties.repository.js';
 import { CounterpartiesService } from './counterparties/counterparties.service.js';
 import { CounterpartyUsagesRepository } from './counterparties/counterparty-usages.repository.js';
+import { CounterpartyFieldValuesCleanupHandler } from './events/counterparty-field-values-cleanup.handler.js';
 import {
   LetterDeletedUsageHandler,
   LetterRegisteredUsageHandler,
@@ -44,6 +45,8 @@ import {
     LetterDeletedUsageHandler,
     ProjectCreatedUsageHandler,
     ProjectUpdatedUsageHandler,
+    // Уборка значений удалённого атрибута (#646): custom_fields контрагентов.
+    CounterpartyFieldValuesCleanupHandler,
   ],
 })
 export class CrmModule {}

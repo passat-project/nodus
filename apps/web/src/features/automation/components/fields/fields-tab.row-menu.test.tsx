@@ -105,7 +105,7 @@ vi.mock('../../api/custom-fields-api.js', () => ({
   useCustomFieldUsage: (ids: readonly string[]) =>
     ids.map(() => ({
       data: {
-        values: { task: 0, letter: 0, project: 0, node: 0 },
+        values: { task: 0, letter: 0, counterparty: 0, project: 0, node: 0 },
         forms: [],
         workflows: [],
         bindings: { processTypes: [], projectTypes: [], nodeKinds: [] },
