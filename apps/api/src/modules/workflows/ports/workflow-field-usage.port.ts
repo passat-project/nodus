@@ -19,10 +19,13 @@ export interface WorkflowFieldUsage {
   name: string;
 }
 
-/** Тип процесса, в форме создания которого атрибут стоит слотом. */
+/** Тип процесса, в форме создания которого атрибут стоит слотом.
+ *  `draft` — форма непубликуемого черновика (удаление не блокирует, но
+ *  последствие показывается — Review Focus §9 #631). */
 export interface WorkflowCreationFormUsage {
   kind: 'task' | 'letter';
   name: string;
+  draft: boolean;
 }
 
 export interface WorkflowFieldUsageReader {

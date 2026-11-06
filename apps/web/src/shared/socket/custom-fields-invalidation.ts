@@ -3,6 +3,8 @@ import { CUSTOM_FIELD_CATALOG_EVENTS, DICTIONARY_CATALOG_EVENTS } from '@nodus/c
 
 import { customFieldsKeys } from '../custom-fields/queries.js';
 import { dictionariesKeys } from '../dictionaries/keys.js';
+import { nodeKindsKeys } from '../api/node-kinds.js';
+import { projectsKeys } from '../api/projects-list.js';
 import { tasksKeys } from '../api/tasks-keys.js';
 import type { KeyBatcher } from './invalidation-batcher.js';
 
@@ -24,6 +26,10 @@ export function pushCustomFieldKeys(
   if (!CATALOG_EVENTS.has(type)) return false;
   batcher.push(customFieldsKeys.all, 'list');
   batcher.push(dictionariesKeys.all, 'list');
+  // Удаление атрибута чистит слоты форм типов проектов и видов папок
+  // (#646): каталоги перечитываются, иначе форма покажет удалённый слот.
+  batcher.push(projectsKeys.types(), 'list');
+  batcher.push(nodeKindsKeys.all, 'list');
   // Новое поле/вариант меняет карточку и строки списков (значения и подписи).
   batcher.push(tasksKeys.detailsAll(), 'list');
   batcher.push(tasksKeys.listPages(), 'list');

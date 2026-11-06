@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { nodeKindsKeys } from '../api/node-kinds.js';
 import { projectsKeys } from '../api/projects-list.js';
+import { customFieldsKeys } from '../custom-fields/queries.js';
 import type { InvalidationTier, KeyBatcher } from './invalidation-batcher.js';
 import { pushNodeKindKeys } from './node-kinds-invalidation.js';
 
@@ -28,6 +29,15 @@ describe('pushNodeKindKeys (#556, Р10)', () => {
     expect(handled).toBe(true);
     expect(has(keys, nodeKindsKeys.all)).toBe(true);
     expect(has(keys, projectsKeys.structures())).toBe(true);
+    expect(has(keys, customFieldsKeys.all)).toBe(true);
+  });
+
+  it('смена типа проекта инвалидирует типы и реестр атрибутов (#631)', () => {
+    const { batcher, keys } = recordingBatcher();
+    const handled = pushNodeKindKeys(batcher, new QueryClient(), 'project.type_changed');
+    expect(handled).toBe(true);
+    expect(has(keys, projectsKeys.types())).toBe(true);
+    expect(has(keys, customFieldsKeys.all)).toBe(true);
   });
 
   it('чужие события не обрабатывает', () => {

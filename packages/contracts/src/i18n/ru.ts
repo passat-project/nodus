@@ -84,7 +84,6 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.LETTER_NOT_EDITABLE]: 'Править данные можно только у зарегистрированного письма',
   [ErrorCode.LETTER_RELATION_INVALID]: 'Связь «ответ на» не подходит — проверьте подсказку',
   [ErrorCode.CUSTOM_FIELD_VALUE_INVALID]: 'Значение атрибута не подходит — проверьте отмеченные',
-  [ErrorCode.CUSTOM_FIELD_TYPE_UNAVAILABLE]: 'Этот тип атрибута пока недоступен',
   [ErrorCode.CUSTOM_FIELD_NAME_TAKEN]: 'Атрибут с таким названием уже есть',
   [ErrorCode.CUSTOM_FIELD_TYPE_CHANGE_INCOMPATIBLE]:
     'Тип нельзя сузить без потери данных — создайте новый атрибут',

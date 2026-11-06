@@ -164,22 +164,20 @@ describe('DefinitionsRepository: привязки field_bindings (Р3/Р10 #631)
     });
   });
 
-  it('syncTargets: точный набор вида цели — лишние сняты, недостающие добавлены', async () => {
+  it('syncTargets: добавленные слоты привязывают, снятые — снимают, привязки без слотов живут', async () => {
     const { repo, db, tx } = make();
     // Без tx — на PrismaService, с tx — на транзакции записи формы.
-    await repo.syncTargets('project_type', T1, [ID]);
-    expect(db.fieldBinding.deleteMany).toHaveBeenCalledWith({
-      where: { targetKind: 'project_type', targetId: T1, definitionId: { notIn: [ID] } },
-    });
+    await repo.syncTargets('project_type', T1, [ID], []);
+    expect(db.fieldBinding.deleteMany).not.toHaveBeenCalled();
     expect(db.fieldBinding.createMany).toHaveBeenCalledWith({
       data: [{ definitionId: ID, targetKind: 'project_type', targetId: T1 }],
       skipDuplicates: true,
     });
 
     db.fieldBinding.createMany.mockClear();
-    await repo.syncTargets('node_kind', T1, [], tx as never);
-    expect(tx.fieldBinding.deleteMany).toHaveBeenLastCalledWith({
-      where: { targetKind: 'node_kind', targetId: T1 },
+    await repo.syncTargets('node_kind', T1, [], [ID], tx as never);
+    expect(tx.fieldBinding.deleteMany).toHaveBeenCalledWith({
+      where: { targetKind: 'node_kind', targetId: T1, definitionId: { in: [ID] } },
     });
     expect(tx.fieldBinding.createMany).not.toHaveBeenCalled();
   });

@@ -34,9 +34,10 @@ import { bindingsOf, type FieldDefinitionRow } from './definition.mapper.js';
 /**
  * «Где используется атрибут» (Р8 #631) — агрегат последствий для окна
  * удаления: значения по видам сущностей (каждый владелец считает свой
- * JSONB, I3; контрагенты — порт crm, #646), формы создания, опубликованные
- * маршруты, привязки с именами целей и факт глобального значения. Удаление
- * разрешено всегда — usage информирует, не блокирует.
+ * JSONB, I3; контрагенты — порт crm, #646), формы (создания процессов,
+ * включая непубликуемые черновики; типов проектов; видов папок),
+ * опубликованные маршруты, привязки с именами целей и факт глобального
+ * значения. Удаление разрешено всегда — usage информирует, не блокирует.
  */
 @Injectable()
 export class DefinitionsUsageService {
@@ -59,7 +60,8 @@ export class DefinitionsUsageService {
       counterpartyCount,
       projectCount,
       nodeCount,
-      forms,
+      processForms,
+      projectForms,
       workflows,
       processTypes,
       projectTypes,
@@ -71,6 +73,7 @@ export class DefinitionsUsageService {
       this.projectUsage.countValues('project', definition.id),
       this.projectUsage.countValues('node', definition.id),
       this.workflows.creationFormsUsingField(definition.id),
+      this.projectUsage.formsUsingField(definition.id),
       this.workflows.workflowsUsingField(definition.id),
       this.catalog.typeRefs(bindings.processTypeIds),
       this.targets.projectTypes(),
@@ -91,7 +94,7 @@ export class DefinitionsUsageService {
         project: projectCount,
         node: nodeCount,
       },
-      forms,
+      forms: [...processForms, ...projectForms],
       workflows,
       bindings: {
         processTypes: nameById(processTypes, bindings.processTypeIds),

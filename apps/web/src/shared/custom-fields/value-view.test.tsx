@@ -192,6 +192,14 @@ describe('ссылки на записи (Р5)', () => {
     const hidden = ref('55000000-0000-4000-8000-0000000000ac', { name: null });
     view('user', hidden.id, [hidden]);
     expect(screen.getByText(ui.customFields.block.unavailable)).toBeTruthy();
+    cleanup();
+    // Удалённая цель отличается от недоступной (Р5): archived + без имени.
+    const deleted = ref('55000000-0000-4000-8000-0000000000af', {
+      name: null,
+      archived: true,
+    });
+    view('task', deleted.id, [deleted]);
+    expect(screen.getByText(ui.customFields.block.deleted)).toBeTruthy();
   });
 
   it('папка — имя без перехода (карточки нет)', () => {

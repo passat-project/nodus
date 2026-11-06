@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   apiErrorResponseSchema,
+  customFieldKey,
   customFieldUsageSchema,
   dictionaryItemSchema,
   dictionarySchema,
@@ -103,6 +104,37 @@ describe.skipIf(!process.env.DATABASE_URL)(
         select: { customFields: true },
       });
       expect(counterpartyRow.customFields).not.toHaveProperty(field.id);
+    });
+
+    it('форма создания непубликуемого черновика видна в usage (Review Focus §9 #631)', async () => {
+      const { fx, admin } = cf;
+      const field = await cf.createField({
+        type: 'text',
+        name: `Черновик ${fx.runId}`,
+      });
+      const draft = await fx.prisma.workflow.create({
+        data: {
+          name: `Черновик маршрута ${fx.runId}`,
+          kind: 'task',
+          publishedAt: null,
+          creation: { fields: [{ key: customFieldKey(field.id) }] } as never,
+        },
+      });
+      try {
+        const usage = customFieldUsageSchema.parse(
+          await (await fx.api(admin, 'GET', `/custom-fields/definitions/${field.id}/usage`)).json(),
+        );
+        expect(usage.forms).toContainEqual({
+          kind: 'task',
+          name: draft.name,
+          draft: true,
+        });
+        // Удаление не блокируется черновиком (Review Focus §9): 204.
+        const removed = await fx.api(admin, 'DELETE', `/custom-fields/definitions/${field.id}`);
+        expect(removed.status, await removed.clone().text()).toBe(204);
+      } finally {
+        await fx.prisma.workflow.delete({ where: { id: draft.id } });
+      }
     });
 
     it('окно и гейт: поле процесса разблокирует переход', async () => {

@@ -34,6 +34,7 @@ import {
   FIELD_BINDING_FORM_CLEANER,
   type FieldBindingFormCleaner,
 } from '../../projects/ports/field-binding-form-cleaner.port.js';
+import type { ProjectActor } from '../../projects/ports/project-reader.port.js';
 import {
   WORKFLOW_FIELD_USAGE_READER,
   type WorkflowFieldUsageReader,
@@ -261,7 +262,7 @@ export class DefinitionsService {
   async setCompanyValue(
     id: string,
     value: CustomFieldValue | null,
-    actorId: string,
+    actor: ProjectActor,
   ): Promise<CustomFieldDefinition> {
     const definition = await requireDefinition(this.definitions, id);
     if (!definition.isCompany) {
@@ -269,7 +270,10 @@ export class DefinitionsService {
     }
     if (value !== null) {
       const dto = await this.mapper.toDto(definition);
-      const issues = await this.validator.validate([dto], { [id]: value });
+      // Актёр нужен ссылочным типам (project/task/letter/node): глобальную
+      // переменную-ссылку админ задаёт из реестра, видимость проверяется
+      // его глазами (#646). Без актёра любая ссылка получала not_found.
+      const issues = await this.validator.validate([dto], { [id]: value }, undefined, actor);
       if (issues.length > 0) {
         throw new DomainException(ErrorCode.CUSTOM_FIELD_VALUE_INVALID, 'Value is invalid', {
           issues,
@@ -277,9 +281,9 @@ export class DefinitionsService {
       }
     }
     return this.txRunner.run(async (tx) => {
-      await this.definitions.putCompanyValue(id, value, actorId, tx);
+      await this.definitions.putCompanyValue(id, value, actor.id, tx);
       const row = (await this.definitions.findById(id, tx)) ?? definition;
-      await this.emitChanged(tx, row, 'updated', actorId, ['companyValue']);
+      await this.emitChanged(tx, row, 'updated', actor.id, ['companyValue']);
       return this.mapper.toDto(row, tx);
     });
   }

@@ -83,8 +83,10 @@ TEXT COLLATE "C" (канон 20261016180000, ключи — `core/lib/fractional
   hidden/optional/required; системного ключа `code` больше нет — «Код»
   посевной атрибут, Р9 #631) и закрытый список `capabilities`
   (`document_changes`, `pulse_row`, `schema_row`). Слот формы вида и
-  привязка «Где используется» (`field_bindings`, kind `node_kind`) — одна
-  сущность: запись формы синхронизирует привязки. Справочник
+  привязка «Где используется» (`field_bindings`, kind `node_kind`) пишут
+  одну таблицу: добавленный слот привязывает, снятый снимает; привязка без
+  слота законна (посев системных полей, точечный пикер) и не сносится.
+  Справочник
   «Автоматизации»; удаление = архивация (папки архивного вида создавать
   нельзя — 409, существующие живут и правятся); имя уникально lower(btrim) —
   выраженный индекс в миграции; посев 6 видов (стадия, очередь, пусковой
@@ -119,7 +121,8 @@ TEXT COLLATE "C" (канон 20261016180000, ключи — `core/lib/fractional
 - События (outbox в той же tx, I9; gateway не маршрутизирует узлы — реалтайма
   структуры до пилота нет): `project.node_created / node_updated /
 node_moved / node_deleted`; `node_updated` несёт `customFieldChanges` и
-  ключи `cf.<id>`; каталог видов — `project.node_kind_changed` (presence).
+  ключи `cf.<id>`; каталоги — `project.node_kind_changed` и
+  `project.type_changed` (presence: формы мест и привязки атрибутов).
   Мутации — аудит (`project.node_*`) и `Idempotency-Key`. Негодный узел
   (не найден/чужой проект) — 422
   `PROJECT_NODE_INVALID` без оракула.

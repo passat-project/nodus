@@ -141,20 +141,36 @@ export function FieldUsagePicker({
   onChange: (bindings: CustomFieldBindings) => void;
 }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const { data: processTypes } = useProcessTypes();
+  // Архивные цели включаются, только если уже стоят в привязках (#646):
+  // иначе их нельзя ни увидеть, ни снять, а сохранение полного набора
+  // упирается в запрет привязки к архиву. Новую привязку к архиву не
+  // предлагаем — сервер её по-прежнему отклоняет.
+  const { data: processTypes } = useProcessTypes('include');
   const { data: projectTypes } = useProjectTypes(true);
   const { data: nodeKinds } = useNodeKinds();
 
+  const label = (name: string, archived: boolean) =>
+    archived ? `${name} (${ui.customFields.bind.archived})` : name;
   const taskTypes: Target[] = (processTypes ?? [])
-    .filter((type) => type.category === 'task' && !type.archivedAt)
-    .map((type) => ({ id: type.id, name: type.name }));
+    .filter(
+      (type) =>
+        type.category === 'task' && (!type.archivedAt || bindings.processTypeIds.includes(type.id)),
+    )
+    .map((type) => ({ id: type.id, name: label(type.name, type.archivedAt !== null) }));
   const letterTypes: Target[] = (processTypes ?? [])
-    .filter((type) => type.category === 'letter' && !type.archivedAt)
-    .map((type) => ({ id: type.id, name: type.name }));
+    .filter(
+      (type) =>
+        type.category === 'letter' &&
+        (!type.archivedAt || bindings.processTypeIds.includes(type.id)),
+    )
+    .map((type) => ({ id: type.id, name: label(type.name, type.archivedAt !== null) }));
   const types: Target[] = (projectTypes ?? [])
-    .filter((type) => type.archivedAt === null)
-    .map((type) => ({ id: type.id, name: type.name }));
-  const kinds: Target[] = (nodeKinds ?? []).map((kind) => ({ id: kind.id, name: kind.name }));
+    .filter((type) => type.archivedAt === null || bindings.projectTypeIds.includes(type.id))
+    .map((type) => ({ id: type.id, name: label(type.name, type.archivedAt !== null) }));
+  const kinds: Target[] = (nodeKinds ?? []).map((kind) => ({
+    id: kind.id,
+    name: label(kind.name, kind.archivedAt !== null),
+  }));
 
   const toggleList = (current: string[], all: readonly Target[]): string[] => {
     const set = new Set(current);

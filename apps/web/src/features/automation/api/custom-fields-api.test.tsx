@@ -65,7 +65,7 @@ function hook<T>(qc: QueryClient, fn: () => T) {
 
 const usage: CustomFieldUsage = {
   values: { task: 3, letter: 0, counterparty: 0, project: 1, node: 0 },
-  forms: [{ kind: 'task', name: 'Стандартный' }],
+  forms: [{ kind: 'task', name: 'Стандартный', draft: false }],
   workflows: [],
   bindings: { processTypes: [], projectTypes: [], nodeKinds: [] },
   companyValue: false,

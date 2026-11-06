@@ -10,6 +10,7 @@ import { demoNodeKinds, demoNodeRows } from '../../mocks/data/project-nodes.js';
 import { demoProjectRows, demoProjectTypes } from '../../mocks/data/projects.js';
 import { demoSubtasks, demoTasks } from '../../mocks/data/tasks.js';
 import { creationFormOf, mockTypes } from '../../mocks/data/process-types-store.js';
+import { mockWorkflows } from '../../mocks/data/workflows-store.js';
 
 /** Утилиты мок-сервера реестра атрибутов (#631): сборка DTO с гидратацией
  *  справочника/ссылок, ошибки, поиск дубля имени, категории типов, проверка
@@ -54,11 +55,17 @@ function nameTaken(name: string, exceptId?: string) {
 
 /** Категории демо-типов процессов (для фильтра module=task|letter). */
 function typeCategorySets() {
+  // Сервер считает module=task|letter только по ЖИВЫМ типам (typeRefs live):
+  // архивный тип не делает атрибут «задачным» (#646).
   const taskTypeIds = new Set(
-    mockTypes.filter((type) => type.category === 'task').map((type) => type.id),
+    mockTypes
+      .filter((type) => type.category === 'task' && type.archivedAt === null)
+      .map((type) => type.id),
   );
   const letterTypeIds = new Set(
-    mockTypes.filter((type) => type.category === 'letter').map((type) => type.id),
+    mockTypes
+      .filter((type) => type.category === 'letter' && type.archivedAt === null)
+      .map((type) => type.id),
   );
   return { taskTypeIds, letterTypeIds };
 }
@@ -88,12 +95,24 @@ function entitiesWithValue(fieldId: string) {
   return { task, letter, project, node };
 }
 
-/** Формы создания типов, где атрибут стоит слотом. */
+/** Формы, где атрибут стоит слотом (Р8/Р10): формы создания процессов
+ *  (включая непубликуемые черновики), формы типов проектов и видов папок. */
 function formsUsingField(fieldId: string) {
   const key = customFieldKey(fieldId);
-  return mockTypes
+  const processForms = mockTypes
     .filter((type) => creationFormOf(type).fields.some((slot) => slot.key === key) === true)
-    .map((type) => ({ kind: type.category as 'task' | 'letter', name: type.name }));
+    .map((type) => ({
+      kind: type.category as 'task' | 'letter',
+      name: type.name,
+      draft: mockWorkflows.get(type.workflowId)?.publishedAt == null,
+    }));
+  const projectForms = demoProjectTypes
+    .filter((type) => type.form.fields.some((slot) => slot.fieldId === fieldId))
+    .map((type) => ({ kind: 'project_type' as const, name: type.name, draft: false }));
+  const nodeForms = demoNodeKinds
+    .filter((kind) => kind.form.fields.some((slot) => slot.fieldId === fieldId))
+    .map((kind) => ({ kind: 'node_kind' as const, name: kind.name, draft: false }));
+  return [...processForms, ...projectForms, ...nodeForms];
 }
 
 export {

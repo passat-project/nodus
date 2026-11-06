@@ -132,7 +132,6 @@ export const ErrorCode = {
    *  details.issues[] — { fieldId, reason: unknown|invalid|not_found|inactive|not_in_type, message }. */
   CUSTOM_FIELD_VALUE_INVALID: 'CUSTOM_FIELD_VALUE_INVALID',
   /** Тип атрибута недоступен: «Проект» до модуля проектов (#431, Р11). */
-  CUSTOM_FIELD_TYPE_UNAVAILABLE: 'CUSTOM_FIELD_TYPE_UNAVAILABLE',
   /** Имя занято атрибутом той же области; details — { definitionId } (#431). */
   CUSTOM_FIELD_NAME_TAKEN: 'CUSTOM_FIELD_NAME_TAKEN',
   /** Смена типа несовместима с хранимыми значениями; details — { from, to } (#431, Р3). */

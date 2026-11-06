@@ -16,7 +16,7 @@ export interface FieldBindingTarget {
 }
 
 export interface FieldBindingTargetReader {
-  /** Типы проектов (включая архивные — архива у типов нет, поле задел). */
+  /** Типы проектов (включая архивные: их формы и проекты живут). */
   projectTypes(): Promise<FieldBindingTarget[]>;
 
   /** Виды папок (архивные включаются: их формы живут у существующих папок). */

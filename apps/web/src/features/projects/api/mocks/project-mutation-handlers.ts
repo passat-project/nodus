@@ -1,13 +1,19 @@
 import { http, HttpResponse } from 'msw';
 import {
+  clearedProjectFields,
   ErrorCode,
+  missingProjectFields,
   Permission,
+  SYSTEM_FIELD_IDS,
   createProjectBodySchema,
   projectMemberAddBodySchema,
   projectStatusBodySchema,
   projectTransferBodySchema,
+  projectTypeFormOf,
+  requiredProjectFields,
   updateProjectBodySchema,
 } from '@nodus/contracts';
+import type { CustomFieldValues } from '@nodus/contracts';
 
 import { demoUserListItems } from '../../../../shared/mocks/data/users.js';
 import { counterpartyRefById } from '../../../../shared/mocks/data/counterparties.js';
@@ -38,6 +44,41 @@ const forbidden = () =>
   HttpResponse.json({ code: ErrorCode.FORBIDDEN, message: 'Forbidden' }, { status: 403 });
 const notFound = () =>
   HttpResponse.json({ code: ErrorCode.NOT_FOUND, message: 'Project not found' }, { status: 404 });
+const fieldsRequired = (typeId: string, fields: string[], reason: 'create' | 'clear') =>
+  HttpResponse.json(
+    {
+      code: ErrorCode.PROJECT_FIELDS_REQUIRED,
+      message: 'Required project fields are missing',
+      details: { typeId, fields, reason },
+    },
+    { status: 422 },
+  );
+const valuesInvalid = (fieldIds: string[]) =>
+  HttpResponse.json(
+    {
+      code: ErrorCode.CUSTOM_FIELD_VALUE_INVALID,
+      message: 'Custom field values are invalid',
+      details: { issues: fieldIds.map((fieldId) => ({ fieldId, code: 'not_in_type' })) },
+    },
+    { status: 422 },
+  );
+
+/** Значения тела проекта: legacy code/clientId — системные атрибуты (Р9),
+ *  как `legacyToAttributes` сервера. */
+function valuesOfBody(body: {
+  code?: string | null;
+  clientId?: string | null;
+  customFields?: Record<string, unknown>;
+}): Record<string, unknown> {
+  const values: Record<string, unknown> = { ...(body.customFields ?? {}) };
+  if (body.code && values[SYSTEM_FIELD_IDS.projectCode] === undefined) {
+    values[SYSTEM_FIELD_IDS.projectCode] = body.code;
+  }
+  if (body.clientId && values[SYSTEM_FIELD_IDS.projectClient] === undefined) {
+    values[SYSTEM_FIELD_IDS.projectClient] = body.clientId;
+  }
+  return values;
+}
 
 /** Запись проектов в моках (#52): создание/правка/статусы/руководство/
  *  участие — зеркало серверных правил, чтобы приёмка на демо-мире видела
@@ -56,7 +97,17 @@ export const projectMutationHandlers = [
       if (!portfolio || portfolio.archivedAt !== null) return invalid();
     }
     if (body.clientId && !counterpartyRefById(body.clientId)) return invalid();
-    const row = createDemoProject(body, actor);
+    const form = projectTypeFormOf(type);
+    const values = valuesOfBody(body);
+    const unknown = Object.keys(values).filter(
+      (fieldId) => !form.fields.some((slot) => slot.fieldId === fieldId),
+    );
+    if (unknown.length > 0) return valuesInvalid(unknown);
+    const missing = missingProjectFields(form, {
+      customFields: values as CustomFieldValues,
+    });
+    if (missing.length > 0) return fieldsRequired(type.id, missing, 'create');
+    const row = createDemoProject({ ...body, customFields: values as CustomFieldValues }, actor);
     return HttpResponse.json(detailOf(row, actor), { status: 201 });
   }),
 
@@ -82,6 +133,16 @@ export const projectMutationHandlers = [
       if (!portfolio || portfolio.archivedAt !== null) return invalid();
     }
     if (body.clientId && !counterpartyRefById(body.clientId)) return invalid();
+    const type = demoProjectTypes.find((entry) => entry.id === row.typeId);
+    if (!type) return invalid();
+    const form = projectTypeFormOf(type);
+    const values = valuesOfBody(body);
+    const unknown = Object.keys(values).filter(
+      (fieldId) => !form.fields.some((slot) => slot.fieldId === fieldId),
+    );
+    if (unknown.length > 0) return valuesInvalid(unknown);
+    const cleared = clearedProjectFields(requiredProjectFields(form), values);
+    if (cleared.length > 0) return fieldsRequired(type.id, cleared, 'clear');
     const updated = updateDemoProject(row.id, body, actor.id);
     return updated ? HttpResponse.json(detailOf(updated, actor)) : notFound();
   }),

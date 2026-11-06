@@ -25,6 +25,9 @@ export const PROJECT_EVENTS = {
   /** Каталог видов папок (#556): форма и возможности вида изменились.
    *  Каталожное событие — gateway рассылает всем в presence (О6). */
   NODE_KIND_CHANGED: 'project.node_kind_changed',
+  /** Каталог типов проектов (#631, Р10): форма типа (слоты атрибутов),
+   *  название, значок, цвет, архив. Каталожное — рассылается всем. */
+  TYPE_CHANGED: 'project.type_changed',
 } as const;
 
 export type ProjectEventType = (typeof PROJECT_EVENTS)[keyof typeof PROJECT_EVENTS];
@@ -32,7 +35,10 @@ export type ProjectEventType = (typeof PROJECT_EVENTS)[keyof typeof PROJECT_EVEN
 /** Каталожные события проектов (ADR-0030 «Дополнение (#556)»): справочные
  *  данные без персональных данных и без привязки к проекту — рассылаются
  *  всем, как каталог атрибутов (`custom_field.*`). */
-export const PROJECT_CATALOG_EVENTS = [PROJECT_EVENTS.NODE_KIND_CHANGED] as const;
+export const PROJECT_CATALOG_EVENTS = [
+  PROJECT_EVENTS.NODE_KIND_CHANGED,
+  PROJECT_EVENTS.TYPE_CHANGED,
+] as const;
 
 export type ProjectCatalogEventType = (typeof PROJECT_CATALOG_EVENTS)[number];
 
@@ -129,3 +135,12 @@ export const projectNodeKindChangedPayloadSchema = z.object({
   fields: z.array(z.string()),
 });
 export type ProjectNodeKindChangedPayload = z.infer<typeof projectNodeKindChangedPayloadSchema>;
+
+/** Тип проекта изменился (#631, Р10): форма-слоты, справочные поля, архив.
+ *  `form` в `fields` — слоты и привязки атрибутов перечитаны. */
+export const projectTypeChangedPayloadSchema = z.object({
+  typeId: z.uuid(),
+  change: z.enum(['created', 'updated', 'archived', 'restored']),
+  fields: z.array(z.string()),
+});
+export type ProjectTypeChangedPayload = z.infer<typeof projectTypeChangedPayloadSchema>;

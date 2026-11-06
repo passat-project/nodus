@@ -216,7 +216,10 @@ export function FieldsTab() {
           rowMenu={(definition) =>
             fieldRowMenu({
               row: definition,
-              index: q ? -1 : inModuleRows.indexOf(definition),
+              // Порядок глобальный (весь портал), а фильтр/поиск показывают
+              // подмножество: движение по глобальному списку выглядело бы
+              // «прыжком мимо невидимых». При фильтре — без перемещения.
+              index: q || module !== 'all' ? -1 : inModuleRows.indexOf(definition),
               total: inModuleRows.length,
               canManage,
               onEdit: (row) => setSearch({ field: row.id }),

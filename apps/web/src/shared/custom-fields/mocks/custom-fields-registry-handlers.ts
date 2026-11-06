@@ -11,7 +11,6 @@ import {
   reorderCustomFieldsBodySchema,
 } from '@nodus/contracts';
 
-import { projectsAvailable } from '../../api/projects-available.js';
 import { dictionaryById } from '../../mocks/data/dictionaries.js';
 import {
   demoCustomFieldDefinitions,
@@ -63,9 +62,6 @@ export const registryHandlers = [
       return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 422, parsed.error.issues);
     }
     const body: CreateCustomFieldBody = parsed.data;
-    if (body.type === 'project' && !projectsAvailable()) {
-      return error(ErrorCode.CUSTOM_FIELD_TYPE_UNAVAILABLE, 'Project fields unavailable', 422);
-    }
     if (body.settings.dictionaryId && !dictionaryById(body.settings.dictionaryId)) {
       return error(ErrorCode.VALIDATION_FAILED, 'Dictionary not found', 422);
     }

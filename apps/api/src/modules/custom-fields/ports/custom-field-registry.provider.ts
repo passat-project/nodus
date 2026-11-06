@@ -140,12 +140,13 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
   async syncPlaceBindings(
     target: RegistryTarget,
     fieldIds: readonly string[],
+    removedFieldIds: readonly string[],
     tx?: TransactionClient,
   ): Promise<void> {
     if (target.kind === 'process_type') {
       throw new Error('process_type has no form slots');
     }
-    await this.repository.syncTargets(target.kind, target.id, fieldIds, tx);
+    await this.repository.syncTargets(target.kind, target.id, fieldIds, removedFieldIds, tx);
   }
 }
 

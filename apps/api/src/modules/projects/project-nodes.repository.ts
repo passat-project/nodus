@@ -12,7 +12,6 @@ export const nodeSelect = {
   parentId: true,
   kindId: true,
   name: true,
-  code: true,
   customFields: true,
   order: true,
   createdAt: true,
@@ -31,7 +30,6 @@ export interface NewProjectNode {
 
 export interface ProjectNodePatch {
   name?: string;
-  code?: string | null;
   kindId?: string;
   customFields?: Prisma.InputJsonValue;
   parentId?: string | null;

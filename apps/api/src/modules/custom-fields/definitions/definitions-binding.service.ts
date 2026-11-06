@@ -79,7 +79,8 @@ export class DefinitionsBindingService {
   ): Promise<CustomFieldDefinition> {
     const definition = await this.require(id);
     assertNotCompany(definition);
-    await assertTargetsBindable(this.catalog, this.targets, kind, [targetId]);
+    // Снятие разрешено ВСЕГДА (О3): цель могла быть заархивирована или
+    // удалена — привязка-сирота не должна блокировать уборку (N-5 #646).
     return this.txRunner.run(async (tx) => {
       await this.definitions.unbindTarget(id, bindingRowKind(kind), targetId, tx);
       const rowKind = bindingRowKind(kind);

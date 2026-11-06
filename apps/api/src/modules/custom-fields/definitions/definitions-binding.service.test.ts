@@ -197,12 +197,15 @@ describe('DefinitionsBindingService.unbind (#631, О3 — снятие всег�
     expect(formCleaner.removeFieldFromForm).not.toHaveBeenCalled();
   });
 
-  it('цель проверяется и на снятии: неизвестная — 404', async () => {
+  it('цель на снятии не проверяется: удалённая/архивная — идемпотентно (N-5 #646)', async () => {
     const { service, definitions } = makeService();
-    await expect(service.unbind(ROW.id, 'process-type', 't-x', 'actor-1')).rejects.toMatchObject({
-      code: ErrorCode.NOT_FOUND,
-    });
-    expect(definitions.unbindTarget).not.toHaveBeenCalled();
+    await service.unbind(ROW.id, 'process-type', 't-gone', 'actor-1');
+    expect(definitions.unbindTarget).toHaveBeenCalledWith(
+      ROW.id,
+      'process_type',
+      't-gone',
+      expect.anything(),
+    );
   });
 
   it('неизвестный атрибут — 404', async () => {

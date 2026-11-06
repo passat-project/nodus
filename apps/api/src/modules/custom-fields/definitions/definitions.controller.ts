@@ -223,7 +223,7 @@ export class DefinitionsController {
     dto: CustomFieldCompanyValueBody,
     @GetUser() actor: AuthUser,
   ): Promise<CustomFieldDefinition> {
-    return this.definitions.setCompanyValue(id, dto.value, actor.id);
+    return this.definitions.setCompanyValue(id, dto.value, actor);
   }
 
   @Patch(':id')

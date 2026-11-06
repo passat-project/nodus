@@ -158,12 +158,17 @@ export const customFieldUsageSchema = z.object({
     node: z.number().int().min(0),
     counterparty: z.number().int().min(0),
   }),
-  /** Формы создания типов, где атрибут стоит слотом. */
+  /** Формы, где атрибут стоит слотом: формы создания типов процессов
+   *  (`task`/`letter`), формы типов проектов и формы видов папок.
+   *  `draft` — форма создания непубликуемого черновика процесса: удаление
+   *  она не блокирует, но окно последствий обязано её показать (Review
+   *  Focus §9 #631). */
   forms: z.array(
     z
       .object({
-        kind: z.enum(['task', 'letter']),
+        kind: z.enum(['task', 'letter', 'project_type', 'node_kind']),
         name: z.string().min(1),
+        draft: z.boolean(),
       })
       .strict(),
   ),

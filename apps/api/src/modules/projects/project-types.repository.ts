@@ -11,7 +11,6 @@ const typeSelect = {
   name: true,
   icon: true,
   color: true,
-  codeField: true,
   form: true,
   kindIds: true,
   archivedAt: true,

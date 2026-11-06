@@ -42,8 +42,13 @@ export async function assertBindingsUsable(
     projectTypeIds: readonly string[];
     nodeKindIds: readonly string[];
   },
+  opts: { allowArchivedProcessTypeIds?: ReadonlySet<string> } = {},
 ): Promise<void> {
-  await assertTargetsBindable(catalog, targets, 'process-type', bindings.processTypeIds);
+  await assertTargetsBindable(catalog, targets, 'process-type', bindings.processTypeIds, {
+    ...(opts.allowArchivedProcessTypeIds
+      ? { allowArchived: opts.allowArchivedProcessTypeIds }
+      : {}),
+  });
   await assertTargetsBindable(catalog, targets, 'project-type', bindings.projectTypeIds);
   await assertTargetsBindable(catalog, targets, 'node-kind', bindings.nodeKindIds);
 }
@@ -148,7 +153,16 @@ export async function assertUpdateAllowed(
         'Company variable cannot have bindings',
       );
     }
-    await assertBindingsUsable(ctx.catalog, ctx.targets, dto.bindings);
+    // Архивный тип процесса, уже привязанный к атрибуту, не блокирует
+    // сохранение полного набора: снять его можно, оставить — тоже (#646).
+    const allowArchivedProcessTypeIds = new Set(
+      current.bindings
+        .filter((binding) => binding.targetKind === 'process_type')
+        .map((binding) => binding.targetId),
+    );
+    await assertBindingsUsable(ctx.catalog, ctx.targets, dto.bindings, {
+      allowArchivedProcessTypeIds,
+    });
   }
   if (nextDefault?.kind === 'static') {
     const issues = await ctx.validator.validate(

@@ -202,7 +202,8 @@ export const projectDetailSchema = projectListItemSchema.extend({
   startDate: z.iso.date().nullable(),
   completedAt: z.iso.datetime().nullable(),
   archivedAt: z.iso.datetime().nullable(),
-  /** Значения кастомных атрибутов области `project` по id определения. */
+  /** Значения атрибутов проекта по id определения (одно определение на
+   *  портал; место — тип проекта, #631). */
   customFields: customFieldValuesSchema,
   customFieldRefs: z.array(customFieldRefSchema),
   access: projectAccessSchema,

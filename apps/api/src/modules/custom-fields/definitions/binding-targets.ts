@@ -32,6 +32,7 @@ export async function assertTargetsBindable(
   targets: FieldBindingTargetReader,
   kind: BindingTargetKind,
   targetIds: readonly string[],
+  opts: { allowArchived?: ReadonlySet<string> } = {},
 ): Promise<void> {
   const unique = [...new Set(targetIds)];
   if (unique.length === 0) return;
@@ -44,7 +45,10 @@ export async function assertTargetsBindable(
       throw DomainException.notFound('Process type not found', { typeIds: missing });
     }
     const live = new Set((await catalog.typeRefs(unique, { live: true })).map((ref) => ref.id));
-    const invalid = unique.filter((id) => !live.has(id));
+    // Архивная цель, уже стоящая в привязках, остаётся допустимой при
+    // сохранении полного набора (иначе окно атрибута нельзя сохранить —
+    // #646); новую привязку к архиву по-прежнему запрещаем.
+    const invalid = unique.filter((id) => !live.has(id) && !opts.allowArchived?.has(id));
     if (invalid.length > 0) {
       throw new DomainException(
         ErrorCode.CUSTOM_FIELD_BINDING_INVALID,

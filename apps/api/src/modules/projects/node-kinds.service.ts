@@ -66,10 +66,14 @@ export class NodeKindsService {
       }
       if (dto.form !== undefined) {
         await this.assertForm(tx, dto.form);
-        // Слот — привязка (Р3): набор слотов формы и есть набор привязок вида.
+        // Слот — привязка (Р3): добавленный слот привязывает, снятый —
+        // снимает; привязки без слотов (посев/диалог) не трогаются (#646).
+        const previous = current.form.fields.map((slot) => slot.fieldId);
+        const next = dto.form.fields.map((slot) => slot.fieldId);
         await this.registry.syncPlaceBindings(
           { kind: 'node_kind', id },
-          dto.form.fields.map((slot) => slot.fieldId),
+          next,
+          previous.filter((fieldId) => !next.includes(fieldId)),
           tx,
         );
       }
@@ -119,15 +123,20 @@ export class NodeKindsService {
    *  синхронизирует привязки вида (Р3). */
   private async assertForm(tx: TransactionClient, form: NodeKindForm): Promise<void> {
     const definitions = await this.registry.definitions({}, tx);
-    const known = new Set(definitions.map((definition) => definition.id));
-    const issues = form.fields
-      .filter((slot) => !known.has(slot.fieldId))
-      .map((slot) => ({ fieldId: slot.fieldId, reason: 'unknown_field' as const }));
+    const byId = new Map(definitions.map((definition) => [definition.id, definition]));
+    const issues: { fieldId: string; reason: 'unknown_field' | 'not_bindable' }[] = [];
+    for (const slot of form.fields) {
+      const definition = byId.get(slot.fieldId);
+      if (!definition) issues.push({ fieldId: slot.fieldId, reason: 'unknown_field' });
+      else if (definition.isCompany) {
+        issues.push({ fieldId: slot.fieldId, reason: 'not_bindable' });
+      }
+    }
     if (issues.length > 0) {
       throw new DomainException(
         ErrorCode.PROJECT_NODE_KIND_FORM_INVALID,
         'Node kind form is invalid',
-        { fieldIds: issues, reason: 'unknown_field' },
+        { fieldIds: issues, reason: issues[0]!.reason },
       );
     }
   }

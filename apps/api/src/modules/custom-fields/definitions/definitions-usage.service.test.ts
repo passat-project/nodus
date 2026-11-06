@@ -36,10 +36,17 @@ function makeService() {
   const taskValues = { countValues: vi.fn(async () => 3) };
   const letterValues = { countValues: vi.fn(async () => 7) };
   const counterpartyValues = { countValues: vi.fn(async () => 2) };
-  const projectUsage = { countValues: vi.fn(async () => 5) };
+  const projectUsage = {
+    countValues: vi.fn(async () => 5),
+    formsUsingField: vi.fn(async () => [
+      { kind: 'project_type' as const, name: 'Тендер', draft: false },
+    ]),
+  };
   const workflows = {
     workflowsUsingField: vi.fn(async () => [{ id: 'w-1', name: 'Переработка' }]),
-    creationFormsUsingField: vi.fn(async () => [{ kind: 'task' as const, name: 'Стандартный' }]),
+    creationFormsUsingField: vi.fn(async () => [
+      { kind: 'task' as const, name: 'Стандартный', draft: true },
+    ]),
   };
   const catalog = {
     typeRefs: vi.fn(async (ids: string[]) =>
@@ -78,7 +85,10 @@ describe('DefinitionsUsageService (#631, Р8)', () => {
     const { service } = makeService();
     expect(await service.usage(row())).toEqual({
       values: { task: 3, letter: 7, counterparty: 2, project: 5, node: 5 },
-      forms: [{ kind: 'task', name: 'Стандартный' }],
+      forms: [
+        { kind: 'task', name: 'Стандартный', draft: true },
+        { kind: 'project_type', name: 'Тендер', draft: false },
+      ],
       workflows: [{ id: 'w-1', name: 'Переработка' }],
       bindings: {
         processTypes: [{ id: 't-1', name: 'Заявка' }],
@@ -98,6 +108,7 @@ describe('DefinitionsUsageService (#631, Р8)', () => {
     expect(counterpartyValues.countValues).toHaveBeenCalledWith(definition.id);
     expect(projectUsage.countValues).toHaveBeenCalledWith('project', definition.id);
     expect(projectUsage.countValues).toHaveBeenCalledWith('node', definition.id);
+    expect(projectUsage.formsUsingField).toHaveBeenCalledWith(definition.id);
   });
 
   it('компания не задана — companyValue false (обычный атрибут)', async () => {

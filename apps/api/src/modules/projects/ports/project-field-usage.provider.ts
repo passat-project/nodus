@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common';
 
 import { Prisma } from '../../../generated/prisma/client.js';
 import { PrismaService } from '../../../core/database/prisma.service.js';
-import type { ProjectFieldScope, ProjectFieldUsageReader } from './project-field-usage.port.js';
+import type {
+  ProjectFieldScope,
+  ProjectFieldUsageReader,
+  ProjectFormUsage,
+} from './project-field-usage.port.js';
 
 /**
  * Реализация порта использования атрибутов в проектах (#556, Р11).
@@ -21,5 +25,19 @@ export class ProjectFieldUsageProvider implements ProjectFieldUsageReader {
       WHERE custom_fields ? ${fieldId}
     `);
     return Number(rows[0]?.count ?? 0);
+  }
+
+  async formsUsingField(fieldId: string): Promise<ProjectFormUsage[]> {
+    return this.prisma.$queryRaw<ProjectFormUsage[]>(Prisma.sql`
+      SELECT 'project_type'::text AS kind, "name", false AS draft
+      FROM "project_types"
+      WHERE "form"->'fields' @> jsonb_build_array(jsonb_build_object('fieldId', ${fieldId}::text))
+      UNION ALL
+      SELECT 'node_kind'::text AS kind, "name", false AS draft
+      FROM "node_kinds"
+      WHERE "config"->'form'->'fields'
+            @> jsonb_build_array(jsonb_build_object('fieldId', ${fieldId}::text))
+      ORDER BY name
+    `);
   }
 }

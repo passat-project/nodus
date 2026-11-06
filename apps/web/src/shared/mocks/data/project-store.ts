@@ -72,7 +72,9 @@ export function createDemoProject(body: CreateProjectBody, actor: DemoActor): De
     endDate: body.endDate ?? null,
     completedAt: null,
     archivedAt: null,
-    customFields: {},
+    // Значения атрибутов создания (#631): мок обязан сохранять их так же,
+    // как сервер, иначе «Шифр»/«Заказчик» теряются на :5173.
+    customFields: { ...(body.customFields ?? {}) },
     creatorId: actor.id,
     createdAt: now,
     updatedAt: now,

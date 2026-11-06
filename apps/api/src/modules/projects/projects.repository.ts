@@ -16,13 +16,11 @@ function escapeLike(value: string): string {
 /** Строка проекта для DTO и прав; участники — отдельно (mapper). */
 export const projectSelect = {
   id: true,
-  code: true,
   name: true,
   description: true,
   color: true,
   typeId: true,
   portfolioId: true,
-  clientId: true,
   managerId: true,
   assistantIds: true,
   visibility: true,
@@ -188,8 +186,6 @@ export class ProjectsRepository {
     );
     return rows[0] ?? null;
   }
-
-  /** Шифр занят другим проектом (частичный unique включает архивные). */
 
   async create(data: ProjectWriteData, tx: TransactionClient): Promise<ProjectRow> {
     return tx.project.create({ select: projectSelect, data: { ...data, id: randomUUID() } });

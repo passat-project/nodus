@@ -92,6 +92,9 @@ export const definitionHandlers = [
   http.delete('/api/v1/custom-fields/definitions/:id/bindings/:kind/:targetId', ({ params }) => {
     const definition = demoFieldById(String(params.id));
     if (!definition) return error(ErrorCode.NOT_FOUND, 'Field not found', 404);
+    if (definition.isCompany) {
+      return error(ErrorCode.VALIDATION_FAILED, 'Company variable has no bindings', 422);
+    }
     const kind = String(params.kind);
     const targetId = String(params.targetId);
     if (kind === 'process-type') {

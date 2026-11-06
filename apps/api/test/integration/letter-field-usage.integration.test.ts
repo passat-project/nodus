@@ -54,7 +54,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       };
     }
 
-    it('считает живые письма, не считает спам; очистка значения обнуляет', async () => {
+    it('считает и мягко удалённые письма (уборка стирает их значения); очистка живого уменьшает счётчик', async () => {
       const tokens = c.fx.app.get(TokenService);
       const admin = {
         ...c.registrar,
@@ -94,11 +94,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
         );
       expect((await usage()).values.letter).toBe(2);
 
+      // Надгробие остаётся носителем: уборка определения стирает и его
+      // значение, окно обязано показать реальный объём потерь (#646).
       await c.fx.prisma.letter.update({ where: { id: spam }, data: { deletedAt: new Date() } });
-      expect((await usage()).values.letter).toBe(1);
+      expect((await usage()).values.letter).toBe(2);
 
       await c.fx.prisma.letter.update({ where: { id: live }, data: { customFields: {} } });
-      expect((await usage()).values.letter).toBe(0);
+      expect((await usage()).values.letter).toBe(1);
 
       const removed = await c.api(admin, 'DELETE', `/custom-fields/definitions/${field.id}`, {
         key: `it-cf-letter-del-${c.fx.runId}`,

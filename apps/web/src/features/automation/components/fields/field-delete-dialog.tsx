@@ -81,7 +81,12 @@ export function FieldDeleteDialog({
     return parts;
   });
   const formsLines = usage.flatMap((query) =>
-    (query.data?.forms ?? []).map((form) => `${form.name} (${ui.customFields.modules[form.kind]})`),
+    (query.data?.forms ?? []).map(
+      (form) =>
+        `${form.name} (${ui.customFields.delete.formKinds[form.kind]}${
+          form.draft ? `, ${ui.customFields.delete.draft}` : ''
+        })`,
+    ),
   );
   const workflowsLines = usage.flatMap((query) => (query.data?.workflows ?? []).map((w) => w.name));
   const bindingsLines = usage.flatMap((query) => {

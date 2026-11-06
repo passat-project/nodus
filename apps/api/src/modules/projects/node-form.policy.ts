@@ -120,7 +120,6 @@ export class NodeFormPolicy {
             authorId: opts.authorId,
             actor: opts.actor,
             target: { kind: 'node_kind', id: kind.id },
-            ...{},
           },
           tx,
         );

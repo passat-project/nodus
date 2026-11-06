@@ -128,20 +128,43 @@ BEGIN
     WHERE loser.rn > 1
   LOOP
     -- Значения JSONB (5 таблиц сущностей): ключ uuid → канонический.
-    UPDATE "tasks" SET "custom_fields" = "custom_fields" - absorbed::text
-        || jsonb_build_object(canonical::text, "custom_fields" -> absorbed::text)
+    -- Если у записи уже есть значение канонического определения, оно
+    -- ПОБЕЖДАЕТ (канонический — тот, кто выжил; N-10 #646): поглощённый
+    -- ключ просто убирается. Иначе значение переносится на канонический.
+    UPDATE "tasks" SET "custom_fields" =
+        CASE WHEN jsonb_exists("custom_fields", canonical::text)
+             THEN "custom_fields" - absorbed::text
+             ELSE ("custom_fields" - absorbed::text)
+                  || jsonb_build_object(canonical::text, "custom_fields" -> absorbed::text)
+        END
     WHERE jsonb_exists("custom_fields", absorbed::text);
-    UPDATE "letters" SET "custom_fields" = "custom_fields" - absorbed::text
-        || jsonb_build_object(canonical::text, "custom_fields" -> absorbed::text)
+    UPDATE "letters" SET "custom_fields" =
+        CASE WHEN jsonb_exists("custom_fields", canonical::text)
+             THEN "custom_fields" - absorbed::text
+             ELSE ("custom_fields" - absorbed::text)
+                  || jsonb_build_object(canonical::text, "custom_fields" -> absorbed::text)
+        END
     WHERE jsonb_exists("custom_fields", absorbed::text);
-    UPDATE "projects" SET "custom_fields" = "custom_fields" - absorbed::text
-        || jsonb_build_object(canonical::text, "custom_fields" -> absorbed::text)
+    UPDATE "projects" SET "custom_fields" =
+        CASE WHEN jsonb_exists("custom_fields", canonical::text)
+             THEN "custom_fields" - absorbed::text
+             ELSE ("custom_fields" - absorbed::text)
+                  || jsonb_build_object(canonical::text, "custom_fields" -> absorbed::text)
+        END
     WHERE jsonb_exists("custom_fields", absorbed::text);
-    UPDATE "project_nodes" SET "custom_fields" = "custom_fields" - absorbed::text
-        || jsonb_build_object(canonical::text, "custom_fields" -> absorbed::text)
+    UPDATE "project_nodes" SET "custom_fields" =
+        CASE WHEN jsonb_exists("custom_fields", canonical::text)
+             THEN "custom_fields" - absorbed::text
+             ELSE ("custom_fields" - absorbed::text)
+                  || jsonb_build_object(canonical::text, "custom_fields" -> absorbed::text)
+        END
     WHERE jsonb_exists("custom_fields", absorbed::text);
-    UPDATE "counterparties" SET "custom_fields" = "custom_fields" - absorbed::text
-        || jsonb_build_object(canonical::text, "custom_fields" -> absorbed::text)
+    UPDATE "counterparties" SET "custom_fields" =
+        CASE WHEN jsonb_exists("custom_fields", canonical::text)
+             THEN "custom_fields" - absorbed::text
+             ELSE ("custom_fields" - absorbed::text)
+                  || jsonb_build_object(canonical::text, "custom_fields" -> absorbed::text)
+        END
     WHERE jsonb_exists("custom_fields", absorbed::text);
 
     -- Слоты форм видов папок: fieldId → канонический (порядок слотов сохранён).
