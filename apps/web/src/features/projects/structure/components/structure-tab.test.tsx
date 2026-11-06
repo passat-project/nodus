@@ -187,11 +187,13 @@ function nodeDefinition(id: string, name: string): CustomFieldDefinition {
 vi.mock('../../../../app/shell/use-card-stack.js', () => ({ useOpenCard: () => openCard }));
 
 vi.mock('../../../../shared/auth-store.js', () => {
-  const state = { user: { id: ME_ID, permissions: ['project.setup.manage'] } };
-  return {
-    useAuthStore: (selector: (s: typeof state) => unknown) => selector(state),
-    getState: () => state,
+  const state = {
+    user: { id: ME_ID, permissions: ['project.setup.manage'], modules: ['projects'] },
   };
+  // projectsAvailable() зовёт СТАТИКУ useAuthStore.getState() (без моков
+  // VITE_API_MOCK доходит до живого модуля) — статика обязана быть на хуке.
+  const useAuthStore = (selector: (s: typeof state) => unknown) => selector(state);
+  return { useAuthStore: Object.assign(useAuthStore, { getState: () => state }) };
 });
 
 vi.mock('../../../../shared/api/projects-list.js', () => ({
