@@ -100,13 +100,18 @@ export async function setupTypeFormsFixture(): Promise<TypeFormsFixture> {
   expect(enabled.status).toBe(200);
 
   const bound = await fx.api(admin, 'POST', '/custom-fields/definitions', {
-    body: { scope: 'task', type: 'number', name: `Поле часы ${fx.runId}`, typeIds: [type.id] },
+    // Привязка к типу процесса — bindings (Р3 #631); body без scope/typeIds.
+    body: {
+      type: 'number',
+      name: `Поле часы ${fx.runId}`,
+      bindings: { processTypeIds: [type.id], projectTypeIds: [], nodeKindIds: [] },
+    },
     key: `it-432-field-a-${fx.runId}`,
   });
   expect(bound.status, await bound.clone().text()).toBe(201);
   const fieldBound = ((await bound.json()) as { id: string }).id;
   const unbound = await fx.api(admin, 'POST', '/custom-fields/definitions', {
-    body: { scope: 'task', type: 'text', name: `Поле чужое ${fx.runId}` },
+    body: { type: 'text', name: `Поле чужое ${fx.runId}` },
     key: `it-432-field-b-${fx.runId}`,
   });
   expect(unbound.status).toBe(201);
@@ -179,7 +184,8 @@ export async function setupTypeFormsFixture(): Promise<TypeFormsFixture> {
       await fx.prisma.task
         .deleteMany({ where: { id: { in: fixture.taskIds } } })
         .catch(() => undefined);
-      await fx.prisma.fieldDefinitionType.deleteMany({
+      // Привязки чистятся до определений (field_bindings; определения — каскадом).
+      await fx.prisma.fieldBinding.deleteMany({
         where: { definitionId: { in: [fieldBound, fieldUnbound] } },
       });
       await fx.prisma.fieldDefinition.deleteMany({

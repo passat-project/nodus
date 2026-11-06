@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   ErrorCode,
+  SYSTEM_FIELD_IDS,
   customFieldUsageSchema,
   projectNodeSchema,
   projectStructureResponseSchema,
@@ -10,11 +11,11 @@ import {
 import { setupNodeKindsFixture, type NodeKindsFixture } from './node-kinds.fixtures.js';
 
 /**
- * Виды папок как настраиваемые типы (#556, пакет 2): конфигурация вида
- * (форма + возможности), значения атрибутов области `node`, политика формы
- * (обязательные при создании/смене вида/очистке), допустимость вида типом
- * проекта, ссылки значений в срезе структуры, использование в `usage` и
- * уборка значений удалённого атрибута. Фикстура — `node-kinds.fixtures.ts`.
+ * Виды папок как настраиваемые типы (#556; #631 — «Код» стал атрибутом):
+ * конфигурация вида (форма + возможности), значения атрибутов с легаси-code,
+ * политика формы (обязательные при создании/смене вида/очистке), допустимость
+ * вида типом проекта, ссылки значений в срезе структуры, использование в
+ * `usage` и уборка значений удалённого атрибута. Фикстура — node-kinds.fixtures.
  */
 describe('Виды папок как настраиваемые типы (#556)', () => {
   let f: NodeKindsFixture;
@@ -27,29 +28,33 @@ describe('Виды папок как настраиваемые типы (#556)'
     await f.cleanup();
   });
 
-  it('посев: «Комплект» — шифр обязателен, «Марка» обязательна, три возможности', async () => {
+  it('посев: «Комплект» — «Код» и «Марка» обязательны, три возможности', async () => {
     const set = (await f.kinds()).find((kind) => kind.name === 'Комплект');
     expect(set, 'посевной «Комплект» в миграции Б').toBeTruthy();
-    expect(set!.form.code).toBe('required');
-    expect(set!.form.fields).toHaveLength(1);
-    expect(set!.form.fields[0]!.state).toBe('required');
+    expect(set!.form.fields).toHaveLength(2);
+    // Порядок слотов не значим (Р9 #631: слот «Кода» встал на место
+    // отжившего form.code) — важна обязательность обоих.
+    const markSlot = set!.form.fields.find((slot) => slot.fieldId !== SYSTEM_FIELD_IDS.nodeCode);
+    expect(set!.form.fields.find((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)?.state).toBe(
+      'required',
+    );
+    expect(markSlot?.state).toBe('required');
     expect(set!.capabilities).toEqual(['document_changes', 'pulse_row', 'schema_row']);
 
-    const mark = (await f.definitions()).find((field) => field.id === set!.form.fields[0]!.fieldId);
+    const mark = (await f.definitions()).find((field) => field.id === markSlot!.fieldId);
     expect(mark?.name).toBe('Марка');
     expect(mark?.type).toBe('enum');
   });
 
   it('конфигурация вида: возможности в порядке enum, чужой атрибут — 422', async () => {
     expect(f.kindB.capabilities).toEqual(['document_changes', 'schema_row']);
-    expect(f.kindA.form.code).toBe('optional');
+    expect(
+      f.kindA.form.fields.find((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)?.state,
+    ).toBe('optional');
 
     const unknown = await f.fx.fx.api(f.admin, 'PATCH', `/projects/node-kinds/${f.kindA.id}`, {
       body: {
-        form: {
-          code: 'optional',
-          fields: [{ fieldId: '00000000-0000-4000-8000-0000000000ff', state: 'optional' }],
-        },
+        form: { fields: [{ fieldId: '00000000-0000-4000-8000-0000000000ff', state: 'optional' }] },
       },
       key: f.key('kind-bad'),
     });
@@ -63,7 +68,7 @@ describe('Виды папок как настраиваемые типы (#556)'
     await f.expectError(duplicate, 409, ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN);
   });
 
-  it('создание папки: значения, ссылки в срезе, чужой атрибут — 422', async () => {
+  it('создание папки: значения (legacy code → атрибут «Код»), ссылки в срезе, чужой атрибут — 422', async () => {
     const created = await f.fx.node(f.fx.alice, f.projectId, {
       kindId: f.kindB.id,
       name: 'Папка Б',
@@ -71,9 +76,11 @@ describe('Виды папок как настраиваемые типы (#556)'
       customFields: { [f.textField]: 'значение', [f.userField]: f.fx.alice.id },
     });
     expect(created.customFields).toEqual({
+      [SYSTEM_FIELD_IDS.nodeCode]: 'P556-1',
       [f.textField]: 'значение',
       [f.userField]: f.fx.alice.id,
     });
+    expect(created.code).toBe('P556-1');
 
     const structure = await f.fx.structure(f.fx.alice, f.projectId);
     const stored = structure.nodes.find((node) => node.id === created.id)!;
@@ -94,13 +101,15 @@ describe('Виды папок как настраиваемые типы (#556)'
     ]);
   });
 
-  it('обязательные: создание и пачка без шифра/атрибута — 422, «скрытый» шифр — 400', async () => {
+  it('обязательные: создание и пачка без «Кода»/атрибута — 422; код мимо слота игнорируется', async () => {
     const noCode = await f.fx.createNode(f.fx.alice, f.projectId, {
       kindId: f.kindB.id,
-      name: 'Без шифра',
+      name: 'Без кода',
     });
     const noCodeBody = await f.expectError(noCode, 422, ErrorCode.PROJECT_NODE_FIELDS_REQUIRED);
-    expect((noCodeBody.details as { fields: string[] }).fields).toEqual(['code']);
+    expect((noCodeBody.details as { fields: string[] }).fields).toEqual([
+      `cf.${SYSTEM_FIELD_IDS.nodeCode}`,
+    ]);
 
     const noText = await f.fx.createNode(f.fx.alice, f.projectId, {
       kindId: f.kindA.id,
@@ -114,7 +123,9 @@ describe('Виды папок как настраиваемые типы (#556)'
       key: f.key('batch'),
     });
     const batchBody = await f.expectError(batch, 422, ErrorCode.PROJECT_NODE_FIELDS_REQUIRED);
-    expect((batchBody.details as { fields: string[] }).fields).toEqual(['code']);
+    expect((batchBody.details as { fields: string[] }).fields).toEqual([
+      `cf.${SYSTEM_FIELD_IDS.nodeCode}`,
+    ]);
 
     const batchA = await f.fx.fx.api(f.fx.alice, 'POST', `/projects/${f.projectId}/nodes/batch`, {
       body: {
@@ -129,20 +140,22 @@ describe('Виды папок как настраиваемые типы (#556)'
     expect(batchNodes.nodes).toHaveLength(2);
     expect(batchNodes.nodes[0]!.customFields).toEqual({ [f.textField]: 'общее' });
 
-    const hidden = await f.fx.fx.api(f.admin, 'PATCH', `/projects/node-kinds/${f.kindA.id}`, {
-      body: { form: { code: 'hidden', fields: [{ fieldId: f.textField, state: 'optional' }] } },
-      key: f.key('kind-hidden'),
+    // Слот «Код» убран из формы вида: legacy code больше не 400 — значение
+    // просто игнорируется (пишут атрибутом, которого нет в форме).
+    const noCodeSlot = await f.fx.fx.api(f.admin, 'PATCH', `/projects/node-kinds/${f.kindA.id}`, {
+      body: { form: { fields: [{ fieldId: f.textField, state: 'required' }] } },
+      key: f.key('kind-no-code-slot'),
     });
-    expect(hidden.status, await hidden.clone().text()).toBe(200);
-    const hiddenCode = await f.fx.createNode(f.fx.alice, f.projectId, {
+    expect(noCodeSlot.status, await noCodeSlot.clone().text()).toBe(200);
+    const ignored = await f.fx.createNode(f.fx.alice, f.projectId, {
       kindId: f.kindA.id,
-      name: 'Скрытый шифр',
+      name: 'Код мимо слота',
       code: 'H-1',
+      customFields: { [f.textField]: 'ок' },
     });
-    await f.expectError(hiddenCode, 400, ErrorCode.VALIDATION_FAILED);
-    await f.fx.fx.api(f.admin, 'PATCH', `/projects/node-kinds/${f.kindA.id}`, {
-      body: { form: { code: 'optional', fields: [{ fieldId: f.textField, state: 'required' }] } },
-      key: f.key('kind-unhide'),
+    expect(ignored.status, await ignored.clone().text()).toBe(201);
+    expect(projectNodeSchema.parse(await ignored.json()).customFields).toEqual({
+      [f.textField]: 'ок',
     });
   });
 
@@ -165,18 +178,25 @@ describe('Виды папок как настраиваемые типы (#556)'
     expect(changed.status, await changed.clone().text()).toBe(200);
     const changedNode = projectNodeSchema.parse(await changed.json());
     expect(changedNode.kindId).toBe(f.kindB.id);
-    expect(changedNode.customFields).toEqual({ [f.textField]: 'исходное' });
+    expect(changedNode.customFields).toEqual({
+      [f.textField]: 'исходное',
+      [SYSTEM_FIELD_IDS.nodeCode]: 'P556-KIND',
+    });
 
+    // Значения прежнего вида не стираются: «Код» остаётся в значениях, хотя
+    // у вида А слота больше нет (Р5) — DTO отдаёт все хранимые значения.
     const back = await f.patchNode(node.id, { kindId: f.kindA.id });
     expect(back.status, await back.clone().text()).toBe(200);
     expect(projectNodeSchema.parse(await back.json()).customFields).toEqual({
       [f.textField]: 'исходное',
+      [SYSTEM_FIELD_IDS.nodeCode]: 'P556-KIND',
     });
 
     const valueChanged = await f.patchNode(node.id, { customFields: { [f.textField]: 'новое' } });
     expect(valueChanged.status, await valueChanged.clone().text()).toBe(200);
     expect(projectNodeSchema.parse(await valueChanged.json()).customFields).toEqual({
       [f.textField]: 'новое',
+      [SYSTEM_FIELD_IDS.nodeCode]: 'P556-KIND',
     });
 
     const events = await f.fx.fx.prisma.event.findMany({
@@ -219,7 +239,7 @@ describe('Виды папок как настраиваемые типы (#556)'
     });
   });
 
-  it('использование атрибута: значения папок и виды в форме (usage)', async () => {
+  it('использование атрибута: значения папок и виды в привязках (usage)', async () => {
     const res = await f.fx.fx.api(
       f.admin,
       'GET',
@@ -227,8 +247,8 @@ describe('Виды папок как настраиваемые типы (#556)'
     );
     expect(res.status).toBe(200);
     const usage = customFieldUsageSchema.parse(await res.json());
-    expect(usage.valueCount).toBeGreaterThanOrEqual(1);
-    expect(usage.nodeKinds.map((kind) => kind.id)).toEqual(
+    expect(usage.values.node).toBeGreaterThanOrEqual(1);
+    expect(usage.bindings.nodeKinds.map((kind) => kind.id)).toEqual(
       expect.arrayContaining([f.kindA.id, f.kindB.id]),
     );
   });
@@ -259,7 +279,7 @@ describe('Виды папок как настраиваемые типы (#556)'
   it('удаление атрибута: значения и формы чистятся, повторная доставка безвредна', async () => {
     const fieldId = await f.createDefinition('text', `Проба 556 уборка ${f.fx.fx.runId}`);
     const kind = await f.createKind(`Проба 556 вид уборки ${f.fx.fx.runId}`, {
-      form: { code: 'optional', fields: [{ fieldId, state: 'required' }] },
+      form: { fields: [{ fieldId, state: 'required' }] },
     });
     const node = await f.fx.node(f.fx.alice, f.projectId, {
       kindId: kind.id,

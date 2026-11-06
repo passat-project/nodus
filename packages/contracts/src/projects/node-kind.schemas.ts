@@ -5,15 +5,22 @@ import {
   type CustomFieldValues,
 } from '../custom-fields/custom-field-values.js';
 import { customFieldKey } from '../custom-fields/custom-field-key.js';
+import {
+  fieldFormSlotSchema,
+  fieldFormStateSchema,
+  hasDuplicateSlots,
+} from '../custom-fields/field-form.schemas.js';
 import { projectColorSchema } from './project.schemas.js';
 
 /**
- * Вид папки как настраиваемый тип (#556, ADR-0030 «Дополнение (02.11)»):
- * конфигурация вида — форма создания (шифр и атрибуты области `node`
- * в состояниях «скрыто / по желанию / обязательно») и закрытый список
- * возможностей. Форма вида И ЕСТЬ привязка атрибутов к виду (Р3): отдельной
- * таблицы «атрибут × вид» нет. Значения живут в JSONB папки по id определения,
- * проверка — порт `CUSTOM_FIELD_REGISTRY` со скоупингом `fieldIds`.
+ * Вид папки как настраиваемый тип (#556, ADR-0030 «Дополнение (02.11)»;
+ * ревизия #631): конфигурация вида — форма создания (атрибуты в состояниях
+ * «скрыто / по желанию / обязательно») и закрытый список возможностей.
+ * Форма вида задаёт СОСТОЯНИЯ атрибутов; сама привязка «атрибут × вид»
+ * живёт в реестре атрибутов («Где используется», Р3). Бывший системный
+ * слот `code` заменён посевным атрибутом «Код» (system-fields). Значения
+ * живут в JSONB папки по id определения, проверка — порт
+ * `CUSTOM_FIELD_REGISTRY` со скоупингом target.
  *
  * Схема закрытая: битый раздел при чтении заменяется умолчанием
  * (`normalizeNodeKindConfig`), запись — целыми разделами, сохраняется сразу.
@@ -58,30 +65,19 @@ export const NODE_KIND_CAPABILITIES = nodeKindCapabilitySchema.options;
 
 /** Состояние поля формы: «скрыто» — не спрашивается при создании, но видно
  *  и правится в свойствах; «по желанию» и «обязательно» — в окне создания. */
-export const nodeKindFieldStateSchema = z.enum(['hidden', 'optional', 'required']);
+export const nodeKindFieldStateSchema = fieldFormStateSchema;
 export type NodeKindFieldState = z.infer<typeof nodeKindFieldStateSchema>;
 
-/** Состояние системного поля «Шифр» (В10). */
-export const nodeKindCodeStateSchema = nodeKindFieldStateSchema;
-export type NodeKindCodeState = NodeKindFieldState;
-
-export const nodeKindFormFieldSchema = z
-  .object({
-    fieldId: z.uuid(),
-    state: nodeKindFieldStateSchema,
-  })
-  .strict();
+export const nodeKindFormFieldSchema = fieldFormSlotSchema;
 export type NodeKindFormField = z.infer<typeof nodeKindFormFieldSchema>;
 
 export const nodeKindFormSchema = z
   .object({
-    code: nodeKindCodeStateSchema,
     fields: z.array(nodeKindFormFieldSchema).max(NODE_KIND_LIMITS.fields),
   })
   .strict()
   .superRefine((form, ctx) => {
-    const ids = form.fields.map((slot) => slot.fieldId);
-    if (new Set(ids).size !== ids.length) {
+    if (hasDuplicateSlots(form.fields)) {
       ctx.addIssue({ code: 'custom', path: ['fields'], message: 'duplicate field' });
     }
   });
@@ -102,8 +98,8 @@ export const nodeKindConfigSchema = z
   .strict();
 export type NodeKindConfig = z.infer<typeof nodeKindConfigSchema>;
 
-/** Умолчание: шифр по желанию, атрибутов нет, возможностей нет. */
-export const DEFAULT_NODE_KIND_FORM: NodeKindForm = { code: 'optional', fields: [] };
+/** Умолчание: атрибутов нет, возможностей нет. */
+export const DEFAULT_NODE_KIND_FORM: NodeKindForm = { fields: [] };
 
 export const DEFAULT_NODE_KIND_CONFIG: NodeKindConfig = {
   form: DEFAULT_NODE_KIND_FORM,
@@ -194,21 +190,18 @@ export function nodeKindHas(
 }
 
 /**
- * Эффективная форма вида: слоты без неизвестных id и без скрытых в «Атрибутах»
- * определений. Скрытое определение в форме — тупик (поле не видно, но
- * обязательно), поэтому оно исключается из формы целиком (C1). Без списка
- * определений (моки, предпросмотр) форма берётся как есть.
+ * Эффективная форма вида: слоты без неизвестных id (определение удалено).
+ * Без списка определений (моки, предпросмотр) форма берётся как есть.
+ * Глобального скрытия больше нет — видимость регулирует слот (О2 #631).
  */
 export function effectiveNodeForm(
   kind: { form?: unknown },
-  definitions?: readonly { id: string; hidden: boolean }[],
+  definitions?: readonly { id: string }[],
 ): NodeKindForm {
   const form = nodeKindFormOf(kind);
   if (!definitions) return form;
-  const visible = new Set(
-    definitions.filter((definition) => !definition.hidden).map((definition) => definition.id),
-  );
-  return { code: form.code, fields: form.fields.filter((slot) => visible.has(slot.fieldId)) };
+  const known = new Set(definitions.map((definition) => definition.id));
+  return { fields: form.fields.filter((slot) => known.has(slot.fieldId)) };
 }
 
 /**
@@ -220,7 +213,7 @@ export function effectiveNodeForm(
 export function nodeFormValues(
   values: CustomFieldValues | undefined,
   kind: { form?: unknown },
-  definitions?: readonly { id: string; hidden: boolean }[],
+  definitions?: readonly { id: string }[],
 ): CustomFieldValues {
   if (!values) return {};
   const form = effectiveNodeForm(kind, definitions);
@@ -232,9 +225,8 @@ export function nodeFormValues(
   return out;
 }
 
-/** Ключ поля формы: `code` — системный шифр, `cf.<id>` — атрибут (общий
- *  ключ окна/гейта, канон #431). */
-export type NodeFormKey = 'code' | `cf.${string}`;
+/** Ключ поля формы: `cf.<id>` — атрибут (общий ключ окна/гейта, канон #431). */
+export type NodeFormKey = `cf.${string}`;
 
 export function nodeFormKey(fieldId: string): NodeFormKey {
   return customFieldKey(fieldId);
@@ -242,31 +234,21 @@ export function nodeFormKey(fieldId: string): NodeFormKey {
 
 /** Обязательные слоты формы (состояние «обязательно»). */
 export function requiredNodeFields(form: NodeKindForm): NodeFormKey[] {
-  const keys: NodeFormKey[] = form.code === 'required' ? ['code'] : [];
-  for (const slot of form.fields) {
-    if (slot.state === 'required') keys.push(nodeFormKey(slot.fieldId));
-  }
-  return keys;
-}
-
-function formValueOf(
-  key: NodeFormKey,
-  input: { code?: string | null; customFields?: CustomFieldValues },
-): unknown {
-  if (key === 'code') return input.code;
-  return input.customFields?.[key.slice('cf.'.length)];
+  return form.fields
+    .filter((slot) => slot.state === 'required')
+    .map((slot) => nodeFormKey(slot.fieldId));
 }
 
 /**
- * Чего не хватает для формы (обязательные слоты + шифр): проверка ПОСЛЕ
- * умолчаний атрибутов. Отказ — 422 `PROJECT_NODE_FIELDS_REQUIRED`.
+ * Чего не хватает для формы (обязательные слоты): проверка ПОСЛЕ умолчаний
+ * атрибутов. Отказ — 422 `PROJECT_NODE_FIELDS_REQUIRED`.
  */
 export function missingNodeFields(
   form: NodeKindForm,
-  input: { code?: string | null; customFields?: CustomFieldValues },
+  input: { customFields?: CustomFieldValues },
 ): NodeFormKey[] {
   return requiredNodeFields(form).filter(
-    (key) => !isCustomFieldValueFilled(formValueOf(key, input)),
+    (key) => !isCustomFieldValueFilled(input.customFields?.[key.slice('cf.'.length)]),
   );
 }
 

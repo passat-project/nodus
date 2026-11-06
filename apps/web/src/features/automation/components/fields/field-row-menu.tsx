@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Eye, EyeOff, Pencil, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Pencil, Trash2 } from 'lucide-react';
 import type { CustomFieldDefinition } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
@@ -18,7 +18,6 @@ export function fieldRowMenu({
   canManage,
   onEdit,
   onMove,
-  onSetHidden,
   onDelete,
 }: {
   row: CustomFieldDefinition;
@@ -27,7 +26,6 @@ export function fieldRowMenu({
   canManage: boolean;
   onEdit: (row: CustomFieldDefinition) => void;
   onMove: (row: CustomFieldDefinition, delta: -1 | 1) => void;
-  onSetHidden: (row: CustomFieldDefinition, hidden: boolean) => void;
   onDelete: (row: CustomFieldDefinition) => void;
 }): RowMenuItem[] {
   if (!canManage) return [];
@@ -57,29 +55,13 @@ export function fieldRowMenu({
       onSelect: () => onMove(row, 1),
     });
   }
-  items.push(
-    row.hidden
-      ? {
-          id: 'show',
-          icon: <Eye className="size-3.5" />,
-          label: ui.customFields.menu.show,
-          separatorBefore: true,
-          onSelect: () => onSetHidden(row, false),
-        }
-      : {
-          id: 'hide',
-          icon: <EyeOff className="size-3.5" />,
-          label: ui.customFields.menu.hide,
-          separatorBefore: true,
-          onSelect: () => onSetHidden(row, true),
-        },
-    {
-      id: 'delete',
-      icon: <Trash2 className="size-3.5" />,
-      label: ui.customFields.menu.delete,
-      danger: true,
-      onSelect: () => onDelete(row),
-    },
-  );
+  items.push({
+    id: 'delete',
+    icon: <Trash2 className="size-3.5" />,
+    label: ui.customFields.menu.delete,
+    danger: true,
+    separatorBefore: true,
+    onSelect: () => onDelete(row),
+  });
   return items;
 }

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { CustomFieldScope, CustomFieldUsage } from '@nodus/contracts';
+import type { CustomFieldUsage } from '@nodus/contracts';
 
 import {
   CUSTOM_FIELD_VALUES_READER,
@@ -11,44 +11,85 @@ import {
 } from '../../correspondence/ports/letter-field-values.port.js';
 import {
   PROJECT_FIELD_USAGE_READER,
-  type ProjectFieldScope,
   type ProjectFieldUsageReader,
 } from '../../projects/ports/project-field-usage.port.js';
+import {
+  FIELD_BINDING_TARGET_READER,
+  type FieldBindingTargetReader,
+} from '../../projects/ports/field-binding-targets.port.js';
+import {
+  PROCESS_CATALOG_READER,
+  type ProcessCatalogReader,
+} from '../../workflows/ports/process-catalog-reader.port.js';
 import {
   WORKFLOW_FIELD_USAGE_READER,
   type WorkflowFieldUsageReader,
 } from '../../workflows/ports/workflow-field-usage.port.js';
-import type { FieldDefinitionRow } from './definition.mapper.js';
+import { bindingsOf, type FieldDefinitionRow } from './definition.mapper.js';
 
 /**
- * «Где используется атрибут» (#431/#556/#575): число заполненных сущностей,
- * маршруты процессов и формы видов папок. Значения считает порт владельца
- * области (задачи/письма/проекты), сам реестр чужие таблицы не читает (I3).
+ * «Где используется атрибут» (Р8 #631) — агрегат последствий для окна
+ * удаления: значения по видам сущностей (каждый владелец считает свой
+ * JSONB, I3), формы создания, опубликованные маршруты, привязки с именами
+ * целей и факт глобального значения. Удаление разрешено всегда — usage
+ * информирует, не блокирует.
  */
 @Injectable()
 export class DefinitionsUsageService {
   constructor(
-    @Inject(CUSTOM_FIELD_VALUES_READER) private readonly values: CustomFieldValuesReader,
+    @Inject(CUSTOM_FIELD_VALUES_READER) private readonly taskValues: CustomFieldValuesReader,
     @Inject(LETTER_FIELD_VALUES_READER) private readonly letterValues: LetterFieldValuesReader,
     @Inject(PROJECT_FIELD_USAGE_READER) private readonly projectUsage: ProjectFieldUsageReader,
     @Inject(WORKFLOW_FIELD_USAGE_READER) private readonly workflows: WorkflowFieldUsageReader,
+    @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
+    @Inject(FIELD_BINDING_TARGET_READER) private readonly targets: FieldBindingTargetReader,
   ) {}
 
   async usage(definition: FieldDefinitionRow): Promise<CustomFieldUsage> {
-    const scope = definition.scope as CustomFieldScope;
-    const projectScope = isProjectScope(scope);
-    const values = scope === 'letter' ? this.letterValues : this.values;
-    const [valueCount, workflows, nodeKinds] = await Promise.all([
-      projectScope
-        ? this.projectUsage.countValues(scope, definition.id)
-        : values.countValues(scope, definition.id),
-      this.workflows.workflowsUsingField(scope, definition.id),
-      scope === 'node' ? this.projectUsage.nodeKindsUsing(definition.id) : Promise.resolve([]),
+    const bindings = bindingsOf(definition);
+    const [
+      taskCount,
+      letterCount,
+      projectCount,
+      nodeCount,
+      forms,
+      workflows,
+      processTypes,
+      projectTypes,
+      nodeKinds,
+    ] = await Promise.all([
+      this.taskValues.countValues(definition.id),
+      this.letterValues.countValues(definition.id),
+      this.projectUsage.countValues('project', definition.id),
+      this.projectUsage.countValues('node', definition.id),
+      this.workflows.creationFormsUsingField(definition.id),
+      this.workflows.workflowsUsingField(definition.id),
+      this.catalog.typeRefs(bindings.processTypeIds),
+      this.targets.projectTypes(),
+      this.targets.nodeKinds(),
     ]);
-    return { valueCount, workflows, nodeKinds };
-  }
-}
 
-function isProjectScope(scope: CustomFieldScope): scope is ProjectFieldScope {
-  return scope === 'project' || scope === 'node';
+    const nameById = (rows: { id: string; name: string }[], ids: readonly string[]) =>
+      ids
+        .map((id) => rows.find((row) => row.id === id))
+        .filter((row): row is { id: string; name: string } => row !== undefined)
+        .map((row) => ({ id: row.id, name: row.name }));
+
+    return {
+      values: {
+        task: taskCount,
+        letter: letterCount,
+        project: projectCount,
+        node: nodeCount,
+      },
+      forms,
+      workflows,
+      bindings: {
+        processTypes: nameById(processTypes, bindings.processTypeIds),
+        projectTypes: nameById(projectTypes, bindings.projectTypeIds),
+        nodeKinds: nameById(nodeKinds, bindings.nodeKindIds),
+      },
+      companyValue: definition.companyValue !== null,
+    };
+  }
 }

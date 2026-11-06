@@ -61,8 +61,7 @@ export class LetterWorkflowAdapter implements WorkflowEntityAdapter {
     if (participants.some((p) => p.userId === actor.id)) roles.add('participant');
     if (letter.direction === 'outgoing' && letter.createdBy === actor.id) roles.add('author');
     const definitions = await this.customFields.definitions(
-      'letter',
-      { typeId: letter.typeId },
+      { target: { kind: 'process_type', id: letter.typeId } },
       tx,
     );
     return {

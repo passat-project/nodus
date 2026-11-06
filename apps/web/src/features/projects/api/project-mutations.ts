@@ -10,7 +10,7 @@ import type {
   UpdateProjectBody,
   UserRef,
 } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { SYSTEM_FIELD_IDS, ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api } from '../../../shared/api-client.js';
@@ -26,8 +26,32 @@ import {
   type JournalPages,
 } from './project-mutation-helpers.js';
 
+/** Шифр из значений атрибутов (системное поле «Шифр», #631): строка или
+ *  `null` — витринные поля строки журнала остаются производными. */
+function codeOf(
+  customFields: CreateProjectBody['customFields'] | UpdateProjectBody['customFields'],
+): string | null {
+  const value = customFields?.[SYSTEM_FIELD_IDS.projectCode];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/** Значения после патча (`null` удаляет ключ) — оптимистичный кэш карточки. */
+function valuesPatched(
+  current: ProjectDetail['customFields'],
+  patch: NonNullable<UpdateProjectBody['customFields']>,
+): ProjectDetail['customFields'] {
+  const next = { ...current };
+  for (const [fieldId, value] of Object.entries(patch)) {
+    if (value === null) delete next[fieldId];
+    else next[fieldId] = value;
+  }
+  return next;
+}
+
 /** Создание проекта: оптимистичная вставка в журналы, чьим фильтрам запись
- *  удовлетворяет (I4), серверный DTO заменяет временную строку на месте. */
+ *  удовлетворяет (I4), серверный DTO заменяет временную строку на месте.
+ *  `client` — витринная ссылка заказчика для строки журнала (значение едет
+ *  в `customFields` по ключу системного поля, #631). */
 export function useCreateProject() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -54,7 +78,7 @@ export function useCreateProject() {
       const portfolio = groups.find((entry) => entry.id === body.portfolioId);
       const temp: ProjectListItem = {
         id: `temp-${crypto.randomUUID()}`,
-        code: body.code ?? null,
+        code: codeOf(body.customFields),
         name: body.name,
         color: body.color ?? 'blue',
         manager: managerId ? userRefOf(managerId, users) : null,
@@ -67,7 +91,7 @@ export function useCreateProject() {
         },
         visibility: body.visibility ?? defaultVisibility,
         status: 'active',
-        type: type ? { id: type.id, name: type.name, codeField: type.codeField } : null,
+        type: type ? { id: type.id, name: type.name } : null,
         portfolio: portfolio ? { id: portfolio.id, name: portfolio.name } : null,
         client: client ?? null,
         membersCount: people.length,
@@ -113,7 +137,9 @@ export function useCreateProject() {
   });
 }
 
-/** Правка полей: оптимистичный патч карточки и строк журнала (I4). */
+/** Правка полей: оптимистичный патч карточки и строк журнала (I4). Шифр и
+ *  заказчик — атрибуты: их значения едут в `customFields` (ключи системных
+ *  полей), `client` — витринная ссылка для строки журнала (в тело не идёт). */
 export function useUpdateProject(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -127,7 +153,9 @@ export function useUpdateProject(id: string) {
       const portfolio = groups.find((entry) => entry.id === body.portfolioId);
       const patch: Partial<ProjectListItem> = {
         ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.code !== undefined ? { code: body.code ?? null } : {}),
+        ...(body.customFields && SYSTEM_FIELD_IDS.projectCode in body.customFields
+          ? { code: codeOf(body.customFields) }
+          : {}),
         ...(body.color !== undefined ? { color: body.color } : {}),
         ...(body.visibility !== undefined ? { visibility: body.visibility } : {}),
         ...(body.endDate !== undefined ? { endDate: body.endDate ?? null } : {}),
@@ -146,6 +174,9 @@ export function useUpdateProject(id: string) {
           ...patch,
           ...(body.description !== undefined ? { description: body.description ?? '' } : {}),
           ...(body.startDate !== undefined ? { startDate: body.startDate ?? null } : {}),
+          ...(body.customFields
+            ? { customFields: valuesPatched(previous.customFields, body.customFields) }
+            : {}),
         });
       }
       return { previous };

@@ -1,5 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { CustomFieldDefinition, CustomFieldRef, CustomFieldValue } from '@nodus/contracts';
+import type {
+  CustomFieldBindings,
+  CustomFieldDefinition,
+  CustomFieldRef,
+  CustomFieldValue,
+} from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import {
@@ -8,29 +13,32 @@ import {
 } from '../../dictionaries/ports/dictionary-reader.port.js';
 import { CustomFieldRefsHydrator } from '../values/refs-hydrator.js';
 
-/** Строка `field_definitions` в объёме DTO (схема — ADR-0029). */
+/** Строка `field_definitions` в объёме DTO (схема — ADR-0029, ревизия #631). */
 export interface FieldDefinitionRow {
   id: string;
-  scope: string;
+  number: number;
   type: string;
   name: string;
   hint: string | null;
   settings: unknown;
   defaultValue: unknown;
   reportIndexed: boolean;
-  hidden: boolean;
+  isCompany: boolean;
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
-  /** Привязки к типам процессов (#432, Р8); пусто — атрибут нигде не виден. */
-  typeBindings: { processTypeId: string }[];
+  /** Привязки «Где используется» (Р3); глобальная переменная — пусто. */
+  bindings: { targetKind: string; targetId: string }[];
+  /** Значение глобальной переменной (null — не задано). */
+  companyValue: { value: unknown } | null;
 }
 
 /**
- * Строка определения → DTO контракта (#431): настройки типа, справочник
- * списка и ссылки статического умолчания (имена для колонки «По умолчанию»).
- * Пачки: один запрос справочников и один гидратор ссылок на список, а не на
- * строку — реестр области ≤ 100.
+ * Строка определения → DTO контракта (#631): настройки типа, справочник
+ * списка и ссылки статического умолчания (имена для колонки «По умолчанию»),
+ * привязки по видам целей и значение глобальной переменной. Пачки: один
+ * запрос справочников и один гидратор ссылок на список, а не на строку —
+ * реестр портала ≤ 1000.
  */
 @Injectable()
 export class DefinitionMapper {
@@ -101,21 +109,39 @@ export class DefinitionMapper {
   private base(row: FieldDefinitionRow): Omit<CustomFieldDefinition, 'dictionary' | 'defaultRefs'> {
     return {
       id: row.id,
-      scope: row.scope as CustomFieldDefinition['scope'],
+      number: row.number,
       type: row.type as CustomFieldDefinition['type'],
       name: row.name,
       hint: row.hint,
       settings: (row.settings ?? {}) as CustomFieldDefinition['settings'],
       defaultValue: (row.defaultValue ?? null) as CustomFieldDefinition['defaultValue'],
       reportIndexed: row.reportIndexed,
-      hidden: row.hidden,
-      // Привязки к типам (#432, Р8): порядок детерминирован — id по возрастанию.
-      typeIds: row.typeBindings.map((binding) => binding.processTypeId).sort(),
+      isCompany: row.isCompany,
+      companyValue: (row.companyValue?.value ?? null) as CustomFieldDefinition['companyValue'],
+      // Привязки по видам целей; порядок детерминирован — id по возрастанию.
+      bindings: bindingsOf(row),
       sortOrder: row.sortOrder,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
   }
+}
+
+/** Привязки строки → DTO (глобальная переменная связей не имеет). */
+export function bindingsOf(row: Pick<FieldDefinitionRow, 'bindings'>): CustomFieldBindings {
+  const processTypeIds: string[] = [];
+  const projectTypeIds: string[] = [];
+  const nodeKindIds: string[] = [];
+  for (const binding of row.bindings) {
+    if (binding.targetKind === 'process_type') processTypeIds.push(binding.targetId);
+    else if (binding.targetKind === 'project_type') projectTypeIds.push(binding.targetId);
+    else if (binding.targetKind === 'node_kind') nodeKindIds.push(binding.targetId);
+  }
+  return {
+    processTypeIds: processTypeIds.sort(),
+    projectTypeIds: projectTypeIds.sort(),
+    nodeKindIds: nodeKindIds.sort(),
+  };
 }
 
 /** Ссылки, на которые указывает статическое умолчание определения. */
@@ -136,6 +162,9 @@ function refsOfDefault(
     case 'department':
     case 'counterparty':
     case 'project':
+    case 'task':
+    case 'letter':
+    case 'node':
       ids.push(String(value));
       break;
     case 'money':
@@ -153,6 +182,9 @@ function refsOfDefault(
     money: 'dictionary_item',
     counterparty: 'counterparty',
     project: 'project',
+    task: 'task',
+    letter: 'letter',
+    node: 'node',
   };
   const kind = kinds[definition.type];
   if (!kind) return [];

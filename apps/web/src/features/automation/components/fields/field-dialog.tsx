@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { CustomFieldDefinition, CustomFieldScope } from '@nodus/contracts';
+import type { CustomFieldDefinition } from '@nodus/contracts';
 import { ErrorCode, errorMessages, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
@@ -18,13 +18,18 @@ import {
   fetchDictionaryItems,
   useDictionaryItems,
 } from '../../../../shared/dictionaries/queries.js';
-import { useCreateCustomField, useUpdateCustomField } from '../../api/custom-fields-api.js';
+import {
+  useCreateCustomField,
+  useSetCompanyValue,
+  useUpdateCustomField,
+} from '../../api/custom-fields-api.js';
 import {
   commitOptionDrafts,
   invalidateDictionaries,
   useCreateDictionary,
 } from '../../api/dictionaries-api.js';
 import {
+  companyValueChanged,
   createBody,
   draftIssues,
   draftOf,
@@ -43,8 +48,7 @@ import { useDefaultCurrencyId } from './field-settings.js';
 import { FieldTypePicker } from './field-type-picker.js';
 
 export type FieldDialogMode =
-  | { kind: 'create'; scope: CustomFieldScope; presetTypeId?: string }
-  | { kind: 'edit'; definition: CustomFieldDefinition };
+  { kind: 'create' } | { kind: 'edit'; definition: CustomFieldDefinition };
 
 interface Errors {
   name?: string;
@@ -52,15 +56,24 @@ interface Errors {
   form?: string;
 }
 
+/** details 409 CUSTOM_FIELD_NAME_TAKEN: существующий атрибут (В3). */
+function suggestionOf(error: unknown): { definitionId: string; name: string } | null {
+  if (!(error instanceof ApiError)) return null;
+  const suggestion = (error.details as { suggestion?: { definitionId: string; name: string } })
+    ?.suggestion;
+  return suggestion ?? null;
+}
+
 /**
- * Окно атрибута (#431, ревизия UI 25.10.2026 — вместо колонки-редактора с
- * автосохранением): ОДНО окно на создание и правку. Слева — колонка типов,
- * справа — форма выбранного типа; высота окна фиксирована (смена типа и
- * длинные списки вариантов не меняют габарит — канон оверлеев), прокрутка
- * внутри колонок. Всё правится в черновике и уходит на сервер по
- * «Создать»/«Сохранить» (составная операция: варианты справочника →
- * атрибут). Мимо-клик окно не закрывает (заполненное не теряем); без права
- * `custom_field.manage` — просмотр с «Закрыть».
+ * Окно атрибута (#431, ревизия #631): ОДНО окно на создание и правку
+ * атрибута портала. Слева — колонка типов, справа — форма выбранного типа
+ * («Основное», «Вид использования» и «Где используется», настройки,
+ * варианты, умолчание); высота окна фиксирована, прокрутка внутри колонок.
+ * Всё правится в черновике и уходит на сервер по «Создать»/«Сохранить»
+ * (составная операция: варианты справочника → атрибут → значение
+ * глобальной). Мимо-клик окно не закрывает (заполненное не теряем); без
+ * права `custom_field.manage` — просмотр с «Закрыть». Дубль имени —
+ * предложение открыть существующий (В3: названия уникальны на портале).
  */
 export function FieldDialog({
   mode,
@@ -68,32 +81,29 @@ export function FieldDialog({
   canManage,
   onClose,
   onSaved,
+  onOpenDefinition,
 }: {
   mode: FieldDialogMode;
   definitions: readonly CustomFieldDefinition[];
   canManage: boolean;
   onClose: () => void;
   onSaved: (id: string) => void;
+  /** Переход к существующему атрибуту по кнопке предложения (В3). */
+  onOpenDefinition: (definitionId: string) => void;
 }) {
   const queryClient = useQueryClient();
   const definition = mode.kind === 'edit' ? mode.definition : null;
-  const scope = mode.kind === 'edit' ? mode.definition.scope : mode.scope;
   const code =
     definition?.dictionary && definition.settings.dictionaryId ? definition.dictionary.code : null;
   const items = useDictionaryItems(code);
   const currencyFallback = useDefaultCurrencyId();
   const createField = useCreateCustomField();
   const updateField = useUpdateCustomField();
+  const setCompanyValue = useSetCompanyValue();
   const createDictionary = useCreateDictionary();
 
   const [draft, setDraft] = useState<FieldDraft | null>(() =>
-    definition
-      ? code
-        ? null
-        : draftOf(definition, [])
-      : mode.kind === 'create' && mode.presetTypeId
-        ? { ...emptyDraft, typeIds: [mode.presetTypeId] }
-        : emptyDraft,
+    definition ? (code ? null : draftOf(definition, [])) : emptyDraft,
   );
   const [initial, setInitial] = useState<FieldDraft | null>(draft);
   // Варианты справочника приходят запросом: черновик правки собирается,
@@ -104,6 +114,7 @@ export function FieldDialog({
     setInitial(ready);
   }
   const [errors, setErrors] = useState<Errors>({});
+  const [suggestion, setSuggestion] = useState<{ definitionId: string; name: string } | null>(null);
   const [pending, setPending] = useState(false);
 
   const readOnly = !canManage;
@@ -123,17 +134,17 @@ export function FieldDialog({
 
   function update(next: Partial<FieldDraft>) {
     setDraft((current) => (current ? { ...current, ...next } : current));
-    if ('name' in next) setErrors((current) => ({ ...current, name: undefined }));
+    if ('name' in next) {
+      setErrors((current) => ({ ...current, name: undefined }));
+      setSuggestion(null);
+    }
     if ('options' in next) setErrors((current) => ({ ...current, options: undefined }));
   }
 
-  function nameTakenLocally(name: string): boolean {
+  function nameTakenLocally(name: string): CustomFieldDefinition | undefined {
     const key = name.trim().toLowerCase();
-    return definitions.some(
-      (entry) =>
-        entry.scope === scope &&
-        entry.id !== definition?.id &&
-        entry.name.trim().toLowerCase() === key,
+    return definitions.find(
+      (entry) => entry.id !== definition?.id && entry.name.trim().toLowerCase() === key,
     );
   }
 
@@ -149,8 +160,10 @@ export function FieldDialog({
         return;
       }
     }
-    if (nameTakenLocally(draft.name)) {
+    const existing = nameTakenLocally(draft.name);
+    if (existing) {
       setErrors({ name: errorMessages[ErrorCode.CUSTOM_FIELD_NAME_TAKEN] });
+      setSuggestion({ definitionId: existing.id, name: existing.name });
       return;
     }
     const type = draftType(draft)!;
@@ -174,10 +187,15 @@ export function FieldDialog({
           type === 'money' && !draft.settings.currencyId
             ? { ...draft, settings: { currencyId: currencyFallback } }
             : draft,
-          scope,
           { dictionaryId, defaultValue },
         );
         const saved = await createField.mutateAsync(body);
+        if (draft.isCompany && draft.companyValue !== null) {
+          await setCompanyValue.mutateAsync({
+            fieldId: saved.id,
+            value: draft.companyValue,
+          });
+        }
         onSaved(saved.id);
         return;
       }
@@ -195,11 +213,15 @@ export function FieldDialog({
       }
       const body = patchBody(definition, draft, defaultValue);
       if (body) await updateField.mutateAsync({ id: definition.id, body });
+      if (definition.isCompany && companyValueChanged(definition, draft)) {
+        await setCompanyValue.mutateAsync({ fieldId: definition.id, value: draft.companyValue });
+      }
       onSaved(definition.id);
     } catch (caught) {
       const codeOf = caught instanceof ApiError ? caught.code : null;
       if (codeOf === ErrorCode.CUSTOM_FIELD_NAME_TAKEN) {
         setErrors({ name: errorMessages[ErrorCode.CUSTOM_FIELD_NAME_TAKEN] });
+        setSuggestion(suggestionOf(caught));
       } else if (codeOf === ErrorCode.DICTIONARY_ITEM_NAME_TAKEN) {
         setErrors({ options: errorMessages[ErrorCode.DICTIONARY_ITEM_NAME_TAKEN] });
       } else {
@@ -233,7 +255,7 @@ export function FieldDialog({
       >
         <DialogHeader className="shrink-0">
           <DialogTitle>{definition ? `${title} · ${definition.name}` : title}</DialogTitle>
-          <DialogDescription>{ui.customFields.dialog.scopeHint[scope]}</DialogDescription>
+          <DialogDescription>{ui.customFields.dialog.portalHint}</DialogDescription>
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 gap-6">
@@ -258,7 +280,6 @@ export function FieldDialog({
           <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-1">
             <FieldDialogForm
               draft={draft}
-              scope={scope}
               definition={definition}
               shared={shared}
               disabled={readOnly || pending}
@@ -267,6 +288,8 @@ export function FieldDialog({
               issues={issues}
               currencyFallback={currencyFallback}
               removedOptions={removedOptions}
+              suggestion={suggestion}
+              onOpenSuggestion={onOpenDefinition}
               onChange={update}
             />
           </div>

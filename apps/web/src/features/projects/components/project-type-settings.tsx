@@ -1,49 +1,33 @@
 import { Archive, RotateCcw } from 'lucide-react';
-import type {
-  NodeKind,
-  ProjectCodeField,
-  ProjectType,
-  ProjectTypeUpdateBody,
-} from '@nodus/contracts';
+import type { NodeKind, ProjectType, ProjectTypeUpdateBody } from '@nodus/contracts';
 import { processTypeIconSchema, projectColorSchema, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { identityTone } from '../../../shared/ui/identity-tone.js';
 import { CommitInput } from '../../../shared/ui/panel/commit-field.js';
-import {
-  PanelDanger,
-  PanelField,
-  PanelNote,
-  SectionLink,
-  Segmented,
-} from '../../../shared/ui/panel/panel-kit.js';
+import { PanelDanger, PanelField, SectionLink } from '../../../shared/ui/panel/panel-kit.js';
 import { SidePanel } from '../../../shared/ui/panel/side-panel.js';
 import { ProcessTypeGlyph } from '../../../shared/workflow/process-type-icon.js';
 import {
   useSetProjectTypeArchived,
   useUpdateProjectType,
 } from '../api/project-catalog-mutations.js';
-import { kindsSummary } from '../lib/project-type-summary.js';
+import { fieldsSummary, kindsSummary } from '../lib/project-type-summary.js';
+import { ProjectTypeFieldsSection } from './project-type-fields.js';
 import { ProjectTypeKindsSection } from './project-type-kinds.js';
 
 /** Разделы панели типа: корень и страницы поверх него (как «Настройки
  *  типа» в «Процессах» — раздел заменяет содержимое, «назад» в шапке). */
-export type ProjectTypeSection = 'root' | 'kinds' | 'code';
-
-const CODE_OPTIONS = [
-  { value: 'hidden', label: ui.projects.codeField.hidden },
-  { value: 'optional', label: ui.projects.codeField.optional },
-  { value: 'required', label: ui.projects.codeField.required },
-] as const;
+export type ProjectTypeSection = 'root' | 'kinds' | 'fields';
 
 /**
  * Настройки типа проекта (#556) — правая панель окна-сплита и та же
  * анатомия, что у настроек типа процесса (#432): в корне — поля самого типа
  * (название, значок, цвет), дальше строки «›» со сводкой — «Виды папок» и
- * «Шифр проекта»; каждая открывает свой раздел со стрелкой «назад» и первым
- * Esc. Политика шифра не висит одиноким селектом в шапке: у неё есть
- * страница с пояснением (вердикт владельца 03.11). Всё сохраняется сразу
- * (оптимистично); архив — внизу, это не удаление.
+ * «Атрибуты»; каждая открывает свой раздел со стрелкой «назад» и первым
+ * Esc. Атрибуты — слоты формы типа (Р10 #631): политика шифра стала обычным
+ * слотом «Шифр». Всё сохраняется сразу (оптимистично); архив — внизу, это
+ * не удаление.
  */
 export function ProjectTypeSettingsPanel({
   type,
@@ -81,7 +65,7 @@ export function ProjectTypeSettingsPanel({
           ? ui.projects.schemasTypeSettings
           : section === 'kinds'
             ? ui.projects.schemasKinds
-            : ui.projects.schemasCodeSection
+            : ui.customFields.block.title
       }
       leading={
         <span
@@ -107,7 +91,7 @@ export function ProjectTypeSettingsPanel({
           onOpenKind={onOpenKind}
         />
       ) : (
-        <TypeCode type={type} canSetup={canSetup} />
+        <ProjectTypeFieldsSection type={type} canSetup={canSetup} />
       )}
     </SidePanel>
   );
@@ -194,9 +178,9 @@ function TypeRoot({
           onClick={() => onSection('kinds')}
         />
         <SectionLink
-          title={ui.projects.schemasCodeSection}
-          summary={ui.projects.codeField[type.codeField]}
-          onClick={() => onSection('code')}
+          title={ui.customFields.block.title}
+          summary={fieldsSummary(type)}
+          onClick={() => onSection('fields')}
         />
       </div>
 
@@ -217,27 +201,6 @@ function TypeRoot({
           </PanelDanger>
         )
       ) : null}
-    </>
-  );
-}
-
-/** «Шифр проекта» — политика системного поля, страница вместо одинокого
- *  селекта в шапке: видно, что именно настраивается, и чем это грозит. */
-function TypeCode({ type, canSetup }: { type: ProjectType; canSetup: boolean }) {
-  const update = useUpdateProjectType();
-  return (
-    <>
-      <PanelNote>{ui.projects.schemasCodeHint}</PanelNote>
-      <PanelField label={ui.projects.codeFieldLabel}>
-        <Segmented<ProjectCodeField>
-          value={type.codeField}
-          options={CODE_OPTIONS}
-          layout="grid"
-          className="w-full"
-          disabled={!canSetup}
-          onChange={(codeField) => update.mutate({ id: type.id, codeField })}
-        />
-      </PanelField>
     </>
   );
 }

@@ -50,12 +50,7 @@ export const nodeKindsStrings = {
     capabilitiesSection: 'Возможности',
     archive: 'В архив',
     restore: 'Вернуть из архива',
-    /** Сводка раздела «При создании папки» (строка-ссылка панели). */
-    codeSummary: {
-      hidden: 'Шифр скрыт',
-      optional: 'Шифр по желанию',
-      required: 'Шифр обязателен',
-    },
+    /** Сводка раздела «Атрибуты» (строка-ссылка панели). */
     fieldsRequired: 'обязательных: {count}',
     formSummaryEmpty: 'Папки этого вида спрашивают только название',
     capabilitiesSummaryNone: 'Нет',
@@ -63,14 +58,12 @@ export const nodeKindsStrings = {
   },
   /** Раздел «При создании папки». */
   form: {
-    codeLabel: 'Шифр',
     empty: 'Атрибутов нет — папки этого вида спрашивают только название',
     addField: 'Атрибут',
     pickerTitle: 'Атрибуты папок',
     pickerEmpty: 'Все атрибуты уже в форме',
     pickerSearch: 'Найти атрибут',
     createField: 'Создать атрибут…',
-    hiddenInRegistry: 'скрыт в «Атрибутах»',
     remove: 'Убрать из формы',
     /** Состояния слота — сегменты «Скрыто / По желанию / Обязательно». */
     state: {

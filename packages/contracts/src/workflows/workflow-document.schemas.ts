@@ -219,7 +219,6 @@ export const workflowProblemCodeSchema = z.enum([
   'form_duplicate_section',
   /** Атрибуты в окне и гейтах (#431): неизвестный — ошибка, скрытый в окне — предупреждение. */
   'custom_field_unknown',
-  'custom_field_hidden',
   /** Атрибут не привязан к типу процесса (#432, Р8): в его форме, окнах и
    *  условиях такой атрибут не выбирается — ошибка публикации. */
   'custom_field_not_in_type',
@@ -232,7 +231,6 @@ export const workflowProblemCodeSchema = z.enum([
   'creation_preset_not_allowed',
   'creation_preset_invalid',
   'creation_hidden_required',
-  'creation_hidden_attribute_visible',
   'creation_field_unavailable',
   /** Словарь категории (#55, Р6): роль, раздел окна, гейт или пост-действие
    *  чужой категории (роль письма в маршруте задачи, задачный гейт у письма)

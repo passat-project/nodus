@@ -54,7 +54,7 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.PROCESS_TYPE_FIELDS_REQUIRED]: 'Заполните обязательные поля задачи',
   [ErrorCode.PROCESS_TYPE_PRESET_INVALID]:
     'Настройка типа ссылается на недоступное значение — обратитесь к администратору',
-  [ErrorCode.CUSTOM_FIELD_BINDING_INVALID]: 'Атрибут нельзя привязать к этому типу',
+  [ErrorCode.CUSTOM_FIELD_BINDING_INVALID]: 'Место привязки недоступно — проверьте список мест',
   [ErrorCode.PROCESS_TYPE_NAME_TAKEN]: 'Тип с таким названием уже существует',
   [ErrorCode.CHAT_ATTACHMENT_TOO_LARGE]:
     'Файл больше 100 МБ — вложения такого размера не поддерживаются',
@@ -88,9 +88,8 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.CUSTOM_FIELD_NAME_TAKEN]: 'Атрибут с таким названием уже есть',
   [ErrorCode.CUSTOM_FIELD_TYPE_CHANGE_INCOMPATIBLE]:
     'Тип нельзя сузить без потери данных — создайте новый атрибут',
-  [ErrorCode.CUSTOM_FIELD_LIMIT_REACHED]: 'Атрибутов уже 100 — больше нельзя',
-  [ErrorCode.CUSTOM_FIELD_IN_USE]:
-    'Атрибут стоит в маршрутах процессов — сначала уберите его оттуда',
+  [ErrorCode.CUSTOM_FIELD_LIMIT_REACHED]:
+    'Достигнут технический предел числа атрибутов — обратитесь к разработчикам',
   [ErrorCode.DICTIONARY_SYSTEM_LOCKED]: 'Системный справочник изменить нельзя',
   [ErrorCode.DICTIONARY_ITEM_NAME_TAKEN]: 'Такой вариант уже есть в списке',
   [ErrorCode.ROLE_LOCKED]: 'Права администратора не меняются — у него всегда все права',
@@ -105,6 +104,7 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.PROJECT_NODE_KIND_ARCHIVED]: 'Этот вид папки в архиве — выберите другой',
   [ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN]: 'Вид папки с таким названием уже есть',
   [ErrorCode.PROJECT_NODE_FIELDS_REQUIRED]: 'Заполните обязательные поля папки',
+  [ErrorCode.PROJECT_FIELDS_REQUIRED]: 'Заполните обязательные атрибуты проекта',
   [ErrorCode.PROJECT_NODE_KIND_FORM_INVALID]: 'Форма вида ссылается на негодные атрибуты',
   [ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED]: 'Этот вид папки не назначен типу проекта',
 };

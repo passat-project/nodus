@@ -1,12 +1,14 @@
-import { EyeOff, Info } from 'lucide-react';
-import type { CustomFieldDefinition, CustomFieldScope } from '@nodus/contracts';
-import { nodeKindFormOf, SystemDictionary, typeIdsOf, ui } from '@nodus/contracts';
+import { Info } from 'lucide-react';
+import type { CustomFieldDefinition, CustomFieldModule, CustomFieldValue } from '@nodus/contracts';
+import { SystemDictionary, ui } from '@nodus/contracts';
 
-import { CustomFieldTypeIcon } from '../../../../shared/custom-fields/field-type-icon.js';
-import { CustomFieldValueView, refsById } from '../../../../shared/custom-fields/value-view.js';
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
+import { useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useDictionaryItems } from '../../../../shared/dictionaries/queries.js';
 import { useProcessTypes } from '../../api/automation-api.js';
+import { CustomFieldTypeIcon } from '../../../../shared/custom-fields/field-type-icon.js';
+import { CustomFieldEditor } from '../../../../shared/custom-fields/value-editor.js';
+import { CustomFieldValueView, refsById } from '../../../../shared/custom-fields/value-view.js';
 import { formatDateTimeShort, plural } from '../../../../shared/lib/format.js';
 import { monoCell } from '../../../../shared/ui/person-cell.js';
 import type { DataTableField } from '../../../../shared/views/data-table.js';
@@ -86,171 +88,215 @@ function DefaultCell({ definition }: { definition: CustomFieldDefinition }) {
   );
 }
 
-/** Виды папок, в форме которых стоит атрибут (#556): колонка «Виды папок»
- *  области «Папки» — обратная сторона формы вида (привязки нет). */
-function NodeKindsCell({ definition }: { definition: CustomFieldDefinition }) {
-  const { data: kinds, isLoading } = useNodeKinds();
-  if (isLoading) return <CellLoading />;
-  const names = (kinds ?? [])
-    .filter((kind) => nodeKindFormOf(kind).fields.some((slot) => slot.fieldId === definition.id))
-    .map((kind) => kind.name);
-  if (names.length === 0) return <span className={muted}>{ui.customFields.bind.nodeNone}</span>;
-  const shown = names.slice(0, 2).join(', ');
-  const rest = names.length - 2;
-  return (
-    <span className="truncate text-sm text-secondary-foreground" title={names.join(', ')}>
-      {shown}
-      {rest > 0 ? ` ${ui.customFields.bind.moreTypes} ${rest}` : ''}
-    </span>
-  );
-}
+/** Сводка «Где используется» (Р11): модули с числом мест — «Задачи · 2,
+ *  Письма · 1, Папки · 1», глобальная — «Глобальная переменная». Категории
+ *  типов знает реестр (типы процессов загружены) — разбивка честная. */
+function UsageCell({ definition }: { definition: CustomFieldDefinition }) {
+  const { data: processTypes } = useProcessTypes();
+  const { data: projectTypes } = useProjectTypes(true);
+  const { data: nodeKinds } = useNodeKinds();
 
-/** Типы, которым принадлежит атрибут (#432, В2): пусто — «Нигде не
- *  показывается» (приглушённо). У проектов и контрагентов типов нет. */
-function TypesCell({ definition }: { definition: CustomFieldDefinition }) {
-  const { data: types } = useProcessTypes();
-  if (definition.scope === 'node') return <NodeKindsCell definition={definition} />;
-  if (definition.scope !== 'task' && definition.scope !== 'letter') {
-    return <span className={muted}>{ui.customFields.cells.allEntities}</span>;
+  if (definition.isCompany) {
+    return (
+      <span className="truncate text-sm text-secondary-foreground">
+        {ui.customFields.cells.company}
+      </span>
+    );
   }
-  const names = typeIdsOf(definition)
-    .map((id) => types?.find((type) => type.id === id)?.name)
-    .filter((name): name is string => Boolean(name));
-  if (names.length === 0) {
-    return <span className={muted}>{ui.customFields.bind.none}</span>;
+  const bindings = definition.bindings;
+  const taskTypeIds = new Set(
+    (processTypes ?? []).filter((type) => type.category === 'task').map((type) => type.id),
+  );
+  const letterTypeIds = new Set(
+    (processTypes ?? []).filter((type) => type.category === 'letter').map((type) => type.id),
+  );
+  const parts: string[] = [];
+  const places = ui.customFields.cells.places;
+  const taskCount = bindings.processTypeIds.filter((id) => taskTypeIds.has(id)).length;
+  const letterCount = bindings.processTypeIds.filter((id) => letterTypeIds.has(id)).length;
+  // Счётчик с единицей измерения: «Задачи · 1 место», а не криптозапись «Задачи · 1».
+  if (taskCount > 0)
+    parts.push(`${ui.customFields.moduleNames.task} · ${taskCount} ${plural(taskCount, places)}`);
+  if (letterCount > 0)
+    parts.push(
+      `${ui.customFields.moduleNames.letter} · ${letterCount} ${plural(letterCount, places)}`,
+    );
+  if (bindings.projectTypeIds.length > 0) {
+    const names = bindings.projectTypeIds
+      .map((id) => (projectTypes ?? []).find((type) => type.id === id)?.name)
+      .filter((name): name is string => Boolean(name));
+    parts.push(
+      `${ui.customFields.moduleNames.project} · ${names.length > 0 ? names.join(', ') : bindings.projectTypeIds.length}`,
+    );
   }
-  const shown = names.slice(0, 2).join(', ');
-  const rest = names.length - 2;
+  if (bindings.nodeKindIds.length > 0) {
+    const names = bindings.nodeKindIds
+      .map((id) => (nodeKinds ?? []).find((kind) => kind.id === id)?.name)
+      .filter((name): name is string => Boolean(name));
+    parts.push(
+      `${ui.customFields.moduleNames.node} · ${names.length > 0 ? names.join(', ') : bindings.nodeKindIds.length}`,
+    );
+  }
+  if (parts.length === 0) {
+    return <span className={muted}>{ui.customFields.cells.nowhere}</span>;
+  }
+  const text = parts.join(', ');
   return (
-    <span className="truncate text-sm text-secondary-foreground" title={names.join(', ')}>
-      {shown}
-      {rest > 0 ? ` ${ui.customFields.bind.moreTypes} ${rest}` : ''}
+    <span className="truncate text-sm text-secondary-foreground" title={text}>
+      {text}
     </span>
   );
 }
 
 /**
- * Колонки реестра атрибутов (ключ вида `custom-fields.list`): название с
- * иконкой типа закреплено; тип, настройки типа, умолчание, видимость —
- * по умолчанию; «Отчёты» и «Изменён» включает шестерёнка. Строки идут в
- * порядке атрибутов карточки (sortOrder), клик по заголовку — сортировка
- * только для просмотра (порядок карточки меняют «Поднять/Опустить»).
+ * Колонки реестра атрибутов портала (#631, ключ вида `custom-fields.list`):
+ * название с иконкой типа закреплено; тип, «Где используется» (сводка
+ * привязок), «Значение» (только глобальные — инлайн-редактор), настройки,
+ * умолчание — по умолчанию; «Отчёты» и «Изменён» включает шестерёнка.
+ * Строки идут в порядке реестра (sortOrder), клик по заголовку — сортировка
+ * только для просмотра (порядок меняют «Поднять/Опустить»).
  */
-export const fieldColumns: DataTableField<CustomFieldDefinition>[] = [
-  {
-    id: 'name',
-    label: ui.customFields.columns.name,
-    defaultVisible: true,
-    defaultWidth: 300,
-    minWidth: 180,
-    locked: true,
-    render: (definition) => (
-      <span className="flex min-w-0 items-center gap-2.5" title={definition.hint ?? undefined}>
-        <CustomFieldTypeIcon
-          type={definition.type}
-          className="size-4 shrink-0 text-muted-foreground"
-        />
-        <span
-          className={
-            definition.hidden
-              ? 'truncate text-sm font-medium text-muted-foreground'
-              : 'truncate text-sm font-medium'
-          }
-        >
-          {definition.name}
-        </span>
-        {definition.hint ? (
-          <Info
-            className="size-3 shrink-0 text-muted-foreground opacity-60"
-            strokeWidth={1.75}
-            aria-hidden
+export function fieldColumns(
+  canManage: boolean,
+  onCompanyValueCommit: (definition: CustomFieldDefinition, value: CustomFieldValue | null) => void,
+): DataTableField<CustomFieldDefinition>[] {
+  return [
+    {
+      id: 'name',
+      label: ui.customFields.columns.name,
+      defaultVisible: true,
+      defaultWidth: 300,
+      minWidth: 180,
+      locked: true,
+      render: (definition) => (
+        <span className="flex min-w-0 items-center gap-2.5" title={definition.hint ?? undefined}>
+          <CustomFieldTypeIcon
+            type={definition.type}
+            className="size-4 shrink-0 text-muted-foreground"
           />
-        ) : null}
-      </span>
-    ),
-    sortValue: (definition) => definition.name.toLowerCase(),
-  },
-  {
-    id: 'type',
-    label: ui.customFields.columns.type,
-    defaultVisible: true,
-    defaultWidth: 200,
-    render: (definition) => (
-      <span className="truncate text-sm text-secondary-foreground">
-        {ui.customFields.types[definition.type]}
-      </span>
-    ),
-    sortValue: (definition) => ui.customFields.types[definition.type],
-  },
-  {
-    id: 'types',
-    label: ui.customFields.bind.column,
-    defaultVisible: true,
-    defaultWidth: 200,
-    render: (definition) => <TypesCell definition={definition} />,
-    sortValue: (definition) => typeIdsOf(definition).length,
-  },
-  {
-    id: 'settings',
-    label: ui.customFields.columns.settings,
-    defaultVisible: true,
-    defaultWidth: 260,
-    render: (definition) => <SettingsCell definition={definition} />,
-  },
-  {
-    id: 'defaultValue',
-    label: ui.customFields.columns.defaultValue,
-    defaultVisible: true,
-    defaultWidth: 200,
-    render: (definition) => <DefaultCell definition={definition} />,
-  },
-  {
-    id: 'visibility',
-    label: ui.customFields.columns.visibility,
-    defaultVisible: true,
-    defaultWidth: 130,
-    render: (definition) =>
-      definition.hidden ? (
-        <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-          <EyeOff className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-          {ui.customFields.cells.hidden}
+          <span className="truncate text-sm font-medium">{definition.name}</span>
+          {definition.hint ? (
+            <Info
+              className="size-3 shrink-0 text-muted-foreground opacity-60"
+              strokeWidth={1.75}
+              aria-hidden
+            />
+          ) : null}
         </span>
-      ) : (
-        <span className="text-sm text-secondary-foreground">{ui.customFields.cells.visible}</span>
       ),
-    sortValue: (definition) => (definition.hidden ? 1 : 0),
-  },
-  {
-    id: 'reports',
-    label: ui.customFields.columns.reports,
-    defaultVisible: false,
-    defaultWidth: 150,
-    render: (definition) =>
-      definition.reportIndexed ? (
-        <span className="text-sm text-secondary-foreground">{ui.customFields.cells.indexed}</span>
-      ) : (
-        <span className={muted}>—</span>
+      sortValue: (definition) => definition.name.toLowerCase(),
+    },
+    {
+      id: 'type',
+      label: ui.customFields.columns.type,
+      defaultVisible: true,
+      defaultWidth: 180,
+      render: (definition) => (
+        <span className="truncate text-sm text-secondary-foreground">
+          {ui.customFields.types[definition.type]}
+        </span>
       ),
-    sortValue: (definition) => (definition.reportIndexed ? 0 : 1),
-  },
-  {
-    id: 'updatedAt',
-    label: ui.customFields.columns.updatedAt,
-    defaultVisible: false,
-    defaultWidth: 150,
-    render: (definition) => (
-      <span className={monoCell}>{formatDateTimeShort(definition.updatedAt)}</span>
-    ),
-    sortValue: (definition) => definition.updatedAt,
-  },
-];
-
-/** Колонки реестра для области: у «Папок» колонка «Типы» называется
- *  «Виды папок» (#556) — id колонки и пресет вида те же. */
-export function fieldColumnsFor(scope: CustomFieldScope): DataTableField<CustomFieldDefinition>[] {
-  return scope === 'node'
-    ? fieldColumns.map((field) =>
-        field.id === 'types' ? { ...field, label: ui.customFields.bind.nodeColumn } : field,
-      )
-    : fieldColumns;
+      sortValue: (definition) => ui.customFields.types[definition.type],
+    },
+    {
+      id: 'usage',
+      label: ui.customFields.columns.usage,
+      defaultVisible: true,
+      defaultWidth: 260,
+      render: (definition) => <UsageCell definition={definition} />,
+      sortValue: (definition) =>
+        definition.isCompany
+          ? 0
+          : definition.bindings.processTypeIds.length +
+            definition.bindings.projectTypeIds.length +
+            definition.bindings.nodeKindIds.length,
+    },
+    {
+      id: 'value',
+      label: ui.customFields.columns.value,
+      defaultVisible: true,
+      defaultWidth: 200,
+      render: (definition) =>
+        definition.isCompany ? (
+          <CompanyValueEditor
+            definition={definition}
+            canManage={canManage}
+            onCommit={onCompanyValueCommit}
+          />
+        ) : (
+          <span className={muted}>—</span>
+        ),
+    },
+    {
+      id: 'settings',
+      label: ui.customFields.columns.settings,
+      defaultVisible: true,
+      defaultWidth: 240,
+      render: (definition) => <SettingsCell definition={definition} />,
+    },
+    {
+      id: 'defaultValue',
+      label: ui.customFields.columns.defaultValue,
+      defaultVisible: true,
+      defaultWidth: 200,
+      render: (definition) => <DefaultCell definition={definition} />,
+    },
+    {
+      id: 'reports',
+      label: ui.customFields.columns.reports,
+      defaultVisible: false,
+      defaultWidth: 150,
+      render: (definition) =>
+        definition.reportIndexed ? (
+          <span className="text-sm text-secondary-foreground">{ui.customFields.cells.indexed}</span>
+        ) : (
+          <span className={muted}>—</span>
+        ),
+      sortValue: (definition) => (definition.reportIndexed ? 0 : 1),
+    },
+    {
+      id: 'updatedAt',
+      label: ui.customFields.columns.updatedAt,
+      defaultVisible: false,
+      defaultWidth: 150,
+      render: (definition) => (
+        <span className={monoCell}>{formatDateTimeShort(definition.updatedAt)}</span>
+      ),
+      sortValue: (definition) => definition.updatedAt,
+    },
+  ];
 }
+
+/** Инлайн-редактор значения глобальной (Р7): коммит уходит мутацией реестра
+ *  (useSetCompanyValue в fields-tab), оптимистичный показ — из кэша. */
+function CompanyValueEditor({
+  definition,
+  canManage,
+  onCommit,
+}: {
+  definition: CustomFieldDefinition;
+  canManage: boolean;
+  onCommit: (definition: CustomFieldDefinition, value: CustomFieldValue | null) => void;
+}) {
+  return (
+    <CustomFieldEditor
+      definition={definition}
+      value={definition.companyValue ?? undefined}
+      refs={[]}
+      disabled={!canManage}
+      variant="inline"
+      onCommit={(value) => onCommit(definition, value)}
+    />
+  );
+}
+
+/** Фильтр-модули реестра: Все + модули «Где используется» (В6: «Реестры»
+ *  до #636 не показываются). */
+export const FIELD_MODULES: Array<CustomFieldModule | 'all'> = [
+  'all',
+  'task',
+  'letter',
+  'project',
+  'node',
+  'company',
+];

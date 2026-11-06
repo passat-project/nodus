@@ -947,7 +947,6 @@ model ProcessType {
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
 
   schemeEntries WorkflowSchemeEntry[]
-  fieldBindings FieldDefinitionType[]
 
   @@map("process_types")
 }
@@ -1384,6 +1383,8 @@ model DictionaryItem {
   /// Необязательный машинный ключ (системные элементы сида) — уникален в справочнике.
   code         String?
   name         String
+  /// Тон варианта списка (Р6 #631): ключ stageColorSchema, null — без цвета.
+  color        String?
   sortOrder    Int     @default(0) @map("sort_order")
   isActive     Boolean @default(true) @map("is_active")
 
@@ -1494,12 +1495,13 @@ model CounterpartyUsage {
 model ProjectType {
   id         String    @id @default(uuid()) @db.Uuid
   name       String    @unique
-  /// Политика системного поля «Шифр» в форме проекта этого типа
-  /// (hidden | optional | required, CHECK в миграции): «Договор» — шифр
-  /// обязателен, «Тема» — поля нет. Мост к формам типов «Автоматизации»
-  /// (#38/#468): полный набор полей типа придёт схемой формы.
+  /// ЗАМОРОЖЕНА (#631 Р9): бывшая политика «Шифра», значение перенесено в
+  /// слот формы `form`; колонка не читается кодом, удаляется отдельным chore.
   codeField  String    @default("optional") @map("code_field")
-  /// Значок и цвет плитки типа (#556, вердикт 02.11) — ключи закрытых
+  /// Форма типа (Р10 #631): слоты атрибутов {fields:[{fieldId, state}]} —
+  /// зеркало формы вида папки; посев миграции переносит code_field сюда.
+  form       Json?
+  /// Значок и цвет плитки типа (#556, вердикт владельца 02.11) — ключи закрытых
   /// реестров contracts (processTypeIconSchema, projectColorSchema).
   icon       String    @default("file-text")
   color      String    @default("blue")
@@ -1535,44 +1537,43 @@ model ProjectGroup {
   @@map("project_groups")
 }
 
-
 /// Проект. Руководитель/создатель/заказчик — plain UUID без FK (модули
 /// directory/crm, I3); помощники — массив UUID в JSONB (паттерн
 /// mentionedUserIds; лимит ≤10 — контракт и CHECK в миграции).
 model Project {
-  id          String    @id @default(uuid()) @db.Uuid
+  id           String    @id @default(uuid()) @db.Uuid
   /// Шифр договора; null — «тема». Частичный unique WHERE code IS NOT NULL —
   /// в миграции (шифр не освобождается архивацией).
-  code        String?
-  name        String
-  description String    @default("")
+  code         String?
+  name         String
+  description  String    @default("")
   /// Тон плитки-идентичности (projectColorSchema: ключи, не hex, I15).
-  color       String    @default("blue")
-  typeId      String    @map("type_id") @db.Uuid
-  portfolioId String?   @map("portfolio_id") @db.Uuid
-  clientId    String?   @map("client_id") @db.Uuid
-  managerId   String    @map("manager_id") @db.Uuid
-  assistantIds Json     @default("[]") @map("assistant_ids")
+  color        String    @default("blue")
+  typeId       String    @map("type_id") @db.Uuid
+  portfolioId  String?   @map("portfolio_id") @db.Uuid
+  clientId     String?   @map("client_id") @db.Uuid
+  managerId    String    @map("manager_id") @db.Uuid
+  assistantIds Json      @default("[]") @map("assistant_ids")
   /// open | secret (CHECK в миграции): секретный видят только участники
   /// (+ project.view_secret — системный надзор).
-  visibility  String    @default("open")
+  visibility   String    @default("open")
   /// active | completed | archived (CHECK в миграции): completed — метка,
   /// archived — заморозка (создание задач в проекте — 422).
-  status      String    @default("active")
-  completedAt DateTime? @map("completed_at") @db.Timestamptz()
-  archivedAt  DateTime? @map("archived_at") @db.Timestamptz()
-  startedAt   DateTime? @map("started_at") @db.Date
-  endsAt      DateTime? @map("ends_at") @db.Date
+  status       String    @default("active")
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz()
+  archivedAt   DateTime? @map("archived_at") @db.Timestamptz()
+  startedAt    DateTime? @map("started_at") @db.Date
+  endsAt       DateTime? @map("ends_at") @db.Date
   /// Кастомные атрибуты области `project` (ADR-0029); GIN — в миграции.
-  customFields Json     @default("{}") @map("custom_fields")
-  creatorId   String    @map("creator_id") @db.Uuid
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  customFields Json      @default("{}") @map("custom_fields")
+  creatorId    String    @map("creator_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
 
-  type        ProjectType        @relation(fields: [typeId], references: [id], onDelete: Restrict)
-  portfolio   ProjectGroup?      @relation(fields: [portfolioId], references: [id], onDelete: SetNull)
+  type         ProjectType          @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  portfolio    ProjectGroup?        @relation(fields: [portfolioId], references: [id], onDelete: SetNull)
   participants ProjectParticipant[]
-  nodes       ProjectNode[]
+  nodes        ProjectNode[]
 
   /// Журнал: keyset по (updated_at DESC, id) — активность = updatedAt.
   @@index([status, updatedAt(sort: Desc), id])
@@ -1649,24 +1650,24 @@ model NodeKind {
 /// NODE_LIMITS): ≤1000 узлов на проект, глубина ≤10, детей ≤100. Шифр узла
 /// уникален в проекте — частичный unique WHERE code IS NOT NULL в миграции.
 model ProjectNode {
-  id        String   @id @default(uuid()) @db.Uuid
-  projectId String   @map("project_id") @db.Uuid
-  parentId  String?  @map("parent_id") @db.Uuid
-  kindId   String   @map("kind_id") @db.Uuid
-  name      String
-  code      String?
-  order     String
+  id           String   @id @default(uuid()) @db.Uuid
+  projectId    String   @map("project_id") @db.Uuid
+  parentId     String?  @map("parent_id") @db.Uuid
+  kindId       String   @map("kind_id") @db.Uuid
+  name         String
+  code         String?
+  order        String
   /// Кастомные атрибуты области `node` (#556, ADR-0029): значения по id
   /// определения. Хранятся ВСЕ значения, включая скрытые сменой вида; форма
   /// фильтрует помощником nodeFormValues. GIN — в миграции.
-  customFields Json  @default("{}") @map("custom_fields")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  customFields Json     @default("{}") @map("custom_fields")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent   ProjectNode? @relation("NodeTree", fields: [parentId], references: [id], onDelete: Restrict)
+  project  Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   ProjectNode?  @relation("NodeTree", fields: [parentId], references: [id], onDelete: Restrict)
   children ProjectNode[] @relation("NodeTree")
-  kind     NodeKind    @relation(fields: [kindId], references: [id], onDelete: Restrict)
+  kind     NodeKind      @relation(fields: [kindId], references: [id], onDelete: Restrict)
 
   @@index([projectId, parentId])
   @@index([projectId, order])
@@ -1685,22 +1686,21 @@ model PortalSetting {
   @@map("portal_settings")
 }
 
-// ===== Модуль custom-fields (#431, ADR-0029) =====
-// Реестр определений атрибутов: область, тип, настройки типа, умолчание,
-// видимость. Значения НЕ здесь: они живут в JSONB сущности-владельца
-// (tasks.custom_fields, …) по id определения — переименование безопасно,
-// «code» у атрибута нет (О10). Скрытие (hidden) заменяет архив (вердикт
-// владельца 25.10.2026): значения живут и доступны процессам/отчётам, но
-// карточки, фильтры и окна переходов атрибут не видят.
+// ===== Модуль custom-fields (#431, ADR-0029; ревизия #631, ADR-0037 п.2) =====
+// Реестр определений атрибутов ПОРТАЛА: одно определение — много мест
+// (привязки field_bindings), глобально уникальное имя. Значения НЕ здесь:
+// они живут в JSONB сущности-владельца (tasks.custom_fields, …) по id
+// определения — переименование безопасно. Видимость — у формы места
+// (слоты состояний), глобального hidden нет (О2 #631).
 
-/// Определение кастомного атрибута. Удаление — физическое, вместе со
-/// значениями (стираются владельцем при следующем чтении: ключа нет в
-/// реестре), поэтому отдельной таблицы значений нет.
+/// Определение кастомного атрибута. Удаление — физическое, всегда разрешено
+/// (окно показывает последствия); значения стирают владельцы по событию.
 model FieldDefinition {
   id            String  @id @default(uuid()) @db.Uuid
-  /// task | letter | project | counterparty — домен в CHECK миграции.
-  scope         String
-  /// Тип из `customFieldTypeSchema` (16 значений) — домен в CHECK миграции.
+  /// Внутренний номер (Р2 #631): адрес атрибута в формулах #632, sequence,
+  /// не переиспользуется, в интерфейсе не показывается.
+  number        Int     @unique
+  /// Тип из `customFieldTypeSchema` (19 значений) — домен в CHECK миграции.
   type          String
   name          String
   hint          String?
@@ -1710,9 +1710,9 @@ model FieldDefinition {
   defaultValue  Json?   @map("default_value")
   /// Флаг «индексировать для отчётов» (Р9): материализация — по триггеру (Н4).
   reportIndexed Boolean @default(false) @map("report_indexed")
-  /// Скрытый (служебный) атрибут: не виден никому в карточках, фильтрах и
-  /// окнах переходов; процессы, автоматика и отчёты значения видят.
-  hidden        Boolean @default(false)
+  /// Глобальная переменная (Р7 #631): значений у записей не принимает,
+  /// привязок не имеет; значение — строка company_values.
+  isCompany     Boolean @default(false) @map("is_company")
   sortOrder     Int     @default(0) @map("sort_order")
   /// Автор определения — plain UUID без FK (пользователь живёт в auth, I3).
   createdById   String? @map("created_by_id") @db.Uuid
@@ -1720,29 +1720,47 @@ model FieldDefinition {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  typeBindings FieldDefinitionType[]
+  bindings     FieldBinding[]
+  companyValue CompanyValue?
 
-  /// Выдача реестра области в порядке карточки: (scope, sort_order, id).
-  @@index([scope, sortOrder, id])
+  /// Выдача реестра портала в порядке карточки: (sort_order, id). Имя
+  /// уникально глобально — выраженный индекс lower(btrim(name)) в миграции.
+  @@index([sortOrder, id])
   @@map("field_definitions")
 }
 
-/// Привязка атрибута к типу процесса (#432, Р8): атрибут виден и принимает
-/// значения только у своих типов; заполненное при снятии привязки не
-/// стирается. Каскад — определение удаляется целиком, тип не удаляется
-/// (архив), но каскад страхует от сирот. Обратный индекс — по типу: список
-/// «атрибуты типа» читается на каждой карточке и форме.
-model FieldDefinitionType {
-  definitionId  String   @map("definition_id") @db.Uuid
-  processTypeId String   @map("process_type_id") @db.Uuid
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+/// Привязка атрибута к месту (Р3 #631): тип процесса, тип проекта или вид
+/// папки. Цель — plain UUID без FK (полиморфная, прецедент createdById):
+/// целостность проверяет сервис (тип существует и не архивный).
+/// Заполненное при снятии привязки не стирается.
+model FieldBinding {
+  id           String   @id @default(uuid()) @db.Uuid
+  definitionId String   @map("definition_id") @db.Uuid
+  /// process_type | project_type | node_kind — CHECK в миграции (#636 добавит registry_kind).
+  targetKind   String   @map("target_kind")
+  targetId     String   @map("target_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  definition  FieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
-  processType ProcessType     @relation(fields: [processTypeId], references: [id], onDelete: Cascade)
+  definition FieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
 
-  @@id([definitionId, processTypeId])
-  @@index([processTypeId])
-  @@map("field_definition_types")
+  @@unique([definitionId, targetKind, targetId])
+  /// Список «атрибуты места» читается на каждой карточке и форме.
+  @@index([targetKind, targetId])
+  @@map("field_bindings")
+}
+
+/// Значение глобальной переменной (Р7 #631): одно на компанию. Грамматика —
+/// тип определения; правит custom_field.manage из реестра атрибутов.
+model CompanyValue {
+  definitionId String   @id @map("definition_id") @db.Uuid
+  value        Json
+  /// Кто задал — plain UUID без FK (пользователь живёт в auth, I3).
+  updatedById  String?  @map("updated_by_id") @db.Uuid
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  definition FieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+
+  @@map("company_values")
 }
 
 // ===== Модуль корреспонденции (#55, ADR-0027) =====
@@ -1798,23 +1816,23 @@ model Letter {
   // полей: адрес/Message-ID пусты, флаги не горят). =====
   /// Message-ID конверта: дедуп повторной доставки и ключ цепочки «ответ
   /// на»; частичный unique — в миграции. null — письмо без него.
-  mailMessageId String? @map("mail_message_id")
+  mailMessageId         String?   @map("mail_message_id")
   /// In-Reply-To конверта (один ID; диагностика цепочки).
-  mailInReplyTo String? @map("mail_in_reply_to")
+  mailInReplyTo         String?   @map("mail_in_reply_to")
   /// References конверта — список ID предков (кап 100 на приёме).
-  mailReferences Json?   @map("mail_references")
-  mailFromAddress String? @map("mail_from_address")
-  mailFromName    String? @map("mail_from_name")
+  mailReferences        Json?     @map("mail_references")
+  mailFromAddress       String?   @map("mail_from_address")
+  mailFromName          String?   @map("mail_from_name")
   /// Письмо не разобрано целиком — реквизиты и файлы неполные (анти-яд).
-  mailParseIssue        Boolean @default(false) @map("mail_parse_issue")
+  mailParseIssue        Boolean   @default(false) @map("mail_parse_issue")
   /// Часть письма не сохранена (исходник/вложения сверх лимита) — Р12.
-  mailStorageIncomplete Boolean @default(false) @map("mail_storage_incomplete")
+  mailStorageIncomplete Boolean   @default(false) @map("mail_storage_incomplete")
   /// PDF-копия тела не создана (конвертер отказал после ретраев — «Основной
   /// документ письма» #56): кандидат «текст-PDF» недоступен, письмо живёт.
-  mailBodyPdfIssue      Boolean @default(false) @map("mail_body_pdf_issue")
+  mailBodyPdfIssue      Boolean   @default(false) @map("mail_body_pdf_issue")
   /// Надгробие спама (Р13): файлы снесены, строка живёт ради Message-ID —
   /// переимпорт удалённого не возвращает его в «Новые». Списки/GET фильтруют.
-  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+  deletedAt             DateTime? @map("deleted_at") @db.Timestamptz()
 
   /// «Конфиденциально» (#461, Р4, В3): письмо, его чат, файлы и созданные из
   /// него поручения видят ТОЛЬКО участники (регистратор, адресат, участники
@@ -1827,8 +1845,8 @@ model Letter {
   attachedRefs LetterAttachedRef[]
   participants LetterParticipant[]
   views        LetterView[]
-  relations    LetterRelation[] @relation("LetterRelationsFrom")
-  replyToLink  LetterRelation[] @relation("LetterRelationsTo")
+  relations    LetterRelation[]    @relation("LetterRelationsFrom")
+  replyToLink  LetterRelation[]    @relation("LetterRelationsTo")
 
   @@unique([regSeriesId, regYear, regSeq])
   /// Очередь «Новые» и реестр зарегистрированных (keyset, id — tiebreak).
@@ -1858,9 +1876,9 @@ model LetterAttachment {
   sortOrder Int      @default(0) @map("sort_order")
   /// Content-ID MIME-части (#56): связывает inline-картинку HTML-тела с
   /// вложением (cid: резолв на показе); null — обычное вложение.
-  contentId String? @map("content_id")
+  contentId String?  @map("content_id")
   /// Inline-часть (картинка в HTML-теле): из блока «Файлы» скрыта.
-  inline    Boolean @default(false)
+  inline    Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
   letter Letter @relation(fields: [letterId], references: [id], onDelete: Cascade)
@@ -1890,9 +1908,9 @@ model LetterParticipant {
 /// индикатор «я ещё не открывал» гаснет при открытии карточки. Общего
 /// счётчика «никто не смотрел» нет (решение владельца 28.10).
 model LetterView {
-  letterId  String   @map("letter_id") @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  viewedAt  DateTime @default(now()) @map("viewed_at") @db.Timestamptz()
+  letterId String   @map("letter_id") @db.Uuid
+  userId   String   @map("user_id") @db.Uuid
+  viewedAt DateTime @default(now()) @map("viewed_at") @db.Timestamptz()
 
   letter Letter @relation(fields: [letterId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1956,21 +1974,21 @@ model LetterAttachedRef {
 /// UIDVALIDITY/UID»): курсор и аккумуляторы цикла приёма. Один ящик до #477
 /// (код 'chancery' сидируется миграцией); personal — там же.
 model MailSource {
-  id        String   @id @default(uuid()) @db.Uuid
+  id                  String    @id @default(uuid()) @db.Uuid
   /// Системный код ящика ('chancery') — адресует события sync_failed.
-  code      String   @unique
+  code                String    @unique
   /// UIDVALIDITY INBOX: смена — полный переобход под дедупом Message-ID.
-  uidValidity BigInt? @map("uid_validity")
+  uidValidity         BigInt?   @map("uid_validity")
   /// Курсор: обработаны UID ≤ lastUid; null/0 при первом запуске = max UID.
-  lastUid      BigInt? @map("last_uid")
+  lastUid             BigInt?   @map("last_uid")
   /// Аккумулятор порога (Р4): ≥3 неудачных циклов подряд — уведомление.
-  consecutiveFailures Int      @default(0) @map("consecutive_failures")
+  consecutiveFailures Int       @default(0) @map("consecutive_failures")
   /// Троттлинг уведомления о молчании ящика: раз в 24 ч.
-  lastNotifiedAt DateTime? @map("last_notified_at") @db.Timestamptz()
-  lastError      String?   @map("last_error")
-  lastSyncAt     DateTime? @map("last_sync_at") @db.Timestamptz()
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  lastNotifiedAt      DateTime? @map("last_notified_at") @db.Timestamptz()
+  lastError           String?   @map("last_error")
+  lastSyncAt          DateTime? @map("last_sync_at") @db.Timestamptz()
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
 
   @@map("mail_sources")
 }

@@ -238,7 +238,7 @@ export const lettersTransitionHandlers = [
         addressee: userRef(registration.addresseeId),
         responseDeadline: registration.responseDeadline,
         customFields: registration.customFields
-          ? applyDemoPatch('letter', letter.customFields, registration.customFields).next
+          ? applyDemoPatch(letter.customFields, registration.customFields).next
           : letter.customFields,
         registrar: actorUserRef(),
         // #461: флаг и строки приложенных приходят тем же окном регистрации.

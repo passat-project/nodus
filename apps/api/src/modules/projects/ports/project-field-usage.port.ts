@@ -1,22 +1,19 @@
 import type { InjectionToken } from '@nestjs/common';
 
 /**
- * Порт использования атрибутов в проектах (#556, Р11): окно удаления
- * атрибута показывает, сколько значений живёт в проектах и папках и какие
- * виды папок держат его в форме. Потребитель — модуль custom-fields
- * (`DefinitionsService.usage`), владелец данных — projects (I3): чужие
- * таблицы читаются только через порт, не запросом.
+ * Порт использования атрибутов в проектах (#556 Р11; ревизия #631): окно
+ * последствий удаления спрашивает, сколько значений живёт в проектах и
+ * папках (привязки и формы видов реестр атрибутов читает из своих таблиц).
+ * Потребитель — модуль custom-fields (`usage`), владелец данных — projects
+ * (I3): чужие таблицы читаются только через порт, не запросом.
  */
 export const PROJECT_FIELD_USAGE_READER: InjectionToken = 'PROJECT_FIELD_USAGE_READER';
 
-/** Области атрибутов, значения которых живут в проектах. */
+/** Где живут значения: проекты и папки структуры. */
 export type ProjectFieldScope = 'project' | 'node';
 
 export interface ProjectFieldUsageReader {
   /** Сущностей области со значением атрибута (значение — любой непустой
    *  ключ JSONB; `null` в JSONB не хранится — очистка удаляет ключ). */
   countValues(scope: ProjectFieldScope, fieldId: string): Promise<number>;
-
-  /** Виды папок, в форме которых стоит атрибут (архивные тоже). */
-  nodeKindsUsing(fieldId: string): Promise<{ id: string; name: string }[]>;
 }

@@ -1,5 +1,5 @@
 import type { ProcessType } from '@nodus/contracts';
-import { typeAccessFor } from '@nodus/contracts';
+import { bindingsOf, typeAccessFor } from '@nodus/contracts';
 
 import { demoCustomFieldDefinitions } from './custom-fields.js';
 import { mockEffectiveRoleIds, mockIsAdmin } from './roles.js';
@@ -25,25 +25,24 @@ export function canSeeAllTypes(): boolean {
   return getMockActor().permissions.includes('workflow.manage');
 }
 
-/** Факты проверки документа: атрибуты области и привязка к типу (Р8). */
+/** Факты проверки документа: весь реестр атрибутов и привязка к типу (Р8,
+ *  #631 — реестр один на портал, «свой/чужой» решает привязка, скрытия нет). */
 export function documentFacts(type: DemoProcessType | undefined, category: string) {
-  const scope = category === 'letter' ? 'letter' : 'task';
-  const scoped = demoCustomFieldDefinitions.filter((entry) => entry.scope === scope);
   const inType = new Set(
-    scoped.filter((entry) => type && entry.typeIds.includes(type.id)).map((entry) => entry.id),
+    demoCustomFieldDefinitions
+      .filter((entry) => type && bindingsOf(entry).processTypeIds.includes(type.id))
+      .map((entry) => entry.id),
   );
   return {
     customFields: {
-      active: new Set(scoped.map((entry) => entry.id)),
-      hidden: new Set(scoped.filter((entry) => entry.hidden).map((entry) => entry.id)),
+      active: new Set(demoCustomFieldDefinitions.map((entry) => entry.id)),
       inType,
     },
-    category: scope,
-    definitions: scoped.map((entry) => ({
+    category: category === 'letter' ? 'letter' : 'task',
+    definitions: demoCustomFieldDefinitions.map((entry) => ({
       id: entry.id,
       type: entry.type,
       settings: entry.settings,
-      hidden: entry.hidden,
     })),
     projectsAvailable: true,
     activeUserIds: new Set(

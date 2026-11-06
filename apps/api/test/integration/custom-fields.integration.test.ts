@@ -32,22 +32,22 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it('реестр: право, создание, правка, имя и смена типа', async () => {
       const { fx, admin, plain } = cf;
       const denied = await fx.api(plain, 'POST', '/custom-fields/definitions', {
-        body: { scope: 'task', type: 'text', name: `Проба ${fx.runId} запрет` },
+        body: { type: 'text', name: `Проба ${fx.runId} запрет` },
         key: `it-cf-deny-${fx.runId}`,
       });
       expect(denied.status).toBe(403);
 
       const field = await cf.createField({
-        scope: 'task',
         type: 'text',
         name: `  Проба ${fx.runId} № накладной  `,
       });
       expect(field.name).toBe(`Проба ${fx.runId} № накладной`);
-      expect(field.hidden).toBe(false);
+      expect(field.isCompany).toBe(false);
+      expect(field.number).toBeGreaterThan(0);
 
       // Идемпотентность: повтор того же ключа — тот же атрибут, не дубль.
       const key = `it-cf-idem-${fx.runId}`;
-      const body = { scope: 'task', type: 'text', name: `Проба ${fx.runId} идемпотентность` };
+      const body = { type: 'text', name: `Проба ${fx.runId} идемпотентность` };
       const first = await fx.api(admin, 'POST', '/custom-fields/definitions', { body, key });
       const second = await fx.api(admin, 'POST', '/custom-fields/definitions', { body, key });
       expect(first.status).toBe(201);
@@ -58,13 +58,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
       cf.definitionIds.push(firstDto.id);
 
       const taken = await fx.api(admin, 'POST', '/custom-fields/definitions', {
-        body: { scope: 'task', type: 'text', name: `проба ${fx.runId} № НАКЛАДНОЙ` },
+        body: { type: 'text', name: `проба ${fx.runId} № НАКЛАДНОЙ` },
         key: `it-cf-taken-${fx.runId}`,
       });
       expect(taken.status).toBe(409);
-      expect(apiErrorResponseSchema.parse(await taken.json()).code).toBe(
-        ErrorCode.CUSTOM_FIELD_NAME_TAKEN,
-      );
+      const takenError = apiErrorResponseSchema.parse(await taken.json());
+      expect(takenError.code).toBe(ErrorCode.CUSTOM_FIELD_NAME_TAKEN);
+      // 409 несёт suggestion существующего — «открыть существующий» (В3).
+      expect(takenError.details).toMatchObject({
+        suggestion: { definitionId: field.id, name: `Проба ${fx.runId} № накладной` },
+      });
 
       const incompatible = await fx.api(admin, 'PATCH', `/custom-fields/definitions/${field.id}`, {
         body: { type: 'number' },
@@ -82,7 +85,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(widened.status).toBe(200);
       expect(customFieldDefinitionSchema.parse(await widened.json()).type).toBe('long_text');
 
-      const list = await fx.api(plain, 'GET', '/custom-fields/definitions?scope=task');
+      // Фильтр `module=task`: атрибуты, привязанные к живым типам задач (Р11).
+      const list = await fx.api(plain, 'GET', '/custom-fields/definitions?module=task');
       expect(list.status).toBe(200);
       const items = z.array(customFieldDefinitionSchema).parse(await list.json());
       expect(items.some((item) => item.id === field.id)).toBe(true);
@@ -103,12 +107,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it('значения: 200 и 422 по каждой причине, событие с cf-ключом', async () => {
       const { fx, admin, plain } = cf;
       const text = await cf.createField({
-        scope: 'task',
         type: 'text',
         name: `Проба ${fx.runId} текст`,
       });
       const person = await cf.createField({
-        scope: 'task',
         type: 'user',
         name: `Проба ${fx.runId} сотрудник`,
       });
@@ -209,7 +211,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await fx.prisma.user.update({ where: { id: admin.id }, data: { departmentId: first.id } });
 
       const field = await cf.createField({
-        scope: 'task',
         type: 'department',
         name: `Проба ${fx.runId} подразделение`,
         defaultValue: { kind: 'author_department' },
@@ -235,7 +236,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it('список задач несёт значения, строка детали — ссылки', async () => {
       const { fx, admin } = cf;
       const field = await cf.createField({
-        scope: 'task',
         type: 'text',
         name: `Проба ${fx.runId} в списке`,
       });

@@ -6,7 +6,10 @@ import {
   customFieldValuesInputSchema,
   customFieldValuesPatchSchema,
   customFieldValuesSchema,
+  isCustomFieldValueFilled,
+  type CustomFieldValues,
 } from '../custom-fields/custom-field-values.js';
+import { fieldFormSlotSchema, hasDuplicateSlots } from '../custom-fields/field-form.schemas.js';
 import { userRefSchema } from '../directory/user-ref.schema.js';
 import { processTypeIconSchema } from '../workflows/process-type.schemas.js';
 import { cursorQuerySchema } from '../pagination/paginated.schema.js';
@@ -62,19 +65,66 @@ export const projectRefSchema = z.object({
 
 export type ProjectRef = z.infer<typeof projectRefSchema>;
 
-/** Политика системного поля «Шифр» у типа: hidden — поля в форме нет
- *  («Тема»), optional — по желанию, required — обязательно («Договор»).
- *  Мост к формам типов (#38/#468): полный набор полей типа — схемой формы. */
-export const projectCodeFieldSchema = z.enum(['hidden', 'optional', 'required']);
-export type ProjectCodeField = z.infer<typeof projectCodeFieldSchema>;
+/** Форма типа проекта (Р10 #631): слоты атрибутов в состояниях
+ *  «скрыто / по желанию / обязательно» — зеркало формы вида папки. Посевной
+ *  слот «Шифр» занимает место бывшей политики codeField. */
+export const PROJECT_TYPE_LIMITS = {
+  /** Атрибутов в форме типа (слоты всех состояний). */
+  fields: 30,
+} as const;
+
+export const projectTypeFormSchema = z
+  .object({
+    fields: z.array(fieldFormSlotSchema).max(PROJECT_TYPE_LIMITS.fields),
+  })
+  .strict()
+  .superRefine((form, ctx) => {
+    if (hasDuplicateSlots(form.fields)) {
+      ctx.addIssue({ code: 'custom', path: ['fields'], message: 'duplicate field' });
+    }
+  });
+export type ProjectTypeForm = z.infer<typeof projectTypeFormSchema>;
+
+/** Умолчание: атрибутов нет (посев миграции добавит «Шифр» и «Заказчик»). */
+export const DEFAULT_PROJECT_TYPE_FORM: ProjectTypeForm = { fields: [] };
+
+/** Толерантное чтение формы типа (`{}`/битое → умолчание). */
+export function projectTypeFormOf(type: { form?: unknown }): ProjectTypeForm {
+  const parsed = projectTypeFormSchema.safeParse(type.form);
+  return parsed.success ? parsed.data : DEFAULT_PROJECT_TYPE_FORM;
+}
+
+/** Обязательные слоты формы типа (id атрибутов). */
+export function requiredProjectFields(form: ProjectTypeForm): string[] {
+  return form.fields.filter((slot) => slot.state === 'required').map((slot) => slot.fieldId);
+}
+
+/** Чего не хватает для формы типа (обязательные слоты после умолчаний):
+ *  проверка создания/правки проекта. Отказ — 422 PROJECT_FIELDS_REQUIRED. */
+export function missingProjectFields(
+  form: ProjectTypeForm,
+  input: { customFields?: CustomFieldValues },
+): string[] {
+  return requiredProjectFields(form).filter(
+    (fieldId) => !isCustomFieldValueFilled(input.customFields?.[fieldId]),
+  );
+}
+
+/** Ключи обязательных полей, которые патч очищает (`null`/пусто) — 422
+ *  `PROJECT_FIELDS_REQUIRED { reason: 'clear' }` (зеркало папок). */
+export function clearedProjectFields(
+  requiredIds: readonly string[],
+  values: Readonly<Record<string, unknown>>,
+): string[] {
+  return requiredIds.filter((id) => id in values && !isCustomFieldValueFilled(values[id]));
+}
 
 /** Тип проекта — справочник «Автоматизации» (сид: «Договор», «Тема»).
- *  `codeField` — политика системного поля «Шифр» (см. ниже): карточка и
- *  окна создания/правки показывают поле только там, где оно есть у типа. */
+ *  Форма типа — слоты атрибутов (Р10): диалоги проекта показывают только
+ *  привязанные типу атрибуты в состояниях слотов. */
 export const projectTypeRefSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1),
-  codeField: projectCodeFieldSchema,
 });
 export type ProjectTypeRef = z.infer<typeof projectTypeRefSchema>;
 
@@ -318,7 +368,9 @@ export const projectTypeSchema = z.object({
    *  02.11): тип узнаётся по плитке в левом списке «Схем проектов». */
   icon: processTypeIconSchema,
   color: projectColorSchema,
-  codeField: projectCodeFieldSchema,
+  /** Слоты атрибутов типа (Р10 #631): «Шифр» — обычный атрибут в слоте,
+   *  бывший сегмент политики шифра из настроек типа убран. */
+  form: projectTypeFormSchema,
   /** Допустимые виды папок проекта этого типа (#556, вердикт владельца
    *  02.11): `null` — все виды справочника; массив — только перечисленные.
    *  Создание папки и смена вида вне списка — 422
@@ -334,6 +386,8 @@ export const projectTypeCreateBodySchema = z.object({
   name: z.string().trim().min(1).max(120),
   icon: processTypeIconSchema.optional(),
   color: projectColorSchema.optional(),
+  /** Слоты атрибутов нового типа (Р10). */
+  form: projectTypeFormSchema.optional(),
 });
 
 export type ProjectTypeCreateBody = z.infer<typeof projectTypeCreateBodySchema>;
@@ -343,7 +397,8 @@ export const projectTypeUpdateBodySchema = z
     name: z.string().trim().min(1).max(120).optional(),
     icon: processTypeIconSchema.optional(),
     color: projectColorSchema.optional(),
-    codeField: projectCodeFieldSchema.optional(),
+    /** Слоты атрибутов типа — замена целиком (Р10). */
+    form: projectTypeFormSchema.optional(),
     /** Допустимые виды папок типа (#556): null — все, массив — только эти. */
     kindIds: z.array(z.uuid()).max(50).nullable().optional(),
   })

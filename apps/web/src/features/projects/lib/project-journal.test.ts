@@ -20,7 +20,7 @@ function project(overrides: Partial<ProjectListItem> = {}): ProjectListItem {
     myMembership: { manager: true, assistant: false, participant: false, observer: false },
     visibility: 'open',
     status: 'active',
-    type: { id: 't1', name: 'Договор', codeField: 'required' },
+    type: { id: 't1', name: 'Договор' },
     portfolio: { id: 'g1', name: 'Метро' },
     client: null,
     membersCount: 1,

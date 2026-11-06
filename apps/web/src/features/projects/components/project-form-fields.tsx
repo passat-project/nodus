@@ -1,6 +1,6 @@
 import { Plus, X } from 'lucide-react';
 import { useState } from 'react';
-import type { ProjectVisibility } from '@nodus/contracts';
+import type { CounterpartyRef, CustomFieldRef, ProjectVisibility } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Input } from '@nodus/ui/components/input';
@@ -15,11 +15,13 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { useProjectGroups } from '../../../shared/api/projects-list.js';
 import { useUsersList } from '../../../shared/api/users-list.js';
-import { DateTimePicker } from '../../../shared/ui/date-time-picker.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { PeoplePicker } from '../../../shared/ui/people-picker.js';
 import { SegmentedControl } from '../../../shared/ui/segmented-control.js';
 import { useCreateProjectGroup } from '../api/project-catalog-mutations.js';
+
+export { ProjectAttributeRows } from './project-attribute-rows.js';
+export { ProjectDeadlineField } from './project-deadline-field.js';
 
 const triggerClass =
   'flex h-8 w-full min-w-0 items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm transition-colors hover:bg-accent/40 dark:bg-input/30';
@@ -262,36 +264,19 @@ export function VisibilityField({
   );
 }
 
-/** Крайний срок проекта: только дата, НАШ пикер. «Начала» у проекта не
- *  спрашиваем — в проекте есть срок сдачи (вердикт владельца 07.11.2026:
- *  «странный атрибут „Срок начала“ — никто такое не указывает»). */
-export function ProjectDeadlineField({
-  value,
-  onChange,
-}: {
-  value: string | null;
-  onChange: (value: string | null) => void;
-}) {
-  return (
-    <DateTimePicker
-      value={fromIsoDate(value)}
-      onChange={(date) => onChange(toIsoDate(date))}
-      ariaLabel={ui.projects.deadline}
-      placeholder={ui.common.pickDate}
-      withTime={false}
-    />
-  );
+/** Слияние ссылок значений (выбор в редакторе атрибута): без дублей по
+ * «kind:id» — иконки и имена в окне живут до ответа сервера (Р6). */
+export function mergeFieldRefs(
+  prev: readonly CustomFieldRef[],
+  picked: readonly CustomFieldRef[],
+): CustomFieldRef[] {
+  const map = new Map(prev.map((ref) => [`${ref.kind}:${ref.id}`, ref]));
+  for (const ref of picked) map.set(`${ref.kind}:${ref.id}`, ref);
+  return [...map.values()];
 }
 
-/** Локальная дата → ISO-дата контракта (`YYYY-MM-DD`, без времени). */
-export function toIsoDate(date: Date | null): string | null {
-  if (!date) return null;
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
-/** ISO-дата контракта → локальная полночь для пикера. */
-function fromIsoDate(value: string | null): Date | null {
-  return value ? new Date(`${value}T00:00:00`) : null;
+/** Ссылка заказчика из выбора редактора атрибута — витринное поле строки
+ * журнала при оптимистичной вставке/патче (в тело мутации не идёт). */
+export function counterpartyRefOf(ref: CustomFieldRef | undefined): CounterpartyRef | null {
+  return ref ? { id: ref.id, name: ref.name ?? '' } : null;
 }

@@ -1,16 +1,15 @@
 import type { InjectionToken } from '@nestjs/common';
-import type { CustomFieldScope } from '@nodus/contracts';
 
 /**
- * Порт «где атрибут используется в процессах» (#431, вердикт владельца
- * 25.10.2026): удаление атрибута запрещено, пока он стоит в окне перехода
- * или в условии «Заполнены поля» опубликованного маршрута области. Таблицы
- * процессов принадлежат модулю workflows (I3) — модуль атрибутов спрашивает
- * порт, а не читает `workflow_transitions` сам.
+ * Порт «где атрибут используется в процессах» (#431; ревизия #631 — без
+ * областей): окно последствий и публикация спрашивают порт, какие
+ * опубликованные маршруты держат ключ `cf.<uuid>` и в чьих формах создания
+ * атрибут стоит слотом. Таблицы процессов принадлежат модулю workflows
+ * (I3) — модуль атрибутов читает их только через порт.
  *
- * Ссылка — ключ `cf.<uuid>` в разделах окна и в валидаторах `fields_required`.
- * Области писем/проектов/контрагентов в #431 не имеют маршрутов: для них
- * список пуст (появится вместе с модулями, #55/#52).
+ * Места поиска (Р8 #631): окно перехода, валидатор «Заполнены поля»,
+ * условие решающего `decider_in` (источник «поле») и форма создания узла
+ * «Создание» (отдельным методом — для usage-агрегата).
  */
 export const WORKFLOW_FIELD_USAGE_READER: InjectionToken = 'WORKFLOW_FIELD_USAGE_READER';
 
@@ -20,13 +19,17 @@ export interface WorkflowFieldUsage {
   name: string;
 }
 
+/** Тип процесса, в форме создания которого атрибут стоит слотом. */
+export interface WorkflowCreationFormUsage {
+  kind: 'task' | 'letter';
+  name: string;
+}
+
 export interface WorkflowFieldUsageReader {
-  /** Маршруты, где атрибут стоит в опубликованном окне, условии или форме
-   *  создания. `typeId` — только маршрут этого типа (#432: снятие привязки
-   *  блокируется, если атрибут работает в маршруте типа). */
-  workflowsUsingField(
-    scope: CustomFieldScope,
-    fieldId: string,
-    opts?: { typeId?: string },
-  ): Promise<WorkflowFieldUsage[]>;
+  /** Опубликованные маршруты с `cf.<id>` в окне, валидаторе или условии
+   *  решающего. `typeId` — только маршруты этого типа (публикация). */
+  workflowsUsingField(fieldId: string, opts?: { typeId?: string }): Promise<WorkflowFieldUsage[]>;
+
+  /** Формы создания типов с атрибутом-слотом (окно последствий, Р8). */
+  creationFormsUsingField(fieldId: string): Promise<WorkflowCreationFormUsage[]>;
 }

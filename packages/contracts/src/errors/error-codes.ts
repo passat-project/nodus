@@ -75,8 +75,8 @@ export const ErrorCode = {
   /** Скрытое значение формы стало недействительным — уволенный сотрудник,
    *  удалённый вариант (#432, Р4); details — { typeId, fields }. */
   PROCESS_TYPE_PRESET_INVALID: 'PROCESS_TYPE_PRESET_INVALID',
-  /** Привязка атрибута к типам процессов неверна (#432, Р8): чужой тип,
-   *  архивный тип, тип другой категории; details — { typeIds }. */
+  /** Привязка неверна (#631, Р3): цель не существует, архивный тип или
+   *  привязка у глобальной переменной; details — { targetKind, targetId }. */
   CUSTOM_FIELD_BINDING_INVALID: 'CUSTOM_FIELD_BINDING_INVALID',
   /** Название типа процесса уже занято живым типом (#378, #428). */
   PROCESS_TYPE_NAME_TAKEN: 'PROCESS_TYPE_NAME_TAKEN',
@@ -137,12 +137,9 @@ export const ErrorCode = {
   CUSTOM_FIELD_NAME_TAKEN: 'CUSTOM_FIELD_NAME_TAKEN',
   /** Смена типа несовместима с хранимыми значениями; details — { from, to } (#431, Р3). */
   CUSTOM_FIELD_TYPE_CHANGE_INCOMPATIBLE: 'CUSTOM_FIELD_TYPE_CHANGE_INCOMPATIBLE',
-  /** Больше 100 атрибутов в области (#431). */
+  /** Технический потолок 1000 атрибутов портала (страховка, #631 Р12);
+   *  продуктового лимита нет — текст просит обратиться к разработчикам. */
   CUSTOM_FIELD_LIMIT_REACHED: 'CUSTOM_FIELD_LIMIT_REACHED',
-  /** Удалить нельзя: атрибут стоит в окне перехода или условии маршрута;
-   *  details — { workflows: [{ id, name }] } (#431, вердикт владельца
-   *  25.10.2026: сначала убрать из процессов). */
-  CUSTOM_FIELD_IN_USE: 'CUSTOM_FIELD_IN_USE',
   /** Системный справочник защищён от удаления вариантов и переименования (#431, Р10). */
   DICTIONARY_SYSTEM_LOCKED: 'DICTIONARY_SYSTEM_LOCKED',
   /** Вариант с таким названием уже есть среди активных (#431). */
@@ -177,6 +174,9 @@ export const ErrorCode = {
   /** Обязательные поля формы вида не заполнены: создание, смена вида или
    *  очистка (`details.reason`: create | kind_change | clear; 422; #556). */
   PROJECT_NODE_FIELDS_REQUIRED: 'PROJECT_NODE_FIELDS_REQUIRED',
+  /** Обязательные слоты формы типа проекта не заполнены/очищаются
+   *  (`details.reason`: create | clear; 422; #631 Р10). */
+  PROJECT_FIELDS_REQUIRED: 'PROJECT_FIELDS_REQUIRED',
   /** Форма вида ссылается на негодные атрибуты (`details.reason`:
    *  unknown_field | hidden_field; 422; #556). */
   PROJECT_NODE_KIND_FORM_INVALID: 'PROJECT_NODE_KIND_FORM_INVALID',

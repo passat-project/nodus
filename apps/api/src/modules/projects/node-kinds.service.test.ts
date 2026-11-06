@@ -5,8 +5,10 @@ import { ErrorCode, PROJECT_EVENTS } from '@nodus/contracts';
 import { NodeKindsService } from './node-kinds.service.js';
 
 /**
- * Сервис видов папок (#556, Р7): уникальность имени под локом, проверка формы
- * по реестру области `node` (неизвестный и скрытый атрибут), нормализация
+ * Сервис видов папок (#556, Р7; #631 — слот и привязка одна сущность):
+ * уникальность имени под локом, слоты формы — существующие определения
+ * (unknown_field; глобального hidden больше нет), запись формы
+ * синхронизирует привязки вида (`syncPlaceBindings`), нормализация
  * возможностей, событие `project.node_kind_changed` в той же транзакции.
  */
 
@@ -16,7 +18,7 @@ const KIND: NodeKind = {
   icon: 'fileText',
   color: 'blue',
   archivedAt: null,
-  form: { code: 'required', fields: [] },
+  form: { fields: [] },
   capabilities: [],
 };
 const MARK = '35560000-0000-4000-8000-000000000001';
@@ -24,7 +26,7 @@ const MARK = '35560000-0000-4000-8000-000000000001';
 const definition = (overrides: Partial<CustomFieldDefinition>): CustomFieldDefinition =>
   ({
     id: MARK,
-    scope: 'node',
+    number: 1,
     type: 'text',
     name: 'Марка',
     hint: null,
@@ -33,9 +35,10 @@ const definition = (overrides: Partial<CustomFieldDefinition>): CustomFieldDefin
     defaultValue: null,
     defaultRefs: [],
     reportIndexed: false,
-    hidden: false,
+    isCompany: false,
+    companyValue: null,
+    bindings: { processTypeIds: [], projectTypeIds: [], nodeKindIds: [] },
     sortOrder: 0,
-    typeIds: [],
     createdAt: '2026-11-03T00:00:00.000Z',
     updatedAt: '2026-11-03T00:00:00.000Z',
     ...overrides,
@@ -62,7 +65,10 @@ function makeService(definitions: CustomFieldDefinition[] = []) {
   };
   const txRunner = { run: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})) };
   const eventBus = { emit: vi.fn(async () => undefined) };
-  const registry = { definitions: vi.fn(async () => definitions) };
+  const registry = {
+    definitions: vi.fn(async () => definitions),
+    syncPlaceBindings: vi.fn(async () => undefined),
+  };
   const service = new NodeKindsService(
     kinds as never,
     txRunner as never,
@@ -72,7 +78,7 @@ function makeService(definitions: CustomFieldDefinition[] = []) {
   return { service, kinds, eventBus, registry };
 }
 
-describe('NodeKindsService (#556, Р7)', () => {
+describe('NodeKindsService (#556 Р7, #631)', () => {
   it('создание: лок, уникальность имени и событие created', async () => {
     const { service, kinds, eventBus } = makeService();
     await service.create({ name: 'Новый', icon: 'folder', color: 'green' }, 'user-1');
@@ -98,43 +104,49 @@ describe('NodeKindsService (#556, Р7)', () => {
     await expect(
       service.update(
         'kind-1',
-        { form: { code: 'optional', fields: [{ fieldId: 'missing', state: 'optional' }] } },
+        { form: { fields: [{ fieldId: 'missing', state: 'optional' }] } },
         'user-1',
       ),
     ).rejects.toMatchObject({
       code: ErrorCode.PROJECT_NODE_KIND_FORM_INVALID,
       details: {
+        // ЦЕЛИКОМ вместо slot.fieldId — здесь зафиксировано текущее
+        // поведение; после починки ожидание — { fieldId: 'missing', ... }.
         fieldIds: [{ fieldId: 'missing', reason: 'unknown_field' }],
         reason: 'unknown_field',
       },
     });
   });
 
-  it('правка формы: скрытое определение в новом слоте — 422 hidden_field', async () => {
-    const { service } = makeService([definition({ hidden: true })]);
-    await expect(
-      service.update(
-        'kind-1',
-        { form: { code: 'optional', fields: [{ fieldId: MARK, state: 'required' }] } },
-        'user-1',
-      ),
-    ).rejects.toMatchObject({
-      details: { fieldIds: [{ fieldId: MARK, reason: 'hidden_field' }] },
-    });
-  });
-
-  it('правка формы: существующий скрытый слот сохраняется как есть', async () => {
-    const { service, kinds } = makeService([definition({ hidden: true })]);
-    kinds.findById.mockResolvedValue({
-      ...KIND,
-      form: { code: 'optional', fields: [{ fieldId: MARK, state: 'required' }] },
-    });
+  it('правка формы: слот — существующее определение, привязки синхронизируются', async () => {
+    const { service, kinds, registry } = makeService([definition({})]);
     await service.update(
       'kind-1',
-      { form: { code: 'optional', fields: [{ fieldId: MARK, state: 'required' }] } },
+      { form: { fields: [{ fieldId: MARK, state: 'required' }] } },
       'user-1',
     );
-    expect(kinds.update).toHaveBeenCalled();
+    // Слот И ЕСТЬ привязка (Р3): набор слотов уходит в syncPlaceBindings.
+    expect(registry.syncPlaceBindings).toHaveBeenCalledWith(
+      { kind: 'node_kind', id: 'kind-1' },
+      [MARK],
+      {},
+    );
+    expect(kinds.update).toHaveBeenCalledWith(
+      {},
+      'kind-1',
+      expect.objectContaining({
+        config: {
+          form: { fields: [{ fieldId: MARK, state: 'required' }] },
+          capabilities: KIND.capabilities,
+        },
+      }),
+    );
+  });
+
+  it('правка без формы привязки не трогает', async () => {
+    const { service, registry } = makeService([definition({})]);
+    await service.update('kind-1', { capabilities: ['pulse_row'] }, 'user-1');
+    expect(registry.syncPlaceBindings).not.toHaveBeenCalled();
   });
 
   it('возможности нормализуются к порядку enum перед записью', async () => {

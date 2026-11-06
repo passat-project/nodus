@@ -1,6 +1,6 @@
 import { useId, useRef, type ReactNode } from 'react';
 import type { LetterDetail, LetterRegistrationField } from '@nodus/contracts';
-import { typeIdsOf, ui } from '@nodus/contracts';
+import { bindingsOf, ui } from '@nodus/contracts';
 import { Input } from '@nodus/ui/components/input';
 import {
   Select,
@@ -15,10 +15,7 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { projectsAvailable } from '../../../../shared/api/projects-available.js';
 import { CounterpartyCombobox } from '../../../../shared/counterparties/counterparty-combobox.js';
-import {
-  useCustomFieldDefinitions,
-  visibleDefinitions,
-} from '../../../../shared/custom-fields/queries.js';
+import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { ProjectPicker } from '../../../../shared/ui/project-picker.js';
 import { useReceiptMethods } from '../../api/letters-queries.js';
 import {
@@ -63,8 +60,9 @@ export function RegistrationFields({
   const prefix = useId();
   const { data: methods = [] } = useReceiptMethods();
   const { data: definitions } = useCustomFieldDefinitions('letter');
-  const attributes = visibleDefinitions(definitions).filter((definition) =>
-    typeIdsOf(definition).includes(letter.typeId),
+  // Атрибуты типа письма — привязка «Где используется» (#631, Р3).
+  const attributes = (definitions ?? []).filter((definition) =>
+    bindingsOf(definition).processTypeIds.includes(letter.typeId),
   );
 
   // Подстановка контрагента/подписанта по адресу отправителя (Р6, В2).

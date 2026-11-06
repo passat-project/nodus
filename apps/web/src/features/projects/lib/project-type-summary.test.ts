@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { NodeKind, ProjectType } from '@nodus/contracts';
+import { SYSTEM_FIELD_IDS } from '@nodus/contracts';
 
 import {
+  fieldsSummary,
   kindsSummary,
   kindIdsAfterToggle,
   typeMeta,
@@ -19,7 +21,7 @@ function kind(overrides: Partial<NodeKind> = {}): NodeKind {
     icon: 'folder',
     color: 'blue',
     archivedAt: null,
-    form: { code: 'optional', fields: [] },
+    form: { fields: [] },
     capabilities: [],
     ...overrides,
   };
@@ -31,7 +33,7 @@ function type(overrides: Partial<ProjectType> = {}): ProjectType {
     name: 'Договор',
     icon: 'file-text',
     color: 'blue',
-    codeField: 'required',
+    form: { fields: [] },
     kindIds: null,
     archivedAt: null,
     ...overrides,
@@ -67,6 +69,37 @@ describe('kindsSummary', () => {
     expect(kindsSummary(type({ kindIds: null }), kinds)).toBe('Все виды · 2');
     expect(kindsSummary(type({ kindIds: [KIND] }), kinds)).toBe('1 из 2');
     expect(kindsSummary(type({ kindIds: [] }), kinds)).toBe('0 из 2');
+  });
+});
+
+describe('fieldsSummary', () => {
+  it('пустая форма — «Атрибутов нет»', () => {
+    expect(fieldsSummary(type())).toBe('Атрибутов нет');
+  });
+
+  it('слоты формы — счётчик атрибутов и обязательных (посев #631)', () => {
+    expect(
+      fieldsSummary(
+        type({
+          form: {
+            fields: [
+              { fieldId: SYSTEM_FIELD_IDS.projectCode, state: 'required' },
+              { fieldId: SYSTEM_FIELD_IDS.projectClient, state: 'optional' },
+            ],
+          },
+        }),
+      ),
+    ).toBe('2 атрибута · обязательных: 1');
+    expect(
+      fieldsSummary({
+        ...type(),
+        form: { fields: [{ fieldId: SYSTEM_FIELD_IDS.projectClient, state: 'optional' }] },
+      }),
+    ).toBe('1 атрибут');
+  });
+
+  it('битая форма читается толерантно — умолчание, без падения', () => {
+    expect(fieldsSummary({ ...type(), form: undefined as never })).toBe('Атрибутов нет');
   });
 });
 

@@ -3,10 +3,12 @@ import type {
   CreateCustomFieldBody,
   CustomFieldDefinition,
   CustomFieldUsage,
+  CustomFieldValue,
+  CustomFieldBindingKind,
   ReorderCustomFieldsBody,
   UpdateCustomFieldBody,
 } from '@nodus/contracts';
-import { typeIdsOf, ui } from '@nodus/contracts';
+import { bindingsOf, ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api } from '../../../shared/api-client.js';
@@ -15,7 +17,7 @@ import { tasksKeys } from '../../../shared/api/tasks-keys.js';
 
 type DefinitionLists = Array<[readonly unknown[], CustomFieldDefinition[]]>;
 
-/** Все подгруженные списки определений (по областям) — оптимистичные
+/** Все подгруженные списки определений (по модулям) — оптимистичные
  *  правки бьют в каждый, как списки задач в журнале. */
 function definitionLists(queryClient: ReturnType<typeof useQueryClient>): DefinitionLists {
   return queryClient.getQueriesData<CustomFieldDefinition[]>({
@@ -41,7 +43,8 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>): void {
 }
 
 /** Создание атрибута — пессимистично (составная операция «справочник →
- *  атрибут»); ошибки (имя, лимит, тип) показывает окно. */
+ *  атрибут»); ошибки (имя, потолок, тип) показывает окно, включая
+ *  предложение существующего при дубле имени (В3). */
 export function useCreateCustomField() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -52,7 +55,7 @@ export function useCreateCustomField() {
 }
 
 /** Правка определения: имя, подсказка, тип, настройки, умолчание,
- *  видимость, отчёты. Оптимистично с откатом; ошибку разбирает вызывающий. */
+ *  привязки, отчёты. Оптимистично с откатом; ошибку разбирает вызывающий. */
 export function useUpdateCustomField() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -89,17 +92,16 @@ function patchOf(
   if (body.hint !== undefined) patch.hint = body.hint;
   if (body.type !== undefined) patch.type = body.type;
   if (body.reportIndexed !== undefined) patch.reportIndexed = body.reportIndexed;
-  if (body.hidden !== undefined) patch.hidden = body.hidden;
   if (body.defaultValue !== undefined) patch.defaultValue = body.defaultValue;
   if (body.settings !== undefined) {
     patch.settings = { ...definition.settings, ...body.settings };
   }
-  if (body.typeIds !== undefined) patch.typeIds = body.typeIds;
+  if (body.bindings !== undefined) patch.bindings = body.bindings;
   return patch;
 }
 
-/** Где используется атрибут (окно удаления): число заполненных карточек и
- *  маршруты процессов — непустые маршруты блокируют удаление. Без кэша:
+/** Где используется атрибут (окно удаления): агрегат последствий — значения
+ *  по сущностям, формы, маршруты, привязки, глобальное значение. Без кэша:
  *  окно всегда проверяет свежую картину. */
 export function useCustomFieldUsage(ids: readonly string[]) {
   return useQueries({
@@ -114,9 +116,9 @@ export function useCustomFieldUsage(ids: readonly string[]) {
   });
 }
 
-/** Удаление атрибутов (одного или пачки): пессимистично — необратимо, и
- *  сервер может отказать (CUSTOM_FIELD_IN_USE). Значения стираются вместе
- *  с определением; карточки перечитываются по инвалидации задач. */
+/** Удаление атрибутов (одного или пачки): пессимистично — необратимо.
+ *  Разрешено всегда (Р8): значения стираются вместе с определением,
+ *  карточки перечитываются по инвалидации задач. */
 export function useDeleteCustomFields() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -133,18 +135,18 @@ export function useDeleteCustomFields() {
   });
 }
 
-/** Порядок атрибутов области (ids = ровно все атрибуты области). */
+/** Порядок атрибутов портала (ids = ровно все атрибуты реестра). */
 export function useReorderCustomFields() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: ReorderCustomFieldsBody) =>
       api<void>('/custom-fields/definitions/order', { method: 'PUT', body }),
-    onMutate: async ({ scope, ids }) => {
+    onMutate: async ({ ids }) => {
       await queryClient.cancelQueries({ queryKey: customFieldsKeys.all });
       const previous = definitionLists(queryClient);
       const order = new Map(ids.map((id, index) => [id, index]));
       patchLists(queryClient, (definition) =>
-        definition.scope === scope && order.has(definition.id)
+        order.has(definition.id)
           ? { ...definition, sortOrder: order.get(definition.id)! }
           : definition,
       );
@@ -158,31 +160,57 @@ export function useReorderCustomFields() {
   });
 }
 
+/** Список привязок нужного вида у определения (для оптимистичной правки). */
+function bindingListOf(definition: CustomFieldDefinition, kind: CustomFieldBindingKind): string[] {
+  const bindings = bindingsOf(definition);
+  return kind === 'process-type'
+    ? bindings.processTypeIds
+    : kind === 'project-type'
+      ? bindings.projectTypeIds
+      : bindings.nodeKindIds;
+}
+
+function withBindingList(
+  definition: CustomFieldDefinition,
+  kind: CustomFieldBindingKind,
+  list: string[],
+): CustomFieldDefinition {
+  const bindings = bindingsOf(definition);
+  return {
+    ...definition,
+    bindings: {
+      processTypeIds: kind === 'process-type' ? list : bindings.processTypeIds,
+      projectTypeIds: kind === 'project-type' ? list : bindings.projectTypeIds,
+      nodeKindIds: kind === 'node-kind' ? list : bindings.nodeKindIds,
+    },
+  };
+}
+
 /**
- * Привязка атрибута к типу процесса (#432, Р8): оптимистично (I4) и по
- * очереди на атрибут (`scope`): два быстрых клика по разным типам не
- * перетирают список друг друга. Снятие привязки сервер может отклонить
- * (409 CUSTOM_FIELD_IN_USE) — откат и текст ошибки из окна.
+ * Привязка атрибута к месту «Где используется» (#631, Р3): оптимистично
+ * (I4) и по очереди на атрибут: два быстрых клика по разным местам не
+ * перетирают список друг друга. Идемпотентна и всегда разрешена (В4).
  */
-export function useBindFieldType(fieldId: string) {
+export function useBindFieldTarget(fieldId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    scope: { id: `field-types:${fieldId}` },
-    mutationFn: (typeId: string) =>
-      api<CustomFieldDefinition>(`/custom-fields/definitions/${fieldId}/types/${typeId}`, {
-        method: 'PUT',
-      }),
-    onMutate: async (typeId) => {
+    scope: { id: `field-bindings:${fieldId}` },
+    mutationFn: (vars: { kind: CustomFieldBindingKind; targetId: string }) =>
+      api<CustomFieldDefinition>(
+        `/custom-fields/definitions/${fieldId}/bindings/${vars.kind}/${vars.targetId}`,
+        { method: 'PUT' },
+      ),
+    onMutate: async ({ kind, targetId }) => {
       await queryClient.cancelQueries({ queryKey: customFieldsKeys.all });
       const previous = definitionLists(queryClient);
       patchLists(queryClient, (definition) =>
-        definition.id === fieldId && !typeIdsOf(definition).includes(typeId)
-          ? { ...definition, typeIds: [...typeIdsOf(definition), typeId] }
+        definition.id === fieldId && !bindingListOf(definition, kind).includes(targetId)
+          ? withBindingList(definition, kind, [...bindingListOf(definition, kind), targetId])
           : definition,
       );
       return { previous };
     },
-    onError: (_error, _typeId, context) => {
+    onError: (_error, _vars, context) => {
       for (const [key, data] of context?.previous ?? []) queryClient.setQueryData(key, data);
     },
     onSuccess: (definition) => {
@@ -192,27 +220,62 @@ export function useBindFieldType(fieldId: string) {
   });
 }
 
-/** Снятие привязки атрибута к типу (#432): оптимистично; 409 — откат. */
-export function useUnbindFieldType(fieldId: string) {
+/** Снятие привязки (#631): оптимистично; ошибка — откат. */
+export function useUnbindFieldTarget(fieldId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    scope: { id: `field-types:${fieldId}` },
-    mutationFn: (typeId: string) =>
-      api<CustomFieldDefinition>(`/custom-fields/definitions/${fieldId}/types/${typeId}`, {
-        method: 'DELETE',
-      }),
-    onMutate: async (typeId) => {
+    scope: { id: `field-bindings:${fieldId}` },
+    mutationFn: (vars: { kind: CustomFieldBindingKind; targetId: string }) =>
+      api<CustomFieldDefinition>(
+        `/custom-fields/definitions/${fieldId}/bindings/${vars.kind}/${vars.targetId}`,
+        { method: 'DELETE' },
+      ),
+    onMutate: async ({ kind, targetId }) => {
       await queryClient.cancelQueries({ queryKey: customFieldsKeys.all });
       const previous = definitionLists(queryClient);
       patchLists(queryClient, (definition) =>
         definition.id === fieldId
-          ? { ...definition, typeIds: typeIdsOf(definition).filter((id) => id !== typeId) }
+          ? withBindingList(
+              definition,
+              kind,
+              bindingListOf(definition, kind).filter((id) => id !== targetId),
+            )
           : definition,
       );
       return { previous };
     },
-    onError: (_error, _typeId, context) => {
+    onError: (_error, _vars, context) => {
       for (const [key, data] of context?.previous ?? []) queryClient.setQueryData(key, data);
+    },
+    onSuccess: (definition) => {
+      patchLists(queryClient, (current) => (current.id === definition.id ? definition : current));
+    },
+    onSettled: () => invalidate(queryClient),
+  });
+}
+
+/** Значение глобальной переменной (Р7): правит администратор из реестра;
+ *  оптимистично — значение видно сразу, ошибка откатывает. */
+export function useSetCompanyValue() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    scope: { id: 'company-value' },
+    mutationFn: (vars: { fieldId: string; value: CustomFieldValue | null }) =>
+      api<CustomFieldDefinition>(`/custom-fields/definitions/${vars.fieldId}/company-value`, {
+        method: 'PUT',
+        body: { value: vars.value },
+      }),
+    onMutate: async ({ fieldId, value }) => {
+      await queryClient.cancelQueries({ queryKey: customFieldsKeys.all });
+      const previous = definitionLists(queryClient);
+      patchLists(queryClient, (definition) =>
+        definition.id === fieldId ? { ...definition, companyValue: value } : definition,
+      );
+      return { previous };
+    },
+    onError: (_error, _vars, context) => {
+      for (const [key, data] of context?.previous ?? []) queryClient.setQueryData(key, data);
+      toast.error(ui.common.saveError);
     },
     onSuccess: (definition) => {
       patchLists(queryClient, (current) => (current.id === definition.id ? definition : current));

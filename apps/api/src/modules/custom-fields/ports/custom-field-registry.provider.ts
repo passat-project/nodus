@@ -3,7 +3,6 @@ import { PinoLogger } from 'nestjs-pino';
 import type {
   CustomFieldDefinition,
   CustomFieldRef,
-  CustomFieldScope,
   CustomFieldValue,
   CustomFieldValues,
 } from '@nodus/contracts';
@@ -24,12 +23,13 @@ import type {
   RegistryFieldChange,
   RegistryQuery,
   RegistryScoping,
+  RegistryTarget,
 } from './custom-field-registry.port.js';
 
 /**
- * Реализация порта реестра атрибутов (#431, Р2): единственная точка
- * динамической валидации значений и умолчаний. Определения читаются без
- * кэша (≤ 100 строк области, один запрос на операцию).
+ * Реализация порта реестра атрибутов (#431, Р2; #631 — скопинг по месту):
+ * единственная точка динамической валидации значений и умолчаний. Реестр
+ * портала ≤ 1000 строк читается одним запросом без кэша.
  *
  * Каноническое сравнение значений — по стабильной строке: PostgreSQL
  * переставляет ключи JSONB, а `{amount, currencyId}` и `{currencyId, amount}`
@@ -49,27 +49,18 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
   }
 
   async definitions(
-    scope: CustomFieldScope,
     opts: RegistryQuery = {},
     tx?: TransactionClient,
   ): Promise<CustomFieldDefinition[]> {
-    assertScoping(opts);
-    const rows = await this.repository.list(scope, tx, {
-      typeId: opts.typeId,
-      fieldIds: opts.fieldIds,
-    });
-    return this.mapper.toDtos(rows, tx);
+    const all = await this.mapper.toDtos(await this.repository.list(tx), tx);
+    return opts.target === undefined ? all : all.filter(boundTo(opts.target));
   }
 
-  async prepareCreate(
-    scope: CustomFieldScope,
-    args: PrepareCreateArgs,
-    tx?: TransactionClient,
-  ): Promise<CustomFieldValues> {
-    // Все определения области — чтобы отличить «нет такого атрибута» от
-    // «есть, но не привязан» (#432, Р8; #556, Р4): второе — отдельная причина.
-    const all = await this.definitions(scope, {}, tx);
-    const definitions = boundTo(all, args);
+  async prepareCreate(args: PrepareCreateArgs, tx?: TransactionClient): Promise<CustomFieldValues> {
+    // Весь реестр — чтобы отличить «нет такого атрибута» от «есть, но не
+    // привязан к месту» (Р8/Р3): второе — отдельная причина.
+    const all = await this.definitions({}, tx);
+    const definitions = boundList(all, args);
     const unbound = unboundIssues(all, definitions, args.input);
     if (unbound.length > 0) throw invalidValues(unbound);
     if (definitions.length === 0) {
@@ -78,22 +69,21 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
     }
 
     const candidates = await this.defaults.resolve(definitions, args.authorId, tx);
-    const defaultIssues = await this.validator.validate(scope, definitions, candidates, tx);
+    const defaultIssues = await this.validator.validate(definitions, candidates, tx);
     const cleanDefaults = dropIssues(candidates, defaultIssues);
     if (defaultIssues.length > 0) {
       this.logger.warn(
-        { scope, fieldIds: defaultIssues.map((issue) => issue.fieldId) },
+        { fieldIds: defaultIssues.map((issue) => issue.fieldId) },
         'Умолчания атрибутов пропущены: ссылки недействительны',
       );
     }
 
-    const issues = await this.validator.validate(scope, definitions, args.input, tx, args.actor);
+    const issues = await this.validator.validate(definitions, args.input, tx, args.actor);
     if (issues.length > 0) throw invalidValues(issues);
     return { ...cleanDefaults, ...args.input };
   }
 
   async prepareUpdate(
-    scope: CustomFieldScope,
     args: PrepareUpdateArgs,
     tx?: TransactionClient,
   ): Promise<{ next: CustomFieldValues; changes: RegistryFieldChange[] }> {
@@ -103,13 +93,13 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
       if (canonical(args.current[fieldId]) !== canonical(value)) changed[fieldId] = value;
     }
 
-    const all = await this.definitions(scope, {}, tx);
-    const definitions = boundTo(all, args);
+    const all = await this.definitions({}, tx);
+    const definitions = boundList(all, args);
     // Запись непривязанного — ошибка; очистка (`null`) разрешена всегда:
     // снятие привязки не должно блокировать уборку старого значения (Р8).
     const unbound = unboundIssues(all, definitions, changed);
     if (unbound.length > 0) throw invalidValues(unbound);
-    const issues = await this.validator.validate(scope, definitions, changed, tx, args.actor);
+    const issues = await this.validator.validate(definitions, changed, tx, args.actor);
     if (issues.length > 0) throw invalidValues(issues);
 
     const next: CustomFieldValues = { ...args.current };
@@ -130,53 +120,63 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
   }
 
   async refs(
-    scope: CustomFieldScope,
     values: CustomFieldValues,
     actor: ProjectActor,
     tx?: TransactionClient,
   ): Promise<CustomFieldRef[]> {
-    return this.refsMany(scope, [values], actor, tx);
+    return this.refsMany([values], actor, tx);
   }
 
   async refsMany(
-    scope: CustomFieldScope,
     valuesList: readonly CustomFieldValues[],
     actor: ProjectActor,
     tx?: TransactionClient,
   ): Promise<CustomFieldRef[]> {
     if (valuesList.every((values) => Object.keys(values).length === 0)) return [];
-    const definitions = await this.definitions(scope, {}, tx);
+    const definitions = await this.definitions({}, tx);
     return this.hydrator.hydrateMany(definitions, valuesList, actor, tx);
   }
-}
 
-/** Оба скоупа сразу — ошибка программиста, а не пользователя (Р4). */
-function assertScoping(scoping: RegistryScoping): void {
-  if (scoping.typeId !== undefined && scoping.fieldIds !== undefined) {
-    throw new Error('typeId and fieldIds are exclusive');
+  async syncPlaceBindings(
+    target: RegistryTarget,
+    fieldIds: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<void> {
+    if (target.kind === 'process_type') {
+      throw new Error('process_type has no form slots');
+    }
+    await this.repository.syncTargets(target.kind, target.id, fieldIds, tx);
   }
 }
 
-/** Атрибуты выбранного скоупа; без скоупа — все (старые вызовы, письма).
- *  При `fieldIds` порядок — реестра, а не списка (канон карточки). */
-function boundTo(
+/** Привязано ли определение к месту (Р3): строка field_bindings. */
+function boundTo(target: RegistryTarget): (definition: CustomFieldDefinition) => boolean {
+  return (definition) => {
+    switch (target.kind) {
+      case 'process_type':
+        return definition.bindings.processTypeIds.includes(target.id);
+      case 'project_type':
+        return definition.bindings.projectTypeIds.includes(target.id);
+      case 'node_kind':
+        return definition.bindings.nodeKindIds.includes(target.id);
+    }
+  };
+}
+
+/** Атрибуты выбранного места; без `target` — весь реестр (фильтры, окна). */
+function boundList(
   definitions: readonly CustomFieldDefinition[],
   scoping: RegistryScoping,
 ): CustomFieldDefinition[] {
-  assertScoping(scoping);
-  if (scoping.fieldIds !== undefined) {
-    const ids = new Set(scoping.fieldIds);
-    return definitions.filter((definition) => ids.has(definition.id));
-  }
-  return scoping.typeId === undefined
+  return scoping.target === undefined
     ? [...definitions]
-    : definitions.filter((definition) => definition.typeIds.includes(scoping.typeId!));
+    : definitions.filter(boundTo(scoping.target));
 }
 
-/** Значения СУЩЕСТВУЮЩИХ, но непривязанных атрибутов — 422 `not_in_type`
- *  (Р8, Р4). Неизвестный ключ сюда не попадает: его причина — `unknown`,
- *  иначе клиент не отличит опечатку в id от «атрибут есть, но не для этого
- *  вида/типа». */
+/** Значения СУЩЕСТВУЮЩИХ, но непривязанных к месту атрибутов — 422
+ *  `not_in_type` (Р8, Р3). Неизвестный ключ сюда не попадает: его причина —
+ *  `unknown`, иначе клиент не отличит опечатку в id от «атрибут есть, но не
+ *  для этого места». */
 function unboundIssues(
   all: readonly CustomFieldDefinition[],
   bound: readonly CustomFieldDefinition[],
@@ -192,11 +192,11 @@ function unboundIssues(
     .map(([fieldId]) => ({
       fieldId,
       reason: 'not_in_type' as const,
-      message: 'Field is not bound to this type',
+      message: 'Field is not bound to this place',
     }));
 }
 
-/** Пустой ввод при отсутствии определений области — это «чужой ключ». */
+/** Пустой ввод при отсутствии определений — это «чужой ключ». */
 function assertNoInput(input: CustomFieldValues): void {
   const keys = Object.keys(input);
   if (keys.length === 0) return;

@@ -1,33 +1,31 @@
 import { Injectable } from '@nestjs/common';
-import type { CustomFieldScope } from '@nodus/contracts';
 import { customFieldKey } from '@nodus/contracts';
 
 import { Prisma } from '../../../generated/prisma/client.js';
 import { PrismaService } from '../../../core/database/prisma.service.js';
-import type { WorkflowFieldUsage, WorkflowFieldUsageReader } from './workflow-field-usage.port.js';
+import type {
+  WorkflowCreationFormUsage,
+  WorkflowFieldUsage,
+  WorkflowFieldUsageReader,
+} from './workflow-field-usage.port.js';
 
 /**
- * Реализация порта использования атрибута в процессах (#431): ищет ключ
- * `cf.<uuid>` в ОПУБЛИКОВАННЫХ документах маршрутов области — в разделах
- * окна перехода (`form.sections[kind=fields].fields`) и в валидаторах
- * «Заполнены поля» (`rules.validators[kind=fields_required].fields`).
- *
- * Черновик маршрута удаление не блокирует: публикация с неизвестным полем
- * даёт блокирующую ошибку `custom_field_unknown` (Р7) — это и есть защита
- * черновика. Оператор `?` jsonb проверяет наличие элемента массива, поэтому
- * сравнение идёт по точному ключу, без LIKE по тексту документа.
+ * Реализация порта использования атрибута в процессах (#631): ищет ключ
+ * `cf.<uuid>` в ОПУБЛИКОВАННЫХ документах маршрутов — в разделах окна
+ * перехода (`form.sections[kind=fields].fields`), в валидаторах «Заполнены
+ * поля» и в условиях решающих `decider_in` (источник «поле», Р8 #631).
+ * Оператор `?` jsonb проверяет наличие элемента массива, сравнение идёт по
+ * точному ключу. Черновик не считается: публикация с неизвестным полем
+ * даёт блокирующую ошибку `custom_field_unknown` — это и есть защита.
  */
 @Injectable()
 export class WorkflowFieldUsageProvider implements WorkflowFieldUsageReader {
   constructor(private readonly prisma: PrismaService) {}
 
   async workflowsUsingField(
-    scope: CustomFieldScope,
     fieldId: string,
     opts: { typeId?: string } = {},
   ): Promise<WorkflowFieldUsage[]> {
-    // Маршруты есть только у задач и писем (ADR-0024); прочие области — пусто.
-    if (scope !== 'task' && scope !== 'letter') return [];
     const key = customFieldKey(fieldId);
     return this.prisma.$queryRaw<WorkflowFieldUsage[]>(Prisma.sql`
       SELECT DISTINCT w.id, COALESCE(pt.name, w.name) AS name
@@ -36,8 +34,8 @@ export class WorkflowFieldUsageProvider implements WorkflowFieldUsageReader {
         ON t.workflow_id = w.id AND t.archived_at IS NULL
       LEFT JOIN workflow_scheme_entries se ON se.workflow_id = w.id
       LEFT JOIN process_types pt ON pt.id = se.process_type_id
-      WHERE w.kind = ${scope}
-        AND w.published_at IS NOT NULL
+      WHERE w.published_at IS NOT NULL
+        AND w.kind IN ('task', 'letter')
         ${opts.typeId ? Prisma.sql`AND se.process_type_id = ${opts.typeId}::uuid` : Prisma.empty}
         AND (
           EXISTS (
@@ -51,17 +49,28 @@ export class WorkflowFieldUsageProvider implements WorkflowFieldUsageReader {
             WHERE v->>'kind' = 'fields_required'
               AND v->'fields' ? ${key}
           )
+          OR EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(COALESCE(t.rules->'conditions', '[]'::jsonb)) c
+            WHERE c->>'kind' = 'decider_in'
+              AND c->'source'->>'kind' = 'field'
+              AND c->'source'->>'field' = ${key}
+          )
         )
-      UNION
-      -- Форма создания (#432): атрибут стоит в окне узла «Создание».
-      SELECT DISTINCT w.id, COALESCE(pt.name, w.name) AS name
+      ORDER BY name
+    `);
+  }
+
+  async creationFormsUsingField(fieldId: string): Promise<WorkflowCreationFormUsage[]> {
+    const key = customFieldKey(fieldId);
+    return this.prisma.$queryRaw<WorkflowCreationFormUsage[]>(Prisma.sql`
+      SELECT DISTINCT w.kind, COALESCE(pt.name, w.name) AS name
       FROM workflows w
       JOIN workflow_scheme_entries se ON se.workflow_id = w.id
       JOIN process_types pt ON pt.id = se.process_type_id
       CROSS JOIN LATERAL jsonb_array_elements(COALESCE(w.creation->'fields', '[]'::jsonb)) f
-      WHERE w.kind = ${scope}
-        AND w.published_at IS NOT NULL
-        ${opts.typeId ? Prisma.sql`AND se.process_type_id = ${opts.typeId}::uuid` : Prisma.empty}
+      WHERE w.published_at IS NOT NULL
+        AND w.kind IN ('task', 'letter')
         AND f->>'key' = ${key}
       ORDER BY name
     `);

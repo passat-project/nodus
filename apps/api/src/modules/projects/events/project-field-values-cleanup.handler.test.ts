@@ -42,11 +42,11 @@ function event(payload: Record<string, unknown>) {
   };
 }
 
-describe('ProjectFieldValuesCleanupHandler (#556, Р11)', () => {
-  it('область node: значения папок и формы видов, событие на каждый вид', async () => {
+describe('ProjectFieldValuesCleanupHandler (#556, Р11; #631 — без областей)', () => {
+  it('значения папок и формы видов, событие на каждый вид + проекты тем же событием', async () => {
     const { handler, nodes, kinds, eventBus, projects } = makeHandler();
-    await handler.handle(event({ definitionId: FIELD, scope: 'node', change: 'deleted' }));
-    expect(projects.removeCustomFieldValues).not.toHaveBeenCalled();
+    await handler.handle(event({ definitionId: FIELD, change: 'deleted' }));
+    expect(projects.removeCustomFieldValues).toHaveBeenCalledWith({}, FIELD);
     expect(nodes.removeCustomFieldValues).toHaveBeenCalledWith({}, FIELD);
     expect(kinds.lockForms).toHaveBeenCalledWith({});
     expect(kinds.removeFieldFromForms).toHaveBeenCalledWith({}, FIELD);
@@ -58,18 +58,18 @@ describe('ProjectFieldValuesCleanupHandler (#556, Р11)', () => {
     );
   });
 
-  it('область project: значения проектов (F1)', async () => {
+  it('идемпотентность: повторная доставка — те же вызовы (ключа уже нет)', async () => {
     const { handler, projects, nodes } = makeHandler();
-    await handler.handle(event({ definitionId: FIELD, scope: 'project', change: 'deleted' }));
-    expect(projects.removeCustomFieldValues).toHaveBeenCalledWith({}, FIELD);
-    expect(nodes.removeCustomFieldValues).not.toHaveBeenCalled();
+    await handler.handle(event({ definitionId: FIELD, change: 'deleted' }));
+    await handler.handle(event({ definitionId: FIELD, change: 'deleted' }));
+    expect(projects.removeCustomFieldValues).toHaveBeenCalledTimes(2);
+    expect(nodes.removeCustomFieldValues).toHaveBeenCalledTimes(2);
   });
 
   it('чужие события и области игнорируются', async () => {
     const { handler, projects, nodes } = makeHandler();
-    await handler.handle(event({ definitionId: FIELD, scope: 'task', change: 'deleted' }));
-    await handler.handle(event({ definitionId: FIELD, scope: 'node', change: 'updated' }));
-    await handler.handle(event({ definitionId: 'не-uuid', scope: 'node', change: 'deleted' }));
+    await handler.handle(event({ definitionId: FIELD, change: 'updated' }));
+    await handler.handle(event({ definitionId: 'не-uuid', change: 'deleted' }));
     expect(projects.removeCustomFieldValues).not.toHaveBeenCalled();
     expect(nodes.removeCustomFieldValues).not.toHaveBeenCalled();
   });
@@ -77,8 +77,8 @@ describe('ProjectFieldValuesCleanupHandler (#556, Р11)', () => {
   it('повторная доставка идемпотентна: те же запросы, событий нет без изменённых видов', async () => {
     const { handler, kinds, eventBus } = makeHandler();
     kinds.removeFieldFromForms.mockResolvedValue([]);
-    await handler.handle(event({ definitionId: FIELD, scope: 'node', change: 'deleted' }));
-    await handler.handle(event({ definitionId: FIELD, scope: 'node', change: 'deleted' }));
+    await handler.handle(event({ definitionId: FIELD, change: 'deleted' }));
+    await handler.handle(event({ definitionId: FIELD, change: 'deleted' }));
     expect(kinds.removeFieldFromForms).toHaveBeenCalledTimes(2);
     expect(eventBus.emit).not.toHaveBeenCalled();
   });

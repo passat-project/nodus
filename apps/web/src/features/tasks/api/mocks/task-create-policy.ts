@@ -7,6 +7,7 @@ import type {
 import {
   ErrorCode,
   applyCreationPresets,
+  bindingsOf,
   clearedRequiredKeys,
   defaultCreationForm,
   isCreationValueFilled,
@@ -71,11 +72,12 @@ export function resolveCreateType(typeId: string | undefined): PolicyResult<Demo
   return { ok: true, value: type };
 }
 
-/** Атрибуты, привязанные к типу (Р8): только они видны и принимают значения. */
+/** Атрибуты, привязанные к типу (Р8): только они видны и принимают значения.
+ *  Привязка — к типу процесса (`bindings.processTypeIds`, «Где используется»). */
 export function boundFieldIds(type: DemoProcessType): ReadonlySet<string> {
   return new Set(
     demoCustomFieldDefinitions
-      .filter((entry) => entry.scope === 'task' && entry.typeIds.includes(type.id))
+      .filter((entry) => bindingsOf(entry).processTypeIds.includes(type.id))
       .map((entry) => entry.id),
   );
 }
@@ -141,9 +143,9 @@ export function prepareCreateBody(
   // Умолчания — только атрибутов, привязанных к типу создаваемой задачи (Р8).
   body = {
     ...body,
-    customFields: demoDefaults('task', body.customFields ?? {}, boundFieldIds(type)),
+    customFields: demoDefaults(body.customFields ?? {}, boundFieldIds(type)),
   };
-  const fieldIssues = checkDemoValues('task', body.customFields ?? {});
+  const fieldIssues = checkDemoValues(body.customFields ?? {}, boundFieldIds(type));
   if (fieldIssues.length > 0) {
     return fail(422, ErrorCode.CUSTOM_FIELD_VALUE_INVALID, { issues: fieldIssues });
   }

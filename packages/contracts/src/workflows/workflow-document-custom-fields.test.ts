@@ -5,7 +5,7 @@ import type {
   WorkflowDraftStage,
   WorkflowDraftTransition,
 } from './workflow-document.schemas.js';
-import { checkWorkflowDocument, hasBlockingProblems } from './workflow-document-check.js';
+import { checkWorkflowDocument } from './workflow-document-check.js';
 import type { WorkflowActorRole, WorkflowTransitionRules } from './workflow.schemas.js';
 
 /** Каркас «Стандартного» маршрута — валидная база для проверок кастомных
@@ -70,7 +70,7 @@ function baseDocument(): WorkflowDraftDocument {
 describe('checkWorkflowDocument: кастомные поля в окне и гейтах (#431)', () => {
   const CF_ACTIVE = '50000000-0000-4000-8000-000000000001';
   const CF_HIDDEN = '50000000-0000-4000-8000-000000000002';
-  const facts = { active: new Set([CF_ACTIVE, CF_HIDDEN]), hidden: new Set([CF_HIDDEN]) };
+  const facts = { active: new Set([CF_ACTIVE, CF_HIDDEN]) };
 
   it('без фактов проверки полей пропускаются', () => {
     const doc = baseDocument();
@@ -90,25 +90,12 @@ describe('checkWorkflowDocument: кастомные поля в окне и ге
     );
   });
 
-  it('скрытый атрибут в окне — предупреждение custom_field_hidden', () => {
+  it('привязанный атрибут в окне и гейте — без проблем (скрытия нет, О2)', () => {
     const doc = baseDocument();
     doc.transitions[0]!.form = {
       enabled: true,
       sections: [{ kind: 'fields', fields: [`cf.${CF_HIDDEN}`] }],
     };
-    const problems = checkWorkflowDocument(doc, { customFields: facts });
-    expect(problems).toContainEqual(
-      expect.objectContaining({
-        code: 'custom_field_hidden',
-        severity: 'warning',
-        transitionId: 't-start',
-      }),
-    );
-    expect(hasBlockingProblems(problems)).toBe(false);
-  });
-
-  it('скрытый атрибут в условии — без проблем (значение ставит автоматика)', () => {
-    const doc = baseDocument();
     doc.transitions[0]!.rules.validators = [
       { kind: 'fields_required', fields: [`cf.${CF_HIDDEN}`] },
     ];

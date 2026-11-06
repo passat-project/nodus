@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { stageColorSchema } from '@nodus/contracts';
 import { Prisma } from '../../generated/prisma/client.js';
 
 import { PrismaService } from '../../core/database/prisma.service.js';
@@ -20,6 +21,8 @@ export interface DictionaryItemWriteData {
   name: string;
   code: string | null;
   sortOrder: number;
+  /** Тон варианта списка (Р6 #631); null — без цвета. */
+  color?: string | null;
 }
 
 const dictionarySelect = {
@@ -36,6 +39,7 @@ const itemSelect = {
   parentId: true,
   code: true,
   name: true,
+  color: true,
   sortOrder: true,
   isActive: true,
 } as const;
@@ -73,7 +77,7 @@ export class DictionariesRepository {
     opts: { includeArchived: boolean; limit: number; after: ItemCursor | null },
   ) {
     const { after } = opts;
-    return this.prisma.dictionaryItem.findMany({
+    const rows = await this.prisma.dictionaryItem.findMany({
       where: {
         dictionaryId,
         ...(opts.includeArchived ? {} : { isActive: true }),
@@ -91,6 +95,7 @@ export class DictionariesRepository {
       take: opts.limit + 1,
       select: itemSelect,
     });
+    return rows.map((row) => normalizeItem(row));
   }
 
   /** Все элементы справочника (без страницы) — сверка порядка и уборка. */
@@ -103,7 +108,8 @@ export class DictionariesRepository {
   }
 
   async findItemById(id: string, tx?: TransactionClient) {
-    return this.db(tx).dictionaryItem.findUnique({ where: { id }, select: itemSelect });
+    const row = await this.db(tx).dictionaryItem.findUnique({ where: { id }, select: itemSelect });
+    return row ? normalizeItem(row) : null;
   }
 
   /** Активный элемент с таким названием (lower + trim) — проверка уникальности. */
@@ -151,11 +157,18 @@ export class DictionariesRepository {
     data: DictionaryItemWriteData & { dictionaryId: string },
     tx: TransactionClient,
   ) {
-    return tx.dictionaryItem.create({ data, select: itemSelect });
+    const row = await tx.dictionaryItem.create({ data, select: itemSelect });
+    return normalizeItem(row);
   }
 
-  async renameItem(id: string, name: string, tx: TransactionClient) {
-    return tx.dictionaryItem.update({ where: { id }, data: { name }, select: itemSelect });
+  /** Правка варианта: имя и/или цвет (Р6 #631: PATCH цвета без переименования). */
+  async updateItem(
+    id: string,
+    data: { name?: string; color?: string | null },
+    tx: TransactionClient,
+  ) {
+    const row = await tx.dictionaryItem.update({ where: { id }, data, select: itemSelect });
+    return normalizeItem(row);
   }
 
   async deleteItem(id: string, tx: TransactionClient): Promise<void> {
@@ -204,18 +217,20 @@ export class DictionariesRepository {
   /** Элементы по id — пачкой, включая архивные (история читается). */
   async findItemRefs(ids: readonly string[], tx?: TransactionClient) {
     if (ids.length === 0) return [];
-    return this.db(tx).dictionaryItem.findMany({
+    const rows = await this.db(tx).dictionaryItem.findMany({
       where: { id: { in: [...ids] } },
-      select: { id: true, dictionaryId: true, name: true, isActive: true },
+      select: { id: true, dictionaryId: true, name: true, isActive: true, color: true },
     });
+    return rows.map(normalizeItem);
   }
 
   /** Активный элемент конкретного справочника — запись значения (Р1). */
   async findActiveItemRef(dictionaryId: string, itemId: string, tx?: TransactionClient) {
-    return this.db(tx).dictionaryItem.findFirst({
+    const row = await this.db(tx).dictionaryItem.findFirst({
       where: { id: itemId, dictionaryId, isActive: true },
-      select: { id: true, dictionaryId: true, name: true, isActive: true },
+      select: { id: true, dictionaryId: true, name: true, isActive: true, color: true },
     });
+    return row ? normalizeItem(row) : null;
   }
 
   /** Id системного справочника по коду (#55: `receipt-method` в регистрации). */
@@ -246,3 +261,16 @@ export class DictionariesRepository {
     return tx ?? this.prisma;
   }
 }
+
+/** Цвет варианта нормализуется к палитре темы (Р6 #631): чужой ключ из БД
+ *  читается как «без цвета» — чипы не ломаются. */
+function normalizeItem<T extends { color: string | null }>(
+  row: T,
+): Omit<T, 'color'> & {
+  color: StageColor | null;
+} {
+  const color = stageColorSchema.options.find((option) => option === row.color);
+  return { ...row, color: color ?? null };
+}
+
+type StageColor = (typeof stageColorSchema.options)[number];

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 
 import { ORG_STRUCTURE_READER } from '../../core/ports/org-structure.port.js';
 import { OrgStructureProvider } from '../../core/ports/org-structure.provider.js';
@@ -6,7 +6,9 @@ import { USER_PROFILE_READER } from '../../core/ports/user-profile.port.js';
 import { UserProfileProvider } from '../../core/ports/user-profile.provider.js';
 import { ProjectsPortsModule } from '../projects/projects-ports.module.js';
 import { CrmPortsModule } from '../crm/crm-ports.module.js';
+import { CorrespondencePortsModule } from '../correspondence/correspondence-ports.module.js';
 import { DictionariesPortsModule } from '../dictionaries/dictionaries-ports.module.js';
+import { TasksPortsModule } from '../tasks/tasks-ports.module.js';
 import { CustomFieldRegistryProvider } from './ports/custom-field-registry.provider.js';
 import { CUSTOM_FIELD_REGISTRY } from './ports/custom-field-registry.port.js';
 import { DefinitionMapper } from './definitions/definition.mapper.js';
@@ -23,11 +25,19 @@ import { CustomFieldValueValidator } from './values/value-validator.js';
  * токен, доменные сервисы реестра наружу не экспортируются (ADR-0012).
  *
  * Источники ссылок — порты владельцев данных (I3): профили сотрудников,
- * оргструктура, справочники, контрагенты; биндинг токенов — здесь, в
- * модуле-потребителе.
+ * оргструктура, справочники, контрагенты, проекты, задачи, письма, папки
+ * (Р3/Р5 #631). Встречный импорт tasks (decider-Recipients) — ESM-цикл
+ * обоих модулей разорван forwardRef'ами; реестр там разрешается лениво
+ * через ModuleRef (конструкторского цикла инстанцирования нет).
  */
 @Module({
-  imports: [DictionariesPortsModule, CrmPortsModule, ProjectsPortsModule],
+  imports: [
+    DictionariesPortsModule,
+    CrmPortsModule,
+    ProjectsPortsModule,
+    forwardRef(() => TasksPortsModule),
+    CorrespondencePortsModule,
+  ],
   providers: [
     UserProfileProvider,
     { provide: USER_PROFILE_READER, useClass: UserProfileProvider },

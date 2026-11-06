@@ -13,10 +13,7 @@ import {
 import { Textarea } from '@nodus/ui/components/textarea';
 
 import { useTaskConversation } from '../../../shared/chat/chat-queries.js';
-import {
-  visibleDefinitions,
-  useCustomFieldDefinitions,
-} from '../../../shared/custom-fields/queries.js';
+import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries.js';
 import {
   TransitionGateDetails,
   type GateDetailsHost,
@@ -79,7 +76,7 @@ export function useTransitionRunner(task: TaskDetail, onOpenSubtask?: (id: strin
   const submit = useSubmitTransitionWindow(task.id);
   const { data: conversation } = useTaskConversation(task.id);
   const { data: definitions } = useCustomFieldDefinitions('task');
-  const taskDefinitions = visibleDefinitions(definitions);
+  const taskDefinitions = definitions ?? [];
   const [pending, setPending] = useState<WorkflowTransition | null>(null);
   const [windowTransition, setWindowTransition] = useState<WorkflowTransition | null>(null);
 

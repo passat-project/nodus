@@ -68,7 +68,7 @@ const structure: ProjectStructureResponse = {
       icon: 'fileText',
       color: 'blue',
       archivedAt: null,
-      form: { code: 'required', fields: [{ fieldId: MARKA, state: 'required' }] },
+      form: { fields: [{ fieldId: MARKA, state: 'required' }] },
       capabilities: ['document_changes'],
     },
   ],

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type {
-  CustomFieldScope,
+  CustomFieldModule,
   ProcessCategory,
   WorkflowDraftDocument,
   WorkflowDraftTransition,
@@ -10,10 +10,7 @@ import { Checkbox } from '@nodus/ui/components/checkbox';
 import { Input } from '@nodus/ui/components/input';
 import { Eye } from 'lucide-react';
 
-import {
-  visibleDefinitions,
-  useCustomFieldDefinitions,
-} from '../../../../../shared/custom-fields/queries.js';
+import { useCustomFieldDefinitions } from '../../../../../shared/custom-fields/queries.js';
 import { useRouteDocStore } from '../../../model/route-doc-store.js';
 import {
   WINDOW_FIELDS,
@@ -54,7 +51,7 @@ export function WindowSection({
 }: {
   transition: WorkflowDraftTransition;
   document: WorkflowDraftDocument;
-  scope: CustomFieldScope;
+  scope: CustomFieldModule;
   /** Тип процесса: в окно выбираются только его атрибуты (#432, Р8). */
   typeId?: string;
   readOnly: boolean;
@@ -269,7 +266,7 @@ export function WindowSection({
             open={previewOpen}
             transition={transition}
             document={doc}
-            definitions={visibleDefinitions(definitions)}
+            definitions={definitions ?? []}
             onClose={() => setPreviewOpen(false)}
           />
         </>

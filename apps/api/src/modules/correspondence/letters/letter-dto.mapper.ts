@@ -288,7 +288,7 @@ export class LetterDtoMapper {
       attachments: files,
       body: bodyOf(files),
       customFields: values,
-      customFieldRefs: await this.customFields.refs('letter', values, actor),
+      customFieldRefs: await this.customFields.refs(values, actor),
       attachedRefs: extra.attachedRefs.map((ref) => ({
         id: ref.id,
         number: ref.number,

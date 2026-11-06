@@ -5,42 +5,55 @@ import { DefinitionsBindingService } from './definitions-binding.service.js';
 import type { FieldDefinitionRow } from './definition.mapper.js';
 
 /**
- * Точечная привязка атрибута к типу (#432, Р8): идемпотентность, проверка
- * типа (живой, своей категории) и запрет снятия, пока атрибут работает в
- * опубликованном маршруте типа. Репозиторий и порты — моки: логика без БД.
+ * Точечные привязки «Где используется» (#631, Р3/О3): PUT/DELETE на три
+ * вида целей, проверка цели (404 неизвестный, 422 архивный тип процесса),
+ * запрет привязок глобальной переменной, идемпотентность обеих операций.
+ * Репозиторий и порты — моки: логика без БД.
  */
 
-const ROW: FieldDefinitionRow = {
+const NOW = new Date('2026-11-06T00:00:00.000Z');
+
+const row = (overrides: Partial<FieldDefinitionRow> = {}): FieldDefinitionRow => ({
   id: '11111111-1111-4111-8111-111111111111',
-  scope: 'task',
+  number: 7,
   type: 'text',
   name: '№ накладной',
   hint: null,
   settings: {},
   defaultValue: null,
   reportIndexed: false,
-  hidden: false,
+  isCompany: false,
   sortOrder: 0,
-  createdAt: new Date('2026-10-26T00:00:00.000Z'),
-  updatedAt: new Date('2026-10-26T00:00:00.000Z'),
-  typeBindings: [{ processTypeId: 't-1' }],
-};
+  createdAt: NOW,
+  updatedAt: NOW,
+  bindings: [],
+  companyValue: null,
+  ...overrides,
+});
 
-function makeService(overrides: { workflows?: { id: string; name: string }[] } = {}) {
+const ROW = row();
+
+function makeService() {
   const definitions = {
     findById: vi.fn(async (): Promise<FieldDefinitionRow | null> => ROW),
-    bindType: vi.fn(async () => void 0),
-    unbindType: vi.fn(async () => true),
-    lockScope: vi.fn(async () => void 0),
+    bindTarget: vi.fn(async () => undefined),
+    unbindTarget: vi.fn(async () => true),
   };
-  const mapper = { toDto: vi.fn(async () => ({ id: ROW.id, typeIds: ['t-1'] })) };
+  const mapper = { toDto: vi.fn(async () => ({ id: ROW.id })) };
   const txRunner = { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn({})) };
-  const eventBus = { emit: vi.fn(async () => void 0) };
-  const workflows = { workflowsUsingField: vi.fn(async () => overrides.workflows ?? []) };
+  const eventBus = { emit: vi.fn(async () => undefined) };
   const catalog = {
-    typeRefs: vi.fn(async (ids: string[]) =>
-      ids.map((id) => ({ id, code: `custom-${id}`, name: 'Тип', category: 'task' })),
-    ),
+    typeRefs: vi.fn(async (ids: string[], opts?: { live?: boolean }) => {
+      const known = new Set(['t-1']);
+      const live = new Set(['t-1']);
+      return ids
+        .filter((id) => known.has(id) && (!opts?.live || live.has(id)))
+        .map((id) => ({ id, code: `custom-${id}`, name: 'Тип', category: 'task' }));
+    }),
+  };
+  const targets = {
+    projectTypes: vi.fn(async () => [{ id: 'pt-1', name: 'Тендер', archived: false }]),
+    nodeKinds: vi.fn(async () => [{ id: 'nk-1', name: 'Комплект', archived: true }]),
   };
   const logger = { setContext: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
   const service = new DefinitionsBindingService(
@@ -48,76 +61,139 @@ function makeService(overrides: { workflows?: { id: string; name: string }[] } =
     mapper as never,
     txRunner as never,
     eventBus as never,
-    workflows as never,
     catalog as never,
+    targets as never,
     logger as never,
   );
-  return { service, definitions, eventBus, workflows, catalog };
+  return { service, definitions, eventBus, catalog, targets };
 }
 
-describe('DefinitionsBindingService.bind (#432, Р8)', () => {
-  it('идемпотентна: повтор пишет то же и сообщает typeIds', async () => {
+describe('DefinitionsBindingService.bind (#631, Р3)', () => {
+  it('process-type: привязка с kind строки таблицы и событием bindings', async () => {
     const { service, definitions, eventBus } = makeService();
-    await service.bind(ROW.id, 't-1', 'actor-1');
-    await service.bind(ROW.id, 't-1', 'actor-1');
-    expect(definitions.bindType).toHaveBeenCalledTimes(2);
-    expect(definitions.bindType).toHaveBeenCalledWith(ROW.id, 't-1', expect.anything());
+    await service.bind(ROW.id, 'process-type', 't-1', 'actor-1');
+    expect(definitions.bindTarget).toHaveBeenCalledWith(
+      ROW.id,
+      'process_type',
+      't-1',
+      expect.anything(),
+    );
     expect(eventBus.emit).toHaveBeenCalledWith(
       expect.anything(),
       'custom_field.definition_changed',
-      expect.objectContaining({ change: 'updated', fields: ['typeIds'] }),
+      expect.objectContaining({ change: 'updated', fields: ['bindings'] }),
       expect.anything(),
     );
   });
 
-  it('тип чужой категории — 422, неизвестный — 404', async () => {
-    const foreign = makeService();
-    foreign.catalog.typeRefs.mockResolvedValue([
-      { id: 't-1', code: 'c', name: 'Письмо', category: 'letter' },
-    ]);
-    await expect(foreign.service.bind(ROW.id, 't-1', 'actor-1')).rejects.toMatchObject({
-      code: ErrorCode.CUSTOM_FIELD_BINDING_INVALID,
-    });
-    expect(foreign.definitions.bindType).not.toHaveBeenCalled();
+  it('идемпотентна: повтор пишет то же и снова эмитит событие', async () => {
+    const { service, definitions, eventBus } = makeService();
+    await service.bind(ROW.id, 'process-type', 't-1', 'actor-1');
+    await service.bind(ROW.id, 'process-type', 't-1', 'actor-1');
+    expect(definitions.bindTarget).toHaveBeenCalledTimes(2);
+    expect(eventBus.emit).toHaveBeenCalledTimes(2);
+  });
 
+  it('project-type/node-kind: через порт целей привязки', async () => {
+    const { service, definitions } = makeService();
+    await service.bind(ROW.id, 'project-type', 'pt-1', 'actor-1');
+    await service.bind(ROW.id, 'node-kind', 'nk-1', 'actor-1');
+    expect(definitions.bindTarget).toHaveBeenCalledWith(
+      ROW.id,
+      'project_type',
+      'pt-1',
+      expect.anything(),
+    );
+    expect(definitions.bindTarget).toHaveBeenCalledWith(
+      ROW.id,
+      'node_kind',
+      'nk-1',
+      expect.anything(),
+    );
+  });
+
+  it('тип процесса неизвестен — 404, архивный — 422 CUSTOM_FIELD_BINDING_INVALID', async () => {
     const missing = makeService();
-    missing.catalog.typeRefs.mockResolvedValue([]);
-    await expect(missing.service.bind(ROW.id, 't-1', 'actor-1')).rejects.toMatchObject({
-      code: ErrorCode.NOT_FOUND,
-    });
-  });
-});
+    await expect(
+      missing.service.bind(ROW.id, 'process-type', 't-x', 'actor-1'),
+    ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
+    expect(missing.definitions.bindTarget).not.toHaveBeenCalled();
 
-describe('DefinitionsBindingService.unbind (#432, Р8)', () => {
-  it('снятие, пока атрибут работает в маршруте типа — 409 со списком процессов', async () => {
-    const { service, workflows, definitions } = makeService({
-      workflows: [{ id: 'w-1', name: 'Переработка' }],
-    });
-    await expect(service.unbind(ROW.id, 't-1', 'actor-1')).rejects.toMatchObject({
-      code: ErrorCode.CUSTOM_FIELD_IN_USE,
-      details: { workflows: [{ id: 'w-1', name: 'Переработка' }] },
-    });
-    expect(workflows.workflowsUsingField).toHaveBeenCalledWith('task', ROW.id, { typeId: 't-1' });
-    expect(definitions.unbindType).not.toHaveBeenCalled();
-  });
-
-  it('свободная привязка снимается идемпотентно', async () => {
-    const { service, definitions, eventBus } = makeService();
-    await service.unbind(ROW.id, 't-1', 'actor-1');
-    await service.unbind(ROW.id, 't-1', 'actor-1');
-    expect(definitions.unbindType).toHaveBeenCalledTimes(2);
-    expect(eventBus.emit).toHaveBeenCalledWith(
-      expect.anything(),
-      'custom_field.definition_changed',
-      expect.objectContaining({ fields: ['typeIds'] }),
-      expect.anything(),
+    // Известен, но не в «живых» — архивный тип процесса.
+    const archived = makeService();
+    archived.catalog.typeRefs.mockImplementation(async (ids: string[], opts?: { live?: boolean }) =>
+      ids
+        .filter(() => !opts?.live)
+        .map((id) => ({ id, code: `custom-${id}`, name: 'Тип', category: 'task' })),
     );
+    await expect(
+      archived.service.bind(ROW.id, 'process-type', 't-1', 'actor-1'),
+    ).rejects.toMatchObject({ code: ErrorCode.CUSTOM_FIELD_BINDING_INVALID });
+    expect(archived.definitions.bindTarget).not.toHaveBeenCalled();
+  });
+
+  it('тип проекта/вид папки неизвестен — 404 (архивные виды папок допустимы)', async () => {
+    const missingType = makeService();
+    missingType.targets.projectTypes.mockResolvedValue([]);
+    await expect(
+      missingType.service.bind(ROW.id, 'project-type', 'pt-x', 'actor-1'),
+    ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
+
+    const missingKind = makeService();
+    missingKind.targets.nodeKinds.mockResolvedValue([]);
+    await expect(
+      missingKind.service.bind(ROW.id, 'node-kind', 'nk-x', 'actor-1'),
+    ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
+  });
+
+  it('глобальной переменной привязки запрещены — 422', async () => {
+    const { service, definitions } = makeService();
+    definitions.findById.mockResolvedValue(row({ isCompany: true }));
+    await expect(service.bind(ROW.id, 'process-type', 't-1', 'actor-1')).rejects.toMatchObject({
+      code: ErrorCode.VALIDATION_FAILED,
+    });
+    expect(definitions.bindTarget).not.toHaveBeenCalled();
   });
 
   it('неизвестный атрибут — 404', async () => {
     const { service, definitions } = makeService();
     definitions.findById.mockResolvedValue(null);
-    await expect(service.unbind('nope', 't-1', 'actor-1')).rejects.toMatchObject({
+    await expect(service.bind('nope', 'process-type', 't-1', 'actor-1')).rejects.toMatchObject({
+      code: ErrorCode.NOT_FOUND,
+    });
+  });
+});
+
+describe('DefinitionsBindingService.unbind (#631, О3 — снятие всегда разрешено)', () => {
+  it('снятие пишется тем же kind и эмитит событие', async () => {
+    const { service, definitions, eventBus } = makeService();
+    await service.unbind(ROW.id, 'project-type', 'pt-1', 'actor-1');
+    expect(definitions.unbindTarget).toHaveBeenCalledWith(
+      ROW.id,
+      'project_type',
+      'pt-1',
+      expect.anything(),
+    );
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      expect.anything(),
+      'custom_field.definition_changed',
+      expect.objectContaining({ change: 'updated', fields: ['bindings'] }),
+      expect.anything(),
+    );
+  });
+
+  it('цель проверяется и на снятии: неизвестная — 404', async () => {
+    const { service, definitions } = makeService();
+    await expect(service.unbind(ROW.id, 'process-type', 't-x', 'actor-1')).rejects.toMatchObject({
+      code: ErrorCode.NOT_FOUND,
+    });
+    expect(definitions.unbindTarget).not.toHaveBeenCalled();
+  });
+
+  it('неизвестный атрибут — 404', async () => {
+    const { service, definitions } = makeService();
+    definitions.findById.mockResolvedValue(null);
+    await expect(service.unbind('nope', 'node-kind', 'nk-1', 'actor-1')).rejects.toMatchObject({
       code: ErrorCode.NOT_FOUND,
     });
   });

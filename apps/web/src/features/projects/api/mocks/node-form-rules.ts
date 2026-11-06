@@ -3,7 +3,6 @@ import type {
   CustomFieldValues,
   NodeKind,
   NodeKindForm,
-  NodeKindFormField,
   NodeFormKey,
 } from '@nodus/contracts';
 import {
@@ -14,23 +13,20 @@ import {
   requiredNodeFields,
 } from '@nodus/contracts';
 
-import {
-  demoCustomFieldDefinitions,
-  demoFieldById,
-} from '../../../../shared/mocks/data/custom-fields.js';
+import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
+import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
 
 /**
- * Правила формы вида в мок-мире (#556): те же помощники контрактов, что у
- * сервера (одна грамматика) — «чужой атрибут», обязательность при создании,
- * смене вида и очистке, скрытое определение в форме. Мок повторяет сервер
- * (ADR-0001): отказ мока = отказ сервера.
+ * Правила формы вида в мок-мире (#556, ревизия #631): те же помощники
+ * контрактов, что у сервера (одна грамматика) — «чужой атрибут»,
+ * обязательность при создании, смене вида и очистке. Код папки — обычный
+ * слот атрибута «Код» (SYSTEM_FIELD_IDS.nodeCode), системного слота code
+ * больше нет. Мок повторяет сервер (ADR-0001): отказ мока = отказ сервера.
  */
 
-const nodeDefinitions = () => demoCustomFieldDefinitions.filter((entry) => entry.scope === 'node');
-
-/** Эффективная форма вида: без неизвестных и скрытых определений. */
+/** Эффективная форма вида: слоты атрибутов, привязанных к этому виду (Р3). */
 export function formOfKind(kind: NodeKind): NodeKindForm {
-  return effectiveNodeForm(kind, nodeDefinitions());
+  return effectiveNodeForm(kind, definitionsForTarget(demoCustomFieldDefinitions, 'node', kind.id));
 }
 
 export interface NodeRuleIssue {
@@ -40,7 +36,7 @@ export interface NodeRuleIssue {
   details: Record<string, unknown>;
 }
 
-/** Ошибка обязательных полей (422): `fields` — `code` и `cf.<id>`. */
+/** Ошибка обязательных полей (422): `fields` — ключи `cf.<id>`. */
 export function requiredIssue(
   kindId: string,
   fields: NodeFormKey[],
@@ -54,8 +50,8 @@ export function requiredIssue(
   };
 }
 
-/** Значения существующих атрибутов области «Папка» вне формы вида — 422
- *  `not_in_type` (как `CUSTOM_FIELD_VALUE_INVALID` у сервера). */
+/** Значения атрибутов вне формы вида (не привязан к виду или не в слотах) —
+ *  422 `not_in_type` (как `CUSTOM_FIELD_VALUE_INVALID` у сервера). */
 export function foreignValueIssue(
   kind: NodeKind,
   values: Record<string, CustomFieldValue | null> | undefined,
@@ -63,11 +59,7 @@ export function foreignValueIssue(
   if (!values) return null;
   const inForm = new Set(formOfKind(kind).fields.map((slot) => slot.fieldId));
   const issues = Object.entries(values)
-    .filter(([fieldId, value]) => {
-      if (value === null || value === undefined) return false;
-      const definition = demoFieldById(fieldId);
-      return definition?.scope === 'node' && !inForm.has(fieldId);
-    })
+    .filter(([fieldId, value]) => value !== null && value !== undefined && !inForm.has(fieldId))
     .map(([fieldId]) => ({
       fieldId,
       reason: 'not_in_type' as const,
@@ -82,27 +74,11 @@ export function foreignValueIssue(
   };
 }
 
-/** Шифр у вида со состоянием «скрыто» — 400 (поле не показывается, Р6). */
-export function hiddenCodeIssue(
-  kind: NodeKind,
-  code: string | null | undefined,
-): NodeRuleIssue | null {
-  if (formOfKind(kind).code !== 'hidden' || code === undefined || code === null) return null;
-  return {
-    code: 'VALIDATION_FAILED',
-    status: 400,
-    message: 'Code is hidden for this kind',
-    details: { kindId: kind.id },
-  };
-}
-
-/** Создание: обязательные формы вида (шифр + атрибуты) — 422 `create`. */
+/** Создание: обязательные слоты формы вида (код — как обычный слот) — 422 `create`. */
 export function createIssues(
   kind: NodeKind,
-  input: { code?: string | null; customFields?: CustomFieldValues },
+  input: { customFields?: CustomFieldValues },
 ): NodeRuleIssue | null {
-  const hidden = hiddenCodeIssue(kind, input.code);
-  if (hidden) return hidden;
   const foreign = foreignValueIssue(kind, input.customFields);
   if (foreign) return foreign;
   const missing = missingNodeFields(formOfKind(kind), input);
@@ -114,12 +90,10 @@ export function createIssues(
  *  стираются (Р6). */
 export function updateIssues(
   kind: NodeKind,
-  current: { code: string | null; customFields: CustomFieldValues },
-  patch: { code?: string | null; customFields?: Record<string, CustomFieldValue | null> },
+  current: { customFields: CustomFieldValues },
+  patch: { customFields?: Record<string, CustomFieldValue | null> },
   kindChanged: boolean,
 ): NodeRuleIssue | null {
-  const hidden = hiddenCodeIssue(kind, patch.code);
-  if (hidden) return hidden;
   const foreign = foreignValueIssue(kind, patch.customFields);
   if (foreign) return foreign;
 
@@ -128,44 +102,33 @@ export function updateIssues(
     if (value === null) delete next[fieldId];
     else next[fieldId] = value;
   }
-  const nextCode = patch.code !== undefined ? patch.code : current.code;
   const form = formOfKind(kind);
   if (kindChanged) {
-    const missing = missingNodeFields(form, { code: nextCode, customFields: next });
+    const missing = missingNodeFields(form, { customFields: next });
     return missing.length > 0 ? requiredIssue(kind.id, missing, 'kind_change') : null;
   }
-  const required = requiredNodeFields(form);
-  const values: Record<string, unknown> = {
-    ...Object.fromEntries(
-      Object.entries(patch.customFields ?? {}).map(([id, value]) => [nodeFormKey(id), value]),
-    ),
-    ...(patch.code !== undefined ? { code: patch.code } : {}),
-  };
-  const cleared = clearedNodeFields(required, values);
+  const values: Record<string, unknown> = Object.fromEntries(
+    Object.entries(patch.customFields ?? {}).map(([id, value]) => [nodeFormKey(id), value]),
+  );
+  const cleared = clearedNodeFields(requiredNodeFields(form), values);
   return cleared.length > 0 ? requiredIssue(kind.id, cleared, 'clear') : null;
 }
 
-/** Форма вида при PATCH: каждый fieldId — определение области «Папка»
- *  (иначе 422 `unknown_field`); скрытое определение допустимо только в
- *  состоянии «скрыто» и только для НОВОГО слота/смены состояния
- *  (`hidden_field`), существующий слот сохраняется как есть (Р7). */
+/** Форма вида при PATCH: каждый слот — атрибут, привязанный к этому виду
+ *  (иначе 422 `unknown_field`); привязка живёт в реестре («Где
+ *  используется»), форма задаёт только состояния (Р3 #631). */
 export function kindFormIssues(
+  kind: NodeKind,
   form: NodeKindForm,
-  previous: NodeKindForm | null,
-): { fieldId: string; reason: 'unknown_field' | 'hidden_field' }[] {
-  const issues: { fieldId: string; reason: 'unknown_field' | 'hidden_field' }[] = [];
-  const before = new Map((previous?.fields ?? []).map((slot) => [slot.fieldId, slot.state]));
-  for (const slot of form.fields as NodeKindFormField[]) {
-    const definition = demoFieldById(slot.fieldId);
-    if (!definition || definition.scope !== 'node') {
-      issues.push({ fieldId: slot.fieldId, reason: 'unknown_field' });
-      continue;
-    }
-    if (definition.hidden && slot.state !== 'hidden' && before.get(slot.fieldId) !== slot.state) {
-      issues.push({ fieldId: slot.fieldId, reason: 'hidden_field' });
-    }
-  }
-  return issues;
+): { fieldId: string; reason: 'unknown_field' }[] {
+  const bound = new Set(
+    definitionsForTarget(demoCustomFieldDefinitions, 'node', kind.id).map(
+      (definition) => definition.id,
+    ),
+  );
+  return form.fields
+    .filter((slot) => !bound.has(slot.fieldId))
+    .map((slot) => ({ fieldId: slot.fieldId, reason: 'unknown_field' as const }));
 }
 
 export function kindFormInvalidIssue(

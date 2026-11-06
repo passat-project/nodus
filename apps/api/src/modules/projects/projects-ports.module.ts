@@ -8,6 +8,10 @@ import { ProjectFieldUsageProvider } from './ports/project-field-usage.provider.
 import { PROJECT_FIELD_USAGE_READER } from './ports/project-field-usage.port.js';
 import { ProjectReaderProvider } from './ports/project-reader.provider.js';
 import { PROJECT_CHAT_READER, PROJECT_READER } from './ports/project-reader.port.js';
+import { NodeRefReaderProvider } from './ports/node-ref-reader.provider.js';
+import { NODE_REF_READER } from './ports/node-ref-reader.port.js';
+import { FieldBindingTargetsProvider } from './ports/field-binding-targets.provider.js';
+import { FIELD_BINDING_TARGET_READER } from './ports/field-binding-targets.port.js';
 import {
   ProjectCreatedScopeHandler,
   ProjectParticipantsScopeHandler,
@@ -34,12 +38,23 @@ import {
     // удаления атрибута и виды папок в форме.
     ProjectFieldUsageProvider,
     { provide: PROJECT_FIELD_USAGE_READER, useExisting: ProjectFieldUsageProvider },
+    // Ссылки на папки и цели привязок атрибутов (Р3/Р5 #631).
+    NodeRefReaderProvider,
+    { provide: NODE_REF_READER, useExisting: NodeRefReaderProvider },
+    FieldBindingTargetsProvider,
+    { provide: FIELD_BINDING_TARGET_READER, useExisting: FieldBindingTargetsProvider },
     // Сброс кэша множеств видимости по событиям проектов (Р3).
     ProjectScopeInvalidateRunner,
     ProjectCreatedScopeHandler,
     ProjectUpdatedScopeHandler,
     ProjectParticipantsScopeHandler,
   ],
-  exports: [PROJECT_READER, PROJECT_CHAT_READER, PROJECT_FIELD_USAGE_READER],
+  exports: [
+    PROJECT_READER,
+    PROJECT_CHAT_READER,
+    PROJECT_FIELD_USAGE_READER,
+    NODE_REF_READER,
+    FIELD_BINDING_TARGET_READER,
+  ],
 })
 export class ProjectsPortsModule {}

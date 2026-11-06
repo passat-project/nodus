@@ -10,6 +10,7 @@ import {
   type ProjectNode,
   type ProjectStructureResponse,
   type UpdateProjectNodeBody,
+  SYSTEM_FIELD_IDS,
 } from '@nodus/contracts';
 
 import { Prisma } from '../../generated/prisma/client.js';
@@ -27,12 +28,7 @@ import {
 } from '../tasks/ports/task-project-reader.port.js';
 import { NodeFormPolicy } from './node-form.policy.js';
 import { loadForStructureManage } from './project-structure.access.js';
-import {
-  assertCodeFree,
-  assertKindAlive,
-  assertParent,
-  kindOf,
-} from './project-structure.guards.js';
+import { assertKindAlive, assertParent, kindOf } from './project-structure.guards.js';
 import { nodeToDto } from './project-structure.mapper.js';
 import { eventValue, valuesOf } from './project-structure.values.js';
 import { NodeKindsRepository } from './project-node-kinds.repository.js';
@@ -85,7 +81,6 @@ export class ProjectStructureService {
     ]);
     const byNode = new Map(rollups.map((rollup) => [rollup.nodeId, rollup]));
     const customFieldRefs = await this.registry.refsMany(
-      'node',
       rows.map((row) => valuesOf(row)),
       user,
     );
@@ -140,10 +135,7 @@ export class ProjectStructureService {
       }
       const depth = parent ? nodeDepth(parentOf(tree), parent.id) + 1 : 1;
       if (depth > NODE_LIMITS.depth) throw limitError('depth', NODE_LIMITS.depth);
-      if (body.code !== undefined && body.code !== null) {
-        await assertCodeFree(this.nodes, tx, projectId, body.code, null);
-      }
-      // Умолчания формы и обязательные (шифр + атрибуты) — одна точка (Р6).
+      // Умолчания формы и обязательные слоты (код — атрибут) — одна точка (Р6).
       const values = await this.policy.prepareCreate(
         kind,
         { code: body.code ?? null, customFields: body.customFields },
@@ -160,7 +152,6 @@ export class ProjectStructureService {
           parentId: parent?.id ?? null,
           kindId: kind.id,
           name,
-          code: created.length === 0 ? (body.code ?? null) : null,
           order: orderKeyFor(orders, null, 'end'),
           customFields: values as Prisma.InputJsonValue,
         });
@@ -202,7 +193,6 @@ export class ProjectStructureService {
         : await kindOf(this.kinds, tx, node.kindId);
       const patch: {
         name?: string;
-        code?: string | null;
         kindId?: string;
         customFields?: Prisma.InputJsonValue;
       } = {};
@@ -211,7 +201,7 @@ export class ProjectStructureService {
       if (body.code !== undefined || body.customFields !== undefined || kindChanged) {
         const prepared = await this.policy.prepareUpdate(
           kind,
-          { code: node.code, customFields: valuesOf(node) },
+          { customFields: valuesOf(node) },
           { code: body.code, customFields: body.customFields },
           { authorId: user.id, actor: user, kindChanged },
           tx,
@@ -223,13 +213,6 @@ export class ProjectStructureService {
       if (body.name !== undefined) {
         patch.name = body.name;
         fields.push('name');
-      }
-      if (body.code !== undefined) {
-        if (body.code !== null && body.code !== node.code) {
-          await assertCodeFree(this.nodes, tx, projectId, body.code, node.id);
-        }
-        patch.code = body.code;
-        fields.push('code');
       }
       if (kindChanged) {
         patch.kindId = kind.id;
@@ -244,7 +227,9 @@ export class ProjectStructureService {
           nodeId: node.id,
           fields,
           ...(patch.name !== undefined ? { name: patch.name } : {}),
-          ...(patch.code !== undefined ? { code: patch.code } : {}),
+          ...(changes.some((change) => change.fieldId === SYSTEM_FIELD_IDS.nodeCode)
+            ? { code: nodeCodeOf(patch.customFields as Prisma.InputJsonValue | undefined) }
+            : {}),
           ...(patch.kindId !== undefined ? { kindId: patch.kindId } : {}),
           ...(changes.length > 0
             ? {
@@ -288,4 +273,11 @@ export class ProjectStructureService {
       );
     });
   }
+}
+
+/** Код папки из значений атрибутов (системный «Код», Р9 #631). */
+function nodeCodeOf(customFields: Prisma.InputJsonValue | undefined): string | null {
+  if (customFields === null || typeof customFields !== 'object') return null;
+  const value = (customFields as Record<string, unknown>)[SYSTEM_FIELD_IDS.nodeCode];
+  return typeof value === 'string' && value !== '' ? value : null;
 }

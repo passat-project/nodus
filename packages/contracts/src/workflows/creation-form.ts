@@ -153,20 +153,19 @@ export function slotLabel(slot: CreationFieldSlot, ctx: SlotLabelContext = {}): 
   return ui.taskCreate.fields[slot.key as TaskCreationSystemKey];
 }
 
-/** Факты проверки формы: реестр атрибутов области, привязка к типу, живые
- *  сотрудники и наличие модуля проектов (Р2, Р4, Р8). */
+/** Факты проверки формы: реестр атрибутов, привязка к типу, живые
+ *  сотрудники и наличие модуля проектов (Р2, Р4, Р8). Глобального скрытия
+ *  нет (О2 #631): «спрятать» = снять привязку или слот hidden у места. */
 export interface CreationFormFacts {
   category: ProcessCategory;
   customFields: {
-    /** id живых атрибутов области. */
+    /** id живых атрибутов. */
     active: ReadonlySet<string>;
-    /** id скрытых атрибутов (`hidden` у определения). */
-    hidden: ReadonlySet<string>;
     /** id атрибутов, привязанных к типу (Р8). */
     inType: ReadonlySet<string>;
   };
-  /** Определения области: тип и настройки значения для проверки пресета. */
-  definitions?: readonly Pick<CustomFieldDefinition, 'id' | 'type' | 'settings' | 'hidden'>[];
+  /** Определения: тип и настройки значения для проверки пресета. */
+  definitions?: readonly Pick<CustomFieldDefinition, 'id' | 'type' | 'settings'>[];
   /** Доступны ли проекты (модуль #52); по умолчанию — да. */
   projectsAvailable?: boolean;
   /** Живые сотрудники — пресеты ответственного, соисполнителей, наблюдателей. */
@@ -227,9 +226,6 @@ export function checkCreationForm(form: CreationForm, facts: CreationFormFacts):
       }
       if (!facts.customFields.inType.has(fieldId)) {
         problems.push(creationProblem('custom_field_not_in_type', key));
-      }
-      if (slot.preset === null && facts.customFields.hidden.has(fieldId)) {
-        problems.push(creationProblem('creation_hidden_attribute_visible', key));
       }
     } else if (key === 'project' && facts.projectsAvailable === false) {
       problems.push(creationProblem('creation_field_unavailable', key));

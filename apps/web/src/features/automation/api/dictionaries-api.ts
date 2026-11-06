@@ -47,11 +47,13 @@ export async function commitOptionDrafts(
   const byId = new Map(original.map((item) => [item.id, item]));
   for (const draft of drafts) {
     const item = byId.get(draft.id);
-    if (item && item.name !== draft.name) {
-      await api<DictionaryItem>(`${base}/${item.id}`, {
-        method: 'PATCH',
-        body: { name: draft.name } satisfies UpdateDictionaryItemBody,
-      });
+    if (!item) continue;
+    // Правка — только изменённые ключи: имя, цвет варианта (Р6 #631).
+    const body: UpdateDictionaryItemBody = {};
+    if (item.name !== draft.name) body.name = draft.name;
+    if ((item.color ?? null) !== (draft.color ?? null)) body.color = draft.color ?? null;
+    if (Object.keys(body).length > 0) {
+      await api<DictionaryItem>(`${base}/${item.id}`, { method: 'PATCH', body });
     }
   }
   const ids = new Map<string, string>();

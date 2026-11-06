@@ -19,6 +19,7 @@ const fixtures = vi.hoisted(() => ({
       parentId: null,
       code: null,
       name: 'А',
+      color: null,
       sortOrder: 0,
       isActive: true,
     },
@@ -28,6 +29,7 @@ const fixtures = vi.hoisted(() => ({
       parentId: null,
       code: null,
       name: 'Б',
+      color: null,
       sortOrder: 1,
       isActive: true,
     },
@@ -50,6 +52,7 @@ vi.mock('../../../../shared/dictionaries/queries.js', () => ({
 vi.mock('../../api/custom-fields-api.js', () => ({
   useCreateCustomField: () => ({ mutateAsync: spies.createField }),
   useUpdateCustomField: () => ({ mutateAsync: spies.updateField }),
+  useSetCompanyValue: () => ({ mutateAsync: vi.fn() }),
 }));
 
 vi.mock('../../api/dictionaries-api.js', () => ({
@@ -58,11 +61,10 @@ vi.mock('../../api/dictionaries-api.js', () => ({
   invalidateDictionaries: spies.invalidateDictionaries,
 }));
 
-// Форма тянет селектор process-типов; для списка он не нужен и в jsdom
-// требует ResizeObserver — подменяем пустышкой.
-vi.mock('./field-types-picker.js', () => ({
-  FieldTypesPicker: () => null,
-  NodeKindsSummary: () => null,
+// Форма тянет пикер мест и пикер типов; для списка они не нужны, а
+// useFitCount требует ResizeObserver — подменяем пустышками.
+vi.mock('./field-usage-picker.js', () => ({
+  FieldUsagePicker: () => null,
 }));
 
 vi.mock('./field-settings.js', async (importOriginal) => {
@@ -72,7 +74,7 @@ vi.mock('./field-settings.js', async (importOriginal) => {
 
 const definition: CustomFieldDefinition = {
   id: '50000000-0000-4000-8000-000000000001',
-  scope: 'project',
+  number: 1,
   type: 'enum',
   name: 'Вид',
   hint: null,
@@ -81,8 +83,9 @@ const definition: CustomFieldDefinition = {
   defaultValue: { kind: 'static', value: ITEM_B },
   defaultRefs: [],
   reportIndexed: false,
-  hidden: false,
-  typeIds: [],
+  isCompany: false,
+  companyValue: null,
+  bindings: { processTypeIds: [], projectTypeIds: [], nodeKindIds: [] },
   sortOrder: 0,
   createdAt: '2026-10-25T00:00:00.000Z',
   updatedAt: '2026-10-25T00:00:00.000Z',
@@ -113,6 +116,7 @@ function renderDialog(permissions: Permission[]) {
         canManage
         onClose={vi.fn()}
         onSaved={vi.fn()}
+        onOpenDefinition={vi.fn()}
       />
     </QueryClientProvider>,
   );

@@ -170,7 +170,7 @@ export function applyForm(task: TaskListItem, input: TransitionFormInput): void 
   if (input.fields?.deadline !== undefined) task.deadline = input.fields.deadline;
   if (input.fields?.assigneeId !== undefined) task.assignee = userRef(input.fields.assigneeId);
   if (input.fields?.customFields) {
-    const { next } = applyDemoPatch('task', task.customFields, input.fields.customFields);
+    const { next } = applyDemoPatch(task.customFields, input.fields.customFields);
     task.customFields = next;
   }
   if (input.time) task.spentMinutes += input.time.minutes;

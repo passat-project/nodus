@@ -118,12 +118,12 @@ export class LetterFieldsValidator {
     // Проект (#52 Р5): существует и не в архиве; видимость регистратора не
     // требуется — служебное действие канцелярии, DTO фильтрует смотрящим.
     if (value.projectId) await this.projects.assertProjectAttachable(value.projectId);
-    const customFields = await this.customFields.prepareCreate('letter', {
+    const customFields = await this.customFields.prepareCreate({
       input: value.customFields ?? {},
       // Автор умолчаний «подразделение автора» — сам актор регистрации.
       authorId: actor.id,
       actor,
-      typeId,
+      target: { kind: 'process_type', id: typeId },
     });
     return {
       values: {
@@ -216,11 +216,11 @@ export class LetterFieldsValidator {
       data[field] = field === 'theirDate' || field === 'responseDeadline' ? asDate(value) : value;
     }
     if (body.customFields !== undefined) {
-      const prepared = await this.customFields.prepareUpdate('letter', {
+      const prepared = await this.customFields.prepareUpdate({
         current: currentCustomFields as CustomFieldValues,
         patch: body.customFields,
         actor,
-        typeId,
+        target: { kind: 'process_type', id: typeId },
       });
       data.customFields = prepared.next;
       for (const change of prepared.changes) {

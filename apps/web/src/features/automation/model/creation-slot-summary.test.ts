@@ -21,7 +21,7 @@ const slot = (over: Partial<CreationFieldSlot>): CreationFieldSlot => ({
 
 const definition = (type: CustomFieldDefinition['type']): CustomFieldDefinition => ({
   id: FIELD_ID,
-  scope: 'task',
+  number: 1,
   type,
   name: 'Часы переработки',
   hint: null,
@@ -30,8 +30,9 @@ const definition = (type: CustomFieldDefinition['type']): CustomFieldDefinition 
   defaultValue: null,
   defaultRefs: [],
   reportIndexed: false,
-  hidden: false,
-  typeIds: [],
+  isCompany: false,
+  companyValue: null,
+  bindings: { processTypeIds: [], projectTypeIds: [], nodeKindIds: [] },
   sortOrder: 0,
   createdAt: '2026-10-26T00:00:00Z',
   updatedAt: '2026-10-26T00:00:00Z',

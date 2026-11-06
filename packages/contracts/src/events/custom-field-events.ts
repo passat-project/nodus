@@ -1,12 +1,11 @@
 import { z } from 'zod';
 
-import { customFieldScopeSchema } from '../custom-fields/custom-field.schemas.js';
-
 /**
- * Каталог событий кастомных полей (#431, ADR-0029, I9). Каталожное событие —
- * без `audience`: gateway рассылает его всем авторизованным сокетам (как
- * `workflow.*`), клиенты инвалидируют определения и блок «Атрибуты» карточек.
- * Payload минимальный: подробности — GET /custom-fields/definitions.
+ * Каталог событий атрибутов (#431/#631, ADR-0029/0037, I9). Каталожное
+ * событие — без `audience`: gateway рассылает его всем авторизованным
+ * сокетам (как `workflow.*`), клиенты инвалидируют определения и блок
+ * «Атрибуты» карточек. Payload минимальный: подробности — GET
+ * /custom-fields/definitions.
  */
 export const CUSTOM_FIELD_EVENTS = {
   DEFINITION_CHANGED: 'custom_field.definition_changed',
@@ -23,9 +22,9 @@ export type CustomFieldChangeKind = z.infer<typeof customFieldChangeKindSchema>;
 
 export const customFieldDefinitionChangedPayloadSchema = z.object({
   definitionId: z.uuid(),
-  scope: customFieldScopeSchema,
   change: customFieldChangeKindSchema,
-  /** Изменённые ключи свойств определения (updated). */
+  /** Изменённые ключи свойств определения (updated): включая
+   *  'companyValue' — значение глобальной переменной (Р7). */
   fields: z.array(z.string()).optional(),
 });
 export type CustomFieldDefinitionChangedPayload = z.infer<

@@ -1,50 +1,48 @@
 import type {
+  CustomFieldModule,
   CustomFieldRef,
-  CustomFieldScope,
   CustomFieldValue,
   CustomFieldValues,
 } from '@nodus/contracts';
-import { typeIdsOf, ui } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 
 import { FieldRow } from '../ui/entity-fields.js';
 import { CustomFieldTypeIcon } from './field-type-icon.js';
-import { visibleDefinitions, useCustomFieldDefinitions } from './queries.js';
+import { definitionsForTarget } from './module-target.js';
+import { useCustomFieldDefinitions } from './queries.js';
 import { CustomFieldEditor } from './value-editor.js';
 
 /**
- * Блок «Атрибуты» карточки сущности (#431, Р1/Р6): сетка строк той же
+ * Блок «Атрибуты» карточки сущности (#431/#631): сетка строк той же
  * грамматики, что `EntityFields` (иконка + моно-метка w-44 + значение,
  * 1→2 колонки по @container), правка по месту. Многострочный текст — на
- * всю ширину сетки, как описание. Скрытые (служебные) атрибуты не
- * показываются никому; настройка атрибутов — только во вкладке «Атрибуты»
- * «Автоматизации» (кнопки «Настроить» в карточке нет — вердикт владельца
- * 25.10.2026: она уводила из карточки). Нет видимых атрибутов — блока нет;
- * загрузка — два скелета; ошибка — строка с повтором. Значения правит
- * вызывающий (оптимистично, I4).
+ *  всю ширину сетки, как описание. Показываются атрибуты, привязанные
+ *  к типу/виду сущности («Где используется», Р3); настройка — только во
+ *  вкладке «Атрибуты» «Автоматизации». Нет атрибутов — блока нет;
+ *  загрузка — два скелета; ошибка — строка с повтором. Значения правит
+ *  вызывающий (оптимистично, I4).
  */
 export function CustomFieldsBlock({
-  scope,
-  typeId,
+  module,
+  targetId,
   values,
   refs,
   canEdit,
   onChange,
 }: {
-  scope: CustomFieldScope;
-  /** Тип процесса: показываются только его атрибуты (#432, Р8). */
-  typeId?: string;
+  module: Exclude<CustomFieldModule, 'company'>;
+  /** Тип процесса / тип проекта / вид папки: показываются только его
+   *  атрибуты (Р3, «Где используется»). */
+  targetId?: string;
   values: CustomFieldValues;
   refs: readonly CustomFieldRef[];
   canEdit: boolean;
   onChange: (fieldId: string, value: CustomFieldValue | null, refs?: CustomFieldRef[]) => void;
 }) {
-  const query = useCustomFieldDefinitions(scope);
-  const typed = scope === 'task' || scope === 'letter';
-  const definitions = visibleDefinitions(query.data).filter(
-    (definition) => !typeId || !typed || typeIdsOf(definition).includes(typeId),
-  );
+  const query = useCustomFieldDefinitions(module);
+  const definitions = definitionsForTarget(query.data, module, targetId);
 
   if (query.isLoading) {
     return (

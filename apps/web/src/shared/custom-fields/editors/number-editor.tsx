@@ -129,7 +129,9 @@ export function NumberEditor(props: EditorProps) {
           aria-invalid={error !== null || undefined}
           aria-describedby={error ? errorId : undefined}
           placeholder={
-            money ? ui.customFields.value.amountPlaceholder : ui.customFields.dialog.precision
+            money
+              ? ui.customFields.value.amountPlaceholder
+              : ui.customFields.value.numberPlaceholder
           }
           onChange={(e) => setText(e.target.value)}
           onBlur={(e) => {

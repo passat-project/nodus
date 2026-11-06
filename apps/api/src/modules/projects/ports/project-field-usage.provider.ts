@@ -22,12 +22,4 @@ export class ProjectFieldUsageProvider implements ProjectFieldUsageReader {
     `);
     return Number(rows[0]?.count ?? 0);
   }
-
-  async nodeKindsUsing(fieldId: string): Promise<{ id: string; name: string }[]> {
-    return this.prisma.$queryRaw<{ id: string; name: string }[]>(Prisma.sql`
-      SELECT id, name FROM node_kinds
-      WHERE config->'form'->'fields' @> jsonb_build_array(jsonb_build_object('fieldId', ${fieldId}::text))
-      ORDER BY lower(btrim(name)), id
-    `);
-  }
 }

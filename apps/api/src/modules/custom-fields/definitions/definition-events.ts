@@ -11,14 +11,16 @@ export interface DefinitionEventSink {
 }
 
 /**
- * Одно событие на все изменения реестра (#431, Р12; #432 — `typeIds`):
- * обработчики владельцев инвалидируют кэши по `definitionId`/`scope`, поэтому
- * точка эмита обязана быть одна — иначе появится изменение без события.
+ * Одно событие на все изменения реестра (#431, Р12; #631 — без области):
+ * обработчики-владельцы чистят свои таблицы по `definitionId` безусловно
+ * (ключ либо есть, либо нет — идемпотентно), веб инвалидирует кэш
+ * определений. Точка эмита обязана быть одна — иначе появится изменение
+ * без события.
  */
 export async function emitDefinitionChanged(
   sink: DefinitionEventSink,
   tx: TransactionClient,
-  definition: Pick<FieldDefinitionRow, 'id' | 'scope'>,
+  definition: Pick<FieldDefinitionRow, 'id'>,
   change: 'created' | 'updated' | 'deleted' | 'reordered',
   actorId: string,
   fields: string[],
@@ -28,7 +30,6 @@ export async function emitDefinitionChanged(
     CUSTOM_FIELD_EVENTS.DEFINITION_CHANGED,
     {
       definitionId: definition.id,
-      scope: definition.scope,
       change,
       ...(fields.length > 0 ? { fields } : {}),
     },

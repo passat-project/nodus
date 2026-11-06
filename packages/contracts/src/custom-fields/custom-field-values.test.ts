@@ -19,7 +19,7 @@ const OTHER = '20000000-0000-4000-8000-000000000002';
 function def(partial: Partial<CustomFieldDefinition> & Pick<CustomFieldDefinition, 'type'>) {
   return {
     id: ID,
-    scope: 'task',
+    number: 1,
     name: 'Поле',
     hint: null,
     settings: {},
@@ -27,8 +27,9 @@ function def(partial: Partial<CustomFieldDefinition> & Pick<CustomFieldDefinitio
     defaultValue: null,
     defaultRefs: [],
     reportIndexed: false,
-    hidden: false,
-    typeIds: [],
+    isCompany: false,
+    companyValue: null,
+    bindings: { processTypeIds: [], projectTypeIds: [], nodeKindIds: [] },
     sortOrder: 0,
     createdAt: '2026-10-25T00:00:00.000Z',
     updatedAt: '2026-10-25T00:00:00.000Z',

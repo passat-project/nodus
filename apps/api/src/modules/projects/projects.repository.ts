@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { ProjectRef } from '@nodus/contracts';
+import { SYSTEM_FIELD_IDS } from '@nodus/contracts';
 import { Prisma } from '../../generated/prisma/client.js';
 
 import { PrismaService } from '../../core/database/prisma.service.js';
@@ -34,7 +35,7 @@ export const projectSelect = {
   creatorId: true,
   createdAt: true,
   updatedAt: true,
-  type: { select: { id: true, name: true, codeField: true } },
+  type: { select: { id: true, name: true, form: true } },
   portfolio: { select: { id: true, name: true } },
 } as const;
 
@@ -62,13 +63,11 @@ export interface ProjectListFilter {
 }
 
 export interface ProjectWriteData {
-  code: string | null;
   name: string;
   description: string;
   color: string;
   typeId: string;
   portfolioId: string | null;
-  clientId: string | null;
   managerId: string;
   assistantIds: Prisma.InputJsonValue;
   visibility: string;
@@ -117,14 +116,26 @@ export class ProjectsRepository {
     if (filter.visibility) and.push({ visibility: filter.visibility });
     if (filter.status) and.push({ status: filter.status });
     if (filter.portfolioId) and.push({ portfolioId: filter.portfolioId });
-    if (filter.clientId) and.push({ clientId: filter.clientId });
+    // Заказчик — атрибут (Р9 #631): вкладка «Проекты» карточки контрагента.
+    if (filter.clientId) {
+      and.push({
+        customFields: { path: [SYSTEM_FIELD_IDS.projectClient], equals: filter.clientId },
+      });
+    }
     if (filter.search) {
-      // contains маппится в LIKE: спецсимволы ввода экранированы (security #460)
+      // contains маппится в LIKE: спецсимволы ввода экранированы (security
+      // #460). Шифр — атрибут (Р9 #631): поиск по нему — по JSONB-ключу
+      // системного поля, колонка code заморожена.
       const needle = escapeLike(filter.search);
       and.push({
         OR: [
           { name: { contains: needle, mode: 'insensitive' } },
-          { code: { contains: needle, mode: 'insensitive' } },
+          {
+            customFields: {
+              path: [SYSTEM_FIELD_IDS.projectCode],
+              string_contains: needle,
+            },
+          },
         ],
       });
     }
@@ -179,13 +190,6 @@ export class ProjectsRepository {
   }
 
   /** Шифр занят другим проектом (частичный unique включает архивные). */
-  async codeTaken(code: string, excludeId: string | null): Promise<boolean> {
-    const row = await this.prisma.project.findFirst({
-      select: { id: true },
-      where: { code, ...(excludeId ? { id: { not: excludeId } } : {}) },
-    });
-    return row !== null;
-  }
 
   async create(data: ProjectWriteData, tx: TransactionClient): Promise<ProjectRow> {
     return tx.project.create({ select: projectSelect, data: { ...data, id: randomUUID() } });
@@ -246,10 +250,17 @@ export class ProjectsRepository {
   ): Promise<{ id: string; code: string | null; name: string; color: ProjectRef['color'] }[]> {
     if (ids.length === 0) return [];
     const rows = await this.prisma.project.findMany({
-      select: { id: true, code: true, name: true, color: true },
+      // Шифр — атрибут (Р9 #631): производное из customFields; колонка
+      // code заморожена (палитра/пикер/чаты задач показывают шифр ссылки).
+      select: { id: true, customFields: true, name: true, color: true },
       where: { id: { in: [...ids] } },
     });
-    return rows.map((row) => ({ ...row, color: row.color as ProjectRef['color'] }));
+    return rows.map((row) => ({
+      id: row.id,
+      code: codeOfAttributes(row.customFields),
+      name: row.name,
+      color: row.color as ProjectRef['color'],
+    }));
   }
 
   // ===== Настройки портала (Р7) =====
@@ -266,4 +277,11 @@ export class ProjectsRepository {
       create: { key, value },
     });
   }
+}
+
+/** Шифр проекта из значений атрибутов (системный «Шифр», Р9 #631). */
+function codeOfAttributes(customFields: Prisma.JsonValue): string | null {
+  if (customFields === null || typeof customFields !== 'object') return null;
+  const value = (customFields as Record<string, unknown>)[SYSTEM_FIELD_IDS.projectCode];
+  return typeof value === 'string' && value !== '' ? value : null;
 }

@@ -14,14 +14,13 @@ import type { CustomFieldRegistry } from '../../../custom-fields/ports/custom-fi
 export async function creationFactsOf(
   registry: CustomFieldRegistry,
   profiles: UserProfileReader,
-  category: 'task' | 'letter',
   creation: CreationForm | null | undefined,
   tx: TransactionClient,
 ): Promise<{
-  definitions: readonly Pick<CustomFieldDefinition, 'id' | 'type' | 'settings' | 'hidden'>[];
+  definitions: readonly Pick<CustomFieldDefinition, 'id' | 'type' | 'settings'>[];
   activeUserIds?: ReadonlySet<string>;
 }> {
-  const definitions = await registry.definitions(category, {}, tx);
+  const definitions = await registry.definitions({}, tx);
   const userIds = presetUserIdsOf(creation);
   if (userIds.length === 0) return { definitions };
   const active = await profiles.filterActiveUserIds(userIds, tx);

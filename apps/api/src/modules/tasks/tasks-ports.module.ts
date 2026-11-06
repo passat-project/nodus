@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 
 import { ProjectsPortsModule } from '../projects/projects-ports.module.js';
 import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.module.js';
@@ -17,6 +17,8 @@ import { TASK_CHAT_READER } from './ports/task-chat-reader.port.js';
 import { TaskChatReaderProvider } from './ports/task-chat-reader.provider.js';
 import { TASK_PROJECT_READER } from './ports/task-project-reader.port.js';
 import { TaskProjectReaderProvider } from './ports/task-project-reader.provider.js';
+import { TASK_REF_READER } from './ports/task-ref-reader.port.js';
+import { TaskRefReaderProvider } from './ports/task-ref-reader.provider.js';
 import { TasksQueryRepository } from './tasks/tasks-query.repository.js';
 
 /**
@@ -26,7 +28,7 @@ import { TasksQueryRepository } from './tasks/tasks-query.repository.js';
  * импорта; доменные сервисы задач не экспортируются.
  */
 @Module({
-  imports: [ProjectsPortsModule, CustomFieldsPortsModule, WorkflowsPortsModule],
+  imports: [ProjectsPortsModule, forwardRef(() => CustomFieldsPortsModule), WorkflowsPortsModule],
   providers: [
     OrgStructureProvider,
     { provide: ORG_STRUCTURE_READER, useClass: OrgStructureProvider },
@@ -43,7 +45,9 @@ import { TasksQueryRepository } from './tasks/tasks-query.repository.js';
     { provide: CUSTOM_FIELD_VALUES_READER, useClass: TaskCustomFieldValuesProvider },
     TaskProjectReaderProvider,
     { provide: TASK_PROJECT_READER, useClass: TaskProjectReaderProvider },
+    TaskRefReaderProvider,
+    { provide: TASK_REF_READER, useExisting: TaskRefReaderProvider },
   ],
-  exports: [TASK_CHAT_READER, CUSTOM_FIELD_VALUES_READER, TASK_PROJECT_READER],
+  exports: [TASK_CHAT_READER, CUSTOM_FIELD_VALUES_READER, TASK_PROJECT_READER, TASK_REF_READER],
 })
 export class TasksPortsModule {}

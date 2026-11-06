@@ -151,7 +151,6 @@ export class TasksQueryService {
     // Ссылки значений атрибутов (Р6): имена сотрудников, подразделений,
     // вариантов и контрагентов — пачками через порты, а не по строке.
     const customFieldRefs = await this.customFields.refs(
-      'task',
       (row.customFields ?? {}) as CustomFieldValues,
       user,
     );

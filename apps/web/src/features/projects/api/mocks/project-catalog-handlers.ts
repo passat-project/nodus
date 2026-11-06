@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw';
 import {
+  DEFAULT_PROJECT_TYPE_FORM,
   ErrorCode,
   Permission,
   portalSettingsUpdateBodySchema,
@@ -11,6 +12,7 @@ import {
   type ProjectType,
 } from '@nodus/contracts';
 
+import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import {
   demoPortalSettings,
@@ -40,6 +42,32 @@ function includeArchivedOf(request: Request): boolean {
   return new URL(request.url).searchParams.get('includeArchived') === 'true';
 }
 
+/** Слот формы типа ↔ привязка атрибута к типу (сервер держит их вместе,
+ *  Р10 #631): добавленный слот привязывает атрибут к типу, убранный —
+ *  снимает привязку (значения живых проектов не трогаются). */
+function syncFieldBindings(
+  typeId: string,
+  before: readonly string[],
+  after: readonly string[],
+): void {
+  for (const fieldId of after) {
+    if (before.includes(fieldId)) continue;
+    const definition = demoCustomFieldDefinitions.find((entry) => entry.id === fieldId);
+    if (definition && !definition.bindings.projectTypeIds.includes(typeId)) {
+      definition.bindings.projectTypeIds.push(typeId);
+    }
+  }
+  for (const fieldId of before) {
+    if (after.includes(fieldId)) continue;
+    const definition = demoCustomFieldDefinitions.find((entry) => entry.id === fieldId);
+    if (definition) {
+      definition.bindings.projectTypeIds = definition.bindings.projectTypeIds.filter(
+        (id) => id !== typeId,
+      );
+    }
+  }
+}
+
 /**
  * Справочники модуля в моках (#52): типы проектов, портфели, настройки
  * портала. Регистрируются ДО параметрического `/projects/:id` (gotcha
@@ -64,10 +92,15 @@ export const projectCatalogHandlers = [
       name: parsed.data.name,
       icon: parsed.data.icon ?? 'file-text',
       color: parsed.data.color ?? 'blue',
-      codeField: 'optional',
+      form: parsed.data.form ?? DEFAULT_PROJECT_TYPE_FORM,
       kindIds: null,
       archivedAt: null,
     };
+    syncFieldBindings(
+      type.id,
+      [],
+      type.form.fields.map((slot) => slot.fieldId),
+    );
     demoProjectTypes.push(type);
     return HttpResponse.json(type, { status: 201 });
   }),
@@ -87,7 +120,16 @@ export const projectCatalogHandlers = [
     if (parsed.data.name) type.name = parsed.data.name;
     if (parsed.data.icon) type.icon = parsed.data.icon;
     if (parsed.data.color) type.color = parsed.data.color;
-    if (parsed.data.codeField) type.codeField = parsed.data.codeField;
+    // Форма — замена целиком; дубль fieldId режет схема (422), привязки
+    // атрибутов типа синхронизируются со слотами.
+    if (parsed.data.form) {
+      syncFieldBindings(
+        type.id,
+        type.form.fields.map((slot) => slot.fieldId),
+        parsed.data.form.fields.map((slot) => slot.fieldId),
+      );
+      type.form = parsed.data.form;
+    }
     if (parsed.data.kindIds !== undefined) type.kindIds = parsed.data.kindIds;
     return HttpResponse.json(type);
   }),

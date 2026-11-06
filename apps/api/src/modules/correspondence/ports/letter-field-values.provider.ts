@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import type { CustomFieldScope } from '@nodus/contracts';
 
 import { Prisma } from '../../../generated/prisma/client.js';
 import { PrismaService } from '../../../core/database/prisma.service.js';
@@ -17,8 +16,7 @@ import type { LetterFieldValuesReader } from './letter-field-values.port.js';
 export class LetterFieldValuesProvider implements LetterFieldValuesReader {
   constructor(private readonly prisma: PrismaService) {}
 
-  async countValues(scope: CustomFieldScope, fieldId: string): Promise<number> {
-    if (scope !== 'letter') return 0;
+  async countValues(fieldId: string): Promise<number> {
     const rows = await this.prisma.$queryRaw<{ count: bigint }[]>(Prisma.sql`
       SELECT count(*)::bigint AS count FROM letters
       WHERE deleted_at IS NULL AND custom_fields ? ${fieldId}

@@ -1,4 +1,9 @@
-import type { CustomFieldValues, ProjectNode, ProjectNodeRollup } from '@nodus/contracts';
+import {
+  SYSTEM_FIELD_IDS,
+  type CustomFieldValues,
+  type ProjectNode,
+  type ProjectNodeRollup,
+} from '@nodus/contracts';
 
 import type { ProjectNodeRow } from './project-nodes.repository.js';
 
@@ -21,9 +26,16 @@ export function nodeToDto(row: ProjectNodeRow, rollup: ProjectNodeRollup | null)
     parentId: row.parentId,
     kindId: row.kindId,
     name: row.name,
-    code: row.code,
+    code: nodeCodeOf((row.customFields ?? {}) as CustomFieldValues),
     customFields: (row.customFields ?? {}) as CustomFieldValues,
     rollup: rollup ?? EMPTY_ROLLUP,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/** Код папки из значений атрибутов (системный «Код», Р9 #631; колонка
+ *  project_nodes.code заморожена — не читается). */
+function nodeCodeOf(customFields: CustomFieldValues): string | null {
+  const value = customFields[SYSTEM_FIELD_IDS.nodeCode];
+  return typeof value === 'string' && value !== '' ? value : null;
 }

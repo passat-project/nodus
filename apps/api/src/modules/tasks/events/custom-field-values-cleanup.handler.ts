@@ -38,7 +38,6 @@ export class CustomFieldValuesCleanupHandler {
   async handle(event: DomainEvent<Record<string, unknown>>): Promise<void> {
     const parsed = customFieldDefinitionChangedPayloadSchema.safeParse(event.payload);
     if (!parsed.success || parsed.data.change !== 'deleted') return;
-    if (parsed.data.scope !== 'task') return;
     const fieldId = parsed.data.definitionId;
     const removed = await this.facts.removeCustomFieldValues(fieldId);
     this.logger.debug({ fieldId, removed }, 'Значения удалённого атрибута убраны из задач');

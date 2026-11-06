@@ -48,18 +48,16 @@ export class ProjectFieldValuesCleanupHandler {
   async handle(event: DomainEvent<Record<string, unknown>>): Promise<void> {
     const parsed = customFieldDefinitionChangedPayloadSchema.safeParse(event.payload);
     if (!parsed.success || parsed.data.change !== 'deleted') return;
-    const { definitionId, scope } = parsed.data;
-    if (scope === 'project') {
-      const removed = await this.txRunner.run((tx) =>
-        this.projects.removeCustomFieldValues(tx, definitionId),
-      );
-      this.logger.debug(
-        { fieldId: definitionId, removed },
-        'Значения удалённого атрибута убраны из проектов',
-      );
-      return;
-    }
-    if (scope !== 'node') return;
+    // Без областей (#631): чистим свои таблицы безусловно — ключ либо есть,
+    // либо нет (идемпотентно).
+    const { definitionId } = parsed.data;
+    const projectRemoved = await this.txRunner.run((tx) =>
+      this.projects.removeCustomFieldValues(tx, definitionId),
+    );
+    this.logger.debug(
+      { fieldId: definitionId, removed: projectRemoved },
+      'Значения удалённого атрибута убраны из проектов',
+    );
 
     await this.txRunner.run(async (tx) => {
       await this.kinds.lockForms(tx);

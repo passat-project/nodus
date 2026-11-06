@@ -26,7 +26,7 @@ function event(payload: Record<string, unknown>) {
 describe('LetterFieldValuesCleanupHandler (#582)', () => {
   it('область letter, change=deleted — чистит значения писем', async () => {
     const { handler, letters, logger } = makeHandler();
-    await handler.handle(event({ definitionId: FIELD, scope: 'letter', change: 'deleted' }));
+    await handler.handle(event({ definitionId: FIELD, change: 'deleted' }));
     expect(letters.removeCustomFieldValues).toHaveBeenCalledWith(FIELD);
     expect(logger.debug).toHaveBeenCalledWith(
       { fieldId: FIELD, removed: 2 },
@@ -36,17 +36,17 @@ describe('LetterFieldValuesCleanupHandler (#582)', () => {
 
   it('чужие области, изменения и невалидный payload игнорируются', async () => {
     const { handler, letters } = makeHandler();
-    await handler.handle(event({ definitionId: FIELD, scope: 'task', change: 'deleted' }));
+
     await handler.handle(event({ definitionId: FIELD, scope: 'letter', change: 'updated' }));
-    await handler.handle(event({ definitionId: 'не-uuid', scope: 'letter', change: 'deleted' }));
+    await handler.handle(event({ definitionId: 'не-uuid', change: 'deleted' }));
     expect(letters.removeCustomFieldValues).not.toHaveBeenCalled();
   });
 
   it('повторная доставка идемпотентна: репозиторий вызывается снова, удаляет только остатки', async () => {
     const { handler, letters } = makeHandler();
     letters.removeCustomFieldValues.mockResolvedValueOnce(2).mockResolvedValueOnce(0);
-    await handler.handle(event({ definitionId: FIELD, scope: 'letter', change: 'deleted' }));
-    await handler.handle(event({ definitionId: FIELD, scope: 'letter', change: 'deleted' }));
+    await handler.handle(event({ definitionId: FIELD, change: 'deleted' }));
+    await handler.handle(event({ definitionId: FIELD, change: 'deleted' }));
     expect(letters.removeCustomFieldValues).toHaveBeenCalledTimes(2);
   });
 });

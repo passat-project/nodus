@@ -1,12 +1,14 @@
 import { http, HttpResponse } from 'msw';
 import {
   ErrorCode,
+  DEFAULT_NODE_KIND_FORM,
   nodeKindCreateBodySchema,
   nodeKindUpdateBodySchema,
   normalizeNodeKindCapabilities,
   type NodeKind,
 } from '@nodus/contracts';
 
+import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
 import { demoNodeKinds } from '../../../../shared/mocks/data/project-nodes.js';
 import {
   conflict,
@@ -18,6 +20,25 @@ import {
   ruleResponse,
 } from './structure-mock-kit.js';
 import { kindFormInvalidIssue, kindFormIssues } from './node-form-rules.js';
+
+/** Слот формы вида ↔ привязка атрибута к виду (Р3 #631, зеркало мока типов
+ *  проектов и сервера): добавленный слот привязывает, убранный — снимает. */
+function syncKindBindings(
+  kindId: string,
+  before: readonly string[],
+  after: readonly string[],
+): void {
+  for (const definition of demoCustomFieldDefinitions) {
+    const bound = definition.bindings.nodeKindIds.includes(kindId);
+    const inForm = after.includes(definition.id);
+    if (inForm && !bound) definition.bindings.nodeKindIds.push(kindId);
+    if (!inForm && bound && before.includes(definition.id)) {
+      definition.bindings.nodeKindIds = definition.bindings.nodeKindIds.filter(
+        (id) => id !== kindId,
+      );
+    }
+  }
+}
 
 /** Виды папок как настраиваемые типы (#556): реестр и мутации мок-мира.
  *  Правила формы — помощники контрактов (одна грамматика с сервером);
@@ -37,7 +58,7 @@ export const structureKindHandlers = [
     const kind: NodeKind = {
       id: crypto.randomUUID(),
       archivedAt: null,
-      form: { code: 'optional', fields: [] },
+      form: DEFAULT_NODE_KIND_FORM,
       capabilities: [],
       ...parsed.data,
     };
@@ -62,9 +83,14 @@ export const structureKindHandlers = [
       return conflict(ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN, 'Kind name is already taken');
     }
     if (parsed.data.form) {
-      const issues = kindFormIssues(parsed.data.form, kind.form);
+      const issues = kindFormIssues(kind, parsed.data.form);
       const response = issues.length > 0 ? ruleResponse(kindFormInvalidIssue(issues)) : null;
       if (response) return response;
+      syncKindBindings(
+        kind.id,
+        kind.form.fields.map((slot) => slot.fieldId),
+        parsed.data.form.fields.map((slot) => slot.fieldId),
+      );
       kind.form = parsed.data.form;
     }
     if (parsed.data.capabilities) {

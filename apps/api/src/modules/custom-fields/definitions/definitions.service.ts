@@ -3,18 +3,13 @@ import { PinoLogger } from 'nestjs-pino';
 import type {
   CreateCustomFieldBody,
   CustomFieldDefinition,
-  CustomFieldScope,
+  CustomFieldModule,
   CustomFieldUsage,
+  CustomFieldValue,
   ReorderCustomFieldsBody,
   UpdateCustomFieldBody,
 } from '@nodus/contracts';
-import {
-  checkDefinitionShape,
-  CUSTOM_FIELD_LIMITS,
-  ErrorCode,
-  isCompatibleTypeChange,
-  SystemDictionary,
-} from '@nodus/contracts';
+import { CUSTOM_FIELD_LIMITS, ErrorCode } from '@nodus/contracts';
 
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
@@ -28,21 +23,35 @@ import {
   type ProcessCatalogReader,
 } from '../../workflows/ports/process-catalog-reader.port.js';
 import {
+  FIELD_BINDING_TARGET_READER,
+  type FieldBindingTargetReader,
+} from '../../projects/ports/field-binding-targets.port.js';
+import {
   WORKFLOW_FIELD_USAGE_READER,
   type WorkflowFieldUsageReader,
 } from '../../workflows/ports/workflow-field-usage.port.js';
 import { DefinitionMapper, type FieldDefinitionRow } from './definition.mapper.js';
 import { DefinitionsUsageService } from './definitions-usage.service.js';
 import { emitDefinitionChanged } from './definition-events.js';
-import { assertBindable, assertUnbindable } from './type-bindings.js';
+import {
+  assertBindingsUsable,
+  assertSettingsUsable,
+  assertUpdateAllowed,
+  nameTaken,
+  replaceBindings,
+  requireDefinition,
+} from './definition-guards.js';
 import { DefinitionsRepository, type FieldDefinitionWriteData } from './definitions.repository.js';
 import { CustomFieldValueValidator } from '../values/value-validator.js';
+
 /**
- * Реестр определений атрибутов (#431, ADR-0029): CRUD, удаление с проверкой
- * использования, порядок; мутации — транзакция + outbox `custom_field.
- * definition_changed` (I9), аудит — контроллером. Имя уникально в области
- * под advisory-локом; лимит 100; смена типа — только расширяющая; справочник
- * списка неизменен; `hidden` заменяет архив.
+ * Реестр определений атрибутов портала (#631, ADR-0037 п.2): CRUD,
+ * привязки «Где используется», глобальные переменные, порядок. Имя
+ * уникально глобально под advisory-локом (один ключ на портал, Р1);
+ * создание дубля — 409 с suggestion существующего (В3); удаление разрешено
+ * ВСЕГДА (Р8) — окно последствий показывает usage; потолок портала 1000
+ * (Р12, техническая страховка). Мутации — транзакция + outbox
+ * `custom_field.definition_changed` (I9), аудит — контроллером.
  */
 @Injectable()
 export class DefinitionsService {
@@ -55,59 +64,90 @@ export class DefinitionsService {
     @Inject(DICTIONARY_READER) private readonly dictionaries: DictionaryReader,
     @Inject(WORKFLOW_FIELD_USAGE_READER) private readonly workflows: WorkflowFieldUsageReader,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
+    @Inject(FIELD_BINDING_TARGET_READER) private readonly targets: FieldBindingTargetReader,
     private readonly usageReader: DefinitionsUsageService,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(DefinitionsService.name);
   }
 
-  async list(scope: CustomFieldScope | null): Promise<CustomFieldDefinition[]> {
-    const rows = await this.definitions.list(scope);
-    return this.mapper.toDtos(rows);
+  /** Реестр портала; `module` — фильтр по привязкам/категории (Р11). */
+  async list(module: CustomFieldModule | null): Promise<CustomFieldDefinition[]> {
+    const rows = await this.definitions.list();
+    if (!module) return this.mapper.toDtos(rows);
+    if (module === 'company') return this.mapper.toDtos(rows.filter((row) => row.isCompany));
+    if (module === 'project' || module === 'node') {
+      const kind = module === 'project' ? 'project_type' : 'node_kind';
+      return this.mapper.toDtos(
+        rows.filter((row) => row.bindings.some((b) => b.targetKind === kind)),
+      );
+    }
+    // task/letter: привязка к живому типу своей категории (типы письма не
+    // делают атрибут «задачным» и наоборот).
+    const refs = await this.catalog.typeRefs(
+      rows.flatMap((row) =>
+        row.bindings.filter((b) => b.targetKind === 'process_type').map((b) => b.targetId),
+      ),
+      { live: true },
+    );
+    const categoryTypes = new Set(
+      refs.filter((ref) => ref.category === module).map((ref) => ref.id),
+    );
+    return this.mapper.toDtos(
+      rows.filter((row) =>
+        row.bindings.some((b) => b.targetKind === 'process_type' && categoryTypes.has(b.targetId)),
+      ),
+    );
   }
 
   async create(dto: CreateCustomFieldBody, actorId: string): Promise<CustomFieldDefinition> {
-    await this.assertSettingsUsable(dto.type, dto.settings?.dictionaryId, dto.settings?.currencyId);
-    // Привязка (#432, Р8): только живые типы своей категории; пусто — атрибут
-    // создаётся «нигде не показывается» (осознанный выбор администратора).
-    await assertBindable(this.catalog, dto.scope, dto.typeIds ?? []);
+    await assertSettingsUsable(
+      this.dictionaries,
+      dto.type,
+      dto.settings?.dictionaryId,
+      dto.settings?.currencyId,
+    );
+    const bindings = dto.isCompany
+      ? { processTypeIds: [] as const, projectTypeIds: [] as const, nodeKindIds: [] as const }
+      : (dto.bindings ?? {
+          processTypeIds: [] as const,
+          projectTypeIds: [] as const,
+          nodeKindIds: [] as const,
+        });
+    await assertBindingsUsable(this.catalog, this.targets, bindings);
 
     return this.txRunner.run(async (tx) => {
-      await this.definitions.lockScope(dto.scope, tx);
-      if (await this.definitions.findByName(dto.scope, dto.name, null, tx)) {
-        throw nameTaken(dto.name);
-      }
-      if ((await this.definitions.countInScope(dto.scope, tx)) >= CUSTOM_FIELD_LIMITS.perScope) {
+      await this.definitions.lockRegistry(tx);
+      const taken = await this.definitions.findByName(dto.name, null, tx);
+      if (taken) throw nameTaken(taken.id, taken.name);
+      if ((await this.definitions.countAll(tx)) >= CUSTOM_FIELD_LIMITS.portal) {
         throw new DomainException(
           ErrorCode.CUSTOM_FIELD_LIMIT_REACHED,
           'Custom field limit reached',
-          { scope: dto.scope, limit: CUSTOM_FIELD_LIMITS.perScope },
+          { limit: CUSTOM_FIELD_LIMITS.portal },
         );
       }
-      const sortOrder = (await this.definitions.maxSortOrder(dto.scope, tx)) + 1;
+      const number = await this.definitions.nextNumber(tx);
+      const sortOrder = (await this.definitions.maxSortOrder(tx)) + 1;
       const data: FieldDefinitionWriteData = {
-        scope: dto.scope,
+        number,
         type: dto.type,
         name: dto.name,
         hint: dto.hint ?? null,
         settings: dto.settings as FieldDefinitionWriteData['settings'],
         defaultValue: (dto.defaultValue ?? null) as FieldDefinitionWriteData['defaultValue'],
         reportIndexed: dto.reportIndexed,
-        hidden: dto.hidden,
+        isCompany: dto.isCompany,
         sortOrder,
         createdById: actorId,
       };
       const created = await this.definitions.create(data, tx);
-      await this.definitions.replaceTypes(created.id, dto.typeIds ?? [], tx);
+      await replaceBindings(this.definitions, created.id, bindings, tx);
       const row = (await this.definitions.findById(created.id, tx)) ?? created;
-      const fields = Object.keys(data);
-      await this.emitChanged(
-        tx,
-        row,
-        'created',
-        actorId,
-        dto.typeIds === undefined ? fields : [...fields, 'typeIds'],
-      );
+      await this.emitChanged(tx, row, 'created', actorId, [
+        ...Object.keys(data).filter((key) => key !== 'number'),
+        'bindings',
+      ]);
       return this.mapper.toDto(row, tx);
     });
   }
@@ -117,67 +157,25 @@ export class DefinitionsService {
     dto: UpdateCustomFieldBody,
     actorId: string,
   ): Promise<CustomFieldDefinition> {
-    const current = await this.requireDefinition(id);
-    const nextType = dto.type ?? (current.type as CustomFieldDefinition['type']);
-    if (!isCompatibleTypeChange(current.type as CustomFieldDefinition['type'], nextType)) {
-      throw new DomainException(
-        ErrorCode.CUSTOM_FIELD_TYPE_CHANGE_INCOMPATIBLE,
-        'Type change is incompatible with stored values',
-        { from: current.type, to: nextType },
-      );
-    }
-    const nextSettings = {
-      ...(current.settings as CustomFieldDefinition['settings']),
-      ...(dto.settings ?? {}),
-    };
-    const nextDefault =
-      dto.defaultValue === undefined
-        ? (current.defaultValue as CustomFieldDefinition['defaultValue'])
-        : dto.defaultValue;
-
-    const shape = checkDefinitionShape(nextType, nextSettings, nextDefault);
-    if (shape.length > 0) {
-      throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Invalid custom field shape', {
-        issues: shape,
-      });
-    }
-    await this.assertSettingsUsable(nextType, nextSettings.dictionaryId, nextSettings.currencyId);
-    if (dto.typeIds !== undefined) {
-      await assertBindable(this.catalog, current.scope, dto.typeIds);
-      // Снятие привязки тем же телом (#432, security-ревью): тип, где атрибут
-      // работает в опубликованном маршруте, из набора убрать нельзя.
-      await assertUnbindable(
-        this.workflows,
-        current.scope as CustomFieldScope,
-        id,
-        current.typeBindings
-          .map((binding) => binding.processTypeId)
-          .filter((typeId) => !dto.typeIds!.includes(typeId)),
-      );
-    }
-    if (nextDefault?.kind === 'static') {
-      const issues = await this.validator.validate(
-        current.scope as CustomFieldScope,
-        [{ ...(await this.mapper.toDto(current)), type: nextType, settings: nextSettings }],
-        { [id]: nextDefault.value },
-      );
-      if (issues.length > 0) {
-        throw new DomainException(
-          ErrorCode.CUSTOM_FIELD_VALUE_INVALID,
-          'Default value is invalid',
-          {
-            issues,
-          },
-        );
-      }
-    }
+    const current = await requireDefinition(this.definitions, id);
+    const { nextSettings, nextDefault } = await assertUpdateAllowed(
+      {
+        mapper: this.mapper,
+        validator: this.validator,
+        dictionaries: this.dictionaries,
+        catalog: this.catalog,
+        targets: this.targets,
+      },
+      id,
+      current,
+      dto,
+    );
 
     return this.txRunner.run(async (tx) => {
-      await this.definitions.lockScope(current.scope, tx);
+      await this.definitions.lockRegistry(tx);
       if (dto.name !== undefined && dto.name !== current.name) {
-        if (await this.definitions.findByName(current.scope, dto.name, id, tx)) {
-          throw nameTaken(dto.name);
-        }
+        const taken = await this.definitions.findByName(dto.name, id, tx);
+        if (taken) throw nameTaken(taken.id, taken.name);
       }
       const data: Parameters<DefinitionsRepository['update']>[1] = {};
       if (dto.name !== undefined) data.name = dto.name;
@@ -189,67 +187,49 @@ export class DefinitionsService {
         data.defaultValue = nextDefault as FieldDefinitionWriteData['defaultValue'];
       }
       if (dto.reportIndexed !== undefined) data.reportIndexed = dto.reportIndexed;
-      if (dto.hidden !== undefined) data.hidden = dto.hidden;
-      const updated = await this.definitions.update(id, data, tx);
-      if (dto.typeIds !== undefined) await this.definitions.replaceTypes(id, dto.typeIds, tx);
-      const row =
-        dto.typeIds === undefined
-          ? updated
-          : ((await this.definitions.findById(id, tx)) ?? updated);
+      await this.definitions.update(id, data, tx);
+      if (dto.bindings !== undefined) await replaceBindings(this.definitions, id, dto.bindings, tx);
+      const row = (await this.definitions.findById(id, tx)) ?? current;
       const fields = Object.keys(data);
       await this.emitChanged(
         tx,
         row,
         'updated',
         actorId,
-        dto.typeIds === undefined ? fields : [...fields, 'typeIds'],
+        dto.bindings === undefined ? fields : [...fields, 'bindings'],
       );
       return this.mapper.toDto(row, tx);
     });
   }
 
-  /** Где используется: значения — порт владельца области, маршруты и виды папок (#556). */
+  /** Где используется: агрегат последствий для окна удаления (Р8). */
   async usage(id: string): Promise<CustomFieldUsage> {
-    return this.usageReader.usage(await this.requireDefinition(id));
+    return this.usageReader.usage(await requireDefinition(this.definitions, id));
   }
 
   /**
-   * Удаление определения (вердикт владельца 25.10.2026: у атрибутов нет
-   * архива — тестовый мусор должен удаляться). Запрещено, пока атрибут стоит
-   * в окне перехода или условии «Заполнены поля» опубликованного маршрута:
-   * 409 `CUSTOM_FIELD_IN_USE` со списком процессов. Значения стираются
-   * владельцами по событию `change='deleted'` (tasks/projects/letters — своими
-   * обработчиками).
+   * Удаление — всегда разрешено (Р8, В4): 409 CUSTOM_FIELD_IN_USE снят.
+   * Определение + привязки + глобальное значение (каскад) в одной
+   * транзакции с событием `deleted`; значения в JSONB сущностей стирают
+   * владельцы своими обработчиками (идемпотентно). Опубликованные маршруты
+   * с ключом продолжают работать (толерантность unknown-ключа).
    */
   async remove(id: string, actorId: string): Promise<void> {
-    const definition = await this.requireDefinition(id);
-    const scope = definition.scope as CustomFieldScope;
-    const workflows = await this.workflows.workflowsUsingField(scope, id);
-    if (workflows.length > 0) {
-      throw new DomainException(
-        ErrorCode.CUSTOM_FIELD_IN_USE,
-        'Custom field is used by workflows',
-        {
-          workflows,
-        },
-      );
-    }
+    const definition = await requireDefinition(this.definitions, id);
     await this.txRunner.run(async (tx) => {
       await this.definitions.remove(id, tx);
       await this.emitChanged(tx, definition, 'deleted', actorId, []);
     });
   }
 
-  /** Порядок атрибутов области: `ids` — ровно все атрибуты области. */
+  /** Порядок атрибутов портала: `ids` — ровно все атрибуты (реестр один). */
   async reorder(dto: ReorderCustomFieldsBody, actorId: string): Promise<void> {
     await this.txRunner.run(async (tx) => {
-      await this.definitions.lockScope(dto.scope, tx);
-      const rows = await this.definitions.list(dto.scope, tx);
+      await this.definitions.lockRegistry(tx);
+      const rows = await this.definitions.list(tx);
       const expected = new Set(rows.map((row) => row.id));
       if (dto.ids.length !== expected.size || dto.ids.some((id) => !expected.has(id))) {
-        throw new DomainException(ErrorCode.CONFLICT, 'Field order is stale', {
-          scope: dto.scope,
-        });
+        throw new DomainException(ErrorCode.CONFLICT, 'Field order is stale');
       }
       const changed = dto.ids.some((id, index) => rows[index]?.id !== id);
       if (!changed) return;
@@ -260,35 +240,36 @@ export class DefinitionsService {
     });
   }
 
-  private async requireDefinition(id: string): Promise<FieldDefinitionRow> {
-    const row = await this.definitions.findById(id);
-    if (!row) throw DomainException.notFound('Custom field not found', { definitionId: id });
-    return row;
-  }
-
-  /** Справочник списка и валюта денег обязаны существовать и быть активными. */
-  private async assertSettingsUsable(
-    type: string,
-    dictionaryId: string | undefined,
-    currencyId: string | null | undefined,
-  ): Promise<void> {
-    if ((type === 'enum' || type === 'multienum') && dictionaryId) {
-      const [dictionary] = await this.dictionaries.dictionaryRefs([dictionaryId]);
-      if (!dictionary) {
-        throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Dictionary not found', {
-          dictionaryId,
+  /**
+   * Значение глобальной переменной (Р7): одна строка на компанию (PK =
+   * определение, upsert), null — очистка. Грамматика — тип определения.
+   * Не-глобальному — 422. Изменение — событие {fields:['companyValue']}
+   * (веб-кэш определений слушает).
+   */
+  async setCompanyValue(
+    id: string,
+    value: CustomFieldValue | null,
+    actorId: string,
+  ): Promise<CustomFieldDefinition> {
+    const definition = await requireDefinition(this.definitions, id);
+    if (!definition.isCompany) {
+      throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Field is not a company variable');
+    }
+    if (value !== null) {
+      const dto = await this.mapper.toDto(definition);
+      const issues = await this.validator.validate([dto], { [id]: value });
+      if (issues.length > 0) {
+        throw new DomainException(ErrorCode.CUSTOM_FIELD_VALUE_INVALID, 'Value is invalid', {
+          issues,
         });
       }
     }
-    if (type === 'money' && currencyId) {
-      const [item] = await this.dictionaries.itemRefs([currencyId]);
-      const [dictionary] = item ? await this.dictionaries.dictionaryRefs([item.dictionaryId]) : [];
-      if (!item?.isActive || dictionary?.code !== SystemDictionary.CURRENCY) {
-        throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Currency not found', {
-          currencyId,
-        });
-      }
-    }
+    return this.txRunner.run(async (tx) => {
+      await this.definitions.putCompanyValue(id, value, actorId, tx);
+      const row = (await this.definitions.findById(id, tx)) ?? definition;
+      await this.emitChanged(tx, row, 'updated', actorId, ['companyValue']);
+      return this.mapper.toDto(row, tx);
+    });
   }
 
   /** Одна точка события изменения реестра — `definition-events.ts` (#432). */
@@ -308,8 +289,4 @@ export class DefinitionsService {
       fields,
     );
   }
-}
-
-function nameTaken(name: string): DomainException {
-  return new DomainException(ErrorCode.CUSTOM_FIELD_NAME_TAKEN, 'Field name is taken', { name });
 }

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ErrorCode } from '@nodus/contracts';
+import { ErrorCode, SYSTEM_FIELD_IDS } from '@nodus/contracts';
 
 import { setupProjectNodeFixture, type ProjectNodeFixture } from './project-node.fixtures.js';
 
@@ -129,14 +129,29 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: структура #467 �
       await s.expectError(eleventh, 409, ErrorCode.PROJECT_NODE_LIMIT_REACHED);
     });
 
-    it('шифр уникален в проекте (409), свободен между проектами; null очищает', async () => {
+    it('дубль кода узла легален (В2 #631) в проекте и между проектами; null очищает', async () => {
       const a = await s.createProject(s.alice, { name: s.unique('Шифр А') });
       const b = await s.createProject(s.alice, { name: s.unique('Шифр Б') });
       const code = s.unique('K-1');
-      await s.node(s.alice, a.id, { kindId: s.kindId, name: 'Первый', code });
-      const clash = await s.createNode(s.alice, a.id, { kindId: s.kindId, name: 'Второй', code });
-      await s.expectError(clash, 409, ErrorCode.PROJECT_NODE_CODE_TAKEN);
-      await s.node(s.alice, b.id, { kindId: s.kindId, name: 'Сосед', code });
+      // Вид со слотом «Кода»: у вида без слота legacy-код из тела молча
+      // отбрасывается (Р9 #631, десктоп-толерантность) — слот обязателен.
+      const kindRes = await s.fx.api(s.alice, 'POST', '/projects/node-kinds', {
+        body: { name: s.unique('Вид с кодом'), icon: 'box', color: 'blue' },
+        key: `kc-${s.unique('kind')}`,
+      });
+      expect(kindRes.status, await kindRes.clone().text()).toBe(201);
+      const kind = (await kindRes.json()) as { id: string };
+      s.nodeKindIds.push(kind.id);
+      const slotRes = await s.fx.api(s.alice, 'PATCH', `/projects/node-kinds/${kind.id}`, {
+        body: { form: { fields: [{ fieldId: SYSTEM_FIELD_IDS.nodeCode, state: 'optional' }] } },
+        key: `ks-${s.unique('kind')}`,
+      });
+      expect(slotRes.status, await slotRes.clone().text()).toBe(200);
+
+      await s.node(s.alice, a.id, { kindId: kind.id, name: 'Первый', code });
+      const second = await s.createNode(s.alice, a.id, { kindId: kind.id, name: 'Второй', code });
+      expect(second.status, await second.clone().text()).toBe(201);
+      await s.node(s.alice, b.id, { kindId: kind.id, name: 'Сосед', code });
 
       const tree = await s.structure(s.alice, a.id);
       const first = tree.nodes.find((n) => n.code === code)!;

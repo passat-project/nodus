@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
 import type { ProjectNode } from '@nodus/contracts';
@@ -10,17 +10,20 @@ import { allowedNodeKinds } from '@nodus/contracts';
 import { useAuthStore } from '../../../../shared/auth-store.js';
 import { projectsKeys, useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
+import { useCustomFieldFilterDefs } from '../../../../shared/custom-fields/filter-defs.js';
 import { tasksKeys } from '../../../../shared/api/tasks-keys.js';
 import { openTaskCreate } from '../../../../shared/tasks/task-create-store.js';
 import { EdgeHints } from '../../../../shared/ui/board/board-scroller.js';
 import { useBoardEdgeScroll } from '../../../../shared/ui/board/use-board-edge-scroll.js';
 import { DataTableHeader } from '../../../../shared/views/data-table-header.js';
+import { isActiveFilter } from '../../../../shared/views/list-filters.js';
 import { useAutoFitColumn } from '../../../../shared/views/use-autofit-column.js';
 import { structureKeys, useMoveNode } from '../api/structure-api.js';
 import { useMoveTaskNode, useSetTasksNode } from '../api/structure-task-mutations.js';
 import { useProjectDetail } from '../../api/projects-api.js';
 import { useStructureModel } from '../lib/use-structure-model.js';
 import { useStructureDnd } from '../lib/use-structure-dnd.js';
+import { filterVisibleRows } from '../lib/structure-tree.js';
 import { StructureBulkIsland } from './structure-bulk-island.js';
 import { StructureDragPlate } from './structure-drag-plate.js';
 import { StructureDialogHost, type StructureDialog } from './structure-dialog-host.js';
@@ -104,6 +107,41 @@ export function StructureTab({
     ? (model.nodes.find((node) => node.id === propertiesId) ?? null)
     : null;
 
+  // Фильтры по атрибутам папок (#631): группа «Атрибуты» панели фильтра —
+  // атрибуты, привязанные к видам папок. Применяются как поиск: папки-
+  // совпадения с путём до корня; задачи и «Без папки» фильтром скрываются
+  // (фильтр описывает папки, не их содержимое).
+  const filterDefs = useCustomFieldFilterDefs(
+    'node',
+    (node: ProjectNode) => node.customFields ?? {},
+  );
+  const attributeView = useMemo(() => {
+    const active = filterDefs.filter((def) => isActiveFilter(model.toolbar.filters[def.id]));
+    if (active.length === 0) return null;
+    const matches = (node: ProjectNode) =>
+      active.every((def) => def.match(node, model.toolbar.filters[def.id]));
+    const keep = new Set<number>();
+    model.filtered.forEach((row, index) => {
+      if (row.kind !== 'node' || !matches(row.node)) return;
+      keep.add(index);
+      let depth = row.depth;
+      for (let j = index - 1; j >= 0 && depth > 0; j -= 1) {
+        const prev = model.filtered[j];
+        if (prev && prev.kind !== 'noNode' && prev.depth < depth) {
+          keep.add(j);
+          depth = prev.depth;
+        }
+      }
+    });
+    return filterVisibleRows(
+      model.filtered.filter((_, index) => keep.has(index)),
+      new Set(),
+    );
+  }, [filterDefs, model.filtered, model.toolbar.filters]);
+  const treeRows = attributeView ?? model.treeRows;
+  const noNodeRow = attributeView ? null : model.noNodeRow;
+  const noNodeTasks = attributeView ? [] : model.noNodeTasks;
+
   function moveTasks(taskIds: string[], nodeId: string | null) {
     if (taskIds.length === 1) moveTask.mutate({ taskId: taskIds[0]!, nodeId });
     else setTasksNode.mutate({ taskIds, nodeId });
@@ -156,6 +194,7 @@ export function StructureTab({
       <div className="flex min-w-0 flex-1 flex-col">
         <StructureToolbar
           toolbar={model.toolbar}
+          defs={filterDefs}
           canEdit={canEdit}
           onCreateNode={() => setDialog({ kind: 'create', parent: null })}
           onExpandAll={() => model.setCollapsed(new Set())}
@@ -176,7 +215,7 @@ export function StructureTab({
             >
               {model.nodes.length === 0 ? (
                 <StructureEmpty onCreateNode={() => setDialog({ kind: 'create', parent: null })} />
-              ) : model.filtered.length === 0 ? (
+              ) : (attributeView ?? model.filtered).length === 0 ? (
                 <StructureSearchEmpty onReset={() => model.toolbar.setQuery('')} />
               ) : (
                 <>
@@ -194,9 +233,9 @@ export function StructureTab({
                     onReorder={model.commitOrder}
                   />
                   <StructureRowList
-                    treeRows={model.treeRows}
-                    noNodeRow={model.noNodeRow}
-                    noNodeTasks={model.noNodeTasks}
+                    treeRows={treeRows}
+                    noNodeRow={noNodeRow}
+                    noNodeTasks={noNodeTasks}
                     kindById={model.kindById}
                     collapsed={model.collapsed}
                     noNodeCollapsed={model.noNodeCollapsed}
@@ -216,7 +255,6 @@ export function StructureTab({
                     onMoveTasks={(ids) => setDialog({ kind: 'moveTasks', taskIds: ids })}
                     onRemoveFromStructure={(id) => moveTasks([id], null)}
                   />
-                  {model.selection.selected.size > 0 ? <div aria-hidden className="h-24" /> : null}
                 </>
               )}
             </div>
