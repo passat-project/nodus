@@ -31,4 +31,18 @@ describe('customFieldFactsOf (#631, #646)', () => {
     expect(facts.inType).toBeUndefined();
     expect(r.definitions).toHaveBeenCalledTimes(1);
   });
+
+  it('несколько типов маршрута: inType — пересечение привязок (publish multi-type)', async () => {
+    const definitions = vi.fn(async (opts?: { target?: { kind: string; id: string } }) => {
+      if (!opts?.target) return [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+      return opts.target.id === 'type-1' ? [{ id: 'a' }, { id: 'b' }] : [{ id: 'b' }, { id: 'c' }];
+    });
+    const facts = await customFieldFactsOf({ definitions } as never, {} as never, [
+      'type-1',
+      'type-2',
+    ]);
+    // Слот формы создания обязан быть привязан к КАЖДОМУ типу маршрута.
+    expect([...(facts.inType ?? [])]).toEqual(['b']);
+    expect(definitions).toHaveBeenCalledTimes(3);
+  });
 });

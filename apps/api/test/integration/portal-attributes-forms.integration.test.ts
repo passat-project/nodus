@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   apiErrorResponseSchema,
   CUSTOM_FIELD_EVENTS,
+  customFieldKey,
   customFieldUsageSchema,
   ErrorCode,
 } from '@nodus/contracts';
@@ -180,6 +181,76 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
       } finally {
         await cf.fx.prisma.nodeKind.deleteMany({ where: { id: kind.id } });
+      }
+    });
+
+    it('отвязка от одного типа процесса не снимает слот формы создания у другого (#646)', async () => {
+      const { fx, admin } = cf;
+      const api = (method: 'PUT' | 'DELETE', url: string) => fx.api(admin, method, url);
+      const field = await cf.createField({ type: 'text', name: `Два типа ${fx.runId}` });
+      const slotKey = customFieldKey(field.id);
+      const standardWorkflow = await fx.prisma.workflow.findUniqueOrThrow({
+        where: { code: 'task.default' },
+      });
+      const originalCreation = standardWorkflow.creation;
+      const second = await fx.prisma.processType.create({
+        data: { code: `audit646-${fx.runId}`, name: `Второй тип ${fx.runId}` },
+      });
+      const secondWorkflow = await fx.prisma.workflow.create({
+        data: {
+          name: `Маршрут ${fx.runId}`,
+          kind: 'task',
+          publishedAt: null,
+          creation: { fields: [{ key: slotKey }] } as never,
+        },
+      });
+      const scheme = await fx.prisma.workflowScheme.findFirstOrThrow({
+        where: { code: 'default' },
+      });
+      await fx.prisma.workflowSchemeEntry.create({
+        data: { schemeId: scheme.id, processTypeId: second.id, workflowId: secondWorkflow.id },
+      });
+      const keysOf = (creation: unknown): string[] =>
+        ((creation as { fields?: { key: string }[] } | null)?.fields ?? []).map(
+          (field) => field.key,
+        );
+      try {
+        await fx.prisma.workflow.update({
+          where: { id: standardWorkflow.id },
+          data: { creation: { fields: [{ key: slotKey }] } as never },
+        });
+        const bound = await api(
+          'PUT',
+          `/custom-fields/definitions/${field.id}/bindings/process-type/${second.id}`,
+        );
+        expect(bound.status, await bound.clone().text()).toBe(200);
+        const unbound = await api(
+          'DELETE',
+          `/custom-fields/definitions/${field.id}/bindings/process-type/${second.id}`,
+        );
+        expect(unbound.status, await unbound.clone().text()).toBe(200);
+        const kept = await fx.prisma.workflow.findUniqueOrThrow({
+          where: { id: standardWorkflow.id },
+          select: { creation: true },
+        });
+        const cleaned = await fx.prisma.workflow.findUniqueOrThrow({
+          where: { id: secondWorkflow.id },
+          select: { creation: true },
+        });
+        // Маршрут типа, у которого привязка осталась, слот сохраняет;
+        // маршрут отвязанного типа — теряет.
+        expect(keysOf(kept.creation)).toContain(slotKey);
+        expect(keysOf(cleaned.creation)).not.toContain(slotKey);
+      } finally {
+        await fx.prisma.workflow.update({
+          where: { id: standardWorkflow.id },
+          data: { creation: originalCreation as never },
+        });
+        await fx.prisma.workflowSchemeEntry.deleteMany({
+          where: { workflowId: secondWorkflow.id },
+        });
+        await fx.prisma.workflow.delete({ where: { id: secondWorkflow.id } });
+        await fx.prisma.processType.delete({ where: { id: second.id } });
       }
     });
   },

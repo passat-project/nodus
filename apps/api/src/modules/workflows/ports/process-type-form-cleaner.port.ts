@@ -14,12 +14,20 @@ import type { TransactionClient } from '../../../core/database/transaction-runne
 export const PROCESS_TYPE_FORM_CLEANER: InjectionToken = 'PROCESS_TYPE_FORM_CLEANER';
 
 export interface ProcessTypeFormCleaner {
-  /** Снять слоты `cf.<fieldId>` из форм создания всех маршрутов.
-   *  Идемпотентно; возвращает затронутые типы процессов — вызывающий эмитит
-   *  каталожное событие на каждый (кэш типов/форм у клиентов). */
+  /** Снять слоты `cf.<fieldId>` из форм создания маршрутов, у которых не
+   *  осталось ни одного типа с привязкой атрибута (#646).
+   *
+   *  `keepTypeIds` — типы процессов, у которых привязка ЕЩЁ ЕСТЬ: маршрут,
+   *  обслуживающий такой тип, слот сохраняет (иначе отвязка от одного типа
+   *  молча снимала бы обязательное поле у соседнего). Пустой список — снять
+   *  везде (удаление определения: привязок не осталось).
+   *
+   *  Идемпотентно; возвращает затронутые типы процессов — событие
+   *  `workflow.type_updated` эмитит сам провайдер (см. реализацию). */
   removeFieldFromCreationForms(
     fieldId: string,
     actorId: string | null,
     tx: TransactionClient,
+    keepTypeIds?: readonly string[],
   ): Promise<{ typeId: string; name: string }[]>;
 }

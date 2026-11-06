@@ -45,7 +45,7 @@ function setup(overrides: { signer?: unknown; receipt?: unknown; active?: string
     customFields as never,
     projects as never,
   );
-  return { validator, counterparties, dictionaries, profiles };
+  return { validator, counterparties, dictionaries, profiles, customFields };
 }
 
 const input = (patch: Record<string, unknown> = {}) => ({
@@ -62,6 +62,24 @@ const input = (patch: Record<string, unknown> = {}) => ({
 });
 
 describe('проверка регистрации письма (#55, Р1)', () => {
+  it('значения черновика — база регистрации: окно перекрывает, чужие ключи живут (#646)', async () => {
+    const { validator, customFields } = setup();
+    const fieldA = '00000000-0000-4000-8000-0000000000d1';
+    const fieldB = '00000000-0000-4000-8000-0000000000d2';
+    await validator.registration(
+      TYPE_ID,
+      input({ customFields: { [fieldB]: 'из окна' } }),
+      AUTHOR,
+      '2026-10-27',
+      { [fieldA]: 'поставлено раньше', [fieldB]: 'старое' },
+    );
+    expect(customFields.prepareCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: { [fieldA]: 'поставлено раньше', [fieldB]: 'из окна' },
+      }),
+    );
+  });
+
   it('валидный ввод: значения и атрибуты', async () => {
     const { validator } = setup();
     const result = await validator.registration(TYPE_ID, input(), AUTHOR, '2026-10-27');

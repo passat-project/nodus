@@ -3,6 +3,8 @@ import {
   apiErrorResponseSchema,
   CUSTOM_FIELD_EVENTS,
   customFieldDefinitionSchema,
+  dictionaryItemSchema,
+  dictionarySchema,
   ErrorCode,
   taskDetailSchema,
   taskListItemSchema,
@@ -128,6 +130,40 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const response = await fx.api(plain, method, path, {
           ...(body ? { body } : {}),
           key: `it-cf-deny-${method}-${fx.runId}`,
+        });
+        expect(response.status, `${method} ${path}`).toBe(403);
+      }
+    });
+
+    it('403 на мутирующих роутах справочников (plain без dictionary.manage)', async () => {
+      const { fx, plain, admin } = cf;
+      const created = await fx.api(admin, 'POST', '/dictionaries', {
+        body: { name: `Права ${fx.runId}`, items: ['А'] },
+        key: `it-dict-deny-create-${fx.runId}`,
+      });
+      expect(created.status, await created.clone().text()).toBe(201);
+      const dictionary = dictionarySchema.parse(await created.json());
+      cf.dictionaryIds.push(dictionary.id);
+      const items = z
+        .object({ items: z.array(dictionaryItemSchema) })
+        .parse(
+          await (
+            await fx.api(admin, 'GET', `/dictionaries/${dictionary.code}/items?limit=50`)
+          ).json(),
+        ).items;
+      const item = items[0]!;
+      const routes: ['POST' | 'PUT' | 'PATCH' | 'DELETE', string, Record<string, unknown>?][] = [
+        ['POST', '/dictionaries', { name: `Чужая ${fx.runId}` }],
+        ['PATCH', `/dictionaries/${dictionary.code}`, { name: `Чужое ${fx.runId}` }],
+        ['POST', `/dictionaries/${dictionary.code}/items`, { name: 'Б' }],
+        ['PUT', `/dictionaries/${dictionary.code}/items/order`, { ids: [item.id] }],
+        ['PATCH', `/dictionaries/${dictionary.code}/items/${item.id}`, { name: 'В' }],
+        ['DELETE', `/dictionaries/${dictionary.code}/items/${item.id}`],
+      ];
+      for (const [method, path, body] of routes) {
+        const response = await fx.api(plain, method, path, {
+          ...(body ? { body } : {}),
+          key: `it-dict-deny-${method}-${fx.runId}`,
         });
         expect(response.status, `${method} ${path}`).toBe(403);
       }

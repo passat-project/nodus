@@ -100,6 +100,19 @@ export class ProjectNodesRepository {
     );
   }
 
+  /** Строковый лок узла до конца транзакции (#646): уборка значений
+   *  удалённого атрибута идёт bulk-UPDATE под другим ключом
+   *  (`nodus:node_kinds`), поэтому advisory-лока структуры мало — без
+   *  `FOR UPDATE` PATCH успевал записать прочитанный JSONB поверх уборки и
+   *  воскрешал ключ удалённого атрибута. */
+  async lockNode(tx: TransactionClient, projectId: string, nodeId: string): Promise<void> {
+    await tx.$executeRaw(Prisma.sql`
+      SELECT 1 FROM "project_nodes"
+      WHERE "id" = ${nodeId}::uuid AND "project_id" = ${projectId}::uuid
+      FOR UPDATE
+    `);
+  }
+
   /** Уборка значений удалённого атрибута (#556, Р11): `custom_fields - key`
    *  только по строкам, где ключ ещё есть — повторная доставка события
    *  безвредна (идемпотентность). */

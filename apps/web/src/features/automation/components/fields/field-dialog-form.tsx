@@ -12,6 +12,7 @@ import {
   draftDefinition,
   draftType,
   isListFamily,
+  mergeDraftRefs,
   type DraftIssue,
   type FieldDraft,
 } from '../../lib/field-draft.js';
@@ -183,10 +184,15 @@ export function FieldDialogForm({
                 <CustomFieldEditor
                   definition={definition ?? preview}
                   value={draft.companyValue ?? undefined}
-                  refs={(definition ?? preview).companyRefs ?? []}
+                  refs={draft.companyRefs}
                   disabled={disabled}
                   variant="form"
-                  onCommit={(value) => onChange({ companyValue: value })}
+                  onCommit={(value, picked) =>
+                    onChange({
+                      companyValue: value,
+                      companyRefs: mergeDraftRefs(draft.companyRefs, picked),
+                    })
+                  }
                 />
               </Labeled>
             ))

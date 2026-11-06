@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ErrorCode } from '@nodus/contracts';
+import type { CustomFieldValues } from '@nodus/contracts';
 
 import type { Prisma } from '../../../generated/prisma/client.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
@@ -57,6 +58,9 @@ export class LetterFormApplier {
       input.registration,
       actor,
       today,
+      // Значения, поставленные PATCH до регистрации, — база: окно их
+      // перекрывает, умолчания заполняют только пустое (#646).
+      (letter.customFields ?? {}) as CustomFieldValues,
     );
     // «Основной документ письма» (#56): у письма с файлами-кандидатами один
     // обязан быть выбран звездой — номер присваивается конкретному документу

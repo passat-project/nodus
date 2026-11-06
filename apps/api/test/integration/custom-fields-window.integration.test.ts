@@ -104,6 +104,23 @@ describe.skipIf(!process.env.DATABASE_URL)(
         select: { customFields: true },
       });
       expect(counterpartyRow.customFields).not.toHaveProperty(field.id);
+
+      // §6-7 матрицы: удалённый атрибут не блокирует переход. Форма окна
+      // всё ещё ссылается на `cf.<id>` — исполнение толерантно (ADR-0029).
+      await cf.startTask(taskId);
+      const button = z
+        .array(workflowTransitionSchema)
+        .parse(await (await fx.api(admin, 'GET', `/tasks/${taskId}/transitions`)).json())
+        .find((candidate) => candidate.name === 'Завершить')!;
+      const done = await fx.api(admin, 'POST', `/tasks/${taskId}/transitions/${button.id}`, {
+        body: { form: {} },
+        key: `it-cf-del-transition-${fx.runId}`,
+      });
+      expect(done.status, await done.clone().text()).toBe(200);
+      // Переход прошёл, несмотря на мёртвый ключ в форме окна.
+      expect(
+        executeTransitionResultSchema.parse(await done.json()).task.stage.systemState,
+      ).not.toBe('active');
     });
 
     it('форма создания непубликуемого черновика видна в usage (Review Focus §9 #631)', async () => {

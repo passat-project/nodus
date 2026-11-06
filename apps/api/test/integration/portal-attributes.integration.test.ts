@@ -50,6 +50,20 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).toBeTruthy();
     });
 
+    it('параллельные одноимённые правки: один 200, второй 409 с suggestion', async () => {
+      const first = await cf.createField({ type: 'text', name: `Правка A ${cf.fx.runId}` });
+      const second = await cf.createField({ type: 'text', name: `Правка B ${cf.fx.runId}` });
+      const name = `Правка общая ${cf.fx.runId}`;
+      const patch = (id: string) =>
+        cf.fx.api(cf.admin, 'PATCH', `/custom-fields/definitions/${id}`, { body: { name } });
+      const [one, two] = await Promise.all([patch(first.id), patch(second.id)]);
+      expect([one.status, two.status].sort()).toEqual([200, 409]);
+      const conflict = one.status === 409 ? one : two;
+      const parsed = apiErrorResponseSchema.parse(await conflict.json());
+      expect(parsed.code).toBe(ErrorCode.CUSTOM_FIELD_NAME_TAKEN);
+      expect(parsed.details).toMatchObject({ suggestion: { name } });
+    });
+
     it('ссылка на конфиденциальную задачу: участник ставит, не-участник — 422 not_found', async () => {
       const field = await cf.createField({ type: 'task', name: `Связанная задача ${cf.fx.runId}` });
       const task = await cf.createTask(`Конфиденциальная ${cf.fx.runId}`);
@@ -118,11 +132,24 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       const bobCanSee = await cf.fx.api(cf.plain, 'GET', `/tasks/${secret}`);
       expect(bobCanSee.status).toBe(404);
-      // Прямая проверка refs гидратора — через свою задачу боба со ссылкой
-      // на скрытую: значение ставит admin, а refs собираются для bob через
-      // окно его задачи… здесь проще прямой вызов порта невозможен без
-      // приложения — покрыто юнит-тестом гидратора; здесь фиксируем
-      // недоступность самой цели (404 без оракула секретности).
+      // Полный сценарий §6-4: ссылка стоит в задаче, которую bob видит;
+      // значение ставит admin, refs собираются глазами bob — имя скрыто,
+      // id не скрывается (значение уже стоит у записи).
+      const own = await cf.fx.api(cf.admin, 'POST', '/tasks', {
+        body: { title: `Задача боба refs ${cf.fx.runId}`, assigneeId: cf.plain.id },
+      });
+      expect(own.status, await own.clone().text()).toBe(201);
+      const ownId = ((await own.json()) as { id: string }).id;
+      cf.taskIds.push(ownId);
+      const setByAdmin = await cf.fx.api(cf.admin, 'PATCH', `/tasks/${ownId}`, {
+        body: { customFields: { [field.id]: secret } },
+      });
+      expect(setByAdmin.status, await setByAdmin.clone().text()).toBe(200);
+      const bobDetail = taskDetailSchema.parse(
+        await (await cf.fx.api(cf.plain, 'GET', `/tasks/${ownId}`)).json(),
+      );
+      const bobRef = bobDetail.customFieldRefs.find((entry) => entry.id === secret);
+      expect(bobRef).toMatchObject({ kind: 'task', name: null, archived: false });
     });
 
     it('глобальная переменная: PUT×2 — одна строка, чтение всем, не-глобальному 422', async () => {
@@ -135,6 +162,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         cf.fx.api(cf.admin, 'PUT', `/custom-fields/definitions/${global.id}/company-value`, {
           body: { value },
         });
+      // Пустое глобальное значение — DTO null (Review Focus §9, формулы #632).
+      const before = await cf.fx.api(cf.admin, 'GET', '/custom-fields/definitions?module=company');
+      const beforeList = z
+        .array(z.object({ id: z.uuid(), companyValue: z.number().nullable() }))
+        .parse(await before.json());
+      expect(beforeList.find((entry) => entry.id === global.id)?.companyValue).toBeNull();
       expect((await put(14)).status).toBe(200);
       expect((await put(21)).status).toBe(200);
 
@@ -148,9 +181,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const asPlain = await cf.fx.api(cf.plain, 'GET', '/custom-fields/definitions?module=company');
       expect(asPlain.status).toBe(200);
       const list = z
-        .array(z.object({ companyValue: z.number().nullable() }))
+        .array(z.object({ id: z.uuid(), companyValue: z.number().nullable() }))
         .parse(await asPlain.json());
-      expect(list.some((entry) => entry.companyValue === 21)).toBe(true);
+      expect(list.find((entry) => entry.id === global.id)?.companyValue).toBe(21);
 
       // Не-глобальному значение нельзя.
       const plain = await cf.createField({ type: 'number', name: `Обычная ${cf.fx.runId}` });
@@ -162,7 +195,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
           body: { value: 1 },
         },
       );
-      expect([400, 422]).toContain(rejected.status);
+      expect(rejected.status, await rejected.clone().text()).toBe(422);
+      expect(apiErrorResponseSchema.parse(await rejected.json()).code).toBe(
+        ErrorCode.CUSTOM_FIELD_VALUE_INVALID,
+      );
     });
 
     it('обязательный слот формы типа: создание без значения и очистка — 422 PROJECT_FIELDS_REQUIRED', async () => {

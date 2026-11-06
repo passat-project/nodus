@@ -189,6 +189,7 @@ export function FieldDialog({
           await setCompanyValue.mutateAsync({
             fieldId: saved.id,
             value: draft.companyValue,
+            refs: draft.companyRefs,
           });
         }
         onSaved(saved.id);
@@ -209,7 +210,11 @@ export function FieldDialog({
       const body = patchBody(definition, draft, defaultValue);
       if (body) await updateField.mutateAsync({ id: definition.id, body });
       if (definition.isCompany && companyValueChanged(definition, draft)) {
-        await setCompanyValue.mutateAsync({ fieldId: definition.id, value: draft.companyValue });
+        await setCompanyValue.mutateAsync({
+          fieldId: definition.id,
+          value: draft.companyValue,
+          refs: draft.companyRefs,
+        });
       }
       onSaved(definition.id);
     } catch (caught) {

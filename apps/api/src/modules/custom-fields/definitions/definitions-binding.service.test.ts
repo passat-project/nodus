@@ -203,6 +203,28 @@ describe('DefinitionsBindingService.unbind (#631, О3 — снятие всег�
       ROW.id,
       'actor-1',
       expect.anything(),
+      [],
+    );
+  });
+
+  it('отвязка одного типа сохраняет слот у маршрутов оставшегося типа (#646)', async () => {
+    const { service, definitions, processTypeCleaner } = makeService();
+    definitions.findById.mockResolvedValue(
+      row({
+        bindings: [
+          { targetKind: 'process_type', targetId: 't-2' },
+          { targetKind: 'project_type', targetId: 'pt-1' },
+        ],
+      }),
+    );
+    await service.unbind(ROW.id, 'process-type', 't-1', 'actor-1');
+    // keepTypeIds — типы, у которых привязка ещё есть: их маршруты слот
+    // сохраняют, иначе отвязка от одного типа снимала бы поле у соседнего.
+    expect(processTypeCleaner.removeFieldFromCreationForms).toHaveBeenCalledWith(
+      ROW.id,
+      'actor-1',
+      expect.anything(),
+      ['t-2'],
     );
   });
 

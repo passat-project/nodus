@@ -38,9 +38,17 @@ export function CustomFieldChecks({
       bindingsOf(definition).processTypeIds.includes(typeId) ||
       isSelected(definition),
   );
+  // Удалённый атрибут: в реестре его уже нет, но ключ остался в документе
+  // маршрута — публикация блокируется `custom_field_unknown`, а снять его
+  // было негде. Показываем строку «Атрибут удалён» с активным флажком (#646).
+  const knownIds = new Set(data.map((definition) => definition.id));
+  const unknown = selected.filter((key) => {
+    const id = customFieldIdOfKey(key);
+    return id !== null && !knownIds.has(id);
+  });
   const atLimit = selected.length >= limit;
 
-  if (shown.length === 0) {
+  if (shown.length === 0 && unknown.length === 0) {
     return (
       <div className="flex flex-col gap-1">
         <span className="text-xs font-medium text-muted-foreground">
@@ -75,6 +83,16 @@ export function CustomFieldChecks({
           </label>
         );
       })}
+      {unknown.map((key) => (
+        <label key={key} className="flex items-center gap-2 text-sm">
+          <Checkbox
+            checked
+            disabled={disabled}
+            onCheckedChange={() => onToggle(key as CustomFieldKey)}
+          />
+          <span className="text-muted-foreground">{ui.automation.creation.unknownAttribute}</span>
+        </label>
+      ))}
       {atLimit ? <p className="text-xs text-muted-foreground">{limitHint}</p> : null}
     </div>
   );

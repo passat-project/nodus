@@ -22,8 +22,22 @@ export class ProcessTypeFormCleanerProvider implements ProcessTypeFormCleaner {
     fieldId: string,
     actorId: string | null,
     tx: TransactionClient,
+    keepTypeIds: readonly string[] = [],
   ): Promise<{ typeId: string; name: string }[]> {
     const key = customFieldKey(fieldId);
+    // Маршрут может обслуживать несколько типов (workflow_scheme_entries):
+    // слот снимаем только там, где привязки атрибута не осталось ни у одного
+    // из его типов (#646). Пустой keep — снять везде (удаление определения).
+    const keep =
+      keepTypeIds.length > 0
+        ? Prisma.sql`AND NOT EXISTS (
+            SELECT 1 FROM "workflow_scheme_entries" se
+            WHERE se."workflow_id" = w."id"
+              AND se."process_type_id" IN (${Prisma.join(
+                keepTypeIds.map((id) => Prisma.sql`${id}::uuid`),
+              )})
+          )`
+        : Prisma.empty;
     const changed = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
       UPDATE "workflows" w
       SET "creation" = jsonb_set(w."creation", '{fields}', (
@@ -35,6 +49,7 @@ export class ProcessTypeFormCleanerProvider implements ProcessTypeFormCleaner {
         AND w."creation"->'fields' @> jsonb_build_array(
           jsonb_build_object('key', ${key}::text)
         )
+        ${keep}
       RETURNING w."id"
     `);
     if (changed.length === 0) return [];

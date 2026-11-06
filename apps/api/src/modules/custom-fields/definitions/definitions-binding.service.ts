@@ -100,7 +100,13 @@ export class DefinitionsBindingService {
         // Отвязка от типа процесса снимает слот из формы создания маршрута
         // (#646): иначе required-слот отвязанного атрибута блокирует
         // создание задачи типа, а подать значение уже нельзя (not_in_type).
-        await this.processTypeCleaner.removeFieldFromCreationForms(id, actorId, tx);
+        // Слот маршрутов, у которых остался другой привязанный тип, не
+        // трогаем: иначе отвязка от одного типа снимала бы поле у соседнего.
+        const fresh = await this.definitions.findById(id, tx);
+        const keep = (fresh?.bindings ?? [])
+          .filter((binding) => binding.targetKind === 'process_type')
+          .map((binding) => binding.targetId);
+        await this.processTypeCleaner.removeFieldFromCreationForms(id, actorId, tx, keep);
       } else {
         await this.formCleaner.removeFieldFromForm(
           { kind: rowKind, id: targetId },

@@ -268,11 +268,17 @@ export async function cleanRemovedFormSlots(
   // Снятие привязки к типу процесса снимает и слот из формы создания
   // маршрута (#646): иначе required-слот отвязанного атрибута блокирует
   // создание задачи типа (значение подать нельзя — not_in_type).
+  // Слоты маршрутов, у которых остался привязанный тип, сохраняются.
   const removedProcessTypes = current.bindings.some(
     (binding) =>
       binding.targetKind === 'process_type' && !next.processTypeIds.includes(binding.targetId),
   );
   if (removedProcessTypes && processTypeCleaner) {
-    await processTypeCleaner.removeFieldFromCreationForms(current.id, actorId, tx);
+    await processTypeCleaner.removeFieldFromCreationForms(
+      current.id,
+      actorId,
+      tx,
+      next.processTypeIds,
+    );
   }
 }
