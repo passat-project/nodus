@@ -73,12 +73,20 @@ export function FieldDeleteDialog({
     const parts: string[] = [];
     if (values.task > 0) parts.push(`${values.task} ${plural(values.task, e.task)}`);
     if (values.letter > 0) parts.push(`${values.letter} ${plural(values.letter, e.letter)}`);
+    if (values.counterparty > 0) {
+      parts.push(`${values.counterparty} ${plural(values.counterparty, e.counterparty)}`);
+    }
     if (values.project > 0) parts.push(`${values.project} ${plural(values.project, e.project)}`);
     if (values.node > 0) parts.push(`${values.node} ${plural(values.node, e.node)}`);
     return parts;
   });
   const formsLines = usage.flatMap((query) =>
-    (query.data?.forms ?? []).map((form) => `${form.name} (${ui.customFields.modules[form.kind]})`),
+    (query.data?.forms ?? []).map(
+      (form) =>
+        `${form.name} (${ui.customFields.delete.formKinds[form.kind]}${
+          form.draft ? `, ${ui.customFields.delete.draft}` : ''
+        })`,
+    ),
   );
   const workflowsLines = usage.flatMap((query) => (query.data?.workflows ?? []).map((w) => w.name));
   const bindingsLines = usage.flatMap((query) => {

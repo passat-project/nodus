@@ -25,14 +25,11 @@ export function kindsCountLabel(count: number): string {
   return `${count} ${plural(count, ui.projects.schemasKindsCount)}`;
 }
 
-/** «Атрибутов нет» — отдельная константа: строка и панели, и теста. */
-const PROJECT_TYPE_FIELDS_EMPTY = 'Атрибутов нет';
-
 /** Сводка строки-ссылки «Атрибуты» (Р10 #631): «2 атрибута · обязательных: 1»
  *  или «Атрибутов нет» — счётчики слотов формы типа, как у вида папки. */
 export function fieldsSummary(type: ProjectType): string {
   const form = projectTypeFormOf(type);
-  if (form.fields.length === 0) return PROJECT_TYPE_FIELDS_EMPTY;
+  if (form.fields.length === 0) return ui.customFields.typeForm.empty;
   const required = form.fields.filter((slot) => slot.state === 'required').length;
   const parts = [`${form.fields.length} ${plural(form.fields.length, ui.nodeKinds.fieldsCount)}`];
   if (required > 0) {

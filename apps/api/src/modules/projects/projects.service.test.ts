@@ -110,7 +110,7 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
         kit.service.create(user(CREATOR), { name: 'x', typeId: TYPE } as never),
       ).rejects.toMatchObject({
         code: ErrorCode.PROJECT_FIELDS_REQUIRED,
-        details: { typeId: TYPE, fields: [CODE], reason: 'create' },
+        details: { typeId: TYPE, fields: [`cf.${CODE}`], reason: 'create' },
       });
       expect(repo.create).not.toHaveBeenCalled();
 

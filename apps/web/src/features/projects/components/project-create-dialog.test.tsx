@@ -151,29 +151,32 @@ describe('ProjectCreateDialog: атрибуты слотами формы тип
     typesData = TYPES;
   });
 
-  it('обязательный слот без значения блокирует «Создать», очистка возвращает блок', async () => {
+  it('обязательный слот без значения: ошибка у поля, после заполнения — отправка', async () => {
     render(
       <ProjectCreateDialog prefill={{ typeId: CONTRACT_TYPE_ID }} onClose={() => undefined} />,
     );
 
     const submit = screen.getByRole('button', { name: ui.projects.createSubmit });
-    // Название пустое и обязательный «Шифр» не заполнен.
+    // Название пустое — кнопка недоступна (обязательное имя окна).
     expect(submit).toHaveProperty('disabled', true);
 
     fireEvent.change(screen.getByLabelText(ui.projects.fieldName), {
       target: { value: 'Главный корпус' },
     });
-    expect(submit).toHaveProperty('disabled', true);
+    expect(submit).toHaveProperty('disabled', false);
 
-    // Обязательный слот «Шифр» — обычный атрибут: ввод + Enter.
+    // Обязательный слот «Шифр» пуст: клик показывает ошибку У ПОЛЯ (§4c),
+    // мутации нет — молчаливой блокировки кнопки больше нет (#646).
+    fireEvent.click(submit);
+    await waitFor(() => expect(screen.getByText(ui.structure.requiredEmpty)).toBeTruthy());
+    expect(createMutate).not.toHaveBeenCalled();
+
+    // Заполнили шифр — ошибка исчезает, отправка проходит.
     fireEvent.change(screen.getByLabelText('Шифр'), { target: { value: '22-01' } });
     fireEvent.keyDown(screen.getByLabelText('Шифр'), { key: 'Enter' });
-    await waitFor(() => expect(submit).toHaveProperty('disabled', false));
-
-    // Очистка шифра снова блокирует отправку (значение уходит null).
-    fireEvent.change(screen.getByLabelText('Шифр'), { target: { value: '' } });
-    fireEvent.keyDown(screen.getByLabelText('Шифр'), { key: 'Enter' });
-    await waitFor(() => expect(submit).toHaveProperty('disabled', true));
+    await waitFor(() => expect(screen.queryByText(ui.structure.requiredEmpty)).toBeNull());
+    fireEvent.click(submit);
+    await waitFor(() => expect(createMutate).toHaveBeenCalled());
   });
 
   it('значения слотов едут в customFields, видимость — из настроек портала', async () => {

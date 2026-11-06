@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
-import type { ProjectType, ProjectTypeForm, ProjectTypeUpdateBody } from '@nodus/contracts';
+import {
+  projectTypeFormOf,
+  type ProjectType,
+  type ProjectTypeForm,
+  type ProjectTypeUpdateBody,
+} from '@nodus/contracts';
 
 import { PrismaService } from '../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../core/database/transaction-runner.js';
@@ -11,7 +16,6 @@ const typeSelect = {
   name: true,
   icon: true,
   color: true,
-  codeField: true,
   form: true,
   kindIds: true,
   archivedAt: true,
@@ -30,8 +34,9 @@ export class ProjectTypesRepository {
       icon: row.icon as ProjectType['icon'],
       color: row.color as ProjectType['color'],
       // Слоты атрибутов типа (Р10 #631): слот «Шифр» занял место политики
-      // codeField; колонка code_field заморожена (не читается).
-      form: (row.form ?? { fields: [] }) as ProjectTypeForm,
+      // codeField; колонка code_field заморожена (не читается). Чтение
+      // толерантное: битая форма → умолчание, а не TypeError (#646).
+      form: projectTypeFormOf(row),
       kindIds: Array.isArray(row.kindIds) ? (row.kindIds as string[]) : null,
       archivedAt: row.archivedAt?.toISOString() ?? null,
     };
@@ -55,13 +60,16 @@ export class ProjectTypesRepository {
   }
 
   /** Тип без фильтра архива: правка полей проекта живёт и у архивного типа. */
-  async findById(id: string): Promise<ProjectType | null> {
-    const row = await this.prisma.projectType.findUnique({ select: typeSelect, where: { id } });
+  async findById(id: string, tx?: TransactionClient): Promise<ProjectType | null> {
+    const row = await (tx ?? this.prisma).projectType.findUnique({
+      select: typeSelect,
+      where: { id },
+    });
     return row ? this.toDto(row) : null;
   }
 
-  async nameTaken(name: string, excludeId?: string): Promise<boolean> {
-    const row = await this.prisma.projectType.findFirst({
+  async nameTaken(name: string, excludeId?: string, tx?: TransactionClient): Promise<boolean> {
+    const row = await (tx ?? this.prisma).projectType.findFirst({
       select: { id: true },
       where: { name, ...(excludeId ? { id: { not: excludeId } } : {}) },
     });
@@ -103,6 +111,58 @@ export class ProjectTypesRepository {
     if (result.count === 0) return null;
     const row = await tx.projectType.findUnique({ select: typeSelect, where: { id } });
     return row ? this.toDto(row) : null;
+  }
+
+  /** Advisory-лок справочника типов на транзакцию (#631 Р10): форма типа
+   *  и привязки атрибутов сериализуются между собой и с уборкой значений. */
+  async lockForms(tx: TransactionClient): Promise<void> {
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('nodus:project_types'))`);
+  }
+
+  /** Убрать атрибут из формы одного типа (unbind, Р3): идемпотентно.
+   *  Слот формы места и есть привязка — снятие привязки чистит слот. */
+  async removeFieldFromForm(
+    tx: TransactionClient,
+    typeId: string,
+    fieldId: string,
+  ): Promise<boolean> {
+    const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
+      UPDATE "project_types"
+      SET "form" = jsonb_set(COALESCE("form", '{}'::jsonb), '{fields}', (
+        SELECT COALESCE(jsonb_agg(e ORDER BY ord), '[]'::jsonb)
+        FROM jsonb_array_elements(COALESCE("form"->'fields', '[]'::jsonb))
+             WITH ORDINALITY AS t(e, ord)
+        WHERE e->>'fieldId' <> ${fieldId}::text
+      )),
+      "updated_at" = CURRENT_TIMESTAMP
+      WHERE "id" = ${typeId}::uuid
+        AND COALESCE("form"->'fields', '[]'::jsonb)
+            @> jsonb_build_array(jsonb_build_object('fieldId', ${fieldId}::text))
+      RETURNING "id"
+    `);
+    return rows.length > 0;
+  }
+
+  /** Убрать атрибут из форм всех типов (удаление определения, #631):
+   *  идемпотентно, возвращает изменённые типы (id + имя) — обработчик
+   *  эмитит `project.type_changed` на каждый (#646). */
+  async removeFieldFromForms(
+    tx: TransactionClient,
+    fieldId: string,
+  ): Promise<{ id: string; name: string }[]> {
+    return tx.$queryRaw<{ id: string; name: string }[]>(Prisma.sql`
+      UPDATE "project_types"
+      SET "form" = jsonb_set(COALESCE("form", '{}'::jsonb), '{fields}', (
+        SELECT COALESCE(jsonb_agg(e ORDER BY ord), '[]'::jsonb)
+        FROM jsonb_array_elements(COALESCE("form"->'fields', '[]'::jsonb))
+             WITH ORDINALITY AS t(e, ord)
+        WHERE e->>'fieldId' <> ${fieldId}::text
+      )),
+      "updated_at" = CURRENT_TIMESTAMP
+      WHERE COALESCE("form"->'fields', '[]'::jsonb)
+            @> jsonb_build_array(jsonb_build_object('fieldId', ${fieldId}::text))
+      RETURNING "id", "name"
+    `);
   }
 
   async setArchived(

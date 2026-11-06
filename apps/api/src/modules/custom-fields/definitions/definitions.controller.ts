@@ -76,8 +76,9 @@ export class DefinitionsController {
       pipes: [new ZodValidationPipe(listCustomFieldsQuerySchema)],
     })
     query: ListCustomFieldsQuery,
+    @GetUser() actor: AuthUser,
   ): Promise<CustomFieldDefinition[]> {
-    return this.definitions.list(query.module ?? null);
+    return this.definitions.list(query.module ?? null, actor);
   }
 
   @Post()
@@ -223,7 +224,7 @@ export class DefinitionsController {
     dto: CustomFieldCompanyValueBody,
     @GetUser() actor: AuthUser,
   ): Promise<CustomFieldDefinition> {
-    return this.definitions.setCompanyValue(id, dto.value, actor.id);
+    return this.definitions.setCompanyValue(id, dto.value, actor);
   }
 
   @Patch(':id')

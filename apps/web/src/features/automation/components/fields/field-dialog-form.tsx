@@ -12,12 +12,14 @@ import {
   draftDefinition,
   draftType,
   isListFamily,
+  mergeDraftRefs,
   type DraftIssue,
   type FieldDraft,
 } from '../../lib/field-draft.js';
 import { familyModifier, modifierOf } from '../../lib/field-type-families.js';
 import { CustomFieldEditor } from '../../../../shared/custom-fields/value-editor.js';
 import { FieldDefaultValue } from './field-default-value.js';
+import { KindOption } from './field-kind-option.js';
 import { FieldOptionsEditor } from './field-options-editor.js';
 import { FieldSettings, SettingRow } from './field-settings.js';
 import { FieldUsagePicker } from './field-usage-picker.js';
@@ -40,58 +42,6 @@ function Labeled({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-/** Радиострока вида использования (Р7): атрибут записей / глобальная. */
-function KindOption({
-  title,
-  hint,
-  on,
-  disabled,
-  onSelect,
-}: {
-  title: string;
-  hint: string;
-  on: boolean;
-  disabled: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={on}
-      disabled={disabled}
-      onClick={onSelect}
-      className={cn(
-        'flex w-full items-start gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors',
-        on ? 'border-primary/50 bg-accent/40' : 'border-input hover:bg-accent/25',
-        disabled && 'cursor-not-allowed opacity-60',
-      )}
-    >
-      <span
-        aria-hidden
-        className={cn(
-          'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border',
-          on ? 'border-primary' : 'border-input',
-        )}
-      >
-        {on ? <span className="size-2 rounded-full bg-primary" /> : null}
-      </span>
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-sm text-foreground">{title}</span>
-        <span className="text-xs break-words text-muted-foreground">{hint}</span>
-      </span>
-    </button>
-  );
-}
-
-/**
- * Правая колонка окна атрибута (#631): «Основное» (название, подсказка),
- * «Вид использования» (атрибут записей с «Где используется» / глобальная
- * переменная со значением), «Настройки» типа, «Варианты» списка,
- * «Значение по умолчанию», «Отчёты». Секции разделяются отступами, не
- * линиями (канон сепараторов). Тип не выбран — честная заглушка на месте
- * формы (высота окна не меняется).
- */
 export function FieldDialogForm({
   draft,
   definition,
@@ -140,7 +90,10 @@ export function FieldDialogForm({
   const hasSettings =
     family !== null &&
     (familyModifier(family) !== null || family === 'number' || family === 'money');
-  const kindLocked = definition !== null && definition.isCompany;
+  // Вид использования фиксируется при создании: PATCH не меняет isCompany,
+  // а переключение записи в глобальную молча сняло бы привязки и не сохранило
+  // значение (#646). Для нового атрибута выбор доступен.
+  const kindLocked = definition !== null;
 
   return (
     <div className="flex flex-col gap-5 pb-1">
@@ -185,7 +138,11 @@ export function FieldDialogForm({
       </Section>
 
       <Section label={ui.customFields.dialog.kind}>
-        <div className="flex flex-col gap-1.5">
+        <div
+          className="flex flex-col gap-1.5"
+          role="radiogroup"
+          aria-label={ui.customFields.dialog.kind}
+        >
           <KindOption
             title={ui.customFields.dialog.kindRecord}
             hint={ui.customFields.dialog.kindRecordHint}
@@ -198,24 +155,47 @@ export function FieldDialogForm({
             hint={ui.customFields.dialog.kindCompanyHint}
             on={draft.isCompany}
             disabled={disabled || kindLocked}
-            onSelect={() => onChange({ isCompany: true, bindings: EMPTY_CUSTOM_FIELD_BINDINGS })}
+            onSelect={() =>
+              onChange({
+                isCompany: true,
+                bindings: EMPTY_CUSTOM_FIELD_BINDINGS,
+                defaultMode: 'none',
+                defaultValue: null,
+                defaultRefs: [],
+                defaultOptionIds: [],
+              })
+            }
           />
         </div>
         {draft.isCompany
-          ? preview && (
+          ? preview &&
+            (definition === null && isListFamily(draft.family) ? (
+              // Варианты списка создаются вместе с атрибутом — до сохранения
+              // серверных id нет, выбирать не из чего (#646).
+              <p className="text-xs text-muted-foreground">
+                {ui.customFields.dialog.companyValueAfterSave}
+              </p>
+            ) : (
               <Labeled label={ui.customFields.dialog.companyValue}>
                 {/* Редактор form-варианта — сам контрол с рамкой: обёртка
-                    давала двойной бордюр (рамка в рамке). */}
+                    давала двойной бордюр (рамка в рамке). У существующего
+                    атрибута берём настоящее определение (справочник и имена
+                    ссылок), у нового — черновик. */}
                 <CustomFieldEditor
-                  definition={preview}
+                  definition={definition ?? preview}
                   value={draft.companyValue ?? undefined}
-                  refs={[]}
+                  refs={draft.companyRefs}
                   disabled={disabled}
                   variant="form"
-                  onCommit={(value) => onChange({ companyValue: value })}
+                  onCommit={(value, picked) =>
+                    onChange({
+                      companyValue: value,
+                      companyRefs: mergeDraftRefs(draft.companyRefs, picked),
+                    })
+                  }
                 />
               </Labeled>
-            )
+            ))
           : null}
       </Section>
 

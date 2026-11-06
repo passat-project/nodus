@@ -24,6 +24,8 @@ export const projectsKeys = {
   settings: () => [...projectsKeys.all, 'settings'] as const,
   journal: (params: Record<string, string | undefined>) =>
     [...projectsKeys.all, 'journal', params] as const,
+  /** Префикс всех журналов: событие проекта перечитывает любой фильтр. */
+  journals: () => [...projectsKeys.all, 'journal'] as const,
   detail: (id: string) => [...projectsKeys.all, 'detail', id] as const,
   members: (id: string) => [...projectsKeys.all, 'members', id] as const,
   history: (id: string) => [...projectsKeys.all, 'history', id] as const,

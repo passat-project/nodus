@@ -47,7 +47,7 @@ const state = vi.hoisted(() => ({
 
 function usageOf(extra: Partial<CustomFieldUsage>): CustomFieldUsage {
   return {
-    values: { task: 0, letter: 0, project: 0, node: 0 },
+    values: { task: 0, letter: 0, counterparty: 0, project: 0, node: 0 },
     forms: [],
     workflows: [],
     bindings: { processTypes: [], projectTypes: [], nodeKinds: [] },
@@ -121,8 +121,13 @@ describe('окно удаления атрибута: последствия и 
 
   it('агрегат последствий: значения, формы, маршруты, привязки, глобальное', () => {
     state.usage[FIELD.id] = {
-      values: { task: 2, letter: 5, project: 1, node: 0 },
-      forms: [{ kind: 'task', name: 'Задание сметчикам' }],
+      values: { task: 2, letter: 5, counterparty: 4, project: 1, node: 0 },
+      forms: [
+        { kind: 'task', name: 'Задание сметчикам', draft: false },
+        { kind: 'letter', name: 'Регистрация письма', draft: true },
+        { kind: 'project_type', name: 'Договорная', draft: false },
+        { kind: 'node_kind', name: 'Комплект', draft: false },
+      ],
       workflows: [{ id: '90000000-0000-4000-8000-000000000001', name: 'Стандартный маршрут' }],
       bindings: {
         processTypes: [{ id: '20000000-0000-4000-8000-000000000901', name: 'Стандартный' }],
@@ -138,8 +143,12 @@ describe('окно удаления атрибута: последствия и 
 
     expect(screen.getByText('2 задачи')).toBeTruthy();
     expect(screen.getByText('5 писем')).toBeTruthy();
+    expect(screen.getByText('4 контрагента')).toBeTruthy();
     expect(screen.getByText('1 проект')).toBeTruthy();
     expect(screen.getByText('Задание сметчикам (Задачи)')).toBeTruthy();
+    expect(screen.getByText('Регистрация письма (Письма, черновик)')).toBeTruthy();
+    expect(screen.getByText('Договорная (Проекты)')).toBeTruthy();
+    expect(screen.getByText('Комплект (Папки)')).toBeTruthy();
     expect(screen.getByText('Стандартный маршрут')).toBeTruthy();
     expect(screen.getByText('Стандартный')).toBeTruthy();
     expect(screen.getByText('Договорная')).toBeTruthy();
@@ -192,7 +201,9 @@ describe('окно удаления атрибута: последствия и 
     spies.remove.mockImplementation((_ids: string[], opts?: { onSuccess?: (n: number) => void }) =>
       opts?.onSuccess?.(_ids.length),
     );
-    state.usage[FIELD.id] = { forms: [{ kind: 'letter', name: 'Регистрация письма' }] };
+    state.usage[FIELD.id] = {
+      forms: [{ kind: 'letter', name: 'Регистрация письма', draft: false }],
+    };
     const { onDeleted } = renderDialog([FIELD, SECOND]);
 
     expect(screen.getByText(ui.customFields.delete.titleMany)).toBeTruthy();

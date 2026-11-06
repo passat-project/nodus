@@ -18,6 +18,10 @@ function makeHandler() {
     lockForms: vi.fn(async () => undefined),
     removeFieldFromForms: vi.fn(async () => [{ id: 'kind-1', name: 'Комплект' }]),
   };
+  const types = {
+    lockForms: vi.fn(async () => undefined),
+    removeFieldFromForms: vi.fn(async () => [{ id: 'type-1', name: 'Договор' }]),
+  };
   const txRunner = { run: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})) };
   const eventBus = { emit: vi.fn(async () => undefined) };
   const logger = { setContext: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -27,9 +31,10 @@ function makeHandler() {
     projects as never,
     nodes as never,
     kinds as never,
+    types as never,
     logger as never,
   );
-  return { handler, projects, nodes, kinds, eventBus };
+  return { handler, projects, nodes, kinds, types, eventBus };
 }
 
 function event(payload: Record<string, unknown>) {
@@ -44,12 +49,21 @@ function event(payload: Record<string, unknown>) {
 
 describe('ProjectFieldValuesCleanupHandler (#556, Р11; #631 — без областей)', () => {
   it('значения папок и формы видов, событие на каждый вид + проекты тем же событием', async () => {
-    const { handler, nodes, kinds, eventBus, projects } = makeHandler();
+    const { handler, nodes, kinds, types, eventBus, projects } = makeHandler();
     await handler.handle(event({ definitionId: FIELD, change: 'deleted' }));
     expect(projects.removeCustomFieldValues).toHaveBeenCalledWith({}, FIELD);
     expect(nodes.removeCustomFieldValues).toHaveBeenCalledWith({}, FIELD);
     expect(kinds.lockForms).toHaveBeenCalledWith({});
     expect(kinds.removeFieldFromForms).toHaveBeenCalledWith({}, FIELD);
+    // Формы типов проектов — тоже место привязки (#646).
+    expect(types.lockForms).toHaveBeenCalledWith({});
+    expect(types.removeFieldFromForms).toHaveBeenCalledWith({}, FIELD);
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      {},
+      PROJECT_EVENTS.TYPE_CHANGED,
+      { typeId: 'type-1', change: 'updated', fields: ['form'] },
+      { actorId: 'admin-1', aggregateType: 'project_type', aggregateId: 'type-1' },
+    );
     expect(eventBus.emit).toHaveBeenCalledWith(
       {},
       PROJECT_EVENTS.NODE_KIND_CHANGED,
@@ -67,16 +81,18 @@ describe('ProjectFieldValuesCleanupHandler (#556, Р11; #631 — без обла
   });
 
   it('чужие события и области игнорируются', async () => {
-    const { handler, projects, nodes } = makeHandler();
+    const { handler, projects, nodes, types } = makeHandler();
     await handler.handle(event({ definitionId: FIELD, change: 'updated' }));
     await handler.handle(event({ definitionId: 'не-uuid', change: 'deleted' }));
     expect(projects.removeCustomFieldValues).not.toHaveBeenCalled();
     expect(nodes.removeCustomFieldValues).not.toHaveBeenCalled();
+    expect(types.removeFieldFromForms).not.toHaveBeenCalled();
   });
 
   it('повторная доставка идемпотентна: те же запросы, событий нет без изменённых видов', async () => {
-    const { handler, kinds, eventBus } = makeHandler();
+    const { handler, kinds, types, eventBus } = makeHandler();
     kinds.removeFieldFromForms.mockResolvedValue([]);
+    types.removeFieldFromForms.mockResolvedValue([]);
     await handler.handle(event({ definitionId: FIELD, change: 'deleted' }));
     await handler.handle(event({ definitionId: FIELD, change: 'deleted' }));
     expect(kinds.removeFieldFromForms).toHaveBeenCalledTimes(2);

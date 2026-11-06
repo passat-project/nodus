@@ -56,7 +56,7 @@ function applierWith(attachments: { id: string; role: string; inline: boolean }[
     attached as never,
     { validate: vi.fn(async () => []) } as never,
   );
-  return { applier, repo };
+  return { applier, repo, validator };
 }
 
 describe('регистрация требует основной документ («Основной документ письма» #56)', () => {
@@ -105,6 +105,24 @@ describe('регистрация требует основной докумен�
       .apply({} as never, row, { id: 'u', permissions: [] }, { registration: {} })
       .catch((e) => e);
     expect(error).toBeInstanceOf(DomainException);
+  });
+});
+
+describe('значения атрибутов, поставленные до регистрации (#646)', () => {
+  it('текущие значения письма уходят базой в окно регистрации', async () => {
+    const { applier, validator } = applierWith([]);
+    const letter = {
+      ...row,
+      customFields: { 'field-a': 'поставлено PATCH' },
+    } as unknown as LetterDetailRow;
+    await applier.apply({} as never, letter, { id: 'u', permissions: [] }, { registration: {} });
+    expect(validator.registration).toHaveBeenCalledWith(
+      letter.typeId,
+      {},
+      { id: 'u', permissions: [] },
+      expect.any(String),
+      { 'field-a': 'поставлено PATCH' },
+    );
   });
 });
 

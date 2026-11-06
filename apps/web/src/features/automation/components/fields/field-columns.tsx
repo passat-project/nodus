@@ -1,5 +1,10 @@
 import { Info } from 'lucide-react';
-import type { CustomFieldDefinition, CustomFieldModule, CustomFieldValue } from '@nodus/contracts';
+import type {
+  CustomFieldDefinition,
+  CustomFieldModule,
+  CustomFieldRef,
+  CustomFieldValue,
+} from '@nodus/contracts';
 import { SystemDictionary, ui } from '@nodus/contracts';
 
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
@@ -7,7 +12,7 @@ import { useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useDictionaryItems } from '../../../../shared/dictionaries/queries.js';
 import { useProcessTypes } from '../../api/automation-api.js';
 import { CustomFieldTypeIcon } from '../../../../shared/custom-fields/field-type-icon.js';
-import { CustomFieldEditor } from '../../../../shared/custom-fields/value-editor.js';
+import { CompanyValueEditor } from './field-company-value-editor.js';
 import { CustomFieldValueView, refsById } from '../../../../shared/custom-fields/value-view.js';
 import { formatDateTimeShort, plural } from '../../../../shared/lib/format.js';
 import { monoCell } from '../../../../shared/ui/person-cell.js';
@@ -158,7 +163,11 @@ function UsageCell({ definition }: { definition: CustomFieldDefinition }) {
  */
 export function fieldColumns(
   canManage: boolean,
-  onCompanyValueCommit: (definition: CustomFieldDefinition, value: CustomFieldValue | null) => void,
+  onCompanyValueCommit: (
+    definition: CustomFieldDefinition,
+    value: CustomFieldValue | null,
+    refs?: readonly CustomFieldRef[],
+  ) => void,
 ): DataTableField<CustomFieldDefinition>[] {
   return [
     {
@@ -265,29 +274,6 @@ export function fieldColumns(
       sortValue: (definition) => definition.updatedAt,
     },
   ];
-}
-
-/** Инлайн-редактор значения глобальной (Р7): коммит уходит мутацией реестра
- *  (useSetCompanyValue в fields-tab), оптимистичный показ — из кэша. */
-function CompanyValueEditor({
-  definition,
-  canManage,
-  onCommit,
-}: {
-  definition: CustomFieldDefinition;
-  canManage: boolean;
-  onCommit: (definition: CustomFieldDefinition, value: CustomFieldValue | null) => void;
-}) {
-  return (
-    <CustomFieldEditor
-      definition={definition}
-      value={definition.companyValue ?? undefined}
-      refs={[]}
-      disabled={!canManage}
-      variant="inline"
-      onCommit={(value) => onCommit(definition, value)}
-    />
-  );
 }
 
 /** Фильтр-модули реестра: Все + модули «Где используется» (В6: «Реестры»

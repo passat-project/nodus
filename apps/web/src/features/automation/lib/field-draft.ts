@@ -65,6 +65,9 @@ export interface FieldDraft {
   isCompany: boolean;
   /** Значение глобальной переменной (грамматика типа); null — не задано. */
   companyValue: CustomFieldValue | null;
+  /** Ссылки выбранного значения глобальной — имена до ответа сервера
+   *  (иначе редактор показывает «Запись недоступна», #646). */
+  companyRefs: CustomFieldRef[];
   reportIndexed: boolean;
   /** «Где используется» (Р3): типы задач/писем, типы проектов, виды папок. */
   bindings: CustomFieldBindings;
@@ -83,6 +86,7 @@ export const emptyDraft: FieldDraft = {
   defaultOptionIds: [],
   isCompany: false,
   companyValue: null,
+  companyRefs: [],
   reportIndexed: false,
   bindings: EMPTY_CUSTOM_FIELD_BINDINGS,
 };
@@ -133,6 +137,7 @@ export function draftOf(
           : [],
     isCompany: definition.isCompany,
     companyValue: definition.companyValue,
+    companyRefs: [...(definition.companyRefs ?? [])],
     reportIndexed: definition.reportIndexed,
     bindings: {
       processTypeIds: [...definition.bindings.processTypeIds],
@@ -275,6 +280,17 @@ export function patchBody(
     body.bindings = draft.bindings;
   if (draft.reportIndexed !== definition.reportIndexed) body.reportIndexed = draft.reportIndexed;
   return Object.keys(body).length > 0 ? body : null;
+}
+
+/** Свежие ссылки значения глобальной поверх прежних (ключ `kind:id`):
+ *  выбранная запись должна показывать имя сразу, до ответа сервера (#646). */
+export function mergeDraftRefs(
+  base: readonly CustomFieldRef[],
+  picked?: readonly CustomFieldRef[],
+): CustomFieldRef[] {
+  const merged = new Map(base.map((ref) => [`${ref.kind}:${ref.id}`, ref]));
+  for (const ref of picked ?? []) merged.set(`${ref.kind}:${ref.id}`, ref);
+  return [...merged.values()];
 }
 
 /** Изменилось ли значение глобальной переменной (отдельный PUT, Р7). */

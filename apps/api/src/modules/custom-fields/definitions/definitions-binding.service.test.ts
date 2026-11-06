@@ -36,6 +36,7 @@ const ROW = row();
 function makeService() {
   const definitions = {
     findById: vi.fn(async (): Promise<FieldDefinitionRow | null> => ROW),
+    lockRegistry: vi.fn(async () => undefined),
     bindTarget: vi.fn(async () => undefined),
     unbindTarget: vi.fn(async () => true),
   };
@@ -56,6 +57,8 @@ function makeService() {
     nodeKinds: vi.fn(async () => [{ id: 'nk-1', name: 'Комплект', archived: true }]),
   };
   const logger = { setContext: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  const formCleaner = { removeFieldFromForm: vi.fn(async () => undefined) };
+  const processTypeCleaner = { removeFieldFromCreationForms: vi.fn(async () => []) };
   const service = new DefinitionsBindingService(
     definitions as never,
     mapper as never,
@@ -63,9 +66,11 @@ function makeService() {
     eventBus as never,
     catalog as never,
     targets as never,
+    formCleaner as never,
+    processTypeCleaner as never,
     logger as never,
   );
-  return { service, definitions, eventBus, catalog, targets };
+  return { service, definitions, eventBus, catalog, targets, formCleaner, processTypeCleaner };
 }
 
 describe('DefinitionsBindingService.bind (#631, Р3)', () => {
@@ -150,7 +155,7 @@ describe('DefinitionsBindingService.bind (#631, Р3)', () => {
     const { service, definitions } = makeService();
     definitions.findById.mockResolvedValue(row({ isCompany: true }));
     await expect(service.bind(ROW.id, 'process-type', 't-1', 'actor-1')).rejects.toMatchObject({
-      code: ErrorCode.VALIDATION_FAILED,
+      code: ErrorCode.CUSTOM_FIELD_BINDING_INVALID,
     });
     expect(definitions.bindTarget).not.toHaveBeenCalled();
   });
@@ -166,12 +171,19 @@ describe('DefinitionsBindingService.bind (#631, Р3)', () => {
 
 describe('DefinitionsBindingService.unbind (#631, О3 — снятие всегда разрешено)', () => {
   it('снятие пишется тем же kind и эмитит событие', async () => {
-    const { service, definitions, eventBus } = makeService();
+    const { service, definitions, eventBus, formCleaner } = makeService();
     await service.unbind(ROW.id, 'project-type', 'pt-1', 'actor-1');
     expect(definitions.unbindTarget).toHaveBeenCalledWith(
       ROW.id,
       'project_type',
       'pt-1',
+      expect.anything(),
+    );
+    // Слот формы места и есть привязка: unbind чистит слот (#646).
+    expect(formCleaner.removeFieldFromForm).toHaveBeenCalledWith(
+      { kind: 'project_type', id: 'pt-1' },
+      ROW.id,
+      'actor-1',
       expect.anything(),
     );
     expect(eventBus.emit).toHaveBeenCalledWith(
@@ -182,12 +194,49 @@ describe('DefinitionsBindingService.unbind (#631, О3 — снятие всег�
     );
   });
 
-  it('цель проверяется и на снятии: неизвестная — 404', async () => {
+  it('process-type — слот формы вида не трогается, чистится форма создания (#646)', async () => {
+    const { service, formCleaner, processTypeCleaner } = makeService();
+    await service.unbind(ROW.id, 'process-type', 't-1', 'actor-1');
+    expect(formCleaner.removeFieldFromForm).not.toHaveBeenCalled();
+    // Иначе required-слот отвязанного атрибута блокирует создание задачи.
+    expect(processTypeCleaner.removeFieldFromCreationForms).toHaveBeenCalledWith(
+      ROW.id,
+      'actor-1',
+      expect.anything(),
+      [],
+    );
+  });
+
+  it('отвязка одного типа сохраняет слот у маршрутов оставшегося типа (#646)', async () => {
+    const { service, definitions, processTypeCleaner } = makeService();
+    definitions.findById.mockResolvedValue(
+      row({
+        bindings: [
+          { targetKind: 'process_type', targetId: 't-2' },
+          { targetKind: 'project_type', targetId: 'pt-1' },
+        ],
+      }),
+    );
+    await service.unbind(ROW.id, 'process-type', 't-1', 'actor-1');
+    // keepTypeIds — типы, у которых привязка ещё есть: их маршруты слот
+    // сохраняют, иначе отвязка от одного типа снимала бы поле у соседнего.
+    expect(processTypeCleaner.removeFieldFromCreationForms).toHaveBeenCalledWith(
+      ROW.id,
+      'actor-1',
+      expect.anything(),
+      ['t-2'],
+    );
+  });
+
+  it('цель на снятии не проверяется: удалённая/архивная — идемпотентно (N-5 #646)', async () => {
     const { service, definitions } = makeService();
-    await expect(service.unbind(ROW.id, 'process-type', 't-x', 'actor-1')).rejects.toMatchObject({
-      code: ErrorCode.NOT_FOUND,
-    });
-    expect(definitions.unbindTarget).not.toHaveBeenCalled();
+    await service.unbind(ROW.id, 'process-type', 't-gone', 'actor-1');
+    expect(definitions.unbindTarget).toHaveBeenCalledWith(
+      ROW.id,
+      'process_type',
+      't-gone',
+      expect.anything(),
+    );
   });
 
   it('неизвестный атрибут — 404', async () => {

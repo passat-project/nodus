@@ -25,6 +25,9 @@ export const PROJECT_EVENTS = {
   /** Каталог видов папок (#556): форма и возможности вида изменились.
    *  Каталожное событие — gateway рассылает всем в presence (О6). */
   NODE_KIND_CHANGED: 'project.node_kind_changed',
+  /** Каталог типов проектов (#631, Р10): форма типа (слоты атрибутов),
+   *  название, значок, цвет, архив. Каталожное — рассылается всем. */
+  TYPE_CHANGED: 'project.type_changed',
 } as const;
 
 export type ProjectEventType = (typeof PROJECT_EVENTS)[keyof typeof PROJECT_EVENTS];
@@ -32,9 +35,24 @@ export type ProjectEventType = (typeof PROJECT_EVENTS)[keyof typeof PROJECT_EVEN
 /** Каталожные события проектов (ADR-0030 «Дополнение (#556)»): справочные
  *  данные без персональных данных и без привязки к проекту — рассылаются
  *  всем, как каталог атрибутов (`custom_field.*`). */
-export const PROJECT_CATALOG_EVENTS = [PROJECT_EVENTS.NODE_KIND_CHANGED] as const;
+export const PROJECT_CATALOG_EVENTS = [
+  PROJECT_EVENTS.NODE_KIND_CHANGED,
+  PROJECT_EVENTS.TYPE_CHANGED,
+] as const;
 
 export type ProjectCatalogEventType = (typeof PROJECT_CATALOG_EVENTS)[number];
+
+/** События проекта с адресной аудиторией (#646): gateway рассылает их в
+ *  user-комнаты участников, а не в общий presence — имя/шифр секретного
+ *  проекта не должны утекать всем. `audience` — служебное поле, клиенту
+ *  не уходит (снимает gateway). */
+export const PROJECT_AUDIENCE_EVENTS = [
+  PROJECT_EVENTS.CREATED,
+  PROJECT_EVENTS.UPDATED,
+  PROJECT_EVENTS.PARTICIPANTS_CHANGED,
+] as const;
+
+export type ProjectAudienceEventType = (typeof PROJECT_AUDIENCE_EVENTS)[number];
 
 export const projectCreatedPayloadSchema = z.object({
   projectId: z.uuid(),
@@ -49,6 +67,8 @@ export const projectCreatedPayloadSchema = z.object({
   typeId: z.uuid(),
   /** Наблюдатели, заданные при создании (просмотр без прав правки). */
   observerIds: z.array(z.uuid()).optional(),
+  /** Кому доставить событие (участники проекта); gateway снимает. */
+  audience: z.array(z.uuid()).optional(),
 });
 export type ProjectCreatedPayload = z.infer<typeof projectCreatedPayloadSchema>;
 
@@ -59,10 +79,14 @@ export const projectUpdatedPayloadSchema = z.object({
   projectId: z.uuid(),
   fields: z.array(z.string()),
   name: z.string().optional(),
+  /** Производный шифр (системный атрибут) — для колонок журнала/палитры. */
+  code: z.string().nullable().optional(),
   status: projectStatusSchema.optional(),
   clientId: z.uuid().nullable().optional(),
   /** Прежний заказчик — crm убирает строку использования при смене/снятии. */
   previousClientId: z.uuid().nullable().optional(),
+  /** Кому доставить событие (участники проекта); gateway снимает. */
+  audience: z.array(z.uuid()).optional(),
 });
 export type ProjectUpdatedPayload = z.infer<typeof projectUpdatedPayloadSchema>;
 
@@ -71,6 +95,8 @@ export type ProjectUpdatedPayload = z.infer<typeof projectUpdatedPayloadSchema>;
 export const projectParticipantsChangedPayloadSchema = z.object({
   projectId: z.uuid(),
   changedUserIds: z.array(z.uuid()),
+  /** Кому доставить событие (участники проекта); gateway снимает. */
+  audience: z.array(z.uuid()).optional(),
 });
 export type ProjectParticipantsChangedPayload = z.infer<
   typeof projectParticipantsChangedPayloadSchema
@@ -129,3 +155,12 @@ export const projectNodeKindChangedPayloadSchema = z.object({
   fields: z.array(z.string()),
 });
 export type ProjectNodeKindChangedPayload = z.infer<typeof projectNodeKindChangedPayloadSchema>;
+
+/** Тип проекта изменился (#631, Р10): форма-слоты, справочные поля, архив.
+ *  `form` в `fields` — слоты и привязки атрибутов перечитаны. */
+export const projectTypeChangedPayloadSchema = z.object({
+  typeId: z.uuid(),
+  change: z.enum(['created', 'updated', 'archived', 'restored']),
+  fields: z.array(z.string()),
+});
+export type ProjectTypeChangedPayload = z.infer<typeof projectTypeChangedPayloadSchema>;

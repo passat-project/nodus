@@ -38,7 +38,10 @@ interface Ctx {
   groups: { findActive: ReturnType<typeof vi.fn> };
   profiles: { filterActiveUserIds: ReturnType<typeof vi.fn> };
   types: { findById: ReturnType<typeof vi.fn> };
-  customFields: { prepareUpdate: ReturnType<typeof vi.fn> };
+  customFields: {
+    definitions: ReturnType<typeof vi.fn>;
+    prepareUpdate: ReturnType<typeof vi.fn>;
+  };
 }
 
 function makeCtx(): Ctx {
@@ -47,6 +50,7 @@ function makeCtx(): Ctx {
     profiles: { filterActiveUserIds: vi.fn(async (ids: string[]) => ids) },
     types: { findById: vi.fn(async () => ({ id: TYPE, name: 'Договор', form: { fields: [] } })) },
     customFields: {
+      definitions: vi.fn(async () => [{ id: 'x' }]),
       prepareUpdate: vi.fn(async () => ({ next: { x: 1 }, changes: [] as { fieldId: string }[] })),
     },
   };
@@ -136,6 +140,7 @@ describe('buildUpdatePatch (#52/#631)', () => {
         patch: { [CODE]: 'ПР-1', [CLIENT]: 'cp-1' },
         target: { kind: 'project_type', id: TYPE },
       }),
+      undefined,
     );
     expect(patch.customFields).toEqual({ x: 1 });
     expect(fields).toEqual([`cf.${CODE}`, `cf.${CLIENT}`]);

@@ -8,10 +8,17 @@ import {
   moveProjectNodeBodySchema,
   nodeFormKey,
   updateProjectNodeBodySchema,
+  type CustomFieldValues,
   type ProjectNode,
 } from '@nodus/contracts';
 
+import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
+import {
+  invalidMockValues,
+  withStaticDefaults,
+} from '../../../../shared/custom-fields/mocks/custom-fields-mock-utils.js';
 import { demoRefsForValues } from '../../../../shared/mocks/data/custom-fields-refs.js';
+import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
 import { findDemoProjectRow } from '../../../../shared/mocks/data/projects.js';
 import { canSeeProject } from '../../../../shared/mocks/data/project-views.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
@@ -22,60 +29,28 @@ import {
   descendantIdsOf,
   directTasksOf,
   findDemoNodeRow,
-  nodeCodeTaken,
   nodeDepthOf,
   nodesOfProject,
   projectNodeDto,
   type DemoNodeRow,
 } from '../../../../shared/mocks/data/project-nodes.js';
 import {
+  appendNode,
   assertKindAlive,
   checkedParent,
   conflict,
   guardResponse,
   invalid,
   kindAllowedForProject,
+  codeOfValue,
   kindOf,
   manageableProject,
   nodeNotFound,
   ruleResponse,
   subtreeHeight,
+  valuesInvalid,
 } from './structure-mock-kit.js';
 import { createIssues, formOfKind, updateIssues } from './node-form-rules.js';
-
-/** Дерево папок проекта в мок-мире (#467, #556; ревизия #631): создание,
- *  пачка, правка (имя/вид/значения), перенос, удаление пустой. Код папки —
- *  атрибут «Код» (SYSTEM_FIELD_IDS.nodeCode): DTO-колонка `code` синхрон-
- *  зируется со значением атрибута. Правила формы вида — помощники
- *  контрактов (`node-form-rules.ts`), отказ мока = отказ сервера. */
-
-/** Код папки из значения атрибута «Код» (непустая строка или null). */
-function codeOfValue(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value : null;
-}
-
-function appendNode(
-  projectId: string,
-  parentId: string | null,
-  kindId: string,
-  name: string,
-  code: string | null,
-  customFields: DemoNodeRow['customFields'],
-): DemoNodeRow {
-  const row: DemoNodeRow = {
-    id: crypto.randomUUID(),
-    projectId,
-    parentId,
-    kindId,
-    name,
-    code,
-    customFields,
-    createdAt: new Date().toISOString(),
-  };
-  demoNodeRows.push(row);
-  return row;
-}
-
 export const structureNodeHandlers = [
   http.get('/api/v1/projects/:id/structure', ({ params }) => {
     const row = findDemoProjectRow(String(params.id));
@@ -109,13 +84,22 @@ export const structureNodeHandlers = [
         { status: 422 },
       );
     }
-    const rule = ruleResponse(createIssues(kind!, { customFields: body.customFields }));
-    if (rule) return rule;
-    // Код — атрибут «Код»; явный `body.code` (старый путь) важнее.
-    const code = body.code ?? codeOfValue(body.customFields?.[SYSTEM_FIELD_IDS.nodeCode]);
-    if (code && nodeCodeTaken(code, guard.row.id, null)) {
-      return conflict(ErrorCode.PROJECT_NODE_CODE_TAKEN, 'Node code is already taken');
+    // Legacy `code` переводится в атрибут «Код» только если слот есть в
+    // форме вида (как `withLegacyCode` сервера); явное customFields важнее.
+    const bound = definitionsForTarget(demoCustomFieldDefinitions, 'node', kind!.id);
+    const values = withStaticDefaults(bound, { ...(body.customFields ?? {}) });
+    if (
+      body.code != null &&
+      values[SYSTEM_FIELD_IDS.nodeCode] === undefined &&
+      formOfKind(kind!).fields.some((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)
+    ) {
+      values[SYSTEM_FIELD_IDS.nodeCode] = body.code;
     }
+    const malformed = invalidMockValues(bound, values);
+    if (malformed.length > 0) return valuesInvalid(malformed);
+    const rule = ruleResponse(createIssues(kind!, { customFields: values }));
+    if (rule) return rule;
+    const code = codeOfValue(values[SYSTEM_FIELD_IDS.nodeCode]);
     if (nodesOfProject(guard.row.id).length >= NODE_LIMITS.nodesPerProject) {
       return conflict(ErrorCode.PROJECT_NODE_LIMIT_REACHED, 'Node limit reached');
     }
@@ -128,7 +112,7 @@ export const structureNodeHandlers = [
       body.kindId,
       body.name,
       code,
-      body.customFields ?? {},
+      values,
     );
     return HttpResponse.json(projectNodeDto(row), { status: 201 });
   }),
@@ -200,43 +184,55 @@ export const structureNodeHandlers = [
     const node = findDemoNodeRow(String(params.nodeId));
     if (!node || node.projectId !== guard.row.id) return nodeNotFound();
     const kindChanged = body.kindId !== undefined && body.kindId !== node.kindId;
-    const kind = kindOf(body.kindId ?? node.kindId);
-    const archived = assertKindAlive(kind);
-    if (archived) return archived;
-    if (!kindAllowedForProject(guard.row.id, body.kindId ?? node.kindId)) {
-      return HttpResponse.json(
-        { code: ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED, message: 'Kind is not allowed' },
-        { status: 422 },
-      );
+    // Архивный/снятый с типа вид живёт у существующих папок: проверяем
+    // живость только при СМЕНЕ вида (как сервер).
+    if (kindChanged) {
+      const kind = kindOf(body.kindId!);
+      const archived = assertKindAlive(kind);
+      if (archived) return archived;
+      if (!kindAllowedForProject(guard.row.id, body.kindId!)) {
+        return HttpResponse.json(
+          { code: ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED, message: 'Kind is not allowed' },
+          { status: 422 },
+        );
+      }
     }
+    const kind = kindOf(body.kindId ?? node.kindId);
+    if (!kind) return nodeNotFound();
+    const patchValues = { ...(body.customFields ?? {}) };
+    // Legacy `code` — только если слот «Код» есть в форме; явное значение
+    // customFields важнее (как `node-form.policy.ts`).
+    if (
+      body.code !== undefined &&
+      patchValues[SYSTEM_FIELD_IDS.nodeCode] === undefined &&
+      formOfKind(kind).fields.some((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)
+    ) {
+      patchValues[SYSTEM_FIELD_IDS.nodeCode] = body.code;
+    }
+    const malformed = invalidMockValues(
+      definitionsForTarget(demoCustomFieldDefinitions, 'node', kind.id),
+      patchValues as CustomFieldValues,
+    );
+    if (malformed.length > 0) return valuesInvalid(malformed);
     const rule = ruleResponse(
       updateIssues(
-        kind!,
+        kind,
         { customFields: node.customFields },
-        { customFields: body.customFields },
+        { customFields: patchValues },
         kindChanged,
       ),
     );
     if (rule) return rule;
-    // Код — атрибут «Код»: DTO-колонка следует за значением (или явным
-    // `body.code` старого пути, он важнее).
-    const patchCode = body.customFields?.[SYSTEM_FIELD_IDS.nodeCode];
-    if (body.code !== undefined || patchCode !== undefined) {
-      const nextCode = body.code !== undefined ? body.code : codeOfValue(patchCode);
-      if (nextCode !== null && nodeCodeTaken(nextCode, guard.row.id, node.id)) {
-        return conflict(ErrorCode.PROJECT_NODE_CODE_TAKEN, 'Node code is already taken');
-      }
-      node.code = nextCode;
-    }
     if (kindChanged) node.kindId = body.kindId!;
     if (body.name) node.name = body.name;
-    if (body.customFields) {
+    if (Object.keys(patchValues).length > 0) {
       const next: DemoNodeRow['customFields'] = { ...node.customFields };
-      for (const [fieldId, value] of Object.entries(body.customFields)) {
+      for (const [fieldId, value] of Object.entries(patchValues)) {
         if (value === null) delete next[fieldId];
         else next[fieldId] = value;
       }
       node.customFields = next;
+      node.code = codeOfValue(next[SYSTEM_FIELD_IDS.nodeCode]);
     }
     return HttpResponse.json(projectNodeDto(node));
   }),

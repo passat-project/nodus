@@ -1418,7 +1418,8 @@ model Counterparty {
   address      String?
   email        String?
   phone        String?
-  /// Кастомные поля области `counterparty` (ADR-0029); запись — с #431.
+  /// Кастомные поля области `counterparty` (ADR-0029); запись — Н2 CRM,
+  /// уборка удалённого определения — #646.
   customFields Json      @default("{}") @map("custom_fields")
   archivedAt   DateTime? @map("archived_at") @db.Timestamptz()
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
@@ -1542,8 +1543,9 @@ model ProjectGroup {
 /// mentionedUserIds; лимит ≤10 — контракт и CHECK в миграции).
 model Project {
   id           String    @id @default(uuid()) @db.Uuid
-  /// Шифр договора; null — «тема». Частичный unique WHERE code IS NOT NULL —
-  /// в миграции (шифр не освобождается архивацией).
+  /// ЗАМОРОЖЕНА (#631 Р9): шифр переехал в атрибут «Шифр» (SYSTEM_FIELD_IDS);
+  /// колонка не читается кодом, unique снят (В2 — дубли разрешены),
+  /// удаляется отдельным chore после релиза.
   code         String?
   name         String
   description  String    @default("")
@@ -1551,6 +1553,7 @@ model Project {
   color        String    @default("blue")
   typeId       String    @map("type_id") @db.Uuid
   portfolioId  String?   @map("portfolio_id") @db.Uuid
+  /// ЗАМОРОЖЕНА (#631 Р9): заказчик — атрибут «Заказчик»; не читается кодом.
   clientId     String?   @map("client_id") @db.Uuid
   managerId    String    @map("manager_id") @db.Uuid
   assistantIds Json      @default("[]") @map("assistant_ids")
@@ -1628,10 +1631,10 @@ model NodeKind {
   icon       String
   /// Тон ярлыка (projectColorSchema).
   color      String
-  /// Конфигурация вида (#556, Р2): {form:{code, fields:[{fieldId,state}]},
-  /// capabilities:[…]}. Закрытая zod-схема, толерантное чтение
-  /// (normalizeNodeKindConfig); `{}` — умолчания. Форма вида И ЕСТЬ привязка
-  /// атрибутов области `node` (Р3) — отдельной таблицы нет.
+  /// Конфигурация вида (#556, Р2; ревизия #631):
+  /// {form:{fields:[{fieldId,state}]}, capabilities:[…]}. Закрытая zod-схема,
+  /// толерантное чтение (normalizeNodeKindConfig); `{}` — умолчания.
+  /// Слот задаёт видимость; привязка «атрибут × вид» — `field_bindings`.
   config     Json      @default("{}")
   archivedAt DateTime? @map("archived_at") @db.Timestamptz()
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz()
@@ -1647,8 +1650,8 @@ model NodeKind {
 /// tasks.node_id (plain UUID, модуль задач). Порядок среди детей родителя —
 /// fractional-ключ `order` TEXT COLLATE "C" (канон 20261016180000). Узлы
 /// БЕЗ архивации: пустой удаляется, непустой — 409. Лимиты (контракты
-/// NODE_LIMITS): ≤1000 узлов на проект, глубина ≤10, детей ≤100. Шифр узла
-/// уникален в проекте — частичный unique WHERE code IS NOT NULL в миграции.
+/// NODE_LIMITS): ≤1000 узлов на проект, глубина ≤10, детей ≤100. Колонка
+/// `code` заморожена (#631): код — атрибут «Код», unique снят (В2).
 model ProjectNode {
   id           String   @id @default(uuid()) @db.Uuid
   projectId    String   @map("project_id") @db.Uuid
@@ -1657,9 +1660,9 @@ model ProjectNode {
   name         String
   code         String?
   order        String
-  /// Кастомные атрибуты области `node` (#556, ADR-0029): значения по id
-  /// определения. Хранятся ВСЕ значения, включая скрытые сменой вида; форма
-  /// фильтрует помощником nodeFormValues. GIN — в миграции.
+  /// Кастомные атрибуты папки (#556, ADR-0029; #631 — без областей): значения
+  /// по id определения. Хранятся ВСЕ значения, включая скрытые сменой вида;
+  /// форма фильтрует помощником nodeFormValues. GIN — в миграции.
   customFields Json     @default("{}") @map("custom_fields")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz()

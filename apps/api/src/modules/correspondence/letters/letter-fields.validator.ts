@@ -93,12 +93,18 @@ export class LetterFieldsValidator {
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
   ) {}
 
-  /** Регистрация: обязательные поля окна + даты + ссылки + атрибуты. */
+  /** Регистрация: обязательные поля окна + даты + ссылки + атрибуты.
+   *
+   *  `current` — значения атрибутов, уже стоящие у черновика (PATCH до
+   *  регистрации разрешён): они база, ввод окна их перекрывает, умолчания
+   *  заполняют только пустое. Иначе регистрация затирала бы поставленное
+   *  заранее (#646). */
   async registration(
     typeId: string,
     input: unknown,
     actor: { id: string; permissions: readonly string[] },
     today: string,
+    current: CustomFieldValues = {},
   ): Promise<{
     values: RegistrationValues;
     extra: RegistrationExtra;
@@ -119,7 +125,7 @@ export class LetterFieldsValidator {
     // требуется — служебное действие канцелярии, DTO фильтрует смотрящим.
     if (value.projectId) await this.projects.assertProjectAttachable(value.projectId);
     const customFields = await this.customFields.prepareCreate({
-      input: value.customFields ?? {},
+      input: { ...current, ...(value.customFields ?? {}) },
       // Автор умолчаний «подразделение автора» — сам актор регистрации.
       authorId: actor.id,
       actor,

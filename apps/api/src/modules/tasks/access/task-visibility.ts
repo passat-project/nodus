@@ -53,7 +53,14 @@ function notHiddenProjectIds(hidden: readonly string[]): Prisma.TaskWhereInput |
  * `confidential = false`, прямое участие (mine) — нет. Поручения из
  * конфиденциального письма ставит #463; поле до тех пор не пишется.
  */
-export function visibleTasksWhere(viewer: Viewer, scope: 'mine' | 'all'): Prisma.TaskWhereInput {
+export function visibleTasksWhere(
+  viewer: Viewer,
+  scope: 'mine' | 'all',
+  opts: { includeDeleted?: boolean } = {},
+): Prisma.TaskWhereInput {
+  // `includeDeleted` — только для «была видима до удаления» (#631 Р5):
+  // плашка «запись удалена» участнику, без оракула для постороннего.
+  const alive: Prisma.TaskWhereInput = opts.includeDeleted ? {} : { deletedAt: null };
   const mine = involves([viewer.id]);
   const gate = notHiddenProjectIds(viewer.hiddenProjectIds);
   // Конфиденциальное вне прямого участия не раскрывается ни оргструктурой,
@@ -63,7 +70,7 @@ export function visibleTasksWhere(viewer: Viewer, scope: 'mine' | 'all'): Prisma
   // (removeManual, open→secret) не сохраняет доступ к его задачам через
   // роль постановщика/ответственного (вердикт 29.10).
   const mineGated: Prisma.TaskWhereInput = gate ? { AND: [{ OR: mine }, gate] } : { OR: mine };
-  if (scope === 'mine') return { deletedAt: null, ...mineGated };
+  if (scope === 'mine') return { ...alive, ...mineGated };
   const or: Prisma.TaskWhereInput[] = [mineGated];
   // Решающий видит задачу, даже не участвуя (#433): только не конфиденциальную
   // и не из скрытого секретного проекта — те же гейты, что у руководителей.
@@ -89,11 +96,11 @@ export function visibleTasksWhere(viewer: Viewer, scope: 'mine' | 'all'): Prisma
     // задачи видит её и с task.view_all (иначе деталь/чат отдают 404).
     const rest = gate ? { AND: [gate, openOnly] } : openOnly;
     return {
-      deletedAt: null,
+      ...alive,
       OR: [mineGated, rest, ...(deciderBranch ? [deciderBranch] : [])],
     };
   }
-  return { deletedAt: null, OR: or };
+  return { ...alive, OR: or };
 }
 
 @Injectable()

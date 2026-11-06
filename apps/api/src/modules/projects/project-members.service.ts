@@ -26,6 +26,7 @@ import {
   type MembersCursor,
   type ParticipantRow,
 } from './project-participants.repository.js';
+import { projectAudience } from './project-audience.js';
 import { ProjectsRepository } from './projects.repository.js';
 
 /**
@@ -279,10 +280,14 @@ export class ProjectMembersService {
     projectId: string,
     changedUserIds: readonly string[],
   ): Promise<void> {
+    const project = await this.projects.findById(projectId);
+    const audience = project
+      ? [...new Set([...(await projectAudience(this.participants, project)), ...changedUserIds])]
+      : [...new Set(changedUserIds)];
     await this.eventBus.emit(
       tx,
       PROJECT_EVENTS.PARTICIPANTS_CHANGED,
-      { projectId, changedUserIds: [...new Set(changedUserIds)] },
+      { projectId, changedUserIds: [...new Set(changedUserIds)], audience },
       { aggregateType: 'project', aggregateId: projectId },
     );
     await this.projects.touch(tx, projectId);

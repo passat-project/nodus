@@ -78,7 +78,7 @@ describe('ProjectTypeFieldsSection: форма атрибутов типа пр�
   });
 
   it('смена состояния слота сохраняет форму целиком', () => {
-    render(<ProjectTypeFieldsSection type={TYPE} canSetup />);
+    render(<ProjectTypeFieldsSection type={TYPE} canSetup canCreateField={false} />);
 
     const row = screen.getByText('Заказчик').closest('li') as HTMLElement;
     fireEvent.click(within(row).getByRole('radio', { name: ui.nodeKinds.form.state.required }));
@@ -95,7 +95,7 @@ describe('ProjectTypeFieldsSection: форма атрибутов типа пр�
   });
 
   it('крестик убирает слот из формы', () => {
-    render(<ProjectTypeFieldsSection type={TYPE} canSetup />);
+    render(<ProjectTypeFieldsSection type={TYPE} canSetup canCreateField={false} />);
 
     fireEvent.click(screen.getAllByRole('button', { name: ui.nodeKinds.form.remove })[1]!);
 
@@ -106,7 +106,7 @@ describe('ProjectTypeFieldsSection: форма атрибутов типа пр�
   });
 
   it('пикер добавляет атрибут «По желанию»', () => {
-    render(<ProjectTypeFieldsSection type={TYPE} canSetup />);
+    render(<ProjectTypeFieldsSection type={TYPE} canSetup canCreateField={false} />);
 
     fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.form.addField }));
     // В пикере только атрибуты вне формы («Площадь»), уже стоящих нет.
@@ -128,7 +128,7 @@ describe('ProjectTypeFieldsSection: форма атрибутов типа пр�
   });
 
   it('без права project.setup.manage — только просмотр', () => {
-    render(<ProjectTypeFieldsSection type={TYPE} canSetup={false} />);
+    render(<ProjectTypeFieldsSection type={TYPE} canSetup={false} canCreateField={false} />);
 
     expect(screen.queryByRole('button', { name: ui.nodeKinds.form.addField })).toBeNull();
     expect(screen.queryByRole('button', { name: ui.nodeKinds.form.remove })).toBeNull();
@@ -142,7 +142,7 @@ describe('ProjectTypeFieldsSection: форма атрибутов типа пр�
 
   it('пустая форма — честная пустота', () => {
     const emptyType: ProjectType = { ...TYPE, form: { fields: [] } };
-    render(<ProjectTypeFieldsSection type={emptyType} canSetup />);
+    render(<ProjectTypeFieldsSection type={emptyType} canSetup canCreateField={false} />);
 
     expect(screen.getByText(ui.customFields.typeForm.empty)).toBeTruthy();
   });

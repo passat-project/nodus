@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import type { CustomFieldDefinition } from '@nodus/contracts';
 
+import { DefinitionsQueryService } from './definitions-query.service.js';
 import { DefinitionsService } from './definitions.service.js';
 import type { FieldDefinitionRow } from './definition.mapper.js';
 import type { CustomFieldIssue } from '../values/value-validator.js';
@@ -87,6 +88,16 @@ function makeService() {
     nodeKinds: vi.fn(async () => [{ id: 'nk-1', name: 'Комплект', archived: false }]),
   };
   const usageReader = { usage: vi.fn(async () => ({})) };
+  const formCleaner = { removeFieldFromForm: vi.fn(async () => undefined) };
+  const processTypeCleaner = {
+    removeFieldFromCreationForms: vi.fn(async () => []),
+  };
+  const query = new DefinitionsQueryService(
+    definitions as never,
+    mapper as never,
+    usageReader as never,
+    catalog as never,
+  );
   const logger = { setContext: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
   const service = new DefinitionsService(
     definitions as never,
@@ -95,10 +106,11 @@ function makeService() {
     txRunner as never,
     eventBus as never,
     dictionaries as never,
-    workflows as never,
     catalog as never,
     targets as never,
-    usageReader as never,
+    formCleaner as never,
+    processTypeCleaner as never,
+    query as never,
     logger as never,
   );
   return {
@@ -111,6 +123,8 @@ function makeService() {
     workflows,
     catalog,
     targets,
+    formCleaner,
+    processTypeCleaner,
   };
 }
 

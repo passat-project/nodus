@@ -14,7 +14,10 @@ import {
 } from '@nodus/contracts';
 
 import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
-import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
+import {
+  demoCustomFieldDefinitions,
+  demoFieldById,
+} from '../../../../shared/mocks/data/custom-fields.js';
 
 /**
  * Правила формы вида в мок-мире (#556, ревизия #631): те же помощники
@@ -24,13 +27,17 @@ import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom
  * больше нет. Мок повторяет сервер (ADR-0001): отказ мока = отказ сервера.
  */
 
-/** Эффективная форма вида: слоты атрибутов, привязанных к этому виду (Р3). */
+/** Эффективная форма вида: слоты существующих определений (зеркало
+ *  серверного `effectiveNodeForm`); привязка — отдельный слой. */
 export function formOfKind(kind: NodeKind): NodeKindForm {
-  return effectiveNodeForm(kind, definitionsForTarget(demoCustomFieldDefinitions, 'node', kind.id));
+  return effectiveNodeForm(kind, demoCustomFieldDefinitions);
 }
 
 export interface NodeRuleIssue {
-  code: 'PROJECT_NODE_FIELDS_REQUIRED' | 'PROJECT_NODE_KIND_FORM_INVALID' | 'VALIDATION_FAILED';
+  code:
+    | 'PROJECT_NODE_FIELDS_REQUIRED'
+    | 'PROJECT_NODE_KIND_FORM_INVALID'
+    | 'CUSTOM_FIELD_VALUE_INVALID';
   status: 400 | 422;
   message: string;
   details: Record<string, unknown>;
@@ -57,17 +64,29 @@ export function foreignValueIssue(
   values: Record<string, CustomFieldValue | null> | undefined,
 ): NodeRuleIssue | null {
   if (!values) return null;
-  const inForm = new Set(formOfKind(kind).fields.map((slot) => slot.fieldId));
-  const issues = Object.entries(values)
-    .filter(([fieldId, value]) => value !== null && value !== undefined && !inForm.has(fieldId))
-    .map(([fieldId]) => ({
-      fieldId,
-      reason: 'not_in_type' as const,
-      message: 'Field is not bound to this type',
-    }));
+  // Сервер разрешает значение ПРИВЯЗАННОГО атрибута, даже если слота нет:
+  // привязка = доступность, слот = видимость (Р3/#646).
+  const bound = new Set(
+    definitionsForTarget(demoCustomFieldDefinitions, 'node', kind.id).map(
+      (definition) => definition.id,
+    ),
+  );
+  const issues: { fieldId: string; reason: 'unknown' | 'not_in_type'; message: string }[] = [];
+  for (const [fieldId, value] of Object.entries(values)) {
+    if (value === null || value === undefined) continue;
+    if (!demoFieldById(fieldId)) {
+      issues.push({ fieldId, reason: 'unknown', message: 'Unknown custom field' });
+    } else if (!bound.has(fieldId)) {
+      issues.push({
+        fieldId,
+        reason: 'not_in_type',
+        message: 'Field is not bound to this type',
+      });
+    }
+  }
   if (issues.length === 0) return null;
   return {
-    code: 'VALIDATION_FAILED',
+    code: 'CUSTOM_FIELD_VALUE_INVALID',
     status: 422,
     message: 'Custom field value is invalid',
     details: { issues },
@@ -114,21 +133,21 @@ export function updateIssues(
   return cleared.length > 0 ? requiredIssue(kind.id, cleared, 'clear') : null;
 }
 
-/** Форма вида при PATCH: каждый слот — атрибут, привязанный к этому виду
- *  (иначе 422 `unknown_field`); привязка живёт в реестре («Где
- *  используется»), форма задаёт только состояния (Р3 #631). */
+/** Форма вида при PATCH: каждый слот — существующий атрибут портала, не
+ *  глобальная переменная. Предварительная привязка НЕ требуется: сервер
+ *  сам создаёт её из слота (`syncPlaceBindings`). */
 export function kindFormIssues(
-  kind: NodeKind,
+  _kind: NodeKind,
   form: NodeKindForm,
-): { fieldId: string; reason: 'unknown_field' }[] {
-  const bound = new Set(
-    definitionsForTarget(demoCustomFieldDefinitions, 'node', kind.id).map(
-      (definition) => definition.id,
-    ),
-  );
-  return form.fields
-    .filter((slot) => !bound.has(slot.fieldId))
-    .map((slot) => ({ fieldId: slot.fieldId, reason: 'unknown_field' as const }));
+): { fieldId: string; reason: 'unknown_field' | 'not_bindable' }[] {
+  const byId = new Map(demoCustomFieldDefinitions.map((definition) => [definition.id, definition]));
+  const issues: { fieldId: string; reason: 'unknown_field' | 'not_bindable' }[] = [];
+  for (const slot of form.fields) {
+    const definition = byId.get(slot.fieldId);
+    if (!definition) issues.push({ fieldId: slot.fieldId, reason: 'unknown_field' });
+    else if (definition.isCompany) issues.push({ fieldId: slot.fieldId, reason: 'not_bindable' });
+  }
+  return issues;
 }
 
 export function kindFormInvalidIssue(

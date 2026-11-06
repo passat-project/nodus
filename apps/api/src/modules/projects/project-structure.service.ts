@@ -185,6 +185,9 @@ export class ProjectStructureService {
     return this.txRunner.run(async (tx) => {
       await this.nodes.lockStructure(tx, projectId);
       // Чтение ВНУТРИ tx после лока (F2): гонка двух PATCH сериализуется.
+      // Строковый лок узла — против bulk-уборки значений удалённого атрибута
+      // (у неё другой advisory-ключ): иначе запись вернула бы стёртый ключ.
+      await this.nodes.lockNode(tx, projectId, nodeId);
       const node = await this.nodes.findInProject(projectId, nodeId, tx);
       if (!node) throw nodeInvalid(nodeId);
       const kindChanged = body.kindId !== undefined && body.kindId !== node.kindId;

@@ -13,6 +13,7 @@ import {
   useUpdateProjectType,
 } from '../api/project-catalog-mutations.js';
 import { fieldsSummary, kindsSummary } from '../lib/project-type-summary.js';
+import type { RenderCreateField } from '../node-kinds/types.js';
 import { ProjectTypeFieldsSection } from './project-type-fields.js';
 import { ProjectTypeKindsSection } from './project-type-kinds.js';
 
@@ -35,6 +36,8 @@ export function ProjectTypeSettingsPanel({
   open,
   section,
   canSetup,
+  canCreateField,
+  renderCreateField,
   onSection,
   onClose,
   onOpenKind,
@@ -45,6 +48,8 @@ export function ProjectTypeSettingsPanel({
   section: ProjectTypeSection;
   /** Право `project.setup.manage` — правка; иначе только просмотр. */
   canSetup: boolean;
+  canCreateField: boolean;
+  renderCreateField?: RenderCreateField;
   onSection: (section: ProjectTypeSection) => void;
   onClose: () => void;
   onOpenKind: (id: string) => void;
@@ -91,7 +96,12 @@ export function ProjectTypeSettingsPanel({
           onOpenKind={onOpenKind}
         />
       ) : (
-        <ProjectTypeFieldsSection type={type} canSetup={canSetup} />
+        <ProjectTypeFieldsSection
+          type={type}
+          canSetup={canSetup}
+          canCreateField={canCreateField}
+          renderCreateField={renderCreateField}
+        />
       )}
     </SidePanel>
   );

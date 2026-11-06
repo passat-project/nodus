@@ -76,10 +76,14 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
     );
     const facts = await this.facts.gateFacts(taskId, tx);
     const { resultMessageIds, ...gateFacts } = facts;
-    // Реестр атрибутов области (#431, Р7): гейт «Заполнены поля» знает,
-    // какие ключи `cf.<id>` существуют. Скрытые входят — условие процесса
-    // видит служебные значения, а несуществующий ключ не блокирует переход.
-    const definitions = await this.customFields.definitions({}, tx);
+    // Атрибуты, привязанные к типу задачи (#431, Р7; #646): гейт
+    // «Заполнены поля» знает только доступные в карточке ключи. Неизвестный
+    // или снятый с типа ключ не блокирует переход — иначе гейт на невидимом
+    // поле сделал бы переход невыполнимым (зеркало писем).
+    const definitions = await this.customFields.definitions(
+      { target: { kind: 'process_type', id: task.typeId } },
+      tx,
+    );
     // Решающие (#433): факты актора и вакансии переходов текущей стадии.
     // Нет `decider_in` в маршруте — контекст undefined, лишних запросов нет.
     const deciderContext = await this.deciders.contextFor(

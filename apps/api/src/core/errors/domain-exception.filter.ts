@@ -103,11 +103,11 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.LETTER_NOT_EDITABLE]: HttpStatus.CONFLICT,
   // Подтверждение связи «ответ на» (#56) — негодное значение, не конфликт.
   [ErrorCode.LETTER_RELATION_INVALID]: HttpStatus.UNPROCESSABLE_ENTITY,
-  // Кастомные поля (#431, ADR-0029): невалидное значение и недоступный тип —
-  // 422 (семантика значения, не форма запроса); имя, лимит, архивное поле и
-  // несовместимая смена типа — конфликт состояния; справочники — конфликт.
+  // Кастомные поля (#431, ADR-0029): невалидное значение и неверная привязка
+  // (архив/глобальная) — 422 (семантика значения, не форма запроса); имя,
+  // лимит и несовместимая смена типа — конфликт состояния; справочники —
+  // конфликт.
   [ErrorCode.CUSTOM_FIELD_VALUE_INVALID]: HttpStatus.UNPROCESSABLE_ENTITY,
-  [ErrorCode.CUSTOM_FIELD_TYPE_UNAVAILABLE]: HttpStatus.UNPROCESSABLE_ENTITY,
   [ErrorCode.CUSTOM_FIELD_NAME_TAKEN]: HttpStatus.CONFLICT,
   [ErrorCode.CUSTOM_FIELD_TYPE_CHANGE_INCOMPATIBLE]: HttpStatus.CONFLICT,
   [ErrorCode.CUSTOM_FIELD_LIMIT_REACHED]: HttpStatus.CONFLICT,
@@ -135,6 +135,7 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   // с состоянием (#556).
   [ErrorCode.PROJECT_NODE_FIELDS_REQUIRED]: HttpStatus.UNPROCESSABLE_ENTITY,
   [ErrorCode.PROJECT_NODE_KIND_FORM_INVALID]: HttpStatus.UNPROCESSABLE_ENTITY,
+  [ErrorCode.PROJECT_TYPE_FORM_INVALID]: HttpStatus.UNPROCESSABLE_ENTITY,
   // Вид не входит в допустимые виды типа проекта — 422 (как not_in_type
   // атрибутов): запрос корректен, но вид этому типу не назначен (#556).
   [ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED]: HttpStatus.UNPROCESSABLE_ENTITY,

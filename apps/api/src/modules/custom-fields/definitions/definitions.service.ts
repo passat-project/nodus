@@ -27,17 +27,25 @@ import {
   type FieldBindingTargetReader,
 } from '../../projects/ports/field-binding-targets.port.js';
 import {
-  WORKFLOW_FIELD_USAGE_READER,
-  type WorkflowFieldUsageReader,
-} from '../../workflows/ports/workflow-field-usage.port.js';
+  FIELD_BINDING_FORM_CLEANER,
+  type FieldBindingFormCleaner,
+} from '../../projects/ports/field-binding-form-cleaner.port.js';
+import type { ProjectActor } from '../../projects/ports/project-reader.port.js';
+import {
+  PROCESS_TYPE_FORM_CLEANER,
+  type ProcessTypeFormCleaner,
+} from '../../workflows/ports/process-type-form-cleaner.port.js';
 import { DefinitionMapper, type FieldDefinitionRow } from './definition.mapper.js';
-import { DefinitionsUsageService } from './definitions-usage.service.js';
+import { DefinitionsQueryService } from './definitions-query.service.js';
 import { emitDefinitionChanged } from './definition-events.js';
 import {
   assertBindingsUsable,
+  createBindings,
+  assertDefaultUsable,
   assertSettingsUsable,
   assertUpdateAllowed,
   nameTaken,
+  cleanRemovedFormSlots,
   replaceBindings,
   requireDefinition,
 } from './definition-guards.js';
@@ -62,42 +70,19 @@ export class DefinitionsService {
     private readonly txRunner: TransactionRunner,
     private readonly eventBus: EventBus,
     @Inject(DICTIONARY_READER) private readonly dictionaries: DictionaryReader,
-    @Inject(WORKFLOW_FIELD_USAGE_READER) private readonly workflows: WorkflowFieldUsageReader,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
     @Inject(FIELD_BINDING_TARGET_READER) private readonly targets: FieldBindingTargetReader,
-    private readonly usageReader: DefinitionsUsageService,
+    @Inject(FIELD_BINDING_FORM_CLEANER) private readonly formCleaner: FieldBindingFormCleaner,
+    @Inject(PROCESS_TYPE_FORM_CLEANER) private readonly processTypeCleaner: ProcessTypeFormCleaner,
+    private readonly query: DefinitionsQueryService,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(DefinitionsService.name);
   }
 
-  /** Реестр портала; `module` — фильтр по привязкам/категории (Р11). */
-  async list(module: CustomFieldModule | null): Promise<CustomFieldDefinition[]> {
-    const rows = await this.definitions.list();
-    if (!module) return this.mapper.toDtos(rows);
-    if (module === 'company') return this.mapper.toDtos(rows.filter((row) => row.isCompany));
-    if (module === 'project' || module === 'node') {
-      const kind = module === 'project' ? 'project_type' : 'node_kind';
-      return this.mapper.toDtos(
-        rows.filter((row) => row.bindings.some((b) => b.targetKind === kind)),
-      );
-    }
-    // task/letter: привязка к живому типу своей категории (типы письма не
-    // делают атрибут «задачным» и наоборот).
-    const refs = await this.catalog.typeRefs(
-      rows.flatMap((row) =>
-        row.bindings.filter((b) => b.targetKind === 'process_type').map((b) => b.targetId),
-      ),
-      { live: true },
-    );
-    const categoryTypes = new Set(
-      refs.filter((ref) => ref.category === module).map((ref) => ref.id),
-    );
-    return this.mapper.toDtos(
-      rows.filter((row) =>
-        row.bindings.some((b) => b.targetKind === 'process_type' && categoryTypes.has(b.targetId)),
-      ),
-    );
+  /** Реестр портала; чтения — `DefinitionsQueryService` (I5). */
+  list(module: CustomFieldModule | null, actor?: ProjectActor): Promise<CustomFieldDefinition[]> {
+    return this.query.list(module, actor);
   }
 
   async create(dto: CreateCustomFieldBody, actorId: string): Promise<CustomFieldDefinition> {
@@ -107,13 +92,14 @@ export class DefinitionsService {
       dto.settings?.dictionaryId,
       dto.settings?.currencyId,
     );
-    const bindings = dto.isCompany
-      ? { processTypeIds: [] as const, projectTypeIds: [] as const, nodeKindIds: [] as const }
-      : (dto.bindings ?? {
-          processTypeIds: [] as const,
-          projectTypeIds: [] as const,
-          nodeKindIds: [] as const,
-        });
+    await assertDefaultUsable(
+      this.validator,
+      'new',
+      dto.type,
+      dto.settings ?? {},
+      dto.defaultValue ?? null,
+    );
+    const bindings = createBindings(dto);
     await assertBindingsUsable(this.catalog, this.targets, bindings);
 
     return this.txRunner.run(async (tx) => {
@@ -145,7 +131,8 @@ export class DefinitionsService {
       await replaceBindings(this.definitions, created.id, bindings, tx);
       const row = (await this.definitions.findById(created.id, tx)) ?? created;
       await this.emitChanged(tx, row, 'created', actorId, [
-        ...Object.keys(data).filter((key) => key !== 'number'),
+        // Только поля DTO: `number` и `createdById` — внутренние колонки.
+        ...Object.keys(data).filter((key) => key !== 'number' && key !== 'createdById'),
         'bindings',
       ]);
       return this.mapper.toDto(row, tx);
@@ -160,7 +147,6 @@ export class DefinitionsService {
     const current = await requireDefinition(this.definitions, id);
     const { nextSettings, nextDefault } = await assertUpdateAllowed(
       {
-        mapper: this.mapper,
         validator: this.validator,
         dictionaries: this.dictionaries,
         catalog: this.catalog,
@@ -173,7 +159,10 @@ export class DefinitionsService {
 
     return this.txRunner.run(async (tx) => {
       await this.definitions.lockRegistry(tx);
-      if (dto.name !== undefined && dto.name !== current.name) {
+      // Снимок привязок для дельты слотов — под локом и в транзакции:
+      // внешний `current` мог устареть между чтением и мутацией (#646).
+      const fresh = (await this.definitions.findById(id, tx)) ?? current;
+      if (dto.name !== undefined && dto.name !== fresh.name) {
         const taken = await this.definitions.findByName(dto.name, id, tx);
         if (taken) throw nameTaken(taken.id, taken.name);
       }
@@ -188,8 +177,18 @@ export class DefinitionsService {
       }
       if (dto.reportIndexed !== undefined) data.reportIndexed = dto.reportIndexed;
       await this.definitions.update(id, data, tx);
-      if (dto.bindings !== undefined) await replaceBindings(this.definitions, id, dto.bindings, tx);
-      const row = (await this.definitions.findById(id, tx)) ?? current;
+      if (dto.bindings !== undefined) {
+        await replaceBindings(this.definitions, id, dto.bindings, tx);
+        await cleanRemovedFormSlots(
+          this.formCleaner,
+          fresh,
+          dto.bindings,
+          actorId,
+          tx,
+          this.processTypeCleaner,
+        );
+      }
+      const row = (await this.definitions.findById(id, tx)) ?? fresh;
       const fields = Object.keys(data);
       await this.emitChanged(
         tx,
@@ -202,21 +201,38 @@ export class DefinitionsService {
     });
   }
 
-  /** Где используется: агрегат последствий для окна удаления (Р8). */
-  async usage(id: string): Promise<CustomFieldUsage> {
-    return this.usageReader.usage(await requireDefinition(this.definitions, id));
+  /** Где используется: агрегат последствий (Р8) — `DefinitionsQueryService`. */
+  usage(id: string): Promise<CustomFieldUsage> {
+    return this.query.usage(id);
   }
 
-  /**
-   * Удаление — всегда разрешено (Р8, В4): 409 CUSTOM_FIELD_IN_USE снят.
-   * Определение + привязки + глобальное значение (каскад) в одной
-   * транзакции с событием `deleted`; значения в JSONB сущностей стирают
-   * владельцы своими обработчиками (идемпотентно). Опубликованные маршруты
-   * с ключом продолжают работать (толерантность unknown-ключа).
-   */
+  /** Удаление всегда разрешено (Р8, В4); значения стирают владельцы. */
   async remove(id: string, actorId: string): Promise<void> {
-    const definition = await requireDefinition(this.definitions, id);
     await this.txRunner.run(async (tx) => {
+      await this.definitions.lockRegistry(tx);
+      // Привязки читаем В ТРАНЗАКЦИИ под локом реестра (#646): внешний
+      // снимок мог не увидеть привязку, добавленную конкурентно, и слот
+      // формы остался бы сиротой до асинхронной страховки.
+      const definition = await this.definitions.findById(id, tx);
+      if (!definition) {
+        throw DomainException.notFound('Custom field not found', { definitionId: id });
+      }
+      // Слоты форм мест снимаем СИНХРОННО, до коммита удаления (#646):
+      // обработчик outbox асинхронен (до 1 с), а required-слот удалённого
+      // атрибута в этом окне блокирует создание проекта/папки/задачи.
+      // Обработчики остаются идемпотентной страховкой для остальных мест.
+      for (const binding of definition.bindings) {
+        if (binding.targetKind !== 'project_type' && binding.targetKind !== 'node_kind') continue;
+        await this.formCleaner.removeFieldFromForm(
+          { kind: binding.targetKind as 'project_type' | 'node_kind', id: binding.targetId },
+          id,
+          actorId,
+          tx,
+        );
+      }
+      if (definition.bindings.some((binding) => binding.targetKind === 'process_type')) {
+        await this.processTypeCleaner.removeFieldFromCreationForms(id, actorId, tx);
+      }
       await this.definitions.remove(id, tx);
       await this.emitChanged(tx, definition, 'deleted', actorId, []);
     });
@@ -228,7 +244,11 @@ export class DefinitionsService {
       await this.definitions.lockRegistry(tx);
       const rows = await this.definitions.list(tx);
       const expected = new Set(rows.map((row) => row.id));
-      if (dto.ids.length !== expected.size || dto.ids.some((id) => !expected.has(id))) {
+      if (
+        dto.ids.length !== expected.size ||
+        new Set(dto.ids).size !== dto.ids.length ||
+        dto.ids.some((id) => !expected.has(id))
+      ) {
         throw new DomainException(ErrorCode.CONFLICT, 'Field order is stale');
       }
       const changed = dto.ids.some((id, index) => rows[index]?.id !== id);
@@ -249,15 +269,24 @@ export class DefinitionsService {
   async setCompanyValue(
     id: string,
     value: CustomFieldValue | null,
-    actorId: string,
+    actor: ProjectActor,
   ): Promise<CustomFieldDefinition> {
     const definition = await requireDefinition(this.definitions, id);
     if (!definition.isCompany) {
-      throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Field is not a company variable');
+      throw new DomainException(
+        ErrorCode.CUSTOM_FIELD_VALUE_INVALID,
+        'Field is not a company variable',
+        {
+          issues: [{ fieldId: id, reason: 'invalid', message: 'Field is not a company variable' }],
+        },
+      );
     }
     if (value !== null) {
       const dto = await this.mapper.toDto(definition);
-      const issues = await this.validator.validate([dto], { [id]: value });
+      // Актёр нужен ссылочным типам (project/task/letter/node): глобальную
+      // переменную-ссылку админ задаёт из реестра, видимость проверяется
+      // его глазами (#646). Без актёра любая ссылка получала not_found.
+      const issues = await this.validator.validate([dto], { [id]: value }, undefined, actor);
       if (issues.length > 0) {
         throw new DomainException(ErrorCode.CUSTOM_FIELD_VALUE_INVALID, 'Value is invalid', {
           issues,
@@ -265,10 +294,26 @@ export class DefinitionsService {
       }
     }
     return this.txRunner.run(async (tx) => {
-      await this.definitions.putCompanyValue(id, value, actorId, tx);
-      const row = (await this.definitions.findById(id, tx)) ?? definition;
-      await this.emitChanged(tx, row, 'updated', actorId, ['companyValue']);
-      return this.mapper.toDto(row, tx);
+      // Лок реестра и перечитывание (#646): конкурентное удаление между
+      // проверкой и записью давало FK-ошибку → 500 вместо 404.
+      await this.definitions.lockRegistry(tx);
+      const fresh = await this.definitions.findById(id, tx);
+      if (!fresh) throw DomainException.notFound('Custom field not found', { definitionId: id });
+      if (!fresh.isCompany) {
+        throw new DomainException(
+          ErrorCode.CUSTOM_FIELD_VALUE_INVALID,
+          'Field is not a company variable',
+          {
+            issues: [
+              { fieldId: id, reason: 'invalid', message: 'Field is not a company variable' },
+            ],
+          },
+        );
+      }
+      await this.definitions.putCompanyValue(id, value, actor.id, tx);
+      const row = (await this.definitions.findById(id, tx)) ?? fresh;
+      await this.emitChanged(tx, row, 'updated', actor.id, ['companyValue']);
+      return this.mapper.toDto(row, tx, actor);
     });
   }
 

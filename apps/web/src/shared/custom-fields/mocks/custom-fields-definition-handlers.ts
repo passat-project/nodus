@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import type { CustomFieldUsage, UpdateCustomFieldBody } from '@nodus/contracts';
 import {
+  checkDefinitionShape,
   customFieldCompanyValueBodySchema,
   customFieldValueSchemaOf,
   ErrorCode,
@@ -14,12 +15,16 @@ import { demoProjectTypes } from '../../mocks/data/projects.js';
 import { mockTypes } from '../../mocks/data/process-types-store.js';
 import { workflowsUsingField } from '../../mocks/data/workflows-store.js';
 import {
-  bindingTargetExists,
+  bindingTargetState,
+  canManageFields,
   dto,
   entitiesWithValue,
   error,
+  forbidden,
   formsUsingField,
   nameTaken,
+  removeFormSlot,
+  validateBindingTargets,
 } from './custom-fields-mock-utils.js';
 
 /** Хендлеры одного атрибута реестра (#631): точечные привязки
@@ -33,15 +38,15 @@ export const definitionHandlers = [
   // (запрет снят: unbind мягче delete, В4/О3). Путь с bindings раньше
   // `:id`-маршрутов, gotcha msw-query.
   http.put('/api/v1/custom-fields/definitions/:id/bindings/:kind/:targetId', ({ params }) => {
+    if (!canManageFields()) return forbidden();
     const definition = demoFieldById(String(params.id));
     if (!definition) return error(ErrorCode.NOT_FOUND, 'Field not found', 404);
     const kind = String(params.kind);
     const targetId = String(params.targetId);
-    if (!bindingTargetExists(kind, targetId)) {
-      return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Binding target not found', 422, {
-        targetKind: kind,
-        targetId,
-      });
+    // Порядок проверок как у сервера (#646): вид цели (400) → глобальная
+    // переменная (422) → существование/архив цели (404/422).
+    if (!['process-type', 'project-type', 'node-kind'].includes(kind)) {
+      return error(ErrorCode.VALIDATION_FAILED, 'Unknown binding kind', 400);
     }
     if (definition.isCompany) {
       return error(
@@ -53,6 +58,20 @@ export const definitionHandlers = [
           targetId,
         },
       );
+    }
+    const state = bindingTargetState(kind, targetId);
+    if (state === 'missing') {
+      // Сервер не раскрывает чужие справочники: неизвестная цель — 404.
+      return error(ErrorCode.NOT_FOUND, 'Binding target not found', 404, {
+        targetKind: kind,
+        targetId,
+      });
+    }
+    if (state === 'archived') {
+      return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Target is archived', 422, {
+        targetKind: kind,
+        targetId,
+      });
     }
     const list =
       kind === 'process-type'
@@ -66,10 +85,17 @@ export const definitionHandlers = [
   }),
 
   http.delete('/api/v1/custom-fields/definitions/:id/bindings/:kind/:targetId', ({ params }) => {
+    if (!canManageFields()) return forbidden();
     const definition = demoFieldById(String(params.id));
     if (!definition) return error(ErrorCode.NOT_FOUND, 'Field not found', 404);
     const kind = String(params.kind);
     const targetId = String(params.targetId);
+    if (!['process-type', 'project-type', 'node-kind'].includes(kind)) {
+      return error(ErrorCode.VALIDATION_FAILED, 'Unknown binding kind', 400);
+    }
+    if (definition.isCompany) {
+      return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Company variable has no bindings', 422);
+    }
     if (kind === 'process-type') {
       definition.bindings.processTypeIds = definition.bindings.processTypeIds.filter(
         (id) => id !== targetId,
@@ -78,19 +104,19 @@ export const definitionHandlers = [
       definition.bindings.projectTypeIds = definition.bindings.projectTypeIds.filter(
         (id) => id !== targetId,
       );
-    } else if (kind === 'node-kind') {
+    } else {
       definition.bindings.nodeKindIds = definition.bindings.nodeKindIds.filter(
         (id) => id !== targetId,
       );
-    } else {
-      return error(ErrorCode.VALIDATION_FAILED, 'Unknown binding kind', 422);
     }
+    removeFormSlot(kind, targetId, definition.id);
     definition.updatedAt = new Date().toISOString();
     return HttpResponse.json(dto(definition));
   }),
 
   // Значение глобальной переменной (Р7): одно на компанию, грамматика типа.
   http.put('/api/v1/custom-fields/definitions/:id/company-value', async ({ params, request }) => {
+    if (!canManageFields()) return forbidden();
     const definition = demoFieldById(String(params.id));
     if (!definition) return error(ErrorCode.NOT_FOUND, 'Field not found', 404);
     if (!definition.isCompany) {
@@ -98,7 +124,7 @@ export const definitionHandlers = [
     }
     const parsed = customFieldCompanyValueBodySchema.safeParse(await request.json());
     if (!parsed.success) {
-      return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 422, parsed.error.issues);
+      return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400, parsed.error.issues);
     }
     if (
       parsed.data.value !== null &&
@@ -112,11 +138,12 @@ export const definitionHandlers = [
   }),
 
   http.patch('/api/v1/custom-fields/definitions/:id', async ({ params, request }) => {
+    if (!canManageFields()) return forbidden();
     const definition = demoFieldById(String(params.id));
     if (!definition) return error(ErrorCode.NOT_FOUND, 'Field not found', 404);
     const parsed = updateCustomFieldBodySchema.safeParse(await request.json());
     if (!parsed.success) {
-      return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 422, parsed.error.issues);
+      return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400, parsed.error.issues);
     }
     const body: UpdateCustomFieldBody = parsed.data;
     if (body.type && !isCompatibleTypeChange(definition.type, body.type)) {
@@ -138,43 +165,55 @@ export const definitionHandlers = [
         });
       }
     }
-    if (body.name !== undefined) definition.name = body.name;
-    if (body.hint !== undefined) definition.hint = body.hint;
-    if (body.type !== undefined) definition.type = body.type;
-    if (body.reportIndexed !== undefined) definition.reportIndexed = body.reportIndexed;
-    if (body.defaultValue !== undefined) definition.defaultValue = body.defaultValue;
-    if (body.settings !== undefined)
-      definition.settings = { ...definition.settings, ...body.settings };
+    // Всё валидируем ДО мутации: отказ не должен оставлять частичных правок
+    // (сервер делает это в транзакции).
+    const nextType = body.type ?? definition.type;
+    const nextSettings = { ...definition.settings, ...(body.settings ?? {}) };
+    const nextDefault =
+      body.defaultValue !== undefined ? body.defaultValue : definition.defaultValue;
+    const shape = checkDefinitionShape(nextType, nextSettings, nextDefault);
+    if (shape.length > 0) {
+      return error(ErrorCode.VALIDATION_FAILED, 'Invalid custom field shape', 400, {
+        issues: shape,
+      });
+    }
+    if (
+      nextDefault?.kind === 'static' &&
+      !customFieldValueSchemaOf({ type: nextType, settings: nextSettings }).safeParse(
+        nextDefault.value,
+      ).success
+    ) {
+      return error(ErrorCode.CUSTOM_FIELD_VALUE_INVALID, 'Default value is invalid', 422);
+    }
     if (body.bindings !== undefined) {
       if (definition.isCompany) {
         return error(
           ErrorCode.CUSTOM_FIELD_BINDING_INVALID,
           'Company variable has no bindings',
           422,
+          { reason: 'company' },
         );
       }
-      for (const targetId of body.bindings.processTypeIds) {
-        if (!bindingTargetExists('process-type', targetId)) {
-          return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Process type not found', 422, {
-            targetKind: 'process-type',
-            targetId,
-          });
+      const invalidTargets = validateBindingTargets(definition, body.bindings);
+      if (invalidTargets) return invalidTargets;
+    }
+
+    if (body.name !== undefined) definition.name = body.name;
+    if (body.hint !== undefined) definition.hint = body.hint;
+    if (body.type !== undefined) definition.type = body.type;
+    if (body.reportIndexed !== undefined) definition.reportIndexed = body.reportIndexed;
+    if (body.defaultValue !== undefined) definition.defaultValue = body.defaultValue;
+    if (body.settings !== undefined) definition.settings = nextSettings;
+    if (body.bindings !== undefined) {
+      const before = definition.bindings;
+      for (const targetId of before.projectTypeIds) {
+        if (!body.bindings.projectTypeIds.includes(targetId)) {
+          removeFormSlot('project-type', targetId, definition.id);
         }
       }
-      for (const targetId of body.bindings.projectTypeIds) {
-        if (!bindingTargetExists('project-type', targetId)) {
-          return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Project type not found', 422, {
-            targetKind: 'project-type',
-            targetId,
-          });
-        }
-      }
-      for (const targetId of body.bindings.nodeKindIds) {
-        if (!bindingTargetExists('node-kind', targetId)) {
-          return error(ErrorCode.CUSTOM_FIELD_BINDING_INVALID, 'Node kind not found', 422, {
-            targetKind: 'node-kind',
-            targetId,
-          });
+      for (const targetId of before.nodeKindIds) {
+        if (!body.bindings.nodeKindIds.includes(targetId)) {
+          removeFormSlot('node-kind', targetId, definition.id);
         }
       }
       definition.bindings = body.bindings;
@@ -185,6 +224,7 @@ export const definitionHandlers = [
 
   // Агрегат последствий удаления (Р8): окно показывает, что сотрётся.
   http.get('/api/v1/custom-fields/definitions/:id/usage', ({ params }) => {
+    if (!canManageFields()) return forbidden();
     const definition = demoFieldById(String(params.id));
     if (!definition) return error(ErrorCode.NOT_FOUND, 'Field not found', 404);
     const values = entitiesWithValue(definition.id);
@@ -192,6 +232,9 @@ export const definitionHandlers = [
       values: {
         task: values.task.length,
         letter: values.letter.length,
+        // Значения контрагентов мок-мир не заводит (пути записи — Н2 CRM),
+        // но контракт usage требует честный счётчик (#646).
+        counterparty: 0,
         project: values.project.length,
         node: values.node.length,
       },
@@ -219,6 +262,7 @@ export const definitionHandlers = [
   // Удаление всегда разрешено (Р8): значения всех носителей стираются,
   // формы видов теряют слот, маршруты продолжают работать (толерантность).
   http.delete('/api/v1/custom-fields/definitions/:id', ({ params }) => {
+    if (!canManageFields()) return forbidden();
     const definition = demoFieldById(String(params.id));
     if (!definition) return error(ErrorCode.NOT_FOUND, 'Field not found', 404);
     const values = entitiesWithValue(definition.id);

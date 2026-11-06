@@ -184,6 +184,22 @@ export function NodeCreateDialog({
               value={kind?.id ?? ''}
               canSetup={canSetup}
               onChange={(id) => {
+                // Смена вида: значения прошлого вида не должны улетать в
+                // customFields — сервер ответит not_in_type за слот, которого
+                // в новом виде нет и который пользователь не видит (#646).
+                const nextKind = active.find((entry) => entry.id === id);
+                if (nextKind && definitions.data) {
+                  const allowed = new Set(
+                    effectiveNodeForm(nextKind, definitions.data).fields.map(
+                      (slot) => slot.fieldId,
+                    ),
+                  );
+                  setValues((prev) =>
+                    Object.fromEntries(
+                      Object.entries(prev).filter(([fieldId]) => allowed.has(fieldId)),
+                    ),
+                  );
+                }
                 setKindId(id);
                 setErrors(new Set());
               }}

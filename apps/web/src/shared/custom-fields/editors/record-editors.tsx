@@ -9,6 +9,7 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { useDebouncedValue } from '../../lib/use-debounced-value.js';
 import { useLettersInfinite, letterRows } from '../../api/letters-list.js';
+import { projectsAvailable } from '../../api/projects-available.js';
 import { useProjectStructure } from '../../api/project-structure.js';
 import { useProjectsList } from '../../api/projects-list.js';
 import { useTasksSearch } from '../../api/tasks-search.js';
@@ -80,6 +81,7 @@ function RefPopover({
   text,
   onTextChange,
   header,
+  onPick,
 }: {
   props: EditorProps;
   kind: CustomFieldRefKind;
@@ -87,6 +89,9 @@ function RefPopover({
   text: string;
   onTextChange: (next: string) => void;
   header?: ReactNode;
+  /** Перехват выбора (двухшаговый пикер папки): без него опция коммитится
+   *  как значение ссылки. */
+  onPick?: (option: RefOption) => void;
 }) {
   const [open, setOpen] = useState(false);
   const q = text.trim().toLowerCase();
@@ -138,7 +143,11 @@ function RefPopover({
                 key={option.id}
                 option={option}
                 on={props.value === option.id}
-                onClick={() => commitRef(props.onCommit, kind, option, () => setOpen(false))}
+                onClick={() =>
+                  onPick
+                    ? onPick(option)
+                    : commitRef(props.onCommit, kind, option, () => setOpen(false))
+                }
               />
             ))
           )}
@@ -180,10 +189,11 @@ export function LetterEditor(props: EditorProps) {
 
 /** Папка: двухшаговый выбор — проект, затем узел его структуры. */
 export function NodeEditor(props: EditorProps) {
+  const available = projectsAvailable();
   const [text, setText] = useState('');
   const [projectId, setProjectId] = useState<string | null>(null);
-  const { data: projects } = useProjectsList();
-  const { data: structure } = useProjectStructure(projectId);
+  const { data: projects } = useProjectsList({ enabled: available });
+  const { data: structure } = useProjectStructure(available ? projectId : null);
   const options =
     projectId === null
       ? (projects?.items ?? []).map((project) => ({
@@ -193,6 +203,19 @@ export function NodeEditor(props: EditorProps) {
         }))
       : (structure?.nodes ?? []).map((node) => ({ id: node.id, label: node.name }));
   const projectName = (projects?.items ?? []).find((project) => project.id === projectId)?.name;
+  if (!available) {
+    // Модуль проектов выключен — папок нет: показываем значение, не ходим
+    // в несуществующий контур (зеркало ProjectEditor, #646).
+    return (
+      <EditorTrigger variant={props.variant} disabled ariaLabel={props.definition.name}>
+        <CustomFieldValueView
+          definition={props.definition}
+          value={props.value}
+          refs={refsById(props.refs)}
+        />
+      </EditorTrigger>
+    );
+  }
   return (
     <RefPopover
       props={props}
@@ -200,6 +223,17 @@ export function NodeEditor(props: EditorProps) {
       options={options}
       text={text}
       onTextChange={setText}
+      // Шаг «проект»: клик по проекту открывает его структуру, а не
+      // коммитит projectId как значение папки (иначе сервер отвечает
+      // not_found и тип «Папка» нельзя поставить нигде — #646).
+      onPick={
+        projectId === null
+          ? (option) => {
+              setProjectId(option.id);
+              setText('');
+            }
+          : undefined
+      }
       header={
         projectId !== null ? (
           <div className="mb-1 flex items-center gap-1 border-b pb-1">

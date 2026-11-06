@@ -173,6 +173,33 @@ export class NodeKindsRepository {
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('nodus:node_kinds'))`);
   }
 
+  /** Убрать атрибут из формы одного вида (unbind, Р3): идемпотентно.
+   *  Слот формы места и есть привязка — снятие привязки чистит слот. */
+  async removeFieldFromForm(
+    tx: TransactionClient,
+    kindId: string,
+    fieldId: string,
+  ): Promise<boolean> {
+    const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
+      UPDATE node_kinds
+      SET config = jsonb_set(
+              config,
+              '{form,fields}',
+              COALESCE((
+                SELECT jsonb_agg(slot)
+                FROM jsonb_array_elements(COALESCE(config->'form'->'fields', '[]'::jsonb)) AS slot
+                WHERE slot->>'fieldId' <> ${fieldId}
+              ), '[]'::jsonb)
+          ),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${kindId}::uuid
+        AND COALESCE(config->'form'->'fields', '[]'::jsonb)
+            @> jsonb_build_array(jsonb_build_object('fieldId', ${fieldId}::text))
+      RETURNING id
+    `);
+    return rows.length > 0;
+  }
+
   /** Убрать атрибут из форм всех видов (удаление определения, Р11):
    *  идемпотентно, возвращает изменённые виды для события. */
   async removeFieldFromForms(

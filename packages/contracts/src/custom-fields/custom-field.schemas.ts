@@ -126,6 +126,10 @@ export const customFieldDefinitionSchema = z.object({
   /** Значение глобальной переменной (грамматика типа); у обычных атрибутов —
    *  null. Изменение — событие definition_changed {fields:['companyValue']}. */
   companyValue: customFieldValueSchema.nullable(),
+  /** Ссылки значения глобальной переменной (имена для показа): сервер
+   *  гидрирует их глазами актёра. Поле производное — старые моки/клиенты
+   *  могут его не присылать (пусто = имени нет). */
+  companyRefs: z.array(customFieldRefSchema).optional(),
   bindings: customFieldBindingsSchema,
   sortOrder: z.number().int().min(0),
   createdAt: z.iso.datetime(),
@@ -147,19 +151,28 @@ export type ListCustomFieldsQuery = z.infer<typeof listCustomFieldsQuerySchema>;
  * Удаление разрешено всегда — usage информирует, не блокирует.
  */
 export const customFieldUsageSchema = z.object({
-  /** Число записей со значением по видам сущностей. */
+  /** Число записей со значением по видам сущностей. Контрагенты — пятый
+   *  носитель (колонка `counterparties.custom_fields` живёт с #431, пути
+   *  записи — Н2 CRM; миграция #631 переписывает её ключи, поэтому честный
+   *  счётчик и уборка обязательны уже сейчас). */
   values: z.object({
     task: z.number().int().min(0),
     letter: z.number().int().min(0),
     project: z.number().int().min(0),
     node: z.number().int().min(0),
+    counterparty: z.number().int().min(0),
   }),
-  /** Формы создания типов, где атрибут стоит слотом. */
+  /** Формы, где атрибут стоит слотом: формы создания типов процессов
+   *  (`task`/`letter`), формы типов проектов и формы видов папок.
+   *  `draft` — форма создания непубликуемого черновика процесса: удаление
+   *  она не блокирует, но окно последствий обязано её показать (Review
+   *  Focus §9 #631). */
   forms: z.array(
     z
       .object({
-        kind: z.enum(['task', 'letter']),
+        kind: z.enum(['task', 'letter', 'project_type', 'node_kind']),
         name: z.string().min(1),
+        draft: z.boolean(),
       })
       .strict(),
   ),
@@ -290,25 +303,13 @@ export const createCustomFieldBodySchema = z
     isCompany: z.boolean().default(false),
     /** Привязки сразу (диалог одношаговый): живые цели своих видов
      *  (проверяет сервер — 422 CUSTOM_FIELD_BINDING_INVALID). Глобальной
-     *  переменной привязки запрещены (422). */
+     *  переменной привязки запрещены — доменная 422 на сервере (не 400
+     *  схемы: это семантика, а не форма запроса). */
     bindings: customFieldBindingsSchema.optional(),
   })
   .strict()
   .superRefine((body, ctx) => {
     refineShape(body, ctx);
-    if (body.isCompany && body.bindings) {
-      const bound =
-        body.bindings.processTypeIds.length > 0 ||
-        body.bindings.projectTypeIds.length > 0 ||
-        body.bindings.nodeKindIds.length > 0;
-      if (bound) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['bindings'],
-          message: 'company variable cannot have bindings',
-        });
-      }
-    }
   });
 export type CreateCustomFieldBody = z.infer<typeof createCustomFieldBodySchema>;
 

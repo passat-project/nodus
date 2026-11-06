@@ -31,4 +31,13 @@ export interface TaskRefReader {
   /** Видима ли задача актёру (существует, не удалена; конфиденциальная —
    *  участник или надзор). */
   visibleFor(taskId: string, viewer: TaskRefViewer): Promise<boolean>;
+
+  /** Батч видимости (#641): один SQL на пачку вместо запроса на ссылку.
+   *  `includeDeleted` — «была видима до удаления»: только для плашки
+   *  «запись удалена» (оракул не раскрывается — невидимая цель не входит). */
+  visibleForMany(
+    taskIds: readonly string[],
+    viewer: TaskRefViewer,
+    opts?: { includeDeleted?: boolean },
+  ): Promise<ReadonlySet<string>>;
 }

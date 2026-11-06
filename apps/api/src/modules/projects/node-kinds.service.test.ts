@@ -129,6 +129,7 @@ describe('NodeKindsService (#556 Р7, #631)', () => {
     expect(registry.syncPlaceBindings).toHaveBeenCalledWith(
       { kind: 'node_kind', id: 'kind-1' },
       [MARK],
+      [],
       {},
     );
     expect(kinds.update).toHaveBeenCalledWith(

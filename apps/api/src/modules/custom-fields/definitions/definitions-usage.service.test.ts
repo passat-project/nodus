@@ -5,9 +5,9 @@ import { DefinitionsUsageService } from './definitions-usage.service.js';
 
 /**
  * «Где используется атрибут» (#631, Р8): агрегат последствий для окна
- * удаления — значения по четырём видам сущностей (каждый владелец считает
- * свой JSONB), формы создания, маршруты, имена привязок и факт глобального
- * значения. Порты — моки: логика без БД.
+ * удаления — значения по видам сущностей (каждый владелец считает свой
+ * JSONB; контрагенты — порт crm, #646), формы создания, маршруты, имена
+ * привязок и факт глобального значения. Порты — моки: логика без БД.
  */
 
 const row = (overrides: Partial<FieldDefinitionRow> = {}): FieldDefinitionRow => ({
@@ -35,10 +35,18 @@ const row = (overrides: Partial<FieldDefinitionRow> = {}): FieldDefinitionRow =>
 function makeService() {
   const taskValues = { countValues: vi.fn(async () => 3) };
   const letterValues = { countValues: vi.fn(async () => 7) };
-  const projectUsage = { countValues: vi.fn(async () => 5) };
+  const counterpartyValues = { countValues: vi.fn(async () => 2) };
+  const projectUsage = {
+    countValues: vi.fn(async () => 5),
+    formsUsingField: vi.fn(async () => [
+      { kind: 'project_type' as const, name: 'Тендер', draft: false },
+    ]),
+  };
   const workflows = {
     workflowsUsingField: vi.fn(async () => [{ id: 'w-1', name: 'Переработка' }]),
-    creationFormsUsingField: vi.fn(async () => [{ kind: 'task' as const, name: 'Стандартный' }]),
+    creationFormsUsingField: vi.fn(async () => [
+      { kind: 'task' as const, name: 'Стандартный', draft: true },
+    ]),
   };
   const catalog = {
     typeRefs: vi.fn(async (ids: string[]) =>
@@ -54,20 +62,33 @@ function makeService() {
   const service = new DefinitionsUsageService(
     taskValues as never,
     letterValues as never,
+    counterpartyValues as never,
     projectUsage as never,
     workflows as never,
     catalog as never,
     targets as never,
   );
-  return { service, taskValues, letterValues, projectUsage, workflows, catalog, targets };
+  return {
+    service,
+    taskValues,
+    letterValues,
+    counterpartyValues,
+    projectUsage,
+    workflows,
+    catalog,
+    targets,
+  };
 }
 
 describe('DefinitionsUsageService (#631, Р8)', () => {
   it('агрегат: значения по видам, формы, маршруты, имена привязок, глобальное значение', async () => {
     const { service } = makeService();
     expect(await service.usage(row())).toEqual({
-      values: { task: 3, letter: 7, project: 5, node: 5 },
-      forms: [{ kind: 'task', name: 'Стандартный' }],
+      values: { task: 3, letter: 7, counterparty: 2, project: 5, node: 5 },
+      forms: [
+        { kind: 'task', name: 'Стандартный', draft: true },
+        { kind: 'project_type', name: 'Тендер', draft: false },
+      ],
       workflows: [{ id: 'w-1', name: 'Переработка' }],
       bindings: {
         processTypes: [{ id: 't-1', name: 'Заявка' }],
@@ -79,13 +100,15 @@ describe('DefinitionsUsageService (#631, Р8)', () => {
   });
 
   it('каждый вид значений спрашивается у своего владельца (I3)', async () => {
-    const { service, taskValues, letterValues, projectUsage } = makeService();
+    const { service, taskValues, letterValues, counterpartyValues, projectUsage } = makeService();
     const definition = row();
     await service.usage(definition);
     expect(taskValues.countValues).toHaveBeenCalledWith(definition.id);
     expect(letterValues.countValues).toHaveBeenCalledWith(definition.id);
+    expect(counterpartyValues.countValues).toHaveBeenCalledWith(definition.id);
     expect(projectUsage.countValues).toHaveBeenCalledWith('project', definition.id);
     expect(projectUsage.countValues).toHaveBeenCalledWith('node', definition.id);
+    expect(projectUsage.formsUsingField).toHaveBeenCalledWith(definition.id);
   });
 
   it('компания не задана — companyValue false (обычный атрибут)', async () => {

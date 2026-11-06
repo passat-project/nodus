@@ -44,7 +44,6 @@ function Group({
   onToggleExpand,
   onToggleAll,
   onToggleOne,
-  emptyText,
   disabled,
 }: {
   label: string;
@@ -54,7 +53,6 @@ function Group({
   onToggleExpand: () => void;
   onToggleAll: () => void;
   onToggleOne: (id: string) => void;
-  emptyText?: string;
   disabled: boolean;
 }) {
   const chosen = targets.filter((target) => selected.has(target.id));
@@ -124,9 +122,6 @@ function Group({
           })}
         </div>
       ) : null}
-      {expanded && targets.length === 0 && emptyText ? (
-        <p className="border-t px-2.5 py-2 text-xs text-muted-foreground">{emptyText}</p>
-      ) : null}
     </div>
   );
 }
@@ -141,20 +136,36 @@ export function FieldUsagePicker({
   onChange: (bindings: CustomFieldBindings) => void;
 }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const { data: processTypes } = useProcessTypes();
+  // Архивные цели включаются, только если уже стоят в привязках (#646):
+  // иначе их нельзя ни увидеть, ни снять, а сохранение полного набора
+  // упирается в запрет привязки к архиву. Новую привязку к архиву не
+  // предлагаем — сервер её по-прежнему отклоняет.
+  const { data: processTypes } = useProcessTypes('include');
   const { data: projectTypes } = useProjectTypes(true);
   const { data: nodeKinds } = useNodeKinds();
 
+  const label = (name: string, archived: boolean) =>
+    archived ? `${name} (${ui.customFields.bind.archived})` : name;
   const taskTypes: Target[] = (processTypes ?? [])
-    .filter((type) => type.category === 'task' && !type.archivedAt)
-    .map((type) => ({ id: type.id, name: type.name }));
+    .filter(
+      (type) =>
+        type.category === 'task' && (!type.archivedAt || bindings.processTypeIds.includes(type.id)),
+    )
+    .map((type) => ({ id: type.id, name: label(type.name, type.archivedAt !== null) }));
   const letterTypes: Target[] = (processTypes ?? [])
-    .filter((type) => type.category === 'letter' && !type.archivedAt)
-    .map((type) => ({ id: type.id, name: type.name }));
+    .filter(
+      (type) =>
+        type.category === 'letter' &&
+        (!type.archivedAt || bindings.processTypeIds.includes(type.id)),
+    )
+    .map((type) => ({ id: type.id, name: label(type.name, type.archivedAt !== null) }));
   const types: Target[] = (projectTypes ?? [])
-    .filter((type) => type.archivedAt === null)
-    .map((type) => ({ id: type.id, name: type.name }));
-  const kinds: Target[] = (nodeKinds ?? []).map((kind) => ({ id: kind.id, name: kind.name }));
+    .filter((type) => type.archivedAt === null || bindings.projectTypeIds.includes(type.id))
+    .map((type) => ({ id: type.id, name: label(type.name, type.archivedAt !== null) }));
+  const kinds: Target[] = (nodeKinds ?? []).map((kind) => ({
+    id: kind.id,
+    name: label(kind.name, kind.archivedAt !== null),
+  }));
 
   const toggleList = (current: string[], all: readonly Target[]): string[] => {
     const set = new Set(current);
@@ -176,7 +187,6 @@ export function FieldUsagePicker({
     targets: readonly Target[];
     selected: string[];
     list: 'processTypeIds' | 'projectTypeIds' | 'nodeKindIds';
-    emptyText?: string;
   }> = [
     {
       key: 'task',
@@ -198,7 +208,6 @@ export function FieldUsagePicker({
       targets: types,
       selected: bindings.projectTypeIds,
       list: 'projectTypeIds',
-      emptyText: ui.customFields.bind.projectTypesEmpty,
     },
     {
       key: 'node',
@@ -206,7 +215,6 @@ export function FieldUsagePicker({
       targets: kinds,
       selected: bindings.nodeKindIds,
       list: 'nodeKindIds',
-      emptyText: ui.customFields.bind.nodeKindsEmpty,
     },
   ];
 
@@ -232,7 +240,6 @@ export function FieldUsagePicker({
             onToggleOne={(id) =>
               onChange({ ...bindings, [group.list]: toggleOne(bindings[group.list], id) })
             }
-            emptyText={group.emptyText}
             disabled={disabled}
           />
         ))}

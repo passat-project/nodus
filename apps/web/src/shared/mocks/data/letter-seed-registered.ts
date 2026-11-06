@@ -3,7 +3,7 @@
 import type { TaskStage } from '@nodus/contracts';
 
 import { contactIds, counterpartyIds } from './counterparties.js';
-import { fieldIds } from './custom-fields.js';
+import { fieldIds } from './field-ids.js';
 import { receiptMethodIds } from './dictionaries.js';
 import { letterStages } from './letter-catalog.js';
 import type { DemoLetter } from './letters-model.js';

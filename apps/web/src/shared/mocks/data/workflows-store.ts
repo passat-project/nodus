@@ -33,24 +33,24 @@ for (const [id, detail] of Object.entries(demoWorkflowDetails)) {
   );
 }
 
-/** Маршруты, где атрибут стоит в окне перехода, условии «Заполнены поля» или
- *  форме создания типа (как серверный поиск ссылок перед удалением и снятием
- *  привязки к типу, #432). Имя — тип процесса. */
+/** Маршруты, где атрибут стоит в окне перехода или условии «Заполнены
+ *  поля» (как серверный поиск ссылок перед удалением, #432). Формы создания
+ *  считаются отдельно (`forms`, включая черновики); только опубликованные.
+ *  Имя — тип процесса. */
 export function workflowsUsingField(fieldId: string): { id: string; name: string }[] {
   const key = customFieldKey(fieldId);
   const result: { id: string; name: string }[] = [];
   for (const detail of mockWorkflows.values()) {
-    const used =
-      detail.document.creation?.fields.some((slot) => slot.key === key) === true ||
-      detail.document.transitions.some(
-        (t) =>
-          (t.form.enabled &&
-            t.form.sections.some((s) => s.kind === 'fields' && s.fields.includes(key))) ||
-          t.rules.validators.some((v) => v.kind === 'fields_required' && v.fields.includes(key)) ||
-          t.rules.conditions.some(
-            (c) => c.kind === 'decider_in' && c.source.kind === 'field' && c.source.field === key,
-          ),
-      );
+    if (!detail.publishedAt) continue;
+    const used = detail.document.transitions.some(
+      (t) =>
+        (t.form.enabled &&
+          t.form.sections.some((s) => s.kind === 'fields' && s.fields.includes(key))) ||
+        t.rules.validators.some((v) => v.kind === 'fields_required' && v.fields.includes(key)) ||
+        t.rules.conditions.some(
+          (c) => c.kind === 'decider_in' && c.source.kind === 'field' && c.source.field === key,
+        ),
+    );
     if (!used) continue;
     const type = demoProcessTypes.find((entry) => entry.workflowId === detail.id);
     result.push({ id: detail.id, name: type?.name ?? detail.id });

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { ProjectDetail, UserRef } from '@nodus/contracts';
+import type { CustomFieldRef, CustomFieldValue, ProjectDetail, UserRef } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
@@ -177,24 +177,35 @@ export function useRemoveProjectMember(id: string) {
   });
 }
 
-/** Атрибут проекта: оптимистичная правка значения (I4). */
+/** Атрибут проекта: оптимистичная правка значения (I4). Выбранная ссылка
+ *  мержится в `customFieldRefs` — иначе до ответа сервера свежее значение
+ *  показывает «Запись недоступна» (#646). */
 export function useUpdateProjectCustomField(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { fieldId: string; value: unknown }) =>
+    mutationFn: (vars: {
+      fieldId: string;
+      value: CustomFieldValue | null;
+      refs?: readonly CustomFieldRef[];
+    }) =>
       api<ProjectDetail>(`/projects/${id}`, {
         method: 'PATCH',
         body: { customFields: { [vars.fieldId]: vars.value } },
       }),
-    onMutate: async ({ fieldId, value }) => {
+    onMutate: async ({ fieldId, value, refs }) => {
       const previous = queryClient.getQueryData<ProjectDetail>(projectsKeys.detail(id));
       if (previous) {
         const customFields = { ...previous.customFields };
         if (value === null) delete customFields[fieldId];
-        else customFields[fieldId] = value as never;
+        else customFields[fieldId] = value;
+        const merged = new Map(
+          previous.customFieldRefs.map((ref) => [`${ref.kind}:${ref.id}`, ref]),
+        );
+        for (const ref of refs ?? []) merged.set(`${ref.kind}:${ref.id}`, ref);
         queryClient.setQueryData<ProjectDetail>(projectsKeys.detail(id), {
           ...previous,
           customFields,
+          customFieldRefs: [...merged.values()],
         });
       }
       return { previous };
@@ -205,7 +216,11 @@ export function useUpdateProjectCustomField(id: string) {
     },
     onSuccess: (project) => queryClient.setQueryData(projectsKeys.detail(id), project),
     onSettled: () => {
+      // Шифр/заказчик — производные: журнал и пикеры тоже перечитываются,
+      // иначе колонка «Шифр» показывает старое значение до полного рефеча.
       void queryClient.invalidateQueries({ queryKey: projectsKeys.detail(id) });
+      void queryClient.invalidateQueries({ queryKey: projectsKeys.journals() });
+      void queryClient.invalidateQueries({ queryKey: projectsKeys.options() });
     },
   });
 }

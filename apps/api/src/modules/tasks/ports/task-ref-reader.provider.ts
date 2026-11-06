@@ -28,7 +28,18 @@ export class TaskRefReaderProvider implements TaskRefReader {
   }
 
   async visibleFor(taskId: string, viewer: TaskRefViewer): Promise<boolean> {
+    return (await this.visibleForMany([taskId], viewer)).has(taskId);
+  }
+
+  async visibleForMany(
+    taskIds: readonly string[],
+    viewer: TaskRefViewer,
+    opts: { includeDeleted?: boolean } = {},
+  ): Promise<ReadonlySet<string>> {
+    if (taskIds.length === 0) return new Set();
     const resolved = await this.viewers.resolve(viewer);
-    return this.reads.isVisible(taskId, visibleTasksWhere(resolved, 'all'));
+    const where = visibleTasksWhere(resolved, 'all', opts);
+    const ids = await this.reads.visibleIds([...new Set(taskIds)], where);
+    return new Set(ids);
   }
 }

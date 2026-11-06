@@ -1,6 +1,8 @@
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 
+import { nodeKindsKeys } from '../api/node-kinds.js';
+import { projectsKeys } from '../api/projects-list.js';
 import { tasksKeys } from '../api/tasks-keys.js';
 import { customFieldsKeys } from '../custom-fields/queries.js';
 import { dictionariesKeys } from '../dictionaries/keys.js';
@@ -33,6 +35,8 @@ describe('pushCustomFieldKeys (#431, ADR-0029)', () => {
     expect(handled).toBe(true);
     expect(has(keys, customFieldsKeys.all)).toBe(true);
     expect(has(keys, dictionariesKeys.all)).toBe(true);
+    expect(has(keys, projectsKeys.types())).toBe(true);
+    expect(has(keys, nodeKindsKeys.all)).toBe(true);
     expect(has(keys, tasksKeys.detailsAll())).toBe(true);
     expect(has(keys, tasksKeys.listPages())).toBe(true);
   });

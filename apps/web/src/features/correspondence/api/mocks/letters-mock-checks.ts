@@ -17,7 +17,10 @@ import { HttpResponse } from 'msw';
 import type { z } from 'zod';
 
 import { demoCounterpartyById } from '../../../../shared/mocks/data/counterparties.js';
-import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
+import {
+  applyDemoPatch,
+  boundFieldIds,
+} from '../../../../shared/mocks/data/custom-fields-rules.js';
 import { itemsOf } from '../../../../shared/mocks/data/dictionaries.js';
 import {
   localIsoDate,
@@ -38,6 +41,8 @@ export const notFound = () => apiError(404, 'NOT_FOUND');
 
 /** Ввод, который проверяется против справочников (регистрация и правка). */
 export interface LetterFieldsCheck {
+  /** Тип письма: значения проверяются против его привязок (#631 Р3). */
+  typeId: string;
   counterpartyId: string;
   signerId: string | null;
   theirDate?: string | null;
@@ -72,7 +77,7 @@ export async function letterFieldsIssue(
   const [dateIssue] = checkLetterDates(input, localIsoDate());
   if (dateIssue) return dateIssue;
   if (input.customFields) {
-    const { issues } = applyDemoPatch({}, input.customFields);
+    const { issues } = applyDemoPatch({}, input.customFields, boundFieldIds(input.typeId));
     if (issues.length > 0) return { field: 'customFields', reason: 'invalid' };
   }
   return null;

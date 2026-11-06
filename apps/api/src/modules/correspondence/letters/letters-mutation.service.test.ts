@@ -20,9 +20,19 @@ const COLLEAGUE = '00000000-0000-4000-8000-000000000404';
 const row = (registeredAt: Date | null): LetterDetailRow =>
   ({
     id: LETTER,
+    typeId: '00000000-0000-4000-8000-000000000499',
     registeredAt,
     addresseeId: null,
     counterpartyId: null,
+    signerId: null,
+    theirNumber: null,
+    theirDate: null,
+    subject: null,
+    receiptMethodId: null,
+    projectId: null,
+    responseDeadline: null,
+    customFields: {},
+    deletedAt: null,
     registrarId: null,
     confidential: false,
     systemState: 'active',
@@ -31,6 +41,7 @@ const row = (registeredAt: Date | null): LetterDetailRow =>
 function setup(letter: LetterDetailRow) {
   const repo = {
     lock: vi.fn(async () => void 0),
+    findDetailById: vi.fn(async () => letter),
     participants: vi.fn(async () => []),
     addParticipant: vi.fn(async () => true),
     markViewed: vi.fn(async () => void 0),

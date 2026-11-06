@@ -500,6 +500,35 @@ async function main(): Promise<void> {
     });
   }
 
+  // Привязка посевной «Марки» к типу задачи (#631 Р9/§9.1): демо-мир должен
+  // сразу показывать один атрибут в двух местах — вид папки и тип задачи.
+  const marka = await prisma.fieldDefinition.findUnique({
+    where: { id: '35560000-0000-4000-8000-000000000001' },
+    select: { id: true },
+  });
+  const taskType = await prisma.processType.findFirst({
+    where: { category: 'task', archivedAt: null },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { id: true },
+  });
+  if (marka && taskType) {
+    await prisma.fieldBinding.upsert({
+      where: {
+        definitionId_targetKind_targetId: {
+          definitionId: marka.id,
+          targetKind: 'process_type',
+          targetId: taskType.id,
+        },
+      },
+      update: {},
+      create: {
+        definitionId: marka.id,
+        targetKind: 'process_type',
+        targetId: taskType.id,
+      },
+    });
+  }
+
   // Демо-проект со шифром (Р9): «Шифр» и «Заказчик» — атрибуты, значение
   // живёт в customFields; колонки code/client_id заморожены. Только при
   // пустом журнале проектов (ре-сид живого стенда ничего не добавляет).

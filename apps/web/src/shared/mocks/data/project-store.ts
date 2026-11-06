@@ -1,4 +1,9 @@
-import type { CreateProjectBody, ProjectStatus, UpdateProjectBody } from '@nodus/contracts';
+import {
+  SYSTEM_FIELD_IDS,
+  type CreateProjectBody,
+  type ProjectStatus,
+  type UpdateProjectBody,
+} from '@nodus/contracts';
 
 import { appendDemoProjectEvent } from './project-events.js';
 import {
@@ -15,16 +20,21 @@ import type { DemoActor } from './project-views.js';
 /** Мутации мок-мира проектов (#52): зеркало серверных правил для приёмки
  *  демо-сборки. Данные — `projects.ts`, чтение/DTO — `project-views.ts`. */
 
-export function projectCodeTaken(code: string, excludeId: string | null): boolean {
-  return demoProjectRows.some((row) => row.code === code && row.id !== excludeId);
-}
-
 export function defaultVisibility(): 'open' | 'secret' {
   return demoPortalSettings.projects.defaultVisibility;
 }
 
 function touch(row: DemoProjectRow): void {
   row.updatedAt = new Date().toISOString();
+}
+
+/** `code`/`clientId` строки — производные системных атрибутов (#631):
+ *  мок обязан держать их в синхроне, иначе журнал/поиск/пикер врут. */
+function syncLegacyFields(row: DemoProjectRow): void {
+  const code = row.customFields[SYSTEM_FIELD_IDS.projectCode];
+  row.code = typeof code === 'string' && code !== '' ? code : null;
+  const client = row.customFields[SYSTEM_FIELD_IDS.projectClient];
+  row.clientId = typeof client === 'string' && client !== '' ? client : null;
 }
 
 function syncManagement(row: DemoProjectRow): void {
@@ -72,11 +82,14 @@ export function createDemoProject(body: CreateProjectBody, actor: DemoActor): De
     endDate: body.endDate ?? null,
     completedAt: null,
     archivedAt: null,
-    customFields: {},
+    // Значения атрибутов создания (#631): мок обязан сохранять их так же,
+    // как сервер, иначе «Шифр»/«Заказчик» теряются на :5173.
+    customFields: { ...(body.customFields ?? {}) },
     creatorId: actor.id,
     createdAt: now,
     updatedAt: now,
   };
+  syncLegacyFields(row);
   demoProjectRows.unshift(row);
   syncManagement(row);
   for (const observerId of new Set(body.observers ?? [])) {
@@ -117,12 +130,20 @@ export function updateDemoProject(
 ): DemoProjectRow | null {
   const row = findDemoProjectRow(id);
   if (!row) return null;
-  if (body.code !== undefined) row.code = body.code ?? null;
+  // Legacy-поля идут в те же системные атрибуты, что и на сервере; явное
+  // customFields ниже важнее (порядок как в project-legacy-fields.ts).
+  if (body.code !== undefined) {
+    if (body.code === null) delete row.customFields[SYSTEM_FIELD_IDS.projectCode];
+    else row.customFields[SYSTEM_FIELD_IDS.projectCode] = body.code;
+  }
+  if (body.clientId !== undefined) {
+    if (body.clientId === null) delete row.customFields[SYSTEM_FIELD_IDS.projectClient];
+    else row.customFields[SYSTEM_FIELD_IDS.projectClient] = body.clientId;
+  }
   if (body.name !== undefined) row.name = body.name;
   if (body.description !== undefined) row.description = body.description ?? '';
   if (body.color !== undefined) row.color = body.color;
   if (body.portfolioId !== undefined) row.portfolioId = body.portfolioId ?? null;
-  if (body.clientId !== undefined) row.clientId = body.clientId ?? null;
   if (body.visibility !== undefined) row.visibility = body.visibility;
   if (body.startDate !== undefined) row.startDate = body.startDate ?? null;
   if (body.endDate !== undefined) row.endDate = body.endDate ?? null;
@@ -136,6 +157,7 @@ export function updateDemoProject(
       else row.customFields[fieldId] = value as never;
     }
   }
+  syncLegacyFields(row);
   touch(row);
   appendDemoProjectEvent({
     projectId: row.id,

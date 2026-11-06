@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   apiErrorResponseSchema,
+  customFieldKey,
   customFieldUsageSchema,
   dictionaryItemSchema,
   dictionarySchema,
@@ -39,6 +40,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
         name: `Проба ${fx.runId} удаляемый`,
       });
       const taskId = await cf.createTask();
+      const counterparty = await fx.prisma.counterparty.create({
+        data: {
+          shortName: `Проба ${fx.runId} контрагент`,
+          fullName: `ООО «Проба ${fx.runId}»`,
+          customFields: { [field.id]: 'значение контрагента' },
+        },
+      });
+      cf.counterpartyIds.push(counterparty.id);
       const detail = taskDetailSchema.parse(
         await (await fx.api(admin, 'GET', `/tasks/${taskId}`)).json(),
       );
@@ -66,7 +75,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const usage = await fx.api(admin, 'GET', `/custom-fields/definitions/${field.id}/usage`);
       expect(usage.status).toBe(200);
       expect(customFieldUsageSchema.parse(await usage.json())).toMatchObject({
-        values: { task: 1, letter: 0, project: 0, node: 0 },
+        values: { task: 1, letter: 0, counterparty: 1, project: 0, node: 0 },
         workflows: [{ id: workflowId }],
         bindings: { processTypes: [expect.objectContaining({ name: expect.any(String) })] },
         companyValue: false,
@@ -88,6 +97,61 @@ describe.skipIf(!process.env.DATABASE_URL)(
         select: { customFields: true },
       });
       expect(row.customFields).not.toHaveProperty(field.id);
+
+      // Контрагенты — пятый носитель (#646): обработчик crm чистит ключ.
+      const counterpartyRow = await fx.prisma.counterparty.findUniqueOrThrow({
+        where: { id: counterparty.id },
+        select: { customFields: true },
+      });
+      expect(counterpartyRow.customFields).not.toHaveProperty(field.id);
+
+      // §6-7 матрицы: удалённый атрибут не блокирует переход. Форма окна
+      // всё ещё ссылается на `cf.<id>` — исполнение толерантно (ADR-0029).
+      await cf.startTask(taskId);
+      const button = z
+        .array(workflowTransitionSchema)
+        .parse(await (await fx.api(admin, 'GET', `/tasks/${taskId}/transitions`)).json())
+        .find((candidate) => candidate.name === 'Завершить')!;
+      const done = await fx.api(admin, 'POST', `/tasks/${taskId}/transitions/${button.id}`, {
+        body: { form: {} },
+        key: `it-cf-del-transition-${fx.runId}`,
+      });
+      expect(done.status, await done.clone().text()).toBe(200);
+      // Переход прошёл, несмотря на мёртвый ключ в форме окна.
+      expect(
+        executeTransitionResultSchema.parse(await done.json()).task.stage.systemState,
+      ).not.toBe('active');
+    });
+
+    it('форма создания непубликуемого черновика видна в usage (Review Focus §9 #631)', async () => {
+      const { fx, admin } = cf;
+      const field = await cf.createField({
+        type: 'text',
+        name: `Черновик ${fx.runId}`,
+      });
+      const draft = await fx.prisma.workflow.create({
+        data: {
+          name: `Черновик маршрута ${fx.runId}`,
+          kind: 'task',
+          publishedAt: null,
+          creation: { fields: [{ key: customFieldKey(field.id) }] } as never,
+        },
+      });
+      try {
+        const usage = customFieldUsageSchema.parse(
+          await (await fx.api(admin, 'GET', `/custom-fields/definitions/${field.id}/usage`)).json(),
+        );
+        expect(usage.forms).toContainEqual({
+          kind: 'task',
+          name: draft.name,
+          draft: true,
+        });
+        // Удаление не блокируется черновиком (Review Focus §9): 204.
+        const removed = await fx.api(admin, 'DELETE', `/custom-fields/definitions/${field.id}`);
+        expect(removed.status, await removed.clone().text()).toBe(204);
+      } finally {
+        await fx.prisma.workflow.delete({ where: { id: draft.id } });
+      }
     });
 
     it('окно и гейт: поле процесса разблокирует переход', async () => {

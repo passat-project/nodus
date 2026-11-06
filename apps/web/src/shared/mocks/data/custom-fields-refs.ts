@@ -5,7 +5,10 @@ import { demoCounterpartyById } from './counterparties.js';
 import { demoFieldById } from './custom-fields.js';
 import { itemById } from './dictionaries.js';
 import { demoDepartments } from './departments.js';
+import { demoLetters } from './letters.js';
+import { demoNodeRows } from './project-nodes.js';
 import { projectRefs } from './task-item-factory.js';
+import { demoTasks } from './task-items.js';
 import { demoUserListItems } from './users.js';
 
 /** Ссылки для показа значений (Р6): сотрудники, подразделения, элементы
@@ -104,6 +107,47 @@ export function demoRefsForValues(values: CustomFieldValues): CustomFieldRef[] {
             name: counterparty.shortName,
             avatarUrl: null,
             archived: counterparty.archivedAt !== null,
+          });
+        }
+        break;
+      }
+      case 'task': {
+        const task = demoTasks.find((entry) => entry.id === value);
+        if (task) {
+          add({
+            kind: 'task',
+            id: task.id,
+            name: task.title,
+            avatarUrl: null,
+            archived: false,
+          });
+        }
+        break;
+      }
+      case 'letter': {
+        const letter = demoLetters.find((entry) => entry.id === value);
+        if (letter) {
+          add({
+            kind: 'letter',
+            id: letter.id,
+            name: [letter.regNumber ?? '—', letter.counterparty?.name ?? '']
+              .filter((part) => part !== '')
+              .join(' · '),
+            avatarUrl: null,
+            archived: false,
+          });
+        }
+        break;
+      }
+      case 'node': {
+        const node = demoNodeRows.find((entry) => entry.id === value);
+        if (node) {
+          add({
+            kind: 'node',
+            id: node.id,
+            name: node.name,
+            avatarUrl: null,
+            archived: false,
           });
         }
         break;

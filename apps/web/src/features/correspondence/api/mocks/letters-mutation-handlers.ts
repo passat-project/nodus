@@ -9,7 +9,10 @@ import { http, HttpResponse } from 'msw';
 
 import { demoConversations } from '../../../../shared/mocks/data/chat.js';
 import { counterpartyRefById } from '../../../../shared/mocks/data/counterparties.js';
-import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
+import {
+  applyDemoPatch,
+  boundFieldIds,
+} from '../../../../shared/mocks/data/custom-fields-rules.js';
 import { incomingLetterType, letterStages } from '../../../../shared/mocks/data/letter-catalog.js';
 import { previewKindOf } from '../../../../shared/mocks/data/letter-files.js';
 import {
@@ -156,6 +159,7 @@ export const lettersMutationHandlers = [
     const signerId = body.signerId !== undefined ? body.signerId : (letter.signer?.id ?? null);
     const issue = await letterFieldsIssue(
       {
+        typeId: letter.typeId,
         counterpartyId,
         signerId,
         theirDate: body.theirDate,
@@ -207,7 +211,7 @@ export const lettersMutationHandlers = [
       responseDeadline:
         body.responseDeadline !== undefined ? body.responseDeadline : letter.responseDeadline,
       customFields: body.customFields
-        ? applyDemoPatch(letter.customFields, body.customFields).next
+        ? applyDemoPatch(letter.customFields, body.customFields, boundFieldIds(letter.typeId)).next
         : letter.customFields,
       confidential: body.confidential ?? letter.confidential,
       attachedRefs: attached && 'refs' in attached ? attached.refs : letter.attachedRefs,

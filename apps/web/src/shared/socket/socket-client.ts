@@ -9,6 +9,7 @@ import {
   chatMessageSentPayloadSchema,
   CUSTOM_FIELD_CATALOG_EVENTS,
   DICTIONARY_CATALOG_EVENTS,
+  PROJECT_AUDIENCE_EVENTS,
   PROJECT_CATALOG_EVENTS,
   WORKFLOW_CATALOG_EVENTS,
 } from '@nodus/contracts';
@@ -86,6 +87,7 @@ export const DOMAIN_EVENTS = [
   ...DICTIONARY_CATALOG_EVENTS,
   ...WORKFLOW_CATALOG_EVENTS,
   ...PROJECT_CATALOG_EVENTS,
+  ...PROJECT_AUDIENCE_EVENTS,
 ] as const;
 
 let socket: Socket | null = null;

@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -9,7 +20,6 @@ import {
 } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
-  ErrorCode,
   Permission,
   projectGroupCreateBodySchema,
   projectGroupSchema,
@@ -35,13 +45,20 @@ import { GetUser } from '../../core/decorators/get-user.decorator.js';
 import { RequireFeature } from '../../core/decorators/require-feature.decorator.js';
 import { RequirePermissions } from '../../core/decorators/require-permissions.decorator.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
+import { EventBus } from '../../core/events/event-bus.js';
 import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../core/openapi/api-idempotency.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { TransactionRunner } from '../../core/database/transaction-runner.js';
+import {
+  CUSTOM_FIELD_REGISTRY,
+  type CustomFieldRegistry,
+} from '../custom-fields/ports/custom-field-registry.port.js';
 import { NodeKindsRepository } from './project-node-kinds.repository.js';
 import { ProjectGroupsRepository } from './project-groups.repository.js';
 import { ProjectTypesRepository } from './project-types.repository.js';
+import { emitProjectTypeChanged } from './project-type-events.js';
+import { createProjectType, updateProjectType } from './project-type-form.js';
 import { ProjectsService } from './projects.service.js';
 
 const idParamSchema = z.uuid();
@@ -67,6 +84,8 @@ export class ProjectCatalogsController {
     private readonly nodeKinds: NodeKindsRepository,
     private readonly settings: ProjectsService,
     private readonly txRunner: TransactionRunner,
+    private readonly eventBus: EventBus,
+    @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
   ) {}
 
   // ===== Типы проектов («Автоматизация», Р6) =====
@@ -97,13 +116,16 @@ export class ProjectCatalogsController {
       pipes: [new ZodValidationPipe(projectTypeCreateBodySchema)],
     })
     dto: ProjectTypeCreateBody,
+    @GetUser() actor: AuthUser,
   ): Promise<ProjectType> {
-    return this.txRunner.run(async (tx) => {
-      if (await this.types.nameTaken(dto.name)) {
-        throw DomainException.conflict('Project type name is already taken');
-      }
-      return this.types.create(tx, dto);
-    });
+    return this.txRunner.run((tx) =>
+      createProjectType(
+        { types: this.types, registry: this.customFields, eventBus: this.eventBus },
+        tx,
+        dto,
+        actor.id,
+      ),
+    );
   }
 
   @Patch('projects/types/:id')
@@ -111,7 +133,7 @@ export class ProjectCatalogsController {
   @Audit({ action: 'project.type_update', entity: 'project_type' })
   @ApiParam({ name: 'id', description: 'UUID типа', schema: { type: 'string', format: 'uuid' } })
   @ApiOperation({
-    summary: 'Правка типа проекта: имя, значок, цвет, поле «Шифр», виды папок',
+    summary: 'Правка типа проекта: имя, значок, цвет, форма атрибутов, виды папок',
   })
   @ApiOkResponse({ standardSchema: projectTypeSchema })
   @ApiErrors(400, 401, 403, 404, 409)
@@ -123,25 +145,22 @@ export class ProjectCatalogsController {
       pipes: [new ZodValidationPipe(projectTypeUpdateBodySchema)],
     })
     dto: ProjectTypeUpdateBody,
+    @GetUser() actor: AuthUser,
   ): Promise<ProjectType> {
-    return this.txRunner.run(async (tx) => {
-      if (dto.name !== undefined && (await this.types.nameTaken(dto.name, id))) {
-        throw DomainException.conflict('Project type name is already taken');
-      }
-      // Допустимые виды папок типа (#556): id существуют и живые, иначе 422
-      // (без оракула — не раскрываем, какой именно вид исчез).
-      if (dto.kindIds !== undefined && dto.kindIds !== null) {
-        const alive = await this.nodeKinds.activeByIds(dto.kindIds);
-        if (alive.length !== new Set(dto.kindIds).size) {
-          throw new DomainException(ErrorCode.PROJECT_NODE_INVALID, 'Node kind is not available', {
-            typeId: id,
-          });
-        }
-      }
-      const updated = await this.types.update(tx, id, dto);
-      if (!updated) throw DomainException.notFound('Project type not found');
-      return updated;
-    });
+    return this.txRunner.run((tx) =>
+      updateProjectType(
+        {
+          types: this.types,
+          nodeKinds: this.nodeKinds,
+          registry: this.customFields,
+          eventBus: this.eventBus,
+        },
+        tx,
+        id,
+        dto,
+        actor.id,
+      ),
+    );
   }
 
   @Delete('projects/types/:id')
@@ -151,10 +170,14 @@ export class ProjectCatalogsController {
   @ApiOperation({ summary: 'Архивировать тип (проекты сохраняют ссылку, состав не ломается)' })
   @ApiOkResponse({ standardSchema: projectTypeSchema })
   @ApiErrors(400, 401, 403, 404)
-  typeArchive(@Param('id', new ZodValidationPipe(idParamSchema)) id: string): Promise<ProjectType> {
+  typeArchive(
+    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @GetUser() actor: AuthUser,
+  ): Promise<ProjectType> {
     return this.txRunner.run(async (tx) => {
       const archived = await this.types.setArchived(tx, id, true);
       if (!archived) throw DomainException.notFound('Project type not found');
+      await emitProjectTypeChanged(this.eventBus, tx, id, 'archived', ['archivedAt'], actor.id);
       return archived;
     });
   }
@@ -167,10 +190,14 @@ export class ProjectCatalogsController {
   @ApiOkResponse({ standardSchema: projectTypeSchema })
   @ApiErrors(400, 401, 403, 404)
   @ApiIdempotencyKey()
-  typeRestore(@Param('id', new ZodValidationPipe(idParamSchema)) id: string): Promise<ProjectType> {
+  typeRestore(
+    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @GetUser() actor: AuthUser,
+  ): Promise<ProjectType> {
     return this.txRunner.run(async (tx) => {
       const restored = await this.types.setArchived(tx, id, false);
       if (!restored) throw DomainException.notFound('Project type not found');
+      await emitProjectTypeChanged(this.eventBus, tx, id, 'restored', ['archivedAt'], actor.id);
       return restored;
     });
   }

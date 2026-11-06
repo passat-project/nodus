@@ -1,12 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  customFieldKey,
   ErrorCode,
   Permission,
   PROJECT_EVENTS,
   PROJECT_LIMITS,
   SYSTEM_FIELD_IDS,
+  effectiveProjectTypeForm,
   missingProjectFields,
-  projectTypeFormOf,
   type AuthUser,
   type CreateProjectBody,
   type ProjectDetail,
@@ -23,6 +24,7 @@ import {
   type CustomFieldRegistry,
 } from '../custom-fields/ports/custom-field-registry.port.js';
 import type { ProjectFacts } from './project-access.js';
+import { projectAudience } from './project-audience.js';
 import { clientOf, codeOf, legacyToAttributes } from './project-legacy-fields.js';
 import { buildUpdatePatch } from './project-update-patch.js';
 import { ProjectsQueryService } from './projects-query.service.js';
@@ -91,15 +93,22 @@ export class ProjectsService {
         tx,
       );
       // Обязательные слоты формы типа — после умолчаний (Р10): сервер —
-      // истина, как у задач и папок.
-      const missing = missingProjectFields(projectTypeFormOf(type), { customFields });
+      // истина, как у задач и папок. Форма — эффективная: слот удалённого
+      // атрибута не блокирует создание (#646).
+      const boundDefinitions = await this.customFields.definitions(
+        { target: { kind: 'project_type', id: body.typeId } },
+        tx,
+      );
+      const missing = missingProjectFields(effectiveProjectTypeForm(type, boundDefinitions), {
+        customFields,
+      });
       if (missing.length > 0) {
         throw new DomainException(
           ErrorCode.PROJECT_FIELDS_REQUIRED,
           'Required project fields are missing',
           {
             typeId: type.id,
-            fields: missing,
+            fields: missing.map(customFieldKey),
             reason: 'create',
           },
         );
@@ -154,6 +163,7 @@ export class ProjectsService {
           visibility,
           typeId: row.typeId,
           observerIds,
+          audience: [...new Set([user.id, managerId, ...assistantIds, ...observerIds])],
         },
         { actorId: user.id, aggregateType: 'project', aggregateId: row.id },
       );
@@ -169,47 +179,66 @@ export class ProjectsService {
     if (row.status === 'archived' && !user.permissions.includes(Permission.PROJECT_MANAGE)) {
       throw DomainException.forbidden('Archived project fields are managed by project.manage');
     }
-    const { patch, fields, assistantIds } = await buildUpdatePatch(
-      {
-        groups: this.groups,
-        profiles: this.profiles,
-        types: this.types,
-        customFields: this.customFields,
-      },
-      user,
-      row,
-      this.factsOf(row),
-      body,
-    );
-    await this.txRunner.run(async (tx) => {
-      const next = await this.repo.update(tx, id, patch);
-      if (assistantIds !== null) {
-        await this.members.syncManagement(tx, id, { managerId: next.managerId, assistantIds });
+    // Патч строится В ТРАНЗАКЦИИ по свежей строке под FOR UPDATE (#646):
+    // иначе два параллельных PATCH теряют значения JSONB друг друга, а
+    // PATCH поверх cleanup воскрешает ключ удалённого атрибута.
+    const { patch } = await this.txRunner.run(async (tx) => {
+      const locked = await this.repo.lockForUpdate(tx, id);
+      if (!locked) throw DomainException.notFound('Project not found');
+      const fresh = await this.repo.findById(id, tx);
+      if (!fresh) throw DomainException.notFound('Project not found');
+      if (fresh.status === 'archived' && !user.permissions.includes(Permission.PROJECT_MANAGE)) {
+        throw DomainException.forbidden('Archived project fields are managed by project.manage');
+      }
+      const built = await buildUpdatePatch(
+        {
+          groups: this.groups,
+          profiles: this.profiles,
+          types: this.types,
+          customFields: this.customFields,
+        },
+        user,
+        fresh,
+        this.factsOf(fresh),
+        body,
+        tx,
+      );
+      const next = await this.repo.update(tx, id, built.patch);
+      if (built.assistantIds !== null) {
+        await this.members.syncManagement(tx, id, {
+          managerId: next.managerId,
+          assistantIds: built.assistantIds,
+        });
       }
       // Уход в секретность: состав становится полностью ручным В ТОЙ ЖЕ
       // транзакции — без окна, где проект уже скрыт, а бывшие участники
       // задач/самовступившие наблюдатели ещё держат доступ.
-      if (patch.visibility === 'secret') {
+      if (built.patch.visibility === 'secret') {
         await this.members.dropOpenRoster(tx, id);
       }
+      const nextValues =
+        (built.patch.customFields as Prisma.JsonValue | undefined) ?? fresh.customFields;
       await this.eventBus.emit(
         tx,
         PROJECT_EVENTS.UPDATED,
         {
           projectId: id,
-          fields,
-          ...(patch.name !== undefined ? { name: patch.name } : {}),
-          ...(fields.some((field) => field === `cf.${SYSTEM_FIELD_IDS.projectClient}`)
+          fields: built.fields,
+          ...(built.patch.name !== undefined ? { name: built.patch.name } : {}),
+          ...(built.fields.some((field) => field === `cf.${SYSTEM_FIELD_IDS.projectCode}`)
+            ? { code: codeOf(nextValues) }
+            : {}),
+          ...(built.fields.some((field) => field === `cf.${SYSTEM_FIELD_IDS.projectClient}`)
             ? {
-                clientId: clientOf(
-                  (patch.customFields as Prisma.JsonValue | undefined) ?? row.customFields,
-                ),
-                previousClientId: clientOf(row.customFields),
+                clientId: clientOf(nextValues),
+                previousClientId: clientOf(fresh.customFields),
               }
             : {}),
+          audience: await projectAudience(this.participantsRepo, next, tx),
         },
         { actorId: user.id, aggregateType: 'project', aggregateId: id },
       );
+      return { patch: built.patch };
     });
     if (patch.visibility === 'open') {
       await this.members.recomputeTaskSource(id);

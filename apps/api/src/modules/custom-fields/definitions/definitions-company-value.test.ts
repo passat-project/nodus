@@ -12,6 +12,8 @@ import type { CustomFieldIssue } from '../values/value-validator.js';
  * грамматика — тип определения, изменение — событие companyValue.
  */
 
+const ACTOR = { id: 'actor-1', permissions: [] as string[] };
+
 const ROW: FieldDefinitionRow = {
   id: '11111111-1111-4111-8111-111111111111',
   number: 7,
@@ -53,13 +55,11 @@ function makeService() {
   const txRunner = { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn({})) };
   const eventBus = { emit: vi.fn(async () => undefined) };
   const dictionaries = { dictionaryRefs: vi.fn(async () => []), itemRefs: vi.fn(async () => []) };
-  const workflows = {
-    workflowsUsingField: vi.fn(async () => []),
-    creationFormsUsingField: vi.fn(async () => []),
-  };
   const catalog = { typeRefs: vi.fn(async () => []) };
   const targets = { projectTypes: vi.fn(async () => []), nodeKinds: vi.fn(async () => []) };
-  const usageReader = { usage: vi.fn(async () => ({})) };
+  const query = { list: vi.fn(async () => []), usage: vi.fn(async () => ({})) };
+  const formCleaner = { removeFieldFromForm: vi.fn(async () => undefined) };
+  const processTypeCleaner = { removeFieldFromCreationForms: vi.fn(async () => []) };
   const logger = { setContext: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
   const service = new DefinitionsService(
     definitions as never,
@@ -68,10 +68,11 @@ function makeService() {
     txRunner as never,
     eventBus as never,
     dictionaries as never,
-    workflows as never,
     catalog as never,
     targets as never,
-    usageReader as never,
+    formCleaner as never,
+    processTypeCleaner as never,
+    query as never,
     logger as never,
   );
   return { service, definitions, validator, eventBus };
@@ -82,15 +83,23 @@ describe('DefinitionsService.setCompanyValue (#631, Р7)', () => {
     const { service, definitions } = makeService();
     definitions.findById.mockResolvedValue({ ...ROW, isCompany: false });
     await expect(
-      service.setCompanyValue(ROW.id, 'значение' as CustomFieldValue, 'actor-1'),
-    ).rejects.toMatchObject({ code: ErrorCode.VALIDATION_FAILED });
+      service.setCompanyValue(ROW.id, 'значение' as CustomFieldValue, ACTOR),
+    ).rejects.toMatchObject({ code: ErrorCode.CUSTOM_FIELD_VALUE_INVALID });
     expect(definitions.putCompanyValue).not.toHaveBeenCalled();
   });
 
   it('значение глобальной переменной: upsert по определению + событие companyValue', async () => {
-    const { service, definitions, eventBus } = makeService();
-    const result = await service.setCompanyValue(ROW.id, '20%' as CustomFieldValue, 'actor-1');
+    const { service, definitions, eventBus, validator } = makeService();
+    const result = await service.setCompanyValue(ROW.id, '20%' as CustomFieldValue, ACTOR);
     expect(result).toEqual({ id: ROW.id });
+    // Ссылочные типы проверяются глазами актёра (#646): без него любая
+    // ссылка в глобальной переменной получала not_found.
+    expect(validator.validate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ [ROW.id]: '20%' }),
+      undefined,
+      ACTOR,
+    );
     expect(definitions.putCompanyValue).toHaveBeenCalledWith(
       ROW.id,
       '20%',
@@ -107,8 +116,8 @@ describe('DefinitionsService.setCompanyValue (#631, Р7)', () => {
 
   it('PUT×2 — одна строка на компанию: оба раза тот же upsert PK-определения', async () => {
     const { service, definitions } = makeService();
-    await service.setCompanyValue(ROW.id, '20%' as CustomFieldValue, 'actor-1');
-    await service.setCompanyValue(ROW.id, '25%' as CustomFieldValue, 'actor-1');
+    await service.setCompanyValue(ROW.id, '20%' as CustomFieldValue, ACTOR);
+    await service.setCompanyValue(ROW.id, '25%' as CustomFieldValue, ACTOR);
     // «Одна строка» — upsert репозитория (PK = определение); сервис обязан
     // оба раза делегировать одному и тому же putCompanyValue, без ветки create.
     expect(definitions.putCompanyValue).toHaveBeenCalledTimes(2);
@@ -130,7 +139,7 @@ describe('DefinitionsService.setCompanyValue (#631, Р7)', () => {
 
   it('null — очистка без валидации значения', async () => {
     const { service, definitions, validator } = makeService();
-    await service.setCompanyValue(ROW.id, null, 'actor-1');
+    await service.setCompanyValue(ROW.id, null, ACTOR);
     expect(definitions.putCompanyValue).toHaveBeenCalledWith(
       ROW.id,
       null,
@@ -147,7 +156,7 @@ describe('DefinitionsService.setCompanyValue (#631, Р7)', () => {
       { fieldId: ROW.id, reason: 'invalid', message: 'Value does not match field type' },
     ]);
     await expect(
-      service.setCompanyValue(ROW.id, 'не число' as CustomFieldValue, 'actor-1'),
+      service.setCompanyValue(ROW.id, 'не число' as CustomFieldValue, ACTOR),
     ).rejects.toMatchObject({ code: ErrorCode.CUSTOM_FIELD_VALUE_INVALID });
     expect(definitions.putCompanyValue).not.toHaveBeenCalled();
   });

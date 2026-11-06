@@ -56,6 +56,8 @@ export function DataTable<T>({
   onOpenRow,
   onHoverRow,
   isLoading = false,
+  isError = false,
+  onRetry,
   hasNextPage = false,
   isFetchingNextPage = false,
   onLoadMore,
@@ -74,6 +76,9 @@ export function DataTable<T>({
   onOpenRow: (row: T, rowEl: HTMLElement) => void;
   onHoverRow?: (row: T) => void;
   isLoading?: boolean;
+  /** Ошибка загрузки: пустой список не должен выглядеть как «ничего нет». */
+  isError?: boolean;
+  onRetry?: () => void;
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   onLoadMore?: () => void;
@@ -125,6 +130,25 @@ export function DataTable<T>({
         {[0, 1, 2, 3, 4].map((i) => (
           <Skeleton key={i} className="h-12 w-full" />
         ))}
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Empty>
+          <EmptyTitle>{ui.customFields.block.loadError}</EmptyTitle>
+          {onRetry ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="text-xs font-medium text-info underline-offset-2 hover:underline"
+            >
+              {ui.customFields.block.retry}
+            </button>
+          ) : null}
+        </Empty>
       </div>
     );
   }

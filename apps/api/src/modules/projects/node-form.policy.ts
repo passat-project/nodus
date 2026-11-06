@@ -120,7 +120,6 @@ export class NodeFormPolicy {
             authorId: opts.authorId,
             actor: opts.actor,
             target: { kind: 'node_kind', id: kind.id },
-            ...{},
           },
           tx,
         );
@@ -159,9 +158,15 @@ export class NodeFormPolicy {
     return { values: next, changes };
   }
 
-  /** Эффективная форма: слоты без неизвестных определений (удалённые). */
+  /** Эффективная форма: слоты без неизвестных и отвязанных определений
+   *  (удалённые/снятые). Только привязанные к виду — зеркало проекта
+   *  (#646): required-слот отвязанного атрибута не должен блокировать
+   *  создание папки. */
   private async formOf(kind: NodeKind, tx?: TransactionClient): Promise<NodeKindForm> {
-    const definitions = await this.registry.definitions({}, tx);
+    const definitions = await this.registry.definitions(
+      { target: { kind: 'node_kind', id: kind.id } },
+      tx,
+    );
     return effectiveNodeForm(kind, definitions);
   }
 }

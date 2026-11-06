@@ -11,12 +11,14 @@ import type {
 
 /**
  * Реализация порта использования атрибута в процессах (#631): ищет ключ
- * `cf.<uuid>` в ОПУБЛИКОВАННЫХ документах маршрутов — в разделах окна
- * перехода (`form.sections[kind=fields].fields`), в валидаторах «Заполнены
- * поля» и в условиях решающих `decider_in` (источник «поле», Р8 #631).
- * Оператор `?` jsonb проверяет наличие элемента массива, сравнение идёт по
- * точному ключу. Черновик не считается: публикация с неизвестным полем
- * даёт блокирующую ошибку `custom_field_unknown` — это и есть защита.
+ * `cf.<uuid>` в документах маршрутов — в разделах окна перехода
+ * (`form.sections[kind=fields].fields`), в валидаторах «Заполнены поля» и в
+ * условиях решающих `decider_in` (источник «поле», Р8 #631). Оператор `?`
+ * jsonb проверяет наличие элемента массива, сравнение идёт по точному ключу.
+ * Маршруты — только опубликованные (черновик публикацией ещё не стал).
+ * Формы создания считаются вместе с непубликуемыми черновиками: удаление
+ * они не блокируют, но окно последствий обязано показать их (Review Focus
+ * §9 #631) — `draft` различает черновик и опубликованную форму.
  */
 @Injectable()
 export class WorkflowFieldUsageProvider implements WorkflowFieldUsageReader {
@@ -64,13 +66,13 @@ export class WorkflowFieldUsageProvider implements WorkflowFieldUsageReader {
   async creationFormsUsingField(fieldId: string): Promise<WorkflowCreationFormUsage[]> {
     const key = customFieldKey(fieldId);
     return this.prisma.$queryRaw<WorkflowCreationFormUsage[]>(Prisma.sql`
-      SELECT DISTINCT w.kind, COALESCE(pt.name, w.name) AS name
+      SELECT DISTINCT w.kind, COALESCE(pt.name, w.name) AS name,
+             (w.published_at IS NULL) AS draft
       FROM workflows w
-      JOIN workflow_scheme_entries se ON se.workflow_id = w.id
-      JOIN process_types pt ON pt.id = se.process_type_id
+      LEFT JOIN workflow_scheme_entries se ON se.workflow_id = w.id
+      LEFT JOIN process_types pt ON pt.id = se.process_type_id
       CROSS JOIN LATERAL jsonb_array_elements(COALESCE(w.creation->'fields', '[]'::jsonb)) f
-      WHERE w.published_at IS NOT NULL
-        AND w.kind IN ('task', 'letter')
+      WHERE w.kind IN ('task', 'letter')
         AND f->>'key' = ${key}
       ORDER BY name
     `);

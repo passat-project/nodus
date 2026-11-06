@@ -17,6 +17,7 @@ export class LetterVisibilityProvider implements LetterVisibilityReader {
   async visibleLetterIds(
     letterIds: readonly string[],
     viewer: LetterVisibilityViewer,
+    opts: { includeDeleted?: boolean } = {},
   ): Promise<ReadonlySet<string>> {
     const rows = await this.letters.visibilityRows(letterIds);
     const confidentialIds = rows.filter((row) => row.confidential).map((row) => row.id);
@@ -24,7 +25,9 @@ export class LetterVisibilityProvider implements LetterVisibilityReader {
     const visible = new Set<string>();
     for (const row of rows) {
       // Надгробия не считаются: число совпадает со списком (Р13, #461).
-      if (row.deletedAt !== null) continue;
+      // Исключение — «была видима до удаления» для плашки значения-ссылки
+      // (#631 Р5): доступ проверяется тем же правилом, оракула нет.
+      if (!opts.includeDeleted && row.deletedAt !== null) continue;
       const members = new Set(
         participants
           .filter((participant) => participant.letterId === row.id)

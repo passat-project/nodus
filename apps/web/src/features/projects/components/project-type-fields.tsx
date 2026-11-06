@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { X } from 'lucide-react';
 import type { FieldFormState, ProjectType, ProjectTypeForm } from '@nodus/contracts';
 import { projectTypeFormOf, ui } from '@nodus/contracts';
@@ -8,6 +9,7 @@ import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries
 import { Segmented } from '../../../shared/ui/panel/panel-kit.js';
 import { useUpdateProjectType } from '../api/project-catalog-mutations.js';
 import { stateOptions } from '../node-kinds/components/node-kind-summary.js';
+import type { RenderCreateField } from '../node-kinds/types.js';
 import { ProjectTypeFieldPicker } from './project-type-field-picker.js';
 
 /**
@@ -20,15 +22,20 @@ import { ProjectTypeFieldPicker } from './project-type-field-picker.js';
 export function ProjectTypeFieldsSection({
   type,
   canSetup,
+  canCreateField,
+  renderCreateField,
 }: {
   type: ProjectType;
   /** Право `project.setup.manage` — правка; иначе только просмотр. */
   canSetup: boolean;
+  canCreateField: boolean;
+  renderCreateField?: RenderCreateField;
 }) {
   const update = useUpdateProjectType();
   const form = projectTypeFormOf(type);
   const query = useCustomFieldDefinitions('project');
   const byId = new Map((query.data ?? []).map((definition) => [definition.id, definition]));
+  const [createField, setCreateField] = useState(false);
 
   function save(next: ProjectTypeForm) {
     if (!canSetup) return;
@@ -110,9 +117,21 @@ export function ProjectTypeFieldsSection({
         <ProjectTypeFieldPicker
           inForm={new Set(form.fields.map((slot) => slot.fieldId))}
           disabled={!canSetup}
+          canCreateField={canCreateField}
           onPick={add}
+          onCreateField={renderCreateField ? () => setCreateField(true) : undefined}
         />
       ) : null}
+
+      {createField && renderCreateField
+        ? renderCreateField({
+            onClose: () => setCreateField(false),
+            onCreated: (fieldId) => {
+              setCreateField(false);
+              add(fieldId);
+            },
+          })
+        : null}
     </div>
   );
 }

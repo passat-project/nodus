@@ -186,23 +186,24 @@ export class DefinitionsRepository {
     });
   }
 
-  /** Синхронизация привязок вида цели под точный набор (формы мест): слот
-   *  добавлен — привязка появляется, слот убран — снимается; значения не
-   *  трогаются. Один вызов на запись формы (Р10, канон моков). Вызывается
-   *  в транзакции записи формы (форма и привязки — одна операция). */
+  /** Синхронизация привязок формы места (Р10): слот добавлен — привязка
+   *  появляется, слот СНЯТ (`removedFieldIds`) — привязка снимается.
+   *  Привязки без слотов не трогаются: их законно сеет миграция (системные
+   *  поля на все места) и ставит диалог атрибута (#646). Значения не
+   *  трогаются. Один вызов на запись формы (форма и привязки — одна
+   *  операция в транзакции записи формы). */
   async syncTargets(
     targetKind: 'project_type' | 'node_kind',
     targetId: string,
     fieldIds: readonly string[],
+    removedFieldIds: readonly string[],
     tx?: TransactionClient,
   ): Promise<void> {
-    await this.db(tx).fieldBinding.deleteMany({
-      where: {
-        targetKind,
-        targetId,
-        ...(fieldIds.length > 0 ? { definitionId: { notIn: [...fieldIds] } } : {}),
-      },
-    });
+    if (removedFieldIds.length > 0) {
+      await this.db(tx).fieldBinding.deleteMany({
+        where: { targetKind, targetId, definitionId: { in: [...removedFieldIds] } },
+      });
+    }
     if (fieldIds.length === 0) return;
     await this.db(tx).fieldBinding.createMany({
       data: fieldIds.map((definitionId) => ({ definitionId, targetKind, targetId })),

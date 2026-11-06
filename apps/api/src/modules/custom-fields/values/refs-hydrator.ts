@@ -152,15 +152,17 @@ export class CustomFieldRefsHydrator {
       this.tasks.refs([...taskIds]),
       this.letters.refs([...letterIds]),
       this.nodes.refs([...nodeIds]),
+      // Батч-видимость (#641): один запрос на вид ссылки. `includeDeleted` —
+      // «была видима до удаления»: удалённая цель даёт «запись удалена»
+      // (name null + archived) только тому, кто её видел; остальным —
+      // «нет доступа» без оракула (#631 Р5).
       actor
-        ? this.visibleOf(taskIds, (id) => this.tasks.visibleFor(id, actor))
+        ? this.tasks.visibleForMany([...taskIds], actor, { includeDeleted: true })
         : Promise.resolve(new Set<string>()),
       actor
-        ? this.visibleOf(letterIds, (id) => this.letters.visibleFor(id, actor))
+        ? this.letters.visibleForMany([...letterIds], actor, { includeDeleted: true })
         : Promise.resolve(new Set<string>()),
-      actor
-        ? this.visibleOf(nodeIds, (id) => this.nodes.visibleFor(id, actor))
-        : Promise.resolve(new Set<string>()),
+      actor ? this.nodes.visibleForMany([...nodeIds], actor) : Promise.resolve(new Set<string>()),
     ]);
 
     const refs = new Map<string, CustomFieldRef>();
@@ -227,25 +229,30 @@ export class CustomFieldRefsHydrator {
     const taskById = new Map(taskRefs.map((ref) => [ref.id, ref]));
     for (const id of taskIds) {
       const task = taskById.get(id);
-      const visible = task !== undefined && !task.deleted && visibleTasks.has(id);
+      // `archived` — оракул только для тех, кто и так видит задачу:
+      // невидимой конфиденциальной цели нельзя раскрывать даже факт
+      // удаления (#646, security-аудит).
+      const accessible = task !== undefined && visibleTasks.has(id);
+      const deleted = task?.deleted ?? false;
       add({
         kind: 'task',
         id,
-        name: visible ? task!.name : null,
+        name: accessible && !deleted ? task!.name : null,
         avatarUrl: null,
-        archived: task?.deleted ?? false,
+        archived: accessible && deleted,
       });
     }
     const letterById = new Map(letterRefs.map((ref) => [ref.id, ref]));
     for (const id of letterIds) {
       const letter = letterById.get(id);
-      const visible = letter !== undefined && !letter.deleted && visibleLetters.has(id);
+      const accessible = letter !== undefined && visibleLetters.has(id);
+      const deleted = letter?.deleted ?? false;
       add({
         kind: 'letter',
         id,
-        name: visible ? letter!.name : null,
+        name: accessible && !deleted ? letter!.name : null,
         avatarUrl: null,
-        archived: letter?.deleted ?? false,
+        archived: accessible && deleted,
       });
     }
     const nodeById = new Map(nodeRefs.map((ref) => [ref.id, ref]));
@@ -257,19 +264,12 @@ export class CustomFieldRefsHydrator {
         id,
         name: visible ? node!.name : null,
         avatarUrl: null,
-        archived: node === undefined,
+        // Узел удалён физически — проекта/видимости уже нет, поэтому факт
+        // удаления не показываем (иначе оракул для папки секретного проекта).
+        archived: false,
       });
     }
 
     return [...refs.values()];
-  }
-
-  /** Параллельная видимость ссылок одного вида (пачка мелких проверок). */
-  private async visibleOf(
-    ids: ReadonlySet<string>,
-    visibleFor: (id: string) => Promise<boolean>,
-  ): Promise<Set<string>> {
-    const checks = await Promise.all([...ids].map((id) => visibleFor(id)));
-    return new Set([...ids].filter((_, index) => checks[index]));
   }
 }

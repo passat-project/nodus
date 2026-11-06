@@ -192,7 +192,7 @@ describe('ProjectEditDialog: атрибуты слотами формы типа
     expect(vars.client).toBeNull();
   });
 
-  it('очистка обязательного слота блокирует «Сохранить»', async () => {
+  it('очистка обязательного слота: ошибка у поля, без сохранения', async () => {
     const project = projectOf({
       customFields: { [fieldIds.projectCode]: '22-01' },
     });
@@ -202,9 +202,9 @@ describe('ProjectEditDialog: атрибуты слотами формы типа
     fireEvent.change(code, { target: { value: '' } });
     fireEvent.keyDown(code, { key: 'Enter' });
 
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: ui.common.save })).toHaveProperty('disabled', true),
-    );
+    const save = screen.getByRole('button', { name: ui.common.save });
+    fireEvent.click(save);
+    await waitFor(() => expect(screen.getByText(ui.structure.requiredEmpty)).toBeTruthy());
     expect(updateMutate).not.toHaveBeenCalled();
   });
 

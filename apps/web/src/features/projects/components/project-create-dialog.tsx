@@ -10,10 +10,10 @@ import type {
 import {
   createProjectBodySchema,
   DEFAULT_PROJECT_TYPE_FORM,
+  effectiveProjectTypeForm,
   ErrorCode,
   errorMessages,
   missingProjectFields,
-  projectTypeFormOf,
   SYSTEM_FIELD_IDS,
   ui,
 } from '@nodus/contracts';
@@ -32,6 +32,8 @@ import { Textarea } from '@nodus/ui/components/textarea';
 
 import { ApiError } from '../../../shared/api-client.js';
 import { usePortalSettings, useProjectTypes } from '../../../shared/api/projects-list.js';
+import { definitionsForTarget } from '../../../shared/custom-fields/module-target.js';
+import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import type { ProjectCreatePrefill } from '../../../shared/projects/project-create-store.js';
 import { useCreateProject } from '../api/project-mutations.js';
@@ -87,19 +89,22 @@ export function ProjectCreateDialog({
   const [refs, setRefs] = useState<CustomFieldRef[]>([]);
   const [client, setClient] = useState<CounterpartyRef | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Попытка отправки: обязательные слоты показывают ошибку у поля (§4c),
+  // а не молчаливую блокировку кнопки (#646).
+  const [attempted, setAttempted] = useState(false);
 
   const defaultVisibility = settings.data?.projects.defaultVisibility ?? 'open';
   const effectiveVisibility = visibility ?? defaultVisibility;
   const liveTypes = types.data ?? [];
   const selectedType: ProjectType | null = liveTypes.find((type) => type.id === typeId) ?? null;
-  const form = selectedType ? projectTypeFormOf(selectedType) : DEFAULT_PROJECT_TYPE_FORM;
+  const definitions = useCustomFieldDefinitions('project');
+  const boundDefinitions = definitionsForTarget(definitions.data, 'project', selectedType?.id);
+  const form = selectedType
+    ? effectiveProjectTypeForm(selectedType, boundDefinitions)
+    : DEFAULT_PROJECT_TYPE_FORM;
   const missing = missingProjectFields(form, { customFields: values });
   const canSubmit =
-    name.trim().length > 0 &&
-    typeId.length > 0 &&
-    !create.isPending &&
-    liveTypes.length > 0 &&
-    missing.length === 0;
+    name.trim().length > 0 && typeId.length > 0 && !create.isPending && liveTypes.length > 0;
 
   function onField(fieldId: string, value: CustomFieldValue | null, picked?: CustomFieldRef[]) {
     setValues((prev) => {
@@ -115,6 +120,8 @@ export function ProjectCreateDialog({
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!canSubmit) return;
+    setAttempted(true);
+    if (missing.length > 0) return;
     setError(null);
     // В тело идут только значения слотов выбранного типа: пережитки смены
     // типа сервер режет как «не привязан к типу» (422 not_in_type).
@@ -204,6 +211,7 @@ export function ProjectCreateDialog({
                 type={selectedType}
                 values={values}
                 refs={refs}
+                errors={attempted ? new Set(missing) : undefined}
                 onChange={onField}
               />
 

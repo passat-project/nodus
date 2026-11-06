@@ -26,6 +26,7 @@ import {
 import {
   commitOptionDrafts,
   invalidateDictionaries,
+  updateDictionaryItem,
   useCreateDictionary,
 } from '../../api/dictionaries-api.js';
 import {
@@ -44,25 +45,12 @@ import {
   type FieldDraft,
 } from '../../lib/field-draft.js';
 import { FieldDialogForm } from './field-dialog-form.js';
+import { suggestionOf, type Errors } from './field-dialog-errors.js';
 import { useDefaultCurrencyId } from './field-settings.js';
 import { FieldTypePicker } from './field-type-picker.js';
 
 export type FieldDialogMode =
   { kind: 'create' } | { kind: 'edit'; definition: CustomFieldDefinition };
-
-interface Errors {
-  name?: string;
-  options?: string;
-  form?: string;
-}
-
-/** details 409 CUSTOM_FIELD_NAME_TAKEN: существующий атрибут (В3). */
-function suggestionOf(error: unknown): { definitionId: string; name: string } | null {
-  if (!(error instanceof ApiError)) return null;
-  const suggestion = (error.details as { suggestion?: { definitionId: string; name: string } })
-    ?.suggestion;
-  return suggestion ?? null;
-}
 
 /**
  * Окно атрибута (#431, ревизия #631): ОДНО окно на создание и правку
@@ -180,6 +168,13 @@ export function FieldDialog({
           });
           const created = await fetchDictionaryItems(dictionary.code);
           const ids = new Map(draft.options.map((option, i) => [option.id, created[i]?.id ?? '']));
+          // Цвета новых вариантов: POST справочника принимает только имена.
+          for (const [index, option] of draft.options.entries()) {
+            const item = created[index];
+            if (item && option.color) {
+              await updateDictionaryItem(dictionary.code, item.id, { color: option.color });
+            }
+          }
           dictionaryId = dictionary.id;
           defaultValue = listDefault(draft, type, ids);
         }
@@ -194,6 +189,7 @@ export function FieldDialog({
           await setCompanyValue.mutateAsync({
             fieldId: saved.id,
             value: draft.companyValue,
+            refs: draft.companyRefs,
           });
         }
         onSaved(saved.id);
@@ -214,7 +210,11 @@ export function FieldDialog({
       const body = patchBody(definition, draft, defaultValue);
       if (body) await updateField.mutateAsync({ id: definition.id, body });
       if (definition.isCompany && companyValueChanged(definition, draft)) {
-        await setCompanyValue.mutateAsync({ fieldId: definition.id, value: draft.companyValue });
+        await setCompanyValue.mutateAsync({
+          fieldId: definition.id,
+          value: draft.companyValue,
+          refs: draft.companyRefs,
+        });
       }
       onSaved(definition.id);
     } catch (caught) {
@@ -248,9 +248,7 @@ export function FieldDialog({
       <DialogContent
         showCloseButton={false}
         onInteractOutside={(event) => event.preventDefault()}
-        // Габарит — по содержимому с нижней границей «самая высокая обычная
-        // форма»: обычные типы окно не меняет, у списка с вариантами оно
-        // подрастает до 92vh, а не прокручивается (вердикт 25.10.2026).
+        // Габарит — по содержимому: у списка с вариантами окно растёт до 92vh.
         className="flex max-h-[92vh] min-h-[min(34rem,88vh)] max-w-[56rem] flex-col gap-5 overflow-hidden p-5 sm:max-w-[56rem]"
       >
         <DialogHeader className="shrink-0">
@@ -278,20 +276,35 @@ export function FieldDialog({
           {/* overflow-x-hidden: вертикальная прокрутка иначе включает
               горизонтальную полосу от долей пикселя (баг 25.10.2026). */}
           <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-1">
-            <FieldDialogForm
-              draft={draft}
-              definition={definition}
-              shared={shared}
-              disabled={readOnly || pending}
-              optionsReadOnly={!canManageDictionaries}
-              errors={errors}
-              issues={issues}
-              currencyFallback={currencyFallback}
-              removedOptions={removedOptions}
-              suggestion={suggestion}
-              onOpenSuggestion={onOpenDefinition}
-              onChange={update}
-            />
+            {items.isError ? (
+              <div className="flex flex-col gap-2 p-4 text-sm">
+                <span className="text-muted-foreground">
+                  {ui.customFields.dialog.dictionaryLoadError}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void items.refetch()}
+                  className="w-fit text-xs font-medium text-info underline-offset-2 hover:underline"
+                >
+                  {ui.customFields.block.retry}
+                </button>
+              </div>
+            ) : (
+              <FieldDialogForm
+                draft={draft}
+                definition={definition}
+                shared={shared}
+                disabled={readOnly || pending}
+                optionsReadOnly={!canManageDictionaries}
+                errors={errors}
+                issues={issues}
+                currencyFallback={currencyFallback}
+                removedOptions={removedOptions}
+                suggestion={suggestion}
+                onOpenSuggestion={onOpenDefinition}
+                onChange={update}
+              />
+            )}
           </div>
         </div>
 

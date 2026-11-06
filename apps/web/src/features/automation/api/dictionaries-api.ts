@@ -18,6 +18,18 @@ export function invalidateDictionaries(queryClient: ReturnType<typeof useQueryCl
   void queryClient.invalidateQueries({ queryKey: dictionariesKeys.all });
 }
 
+/** Правка варианта (имя/цвет) — общий вызов для черновика и цвета. */
+export function updateDictionaryItem(
+  code: string,
+  itemId: string,
+  body: UpdateDictionaryItemBody,
+): Promise<DictionaryItem> {
+  return api<DictionaryItem>(`/dictionaries/${encodeURIComponent(code)}/items/${itemId}`, {
+    method: 'PATCH',
+    body,
+  });
+}
+
 /** Новый справочник с вариантами — для атрибута-списка при создании. */
 export function useCreateDictionary() {
   const queryClient = useQueryClient();
@@ -53,7 +65,7 @@ export async function commitOptionDrafts(
     if (item.name !== draft.name) body.name = draft.name;
     if ((item.color ?? null) !== (draft.color ?? null)) body.color = draft.color ?? null;
     if (Object.keys(body).length > 0) {
-      await api<DictionaryItem>(`${base}/${item.id}`, { method: 'PATCH', body });
+      await updateDictionaryItem(code, item.id, body);
     }
   }
   const ids = new Map<string, string>();
@@ -63,6 +75,11 @@ export async function commitOptionDrafts(
       method: 'POST',
       body: { name: draft.name } satisfies CreateDictionaryItemBody,
     });
+    // Цвет нового варианта: POST его не принимает (контракт #431), поэтому
+    // досылаем PATCH сразу после создания (#646).
+    if (draft.color) {
+      await updateDictionaryItem(code, created.id, { color: draft.color });
+    }
     ids.set(draft.id, created.id);
   }
   const order = drafts.map((draft) => ids.get(draft.id) ?? draft.id);

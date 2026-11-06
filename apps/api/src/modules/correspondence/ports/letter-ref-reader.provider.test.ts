@@ -74,6 +74,15 @@ describe('LetterRefReaderProvider.visibleFor (#461)', () => {
     expect(await provider.visibleFor(L1, viewer)).toBe(true);
     expect(await provider.visibleFor(L2, viewer)).toBe(false);
     expect(visibility.visibleLetterIds).toHaveBeenCalledTimes(2);
-    expect(visibility.visibleLetterIds).toHaveBeenCalledWith([L1], viewer);
+    expect(visibility.visibleLetterIds).toHaveBeenCalledWith([L1], viewer, {});
+
+    const history = make([], [], new Set([L1]));
+    expect([
+      ...(await history.provider.visibleForMany([L1, L2], viewer, { includeDeleted: true })),
+    ]).toEqual([L1]);
+    expect(history.visibility.visibleLetterIds).toHaveBeenCalledTimes(1);
+    expect(history.visibility.visibleLetterIds).toHaveBeenCalledWith([L1, L2], viewer, {
+      includeDeleted: true,
+    });
   });
 });

@@ -95,8 +95,8 @@ export function FieldsTab() {
   const setCompanyValue = useSetCompanyValue();
   const columns = useMemo(
     () =>
-      fieldColumns(canManage, (definition, value) =>
-        setCompanyValue.mutate({ fieldId: definition.id, value }),
+      fieldColumns(canManage, (definition, value, refs) =>
+        setCompanyValue.mutate({ fieldId: definition.id, value, refs }),
       ),
     [canManage, setCompanyValue],
   );
@@ -205,6 +205,9 @@ export function FieldsTab() {
           rowKey={(definition) => definition.id}
           selection={selection}
           isLoading={query.isLoading}
+          isError={query.isError}
+          onRetry={() => void query.refetch()}
+          label={ui.customFields.page.title}
           onOpenRow={(definition) => setSearch({ field: definition.id })}
           emptyTitle={
             q
@@ -216,7 +219,10 @@ export function FieldsTab() {
           rowMenu={(definition) =>
             fieldRowMenu({
               row: definition,
-              index: q ? -1 : inModuleRows.indexOf(definition),
+              // Порядок глобальный (весь портал), а фильтр/поиск показывают
+              // подмножество: движение по глобальному списку выглядело бы
+              // «прыжком мимо невидимых». При фильтре — без перемещения.
+              index: q || module !== 'all' ? -1 : inModuleRows.indexOf(definition),
               total: inModuleRows.length,
               canManage,
               onEdit: (row) => setSearch({ field: row.id }),

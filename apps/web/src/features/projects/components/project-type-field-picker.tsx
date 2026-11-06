@@ -8,25 +8,31 @@ import { CustomFieldTypeIcon } from '../../../shared/custom-fields/field-type-ic
 import { PanelAction } from '../../../shared/ui/panel/panel-kit.js';
 
 /**
- * Поповер добавления атрибута в форму типа проекта (#631, Р10): атрибуты
- * области «Проекты», которых ещё нет в форме. Добавленный слот получает
- * состояние «По желанию»; сервер вместе со слотом привязывает атрибут
- * к типу (мок повторяет). Создания атрибута здесь нет — реестр «Атрибуты»
- * во вкладке «Автоматизация».
+ * Поповер добавления атрибута в форму типа проекта (#631, Р10): все атрибуты
+ * портала, которых ещё нет в форме; глобальные переменные не предлагаются
+ * (привязок не имеют). Добавленный слот получает состояние «По желанию»;
+ * сервер вместе со слотом привязывает атрибут к типу (слот = привязка).
+ * Внизу — «Создать атрибут…» (только при праве `custom_field.manage`).
  */
 export function ProjectTypeFieldPicker({
   inForm,
   disabled,
+  canCreateField,
   onPick,
+  onCreateField,
 }: {
   /** fieldId слотов текущей формы типа. */
   inForm: ReadonlySet<string>;
   disabled: boolean;
+  canCreateField: boolean;
   onPick: (fieldId: string) => void;
+  onCreateField?: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const query = useCustomFieldDefinitions('project');
-  const options = (query.data ?? []).filter((definition) => !inForm.has(definition.id));
+  const query = useCustomFieldDefinitions();
+  const options = (query.data ?? []).filter(
+    (definition) => !definition.isCompany && !inForm.has(definition.id),
+  );
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -66,6 +72,22 @@ export function ProjectTypeFieldPicker({
             ))
           )}
         </div>
+        {canCreateField && onCreateField ? (
+          <>
+            <div className="my-1 h-px bg-border" />
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onCreateField();
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+            >
+              <Plus className="size-3.5 shrink-0" strokeWidth={1.75} />
+              {ui.nodeKinds.form.createField}
+            </button>
+          </>
+        ) : null}
       </PopoverContent>
     </Popover>
   );

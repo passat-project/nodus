@@ -34,10 +34,10 @@ describe('LetterFieldValuesCleanupHandler (#582)', () => {
     );
   });
 
-  it('чужие области, изменения и невалидный payload игнорируются', async () => {
+  it('не-удаление и невалидный payload игнорируются', async () => {
     const { handler, letters } = makeHandler();
 
-    await handler.handle(event({ definitionId: FIELD, scope: 'letter', change: 'updated' }));
+    await handler.handle(event({ definitionId: FIELD, change: 'updated' }));
     await handler.handle(event({ definitionId: 'не-uuid', change: 'deleted' }));
     expect(letters.removeCustomFieldValues).not.toHaveBeenCalled();
   });

@@ -231,12 +231,15 @@ export function rollupOfNode(nodeId: string): ProjectNodeRollup {
 }
 
 export function projectNodeDto(row: DemoNodeRow): ProjectNode {
+  // Код — производная системного атрибута (как серверный `nodeToDto`);
+  // колонка row.code осталась только у старых сидов.
+  const code = row.customFields[SYSTEM_FIELD_IDS.nodeCode];
   return {
     id: row.id,
     parentId: row.parentId,
     kindId: row.kindId,
     name: row.name,
-    code: row.code,
+    code: typeof code === 'string' && code.trim().length > 0 ? code : null,
     customFields: row.customFields,
     rollup: rollupOfNode(row.id),
     createdAt: row.createdAt,
@@ -287,11 +290,4 @@ export function nodeDepthOf(row: DemoNodeRow): number {
     if (depth > NODE_LIMITS.depth) break;
   }
   return depth;
-}
-
-/** Шифр узла уникален в проекте (кроме самого узла при правке). */
-export function nodeCodeTaken(code: string, projectId: string, exceptId: string | null): boolean {
-  return demoNodeRows.some(
-    (row) => row.projectId === projectId && row.code === code && row.id !== exceptId,
-  );
 }

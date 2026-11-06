@@ -47,8 +47,17 @@ function RefName({
   interactive?: boolean;
 }) {
   const ref = refs.get(id);
-  if (!ref || ref.name === null) {
+  if (!ref) {
     return <span className="text-muted-foreground">{ui.customFields.block.unavailable}</span>;
+  }
+  if (ref.name === null) {
+    // Удалённая цель отличается от недоступной (Р5): обе без имени, но
+    // «удалена» — факт, «недоступна» — ограничение видимости (#646).
+    return (
+      <span className="text-muted-foreground">
+        {ref.archived ? ui.customFields.block.deleted : ui.customFields.block.unavailable}
+      </span>
+    );
   }
   const openable = interactive && !ref.archived && OPENABLE_KINDS.has(ref.kind);
   const name = (

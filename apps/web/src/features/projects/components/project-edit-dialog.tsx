@@ -11,8 +11,8 @@ import type {
 import {
   errorMessages,
   ErrorCode,
+  effectiveProjectTypeForm,
   missingProjectFields,
-  projectTypeFormOf,
   SYSTEM_FIELD_IDS,
   ui,
   updateProjectBodySchema,
@@ -24,6 +24,8 @@ import { Textarea } from '@nodus/ui/components/textarea';
 
 import { ApiError } from '../../../shared/api-client.js';
 import { useProjectTypes } from '../../../shared/api/projects-list.js';
+import { definitionsForTarget } from '../../../shared/custom-fields/module-target.js';
+import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries.js';
 import { useUpdateProject } from '../api/project-mutations.js';
 import {
   counterpartyRefOf,
@@ -64,7 +66,11 @@ export function ProjectEditDialog({
   const types = useProjectTypes(true);
   const type: ProjectType | null =
     types.data?.find((entry) => entry.id === project.type?.id) ?? null;
-  const form = projectTypeFormOf(type ?? {});
+  const definitions = useCustomFieldDefinitions('project');
+  const boundDefinitions = definitionsForTarget(definitions.data, 'project', project.type?.id);
+  const form = type
+    ? effectiveProjectTypeForm(type, boundDefinitions)
+    : effectiveProjectTypeForm({}, boundDefinitions);
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description);
   const [portfolioId, setPortfolioId] = useState(project.portfolio?.id ?? null);
@@ -77,10 +83,12 @@ export function ProjectEditDialog({
   const [visibility, setVisibility] = useState<ProjectVisibility>(project.visibility);
   const [endDate, setEndDate] = useState<string | null>(project.endDate);
   const [error, setError] = useState<string | null>(null);
+  // Попытка отправки: обязательные слоты показывают ошибку у поля (§4c).
+  const [attempted, setAttempted] = useState(false);
 
   const canMakeSecret = project.access.canTransfer || project.visibility === 'secret';
   const missing = missingProjectFields(form, { customFields: values });
-  const canSubmit = name.trim().length > 0 && !update.isPending && missing.length === 0;
+  const canSubmit = name.trim().length > 0 && !update.isPending;
 
   function onField(fieldId: string, value: CustomFieldValue | null, picked?: CustomFieldRef[]) {
     setValues((prev) => {
@@ -96,6 +104,8 @@ export function ProjectEditDialog({
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!canSubmit) return;
+    setAttempted(true);
+    if (missing.length > 0) return;
     setError(null);
     // Патч значений — только изменившиеся ключи (null очищает): нетронутое
     // не едет, скрытые слоты формы типа не трогаются.
@@ -161,7 +171,13 @@ export function ProjectEditDialog({
             <div className="grid grid-cols-[7.5rem_1fr] items-center gap-x-3 gap-y-3">
               {/* Атрибуты слотов формы типа проекта — на месте бывших спец-полей
                   «Шифр»/«Заказчик» (Р10 #631). */}
-              <ProjectAttributeRows type={type} values={values} refs={refs} onChange={onField} />
+              <ProjectAttributeRows
+                type={type}
+                values={values}
+                refs={refs}
+                errors={attempted ? new Set(missing) : undefined}
+                onChange={onField}
+              />
 
               <FieldLabel>{ui.projects.assistants}</FieldLabel>
               <PeopleMultiField

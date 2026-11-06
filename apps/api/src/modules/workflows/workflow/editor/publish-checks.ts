@@ -90,13 +90,15 @@ export async function checkDocumentForPublish(
     document: WorkflowDocument;
     category: ProcessCategory;
     typeId?: string;
+    /** Все типы маршрута (#646): привязки проверяются пересечением. */
+    typeIds?: readonly string[];
     /** У типа настроена серия номеров (#55): маршрут письма с
      *  `assign_number` без неё публиковать нельзя. */
     numberingConfigured?: boolean;
     tx: TransactionClient;
   },
 ): Promise<void> {
-  const customFields = await customFieldFactsOf(deps.registry, ctx.tx, ctx.typeId);
+  const customFields = await customFieldFactsOf(deps.registry, ctx.tx, ctx.typeIds ?? ctx.typeId);
   const creation = await creationFactsOf(
     deps.registry,
     deps.profiles,

@@ -9,6 +9,7 @@ import type { InjectionToken } from '@nestjs/common';
 export const CUSTOM_FIELD_VALUES_READER: InjectionToken = 'CUSTOM_FIELD_VALUES_READER';
 
 export interface CustomFieldValuesReader {
-  /** Число живых задач, у которых ключ атрибута заполнен. */
+  /** Число задач с ключом атрибута, включая мягко удалённые: счётчик
+   *  равен реальному объёму уборки (cleanup чистит и надгробия). */
   countValues(fieldId: string): Promise<number>;
 }

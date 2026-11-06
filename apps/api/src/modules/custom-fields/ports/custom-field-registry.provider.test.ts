@@ -271,22 +271,29 @@ describe('CustomFieldRegistry.syncPlaceBindings (#631, Р10)', () => {
   it('process_type не имеет форм-слотов — ошибка программиста', async () => {
     const { registry, repository } = makeRegistry([]);
     await expect(
-      registry.syncPlaceBindings({ kind: 'process_type', id: 't-1' }, ['f-a']),
+      registry.syncPlaceBindings({ kind: 'process_type', id: 't-1' }, ['f-a'], []),
     ).rejects.toThrow('process_type has no form slots');
     expect(repository.syncTargets).not.toHaveBeenCalled();
   });
 
-  it('project_type/node_kind: привязки места — под точный набор слотов', async () => {
+  it('project_type/node_kind: добавленные слоты и снятые — раздельно', async () => {
     const { registry, repository } = makeRegistry([]);
-    await registry.syncPlaceBindings({ kind: 'project_type', id: 'pt-1' }, ['f-a', 'f-b']);
-    await registry.syncPlaceBindings({ kind: 'node_kind', id: 'nk-1' }, []);
+    await registry.syncPlaceBindings({ kind: 'project_type', id: 'pt-1' }, ['f-a', 'f-b'], ['f-c']);
+    await registry.syncPlaceBindings({ kind: 'node_kind', id: 'nk-1' }, [], ['f-d']);
     expect(repository.syncTargets).toHaveBeenCalledWith(
       'project_type',
       'pt-1',
       ['f-a', 'f-b'],
+      ['f-c'],
       undefined,
     );
-    expect(repository.syncTargets).toHaveBeenCalledWith('node_kind', 'nk-1', [], undefined);
+    expect(repository.syncTargets).toHaveBeenCalledWith(
+      'node_kind',
+      'nk-1',
+      [],
+      ['f-d'],
+      undefined,
+    );
   });
 });
 

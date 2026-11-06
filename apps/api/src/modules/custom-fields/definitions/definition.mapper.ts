@@ -3,6 +3,7 @@ import type {
   CustomFieldBindings,
   CustomFieldDefinition,
   CustomFieldRef,
+  CustomFieldType,
   CustomFieldValue,
 } from '@nodus/contracts';
 
@@ -11,6 +12,7 @@ import {
   DICTIONARY_READER,
   type DictionaryReader,
 } from '../../dictionaries/ports/dictionary-reader.port.js';
+import type { ProjectActor } from '../../projects/ports/project-reader.port.js';
 import { CustomFieldRefsHydrator } from '../values/refs-hydrator.js';
 
 /** Строка `field_definitions` в объёме DTO (схема — ADR-0029, ревизия #631). */
@@ -50,6 +52,7 @@ export class DefinitionMapper {
   async toDtos(
     rows: readonly FieldDefinitionRow[],
     tx?: TransactionClient,
+    actor?: ProjectActor,
   ): Promise<CustomFieldDefinition[]> {
     if (rows.length === 0) return [];
     const definitions = rows.map((row) => this.base(row));
@@ -66,18 +69,34 @@ export class DefinitionMapper {
     const dictionaryById = new Map(dictionaries.map((row) => [row.id, row]));
 
     const staticDefaults: Record<string, CustomFieldValue> = {};
+    const companyValues: Record<string, CustomFieldValue> = {};
     for (const definition of definitions) {
       if (definition.defaultValue?.kind === 'static') {
         staticDefaults[definition.id] = definition.defaultValue.value;
       }
+      if (definition.isCompany && definition.companyValue !== null) {
+        companyValues[definition.id] = definition.companyValue;
+      }
     }
-    const defaultRefs = await this.refs.hydrate(
-      rows.map((row) => this.base(row)),
-      staticDefaults,
-      undefined,
-      tx,
-    );
+    // Имена ссылок умолчаний и глобальных значений гидрируются отдельно:
+    // у глобальной ссылки видимость — глазами актёра запроса (реестр читают
+    // все), у умолчания актёра нет (ссылки-записи в умолчаниях запрещены).
+    const [defaultRefs, companyRefs] = await Promise.all([
+      this.refs.hydrate(
+        rows.map((row) => this.base(row)),
+        staticDefaults,
+        undefined,
+        tx,
+      ),
+      this.refs.hydrate(
+        rows.map((row) => this.base(row)),
+        companyValues,
+        actor,
+        tx,
+      ),
+    ]);
     const refsByKey = new Map(defaultRefs.map((ref) => [`${ref.kind}:${ref.id}`, ref]));
+    const companyRefsByKey = new Map(companyRefs.map((ref) => [`${ref.kind}:${ref.id}`, ref]));
 
     return definitions.map((definition) => {
       const dictionaryId =
@@ -96,12 +115,17 @@ export class DefinitionMapper {
             }
           : null,
         defaultRefs: refsOfDefault(definition, refsByKey),
+        companyRefs: refsOfValue(definition.type, definition.companyValue, companyRefsByKey),
       };
     });
   }
 
-  async toDto(row: FieldDefinitionRow, tx?: TransactionClient): Promise<CustomFieldDefinition> {
-    const [dto] = await this.toDtos([row], tx);
+  async toDto(
+    row: FieldDefinitionRow,
+    tx?: TransactionClient,
+    actor?: ProjectActor,
+  ): Promise<CustomFieldDefinition> {
+    const [dto] = await this.toDtos([row], tx, actor);
     return dto!;
   }
 
@@ -146,13 +170,22 @@ export function bindingsOf(row: Pick<FieldDefinitionRow, 'bindings'>): CustomFie
 
 /** Ссылки, на которые указывает статическое умолчание определения. */
 function refsOfDefault(
-  definition: Omit<CustomFieldDefinition, 'dictionary' | 'defaultRefs'>,
+  definition: Omit<CustomFieldDefinition, 'dictionary' | 'defaultRefs' | 'companyRefs'>,
   refsByKey: ReadonlyMap<string, CustomFieldRef>,
 ): CustomFieldRef[] {
   if (definition.defaultValue?.kind !== 'static') return [];
-  const value = definition.defaultValue.value;
+  return refsOfValue(definition.type, definition.defaultValue.value, refsByKey);
+}
+
+/** Ссылки значения (умолчание или глобальная переменная) по карте имён. */
+function refsOfValue(
+  type: CustomFieldType,
+  value: unknown,
+  refsByKey: ReadonlyMap<string, CustomFieldRef>,
+): CustomFieldRef[] {
+  if (value === null || value === undefined) return [];
   const ids: string[] = [];
-  switch (definition.type) {
+  switch (type) {
     case 'user':
     case 'users':
     case 'enum':
@@ -173,7 +206,7 @@ function refsOfDefault(
     default:
       break;
   }
-  const kinds: Record<string, CustomFieldRef['kind']> = {
+  const kinds: Partial<Record<CustomFieldType, CustomFieldRef['kind']>> = {
     user: 'user',
     users: 'user',
     department: 'department',
@@ -186,7 +219,7 @@ function refsOfDefault(
     letter: 'letter',
     node: 'node',
   };
-  const kind = kinds[definition.type];
+  const kind = kinds[type];
   if (!kind) return [];
   return ids
     .map((id) => refsByKey.get(`${kind}:${id}`))

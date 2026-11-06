@@ -10,6 +10,10 @@ import {
   type LetterFieldValuesReader,
 } from '../../correspondence/ports/letter-field-values.port.js';
 import {
+  COUNTERPARTY_FIELD_VALUES_READER,
+  type CounterpartyFieldValuesReader,
+} from '../../crm/ports/counterparty-field-values.port.js';
+import {
   PROJECT_FIELD_USAGE_READER,
   type ProjectFieldUsageReader,
 } from '../../projects/ports/project-field-usage.port.js';
@@ -30,15 +34,18 @@ import { bindingsOf, type FieldDefinitionRow } from './definition.mapper.js';
 /**
  * «Где используется атрибут» (Р8 #631) — агрегат последствий для окна
  * удаления: значения по видам сущностей (каждый владелец считает свой
- * JSONB, I3), формы создания, опубликованные маршруты, привязки с именами
- * целей и факт глобального значения. Удаление разрешено всегда — usage
- * информирует, не блокирует.
+ * JSONB, I3; контрагенты — порт crm, #646), формы (создания процессов,
+ * включая непубликуемые черновики; типов проектов; видов папок),
+ * опубликованные маршруты, привязки с именами целей и факт глобального
+ * значения. Удаление разрешено всегда — usage информирует, не блокирует.
  */
 @Injectable()
 export class DefinitionsUsageService {
   constructor(
     @Inject(CUSTOM_FIELD_VALUES_READER) private readonly taskValues: CustomFieldValuesReader,
     @Inject(LETTER_FIELD_VALUES_READER) private readonly letterValues: LetterFieldValuesReader,
+    @Inject(COUNTERPARTY_FIELD_VALUES_READER)
+    private readonly counterpartyValues: CounterpartyFieldValuesReader,
     @Inject(PROJECT_FIELD_USAGE_READER) private readonly projectUsage: ProjectFieldUsageReader,
     @Inject(WORKFLOW_FIELD_USAGE_READER) private readonly workflows: WorkflowFieldUsageReader,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
@@ -50,9 +57,11 @@ export class DefinitionsUsageService {
     const [
       taskCount,
       letterCount,
+      counterpartyCount,
       projectCount,
       nodeCount,
-      forms,
+      processForms,
+      projectForms,
       workflows,
       processTypes,
       projectTypes,
@@ -60,9 +69,11 @@ export class DefinitionsUsageService {
     ] = await Promise.all([
       this.taskValues.countValues(definition.id),
       this.letterValues.countValues(definition.id),
+      this.counterpartyValues.countValues(definition.id),
       this.projectUsage.countValues('project', definition.id),
       this.projectUsage.countValues('node', definition.id),
       this.workflows.creationFormsUsingField(definition.id),
+      this.projectUsage.formsUsingField(definition.id),
       this.workflows.workflowsUsingField(definition.id),
       this.catalog.typeRefs(bindings.processTypeIds),
       this.targets.projectTypes(),
@@ -79,10 +90,11 @@ export class DefinitionsUsageService {
       values: {
         task: taskCount,
         letter: letterCount,
+        counterparty: counterpartyCount,
         project: projectCount,
         node: nodeCount,
       },
-      forms,
+      forms: [...processForms, ...projectForms],
       workflows,
       bindings: {
         processTypes: nameById(processTypes, bindings.processTypeIds),

@@ -14,9 +14,12 @@ export interface LetterVisibilityViewer {
 
 export interface LetterVisibilityReader {
   /** Из переданных писем — видимые этому сотруднику (конфиденциальные —
-   *  участникам и держателям `correspondence.view_confidential`). */
+   *  участникам и держателям `correspondence.view_confidential`).
+   *  `includeDeleted` — «было видимо до удаления»: только для плашки
+   *  «запись удалена» у значения-ссылки (#631 Р5), не для списков. */
   visibleLetterIds(
     letterIds: readonly string[],
     viewer: LetterVisibilityViewer,
+    opts?: { includeDeleted?: boolean },
   ): Promise<ReadonlySet<string>>;
 }

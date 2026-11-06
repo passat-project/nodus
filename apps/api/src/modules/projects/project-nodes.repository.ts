@@ -12,7 +12,6 @@ export const nodeSelect = {
   parentId: true,
   kindId: true,
   name: true,
-  code: true,
   customFields: true,
   order: true,
   createdAt: true,
@@ -31,7 +30,6 @@ export interface NewProjectNode {
 
 export interface ProjectNodePatch {
   name?: string;
-  code?: string | null;
   kindId?: string;
   customFields?: Prisma.InputJsonValue;
   parentId?: string | null;
@@ -100,6 +98,19 @@ export class ProjectNodesRepository {
     await tx.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('nodus:project_nodes:' || ${projectId}::text))`,
     );
+  }
+
+  /** Строковый лок узла до конца транзакции (#646): уборка значений
+   *  удалённого атрибута идёт bulk-UPDATE под другим ключом
+   *  (`nodus:node_kinds`), поэтому advisory-лока структуры мало — без
+   *  `FOR UPDATE` PATCH успевал записать прочитанный JSONB поверх уборки и
+   *  воскрешал ключ удалённого атрибута. */
+  async lockNode(tx: TransactionClient, projectId: string, nodeId: string): Promise<void> {
+    await tx.$executeRaw(Prisma.sql`
+      SELECT 1 FROM "project_nodes"
+      WHERE "id" = ${nodeId}::uuid AND "project_id" = ${projectId}::uuid
+      FOR UPDATE
+    `);
   }
 
   /** Уборка значений удалённого атрибута (#556, Р11): `custom_fields - key`

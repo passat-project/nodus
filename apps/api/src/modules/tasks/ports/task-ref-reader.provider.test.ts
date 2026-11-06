@@ -22,7 +22,12 @@ const RESOLVED = {
 
 function make(rows: { id: string; title: string; deletedAt: Date | null }[], visible: boolean) {
   const prisma = { task: { findMany: vi.fn(async () => rows) } };
-  const reads = { isVisible: vi.fn(async () => visible) };
+  const reads = {
+    visibleIds: vi.fn(async (ids: string[], where: Record<string, unknown>) => {
+      void where;
+      return visible ? ids : [];
+    }),
+  };
   const viewers = { resolve: vi.fn(async () => RESOLVED) };
   const provider = new TaskRefReaderProvider(prisma as never, reads as never, viewers as never);
   return { provider, prisma, reads, viewers };
@@ -55,9 +60,28 @@ describe('TaskRefReaderProvider.visibleFor (Р5 #631)', () => {
     expect(await provider.visibleFor(T1, viewer)).toBe(true);
     expect(viewers.resolve).toHaveBeenCalledWith(viewer);
     // Фильтр — visibleTasksWhere(resolved, 'all'): гейт deletedAt обязателен.
-    expect(reads.isVisible).toHaveBeenCalledWith(T1, expect.objectContaining({ deletedAt: null }));
+    expect(reads.visibleIds).toHaveBeenCalledWith(
+      [T1],
+      expect.objectContaining({ deletedAt: null }),
+    );
 
     const hidden = make([], false);
     expect(await hidden.provider.visibleFor(T1, viewer)).toBe(false);
+  });
+
+  it('батч (#641): один вызов на пачку, без запроса на каждую ссылку', async () => {
+    const { provider, reads, viewers } = make([], true);
+    const viewer = { id: 'u1', permissions: [] };
+    const result = await provider.visibleForMany([T1, T2], viewer);
+    expect([...result]).toEqual([T1, T2]);
+    expect(viewers.resolve).toHaveBeenCalledTimes(1);
+    expect(reads.visibleIds).toHaveBeenCalledTimes(1);
+  });
+
+  it('includeDeleted (#631 Р5): «была видима до удаления» — без гейта deletedAt', async () => {
+    const { provider, reads } = make([], true);
+    await provider.visibleForMany([T1], { id: 'u1', permissions: [] }, { includeDeleted: true });
+    const where = reads.visibleIds.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(where.deletedAt).toBeUndefined();
   });
 });

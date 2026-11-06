@@ -72,7 +72,7 @@ describe('ProjectLifecycleService (#52: статусы и передача, Т5/
       expect(eventBus.emit).toHaveBeenCalledWith(
         {},
         PROJECT_EVENTS.UPDATED,
-        { projectId: ID, fields: ['status'], status: 'completed' },
+        { projectId: ID, fields: ['status'], status: 'completed', audience: expect.any(Array) },
         expect.anything(),
       );
     });

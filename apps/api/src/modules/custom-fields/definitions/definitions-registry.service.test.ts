@@ -13,6 +13,39 @@ import { makeService, ROW, row } from './definitions-service.test-kit.js';
  */
 
 describe('DefinitionsService.update (#631, Р3)', () => {
+  it('снятие привязок полным набором чистит слоты форм мест (#646)', async () => {
+    const { service, definitions, formCleaner } = makeService();
+    definitions.findById.mockResolvedValue(
+      row({
+        bindings: [
+          { targetKind: 'process_type', targetId: 't-1' },
+          { targetKind: 'project_type', targetId: 'pt-1' },
+          { targetKind: 'node_kind', targetId: 'nk-1' },
+        ],
+      }),
+    );
+    await service.update(
+      ROW.id,
+      {
+        bindings: { processTypeIds: ['t-1'], projectTypeIds: [], nodeKindIds: [] },
+      } as never,
+      'actor-1',
+    );
+    expect(formCleaner.removeFieldFromForm).toHaveBeenCalledWith(
+      { kind: 'project_type', id: 'pt-1' },
+      ROW.id,
+      'actor-1',
+      expect.anything(),
+    );
+    expect(formCleaner.removeFieldFromForm).toHaveBeenCalledWith(
+      { kind: 'node_kind', id: 'nk-1' },
+      ROW.id,
+      'actor-1',
+      expect.anything(),
+    );
+    expect(formCleaner.removeFieldFromForm).toHaveBeenCalledTimes(2);
+  });
+
   it('расширение text → long_text разрешено', async () => {
     const { service, definitions } = makeService();
     await service.update(ROW.id, { type: 'long_text' } as never, 'actor-1');
@@ -78,7 +111,7 @@ describe('DefinitionsService.update (#631, Р3)', () => {
     definitions.findById.mockResolvedValue(row({ isCompany: true }));
     await expect(
       service.update(ROW.id, { bindings: { processTypeIds: ['t-1'] } } as never, 'actor-1'),
-    ).rejects.toMatchObject({ code: ErrorCode.VALIDATION_FAILED });
+    ).rejects.toMatchObject({ code: ErrorCode.CUSTOM_FIELD_BINDING_INVALID });
   });
 });
 
@@ -113,6 +146,20 @@ describe('DefinitionsService.remove (#631, Р8 — удаление всегда
       'custom_field.definition_changed',
       { definitionId: ROW.id, change: 'deleted' },
       expect.objectContaining({ actorId: 'actor-1' }),
+    );
+  });
+
+  it('удаление снимает слот из формы создания типа процесса (#646)', async () => {
+    const { service, definitions, processTypeCleaner } = makeService();
+    definitions.findById.mockResolvedValue({
+      ...ROW,
+      bindings: [{ targetKind: 'process_type', targetId: 't-1' }],
+    });
+    await service.remove(ROW.id, 'actor-1');
+    expect(processTypeCleaner.removeFieldFromCreationForms).toHaveBeenCalledWith(
+      ROW.id,
+      'actor-1',
+      expect.anything(),
     );
   });
 
@@ -188,11 +235,17 @@ describe('DefinitionsService.list (#631, Р11 — фильтр по модулю
     const { service, mapper, definitions } = makeService();
     definitions.list.mockResolvedValue(rows());
     await service.list('company');
-    expect(mapper.toDtos).toHaveBeenCalledWith([
-      expect.objectContaining({ id: fCompanyId, isCompany: true }),
-    ]);
+    expect(mapper.toDtos).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: fCompanyId, isCompany: true })],
+      undefined,
+      undefined,
+    );
     await service.list('project');
-    expect(mapper.toDtos).toHaveBeenCalledWith([expect.objectContaining({ id: fProjectId })]);
+    expect(mapper.toDtos).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: fProjectId })],
+      undefined,
+      undefined,
+    );
   });
 
   it('task/letter — привязка к живому типу своей категории (не чужой, не архиву)', async () => {
@@ -202,14 +255,22 @@ describe('DefinitionsService.list (#631, Р11 — фильтр по модулю
     await service.list('task');
     // Живые типы спрашиваются одной пачкой с {live: true}.
     expect(catalog.typeRefs).toHaveBeenCalledWith(['t-task', 't-letter', 't-arch'], { live: true });
-    expect(mapper.toDtos).toHaveBeenCalledWith([expect.objectContaining({ id: fTask })]);
+    expect(mapper.toDtos).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: fTask })],
+      undefined,
+      undefined,
+    );
     await service.list('letter');
-    expect(mapper.toDtos).toHaveBeenCalledWith([expect.objectContaining({ id: fLetter })]);
+    expect(mapper.toDtos).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: fLetter })],
+      undefined,
+      undefined,
+    );
   });
 
   it('без модуля — весь реестр', async () => {
     const { service, mapper } = makeService();
     await service.list(null);
-    expect(mapper.toDtos).toHaveBeenCalledWith([ROW]);
+    expect(mapper.toDtos).toHaveBeenCalledWith([ROW], undefined, undefined);
   });
 });
