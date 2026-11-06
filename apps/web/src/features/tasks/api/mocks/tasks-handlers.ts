@@ -1,4 +1,5 @@
 import type {
+  FormulaMovePreviewResponse,
   Paginated,
   TaskBranch,
   TaskBranchNode,
@@ -19,6 +20,7 @@ import {
   taskDetailOf,
 } from '../../../../shared/mocks/data/tasks.js';
 import { demoStages } from '../../../../shared/mocks/data/task-stages.js';
+import { findDemoNodeRow } from '../../../../shared/mocks/data/project-nodes.js';
 import { userRef } from '../../../../shared/mocks/data/users.js';
 import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
 import { removeOwnFormula } from '../../../../shared/custom-fields/formula/formula-mocks.js';
@@ -129,6 +131,18 @@ export const tasksHandlers = [
     return HttpResponse.json(subtask, { status: 201 });
   }),
 
+  /** Превью формульного диффа переноса задачи (#632, критерий 1): демо-мир
+   *  без формульных переносов — дифф пуст, окно подтверждения не открывается. */
+  http.post('/api/v1/tasks/:id/move-preview', ({ params }) => {
+    const task =
+      demoTasks.find((t) => t.id === params.id) ??
+      Object.values(demoSubtasks)
+        .flat()
+        .find((t) => t.id === params.id);
+    if (!task) return notFound('Task not found');
+    return HttpResponse.json({ changes: [] } satisfies FormulaMovePreviewResponse);
+  }),
+
   http.patch('/api/v1/tasks/:id', async ({ params, request }) => {
     const task = demoTasks.find((t) => t.id === params.id);
     if (!task) return notFound('Task not found');
@@ -172,6 +186,23 @@ export const tasksHandlers = [
       if (body.title !== undefined) task.title = body.title;
       if (body.priority !== undefined) task.priority = body.priority;
       if (body.deadline !== undefined) task.deadline = body.deadline;
+      // Перенос в папку структуры (#467): PATCH несёт nodeId одиночного DnD,
+      // null — «Без папки». Мок терял его, и перенос задачи в демо-мире не
+      // менял ничего (сервер пишет nodeId — task-fields.writer.ts:147).
+      if (body.nodeId !== undefined) {
+        if (body.nodeId === null) {
+          task.nodeId = null;
+        } else {
+          const node = findDemoNodeRow(body.nodeId);
+          if (!node || node.projectId !== task.project?.id) {
+            return HttpResponse.json(
+              { code: ErrorCode.PROJECT_NODE_INVALID, message: 'Node is invalid' },
+              { status: 422 },
+            );
+          }
+          task.nodeId = node.id;
+        }
+      }
       const extra = (detailsExtra[task.id] ??= {
         description: taskDetailOf(task).description,
         observers: [],

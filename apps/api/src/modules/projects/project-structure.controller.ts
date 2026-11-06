@@ -14,6 +14,7 @@ import {
   batchCreateProjectNodesResponseSchema,
   createProjectNodeBodySchema,
   formulaBodySchema,
+  formulaMovePreviewResponseSchema,
   formulaResponseSchema,
   moveProjectNodeBodySchema,
   projectNodeSchema,
@@ -24,6 +25,7 @@ import {
   type BatchCreateProjectNodesResponse,
   type CreateProjectNodeBody,
   type FormulaBody,
+  type FormulaMovePreviewResponse,
   type FormulaResponse,
   type MoveProjectNodeBody,
   type ProjectNode,
@@ -43,6 +45,10 @@ import { ProjectStructureService } from './project-structure.service.js';
 
 const idParamSchema = z.uuid();
 const nodeIdParamSchema = z.uuid();
+/** Тело dry-run переноса (#632, Р10): только новый родитель (`null` — корень);
+ *  якоря позиции (beforeId/afterId) на формулы не влияют. */
+const movePreviewBodySchema = z.object({ parentId: z.uuid().nullable() }).strict();
+type MovePreviewBody = z.infer<typeof movePreviewBodySchema>;
 
 /**
  * Дерево проекта (`/api/v1/projects/:id/…`, #467, ADR-0030 «Дополнение»):
@@ -238,6 +244,32 @@ export class ProjectStructureController {
     @GetUser() user: AuthUser,
   ): Promise<ProjectNode> {
     return this.moves.move(user, id, nodeId, dto);
+  }
+
+  @Post('nodes/:nodeId/move-preview')
+  @HttpCode(200)
+  @ApiParam({ name: 'id', description: 'UUID проекта', schema: { type: 'string', format: 'uuid' } })
+  @ApiParam({
+    name: 'nodeId',
+    description: 'UUID узла',
+    schema: { type: 'string', format: 'uuid' },
+  })
+  @ApiOperation({
+    summary: 'Что изменится в формулах при переносе папки (dry-run, без записи)',
+  })
+  @ApiOkResponse({ standardSchema: formulaMovePreviewResponseSchema })
+  @ApiErrors(400, 401, 403, 404, 422)
+  movePreview(
+    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @Param('nodeId', new ZodValidationPipe(nodeIdParamSchema)) nodeId: string,
+    @Body({
+      schema: movePreviewBodySchema,
+      pipes: [new ZodValidationPipe(movePreviewBodySchema)],
+    })
+    dto: MovePreviewBody,
+    @GetUser() user: AuthUser,
+  ): Promise<FormulaMovePreviewResponse> {
+    return this.formulas.movePreview(user, id, nodeId, dto.parentId);
   }
 
   @Delete('nodes/:nodeId')

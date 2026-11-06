@@ -237,7 +237,7 @@ describe('extractDeps', () => {
       { kind: 'value', number: 1 },
       { kind: 'company', number: 2 },
       { kind: 'project', number: 3 },
-      { kind: 'related', selector: 'relations', number: 4 },
+      { kind: 'related', selector: 'relations', relation: 'blocks', direction: 'out', number: 4 },
     ]);
   });
 });

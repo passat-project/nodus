@@ -67,7 +67,13 @@ export function FormulaCell({
   }, [own]);
 
   return (
-    <div className="group/formula flex min-w-0 items-center gap-1">
+    // data-testid — адрес ячейки для живых e2e (#632): меню «⋯» есть у каждой
+    // строки атрибутов, и без адреса по полю спека не отличит шифр от марки.
+    <div
+      className="group/formula flex min-w-0 items-center gap-1"
+      data-testid="formula-cell"
+      data-field-id={definition.id}
+    >
       {/* Значок формулы — левый жёлоб строки: «fx» моно 11px (данные, не метка),
           тихий до наведения; своя формула кликабельна (открывает редактор),
           формула типа — только пометка. */}

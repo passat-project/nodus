@@ -43,3 +43,8 @@ export function asCellError(raw: unknown): FormulaCellError {
     ...(typeof value?.number === 'number' ? { number: value.number } : {}),
   };
 }
+
+/** Ошибка ячейки или null: JSONB `DbNull` — ошибки нет (Р13). */
+export function cellErrorOf(raw: unknown): FormulaCellError | null {
+  return raw === null || raw === undefined ? null : asCellError(raw);
+}

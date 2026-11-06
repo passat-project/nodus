@@ -125,37 +125,42 @@ export class ProjectFormulaRecalcService {
     // их значения здесь нельзя (I3), иначе «находка» станет порчей данных.
     if (cell.hostKind !== 'project' && cell.hostKind !== 'node') return;
     const outcome = await this.cells.recalc(tx, cell, depth);
-    if (outcome.silent || !outcome.changed) return;
-    try {
-      if (cell.hostKind === 'project') {
-        await this.writer.writeProject(tx, actorId, projectId, cell.fieldId, outcome.value);
-      } else {
-        await this.writer.writeNode(
-          tx,
-          actorId,
-          projectId,
-          cell.hostId,
-          cell.fieldId,
-          outcome.value,
+    if (outcome.silent) return;
+    if (outcome.changed) {
+      try {
+        if (cell.hostKind === 'project') {
+          await this.writer.writeProject(tx, actorId, projectId, cell.fieldId, outcome.value);
+        } else {
+          await this.writer.writeNode(
+            tx,
+            actorId,
+            projectId,
+            cell.hostId,
+            cell.fieldId,
+            outcome.value,
+          );
+        }
+      } catch (error) {
+        // Изоляция сбоев per-cell (Р4): «ядовитая» ячейка не валит партию.
+        this.logger.debug(
+          { cell, error: error instanceof Error ? error.message : String(error) },
+          'Значение формулы не записано',
         );
+        return;
       }
-    } catch (error) {
-      // Изоляция сбоев per-cell (Р4): «ядовитая» ячейка не валит партию.
-      this.logger.debug(
-        { cell, error: error instanceof Error ? error.message : String(error) },
-        'Значение формулы не записано',
-      );
-      return;
     }
-    await this.events.emitChanged(
-      tx,
-      actorId,
-      cell.hostKind,
-      cell.hostId,
-      projectId,
-      cell.fieldId,
-      outcome.error !== null,
-    );
+    // formula_changed — только при смене наличия ошибки (O4).
+    if (outcome.errorChanged) {
+      await this.events.emitChanged(
+        tx,
+        actorId,
+        cell.hostKind,
+        cell.hostId,
+        projectId,
+        cell.fieldId,
+        outcome.error !== null,
+      );
+    }
   }
 }
 

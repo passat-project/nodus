@@ -26,6 +26,7 @@ import { ProjectFieldValuesCleanupHandler } from './events/project-field-values-
 import { ProjectFormulaDefinitionHandler } from './events/formula-definition.handler.js';
 import {
   ProjectFormulaRecalcHandler,
+  ProjectNodeCreatedFormulaHandler,
   ProjectNodeDeletedFormulaHandler,
   ProjectNodeFormulaRecalcHandler,
   ProjectNodeKindFormulaHandler,
@@ -35,6 +36,11 @@ import { ProjectNodesRepository } from './project-nodes.repository.js';
 import { ProjectFormulaEvents } from './project-formula-events.js';
 import { ProjectFormulaRecalcService } from './project-formula-recalc.service.js';
 import { ProjectFormulaService } from './project-formula.service.js';
+import {
+  TaskCreatedProjectFormulaHandler,
+  TaskDeletedProjectFormulaHandler,
+  TaskUpdatedProjectFormulaHandler,
+} from './events/formula-task-source.handler.js';
 import { ProjectStructureController } from './project-structure.controller.js';
 import { ProjectStructureService } from './project-structure.service.js';
 import { ProjectStructureMoveService } from './project-structure-move.service.js';
@@ -95,10 +101,16 @@ import {
     // Пересчёт формул по зависимостям (#632, Р4/Р8): события хостов и реестра.
     ProjectFormulaRecalcHandler,
     ProjectNodeFormulaRecalcHandler,
+    ProjectNodeCreatedFormulaHandler,
     ProjectStructureFormulaRecalcHandler,
     ProjectNodeDeletedFormulaHandler,
     ProjectNodeKindFormulaHandler,
     ProjectFormulaDefinitionHandler,
+    // Пересчёт формул проектов/папок по событиям задач (#632): задачи —
+    // источник через ссылку (`v:task:*`) и состав выборки папки (I3).
+    TaskUpdatedProjectFormulaHandler,
+    TaskCreatedProjectFormulaHandler,
+    TaskDeletedProjectFormulaHandler,
     // Проекция участия «из задач» (Р2): события task.*.
     TaskParticipantsProjectionRunner,
     TaskCreatedProjectHandler,

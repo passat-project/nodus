@@ -24,6 +24,7 @@ import {
   createSubtaskBodySchema,
   createTaskBodySchema,
   formulaBodySchema,
+  formulaMovePreviewResponseSchema,
   formulaResponseSchema,
   listTasksQuerySchema,
   paginatedSchema,
@@ -39,6 +40,7 @@ import {
   type CreateSubtaskBody,
   type CreateTaskBody,
   type FormulaBody,
+  type FormulaMovePreviewResponse,
   type FormulaResponse,
   type ListTasksQuery,
   type Paginated,
@@ -66,6 +68,10 @@ import { TasksQueryService } from './tasks-query.service.js';
 import { TasksService } from './tasks.service.js';
 
 const uuid = new ZodValidationPipe(z.uuid());
+/** Перенос задачи в папку структуры (#632, Р10): `nodeId=null` — вынос из
+ *  папки. Схема локальная — тело живёт только у dry-run маршрута. */
+const taskMovePreviewBodySchema = z.object({ nodeId: z.uuid().nullable() }).strict();
+type TaskMovePreviewBody = z.infer<typeof taskMovePreviewBodySchema>;
 const scopeQuery = z.object({
   scope: z.enum(['mine', 'all']).default('mine'),
   typeId: z.uuid().optional(),
@@ -241,6 +247,25 @@ export class TasksController {
     @Param('fieldId', uuid) fieldId: string,
   ): Promise<void> {
     return this.formulas.remove(user, id, fieldId);
+  }
+
+  @Post(':id/move-preview')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Что изменится в формулах при переносе задачи в папку (dry-run, без записи)',
+  })
+  @ApiOkResponse({ standardSchema: formulaMovePreviewResponseSchema })
+  @ApiErrors(400, 401, 403, 404, 422)
+  movePreview(
+    @GetUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Body({
+      schema: taskMovePreviewBodySchema,
+      pipes: [new ZodValidationPipe(taskMovePreviewBodySchema)],
+    })
+    body: TaskMovePreviewBody,
+  ): Promise<FormulaMovePreviewResponse> {
+    return this.formulas.movePreview(user, id, body.nodeId);
   }
 
   @Get(':id/branch')

@@ -68,7 +68,13 @@ function setup(options: { visible?: boolean } = {}) {
     cellsForHost: vi.fn(async (): Promise<FormulaCellRef[]> => [
       { cellId: 'c1', hostKind: 'letter', hostId: LETTER, fieldId: FIELD },
     ]),
-    recalc: vi.fn(async () => ({ value: 'новое', error: null, changed: true, silent: false })),
+    recalc: vi.fn(async () => ({
+      value: 'новое',
+      error: null,
+      changed: true,
+      errorChanged: false,
+      silent: false,
+    })),
   };
   const service = new LetterFormulaService(
     { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
@@ -152,8 +158,20 @@ describe('LetterFormulaService (#632, Р10)', () => {
   it('пересчёт: изменившееся значение пишется, неизменившееся — молчит (Р8)', async () => {
     const { service, fields, eventBus, cells } = setup();
     cells.recalc
-      .mockResolvedValueOnce({ value: 'новое', error: null, changed: true, silent: false })
-      .mockResolvedValueOnce({ value: 'старое', error: null, changed: false, silent: false });
+      .mockResolvedValueOnce({
+        value: 'новое',
+        error: null,
+        changed: true,
+        errorChanged: true,
+        silent: false,
+      })
+      .mockResolvedValueOnce({
+        value: 'старое',
+        error: null,
+        changed: false,
+        errorChanged: false,
+        silent: false,
+      });
     cells.cellsForHost.mockResolvedValueOnce([
       { cellId: 'c1', hostKind: 'letter', hostId: LETTER, fieldId: FIELD },
       {

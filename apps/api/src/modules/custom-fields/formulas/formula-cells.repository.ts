@@ -194,6 +194,18 @@ export class FormulaCellsRepository {
     });
     return row?.number ?? null;
   }
+
+  /** Свои формулы ячеек атрибута (#632, F1 — usage «В формулах»). */
+  async countByFieldId(fieldId: string, tx?: TransactionClient): Promise<number> {
+    return this.db(tx).formulaCell.count({ where: { fieldId } });
+  }
+
+  /** Формулы привязок типа/вида атрибута (F1). */
+  async countTypeDefaults(fieldId: string, tx?: TransactionClient): Promise<number> {
+    return this.db(tx).fieldBinding.count({
+      where: { definitionId: fieldId, defaultFormula: { not: Prisma.DbNull } },
+    });
+  }
 }
 
 const cellSelect = {

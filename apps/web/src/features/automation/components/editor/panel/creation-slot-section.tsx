@@ -1,13 +1,31 @@
-import type { CreationFieldSlot, CustomFieldDefinition, WorkflowProblem } from '@nodus/contracts';
+import type {
+  CreationFieldSlot,
+  CustomFieldDefinition,
+  CustomFieldType,
+  FormulaHostKind,
+  WorkflowProblem,
+} from '@nodus/contracts';
 import { presetAllowed, requiredAllowed, ui } from '@nodus/contracts';
 import { CircleAlert } from 'lucide-react';
 
 import { SlotControl } from '../../../../../shared/tasks/task-create-fields.js';
+import { TypeFormulaControl } from '../../../../../shared/custom-fields/formula/type-formula-control.js';
 import { initialPreset, type SlotPatch } from '../../../model/creation-form.js';
 import { CommitInput } from '../../../../../shared/ui/panel/commit-field.js';
 import { PanelDanger, PanelField, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
 
 const c = ui.automation.creation;
+
+/** Тип стандартного поля формы создания — результат формулы (Р12). */
+const SLOT_TYPES: Readonly<Record<string, CustomFieldType>> = {
+  description: 'long_text',
+  deadline: 'datetime',
+  assignee: 'user',
+  coexecutors: 'users',
+  observers: 'users',
+  priority: 'enum',
+  project: 'project',
+};
 
 /**
  * Раздел одного поля окна создания (#432, Р12; переход внутрь из строки
@@ -22,6 +40,8 @@ export function CreationSlotSection({
   slot,
   standardLabel,
   definition,
+  ownDefinitions,
+  hostKind,
   presetLabel,
   problems,
   readOnly,
@@ -33,6 +53,10 @@ export function CreationSlotSection({
   standardLabel: string;
   /** Определение атрибута (для `cf.<id>`). */
   definition?: CustomFieldDefinition;
+  /** Атрибуты места — палитра конструктора формулы слота. */
+  ownDefinitions: readonly CustomFieldDefinition[];
+  /** Носитель формулы слота: задача или письмо (Р12). */
+  hostKind: FormulaHostKind;
   /** Скрытое значение текстом — для просмотра без права правки. */
   presetLabel: string | null;
   problems: readonly WorkflowProblem[];
@@ -115,6 +139,19 @@ export function CreationSlotSection({
           </PanelField>
         ) : null}
       </div>
+
+      <PanelField label={ui.formulas.typeFormula.field} hint={ui.formulas.typeFormula.hint}>
+        <TypeFormulaControl
+          hostKind={hostKind}
+          {...(definition
+            ? { definition }
+            : { targetType: SLOT_TYPES[slot.key] ?? 'text', label: standardLabel })}
+          ownDefinitions={ownDefinitions}
+          value={slot.formula ?? null}
+          readOnly={readOnly}
+          onChange={(formula) => onChange({ formula })}
+        />
+      </PanelField>
 
       {readOnly ? null : <PanelDanger onClick={onRemove}>{c.removeFromForm}</PanelDanger>}
     </>

@@ -13,14 +13,18 @@ import type {
   FormulaCellRef,
   FormulaCells,
   FormulaComputation,
+  FormulaPreviewEntry,
+  FormulaPreviewOverride,
   FormulaRecalcOutcome,
   FormulaSaveArgs,
   FormulaStateMap,
 } from '../ports/formula-cells.port.js';
 import { FORMULA_ENGINE, type FormulaEngine } from '../ports/formula-engine.port.js';
 import { FormulaCellsRepository } from './formula-cells.repository.js';
-import { asCellError, errorCodeOf, refOf } from './formula-cells.support.js';
+import { asCellError, cellErrorOf, errorCodeOf, refOf } from './formula-cells.support.js';
 import { computeFormula } from './formula-compute.js';
+import { evaluateFormula, type FormulaEvaluateOptions } from './formula-evaluate.js';
+import { previewCells } from './formula-preview.js';
 import { applyTypeFormulas } from './formula-type-formulas.js';
 import { createFormulaCache, FormulaContextService } from './formula-context.service.js';
 import { FormulaMetaService, type FormulaRegistrySnapshot } from './formula-meta.service.js';
@@ -160,6 +164,10 @@ export class FormulaCellsService implements FormulaCells {
     return this.repo.byAttrNumber(number, tx);
   }
 
+  dependentCellsByDepKey(key: string, tx?: TransactionClient): Promise<FormulaCellRef[]> {
+    return this.repo.byDepKeys([key], tx);
+  }
+
   async cellsForHost(
     hostKind: FormulaHostKind,
     hostId: string,
@@ -190,7 +198,10 @@ export class FormulaCellsService implements FormulaCells {
   ): Promise<FormulaRecalcOutcome> {
     const cell = await this.repo.find(ref.hostKind, ref.hostId, ref.fieldId, tx);
     // Ячейку сняли/удалили, пока событие шло — пересчитывать нечего.
-    if (!cell) return { value: null, error: null, changed: false, silent: true };
+    if (!cell)
+      return { value: null, error: null, changed: false, errorChanged: false, silent: true };
+    const previousError = cellErrorOf(cell.error);
+    const hadError = previousError !== null;
 
     if (depth > FORMULA_LIMITS.cascadeDepth) {
       const error: FormulaCellError = {
@@ -198,7 +209,7 @@ export class FormulaCellsService implements FormulaCells {
         message: 'formula recalculation cycle detected',
       };
       await this.repo.updateState(tx, cell.id, { error, depth });
-      return { value: null, error, changed: true, silent: true };
+      return { value: null, error, changed: true, errorChanged: !hadError, silent: true };
     }
 
     const snapshot = await this.meta.snapshot(tx);
@@ -209,12 +220,12 @@ export class FormulaCellsService implements FormulaCells {
     );
     if (!context) {
       await this.repo.deleteByHost(tx, ref.hostKind, ref.hostId);
-      return { value: null, error: null, changed: false, silent: true };
+      return { value: null, error: null, changed: false, errorChanged: false, silent: true };
     }
     const definition = snapshot.byId.get(ref.fieldId);
     if (!definition) {
       await this.repo.remove(tx, ref.hostKind, ref.hostId, ref.fieldId);
-      return { value: null, error: null, changed: false, silent: true };
+      return { value: null, error: null, changed: false, errorChanged: false, silent: true };
     }
 
     const outcome = await computeFormula({
@@ -227,9 +238,29 @@ export class FormulaCellsService implements FormulaCells {
     });
     const previous = context.host.values[ref.fieldId] ?? null;
     const changed = !sameFormulaValue(previous, outcome.value);
+    const errorChanged = (previousError?.code ?? null) !== (outcome.error?.code ?? null);
     await this.repo.replaceDeps(tx, cell.id, context.depKeys);
     await this.repo.updateState(tx, cell.id, { error: outcome.error, depth });
-    return { ...outcome, changed, silent: false };
+    return { ...outcome, changed, errorChanged, silent: false };
+  }
+
+  /**
+   * Вычисление без записи (префилл окна/создания, Р12): контекст хоста,
+   * материализация под тип слота. Ошибка расчёта — пустое значение (Р13).
+   */
+  async evaluate(
+    hostKind: FormulaHostKind,
+    hostId: string,
+    ast: FormulaNode,
+    opts: FormulaEvaluateOptions = {},
+  ): Promise<FormulaComputation> {
+    return evaluateFormula(
+      { meta: this.meta, context: this.context, values: this.values, engine: this.engine },
+      hostKind,
+      hostId,
+      ast,
+      opts,
+    );
   }
 
   async cleanupHost(
@@ -238,6 +269,27 @@ export class FormulaCellsService implements FormulaCells {
     hostId: string,
   ): Promise<void> {
     await this.repo.deleteByHost(tx, hostKind, hostId);
+  }
+
+  async preview(
+    hostKind: FormulaHostKind,
+    hostIds: readonly string[],
+    override: FormulaPreviewOverride,
+    tx?: TransactionClient,
+  ): Promise<FormulaPreviewEntry[]> {
+    return previewCells(
+      {
+        repo: this.repo,
+        meta: this.meta,
+        context: this.context,
+        values: this.values,
+        engine: this.engine,
+      },
+      hostKind,
+      hostIds,
+      override,
+      tx,
+    );
   }
 
   /** Статическая проверка перед записью: блокирующие проблемы — 422 (Р13). */
@@ -257,7 +309,9 @@ export class FormulaCellsService implements FormulaCells {
     throw new DomainException(
       errorCodeOf(blocking[0]!),
       'Formula is invalid',
-      { issues: blocking },
+      {
+        issues: blocking,
+      },
       422,
     );
   }

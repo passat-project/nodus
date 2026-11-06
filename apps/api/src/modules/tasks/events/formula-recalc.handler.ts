@@ -11,12 +11,13 @@ import {
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import { TaskFormulaService } from '../tasks/task-formula.service.js';
+import { recalcSubtaskParents } from './formula-source.helpers.js';
 
 /**
  * Пересчёт формул задач по зависимостям (#632, Р4/Р8). Триггеры:
  * - `task.updated` — значения атрибутов (`customFieldChanges`), системные
  *   поля и место задачи (родитель/проект/узел): пересчитываются ячейки
- *   задачи и зависимые от её значений;
+ *   задачи, зависимые от её значений и агрегаты старого/нового родителя;
  * - `custom_field.definition_changed` — значение компании (`company:<n>`)
  *   и удаление атрибута (`attr_number = N`, Р13) — массовый пересчёт.
  *
@@ -61,6 +62,13 @@ export class TaskFormulaRecalcHandler {
         numbers,
         sourceDepth + 1,
       );
+      // Перепривязка (#632): состав подзадач сменился у старого и нового
+      // родителя — их формулы-агрегаты пересчитываются (ручная правка — 1).
+      // Место задачи (проект/узел) закрывает модуль проектов своими хостами.
+      await recalcSubtaskParents(this.formulas, this.cells, tx, event.actorId ?? null, [
+        payload.parentId,
+        payload.previousParentId,
+      ]);
     });
   }
 }

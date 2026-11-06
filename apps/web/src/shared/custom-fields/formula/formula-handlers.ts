@@ -10,6 +10,7 @@ import { http, HttpResponse } from 'msw';
 
 import { demoFieldById } from '../../mocks/data/custom-fields.js';
 
+import { demoCreationResolver } from './formula-creation-resolver.js';
 import { effectiveFormula, removeOwnFormula, saveOwnFormula } from './formula-mocks.js';
 import { demoResolver } from './formula-resolver.js';
 import { demoFormulaMeta, findFormulaHost } from './formula-state.js';
@@ -115,12 +116,19 @@ export const formulaHandlers = [
     });
   }),
 
-  // Превью/префилл без записи: контекст — существующая запись мок-мира.
+  // Превью/префилл без записи: контекст — запись мок-мира или создание.
   http.post('/api/v1/custom-fields/formulas/evaluate', async ({ request }) => {
     const parsed = formulaEvaluateBodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return badRequest();
     const body = parsed.data;
-    const resolver = demoResolver(body.context.hostKind, body.context.hostId);
+    const ctx = body.context as {
+      hostKind?: Parameters<typeof demoResolver>[0];
+      hostId?: string;
+      creation?: Parameters<typeof demoCreationResolver>[0];
+    };
+    const resolver = ctx.creation
+      ? demoCreationResolver(ctx.creation)
+      : demoResolver(ctx.hostKind!, ctx.hostId!);
     if (!resolver) return notFound();
     const result = evaluate(body.ast, resolver);
     return HttpResponse.json({ value: result.value, error: result.error });

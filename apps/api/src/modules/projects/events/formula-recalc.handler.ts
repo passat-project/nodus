@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 import {
   PROJECT_EVENTS,
+  projectNodeCreatedPayloadSchema,
   projectNodeDeletedPayloadSchema,
   projectNodeKindChangedPayloadSchema,
   projectNodeMovedPayloadSchema,
@@ -67,12 +68,15 @@ export class ProjectFormulaRecalcHandler {
     const parsed = projectUpdatedPayloadSchema.safeParse(event.payload);
     if (!parsed.success) return;
     const fieldIds = changedFieldIds(parsed.data.fields);
-    if (fieldIds.length === 0) return;
     const { projectId } = parsed.data;
     await this.txRunner.run(async (tx) => {
-      const { numbers, depth } = await numbersOf(this.cells, 'project', projectId, fieldIds, tx);
-      if (numbers.length === 0) return;
+      const { numbers, depth } =
+        fieldIds.length > 0
+          ? await numbersOf(this.cells, 'project', projectId, fieldIds, tx)
+          : { numbers: [], depth: 0 };
       this.logger.debug({ projectId, numbers }, 'Пересчёт формул проекта');
+      // Свои ячейки проекта пересчитываются всегда: системные поля
+      // (название/статус/даты/руководитель) меняются без атрибутов (Р4).
       await this.formulas.recalcProjectCells(
         tx,
         event.actorId ?? null,
@@ -80,6 +84,13 @@ export class ProjectFormulaRecalcHandler {
         numbers,
         depth + 1,
       );
+      const systemRefs = await this.cells.dependentCellsByDepKey(`system:project:${projectId}`, tx);
+      const nodes = [
+        ...new Set(systemRefs.filter((cell) => cell.hostKind === 'node').map((c) => c.hostId)),
+      ];
+      if (nodes.length > 0) {
+        await this.formulas.recalcNodes(tx, event.actorId ?? null, projectId, nodes, depth + 1);
+      }
     });
   }
 }
@@ -102,12 +113,14 @@ export class ProjectNodeFormulaRecalcHandler {
     const parsed = projectNodeUpdatedPayloadSchema.safeParse(event.payload);
     if (!parsed.success) return;
     const fieldIds = changedFieldIds(parsed.data.fields);
-    if (fieldIds.length === 0) return;
     const { projectId, nodeId } = parsed.data;
     await this.txRunner.run(async (tx) => {
-      const { numbers, depth } = await numbersOf(this.cells, 'node', nodeId, fieldIds, tx);
-      if (numbers.length === 0) return;
+      const { numbers, depth } =
+        fieldIds.length > 0
+          ? await numbersOf(this.cells, 'node', nodeId, fieldIds, tx)
+          : { numbers: [], depth: 0 };
       this.logger.debug({ projectId, nodeId, numbers }, 'Пересчёт формул папки');
+      // Свои ячейки папки — всегда (системные поля названия/вида, Р4).
       await this.formulas.recalcNodeCells(
         tx,
         event.actorId ?? null,
@@ -116,6 +129,17 @@ export class ProjectNodeFormulaRecalcHandler {
         numbers,
         depth + 1,
       );
+      const systemRefs = await this.cells.dependentCellsByDepKey(`system:node:${nodeId}`, tx);
+      const nodes = [
+        ...new Set(
+          systemRefs
+            .filter((cell) => cell.hostKind === 'node' && cell.hostId !== nodeId)
+            .map((cell) => cell.hostId),
+        ),
+      ];
+      if (nodes.length > 0) {
+        await this.formulas.recalcNodes(tx, event.actorId ?? null, projectId, nodes, depth + 1);
+      }
     });
   }
 }
@@ -147,6 +171,39 @@ export class ProjectStructureFormulaRecalcHandler {
     await this.txRunner.run(async (tx) => {
       this.logger.debug({ projectId, nodeId, roots }, 'Пересчёт формул после переноса папки');
       await this.formulas.recalcStructure(tx, event.actorId ?? null, projectId, roots, 1);
+    });
+  }
+}
+
+/**
+ * Создание папки (`project.node_created`): срез дерева изменился — формулы
+ * с зависимостью `tree:project:<id>` пересчитываются (Р4).
+ */
+@Injectable()
+export class ProjectNodeCreatedFormulaHandler {
+  static readonly eventType = PROJECT_EVENTS.NODE_CREATED;
+
+  constructor(
+    private readonly txRunner: TransactionRunner,
+    private readonly formulas: ProjectFormulaRecalcService,
+    @Inject(FORMULA_CELLS) private readonly cells: FormulaCells,
+    private readonly logger: PinoLogger,
+  ) {
+    this.logger.setContext(ProjectNodeCreatedFormulaHandler.name);
+  }
+
+  async handle(event: DomainEvent<Record<string, unknown>>): Promise<void> {
+    const parsed = projectNodeCreatedPayloadSchema.safeParse(event.payload);
+    if (!parsed.success) return;
+    const { projectId } = parsed.data;
+    await this.txRunner.run(async (tx) => {
+      const refs = await this.cells.dependentCellsByDepKey(`tree:project:${projectId}`, tx);
+      const nodes = [
+        ...new Set(refs.filter((cell) => cell.hostKind === 'node').map((cell) => cell.hostId)),
+      ];
+      if (nodes.length === 0) return;
+      this.logger.debug({ projectId, nodes: nodes.length }, 'Формулы папок после создания');
+      await this.formulas.recalcNodes(tx, event.actorId ?? null, projectId, nodes, 1);
     });
   }
 }

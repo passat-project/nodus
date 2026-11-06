@@ -7,7 +7,9 @@ const TX = { tx: true };
 const USER = { id: 'bob', displayName: 'Боб', permissions: [] } as unknown as AuthUser;
 
 function makeService(
-  deps: Partial<Record<'txRunner' | 'query' | 'placements' | 'taskService' | 'engine', unknown>>,
+  deps: Partial<
+    Record<'txRunner' | 'query' | 'placements' | 'taskService' | 'engine' | 'cells', unknown>
+  >,
 ) {
   return new TaskTransitionsService(
     (deps.txRunner ?? {}) as never,
@@ -15,6 +17,7 @@ function makeService(
     (deps.placements ?? {}) as never,
     (deps.taskService ?? {}) as never,
     (deps.engine ?? {}) as never,
+    (deps.cells ?? {}) as never,
   );
 }
 

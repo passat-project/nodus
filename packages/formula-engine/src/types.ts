@@ -2,6 +2,8 @@ import type {
   CustomFieldType,
   FormulaAggregateFrom,
   FormulaErrorCode,
+  FormulaRelationDirection,
+  FormulaRelationKind,
   FormulaSource,
   FormulaValueType,
   MoneyValue,
@@ -125,11 +127,17 @@ export interface FormulaDependency {
     | 'folder'
     | 'related'
     | 'node_tasks'
-    | 'system';
+    | 'system'
+    | 'selection';
   number?: number;
   /** Номер атрибута-ссылки (для `ref`). */
   refField?: number;
   /** Вид папки (для `folder`/`folder_chain`). */
   kindId?: string;
   selector?: 'subtasks' | 'relations' | 'node_tasks';
+  /** Вид связи (для `related{relations}`): каждая пара вид+направление —
+   *  отдельная зависимость и отдельная выборка (Р2). */
+  relation?: FormulaRelationKind;
+  /** Направление связи (для `related{relations}`). */
+  direction?: FormulaRelationDirection;
 }

@@ -262,8 +262,16 @@ export class TasksService {
         tx,
         TASK_EVENTS.DELETED,
         // projectId — пересчёт участия «из задач» (Р2): событие удаления
-        // снимает строки task-источника.
-        { taskId: id, number: row.number, audience: audienceIds(row), projectId: row.projectId },
+        // снимает строки task-источника. nodeId/parentId — формулы-агрегаты
+        // папки и подзадач (#632): состав выборок изменился.
+        {
+          taskId: id,
+          number: row.number,
+          audience: audienceIds(row),
+          projectId: row.projectId,
+          nodeId: row.nodeId,
+          parentId: row.parentId,
+        },
         { actorId: user.id, aggregateType: 'task', aggregateId: id },
       );
     });

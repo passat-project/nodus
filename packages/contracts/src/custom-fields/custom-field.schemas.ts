@@ -198,6 +198,16 @@ export const customFieldUsageSchema = z.object({
   }),
   /** Заполнено ли глобальное значение (для isCompany). */
   companyValue: z.boolean(),
+  /** Формулы (#632, F1): свои ячейки, формулы привязок типа/вида и слоты
+   *  окон с формулой-подстановкой — окно удаления показывает последствия. */
+  formulas: z
+    .object({
+      ownCells: z.number().int().min(0),
+      typeDefaults: z.number().int().min(0),
+      windowSlots: z.number().int().min(0),
+    })
+    .strict()
+    .optional(),
 });
 export type CustomFieldUsage = z.infer<typeof customFieldUsageSchema>;
 

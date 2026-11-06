@@ -30,6 +30,7 @@ import {
   type WorkflowFieldUsageReader,
 } from '../../workflows/ports/workflow-field-usage.port.js';
 import { bindingsOf, type FieldDefinitionRow } from './definition.mapper.js';
+import { FormulaCellsRepository } from '../formulas/formula-cells.repository.js';
 
 /**
  * «Где используется атрибут» (Р8 #631) — агрегат последствий для окна
@@ -50,6 +51,7 @@ export class DefinitionsUsageService {
     @Inject(WORKFLOW_FIELD_USAGE_READER) private readonly workflows: WorkflowFieldUsageReader,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
     @Inject(FIELD_BINDING_TARGET_READER) private readonly targets: FieldBindingTargetReader,
+    private readonly formulaCells: FormulaCellsRepository,
   ) {}
 
   async usage(definition: FieldDefinitionRow): Promise<CustomFieldUsage> {
@@ -66,6 +68,9 @@ export class DefinitionsUsageService {
       processTypes,
       projectTypes,
       nodeKinds,
+      ownCells,
+      typeDefaults,
+      windowSlots,
     ] = await Promise.all([
       this.taskValues.countValues(definition.id),
       this.letterValues.countValues(definition.id),
@@ -78,6 +83,9 @@ export class DefinitionsUsageService {
       this.catalog.typeRefs(bindings.processTypeIds),
       this.targets.projectTypes(),
       this.targets.nodeKinds(),
+      this.formulaCells.countByFieldId(definition.id),
+      this.formulaCells.countTypeDefaults(definition.id),
+      this.workflows.formulaSlotsUsingField(definition.id),
     ]);
 
     const nameById = (rows: { id: string; name: string }[], ids: readonly string[]) =>
@@ -102,6 +110,7 @@ export class DefinitionsUsageService {
         nodeKinds: nameById(nodeKinds, bindings.nodeKindIds),
       },
       companyValue: definition.companyValue !== null,
+      formulas: { ownCells, typeDefaults, windowSlots },
     };
   }
 }

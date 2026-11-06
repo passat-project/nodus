@@ -116,17 +116,32 @@ export const formulaValidateResponseSchema = z
   .strict();
 export type FormulaValidateResponse = z.infer<typeof formulaValidateResponseSchema>;
 
-/** `POST /custom-fields/formulas/evaluate` (#632, Р10): превью/префилл без
- *  записи. Контекст — существующая запись; создание окна — `creation`. */
+/** `POST /custom-fields/formulas/evaluate` (#632, Р10/Р12): превью/префилл
+ *  без записи. Контекст — существующая запись; создание окна — `creation`
+ *  (записи ещё нет: место задаёт проект/папка/родитель). */
 export const formulaEvaluateBodySchema = z
   .object({
     ast: formulaNodeSchema,
-    context: z
-      .object({
-        hostKind: formulaHostKindSchema,
-        hostId: z.uuid(),
-      })
-      .strict(),
+    context: z.union([
+      z
+        .object({
+          hostKind: formulaHostKindSchema,
+          hostId: z.uuid(),
+        })
+        .strict(),
+      z
+        .object({
+          creation: z
+            .object({
+              hostKind: formulaHostKindSchema,
+              projectId: z.uuid().optional(),
+              nodeId: z.uuid().optional(),
+              parentId: z.uuid().optional(),
+            })
+            .strict(),
+        })
+        .strict(),
+    ]),
   })
   .strict();
 export type FormulaEvaluateBody = z.infer<typeof formulaEvaluateBodySchema>;

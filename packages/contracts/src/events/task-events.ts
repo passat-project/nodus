@@ -59,6 +59,8 @@ export const taskCreatedPayloadSchema = taskEventBaseSchema.extend({
   observerIds: z.array(z.uuid()),
   projectId: z.uuid().nullable(),
   parentId: z.uuid().nullable(),
+  /** Узел структуры (#467/#632): агрегаты «задачи папки» у формул. */
+  nodeId: z.uuid().nullable().optional(),
   source: z.enum(['manual', 'chat_message', 'letter']),
   sourceId: z.uuid().nullable(),
 });
@@ -79,6 +81,9 @@ export const taskUpdatedPayloadSchema = taskEventBaseSchema.extend({
   previousProjectId: z.uuid().nullable().optional(),
   nodeId: z.uuid().nullable().optional(),
   previousNodeId: z.uuid().nullable().optional(),
+  /** Родитель (#632): агрегат подзадач пересчитывается у старого и нового. */
+  parentId: z.uuid().nullable().optional(),
+  previousParentId: z.uuid().nullable().optional(),
   customFieldChanges: z.array(customFieldChangeSchema).max(CUSTOM_FIELD_LIMITS.changes).optional(),
 });
 export type TaskUpdatedPayload = z.infer<typeof taskUpdatedPayloadSchema>;
@@ -150,6 +155,9 @@ export type TaskParticipantsChangedPayload = z.infer<typeof taskParticipantsChan
 /** Удаление задачи: проекции (канал, участники проекта) распускают состав. */
 export const taskDeletedPayloadSchema = taskEventBaseSchema.extend({
   projectId: z.uuid().nullable(),
+  /** Место удалённой задачи (#632): формулы папки/подзадач пересчитываются. */
+  nodeId: z.uuid().nullable().optional(),
+  parentId: z.uuid().nullable().optional(),
 });
 export type TaskDeletedPayload = z.infer<typeof taskDeletedPayloadSchema>;
 

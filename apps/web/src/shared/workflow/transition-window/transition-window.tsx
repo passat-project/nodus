@@ -108,7 +108,7 @@ export function TransitionWindow({
     addFiles,
     toggleFile,
     toggleMessage,
-  } = useWindowDraft(effectiveContext);
+  } = useWindowDraft(effectiveContext, transition.formPrefill);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
 

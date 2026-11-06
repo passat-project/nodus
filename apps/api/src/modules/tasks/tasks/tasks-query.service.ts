@@ -90,6 +90,24 @@ export class TasksQueryService {
     return row;
   }
 
+  /** id поддерева задачи (сам корень + живые потомки) — прокси репозитория
+   *  для модулей-потребителей (#632 move-preview). */
+  subtreeIds(id: string): Promise<string[]> {
+    return this.reads.subtreeIds(id);
+  }
+
+  /** Видимые пользователю id из набора — ОДНИМ запросом (как ветка), а не
+   *  N вызовами `visibleRow`: move-preview поддерева не должен стоить
+   *  сотни запросов (#632, Р7). */
+  async visibleIdsAmong(
+    user: Pick<AuthUser, 'id' | 'permissions'>,
+    ids: readonly string[],
+  ): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const viewer = await this.viewer(user);
+    return this.reads.visibleIdsAmong([...ids], visibleTasksWhere(viewer, 'all'));
+  }
+
   async list(user: AuthUser, q: ListTasksQuery): Promise<Paginated<TaskListItem>> {
     const viewer = await this.viewer(user);
     const me = user.id;

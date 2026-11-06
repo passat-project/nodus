@@ -13,6 +13,11 @@ import {
   LetterFormulaRecalcHandler,
   LetterFormulaRegisteredHandler,
 } from './events/letter-formula-recalc.handler.js';
+import {
+  LetterFormulaNodeSourceHandler,
+  LetterFormulaProjectSourceHandler,
+  LetterFormulaTaskSourceHandler,
+} from './events/letter-formula-source.handler.js';
 import { LetterHistoryRepository } from './history/letter-history.repository.js';
 import { LetterHistoryService } from './history/letter-history.service.js';
 import { LetterAttachedRefsRepository } from './letters/letter-attached-refs.repository.js';
@@ -87,6 +92,11 @@ import { LetterWorkflowAdapter } from './workflow/letter-workflow.adapter.js';
     LetterFormulaRecalcHandler,
     LetterFormulaRegisteredHandler,
     LetterFormulaDefinitionHandler,
+    // Формулы писем по событиям-источникам (#632): значения задач, проектов
+    // и папок, прочитанные по атрибуту-ссылке (I3 — пишутся только письма).
+    LetterFormulaTaskSourceHandler,
+    LetterFormulaProjectSourceHandler,
+    LetterFormulaNodeSourceHandler,
     LetterFileAccess,
     LetterHistoryRepository,
     LetterDtoMapper,

@@ -1,14 +1,7 @@
-import type {
-  CustomFieldDefinition,
-  CustomFieldValue,
-  CustomFieldValues,
-  FormulaHostKind,
-  MoneyValue,
-} from '@nodus/contracts';
+import type { CustomFieldValues, FormulaHostKind } from '@nodus/contracts';
 import type { FormulaRecord, FormulaResolver, FormulaValue } from '@nodus/formula-engine';
 
 import { demoCustomFieldDefinitions } from '../../mocks/data/custom-fields.js';
-import { itemById } from '../../mocks/data/dictionaries.js';
 import { findLetter } from '../../mocks/data/letters.js';
 import { demoNodeKinds, findDemoNodeRow } from '../../mocks/data/project-nodes.js';
 import { findDemoProjectRow } from '../../mocks/data/projects.js';
@@ -22,43 +15,12 @@ import {
   findFormulaHost,
   type DemoFormulaHost,
 } from './formula-state.js';
+import { toFormulaValue } from './formula-value-map.js';
 
 /** Демо-резолвер формул (#632, Р7): единственная точка чтения данных
  *  формулой. Источники одного значения и выборки агрегатов собираются из
  *  мок-мира; невидимые записи (конфиденциальные задачи, чужие секретные
  *  проекты) резолвер не отдаёт — движок не умеет читать мимо него. */
-
-/** Значение атрибута в языке формул: перечисления — КОД варианта
- *  (короткая марка «КЖ»; без кода — подпись), списки — массив кодов,
- *  ссылки — id. */
-export function toFormulaValue(
-  definition: CustomFieldDefinition,
-  value: CustomFieldValue,
-): FormulaValue {
-  switch (definition.type) {
-    case 'enum': {
-      const item = itemById(String(value));
-      return item ? (item.code ?? item.name) : String(value);
-    }
-    case 'multienum':
-    case 'users': {
-      const ids = Array.isArray(value) ? value : [String(value)];
-      return ids.map((id) => {
-        const item = itemById(id);
-        return item ? (item.code ?? item.name) : id;
-      });
-    }
-    case 'money':
-      return value as MoneyValue;
-    case 'bool':
-      return Boolean(value);
-    case 'number':
-    case 'duration':
-      return typeof value === 'number' ? value : Number(value);
-    default:
-      return String(value);
-  }
-}
 
 function valuesRecord(
   values: CustomFieldValues,
@@ -158,8 +120,12 @@ function taskRecord(
 }
 
 /** Задача видна формуле: без признака конфиденциальности и в видимом
- *  проекте (Р7: резолвер обязан отфильтровать выборку). */
-function isTaskVisible(task: { confidential?: boolean; project?: { id: string } | null }): boolean {
+ *  проекте (Р7: резолвер обязан отфильтровать выборку). Экспорт — резолвер
+ *  создания (`formula-creation-resolver.ts`). */
+export function isTaskVisible(task: {
+  confidential?: boolean;
+  project?: { id: string } | null;
+}): boolean {
   if (task.confidential === true) return false;
   const projectId = task.project?.id;
   if (!projectId) return true;
@@ -167,7 +133,9 @@ function isTaskVisible(task: { confidential?: boolean; project?: { id: string } 
   return row ? canSeeProject(row, currentAuthUser) : false;
 }
 
-function projectRecord(projectId: string | null): FormulaRecord | null {
+/** Запись проекта, видимая текущему пользователю (иначе null).
+ *  Экспорт — резолвер создания (`formula-creation-resolver.ts`). */
+export function projectRecord(projectId: string | null): FormulaRecord | null {
   if (!projectId) return null;
   const row = findDemoProjectRow(projectId);
   if (!row || !canSeeProject(row, currentAuthUser)) return null;
@@ -289,6 +257,13 @@ function hostRecord(host: DemoFormulaHost): FormulaRecord {
 export function demoResolver(kind: FormulaHostKind, hostId: string): FormulaResolver | null {
   const host = findFormulaHost(kind, hostId);
   if (!host) return null;
+  return resolverForHost(host);
+}
+
+/** Резолвер хоста: единая сборка источников для записи мок-мира.
+ *  Экспорт — резолвер создания (`formula-creation-resolver.ts`). */
+export function resolverForHost(host: DemoFormulaHost): FormulaResolver {
+  const kind = host.kind;
   return {
     single(source) {
       switch (source.kind) {

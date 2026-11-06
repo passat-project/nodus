@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import type { CustomFieldDefinition, FormulaHostKind, FormulaNode } from '@nodus/contracts';
+import type {
+  CustomFieldDefinition,
+  CustomFieldType,
+  FormulaHostKind,
+  FormulaNode,
+} from '@nodus/contracts';
 import { formulaToText, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 
@@ -13,13 +18,20 @@ import { TypeFormulaDialog } from './type-formula-dialog.js';
 export function TypeFormulaControl({
   hostKind,
   definition,
+  targetType,
+  label,
   ownDefinitions,
   value,
   readOnly,
   onChange,
 }: {
   hostKind: FormulaHostKind;
-  definition: CustomFieldDefinition;
+  /** Атрибут-ячейка (если слот — атрибут); у системного поля null. */
+  definition?: CustomFieldDefinition;
+  /** Тип результата системного поля окна (когда определения нет). */
+  targetType?: CustomFieldType;
+  /** Подпись слота, если определения нет. */
+  label?: string;
   /** Атрибуты места — палитра «Свои поля» конструктора. */
   ownDefinitions: readonly CustomFieldDefinition[];
   value: FormulaNode | null;
@@ -55,7 +67,9 @@ export function TypeFormulaControl({
         <TypeFormulaDialog
           open={open}
           hostKind={hostKind}
-          definition={definition}
+          {...(definition ? { definition } : {})}
+          {...(targetType ? { targetType } : {})}
+          {...(label ? { label } : {})}
           ownDefinitions={ownDefinitions}
           initial={value}
           onSave={onChange}

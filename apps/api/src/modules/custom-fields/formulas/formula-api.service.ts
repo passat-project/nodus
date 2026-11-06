@@ -3,6 +3,7 @@ import type {
   AuthUser,
   CustomFieldType,
   FormulaCellError,
+  FormulaEvaluateBody,
   FormulaEvaluateResponse,
   FormulaHostKind,
   FormulaNode,
@@ -13,7 +14,8 @@ import { ErrorCode, FORMULA_LIMITS } from '@nodus/contracts';
 
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { FORMULA_ENGINE, type FormulaEngine } from '../ports/formula-engine.port.js';
-import { FormulaContextService } from './formula-context.service.js';
+import type { FormulaRecordData } from '../ports/record-values.port.js';
+import { createFormulaCache, FormulaContextService } from './formula-context.service.js';
 import { FormulaMetaService } from './formula-meta.service.js';
 
 /**
@@ -22,6 +24,13 @@ import { FormulaMetaService } from './formula-meta.service.js';
  * хоста, I3). Доступ к контексту evaluate обязателен: невидимый хост —
  * 404 без оракула (Р7).
  */
+interface CreationContext {
+  hostKind: FormulaHostKind;
+  projectId?: string;
+  nodeId?: string;
+  parentId?: string;
+}
+
 @Injectable()
 export class FormulaApiService {
   constructor(
@@ -57,15 +66,20 @@ export class FormulaApiService {
     };
   }
 
-  async evaluate(
-    body: { ast: FormulaNode; context: { hostKind: FormulaHostKind; hostId: string } },
-    actor: AuthUser,
-  ): Promise<FormulaEvaluateResponse> {
+  async evaluate(body: FormulaEvaluateBody, actor: AuthUser): Promise<FormulaEvaluateResponse> {
     const snapshot = await this.meta.snapshot();
+    // zod-union контекста: запись либо ещё не созданная запись (creation).
+    const ctx = body.context as {
+      hostKind?: FormulaHostKind;
+      hostId?: string;
+      creation?: CreationContext;
+    };
+    const creation = ctx.creation ?? null;
+    const hostKind = creation?.hostKind ?? ctx.hostKind!;
     // Форма AST (лимиты, матрица источников) проверяется и в превью:
     // иначе evaluate обходил бы запреты матрицы и лимиты языка (Р2/Р7).
     const shape = this.engine.validate(body.ast, {
-      hostKind: body.context.hostKind,
+      hostKind,
       meta: snapshot.meta,
     });
     const blocking = shape.issues.filter((issue) => issue.blocking);
@@ -74,13 +88,15 @@ export class FormulaApiService {
         issues: blocking,
       });
     }
-    const context = await this.context.build({
-      hostKind: body.context.hostKind,
-      hostId: body.context.hostId,
-      asts: [body.ast],
-      snapshot,
-      actor,
-    });
+    const context = creation
+      ? await this.creationContext(creation, hostKind, body.ast, snapshot, actor)
+      : await this.context.build({
+          hostKind,
+          hostId: ctx.hostId!,
+          asts: [body.ast],
+          snapshot,
+          actor,
+        });
     if (!context) throw DomainException.notFound('Formula host not found');
     if (context.overflowed) {
       return {
@@ -96,6 +112,65 @@ export class FormulaApiService {
       value: evaluation.value as FormulaEvaluateResponse['value'],
       error: evaluation.error,
     };
+  }
+
+  /** Контекст ещё не созданной записи (префилл окна создания, Р12): место
+   *  задаёт проект/папка/родитель; доступ актора проверяется явно (Р7). */
+  private async creationContext(
+    creation: CreationContext,
+    hostKind: FormulaHostKind,
+    ast: FormulaNode,
+    snapshot: Awaited<ReturnType<FormulaMetaService['snapshot']>>,
+    actor: AuthUser,
+  ) {
+    const cache = createFormulaCache();
+    const requestedProjectId = creation.projectId ?? null;
+    // Узел — без актора (его видимость определяется проектом): сначала
+    // дочитываем проект узла, иначе creation без projectId обходил бы Р7.
+    let nodeProjectId: string | null = null;
+    if (creation.nodeId) {
+      const node = await this.context.record('node', creation.nodeId, undefined, undefined, cache);
+      if (!node) throw DomainException.notFound('Formula host not found');
+      nodeProjectId = node.projectId;
+      if (requestedProjectId !== null && node.projectId !== requestedProjectId) {
+        throw DomainException.notFound('Formula host not found');
+      }
+    }
+    const effectiveProjectId = requestedProjectId ?? nodeProjectId;
+    if (effectiveProjectId) {
+      const project = await this.context.record(
+        'project',
+        effectiveProjectId,
+        actor,
+        undefined,
+        cache,
+      );
+      if (!project) throw DomainException.notFound('Formula host not found');
+    }
+    if (creation.parentId) {
+      const parent = await this.context.record('task', creation.parentId, actor, undefined, cache);
+      if (!parent || (effectiveProjectId !== null && parent.projectId !== effectiveProjectId)) {
+        throw DomainException.notFound('Formula host not found');
+      }
+    }
+    const hostData: FormulaRecordData = {
+      kind: hostKind,
+      id: '00000000-0000-0000-0000-000000000000',
+      values: {},
+      system: {},
+      projectId: effectiveProjectId,
+      parentId: creation.parentId ?? null,
+      nodeId: creation.nodeId ?? null,
+      placeId: null,
+      confidential: false,
+    };
+    return this.context.build({
+      hostKind,
+      hostId: hostData.id,
+      asts: [ast],
+      snapshot,
+      hostData,
+    });
   }
 }
 

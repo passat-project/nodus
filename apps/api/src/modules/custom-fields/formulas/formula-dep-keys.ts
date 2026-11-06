@@ -85,6 +85,11 @@ export function buildDepKeys(args: FormulaDepArgs): FormulaDepKey[] {
         if (dep.selector === 'node_tasks') {
           const nodeId = args.hostKind === 'node' ? args.host.id : args.host.nodeId;
           if (nodeId) add(`nodetasks:node:${nodeId}`);
+          // Значения членов выборки — отдельные ключи (Р4): правка атрибута
+          // у задачи папки пересчитывает агрегат папки/задачи.
+          for (const row of args.related.get('node_tasks') ?? []) {
+            add(`v:task:${row.id}:${dep.number ?? 0}`, dep.number ?? null);
+          }
         } else if (dep.selector === 'subtasks') {
           add(`subtasks:task:${args.host.id}`);
           for (const row of args.related.get('subtasks') ?? []) {
@@ -99,12 +104,50 @@ export function buildDepKeys(args: FormulaDepArgs): FormulaDepKey[] {
         }
         break;
       }
-      case 'system':
-        // Системные поля меняются событиями хоста/родителя/папки: ключи
-        // структуры и родителя покрывают пересчёт (значение — по событию).
+      case 'system': {
+        // Системные поля своего хоста, родителя, проекта, папок и цели
+        // ссылки: у каждой записи-источника свой ключ (Р4). Значения не
+        // входят — событие системного поля пересчитывает зависимые ячейки.
+        add(`system:${args.hostKind}:${args.host.id}`);
         add(`parent:task:${args.host.id}`);
-        if (hostProject) add(`tree:project:${hostProject}`);
+        if (args.parent) add(`system:task:${args.parent.id}`);
+        if (args.project) add(`system:project:${args.project.id}`);
+        let currentId: string | null = args.hostKind === 'node' ? args.host.id : args.host.nodeId;
+        const guard = new Set<string>();
+        while (currentId && !guard.has(currentId)) {
+          guard.add(currentId);
+          const node = args.nodes.get(currentId);
+          if (!node) break;
+          add(`system:node:${node.id}`);
+          currentId = node.parentId;
+        }
+        if (dep.refField !== undefined) {
+          const definition = args.snapshot.byNumber.get(dep.refField);
+          const raw = definition ? args.host.values[definition.id] : undefined;
+          if (definition && raw !== undefined && raw !== null && !Array.isArray(raw)) {
+            add(`system:${definition.type}:${String(raw)}`);
+          }
+        }
         break;
+      }
+      case 'selection': {
+        // Поле фильтра агрегата читается у ЗАПИСИ ВЫБОРКИ (`self` внутри
+        // filter): ключи — по всем строкам выборок и цепочке папок (Р4).
+        for (const rows of args.related.values()) {
+          for (const row of rows)
+            add(`v:${row.kind}:${row.id}:${dep.number ?? 0}`, dep.number ?? null);
+        }
+        let currentId: string | null = args.hostKind === 'node' ? args.host.id : args.host.nodeId;
+        const guard = new Set<string>();
+        while (currentId && !guard.has(currentId)) {
+          guard.add(currentId);
+          const node = args.nodes.get(currentId);
+          if (!node) break;
+          add(`v:node:${node.id}:${dep.number ?? 0}`, dep.number ?? null);
+          currentId = node.parentId;
+        }
+        break;
+      }
       default:
         break;
     }

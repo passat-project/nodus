@@ -1,8 +1,7 @@
-import type { CustomFieldValues, FormulaNode } from '@nodus/contracts';
+import type { CustomFieldValues } from '@nodus/contracts';
 import type { FormulaValue } from '@nodus/formula-engine';
 import type { FormulaDependency } from '@nodus/formula-engine';
 
-import type { FormulaRecordData } from '../ports/record-values.port.js';
 import type { FormulaRegistrySnapshot } from './formula-meta.service.js';
 
 /** Что из окружения нужно формуле (по зависимостям AST). */
@@ -16,11 +15,6 @@ export interface NeededSources {
   company: boolean;
   refs: boolean;
 }
-
-export type RelationSelector = {
-  relation: 'relates' | 'blocks' | 'precedes' | 'duplicates';
-  direction: 'out' | 'in' | 'both';
-};
 
 export { resolveRefSource } from './formula-ref.js';
 
@@ -73,49 +67,6 @@ export function neededSources(deps: readonly FormulaDependency[]): NeededSources
     }
   }
   return needed;
-}
-
-/** Узел связи в AST: вид и направление первого агрегата по связям. */
-export function findRelationNode(asts: readonly FormulaNode[]): RelationSelector | null {
-  for (const ast of asts) {
-    const found = searchRelation(ast);
-    if (found) return found;
-  }
-  return null;
-}
-
-function searchRelation(node: FormulaNode): RelationSelector | null {
-  switch (node.kind) {
-    case 'aggregate': {
-      if (node.from.kind === 'related' && node.from.selector.kind === 'relations') {
-        return {
-          relation: node.from.selector.relation,
-          direction: node.from.selector.direction,
-        };
-      }
-      return node.filter ? searchRelation(node.filter) : null;
-    }
-    case 'op':
-    case 'call': {
-      for (const arg of node.args) {
-        const found = searchRelation(arg);
-        if (found) return found;
-      }
-      return null;
-    }
-    default:
-      return null;
-  }
-}
-
-/** Выборка связей контекста: строки первого узла связей в AST. */
-export function relationRows(
-  related: ReadonlyMap<string, FormulaRecordData[]>,
-  asts: readonly FormulaNode[],
-): readonly FormulaRecordData[] {
-  const node = findRelationNode(asts);
-  if (!node) return [];
-  return related.get(`relations:${node.relation}:${node.direction}`) ?? [];
 }
 
 /** Глобальные переменные компании (Р7): значения всех isCompany-атрибутов. */

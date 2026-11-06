@@ -109,14 +109,19 @@ export class LetterFormulaService {
     await this.repo.lock(tx, letterId);
     for (const cell of all) {
       const outcome = await this.cells.recalc(tx, cell, depth);
-      // Гашение каскада (Р8): неизменившееся значение событий не эмитит.
-      if (outcome.silent || !outcome.changed) continue;
-      await this.fields.applyFormulaValues(tx, {
-        letterId,
-        values: { [cell.fieldId]: outcome.value },
-        actorId,
-      });
-      await this.emitChanged(tx, actorId, letterId, cell.fieldId, outcome.error !== null);
+      // Гашение каскада (Р8): неизменившееся значение событий не эмитит;
+      // адресное formula_changed — только при смене наличия ошибки (O4).
+      if (outcome.silent) continue;
+      if (outcome.changed) {
+        await this.fields.applyFormulaValues(tx, {
+          letterId,
+          values: { [cell.fieldId]: outcome.value },
+          actorId,
+        });
+      }
+      if (outcome.errorChanged) {
+        await this.emitChanged(tx, actorId, letterId, cell.fieldId, outcome.error !== null);
+      }
     }
   }
 

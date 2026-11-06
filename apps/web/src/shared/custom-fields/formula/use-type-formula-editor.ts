@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type {
   CustomFieldDefinition,
+  CustomFieldType,
   FormulaHostKind,
   FormulaNode,
   FormulaValidationIssue,
@@ -39,7 +40,7 @@ import {
 export function useTypeFormulaEditor({
   open,
   hostKind,
-  definition,
+  targetType,
   ownDefinitions,
   initial,
   onSave,
@@ -47,7 +48,8 @@ export function useTypeFormulaEditor({
 }: {
   open: boolean;
   hostKind: FormulaHostKind;
-  definition: CustomFieldDefinition;
+  /** Тип атрибута-ячейки (результат обязан к нему подходить). */
+  targetType: CustomFieldType;
   ownDefinitions: readonly CustomFieldDefinition[];
   initial: FormulaNode | null;
   onSave: (ast: FormulaNode | null) => void;
@@ -142,11 +144,11 @@ export function useTypeFormulaEditor({
     const result = validateFormula(parse.ast, {
       hostKind,
       meta,
-      targetFieldType: definition.type,
+      targetFieldType: targetType,
       typeDefault: true,
     });
     setIssues(result.issues.filter((issue) => issue.blocking));
-  }, [parse.ast, hostKind, definition.type, definitions.data]);
+  }, [parse.ast, hostKind, targetType, definitions.data]);
 
   const insertChip = (chip: FormulaChip) => {
     const root = rootRef.current;

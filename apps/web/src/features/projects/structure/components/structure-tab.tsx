@@ -12,6 +12,12 @@ import { projectsKeys, useProjectTypes } from '../../../../shared/api/projects-l
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { useCustomFieldFilterDefs } from '../../../../shared/custom-fields/filter-defs.js';
 import { tasksKeys } from '../../../../shared/api/tasks-keys.js';
+import { FormulaMovePreviewDialog } from '../../../../shared/custom-fields/formula/formula-move-preview-dialog.js';
+import {
+  useFormulaMoveGate,
+  useNodeMovePreview,
+  useTaskMovePreview,
+} from '../../../../shared/custom-fields/formula/formula-move-preview.js';
 import { openTaskCreate } from '../../../../shared/tasks/task-create-store.js';
 import { EdgeHints } from '../../../../shared/ui/board/board-scroller.js';
 import { useBoardEdgeScroll } from '../../../../shared/ui/board/use-board-edge-scroll.js';
@@ -72,6 +78,11 @@ export function StructureTab({
   const moveNode = useMoveNode(projectId);
   const moveTask = useMoveTaskNode(projectId);
   const setTasksNode = useSetTasksNode(projectId);
+  // Превью формульного диффа перед переносом (#632): непустой дифф — окно
+  // подтверждения, пустой — перенос сразу.
+  const gate = useFormulaMoveGate();
+  const nodePreview = useNodeMovePreview(projectId);
+  const taskPreview = useTaskMovePreview();
   const containerRef = useRef<HTMLDivElement>(null);
   const autoFitColumn = useAutoFitColumn(containerRef, 1, model.setWidth);
 
@@ -86,12 +97,14 @@ export function StructureTab({
       }),
     onDropNode: (nodeId, parentId, beforeId, afterId) => {
       if (!canEdit) return;
-      moveNode.mutate({
-        nodeId,
-        parentId,
-        ...(beforeId ? { beforeId } : {}),
-        ...(afterId ? { afterId } : {}),
-      });
+      void gate.offer(nodePreview.mutateAsync({ nodeId, parentId }), () =>
+        moveNode.mutate({
+          nodeId,
+          parentId,
+          ...(beforeId ? { beforeId } : {}),
+          ...(afterId ? { afterId } : {}),
+        }),
+      );
     },
     onDropTasks: (taskIds, nodeId) => {
       if (!canEdit) return;
@@ -142,9 +155,17 @@ export function StructureTab({
   const noNodeRow = attributeView ? null : model.noNodeRow;
   const noNodeTasks = attributeView ? [] : model.noNodeTasks;
 
+  /** Перенос задач в папку (DnD, меню, «Без папки»): одиночный — с диффом
+   *  формул (превью → окно или сразу перенос), пачка — bulk без превью. */
   function moveTasks(taskIds: string[], nodeId: string | null) {
-    if (taskIds.length === 1) moveTask.mutate({ taskId: taskIds[0]!, nodeId });
-    else setTasksNode.mutate({ taskIds, nodeId });
+    const [taskId] = taskIds;
+    if (taskIds.length !== 1 || !taskId) {
+      setTasksNode.mutate({ taskIds, nodeId });
+      return;
+    }
+    void gate.offer(taskPreview.mutateAsync({ taskId, nodeId }), () =>
+      moveTask.mutate({ taskId, nodeId }),
+    );
   }
 
   function toggleBranch(id: string) {
@@ -293,6 +314,8 @@ export function StructureTab({
             onMoveTasks={moveTasks}
           />
         ) : null}
+        {/* Подтверждение переноса DnD: дифф формул — до мутации. */}
+        <FormulaMovePreviewDialog {...gate.dialogProps} />
       </div>
       <NodePropertiesPanel
         projectId={projectId}

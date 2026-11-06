@@ -62,10 +62,12 @@ function make() {
       { cellId: `c-${hostId}`, hostKind: kind, hostId, fieldId: FIELD },
       { cellId: 'c-other', hostKind: 'node', hostId: 'other', fieldId: FIELD },
     ]),
+    dependentCellsByDepKey: vi.fn(async () => []),
     recalc: vi.fn<(tx?: unknown, ref?: unknown, depth?: number) => Promise<Outcome>>(async () => ({
       value: 7,
       error: null,
       changed: true,
+      errorChanged: true,
       silent: false,
     })),
   };

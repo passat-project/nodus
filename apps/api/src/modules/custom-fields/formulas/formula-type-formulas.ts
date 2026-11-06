@@ -76,7 +76,19 @@ export async function applyTypeFormulas(args: {
         },
         evaluation.value,
       );
-      if (materialized !== null) state.values[slot.definitionId] = materialized;
+      if (materialized !== null) {
+        state.values[slot.definitionId] = materialized;
+      } else if (evaluation.value !== null) {
+        // Непустой результат, не влезающий в тип поля (устаревший вариант
+        // справочника/валюта): ошибка видна в ячейке, а не тихая пустота (Р13).
+        state.formulas[slot.definitionId] = {
+          origin: 'type',
+          error: {
+            code: 'type_mismatch',
+            message: `formula result does not fit ${definition.type}`,
+          },
+        };
+      }
     }
     result.set(hostId, state);
   }

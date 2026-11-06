@@ -9,6 +9,7 @@ import {
   nodeFormKey,
   updateProjectNodeBodySchema,
   type CustomFieldValues,
+  type FormulaMovePreviewResponse,
   type ProjectNode,
 } from '@nodus/contracts';
 
@@ -245,6 +246,17 @@ export const structureNodeHandlers = [
       node.code = codeOfValue(next[SYSTEM_FIELD_IDS.nodeCode]);
     }
     return HttpResponse.json(nodeWithFormulas(projectNodeDto(node), node.kindId));
+  }),
+
+  // Превью формульного диффа переноса (#632, критерий 1): демо-мир без
+  // формульных переносов — дифф пуст, окно подтверждения не открывается.
+  // Права те же, что у переноса (structure manage), 404 — как у move.
+  http.post('/api/v1/projects/:id/nodes/:nodeId/move-preview', ({ params }) => {
+    const guard = manageableProject(String(params.id));
+    if (typeof guard === 'string') return guardResponse(guard);
+    const node = findDemoNodeRow(String(params.nodeId));
+    if (!node || node.projectId !== guard.row.id) return nodeNotFound();
+    return HttpResponse.json({ changes: [] } satisfies FormulaMovePreviewResponse);
   }),
 
   http.post('/api/v1/projects/:id/nodes/:nodeId/move', async ({ params, request }) => {

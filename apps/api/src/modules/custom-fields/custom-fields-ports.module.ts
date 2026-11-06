@@ -77,6 +77,10 @@ import { FormulaValuesService } from './formulas/formula-values.service.js';
     FORMULA_ENGINE,
     FORMULA_CELLS,
     RECORD_VALUES_READER,
+    // Репозиторий ячеек нужен usage-агрегату «В формулах» (F1): сервис
+    // определений живёт в CustomFieldsModule, провайдер — здесь (иначе DI
+    // не находит FormulaCellsRepository в контексте определения).
+    FormulaCellsRepository,
     FormulaMetaService,
     FormulaContextService,
     FormulaValuesService,

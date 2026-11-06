@@ -19,6 +19,7 @@ import {
   setRequired,
   setTimeMode,
   setWindowEnabled,
+  setWindowFieldFormula,
   setWindowTitle,
   toggleSection,
   toggleWindowField,
@@ -31,6 +32,7 @@ import {
   SwitchRow,
 } from '../../../../../shared/ui/panel/panel-kit.js';
 import { CustomFieldChecks } from './custom-fields-checks.js';
+import { WindowFieldFormulas } from './window-field-formulas.js';
 import { GateCheck, RequiredCheck, SectionToggle } from './window-section-rows.js';
 import { WindowPreview } from './window-preview.js';
 
@@ -133,6 +135,13 @@ export function WindowSection({
                   onToggle={(key) => patch(toggleWindowField(form, key))}
                 />
                 <p className="text-xs text-muted-foreground">{ui.automation.window.fieldsHint}</p>
+                <WindowFieldFormulas
+                  form={form}
+                  hostKind={category === 'letter' ? 'letter' : 'task'}
+                  definitions={definitions ?? []}
+                  readOnly={readOnly}
+                  onChange={(field, ast) => patch(setWindowFieldFormula(form, field, ast))}
+                />
               </div>
             </SectionToggle>
           ) : null}

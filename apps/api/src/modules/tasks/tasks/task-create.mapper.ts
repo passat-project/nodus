@@ -71,7 +71,7 @@ export function taskCreateData(
 export function taskCreatedPayload(
   task: Pick<
     CreatedTaskRow,
-    'id' | 'number' | 'title' | 'projectId' | 'parentId' | 'source' | 'sourceId'
+    'id' | 'number' | 'title' | 'projectId' | 'parentId' | 'nodeId' | 'source' | 'sourceId'
   >,
   args: { creatorId: string; assigneeId: string; participants: ReturnType<typeof participantRows> },
 ) {
@@ -90,6 +90,7 @@ export function taskCreatedPayload(
     observerIds: args.participants.filter((p) => p.role === 'observer').map((p) => p.userId),
     projectId: task.projectId,
     parentId: task.parentId,
+    nodeId: task.nodeId,
     source: task.source,
     sourceId: task.sourceId,
   };

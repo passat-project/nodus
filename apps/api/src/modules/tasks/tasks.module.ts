@@ -30,9 +30,25 @@ import {
 } from './events/comments-count.handler.js';
 import { CustomFieldValuesCleanupHandler } from './events/custom-field-values-cleanup.handler.js';
 import {
+  TaskAssignedFormulaHandler,
+  TaskCreatedFormulaSourceHandler,
+  TaskDeletedFormulaSourceHandler,
+  TaskRelationFormulaHandler,
+  TaskStageFormulaHandler,
+  TaskSystemFieldRunner,
+} from './events/formula-lifecycle.handler.js';
+import {
   TaskFormulaDefinitionHandler,
   TaskFormulaRecalcHandler,
 } from './events/formula-recalc.handler.js';
+import {
+  TaskFormulaNodeSourceHandler,
+  TaskFormulaProjectSourceHandler,
+  TaskFormulaTreeCreatedHandler,
+  TaskFormulaTreeDeletedHandler,
+  TaskFormulaTreeMovedHandler,
+  TaskFormulaTreeRunner,
+} from './events/formula-source-recalc.handler.js';
 import { OverdueScanner } from './events/overdue.scanner.js';
 import { ParticipantsRepository } from './participants/participants.repository.js';
 import { ParticipantsService } from './participants/participants.service.js';
@@ -142,6 +158,22 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
     CustomFieldValuesCleanupHandler,
     TaskFormulaRecalcHandler,
     TaskFormulaDefinitionHandler,
+    // Пересчёт формул задач по событиям-источникам чужих модулей (#632):
+    // значения и структура проектов/папок — пишутся только ячейки задач (I3).
+    TaskFormulaProjectSourceHandler,
+    TaskFormulaNodeSourceHandler,
+    TaskFormulaTreeRunner,
+    TaskFormulaTreeCreatedHandler,
+    TaskFormulaTreeMovedHandler,
+    TaskFormulaTreeDeletedHandler,
+    // Жизненный цикл задачи: связи, создание и удаление (агрегаты родителя).
+    TaskRelationFormulaHandler,
+    TaskCreatedFormulaSourceHandler,
+    TaskDeletedFormulaSourceHandler,
+    // Системные поля без task.updated: стадия и ответственный (Р4).
+    TaskSystemFieldRunner,
+    TaskStageFormulaHandler,
+    TaskAssignedFormulaHandler,
   ],
 })
 export class TasksModule {}

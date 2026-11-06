@@ -20,12 +20,19 @@ import {
   SelectValue,
 } from '@nodus/ui/components/select';
 
+import { FormulaMovePreviewDialog } from '../../../../shared/custom-fields/formula/formula-move-preview-dialog.js';
+import {
+  useFormulaMoveGate,
+  useNodeMovePreview,
+} from '../../../../shared/custom-fields/formula/formula-move-preview.js';
 import { plural } from '../../../../shared/lib/format.js';
 import { useDeleteNode, useMoveNode } from '../api/structure-api.js';
 import { nodeOptions, subtreeNodeIds } from '../lib/structure-tree.js';
 
 /** Перенос узла выбором родителя (меню «Переместить…»); своё поддерево —
- *  недоступно (цикл). Позиция — последним ребёнком (тонкий порядок — DnD). */
+ *  недоступно (цикл). Позиция — последним ребёнком (тонкий порядок — DnD).
+ *  Перед мутацией — превью формульного диффа (#632): непустой дифф
+ *  спрашивает подтверждение, пустой переносит сразу. */
 export function NodeMoveDialog({
   projectId,
   node,
@@ -38,15 +45,22 @@ export function NodeMoveDialog({
   onClose: () => void;
 }) {
   const move = useMoveNode(projectId);
+  const preview = useNodeMovePreview(projectId);
+  const gate = useFormulaMoveGate();
   const [parentId, setParentId] = useState<string>('root');
   const options = nodeOptions(nodes, node.id);
 
   function submit() {
-    move.mutate(
-      { nodeId: node.id, parentId: parentId === 'root' ? null : parentId },
-      { onSuccess: onClose },
+    const target = parentId === 'root' ? null : parentId;
+    void gate.offer(preview.mutateAsync({ nodeId: node.id, parentId: target }), () =>
+      move.mutate({ nodeId: node.id, parentId: target }, { onSuccess: onClose }),
     );
   }
+
+  // Непустой дифф — шаг подтверждения ВМЕСТО выбора родителя: перенос и
+  // пересчёт значений решаются одним намеренным кликом. «Отмена» возвращает
+  // к выбору (человек может передумать про родителя, а не про перенос).
+  if (gate.pending) return <FormulaMovePreviewDialog {...gate.dialogProps} />;
 
   return (
     <Dialog open onOpenChange={(next) => (next ? undefined : onClose())}>
@@ -79,7 +93,7 @@ export function NodeMoveDialog({
           <Button variant="ghost" onClick={onClose}>
             {ui.common.cancel}
           </Button>
-          <Button disabled={move.isPending} onClick={submit}>
+          <Button disabled={move.isPending || preview.isPending} onClick={submit}>
             {ui.structure.move}
           </Button>
         </DialogFooter>

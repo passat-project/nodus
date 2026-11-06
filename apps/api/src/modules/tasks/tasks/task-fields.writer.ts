@@ -230,6 +230,11 @@ export class TaskFieldsWriter {
         ...(patch.nodeId !== undefined || nodeReset
           ? { nodeId: after.nodeId, previousNodeId: row.nodeId }
           : {}),
+        // Перепривязка (#632): состав подзадач меняется у старого и нового
+        // родителя — формулы-агрегаты пересчитываются по обоим.
+        ...(patch.parentId !== undefined
+          ? { parentId: after.parentId, previousParentId: row.parentId }
+          : {}),
       },
       meta,
     );

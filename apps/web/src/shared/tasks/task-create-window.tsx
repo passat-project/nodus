@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { CreationForm, ProcessType } from '@nodus/contracts';
+import type { CreationFieldKey, CreationForm, ProcessType } from '@nodus/contracts';
 import { typeConfigOf, typeCreationFormOf, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
@@ -34,6 +34,7 @@ import { createFailureOf } from './task-create-errors.js';
 import { TaskCreateFormBody } from './task-create-form-body.js';
 import { FormSkeleton } from './task-create-skeleton.js';
 import { TaskCreateStructure, useTaskCreateStructure } from './task-create-structure.js';
+import { useCreationFormulaPrefill } from './use-creation-formula-prefill.js';
 
 /** Форма без типа (типы не загрузились): пустая — низ окна покажет заглушку. */
 const EMPTY_FORM: CreationForm = { fields: [], chips: [] };
@@ -108,6 +109,27 @@ export function TaskCreateWindow({
   // предпросмотре — черновая форма редактора.
   const form = preview?.form ?? (shownType ? typeCreationFormOf(shownType) : EMPTY_FORM);
   const typesLoading = !preview && isLoading;
+  // Префилл формульных слотов (#632, Р12): считается при открытии и смене
+  // места (проект/папка/родитель); значение остаётся редактируемым.
+  const formulaPrefill = useCreationFormulaPrefill({
+    slots: form.fields,
+    hostKind: shownType?.category === 'letter' ? 'letter' : 'task',
+    projectId: projectId ?? null,
+    nodeId: draft.nodeId,
+    parentId: prefill?.parentId ?? null,
+    enabled: open && !preview,
+  });
+  useEffect(() => {
+    if (formulaPrefill.version === 0) return;
+    setDraft((prev) => {
+      let next = prev;
+      for (const [key, value] of Object.entries(formulaPrefill.values)) {
+        next = withValue(next, key as CreationFieldKey, value);
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- версия — сигнал применения
+  }, [formulaPrefill.version]);
 
   const missing = shownType ? missingFor(form, draft) : [];
   const missingStructure = structure.required && draft.nodeId === null;

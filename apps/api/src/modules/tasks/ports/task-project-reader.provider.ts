@@ -116,4 +116,32 @@ export class TaskProjectReaderProvider implements TaskProjectReader {
     `;
     return rows[0]?.has === true;
   }
+
+  async taskIdsInNodes(
+    projectId: string,
+    nodeIds: readonly string[],
+    actorId?: string,
+  ): Promise<string[]> {
+    if (nodeIds.length === 0) return [];
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM tasks
+      WHERE project_id = ${projectId}::uuid
+        AND deleted_at IS NULL
+        AND node_id IN (${Prisma.join(nodeIds.map((id) => Prisma.sql`${id}::uuid`))})
+        ${
+          actorId
+            ? Prisma.sql`AND (
+                confidential = false
+                OR creator_id = ${actorId}::uuid
+                OR assignee_id = ${actorId}::uuid
+                OR EXISTS (
+                  SELECT 1 FROM task_participants tp
+                  WHERE tp.task_id = tasks.id AND tp.user_id = ${actorId}::uuid
+                )
+              )`
+            : Prisma.empty
+        }
+    `;
+    return rows.map((row) => row.id);
+  }
 }

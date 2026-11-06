@@ -67,7 +67,9 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
       });
       return row ? this.toRecord(row) : null;
     }
-    const row = await db.task.findUnique({ where: { id }, select: taskSelect });
+    // Без актора (источник формулы у пересчёта) мягко удалённая задача
+    // источником не бывает: «смерть связей» (Р7) — как и в ветке видимости.
+    const row = await db.task.findFirst({ where: { id, deletedAt: null }, select: taskSelect });
     return row ? this.toRecord(row) : null;
   }
 

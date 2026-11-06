@@ -39,12 +39,18 @@ export function extractDeps(ast: FormulaNode): FormulaDependency[] {
     seen.add(key);
     deps.push(dep);
   };
-  const visit = (node: FormulaNode): void => {
+  const visit = (node: FormulaNode, inFilter = false): void => {
     switch (node.kind) {
       case 'literal':
         return;
       case 'field':
-        add(sourceDep(node.source, node.number));
+        // `self` внутри фильтра агрегата — поле ЗАПИСИ ВЫБОРКИ, а не хоста
+        // (evaluate читает его у каждого члена): отдельный вид зависимости.
+        if (inFilter && node.source.kind === 'self') {
+          add({ kind: 'selection', number: node.number });
+        } else {
+          add(sourceDep(node.source, node.number));
+        }
         return;
       case 'system':
         add({
@@ -54,7 +60,7 @@ export function extractDeps(ast: FormulaNode): FormulaDependency[] {
         return;
       case 'op':
       case 'call':
-        node.args.forEach(visit);
+        node.args.forEach((arg) => visit(arg, inFilter));
         return;
       case 'aggregate': {
         if (node.from.kind === 'folder_chain') {
@@ -64,14 +70,17 @@ export function extractDeps(ast: FormulaNode): FormulaDependency[] {
             ...(node.field ? { number: node.field } : {}),
           });
         } else {
-          const selector = node.from.selector.kind;
+          const selector = node.from.selector;
           add({
-            kind: selector === 'node_tasks' ? 'node_tasks' : 'related',
-            selector,
+            kind: selector.kind === 'node_tasks' ? 'node_tasks' : 'related',
+            selector: selector.kind,
+            ...(selector.kind === 'relations'
+              ? { relation: selector.relation, direction: selector.direction }
+              : {}),
             ...(node.field ? { number: node.field } : {}),
           });
         }
-        if (node.filter) visit(node.filter);
+        if (node.filter) visit(node.filter, true);
         return;
       }
     }

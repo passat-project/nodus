@@ -99,7 +99,8 @@ export function setRequired(
 }
 
 /** Поле раздела вкл/выкл: системные и поля процесса (`cf.<id>`, #431) — в
- *  одном массиве; последнее не снимается, лимит раздела — 12 (Р7). */
+ *  одном массиве; последнее не снимается, лимит раздела — 12 (Р7).
+ *  Формулы-подстановки (#632, Р12) снятого поля удаляются вместе с ним. */
 export function toggleWindowField(form: Form, field: TransitionWindowFieldKey): Form {
   const section = sectionOf(form, 'fields');
   if (!section) return form;
@@ -110,11 +111,43 @@ export function toggleWindowField(form: Form, field: TransitionWindowFieldKey): 
     fields.add(field);
   }
   if (fields.size === 0) return form; // раздел без полей бессмыслен — не снимаем последнее
+  const formulas = Object.fromEntries(
+    Object.entries(section.formulas ?? {}).filter(([key]) => fields.has(key)),
+  );
   return {
     ...form,
     sections: form.sections.map((s) =>
       s.kind === 'fields'
-        ? { kind: 'fields', fields: [...fields] as TransitionWindowFieldKey[] }
+        ? {
+            kind: 'fields',
+            fields: [...fields] as TransitionWindowFieldKey[],
+            ...(Object.keys(formulas).length > 0 ? { formulas } : {}),
+          }
+        : s,
+    ),
+  };
+}
+
+/** Формула-подстановка поля окна (#632, Р12): null — снять. */
+export function setWindowFieldFormula(
+  form: Form,
+  field: TransitionWindowFieldKey,
+  ast: import('@nodus/contracts').FormulaNode | null,
+): Form {
+  const section = sectionOf(form, 'fields');
+  if (!section || !section.fields.includes(field)) return form;
+  const formulas = { ...(section.formulas ?? {}) };
+  if (ast) formulas[field] = ast;
+  else delete formulas[field];
+  return {
+    ...form,
+    sections: form.sections.map((s) =>
+      s.kind === 'fields'
+        ? {
+            kind: 'fields',
+            fields: section.fields,
+            ...(Object.keys(formulas).length > 0 ? { formulas } : {}),
+          }
         : s,
     ),
   };

@@ -1,4 +1,9 @@
-import type { CustomFieldDefinition, FormulaHostKind, FormulaNode } from '@nodus/contracts';
+import type {
+  CustomFieldDefinition,
+  CustomFieldType,
+  FormulaHostKind,
+  FormulaNode,
+} from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
@@ -24,6 +29,8 @@ export function TypeFormulaDialog({
   open,
   hostKind,
   definition,
+  targetType,
+  label,
   ownDefinitions,
   initial,
   onSave,
@@ -31,12 +38,18 @@ export function TypeFormulaDialog({
 }: {
   open: boolean;
   hostKind: FormulaHostKind;
-  definition: CustomFieldDefinition;
+  /** Атрибут-ячейка (если слот — атрибут); у системного поля null. */
+  definition?: CustomFieldDefinition;
+  /** Тип результата, если слота-атрибута нет (системное поле окна). */
+  targetType?: CustomFieldType;
+  /** Подпись слота в заголовке (когда нет определения). */
+  label?: string;
   ownDefinitions: readonly CustomFieldDefinition[];
   initial: FormulaNode | null;
   onSave: (ast: FormulaNode | null) => void;
   onClose: () => void;
 }) {
+  const resultType = (definition?.type ?? targetType)!;
   const {
     rootRef,
     definitions,
@@ -59,7 +72,7 @@ export function TypeFormulaDialog({
   } = useTypeFormulaEditor({
     open,
     hostKind,
-    definition,
+    targetType: resultType,
     ownDefinitions,
     initial,
     onSave,
@@ -78,7 +91,7 @@ export function TypeFormulaDialog({
             <DialogTitle className="flex min-w-0 items-baseline gap-2">
               <span className="shrink-0">{ui.formulas.typeFormula.title}</span>
               <span className="min-w-0 truncate text-xs font-normal text-muted-foreground">
-                {definition.name}
+                {definition?.name ?? label ?? ''}
               </span>
             </DialogTitle>
           </DialogHeader>

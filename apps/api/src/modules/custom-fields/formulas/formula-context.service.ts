@@ -11,15 +11,10 @@ import {
   type FormulaRecordData,
   type RecordValuesReader,
 } from '../ports/record-values.port.js';
+import type { FormulaPreviewOverride } from '../ports/formula-cells.port.js';
 import { FORMULA_ENGINE, type FormulaEngine } from '../ports/formula-engine.port.js';
 import { buildDepKeys, type FormulaDepKey } from './formula-dep-keys.js';
-import {
-  companyRecord,
-  findRelationNode,
-  neededSources,
-  relationRows,
-  resolveRefSource,
-} from './formula-context.helpers.js';
+import { companyRecord, neededSources, resolveRefSource } from './formula-context.helpers.js';
 import type { FormulaRegistrySnapshot } from './formula-meta.service.js';
 import { FormulaValuesService } from './formula-values.service.js';
 
@@ -54,6 +49,11 @@ export interface FormulaContextArgs {
   snapshot: FormulaRegistrySnapshot;
   /** Пользовательский путь (evaluate): невидимый хост = null (Р7). */
   actor?: ProjectActor;
+  /** Dry-run переноса (move-preview): подмена места без записи в БД. */
+  override?: FormulaPreviewOverride;
+  /** Синтетический хост (префилл создания, Р12): записи ещё нет — контекст
+   *  задаёт место (проект/папка/родитель), значения пустые. */
+  hostData?: FormulaRecordData;
 }
 
 /**
@@ -77,9 +77,10 @@ export class FormulaContextService {
     tx?: TransactionClient,
     cache: FormulaContextCache = createFormulaCache(),
   ): Promise<FormulaContext | null> {
-    const { hostKind, hostId, asts, snapshot, actor } = args;
-    const host = await this.record(hostKind, hostId, actor, tx, cache);
-    if (!host) return null;
+    const { hostKind, hostId, asts, snapshot, actor, override } = args;
+    const loaded = args.hostData ?? (await this.record(hostKind, hostId, actor, tx, cache));
+    if (!loaded) return null;
+    const host = withOverride(loaded, override);
 
     const deps = asts.flatMap((ast) => this.engine.extractDeps(ast));
     const needed = neededSources(deps);
@@ -97,7 +98,7 @@ export class FormulaContextService {
         ? new Map(
             (projectId ? await this.projectNodes(projectId, tx, cache) : []).map((node) => [
               node.id,
-              node,
+              withOverride(node, override),
             ]),
           )
         : new Map<string, FormulaRecordData>();
@@ -114,27 +115,24 @@ export class FormulaContextService {
       if (rows.length > FORMULA_LIMITS.selection) overflowed = true;
       related.set('subtasks', rows);
     }
-    for (const dep of deps) {
-      if (dep.kind !== 'related' || !dep.selector || dep.selector === 'subtasks') continue;
-      if (dep.selector === 'node_tasks') {
-        const nodeId = hostKind === 'node' ? host.id : host.nodeId;
-        if (!nodeId) continue;
+    if (needed.nodeTasks) {
+      const nodeId = hostKind === 'node' ? host.id : host.nodeId;
+      if (nodeId) {
         const rows = await this.reader.nodeTasks(nodeId, tx);
         if (rows.length > FORMULA_LIMITS.selection) overflowed = true;
         related.set('node_tasks', rows);
-        continue;
       }
-      // Связи: выборка зависит от вида и направления — ключ селектора.
-      const relation = findRelationNode(asts);
-      if (!relation) continue;
-      const rows = await this.reader.relatedTasks(
-        host.id,
-        relation.relation,
-        relation.direction,
-        tx,
-      );
+    }
+    for (const dep of deps) {
+      if (dep.kind !== 'related' || dep.selector !== 'relations') continue;
+      if (!dep.relation || !dep.direction || host.kind !== 'task') continue;
+      // Связи: каждая пара вид+направление — своя выборка и свой ключ (Р2):
+      // формула может агрегировать несколько видов связей сразу.
+      const key = `relations:${dep.relation}:${dep.direction}`;
+      if (related.has(key)) continue;
+      const rows = await this.reader.relatedTasks(host.id, dep.relation, dep.direction, tx);
       if (rows.length > FORMULA_LIMITS.selection) overflowed = true;
-      related.set(`relations:${relation.relation}:${relation.direction}`, rows);
+      related.set(key, rows);
     }
 
     const company = companyRecord(snapshot);
@@ -161,7 +159,11 @@ export class FormulaContextService {
     };
     if (needed.refs) {
       for (const dep of deps) {
-        if (dep.kind === 'ref' && dep.refField !== undefined) await refRecord(dep.refField);
+        // Системное поле цели ссылки (`{Ссылка · Название}`) тоже требует
+        // предзагрузки цели — иначе резолвер всегда отдаёт null (Р2).
+        if ((dep.kind === 'ref' || dep.kind === 'system') && dep.refField !== undefined) {
+          await refRecord(dep.refField);
+        }
       }
     }
 
@@ -230,13 +232,13 @@ export class FormulaContextService {
             .map((node) => this.values.toRecord(node, snapshot.byNumber, items))
             .filter((record): record is FormulaRecord => record !== null);
         }
-        const selector = from.selector.kind;
+        const selector = from.selector;
         const rows =
-          selector === 'subtasks'
+          selector.kind === 'subtasks'
             ? (related.get('subtasks') ?? [])
-            : selector === 'node_tasks'
+            : selector.kind === 'node_tasks'
               ? (related.get('node_tasks') ?? [])
-              : relationRows(related, asts);
+              : (related.get(`relations:${selector.relation}:${selector.direction}`) ?? []);
         return rows
           .map((row) => this.values.toRecord(row, snapshot.byNumber, items))
           .filter((record): record is FormulaRecord => record !== null);
@@ -294,4 +296,20 @@ export class FormulaContextService {
     cache.nodes.set(projectId, promise);
     return promise;
   }
+}
+
+/** Подмена места (move-preview): дерево/узел задачи как после переноса. */
+function withOverride(
+  record: FormulaRecordData,
+  override: FormulaPreviewOverride | undefined,
+): FormulaRecordData {
+  if (!override) return record;
+  const nodeId = override.taskNode?.[record.id];
+  const parentId = override.nodeParent?.[record.id];
+  if (nodeId === undefined && parentId === undefined) return record;
+  return {
+    ...record,
+    ...(nodeId === undefined ? {} : { nodeId }),
+    ...(parentId === undefined ? {} : { parentId }),
+  };
 }

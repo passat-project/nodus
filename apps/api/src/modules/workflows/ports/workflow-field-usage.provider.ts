@@ -77,4 +77,28 @@ export class WorkflowFieldUsageProvider implements WorkflowFieldUsageReader {
       ORDER BY name
     `);
   }
+
+  async formulaSlotsUsingField(fieldId: string): Promise<number> {
+    const key = customFieldKey(fieldId);
+    const rows = await this.prisma.$queryRaw<{ count: number }[]>(Prisma.sql`
+      SELECT (
+        (SELECT COUNT(*) FROM workflow_transitions t
+          JOIN workflows w ON w.id = t.workflow_id
+          WHERE t.archived_at IS NULL
+            AND EXISTS (
+              SELECT 1 FROM jsonb_array_elements(COALESCE(t.form->'sections', '[]'::jsonb)) s
+              WHERE s->>'kind' = 'fields'
+                AND s->'formulas' ? ${key}
+            ))
+        +
+        (SELECT COUNT(*) FROM workflows w
+          WHERE w.kind IN ('task', 'letter')
+            AND EXISTS (
+              SELECT 1 FROM jsonb_array_elements(COALESCE(w.creation->'fields', '[]'::jsonb)) f
+              WHERE f->>'key' = ${key} AND f->'formula' IS NOT NULL
+            ))
+      )::int AS count
+    `);
+    return rows[0]?.count ?? 0;
+  }
 }

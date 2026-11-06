@@ -47,6 +47,7 @@ function makeService() {
     creationFormsUsingField: vi.fn(async () => [
       { kind: 'task' as const, name: 'Стандартный', draft: true },
     ]),
+    formulaSlotsUsingField: vi.fn(async () => 2),
   };
   const catalog = {
     typeRefs: vi.fn(async (ids: string[]) =>
@@ -59,6 +60,10 @@ function makeService() {
     projectTypes: vi.fn(async () => [{ id: 'pt-1', name: 'Тендер', archived: false }]),
     nodeKinds: vi.fn(async () => [{ id: 'nk-1', name: 'Комплект', archived: true }]),
   };
+  const formulaCells = {
+    countByFieldId: vi.fn(async () => 4),
+    countTypeDefaults: vi.fn(async () => 1),
+  };
   const service = new DefinitionsUsageService(
     taskValues as never,
     letterValues as never,
@@ -67,6 +72,7 @@ function makeService() {
     workflows as never,
     catalog as never,
     targets as never,
+    formulaCells as never,
   );
   return {
     service,
@@ -96,6 +102,7 @@ describe('DefinitionsUsageService (#631, Р8)', () => {
         nodeKinds: [{ id: 'nk-1', name: 'Комплект' }],
       },
       companyValue: true,
+      formulas: { ownCells: 4, typeDefaults: 1, windowSlots: 2 },
     });
   });
 

@@ -27,19 +27,34 @@ export function buildExecuteBody({
   if (fieldsSection?.kind === 'fields') {
     const fields: NonNullable<NonNullable<typeof form.fields>> = {};
     const allowed = new Set(fieldsSection.fields);
+    // Формульные слоты окна (#632, Р12) отправляются ВСЕГДА, даже без
+    // правки: иначе дифф-механика опустит нетронутое поле и снимок в
+    // журнале перехода не сохранится (F2).
+    const formulaKeys = new Set(Object.keys(fieldsSection.formulas ?? {}));
     const description = draft.fields.description.trim();
-    if (allowed.has('description') && description !== context.fields.description) {
+    if (
+      allowed.has('description') &&
+      (description !== context.fields.description || formulaKeys.has('description')) &&
+      description
+    ) {
       fields.description = description;
     }
-    if (allowed.has('deadline') && draft.fields.deadline !== context.fields.deadline) {
+    if (
+      allowed.has('deadline') &&
+      (draft.fields.deadline !== context.fields.deadline || formulaKeys.has('deadline'))
+    ) {
       if (draft.fields.deadline) fields.deadline = draft.fields.deadline;
     }
-    if (allowed.has('assignee') && draft.fields.assigneeId !== context.fields.assigneeId) {
+    if (
+      allowed.has('assignee') &&
+      (draft.fields.assigneeId !== context.fields.assigneeId || formulaKeys.has('assignee'))
+    ) {
       if (draft.fields.assigneeId) fields.assigneeId = draft.fields.assigneeId;
     }
     if (
       allowed.has('plannedMinutes') &&
-      draft.fields.plannedMinutes !== context.fields.plannedMinutes
+      (draft.fields.plannedMinutes !== context.fields.plannedMinutes ||
+        formulaKeys.has('plannedMinutes'))
     ) {
       if (draft.fields.plannedMinutes) fields.plannedMinutes = draft.fields.plannedMinutes;
     }
@@ -52,7 +67,9 @@ export function buildExecuteBody({
       const next = draft.fields.customFields[id];
       const previous = context.fields.customFields[id];
       if (next === undefined || next === null) continue;
-      if (JSON.stringify(next) !== JSON.stringify(previous)) customFields[id] = next;
+      if (JSON.stringify(next) !== JSON.stringify(previous) || formulaKeys.has(key)) {
+        customFields[id] = next;
+      }
     }
     if (Object.keys(customFields).length > 0) fields.customFields = customFields;
     if (Object.keys(fields).length > 0) form.fields = fields;
