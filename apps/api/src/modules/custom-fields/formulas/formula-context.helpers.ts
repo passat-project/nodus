@@ -22,6 +22,8 @@ export type RelationSelector = {
   direction: 'out' | 'in' | 'both';
 };
 
+export { resolveRefSource } from './formula-ref.js';
+
 export function neededSources(deps: readonly FormulaDependency[]): NeededSources {
   const needed: NeededSources = {
     project: false,

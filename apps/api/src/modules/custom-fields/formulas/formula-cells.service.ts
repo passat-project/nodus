@@ -1,6 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
-  CustomFieldType,
   FormulaCellError,
   FormulaHostKind,
   FormulaNode,
@@ -22,6 +21,7 @@ import { FORMULA_ENGINE, type FormulaEngine } from '../ports/formula-engine.port
 import { FormulaCellsRepository } from './formula-cells.repository.js';
 import { asCellError, errorCodeOf, refOf } from './formula-cells.support.js';
 import { computeFormula } from './formula-compute.js';
+import { applyTypeFormulas } from './formula-type-formulas.js';
 import { createFormulaCache, FormulaContextService } from './formula-context.service.js';
 import { FormulaMetaService, type FormulaRegistrySnapshot } from './formula-meta.service.js';
 import { FormulaValuesService, sameFormulaValue } from './formula-values.service.js';
@@ -64,65 +64,20 @@ export class FormulaCellsService implements FormulaCells {
       own.push(cell.fieldId);
       ownByHost.set(cell.hostId, own);
     }
-    // Формулы типа/вида (Р6): считаются НА ЧТЕНИИ для записей без своего
-    // значения и своей формулы; значения в БД не материализуются.
     const snapshot = await this.meta.snapshot(tx);
     const cache = createFormulaCache();
-    for (const hostId of hostIds) {
-      const host = await this.context.record(hostKind, hostId, undefined, tx, cache);
-      if (!host?.placeId) continue;
-      const slots = snapshot.bindingFormulas.get(host.placeId) ?? [];
-      if (slots.length === 0) continue;
-      const own = new Set(ownByHost.get(hostId) ?? []);
-      const pending = slots.filter((slot) => !own.has(slot.definitionId));
-      if (pending.length === 0) continue;
-      const state = result.get(hostId) ?? { values: {}, formulas: {} };
-      const evaluate = pending.filter((slot) => host.values[slot.definitionId] === undefined);
-      for (const slot of pending) {
-        if (host.values[slot.definitionId] !== undefined) {
-          state.formulas[slot.definitionId] = { origin: 'value' };
-        }
-      }
-      if (evaluate.length === 0) {
-        result.set(hostId, state);
-        continue;
-      }
-      const context = await this.context.build(
-        { hostKind, hostId, asts: evaluate.map((slot) => slot.ast), snapshot },
-        tx,
-        cache,
-      );
-      if (!context) continue;
-      for (const slot of evaluate) {
-        const definition = snapshot.byId.get(slot.definitionId);
-        const evaluation = this.engine.evaluate(slot.ast, context.resolver);
-        if (context.overflowed) {
-          state.formulas[slot.definitionId] = {
-            origin: 'type',
-            error: {
-              code: 'selection_limit',
-              message: `aggregate selection exceeds ${FORMULA_LIMITS.selection} records`,
-            },
-          };
-          continue;
-        }
-        if (evaluation.error) {
-          state.formulas[slot.definitionId] = { origin: 'type', error: evaluation.error };
-          continue;
-        }
-        state.formulas[slot.definitionId] = { origin: 'type' };
-        if (!definition) continue;
-        const materialized = await this.values.materialize(
-          {
-            type: definition.type as CustomFieldType,
-            settings: (definition.settings ?? {}) as never,
-          },
-          evaluation.value,
-        );
-        if (materialized !== null) state.values[slot.definitionId] = materialized;
-      }
-      result.set(hostId, state);
-    }
+    await applyTypeFormulas({
+      hostKind,
+      hostIds,
+      snapshot,
+      ownByHost,
+      result,
+      tx,
+      cache,
+      context: this.context,
+      engine: this.engine,
+      values: this.values,
+    });
     return result;
   }
 

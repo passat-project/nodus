@@ -18,6 +18,7 @@ import {
   findRelationNode,
   neededSources,
   relationRows,
+  resolveRefSource,
 } from './formula-context.helpers.js';
 import type { FormulaRegistrySnapshot } from './formula-meta.service.js';
 import { FormulaValuesService } from './formula-values.service.js';
@@ -154,7 +155,7 @@ export class FormulaContextService {
     const refRecord = async (number: number): Promise<FormulaRecordData | null> => {
       const cached = refCache.get(number);
       if (cached !== undefined) return cached;
-      const target = await this.resolveRef(host, number, snapshot, tx, cache);
+      const target = await resolveRefSource(host, number, snapshot, tx, cache, this);
       refCache.set(number, target);
       return target;
     };
@@ -292,37 +293,5 @@ export class FormulaContextService {
     const promise = this.reader.projectNodes(projectId, tx);
     cache.nodes.set(projectId, promise);
     return promise;
-  }
-
-  /** Цель атрибута-ссылки: только своё дерево и не конфиденциальные (Р7). */
-  private async resolveRef(
-    host: FormulaRecordData,
-    number: number,
-    snapshot: FormulaRegistrySnapshot,
-    tx: TransactionClient | undefined,
-    cache: FormulaContextCache,
-  ): Promise<FormulaRecordData | null> {
-    const definition = snapshot.byNumber.get(number);
-    if (!definition) return null;
-    const raw = host.values[definition.id];
-    if (raw === undefined || raw === null || Array.isArray(raw) || typeof raw === 'object') {
-      return null;
-    }
-    const targetId = String(raw);
-    switch (definition.type) {
-      case 'task':
-      case 'node':
-      case 'project': {
-        const target = await this.record(definition.type, targetId, undefined, tx, cache);
-        if (!target || target.confidential) return null;
-        // Цель обязана быть в проекте хоста (Р7 г) — иначе источник недоступен.
-        const hostProject = host.kind === 'project' ? host.id : host.projectId;
-        if ((target.projectId ?? null) !== (hostProject ?? null)) return null;
-        return target;
-      }
-      default:
-        // Письмо/контрагент источниками атрибутов V1 не являются (O5).
-        return null;
-    }
   }
 }

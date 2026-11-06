@@ -31,6 +31,7 @@ import {
 } from '../../custom-fields/ports/custom-field-registry.port.js';
 import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import { selfChainNode, stageDto, TaskDtoMapper } from './task-dto.mapper.js';
+import { withFormulaState } from './task-formula-state.js';
 import { stagesCatalog } from './task-stages-catalog.js';
 import { TasksQueryRepository, type TaskOrder } from './tasks-query.repository.js';
 import { TasksRepository } from './tasks.repository.js';
@@ -120,7 +121,7 @@ export class TasksQueryService {
           : encodeCursor({ o: sortKeys.get(last.id)!, id: last.id });
     }
     const items = await this.mapper.toListItems(page, undefined, user);
-    return { items: await this.withFormulas(items), nextCursor };
+    return { items: await withFormulaState(this.formulas, items), nextCursor };
   }
 
   private order(q: ListTasksQuery, me: string): TaskOrder {
@@ -174,7 +175,7 @@ export class TasksQueryService {
         ? [await this.messageNode(full.sourceId, user.id)]
         : []),
     ];
-    const [withFormulas] = await this.withFormulas([
+    const [withFormulas] = await withFormulaState(this.formulas, [
       this.mapper.toListItem(row, refs, catalog, projectRefs),
     ]);
     return {
@@ -185,7 +186,8 @@ export class TasksQueryService {
       description: full.description,
       observers: observerIds.map((uid) => this.mapper.ref(refs, uid)),
       checklist: full.checklist.map((c) => ({ id: c.id, text: c.text, done: c.done })),
-      subtasks: await this.withFormulas(
+      subtasks: await withFormulaState(
+        this.formulas,
         children.map((c) => this.mapper.toListItem(c, refs, catalog, projectRefs)),
       ),
       chain: [
@@ -212,25 +214,6 @@ export class TasksQueryService {
       access: taskAccess(actorRoles(row, user.id), user.permissions),
       createdAt: full.createdAt.toISOString(),
     };
-  }
-
-  /** Формульное состояние ячеек (#632, Р9): own-формулы в DTO списков и
-   *  детали — значок fx и бейдж ошибки без отдельных запросов на строку. */
-  private async withFormulas(items: readonly TaskListItem[]): Promise<TaskListItem[]> {
-    if (items.length === 0) return [...items];
-    const states = await this.formulas.stateFor(
-      'task',
-      items.map((item) => item.id),
-    );
-    return items.map((item) => {
-      const state = states.get(item.id);
-      if (!state) return item;
-      return {
-        ...item,
-        customFields: { ...item.customFields, ...state.values },
-        customFieldFormulas: state.formulas,
-      };
-    });
   }
 
   /** Узел «сообщение чата» цепочки — по правам СМОТРЯЩЕГО: участник беседы
