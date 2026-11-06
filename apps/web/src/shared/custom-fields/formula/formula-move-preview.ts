@@ -52,23 +52,26 @@ export function useTaskMovePreview() {
  *  перенос выполняется, значения пересчитаются фоном. */
 export async function movePreviewChanges(
   run: Promise<FormulaMovePreviewResponse>,
-): Promise<FormulaMovePreviewEntry[]> {
+): Promise<FormulaMovePreviewResponse> {
   try {
-    return (await run).changes;
+    return await run;
   } catch {
-    return [];
+    return { changes: [] };
   }
 }
 
 /** Ожидающий подтверждения перенос: дифф + действие, которое его выполнит. */
 export interface PendingFormulaMove {
   changes: FormulaMovePreviewEntry[];
+  /** Выборка обрезана: окно показывает не весь дифф. */
+  truncated: boolean;
   apply: () => void;
 }
 
 /** Пропсы окна подтверждения — хост рендерит `FormulaMovePreviewDialog`. */
 export interface FormulaMoveDialogProps {
   changes: readonly FormulaMovePreviewEntry[];
+  truncated?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -94,9 +97,9 @@ export function useFormulaMoveGate(): FormulaMoveGate {
   const [pending, setPending] = useState<PendingFormulaMove | null>(null);
 
   const offer = useCallback(async (run: Promise<FormulaMovePreviewResponse>, apply: () => void) => {
-    const changes = await movePreviewChanges(run);
-    if (changes.length === 0) apply();
-    else setPending({ changes, apply });
+    const response = await movePreviewChanges(run);
+    if (response.changes.length === 0) apply();
+    else setPending({ changes: response.changes, truncated: response.truncated ?? false, apply });
   }, []);
 
   const confirm = useCallback(() => {
@@ -115,6 +118,11 @@ export function useFormulaMoveGate(): FormulaMoveGate {
     pending,
     confirm,
     cancel,
-    dialogProps: { changes: pending?.changes ?? [], onConfirm: confirm, onCancel: cancel },
+    dialogProps: {
+      changes: pending?.changes ?? [],
+      truncated: pending?.truncated ?? false,
+      onConfirm: confirm,
+      onCancel: cancel,
+    },
   };
 }

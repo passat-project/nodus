@@ -42,7 +42,12 @@ export function movePreviewValueText(value: CustomFieldValue | null | undefined)
  * комплекта длиннее колонки, и `truncate` в одну строку превращал дифф в
  * «2026-42-… → 2026-42-…» — по такому окну нельзя решить, переносить ли.
  */
-export function FormulaMovePreviewDialog({ changes, onConfirm, onCancel }: FormulaMoveDialogProps) {
+export function FormulaMovePreviewDialog({
+  changes,
+  truncated = false,
+  onConfirm,
+  onCancel,
+}: FormulaMoveDialogProps) {
   if (changes.length === 0) return null;
   const shown = changes.slice(0, MOVE_PREVIEW_LIMIT);
   const rest = changes.length - shown.length;
@@ -92,6 +97,9 @@ export function FormulaMovePreviewDialog({ changes, onConfirm, onCancel }: Formu
           <p className="text-xs text-muted-foreground">
             {ui.formulas.move.more} {rest}
           </p>
+        ) : null}
+        {truncated ? (
+          <p className="text-xs text-muted-foreground">{ui.formulas.move.truncated}</p>
         ) : null}
         <DialogFooter>
           <Button variant="ghost" onClick={onCancel}>

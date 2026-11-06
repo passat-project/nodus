@@ -178,6 +178,10 @@ export const formulaMovePreviewEntrySchema = z
 export type FormulaMovePreviewEntry = z.infer<typeof formulaMovePreviewEntrySchema>;
 
 export const formulaMovePreviewResponseSchema = z
-  .object({ changes: z.array(formulaMovePreviewEntrySchema) })
+  .object({
+    changes: z.array(formulaMovePreviewEntrySchema),
+    /** Выборка обрезана потолком: окно не должно обещать полный дифф. */
+    truncated: z.boolean().optional(),
+  })
   .strict();
 export type FormulaMovePreviewResponse = z.infer<typeof formulaMovePreviewResponseSchema>;

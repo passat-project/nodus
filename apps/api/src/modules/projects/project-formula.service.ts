@@ -197,10 +197,12 @@ export class ProjectFormulaService {
         { nodeId },
       );
     }
-    const nodes = subtreeIds(childrenByParent(tree), nodeId).slice(0, 100);
+    const allNodes = subtreeIds(childrenByParent(tree), nodeId);
+    const nodes = allNodes.slice(0, 100);
     // Видимость актора (Р7): конфиденциальные задачи чужих не раскрываются
     // даже в подписи диффа; потолок — диалог, а не пересчёт тысяч записей.
-    const taskIds = (await this.taskReader.taskIdsInNodes(projectId, nodes, user.id)).slice(0, 100);
+    const allTaskIds = await this.taskReader.taskIdsInNodes(projectId, nodes, user.id);
+    const taskIds = allTaskIds.slice(0, 100);
     // Дерево в БД ещё старое: подмена родителя ровно у переносимого узла —
     // остальные папки поддерева едут вместе с ним, их parentId не меняется.
     const override = { nodeParent: { [nodeId]: parentId } };
@@ -208,7 +210,10 @@ export class ProjectFormulaService {
       this.cells.preview('node', nodes, override),
       this.cells.preview('task', taskIds, override),
     ]);
-    return { changes: [...nodeChanges, ...taskChanges] };
+    return {
+      changes: [...nodeChanges, ...taskChanges],
+      ...(allNodes.length > 100 || allTaskIds.length > 100 ? { truncated: true } : {}),
+    };
   }
 
   /** Правка полей проекта: руководство или project.manage; архив — заморозка. */

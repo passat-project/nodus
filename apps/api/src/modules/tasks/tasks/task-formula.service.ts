@@ -124,7 +124,8 @@ export class TaskFormulaService {
         throw DomainException.notFound('Node not found', { nodeId });
       }
     }
-    const subtree = (await this.query.subtreeIds(taskId)).slice(0, PREVIEW_TASKS_LIMIT);
+    const allSubtree = await this.query.subtreeIds(taskId);
+    const subtree = allSubtree.slice(0, PREVIEW_TASKS_LIMIT);
     const visible = await this.query.visibleIdsAmong(user, subtree);
     const override = { taskNode: { [taskId]: nodeId } };
     // Задача меняет папку — у СТАРОЙ и НОВОЙ папки меняется выборка «задачи
@@ -135,7 +136,10 @@ export class TaskFormulaService {
       this.cells.preview('task', visible, override),
       nodeIds.length > 0 ? this.cells.preview('node', nodeIds, override) : Promise.resolve([]),
     ]);
-    return { changes: [...taskChanges, ...nodeChanges] };
+    return {
+      changes: [...taskChanges, ...nodeChanges],
+      ...(allSubtree.length > PREVIEW_TASKS_LIMIT ? { truncated: true } : {}),
+    };
   }
 
   /** Пересчёт ячеек задачи после изменения значений (Р4): общая точка. */

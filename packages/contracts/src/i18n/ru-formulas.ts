@@ -274,6 +274,7 @@ export const formulasStrings = {
     before: 'Было',
     after: 'Станет',
     empty: 'Значения формул не изменятся',
+    truncated: 'Показаны не все изменения: выборка ограничена',
     more: 'и ещё',
     records: 'записей',
     confirm: 'Перенести',

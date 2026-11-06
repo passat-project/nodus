@@ -62,6 +62,18 @@ describe('FormulaMovePreviewDialog: подтверждение переноса 
     expect(from.className).not.toContain('truncate');
   });
 
+  it('обрезанная выборка — предупреждение, что изменения не все', () => {
+    render(
+      <FormulaMovePreviewDialog
+        changes={[entry(1)]}
+        truncated
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(ui.formulas.move.truncated)).toBeTruthy();
+  });
+
   it('больше 10 строк — первые 10 и «и ещё N»', () => {
     const changes = Array.from({ length: 13 }, (_, index) => entry(index + 1));
     render(<FormulaMovePreviewDialog changes={changes} onConfirm={vi.fn()} onCancel={vi.fn()} />);
