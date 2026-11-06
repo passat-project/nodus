@@ -262,6 +262,8 @@ DECLARE
   sort_no INT;
   existing_id UUID;
   existing_type TEXT;
+  alt_free TEXT;
+  alt_no INT;
 BEGIN
   -- Системные — первые в реестре: существующие сдвигаются.
   UPDATE "field_definitions" SET "sort_order" = "sort_order" + 3;
@@ -278,7 +280,11 @@ BEGIN
 
     IF existing_id IS NOT NULL AND existing_type = want_type THEN
       -- Поглощение: перепись id на детерминированный (значения, слоты,
-      -- привязки, cf-ключи), название сохраняется.
+      -- привязки, cf-ключи), название сохраняется. Переименование строки —
+      -- ПЕРВЫМ: зависимые таблицы (field_bindings FK) обновляются на sys_id,
+      -- только когда он уже существует.
+      UPDATE "field_definitions" SET "id" = sys_id, "sort_order" = sort_no
+      WHERE "id" = existing_id;
       UPDATE "tasks" SET "custom_fields" = "custom_fields" - existing_id::text
           || jsonb_build_object(sys_id::text, "custom_fields" -> existing_id::text)
       WHERE jsonb_exists("custom_fields", existing_id::text);
@@ -315,15 +321,26 @@ BEGIN
       UPDATE "workflow_transitions" SET "rules" = REPLACE("rules"::text,
           '"cf.' || existing_id || '"', '"cf.' || sys_id || '"')::jsonb
       WHERE "rules"::text LIKE '%"cf.' || existing_id || '"%';
-      UPDATE "field_definitions" SET "id" = sys_id, "sort_order" = sort_no
-      WHERE "id" = existing_id;
     ELSE
+      -- Запасное имя тоже может быть занято: первый свободный
+      -- «Шифр проекта 2», «Шифр проекта 3», … — иначе уникальный индекс
+      -- имени уронил бы всю миграцию.
+      alt_free := NULL;
+      IF existing_id IS NOT NULL THEN
+        alt_no := 1;
+        alt_free := alt_name;
+        WHILE EXISTS (SELECT 1 FROM "field_definitions"
+                      WHERE lower(btrim("name")) = lower(alt_free)) LOOP
+          alt_no := alt_no + 1;
+          alt_free := alt_name || ' ' || alt_no::text;
+        END LOOP;
+      END IF;
       INSERT INTO "field_definitions"
         ("id", "number", "type", "name", "hint", "settings", "default_value",
          "report_indexed", "is_company", "sort_order", "created_by_id",
          "created_at", "updated_at")
       VALUES (sys_id, nextval('field_definitions_number_seq'), want_type,
-              CASE WHEN existing_id IS NOT NULL THEN alt_name ELSE sys_name END,
+              COALESCE(alt_free, sys_name),
               NULL, '{}'::jsonb, NULL, false, false, sort_no, NULL,
               CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT ("id") DO NOTHING;
@@ -372,15 +389,36 @@ BEGIN
       ));
 
   -- Формы видов: form.code → слот «Код» (состояние сохраняется), ключ code
-  -- из конфига удаляется. Два оператора: в SET все ссылки на столбец видят
+  -- из конфига удаляется. Три оператора: в SET все ссылки на столбец видят
   -- СТАРУЮ строку — удаление ключа из уже собранной формы отдельным шагом.
+  -- Слот «Кода» мог уже стоять (поглощённый пользовательский «Код»,
+  -- перепись выше): тогда дублирование слота запрещено — форма вида с двумя
+  -- одинаковыми fieldId отваливается парсером целиком; legacy-состояние
+  -- form.code переносится в существующий слот отдельным оператором.
+  UPDATE "node_kinds" k
+  SET "config" = jsonb_set(k."config", '{form,fields}', (
+        SELECT COALESCE(jsonb_agg(
+                 CASE WHEN e->>'fieldId' = '6ebf0f32-ff97-582e-a1b3-095558c317fa'
+                      THEN jsonb_set(e, '{state}', to_jsonb(k."config"->'form'->>'code'))
+                      ELSE e END
+                 ORDER BY ord), '[]'::jsonb)
+        FROM jsonb_array_elements(COALESCE(k."config"->'form'->'fields', '[]'::jsonb))
+             WITH ORDINALITY AS t(e, ord)
+      ))
+  WHERE jsonb_exists(k."config"->'form', 'code')
+    AND k."config"->'form'->'fields'
+        @> jsonb_build_array(jsonb_build_object(
+            'fieldId', '6ebf0f32-ff97-582e-a1b3-095558c317fa'));
   UPDATE "node_kinds" k
   SET "config" = jsonb_set(k."config", '{form,fields}',
         COALESCE(k."config"->'form'->'fields', '[]'::jsonb)
         || jsonb_build_array(jsonb_build_object(
             'fieldId', '6ebf0f32-ff97-582e-a1b3-095558c317fa',
             'state', k."config"->'form'->>'code')))
-  WHERE jsonb_exists(k."config"->'form', 'code');
+  WHERE jsonb_exists(k."config"->'form', 'code')
+    AND NOT (k."config"->'form'->'fields')
+        @> jsonb_build_array(jsonb_build_object(
+            'fieldId', '6ebf0f32-ff97-582e-a1b3-095558c317fa'));
   UPDATE "node_kinds" k
   SET "config" = jsonb_set(k."config", '{form}', (k."config"->'form') - 'code')
   WHERE jsonb_exists(k."config"->'form', 'code');
