@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { SYSTEM_FIELD_IDS, systemFieldValue, isSystemFieldId } from '../custom-fields/system-fields.js';
+import {
+  SYSTEM_FIELD_IDS,
+  systemFieldValue,
+  isSystemFieldId,
+} from '../custom-fields/system-fields.js';
 import { hasDuplicateSlots } from '../custom-fields/field-form.schemas.js';
 import {
   projectTypeFormOf,
@@ -33,8 +37,18 @@ describe('system-fields', () => {
 
 describe('hasDuplicateSlots', () => {
   it('дубль fieldId — true, уникальные — false', () => {
-    expect(hasDuplicateSlots([{ fieldId: CODE, state: 'required' }, { fieldId: CODE, state: 'optional' }])).toBe(true);
-    expect(hasDuplicateSlots([{ fieldId: CODE, state: 'required' }, { fieldId: CLIENT, state: 'optional' }])).toBe(false);
+    expect(
+      hasDuplicateSlots([
+        { fieldId: CODE, state: 'required' },
+        { fieldId: CODE, state: 'optional' },
+      ]),
+    ).toBe(true);
+    expect(
+      hasDuplicateSlots([
+        { fieldId: CODE, state: 'required' },
+        { fieldId: CLIENT, state: 'optional' },
+      ]),
+    ).toBe(false);
     expect(hasDuplicateSlots([])).toBe(false);
   });
 });
@@ -65,7 +79,9 @@ describe('form мест: чтение и обязательные слоты', (
   });
 
   it('clearedProjectFields — обязательные, которые патч очищает', () => {
-    expect(clearedProjectFields([CODE, CLIENT], { [CODE]: null, [CLIENT]: 'Акционер' })).toEqual([CODE]);
+    expect(clearedProjectFields([CODE, CLIENT], { [CODE]: null, [CLIENT]: 'Акционер' })).toEqual([
+      CODE,
+    ]);
     expect(clearedProjectFields([CODE], { [CODE]: 'ПР-2' })).toEqual([]);
     expect(clearedProjectFields([CODE], {})).toEqual([]);
   });
