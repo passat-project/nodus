@@ -1,6 +1,7 @@
 import { Trash2 } from 'lucide-react';
+import { useEffect } from 'react';
 import type { CustomFieldDefinition } from '@nodus/contracts';
-import { FORMULA_LIMITS, ui } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
   Dialog,
@@ -13,8 +14,9 @@ import { Skeleton } from '@nodus/ui/components/skeleton';
 
 import { FormulaAggregateDialog } from './formula-aggregate-dialog.js';
 import { FormulaFunctionsPanel } from './formula-functions-panel.js';
+import { FormulaLine } from './formula-line.js';
 import { FormulaPalette } from './formula-palette.js';
-import { issueText, previewText } from './formula-preview.js';
+import { previewText } from './formula-preview.js';
 import { useFormulaEditor } from './use-formula-editor.js';
 import type { FormulaHost } from './formula-api.js';
 
@@ -31,6 +33,12 @@ export interface FormulaHostContext {
  * типа/вида ставят в настройках типа/вида (Р6), поэтому редактор здесь
  * работает только с собственной формулой ячейки. Состояние — в
  * `useFormulaEditor`, здесь разметка окна.
+ *
+ * Геометрия окна (#632, вкус): окно НЕ выше 88vh — заголовок и футер всегда
+ * видны, прокручиваются только панели (канон диалогов: max-height + внутренний
+ * скролл). Ширина — `sm:max-w-*`: базовый `sm:max-w-sm` примитива сильнее
+ * `max-w-*` по порядку в таблице стилей, поэтому широкое окно задаётся тем же
+ * вариантом. Панели — ступень тона без рамок (секции разделяет тон, не линии).
  */
 export function FormulaEditor({
   open,
@@ -76,104 +84,82 @@ export function FormulaEditor({
     handleRemove,
   } = useFormulaEditor({ open, host, fieldId, ownDefinitions, hostContext, onClose });
 
+  // Ошибка строки — одна плашка: разбор сильнее оценки (нераспознанная
+  // формула не считается вовсе). Проблемы структуры (issues) блокируют
+  // сохранение — вторая строка ниже, тише плашки.
+  const error = parse.error ?? preview.error;
+  const resultText = previewText(preview.value, definition);
+  const resultEmpty = preview.value === null || preview.value === undefined;
+
+  // Курсор — в строку формулы, в КОНЕЦ (окно открывается на загрузке ячейки,
+  // поэтому не через onOpenAutoFocus: узла ещё нет). Иначе фокус-ловушка
+  // Radix встаёт на первую кнопку футера — «Убрать формулу» при своей формуле.
+  useEffect(() => {
+    if (!open || cell.isLoading) return;
+    const root = rootRef.current;
+    if (!root) return;
+    root.focus();
+    const range = document.createRange();
+    range.selectNodeContents(root);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }, [open, cell.isLoading, rootRef]);
+
   return (
     <>
       <Dialog open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
-        <DialogContent className="max-w-4xl gap-4">
-          <DialogHeader>
-            <DialogTitle>
-              {ui.formulas.editor.title}
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
+        <DialogContent
+          className="flex max-h-[min(88vh,36rem)] flex-col gap-4 overflow-hidden sm:max-w-[46rem]"
+          showCloseButton={false}
+          // Формула — набранный руками текст: мимо-клик не должен его терять
+          // (канон окон с пополняемыми данными). Выход — «Отмена» или Esc.
+          onInteractOutside={(event) => event.preventDefault()}
+        >
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="flex min-w-0 items-baseline gap-2">
+              <span className="shrink-0">{ui.formulas.editor.title}</span>
+              <span className="min-w-0 truncate text-xs font-normal text-muted-foreground">
                 {definition.name}
               </span>
             </DialogTitle>
           </DialogHeader>
-
           {cell.isLoading ? (
-            <div className="flex flex-col gap-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-40 w-full" />
+            <div className="flex flex-1 flex-col gap-3">
+              <Skeleton className="h-16 w-full rounded-xl" />
+              <Skeleton className="min-h-40 w-full flex-1 rounded-xl" />
             </div>
           ) : cell.isError ? (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex flex-1 flex-col items-start gap-2 text-xs text-muted-foreground">
               <span>{ui.formulas.editor.loadError}</span>
-              <Button variant="ghost" size="sm" onClick={() => void cell.refetch()}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="-ml-2"
+                onClick={() => void cell.refetch()}
+              >
                 {ui.formulas.editor.retry}
               </Button>
             </div>
           ) : (
-            <div className="flex min-h-[440px] flex-col gap-3">
-              <div className="rounded-lg border border-border bg-card">
-                <div className="flex items-start gap-2 px-3 py-2.5">
-                  <span aria-hidden className="mt-0.5 font-mono text-sm text-muted-foreground">
-                    =
-                  </span>
-                  <div className="relative min-w-0 flex-1">
-                    <div
-                      ref={rootRef}
-                      contentEditable
-                      suppressContentEditableWarning
-                      role="textbox"
-                      aria-label={ui.formulas.editor.title}
-                      aria-multiline="false"
-                      spellCheck={false}
-                      onInput={handleInput}
-                      onKeyDown={handleKeyDown}
-                      onPaste={(event) => {
-                        event.preventDefault();
-                        const text = event.clipboardData.getData('text/plain');
-                        insertText(text.replace(/[\r\n]+/g, ' '));
-                      }}
-                      className="min-h-7 w-full font-mono text-[13px] leading-6 break-words whitespace-pre-wrap outline-none"
-                    />
-                    {empty ? (
-                      <span className="pointer-events-none absolute inset-0 font-mono text-[13px] leading-6 text-muted-foreground/70">
-                        {ui.formulas.editor.placeholder}
-                      </span>
-                    ) : null}
-                    {autocomplete.open ? (
-                      <div className="absolute top-full left-0 z-20 mt-1 w-64 rounded-lg border border-border bg-popover p-1 shadow-md">
-                        <p className="px-2 py-1 text-[10px] tracking-wide text-muted-foreground uppercase">
-                          {ui.formulas.editor.autocomplete}
-                        </p>
-                        {autocomplete.items.map((entry) => (
-                          <button
-                            key={entry.id}
-                            type="button"
-                            onMouseDown={(event) => {
-                              event.preventDefault();
-                              applyAutocomplete(entry);
-                            }}
-                            className="flex w-full items-center rounded px-2 py-1 text-left text-xs hover:bg-accent"
-                          >
-                            {entry.name}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 border-t border-border/70 px-3 py-2 text-xs">
-                  <span className="text-muted-foreground">{ui.formulas.editor.result}:</span>
-                  {parse.error ? (
-                    <span className="text-danger">{parse.error}</span>
-                  ) : preview.error ? (
-                    <span className="text-danger">{preview.error}</span>
-                  ) : (
-                    <span className="font-mono text-foreground">
-                      {previewText(preview.value, definition)}
-                    </span>
-                  )}
-                  {issues.length > 0 ? (
-                    <span className="ml-auto text-danger" title={issues.map(issueText).join('\n')}>
-                      {issueText(issues[0]!)}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+              <FormulaLine
+                rootRef={rootRef}
+                empty={empty}
+                error={error}
+                resultText={resultText}
+                resultEmpty={resultEmpty}
+                issues={issues}
+                autocomplete={autocomplete}
+                onInput={handleInput}
+                onKeyDown={handleKeyDown}
+                onInsertText={insertText}
+                onApplyAutocomplete={applyAutocomplete}
+              />
 
-              <div className="grid min-h-0 flex-1 grid-cols-[240px_1fr] gap-3">
-                <aside className="min-h-0 rounded-lg border border-border bg-card">
+              <div className="grid min-h-[18rem] flex-1 grid-cols-[13rem_minmax(0,1fr)] gap-3">
+                <aside className="min-h-0 overflow-hidden rounded-xl bg-muted/60 dark:bg-background/60">
                   <FormulaPalette
                     groups={groups}
                     onInsertField={insertField}
@@ -187,9 +173,6 @@ export function FormulaEditor({
                   onOpenAggregate={() => setAggregateDialog({ open: true, initial: null })}
                 />
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                {`${ui.formulas.editor.limitsLabel}: ${FORMULA_LIMITS.nodes} / ${FORMULA_LIMITS.sources}`}
-              </p>
             </div>
           )}
 

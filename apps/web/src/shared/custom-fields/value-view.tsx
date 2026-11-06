@@ -181,7 +181,12 @@ export function CustomFieldValueView({
     case 'text':
     case 'long_text':
       return (
-        <span className={cn(line, definition.type === 'long_text' && 'whitespace-pre-line')}>
+        <span
+          className={cn(line, definition.type === 'long_text' && 'whitespace-pre-line')}
+          // Компактная ячейка таблицы обрезает строку — подсказка раскрывает
+          // полное значение (атрибутные колонки #632).
+          title={compact ? String(value) : undefined}
+        >
           {String(value)}
         </span>
       );

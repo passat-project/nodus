@@ -116,7 +116,7 @@ export function ViewSettings({ viewKey, defs }: { viewKey: string; defs: FieldDe
               }}
               placeholder={ui.common.searchPlaceholder}
               aria-label={ui.common.searchPlaceholder}
-              className="h-7 text-sm"
+              className="h-7 text-xs"
             />
           </div>
         ) : null}
@@ -127,12 +127,15 @@ export function ViewSettings({ viewKey, defs }: { viewKey: string; defs: FieldDe
         ) : null}
         {groups.map((group) => (
           <div key={group.id}>
-            <div className="flex items-center justify-between gap-2 px-1.5 pt-1.5 pb-1">
-              <span className="min-w-0 truncate text-xs font-medium text-muted-foreground">
+            {/* Заголовок группы — плотный NodeLabel на ступени тона: в длинном
+                реестре (атрибутов до 1000) секция должна читаться полосой, а
+                не ещё одной серой строкой среди пунктов. */}
+            <div className="mx-0.5 mt-1 flex items-center justify-between gap-2 rounded-md bg-muted/50 px-1.5 py-1">
+              <span className="min-w-0 truncate text-label-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
                 {group.title}
               </span>
               <span
-                className="shrink-0 font-mono text-label-sm text-muted-foreground tabular-nums"
+                className="shrink-0 font-mono text-label-xs text-muted-foreground tabular-nums"
                 title={`${group.enabled} ${ui.formulas.views.count}`}
               >
                 {group.enabled}/{group.fields.length}

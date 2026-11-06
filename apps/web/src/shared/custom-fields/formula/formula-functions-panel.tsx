@@ -6,7 +6,11 @@ import { Input } from '@nodus/ui/components/input';
 
 /** Правая панель редактора формул (§4c): операторы, функции каталога и
  *  агрегаты. Функция вставляется как «ИМЯ(» — аргументы человек пишет в
- *  строке; агрегат открывает диалог выбора выборки/атрибута/условия. */
+ *  строке; агрегат открывает диалог выбора выборки/атрибута/условия.
+ *
+ *  Клавиши (операторы и функции) — одна грамматика: тонированная подложка
+ *  на ступени панели, hover — `accent`, без «угольков»-обводок (канон панелей).
+ *  Операторы — моно-символы, функции — моно-имена (это код, не текст). */
 
 const OPERATOR_BUTTONS: { symbol: string; insert: string }[] = [
   { symbol: '+', insert: ' + ' },
@@ -29,6 +33,9 @@ const FUNCTION_GROUPS = [
   { key: 'date', label: ui.formulas.functionGroups.date },
 ] as const;
 
+const GROUP_CLASS =
+  'px-1 pt-2.5 pb-1 text-label-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase';
+
 export function FormulaFunctionsPanel({
   onInsertText,
   onOpenAggregate,
@@ -44,46 +51,48 @@ export function FormulaFunctionsPanel({
   );
 
   return (
-    <div className="flex min-h-0 flex-col rounded-lg border border-border bg-card">
-      <div className="flex flex-wrap gap-1 border-b border-border/70 px-2 py-2">
-        {OPERATOR_BUTTONS.map((operator) => (
-          <Button
-            key={operator.symbol}
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0 font-mono text-xs"
-            onClick={() => onInsertText(operator.insert)}
-          >
-            {operator.symbol}
-          </Button>
-        ))}
+    <div className="flex min-h-0 flex-col overflow-hidden rounded-xl bg-muted/60 dark:bg-background/60">
+      <div className="shrink-0 p-2 pb-0">
+        <div className="flex flex-wrap gap-1">
+          {OPERATOR_BUTTONS.map((operator) => (
+            <Button
+              key={operator.symbol}
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 bg-popover p-0 font-mono text-xs text-foreground hover:bg-muted dark:bg-input/50 dark:hover:bg-input/70"
+              aria-label={operator.insert.trim()}
+              onClick={() => onInsertText(operator.insert)}
+            >
+              {operator.symbol}
+            </Button>
+          ))}
+        </div>
       </div>
-      <div className="px-2 pt-2">
+      <div className="shrink-0 px-2 pt-2">
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={ui.formulas.editor.searchFunctions}
+          aria-label={ui.formulas.editor.searchFunctions}
           className="h-8 text-xs"
         />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
         {FUNCTION_GROUPS.map((group) => {
           const items = filtered.filter((spec) => spec.group === group.key);
           if (items.length === 0) return null;
           return (
-            <section key={group.key} className="mb-2">
-              <p className="px-1 py-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-                {group.label}
-              </p>
+            <section key={group.key}>
+              <p className={GROUP_CLASS}>{group.label}</p>
               <div className="flex flex-wrap gap-1">
                 {items.map((spec) => (
                   <Button
                     key={spec.id}
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    className="h-7 font-mono text-[11px]"
+                    className="h-7 bg-popover px-2 font-mono text-label-sm text-foreground hover:bg-muted dark:bg-input/50 dark:hover:bg-input/70"
                     title={`${ui.formulas.functions[spec.id]}(${
                       spec.minArgs === spec.maxArgs
                         ? spec.minArgs
@@ -99,21 +108,17 @@ export function FormulaFunctionsPanel({
           );
         })}
         <section>
-          <p className="px-1 py-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-            {ui.formulas.functionGroups.aggregate}
-          </p>
-          <div className="flex flex-wrap gap-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-[11px]"
-              onClick={onOpenAggregate}
-            >
-              <Plus className="size-3" strokeWidth={2} />
-              {ui.formulas.aggregateDialog.title}
-            </Button>
-          </div>
+          <p className={GROUP_CLASS}>{ui.formulas.functionGroups.aggregate}</p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 bg-primary/10 px-2 text-label-sm text-primary hover:bg-primary/15 hover:text-primary"
+            onClick={onOpenAggregate}
+          >
+            <Plus className="size-3" strokeWidth={2} />
+            {ui.formulas.aggregateDialog.title}
+          </Button>
         </section>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { MoreHorizontal } from 'lucide-react';
+import { CircleAlert, MoreHorizontal } from 'lucide-react';
 import type {
   CustomFieldDefinition,
   CustomFieldFormulaInfo,
@@ -68,13 +68,16 @@ export function FormulaCell({
 
   return (
     <div className="group/formula flex min-w-0 items-center gap-1">
+      {/* Значок формулы — левый жёлоб строки: «fx» моно 11px (данные, не метка),
+          тихий до наведения; своя формула кликабельна (открывает редактор),
+          формула типа — только пометка. */}
       {own ? (
         <button
           type="button"
           title={ui.formulas.cell.own}
           aria-label={ui.formulas.cell.own}
           onClick={() => setEditorOpen(true)}
-          className="shrink-0 rounded px-0.5 font-mono text-[11px] text-info/80 transition-colors hover:bg-info/10 hover:text-info"
+          className="-ml-0.5 flex h-5 shrink-0 items-center rounded-md px-1 font-mono text-label-xs font-medium text-info/70 transition-colors hover:bg-info/10 hover:text-info focus-visible:bg-info/10 focus-visible:text-info focus-visible:outline-none"
         >
           fx
         </button>
@@ -82,7 +85,7 @@ export function FormulaCell({
         <span
           title={ui.formulas.cell.type}
           aria-label={ui.formulas.cell.type}
-          className="shrink-0 px-0.5 font-mono text-[11px] text-info/50"
+          className="-ml-0.5 flex h-5 shrink-0 cursor-default items-center rounded-md px-1 font-mono text-label-xs font-medium text-muted-foreground/70"
         >
           fx
         </span>
@@ -94,11 +97,11 @@ export function FormulaCell({
           aria-label={ui.formulas.cell.error}
           onClick={() => (own ? setEditorOpen(true) : undefined)}
           className={cn(
-            'flex size-4 shrink-0 items-center justify-center rounded-full bg-danger/15 text-[10px] font-bold text-danger',
-            own && 'cursor-pointer',
+            'flex size-4 shrink-0 items-center justify-center rounded-full bg-danger/10 text-danger transition-colors',
+            own && 'cursor-pointer hover:bg-danger/15',
           )}
         >
-          !
+          <CircleAlert className="size-3" strokeWidth={2.25} />
         </button>
       ) : null}
       <div className="min-w-0 flex-1">
@@ -125,11 +128,9 @@ export function FormulaCell({
               aria-label={ui.formulas.cell.own}
               className="size-6 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/formula:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
             >
-              {own ? (
-                <span className="font-mono text-[11px]">fx</span>
-              ) : (
-                <MoreHorizontal className="size-3.5" strokeWidth={1.75} />
-              )}
+              {/* Меню — всегда «⋯»: второй значок «fx» рядом с левым сбивал
+                  (две одинаковые пометки в строке). */}
+              <MoreHorizontal className="size-3.5" strokeWidth={1.75} />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">

@@ -157,13 +157,19 @@ function refFieldRecord(host: DemoFormulaHost, number: number): FormulaRecord | 
     }
     case 'letter': {
       const letter = findLetter(targetId);
-      return letter ? valuesRecord(letter.customFields) : null;
+      // Конфиденциальные письма исключены ДЛЯ ВСЕХ (вердикт В1 06.11).
+      if (!letter || letter.confidential) return null;
+      return valuesRecord(letter.customFields);
     }
     case 'project':
       return projectRecord(targetId);
     case 'node': {
       const row = findDemoNodeRow(targetId);
-      return row ? valuesRecord(row.customFields) : null;
+      if (!row) return null;
+      const project = findDemoProjectRow(row.projectId);
+      return project && canSeeProject(project, currentAuthUser)
+        ? valuesRecord(row.customFields)
+        : null;
     }
     default:
       return null;

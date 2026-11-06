@@ -9,10 +9,15 @@ import {
  *  Плашки — нередактируемые span с `data-chip-id`; карта id → чип живёт в
  *  редакторе. Чтение DOM даёт токены, которые парсер превращает в AST. */
 
+/** Плашка атрибута в строке формулы: тон `info` (атрибут — источник данных),
+ *  радиус контрола, кегль на ступень ниже строки (12/16 в моно 13/24) —
+ *  читается вложенной в код, но не спорит с операторами по весу. */
 export const CHIP_CLASS =
-  'mx-0.5 inline-flex max-w-full items-center gap-1 rounded border border-info/35 bg-info/10 px-1.5 py-0.5 align-baseline text-[11px] leading-4 text-info';
+  'mx-0.5 inline-flex max-w-full items-center gap-1 rounded-md border border-info/30 bg-info/10 px-1.5 py-px align-baseline font-medium text-label-sm text-info';
+/** Плашка агрегата: тон `primary` (выборка посчитана по записям), «Σ» в
+ *  начале — форма отличается от плашки атрибута до чтения подписи. */
 export const AGGREGATE_CHIP_CLASS =
-  'mx-0.5 inline-flex max-w-full items-center gap-1 rounded border border-primary/35 bg-primary/10 px-1.5 py-0.5 align-baseline text-[11px] leading-4 text-primary';
+  'mx-0.5 inline-flex max-w-full items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-1.5 py-px align-baseline font-medium text-label-sm text-primary';
 
 /** Прочитать строку в токены (соседние текстовые узлы склеиваются). */
 export function readTokens(

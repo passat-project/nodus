@@ -7,6 +7,7 @@ import type {
 } from '@nodus/contracts';
 import { FORMULA_AGGREGATES, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
+import { Checkbox } from '@nodus/ui/components/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -26,11 +27,25 @@ import {
 
 import { FILTER_OPERATORS, useAggregateDraft, type FromKind } from './use-aggregate-draft.js';
 
+/** Поле диалога: метка — 13px muted (канон форм: метка мельче и серее
+ *  значения), контрол на своей строке. */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <Label className="text-xs font-normal text-muted-foreground">{label}</Label>
+      {children}
+    </div>
+  );
+}
+
 /**
  * Диалог агрегата (#632, §4c): выборка (подзадачи / связанные / задачи
  * папки / цепочка папок), функция и атрибут; «все/хотя бы одна» требуют
  * условия, «сколько» — без атрибута. Фильтр V1 — одно сравнение атрибута
  * с литералом (движок и AST поддерживают произвольное условие).
+ *
+ * Условие — отдельная ступень тона: это необязательная часть выборки, и
+ * включается она галочкой, а не полем в общем столбце (группировка по смыслу).
  */
 export function FormulaAggregateDialog({
   open,
@@ -78,15 +93,16 @@ export function FormulaAggregateDialog({
     apply,
   } = useAggregateDraft({ open, initial, hostKind, definitions, kinds, onApply });
 
+  const conditionOpen = filterEnabled || needsFilter;
+
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-[30rem]">
         <DialogHeader>
           <DialogTitle>{ui.formulas.aggregateDialog.title}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label>{ui.formulas.aggregateDialog.fn}</Label>
+          <Field label={ui.formulas.aggregateDialog.fn}>
             <Select value={fn} onValueChange={(next) => setFn(next as FormulaAggregateFn)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -99,10 +115,9 @@ export function FormulaAggregateDialog({
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </Field>
 
-          <div className="flex flex-col gap-1.5">
-            <Label>{ui.formulas.aggregateDialog.from}</Label>
+          <Field label={ui.formulas.aggregateDialog.from}>
             <Select value={from} onValueChange={(next) => setFrom(next as FromKind)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -121,7 +136,7 @@ export function FormulaAggregateDialog({
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </Field>
 
           {from === 'relations' ? (
             <div className="grid grid-cols-2 gap-2">
@@ -172,8 +187,7 @@ export function FormulaAggregateDialog({
           ) : null}
 
           {needsField ? (
-            <div className="flex flex-col gap-1.5">
-              <Label>{ui.formulas.aggregateDialog.field}</Label>
+            <Field label={ui.formulas.aggregateDialog.field}>
               <Select value={fieldNumber} onValueChange={setFieldNumber}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder={ui.formulas.aggregateDialog.pickField} />
@@ -186,67 +200,74 @@ export function FormulaAggregateDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </Field>
           ) : null}
 
-          {!needsFilter ? (
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={filterEnabled}
-                onChange={(event) => setFilterEnabled(event.target.checked)}
-              />
-              {ui.formulas.aggregateDialog.filterToggle}
-            </label>
-          ) : null}
+          <div className="flex flex-col gap-2 rounded-lg bg-muted/60 p-2.5 dark:bg-background/60">
+            {needsFilter ? null : (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="aggregate-filter-toggle"
+                  checked={filterEnabled}
+                  onCheckedChange={(checked) => setFilterEnabled(checked === true)}
+                />
+                <Label
+                  htmlFor="aggregate-filter-toggle"
+                  className="cursor-pointer text-xs font-normal text-muted-foreground"
+                >
+                  {ui.formulas.aggregateDialog.filterToggle}
+                </Label>
+              </div>
+            )}
 
-          {filterEnabled || needsFilter ? (
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-              <Select value={filterNumber} onValueChange={setFilterNumber}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={ui.formulas.aggregateDialog.filterField} />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  {definitions
-                    .filter((definition) => !definition.isCompany)
-                    .map((definition) => (
-                      <SelectItem key={definition.id} value={String(definition.number)}>
-                        {definition.name}
+            {conditionOpen ? (
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+                <Select value={filterNumber} onValueChange={setFilterNumber}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={ui.formulas.aggregateDialog.filterField} />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    {definitions
+                      .filter((definition) => !definition.isCompany)
+                      .map((definition) => (
+                        <SelectItem key={definition.id} value={String(definition.number)}>
+                          {definition.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={filterOperator}
+                  onValueChange={(next) =>
+                    setFilterOperator(next as (typeof FILTER_OPERATORS)[number]['value'])
+                  }
+                >
+                  <SelectTrigger className="w-14 justify-center px-2 font-mono">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    {FILTER_OPERATORS.map((operator) => (
+                      <SelectItem key={operator.value} value={operator.value}>
+                        {operator.label}
                       </SelectItem>
                     ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={filterOperator}
-                onValueChange={(next) =>
-                  setFilterOperator(next as (typeof FILTER_OPERATORS)[number]['value'])
-                }
-              >
-                <SelectTrigger className="w-16">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  {FILTER_OPERATORS.map((operator) => (
-                    <SelectItem key={operator.value} value={operator.value}>
-                      {operator.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                value={filterValue}
-                onChange={(event) => setFilterValue(event.target.value)}
-                placeholder={ui.formulas.aggregateDialog.value}
-              />
-            </div>
-          ) : null}
+                  </SelectContent>
+                </Select>
+                <Input
+                  value={filterValue}
+                  onChange={(event) => setFilterValue(event.target.value)}
+                  placeholder={ui.formulas.aggregateDialog.value}
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
             {ui.formulas.editor.cancel}
           </Button>
           <Button disabled={!canApply} onClick={apply}>
-            {ui.formulas.editor.save}
+            {ui.formulas.aggregateDialog.apply}
           </Button>
         </DialogFooter>
       </DialogContent>
