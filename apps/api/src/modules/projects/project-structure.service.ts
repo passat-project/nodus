@@ -179,7 +179,14 @@ export class ProjectStructureService {
           { ...meta, aggregateId: node.id },
         );
       }
-      return created.map((node) => nodeToDto(node, null));
+      // Формульное состояние новых папок — сразу в DTO: иначе карточка
+      // показывает формулу типа, но остаётся редактируемой до перезагрузки.
+      const states = await this.formulas.stateFor(
+        'node',
+        created.map((node) => node.id),
+        tx,
+      );
+      return created.map((node) => nodeToDto(node, null, states.get(node.id)));
     });
   }
 

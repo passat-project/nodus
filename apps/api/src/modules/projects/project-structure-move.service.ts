@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   ErrorCode,
   NODE_LIMITS,
@@ -13,6 +13,7 @@ import { DomainException } from '../../core/errors/domain-exception.js';
 import { EventBus } from '../../core/events/event-bus.js';
 import { ProjectNodesRepository, type ProjectNodeRow } from './project-nodes.repository.js';
 import { nodeToDto } from './project-structure.mapper.js';
+import { FORMULA_CELLS, type FormulaCells } from '../custom-fields/ports/formula-cells.port.js';
 import { ProjectsService } from './projects.service.js';
 import {
   childrenByParent,
@@ -38,6 +39,7 @@ export class ProjectStructureMoveService {
     private readonly eventBus: EventBus,
     private readonly projects: ProjectsService,
     private readonly nodes: ProjectNodesRepository,
+    @Inject(FORMULA_CELLS) private readonly formulas: FormulaCells,
   ) {}
 
   /** Перенос узла (DnD/меню): родитель + позиция среди его детей. */
@@ -97,10 +99,11 @@ export class ProjectStructureMoveService {
         },
         { actorId: user.id, aggregateType: 'project_node', aggregateId: node.id },
       );
-      return nodeToDto(
-        { ...node, parentId: targetParent?.id ?? null, order } as ProjectNodeRow,
-        null,
-      );
+      const moved = { ...node, parentId: targetParent?.id ?? null, order } as ProjectNodeRow;
+      // Формульное состояние — сразу в DTO переноса: карточка не должна
+      // оставаться редактируемой до фонового пересчёта.
+      const state = (await this.formulas.stateFor('node', [node.id], tx)).get(node.id);
+      return nodeToDto(moved, null, state);
     });
   }
 }
