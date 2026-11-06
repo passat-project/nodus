@@ -6,6 +6,7 @@ import {
   customFieldValuesSchema,
 } from '../custom-fields/custom-field-values.js';
 import { customFieldRefSchema } from '../custom-fields/custom-field-refs.js';
+import { customFieldFormulasSchema } from '../custom-fields/formula-api.schemas.js';
 import { userRefSchema } from '../directory/user-ref.schema.js';
 import { cursorQuerySchema } from '../pagination/paginated.schema.js';
 import { projectRefSchema } from '../projects/project.schemas.js';
@@ -107,6 +108,14 @@ export const taskListItemSchema = z.object({
   source: taskSourceSchema,
   /** Значения кастомных полей по id определения (#431, ADR-0029). */
   customFields: customFieldValuesSchema,
+  /** Ссылки для показа значений в списках (#632, Р9): строки списков несут
+   *  имена/цвета, чтобы атрибутные колонки показывали список/ссылку без
+   *  запроса детали. Производное — старые моки могут не присылать. */
+  customFieldRefs: z.array(customFieldRefSchema).optional(),
+  /** Формульные ячейки (#632): своя формула/формула типа и ошибка. Поле
+   *  производное — старые моки/клиенты могут его не присылать (пусто =
+   *  формул нет). */
+  customFieldFormulas: customFieldFormulasSchema.optional(),
   updatedAt: z.iso.datetime(),
 });
 

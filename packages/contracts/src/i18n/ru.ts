@@ -6,6 +6,7 @@ import { chatStrings } from './ru-chat.js';
 import { lettersStrings } from './ru-correspondence.js';
 import { counterpartiesStrings } from './ru-crm.js';
 import { customFieldsStrings } from './ru-custom-fields.js';
+import { formulasStrings } from './ru-formulas.js';
 import { employeesStrings } from './ru-employees.js';
 import { filesStrings } from './ru-files.js';
 import { notificationsStrings } from './ru-notifications.js';
@@ -89,6 +90,11 @@ export const errorMessages: Record<ErrorCode, string> = {
     'Тип нельзя сузить без потери данных — создайте новый атрибут',
   [ErrorCode.CUSTOM_FIELD_LIMIT_REACHED]:
     'Достигнут технический предел числа атрибутов — обратитесь к разработчикам',
+  [ErrorCode.FORMULA_AST_INVALID]: 'Формула не распознана — проверьте её в редакторе',
+  [ErrorCode.FORMULA_TYPE_MISMATCH]:
+    'Результат формулы не подходит к типу атрибута — измените формулу',
+  [ErrorCode.FORMULA_SOURCE_FORBIDDEN]: 'В этой формуле нельзя использовать выбранный источник',
+  [ErrorCode.FORMULA_LIMIT_EXCEEDED]: 'Формула слишком большая — упростите её',
   [ErrorCode.DICTIONARY_SYSTEM_LOCKED]: 'Системный справочник изменить нельзя',
   [ErrorCode.DICTIONARY_ITEM_NAME_TAKEN]: 'Такой вариант уже есть в списке',
   [ErrorCode.ROLE_LOCKED]: 'Права администратора не меняются — у него всегда все права',
@@ -284,6 +290,8 @@ export const ui = {
   automation: automationStrings,
   access: accessStrings,
   customFields: customFieldsStrings,
+  /** Формулы в ячейках атрибутов (#632): редактор, ячейка, колонки, перенос. */
+  formulas: formulasStrings,
   letters: lettersStrings,
   counterparties: counterpartiesStrings,
   projects: projectsStrings,

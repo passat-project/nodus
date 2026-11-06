@@ -139,6 +139,15 @@ export const ErrorCode = {
   /** Технический потолок 1000 атрибутов портала (страховка, #631 Р12);
    *  продуктового лимита нет — текст просит обратиться к разработчикам. */
   CUSTOM_FIELD_LIMIT_REACHED: 'CUSTOM_FIELD_LIMIT_REACHED',
+  /** Формула не разбирается как AST или содержит неизвестную функцию (#632, Р2). */
+  FORMULA_AST_INVALID: 'FORMULA_AST_INVALID',
+  /** Результат формулы не совпадает с типом атрибута-ячейки (#632, Р2/Р13). */
+  FORMULA_TYPE_MISMATCH: 'FORMULA_TYPE_MISMATCH',
+  /** Источник формулы недоступен носителю (#632, матрица Р2/Р7);
+   *  details — { source, hostKind }. */
+  FORMULA_SOURCE_FORBIDDEN: 'FORMULA_SOURCE_FORBIDDEN',
+  /** Превышен лимит языка: глубина/узлы/источники/литерал (#632, Р2). */
+  FORMULA_LIMIT_EXCEEDED: 'FORMULA_LIMIT_EXCEEDED',
   /** Системный справочник защищён от удаления вариантов и переименования (#431, Р10). */
   DICTIONARY_SYSTEM_LOCKED: 'DICTIONARY_SYSTEM_LOCKED',
   /** Вариант с таким названием уже есть среди активных (#431). */

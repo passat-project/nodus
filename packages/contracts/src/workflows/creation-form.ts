@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { CustomFieldDefinition } from '../custom-fields/custom-field.schemas.js';
 import { customFieldIdOfKey, customFieldKeySchema } from '../custom-fields/custom-field-key.js';
+import { formulaNodeSchema } from '../custom-fields/formula.js';
 import {
   customFieldValueSchemaOf,
   isCustomFieldValueFilled,
@@ -67,6 +68,9 @@ export const creationFieldSlotSchema = z
     required: z.boolean(),
     /** Скрытое поле с предустановленным значением; null — поле видно. */
     preset: creationPresetSchema.nullable(),
+    /** Формула-подстановка (#632, Р12): значение считается при открытии окна,
+     *  человек может поправить; в тело создания едет значением. */
+    formula: formulaNodeSchema.nullable().optional(),
   })
   .strict();
 export type CreationFieldSlot = z.infer<typeof creationFieldSlotSchema>;

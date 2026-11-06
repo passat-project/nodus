@@ -36,7 +36,8 @@ function json(data: CatalogTransitionData) {
   return {
     ...data,
     rules: data.rules as Prisma.InputJsonValue,
-    form: data.form as Prisma.InputJsonValue,
+    // AST формул слота (#632) несёт optional-поля — на границе БД это JSON.
+    form: data.form as unknown as Prisma.InputJsonValue,
   };
 }
 

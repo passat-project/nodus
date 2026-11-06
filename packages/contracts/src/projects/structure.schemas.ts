@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { customFieldRefSchema } from '../custom-fields/custom-field-refs.js';
+import { customFieldFormulasSchema } from '../custom-fields/formula-api.schemas.js';
 import {
   customFieldValuesInputSchema,
   customFieldValuesPatchSchema,
@@ -64,6 +65,8 @@ export const projectNodeSchema = z.object({
    *  уникальность снята В2 #631). */
   code: z.string().min(1).max(NODE_LIMITS.codeLength).nullable(),
   customFields: customFieldValuesSchema,
+  /** Формульные ячейки узла (#632): своя/типовая формула и ошибка. */
+  customFieldFormulas: customFieldFormulasSchema.optional(),
   rollup: projectNodeRollupSchema,
   createdAt: z.iso.datetime(),
 });

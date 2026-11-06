@@ -131,6 +131,11 @@ export const customFieldDefinitionSchema = z.object({
    *  могут его не присылать (пусто = имени нет). */
   companyRefs: z.array(customFieldRefSchema).optional(),
   bindings: customFieldBindingsSchema,
+  /** Категории процессов, к типам которых привязан атрибут (#632, Р9):
+   *  решающий сигнал для колонок видов — в список задач идут task-атрибуты,
+   *  в список писем — letter-атрибуты. Производное поле (сервер считает по
+   *  привязкам); старые моки могут его не присылать. */
+  processCategories: z.array(z.enum(['task', 'letter'])).optional(),
   sortOrder: z.number().int().min(0),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),

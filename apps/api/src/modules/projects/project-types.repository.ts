@@ -80,12 +80,16 @@ export class ProjectTypesRepository {
     tx: TransactionClient,
     data: { name: string; icon?: string; color?: string; form?: ProjectTypeForm },
   ): Promise<ProjectType> {
+    // Форма — JSONB; AST формул (#632) несёт optional-поля, которые Prisma
+    // JSON-тип не выражает: на границе БД это обычный JSON (undefined не
+    // сериализуется), поэтому явный каст к InputJsonValue.
+    const { form, ...rest } = data;
     const row = await tx.projectType.create({
       select: typeSelect,
       data: {
         id: randomUUID(),
-        ...data,
-        ...(data.form ? { form: data.form as Prisma.InputJsonValue } : {}),
+        ...rest,
+        ...(form ? { form: form as unknown as Prisma.InputJsonValue } : {}),
       },
     });
     return this.toDto(row);
@@ -102,7 +106,7 @@ export class ProjectTypesRepository {
     if (patch.name !== undefined) data.name = patch.name;
     if (patch.icon !== undefined) data.icon = patch.icon;
     if (patch.color !== undefined) data.color = patch.color;
-    if (patch.form !== undefined) data.form = patch.form as Prisma.InputJsonValue;
+    if (patch.form !== undefined) data.form = patch.form as unknown as Prisma.InputJsonValue;
     if (patch.kindIds !== undefined) {
       data.kindIds =
         patch.kindIds === null ? Prisma.JsonNull : (patch.kindIds as Prisma.InputJsonValue);
