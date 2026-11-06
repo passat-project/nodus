@@ -75,7 +75,7 @@ describe('form мест: чтение и обязательные слоты', (
     expect(missingProjectFields(form, {})).toEqual([CODE]);
     expect(missingProjectFields(form, { customFields: { [CODE]: 'ПР-1' } })).toEqual([]);
     expect(missingProjectFields(form, { customFields: { [CODE]: '   ' } })).toEqual([CODE]);
-    expect(missingProjectFields(form, { customFields: { [CODE]: null } })).toEqual([CODE]);
+    expect(missingProjectFields(form, { customFields: {} })).toEqual([CODE]);
   });
 
   it('clearedProjectFields — обязательные, которые патч очищает', () => {
