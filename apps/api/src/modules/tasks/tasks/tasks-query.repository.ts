@@ -186,6 +186,16 @@ export class TasksQueryRepository {
     return row !== null;
   }
 
+  /** Видимые из пачки (#641): один запрос вместо `isVisible` на ссылку. */
+  async visibleIds(taskIds: readonly string[], visible: Prisma.TaskWhereInput): Promise<string[]> {
+    if (taskIds.length === 0) return [];
+    const rows = await this.prisma.task.findMany({
+      where: { AND: [{ id: { in: [...taskIds] } }, visible] },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
+
   /** Счётчики колонок глобальной оси (count + overdue) в рамках видимости. */
   async stageCounts(where: Prisma.TaskWhereInput, now: Date) {
     const [all, overdue] = await Promise.all([

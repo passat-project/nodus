@@ -152,15 +152,17 @@ export class CustomFieldRefsHydrator {
       this.tasks.refs([...taskIds]),
       this.letters.refs([...letterIds]),
       this.nodes.refs([...nodeIds]),
+      // Батч-видимость (#641): один запрос на вид ссылки. `includeDeleted` —
+      // «была видима до удаления»: удалённая цель даёт «запись удалена»
+      // (name null + archived) только тому, кто её видел; остальным —
+      // «нет доступа» без оракула (#631 Р5).
       actor
-        ? this.visibleOf(taskIds, (id) => this.tasks.visibleFor(id, actor))
+        ? this.tasks.visibleForMany([...taskIds], actor, { includeDeleted: true })
         : Promise.resolve(new Set<string>()),
       actor
-        ? this.visibleOf(letterIds, (id) => this.letters.visibleFor(id, actor))
+        ? this.letters.visibleForMany([...letterIds], actor, { includeDeleted: true })
         : Promise.resolve(new Set<string>()),
-      actor
-        ? this.visibleOf(nodeIds, (id) => this.nodes.visibleFor(id, actor))
-        : Promise.resolve(new Set<string>()),
+      actor ? this.nodes.visibleForMany([...nodeIds], actor) : Promise.resolve(new Set<string>()),
     ]);
 
     const refs = new Map<string, CustomFieldRef>();
@@ -269,14 +271,5 @@ export class CustomFieldRefsHydrator {
     }
 
     return [...refs.values()];
-  }
-
-  /** Параллельная видимость ссылок одного вида (пачка мелких проверок). */
-  private async visibleOf(
-    ids: ReadonlySet<string>,
-    visibleFor: (id: string) => Promise<boolean>,
-  ): Promise<Set<string>> {
-    const checks = await Promise.all([...ids].map((id) => visibleFor(id)));
-    return new Set([...ids].filter((_, index) => checks[index]));
   }
 }

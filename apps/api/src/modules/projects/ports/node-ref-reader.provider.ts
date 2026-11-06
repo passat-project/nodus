@@ -30,13 +30,25 @@ export class NodeRefReaderProvider implements NodeRefReader {
     nodeId: string,
     viewer: { id: string; permissions: readonly string[] },
   ): Promise<boolean> {
-    const node = await this.prisma.projectNode.findUnique({
-      where: { id: nodeId },
-      select: { projectId: true },
+    return (await this.visibleForMany([nodeId], viewer)).has(nodeId);
+  }
+
+  async visibleForMany(
+    nodeIds: readonly string[],
+    viewer: { id: string; permissions: readonly string[] },
+    opts: { fresh?: boolean } = {},
+  ): Promise<ReadonlySet<string>> {
+    if (nodeIds.length === 0) return new Set();
+    const rows = await this.prisma.projectNode.findMany({
+      where: { id: { in: [...new Set(nodeIds)] } },
+      select: { id: true, projectId: true },
     });
-    if (!node) return false;
+    if (rows.length === 0) return new Set();
     const actor: ProjectActor = viewer;
-    const scope = await this.projects.viewScopeFor(actor);
-    return scope.visibleProjectIds.includes(node.projectId);
+    const scope = opts.fresh
+      ? await this.projects.freshViewScopeFor(actor)
+      : await this.projects.viewScopeFor(actor);
+    const visible = new Set(scope.visibleProjectIds);
+    return new Set(rows.filter((row) => visible.has(row.projectId)).map((row) => row.id));
   }
 }

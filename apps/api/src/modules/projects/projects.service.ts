@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  customFieldKey,
   ErrorCode,
   Permission,
   PROJECT_EVENTS,
@@ -107,7 +108,7 @@ export class ProjectsService {
           'Required project fields are missing',
           {
             typeId: type.id,
-            fields: missing,
+            fields: missing.map(customFieldKey),
             reason: 'create',
           },
         );
@@ -233,7 +234,7 @@ export class ProjectsService {
                 previousClientId: clientOf(fresh.customFields),
               }
             : {}),
-          audience: await projectAudience(this.participantsRepo, fresh),
+          audience: await projectAudience(this.participantsRepo, next, tx),
         },
         { actorId: user.id, aggregateType: 'project', aggregateId: id },
       );

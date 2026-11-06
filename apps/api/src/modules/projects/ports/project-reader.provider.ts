@@ -83,6 +83,12 @@ export class ProjectReaderProvider implements ProjectReader, ProjectChatReader {
     return scope;
   }
 
+  /** Без кэша — путь записи значения-ссылки (#646). */
+  async freshViewScopeFor(actor: ProjectActor): Promise<ProjectViewScope> {
+    if (!(await this.enabled())) return EMPTY_SCOPE;
+    return this.buildScope(actor);
+  }
+
   private async buildScope(actor: ProjectActor): Promise<ProjectViewScope> {
     const myProjectIds = await this.projects.participantProjectIds(actor.id);
     const mine = new Set(myProjectIds);

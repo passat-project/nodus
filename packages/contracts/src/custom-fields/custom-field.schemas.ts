@@ -303,25 +303,13 @@ export const createCustomFieldBodySchema = z
     isCompany: z.boolean().default(false),
     /** Привязки сразу (диалог одношаговый): живые цели своих видов
      *  (проверяет сервер — 422 CUSTOM_FIELD_BINDING_INVALID). Глобальной
-     *  переменной привязки запрещены (422). */
+     *  переменной привязки запрещены — доменная 422 на сервере (не 400
+     *  схемы: это семантика, а не форма запроса). */
     bindings: customFieldBindingsSchema.optional(),
   })
   .strict()
   .superRefine((body, ctx) => {
     refineShape(body, ctx);
-    if (body.isCompany && body.bindings) {
-      const bound =
-        body.bindings.processTypeIds.length > 0 ||
-        body.bindings.projectTypeIds.length > 0 ||
-        body.bindings.nodeKindIds.length > 0;
-      if (bound) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['bindings'],
-          message: 'company variable cannot have bindings',
-        });
-      }
-    }
   });
 export type CreateCustomFieldBody = z.infer<typeof createCustomFieldBodySchema>;
 

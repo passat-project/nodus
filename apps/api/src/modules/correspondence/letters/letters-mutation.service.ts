@@ -22,9 +22,29 @@ import {
   type LetterAttachedRefInput,
 } from './letter-attached-refs.repository.js';
 import { LetterAttachedRefsValidator, sameAttachedRefs } from './letter-attached-refs.validator.js';
-import { LetterFieldsValidator } from './letter-fields.validator.js';
+import { LetterFieldsValidator, type RegistrationValues } from './letter-fields.validator.js';
 import { LettersQueryService } from './letters-query.service.js';
 import { LettersRepository } from './letters.repository.js';
+import type { LetterDetailRow } from './letter-row.js';
+
+/** Строка письма → значения регистрации: PATCH строит их под замком строки
+ *  (#646), чтобы параллельная правка не потеряла чужие изменения. */
+function registrationValuesOf(row: LetterDetailRow): RegistrationValues {
+  return {
+    counterpartyId: row.counterpartyId ?? '',
+    signerId: row.signerId,
+    theirNumber: row.theirNumber ?? '',
+    theirDate: row.theirDate ? row.theirDate.toISOString().slice(0, 10) : '',
+    subject: row.subject ?? '',
+    receiptMethodId: row.receiptMethodId ?? '',
+    projectId: row.projectId,
+    addresseeId: row.addresseeId ?? '',
+    responseDeadline: row.responseDeadline ? row.responseDeadline.toISOString().slice(0, 10) : null,
+    // Правка не касается связей «ответ на» (Р5) — в RegistrationValues
+    // поле присутствует, но PATCH его не меняет.
+    replyToLetterId: null,
+  };
+}
 
 /**
  * Мутации писем (#55): правка реквизитов (В3; редизайн #56 — и
@@ -60,61 +80,54 @@ export class LettersMutationService {
       // Адресат и номер не меняются после регистрации.
       throw new DomainException(ErrorCode.LETTER_NOT_EDITABLE, 'Addressee is not editable');
     }
-    const current = {
-      counterpartyId: row.counterpartyId ?? '',
-      signerId: row.signerId,
-      theirNumber: row.theirNumber ?? '',
-      theirDate: row.theirDate ? row.theirDate.toISOString().slice(0, 10) : '',
-      subject: row.subject ?? '',
-      receiptMethodId: row.receiptMethodId ?? '',
-      projectId: row.projectId,
-      addresseeId: row.addresseeId ?? '',
-      responseDeadline: row.responseDeadline
-        ? row.responseDeadline.toISOString().slice(0, 10)
-        : null,
-      // Правка не касается связей «ответ на» (Р5) — в RegistrationValues
-      // поле присутствует, но PATCH его не меняет.
-      replyToLetterId: null,
-    };
-    const { data, changes } = await this.validator.patch(
-      current,
-      (row.customFields ?? {}) as Record<string, unknown>,
-      body,
-      row.typeId,
-      companyDate(new Date()),
-      user,
-    );
-    // «Приложенные письма» (#461, Р3): правка набором; история — счётчиком
-    // строк, только если набор реально изменился.
-    let attachedRows: LetterAttachedRefInput[] | null = null;
-    if (body.attachedRefs !== undefined) {
-      const next = await this.attachedValidator.validate(body.attachedRefs);
-      const before = await this.attached.attachedRefs(id);
-      // Набор не изменился (правились другие поля, окно прислало то же) —
-      // строки не пересоздаём: delete+insert менял бы id и писал лишнее.
-      if (!sameAttachedRefs(before, next)) {
-        attachedRows = next;
+    const today = companyDate(new Date());
+    await this.txRunner.run(async (tx) => {
+      // Read-modify-write `custom_fields` — только под замком строки (#646):
+      // иначе два параллельных PATCH по разным атрибутам теряют значения
+      // друг друга (у задач и проектов этот путь уже закрыт; письма — нет).
+      await this.repo.lock(tx, id);
+      const fresh = await this.repo.findDetailById(id, tx);
+      if (!fresh || fresh.deletedAt !== null) throw DomainException.notFound('Letter not found');
+      if (body.addresseeId !== undefined && fresh.registeredAt !== null) {
+        throw new DomainException(ErrorCode.LETTER_NOT_EDITABLE, 'Addressee is not editable');
+      }
+      const { data, changes } = await this.validator.patch(
+        registrationValuesOf(fresh),
+        (fresh.customFields ?? {}) as Record<string, unknown>,
+        body,
+        fresh.typeId,
+        today,
+        user,
+      );
+      // «Приложенные письма» (#461, Р3): правка набором; история — счётчиком
+      // строк, только если набор реально изменился.
+      let attachedRows: LetterAttachedRefInput[] | null = null;
+      if (body.attachedRefs !== undefined) {
+        const next = await this.attachedValidator.validate(body.attachedRefs);
+        const before = await this.attached.attachedRefs(id);
+        // Набор не изменился (правились другие поля, окно прислало то же) —
+        // строки не пересоздаём: delete+insert менял бы id и писал лишнее.
+        if (!sameAttachedRefs(before, next)) {
+          attachedRows = next;
+          changes.push({
+            field: 'attachedRefs',
+            from: String(before.length),
+            to: String(next.length),
+          });
+        }
+      }
+      // «Конфиденциально» (#461, Р4): флаг в карточке; история — «Да/Нет».
+      if (body.confidential !== undefined && body.confidential !== fresh.confidential) {
         changes.push({
-          field: 'attachedRefs',
-          from: String(before.length),
-          to: String(next.length),
+          field: 'confidential',
+          from: String(fresh.confidential),
+          to: String(body.confidential),
         });
       }
-    }
-    // «Конфиденциально» (#461, Р4): флаг в карточке; история — «Да/Нет».
-    if (body.confidential !== undefined && body.confidential !== row.confidential) {
-      changes.push({
-        field: 'confidential',
-        from: String(row.confidential),
-        to: String(body.confidential),
-      });
-    }
-    if (changes.length === 0) return this.query.detail(user, id);
-    // Эффективный подписант: смена корреспондента могла сбросить его в null
-    // (валидатор), и проекция CRM не должна оставить чужой контакт.
-    const signerChange = changes.find((change) => change.field === 'signerId');
-    await this.txRunner.run(async (tx) => {
-      await this.repo.lock(tx, id);
+      if (changes.length === 0) return;
+      // Эффективный подписант: смена корреспондента могла сбросить его в null
+      // (валидатор), и проекция CRM не должна оставить чужой контакт.
+      const signerChange = changes.find((change) => change.field === 'signerId');
       await this.repo.update(tx, id, {
         ...data,
         ...(body.confidential === undefined ? {} : { confidential: body.confidential }),

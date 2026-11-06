@@ -102,28 +102,22 @@ describe('DefinitionsService.create (#631, Р1/Р3)', () => {
     }
   });
 
-  it('глобальной переменной (isCompany) привязки не пишутся и не проверяются', async () => {
+  it('глобальной переменной (isCompany) привязки запрещены — 422, ничего не пишется', async () => {
     const { service, definitions, catalog } = makeService();
-    await service.create(
-      {
-        type: 'text',
-        name: 'Ставка НДС',
-        isCompany: true,
-        bindings: { processTypeIds: ['t-1'], projectTypeIds: [], nodeKindIds: [] },
-      } as never,
-      'actor-1',
-    );
+    await expect(
+      service.create(
+        {
+          type: 'text',
+          name: 'Ставка НДС',
+          isCompany: true,
+          bindings: { processTypeIds: ['t-1'], projectTypeIds: [], nodeKindIds: [] },
+        } as never,
+        'actor-1',
+      ),
+    ).rejects.toMatchObject({ code: 'CUSTOM_FIELD_BINDING_INVALID' });
     expect(catalog.typeRefs).not.toHaveBeenCalled();
-    expect(definitions.replaceTargets).toHaveBeenCalledWith(
-      ROW.id,
-      'process_type',
-      [],
-      expect.anything(),
-    );
-    expect(definitions.create).toHaveBeenCalledWith(
-      expect.objectContaining({ isCompany: true }),
-      expect.anything(),
-    );
+    expect(definitions.replaceTargets).not.toHaveBeenCalled();
+    expect(definitions.create).not.toHaveBeenCalled();
   });
 
   it('тип процесса неизвестен — 404; архивный — 422 CUSTOM_FIELD_BINDING_INVALID', async () => {

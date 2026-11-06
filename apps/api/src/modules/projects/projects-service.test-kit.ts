@@ -114,6 +114,11 @@ export function makeProjectsServiceKit() {
       vi.clearAllMocks();
       repo.settingValue.mockResolvedValue(null);
       repo.create.mockImplementation(async (data: Record<string, unknown>) => row(data));
+      // `update` возвращает строку (как Prisma): аудитория `project.updated`
+      // считается по состоянию ПОСЛЕ правки (#646).
+      repo.update.mockImplementation(
+        async (_tx: unknown, _id: string, data: Record<string, unknown>) => row(data),
+      );
       repo.findById.mockResolvedValue(row());
       repo.lockForUpdate.mockResolvedValue({ id: ID, visibility: 'open', status: 'active' });
       types.findActive.mockResolvedValue(typeRow());

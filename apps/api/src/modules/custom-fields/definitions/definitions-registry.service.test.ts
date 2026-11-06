@@ -149,6 +149,20 @@ describe('DefinitionsService.remove (#631, Р8 — удаление всегда
     );
   });
 
+  it('удаление снимает слот из формы создания типа процесса (#646)', async () => {
+    const { service, definitions, processTypeCleaner } = makeService();
+    definitions.findById.mockResolvedValue({
+      ...ROW,
+      bindings: [{ targetKind: 'process_type', targetId: 't-1' }],
+    });
+    await service.remove(ROW.id, 'actor-1');
+    expect(processTypeCleaner.removeFieldFromCreationForms).toHaveBeenCalledWith(
+      ROW.id,
+      'actor-1',
+      expect.anything(),
+    );
+  });
+
   it('неизвестный атрибут — 404', async () => {
     const { service, definitions } = makeService();
     definitions.findById.mockResolvedValue(null);

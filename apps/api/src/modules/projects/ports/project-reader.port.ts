@@ -35,6 +35,11 @@ export interface ProjectReader {
   /** Множества видимости задач актёра; флаг выключен — оба пусты. */
   viewScopeFor(actor: ProjectActor): Promise<ProjectViewScope>;
 
+  /** То же без TTL-кэша (#646): путь ЗАПИСИ значения-ссылки не должен
+   *  принимать узел проекта, только что ушедшего в секретные, из-за
+   *  5-секундного окна кэша (у задач этот путь уже обходит кэш). */
+  freshViewScopeFor(actor: ProjectActor): Promise<ProjectViewScope>;
+
   /** Привязка задачи к проекту доступна актёру: проект существует, не в
    *  архиве и виден (открытый/участие/view_secret); иначе — 422 (#432, Р5). */
   assertTaskProjectVisible(actor: ProjectActor, projectId: string): Promise<void>;

@@ -40,8 +40,8 @@ export class ProjectParticipantsRepository {
     });
   }
 
-  async rowsOfProject(projectId: string): Promise<ParticipantRow[]> {
-    return this.prisma.projectParticipant.findMany({ where: { projectId } });
+  async rowsOfProject(projectId: string, tx?: TransactionClient): Promise<ParticipantRow[]> {
+    return (tx ?? this.prisma).projectParticipant.findMany({ where: { projectId } });
   }
 
   /** Страница состава (user_id, source) + 1 строка — признак следующей. */

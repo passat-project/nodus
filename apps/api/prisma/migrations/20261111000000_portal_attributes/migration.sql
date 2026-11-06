@@ -207,43 +207,82 @@ BEGIN
         END
     WHERE jsonb_exists("custom_fields", absorbed::text);
 
-    -- Слоты форм видов папок: fieldId → канонический (порядок слотов сохранён).
-    UPDATE "node_kinds" k
-    SET "config" = jsonb_set(k."config", '{form,fields}', (
-          SELECT COALESCE(jsonb_agg(
-                   CASE WHEN e->>'fieldId' = absorbed::text
-                        THEN jsonb_set(e, '{fieldId}', to_jsonb(canonical::text)) ELSE e END
-                   ORDER BY ord), '[]'::jsonb)
-          FROM jsonb_array_elements(k."config"->'form'->'fields')
-               WITH ORDINALITY AS t(e, ord)
-        ))
-    WHERE jsonb_typeof(k."config") = 'object'
-      AND jsonb_typeof(k."config"->'form'->'fields') = 'array'
-      AND k."config"->'form'->'fields'
-          @> jsonb_build_array(jsonb_build_object('fieldId', absorbed::text));
+    -- Слоты форм видов папок. Скрытый поглощённый слот НЕ переезжает к
+    -- видимому канону (О2: скрытое мест не получает) — он удаляется. Для
+    -- видимого — перепись с дедупликацией: если форма содержала слоты ОБОИХ
+    -- id, после переписи получились бы два слота с одним fieldId, а парсер
+    -- формы отвергает дубль целиком — вид терял бы ВСЕ слоты (#646).
+    IF absorbed IN (SELECT "id" FROM "_hidden_defs") THEN
+      UPDATE "node_kinds" k
+      SET "config" = jsonb_set(k."config", '{form,fields}', (
+            SELECT COALESCE(jsonb_agg(e ORDER BY ord), '[]'::jsonb)
+            FROM jsonb_array_elements(k."config"->'form'->'fields')
+                 WITH ORDINALITY AS t(e, ord)
+            WHERE e->>'fieldId' IS DISTINCT FROM absorbed::text
+          ))
+      WHERE jsonb_typeof(k."config") = 'object'
+        AND jsonb_typeof(k."config"->'form'->'fields') = 'array'
+        AND k."config"->'form'->'fields'
+            @> jsonb_build_array(jsonb_build_object('fieldId', absorbed::text));
+    ELSE
+      UPDATE "node_kinds" k
+      SET "config" = jsonb_set(k."config", '{form,fields}', (
+            SELECT COALESCE(jsonb_agg(rewritten ORDER BY ord), '[]'::jsonb)
+            FROM (
+              SELECT rewritten, ord,
+                     row_number() OVER (
+                       PARTITION BY COALESCE(rewritten->>'fieldId', '#' || ord::text)
+                       ORDER BY is_canonical DESC, ord
+                     ) AS rn
+              FROM (
+                SELECT CASE WHEN e->>'fieldId' = absorbed::text
+                            THEN jsonb_set(e, '{fieldId}', to_jsonb(canonical::text))
+                            ELSE e END AS rewritten,
+                       (e->>'fieldId') = canonical::text AS is_canonical,
+                       ord
+                FROM jsonb_array_elements(k."config"->'form'->'fields')
+                     WITH ORDINALITY AS t(e, ord)
+              ) x
+            ) d
+            WHERE rn = 1
+          ))
+      WHERE jsonb_typeof(k."config") = 'object'
+        AND jsonb_typeof(k."config"->'form'->'fields') = 'array'
+        AND k."config"->'form'->'fields'
+            @> jsonb_build_array(jsonb_build_object('fieldId', absorbed::text));
+    END IF;
 
     -- Ключи cf.<uuid> в маршрутах: форма создания + документы переходов
     -- (окно, валидаторы, условия). uuid в кавычках встречается только как
     -- ключ — замена по тексту безопасна. История transition_records не
-    -- переписывается (толерантное чтение).
-    UPDATE "workflows" SET "creation" = REPLACE("creation"::text,
-        '"cf.' || absorbed || '"', '"cf.' || canonical || '"')::jsonb
-    WHERE "creation"::text LIKE '%"cf.' || absorbed || '"%';
-    UPDATE "workflow_transitions" SET "form" = REPLACE("form"::text,
-        '"cf.' || absorbed || '"', '"cf.' || canonical || '"')::jsonb
-    WHERE "form"::text LIKE '%"cf.' || absorbed || '"%';
-    UPDATE "workflow_transitions" SET "rules" = REPLACE("rules"::text,
-        '"cf.' || absorbed || '"', '"cf.' || canonical || '"')::jsonb
-    WHERE "rules"::text LIKE '%"cf.' || absorbed || '"%';
+    -- переписывается (толерантное чтение). Скрытый поглощённый ключ НЕ
+    -- переписывается: после миграции он ведёт себя как ключ удалённого
+    -- атрибута (О2/Р4: исполнение толерантно, повторная публикация — ошибка),
+    -- а не «оживает» у видимого канона.
+    IF absorbed NOT IN (SELECT "id" FROM "_hidden_defs") THEN
+      UPDATE "workflows" SET "creation" = REPLACE("creation"::text,
+          '"cf.' || absorbed || '"', '"cf.' || canonical || '"')::jsonb
+      WHERE "creation"::text LIKE '%"cf.' || absorbed || '"%';
+      UPDATE "workflow_transitions" SET "form" = REPLACE("form"::text,
+          '"cf.' || absorbed || '"', '"cf.' || canonical || '"')::jsonb
+      WHERE "form"::text LIKE '%"cf.' || absorbed || '"%';
+      UPDATE "workflow_transitions" SET "rules" = REPLACE("rules"::text,
+          '"cf.' || absorbed || '"', '"cf.' || canonical || '"')::jsonb
+      WHERE "rules"::text LIKE '%"cf.' || absorbed || '"%';
+    END IF;
 
     -- Привязки к типам процессов поглощённого переезжают на канонический:
     -- FK field_definition_types уходит каскадом вместе со строкой, поэтому
     -- копируем ДО DELETE (иначе слияние теряет места использования — #646).
-    INSERT INTO "field_definition_types" ("definition_id", "process_type_id")
-    SELECT canonical, dt."process_type_id"
-    FROM "field_definition_types" dt
-    WHERE dt."definition_id" = absorbed
-    ON CONFLICT DO NOTHING;
+    -- Скрытый поглощённый мест не передаёт (О2): его привязки не «оживают»
+    -- у видимого канона.
+    IF absorbed NOT IN (SELECT "id" FROM "_hidden_defs") THEN
+      INSERT INTO "field_definition_types" ("definition_id", "process_type_id")
+      SELECT canonical, dt."process_type_id"
+      FROM "field_definition_types" dt
+      WHERE dt."definition_id" = absorbed
+      ON CONFLICT DO NOTHING;
+    END IF;
 
     DELETE FROM "field_definitions" WHERE "id" = absorbed;
   END LOOP;
@@ -301,16 +340,23 @@ ON CONFLICT DO NOTHING;
 -- сиротский слот (определение удалено до миграции) привязку не создаёт,
 -- FK не нарушается.
 INSERT INTO "field_bindings" ("id", "definition_id", "target_kind", "target_id")
-SELECT gen_random_uuid(), (slot->>'fieldId')::uuid, 'node_kind', k."id"
-FROM "node_kinds" k,
-     jsonb_array_elements(
-       CASE WHEN jsonb_typeof(k."config") = 'object'
-                 AND jsonb_typeof(k."config"->'form'->'fields') = 'array'
-            THEN k."config"->'form'->'fields' ELSE '[]'::jsonb END
-     ) slot
-WHERE slot->>'fieldId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-  AND slot->>'fieldId' NOT IN (SELECT "id"::text FROM "_hidden_defs")
-  AND (slot->>'fieldId')::uuid IN (SELECT "id" FROM "field_definitions")
+SELECT gen_random_uuid(), parsed.field_id, 'node_kind', k."id"
+FROM "node_kinds" k
+CROSS JOIN LATERAL (
+  -- CASE гарантирует порядок вычисления: каст uuid выполняется только для
+  -- строк, прошедших regexp (порядок AND-термов в WHERE не гарантирован,
+  -- «грязный» fieldId уронил бы миграцию 22P02 — #646).
+  SELECT CASE WHEN slot->>'fieldId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              THEN (slot->>'fieldId')::uuid END AS field_id
+  FROM jsonb_array_elements(
+         CASE WHEN jsonb_typeof(k."config") = 'object'
+                   AND jsonb_typeof(k."config"->'form'->'fields') = 'array'
+              THEN k."config"->'form'->'fields' ELSE '[]'::jsonb END
+       ) slot
+) parsed
+WHERE parsed.field_id IS NOT NULL
+  AND parsed.field_id NOT IN (SELECT "id" FROM "_hidden_defs")
+  AND parsed.field_id IN (SELECT "id" FROM "field_definitions")
 ON CONFLICT DO NOTHING;
 
 -- Слоты скрытых определений вычищаются из форм видов (только те виды, где
@@ -371,6 +417,13 @@ BEGIN
       -- только когда он уже существует.
       UPDATE "field_definitions" SET "id" = sys_id, "sort_order" = sort_no
       WHERE "id" = existing_id;
+      -- Temp-таблицы мест использования помнят СТАРЫЙ id (#646): без этой
+      -- переписи INSERT привязок ниже падал по FK (канонический project-
+      -- атрибут, поглощённый посевом «Кода»), а одиночный project-атрибут
+      -- «Код» терял привязки ко всем типам проектов. Семантика слияния та же:
+      -- поглощённый атрибут передаёт каноническому свои места.
+      UPDATE "_project_canonicals" SET "id" = sys_id WHERE "id" = existing_id;
+      UPDATE "_ex_project_defs" SET "id" = sys_id WHERE "id" = existing_id;
       UPDATE "tasks" SET "custom_fields" = "custom_fields" - existing_id::text
           || jsonb_build_object(sys_id::text, "custom_fields" -> existing_id::text)
       WHERE jsonb_exists("custom_fields", existing_id::text);

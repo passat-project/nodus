@@ -1,4 +1,5 @@
 import type {
+  CreateCustomFieldBody,
   CustomFieldBindings,
   CustomFieldDefinition,
   UpdateCustomFieldBody,
@@ -15,9 +16,10 @@ import type { DictionaryReader } from '../../dictionaries/ports/dictionary-reade
 import type { ProcessCatalogReader } from '../../workflows/ports/process-catalog-reader.port.js';
 import type { FieldBindingTargetReader } from '../../projects/ports/field-binding-targets.port.js';
 import { assertTargetsBindable } from './binding-targets.js';
-import type { DefinitionMapper, FieldDefinitionRow } from './definition.mapper.js';
+import type { FieldDefinitionRow } from './definition.mapper.js';
 import type { DefinitionsRepository } from './definitions.repository.js';
 import type { FieldBindingFormCleaner } from '../../projects/ports/field-binding-form-cleaner.port.js';
+import type { ProcessTypeFormCleaner } from '../../workflows/ports/process-type-form-cleaner.port.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import type { CustomFieldValueValidator } from '../values/value-validator.js';
 
@@ -59,8 +61,33 @@ export async function assertBindingsUsable(
   await assertTargetsBindable(catalog, targets, 'node-kind', bindings.nodeKindIds);
 }
 
-/** Замена всех трёх наборов привязок (тело с `bindings`). */
-export async function replaceBindings(
+const EMPTY_BINDINGS: CustomFieldBindings = {
+  processTypeIds: [],
+  projectTypeIds: [],
+  nodeKindIds: [],
+};
+
+/** Привязки создания (#631): глобальная переменная привязок не имеет —
+ *  запрос с ними отвергается 422 (семантика, а не форма запроса). */
+export function createBindings(dto: CreateCustomFieldBody): CustomFieldBindings {
+  if (!dto.isCompany) return dto.bindings ?? EMPTY_BINDINGS;
+  const requested = dto.bindings;
+  const bound =
+    requested !== undefined &&
+    (requested.processTypeIds.length > 0 ||
+      requested.projectTypeIds.length > 0 ||
+      requested.nodeKindIds.length > 0);
+  if (bound) {
+    throw new DomainException(
+      ErrorCode.CUSTOM_FIELD_BINDING_INVALID,
+      'Company variable cannot have bindings',
+      { reason: 'company' },
+    );
+  }
+  return EMPTY_BINDINGS;
+}
+
+/** Замена всех трёх наборов привязок (тело с `bindings`). */ export async function replaceBindings(
   definitions: DefinitionsRepository,
   id: string,
   bindings: {
@@ -130,7 +157,6 @@ export async function assertSettingsUsable(
  */
 export async function assertUpdateAllowed(
   ctx: {
-    mapper: DefinitionMapper;
     validator: CustomFieldValueValidator;
     dictionaries: DictionaryReader;
     catalog: ProcessCatalogReader;
@@ -193,8 +219,10 @@ export async function assertUpdateAllowed(
     });
   }
   if (nextDefault?.kind === 'static') {
+    // Факты — из строки, без полной гидратации DTO (#646): нужны только
+    // id/type/settings, а mapper.toDto тянет справочники и ссылки.
     const issues = await ctx.validator.validate(
-      [{ ...(await ctx.mapper.toDto(current)), type: nextType, settings: nextSettings }],
+      [{ id: current.id, type: nextType, settings: nextSettings }],
       { [id]: nextDefault.value },
     );
     if (issues.length > 0) {
@@ -222,6 +250,7 @@ export async function cleanRemovedFormSlots(
   next: CustomFieldBindings,
   actorId: string,
   tx: TransactionClient,
+  processTypeCleaner?: ProcessTypeFormCleaner,
 ): Promise<void> {
   const removed = current.bindings.filter(
     (binding) =>
@@ -235,5 +264,15 @@ export async function cleanRemovedFormSlots(
       actorId,
       tx,
     );
+  }
+  // Снятие привязки к типу процесса снимает и слот из формы создания
+  // маршрута (#646): иначе required-слот отвязанного атрибута блокирует
+  // создание задачи типа (значение подать нельзя — not_in_type).
+  const removedProcessTypes = current.bindings.some(
+    (binding) =>
+      binding.targetKind === 'process_type' && !next.processTypeIds.includes(binding.targetId),
+  );
+  if (removedProcessTypes && processTypeCleaner) {
+    await processTypeCleaner.removeFieldFromCreationForms(current.id, actorId, tx);
   }
 }

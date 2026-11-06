@@ -92,7 +92,7 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
         kit.service.update(user(CREATOR), ID, { code: null } as never),
       ).rejects.toMatchObject({
         code: ErrorCode.PROJECT_FIELDS_REQUIRED,
-        details: { typeId: TYPE, fields: [CODE], reason: 'clear' },
+        details: { typeId: TYPE, fields: [`cf.${CODE}`], reason: 'clear' },
       });
       // Патч реестра собран из legacy-поля до проверки очистки.
       expect(customFields.prepareUpdate).toHaveBeenCalledWith(
@@ -141,6 +141,37 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
         }),
         expect.anything(),
       );
+    });
+
+    it('project.updated: снятый помощник не получает имя/шифр секретного проекта (#646)', async () => {
+      repo.findById.mockResolvedValue(
+        row({
+          visibility: 'secret',
+          assistantIds: [HELPER],
+          customFields: { [CODE]: '22-01' },
+        }),
+      );
+      types.findById.mockResolvedValue(typeRow({ fields: [{ fieldId: CODE, state: 'optional' }] }));
+      // После syncManagement в составе остался только руководитель:
+      // аудитория считается по состоянию ПОСЛЕ правки.
+      participantsRepo.rowsOfProject.mockResolvedValue([
+        {
+          projectId: ID,
+          userId: CREATOR,
+          source: 'manager',
+          observerKind: null,
+          createdAt: new Date(),
+        },
+      ]);
+      customFields.prepareUpdate.mockResolvedValue({ next: {}, changes: [] });
+
+      await kit.service.update(user(CREATOR), ID, { assistantIds: [] } as never);
+
+      const call = eventBus.emit.mock.calls.find(([, type]) => type === PROJECT_EVENTS.UPDATED);
+      expect(call).toBeTruthy();
+      const payload = call![2] as { audience: string[] };
+      expect(payload.audience).toContain(CREATOR);
+      expect(payload.audience).not.toContain(HELPER);
     });
   });
 });

@@ -106,6 +106,12 @@ export const updateDictionaryBodySchema = z
   .strict();
 export type UpdateDictionaryBody = z.infer<typeof updateDictionaryBodySchema>;
 
+/**
+ * Создание варианта. Цвет сознательно НЕ принимается (Р6 #631): палитра
+ * назначается после создания отдельным PATCH (`updateDictionaryItemBodySchema`),
+ * когда у варианта уже есть id, — так диалог атрибута создаёт варианты
+ * пачкой и красит их одним проходом. Сервер цвет в create-данных не ждёт.
+ */
 export const createDictionaryItemBodySchema = z
   .object({
     name: z.string().trim().min(1).max(120),

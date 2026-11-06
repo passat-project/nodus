@@ -133,7 +133,7 @@ export class ProjectCatalogsController {
   @Audit({ action: 'project.type_update', entity: 'project_type' })
   @ApiParam({ name: 'id', description: 'UUID типа', schema: { type: 'string', format: 'uuid' } })
   @ApiOperation({
-    summary: 'Правка типа проекта: имя, значок, цвет, поле «Шифр», виды папок',
+    summary: 'Правка типа проекта: имя, значок, цвет, форма атрибутов, виды папок',
   })
   @ApiOkResponse({ standardSchema: projectTypeSchema })
   @ApiErrors(400, 401, 403, 404, 409)

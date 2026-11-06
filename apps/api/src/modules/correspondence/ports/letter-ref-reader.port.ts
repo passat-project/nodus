@@ -27,4 +27,13 @@ export interface LetterRefReader {
 
   /** Видимо ли письмо актёру (конфиденциальное — круг доступа + надзор). */
   visibleFor(letterId: string, viewer: LetterRefViewer): Promise<boolean>;
+
+  /** Батч видимости (#641): один набор запросов на пачку.
+   *  `includeDeleted` — «было видимо до удаления» для плашки «запись
+   *  удалена»; оракула нет — невидимое письмо не входит. */
+  visibleForMany(
+    letterIds: readonly string[],
+    viewer: LetterRefViewer,
+    opts?: { includeDeleted?: boolean },
+  ): Promise<ReadonlySet<string>>;
 }

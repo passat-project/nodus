@@ -25,4 +25,13 @@ export interface NodeRefReader {
     nodeId: string,
     viewer: { id: string; permissions: readonly string[] },
   ): Promise<boolean>;
+
+  /** Батч видимости (#641): один запрос узлов + один расчёт scope на пачку
+   *  (раньше — два запроса на каждую ссылку). `fresh` — без TTL-кэша scope:
+   *  путь записи значения (#646). */
+  visibleForMany(
+    nodeIds: readonly string[],
+    viewer: { id: string; permissions: readonly string[] },
+    opts?: { fresh?: boolean },
+  ): Promise<ReadonlySet<string>>;
 }

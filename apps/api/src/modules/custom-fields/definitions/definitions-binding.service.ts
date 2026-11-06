@@ -21,6 +21,10 @@ import {
   FIELD_BINDING_FORM_CLEANER,
   type FieldBindingFormCleaner,
 } from '../../projects/ports/field-binding-form-cleaner.port.js';
+import {
+  PROCESS_TYPE_FORM_CLEANER,
+  type ProcessTypeFormCleaner,
+} from '../../workflows/ports/process-type-form-cleaner.port.js';
 import { DefinitionMapper, type FieldDefinitionRow } from './definition.mapper.js';
 import { emitDefinitionChanged } from './definition-events.js';
 import {
@@ -51,6 +55,8 @@ export class DefinitionsBindingService {
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
     @Inject(FIELD_BINDING_TARGET_READER) private readonly targets: FieldBindingTargetReader,
     @Inject(FIELD_BINDING_FORM_CLEANER) private readonly formCleaner: FieldBindingFormCleaner,
+    @Inject(PROCESS_TYPE_FORM_CLEANER)
+    private readonly processTypeCleaner: ProcessTypeFormCleaner,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(DefinitionsBindingService.name);
@@ -66,6 +72,12 @@ export class DefinitionsBindingService {
     assertNotCompany(definition, kind, targetId);
     await assertTargetsBindable(this.catalog, this.targets, kind, [targetId]);
     return this.txRunner.run(async (tx) => {
+      // Перечитываем под локом реестра (#646): конкурентное удаление между
+      // require и bindTarget давало FK-ошибку → 500 вместо 404.
+      await this.definitions.lockRegistry(tx);
+      const fresh = await this.definitions.findById(id, tx);
+      if (!fresh) throw DomainException.notFound('Custom field not found', { definitionId: id });
+      assertNotCompany(fresh, kind, targetId);
       await this.definitions.bindTarget(id, bindingRowKind(kind), targetId, tx);
       return this.afterChange(tx, id, actorId);
     });
@@ -84,7 +96,12 @@ export class DefinitionsBindingService {
     return this.txRunner.run(async (tx) => {
       await this.definitions.unbindTarget(id, bindingRowKind(kind), targetId, tx);
       const rowKind = bindingRowKind(kind);
-      if (rowKind !== 'process_type') {
+      if (rowKind === 'process_type') {
+        // Отвязка от типа процесса снимает слот из формы создания маршрута
+        // (#646): иначе required-слот отвязанного атрибута блокирует
+        // создание задачи типа, а подать значение уже нельзя (not_in_type).
+        await this.processTypeCleaner.removeFieldFromCreationForms(id, actorId, tx);
+      } else {
         await this.formCleaner.removeFieldFromForm(
           { kind: rowKind, id: targetId },
           id,

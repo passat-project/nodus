@@ -55,14 +55,11 @@ function makeService() {
   const txRunner = { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn({})) };
   const eventBus = { emit: vi.fn(async () => undefined) };
   const dictionaries = { dictionaryRefs: vi.fn(async () => []), itemRefs: vi.fn(async () => []) };
-  const workflows = {
-    workflowsUsingField: vi.fn(async () => []),
-    creationFormsUsingField: vi.fn(async () => []),
-  };
   const catalog = { typeRefs: vi.fn(async () => []) };
   const targets = { projectTypes: vi.fn(async () => []), nodeKinds: vi.fn(async () => []) };
-  const usageReader = { usage: vi.fn(async () => ({})) };
+  const query = { list: vi.fn(async () => []), usage: vi.fn(async () => ({})) };
   const formCleaner = { removeFieldFromForm: vi.fn(async () => undefined) };
+  const processTypeCleaner = { removeFieldFromCreationForms: vi.fn(async () => []) };
   const logger = { setContext: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
   const service = new DefinitionsService(
     definitions as never,
@@ -71,11 +68,11 @@ function makeService() {
     txRunner as never,
     eventBus as never,
     dictionaries as never,
-    workflows as never,
     catalog as never,
     targets as never,
     formCleaner as never,
-    usageReader as never,
+    processTypeCleaner as never,
+    query as never,
     logger as never,
   );
   return { service, definitions, validator, eventBus };

@@ -7,6 +7,7 @@ import { OrgStructureProvider } from '../../core/ports/org-structure.provider.js
 import { CatalogBootstrap } from './catalog/catalog.bootstrap.js';
 import { CatalogRepository } from './catalog/catalog.repository.js';
 import { WorkflowPublishedHandler } from './events/workflow-published.handler.js';
+import { ProcessTypeCreationCleanupHandler } from './events/process-type-creation-cleanup.handler.js';
 import { ProcessTypesController } from './types/process-types.controller.js';
 import { ProcessTypesService } from './types/process-types.service.js';
 import { WorkflowEditorController } from './workflow/editor/workflow-editor.controller.js';
@@ -48,6 +49,8 @@ import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.mo
     WorkflowSyncJob,
     // Фоновый перенос сущностей публикации ставится из outbox (at-least-once).
     WorkflowPublishedHandler,
+    // Страховка уборки формы создания при удалении атрибута (#646).
+    ProcessTypeCreationCleanupHandler,
   ],
 })
 export class WorkflowsModule {}

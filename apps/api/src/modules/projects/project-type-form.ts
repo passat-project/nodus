@@ -64,7 +64,7 @@ export async function createProjectType(
   actorId: string,
 ): Promise<ProjectType> {
   await deps.types.lockForms(tx);
-  if (await deps.types.nameTaken(dto.name)) {
+  if (await deps.types.nameTaken(dto.name, undefined, tx)) {
     throw DomainException.conflict('Project type name is already taken');
   }
   if (dto.form !== undefined) await assertProjectTypeForm(deps.registry, tx, dto.form);
@@ -93,13 +93,17 @@ export async function updateProjectType(
   // Лок справочника — на любой PATCH: имя, форма и привязки сериализуются
   // между собой (как у видов папок; #646).
   await deps.types.lockForms(tx);
+  // 404 — до валидации формы (#646): PATCH несуществующего типа с битой
+  // формой обязан отвечать 404, а не 422. Чтение — в транзакции под локом:
+  // прежняя форма (дельта снятых слотов) не должна устареть.
+  const current = await deps.types.findById(id, tx);
+  if (!current) throw DomainException.notFound('Project type not found');
   let previousFormIds: string[] = [];
   if (dto.form !== undefined) {
     await assertProjectTypeForm(deps.registry, tx, dto.form);
-    const current = await deps.types.findById(id);
-    previousFormIds = current?.form.fields.map((slot) => slot.fieldId) ?? [];
+    previousFormIds = current.form.fields.map((slot) => slot.fieldId);
   }
-  if (dto.name !== undefined && (await deps.types.nameTaken(dto.name, id))) {
+  if (dto.name !== undefined && (await deps.types.nameTaken(dto.name, id, tx))) {
     throw DomainException.conflict('Project type name is already taken');
   }
   if (dto.kindIds !== undefined && dto.kindIds !== null) {

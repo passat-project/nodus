@@ -60,13 +60,16 @@ export class ProjectTypesRepository {
   }
 
   /** Тип без фильтра архива: правка полей проекта живёт и у архивного типа. */
-  async findById(id: string): Promise<ProjectType | null> {
-    const row = await this.prisma.projectType.findUnique({ select: typeSelect, where: { id } });
+  async findById(id: string, tx?: TransactionClient): Promise<ProjectType | null> {
+    const row = await (tx ?? this.prisma).projectType.findUnique({
+      select: typeSelect,
+      where: { id },
+    });
     return row ? this.toDto(row) : null;
   }
 
-  async nameTaken(name: string, excludeId?: string): Promise<boolean> {
-    const row = await this.prisma.projectType.findFirst({
+  async nameTaken(name: string, excludeId?: string, tx?: TransactionClient): Promise<boolean> {
+    const row = await (tx ?? this.prisma).projectType.findFirst({
       select: { id: true },
       where: { name, ...(excludeId ? { id: { not: excludeId } } : {}) },
     });
@@ -130,7 +133,8 @@ export class ProjectTypesRepository {
         FROM jsonb_array_elements(COALESCE("form"->'fields', '[]'::jsonb))
              WITH ORDINALITY AS t(e, ord)
         WHERE e->>'fieldId' <> ${fieldId}::text
-      ))
+      )),
+      "updated_at" = CURRENT_TIMESTAMP
       WHERE "id" = ${typeId}::uuid
         AND COALESCE("form"->'fields', '[]'::jsonb)
             @> jsonb_build_array(jsonb_build_object('fieldId', ${fieldId}::text))
@@ -153,7 +157,8 @@ export class ProjectTypesRepository {
         FROM jsonb_array_elements(COALESCE("form"->'fields', '[]'::jsonb))
              WITH ORDINALITY AS t(e, ord)
         WHERE e->>'fieldId' <> ${fieldId}::text
-      ))
+      )),
+      "updated_at" = CURRENT_TIMESTAMP
       WHERE COALESCE("form"->'fields', '[]'::jsonb)
             @> jsonb_build_array(jsonb_build_object('fieldId', ${fieldId}::text))
       RETURNING "id", "name"

@@ -104,6 +104,35 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ]);
     });
 
+    it('403 на КАЖДОМ мутирующем роуте реестра (plain без custom_field.manage)', async () => {
+      const { fx, plain } = cf;
+      const field = await cf.createField({
+        type: 'text',
+        name: `Проба ${fx.runId} права`,
+      });
+      const target = '00000000-0000-4000-8000-0000000000ff';
+      const routes: [
+        'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+        string,
+        Record<string, unknown>?,
+      ][] = [
+        ['PATCH', `/custom-fields/definitions/${field.id}`, { hint: 'x' }],
+        ['DELETE', `/custom-fields/definitions/${field.id}`],
+        ['PUT', '/custom-fields/definitions/order', { ids: [field.id] }],
+        ['GET', `/custom-fields/definitions/${field.id}/usage`],
+        ['PUT', `/custom-fields/definitions/${field.id}/bindings/process-type/${target}`],
+        ['DELETE', `/custom-fields/definitions/${field.id}/bindings/process-type/${target}`],
+        ['PUT', `/custom-fields/definitions/${field.id}/company-value`, { value: null }],
+      ];
+      for (const [method, path, body] of routes) {
+        const response = await fx.api(plain, method, path, {
+          ...(body ? { body } : {}),
+          key: `it-cf-deny-${method}-${fx.runId}`,
+        });
+        expect(response.status, `${method} ${path}`).toBe(403);
+      }
+    });
+
     it('значения: 200 и 422 по каждой причине, событие с cf-ключом', async () => {
       const { fx, admin, plain } = cf;
       const text = await cf.createField({

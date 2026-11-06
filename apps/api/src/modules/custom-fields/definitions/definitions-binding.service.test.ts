@@ -36,6 +36,7 @@ const ROW = row();
 function makeService() {
   const definitions = {
     findById: vi.fn(async (): Promise<FieldDefinitionRow | null> => ROW),
+    lockRegistry: vi.fn(async () => undefined),
     bindTarget: vi.fn(async () => undefined),
     unbindTarget: vi.fn(async () => true),
   };
@@ -57,6 +58,7 @@ function makeService() {
   };
   const logger = { setContext: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
   const formCleaner = { removeFieldFromForm: vi.fn(async () => undefined) };
+  const processTypeCleaner = { removeFieldFromCreationForms: vi.fn(async () => []) };
   const service = new DefinitionsBindingService(
     definitions as never,
     mapper as never,
@@ -65,9 +67,10 @@ function makeService() {
     catalog as never,
     targets as never,
     formCleaner as never,
+    processTypeCleaner as never,
     logger as never,
   );
-  return { service, definitions, eventBus, catalog, targets, formCleaner };
+  return { service, definitions, eventBus, catalog, targets, formCleaner, processTypeCleaner };
 }
 
 describe('DefinitionsBindingService.bind (#631, Р3)', () => {
@@ -191,10 +194,16 @@ describe('DefinitionsBindingService.unbind (#631, О3 — снятие всег�
     );
   });
 
-  it('process-type — форм-слота нет, уборка формы не вызывается', async () => {
-    const { service, formCleaner } = makeService();
+  it('process-type — слот формы вида не трогается, чистится форма создания (#646)', async () => {
+    const { service, formCleaner, processTypeCleaner } = makeService();
     await service.unbind(ROW.id, 'process-type', 't-1', 'actor-1');
     expect(formCleaner.removeFieldFromForm).not.toHaveBeenCalled();
+    // Иначе required-слот отвязанного атрибута блокирует создание задачи.
+    expect(processTypeCleaner.removeFieldFromCreationForms).toHaveBeenCalledWith(
+      ROW.id,
+      'actor-1',
+      expect.anything(),
+    );
   });
 
   it('цель на снятии не проверяется: удалённая/архивная — идемпотентно (N-5 #646)', async () => {

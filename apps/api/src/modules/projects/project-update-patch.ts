@@ -1,6 +1,7 @@
 import type { AuthUser, CustomFieldValues, UpdateProjectBody } from '@nodus/contracts';
 import {
   clearedProjectFields,
+  customFieldKey,
   effectiveProjectTypeForm,
   ErrorCode,
   Permission,
@@ -130,7 +131,7 @@ export async function buildUpdatePatch(
         'Required project fields cannot be cleared',
         {
           typeId: row.typeId,
-          fields: cleared,
+          fields: cleared.map(customFieldKey),
           reason: 'clear',
         },
       );

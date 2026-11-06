@@ -44,7 +44,15 @@ export class LetterRefReaderProvider implements LetterRefReader {
   }
 
   async visibleFor(letterId: string, viewer: LetterRefViewer): Promise<boolean> {
-    const visible = await this.visibility.visibleLetterIds([letterId], viewer);
-    return visible.has(letterId);
+    return (await this.visibleForMany([letterId], viewer)).has(letterId);
+  }
+
+  async visibleForMany(
+    letterIds: readonly string[],
+    viewer: LetterRefViewer,
+    opts: { includeDeleted?: boolean } = {},
+  ): Promise<ReadonlySet<string>> {
+    if (letterIds.length === 0) return new Set();
+    return this.visibility.visibleLetterIds([...new Set(letterIds)], viewer, opts);
   }
 }

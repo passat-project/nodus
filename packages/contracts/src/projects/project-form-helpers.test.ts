@@ -7,6 +7,7 @@ import {
 } from '../custom-fields/system-fields.js';
 import { hasDuplicateSlots } from '../custom-fields/field-form.schemas.js';
 import {
+  effectiveProjectTypeForm,
   projectTypeFormOf,
   requiredProjectFields,
   missingProjectFields,
@@ -84,5 +85,37 @@ describe('form мест: чтение и обязательные слоты', (
     ]);
     expect(clearedProjectFields([CODE], { [CODE]: 'ПР-2' })).toEqual([]);
     expect(clearedProjectFields([CODE], {})).toEqual([]);
+  });
+});
+
+describe('effectiveProjectTypeForm (#646)', () => {
+  const DELETED = '00000000-0000-4000-8000-0000000000ff';
+
+  it('required-слот удалённого определения не блокирует создание', () => {
+    const type = {
+      form: {
+        fields: [
+          { fieldId: CODE, state: 'required' },
+          { fieldId: DELETED, state: 'required' },
+        ],
+      },
+    };
+    // В реестре осталось только «Шифр»: слот удалённого отфильтрован.
+    const effective = effectiveProjectTypeForm(type, [{ id: CODE }]);
+    expect(effective.fields).toEqual([{ fieldId: CODE, state: 'required' }]);
+    expect(missingProjectFields(effective, { customFields: { [CODE]: 'ПР-1' } })).toEqual([]);
+  });
+
+  it('слот отвязанного атрибута (нет в bound-определениях) тоже отфильтрован', () => {
+    const type = {
+      form: {
+        fields: [
+          { fieldId: CODE, state: 'required' },
+          { fieldId: CLIENT, state: 'required' },
+        ],
+      },
+    };
+    const effective = effectiveProjectTypeForm(type, [{ id: CODE }]);
+    expect(effective.fields.map((slot) => slot.fieldId)).toEqual([CODE]);
   });
 });

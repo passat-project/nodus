@@ -73,13 +73,20 @@ function makeHydrator() {
     refs: vi.fn(async (ids: string[]) =>
       ids.map((id) => ({ id, name: `Задача ${id.slice(0, 4)}`, deleted: id === TASK_DELETED })),
     ),
-    visibleFor: vi.fn(async (id: string) => id !== TASK_DELETED && id !== TASK_HIDDEN),
+    visibleForMany: vi.fn(
+      async (ids: string[], _viewer: unknown, opts?: { includeDeleted?: boolean }) =>
+        new Set(
+          ids.filter(
+            (id) => id !== TASK_HIDDEN && (opts?.includeDeleted === true || id !== TASK_DELETED),
+          ),
+        ),
+    ),
   };
   const letters = {
     refs: vi.fn(async (ids: string[]) =>
       ids.map((id) => ({ id, name: `Вх-2026/1 · ${id.slice(0, 4)}`, deleted: false })),
     ),
-    visibleFor: vi.fn(async (id: string) => id === LETTER),
+    visibleForMany: vi.fn(async (ids: string[]) => new Set(ids.filter((id) => id === LETTER))),
   };
   const nodes = {
     // Узлы удаляются физически: отсутствующий в ответе = удалённый.
@@ -88,7 +95,7 @@ function makeHydrator() {
         .filter((id) => id !== NODE_GONE)
         .map((id) => ({ id, name: `Папка ${id.slice(0, 4)}`, deleted: false })),
     ),
-    visibleFor: vi.fn(async () => true),
+    visibleForMany: vi.fn(async (ids: string[]) => new Set(ids)),
   };
   const hydrator = new CustomFieldRefsHydrator(
     users as never,
@@ -191,7 +198,7 @@ describe('CustomFieldRefsHydrator (#431, Р6)', () => {
         archived: false,
       },
     ]);
-    expect(tasks.visibleFor).toHaveBeenCalledWith(TASK_OK, ACTOR);
+    expect(tasks.visibleForMany).toHaveBeenCalledWith([TASK_OK], ACTOR, { includeDeleted: true });
 
     const mixed = await hydrator.hydrate(
       [
@@ -201,13 +208,14 @@ describe('CustomFieldRefsHydrator (#431, Р6)', () => {
       { 'f-del': TASK_DELETED, 'f-hid': TASK_HIDDEN },
       ACTOR,
     );
-    // Удалённая цель: история значения живёт, имя скрыто, помечена архивом.
+    // Удалённая цель: история значения живёт, имя скрыто, помечена архивом
+    // (Р5 #631: «запись удалена» — только тому, кто видел её до удаления).
     expect(mixed.find((ref) => ref.id === TASK_DELETED)).toEqual({
       kind: 'task',
       id: TASK_DELETED,
       name: null,
       avatarUrl: null,
-      archived: false,
+      archived: true,
     });
     // Без доступа (не удалена): имя скрыто, архивности нет.
     expect(mixed.find((ref) => ref.id === TASK_HIDDEN)).toEqual({
@@ -231,10 +239,10 @@ describe('CustomFieldRefsHydrator (#431, Р6)', () => {
       name: `Вх-2026/1 · ${LETTER.slice(0, 4)}`,
       archived: false,
     });
-    expect(letters.visibleFor).toHaveBeenCalledWith(LETTER, ACTOR);
+    expect(letters.visibleForMany).toHaveBeenCalledWith([LETTER], ACTOR, { includeDeleted: true });
 
     const hidden = makeHydrator();
-    hidden.letters.visibleFor = vi.fn(async () => false);
+    hidden.letters.visibleForMany = vi.fn(async () => new Set<string>()) as never;
     const hiddenRefs = await hidden.hydrator.hydrate(
       [{ id: 'f-letter', type: 'letter' }],
       { 'f-letter': LETTER },

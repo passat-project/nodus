@@ -221,10 +221,14 @@ export class CustomFieldValueValidator {
       this.dictionaries.itemRefs([...itemIds], tx),
       this.dictionaries.itemRefs([...currencyIds], tx),
       Promise.all([...counterpartyIds].map((id) => this.counterparties.activeRef(id))),
-      this.visibleProjectIds(actor),
-      this.visibleOf(taskIds, (id) => this.tasks.visibleFor(id, actor!)),
-      this.visibleOf(letterIds, (id) => this.letters.visibleFor(id, actor!)),
-      this.visibleOf(nodeIds, (id) => this.nodes.visibleFor(id, actor!)),
+      projectIds.size === 0 ? new Set<string>() : this.visibleProjectIds(actor),
+      // Батч-видимость (#641): один запрос на вид ссылки вместо запроса на
+      // каждую ссылку; пачки дедуплицированы выше.
+      actor ? this.tasks.visibleForMany([...taskIds], actor) : new Set<string>(),
+      actor ? this.letters.visibleForMany([...letterIds], actor) : new Set<string>(),
+      // Запись значения — без TTL-кэша scope (#646): проект, только что
+      // ушедший в секретные, не должен приниматься из кэша.
+      actor ? this.nodes.visibleForMany([...nodeIds], actor, { fresh: true }) : new Set<string>(),
     ]);
 
     // Валюта — элемент ИМЕННО системного справочника `currency` (Р10):
@@ -276,15 +280,6 @@ export class CustomFieldValueValidator {
     if (!actor) return new Set();
     const scope = await this.projects.viewScopeFor(actor);
     return new Set(scope.visibleProjectIds);
-  }
-
-  /** Параллельная видимость ссылок одного вида (пачка мелких проверок). */
-  private async visibleOf(
-    ids: ReadonlySet<string>,
-    visibleFor: (id: string) => Promise<boolean>,
-  ): Promise<ReadonlySet<string>> {
-    const checks = await Promise.all([...ids].map((id) => visibleFor(id)));
-    return new Set([...ids].filter((_, index) => checks[index]));
   }
 }
 

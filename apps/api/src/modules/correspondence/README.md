@@ -72,7 +72,8 @@ resume). Секреты — только `.env` владельца/песочн�
   без FK; категория типа `letter`. Адаптер регистрируется DiscoveryService по
   `static readonly workflowCategory = 'letter'`.
 - **Уборка значений удалённого атрибута** (#582): событие
-  `custom_field.definition_changed` (`change='deleted'`, `scope='letter'`)
+  `custom_field.definition_changed` (`change='deleted'`; `scope` упразднён
+  #631 — каждый владелец чистит свою таблицу безусловно)
   убирает ключ из `letters.custom_fields` пачками и идемпотентно; мягко
   удалённые письма тоже чистит — восстановление не воскрешает значение.
 - **Регистрация — переход** `register` маршрута входящего: окно

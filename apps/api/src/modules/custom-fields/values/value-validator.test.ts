@@ -98,15 +98,24 @@ function makeValidator(
   };
   const tasks = {
     refs: vi.fn(async () => []),
-    visibleFor: vi.fn(async (id: string) => (opts.visible?.tasks ?? []).includes(id)),
+    visibleForMany: vi.fn(
+      async (ids: string[]) =>
+        new Set(ids.filter((id) => (opts.visible?.tasks ?? []).includes(id))),
+    ),
   };
   const letters = {
     refs: vi.fn(async () => []),
-    visibleFor: vi.fn(async (id: string) => (opts.visible?.letters ?? []).includes(id)),
+    visibleForMany: vi.fn(
+      async (ids: string[]) =>
+        new Set(ids.filter((id) => (opts.visible?.letters ?? []).includes(id))),
+    ),
   };
   const nodes = {
     refs: vi.fn(async () => []),
-    visibleFor: vi.fn(async (id: string) => (opts.visible?.nodes ?? []).includes(id)),
+    visibleForMany: vi.fn(
+      async (ids: string[]) =>
+        new Set(ids.filter((id) => (opts.visible?.nodes ?? []).includes(id))),
+    ),
   };
   const validator = new CustomFieldValueValidator(
     users as never,
@@ -227,7 +236,7 @@ describe('CustomFieldValueValidator (#431/#631)', () => {
     const { validator, tasks } = makeValidator({ visible: { tasks: [TASK] } });
     const task = definition('f-task', 'task');
     expect(await validator.validate([task], { 'f-task': TASK }, undefined, ACTOR)).toEqual([]);
-    expect(tasks.visibleFor).toHaveBeenCalledWith(TASK, ACTOR);
+    expect(tasks.visibleForMany).toHaveBeenCalledWith([TASK], ACTOR);
 
     const hidden = makeValidator({ visible: { tasks: [] } });
     const issues = await hidden.validator.validate(
@@ -257,8 +266,8 @@ describe('CustomFieldValueValidator (#431/#631)', () => {
         ACTOR,
       ),
     ).toEqual([]);
-    expect(letters.visibleFor).toHaveBeenCalledWith(LETTER, ACTOR);
-    expect(nodes.visibleFor).toHaveBeenCalledWith(NODE, ACTOR);
+    expect(letters.visibleForMany).toHaveBeenCalledWith([LETTER], ACTOR);
+    expect(nodes.visibleForMany).toHaveBeenCalledWith([NODE], ACTOR, { fresh: true });
 
     const invisible = makeValidator({ visible: {} });
     const issues = await invisible.validator.validate(
@@ -285,7 +294,7 @@ describe('CustomFieldValueValidator (#431/#631)', () => {
       { fieldId: 'f-letter', reason: 'not_found', message: 'Record not found or not visible' },
       { fieldId: 'f-node', reason: 'not_found', message: 'Record not found or not visible' },
     ]);
-    expect(tasks.visibleFor).not.toHaveBeenCalled();
+    expect(tasks.visibleForMany).not.toHaveBeenCalled();
   });
 
   it('больше 50 ключей — отказ без обращения к портам', async () => {
