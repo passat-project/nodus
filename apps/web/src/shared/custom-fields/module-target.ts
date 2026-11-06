@@ -42,26 +42,3 @@ export function definitionsForTarget(
     boundToModuleTarget(definition, module, targetId),
   );
 }
-
-/** Сводка «Где используется» для колонки реестра: модули с числом мест.
- *  Категории типов процесса (задача/письмо) передаёт вызывающий — он знает
- *  список типов; без них processTypeIds не разбивается по модулям. */
-export function usageSummaryOf(
-  definition: CustomFieldDefinition,
-  typeCategories: { taskTypeIds: ReadonlySet<string>; letterTypeIds: ReadonlySet<string> },
-): Partial<Record<CustomFieldModule, number>> {
-  if (definition.isCompany) return { company: 1 };
-  const bindings = bindingsOf(definition);
-  const summary: Partial<Record<CustomFieldModule, number>> = {};
-  const taskCount = bindings.processTypeIds.filter((id) =>
-    typeCategories.taskTypeIds.has(id),
-  ).length;
-  const letterCount = bindings.processTypeIds.filter((id) =>
-    typeCategories.letterTypeIds.has(id),
-  ).length;
-  if (taskCount > 0) summary.task = taskCount;
-  if (letterCount > 0) summary.letter = letterCount;
-  if (bindings.projectTypeIds.length > 0) summary.project = bindings.projectTypeIds.length;
-  if (bindings.nodeKindIds.length > 0) summary.node = bindings.nodeKindIds.length;
-  return summary;
-}
