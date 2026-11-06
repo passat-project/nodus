@@ -24,7 +24,8 @@ export function TextEditor(props: EditorProps) {
   const current = typeof props.value === 'string' ? props.value : '';
   const [editing, setEditing] = useState(props.variant === 'form');
   const [text, setText] = useState(current);
-  const ref = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (props.variant === 'form') setText(current);
@@ -36,14 +37,14 @@ export function TextEditor(props: EditorProps) {
     // в следующем кадре, когда инпут уже в DOM и родительские обработчики
     // клика отработали.
     const frame = requestAnimationFrame(() => {
-      const node = ref.current;
+      const node = multiline ? textareaRef.current : inputRef.current;
       if (!node) return;
       node.focus();
       const end = node.value.length;
       node.setSelectionRange(end, end);
     });
     return () => cancelAnimationFrame(frame);
-  }, [editing]);
+  }, [editing, multiline]);
 
   const commit = () => {
     const next = text.trim();
@@ -102,9 +103,10 @@ export function TextEditor(props: EditorProps) {
   return multiline ? (
     <Textarea
       {...shared}
+      ref={textareaRef}
       className={cn('text-sm [field-sizing:content]', editorTextareaClass(props.variant))}
     />
   ) : (
-    <Input {...shared} className={cn(editorInputClass(props.variant), 'text-sm')} />
+    <Input {...shared} ref={inputRef} className={cn(editorInputClass(props.variant), 'text-sm')} />
   );
 }
