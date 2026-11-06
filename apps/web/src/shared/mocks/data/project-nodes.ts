@@ -2,9 +2,11 @@ import type { NodeKind, ProjectNode, ProjectNodeRollup } from '@nodus/contracts'
 import { isCompletedState, isOpenState, NODE_LIMITS } from '@nodus/contracts';
 
 import { SYSTEM_FIELD_IDS } from '@nodus/contracts';
-import { KOMPLEKT_KIND_ID, MARKA_FIELD_ID, SET_MARK_OV_ID } from './set-marks.js';
+import { MARKA_FIELD_ID, SET_MARK_OV_ID } from './set-marks.js';
 
 import { isoAgo } from './dates.js';
+import { fieldIds } from './field-ids.js';
+import { nodeKindSeedIds } from './node-kind-ids.js';
 import { nodeIds } from './project-node-ids.js';
 import { demoTasks } from './tasks.js';
 import { projectRefs } from './task-item-factory.js';
@@ -24,10 +26,12 @@ export const nodeKindIds = {
   stage: kindId(1),
   queue: kindId(2),
   startup: kindId(3),
-  building: kindId(4),
+  // «Здание по генплану» и «Комплект» — из лист-модуля (#632): те же id
+  // нужны формулам маршрутов, которые не могут импортировать этот файл.
+  building: nodeKindSeedIds.building,
   section: kindId(5),
   phase: kindId(6),
-  komplekt: KOMPLEKT_KIND_ID,
+  komplekt: nodeKindSeedIds.komplekt,
 } as const;
 
 export const demoNodeKinds: NodeKind[] = [
@@ -64,7 +68,9 @@ export const demoNodeKinds: NodeKind[] = [
     icon: 'building',
     color: 'sky',
     archivedAt: null,
-    form: defaultForm,
+    // «№ по ГП» (#632) — посевной атрибут вида: формула шифра комплекта
+    // читает его у ближайшей папки-здания. Слот = привязка (инвариант мока).
+    form: { fields: [{ fieldId: fieldIds.buildingGp, state: 'optional' }] },
     capabilities: [],
   },
   {
@@ -130,7 +136,9 @@ export const demoNodeRows: DemoNodeRow[] = [
     kindId: nodeKindIds.building,
     name: 'Здание 1',
     code: null,
-    customFields: {},
+    // «№ по ГП» (#632): шифр комплекта собирается как
+    // «шифр проекта — № по ГП — марка номер».
+    customFields: { [fieldIds.buildingGp]: '1' },
     createdAt: isoAgo(80),
   },
   {

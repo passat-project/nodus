@@ -41,8 +41,17 @@ function dto(definition: CustomFieldDefinition): CustomFieldDefinition {
     definition.companyValue !== undefined
       ? demoRefsForValues({ [definition.id]: definition.companyValue })
       : [];
+  // Категории процессов (#632, Р9): решающий сигнал для атрибутных колонок
+  // видов; сервер считает то же по привязкам типов.
+  const categories = new Set<'task' | 'letter'>();
+  for (const type of mockTypes) {
+    if (type.archivedAt === null && definition.bindings.processTypeIds.includes(type.id)) {
+      categories.add(type.category);
+    }
+  }
   return {
     ...definition,
+    processCategories: [...categories],
     defaultRefs,
     companyRefs,
     dictionary: dictionary

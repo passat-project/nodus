@@ -8,7 +8,7 @@ import { BoardSortableCard } from '../../../shared/ui/board/board-sortable-card.
 import { KanbanSkeleton } from '../../../shared/ui/board/kanban-skeleton.js';
 import { useKanbanBoard } from '../../../shared/ui/board/use-kanban-board.js';
 import { isFilteringActive, type ActiveListFilter } from '../../../shared/views/list-filters.js';
-import { makeTaskCardFields } from '../../../shared/views/task-card-fields.js';
+import { useTaskCardFields } from '../../../shared/views/task-card-fields.js';
 import { useFilteredList } from '../../../shared/views/use-list-toolbar.js';
 import { useViewFields } from '../../../shared/views/use-view-fields.js';
 import type { TaskListItem } from '@nodus/contracts';
@@ -24,9 +24,6 @@ import { TaskKanbanCard } from './task-kanban-card.js';
 import { TaskKanbanColumn } from './task-kanban-column.js';
 import { TaskStageCreate } from './task-stage-create.js';
 import { TasksEmpty } from './tasks-empty.js';
-
-/** Реестр блоков карточки канбана — module-константа (стабильная идентичность). */
-const taskCardFields = makeTaskCardFields();
 
 /** Канбан «Мой план» (ADR-0007 + ADR-0008): колонки — ЛИЧНЫЕ стадии
  * пользователя (цветные чипы, меню колонки: переименовать/цвет/удалить —
@@ -50,7 +47,9 @@ export function TaskKanban({
   const quick = useQuickCreate();
   const updateStageMeta = useUpdatePersonalStage();
   const deleteStage = useDeletePersonalStage();
-  const { isVisible } = useViewFields('tasks.kanban', taskCardFields);
+  // Реестр вида с атрибутами портала (#632): блоки карточки + их видимость.
+  const cardFields = useTaskCardFields();
+  const { isVisible, fields } = useViewFields('tasks.kanban', cardFields);
 
   // Дельта счётчиков шапок при оптимистичном переносе: stage.count —
   // серверный, локальный перенос корректирует до инвалидации; откат — минус.
@@ -163,6 +162,7 @@ export function TaskKanban({
                       task={task}
                       parentNumber={task.parentId ? board.numberById.get(task.parentId) : undefined}
                       isVisible={isVisible}
+                      fields={fields}
                       placeholder={placeholder}
                     />
                   )}
@@ -182,6 +182,7 @@ export function TaskKanban({
             task={board.activeTask}
             parentNumber={board.activeParent}
             isVisible={isVisible}
+            fields={fields}
             overlay
           />
         ) : null}

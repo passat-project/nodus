@@ -1,5 +1,6 @@
 import type {
   CustomFieldDefinition,
+  CustomFieldFormulas,
   CustomFieldRef,
   CustomFieldValue,
   CustomFieldValues,
@@ -9,6 +10,9 @@ import type {
 import { effectiveNodeForm, isCustomFieldValueFilled, ui } from '@nodus/contracts';
 
 import { CustomFieldTypeIcon } from '../../../../shared/custom-fields/field-type-icon.js';
+import { FormulaCell } from '../../../../shared/custom-fields/formula/formula-cell.js';
+import type { FormulaHost } from '../../../../shared/custom-fields/formula/formula-api.js';
+import type { FormulaHostContext } from '../../../../shared/custom-fields/formula/formula-editor.js';
 import { CustomFieldEditor } from '../../../../shared/custom-fields/value-editor.js';
 import { FieldRow } from '../../../../shared/ui/entity-fields.js';
 
@@ -95,6 +99,9 @@ export function NodePanelFields({
   refs,
   disabled,
   onChange,
+  host,
+  hostContext,
+  formulas,
 }: {
   kind: NodeKind;
   definitions: readonly CustomFieldDefinition[];
@@ -102,6 +109,10 @@ export function NodePanelFields({
   refs: readonly CustomFieldRef[];
   disabled: boolean;
   onChange: (fieldId: string, value: CustomFieldValue | null, picked?: CustomFieldRef[]) => void;
+  /** Папка-носитель формул (#632); без неё — обычная правка значений. */
+  host?: FormulaHost;
+  hostContext?: FormulaHostContext;
+  formulas?: CustomFieldFormulas;
 }) {
   const slots = slotDefinitions(kind, definitions);
 
@@ -123,14 +134,37 @@ export function NodePanelFields({
             requiredText={ui.structure.requiredMark}
             wide={definition.type === 'long_text'}
           >
-            <CustomFieldEditor
-              definition={definition}
-              value={values[definition.id]}
-              refs={refs}
-              disabled={disabled}
-              variant="inline"
-              onCommit={(value, picked) => onChange(definition.id, value, picked)}
-            />
+            {host ? (
+              <FormulaCell
+                definition={definition}
+                host={host}
+                hostContext={hostContext ?? {}}
+                info={formulas?.[definition.id]}
+                value={values[definition.id]}
+                refs={refs}
+                canEdit={!disabled}
+                onChange={onChange}
+                ownDefinitions={slots.map((entry) => entry.definition)}
+              >
+                <CustomFieldEditor
+                  definition={definition}
+                  value={values[definition.id]}
+                  refs={refs}
+                  disabled={disabled}
+                  variant="inline"
+                  onCommit={(value, picked) => onChange(definition.id, value, picked)}
+                />
+              </FormulaCell>
+            ) : (
+              <CustomFieldEditor
+                definition={definition}
+                value={values[definition.id]}
+                refs={refs}
+                disabled={disabled}
+                variant="inline"
+                onCommit={(value, picked) => onChange(definition.id, value, picked)}
+              />
+            )}
           </FieldRow>
         ))
       )}

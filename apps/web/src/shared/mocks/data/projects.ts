@@ -8,6 +8,7 @@ import type {
   ProjectStatus,
   ProjectVisibility,
 } from '@nodus/contracts';
+import { SYSTEM_FIELD_IDS } from '@nodus/contracts';
 
 import { counterpartyIds } from './counterparties.js';
 import { isoAgo, isoDateIn } from './dates.js';
@@ -149,7 +150,8 @@ export const demoProjectRows: DemoProjectRow[] = [
     endDate: isoDateIn(120),
     completedAt: null,
     archivedAt: null,
-    customFields: {},
+    // «Шифр» (#632): формула шифра комплекта читает его у проекта.
+    customFields: { [SYSTEM_FIELD_IDS.projectCode]: projectRefs.p4.code },
     creatorId: userIds.vinnichek,
     createdAt: isoAgo(90),
     updatedAt: isoAgo(0, 11, 45),

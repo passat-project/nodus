@@ -1,10 +1,18 @@
-import type { CreationForm, ProcessType, WorkflowDetail } from '@nodus/contracts';
+import type {
+  CreationForm,
+  FormulaNode,
+  ProcessType,
+  ProcessTypeRef,
+  WorkflowDetail,
+} from '@nodus/contracts';
+import { customFieldKey } from '@nodus/contracts';
 
 import { quickDocument, simpleDocument, standardDocument } from './workflows-documents.js';
 import { letterProcessTypes, letterWorkflowDetails } from './letter-catalog.js';
 
 import { quickProcessType, systemProcessType } from './task-stages.js';
-import { fieldIds } from './field-ids.js';
+import { FORMULA_DEMO_NUMBERS, fieldIds } from './field-ids.js';
+import { nodeKindSeedIds } from './node-kind-ids.js';
 import { processTypeIds } from './process-type-ids.js';
 import { demoRoleIds } from './roles.js';
 
@@ -23,6 +31,8 @@ export const QUICK_WORKFLOW_ID = wid(51);
 export const ARCHIVED_WORKFLOW_ID = wid(52);
 export const OVERTIME_WORKFLOW_ID = wid(53);
 export const HR_WORKFLOW_ID = wid(54);
+/** Маршрут типа «Комплект» (#632): быстрый маршрут + форма с формулой. */
+export const KOMPLEKT_WORKFLOW_ID = wid(55);
 
 /** Тип мок-библиотеки: `viewer` и `creationForm` считает хендлер — они
  *  зависят от актёра и опубликованного документа (Р6, Р2). */
@@ -116,6 +126,92 @@ export const hrType: DemoProcessType = {
   },
 };
 
+/** Тип «Комплект» (#632): демонстратор формул типа — «Шифр комплекта»
+ *  считается из данных проекта, папки-здания, марки и номера. */
+export const komplektType: DemoProcessType = {
+  id: processTypeIds.komplekt,
+  code: 'komplekt',
+  name: 'Комплект',
+  icon: 'package',
+  color: 'info',
+  description: 'Комплект документации: марка, номер и шифр по формуле',
+  creatable: true,
+  category: 'task',
+  direction: null,
+  isSystem: false,
+  sortOrder: 4,
+  archivedAt: null,
+  workflowId: KOMPLEKT_WORKFLOW_ID,
+  numbering: null,
+  config: { card: { hiddenBlocks: [], roleLabels: {} }, access: allAccess },
+};
+
+/** Ссылка типа для демо-задач комплектов (TaskListItem.type). */
+export const komplektTypeRef: ProcessTypeRef = {
+  id: komplektType.id,
+  code: komplektType.code,
+  name: komplektType.name,
+  category: komplektType.category,
+  icon: komplektType.icon,
+  color: komplektType.color,
+};
+
+/** Формула шифра комплекта (#632, Р6): шифр проекта — № по ГП ближайшей
+ *  папки «Здание по генплану» — марка и номер комплекта. Источники только
+ *  однозначные (`related`/цепочка папок формулам типа запрещены).
+ *  AST собран статически: адресация — внутренними номерами атрибутов (Р2),
+ *  имена — снимок для редактора. */
+export const komplektCipherFormula: FormulaNode = {
+  kind: 'op',
+  op: 'concat',
+  args: [
+    {
+      kind: 'field',
+      source: { kind: 'project' },
+      number: FORMULA_DEMO_NUMBERS.projectCode,
+      name: 'Шифр',
+    },
+    { kind: 'literal', value: '-' },
+    {
+      kind: 'field',
+      source: { kind: 'folder_nearest', kindId: nodeKindSeedIds.building },
+      number: FORMULA_DEMO_NUMBERS.buildingGp,
+      name: '№ по ГП',
+    },
+    { kind: 'literal', value: '-' },
+    { kind: 'field', source: { kind: 'self' }, number: FORMULA_DEMO_NUMBERS.marka, name: 'Марка' },
+    {
+      kind: 'field',
+      source: { kind: 'self' },
+      number: FORMULA_DEMO_NUMBERS.komplektNumber,
+      name: 'Номер комплекта',
+    },
+  ],
+};
+
+/** Форма создания «Комплекта»: марка и номер обязательны, шифр считает
+ *  формула (человек может поправить — тогда значение подавляет формулу). */
+export const komplektCreationForm: CreationForm = {
+  fields: [
+    { key: customFieldKey(fieldIds.marka), label: 'Марка', required: true, preset: null },
+    {
+      key: customFieldKey(fieldIds.komplektNumber),
+      label: 'Номер комплекта',
+      required: true,
+      preset: null,
+    },
+    {
+      key: customFieldKey(fieldIds.komplektCipher),
+      label: 'Шифр комплекта',
+      required: false,
+      preset: null,
+      formula: komplektCipherFormula,
+    },
+    { key: 'project', label: null, required: false, preset: null },
+  ],
+  chips: [],
+};
+
 export const archivedDemoType: DemoProcessType = {
   id: processTypeIds.archived,
   code: 'custom-check-docs',
@@ -127,7 +223,7 @@ export const archivedDemoType: DemoProcessType = {
   category: 'task',
   direction: null,
   isSystem: false,
-  sortOrder: 4,
+  sortOrder: 5,
   archivedAt: '2026-10-01T10:00:00Z',
   workflowId: ARCHIVED_WORKFLOW_ID,
   numbering: null,
@@ -139,6 +235,7 @@ export const demoProcessTypes: DemoProcessType[] = [
   quickTypeDto,
   overtimeType,
   hrType,
+  komplektType,
   archivedDemoType,
   ...letterProcessTypes,
 ];
@@ -198,6 +295,16 @@ export const demoWorkflowDetails: Record<string, WorkflowDetail> = {
     publishedAt,
     publishedBy,
     document: quickDocument,
+    stageEntityCounts: {},
+  },
+  // «Комплект» (#632): быстрый маршрут + форма создания с формулой шифра.
+  [KOMPLEKT_WORKFLOW_ID]: {
+    id: KOMPLEKT_WORKFLOW_ID,
+    typeIds: [komplektType.id],
+    version: 1,
+    publishedAt,
+    publishedBy,
+    document: { ...quickDocument, creation: komplektCreationForm },
     stageEntityCounts: {},
   },
   [ARCHIVED_WORKFLOW_ID]: {

@@ -21,6 +21,8 @@ import {
 import { demoStages } from '../../../../shared/mocks/data/task-stages.js';
 import { userRef } from '../../../../shared/mocks/data/users.js';
 import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
+import { removeOwnFormula } from '../../../../shared/custom-fields/formula/formula-mocks.js';
+import { taskDetailWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
 import { checkClearedRequired, checkUnboundValues, typeOfTask } from './task-create-policy.js';
 import { tasksChecklistHandlers } from './tasks-checklist-handlers.js';
 import { tasksListHandlers } from './tasks-list-handlers.js';
@@ -85,7 +87,8 @@ export const tasksHandlers = [
         .flat()
         .find((t) => t.id === params.id);
     if (!task) return notFound('Task not found');
-    return HttpResponse.json(taskDetailOf(task));
+    // Формулы типа (#632) — поверх клонированного DTO, не в сторе задач.
+    return HttpResponse.json(taskDetailWithFormulas(task));
   }),
 
   /** Ветка задачи для панели-навигатора: дерево от корневого предка. */
@@ -190,6 +193,11 @@ export const tasksHandlers = [
             },
             { status: 422 },
           );
+        }
+        // Ручная правка ячейки снимает свою формулу (Р5) — до записи значения:
+        // значение важнее, формула типа остаётся кнопкой «Как у типа».
+        for (const fieldId of Object.keys(body.customFields)) {
+          removeOwnFormula('task', task.id, fieldId);
         }
         task.customFields = next;
       }

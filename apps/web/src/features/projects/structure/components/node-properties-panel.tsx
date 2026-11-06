@@ -202,6 +202,9 @@ export function NodePropertiesPanel({
                     values={node.customFields}
                     refs={refs}
                     onChange={patchValue}
+                    host={{ kind: 'node', id: node.id, projectId }}
+                    hostContext={{ parentId: node.parentId, projectId, nodeId: node.id }}
+                    formulas={node.customFieldFormulas}
                   />
                 ) : null}
               </section>

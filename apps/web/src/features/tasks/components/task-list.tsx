@@ -20,7 +20,7 @@ import { EdgeHints } from '../../../shared/ui/board/board-scroller.js';
 import { useBoardEdgeScroll } from '../../../shared/ui/board/use-board-edge-scroll.js';
 import { useTasksPages, usePrefetchTask } from '../api/tasks-api.js';
 import type { TaskListItem } from '@nodus/contracts';
-import { taskListFields } from '../lib/task-fields.js';
+import { useTaskListFields } from '../lib/task-fields.js';
 import { buildTaskRows, filterVisibleRows, type TaskRow } from '../lib/task-tree.js';
 import { graphWidth, graphX, TaskListTree } from './task-list-graph.js';
 import { cn } from '@nodus/ui/lib/utils';
@@ -67,6 +67,7 @@ export function TaskList({
   /** Каскадное построение графа: база = индекс первой раскрытой строки,
    *  key перезапускает draw-on только нового раскрытия. */
   const [reveal, setReveal] = useState({ base: 0, key: 1 });
+  const taskListFields = useTaskListFields();
   const { visibleFields, sort, setWidth, cycleSort, commitOrder } = useViewFields(
     'tasks.list',
     taskListFields,
@@ -83,7 +84,7 @@ export function TaskList({
   // сортировка СИБЛИНГОВ внутри веток, структура дерева не ломается.
   const sorted = useMemo(
     () => sortRows(filtered, sort, taskListFields, (t) => t.id),
-    [filtered, sort],
+    [filtered, sort, taskListFields],
   );
   const rows = useMemo(() => buildTaskRows(sorted), [sorted]);
   const visible = useMemo(() => filterVisibleRows(rows, collapsed), [rows, collapsed]);

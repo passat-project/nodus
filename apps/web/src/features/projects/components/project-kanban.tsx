@@ -15,13 +15,10 @@ import { BoardTaskCard } from '../../../shared/ui/board/board-task-card.js';
 import { KanbanSkeleton } from '../../../shared/ui/board/kanban-skeleton.js';
 import { useKanbanBoard } from '../../../shared/ui/board/use-kanban-board.js';
 import { isFilteringActive, type ActiveListFilter } from '../../../shared/views/list-filters.js';
-import { makeTaskCardFields } from '../../../shared/views/task-card-fields.js';
+import { useTaskCardFields } from '../../../shared/views/task-card-fields.js';
 import { useFilteredList } from '../../../shared/views/use-list-toolbar.js';
 import { useViewFields } from '../../../shared/views/use-view-fields.js';
 import { projectKanbanFeedUrl, useMoveProjectTask } from '../api/projects-api.js';
-
-/** Реестр — module-константа; «Проект» скрыт по умолчанию (контекст очевиден). */
-export const projectKanbanCardFields = makeTaskCardFields({ projectVisible: false });
 
 /**
  * Проектный канбан (плейбук §3.1): задачи проекта — ТЕ ЖЕ сущности
@@ -48,7 +45,10 @@ export function ProjectKanban({
   const { data: stages } = useTaskStages(defaultType?.id, { enabled: defaultType !== undefined });
   const move = useMoveProjectTask();
   const quick = useQuickCreate();
-  const { isVisible } = useViewFields('projects.kanban', projectKanbanCardFields);
+  // Реестр вида с атрибутами портала (#632); «Проект» скрыт по умолчанию —
+  // доска открыта в контексте проекта.
+  const cardFields = useTaskCardFields({ projectVisible: false });
+  const { isVisible, fields } = useViewFields('projects.kanban', cardFields);
   const openCard = useOpenCard();
 
   const board = useKanbanBoard({
@@ -117,6 +117,7 @@ export function ProjectKanban({
                       task={task}
                       parentNumber={task.parentId ? board.numberById.get(task.parentId) : undefined}
                       isVisible={isVisible}
+                      fields={fields}
                       placeholder={placeholder}
                       onOpen={(t, rect) => openCard({ kind: 'task', id: t.id }, rect)}
                     />
@@ -133,6 +134,7 @@ export function ProjectKanban({
             task={board.activeTask}
             parentNumber={board.activeParent}
             isVisible={isVisible}
+            fields={fields}
             overlay
             onOpen={() => {}}
           />

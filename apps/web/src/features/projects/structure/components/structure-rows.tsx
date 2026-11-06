@@ -1,10 +1,11 @@
 import { ChevronRight } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import type { NodeKind } from '@nodus/contracts';
+import type { CustomFieldRef, NodeKind } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { attributeRefs } from '../../../../shared/views/attribute-fields.js';
 import { uiPx } from '../../../../shared/ui/ui-scale.js';
 import type { RowMenuItem } from '../../../../shared/views/row-menu.js';
 import type { StructureNodeRow, StructureTaskRow } from '../lib/structure-tree.js';
@@ -17,12 +18,14 @@ import {
   rowBase,
   taskCell,
 } from './structure-cells.js';
-import type { StructureField } from './structure-cells.js';
+import type { StructureAttributeDefs, StructureField } from './structure-cells.js';
 import { StructureContextMenu } from './structure-menus.js';
 
 /** Строки таблицы структуры: узел-папка, задача-лист и секция «Без узла».
  *  Вложенность — отступами в ячейке названия (как в проводнике), без
- *  колонки графа, линий и точек. Пустые ячейки — пустые (без дефисов). */
+ *  колонки графа, линий и точек. Пустые ячейки — пустые (без дефисов).
+ *  Атрибутные ячейки (#632) получают определения и ссылки: у папок — срез
+ *  структуры, у задач — ссылки самой задачи. */
 
 const INDENT = uiPx(24);
 
@@ -45,6 +48,8 @@ export function StructureNodeRowView({
   invalid,
   isDragging,
   fields,
+  attributes,
+  refs,
   grid,
   showSelection,
   readOnly,
@@ -63,6 +68,10 @@ export function StructureNodeRowView({
   invalid: boolean;
   isDragging: boolean;
   fields: readonly StructureField[];
+  /** Определения атрибутных колонок по id поля (#632). */
+  attributes: StructureAttributeDefs;
+  /** Ссылки значений папок — карта по id (срез структуры проекта). */
+  refs: ReadonlyMap<string, CustomFieldRef>;
   grid: { templateColumns: string };
   showSelection: boolean;
   readOnly: boolean;
@@ -131,7 +140,7 @@ export function StructureNodeRowView({
                 ) : (
                   <span className="size-5 shrink-0" />
                 )}
-                {nodeCell(row, field.id, kind)}
+                {nodeCell(row, field.id, kind, attributes, refs)}
                 {collapsed && row.descendantCount > 0 ? (
                   <span className="shrink-0 font-mono text-label-sm text-muted-foreground tabular-nums">
                     +{row.descendantCount}
@@ -139,7 +148,7 @@ export function StructureNodeRowView({
                 ) : null}
               </>
             ) : (
-              nodeCell(row, field.id, kind)
+              nodeCell(row, field.id, kind, attributes, refs)
             )}
           </span>
         ))}
@@ -159,6 +168,7 @@ export function StructureTaskRowView({
   dragData,
   isDragging,
   fields,
+  attributes,
   grid,
   showSelection,
   readOnly,
@@ -174,6 +184,8 @@ export function StructureTaskRowView({
   dragData: DragPayload;
   isDragging: boolean;
   fields: readonly StructureField[];
+  /** Определения атрибутных колонок по id поля (#632). */
+  attributes: StructureAttributeDefs;
   grid: { templateColumns: string };
   showSelection: boolean;
   readOnly: boolean;
@@ -183,6 +195,9 @@ export function StructureTaskRowView({
     data: dragData,
     disabled: readOnly,
   });
+  // Ссылки значений задачи — карта по id, одна на строку (ячеек может быть
+  // несколько: ссылочные атрибуты и списки).
+  const taskRefs = attributeRefs(row.task);
   const style: CSSProperties = { gridTemplateColumns: grid.templateColumns };
   return (
     <StructureContextMenu items={items}>
@@ -229,7 +244,7 @@ export function StructureTaskRowView({
                 ) : (
                   <span className="size-5 shrink-0" />
                 )}
-                {taskCell(row.task, field.id)}
+                {taskCell(row.task, field.id, attributes, taskRefs)}
                 {collapsed && row.descendantCount > 0 ? (
                   <span className="shrink-0 font-mono text-label-sm text-muted-foreground tabular-nums">
                     +{row.descendantCount}
@@ -237,7 +252,7 @@ export function StructureTaskRowView({
                 ) : null}
               </>
             ) : (
-              taskCell(row.task, field.id)
+              taskCell(row.task, field.id, attributes, taskRefs)
             )}
           </span>
         ))}

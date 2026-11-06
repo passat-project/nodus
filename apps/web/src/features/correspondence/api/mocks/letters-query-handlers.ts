@@ -29,6 +29,7 @@ import {
 import { demoUserListItems } from '../../../../shared/mocks/data/users.js';
 import { counterpartyMatcher } from '../../../../shared/mocks/live-counterparty.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
+import { letterWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
 import { apiError, notFound } from './letters-mock-checks.js';
 
 /** Чтение писем (#55, §6.2): списки вкладок курсором, держатели решений,
@@ -121,7 +122,8 @@ export const lettersQueryHandlers = [
     const letter = findLetter(String(params.id));
     const actor = getMockActor();
     if (!letter || !canSeeLetter(letter, actor)) return notFound();
-    return HttpResponse.json(letterDetailOf(letter, actor));
+    // Формулы типа письма (#632) — на чтении, поверх клонированного DTO.
+    return HttpResponse.json(letterWithFormulas(letterDetailOf(letter, actor)));
   }),
 
   /** Дерево «ёлочки» (#461, Р2): корень — верх цепочки, текущее письмо

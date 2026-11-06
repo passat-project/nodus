@@ -21,11 +21,8 @@ import {
   taskSearchText,
   useTaskFilterDefs,
 } from '../../../shared/views/task-filter-fields.js';
-import { makeTaskTableFields } from '../../../shared/views/task-table-fields.js';
+import { useTaskTableFields } from '../../../shared/views/task-table-fields.js';
 import { ViewSettings } from '../../../shared/views/view-settings.js';
-
-/** Реестры таблиц — module-константы (стабильная идентичность useViewFields). */
-const employeeTaskTableFields = makeTaskTableFields();
 
 /**
  * Вкладки «Задачи»/«Проекты» карточки сотрудника — ПОЛНОЦЕННЫЕ журналы по
@@ -45,6 +42,8 @@ export function EmployeeTasksTab({
 }) {
   const openCard = useOpenCard();
   const toolbar = useListToolbar('directory.tasks', taskBuiltinPresets);
+  // Реестр колонок — хук: атрибуты портала (#632) приходят с сервера.
+  const fields = useTaskTableFields();
   const defs = useTaskFilterDefs({
     projectVisible: projectsAvailable(),
     assigneeVisible: false,
@@ -73,12 +72,12 @@ export function EmployeeTasksTab({
             {ui.common.create}
           </Button>
         }
-        right={<ViewSettings viewKey="directory.tasks" defs={employeeTaskTableFields} />}
+        right={<ViewSettings viewKey="directory.tasks" defs={fields} />}
       />
       <div className="min-h-0 flex-1">
         <DataTable
           viewKey="directory.tasks"
-          defs={employeeTaskTableFields}
+          defs={fields}
           rows={rows}
           rowKey={(task) => task.id}
           isLoading={isLoading}

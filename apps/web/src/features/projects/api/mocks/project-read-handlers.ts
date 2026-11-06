@@ -2,6 +2,7 @@ import { http, HttpResponse } from 'msw';
 import { ErrorCode, listProjectsQuerySchema, type ProjectListItem } from '@nodus/contracts';
 
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
+import { projectWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
 import {
   canSeeProject,
   demoProjectMembersFor,
@@ -94,7 +95,8 @@ export const projectReadHandlers = [
     const row = findDemoProjectRow(String(params.id));
     const actor = getMockActor();
     if (!row || !canSeeProject(row, actor)) return notFound();
-    return HttpResponse.json(detailOf(row, actor));
+    // Формулы типа проекта (#632) — на чтении, поверх клонированного DTO.
+    return HttpResponse.json(projectWithFormulas(detailOf(row, actor), row.typeId));
   }),
 
   http.get('/api/v1/projects/:id/members', ({ params }) => {

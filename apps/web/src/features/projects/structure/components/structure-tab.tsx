@@ -195,6 +195,7 @@ export function StructureTab({
         <StructureToolbar
           toolbar={model.toolbar}
           defs={filterDefs}
+          fields={model.fields}
           canEdit={canEdit}
           onCreateNode={() => setDialog({ kind: 'create', parent: null })}
           onExpandAll={() => model.setCollapsed(new Set())}
@@ -240,6 +241,8 @@ export function StructureTab({
                     collapsed={model.collapsed}
                     noNodeCollapsed={model.noNodeCollapsed}
                     fields={model.visibleFields}
+                    attributes={model.attributeDefinitions}
+                    refs={model.nodeRefs}
                     grid={{ templateColumns: model.gridTemplateColumns }}
                     selection={model.selection}
                     dnd={dnd}

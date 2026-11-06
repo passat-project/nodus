@@ -30,6 +30,8 @@ import {
 } from '../../../../shared/mocks/data/letters.js';
 import { demoUserListItems } from '../../../../shared/mocks/data/users.js';
 import { actorUserRef, getMockActor } from '../../../../shared/mocks/mock-actor.js';
+import { letterWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
+import { removeOwnFormula } from '../../../../shared/custom-fields/formula/formula-mocks.js';
 import {
   apiError,
   attachedRefsOf,
@@ -204,6 +206,10 @@ export const lettersMutationHandlers = [
           : letter.addressee,
     };
     const changes = patchChanges(letter, body, next);
+    // Ручная правка ячейки снимает свою формулу письма (Р5, #632).
+    for (const fieldId of Object.keys(body.customFields ?? {})) {
+      removeOwnFormula('letter', letter.id, fieldId);
+    }
     Object.assign(letter, next, {
       theirNumber: body.theirNumber ?? letter.theirNumber,
       theirDate: body.theirDate ?? letter.theirDate,
@@ -227,7 +233,7 @@ export const lettersMutationHandlers = [
     }
     const conversation = demoConversations.find((c) => c.letter?.id === letter.id);
     if (conversation?.letter) conversation.letter.subject = letter.subject;
-    return HttpResponse.json(letterDetailOf(letter, actor));
+    return HttpResponse.json(letterWithFormulas(letterDetailOf(letter, actor)));
   }),
 
   /** Удаление спама (Р12): только из «Новых», физически, без следа содержимого. */

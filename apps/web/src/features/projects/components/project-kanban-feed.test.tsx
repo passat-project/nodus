@@ -36,6 +36,10 @@ vi.mock('../../../shared/api/process-types-api.js', () => ({
   useAliveProcessTypes: () => ({ data: [] }),
 }));
 vi.mock('../../../shared/tasks/quick-create.js', () => ({ useQuickCreate: () => ({}) }));
+// Реестр вида грузит определения атрибутов (#632) — тесту фида не нужен.
+vi.mock('../../../shared/custom-fields/queries.js', () => ({
+  useCustomFieldDefinitions: () => ({ data: [] }),
+}));
 vi.mock('../../../shared/views/use-view-fields.js', () => ({
   useViewFields: () => ({ isVisible: () => true }),
 }));

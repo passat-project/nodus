@@ -20,6 +20,8 @@ import { demoUserListItems } from '../../../../shared/mocks/data/users.js';
 import { counterpartyRefById } from '../../../../shared/mocks/data/counterparties.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
+import { projectWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
+import { removeOwnFormula } from '../../../../shared/custom-fields/formula/formula-mocks.js';
 import {
   invalidMockValues,
   withStaticDefaults,
@@ -170,8 +172,14 @@ export const projectMutationHandlers = [
     if (malformed.length > 0) return valuesInvalid(malformed);
     const cleared = clearedProjectFields(requiredProjectFields(form), values);
     if (cleared.length > 0) return fieldsRequired(type.id, cleared, 'clear');
+    // Ручная правка ячейки снимает свою формулу проекта (Р5, #632) — до записи.
+    for (const [fieldId, value] of Object.entries(values)) {
+      if (value !== null) removeOwnFormula('project', row.id, fieldId);
+    }
     const updated = updateDemoProject(row.id, body, actor.id);
-    return updated ? HttpResponse.json(detailOf(updated, actor)) : notFound();
+    return updated
+      ? HttpResponse.json(projectWithFormulas(detailOf(updated, actor), updated.typeId))
+      : notFound();
   }),
 
   http.post('/api/v1/projects/:id/status', async ({ params, request }) => {

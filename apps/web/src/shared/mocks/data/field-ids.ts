@@ -43,4 +43,22 @@ export const fieldIds = {
   projectCode: SYSTEM_FIELD_IDS.projectCode,
   projectClient: SYSTEM_FIELD_IDS.projectClient,
   nodeCode: SYSTEM_FIELD_IDS.nodeCode,
+  /** Демо-комплект (#632): номер и шифр комплекта — тип процесса «Комплект». */
+  komplektNumber: fid(28),
+  komplektCipher: fid(29),
+  /** «№ по ГП» — вид папки «Здание по генплану» (формула шифра комплекта). */
+  buildingGp: fid(30),
 };
+
+/** Внутренние номера атрибутов, на которые ссылаются демо-формулы (#632):
+ *  AST в данных собирается по номерам (Р2 — стабильный адрес), поэтому
+ *  номера живут рядом с id, а не магическими числами в маршрутах. */
+export const FORMULA_DEMO_NUMBERS = {
+  /** «Шифр» проекта (первое определение реестра). */
+  projectCode: 1,
+  /** «Марка» — сквозной атрибут. */
+  marka: 27,
+  komplektNumber: 28,
+  komplektCipher: 29,
+  buildingGp: 30,
+} as const;
