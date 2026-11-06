@@ -1,4 +1,4 @@
-import type { RefObject } from 'react';
+import type { Ref } from 'react';
 import type { CustomFieldDefinition, FormulaValidationIssue } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
@@ -34,7 +34,7 @@ export function FormulaLine({
   onInsertText,
   onApplyAutocomplete,
 }: {
-  rootRef: RefObject<HTMLDivElement | null>;
+  rootRef: Ref<HTMLDivElement>;
   empty: boolean;
   error: string | null;
   resultText: string;

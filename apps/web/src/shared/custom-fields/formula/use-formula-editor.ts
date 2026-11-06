@@ -58,6 +58,14 @@ export function useFormulaEditor({
   onClose: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  /** Появление contenteditable: Radix монтирует портал позже эффекта, и без
+   *  этого сигнала второй открыв редактора оставался пустым (AST уже в кэше,
+   *  rootRef ещё null, повторного эффекта нет). */
+  const [rootEpoch, setRootEpoch] = useState(0);
+  const setRootRef = useCallback((node: HTMLDivElement | null) => {
+    rootRef.current = node;
+    if (node) setRootEpoch((value) => value + 1);
+  }, []);
   const chipsRef = useRef(new Map<string, FormulaChip>());
   /** Пользователь уже правил строку — ответ GET не должен затирать ввод. */
   const dirtyRef = useRef(false);
@@ -155,7 +163,7 @@ export function useFormulaEditor({
     // GET — его нужно применить, если пользователь ещё не правил строку.
     if (cell.data === undefined || dirtyRef.current) return;
     setDom(cell.data.ast ?? null);
-  }, [open, cell.data, setDom]);
+  }, [open, cell.data, setDom, rootEpoch]);
 
   useEffect(() => {
     if (!parse.ast) {
@@ -298,6 +306,8 @@ export function useFormulaEditor({
 
   return {
     rootRef,
+    setRootRef,
+    rootEpoch,
     cell,
     definitions,
     kinds,

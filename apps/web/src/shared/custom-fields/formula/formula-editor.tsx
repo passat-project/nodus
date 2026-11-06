@@ -61,6 +61,8 @@ export function FormulaEditor({
 }) {
   const {
     rootRef,
+    setRootRef,
+    rootEpoch,
     cell,
     definitions,
     kinds,
@@ -110,7 +112,7 @@ export function FormulaEditor({
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
-  }, [open, cell.isLoading, rootRef]);
+  }, [open, cell.isLoading, rootEpoch, rootRef]);
 
   return (
     <>
@@ -155,7 +157,7 @@ export function FormulaEditor({
                 </p>
               ) : null}
               <FormulaLine
-                rootRef={rootRef}
+                rootRef={setRootRef}
                 empty={empty}
                 error={error}
                 resultText={resultText}
