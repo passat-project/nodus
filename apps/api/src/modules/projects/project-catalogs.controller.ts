@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -39,9 +50,14 @@ import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../core/openapi/api-idempotency.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { TransactionRunner } from '../../core/database/transaction-runner.js';
+import {
+  CUSTOM_FIELD_REGISTRY,
+  type CustomFieldRegistry,
+} from '../custom-fields/ports/custom-field-registry.port.js';
 import { NodeKindsRepository } from './project-node-kinds.repository.js';
 import { ProjectGroupsRepository } from './project-groups.repository.js';
 import { ProjectTypesRepository } from './project-types.repository.js';
+import { assertProjectTypeForm, syncProjectTypeForm } from './project-type-form.js';
 import { ProjectsService } from './projects.service.js';
 
 const idParamSchema = z.uuid();
@@ -67,6 +83,7 @@ export class ProjectCatalogsController {
     private readonly nodeKinds: NodeKindsRepository,
     private readonly settings: ProjectsService,
     private readonly txRunner: TransactionRunner,
+    @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
   ) {}
 
   // ===== Типы проектов («Автоматизация», Р6) =====
@@ -99,10 +116,15 @@ export class ProjectCatalogsController {
     dto: ProjectTypeCreateBody,
   ): Promise<ProjectType> {
     return this.txRunner.run(async (tx) => {
+      await this.types.lockForms(tx);
       if (await this.types.nameTaken(dto.name)) {
         throw DomainException.conflict('Project type name is already taken');
       }
-      return this.types.create(tx, dto);
+      if (dto.form !== undefined) await assertProjectTypeForm(this.customFields, tx, dto.form);
+      const created = await this.types.create(tx, dto);
+      if (dto.form !== undefined)
+        await syncProjectTypeForm(this.customFields, tx, created.id, dto.form);
+      return created;
     });
   }
 
@@ -125,6 +147,10 @@ export class ProjectCatalogsController {
     dto: ProjectTypeUpdateBody,
   ): Promise<ProjectType> {
     return this.txRunner.run(async (tx) => {
+      if (dto.form !== undefined) {
+        await this.types.lockForms(tx);
+        await assertProjectTypeForm(this.customFields, tx, dto.form);
+      }
       if (dto.name !== undefined && (await this.types.nameTaken(dto.name, id))) {
         throw DomainException.conflict('Project type name is already taken');
       }
@@ -140,6 +166,7 @@ export class ProjectCatalogsController {
       }
       const updated = await this.types.update(tx, id, dto);
       if (!updated) throw DomainException.notFound('Project type not found');
+      if (dto.form !== undefined) await syncProjectTypeForm(this.customFields, tx, id, dto.form);
       return updated;
     });
   }

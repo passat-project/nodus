@@ -3,7 +3,10 @@ import { Module } from '@nestjs/common';
 import { NodeKindsRepository } from './project-node-kinds.repository.js';
 import { ProjectParticipantsRepository } from './project-participants.repository.js';
 import { ProjectNodesRepository } from './project-nodes.repository.js';
+import { ProjectTypesRepository } from './project-types.repository.js';
 import { ProjectsRepository } from './projects.repository.js';
+import { FieldBindingFormCleanerProvider } from './ports/field-binding-form-cleaner.provider.js';
+import { FIELD_BINDING_FORM_CLEANER } from './ports/field-binding-form-cleaner.port.js';
 import { ProjectFieldUsageProvider } from './ports/project-field-usage.provider.js';
 import { PROJECT_FIELD_USAGE_READER } from './ports/project-field-usage.port.js';
 import { ProjectReaderProvider } from './ports/project-reader.provider.js';
@@ -20,9 +23,9 @@ import {
 } from './ports/scope-invalidation.handler.js';
 
 /**
- * Порты чтения проектов (ADR-0012): тонкий модуль экспорта read-портов
- * чужим модулям-потребителям (#52 Р11 — задачи, корреспонденция,
- * custom-fields, chat). Единственная допустимая форма межмодульного
+ * Порты проектов (ADR-0012): тонкий модуль экспорта read-портов и
+ * write-порта уборки формы места (#646) чужим модулям-потребителям (#52 Р11 —
+ * задачи, корреспонденция, custom-fields, chat). Единственная допустимая форма межмодульного
  * импорта; доменные сервисы и контроллеры наружу не экспортируются.
  */
 @Module({
@@ -31,6 +34,7 @@ import {
     ProjectParticipantsRepository,
     ProjectNodesRepository,
     NodeKindsRepository,
+    ProjectTypesRepository,
     ProjectReaderProvider,
     { provide: PROJECT_READER, useExisting: ProjectReaderProvider },
     { provide: PROJECT_CHAT_READER, useExisting: ProjectReaderProvider },
@@ -43,6 +47,9 @@ import {
     { provide: NODE_REF_READER, useExisting: NodeRefReaderProvider },
     FieldBindingTargetsProvider,
     { provide: FIELD_BINDING_TARGET_READER, useExisting: FieldBindingTargetsProvider },
+    // Снятие слота формы места при unbind атрибута (#646).
+    FieldBindingFormCleanerProvider,
+    { provide: FIELD_BINDING_FORM_CLEANER, useExisting: FieldBindingFormCleanerProvider },
     // Сброс кэша множеств видимости по событиям проектов (Р3).
     ProjectScopeInvalidateRunner,
     ProjectCreatedScopeHandler,
@@ -55,6 +62,7 @@ import {
     PROJECT_FIELD_USAGE_READER,
     NODE_REF_READER,
     FIELD_BINDING_TARGET_READER,
+    FIELD_BINDING_FORM_CLEANER,
   ],
 })
 export class ProjectsPortsModule {}

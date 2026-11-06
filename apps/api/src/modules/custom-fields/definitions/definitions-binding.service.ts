@@ -17,6 +17,10 @@ import {
   FIELD_BINDING_TARGET_READER,
   type FieldBindingTargetReader,
 } from '../../projects/ports/field-binding-targets.port.js';
+import {
+  FIELD_BINDING_FORM_CLEANER,
+  type FieldBindingFormCleaner,
+} from '../../projects/ports/field-binding-form-cleaner.port.js';
 import { DefinitionMapper, type FieldDefinitionRow } from './definition.mapper.js';
 import { emitDefinitionChanged } from './definition-events.js';
 import {
@@ -46,6 +50,7 @@ export class DefinitionsBindingService {
     private readonly eventBus: EventBus,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
     @Inject(FIELD_BINDING_TARGET_READER) private readonly targets: FieldBindingTargetReader,
+    @Inject(FIELD_BINDING_FORM_CLEANER) private readonly formCleaner: FieldBindingFormCleaner,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(DefinitionsBindingService.name);
@@ -77,6 +82,15 @@ export class DefinitionsBindingService {
     await assertTargetsBindable(this.catalog, this.targets, kind, [targetId]);
     return this.txRunner.run(async (tx) => {
       await this.definitions.unbindTarget(id, bindingRowKind(kind), targetId, tx);
+      const rowKind = bindingRowKind(kind);
+      if (rowKind !== 'process_type') {
+        await this.formCleaner.removeFieldFromForm(
+          { kind: rowKind, id: targetId },
+          id,
+          actorId,
+          tx,
+        );
+      }
       return this.afterChange(tx, id, actorId);
     });
   }

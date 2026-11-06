@@ -87,6 +87,7 @@ function makeService() {
     nodeKinds: vi.fn(async () => [{ id: 'nk-1', name: 'Комплект', archived: false }]),
   };
   const usageReader = { usage: vi.fn(async () => ({})) };
+  const formCleaner = { removeFieldFromForm: vi.fn(async () => undefined) };
   const logger = { setContext: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
   const service = new DefinitionsService(
     definitions as never,
@@ -98,6 +99,7 @@ function makeService() {
     workflows as never,
     catalog as never,
     targets as never,
+    formCleaner as never,
     usageReader as never,
     logger as never,
   );
@@ -111,6 +113,7 @@ function makeService() {
     workflows,
     catalog,
     targets,
+    formCleaner,
   };
 }
 

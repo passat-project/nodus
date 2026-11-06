@@ -140,7 +140,10 @@ export function FieldDialogForm({
   const hasSettings =
     family !== null &&
     (familyModifier(family) !== null || family === 'number' || family === 'money');
-  const kindLocked = definition !== null && definition.isCompany;
+  // Вид использования фиксируется при создании: PATCH не меняет isCompany,
+  // а переключение записи в глобальную молча сняло бы привязки и не сохранило
+  // значение (#646). Для нового атрибута выбор доступен.
+  const kindLocked = definition !== null;
 
   return (
     <div className="flex flex-col gap-5 pb-1">

@@ -18,7 +18,6 @@ import {
   createDemoProject,
   joinDemoProject,
   leaveDemoProject,
-  projectCodeTaken,
   removeDemoProjectMember,
   setDemoProjectStatus,
   transferDemoProject,
@@ -57,12 +56,6 @@ export const projectMutationHandlers = [
       if (!portfolio || portfolio.archivedAt !== null) return invalid();
     }
     if (body.clientId && !counterpartyRefById(body.clientId)) return invalid();
-    if (body.code && projectCodeTaken(body.code, null)) {
-      return HttpResponse.json(
-        { code: ErrorCode.CONFLICT, message: 'Project code is already taken' },
-        { status: 409 },
-      );
-    }
     const row = createDemoProject(body, actor);
     return HttpResponse.json(detailOf(row, actor), { status: 201 });
   }),
@@ -83,12 +76,6 @@ export const projectMutationHandlers = [
       !actor.permissions.includes(Permission.PROJECT_MANAGE)
     ) {
       return forbidden();
-    }
-    if (body.code && projectCodeTaken(body.code, row.id)) {
-      return HttpResponse.json(
-        { code: ErrorCode.CONFLICT, message: 'Project code is already taken' },
-        { status: 409 },
-      );
     }
     if (body.portfolioId) {
       const portfolio = demoProjectGroups.find((entry) => entry.id === body.portfolioId);

@@ -180,6 +180,9 @@ export const ErrorCode = {
   /** Форма вида ссылается на негодные атрибуты (`details.reason`:
    *  unknown_field | hidden_field; 422; #556). */
   PROJECT_NODE_KIND_FORM_INVALID: 'PROJECT_NODE_KIND_FORM_INVALID',
+  /** Форма типа проекта ссылается на негодные атрибуты (`details.reason`:
+   *  unknown_field; 422; #631 Р10). */
+  PROJECT_TYPE_FORM_INVALID: 'PROJECT_TYPE_FORM_INVALID',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

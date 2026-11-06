@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 import type {
   CreateCustomFieldBody,
+  CustomFieldBindings,
   CustomFieldDefinition,
   CustomFieldModule,
   CustomFieldUsage,
@@ -11,7 +12,10 @@ import type {
 } from '@nodus/contracts';
 import { CUSTOM_FIELD_LIMITS, ErrorCode } from '@nodus/contracts';
 
-import { TransactionRunner } from '../../../core/database/transaction-runner.js';
+import {
+  TransactionRunner,
+  type TransactionClient,
+} from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { EventBus } from '../../../core/events/event-bus.js';
 import {
@@ -26,6 +30,10 @@ import {
   FIELD_BINDING_TARGET_READER,
   type FieldBindingTargetReader,
 } from '../../projects/ports/field-binding-targets.port.js';
+import {
+  FIELD_BINDING_FORM_CLEANER,
+  type FieldBindingFormCleaner,
+} from '../../projects/ports/field-binding-form-cleaner.port.js';
 import {
   WORKFLOW_FIELD_USAGE_READER,
   type WorkflowFieldUsageReader,
@@ -65,6 +73,7 @@ export class DefinitionsService {
     @Inject(WORKFLOW_FIELD_USAGE_READER) private readonly workflows: WorkflowFieldUsageReader,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
     @Inject(FIELD_BINDING_TARGET_READER) private readonly targets: FieldBindingTargetReader,
+    @Inject(FIELD_BINDING_FORM_CLEANER) private readonly formCleaner: FieldBindingFormCleaner,
     private readonly usageReader: DefinitionsUsageService,
     private readonly logger: PinoLogger,
   ) {
@@ -188,7 +197,10 @@ export class DefinitionsService {
       }
       if (dto.reportIndexed !== undefined) data.reportIndexed = dto.reportIndexed;
       await this.definitions.update(id, data, tx);
-      if (dto.bindings !== undefined) await replaceBindings(this.definitions, id, dto.bindings, tx);
+      if (dto.bindings !== undefined) {
+        await replaceBindings(this.definitions, id, dto.bindings, tx);
+        await this.cleanRemovedFormSlots(current, dto.bindings, actorId, tx);
+      }
       const row = (await this.definitions.findById(id, tx)) ?? current;
       const fields = Object.keys(data);
       await this.emitChanged(
@@ -270,6 +282,30 @@ export class DefinitionsService {
       await this.emitChanged(tx, row, 'updated', actorId, ['companyValue']);
       return this.mapper.toDto(row, tx);
     });
+  }
+
+  /** Снятие привязки полным набором (диалог атрибута) — слоты форм мест
+   *  убираются синхронно (#646): инвариант «слот = привязка» в обе стороны. */
+  private async cleanRemovedFormSlots(
+    current: FieldDefinitionRow,
+    next: CustomFieldBindings,
+    actorId: string,
+    tx: TransactionClient,
+  ): Promise<void> {
+    const removed = current.bindings.filter(
+      (binding) =>
+        (binding.targetKind === 'project_type' &&
+          !next.projectTypeIds.includes(binding.targetId)) ||
+        (binding.targetKind === 'node_kind' && !next.nodeKindIds.includes(binding.targetId)),
+    );
+    for (const binding of removed) {
+      await this.formCleaner.removeFieldFromForm(
+        { kind: binding.targetKind as 'project_type' | 'node_kind', id: binding.targetId },
+        current.id,
+        actorId,
+        tx,
+      );
+    }
   }
 
   /** Одна точка события изменения реестра — `definition-events.ts` (#432). */

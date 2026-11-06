@@ -56,6 +56,7 @@ function makeService() {
     nodeKinds: vi.fn(async () => [{ id: 'nk-1', name: 'Комплект', archived: true }]),
   };
   const logger = { setContext: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  const formCleaner = { removeFieldFromForm: vi.fn(async () => undefined) };
   const service = new DefinitionsBindingService(
     definitions as never,
     mapper as never,
@@ -63,9 +64,10 @@ function makeService() {
     eventBus as never,
     catalog as never,
     targets as never,
+    formCleaner as never,
     logger as never,
   );
-  return { service, definitions, eventBus, catalog, targets };
+  return { service, definitions, eventBus, catalog, targets, formCleaner };
 }
 
 describe('DefinitionsBindingService.bind (#631, Р3)', () => {
@@ -166,12 +168,19 @@ describe('DefinitionsBindingService.bind (#631, Р3)', () => {
 
 describe('DefinitionsBindingService.unbind (#631, О3 — снятие всегда разрешено)', () => {
   it('снятие пишется тем же kind и эмитит событие', async () => {
-    const { service, definitions, eventBus } = makeService();
+    const { service, definitions, eventBus, formCleaner } = makeService();
     await service.unbind(ROW.id, 'project-type', 'pt-1', 'actor-1');
     expect(definitions.unbindTarget).toHaveBeenCalledWith(
       ROW.id,
       'project_type',
       'pt-1',
+      expect.anything(),
+    );
+    // Слот формы места и есть привязка: unbind чистит слот (#646).
+    expect(formCleaner.removeFieldFromForm).toHaveBeenCalledWith(
+      { kind: 'project_type', id: 'pt-1' },
+      ROW.id,
+      'actor-1',
       expect.anything(),
     );
     expect(eventBus.emit).toHaveBeenCalledWith(
@@ -180,6 +189,12 @@ describe('DefinitionsBindingService.unbind (#631, О3 — снятие всег�
       expect.objectContaining({ change: 'updated', fields: ['bindings'] }),
       expect.anything(),
     );
+  });
+
+  it('process-type — форм-слота нет, уборка формы не вызывается', async () => {
+    const { service, formCleaner } = makeService();
+    await service.unbind(ROW.id, 'process-type', 't-1', 'actor-1');
+    expect(formCleaner.removeFieldFromForm).not.toHaveBeenCalled();
   });
 
   it('цель проверяется и на снятии: неизвестная — 404', async () => {

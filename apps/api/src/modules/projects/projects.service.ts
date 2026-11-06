@@ -199,6 +199,13 @@ export class ProjectsService {
           projectId: id,
           fields,
           ...(patch.name !== undefined ? { name: patch.name } : {}),
+          ...(fields.some((field) => field === `cf.${SYSTEM_FIELD_IDS.projectCode}`)
+            ? {
+                code: codeOf(
+                  (patch.customFields as Prisma.JsonValue | undefined) ?? row.customFields,
+                ),
+              }
+            : {}),
           ...(fields.some((field) => field === `cf.${SYSTEM_FIELD_IDS.projectClient}`)
             ? {
                 clientId: clientOf(

@@ -60,6 +60,7 @@ function makeService() {
   const catalog = { typeRefs: vi.fn(async () => []) };
   const targets = { projectTypes: vi.fn(async () => []), nodeKinds: vi.fn(async () => []) };
   const usageReader = { usage: vi.fn(async () => ({})) };
+  const formCleaner = { removeFieldFromForm: vi.fn(async () => undefined) };
   const logger = { setContext: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
   const service = new DefinitionsService(
     definitions as never,
@@ -71,6 +72,7 @@ function makeService() {
     workflows as never,
     catalog as never,
     targets as never,
+    formCleaner as never,
     usageReader as never,
     logger as never,
   );

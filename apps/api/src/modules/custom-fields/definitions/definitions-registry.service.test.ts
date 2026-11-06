@@ -13,6 +13,39 @@ import { makeService, ROW, row } from './definitions-service.test-kit.js';
  */
 
 describe('DefinitionsService.update (#631, Р3)', () => {
+  it('снятие привязок полным набором чистит слоты форм мест (#646)', async () => {
+    const { service, definitions, formCleaner } = makeService();
+    definitions.findById.mockResolvedValue(
+      row({
+        bindings: [
+          { targetKind: 'process_type', targetId: 't-1' },
+          { targetKind: 'project_type', targetId: 'pt-1' },
+          { targetKind: 'node_kind', targetId: 'nk-1' },
+        ],
+      }),
+    );
+    await service.update(
+      ROW.id,
+      {
+        bindings: { processTypeIds: ['t-1'], projectTypeIds: [], nodeKindIds: [] },
+      } as never,
+      'actor-1',
+    );
+    expect(formCleaner.removeFieldFromForm).toHaveBeenCalledWith(
+      { kind: 'project_type', id: 'pt-1' },
+      ROW.id,
+      'actor-1',
+      expect.anything(),
+    );
+    expect(formCleaner.removeFieldFromForm).toHaveBeenCalledWith(
+      { kind: 'node_kind', id: 'nk-1' },
+      ROW.id,
+      'actor-1',
+      expect.anything(),
+    );
+    expect(formCleaner.removeFieldFromForm).toHaveBeenCalledTimes(2);
+  });
+
   it('расширение text → long_text разрешено', async () => {
     const { service, definitions } = makeService();
     await service.update(ROW.id, { type: 'long_text' } as never, 'actor-1');

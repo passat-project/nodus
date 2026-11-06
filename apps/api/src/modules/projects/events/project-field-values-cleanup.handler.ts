@@ -11,6 +11,7 @@ import { TransactionRunner } from '../../../core/database/transaction-runner.js'
 import { EventBus } from '../../../core/events/event-bus.js';
 import { NodeKindsRepository } from '../project-node-kinds.repository.js';
 import { ProjectNodesRepository } from '../project-nodes.repository.js';
+import { ProjectTypesRepository } from '../project-types.repository.js';
 import { ProjectsRepository } from '../projects.repository.js';
 
 /**
@@ -40,6 +41,7 @@ export class ProjectFieldValuesCleanupHandler {
     private readonly projects: ProjectsRepository,
     private readonly nodes: ProjectNodesRepository,
     private readonly kinds: NodeKindsRepository,
+    private readonly types: ProjectTypesRepository,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(ProjectFieldValuesCleanupHandler.name);
@@ -58,6 +60,15 @@ export class ProjectFieldValuesCleanupHandler {
       { fieldId: definitionId, removed: projectRemoved },
       'Значения удалённого атрибута убраны из проектов',
     );
+
+    await this.txRunner.run(async (tx) => {
+      await this.types.lockForms(tx);
+      const removed = await this.types.removeFieldFromForms(tx, definitionId);
+      this.logger.debug(
+        { fieldId: definitionId, removed },
+        'Слоты удалённого атрибута убраны из форм типов проектов',
+      );
+    });
 
     await this.txRunner.run(async (tx) => {
       await this.kinds.lockForms(tx);

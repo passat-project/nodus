@@ -22,7 +22,6 @@ import {
   descendantIdsOf,
   directTasksOf,
   findDemoNodeRow,
-  nodeCodeTaken,
   nodeDepthOf,
   nodesOfProject,
   projectNodeDto,
@@ -113,9 +112,6 @@ export const structureNodeHandlers = [
     if (rule) return rule;
     // Код — атрибут «Код»; явный `body.code` (старый путь) важнее.
     const code = body.code ?? codeOfValue(body.customFields?.[SYSTEM_FIELD_IDS.nodeCode]);
-    if (code && nodeCodeTaken(code, guard.row.id, null)) {
-      return conflict(ErrorCode.PROJECT_NODE_CODE_TAKEN, 'Node code is already taken');
-    }
     if (nodesOfProject(guard.row.id).length >= NODE_LIMITS.nodesPerProject) {
       return conflict(ErrorCode.PROJECT_NODE_LIMIT_REACHED, 'Node limit reached');
     }
@@ -223,9 +219,6 @@ export const structureNodeHandlers = [
     const patchCode = body.customFields?.[SYSTEM_FIELD_IDS.nodeCode];
     if (body.code !== undefined || patchCode !== undefined) {
       const nextCode = body.code !== undefined ? body.code : codeOfValue(patchCode);
-      if (nextCode !== null && nodeCodeTaken(nextCode, guard.row.id, node.id)) {
-        return conflict(ErrorCode.PROJECT_NODE_CODE_TAKEN, 'Node code is already taken');
-      }
       node.code = nextCode;
     }
     if (kindChanged) node.kindId = body.kindId!;

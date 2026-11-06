@@ -171,6 +171,15 @@ BEGIN
         '"cf.' || absorbed || '"', '"cf.' || canonical || '"')::jsonb
     WHERE "rules"::text LIKE '%"cf.' || absorbed || '"%';
 
+    -- Привязки к типам процессов поглощённого переезжают на канонический:
+    -- FK field_definition_types уходит каскадом вместе со строкой, поэтому
+    -- копируем ДО DELETE (иначе слияние теряет места использования — #646).
+    INSERT INTO "field_definition_types" ("definition_id", "process_type_id")
+    SELECT canonical, dt."process_type_id"
+    FROM "field_definition_types" dt
+    WHERE dt."definition_id" = absorbed
+    ON CONFLICT DO NOTHING;
+
     DELETE FROM "field_definitions" WHERE "id" = absorbed;
   END LOOP;
 END $$;

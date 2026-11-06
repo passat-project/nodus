@@ -6,10 +6,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 import { ProjectTypeFieldPicker } from './project-type-field-picker.js';
 
-/** Поповер добавления атрибута в форму типа проекта (#631, Р10): предлагает
- *  атрибуты проектов, которых ещё нет в форме; выбор закрывает список. */
+/** Поповер добавления атрибута в форму типа проекта (#631, Р10; #646):
+ *  предлагает атрибуты портала, которых ещё нет в форме; глобальные
+ *  переменные не предлагаются; выбор закрывает список. */
 const FIELD_A = '59000000-0000-4000-8000-000000000001';
 const FIELD_B = '59000000-0000-4000-8000-000000000002';
+const COMPANY = '59000000-0000-4000-8000-000000000003';
 
 const queryState = { current: {} as { data?: CustomFieldDefinition[]; isLoading?: boolean } };
 vi.mock('../../../shared/custom-fields/queries.js', () => ({
@@ -42,6 +44,7 @@ function picker(props: Partial<Parameters<typeof ProjectTypeFieldPicker>[0]> = {
     <ProjectTypeFieldPicker
       inForm={new Set<string>()}
       disabled={false}
+      canCreateField={false}
       onPick={() => {}}
       {...props}
     />,
@@ -54,16 +57,19 @@ afterEach(() => {
 });
 
 describe('ProjectTypeFieldPicker', () => {
-  it('открытие — атрибуты проектов, которых нет в форме', async () => {
-    queryState.current = { data: [definition(FIELD_A), definition(FIELD_B)] };
+  it('открытие — атрибуты портала, которых нет в форме; глобальные скрыты', async () => {
+    queryState.current = {
+      data: [definition(FIELD_A), definition(FIELD_B), { ...definition(COMPANY), isCompany: true }],
+    };
     picker({ inForm: new Set([FIELD_B]) });
 
     fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.form.addField }));
     await waitFor(() => {
       expect(screen.getByRole('option', { name: `Поле ${FIELD_A}` })).toBeTruthy();
     });
-    // Уже в форме — не предлагается.
+    // Уже в форме и глобальная переменная — не предлагаются.
     expect(screen.queryByRole('option', { name: `Поле ${FIELD_B}` })).toBeNull();
+    expect(screen.queryByRole('option', { name: `Поле ${COMPANY}` })).toBeNull();
   });
 
   it('выбор атрибута — onPick и закрытие списка', async () => {
@@ -97,7 +103,14 @@ describe('ProjectTypeFieldPicker', () => {
     }) as HTMLButtonElement;
     expect(trigger.disabled).toBe(true);
 
-    rerender(<ProjectTypeFieldPicker inForm={new Set()} disabled onPick={() => {}} />);
+    rerender(
+      <ProjectTypeFieldPicker
+        inForm={new Set()}
+        disabled
+        canCreateField={false}
+        onPick={() => {}}
+      />,
+    );
     expect(
       (screen.getByRole('button', { name: ui.nodeKinds.form.addField }) as HTMLButtonElement)
         .disabled,

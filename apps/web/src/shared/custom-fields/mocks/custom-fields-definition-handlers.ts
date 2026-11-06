@@ -22,6 +22,30 @@ import {
   nameTaken,
 } from './custom-fields-mock-utils.js';
 
+/** Снять слот атрибута из формы места в мок-мире (#646): unbind чистит
+ *  форму так же, как сервер — инвариант «слот = привязка» в обе стороны. */
+function removeFormSlot(kind: string, targetId: string, fieldId: string): void {
+  if (kind === 'project-type') {
+    const type = demoProjectTypes.find((entry) => entry.id === targetId);
+    if (type) {
+      type.form = {
+        ...type.form,
+        fields: type.form.fields.filter((slot) => slot.fieldId !== fieldId),
+      };
+    }
+    return;
+  }
+  if (kind === 'node-kind') {
+    const nodeKind = demoNodeKinds.find((entry) => entry.id === targetId);
+    if (nodeKind) {
+      nodeKind.form = {
+        ...nodeKind.form,
+        fields: nodeKind.form.fields.filter((slot) => slot.fieldId !== fieldId),
+      };
+    }
+  }
+}
+
 /** Хендлеры одного атрибута реестра (#631): точечные привязки
  *  (идемпотентны, снятие всегда разрешено), значение глобальной
  *  переменной, правка (белый список смены типа, имя уникально), агрегат
@@ -85,6 +109,7 @@ export const definitionHandlers = [
     } else {
       return error(ErrorCode.VALIDATION_FAILED, 'Unknown binding kind', 422);
     }
+    removeFormSlot(kind, targetId, definition.id);
     definition.updatedAt = new Date().toISOString();
     return HttpResponse.json(dto(definition));
   }),
@@ -175,6 +200,17 @@ export const definitionHandlers = [
             targetKind: 'node-kind',
             targetId,
           });
+        }
+      }
+      const before = definition.bindings;
+      for (const targetId of before.projectTypeIds) {
+        if (!body.bindings.projectTypeIds.includes(targetId)) {
+          removeFormSlot('project-type', targetId, definition.id);
+        }
+      }
+      for (const targetId of before.nodeKindIds) {
+        if (!body.bindings.nodeKindIds.includes(targetId)) {
+          removeFormSlot('node-kind', targetId, definition.id);
         }
       }
       definition.bindings = body.bindings;

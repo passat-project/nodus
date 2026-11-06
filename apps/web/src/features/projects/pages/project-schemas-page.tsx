@@ -151,6 +151,8 @@ export function ProjectSchemasPage({
         open={typePanel !== null && panelType !== null}
         section={typePanel ?? 'root'}
         canSetup={canSetup}
+        canCreateField={canCreateField}
+        renderCreateField={renderCreateField}
         onSection={setTypePanel}
         onClose={() => {
           setTypePanel(null);

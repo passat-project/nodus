@@ -105,6 +105,53 @@ export class ProjectTypesRepository {
     return row ? this.toDto(row) : null;
   }
 
+  /** Advisory-лок справочника типов на транзакцию (#631 Р10): форма типа
+   *  и привязки атрибутов сериализуются между собой и с уборкой значений. */
+  async lockForms(tx: TransactionClient): Promise<void> {
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('nodus:project_types'))`);
+  }
+
+  /** Убрать атрибут из формы одного типа (unbind, Р3): идемпотентно.
+   *  Слот формы места и есть привязка — снятие привязки чистит слот. */
+  async removeFieldFromForm(
+    tx: TransactionClient,
+    typeId: string,
+    fieldId: string,
+  ): Promise<boolean> {
+    const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
+      UPDATE "project_types"
+      SET "form" = jsonb_set(COALESCE("form", '{}'::jsonb), '{fields}', (
+        SELECT COALESCE(jsonb_agg(e ORDER BY ord), '[]'::jsonb)
+        FROM jsonb_array_elements(COALESCE("form"->'fields', '[]'::jsonb))
+             WITH ORDINALITY AS t(e, ord)
+        WHERE e->>'fieldId' <> ${fieldId}::text
+      ))
+      WHERE "id" = ${typeId}::uuid
+        AND COALESCE("form"->'fields', '[]'::jsonb)
+            @> jsonb_build_array(jsonb_build_object('fieldId', ${fieldId}::text))
+      RETURNING "id"
+    `);
+    return rows.length > 0;
+  }
+
+  /** Убрать атрибут из форм всех типов (удаление определения, #631):
+   *  идемпотентно, возвращает число изменённых типов. */
+  async removeFieldFromForms(tx: TransactionClient, fieldId: string): Promise<number> {
+    const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
+      UPDATE "project_types"
+      SET "form" = jsonb_set(COALESCE("form", '{}'::jsonb), '{fields}', (
+        SELECT COALESCE(jsonb_agg(e ORDER BY ord), '[]'::jsonb)
+        FROM jsonb_array_elements(COALESCE("form"->'fields', '[]'::jsonb))
+             WITH ORDINALITY AS t(e, ord)
+        WHERE e->>'fieldId' <> ${fieldId}::text
+      ))
+      WHERE COALESCE("form"->'fields', '[]'::jsonb)
+            @> jsonb_build_array(jsonb_build_object('fieldId', ${fieldId}::text))
+      RETURNING "id"
+    `);
+    return rows.length;
+  }
+
   async setArchived(
     tx: TransactionClient,
     id: string,

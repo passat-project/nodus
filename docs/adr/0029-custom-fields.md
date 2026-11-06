@@ -57,7 +57,7 @@
 
 **Где живёт валидация.** Одна точка на сервере — порт `CUSTOM_FIELD_REGISTRY` (`definitions`, `prepareCreate`, `prepareUpdate`, `refs`). Модули-владельцы сущностей не читают `field_definitions` и не проверяют значения сами (I3/I7). Грамматика типов — общая в `packages/contracts/src/custom-fields/custom-field-values.ts` (исключение «общая грамматика» из `patterns.md`).
 
-**События и ключи.** `custom_field.definition_changed {definitionId, scope, change: created|updated|deleted|reordered, fields?}` — каталожное (gateway рассылает всем); `task.updated` несёт `customFieldChanges[{fieldId, from, to}]` и ключи `cf.<id>` в `fields`. Ключ `cf.<uuid>` — общий для окна перехода и гейта `fields_required`; неизвестный (удалённый) ключ переход не блокирует, публикация даёт ошибку `custom_field_unknown`, а скрытый в окне — предупреждение `custom_field_hidden` (в условии скрытый допустим).
+**События и ключи.** `custom_field.definition_changed {definitionId, change: created|updated|deleted|reordered, fields?}` — каталожное (gateway рассылает всем); `task.updated` несёт `customFieldChanges[{fieldId, from, to}]` и ключи `cf.<id>` в `fields`. Ключ `cf.<uuid>` — общий для окна перехода и гейта `fields_required`; неизвестный (удалённый) ключ переход не блокирует, публикация даёт ошибку `custom_field_unknown`, существующий, но не привязанный к типу процесса — `custom_field_not_in_type` (глобального `hidden` нет — О2 #631).
 
 ## Дополнение (#432)
 

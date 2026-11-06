@@ -42,7 +42,7 @@ export interface CustomFieldsFixture {
 
 export async function setupCustomFieldsFixture(): Promise<CustomFieldsFixture> {
   const fx = await setupChatFixture(['alice', 'bob']);
-  for (const key of ['tasks', 'chat']) {
+  for (const key of ['tasks', 'chat', 'projects']) {
     await fx.prisma.featureFlag.upsert({
       where: { key },
       update: { enabled: true },
@@ -62,6 +62,8 @@ export async function setupCustomFieldsFixture(): Promise<CustomFieldsFixture> {
     Permission.TASK_MANAGE_ANY,
     Permission.CUSTOM_FIELD_MANAGE,
     Permission.DICTIONARY_MANAGE,
+    Permission.PROJECT_CREATE,
+    Permission.PROJECT_SETUP_MANAGE,
   ]);
   const plain = await sign(fx.users.bob, [Permission.TASK_CREATE]);
   const dispatcher = fx.app.get(EventDispatcher);
