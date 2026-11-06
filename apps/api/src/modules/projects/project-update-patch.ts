@@ -14,6 +14,7 @@ import type { TransactionClient } from '../../core/database/transaction-runner.j
 import { DomainException } from '../../core/errors/domain-exception.js';
 import type { UserProfileReader } from '../../core/ports/user-profile.port.js';
 import type { CustomFieldRegistry } from '../custom-fields/ports/custom-field-registry.port.js';
+import type { FormulaCells } from '../custom-fields/ports/formula-cells.port.js';
 import type { ProjectFacts } from './project-access.js';
 import { legacyPatchToAttributes } from './project-legacy-fields.js';
 import type { ProjectGroupsRepository } from './project-groups.repository.js';
@@ -33,6 +34,8 @@ export async function buildUpdatePatch(
     profiles: UserProfileReader;
     types: ProjectTypesRepository;
     customFields: CustomFieldRegistry;
+    /** Снятие формулы ячейки при обычной записи значения (Р5 #632). */
+    formulaCells: Pick<FormulaCells, 'release'>;
   },
   user: AuthUser,
   row: ProjectRow,
@@ -104,6 +107,9 @@ export async function buildUpdatePatch(
     // Шифр/заказчик — атрибуты: legacy-поля тела и customFields сливаются
     // в один патч (явное customFields важнее), затем общий конвейер.
     const patchBody = legacyPatchToAttributes(body, body.customFields ?? {});
+    // Вписанное значение снимает формулу ячейки в той же tx (Р5 #632):
+    // «зафиксировать» = вписать руками, «как у типа» = очистить значение.
+    if (tx) await ctx.formulaCells.release(tx, 'project', row.id, Object.keys(patchBody));
     const type = await ctx.types.findById(row.typeId);
     // Эффективная форма: удалённый атрибут не должен требовать очистки
     // несуществующего слота (#646). Значения — в транзакции писателя.

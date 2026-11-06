@@ -13,6 +13,8 @@ import { ProjectReaderProvider } from './ports/project-reader.provider.js';
 import { PROJECT_CHAT_READER, PROJECT_READER } from './ports/project-reader.port.js';
 import { NodeRefReaderProvider } from './ports/node-ref-reader.provider.js';
 import { NODE_REF_READER } from './ports/node-ref-reader.port.js';
+import { ProjectFormulaValuesProvider } from './ports/project-formula-values.provider.js';
+import { PROJECT_FORMULA_VALUES } from './ports/project-formula-values.port.js';
 import { FieldBindingTargetsProvider } from './ports/field-binding-targets.provider.js';
 import { FIELD_BINDING_TARGET_READER } from './ports/field-binding-targets.port.js';
 import {
@@ -45,6 +47,10 @@ import {
     // Ссылки на папки и цели привязок атрибутов (Р3/Р5 #631).
     NodeRefReaderProvider,
     { provide: NODE_REF_READER, useExisting: NodeRefReaderProvider },
+    // Проекты и папки как источники формул (#632, Р6/Р7): значения,
+    // системные поля, срез папок — только через порт (I3).
+    ProjectFormulaValuesProvider,
+    { provide: PROJECT_FORMULA_VALUES, useExisting: ProjectFormulaValuesProvider },
     FieldBindingTargetsProvider,
     { provide: FIELD_BINDING_TARGET_READER, useExisting: FieldBindingTargetsProvider },
     // Снятие слота формы места при unbind атрибута (#646).
@@ -63,6 +69,7 @@ import {
     NODE_REF_READER,
     FIELD_BINDING_TARGET_READER,
     FIELD_BINDING_FORM_CLEANER,
+    PROJECT_FORMULA_VALUES,
   ],
 })
 export class ProjectsPortsModule {}

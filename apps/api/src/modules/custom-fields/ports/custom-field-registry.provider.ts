@@ -70,7 +70,20 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
       return {};
     }
 
-    const candidates = await this.defaults.resolve(definitions, args.authorId, tx);
+    // Формула места подавляет статическое умолчание (#632, Р6): иначе
+    // значение «заморозит» формулу с рождения записи.
+    const formulaBound = new Set(
+      definitions
+        .filter((definition) =>
+          args.target ? definition.bindingFormulas?.[args.target.id] !== undefined : false,
+        )
+        .map((definition) => definition.id),
+    );
+    const candidates = await this.defaults.resolve(
+      definitions.filter((definition) => !formulaBound.has(definition.id)),
+      args.authorId,
+      tx,
+    );
     const defaultIssues = await this.validator.validate(definitions, candidates, tx);
     const cleanDefaults = dropIssues(candidates, defaultIssues);
     if (defaultIssues.length > 0) {

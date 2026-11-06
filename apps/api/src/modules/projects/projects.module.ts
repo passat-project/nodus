@@ -23,10 +23,20 @@ import { NodeKindsRepository } from './project-node-kinds.repository.js';
 import { NodeKindsService } from './node-kinds.service.js';
 import { NodeFormPolicy } from './node-form.policy.js';
 import { ProjectFieldValuesCleanupHandler } from './events/project-field-values-cleanup.handler.js';
+import { ProjectFormulaDefinitionHandler } from './events/formula-definition.handler.js';
+import {
+  ProjectFormulaRecalcHandler,
+  ProjectNodeDeletedFormulaHandler,
+  ProjectNodeFormulaRecalcHandler,
+  ProjectNodeKindFormulaHandler,
+  ProjectStructureFormulaRecalcHandler,
+} from './events/formula-recalc.handler.js';
 import { ProjectNodesRepository } from './project-nodes.repository.js';
+import { ProjectFormulaService } from './project-formula.service.js';
 import { ProjectStructureController } from './project-structure.controller.js';
 import { ProjectStructureService } from './project-structure.service.js';
 import { ProjectStructureMoveService } from './project-structure-move.service.js';
+import { ProjectValuesWriter } from './project-values.writer.js';
 import {
   TaskAssignedProjectHandler,
   TaskCreatedProjectHandler,
@@ -70,8 +80,19 @@ import {
     ProjectNodesRepository,
     ProjectStructureService,
     ProjectStructureMoveService,
+    // Формулы ячеек атрибутов (#632): сервис формул проекта/папки и писатель
+    // значений (материализация результата — штатным путём, Р4).
+    ProjectValuesWriter,
+    ProjectFormulaService,
     // Уборка значений удалённого атрибута (#556, Р11): событие custom-fields.
     ProjectFieldValuesCleanupHandler,
+    // Пересчёт формул по зависимостям (#632, Р4/Р8): события хостов и реестра.
+    ProjectFormulaRecalcHandler,
+    ProjectNodeFormulaRecalcHandler,
+    ProjectStructureFormulaRecalcHandler,
+    ProjectNodeDeletedFormulaHandler,
+    ProjectNodeKindFormulaHandler,
+    ProjectFormulaDefinitionHandler,
     // Проекция участия «из задач» (Р2): события task.*.
     TaskParticipantsProjectionRunner,
     TaskCreatedProjectHandler,

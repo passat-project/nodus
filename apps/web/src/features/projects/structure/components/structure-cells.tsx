@@ -15,6 +15,7 @@ import { monoCell, PersonCell } from '../../../../shared/ui/person-cell.js';
 import { TaskStatusBadge } from '../../../../shared/ui/task-status-badge.js';
 import {
   attributeFitsModule,
+  attributeFormula,
   attributeRenderCell,
   attributeValue,
   isAttributeFieldId,
@@ -103,8 +104,11 @@ export function nodeCell(
     const definition = attributes.get(fieldId);
     if (!definition || !attributeFitsModule(definition, 'node')) return null;
     const value = attributeValue(row.node, definition);
-    if (!isCustomFieldValueFilled(value)) return null;
-    return attributeRenderCell(definition, value, refs);
+    const formula = attributeFormula(row.node, definition);
+    // Ошибка формулы видна и без значения (бейдж «!»), иначе колонка
+    // молчала бы о сломанной формуле.
+    if (!isCustomFieldValueFilled(value) && !formula?.error) return null;
+    return attributeRenderCell(definition, value, refs, { formula });
   }
   switch (fieldId) {
     case 'name':
@@ -161,8 +165,9 @@ export function taskCell(
     const definition = attributes.get(fieldId);
     if (!definition || !attributeFitsModule(definition, 'task')) return null;
     const value = attributeValue(task, definition);
-    if (!isCustomFieldValueFilled(value)) return null;
-    return attributeRenderCell(definition, value, refs);
+    const formula = attributeFormula(task, definition);
+    if (!isCustomFieldValueFilled(value) && !formula?.error) return null;
+    return attributeRenderCell(definition, value, refs, { formula });
   }
   switch (fieldId) {
     case 'name':

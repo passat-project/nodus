@@ -23,6 +23,7 @@ import {
   CUSTOM_FIELD_REGISTRY,
   type CustomFieldRegistry,
 } from '../custom-fields/ports/custom-field-registry.port.js';
+import { FORMULA_CELLS, type FormulaCells } from '../custom-fields/ports/formula-cells.port.js';
 import type { ProjectFacts } from './project-access.js';
 import { projectAudience } from './project-audience.js';
 import { clientOf, codeOf, legacyToAttributes } from './project-legacy-fields.js';
@@ -56,6 +57,8 @@ export class ProjectsService {
     private readonly queries: ProjectsQueryService,
     @Inject(USER_PROFILE_READER) private readonly profiles: UserProfileReader,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
+    // Снятие формулы ячейки при обычной записи значения (Р5 #632).
+    @Inject(FORMULA_CELLS) private readonly formulaCells: FormulaCells,
   ) {}
 
   async create(user: AuthUser, body: CreateProjectBody): Promise<ProjectDetail> {
@@ -196,6 +199,7 @@ export class ProjectsService {
           profiles: this.profiles,
           types: this.types,
           customFields: this.customFields,
+          formulaCells: this.formulaCells,
         },
         user,
         fresh,

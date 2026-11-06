@@ -11,6 +11,7 @@ import { monoCell, PersonCell } from '../ui/person-cell.js';
 import { TaskStatusBadge } from '../ui/task-status-badge.js';
 import {
   attributeFieldDefs,
+  attributeFormula,
   attributeRefs,
   attributeRenderCell,
   attributeValue,
@@ -179,8 +180,11 @@ export function makeTaskTableFields({
         const definition = field.attribute;
         if (!definition) return null;
         const value = attributeValue(task, definition);
-        if (!isCustomFieldValueFilled(value)) return null;
-        return attributeRenderCell(definition, value, attributeRefs(task));
+        const formula = attributeFormula(task, definition);
+        // Ячейка формульной ошибки: значения нет, но бейдж «!» обязан быть
+        // виден — иначе колонка молчит о сломанной формуле.
+        if (!isCustomFieldValueFilled(value) && !formula?.error) return null;
+        return attributeRenderCell(definition, value, attributeRefs(task), { formula });
       },
       // Сортировка по атрибуту не предлагается: sortValue не задан — хедер
       // рисует заголовок без ↑/↓ (data-table-header).

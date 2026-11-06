@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { Mail, MessageSquare } from 'lucide-react';
 import type { TaskListItem } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { isCustomFieldValueFilled, ui } from '@nodus/contracts';
 import { NodeChip } from '@nodus/ui/components/node-chip';
 
 import { formatDateTime, formatMinutes } from '../../../shared/lib/format.js';
@@ -10,6 +10,7 @@ import { monoCell, PersonCell } from '../../../shared/ui/person-cell.js';
 import { priorityTone } from '../../../shared/views/task-table-fields.js';
 import {
   attributeFieldDefs,
+  attributeFormula,
   attributeRefs,
   attributeRenderCell,
   attributeValue,
@@ -187,14 +188,15 @@ export function useTaskListFields(): ListFieldDef[] {
       ...taskListFields,
       ...attributes.map((field): ListFieldDef => ({
         ...field,
-        render: (task) =>
-          field.attribute
-            ? attributeRenderCell(
-                field.attribute,
-                attributeValue(task, field.attribute),
-                attributeRefs(task),
-              )
-            : null,
+        render: (task) => {
+          if (!field.attribute) return null;
+          const value = attributeValue(task, field.attribute);
+          const formula = attributeFormula(task, field.attribute);
+          // Ошибка формулы видна и без значения (бейдж «!»), иначе колонка
+          // молчала бы о сломанной формуле.
+          if (!isCustomFieldValueFilled(value) && !formula?.error) return null;
+          return attributeRenderCell(field.attribute, value, attributeRefs(task), { formula });
+        },
       })),
     ];
   }, [definitions.data]);

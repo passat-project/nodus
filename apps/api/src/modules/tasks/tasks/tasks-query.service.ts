@@ -224,7 +224,12 @@ export class TasksQueryService {
     );
     return items.map((item) => {
       const state = states.get(item.id);
-      return state ? { ...item, customFieldFormulas: state } : item;
+      if (!state) return item;
+      return {
+        ...item,
+        customFields: { ...item.customFields, ...state.values },
+        customFieldFormulas: state.formulas,
+      };
     });
   }
 

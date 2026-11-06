@@ -1,14 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
-  CustomFieldFormulas,
   CustomFieldType,
   FormulaCellError,
   FormulaHostKind,
   FormulaNode,
   FormulaResponse,
 } from '@nodus/contracts';
-import { ErrorCode, FORMULA_LIMITS } from '@nodus/contracts';
-import type { FormulaValidationIssue } from '@nodus/formula-engine';
+import { FORMULA_LIMITS } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
@@ -21,8 +19,10 @@ import type {
   FormulaStateMap,
 } from '../ports/formula-cells.port.js';
 import { FORMULA_ENGINE, type FormulaEngine } from '../ports/formula-engine.port.js';
-import { FormulaCellsRepository, type FormulaCellRow } from './formula-cells.repository.js';
-import { FormulaContextService, type FormulaContext } from './formula-context.service.js';
+import { FormulaCellsRepository } from './formula-cells.repository.js';
+import { asCellError, errorCodeOf, refOf } from './formula-cells.support.js';
+import { computeFormula } from './formula-compute.js';
+import { createFormulaCache, FormulaContextService } from './formula-context.service.js';
 import { FormulaMetaService, type FormulaRegistrySnapshot } from './formula-meta.service.js';
 import { FormulaValuesService, sameFormulaValue } from './formula-values.service.js';
 
@@ -52,13 +52,76 @@ export class FormulaCellsService implements FormulaCells {
     const result: FormulaStateMap = new Map();
     if (hostIds.length === 0) return result;
     const cells = await this.repo.listByHosts(hostKind, hostIds, tx);
+    const ownByHost = new Map<string, string[]>();
     for (const cell of cells) {
-      const formulas: CustomFieldFormulas = result.get(cell.hostId) ?? {};
-      formulas[cell.fieldId] = {
+      const state = result.get(cell.hostId) ?? { values: {}, formulas: {} };
+      state.formulas[cell.fieldId] = {
         origin: 'own',
         ...(cell.error ? { error: asCellError(cell.error) } : {}),
       };
-      result.set(cell.hostId, formulas);
+      result.set(cell.hostId, state);
+      const own = ownByHost.get(cell.hostId) ?? [];
+      own.push(cell.fieldId);
+      ownByHost.set(cell.hostId, own);
+    }
+    // Формулы типа/вида (Р6): считаются НА ЧТЕНИИ для записей без своего
+    // значения и своей формулы; значения в БД не материализуются.
+    const snapshot = await this.meta.snapshot(tx);
+    const cache = createFormulaCache();
+    for (const hostId of hostIds) {
+      const host = await this.context.record(hostKind, hostId, undefined, tx, cache);
+      if (!host?.placeId) continue;
+      const slots = snapshot.bindingFormulas.get(host.placeId) ?? [];
+      if (slots.length === 0) continue;
+      const own = new Set(ownByHost.get(hostId) ?? []);
+      const pending = slots.filter((slot) => !own.has(slot.definitionId));
+      if (pending.length === 0) continue;
+      const state = result.get(hostId) ?? { values: {}, formulas: {} };
+      const evaluate = pending.filter((slot) => host.values[slot.definitionId] === undefined);
+      for (const slot of pending) {
+        if (host.values[slot.definitionId] !== undefined) {
+          state.formulas[slot.definitionId] = { origin: 'value' };
+        }
+      }
+      if (evaluate.length === 0) {
+        result.set(hostId, state);
+        continue;
+      }
+      const context = await this.context.build(
+        { hostKind, hostId, asts: evaluate.map((slot) => slot.ast), snapshot },
+        tx,
+        cache,
+      );
+      if (!context) continue;
+      for (const slot of evaluate) {
+        const definition = snapshot.byId.get(slot.definitionId);
+        const evaluation = this.engine.evaluate(slot.ast, context.resolver);
+        if (context.overflowed) {
+          state.formulas[slot.definitionId] = {
+            origin: 'type',
+            error: {
+              code: 'selection_limit',
+              message: `aggregate selection exceeds ${FORMULA_LIMITS.selection} records`,
+            },
+          };
+          continue;
+        }
+        if (evaluation.error) {
+          state.formulas[slot.definitionId] = { origin: 'type', error: evaluation.error };
+          continue;
+        }
+        state.formulas[slot.definitionId] = { origin: 'type' };
+        if (!definition) continue;
+        const materialized = await this.values.materialize(
+          {
+            type: definition.type as CustomFieldType,
+            settings: (definition.settings ?? {}) as never,
+          },
+          evaluation.value,
+        );
+        if (materialized !== null) state.values[slot.definitionId] = materialized;
+      }
+      result.set(hostId, state);
     }
     return result;
   }
@@ -92,7 +155,14 @@ export class FormulaCellsService implements FormulaCells {
     );
     if (!context) throw DomainException.notFound('Formula host not found');
 
-    const outcome = await this.compute(args.ast, context, snapshot, definition.id);
+    const outcome = await computeFormula({
+      ast: args.ast,
+      context,
+      snapshot,
+      fieldId: definition.id,
+      engine: this.engine,
+      values: this.values,
+    });
     const cellId = await this.repo.upsert(tx, {
       hostKind: args.hostKind,
       hostId: args.hostId,
@@ -192,7 +262,14 @@ export class FormulaCellsService implements FormulaCells {
       return { value: null, error: null, changed: false, silent: true };
     }
 
-    const outcome = await this.compute(ast, context, snapshot, ref.fieldId);
+    const outcome = await computeFormula({
+      ast,
+      context,
+      snapshot,
+      fieldId: ref.fieldId,
+      engine: this.engine,
+      values: this.values,
+    });
     const previous = context.host.values[ref.fieldId] ?? null;
     const changed = !sameFormulaValue(previous, outcome.value);
     await this.repo.replaceDeps(tx, cell.id, context.depKeys);
@@ -206,45 +283,6 @@ export class FormulaCellsService implements FormulaCells {
     hostId: string,
   ): Promise<void> {
     await this.repo.deleteByHost(tx, hostKind, hostId);
-  }
-
-  /** Вычисление + материализация: ошибка ячейки важнее значения (Р13). */
-  private async compute(
-    ast: FormulaNode,
-    context: FormulaContext,
-    snapshot: FormulaRegistrySnapshot,
-    fieldId: string,
-  ): Promise<FormulaComputation> {
-    const evaluation = this.engine.evaluate(ast, context.resolver);
-    if (context.overflowed) {
-      return {
-        value: null,
-        error: {
-          code: 'selection_limit',
-          message: `aggregate selection exceeds ${FORMULA_LIMITS.selection} records`,
-        },
-      };
-    }
-    if (evaluation.error) return { value: null, error: evaluation.error };
-    const definition = snapshot.byId.get(fieldId);
-    if (!definition) return { value: null, error: null };
-    const materialized = await this.values.materialize(
-      {
-        type: definition.type as CustomFieldType,
-        settings: (definition.settings ?? {}) as never,
-      },
-      evaluation.value,
-    );
-    if (materialized === null && evaluation.value !== null) {
-      return {
-        value: null,
-        error: {
-          code: 'type_mismatch',
-          message: `formula result does not fit ${definition.type}`,
-        },
-      };
-    }
-    return { value: materialized, error: null };
   }
 
   /** Статическая проверка перед записью: блокирующие проблемы — 422 (Р13). */
@@ -268,41 +306,4 @@ export class FormulaCellsService implements FormulaCells {
       422,
     );
   }
-}
-
-/** Код отказа API по блокирующей проблеме формулы (каталог Р13). */
-function errorCodeOf(issue: FormulaValidationIssue): ErrorCode {
-  switch (issue.code) {
-    case 'type_mismatch':
-      return ErrorCode.FORMULA_TYPE_MISMATCH;
-    case 'source_forbidden':
-    case 'selector_forbidden':
-      return ErrorCode.FORMULA_SOURCE_FORBIDDEN;
-    case 'depth':
-    case 'nodes':
-    case 'sources':
-    case 'literal_text':
-      return ErrorCode.FORMULA_LIMIT_EXCEEDED;
-    default:
-      return ErrorCode.FORMULA_AST_INVALID;
-  }
-}
-
-function refOf(row: FormulaCellRow): FormulaCellRef {
-  return {
-    cellId: row.id,
-    hostKind: row.hostKind as FormulaHostKind,
-    hostId: row.hostId,
-    fieldId: row.fieldId,
-  };
-}
-
-/** Ошибка ячейки из JSONB (терпимо к старым формам). */
-function asCellError(raw: unknown): FormulaCellError {
-  const value = raw as Partial<FormulaCellError> | null;
-  return {
-    code: (value?.code ?? 'eval_failed') as FormulaCellError['code'],
-    message: value?.message ?? 'formula evaluation failed',
-    ...(typeof value?.number === 'number' ? { number: value.number } : {}),
-  };
 }

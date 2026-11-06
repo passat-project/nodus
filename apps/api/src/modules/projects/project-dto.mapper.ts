@@ -19,6 +19,7 @@ import {
   CUSTOM_FIELD_REGISTRY,
   type CustomFieldRegistry,
 } from '../custom-fields/ports/custom-field-registry.port.js';
+import { FORMULA_CELLS, type FormulaCells } from '../custom-fields/ports/formula-cells.port.js';
 import {
   TASK_PROJECT_READER,
   type TaskProjectReader,
@@ -66,6 +67,8 @@ export class ProjectDtoMapper {
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
     private readonly nodes: ProjectNodesRepository,
     @Inject(TASK_PROJECT_READER) private readonly taskReader: TaskProjectReader,
+    // Формульное состояние ячеек карточки (#632, Р9): значок fx/ошибка.
+    @Inject(FORMULA_CELLS) private readonly formulas: FormulaCells,
   ) {}
 
   async toListItems(inputs: ProjectDtoInput[]): Promise<ProjectListItem[]> {

@@ -73,6 +73,14 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'POST /projects/:id/leave': PROJECT_MEMBERSHIP,
   // Дерево проекта (#467)
   'GET /projects/:id/structure': PROJECT_STRUCTURE,
+  // Формулы ячеек атрибутов (#632): чтение — видимость проекта/папки,
+  // мутации — право правки записи в сервисе (структура/карточка).
+  'GET /projects/:id/custom-fields/:fieldId/formula': PROJECT_VISIBILITY,
+  'PUT /projects/:id/custom-fields/:fieldId/formula': PROJECT_MANAGE,
+  'DELETE /projects/:id/custom-fields/:fieldId/formula': PROJECT_MANAGE,
+  'GET /projects/:id/nodes/:nodeId/custom-fields/:fieldId/formula': PROJECT_STRUCTURE,
+  'PUT /projects/:id/nodes/:nodeId/custom-fields/:fieldId/formula': PROJECT_STRUCTURE,
+  'DELETE /projects/:id/nodes/:nodeId/custom-fields/:fieldId/formula': PROJECT_STRUCTURE,
   'POST /projects/:id/nodes': PROJECT_STRUCTURE,
   'POST /projects/:id/nodes/batch': PROJECT_STRUCTURE,
   'PATCH /projects/:id/nodes/:nodeId': PROJECT_STRUCTURE,
@@ -106,6 +114,11 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'GET /letters': LETTER_VISIBILITY,
   'GET /letters/resolvers': LETTER_RESOLVERS,
   'GET /letters/:id': LETTER_VISIBLE_ONE,
+  // Формулы ячеек атрибутов письма (#632): чтение — видимость письма,
+  // мутации — canEdit письма в сервисе.
+  'GET /letters/:id/custom-fields/:fieldId/formula': LETTER_VISIBLE_ONE,
+  'PUT /letters/:id/custom-fields/:fieldId/formula': LETTER_VISIBLE_ONE,
+  'DELETE /letters/:id/custom-fields/:fieldId/formula': LETTER_VISIBLE_ONE,
   'POST /letters/:id/view': LETTER_VISIBLE_ONE,
   'POST /letters/:id/join': LETTER_VISIBLE_ONE,
   'GET /letters/:id/transitions': LETTER_VISIBLE_ONE,

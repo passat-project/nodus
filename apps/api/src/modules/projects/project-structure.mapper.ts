@@ -1,5 +1,6 @@
 import {
   SYSTEM_FIELD_IDS,
+  type CustomFieldFormulas,
   type CustomFieldValues,
   type ProjectNode,
   type ProjectNodeRollup,
@@ -19,8 +20,13 @@ export const EMPTY_ROLLUP: ProjectNodeRollup = {
 
 /** Строка БД → DTO узла (rollup=null → пустой агрегат). `customFields` —
  *  ВСЕ хранимые значения, включая скрытые сменой вида (Р5): форма вида
- *  фильтрует помощником nodeFormValues. */
-export function nodeToDto(row: ProjectNodeRow, rollup: ProjectNodeRollup | null): ProjectNode {
+ *  фильтрует помощником nodeFormValues. `formulas` — формульные ячейки
+ *  папки (#632, Р9): своя/типовая формула и ошибка. */
+export function nodeToDto(
+  row: ProjectNodeRow,
+  rollup: ProjectNodeRollup | null,
+  formulas?: CustomFieldFormulas,
+): ProjectNode {
   return {
     id: row.id,
     parentId: row.parentId,
@@ -28,6 +34,7 @@ export function nodeToDto(row: ProjectNodeRow, rollup: ProjectNodeRollup | null)
     name: row.name,
     code: nodeCodeOf((row.customFields ?? {}) as CustomFieldValues),
     customFields: (row.customFields ?? {}) as CustomFieldValues,
+    ...(formulas ? { customFieldFormulas: formulas } : {}),
     rollup: rollup ?? EMPTY_ROLLUP,
     createdAt: row.createdAt.toISOString(),
   };

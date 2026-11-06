@@ -39,6 +39,7 @@ export class FormulaValuesService {
     records: readonly Pick<FormulaRecordData, 'values'>[],
     byId: ReadonlyMap<string, DefinitionLike>,
     tx?: TransactionClient,
+    cache?: Map<string, DictionaryItemRef>,
   ): Promise<ReadonlyMap<string, DictionaryItemRef>> {
     const ids = new Set<string>();
     for (const record of records) {
@@ -52,9 +53,13 @@ export class FormulaValuesService {
         }
       }
     }
-    if (ids.size === 0) return new Map();
-    const items = await this.dictionaries.itemRefs([...ids], tx);
-    return new Map(items.map((item) => [item.id, item]));
+    const target = cache ?? new Map<string, DictionaryItemRef>();
+    for (const id of target.keys()) ids.delete(id);
+    if (ids.size > 0) {
+      const items = await this.dictionaries.itemRefs([...ids], tx);
+      for (const item of items) target.set(item.id, item);
+    }
+    return target;
   }
 
   /** Запись-источник в языке формул: значения по номеру + системные поля. */

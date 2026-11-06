@@ -4,6 +4,7 @@ import { FORMULA_LIMITS } from '@nodus/contracts';
 import type { FormulaRecord, FormulaResolver, FormulaSingleSource } from '@nodus/formula-engine';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import type { DictionaryItemRef } from '../../dictionaries/ports/dictionary-reader.port.js';
 import type { ProjectActor } from '../../projects/ports/project-reader.port.js';
 import {
   RECORD_VALUES_READER,
@@ -33,6 +34,18 @@ export interface FormulaContext {
   placeFormula(fieldId: string): FormulaNode | null;
 }
 
+/** Кэш источников на одну операцию (#632, Р6): список из N записей одного
+ *  проекта читает проект/срез папок/компанию один раз, а не N раз. */
+export interface FormulaContextCache {
+  records: Map<string, Promise<FormulaRecordData | null>>;
+  nodes: Map<string, Promise<FormulaRecordData[]>>;
+  items: Map<string, DictionaryItemRef>;
+}
+
+export function createFormulaCache(): FormulaContextCache {
+  return { records: new Map(), nodes: new Map(), items: new Map() };
+}
+
 export interface FormulaContextArgs {
   hostKind: FormulaHostKind;
   hostId: string;
@@ -58,9 +71,13 @@ export class FormulaContextService {
   ) {}
 
   /** Контекст хоста; null — записи нет или она не видна актору (404). */
-  async build(args: FormulaContextArgs, tx?: TransactionClient): Promise<FormulaContext | null> {
+  async build(
+    args: FormulaContextArgs,
+    tx?: TransactionClient,
+    cache: FormulaContextCache = createFormulaCache(),
+  ): Promise<FormulaContext | null> {
     const { hostKind, hostId, asts, snapshot, actor } = args;
-    const host = await this.reader.record(hostKind, hostId, actor ? { actor } : undefined, tx);
+    const host = await this.record(hostKind, hostId, actor, tx, cache);
     if (!host) return null;
 
     const deps = asts.flatMap((ast) => this.engine.extractDeps(ast));
@@ -71,13 +88,13 @@ export class FormulaContextService {
       hostKind === 'project'
         ? host
         : projectId
-          ? await this.reader.record('project', projectId, undefined, tx)
+          ? await this.record('project', projectId, undefined, tx, cache)
           : null;
 
     const nodes =
       needed.folders || needed.nodeTasks
         ? new Map(
-            (projectId ? await this.reader.projectNodes(projectId, tx) : []).map((node) => [
+            (projectId ? await this.projectNodes(projectId, tx, cache) : []).map((node) => [
               node.id,
               node,
             ]),
@@ -86,7 +103,7 @@ export class FormulaContextService {
 
     const parent =
       needed.parent && host.parentId
-        ? await this.reader.record('task', host.parentId, undefined, tx)
+        ? await this.record('task', host.parentId, undefined, tx, cache)
         : null;
 
     let overflowed = false;
@@ -130,14 +147,14 @@ export class FormulaContextService {
     records.push(...nodes.values());
     for (const rows of related.values()) records.push(...rows);
     records.push(company);
-    const items = await this.values.loadItems(records, snapshot.byId, tx);
+    const items = await this.values.loadItems(records, snapshot.byId, tx, cache.items);
 
     // Цели атрибутов-ссылок — лениво (по номеру), с кэшем на контекст.
     const refCache = new Map<number, FormulaRecordData | null>();
     const refRecord = async (number: number): Promise<FormulaRecordData | null> => {
       const cached = refCache.get(number);
       if (cached !== undefined) return cached;
-      const target = await this.resolveRef(host, number, snapshot, tx);
+      const target = await this.resolveRef(host, number, snapshot, tx, cache);
       refCache.set(number, target);
       return target;
     };
@@ -249,12 +266,41 @@ export class FormulaContextService {
     };
   }
 
+  /** Запись-источник с кэшем операции: один проект/родитель на страницу. */
+  async record(
+    kind: FormulaHostKind,
+    id: string,
+    actor: ProjectActor | undefined,
+    tx: TransactionClient | undefined,
+    cache: FormulaContextCache,
+  ): Promise<FormulaRecordData | null> {
+    const key = `${kind}:${id}:${actor?.id ?? '-'}`;
+    const cached = cache.records.get(key);
+    if (cached) return cached;
+    const promise = this.reader.record(kind, id, actor ? { actor } : undefined, tx);
+    cache.records.set(key, promise);
+    return promise;
+  }
+
+  private async projectNodes(
+    projectId: string,
+    tx: TransactionClient | undefined,
+    cache: FormulaContextCache,
+  ): Promise<FormulaRecordData[]> {
+    const cached = cache.nodes.get(projectId);
+    if (cached) return cached;
+    const promise = this.reader.projectNodes(projectId, tx);
+    cache.nodes.set(projectId, promise);
+    return promise;
+  }
+
   /** Цель атрибута-ссылки: только своё дерево и не конфиденциальные (Р7). */
   private async resolveRef(
     host: FormulaRecordData,
     number: number,
     snapshot: FormulaRegistrySnapshot,
-    tx?: TransactionClient,
+    tx: TransactionClient | undefined,
+    cache: FormulaContextCache,
   ): Promise<FormulaRecordData | null> {
     const definition = snapshot.byNumber.get(number);
     if (!definition) return null;
@@ -267,7 +313,7 @@ export class FormulaContextService {
       case 'task':
       case 'node':
       case 'project': {
-        const target = await this.reader.record(definition.type, targetId, undefined, tx);
+        const target = await this.record(definition.type, targetId, undefined, tx, cache);
         if (!target || target.confidential) return null;
         // Цель обязана быть в проекте хоста (Р7 г) — иначе источник недоступен.
         const hostProject = host.kind === 'project' ? host.id : host.projectId;

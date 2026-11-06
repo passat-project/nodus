@@ -7,6 +7,7 @@ import { cn } from '@nodus/ui/lib/utils';
 import { formatMinutes } from '../../lib/format.js';
 import { useCommentsCount } from '../../tasks/comments-live.js';
 import {
+  attributeFormula,
   attributeRefs,
   attributeRenderCell,
   attributeValue,
@@ -138,7 +139,9 @@ export function BoardTaskCard({
         const definition = field.attribute;
         if (!definition) return null;
         const value = attributeValue(task, definition);
-        if (!isCustomFieldValueFilled(value)) return null;
+        const formula = attributeFormula(task, definition);
+        // Ошибка формулы видна и без значения (бейдж «!»).
+        if (!isCustomFieldValueFilled(value) && !formula?.error) return null;
         return (
           <span
             key={field.id}
@@ -147,7 +150,10 @@ export function BoardTaskCard({
           >
             <span className="shrink-0 text-muted-foreground">{field.label}</span>
             <span className="min-w-0 text-foreground/90 line-clamp-1">
-              {attributeRenderCell(definition, value, refs, false)}
+              {attributeRenderCell(definition, value, refs, {
+                interactive: false,
+                formula: attributeFormula(task, definition),
+              })}
             </span>
           </span>
         );

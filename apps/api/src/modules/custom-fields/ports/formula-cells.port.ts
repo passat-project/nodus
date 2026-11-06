@@ -2,6 +2,7 @@ import type { InjectionToken } from '@nestjs/common';
 import type {
   CustomFieldFormulas,
   CustomFieldValue,
+  CustomFieldValues,
   FormulaCellError,
   FormulaHostKind,
   FormulaNode,
@@ -29,8 +30,15 @@ export interface FormulaCellRef {
   fieldId: string;
 }
 
-/** Состояние формул ячеек хоста для DTO (Р9): origin + ошибка. */
-export type FormulaStateMap = Map<string, CustomFieldFormulas>;
+/** Состояние ячеек хоста для DTO (Р9/Р6): значения (формулы типа посчитаны
+ *  на чтении и в БД не лежат) + origin/ошибка каждой формульной ячейки. */
+export interface FormulaHostState {
+  values: CustomFieldValues;
+  formulas: CustomFieldFormulas;
+}
+
+/** Состояние хостов страницы: hostId → значения и формулы. */
+export type FormulaStateMap = Map<string, FormulaHostState>;
 
 export interface FormulaSaveArgs {
   hostKind: FormulaHostKind;

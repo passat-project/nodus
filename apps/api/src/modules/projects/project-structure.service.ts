@@ -22,6 +22,7 @@ import {
   type CustomFieldRegistry,
   type RegistryFieldChange,
 } from '../custom-fields/ports/custom-field-registry.port.js';
+import { FORMULA_CELLS, type FormulaCells } from '../custom-fields/ports/formula-cells.port.js';
 import {
   TASK_PROJECT_READER,
   type TaskProjectReader,
@@ -68,6 +69,8 @@ export class ProjectStructureService {
     private readonly policy: NodeFormPolicy,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly registry: CustomFieldRegistry,
     @Inject(TASK_PROJECT_READER) private readonly taskReader: TaskProjectReader,
+    // Формулы ячеек папок (#632): состояние для DTO и снятие при записи (Р5).
+    @Inject(FORMULA_CELLS) private readonly formulas: FormulaCells,
   ) {}
 
   /** GET /projects/:id/structure: папки (плоско, по order) + rollups + виды +
@@ -80,12 +83,19 @@ export class ProjectStructureService {
       this.kinds.list(),
     ]);
     const byNode = new Map(rollups.map((rollup) => [rollup.nodeId, rollup]));
-    const customFieldRefs = await this.registry.refsMany(
-      rows.map((row) => valuesOf(row)),
-      user,
-    );
+    const [customFieldRefs, formulas] = await Promise.all([
+      this.registry.refsMany(
+        rows.map((row) => valuesOf(row)),
+        user,
+      ),
+      // Формульное состояние всех папок среза — одним запросом (Р9).
+      this.formulas.stateFor(
+        'node',
+        rows.map((row) => row.id),
+      ),
+    ]);
     return {
-      nodes: rows.map((row) => nodeToDto(row, byNode.get(row.id) ?? null)),
+      nodes: rows.map((row) => nodeToDto(row, byNode.get(row.id) ?? null, formulas.get(row.id))),
       kinds,
       customFieldRefs,
     };
@@ -202,6 +212,10 @@ export class ProjectStructureService {
       const fields: string[] = [];
       let changes: RegistryFieldChange[] = [];
       if (body.code !== undefined || body.customFields !== undefined || kindChanged) {
+        // Вписанное значение снимает формулу ячейки в той же tx (Р5 #632).
+        if (body.customFields && Object.keys(body.customFields).length > 0) {
+          await this.formulas.release(tx, 'node', nodeId, Object.keys(body.customFields));
+        }
         const prepared = await this.policy.prepareUpdate(
           kind,
           { customFields: valuesOf(node) },
@@ -246,7 +260,9 @@ export class ProjectStructureService {
         },
         { actorId: user.id, aggregateType: 'project_node', aggregateId: node.id },
       );
-      return nodeToDto({ ...node, ...patch } as ProjectNodeRow, null);
+      // Формульное состояние папки для DTO (значок fx и бейдж ошибки, Р9).
+      const formulas = (await this.formulas.stateFor('node', [node.id], tx)).get(node.id);
+      return nodeToDto({ ...node, ...patch } as ProjectNodeRow, null, formulas);
     });
   }
 
