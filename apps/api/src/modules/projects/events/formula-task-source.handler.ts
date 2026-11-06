@@ -76,6 +76,21 @@ export class TaskUpdatedProjectFormulaHandler {
       const systemRefs = (
         await this.cells.dependentCellsByDepKey(`system:task:${payload.taskId}`, tx)
       ).filter((cell) => cell.hostKind === 'project' || cell.hostKind === 'node');
+      // Смена проекта: ref-источник стал недоступен в старом проекте и
+      // появился в новом — пересчитываем оба проекта и потребителей значений.
+      if (
+        payload.projectId !== undefined &&
+        payload.previousProjectId !== undefined &&
+        payload.projectId !== payload.previousProjectId
+      ) {
+        for (const projectId of new Set([payload.projectId, payload.previousProjectId])) {
+          if (projectId) await this.formulas.recalcProjectCells(tx, actorId, projectId, [], 1);
+        }
+        const refs = (
+          await this.cells.dependentCellsByDepPrefix(`v:task:${payload.taskId}:`, tx)
+        ).filter((cell) => cell.hostKind === 'project' || cell.hostKind === 'node');
+        await this.recalcHosts(tx, actorId, refs, 1);
+      }
       if (changes.length === 0) {
         await this.recalcHosts(tx, actorId, systemRefs, 1);
         return;
@@ -179,3 +194,49 @@ export class TaskDeletedProjectFormulaHandler {
     });
   }
 }
+
+/**
+ * Смена стадии/ответственного задачи (`task.stage_changed`/`task.assigned`):
+ * `task.updated` при чистом переходе не эмитится, а системные поля задачи —
+ * источник `ref_field` у формул проектов и папок (`system:task:<id>`).
+ * Пересчитываются только свои хосты (I3).
+ */
+@Injectable()
+class ProjectFormulaTaskSystemHandler {
+  static readonly eventType = TASK_EVENTS.STAGE_CHANGED;
+
+  constructor(
+    private readonly txRunner: TransactionRunner,
+    private readonly formulas: ProjectFormulaRecalcService,
+    private readonly nodes: ProjectNodesRepository,
+    @Inject(FORMULA_CELLS) private readonly cells: FormulaCells,
+    private readonly logger: PinoLogger,
+  ) {
+    this.logger.setContext(ProjectFormulaTaskSystemHandler.name);
+  }
+
+  async handle(event: DomainEvent<Record<string, unknown>>): Promise<void> {
+    const taskId = event.payload.taskId;
+    if (typeof taskId !== 'string') return;
+    await this.txRunner.run(async (tx) => {
+      const refs = (await this.cells.dependentCellsByDepKey(`system:task:${taskId}`, tx)).filter(
+        (cell) => cell.hostKind === 'project' || cell.hostKind === 'node',
+      );
+      if (refs.length === 0) return;
+      const projects = [
+        ...new Set(refs.filter((cell) => cell.hostKind === 'project').map((cell) => cell.hostId)),
+      ];
+      for (const projectId of projects) {
+        await this.formulas.recalcProjectCells(tx, event.actorId ?? null, projectId, [], 1);
+      }
+      const nodeHosts = [
+        ...new Set(refs.filter((cell) => cell.hostKind === 'node').map((cell) => cell.hostId)),
+      ];
+      for (const [projectId, nodeIds] of await nodesByProject(this.nodes, nodeHosts, tx)) {
+        await this.formulas.recalcNodes(tx, event.actorId ?? null, projectId, nodeIds, 1);
+      }
+    });
+  }
+}
+
+export { ProjectFormulaTaskSystemHandler };

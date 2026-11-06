@@ -97,6 +97,12 @@ export function withNode(draft: TaskCreateDraft, nodeId: string | null): TaskCre
   return { ...draft, nodeId };
 }
 
+/** Равенство значений черновика (примитивы/списки/деньги): префилл обновляет
+ *  слот только пока человек его не тронул. */
+export function sameDraftValue(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
 /** Человеческая строка «Не хватает: …» (подписи слотов формы). */
 export function missingTextOf(
   missing: readonly CreationFieldKey[],
@@ -158,7 +164,13 @@ export function buildCreateBody(
   prefill: TaskCreatePrefill,
   form: CreationForm,
 ): CreateTaskBody {
-  const body = draftBody(draft);
+  // Тело — только слоты АКТИВНОЙ формы: значение, оставшееся от прежнего типа,
+  // не должно уезжать в customFields невидимо для человека (Р9).
+  const allowed = new Set(form.fields.map((slot) => slot.key));
+  const visibleValues = Object.fromEntries(
+    Object.entries(draft.values).filter(([key]) => allowed.has(key as CreationFieldKey)),
+  );
+  const body = draftBody({ ...draft, values: visibleValues });
   const withPrefill: CreateTaskBody = {
     ...body,
     ...(prefill.personalStageId ? { personalStageId: prefill.personalStageId } : {}),

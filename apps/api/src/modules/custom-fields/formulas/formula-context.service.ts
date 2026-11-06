@@ -117,8 +117,10 @@ export class FormulaContextService {
     }
     if (needed.nodeTasks) {
       const nodeId = hostKind === 'node' ? host.id : host.nodeId;
-      if (nodeId) {
-        const rows = await this.reader.nodeTasks(nodeId, tx);
+      // Папка обязана принадлежать проекту хоста: аномальный nodeId из
+      // чужих данных не должен приносить задачи чужого проекта (Р7).
+      if (nodeId && nodes.has(nodeId)) {
+        const rows = await this.nodeTasksAt(nodeId, override, tx, cache);
         if (rows.length > FORMULA_LIMITS.selection) overflowed = true;
         related.set('node_tasks', rows);
       }
@@ -297,6 +299,42 @@ export class FormulaContextService {
     const promise = this.reader.projectNodes(projectId, tx);
     cache.nodes.set(projectId, promise);
     return promise;
+  }
+
+  /**
+   * Состав «задач папки» с подменой места (move-preview, Р10): задача,
+   * которую переносят, ещё лежит в старой папке БД. Без этой подмены дифф
+   * показывал бы старую папку с ушедшей задачей и новую — без неё, то есть
+   * обещал бы не то, что пересчитает перенос.
+   */
+  private async nodeTasksAt(
+    nodeId: string,
+    override: FormulaPreviewOverride | undefined,
+    tx: TransactionClient | undefined,
+    cache: FormulaContextCache,
+  ): Promise<FormulaRecordData[]> {
+    const rows = await this.reader.nodeTasks(nodeId, tx);
+    const moved = override?.taskNode;
+    if (!moved) return rows;
+    const movedOut = new Set<string>();
+    const movedIn: string[] = [];
+    for (const [taskId, target] of Object.entries(moved)) {
+      if (target === nodeId) movedIn.push(taskId);
+      else movedOut.add(taskId);
+    }
+    if (movedOut.size === 0 && movedIn.length === 0) return rows;
+    const kept = rows.filter((row) => !movedOut.has(row.id));
+    const present = new Set(kept.map((row) => row.id));
+    for (const taskId of movedIn) {
+      if (present.has(taskId)) continue;
+      // Видимость выборки — та же, что у `nodeTasks` (В1): конфиденциальные
+      // задачи не попадают в агрегат ни у кого.
+      const record = await this.record('task', taskId, undefined, tx, cache);
+      if (!record || record.confidential) continue;
+      kept.push(withOverride(record, override));
+      present.add(taskId);
+    }
+    return kept;
   }
 }
 

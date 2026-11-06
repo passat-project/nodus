@@ -38,8 +38,40 @@ export class ProjectFormulaDefinitionHandler {
     if (!parsed.success) return;
     const payload = parsed.data;
     const companyChanged = payload.fields?.includes('companyValue') === true;
+    const bindingsChanged = payload.fields?.includes('bindings') === true;
     const deleted = payload.change === 'deleted';
-    if (!companyChanged && !deleted) return;
+    if (!companyChanged && !bindingsChanged && !deleted) return;
+    // Привязки сменились: все свои ячейки атрибута пересчитываются (часть
+    // хостов осталась без привязки — `attribute_unavailable`).
+    if (bindingsChanged && !deleted && !companyChanged) {
+      const own = (await this.cells.dependentCellsByField(payload.definitionId)).filter(
+        (cell) => cell.hostKind === 'project' || cell.hostKind === 'node',
+      );
+      const nodeHosts = own.filter((cell) => cell.hostKind === 'node').map((cell) => cell.hostId);
+      const projectOf = new Map(
+        (await this.nodes.listByIds(nodeHosts)).map((node) => [node.id, node.projectId]),
+      );
+      for (const cell of own) {
+        const projectId =
+          cell.hostKind === 'project' ? cell.hostId : (projectOf.get(cell.hostId) ?? null);
+        if (!projectId) continue;
+        await this.txRunner.run(async (tx) => {
+          if (cell.hostKind === 'project') {
+            await this.formulas.recalcProjectCells(tx, event.actorId ?? null, projectId, [], 1);
+          } else {
+            await this.formulas.recalcNodeCells(
+              tx,
+              event.actorId ?? null,
+              projectId,
+              cell.hostId,
+              [],
+              1,
+            );
+          }
+        });
+      }
+      return;
+    }
     // Удаление: строки определения уже нет — номер едет в payload (#632).
     const number = payload.number ?? (await this.cells.numberByDefinitionId(payload.definitionId));
     if (number === null) return;

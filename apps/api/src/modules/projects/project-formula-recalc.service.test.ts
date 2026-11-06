@@ -31,7 +31,12 @@ function make() {
       { id: 'other', parentId: null, order: 'b' },
     ]),
   };
-  const writer = { writeProject: vi.fn(async () => true), writeNode: vi.fn(async () => true) };
+  const writer = {
+    writeProject: vi.fn(async () => true),
+    writeNode: vi.fn(async () => true),
+    lockProject: vi.fn(async () => true),
+    lockNode: vi.fn(async () => void 0),
+  };
   const repo = {
     findById: vi.fn<(id?: string, tx?: unknown) => Promise<Record<string, unknown>>>(async () => ({
       id: PROJECT,
@@ -87,7 +92,7 @@ describe('ProjectFormulaRecalcService (#632, Р4/Р8)', () => {
     const { service, cells, writer } = make();
     await service.recalcStructure({} as never, null, PROJECT, ['root'], 1);
     const hosts = cells.cellsForHost.mock.calls.map((call) => call[1]);
-    expect(hosts).toEqual(['root', 'child', 'grand']);
+    expect(hosts).toEqual(['child', 'grand', 'root']);
     expect(writer.writeNode).toHaveBeenCalledTimes(3);
   });
 

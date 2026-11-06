@@ -101,6 +101,21 @@ export class TaskDeletedFormulaSourceHandler {
     await this.txRunner.run(async (tx) => {
       // «Смерть связей» (Р4): ячейки удалённой задачи живыми не остаются.
       await this.cells.cleanupHost(tx, 'task', taskId);
+      // Потребители значений/системных полей удалённой задачи: источник
+      // стал недоступен — их ячейки пересчитываются, а не висят протухшими
+      // (префикс `v:task:<id>:` находит все номера одним запросом).
+      const refs = [
+        ...(await this.cells.dependentCellsByDepPrefix(`v:task:${taskId}:`, tx)),
+        ...(await this.cells.dependentCellsByDepKey(`system:task:${taskId}`, tx)),
+        ...(await this.cells.dependentCellsByDepKey(`parent:task:${taskId}`, tx)),
+      ];
+      await recalcTaskHosts(
+        this.formulas,
+        tx,
+        event.actorId ?? null,
+        taskHosts(refs).filter((hostId) => hostId !== taskId),
+        1,
+      );
       await recalcSubtaskParents(this.formulas, this.cells, tx, event.actorId ?? null, [parentId]);
       // Задача вышла из выборки «задачи папки»: агрегаты соседей изменились.
       await recalcNodeTaskConsumers(this.formulas, this.cells, tx, event.actorId ?? null, [nodeId]);
@@ -153,5 +168,30 @@ export class TaskAssignedFormulaHandler {
   constructor(private readonly runner: TaskSystemFieldRunner) {}
   handle(event: DomainEvent<Record<string, unknown>>): Promise<void> {
     return this.runner.run(event);
+  }
+}
+
+/**
+ * Смена типа задачи (`task.type_changed`): у задачи меняется место (привязки
+ * атрибутов), формулы могут стать `attribute_unavailable` или снова
+ * доступными. Стадия при этом часто не меняется, поэтому `task.updated`
+ * может не быть — пересчитываем свои ячейки явно.
+ */
+@Injectable()
+export class TaskTypeFormulaHandler {
+  static readonly eventType = TASK_EVENTS.TYPE_CHANGED;
+
+  constructor(
+    private readonly txRunner: TransactionRunner,
+    private readonly formulas: TaskFormulaService,
+  ) {}
+
+  async handle(event: DomainEvent<Record<string, unknown>>): Promise<void> {
+    const parsed = taskEventBaseSchema.safeParse(event.payload);
+    if (!parsed.success) return;
+    const { taskId } = parsed.data;
+    await this.txRunner.run((tx) =>
+      this.formulas.recalcCells(tx, event.actorId ?? null, taskId, [], 1),
+    );
   }
 }

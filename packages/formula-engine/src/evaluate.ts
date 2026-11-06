@@ -20,11 +20,37 @@ function evaluateOperation(
 ): FormulaValue {
   if (node.op === 'concat') {
     // «&» — склейка N операндов (редактор строит один узел из плашек подряд);
-    // пустые операнды пропускаются.
-    return node.args
-      .map((arg) => evaluateNode(arg, resolver))
-      .map((value) => (value === null ? '' : asText(value)))
-      .join('');
+    // пустые операнды пропускаются. Литерал-разделитель (`"-"`, `"—"`…)
+    // при пустом соседе тоже пропускается: пустое значение не оставляет
+    // висячих дефисов (`Шифр-№` при пустом № = `Шифр`, а не `Шифр--`).
+    const texts = node.args.map((arg) => {
+      const value = evaluateNode(arg, resolver);
+      return value === null ? '' : asText(value);
+    });
+    const separator = node.args.map(
+      (arg, index) =>
+        arg.kind === 'literal' &&
+        typeof arg.value === 'string' &&
+        texts[index] !== '' &&
+        /^[-–—−]+$/.test(arg.value),
+    );
+    // Формула из одного литерала `"-"` — это литерал, а не разделитель.
+    if (!texts.some((text, index) => !separator[index] && text !== '')) {
+      return texts.join('');
+    }
+    const parts: string[] = [];
+    for (let index = 0; index < texts.length; index += 1) {
+      const text = texts[index]!;
+      if (separator[index]) {
+        const prev = texts[index - 1] ?? '';
+        const next = texts[index + 1] ?? '';
+        if (prev === '' || next === '') continue;
+        parts.push(text);
+        continue;
+      }
+      if (text !== '') parts.push(text);
+    }
+    return parts.join('');
   }
   const [leftNode, rightNode] = node.args;
   if (!leftNode || !rightNode) fail('type_mismatch', 'operator expects two arguments');

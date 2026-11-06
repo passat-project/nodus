@@ -36,6 +36,19 @@ export class ProjectValuesWriter {
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly registry: CustomFieldRegistry,
   ) {}
 
+  /** Замок проекта в порядке «хост → ячейки»: его берут и save формулы, и
+   *  пересчёт ДО записи `formula_cells`, иначе конкурентный PATCH ловит 40P01. */
+  async lockProject(tx: TransactionClient, projectId: string): Promise<boolean> {
+    return (await this.projects.lockForUpdate(tx, projectId)) !== null;
+  }
+
+  /** Замок папки (структура проекта → строка узла) — тот же порядок, что у
+   *  PATCH папки. */
+  async lockNode(tx: TransactionClient, projectId: string, nodeId: string): Promise<void> {
+    await this.nodes.lockStructure(tx, projectId);
+    await this.nodes.lockNode(tx, projectId, nodeId);
+  }
+
   /** Значение формулы в атрибутах проекта (Р4): `false` — без изменений. */
   async writeProject(
     tx: TransactionClient,
@@ -44,8 +57,7 @@ export class ProjectValuesWriter {
     fieldId: string,
     value: CustomFieldValue | null,
   ): Promise<boolean> {
-    const locked = await this.projects.lockForUpdate(tx, projectId);
-    if (!locked) return false;
+    if (!(await this.lockProject(tx, projectId))) return false;
     const fresh = await this.projects.findById(projectId, tx);
     if (!fresh) return false;
     const prepared = await this.registry.prepareUpdate(
@@ -85,8 +97,7 @@ export class ProjectValuesWriter {
     fieldId: string,
     value: CustomFieldValue | null,
   ): Promise<boolean> {
-    await this.nodes.lockStructure(tx, projectId);
-    await this.nodes.lockNode(tx, projectId, nodeId);
+    await this.lockNode(tx, projectId, nodeId);
     const node = await this.nodes.findInProject(projectId, nodeId, tx);
     if (!node) return false;
     const prepared = await this.registry.prepareUpdate(

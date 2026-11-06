@@ -9,6 +9,9 @@ import {
 
 import type { FormulaRegistryMeta, FormulaTypeIssue, FormulaTypeResult } from './types.js';
 
+/** Типы, для которых определено сравнение порядка (МИН/МАКС). */
+const ORDERED_TYPES = new Set<FormulaValueType>(['number', 'money', 'date', 'datetime', 'string']);
+
 /** Тип значения атрибута в языке формул: продолжительность — минуты (number),
  *  ссылки — id (ref), списки — массив id (list), текст/ссылка-путь — string. */
 export function formulaTypeOfField(type: CustomFieldType): FormulaValueType {
@@ -251,14 +254,21 @@ function inferNode(
             `${node.fn} works only with numbers or money`,
           );
         case 'unique':
+          if (fieldType === 'list') {
+            return issue(issues, 'type_mismatch', path, 'unique works only with scalar fields');
+          }
           return 'list';
         case 'every':
         case 'some':
         case 'count':
           return spec.result === 'field' ? fieldType : spec.result;
         case 'last':
+          return fieldType;
         case 'min':
         case 'max':
+          if (!ORDERED_TYPES.has(fieldType)) {
+            return issue(issues, 'type_mismatch', path, `${node.fn} needs an ordered field`);
+          }
           return fieldType;
       }
     }

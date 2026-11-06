@@ -17,6 +17,7 @@ import { FORMULA_ENGINE, type FormulaEngine } from '../ports/formula-engine.port
 import type { FormulaRecordData } from '../ports/record-values.port.js';
 import { createFormulaCache, FormulaContextService } from './formula-context.service.js';
 import { FormulaMetaService } from './formula-meta.service.js';
+import { FormulaValuesService } from './formula-values.service.js';
 
 /**
  * Вычислительно-справочный контур формул (#632, Р10): проверка AST и
@@ -36,6 +37,7 @@ export class FormulaApiService {
   constructor(
     private readonly meta: FormulaMetaService,
     private readonly context: FormulaContextService,
+    private readonly values: FormulaValuesService,
     @Inject(FORMULA_ENGINE) private readonly engine: FormulaEngine,
   ) {}
 
@@ -76,11 +78,14 @@ export class FormulaApiService {
     };
     const creation = ctx.creation ?? null;
     const hostKind = creation?.hostKind ?? ctx.hostKind!;
+    const definition = body.targetFieldId ? snapshot.byId.get(body.targetFieldId) : undefined;
+    const targetType = (definition?.type as CustomFieldType | undefined) ?? body.targetType;
     // Форма AST (лимиты, матрица источников) проверяется и в превью:
     // иначе evaluate обходил бы запреты матрицы и лимиты языка (Р2/Р7).
     const shape = this.engine.validate(body.ast, {
       hostKind,
       meta: snapshot.meta,
+      ...(targetType ? { targetFieldType: targetType } : {}),
     });
     const blocking = shape.issues.filter((issue) => issue.blocking);
     if (blocking.length > 0) {
@@ -108,10 +113,27 @@ export class FormulaApiService {
       };
     }
     const evaluation = this.engine.evaluate(body.ast, context.resolver);
-    return {
-      value: evaluation.value as FormulaEvaluateResponse['value'],
-      error: evaluation.error,
-    };
+    if (evaluation.error) return { value: null, error: evaluation.error };
+    // Префилл едет в поле окна: значение материализуется по грамматике слота
+    // (enum → id словаря, дата → ISO), иначе окно покажет код варианта и
+    // сабмит отвергнет значение (Р12/Р13).
+    if (!targetType) {
+      return {
+        value: evaluation.value as FormulaEvaluateResponse['value'],
+        error: null,
+      };
+    }
+    const materialized = await this.values.materialize(
+      { type: targetType, settings: (definition?.settings ?? {}) as never },
+      evaluation.value,
+    );
+    if (materialized === null && evaluation.value !== null) {
+      return {
+        value: null,
+        error: { code: 'type_mismatch', message: `formula result does not fit ${targetType}` },
+      };
+    }
+    return { value: materialized as FormulaEvaluateResponse['value'], error: null };
   }
 
   /** Контекст ещё не созданной записи (префилл окна создания, Р12): место

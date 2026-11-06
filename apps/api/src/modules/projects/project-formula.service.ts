@@ -71,6 +71,8 @@ export class ProjectFormulaService {
   ): Promise<FormulaResponse> {
     await this.requireManage(user, projectId);
     return this.txRunner.run(async (tx) => {
+      // Порядок замков как у PATCH проекта: строка → ячейки (40P01).
+      await this.writer.lockProject(tx, projectId);
       const outcome = await this.cells.save(tx, {
         hostKind: 'project',
         hostId: projectId,
@@ -124,6 +126,8 @@ export class ProjectFormulaService {
     await loadForStructureManage(this.projects, user, projectId);
     if (!(await this.nodes.findInProject(projectId, nodeId))) throw nodeInvalid(nodeId);
     return this.txRunner.run(async (tx) => {
+      // Порядок замков как у PATCH папки: структура → узел → ячейки.
+      await this.writer.lockNode(tx, projectId, nodeId);
       const outcome = await this.cells.save(tx, {
         hostKind: 'node',
         hostId: nodeId,

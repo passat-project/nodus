@@ -60,6 +60,7 @@ export function WindowFieldFormulas({
               ownDefinitions={definitions}
               value={section?.formulas?.[field] ?? null}
               readOnly={readOnly}
+              allowRelated
               onChange={(ast) => onChange(field, ast)}
             />
           </div>

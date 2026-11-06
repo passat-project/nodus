@@ -146,6 +146,15 @@ export interface FormulaCells {
    *  их владелец (I3). */
   dependentCellsByDepKey(key: string, tx?: TransactionClient): Promise<FormulaCellRef[]>;
 
+  /** Ячейки по ПРЕФИКСУ ключа зависимости (`v:task:<id>:`,
+   *  `system:task:<id>`): удалённый источник не оставляет протухших
+   *  значений у потребителей — их хосты находятся без перебора всех ячеек. */
+  dependentCellsByDepPrefix(prefix: string, tx?: TransactionClient): Promise<FormulaCellRef[]>;
+
+  /** Все свои ячейки атрибута (смена привязок: атрибут отвязан/привязан —
+   *  ячейки получают `attribute_unavailable` или снова считаются). */
+  dependentCellsByField(fieldId: string, tx?: TransactionClient): Promise<FormulaCellRef[]>;
+
   /** Все ячейки хоста (пересчёт после переноса/смены места, Р8). */
   cellsForHost(
     hostKind: FormulaHostKind,

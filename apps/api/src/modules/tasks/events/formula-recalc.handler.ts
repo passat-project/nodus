@@ -11,7 +11,12 @@ import {
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import { TaskFormulaService } from '../tasks/task-formula.service.js';
-import { recalcNodeTaskConsumers, recalcSubtaskParents } from './formula-source.helpers.js';
+import {
+  recalcNodeTaskConsumers,
+  recalcSubtaskParents,
+  recalcTaskHosts,
+  taskHosts,
+} from './formula-source.helpers.js';
 
 /**
  * Пересчёт формул задач по зависимостям (#632, Р4/Р8). Триггеры:
@@ -74,6 +79,25 @@ export class TaskFormulaRecalcHandler {
         payload.nodeId,
         payload.previousNodeId,
       ]);
+      // Смена проекта меняет видимость ref-источника (Р7 «своё дерево»):
+      // потребители значений задачи пересчитываются, иначе держат старое.
+      if (
+        payload.projectId !== undefined &&
+        payload.previousProjectId !== undefined &&
+        payload.projectId !== payload.previousProjectId
+      ) {
+        const refs = [
+          ...(await this.cells.dependentCellsByDepPrefix(`v:task:${payload.taskId}:`, tx)),
+          ...(await this.cells.dependentCellsByDepKey(`system:task:${payload.taskId}`, tx)),
+        ];
+        await recalcTaskHosts(
+          this.formulas,
+          tx,
+          event.actorId ?? null,
+          taskHosts(refs).filter((hostId) => hostId !== payload.taskId),
+          1,
+        );
+      }
     });
   }
 }
@@ -97,8 +121,27 @@ export class TaskFormulaDefinitionHandler {
     if (!parsed.success) return;
     const payload = parsed.data;
     const companyChanged = payload.fields?.includes('companyValue') === true;
+    const bindingsChanged = payload.fields?.includes('bindings') === true;
     const deleted = payload.change === 'deleted';
-    if (!companyChanged && !deleted) return;
+    if (!companyChanged && !bindingsChanged && !deleted) return;
+    // Привязки сменились: ячейки атрибута пересчитываются все — часть
+    // хостов осталась без привязки (`attribute_unavailable`), часть
+    // получила её обратно. Номер атрибута здесь не нужен.
+    if (bindingsChanged && !deleted && !companyChanged) {
+      const own = (await this.cells.dependentCellsByField(payload.definitionId)).filter(
+        (cell) => cell.hostKind === 'task',
+      );
+      const hosts = [...new Set(own.map((cell) => cell.hostId))];
+      for (let index = 0; index < hosts.length; index += 100) {
+        const batch = hosts.slice(index, index + 100);
+        await this.txRunner.run(async (tx) => {
+          for (const hostId of batch) {
+            await this.formulas.recalcCells(tx, event.actorId ?? null, hostId, [], 1);
+          }
+        });
+      }
+      return;
+    }
     // Удаление: строки определения уже нет — номер едет в payload (#632).
     const number = payload.number ?? (await this.cells.numberByDefinitionId(payload.definitionId));
     if (number === null) return;

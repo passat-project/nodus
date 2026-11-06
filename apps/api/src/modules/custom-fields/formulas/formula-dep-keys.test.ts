@@ -89,7 +89,7 @@ describe('buildDepKeys: что должно измениться для пере
       deps: [{ kind: 'parent', number: 3 }],
       snapshot: snapshot([]),
     });
-    expect(keys.map((entry) => entry.key)).toEqual(['v:task:parent1:3', 'parent:task:task1']);
+    expect(keys.map((entry) => entry.key)).toEqual(['v:task:parent1:3', 'parent:task:parent1']);
   });
 
   it('папка — дерево проекта + значения всех предков цепочки', () => {

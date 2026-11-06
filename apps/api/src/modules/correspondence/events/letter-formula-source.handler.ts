@@ -106,6 +106,14 @@ export class LetterFormulaTaskSourceHandler {
         ...new Set([
           ...(await letterHostsBySystem(this.cells, 'task', taskId, tx)),
           ...(await letterHosts(this.cells, 'task', taskId, numbers, tx)),
+          // Смена проекта меняет видимость ref-источника (Р7 «своё дерево»).
+          ...(parsed.data.projectId !== undefined &&
+          parsed.data.previousProjectId !== undefined &&
+          parsed.data.projectId !== parsed.data.previousProjectId
+            ? (await this.cells.dependentCellsByDepPrefix(`v:task:${taskId}:`, tx))
+                .filter((cell) => cell.hostKind === 'letter')
+                .map((cell) => cell.hostId)
+            : []),
         ]),
       ];
       if (hosts.length === 0) return;

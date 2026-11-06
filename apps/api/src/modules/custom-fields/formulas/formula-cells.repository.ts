@@ -182,6 +182,25 @@ export class FormulaCellsRepository {
     return dedupeCells(rows.map((row) => row.cell));
   }
 
+  /** Ячейки по префиксу dep_key: удалённый источник (`v:task:<id>:`,
+   *  `system:task:<id>`) — потребители находятся одним запросом. */
+  async byDepPrefix(prefix: string, tx?: TransactionClient): Promise<FormulaCellRef[]> {
+    const rows = await this.db(tx).formulaDep.findMany({
+      where: { depKey: { startsWith: prefix } },
+      select: { cell: { select: { id: true, hostKind: true, hostId: true, fieldId: true } } },
+    });
+    return dedupeCells(rows.map((row) => row.cell));
+  }
+
+  /** Свои ячейки атрибута (смена привязок типа/вида, Р3/Р13). */
+  async byFieldId(fieldId: string, tx?: TransactionClient): Promise<FormulaCellRef[]> {
+    const rows = await this.db(tx).formulaCell.findMany({
+      where: { fieldId },
+      select: { id: true, hostKind: true, hostId: true, fieldId: true },
+    });
+    return dedupeCells(rows);
+  }
+
   /** Есть ли вообще ячейки, зависящие от номера (быстрая проверка события). */
   async countByAttrNumber(number: number, tx?: TransactionClient): Promise<number> {
     return this.db(tx).formulaDep.count({ where: { attrNumber: number } });

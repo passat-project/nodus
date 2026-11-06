@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type {
   AuthUser,
   FormulaHostKind,
@@ -40,6 +40,8 @@ const PREVIEW_TASKS_LIMIT = 100;
  */
 @Injectable()
 export class TaskFormulaService {
+  private readonly log = new Logger(TaskFormulaService.name);
+
   constructor(
     private readonly txRunner: TransactionRunner,
     private readonly query: TasksQueryService,
@@ -66,6 +68,10 @@ export class TaskFormulaService {
   ): Promise<FormulaResponse> {
     const row = await this.requireEdit(user, taskId);
     return this.txRunner.run(async (tx) => {
+      // Порядок замков как у PATCH задачи: строка → ячейки. Иначе
+      // параллельные «правка значения» и «поставить формулу» берут строки в
+      // разном порядке и ловят 40P01 (как уже сделано у письма).
+      await this.repo.lock(tx, taskId);
       const outcome = await this.cells.save(tx, {
         hostKind: 'task',
         hostId: taskId,
@@ -121,7 +127,15 @@ export class TaskFormulaService {
     const subtree = (await this.query.subtreeIds(taskId)).slice(0, PREVIEW_TASKS_LIMIT);
     const visible = await this.query.visibleIdsAmong(user, subtree);
     const override = { taskNode: { [taskId]: nodeId } };
-    return { changes: await this.cells.preview('task', visible, override) };
+    // Задача меняет папку — у СТАРОЙ и НОВОЙ папки меняется выборка «задачи
+    // папки»: их формулы пересчитываются реальным переносом, значит и дифф
+    // должен их показать (иначе окно обещает не то, что произойдёт).
+    const nodeIds = [...new Set([row.nodeId, nodeId].filter((id): id is string => id !== null))];
+    const [taskChanges, nodeChanges] = await Promise.all([
+      this.cells.preview('task', visible, override),
+      nodeIds.length > 0 ? this.cells.preview('node', nodeIds, override) : Promise.resolve([]),
+    ]);
+    return { changes: [...taskChanges, ...nodeChanges] };
   }
 
   /** Пересчёт ячеек задачи после изменения значений (Р4): общая точка. */
@@ -144,12 +158,14 @@ export class TaskFormulaService {
     if (all.length > 0) await this.recalcOwn(tx, actorId, taskId, all, depth);
     // Зависимые задачи ТОГО ЖЕ модуля (формула ребёнка «Родитель · Поле»,
     // системные поля родителя): их строки пишет tasks — I3 не нарушается.
+    // Глубина та же, что у своих: обработчик следующего события сам добавит
+    // шаг, иначе каскад растёт на +2 за хоп и ложно упирается в `cycle`.
     const foreign = dependent.filter((cell) => cell.hostKind === 'task' && cell.hostId !== taskId);
     const linked = [
       ...(await this.cells.dependentCellsByDepKey(`system:task:${taskId}`, tx)),
       ...(await this.cells.dependentCellsByDepKey(`parent:task:${taskId}`, tx)),
     ].filter((cell) => cell.hostKind === 'task' && cell.hostId !== taskId);
-    await this.recalcForeign(tx, actorId, [...foreign, ...linked], depth + 1);
+    await this.recalcForeign(tx, actorId, [...foreign, ...linked], depth);
   }
 
   /** Пересчёт набора своих ячеек: значение → writer, ошибка → событие (O4). */
@@ -166,19 +182,33 @@ export class TaskFormulaService {
     depth: number,
   ): Promise<void> {
     const row = await this.repo.findWithParticipants(taskId, tx);
+    // Замок строки до ячеек: тот же порядок, что у PATCH задачи (хост →
+    // формула), иначе конкурентная правка значения даёт 40P01.
+    await this.repo.lock(tx, taskId);
     const actor = { id: actorId ?? row.creatorId, permissions: [] as string[] };
     for (const cell of cells) {
       const outcome = await this.cells.recalc(tx, cell, depth);
       if (outcome.silent) continue;
       if (outcome.changed) {
-        await this.writer.apply(
-          tx,
-          actor,
-          row,
-          { customFields: { [cell.fieldId]: outcome.value } },
-          ['customFields'],
-          { formulaWrite: true },
-        );
+        try {
+          await this.writer.apply(
+            tx,
+            actor,
+            row,
+            { customFields: { [cell.fieldId]: outcome.value } },
+            ['customFields'],
+            { formulaWrite: true },
+          );
+        } catch (error) {
+          // Сбой одной ячейки не валит партию (Р4): «ядовитая» ячейка не
+          // должна превращать событие в вечный retry-loop диспетчера.
+          this.log.warn(
+            `Формула задачи ${taskId}/${cell.fieldId} не записана: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+          continue;
+        }
       }
       // formula_changed — только при смене наличия ошибки (O4): успешный
       // пересчёт значения уже уезжает событием хоста от writer'а.
@@ -201,6 +231,10 @@ export class TaskFormulaService {
     depth: number,
   ): Promise<void> {
     const seen = new Set<string>();
+    // Все хосты-получатели блокируются в стабильном порядке (сортировка id):
+    // два обработчика с разным порядком строк иначе дают 40P01.
+    const hostIds = [...new Set(cells.map((cell) => cell.hostId))].sort();
+    for (const hostId of hostIds) await this.repo.lock(tx, hostId);
     for (const cell of cells) {
       if (seen.has(cell.cellId)) continue;
       seen.add(cell.cellId);
@@ -209,14 +243,23 @@ export class TaskFormulaService {
       if (outcome.silent) continue;
       const actor = { id: actorId ?? row.creatorId, permissions: [] as string[] };
       if (outcome.changed) {
-        await this.writer.apply(
-          tx,
-          actor,
-          row,
-          { customFields: { [cell.fieldId]: outcome.value } },
-          ['customFields'],
-          { formulaWrite: true },
-        );
+        try {
+          await this.writer.apply(
+            tx,
+            actor,
+            row,
+            { customFields: { [cell.fieldId]: outcome.value } },
+            ['customFields'],
+            { formulaWrite: true },
+          );
+        } catch (error) {
+          this.log.warn(
+            `Формула задачи ${cell.hostId}/${cell.fieldId} не записана: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+          continue;
+        }
       }
       if (outcome.errorChanged) {
         await this.emitChanged(tx, actorId, cell.hostId, cell.fieldId, outcome.error !== null);

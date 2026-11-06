@@ -36,12 +36,14 @@ import {
   TaskRelationFormulaHandler,
   TaskStageFormulaHandler,
   TaskSystemFieldRunner,
+  TaskTypeFormulaHandler,
 } from './events/formula-lifecycle.handler.js';
 import {
   TaskFormulaDefinitionHandler,
   TaskFormulaRecalcHandler,
 } from './events/formula-recalc.handler.js';
 import {
+  TaskFormulaNodeDeletedSourceHandler,
   TaskFormulaNodeSourceHandler,
   TaskFormulaProjectSourceHandler,
   TaskFormulaTreeCreatedHandler,
@@ -162,6 +164,7 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
     // значения и структура проектов/папок — пишутся только ячейки задач (I3).
     TaskFormulaProjectSourceHandler,
     TaskFormulaNodeSourceHandler,
+    TaskFormulaNodeDeletedSourceHandler,
     TaskFormulaTreeRunner,
     TaskFormulaTreeCreatedHandler,
     TaskFormulaTreeMovedHandler,
@@ -174,6 +177,8 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
     TaskSystemFieldRunner,
     TaskStageFormulaHandler,
     TaskAssignedFormulaHandler,
+    // Смена типа: доступность атрибутов места изменилась (Р3/Р13).
+    TaskTypeFormulaHandler,
   ],
 })
 export class TasksModule {}

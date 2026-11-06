@@ -4,6 +4,10 @@ import type { FormulaRecordData } from '../ports/record-values.port.js';
 import type { FormulaContextCache, FormulaContextService } from './formula-context.service.js';
 import type { FormulaRegistrySnapshot } from './formula-meta.service.js';
 
+/** UUID-форма цели: мусор в старых значениях не должен ронять Prisma
+ *  (500/«ядовитая ячейка») — такой источник просто недоступен. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Цель атрибута-ссылки (#632, Р7 г): только своё дерево и не конфиденциальные;
  *  письмо/контрагент источниками атрибутов V1 не являются (O5). */
 export async function resolveRefSource(
@@ -22,6 +26,7 @@ export async function resolveRefSource(
     return null;
   }
   const targetId = String(raw);
+  if (!UUID_RE.test(targetId)) return null;
   switch (definition.type) {
     case 'task':
     case 'node':

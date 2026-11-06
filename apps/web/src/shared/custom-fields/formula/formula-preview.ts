@@ -36,9 +36,13 @@ export function previewText(
     return value ? ui.customFields.value.yes : ui.formulas.editor.resultEmpty;
   }
   if (typeof value === 'string') {
-    if (definition.type === 'date') return formatIsoDate(value);
-    if (definition.type === 'datetime') return formatIsoDateTime(value);
-    return value;
+    // Пример в редакторе — тот же очиститель, что в карточке: пустой операнд
+    // не должен показывать `--`/`—`/`−` даже до пересчёта движком.
+    const cleaned = cleanFormulaText(value);
+    if (typeof cleaned !== 'string') return ui.formulas.editor.resultEmpty;
+    if (definition.type === 'date') return formatIsoDate(cleaned);
+    if (definition.type === 'datetime') return formatIsoDateTime(cleaned);
+    return cleaned;
   }
   if (Array.isArray(value)) {
     return value.length > 0 ? value.join(', ') : ui.formulas.editor.resultEmpty;
@@ -52,4 +56,20 @@ export function saveErrorText(error: unknown): string {
     if (known) return known;
   }
   return ui.formulas.editor.saveError;
+}
+
+/** Формульное значение без пустых маркеров и висячих разделителей: пустой
+ *  операнд не должен оставлять `--`, `—` или `−` в ячейке (Р13).
+ *  Нормализация на отображении нужна и для уже материализованных значений:
+ *  они пересчитываются не на каждом чтении. */
+export function cleanFormulaText(
+  value: CustomFieldValue | null | undefined,
+): CustomFieldValue | null | undefined {
+  if (value === null || value === undefined) return value;
+  if (typeof value !== 'string') return value;
+  const cleaned = value
+    .replace(/[—–−]/g, '')
+    .replace(/-{2,}/g, '-')
+    .replace(/^[-–—−]+|[-–—−]+$/g, '');
+  return cleaned === '' ? null : cleaned;
 }

@@ -37,6 +37,7 @@ import { ProjectFormulaEvents } from './project-formula-events.js';
 import { ProjectFormulaRecalcService } from './project-formula-recalc.service.js';
 import { ProjectFormulaService } from './project-formula.service.js';
 import {
+  ProjectFormulaTaskSystemHandler,
   TaskCreatedProjectFormulaHandler,
   TaskDeletedProjectFormulaHandler,
   TaskUpdatedProjectFormulaHandler,
@@ -109,6 +110,7 @@ import {
     // Пересчёт формул проектов/папок по событиям задач (#632): задачи —
     // источник через ссылку (`v:task:*`) и состав выборки папки (I3).
     TaskUpdatedProjectFormulaHandler,
+    ProjectFormulaTaskSystemHandler,
     TaskCreatedProjectFormulaHandler,
     TaskDeletedProjectFormulaHandler,
     // Проекция участия «из задач» (Р2): события task.*.

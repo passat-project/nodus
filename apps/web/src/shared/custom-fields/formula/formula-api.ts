@@ -9,6 +9,7 @@ import type {
 } from '@nodus/contracts';
 
 import { api } from '../../api-client.js';
+import { markFreshFromMutation } from '../../api/fresh-from-mutation.js';
 import { projectsKeys } from '../../api/projects-list.js';
 import { tasksKeys } from '../../api/tasks-keys.js';
 
@@ -70,7 +71,8 @@ export function useFormulaCell(host: FormulaHost | null, fieldId: string, enable
 /** После мутации формулы обновляем деталь хоста и его списки (значок fx и
  *  значение материализованы сервером). */
 function invalidateHost(queryClient: ReturnType<typeof useQueryClient>, host: FormulaHost) {
-  void queryClient.invalidateQueries({ queryKey: formulaKeys.all });
+  // Точную ячейку мутация уже записала в кэш: общий префикс `formulaKeys.all`
+  // рефетчил бы AST всех открытых редакторов (лишняя волна запросов).
   switch (host.kind) {
     case 'task':
       void queryClient.invalidateQueries({ queryKey: tasksKeys.detail(host.id) });
@@ -108,6 +110,9 @@ export function useSaveFormula(host: FormulaHost) {
       const key = formulaKeys.cell(host, vars.fieldId);
       await queryClient.cancelQueries({ queryKey: key });
       queryClient.setQueryData(key, { ast: vars.ast, origin: 'own' });
+      // Эхо собственного `task.updated` не должно второй раз рефетчить
+      // деталь/кнопки: сервер уже вернул актуальное значение (Р10).
+      if (host.kind === 'task') markFreshFromMutation(host.id);
       invalidateHost(queryClient, host);
     },
   });
@@ -125,6 +130,7 @@ export function useRemoveFormula(host: FormulaHost) {
       const key = formulaKeys.cell(host, fieldId);
       await queryClient.cancelQueries({ queryKey: key });
       queryClient.setQueryData(key, { ast: null });
+      if (host.kind === 'task') markFreshFromMutation(host.id);
       invalidateHost(queryClient, host);
     },
   });

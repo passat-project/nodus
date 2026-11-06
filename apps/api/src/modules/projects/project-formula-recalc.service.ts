@@ -43,6 +43,8 @@ export class ProjectFormulaRecalcService {
         ? await this.cells.dependentCellsByValues('project', projectId, numbers, tx)
         : [];
     const own = await this.cells.cellsForHost('project', projectId, tx);
+    // Замок хоста ДО ячеек: тот же порядок, что у PATCH проекта (40P01).
+    if (!(await this.writer.lockProject(tx, projectId))) return;
     for (const cell of dedupe([...dependent, ...own])) {
       await this.recalcCell(tx, actorId, projectId, cell, depth);
     }
@@ -62,6 +64,7 @@ export class ProjectFormulaRecalcService {
         ? await this.cells.dependentCellsByValues('node', nodeId, numbers, tx)
         : [];
     const own = await this.cells.cellsForHost('node', nodeId, tx);
+    await this.writer.lockNode(tx, projectId, nodeId);
     for (const cell of dedupe([...dependent, ...own])) {
       await this.recalcCell(tx, actorId, projectId, cell, depth);
     }
@@ -107,7 +110,8 @@ export class ProjectFormulaRecalcService {
     nodeIds: readonly string[],
     depth: number,
   ): Promise<void> {
-    for (const nodeId of nodeIds) {
+    for (const nodeId of [...nodeIds].sort()) {
+      await this.writer.lockNode(tx, projectId, nodeId);
       const cells = await this.cells.cellsForHost('node', nodeId, tx);
       for (const cell of cells) await this.recalcCell(tx, actorId, projectId, cell, depth);
     }

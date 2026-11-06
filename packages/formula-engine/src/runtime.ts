@@ -42,17 +42,22 @@ export function moneyFromMinor(minor: number, currencyId: string): MoneyValue {
 
 /** Текст значения для «&» и текстовых функций: число — без группировки,
  *  десятичная запятая (русская деловая запись), флаг — ИСТИНА/ЛОЖЬ. */
+const EMPTY_DASHES = new Set(['—', '–', '−']);
+
 export function textOf(value: FormulaValue): string {
   if (value === null) return '';
   if (typeof value === 'string') {
     // Типографский «пустой» маркер из старых данных/подсказок не должен
     // попадать в склейку: пустое значение — это пусто, а не дефис.
-    return value === '—' || value === '–' || value === '−' ? '' : value;
+    return EMPTY_DASHES.has(value) ? '' : value;
   }
   if (typeof value === 'number')
     return Number.isFinite(value) ? String(value).replace('.', ',') : '';
   if (typeof value === 'boolean') return value ? 'ИСТИНА' : 'ЛОЖЬ';
-  if (Array.isArray(value)) return value.join(', ');
+  if (Array.isArray(value)) {
+    // Пустые маркеры в списке не должны превращаться в дефисы в склейке.
+    return value.filter((item) => !EMPTY_DASHES.has(item)).join(', ');
+  }
   return String(value.amount).replace('.', ',');
 }
 

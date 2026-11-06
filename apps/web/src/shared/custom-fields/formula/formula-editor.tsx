@@ -15,6 +15,7 @@ import { Skeleton } from '@nodus/ui/components/skeleton';
 import { FormulaAggregateDialog } from './formula-aggregate-dialog.js';
 import { FormulaFunctionsPanel } from './formula-functions-panel.js';
 import { FormulaLine } from './formula-line.js';
+import { nextChipKey } from './formula-text.js';
 import { FormulaPalette } from './formula-palette.js';
 import { previewText } from './formula-preview.js';
 import { FormulaRemoveDialog } from './formula-remove-dialog.js';
@@ -48,6 +49,7 @@ export function FormulaEditor({
   definition,
   ownDefinitions,
   hostContext,
+  readOnly = false,
   onClose,
 }: {
   open: boolean;
@@ -57,6 +59,9 @@ export function FormulaEditor({
   /** Атрибуты места хоста — группа «Свои поля». */
   ownDefinitions: readonly CustomFieldDefinition[];
   hostContext: FormulaHostContext;
+  /** Нет права правки: формула открывается на просмотр (fx кликабелен у
+   *  зрителя), строка и футер не дают сохранить/снять. */
+  readOnly?: boolean;
   onClose: () => void;
 }) {
   const {
@@ -79,7 +84,7 @@ export function FormulaEditor({
     autocomplete,
     insertText,
     insertField,
-    insertAggregate,
+    insertChip,
     applyAutocomplete,
     handleInput,
     handleKeyDown,
@@ -157,6 +162,7 @@ export function FormulaEditor({
                 </p>
               ) : null}
               <FormulaLine
+                readOnly={readOnly}
                 rootRef={setRootRef}
                 empty={empty}
                 error={error}
@@ -170,21 +176,23 @@ export function FormulaEditor({
                 onApplyAutocomplete={applyAutocomplete}
               />
 
-              <div className="grid min-h-[18rem] flex-1 grid-cols-[13rem_minmax(0,1fr)] gap-3">
-                <aside className="min-h-0 overflow-hidden rounded-xl bg-muted/60 dark:bg-background/60">
-                  <FormulaPalette
-                    groups={groups}
-                    onInsertField={insertField}
-                    onInsertAggregate={(aggregate) =>
-                      setAggregateDialog({ open: true, initial: aggregate })
-                    }
+              {readOnly ? null : (
+                <div className="grid min-h-[18rem] flex-1 grid-cols-[13rem_minmax(0,1fr)] gap-3">
+                  <aside className="min-h-0 overflow-hidden rounded-xl bg-muted/60 dark:bg-background/60">
+                    <FormulaPalette
+                      groups={groups}
+                      onInsertField={insertField}
+                      onInsertAggregate={(aggregate) =>
+                        setAggregateDialog({ open: true, initial: aggregate })
+                      }
+                    />
+                  </aside>
+                  <FormulaFunctionsPanel
+                    onInsertText={insertText}
+                    onOpenAggregate={() => setAggregateDialog({ open: true, initial: null })}
                   />
-                </aside>
-                <FormulaFunctionsPanel
-                  onInsertText={insertText}
-                  onOpenAggregate={() => setAggregateDialog({ open: true, initial: null })}
-                />
-              </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -193,7 +201,7 @@ export function FormulaEditor({
               type="button"
               variant="ghost"
               className="mr-auto text-danger hover:text-danger"
-              disabled={remove.isPending || origin !== 'own'}
+              disabled={readOnly || remove.isPending || origin !== 'own'}
               onClick={() => setRemoveOpen(true)}
             >
               <Trash2 className="size-3.5" strokeWidth={1.75} />
@@ -204,7 +212,7 @@ export function FormulaEditor({
             </Button>
             <Button
               type="button"
-              disabled={save.isPending || validate.isPending || !parse.ast}
+              disabled={readOnly || save.isPending || validate.isPending || !parse.ast}
               onClick={handleSave}
             >
               {ui.formulas.editor.save}
@@ -220,7 +228,7 @@ export function FormulaEditor({
         kinds={kinds.data ?? []}
         onClose={() => setAggregateDialog({ open: false, initial: null })}
         onApply={(aggregate) => {
-          insertAggregate(aggregate);
+          insertChip({ type: 'aggregate', key: nextChipKey(), aggregate });
           setAggregateDialog({ open: false, initial: null });
         }}
       />

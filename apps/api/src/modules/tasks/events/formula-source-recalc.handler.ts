@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 import {
   PROJECT_EVENTS,
+  projectNodeDeletedPayloadSchema,
   projectNodeUpdatedPayloadSchema,
   projectUpdatedPayloadSchema,
   type DomainEvent,
@@ -165,5 +166,43 @@ export class TaskFormulaTreeDeletedHandler {
   constructor(private readonly runner: TaskFormulaTreeRunner) {}
   handle(event: DomainEvent<Record<string, unknown>>): Promise<void> {
     return this.runner.run(event);
+  }
+}
+
+/**
+ * Удаление папки-источника (`project.node_deleted`): формулы задач, читавшие
+ * значения/системные поля папки по ссылке, получают `source_unavailable` —
+ * пересчитываются, а не держат последнее значение (Р13).
+ */
+@Injectable()
+export class TaskFormulaNodeDeletedSourceHandler {
+  static readonly eventType = PROJECT_EVENTS.NODE_DELETED;
+
+  constructor(
+    private readonly txRunner: TransactionRunner,
+    private readonly formulas: TaskFormulaService,
+    @Inject(FORMULA_CELLS) private readonly cells: FormulaCells,
+    private readonly logger: PinoLogger,
+  ) {
+    this.logger.setContext(TaskFormulaNodeDeletedSourceHandler.name);
+  }
+
+  async handle(event: DomainEvent<Record<string, unknown>>): Promise<void> {
+    const parsed = projectNodeDeletedPayloadSchema.safeParse(event.payload);
+    if (!parsed.success) return;
+    const { projectId, nodeId } = parsed.data;
+    await this.txRunner.run(async (tx) => {
+      const refs = [
+        ...(await this.cells.dependentCellsByDepPrefix(`v:node:${nodeId}:`, tx)),
+        ...(await this.cells.dependentCellsByDepKey(`system:node:${nodeId}`, tx)),
+      ];
+      const hosts = taskHosts(refs);
+      if (hosts.length === 0) return;
+      this.logger.debug(
+        { projectId, nodeId, hosts: hosts.length },
+        'Формулы задач после удаления папки',
+      );
+      await recalcTaskHosts(this.formulas, tx, event.actorId ?? null, hosts, 1);
+    });
   }
 }

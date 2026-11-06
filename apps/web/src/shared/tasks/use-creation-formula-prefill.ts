@@ -1,7 +1,20 @@
 import { useEffect, useState } from 'react';
-import type { CreationFieldSlot, FormulaHostKind } from '@nodus/contracts';
+import type { CreationFieldSlot, CustomFieldType, FormulaHostKind } from '@nodus/contracts';
+import { customFieldIdOfKey } from '@nodus/contracts';
 
 import { api } from '../api-client.js';
+
+/** Тип системного слота окна создания: значение формулы материализуется
+ *  грамматикой поля (дата — ISO, сотрудник — id). `priority` — строковый
+ *  enum без словаря, материализация ему не нужна. */
+const SLOT_TYPES: Readonly<Record<string, CustomFieldType>> = {
+  description: 'long_text',
+  deadline: 'datetime',
+  assignee: 'user',
+  coexecutors: 'users',
+  observers: 'users',
+  project: 'project',
+};
 
 /** Префилл формульных слотов окна создания (#632, Р12): значение считается
  *  при открытии и при смене места (проект/папка/родитель). Ошибка/нет
@@ -43,10 +56,14 @@ export function useCreationFormulaPrefill({
         const values: Record<string, unknown> = {};
         for (const slot of withFormula) {
           try {
+            const fieldId = customFieldIdOfKey(slot.key);
+            const slotType = fieldId ? undefined : SLOT_TYPES[slot.key];
             const result = await api<{ value: unknown }>('/custom-fields/formulas/evaluate', {
               method: 'POST',
               body: {
                 ast: slot.formula,
+                ...(fieldId ? { targetFieldId: fieldId } : {}),
+                ...(slotType ? { targetType: slotType } : {}),
                 context: {
                   creation: {
                     hostKind,

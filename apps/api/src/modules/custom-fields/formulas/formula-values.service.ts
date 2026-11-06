@@ -142,10 +142,12 @@ export function toFormulaValue(
     }
     case 'multienum': {
       const ids = Array.isArray(value) ? value : [String(value)];
-      return ids.map((id) => {
-        const item = items.get(id);
-        return item ? (item.code ?? item.name) : id;
-      });
+      return ids
+        .map((id) => {
+          const item = items.get(id);
+          return item ? (item.code ?? item.name) : id;
+        })
+        .filter((id) => !EMPTY_DASHES.has(id));
     }
     case 'money':
       return value as MoneyValue;
@@ -166,7 +168,21 @@ export function sameFormulaValue(
   left: CustomFieldValue | null | undefined,
   right: CustomFieldValue | null | undefined,
 ): boolean {
-  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+  return stableValue(left ?? null) === stableValue(right ?? null);
+}
+
+/** Стабильная строка значения: ключи объектов сортируются (PG jsonb не
+ *  хранит порядок ключей), порядок массива значим (multienum). */
+function stableValue(value: unknown): string {
+  if (value === null || value === undefined) return 'null';
+  if (Array.isArray(value)) return `[${value.map((item) => stableValue(item)).join(',')}]`;
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+      a.localeCompare(b),
+    );
+    return `{${entries.map(([key, item]) => `${key}:${stableValue(item)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 /** Пустая карта значений (запись без атрибутов). */

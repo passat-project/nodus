@@ -131,7 +131,9 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
         id: { in: ids },
         deletedAt: null,
         confidential: false,
-        ...(host?.projectId ? { projectId: host.projectId } : {}),
+        // «Своё дерево» (Р7): безпроектная задача не тянет связанные из
+        // чужих проектов (иначе личная задача — канал чтения секретных).
+        projectId: host?.projectId ?? null,
       },
       select: taskSelect,
       take: FORMULA_LIMITS.selection + 1,

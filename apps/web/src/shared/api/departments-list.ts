@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { DepartmentNode } from '@nodus/contracts';
 
@@ -45,5 +46,7 @@ export function flattenDepartments(
 
 export function useDepartmentsList(): DepartmentOption[] {
   const { data } = useDepartmentTreeManagement();
-  return flattenDepartments(data ?? []);
+  // Стабильная ссылка: фильтры списков пересобираются по deps и иначе
+  // пересчитывают все строки на каждый рендер страницы.
+  return useMemo(() => flattenDepartments(data ?? []), [data]);
 }

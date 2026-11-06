@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
-import type { ProjectNode } from '@nodus/contracts';
+import type { CustomFieldValues, ProjectNode } from '@nodus/contracts';
 import { Permission, ui } from '@nodus/contracts';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 
@@ -48,6 +48,11 @@ import { StructureEmpty, StructureSearchEmpty, StructureToolbar } from './struct
  * вталкивающая панель «Свойства папки» (#556): открывается пунктом меню и
  * следует за кликом по папке.
  */
+/** Значения атрибутов папки для фильтров: стабильная ссылка (memo фильтров). */
+function nodeValuesOf(node: ProjectNode): CustomFieldValues {
+  return node.customFields ?? {};
+}
+
 export function StructureTab({
   projectId,
   canManage,
@@ -124,10 +129,7 @@ export function StructureTab({
   // атрибуты, привязанные к видам папок. Применяются как поиск: папки-
   // совпадения с путём до корня; задачи и «Без папки» фильтром скрываются
   // (фильтр описывает папки, не их содержимое).
-  const filterDefs = useCustomFieldFilterDefs(
-    'node',
-    (node: ProjectNode) => node.customFields ?? {},
-  );
+  const filterDefs = useCustomFieldFilterDefs('node', nodeValuesOf);
   const attributeView = useMemo(() => {
     const active = filterDefs.filter((def) => isActiveFilter(model.toolbar.filters[def.id]));
     if (active.length === 0) return null;

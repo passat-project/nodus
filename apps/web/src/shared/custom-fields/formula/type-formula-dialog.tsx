@@ -33,6 +33,7 @@ export function TypeFormulaDialog({
   label,
   ownDefinitions,
   initial,
+  allowRelated = false,
   onSave,
   onClose,
 }: {
@@ -46,6 +47,7 @@ export function TypeFormulaDialog({
   label?: string;
   ownDefinitions: readonly CustomFieldDefinition[];
   initial: FormulaNode | null;
+  allowRelated?: boolean;
   onSave: (ast: FormulaNode | null) => void;
   onClose: () => void;
 }) {
@@ -75,6 +77,7 @@ export function TypeFormulaDialog({
     targetType: resultType,
     ownDefinitions,
     initial,
+    allowRelated,
     onSave,
     onClose,
   });

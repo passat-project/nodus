@@ -50,7 +50,12 @@ function make(options: { tree?: ReturnType<typeof node>[]; tasks?: string[] } = 
     listByProject: vi.fn(async () => options.tree ?? [node(NODE, null, 'a1')]),
   };
   const taskReader = { taskIdsInNodes: vi.fn(async () => options.tasks ?? []) };
-  const writer = { writeProject: vi.fn(async () => true), writeNode: vi.fn(async () => true) };
+  const writer = {
+    writeProject: vi.fn(async () => true),
+    writeNode: vi.fn(async () => true),
+    lockProject: vi.fn(async () => true),
+    lockNode: vi.fn(async () => void 0),
+  };
   const participants = { rowsOfProject: vi.fn(async () => [{ userId: 'u-participant' }]) };
   const eventBus = { emit: vi.fn(async () => void 0) };
   const cells = {

@@ -8,6 +8,7 @@ import { DictionariesPortsModule } from '../dictionaries/dictionaries-ports.modu
 import { WorkflowsPortsModule } from '../workflows/workflows-ports.module.js';
 import { LetterFileAccess } from './access/letter-file-access.js';
 import { LetterFieldValuesCleanupHandler } from './events/letter-field-values-cleanup.handler.js';
+import { LetterFormulaLifecycleHandler } from './events/letter-formula-lifecycle.handler.js';
 import {
   LetterFormulaDefinitionHandler,
   LetterFormulaRecalcHandler,
@@ -18,6 +19,12 @@ import {
   LetterFormulaProjectSourceHandler,
   LetterFormulaTaskSourceHandler,
 } from './events/letter-formula-source.handler.js';
+import {
+  LetterFormulaAssignedSourceHandler,
+  LetterFormulaDeletedSourceHandler,
+  LetterFormulaNodeDeletedSourceHandler,
+  LetterFormulaStageSourceHandler,
+} from './events/letter-formula-system-source.handler.js';
 import { LetterHistoryRepository } from './history/letter-history.repository.js';
 import { LetterHistoryService } from './history/letter-history.service.js';
 import { LetterAttachedRefsRepository } from './letters/letter-attached-refs.repository.js';
@@ -92,11 +99,17 @@ import { LetterWorkflowAdapter } from './workflow/letter-workflow.adapter.js';
     LetterFormulaRecalcHandler,
     LetterFormulaRegisteredHandler,
     LetterFormulaDefinitionHandler,
+    // Уборка ячеек удалённого письма (#632).
+    LetterFormulaLifecycleHandler,
     // Формулы писем по событиям-источникам (#632): значения задач, проектов
     // и папок, прочитанные по атрибуту-ссылке (I3 — пишутся только письма).
     LetterFormulaTaskSourceHandler,
+    LetterFormulaStageSourceHandler,
+    LetterFormulaAssignedSourceHandler,
+    LetterFormulaDeletedSourceHandler,
     LetterFormulaProjectSourceHandler,
     LetterFormulaNodeSourceHandler,
+    LetterFormulaNodeDeletedSourceHandler,
     LetterFileAccess,
     LetterHistoryRepository,
     LetterDtoMapper,

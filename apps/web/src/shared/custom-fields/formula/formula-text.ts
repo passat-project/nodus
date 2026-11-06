@@ -84,9 +84,15 @@ function functionLabel(fn: FormulaFunctionId): string {
 }
 
 function printLiteral(value: number | string | boolean): string {
-  if (typeof value === 'string') return `"${value.replace(/"/g, '""')}"`;
+  if (typeof value === 'string') {
+    // Приватные маркеры плашек не должны попасть в текст: иначе разбор
+    // строки уходит в вечный цикл/подменяет кусок литерала плашкой.
+    return `"${value.replace(/[]/g, '').replace(/"/g, '""')}"`;
+  }
   if (typeof value === 'boolean') return value ? 'ИСТИНА' : 'ЛОЖЬ';
-  return String(value);
+  // Отрицательный литерал в склейке (`1 -2`) репарсился как вычитание;
+  // скобки сохраняют значение при round-trip.
+  return value < 0 ? `(0${String(value)})` : String(value);
 }
 
 function printNode(node: FormulaNode, tokens: FormulaToken[], parentPrecedence: number): string {

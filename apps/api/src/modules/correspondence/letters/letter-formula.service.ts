@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   CUSTOM_FIELD_EVENTS,
   type AuthUser,
@@ -29,6 +29,8 @@ import { LettersRepository } from './letters.repository.js';
  */
 @Injectable()
 export class LetterFormulaService {
+  private readonly log = new Logger(LetterFormulaService.name);
+
   constructor(
     private readonly txRunner: TransactionRunner,
     private readonly query: LettersQueryService,
@@ -113,11 +115,21 @@ export class LetterFormulaService {
       // адресное formula_changed — только при смене наличия ошибки (O4).
       if (outcome.silent) continue;
       if (outcome.changed) {
-        await this.fields.applyFormulaValues(tx, {
-          letterId,
-          values: { [cell.fieldId]: outcome.value },
-          actorId,
-        });
+        try {
+          await this.fields.applyFormulaValues(tx, {
+            letterId,
+            values: { [cell.fieldId]: outcome.value },
+            actorId,
+          });
+        } catch (error) {
+          // Одна «ядовитая» ячейка не валит партию и не зацикливает событие.
+          this.log.warn(
+            `Формула письма ${letterId}/${cell.fieldId} не записана: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+          continue;
+        }
       }
       if (outcome.errorChanged) {
         await this.emitChanged(tx, actorId, letterId, cell.fieldId, outcome.error !== null);

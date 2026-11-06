@@ -23,6 +23,7 @@ export function TypeFormulaControl({
   ownDefinitions,
   value,
   readOnly,
+  allowRelated = false,
   onChange,
 }: {
   hostKind: FormulaHostKind;
@@ -36,6 +37,7 @@ export function TypeFormulaControl({
   ownDefinitions: readonly CustomFieldDefinition[];
   value: FormulaNode | null;
   readOnly: boolean;
+  allowRelated?: boolean;
   onChange: (formula: FormulaNode | null) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -72,6 +74,7 @@ export function TypeFormulaControl({
           {...(label ? { label } : {})}
           ownDefinitions={ownDefinitions}
           initial={value}
+          allowRelated={allowRelated}
           onSave={onChange}
           onClose={() => setOpen(false)}
         />

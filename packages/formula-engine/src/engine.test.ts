@@ -139,3 +139,44 @@ describe('evaluate: функции', () => {
     expect(datedif('2026-01-01', '2028-03-15', 'years')).toBe(2);
   });
 });
+
+describe('concat: пустые операнды не оставляют висячих разделителей (#632)', () => {
+  const concat = (...args: FormulaNode[]): FormulaNode => ({ kind: 'op', op: 'concat', args });
+
+  it('пустая папка в середине — разделители схлопываются', () => {
+    const ast = concat(self(1), lit('-'), self(2), lit('-'), self(3), self(4));
+    expect(evaluate(ast, resolver({ self: { 1: '2026-42' } }))).toEqual({
+      value: '2026-42',
+      error: null,
+    });
+  });
+
+  it('пустое значение в начале/конце — без ведущего/висячего дефиса', () => {
+    expect(evaluate(concat(lit('-'), self(1)), resolver({ self: { 1: 'A' } })).value).toBe('A');
+    expect(evaluate(concat(self(1), lit('-')), resolver({ self: { 1: 'A' } })).value).toBe('A');
+  });
+
+  it('одинокий литерал-дефис остаётся литералом', () => {
+    expect(evaluate(concat(lit('-')), resolver({ self: {} })).value).toBe('-');
+  });
+
+  it('непустые операнды сохраняют разделитель', () => {
+    expect(
+      evaluate(concat(self(1), lit('-'), self(2)), resolver({ self: { 1: 'A', 2: 'B' } })).value,
+    ).toBe('A-B');
+  });
+});
+
+describe('шифр комплекта: пустые папка/марка/номер не оставляют дефисов (#632)', () => {
+  it('2026-42-- → 2026-42, когда пусты № по ГП, марка и номер', () => {
+    const ast: FormulaNode = {
+      kind: 'op',
+      op: 'concat',
+      args: [self(1), lit('-'), self(2), lit('-'), self(3), self(4)],
+    };
+    expect(evaluate(ast, resolver({ self: { 1: '2026-42' } }))).toEqual({
+      value: '2026-42',
+      error: null,
+    });
+  });
+});

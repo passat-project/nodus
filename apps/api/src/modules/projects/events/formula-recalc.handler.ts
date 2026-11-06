@@ -234,6 +234,23 @@ export class ProjectNodeDeletedFormulaHandler {
       await this.cells.cleanupHost(tx, 'node', nodeId);
       const roots = parentId ? [parentId] : [];
       await this.formulas.recalcStructure(tx, event.actorId ?? null, projectId, roots, 1);
+      // Потребители значений/системных полей удалённой папки по ссылке:
+      // `v:node:<id>:*` и `system:node:<id>` — их формулы получают
+      // `source_unavailable`, а не держат последнее значение (Р13).
+      const refs = [
+        ...(await this.cells.dependentCellsByDepPrefix(`v:node:${nodeId}:`, tx)),
+        ...(await this.cells.dependentCellsByDepKey(`system:node:${nodeId}`, tx)),
+      ];
+      const dependents = [
+        ...new Set(
+          refs
+            .filter((cell) => cell.hostKind === 'node' && cell.hostId !== nodeId)
+            .map((cell) => cell.hostId),
+        ),
+      ];
+      if (dependents.length > 0) {
+        await this.formulas.recalcNodes(tx, event.actorId ?? null, projectId, dependents, 1);
+      }
       await this.formulas.recalcProjectCells(tx, event.actorId ?? null, projectId, [], 1);
       this.logger.debug({ projectId, nodeId }, 'Формулы после удаления папки пересчитаны');
     });

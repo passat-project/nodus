@@ -27,7 +27,7 @@ function entry(
 describe('FormulaMovePreviewDialog: подтверждение переноса с диффом формул (#632)', () => {
   afterEach(cleanup);
 
-  it('пустой дифф окна не открывает, непустой — строки «запись · атрибут: было → станет»', () => {
+  it('пустой дифф окна не открывает, непустой — карточка «атрибут · запись», было/станет', () => {
     const { container } = render(
       <FormulaMovePreviewDialog changes={[]} onConfirm={vi.fn()} onCancel={vi.fn()} />,
     );
@@ -38,12 +38,28 @@ describe('FormulaMovePreviewDialog: подтверждение переноса 
     );
     expect(screen.getByText(ui.formulas.move.title)).toBeTruthy();
     expect(screen.getByText(ui.formulas.move.hint)).toBeTruthy();
-    // Строка диффа — одной строкой: «запись · атрибут: было → станет».
-    expect(screen.getByText('#1 Комплект · Шифр:')).toBeTruthy();
+    // Две строки карточки: атрибут-плашка + запись, ниже «Было»/«Станет».
+    expect(screen.getByText('Шифр')).toBeTruthy();
+    expect(screen.getByText('#1 Комплект')).toBeTruthy();
+    expect(screen.getByText(ui.formulas.move.before)).toBeTruthy();
+    expect(screen.getByText(ui.formulas.move.after)).toBeTruthy();
     expect(screen.getByText('А-1')).toBeTruthy();
     expect(screen.getByText('Б-2')).toBeTruthy();
-    // Подсказка строки — полная строка формата (обрезанное имя читается ею).
-    expect(screen.getByTitle('#1 Комплект · Шифр: А-1 → Б-2')).toBeTruthy();
+  });
+
+  it('длинные значения не обрезаются одной строкой: у них break-words, а не truncate', () => {
+    render(
+      <FormulaMovePreviewDialog
+        changes={[
+          entry(1, { from: '0359-1-КЖ1-ОЧЕНЬ-ДЛИННЫЙ-ШИФР', to: '0359-2-КЖ1-ОЧЕНЬ-ДЛИННЫЙ-ШИФР' }),
+        ]}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const from = screen.getByText('0359-1-КЖ1-ОЧЕНЬ-ДЛИННЫЙ-ШИФР');
+    expect(from.className).toContain('break-words');
+    expect(from.className).not.toContain('truncate');
   });
 
   it('больше 10 строк — первые 10 и «и ещё N»', () => {

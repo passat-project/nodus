@@ -113,7 +113,6 @@ export class FormulaCellsService implements FormulaCells {
       tx,
     );
     if (!context) throw DomainException.notFound('Formula host not found');
-
     const outcome = await computeFormula({
       ast: args.ast,
       context,
@@ -166,6 +165,14 @@ export class FormulaCellsService implements FormulaCells {
 
   dependentCellsByDepKey(key: string, tx?: TransactionClient): Promise<FormulaCellRef[]> {
     return this.repo.byDepKeys([key], tx);
+  }
+
+  dependentCellsByDepPrefix(prefix: string, tx?: TransactionClient): Promise<FormulaCellRef[]> {
+    return this.repo.byDepPrefix(prefix, tx);
+  }
+
+  dependentCellsByField(fieldId: string, tx?: TransactionClient): Promise<FormulaCellRef[]> {
+    return this.repo.byFieldId(fieldId, tx);
   }
 
   async cellsForHost(
@@ -232,7 +239,6 @@ export class FormulaCellsService implements FormulaCells {
       await this.repo.remove(tx, ref.hostKind, ref.hostId, ref.fieldId);
       return { value: null, error: null, changed: false, errorChanged: false, silent: true };
     }
-
     const outcome = await computeFormula({
       ast,
       context,

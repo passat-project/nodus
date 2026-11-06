@@ -110,7 +110,14 @@ export class TaskTransitionsService {
     );
     const transitions = await this.txRunner.run(async (tx) => {
       await this.engine.execute(tx, taskId, 'task', user, { transitionId }, body);
-      return this.engine.available(tx, taskId, 'task', user);
+      // Кнопки после действия уезжают в кэш веба — с тем же префиллом, что
+      // и в listFor: иначе следующее окно откроется с пустыми слотами.
+      return this.withPrefill(
+        await this.engine.available(tx, taskId, 'task', user),
+        taskId,
+        user,
+        tx,
+      );
     });
     return { task: await this.taskService.listItem(user, taskId), transitions };
   }

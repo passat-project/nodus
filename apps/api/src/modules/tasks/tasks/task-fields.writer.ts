@@ -133,7 +133,10 @@ export class TaskFieldsWriter {
       await this.projects.assertNodeAllowed(effectiveProjectId, patch.nodeId);
     }
     if (projectChanged) nodeReset = true;
-    await this.assertRequiredKept(row.typeId, patch);
+    // Формульная запись — не ручная правка: пустой результат/ошибка ячейки
+    // не должны блокировать сохранение формулы проверкой обязательных полей
+    // (Р13: ошибка живёт в ячейке, а не отменяет действие).
+    if (!opts.formulaWrite) await this.assertRequiredKept(row.typeId, patch);
     const data: TaskFieldsPatch = {};
     // Значения атрибутов читаются и пишутся под замком строки: параллельные
     // PATCH сливаются по ключам, а не перетирают карту целиком (#431).
@@ -189,6 +192,10 @@ export class TaskFieldsWriter {
       }
       if (prepared.changes.length > 0) data.customFields = prepared.next;
     }
+    // Формульная запись без фактических изменений не эмитит `task.updated`:
+    // иначе пересчёт «значение не изменилось» запускал бы новую волну
+    // пересчёта по кругу (шторм событий без роста глубины).
+    if (opts.formulaWrite && fieldChanges.length === 0) return { customFieldChanges: [] };
     await this.repo.updateFields(tx, row.id, data);
     const after = await this.repo.findWithParticipants(row.id, tx);
     const base = {
@@ -238,10 +245,14 @@ export class TaskFieldsWriter {
           ? { nodeId: after.nodeId, previousNodeId: row.nodeId }
           : {}),
         // Перепривязка (#632): состав подзадач меняется у старого и нового
-        // родителя — формулы-агрегаты пересчитываются по обоим.
+        // родителя — формулы-агрегаты пересчитываются по обоим. Смена
+        // проекта тоже выкидывает задачу из выборки родителя (subtasks
+        // фильтруются проектом) — отдаём фактического родителя.
         ...(patch.parentId !== undefined
           ? { parentId: after.parentId, previousParentId: row.parentId }
-          : {}),
+          : projectChanged
+            ? { parentId: after.parentId }
+            : {}),
       },
       meta,
     );

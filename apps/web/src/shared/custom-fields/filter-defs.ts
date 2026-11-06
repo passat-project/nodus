@@ -53,6 +53,10 @@ export function useCustomFieldFilterDefs<T>(
       staleTime: 60_000,
     })),
   });
+  // `useQueries` отдаёт новый массив результатов каждый рендер: зависимость
+  // от него ломала memo и пересобирала фильтры (а с ними — все строки списка).
+  // Версия данных меняется только при реальном обновлении справочника.
+  const dictionaryVersion = dictionaryQueries.map((query) => query.dataUpdatedAt).join('|');
   const itemsByCode = useMemo(() => {
     const map = new Map<string, FilterOption[]>();
     dictionaryCodes.forEach((code, index) => {
@@ -64,7 +68,8 @@ export function useCustomFieldFilterDefs<T>(
       );
     });
     return map;
-  }, [dictionaryCodes, dictionaryQueries]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- версия данных покрывает справочники
+  }, [dictionaryCodes, dictionaryVersion]);
 
   return useMemo(
     () =>

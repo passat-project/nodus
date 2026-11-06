@@ -121,8 +121,26 @@ export class LetterFormulaDefinitionHandler {
     if (!parsed.success) return;
     const payload = parsed.data;
     const companyChanged = payload.fields?.includes('companyValue') === true;
+    const bindingsChanged = payload.fields?.includes('bindings') === true;
     const deleted = payload.change === 'deleted';
-    if (!companyChanged && !deleted) return;
+    if (!companyChanged && !bindingsChanged && !deleted) return;
+    // Привязки сменились: свои ячейки атрибута пересчитываются (часть
+    // писем осталась без привязки — `attribute_unavailable`).
+    if (bindingsChanged && !deleted && !companyChanged) {
+      const own = (await this.cells.dependentCellsByField(payload.definitionId)).filter(
+        (cell) => cell.hostKind === 'letter',
+      );
+      const hosts = [...new Set(own.map((cell) => cell.hostId))];
+      for (let index = 0; index < hosts.length; index += HOST_BATCH) {
+        const batch = hosts.slice(index, index + HOST_BATCH);
+        await this.txRunner.run(async (tx) => {
+          for (const hostId of batch) {
+            await this.formulas.recalcCells(tx, event.actorId ?? null, hostId, [], 1);
+          }
+        });
+      }
+      return;
+    }
     // Удаление: строки определения уже нет — номер едет в payload (#632).
     const number = payload.number ?? (await this.cells.numberByDefinitionId(payload.definitionId));
     if (number === null) return;

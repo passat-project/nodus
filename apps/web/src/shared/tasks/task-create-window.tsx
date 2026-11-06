@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { CreationFieldKey, CreationForm, ProcessType } from '@nodus/contracts';
 import { typeConfigOf, typeCreationFormOf, ui } from '@nodus/contracts';
@@ -22,6 +22,7 @@ import {
   emptyDraft,
   missingFor,
   missingTextOf,
+  sameDraftValue,
   withChecklist,
   withNode,
   withTitle,
@@ -119,12 +120,29 @@ export function TaskCreateWindow({
     parentId: prefill?.parentId ?? null,
     enabled: open && !preview,
   });
+  // Что из черновика подставлено формулой и ещё не тронуто человеком:
+  // ре-эвал при смене места обновляет только такие слоты, ручной ввод не
+  // затирается, а исчезнувший из формулы слот очищается (Р12).
+  const autoFilledRef = useRef<Record<string, unknown>>({});
   useEffect(() => {
     if (formulaPrefill.version === 0) return;
     setDraft((prev) => {
       let next = prev;
-      for (const [key, value] of Object.entries(formulaPrefill.values)) {
+      const auto = autoFilledRef.current;
+      const incoming = formulaPrefill.values;
+      for (const key of Object.keys(auto)) {
+        if (key in incoming) continue;
+        if (!sameDraftValue(prev.values[key], auto[key])) continue;
+        next = withValue(next, key as CreationFieldKey, null);
+        delete auto[key];
+      }
+      for (const [key, value] of Object.entries(incoming)) {
+        const current = next.values[key];
+        const untouched =
+          current === undefined || (key in auto && sameDraftValue(current, auto[key]));
+        if (!untouched) continue;
         next = withValue(next, key as CreationFieldKey, value);
+        auto[key] = value;
       }
       return next;
     });

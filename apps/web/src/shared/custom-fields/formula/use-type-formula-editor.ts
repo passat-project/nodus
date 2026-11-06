@@ -43,6 +43,7 @@ export function useTypeFormulaEditor({
   targetType,
   ownDefinitions,
   initial,
+  allowRelated = false,
   onSave,
   onClose,
 }: {
@@ -52,6 +53,9 @@ export function useTypeFormulaEditor({
   targetType: CustomFieldType;
   ownDefinitions: readonly CustomFieldDefinition[];
   initial: FormulaNode | null;
+  /** Окно перехода: запись уже существует — связанные записи и цепочка
+   *  папок легальны (в отличие от формулы типа/вида и окна создания). */
+  allowRelated?: boolean;
   onSave: (ast: FormulaNode | null) => void;
   onClose: () => void;
 }) {
@@ -86,9 +90,9 @@ export function useTypeFormulaEditor({
         kinds: kinds.data ?? [],
         hasParent: true,
         hasProject: true,
-        typeDefault: true,
+        typeDefault: !allowRelated,
       }),
-    [hostKind, ownDefinitions, definitions.data, kinds.data],
+    [hostKind, ownDefinitions, definitions.data, kinds.data, allowRelated],
   );
 
   const refresh = useCallback(() => {
@@ -145,10 +149,10 @@ export function useTypeFormulaEditor({
       hostKind,
       meta,
       targetFieldType: targetType,
-      typeDefault: true,
+      typeDefault: !allowRelated,
     });
     setIssues(result.issues.filter((issue) => issue.blocking));
-  }, [parse.ast, hostKind, targetType, definitions.data]);
+  }, [parse.ast, hostKind, targetType, definitions.data, allowRelated]);
 
   const insertChip = (chip: FormulaChip) => {
     const root = rootRef.current;

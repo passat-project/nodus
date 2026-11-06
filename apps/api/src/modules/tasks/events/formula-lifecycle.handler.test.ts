@@ -41,15 +41,20 @@ function setup() {
   const formulas = { recalcCells: vi.fn(async () => void 0) };
   const cells = {
     cleanupHost: vi.fn(async () => void 0),
-    dependentCellsByDepKey: vi.fn(async () => [
-      { cellId: 'c-parent', hostKind: 'task', hostId: PARENT, fieldId: FIELD },
-      {
-        cellId: 'c-node',
-        hostKind: 'node',
-        hostId: '63200000-0000-4000-8000-000000000206',
-        fieldId: FIELD,
-      },
-    ]),
+    dependentCellsByDepPrefix: vi.fn(async () => []),
+    dependentCellsByDepKey: vi.fn(async (key: string) =>
+      key.startsWith('subtasks:')
+        ? [
+            { cellId: 'c-parent', hostKind: 'task', hostId: PARENT, fieldId: FIELD },
+            {
+              cellId: 'c-node',
+              hostKind: 'node',
+              hostId: '63200000-0000-4000-8000-000000000206',
+              fieldId: FIELD,
+            },
+          ]
+        : [],
+    ),
   };
   const txRunner = { run: (fn: (tx: unknown) => unknown) => fn({}) };
   return { formulas, cells, txRunner };
@@ -136,7 +141,10 @@ describe('TaskDeletedFormulaSourceHandler: task.deleted (#632, Р4)', () => {
       event('task.deleted', { ...base, projectId: null, nodeId: null, parentId: null }),
     );
     expect(cells.cleanupHost).toHaveBeenCalledWith({}, 'task', TASK);
-    expect(cells.dependentCellsByDepKey).not.toHaveBeenCalled();
+    // Потребители значений/системных полей удалённой задачи ищутся всегда
+    // (префикс + точный ключ), но при пустых выборках пересчёта нет.
+    expect(cells.dependentCellsByDepPrefix).toHaveBeenCalledWith(`v:task:${TASK}:`, {});
+    expect(cells.dependentCellsByDepKey).toHaveBeenCalledWith(`system:task:${TASK}`, {});
     expect(formulas.recalcCells).not.toHaveBeenCalled();
   });
 });

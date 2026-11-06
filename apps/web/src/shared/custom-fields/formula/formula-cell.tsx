@@ -16,12 +16,20 @@ import {
   DropdownMenuTrigger,
 } from '@nodus/ui/components/dropdown-menu';
 import { cn } from '@nodus/ui/lib/utils';
+import { toast } from 'sonner';
 
 import { CustomFieldEditor } from '../value-editor.js';
 import type { FormulaHost } from './formula-api.js';
 import { useRemoveFormula } from './formula-api.js';
 import { FormulaEditor, type FormulaHostContext } from './formula-editor.js';
+import { cleanFormulaText, saveErrorText } from './formula-preview.js';
 import { FormulaRemoveDialog } from './formula-remove-dialog.js';
+
+/** Любая формула в ячейке (своя или типа) замораживает правку значения:
+ *  снять её можно только явным действием в редакторе формулы. */
+export function formulaCellFrozen(origin: CustomFieldFormulaInfo['origin'] | null): boolean {
+  return origin === 'own' || origin === 'type';
+}
 
 /**
  * Ячейка атрибута с формулой (#632, §4c): значение + мини-значок fx,
@@ -63,6 +71,13 @@ export function FormulaCell({
   const own = origin === 'own';
   const typeFormula = origin === 'type';
   const suppressed = origin === 'value';
+  // Формула — любого происхождения: своя ИЛИ типа. Ячейка заморожена сразу,
+  // как только формула есть в DTO, а не после «сохранить» (иначе формула
+  // типа оставалась редактируемой до превращения в свою).
+  const frozen = formulaCellFrozen(origin);
+  // Уже материализованное значение могло сохраниться с `--`/`—` до фикса
+  // движка: показываем его очищенным, не дожидаясь пересчёта.
+  const shownValue = frozen ? cleanFormulaText(value) : value;
 
   useEffect(() => {
     if (!own) setRemoveOpen(false);
@@ -113,10 +128,10 @@ export function FormulaCell({
         </button>
       ) : null}
       <div className="min-w-0 flex-1">
-        {own ? (
+        {frozen ? (
           <CustomFieldEditor
             definition={definition}
-            value={value}
+            value={shownValue ?? undefined}
             refs={refs}
             disabled
             variant="inline"
@@ -169,6 +184,7 @@ export function FormulaCell({
           definition={definition}
           ownDefinitions={ownDefinitions}
           hostContext={hostContext}
+          readOnly={!canEdit}
           onClose={() => setEditorOpen(false)}
         />
       ) : null}
@@ -176,7 +192,13 @@ export function FormulaCell({
         open={removeOpen}
         pending={remove.isPending}
         onCancel={() => setRemoveOpen(false)}
-        onConfirm={() => remove.mutate(definition.id, { onSuccess: () => setRemoveOpen(false) })}
+        onConfirm={() =>
+          remove.mutate(definition.id, {
+            onSuccess: () => setRemoveOpen(false),
+            // Сеть/права: окно не «зависает» молча — причина видна тостом.
+            onError: (error) => toast.error(saveErrorText(error)),
+          })
+        }
       />
     </div>
   );

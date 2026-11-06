@@ -144,6 +144,8 @@ describe('FormulaContextService: видимость источников (Р7)',
     expect(context!.resolver.single({ kind: 'ref_field', field: 7 })).toBeNull();
   });
 
+  const TARGET = '11111111-1111-4111-8111-111111111111';
+
   it('ссылка на задачу своего проекта видна', async () => {
     const ast: FormulaNode = {
       kind: 'field',
@@ -152,8 +154,8 @@ describe('FormulaContextService: видимость источников (Р7)',
     };
     const reader = {
       record: vi.fn(async (kind: string, id: string) => {
-        if (id === 'task1') return record({ id: 'task1', values: { 'f-ref': 'target1' } });
-        if (id === 'target1') return record({ id: 'target1' });
+        if (id === 'task1') return record({ id: 'task1', values: { 'f-ref': TARGET } });
+        if (id === TARGET) return record({ id: TARGET });
         if (id === 'p1') return record({ kind: 'project', id: 'p1', projectId: 'p1' });
         return null;
       }),

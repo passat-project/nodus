@@ -122,6 +122,11 @@ export type FormulaValidateResponse = z.infer<typeof formulaValidateResponseSche
 export const formulaEvaluateBodySchema = z
   .object({
     ast: formulaNodeSchema,
+    /** Тип слота, в который едет значение: префилл окна создания обязан
+     *  материализовать результат по грамматике поля (enum → id словаря,
+     *  дата → ISO), иначе окно покажет код и сабмит получит 422. */
+    targetFieldId: z.uuid().optional(),
+    targetType: customFieldTypeSchema.optional(),
     context: z.union([
       z
         .object({

@@ -103,7 +103,10 @@ describe('NodeMoveDialog: перенос с превью формульного 
     renderDialog();
     fireEvent.click(screen.getByRole('button', { name: ui.structure.move }));
     expect(await screen.findByText(ui.formulas.move.title)).toBeTruthy();
-    expect(screen.getByTitle('Раздел 1 · Шифр: ГК-1 → ГК-2')).toBeTruthy();
+    expect(screen.getByText('Шифр')).toBeTruthy();
+    expect(screen.getByText('Раздел 1')).toBeTruthy();
+    expect(screen.getByText('ГК-1')).toBeTruthy();
+    expect(screen.getByText('ГК-2')).toBeTruthy();
     expect(moveMutate).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: ui.formulas.move.confirm }));

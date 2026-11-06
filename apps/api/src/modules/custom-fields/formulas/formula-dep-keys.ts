@@ -48,8 +48,10 @@ export function buildDepKeys(args: FormulaDepArgs): FormulaDepKey[] {
       case 'parent':
         if (args.parent) {
           add(`v:task:${args.parent.id}:${dep.number ?? 0}`, dep.number ?? null);
-          // Смена родителя меняет источник целиком (Р7 в).
-          add(`parent:task:${args.host.id}`);
+          // Смена системных полей РОДИТЕЛЯ меняет источник целиком (Р7 в):
+          // ключ адресует детей этой задачи, поэтому несёт id родителя, а
+          // не хоста (иначе событие родителя не находило потребителей).
+          add(`parent:task:${args.parent.id}`);
         }
         break;
       case 'project':

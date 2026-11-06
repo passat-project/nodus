@@ -7,7 +7,6 @@ import type { FormulaCellRow } from './formula-cells.repository.js';
 
 /** Вспомогательное для сервиса ячеек (#632): коды отказа и формы строк. */
 
-/** Код отказа API по блокирующей проблеме формулы (каталог Р13). */
 export function errorCodeOf(issue: FormulaValidationIssue): ErrorCode {
   switch (issue.code) {
     case 'type_mismatch':

@@ -22,6 +22,7 @@ export interface FormulaAutocompleteState {
  * иначе окно прыгает на каждом символе набора.
  */
 export function FormulaLine({
+  readOnly = false,
   rootRef,
   empty,
   error,
@@ -34,6 +35,8 @@ export function FormulaLine({
   onInsertText,
   onApplyAutocomplete,
 }: {
+  /** Просмотр без права правки: строка не редактируется, подсказки нет. */
+  readOnly?: boolean;
   rootRef: Ref<HTMLDivElement>;
   empty: boolean;
   error: string | null;
@@ -64,7 +67,7 @@ export function FormulaLine({
           <div className="relative min-w-0 flex-1">
             <div
               ref={rootRef}
-              contentEditable
+              contentEditable={!readOnly}
               suppressContentEditableWarning
               role="textbox"
               aria-label={ui.formulas.editor.title}
@@ -86,7 +89,7 @@ export function FormulaLine({
                 {ui.formulas.editor.placeholder}
               </span>
             ) : null}
-            {autocomplete.open ? (
+            {!readOnly && autocomplete.open ? (
               <div className="absolute top-full left-0 z-30 mt-1 w-72 rounded-xl bg-popover p-1 ring-1 ring-foreground/10">
                 <p className="px-2 py-1 text-label-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
                   {ui.formulas.editor.autocomplete}

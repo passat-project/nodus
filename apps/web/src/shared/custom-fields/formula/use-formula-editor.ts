@@ -32,7 +32,6 @@ import { tokensToAst } from './formula-parser.js';
 import {
   astToTokens,
   nextChipKey,
-  type FormulaAggregateChip,
   type FormulaChip,
   type FormulaFieldChip,
   type FormulaSystemChip,
@@ -58,18 +57,17 @@ export function useFormulaEditor({
   onClose: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  /** Появление contenteditable: Radix монтирует портал позже эффекта, и без
-   *  этого сигнала второй открыв редактора оставался пустым (AST уже в кэше,
-   *  rootRef ещё null, повторного эффекта нет). */
+  /** Появление contenteditable: Radix монтирует портал позже эффекта —
+   *  без сигнала повторное открытие оставалось пустым (rootRef ещё null). */
   const [rootEpoch, setRootEpoch] = useState(0);
   const setRootRef = useCallback((node: HTMLDivElement | null) => {
     rootRef.current = node;
     if (node) setRootEpoch((value) => value + 1);
   }, []);
   const chipsRef = useRef(new Map<string, FormulaChip>());
-  /** Пользователь уже правил строку — ответ GET не должен затирать ввод. */
+  /** Пользователь уже правил строку — GET не затирает ввод. */
   const dirtyRef = useRef(false);
-  /** Номер последнего запроса превью: ответ старого набора не перезаписывает. */
+  /** Номер последнего превью: старый ответ не перезаписывает. */
   const evalSeq = useRef(0);
   const cell = useFormulaCell(host, fieldId, open);
   const definitions = useCustomFieldDefinitions();
@@ -209,6 +207,9 @@ export function useFormulaEditor({
     insertChipAtCaret(root, chip, chipsRef.current, (aggregateChip) =>
       setAggregateDialog({ open: true, initial: aggregateChip.aggregate }),
     );
+    // Вставка из палитры закрывает автодополнение: иначе следующий Enter
+    // применит устаревшее слово и добавит лишнюю плашку.
+    setAutocomplete({ open: false, word: '', items: [] });
     refresh();
   };
 
@@ -235,16 +236,12 @@ export function useFormulaEditor({
     insertChip(chip);
   };
 
-  const insertAggregate = (aggregate: FormulaAggregate) => {
-    const chip: FormulaAggregateChip = { type: 'aggregate', key: nextChipKey(), aggregate };
-    insertChip(chip);
-  };
-
   const insertText = (text: string) => {
     const root = rootRef.current;
     if (!root) return;
     dirtyRef.current = true;
     insertTextAtCaret(root, text);
+    setAutocomplete({ open: false, word: '', items: [] });
     refresh();
   };
 
@@ -282,12 +279,16 @@ export function useFormulaEditor({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!autocomplete.open) return;
-    if (event.key === 'Enter' && autocomplete.items[0]) {
+    // Строка однострочная: Enter без автодополнения не создаёт перенос
+    // (contenteditable иначе плодит пустые строки в «однострочном» поле).
+    if (event.key === 'Enter') {
       event.preventDefault();
-      applyAutocomplete(autocomplete.items[0]);
+      if (autocomplete.open && autocomplete.items[0]) {
+        applyAutocomplete(autocomplete.items[0]);
+      }
       return;
     }
+    if (!autocomplete.open) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       setAutocomplete({ open: false, word: '', items: [] });
@@ -324,7 +325,7 @@ export function useFormulaEditor({
     autocomplete,
     insertText,
     insertField,
-    insertAggregate,
+    insertChip,
     applyAutocomplete,
     handleInput,
     handleKeyDown,
