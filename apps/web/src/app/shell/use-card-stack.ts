@@ -35,6 +35,32 @@ export function useOpenCard(): (ref: CardRef, sourceRect?: SourceRect) => void {
   );
 }
 
+/** Открыть НАБОР карточек поверх стека за один переход (deep-link `?cards=…`):
+ *  повтор верхней не дублируется; для одиночной ссылки эквивалент
+ *  `useOpenCard`, для стека «письмо,задача» — оба уровня одной записью
+ *  истории (закрытие по одному, как при живом открытии). */
+export function useOpenCards(): (refs: readonly CardRef[]) => void {
+  const navigate = useNavigate();
+  return useCallback(
+    (refs: readonly CardRef[]) => {
+      if (refs.length === 0) return;
+      void navigate({
+        to: '.',
+        search: (prev) => {
+          const stack = parseCardStack(prev.cards);
+          const next = [...stack];
+          for (const ref of refs) {
+            const top = next[next.length - 1];
+            if (!top || !sameCard(top, ref)) next.push(ref);
+          }
+          return { ...prev, cards: serializeCardStack(next) };
+        },
+      });
+    },
+    [navigate],
+  );
+}
+
 /** Заменить ВЕРХНЮЮ карточку стека БЕЗ новой записи истории и без ремаунта
  *  панели — режим «Навигация» левой панели ветки (ClickUp-навигатор): клики
  *  по связанным задачам (панель, поля «Подзадачи»/«Связи») меняют содержимое

@@ -36,6 +36,16 @@ export function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
+/** Компактная дата/время для тесных карточек (превью ссылки): «12.11, 14:00». */
+export function formatDateTimeCompact(iso: string): string {
+  return new Date(iso).toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 /** Компактная дата/время для таблиц (моно-колонки): «03.09.2026, 17:00». */
 export function formatDateTimeShort(iso: string): string {
   return new Date(iso).toLocaleString('ru-RU', {

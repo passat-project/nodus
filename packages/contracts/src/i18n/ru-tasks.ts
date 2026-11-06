@@ -17,6 +17,7 @@ export const tasksStrings = {
   collapseBranch: 'Свернуть подзадачи',
   expandBranch: 'Развернуть подзадачи',
   branchHiddenNode: 'Нет доступа к задаче',
+  linkPreviewUnavailable: 'Задача недоступна',
   roleLabel: 'Роль',
   roles: {
     assignee: 'Я — ответственный',
