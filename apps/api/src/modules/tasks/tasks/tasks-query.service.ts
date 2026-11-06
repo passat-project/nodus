@@ -10,7 +10,6 @@ import type {
   TaskDetail,
   TaskListItem,
   TaskStageWithCount,
-  CustomFieldValues,
   ProjectRef,
 } from '@nodus/contracts';
 import { normalizeTypeConfig, requiredCreateKeys } from '@nodus/contracts';
@@ -139,7 +138,13 @@ export class TasksQueryService {
           : encodeCursor({ o: sortKeys.get(last.id)!, id: last.id });
     }
     const items = await this.mapper.toListItems(page, undefined, user);
-    return { items: await withFormulaState(this.formulas, items), nextCursor };
+    return {
+      items: await withFormulaState(this.formulas, items, {
+        registry: this.customFields,
+        actor: user,
+      }),
+      nextCursor,
+    };
   }
 
   private order(q: ListTasksQuery, me: string): TaskOrder {
@@ -170,12 +175,6 @@ export class TasksQueryService {
     const catalog = await this.mapper.catalogOf([row, ...children]);
     // Проект задачи — ссылка видна только участнику секретного (Т1).
     const projectRefs = await this.projectsRefsFor(user, [row, ...children]);
-    // Ссылки значений атрибутов (Р6): имена сотрудников, подразделений,
-    // вариантов и контрагентов — пачками через порты, а не по строке.
-    const customFieldRefs = await this.customFields.refs(
-      (row.customFields ?? {}) as CustomFieldValues,
-      user,
-    );
     // Состав карточки по типу (#432, Р7): сервер собирает его сам, поэтому
     // он работает и для типа, невидимого зрителю (имя типа не раскрывается).
     const type = await this.catalog.typeById(row.typeId);
@@ -193,21 +192,24 @@ export class TasksQueryService {
         ? [await this.messageNode(full.sourceId, user.id)]
         : []),
     ];
-    const [withFormulas] = await withFormulaState(this.formulas, [
-      this.mapper.toListItem(row, refs, catalog, projectRefs),
-    ]);
+    // Один stateFor/снапшот на родителя и подзадач, ссылки — по эффективным
+    // значениям (формула типа не лежит в строке): иначе fx есть, а имя
+    // ссылки — «Запись недоступна».
+    const withFormulas = await withFormulaState(
+      this.formulas,
+      [row, ...children].map((item) => this.mapper.toListItem(item, refs, catalog, projectRefs)),
+      { registry: this.customFields, actor: user },
+    );
+    const [withFormulasParent, ...withFormulasChildren] = withFormulas;
     return {
-      ...withFormulas!,
+      ...withFormulasParent!,
       // Свой маршрут задачи (по нему работают кнопки): тип может быть в
       // архиве — его задачи обязаны открываться (код-ревью #378).
       workflowId: full.workflowId,
       description: full.description,
       observers: observerIds.map((uid) => this.mapper.ref(refs, uid)),
       checklist: full.checklist.map((c) => ({ id: c.id, text: c.text, done: c.done })),
-      subtasks: await withFormulaState(
-        this.formulas,
-        children.map((c) => this.mapper.toListItem(c, refs, catalog, projectRefs)),
-      ),
+      subtasks: withFormulasChildren,
       chain: [
         ...origin,
         selfChainNode({
@@ -227,7 +229,7 @@ export class TasksQueryService {
           }
         : null,
       completedAt: full.completedAt?.toISOString() ?? null,
-      customFieldRefs,
+      customFieldRefs: withFormulasParent?.customFieldRefs ?? [],
       layout,
       access: taskAccess(actorRoles(row, user.id), user.permissions),
       createdAt: full.createdAt.toISOString(),

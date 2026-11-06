@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { extractDeps } from '@nodus/formula-engine';
 import { buildDepKeys } from './formula-dep-keys.js';
 import type { FormulaRegistrySnapshot } from './formula-meta.service.js';
 import type { FormulaRecordData } from '../ports/record-values.port.js';
@@ -175,6 +176,14 @@ describe('buildDepKeys: что должно измениться для пере
 
 describe('buildDepKeys: выборки и системные поля в фильтрах (#632, Р4)', () => {
   it('node_tasks: ключ состава папки + значения членов выборки', () => {
+    // Зависимости берём из реального extractDeps (а не руками): движок
+    // эмитит `node_tasks` отдельным видом, и рассинхрон форм ловится здесь.
+    const deps = extractDeps({
+      kind: 'aggregate',
+      from: { kind: 'related', selector: { kind: 'node_tasks' } },
+      fn: 'sum',
+      field: 7,
+    });
     const keys = buildDepKeys({
       host: record({ id: 'task1', nodeId: 'n1' }),
       hostKind: 'task',
@@ -183,7 +192,7 @@ describe('buildDepKeys: выборки и системные поля в фил�
       parent: null,
       related: new Map([['node_tasks', [record({ id: 'task2' })]]]),
       asts: [],
-      deps: [{ kind: 'related', selector: 'node_tasks', number: 7 }],
+      deps,
       snapshot: snapshot([]),
     });
     expect(keys).toEqual([

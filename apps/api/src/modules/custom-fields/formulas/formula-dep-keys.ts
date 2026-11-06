@@ -81,8 +81,12 @@ export function buildDepKeys(args: FormulaDepArgs): FormulaDepKey[] {
         }
         break;
       }
+      // `extractDeps` эмитит `node_tasks` отдельным видом (не `related`):
+      // без этой ветки агрегат «задачи папки» не получал ни одного ключа и
+      // никогда не пересчитывался.
+      case 'node_tasks':
       case 'related': {
-        if (dep.selector === 'node_tasks') {
+        if (dep.kind === 'node_tasks' || dep.selector === 'node_tasks') {
           const nodeId = args.hostKind === 'node' ? args.host.id : args.host.nodeId;
           if (nodeId) add(`nodetasks:node:${nodeId}`);
           // Значения членов выборки — отдельные ключи (Р4): правка атрибута

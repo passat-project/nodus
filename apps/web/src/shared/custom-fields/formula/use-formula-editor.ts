@@ -59,7 +59,10 @@ export function useFormulaEditor({
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const chipsRef = useRef(new Map<string, FormulaChip>());
-  const loadedRef = useRef(false);
+  /** Пользователь уже правил строку — ответ GET не должен затирать ввод. */
+  const dirtyRef = useRef(false);
+  /** Номер последнего запроса превью: ответ старого набора не перезаписывает. */
+  const evalSeq = useRef(0);
   const cell = useFormulaCell(host, fieldId, open);
   const definitions = useCustomFieldDefinitions();
   const kinds = useNodeKinds();
@@ -124,22 +127,31 @@ export function useFormulaEditor({
     const tokens = ast ? astToTokens(ast) : [];
     for (const token of tokens) {
       if (token.type === 'text') root.appendChild(document.createTextNode(token.text));
-      else root.appendChild(createChipElement(token, chipsRef.current, () => undefined));
+      else
+        root.appendChild(
+          createChipElement(token, chipsRef.current, (aggregateChip) =>
+            setAggregateDialog({ open: true, initial: aggregateChip.aggregate }),
+          ),
+        );
     }
+    dirtyRef.current = false;
     setParse({ ast, error: null });
     setEmpty(tokens.length === 0);
     setIssues([]);
     setPreview({ value: null, error: null });
   }, []);
 
+  // Данные применяем и когда они пришли ПОСЛЕ открытия (кэша не было):
+  // повторное открытие редактора не должно оставаться пустым из-за гонки
+  // «сначала isLoading=false с undefined, потом data». Правку пользователя
+  // не затираем — dirtyRef.
   useEffect(() => {
     if (!open) {
-      loadedRef.current = false;
+      dirtyRef.current = false;
       return;
     }
-    if (loadedRef.current || cell.isLoading) return;
-    loadedRef.current = true;
-    setDom(cell.data?.ast ?? null);
+    if (cell.isLoading || cell.data === undefined || dirtyRef.current) return;
+    setDom(cell.data.ast ?? null);
   }, [open, cell.isLoading, cell.data, setDom]);
 
   useEffect(() => {
@@ -149,18 +161,30 @@ export function useFormulaEditor({
       return;
     }
     const ast = parse.ast;
+    const seq = ++evalSeq.current;
     const timer = window.setTimeout(() => {
       evaluate.mutate(ast, {
-        onSuccess: (response) =>
+        onSuccess: (response) => {
+          if (seq !== evalSeq.current) return;
           setPreview({
             value: response.value,
             error: response.error ? ui.formulas.errors[response.error.code] : null,
-          }),
-        onError: () => setPreview({ value: null, error: ui.formulas.editor.syntaxHint }),
+          });
+        },
+        onError: () => {
+          if (seq === evalSeq.current) {
+            setPreview({ value: null, error: ui.formulas.editor.syntaxHint });
+          }
+        },
       });
       validate.mutate(
         { ast, targetFieldId: fieldId },
-        { onSuccess: (response) => setIssues(response.issues.filter((issue) => issue.blocking)) },
+        {
+          onSuccess: (response) => {
+            if (seq !== evalSeq.current) return;
+            setIssues(response.issues.filter((issue) => issue.blocking));
+          },
+        },
       );
     }, 450);
     return () => window.clearTimeout(timer);
@@ -170,6 +194,7 @@ export function useFormulaEditor({
   const insertChip = (chip: FormulaChip) => {
     const root = rootRef.current;
     if (!root) return;
+    dirtyRef.current = true;
     insertChipAtCaret(root, chip, chipsRef.current, (aggregateChip) =>
       setAggregateDialog({ open: true, initial: aggregateChip.aggregate }),
     );
@@ -207,6 +232,7 @@ export function useFormulaEditor({
   const insertText = (text: string) => {
     const root = rootRef.current;
     if (!root) return;
+    dirtyRef.current = true;
     insertTextAtCaret(root, text);
     refresh();
   };
@@ -239,6 +265,7 @@ export function useFormulaEditor({
   };
 
   const handleInput = () => {
+    dirtyRef.current = true;
     refresh();
     updateAutocomplete();
   };

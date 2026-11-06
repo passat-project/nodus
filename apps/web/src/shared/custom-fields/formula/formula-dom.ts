@@ -14,11 +14,11 @@ import {
  *  радиус контрола, кегль на ступень ниже строки (12/16 в моно 13/24) —
  *  читается вложенной в код, но не спорит с операторами по весу. */
 export const CHIP_CLASS =
-  'mx-0.5 inline-flex max-w-full items-center gap-1 rounded-md border border-info/30 bg-info/10 px-1.5 py-px align-baseline font-medium text-label-sm text-info';
+  'mx-0.5 inline-flex max-w-full items-baseline gap-1 rounded-md border border-info/30 bg-info/10 px-1.5 py-px align-baseline text-xs font-medium text-info';
 /** Плашка агрегата: тон `primary` (выборка посчитана по записям), «Σ» в
  *  начале — форма отличается от плашки атрибута до чтения подписи. */
 export const AGGREGATE_CHIP_CLASS =
-  'mx-0.5 inline-flex max-w-full items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-1.5 py-px align-baseline font-medium text-label-sm text-primary';
+  'mx-0.5 inline-flex max-w-full items-baseline gap-1 rounded-md border border-primary/30 bg-primary/10 px-1.5 py-px align-baseline text-xs font-medium text-primary';
 
 /** Прочитать строку в токены (соседние текстовые узлы склеиваются). */
 export function readTokens(

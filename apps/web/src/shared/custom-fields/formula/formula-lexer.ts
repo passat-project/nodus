@@ -20,12 +20,28 @@ type LexToken =
 const CHIP_START = '\uE000';
 const CHIP_END = '\uE001';
 
+/** Типографские операторы из подсказок/копипаста → язык формул. */
+const UNICODE_OPERATORS: Record<string, FormulaOperator> = {
+  '−': 'sub',
+  '×': 'mul',
+  '÷': 'div',
+  '≠': 'ne',
+  '≤': 'le',
+  '≥': 'ge',
+};
+
 function lex(source: string): LexToken[] {
   const tokens: LexToken[] = [];
   let index = 0;
   while (index < source.length) {
     const char = source[index]!;
     if (/\s/.test(char)) {
+      index += 1;
+      continue;
+    }
+    const unicodeOp = UNICODE_OPERATORS[char];
+    if (unicodeOp) {
+      tokens.push({ kind: 'op', value: unicodeOp });
       index += 1;
       continue;
     }

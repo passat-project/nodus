@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   CORRESPONDENCE_EVENTS,
   ErrorCode,
+  sameCustomFieldValue,
   type AuthUser,
   type LetterDetail,
   type UpdateLetterBody,
@@ -93,9 +94,6 @@ export class LettersMutationService {
       if (body.addresseeId !== undefined && fresh.registeredAt !== null) {
         throw new DomainException(ErrorCode.LETTER_NOT_EDITABLE, 'Addressee is not editable');
       }
-      // Вписанное руками значение снимает формулу ячейки в той же tx
-      // (Р5 #632): «зафиксировать» = вписать значение, «как у типа» = очистить.
-      await this.fields.releaseFormulas(tx, id, Object.keys(body.customFields ?? {}));
       const { data, changes } = await this.validator.patch(
         registrationValuesOf(fresh),
         (fresh.customFields ?? {}) as Record<string, unknown>,
@@ -103,6 +101,22 @@ export class LettersMutationService {
         fresh.typeId,
         today,
         user,
+      );
+      // Вписанное руками значение снимает формулу ячейки в той же tx
+      // (Р5 #632): «зафиксировать» = вписать значение, «как у типа» = очистить.
+      // Снимаем только РЕАЛЬНО изменённые ключи: Enter без правки формулу
+      // не отменяет.
+      const requested = body.customFields ?? {};
+      await this.fields.releaseFormulas(
+        tx,
+        id,
+        Object.keys(requested).filter(
+          (fieldId) =>
+            !sameCustomFieldValue(
+              (fresh.customFields as Record<string, unknown> | null)?.[fieldId],
+              requested[fieldId],
+            ),
+        ),
       );
       // «Приложенные письма» (#461, Р3): правка набором; история — счётчиком
       // строк, только если набор реально изменился.

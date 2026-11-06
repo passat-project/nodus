@@ -83,17 +83,17 @@ export class ProjectStructureService {
       this.kinds.list(),
     ]);
     const byNode = new Map(rollups.map((rollup) => [rollup.nodeId, rollup]));
-    const [customFieldRefs, formulas] = await Promise.all([
-      this.registry.refsMany(
-        rows.map((row) => valuesOf(row)),
-        user,
-      ),
-      // Формульное состояние всех папок среза — одним запросом (Р9).
-      this.formulas.stateFor(
-        'node',
-        rows.map((row) => row.id),
-      ),
-    ]);
+    // Формульное состояние всех папок среза — одним запросом (Р9). Ссылки —
+    // по ЭФФЕКТИВНЫМ значениям: значение формулы вида не лежит в строке,
+    // иначе имя ссылки в дереве было бы «Запись недоступна».
+    const formulas = await this.formulas.stateFor(
+      'node',
+      rows.map((row) => row.id),
+    );
+    const customFieldRefs = await this.registry.refsMany(
+      rows.map((row) => ({ ...valuesOf(row), ...(formulas.get(row.id)?.values ?? {}) })),
+      user,
+    );
     return {
       nodes: rows.map((row) => nodeToDto(row, byNode.get(row.id) ?? null, formulas.get(row.id))),
       kinds,
@@ -212,10 +212,6 @@ export class ProjectStructureService {
       const fields: string[] = [];
       let changes: RegistryFieldChange[] = [];
       if (body.code !== undefined || body.customFields !== undefined || kindChanged) {
-        // Вписанное значение снимает формулу ячейки в той же tx (Р5 #632).
-        if (body.customFields && Object.keys(body.customFields).length > 0) {
-          await this.formulas.release(tx, 'node', nodeId, Object.keys(body.customFields));
-        }
         const prepared = await this.policy.prepareUpdate(
           kind,
           { customFields: valuesOf(node) },
@@ -223,6 +219,17 @@ export class ProjectStructureService {
           { authorId: user.id, actor: user, kindChanged },
           tx,
         );
+        // Вписанное значение снимает формулу ячейки в той же tx (Р5 #632);
+        // только реально изменённые ключи — Enter без правки формулу не
+        // отменяет.
+        if (prepared.changes.length > 0) {
+          await this.formulas.release(
+            tx,
+            'node',
+            nodeId,
+            prepared.changes.map((change) => change.fieldId),
+          );
+        }
         patch.customFields = prepared.values as Prisma.InputJsonValue;
         changes = prepared.changes;
         fields.push(...changes.map((change) => nodeFormKey(change.fieldId)));

@@ -11,7 +11,7 @@ import {
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import { TaskFormulaService } from '../tasks/task-formula.service.js';
-import { recalcSubtaskParents } from './formula-source.helpers.js';
+import { recalcNodeTaskConsumers, recalcSubtaskParents } from './formula-source.helpers.js';
 
 /**
  * Пересчёт формул задач по зависимостям (#632, Р4/Р8). Триггеры:
@@ -69,6 +69,11 @@ export class TaskFormulaRecalcHandler {
         payload.parentId,
         payload.previousParentId,
       ]);
+      // Задача вошла/вышла из папки: агрегаты «задачи папки» у соседей.
+      await recalcNodeTaskConsumers(this.formulas, this.cells, tx, event.actorId ?? null, [
+        payload.nodeId,
+        payload.previousNodeId,
+      ]);
     });
   }
 }
@@ -94,7 +99,8 @@ export class TaskFormulaDefinitionHandler {
     const companyChanged = payload.fields?.includes('companyValue') === true;
     const deleted = payload.change === 'deleted';
     if (!companyChanged && !deleted) return;
-    const number = await this.cells.numberByDefinitionId(payload.definitionId);
+    // Удаление: строки определения уже нет — номер едет в payload (#632).
+    const number = payload.number ?? (await this.cells.numberByDefinitionId(payload.definitionId));
     if (number === null) return;
     const cells = await this.cells.dependentCellsByAttrNumber(number);
     if (cells.length === 0) return;

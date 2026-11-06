@@ -15,7 +15,9 @@ import type { FormulaChip, FormulaToken } from './formula-text.js';
 
 const FUNCTION_BY_NAME = new Map<string, FormulaFunctionId>();
 for (const spec of FORMULA_FUNCTIONS) {
-  FUNCTION_BY_NAME.set(spec.id.toLowerCase(), spec.id);
+  // Идентификатор и русская подпись — регистронезависимо: `if(` и `ЕСЛИ(`
+  // должны работать одинаково.
+  FUNCTION_BY_NAME.set(spec.id.toUpperCase(), spec.id);
   FUNCTION_BY_NAME.set(ui.formulas.functions[spec.id].toUpperCase(), spec.id);
 }
 
@@ -48,13 +50,13 @@ class Parser {
   }
 
   private comparison(): FormulaNode {
-    let left = this.additive();
+    let left = this.concat();
     while (
       this.peek().kind === 'op' &&
       COMPARISONS.has((this.peek() as { value: FormulaOperator }).value)
     ) {
       const operator = (this.next() as { value: FormulaOperator }).value;
-      const right = this.additive();
+      const right = this.concat();
       left = { kind: 'op', op: operator, args: [left, right] };
     }
     return left;
@@ -66,6 +68,14 @@ class Parser {
       this.peek().kind === 'op' &&
       ['add', 'sub'].includes((this.peek() as { value: FormulaOperator }).value)
     ) {
+      // `A - "-" B`: минус перед строкой — не арифметика, а разделитель
+      // склейки; отдаём его уровню concat.
+      if (
+        (this.peek() as { value: FormulaOperator }).value === 'sub' &&
+        this.tokens[this.position + 1]?.kind === 'string'
+      ) {
+        break;
+      }
       const operator = (this.next() as { value: FormulaOperator }).value;
       const right = this.multiplicative();
       left = { kind: 'op', op: operator, args: [left, right] };
@@ -74,25 +84,37 @@ class Parser {
   }
 
   private multiplicative(): FormulaNode {
-    let left = this.concat();
+    let left = this.unary();
     while (
       this.peek().kind === 'op' &&
       ['mul', 'div'].includes((this.peek() as { value: FormulaOperator }).value)
     ) {
       const operator = (this.next() as { value: FormulaOperator }).value;
-      const right = this.concat();
+      const right = this.unary();
       left = { kind: 'op', op: operator, args: [left, right] };
     }
     return left;
   }
 
   private concat(): FormulaNode {
-    const args: FormulaNode[] = [this.unary()];
+    const args: FormulaNode[] = [this.additive()];
     for (;;) {
       const token = this.peek();
       if (token.kind === 'op' && token.value === 'concat') {
         this.next();
-        args.push(this.unary());
+        args.push(this.additive());
+        continue;
+      }
+      // Дружелюбный разделитель: `{A} - "-" {B}` — минус перед строковым
+      // литералом не может быть валидной арифметикой, человек имел в виду
+      // склейку. Без этого флагманский ввод шифра давал type_mismatch.
+      if (
+        token.kind === 'op' &&
+        token.value === 'sub' &&
+        this.tokens[this.position + 1]?.kind === 'string'
+      ) {
+        this.next();
+        args.push(this.additive());
         continue;
       }
       // Неявная склейка соседних операндов: {Марка}{Номер}, "a" {b}.
@@ -104,7 +126,7 @@ class Parser {
         token.kind === 'chip' ||
         token.kind === 'lparen'
       ) {
-        args.push(this.unary());
+        args.push(this.additive());
         continue;
       }
       break;

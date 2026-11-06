@@ -162,11 +162,6 @@ export class TaskFieldsWriter {
     }
     if (patch.customFields && Object.keys(patch.customFields).length > 0) {
       const current = await this.facts.customFieldsOf(tx, row.id);
-      // Вписанное значение снимает формулу ячейки в той же tx (Р5 #632):
-      // «зафиксировать» = вписать руками, «как у типа» = очистить значение.
-      if (!opts.formulaWrite) {
-        await this.formulaCells.release(tx, 'task', row.id, Object.keys(patch.customFields));
-      }
       // Тип строки — привязка атрибутов (#432, Р8): запись значения
       // непривязанного атрибута — 422 `not_in_type`, очистка разрешена.
       const prepared = await this.customFields.prepareUpdate(
@@ -180,6 +175,18 @@ export class TaskFieldsWriter {
         tx,
       );
       fieldChanges = prepared.changes;
+      // Вписанное значение снимает формулу ячейки в той же tx (Р5 #632):
+      // «зафиксировать» = вписать руками, «как у типа» = очистить значение.
+      // Снимаем только РЕАЛЬНО изменённые ключи: Enter без правки (и повтор
+      // того же значения из окна) формулу не отменяет.
+      if (!opts.formulaWrite && prepared.changes.length > 0) {
+        await this.formulaCells.release(
+          tx,
+          'task',
+          row.id,
+          prepared.changes.map((change) => change.fieldId),
+        );
+      }
       if (prepared.changes.length > 0) data.customFields = prepared.next;
     }
     await this.repo.updateFields(tx, row.id, data);

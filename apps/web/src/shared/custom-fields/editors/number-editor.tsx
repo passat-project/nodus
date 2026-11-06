@@ -63,7 +63,8 @@ export function NumberEditor(props: EditorProps) {
     const next = parseNumber(text, precision);
     if (text.trim() === '') {
       setError(null);
-      props.onCommit(null);
+      // Пусто и было пусто — не «вписал руками»: формула ячейки остаётся.
+      if (props.value !== undefined && props.value !== null) props.onCommit(null);
       if (props.variant === 'inline') setEditing(false);
       return;
     }
@@ -78,8 +79,16 @@ export function NumberEditor(props: EditorProps) {
     setError(null);
     if (money) {
       if (!effectiveCurrency) return;
+      if (moneyValue?.amount === next && moneyValue.currencyId === effectiveCurrency) {
+        if (props.variant === 'inline') setEditing(false);
+        return;
+      }
       props.onCommit({ amount: next, currencyId: effectiveCurrency } satisfies MoneyValue);
     } else {
+      if (numberValue === next) {
+        if (props.variant === 'inline') setEditing(false);
+        return;
+      }
       props.onCommit(next);
     }
     committedText.current = text;
@@ -167,7 +176,7 @@ export function NumberEditor(props: EditorProps) {
             onValueChange={(id) => {
               setCurrencyId(id);
               const next = parseNumber(text, 2);
-              if (next !== null) {
+              if (next !== null && (moneyValue?.amount !== next || moneyValue.currencyId !== id)) {
                 props.onCommit({ amount: next, currencyId: id } satisfies MoneyValue);
                 committedText.current = text;
               }

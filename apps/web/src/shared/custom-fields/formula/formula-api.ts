@@ -70,16 +70,20 @@ function invalidateHost(queryClient: ReturnType<typeof useQueryClient>, host: Fo
     case 'task':
       void queryClient.invalidateQueries({ queryKey: tasksKeys.detail(host.id) });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.listPages() });
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.detailsAll() });
+      void queryClient.invalidateQueries({ queryKey: tasksKeys.kanbanAll() });
       return;
     case 'letter':
       void queryClient.invalidateQueries({ queryKey: ['letters'] });
       return;
     case 'project':
-      void queryClient.invalidateQueries({ queryKey: projectsKeys.all });
+      void queryClient.invalidateQueries({ queryKey: projectsKeys.detail(host.id) });
+      void queryClient.invalidateQueries({ queryKey: projectsKeys.journals() });
       return;
     case 'node':
-      void queryClient.invalidateQueries({ queryKey: projectsKeys.all });
+      void queryClient.invalidateQueries({ queryKey: projectsKeys.structures() });
+      if (host.projectId) {
+        void queryClient.invalidateQueries({ queryKey: projectsKeys.detail(host.projectId) });
+      }
       return;
   }
 }
@@ -93,8 +97,12 @@ export function useSaveFormula(host: FormulaHost) {
         method: 'PUT',
         body: { ast: vars.ast },
       }),
-    onSuccess: (_data, vars) => {
-      queryClient.setQueryData(formulaKeys.cell(host, vars.fieldId), { ast: vars.ast });
+    onSuccess: async (_data, vars) => {
+      // GET, начатый до сохранения, не должен перетереть кэш старым AST
+      // (иначе повторное открытие редактора показывает пустую формулу).
+      const key = formulaKeys.cell(host, vars.fieldId);
+      await queryClient.cancelQueries({ queryKey: key });
+      queryClient.setQueryData(key, { ast: vars.ast, origin: 'own' });
       invalidateHost(queryClient, host);
     },
   });
@@ -108,8 +116,10 @@ export function useRemoveFormula(host: FormulaHost) {
       api<void>(`${formulaHostPath(host)}/custom-fields/${fieldId}/formula`, {
         method: 'DELETE',
       }),
-    onSuccess: (_data, fieldId) => {
-      queryClient.setQueryData(formulaKeys.cell(host, fieldId), { ast: null });
+    onSuccess: async (_data, fieldId) => {
+      const key = formulaKeys.cell(host, fieldId);
+      await queryClient.cancelQueries({ queryKey: key });
+      queryClient.setQueryData(key, { ast: null });
       invalidateHost(queryClient, host);
     },
   });

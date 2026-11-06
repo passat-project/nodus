@@ -72,8 +72,11 @@ describe('TaskFormulaRecalcHandler: task.updated (#632, Р4)', () => {
     expect(formulas.recalcCells).toHaveBeenCalledWith({}, null, OLD_PARENT, [], 1);
   });
 
-  it('смена узла — дополнительных пересчётов нет: свои ячейки уже пересчитаны', async () => {
+  it('смена узла — ищем потребителей «задачи папки» старого и нового узла', async () => {
     const { formulas, cells, txRunner } = setup();
+    cells.dependentCellsByDepKey.mockImplementation(async (key: string) =>
+      key.startsWith('nodetasks:') ? [] : [],
+    );
     const handler = new TaskFormulaRecalcHandler(
       txRunner as never,
       formulas as never,
@@ -86,7 +89,14 @@ describe('TaskFormulaRecalcHandler: task.updated (#632, Р4)', () => {
         previousNodeId: '63200000-0000-4000-8000-000000000406',
       }),
     );
-    expect(cells.dependentCellsByDepKey).not.toHaveBeenCalled();
+    expect(cells.dependentCellsByDepKey).toHaveBeenCalledWith(
+      'nodetasks:node:63200000-0000-4000-8000-000000000405',
+      {},
+    );
+    expect(cells.dependentCellsByDepKey).toHaveBeenCalledWith(
+      'nodetasks:node:63200000-0000-4000-8000-000000000406',
+      {},
+    );
     expect(formulas.recalcCells).toHaveBeenCalledTimes(1);
     expect(formulas.recalcCells).toHaveBeenCalledWith({}, null, TASK, [], 1);
   });

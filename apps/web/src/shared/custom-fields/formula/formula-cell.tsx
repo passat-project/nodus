@@ -21,6 +21,7 @@ import { CustomFieldEditor } from '../value-editor.js';
 import type { FormulaHost } from './formula-api.js';
 import { useRemoveFormula } from './formula-api.js';
 import { FormulaEditor, type FormulaHostContext } from './formula-editor.js';
+import { FormulaRemoveDialog } from './formula-remove-dialog.js';
 
 /**
  * Ячейка атрибута с формулой (#632, §4c): значение + мини-значок fx,
@@ -57,13 +58,17 @@ export function FormulaCell({
   const remove = useRemoveFormula(host);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
   const origin = info?.origin ?? null;
   const own = origin === 'own';
   const typeFormula = origin === 'type';
   const suppressed = origin === 'value';
 
   useEffect(() => {
-    if (!own) setEditing(false);
+    if (!own) {
+      setEditing(false);
+      setRemoveOpen(false);
+    }
   }, [own]);
 
   return (
@@ -156,10 +161,7 @@ export function FormulaCell({
             {own ? (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() => remove.mutate(definition.id)}
-                >
+                <DropdownMenuItem variant="destructive" onClick={() => setRemoveOpen(true)}>
                   {ui.formulas.cell.remove}
                 </DropdownMenuItem>
               </>
@@ -178,6 +180,12 @@ export function FormulaCell({
           onClose={() => setEditorOpen(false)}
         />
       ) : null}
+      <FormulaRemoveDialog
+        open={removeOpen}
+        pending={remove.isPending}
+        onCancel={() => setRemoveOpen(false)}
+        onConfirm={() => remove.mutate(definition.id, { onSuccess: () => setRemoveOpen(false) })}
+      />
     </div>
   );
 }

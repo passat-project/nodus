@@ -33,6 +33,8 @@ import {
   CUSTOM_FIELD_REGISTRY,
   type CustomFieldRegistry,
 } from '../../custom-fields/ports/custom-field-registry.port.js';
+import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
+import { withFormulaState } from './task-formula-state.js';
 import { ChecklistRepository } from '../checklist/checklist.repository.js';
 import { PersonalBoardsRepository } from '../personal/personal-boards.repository.js';
 import { Placements } from '../personal/placements.js';
@@ -69,6 +71,7 @@ export class TasksService {
     private readonly projectRights: TaskProjectRights,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
+    @Inject(FORMULA_CELLS) private readonly formulas: FormulaCells,
     private readonly policy: TaskCreatePolicy,
   ) {}
 
@@ -283,7 +286,12 @@ export class TasksService {
     tx?: TransactionClient,
   ): Promise<TaskListItem> {
     const row = await this.repo.findListRow(id, actor.id, tx);
-    return (await this.mapper.toListItems([row], tx, actor))[0]!;
+    const [item] = await withFormulaState(
+      this.formulas,
+      await this.mapper.toListItems([row], tx, actor),
+      { registry: this.customFields, actor, ...(tx ? { tx } : {}) },
+    );
+    return item!;
   }
 
   private async personalColumn(userId: string, stageId: string) {

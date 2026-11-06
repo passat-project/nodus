@@ -106,6 +106,7 @@ function setup() {
     prepareCreate: vi
       .fn()
       .mockImplementation((_scope, args: { input: unknown }) => Promise.resolve(args.input)),
+    refsMany: vi.fn(async () => []),
   };
   const txRunner = { run: vi.fn((fn: (tx: unknown) => unknown) => fn(TX)) };
   const service = new TasksService(
@@ -128,6 +129,7 @@ function setup() {
       assertMembersAllowed: vi.fn(async () => void 0),
     } as never,
     customFields as never,
+    { stateFor: vi.fn(async () => new Map()) } as never,
     new TaskCreatePolicy(profiles as never),
   );
   return { service, repo, placements, placementsRepo, txRunner, eventBus, catalog, boards, engine };

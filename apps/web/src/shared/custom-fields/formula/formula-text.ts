@@ -70,11 +70,13 @@ const PRECEDENCE: Record<FormulaOperator, number> = {
   le: 1,
   gt: 1,
   ge: 1,
-  add: 2,
-  sub: 2,
-  mul: 3,
-  div: 3,
-  concat: 4,
+  // Склейка ниже арифметики (как `&` в Excel): `{Цена}*{Кол} & " руб"`
+  // читается как склейка результата умножения, а не умножение склейки.
+  concat: 2,
+  add: 3,
+  sub: 3,
+  mul: 4,
+  div: 4,
 };
 
 function functionLabel(fn: FormulaFunctionId): string {
@@ -101,7 +103,7 @@ function printNode(node: FormulaNode, tokens: FormulaToken[], parentPrecedence: 
         ...(node.name ? { name: node.name } : {}),
       };
       tokens.push(chip);
-      return `${tokens.length - 1}`;
+      return `\uE000${tokens.length - 1}\uE001`;
     }
     case 'field': {
       const chip: FormulaFieldChip = {

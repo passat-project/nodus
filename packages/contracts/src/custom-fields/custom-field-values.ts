@@ -195,6 +195,28 @@ export function isCustomFieldValueFilled(raw: unknown): boolean {
   return false;
 }
 
+/**
+ * Совпадают ли значения атрибута (Р5 #632): повторная запись того же
+ * значения — не «вписал руками», формулу она не снимает. `null` и
+ * `undefined` — одно и то же «пусто»; массивы сравниваются поэлементно,
+ * деньги — по сумме и валюте (порядок ключей JSON не важен).
+ */
+export function sameCustomFieldValue(left: unknown, right: unknown): boolean {
+  if (left === null || left === undefined) return right === null || right === undefined;
+  if (right === null || right === undefined) return false;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    return left.every((item, index) => item === right[index]);
+  }
+  if (typeof left === 'object' || typeof right === 'object') {
+    if (typeof left !== 'object' || typeof right !== 'object') return false;
+    const a = left as Partial<MoneyValue>;
+    const b = right as Partial<MoneyValue>;
+    return a.amount === b.amount && a.currencyId === b.currencyId;
+  }
+  return left === right;
+}
+
 /** Белый список смены типа (Р3): только расширяющая, без сканов данных. */
 const TYPE_WIDENING: Partial<Record<CustomFieldType, CustomFieldType>> = {
   text: 'long_text',

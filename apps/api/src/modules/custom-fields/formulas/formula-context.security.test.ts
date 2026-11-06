@@ -154,6 +154,7 @@ describe('FormulaContextService: видимость источников (Р7)',
       record: vi.fn(async (kind: string, id: string) => {
         if (id === 'task1') return record({ id: 'task1', values: { 'f-ref': 'target1' } });
         if (id === 'target1') return record({ id: 'target1' });
+        if (id === 'p1') return record({ kind: 'project', id: 'p1', projectId: 'p1' });
         return null;
       }),
       subtasks: vi.fn(async () => []),

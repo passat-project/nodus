@@ -40,7 +40,8 @@ export class ProjectFormulaDefinitionHandler {
     const companyChanged = payload.fields?.includes('companyValue') === true;
     const deleted = payload.change === 'deleted';
     if (!companyChanged && !deleted) return;
-    const number = await this.cells.numberByDefinitionId(payload.definitionId);
+    // Удаление: строки определения уже нет — номер едет в payload (#632).
+    const number = payload.number ?? (await this.cells.numberByDefinitionId(payload.definitionId));
     if (number === null) return;
     const cells = (await this.cells.dependentCellsByAttrNumber(number)).filter(
       (cell) => cell.hostKind === 'project' || cell.hostKind === 'node',

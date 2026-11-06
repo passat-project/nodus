@@ -45,7 +45,8 @@ export function ListEditor(props: EditorProps) {
       props.onCommit(ids.length > 0 ? ids : null, refsFor(ids));
       return;
     }
-    props.onCommit(id, refsFor([id]));
+    // Повторный выбор того же варианта — не ручная запись (Р5 #632).
+    if (props.value !== id) props.onCommit(id, refsFor([id]));
     setOpen(false);
   }
 

@@ -32,7 +32,8 @@ export function DurationEditor(props: EditorProps) {
   function commit() {
     if (text.trim() === '') {
       setError(false);
-      props.onCommit(null);
+      // Пусто и было пусто — формулу ячейки не снимаем.
+      if (current !== undefined) props.onCommit(null);
       if (props.variant === 'inline') setEditing(false);
       return;
     }
@@ -42,6 +43,11 @@ export function DurationEditor(props: EditorProps) {
       return;
     }
     setError(false);
+    // Enter без правки не должен считаться ручной записью (Р5 #632).
+    if (minutes === current) {
+      if (props.variant === 'inline') setEditing(false);
+      return;
+    }
     props.onCommit(minutes);
     if (props.variant === 'inline') setEditing(false);
   }

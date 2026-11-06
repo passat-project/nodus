@@ -11,7 +11,12 @@ import {
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import { TaskFormulaService } from '../tasks/task-formula.service.js';
-import { recalcSubtaskParents, recalcTaskHosts, taskHosts } from './formula-source.helpers.js';
+import {
+  recalcNodeTaskConsumers,
+  recalcSubtaskParents,
+  recalcTaskHosts,
+  taskHosts,
+} from './formula-source.helpers.js';
 
 /**
  * Пересчёт формул задач по событиям их собственного жизненного цикла (#632,
@@ -64,12 +69,13 @@ export class TaskCreatedFormulaSourceHandler {
   async handle(event: DomainEvent<Record<string, unknown>>): Promise<void> {
     const parsed = taskCreatedPayloadSchema.safeParse(event.payload);
     if (!parsed.success) return;
-    const { taskId, parentId } = parsed.data;
-    if (!parentId) return;
-    this.logger.debug({ taskId, parentId }, 'Пересчёт формул родителя новой задачи');
-    await this.txRunner.run((tx) =>
-      recalcSubtaskParents(this.formulas, this.cells, tx, event.actorId ?? null, [parentId]),
-    );
+    const { taskId, parentId, nodeId } = parsed.data;
+    this.logger.debug({ taskId, parentId, nodeId }, 'Пересчёт формул после создания задачи');
+    await this.txRunner.run(async (tx) => {
+      await recalcSubtaskParents(this.formulas, this.cells, tx, event.actorId ?? null, [parentId]);
+      // Задача вошла в выборку «задачи папки»: агрегаты соседей изменились.
+      await recalcNodeTaskConsumers(this.formulas, this.cells, tx, event.actorId ?? null, [nodeId]);
+    });
   }
 }
 
@@ -90,12 +96,14 @@ export class TaskDeletedFormulaSourceHandler {
   async handle(event: DomainEvent<Record<string, unknown>>): Promise<void> {
     const parsed = taskDeletedPayloadSchema.safeParse(event.payload);
     if (!parsed.success) return;
-    const { taskId, parentId } = parsed.data;
-    this.logger.debug({ taskId, parentId }, 'Формулы после удаления задачи');
+    const { taskId, parentId, nodeId } = parsed.data;
+    this.logger.debug({ taskId, parentId, nodeId }, 'Формулы после удаления задачи');
     await this.txRunner.run(async (tx) => {
       // «Смерть связей» (Р4): ячейки удалённой задачи живыми не остаются.
       await this.cells.cleanupHost(tx, 'task', taskId);
       await recalcSubtaskParents(this.formulas, this.cells, tx, event.actorId ?? null, [parentId]);
+      // Задача вышла из выборки «задачи папки»: агрегаты соседей изменились.
+      await recalcNodeTaskConsumers(this.formulas, this.cells, tx, event.actorId ?? null, [nodeId]);
     });
   }
 }

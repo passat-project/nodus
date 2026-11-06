@@ -80,12 +80,15 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
       where: { id: taskId },
       select: { projectId: true },
     });
+    // Нет хоста — нет выборки. Без проекта фильтр `projectId: null`: иначе
+    // подзадача из чужого (в т.ч. секретного) проекта попала бы в агрегат.
+    if (!host) return [];
     const rows = await (tx ?? this.prisma).task.findMany({
       where: {
         parentId: taskId,
         deletedAt: null,
         confidential: false,
-        ...(host?.projectId ? { projectId: host.projectId } : {}),
+        projectId: host.projectId,
       },
       select: taskSelect,
       orderBy: [{ number: 'asc' }],

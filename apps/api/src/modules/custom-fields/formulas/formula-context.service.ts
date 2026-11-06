@@ -153,7 +153,7 @@ export class FormulaContextService {
     const refRecord = async (number: number): Promise<FormulaRecordData | null> => {
       const cached = refCache.get(number);
       if (cached !== undefined) return cached;
-      const target = await resolveRefSource(host, number, snapshot, tx, cache, this);
+      const target = await resolveRefSource(host, number, snapshot, tx, cache, this, actor);
       refCache.set(number, target);
       return target;
     };
@@ -202,8 +202,10 @@ export class FormulaContextService {
 
     const visibleParent = (): FormulaRecordData | null => {
       // Р7 (в): родитель — только тот же проект и не конфиденциальный.
-      if (!parent || parent.confidential) return null;
-      if ((parent.projectId ?? null) !== (host.projectId ?? null)) return null;
+      // Без проекта «своё дерево» не определено: личная задача не должна
+      // читать чужого родителя (участническая видимость безпроектных задач).
+      if (!parent || parent.confidential || host.projectId === null) return null;
+      if ((parent.projectId ?? null) !== host.projectId) return null;
       return parent;
     };
 

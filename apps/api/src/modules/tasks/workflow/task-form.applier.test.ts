@@ -114,12 +114,14 @@ describe('TaskFormApplier — окно перехода задачи (#380)', ()
     ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
   });
 
-  it('права разделов: наблюдатель — 403 на поля, время и итог', async () => {
+  it('права разделов: наблюдатель — поля игнорируются, время и итог — 403', async () => {
     const { applier } = setup();
     const observer = actor('carol');
+    // Формульные слоты окна шлются always-send и не должны ломать переход
+    // актору без права правки: поля просто не применяются (#632).
     await expect(
       applier.apply(TX, 't1', observer, { fields: { description: 'x' } }),
-    ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN });
+    ).resolves.toBeDefined();
     await expect(
       applier.apply(TX, 't1', observer, { time: { minutes: 5, date: '2026-10-25' } }),
     ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN });

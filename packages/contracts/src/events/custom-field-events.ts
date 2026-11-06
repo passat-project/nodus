@@ -42,6 +42,9 @@ export type CustomFieldChangeKind = z.infer<typeof customFieldChangeKindSchema>;
 export const customFieldDefinitionChangedPayloadSchema = z.object({
   definitionId: z.uuid(),
   change: customFieldChangeKindSchema,
+  /** Номер атрибута на момент события: при `deleted` строки определения уже
+   *  нет, и обработчики не могут дочитать номер — он едет в payload (#632). */
+  number: z.number().int().positive().optional(),
   /** Изменённые ключи свойств определения (updated): включая
    *  'companyValue' — значение глобальной переменной (Р7). */
   fields: z.array(z.string()).optional(),

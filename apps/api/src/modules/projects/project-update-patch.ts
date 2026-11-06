@@ -107,9 +107,6 @@ export async function buildUpdatePatch(
     // Шифр/заказчик — атрибуты: legacy-поля тела и customFields сливаются
     // в один патч (явное customFields важнее), затем общий конвейер.
     const patchBody = legacyPatchToAttributes(body, body.customFields ?? {});
-    // Вписанное значение снимает формулу ячейки в той же tx (Р5 #632):
-    // «зафиксировать» = вписать руками, «как у типа» = очистить значение.
-    if (tx) await ctx.formulaCells.release(tx, 'project', row.id, Object.keys(patchBody));
     const type = await ctx.types.findById(row.typeId);
     // Эффективная форма: удалённый атрибут не должен требовать очистки
     // несуществующего слота (#646). Значения — в транзакции писателя.
@@ -127,6 +124,17 @@ export async function buildUpdatePatch(
       },
       tx,
     );
+    // Вписанное значение снимает формулу ячейки в той же tx (Р5 #632):
+    // «зафиксировать» = вписать руками, «как у типа» = очистить значение.
+    // Только реально изменённые ключи — Enter без правки формулу не отменяет.
+    if (tx && prepared.changes.length > 0) {
+      await ctx.formulaCells.release(
+        tx,
+        'project',
+        row.id,
+        prepared.changes.map((change) => change.fieldId),
+      );
+    }
     const cleared = clearedProjectFields(
       form.fields.filter((slot) => slot.state === 'required').map((slot) => slot.fieldId),
       patchBody,

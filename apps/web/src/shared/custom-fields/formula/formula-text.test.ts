@@ -103,6 +103,49 @@ describe('formula-text: печать и разбор', () => {
     });
   });
 
+  it('склейка ниже арифметики: 1*2 & " руб" — умножение, затем текст', () => {
+    const result = tokensToAst([{ type: 'text', text: '1*2 & " руб"' }]);
+    expect(result.error).toBeNull();
+    expect(result.ast).toEqual({
+      kind: 'op',
+      op: 'concat',
+      args: [
+        {
+          kind: 'op',
+          op: 'mul',
+          args: [
+            { kind: 'literal', value: 1 },
+            { kind: 'literal', value: 2 },
+          ],
+        },
+        { kind: 'literal', value: ' руб' },
+      ],
+    });
+  });
+
+  it('минус перед строковым литералом — разделитель склейки (шифр)', () => {
+    const result = tokensToAst([{ type: 'text', text: '1 - "-" 2' }]);
+    expect(result.error).toBeNull();
+    expect(result.ast).toEqual({
+      kind: 'op',
+      op: 'concat',
+      args: [
+        { kind: 'literal', value: 1 },
+        { kind: 'literal', value: '-' },
+        { kind: 'literal', value: 2 },
+      ],
+    });
+  });
+
+  it('английское имя функции регистронезависимо', () => {
+    expect(tokensToAst([{ type: 'text', text: 'if(1;2;3)' }]).error).toBeNull();
+  });
+
+  it('типографские операторы нормализуются', () => {
+    expect(tokensToAst([{ type: 'text', text: '1 − 2' }]).error).toBeNull();
+    expect(tokensToAst([{ type: 'text', text: '1 ≠ 2' }]).error).toBeNull();
+  });
+
   it('пустая формула — null без ошибки', () => {
     expect(tokensToAst([{ type: 'text', text: '   ' }])).toEqual({ ast: null, error: null });
   });

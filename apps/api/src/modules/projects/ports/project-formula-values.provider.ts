@@ -79,7 +79,9 @@ function toProjectRecord(row: ProjectRow): FormulaRecordData {
     parentId: null,
     nodeId: null,
     placeId: row.typeId,
-    confidential: false,
+    // Секретный проект — не источник ссылок: иначе письмо/задача, видимая
+    // широкому кругу, прочитала бы его название и значения через формулу.
+    confidential: row.visibility === 'secret',
   };
 }
 

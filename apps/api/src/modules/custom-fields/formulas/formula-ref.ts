@@ -1,4 +1,5 @@
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import type { ProjectActor } from '../../projects/ports/project-reader.port.js';
 import type { FormulaRecordData } from '../ports/record-values.port.js';
 import type { FormulaContextCache, FormulaContextService } from './formula-context.service.js';
 import type { FormulaRegistrySnapshot } from './formula-meta.service.js';
@@ -12,6 +13,7 @@ export async function resolveRefSource(
   tx: TransactionClient | undefined,
   cache: FormulaContextCache,
   context: Pick<FormulaContextService, 'record'>,
+  actor?: ProjectActor,
 ): Promise<FormulaRecordData | null> {
   const definition = snapshot.byNumber.get(number);
   if (!definition) return null;
@@ -24,11 +26,20 @@ export async function resolveRefSource(
     case 'task':
     case 'node':
     case 'project': {
-      const target = await context.record(definition.type, targetId, undefined, tx, cache);
+      const hostProject = host.kind === 'project' ? host.id : host.projectId;
+      // Без проекта «своё дерево» не определено: без актора такую ссылку не
+      // резолвим вовсе, с актором — решает видимость цели (Р7).
+      if (hostProject === null && !actor) return null;
+      const target = await context.record(definition.type, targetId, actor, tx, cache);
       if (!target || target.confidential) return null;
       // Цель обязана быть в проекте хоста (Р7 г) — иначе источник недоступен.
-      const hostProject = host.kind === 'project' ? host.id : host.projectId;
       if ((target.projectId ?? null) !== (hostProject ?? null)) return null;
+      // Секретный проект цели: даже без актора (пересчёт) не читаем его
+      // задачи/папки в формулу, видимую широкому кругу (письмо, личная задача).
+      if (target.kind !== 'project' && target.projectId) {
+        const project = await context.record('project', target.projectId, actor, tx, cache);
+        if (!project || project.confidential) return null;
+      }
       return target;
     }
     default:

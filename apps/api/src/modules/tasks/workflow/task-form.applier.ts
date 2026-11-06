@@ -46,8 +46,10 @@ export class TaskFormApplier {
     let timeEntryId: string | null = null;
     let result: WorkflowFormApplied['result'] = null;
 
-    if (input.fields) {
-      if (!access.canEdit) throw DomainException.forbidden('Task edit not allowed');
+    // Окно может прислать формульные слоты (always-send) даже актору без
+    // права правки. Это не его ручной ввод: переход не блокируем, поля
+    // просто не применяем (иначе 403 на пустом месте).
+    if (input.fields && access.canEdit) {
       const patch: TaskFieldsWrite = {};
       const keys: string[] = [];
       if (input.fields.description !== undefined && input.fields.description !== task.description) {

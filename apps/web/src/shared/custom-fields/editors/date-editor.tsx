@@ -21,10 +21,13 @@ export function DateEditor(props: EditorProps) {
 
   function commit(next: Date | null) {
     if (next === null) {
-      props.onCommit(null);
+      if (props.value !== undefined && props.value !== null) props.onCommit(null);
       return;
     }
-    props.onCommit(withTime ? next.toISOString() : toIsoDate(next));
+    const value = withTime ? next.toISOString() : toIsoDate(next);
+    // Повтор того же дня не считается ручной записью (Р5 #632).
+    if (value === props.value) return;
+    props.onCommit(value);
   }
 
   return (

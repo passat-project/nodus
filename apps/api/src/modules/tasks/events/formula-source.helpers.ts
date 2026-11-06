@@ -74,3 +74,25 @@ export async function recalcSubtaskParents(
     await recalcTaskHosts(formulas, tx, actorId, taskHosts(own), 1);
   }
 }
+
+/**
+ * Пересчёт ЗАДАЧ-потребителей агрегата «задачи папки» (#632, Р4): состав
+ * `node_tasks` сменился переносом/созданием/удалением задачи. Ключ
+ * `nodetasks:node:<id>` есть у ячеек задач-соседей (и у самой задачи), но не
+ * у папки: node-хосты пересчитывает модуль проектов своим событием.
+ */
+export async function recalcNodeTaskConsumers(
+  formulas: TaskFormulaService,
+  cells: FormulaCells,
+  tx: TransactionClient,
+  actorId: string | null,
+  nodeIds: readonly (string | null | undefined)[],
+): Promise<void> {
+  const ids = [...new Set(nodeIds.filter((id): id is string => typeof id === 'string'))];
+  const refs: FormulaCellRef[] = [];
+  for (const nodeId of ids) {
+    refs.push(...(await cells.dependentCellsByDepKey(`nodetasks:node:${nodeId}`, tx)));
+  }
+  const hosts = taskHosts(refs);
+  if (hosts.length > 0) await recalcTaskHosts(formulas, tx, actorId, hosts, 1);
+}

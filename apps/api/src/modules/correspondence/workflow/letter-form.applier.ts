@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ErrorCode } from '@nodus/contracts';
+import { ErrorCode, sameCustomFieldValue } from '@nodus/contracts';
 import type { CustomFieldValues } from '@nodus/contracts';
 
 import type { Prisma } from '../../../generated/prisma/client.js';
@@ -28,12 +28,15 @@ const relationFail = (reason: 'not_found' | 'not_outgoing_registered' | 'suggest
     reason,
   });
 
-/** Ключи атрибутов, реально переданные окном регистрации (ввод невалиден —
- *  пустой список: проверку формы делает валидатор, здесь только семантика
- *  «вписано руками» для снятия формулы, Р5 #632). */
-function explicitCustomFieldKeys(input: unknown): string[] {
-  const values = (input as { customFields?: unknown } | null | undefined)?.customFields;
-  return values && typeof values === 'object' ? Object.keys(values) : [];
+/** Ключи атрибутов, которые окно РЕАЛЬНО изменило (Р5 #632): умолчания
+ *  формы и повтор того же значения формулу не снимают. Сравниваем ввод окна
+ *  с текущими значениями — не итог валидатора (там уже подмешаны умолчания). */
+function changedCustomFieldKeys(before: CustomFieldValues | undefined, input: unknown): string[] {
+  const requested = (input as { customFields?: Record<string, unknown> } | null | undefined)
+    ?.customFields;
+  if (!requested || typeof requested !== 'object') return [];
+  const base = before ?? {};
+  return Object.keys(requested).filter((key) => !sameCustomFieldValue(base[key], requested[key]));
 }
 
 /**
@@ -63,10 +66,6 @@ export class LetterFormApplier {
   ): Promise<WorkflowFormApplied> {
     if (!input.registration) return EMPTY;
     const today = companyDate(new Date());
-    // Значения, вписанные в окно, снимают формулу ячейки в той же tx
-    // (Р5 #632); умолчания формы — не вписанные руками значения и формулу
-    // не трогают, поэтому берутся только ключи из ввода окна.
-    await this.fields.releaseFormulas(tx, letter.id, explicitCustomFieldKeys(input.registration));
     const { values, extra, customFields } = await this.validator.registration(
       letter.typeId,
       input.registration,
@@ -75,6 +74,17 @@ export class LetterFormApplier {
       // Значения, поставленные PATCH до регистрации, — база: окно их
       // перекрывает, умолчания заполняют только пустое (#646).
       (letter.customFields ?? {}) as CustomFieldValues,
+    );
+    // Значения, вписанные в окно, снимают формулу ячейки в той же tx
+    // (Р5 #632); умолчания формы и повтор того же значения — не «вписано
+    // руками», формулу не трогают.
+    await this.fields.releaseFormulas(
+      tx,
+      letter.id,
+      changedCustomFieldKeys(
+        letter.customFields as CustomFieldValues | undefined,
+        input.registration,
+      ),
     );
     // «Основной документ письма» (#56): у письма с файлами-кандидатами один
     // обязан быть выбран звездой — номер присваивается конкретному документу

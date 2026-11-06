@@ -25,6 +25,9 @@ export async function applyTypeFormulas(args: {
 }): Promise<void> {
   const { hostKind, hostIds, snapshot, ownByHost, result, tx, cache, context, engine, values } =
     args;
+  // Нет ни одной формулы типа/вида на портале — не читаем хосты вовсе:
+  // список не платит N+1 за фичу, которой ещё не пользуются.
+  if (snapshot.bindingFormulas.size === 0) return;
   for (const hostId of hostIds) {
     const host = await context.record(hostKind, hostId, undefined, tx, cache);
     if (!host?.placeId) continue;

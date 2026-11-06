@@ -1,5 +1,5 @@
 import { Trash2 } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { CustomFieldDefinition } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
@@ -17,6 +17,7 @@ import { FormulaFunctionsPanel } from './formula-functions-panel.js';
 import { FormulaLine } from './formula-line.js';
 import { FormulaPalette } from './formula-palette.js';
 import { previewText } from './formula-preview.js';
+import { FormulaRemoveDialog } from './formula-remove-dialog.js';
 import { useFormulaEditor } from './use-formula-editor.js';
 import type { FormulaHost } from './formula-api.js';
 
@@ -83,6 +84,7 @@ export function FormulaEditor({
     handleSave,
     handleRemove,
   } = useFormulaEditor({ open, host, fieldId, ownDefinitions, hostContext, onClose });
+  const [removeOpen, setRemoveOpen] = useState(false);
   // Формула типа/вида приходит как основа для правки: сохранение создаст
   // собственную формулу записи, тип не меняется (Р6).
   const origin = cell.data?.origin ?? null;
@@ -190,7 +192,7 @@ export function FormulaEditor({
               variant="ghost"
               className="mr-auto text-danger hover:text-danger"
               disabled={remove.isPending || origin !== 'own'}
-              onClick={handleRemove}
+              onClick={() => setRemoveOpen(true)}
             >
               <Trash2 className="size-3.5" strokeWidth={1.75} />
               {ui.formulas.editor.remove}
@@ -218,6 +220,16 @@ export function FormulaEditor({
         onApply={(aggregate) => {
           insertAggregate(aggregate);
           setAggregateDialog({ open: false, initial: null });
+        }}
+      />
+      <FormulaRemoveDialog
+        open={removeOpen}
+        pending={remove.isPending}
+        overlay={false}
+        onCancel={() => setRemoveOpen(false)}
+        onConfirm={() => {
+          setRemoveOpen(false);
+          handleRemove();
         }}
       />
     </>

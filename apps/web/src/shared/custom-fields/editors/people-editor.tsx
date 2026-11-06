@@ -37,7 +37,8 @@ export function PeopleEditor(props: EditorProps) {
       props.onCommit(list.length > 0 ? list : null, ref ? [ref] : undefined);
       return;
     }
-    props.onCommit(userId, ref ? [ref] : undefined);
+    // Повторный выбор того же сотрудника — не ручная запись (Р5 #632).
+    if (props.value !== userId) props.onCommit(userId, ref ? [ref] : undefined);
   }
 
   return (
