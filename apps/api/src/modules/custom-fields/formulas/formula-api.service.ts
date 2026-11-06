@@ -62,6 +62,18 @@ export class FormulaApiService {
     actor: AuthUser,
   ): Promise<FormulaEvaluateResponse> {
     const snapshot = await this.meta.snapshot();
+    // Форма AST (лимиты, матрица источников) проверяется и в превью:
+    // иначе evaluate обходил бы запреты матрицы и лимиты языка (Р2/Р7).
+    const shape = this.engine.validate(body.ast, {
+      hostKind: body.context.hostKind,
+      meta: snapshot.meta,
+    });
+    const blocking = shape.issues.filter((issue) => issue.blocking);
+    if (blocking.length > 0) {
+      throw new DomainException(formulaErrorCodeOf(blocking[0]!.code), 'Formula is invalid', {
+        issues: blocking,
+      });
+    }
     const context = await this.context.build({
       hostKind: body.context.hostKind,
       hostId: body.context.hostId,

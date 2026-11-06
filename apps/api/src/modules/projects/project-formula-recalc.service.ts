@@ -121,6 +121,9 @@ export class ProjectFormulaRecalcService {
     cell: FormulaCellRef,
     depth: number,
   ): Promise<void> {
+    // Чужие хосты (task/letter) пересчитывают их собственные модули: писать
+    // их значения здесь нельзя (I3), иначе «находка» станет порчей данных.
+    if (cell.hostKind !== 'project' && cell.hostKind !== 'node') return;
     const outcome = await this.cells.recalc(tx, cell, depth);
     if (outcome.silent || !outcome.changed) return;
     try {

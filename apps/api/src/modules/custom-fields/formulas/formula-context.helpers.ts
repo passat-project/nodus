@@ -60,6 +60,14 @@ export function neededSources(deps: readonly FormulaDependency[]): NeededSources
       case 'ref':
         needed.refs = true;
         break;
+      case 'system':
+        // Системное поле может стоять на любом источнике (родитель, папка,
+        // проект, ссылка): грузим все — дешевле, чем неверный null.
+        needed.parent = true;
+        needed.project = true;
+        needed.folders = true;
+        needed.refs = true;
+        break;
       default:
         break;
     }

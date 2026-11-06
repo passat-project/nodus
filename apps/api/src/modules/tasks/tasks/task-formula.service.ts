@@ -86,9 +86,13 @@ export class TaskFormulaService {
     numbers: readonly number[],
     depth: number,
   ): Promise<void> {
+    // Только ячейки ЭТОГО хоста (I3): зависимые ячейки чужих записей
+    // пересчитывают их собственные модули по тем же событиям.
     const cells =
       numbers.length > 0
-        ? await this.cells.dependentCellsByValues('task', taskId, numbers, tx)
+        ? (await this.cells.dependentCellsByValues('task', taskId, numbers, tx)).filter(
+            (cell) => cell.hostKind === 'task' && cell.hostId === taskId,
+          )
         : [];
     const own = await this.cells.cellsForHost('task', taskId, tx);
     const seen = new Set(cells.map((cell) => cell.cellId));

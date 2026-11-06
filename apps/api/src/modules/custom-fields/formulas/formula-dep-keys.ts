@@ -99,6 +99,12 @@ export function buildDepKeys(args: FormulaDepArgs): FormulaDepKey[] {
         }
         break;
       }
+      case 'system':
+        // Системные поля меняются событиями хоста/родителя/папки: ключи
+        // структуры и родителя покрывают пересчёт (значение — по событию).
+        add(`parent:task:${args.host.id}`);
+        if (hostProject) add(`tree:project:${hostProject}`);
+        break;
       default:
         break;
     }

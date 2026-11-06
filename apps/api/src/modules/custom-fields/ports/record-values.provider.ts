@@ -14,6 +14,7 @@ import {
   PROJECT_FORMULA_VALUES,
   type ProjectFormulaValues,
 } from '../../projects/ports/project-formula-values.port.js';
+import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
 import {
   TASK_FORMULA_VALUES,
   type TaskFormulaValues,
@@ -35,9 +36,10 @@ export class RecordValuesProvider implements RecordValuesReader {
     @Inject(TASK_FORMULA_VALUES) private readonly tasks: TaskFormulaValues,
     @Inject(PROJECT_FORMULA_VALUES) private readonly projects: ProjectFormulaValues,
     @Inject(LETTER_FORMULA_VALUES) private readonly letters: LetterFormulaValues,
+    @Inject(PROJECT_READER) private readonly projectsReader: ProjectReader,
   ) {}
 
-  record(
+  async record(
     kind: FormulaHostKind,
     id: string,
     opts?: RecordReadOptions,
@@ -48,10 +50,22 @@ export class RecordValuesProvider implements RecordValuesReader {
         return this.tasks.record(id, opts, tx);
       case 'letter':
         return this.letters.record(id, opts, tx);
-      case 'project':
+      case 'project': {
+        // Секретный проект не виден актору — 404 без оракула (Р7).
+        if (opts?.actor) {
+          const refs = await this.projectsReader.refsFor(opts.actor, [id]);
+          if (refs.length === 0) return null;
+        }
         return this.projects.project(id, tx);
-      case 'node':
-        return this.projects.node(id, tx);
+      }
+      case 'node': {
+        const node = await this.projects.node(id, tx);
+        if (opts?.actor && node?.projectId) {
+          const refs = await this.projectsReader.refsFor(opts.actor, [node.projectId]);
+          if (refs.length === 0) return null;
+        }
+        return node;
+      }
     }
   }
 

@@ -72,8 +72,19 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
   }
 
   async subtasks(taskId: string, tx?: TransactionClient): Promise<FormulaRecordData[]> {
+    // Р7 (д): только свой проект — подзадача/связь из чужого (в т.ч.
+    // секретного) проекта не попадает в агрегаты.
+    const host = await (tx ?? this.prisma).task.findUnique({
+      where: { id: taskId },
+      select: { projectId: true },
+    });
     const rows = await (tx ?? this.prisma).task.findMany({
-      where: { parentId: taskId, deletedAt: null, confidential: false },
+      where: {
+        parentId: taskId,
+        deletedAt: null,
+        confidential: false,
+        ...(host?.projectId ? { projectId: host.projectId } : {}),
+      },
       select: taskSelect,
       orderBy: [{ number: 'asc' }],
       take: FORMULA_LIMITS.selection + 1,
@@ -106,8 +117,17 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
       ),
     ];
     if (ids.length === 0) return [];
+    const host = await db.task.findUnique({
+      where: { id: taskId },
+      select: { projectId: true },
+    });
     const rows = await db.task.findMany({
-      where: { id: { in: ids }, deletedAt: null, confidential: false },
+      where: {
+        id: { in: ids },
+        deletedAt: null,
+        confidential: false,
+        ...(host?.projectId ? { projectId: host.projectId } : {}),
+      },
       select: taskSelect,
       take: FORMULA_LIMITS.selection + 1,
     });
