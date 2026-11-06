@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -12,6 +23,8 @@ import {
   changeTaskTypeBodySchema,
   createSubtaskBodySchema,
   createTaskBodySchema,
+  formulaBodySchema,
+  formulaResponseSchema,
   listTasksQuerySchema,
   paginatedSchema,
   taskBranchSchema,
@@ -25,6 +38,8 @@ import {
   type ChangeTaskTypeBody,
   type CreateSubtaskBody,
   type CreateTaskBody,
+  type FormulaBody,
+  type FormulaResponse,
   type ListTasksQuery,
   type Paginated,
   type TaskBranch,
@@ -46,6 +61,7 @@ import { ZodValidationPipe } from '../../../core/pipes/zod-validation.pipe.js';
 import { BulkService } from '../bulk/bulk.service.js';
 import { TaskTypeChangeService } from '../types/task-type-change.service.js';
 import { TaskEditService } from './task-edit.service.js';
+import { TaskFormulaService } from './task-formula.service.js';
 import { TasksQueryService } from './tasks-query.service.js';
 import { TasksService } from './tasks.service.js';
 
@@ -70,6 +86,7 @@ export class TasksController {
     private readonly query: TasksQueryService,
     private readonly bulk: BulkService,
     private readonly typeChange: TaskTypeChangeService,
+    private readonly formulas: TaskFormulaService,
   ) {}
 
   @Get()
@@ -181,6 +198,49 @@ export class TasksController {
   @ApiIdempotencyKey()
   remove(@GetUser() user: AuthUser, @Param('id', uuid) id: string): Promise<void> {
     return this.tasks.remove(user, id);
+  }
+
+  @Get(':id/custom-fields/:fieldId/formula')
+  @ApiOperation({ summary: 'Эффективная формула ячейки атрибута (своя или типа)' })
+  @ApiOkResponse({ standardSchema: formulaResponseSchema })
+  @ApiErrors(400, 401, 404)
+  formula(
+    @GetUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Param('fieldId', uuid) fieldId: string,
+  ): Promise<FormulaResponse> {
+    return this.formulas.read(user, id, fieldId);
+  }
+
+  @Put(':id/custom-fields/:fieldId/formula')
+  @HttpCode(200)
+  @Audit({ action: 'custom_field.formula_set', entity: 'task' })
+  @ApiOperation({ summary: 'Поставить формулу в ячейку атрибута задачи' })
+  @ApiOkResponse({ standardSchema: formulaResponseSchema })
+  @ApiErrors(400, 401, 403, 404, 422)
+  @ApiIdempotencyKey()
+  setFormula(
+    @GetUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Param('fieldId', uuid) fieldId: string,
+    @Body({ schema: formulaBodySchema, pipes: [new ZodValidationPipe(formulaBodySchema)] })
+    body: FormulaBody,
+  ): Promise<FormulaResponse> {
+    return this.formulas.save(user, id, fieldId, body.ast);
+  }
+
+  @Delete(':id/custom-fields/:fieldId/formula')
+  @HttpCode(204)
+  @Audit({ action: 'custom_field.formula_remove', entity: 'task' })
+  @ApiOperation({ summary: 'Снять формулу (значение-снимок остаётся)' })
+  @ApiErrors(400, 401, 403, 404)
+  @ApiIdempotencyKey()
+  removeFormula(
+    @GetUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Param('fieldId', uuid) fieldId: string,
+  ): Promise<void> {
+    return this.formulas.remove(user, id, fieldId);
   }
 
   @Get(':id/branch')

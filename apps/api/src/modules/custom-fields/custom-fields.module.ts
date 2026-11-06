@@ -10,6 +10,7 @@ import { CorrespondencePortsModule } from '../correspondence/correspondence-port
 import { DictionariesPortsModule } from '../dictionaries/dictionaries-ports.module.js';
 import { TasksPortsModule } from '../tasks/tasks-ports.module.js';
 import { WorkflowsPortsModule } from '../workflows/workflows-ports.module.js';
+import { CustomFieldsPortsModule } from './custom-fields-ports.module.js';
 import { DefinitionsController } from './definitions/definitions.controller.js';
 import { DefinitionMapper } from './definitions/definition.mapper.js';
 import { DefinitionsRepository } from './definitions/definitions.repository.js';
@@ -17,6 +18,10 @@ import { DefinitionsBindingService } from './definitions/definitions-binding.ser
 import { DefinitionsService } from './definitions/definitions.service.js';
 import { DefinitionsQueryService } from './definitions/definitions-query.service.js';
 import { DefinitionsUsageService } from './definitions/definitions-usage.service.js';
+import { FormulaApiService } from './formulas/formula-api.service.js';
+import { FormulaBindingService } from './formulas/formula-binding.service.js';
+import { FormulaBindingsController } from './formulas/formula-bindings.controller.js';
+import { FormulasController } from './formulas/formulas.controller.js';
 import { CustomFieldDefaults } from './values/defaults.js';
 import { CustomFieldRefsHydrator } from './values/refs-hydrator.js';
 import { CustomFieldValueValidator } from './values/value-validator.js';
@@ -35,8 +40,9 @@ import { CustomFieldValueValidator } from './values/value-validator.js';
     TasksPortsModule,
     WorkflowsPortsModule,
     ProjectsPortsModule,
+    CustomFieldsPortsModule,
   ],
-  controllers: [DefinitionsController],
+  controllers: [DefinitionsController, FormulasController, FormulaBindingsController],
   providers: [
     UserProfileProvider,
     { provide: USER_PROFILE_READER, useClass: UserProfileProvider },
@@ -51,6 +57,8 @@ import { CustomFieldValueValidator } from './values/value-validator.js';
     CustomFieldRefsHydrator,
     DefinitionsService,
     DefinitionsBindingService,
+    FormulaApiService,
+    FormulaBindingService,
   ],
 })
 export class CustomFieldsModule {}

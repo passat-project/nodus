@@ -101,7 +101,12 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
     // снятие привязки не должно блокировать уборку старого значения (Р8).
     const unbound = unboundIssues(all, definitions, changed);
     if (unbound.length > 0) throw invalidValues(unbound);
-    const issues = await this.validator.validate(definitions, changed, tx, args.actor);
+    const issues = await this.validator.validate(
+      definitions,
+      changed,
+      tx,
+      args.trusted ? undefined : args.actor,
+    );
     if (issues.length > 0) throw invalidValues(issues);
 
     const next: CustomFieldValues = { ...args.current };

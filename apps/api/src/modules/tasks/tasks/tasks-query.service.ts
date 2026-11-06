@@ -29,6 +29,7 @@ import {
   CUSTOM_FIELD_REGISTRY,
   type CustomFieldRegistry,
 } from '../../custom-fields/ports/custom-field-registry.port.js';
+import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import { selfChainNode, stageDto, TaskDtoMapper } from './task-dto.mapper.js';
 import { stagesCatalog } from './task-stages-catalog.js';
 import { TasksQueryRepository, type TaskOrder } from './tasks-query.repository.js';
@@ -57,6 +58,7 @@ export class TasksQueryService {
     @Inject(CHAT_MESSAGE_ACCESS) private readonly messages: ChatMessageAccess,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
+    @Inject(FORMULA_CELLS) private readonly formulas: FormulaCells,
   ) {}
 
   viewer(user: Pick<AuthUser, 'id' | 'permissions'>): Promise<Viewer> {
@@ -117,7 +119,8 @@ export class TasksQueryService {
           ? encodeCursor({ n: last.number })
           : encodeCursor({ o: sortKeys.get(last.id)!, id: last.id });
     }
-    return { items: await this.mapper.toListItems(page, undefined, user), nextCursor };
+    const items = await this.mapper.toListItems(page, undefined, user);
+    return { items: await this.withFormulas(items), nextCursor };
   }
 
   private order(q: ListTasksQuery, me: string): TaskOrder {
@@ -171,15 +174,20 @@ export class TasksQueryService {
         ? [await this.messageNode(full.sourceId, user.id)]
         : []),
     ];
+    const [withFormulas] = await this.withFormulas([
+      this.mapper.toListItem(row, refs, catalog, projectRefs),
+    ]);
     return {
-      ...this.mapper.toListItem(row, refs, catalog, projectRefs),
+      ...withFormulas!,
       // Свой маршрут задачи (по нему работают кнопки): тип может быть в
       // архиве — его задачи обязаны открываться (код-ревью #378).
       workflowId: full.workflowId,
       description: full.description,
       observers: observerIds.map((uid) => this.mapper.ref(refs, uid)),
       checklist: full.checklist.map((c) => ({ id: c.id, text: c.text, done: c.done })),
-      subtasks: children.map((c) => this.mapper.toListItem(c, refs, catalog, projectRefs)),
+      subtasks: await this.withFormulas(
+        children.map((c) => this.mapper.toListItem(c, refs, catalog, projectRefs)),
+      ),
       chain: [
         ...origin,
         selfChainNode({
@@ -204,6 +212,20 @@ export class TasksQueryService {
       access: taskAccess(actorRoles(row, user.id), user.permissions),
       createdAt: full.createdAt.toISOString(),
     };
+  }
+
+  /** Формульное состояние ячеек (#632, Р9): own-формулы в DTO списков и
+   *  детали — значок fx и бейдж ошибки без отдельных запросов на строку. */
+  private async withFormulas(items: readonly TaskListItem[]): Promise<TaskListItem[]> {
+    if (items.length === 0) return [...items];
+    const states = await this.formulas.stateFor(
+      'task',
+      items.map((item) => item.id),
+    );
+    return items.map((item) => {
+      const state = states.get(item.id);
+      return state ? { ...item, customFieldFormulas: state } : item;
+    });
   }
 
   /** Узел «сообщение чата» цепочки — по правам СМОТРЯЩЕГО: участник беседы

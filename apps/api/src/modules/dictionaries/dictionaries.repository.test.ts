@@ -89,7 +89,7 @@ describe('DictionariesRepository: нормализация цвета (Р6 #631)
     expect(refs.map((r) => r.color)).toEqual(['neutral', null]);
     expect(dictionaryItem.findMany).toHaveBeenCalledWith({
       where: { id: { in: [ITEM_ID] } },
-      select: { id: true, dictionaryId: true, name: true, isActive: true, color: true },
+      select: { id: true, dictionaryId: true, name: true, code: true, isActive: true, color: true },
     });
   });
 

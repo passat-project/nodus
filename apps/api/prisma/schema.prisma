@@ -1725,6 +1725,7 @@ model FieldDefinition {
 
   bindings     FieldBinding[]
   companyValue CompanyValue?
+  formulaCells FormulaCell[]
 
   /// Выдача реестра портала в порядке карточки: (sort_order, id). Имя
   /// уникально глобально — выраженный индекс lower(btrim(name)) в миграции.
@@ -1742,6 +1743,10 @@ model FieldBinding {
   /// process_type | project_type | node_kind — CHECK в миграции (#636 добавит registry_kind).
   targetKind   String   @map("target_kind")
   targetId     String   @map("target_id") @db.Uuid
+  /// Формула места (#632, Р6): вычисляется НА ЧТЕНИИ для записей без своего
+  /// значения и своей формулы. У каждой привязки своя формула — у одного
+  /// атрибута в разных типах/видах формулы разные. JSONB — AST `formula.ts`.
+  defaultFormula Json?  @map("default_formula")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
   definition FieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
@@ -1764,6 +1769,59 @@ model CompanyValue {
   definition FieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
 
   @@map("company_values")
+}
+
+/// Своя формула ячейки атрибута (#632, Р1/Р4): значение ИЛИ формула —
+/// взаимоисключающи; результат материализуется обычным значением в
+/// `custom_fields` хоста. Хост полиморфный (task|letter|node|project) —
+/// plain UUID без FK, целостность держат обработчики владельцев.
+model FormulaCell {
+  id           String   @id @default(uuid()) @db.Uuid
+  /// task | letter | node | project — CHECK в миграции.
+  hostKind     String   @map("host_kind")
+  hostId       String   @map("host_id") @db.Uuid
+  /// Атрибут-цель: каскад — ячейка умирает вместе с определением (Р1).
+  fieldId      String   @map("field_id") @db.Uuid
+  /// AST формулы (`formula.ts` в contracts), адресация атрибутов по number.
+  ast          Json
+  /// Ошибка ячейки (runtime, Р13): null — вычислено без ошибки.
+  error        Json?
+  computedAt   DateTime @default(now()) @map("computed_at") @db.Timestamptz()
+  /// Глубина последнего пересчёта (Р8): диагностика живого цикла.
+  recalcDepth  Int      @default(0) @map("recalc_depth")
+  /// Автор формулы — plain UUID без FK (пользователь живёт в auth, I3).
+  createdById  String?  @map("created_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  field      FieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  deps       FormulaDep[]
+
+  @@unique([hostKind, hostId, fieldId])
+  /// Чтение формульного состояния хоста (деталь/список) и уборка хоста.
+  @@index([hostKind, hostId])
+  /// Уборка ячеек удалённого определения и usage-агрегат «В формулах».
+  @@index([fieldId])
+  @@map("formula_cells")
+}
+
+/// Зависимости ячейки-формулы (#632, Р4): ключи данных, изменение которых
+/// требует пересчёта. `attr_number` вытащен из ключа колонкой — поиск
+/// «кто ссылается на атрибут N» при удалении определения (Р13).
+model FormulaDep {
+  cellId     String @map("cell_id") @db.Uuid
+  /// v:<kind>:<uuid>:<number> | company:<number> | tree:project:<uuid> |
+  /// rel:task:<uuid> | nodetasks:node:<uuid> (Р4).
+  depKey     String @map("dep_key")
+  /// Номер атрибута зависимости (NULL — зависимость не от значения).
+  attrNumber Int?   @map("attr_number")
+
+  cell FormulaCell @relation(fields: [cellId], references: [id], onDelete: Cascade)
+
+  @@id([cellId, depKey])
+  @@index([depKey])
+  @@index([attrNumber])
+  @@map("formula_deps")
 }
 
 // ===== Модуль корреспонденции (#55, ADR-0027) =====

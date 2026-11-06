@@ -29,6 +29,10 @@ import {
   TaskCommentsCounter,
 } from './events/comments-count.handler.js';
 import { CustomFieldValuesCleanupHandler } from './events/custom-field-values-cleanup.handler.js';
+import {
+  TaskFormulaDefinitionHandler,
+  TaskFormulaRecalcHandler,
+} from './events/formula-recalc.handler.js';
 import { OverdueScanner } from './events/overdue.scanner.js';
 import { ParticipantsRepository } from './participants/participants.repository.js';
 import { ParticipantsService } from './participants/participants.service.js';
@@ -41,6 +45,7 @@ import { TaskCreatePolicy } from './tasks/task-create.policy.js';
 import { TaskDtoMapper } from './tasks/task-dto.mapper.js';
 import { TaskFactsRepository } from './tasks/task-facts.repository.js';
 import { TaskEditService } from './tasks/task-edit.service.js';
+import { TaskFormulaService } from './tasks/task-formula.service.js';
 import { TaskFieldsWriter } from './tasks/task-fields.writer.js';
 import { ProjectsPortsModule } from '../projects/projects-ports.module.js';
 import { TasksController } from './tasks/tasks.controller.js';
@@ -119,6 +124,7 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
     TasksQueryService,
     TasksService,
     TaskEditService,
+    TaskFormulaService,
     PersonalStagesService,
     ParticipantsService,
     ChecklistService,
@@ -134,6 +140,8 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
     TaskCommentDeletedHandler,
     // Уборка значений удалённого атрибута (#431): событие custom_field.definition_changed.
     CustomFieldValuesCleanupHandler,
+    TaskFormulaRecalcHandler,
+    TaskFormulaDefinitionHandler,
   ],
 })
 export class TasksModule {}

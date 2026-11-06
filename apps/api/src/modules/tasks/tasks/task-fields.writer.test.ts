@@ -58,6 +58,7 @@ function setup(required: CreationFieldSlot['key'][] = []) {
     prepareUpdate: vi.fn(async () => ({ next: {}, changes: [] })),
   };
   const catalog = { typeById: vi.fn(async () => type(required)) };
+  const formulaCells = { release: vi.fn(async () => void 0) };
   const projects = {
     assertNodeAllowed: vi.fn(async () => void 0),
     lockNodeStructure: vi.fn(async () => void 0),
@@ -69,6 +70,7 @@ function setup(required: CreationFieldSlot['key'][] = []) {
     participantsRepo as never,
     placements as never,
     customFields as never,
+    formulaCells as never,
     catalog as never,
     projects as never,
   );
@@ -173,6 +175,7 @@ describe('TaskFieldsWriter: узел структуры (#467)', () => {
       { remove: vi.fn(async () => void 0) } as never,
       { sync: vi.fn(async () => void 0) } as never,
       { prepareUpdate: vi.fn(async () => ({ next: {}, changes: [] })) } as never,
+      { release: vi.fn(async () => void 0) } as never,
       { typeById: vi.fn(async () => null) } as never,
       {
         assertNodeAllowed: vi.fn(async () => void 0),

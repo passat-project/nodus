@@ -139,6 +139,17 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'GET /tasks/:id/history': TASK_VISIBLE_ONE,
   'GET /tasks/:id/time-entries': TASK_VISIBLE_ONE,
   'GET /tasks/:id/transitions': TASK_VISIBLE_ONE,
+  // Формулы ячеек атрибутов (#632): чтение — зрителю задачи, мутации — праву
+  // правки задачи (canEdit) в сервисе.
+  'GET /tasks/:id/custom-fields/:fieldId/formula': TASK_VISIBLE_ONE,
+  'POST /custom-fields/formulas/validate':
+    'проверка AST без записи — нужна редактору формул каждому, кто может править атрибуты ' +
+    'своих записей; данные реестра не персональные (как чтение реестра #431)',
+  'POST /custom-fields/formulas/evaluate':
+    'превью без записи: доступ к контексту проверяет резолвер источника (Р7) — ' +
+    'невидимый хост/источник даёт 404 без оракула',
+  'PUT /tasks/:id/custom-fields/:fieldId/formula': TASK_ACCESS,
+  'DELETE /tasks/:id/custom-fields/:fieldId/formula': TASK_ACCESS,
   'GET /tasks/personal-stages': PERSONAL_PLAN,
   // Изменения (#320)
   'POST /auth/logout-all': SELF,

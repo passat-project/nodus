@@ -2,6 +2,7 @@ import type { Server } from 'socket.io';
 import {
   CHAT_EVENTS,
   CUSTOM_FIELD_CATALOG_EVENTS,
+  CUSTOM_FIELD_EVENTS,
   DICTIONARY_CATALOG_EVENTS,
   DIRECTORY_EVENTS,
   PROJECT_AUDIENCE_EVENTS,
@@ -123,6 +124,13 @@ export async function routeEnvelope(
       ? payload.deciderIds.filter((id): id is string => typeof id === 'string')
       : [];
     emitToUsers(io, envelope, [...new Set([...memberIdsOf(payload.audience), ...deciderIds])]);
+    return;
+  }
+
+  // Формула ячейки (#632, O4): адресно — аудитория хоста. Каталожный
+  // broadcast раскрывал бы hostId конфиденциальных записей.
+  if (envelope.type === CUSTOM_FIELD_EVENTS.FORMULA_CHANGED) {
+    emitToUsers(io, envelope, memberIdsOf(payload.audience));
     return;
   }
 

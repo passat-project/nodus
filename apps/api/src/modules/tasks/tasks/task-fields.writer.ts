@@ -22,6 +22,7 @@ import {
   type CustomFieldRegistry,
   type RegistryFieldChange,
 } from '../../custom-fields/ports/custom-field-registry.port.js';
+import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import {
   PROCESS_CATALOG_READER,
   type ProcessCatalogReader,
@@ -79,6 +80,7 @@ export class TaskFieldsWriter {
     private readonly participantsRepo: ParticipantsRepository,
     private readonly placements: Placements,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
+    @Inject(FORMULA_CELLS) private readonly formulaCells: FormulaCells,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
   ) {}
@@ -89,6 +91,7 @@ export class TaskFieldsWriter {
     row: TaskFieldsRow,
     patch: TaskFieldsWrite,
     fields: readonly string[],
+    opts: { formulaWrite?: boolean } = {},
   ): Promise<{ customFieldChanges: RegistryFieldChange[] }> {
     const reparent = patch.parentId !== undefined;
     // Смены родителя сериализуются одной advisory-блокировкой транзакции
@@ -159,6 +162,11 @@ export class TaskFieldsWriter {
     }
     if (patch.customFields && Object.keys(patch.customFields).length > 0) {
       const current = await this.facts.customFieldsOf(tx, row.id);
+      // Вписанное значение снимает формулу ячейки в той же tx (Р5 #632):
+      // «зафиксировать» = вписать руками, «как у типа» = очистить значение.
+      if (!opts.formulaWrite) {
+        await this.formulaCells.release(tx, 'task', row.id, Object.keys(patch.customFields));
+      }
       // Тип строки — привязка атрибутов (#432, Р8): запись значения
       // непривязанного атрибута — 422 `not_in_type`, очистка разрешена.
       const prepared = await this.customFields.prepareUpdate(
@@ -167,6 +175,7 @@ export class TaskFieldsWriter {
           patch: patch.customFields,
           actor,
           target: { kind: 'process_type', id: row.typeId },
+          ...(opts.formulaWrite ? { trusted: true } : {}),
         },
         tx,
       );

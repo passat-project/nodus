@@ -27,6 +27,9 @@ export interface DictionaryItemRef {
   id: string;
   dictionaryId: string;
   name: string;
+  /** Код варианта (null — машинного кода нет) — значение в языке формул
+   *  (#632: «КЖ» вместо подписи). */
+  code: string | null;
   isActive: boolean;
   /** Тон варианта списка (Р6 #631): ключ stageColorSchema, null — без цвета. */
   color: NonNullable<CustomFieldRef['color']> | null;
@@ -47,6 +50,10 @@ export interface DictionaryReader {
     itemId: string,
     tx?: TransactionClient,
   ): Promise<DictionaryItemRef | null>;
+
+  /** Все варианты справочника (включая архивные): обратная конвертация
+   *  значения формулы «код → id» (#632, Р13). Пустой вход — без запроса. */
+  itemsOf(dictionaryId: string, tx?: TransactionClient): Promise<DictionaryItemRef[]>;
 
   /** Id справочника по коду (#55): регистрация письма проверяет, что способ
    *  поступления — активный элемент системного `receipt-method`. null — нет. */

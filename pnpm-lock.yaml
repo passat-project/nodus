@@ -86,6 +86,9 @@ importers:
       '@nodus/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@nodus/formula-engine':
+        specifier: workspace:*
+        version: link:../../packages/formula-engine
       '@prisma/adapter-pg':
         specifier: ^7.10.1
         version: 7.10.1
