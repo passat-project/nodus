@@ -7,7 +7,7 @@
 ## Что здесь, а что — нет
 
 - **Здесь:** определения (тип, настройки, умолчание, номер, порядок), их CRUD, привязки «Где используется» (`field_bindings`: типы задач/писем, типы проектов, виды папок), глобальные переменные (`company_values`), порт `CUSTOM_FIELD_REGISTRY` для модулей-владельцев сущностей.
-- **Не здесь:** значения. Они живут в JSONB-колонке сущности-владельца (`tasks.custom_fields`, `letters`, `projects`, `project_nodes`) по id определения. Чужих таблиц модуль не читает и не пишет (I3): «сколько записей заполнено» и уборку значений после удаления выполняет владелец — через порты `CUSTOM_FIELD_VALUES_READER` (задачи), `LETTER_FIELD_VALUES_READER` (письма), `PROJECT_FIELD_USAGE_READER` (проекты/папки) и обработчики события `custom_field.definition_changed` (`change='deleted'`, безусловно — каждый чистит свою таблицу, идемпотентно).
+- **Не здесь:** значения. Они живут в JSONB-колонке сущности-владельца (`tasks.custom_fields`, `letters`, `projects`, `project_nodes`, `counterparties`) по id определения. Чужих таблиц модуль не читает и не пишет (I3): «сколько записей заполнено» и уборку значений после удаления выполняет владелец — через порты `CUSTOM_FIELD_VALUES_READER` (задачи), `LETTER_FIELD_VALUES_READER` (письма), `COUNTERPARTY_FIELD_VALUES_READER` (контрагенты), `PROJECT_FIELD_USAGE_READER` (проекты/папки) и обработчики события `custom_field.definition_changed` (`change='deleted'`, безусловно — каждый чистит свою таблицу, идемпотентно).
 
 ## Модель (#631)
 
