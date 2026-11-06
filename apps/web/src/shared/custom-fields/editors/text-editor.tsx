@@ -31,7 +31,18 @@ export function TextEditor(props: EditorProps) {
   }, [current, props.variant]);
 
   useEffect(() => {
-    if (editing) ref.current?.focus();
+    if (!editing) return;
+    // Карточка/чат могут перехватить фокус сразу после клика: ставим курсор
+    // в следующем кадре, когда инпут уже в DOM и родительские обработчики
+    // клика отработали.
+    const frame = requestAnimationFrame(() => {
+      const node = ref.current;
+      if (!node) return;
+      node.focus();
+      const end = node.value.length;
+      node.setSelectionRange(end, end);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [editing]);
 
   const commit = () => {
@@ -56,6 +67,7 @@ export function TextEditor(props: EditorProps) {
         disabled={props.disabled}
         ariaLabel={props.definition.name}
         multiline={multiline}
+        onPointerDown={(event) => event.stopPropagation()}
         onClick={() => !props.disabled && setEditing(true)}
       >
         <CustomFieldValueView
