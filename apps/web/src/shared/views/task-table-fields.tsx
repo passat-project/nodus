@@ -150,7 +150,7 @@ export function makeTaskTableFields({
       minWidth: 56,
       render: (task) => (
         <span className={monoCell}>
-          {task.spentMinutes > 0 ? formatMinutes(task.spentMinutes) : '—'}
+          {task.spentMinutes > 0 ? formatMinutes(task.spentMinutes) : null}
         </span>
       ),
       sortValue: (task) => task.spentMinutes,

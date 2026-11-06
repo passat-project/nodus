@@ -44,7 +44,11 @@ export function moneyFromMinor(minor: number, currencyId: string): MoneyValue {
  *  десятичная запятая (русская деловая запись), флаг — ИСТИНА/ЛОЖЬ. */
 export function textOf(value: FormulaValue): string {
   if (value === null) return '';
-  if (typeof value === 'string') return value;
+  if (typeof value === 'string') {
+    // Типографский «пустой» маркер из старых данных/подсказок не должен
+    // попадать в склейку: пустое значение — это пусто, а не дефис.
+    return value === '—' || value === '–' || value === '−' ? '' : value;
+  }
   if (typeof value === 'number')
     return Number.isFinite(value) ? String(value).replace('.', ',') : '';
   if (typeof value === 'boolean') return value ? 'ИСТИНА' : 'ЛОЖЬ';

@@ -6,6 +6,8 @@ import { itemById } from '../../mocks/data/dictionaries.js';
 /** Значение атрибута в языке формул (#632, Р7): перечисления — КОД варианта
  *  (короткая марка «КЖ»; без кода — подпись), списки — массив кодов,
  *  ссылки — id. */
+const EMPTY_DASHES = new Set(['—', '–', '−']);
+
 export function toFormulaValue(
   definition: CustomFieldDefinition,
   value: CustomFieldValue,
@@ -13,7 +15,8 @@ export function toFormulaValue(
   switch (definition.type) {
     case 'enum': {
       const item = itemById(String(value));
-      return item ? (item.code ?? item.name) : String(value);
+      const text = item ? (item.code ?? item.name) : String(value);
+      return EMPTY_DASHES.has(text) ? null : text;
     }
     case 'multienum':
     case 'users': {
@@ -30,7 +33,9 @@ export function toFormulaValue(
     case 'number':
     case 'duration':
       return typeof value === 'number' ? value : Number(value);
-    default:
-      return String(value);
+    default: {
+      const text = String(value);
+      return EMPTY_DASHES.has(text) ? null : text;
+    }
   }
 }

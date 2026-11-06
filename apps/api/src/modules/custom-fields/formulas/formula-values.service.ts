@@ -125,6 +125,9 @@ export class FormulaValuesService {
   }
 }
 
+/** Типографские «пустые» маркеры старых данных: в формуле это пусто, не текст. */
+const EMPTY_DASHES = new Set(['—', '–', '−']);
+
 /** Значение атрибута в языке формул (#632): enum — код варианта, иначе подпись. */
 export function toFormulaValue(
   definition: Pick<DefinitionLike, 'type'>,
@@ -134,7 +137,8 @@ export function toFormulaValue(
   switch (definition.type) {
     case 'enum': {
       const item = items.get(String(value));
-      return item ? (item.code ?? item.name) : String(value);
+      const text = item ? (item.code ?? item.name) : String(value);
+      return EMPTY_DASHES.has(text) ? null : text;
     }
     case 'multienum': {
       const ids = Array.isArray(value) ? value : [String(value)];
@@ -150,8 +154,10 @@ export function toFormulaValue(
     case 'number':
     case 'duration':
       return typeof value === 'number' ? value : Number(value);
-    default:
-      return String(value);
+    default: {
+      const text = String(value);
+      return EMPTY_DASHES.has(text) ? null : text;
+    }
   }
 }
 

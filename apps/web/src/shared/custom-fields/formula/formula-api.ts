@@ -59,6 +59,11 @@ export function useFormulaCell(host: FormulaHost | null, fieldId: string, enable
       api<FormulaResponse>(`${formulaHostPath(host!)}/custom-fields/${fieldId}/formula`),
     enabled: enabled && host !== null,
     staleTime: 0,
+    // Каждое открытие редактора читает АКТУАЛЬНУЮ формулу: кэш после
+    // save/remove может быть промежуточным ({ast:null}), а фоновый GET
+    // обязан доехать и заполнить строку.
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
   });
 }
 

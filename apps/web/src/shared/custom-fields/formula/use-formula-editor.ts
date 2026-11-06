@@ -150,9 +150,12 @@ export function useFormulaEditor({
       dirtyRef.current = false;
       return;
     }
-    if (cell.isLoading || cell.data === undefined || dirtyRef.current) return;
+    // Ждём именно данные, а не флаг isLoading: при повторном открытии
+    // кэш может быть пустым ({ast:null}), а настоящий AST придёт фоновым
+    // GET — его нужно применить, если пользователь ещё не правил строку.
+    if (cell.data === undefined || dirtyRef.current) return;
     setDom(cell.data.ast ?? null);
-  }, [open, cell.isLoading, cell.data, setDom]);
+  }, [open, cell.data, setDom]);
 
   useEffect(() => {
     if (!parse.ast) {
