@@ -14,6 +14,13 @@ describe('cleanFormulaText: пустые операнды не оставляю�
   it('пустая строка — пустое значение', () => {
     expect(cleanFormulaText('—')).toBeNull();
   });
+  it('легитимные дефисы и знак числа не портятся', () => {
+    expect(cleanFormulaText('-5')).toBe('-5');
+    expect(cleanFormulaText('Москва — Питер')).toBe('Москва — Питер');
+    expect(cleanFormulaText('ГОСТ 12—3')).toBe('ГОСТ 12—3');
+    expect(cleanFormulaText('A--B')).toBe('A--B');
+    expect(cleanFormulaText('2026--42')).toBe('2026-42');
+  });
 });
 
 describe('previewText: пример в редакторе без пустых дефисов (#632)', () => {

@@ -18,6 +18,7 @@ import {
   insertTextAtCaret,
   readTokens,
   removeWordBeforeCaret,
+  replaceChipElement,
   wordBeforeCaret,
 } from './formula-dom.js';
 import { tokensToAst } from './formula-parser.js';
@@ -74,7 +75,9 @@ export function useTypeFormulaEditor({
   const [aggregateDialog, setAggregateDialog] = useState<{
     open: boolean;
     initial: import('@nodus/contracts').FormulaAggregate | null;
-  }>({ open: false, initial: null });
+    /** Ключ правимой плашки: dblclick заменяет её на месте (не дублирует). */
+    key: string | null;
+  }>({ open: false, initial: null, key: null });
   const [autocomplete, setAutocomplete] = useState<{
     open: boolean;
     word: string;
@@ -103,20 +106,32 @@ export function useTypeFormulaEditor({
     setEmpty(tokens.every((token) => token.type === 'text' && token.text.trim().length === 0));
   }, []);
 
-  const setDom = useCallback((ast: FormulaNode | null) => {
-    const root = rootRef.current;
-    if (!root) return;
-    root.replaceChildren();
-    chipsRef.current.clear();
-    const tokens = ast ? astToTokens(ast) : [];
-    for (const token of tokens) {
-      if (token.type === 'text') root.appendChild(document.createTextNode(token.text));
-      else root.appendChild(createChipElement(token, chipsRef.current, () => undefined));
-    }
-    setParse({ ast, error: null });
-    setEmpty(tokens.length === 0);
-    setIssues([]);
-  }, []);
+  /** Двойной клик по плашке агрегата открывает её на правку — и у плашек,
+   *  восстановленных из AST, а не только у свежевставленных. */
+  const openAggregateEditor = useCallback(
+    (aggregateChip: Extract<FormulaChip, { type: 'aggregate' }>) => {
+      setAggregateDialog({ open: true, initial: aggregateChip.aggregate, key: aggregateChip.key });
+    },
+    [],
+  );
+
+  const setDom = useCallback(
+    (ast: FormulaNode | null) => {
+      const root = rootRef.current;
+      if (!root) return;
+      root.replaceChildren();
+      chipsRef.current.clear();
+      const tokens = ast ? astToTokens(ast) : [];
+      for (const token of tokens) {
+        if (token.type === 'text') root.appendChild(document.createTextNode(token.text));
+        else root.appendChild(createChipElement(token, chipsRef.current, openAggregateEditor));
+      }
+      setParse({ ast, error: null });
+      setEmpty(tokens.length === 0);
+      setIssues([]);
+    },
+    [openAggregateEditor],
+  );
 
   useEffect(() => {
     if (!open) {
@@ -157,9 +172,7 @@ export function useTypeFormulaEditor({
   const insertChip = (chip: FormulaChip) => {
     const root = rootRef.current;
     if (!root) return;
-    insertChipAtCaret(root, chip, chipsRef.current, (aggregateChip) =>
-      setAggregateDialog({ open: true, initial: aggregateChip.aggregate }),
-    );
+    insertChipAtCaret(root, chip, chipsRef.current, openAggregateEditor);
     refresh();
   };
 
@@ -186,10 +199,28 @@ export function useTypeFormulaEditor({
     insertChip(chip);
   };
 
+  /** Правка существующей плашки заменяет её на месте, новая — вставляется. */
   const insertAggregate = (aggregate: import('@nodus/contracts').FormulaAggregate) => {
-    const chip: FormulaAggregateChip = { type: 'aggregate', key: nextChipKey(), aggregate };
+    const root = rootRef.current;
+    const key = aggregateDialog.key;
+    const chip: FormulaAggregateChip = {
+      type: 'aggregate',
+      key: key ?? nextChipKey(),
+      aggregate,
+    };
+    if (root && key !== null) {
+      const replaced = replaceChipElement(root, key, chip, chipsRef.current, openAggregateEditor);
+      if (replaced) {
+        refresh();
+        setAggregateDialog({ open: false, initial: null, key: null });
+        return;
+      }
+    }
     insertChip(chip);
+    setAggregateDialog({ open: false, initial: null, key: null });
   };
+
+  const closeAutocomplete = () => setAutocomplete({ open: false, word: '', items: [] });
 
   const insertText = (text: string) => {
     const root = rootRef.current;
@@ -231,15 +262,19 @@ export function useTypeFormulaEditor({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!autocomplete.open) return;
-    if (event.key === 'Enter' && autocomplete.items[0]) {
+    // Строка однострочная: Enter не создаёт перенос ни при открытом, ни при
+    // закрытом автодополнении (contenteditable иначе плодит пустые строки).
+    if (event.key === 'Enter') {
       event.preventDefault();
-      applyAutocomplete(autocomplete.items[0]);
+      if (autocomplete.open && autocomplete.items[0]) {
+        applyAutocomplete(autocomplete.items[0]);
+      }
       return;
     }
+    if (!autocomplete.open) return;
     if (event.key === 'Escape') {
       event.preventDefault();
-      setAutocomplete({ open: false, word: '', items: [] });
+      closeAutocomplete();
     }
   };
 
@@ -273,6 +308,7 @@ export function useTypeFormulaEditor({
     issues,
     aggregateDialog,
     setAggregateDialog,
+    closeAutocomplete,
     autocomplete,
     insertText,
     insertField,

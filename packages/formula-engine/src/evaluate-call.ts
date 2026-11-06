@@ -28,18 +28,23 @@ export function evaluateCall(
       const branch = condition ? args[1] : args[2];
       return branch ? evaluateNode(branch, resolver) : null;
     }
+    // И/ИЛИ — ленивые: правая часть не вычисляется, если исход уже определён
+    // левой. Иначе идиома-гард `И(x<>0; y/x>1)` падает делением на ноль.
     case 'and': {
-      let result = true;
-      for (const arg of args) result = result && asBoolean(evaluateNode(arg, resolver));
-      return result;
+      for (const arg of args) {
+        if (!asBoolean(evaluateNode(arg, resolver))) return false;
+      }
+      return true;
     }
     case 'or': {
-      let result = false;
-      for (const arg of args) result = result || asBoolean(evaluateNode(arg, resolver));
-      return result;
+      for (const arg of args) {
+        if (asBoolean(evaluateNode(arg, resolver))) return true;
+      }
+      return false;
     }
     case 'not':
-      return !asBoolean(args[0] ? evaluateNode(args[0], resolver) : null);
+      if (args.length !== 1) fail('type_mismatch', 'НЕ expects one argument');
+      return !asBoolean(evaluateNode(args[0]!, resolver));
     case 'len': {
       const value = args[0] ? evaluateNode(args[0], resolver) : null;
       return value === null ? 0 : asText(value).length;

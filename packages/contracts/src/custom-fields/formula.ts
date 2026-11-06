@@ -228,7 +228,7 @@ const operationSchema = z
     kind: z.literal('op'),
     op: formulaOperatorSchema,
     args: z
-      .array(z.lazy(() => formulaNodeSchema))
+      .array(z.lazy(() => nodeSchema))
       .min(1)
       .max(10),
   })
@@ -238,7 +238,7 @@ const callSchema = z
   .object({
     kind: z.literal('call'),
     fn: formulaFunctionIdSchema,
-    args: z.array(z.lazy(() => formulaNodeSchema)).max(10),
+    args: z.array(z.lazy(() => nodeSchema)).max(10),
   })
   .strict();
 
@@ -248,13 +248,14 @@ const aggregateSchema = z
     from: z.lazy(() => formulaAggregateFromSchema),
     fn: formulaAggregateFnSchema,
     field: z.number().int().min(1).optional(),
-    filter: z.lazy(() => formulaNodeSchema).optional(),
+    filter: z.lazy(() => nodeSchema).optional(),
   })
   .strict();
 
-/** Рекурсивная схема узла: глубина и размер проверяются `checkFormulaShape`
- *  (zod не умеет считать глубину без рекурсивного refine). */
-export const formulaNodeSchema: z.ZodType<FormulaNode> = z.lazy(() =>
+/** Внутренняя рекурсивная схема узла. Наружу отдаётся `formulaNodeSchema`
+ *  с дешёвым предварительным потолком глубины: zod-рекурсия без него падает
+ *  `RangeError` на depth-bomb ещё до проверки лимитов (DoS). */
+const nodeSchema: z.ZodType<FormulaNode> = z.lazy(() =>
   z.union([
     literalSchema,
     fieldRefSchema,
@@ -264,3 +265,37 @@ export const formulaNodeSchema: z.ZodType<FormulaNode> = z.lazy(() =>
     aggregateSchema,
   ]),
 );
+
+/** Потолок сырой вложенности до рекурсивного парса: с большим запасом к
+ *  `FORMULA_LIMITS.depth` (12) — отсекает только depth-bomb. Ширина дерева
+ *  стек не рвёт, её ограничивает `checkFormulaShape` точным кодом `nodes`. */
+const RAW_DEPTH_LIMIT = 64;
+
+/** Итеративный обход сырого значения: рекурсия здесь сама была бы уязвима. */
+function exceedsRawLimits(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  const stack: { value: unknown; depth: number }[] = [{ value, depth: 1 }];
+  while (stack.length > 0) {
+    const item = stack.pop()!;
+    if (item.depth > RAW_DEPTH_LIMIT) return true;
+    const current = item.value;
+    if (Array.isArray(current)) {
+      for (const entry of current) stack.push({ value: entry, depth: item.depth + 1 });
+      continue;
+    }
+    if (typeof current === 'object' && current !== null) {
+      for (const entry of Object.values(current)) {
+        stack.push({ value: entry, depth: item.depth + 1 });
+      }
+    }
+  }
+  return false;
+}
+
+/** Рекурсивная схема узла: глубина и размер проверяются `checkFormulaShape`
+ *  (zod не умеет считать глубину без рекурсивного refine), но сырой потолок
+ *  срабатывает ДО рекурсии — depth-bomb даёт `ast_invalid`, а не 500. */
+export const formulaNodeSchema = z.preprocess(
+  (value) => (exceedsRawLimits(value) ? null : value),
+  nodeSchema,
+) as unknown as z.ZodType<FormulaNode>;

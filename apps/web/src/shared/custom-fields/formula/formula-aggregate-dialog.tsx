@@ -86,6 +86,7 @@ export function FormulaAggregateDialog({
     setFilterOperator,
     filterValue,
     setFilterValue,
+    complexFilter,
     needsField,
     needsFilter,
     fieldDefinitions,
@@ -219,6 +220,12 @@ export function FormulaAggregateDialog({
                 </Label>
               </div>
             )}
+
+            {conditionOpen && complexFilter ? (
+              <p className="text-xs text-muted-foreground">
+                {ui.formulas.aggregateDialog.filterComplex}
+              </p>
+            ) : null}
 
             {conditionOpen ? (
               <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">

@@ -58,18 +58,31 @@ export function saveErrorText(error: unknown): string {
   return ui.formulas.editor.saveError;
 }
 
-/** Формульное значение без пустых маркеров и висячих разделителей: пустой
- *  операнд не должен оставлять `--`, `—` или `−` в ячейке (Р13).
- *  Нормализация на отображении нужна и для уже материализованных значений:
- *  они пересчитываются не на каждом чтении. */
+/** Значение целиком из дефисов — это старый «пустой» маркер, а не текст. */
+const EMPTY_DASH_VALUE = /^[\s—–−-]+$/;
+/** Висячие разделители по краям: пустой операнд склейки оставлял `--`/`—`. */
+const EDGE_DASHES = /[\s—–−-]+$/;
+
+/**
+ * Формульное значение без пустых маркеров и ВИСЯЧИХ разделителей (Р13).
+ * Нормализация на отображении нужна и для уже материализованных значений:
+ * они пересчитываются не на каждом чтении.
+ *
+ * Чистим только края и только разделители: легитимные дефисы внутри текста
+ * (`ГОСТ 12—3`, `A--B`) и знак числа (`-5`) не трогаем — иначе отображение
+ * портит данные пользователя.
+ */
 export function cleanFormulaText(
   value: CustomFieldValue | null | undefined,
 ): CustomFieldValue | null | undefined {
   if (value === null || value === undefined) return value;
   if (typeof value !== 'string') return value;
-  const cleaned = value
-    .replace(/[—–−]/g, '')
-    .replace(/-{2,}/g, '-')
-    .replace(/^[-–—−]+|[-–—−]+$/g, '');
+  if (EMPTY_DASH_VALUE.test(value)) return null;
+  let cleaned = value.replace(EDGE_DASHES, '');
+  // `--5` — знак числа, а не разделитель.
+  cleaned = cleaned.replace(/^-{2,}(?=\d)/, '-');
+  if (!/^-\d/.test(cleaned)) cleaned = cleaned.replace(/^[\s—–−-]+/, '');
+  // Наследие пустого операнда в середине: `2026--42` → `2026-42`.
+  cleaned = cleaned.replace(/(?<=\d)-{2,}(?=\d)/g, '-');
   return cleaned === '' ? null : cleaned;
 }

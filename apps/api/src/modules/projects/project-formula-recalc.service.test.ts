@@ -76,7 +76,7 @@ function make() {
       silent: false,
     })),
   };
-  const logger = { setContext: vi.fn(), debug: vi.fn() };
+  const logger = { setContext: vi.fn(), debug: vi.fn(), warn: vi.fn() };
   const service = new ProjectFormulaRecalcService(
     nodes as never,
     writer as never,
@@ -122,6 +122,19 @@ describe('ProjectFormulaRecalcService (#632, Р4/Р8)', () => {
     expect(logger.debug).toHaveBeenCalled();
     // Ячейка с ошибкой записи событие формулы не эмитит (значение не легло).
     expect(eventBus.emit).toHaveBeenCalledTimes(2);
+  });
+
+  it('сбой пересчёта ячейки изолирован: остальные обработаны, warn (A3-07)', async () => {
+    const { service, cells, writer, logger } = make();
+    // Падение чтения источника/вычисления на первой ячейке партии.
+    cells.recalc.mockRejectedValueOnce(new Error('источник недоступен'));
+    await expect(
+      service.recalcStructure({} as never, null, PROJECT, ['root'], 1),
+    ).resolves.toBeUndefined();
+    // Упавшая ячейка пропущена, остальные две материализованы.
+    expect(cells.recalc).toHaveBeenCalledTimes(3);
+    expect(writer.writeNode).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
   });
 
   it('ячейка проекта: значение — писателем проекта, глубина каскада — cycle молчит', async () => {

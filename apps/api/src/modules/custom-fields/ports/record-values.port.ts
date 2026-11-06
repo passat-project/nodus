@@ -20,6 +20,11 @@ import type { ProjectActor } from '../../projects/ports/project-reader.port.js';
  * `record` — проверка видимости для пользовательских путей (evaluate):
  * невидимый хост = null (404 без оракула). Пересчёт (системный путь) зовёт
  * без актора.
+ *
+ * Тот же актор нужен и выборкам агрегатов (A7-1): у безпроектной (личной)
+ * записи «своё дерево» не определено, поэтому связанные записи фильтруются
+ * зоной видимости актора, а без актора выборка пуста — иначе в агрегат
+ * личной задачи попадали бы ЛЮБЫЕ не-конфиденциальные задачи портала.
  */
 export const RECORD_VALUES_READER: InjectionToken = 'RECORD_VALUES_READER';
 
@@ -45,7 +50,8 @@ export interface FormulaRecordData {
 }
 
 export interface RecordReadOptions {
-  /** Актёр пользовательского пути: невидимая запись = null (Р7). */
+  /** Актёр пользовательского пути: невидимая запись = null (Р7), а выборки
+   *  безпроектных записей — только его зона видимости (A7-1). */
   actor?: ProjectActor;
 }
 
@@ -59,18 +65,29 @@ export interface RecordValuesReader {
   ): Promise<FormulaRecordData | null>;
 
   /** Подзадачи задачи (Р2 `related{subtasks}`), отфильтрованные Р7. */
-  subtasks(taskId: string, tx?: TransactionClient): Promise<FormulaRecordData[]>;
+  subtasks(
+    taskId: string,
+    opts?: RecordReadOptions,
+    tx?: TransactionClient,
+  ): Promise<FormulaRecordData[]>;
 
   /** Связанные задачи (Р2 `related{relations}`) с учётом направления. */
   relatedTasks(
     taskId: string,
     relation: FormulaRelationKind,
     direction: FormulaRelationDirection,
+    opts?: RecordReadOptions,
     tx?: TransactionClient,
   ): Promise<FormulaRecordData[]>;
 
-  /** Задачи папки (Р2 `related{node_tasks}`), отфильтрованные Р7. */
-  nodeTasks(nodeId: string, tx?: TransactionClient): Promise<FormulaRecordData[]>;
+  /** Задачи папки (Р2 `related{node_tasks}`), отфильтрованные Р7. `projectId`
+   *  — проект папки: задачи выборки обязаны принадлежать ему (A7-2), папка
+   *  без проекта (аномалия данных) выборки не имеет. */
+  nodeTasks(
+    nodeId: string,
+    projectId: string | null,
+    tx?: TransactionClient,
+  ): Promise<FormulaRecordData[]>;
 
   /** Срез папок проекта (цепочки предков и агрегаты по цепочке, Р6). */
   projectNodes(projectId: string, tx?: TransactionClient): Promise<FormulaRecordData[]>;

@@ -15,7 +15,6 @@ import { Skeleton } from '@nodus/ui/components/skeleton';
 import { FormulaAggregateDialog } from './formula-aggregate-dialog.js';
 import { FormulaFunctionsPanel } from './formula-functions-panel.js';
 import { FormulaLine } from './formula-line.js';
-import { nextChipKey } from './formula-text.js';
 import { FormulaPalette } from './formula-palette.js';
 import { previewText } from './formula-preview.js';
 import { FormulaRemoveDialog } from './formula-remove-dialog.js';
@@ -80,11 +79,13 @@ export function FormulaEditor({
     preview,
     issues,
     aggregateDialog,
-    setAggregateDialog,
+    openNewAggregate,
+    closeAggregateDialog,
+    applyAggregate,
+    closeAutocomplete,
     autocomplete,
     insertText,
     insertField,
-    insertChip,
     applyAutocomplete,
     handleInput,
     handleKeyDown,
@@ -101,7 +102,13 @@ export function FormulaEditor({
   // сохранение — вторая строка ниже, тише плашки.
   const error = parse.error ?? preview.error;
   const resultText = previewText(preview.value, definition);
-  const resultEmpty = preview.value === null || preview.value === undefined;
+  // «Пусто» — не значение: false и пустой список тоже пусты (иначе подсказка
+  // «Пусто» рисуется цветом настоящего значения).
+  const resultEmpty =
+    preview.value === null ||
+    preview.value === undefined ||
+    preview.value === false ||
+    (Array.isArray(preview.value) && preview.value.length === 0);
 
   // Курсор — в строку формулы, в КОНЕЦ (окно открывается на загрузке ячейки,
   // поэтому не через onOpenAutoFocus: узла ещё нет). Иначе фокус-ловушка
@@ -128,6 +135,14 @@ export function FormulaEditor({
           // Формула — набранный руками текст: мимо-клик не должен его терять
           // (канон окон с пополняемыми данными). Выход — «Отмена» или Esc.
           onInteractOutside={(event) => event.preventDefault()}
+          // Esc при открытом автодополнении гасит только его: Radix слушает
+          // документ в capture-фазе, поэтому preventDefault из contenteditable
+          // до него не доходит — перехватываем здесь.
+          onEscapeKeyDown={(event) => {
+            if (!autocomplete.open) return;
+            event.preventDefault();
+            closeAutocomplete();
+          }}
         >
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex min-w-0 items-baseline gap-2">
@@ -182,14 +197,12 @@ export function FormulaEditor({
                     <FormulaPalette
                       groups={groups}
                       onInsertField={insertField}
-                      onInsertAggregate={(aggregate) =>
-                        setAggregateDialog({ open: true, initial: aggregate })
-                      }
+                      onInsertAggregate={openNewAggregate}
                     />
                   </aside>
                   <FormulaFunctionsPanel
                     onInsertText={insertText}
-                    onOpenAggregate={() => setAggregateDialog({ open: true, initial: null })}
+                    onOpenAggregate={() => openNewAggregate(null)}
                   />
                 </div>
               )}
@@ -226,11 +239,8 @@ export function FormulaEditor({
         hostKind={host.kind}
         definitions={definitions.data ?? []}
         kinds={kinds.data ?? []}
-        onClose={() => setAggregateDialog({ open: false, initial: null })}
-        onApply={(aggregate) => {
-          insertChip({ type: 'aggregate', key: nextChipKey(), aggregate });
-          setAggregateDialog({ open: false, initial: null });
-        }}
+        onClose={closeAggregateDialog}
+        onApply={applyAggregate}
       />
       <FormulaRemoveDialog
         open={removeOpen}

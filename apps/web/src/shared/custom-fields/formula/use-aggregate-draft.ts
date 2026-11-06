@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CustomFieldDefinition,
   FormulaAggregate,
@@ -72,9 +72,20 @@ export function useAggregateDraft({
   const [filterOperator, setFilterOperator] =
     useState<(typeof FILTER_OPERATORS)[number]['value']>('eq');
   const [filterValue, setFilterValue] = useState('');
+  /** Условие сложной формы (И/ИЛИ, системное поле…) — диалог его не умеет
+   *  редактировать построчно и обязан сохранить как есть, а не потерять. */
+  const [complexFilter, setComplexFilter] = useState<FormulaNode | null>(null);
+  /** Инициализация ровно один раз на открытие: поздний ответ `kinds` не
+   *  должен сбрасывать уже выбранные поля диалога. */
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      initializedRef.current = false;
+      return;
+    }
+    if (initializedRef.current) return;
+    initializedRef.current = true;
     const aggregate = initial;
     setFn(aggregate?.fn ?? 'sum');
     if (aggregate?.from.kind === 'folder_chain') {
@@ -94,6 +105,7 @@ export function useAggregateDraft({
     const filter = aggregate?.filter;
     const isComparison = filter?.kind === 'op' && filter.args[0]?.kind === 'field';
     setFilterEnabled(Boolean(filter));
+    setComplexFilter(filter && !isComparison ? filter : null);
     if (isComparison && filter.kind === 'op') {
       const [left, right] = filter.args;
       if (left?.kind === 'field') setFilterNumber(String(left.number));
@@ -121,16 +133,18 @@ export function useAggregateDraft({
   );
   const fieldDefinitions =
     from === 'folder_chain' ? folderDefinitions : definitions.filter((d) => !d.isCompany);
+  /** Папка по умолчанию: первый вид, даже если список пришёл после открытия. */
+  const effectiveKindId = folderKindId || (kinds[0]?.id ?? '');
   const canApply =
     (!needsField || fieldNumber !== '') &&
-    (!needsFilter || filterNumber !== '') &&
-    (from !== 'folder_chain' || folderKindId !== '') &&
+    (!needsFilter || filterNumber !== '' || complexFilter !== null) &&
+    (from !== 'folder_chain' || effectiveKindId !== '') &&
     options.length > 0;
 
   const apply = () => {
     const fromValue: FormulaAggregate['from'] =
       from === 'folder_chain'
-        ? { kind: 'folder_chain', kindId: folderKindId }
+        ? { kind: 'folder_chain', kindId: effectiveKindId }
         : from === 'relations'
           ? { kind: 'related', selector: { kind: 'relations', relation, direction } }
           : { kind: 'related', selector: { kind: from } };
@@ -144,7 +158,9 @@ export function useAggregateDraft({
               literalOf(filterValue),
             ],
           }
-        : undefined;
+        : filterEnabled
+          ? (complexFilter ?? undefined)
+          : undefined;
     onApply({
       kind: 'aggregate',
       from: fromValue,
@@ -176,6 +192,7 @@ export function useAggregateDraft({
     setFilterOperator,
     filterValue,
     setFilterValue,
+    complexFilter,
     needsField,
     needsFilter,
     fieldDefinitions,

@@ -18,6 +18,7 @@ const NODE = '63200000-0000-4000-8000-000000000503';
 const OLD_NODE = '63200000-0000-4000-8000-000000000504';
 const TASK = '63200000-0000-4000-8000-000000000505';
 const FIELD = '63200000-0000-4000-8000-000000000506';
+const LINKED_NODE = '63200000-0000-4000-8000-000000000509';
 
 const logger = () => ({ setContext: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() });
 
@@ -40,6 +41,9 @@ const createdPayload = {
   sourceId: null,
 };
 
+/** Ячейка-ссылка порта FORMULA_CELLS (зависимость по ключу/префиксу). */
+type CellRef = { cellId: string; hostKind: string; hostId: string; fieldId: string };
+
 function setup() {
   const formulas = {
     recalcProjectCells: vi.fn(async () => void 0),
@@ -53,13 +57,14 @@ function setup() {
   const cells = {
     numberByDefinitionId: vi.fn(async () => 9),
     depthOf: vi.fn(async () => 2),
-    dependentCellsByValues: vi.fn(async () => [
+    dependentCellsByValues: vi.fn(async (): Promise<CellRef[]> => [
       { cellId: 'c-project', hostKind: 'project', hostId: PROJECT, fieldId: FIELD },
       { cellId: 'c-node', hostKind: 'node', hostId: NODE, fieldId: FIELD },
       { cellId: 'c-task', hostKind: 'task', hostId: TASK, fieldId: FIELD },
       { cellId: 'c-letter', hostKind: 'letter', hostId: 'l1', fieldId: FIELD },
     ]),
-    dependentCellsByDepKey: vi.fn(async () => []),
+    dependentCellsByDepKey: vi.fn(async (): Promise<CellRef[]> => []),
+    dependentCellsByDepPrefix: vi.fn(async (): Promise<CellRef[]> => []),
   };
   const txRunner = { run: (fn: (tx: unknown) => unknown) => fn({}) };
   return { formulas, nodes, cells, txRunner };
@@ -159,10 +164,12 @@ describe('TaskCreatedProjectFormulaHandler: task.created (#632, Р4)', () => {
 
 describe('TaskDeletedProjectFormulaHandler: task.deleted (#632, Р4)', () => {
   it('удаление — пересчёт папки и проекта (ячейки задачи чистит её модуль)', async () => {
-    const { formulas, txRunner } = setup();
+    const { formulas, nodes, cells, txRunner } = setup();
     const handler = new TaskDeletedProjectFormulaHandler(
       txRunner as never,
       formulas as never,
+      nodes as never,
+      cells as never,
       logger() as never,
     );
     await handler.handle(
@@ -172,11 +179,44 @@ describe('TaskDeletedProjectFormulaHandler: task.deleted (#632, Р4)', () => {
     expect(formulas.recalcProjectCells).toHaveBeenCalledWith({}, null, PROJECT, [], 1);
   });
 
-  it('задача вне проекта — пересчёта нет', async () => {
-    const { formulas, txRunner } = setup();
+  it('потребители ссылки и системных полей удалённой задачи — пересчитаны (Р13)', async () => {
+    const { formulas, nodes, cells, txRunner } = setup();
+    // Формула папки читает атрибут удалённой задачи через ссылку, формула
+    // другого проекта — её системные поля: оба получают `source_unavailable`.
+    cells.dependentCellsByDepPrefix.mockResolvedValue([
+      { cellId: 'c-node-ref', hostKind: 'node', hostId: LINKED_NODE, fieldId: FIELD },
+      { cellId: 'c-task', hostKind: 'task', hostId: TASK, fieldId: FIELD },
+    ]);
+    cells.dependentCellsByDepKey.mockResolvedValue([
+      { cellId: 'c-project-ref', hostKind: 'project', hostId: OTHER_PROJECT, fieldId: FIELD },
+      { cellId: 'c-own-project', hostKind: 'project', hostId: PROJECT, fieldId: FIELD },
+    ]);
     const handler = new TaskDeletedProjectFormulaHandler(
       txRunner as never,
       formulas as never,
+      nodes as never,
+      cells as never,
+      logger() as never,
+    );
+    await handler.handle(
+      event('task.deleted', { ...base, projectId: PROJECT, nodeId: NODE, parentId: null }),
+    );
+    expect(cells.dependentCellsByDepPrefix).toHaveBeenCalledWith(`v:task:${TASK}:`, {});
+    expect(cells.dependentCellsByDepKey).toHaveBeenCalledWith(`system:task:${TASK}`, {});
+    // Папка-потребитель ссылки: проект дочитывается пачкой по узлам.
+    expect(formulas.recalcNodes).toHaveBeenCalledWith({}, null, PROJECT, [LINKED_NODE], 1);
+    // Чужой проект-потребитель — целиком; свой проект не дублируется.
+    expect(formulas.recalcProjectCells).toHaveBeenCalledWith({}, null, OTHER_PROJECT, [], 1);
+    expect(formulas.recalcProjectCells).toHaveBeenCalledTimes(2);
+  });
+
+  it('задача вне проекта — пересчёта нет', async () => {
+    const { formulas, nodes, cells, txRunner } = setup();
+    const handler = new TaskDeletedProjectFormulaHandler(
+      txRunner as never,
+      formulas as never,
+      nodes as never,
+      cells as never,
       logger() as never,
     );
     await handler.handle(

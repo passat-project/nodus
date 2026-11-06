@@ -264,7 +264,14 @@ export function attributeRenderCell(
       {options.formula ? <AttributeFormulaMarks info={options.formula} /> : null}
       <CustomFieldValueView
         definition={definition}
-        value={options.formula ? (cleanFormulaText(value) ?? undefined) : value}
+        value={
+          // Чистим только формульные значения (own/type). Ручное значение,
+          // подавившее формулу типа (`origin='value'`), — данные пользователя:
+          // тире и дефисы в нём значимы.
+          options.formula?.origin === 'own' || options.formula?.origin === 'type'
+            ? (cleanFormulaText(value) ?? undefined)
+            : value
+        }
         refs={refs}
         compact
         interactive={interactive}

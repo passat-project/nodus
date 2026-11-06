@@ -36,6 +36,16 @@ describe('AST формулы (#632)', () => {
     expect(formulaNodeSchema.safeParse({ kind: 'nope' }).success).toBe(false);
   });
 
+  it('depth-bomb не роняет парсер: ast_invalid вместо RangeError', () => {
+    let bomb: unknown = { kind: 'literal', value: 1 };
+    for (let index = 0; index < 5000; index += 1) {
+      bomb = { kind: 'op', op: 'add', args: [bomb, { kind: 'literal', value: 1 }] };
+    }
+    expect(() => formulaNodeSchema.safeParse(bomb)).not.toThrow();
+    expect(formulaNodeSchema.safeParse(bomb).success).toBe(false);
+    expect(checkFormulaShape(bomb, 'task')[0]?.code).toBe('ast_invalid');
+  });
+
   it('формула шифра проходит структурную проверку', () => {
     expect(checkFormulaShape(cipher, 'task')).toEqual([]);
   });

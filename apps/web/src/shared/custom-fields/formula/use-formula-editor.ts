@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import type {
   CustomFieldDefinition,
   CustomFieldValue,
-  FormulaAggregate,
   FormulaNode,
   FormulaValidationIssue,
 } from '@nodus/contracts';
@@ -15,9 +14,9 @@ import {
   insertChipAtCaret,
   insertTextAtCaret,
   readTokens,
-  removeWordBeforeCaret,
-  wordBeforeCaret,
 } from './formula-dom.js';
+import { useFormulaAggregateDialog } from './use-formula-aggregate.js';
+import { useFormulaAutocomplete } from './use-formula-autocomplete.js';
 import {
   type FormulaHost,
   useEvaluateFormula,
@@ -87,34 +86,25 @@ export function useFormulaEditor({
     error: null,
   });
   const [issues, setIssues] = useState<FormulaValidationIssue[]>([]);
-  const [aggregateDialog, setAggregateDialog] = useState<{
-    open: boolean;
-    initial: FormulaAggregate | null;
-  }>({ open: false, initial: null });
-  const [autocomplete, setAutocomplete] = useState<{
-    open: boolean;
-    word: string;
-    items: CustomFieldDefinition[];
-  }>({ open: false, word: '', items: [] });
+
+  /** Свой атрибут нельзя вставить в собственную формулу — это цикл; палитра
+   *  и автодополнение его не предлагают (сервер всё равно отклонит). */
+  const ownSources = useMemo(
+    () => ownDefinitions.filter((definition) => definition.id !== fieldId),
+    [ownDefinitions, fieldId],
+  );
 
   const groups = useMemo(
     () =>
       formulaSourceGroups({
         host,
-        ownDefinitions,
+        ownDefinitions: ownSources,
         allDefinitions: definitions.data ?? [],
         kinds: kinds.data ?? [],
         hasParent: Boolean(hostContext.parentId),
         hasProject: Boolean(hostContext.projectId),
       }),
-    [
-      host,
-      ownDefinitions,
-      definitions.data,
-      kinds.data,
-      hostContext.parentId,
-      hostContext.projectId,
-    ],
+    [host, ownSources, definitions.data, kinds.data, hostContext.parentId, hostContext.projectId],
   );
 
   const refresh = useCallback(() => {
@@ -125,27 +115,35 @@ export function useFormulaEditor({
     setEmpty(tokens.every((token) => token.type === 'text' && token.text.trim().length === 0));
   }, []);
 
-  const setDom = useCallback((ast: FormulaNode | null) => {
-    const root = rootRef.current;
-    if (!root) return;
-    root.replaceChildren();
-    chipsRef.current.clear();
-    const tokens = ast ? astToTokens(ast) : [];
-    for (const token of tokens) {
-      if (token.type === 'text') root.appendChild(document.createTextNode(token.text));
-      else
-        root.appendChild(
-          createChipElement(token, chipsRef.current, (aggregateChip) =>
-            setAggregateDialog({ open: true, initial: aggregateChip.aggregate }),
-          ),
-        );
-    }
-    dirtyRef.current = false;
-    setParse({ ast, error: null });
-    setEmpty(tokens.length === 0);
-    setIssues([]);
-    setPreview({ value: null, error: null });
-  }, []);
+  const {
+    aggregateDialog,
+    openAggregateEditor,
+    openNewAggregate,
+    closeAggregateDialog,
+    applyAggregate,
+  } = useFormulaAggregateDialog({ rootRef, chipsRef, refresh });
+  const { autocomplete, updateAutocomplete, closeAutocomplete, consumeWord } =
+    useFormulaAutocomplete({ ownDefinitions: ownSources });
+
+  const setDom = useCallback(
+    (ast: FormulaNode | null) => {
+      const root = rootRef.current;
+      if (!root) return;
+      root.replaceChildren();
+      chipsRef.current.clear();
+      const tokens = ast ? astToTokens(ast) : [];
+      for (const token of tokens) {
+        if (token.type === 'text') root.appendChild(document.createTextNode(token.text));
+        else root.appendChild(createChipElement(token, chipsRef.current, openAggregateEditor));
+      }
+      dirtyRef.current = false;
+      setParse({ ast, error: null });
+      setEmpty(tokens.length === 0);
+      setIssues([]);
+      setPreview({ value: null, error: null });
+    },
+    [openAggregateEditor],
+  );
 
   // Данные применяем и когда они пришли ПОСЛЕ открытия (кэша не было):
   // повторное открытие редактора не должно оставаться пустым из-за гонки
@@ -204,12 +202,10 @@ export function useFormulaEditor({
     const root = rootRef.current;
     if (!root) return;
     dirtyRef.current = true;
-    insertChipAtCaret(root, chip, chipsRef.current, (aggregateChip) =>
-      setAggregateDialog({ open: true, initial: aggregateChip.aggregate }),
-    );
+    insertChipAtCaret(root, chip, chipsRef.current, openAggregateEditor);
     // Вставка из палитры закрывает автодополнение: иначе следующий Enter
     // применит устаревшее слово и добавит лишнюю плашку.
-    setAutocomplete({ open: false, word: '', items: [] });
+    closeAutocomplete();
     refresh();
   };
 
@@ -241,27 +237,12 @@ export function useFormulaEditor({
     if (!root) return;
     dirtyRef.current = true;
     insertTextAtCaret(root, text);
-    setAutocomplete({ open: false, word: '', items: [] });
+    closeAutocomplete();
     refresh();
   };
 
-  const updateAutocomplete = () => {
-    const root = rootRef.current;
-    if (!root) return;
-    const word = wordBeforeCaret(root);
-    if (word.length < 1) {
-      setAutocomplete({ open: false, word: '', items: [] });
-      return;
-    }
-    const items = ownDefinitions
-      .filter((entry) => entry.name.toLowerCase().includes(word.toLowerCase()))
-      .slice(0, 8);
-    setAutocomplete({ open: items.length > 0, word, items });
-  };
-
   const applyAutocomplete = (entry: CustomFieldDefinition) => {
-    const root = rootRef.current;
-    if (root) removeWordBeforeCaret(root, autocomplete.word.length);
+    consumeWord(rootRef.current);
     insertChip({
       type: 'field',
       key: nextChipKey(),
@@ -269,13 +250,13 @@ export function useFormulaEditor({
       name: entry.name,
       source: { kind: 'self' },
     });
-    setAutocomplete({ open: false, word: '', items: [] });
+    closeAutocomplete();
   };
 
   const handleInput = () => {
     dirtyRef.current = true;
     refresh();
-    updateAutocomplete();
+    updateAutocomplete(rootRef.current);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -291,7 +272,7 @@ export function useFormulaEditor({
     if (!autocomplete.open) return;
     if (event.key === 'Escape') {
       event.preventDefault();
-      setAutocomplete({ open: false, word: '', items: [] });
+      closeAutocomplete();
     }
   };
 
@@ -321,7 +302,10 @@ export function useFormulaEditor({
     preview,
     issues,
     aggregateDialog,
-    setAggregateDialog,
+    openNewAggregate,
+    closeAggregateDialog,
+    applyAggregate,
+    closeAutocomplete,
     autocomplete,
     insertText,
     insertField,

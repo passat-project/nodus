@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { PinoLogger } from 'nestjs-pino';
 import type {
   AuthUser,
   CustomFieldType,
@@ -7,7 +8,7 @@ import type {
   ExecuteTransitionResult,
   WorkflowTransition,
 } from '@nodus/contracts';
-import { customFieldIdOfKey } from '@nodus/contracts';
+import { customFieldIdOfKey, CUSTOM_FIELD_LIMITS } from '@nodus/contracts';
 
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
@@ -30,6 +31,21 @@ const SLOT_TYPES: Readonly<Record<string, CustomFieldType>> = {
 };
 
 /**
+ * Входная грамматика системного слота окна (A8-5): префилл не подставляет
+ * заведомо невалидное — сабмит отверг бы значение 422 на поле, которое
+ * человек не трогал. Плановое время — `int 1..100 000` (тело перехода).
+ */
+function slotValueFits(key: string, value: CustomFieldValue): boolean {
+  if (key !== 'plannedMinutes') return true;
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= CUSTOM_FIELD_LIMITS.duration
+  );
+}
+
+/**
  * Сценарии API «кнопки маршрута» задачи (ADR-0020; движок — модуль
  * «Процессы», ADR-0024): видимость задачи, подготовка личных маршрутов,
  * транзакция, ответ. Сам порядок «замок → субъект → условия → гейты →
@@ -45,7 +61,10 @@ export class TaskTransitionsService {
     private readonly taskService: TasksService,
     @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
     @Inject(FORMULA_CELLS) private readonly cells: FormulaCells,
-  ) {}
+    private readonly logger: PinoLogger,
+  ) {
+    this.logger.setContext(TaskTransitionsService.name);
+  }
 
   /** GET /tasks/:id/transitions — кнопки маршрута видимой задачи. Формульные
    *  слоты окна получают посчитанный префилл (Р12): значение видно сразу,
@@ -58,7 +77,8 @@ export class TaskTransitionsService {
     });
   }
 
-  /** Префилл формульных слотов: ошибка/пусто — слот остаётся пустым (Р13). */
+  /** Префилл формульных слотов: ошибка/пусто — слот остаётся пустым (Р13).
+   *  Ошибка расчёта пишется в лог (A8-6), но переход не блокируется. */
   private async withPrefill(
     transitions: readonly WorkflowTransition[],
     taskId: string,
@@ -77,7 +97,18 @@ export class TaskTransitionsService {
             ...(fieldId ? { fieldId } : { fieldType: SLOT_TYPES[key] }),
             tx,
           });
-          if (result.error || result.value === null) continue;
+          if (result.error) {
+            this.logger.warn(
+              { taskId, key, code: result.error.code },
+              'Формула-префилл окна не посчитана',
+            );
+            continue;
+          }
+          if (result.value === null) continue;
+          if (!slotValueFits(key, result.value)) {
+            this.logger.warn({ taskId, key }, 'Формула-префилл окна не подходит грамматике поля');
+            continue;
+          }
           prefill[key] = result.value;
         }
         return Object.keys(prefill).length > 0

@@ -128,6 +128,23 @@ export function insertChipAtCaret(
   selection?.addRange(after);
 }
 
+/** Заменить существующую плашку на месте (правка агрегата двойным кликом):
+ *  ключ сохраняется, поэтому позиция в строке и карта чипов не рвутся. */
+export function replaceChipElement(
+  root: HTMLElement,
+  key: string,
+  chip: FormulaChip,
+  chips: Map<string, FormulaChip>,
+  onAggregateEdit: (chip: Extract<FormulaChip, { type: 'aggregate' }>) => void,
+): boolean {
+  const element = root.querySelector(`[data-chip-id="${key}"]`);
+  if (!element) return false;
+  chips.delete(key);
+  const next = createChipElement({ ...chip, key } as FormulaChip, chips, onAggregateEdit);
+  element.replaceWith(next);
+  return true;
+}
+
 export function insertTextAtCaret(root: HTMLElement, text: string): void {
   insertNodeAtCaret(root, document.createTextNode(text));
 }

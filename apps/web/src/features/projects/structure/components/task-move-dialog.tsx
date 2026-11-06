@@ -11,19 +11,15 @@ import {
   DialogTitle,
 } from '@nodus/ui/components/dialog';
 import { NodeLabel } from '@nodus/ui/components/node-label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@nodus/ui/components/select';
 
 import { plural } from '../../../../shared/lib/format.js';
 import { nodeOptions } from '../lib/structure-tree.js';
+import { TargetSelect } from './node-edit-dialog.js';
 
 /** Перенос задач в узел / «Без узла» (меню строки задачи и мультиселекта):
- *  выбор цели, сама мутация — bulk set_node у вызывающего. */
+ *  выбор цели, сама мутация — bulk set_node у вызывающего (с превью формул,
+ *  `moveTasks` вкладки «Структура»). Триггер цели — общий `TargetSelect`
+ *  (A9-6): длинное имя папки читается двумя строками и целиком в подсказке. */
 export function TaskMoveDialog({
   count,
   nodes,
@@ -36,9 +32,10 @@ export function TaskMoveDialog({
   onClose: () => void;
 }) {
   const [target, setTarget] = useState('no-node');
+  const items = [{ id: 'no-node', label: ui.structure.moveTasksNoNode }, ...nodeOptions(nodes)];
   return (
     <Dialog open onOpenChange={(next) => (next ? undefined : onClose())}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{ui.structure.moveTasksTo}</DialogTitle>
           <DialogDescription>
@@ -47,19 +44,7 @@ export function TaskMoveDialog({
         </DialogHeader>
         <div className="flex flex-col gap-1">
           <NodeLabel label={ui.structure.moveTasksTo} />
-          <Select value={target} onValueChange={setTarget}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent position="popper">
-              <SelectItem value="no-node">{ui.structure.moveTasksNoNode}</SelectItem>
-              {nodeOptions(nodes).map((option) => (
-                <SelectItem key={option.id} value={option.id}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <TargetSelect value={target} onChange={setTarget} items={items} />
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>

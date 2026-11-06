@@ -62,6 +62,7 @@ export function TypeFormulaDialog({
     issues,
     aggregateDialog,
     setAggregateDialog,
+    closeAutocomplete,
     autocomplete,
     insertText,
     insertField,
@@ -89,6 +90,13 @@ export function TypeFormulaDialog({
           className="flex max-h-[min(88vh,36rem)] flex-col gap-4 overflow-hidden sm:max-w-[46rem]"
           showCloseButton={false}
           onInteractOutside={(event) => event.preventDefault()}
+          // Esc при открытом автодополнении гасит только его (Radix слушает
+          // документ в capture-фазе — preventDefault из строки не помогает).
+          onEscapeKeyDown={(event) => {
+            if (!autocomplete.open) return;
+            event.preventDefault();
+            closeAutocomplete();
+          }}
         >
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex min-w-0 items-baseline gap-2">
@@ -122,13 +130,13 @@ export function TypeFormulaDialog({
                   groups={groups}
                   onInsertField={insertField}
                   onInsertAggregate={(aggregate) =>
-                    setAggregateDialog({ open: true, initial: aggregate })
+                    setAggregateDialog({ open: true, initial: aggregate, key: null })
                   }
                 />
               </aside>
               <FormulaFunctionsPanel
                 onInsertText={insertText}
-                onOpenAggregate={() => setAggregateDialog({ open: true, initial: null })}
+                onOpenAggregate={() => setAggregateDialog({ open: true, initial: null, key: null })}
               />
             </div>
           </div>
@@ -158,11 +166,8 @@ export function TypeFormulaDialog({
         hostKind={hostKind}
         definitions={definitions.data ?? []}
         kinds={kinds.data ?? []}
-        onClose={() => setAggregateDialog({ open: false, initial: null })}
-        onApply={(aggregate) => {
-          insertAggregate(aggregate);
-          setAggregateDialog({ open: false, initial: null });
-        }}
+        onClose={() => setAggregateDialog({ open: false, initial: null, key: null })}
+        onApply={insertAggregate}
       />
     </>
   );

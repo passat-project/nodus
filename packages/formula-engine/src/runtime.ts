@@ -83,23 +83,28 @@ export function asDate(value: FormulaValue): Date {
   return date;
 }
 
+/** Масштаб без двоичного шума: `2.675 * 100` в double — `267.49999999999997`,
+ *  из-за чего ОКРУГЛ(2.675; 2) давал 2.67 вместо 2.68 (Excel). 15 значащих
+ *  цифр — точность double, шум ниже неё отбрасывается. */
+function scaledBy(value: number, digits: number): number {
+  return Number((Math.abs(value) * 10 ** digits).toPrecision(15));
+}
+
 export function roundHalfAway(value: number, digits: number): number {
   const factor = 10 ** digits;
-  const scaled = Math.abs(value) * factor;
-  const rounded = Math.round(scaled);
-  const result = rounded / factor;
+  const result = Math.round(scaledBy(value, digits)) / factor;
   return value < 0 ? -result : result;
 }
 
 export function roundUpAway(value: number, digits: number): number {
   const factor = 10 ** digits;
-  const result = Math.ceil(Math.abs(value) * factor - 1e-9) / factor;
+  const result = Math.ceil(scaledBy(value, digits)) / factor;
   return value < 0 ? -result : result;
 }
 
 export function roundDownAway(value: number, digits: number): number {
   const factor = 10 ** digits;
-  const result = Math.floor(Math.abs(value) * factor + 1e-9) / factor;
+  const result = Math.floor(scaledBy(value, digits)) / factor;
   return value < 0 ? -result : result;
 }
 

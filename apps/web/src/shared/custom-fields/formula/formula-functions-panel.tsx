@@ -61,6 +61,7 @@ export function FormulaFunctionsPanel({
               size="sm"
               className="h-7 w-7 bg-popover p-0 font-mono text-xs text-foreground hover:bg-muted dark:bg-input/50 dark:hover:bg-input/70"
               aria-label={operator.insert.trim()}
+              onMouseDown={(event) => event.preventDefault()}
               onClick={() => onInsertText(operator.insert)}
             >
               {operator.symbol}
@@ -97,6 +98,7 @@ export function FormulaFunctionsPanel({
                         ? spec.minArgs
                         : `${spec.minArgs}–${spec.maxArgs}`
                     })`}
+                    onMouseDown={(event) => event.preventDefault()}
                     onClick={() => onInsertText(`${ui.formulas.functions[spec.id]}(`)}
                   >
                     {ui.formulas.functions[spec.id]}
@@ -113,6 +115,7 @@ export function FormulaFunctionsPanel({
             variant="ghost"
             size="sm"
             className="h-7 gap-1 bg-primary/10 px-2 text-label-sm text-primary hover:bg-primary/15 hover:text-primary"
+            onMouseDown={(event) => event.preventDefault()}
             onClick={onOpenAggregate}
           >
             <Plus className="size-3" strokeWidth={2} />

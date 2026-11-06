@@ -25,7 +25,12 @@ function evaluateOperation(
     // висячих дефисов (`Шифр-№` при пустом № = `Шифр`, а не `Шифр--`).
     const texts = node.args.map((arg) => {
       const value = evaluateNode(arg, resolver);
-      return value === null ? '' : asText(value);
+      if (value === null) return '';
+      // Литерал — это написанный руками текст: типографский разделитель `"—"`
+      // не «пустой маркер», его нельзя прогонять через `textOf` — иначе
+      // склейка молча теряет разделитель. Пустой маркер — только значение поля.
+      if (arg.kind === 'literal' && typeof value === 'string') return value;
+      return asText(value);
     });
     const separator = node.args.map(
       (arg, index) =>
@@ -52,8 +57,10 @@ function evaluateOperation(
     }
     return parts.join('');
   }
-  const [leftNode, rightNode] = node.args;
-  if (!leftNode || !rightNode) fail('type_mismatch', 'operator expects two arguments');
+  // Арность проверяется до вычисления: лишний аргумент не должен молча
+  // теряться (`add(1,2,3)` — ошибка формы, а не `3`).
+  if (node.args.length !== 2) fail('type_mismatch', 'operator expects two arguments');
+  const [leftNode, rightNode] = node.args as [FormulaNode, FormulaNode];
   const left = evaluateNode(leftNode, resolver);
   const right = evaluateNode(rightNode, resolver);
   switch (node.op) {

@@ -66,6 +66,9 @@ export function FormulaPalette({
         <button
           key={item.key}
           type="button"
+          // mousedown уводит фокус и схлопывает каретку — плашка вставилась бы
+          // в конец строки вместо позиции курсора.
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => onInsertField(item.leaf!)}
           className={cn(
             'flex w-full items-center rounded-md px-2 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none',
@@ -83,6 +86,7 @@ export function FormulaPalette({
         <button
           key={item.key}
           type="button"
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => onInsertAggregate(item.aggregate!)}
           className={cn(
             'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none',

@@ -180,3 +180,73 @@ describe('шифр комплекта: пустые папка/марка/ном
     });
   });
 });
+
+describe('concat: типографский разделитель — литерал, а не пустой маркер (#632)', () => {
+  const concat = (...args: FormulaNode[]): FormulaNode => ({ kind: 'op', op: 'concat', args });
+
+  it('«—» между непустыми значениями сохраняется', () => {
+    expect(
+      evaluate(concat(self(1), lit('—'), self(2)), resolver({ self: { 1: 'A', 2: 'B' } })).value,
+    ).toBe('A—B');
+    expect(
+      evaluate(concat(self(1), lit('–'), self(2)), resolver({ self: { 1: 'A', 2: 'B' } })).value,
+    ).toBe('A–B');
+    expect(
+      evaluate(concat(self(1), lit('−'), self(2)), resolver({ self: { 1: 'A', 2: 'B' } })).value,
+    ).toBe('A−B');
+  });
+
+  it('«—» у пустого соседа по-прежнему не оставляет висячий разделитель', () => {
+    expect(evaluate(concat(self(1), lit('—')), resolver({ self: { 1: 'A' } })).value).toBe('A');
+    expect(evaluate(concat(lit('—'), self(1)), resolver({ self: { 1: 'A' } })).value).toBe('A');
+  });
+});
+
+describe('логика: ленивые И/ИЛИ и арность (#632)', () => {
+  const call = (
+    fn: Extract<FormulaNode, { kind: 'call' }>['fn'],
+    ...args: FormulaNode[]
+  ): FormulaNode => ({ kind: 'call', fn, args });
+
+  it('И/ИЛИ не вычисляют правую часть, когда исход уже определён', () => {
+    const divideByZero = op('div', lit(1), lit(0));
+    expect(evaluate(call('or', lit(true), divideByZero), resolver({})).value).toBe(true);
+    expect(evaluate(call('and', lit(false), divideByZero), resolver({})).value).toBe(false);
+  });
+
+  it('И/ИЛИ с ошибкой в нужной ветке — ошибка ячейки', () => {
+    const divideByZero = op('div', lit(1), lit(0));
+    expect(evaluate(call('or', lit(false), divideByZero), resolver({})).error?.code).toBe(
+      'division_by_zero',
+    );
+    expect(evaluate(call('and', lit(true), divideByZero), resolver({})).error?.code).toBe(
+      'division_by_zero',
+    );
+  });
+
+  it('НЕ без аргумента — ошибка, а не ИСТИНА', () => {
+    expect(evaluate(call('not'), resolver({})).error?.code).toBe('type_mismatch');
+  });
+
+  it('бинарный оператор с лишним аргументом — ошибка, а не потеря аргумента', () => {
+    const ast: FormulaNode = { kind: 'op', op: 'add', args: [lit(1), lit(2), lit(3)] };
+    expect(evaluate(ast, resolver({})).error?.code).toBe('type_mismatch');
+  });
+});
+
+describe('округление без двоичного шума (#632)', () => {
+  const call = (fn: 'round' | 'roundup' | 'rounddown', value: number, digits: number) =>
+    evaluate({ kind: 'call', fn, args: [lit(value), lit(digits)] }, resolver({})).value;
+
+  it('ОКРУГЛ(2.675; 2) = 2.68, как в Excel', () => {
+    expect(call('round', 2.675, 2)).toBe(2.68);
+    expect(call('round', -2.675, 2)).toBe(-2.68);
+  });
+
+  it('ОКРУГЛВВЕРХ/ВНИЗ на целых не прыгают из-за эпсилона', () => {
+    expect(call('roundup', 1, 0)).toBe(1);
+    expect(call('rounddown', 1, 0)).toBe(1);
+    expect(call('roundup', 1.0000005, 0)).toBe(2);
+    expect(call('rounddown', 1.999999999, 0)).toBe(1);
+  });
+});
