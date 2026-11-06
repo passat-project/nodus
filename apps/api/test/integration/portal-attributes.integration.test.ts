@@ -83,7 +83,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         body: { title: `Задача боба ${cf.fx.runId}`, assigneeId: cf.plain.id },
       });
       expect(own.status).toBe(201);
-      const ownId = (await own.json()).id;
+      const ownId = ((await own.json()) as { id: string }).id;
       const withRef = await cf.fx.api(cf.plain, 'PATCH', `/tasks/${ownId}`, {
         body: { customFields: { [field.id]: task } },
       });
@@ -178,7 +178,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         'integration-test-session',
       );
       const pm = { ...cf.admin, token: pmToken };
-      const api = (method: string, url: string, init?: Record<string, unknown>) =>
+      const api = (
+        method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+        url: string,
+        init?: Record<string, unknown>,
+      ) =>
         cf.fx.api(pm, method, url, init);
 
       // Тип с обязательным «Шифром» (слот системного атрибута).

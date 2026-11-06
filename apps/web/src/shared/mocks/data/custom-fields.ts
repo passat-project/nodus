@@ -6,10 +6,9 @@ import type {
   CustomFieldType,
   CustomFieldValues,
 } from '@nodus/contracts';
-import { SystemDictionary, SYSTEM_FIELD_IDS } from '@nodus/contracts';
+import { SystemDictionary } from '@nodus/contracts';
 
 import { currencyIds, dictionaryByCode, itemsOf, workKindIds } from './dictionaries.js';
-import { MARKA_FIELD_ID } from './set-marks.js';
 import { departmentIds } from './org-ids.js';
 import { processTypeIds } from './process-type-ids.js';
 import { demoProjectTypeIds } from './projects.js';
