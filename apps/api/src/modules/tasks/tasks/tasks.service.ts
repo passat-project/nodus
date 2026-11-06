@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   ErrorCode,
-  isOpenState,
   TASK_EVENTS,
   type AuthUser,
   type CreateTaskBody,
@@ -39,6 +38,8 @@ import { PersonalBoardsRepository } from '../personal/personal-boards.repository
 import { Placements } from '../personal/placements.js';
 import { PlacementsRepository } from '../personal/placements.repository.js';
 import { TaskDtoMapper } from './task-dto.mapper.js';
+import { participantRows, taskCreateData, taskCreatedPayload } from './task-create.mapper.js';
+import { resolveCreateStage } from './task-create.stage.js';
 import { TasksQueryService } from './tasks-query.service.js';
 import { TaskCreatePolicy } from './task-create.policy.js';
 import { DuplicateTaskSourceError, TasksRepository } from './tasks.repository.js';
@@ -112,7 +113,7 @@ export class TasksService {
       if (!body.nodeId && parent.nodeId) body = { ...body, nodeId: parent.nodeId };
     }
     const assigneeId = body.assigneeId ?? user.id;
-    const participants = this.participantRows(body, user.id, assigneeId);
+    const participants = participantRows(body, user.id, assigneeId);
     await this.assertActiveUsers([assigneeId, ...participants.map((p) => p.userId)]);
     // Привязка к проекту (#52 Р5): видимость проекту актёру, состав
     // секретного (все люди задачи — участники) и не-архивность. Одна точка
@@ -148,44 +149,14 @@ export class TasksService {
     const personalColumn = body.personalStageId
       ? await this.personalColumn(user.id, body.personalStageId)
       : null;
-    // Новая задача рождается только в открытой стадии (backlog/active/paused):
-    // «начальной» может оказаться утверждение или итог — тогда берём первую
-    // открытую, как раньше (security-гейт #37). Колонка задаёт цель, но не
-    // обходит условия кнопки: переход выполняется в той же транзакции после
-    // создания (#402). Нет перехода — отказ с причинами, а не подмена стадии.
-    const openStages = workflowStages.filter((s) => isOpenState(s.systemState));
-    const initial = openStages.find((s) => s.isInitial) ?? openStages[0];
-    if (!initial) throw DomainException.conflict('Workflow has no open stage');
-    const personalTarget = personalColumn
-      ? (workflowStages.find(
-          (s) =>
-            s.systemState === personalColumn.systemState &&
-            (s.outcome ?? null) === (personalColumn.outcome ?? null),
-        ) ?? null)
-      : null;
-    if (personalColumn && !personalTarget) {
-      throw new DomainException(
-        ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED,
-        'No stage for personal column',
-        { fromStageName: initial.name },
-      );
-    }
-    const stageById = body.stageId
-      ? (workflowStages.find((s) => s.id === body.stageId) ?? null)
-      : null;
-    if (body.stageId && !stageById) throw DomainException.notFound('Stage not found');
-    const requested: { stageId: string } | { systemState: string; outcome: string | null } | null =
-      stageById
-        ? { stageId: stageById.id }
-        : personalTarget
-          ? { systemState: personalTarget.systemState, outcome: personalTarget.outcome ?? null }
-          : null;
-    const targetIsInitial =
-      requested === null ||
-      ('stageId' in requested
-        ? requested.stageId === initial.id
-        : requested.systemState === initial.systemState &&
-          (requested.outcome ?? null) === (initial.outcome ?? null));
+    // Новая задача рождается только в открытой стадии, колонка «Моего плана»
+    // задаёт цель, но не обходит условия кнопки (#402, security-гейт #37) —
+    // разрешение стадии — `task-create.stage.ts`.
+    const { initial, requested, targetIsInitial } = resolveCreateStage(
+      workflowStages,
+      personalColumn,
+      body.stageId,
+    );
     const holders = planHolderIds({ creatorId: user.id, assigneeId, participants });
     await this.placements.prepare(holders);
 
@@ -212,31 +183,18 @@ export class TasksService {
           await this.projects.lockNodeStructure(tx, body.projectId);
           await this.projects.assertNodeAllowed(body.projectId, body.nodeId);
         }
+        const stageOrder = await this.repo.stageKeyAt(tx, initial.id, 0);
         const task = await this.repo.create(
-          {
-            title: body.title,
-            description: body.description ?? '',
+          taskCreateData(body, {
             typeId,
             workflowId,
-            stageId: initial.id,
-            systemState: initial.systemState,
-            stageOrder: await this.repo.stageKeyAt(tx, initial.id, 0),
-            priority: body.priority ?? 'normal',
-            deadline: body.deadline ? new Date(body.deadline) : null,
-            plannedMinutes: body.plannedMinutes ?? null,
-            // Утверждение — статус маршрута (#378); поле БД живёт до #383.
-            acceptRequired: false,
+            initial,
+            stageOrder,
             creatorId: user.id,
             assigneeId,
-            parentId: body.parentId ?? null,
-            projectId: body.projectId ?? null,
-            nodeId: body.nodeId ?? null,
-            source: body.sourceMessageId ? 'chat_message' : 'manual',
-            sourceId: body.sourceMessageId ?? null,
-            checklistTotal: body.checklist?.length ?? 0,
             participants,
             customFields,
-          },
+          }),
           tx,
         );
         await this.checklist.createInitial(tx, task.id, body.checklist ?? []);
@@ -262,20 +220,7 @@ export class TasksService {
         await this.eventBus.emit(
           tx,
           TASK_EVENTS.CREATED,
-          {
-            taskId: task.id,
-            number: task.number,
-            audience: audienceIds({ creatorId: user.id, assigneeId, participants }),
-            title: task.title,
-            creatorId: user.id,
-            assigneeId,
-            coexecutorIds: participants.filter((p) => p.role === 'coexecutor').map((p) => p.userId),
-            observerIds: participants.filter((p) => p.role === 'observer').map((p) => p.userId),
-            projectId: task.projectId,
-            parentId: task.parentId,
-            source: task.source,
-            sourceId: task.sourceId,
-          },
+          taskCreatedPayload(task, { creatorId: user.id, assigneeId, participants }),
           { actorId: user.id, aggregateType: 'task', aggregateId: task.id },
         );
         return task.id;
@@ -331,17 +276,6 @@ export class TasksService {
   ): Promise<TaskListItem> {
     const row = await this.repo.findListRow(id, actor.id, tx);
     return (await this.mapper.toListItems([row], tx, actor))[0]!;
-  }
-
-  /** Строки участников: ответственный и постановщик ролей не дублируют;
-   *  соисполнитель сильнее наблюдателя. */
-  private participantRows(body: CreateTaskBody, creatorId: string, assigneeId: string) {
-    const skip = new Set([assigneeId]);
-    const rows = new Map<string, 'coexecutor' | 'observer'>();
-    for (const uid of body.observerIds ?? [])
-      if (!skip.has(uid) && uid !== creatorId) rows.set(uid, 'observer');
-    for (const uid of body.coexecutorIds ?? []) if (!skip.has(uid)) rows.set(uid, 'coexecutor');
-    return [...rows].map(([userId, role]) => ({ userId, role, muted: role === 'observer' }));
   }
 
   private async personalColumn(userId: string, stageId: string) {

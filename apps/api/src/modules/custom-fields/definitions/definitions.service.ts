@@ -9,13 +9,7 @@ import type {
   ReorderCustomFieldsBody,
   UpdateCustomFieldBody,
 } from '@nodus/contracts';
-import {
-  checkDefinitionShape,
-  CUSTOM_FIELD_LIMITS,
-  ErrorCode,
-  isCompatibleTypeChange,
-  SystemDictionary,
-} from '@nodus/contracts';
+import { CUSTOM_FIELD_LIMITS, ErrorCode } from '@nodus/contracts';
 
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
@@ -39,7 +33,14 @@ import {
 import { DefinitionMapper, type FieldDefinitionRow } from './definition.mapper.js';
 import { DefinitionsUsageService } from './definitions-usage.service.js';
 import { emitDefinitionChanged } from './definition-events.js';
-import { assertTargetsBindable } from './binding-targets.js';
+import {
+  assertBindingsUsable,
+  assertSettingsUsable,
+  assertUpdateAllowed,
+  nameTaken,
+  replaceBindings,
+  requireDefinition,
+} from './definition-guards.js';
 import { DefinitionsRepository, type FieldDefinitionWriteData } from './definitions.repository.js';
 import { CustomFieldValueValidator } from '../values/value-validator.js';
 
@@ -100,7 +101,12 @@ export class DefinitionsService {
   }
 
   async create(dto: CreateCustomFieldBody, actorId: string): Promise<CustomFieldDefinition> {
-    await this.assertSettingsUsable(dto.type, dto.settings?.dictionaryId, dto.settings?.currencyId);
+    await assertSettingsUsable(
+      this.dictionaries,
+      dto.type,
+      dto.settings?.dictionaryId,
+      dto.settings?.currencyId,
+    );
     const bindings = dto.isCompany
       ? { processTypeIds: [] as const, projectTypeIds: [] as const, nodeKindIds: [] as const }
       : (dto.bindings ?? {
@@ -108,7 +114,7 @@ export class DefinitionsService {
           projectTypeIds: [] as const,
           nodeKindIds: [] as const,
         });
-    await this.assertBindingsUsable(bindings);
+    await assertBindingsUsable(this.catalog, this.targets, bindings);
 
     return this.txRunner.run(async (tx) => {
       await this.definitions.lockRegistry(tx);
@@ -136,7 +142,7 @@ export class DefinitionsService {
         createdById: actorId,
       };
       const created = await this.definitions.create(data, tx);
-      await this.replaceBindings(created.id, bindings, tx);
+      await replaceBindings(this.definitions, created.id, bindings, tx);
       const row = (await this.definitions.findById(created.id, tx)) ?? created;
       await this.emitChanged(tx, row, 'created', actorId, [
         ...Object.keys(data).filter((key) => key !== 'number'),
@@ -151,53 +157,19 @@ export class DefinitionsService {
     dto: UpdateCustomFieldBody,
     actorId: string,
   ): Promise<CustomFieldDefinition> {
-    const current = await this.requireDefinition(id);
-    const nextType = dto.type ?? (current.type as CustomFieldDefinition['type']);
-    if (!isCompatibleTypeChange(current.type as CustomFieldDefinition['type'], nextType)) {
-      throw new DomainException(
-        ErrorCode.CUSTOM_FIELD_TYPE_CHANGE_INCOMPATIBLE,
-        'Type change is incompatible with stored values',
-        { from: current.type, to: nextType },
-      );
-    }
-    const nextSettings = {
-      ...(current.settings as CustomFieldDefinition['settings']),
-      ...(dto.settings ?? {}),
-    };
-    const nextDefault =
-      dto.defaultValue === undefined
-        ? (current.defaultValue as CustomFieldDefinition['defaultValue'])
-        : dto.defaultValue;
-
-    const shape = checkDefinitionShape(nextType, nextSettings, nextDefault);
-    if (shape.length > 0) {
-      throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Invalid custom field shape', {
-        issues: shape,
-      });
-    }
-    await this.assertSettingsUsable(nextType, nextSettings.dictionaryId, nextSettings.currencyId);
-    if (dto.bindings !== undefined) {
-      if (current.isCompany) {
-        throw new DomainException(
-          ErrorCode.VALIDATION_FAILED,
-          'Company variable cannot have bindings',
-        );
-      }
-      await this.assertBindingsUsable(dto.bindings);
-    }
-    if (nextDefault?.kind === 'static') {
-      const issues = await this.validator.validate(
-        [{ ...(await this.mapper.toDto(current)), type: nextType, settings: nextSettings }],
-        { [id]: nextDefault.value },
-      );
-      if (issues.length > 0) {
-        throw new DomainException(
-          ErrorCode.CUSTOM_FIELD_VALUE_INVALID,
-          'Default value is invalid',
-          { issues },
-        );
-      }
-    }
+    const current = await requireDefinition(this.definitions, id);
+    const { nextSettings, nextDefault } = await assertUpdateAllowed(
+      {
+        mapper: this.mapper,
+        validator: this.validator,
+        dictionaries: this.dictionaries,
+        catalog: this.catalog,
+        targets: this.targets,
+      },
+      id,
+      current,
+      dto,
+    );
 
     return this.txRunner.run(async (tx) => {
       await this.definitions.lockRegistry(tx);
@@ -216,7 +188,7 @@ export class DefinitionsService {
       }
       if (dto.reportIndexed !== undefined) data.reportIndexed = dto.reportIndexed;
       await this.definitions.update(id, data, tx);
-      if (dto.bindings !== undefined) await this.replaceBindings(id, dto.bindings, tx);
+      if (dto.bindings !== undefined) await replaceBindings(this.definitions, id, dto.bindings, tx);
       const row = (await this.definitions.findById(id, tx)) ?? current;
       const fields = Object.keys(data);
       await this.emitChanged(
@@ -232,7 +204,7 @@ export class DefinitionsService {
 
   /** Где используется: агрегат последствий для окна удаления (Р8). */
   async usage(id: string): Promise<CustomFieldUsage> {
-    return this.usageReader.usage(await this.requireDefinition(id));
+    return this.usageReader.usage(await requireDefinition(this.definitions, id));
   }
 
   /**
@@ -243,7 +215,7 @@ export class DefinitionsService {
    * с ключом продолжают работать (толерантность unknown-ключа).
    */
   async remove(id: string, actorId: string): Promise<void> {
-    const definition = await this.requireDefinition(id);
+    const definition = await requireDefinition(this.definitions, id);
     await this.txRunner.run(async (tx) => {
       await this.definitions.remove(id, tx);
       await this.emitChanged(tx, definition, 'deleted', actorId, []);
@@ -279,7 +251,7 @@ export class DefinitionsService {
     value: CustomFieldValue | null,
     actorId: string,
   ): Promise<CustomFieldDefinition> {
-    const definition = await this.requireDefinition(id);
+    const definition = await requireDefinition(this.definitions, id);
     if (!definition.isCompany) {
       throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Field is not a company variable');
     }
@@ -300,73 +272,6 @@ export class DefinitionsService {
     });
   }
 
-  private async requireDefinition(id: string): Promise<FieldDefinitionRow> {
-    const row = await this.definitions.findById(id);
-    if (!row) throw DomainException.notFound('Custom field not found', { definitionId: id });
-    return row;
-  }
-
-  /** Привязки тела создания/правки: цели существуют и живые (Р3). */
-  private async assertBindingsUsable(bindings: {
-    processTypeIds: readonly string[];
-    projectTypeIds: readonly string[];
-    nodeKindIds: readonly string[];
-  }): Promise<void> {
-    await assertTargetsBindable(
-      this.catalog,
-      this.targets,
-      'process-type',
-      bindings.processTypeIds,
-    );
-    await assertTargetsBindable(
-      this.catalog,
-      this.targets,
-      'project-type',
-      bindings.projectTypeIds,
-    );
-    await assertTargetsBindable(this.catalog, this.targets, 'node-kind', bindings.nodeKindIds);
-  }
-
-  /** Замена всех трёх наборов привязок (тело с `bindings`). */
-  private async replaceBindings(
-    id: string,
-    bindings: {
-      processTypeIds: readonly string[];
-      projectTypeIds: readonly string[];
-      nodeKindIds: readonly string[];
-    },
-    tx: Parameters<DefinitionsRepository['replaceTargets']>[3],
-  ): Promise<void> {
-    await this.definitions.replaceTargets(id, 'process_type', bindings.processTypeIds, tx);
-    await this.definitions.replaceTargets(id, 'project_type', bindings.projectTypeIds, tx);
-    await this.definitions.replaceTargets(id, 'node_kind', bindings.nodeKindIds, tx);
-  }
-
-  /** Справочник списка и валюта денег обязаны существовать и быть активными. */
-  private async assertSettingsUsable(
-    type: string,
-    dictionaryId: string | undefined,
-    currencyId: string | null | undefined,
-  ): Promise<void> {
-    if ((type === 'enum' || type === 'multienum') && dictionaryId) {
-      const [dictionary] = await this.dictionaries.dictionaryRefs([dictionaryId]);
-      if (!dictionary) {
-        throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Dictionary not found', {
-          dictionaryId,
-        });
-      }
-    }
-    if (type === 'money' && currencyId) {
-      const [item] = await this.dictionaries.itemRefs([currencyId]);
-      const [dictionary] = item ? await this.dictionaries.dictionaryRefs([item.dictionaryId]) : [];
-      if (!item?.isActive || dictionary?.code !== SystemDictionary.CURRENCY) {
-        throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Currency not found', {
-          currencyId,
-        });
-      }
-    }
-  }
-
   /** Одна точка события изменения реестра — `definition-events.ts` (#432). */
   private emitChanged(
     tx: Parameters<EventBus['emit']>[0],
@@ -384,11 +289,4 @@ export class DefinitionsService {
       fields,
     );
   }
-}
-
-/** 409 дубля имени: suggestion существующего — «открыть существующий» (В3). */
-function nameTaken(definitionId: string, name: string): DomainException {
-  return new DomainException(ErrorCode.CUSTOM_FIELD_NAME_TAKEN, 'Field name is taken', {
-    suggestion: { definitionId, name },
-  });
 }

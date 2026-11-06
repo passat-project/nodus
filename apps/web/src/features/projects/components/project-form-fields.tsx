@@ -1,14 +1,7 @@
 import { Plus, X } from 'lucide-react';
-import { Fragment, useState } from 'react';
-import type {
-  CounterpartyRef,
-  CustomFieldRef,
-  CustomFieldValue,
-  CustomFieldValues,
-  ProjectType,
-  ProjectVisibility,
-} from '@nodus/contracts';
-import { projectTypeFormOf, ui } from '@nodus/contracts';
+import { useState } from 'react';
+import type { CounterpartyRef, CustomFieldRef, ProjectVisibility } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Input } from '@nodus/ui/components/input';
 import {
@@ -22,15 +15,13 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { useProjectGroups } from '../../../shared/api/projects-list.js';
 import { useUsersList } from '../../../shared/api/users-list.js';
-import { CustomFieldTypeIcon } from '../../../shared/custom-fields/field-type-icon.js';
-import { definitionsForTarget } from '../../../shared/custom-fields/module-target.js';
-import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries.js';
-import { CustomFieldEditor } from '../../../shared/custom-fields/value-editor.js';
-import { DateTimePicker } from '../../../shared/ui/date-time-picker.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { PeoplePicker } from '../../../shared/ui/people-picker.js';
 import { SegmentedControl } from '../../../shared/ui/segmented-control.js';
 import { useCreateProjectGroup } from '../api/project-catalog-mutations.js';
+
+export { ProjectAttributeRows } from './project-attribute-rows.js';
+export { ProjectDeadlineField } from './project-deadline-field.js';
 
 const triggerClass =
   'flex h-8 w-full min-w-0 items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm transition-colors hover:bg-accent/40 dark:bg-input/30';
@@ -273,40 +264,6 @@ export function VisibilityField({
   );
 }
 
-/** Крайний срок проекта: только дата, НАШ пикер. «Начала» у проекта не
- *  спрашиваем — в проекте есть срок сдачи (вердикт владельца 07.11.2026:
- *  «странный атрибут „Срок начала“ — никто такое не указывает»). */
-export function ProjectDeadlineField({
-  value,
-  onChange,
-}: {
-  value: string | null;
-  onChange: (value: string | null) => void;
-}) {
-  return (
-    <DateTimePicker
-      value={fromIsoDate(value)}
-      onChange={(date) => onChange(toIsoDate(date))}
-      ariaLabel={ui.projects.deadline}
-      placeholder={ui.common.pickDate}
-      withTime={false}
-    />
-  );
-}
-
-/** Локальная дата → ISO-дата контракта (`YYYY-MM-DD`, без времени). */
-export function toIsoDate(date: Date | null): string | null {
-  if (!date) return null;
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
-/** ISO-дата контракта → локальная полночь для пикера. */
-function fromIsoDate(value: string | null): Date | null {
-  return value ? new Date(`${value}T00:00:00`) : null;
-}
-
 /** Слияние ссылок значений (выбор в редакторе атрибута): без дублей по
  * «kind:id» — иконки и имена в окне живут до ответа сервера (Р6). */
 export function mergeFieldRefs(
@@ -322,84 +279,4 @@ export function mergeFieldRefs(
  * журнала при оптимистичной вставке/патче (в тело мутации не идёт). */
 export function counterpartyRefOf(ref: CustomFieldRef | undefined): CounterpartyRef | null {
   return ref ? { id: ref.id, name: ref.name ?? '' } : null;
-}
-
-/** Звёздочка обязательного поля — тон действия, прижата к метке (как у
- *  системных полей окон проекта). */
-function RequiredMark() {
-  return (
-    <span aria-hidden className="text-primary">
-      *
-    </span>
-  );
-}
-
-/**
- * Строки атрибутов слотов формы типа проекта (#631, Р10): дети сетки окон
- * создания/правки («метка слева — контрол справа»), скрытые слоты не
- * спрашиваются, обязательные — со звёздочкой (кнопку окна блокирует
- * `missingProjectFields` у вызывающего). Показываются атрибуты,
- * привязанные к выбранному типу; многострочный текст — на всю ширину окна.
- */
-export function ProjectAttributeRows({
-  type,
-  values,
-  refs,
-  onChange,
-}: {
-  type: ProjectType | null;
-  values: CustomFieldValues;
-  refs: readonly CustomFieldRef[];
-  onChange: (fieldId: string, value: CustomFieldValue | null, picked?: CustomFieldRef[]) => void;
-}) {
-  const query = useCustomFieldDefinitions('project');
-  const form = projectTypeFormOf(type ?? {});
-  const definitions = definitionsForTarget(query.data, 'project', type?.id);
-  const byId = new Map(definitions.map((definition) => [definition.id, definition]));
-  const slots = form.fields.flatMap((slot) => {
-    if (slot.state === 'hidden') return [];
-    const definition = byId.get(slot.fieldId);
-    return definition ? [{ slot, definition }] : [];
-  });
-  if (slots.length === 0) return null;
-
-  return (
-    <>
-      {slots.map(({ slot, definition }) => {
-        const required = slot.state === 'required';
-        const label = (
-          <span className="flex min-w-0 items-center gap-1 text-xs font-medium text-muted-foreground">
-            <CustomFieldTypeIcon
-              type={definition.type}
-              className="size-3.5 shrink-0 text-muted-foreground"
-            />
-            <span className="min-w-0 truncate" title={definition.name}>
-              {definition.name}
-            </span>
-            {required ? <RequiredMark /> : null}
-          </span>
-        );
-        const editor = (
-          <CustomFieldEditor
-            definition={definition}
-            value={values[definition.id]}
-            refs={refs}
-            variant="form"
-            onCommit={(value, picked) => onChange(definition.id, value, picked)}
-          />
-        );
-        return definition.type === 'long_text' ? (
-          <div key={definition.id} className="col-span-2 flex flex-col gap-1.5">
-            {label}
-            {editor}
-          </div>
-        ) : (
-          <Fragment key={definition.id}>
-            {label}
-            {editor}
-          </Fragment>
-        );
-      })}
-    </>
-  );
 }
