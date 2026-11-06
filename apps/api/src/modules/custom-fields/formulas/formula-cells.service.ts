@@ -201,7 +201,6 @@ export class FormulaCellsService implements FormulaCells {
     if (!cell)
       return { value: null, error: null, changed: false, errorChanged: false, silent: true };
     const previousError = cellErrorOf(cell.error);
-    const hadError = previousError !== null;
 
     if (depth > FORMULA_LIMITS.cascadeDepth) {
       const error: FormulaCellError = {
@@ -209,7 +208,13 @@ export class FormulaCellsService implements FormulaCells {
         message: 'formula recalculation cycle detected',
       };
       await this.repo.updateState(tx, cell.id, { error, depth });
-      return { value: null, error, changed: true, errorChanged: !hadError, silent: true };
+      return {
+        value: null,
+        error,
+        changed: true,
+        errorChanged: previousError?.code !== error.code,
+        silent: true,
+      };
     }
 
     const snapshot = await this.meta.snapshot(tx);

@@ -55,6 +55,7 @@ export function extractDeps(ast: FormulaNode): FormulaDependency[] {
       case 'system':
         add({
           kind: 'system',
+          ...(inFilter && node.source.kind === 'self' ? { selection: true } : {}),
           ...(node.source.kind === 'ref_field' ? { refField: node.source.field } : {}),
         });
         return;

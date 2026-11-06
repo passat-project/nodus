@@ -105,6 +105,22 @@ export function buildDepKeys(args: FormulaDepArgs): FormulaDepKey[] {
         break;
       }
       case 'system': {
+        // `system{self}` в фильтре агрегата — системное поле ЗАПИСИ ВЫБОРКИ:
+        // ключи по строкам выборок и цепочке папок (Р4).
+        if (dep.selection) {
+          for (const rows of args.related.values()) {
+            for (const row of rows) add(`system:${row.kind}:${row.id}`);
+          }
+          let chainId: string | null = args.hostKind === 'node' ? args.host.id : args.host.nodeId;
+          const chainGuard = new Set<string>();
+          while (chainId && !chainGuard.has(chainId)) {
+            chainGuard.add(chainId);
+            const node = args.nodes.get(chainId);
+            if (!node) break;
+            add(`system:node:${node.id}`);
+            chainId = node.parentId;
+          }
+        }
         // Системные поля своего хоста, родителя, проекта, папок и цели
         // ссылки: у каждой записи-источника свой ключ (Р4). Значения не
         // входят — событие системного поля пересчитывает зависимые ячейки.

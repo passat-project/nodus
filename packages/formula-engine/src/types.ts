@@ -135,6 +135,8 @@ export interface FormulaDependency {
   /** Вид папки (для `folder`/`folder_chain`). */
   kindId?: string;
   selector?: 'subtasks' | 'relations' | 'node_tasks';
+  /** `system{self}` внутри фильтра агрегата — поле ЗАПИСИ ВЫБОРКИ. */
+  selection?: boolean;
   /** Вид связи (для `related{relations}`): каждая пара вид+направление —
    *  отдельная зависимость и отдельная выборка (Р2). */
   relation?: FormulaRelationKind;

@@ -136,7 +136,14 @@ export class FormulaApiService {
         throw DomainException.notFound('Formula host not found');
       }
     }
-    const effectiveProjectId = requestedProjectId ?? nodeProjectId;
+    let parent: FormulaRecordData | null = null;
+    if (creation.parentId) {
+      parent = await this.context.record('task', creation.parentId, actor, undefined, cache);
+      if (!parent) throw DomainException.notFound('Formula host not found');
+    }
+    // Подзадача наследует место родителя (как POST /tasks): иначе префилл
+    // расходится с тем, что будет у созданной записи (Р12).
+    const effectiveProjectId = requestedProjectId ?? nodeProjectId ?? parent?.projectId ?? null;
     if (effectiveProjectId) {
       const project = await this.context.record(
         'project',
@@ -147,11 +154,8 @@ export class FormulaApiService {
       );
       if (!project) throw DomainException.notFound('Formula host not found');
     }
-    if (creation.parentId) {
-      const parent = await this.context.record('task', creation.parentId, actor, undefined, cache);
-      if (!parent || (effectiveProjectId !== null && parent.projectId !== effectiveProjectId)) {
-        throw DomainException.notFound('Formula host not found');
-      }
+    if (parent && effectiveProjectId !== null && parent.projectId !== effectiveProjectId) {
+      throw DomainException.notFound('Formula host not found');
     }
     const hostData: FormulaRecordData = {
       kind: hostKind,
@@ -160,7 +164,7 @@ export class FormulaApiService {
       system: {},
       projectId: effectiveProjectId,
       parentId: creation.parentId ?? null,
-      nodeId: creation.nodeId ?? null,
+      nodeId: creation.nodeId ?? parent?.nodeId ?? null,
       placeId: null,
       confidential: false,
     };

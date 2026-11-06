@@ -172,3 +172,64 @@ describe('buildDepKeys: что должно измениться для пере
     ).toEqual([]);
   });
 });
+
+describe('buildDepKeys: выборки и системные поля в фильтрах (#632, Р4)', () => {
+  it('node_tasks: ключ состава папки + значения членов выборки', () => {
+    const keys = buildDepKeys({
+      host: record({ id: 'task1', nodeId: 'n1' }),
+      hostKind: 'task',
+      project: null,
+      nodes: new Map(),
+      parent: null,
+      related: new Map([['node_tasks', [record({ id: 'task2' })]]]),
+      asts: [],
+      deps: [{ kind: 'related', selector: 'node_tasks', number: 7 }],
+      snapshot: snapshot([]),
+    });
+    expect(keys).toEqual([
+      { key: 'nodetasks:node:n1', attrNumber: null },
+      { key: 'v:task:task2:7', attrNumber: 7 },
+    ]);
+  });
+
+  it('selection: self-поле фильтра агрегата — значения строк выборки и цепочки', () => {
+    const keys = buildDepKeys({
+      host: record({ id: 'task1', nodeId: 'n1' }),
+      hostKind: 'task',
+      project: null,
+      nodes: new Map([
+        ['n1', record({ kind: 'node', id: 'n1', parentId: 'n0' })],
+        ['n0', record({ kind: 'node', id: 'n0' })],
+      ]),
+      parent: null,
+      related: new Map([['subtasks', [record({ id: 'task2' })]]]),
+      asts: [],
+      deps: [{ kind: 'selection', number: 3 }],
+      snapshot: snapshot([]),
+    });
+    expect(keys).toEqual([
+      { key: 'v:task:task2:3', attrNumber: 3 },
+      { key: 'v:node:n1:3', attrNumber: 3 },
+      { key: 'v:node:n0:3', attrNumber: 3 },
+    ]);
+  });
+
+  it('system{self} в фильтре — системные ключи строк выборки', () => {
+    const keys = buildDepKeys({
+      host: record({ id: 'task1' }),
+      hostKind: 'task',
+      project: null,
+      nodes: new Map(),
+      parent: null,
+      related: new Map([['subtasks', [record({ id: 'task2' })]]]),
+      asts: [],
+      deps: [{ kind: 'system', selection: true }],
+      snapshot: snapshot([]),
+    });
+    expect(keys).toEqual([
+      { key: 'system:task:task2', attrNumber: null },
+      { key: 'system:task:task1', attrNumber: null },
+      { key: 'parent:task:task1', attrNumber: null },
+    ]);
+  });
+});
