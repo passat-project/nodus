@@ -72,7 +72,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         body: {
           type: 'text',
           name: `Проба ${c.fx.runId} письмо`,
-          bindings: { processTypeIds: [c.incomingTypeId] },
+          bindings: { processTypeIds: [c.incomingTypeId], projectTypeIds: [], nodeKindIds: [] },
         },
         key: `it-cf-letter-${c.fx.runId}`,
       });
@@ -112,7 +112,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         body: {
           type: 'text',
           name: `Проба ${c.fx.runId} очистка`,
-          bindings: { processTypeIds: [c.incomingTypeId] },
+          bindings: { processTypeIds: [c.incomingTypeId], projectTypeIds: [], nodeKindIds: [] },
         },
         key: `it-cf-letter-clean-${c.fx.runId}`,
       });

@@ -104,7 +104,7 @@ export async function setupTypeFormsFixture(): Promise<TypeFormsFixture> {
     body: {
       type: 'number',
       name: `Поле часы ${fx.runId}`,
-      bindings: { processTypeIds: [type.id] },
+      bindings: { processTypeIds: [type.id], projectTypeIds: [], nodeKindIds: [] },
     },
     key: `it-432-field-a-${fx.runId}`,
   });

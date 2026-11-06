@@ -161,7 +161,9 @@ export async function setupNodeKindsFixture(): Promise<NodeKindsFixture> {
   typeIds.push(ownType.id);
 
   const projectRes = await fx.fx.api(fx.alice, 'POST', '/projects', {
-    body: { typeId: ownType.id, name: `Проба 556 проект ${fx.fx.runId}`, code: fx.unique('P556') },
+    // Без top-level code: у свежесозданного типа нет слота «Шифр» — значение
+    // отверглось бы not_in_type (#631), а шифр проекта тестам не нужен.
+    body: { typeId: ownType.id, name: `Проба 556 проект ${fx.fx.runId}` },
     key: key('project'),
   });
   expect(projectRes.status, await projectRes.clone().text()).toBe(201);

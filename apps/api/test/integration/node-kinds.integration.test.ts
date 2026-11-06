@@ -32,14 +32,16 @@ describe('Виды папок как настраиваемые типы (#556)'
     const set = (await f.kinds()).find((kind) => kind.name === 'Комплект');
     expect(set, 'посевной «Комплект» в миграции Б').toBeTruthy();
     expect(set!.form.fields).toHaveLength(2);
-    expect(set!.form.fields[0]).toEqual({
-      fieldId: SYSTEM_FIELD_IDS.nodeCode,
-      state: 'required',
-    });
-    expect(set!.form.fields[1]!.state).toBe('required');
+    // Порядок слотов не значим (Р9 #631: слот «Кода» встал на место
+    // отжившего form.code) — важна обязательность обоих.
+    const markSlot = set!.form.fields.find((slot) => slot.fieldId !== SYSTEM_FIELD_IDS.nodeCode);
+    expect(set!.form.fields.find((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)?.state).toBe(
+      'required',
+    );
+    expect(markSlot?.state).toBe('required');
     expect(set!.capabilities).toEqual(['document_changes', 'pulse_row', 'schema_row']);
 
-    const mark = (await f.definitions()).find((field) => field.id === set!.form.fields[1]!.fieldId);
+    const mark = (await f.definitions()).find((field) => field.id === markSlot!.fieldId);
     expect(mark?.name).toBe('Марка');
     expect(mark?.type).toBe('enum');
   });

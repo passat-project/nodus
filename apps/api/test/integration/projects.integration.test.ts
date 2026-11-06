@@ -382,25 +382,28 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: трассы Т1/Т2/Т2b 
   });
 
   describe('Review Focus', () => {
-    it('дубль шифра → 409, в том числе с архивным проектом; шифр не освобождается', async () => {
+    it('дубль шифра легален (В2 #631): и у живых проектов, и после архивации', async () => {
       const code = `DUP-${fx.runId}`;
       const first = await createProject(alice, { name: `Первый ${fx.runId}`, code });
-      const taken = await fx.api(alice, 'POST', '/projects', {
+      const second = await fx.api(alice, 'POST', '/projects', {
         body: { name: `Второй ${fx.runId}`, code, typeId },
         key: `dup-1-${fx.runId}`,
       });
-      expect(taken.status).toBe(409);
+      expect(second.status, await second.clone().text()).toBe(201);
+      expect(projectDetailSchema.parse(await second.json()).code).toBe(code);
 
-      // Архивируем первый — шифр всё ещё занят (Trimble-паттерн)
+      // Архивируем первый — уникальности нет вовсе: шифр стал обычным
+      // атрибутом (Trimble-паттерн «один шифр у подрядчика» больше не ограничен).
       const archive = await fx.api(alice, 'POST', `/projects/${first.id}/status`, {
         body: { status: 'archived' },
       });
       expect(archive.status).toBe(200);
-      const takenAgain = await fx.api(alice, 'POST', '/projects', {
+      const third = await fx.api(alice, 'POST', '/projects', {
         body: { name: `Третий ${fx.runId}`, code, typeId },
         key: `dup-2-${fx.runId}`,
       });
-      expect(takenAgain.status).toBe(409);
+      expect(third.status).toBe(201);
+      expect(projectDetailSchema.parse(await third.json()).code).toBe(code);
     });
 
     it('перенос задачи между проектами: previousProjectId в событии, обе проверки переносящего', async () => {

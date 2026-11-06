@@ -504,7 +504,7 @@ async function main(): Promise<void> {
   // живёт в customFields; колонки code/client_id заморожены. Только при
   // пустом журнале проектов (ре-сид живого стенда ничего не добавляет).
   const projectCount = await prisma.project.count();
-  const admin = await prisma.user.findFirst({
+  const adminUser = await prisma.user.findFirst({
     where: { email: 'admin@nodus.by' },
     select: { id: true },
   });
@@ -512,13 +512,13 @@ async function main(): Promise<void> {
     where: { id: '11111111-1111-4111-8111-111111111111' },
     select: { id: true },
   });
-  if (projectCount === 0 && admin && contractType) {
+  if (projectCount === 0 && adminUser && contractType) {
     await prisma.project.create({
       data: {
         name: 'Демо-договор «Пассат»',
         typeId: contractType.id,
-        managerId: admin.id,
-        creatorId: admin.id,
+        managerId: adminUser.id,
+        creatorId: adminUser.id,
         visibility: 'open',
         customFields: {
           '4b91bbe0-2d81-5ba2-8c51-93beb41da2cf': 'ПР-2026-01',
