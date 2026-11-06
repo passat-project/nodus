@@ -33,7 +33,8 @@ import { EDGE_W_COLLAPSED, EDGE_W_EXPANDED, RightRail } from './right-rail.js';
 import { useRailHidden } from './rail-visibility.js';
 import { useShellStore } from './shell-store.js';
 import { TopBar } from './top-bar.js';
-import { useCardStack, useOpenCard, useReplaceTopCard } from './use-card-stack.js';
+import { useCardStack, useOpenCard, useOpenCards, useReplaceTopCard } from './use-card-stack.js';
+import { useLinkInterception } from './use-link-interception.js';
 
 function ShellFallback() {
   return (
@@ -51,8 +52,12 @@ function ShellFallback() {
 export function AppShell() {
   const theme = useShellStore((s) => s.theme);
   const openCard = useOpenCard();
+  const openCards = useOpenCards();
   const cardStack = useCardStack();
   const replaceTopCard = useReplaceTopCard();
+  // Ссылки портала (#644): внутренние карточки — стеком, внешние в десктопе —
+  // системным браузером через мост open_external (иначе клики глушились ACL).
+  useLinkInterception(openCards);
   // Геометрия вьюера вложений = канон карточек (ADR-0009): правый край у
   // служебной полосы; на модуле мессенджера полоса скрыта — stripW=0.
   const edgeOpen = useShellStore((s) => s.edgeOpen);

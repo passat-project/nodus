@@ -13,6 +13,7 @@ mod updates;
 
 use std::sync::Mutex;
 
+use tauri::webview::NewWindowResponse;
 use tauri::{AppHandle, Manager, Url, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_log::{Target, TargetKind};
@@ -44,7 +45,15 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             None,
         ))
-        .plugin(tauri_plugin_opener::init())
+        // JS-перехват `<a target="_blank">` выключен (#644): плагин глушил
+        // клики — его `open_url` отклоняется ACL портала, и ошибка не видна.
+        // Ссылки обрабатывает само приложение (use-link-interception) через
+        // разрешённый мост open_external; новые окна — on_new_window ниже.
+        .plugin(
+            tauri_plugin_opener::Builder::new()
+                .open_js_links_on_click(false)
+                .build(),
+        )
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
@@ -123,6 +132,7 @@ pub fn run() {
 fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
     let version = app.package_info().version.to_string();
     let nav_app = app.clone();
+    let new_window_app = app.clone();
     let win =
         tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
             .title("Nodus")
@@ -133,9 +143,28 @@ fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
             .additional_browser_args(WEBVIEW2_BROWSER_ARGS)
             .initialization_script(bridge::initialization_script(&version))
             .on_navigation(move |url| navigation_allowed(&nav_app, url))
+            // Страховка (#644): если ссылка всё же запросила новое окно
+            // (правый клик «открыть в новом окне», библиотечный window.open) —
+            // открываем системным приложением, окно WebView2 не создаём.
+            .on_new_window(move |url, _features| {
+                open_in_system(&new_window_app, &url);
+                NewWindowResponse::Deny
+            })
             .build()?;
     let _ = win.show();
     Ok(())
+}
+
+/// Открыть ссылку системным приложением: браузер (http/https), почта
+/// (mailto), телефон (tel). Прочие схемы игнорируются — security-рамка
+/// ADR-0019 (никаких file:// и произвольных протоколов).
+fn open_in_system(app: &AppHandle, url: &Url) {
+    if !matches!(url.scheme(), "http" | "https" | "mailto" | "tel") {
+        return;
+    }
+    if let Err(e) = app.opener().open_url(url.to_string(), None::<&str>) {
+        log::warn!("ссылка не открыта: {e}");
+    }
 }
 
 /// Гвард навигации: локальный мини-UI и origin портала — можно; всё прочее —
@@ -154,11 +183,7 @@ fn navigation_allowed(app: &AppHandle, url: &Url) -> bool {
             }
         }
     }
-    if matches!(url.scheme(), "http" | "https") {
-        if let Err(e) = app.opener().open_url(url.to_string(), None::<&str>) {
-            log::warn!("внешняя ссылка не открыта: {e}");
-        }
-    }
+    open_in_system(app, url);
     false
 }
 

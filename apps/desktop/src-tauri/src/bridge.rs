@@ -256,12 +256,13 @@ pub fn flash_taskbar(app: AppHandle, critical: bool) {
     }
 }
 
-/// Открыть ссылку в системном браузере: только http/https (deep link'и портала
-/// и внешние адреса; произвольные схемы и file:// запрещены).
+/// Открыть ссылку системным приложением: http/https (браузер), mailto (почта),
+/// tel (телефон). Deep link'и портала остаются в приложении, произвольные
+/// схемы и file:// запрещены.
 #[tauri::command]
 pub fn open_external(app: AppHandle, url: String) -> Result<(), String> {
     let parsed = tauri::Url::parse(&url).map_err(|_| "invalid_url")?;
-    if !matches!(parsed.scheme(), "http" | "https") {
+    if !matches!(parsed.scheme(), "http" | "https" | "mailto" | "tel") {
         return Err("invalid_url".into());
     }
     app.opener()

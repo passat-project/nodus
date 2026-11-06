@@ -29,6 +29,8 @@ import {
 import { useBranchWidth } from '../lib/use-branch-width.js';
 import { useTaskCardLayout } from '../lib/task-card-type-layout.js';
 import { useTaskTabs } from '../lib/use-task-tabs.js';
+// Побочный эффект: регистрация превью ссылки на задачу в чате (#645).
+import './task-link-preview.js';
 
 /** Ширина панели «О задаче»: на неё же сужается правая зона по общему канону
  *  буфера (ниже — пол, дальше двигается левая зона); панель полновысотная,

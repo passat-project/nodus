@@ -20,7 +20,7 @@ commands.allow = ["flash_taskbar"]
 
 [[permission]]
 identifier = "allow-open-external"
-description = "Открыть http(s)-ссылку в системном браузере (ссылки портала)."
+description = "Открыть ссылку системным приложением: http(s)/mailto/tel (ссылки портала)."
 commands.allow = ["open_external"]
 
 [[permission]]

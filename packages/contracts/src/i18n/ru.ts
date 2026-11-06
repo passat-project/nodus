@@ -146,6 +146,7 @@ export const ui = {
     addField: 'Добавить поле',
     resizePanel: 'Изменить ширину панели',
     copyError: 'Не удалось скопировать',
+    linkOpenError: 'Не удалось открыть ссылку',
     open: 'Открыть',
     resizeColumn: 'Изменить ширину колонки',
     copyLink: 'Копировать ссылку',

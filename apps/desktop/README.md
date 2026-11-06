@@ -45,6 +45,12 @@ apps/desktop/
   (беседа или письмо, модель Telegram unlinkHistory).
 - Обновления: `GET <портал>/desktop/latest.json` + установщики (`/desktop/`
   статика nginx, env `NODUS_DESKTOP_DIR`); pubkey зашит в `tauri.conf.json`.
+- Ссылки (#644): JS-перехват `<a target="_blank">` плагина opener **выключен**
+  (`open_js_links_on_click(false)`) — он глушил клики отказом ACL. Решение
+  принимает веб-перехватчик `apps/web/src/app/shell/use-link-interception.ts`:
+  внутренние карточки открываются стеком, внешние http(s) и `mailto:`/`tel:` —
+  командой моста `open_external` (системные приложения). `on_new_window`
+  остаётся страховкой: URL уходит в систему, окно WebView2 не создаётся.
 
 ## Автообновление (пассивный поток, #263)
 
@@ -69,7 +75,8 @@ apps/desktop/
   дисплея; ACL моста выдаётся runtime-capability РОВНО origin'у портала
   (`dynamic-acl`, минимальный набор прав в `permissions/shell-bridge.toml`).
 - Гвард навигации: локальный мини-UI и origin портала; всё прочее — системный
-  браузер. `open_external` принимает только http/https.
+  браузер. `open_external` принимает только http/https/mailto/tel; новые окна
+  WebView2 не создаются (`on_new_window` → системное приложение, #644).
 - Адрес портала валидируется (схема/хост, без пути и user-info).
 
 ## Команды (из каталога apps/desktop)
