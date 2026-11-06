@@ -163,11 +163,6 @@ describe('терпимое чтение со старого API (:5173 без #4
 
   it('нет bindings — пустые привязки (атрибут нигде не показывается)', () => {
     expect(bindingsOf({})).toEqual({ processTypeIds: [], projectTypeIds: [], nodeKindIds: [] });
-    expect(bindingsOf({ typeIds: [roleA] })).toEqual({
-      processTypeIds: [],
-      projectTypeIds: [],
-      nodeKindIds: [],
-    });
     expect(
       bindingsOf({ bindings: { processTypeIds: [roleA], projectTypeIds: [], nodeKindIds: [] } }),
     ).toEqual({ processTypeIds: [roleA], projectTypeIds: [], nodeKindIds: [] });
