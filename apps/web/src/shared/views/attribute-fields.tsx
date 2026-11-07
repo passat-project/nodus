@@ -11,11 +11,7 @@ import { bindingsOf, customFieldKey, isCustomFieldValueFilled, ui } from '@nodus
 import { cn } from '@nodus/ui/lib/utils';
 
 import type { AttributeCarrier } from '../custom-fields/attribute-carrier.js';
-import {
-  cleanEmptyMarker,
-  cleanFormulaText,
-  isDashOnly,
-} from '../custom-fields/formula/formula-preview.js';
+import { cleanFormulaText, isDashOnly } from '../custom-fields/formula/formula-preview.js';
 import { CustomFieldValueView, refsById } from '../custom-fields/value-view.js';
 import type { DataTableField } from './data-table.js';
 import type { FieldDef } from './use-view-fields.js';
@@ -277,14 +273,10 @@ export function attributeRenderCell(
       <CustomFieldValueView
         definition={definition}
         value={
-          // own/type — чистим висячие разделители; ручное значение
-          // (`origin='value'`) — только легаси-маркер «пусто» из дефисов,
-          // иначе тире и дефисы пользователя значимы.
-          options.formula?.origin === 'own' || options.formula?.origin === 'type'
-            ? (cleanFormulaText(shownValue) ?? undefined)
-            : options.formula
-              ? (cleanEmptyMarker(shownValue) ?? undefined)
-              : shownValue
+          // Формульное значение (своя формула или типа) чистится от висячих
+          // разделителей; обычное значение — как хранится (тире и дефисы
+          // пользователя значимы).
+          options.formula ? (cleanFormulaText(shownValue) ?? undefined) : shownValue
         }
         refs={refs}
         compact

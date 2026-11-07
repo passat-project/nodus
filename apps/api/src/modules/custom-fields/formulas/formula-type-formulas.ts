@@ -96,6 +96,10 @@ export async function applyTypeFormulas(args: {
       if (materialized !== null) {
         state.values[slot.definitionId] = materialized;
       } else if (evaluation.value !== null) {
+        // ЛОЖЬ в bool-поле — пустое значение, а не ошибка (как в compute).
+        if (definition.type === 'bool' && evaluation.value === false) {
+          continue;
+        }
         // Непустой результат, не влезающий в тип поля (устаревший вариант
         // справочника/валюта): ошибка видна в ячейке, а не тихая пустота (Р13).
         state.formulas[slot.definitionId] = {

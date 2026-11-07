@@ -6,7 +6,7 @@ import type {
   CustomFieldValue,
   CustomFieldValues,
 } from '@nodus/contracts';
-import { ErrorCode } from '@nodus/contracts';
+import { ErrorCode, isDashOnlyMarker } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
@@ -83,7 +83,9 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
     // введённое в окне создания значение атрибута с формулой места не
     // сохраняется — считаться будет формула.
     const input = Object.fromEntries(
-      Object.entries(args.input).filter(([fieldId]) => !formulaBound.has(fieldId)),
+      Object.entries(args.input).filter(
+        ([fieldId, value]) => !formulaBound.has(fieldId) && !isDashOnlyMarker(value),
+      ),
     );
     const candidates = await this.defaults.resolve(
       definitions.filter((definition) => !formulaBound.has(definition.id)),
@@ -108,8 +110,13 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
     args: PrepareUpdateArgs,
     tx?: TransactionClient,
   ): Promise<{ next: CustomFieldValues; changes: RegistryFieldChange[] }> {
+    // Дефис-маркер «пусто» (—, –, ‐…) нормализуется в null при записи:
+    // новые маркеры не попадают в БД — фильтры и формулы видят пусто (#632).
+    const patch = Object.fromEntries(
+      Object.entries(args.patch).map(([fieldId, value]) => [fieldId, dashToNull(value)]),
+    );
     const changed: CustomFieldValues = {};
-    for (const [fieldId, value] of Object.entries(args.patch)) {
+    for (const [fieldId, value] of Object.entries(patch)) {
       if (value === null) continue;
       if (canonical(args.current[fieldId]) !== canonical(value)) changed[fieldId] = value;
     }
@@ -130,7 +137,7 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
 
     const next: CustomFieldValues = { ...args.current };
     const changes: RegistryFieldChange[] = [];
-    for (const [fieldId, value] of Object.entries(args.patch)) {
+    for (const [fieldId, value] of Object.entries(patch)) {
       const before = (args.current[fieldId] ?? null) as CustomFieldValue | null;
       if (value === null) {
         if (before === null) continue;
@@ -198,6 +205,11 @@ function boundList(
   return scoping.target === undefined
     ? [...definitions]
     : definitions.filter(boundTo(scoping.target));
+}
+
+/** Дефис-маркер «пусто» → null (очистка ключа), иначе значение как есть. */
+function dashToNull<T>(value: T): T | null {
+  return isDashOnlyMarker(value) ? null : value;
 }
 
 /** Значения СУЩЕСТВУЮЩИХ, но непривязанных к месту атрибутов — 422

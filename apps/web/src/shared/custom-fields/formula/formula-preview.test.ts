@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cleanEmptyMarker, cleanFormulaText, previewText } from './formula-preview.js';
+import { cleanFormulaText, previewText } from './formula-preview.js';
 
 describe('cleanFormulaText: пустые операнды не оставляют дефисов (#632)', () => {
   it('двойной дефис и типографские маркеры убираются', () => {
@@ -21,16 +21,6 @@ describe('cleanFormulaText: пустые операнды не оставляю�
     expect(cleanFormulaText('ГОСТ 12—3')).toBe('ГОСТ 12—3');
     expect(cleanFormulaText('A--B')).toBe('A--B');
     expect(cleanFormulaText('2026--42')).toBe('2026-42');
-  });
-});
-
-describe('cleanEmptyMarker: ручное значение поверх формулы (#632)', () => {
-  it('легаси-маркер пустоты убирается, данные пользователя целы', () => {
-    expect(cleanEmptyMarker('—')).toBeNull();
-    expect(cleanEmptyMarker(' – ')).toBeNull();
-    expect(cleanEmptyMarker('-5')).toBe('-5');
-    expect(cleanEmptyMarker('ГОСТ 12—3')).toBe('ГОСТ 12—3');
-    expect(cleanEmptyMarker('2026-42')).toBe('2026-42');
   });
 });
 

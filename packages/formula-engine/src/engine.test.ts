@@ -160,6 +160,15 @@ describe('concat: пустые операнды не оставляют вися
     expect(evaluate(concat(lit('-')), resolver({ self: {} })).value).toBe('-');
   });
 
+  it('все поля пусты, разделители есть — пустая строка, не дефис-маркер', () => {
+    // `А & "-" & Б` при пустых А и Б = '', а не '-': движок не генерирует
+    // легаси-маркер пустоты (фикс «кривого дефиса» у наследованных формул).
+    expect(evaluate(concat(self(1), lit('-'), self(2)), resolver({ self: {} })).value).toBe('');
+    expect(
+      evaluate(concat(self(1), lit('-'), self(2), lit('-'), self(3)), resolver({ self: {} })).value,
+    ).toBe('');
+  });
+
   it('непустые операнды сохраняют разделитель', () => {
     expect(
       evaluate(concat(self(1), lit('-'), self(2)), resolver({ self: { 1: 'A', 2: 'B' } })).value,

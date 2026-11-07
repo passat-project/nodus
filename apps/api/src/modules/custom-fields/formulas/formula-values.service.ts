@@ -5,8 +5,8 @@ import type {
   CustomFieldValues,
   MoneyValue,
 } from '@nodus/contracts';
-import { customFieldValueSchemaOf } from '@nodus/contracts';
-import type { FormulaRecord, FormulaValue } from '@nodus/formula-engine';
+import { customFieldValueSchemaOf, isDashOnlyMarker } from '@nodus/contracts';
+import { textOf, type FormulaRecord, type FormulaValue } from '@nodus/formula-engine';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import {
@@ -121,10 +121,18 @@ export class FormulaValuesService {
         // Грамматика bool: хранится только true (отсутствие = false).
         return value === true ? true : null;
       default: {
+        // Текстовые поля принимают любой скаляр с автопревращением в строку
+        // (как «&» в Excel, Р2): число/флаг/дата из формулы — текст, а не
+        // вечная ошибка type_mismatch (грамматика типа — z.string()).
+        const scalar =
+          (definition.type === 'text' || definition.type === 'long_text') &&
+          typeof value !== 'string'
+            ? textOf(value)
+            : value;
         // Расширяющие типы читают скаляр как массив (Р3, как `readCustomFieldValue`):
         // один сотрудник из формулы годится в «Сотрудники (несколько)».
         const candidate =
-          definition.type === 'users' && typeof value === 'string' ? [value] : value;
+          definition.type === 'users' && typeof scalar === 'string' ? [scalar] : scalar;
         const parsed = customFieldValueSchemaOf(definition).safeParse(candidate);
         if (!parsed.success) return null;
         const typed = parsed.data as CustomFieldValue;
@@ -176,10 +184,6 @@ function itemIdOf(items: readonly DictionaryItemRef[], label: string): string | 
   return match?.id ?? null;
 }
 
-/** Любой «пустой» маркер из дефисов/пробелов (`—`, `–`, `−`, `‐`, `‑` и их
- *  комбинации): в формуле это пусто, не текст. */
-const EMPTY_DASH = /^[\s\u2010-\u2015\u2212-]+$/;
-
 /** Значение атрибута в языке формул (#632): enum — код варианта, иначе подпись. */
 export function toFormulaValue(
   definition: Pick<DefinitionLike, 'type'>,
@@ -188,12 +192,12 @@ export function toFormulaValue(
 ): FormulaValue {
   // Легаси-маркер пустоты в ЛЮБОМ строковом значении (в т.ч. text/long_text):
   // иначе он попадает в формулы и рисуется «кривым дефисом».
-  if (typeof value === 'string' && EMPTY_DASH.test(value)) return null;
+  if (typeof value === 'string' && isDashOnlyMarker(value)) return null;
   switch (definition.type) {
     case 'enum': {
       const item = items.get(String(value));
       const text = item ? (item.code ?? item.name) : String(value);
-      return EMPTY_DASH.test(text) ? null : text;
+      return isDashOnlyMarker(text) ? null : text;
     }
     case 'multienum': {
       const ids = Array.isArray(value) ? value : [String(value)];
@@ -202,13 +206,13 @@ export function toFormulaValue(
           const item = items.get(id);
           return item ? (item.code ?? item.name) : id;
         })
-        .filter((id) => !EMPTY_DASH.test(id));
+        .filter((id) => !isDashOnlyMarker(id));
     }
     case 'users': {
       // Сотрудники — массив id без словарной замены (A1-05): раньше массив
       // уходил в default и превращался в 'id1,id2'.
       const ids = Array.isArray(value) ? value : [String(value)];
-      return ids.filter((id) => !EMPTY_DASH.test(id));
+      return ids.filter((id) => !isDashOnlyMarker(id));
     }
     case 'money':
       return value as MoneyValue;
@@ -219,7 +223,7 @@ export function toFormulaValue(
       return typeof value === 'number' ? value : Number(value);
     default: {
       const text = String(value);
-      return EMPTY_DASH.test(text) ? null : text;
+      return isDashOnlyMarker(text) ? null : text;
     }
   }
 }

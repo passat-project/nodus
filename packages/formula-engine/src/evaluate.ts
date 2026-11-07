@@ -39,9 +39,15 @@ function evaluateOperation(
         texts[index] !== '' &&
         /^[-–—−]+$/.test(arg.value),
     );
-    // Формула из одного литерала `"-"` — это литерал, а не разделитель.
-    if (!texts.some((text, index) => !separator[index] && text !== '')) {
+    // Формула из одних литералов — текст как написан (`"-"` сам по себе —
+    // литерал, а не разделитель). Если операнды-значения ЕСТЬ, но все пусты —
+    // результат пуст: висячие разделители не собираются в дефис-маркер
+    // «пусто» (`А & "-" & Б` при пустых А и Б = ``, а не `-`).
+    if (node.args.every((arg) => arg.kind === 'literal')) {
       return texts.join('');
+    }
+    if (!texts.some((text, index) => !separator[index] && text !== '')) {
+      return '';
     }
     const parts: string[] = [];
     for (let index = 0; index < texts.length; index += 1) {

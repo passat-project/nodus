@@ -1,5 +1,5 @@
 import type { CustomFieldValue } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { isDashOnlyMarker, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
   Dialog,
@@ -42,7 +42,9 @@ export function movePreviewValueText(value: CustomFieldValue | null | undefined)
     return value ? ui.customFields.value.yes : ui.customFields.value.no;
   if (typeof value === 'object') return formatMoney(value, null);
   const text = String(value).trim();
-  return text === '' ? ui.customFields.value.empty : text;
+  // Легаси-дефис в хранимом «было» — то же пусто, не кривой дефис (#632).
+  if (text === '' || isDashOnlyMarker(text)) return ui.customFields.value.empty;
+  return text;
 }
 
 /**

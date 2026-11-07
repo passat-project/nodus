@@ -184,10 +184,21 @@ export function readCustomFieldValue(
   return undefined;
 }
 
-/** «Заполнено»: непустая строка/массив, число (в т.ч. 0), деньги, `true`. */
+/** «Пустой» маркер из дефисов/пробелов (`—`, `–`, `−`, `‐`, `‑` и комбинации):
+ *  легаси-пустота в строковых значениях. Для формул, фильтров и «заполнено»
+ *  это пусто (#632); при записи реестр нормализует маркер в null — новые
+ *  дефисы в БД не попадают. Один предикат на все слои (движок/API/веб). */
+const EMPTY_DASH_MARKER = /^[\s\u2010-\u2015\u2212-]+$/;
+
+export function isDashOnlyMarker(value: unknown): boolean {
+  return typeof value === 'string' && EMPTY_DASH_MARKER.test(value);
+}
+
+/** «Заполнено»: непустая строка/массив, число (в т.ч. 0), деньги, `true`;
+ *  дефис-маркер — не заполнено (пустое значение не считается значением). */
 export function isCustomFieldValueFilled(raw: unknown): boolean {
   if (raw === null || raw === undefined) return false;
-  if (typeof raw === 'string') return raw.trim().length > 0;
+  if (typeof raw === 'string') return raw.trim().length > 0 && !isDashOnlyMarker(raw);
   if (typeof raw === 'boolean') return raw;
   if (typeof raw === 'number') return Number.isFinite(raw);
   if (Array.isArray(raw)) return raw.length > 0;

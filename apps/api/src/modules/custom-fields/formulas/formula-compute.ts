@@ -41,6 +41,11 @@ export async function computeFormula(args: {
     evaluation.value,
   );
   if (materialized === null && evaluation.value !== null) {
+    // ЛОЖЬ в bool-поле — грамматически пустое значение («хранится только
+    // true»), а не несовпадение типа: честный пустой результат без «!».
+    if (definition.type === 'bool' && evaluation.value === false) {
+      return { value: null, error: null };
+    }
     return {
       value: null,
       error: {

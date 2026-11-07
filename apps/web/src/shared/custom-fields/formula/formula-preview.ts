@@ -3,7 +3,9 @@ import type {
   CustomFieldValue,
   FormulaValidationIssue,
 } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { isDashOnlyMarker, ui } from '@nodus/contracts';
+
+export { isDashOnlyMarker as isDashOnly };
 
 import { ApiError } from '../../api-client.js';
 import {
@@ -58,15 +60,7 @@ export function saveErrorText(error: unknown): string {
   return ui.formulas.editor.saveError;
 }
 
-/** Значение целиком из дефисов — это старый «пустой» маркер, а не текст. */
-const EMPTY_DASH_VALUE = /^[\s\u2010-\u2015\u2212-]+$/;
-/** Висячие разделители по краям: пустой операнд склейки оставлял `--`/`—`. */
 const EDGE_DASHES = /[\s\u2010-\u2015\u2212-]+$/;
-
-/** Значение — только дефисы/пробелы (легаси-маркер пустоты). */
-export function isDashOnly(value: unknown): boolean {
-  return typeof value === 'string' && EMPTY_DASH_VALUE.test(value);
-}
 
 /**
  * Формульное значение без пустых маркеров и ВИСЯЧИХ разделителей (Р13).
@@ -77,22 +71,12 @@ export function isDashOnly(value: unknown): boolean {
  * (`ГОСТ 12—3`, `A--B`) и знак числа (`-5`) не трогаем — иначе отображение
  * портит данные пользователя.
  */
-/** Легаси-маркер пустоты у РУЧНОГО значения (`origin='value'`): значение
- *  целиком из дефисов — это «пусто», а не текст. Внутренние дефисы и знак
- *  числа не трогаем: это данные пользователя. */
-export function cleanEmptyMarker(
-  value: CustomFieldValue | null | undefined,
-): CustomFieldValue | null | undefined {
-  if (typeof value !== 'string') return value;
-  return EMPTY_DASH_VALUE.test(value) ? null : value;
-}
-
 export function cleanFormulaText(
   value: CustomFieldValue | null | undefined,
 ): CustomFieldValue | null | undefined {
   if (value === null || value === undefined) return value;
   if (typeof value !== 'string') return value;
-  if (EMPTY_DASH_VALUE.test(value)) return null;
+  if (isDashOnlyMarker(value)) return null;
   let cleaned = value.replace(EDGE_DASHES, '');
   // Типографский минус перед цифрой — знак числа (`−5`), не разделитель.
   cleaned = cleaned.replace(/^[\u2212](?=\d)/, '-');
