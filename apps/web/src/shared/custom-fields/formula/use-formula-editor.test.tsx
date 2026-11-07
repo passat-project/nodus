@@ -65,7 +65,7 @@ let onClose: ReturnType<typeof vi.fn>;
 
 /** Стенд: строка формулы как в окне (contenteditable + события хука). */
 function mountEditor(fieldId: string) {
-  onClose = vi.fn();
+  onClose = vi.fn((): void => undefined);
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function Harness() {
     editor = useFormulaEditor({
@@ -74,7 +74,7 @@ function mountEditor(fieldId: string) {
       fieldId,
       ownDefinitions,
       hostContext: { parentId: null, projectId: '41000000-0000-4000-8000-000000000001' },
-      onClose,
+      onClose: onClose as unknown as () => void,
     });
     return (
       <div

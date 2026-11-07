@@ -2,7 +2,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import type {
-  CustomFieldDefinition,
   CustomFieldType,
   FormulaAggregate,
   FormulaHostKind,
@@ -58,19 +57,20 @@ function mountTypeEditor(
     allowRelated?: boolean;
   } = {},
 ) {
-  onSave = vi.fn();
-  onClose = vi.fn();
+  onSave = vi.fn((ast: FormulaNode | null) => {
+    void ast;
+  });
+  onClose = vi.fn(() => undefined);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const initialProps = {
+  const allProps = {
     open: true,
     initial,
-    ownDefinitions: demoCustomFieldDefinitions.filter((definition: CustomFieldDefinition) =>
-      [28, 29, 27].includes(definition.number),
-    ),
+    targetType: 'number' as CustomFieldType,
+    ...options,
   };
   const { rerender } = render(
     <QueryClientProvider client={client}>
-      <TypeHarness {...initialProps} {...options} />
+      <TypeHarness {...allProps} />
     </QueryClientProvider>,
   );
   return {
@@ -78,7 +78,7 @@ function mountTypeEditor(
     reopen: (next: { open: boolean; initial: FormulaNode | null }) =>
       rerender(
         <QueryClientProvider client={client}>
-          <TypeHarness {...initialProps} {...options} {...next} />
+          <TypeHarness {...allProps} {...next} />
         </QueryClientProvider>,
       ),
   };
@@ -106,8 +106,8 @@ function TypeHarness({
     ),
     initial,
     allowRelated,
-    onSave,
-    onClose,
+    onSave: onSave as unknown as (ast: FormulaNode | null) => void,
+    onClose: onClose as unknown as () => void,
   });
   return (
     <div

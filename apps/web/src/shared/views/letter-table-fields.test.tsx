@@ -248,7 +248,10 @@ describe('makeLetterTableFields: системные колонки (#632, Р9)',
     expect(textOf('theirNumber', letterOf())).toContain('01-12/345');
     expect(textOf('theirNumber', letterOf({ theirNumber: null, theirDate: null }))).toBe('—');
     expect(
-      textOf('addressee', letterOf({ addressee: { id: REF_ID, displayName: 'Иванов И.' } })),
+      textOf(
+        'addressee',
+        letterOf({ addressee: { id: REF_ID, displayName: 'Иванов И.', avatarUrl: null } }),
+      ),
     ).toContain('Иванов И.');
     expect(textOf('stage', letterOf())).toBe('Зарегистрировано');
     expect(textOf('responseDeadline', letterOf({ responseDeadline: '2026-11-05' }))).not.toBe('');

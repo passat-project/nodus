@@ -37,7 +37,7 @@ describe('emptyDraft: префилл формульных слотов (#632, Р
       unknown: 'x',
       [`cf.not-a-uuid`]: 'мимо',
       empty: null,
-    };
+    } as unknown as Record<string, CustomFieldValue>;
     const draft = emptyDraft(context(), prefill);
     expect(draft.fields.customFields[CF]).toBe('КЖ-1');
     expect(draft.fields.description).toBe('новое');
