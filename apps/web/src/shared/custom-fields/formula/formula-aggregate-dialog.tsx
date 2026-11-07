@@ -172,8 +172,10 @@ export function FormulaAggregateDialog({
             </div>
           ) : null}
 
+          {/* Показываем то же значение, что уйдёт в формулу: иначе при поздней
+              загрузке видов Select пуст, а apply берёт первый вид. */}
           {from === 'folder_chain' ? (
-            <Select value={folderKindId} onValueChange={setFolderKindId}>
+            <Select value={folderKindId || (kinds[0]?.id ?? '')} onValueChange={setFolderKindId}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder={ui.formulas.sources.folderKind} />
               </SelectTrigger>

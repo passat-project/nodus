@@ -16,6 +16,7 @@ describe('cleanFormulaText: пустые операнды не оставляю�
   });
   it('легитимные дефисы и знак числа не портятся', () => {
     expect(cleanFormulaText('-5')).toBe('-5');
+    expect(cleanFormulaText('−5')).toBe('-5');
     expect(cleanFormulaText('Москва — Питер')).toBe('Москва — Питер');
     expect(cleanFormulaText('ГОСТ 12—3')).toBe('ГОСТ 12—3');
     expect(cleanFormulaText('A--B')).toBe('A--B');

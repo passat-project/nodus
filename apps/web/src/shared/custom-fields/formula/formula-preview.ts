@@ -79,6 +79,8 @@ export function cleanFormulaText(
   if (typeof value !== 'string') return value;
   if (EMPTY_DASH_VALUE.test(value)) return null;
   let cleaned = value.replace(EDGE_DASHES, '');
+  // Типографский минус перед цифрой — знак числа (`−5`), не разделитель.
+  cleaned = cleaned.replace(/^−(?=\d)/, '-');
   // `--5` — знак числа, а не разделитель.
   cleaned = cleaned.replace(/^-{2,}(?=\d)/, '-');
   if (!/^-\d/.test(cleaned)) cleaned = cleaned.replace(/^[\s—–−-]+/, '');

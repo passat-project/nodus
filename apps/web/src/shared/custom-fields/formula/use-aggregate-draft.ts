@@ -90,7 +90,6 @@ export function useAggregateDraft({
     setFn(aggregate?.fn ?? 'sum');
     if (aggregate?.from.kind === 'folder_chain') {
       setFrom('folder_chain');
-      setFolderKindId(aggregate.from.kindId);
     } else if (aggregate?.from.kind === 'related') {
       const selector = aggregate.from.selector;
       setFrom(selector.kind);

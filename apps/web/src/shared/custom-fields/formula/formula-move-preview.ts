@@ -204,7 +204,15 @@ export function useFormulaMoveGate(): FormulaMoveGate {
       if (busy.current || held.current) return;
       busy.current = true;
       try {
-        const response = await movePreviewChanges(run);
+        let response;
+        try {
+          response = await movePreviewChanges(run);
+        } catch {
+          // Сбой расчёта диффа не блокирует перенос (значения пересчитаются
+          // после) и не оставляет unhandled rejection у `void gate.offer`.
+          apply();
+          return;
+        }
         if (response.changes.length === 0) {
           apply();
           return;
