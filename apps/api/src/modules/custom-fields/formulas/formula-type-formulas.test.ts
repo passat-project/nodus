@@ -65,13 +65,13 @@ function run(
     promise: applyTypeFormulas({
       hostKind: 'task' as FormulaHostKind,
       hostIds: [HOST],
-      snapshot: stub.snapshot,
+      snapshot: stub.snapshot as never,
       ownByHost: new Map(),
       result,
-      cache: stub.cache,
-      context: stub.context,
-      engine: stub.engine,
-      values: stub.values,
+      cache: stub.cache as never,
+      context: stub.context as never,
+      engine: stub.engine as never,
+      values: stub.values as never,
       ...args,
     }),
   };

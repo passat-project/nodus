@@ -24,7 +24,7 @@ function stubs(
 ) {
   const changes = over.changes ?? [{ fieldId: FIELD, from: null, to: 1 }];
   const projects = {
-    lockForUpdate: vi.fn(async () => ({})),
+    lockForUpdate: vi.fn(async (): Promise<unknown> => ({})),
     findById: vi.fn(async () =>
       over.project === undefined
         ? {
@@ -142,7 +142,10 @@ describe('ProjectValuesWriter: папка (#632, Р4/security)', () => {
   it('проект исчез — событие едет без аудитории (gateway простит)', async () => {
     const d = stubs({ project: null });
     await d.writer.writeNode({} as never, ACTOR, PROJECT, NODE, FIELD, 1);
-    const payload = d.eventBus.emit.mock.calls[0]?.[2] as Record<string, unknown>;
+    const calls = d.eventBus.emit.mock.calls as unknown as [
+      [unknown, unknown, Record<string, unknown>],
+    ];
+    const payload = calls[0]?.[2];
     expect(payload.audience).toBeUndefined();
   });
 });

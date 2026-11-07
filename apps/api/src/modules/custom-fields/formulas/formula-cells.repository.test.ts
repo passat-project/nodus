@@ -53,7 +53,11 @@ describe('FormulaCellsRepository: ячейки хостов (#632, Р1)', () => 
       }),
     ).resolves.toBe('new-cell');
     await repo.updateState(prisma as never, 'cell-1', { error: null, depth: 2 });
-    const updateArg = prisma.formulaCell.update.mock.calls[0][0];
+    const updateArg = (
+      prisma.formulaCell.update.mock.calls as unknown as [
+        [{ data: { recalcDepth: number; error: unknown } }],
+      ]
+    )[0]![0];
     expect(updateArg.data.recalcDepth).toBe(2);
     expect(String(updateArg.data.error)).toContain('DbNull');
   });
@@ -81,7 +85,10 @@ describe('FormulaCellsRepository: зависимости (#632, Р4/A3-05)', () 
   it('префикс — диапазоном gte/lt, не LIKE', async () => {
     const { repo, prisma } = repoWith({ dep: [] });
     await repo.byDepPrefix('v:task:h1:');
-    const where = prisma.formulaDep.findMany.mock.calls[0][0].where;
+    const depCalls = prisma.formulaDep.findMany.mock.calls as unknown as [
+      [{ where: { depKey: { gte: string; lt: string } } }],
+    ];
+    const where = depCalls[0]![0].where;
     expect(where.depKey.gte).toBe('v:task:h1:');
     expect(where.depKey.lt).toBe('v:task:h1:\uFFFF');
   });

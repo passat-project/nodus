@@ -47,10 +47,15 @@ function deps(
   };
   const values = { materialize: vi.fn(async (_def: unknown, value: unknown) => value) };
   const engine = {
-    evaluate: vi.fn((_ast: unknown, resolver: { marker: string }) => ({
-      value: resolver.marker === 'after' ? 2 : 1,
-      error: null,
-    })),
+    evaluate: vi.fn(
+      (
+        _ast: unknown,
+        resolver: { marker: string },
+      ): { value: unknown; error: { code: string; message: string } | null } => ({
+        value: resolver.marker === 'after' ? 2 : 1,
+        error: null,
+      }),
+    ),
   };
   return {
     deps: { repo, meta, context, values, engine } as never,
@@ -63,14 +68,14 @@ function deps(
 describe('previewCells: dry-run переноса (#632, Р10)', () => {
   it('пустой список хостов — без работы', async () => {
     const d = deps();
-    const entries = await previewCells(d.deps, 'task', [], { kind: 'node', nodeId: 'n' });
+    const entries = await previewCells(d.deps, 'task', [], { nodeParent: {} });
     expect(entries).toEqual([]);
     expect(d.repo.listByHosts).not.toHaveBeenCalled();
   });
 
   it('своё значение изменилось — строка диффа с подписью записи и было/станет', async () => {
     const d = deps({ cells: [{ hostId: HOST, fieldId: FIELD, ast: AST }] });
-    const entries = await previewCells(d.deps, 'task', [HOST], { kind: 'node', nodeId: 'n' });
+    const entries = await previewCells(d.deps, 'task', [HOST], { nodeParent: {} });
     expect(entries).toEqual([
       {
         hostKind: 'task',
@@ -87,7 +92,7 @@ describe('previewCells: dry-run переноса (#632, Р10)', () => {
   it('неизменившееся значение в дифф не попадает; ошибка расчёта — to=null', async () => {
     const same = deps({ cells: [{ hostId: HOST, fieldId: FIELD, ast: AST }] });
     same.engine.evaluate.mockReturnValue({ value: 1, error: null });
-    const entries = await previewCells(same.deps, 'task', [HOST], { kind: 'node', nodeId: 'n' });
+    const entries = await previewCells(same.deps, 'task', [HOST], { nodeParent: {} });
     expect(entries).toEqual([]);
 
     const broken = deps({ cells: [{ hostId: HOST, fieldId: FIELD, ast: AST }] });
@@ -95,10 +100,7 @@ describe('previewCells: dry-run переноса (#632, Р10)', () => {
       value: null,
       error: { code: 'cycle', message: 'цикл' },
     });
-    const withError = await previewCells(broken.deps, 'task', [HOST], {
-      kind: 'node',
-      nodeId: 'n',
-    });
+    const withError = await previewCells(broken.deps, 'task', [HOST], { nodeParent: {} });
     expect(withError).toEqual([expect.objectContaining({ fieldId: FIELD, from: 1, to: null })]);
   });
 
@@ -113,7 +115,7 @@ describe('previewCells: dry-run переноса (#632, Р10)', () => {
       system: { name: 'Здание 1' },
       id: HOST,
     });
-    const entries = await previewCells(d.deps, 'node', [HOST], { kind: 'node', nodeId: 'n2' });
+    const entries = await previewCells(d.deps, 'node', [HOST], { nodeParent: {} });
     expect(entries).toEqual([expect.objectContaining({ hostLabel: 'Здание 1', from: 1, to: 2 })]);
 
     const suppressed = deps({
@@ -126,28 +128,21 @@ describe('previewCells: dry-run переноса (#632, Р10)', () => {
       system: {},
       id: HOST,
     });
-    const quiet = await previewCells(suppressed.deps, 'node', [HOST], {
-      kind: 'node',
-      nodeId: 'n2',
-    });
+    const quiet = await previewCells(suppressed.deps, 'node', [HOST], { nodeParent: {} });
     expect(quiet).toEqual([]);
   });
 
   it('хост не читается или формул нет — тихо пусто; подпись падает на id', async () => {
     const vanished = deps({ record: null });
-    expect(
-      await previewCells(vanished.deps, 'task', [HOST], { kind: 'node', nodeId: 'n' }),
-    ).toEqual([]);
+    expect(await previewCells(vanished.deps, 'task', [HOST], { nodeParent: {} })).toEqual([]);
 
     const noFormulas = deps({ record: { placeId: null, values: {}, system: {}, id: HOST } });
-    expect(
-      await previewCells(noFormulas.deps, 'task', [HOST], { kind: 'node', nodeId: 'n' }),
-    ).toEqual([]);
+    expect(await previewCells(noFormulas.deps, 'task', [HOST], { nodeParent: {} })).toEqual([]);
 
     const bare = deps({ cells: [{ hostId: HOST, fieldId: FIELD, ast: AST }] });
     bare.context.record.mockResolvedValue({ placeId: null, values: {}, system: {}, id: HOST });
     bare.engine.evaluate.mockReturnValue({ value: 2, error: null });
-    const entries = await previewCells(bare.deps, 'task', [HOST], { kind: 'node', nodeId: 'n' });
+    const entries = await previewCells(bare.deps, 'task', [HOST], { nodeParent: {} });
     expect(entries[0]?.hostLabel).toBe(HOST.slice(0, 8));
   });
 });

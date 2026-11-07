@@ -54,13 +54,13 @@ describe('RecordValuesProvider.record (#632, Р11/Р7)', () => {
     const d = setup();
     d.projectsReader.refsFor.mockResolvedValue([]);
     expect(await d.provider.record('node', ID, { actor: ACTOR as never })).toBeNull();
-    d.projects.node.mockResolvedValue({ kind: 'node', id: ID, projectId: null });
+    d.projects.node.mockResolvedValue({ kind: 'node', id: ID, projectId: null } as never);
     expect(await d.provider.record('node', ID, { actor: ACTOR as never })).toEqual({
       kind: 'node',
       id: ID,
       projectId: null,
     });
-    d.projects.node.mockResolvedValue(null);
+    d.projects.node.mockResolvedValue(null as never);
     expect(await d.provider.record('node', 'gone')).toBeNull();
   });
 });

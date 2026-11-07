@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ErrorCode } from '@nodus/contracts';
+import { ErrorCode, type FormulaNode } from '@nodus/contracts';
 
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { FormulaApiService, formulaErrorCodeOf } from './formula-api.service.js';
@@ -14,7 +14,7 @@ const NODE = '21000000-0000-4000-8000-000000000003';
 const PARENT = '21000000-0000-4000-8000-000000000004';
 const PROJECT = '21000000-0000-4000-8000-000000000005';
 const ACTOR = { id: 'user-1', permissions: [] };
-const AST = { kind: 'literal', value: 1 } as const;
+const AST: FormulaNode = { kind: 'literal', value: 1 };
 
 interface Stubs {
   service: FormulaApiService;
@@ -132,7 +132,7 @@ describe('FormulaApiService.validate (#632, Р10)', () => {
 describe('FormulaApiService.evaluate (#632, Р7/Р12)', () => {
   const hostBody = {
     ast: AST,
-    context: { hostKind: 'task', hostId: HOST },
+    context: { hostKind: 'task' as const, hostId: HOST },
     targetFieldId: FIELD,
   };
 
@@ -190,7 +190,7 @@ describe('FormulaApiService.evaluate (#632, Р7/Р12)', () => {
   it('префилл создания: узел без актора, проект узла и родитель сверены (Р7)', async () => {
     const creation = {
       ast: AST,
-      context: { creation: { hostKind: 'task', nodeId: NODE, parentId: PARENT } },
+      context: { creation: { hostKind: 'task' as const, nodeId: NODE, parentId: PARENT } },
     };
     const mismatch = stubs({
       node: { projectId: 'another-project' },

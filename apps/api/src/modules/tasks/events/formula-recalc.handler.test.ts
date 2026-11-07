@@ -31,12 +31,15 @@ function event(payload: Record<string, unknown>, actorId: string | null = null) 
 function setup() {
   const formulas = { recalcCells: vi.fn(async () => void 0) };
   const cells = {
-    numberByDefinitionId: vi.fn(async () => 7),
+    numberByDefinitionId: vi.fn(async (): Promise<number | null> => 7),
     depthOf: vi.fn(async () => 2),
     dependentCellsByDepKey: vi.fn(async (key: string) => {
       const parentId = key.slice('subtasks:task:'.length);
       return [{ cellId: `c-${parentId}`, hostKind: 'task', hostId: parentId, fieldId: FIELD }];
     }),
+    dependentCellsByDepPrefix: vi.fn(
+      async (): Promise<{ hostKind: string; hostId: string }[]> => [],
+    ),
   };
   const txRunner = { run: (fn: (tx: unknown) => unknown) => fn({}) };
   return { formulas, cells, txRunner };
@@ -171,7 +174,7 @@ describe('TaskFormulaDefinitionHandler (#632, Р13)', () => {
     const cells = {
       dependentCellsByField: vi.fn(async () => refs),
       dependentCellsByAttrNumber: vi.fn(async () => refs),
-      numberByDefinitionId: vi.fn(async () => 7),
+      numberByDefinitionId: vi.fn(async (): Promise<number | null> => 7),
     };
     const txRunner = { run: (fn: (tx: unknown) => unknown) => fn({}) };
     return {
