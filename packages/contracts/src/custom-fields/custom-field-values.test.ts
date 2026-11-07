@@ -7,8 +7,10 @@ import {
   customFieldValueSchemaOf,
   isCompatibleTypeChange,
   isCustomFieldValueFilled,
+  isDashOnlyMarker,
   linkKindOf,
   readCustomFieldValue,
+  sameCustomFieldValue,
   type CustomFieldValue,
 } from './custom-field-values.js';
 import { customFieldIdOfKey, customFieldKey } from './custom-field-key.js';
@@ -193,5 +195,50 @@ describe('ключ поля', () => {
     expect(customFieldIdOfKey(`cf.${ID}`)).toBe(ID);
     expect(customFieldIdOfKey('cf.not-a-uuid')).toBeNull();
     expect(customFieldIdOfKey('deadline')).toBeNull();
+  });
+});
+
+describe('дефис-маркер пустоты (#632)', () => {
+  it('все дефисы и пробелы — маркер, значимый текст — нет', () => {
+    for (const marker of ['—', '–', '‐', '‑', '−', '-', ' - - ', '\u2015 \u2010']) {
+      expect(isDashOnlyMarker(marker)).toBe(true);
+    }
+    expect(isDashOnlyMarker('КЖ-1')).toBe(false);
+    expect(isDashOnlyMarker('— 2')).toBe(false);
+    expect(isDashOnlyMarker(5)).toBe(false);
+    expect(isDashOnlyMarker(null)).toBe(false);
+  });
+
+  it('маркер — не заполнено', () => {
+    expect(isCustomFieldValueFilled('—')).toBe(false);
+    expect(isCustomFieldValueFilled(' - ')).toBe(false);
+    expect(isCustomFieldValueFilled('0359')).toBe(true);
+  });
+});
+
+describe('совпадение значений атрибута (Р5 #632)', () => {
+  it('null и undefined — одно и то же пусто', () => {
+    expect(sameCustomFieldValue(null, undefined)).toBe(true);
+    expect(sameCustomFieldValue(undefined, null)).toBe(true);
+    expect(sameCustomFieldValue(null, 'x')).toBe(false);
+    expect(sameCustomFieldValue('x', null)).toBe(false);
+  });
+
+  it('массивы — поэлементно, деньги — по сумме и валюте', () => {
+    expect(sameCustomFieldValue(['a', 'b'], ['a', 'b'])).toBe(true);
+    expect(sameCustomFieldValue(['a'], ['a', 'b'])).toBe(false);
+    expect(sameCustomFieldValue(['a'], 'a')).toBe(false);
+    expect(
+      sameCustomFieldValue({ amount: 1, currencyId: 'u' }, { currencyId: 'u', amount: 1 }),
+    ).toBe(true);
+    expect(
+      sameCustomFieldValue({ amount: 1, currencyId: 'u' }, { amount: 2, currencyId: 'u' }),
+    ).toBe(false);
+    expect(sameCustomFieldValue({ amount: 1, currencyId: 'u' }, 1)).toBe(false);
+  });
+
+  it('скаляры — строгое равенство', () => {
+    expect(sameCustomFieldValue('a', 'a')).toBe(true);
+    expect(sameCustomFieldValue(1, '1')).toBe(false);
   });
 });
