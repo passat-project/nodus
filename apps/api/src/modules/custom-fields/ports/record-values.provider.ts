@@ -69,21 +69,30 @@ export class RecordValuesProvider implements RecordValuesReader {
     }
   }
 
-  subtasks(taskId: string, tx?: TransactionClient): Promise<FormulaRecordData[]> {
-    return this.tasks.subtasks(taskId, tx);
+  subtasks(
+    taskId: string,
+    opts?: RecordReadOptions,
+    tx?: TransactionClient,
+  ): Promise<FormulaRecordData[]> {
+    return this.tasks.subtasks(taskId, opts, tx);
   }
 
   relatedTasks(
     taskId: string,
     relation: FormulaRelationKind,
     direction: FormulaRelationDirection,
+    opts?: RecordReadOptions,
     tx?: TransactionClient,
   ): Promise<FormulaRecordData[]> {
-    return this.tasks.relatedTasks(taskId, relation, direction, tx);
+    return this.tasks.relatedTasks(taskId, relation, direction, opts, tx);
   }
 
-  nodeTasks(nodeId: string, tx?: TransactionClient): Promise<FormulaRecordData[]> {
-    return this.tasks.nodeTasks(nodeId, tx);
+  nodeTasks(
+    nodeId: string,
+    projectId: string | null,
+    tx?: TransactionClient,
+  ): Promise<FormulaRecordData[]> {
+    return this.tasks.nodeTasks(nodeId, projectId, tx);
   }
 
   projectNodes(projectId: string, tx?: TransactionClient): Promise<FormulaRecordData[]> {

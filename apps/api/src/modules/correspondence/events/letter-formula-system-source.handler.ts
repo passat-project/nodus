@@ -35,7 +35,7 @@ async function letterHostsOfSource(
 /** Смена стадии/ответственного задачи — системные поля источника меняются
  *  без `task.updated`: формулы писем со ссылкой на задачу пересчитываются. */
 @Injectable()
-class LetterFormulaTaskSystemRunner {
+export class LetterFormulaTaskSystemRunner {
   constructor(
     private readonly txRunner: TransactionRunner,
     private readonly formulas: LetterFormulaService,

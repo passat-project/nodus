@@ -13,7 +13,12 @@ import {
 } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { EventBus } from '../../../core/events/event-bus.js';
-import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
+import {
+  FORMULA_CELLS,
+  type FormulaCellRef,
+  type FormulaCells,
+  type FormulaRecalcOutcome,
+} from '../../custom-fields/ports/formula-cells.port.js';
 import { letterAccessOf } from '../access/letter-access.js';
 import { letterAudience, LetterFieldsWriter } from './letter-fields.writer.js';
 import { LettersQueryService } from './letters-query.service.js';
@@ -110,7 +115,8 @@ export class LetterFormulaService {
     if (all.length === 0) return;
     await this.repo.lock(tx, letterId);
     for (const cell of all) {
-      const outcome = await this.cells.recalc(tx, cell, depth);
+      const outcome = await this.recalcOrNull(tx, cell, depth);
+      if (!outcome) continue;
       // Гашение каскада (Р8): неизменившееся значение событий не эмитит;
       // адресное formula_changed — только при смене наличия ошибки (O4).
       if (outcome.silent) continue;
@@ -134,6 +140,28 @@ export class LetterFormulaService {
       if (outcome.errorChanged) {
         await this.emitChanged(tx, actorId, letterId, cell.fieldId, outcome.error !== null);
       }
+    }
+  }
+
+  /**
+   * Пересчёт ячейки с изоляцией сбоя (Р4): падение чтения источника или
+   * вычисления одной ячейки не валит транзакцию и не превращает событие в
+   * вечный retry диспетчера — остальные ячейки письма пересчитываются.
+   */
+  private async recalcOrNull(
+    tx: TransactionClient,
+    cell: FormulaCellRef,
+    depth: number,
+  ): Promise<FormulaRecalcOutcome | null> {
+    try {
+      return await this.cells.recalc(tx, cell, depth);
+    } catch (error) {
+      this.log.warn(
+        `Формула письма ${cell.hostId}/${cell.fieldId} не пересчитана: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return null;
     }
   }
 

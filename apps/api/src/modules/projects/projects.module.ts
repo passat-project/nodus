@@ -31,6 +31,7 @@ import {
   ProjectNodeFormulaRecalcHandler,
   ProjectNodeKindFormulaHandler,
   ProjectStructureFormulaRecalcHandler,
+  ProjectTypeFormulaHandler,
 } from './events/formula-recalc.handler.js';
 import { ProjectNodesRepository } from './project-nodes.repository.js';
 import { ProjectFormulaEvents } from './project-formula-events.js';
@@ -106,6 +107,7 @@ import {
     ProjectStructureFormulaRecalcHandler,
     ProjectNodeDeletedFormulaHandler,
     ProjectNodeKindFormulaHandler,
+    ProjectTypeFormulaHandler,
     ProjectFormulaDefinitionHandler,
     // Пересчёт формул проектов/папок по событиям задач (#632): задачи —
     // источник через ссылку (`v:task:*`) и состав выборки папки (I3).

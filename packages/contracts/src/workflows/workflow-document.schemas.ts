@@ -263,6 +263,11 @@ export const workflowProblemCodeSchema = z.enum([
   'decider_position_empty',
   'decider_window_needs_rights',
   'decider_source_empty',
+  /** Формула-подстановка слота (#632, Р12): AST не проходит грамматику языка
+   *  (глубина, арность, матрица источников, запрет related в форме создания)
+   *  или результат не подходит к типу поля. Публикация с такой формулой дала
+   *  бы пустой слот в окне или 422 на сохранении — отклоняем заранее. */
+  'formula_invalid',
 ]);
 export type WorkflowProblemCode = z.infer<typeof workflowProblemCodeSchema>;
 
@@ -273,5 +278,8 @@ export const workflowProblemSchema = z.object({
   transitionId: docIdSchema.optional(),
   /** Ключ слота формы создания (#432); `'*'` — форма целиком. */
   creationField: z.string().min(1).optional(),
+  /** Человекочитаемая деталь проблемы (какой именно слот/узел формулы):
+   *  код проблемы — короткая формулировка, деталь уточняет её в 422 и логах. */
+  detail: z.string().min(1).max(300).optional(),
 });
 export type WorkflowProblem = z.infer<typeof workflowProblemSchema>;

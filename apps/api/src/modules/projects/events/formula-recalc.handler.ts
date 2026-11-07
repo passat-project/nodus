@@ -7,6 +7,7 @@ import {
   projectNodeKindChangedPayloadSchema,
   projectNodeMovedPayloadSchema,
   projectNodeUpdatedPayloadSchema,
+  projectTypeChangedPayloadSchema,
   projectUpdatedPayloadSchema,
   type DomainEvent,
 } from '@nodus/contracts';
@@ -16,6 +17,7 @@ import type { TransactionClient } from '../../../core/database/transaction-runne
 import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import { ProjectNodesRepository } from '../project-nodes.repository.js';
 import { ProjectFormulaRecalcService } from '../project-formula-recalc.service.js';
+import { ProjectsRepository } from '../projects.repository.js';
 
 /** Номера атрибутов из ключей `cf.<uuid>` события хоста. */
 async function numbersOf(
@@ -130,6 +132,21 @@ export class ProjectNodeFormulaRecalcHandler {
         depth + 1,
       );
       const systemRefs = await this.cells.dependentCellsByDepKey(`system:node:${nodeId}`, tx);
+      // Проект-хост с зависимостью `system:node:<N>` (формула проекта читает
+      // системное поле папки через ref_field) — пересчитывается вместе с
+      // папками: иначе значение проекта держит устаревший снимок (Р4).
+      const projects = [
+        ...new Set(systemRefs.filter((cell) => cell.hostKind === 'project').map((c) => c.hostId)),
+      ];
+      for (const hostProjectId of projects) {
+        await this.formulas.recalcProjectCells(
+          tx,
+          event.actorId ?? null,
+          hostProjectId,
+          [],
+          depth + 1,
+        );
+      }
       const nodes = [
         ...new Set(
           systemRefs
@@ -298,6 +315,47 @@ export class ProjectNodeKindFormulaHandler {
     this.logger.debug(
       { kindId: parsed.data.kindId, nodes: rows.length },
       'Формулы папок сменённого вида пересчитаны',
+    );
+  }
+}
+
+/**
+ * Смена формы типа проекта (`project.type_changed`, каталожное): слот формы
+ * и есть привязка атрибута (Р3/Р10 #631) — у проектов этого типа меняется
+ * доступность источников (`attribute_unavailable`) и набор слотов. Симметрично
+ * видам папок (`ProjectNodeKindFormulaHandler`): пересчёт партиями по 100
+ * проектов, каждый — своей транзакцией (Р4, таймаут большой tx).
+ */
+@Injectable()
+export class ProjectTypeFormulaHandler {
+  static readonly eventType = PROJECT_EVENTS.TYPE_CHANGED;
+
+  constructor(
+    private readonly txRunner: TransactionRunner,
+    private readonly formulas: ProjectFormulaRecalcService,
+    private readonly projects: ProjectsRepository,
+    private readonly logger: PinoLogger,
+  ) {
+    this.logger.setContext(ProjectTypeFormulaHandler.name);
+  }
+
+  async handle(event: DomainEvent<Record<string, unknown>>): Promise<void> {
+    const parsed = projectTypeChangedPayloadSchema.safeParse(event.payload);
+    if (!parsed.success || parsed.data.change === 'created') return;
+    // Имя/значок/цвет/архив привязок не меняют — пересчёт не нужен.
+    if (!parsed.data.fields.includes('form')) return;
+    const projectIds = await this.projects.idsByType(parsed.data.typeId);
+    for (let index = 0; index < projectIds.length; index += 100) {
+      const batch = projectIds.slice(index, index + 100);
+      await this.txRunner.run(async (tx) => {
+        for (const projectId of batch) {
+          await this.formulas.recalcProjectCells(tx, event.actorId ?? null, projectId, [], 1);
+        }
+      });
+    }
+    this.logger.debug(
+      { typeId: parsed.data.typeId, projects: projectIds.length },
+      'Формулы проектов сменённого типа пересчитаны',
     );
   }
 }

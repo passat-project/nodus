@@ -24,6 +24,7 @@ import {
   LetterFormulaDeletedSourceHandler,
   LetterFormulaNodeDeletedSourceHandler,
   LetterFormulaStageSourceHandler,
+  LetterFormulaTaskSystemRunner,
 } from './events/letter-formula-system-source.handler.js';
 import { LetterHistoryRepository } from './history/letter-history.repository.js';
 import { LetterHistoryService } from './history/letter-history.service.js';
@@ -104,6 +105,9 @@ import { LetterWorkflowAdapter } from './workflow/letter-workflow.adapter.js';
     // Формулы писем по событиям-источникам (#632): значения задач, проектов
     // и папок, прочитанные по атрибуту-ссылке (I3 — пишутся только письма).
     LetterFormulaTaskSourceHandler,
+    // Общий пересчёт писем по системным полям задачи (стадия/ответственный):
+    // зависит от него каждый из системных handler'ов ниже.
+    LetterFormulaTaskSystemRunner,
     LetterFormulaStageSourceHandler,
     LetterFormulaAssignedSourceHandler,
     LetterFormulaDeletedSourceHandler,

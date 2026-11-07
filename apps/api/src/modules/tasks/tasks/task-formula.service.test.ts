@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Logger } from '@nestjs/common';
 import { ErrorCode, type AuthUser } from '@nodus/contracts';
 
 import { TaskFormulaService } from './task-formula.service.js';
@@ -50,7 +51,7 @@ function setup(options: { nodeProjectId?: string | null } = {}) {
     subtreeIds: vi.fn(async () => [TASK, CHILD, HIDDEN]),
     visibleIdsAmong: vi.fn(async () => [TASK, CHILD]),
   };
-  const repo = { findWithParticipants: vi.fn(async () => row) };
+  const repo = { findWithParticipants: vi.fn(async () => row), lock: vi.fn(async () => void 0) };
   const writer = { apply: vi.fn(async () => void 0) };
   const eventBus = { emit: vi.fn(async () => void 0) };
   const projectRights = { supplement: vi.fn(async (roles: unknown) => roles) };
@@ -58,8 +59,19 @@ function setup(options: { nodeProjectId?: string | null } = {}) {
     read: vi.fn(async () => ({ ast: null, origin: null })),
     preview: vi.fn<(...args: unknown[]) => Promise<unknown[]>>(async () => []),
     dependentCellsByValues: vi.fn(async () => []),
-    cellsForHost: vi.fn(async () => []),
+    cellsForHost: vi.fn(
+      async (): Promise<
+        { cellId: string; hostKind: string; hostId: string; fieldId: string }[]
+      > => [],
+    ),
     dependentCellsByDepKey: vi.fn(async () => []),
+    recalc: vi.fn(async () => ({
+      value: 5,
+      error: null,
+      changed: true,
+      errorChanged: false,
+      silent: false,
+    })),
   };
   const records = {
     record: vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({
@@ -139,5 +151,21 @@ describe('TaskFormulaService.movePreview (#632, Р10, критерий 1)', () =
   it('ничего не меняется — пустой список изменений', async () => {
     const { service } = setup();
     expect(await service.movePreview(creator, TASK, NODE)).toEqual({ changes: [] });
+  });
+});
+
+describe('TaskFormulaService.recalcCells: изоляция сбоя ячейки (A3-07)', () => {
+  const cell = (id: string) => ({ cellId: id, hostKind: 'task', hostId: TASK, fieldId: FIELD });
+
+  it('падение пересчёта одной ячейки не валит партию: остальные обработаны', async () => {
+    const { service, cells, writer } = setup();
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    cells.cellsForHost.mockResolvedValueOnce([cell('c1'), cell('c2')]);
+    cells.recalc.mockRejectedValueOnce(new Error('источник недоступен'));
+    await expect(service.recalcCells({} as never, null, TASK, [], 1)).resolves.toBeUndefined();
+    expect(cells.recalc).toHaveBeenCalledTimes(2);
+    expect(writer.apply).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

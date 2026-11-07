@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { CreationFieldKey, CreationForm, ProcessType } from '@nodus/contracts';
+import type { CreationForm, ProcessType } from '@nodus/contracts';
 import { typeConfigOf, typeCreationFormOf, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
@@ -18,11 +18,11 @@ import { ProcessTypeField } from './process-type-field.js';
 import { TaskChecklistSheet } from './task-checklist-sheet.js';
 import { TaskCreateChips } from './task-create-chips.js';
 import {
+  applyFormulaPrefill,
   buildCreateBody,
   emptyDraft,
   missingFor,
   missingTextOf,
-  sameDraftValue,
   withChecklist,
   withNode,
   withTitle,
@@ -87,17 +87,26 @@ export function TaskCreateWindow({
   const [checklistOpen, setChecklistOpen] = useState(false);
   const projectId = (draft.values.project as string | undefined) ?? prefill?.projectId;
   const structure = useTaskCreateStructure(projectId, prefill?.parentId);
+  // След формульного префилла (Р12): какие слоты подставлены формулой и
+  // какие человек правил. Живёт в ref — ре-эвал не зависит от идентичности
+  // объектов; сбрасывается при каждом открытии окна (A8-4).
+  const autoFilledRef = useRef<Record<string, unknown>>({});
+  const touchedRef = useRef<Set<string>>(new Set());
 
   // Чистое окно при каждом открытии и смене заполнения (плюсик другой
-  // колонки) — рендер-тайм сброс, канон React (аудит #45).
-  const [shownFor, setShownFor] = useState({ open, initial });
+  // колонки) — рендер-тайм сброс, канон React (аудит #45). `seq` — сигнал
+  // «черновик пересоздан»: эффект префилла обязан примениться заново, иначе
+  // после переоткрытия окно останется без формульных значений.
+  const [shownFor, setShownFor] = useState({ open, initial, seq: 0 });
   if (shownFor.open !== open || (open && shownFor.initial !== initial)) {
-    setShownFor({ open, initial });
+    setShownFor({ open, initial, seq: shownFor.seq + 1 });
     if (open) {
       setDraft(initial);
       setInvalidKeys(new Set());
       setError(null);
       setChecklistOpen(false);
+      autoFilledRef.current = {};
+      touchedRef.current = new Set();
     }
   }
 
@@ -121,33 +130,21 @@ export function TaskCreateWindow({
     enabled: open && !preview,
   });
   // Что из черновика подставлено формулой и ещё не тронуто человеком:
-  // ре-эвал при смене места обновляет только такие слоты, ручной ввод не
-  // затирается, а исчезнувший из формулы слот очищается (Р12).
-  const autoFilledRef = useRef<Record<string, unknown>>({});
+  // ре-эвал при смене места обновляет только такие слоты, ручной ввод и
+  // осознанная очистка не затираются, а исчезнувший из формулы слот
+  // очищается (Р12, A8-3).
   useEffect(() => {
     if (formulaPrefill.version === 0) return;
     setDraft((prev) => {
-      let next = prev;
-      const auto = autoFilledRef.current;
-      const incoming = formulaPrefill.values;
-      for (const key of Object.keys(auto)) {
-        if (key in incoming) continue;
-        if (!sameDraftValue(prev.values[key], auto[key])) continue;
-        next = withValue(next, key as CreationFieldKey, null);
-        delete auto[key];
-      }
-      for (const [key, value] of Object.entries(incoming)) {
-        const current = next.values[key];
-        const untouched =
-          current === undefined || (key in auto && sameDraftValue(current, auto[key]));
-        if (!untouched) continue;
-        next = withValue(next, key as CreationFieldKey, value);
-        auto[key] = value;
-      }
-      return next;
+      const applied = applyFormulaPrefill(prev, formulaPrefill.values, {
+        auto: autoFilledRef.current,
+        touched: touchedRef.current,
+      });
+      autoFilledRef.current = applied.auto;
+      return applied.draft;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- версия — сигнал применения
-  }, [formulaPrefill.version]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- версия и seq — сигналы применения
+  }, [formulaPrefill.version, shownFor.seq]);
 
   const missing = shownType ? missingFor(form, draft) : [];
   const missingStructure = structure.required && draft.nodeId === null;
@@ -262,6 +259,10 @@ export function TaskCreateWindow({
                 definitions={fieldDefs}
                 invalidKeys={invalidKeys}
                 onChange={(key, value) => {
+                  // Правка человека — слот больше не формульный: ре-эвал его
+                  // не затирает, очистка тоже считается правкой (A8-3).
+                  touchedRef.current.add(key);
+                  delete autoFilledRef.current[key];
                   const next = withValue(draft, key, value);
                   setDraft(
                     key === 'project' && value !== draft.values.project

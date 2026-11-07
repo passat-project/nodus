@@ -1,5 +1,5 @@
 import type { CustomFieldValue, EffectiveSection, ExecuteTransitionBody } from '@nodus/contracts';
-import { customFieldIdOfKey } from '@nodus/contracts';
+import { customFieldIdOfKey, isCustomFieldValueFilled } from '@nodus/contracts';
 
 import { timeEntryBody } from '../../tasks/time-entry-fields.js';
 import { draftMessageIds, type WindowDraft } from './use-window-draft.js';
@@ -67,6 +67,10 @@ export function buildExecuteBody({
       const next = draft.fields.customFields[id];
       const previous = context.fields.customFields[id];
       if (next === undefined || next === null) continue;
+      // Пустое значение не уходит даже при formula-always-send (A8-2): пустой
+      // список/строка не проходят грамматику поля и дают 422 на поле, которое
+      // человек не трогал.
+      if (!isCustomFieldValueFilled(next)) continue;
       if (JSON.stringify(next) !== JSON.stringify(previous) || formulaKeys.has(key)) {
         customFields[id] = next;
       }

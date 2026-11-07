@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Logger } from '@nestjs/common';
 import { ErrorCode, Permission, type AuthUser } from '@nodus/contracts';
 
 import type { FormulaCellRef } from '../../custom-fields/ports/formula-cells.port.js';
@@ -199,5 +200,22 @@ describe('LetterFormulaService (#632, Р10)', () => {
     cells.cellsForHost.mockResolvedValueOnce([]);
     await service.recalcCells({} as never, null, LETTER, [1], 1);
     expect(fields.applyFormulaValues).not.toHaveBeenCalled();
+  });
+
+  it('падение пересчёта одной ячейки не валит партию (A3-07)', async () => {
+    const { service, fields, cells } = setup();
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const second = '63200000-0000-4000-8000-000000000208';
+    cells.cellsForHost.mockResolvedValueOnce([
+      { cellId: 'c1', hostKind: 'letter', hostId: LETTER, fieldId: FIELD },
+      { cellId: 'c2', hostKind: 'letter', hostId: LETTER, fieldId: second },
+    ]);
+    cells.recalc.mockRejectedValueOnce(new Error('источник недоступен'));
+    await expect(service.recalcCells({} as never, null, LETTER, [], 1)).resolves.toBeUndefined();
+    expect(cells.recalc).toHaveBeenCalledTimes(2);
+    // Вторая ячейка пересчитана и записана, событие ушло только по ней.
+    expect(fields.applyFormulaValues).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

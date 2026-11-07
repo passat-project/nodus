@@ -131,6 +131,21 @@ describe('поля процесса в теле перехода (#431, Р7)', (
     });
     expect(body).toEqual({});
   });
+
+  it('пустой список формульного слота не уходит даже с always-send (A8-2)', () => {
+    const body = buildExecuteBody({
+      sections: sections({
+        kind: 'fields',
+        fields: [`cf.${CF}`],
+        formulas: { [`cf.${CF}`]: { kind: 'literal', value: null } as never },
+        origin: 'form',
+      }),
+      context,
+      // Префилл материализовался в [] — грамматика поля (min 1) не пропустит.
+      draft: draft({ fields: { ...context.fields, customFields: { [CF]: [] } } }),
+    });
+    expect(body).toEqual({});
+  });
   it('раздел «Регистрация» (#55): валидный ввод хоста уходит целиком, неполный — нет', () => {
     const registration = {
       counterpartyId: '00000000-0000-4000-8000-000000000001',

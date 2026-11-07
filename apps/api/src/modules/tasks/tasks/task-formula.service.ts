@@ -14,7 +14,12 @@ import {
 } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { EventBus } from '../../../core/events/event-bus.js';
-import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
+import {
+  FORMULA_CELLS,
+  type FormulaCellRef,
+  type FormulaCells,
+  type FormulaRecalcOutcome,
+} from '../../custom-fields/ports/formula-cells.port.js';
 import {
   RECORD_VALUES_READER,
   type RecordValuesReader,
@@ -191,8 +196,8 @@ export class TaskFormulaService {
     await this.repo.lock(tx, taskId);
     const actor = { id: actorId ?? row.creatorId, permissions: [] as string[] };
     for (const cell of cells) {
-      const outcome = await this.cells.recalc(tx, cell, depth);
-      if (outcome.silent) continue;
+      const outcome = await this.recalcOrNull(tx, cell, depth);
+      if (!outcome || outcome.silent) continue;
       if (outcome.changed) {
         try {
           await this.writer.apply(
@@ -243,8 +248,8 @@ export class TaskFormulaService {
       if (seen.has(cell.cellId)) continue;
       seen.add(cell.cellId);
       const row = await this.repo.findWithParticipants(cell.hostId, tx);
-      const outcome = await this.cells.recalc(tx, cell, depth);
-      if (outcome.silent) continue;
+      const outcome = await this.recalcOrNull(tx, cell, depth);
+      if (!outcome || outcome.silent) continue;
       const actor = { id: actorId ?? row.creatorId, permissions: [] as string[] };
       if (outcome.changed) {
         try {
@@ -268,6 +273,28 @@ export class TaskFormulaService {
       if (outcome.errorChanged) {
         await this.emitChanged(tx, actorId, cell.hostId, cell.fieldId, outcome.error !== null);
       }
+    }
+  }
+
+  /**
+   * Пересчёт ячейки с изоляцией сбоя (Р4): падение чтения источника или
+   * вычисления одной ячейки не валит транзакцию и не превращает событие в
+   * вечный retry диспетчера — остальные ячейки партии пересчитываются.
+   */
+  private async recalcOrNull(
+    tx: TransactionClient,
+    cell: FormulaCellRef,
+    depth: number,
+  ): Promise<FormulaRecalcOutcome | null> {
+    try {
+      return await this.cells.recalc(tx, cell, depth);
+    } catch (error) {
+      this.log.warn(
+        `Формула задачи ${cell.hostId}/${cell.fieldId} не пересчитана: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return null;
     }
   }
 

@@ -9,6 +9,7 @@ import type { ProjectActor } from '../../projects/ports/project-reader.port.js';
 import {
   RECORD_VALUES_READER,
   type FormulaRecordData,
+  type RecordReadOptions,
   type RecordValuesReader,
 } from '../ports/record-values.port.js';
 import type { FormulaPreviewOverride } from '../ports/formula-cells.port.js';
@@ -78,6 +79,9 @@ export class FormulaContextService {
     cache: FormulaContextCache = createFormulaCache(),
   ): Promise<FormulaContext | null> {
     const { hostKind, hostId, asts, snapshot, actor, override } = args;
+    // Опции выборок агрегатов (A7-1): актор нужен порту — у безпроектного
+    // (личного) хоста выборка сужается до его зоны видимости.
+    const selection: RecordReadOptions | undefined = actor ? { actor } : undefined;
     const loaded = args.hostData ?? (await this.record(hostKind, hostId, actor, tx, cache));
     if (!loaded) return null;
     const host = withOverride(loaded, override);
@@ -111,16 +115,19 @@ export class FormulaContextService {
     let overflowed = false;
     const related = new Map<string, FormulaRecordData[]>();
     if (needed.subtasks) {
-      const rows = await this.reader.subtasks(host.id, tx);
+      const rows = await this.reader.subtasks(host.id, selection, tx);
       if (rows.length > FORMULA_LIMITS.selection) overflowed = true;
       related.set('subtasks', rows);
     }
     if (needed.nodeTasks) {
       const nodeId = hostKind === 'node' ? host.id : host.nodeId;
+      const folder = nodeId ? nodes.get(nodeId) : undefined;
       // Папка обязана принадлежать проекту хоста: аномальный nodeId из
       // чужих данных не должен приносить задачи чужого проекта (Р7).
-      if (nodeId && nodes.has(nodeId)) {
-        const rows = await this.nodeTasksAt(nodeId, override, tx, cache);
+      if (nodeId && folder) {
+        // Задачи папки фильтруются проектом самой папки (A7-2): узел и его
+        // задачи обязаны жить в одном проекте.
+        const rows = await this.nodeTasksAt(nodeId, folder.projectId, override, tx, cache);
         if (rows.length > FORMULA_LIMITS.selection) overflowed = true;
         related.set('node_tasks', rows);
       }
@@ -132,7 +139,13 @@ export class FormulaContextService {
       // формула может агрегировать несколько видов связей сразу.
       const key = `relations:${dep.relation}:${dep.direction}`;
       if (related.has(key)) continue;
-      const rows = await this.reader.relatedTasks(host.id, dep.relation, dep.direction, tx);
+      const rows = await this.reader.relatedTasks(
+        host.id,
+        dep.relation,
+        dep.direction,
+        selection,
+        tx,
+      );
       if (rows.length > FORMULA_LIMITS.selection) overflowed = true;
       related.set(key, rows);
     }
@@ -309,11 +322,12 @@ export class FormulaContextService {
    */
   private async nodeTasksAt(
     nodeId: string,
+    projectId: string | null,
     override: FormulaPreviewOverride | undefined,
     tx: TransactionClient | undefined,
     cache: FormulaContextCache,
   ): Promise<FormulaRecordData[]> {
-    const rows = await this.reader.nodeTasks(nodeId, tx);
+    const rows = await this.reader.nodeTasks(nodeId, projectId, tx);
     const moved = override?.taskNode;
     if (!moved) return rows;
     const movedOut = new Set<string>();
@@ -327,10 +341,12 @@ export class FormulaContextService {
     const present = new Set(kept.map((row) => row.id));
     for (const taskId of movedIn) {
       if (present.has(taskId)) continue;
-      // Видимость выборки — та же, что у `nodeTasks` (В1): конфиденциальные
-      // задачи не попадают в агрегат ни у кого.
+      // Видимость выборки — та же, что у `nodeTasks` (В1, A7-2):
+      // конфиденциальные задачи и задачи чужого проекта в агрегат не
+      // попадают ни у кого.
       const record = await this.record('task', taskId, undefined, tx, cache);
       if (!record || record.confidential) continue;
+      if ((record.projectId ?? null) !== projectId) continue;
       kept.push(withOverride(record, override));
       present.add(taskId);
     }

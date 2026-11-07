@@ -9,10 +9,12 @@ import type { FormulaValue } from '@nodus/formula-engine';
 
 import { PrismaService } from '../../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import type { Prisma } from '../../../generated/prisma/client.js';
 import {
   PROCESS_CATALOG_READER,
   type ProcessCatalogReader,
 } from '../../workflows/ports/process-catalog-reader.port.js';
+import type { ProjectActor } from '../../projects/ports/project-reader.port.js';
 import { visibleTasksWhere, ViewerResolver } from '../access/task-visibility.js';
 import type {
   FormulaRecordData,
@@ -44,6 +46,9 @@ const taskSelect = {
  * поля и выборки связанных. Видимость — та же функция, что у списка задач
  * (`visibleTasksWhere`): чужие секретные проекты и конфиденциальные задачи
  * не попадают ни в один источник (вердикт В1 — исключены для всех).
+ * У личной (безпроектной) записи «своё дерево» не определено — выборки
+ * связанных сужаются до зоны видимости актора, а без актора пусты (A7-1);
+ * задачи папки всегда фильтруются проектом папки (A7-2).
  */
 @Injectable()
 export class TaskFormulaValuesProvider implements TaskFormulaValues {
@@ -73,22 +78,32 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
     return row ? this.toRecord(row) : null;
   }
 
-  async subtasks(taskId: string, tx?: TransactionClient): Promise<FormulaRecordData[]> {
+  async subtasks(
+    taskId: string,
+    opts: RecordReadOptions = {},
+    tx?: TransactionClient,
+  ): Promise<FormulaRecordData[]> {
+    const db = tx ?? this.prisma;
     // Р7 (д): только свой проект — подзадача/связь из чужого (в т.ч.
     // секретного) проекта не попадает в агрегаты.
-    const host = await (tx ?? this.prisma).task.findUnique({
+    const host = await db.task.findUnique({
       where: { id: taskId },
       select: { projectId: true },
     });
     // Нет хоста — нет выборки. Без проекта фильтр `projectId: null`: иначе
     // подзадача из чужого (в т.ч. секретного) проекта попала бы в агрегат.
     if (!host) return [];
-    const rows = await (tx ?? this.prisma).task.findMany({
+    // A7-1: у личной задачи «своё дерево» — зона видимости актора, без
+    // актора (фоновый пересчёт) выборки нет (см. selectionScope).
+    const scope = await this.selectionScope(host.projectId, opts.actor);
+    if (!scope) return [];
+    const rows = await db.task.findMany({
       where: {
         parentId: taskId,
         deletedAt: null,
         confidential: false,
         projectId: host.projectId,
+        ...scope,
       },
       select: taskSelect,
       orderBy: [{ number: 'asc' }],
@@ -101,6 +116,7 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
     taskId: string,
     relation: FormulaRelationKind,
     direction: FormulaRelationDirection,
+    opts: RecordReadOptions = {},
     tx?: TransactionClient,
   ): Promise<FormulaRecordData[]> {
     const db = tx ?? this.prisma;
@@ -126,6 +142,10 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
       where: { id: taskId },
       select: { projectId: true },
     });
+    // Связи удалённой/несуществующей записи источником не бывают.
+    if (!host) return [];
+    const scope = await this.selectionScope(host.projectId, opts.actor);
+    if (!scope) return [];
     const rows = await db.task.findMany({
       where: {
         id: { in: ids },
@@ -133,7 +153,8 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
         confidential: false,
         // «Своё дерево» (Р7): безпроектная задача не тянет связанные из
         // чужих проектов (иначе личная задача — канал чтения секретных).
-        projectId: host?.projectId ?? null,
+        projectId: host.projectId,
+        ...scope,
       },
       select: taskSelect,
       take: FORMULA_LIMITS.selection + 1,
@@ -141,14 +162,41 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
     return this.toRecords(rows);
   }
 
-  async nodeTasks(nodeId: string, tx?: TransactionClient): Promise<FormulaRecordData[]> {
+  async nodeTasks(
+    nodeId: string,
+    projectId: string | null,
+    tx?: TransactionClient,
+  ): Promise<FormulaRecordData[]> {
+    // A7-2: задачи папки — только своего проекта, симметрично подзадачам и
+    // связям. Без фильтра задача с `nodeId` узла проекта A, но `projectId`
+    // проекта B попадала бы в агрегат папки A. Папка без проекта (аномалия
+    // данных) выборки не имеет.
+    if (projectId === null) return [];
     const rows = await (tx ?? this.prisma).task.findMany({
-      where: { nodeId, deletedAt: null, confidential: false },
+      where: { nodeId, projectId, deletedAt: null, confidential: false },
       select: taskSelect,
       orderBy: [{ number: 'asc' }],
       take: FORMULA_LIMITS.selection + 1,
     });
     return this.toRecords(rows);
+  }
+
+  /**
+   * Область выборки связанных записей (A7-1). Свой проект — фильтр
+   * `projectId` (его и так задаёт вызывающая выборка); безпроектная (личная)
+   * запись — зона видимости актора той же функцией, что у списка задач
+   * (участие, надзор, решающий, `task.view_all`). Без актора (фоновый
+   * пересчёт, формула типа) безпроектный хост выборок не имеет: агрегат
+   * личной задачи не должен собирать все личные задачи портала. `null` —
+   * выборки нет.
+   */
+  private async selectionScope(
+    projectId: string | null,
+    actor: ProjectActor | undefined,
+  ): Promise<Prisma.TaskWhereInput | null> {
+    if (projectId !== null) return {};
+    if (!actor) return null;
+    return visibleTasksWhere(await this.viewers.resolve(actor), 'all');
   }
 
   /** Системные поля задачи в типах языка (FORMULA_SYSTEM_FIELDS). */

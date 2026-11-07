@@ -6,6 +6,7 @@ import {
   FORMULA_CELLS,
   type FormulaCellRef,
   type FormulaCells,
+  type FormulaRecalcOutcome,
 } from '../custom-fields/ports/formula-cells.port.js';
 import { ProjectFormulaEvents } from './project-formula-events.js';
 import { ProjectNodesRepository } from './project-nodes.repository.js';
@@ -128,7 +129,8 @@ export class ProjectFormulaRecalcService {
     // Чужие хосты (task/letter) пересчитывают их собственные модули: писать
     // их значения здесь нельзя (I3), иначе «находка» станет порчей данных.
     if (cell.hostKind !== 'project' && cell.hostKind !== 'node') return;
-    const outcome = await this.cells.recalc(tx, cell, depth);
+    const outcome = await this.recalcOrNull(tx, cell, depth);
+    if (!outcome) return;
     if (outcome.silent) return;
     if (outcome.changed) {
       try {
@@ -164,6 +166,27 @@ export class ProjectFormulaRecalcService {
         cell.fieldId,
         outcome.error !== null,
       );
+    }
+  }
+
+  /**
+   * Пересчёт ячейки с изоляцией сбоя (Р4): падение чтения источника или
+   * вычисления одной ячейки не должно валить транзакцию партии и превращать
+   * событие в вечный retry диспетчера — остальные ячейки пересчитываются.
+   */
+  private async recalcOrNull(
+    tx: TransactionClient,
+    cell: FormulaCellRef,
+    depth: number,
+  ): Promise<FormulaRecalcOutcome | null> {
+    try {
+      return await this.cells.recalc(tx, cell, depth);
+    } catch (error) {
+      this.logger.warn(
+        { cell, error: error instanceof Error ? error.message : String(error) },
+        'Ячейка формулы не пересчитана',
+      );
+      return null;
     }
   }
 }
