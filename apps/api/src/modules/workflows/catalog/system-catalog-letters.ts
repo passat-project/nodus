@@ -15,10 +15,12 @@ import type { CatalogProcessType, CatalogStage, CatalogWorkflow } from './system
  * появится в #463 вместе с первой кнопкой ожидания).
  */
 
-/** Коды серий нумерации писем (создаёт каталог, `NumberSeries`). */
+/** Коды серий нумерации писем (создаёт каталог, `NumberSeries`); правило
+ *  серии — «общий разрез, каждый год, префикс-ГГГГ/N» (#630, посев и
+ *  backfill миграции идентичны). */
 export const LETTER_SERIES = {
-  incoming: { code: 'letter-incoming', prefix: 'Вх' },
-  outgoing: { code: 'letter-outgoing', prefix: 'Исх' },
+  incoming: { code: 'letter-incoming', prefix: 'Вх', name: 'Входящие письма' },
+  outgoing: { code: 'letter-outgoing', prefix: 'Исх', name: 'Исходящие письма' },
 } as const;
 
 const registerPermission = {

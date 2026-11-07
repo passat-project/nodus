@@ -1086,36 +1086,55 @@ model WorkflowSchemeEntry {
   @@map("workflow_scheme_entries")
 }
 
-/// Серия номеров «Процессов» (#55, ADR-0027 доп. O1): префикс и правило
-/// сброса. Регистрационный номер письма выдаёт движок в транзакции перехода
-/// (`assign_number`), поэтому серии живут в модуле процессов, а не в письмах.
-/// Серии `letter-incoming` «Вх» и `letter-outgoing` «Исх» засевает каталог.
+/// Серия номеров (#630, ADR-0037 §8): единое правило нумерации «разрез ×
+/// период × шаблон × старт». Серия связана 1:1 с определением атрибута типа
+/// `counter` (письмо-серии — без атрибута, из `config.numbering` типа).
+/// `prefix`/`reset` (#55) остаются до contract-шага #630: письмо-рендер
+/// переехал на шаблон бит-в-бит, колонки читаются только старым контрактом.
+/// Серии `letter-incoming`/`letter-outgoing` засевает каталог.
 model NumberSeries {
   id        String   @id @default(uuid()) @db.Uuid
   code      String   @unique
-  /// Префикс номера: «Вх» → «Вх-2026/118».
+  /// Префикс номера: «Вх» → «Вх-2026/118» (уходит в contract-шаге #630).
   prefix    String
   /// Правило сброса счётчика: year (единственное в #55; CHECK в миграции).
   reset     String   @default("year")
+  /// Человекочитаемое имя: «Входящие письма», «Изм.».
+  name      String
+  /// Разрез счёта: none|self|project|portfolio|folder|formula (CHECK).
+  scopeKind String   @default("none") @map("scope_kind")
+  /// Формула разреза (AST формул #632) — только при scope_kind='formula'.
+  scopeFormula Json? @map("scope_formula")
+  /// Период сброса: none|year|month (CHECK); границы — пояс компании.
+  period    String   @default("none")
+  /// Шаблон номера: сегменты counter/literal/year/month/field (`numberSeriesRuleSchema`).
+  template  Json
+  /// Первый номер группы: продолжение нумерации из Excel.
+  startValue Int     @default(1) @map("start_value")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  counters NumberCounter[]
+  counters  NumberCounter[]
+  attribute FieldDefinition?
 
   @@map("number_series")
 }
 
-/// Счётчик серии на год. Строка сериализует регистрации серии (upsert с
-/// `last_value + 1`): откат транзакции не сдвигает счётчик → номеров без
-/// пропусков. Год — по часовому поясу компании (`COMPANY_TIMEZONE`).
+/// Счётчик серии в группе (#630, Р3): группа = разрез × период, ключ —
+/// нормализованная строка (`'2026'`, `'folder:<uuid>|2026'`). Единственный
+/// писатель — `NumberSeriesService.next` (upsert `last_value + 1` в tx
+/// действия): строка сериализует параллельные выдачи, откат транзакции не
+/// сдвигает счётчик → без дублей и потерь. `year` — информационная колонка
+/// (год момента выдачи по поясу компании); границу периода считает сервис.
 model NumberCounter {
   seriesId  String @map("series_id") @db.Uuid
+  scopeKey  String @map("scope_key")
   year      Int
   lastValue Int    @default(0) @map("last_value")
 
   series NumberSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
-  @@id([seriesId, year])
+  @@id([seriesId, scopeKey])
   @@map("number_counters")
 }
 
@@ -1719,6 +1738,9 @@ model FieldDefinition {
   sortOrder     Int     @default(0) @map("sort_order")
   /// Автор определения — plain UUID без FK (пользователь живёт в auth, I3).
   createdById   String? @map("created_by_id") @db.Uuid
+  /// Серия нумерации при типе `counter` (#630, Р1): правило 1:1 с серией.
+  /// Удаление атрибута серию не удаляет — номера не переиспользуются (Р10).
+  numberSeriesId String? @unique @map("number_series_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
@@ -1726,6 +1748,7 @@ model FieldDefinition {
   bindings     FieldBinding[]
   companyValue CompanyValue?
   formulaCells FormulaCell[]
+  numberSeries NumberSeries? @relation(fields: [numberSeriesId], references: [id], onDelete: SetNull)
 
   /// Выдача реестра портала в порядке карточки: (sort_order, id). Имя
   /// уникально глобально — выраженный индекс lower(btrim(name)) в миграции.

@@ -81,9 +81,10 @@ export interface CatalogProcessType {
   description: string;
   /** Порядок в библиотеке типов (дефолт выбора — первый). */
   sortOrder: number;
-  /** Серия нумерации (#55): каталог создаёт её по коду и пишет id в
+  /** Серия нумерации (#55 → #630): каталог создаёт её по коду с правилом
+   *  «общий разрез, каждый год, префикс-ГГГГ/N» и пишет id в
    *  `config.numbering` типа. Только у писем. */
-  numbering?: { code: string; prefix: string };
+  numbering?: { code: string; prefix: string; name: string };
 }
 
 export const DEFAULT_SCHEME = { code: 'default', name: 'Схема по умолчанию' } as const;

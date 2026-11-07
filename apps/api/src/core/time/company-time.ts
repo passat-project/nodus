@@ -33,6 +33,11 @@ export function companyYear(at: Date, timeZone: string = companyTimeZone()): num
   return companyParts(at, timeZone).year;
 }
 
+/** Месяц по поясу компании (1–12) — период «в каждом месяце» у серий (#630). */
+export function companyMonth(at: Date, timeZone: string = companyTimeZone()): number {
+  return Number(companyParts(at, timeZone).month);
+}
+
 /** Дата по поясу компании в формате YYYY-MM-DD (дата регистрации письма). */
 export function companyDate(at: Date, timeZone: string = companyTimeZone()): string {
   const { year, month, day } = companyParts(at, timeZone);

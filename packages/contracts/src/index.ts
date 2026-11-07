@@ -47,6 +47,7 @@ export * from './workflows/stage-names.schemas.js';
 export * from './workflows/workflow-document-check.js';
 export * from './workflows/workflow-document-deciders.js';
 export * from './workflows/workflow-document-category-check.js';
+export * from './workflows/number-series.schemas.js';
 export * from './tasks/task-participants.schemas.js';
 export * from './tasks/task-time.schemas.js';
 export * from './tasks/task-bulk.schemas.js';
