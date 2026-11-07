@@ -192,8 +192,11 @@ describe.skipIf(!process.env.DATABASE_URL)('формулы ячеек (integrati
       },
       select: { error: true, recalcDepth: true },
     });
-    // Ручная правка источника — глубина волны 1; ошибки нет.
-    expect(recalculated.recalcDepth).toBe(1);
+    // Глубина считает ПРОХОДЫ: синхронный пересчёт в tx PATCH (1) + повторная
+    // доставка task.updated хендлером (2). Значение идемпотентно; бюджет
+    // каскада (8) съедает только +1 у ячейки правленного хоста — волны
+    // каскада дальше идут как раньше.
+    expect(recalculated.recalcDepth).toBe(2);
     expect(recalculated.error).toBeNull();
 
     // Второе изменение источника: ячейку нашёл dep-ключ, а не перебор хоста.
