@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowUpFromLine, Calculator, CircleAlert } from 'lucide-react';
+import { Calculator, CircleAlert, Link } from 'lucide-react';
 import type {
   CustomFieldDefinition,
   CustomFieldFormulaInfo,
@@ -73,8 +73,8 @@ export function FormulaCell({
     >
       {/* Значок формулы — левый жёлоб строки: «fx» моно 11px (данные, не
           метка), тихий до наведения; своя формула кликабельна (открывает
-          редактор), формула типа — пометка fx + стрелка наследования
-          (канон IDE: вверх к базовому символу). */}
+          редактор), формула типа — пометка fx + наклонное звено цепи
+          (классический значок «связь с источником», выбор владельца). */}
       {own ? (
         <button
           type="button"
@@ -92,11 +92,7 @@ export function FormulaCell({
           className="-ml-0.5 flex h-5 shrink-0 cursor-default items-center gap-0.5 rounded-md px-1 font-mono text-label-xs font-medium text-muted-foreground/70"
         >
           fx
-          <ArrowUpFromLine
-            className="size-3"
-            strokeWidth={1.75}
-            aria-label={ui.formulas.cell.inherited}
-          />
+          <Link className="size-2" strokeWidth={2} aria-label={ui.formulas.cell.inherited} />
         </span>
       ) : null}
       {info?.error ? (

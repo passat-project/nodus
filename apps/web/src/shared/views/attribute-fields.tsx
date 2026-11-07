@@ -1,4 +1,4 @@
-import { ArrowUpFromLine, CircleAlert } from 'lucide-react';
+import { CircleAlert, Link } from 'lucide-react';
 import type {
   CustomFieldDefinition,
   CustomFieldFormulaInfo,
@@ -204,11 +204,7 @@ function AttributeFormulaMarks({ info }: { info: CustomFieldFormulaInfo }) {
         >
           fx
           {typeOrigin ? (
-            <ArrowUpFromLine
-              className="size-3"
-              strokeWidth={1.75}
-              aria-label={ui.formulas.cell.inherited}
-            />
+            <Link className="size-2" strokeWidth={2} aria-label={ui.formulas.cell.inherited} />
           ) : null}
         </span>
       ) : null}
