@@ -88,7 +88,9 @@ export class ProjectValuesWriter {
     return true;
   }
 
-  /** Значение формулы в атрибутах папки (Р4): `false` — без изменений. */
+  /** Значение формулы в атрибутах папки (Р4): `false` — без изменений.
+   *  `includeActor=false` — каскадный пересчёт: актёр-триггер не входит
+   *  в аудиторию node_updated, если не видит проект (security #632). */
   async writeNode(
     tx: TransactionClient,
     actorId: string | null,
@@ -96,6 +98,7 @@ export class ProjectValuesWriter {
     nodeId: string,
     fieldId: string,
     value: CustomFieldValue | null,
+    opts: { includeActor?: boolean } = {},
   ): Promise<boolean> {
     await this.lockNode(tx, projectId, nodeId);
     const node = await this.nodes.findInProject(projectId, nodeId, tx);
@@ -130,12 +133,14 @@ export class ProjectValuesWriter {
         // Адресная рассылка участникам проекта (#632): без аудитории gateway
         // молча выбрасывает событие — правка атрибутов папки и пересчёт её
         // формул не видны никому (дерево и формулы наследников до F5).
+        // Актёр — только при прямой правке: каскадный пересчёт от чужой
+        // правки не раскрывает ему проект (security #632).
         ...(project
           ? {
               audience: [
                 ...new Set([
                   ...(await projectAudience(this.participants, project, tx)),
-                  ...(actorId ? [actorId] : []),
+                  ...(opts.includeActor === false || !actorId ? [] : [actorId]),
                 ]),
               ],
             }

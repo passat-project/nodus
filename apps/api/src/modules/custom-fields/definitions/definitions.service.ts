@@ -131,11 +131,14 @@ export class DefinitionsService {
       };
       const created = await this.definitions.create(data, tx);
       await replaceBindings(this.definitions, created.id, bindings, tx);
-      const row = (await this.definitions.findById(created.id, tx)) ?? created;
+      let row = (await this.definitions.findById(created.id, tx)) ?? created;
       // Формулы мест в том же диалоге (Г-1 #632): раньше тело молча
       // игнорировалось сервером — формула типа ставилась только в моках.
       if (dto.bindingFormulas && Object.keys(dto.bindingFormulas).length > 0) {
         await this.bindingFormulas.applyWithinTx(tx, row, dto.bindingFormulas, actorId);
+        // Ответ API обязан нести только что сохранённые формулы мест —
+        // перечитываем строку ПОСЛЕ записи (симметрично update).
+        row = (await this.definitions.findById(created.id, tx)) ?? row;
       }
       await this.emitChanged(tx, row, 'created', actorId, [
         // Только поля DTO: `number` и `createdById` — внутренние колонки.

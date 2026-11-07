@@ -175,3 +175,23 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
     });
   });
 });
+
+describe('ProjectsService.update: синхронный пересчёт формул в tx (#632)', () => {
+  it('правка атрибутов зовёт recalcProjectAfterValuesChange с их ключами', async () => {
+    const kit = makeProjectsServiceKit();
+    kit.customFields.prepareUpdate.mockResolvedValue({
+      next: { 'f-1': 'v' },
+      changes: [{ fieldId: 'f-1', from: null, to: 'v' }],
+    } as never);
+    await kit.service.update(user(HELPER, ['project.manage']), ID, {
+      customFields: { 'f-1': 'v' },
+    } as never);
+    expect(kit.formulaRecalc.recalcProjectAfterValuesChange).toHaveBeenCalledWith(
+      expect.anything(),
+      HELPER,
+      ID,
+      ['f-1'],
+    );
+    void user;
+  });
+});

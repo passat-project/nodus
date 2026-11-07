@@ -90,6 +90,7 @@ function setup(letter: LetterDetailRow) {
   return {
     service,
     repo,
+    letterFormulas,
     query,
     validator,
     fields,
@@ -221,5 +222,23 @@ describe('личный признак «просмотрено» (редизай
     const { service, repo } = setup(row(null));
     await service.markViewed(REGISTRAR, LETTER);
     expect(repo.markViewed).toHaveBeenCalledWith(LETTER, REGISTRAR.id);
+  });
+});
+
+describe('PATCH письма: синхронный пересчёт формул в tx (#632)', () => {
+  it('правка атрибутов зовёт recalcAfterValuesChange', async () => {
+    const kit = setup(row(null));
+    const fieldId = '00000000-0000-4000-8000-000000000421';
+    kit.validator.patch.mockResolvedValueOnce({
+      data: { customFields: { [fieldId]: 'v' } },
+      changes: [{ field: `cf.${fieldId}`, from: null, to: 'v' }] as never,
+    });
+    await kit.service.update(REGISTRAR, LETTER, { customFields: { [fieldId]: 'v' } });
+    expect(kit.letterFormulas.recalcAfterValuesChange).toHaveBeenCalledWith(
+      expect.anything(),
+      REGISTRAR.id,
+      LETTER,
+      [fieldId],
+    );
   });
 });

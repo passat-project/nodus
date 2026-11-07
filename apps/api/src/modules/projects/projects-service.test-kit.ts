@@ -102,7 +102,10 @@ export function makeProjectsServiceKit() {
   const formulaCells: Mocks<'lockedFieldIds'> = {
     lockedFieldIds: vi.fn(async () => new Set<string>()),
   };
+  // Синхронный пересчёт формул проекта в tx PATCH (#632).
+  const formulaRecalc = { recalcProjectAfterValuesChange: vi.fn(async () => void 0) };
   const kit = {
+    formulaRecalc,
     repo,
     types,
     groups,
@@ -152,7 +155,7 @@ export function makeProjectsServiceKit() {
         profiles as never,
         customFields as never,
         formulaCells as never,
-        { recalcProjectAfterValuesChange: vi.fn(async () => void 0) } as never,
+        kit.formulaRecalc as never,
       );
     },
   };

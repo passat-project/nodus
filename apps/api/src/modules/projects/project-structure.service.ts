@@ -224,6 +224,7 @@ export class ProjectStructureService {
         kindId?: string;
         customFields?: Prisma.InputJsonValue;
       } = {};
+      let pendingLockCheck: RegistryFieldChange[] = [];
       const fields: string[] = [];
       let changes: RegistryFieldChange[] = [];
       if (body.code !== undefined || body.customFields !== undefined || kindChanged) {
@@ -234,7 +235,11 @@ export class ProjectStructureService {
           { authorId: user.id, actor: user, kindChanged },
           tx,
         );
-        await assertNodeCellsWritable(this.formulas, tx, nodeId, prepared.changes);
+        // Проверка блокировки — ПОСЛЕ nodes.update ниже (вид мог смениться в
+        // этом же патче: место для формул привязок смотрится по НОВОМУ виду,
+        // иначе kindId+значение обходили бы блокировку ячейки, TOCTOU).
+        // Бросок откатывает транзакцию целиком — запись не остаётся.
+        pendingLockCheck = prepared.changes;
         patch.customFields = prepared.values as Prisma.InputJsonValue;
         changes = prepared.changes;
         fields.push(...changes.map((change) => nodeFormKey(change.fieldId)));
@@ -248,6 +253,8 @@ export class ProjectStructureService {
         fields.push('kindId');
       }
       await this.nodes.update(tx, node.id, patch);
+      // Формульная блокировка по фактическому (возможно новому) виду папки.
+      await assertNodeCellsWritable(this.formulas, tx, nodeId, pendingLockCheck);
       if (changes.length > 0) {
         await this.formulaRecalc.recalcNodeAfterValuesChange(
           tx,

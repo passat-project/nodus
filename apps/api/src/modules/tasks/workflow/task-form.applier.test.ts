@@ -48,7 +48,7 @@ function setup(overrides: Record<string, unknown> = {}) {
     { assertMembersAllowed: vi.fn() } as never,
     { lockedFieldIds: vi.fn(async () => new Set<string>()) } as never,
   );
-  return { applier, tasks, writer, time, revisions, messages };
+  return { applier, tasks, writer, time, revisions, messages, formulas };
 }
 
 const actor = (id: string) => ({ id, permissions: [] });
@@ -131,5 +131,24 @@ describe('TaskFormApplier — окно перехода задачи (#380)', ()
     await expect(
       applier.apply(TX, 't1', observer, { result: { text: '', messageIds: [] } }),
     ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN });
+  });
+});
+
+describe('TaskFormApplier: синхронный пересчёт формул в tx (#632)', () => {
+  it('применённые атрибуты зовут recalcOwnAfterValuesChange с их ключами', async () => {
+    const kit = setup();
+    const fieldId = '33333333-3333-4333-8333-3333333333f1';
+    kit.writer.apply.mockResolvedValueOnce({
+      customFieldChanges: [{ fieldId, from: null, to: 'x' }] as never,
+    });
+    await kit.applier.apply({} as never, 't1', actor('bob'), {
+      fields: { customFields: { [fieldId]: 'x' } },
+    } as never);
+    expect(kit.formulas.recalcOwnAfterValuesChange).toHaveBeenCalledWith(
+      expect.anything(),
+      'bob',
+      't1',
+      [fieldId],
+    );
   });
 });

@@ -7,7 +7,7 @@ import type {
   FormulaNode,
   FormulaValidationIssue,
 } from '@nodus/contracts';
-import { ErrorCode, customFieldValueSchemaOf } from '@nodus/contracts';
+import { customFieldValueSchemaOf, ErrorCode, sameCustomFieldValue } from '@nodus/contracts';
 import { evaluate, validateFormula } from '@nodus/formula-engine';
 import type { FormulaValue } from '@nodus/formula-engine';
 
@@ -236,12 +236,25 @@ export function readOwnFormula(
   return readFormulaCell(kind, hostId, fieldId)?.ast ?? null;
 }
 
-/** Снять свою формулу (DELETE): последнее значение остаётся снимком (Р5). */
+/** Снять свою формулу (DELETE): вычисленное значение очищается (#660). */
 export function removeOwnFormula(kind: FormulaHostKind, hostId: string, fieldId: string): boolean {
   // Вычисленное формулой значение очищается вместе с формулой (#660):
   // ячейка пуста или под формулой типа/вида, «снимка» больше нет.
   dropHostValue(kind, hostId, fieldId);
   return dropFormulaCell(kind, hostId, fieldId);
+}
+
+/** Реально изменённые ключи патча значений (включая null-очистку) —
+ *  паритет серверного prepareUpdate: только «настоящие» изменения попадают
+ *  под проверку формульной блокировки (#660). */
+export function changedValueKeys(
+  current: Record<string, unknown> | null | undefined,
+  patch: Record<string, unknown>,
+): string[] {
+  const base = current ?? {};
+  return Object.keys(patch).filter(
+    (fieldId) => !sameCustomFieldValue(base[fieldId], patch[fieldId]),
+  );
 }
 
 /** Убрать ключ значения у демо-хоста (снятие формулы очищает значение). */

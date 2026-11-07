@@ -86,7 +86,12 @@ export class TaskFormulaRecalcService {
     }
   }
 
-  /** Зависимые задачи модуля: их значения пишет tasks, не custom-fields (I3). */
+  /**
+   * Зависимые задачи модуля: их значения пишет tasks, не custom-fields (I3).
+   * Актёр-триггер в аудиторию чужих записей НЕ добавляется (security #632):
+   * он может не видеть приёмник (конфиденциальная подзадача) — события
+   * уходят только настоящей аудитории записи.
+   */
   async recalcForeign(
     tx: TransactionClient,
     actorId: string | null,
@@ -119,7 +124,7 @@ export class TaskFormulaRecalcService {
             row,
             { customFields: { [cell.fieldId]: outcome.value } },
             ['customFields'],
-            { formulaWrite: true },
+            { formulaWrite: true, foreignWrite: true },
           );
         } catch (error) {
           this.log.warn(
@@ -131,7 +136,9 @@ export class TaskFormulaRecalcService {
         }
       }
       if (outcome.errorChanged) {
-        await this.emitChanged(tx, actorId, cell.hostId, cell.fieldId, outcome.error !== null);
+        await this.emitChanged(tx, actorId, cell.hostId, cell.fieldId, outcome.error !== null, {
+          includeActor: false,
+        });
       }
     }
   }
@@ -169,13 +176,16 @@ export class TaskFormulaRecalcService {
     }
   }
 
-  /** Адресное событие формулы (O4): без значений, только состояние ошибки. */
+  /** Адресное событие формулы (O4): без значений, только состояние ошибки.
+   *  `includeActor=false` — каскадный пересчёт чужой записи: актёр-триггер
+   *  в аудиторию не попадает (security #632). */
   async emitChanged(
     tx: TransactionClient,
     actorId: string | null,
     taskId: string,
     fieldId: string,
     hasError: boolean,
+    opts: { includeActor?: boolean } = {},
   ): Promise<void> {
     const after = await this.liveRowOrNull(tx, taskId);
     // Задачу удалили, пока шёл пересчёт: адресата у события больше нет.
@@ -188,9 +198,10 @@ export class TaskFormulaRecalcService {
         hostId: taskId,
         fieldId,
         hasError,
-        // Актёр правки — в аудитории (как у task.updated): редактор-не-участник
-        // иначе не узнаёт о собственной формуле (#632).
-        audience: audienceIds(after, actorId ? [actorId] : []),
+        audience: audienceIds(
+          after,
+          opts.includeActor === false || actorId === null ? [] : [actorId],
+        ),
       },
       { actorId: actorId ?? undefined, aggregateType: 'task', aggregateId: taskId },
     );

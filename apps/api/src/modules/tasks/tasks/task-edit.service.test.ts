@@ -37,6 +37,23 @@ function setup(opts: { placementStage?: string } = {}) {
       outcome: null,
     })),
   };
+  const formulasMock = { recalcOwnAfterValuesChange: vi.fn(async () => void 0) };
+  const writerMock = {
+    apply: vi.fn(
+      async (
+        _tx: unknown,
+        _u: unknown,
+        _row: unknown,
+        patch: { customFields?: Record<string, unknown> },
+      ) => ({
+        customFieldChanges: Object.keys(patch.customFields ?? {}).map((fieldId) => ({
+          fieldId,
+          from: null,
+          to: 'v',
+        })),
+      }),
+    ),
+  };
   const service = new TaskEditService(
     { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn(TX)) } as never,
     { emit: vi.fn() } as never,
@@ -54,14 +71,14 @@ function setup(opts: { placementStage?: string } = {}) {
     { prepare: vi.fn() } as never,
     placementsRepo as never,
     boards as never,
-    {} as never,
-    { recalcOwnAfterValuesChange: vi.fn(async () => void 0) } as never,
+    writerMock as never,
+    formulasMock as never,
     { supplement: vi.fn(async (roles: Set<string>) => roles) } as never,
     {} as never,
     engine as never,
     catalog as never,
   );
-  return { service, engine, placementsRepo, boards, catalog };
+  return { service, engine, placementsRepo, boards, catalog, formulasMock };
 }
 
 describe('TaskEditService.movePersonal (#402)', () => {
@@ -143,3 +160,17 @@ describe('TaskEditService.movePersonal (#402)', () => {
     });
   });
 });
+
+describe('TaskEditService.update: синхронный пересчёт формул в tx (#632)', () => {
+  it('правка атрибута зовёт recalcOwnAfterValuesChange с изменёнными ключами', async () => {
+    const kit = setup();
+    const fieldId = '33333333-3333-4333-8333-3333333333ff';
+    kit.placementsRepo.findOne.mockResolvedValue({ stageId: 'p1' });
+    await service0(kit).update(USER, 't1', { customFields: { [fieldId]: 'v' } });
+    expect(kit.formulasMock.recalcOwnAfterValuesChange).toHaveBeenCalled();
+  });
+});
+
+function service0(kit: ReturnType<typeof setup>) {
+  return kit.service;
+}

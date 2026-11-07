@@ -91,7 +91,7 @@ export class TaskFieldsWriter {
     row: TaskFieldsRow,
     patch: TaskFieldsWrite,
     fields: readonly string[],
-    opts: { formulaWrite?: boolean } = {},
+    opts: { formulaWrite?: boolean; foreignWrite?: boolean } = {},
   ): Promise<{ customFieldChanges: RegistryFieldChange[] }> {
     const reparent = patch.parentId !== undefined;
     // Смены родителя сериализуются одной advisory-блокировкой транзакции
@@ -208,11 +208,17 @@ export class TaskFieldsWriter {
     const base = {
       taskId: row.id,
       number: row.number,
-      // Актёр правки — всегда в аудитории (#632): редактор-не-участник
+      // Актёр правки — в аудитории СВОЕЙ записи (#632): редактор-не-участник
       // (руководитель проекта, task.manage_any) иначе не получает ни одного
-      // события по собственной правке и его карточка «отстаёт на шаг» —
-      // живёт только на ответах мутаций, собранных до пересчёта формул.
-      audience: audienceIds(after, [row.assigneeId, actor.id]),
+      // события по собственной правке и его карточка «отстаёт на шаг». Но
+      // каскадный пересчёт ЧУЖИХ хостов (foreignWrite) актёра-источника в
+      // аудиторию не добавляет: он может не иметь доступа к записи-приёмнику
+      // (конфиденциальная подзадача, секретный проект) — fanout только
+      // получателям (security #632).
+      audience: audienceIds(
+        after,
+        opts.foreignWrite ? [row.assigneeId] : [row.assigneeId, actor.id],
+      ),
     };
     const meta = { actorId: actor.id, aggregateType: 'task', aggregateId: row.id };
     if (reassigned) {

@@ -42,6 +42,7 @@ interface Ctx {
     definitions: ReturnType<typeof vi.fn>;
     prepareUpdate: ReturnType<typeof vi.fn>;
   };
+  formulaCells: { lockedFieldIds: ReturnType<typeof vi.fn> };
 }
 
 function makeCtx(): Ctx {
@@ -53,6 +54,7 @@ function makeCtx(): Ctx {
       definitions: vi.fn(async () => [{ id: 'x' }]),
       prepareUpdate: vi.fn(async () => ({ next: { x: 1 }, changes: [] as { fieldId: string }[] })),
     },
+    formulaCells: { lockedFieldIds: vi.fn(async () => new Set<string>()) },
   };
 }
 
@@ -157,5 +159,39 @@ describe('buildUpdatePatch (#52/#631)', () => {
     } as never);
     // cf.<code> уже в changes — повторная запись из legacy-поля не нужна.
     expect(fields).toEqual([`cf.${CODE}`]);
+  });
+});
+
+describe('buildUpdatePatch: формульная блокировка ячейки (#660)', () => {
+  it('изменённый формульный ключ — 422 FORMULA_CELL_LOCKED', async () => {
+    const ctx = makeCtx();
+    ctx.customFields.prepareUpdate.mockResolvedValue({
+      next: { x: 1 },
+      changes: [{ fieldId: 'f-locked', from: null, to: 'руками' }],
+    } as never);
+    ctx.formulaCells.lockedFieldIds.mockResolvedValue(new Set(['f-locked']));
+    await expect(
+      buildUpdatePatch(
+        ctx as never,
+        user(MANAGER),
+        row,
+        facts,
+        { customFields: { 'f-locked': 'руками' } } as never,
+        {} as never,
+      ),
+    ).rejects.toMatchObject({ code: 'FORMULA_CELL_LOCKED' });
+  });
+
+  it('повтор того же значения блокировку не встречает', async () => {
+    const ctx = makeCtx();
+    await buildUpdatePatch(
+      ctx as never,
+      user(MANAGER),
+      row,
+      facts,
+      { customFields: { x: 1 } } as never,
+      {} as never,
+    );
+    expect(ctx.formulaCells.lockedFieldIds).not.toHaveBeenCalled();
   });
 });

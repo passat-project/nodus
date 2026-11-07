@@ -31,7 +31,10 @@ import {
 import { demoUserListItems } from '../../../../shared/mocks/data/users.js';
 import { actorUserRef, getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import { letterWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
-import { mockLockedFieldError } from '../../../../shared/custom-fields/formula/formula-mocks.js';
+import {
+  changedValueKeys,
+  mockLockedFieldError,
+} from '../../../../shared/custom-fields/formula/formula-mocks.js';
 import {
   apiError,
   attachedRefsOf,
@@ -207,10 +210,11 @@ export const lettersMutationHandlers = [
     };
     const changes = patchChanges(letter, body, next);
     // Формульная ячейка руками не пишется (#660): 422, как на сервере.
+    // Только реально изменённые ключи — повтор значения блокировку не встречает.
     const lockedLetter = mockLockedFieldError(
       'letter',
       letter.id,
-      Object.keys(body.customFields ?? {}),
+      changedValueKeys(letter.customFields, body.customFields ?? {}),
     );
     if (lockedLetter) return HttpResponse.json(lockedLetter, { status: 422 });
     Object.assign(letter, next, {

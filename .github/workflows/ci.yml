@@ -540,11 +540,13 @@ jobs:
             pnpm --filter @nodus/e2e exec playwright install chromium
           fi
 
-      - name: E2E формул (критерии 1–5)
-        # Шифр и перенос (1), ручное значение и «Как у типа» (2), подстановка
-        # в окно (3), ошибка ячейки (4), утечки секретного/конфиденциального (5).
+      - name: E2E формул (критерии 1, 3–5)
+        # Шифр и перенос (1), подстановка в окно (3), ошибка ячейки (4),
+        # утечки секретного/конфиденциального (5). Критерий 2 (ручное
+        # значение поверх формулы, «Как у типа») снят решением владельца
+        # по #660: формульная ячейка руками не пишется (422), спека удалена.
         # Данные — tests/e2e/formula-demo.json (единый источник с сидом выше).
-        run: pnpm --filter @nodus/e2e test specs/formulas-cipher.spec.ts specs/formulas-override.spec.ts specs/formulas-window-prefill.spec.ts specs/formulas-errors.spec.ts specs/formulas-security.spec.ts
+        run: pnpm --filter @nodus/e2e test specs/formulas-cipher.spec.ts specs/formulas-window-prefill.spec.ts specs/formulas-errors.spec.ts specs/formulas-security.spec.ts
         env:
           NODUS_BASE_URL: http://localhost:4173
           E2E_LIVE_API: '1'

@@ -123,7 +123,8 @@ export function useSaveFormula(host: FormulaHost) {
   });
 }
 
-/** Снять формулу: последнее вычисленное значение остаётся снимком (Р5). */
+/** Снять формулу: вычисленное значение очищается — ячейка пуста или под
+ *  формулой типа/вида (#660). */
 export function useRemoveFormula(host: FormulaHost) {
   const queryClient = useQueryClient();
   return useMutation({

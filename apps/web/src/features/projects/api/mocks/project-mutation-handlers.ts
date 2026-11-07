@@ -21,7 +21,10 @@ import { counterpartyRefById } from '../../../../shared/mocks/data/counterpartie
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
 import { projectWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
-import { mockLockedFieldError } from '../../../../shared/custom-fields/formula/formula-mocks.js';
+import {
+  changedValueKeys,
+  mockLockedFieldError,
+} from '../../../../shared/custom-fields/formula/formula-mocks.js';
 import {
   invalidMockValues,
   withStaticDefaults,
@@ -173,7 +176,11 @@ export const projectMutationHandlers = [
     const cleared = clearedProjectFields(requiredProjectFields(form), values);
     if (cleared.length > 0) return fieldsRequired(type.id, cleared, 'clear');
     // Формульная ячейка руками не пишется (#660): 422, как на сервере.
-    const lockedProject = mockLockedFieldError('project', row.id, values);
+    const lockedProject = mockLockedFieldError(
+      'project',
+      row.id,
+      changedValueKeys(row.customFields, values),
+    );
     if (lockedProject) return HttpResponse.json(lockedProject, { status: 422 });
     const updated = updateDemoProject(row.id, body, actor.id);
     return updated

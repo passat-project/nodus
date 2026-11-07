@@ -195,6 +195,8 @@ export class ProjectFormulaRecalcService {
     if (outcome.silent) return;
     if (outcome.changed) {
       try {
+        // Каскадный пересчёт: актёр-триггер в аудиторию хоста не входит —
+        // он может не иметь доступа к проекту/папке (security #632).
         if (cell.hostKind === 'project') {
           await this.writer.writeProject(tx, actorId, projectId, cell.fieldId, outcome.value);
         } else {
@@ -205,6 +207,7 @@ export class ProjectFormulaRecalcService {
             cell.hostId,
             cell.fieldId,
             outcome.value,
+            { includeActor: false },
           );
         }
       } catch (error) {
