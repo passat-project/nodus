@@ -66,6 +66,7 @@ function setup(letter: LetterDetailRow) {
   };
   const validator = { patch: vi.fn(async () => ({ data: {}, changes: [] })) };
   const fields = { releaseFormulas: vi.fn(async () => void 0) };
+  const letterFormulas = { recalcAfterValuesChange: vi.fn(async () => void 0) };
   const eventBus = { emit: vi.fn(async () => void 0) };
   const profiles = { filterActiveUserIds: vi.fn(async (ids: string[]) => ids) };
   const attached = {
@@ -78,6 +79,7 @@ function setup(letter: LetterDetailRow) {
     query as never,
     validator as never,
     fields as never,
+    letterFormulas as never,
     attached as never,
     attachedValidator as never,
     { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,

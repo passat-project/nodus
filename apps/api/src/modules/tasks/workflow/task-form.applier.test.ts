@@ -37,9 +37,11 @@ function setup(overrides: Record<string, unknown> = {}) {
       })),
     ),
   };
+  const formulas = { recalcOwnAfterValuesChange: vi.fn(async () => void 0) };
   const applier = new TaskFormApplier(
     tasks as never,
     writer as never,
+    formulas as never,
     time as never,
     revisions as never,
     messages as never,

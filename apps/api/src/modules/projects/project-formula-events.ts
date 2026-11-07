@@ -22,6 +22,13 @@ export class ProjectFormulaEvents {
     private readonly eventBus: EventBus,
   ) {}
 
+  /** Аудитория адресного события проекта/папки (#632): участники +
+   *  руководство; актёр правки добавляется вызывающим. */
+  async audienceOf(tx: TransactionClient, projectId: string): Promise<string[]> {
+    const project = await this.repo.findById(projectId, tx);
+    return project ? await projectAudience(this.participants, project, tx) : [];
+  }
+
   async emitChanged(
     tx: TransactionClient,
     actorId: string | null,

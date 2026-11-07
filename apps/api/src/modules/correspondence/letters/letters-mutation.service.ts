@@ -25,6 +25,7 @@ import {
 import { LetterAttachedRefsValidator, sameAttachedRefs } from './letter-attached-refs.validator.js';
 import { LetterFieldsValidator, type RegistrationValues } from './letter-fields.validator.js';
 import { LetterFieldsWriter } from './letter-fields.writer.js';
+import { LetterFormulaService } from './letter-formula.service.js';
 import { LettersQueryService } from './letters-query.service.js';
 import { LettersRepository } from './letters.repository.js';
 import type { LetterDetailRow } from './letter-row.js';
@@ -63,6 +64,7 @@ export class LettersMutationService {
     private readonly query: LettersQueryService,
     private readonly validator: LetterFieldsValidator,
     private readonly fields: LetterFieldsWriter,
+    private readonly letterFormulas: LetterFormulaService,
     private readonly attached: LetterAttachedRefsRepository,
     private readonly attachedValidator: LetterAttachedRefsValidator,
     private readonly txRunner: TransactionRunner,
@@ -151,6 +153,14 @@ export class LettersMutationService {
         ...data,
         ...(body.confidential === undefined ? {} : { confidential: body.confidential }),
       });
+      // Синхронный пересчёт формул письма в той же tx (#632): ответ PATCH
+      // несёт свежие значения — обработчик опаздывает на цикл диспетчера.
+      const changedFieldIds = changes
+        .filter((change) => change.field.startsWith('cf.'))
+        .map((change) => change.field.slice(3));
+      if (changedFieldIds.length > 0) {
+        await this.letterFormulas.recalcAfterValuesChange(tx, user.id, id, changedFieldIds);
+      }
       if (attachedRows !== null) await this.attached.replace(tx, id, attachedRows);
       await this.eventBus.emit(
         tx,

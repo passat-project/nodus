@@ -85,6 +85,9 @@ export const taskUpdatedPayloadSchema = taskEventBaseSchema.extend({
   parentId: z.uuid().nullable().optional(),
   previousParentId: z.uuid().nullable().optional(),
   customFieldChanges: z.array(customFieldChangeSchema).max(CUSTOM_FIELD_LIMITS.changes).optional(),
+  /** Формульная запись (#632): значение посчитано пересчётом ПОСЛЕ правки
+   *  источника — клиент обязан перечитать деталь даже у автора мутации. */
+  formulaWrite: z.boolean().optional(),
 });
 export type TaskUpdatedPayload = z.infer<typeof taskUpdatedPayloadSchema>;
 

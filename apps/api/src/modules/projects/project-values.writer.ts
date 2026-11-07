@@ -114,6 +114,7 @@ export class ProjectValuesWriter {
     await this.nodes.update(tx, nodeId, {
       customFields: prepared.next as Prisma.InputJsonValue,
     });
+    const project = await this.projects.findById(projectId, tx);
     await this.eventBus.emit(
       tx,
       PROJECT_EVENTS.NODE_UPDATED,
@@ -126,6 +127,19 @@ export class ProjectValuesWriter {
           from: eventValue(change.from),
           to: eventValue(change.to),
         })),
+        // Адресная рассылка участникам проекта (#632): без аудитории gateway
+        // молча выбрасывает событие — правка атрибутов папки и пересчёт её
+        // формул не видны никому (дерево и формулы наследников до F5).
+        ...(project
+          ? {
+              audience: [
+                ...new Set([
+                  ...(await projectAudience(this.participants, project, tx)),
+                  ...(actorId ? [actorId] : []),
+                ]),
+              ],
+            }
+          : {}),
       },
       { actorId, aggregateType: 'project_node', aggregateId: nodeId },
     );

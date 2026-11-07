@@ -201,7 +201,11 @@ export class TaskFieldsWriter {
     const base = {
       taskId: row.id,
       number: row.number,
-      audience: audienceIds(after, [row.assigneeId]),
+      // Актёр правки — всегда в аудитории (#632): редактор-не-участник
+      // (руководитель проекта, task.manage_any) иначе не получает ни одного
+      // события по собственной правке и его карточка «отстаёт на шаг» —
+      // живёт только на ответах мутаций, собранных до пересчёта формул.
+      audience: audienceIds(after, [row.assigneeId, actor.id]),
     };
     const meta = { actorId: actor.id, aggregateType: 'task', aggregateId: row.id };
     if (reassigned) {

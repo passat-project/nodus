@@ -21,6 +21,9 @@ import { childrenByParent } from './project-structure.tree.js';
  */
 @Injectable()
 export class ProjectFormulaRecalcService {
+  /** Потолок синхронного пересчёта в tx PATCH (#632): массовый каскад
+   *  остаётся диспетчеру — tx пользователя не удлиняется. */
+  private static readonly SYNC_RECALC_LIMIT = 20;
   constructor(
     private readonly nodes: ProjectNodesRepository,
     private readonly writer: ProjectValuesWriter,
@@ -69,6 +72,64 @@ export class ProjectFormulaRecalcService {
     for (const cell of dedupe([...dependent, ...own])) {
       await this.recalcCell(tx, actorId, projectId, cell, depth);
     }
+  }
+
+  /**
+   * Синхронный пересчёт ячеек папки в транзакции PATCH (#632): ответ
+   * мутации и следующий GET обязаны нести свежие значения — асинхронный
+   * обработчик опаздывает на цикл диспетчера (карточка «отстаёт на шаг»).
+   * Свыше лимита ячеек — пропуск: каскад догонит диспетчер.
+   */
+  async recalcNodeAfterValuesChange(
+    tx: TransactionClient,
+    actorId: string | null,
+    projectId: string,
+    nodeId: string,
+    fieldIds: readonly string[],
+  ): Promise<void> {
+    const numbers = await this.numbersOf(tx, fieldIds);
+    if (numbers.length === 0) return;
+    if (!(await this.withinSyncLimit(tx, 'node', nodeId, numbers))) return;
+    await this.recalcNodeCells(tx, actorId, projectId, nodeId, numbers, 1);
+  }
+
+  /**
+   * Синхронный пересчёт ячеек проекта в транзакции PATCH (#632) —
+   * симметрично папке: свежий ответ мутации без ожидания диспетчера.
+   */
+  async recalcProjectAfterValuesChange(
+    tx: TransactionClient,
+    actorId: string | null,
+    projectId: string,
+    fieldIds: readonly string[],
+  ): Promise<void> {
+    const numbers = await this.numbersOf(tx, fieldIds);
+    if (numbers.length === 0) return;
+    if (!(await this.withinSyncLimit(tx, 'project', projectId, numbers))) return;
+    await this.recalcProjectCells(tx, actorId, projectId, numbers, 1);
+  }
+
+  /** Номера определений изменённых атрибутов (адрес зависимостей). */
+  private async numbersOf(tx: TransactionClient, fieldIds: readonly string[]): Promise<number[]> {
+    const numbers: number[] = [];
+    for (const fieldId of fieldIds) {
+      const number = await this.cells.numberByDefinitionId(fieldId, tx);
+      if (number !== null) numbers.push(number);
+    }
+    return numbers;
+  }
+
+  /** Мал ли каскад для синхронного пересчёта в tx пользователя. */
+  private async withinSyncLimit(
+    tx: TransactionClient,
+    hostKind: 'project' | 'node',
+    hostId: string,
+    numbers: readonly number[],
+  ): Promise<boolean> {
+    const dependent = await this.cells.dependentCellsByValues(hostKind, hostId, numbers, tx);
+    const own = await this.cells.cellsForHost(hostKind, hostId, tx);
+    const total = dedupe([...dependent, ...own]).length;
+    return total > 0 && total <= ProjectFormulaRecalcService.SYNC_RECALC_LIMIT;
   }
 
   /**

@@ -150,6 +150,7 @@ export function makeProjectsServiceKit() {
         profiles as never,
         customFields as never,
         formulaCells as never,
+        { recalcProjectAfterValuesChange: vi.fn(async () => void 0) } as never,
       );
     },
   };

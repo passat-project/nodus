@@ -34,6 +34,10 @@ import { TasksRepository } from './tasks.repository.js';
  *  «что изменится», а не про пересчёт тысяч задач. */
 const PREVIEW_TASKS_LIMIT = 100;
 
+/** Потолок синхронного пересчёта в tx PATCH (#632): заодно и диспэтчер
+ *  обработчика — массовый каскад не должен удлинять транзакцию пользователя. */
+const SYNC_RECALC_LIMIT = 20;
+
 /**
  * Формула ячейки задачи (#632, Р10): мутации живут у владельца хоста (I3).
  * Порт `FORMULA_CELLS` проверяет формулу и хранит её, значение пишет штатный
@@ -152,6 +156,40 @@ export class TaskFormulaService {
     };
   }
 
+  /**
+   * Синхронный пересчёт СВОИХ ячеек задачи в транзакции PATCH (#632):
+   * ответ мутации обязан нести свежие формульные значения — асинхронный
+   * обработчик опаздывает на цикл диспетчера (outbox-поллинг), и карточка
+   * автора «отстаёт на шаг» (правка N показывает результат правки N-1).
+   * Пересчитываются только ячейки ЭТОЙ задачи; чужие хосты — диспетчеру
+   * (их строки пишет их модуль, I3). Свыше `SYNC_RECALC_LIMIT` ячеек —
+   * пропускаем: каскад догонит диспетчер, tx пользователя не удлиняем.
+   */
+  async recalcOwnAfterValuesChange(
+    tx: TransactionClient,
+    actorId: string | null,
+    taskId: string,
+    fieldIds: readonly string[],
+  ): Promise<void> {
+    const numbers: number[] = [];
+    let sourceDepth = 0;
+    for (const fieldId of fieldIds) {
+      const number = await this.cells.numberByDefinitionId(fieldId, tx);
+      if (number === null) continue;
+      numbers.push(number);
+      const depth = await this.cells.depthOf('task', taskId, fieldId, tx);
+      if (depth !== null) sourceDepth = Math.max(sourceDepth, depth);
+    }
+    if (numbers.length === 0) return;
+    const dependent = await this.cells.dependentCellsByValues('task', taskId, numbers, tx);
+    const mine = dependent.filter((cell) => cell.hostKind === 'task' && cell.hostId === taskId);
+    const own = await this.cells.cellsForHost('task', taskId, tx);
+    const seen = new Set(mine.map((cell) => cell.cellId));
+    const all = [...mine, ...own.filter((cell) => !seen.has(cell.cellId))];
+    if (all.length === 0 || all.length > SYNC_RECALC_LIMIT) return;
+    await this.recalcOwn(tx, actorId, taskId, all, sourceDepth + 1);
+  }
+
   /** Пересчёт ячеек задачи после изменения значений (Р4): общая точка. */
   async recalcCells(
     tx: TransactionClient,
@@ -195,11 +233,15 @@ export class TaskFormulaService {
     }[],
     depth: number,
   ): Promise<void> {
+    const row0 = await this.liveRowOrNull(tx, taskId);
+    if (!row0) return;
+    // Замок строки до ячеек: тот же порядок, что у PATCH задачи (хост →
+    // формула), иначе конкурентная правка значения даёт 40P01. Строка для
+    // события перечитывается ПОД замком: снимок до лока нёс устаревшие
+    // идентификационные поля (assigneeId аудитории).
+    await this.repo.lock(tx, taskId);
     const row = await this.liveRowOrNull(tx, taskId);
     if (!row) return;
-    // Замок строки до ячеек: тот же порядок, что у PATCH задачи (хост →
-    // формула), иначе конкурентная правка значения даёт 40P01.
-    await this.repo.lock(tx, taskId);
     const actor = { id: actorId ?? row.creatorId, permissions: [] as string[] };
     for (const cell of cells) {
       const outcome = await this.recalcOrNull(tx, cell, depth);
@@ -348,7 +390,9 @@ export class TaskFormulaService {
         hostId: taskId,
         fieldId,
         hasError,
-        audience: audienceIds(after, []),
+        // Актёр правки — в аудитории (как у task.updated): редактор-не-участник
+        // иначе не узнаёт о собственной формуле (#632).
+        audience: audienceIds(after, actorId ? [actorId] : []),
       },
       { actorId: actorId ?? undefined, aggregateType: 'task', aggregateId: taskId },
     );

@@ -55,6 +55,7 @@ function setup(opts: { placementStage?: string } = {}) {
     placementsRepo as never,
     boards as never,
     {} as never,
+    { recalcOwnAfterValuesChange: vi.fn(async () => void 0) } as never,
     { supplement: vi.fn(async (roles: Set<string>) => roles) } as never,
     {} as never,
     engine as never,

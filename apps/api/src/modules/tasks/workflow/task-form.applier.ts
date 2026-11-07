@@ -13,6 +13,7 @@ import { actorRoles, taskAccess } from '../access/task-access.js';
 import { ResultRevisions } from '../activity/result-revisions.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
 import { TaskFieldsWriter, type TaskFieldsWrite } from '../tasks/task-fields.writer.js';
+import { TaskFormulaService } from '../tasks/task-formula.service.js';
 import { TimeService } from '../time/time.service.js';
 
 /**
@@ -27,6 +28,7 @@ export class TaskFormApplier {
   constructor(
     private readonly tasks: TasksRepository,
     private readonly writer: TaskFieldsWriter,
+    private readonly formulas: TaskFormulaService,
     private readonly time: TimeService,
     private readonly revisions: ResultRevisions,
     @Inject(CHAT_MESSAGE_ACCESS) private readonly messages: ChatMessageAccess,
@@ -91,6 +93,17 @@ export class TaskFormApplier {
         const written = await this.writer.apply(tx, actor, task, patch, keys);
         for (const change of written.customFieldChanges) {
           fields[`cf.${change.fieldId}`] = { from: change.from, to: change.to };
+        }
+        // Синхронный пересчёт формул в той же tx (#632): ответ перехода и
+        // следующий GET несут свежие значения (обработчик опаздывает на
+        // цикл диспетчера — карточка «отстаёт на шаг»).
+        if (written.customFieldChanges.length > 0) {
+          await this.formulas.recalcOwnAfterValuesChange(
+            tx,
+            actor.id,
+            taskId,
+            written.customFieldChanges.map((change) => change.fieldId),
+          );
         }
         // Смена ответственного меняет права на СЛЕДУЮЩИЕ разделы: время и
         // итог перепроверяются по свежим ролям (иначе актор, передавший

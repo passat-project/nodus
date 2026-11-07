@@ -30,6 +30,7 @@ import { Placements } from '../personal/placements.js';
 import { PlacementsRepository } from '../personal/placements.repository.js';
 import type { TaskListRow } from './task-row.js';
 import { TaskFieldsWriter } from './task-fields.writer.js';
+import { TaskFormulaService } from './task-formula.service.js';
 import { TasksQueryService } from './tasks-query.service.js';
 import { TasksRepository } from './tasks.repository.js';
 import { TasksService } from './tasks.service.js';
@@ -68,6 +69,7 @@ export class TaskEditService {
     private readonly placementsRepo: PlacementsRepository,
     private readonly boards: PersonalBoardsRepository,
     private readonly writer: TaskFieldsWriter,
+    private readonly formulas: TaskFormulaService,
     private readonly projectRights: TaskProjectRights,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
@@ -155,7 +157,7 @@ export class TaskEditService {
   ): Promise<void> {
     // Доменная логика правки полей — общий писатель (#380): окно перехода
     // правит поля тем же кодом (локи, перепривязка, события).
-    await this.writer.apply(
+    const { customFieldChanges } = await this.writer.apply(
       tx,
       user,
       row,
@@ -173,6 +175,17 @@ export class TaskEditService {
       },
       fields,
     );
+    // Синхронный пересчёт формул в той же tx (#632): ответ PATCH и любой
+    // следующий GET обязаны нести свежие значения — асинхронный обработчик
+    // опаздывает на цикл диспетчера, и карточка «отстаёт на шаг».
+    if (customFieldChanges.length > 0) {
+      await this.formulas.recalcOwnAfterValuesChange(
+        tx,
+        user.id,
+        row.id,
+        customFieldChanges.map((change) => change.fieldId),
+      );
+    }
   }
 
   private async moveGlobal(

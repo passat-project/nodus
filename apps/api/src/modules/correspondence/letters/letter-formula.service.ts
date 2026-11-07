@@ -36,6 +36,10 @@ import { LettersRepository } from './letters.repository.js';
 export class LetterFormulaService {
   private readonly log = new Logger(LetterFormulaService.name);
 
+  /** Потолок синхронного пересчёта в tx PATCH (#632): массовый каскад
+   *  остаётся диспетчеру — tx пользователя не удлиняется. */
+  private static readonly SYNC_RECALC_LIMIT = 20;
+
   constructor(
     private readonly txRunner: TransactionRunner,
     private readonly query: LettersQueryService,
@@ -89,6 +93,30 @@ export class LetterFormulaService {
       await this.cells.remove(tx, { hostKind: 'letter', hostId: letterId, fieldId });
       await this.emitChanged(tx, user.id, letterId, fieldId, false);
     });
+  }
+
+  /**
+   * Синхронный пересчёт ячеек письма в транзакции PATCH (#632): ответ
+   * мутации несёт свежие значения — обработчик опаздывает на цикл
+   * диспетчера, и карточка «отстаёт на шаг». Свыше лимита ячеек — пропуск.
+   */
+  async recalcAfterValuesChange(
+    tx: TransactionClient,
+    actorId: string | null,
+    letterId: string,
+    fieldIds: readonly string[],
+  ): Promise<void> {
+    const numbers: number[] = [];
+    for (const fieldId of fieldIds) {
+      const number = await this.cells.numberByDefinitionId(fieldId, tx);
+      if (number !== null) numbers.push(number);
+    }
+    if (numbers.length === 0) return;
+    const own = await this.cells.cellsForHost('letter', letterId, tx);
+    const dependent = await this.cells.dependentCellsByValues('letter', letterId, numbers, tx);
+    const total = new Set([...own, ...dependent].map((cell) => cell.cellId)).size;
+    if (total === 0 || total > LetterFormulaService.SYNC_RECALC_LIMIT) return;
+    await this.recalcCells(tx, actorId, letterId, numbers, 1);
   }
 
   /** Пересчёт ячеек письма после изменения значений (Р4): общая точка для

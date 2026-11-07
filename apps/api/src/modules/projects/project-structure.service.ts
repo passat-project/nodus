@@ -32,6 +32,8 @@ import { loadForStructureManage } from './project-structure.access.js';
 import { assertKindAlive, assertParent, kindOf } from './project-structure.guards.js';
 import { nodeToDto } from './project-structure.mapper.js';
 import { eventValue, valuesOf } from './project-structure.values.js';
+import { ProjectFormulaEvents } from './project-formula-events.js';
+import { ProjectFormulaRecalcService } from './project-formula-recalc.service.js';
 import { NodeKindsRepository } from './project-node-kinds.repository.js';
 import { ProjectNodesRepository, type ProjectNodeRow } from './project-nodes.repository.js';
 import { ProjectTypesRepository } from './project-types.repository.js';
@@ -71,6 +73,8 @@ export class ProjectStructureService {
     @Inject(TASK_PROJECT_READER) private readonly taskReader: TaskProjectReader,
     // Формулы ячеек папок (#632): состояние для DTO и снятие при записи (Р5).
     @Inject(FORMULA_CELLS) private readonly formulas: FormulaCells,
+    private readonly formulaRecalc: ProjectFormulaRecalcService,
+    private readonly formulaEvents: ProjectFormulaEvents,
   ) {}
 
   /** GET /projects/:id/structure: папки (плоско, по order) + rollups + виды +
@@ -253,6 +257,17 @@ export class ProjectStructureService {
         fields.push('kindId');
       }
       await this.nodes.update(tx, node.id, patch);
+      // Синхронный пересчёт формул папки в той же tx (#632): ответ PATCH
+      // несёт свежие значения — обработчик опаздывает на цикл диспетчера.
+      if (changes.length > 0) {
+        await this.formulaRecalc.recalcNodeAfterValuesChange(
+          tx,
+          user.id,
+          projectId,
+          node.id,
+          changes.map((change) => change.fieldId),
+        );
+      }
       await this.eventBus.emit(
         tx,
         PROJECT_EVENTS.NODE_UPDATED,
@@ -260,6 +275,11 @@ export class ProjectStructureService {
           projectId,
           nodeId: node.id,
           fields,
+          // Адресная рассылка (#632): без аудитории gateway выбрасывает
+          // событие — правка атрибутов папки не видна никому до F5.
+          audience: [
+            ...new Set([...(await this.formulaEvents.audienceOf(tx, projectId)), user.id]),
+          ],
           ...(patch.name !== undefined ? { name: patch.name } : {}),
           ...(changes.some((change) => change.fieldId === SYSTEM_FIELD_IDS.nodeCode)
             ? { code: nodeCodeOf(patch.customFields as Prisma.InputJsonValue | undefined) }
