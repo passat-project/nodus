@@ -31,6 +31,7 @@ import { NodeFormPolicy } from './node-form.policy.js';
 import { loadForStructureManage } from './project-structure.access.js';
 import { assertKindAlive, assertParent, kindOf } from './project-structure.guards.js';
 import { nodeToDto } from './project-structure.mapper.js';
+import { assertNodeCellsWritable } from './project-structure-formulas.js';
 import { eventValue, valuesOf } from './project-structure.values.js';
 import { ProjectFormulaEvents } from './project-formula-events.js';
 import { ProjectFormulaRecalcService } from './project-formula-recalc.service.js';
@@ -233,24 +234,7 @@ export class ProjectStructureService {
           { authorId: user.id, actor: user, kindChanged },
           tx,
         );
-        // Формульная ячейка руками не пишется (решение владельца по #660):
-        // значение в атрибут папки со своей формулой или формулой вида — 422.
-        if (prepared.changes.length > 0) {
-          const locked = await this.formulas.lockedFieldIds(
-            tx,
-            'node',
-            nodeId,
-            prepared.changes.map((change) => change.fieldId),
-          );
-          if (locked.size > 0) {
-            throw new DomainException(
-              ErrorCode.FORMULA_CELL_LOCKED,
-              'Formula cell value is computed by its formula',
-              { fields: [...locked] },
-              422,
-            );
-          }
-        }
+        await assertNodeCellsWritable(this.formulas, tx, nodeId, prepared.changes);
         patch.customFields = prepared.values as Prisma.InputJsonValue;
         changes = prepared.changes;
         fields.push(...changes.map((change) => nodeFormKey(change.fieldId)));
@@ -264,8 +248,6 @@ export class ProjectStructureService {
         fields.push('kindId');
       }
       await this.nodes.update(tx, node.id, patch);
-      // Синхронный пересчёт формул папки в той же tx (#632): ответ PATCH
-      // несёт свежие значения — обработчик опаздывает на цикл диспетчера.
       if (changes.length > 0) {
         await this.formulaRecalc.recalcNodeAfterValuesChange(
           tx,
@@ -282,8 +264,7 @@ export class ProjectStructureService {
           projectId,
           nodeId: node.id,
           fields,
-          // Адресная рассылка (#632): без аудитории gateway выбрасывает
-          // событие — правка атрибутов папки не видна никому до F5.
+          // Без аудитории gateway выбрасывает событие (#632) — до F5.
           audience: [
             ...new Set([...(await this.formulaEvents.audienceOf(tx, projectId)), user.id]),
           ],

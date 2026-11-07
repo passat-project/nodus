@@ -63,6 +63,7 @@ import { TaskCreatePolicy } from './tasks/task-create.policy.js';
 import { TaskDtoMapper } from './tasks/task-dto.mapper.js';
 import { TaskFactsRepository } from './tasks/task-facts.repository.js';
 import { TaskEditService } from './tasks/task-edit.service.js';
+import { TaskFormulaRecalcService } from './tasks/task-formula-recalc.service.js';
 import { TaskFormulaService } from './tasks/task-formula.service.js';
 import { TaskFieldsWriter } from './tasks/task-fields.writer.js';
 import { ProjectsPortsModule } from '../projects/projects-ports.module.js';
@@ -143,6 +144,7 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
     TasksService,
     TaskEditService,
     TaskFormulaService,
+    TaskFormulaRecalcService,
     PersonalStagesService,
     ParticipantsService,
     ChecklistService,

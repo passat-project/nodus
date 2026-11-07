@@ -253,6 +253,26 @@ function dropHostValue(kind: FormulaHostKind, hostId: string, fieldId: string): 
   setHostValues(kind, hostId, next);
 }
 
+/** Тело 422-ответа формульной блокировки для мок-хендлеров значений (#660):
+ *  null — блокировки нет, значение пишется. Паритет FORMULA_CELL_LOCKED. */
+export function mockLockedFieldError(
+  kind: FormulaHostKind,
+  hostId: string,
+  source: Record<string, unknown> | readonly string[],
+): { code: string; message: string; details: { fields: string[] } } | null {
+  const values = source as Record<string, unknown>;
+  const fieldIds = Array.isArray(source)
+    ? source
+    : Object.keys(values).filter((fieldId) => values[fieldId] !== null);
+  const locked = lockedMockFieldIds(kind, hostId, fieldIds);
+  if (locked.size === 0) return null;
+  return {
+    code: 'FORMULA_CELL_LOCKED',
+    message: 'Formula cell value is computed by its formula',
+    details: { fields: [...locked] },
+  };
+}
+
 /** Формульно-заблокированные ключи (паритет сервера, #660): у атрибута
  *  своя формула или формула слота места — значение пишет только формула. */
 export function lockedMockFieldIds(

@@ -95,6 +95,7 @@ export const errorMessages: Record<ErrorCode, string> = {
     'Результат формулы не подходит к типу атрибута — измените формулу',
   [ErrorCode.FORMULA_SOURCE_FORBIDDEN]: 'В этой формуле нельзя использовать выбранный источник',
   [ErrorCode.FORMULA_LIMIT_EXCEEDED]: 'Формула слишком большая — упростите её',
+  [ErrorCode.FORMULA_CELL_LOCKED]: 'Ячейку считает формула — вписать значение нельзя',
   [ErrorCode.DICTIONARY_SYSTEM_LOCKED]: 'Системный справочник изменить нельзя',
   [ErrorCode.DICTIONARY_ITEM_NAME_TAKEN]: 'Такой вариант уже есть в списке',
   [ErrorCode.ROLE_LOCKED]: 'Права администратора не меняются — у него всегда все права',

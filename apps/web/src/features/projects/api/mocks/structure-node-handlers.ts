@@ -15,7 +15,7 @@ import {
 
 import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
 import { nodeWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
-import { lockedMockFieldIds } from '../../../../shared/custom-fields/formula/formula-mocks.js';
+import { mockLockedFieldError } from '../../../../shared/custom-fields/formula/formula-mocks.js';
 import {
   invalidMockValues,
   withStaticDefaults,
@@ -231,23 +231,8 @@ export const structureNodeHandlers = [
     );
     if (rule) return rule;
     // Формульная ячейка руками не пишется (#660): 422, как на сервере.
-    const lockedNodeFields = lockedMockFieldIds(
-      'node',
-      node.id,
-      Object.entries(patchValues)
-        .filter(([, value]) => value !== null)
-        .map(([fieldId]) => fieldId),
-    );
-    if (lockedNodeFields.size > 0) {
-      return HttpResponse.json(
-        {
-          code: 'FORMULA_CELL_LOCKED',
-          message: 'Formula cell value is computed by its formula',
-          details: { fields: [...lockedNodeFields] },
-        },
-        { status: 422 },
-      );
-    }
+    const lockedNode = mockLockedFieldError('node', node.id, patchValues);
+    if (lockedNode) return HttpResponse.json(lockedNode, { status: 422 });
     if (kindChanged) node.kindId = body.kindId!;
     if (body.name) node.name = body.name;
     if (Object.keys(patchValues).length > 0) {

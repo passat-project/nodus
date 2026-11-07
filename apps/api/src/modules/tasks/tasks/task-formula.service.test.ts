@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Logger } from '@nestjs/common';
 import { ErrorCode, type AuthUser } from '@nodus/contracts';
 
 import { TaskFormulaService } from './task-formula.service.js';
@@ -80,17 +79,22 @@ function setup(options: { nodeProjectId?: string | null } = {}) {
       projectId: options.nodeProjectId ?? PROJECT,
     })),
   };
+  const recalcWriter = {
+    recalcOwn: vi.fn(async () => void 0),
+    recalcForeign: vi.fn(async () => void 0),
+    emitChanged: vi.fn(async () => void 0),
+  };
   const service = new TaskFormulaService(
     txRunner as never,
     query as never,
     repo as never,
     writer as never,
-    eventBus as never,
     projectRights as never,
     cells as never,
     records as never,
+    recalcWriter as never,
   );
-  return { service, query, cells, records, writer, eventBus };
+  return { service, query, cells, records, writer, eventBus, recalcWriter };
 }
 
 describe('TaskFormulaService.movePreview (#632, Р10, критерий 1)', () => {
@@ -154,18 +158,23 @@ describe('TaskFormulaService.movePreview (#632, Р10, критерий 1)', () =
   });
 });
 
-describe('TaskFormulaService.recalcCells: изоляция сбоя ячейки (A3-07)', () => {
+describe('TaskFormulaService.recalcCells: партия уходит писателю пересчёта (I5)', () => {
   const cell = (id: string) => ({ cellId: id, hostKind: 'task', hostId: TASK, fieldId: FIELD });
 
-  it('падение пересчёта одной ячейки не валит партию: остальные обработаны', async () => {
-    const { service, cells, writer } = setup();
-    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
-    cells.cellsForHost.mockResolvedValueOnce([cell('c1'), cell('c2')]);
-    cells.recalc.mockRejectedValueOnce(new Error('источник недоступен'));
-    await expect(service.recalcCells({} as never, null, TASK, [], 1)).resolves.toBeUndefined();
-    expect(cells.recalc).toHaveBeenCalledTimes(2);
-    expect(writer.apply).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalled();
-    warn.mockRestore();
+  it('свои ячейки передаются recalcOwn, чужие — recalcForeign', async () => {
+    const { service, cells, recalcWriter } = setup();
+    cells.cellsForHost.mockResolvedValueOnce([cell('c1')]);
+    cells.dependentCellsByValues.mockResolvedValueOnce([
+      { ...cell('c2'), hostId: 'другая' },
+    ] as never);
+    await service.recalcCells({} as never, null, TASK, [7], 1);
+    expect(recalcWriter.recalcOwn).toHaveBeenCalledWith(
+      expect.anything(),
+      null,
+      TASK,
+      expect.arrayContaining([expect.objectContaining({ cellId: 'c1' })]),
+      1,
+    );
+    expect(recalcWriter.recalcForeign).toHaveBeenCalled();
   });
 });

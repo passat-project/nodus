@@ -21,7 +21,7 @@ import { counterpartyRefById } from '../../../../shared/mocks/data/counterpartie
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
 import { projectWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
-import { lockedMockFieldIds } from '../../../../shared/custom-fields/formula/formula-mocks.js';
+import { mockLockedFieldError } from '../../../../shared/custom-fields/formula/formula-mocks.js';
 import {
   invalidMockValues,
   withStaticDefaults,
@@ -173,23 +173,8 @@ export const projectMutationHandlers = [
     const cleared = clearedProjectFields(requiredProjectFields(form), values);
     if (cleared.length > 0) return fieldsRequired(type.id, cleared, 'clear');
     // Формульная ячейка руками не пишется (#660): 422, как на сервере.
-    const lockedProjectFields = lockedMockFieldIds(
-      'project',
-      row.id,
-      Object.entries(values)
-        .filter(([, value]) => value !== null)
-        .map(([fieldId]) => fieldId),
-    );
-    if (lockedProjectFields.size > 0) {
-      return HttpResponse.json(
-        {
-          code: 'FORMULA_CELL_LOCKED',
-          message: 'Formula cell value is computed by its formula',
-          details: { fields: [...lockedProjectFields] },
-        },
-        { status: 422 },
-      );
-    }
+    const lockedProject = mockLockedFieldError('project', row.id, values);
+    if (lockedProject) return HttpResponse.json(lockedProject, { status: 422 });
     const updated = updateDemoProject(row.id, body, actor.id);
     return updated
       ? HttpResponse.json(projectWithFormulas(detailOf(updated, actor), updated.typeId))

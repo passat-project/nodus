@@ -31,7 +31,7 @@ import {
 import { demoUserListItems } from '../../../../shared/mocks/data/users.js';
 import { actorUserRef, getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import { letterWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
-import { lockedMockFieldIds } from '../../../../shared/custom-fields/formula/formula-mocks.js';
+import { mockLockedFieldError } from '../../../../shared/custom-fields/formula/formula-mocks.js';
 import {
   apiError,
   attachedRefsOf,
@@ -207,21 +207,12 @@ export const lettersMutationHandlers = [
     };
     const changes = patchChanges(letter, body, next);
     // Формульная ячейка руками не пишется (#660): 422, как на сервере.
-    const lockedLetterFields = lockedMockFieldIds(
+    const lockedLetter = mockLockedFieldError(
       'letter',
       letter.id,
       Object.keys(body.customFields ?? {}),
     );
-    if (lockedLetterFields.size > 0) {
-      return HttpResponse.json(
-        {
-          code: 'FORMULA_CELL_LOCKED',
-          message: 'Formula cell value is computed by its formula',
-          details: { fields: [...lockedLetterFields] },
-        },
-        { status: 422 },
-      );
-    }
+    if (lockedLetter) return HttpResponse.json(lockedLetter, { status: 422 });
     Object.assign(letter, next, {
       theirNumber: body.theirNumber ?? letter.theirNumber,
       theirDate: body.theirDate ?? letter.theirDate,
