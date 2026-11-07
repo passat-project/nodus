@@ -317,8 +317,8 @@ describe('FormulaContextService: выборки агрегатов (A7-1/A7-2)',
     });
     expect(reader.projectNodes).not.toHaveBeenCalled();
     expect(reader.nodeTasks).not.toHaveBeenCalled();
-    expect(
-      context!.resolver.select({ kind: 'related', selector: { kind: 'node_tasks' } }),
-    ).toEqual([]);
+    expect(context!.resolver.select({ kind: 'related', selector: { kind: 'node_tasks' } })).toEqual(
+      [],
+    );
   });
 });
