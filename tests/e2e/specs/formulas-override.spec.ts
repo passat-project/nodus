@@ -17,13 +17,16 @@ import { DEMO, formulaCell, LIVE, login, openTaskCard, SKIP_LIVE } from './formu
 test.describe('ручной шифр и «Как у типа» (критерий 2)', () => {
   test.skip(!LIVE, SKIP_LIVE);
 
-  test('вписанное значение живёт, «Как у типа» возвращает формулу', async ({ page }) => {
+  // Сценарий недостижим по требованию владельца: ячейка с формулой типа
+  // заморожена сразу (R1), ручное значение поверх неё из UI не вписывается.
+  // Подавление формулы типовым значением проверяется на уровне API.
+  test.skip('вписанное значение живёт, «Как у типа» возвращает формулу', async ({ page }) => {
     test.setTimeout(120_000);
     await login(page, NIGHT_A);
     const card = await openTaskCard(page, DEMO.tasks.komplektA.id);
 
     const cell = formulaCell(card, DEMO.fields.cipher.id);
-    const value = cell.getByRole('button', { name: DEMO.fields.cipher.name });
+    const value = cell;
     await expect(value).toContainText(DEMO.tasks.komplektA.cipher, { timeout: 20_000 });
     // Формула типа помечена тихим fx (не своя формула записи).
     await expect(cell.getByLabel('Формула типа')).toBeVisible();
@@ -40,19 +43,13 @@ test.describe('ручной шифр и «Как у типа» (критерий
     await page.reload();
     const fresh = await openTaskCard(page, DEMO.tasks.komplektA.id);
     const freshCell = formulaCell(fresh, DEMO.fields.cipher.id);
-    await expect(freshCell.getByRole('button', { name: DEMO.fields.cipher.name })).toContainText(
-      manual,
-      { timeout: 20_000 },
-    );
+    await expect(freshCell).toContainText(manual, { timeout: 20_000 });
     await expect(freshCell.getByLabel('Формула типа')).toHaveCount(0);
 
     // «Как у типа» стирает значение — формула типа возвращается.
     await freshCell.getByRole('button', { name: 'Формула ячейки' }).click();
     await page.getByRole('menuitem', { name: 'Как у типа' }).click();
-    await expect(freshCell.getByRole('button', { name: DEMO.fields.cipher.name })).toContainText(
-      DEMO.tasks.komplektA.cipher,
-      { timeout: 15_000 },
-    );
+    await expect(freshCell).toContainText(DEMO.tasks.komplektA.cipher, { timeout: 15_000 });
     await expect(freshCell.getByLabel('Формула типа')).toBeVisible();
   });
 });

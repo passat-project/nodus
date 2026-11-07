@@ -29,10 +29,8 @@ test.describe('ошибка формулы не блокирует карточ�
     await expect(card.getByText('Атрибуты').first()).toBeVisible();
     await expect(card.getByRole('button', { name: DEMO.transitionName })).toBeVisible();
     // Соседние значения формул посчитаны — ошибка локальна ячейке.
-    await expect(
-      formulaCell(card, DEMO.fields.cipher.id).getByRole('button', {
-        name: DEMO.fields.cipher.name,
-      }),
-    ).toContainText(DEMO.tasks.komplektB.cipher);
+    await expect(formulaCell(card, DEMO.fields.cipher.id)).toContainText(
+      DEMO.tasks.komplektB.cipher,
+    );
   });
 });
