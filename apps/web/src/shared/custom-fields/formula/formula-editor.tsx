@@ -31,9 +31,10 @@ export interface FormulaHostContext {
 /**
  * Редактор формул (#632, §4c): строка плашек, палитра источников и функций,
  * живое превью результата/ошибки. У ячейки одна своя формула; формулу
- * типа/вида ставят в настройках типа/вида (Р6), поэтому редактор здесь
- * работает только с собственной формулой ячейки. Состояние — в
- * `useFormulaEditor`, здесь разметка окна.
+ * типа/вида ставят в настройках типа/вида (Р6), из записи она только
+ * просматривается — но «Создать свою формулу» распломбирует строку и
+ * кладёт копию типовой как черновик (своя сильнее типовой, Р1). Состояние —
+ * в `useFormulaEditor`, здесь разметка окна.
  *
  * Геометрия окна (#632, вкус): окно НЕ выше 88vh — заголовок и футер всегда
  * видны, прокручиваются только панели (канон диалогов: max-height + внутренний
@@ -91,14 +92,17 @@ export function FormulaEditor({
     handleKeyDown,
     handleSave,
     handleRemove,
+    resetToCell,
   } = useFormulaEditor({ open, host, fieldId, ownDefinitions, hostContext, onClose });
   const [removeOpen, setRemoveOpen] = useState(false);
-  // Формула типа/вида наследуется из настроек атрибута: в задаче она только
-  // ПРОСМАТРИВАЕТСЯ (правка «для всех» из записи запрещена, решение владельца
-  // по #632) — строка и футер уходят в режим только чтения.
+  // Формула типа/вида наследуется из настроек атрибута: в записи она
+  // просматривается (правка «для всех» из записи запрещена, решение владельца
+  // по #632), но поверх можно СОЗДАТЬ свою формулу этой записи (Р1: своя
+  // сильнее типовой) — строка распломбируется с копией типовой как черновик.
+  const [overrideOpen, setOverrideOpen] = useState(false);
   const origin = cell.data?.origin ?? null;
   const typeOrigin = origin === 'type';
-  const viewOnly = readOnly || typeOrigin;
+  const viewOnly = readOnly || (typeOrigin && !overrideOpen);
 
   // Ошибка строки — одна плашка: разбор сильнее оценки (нераспознанная
   // формула не считается вовсе). Проблемы структуры (issues) блокируют
@@ -116,6 +120,8 @@ export function FormulaEditor({
   // Курсор — в строку формулы, в КОНЕЦ (окно открывается на загрузке ячейки,
   // поэтому не через onOpenAutoFocus: узла ещё нет). Иначе фокус-ловушка
   // Radix встаёт на первую кнопку футера — «Убрать формулу» при своей формуле.
+  // Повтор при входе/выходе из режима «своя поверх типовой»: строка сменила
+  // распломбировку — каретка снова в конец, можно сразу править.
   useEffect(() => {
     if (!open || cell.isLoading) return;
     const root = rootRef.current;
@@ -127,7 +133,7 @@ export function FormulaEditor({
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
-  }, [open, cell.isLoading, rootEpoch, rootRef]);
+  }, [open, cell.isLoading, rootEpoch, rootRef, overrideOpen]);
 
   return (
     <>
@@ -175,9 +181,37 @@ export function FormulaEditor({
           ) : (
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
               {typeOrigin ? (
-                <p className="rounded-lg border border-info/30 bg-info/10 px-3 py-2 text-xs text-info">
-                  {ui.formulas.editor.typeReadonly}
-                </p>
+                <div className="flex shrink-0 items-center justify-between gap-3 rounded-lg border border-info/30 bg-info/10 px-3 py-2 text-xs text-info">
+                  <span className="min-w-0">
+                    {overrideOpen
+                      ? ui.formulas.editor.typeOverrideHint
+                      : ui.formulas.editor.typeReadonly}
+                  </span>
+                  {readOnly ? null : overrideOpen ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="-mr-2 shrink-0 text-info hover:text-info"
+                      onClick={() => {
+                        resetToCell();
+                        setOverrideOpen(false);
+                      }}
+                    >
+                      {ui.formulas.editor.typeOverrideBack}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="-mr-2 shrink-0 text-info hover:text-info"
+                      onClick={() => setOverrideOpen(true)}
+                    >
+                      {ui.formulas.editor.typeOverrideCreate}
+                    </Button>
+                  )}
+                </div>
               ) : null}
               <FormulaLine
                 readOnly={viewOnly}

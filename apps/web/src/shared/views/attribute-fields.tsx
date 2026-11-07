@@ -1,4 +1,4 @@
-import { CircleAlert, Link2 } from 'lucide-react';
+import { ArrowUpFromLine, CircleAlert } from 'lucide-react';
 import type {
   CustomFieldDefinition,
   CustomFieldFormulaInfo,
@@ -184,7 +184,7 @@ export function attributeFormula(
 
 /** Значок формулы и бейдж ошибки в ячейке вида (#632, §4c): та же
  *  грамматика, что у `FormulaCell` в карточке — «fx» слева от значения
- *  (тихая у формулы типа — с цепочкой наследования, info у своей) и красный
+ *  (тихая у формулы типа — со стрелкой наследования, info у своей) и красный
  *  «!» с подсказкой. В строке таблицы это пометки, а не кнопки: правка
  *  формулы живёт в карточке, клик по строке открывает её (вложенный
  *  интерактив сломал бы строку). */
@@ -204,7 +204,11 @@ function AttributeFormulaMarks({ info }: { info: CustomFieldFormulaInfo }) {
         >
           fx
           {typeOrigin ? (
-            <Link2 className="size-3" strokeWidth={1.75} aria-label={ui.formulas.cell.inherited} />
+            <ArrowUpFromLine
+              className="size-3"
+              strokeWidth={1.75}
+              aria-label={ui.formulas.cell.inherited}
+            />
           ) : null}
         </span>
       ) : null}

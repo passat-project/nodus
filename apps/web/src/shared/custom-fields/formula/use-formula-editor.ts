@@ -147,8 +147,8 @@ export function useFormulaEditor({
 
   // Данные применяем и когда они пришли ПОСЛЕ открытия (кэша не было):
   // повторное открытие редактора не должно оставаться пустым из-за гонки
-  // «сначала isLoading=false с undefined, потом data». Правку пользователя
-  // не затираем — dirtyRef.
+  // «сначала isLoading=false с undefined, потом настоящий AST придёт фоновым
+  // GET — его нужно применить, если пользователь ещё не правил строку.
   useEffect(() => {
     if (!open) {
       dirtyRef.current = false;
@@ -160,6 +160,13 @@ export function useFormulaEditor({
     if (cell.data === undefined || dirtyRef.current) return;
     setDom(cell.data.ast ?? null);
   }, [open, cell.data, setDom, rootEpoch]);
+
+  /** Откат строки к формуле ячейки — выход из режима «своя формула поверх
+   *  типовой»: черновик отбрасывается, показывается унаследованная формула
+   *  (как при открытии: копия AST, пометки правки сняты). */
+  const resetToCell = useCallback(() => {
+    if (cell.data) setDom(cell.data.ast ?? null);
+  }, [cell.data, setDom]);
 
   useEffect(() => {
     if (!parse.ast) {
@@ -311,6 +318,7 @@ export function useFormulaEditor({
     insertField,
     insertChip,
     applyAutocomplete,
+    resetToCell,
     handleInput,
     handleKeyDown,
     handleSave,
