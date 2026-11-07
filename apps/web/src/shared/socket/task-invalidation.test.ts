@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Paginated, TaskListItem } from '@nodus/contracts';
 
 import { isFreshFromMutation, markFreshFromMutation } from '../api/fresh-from-mutation.js';
@@ -71,13 +71,17 @@ describe('pushTaskKeys (#311, #317)', () => {
   });
 
   it('формульная запись перечитывает деталь даже у автора (пересчёт после ответа)', () => {
-    const { batcher, keys } = recordingBatcher();
+    const { batcher } = recordingBatcher();
+    const client = new QueryClient();
+    const cancel = vi.spyOn(client, 'cancelQueries');
     markFreshFromMutation('t-formula');
-    pushTaskKeys(batcher, new QueryClient(), 'task.updated', {
+    pushTaskKeys(batcher, client, 'task.updated', {
       taskId: 't-formula',
       formulaWrite: true,
     });
-    expect(has(keys, tasksKeys.detail('t-formula'))).toBe(true);
+    // Обычная инвалидация дедупится об in-flight refetch и отдаёт прошлое
+    // значение — формульная запись обязана отменить его и перечитать заново.
+    expect(cancel).toHaveBeenCalledWith({ queryKey: tasksKeys.detail('t-formula') });
   });
 
   it('task.relation_changed обновляет список связей своей карточки', () => {
