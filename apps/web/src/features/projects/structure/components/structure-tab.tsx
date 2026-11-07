@@ -14,6 +14,7 @@ import { useCustomFieldFilterDefs } from '../../../../shared/custom-fields/filte
 import { tasksKeys } from '../../../../shared/api/tasks-keys.js';
 import { FormulaMovePreviewDialog } from '../../../../shared/custom-fields/formula/formula-move-preview-dialog.js';
 import {
+  previewTaskMoveBatch,
   useFormulaMoveGate,
   useNodeMovePreview,
   useTaskMovePreview,
@@ -158,16 +159,19 @@ export function StructureTab({
   const noNodeTasks = attributeView ? [] : model.noNodeTasks;
 
   /** Перенос задач в папку (DnD, меню, «Без папки»): одиночный — с диффом
-   *  формул (превью → окно или сразу перенос), пачка — bulk без превью. */
+   *  формул (превью → окно или сразу перенос), пачка — со СВОДНЫМ диффом по
+   *  первым `BULK_PREVIEW_LIMIT` записям. Bulk больше не уходит в мутацию
+   *  молча (A9-1): «что изменится» спрашивается у любого переноса, а окно
+   *  честно говорит, по скольким записям собрана сводка. */
   function moveTasks(taskIds: string[], nodeId: string | null) {
+    const apply = () => setTasksNode.mutate({ taskIds, nodeId });
     const [taskId] = taskIds;
-    if (taskIds.length !== 1 || !taskId) {
-      setTasksNode.mutate({ taskIds, nodeId });
+    if (taskIds.length === 1 && taskId) {
+      const run = taskPreview.mutateAsync({ taskId, nodeId });
+      void gate.offer(run, () => moveTask.mutate({ taskId, nodeId }));
       return;
     }
-    void gate.offer(taskPreview.mutateAsync({ taskId, nodeId }), () =>
-      moveTask.mutate({ taskId, nodeId }),
-    );
+    void gate.offer(previewTaskMoveBatch(taskIds, nodeId), apply);
   }
 
   function toggleBranch(id: string) {

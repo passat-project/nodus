@@ -13,6 +13,7 @@ import type { UserProfileReader } from '../../../../core/ports/user-profile.port
 import type { CustomFieldRegistry } from '../../../custom-fields/ports/custom-field-registry.port.js';
 import { creationFactsOf } from './creation-facts.js';
 import { customFieldFactsOf } from './custom-field-facts.js';
+import { checkWorkflowFormulas, hasSlotFormulas } from './workflow-formula-checks.js';
 import type { LoadedWorkflow } from '../workflow.repository.js';
 
 /**
@@ -74,11 +75,12 @@ export function serverChecksOf(
 }
 
 /**
- * Проверка документа на публикации (#378, #431, #432): схема, атрибуты
- * области, привязка к типу маршрута и живые сотрудники в пресетах формы
- * создания. Ошибки запрещают публикацию (`422 WORKFLOW_INVALID` с перечнем
- * проблем), предупреждения — нет. Вынесено из сервиса публикации: там
- * остаётся порядок «замок → версия → проверки → план → применение».
+ * Проверка документа на публикации (#378, #431, #432, #632): схема, атрибуты
+ * области, привязка к типу маршрута, живые сотрудники в пресетах формы
+ * создания и формулы слотов (грамматика + типы движком). Ошибки запрещают
+ * публикацию (`422 WORKFLOW_INVALID` с перечнем проблем), предупреждения —
+ * нет. Вынесено из сервиса публикации: там остаётся порядок «замок → версия
+ * → проверки → план → применение».
  */
 export async function checkDocumentForPublish(
   deps: {
@@ -130,6 +132,13 @@ export async function checkDocumentForPublish(
     projectsAvailable: true,
     numberingConfigured: ctx.numberingConfigured ?? true,
   });
+  // Формулы слотов (#632, Р12; A8-1): форма AST проверена общей грамматикой,
+  // типы и совместимость с типом поля выводит движок — для этого нужен реестр
+  // атрибутов (номер → тип). Без формул лишнего чтения реестра нет.
+  if (hasSlotFormulas(ctx.document)) {
+    const definitions = await deps.registry.definitions({}, ctx.tx);
+    problems.push(...checkWorkflowFormulas(ctx.document, { category: ctx.category, definitions }));
+  }
   if (problems.some((problem) => problem.severity === 'error')) {
     throw new DomainException(ErrorCode.WORKFLOW_INVALID, 'Workflow document is invalid', {
       problems,

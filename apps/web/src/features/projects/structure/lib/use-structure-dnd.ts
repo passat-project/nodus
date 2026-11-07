@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -123,6 +123,33 @@ export function useStructureDnd({
     }
   }, []);
 
+  /** Таймер авто-раскрытия не переживает хук (A6-8): уход со вкладки во
+   *  время наведения оставлял setTimeout, который дёргал `expand` на
+   *  размонтированном дереве. */
+  useEffect(() => clearTimer, [clearTimer]);
+
+  /**
+   * Публикация цели дропа (A6-5): `onDragMove` приходит на КАЖДЫЙ mousemove,
+   * а зона меняется в разы реже. Новый объект в state перерисовывал всё
+   * дерево структуры 60 раз в секунду — сетим, только когда сменились
+   * адрес/зона/запрет. Ref обновляется сразу: сравнение не ждёт рендера.
+   */
+  const commitTarget = useCallback((next: DropTarget | null) => {
+    const prev = targetRef.current;
+    if (prev === next) return;
+    if (
+      prev &&
+      next &&
+      prev.overId === next.overId &&
+      prev.zone === next.zone &&
+      prev.invalid === next.invalid
+    ) {
+      return;
+    }
+    targetRef.current = next;
+    setDropTarget(next);
+  }, []);
+
   const onDragStart = useCallback((event: DragStartEvent) => {
     setActive((event.active.data.current as DragPayload | undefined) ?? null);
   }, []);
@@ -133,7 +160,7 @@ export function useStructureDnd({
       const overId = event.over?.id ? String(event.over.id) : null;
       if (!payload || !overId) {
         clearTimer();
-        setDropTarget(null);
+        commitTarget(null);
         return;
       }
       // Позиция курсора: активатор + накопленное смещение (строки статичны).
@@ -142,7 +169,7 @@ export function useStructureDnd({
       const rect = event.over?.rect;
       if (!rect) {
         clearTimer();
-        setDropTarget(null);
+        commitTarget(null);
         return;
       }
       const zone =
@@ -162,7 +189,7 @@ export function useStructureDnd({
           };
         }
       }
-      setDropTarget(target);
+      commitTarget(target);
 
       // Авто-раскрытие свёрнутой папки при наведении 700 мс.
       clearTimer();
@@ -174,12 +201,13 @@ export function useStructureDnd({
         }
       }
     },
-    [clearTimer, expand, expanded, nodes],
+    [clearTimer, commitTarget, expand, expanded, nodes],
   );
 
   const finish = useCallback(() => {
     clearTimer();
     setActive(null);
+    targetRef.current = null;
     setDropTarget(null);
   }, [clearTimer]);
 

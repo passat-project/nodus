@@ -172,3 +172,45 @@ describe('BoardTaskCard: атрибутные блоки (#632)', () => {
     expect(screen.queryByText('АР-1')).toBeNull();
   });
 });
+
+/**
+ * A6-4 (#632): рендер борда перерисовывал все карточки. Счётчик — вызовы
+ * предиката видимости: карточка зовёт `isVisible` на каждом своём рендере.
+ */
+describe('BoardTaskCard: мемоизация карточки (A6-4)', () => {
+  it('новые стрелки обработчиков не перерисовывают карточку с теми же данными', () => {
+    const task = taskOf();
+    const fields: FieldDef[] = [attributeField()];
+    const isVisible = vi.fn(() => true);
+    const { rerender } = render(
+      <BoardTaskCard task={task} isVisible={isVisible} fields={fields} onOpen={() => {}} />,
+    );
+    const calls = isVisible.mock.calls.length;
+
+    // Потребитель перерисовался: стрелки новые, данные те же.
+    rerender(<BoardTaskCard task={task} isVisible={isVisible} fields={fields} onOpen={() => {}} />);
+
+    expect(isVisible.mock.calls.length).toBe(calls);
+  });
+
+  it('смена данных задачи перерисовывает карточку', () => {
+    const fields: FieldDef[] = [attributeField()];
+    const isVisible = vi.fn(() => true);
+    const { rerender } = render(
+      <BoardTaskCard task={taskOf()} isVisible={isVisible} fields={fields} onOpen={() => {}} />,
+    );
+    const calls = isVisible.mock.calls.length;
+
+    rerender(
+      <BoardTaskCard
+        task={taskOf({ title: 'Согласовать АР (правка)' })}
+        isVisible={isVisible}
+        fields={fields}
+        onOpen={() => {}}
+      />,
+    );
+
+    expect(isVisible.mock.calls.length).toBeGreaterThan(calls);
+    expect(screen.getByText('Согласовать АР (правка)')).toBeTruthy();
+  });
+});

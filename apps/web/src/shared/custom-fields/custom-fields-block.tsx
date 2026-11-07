@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type {
   CustomFieldFormulas,
   CustomFieldModule,
@@ -58,7 +59,13 @@ export function CustomFieldsBlock({
   formulas?: CustomFieldFormulas;
 }) {
   const query = useCustomFieldDefinitions(module);
-  const definitions = definitionsForTarget(query.data, module, targetId);
+  // Стабильный массив определений (A6-10): он уходит в `useFormulaEditor`
+  // как `ownDefinitions` — зависимость `useMemo` дерева источников редактора.
+  // Новая ссылка на каждый рендер блока пересобирала дерево целиком.
+  const definitions = useMemo(
+    () => definitionsForTarget(query.data, module, targetId),
+    [query.data, module, targetId],
+  );
 
   if (query.isLoading) {
     return (

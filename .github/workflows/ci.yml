@@ -410,3 +410,149 @@ jobs:
           NODUS_BASE_URL: http://localhost:4173
           E2E_LIVE_API: '1'
           # Креды — дефолты tests/e2e/e2e-users.ts из e2e-users.json (те же, что у сида выше, #247).
+
+  # E2E формул ячеек (#632, A10-03): отдельная джоба, потому что демо-мир
+  # формул живёт в песочной БД `nodus_night` (канон nodus-dev-testing) и
+  # требует night-пользователей: `scripts/night-users.mjs` отказывается
+  # работать на любой другой базе (публичные тестовые пароли — только в
+  # одноразовой песочнице, security-ревью #247). Отдельно от `e2e`, а не
+  # шагом в нём: спеки формул переносят демо-комплекты между зданиями (общее
+  # состояние) и не должны гасить уже проверенные критичные потоки, если
+  # поедут. Стек — тот же, что у `e2e` (build → миграции/сид → api/gateway/
+  # web на 3001/3002/4173), меняются только база и набор спек.
+  e2e-formulas:
+    name: 'E2E формул (#632 — песочница nodus_night)'
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: nodus
+          POSTGRES_PASSWORD: nodus_ci_password
+          # Имя базы = песочное: гейт демо-мира формул (`formulaDemoEnabled`)
+          # и night-пользователи разрешены ТОЛЬКО на `nodus_night` — на любой
+          # другой базе сид молча пропустит демо-мир, а скрипт пользователей
+          # откажется работать.
+          POSTGRES_DB: nodus_night
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nodus"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://nodus:nodus_ci_password@localhost:5432/nodus_night
+      REDIS_URL: redis://localhost:6379
+      # Тестовый секрет (не продовый); COOKIE_SECURE=false — e2e ходит по http://localhost.
+      JWT_SECRET: ci-e2e-test-secret-min-32-characters
+      NODE_ENV: production
+      COOKIE_SECURE: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Установка зависимостей
+        run: pnpm install --frozen-lockfile
+
+      - name: Сборка (contracts → api + web)
+        run: pnpm build
+
+      - name: Миграции, демо-мир формул и night-пользователи
+        # Порядок как у бутстрапа песочницы (scripts/live-stack.mjs):
+        # миграции (они же сеют каталоги: типы проектов, справочник марок,
+        # виды папок) → сид (admin@nodus.by с паролем из e2e-users.json и
+        # демо-мир формул) → night-a/night-b. SEED_FORMULA_DEMO=1 — явный
+        # гейт демо-мира: без него спеки падают на отсутствующих записях,
+        # а причина видна только в логе сида.
+        run: |
+          export SEED_ADMIN_PASSWORD="$(node -p "require('./tests/e2e/e2e-users.json').admin.password")"
+          export SEED_DEMO_PASSWORD="$(node -p "require('./tests/e2e/e2e-users.json').second.password")"
+          export SEED_FORMULA_DEMO=1
+          pnpm --filter @nodus/api db:deploy
+          pnpm --filter @nodus/api db:seed
+          node scripts/night-users.mjs
+
+      # S3 SILO (#57, форк MinIO): api требует STORAGE_* на старте (env-схема),
+      # вложения в спеках формул не участвуют — контейнер нужен только для
+      # успешного бутстрапа, как в джобе e2e.
+      - name: Запуск S3 (SILO)
+        run: |
+          docker run -d --name silo -p 9000:9000             -e MINIO_ROOT_USER=nodus_ci -e MINIO_ROOT_PASSWORD=nodus_ci_secret_min8             pgsty/silo:RELEASE.2026-09-16T00-00-00Z server /data
+          timeout 30 bash -c 'until curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null; do sleep 1; done'
+
+      - name: Запуск API
+        run: nohup node apps/api/dist/main.js > /tmp/nodus-api.log 2>&1 &
+        env:
+          STORAGE_ENDPOINT: 127.0.0.1
+          STORAGE_PORT: '9000'
+          STORAGE_USE_SSL: 'false'
+          STORAGE_ACCESS_KEY: nodus_ci
+          STORAGE_SECRET_KEY: nodus_ci_secret_min8
+          STORAGE_URL_SECRET: ci-e2e-storage-url-secret-min-32-ch
+
+      # WS-gateway (#104): веб открывает сокет и на карточке проекта (адресная
+      # инвалидация formula_changed) — без него спеки получают ошибки сокета.
+      - name: Запуск WS-gateway
+        run: nohup node apps/gateway/dist/main.js > /tmp/nodus-gateway.log 2>&1 &
+        env:
+          GATEWAY_PORT: '3002'
+
+      - name: Запуск web (vite preview с прокси /api)
+        run: nohup pnpm --filter @nodus/web exec vite preview --host 127.0.0.1 --port 4173 --strictPort > /tmp/nodus-web.log 2>&1 &
+
+      - name: Ожидание готовности стека
+        run: |
+          timeout 60 bash -c 'until curl -fsS http://127.0.0.1:3001/api/v1/health/ready > /dev/null; do sleep 1; done' || { echo '--- API log ---'; cat /tmp/nodus-api.log; exit 1; }
+          timeout 30 bash -c 'until curl -fsS http://127.0.0.1:3002/health > /dev/null; do sleep 1; done' || { echo '--- Gateway log ---'; cat /tmp/nodus-gateway.log; exit 1; }
+          timeout 30 bash -c 'until curl -fsS http://127.0.0.1:4173 > /dev/null; do sleep 1; done' || { echo '--- Web log ---'; cat /tmp/nodus-web.log; exit 1; }
+
+      - name: Кэш браузеров Playwright
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Playwright (chromium)
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" != "true" ]; then
+            pnpm --filter @nodus/e2e exec playwright install --with-deps chromium
+          else
+            pnpm --filter @nodus/e2e exec playwright install chromium
+          fi
+
+      - name: E2E формул (критерии 1–5)
+        # Шифр и перенос (1), ручное значение и «Как у типа» (2), подстановка
+        # в окно (3), ошибка ячейки (4), утечки секретного/конфиденциального (5).
+        # Данные — tests/e2e/formula-demo.json (единый источник с сидом выше).
+        run: pnpm --filter @nodus/e2e test specs/formulas-cipher.spec.ts specs/formulas-override.spec.ts specs/formulas-window-prefill.spec.ts specs/formulas-errors.spec.ts specs/formulas-security.spec.ts
+        env:
+          NODUS_BASE_URL: http://localhost:4173
+          E2E_LIVE_API: '1'
+          # Креды — night-a/night-b из tests/e2e/e2e-users.json (те же, что у скрипта выше, #247).
+
+      - name: Логи стека при падении
+        if: failure()
+        run: |
+          echo '--- API log ---'; tail -n 200 /tmp/nodus-api.log || true
+          echo '--- Gateway log ---'; tail -n 100 /tmp/nodus-gateway.log || true
+          echo '--- Web log ---'; tail -n 100 /tmp/nodus-web.log || true

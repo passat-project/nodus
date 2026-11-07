@@ -74,6 +74,39 @@ describe('FormulaMovePreviewDialog: подтверждение переноса 
     expect(screen.getByText(ui.formulas.move.truncated)).toBeTruthy();
   });
 
+  it('пачка: сводка по неполному счёту говорит «по k из n записей»', () => {
+    render(
+      <FormulaMovePreviewDialog
+        changes={[entry(1), entry(2)]}
+        previewed={20}
+        total={87}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Показаны изменения по 20 из 87 записей')).toBeTruthy();
+  });
+
+  it('полный охват сводки — счёта «k из n» нет', () => {
+    render(
+      <FormulaMovePreviewDialog
+        changes={[entry(1)]}
+        previewed={2}
+        total={2}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/из 2 записей/)).toBeNull();
+  });
+
+  it('граница модели диффа: сказано, что показаны прямые изменения (A9-3)', () => {
+    render(
+      <FormulaMovePreviewDialog changes={[entry(1)]} onConfirm={vi.fn()} onCancel={vi.fn()} />,
+    );
+    expect(screen.getByText(/Показаны прямые изменения/)).toBeTruthy();
+  });
+
   it('больше 10 строк — первые 10 и «и ещё N»', () => {
     const changes = Array.from({ length: 13 }, (_, index) => entry(index + 1));
     render(<FormulaMovePreviewDialog changes={changes} onConfirm={vi.fn()} onCancel={vi.fn()} />);

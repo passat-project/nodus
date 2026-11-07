@@ -18,6 +18,20 @@ import type { FormulaMoveDialogProps } from './formula-move-preview.js';
  *  говорит, сколько записей ещё изменится. */
 export const MOVE_PREVIEW_LIMIT = 10;
 
+/**
+ * Строки окна, которых ещё нет в i18n: `ui.formulas.move` живёт в контрактах
+ * (`packages/contracts/src/i18n/ru-formulas.ts`), а пакет M правит только веб
+ * (I15 — перенести в `formulas.move` следующим пакетом #632, здесь — дословно).
+ */
+const localText = {
+  /** Пачка: сводка собрана не по всем записям (потолок или ошибка dry-run). */
+  shownOf: (shown: number, total: number) => `Показаны изменения по ${shown} из ${total} записей`,
+  /** A9-3: дифф моделирует ПРЯМЫЕ значения; второй порядок сервер считает
+   *  после записи — окно не должно обещать полноту. */
+  directOnly:
+    'Показаны прямые изменения. Формулы, которые берут эти значения как источник, пересчитаются после переноса',
+} as const;
+
 /** Значение формулы текстом: у записи диффа нет определения атрибута (и
  *  ссылок), поэтому формат — по форме значения, а не по типу поля. */
 export function movePreviewValueText(value: CustomFieldValue | null | undefined): string {
@@ -41,16 +55,23 @@ export function movePreviewValueText(value: CustomFieldValue | null | undefined)
  * «Было»/«Станет» значениями. Значения НЕ обрезаются (`break-words`): шифр
  * комплекта длиннее колонки, и `truncate` в одну строку превращал дифф в
  * «2026-42-… → 2026-42-…» — по такому окну нельзя решить, переносить ли.
+ *
+ * Пачка (мультиселект, A9-1/A9-2) приходит сюда же: тот же список «было →
+ * станет» по записям всех переносимых хостов, плюс счёт «по скольким записям
+ * собрана сводка» — если превью спрошено не у всех, окно это говорит.
  */
 export function FormulaMovePreviewDialog({
   changes,
   truncated = false,
+  previewed,
+  total,
   onConfirm,
   onCancel,
 }: FormulaMoveDialogProps) {
   if (changes.length === 0) return null;
   const shown = changes.slice(0, MOVE_PREVIEW_LIMIT);
   const rest = changes.length - shown.length;
+  const partial = previewed !== undefined && total !== undefined && previewed < total;
 
   return (
     <Dialog open onOpenChange={(next) => (next ? undefined : onCancel())}>
@@ -93,14 +114,24 @@ export function FormulaMovePreviewDialog({
             );
           })}
         </ul>
-        {rest > 0 ? (
-          <p className="text-xs text-muted-foreground">
-            {ui.formulas.move.more} {rest}
-          </p>
-        ) : null}
-        {truncated ? (
-          <p className="text-xs text-muted-foreground">{ui.formulas.move.truncated}</p>
-        ) : null}
+        {/* Оговорки под списком — одной стопкой: остаток строк, обрезка
+            выборки, охват сводки пачки и граница модели диффа (A9-3). */}
+        <div className="flex flex-col gap-1">
+          {rest > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {ui.formulas.move.more} {rest}
+            </p>
+          ) : null}
+          {truncated ? (
+            <p className="text-xs text-muted-foreground">{ui.formulas.move.truncated}</p>
+          ) : null}
+          {partial ? (
+            <p className="text-xs text-muted-foreground">
+              {localText.shownOf(previewed ?? 0, total ?? 0)}
+            </p>
+          ) : null}
+          <p className="text-xs text-muted-foreground">{localText.directOnly}</p>
+        </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onCancel}>
             {ui.formulas.move.cancel}

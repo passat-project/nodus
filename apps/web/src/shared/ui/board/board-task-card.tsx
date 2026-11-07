@@ -1,5 +1,5 @@
 import { CornerDownRight, Mail, MessageSquare } from 'lucide-react';
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import type { TaskListItem } from '@nodus/contracts';
 import { isCustomFieldValueFilled, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
@@ -28,7 +28,7 @@ import { stageTone } from './stage-tone.js';
  *  placeholder — слот переносимой карточки (пунктир, без свечения).
  *  fields — реестр вида: блоки с определением атрибута (#632) рисуются
  *  значением по грамматике типа; пустое значение блок не показывает. */
-export function BoardTaskCard({
+function BoardTaskCardInner({
   task,
   parentNumber,
   isVisible,
@@ -181,3 +181,22 @@ export function BoardTaskCard({
     </button>
   );
 }
+
+/**
+ * memo карточки канбана (A6-4, #632): рендер борда (смена состава колонок,
+ * drag-состояние, фильтр) перерисовывал ВСЕ карточки, хотя менялись единицы.
+ * `onOpen`/`onHover` в сравнении не участвуют: потребители передают стрелки
+ * заново на каждый свой рендер, а внутри — стабильные хуки (`useOpenCard`,
+ * `usePrefetchTask`); обработчик вызывается только из события, поэтому
+ * «протухшая» ссылка ведёт себя ровно так же.
+ */
+export const BoardTaskCard = memo(
+  BoardTaskCardInner,
+  (prev, next) =>
+    prev.task === next.task &&
+    prev.parentNumber === next.parentNumber &&
+    prev.isVisible === next.isVisible &&
+    prev.fields === next.fields &&
+    prev.overlay === next.overlay &&
+    prev.placeholder === next.placeholder,
+);

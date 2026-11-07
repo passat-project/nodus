@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import type { Paginated, TaskListItem } from '@nodus/contracts';
 import {
   CUSTOM_FIELD_CATALOG_EVENTS,
   CUSTOM_FIELD_EVENTS,
@@ -8,9 +9,11 @@ import {
 import { lettersKeys } from '../api/letters-keys.js';
 import { customFieldsKeys } from '../custom-fields/queries.js';
 import { dictionariesKeys } from '../dictionaries/keys.js';
+import { isFreshFromMutation } from '../api/fresh-from-mutation.js';
 import { nodeKindsKeys } from '../api/node-kinds.js';
 import { projectsKeys } from '../api/projects-list.js';
 import { tasksKeys } from '../api/tasks-keys.js';
+import { stageIdOfColumnKey } from '../lib/board/kanban-column-key.js';
 import type { KeyBatcher } from './invalidation-batcher.js';
 
 /** Каталожные события «Полей» и справочников (#431, ADR-0029): рассылаются
@@ -37,7 +40,7 @@ export function pushCustomFieldKeys(
   payload: Record<string, unknown> = {},
 ): boolean {
   if (type === CUSTOM_FIELD_EVENTS.FORMULA_CHANGED) {
-    pushFormulaChangedKeys(batcher, payload);
+    pushFormulaChangedKeys(batcher, queryClient, payload);
     return true;
   }
   if (!CATALOG_EVENTS.has(type)) return false;
@@ -54,6 +57,31 @@ export function pushCustomFieldKeys(
 }
 
 /**
+ * Колонки досок, в кэше которых лежит карточка задачи. Бейдж ошибки формулы
+ * живёт в `TaskListItem.customFieldFormulas`, а событие адресное и стадии не
+ * меняет — перезапрашиваются только колонки с этой карточкой (таргетинг тот
+ * же, что у `pushKanbanKeys` в task-invalidation; продублирован осознанно:
+ * каталог событий задачи его не знает, а правится он другим пакетом — A6-2).
+ * Не нашлась в первых страницах — карточка может быть в догруженной странице
+ * колонки с продолжением: такие колонки тоже перезапрашиваются.
+ */
+function pushKanbanColumnsOf(batcher: KeyBatcher, queryClient: QueryClient, taskId: string): void {
+  const columns = queryClient
+    .getQueryCache()
+    .findAll({ queryKey: tasksKeys.kanbanAll() })
+    .filter((query) => stageIdOfColumnKey(query.queryKey) !== null);
+  const pageOf = (query: (typeof columns)[number]) =>
+    query.state.data as Paginated<TaskListItem> | undefined;
+  const holds = (query: (typeof columns)[number]) =>
+    pageOf(query)?.items.some((task) => task.id === taskId) ?? false;
+  const onBoard = columns.some(holds);
+  for (const query of columns) {
+    const mayHide = !onBoard && Boolean(pageOf(query)?.nextCursor);
+    if (holds(query) || mayHide) batcher.push(query.queryKey, 'list');
+  }
+}
+
+/**
  * Инвалидации по `custom_field.formula_changed` (#632): формула ячейки
  * поставлена/снята или сменилось её состояние ошибки — значения не меняются,
  * но DTO несёт `customFieldFormulas` (fx/«!»), поэтому деталь хоста и списки,
@@ -62,13 +90,21 @@ export function pushCustomFieldKeys(
  * Папка живёт в дереве проекта, а `projectId` в событии нет (payload без
  * значений и адресов чужих записей) — перечитываем деревья префиксом.
  */
-function pushFormulaChangedKeys(batcher: KeyBatcher, payload: Record<string, unknown>): void {
+function pushFormulaChangedKeys(
+  batcher: KeyBatcher,
+  queryClient: QueryClient,
+  payload: Record<string, unknown>,
+): void {
   const hostId = typeof payload.hostId === 'string' ? payload.hostId : null;
   if (!hostId) return;
   switch (payload.hostKind) {
     case 'task':
-      batcher.push(tasksKeys.detail(hostId), 'list');
+      // Актёр уже записал деталь из ответа своей мутации (#378, A6-2): эхо
+      // собственного сохранения формулы не перезапрашивает её второй раз.
+      // Доски — обновляем всегда: бейдж ошибки в карточке канбана.
+      if (!isFreshFromMutation(hostId)) batcher.push(tasksKeys.detail(hostId), 'list');
       batcher.push(tasksKeys.listPages(), 'list');
+      pushKanbanColumnsOf(batcher, queryClient, hostId);
       return;
     case 'letter':
       batcher.push(lettersKeys.detail(hostId), 'list');

@@ -1,15 +1,12 @@
 import { ChevronRight } from 'lucide-react';
-import type { CSSProperties } from 'react';
+import { memo, type CSSProperties } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import type { CustomFieldRef, NodeKind } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { attributeRefs } from '../../../../shared/views/attribute-fields.js';
 import { uiPx } from '../../../../shared/ui/ui-scale.js';
-import type { RowMenuItem } from '../../../../shared/views/row-menu.js';
-import type { StructureNodeRow, StructureTaskRow } from '../lib/structure-tree.js';
-import { NO_NODE_DROP_ID, type DragPayload } from '../lib/use-structure-dnd.js';
+import { NO_NODE_DROP_ID } from '../lib/use-structure-dnd.js';
 import {
   BranchButton,
   InsertLine,
@@ -18,7 +15,12 @@ import {
   rowBase,
   taskCell,
 } from './structure-cells.js';
-import type { StructureAttributeDefs, StructureField } from './structure-cells.js';
+import {
+  sameNodeRowProps,
+  sameTaskRowProps,
+  type StructureNodeRowProps,
+  type StructureTaskRowProps,
+} from './structure-row-props.js';
 import { StructureContextMenu } from './structure-menus.js';
 
 /** Строки таблицы структуры: узел-папка, задача-лист и секция «Без узла».
@@ -35,7 +37,7 @@ const combineRefs =
     for (const ref of refs) ref(el);
   };
 
-export function StructureNodeRowView({
+function StructureNodeRowInner({
   row,
   kind,
   collapsed,
@@ -53,29 +55,7 @@ export function StructureNodeRowView({
   grid,
   showSelection,
   readOnly,
-}: {
-  row: StructureNodeRow;
-  kind: NodeKind | undefined;
-  collapsed: boolean;
-  onToggle: () => void;
-  selected: boolean;
-  onToggleSelected: () => void;
-  /** Клик по строке — выбор папки для панели «Свойства» (#556). */
-  onSelect: () => void;
-  items: RowMenuItem[];
-  /** Зона дропа над этой строкой (индикация). */
-  zone: 'before' | 'into' | 'after' | null;
-  invalid: boolean;
-  isDragging: boolean;
-  fields: readonly StructureField[];
-  /** Определения атрибутных колонок по id поля (#632). */
-  attributes: StructureAttributeDefs;
-  /** Ссылки значений папок — карта по id (срез структуры проекта). */
-  refs: ReadonlyMap<string, CustomFieldRef>;
-  grid: { templateColumns: string };
-  showSelection: boolean;
-  readOnly: boolean;
-}) {
+}: StructureNodeRowProps) {
   const drag = useDraggable({
     id: `node:${row.node.id}`,
     data: { kind: 'node', nodeId: row.node.id },
@@ -157,7 +137,7 @@ export function StructureNodeRowView({
   );
 }
 
-export function StructureTaskRowView({
+function StructureTaskRowInner({
   row,
   collapsed,
   onToggle,
@@ -172,24 +152,7 @@ export function StructureTaskRowView({
   grid,
   showSelection,
   readOnly,
-}: {
-  row: StructureTaskRow;
-  collapsed: boolean;
-  onToggle: () => void;
-  selected: boolean;
-  onToggleSelected: () => void;
-  items: RowMenuItem[];
-  onOpen: (anchor: HTMLElement) => void;
-  /** Мультиселект: за строкой тянется вся выборка. */
-  dragData: DragPayload;
-  isDragging: boolean;
-  fields: readonly StructureField[];
-  /** Определения атрибутных колонок по id поля (#632). */
-  attributes: StructureAttributeDefs;
-  grid: { templateColumns: string };
-  showSelection: boolean;
-  readOnly: boolean;
-}) {
+}: StructureTaskRowProps) {
   const drag = useDraggable({
     id: `task:${row.task.id}`,
     data: dragData,
@@ -300,3 +263,9 @@ export function StructureNoNodeRowView({
     </div>
   );
 }
+
+/** memo строки папки (A6-4): перерисовывается только при смене её данных. */
+export const StructureNodeRowView = memo(StructureNodeRowInner, sameNodeRowProps);
+
+/** memo строки задачи (A6-4): то же плюс содержимое payload переноса. */
+export const StructureTaskRowView = memo(StructureTaskRowInner, sameTaskRowProps);

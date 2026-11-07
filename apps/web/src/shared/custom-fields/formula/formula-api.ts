@@ -10,6 +10,7 @@ import type {
 
 import { api } from '../../api-client.js';
 import { markFreshFromMutation } from '../../api/fresh-from-mutation.js';
+import { lettersKeys } from '../../api/letters-keys.js';
 import { projectsKeys } from '../../api/projects-list.js';
 import { tasksKeys } from '../../api/tasks-keys.js';
 
@@ -80,7 +81,11 @@ function invalidateHost(queryClient: ReturnType<typeof useQueryClient>, host: Fo
       void queryClient.invalidateQueries({ queryKey: tasksKeys.kanbanAll() });
       return;
     case 'letter':
-      void queryClient.invalidateQueries({ queryKey: ['letters'] });
+      // Деталь карточки и списки писем (#632, A6-9): корень `['letters']`
+      // рефетчил заодно типы, держателей резолюций, деревья «ёлочек» и тексты
+      // тел — сохранение формулы их не меняет.
+      void queryClient.invalidateQueries({ queryKey: lettersKeys.detail(host.id) });
+      void queryClient.invalidateQueries({ queryKey: lettersKeys.lists() });
       return;
     case 'project':
       void queryClient.invalidateQueries({ queryKey: projectsKeys.detail(host.id) });

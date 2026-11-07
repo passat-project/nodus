@@ -95,6 +95,16 @@ export async function ensureDefinition(
   });
 }
 
+/** Значения атрибутов для записи: демо-поля сида поверх текущих.
+ *  JSONB `custom_fields` — карта «id определения → значение»; ре-сид обновляет
+ *  ТОЛЬКО свои ключи, ручные значения прочих атрибутов остаются (A10-04). */
+export function mergeCustomFields(
+  current: unknown,
+  patch: Record<string, unknown>,
+): Prisma.InputJsonValue {
+  return { ...((current ?? {}) as Record<string, unknown>), ...patch } as Prisma.InputJsonValue;
+}
+
 /** Привязка «атрибут × место»; формула места пишется только при создании
  *  (правку администратора ре-сид не перетирает — политика сида). */
 export async function bind(
