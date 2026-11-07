@@ -22,7 +22,7 @@ import { CustomFieldEditor } from '../value-editor.js';
 import type { FormulaHost } from './formula-api.js';
 import { useRemoveFormula } from './formula-api.js';
 import { FormulaEditor, type FormulaHostContext } from './formula-editor.js';
-import { cleanFormulaText, saveErrorText } from './formula-preview.js';
+import { cleanEmptyMarker, cleanFormulaText, saveErrorText } from './formula-preview.js';
 import { FormulaRemoveDialog } from './formula-remove-dialog.js';
 
 /** Любая формула в ячейке (своя или типа) замораживает правку значения:
@@ -77,7 +77,9 @@ export function FormulaCell({
   const frozen = formulaCellFrozen(origin);
   // Уже материализованное значение могло сохраниться с `--`/`—` до фикса
   // движка: показываем его очищенным, не дожидаясь пересчёта.
-  const shownValue = frozen ? cleanFormulaText(value) : value;
+  // own/type — чистим висячие разделители; ручное значение поверх формулы
+  // (`origin='value'`) — только легаси-маркер «пусто» из дефисов.
+  const shownValue = !info ? value : frozen ? cleanFormulaText(value) : cleanEmptyMarker(value);
 
   useEffect(() => {
     if (!own) setRemoveOpen(false);

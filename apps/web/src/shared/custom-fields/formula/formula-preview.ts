@@ -72,6 +72,16 @@ const EDGE_DASHES = /[\s—–−-]+$/;
  * (`ГОСТ 12—3`, `A--B`) и знак числа (`-5`) не трогаем — иначе отображение
  * портит данные пользователя.
  */
+/** Легаси-маркер пустоты у РУЧНОГО значения (`origin='value'`): значение
+ *  целиком из дефисов — это «пусто», а не текст. Внутренние дефисы и знак
+ *  числа не трогаем: это данные пользователя. */
+export function cleanEmptyMarker(
+  value: CustomFieldValue | null | undefined,
+): CustomFieldValue | null | undefined {
+  if (typeof value !== 'string') return value;
+  return EMPTY_DASH_VALUE.test(value) ? null : value;
+}
+
 export function cleanFormulaText(
   value: CustomFieldValue | null | undefined,
 ): CustomFieldValue | null | undefined {

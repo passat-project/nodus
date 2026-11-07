@@ -9,7 +9,6 @@ import {
 import { lettersKeys } from '../api/letters-keys.js';
 import { customFieldsKeys } from '../custom-fields/queries.js';
 import { dictionariesKeys } from '../dictionaries/keys.js';
-import { isFreshFromMutation } from '../api/fresh-from-mutation.js';
 import { nodeKindsKeys } from '../api/node-kinds.js';
 import { projectsKeys } from '../api/projects-list.js';
 import { tasksKeys } from '../api/tasks-keys.js';
@@ -99,10 +98,12 @@ function pushFormulaChangedKeys(
   if (!hostId) return;
   switch (payload.hostKind) {
     case 'task':
-      // Актёр уже записал деталь из ответа своей мутации (#378, A6-2): эхо
-      // собственного сохранения формулы не перезапрашивает её второй раз.
-      // Доски — обновляем всегда: бейдж ошибки в карточке канбана.
-      if (!isFreshFromMutation(hostId)) batcher.push(tasksKeys.detail(hostId), 'list');
+      // Деталь перечитываем ВСЕГДА, включая автора правки: пересчёт
+      // зависимых формул идёт обработчиком события уже ПОСЛЕ ответа PATCH,
+      // поэтому ответ мутации содержит старые значения. Гейт «свежая
+      // мутация» здесь давал регрессию «формула обновляется только после
+      // перезагрузки страницы» — лишний GET дешевле сломанного UX.
+      batcher.push(tasksKeys.detail(hostId), 'list');
       batcher.push(tasksKeys.listPages(), 'list');
       pushKanbanColumnsOf(batcher, queryClient, hostId);
       return;

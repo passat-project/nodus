@@ -148,12 +148,14 @@ describe('pushCustomFieldKeys: эхо своей мутации и доски (A
     return keys;
   };
 
-  it('своя свежая мутация: деталь не перезапрашивается, колонка доски — да', () => {
+  it('своя свежая мутация: деталь всё равно перезапрашивается, колонка — да', () => {
     const { client, holding, other } = boardClient(FRESH_TASK);
     markFreshFromMutation(FRESH_TASK);
     expect(isFreshFromMutation(FRESH_TASK)).toBe(true);
     const keys = push(client, { hostKind: 'task', hostId: FRESH_TASK, hasError: true });
-    expect(has(keys, tasksKeys.detail(FRESH_TASK))).toBe(false);
+    // Пересчёт зависимых формул идёт ПОСЛЕ ответа мутации: без перезапроса
+    // детали карточка показывала старое значение до перезагрузки (регрессия).
+    expect(has(keys, tasksKeys.detail(FRESH_TASK))).toBe(true);
     expect(has(keys, tasksKeys.listPages())).toBe(true);
     expect(has(keys, holding)).toBe(true);
     // Колонка без карточки не трогается: событие адресное, стадии не меняются.
