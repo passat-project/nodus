@@ -25,6 +25,8 @@ export async function withFormulaState(
   const states = await formulas.stateFor(
     'task',
     items.map((item) => item.id),
+    refs?.tx,
+    new Map(items.map((item) => [item.id, item.type?.id ?? null])),
   );
   const merged = items.map((item) => {
     const state = states.get(item.id);

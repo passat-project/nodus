@@ -1,11 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type {
-  FormulaCellError,
-  FormulaHostKind,
-  FormulaNode,
-  FormulaResponse,
-} from '@nodus/contracts';
-import { FORMULA_LIMITS } from '@nodus/contracts';
+import type { FormulaHostKind, FormulaNode, FormulaResponse } from '@nodus/contracts';
+import { ErrorCode } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
@@ -21,14 +16,16 @@ import type {
 } from '../ports/formula-cells.port.js';
 import { FORMULA_ENGINE, type FormulaEngine } from '../ports/formula-engine.port.js';
 import { FormulaCellsRepository } from './formula-cells.repository.js';
-import { asCellError, cellErrorOf, errorCodeOf, refOf } from './formula-cells.support.js';
+import { formulaPlaceRejection } from './formula-cells.policy.js';
+import { recalcCell } from './formula-cells.recalc.js';
+import { asCellError, errorCodeOf, refOf } from './formula-cells.support.js';
 import { computeFormula } from './formula-compute.js';
 import { evaluateFormula, type FormulaEvaluateOptions } from './formula-evaluate.js';
 import { previewCells } from './formula-preview.js';
 import { applyTypeFormulas } from './formula-type-formulas.js';
 import { createFormulaCache, FormulaContextService } from './formula-context.service.js';
 import { FormulaMetaService, type FormulaRegistrySnapshot } from './formula-meta.service.js';
-import { FormulaValuesService, sameFormulaValue } from './formula-values.service.js';
+import { FormulaValuesService } from './formula-values.service.js';
 
 /**
  * Ячейки-формулы (#632, Р1/Р4/Р5): хранение, проверка, вычисление,
@@ -52,6 +49,7 @@ export class FormulaCellsService implements FormulaCells {
     hostKind: FormulaHostKind,
     hostIds: readonly string[],
     tx?: TransactionClient,
+    places?: ReadonlyMap<string, string | null>,
   ): Promise<FormulaStateMap> {
     const result: FormulaStateMap = new Map();
     if (hostIds.length === 0) return result;
@@ -73,6 +71,7 @@ export class FormulaCellsService implements FormulaCells {
     await applyTypeFormulas({
       hostKind,
       hostIds,
+      places,
       snapshot,
       ownByHost,
       result,
@@ -113,6 +112,20 @@ export class FormulaCellsService implements FormulaCells {
       tx,
     );
     if (!context) throw DomainException.notFound('Formula host not found');
+    // Ядовитая ячейка: атрибут, которому некуда записать значение, не должен
+    // получать формулу (иначе ошибка writer'а проглатывается и ячейка вечно
+    // «здорова», а значение заморожено). Правило fail-open — см. policy.
+    const rejection = formulaPlaceRejection(definition, context.host.placeId);
+    if (rejection) {
+      throw new DomainException(
+        ErrorCode.FORMULA_SOURCE_FORBIDDEN,
+        'Formula is invalid',
+        {
+          issues: [{ code: 'source_forbidden', path: '', message: rejection.message }],
+        },
+        422,
+      );
+    }
     const outcome = await computeFormula({
       ast: args.ast,
       context,
@@ -203,56 +216,18 @@ export class FormulaCellsService implements FormulaCells {
     ref: FormulaCellRef,
     depth: number,
   ): Promise<FormulaRecalcOutcome> {
-    const cell = await this.repo.find(ref.hostKind, ref.hostId, ref.fieldId, tx);
-    // Ячейку сняли/удалили, пока событие шло — пересчитывать нечего.
-    if (!cell)
-      return { value: null, error: null, changed: false, errorChanged: false, silent: true };
-    const previousError = cellErrorOf(cell.error);
-
-    if (depth > FORMULA_LIMITS.cascadeDepth) {
-      const error: FormulaCellError = {
-        code: 'cycle',
-        message: 'formula recalculation cycle detected',
-      };
-      await this.repo.updateState(tx, cell.id, { error, depth });
-      return {
-        value: null,
-        error,
-        changed: true,
-        errorChanged: previousError?.code !== error.code,
-        silent: true,
-      };
-    }
-
-    const snapshot = await this.meta.snapshot(tx);
-    const ast = cell.ast as FormulaNode;
-    const context = await this.context.build(
-      { hostKind: ref.hostKind, hostId: ref.hostId, asts: [ast], snapshot },
+    return recalcCell(
+      {
+        repo: this.repo,
+        meta: this.meta,
+        context: this.context,
+        values: this.values,
+        engine: this.engine,
+      },
       tx,
+      ref,
+      depth,
     );
-    if (!context) {
-      await this.repo.deleteByHost(tx, ref.hostKind, ref.hostId);
-      return { value: null, error: null, changed: false, errorChanged: false, silent: true };
-    }
-    const definition = snapshot.byId.get(ref.fieldId);
-    if (!definition) {
-      await this.repo.remove(tx, ref.hostKind, ref.hostId, ref.fieldId);
-      return { value: null, error: null, changed: false, errorChanged: false, silent: true };
-    }
-    const outcome = await computeFormula({
-      ast,
-      context,
-      snapshot,
-      fieldId: ref.fieldId,
-      engine: this.engine,
-      values: this.values,
-    });
-    const previous = context.host.values[ref.fieldId] ?? null;
-    const changed = !sameFormulaValue(previous, outcome.value);
-    const errorChanged = (previousError?.code ?? null) !== (outcome.error?.code ?? null);
-    await this.repo.replaceDeps(tx, cell.id, context.depKeys);
-    await this.repo.updateState(tx, cell.id, { error: outcome.error, depth });
-    return { ...outcome, changed, errorChanged, silent: false };
   }
 
   /**

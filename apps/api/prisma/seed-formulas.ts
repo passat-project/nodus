@@ -30,6 +30,7 @@ import {
   ensureDefinition,
   formulaDemoEnabled,
   issueFormula,
+  mergeCustomFields,
   type FormulaDemo,
 } from './seed-formulas-support.js';
 import { seedKomplektRoute } from './seed-formulas-workflow.js';
@@ -157,22 +158,32 @@ export async function seedFormulaWorld(
     select: { id: true, code: true },
   });
 
+  // Ре-сид ВОССТАНАВЛИВАЕТ демо-мир (A10-04): раньше `update: {}` оставлял
+  // переименованный проект, стёртый шифр и перенесённые задачи — приёмка
+  // после первого прогона шла по другим данным. Обновляются ТОЛЬКО поля,
+  // которые задаёт сид (имя, тип, руководитель, видимость, шифр); значения
+  // прочих атрибутов сливаются поверх, а не затираются.
   for (const project of [
     { ...DEMO.project, visibility: 'open' as const },
     { ...DEMO.secretProject, visibility: 'secret' as const },
   ]) {
+    const current = await prisma.project.findUnique({
+      where: { id: project.id },
+      select: { customFields: true },
+    });
+    const demo = {
+      name: project.name,
+      typeId: projectType.id,
+      managerId: admin.id,
+      visibility: project.visibility,
+      customFields: mergeCustomFields(current?.customFields, {
+        [SYSTEM_FIELD_IDS.projectCode]: project.cipher,
+      }),
+    };
     await prisma.project.upsert({
       where: { id: project.id },
-      update: {},
-      create: {
-        id: project.id,
-        name: project.name,
-        typeId: projectType.id,
-        managerId: admin.id,
-        creatorId: admin.id,
-        visibility: project.visibility,
-        customFields: { [SYSTEM_FIELD_IDS.projectCode]: project.cipher },
-      },
+      update: demo,
+      create: { id: project.id, creatorId: admin.id, ...demo },
     });
     // Участие руководителя (проекция Р2): без строки секретный проект не
     // попадает в журнал даже его руководителю — видимость идёт по участию.
@@ -187,18 +198,24 @@ export async function seedFormulaWorld(
     { ...DEMO.buildings.two, projectId: DEMO.project.id },
     { ...DEMO.buildings.secret, projectId: DEMO.secretProject.id },
   ];
+  // Демо-поля папки (место, вид, имя, порядок, «№ по ГП») — из сида; прочие
+  // значения атрибутов папки сохраняются слиянием.
   for (const [index, building] of buildings.entries()) {
+    const current = await prisma.projectNode.findUnique({
+      where: { id: building.id },
+      select: { customFields: true },
+    });
+    const demo = {
+      projectId: building.projectId,
+      kindId: buildingKind.id,
+      name: building.name,
+      order: `a${index}`,
+      customFields: mergeCustomFields(current?.customFields, { [buildingGp.id]: building.gp }),
+    };
     await prisma.projectNode.upsert({
       where: { id: building.id },
-      update: {},
-      create: {
-        id: building.id,
-        projectId: building.projectId,
-        kindId: buildingKind.id,
-        name: building.name,
-        order: `a${index}`,
-        customFields: { [buildingGp.id]: building.gp },
-      },
+      update: demo,
+      create: { id: building.id, ...demo },
     });
   }
 
@@ -228,30 +245,62 @@ export async function seedFormulaWorld(
       confidential: false,
     },
   ];
+  // Задача: демо-поля (место, тип/маршрут, имя, конфиденциальность, «Марка»/
+  // «Номер») ре-сид восстанавливает; стадия, ответственный и прочие значения
+  // атрибутов — состояние приёмки, его не трогаем (только при создании).
+  let seededTasks = 0;
+  const missingMarks: string[] = [];
   for (const [index, task] of tasks.entries()) {
     const markId = markItems.find((item) => item.code === task.mark)?.id;
-    if (!markId) continue;
+    if (!markId) {
+      // Молчаливый `continue` оставлял демо-мир без комплекта (A10-05): e2e
+      // падал на отсутствующей строке, а причина не была видна в логе сида.
+      missingMarks.push(task.mark);
+      console.warn(
+        `Формулы #632: комплект «${task.title}» не сеян — в справочнике «Марки комплектов» ` +
+          `нет варианта «${task.mark}» (нужны КЖ/КМ/АР; сид идёт после миграций)`,
+      );
+      continue;
+    }
+    const current = await prisma.task.findUnique({
+      where: { id: task.id },
+      select: { customFields: true },
+    });
+    const demo = {
+      title: task.title,
+      typeId: route.typeId,
+      workflowId: route.workflowId,
+      projectId: task.projectId,
+      nodeId: task.nodeId,
+      confidential: task.confidential,
+      customFields: mergeCustomFields(current?.customFields, {
+        [komplektNumber.id]: task.number,
+        [marka.id]: markId,
+      }),
+    };
     await prisma.task.upsert({
       where: { id: task.id },
-      update: {},
+      update: demo,
       create: {
         id: task.id,
-        title: task.title,
-        typeId: route.typeId,
-        workflowId: route.workflowId,
+        ...demo,
         stageId: route.stageIds.initial,
         systemState: 'backlog',
         stageOrder: `a${index}`,
         priority: 'normal',
         creatorId: admin.id,
         assigneeId: admin.id,
-        projectId: task.projectId,
-        nodeId: task.nodeId,
-        confidential: task.confidential,
-        customFields: { [komplektNumber.id]: task.number, [marka.id]: markId },
       },
     });
+    seededTasks += 1;
   }
+  const uniqueMarks = [...new Set(missingMarks)];
+  console.log(
+    `Формулы #632: сеяно ${seededTasks}/${tasks.length} комплектов` +
+      (uniqueMarks.length > 0
+        ? ` (пропущено ${missingMarks.length}: нет марки ${uniqueMarks.join(', ')})`
+        : ''),
+  );
 
   // Демо ошибки ячейки (критерий 4): своя формула `=1/0` у одного комплекта —
   // в карточке «!» с подсказкой, работа с карточкой не блокируется.
@@ -272,7 +321,12 @@ export async function seedFormulaWorld(
         fieldId: coefficient.id,
       },
     },
-    update: {},
+    // Ре-сид возвращает демо-ошибку: если приёмка сняла или переписала
+    // формулу, критерий 4 снова воспроизводится (A10-04).
+    update: {
+      ast: zeroDivision as unknown as Prisma.InputJsonValue,
+      error: { code: 'division_by_zero', message: 'Деление на ноль' },
+    },
     create: {
       hostKind: 'task',
       hostId: DEMO.tasks.komplektB.id,

@@ -30,6 +30,8 @@ export async function letterListAttributes(
   const states = await formulas.stateFor(
     'letter',
     rows.map((row) => row.id),
+    undefined,
+    new Map(rows.map((row) => [row.id, row.typeId])),
   );
   const refs = await registry.refsMany(
     rows.map(

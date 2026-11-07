@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type {
   CustomFieldDefinition,
   CustomFieldValue,
@@ -9,6 +9,10 @@ import { customFieldValueSchemaOf } from '@nodus/contracts';
 import type { FormulaRecord, FormulaValue } from '@nodus/formula-engine';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import {
+  USER_PROFILE_READER,
+  type UserProfileReader,
+} from '../../../core/ports/user-profile.port.js';
 import {
   DICTIONARY_READER,
   type DictionaryItemRef,
@@ -32,7 +36,12 @@ type DefinitionLike = Pick<FieldDefinitionRow, 'id' | 'number' | 'type'> & {
  */
 @Injectable()
 export class FormulaValuesService {
-  constructor(@Inject(DICTIONARY_READER) private readonly dictionaries: DictionaryReader) {}
+  constructor(
+    @Inject(DICTIONARY_READER) private readonly dictionaries: DictionaryReader,
+    // Живость ссылок на сотрудников (A8-5): та же проверка, что у ручного
+    // ввода. `@Optional` — юнит-контекст без DI проверяет только грамматику.
+    @Optional() @Inject(USER_PROFILE_READER) private readonly users?: UserProfileReader,
+  ) {}
 
   /** Варианты справочников для значений записей — одной пачкой (Р9). */
   async loadItems(
@@ -95,34 +104,75 @@ export class FormulaValuesService {
         return this.dictionaryItemId(definition, String(value), tx);
       case 'multienum': {
         const labels = Array.isArray(value) ? value : [String(value)];
-        const ids = await Promise.all(
-          labels.map((label) => this.dictionaryItemId(definition, String(label), tx)),
-        );
-        return ids.filter((id): id is string => id !== null);
+        // Справочник читается ОДИН раз на значение, а не на каждую метку:
+        // иначе multienum из K кодов делал K одинаковых запросов (A3-03).
+        const items = await this.dictionaryItems(definition, tx);
+        const ids = labels.map((label) => itemIdOf(items, String(label)));
+        // Несовпавший код — значение целиком не материализуется (A8-2):
+        // подмножество/пустой список в окне выглядели бы «заполненным» и
+        // ломали сабмит (multiSchema.min(1)) на нетронутом поле.
+        if (ids.some((id) => id === null)) return null;
+        const unique = [...new Set(ids as string[])];
+        if (unique.length === 0) return null;
+        const parsed = customFieldValueSchemaOf(definition).safeParse(unique);
+        return parsed.success ? (parsed.data as CustomFieldValue) : null;
       }
       case 'bool':
         // Грамматика bool: хранится только true (отсутствие = false).
         return value === true ? true : null;
       default: {
-        const parsed = customFieldValueSchemaOf(definition).safeParse(value);
-        return parsed.success ? (parsed.data as CustomFieldValue) : null;
+        // Расширяющие типы читают скаляр как массив (Р3, как `readCustomFieldValue`):
+        // один сотрудник из формулы годится в «Сотрудники (несколько)».
+        const candidate =
+          definition.type === 'users' && typeof value === 'string' ? [value] : value;
+        const parsed = customFieldValueSchemaOf(definition).safeParse(candidate);
+        if (!parsed.success) return null;
+        const typed = parsed.data as CustomFieldValue;
+        // Ссылка на сотрудника живой быть обязана (A8-5): мёртвый id в
+        // префилле окна — 422 на сабмите поля, которое человек не трогал.
+        if (definition.type === 'user' || definition.type === 'users') {
+          return (await this.activeUserValue(typed, tx)) ? typed : null;
+        }
+        return typed;
       }
     }
   }
 
-  /** Вариант справочника по КОДУ (или подписи) — id для хранения (Р13). */
+  /** Все ли сотрудники значения действующие — порт ручного ввода (#176). */
+  private async activeUserValue(value: CustomFieldValue, tx?: TransactionClient): Promise<boolean> {
+    if (!this.users) return true;
+    const ids = Array.isArray(value) ? value : [String(value)];
+    const active = await this.users.filterActiveUserIds(ids, tx);
+    return active.length === ids.length;
+  }
+
+  /** Вариант справочника по КОДУ (или подписи) — id для хранения (Р13).
+   *  Архивный вариант не материализуется (A8-5): ручной ввод его тоже
+   *  отвергает, иначе префилл окна даёт 422 на нетронутом поле. */
   private async dictionaryItemId(
     definition: Pick<CustomFieldDefinition, 'settings'>,
     label: string,
     tx?: TransactionClient,
   ): Promise<string | null> {
-    const dictionaryId = definition.settings.dictionaryId;
-    if (!dictionaryId) return null;
-    const items = await this.dictionaries.itemsOf(dictionaryId, tx);
-    const match =
-      items.find((item) => item.code === label) ?? items.find((item) => item.name === label);
-    return match?.id ?? null;
+    const items = await this.dictionaryItems(definition, tx);
+    return itemIdOf(items, label);
   }
+
+  /** Активные варианты справочника атрибута (один запрос на значение). */
+  private async dictionaryItems(
+    definition: Pick<CustomFieldDefinition, 'settings'>,
+    tx?: TransactionClient,
+  ): Promise<DictionaryItemRef[]> {
+    const dictionaryId = definition.settings.dictionaryId;
+    if (!dictionaryId) return [];
+    return (await this.dictionaries.itemsOf(dictionaryId, tx)).filter((item) => item.isActive);
+  }
+}
+
+/** Вариант справочника по коду (или подписи) — id для хранения (Р13). */
+function itemIdOf(items: readonly DictionaryItemRef[], label: string): string | null {
+  const match = items.find((item) => item.code === label) ?? items.find((item) => item.name === label);
+  return match?.id ?? null;
 }
 
 /** Типографские «пустые» маркеры старых данных: в формуле это пусто, не текст. */
@@ -148,6 +198,12 @@ export function toFormulaValue(
           return item ? (item.code ?? item.name) : id;
         })
         .filter((id) => !EMPTY_DASHES.has(id));
+    }
+    case 'users': {
+      // Сотрудники — массив id без словарной замены (A1-05): раньше массив
+      // уходил в default и превращался в 'id1,id2'.
+      const ids = Array.isArray(value) ? value : [String(value)];
+      return ids.filter((id) => !EMPTY_DASHES.has(id));
     }
     case 'money':
       return value as MoneyValue;

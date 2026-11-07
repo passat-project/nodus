@@ -85,9 +85,21 @@ export class ProjectDtoMapper {
       for (const id of toFacts(row).assistantIds) userIds.add(id);
       for (const id of [...new Set(participants.map((p) => p.userId))].slice(0, 5)) userIds.add(id);
     }
+    const states = await this.formulas.stateFor(
+      'project',
+      inputs.map(({ row }) => row.id),
+      undefined,
+      new Map(inputs.map(({ row }) => [row.id, row.typeId])),
+    );
+    // Заказчик — по ЭФФЕКТИВНОМУ значению: формула типа может считать его,
+    // и тогда в сырой строке его нет (иначе client=null при видимой колонке).
+    const effectiveOf = (row: ProjectDtoInput['row']) => ({
+      ...(row.customFields as Record<string, unknown>),
+      ...((states.get(row.id)?.values ?? {}) as Record<string, unknown>),
+    });
     const clientIds = [
       ...new Set(
-        inputs.map((i) => clientOf(i.row.customFields)).filter((id): id is string => id !== null),
+        inputs.map((i) => clientOf(effectiveOf(i.row))).filter((id): id is string => id !== null),
       ),
     ];
     const [userRefs, clientRefs] = await Promise.all([
@@ -96,10 +108,6 @@ export class ProjectDtoMapper {
     ]);
     const users = new Map(userRefs.map((ref) => [ref.id, ref]));
     const clients = new Map(clientRefs.map((ref) => [ref.id, ref]));
-    const states = await this.formulas.stateFor(
-      'project',
-      inputs.map(({ row }) => row.id),
-    );
     // Ссылки — по эффективным значениям (формулы типа считаются на чтении):
     // ref-значение формулы получает имя в колонке журнала проектов.
     const attributeRefs = await this.customFields.refsMany(
@@ -128,7 +136,12 @@ export class ProjectDtoMapper {
       ),
     ];
     const facts = toFacts(row);
-    const states = await this.formulas.stateFor('project', [row.id]);
+    const states = await this.formulas.stateFor(
+      'project',
+      [row.id],
+      undefined,
+      new Map([[row.id, row.typeId]]),
+    );
     const state = states.get(row.id);
     // Эффективные значения: формулы типа/вида считаны на чтении (Р6).
     const effective = {

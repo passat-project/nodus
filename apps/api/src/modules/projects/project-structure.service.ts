@@ -89,6 +89,8 @@ export class ProjectStructureService {
     const formulas = await this.formulas.stateFor(
       'node',
       rows.map((row) => row.id),
+      undefined,
+      new Map(rows.map((row) => [row.id, row.kindId])),
     );
     const customFieldRefs = await this.registry.refsMany(
       rows.map((row) => ({ ...valuesOf(row), ...(formulas.get(row.id)?.values ?? {}) })),
@@ -185,6 +187,7 @@ export class ProjectStructureService {
         'node',
         created.map((node) => node.id),
         tx,
+        new Map(created.map((node) => [node.id, node.kindId])),
       );
       return created.map((node) => nodeToDto(node, null, states.get(node.id)));
     });
@@ -275,7 +278,9 @@ export class ProjectStructureService {
         { actorId: user.id, aggregateType: 'project_node', aggregateId: node.id },
       );
       // Формульное состояние папки для DTO (значок fx и бейдж ошибки, Р9).
-      const formulas = (await this.formulas.stateFor('node', [node.id], tx)).get(node.id);
+      const formulas = (
+        await this.formulas.stateFor('node', [node.id], tx, new Map([[node.id, node.kindId]]))
+      ).get(node.id);
       return nodeToDto({ ...node, ...patch } as ProjectNodeRow, null, formulas);
     });
   }

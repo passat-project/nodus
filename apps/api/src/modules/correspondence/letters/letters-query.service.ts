@@ -137,7 +137,9 @@ export class LettersQueryService {
     // Формульные ячейки (#632, Р9/Р6): значения формул типа/вида считаются
     // на чтении и подмешиваются в карту значений ДО сборки DTO — ссылки
     // значений гидрируются уже по эффективным значениям.
-    const formulas = (await this.formulas.stateFor('letter', [id])).get(id);
+    const formulas = (
+      await this.formulas.stateFor('letter', [id], undefined, new Map([[id, row.typeId]]))
+    ).get(id);
     const effectiveRow: LetterDetailRow = formulas
       ? {
           ...row,

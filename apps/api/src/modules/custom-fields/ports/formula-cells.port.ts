@@ -90,11 +90,14 @@ export interface FormulaPreviewEntry {
 
 export interface FormulaCells {
   /** Формульное состояние страницы хостов (деталь/списки, Р9): own-ячейки
-   *  + формулы типа/вида (Р6). Хосты без формул в результат не попадают. */
+   *  + формулы типа/вида (Р6). Хосты без формул в результат не попадают.
+   *  `places` (hostId → typeId/kindId) — подсказка из строк листинга: хосты
+   *  без формул своего места не читаются вовсе (иначе список платит N+1). */
   stateFor(
     hostKind: FormulaHostKind,
     hostIds: readonly string[],
     tx?: TransactionClient,
+    places?: ReadonlyMap<string, string | null>,
   ): Promise<FormulaStateMap>;
 
   /** Эффективная формула ячейки для редактора (GET): своя, иначе формула

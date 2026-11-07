@@ -102,7 +102,9 @@ export class ProjectStructureMoveService {
       const moved = { ...node, parentId: targetParent?.id ?? null, order } as ProjectNodeRow;
       // Формульное состояние — сразу в DTO переноса: карточка не должна
       // оставаться редактируемой до фонового пересчёта.
-      const state = (await this.formulas.stateFor('node', [node.id], tx)).get(node.id);
+      const state = (
+        await this.formulas.stateFor('node', [node.id], tx, new Map([[node.id, node.kindId]]))
+      ).get(node.id);
       return nodeToDto(moved, null, state);
     });
   }

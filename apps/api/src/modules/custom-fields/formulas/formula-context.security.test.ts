@@ -224,3 +224,101 @@ describe('FormulaContextService: видимость источников (Р7)',
     expect(companyRecord?.value(10)).toBe('ООО Нодус');
   });
 });
+
+/** A7-1/A7-2: актор уезжает в выборки агрегатов (у личной задачи выборка —
+ *  только его зона видимости), а задачи папки фильтруются проектом папки. */
+describe('FormulaContextService: выборки агрегатов (A7-1/A7-2)', () => {
+  const ACTOR = { id: 'u1', permissions: [] };
+  const subtasksAst: FormulaNode = {
+    kind: 'aggregate',
+    from: { kind: 'related', selector: { kind: 'subtasks' } },
+    fn: 'count',
+  };
+  const relationsAst: FormulaNode = {
+    kind: 'aggregate',
+    from: {
+      kind: 'related',
+      selector: { kind: 'relations', relation: 'blocks', direction: 'out' },
+    },
+    fn: 'count',
+  };
+  const nodeTasksAst: FormulaNode = {
+    kind: 'aggregate',
+    from: { kind: 'related', selector: { kind: 'node_tasks' } },
+    fn: 'count',
+  };
+
+  function readerFor(host: Partial<FormulaRecordData>) {
+    return {
+      record: vi.fn(async (kind: string, id: string) => {
+        if (id === 'task1') return record({ id: 'task1', ...host });
+        if (id === 'p1') return record({ kind: 'project', id: 'p1', projectId: 'p1' });
+        return null;
+      }),
+      subtasks: vi.fn(async () => []),
+      relatedTasks: vi.fn(async () => []),
+      nodeTasks: vi.fn(async () => []),
+      projectNodes: vi.fn(async () => [
+        record({ kind: 'node', id: 'n1', projectId: 'p1', placeId: 'k1' }),
+      ]),
+    };
+  }
+
+  it('актор уезжает в выборки, папка — со своим проектом', async () => {
+    const reader = readerFor({ projectId: 'p1', nodeId: 'n1' });
+    await service(reader as unknown as RecordValuesReader).build({
+      hostKind: 'task',
+      hostId: 'task1',
+      asts: [subtasksAst, relationsAst, nodeTasksAst],
+      snapshot: snapshot(),
+      actor: ACTOR,
+    });
+    expect(reader.subtasks).toHaveBeenCalledWith('task1', { actor: ACTOR }, undefined);
+    expect(reader.relatedTasks).toHaveBeenCalledWith(
+      'task1',
+      'blocks',
+      'out',
+      { actor: ACTOR },
+      undefined,
+    );
+    expect(reader.nodeTasks).toHaveBeenCalledWith('n1', 'p1', undefined);
+  });
+
+  it('личный хост с актором — выборка идёт с актором (не «все личные задачи»)', async () => {
+    const reader = readerFor({ projectId: null });
+    await service(reader as unknown as RecordValuesReader).build({
+      hostKind: 'task',
+      hostId: 'task1',
+      asts: [subtasksAst],
+      snapshot: snapshot(),
+      actor: ACTOR,
+    });
+    expect(reader.subtasks).toHaveBeenCalledWith('task1', { actor: ACTOR }, undefined);
+  });
+
+  it('фоновый путь без актора — выборка без опций (порт вернёт пусто)', async () => {
+    const reader = readerFor({ projectId: 'p1' });
+    await service(reader as unknown as RecordValuesReader).build({
+      hostKind: 'task',
+      hostId: 'task1',
+      asts: [subtasksAst],
+      snapshot: snapshot(),
+    });
+    expect(reader.subtasks).toHaveBeenCalledWith('task1', undefined, undefined);
+  });
+
+  it('личный хост без проекта — папка не читается, node_tasks пуст', async () => {
+    const reader = readerFor({ projectId: null, nodeId: 'n1' });
+    const context = await service(reader as unknown as RecordValuesReader).build({
+      hostKind: 'task',
+      hostId: 'task1',
+      asts: [nodeTasksAst],
+      snapshot: snapshot(),
+    });
+    expect(reader.projectNodes).not.toHaveBeenCalled();
+    expect(reader.nodeTasks).not.toHaveBeenCalled();
+    expect(
+      context!.resolver.select({ kind: 'related', selector: { kind: 'node_tasks' } }),
+    ).toEqual([]);
+  });
+});

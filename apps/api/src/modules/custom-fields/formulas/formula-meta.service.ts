@@ -24,9 +24,24 @@ export interface FormulaRegistrySnapshot {
  */
 @Injectable()
 export class FormulaMetaService {
+  /** Один снимок на транзакцию (#632, аудит 3): массовый пересчёт сотен
+   *  ячеек больше не читает весь реестр на каждую. Ключ — объект транзакции;
+   *  формулы не меняют реестр внутри той же транзакции, поэтому снимок не
+   *  устаревает. */
+  private readonly byTransaction = new WeakMap<object, Promise<FormulaRegistrySnapshot>>();
+
   constructor(private readonly repo: DefinitionsRepository) {}
 
   async snapshot(tx?: TransactionClient): Promise<FormulaRegistrySnapshot> {
+    if (!tx) return this.load(tx);
+    const cached = this.byTransaction.get(tx);
+    if (cached) return cached;
+    const pending = this.load(tx);
+    this.byTransaction.set(tx, pending);
+    return pending;
+  }
+
+  private async load(tx?: TransactionClient): Promise<FormulaRegistrySnapshot> {
     const rows = await this.repo.list(tx);
     const byNumber = new Map<number, FieldDefinitionRow>();
     const byId = new Map<string, FieldDefinitionRow>();

@@ -14,6 +14,8 @@ import type { FormulaValuesService } from './formula-values.service.js';
 export async function applyTypeFormulas(args: {
   hostKind: FormulaHostKind;
   hostIds: readonly string[];
+  /** hostId → место (typeId/kindId): без формулы места хост не читается. */
+  places?: ReadonlyMap<string, string | null>;
   snapshot: FormulaRegistrySnapshot;
   ownByHost: ReadonlyMap<string, readonly string[]>;
   result: FormulaStateMap;
@@ -23,12 +25,30 @@ export async function applyTypeFormulas(args: {
   engine: FormulaEngine;
   values: FormulaValuesService;
 }): Promise<void> {
-  const { hostKind, hostIds, snapshot, ownByHost, result, tx, cache, context, engine, values } =
-    args;
+  const {
+    hostKind,
+    hostIds,
+    places,
+    snapshot,
+    ownByHost,
+    result,
+    tx,
+    cache,
+    context,
+    engine,
+    values,
+  } = args;
   // Нет ни одной формулы типа/вида на портале — не читаем хосты вовсе:
   // список не платит N+1 за фичу, которой ещё не пользуются.
   if (snapshot.bindingFormulas.size === 0) return;
   for (const hostId of hostIds) {
+    // Место известно из строки листинга: если у него нет формул, запись
+    // хоста не читается (иначе одна формула на портале включает N+1 всем).
+    if (places) {
+      const place = places.get(hostId);
+      if (!place) continue;
+      if ((snapshot.bindingFormulas.get(place) ?? []).length === 0) continue;
+    }
     const host = await context.record(hostKind, hostId, undefined, tx, cache);
     if (!host?.placeId) continue;
     const slots = snapshot.bindingFormulas.get(host.placeId) ?? [];

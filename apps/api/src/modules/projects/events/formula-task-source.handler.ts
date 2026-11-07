@@ -34,6 +34,36 @@ async function nodesByProject(
   return grouped;
 }
 
+/** Хосты-потребители (проект/папка): их ячейки пишет их модуль (I3). */
+interface FormulaHostDeps {
+  formulas: ProjectFormulaRecalcService;
+  nodes: ProjectNodesRepository;
+}
+
+/** Пересчёт найденных по зависимостям хостов проекта и папок. Порядок локов
+ *  общий для всех вызовов (проекты → папки), сбои ячеек изолирует сервис. */
+async function recalcHostRefs(
+  deps: FormulaHostDeps,
+  tx: TransactionClient,
+  actorId: string | null,
+  refs: readonly { hostKind: string; hostId: string }[],
+  depth: number,
+): Promise<void> {
+  if (refs.length === 0) return;
+  const projects = [
+    ...new Set(refs.filter((cell) => cell.hostKind === 'project').map((cell) => cell.hostId)),
+  ];
+  for (const projectId of projects) {
+    await deps.formulas.recalcProjectCells(tx, actorId, projectId, [], depth);
+  }
+  const nodeHosts = [
+    ...new Set(refs.filter((cell) => cell.hostKind === 'node').map((cell) => cell.hostId)),
+  ];
+  for (const [projectId, nodeIds] of await nodesByProject(deps.nodes, nodeHosts, tx)) {
+    await deps.formulas.recalcNodes(tx, actorId, projectId, nodeIds, depth);
+  }
+}
+
 /**
  * Пересчёт формул ПРОЕКТОВ и ПАПОК по событиям задач (#632, Р4/Р8): задачи —
  * источник формул через атрибут-ссылку (`v:task:*`) и состав выборок папки
@@ -116,25 +146,13 @@ export class TaskUpdatedProjectFormulaHandler {
   }
 
   /** Проекты и папки: их ячейки пишет их модуль (I3). */
-  private async recalcHosts(
+  private recalcHosts(
     tx: TransactionClient,
     actorId: string | null,
     refs: readonly { hostKind: string; hostId: string }[],
     depth: number,
   ): Promise<void> {
-    if (refs.length === 0) return;
-    const projects = [
-      ...new Set(refs.filter((cell) => cell.hostKind === 'project').map((cell) => cell.hostId)),
-    ];
-    for (const projectId of projects) {
-      await this.formulas.recalcProjectCells(tx, actorId, projectId, [], depth);
-    }
-    const nodeHosts = [
-      ...new Set(refs.filter((cell) => cell.hostKind === 'node').map((cell) => cell.hostId)),
-    ];
-    for (const [projectId, nodeIds] of await nodesByProject(this.nodes, nodeHosts, tx)) {
-      await this.formulas.recalcNodes(tx, actorId, projectId, nodeIds, depth);
-    }
+    return recalcHostRefs({ formulas: this.formulas, nodes: this.nodes }, tx, actorId, refs, depth);
   }
 }
 
@@ -167,7 +185,12 @@ export class TaskCreatedProjectFormulaHandler {
   }
 }
 
-/** Удаление задачи: выборки папки и проекта похудели — формулы пересчитываются. */
+/**
+ * Удаление задачи: выборки папки и проекта похудели — формулы пересчитываются.
+ * Задача была источником и через ссылку (`v:task:<id>:*`) и через системные
+ * поля (`system:task:<id>`): хосты-потребители получают `source_unavailable`,
+ * а не держат последнее значение (Р13), — как у удалённой папки.
+ */
 @Injectable()
 export class TaskDeletedProjectFormulaHandler {
   static readonly eventType = TASK_EVENTS.DELETED;
@@ -175,6 +198,8 @@ export class TaskDeletedProjectFormulaHandler {
   constructor(
     private readonly txRunner: TransactionRunner,
     private readonly formulas: ProjectFormulaRecalcService,
+    private readonly nodes: ProjectNodesRepository,
+    @Inject(FORMULA_CELLS) private readonly cells: FormulaCells,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(TaskDeletedProjectFormulaHandler.name);
@@ -188,6 +213,20 @@ export class TaskDeletedProjectFormulaHandler {
     this.logger.debug({ taskId, projectId, nodeId }, 'Пересчёт формул после удаления задачи');
     await this.txRunner.run(async (tx) => {
       const actorId = event.actorId ?? null;
+      // Потребители значений и системных полей удалённой задачи по ссылке:
+      // `v:task:<id>:*` и `system:task:<id>` — формулы получают
+      // `source_unavailable` (Р13), а не держат последнее значение.
+      const refs = [
+        ...(await this.cells.dependentCellsByDepPrefix(`v:task:${taskId}:`, tx)),
+        ...(await this.cells.dependentCellsByDepKey(`system:task:${taskId}`, tx)),
+      ].filter(
+        (cell) =>
+          (cell.hostKind === 'project' || cell.hostKind === 'node') &&
+          // Хосты задачи ниже пересчитываются явно — второй проход не нужен.
+          !(cell.hostKind === 'project' && cell.hostId === projectId) &&
+          !(cell.hostKind === 'node' && cell.hostId === nodeId),
+      );
+      await recalcHostRefs({ formulas: this.formulas, nodes: this.nodes }, tx, actorId, refs, 1);
       // Ячейки удалённой задачи чистит её модуль (I3): здесь только свои хосты.
       if (nodeId) await this.formulas.recalcNodes(tx, actorId, projectId, [nodeId], 1);
       await this.formulas.recalcProjectCells(tx, actorId, projectId, [], 1);
@@ -222,19 +261,13 @@ class ProjectFormulaTaskSystemHandler {
       const refs = (await this.cells.dependentCellsByDepKey(`system:task:${taskId}`, tx)).filter(
         (cell) => cell.hostKind === 'project' || cell.hostKind === 'node',
       );
-      if (refs.length === 0) return;
-      const projects = [
-        ...new Set(refs.filter((cell) => cell.hostKind === 'project').map((cell) => cell.hostId)),
-      ];
-      for (const projectId of projects) {
-        await this.formulas.recalcProjectCells(tx, event.actorId ?? null, projectId, [], 1);
-      }
-      const nodeHosts = [
-        ...new Set(refs.filter((cell) => cell.hostKind === 'node').map((cell) => cell.hostId)),
-      ];
-      for (const [projectId, nodeIds] of await nodesByProject(this.nodes, nodeHosts, tx)) {
-        await this.formulas.recalcNodes(tx, event.actorId ?? null, projectId, nodeIds, 1);
-      }
+      await recalcHostRefs(
+        { formulas: this.formulas, nodes: this.nodes },
+        tx,
+        event.actorId ?? null,
+        refs,
+        1,
+      );
     });
   }
 }
