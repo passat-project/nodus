@@ -94,11 +94,13 @@ export class ProjectFormulaService {
     });
   }
 
-  /** Снять формулу проекта: последнее значение остаётся снимком (Р5). */
+  /** Снять формулу проекта (#660): вычисленное значение очищается — ячейка
+   *  пуста или под формулой типа; «снимок» больше не остаётся. */
   async remove(user: AuthUser, projectId: string, fieldId: string): Promise<void> {
     await this.requireManage(user, projectId);
     await this.txRunner.run(async (tx) => {
       await this.cells.remove(tx, { hostKind: 'project', hostId: projectId, fieldId });
+      await this.writer.writeProject(tx, user.id, projectId, fieldId, null);
       await this.events.emitChanged(tx, user.id, 'project', projectId, projectId, fieldId, false);
     });
   }
@@ -149,6 +151,8 @@ export class ProjectFormulaService {
     });
   }
 
+  /** Снять формулу папки (#660): вычисленное значение очищается — ячейка
+   *  пуста или под формулой вида. */
   async removeNode(
     user: AuthUser,
     projectId: string,
@@ -159,6 +163,7 @@ export class ProjectFormulaService {
     if (!(await this.nodes.findInProject(projectId, nodeId))) throw nodeInvalid(nodeId);
     await this.txRunner.run(async (tx) => {
       await this.cells.remove(tx, { hostKind: 'node', hostId: nodeId, fieldId });
+      await this.writer.writeNode(tx, user.id, projectId, nodeId, fieldId, null);
       await this.events.emitChanged(tx, user.id, 'node', nodeId, projectId, fieldId, false);
     });
   }

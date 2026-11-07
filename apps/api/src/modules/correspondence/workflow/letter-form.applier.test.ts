@@ -42,14 +42,16 @@ function applierWith(attachments: { id: string; role: string; inline: boolean }[
     linkReplyTo: vi.fn(),
   };
   const validator = {
-    registration: vi.fn(async () => ({
+    registration: vi.fn(async (_typeId: unknown, input: unknown) => ({
       values: registration,
       extra: { confidential: null, attachedRefs: null },
-      customFields: {},
+      customFields: {
+        ...((input as { customFields?: Record<string, unknown> } | null)?.customFields ?? {}),
+      },
     })),
   };
   const attached = { replace: vi.fn(async () => void 0) };
-  const fields = { releaseFormulas: vi.fn(async () => void 0) };
+  const fields = { lockedFieldIds: vi.fn(async () => new Set<string>()) };
   const applier = new LetterFormApplier(
     repo as never,
     validator as never,
@@ -128,23 +130,45 @@ describe('значения атрибутов, поставленные до р�
   });
 });
 
-describe('формулы ячеек в окне регистрации (#632, Р5)', () => {
-  it('вписанные в окно значения снимают формулу, умолчания — нет', async () => {
-    const { applier, fields } = applierWith([{ id: 'm1', role: 'main', inline: false }]);
+describe('формульная блокировка в окне регистрации (#632, #660)', () => {
+  it('вписанное в окно значение формульного поля не сохраняется', async () => {
+    const kit = applierWith([{ id: 'm1', role: 'main', inline: false }]);
     const fieldId = '00000000-0000-4000-8000-0000000000e4';
-    await applier.apply(
+    kit.fields.lockedFieldIds.mockResolvedValueOnce(new Set([fieldId]));
+    await kit.applier.apply(
       {} as never,
       row,
       { id: 'u', permissions: [] },
       { registration: { customFields: { [fieldId]: 'вписано' } } },
     );
-    expect(fields.releaseFormulas).toHaveBeenCalledWith(expect.anything(), row.id, [fieldId]);
+    expect(kit.repo.update).toHaveBeenCalledWith(
+      expect.anything(),
+      row.id,
+      expect.objectContaining({ customFields: {} }),
+    );
   });
 
-  it('окно без атрибутов формулу не трогает', async () => {
-    const { applier, fields } = applierWith([{ id: 'm1', role: 'main', inline: false }]);
-    await applier.apply({} as never, row, { id: 'u', permissions: [] }, { registration: {} });
-    expect(fields.releaseFormulas).toHaveBeenCalledWith(expect.anything(), row.id, []);
+  it('незаблокированное поле пишется, ключ уходит в проверку блокировки', async () => {
+    const kit = applierWith([{ id: 'm1', role: 'main', inline: false }]);
+    const fieldId = '00000000-0000-4000-8000-0000000000e4';
+    await kit.applier.apply(
+      {} as never,
+      row,
+      { id: 'u', permissions: [] },
+      { registration: { customFields: { [fieldId]: 'обычное' } } },
+    );
+    expect(kit.fields.lockedFieldIds).toHaveBeenCalledWith(expect.anything(), row.id, [fieldId]);
+    expect(kit.repo.update).toHaveBeenCalledWith(
+      expect.anything(),
+      row.id,
+      expect.objectContaining({ customFields: { [fieldId]: 'обычное' } }),
+    );
+  });
+
+  it('окно без атрибутов проверку не зовёт', async () => {
+    const kit = applierWith([{ id: 'm1', role: 'main', inline: false }]);
+    await kit.applier.apply({} as never, row, { id: 'u', permissions: [] }, { registration: {} });
+    expect(kit.fields.lockedFieldIds).not.toHaveBeenCalled();
   });
 });
 
@@ -203,7 +227,7 @@ describe('подсказка «ответ на» (#461, Р4): невидимое
     const applier = new LetterFormApplier(
       repo as never,
       validator as never,
-      { releaseFormulas: vi.fn(async () => void 0) } as never,
+      { lockedFieldIds: vi.fn(async () => new Set<string>()) } as never,
       threading as never,
       { replace: vi.fn() } as never,
       { validate: vi.fn(async () => []) } as never,

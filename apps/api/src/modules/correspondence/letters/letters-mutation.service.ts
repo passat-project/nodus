@@ -104,22 +104,33 @@ export class LettersMutationService {
         today,
         user,
       );
-      // Вписанное руками значение снимает формулу ячейки в той же tx
-      // (Р5 #632): «зафиксировать» = вписать значение, «как у типа» = очистить.
-      // Снимаем только РЕАЛЬНО изменённые ключи: Enter без правки формулу
-      // не отменяет.
+      // Формульная ячейка руками не пишется (решение владельца по #660):
+      // значение в атрибут со своей формулой или формулой типа — 422. Проверка
+      // только РЕАЛЬНО изменённых ключей: повтор того же значения из окна
+      // ошибкой не становится.
       const requested = body.customFields ?? {};
-      await this.fields.releaseFormulas(
-        tx,
-        id,
-        Object.keys(requested).filter(
-          (fieldId) =>
-            !sameCustomFieldValue(
-              (fresh.customFields as Record<string, unknown> | null)?.[fieldId],
-              requested[fieldId],
-            ),
-        ),
-      );
+      const changedKeys =
+        Object.keys(requested).length === 0
+          ? []
+          : Object.keys(requested).filter(
+              (fieldId) =>
+                !sameCustomFieldValue(
+                  (fresh.customFields as Record<string, unknown> | null)?.[fieldId],
+                  requested[fieldId],
+                ),
+            );
+      const locked =
+        changedKeys.length > 0
+          ? await this.fields.lockedFieldIds(tx, id, changedKeys)
+          : new Set<string>();
+      if (locked.size > 0) {
+        throw new DomainException(
+          ErrorCode.FORMULA_CELL_LOCKED,
+          'Formula cell value is computed by its formula',
+          { fields: [...locked] },
+          422,
+        );
+      }
       // «Приложенные письма» (#461, Р3): правка набором; история — счётчиком
       // строк, только если набор реально изменился.
       let attachedRows: LetterAttachedRefInput[] | null = null;

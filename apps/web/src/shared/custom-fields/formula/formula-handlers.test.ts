@@ -61,15 +61,15 @@ describe('мок формул ячейки (#632)', () => {
     expect(read).toEqual({ ast: literal, origin: 'own' });
   });
 
-  it('DELETE снимает формулу, значение-снимок остаётся (Р5)', async () => {
+  it('DELETE снимает формулу и очищает значение (#660)', async () => {
     await fetch(cipherUrl, json('PUT', { ast: literal }));
     const remove = await fetch(cipherUrl, { method: 'DELETE' });
     expect(remove.status).toBe(204);
-    // Своя формула снята, но значение-снимок подавляет формулу типа.
+    // Своя формула снята, значение очищено — действует формула типа.
     const after = (await (await fetch(cipherUrl)).json()) as { ast: unknown; origin: string };
-    expect(after.origin).toBe('value');
+    expect(after.origin).toBe('type');
     expect(after.ast).toBeTruthy();
-    expect(komplektTask.customFields[fieldIds.komplektCipher]).toBe('КЖ-1');
+    expect(komplektTask.customFields[fieldIds.komplektCipher]).toBeUndefined();
   });
 
   it('422 с кодом каталога на блокирующую формулу, 400 на битое тело', async () => {

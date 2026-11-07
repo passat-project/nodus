@@ -233,16 +233,23 @@ export class ProjectStructureService {
           { authorId: user.id, actor: user, kindChanged },
           tx,
         );
-        // Вписанное значение снимает формулу ячейки в той же tx (Р5 #632);
-        // только реально изменённые ключи — Enter без правки формулу не
-        // отменяет.
+        // Формульная ячейка руками не пишется (решение владельца по #660):
+        // значение в атрибут папки со своей формулой или формулой вида — 422.
         if (prepared.changes.length > 0) {
-          await this.formulas.release(
+          const locked = await this.formulas.lockedFieldIds(
             tx,
             'node',
             nodeId,
             prepared.changes.map((change) => change.fieldId),
           );
+          if (locked.size > 0) {
+            throw new DomainException(
+              ErrorCode.FORMULA_CELL_LOCKED,
+              'Formula cell value is computed by its formula',
+              { fields: [...locked] },
+              422,
+            );
+          }
         }
         patch.customFields = prepared.values as Prisma.InputJsonValue;
         changes = prepared.changes;

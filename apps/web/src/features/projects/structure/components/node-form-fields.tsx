@@ -143,7 +143,6 @@ export function NodePanelFields({
                 value={values[definition.id]}
                 refs={refs}
                 canEdit={!disabled}
-                onChange={onChange}
                 ownDefinitions={slots.map((entry) => entry.definition)}
               >
                 <CustomFieldEditor

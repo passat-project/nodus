@@ -31,7 +31,7 @@ import {
 import { demoUserListItems } from '../../../../shared/mocks/data/users.js';
 import { actorUserRef, getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import { letterWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
-import { removeOwnFormula } from '../../../../shared/custom-fields/formula/formula-mocks.js';
+import { lockedMockFieldIds } from '../../../../shared/custom-fields/formula/formula-mocks.js';
 import {
   apiError,
   attachedRefsOf,
@@ -206,9 +206,21 @@ export const lettersMutationHandlers = [
           : letter.addressee,
     };
     const changes = patchChanges(letter, body, next);
-    // Ручная правка ячейки снимает свою формулу письма (Р5, #632).
-    for (const fieldId of Object.keys(body.customFields ?? {})) {
-      removeOwnFormula('letter', letter.id, fieldId);
+    // Формульная ячейка руками не пишется (#660): 422, как на сервере.
+    const lockedLetterFields = lockedMockFieldIds(
+      'letter',
+      letter.id,
+      Object.keys(body.customFields ?? {}),
+    );
+    if (lockedLetterFields.size > 0) {
+      return HttpResponse.json(
+        {
+          code: 'FORMULA_CELL_LOCKED',
+          message: 'Formula cell value is computed by its formula',
+          details: { fields: [...lockedLetterFields] },
+        },
+        { status: 422 },
+      );
     }
     Object.assign(letter, next, {
       theirNumber: body.theirNumber ?? letter.theirNumber,

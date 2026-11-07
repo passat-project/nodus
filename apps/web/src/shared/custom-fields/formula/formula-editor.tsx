@@ -93,9 +93,12 @@ export function FormulaEditor({
     handleRemove,
   } = useFormulaEditor({ open, host, fieldId, ownDefinitions, hostContext, onClose });
   const [removeOpen, setRemoveOpen] = useState(false);
-  // Формула типа/вида приходит как основа для правки: сохранение создаст
-  // собственную формулу записи, тип не меняется (Р6).
+  // Формула типа/вида наследуется из настроек атрибута: в задаче она только
+  // ПРОСМАТРИВАЕТСЯ (правка «для всех» из записи запрещена, решение владельца
+  // по #632) — строка и футер уходят в режим только чтения.
   const origin = cell.data?.origin ?? null;
+  const typeOrigin = origin === 'type';
+  const viewOnly = readOnly || typeOrigin;
 
   // Ошибка строки — одна плашка: разбор сильнее оценки (нераспознанная
   // формула не считается вовсе). Проблемы структуры (issues) блокируют
@@ -171,13 +174,13 @@ export function FormulaEditor({
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-              {origin === 'type' || origin === 'value' ? (
+              {typeOrigin ? (
                 <p className="rounded-lg border border-info/30 bg-info/10 px-3 py-2 text-xs text-info">
-                  {origin === 'type' ? ui.formulas.editor.typeBase : ui.formulas.editor.valueBase}
+                  {ui.formulas.editor.typeReadonly}
                 </p>
               ) : null}
               <FormulaLine
-                readOnly={readOnly}
+                readOnly={viewOnly}
                 rootRef={setRootRef}
                 empty={empty}
                 error={error}
@@ -191,7 +194,7 @@ export function FormulaEditor({
                 onApplyAutocomplete={applyAutocomplete}
               />
 
-              {readOnly ? null : (
+              {viewOnly ? null : (
                 <div className="grid min-h-[18rem] flex-1 grid-cols-[13rem_minmax(0,1fr)] gap-3">
                   <aside className="min-h-0 overflow-hidden rounded-xl bg-muted/60 dark:bg-background/60">
                     <FormulaPalette
@@ -214,7 +217,7 @@ export function FormulaEditor({
               type="button"
               variant="ghost"
               className="mr-auto text-danger hover:text-danger"
-              disabled={readOnly || remove.isPending || origin !== 'own'}
+              disabled={viewOnly || remove.isPending || origin !== 'own'}
               onClick={() => setRemoveOpen(true)}
             >
               <Trash2 className="size-3.5" strokeWidth={1.75} />
@@ -225,7 +228,7 @@ export function FormulaEditor({
             </Button>
             <Button
               type="button"
-              disabled={readOnly || save.isPending || validate.isPending || !parse.ast}
+              disabled={viewOnly || save.isPending || validate.isPending || !parse.ast}
               onClick={handleSave}
             >
               {ui.formulas.editor.save}

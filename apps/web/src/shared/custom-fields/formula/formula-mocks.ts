@@ -98,7 +98,7 @@ export interface ComputedFieldValues {
 
 /** Формулы типа/вида поверх значений записи (DTO сущности, не мутируя
  *  хранимые данные: вызывающий клонирует DTO). Приоритет: своя формула →
- *  вписанное значение → формула типа. */
+ *  формула типа (формульная ячейка руками не пишется, #660). */
 export function applyTypeFormulas(
   kind: FormulaHostKind,
   record: FormulaPlaceRecord,
@@ -118,11 +118,6 @@ export function applyTypeFormulas(
   if (!resolver) return { customFields: values, customFieldFormulas: formulas };
   for (const slot of slots) {
     if (formulas[slot.fieldId] !== undefined) continue;
-    // Вписанное руками значение подавляет формулу типа (кнопка «Как у типа»).
-    if (record.customFields[slot.fieldId] !== undefined) {
-      formulas[slot.fieldId] = { origin: 'value' };
-      continue;
-    }
     const evaluation = evaluate(slot.formula, resolver);
     if (evaluation.error) {
       formulas[slot.fieldId] = { origin: 'type', error: evaluation.error };
@@ -220,7 +215,7 @@ export function effectiveFormula(
   kind: FormulaHostKind,
   hostId: string,
   fieldId: string,
-): { ast: FormulaNode | null; origin: 'own' | 'type' | 'value' | null } {
+): { ast: FormulaNode | null; origin: 'own' | 'type' | null } {
   const own = readOwnFormula(kind, hostId, fieldId);
   if (own) return { ast: own, origin: 'own' };
   const host = findFormulaHost(kind, hostId);
@@ -229,10 +224,7 @@ export function effectiveFormula(
     (entry) => entry.fieldId === fieldId,
   );
   if (!slot) return { ast: null, origin: null };
-  return {
-    ast: slot.formula,
-    origin: host.customFields[fieldId] === undefined ? 'type' : 'value',
-  };
+  return { ast: slot.formula, origin: 'type' };
 }
 
 /** Своя формула ячейки (GET): null — формулы нет. */
@@ -246,5 +238,37 @@ export function readOwnFormula(
 
 /** Снять свою формулу (DELETE): последнее значение остаётся снимком (Р5). */
 export function removeOwnFormula(kind: FormulaHostKind, hostId: string, fieldId: string): boolean {
+  // Вычисленное формулой значение очищается вместе с формулой (#660):
+  // ячейка пуста или под формулой типа/вида, «снимка» больше нет.
+  dropHostValue(kind, hostId, fieldId);
   return dropFormulaCell(kind, hostId, fieldId);
+}
+
+/** Убрать ключ значения у демо-хоста (снятие формулы очищает значение). */
+function dropHostValue(kind: FormulaHostKind, hostId: string, fieldId: string): void {
+  const host = findFormulaHost(kind, hostId);
+  if (!host) return;
+  const next = { ...host.customFields };
+  delete next[fieldId];
+  setHostValues(kind, hostId, next);
+}
+
+/** Формульно-заблокированные ключи (паритет сервера, #660): у атрибута
+ *  своя формула или формула слота места — значение пишет только формула. */
+export function lockedMockFieldIds(
+  kind: FormulaHostKind,
+  hostId: string,
+  fieldIds: readonly string[],
+): Set<string> {
+  const result = new Set<string>();
+  if (fieldIds.length === 0) return result;
+  const own = ownCellsOf(kind, hostId);
+  const placeId = placeIdOf(kind, hostId);
+  const slots = placeId ? typeFormulaSlots(kind, placeId) : [];
+  for (const fieldId of fieldIds) {
+    if (own.has(fieldId) || slots.some((slot) => slot.fieldId === fieldId)) {
+      result.add(fieldId);
+    }
+  }
+  return result;
 }

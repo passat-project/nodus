@@ -99,7 +99,9 @@ export function makeProjectsServiceKit() {
   const txRunner = { run: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})) };
   const eventBus: Mocks<'emit'> = { emit: vi.fn() };
   // Снятие формулы ячейки при обычной записи значения (Р5 #632).
-  const formulaCells: Mocks<'release'> = { release: vi.fn() };
+  const formulaCells: Mocks<'lockedFieldIds'> = {
+    lockedFieldIds: vi.fn(async () => new Set<string>()),
+  };
   const kit = {
     repo,
     types,

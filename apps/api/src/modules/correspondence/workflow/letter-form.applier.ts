@@ -75,17 +75,20 @@ export class LetterFormApplier {
       // перекрывает, умолчания заполняют только пустое (#646).
       (letter.customFields ?? {}) as CustomFieldValues,
     );
-    // Значения, вписанные в окно, снимают формулу ячейки в той же tx
-    // (Р5 #632); умолчания формы и повтор того же значения — не «вписано
-    // руками», формулу не трогают.
-    await this.fields.releaseFormulas(
-      tx,
-      letter.id,
-      changedCustomFieldKeys(
-        letter.customFields as CustomFieldValues | undefined,
-        input.registration,
-      ),
+    // Формульно-заблокированные атрибуты окно не пишет (решение владельца
+    // по #660): значение в формульной ячейке даёт только формула — своя или
+    // привязки места. Регистрация не блокируется, поле просто пропускается;
+    // умолчания формы и повтор того же значения — не «вписано руками»,
+    // поэтому сравниваем ввод окна с текущими значениями.
+    const changedKeys = changedCustomFieldKeys(
+      letter.customFields as CustomFieldValues | undefined,
+      input.registration,
     );
+    const locked =
+      changedKeys.length > 0
+        ? await this.fields.lockedFieldIds(tx, letter.id, changedKeys)
+        : new Set<string>();
+    for (const fieldId of locked) delete customFields[fieldId];
     // «Основной документ письма» (#56): у письма с файлами-кандидатами один
     // обязан быть выбран звездой — номер присваивается конкретному документу
     // (главный де-факто: main или PDF-копия тела).

@@ -17,11 +17,11 @@ export type FormulaBody = z.infer<typeof formulaBodySchema>;
 
 /** Ответ чтения формулы ячейки (GET у владельца хоста): null — формулы нет.
  *  `origin` — откуда эффективная формула: своя ячейка или формула типа/вида
- *  (редактор показывает её как основу для своей правки, не меняя тип). */
+ *  (в задаче формула типа только просматривается — правится в «Атрибутах»). */
 export const formulaResponseSchema = z
   .object({
     ast: formulaNodeSchema.nullable(),
-    origin: z.enum(['own', 'type', 'value']).nullable().optional(),
+    origin: z.enum(['own', 'type']).nullable().optional(),
   })
   .strict();
 export type FormulaResponse = z.infer<typeof formulaResponseSchema>;
@@ -62,15 +62,14 @@ export type FormulaCellError = z.infer<typeof formulaCellErrorSchema>;
 
 /** Формульное состояние ячеек в DTO сущности. `origin`:
  *  - `own` — своя формула ячейки;
- *  - `type` — действует формула типа/вида (своей формулы и значения нет);
- *  - `value` — вписано значение руками, а у типа/вида ЕСТЬ формула
- *    (кнопка «как у типа» вернёт формулу, Р5).
- *  Запись присутствует в DTO, если есть формула или значение подавляет
- *  формулу типа; ячейки без формул в объект не попадают. `error` — только
- *  у ячейки с ошибкой; значение при ошибке пустое (не показываем протухшее). */
+ *  - `type` — действует формула типа/вида (своей формулы нет).
+ *  Формульная ячейка руками не пишется (решение владельца по #660): если
+ *  у атрибута есть формула — значение даёт только она. Ячейки без формул
+ *  в объект не попадают. `error` — только у ячейки с ошибкой; значение
+ *  при ошибке пустое (не показываем протухшее). */
 export const customFieldFormulaInfoSchema = z
   .object({
-    origin: z.enum(['own', 'type', 'value']),
+    origin: z.enum(['own', 'type']),
     error: formulaCellErrorSchema.nullable().optional(),
   })
   .strict();

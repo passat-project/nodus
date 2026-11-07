@@ -148,6 +148,9 @@ export const ErrorCode = {
   FORMULA_SOURCE_FORBIDDEN: 'FORMULA_SOURCE_FORBIDDEN',
   /** Превышен лимит языка: глубина/узлы/источники/литерал (#632, Р2). */
   FORMULA_LIMIT_EXCEEDED: 'FORMULA_LIMIT_EXCEEDED',
+  /** В формульную ячейку нельзя вписать значение руками (#632, решение
+   *  владельца по #660): значение пишет только формула — своя или типа/вида. */
+  FORMULA_CELL_LOCKED: 'FORMULA_CELL_LOCKED',
   /** Системный справочник защищён от удаления вариантов и переименования (#431, Р10). */
   DICTIONARY_SYSTEM_LOCKED: 'DICTIONARY_SYSTEM_LOCKED',
   /** Вариант с таким названием уже есть среди активных (#431). */

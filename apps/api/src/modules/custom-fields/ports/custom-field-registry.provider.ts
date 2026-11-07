@@ -79,6 +79,12 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
         )
         .map((definition) => definition.id),
     );
+    // Формульная ячейка руками не пишется (решение владельца по #660):
+    // введённое в окне создания значение атрибута с формулой места не
+    // сохраняется — считаться будет формула.
+    const input = Object.fromEntries(
+      Object.entries(args.input).filter(([fieldId]) => !formulaBound.has(fieldId)),
+    );
     const candidates = await this.defaults.resolve(
       definitions.filter((definition) => !formulaBound.has(definition.id)),
       args.authorId,
@@ -93,9 +99,9 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
       );
     }
 
-    const issues = await this.validator.validate(definitions, args.input, tx, args.actor);
+    const issues = await this.validator.validate(definitions, input, tx, args.actor);
     if (issues.length > 0) throw invalidValues(issues);
-    return { ...cleanDefaults, ...args.input };
+    return { ...cleanDefaults, ...input };
   }
 
   async prepareUpdate(

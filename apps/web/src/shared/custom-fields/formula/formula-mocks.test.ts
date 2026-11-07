@@ -151,17 +151,17 @@ describe('формула типа «Комплект» (#632)', () => {
     expect(task.customFields).toEqual(before);
   });
 
-  it('вписанное значение подавляет формулу типа (origin value)', () => {
+  it('хранимое значение не подавляет формулу типа (#660): считается формула', () => {
     const task = komplektTask();
     task.customFields = { ...task.customFields, [fieldIds.komplektCipher]: 'КЖ-1 вручную' };
     const computed = compute(task);
-    expect(computed.customFieldFormulas[fieldIds.komplektCipher]).toEqual({ origin: 'value' });
-    expect(computed.customFields[fieldIds.komplektCipher]).toBe('КЖ-1 вручную');
+    expect(computed.customFieldFormulas[fieldIds.komplektCipher]).toEqual({ origin: 'type' });
+    expect(computed.customFields[fieldIds.komplektCipher]).not.toBe('КЖ-1 вручную');
   });
 });
 
 describe('своя формула ячейки (#632)', () => {
-  it('PUT материализует значение и запоминает AST, DELETE оставляет снимок', () => {
+  it('PUT материализует значение, DELETE очищает значение (#660)', () => {
     const task = komplektTask();
     const saved = saveOwnFormula('task', task.id, fieldIds.komplektCipher, cipherAst);
     expect(saved.ok).toBe(true);
@@ -171,9 +171,9 @@ describe('своя формула ячейки (#632)', () => {
 
     expect(removeOwnFormula('task', task.id, fieldIds.komplektCipher)).toBe(true);
     expect(readOwnFormula('task', task.id, fieldIds.komplektCipher)).toBeNull();
-    // Снимок значения остался — формула типа снова подавлена значением (Р5).
-    expect(task.customFields[fieldIds.komplektCipher]).toBe('ручной шифр');
-    expect(compute(task).customFieldFormulas[fieldIds.komplektCipher]).toEqual({ origin: 'value' });
+    // Значение очищено вместе с формулой — действует формула типа (#660).
+    expect(task.customFields[fieldIds.komplektCipher]).toBeUndefined();
+    expect(compute(task).customFieldFormulas[fieldIds.komplektCipher]).toEqual({ origin: 'type' });
   });
 
   it('ошибка вычисления сохраняется, не блокирует и обнуляет значение (Р13)', () => {

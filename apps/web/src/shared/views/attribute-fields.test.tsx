@@ -230,21 +230,15 @@ describe('формульное состояние ячейки атрибута 
     cleanup();
   });
 
-  it('формула типа — тоже fx (тихой пометкой), вписанное значение — без пометки', () => {
+  it('формула типа — fx тихой пометкой с цепочкой наследования', () => {
     render(
       <span>
         {attributeRenderCell(taskAttribute, 'АР-1', new Map(), { formula: { origin: 'type' } })}
       </span>,
     );
-    expect(screen.getByText('fx').getAttribute('title')).toBe('Формула типа');
-    cleanup();
-
-    render(
-      <span>
-        {attributeRenderCell(taskAttribute, 'АР-1', new Map(), { formula: { origin: 'value' } })}
-      </span>,
+    expect(screen.getByText('fx').getAttribute('title')).toBe(
+      'Формула типа — наследованная, правится в «Атрибутах»',
     );
-    expect(screen.queryByText('fx')).toBeNull();
     cleanup();
   });
 

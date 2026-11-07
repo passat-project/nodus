@@ -34,8 +34,8 @@ export async function buildUpdatePatch(
     profiles: UserProfileReader;
     types: ProjectTypesRepository;
     customFields: CustomFieldRegistry;
-    /** Снятие формулы ячейки при обычной записи значения (Р5 #632). */
-    formulaCells: Pick<FormulaCells, 'release'>;
+    /** Проверка формульной блокировки ячейки при записи значения (#660). */
+    formulaCells: Pick<FormulaCells, 'lockedFieldIds'>;
   },
   user: AuthUser,
   row: ProjectRow,
@@ -124,16 +124,25 @@ export async function buildUpdatePatch(
       },
       tx,
     );
-    // Вписанное значение снимает формулу ячейки в той же tx (Р5 #632):
-    // «зафиксировать» = вписать руками, «как у типа» = очистить значение.
-    // Только реально изменённые ключи — Enter без правки формулу не отменяет.
+    // Формульная ячейка руками не пишется (решение владельца по #660):
+    // значение в атрибут со своей формулой или формулой типа — 422.
+    // Только реально изменённые ключи: повтор того же значения ошибкой
+    // не становится.
     if (tx && prepared.changes.length > 0) {
-      await ctx.formulaCells.release(
+      const locked = await ctx.formulaCells.lockedFieldIds(
         tx,
         'project',
         row.id,
         prepared.changes.map((change) => change.fieldId),
       );
+      if (locked.size > 0) {
+        throw new DomainException(
+          ErrorCode.FORMULA_CELL_LOCKED,
+          'Formula cell value is computed by its formula',
+          { fields: [...locked] },
+          422,
+        );
+      }
     }
     const cleared = clearedProjectFields(
       form.fields.filter((slot) => slot.state === 'required').map((slot) => slot.fieldId),

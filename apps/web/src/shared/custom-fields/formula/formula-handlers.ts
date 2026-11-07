@@ -84,7 +84,7 @@ function hostFormulaHandlers(opts: {
       return HttpResponse.json({ ast: parsed.data.ast });
     }),
 
-    // Снятие формулы: значение-снимок остаётся (Р5), ответ без тела.
+    // Снятие формулы: вычисленное значение очищается (#660), ответ без тела.
     http.delete(opts.path, ({ params }) => {
       const target = resolve(params);
       if (target instanceof Response) return target;

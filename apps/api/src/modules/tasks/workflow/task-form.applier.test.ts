@@ -46,6 +46,7 @@ function setup(overrides: Record<string, unknown> = {}) {
     revisions as never,
     messages as never,
     { assertMembersAllowed: vi.fn() } as never,
+    { lockedFieldIds: vi.fn(async () => new Set<string>()) } as never,
   );
   return { applier, tasks, writer, time, revisions, messages };
 }

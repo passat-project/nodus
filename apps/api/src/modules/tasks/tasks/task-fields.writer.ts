@@ -178,17 +178,24 @@ export class TaskFieldsWriter {
         tx,
       );
       fieldChanges = prepared.changes;
-      // Вписанное значение снимает формулу ячейки в той же tx (Р5 #632):
-      // «зафиксировать» = вписать руками, «как у типа» = очистить значение.
-      // Снимаем только РЕАЛЬНО изменённые ключи: Enter без правки (и повтор
-      // того же значения из окна) формулу не отменяет.
+      // Формульная ячейка руками не пишется (решение владельца по #660):
+      // значение в атрибут со своей формулой или формулой типа — 422, формула
+      // не «заменяется» значением. Пишет только формула (formulaWrite).
       if (!opts.formulaWrite && prepared.changes.length > 0) {
-        await this.formulaCells.release(
+        const locked = await this.formulaCells.lockedFieldIds(
           tx,
           'task',
           row.id,
           prepared.changes.map((change) => change.fieldId),
         );
+        if (locked.size > 0) {
+          throw new DomainException(
+            ErrorCode.FORMULA_CELL_LOCKED,
+            'Formula cell value is computed by its formula',
+            { fields: [...locked] },
+            422,
+          );
+        }
       }
       if (prepared.changes.length > 0) data.customFields = prepared.next;
     }

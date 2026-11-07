@@ -23,7 +23,7 @@ import { demoStages } from '../../../../shared/mocks/data/task-stages.js';
 import { findDemoNodeRow } from '../../../../shared/mocks/data/project-nodes.js';
 import { userRef } from '../../../../shared/mocks/data/users.js';
 import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
-import { removeOwnFormula } from '../../../../shared/custom-fields/formula/formula-mocks.js';
+import { lockedMockFieldIds } from '../../../../shared/custom-fields/formula/formula-mocks.js';
 import { taskDetailWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
 import { checkClearedRequired, checkUnboundValues, typeOfTask } from './task-create-policy.js';
 import { tasksChecklistHandlers } from './tasks-checklist-handlers.js';
@@ -225,10 +225,21 @@ export const tasksHandlers = [
             { status: 422 },
           );
         }
-        // Ручная правка ячейки снимает свою формулу (Р5) — до записи значения:
-        // значение важнее, формула типа остаётся кнопкой «Как у типа».
-        for (const fieldId of Object.keys(body.customFields)) {
-          removeOwnFormula('task', task.id, fieldId);
+        // Формульная ячейка руками не пишется (#660): значение в атрибут со
+        // своей формулой или формулой типа — 422, как на реальном сервере.
+        const changedMock = Object.keys(body.customFields).filter(
+          (fieldId) => task.customFields?.[fieldId] !== next[fieldId],
+        );
+        const lockedMock = lockedMockFieldIds('task', task.id, changedMock);
+        if (lockedMock.size > 0) {
+          return HttpResponse.json(
+            {
+              code: 'FORMULA_CELL_LOCKED',
+              message: 'Formula cell value is computed by its formula',
+              details: { fields: [...lockedMock] },
+            },
+            { status: 422 },
+          );
         }
         task.customFields = next;
       }

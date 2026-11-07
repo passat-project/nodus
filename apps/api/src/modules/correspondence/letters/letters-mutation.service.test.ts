@@ -65,7 +65,7 @@ function setup(letter: LetterDetailRow) {
     detail: vi.fn(async () => ({ id: LETTER })),
   };
   const validator = { patch: vi.fn(async () => ({ data: {}, changes: [] })) };
-  const fields = { releaseFormulas: vi.fn(async () => void 0) };
+  const fields = { lockedFieldIds: vi.fn(async () => new Set<string>()) };
   const letterFormulas = { recalcAfterValuesChange: vi.fn(async () => void 0) };
   const eventBus = { emit: vi.fn(async () => void 0) };
   const profiles = { filterActiveUserIds: vi.fn(async (ids: string[]) => ids) };
@@ -128,17 +128,19 @@ describe('правка реквизитов (редизайн #56 — карто
     expect(validator.patch).toHaveBeenCalled();
   });
 
-  it('вписанное значение снимает формулу ячейки в той же tx (#632, Р5)', async () => {
+  it('значение в формульную ячейку — 422 FORMULA_CELL_LOCKED (#660)', async () => {
     const { service, fields } = setup(row(null));
     const fieldId = '00000000-0000-4000-8000-000000000420';
-    await service.update(REGISTRAR, LETTER, { customFields: { [fieldId]: 'руками' } });
-    expect(fields.releaseFormulas).toHaveBeenCalledWith(expect.anything(), LETTER, [fieldId]);
+    fields.lockedFieldIds.mockResolvedValueOnce(new Set([fieldId]));
+    await expect(
+      service.update(REGISTRAR, LETTER, { customFields: { [fieldId]: 'руками' } }),
+    ).rejects.toMatchObject({ code: 'FORMULA_CELL_LOCKED' });
   });
 
-  it('правка без атрибутов формулу не трогает', async () => {
+  it('правка без атрибутов блокировку не проверяет', async () => {
     const { service, fields } = setup(row(null));
     await service.update(REGISTRAR, LETTER, { subject: 'Оферт' });
-    expect(fields.releaseFormulas).toHaveBeenCalledWith(expect.anything(), LETTER, []);
+    expect(fields.lockedFieldIds).not.toHaveBeenCalled();
   });
 });
 

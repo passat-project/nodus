@@ -85,12 +85,18 @@ export class LetterFormulaService {
     });
   }
 
-  /** Снять формулу: последнее значение остаётся снимком (Р5). */
+  /** Снять формулу (#660): вычисленное значение очищается — ячейка пуста
+   *  или под формулой типа; «снимок» больше не остаётся. */
   async remove(user: AuthUser, letterId: string, fieldId: string): Promise<void> {
     await this.requireEdit(user, letterId);
     await this.txRunner.run(async (tx) => {
       await this.repo.lock(tx, letterId);
       await this.cells.remove(tx, { hostKind: 'letter', hostId: letterId, fieldId });
+      await this.fields.applyFormulaValues(tx, {
+        letterId,
+        values: { [fieldId]: null },
+        actorId: user.id,
+      });
       await this.emitChanged(tx, user.id, letterId, fieldId, false);
     });
   }

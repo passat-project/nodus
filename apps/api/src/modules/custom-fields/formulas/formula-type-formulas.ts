@@ -9,8 +9,9 @@ import type { FormulaContextCache, FormulaContextService } from './formula-conte
 import type { FormulaRegistrySnapshot } from './formula-meta.service.js';
 import type { FormulaValuesService } from './formula-values.service.js';
 
-/** Формулы типа/вида на чтении (#632, Р6): считаются для записей без своего
- *  значения и своей формулы; значения в БД не материализуются. */
+/** Формулы типа/вида на чтении (#632, Р6): считаются для записей без своей
+ *  формулы (значение больше не подавляет — ячейка с формулой руками не
+ *  пишется, решение владельца по #660); значения в БД не материализуются. */
 export async function applyTypeFormulas(args: {
   hostKind: FormulaHostKind;
   hostIds: readonly string[];
@@ -54,19 +55,12 @@ export async function applyTypeFormulas(args: {
     const slots = snapshot.bindingFormulas.get(host.placeId) ?? [];
     if (slots.length === 0) continue;
     const own = new Set(ownByHost.get(hostId) ?? []);
+    // Своя формула ячейки сильнее формулы типа (Р1); значения-подавления нет —
+    // формульная ячейка руками не пишется (решение владельца по #660).
     const pending = slots.filter((slot) => !own.has(slot.definitionId));
     if (pending.length === 0) continue;
     const state = result.get(hostId) ?? { values: {}, formulas: {} };
-    const evaluate = pending.filter((slot) => host.values[slot.definitionId] === undefined);
-    for (const slot of pending) {
-      if (host.values[slot.definitionId] !== undefined) {
-        state.formulas[slot.definitionId] = { origin: 'value' };
-      }
-    }
-    if (evaluate.length === 0) {
-      result.set(hostId, state);
-      continue;
-    }
+    const evaluate = pending;
     const ctx = await context.build(
       { hostKind, hostId, asts: evaluate.map((slot) => slot.ast), snapshot },
       tx,

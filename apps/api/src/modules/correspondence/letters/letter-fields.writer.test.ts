@@ -42,7 +42,7 @@ function setup(letter: LetterDetailRow = row(), prepared?: { next: object; chang
         prepared ?? { next: { [FIELD]: 42 }, changes: [{ fieldId: FIELD, from: null, to: 42 }] },
     ),
   };
-  const formulaCells = { release: vi.fn(async () => void 0) };
+  const formulaCells = { lockedFieldIds: vi.fn(async () => void 0) };
   const writer = new LetterFieldsWriter(
     repo as never,
     eventBus as never,
@@ -52,17 +52,17 @@ function setup(letter: LetterDetailRow = row(), prepared?: { next: object; chang
   return { writer, repo, eventBus, registry, formulaCells };
 }
 
-describe('LetterFieldsWriter: ручная запись снимает формулу (Р5)', () => {
-  it('release зовётся с видом хоста letter и ключами патча', async () => {
+describe('LetterFieldsWriter: формульная блокировка ячейки (#660)', () => {
+  it('lockedFieldIds зовётся с видом хоста letter и ключами патча', async () => {
     const { writer, formulaCells } = setup();
-    await writer.releaseFormulas({} as never, LETTER, [FIELD]);
-    expect(formulaCells.release).toHaveBeenCalledWith({}, 'letter', LETTER, [FIELD]);
+    await writer.lockedFieldIds({} as never, LETTER, [FIELD]);
+    expect(formulaCells.lockedFieldIds).toHaveBeenCalledWith({}, 'letter', LETTER, [FIELD]);
   });
 
-  it('пустой список ключей репозиторий ячеек не дёргает', async () => {
+  it('пустой список ключей порт ячеек не дёргает', async () => {
     const { writer, formulaCells } = setup();
-    await writer.releaseFormulas({} as never, LETTER, []);
-    expect(formulaCells.release).not.toHaveBeenCalled();
+    await writer.lockedFieldIds({} as never, LETTER, []);
+    expect(formulaCells.lockedFieldIds).not.toHaveBeenCalled();
   });
 });
 

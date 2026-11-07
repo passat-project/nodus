@@ -1,4 +1,4 @@
-import { CircleAlert } from 'lucide-react';
+import { CircleAlert, Link2 } from 'lucide-react';
 import type {
   CustomFieldDefinition,
   CustomFieldFormulaInfo,
@@ -176,9 +176,9 @@ export function attributeRefs(entity: object): ReadonlyMap<string, CustomFieldRe
   return refsById((entity as AttributeCarrier).customFieldRefs ?? []);
 }
 
-/** Формульное состояние ячейки сущности (#632): своя/типовая формула или
- *  значение, подавившее формулу типа, и ошибка вычисления. Приезжает в DTO
- *  (`customFieldFormulas`); нет записи — ячейка не формульная. */
+/** Формульное состояние ячейки сущности (#632): своя/типовая формула и
+ *  ошибка вычисления. Приезжает в DTO (`customFieldFormulas`); нет записи —
+ *  ячейка не формульная. */
 export function attributeFormula(
   entity: object,
   definition: Pick<CustomFieldDefinition, 'id'>,
@@ -188,23 +188,28 @@ export function attributeFormula(
 
 /** Значок формулы и бейдж ошибки в ячейке вида (#632, §4c): та же
  *  грамматика, что у `FormulaCell` в карточке — «fx» слева от значения
- *  (тихая у формулы типа, info у своей) и красный «!» с подсказкой. В
- *  строке таблицы это пометки, а не кнопки: правка формулы живёт в карточке,
- *  клик по строке открывает её (вложенный интерактив сломал бы строку). */
+ *  (тихая у формулы типа — с цепочкой наследования, info у своей) и красный
+ *  «!» с подсказкой. В строке таблицы это пометки, а не кнопки: правка
+ *  формулы живёт в карточке, клик по строке открывает её (вложенный
+ *  интерактив сломал бы строку). */
 function AttributeFormulaMarks({ info }: { info: CustomFieldFormulaInfo }) {
   const own = info.origin === 'own';
+  const typeOrigin = info.origin === 'type';
   return (
     <>
-      {own || info.origin === 'type' ? (
+      {own || typeOrigin ? (
         <span
           title={own ? ui.formulas.cell.own : ui.formulas.cell.type}
           aria-label={ui.formulas.cell.fx}
           className={cn(
-            '-ml-0.5 flex h-5 shrink-0 items-center font-mono text-label-xs font-medium',
+            '-ml-0.5 flex h-5 shrink-0 items-center gap-0.5 font-mono text-label-xs font-medium',
             own ? 'text-info/70' : 'text-muted-foreground/70',
           )}
         >
           fx
+          {typeOrigin ? (
+            <Link2 className="size-3" strokeWidth={1.75} aria-label={ui.formulas.cell.inherited} />
+          ) : null}
         </span>
       ) : null}
       {info.error ? (

@@ -97,8 +97,7 @@ export class FormulaCellsService implements FormulaCells {
     if (!host) throw DomainException.notFound('Formula host not found');
     const formula = host.placeFormula(fieldId);
     if (!formula) return { ast: null, origin: null };
-    const hasValue = host.host.values[fieldId] !== undefined;
-    return { ast: formula, origin: hasValue ? 'value' : 'type' };
+    return { ast: formula, origin: 'type' };
   }
 
   async save(tx: TransactionClient, args: FormulaSaveArgs): Promise<FormulaComputation> {
@@ -153,13 +152,37 @@ export class FormulaCellsService implements FormulaCells {
     await this.repo.remove(tx, args.hostKind, args.hostId, args.fieldId);
   }
 
-  async release(
+  async lockedFieldIds(
     tx: TransactionClient,
     hostKind: FormulaHostKind,
     hostId: string,
     fieldIds: readonly string[],
-  ): Promise<void> {
-    await this.repo.removeMany(tx, hostKind, hostId, fieldIds);
+  ): Promise<Set<string>> {
+    const result = new Set<string>();
+    if (fieldIds.length === 0) return result;
+    const own = new Set(
+      (await this.repo.listByHost(hostKind, hostId, tx)).map((cell) => cell.fieldId),
+    );
+    const snapshot = await this.meta.snapshot(tx);
+    // Место хоста нужно только когда на портале есть формулы привязок.
+    let placeId: string | null = null;
+    if (snapshot.bindingFormulas.size > 0) {
+      const host = await this.context.record(hostKind, hostId, undefined, tx, createFormulaCache());
+      placeId = host?.placeId ?? null;
+    }
+    for (const fieldId of fieldIds) {
+      if (own.has(fieldId)) {
+        result.add(fieldId);
+        continue;
+      }
+      if (!placeId) continue;
+      if (
+        (snapshot.bindingFormulas.get(placeId) ?? []).some((slot) => slot.definitionId === fieldId)
+      ) {
+        result.add(fieldId);
+      }
+    }
+    return result;
   }
 
   dependentCellsByValues(

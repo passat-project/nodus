@@ -115,20 +115,23 @@ export interface FormulaCells {
    *  блокирует (Р13). */
   save(tx: TransactionClient, args: FormulaSaveArgs): Promise<FormulaComputation>;
 
-  /** Снять формулу: последнее значение остаётся снимком (Р5). */
+  /** Снять формулу (значение ячейки очищает вызывающий: своя формула —
+   *  способ заполнения, без неё ячейка пуста или под формулой типа, #660). */
   remove(
     tx: TransactionClient,
     args: { hostKind: FormulaHostKind; hostId: string; fieldId: string },
   ): Promise<void>;
 
-  /** Запись значения руками снимает формулу ячейки в той же tx (Р5).
-   *  Зовётся точками записи значений владельцев. */
-  release(
+  /** Формульно-заблокированные ключи среди fieldIds (#632, #660): у атрибута
+   *  есть своя формула или формула привязки места — значение пишет только
+   *  формула, ручная запись запрещена (422 FORMULA_CELL_LOCKED). Зовётся
+   *  точками записи значений владельцев. */
+  lockedFieldIds(
     tx: TransactionClient,
     hostKind: FormulaHostKind,
     hostId: string,
     fieldIds: readonly string[],
-  ): Promise<void>;
+  ): Promise<Set<string>>;
 
   /** Ячейки, зависящие от значений конкретных атрибутов записи (Р4):
    *  dep_key `v:<kind>:<uuid>:<number>`. */

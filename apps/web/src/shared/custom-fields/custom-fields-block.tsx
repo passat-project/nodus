@@ -119,7 +119,6 @@ export function CustomFieldsBlock({
                   value={values[definition.id]}
                   refs={refs}
                   canEdit={canEdit}
-                  onChange={onChange}
                   ownDefinitions={definitions}
                 >
                   <CustomFieldEditor

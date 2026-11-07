@@ -101,11 +101,22 @@ export class TaskFormulaService {
     });
   }
 
-  /** Снять формулу: последнее значение остаётся снимком (Р5). */
+  /** Снять формулу (#660): вычисленное формулой значение очищается — ячейка
+   *  пуста или под формулой типа/вида («снимок» больше не остаётся:
+   *  иначе он подавлял бы формулу типа, а без неё висел бы значением
+   *  без источника). */
   async remove(user: AuthUser, taskId: string, fieldId: string): Promise<void> {
-    await this.requireEdit(user, taskId);
+    const row = await this.requireEdit(user, taskId);
     await this.txRunner.run(async (tx) => {
       await this.cells.remove(tx, { hostKind: 'task', hostId: taskId, fieldId });
+      await this.writer.apply(
+        tx,
+        user,
+        row,
+        { customFields: { [fieldId]: null } },
+        ['customFields'],
+        { formulaWrite: true },
+      );
       await this.emitChanged(tx, user.id, taskId, fieldId, false);
     });
   }
