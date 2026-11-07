@@ -2,7 +2,9 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { CustomFieldDefinition, CustomFieldRef, LetterListItem } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 
+import { useAuthStore } from '../auth-store.js';
 import type { AttributeRow } from '../custom-fields/attribute-carrier.js';
 
 import { isResponseOverdue, makeLetterTableFields, theirReference } from './letter-table-fields.js';
@@ -202,5 +204,81 @@ describe('makeLetterTableFields: атрибутные колонки (#632, Р9)
     expect(fields.filter((f) => f.group === 'attributes')).toHaveLength(1);
     // Тип письма-носителя демо-атрибута — категория «письмо» (фильтр Р9).
     expect(letterType.category).toBe('letter');
+  });
+});
+
+describe('makeLetterTableFields: системные колонки (#632, Р9)', () => {
+  const fieldOf = (id: string) => makeLetterTableFields().find((field) => field.id === id)!;
+  const textOf = (id: string, letter: AttributeRow<LetterListItem>) =>
+    render(fieldOf(id).render(letter)).container.textContent;
+
+  it('регномер моно; без номера — «без номера»; дата регистрации — датой или тире', () => {
+    expect(textOf('regNumber', letterOf())).toBe('Вх-2026/118');
+    expect(textOf('regNumber', letterOf({ regNumber: null }))).toBe(ui.letters.noNumber);
+    expect(textOf('regDate', letterOf())).toBe('01.11.2026');
+  });
+
+  it('отправитель: почта с именем, без адреса почты — «вручную»', () => {
+    expect(textOf('sender', letterOf())).toBe('ОАО «Стройпроект»');
+    expect(textOf('sender', letterOf({ source: 'manual' }))).toBe(ui.letters.pipeline.senderManual);
+  });
+
+  it('корреспондент и способ поступления: имя или тире', () => {
+    expect(textOf('counterparty', letterOf())).toBe('—');
+    expect(
+      textOf('counterparty', letterOf({ counterparty: { id: REF_ID, name: 'ОАО «Пример»' } })),
+    ).toBe('ОАО «Пример»');
+    expect(
+      textOf('receiptMethod', letterOf({ receiptMethod: { id: REF_ID, name: 'Курьер' } })),
+    ).toBe('Курьер');
+  });
+
+  it('тема: замок у конфиденциального, точка и полужирная у непрочитанного «нового»', () => {
+    const fields = makeLetterTableFields({ box: 'new' });
+    const subject = fields.find((field) => field.id === 'subject')!;
+    const unread = subject.render(letterOf({ viewed: false }));
+    expect(render(unread).container.textContent).toContain('О согласовании АР');
+    expect(render(unread).container.querySelector('span.bg-info')).not.toBeNull();
+    const confidential = subject.render(letterOf({ confidential: true }));
+    expect(render(confidential).container.querySelector('svg[aria-label]')).not.toBeNull();
+    expect(textOf('subject', letterOf({ subject: null }))).toBe(ui.letters.noSubject);
+  });
+
+  it('реквизиты корреспондента: «№ от дата», адресат, стадия, срок, файлы', () => {
+    expect(textOf('theirNumber', letterOf())).toContain('01-12/345');
+    expect(textOf('theirNumber', letterOf({ theirNumber: null, theirDate: null }))).toBe('—');
+    expect(
+      textOf('addressee', letterOf({ addressee: { id: REF_ID, displayName: 'Иванов И.' } })),
+    ).toContain('Иванов И.');
+    expect(textOf('stage', letterOf())).toBe('Зарегистрировано');
+    expect(textOf('responseDeadline', letterOf({ responseDeadline: '2026-11-05' }))).not.toBe('');
+    expect(textOf('files', letterOf({ attachmentCount: 3 }))).toBe('3');
+    expect(textOf('files', letterOf())).toBe('—');
+    expect(textOf('receivedAt', letterOf())).toContain('2026');
+  });
+
+  it('колонка «Проект» — только когда проекты доступны: шифр и название', () => {
+    useAuthStore.setState({
+      status: 'authenticated',
+      accessToken: null,
+      user: {
+        id: 'u1',
+        email: 'user@nodus.by',
+        displayName: 'Пользователь',
+        permissions: [],
+        modules: ['projects'],
+      } as never,
+    });
+    const withProject = makeLetterTableFields().find((field) => field.id === 'project');
+    expect(withProject).toBeDefined();
+    const cell = withProject!.render(
+      letterOf({
+        project: { id: REF_ID, name: 'Школа', code: 'ШК-1', color: 'blue' } as never,
+      }),
+    );
+    expect(render(cell).container.textContent).toContain('ШК-1');
+    expect(render(cell).container.textContent).toContain('Школа');
+    useAuthStore.setState({ status: 'anonymous', accessToken: null, user: null });
+    expect(makeLetterTableFields().some((field) => field.id === 'project')).toBe(false);
   });
 });

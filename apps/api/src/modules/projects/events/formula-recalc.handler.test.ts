@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  ProjectFormulaRecalcHandler,
+  ProjectNodeCreatedFormulaHandler,
+  ProjectNodeDeletedFormulaHandler,
   ProjectNodeFormulaRecalcHandler,
+  ProjectNodeKindFormulaHandler,
+  ProjectStructureFormulaRecalcHandler,
   ProjectTypeFormulaHandler,
 } from './formula-recalc.handler.js';
 
@@ -115,5 +120,187 @@ describe('ProjectTypeFormulaHandler: project.type_changed (#632, A2-3)', () => {
     );
     expect(txRunner.run).toHaveBeenCalledTimes(2);
     expect(formulas.recalcProjectCells).toHaveBeenCalledTimes(150);
+  });
+});
+
+function cellsStub(
+  over: {
+    number?: number | null;
+    depth?: number | null;
+    refs?: { hostKind: string; hostId: string }[];
+    prefixRefs?: { hostKind: string; hostId: string }[];
+  } = {},
+) {
+  return {
+    numberByDefinitionId: vi.fn(async () => over.number ?? null),
+    depthOf: vi.fn(async () => over.depth ?? 1),
+    dependentCellsByDepKey: vi.fn(async () => over.refs ?? []),
+    dependentCellsByDepPrefix: vi.fn(async () => over.prefixRefs ?? []),
+    cleanupHost: vi.fn(async () => undefined),
+  };
+}
+
+describe('ProjectFormulaRecalcHandler: project.updated (#632, Р4)', () => {
+  it('правка атрибута — свои ячейки по номеру с глубиной источника', async () => {
+    const formulas = { recalcProjectCells: vi.fn(), recalcNodes: vi.fn() };
+    const cells = cellsStub({ number: 12, depth: 2 });
+    await new ProjectFormulaRecalcHandler(
+      { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
+      formulas as never,
+      cells as never,
+      logger() as never,
+    ).handle(event('project.updated', { projectId: PROJECT, fields: [`cf.${FIELD}`, 'name'] }));
+    expect(formulas.recalcProjectCells).toHaveBeenCalledWith({}, null, PROJECT, [12], 3);
+  });
+
+  it('без атрибутов — глубина 1; потребители-папки пачкой, дедупликация', async () => {
+    const formulas = { recalcProjectCells: vi.fn(), recalcNodes: vi.fn() };
+    const cells = cellsStub({
+      refs: [
+        { hostKind: 'node', hostId: OTHER_NODE },
+        { hostKind: 'node', hostId: OTHER_NODE },
+      ],
+    });
+    await new ProjectFormulaRecalcHandler(
+      { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
+      formulas as never,
+      cells as never,
+      logger() as never,
+    ).handle(event('project.updated', { projectId: PROJECT, fields: ['name'] }));
+    expect(formulas.recalcProjectCells).toHaveBeenCalledWith({}, null, PROJECT, [], 1);
+    expect(formulas.recalcNodes).toHaveBeenCalledWith({}, null, PROJECT, [OTHER_NODE], 1);
+  });
+});
+
+describe('ProjectStructureFormulaRecalcHandler: node_moved (#632, Р4)', () => {
+  it('корни волны — узел и родители; null-родители отсеяны', async () => {
+    const formulas = { recalcStructure: vi.fn() };
+    await new ProjectStructureFormulaRecalcHandler(
+      { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
+      formulas as never,
+      logger() as never,
+    ).handle(
+      event('project.node_moved', {
+        projectId: PROJECT,
+        nodeId: NODE,
+        parentId: OTHER_PROJECT,
+        previousParentId: null,
+      }),
+    );
+    expect(formulas.recalcStructure).toHaveBeenCalledWith(
+      {},
+      null,
+      PROJECT,
+      [NODE, OTHER_PROJECT],
+      1,
+    );
+  });
+});
+
+describe('ProjectNodeCreatedFormulaHandler (#632, Р4)', () => {
+  const created = {
+    projectId: PROJECT,
+    nodeId: NODE,
+    parentId: null,
+    kindId: TYPE,
+    name: 'Здание',
+  };
+
+  it('потребители дерева — пересчитаны; пустая выборка — тишина', async () => {
+    const formulas = { recalcNodes: vi.fn() };
+    const cells = cellsStub({ refs: [{ hostKind: 'node', hostId: OTHER_NODE }] });
+    await new ProjectNodeCreatedFormulaHandler(
+      { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
+      formulas as never,
+      cells as never,
+      logger() as never,
+    ).handle(event('project.node_created', created));
+    expect(formulas.recalcNodes).toHaveBeenCalledWith({}, null, PROJECT, [OTHER_NODE], 1);
+    const quiet = { recalcNodes: vi.fn() };
+    await new ProjectNodeCreatedFormulaHandler(
+      { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
+      quiet as never,
+      cellsStub() as never,
+      logger() as never,
+    ).handle(event('project.node_created', created));
+    expect(quiet.recalcNodes).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProjectNodeDeletedFormulaHandler (#632, Р4/Р13)', () => {
+  it('уборка ячеек, волна от родителя, зависимые по ссылке, проект', async () => {
+    const formulas = {
+      recalcStructure: vi.fn(),
+      recalcNodes: vi.fn(),
+      recalcProjectCells: vi.fn(),
+    };
+    const cells = cellsStub({
+      refs: [{ hostKind: 'node', hostId: OTHER_NODE }],
+      prefixRefs: [{ hostKind: 'node', hostId: OTHER_NODE }],
+    });
+    await new ProjectNodeDeletedFormulaHandler(
+      { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
+      formulas as never,
+      cells as never,
+      logger() as never,
+    ).handle(
+      event('project.node_deleted', { projectId: PROJECT, nodeId: NODE, parentId: OTHER_NODE }),
+    );
+    expect(cells.cleanupHost).toHaveBeenCalledWith({}, 'node', NODE);
+    expect(formulas.recalcStructure).toHaveBeenCalledWith({}, null, PROJECT, [OTHER_NODE], 1);
+    expect(cells.dependentCellsByDepPrefix).toHaveBeenCalledWith(`v:node:${NODE}:`, {});
+    // Дедупликация по обоим ключам — один пересчёт.
+    expect(formulas.recalcNodes).toHaveBeenCalledTimes(1);
+    expect(formulas.recalcProjectCells).toHaveBeenCalledWith({}, null, PROJECT, [], 1);
+  });
+
+  it('без родителя и зависимых — пустые корни, папки не трогаем', async () => {
+    const formulas = {
+      recalcStructure: vi.fn(),
+      recalcNodes: vi.fn(),
+      recalcProjectCells: vi.fn(),
+    };
+    const cells = cellsStub({});
+    await new ProjectNodeDeletedFormulaHandler(
+      { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
+      formulas as never,
+      cells as never,
+      logger() as never,
+    ).handle(event('project.node_deleted', { projectId: PROJECT, nodeId: NODE, parentId: null }));
+    expect(formulas.recalcStructure).toHaveBeenCalledWith({}, null, PROJECT, [], 1);
+    expect(formulas.recalcNodes).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProjectNodeKindFormulaHandler (#632, Р4)', () => {
+  it('смена вида — папки этого вида по проектам; created и пустой вид — тишина', async () => {
+    const formulas = { recalcNodes: vi.fn() };
+    const nodes = {
+      listByKind: vi.fn(async () => [
+        { id: NODE, projectId: PROJECT },
+        { id: OTHER_NODE, projectId: PROJECT },
+      ]),
+    };
+    await new ProjectNodeKindFormulaHandler(
+      { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
+      formulas as never,
+      nodes as never,
+      logger() as never,
+    ).handle(
+      event('project.node_kind_changed', { kindId: TYPE, change: 'updated', fields: ['form'] }),
+    );
+    expect(formulas.recalcNodes).toHaveBeenCalledWith({}, null, PROJECT, [NODE, OTHER_NODE], 1);
+
+    const quiet = { recalcNodes: vi.fn() };
+    const empty = { listByKind: vi.fn(async () => []) };
+    await new ProjectNodeKindFormulaHandler(
+      { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
+      quiet as never,
+      empty as never,
+      logger() as never,
+    ).handle(
+      event('project.node_kind_changed', { kindId: TYPE, change: 'created', fields: ['form'] }),
+    );
+    expect(quiet.recalcNodes).not.toHaveBeenCalled();
   });
 });

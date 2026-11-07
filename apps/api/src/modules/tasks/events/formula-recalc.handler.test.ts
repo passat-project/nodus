@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { TaskFormulaRecalcHandler } from './formula-recalc.handler.js';
+import {
+  TaskFormulaDefinitionHandler,
+  TaskFormulaRecalcHandler,
+} from './formula-recalc.handler.js';
 
 /**
  * #632 (Р4/Р8): `task.updated` пересчитывает свои ячейки задачи (глубина —
@@ -105,5 +108,109 @@ describe('TaskFormulaRecalcHandler: task.updated (#632, Р4)', () => {
     expect(formulas.recalcCells).toHaveBeenCalledWith({}, null, TASK, [], 1, {
       includeActorForOwnHost: true,
     });
+  });
+});
+
+describe('TaskFormulaRecalcHandler: свежесть и смена проекта (security #632)', () => {
+  it('formulaWrite-каскад не добавляет актёра; ручная правка — добавляет', async () => {
+    const own = setup();
+    const handler = new TaskFormulaRecalcHandler(
+      own.txRunner as never,
+      own.formulas as never,
+      own.cells as never,
+      logger() as never,
+    );
+    await handler.handle(
+      event({ formulaWrite: true, customFieldChanges: [{ fieldId: FIELD, from: null, to: 1 }] }),
+    );
+    expect(own.formulas.recalcCells).toHaveBeenCalledWith({}, null, TASK, [7], 3, {
+      includeActorForOwnHost: false,
+    });
+    own.formulas.recalcCells.mockClear();
+    await handler.handle(event({ customFieldChanges: [{ fieldId: FIELD, from: null, to: 1 }] }));
+    expect(own.formulas.recalcCells).toHaveBeenCalledWith({}, null, TASK, [7], 3, {
+      includeActorForOwnHost: true,
+    });
+  });
+
+  it('смена проекта — потребители значений задачи пересчитаны', async () => {
+    const own = setup();
+    own.cells.dependentCellsByDepPrefix = vi.fn(async () => [
+      { cellId: 'c-foreign', hostKind: 'task', hostId: 'foreign-task', fieldId: FIELD },
+      { cellId: 'c-self', hostKind: 'task', hostId: TASK, fieldId: FIELD },
+    ]);
+    own.cells.dependentCellsByDepKey = vi.fn(async () => []);
+    const handler = new TaskFormulaRecalcHandler(
+      own.txRunner as never,
+      own.formulas as never,
+      own.cells as never,
+      logger() as never,
+    );
+    await handler.handle(
+      event({
+        projectId: '63200000-0000-4000-8000-000000000405',
+        previousProjectId: '63200000-0000-4000-8000-000000000406',
+      }),
+    );
+    expect(own.cells.dependentCellsByDepPrefix).toHaveBeenCalledWith(`v:task:${TASK}:`, {});
+    expect(own.formulas.recalcCells).toHaveBeenCalledWith({}, null, 'foreign-task', [], 1);
+  });
+});
+
+describe('TaskFormulaDefinitionHandler (#632, Р13)', () => {
+  const DEF_EVENT = (payload: Record<string, unknown>) => ({
+    id: 'evt-2',
+    type: 'custom_field.definition_changed',
+    actorId: 'user-9',
+    payload,
+    createdAt: '2026-11-07T00:00:00.000Z',
+  });
+
+  function defSetup(refs: { hostKind: string; hostId: string }[] = []) {
+    const formulas = { recalcCells: vi.fn(async () => void 0) };
+    const cells = {
+      dependentCellsByField: vi.fn(async () => refs),
+      dependentCellsByAttrNumber: vi.fn(async () => refs),
+      numberByDefinitionId: vi.fn(async () => 7),
+    };
+    const txRunner = { run: (fn: (tx: unknown) => unknown) => fn({}) };
+    return {
+      formulas,
+      cells,
+      handler: new TaskFormulaDefinitionHandler(
+        txRunner as never,
+        formulas as never,
+        cells as never,
+        logger() as never,
+      ),
+    };
+  }
+
+  it('смена привязок — все ячейки задач атрибута; чужие поля — тишина', async () => {
+    const d = defSetup([
+      { hostKind: 'task', hostId: TASK },
+      { hostKind: 'task', hostId: TASK },
+    ]);
+    await d.handler.handle(
+      DEF_EVENT({ definitionId: FIELD, change: 'updated', fields: ['bindings'] }),
+    );
+    expect(d.formulas.recalcCells).toHaveBeenCalledTimes(1);
+    expect(d.formulas.recalcCells).toHaveBeenCalledWith({}, 'user-9', TASK, [], 1);
+    const quiet = defSetup([]);
+    await quiet.handler.handle(
+      DEF_EVENT({ definitionId: FIELD, change: 'updated', fields: ['hint'] }),
+    );
+    expect(quiet.formulas.recalcCells).not.toHaveBeenCalled();
+  });
+
+  it('удаление — по номеру из payload; номер не найден — тишина', async () => {
+    const d = defSetup([{ hostKind: 'task', hostId: TASK }]);
+    await d.handler.handle(DEF_EVENT({ definitionId: FIELD, change: 'deleted', number: 7 }));
+    expect(d.cells.dependentCellsByAttrNumber).toHaveBeenCalledWith(7);
+    expect(d.formulas.recalcCells).toHaveBeenCalledWith({}, 'user-9', TASK, [7], 1);
+    const noNumber = defSetup([]);
+    noNumber.cells.numberByDefinitionId = vi.fn(async () => null);
+    await noNumber.handler.handle(DEF_EVENT({ definitionId: FIELD, change: 'deleted' }));
+    expect(noNumber.formulas.recalcCells).not.toHaveBeenCalled();
   });
 });
