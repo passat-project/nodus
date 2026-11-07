@@ -171,12 +171,14 @@ export class FormulaValuesService {
 
 /** Вариант справочника по коду (или подписи) — id для хранения (Р13). */
 function itemIdOf(items: readonly DictionaryItemRef[], label: string): string | null {
-  const match = items.find((item) => item.code === label) ?? items.find((item) => item.name === label);
+  const match =
+    items.find((item) => item.code === label) ?? items.find((item) => item.name === label);
   return match?.id ?? null;
 }
 
-/** Типографские «пустые» маркеры старых данных: в формуле это пусто, не текст. */
-const EMPTY_DASHES = new Set(['—', '–', '−']);
+/** Любой «пустой» маркер из дефисов/пробелов (`—`, `–`, `−`, `‐`, `‑` и их
+ *  комбинации): в формуле это пусто, не текст. */
+const EMPTY_DASH = /^[\s\u2010-\u2015\u2212-]+$/;
 
 /** Значение атрибута в языке формул (#632): enum — код варианта, иначе подпись. */
 export function toFormulaValue(
@@ -184,11 +186,14 @@ export function toFormulaValue(
   value: CustomFieldValue,
   items: ReadonlyMap<string, DictionaryItemRef>,
 ): FormulaValue {
+  // Легаси-маркер пустоты в ЛЮБОМ строковом значении (в т.ч. text/long_text):
+  // иначе он попадает в формулы и рисуется «кривым дефисом».
+  if (typeof value === 'string' && EMPTY_DASH.test(value)) return null;
   switch (definition.type) {
     case 'enum': {
       const item = items.get(String(value));
       const text = item ? (item.code ?? item.name) : String(value);
-      return EMPTY_DASHES.has(text) ? null : text;
+      return EMPTY_DASH.test(text) ? null : text;
     }
     case 'multienum': {
       const ids = Array.isArray(value) ? value : [String(value)];
@@ -197,13 +202,13 @@ export function toFormulaValue(
           const item = items.get(id);
           return item ? (item.code ?? item.name) : id;
         })
-        .filter((id) => !EMPTY_DASHES.has(id));
+        .filter((id) => !EMPTY_DASH.test(id));
     }
     case 'users': {
       // Сотрудники — массив id без словарной замены (A1-05): раньше массив
       // уходил в default и превращался в 'id1,id2'.
       const ids = Array.isArray(value) ? value : [String(value)];
-      return ids.filter((id) => !EMPTY_DASHES.has(id));
+      return ids.filter((id) => !EMPTY_DASH.test(id));
     }
     case 'money':
       return value as MoneyValue;
@@ -214,7 +219,7 @@ export function toFormulaValue(
       return typeof value === 'number' ? value : Number(value);
     default: {
       const text = String(value);
-      return EMPTY_DASHES.has(text) ? null : text;
+      return EMPTY_DASH.test(text) ? null : text;
     }
   }
 }

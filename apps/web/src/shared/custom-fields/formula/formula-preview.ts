@@ -59,9 +59,14 @@ export function saveErrorText(error: unknown): string {
 }
 
 /** Значение целиком из дефисов — это старый «пустой» маркер, а не текст. */
-const EMPTY_DASH_VALUE = /^[\s—–−-]+$/;
+const EMPTY_DASH_VALUE = /^[\s\u2010-\u2015\u2212-]+$/;
 /** Висячие разделители по краям: пустой операнд склейки оставлял `--`/`—`. */
-const EDGE_DASHES = /[\s—–−-]+$/;
+const EDGE_DASHES = /[\s\u2010-\u2015\u2212-]+$/;
+
+/** Значение — только дефисы/пробелы (легаси-маркер пустоты). */
+export function isDashOnly(value: unknown): boolean {
+  return typeof value === 'string' && EMPTY_DASH_VALUE.test(value);
+}
 
 /**
  * Формульное значение без пустых маркеров и ВИСЯЧИХ разделителей (Р13).
@@ -90,7 +95,7 @@ export function cleanFormulaText(
   if (EMPTY_DASH_VALUE.test(value)) return null;
   let cleaned = value.replace(EDGE_DASHES, '');
   // Типографский минус перед цифрой — знак числа (`−5`), не разделитель.
-  cleaned = cleaned.replace(/^−(?=\d)/, '-');
+  cleaned = cleaned.replace(/^[\u2212](?=\d)/, '-');
   // `--5` — знак числа, а не разделитель.
   cleaned = cleaned.replace(/^-{2,}(?=\d)/, '-');
   if (!/^-\d/.test(cleaned)) cleaned = cleaned.replace(/^[\s—–−-]+/, '');

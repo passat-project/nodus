@@ -78,6 +78,9 @@ describe('toFormulaValue: значение атрибута → язык фор�
     expect(toFormulaValue({ type: 'bool' }, true, items)).toBe(true);
     expect(toFormulaValue({ type: 'number' }, 7, items)).toBe(7);
     expect(toFormulaValue({ type: 'text' }, 'abc', items)).toBe('abc');
+    // Легаси-маркер пустоты в любом строковом значении — пусто, не дефис.
+    expect(toFormulaValue({ type: 'text' }, '—', items)).toBeNull();
+    expect(toFormulaValue({ type: 'text' }, ' – ', items)).toBeNull();
   });
 
   it('сотрудники — массив id, а не строка «id1,id2» (A1-05)', () => {

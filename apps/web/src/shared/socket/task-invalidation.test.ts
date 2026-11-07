@@ -70,6 +70,16 @@ describe('pushTaskKeys (#311, #317)', () => {
     expect(isFreshFromMutation('t-fresh', Date.now() + 5_000)).toBe(false);
   });
 
+  it('формульная запись перечитывает деталь даже у автора (пересчёт после ответа)', () => {
+    const { batcher, keys } = recordingBatcher();
+    markFreshFromMutation('t-formula');
+    pushTaskKeys(batcher, new QueryClient(), 'task.updated', {
+      taskId: 't-formula',
+      formulaWrite: true,
+    });
+    expect(has(keys, tasksKeys.detail('t-formula'))).toBe(true);
+  });
+
   it('task.relation_changed обновляет список связей своей карточки', () => {
     const { batcher, keys } = recordingBatcher();
     pushTaskKeys(batcher, new QueryClient(), 'task.relation_changed', { taskId: 't1' });

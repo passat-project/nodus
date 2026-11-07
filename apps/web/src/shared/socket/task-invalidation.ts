@@ -121,8 +121,11 @@ export function pushTaskKeys(
     return;
   }
   // Деталь и кнопки, только что записанные из ответа своей мутации, эхо не
-  // перезапрашивает (отклик панели процесса, #378).
-  if (taskId && !isFreshFromMutation(taskId)) {
+  // перезапрашивает (отклик панели процесса, #378). Исключение — формульная
+  // запись: пересчёт зависимых ячеек идёт ПОСЛЕ ответа мутации, поэтому
+  // ответ содержит старые значения и деталь нужно перечитать даже автору.
+  const formulaWrite = payload.formulaWrite === true;
+  if (taskId && (formulaWrite || !isFreshFromMutation(taskId))) {
     batcher.push(tasksKeys.detail(taskId), 'feed');
     batcher.push(tasksKeys.transitions(taskId), 'feed');
   }

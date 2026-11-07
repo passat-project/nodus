@@ -9,6 +9,7 @@ import { linkKindOf, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 import { toast } from 'sonner';
 
+import { isDashOnly } from './formula/formula-preview.js';
 import { openCardViaBridge } from '../lib/card-bridge.js';
 import { stageTone } from '../ui/board/stage-tone.js';
 import { PersonAvatar } from '../ui/person-avatar.js';
@@ -172,7 +173,9 @@ export function CustomFieldValueView({
    *  узкой правой панели. */
   wrap?: boolean;
 }) {
-  const empty = value === undefined || value === null;
+  // Легаси-маркер пустоты (`—`, `–`, `−`, `‐`…) — это пусто, а не дефис:
+  // иначе он рисуется «кривым дефисом» в карточке и колонках.
+  const empty = value === undefined || value === null || isDashOnly(value);
   if (empty) return <span className="text-muted-foreground">{ui.customFields.value.empty}</span>;
 
   const line = cn('min-w-0', compact && 'truncate');

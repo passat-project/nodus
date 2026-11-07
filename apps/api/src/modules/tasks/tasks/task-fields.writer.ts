@@ -225,6 +225,10 @@ export class TaskFieldsWriter {
       TASK_EVENTS.UPDATED,
       {
         ...base,
+        // Формульная запись: клиент обязан перечитать деталь даже у автора
+        // правки — пересчёт идёт ПОСЛЕ ответа мутации, и без этого карточка
+        // держит старое значение до перезагрузки.
+        ...(opts.formulaWrite ? { formulaWrite: true } : {}),
         fields: changedKeys.length > 0 ? [...fields, ...changedKeys] : fields,
         // Обрезка длинного текста и числа изменений — лимит события (Р12).
         ...(fieldChanges.length > 0
