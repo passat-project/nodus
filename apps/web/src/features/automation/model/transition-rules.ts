@@ -16,7 +16,7 @@ import { CUSTOM_FIELD_LIMITS } from '@nodus/contracts';
  * исполнитель». Панель только вызывает их и патчит rules целиком.
  */
 
-type Rules = WorkflowDraftTransition['rules'];
+export type Rules = WorkflowDraftTransition['rules'];
 
 export const ACTOR_ROLES: readonly WorkflowActorRole[] = [
   'creator',
@@ -208,18 +208,23 @@ export function setRouteIfWhen(
   };
 }
 
-/** Поле-цель «Присвоить номер» (#630, Р4): null — пост-действия нет. */
-export function assignNumberFieldOf(rules: Rules): string | null {
-  const rule = rules.postFunctions.find((p) => p.kind === 'assign_number');
-  return rule?.kind === 'assign_number' ? (rule.fieldId ?? null) : null;
+/** Поля-цели «Присвоить номер» (#630, Р4): по пост-функции на counter-поле. */
+export function assignNumberFieldsOf(rules: Rules): string[] {
+  return rules.postFunctions.flatMap((p) =>
+    p.kind === 'assign_number' && p.fieldId ? [p.fieldId] : [],
+  );
 }
 
-/** Включить/выключить присвоение номера в counter-поле (Р4). */
-export function setAssignNumber(rules: Rules, fieldId: string | null): Rules {
+/** Заменить набор полей-целей «Присвоить номер» (Р4, пусто — выключить);
+ *  одна кнопка может выдавать номера в несколько counter-полей (К3). */
+export function setAssignNumbers(rules: Rules, fieldIds: readonly string[]): Rules {
   const rest = rules.postFunctions.filter((p) => p.kind !== 'assign_number');
   return {
     ...rules,
-    postFunctions: fieldId === null ? rest : [...rest, { kind: 'assign_number', fieldId }],
+    postFunctions: [
+      ...rest,
+      ...fieldIds.map((fieldId) => ({ kind: 'assign_number', fieldId }) as const),
+    ],
   };
 }
 

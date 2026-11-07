@@ -10,10 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@nodus/ui/components/select';
-import { cn } from '@nodus/ui/lib/utils';
 
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { TypeFormulaDialog } from '../../../../shared/custom-fields/formula/type-formula-dialog.js';
+import { SegmentedControl } from '../../../../shared/ui/segmented-control.js';
 import { COUNTER_SCOPE_PRESETS, counterPreviewOf } from '../../lib/counter-rule.js';
 import { CounterTemplateEditor } from './counter-template-editor.js';
 
@@ -90,15 +90,13 @@ export function CounterRuleSection({
             value={rule.startValue}
             disabled={disabled}
             aria-label={ui.customFields.dialog.counter.start}
+            title={ui.customFields.dialog.counter.startHint}
             onChange={(e) => {
               const next = Number(e.target.value);
               if (Number.isFinite(next) && next >= 1) patchRule({ startValue: Math.trunc(next) });
             }}
             className="h-8 text-sm"
           />
-          <span className="text-label-xs text-muted-foreground">
-            {ui.customFields.dialog.counter.startHint}
-          </span>
         </label>
       </div>
 
@@ -146,25 +144,20 @@ export function CounterRuleSection({
         <span className="text-label text-muted-foreground">
           {ui.customFields.dialog.counter.period}
         </span>
-        <div className="flex flex-wrap gap-1">
-          {(['none', 'year', 'month'] as const).map((period) => (
-            <button
-              key={period}
-              type="button"
-              disabled={disabled}
-              aria-pressed={rule.period === period}
-              onClick={() => patchRule({ period })}
-              className={cn(
-                'h-8 rounded-lg border px-3 text-sm transition-colors',
-                rule.period === period
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-input bg-background hover:bg-accent/40',
-              )}
-            >
-              {ui.customFields.dialog.counter.periods[period]}
-            </button>
-          ))}
-        </div>
+        {/* Выбор в форме — accent-актив примитива (грамматика форм), не
+            заливка действия: конкурировала с primary-кнопкой окна. */}
+        <SegmentedControl
+          value={rule.period}
+          disabled={disabled}
+          ariaLabel={ui.customFields.dialog.counter.period}
+          activeClassName="bg-accent text-foreground"
+          layout="grid"
+          options={(['none', 'year', 'month'] as const).map((period) => ({
+            value: period,
+            label: ui.customFields.dialog.counter.periods[period],
+          }))}
+          onChange={(period) => patchRule({ period })}
+        />
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -183,7 +176,9 @@ export function CounterRuleSection({
         <span className="text-label text-muted-foreground">
           {ui.customFields.dialog.counter.preview}
         </span>
-        <span className="min-w-0 truncate font-mono text-sm">{counterPreviewOf(rule)}</span>
+        <span className="min-w-0 truncate font-mono text-sm tabular-nums">
+          {counterPreviewOf(rule)}
+        </span>
         {issuedCount !== null && issuedCount > 0 ? (
           <span className="ml-auto shrink-0 text-xs text-muted-foreground">
             {ui.customFields.dialog.counter.issuedCount}: {issuedCount}

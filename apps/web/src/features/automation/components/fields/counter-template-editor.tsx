@@ -67,7 +67,7 @@ export function CounterTemplateEditor({
           ) : (
             <span
               key={index}
-              className="inline-flex h-8 items-center gap-1 rounded-lg border border-input bg-muted/40 px-2.5 font-mono text-sm"
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-input bg-muted/40 px-2.5 text-sm"
             >
               {segment.kind === 'counter'
                 ? ui.customFields.dialog.counter.segCounter
@@ -157,7 +157,7 @@ export function CounterTemplateEditor({
       </div>
       {counter?.kind === 'counter' ? (
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{ui.customFields.dialog.counter.segCounterLength}:</span>
+          <span>{ui.customFields.dialog.counter.segCounterLength}</span>
           <Input
             type="number"
             min={0}
