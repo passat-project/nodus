@@ -8,6 +8,7 @@ import {
   orderKeyFor,
   parentOf,
   subtreeHeight,
+  subtreeIds,
   type TreeNodeLike,
 } from './project-structure.tree.js';
 
@@ -45,6 +46,27 @@ describe('project-structure.tree: дети и родители', () => {
     expect(parents.get('a')).toBeNull();
     expect(parents.get('b')).toBe('a');
     expect(parents.get('ghost')).toBeUndefined();
+  });
+
+  it('subtreeIds — узел включительно, DFS в порядке братьев, соседи не попадают', () => {
+    const nodes = [
+      node('root', null, 0),
+      node('a', 'root', 0),
+      node('b', 'root', 1),
+      node('a1', 'a', 0),
+      node('a2', 'a', 1),
+      node('a21', 'a2', 0),
+    ];
+    const children = childrenByParent(nodes);
+    expect(subtreeIds(children, 'a')).toEqual(['a', 'a1', 'a2', 'a21']);
+    expect(subtreeIds(children, 'b')).toEqual(['b']);
+    expect(subtreeIds(children, 'ghost')).toEqual(['ghost']);
+  });
+
+  it('subtreeIds не зацикливается на испорченном дереве', () => {
+    const broken: TreeNodeLike[] = [node('x', 'y', 0), node('y', 'x', 0)];
+    expect(() => subtreeIds(childrenByParent(broken), 'x')).not.toThrow();
+    expect(subtreeIds(childrenByParent(broken), 'x')).toEqual(['x', 'y']);
   });
 });
 

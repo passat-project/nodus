@@ -85,6 +85,17 @@ export class NodeKindsRepository {
     return row ? this.toDto(row) : null;
   }
 
+  /** Имена видов пачкой (#632): системное поле «вид» у среза папок — один
+   *  запрос вместо N (источники формул, О2). */
+  async namesByIds(ids: readonly string[], tx?: TransactionClient): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const rows = await (tx ?? this.prisma).nodeKind.findMany({
+      select: { id: true, name: true },
+      where: { id: { in: [...new Set(ids)] } },
+    });
+    return new Map(rows.map((row) => [row.id, row.name]));
+  }
+
   async findActive(id: string): Promise<NodeKind | null> {
     const row = await this.prisma.nodeKind.findFirst({
       select: kindSelect,

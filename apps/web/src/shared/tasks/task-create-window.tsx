@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { CreationForm, ProcessType } from '@nodus/contracts';
 import { typeConfigOf, typeCreationFormOf, ui } from '@nodus/contracts';
@@ -18,6 +18,7 @@ import { ProcessTypeField } from './process-type-field.js';
 import { TaskChecklistSheet } from './task-checklist-sheet.js';
 import { TaskCreateChips } from './task-create-chips.js';
 import {
+  applyFormulaPrefill,
   buildCreateBody,
   emptyDraft,
   missingFor,
@@ -34,6 +35,7 @@ import { createFailureOf } from './task-create-errors.js';
 import { TaskCreateFormBody } from './task-create-form-body.js';
 import { FormSkeleton } from './task-create-skeleton.js';
 import { TaskCreateStructure, useTaskCreateStructure } from './task-create-structure.js';
+import { useCreationFormulaPrefill } from './use-creation-formula-prefill.js';
 
 /** Форма без типа (типы не загрузились): пустая — низ окна покажет заглушку. */
 const EMPTY_FORM: CreationForm = { fields: [], chips: [] };
@@ -85,17 +87,26 @@ export function TaskCreateWindow({
   const [checklistOpen, setChecklistOpen] = useState(false);
   const projectId = (draft.values.project as string | undefined) ?? prefill?.projectId;
   const structure = useTaskCreateStructure(projectId, prefill?.parentId);
+  // След формульного префилла (Р12): какие слоты подставлены формулой и
+  // какие человек правил. Живёт в ref — ре-эвал не зависит от идентичности
+  // объектов; сбрасывается при каждом открытии окна (A8-4).
+  const autoFilledRef = useRef<Record<string, unknown>>({});
+  const touchedRef = useRef<Set<string>>(new Set());
 
   // Чистое окно при каждом открытии и смене заполнения (плюсик другой
-  // колонки) — рендер-тайм сброс, канон React (аудит #45).
-  const [shownFor, setShownFor] = useState({ open, initial });
+  // колонки) — рендер-тайм сброс, канон React (аудит #45). `seq` — сигнал
+  // «черновик пересоздан»: эффект префилла обязан примениться заново, иначе
+  // после переоткрытия окно останется без формульных значений.
+  const [shownFor, setShownFor] = useState({ open, initial, seq: 0 });
   if (shownFor.open !== open || (open && shownFor.initial !== initial)) {
-    setShownFor({ open, initial });
+    setShownFor({ open, initial, seq: shownFor.seq + 1 });
     if (open) {
       setDraft(initial);
       setInvalidKeys(new Set());
       setError(null);
       setChecklistOpen(false);
+      autoFilledRef.current = {};
+      touchedRef.current = new Set();
     }
   }
 
@@ -108,6 +119,32 @@ export function TaskCreateWindow({
   // предпросмотре — черновая форма редактора.
   const form = preview?.form ?? (shownType ? typeCreationFormOf(shownType) : EMPTY_FORM);
   const typesLoading = !preview && isLoading;
+  // Префилл формульных слотов (#632, Р12): считается при открытии и смене
+  // места (проект/папка/родитель); значение остаётся редактируемым.
+  const formulaPrefill = useCreationFormulaPrefill({
+    slots: form.fields,
+    hostKind: shownType?.category === 'letter' ? 'letter' : 'task',
+    projectId: projectId ?? null,
+    nodeId: draft.nodeId,
+    parentId: prefill?.parentId ?? null,
+    enabled: open && !preview,
+  });
+  // Что из черновика подставлено формулой и ещё не тронуто человеком:
+  // ре-эвал при смене места обновляет только такие слоты, ручной ввод и
+  // осознанная очистка не затираются, а исчезнувший из формулы слот
+  // очищается (Р12, A8-3).
+  useEffect(() => {
+    if (formulaPrefill.version === 0) return;
+    setDraft((prev) => {
+      const applied = applyFormulaPrefill(prev, formulaPrefill.values, {
+        auto: autoFilledRef.current,
+        touched: touchedRef.current,
+      });
+      autoFilledRef.current = applied.auto;
+      return applied.draft;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- версия и seq — сигналы применения
+  }, [formulaPrefill.version, shownFor.seq]);
 
   const missing = shownType ? missingFor(form, draft) : [];
   const missingStructure = structure.required && draft.nodeId === null;
@@ -222,6 +259,10 @@ export function TaskCreateWindow({
                 definitions={fieldDefs}
                 invalidKeys={invalidKeys}
                 onChange={(key, value) => {
+                  // Правка человека — слот больше не формульный: ре-эвал его
+                  // не затирает, очистка тоже считается правкой (A8-3).
+                  touchedRef.current.add(key);
+                  delete autoFilledRef.current[key];
                   const next = withValue(draft, key, value);
                   setDraft(
                     key === 'project' && value !== draft.values.project

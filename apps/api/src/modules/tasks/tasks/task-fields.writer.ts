@@ -22,6 +22,7 @@ import {
   type CustomFieldRegistry,
   type RegistryFieldChange,
 } from '../../custom-fields/ports/custom-field-registry.port.js';
+import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import {
   PROCESS_CATALOG_READER,
   type ProcessCatalogReader,
@@ -79,6 +80,7 @@ export class TaskFieldsWriter {
     private readonly participantsRepo: ParticipantsRepository,
     private readonly placements: Placements,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
+    @Inject(FORMULA_CELLS) private readonly formulaCells: FormulaCells,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
   ) {}
@@ -89,6 +91,7 @@ export class TaskFieldsWriter {
     row: TaskFieldsRow,
     patch: TaskFieldsWrite,
     fields: readonly string[],
+    opts: { formulaWrite?: boolean; foreignWrite?: boolean } = {},
   ): Promise<{ customFieldChanges: RegistryFieldChange[] }> {
     const reparent = patch.parentId !== undefined;
     // Смены родителя сериализуются одной advisory-блокировкой транзакции
@@ -130,7 +133,10 @@ export class TaskFieldsWriter {
       await this.projects.assertNodeAllowed(effectiveProjectId, patch.nodeId);
     }
     if (projectChanged) nodeReset = true;
-    await this.assertRequiredKept(row.typeId, patch);
+    // Формульная запись — не ручная правка: пустой результат/ошибка ячейки
+    // не должны блокировать сохранение формулы проверкой обязательных полей
+    // (Р13: ошибка живёт в ячейке, а не отменяет действие).
+    if (!opts.formulaWrite) await this.assertRequiredKept(row.typeId, patch);
     const data: TaskFieldsPatch = {};
     // Значения атрибутов читаются и пишутся под замком строки: параллельные
     // PATCH сливаются по ключам, а не перетирают карту целиком (#431).
@@ -167,18 +173,52 @@ export class TaskFieldsWriter {
           patch: patch.customFields,
           actor,
           target: { kind: 'process_type', id: row.typeId },
+          ...(opts.formulaWrite ? { trusted: true } : {}),
         },
         tx,
       );
       fieldChanges = prepared.changes;
+      // Формульная ячейка руками не пишется (решение владельца по #660):
+      // значение в атрибут со своей формулой или формулой типа — 422, формула
+      // не «заменяется» значением. Пишет только формула (formulaWrite).
+      if (!opts.formulaWrite && prepared.changes.length > 0) {
+        const locked = await this.formulaCells.lockedFieldIds(
+          tx,
+          'task',
+          row.id,
+          prepared.changes.map((change) => change.fieldId),
+        );
+        if (locked.size > 0) {
+          throw new DomainException(
+            ErrorCode.FORMULA_CELL_LOCKED,
+            'Formula cell value is computed by its formula',
+            { fields: [...locked] },
+            422,
+          );
+        }
+      }
       if (prepared.changes.length > 0) data.customFields = prepared.next;
     }
+    // Формульная запись без фактических изменений не эмитит `task.updated`:
+    // иначе пересчёт «значение не изменилось» запускал бы новую волну
+    // пересчёта по кругу (шторм событий без роста глубины).
+    if (opts.formulaWrite && fieldChanges.length === 0) return { customFieldChanges: [] };
     await this.repo.updateFields(tx, row.id, data);
     const after = await this.repo.findWithParticipants(row.id, tx);
     const base = {
       taskId: row.id,
       number: row.number,
-      audience: audienceIds(after, [row.assigneeId]),
+      // Актёр правки — в аудитории СВОЕЙ записи (#632): редактор-не-участник
+      // (руководитель проекта, task.manage_any) иначе не получает ни одного
+      // события по собственной правке и его карточка «отстаёт на шаг». Но
+      // каскадный пересчёт ЧУЖИХ хостов (foreignWrite) актёра-источника в
+      // аудиторию не добавляет: он может не иметь доступа к записи-приёмнику
+      // (конфиденциальная подзадача, секретный проект) — fanout только
+      // получателям (security #632).
+      audience: audienceIds(
+        after,
+        opts.foreignWrite ? [row.assigneeId] : [row.assigneeId, actor.id],
+      ),
     };
     const meta = { actorId: actor.id, aggregateType: 'task', aggregateId: row.id };
     if (reassigned) {
@@ -202,6 +242,10 @@ export class TaskFieldsWriter {
       TASK_EVENTS.UPDATED,
       {
         ...base,
+        // Формульная запись: клиент обязан перечитать деталь даже у автора
+        // правки — пересчёт идёт ПОСЛЕ ответа мутации, и без этого карточка
+        // держит старое значение до перезагрузки.
+        ...(opts.formulaWrite ? { formulaWrite: true } : {}),
         fields: changedKeys.length > 0 ? [...fields, ...changedKeys] : fields,
         // Обрезка длинного текста и числа изменений — лимит события (Р12).
         ...(fieldChanges.length > 0
@@ -221,6 +265,15 @@ export class TaskFieldsWriter {
         ...(patch.nodeId !== undefined || nodeReset
           ? { nodeId: after.nodeId, previousNodeId: row.nodeId }
           : {}),
+        // Перепривязка (#632): состав подзадач меняется у старого и нового
+        // родителя — формулы-агрегаты пересчитываются по обоим. Смена
+        // проекта тоже выкидывает задачу из выборки родителя (subtasks
+        // фильтруются проектом) — отдаём фактического родителя.
+        ...(patch.parentId !== undefined
+          ? { parentId: after.parentId, previousParentId: row.parentId }
+          : projectChanged
+            ? { parentId: after.parentId }
+            : {}),
       },
       meta,
     );

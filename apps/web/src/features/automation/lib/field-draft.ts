@@ -1,4 +1,5 @@
 import type {
+  FormulaNode,
   CreateCustomFieldBody,
   CustomFieldBindings,
   CustomFieldDefault,
@@ -71,6 +72,8 @@ export interface FieldDraft {
   reportIndexed: boolean;
   /** «Где используется» (Р3): типы задач/писем, типы проектов, виды папок. */
   bindings: CustomFieldBindings;
+  /** Формулы типа/вида по привязкам (#632): id цели → AST. */
+  bindingFormulas: Record<string, FormulaNode>;
 }
 
 export const emptyDraft: FieldDraft = {
@@ -89,6 +92,7 @@ export const emptyDraft: FieldDraft = {
   companyRefs: [],
   reportIndexed: false,
   bindings: EMPTY_CUSTOM_FIELD_BINDINGS,
+  bindingFormulas: {},
 };
 
 export function isListFamily(family: FieldFamily | null): boolean {
@@ -144,6 +148,7 @@ export function draftOf(
       projectTypeIds: [...definition.bindings.projectTypeIds],
       nodeKindIds: [...definition.bindings.nodeKindIds],
     },
+    bindingFormulas: { ...(definition.bindingFormulas ?? {}) },
   };
 }
 
@@ -192,6 +197,7 @@ export function draftDefinition(
     isCompany: false,
     companyValue: null,
     bindings: EMPTY_CUSTOM_FIELD_BINDINGS,
+    bindingFormulas: draft.bindingFormulas,
     sortOrder: 0,
     createdAt: now,
     updatedAt: now,
@@ -250,7 +256,9 @@ export function createBody(
     defaultValue: extra.defaultValue !== undefined ? extra.defaultValue : scalarDefault(draft),
     reportIndexed: draft.reportIndexed,
     isCompany: draft.isCompany,
-    ...(draft.isCompany ? {} : { bindings: draft.bindings }),
+    ...(draft.isCompany
+      ? {}
+      : { bindings: draft.bindings, bindingFormulas: draft.bindingFormulas }),
   };
 }
 
@@ -279,6 +287,11 @@ export function patchBody(
   )
     body.bindings = draft.bindings;
   if (draft.reportIndexed !== definition.reportIndexed) body.reportIndexed = draft.reportIndexed;
+  if (
+    !definition.isCompany &&
+    JSON.stringify(draft.bindingFormulas) !== JSON.stringify(definition.bindingFormulas ?? {})
+  )
+    body.bindingFormulas = draft.bindingFormulas;
   return Object.keys(body).length > 0 ? body : null;
 }
 

@@ -17,7 +17,9 @@ export const PROJECT_EVENTS = {
   UPDATED: 'project.updated',
   PARTICIPANTS_CHANGED: 'project.participants_changed',
   /** Дерево проекта (#467): события узлов — они же аудит-след структуры
-   *  (gateway их не маршрутизирует: реалтайма структуры до пилота нет). */
+   *  (gateway маршрутизирует только node_updated — адресно участникам,
+   *  #632: правка атрибутов папки обновляет дерево и формулы наследников;
+   *  реалтайма остальных событий узлов до пилота нет). */
   NODE_CREATED: 'project.node_created',
   NODE_UPDATED: 'project.node_updated',
   NODE_MOVED: 'project.node_moved',
@@ -45,11 +47,14 @@ export type ProjectCatalogEventType = (typeof PROJECT_CATALOG_EVENTS)[number];
 /** События проекта с адресной аудиторией (#646): gateway рассылает их в
  *  user-комнаты участников, а не в общий presence — имя/шифр секретного
  *  проекта не должны утекать всем. `audience` — служебное поле, клиенту
- *  не уходит (снимает gateway). */
+ *  не уходит (снимает gateway). `node_updated` — с #632: правка атрибутов
+ *  папки и пересчёт её формул меняют дерево и формулы типов записей-
+ *  наследников; без адресной рассылки эти значения живут до F5. */
 export const PROJECT_AUDIENCE_EVENTS = [
   PROJECT_EVENTS.CREATED,
   PROJECT_EVENTS.UPDATED,
   PROJECT_EVENTS.PARTICIPANTS_CHANGED,
+  PROJECT_EVENTS.NODE_UPDATED,
 ] as const;
 
 export type ProjectAudienceEventType = (typeof PROJECT_AUDIENCE_EVENTS)[number];

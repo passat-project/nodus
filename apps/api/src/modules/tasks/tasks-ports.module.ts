@@ -19,6 +19,8 @@ import { TASK_PROJECT_READER } from './ports/task-project-reader.port.js';
 import { TaskProjectReaderProvider } from './ports/task-project-reader.provider.js';
 import { TASK_REF_READER } from './ports/task-ref-reader.port.js';
 import { TaskRefReaderProvider } from './ports/task-ref-reader.provider.js';
+import { TASK_FORMULA_VALUES } from './ports/task-formula-values.port.js';
+import { TaskFormulaValuesProvider } from './ports/task-formula-values.provider.js';
 import { TasksQueryRepository } from './tasks/tasks-query.repository.js';
 
 /**
@@ -47,7 +49,17 @@ import { TasksQueryRepository } from './tasks/tasks-query.repository.js';
     { provide: TASK_PROJECT_READER, useClass: TaskProjectReaderProvider },
     TaskRefReaderProvider,
     { provide: TASK_REF_READER, useExisting: TaskRefReaderProvider },
+    // Задачи как источники формул (#632, Р7): значения, системные поля,
+    // выборки связанных — только через порт (I3).
+    TaskFormulaValuesProvider,
+    { provide: TASK_FORMULA_VALUES, useExisting: TaskFormulaValuesProvider },
   ],
-  exports: [TASK_CHAT_READER, CUSTOM_FIELD_VALUES_READER, TASK_PROJECT_READER, TASK_REF_READER],
+  exports: [
+    TASK_CHAT_READER,
+    CUSTOM_FIELD_VALUES_READER,
+    TASK_PROJECT_READER,
+    TASK_REF_READER,
+    TASK_FORMULA_VALUES,
+  ],
 })
 export class TasksPortsModule {}

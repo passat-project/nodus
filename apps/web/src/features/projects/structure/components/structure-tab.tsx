@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
-import type { ProjectNode } from '@nodus/contracts';
+import type { CustomFieldValues, ProjectNode } from '@nodus/contracts';
 import { Permission, ui } from '@nodus/contracts';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 
@@ -12,6 +12,13 @@ import { projectsKeys, useProjectTypes } from '../../../../shared/api/projects-l
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { useCustomFieldFilterDefs } from '../../../../shared/custom-fields/filter-defs.js';
 import { tasksKeys } from '../../../../shared/api/tasks-keys.js';
+import { FormulaMovePreviewDialog } from '../../../../shared/custom-fields/formula/formula-move-preview-dialog.js';
+import {
+  previewTaskMoveBatch,
+  useFormulaMoveGate,
+  useNodeMovePreview,
+  useTaskMovePreview,
+} from '../../../../shared/custom-fields/formula/formula-move-preview.js';
 import { openTaskCreate } from '../../../../shared/tasks/task-create-store.js';
 import { EdgeHints } from '../../../../shared/ui/board/board-scroller.js';
 import { useBoardEdgeScroll } from '../../../../shared/ui/board/use-board-edge-scroll.js';
@@ -42,6 +49,11 @@ import { StructureEmpty, StructureSearchEmpty, StructureToolbar } from './struct
  * вталкивающая панель «Свойства папки» (#556): открывается пунктом меню и
  * следует за кликом по папке.
  */
+/** Значения атрибутов папки для фильтров: стабильная ссылка (memo фильтров). */
+function nodeValuesOf(node: ProjectNode): CustomFieldValues {
+  return node.customFields ?? {};
+}
+
 export function StructureTab({
   projectId,
   canManage,
@@ -72,6 +84,11 @@ export function StructureTab({
   const moveNode = useMoveNode(projectId);
   const moveTask = useMoveTaskNode(projectId);
   const setTasksNode = useSetTasksNode(projectId);
+  // Превью формульного диффа перед переносом (#632): непустой дифф — окно
+  // подтверждения, пустой — перенос сразу.
+  const gate = useFormulaMoveGate();
+  const nodePreview = useNodeMovePreview(projectId);
+  const taskPreview = useTaskMovePreview();
   const containerRef = useRef<HTMLDivElement>(null);
   const autoFitColumn = useAutoFitColumn(containerRef, 1, model.setWidth);
 
@@ -86,12 +103,14 @@ export function StructureTab({
       }),
     onDropNode: (nodeId, parentId, beforeId, afterId) => {
       if (!canEdit) return;
-      moveNode.mutate({
-        nodeId,
-        parentId,
-        ...(beforeId ? { beforeId } : {}),
-        ...(afterId ? { afterId } : {}),
-      });
+      void gate.offer(nodePreview.mutateAsync({ nodeId, parentId }), () =>
+        moveNode.mutate({
+          nodeId,
+          parentId,
+          ...(beforeId ? { beforeId } : {}),
+          ...(afterId ? { afterId } : {}),
+        }),
+      );
     },
     onDropTasks: (taskIds, nodeId) => {
       if (!canEdit) return;
@@ -111,10 +130,7 @@ export function StructureTab({
   // атрибуты, привязанные к видам папок. Применяются как поиск: папки-
   // совпадения с путём до корня; задачи и «Без папки» фильтром скрываются
   // (фильтр описывает папки, не их содержимое).
-  const filterDefs = useCustomFieldFilterDefs(
-    'node',
-    (node: ProjectNode) => node.customFields ?? {},
-  );
+  const filterDefs = useCustomFieldFilterDefs('node', nodeValuesOf);
   const attributeView = useMemo(() => {
     const active = filterDefs.filter((def) => isActiveFilter(model.toolbar.filters[def.id]));
     if (active.length === 0) return null;
@@ -142,9 +158,20 @@ export function StructureTab({
   const noNodeRow = attributeView ? null : model.noNodeRow;
   const noNodeTasks = attributeView ? [] : model.noNodeTasks;
 
+  /** Перенос задач в папку (DnD, меню, «Без папки»): одиночный — с диффом
+   *  формул (превью → окно или сразу перенос), пачка — со СВОДНЫМ диффом по
+   *  первым `BULK_PREVIEW_LIMIT` записям. Bulk больше не уходит в мутацию
+   *  молча (A9-1): «что изменится» спрашивается у любого переноса, а окно
+   *  честно говорит, по скольким записям собрана сводка. */
   function moveTasks(taskIds: string[], nodeId: string | null) {
-    if (taskIds.length === 1) moveTask.mutate({ taskId: taskIds[0]!, nodeId });
-    else setTasksNode.mutate({ taskIds, nodeId });
+    const apply = () => setTasksNode.mutate({ taskIds, nodeId });
+    const [taskId] = taskIds;
+    if (taskIds.length === 1 && taskId) {
+      const run = taskPreview.mutateAsync({ taskId, nodeId });
+      void gate.offer(run, () => moveTask.mutate({ taskId, nodeId }));
+      return;
+    }
+    void gate.offer(previewTaskMoveBatch(taskIds, nodeId), apply);
   }
 
   function toggleBranch(id: string) {
@@ -195,6 +222,7 @@ export function StructureTab({
         <StructureToolbar
           toolbar={model.toolbar}
           defs={filterDefs}
+          fields={model.fields}
           canEdit={canEdit}
           onCreateNode={() => setDialog({ kind: 'create', parent: null })}
           onExpandAll={() => model.setCollapsed(new Set())}
@@ -240,6 +268,8 @@ export function StructureTab({
                     collapsed={model.collapsed}
                     noNodeCollapsed={model.noNodeCollapsed}
                     fields={model.visibleFields}
+                    attributes={model.attributeDefinitions}
+                    refs={model.nodeRefs}
                     grid={{ templateColumns: model.gridTemplateColumns }}
                     selection={model.selection}
                     dnd={dnd}
@@ -290,6 +320,8 @@ export function StructureTab({
             onMoveTasks={moveTasks}
           />
         ) : null}
+        {/* Подтверждение переноса DnD: дифф формул — до мутации. */}
+        <FormulaMovePreviewDialog {...gate.dialogProps} />
       </div>
       <NodePropertiesPanel
         projectId={projectId}

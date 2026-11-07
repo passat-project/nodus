@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { formulaNodeSchema } from './formula.js';
+
 /**
  * Слот формы места (#631, ADR-0037 п.2): видимость атрибута в форме создания
  * места (вид папки, тип проекта) задаётся привязкой + состоянием слота —
@@ -13,11 +15,14 @@ import { z } from 'zod';
 export const fieldFormStateSchema = z.enum(['hidden', 'optional', 'required']);
 export type FieldFormState = z.infer<typeof fieldFormStateSchema>;
 
-/** Слот: атрибут × состояние. `fieldId` — определение из реестра портала. */
+/** Слот: атрибут × состояние. `fieldId` — определение из реестра портала.
+ *  `formula` (#632, Р6) — формула по умолчанию у типа/вида: действует для
+ *  записей без своего значения и своей формулы, вычисляется на чтении. */
 export const fieldFormSlotSchema = z
   .object({
     fieldId: z.uuid(),
     state: fieldFormStateSchema,
+    formula: formulaNodeSchema.nullable().optional(),
   })
   .strict();
 export type FieldFormSlot = z.infer<typeof fieldFormSlotSchema>;

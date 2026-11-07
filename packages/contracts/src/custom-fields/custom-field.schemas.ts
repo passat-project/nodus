@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { formulaNodeSchema } from './formula.js';
+
 import {
   customFieldValueSchema,
   customFieldValueSchemaOf,
@@ -131,6 +133,16 @@ export const customFieldDefinitionSchema = z.object({
    *  могут его не присылать (пусто = имени нет). */
   companyRefs: z.array(customFieldRefSchema).optional(),
   bindings: customFieldBindingsSchema,
+  /** Формулы типа/вида по привязкам (#632, Р6): ключ — id цели привязки
+   *  (тип процесса, тип проекта, вид папки), значение — AST. Формула живёт
+   *  на привязке «атрибут × место», а не на атрибуте: у одного атрибута в
+   *  разных местах разные формулы. */
+  bindingFormulas: z.record(z.uuid(), formulaNodeSchema).optional(),
+  /** Категории процессов, к типам которых привязан атрибут (#632, Р9):
+   *  решающий сигнал для колонок видов — в список задач идут task-атрибуты,
+   *  в список писем — letter-атрибуты. Производное поле (сервер считает по
+   *  привязкам); старые моки могут его не присылать. */
+  processCategories: z.array(z.enum(['task', 'letter'])).optional(),
   sortOrder: z.number().int().min(0),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
@@ -186,6 +198,16 @@ export const customFieldUsageSchema = z.object({
   }),
   /** Заполнено ли глобальное значение (для isCompany). */
   companyValue: z.boolean(),
+  /** Формулы (#632, F1): свои ячейки, формулы привязок типа/вида и слоты
+   *  окон с формулой-подстановкой — окно удаления показывает последствия. */
+  formulas: z
+    .object({
+      ownCells: z.number().int().min(0),
+      typeDefaults: z.number().int().min(0),
+      windowSlots: z.number().int().min(0),
+    })
+    .strict()
+    .optional(),
 });
 export type CustomFieldUsage = z.infer<typeof customFieldUsageSchema>;
 
@@ -306,6 +328,7 @@ export const createCustomFieldBodySchema = z
      *  переменной привязки запрещены — доменная 422 на сервере (не 400
      *  схемы: это семантика, а не форма запроса). */
     bindings: customFieldBindingsSchema.optional(),
+    bindingFormulas: z.record(z.uuid(), formulaNodeSchema).optional(),
   })
   .strict()
   .superRefine((body, ctx) => {
@@ -324,6 +347,7 @@ export const updateCustomFieldBodySchema = z
     /** Полный набор привязок (замена целиком); точечные привязки —
      *  PUT/DELETE .../bindings/:kind/:targetId. */
     bindings: customFieldBindingsSchema.optional(),
+    bindingFormulas: z.record(z.uuid(), formulaNodeSchema).optional(),
   })
   .strict()
   .refine((v) => Object.keys(v).length > 0, { message: 'empty update' });

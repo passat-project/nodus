@@ -5,6 +5,7 @@ import type {
   CustomFieldRef,
   CustomFieldType,
   CustomFieldValue,
+  FormulaNode,
 } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
@@ -29,8 +30,9 @@ export interface FieldDefinitionRow {
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
-  /** Привязки «Где используется» (Р3); глобальная переменная — пусто. */
-  bindings: { targetKind: string; targetId: string }[];
+  /** Привязки «Где используется» (Р3); глобальная переменная — пусто.
+   *  `defaultFormula` — формула места (#632, Р6), вычисляется на чтении. */
+  bindings: { targetKind: string; targetId: string; defaultFormula?: unknown }[];
   /** Значение глобальной переменной (null — не задано). */
   companyValue: { value: unknown } | null;
 }
@@ -144,6 +146,8 @@ export class DefinitionMapper {
       companyValue: (row.companyValue?.value ?? null) as CustomFieldDefinition['companyValue'],
       // Привязки по видам целей; порядок детерминирован — id по возрастанию.
       bindings: bindingsOf(row),
+      // Формулы мест (#632, Р6): у каждой привязки своя; пусто — нет формул.
+      bindingFormulas: bindingFormulasOf(row),
       sortOrder: row.sortOrder,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -166,6 +170,16 @@ export function bindingsOf(row: Pick<FieldDefinitionRow, 'bindings'>): CustomFie
     projectTypeIds: projectTypeIds.sort(),
     nodeKindIds: nodeKindIds.sort(),
   };
+}
+
+/** Формулы мест (#632, Р6): targetId → AST. Пусто — у привязок формул нет. */
+export function bindingFormulasOf(
+  row: Pick<FieldDefinitionRow, 'bindings'>,
+): Record<string, FormulaNode> | undefined {
+  const entries = row.bindings
+    .filter((binding) => binding.defaultFormula !== null && binding.defaultFormula !== undefined)
+    .map((binding) => [binding.targetId, binding.defaultFormula as FormulaNode] as const);
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 /** Ссылки, на которые указывает статическое умолчание определения. */

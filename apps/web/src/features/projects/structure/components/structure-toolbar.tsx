@@ -14,17 +14,21 @@ import {
 import { ListToolbar } from '../../../../shared/views/list-toolbar.js';
 import type { FilterFieldDef } from '../../../../shared/views/list-filters.js';
 import type { ListToolbarState } from '../../../../shared/views/use-list-toolbar.js';
+import type { FieldDef } from '../../../../shared/views/use-view-fields.js';
 import { ViewSettings } from '../../../../shared/views/view-settings.js';
-import { STRUCTURE_VIEW_KEY, structureFields } from '../lib/structure-fields.js';
+import { STRUCTURE_VIEW_KEY } from '../lib/structure-fields.js';
 
 /** Строка инструментов структуры — тот же `ListToolbar`, что у «Задач»
  *  (одинаковая высота и калибр кнопок): создание, поиск, свернуть/развернуть
  *  справа, шестерёнка колонок. Панель фильтра несёт группу «Атрибуты» —
  *  атрибуты папок из реестра (#631). Виды папок настраиваются в
- *  «Автоматизации» (#556) — шестерёнки справочника здесь нет. */
+ *  «Автоматизации» (#556) — шестерёнки справочника здесь нет.
+ *  `fields` — полный реестр вида с атрибутами папок и задач (#632): он
+ *  приходит из модели (определения грузятся с сервера), поэтому не константа. */
 export function StructureToolbar({
   toolbar,
   defs,
+  fields,
   canEdit,
   onCreateNode,
   onExpandAll,
@@ -32,6 +36,7 @@ export function StructureToolbar({
 }: {
   toolbar: ListToolbarState;
   defs: FilterFieldDef<ProjectNode>[];
+  fields: FieldDef[];
   canEdit: boolean;
   onCreateNode: () => void;
   onExpandAll: () => void;
@@ -71,7 +76,7 @@ export function StructureToolbar({
           >
             <ChevronsDownUp className="size-3.5" strokeWidth={1.75} />
           </Button>
-          <ViewSettings viewKey={STRUCTURE_VIEW_KEY} defs={structureFields} />
+          <ViewSettings viewKey={STRUCTURE_VIEW_KEY} defs={fields} />
         </>
       }
     />

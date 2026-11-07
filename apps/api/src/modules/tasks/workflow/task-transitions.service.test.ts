@@ -1,13 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AuthUser } from '@nodus/contracts';
+import type { AuthUser, WorkflowTransition } from '@nodus/contracts';
 
 import { TaskTransitionsService } from './task-transitions.service.js';
 
 const TX = { tx: true };
 const USER = { id: 'bob', displayName: 'Боб', permissions: [] } as unknown as AuthUser;
 
+function logger() {
+  return { setContext: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn(), info: vi.fn() };
+}
+
 function makeService(
-  deps: Partial<Record<'txRunner' | 'query' | 'placements' | 'taskService' | 'engine', unknown>>,
+  deps: Partial<
+    Record<'txRunner' | 'query' | 'placements' | 'taskService' | 'engine' | 'cells', unknown>
+  >,
+  log = logger(),
 ) {
   return new TaskTransitionsService(
     (deps.txRunner ?? {}) as never,
@@ -15,7 +22,40 @@ function makeService(
     (deps.placements ?? {}) as never,
     (deps.taskService ?? {}) as never,
     (deps.engine ?? {}) as never,
+    (deps.cells ?? {}) as never,
+    log as never,
   );
+}
+
+/** Кнопка с формульным слотом: ключ → AST (движок в тесте не считает). */
+function transition(formulas: Record<string, unknown>): WorkflowTransition {
+  return {
+    id: 'tr1',
+    form: {
+      enabled: true,
+      sections: [{ kind: 'fields', fields: Object.keys(formulas), formulas }],
+    },
+  } as unknown as WorkflowTransition;
+}
+
+/** Стенд listFor: одна кнопка, evaluate отдаёт заранее заданные ответы. */
+function listStand(answers: Record<string, unknown>) {
+  const log = logger();
+  const cells = {
+    evaluate: vi.fn(async (_kind: string, _id: string, ast: unknown) => answers[String(ast)]),
+  };
+  const service = makeService(
+    {
+      query: { visibleRow: vi.fn(async () => ({ id: 't1' })) },
+      txRunner: { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn(TX)) },
+      engine: {
+        available: vi.fn(async () => [transition({ plannedMinutes: 'a', assignee: 'b' })]),
+      },
+      cells,
+    },
+    log,
+  );
+  return { service, log, cells };
 }
 
 describe('TaskTransitionsService — сценарии API кнопок маршрута (#428)', () => {
@@ -97,6 +137,43 @@ describe('TaskTransitionsService — окно перехода (#380)', () => {
       USER,
       { transitionId: 'tr1' },
       { form: { fields: { assigneeId: 'dave' } } },
+    );
+  });
+});
+
+describe('TaskTransitionsService — префилл формульных слотов окна (#632, Р12)', () => {
+  it('значения подставляются; 0 минут не проходит грамматику слота (A8-5)', async () => {
+    const { service, log } = listStand({
+      a: { value: 0, error: null },
+      b: { value: '30000000-0000-4000-8000-000000000001', error: null },
+    });
+    const [only] = await service.listFor(USER, 't1');
+    expect(only?.formPrefill).toEqual({ assignee: '30000000-0000-4000-8000-000000000001' });
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'plannedMinutes' }),
+      expect.any(String),
+    );
+  });
+
+  it('валидное плановое время уходит в префилл', async () => {
+    const { service } = listStand({
+      a: { value: 5000, error: null },
+      b: { value: null, error: null },
+    });
+    const [only] = await service.listFor(USER, 't1');
+    expect(only?.formPrefill).toEqual({ plannedMinutes: 5000 });
+  });
+
+  it('ошибка расчёта: слот пуст, переход не блокируется, ошибка в лог (A8-6)', async () => {
+    const { service, log } = listStand({
+      a: { value: null, error: { code: 'type_mismatch', message: 'не тот тип' } },
+      b: { value: null, error: null },
+    });
+    const [only] = await service.listFor(USER, 't1');
+    expect(only?.formPrefill).toBeUndefined();
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'plannedMinutes', code: 'type_mismatch' }),
+      expect.any(String),
     );
   });
 });

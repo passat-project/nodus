@@ -36,7 +36,14 @@ function commitRef(
   kind: CustomFieldRefKind,
   option: RefOption,
   close: () => void,
+  current?: unknown,
 ): void {
+  // Повторный выбор той же записи — не ручная запись (Р5 #632): формулу
+  // ячейки он снимать не должен.
+  if (current === option.id) {
+    close();
+    return;
+  }
   onCommit(option.id, [
     { kind, id: option.id, name: option.label, avatarUrl: null, archived: false, color: null },
   ]);
@@ -146,7 +153,7 @@ function RefPopover({
                 onClick={() =>
                   onPick
                     ? onPick(option)
-                    : commitRef(props.onCommit, kind, option, () => setOpen(false))
+                    : commitRef(props.onCommit, kind, option, () => setOpen(false), props.value)
                 }
               />
             ))

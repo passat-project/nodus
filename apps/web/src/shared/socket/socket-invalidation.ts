@@ -224,7 +224,7 @@ export function createRealtimeInvalidator(queryClient: QueryClient): RealtimeInv
           // Каталог «Полей» и справочников (#431) — тоже.
           if (envelope.type.startsWith('task.'))
             pushTaskKeys(batcher, queryClient, envelope.type, payload);
-          else if (pushCustomFieldKeys(batcher, queryClient, envelope.type)) return;
+          else if (pushCustomFieldKeys(batcher, queryClient, envelope.type, payload)) return;
           else if (pushNodeKindKeys(batcher, queryClient, envelope.type)) return;
           else if (pushProjectKeys(batcher, envelope.type, payload)) return;
           else pushWorkflowKeys(batcher, queryClient, envelope.type, payload);

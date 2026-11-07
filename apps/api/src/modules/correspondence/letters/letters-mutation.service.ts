@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   CORRESPONDENCE_EVENTS,
   ErrorCode,
+  sameCustomFieldValue,
   type AuthUser,
   type LetterDetail,
   type UpdateLetterBody,
@@ -23,6 +24,8 @@ import {
 } from './letter-attached-refs.repository.js';
 import { LetterAttachedRefsValidator, sameAttachedRefs } from './letter-attached-refs.validator.js';
 import { LetterFieldsValidator, type RegistrationValues } from './letter-fields.validator.js';
+import { LetterFieldsWriter } from './letter-fields.writer.js';
+import { LetterFormulaService } from './letter-formula.service.js';
 import { LettersQueryService } from './letters-query.service.js';
 import { LettersRepository } from './letters.repository.js';
 import type { LetterDetailRow } from './letter-row.js';
@@ -60,6 +63,8 @@ export class LettersMutationService {
     private readonly repo: LettersRepository,
     private readonly query: LettersQueryService,
     private readonly validator: LetterFieldsValidator,
+    private readonly fields: LetterFieldsWriter,
+    private readonly letterFormulas: LetterFormulaService,
     private readonly attached: LetterAttachedRefsRepository,
     private readonly attachedValidator: LetterAttachedRefsValidator,
     private readonly txRunner: TransactionRunner,
@@ -99,6 +104,33 @@ export class LettersMutationService {
         today,
         user,
       );
+      // Формульная ячейка руками не пишется (решение владельца по #660):
+      // значение в атрибут со своей формулой или формулой типа — 422. Проверка
+      // только РЕАЛЬНО изменённых ключей: повтор того же значения из окна
+      // ошибкой не становится.
+      const requested = body.customFields ?? {};
+      const changedKeys =
+        Object.keys(requested).length === 0
+          ? []
+          : Object.keys(requested).filter(
+              (fieldId) =>
+                !sameCustomFieldValue(
+                  (fresh.customFields as Record<string, unknown> | null)?.[fieldId],
+                  requested[fieldId],
+                ),
+            );
+      const locked =
+        changedKeys.length > 0
+          ? await this.fields.lockedFieldIds(tx, id, changedKeys)
+          : new Set<string>();
+      if (locked.size > 0) {
+        throw new DomainException(
+          ErrorCode.FORMULA_CELL_LOCKED,
+          'Formula cell value is computed by its formula',
+          { fields: [...locked] },
+          422,
+        );
+      }
       // «Приложенные письма» (#461, Р3): правка набором; история — счётчиком
       // строк, только если набор реально изменился.
       let attachedRows: LetterAttachedRefInput[] | null = null;
@@ -132,6 +164,14 @@ export class LettersMutationService {
         ...data,
         ...(body.confidential === undefined ? {} : { confidential: body.confidential }),
       });
+      // Синхронный пересчёт формул письма в той же tx (#632): ответ PATCH
+      // несёт свежие значения — обработчик опаздывает на цикл диспетчера.
+      const changedFieldIds = changes
+        .filter((change) => change.field.startsWith('cf.'))
+        .map((change) => change.field.slice(3));
+      if (changedFieldIds.length > 0) {
+        await this.letterFormulas.recalcAfterValuesChange(tx, user.id, id, changedFieldIds);
+      }
       if (attachedRows !== null) await this.attached.replace(tx, id, attachedRows);
       await this.eventBus.emit(
         tx,

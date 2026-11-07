@@ -11,11 +11,21 @@ import { DictionariesPortsModule } from '../dictionaries/dictionaries-ports.modu
 import { TasksPortsModule } from '../tasks/tasks-ports.module.js';
 import { CustomFieldRegistryProvider } from './ports/custom-field-registry.provider.js';
 import { CUSTOM_FIELD_REGISTRY } from './ports/custom-field-registry.port.js';
+import { FormulaEngineProvider } from './ports/formula-engine.provider.js';
+import { FORMULA_ENGINE } from './ports/formula-engine.port.js';
+import { FORMULA_CELLS } from './ports/formula-cells.port.js';
+import { RECORD_VALUES_READER } from './ports/record-values.port.js';
+import { RecordValuesProvider } from './ports/record-values.provider.js';
 import { DefinitionMapper } from './definitions/definition.mapper.js';
 import { DefinitionsRepository } from './definitions/definitions.repository.js';
 import { CustomFieldDefaults } from './values/defaults.js';
 import { CustomFieldRefsHydrator } from './values/refs-hydrator.js';
 import { CustomFieldValueValidator } from './values/value-validator.js';
+import { FormulaCellsRepository } from './formulas/formula-cells.repository.js';
+import { FormulaCellsService } from './formulas/formula-cells.service.js';
+import { FormulaContextService } from './formulas/formula-context.service.js';
+import { FormulaMetaService } from './formulas/formula-meta.service.js';
+import { FormulaValuesService } from './formulas/formula-values.service.js';
 
 /**
  * Порты реестра атрибутов (#431, ADR-0029): `CUSTOM_FIELD_REGISTRY` —
@@ -50,7 +60,30 @@ import { CustomFieldValueValidator } from './values/value-validator.js';
     CustomFieldRefsHydrator,
     CustomFieldRegistryProvider,
     { provide: CUSTOM_FIELD_REGISTRY, useExisting: CustomFieldRegistryProvider },
+    // Формулы (#632): движок, чтение источников, ячейки.
+    FormulaEngineProvider,
+    { provide: FORMULA_ENGINE, useExisting: FormulaEngineProvider },
+    RecordValuesProvider,
+    { provide: RECORD_VALUES_READER, useExisting: RecordValuesProvider },
+    FormulaCellsRepository,
+    FormulaMetaService,
+    FormulaValuesService,
+    FormulaContextService,
+    FormulaCellsService,
+    { provide: FORMULA_CELLS, useExisting: FormulaCellsService },
   ],
-  exports: [CUSTOM_FIELD_REGISTRY],
+  exports: [
+    CUSTOM_FIELD_REGISTRY,
+    FORMULA_ENGINE,
+    FORMULA_CELLS,
+    RECORD_VALUES_READER,
+    // Репозиторий ячеек нужен usage-агрегату «В формулах» (F1): сервис
+    // определений живёт в CustomFieldsModule, провайдер — здесь (иначе DI
+    // не находит FormulaCellsRepository в контексте определения).
+    FormulaCellsRepository,
+    FormulaMetaService,
+    FormulaContextService,
+    FormulaValuesService,
+  ],
 })
 export class CustomFieldsPortsModule {}

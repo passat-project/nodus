@@ -73,10 +73,19 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'POST /projects/:id/leave': PROJECT_MEMBERSHIP,
   // Дерево проекта (#467)
   'GET /projects/:id/structure': PROJECT_STRUCTURE,
+  // Формулы ячеек атрибутов (#632): чтение — видимость проекта/папки,
+  // мутации — право правки записи в сервисе (структура/карточка).
+  'GET /projects/:id/custom-fields/:fieldId/formula': PROJECT_VISIBILITY,
+  'PUT /projects/:id/custom-fields/:fieldId/formula': PROJECT_MANAGE,
+  'DELETE /projects/:id/custom-fields/:fieldId/formula': PROJECT_MANAGE,
+  'GET /projects/:id/nodes/:nodeId/custom-fields/:fieldId/formula': PROJECT_STRUCTURE,
+  'PUT /projects/:id/nodes/:nodeId/custom-fields/:fieldId/formula': PROJECT_STRUCTURE,
+  'DELETE /projects/:id/nodes/:nodeId/custom-fields/:fieldId/formula': PROJECT_STRUCTURE,
   'POST /projects/:id/nodes': PROJECT_STRUCTURE,
   'POST /projects/:id/nodes/batch': PROJECT_STRUCTURE,
   'PATCH /projects/:id/nodes/:nodeId': PROJECT_STRUCTURE,
   'POST /projects/:id/nodes/:nodeId/move': PROJECT_STRUCTURE,
+  'POST /projects/:id/nodes/:nodeId/move-preview': PROJECT_STRUCTURE,
   'DELETE /projects/:id/nodes/:nodeId': PROJECT_STRUCTURE,
   'GET /auth/me': SELF,
   'GET /auth/sessions': SELF,
@@ -106,6 +115,11 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'GET /letters': LETTER_VISIBILITY,
   'GET /letters/resolvers': LETTER_RESOLVERS,
   'GET /letters/:id': LETTER_VISIBLE_ONE,
+  // Формулы ячеек атрибутов письма (#632): чтение — видимость письма,
+  // мутации — canEdit письма в сервисе.
+  'GET /letters/:id/custom-fields/:fieldId/formula': LETTER_VISIBLE_ONE,
+  'PUT /letters/:id/custom-fields/:fieldId/formula': LETTER_VISIBLE_ONE,
+  'DELETE /letters/:id/custom-fields/:fieldId/formula': LETTER_VISIBLE_ONE,
   'POST /letters/:id/view': LETTER_VISIBLE_ONE,
   'POST /letters/:id/join': LETTER_VISIBLE_ONE,
   'GET /letters/:id/transitions': LETTER_VISIBLE_ONE,
@@ -139,6 +153,18 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'GET /tasks/:id/history': TASK_VISIBLE_ONE,
   'GET /tasks/:id/time-entries': TASK_VISIBLE_ONE,
   'GET /tasks/:id/transitions': TASK_VISIBLE_ONE,
+  // Формулы ячеек атрибутов (#632): чтение — зрителю задачи, мутации и
+  // dry-run переноса — праву правки задачи (canEdit) в сервисе.
+  'GET /tasks/:id/custom-fields/:fieldId/formula': TASK_VISIBLE_ONE,
+  'POST /custom-fields/formulas/validate':
+    'проверка AST без записи — нужна редактору формул каждому, кто может править атрибуты ' +
+    'своих записей; данные реестра не персональные (как чтение реестра #431)',
+  'POST /custom-fields/formulas/evaluate':
+    'превью без записи: доступ к контексту проверяет резолвер источника (Р7) — ' +
+    'невидимый хост/источник даёт 404 без оракула',
+  'PUT /tasks/:id/custom-fields/:fieldId/formula': TASK_ACCESS,
+  'DELETE /tasks/:id/custom-fields/:fieldId/formula': TASK_ACCESS,
+  'POST /tasks/:id/move-preview': TASK_ACCESS,
   'GET /tasks/personal-stages': PERSONAL_PLAN,
   // Изменения (#320)
   'POST /auth/logout-all': SELF,

@@ -42,4 +42,13 @@ export interface TaskProjectReader {
   /** Есть ли в узлах проекта хотя бы одна живая задача (structureSummary
    *  карточки: сводка дерева, #467). */
   hasNodeTasks(projectId: string): Promise<boolean>;
+
+  /** Живые задачи набора узлов (#632, move-preview): формулы папок и
+   *  поддерева пересчитываются/сравниваются по ним. `actorId` — фильтр
+   *  видимости (конфиденциальные задачи чужих не попадают в диалог, Р7). */
+  taskIdsInNodes(
+    projectId: string,
+    nodeIds: readonly string[],
+    actorId?: string,
+  ): Promise<string[]>;
 }

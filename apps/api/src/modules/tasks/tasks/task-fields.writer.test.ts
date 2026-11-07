@@ -58,6 +58,7 @@ function setup(required: CreationFieldSlot['key'][] = []) {
     prepareUpdate: vi.fn(async () => ({ next: {}, changes: [] })),
   };
   const catalog = { typeById: vi.fn(async () => type(required)) };
+  const formulaCells = { lockedFieldIds: vi.fn(async () => new Set<string>()) };
   const projects = {
     assertNodeAllowed: vi.fn(async () => void 0),
     lockNodeStructure: vi.fn(async () => void 0),
@@ -69,10 +70,11 @@ function setup(required: CreationFieldSlot['key'][] = []) {
     participantsRepo as never,
     placements as never,
     customFields as never,
+    formulaCells as never,
     catalog as never,
     projects as never,
   );
-  return { writer, repo, projects };
+  return { writer, repo, projects, customFields, formulaCells };
 }
 
 const apply = (
@@ -173,6 +175,7 @@ describe('TaskFieldsWriter: узел структуры (#467)', () => {
       { remove: vi.fn(async () => void 0) } as never,
       { sync: vi.fn(async () => void 0) } as never,
       { prepareUpdate: vi.fn(async () => ({ next: {}, changes: [] })) } as never,
+      { lockedFieldIds: vi.fn(async () => new Set<string>()) } as never,
       { typeById: vi.fn(async () => null) } as never,
       {
         assertNodeAllowed: vi.fn(async () => void 0),
@@ -190,3 +193,50 @@ describe('TaskFieldsWriter: узел структуры (#467)', () => {
     expect(updated?.[2]).toMatchObject({ nodeId: null, previousNodeId: 'n0' });
   });
 });
+
+describe('TaskFieldsWriter: формульная блокировка ячейки (#660)', () => {
+  it('запись значения в формульную ячейку — 422 FORMULA_CELL_LOCKED', async () => {
+    const kit = setup();
+    kit.customFields.prepareUpdate.mockResolvedValueOnce({
+      next: { [FIELD_ID]: 'руками' },
+      changes: [{ fieldId: FIELD_ID, from: null, to: 'руками' }],
+    } as never);
+    kit.formulaCells.lockedFieldIds.mockResolvedValueOnce(new Set([FIELD_ID]));
+    await expect(
+      apply(writer0(kit), { customFields: { [FIELD_ID]: 'руками' } }),
+    ).rejects.toMatchObject({
+      code: ErrorCode.FORMULA_CELL_LOCKED,
+      details: { fields: [FIELD_ID] },
+    });
+    expect(kit.repo.updateFields).not.toHaveBeenCalled();
+  });
+
+  it('формульная запись (formulaWrite) блокировку обходит', async () => {
+    const kit = setup();
+    kit.customFields.prepareUpdate.mockResolvedValueOnce({
+      next: { [FIELD_ID]: '0359-1-КЖ1' },
+      changes: [{ fieldId: FIELD_ID, from: null, to: '0359-1-КЖ1' }],
+    } as never);
+    await expect(
+      kit.writer.apply(
+        {} as never,
+        { id: 'alice', permissions: [] },
+        ROW,
+        { customFields: { [FIELD_ID]: '0359-1-КЖ1' } },
+        ['customFields'],
+        { formulaWrite: true },
+      ),
+    ).resolves.toBeTruthy();
+    expect(kit.formulaCells.lockedFieldIds).not.toHaveBeenCalled();
+  });
+
+  it('повтор того же значения блокировку не встречает (changes пуст)', async () => {
+    const kit = setup();
+    await apply(kit.writer, { customFields: { [FIELD_ID]: 'то же' } });
+    expect(kit.formulaCells.lockedFieldIds).not.toHaveBeenCalled();
+  });
+});
+
+function writer0(kit: ReturnType<typeof setup>): TaskFieldsWriter {
+  return kit.writer;
+}

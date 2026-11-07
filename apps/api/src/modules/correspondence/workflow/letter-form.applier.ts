@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ErrorCode } from '@nodus/contracts';
+import { ErrorCode, sameCustomFieldValue } from '@nodus/contracts';
 import type { CustomFieldValues } from '@nodus/contracts';
 
 import type { Prisma } from '../../../generated/prisma/client.js';
@@ -10,6 +10,7 @@ import { canViewLetter } from '../access/letter-access.js';
 import { companyDate } from '../../../core/time/company-time.js';
 import { LetterAttachedRefsRepository } from '../letters/letter-attached-refs.repository.js';
 import { LetterAttachedRefsValidator } from '../letters/letter-attached-refs.validator.js';
+import { LetterFieldsWriter } from '../letters/letter-fields.writer.js';
 import type { LetterDetailRow } from '../letters/letter-row.js';
 import { LetterThreadingService } from '../letters/letter-threading.service.js';
 import { LettersRepository } from '../letters/letters.repository.js';
@@ -27,6 +28,17 @@ const relationFail = (reason: 'not_found' | 'not_outgoing_registered' | 'suggest
     reason,
   });
 
+/** Ключи атрибутов, которые окно РЕАЛЬНО изменило (Р5 #632): умолчания
+ *  формы и повтор того же значения формулу не снимают. Сравниваем ввод окна
+ *  с текущими значениями — не итог валидатора (там уже подмешаны умолчания). */
+function changedCustomFieldKeys(before: CustomFieldValues | undefined, input: unknown): string[] {
+  const requested = (input as { customFields?: Record<string, unknown> } | null | undefined)
+    ?.customFields;
+  if (!requested || typeof requested !== 'object') return [];
+  const base = before ?? {};
+  return Object.keys(requested).filter((key) => !sameCustomFieldValue(base[key], requested[key]));
+}
+
 /**
  * Применение окна «Регистрация» (#55, Р1; #56 — связь «ответ на»): проверка
  * тех же полей, что у формы, и запись реквизитов в письмо. Номер письма здесь
@@ -40,6 +52,7 @@ export class LetterFormApplier {
   constructor(
     private readonly letters: LettersRepository,
     private readonly validator: LetterFieldsValidator,
+    private readonly fields: LetterFieldsWriter,
     private readonly threading: LetterThreadingService,
     private readonly attached: LetterAttachedRefsRepository,
     private readonly attachedValidator: LetterAttachedRefsValidator,
@@ -62,6 +75,20 @@ export class LetterFormApplier {
       // перекрывает, умолчания заполняют только пустое (#646).
       (letter.customFields ?? {}) as CustomFieldValues,
     );
+    // Формульно-заблокированные атрибуты окно не пишет (решение владельца
+    // по #660): значение в формульной ячейке даёт только формула — своя или
+    // привязки места. Регистрация не блокируется, поле просто пропускается;
+    // умолчания формы и повтор того же значения — не «вписано руками»,
+    // поэтому сравниваем ввод окна с текущими значениями.
+    const changedKeys = changedCustomFieldKeys(
+      letter.customFields as CustomFieldValues | undefined,
+      input.registration,
+    );
+    const locked =
+      changedKeys.length > 0
+        ? await this.fields.lockedFieldIds(tx, letter.id, changedKeys)
+        : new Set<string>();
+    for (const fieldId of locked) delete customFields[fieldId];
     // «Основной документ письма» (#56): у письма с файлами-кандидатами один
     // обязан быть выбран звездой — номер присваивается конкретному документу
     // (главный де-факто: main или PDF-копия тела).

@@ -136,6 +136,8 @@ export function CreationPanel({
         slot={opened}
         standardLabel={labelOf({ ...opened, label: null })}
         definition={definitionOf(opened.key)}
+        ownDefinitions={scoped}
+        hostKind={type.category === 'letter' ? 'letter' : 'task'}
         presetLabel={presetText(opened, summaryCtx(opened))}
         problems={problemsOf(opened.key)}
         readOnly={readOnly}

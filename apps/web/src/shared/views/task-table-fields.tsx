@@ -1,12 +1,15 @@
-import type { TaskListItem, TaskPriority } from '@nodus/contracts';
+import { useMemo } from 'react';
+import type { CustomFieldDefinition, TaskListItem, TaskPriority } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { NodeChip } from '@nodus/ui/components/node-chip';
 
+import { useCustomFieldDefinitions } from '../custom-fields/queries.js';
 import { formatDateTime, formatMinutes } from '../lib/format.js';
 import { DeadlineChip } from '../ui/deadline-chip.js';
 import { identityTone } from '../ui/identity-tone.js';
 import { monoCell, PersonCell } from '../ui/person-cell.js';
 import { TaskStatusBadge } from '../ui/task-status-badge.js';
+import { attributeColumnFields } from './attribute-fields.js';
 import type { DataTableField } from './data-table.js';
 import { CommentsCount } from '../tasks/comments-count.js';
 
@@ -27,10 +30,18 @@ export const priorityTone: Record<TaskPriority, 'muted' | 'warning' | 'danger'> 
  *
  * `projectVisible` — колонка «Проект» по умолчанию: внутри карточки
  * проекта контекст очевиден (false), в остальных местах показываем (true).
+ *
+ * `definitions` — реестр атрибутов модуля «Задачи» (#632): атрибутные
+ * колонки идут после системных, скрыты по умолчанию, сортировки не имеют
+ * (клиентская сортировка по вычисленным значениям — отдельная ступень).
  */
 export function makeTaskTableFields({
   projectVisible = true,
-}: { projectVisible?: boolean } = {}): DataTableField<TaskListItem>[] {
+  definitions,
+}: {
+  projectVisible?: boolean;
+  definitions?: readonly CustomFieldDefinition[];
+} = {}): DataTableField<TaskListItem>[] {
   return [
     {
       id: 'number',
@@ -139,7 +150,7 @@ export function makeTaskTableFields({
       minWidth: 56,
       render: (task) => (
         <span className={monoCell}>
-          {task.spentMinutes > 0 ? formatMinutes(task.spentMinutes) : '—'}
+          {task.spentMinutes > 0 ? formatMinutes(task.spentMinutes) : null}
         </span>
       ),
       sortValue: (task) => task.spentMinutes,
@@ -153,5 +164,23 @@ export function makeTaskTableFields({
       render: (task) => <span className={monoCell}>{formatDateTime(task.updatedAt)}</span>,
       sortValue: (task) => task.updatedAt,
     },
+    // Атрибутные колонки (#632) — после системных, скрыты по умолчанию:
+    // общая фабрика видов (значение по грамматике типа, fx/«!», без
+    // сортировки — клиентская сортировка по вычисленным значениям отдельно).
+    ...attributeColumnFields<TaskListItem>({ definitions, module: 'task' }),
   ];
+}
+
+/** Реестр колонок плоского списка задач с атрибутами портала (#632):
+ *  определения грузятся один раз на операцию (кэш query), колонки —
+ *  мемо-производная. Потребители вызывают хук в компоненте — реестр
+ *  меняется вместе с реестром атрибутов. */
+export function useTaskTableFields({
+  projectVisible = true,
+}: { projectVisible?: boolean } = {}): DataTableField<TaskListItem>[] {
+  const { data } = useCustomFieldDefinitions('task');
+  return useMemo(
+    () => makeTaskTableFields({ projectVisible, definitions: data }),
+    [projectVisible, data],
+  );
 }

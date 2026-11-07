@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { contactRefSchema, counterpartyRefSchema } from '../counterparties/counterparty.schemas.js';
 import { customFieldRefSchema } from '../custom-fields/custom-field-refs.js';
+import { customFieldFormulasSchema } from '../custom-fields/formula-api.schemas.js';
 import {
   customFieldValuesPatchSchema,
   customFieldValuesSchema,
@@ -206,6 +207,11 @@ export const letterListItemSchema = z.object({
    *  только участники (и держатели `correspondence.view_confidential`).
    *  Строка в списках есть только у видящих — бейдж не оракул. */
   confidential: z.boolean(),
+  /** Атрибуты строки списка (#632, Р9): значения, имена ссылок и формульное
+   *  состояние — колонки видов показывают их без отдельных запросов. */
+  customFields: customFieldValuesSchema.optional(),
+  customFieldRefs: z.array(customFieldRefSchema).optional(),
+  customFieldFormulas: customFieldFormulasSchema.optional(),
 });
 export type LetterListItem = z.infer<typeof letterListItemSchema>;
 
@@ -267,6 +273,8 @@ export const letterDetailSchema = letterListItemSchema.extend({
   /** Атрибуты области `letter`, привязанные к типу (ADR-0029). */
   customFields: customFieldValuesSchema,
   customFieldRefs: z.array(customFieldRefSchema),
+  /** Формульные ячейки (#632): своя/типовая формула и ошибка (производное). */
+  customFieldFormulas: customFieldFormulasSchema.optional(),
   /** Строки «приложенных писем» (#461, Р3): № + организация + дата. */
   attachedRefs: z.array(letterAttachedRefSchema),
   /** Канцелярия правит связи (#461, Р1а, В2): «Добавить/Заменить/Снять». */

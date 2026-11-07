@@ -219,7 +219,7 @@ export class DictionariesRepository {
     if (ids.length === 0) return [];
     const rows = await this.db(tx).dictionaryItem.findMany({
       where: { id: { in: [...ids] } },
-      select: { id: true, dictionaryId: true, name: true, isActive: true, color: true },
+      select: { id: true, dictionaryId: true, name: true, code: true, isActive: true, color: true },
     });
     return rows.map(normalizeItem);
   }
@@ -228,9 +228,19 @@ export class DictionariesRepository {
   async findActiveItemRef(dictionaryId: string, itemId: string, tx?: TransactionClient) {
     const row = await this.db(tx).dictionaryItem.findFirst({
       where: { id: itemId, dictionaryId, isActive: true },
-      select: { id: true, dictionaryId: true, name: true, isActive: true, color: true },
+      select: { id: true, dictionaryId: true, name: true, code: true, isActive: true, color: true },
     });
     return row ? normalizeItem(row) : null;
+  }
+
+  /** Все варианты справочника (обратная конвертация формул, #632). */
+  async findItemsOf(dictionaryId: string, tx?: TransactionClient) {
+    const rows = await this.db(tx).dictionaryItem.findMany({
+      where: { dictionaryId },
+      select: { id: true, dictionaryId: true, name: true, code: true, isActive: true, color: true },
+      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map(normalizeItem);
   }
 
   /** Id системного справочника по коду (#55: `receipt-method` в регистрации). */

@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -135,17 +135,33 @@ export function useUpdateTaskStage() {
   });
 }
 
+/** Свежесть префетча детали (A6-3, #632): без staleTime каждый pointerenter
+ *  строки/карточки стоил GET — наведение на список из сотни строк гоняло
+ *  сеть. 45 с переживают серию наведений и возврат к строке. */
+const PREFETCH_STALE_MS = 45_000;
+/** Leading-edge троттл по taskId: после инвалидации деталь снова stale, и
+ *  без окна префетч шёл бы в сеть на каждое наведение. */
+const PREFETCH_REPEAT_MS = 30_000;
+
 /** Префетч детали по ховеру строки/карточки: первое открытие слайдера
  *  рендерит контент одним проходом (без скелетон-релэйаута) — первая
  *  анимация не платит холодный fetch. Беседу задачи по ховеру не трогаем:
  *  by-task — find-or-create, запись на наведение мыши недопустима. */
 export function usePrefetchTask() {
   const queryClient = useQueryClient();
+  // Карта «когда префетчили» — в ref: переживает ререндеры списка, но не
+  // сессию (глобальный Map утёк бы между размонтированными видами).
+  const prefetchedAt = useRef(new Map<string, number>());
   return useCallback(
     (taskId: string) => {
+      const now = Date.now();
+      const last = prefetchedAt.current.get(taskId);
+      if (last !== undefined && now - last < PREFETCH_REPEAT_MS) return;
+      prefetchedAt.current.set(taskId, now);
       void queryClient.prefetchQuery({
         queryKey: tasksKeys.detail(taskId),
         queryFn: () => api<TaskDetail>(`/tasks/${taskId}`),
+        staleTime: PREFETCH_STALE_MS,
       });
     },
     [queryClient],

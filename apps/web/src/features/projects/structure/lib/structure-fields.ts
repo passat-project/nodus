@@ -1,5 +1,8 @@
+import { useMemo } from 'react';
 import { ui } from '@nodus/contracts';
 
+import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
+import { attributeFieldDefs } from '../../../../shared/views/attribute-fields.js';
 import { LEADING_COL_W } from '../../../../shared/views/row-menu.js';
 import type { FieldDef, ViewField } from '../../../../shared/views/use-view-fields.js';
 
@@ -85,4 +88,39 @@ export const structureFields: FieldDef[] = [
  *  отступами в ячейке названия (проводник), отдельной колонки графа нет. */
 export function structureGrid(fields: readonly ViewField<FieldDef>[]): string {
   return `${LEADING_COL_W}px ${fields.map((f) => `${f.width ?? 120}px`).join(' ')}`;
+}
+
+/**
+ * Колонки структуры + атрибуты (#632): в дереве живут ДВА носителя значений —
+ * папки (атрибуты видов папок) и задачи-листья (атрибуты задач), поэтому
+ * реестр собирается из обоих списков. Один атрибут может быть привязан и к
+ * виду папки, и к типу задачи — тогда колонка ОДНА (дедуп по `cf.<id>`:
+ * ячейка папки читает значение папки, ячейка задачи — значение задачи).
+ * Атрибуты скрыты по умолчанию: дерево остаётся пятью колонками, остальное —
+ * в шестерёнке.
+ */
+export function buildStructureFields(attributes: readonly FieldDef[]): FieldDef[] {
+  const seen = new Set(structureFields.map((field) => field.id));
+  const extra: FieldDef[] = [];
+  for (const field of attributes) {
+    if (seen.has(field.id)) continue;
+    seen.add(field.id);
+    extra.push(field);
+  }
+  return [...structureFields, ...extra];
+}
+
+/** Реестр колонок структуры с атрибутами папок и задач (#632): определения
+ *  обоих модулей грузятся один раз на операцию (кэш query). */
+export function useStructureFields(): FieldDef[] {
+  const taskDefinitions = useCustomFieldDefinitions('task');
+  const nodeDefinitions = useCustomFieldDefinitions('node');
+  return useMemo(
+    () =>
+      buildStructureFields([
+        ...attributeFieldDefs({ definitions: taskDefinitions.data, module: 'task' }),
+        ...attributeFieldDefs({ definitions: nodeDefinitions.data, module: 'node' }),
+      ]),
+    [taskDefinitions.data, nodeDefinitions.data],
+  );
 }

@@ -1,8 +1,11 @@
 import { useCallback, useMemo } from 'react';
-import type { ViewSort } from '@nodus/contracts';
+import type { CustomFieldDefinition, ViewSort } from '@nodus/contracts';
 
 import { useViewStore } from './view-store.js';
 import { uiPx } from '../ui/ui-scale.js';
+
+/** Группа поля в шестерёнке вида: системные поля модуля и атрибуты (#632). */
+export type FieldGroup = 'system' | 'attributes';
 
 /** Поле представления из реестра модуля: новое поле = +1 строка реестра. */
 export interface FieldDef {
@@ -20,6 +23,13 @@ export interface FieldDef {
   flex?: boolean;
   /** Нельзя скрыть (название сущности). */
   locked?: boolean;
+  /** Группа в шестерёнке вида: системные поля модуля или «Атрибуты» (#632).
+   *  Не задана — системное поле (реестры без атрибутных колонок). */
+  group?: FieldGroup;
+  /** Определение атрибута, из которого построено поле (#632): по нему
+   *  рендерится значение (грамматика типа) и подпись в шестерёнке. Есть
+   *  только у полей группы «Атрибуты» — id таких полей `cf.<fieldId>`. */
+  attribute?: CustomFieldDefinition;
 }
 
 export type ViewField<T extends FieldDef = FieldDef> = T & {

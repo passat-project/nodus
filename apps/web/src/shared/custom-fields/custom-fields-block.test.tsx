@@ -13,6 +13,16 @@ vi.mock('./queries.js', () => ({
   useCustomFieldDefinitions: vi.fn(),
 }));
 
+/** Ячейка-формула подменена: тест следит только за идентичностью
+ *  `ownDefinitions` (A6-10) — сам редактор проверяется своими тестами. */
+const cellProps = vi.hoisted(() => [] as { ownDefinitions: unknown }[]);
+vi.mock('./formula/formula-cell.js', () => ({
+  FormulaCell: (props: { ownDefinitions: unknown }) => {
+    cellProps.push(props);
+    return null;
+  },
+}));
+
 const { useCustomFieldDefinitions } = await import('./queries.js');
 const queryMock = vi.mocked(useCustomFieldDefinitions);
 
@@ -107,5 +117,40 @@ describe('CustomFieldsBlock', () => {
     expect(screen.getByText(WITH_HINT.hint!)).toBeTruthy();
     // Значение показывается (без правки — строка значения).
     expect(screen.getByText('№ 5')).toBeTruthy();
+  });
+});
+
+/**
+ * A6-10 (#632): `definitionsForTarget` возвращал новый массив на каждый
+ * рендер блока, а он уходит в `useFormulaEditor` как `ownDefinitions` —
+ * зависимость `useMemo` дерева источников. Любая перерисовка карточки
+ * (правка соседнего атрибута, состояние) пересобирала дерево редактора.
+ */
+describe('CustomFieldsBlock: стабильные определения для редактора (A6-10)', () => {
+  it('перерисовка блока не меняет ссылку ownDefinitions', () => {
+    const query = { isLoading: false, isError: false, data: [BOUND] };
+    queryMock.mockReturnValue(query as never);
+    const host = { kind: 'task' as const, id: '21000000-0000-4000-8000-000000000001' };
+    const element = (values: Record<string, string>) => (
+      <CustomFieldsBlock
+        module="task"
+        targetId={TYPE_TASK}
+        values={values}
+        refs={[]}
+        canEdit
+        onChange={() => {}}
+        host={host}
+      />
+    );
+
+    cellProps.length = 0;
+    const { rerender } = render(element({}));
+    const first = cellProps.at(-1)?.ownDefinitions;
+    expect(first).toBeDefined();
+
+    // Новый объект значений — законная перерисовка (правка соседнего поля).
+    rerender(element({ [BOUND.id]: '№ 7' }));
+    expect(cellProps.length).toBeGreaterThan(1);
+    expect(cellProps.at(-1)?.ownDefinitions).toBe(first);
   });
 });

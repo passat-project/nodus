@@ -9,10 +9,13 @@ import {
   nodeFormKey,
   updateProjectNodeBodySchema,
   type CustomFieldValues,
+  type FormulaMovePreviewResponse,
   type ProjectNode,
 } from '@nodus/contracts';
 
 import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
+import { nodeWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
+import { lockedPatchResponse } from '../../../../shared/custom-fields/formula/formula-mocks.js';
 import {
   invalidMockValues,
   withStaticDefaults,
@@ -56,7 +59,11 @@ export const structureNodeHandlers = [
     const row = findDemoProjectRow(String(params.id));
     const actor = getMockActor();
     if (!row || !canSeeProject(row, actor)) return nodeNotFound();
-    const nodes = nodesOfProject(row.id).map(projectNodeDto);
+    // Формулы вида папки (#632) считаются на чтении: DTO клонируется,
+    // хранимые строки структуры не мутируются.
+    const nodes = nodesOfProject(row.id).map((nodeRow) =>
+      nodeWithFormulas(projectNodeDto(nodeRow), nodeRow.kindId),
+    );
     return HttpResponse.json({
       nodes,
       kinds: demoNodeKinds,
@@ -223,6 +230,9 @@ export const structureNodeHandlers = [
       ),
     );
     if (rule) return rule;
+    // Формульная ячейка руками не пишется (#660): 422, как на сервере.
+    const lockedNode = lockedPatchResponse('node', node.id, node.customFields, patchValues);
+    if (lockedNode) return lockedNode;
     if (kindChanged) node.kindId = body.kindId!;
     if (body.name) node.name = body.name;
     if (Object.keys(patchValues).length > 0) {
@@ -234,7 +244,18 @@ export const structureNodeHandlers = [
       node.customFields = next;
       node.code = codeOfValue(next[SYSTEM_FIELD_IDS.nodeCode]);
     }
-    return HttpResponse.json(projectNodeDto(node));
+    return HttpResponse.json(nodeWithFormulas(projectNodeDto(node), node.kindId));
+  }),
+
+  // Превью формульного диффа переноса (#632, критерий 1): демо-мир без
+  // формульных переносов — дифф пуст, окно подтверждения не открывается.
+  // Права те же, что у переноса (structure manage), 404 — как у move.
+  http.post('/api/v1/projects/:id/nodes/:nodeId/move-preview', ({ params }) => {
+    const guard = manageableProject(String(params.id));
+    if (typeof guard === 'string') return guardResponse(guard);
+    const node = findDemoNodeRow(String(params.nodeId));
+    if (!node || node.projectId !== guard.row.id) return nodeNotFound();
+    return HttpResponse.json({ changes: [] } satisfies FormulaMovePreviewResponse);
   }),
 
   http.post('/api/v1/projects/:id/nodes/:nodeId/move', async ({ params, request }) => {

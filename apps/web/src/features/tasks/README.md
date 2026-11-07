@@ -55,9 +55,9 @@
 - **Кастомизация представлений** (инфраструктура `shared/views`, все модули):
   реестр списка-дерева — `lib/task-fields.tsx` (`taskListFields`, с контекстом
   ветки); реестры плоских таблиц задач/проектов и блоков карточки канбана —
-  ЕДИНЫЕ в shared (`shared/views/task-table-fields.tsx` `makeTaskTableFields`,
+  ЕДИНЫЕ в shared (`shared/views/task-table-fields.tsx` `useTaskTableFields`,
   `task-card-fields.ts` `makeTaskCardFields`, `project-table-fields.tsx`
-  `projectListFields`; потребители: задачи проекта, карточка сотрудника —
+  `useProjectTableFields`; потребители: задачи проекта, карточка сотрудника —
   «модули не отличаются», вердикт раунда 3); видимость полей — шестерёнка в
   строке инструментов; ширина колонок — ручкой на грани хедера (`ColumnResizer`);
   пресеты персистятся в localStorage (`nodus-views-v1`, схема — contracts

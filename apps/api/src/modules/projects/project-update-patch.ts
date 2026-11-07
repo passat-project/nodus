@@ -14,6 +14,7 @@ import type { TransactionClient } from '../../core/database/transaction-runner.j
 import { DomainException } from '../../core/errors/domain-exception.js';
 import type { UserProfileReader } from '../../core/ports/user-profile.port.js';
 import type { CustomFieldRegistry } from '../custom-fields/ports/custom-field-registry.port.js';
+import type { FormulaCells } from '../custom-fields/ports/formula-cells.port.js';
 import type { ProjectFacts } from './project-access.js';
 import { legacyPatchToAttributes } from './project-legacy-fields.js';
 import type { ProjectGroupsRepository } from './project-groups.repository.js';
@@ -33,6 +34,8 @@ export async function buildUpdatePatch(
     profiles: UserProfileReader;
     types: ProjectTypesRepository;
     customFields: CustomFieldRegistry;
+    /** Проверка формульной блокировки ячейки при записи значения (#660). */
+    formulaCells: Pick<FormulaCells, 'lockedFieldIds'>;
   },
   user: AuthUser,
   row: ProjectRow,
@@ -121,6 +124,26 @@ export async function buildUpdatePatch(
       },
       tx,
     );
+    // Формульная ячейка руками не пишется (решение владельца по #660):
+    // значение в атрибут со своей формулой или формулой типа — 422.
+    // Только реально изменённые ключи: повтор того же значения ошибкой
+    // не становится.
+    if (tx && prepared.changes.length > 0) {
+      const locked = await ctx.formulaCells.lockedFieldIds(
+        tx,
+        'project',
+        row.id,
+        prepared.changes.map((change) => change.fieldId),
+      );
+      if (locked.size > 0) {
+        throw new DomainException(
+          ErrorCode.FORMULA_CELL_LOCKED,
+          'Formula cell value is computed by its formula',
+          { fields: [...locked] },
+          422,
+        );
+      }
+    }
     const cleared = clearedProjectFields(
       form.fields.filter((slot) => slot.state === 'required').map((slot) => slot.fieldId),
       patchBody,

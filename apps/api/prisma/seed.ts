@@ -21,6 +21,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 
 import { Prisma, PrismaClient } from '../src/generated/prisma/client.js';
 import { GRANTED_ADMIN_PERMISSIONS } from './all-permissions.js';
+import { seedFormulaWorld } from './seed-formulas.js';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -555,6 +556,12 @@ async function main(): Promise<void> {
       },
     });
   }
+
+  // ===== Демо-мир формул (#632, пакет 2c) — ТОЛЬКО песочница =====
+  // Тип «Комплект» с формулой шифра, здания с «№ по ГП», окно «Изм.»,
+  // конфиденциальный комплект и секретный проект: критерии 1–5 владельца.
+  // Гейт внутри: nodus_night или явный SEED_FORMULA_DEMO=1 (на проде — нет).
+  await seedFormulaWorld(prisma, connectionString);
 
   const users = await prisma.user.count();
   const departments = await prisma.department.count();

@@ -2,7 +2,10 @@ import { z } from 'zod';
 
 import { Permission } from '../auth/permission.js';
 import { customFieldKeySchema } from '../custom-fields/custom-field-key.js';
-import { CUSTOM_FIELD_LIMITS } from '../custom-fields/custom-field-values.js';
+import {
+  CUSTOM_FIELD_LIMITS,
+  customFieldValueSchema,
+} from '../custom-fields/custom-field-values.js';
 import { deciderSourceSchema } from './decider.js';
 import type { ProcessCategory } from './process-type.schemas.js';
 import { transitionFormInputSchema, transitionFormSchema } from './transition-form.schemas.js';
@@ -216,6 +219,9 @@ export const workflowTransitionSchema = z.object({
   /** Окно при нажатии (#380): null — окно выключено. Эффективные разделы
    *  (настройка ∪ гейты) собирает `effectiveWindowSections`. */
   form: transitionFormSchema.nullable(),
+  /** Префилл формульных слотов окна (#632, Р12): сервер посчитал значения
+   *  при открытии; человек может поправить, в тело уходит значением. */
+  formPrefill: z.record(z.string(), customFieldValueSchema).optional(),
   /** Гейты кнопки — для живого списка условий в окне. */
   validators: z.array(workflowValidatorSchema),
 });

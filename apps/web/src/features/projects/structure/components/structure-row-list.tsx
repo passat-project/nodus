@@ -1,6 +1,6 @@
-import type { NodeKind } from '@nodus/contracts';
+import type { CustomFieldRef, NodeKind } from '@nodus/contracts';
 import type { RowSelection } from '../../../../shared/views/use-row-selection.js';
-import type { StructureField } from './structure-cells.js';
+import type { StructureAttributeDefs, StructureField } from './structure-cells.js';
 import {
   StructureNoNodeRowView,
   StructureNodeRowView,
@@ -12,7 +12,9 @@ import type { StructureDnd } from '../lib/use-structure-dnd.js';
 
 /** Рендер строк дерева структуры: узлы, задачи-листья и секция «Без узла».
  *  Вложенность — отступами (как в проводнике), без линий и точек. Вынесен
- *  из вкладки (I5); состояние и мутации остаются у вкладки — здесь вид. */
+ *  из вкладки (I5); состояние и мутации остаются у вкладки — здесь вид.
+ *  Атрибутные колонки (#632): определения по id поля и ссылки папок — из
+ *  модели вида; ссылки задачи строка берёт у самой задачи. */
 export function StructureRowList({
   treeRows,
   noNodeRow,
@@ -21,6 +23,8 @@ export function StructureRowList({
   collapsed,
   noNodeCollapsed,
   fields,
+  attributes,
+  refs,
   grid,
   selection,
   dnd,
@@ -41,6 +45,8 @@ export function StructureRowList({
   collapsed: ReadonlySet<string>;
   noNodeCollapsed: boolean;
   fields: readonly StructureField[];
+  attributes: StructureAttributeDefs;
+  refs: ReadonlyMap<string, CustomFieldRef>;
   grid: { templateColumns: string };
   selection: RowSelection;
   dnd: StructureDnd;
@@ -86,6 +92,7 @@ export function StructureRowList({
       }}
       isDragging={dnd.active?.kind === 'tasks' && dnd.active.taskIds.includes(row.task.id)}
       fields={fields}
+      attributes={attributes}
       grid={grid}
       showSelection={canEdit}
       readOnly={!canEdit}
@@ -113,6 +120,8 @@ export function StructureRowList({
                 invalid={target?.overId === `node:${row.node.id}` && target.invalid}
                 isDragging={dnd.active?.kind === 'node' && dnd.active.nodeId === row.node.id}
                 fields={fields}
+                attributes={attributes}
+                refs={refs}
                 grid={grid}
                 showSelection={canEdit}
                 readOnly={!canEdit}

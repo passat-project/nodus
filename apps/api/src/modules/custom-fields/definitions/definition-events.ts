@@ -20,7 +20,7 @@ export interface DefinitionEventSink {
 export async function emitDefinitionChanged(
   sink: DefinitionEventSink,
   tx: TransactionClient,
-  definition: Pick<FieldDefinitionRow, 'id'>,
+  definition: Pick<FieldDefinitionRow, 'id' | 'number'>,
   change: 'created' | 'updated' | 'deleted' | 'reordered',
   actorId: string,
   fields: string[],
@@ -31,6 +31,9 @@ export async function emitDefinitionChanged(
     {
       definitionId: definition.id,
       change,
+      // Номер нужен обработчикам удаления: строки определения к моменту
+      // доставки уже нет (#632, Р13).
+      number: definition.number,
       ...(fields.length > 0 ? { fields } : {}),
     },
     { actorId, aggregateType: 'field_definition', aggregateId: definition.id },

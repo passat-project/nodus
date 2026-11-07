@@ -16,6 +16,8 @@ export function LetterAttributes({ letter }: { letter: LetterDetail }) {
       values={letter.customFields}
       refs={letter.customFieldRefs}
       canEdit={letter.access.canEdit}
+      host={{ kind: 'letter', id: letter.id }}
+      formulas={letter.customFieldFormulas}
       onChange={(fieldId, value, refs) =>
         update.mutate({
           body: { customFields: { [fieldId]: value } },

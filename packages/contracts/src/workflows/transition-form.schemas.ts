@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { letterRegistrationInputSchema } from '../correspondence/letter-registration.schemas.js';
 import { customFieldKeySchema } from '../custom-fields/custom-field-key.js';
+import { formulaNodeSchema } from '../custom-fields/formula.js';
 import {
   customFieldValuesInputSchema,
   CUSTOM_FIELD_LIMITS,
@@ -58,9 +59,20 @@ export const transitionFormSectionSchema = z.discriminatedUnion('kind', [
     .object({
       kind: z.literal('fields'),
       fields: z.array(transitionWindowFieldKeySchema).min(1).max(CUSTOM_FIELD_LIMITS.windowFields),
+      /** Формулы-подстановки полей окна (#632, Р12): ключ — поле раздела,
+       *  значение считается при открытии окна; человек может поправить,
+       *  сохраняется значением (снимок в журнале перехода). */
+      formulas: z.record(z.string(), formulaNodeSchema).optional(),
     })
     .strict()
-    .refine((v) => new Set(v.fields).size === v.fields.length, { message: 'duplicate fields' }),
+    .refine((v) => new Set(v.fields).size === v.fields.length, { message: 'duplicate fields' })
+    .refine(
+      (v) =>
+        Object.keys(v.formulas ?? {}).every((key) =>
+          v.fields.includes(key as TransitionWindowFieldKey),
+        ),
+      { message: 'formula for unknown field' },
+    ),
   z.object({ kind: z.literal('time'), mode: z.enum(['if_empty', 'always']) }).strict(),
   z.object({ kind: z.literal('result') }).strict(),
   z.object({ kind: z.literal('result_files'), label: strictLabel }).strict(),
@@ -77,9 +89,17 @@ export const transitionFormSectionDraftSchema = z.discriminatedUnion('kind', [
     .object({
       kind: z.literal('fields'),
       fields: z.array(transitionWindowFieldKeySchema).min(1).max(CUSTOM_FIELD_LIMITS.windowFields),
+      formulas: z.record(z.string(), formulaNodeSchema).optional(),
     })
     .strict()
-    .refine((v) => new Set(v.fields).size === v.fields.length, { message: 'duplicate fields' }),
+    .refine((v) => new Set(v.fields).size === v.fields.length, { message: 'duplicate fields' })
+    .refine(
+      (v) =>
+        Object.keys(v.formulas ?? {}).every((key) =>
+          v.fields.includes(key as TransitionWindowFieldKey),
+        ),
+      { message: 'formula for unknown field' },
+    ),
   z.object({ kind: z.literal('time'), mode: z.enum(['if_empty', 'always']) }).strict(),
   z.object({ kind: z.literal('result') }).strict(),
   z.object({ kind: z.literal('result_files'), label: draftLabel }).strict(),

@@ -3,8 +3,8 @@ import {
   attachmentPreviewKind,
   isPdfDerivativeCandidate,
   ui,
-  type ContactRef,
-  type CounterpartyRef,
+  type CustomFieldRef,
+  type CustomFieldValues,
   type LetterAccess,
   type LetterAttachment,
   type LetterBody,
@@ -13,10 +13,6 @@ import {
   type LetterListItem,
   type LetterMailInfo,
   type LetterRef,
-  type ProcessTypeRef,
-  type ProjectRef,
-  type ReceiptMethodRef,
-  type UserRef,
 } from '@nodus/contracts';
 
 import { SignedUrlService } from '../../../core/crypto/signed-url.service.js';
@@ -33,6 +29,11 @@ import {
   type CustomFieldRegistry,
 } from '../../custom-fields/ports/custom-field-registry.port.js';
 import {
+  FORMULA_CELLS,
+  type FormulaCells,
+  type FormulaHostState,
+} from '../../custom-fields/ports/formula-cells.port.js';
+import {
   DICTIONARY_READER,
   type DictionaryReader,
 } from '../../dictionaries/ports/dictionary-reader.port.js';
@@ -47,40 +48,17 @@ import {
 } from '../../projects/ports/project-reader.port.js';
 import {
   PROCESS_CATALOG_READER,
-  type CatalogStage,
   type ProcessCatalogReader,
 } from '../../workflows/ports/process-catalog-reader.port.js';
 import { canRegisterLetters } from '../access/letter-access.js';
+import { letterListAttributes } from './letter-list-attributes.js';
 import type {
   LetterAttachedRefRow,
   LetterAttachmentRow,
   LetterDetailRow,
   LetterListRow,
 } from './letter-row.js';
-
-/** Ссылки страницы: гидратация пачками — один запрос на вид ссылки (Р6). */
-export interface LetterRefs {
-  stages: Map<string, CatalogStage>;
-  types: Map<string, ProcessTypeRef>;
-  counterparties: Map<string, CounterpartyRef>;
-  contacts: Map<string, ContactRef>;
-  users: Map<string, UserRef>;
-  receipts: Map<string, ReceiptMethodRef>;
-  projects: Map<string, ProjectRef>;
-}
-
-const EMPTY_REFS = (): LetterRefs => ({
-  stages: new Map(),
-  types: new Map(),
-  counterparties: new Map(),
-  contacts: new Map(),
-  users: new Map(),
-  receipts: new Map(),
-  projects: new Map(),
-});
-
-const dateOnly = (value: Date | null): string | null =>
-  value ? value.toISOString().slice(0, 10) : null;
+import { EMPTY_REFS, dateOnly, type LetterRefs } from './letter-refs.js';
 
 /**
  * Сборка DTO писем (#55): ссылки — пачками через порты (типы и стадии —
@@ -97,6 +75,7 @@ export class LetterDtoMapper {
     @Inject(DICTIONARY_READER) private readonly dictionaries: DictionaryReader,
     @Inject(FILE_OBJECT_READER) private readonly files: FileObjectReader,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
+    @Inject(FORMULA_CELLS) private readonly formulas: FormulaCells,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     private readonly signedUrls: SignedUrlService,
   ) {}
@@ -148,6 +127,7 @@ export class LetterDtoMapper {
     attachmentCount: number,
     replyTo: LetterRef | null = null,
     viewed: boolean = false,
+    attributes?: { refs: readonly CustomFieldRef[]; state?: FormulaHostState },
   ): LetterListItem {
     const stage = refs.stages.get(row.stageId);
     return {
@@ -185,6 +165,18 @@ export class LetterDtoMapper {
       attachmentCount,
       viewed,
       confidential: row.confidential,
+      // Атрибуты строки (#632, Р9): значения (формулы типа наложены на
+      // чтении), ссылки и формульное состояние — колонки без N+1.
+      ...(attributes
+        ? {
+            customFields: {
+              ...((row.customFields ?? {}) as CustomFieldValues),
+              ...(attributes.state?.values ?? {}),
+            } as LetterListItem['customFields'],
+            customFieldRefs: attributes.refs as LetterListItem['customFieldRefs'],
+            ...(attributes.state ? { customFieldFormulas: attributes.state.formulas } : {}),
+          }
+        : {}),
     };
   }
 
@@ -195,7 +187,10 @@ export class LetterDtoMapper {
     replyTos: ReadonlyMap<string, LetterRef> = new Map(),
     viewed: ReadonlySet<string> = new Set(),
   ): Promise<LetterListItem[]> {
-    const refs = await this.refsOf(rows, { actor });
+    const [refs, attributes] = await Promise.all([
+      this.refsOf(rows, { actor }),
+      letterListAttributes(this.customFields, this.formulas, rows, actor),
+    ]);
     return rows.map((row) =>
       this.toListItem(
         row,
@@ -203,6 +198,7 @@ export class LetterDtoMapper {
         counts.get(row.id) ?? 0,
         replyTos.get(row.id) ?? null,
         viewed.has(row.id),
+        attributes.get(row.id),
       ),
     );
   }

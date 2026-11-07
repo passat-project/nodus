@@ -54,9 +54,34 @@ export class ProjectNodesRepository {
     });
   }
 
-  async findById(id: string): Promise<ProjectNodeRow | null> {
-    const row = await this.prisma.projectNode.findUnique({ select: nodeSelect, where: { id } });
+  /** Узел по id (без проекта): источники формул (#632) читают папку по id. */
+  async findById(id: string, tx?: TransactionClient): Promise<ProjectNodeRow | null> {
+    const row = await (tx ?? this.prisma).projectNode.findUnique({
+      select: nodeSelect,
+      where: { id },
+    });
     return row;
+  }
+
+  /** Узлы пачкой по id (пересчёт формул удалённого атрибута, #632). */
+  async listByIds(ids: readonly string[], tx?: TransactionClient): Promise<ProjectNodeRow[]> {
+    if (ids.length === 0) return [];
+    return (tx ?? this.prisma).projectNode.findMany({
+      select: nodeSelect,
+      where: { id: { in: [...new Set(ids)] } },
+    });
+  }
+
+  /** Узлы вида (событие каталога видов, #632): смена формы вида меняет
+   *  доступность атрибутов у всех его папок — пересчёт по проектам. */
+  async listByKind(
+    kindId: string,
+    tx?: TransactionClient,
+  ): Promise<{ id: string; projectId: string }[]> {
+    return (tx ?? this.prisma).projectNode.findMany({
+      select: { id: true, projectId: true },
+      where: { kindId },
+    });
   }
 
   /** Узел проекта (без оракула чужих: не тот проект — null). Чтение под

@@ -76,9 +76,14 @@ export class LettersRepository {
   }
 
   /** Участники одного письма (деталь, состав чата) — по времени прихода:
-   *  первый участник незарегистрированного обсуждения — его создатель. */
-  participants(letterId: string): Promise<{ userId: string; role: string; createdAt: Date }[]> {
-    return this.prisma.letterParticipant.findMany({
+   *  первый участник незарегистрированного обсуждения — его создатель.
+   *  `tx` — чтение в транзакции вызывающего (адресаты адресного события
+   *  формулы видят тот же состав, что и коммит, #632 O4). */
+  participants(
+    letterId: string,
+    tx?: TransactionClient,
+  ): Promise<{ userId: string; role: string; createdAt: Date }[]> {
+    return (tx ?? this.prisma).letterParticipant.findMany({
       where: { letterId },
       orderBy: [{ createdAt: 'asc' }, { userId: 'asc' }],
       select: { userId: true, role: true, createdAt: true },

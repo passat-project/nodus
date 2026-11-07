@@ -200,6 +200,9 @@ vi.mock('../../../../shared/auth-store.js', () => {
 });
 
 vi.mock('../../../../shared/api/projects-list.js', () => ({
+  // Ключи кэша нужны соседним модулям (node-kinds, формулы #632) — мок
+  // обязан отдавать их наравне с хуками.
+  projectsKeys: { all: ['projects'], types: () => ['projects'], detail: (id: string) => [id] },
   useProjectTypes: () => ({ data: TYPES, isLoading: false }),
   useProjectsList: () => ({ data: { items: [], nextCursor: null } }),
   useProjectGroups: () => ({ data: [] }),

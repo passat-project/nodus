@@ -8,11 +8,13 @@ import type {
   WorkflowFormApplied,
 } from '../../../core/ports/workflow-entity.port.js';
 import { CHAT_MESSAGE_ACCESS, type ChatMessageAccess } from '../../chat/message-access.port.js';
+import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
 import { actorRoles, taskAccess } from '../access/task-access.js';
 import { ResultRevisions } from '../activity/result-revisions.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
 import { TaskFieldsWriter, type TaskFieldsWrite } from '../tasks/task-fields.writer.js';
+import { TaskFormulaService } from '../tasks/task-formula.service.js';
 import { TimeService } from '../time/time.service.js';
 
 /**
@@ -27,10 +29,12 @@ export class TaskFormApplier {
   constructor(
     private readonly tasks: TasksRepository,
     private readonly writer: TaskFieldsWriter,
+    private readonly formulas: TaskFormulaService,
     private readonly time: TimeService,
     private readonly revisions: ResultRevisions,
     @Inject(CHAT_MESSAGE_ACCESS) private readonly messages: ChatMessageAccess,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
+    @Inject(FORMULA_CELLS) private readonly formulaCells: FormulaCells,
   ) {}
 
   async apply(
@@ -46,8 +50,10 @@ export class TaskFormApplier {
     let timeEntryId: string | null = null;
     let result: WorkflowFormApplied['result'] = null;
 
-    if (input.fields) {
-      if (!access.canEdit) throw DomainException.forbidden('Task edit not allowed');
+    // Окно может прислать формульные слоты (always-send) даже актору без
+    // права правки. Это не его ручной ввод: переход не блокируем, поля
+    // просто не применяем (иначе 403 на пустом месте).
+    if (input.fields && access.canEdit) {
       const patch: TaskFieldsWrite = {};
       const keys: string[] = [];
       if (input.fields.description !== undefined && input.fields.description !== task.description) {
@@ -83,12 +89,33 @@ export class TaskFormApplier {
       }
       // Кастомные атрибуты окна (#431, Р7): значения идут общим писателем —
       // проверка типов и ссылок, журнал изменений и событие там же.
+      // Формульно-заблокированные поля отфильтрованы (решение владельца по
+      // #660): always-send слот с префиллом формулы не должен ни убить
+      // формулу ячейки, ни получить 422 — переход не блокируется.
       const customPatch = input.fields.customFields ?? {};
-      if (Object.keys(customPatch).length > 0) patch.customFields = customPatch;
+      const locked =
+        Object.keys(customPatch).length > 0
+          ? await this.formulaCells.lockedFieldIds(tx, 'task', taskId, Object.keys(customPatch))
+          : new Set<string>();
+      const unlockedPatch = Object.fromEntries(
+        Object.entries(customPatch).filter(([fieldId]) => !locked.has(fieldId)),
+      );
+      if (Object.keys(unlockedPatch).length > 0) patch.customFields = unlockedPatch;
       if (keys.length > 0 || patch.customFields) {
         const written = await this.writer.apply(tx, actor, task, patch, keys);
         for (const change of written.customFieldChanges) {
           fields[`cf.${change.fieldId}`] = { from: change.from, to: change.to };
+        }
+        // Синхронный пересчёт формул в той же tx (#632): ответ перехода и
+        // следующий GET несут свежие значения (обработчик опаздывает на
+        // цикл диспетчера — карточка «отстаёт на шаг»).
+        if (written.customFieldChanges.length > 0) {
+          await this.formulas.recalcOwnAfterValuesChange(
+            tx,
+            actor.id,
+            taskId,
+            written.customFieldChanges.map((change) => change.fieldId),
+          );
         }
         // Смена ответственного меняет права на СЛЕДУЮЩИЕ разделы: время и
         // итог перепроверяются по свежим ролям (иначе актор, передавший

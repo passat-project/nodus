@@ -1,10 +1,18 @@
 import { CornerDownRight, Mail, MessageSquare } from 'lucide-react';
+import { memo, useMemo } from 'react';
 import type { TaskListItem } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { isCustomFieldValueFilled, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { formatMinutes } from '../../lib/format.js';
 import { useCommentsCount } from '../../tasks/comments-live.js';
+import {
+  attributeFormula,
+  attributeRefs,
+  attributeRenderCell,
+  attributeValue,
+} from '../../views/attribute-fields.js';
+import type { FieldDef } from '../../views/use-view-fields.js';
 import { PersonAvatar } from '../person-avatar.js';
 import { DeadlineChip } from '../deadline-chip.js';
 import { identityTone } from '../identity-tone.js';
@@ -17,11 +25,14 @@ import { stageTone } from './stage-tone.js';
  *  Презентационная: открытие (клик, rect источника для shared-element) и
  *  префетч подключает фича через onOpen/onHover.
  *  overlay — призрак DragOverlay во время переноса (активный узел: свечение).
- *  placeholder — слот переносимой карточки (пунктир, без свечения). */
-export function BoardTaskCard({
+ *  placeholder — слот переносимой карточки (пунктир, без свечения).
+ *  fields — реестр вида: блоки с определением атрибута (#632) рисуются
+ *  значением по грамматике типа; пустое значение блок не показывает. */
+function BoardTaskCardInner({
   task,
   parentNumber,
   isVisible,
+  fields,
   overlay = false,
   placeholder = false,
   onOpen,
@@ -30,6 +41,8 @@ export function BoardTaskCard({
   task: TaskListItem;
   parentNumber?: number;
   isVisible: (fieldId: string) => boolean;
+  /** Реестр полей вида — источник атрибутных блоков (необязателен). */
+  fields?: readonly FieldDef[];
   overlay?: boolean;
   placeholder?: boolean;
   /** Клик по карточке: фича решает, куда открыть (слайдер) и прокидывает rect. */
@@ -40,6 +53,11 @@ export function BoardTaskCard({
   const showFooter = isVisible('assignee') || isVisible('comments') || isVisible('spent');
   // Живой счётчик (#252): +1 сразу по сообщению, точное значение — событием.
   const commentsCount = useCommentsCount(task);
+  // Атрибуты карточки (#632): включённые шестерёнкой и непустые.
+  const attributes = (fields ?? []).filter(
+    (field) => field.attribute !== undefined && isVisible(field.id),
+  );
+  const refs = useMemo(() => attributeRefs(task), [task]);
 
   return (
     <button
@@ -114,6 +132,32 @@ export function BoardTaskCard({
           <span className="truncate">{task.project.name}</span>
         </span>
       ) : null}
+      {/* Атрибуты (#632): «Название: значение» одной строкой; значение —
+          компактно и без ссылок (карточка — кнопка: вложенные кнопки и <a>
+          запрещены), длинный текст обрезается многоточием. */}
+      {attributes.map((field) => {
+        const definition = field.attribute;
+        if (!definition) return null;
+        const value = attributeValue(task, definition);
+        const formula = attributeFormula(task, definition);
+        // Ошибка формулы видна и без значения (бейдж «!»).
+        if (!isCustomFieldValueFilled(value) && !formula?.error) return null;
+        return (
+          <span
+            key={field.id}
+            data-card-field={field.id}
+            className="flex min-w-0 items-baseline gap-1.5 text-body-xs"
+          >
+            <span className="shrink-0 text-muted-foreground">{field.label}</span>
+            <span className="min-w-0 text-foreground/90 line-clamp-1">
+              {attributeRenderCell(definition, value, refs, {
+                interactive: false,
+                formula,
+              })}
+            </span>
+          </span>
+        );
+      })}
       {showFooter ? (
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
           {isVisible('assignee') && task.assignee ? (
@@ -137,3 +181,22 @@ export function BoardTaskCard({
     </button>
   );
 }
+
+/**
+ * memo карточки канбана (A6-4, #632): рендер борда (смена состава колонок,
+ * drag-состояние, фильтр) перерисовывал ВСЕ карточки, хотя менялись единицы.
+ * `onOpen`/`onHover` в сравнении не участвуют: потребители передают стрелки
+ * заново на каждый свой рендер, а внутри — стабильные хуки (`useOpenCard`,
+ * `usePrefetchTask`); обработчик вызывается только из события, поэтому
+ * «протухшая» ссылка ведёт себя ровно так же.
+ */
+export const BoardTaskCard = memo(
+  BoardTaskCardInner,
+  (prev, next) =>
+    prev.task === next.task &&
+    prev.parentNumber === next.parentNumber &&
+    prev.isVisible === next.isVisible &&
+    prev.fields === next.fields &&
+    prev.overlay === next.overlay &&
+    prev.placeholder === next.placeholder,
+);

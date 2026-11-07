@@ -15,8 +15,10 @@ import {
   useTaskFilterDefs,
 } from '../../../shared/views/task-filter-fields.js';
 import { ViewSettings } from '../../../shared/views/view-settings.js';
-import { ProjectKanban, projectKanbanCardFields } from './project-kanban.js';
-import { ProjectTaskList, projectTaskTableFields } from './project-task-list.js';
+import { useTaskCardFields } from '../../../shared/views/task-card-fields.js';
+import { useTaskTableFields } from '../../../shared/views/task-table-fields.js';
+import { ProjectKanban } from './project-kanban.js';
+import { ProjectTaskList } from './project-task-list.js';
 
 type TasksView = 'list' | 'kanban';
 
@@ -36,6 +38,10 @@ export function ProjectTasksTab({ projectId }: { projectId: string }) {
   const [view, setView] = useState<TasksView>('list');
   const toolbar = useListToolbar('projects.tasks', taskBuiltinPresets);
   const defs = useTaskFilterDefs({ projectVisible: false });
+  // Реестры видов с атрибутами портала (#632): шестерёнка показывает их
+  // вместе с системными полями; «Проект» скрыт — контекст очевиден.
+  const listFields = useTaskTableFields({ projectVisible: false });
+  const cardFields = useTaskCardFields({ projectVisible: false });
   const filter = useMemo<ActiveListFilter<TaskListItem>>(
     () => ({ defs, state: toolbar.filters, query: toolbar.query, searchText: taskSearchText }),
     [defs, toolbar.filters, toolbar.query],
@@ -84,7 +90,7 @@ export function ProjectTasksTab({ projectId }: { projectId: string }) {
         right={
           <ViewSettings
             viewKey={view === 'list' ? 'projects.tasks' : 'projects.kanban'}
-            defs={view === 'list' ? projectTaskTableFields : projectKanbanCardFields}
+            defs={view === 'list' ? listFields : cardFields}
           />
         }
       />

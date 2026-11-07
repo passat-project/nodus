@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Mail, MessageSquare } from 'lucide-react';
 import type { TaskListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -8,9 +8,11 @@ import { formatDateTime, formatMinutes } from '../../../shared/lib/format.js';
 import { DeadlineChip } from '../../../shared/ui/deadline-chip.js';
 import { monoCell, PersonCell } from '../../../shared/ui/person-cell.js';
 import { priorityTone } from '../../../shared/views/task-table-fields.js';
+import { attributeColumnFields } from '../../../shared/views/attribute-fields.js';
 import type { FieldDef } from '../../../shared/views/use-view-fields.js';
 import { TaskStatusBadge } from '../../../shared/ui/task-status-badge.js';
 import { CommentsCount } from '../../../shared/tasks/comments-count.js';
+import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries.js';
 
 /** Контекст ячейки списка: состояние ветки дерева (счётчик свёрнутых). */
 export interface CellContext {
@@ -151,7 +153,7 @@ export const taskListFields: ListFieldDef[] = [
     minWidth: 56,
     render: (task) => (
       <span className={monoCell}>
-        {task.spentMinutes > 0 ? formatMinutes(task.spentMinutes) : '—'}
+        {task.spentMinutes > 0 ? formatMinutes(task.spentMinutes) : null}
       </span>
     ),
     sortValue: (task) => task.spentMinutes,
@@ -166,3 +168,19 @@ export const taskListFields: ListFieldDef[] = [
     sortValue: (task) => task.updatedAt,
   },
 ];
+
+/**
+ * Реестр колонок дерева-журнала + атрибуты места «задача» (#632, В3/В5):
+ * атрибутные колонки скрыты по умолчанию, включаются шестерёнкой; сортировка
+ * по ним не включается (серверная сортировка — #435).
+ */
+export function useTaskListFields(): ListFieldDef[] {
+  const definitions = useCustomFieldDefinitions('task');
+  return useMemo(
+    () => [
+      ...taskListFields,
+      ...attributeColumnFields<TaskListItem>({ definitions: definitions.data, module: 'task' }),
+    ],
+    [definitions.data],
+  );
+}

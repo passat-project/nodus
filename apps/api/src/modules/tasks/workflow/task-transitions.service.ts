@@ -1,12 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { PinoLogger } from 'nestjs-pino';
 import type {
   AuthUser,
+  CustomFieldType,
+  CustomFieldValue,
   ExecuteTransitionBody,
   ExecuteTransitionResult,
   WorkflowTransition,
 } from '@nodus/contracts';
+import { customFieldIdOfKey, CUSTOM_FIELD_LIMITS } from '@nodus/contracts';
 
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
+import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import {
   WORKFLOW_ENGINE,
   type WorkflowEnginePort,
@@ -15,6 +21,29 @@ import { actorRoles, planHolderIds, taskAccess } from '../access/task-access.js'
 import { Placements } from '../personal/placements.js';
 import { TasksQueryService } from '../tasks/tasks-query.service.js';
 import { TasksService } from '../tasks/tasks.service.js';
+
+/** Тип стандартного поля окна — для материализации формулы-префилла (Р12). */
+const SLOT_TYPES: Readonly<Record<string, CustomFieldType>> = {
+  description: 'long_text',
+  deadline: 'datetime',
+  assignee: 'user',
+  plannedMinutes: 'number',
+};
+
+/**
+ * Входная грамматика системного слота окна (A8-5): префилл не подставляет
+ * заведомо невалидное — сабмит отверг бы значение 422 на поле, которое
+ * человек не трогал. Плановое время — `int 1..100 000` (тело перехода).
+ */
+function slotValueFits(key: string, value: CustomFieldValue): boolean {
+  if (key !== 'plannedMinutes') return true;
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= CUSTOM_FIELD_LIMITS.duration
+  );
+}
 
 /**
  * Сценарии API «кнопки маршрута» задачи (ADR-0020; движок — модуль
@@ -31,12 +60,62 @@ export class TaskTransitionsService {
     private readonly placements: Placements,
     private readonly taskService: TasksService,
     @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
-  ) {}
+    @Inject(FORMULA_CELLS) private readonly cells: FormulaCells,
+    private readonly logger: PinoLogger,
+  ) {
+    this.logger.setContext(TaskTransitionsService.name);
+  }
 
-  /** GET /tasks/:id/transitions — кнопки маршрута видимой задачи. */
+  /** GET /tasks/:id/transitions — кнопки маршрута видимой задачи. Формульные
+   *  слоты окна получают посчитанный префилл (Р12): значение видно сразу,
+   *  человек может поправить, в тело уйдёт значением. */
   async listFor(user: AuthUser, taskId: string): Promise<WorkflowTransition[]> {
     await this.query.visibleRow(user, taskId);
-    return this.txRunner.run((tx) => this.engine.available(tx, taskId, 'task', user));
+    return this.txRunner.run(async (tx) => {
+      const transitions = await this.engine.available(tx, taskId, 'task', user);
+      return this.withPrefill(transitions, taskId, user, tx);
+    });
+  }
+
+  /** Префилл формульных слотов: ошибка/пусто — слот остаётся пустым (Р13).
+   *  Ошибка расчёта пишется в лог (A8-6), но переход не блокируется. */
+  private async withPrefill(
+    transitions: readonly WorkflowTransition[],
+    taskId: string,
+    user: AuthUser,
+    tx: TransactionClient,
+  ): Promise<WorkflowTransition[]> {
+    return Promise.all(
+      transitions.map(async (transition) => {
+        const section = transition.form?.sections.find((entry) => entry.kind === 'fields');
+        if (section?.kind !== 'fields' || !section.formulas) return transition;
+        const prefill: Record<string, CustomFieldValue> = {};
+        for (const [key, ast] of Object.entries(section.formulas)) {
+          const fieldId = customFieldIdOfKey(key);
+          const result = await this.cells.evaluate('task', taskId, ast, {
+            actor: user,
+            ...(fieldId ? { fieldId } : { fieldType: SLOT_TYPES[key] }),
+            tx,
+          });
+          if (result.error) {
+            this.logger.warn(
+              { taskId, key, code: result.error.code },
+              'Формула-префилл окна не посчитана',
+            );
+            continue;
+          }
+          if (result.value === null) continue;
+          if (!slotValueFits(key, result.value)) {
+            this.logger.warn({ taskId, key }, 'Формула-префилл окна не подходит грамматике поля');
+            continue;
+          }
+          prefill[key] = result.value;
+        }
+        return Object.keys(prefill).length > 0
+          ? { ...transition, formPrefill: prefill }
+          : transition;
+      }),
+    );
   }
 
   /** POST /tasks/:id/transitions/:transitionId — выполнить кнопку. Личные
@@ -62,7 +141,14 @@ export class TaskTransitionsService {
     );
     const transitions = await this.txRunner.run(async (tx) => {
       await this.engine.execute(tx, taskId, 'task', user, { transitionId }, body);
-      return this.engine.available(tx, taskId, 'task', user);
+      // Кнопки после действия уезжают в кэш веба — с тем же префиллом, что
+      // и в listFor: иначе следующее окно откроется с пустыми слотами.
+      return this.withPrefill(
+        await this.engine.available(tx, taskId, 'task', user),
+        taskId,
+        user,
+        tx,
+      );
     });
     return { task: await this.taskService.listItem(user, taskId), transitions };
   }

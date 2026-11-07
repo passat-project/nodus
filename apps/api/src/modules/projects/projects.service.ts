@@ -23,8 +23,10 @@ import {
   CUSTOM_FIELD_REGISTRY,
   type CustomFieldRegistry,
 } from '../custom-fields/ports/custom-field-registry.port.js';
+import { FORMULA_CELLS, type FormulaCells } from '../custom-fields/ports/formula-cells.port.js';
 import type { ProjectFacts } from './project-access.js';
 import { projectAudience } from './project-audience.js';
+import { ProjectFormulaRecalcService } from './project-formula-recalc.service.js';
 import { clientOf, codeOf, legacyToAttributes } from './project-legacy-fields.js';
 import { buildUpdatePatch } from './project-update-patch.js';
 import { ProjectsQueryService } from './projects-query.service.js';
@@ -56,6 +58,9 @@ export class ProjectsService {
     private readonly queries: ProjectsQueryService,
     @Inject(USER_PROFILE_READER) private readonly profiles: UserProfileReader,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
+    // Снятие формулы ячейки при обычной записи значения (Р5 #632).
+    @Inject(FORMULA_CELLS) private readonly formulaCells: FormulaCells,
+    private readonly formulaRecalc: ProjectFormulaRecalcService,
   ) {}
 
   async create(user: AuthUser, body: CreateProjectBody): Promise<ProjectDetail> {
@@ -196,6 +201,7 @@ export class ProjectsService {
           profiles: this.profiles,
           types: this.types,
           customFields: this.customFields,
+          formulaCells: this.formulaCells,
         },
         user,
         fresh,
@@ -218,6 +224,14 @@ export class ProjectsService {
       }
       const nextValues =
         (built.patch.customFields as Prisma.JsonValue | undefined) ?? fresh.customFields;
+      // Синхронный пересчёт формул проекта в той же tx (#632): ответ PATCH
+      // несёт свежие значения — обработчик опаздывает на цикл диспетчера.
+      const changedFieldIds = built.fields
+        .filter((field) => field.startsWith('cf.'))
+        .map((field) => field.slice(3));
+      if (changedFieldIds.length > 0) {
+        await this.formulaRecalc.recalcProjectAfterValuesChange(tx, user.id, id, changedFieldIds);
+      }
       await this.eventBus.emit(
         tx,
         PROJECT_EVENTS.UPDATED,
@@ -234,7 +248,9 @@ export class ProjectsService {
                 previousClientId: clientOf(fresh.customFields),
               }
             : {}),
-          audience: await projectAudience(this.participantsRepo, next, tx),
+          audience: [
+            ...new Set([...(await projectAudience(this.participantsRepo, next, tx)), user.id]),
+          ],
         },
         { actorId: user.id, aggregateType: 'project', aggregateId: id },
       );

@@ -5,6 +5,7 @@ import {
   type ProjectNodeRollup,
 } from '@nodus/contracts';
 
+import type { FormulaHostState } from '../custom-fields/ports/formula-cells.port.js';
 import type { ProjectNodeRow } from './project-nodes.repository.js';
 
 /** Агрегат узла без задач (узел-папка без прямых задач — нули). */
@@ -19,15 +20,26 @@ export const EMPTY_ROLLUP: ProjectNodeRollup = {
 
 /** Строка БД → DTO узла (rollup=null → пустой агрегат). `customFields` —
  *  ВСЕ хранимые значения, включая скрытые сменой вида (Р5): форма вида
- *  фильтрует помощником nodeFormValues. */
-export function nodeToDto(row: ProjectNodeRow, rollup: ProjectNodeRollup | null): ProjectNode {
+ *  фильтрует помощником nodeFormValues. `state` — формульное состояние
+ *  (#632, Р6/Р9): значения формулы вида считаны на чтении и наложены поверх
+ *  хранимых, формулы ячеек — в `customFieldFormulas`. */
+export function nodeToDto(
+  row: ProjectNodeRow,
+  rollup: ProjectNodeRollup | null,
+  state?: FormulaHostState,
+): ProjectNode {
+  const values: CustomFieldValues = {
+    ...((row.customFields ?? {}) as CustomFieldValues),
+    ...(state?.values ?? {}),
+  };
   return {
     id: row.id,
     parentId: row.parentId,
     kindId: row.kindId,
     name: row.name,
-    code: nodeCodeOf((row.customFields ?? {}) as CustomFieldValues),
-    customFields: (row.customFields ?? {}) as CustomFieldValues,
+    code: nodeCodeOf(values),
+    customFields: values,
+    ...(state ? { customFieldFormulas: state.formulas } : {}),
     rollup: rollup ?? EMPTY_ROLLUP,
     createdAt: row.createdAt.toISOString(),
   };

@@ -139,6 +139,7 @@ export const registryHandlers = [
       isCompany: body.isCompany,
       companyValue: null,
       bindings,
+      bindingFormulas: body.bindingFormulas ?? {},
       sortOrder: maxOrder + 1,
       createdAt: now,
       updatedAt: now,

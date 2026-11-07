@@ -1,4 +1,10 @@
-import type { ChatMessage, TaskChainNode, TaskDetail, TaskListItem } from '@nodus/contracts';
+import type {
+  ChatMessage,
+  CustomFieldValues,
+  TaskChainNode,
+  TaskDetail,
+  TaskListItem,
+} from '@nodus/contracts';
 import { isFinalState } from '@nodus/contracts';
 
 import { demoTaskCustomFields } from './custom-fields.js';
@@ -27,6 +33,12 @@ export * from './task-items.js';
 for (const task of demoTasks) {
   Object.defineProperty(task, 'customFields', {
     get: () => demoTaskCustomFields[task.id] ?? {},
+    // Сеттер — часть того же ленивого стора: правка значений (PATCH задачи,
+    // формула ячейки #632) пишет в demoTaskCustomFields, а не в элемент
+    // списка. Без сеттера присваивание в строгом режиме бросало TypeError.
+    set: (next: CustomFieldValues) => {
+      demoTaskCustomFields[task.id] = next;
+    },
     enumerable: true,
     configurable: true,
   });

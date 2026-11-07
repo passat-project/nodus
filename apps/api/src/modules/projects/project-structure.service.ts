@@ -22,6 +22,7 @@ import {
   type CustomFieldRegistry,
   type RegistryFieldChange,
 } from '../custom-fields/ports/custom-field-registry.port.js';
+import { FORMULA_CELLS, type FormulaCells } from '../custom-fields/ports/formula-cells.port.js';
 import {
   TASK_PROJECT_READER,
   type TaskProjectReader,
@@ -30,7 +31,10 @@ import { NodeFormPolicy } from './node-form.policy.js';
 import { loadForStructureManage } from './project-structure.access.js';
 import { assertKindAlive, assertParent, kindOf } from './project-structure.guards.js';
 import { nodeToDto } from './project-structure.mapper.js';
+import { assertNodeCellsWritable } from './project-structure-formulas.js';
 import { eventValue, valuesOf } from './project-structure.values.js';
+import { ProjectFormulaEvents } from './project-formula-events.js';
+import { ProjectFormulaRecalcService } from './project-formula-recalc.service.js';
 import { NodeKindsRepository } from './project-node-kinds.repository.js';
 import { ProjectNodesRepository, type ProjectNodeRow } from './project-nodes.repository.js';
 import { ProjectTypesRepository } from './project-types.repository.js';
@@ -68,6 +72,10 @@ export class ProjectStructureService {
     private readonly policy: NodeFormPolicy,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly registry: CustomFieldRegistry,
     @Inject(TASK_PROJECT_READER) private readonly taskReader: TaskProjectReader,
+    // Формулы ячеек папок (#632): состояние для DTO и снятие при записи (Р5).
+    @Inject(FORMULA_CELLS) private readonly formulas: FormulaCells,
+    private readonly formulaRecalc: ProjectFormulaRecalcService,
+    private readonly formulaEvents: ProjectFormulaEvents,
   ) {}
 
   /** GET /projects/:id/structure: папки (плоско, по order) + rollups + виды +
@@ -80,12 +88,21 @@ export class ProjectStructureService {
       this.kinds.list(),
     ]);
     const byNode = new Map(rollups.map((rollup) => [rollup.nodeId, rollup]));
+    // Формульное состояние всех папок среза — одним запросом (Р9). Ссылки —
+    // по ЭФФЕКТИВНЫМ значениям: значение формулы вида не лежит в строке,
+    // иначе имя ссылки в дереве было бы «Запись недоступна».
+    const formulas = await this.formulas.stateFor(
+      'node',
+      rows.map((row) => row.id),
+      undefined,
+      new Map(rows.map((row) => [row.id, row.kindId])),
+    );
     const customFieldRefs = await this.registry.refsMany(
-      rows.map((row) => valuesOf(row)),
+      rows.map((row) => ({ ...valuesOf(row), ...(formulas.get(row.id)?.values ?? {}) })),
       user,
     );
     return {
-      nodes: rows.map((row) => nodeToDto(row, byNode.get(row.id) ?? null)),
+      nodes: rows.map((row) => nodeToDto(row, byNode.get(row.id) ?? null, formulas.get(row.id))),
       kinds,
       customFieldRefs,
     };
@@ -169,7 +186,15 @@ export class ProjectStructureService {
           { ...meta, aggregateId: node.id },
         );
       }
-      return created.map((node) => nodeToDto(node, null));
+      // Формульное состояние новых папок — сразу в DTO: иначе карточка
+      // показывает формулу типа, но остаётся редактируемой до перезагрузки.
+      const states = await this.formulas.stateFor(
+        'node',
+        created.map((node) => node.id),
+        tx,
+        new Map(created.map((node) => [node.id, node.kindId])),
+      );
+      return created.map((node) => nodeToDto(node, null, states.get(node.id)));
     });
   }
 
@@ -199,6 +224,7 @@ export class ProjectStructureService {
         kindId?: string;
         customFields?: Prisma.InputJsonValue;
       } = {};
+      let pendingLockCheck: RegistryFieldChange[] = [];
       const fields: string[] = [];
       let changes: RegistryFieldChange[] = [];
       if (body.code !== undefined || body.customFields !== undefined || kindChanged) {
@@ -209,6 +235,11 @@ export class ProjectStructureService {
           { authorId: user.id, actor: user, kindChanged },
           tx,
         );
+        // Проверка блокировки — ПОСЛЕ nodes.update ниже (вид мог смениться в
+        // этом же патче: место для формул привязок смотрится по НОВОМУ виду,
+        // иначе kindId+значение обходили бы блокировку ячейки, TOCTOU).
+        // Бросок откатывает транзакцию целиком — запись не остаётся.
+        pendingLockCheck = prepared.changes;
         patch.customFields = prepared.values as Prisma.InputJsonValue;
         changes = prepared.changes;
         fields.push(...changes.map((change) => nodeFormKey(change.fieldId)));
@@ -222,6 +253,17 @@ export class ProjectStructureService {
         fields.push('kindId');
       }
       await this.nodes.update(tx, node.id, patch);
+      // Формульная блокировка по фактическому (возможно новому) виду папки.
+      await assertNodeCellsWritable(this.formulas, tx, nodeId, pendingLockCheck);
+      if (changes.length > 0) {
+        await this.formulaRecalc.recalcNodeAfterValuesChange(
+          tx,
+          user.id,
+          projectId,
+          node.id,
+          changes.map((change) => change.fieldId),
+        );
+      }
       await this.eventBus.emit(
         tx,
         PROJECT_EVENTS.NODE_UPDATED,
@@ -229,6 +271,10 @@ export class ProjectStructureService {
           projectId,
           nodeId: node.id,
           fields,
+          // Без аудитории gateway выбрасывает событие (#632) — до F5.
+          audience: [
+            ...new Set([...(await this.formulaEvents.audienceOf(tx, projectId)), user.id]),
+          ],
           ...(patch.name !== undefined ? { name: patch.name } : {}),
           ...(changes.some((change) => change.fieldId === SYSTEM_FIELD_IDS.nodeCode)
             ? { code: nodeCodeOf(patch.customFields as Prisma.InputJsonValue | undefined) }
@@ -246,7 +292,11 @@ export class ProjectStructureService {
         },
         { actorId: user.id, aggregateType: 'project_node', aggregateId: node.id },
       );
-      return nodeToDto({ ...node, ...patch } as ProjectNodeRow, null);
+      // Формульное состояние папки для DTO (значок fx и бейдж ошибки, Р9).
+      const formulas = (
+        await this.formulas.stateFor('node', [node.id], tx, new Map([[node.id, node.kindId]]))
+      ).get(node.id);
+      return nodeToDto({ ...node, ...patch } as ProjectNodeRow, null, formulas);
     });
   }
 

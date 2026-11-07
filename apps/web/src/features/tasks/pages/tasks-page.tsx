@@ -12,20 +12,17 @@ import { useListToolbar } from '../../../shared/views/use-list-toolbar.js';
 import { ViewSettings } from '../../../shared/views/view-settings.js';
 import { useTaskStages } from '../../../shared/api/task-stages.js';
 import { projectsAvailable } from '../../../shared/api/projects-available.js';
-import { makeTaskCardFields } from '../../../shared/views/task-card-fields.js';
+import { useTaskCardFields } from '../../../shared/views/task-card-fields.js';
 import {
   taskBuiltinPresets,
   taskListPresets,
   taskSearchText,
   useTaskFilterDefs,
 } from '../../../shared/views/task-filter-fields.js';
-import { taskListFields } from '../lib/task-fields.js';
+import { useTaskListFields } from '../lib/task-fields.js';
 import { TaskKanban } from '../components/task-kanban.js';
 import { TaskList } from '../components/task-list.js';
 import { openTaskCreate } from '../../../shared/tasks/task-create-store.js';
-
-/** Реестр блоков карточки канбана — module-константа (стабильная идентичность). */
-const taskCardFields = makeTaskCardFields();
 
 /** Задачи: виды «Мой план» (канбан) и «Список» — переключаются в топбаре.
  *  Шапка — ОДНА строка (вердикт владельца: пустого места нет): заголовок,
@@ -49,6 +46,10 @@ export function TasksPage() {
 
 function TasksSection({ view, overdueTotal }: { view: 'list' | 'kanban'; overdueTotal: number }) {
   const viewKey = view === 'list' ? 'tasks.list' : 'tasks.kanban';
+  const taskListFields = useTaskListFields();
+  // Реестр блоков карточки канбана — с атрибутами портала (#632): реестр
+  // меняется вместе с определениями, поэтому хук, а не module-константа.
+  const cardFields = useTaskCardFields();
   // «Ждут моего решения» — только в списке (#433): канбан «Мой план» — личная
   // доска, журналы проектов/сотрудника — чужие фиды, серверного среза там нет.
   const presets = view === 'list' ? taskListPresets : taskBuiltinPresets;
@@ -109,7 +110,7 @@ function TasksSection({ view, overdueTotal }: { view: 'list' | 'kanban'; overdue
               ) : null}
               <ViewSettings
                 viewKey={viewKey}
-                defs={view === 'list' ? taskListFields : taskCardFields}
+                defs={view === 'list' ? taskListFields : cardFields}
               />
             </>
           }

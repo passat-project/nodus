@@ -14,7 +14,20 @@ export class ZodValidationPipe<T extends z.ZodType> implements PipeTransform<unk
   constructor(private readonly schema: T) {}
 
   transform(value: unknown): z.infer<T> {
-    const result = this.schema.safeParse(value);
+    // Рекурсивная схема формулы на патологической вложенности может
+    // переполнить стек ДО проверки глубины движком: это ошибка входа (422),
+    // а не 500.
+    let result: { success: true; data: z.infer<T> } | { success: false; error: z.ZodError };
+    try {
+      result = this.schema.safeParse(value) as typeof result;
+    } catch (error) {
+      if (error instanceof RangeError) {
+        throw new DomainException(ErrorCode.FORMULA_AST_INVALID, 'Formula is too deep', {
+          issues: [{ path: '', code: 'depth', message: 'formula AST is too deep' }],
+        });
+      }
+      throw error;
+    }
     if (!result.success) {
       throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Validation failed', {
         issues: result.error.issues.map((issue) => ({

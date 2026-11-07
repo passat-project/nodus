@@ -50,6 +50,7 @@ export function EditorTrigger({
   open,
   multiline = false,
   onClick,
+  onPointerDown,
   ref,
 }: {
   children: ReactNode;
@@ -59,6 +60,7 @@ export function EditorTrigger({
   open?: boolean;
   multiline?: boolean;
   onClick?: () => void;
+  onPointerDown?: React.PointerEventHandler<HTMLButtonElement>;
   /** React 19: ref — обычный проп; нужен Radix `asChild` (поповеры пикеров). */
   ref?: Ref<HTMLButtonElement>;
 }) {
@@ -68,7 +70,11 @@ export function EditorTrigger({
       type="button"
       aria-label={ariaLabel}
       disabled={disabled}
-      onClick={onClick}
+      onPointerDown={onPointerDown}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick?.();
+      }}
       className={cn(
         'flex min-w-0 items-center gap-1.5 text-left text-sm transition-colors disabled:cursor-default',
         variant === 'inline'

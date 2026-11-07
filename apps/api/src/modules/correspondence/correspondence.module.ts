@@ -8,12 +8,33 @@ import { DictionariesPortsModule } from '../dictionaries/dictionaries-ports.modu
 import { WorkflowsPortsModule } from '../workflows/workflows-ports.module.js';
 import { LetterFileAccess } from './access/letter-file-access.js';
 import { LetterFieldValuesCleanupHandler } from './events/letter-field-values-cleanup.handler.js';
+import { LetterFormulaLifecycleHandler } from './events/letter-formula-lifecycle.handler.js';
+import {
+  LetterFormulaDefinitionHandler,
+  LetterFormulaRecalcHandler,
+  LetterFormulaRegisteredHandler,
+} from './events/letter-formula-recalc.handler.js';
+import {
+  LetterFormulaNodeSourceHandler,
+  LetterFormulaProjectSourceHandler,
+  LetterFormulaTaskSourceHandler,
+} from './events/letter-formula-source.handler.js';
+import {
+  LetterFormulaAssignedSourceHandler,
+  LetterFormulaDeletedSourceHandler,
+  LetterFormulaNodeDeletedSourceHandler,
+  LetterFormulaStageSourceHandler,
+  LetterFormulaTaskSystemRunner,
+} from './events/letter-formula-system-source.handler.js';
 import { LetterHistoryRepository } from './history/letter-history.repository.js';
 import { LetterHistoryService } from './history/letter-history.service.js';
 import { LetterAttachedRefsRepository } from './letters/letter-attached-refs.repository.js';
 import { LetterAttachedRefsValidator } from './letters/letter-attached-refs.validator.js';
 import { LetterDtoMapper } from './letters/letter-dto.mapper.js';
 import { LetterFieldsValidator } from './letters/letter-fields.validator.js';
+import { LetterFieldsWriter } from './letters/letter-fields.writer.js';
+import { LetterFormulaController } from './letters/letter-formula.controller.js';
+import { LetterFormulaService } from './letters/letter-formula.service.js';
 import { LetterRelationsController } from './letters/letter-relations.controller.js';
 import { LetterRelationsRepository } from './letters/letter-relations.repository.js';
 import { LettersController } from './letters/letters.controller.js';
@@ -62,7 +83,7 @@ import { LetterWorkflowAdapter } from './workflow/letter-workflow.adapter.js';
     ProjectsPortsModule,
     MailModule,
   ],
-  controllers: [LettersController, LetterRelationsController],
+  controllers: [LettersController, LetterRelationsController, LetterFormulaController],
   providers: [
     UserProfileProvider,
     { provide: USER_PROFILE_READER, useClass: UserProfileProvider },
@@ -72,6 +93,27 @@ import { LetterWorkflowAdapter } from './workflow/letter-workflow.adapter.js';
     LetterAttachedRefsRepository,
     // Уборка значений удалённого атрибута (#582): событие custom_field.definition_changed.
     LetterFieldValuesCleanupHandler,
+    // Формулы ячеек атрибутов письма (#632): писатель значений, мутации
+    // формулы (PUT/DELETE у владельца хоста, I3) и пересчёт по событиям.
+    LetterFieldsWriter,
+    LetterFormulaService,
+    LetterFormulaRecalcHandler,
+    LetterFormulaRegisteredHandler,
+    LetterFormulaDefinitionHandler,
+    // Уборка ячеек удалённого письма (#632).
+    LetterFormulaLifecycleHandler,
+    // Формулы писем по событиям-источникам (#632): значения задач, проектов
+    // и папок, прочитанные по атрибуту-ссылке (I3 — пишутся только письма).
+    LetterFormulaTaskSourceHandler,
+    // Общий пересчёт писем по системным полям задачи (стадия/ответственный):
+    // зависит от него каждый из системных handler'ов ниже.
+    LetterFormulaTaskSystemRunner,
+    LetterFormulaStageSourceHandler,
+    LetterFormulaAssignedSourceHandler,
+    LetterFormulaDeletedSourceHandler,
+    LetterFormulaProjectSourceHandler,
+    LetterFormulaNodeSourceHandler,
+    LetterFormulaNodeDeletedSourceHandler,
     LetterFileAccess,
     LetterHistoryRepository,
     LetterDtoMapper,

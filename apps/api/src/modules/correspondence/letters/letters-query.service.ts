@@ -3,6 +3,7 @@ import {
   LETTER_LIMITS,
   Permission,
   type AuthUser,
+  type CustomFieldValues,
   type LetterDetail,
   type LetterListItem,
   type LetterRef,
@@ -27,6 +28,7 @@ import {
   COUNTERPARTY_READER,
   type CounterpartyReader,
 } from '../../crm/ports/counterparty-reader.port.js';
+import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import {
   canRegisterLetters,
   canViewConfidential,
@@ -61,6 +63,7 @@ export class LettersQueryService {
     @Inject(COUNTERPARTY_READER) private readonly counterparties: CounterpartyReader,
     @Inject(ROLE_MEMBERSHIP_READER) private readonly membership: RoleMembershipReader,
     @Inject(USER_PROFILE_READER) private readonly profiles: UserProfileReader,
+    @Inject(FORMULA_CELLS) private readonly formulas: FormulaCells,
   ) {}
 
   async list(user: AuthUser, q: ListLettersQuery): Promise<Paginated<LetterListItem>> {
@@ -131,12 +134,26 @@ export class LettersQueryService {
         ? Promise.resolve(null)
         : this.counterpartySuggestionOf(row.mailFromAddress),
     ]);
-    return this.mapper.toDetail(row, attachments, letterAccessOf(user, row, isParticipant), user, {
-      replyTo,
-      replySuggestion,
-      counterpartySuggestion,
-      attachedRefs,
-    });
+    // Формульные ячейки (#632, Р9/Р6): значения формул типа/вида считаются
+    // на чтении и подмешиваются в карту значений ДО сборки DTO — ссылки
+    // значений гидрируются уже по эффективным значениям.
+    const formulas = (
+      await this.formulas.stateFor('letter', [id], undefined, new Map([[id, row.typeId]]))
+    ).get(id);
+    const effectiveRow: LetterDetailRow = formulas
+      ? {
+          ...row,
+          customFields: { ...((row.customFields ?? {}) as CustomFieldValues), ...formulas.values },
+        }
+      : row;
+    const detail = await this.mapper.toDetail(
+      effectiveRow,
+      attachments,
+      letterAccessOf(user, row, isParticipant),
+      user,
+      { replyTo, replySuggestion, counterpartySuggestion, attachedRefs },
+    );
+    return formulas ? { ...detail, customFieldFormulas: formulas.formulas } : detail;
   }
 
   /** Письмо, видимое сотруднику, или 404 (невидимое = «не найдено», Р7).

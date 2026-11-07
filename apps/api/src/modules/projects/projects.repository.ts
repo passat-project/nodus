@@ -173,6 +173,18 @@ export class ProjectsRepository {
     return tx.project.findUnique({ select: projectSelect, where: { id } });
   }
 
+  /** Id проектов типа (смена формы типа меняет привязки атрибутов — формулы
+   *  ячеек проектов этого типа пересчитываются, #632). Порядок стабильный:
+   *  партии пересчёта берут строки в одном порядке (профилактика 40P01). */
+  async idsByType(typeId: string, tx?: TransactionClient): Promise<string[]> {
+    const rows = await (tx ?? this.prisma).project.findMany({
+      select: { id: true },
+      where: { typeId },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((row) => row.id);
+  }
+
   /** Блокировка строки проекта в транзакции писателя состава
    *  (`SELECT … FOR UPDATE`): писатель ждёт коммита смены видимости и видит
    *  актуальное значение — гонка join/recompute/addManual с `open→secret`

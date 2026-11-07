@@ -35,12 +35,21 @@ export function FieldsSection({
   const editable = !disabled && context.access.canEdit;
   const systemKeys = section.fields.filter((key) => customFieldIdOfKey(key) === null);
   const customKeys = section.fields.filter((key) => customFieldIdOfKey(key) !== null);
+  const hasFormula = (key: string) => Boolean(section.formulas?.[key]);
+  const formulaBadge = (
+    <span className="text-[10px] leading-none text-info" title={ui.formulas.prefill.badge}>
+      fx
+    </span>
+  );
 
   return (
     <div className="flex flex-col gap-3">
       {systemKeys.map((field) => (
         <div key={field} className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">{labelOf(field)}</span>
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            {labelOf(field)}
+            {hasFormula(field) ? formulaBadge : null}
+          </span>
           <FieldEditor field={field} value={draft.fields} editable={editable} onChange={patch} />
         </div>
       ))}
@@ -52,7 +61,12 @@ export function FieldsSection({
         if (!definition) return null;
         return (
           <div key={key} className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">{definition.name}</span>
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              {definition.name}
+              {hasFormula(key) && draft.fields.customFields[definition.id] != null
+                ? formulaBadge
+                : null}
+            </span>
             <CustomFieldEditor
               definition={definition}
               value={draft.fields.customFields[definition.id]}

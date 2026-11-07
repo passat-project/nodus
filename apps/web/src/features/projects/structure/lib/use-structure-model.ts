@@ -1,12 +1,18 @@
 import { useMemo, useState } from 'react';
-import type { NodeKind, ProjectNode } from '@nodus/contracts';
+import type {
+  CustomFieldDefinition,
+  CustomFieldRef,
+  NodeKind,
+  ProjectNode,
+} from '@nodus/contracts';
 
+import { attributeRefs } from '../../../../shared/views/attribute-fields.js';
 import { useListToolbar } from '../../../../shared/views/use-list-toolbar.js';
 import { useRowSelection } from '../../../../shared/views/use-row-selection.js';
 import { useViewFields } from '../../../../shared/views/use-view-fields.js';
 import { useProjectTaskPages } from '../../api/projects-api.js';
 import { useProjectStructure } from '../api/structure-api.js';
-import { STRUCTURE_VIEW_KEY, structureFields, structureGrid } from './structure-fields.js';
+import { STRUCTURE_VIEW_KEY, structureGrid, useStructureFields } from './structure-fields.js';
 import {
   buildStructureRows,
   filterStructureRows,
@@ -30,10 +36,17 @@ export function useStructureModel(projectId: string) {
   const toolbar = useListToolbar('projects.structure');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [noNodeCollapsed, setNoNodeCollapsed] = useState(false);
-  const { visibleFields, sort, setWidth, cycleSort, commitOrder } = useViewFields(
-    STRUCTURE_VIEW_KEY,
-    structureFields,
-  );
+  // Реестр колонок — с атрибутами папок и задач (#632); атрибуты скрыты по
+  // умолчанию, включённые приходят из пресета вида.
+  const fields = useStructureFields();
+  const {
+    fields: viewFields,
+    visibleFields,
+    sort,
+    setWidth,
+    cycleSort,
+    commitOrder,
+  } = useViewFields(STRUCTURE_VIEW_KEY, fields);
 
   const tasks = useMemo(
     () => tasksQuery.data?.pages.flatMap((p) => p.items) ?? [],
@@ -42,7 +55,21 @@ export function useStructureModel(projectId: string) {
   const nodes = useMemo<ProjectNode[]>(() => structure?.nodes ?? [], [structure]);
   const kinds = useMemo<NodeKind[]>(() => structure?.kinds ?? [], [structure]);
   const kindById = useMemo(() => new Map(kinds.map((l) => [l.id, l])), [kinds]);
-  const customFieldRefs = useMemo(() => structure?.customFieldRefs ?? [], [structure]);
+  const customFieldRefs = useMemo<CustomFieldRef[]>(
+    () => structure?.customFieldRefs ?? [],
+    [structure],
+  );
+  // Ссылки значений папок — карта по id (одним срезом на весь проект, О2).
+  const nodeRefs = useMemo(() => attributeRefs({ customFieldRefs }), [customFieldRefs]);
+  // Определения атрибутных колонок по id поля: ячейка рендерит значение по
+  // грамматике типа, не зная, из какого модуля пришёл атрибут.
+  const attributeDefinitions = useMemo(() => {
+    const map = new Map<string, CustomFieldDefinition>();
+    for (const field of viewFields) {
+      if (field.attribute) map.set(field.id, field.attribute);
+    }
+    return map;
+  }, [viewFields]);
   const rows = useMemo(() => buildStructureRows(nodes, tasks), [nodes, tasks]);
   const filtered = useMemo(() => filterStructureRows(rows, toolbar.query), [rows, toolbar.query]);
   const visible = useMemo(
@@ -102,6 +129,8 @@ export function useStructureModel(projectId: string) {
     setCollapsed,
     noNodeCollapsed,
     setNoNodeCollapsed,
+    /** Полный реестр колонок вида — шестерёнка показывает его целиком. */
+    fields: viewFields,
     visibleFields,
     sort,
     setWidth,
@@ -112,6 +141,8 @@ export function useStructureModel(projectId: string) {
     kinds,
     kindById,
     customFieldRefs,
+    nodeRefs,
+    attributeDefinitions,
     rows,
     filtered,
     treeRows,

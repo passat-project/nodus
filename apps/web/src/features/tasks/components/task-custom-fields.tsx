@@ -21,6 +21,13 @@ export function TaskCustomFields({ task }: { task: TaskDetail }) {
       refs={task.customFieldRefs ?? []}
       canEdit={task.access.canEdit}
       onChange={(fieldId, value, refs) => update.mutate({ fieldId, value, refs })}
+      host={{ kind: 'task', id: task.id }}
+      hostContext={{
+        parentId: task.parentId,
+        projectId: task.project?.id ?? null,
+        nodeId: task.nodeId,
+      }}
+      formulas={task.customFieldFormulas}
     />
   );
 }

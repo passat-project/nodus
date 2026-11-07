@@ -98,7 +98,14 @@ export function makeProjectsServiceKit() {
   };
   const txRunner = { run: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})) };
   const eventBus: Mocks<'emit'> = { emit: vi.fn() };
+  // Снятие формулы ячейки при обычной записи значения (Р5 #632).
+  const formulaCells: Mocks<'lockedFieldIds'> = {
+    lockedFieldIds: vi.fn(async () => new Set<string>()),
+  };
+  // Синхронный пересчёт формул проекта в tx PATCH (#632).
+  const formulaRecalc = { recalcProjectAfterValuesChange: vi.fn(async () => void 0) };
   const kit = {
+    formulaRecalc,
     repo,
     types,
     groups,
@@ -107,6 +114,7 @@ export function makeProjectsServiceKit() {
     queries,
     profiles,
     customFields,
+    formulaCells,
     eventBus,
     service: undefined as unknown as ProjectsService,
     /** Аналог beforeEach исходного файла: чистка моков, дефолты, сервис. */
@@ -146,6 +154,8 @@ export function makeProjectsServiceKit() {
         queries as never,
         profiles as never,
         customFields as never,
+        formulaCells as never,
+        kit.formulaRecalc as never,
       );
     },
   };

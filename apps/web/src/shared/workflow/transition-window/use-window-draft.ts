@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { LetterRegistrationInput } from '@nodus/contracts';
+import type { CustomFieldValue, LetterRegistrationInput } from '@nodus/contracts';
+import { customFieldIdOfKey } from '@nodus/contracts';
 
 import { EMPTY_TIME_ENTRY, type TimeEntryDraft } from '../../tasks/time-entry-fields.js';
 import type { TransitionWindowContext, WindowFieldValues } from './window-context.js';
@@ -22,9 +23,42 @@ export interface WindowDraft {
   registration: LetterRegistrationInput | null;
 }
 
-export function emptyDraft(context: TransitionWindowContext): WindowDraft {
+export function emptyDraft(
+  context: TransitionWindowContext,
+  prefill?: Readonly<Record<string, CustomFieldValue>>,
+): WindowDraft {
+  const fields: WindowFieldValues = {
+    ...context.fields,
+    customFields: { ...context.fields.customFields },
+  };
+  // Префилл формульных слотов (#632, Р12): сервер посчитал значение при
+  // открытии; поле остаётся редактируемым, в тело уйдёт значением.
+  for (const [key, value] of Object.entries(prefill ?? {})) {
+    if (value === null || value === undefined) continue;
+    const id = customFieldIdOfKey(key);
+    if (id) {
+      fields.customFields[id] = value;
+      continue;
+    }
+    switch (key) {
+      case 'description':
+        if (typeof value === 'string') fields.description = value;
+        break;
+      case 'deadline':
+        if (typeof value === 'string') fields.deadline = value;
+        break;
+      case 'assignee':
+        if (typeof value === 'string') fields.assigneeId = value;
+        break;
+      case 'plannedMinutes':
+        if (typeof value === 'number') fields.plannedMinutes = value;
+        break;
+      default:
+        break;
+    }
+  }
   return {
-    fields: { ...context.fields },
+    fields,
     time: { ...EMPTY_TIME_ENTRY },
     resultText: context.lastResult?.text ?? '',
     files: [],
@@ -46,10 +80,13 @@ export function draftMessageIds(draft: WindowDraft): string[] {
  * (пессимистичная отправка). Переключение выбранного файла в пикере —
  * добавление/снятие его сообщения.
  */
-export function useWindowDraft(context: TransitionWindowContext | null) {
+export function useWindowDraft(
+  context: TransitionWindowContext | null,
+  prefill?: Readonly<Record<string, CustomFieldValue>>,
+) {
   const [draft, setDraft] = useState<WindowDraft>(() =>
     context
-      ? emptyDraft(context)
+      ? emptyDraft(context, prefill)
       : {
           fields: {
             description: '',
@@ -100,6 +137,6 @@ export function useWindowDraft(context: TransitionWindowContext | null) {
         files: [...new Set([...prev.files, ...messageIds])],
         carried: prev.carried.filter((id) => !messageIds.includes(id)),
       })),
-    reset: () => context && setDraft(emptyDraft(context)),
+    reset: () => context && setDraft(emptyDraft(context, prefill)),
   };
 }

@@ -61,6 +61,23 @@ export function subtreeHeight(children: Map<string | null, TreeNodeLike[]>, id: 
   return max;
 }
 
+/** id поддерева (сам узел + все потомки), DFS в порядке братьев; чужой id —
+ *  только он сам. Предохранитель от испорченного цикла — `seen`. */
+export function subtreeIds(children: Map<string | null, TreeNodeLike[]>, id: string): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  const stack = [id];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (seen.has(current)) continue;
+    seen.add(current);
+    result.push(current);
+    const kids = children.get(current) ?? [];
+    for (let index = kids.length - 1; index >= 0; index--) stack.push(kids[index]!.id);
+  }
+  return result;
+}
+
 /** Потомок ли `id` узла `ancestorId` (включительно не считается). */
 export function isDescendantOf(
   parents: Map<string, string | null>,

@@ -179,6 +179,17 @@ describe('CustomFieldRegistry.prepareCreate (#431/#631, Р5)', () => {
 });
 
 describe('CustomFieldRegistry.prepareUpdate (#431, Р1/Р2)', () => {
+  it('дефис-маркер «пусто» нормализуется в null — в БД дефисы не попадают (#632)', async () => {
+    const { registry } = makeRegistry([definition({ id: 'f-a', type: 'text' })]);
+    const { next, changes } = await registry.prepareUpdate({
+      actor: ACTOR,
+      current: { 'f-a': 'старое' },
+      patch: { 'f-a': '—', 'f-b': ' – ' } as never,
+    });
+    expect(next).toEqual({});
+    expect(changes).toEqual([{ fieldId: 'f-a', from: 'старое', to: null }]);
+  });
+
   it('null удаляет ключ, незаполненное не хранится', async () => {
     const { registry } = makeRegistry([definition({ id: 'f-a', type: 'text' })]);
     const { next, changes } = await registry.prepareUpdate({

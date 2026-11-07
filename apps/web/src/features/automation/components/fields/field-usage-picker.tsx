@@ -1,12 +1,18 @@
 import { useState } from 'react';
-import { Check, ChevronDown, Minus } from 'lucide-react';
-import type { CustomFieldBindings } from '@nodus/contracts';
+import { Calculator, Check, ChevronDown, Minus } from 'lucide-react';
+import type {
+  CustomFieldBindings,
+  CustomFieldDefinition,
+  FormulaHostKind,
+  FormulaNode,
+} from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
 import { useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useProcessTypes } from '../../api/automation-api.js';
+import { BindingFormulaDialog } from './binding-formula-dialog.js';
 
 /**
  * «Где используется» окна атрибута (#631, Р11): галочки модулей с
@@ -45,6 +51,7 @@ function Group({
   onToggleAll,
   onToggleOne,
   disabled,
+  onEditFormula,
 }: {
   label: string;
   targets: readonly Target[];
@@ -54,6 +61,7 @@ function Group({
   onToggleAll: () => void;
   onToggleOne: (id: string) => void;
   disabled: boolean;
+  onEditFormula: (target: Target) => void;
 }) {
   const chosen = targets.filter((target) => selected.has(target.id));
   const state = chosen.length === 0 ? 'off' : chosen.length === targets.length ? 'on' : 'some';
@@ -102,22 +110,38 @@ function Group({
           {targets.map((target) => {
             const on = selected.has(target.id);
             return (
-              <button
+              <div
                 key={target.id}
-                type="button"
-                role="checkbox"
-                aria-checked={on}
-                disabled={disabled}
-                onClick={() => onToggleOne(target.id)}
-                className={cn(
-                  'mx-1.5 flex w-[calc(100%-0.75rem)] items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60',
-                  on ? 'text-foreground' : 'text-secondary-foreground',
-                  disabled && 'cursor-not-allowed opacity-60',
-                )}
+                className="mx-1.5 flex w-[calc(100%-0.75rem)] items-center gap-1"
               >
-                <Mark state={on ? 'on' : 'off'} />
-                <span className="min-w-0 flex-1 truncate">{target.name}</span>
-              </button>
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={on}
+                  disabled={disabled}
+                  onClick={() => onToggleOne(target.id)}
+                  className={cn(
+                    'flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60',
+                    on ? 'text-foreground' : 'text-secondary-foreground',
+                    disabled && 'cursor-not-allowed opacity-60',
+                  )}
+                >
+                  <Mark state={on ? 'on' : 'off'} />
+                  <span className="min-w-0 flex-1 truncate">{target.name}</span>
+                </button>
+                {on ? (
+                  <button
+                    type="button"
+                    aria-label={ui.formulas.typeFormula.set}
+                    title={ui.formulas.typeFormula.hint}
+                    disabled={disabled}
+                    onClick={() => onEditFormula(target)}
+                    className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Calculator className="size-3.5" strokeWidth={1.75} />
+                  </button>
+                ) : null}
+              </div>
             );
           })}
         </div>
@@ -127,14 +151,24 @@ function Group({
 }
 
 export function FieldUsagePicker({
+  definition,
   bindings,
+  bindingFormulas,
+  onBindingFormulasChange,
   disabled,
   onChange,
 }: {
+  definition: CustomFieldDefinition | null;
   bindings: CustomFieldBindings;
+  bindingFormulas: Record<string, FormulaNode>;
+  onBindingFormulasChange: (formulas: Record<string, FormulaNode>) => void;
   disabled: boolean;
   onChange: (bindings: CustomFieldBindings) => void;
 }) {
+  const [formulaTarget, setFormulaTarget] = useState<{
+    target: Target;
+    hostKind: FormulaHostKind;
+  } | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   // Архивные цели включаются, только если уже стоят в привязках (#646):
   // иначе их нельзя ни увидеть, ни снять, а сохранение полного набора
@@ -241,10 +275,28 @@ export function FieldUsagePicker({
               onChange({ ...bindings, [group.list]: toggleOne(bindings[group.list], id) })
             }
             disabled={disabled}
+            onEditFormula={(target) =>
+              setFormulaTarget({ target, hostKind: group.key as FormulaHostKind })
+            }
           />
         ))}
       </div>
       <p className="text-xs break-words text-muted-foreground">{ui.customFields.bind.usageHint}</p>
+      {formulaTarget && definition ? (
+        <BindingFormulaDialog
+          targetId={formulaTarget.target.id}
+          hostKind={formulaTarget.hostKind}
+          definition={definition}
+          initial={bindingFormulas[formulaTarget.target.id] ?? null}
+          onSave={(ast) => {
+            const next = { ...bindingFormulas };
+            if (ast) next[formulaTarget.target.id] = ast;
+            else delete next[formulaTarget.target.id];
+            onBindingFormulasChange(next);
+          }}
+          onClose={() => setFormulaTarget(null)}
+        />
+      ) : null}
     </div>
   );
 }

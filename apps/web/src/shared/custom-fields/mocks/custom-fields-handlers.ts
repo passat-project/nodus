@@ -1,5 +1,6 @@
 import { definitionHandlers } from './custom-fields-definition-handlers.js';
 import { registryHandlers } from './custom-fields-registry-handlers.js';
+import { formulaHandlers } from '../formula/formula-handlers.js';
 
 /** Мок-сервер реестра атрибутов портала (#631): правила те же, что у
  *  бэкенда — имя уникально на портале (409 с suggestion существующего),
@@ -12,7 +13,12 @@ import { registryHandlers } from './custom-fields-registry-handlers.js';
  *  `custom-fields-registry-handlers.ts`, один атрибут (привязки,
  *  глобальное значение, правка, usage, удаление) —
  *  `custom-fields-definition-handlers.ts`, общие утилиты —
- *  `custom-fields-mock-utils.ts`. Порядок конкатенации сохраняет порядок
- *  оригинального массива: буквальные пути (`/order`, `/bindings/...`)
- *  раньше `:id`-маршрутов (gotcha msw-query). */
-export const customFieldsHandlers = [...registryHandlers, ...definitionHandlers];
+ *  `custom-fields-mock-utils.ts`, формулы ячеек (#632) —
+ *  `../formula/formula-handlers.ts`. Порядок конкатенации сохраняет порядок
+ *  оригинального массива: буквальные пути (`/order`, `/bindings/...`,
+ *  `/formulas/...`) раньше `:id`-маршрутов (gotcha msw-query). */
+export const customFieldsHandlers = [
+  ...formulaHandlers,
+  ...registryHandlers,
+  ...definitionHandlers,
+];

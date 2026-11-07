@@ -35,4 +35,8 @@ export interface WorkflowFieldUsageReader {
 
   /** Формы создания типов с атрибутом-слотом (окно последствий, Р8). */
   creationFormsUsingField(fieldId: string): Promise<WorkflowCreationFormUsage[]>;
+
+  /** Слоты окон с формулой-подстановкой (#632, F1): окна перехода и формы
+   *  создания, где `formulas` содержит ключ атрибута. */
+  formulaSlotsUsingField(fieldId: string): Promise<number>;
 }

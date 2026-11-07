@@ -204,6 +204,7 @@ export const definitionHandlers = [
     if (body.reportIndexed !== undefined) definition.reportIndexed = body.reportIndexed;
     if (body.defaultValue !== undefined) definition.defaultValue = body.defaultValue;
     if (body.settings !== undefined) definition.settings = nextSettings;
+    if (body.bindingFormulas !== undefined) definition.bindingFormulas = body.bindingFormulas;
     if (body.bindings !== undefined) {
       const before = definition.bindings;
       for (const targetId of before.projectTypeIds) {

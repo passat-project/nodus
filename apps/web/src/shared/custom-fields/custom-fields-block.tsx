@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import type {
+  CustomFieldFormulas,
   CustomFieldModule,
   CustomFieldRef,
   CustomFieldValue,
@@ -10,6 +12,9 @@ import { Skeleton } from '@nodus/ui/components/skeleton';
 
 import { FieldRow } from '../ui/entity-fields.js';
 import { CustomFieldTypeIcon } from './field-type-icon.js';
+import { FormulaCell } from './formula/formula-cell.js';
+import type { FormulaHost } from './formula/formula-api.js';
+import type { FormulaHostContext } from './formula/formula-editor.js';
 import { definitionsForTarget } from './module-target.js';
 import { useCustomFieldDefinitions } from './queries.js';
 import { CustomFieldEditor } from './value-editor.js';
@@ -23,6 +28,10 @@ import { CustomFieldEditor } from './value-editor.js';
  *  вкладке «Атрибуты» «Автоматизации». Нет атрибутов — блока нет;
  *  загрузка — два скелета; ошибка — строка с повтором. Значения правит
  *  вызывающий (оптимистично, I4).
+ *
+ *  С `host` (#632) ячейка получает формульный режим: значок fx, меню
+ *  «Изменить формулу / Вписать значение / Убрать формулу / Как у типа»,
+ *  бейдж ошибки и редактор формул.
  */
 export function CustomFieldsBlock({
   module,
@@ -31,6 +40,9 @@ export function CustomFieldsBlock({
   refs,
   canEdit,
   onChange,
+  host,
+  hostContext,
+  formulas,
 }: {
   module: Exclude<CustomFieldModule, 'company'>;
   /** Тип процесса / тип проекта / вид папки: показываются только его
@@ -40,9 +52,20 @@ export function CustomFieldsBlock({
   refs: readonly CustomFieldRef[];
   canEdit: boolean;
   onChange: (fieldId: string, value: CustomFieldValue | null, refs?: CustomFieldRef[]) => void;
+  /** Запись-носитель формул (#632); без него блок работает как раньше. */
+  host?: FormulaHost;
+  hostContext?: FormulaHostContext;
+  /** Состояние формульных ячеек из DTO (`customFieldFormulas`). */
+  formulas?: CustomFieldFormulas;
 }) {
   const query = useCustomFieldDefinitions(module);
-  const definitions = definitionsForTarget(query.data, module, targetId);
+  // Стабильный массив определений (A6-10): он уходит в `useFormulaEditor`
+  // как `ownDefinitions` — зависимость `useMemo` дерева источников редактора.
+  // Новая ссылка на каждый рендер блока пересобирала дерево целиком.
+  const definitions = useMemo(
+    () => definitionsForTarget(query.data, module, targetId),
+    [query.data, module, targetId],
+  );
 
   if (query.isLoading) {
     return (
@@ -87,14 +110,36 @@ export function CustomFieldsBlock({
               hintId={hintId}
               wide={definition.type === 'long_text'}
             >
-              <CustomFieldEditor
-                definition={definition}
-                value={values[definition.id]}
-                refs={refs}
-                disabled={!canEdit}
-                variant="inline"
-                onCommit={(value, pickedRefs) => onChange(definition.id, value, pickedRefs)}
-              />
+              {host ? (
+                <FormulaCell
+                  definition={definition}
+                  host={host}
+                  hostContext={hostContext ?? {}}
+                  info={formulas?.[definition.id]}
+                  value={values[definition.id]}
+                  refs={refs}
+                  canEdit={canEdit}
+                  ownDefinitions={definitions}
+                >
+                  <CustomFieldEditor
+                    definition={definition}
+                    value={values[definition.id]}
+                    refs={refs}
+                    disabled={!canEdit}
+                    variant="inline"
+                    onCommit={(value, pickedRefs) => onChange(definition.id, value, pickedRefs)}
+                  />
+                </FormulaCell>
+              ) : (
+                <CustomFieldEditor
+                  definition={definition}
+                  value={values[definition.id]}
+                  refs={refs}
+                  disabled={!canEdit}
+                  variant="inline"
+                  onCommit={(value, pickedRefs) => onChange(definition.id, value, pickedRefs)}
+                />
+              )}
               {definition.hint ? (
                 <span id={hintId} className="sr-only">
                   {definition.hint}

@@ -121,8 +121,21 @@ export function pushTaskKeys(
     return;
   }
   // Деталь и кнопки, только что записанные из ответа своей мутации, эхо не
-  // перезапрашивает (отклик панели процесса, #378).
-  if (taskId && !isFreshFromMutation(taskId)) {
+  // перезапрашивает (отклик панели процесса, #378). Исключение — формульная
+  // запись: пересчёт зависимых ячеек идёт ПОСЛЕ ответа мутации, поэтому
+  // ответ содержит старые значения и деталь нужно перечитать даже автору.
+  const formulaWrite = payload.formulaWrite === true;
+  if (taskId && formulaWrite) {
+    // Пересчёт приходит ПОСЛЕ ответа мутации. К этому моменту деталь уже
+    // может перечитываться со старым значением (refetch, запущенный
+    // onSettled): обычная инвалидация дедупится об in-flight запрос и
+    // отдаёт прошлое значение — формула «отстаёт на один шаг». Отменяем
+    // запрос и перечитываем заново.
+    void queryClient
+      .cancelQueries({ queryKey: tasksKeys.detail(taskId) })
+      .then(() => queryClient.invalidateQueries({ queryKey: tasksKeys.detail(taskId) }));
+    batcher.push(tasksKeys.transitions(taskId), 'feed');
+  } else if (taskId && !isFreshFromMutation(taskId)) {
     batcher.push(tasksKeys.detail(taskId), 'feed');
     batcher.push(tasksKeys.transitions(taskId), 'feed');
   }

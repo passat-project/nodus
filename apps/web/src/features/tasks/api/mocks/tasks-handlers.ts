@@ -1,4 +1,5 @@
 import type {
+  FormulaMovePreviewResponse,
   Paginated,
   TaskBranch,
   TaskBranchNode,
@@ -19,8 +20,11 @@ import {
   taskDetailOf,
 } from '../../../../shared/mocks/data/tasks.js';
 import { demoStages } from '../../../../shared/mocks/data/task-stages.js';
+import { findDemoNodeRow } from '../../../../shared/mocks/data/project-nodes.js';
 import { userRef } from '../../../../shared/mocks/data/users.js';
 import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
+import { mockLockedFieldError } from '../../../../shared/custom-fields/formula/formula-mocks.js';
+import { taskDetailWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
 import { checkClearedRequired, checkUnboundValues, typeOfTask } from './task-create-policy.js';
 import { tasksChecklistHandlers } from './tasks-checklist-handlers.js';
 import { tasksListHandlers } from './tasks-list-handlers.js';
@@ -85,7 +89,8 @@ export const tasksHandlers = [
         .flat()
         .find((t) => t.id === params.id);
     if (!task) return notFound('Task not found');
-    return HttpResponse.json(taskDetailOf(task));
+    // Формулы типа (#632) — поверх клонированного DTO, не в сторе задач.
+    return HttpResponse.json(taskDetailWithFormulas(task));
   }),
 
   /** Ветка задачи для панели-навигатора: дерево от корневого предка. */
@@ -124,6 +129,18 @@ export const tasksHandlers = [
     const subtask = makeSubtask(parent, title);
     (demoSubtasks[parent.id] ??= []).push(subtask);
     return HttpResponse.json(subtask, { status: 201 });
+  }),
+
+  /** Превью формульного диффа переноса задачи (#632, критерий 1): демо-мир
+   *  без формульных переносов — дифф пуст, окно подтверждения не открывается. */
+  http.post('/api/v1/tasks/:id/move-preview', ({ params }) => {
+    const task =
+      demoTasks.find((t) => t.id === params.id) ??
+      Object.values(demoSubtasks)
+        .flat()
+        .find((t) => t.id === params.id);
+    if (!task) return notFound('Task not found');
+    return HttpResponse.json({ changes: [] } satisfies FormulaMovePreviewResponse);
   }),
 
   http.patch('/api/v1/tasks/:id', async ({ params, request }) => {
@@ -169,6 +186,23 @@ export const tasksHandlers = [
       if (body.title !== undefined) task.title = body.title;
       if (body.priority !== undefined) task.priority = body.priority;
       if (body.deadline !== undefined) task.deadline = body.deadline;
+      // Перенос в папку структуры (#467): PATCH несёт nodeId одиночного DnD,
+      // null — «Без папки». Мок терял его, и перенос задачи в демо-мире не
+      // менял ничего (сервер пишет nodeId — task-fields.writer.ts:147).
+      if (body.nodeId !== undefined) {
+        if (body.nodeId === null) {
+          task.nodeId = null;
+        } else {
+          const node = findDemoNodeRow(body.nodeId);
+          if (!node || node.projectId !== task.project?.id) {
+            return HttpResponse.json(
+              { code: ErrorCode.PROJECT_NODE_INVALID, message: 'Node is invalid' },
+              { status: 422 },
+            );
+          }
+          task.nodeId = node.id;
+        }
+      }
       const extra = (detailsExtra[task.id] ??= {
         description: taskDetailOf(task).description,
         observers: [],
@@ -191,6 +225,12 @@ export const tasksHandlers = [
             { status: 422 },
           );
         }
+        // Формульная ячейка руками не пишется (#660): 422, как на сервере.
+        const changedMock = Object.keys(body.customFields).filter(
+          (fieldId) => task.customFields?.[fieldId] !== next[fieldId],
+        );
+        const lockedMock = mockLockedFieldError('task', task.id, changedMock);
+        if (lockedMock) return HttpResponse.json(lockedMock, { status: 422 });
         task.customFields = next;
       }
       task.updatedAt = new Date().toISOString();

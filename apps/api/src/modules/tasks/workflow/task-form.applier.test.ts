@@ -37,15 +37,18 @@ function setup(overrides: Record<string, unknown> = {}) {
       })),
     ),
   };
+  const formulas = { recalcOwnAfterValuesChange: vi.fn(async () => void 0) };
   const applier = new TaskFormApplier(
     tasks as never,
     writer as never,
+    formulas as never,
     time as never,
     revisions as never,
     messages as never,
     { assertMembersAllowed: vi.fn() } as never,
+    { lockedFieldIds: vi.fn(async () => new Set<string>()) } as never,
   );
-  return { applier, tasks, writer, time, revisions, messages };
+  return { applier, tasks, writer, time, revisions, messages, formulas };
 }
 
 const actor = (id: string) => ({ id, permissions: [] });
@@ -114,17 +117,38 @@ describe('TaskFormApplier — окно перехода задачи (#380)', ()
     ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
   });
 
-  it('права разделов: наблюдатель — 403 на поля, время и итог', async () => {
+  it('права разделов: наблюдатель — поля игнорируются, время и итог — 403', async () => {
     const { applier } = setup();
     const observer = actor('carol');
+    // Формульные слоты окна шлются always-send и не должны ломать переход
+    // актору без права правки: поля просто не применяются (#632).
     await expect(
       applier.apply(TX, 't1', observer, { fields: { description: 'x' } }),
-    ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN });
+    ).resolves.toBeDefined();
     await expect(
       applier.apply(TX, 't1', observer, { time: { minutes: 5, date: '2026-10-25' } }),
     ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN });
     await expect(
       applier.apply(TX, 't1', observer, { result: { text: '', messageIds: [] } }),
     ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN });
+  });
+});
+
+describe('TaskFormApplier: синхронный пересчёт формул в tx (#632)', () => {
+  it('применённые атрибуты зовут recalcOwnAfterValuesChange с их ключами', async () => {
+    const kit = setup();
+    const fieldId = '33333333-3333-4333-8333-3333333333f1';
+    kit.writer.apply.mockResolvedValueOnce({
+      customFieldChanges: [{ fieldId, from: null, to: 'x' }] as never,
+    });
+    await kit.applier.apply({} as never, 't1', actor('bob'), {
+      fields: { customFields: { [fieldId]: 'x' } },
+    } as never);
+    expect(kit.formulas.recalcOwnAfterValuesChange).toHaveBeenCalledWith(
+      expect.anything(),
+      'bob',
+      't1',
+      [fieldId],
+    );
   });
 });

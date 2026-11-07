@@ -144,7 +144,7 @@ describe('DefinitionsService.remove (#631, Р8 — удаление всегда
     expect(eventBus.emit).toHaveBeenCalledWith(
       expect.anything(),
       'custom_field.definition_changed',
-      { definitionId: ROW.id, change: 'deleted' },
+      expect.objectContaining({ definitionId: ROW.id, change: 'deleted', number: ROW.number }),
       expect.objectContaining({ actorId: 'actor-1' }),
     );
   });

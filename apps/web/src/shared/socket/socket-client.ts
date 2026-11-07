@@ -8,6 +8,7 @@ import {
   TASK_EVENTS,
   chatMessageSentPayloadSchema,
   CUSTOM_FIELD_CATALOG_EVENTS,
+  CUSTOM_FIELD_EVENTS,
   DICTIONARY_CATALOG_EVENTS,
   PROJECT_AUDIENCE_EVENTS,
   PROJECT_CATALOG_EVENTS,
@@ -88,6 +89,11 @@ export const DOMAIN_EVENTS = [
   ...WORKFLOW_CATALOG_EVENTS,
   ...PROJECT_CATALOG_EVENTS,
   ...PROJECT_AUDIENCE_EVENTS,
+  // Формула ячейки поставлена/снята (#632, O4): АДРЕСНОЕ событие (аудитория
+  // хоста), в каталожный список не входит — без строки здесь оно доезжало до
+  // сокета и молча терялось, обработчик `pushFormulaChangedKeys` был мёртв
+  // (A6-1). Ловушка на весь набор — `socket-client.test.ts`.
+  CUSTOM_FIELD_EVENTS.FORMULA_CHANGED,
 ] as const;
 
 let socket: Socket | null = null;

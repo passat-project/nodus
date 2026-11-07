@@ -18,6 +18,7 @@ import { demoProcessTypes, demoWorkflowDetails } from '../../../../shared/mocks/
 import type { WorkflowDetail } from '@nodus/contracts';
 import { userRef } from '../../../../shared/mocks/data/users.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
+import { taskWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
 import { prepareCreateBody, resolveCreateType } from './task-create-policy.js';
 
 function notFound(message: string) {
@@ -79,7 +80,9 @@ export const tasksListHandlers = [
       );
     }
     const start = cursor ? Number(cursor) || 0 : 0;
-    const items = filtered.slice(start, start + limit);
+    // Формулы типа (#632) считаются на чтении: DTO клонируется, хранимые
+    // демо-задачи не мутируются.
+    const items = filtered.slice(start, start + limit).map(taskWithFormulas);
     const next = start + limit < filtered.length ? String(start + limit) : null;
     return HttpResponse.json({ items, nextCursor: next });
   }),

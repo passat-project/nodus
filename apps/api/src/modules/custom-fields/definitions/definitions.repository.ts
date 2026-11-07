@@ -19,7 +19,7 @@ const definitionSelect = {
   sortOrder: true,
   createdAt: true,
   updatedAt: true,
-  bindings: { select: { targetKind: true, targetId: true } },
+  bindings: { select: { targetKind: true, targetId: true, defaultFormula: true } },
   companyValue: { select: { value: true } },
 } as const;
 
@@ -160,6 +160,22 @@ export class DefinitionsRepository {
   ): Promise<boolean> {
     const { count } = await tx.fieldBinding.deleteMany({
       where: { definitionId, targetKind, targetId },
+    });
+    return count > 0;
+  }
+
+  /** Формула места (#632, Р6): AST на привязке «атрибут × тип/вид».
+   *  null — формулы нет. Привязки нет — false (404 на уровне сервиса). */
+  async setBindingFormula(
+    definitionId: string,
+    targetKind: 'process_type' | 'project_type' | 'node_kind',
+    targetId: string,
+    ast: Prisma.InputJsonValue | null,
+    tx: TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.fieldBinding.updateMany({
+      where: { definitionId, targetKind, targetId },
+      data: { defaultFormula: ast === null ? Prisma.DbNull : ast },
     });
     return count > 0;
   }

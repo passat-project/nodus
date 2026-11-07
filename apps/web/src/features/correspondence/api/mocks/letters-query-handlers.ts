@@ -29,6 +29,10 @@ import {
 import { demoUserListItems } from '../../../../shared/mocks/data/users.js';
 import { counterpartyMatcher } from '../../../../shared/mocks/live-counterparty.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
+import {
+  letterListItemWithFormulas,
+  letterWithFormulas,
+} from '../../../../shared/custom-fields/formula/formula-dto.js';
 import { apiError, notFound } from './letters-mock-checks.js';
 
 /** Чтение писем (#55, §6.2): списки вкладок курсором, держатели решений,
@@ -84,8 +88,16 @@ export const lettersQueryHandlers = [
     return HttpResponse.json(
       page<LetterListItem>(
         // «Я открывал» — личный признак (редизайн #56): точка в «Новых».
+        // Значения атрибутов, имена ссылок и формульное состояние (#632, Р9)
+        // приезжают строкой списка — колонки атрибутов и значок fx.
         items.map((letter) =>
-          letterListItemOf(letter, viewedLetterIds.has(letter.id) || letter.registeredAt !== null),
+          letterListItemWithFormulas(
+            letterListItemOf(
+              letter,
+              viewedLetterIds.has(letter.id) || letter.registeredAt !== null,
+            ),
+            letter.customFields,
+          ),
         ),
         cursor,
         limit ?? 50,
@@ -121,7 +133,8 @@ export const lettersQueryHandlers = [
     const letter = findLetter(String(params.id));
     const actor = getMockActor();
     if (!letter || !canSeeLetter(letter, actor)) return notFound();
-    return HttpResponse.json(letterDetailOf(letter, actor));
+    // Формулы типа письма (#632) — на чтении, поверх клонированного DTO.
+    return HttpResponse.json(letterWithFormulas(letterDetailOf(letter, actor)));
   }),
 
   /** Дерево «ёлочки» (#461, Р2): корень — верх цепочки, текущее письмо

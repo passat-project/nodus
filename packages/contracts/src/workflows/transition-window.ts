@@ -1,3 +1,4 @@
+import type { FormulaNode } from '../custom-fields/formula.js';
 import type {
   TransitionForm,
   TransitionFormSectionKind,
@@ -19,7 +20,14 @@ import type { TransitionBlockReason, WorkflowTransitionRules } from './workflow.
  *  показывает подпись по умолчанию для гейтового раздела). */
 export type EffectiveSection =
   | { kind: 'registration'; origin: 'form' | 'gate' }
-  | { kind: 'fields'; fields: TransitionWindowFieldKey[]; origin: 'form' | 'gate' }
+  | {
+      kind: 'fields';
+      fields: TransitionWindowFieldKey[];
+      /** Формулы-подстановки слотов (#632, Р12): веб применяет префилл и
+       *  всегда отправляет такой слот, чтобы снимок сохранился. */
+      formulas?: Record<string, FormulaNode>;
+      origin: 'form' | 'gate';
+    }
   | { kind: 'time'; mode: 'if_empty' | 'always'; origin: 'form' | 'gate' }
   | { kind: 'result'; origin: 'form' | 'gate' }
   | { kind: 'result_files'; label: string; origin: 'form' | 'gate' }
@@ -68,6 +76,7 @@ export function effectiveWindowSections(
     sections.set('fields', {
       kind: 'fields',
       fields: [...fields],
+      ...(existing?.kind === 'fields' && existing.formulas ? { formulas: existing.formulas } : {}),
       origin: existing ? 'form' : 'gate',
     });
   }

@@ -10,6 +10,7 @@ import {
   type CustomFieldValues,
 } from '../custom-fields/custom-field-values.js';
 import { fieldFormSlotSchema, hasDuplicateSlots } from '../custom-fields/field-form.schemas.js';
+import { customFieldFormulasSchema } from '../custom-fields/formula-api.schemas.js';
 import { userRefSchema } from '../directory/user-ref.schema.js';
 import { processTypeIconSchema } from '../workflows/process-type.schemas.js';
 import { cursorQuerySchema } from '../pagination/paginated.schema.js';
@@ -182,6 +183,11 @@ export const projectListItemSchema = z.object({
   endDate: z.iso.date().nullable(),
   /** Последняя активность (для сортировки журнала). */
   activityAt: z.iso.datetime(),
+  /** Атрибуты строки списка (#632, Р9): значения, ссылки и формулы — колонки
+   *  журнала проектов показывают их без отдельных запросов. */
+  customFields: customFieldValuesSchema.optional(),
+  customFieldRefs: z.array(customFieldRefSchema).optional(),
+  customFieldFormulas: customFieldFormulasSchema.optional(),
 });
 
 export type ProjectListItem = z.infer<typeof projectListItemSchema>;
@@ -218,6 +224,8 @@ export const projectDetailSchema = projectListItemSchema.extend({
    *  портал; место — тип проекта, #631). */
   customFields: customFieldValuesSchema,
   customFieldRefs: z.array(customFieldRefSchema),
+  /** Формульные ячейки (#632): своя/типовая формула и ошибка (производное). */
+  customFieldFormulas: customFieldFormulasSchema.optional(),
   access: projectAccessSchema,
   /** Сводка структуры (#467): дефолт вкладки карточки — «Структура» первична,
    *  когда есть узел с прямыми задачами-детьми (вердикт владельца 07.11). */

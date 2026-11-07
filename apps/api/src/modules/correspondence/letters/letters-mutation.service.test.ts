@@ -65,6 +65,8 @@ function setup(letter: LetterDetailRow) {
     detail: vi.fn(async () => ({ id: LETTER })),
   };
   const validator = { patch: vi.fn(async () => ({ data: {}, changes: [] })) };
+  const fields = { lockedFieldIds: vi.fn(async () => new Set<string>()) };
+  const letterFormulas = { recalcAfterValuesChange: vi.fn(async () => void 0) };
   const eventBus = { emit: vi.fn(async () => void 0) };
   const profiles = { filterActiveUserIds: vi.fn(async (ids: string[]) => ids) };
   const attached = {
@@ -76,6 +78,8 @@ function setup(letter: LetterDetailRow) {
     repo as never,
     query as never,
     validator as never,
+    fields as never,
+    letterFormulas as never,
     attached as never,
     attachedValidator as never,
     { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
@@ -83,7 +87,18 @@ function setup(letter: LetterDetailRow) {
     {} as never,
     profiles as never,
   );
-  return { service, repo, query, validator, eventBus, profiles, attached, attachedValidator };
+  return {
+    service,
+    repo,
+    letterFormulas,
+    query,
+    validator,
+    fields,
+    eventBus,
+    profiles,
+    attached,
+    attachedValidator,
+  };
 }
 
 describe('правка реквизитов (редизайн #56 — карточка = форма)', () => {
@@ -112,6 +127,21 @@ describe('правка реквизитов (редизайн #56 — карто
     const { service, validator } = setup(row(null));
     await service.update(REGISTRAR, LETTER, { addresseeId: COLLEAGUE });
     expect(validator.patch).toHaveBeenCalled();
+  });
+
+  it('значение в формульную ячейку — 422 FORMULA_CELL_LOCKED (#660)', async () => {
+    const { service, fields } = setup(row(null));
+    const fieldId = '00000000-0000-4000-8000-000000000420';
+    fields.lockedFieldIds.mockResolvedValueOnce(new Set([fieldId]));
+    await expect(
+      service.update(REGISTRAR, LETTER, { customFields: { [fieldId]: 'руками' } }),
+    ).rejects.toMatchObject({ code: 'FORMULA_CELL_LOCKED' });
+  });
+
+  it('правка без атрибутов блокировку не проверяет', async () => {
+    const { service, fields } = setup(row(null));
+    await service.update(REGISTRAR, LETTER, { subject: 'Оферт' });
+    expect(fields.lockedFieldIds).not.toHaveBeenCalled();
   });
 });
 
@@ -192,5 +222,23 @@ describe('личный признак «просмотрено» (редизай
     const { service, repo } = setup(row(null));
     await service.markViewed(REGISTRAR, LETTER);
     expect(repo.markViewed).toHaveBeenCalledWith(LETTER, REGISTRAR.id);
+  });
+});
+
+describe('PATCH письма: синхронный пересчёт формул в tx (#632)', () => {
+  it('правка атрибутов зовёт recalcAfterValuesChange', async () => {
+    const kit = setup(row(null));
+    const fieldId = '00000000-0000-4000-8000-000000000421';
+    kit.validator.patch.mockResolvedValueOnce({
+      data: { customFields: { [fieldId]: 'v' } },
+      changes: [{ field: `cf.${fieldId}`, from: null, to: 'v' }] as never,
+    });
+    await kit.service.update(REGISTRAR, LETTER, { customFields: { [fieldId]: 'v' } });
+    expect(kit.letterFormulas.recalcAfterValuesChange).toHaveBeenCalledWith(
+      expect.anything(),
+      REGISTRAR.id,
+      LETTER,
+      [fieldId],
+    );
   });
 });

@@ -42,6 +42,8 @@ export function ProjectAboutPanel({ project }: { project: ProjectDetail }) {
         refs={project.customFieldRefs}
         canEdit={project.access.canManage}
         onChange={(fieldId, value, refs) => updateField.mutate({ fieldId, value, refs })}
+        host={{ kind: 'project', id: project.id }}
+        formulas={project.customFieldFormulas}
       />
     </CardDataColumn>
   );

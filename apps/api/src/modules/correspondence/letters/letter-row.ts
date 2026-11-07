@@ -29,6 +29,9 @@ export const letterListSelect = {
   mailFromName: true,
   // «Конфиденциально» (#461, Р4): бейдж-замок в строке реестра.
   confidential: true,
+  // Атрибуты строки списка (#632, Р9): колонки видов показывают значения
+  // без отдельных запросов; формулы типа считаются на чтении.
+  customFields: true,
 } as const;
 
 export const letterDetailSelect = {
@@ -37,7 +40,6 @@ export const letterDetailSelect = {
   signerId: true,
   registrarId: true,
   createdBy: true,
-  customFields: true,
   // Полный конверт и флаги приёма (#56) — карточка письма.
   mailMessageId: true,
   mailInReplyTo: true,

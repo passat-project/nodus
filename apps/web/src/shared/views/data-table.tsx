@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 import { Checkbox } from '@nodus/ui/components/checkbox';
 import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
@@ -10,7 +10,7 @@ import { sortRows } from './sort-rows.js';
 import { useAutoFitColumn } from './use-autofit-column.js';
 import { useInfiniteSentinel } from './use-infinite-sentinel.js';
 import { useRowSelection, type RowSelection } from './use-row-selection.js';
-import { useViewFields, type FieldDef } from './use-view-fields.js';
+import { useViewFields, type FieldDef, type ViewField } from './use-view-fields.js';
 import { EdgeHints } from '../ui/board/board-scroller.js';
 import { useBoardEdgeScroll } from '../ui/board/use-board-edge-scroll.js';
 import { uiPx } from '../ui/ui-scale.js';
@@ -23,6 +23,102 @@ export interface DataTableField<T> extends FieldDef {
    *  (↑/↓); на бэке id поля = имя параметра `?sort=field:dir`. */
   sortValue?: (row: T) => string | number | null;
 }
+
+interface DataTableRowProps<T> {
+  row: T;
+  /** Ключ строки — готовый: `rowKey(row)` вызывается один раз на рендер
+   *  таблицы, а не в каждой строке (стабильный примитив для memo). */
+  rowKey: string;
+  isSelected: boolean;
+  fields: readonly ViewField<DataTableField<T>>[];
+  gridTemplateColumns: string;
+  onOpenRow: (row: T, rowEl: HTMLElement) => void;
+  onHoverRow?: (row: T) => void;
+  onToggle: (key: string) => void;
+  actions?: (row: T) => ReactNode;
+  rowMenu?: (row: T) => RowMenuItem[];
+}
+
+/**
+ * Строка журнала, отдельная и мемоизированная (A6-4, #632): таблица — одна
+ * компонента, и любой её рендер (ховер, подвод курсора к краю, выбор строки)
+ * перерисовывал ВСЕ строки, а их в журнале сотни. Пропсы — только данные
+ * строки: функции потребителя (`onOpenRow`/`actions`/`rowMenu`) приходят
+ * ссылками с его рендера и в самой таблице не меняются, `selection` больше
+ * не уходит множеством в каждую строку — только свой булев флаг.
+ */
+function DataTableRowInner<T>({
+  row,
+  rowKey,
+  isSelected,
+  fields,
+  gridTemplateColumns,
+  onOpenRow,
+  onHoverRow,
+  onToggle,
+  actions,
+  rowMenu,
+}: DataTableRowProps<T>) {
+  return (
+    <div
+      role="row"
+      tabIndex={0}
+      onClick={(e) => onOpenRow(row, e.currentTarget)}
+      onPointerEnter={() => onHoverRow?.(row)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpenRow(row, e.currentTarget);
+        }
+      }}
+      className={cn(
+        'grid h-12 w-max min-w-full cursor-pointer items-stretch gap-3 border-b border-border/60 px-4 transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_3rem] last:border-b-0 hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-ring',
+        isSelected && 'bg-accent/50',
+      )}
+      style={{ gridTemplateColumns }}
+    >
+      {/* Ведущая ячейка: чекбокс выбора + «шашка» меню (клики не
+      всплывают до строки — открытие карточки не срабатывает). */}
+      <span
+        role="cell"
+        className="flex items-center gap-1"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={() => onToggle(rowKey)}
+          aria-label={ui.common.selectRow}
+        />
+        <RowMenu items={rowMenu?.(row) ?? []} />
+      </span>
+      {fields.map((field) => (
+        <span
+          key={field.id}
+          role="cell"
+          data-cell-field={field.id}
+          className="flex min-w-0 items-center gap-2 overflow-hidden"
+        >
+          {field.render(row)}
+        </span>
+      ))}
+      {actions ? (
+        <span
+          role="cell"
+          className="flex items-center"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          {actions(row)}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** memo с сохранением дженерика: строка перерисовывается только когда
+ *  меняются ЕЁ данные или её собственный флаг выбора. */
+const DataTableRow = memo(DataTableRowInner) as typeof DataTableRowInner;
 
 /**
  * Таблица-канон (модель AG Grid/Битрикса, references/views-customization.md) —
@@ -194,62 +290,20 @@ export function DataTable<T>({
         />
         {sortedRows.map((row) => {
           const key = rowKey(row);
-          const isSelected = selected.has(key);
           return (
-            <div
+            <DataTableRow
               key={key}
-              role="row"
-              tabIndex={0}
-              onClick={(e) => onOpenRow(row, e.currentTarget)}
-              onPointerEnter={() => onHoverRow?.(row)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onOpenRow(row, e.currentTarget);
-                }
-              }}
-              className={cn(
-                'grid h-12 w-max min-w-full cursor-pointer items-stretch gap-3 border-b border-border/60 px-4 transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_3rem] last:border-b-0 hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-ring',
-                isSelected && 'bg-accent/50',
-              )}
-              style={{ gridTemplateColumns }}
-            >
-              {/* Ведущая ячейка: чекбокс выбора + «шашка» меню (клики не
-              всплывают до строки — открытие карточки не срабатывает). */}
-              <span
-                role="cell"
-                className="flex items-center gap-1"
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => e.stopPropagation()}
-              >
-                <Checkbox
-                  checked={isSelected}
-                  onCheckedChange={() => toggle(key)}
-                  aria-label={ui.common.selectRow}
-                />
-                <RowMenu items={rowMenu?.(row) ?? []} />
-              </span>
-              {visibleFields.map((field) => (
-                <span
-                  key={field.id}
-                  role="cell"
-                  data-cell-field={field.id}
-                  className="flex min-w-0 items-center gap-2 overflow-hidden"
-                >
-                  {field.render(row)}
-                </span>
-              ))}
-              {actions ? (
-                <span
-                  role="cell"
-                  className="flex items-center"
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
-                >
-                  {actions(row)}
-                </span>
-              ) : null}
-            </div>
+              row={row}
+              rowKey={key}
+              isSelected={selected.has(key)}
+              fields={visibleFields}
+              gridTemplateColumns={gridTemplateColumns}
+              onOpenRow={onOpenRow}
+              onHoverRow={onHoverRow}
+              onToggle={toggle}
+              actions={actions}
+              rowMenu={rowMenu}
+            />
           );
         })}
         {hasNextPage ? (

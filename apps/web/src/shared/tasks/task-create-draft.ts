@@ -97,6 +97,59 @@ export function withNode(draft: TaskCreateDraft, nodeId: string | null): TaskCre
   return { ...draft, nodeId };
 }
 
+/** Равенство значений черновика (примитивы/списки/деньги): префилл обновляет
+ *  слот только пока человек его не тронул. */
+export function sameDraftValue(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+/** След формульного префилла окна (Р12): что подставила формула и что
+ *  человек правил руками. Живёт в ref окна, чтобы ре-эвал не зависел от
+ *  идентичности объектов. */
+export interface FormulaPrefillTrace {
+  /** Слоты, в которых сейчас стоит НЕтронутое формульное значение. */
+  auto: Readonly<Record<string, unknown>>;
+  /** Слоты, которые человек правил: очистка — тоже правка (A8-3). */
+  touched: ReadonlySet<string>;
+}
+
+/**
+ * Применение посчитанного префилла к черновику (Р12, A8-3/A8-4): формула
+ * обновляет только НЕтронутые слоты; исчезнувший из формулы авто-слот
+ * очищается, ручное значение и осознанная очистка не затираются; протухшие
+ * метки удаляются, чтобы следующий ре-эвал не считал слот формульным.
+ */
+export function applyFormulaPrefill(
+  draft: TaskCreateDraft,
+  incoming: Readonly<Record<string, unknown>>,
+  trace: FormulaPrefillTrace,
+): { draft: TaskCreateDraft; auto: Record<string, unknown> } {
+  const auto: Record<string, unknown> = { ...trace.auto };
+  let next = draft;
+  // 1) Слот пропал из формулы: снимаем только авто-значение (человек его не
+  //    трогал); ручное/очищенное остаётся, метка больше не актуальна.
+  for (const key of Object.keys(auto)) {
+    if (key in incoming) continue;
+    if (!trace.touched.has(key) && sameDraftValue(next.values[key], auto[key])) {
+      next = withValue(next, key as CreationFieldKey, null);
+    }
+    delete auto[key];
+  }
+  // 2) Пришедшие значения: только слоты, которых человек не касался.
+  for (const [key, value] of Object.entries(incoming)) {
+    if (trace.touched.has(key)) continue;
+    const current = next.values[key];
+    const untouched = current === undefined || (key in auto && sameDraftValue(current, auto[key]));
+    if (!untouched) {
+      delete auto[key];
+      continue;
+    }
+    next = withValue(next, key as CreationFieldKey, value);
+    auto[key] = value;
+  }
+  return { draft: next, auto };
+}
+
 /** Человеческая строка «Не хватает: …» (подписи слотов формы). */
 export function missingTextOf(
   missing: readonly CreationFieldKey[],
@@ -158,7 +211,13 @@ export function buildCreateBody(
   prefill: TaskCreatePrefill,
   form: CreationForm,
 ): CreateTaskBody {
-  const body = draftBody(draft);
+  // Тело — только слоты АКТИВНОЙ формы: значение, оставшееся от прежнего типа,
+  // не должно уезжать в customFields невидимо для человека (Р9).
+  const allowed = new Set(form.fields.map((slot) => slot.key));
+  const visibleValues = Object.fromEntries(
+    Object.entries(draft.values).filter(([key]) => allowed.has(key as CreationFieldKey)),
+  );
+  const body = draftBody({ ...draft, values: visibleValues });
   const withPrefill: CreateTaskBody = {
     ...body,
     ...(prefill.personalStageId ? { personalStageId: prefill.personalStageId } : {}),

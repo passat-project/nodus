@@ -56,7 +56,7 @@
   дня, руководитель — переход стеком, HR-статус; на узкой зоне поля уходят
   под фото) + секция «Подчинённые», **Задачи** (`GET /tasks?assigneeId=`) и
   **Проекты** (`GET /projects?memberId=`) со счётчиками — ПОЛНОЦЕННЫЕ журналы
-  на shared-реестрах (`makeTaskTableFields()` / `projectListFields`, ключи
+  на shared-реестрах (`useTaskTableFields()` / `useProjectTableFields()`, ключи
   видов `directory.tasks` / `directory.projects`): СТРОКА ИНСТРУМЕНТОВ
   (`components/employee-journal-tabs.tsx`) — поисковая строка с панелью
   фильтра (модель Битрикс24: пресеты слева, поля справа; у задач скрыт

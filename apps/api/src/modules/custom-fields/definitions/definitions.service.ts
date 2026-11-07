@@ -50,6 +50,7 @@ import {
   requireDefinition,
 } from './definition-guards.js';
 import { DefinitionsRepository, type FieldDefinitionWriteData } from './definitions.repository.js';
+import { FormulaBindingService } from '../formulas/formula-binding.service.js';
 import { CustomFieldValueValidator } from '../values/value-validator.js';
 
 /**
@@ -73,6 +74,7 @@ export class DefinitionsService {
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
     @Inject(FIELD_BINDING_TARGET_READER) private readonly targets: FieldBindingTargetReader,
     @Inject(FIELD_BINDING_FORM_CLEANER) private readonly formCleaner: FieldBindingFormCleaner,
+    private readonly bindingFormulas: FormulaBindingService,
     @Inject(PROCESS_TYPE_FORM_CLEANER) private readonly processTypeCleaner: ProcessTypeFormCleaner,
     private readonly query: DefinitionsQueryService,
     private readonly logger: PinoLogger,
@@ -129,11 +131,20 @@ export class DefinitionsService {
       };
       const created = await this.definitions.create(data, tx);
       await replaceBindings(this.definitions, created.id, bindings, tx);
-      const row = (await this.definitions.findById(created.id, tx)) ?? created;
+      let row = (await this.definitions.findById(created.id, tx)) ?? created;
+      // Формулы мест в том же диалоге (Г-1 #632): раньше тело молча
+      // игнорировалось сервером — формула типа ставилась только в моках.
+      if (dto.bindingFormulas && Object.keys(dto.bindingFormulas).length > 0) {
+        await this.bindingFormulas.applyWithinTx(tx, row, dto.bindingFormulas, actorId);
+        // Ответ API обязан нести только что сохранённые формулы мест —
+        // перечитываем строку ПОСЛЕ записи (симметрично update).
+        row = (await this.definitions.findById(created.id, tx)) ?? row;
+      }
       await this.emitChanged(tx, row, 'created', actorId, [
         // Только поля DTO: `number` и `createdById` — внутренние колонки.
         ...Object.keys(data).filter((key) => key !== 'number' && key !== 'createdById'),
         'bindings',
+        ...(dto.bindingFormulas ? ['defaultFormula'] : []),
       ]);
       return this.mapper.toDto(row, tx);
     });
@@ -188,15 +199,18 @@ export class DefinitionsService {
           this.processTypeCleaner,
         );
       }
+      // Формулы мест в том же диалоге (Г-1 #632): замена набора целиком,
+      // после замены привязок — формулы валидны против свежих целей.
+      if (dto.bindingFormulas !== undefined) {
+        const withBindings = (await this.definitions.findById(id, tx)) ?? fresh;
+        await this.bindingFormulas.applyWithinTx(tx, withBindings, dto.bindingFormulas, actorId);
+      }
       const row = (await this.definitions.findById(id, tx)) ?? fresh;
       const fields = Object.keys(data);
-      await this.emitChanged(
-        tx,
-        row,
-        'updated',
-        actorId,
-        dto.bindings === undefined ? fields : [...fields, 'bindings'],
-      );
+      await this.emitChanged(tx, row, 'updated', actorId, [
+        ...(dto.bindings === undefined ? fields : [...fields, 'bindings']),
+        ...(dto.bindingFormulas !== undefined ? ['defaultFormula'] : []),
+      ]);
       return this.mapper.toDto(row, tx);
     });
   }

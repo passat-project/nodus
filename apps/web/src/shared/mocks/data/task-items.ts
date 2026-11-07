@@ -1,7 +1,7 @@
 // Ручной демо-набор задач (данные, не god-object) — одна ответственность
 // «демо-контент задач»: элементы ссылаются друг на друга (подзадачи/связи
-// внутри одного массива), поэтому набор не делится. Фабрика элемента —
-// task-item-factory.ts, объёмный генератор — task-items-bulk.ts.
+// внутри одного массива). Фабрика элемента — task-item-factory.ts, объёмный
+// генератор — task-items-bulk.ts; демо формул (#632) — formula-demo-tasks.ts.
 import type { TaskListItem } from '@nodus/contracts';
 
 import { isoAgo, isoIn } from './dates.js';
@@ -17,6 +17,7 @@ import {
   stagePostponed,
   systemProcessType,
 } from './task-stages.js';
+import { formulaDemoTasks } from './formula-demo-tasks.js';
 import { userIds, userRef } from './users.js';
 
 export { projectRefs, tid };
@@ -195,6 +196,7 @@ export const demoTasks: TaskListItem[] = [
     source: 'letter',
     updatedAt: isoAgo(2, 9, 10),
   }),
+  ...formulaDemoTasks,
   // Вольная личная колонка «Стратегические» (active) — демонстрация
   // личной организации внутри системного состояния (ADR-0008).
   mk(

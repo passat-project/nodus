@@ -5,6 +5,7 @@ import type { ProcessCategory } from './process-type.schemas.js';
 import { checkCategoryDictionary } from './workflow-document-category-check.js';
 import { checkDeciderRules, type WorkflowPositionFact } from './workflow-document-deciders.js';
 import { checkExtraRules } from './workflow-document-extra-checks.js';
+import { checkFormulaSlots } from './workflow-document-formula-check.js';
 import type {
   WorkflowDraftDocument,
   WorkflowDraftStage,
@@ -206,6 +207,10 @@ export function checkWorkflowDocument(
       problems.push(warning('form_useless_section', { transitionId: t.id }));
     }
   }
+
+  // --- Формулы слотов окна и формы создания (#632, Р12) --------------------
+
+  if (opts.category) problems.push(...checkFormulaSlots(doc, opts.category));
 
   // --- Кастомные поля в окне и гейтах (#431, Р7) ---------------------------
 

@@ -197,6 +197,9 @@ vi.mock('../../../../shared/auth-store.js', () => {
 });
 
 vi.mock('../../../../shared/api/projects-list.js', () => ({
+  // Ключи кэша нужны соседним модулям (node-kinds, формулы #632) — мок
+  // обязан отдавать их наравне с хуками.
+  projectsKeys: { all: ['projects'], types: () => ['projects'], detail: (id: string) => [id] },
   useProjectTypes: () => ({ data: TYPES, isLoading: false }),
   useProjectsList: () => ({ data: { items: [], nextCursor: null } }),
   useProjectGroups: () => ({ data: [] }),
@@ -319,6 +322,8 @@ describe('StructureTab: дерево папок с задачами и филь�
     expect(screen.getByText('Согласовать АР')).toBeTruthy();
     expect(screen.getByText(ui.structure.noNodeSection)).toBeTruthy();
     expect(screen.getByText('Задача вне структуры')).toBeTruthy();
+    // Атрибутные колонки (#632) скрыты по умолчанию — значения в таблице нет.
+    expect(screen.queryByText('Фасад — навесной')).toBeNull();
 
     // Клик по строке папки открывает панель «Свойства папки» (#556):
     // название папки — полем правки в шапке панели.
