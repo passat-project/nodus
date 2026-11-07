@@ -185,8 +185,11 @@ export class FormulaCellsRepository {
   /** Ячейки по префиксу dep_key: удалённый источник (`v:task:<id>:`,
    *  `system:task:<id>`) — потребители находятся одним запросом. */
   async byDepPrefix(prefix: string, tx?: TransactionClient): Promise<FormulaCellRef[]> {
+    // Диапазон вместо `LIKE 'prefix%'`: btree с не-C коллацией не обслуживает
+    // LIKE, а `>= prefix AND < prefix+MAX` — обычный range scan (A3-05, без
+    // миграции и text_pattern_ops). Ключи dep — ASCII (`v:task:<id>:<n>`).
     const rows = await this.db(tx).formulaDep.findMany({
-      where: { depKey: { startsWith: prefix } },
+      where: { depKey: { gte: prefix, lt: `${prefix}\uFFFF` } },
       select: { cell: { select: { id: true, hostKind: true, hostId: true, fieldId: true } } },
     });
     return dedupeCells(rows.map((row) => row.cell));

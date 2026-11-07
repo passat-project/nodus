@@ -8,6 +8,7 @@ import {
 } from '@nodus/contracts';
 import { z } from 'zod';
 
+import { FormulaCellsService } from '../../src/modules/custom-fields/formulas/formula-cells.service.js';
 import { setupCustomFieldsFixture, type CustomFieldsFixture } from './custom-fields-fixtures.js';
 import { dispatchOwnEvent, eventIdOf } from './outbox-test-utils.js';
 
@@ -306,5 +307,25 @@ describe.skipIf(!process.env.DATABASE_URL)('формулы ячеек (integrati
     expect(
       await fx.prisma.formulaDep.count({ where: { depKey: `v:task:${taskId}:${source.number}` } }),
     ).toBe(0);
+  });
+
+  it('потребители по префиксу dep-ключа находятся диапазоном (A3-05)', async () => {
+    const { fx, admin } = cf;
+    const source = await cf.createField({ type: 'number', name: `Префикс ${fx.runId} источник` });
+    const target = await cf.createField({ type: 'number', name: `Префикс ${fx.runId} формула` });
+    const taskId = await cf.createTask(`Префикс ${fx.runId} задача`);
+    const saved = await fx.api(
+      admin,
+      'PUT',
+      `/tasks/${taskId}/custom-fields/${target.id}/formula`,
+      { body: { ast: doubled(source.number) }, key: `it-formula-prefix-${fx.runId}` },
+    );
+    expect(saved.status, await saved.clone().text()).toBe(200);
+
+    // Репозиторий ищет `dep_key >= prefix AND < prefix+MAX` (range scan):
+    // LIKE с не-C коллацией не использует btree.
+    const cells = fx.app.get(FormulaCellsService);
+    const found = await cells.dependentCellsByDepPrefix(`v:task:${taskId}:`);
+    expect(found.some((cell) => cell.hostId === taskId && cell.fieldId === target.id)).toBe(true);
   });
 });
