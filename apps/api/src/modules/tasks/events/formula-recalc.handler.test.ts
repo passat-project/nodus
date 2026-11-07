@@ -53,7 +53,9 @@ describe('TaskFormulaRecalcHandler: task.updated (#632, Р4)', () => {
     );
     expect(cells.depthOf).toHaveBeenCalledWith('task', TASK, FIELD, {});
     expect(formulas.recalcCells).toHaveBeenCalledTimes(1);
-    expect(formulas.recalcCells).toHaveBeenCalledWith({}, 'actor-1', TASK, [7], 3);
+    expect(formulas.recalcCells).toHaveBeenCalledWith({}, 'actor-1', TASK, [7], 3, {
+      includeActorForOwnHost: true,
+    });
   });
 
   it('перепривязка — пересчёт обоих родителей с глубиной 1', async () => {
@@ -67,7 +69,9 @@ describe('TaskFormulaRecalcHandler: task.updated (#632, Р4)', () => {
     await handler.handle(event({ parentId: PARENT, previousParentId: OLD_PARENT }));
     expect(cells.dependentCellsByDepKey).toHaveBeenCalledWith(`subtasks:task:${PARENT}`, {});
     expect(cells.dependentCellsByDepKey).toHaveBeenCalledWith(`subtasks:task:${OLD_PARENT}`, {});
-    expect(formulas.recalcCells).toHaveBeenCalledWith({}, null, TASK, [], 1);
+    expect(formulas.recalcCells).toHaveBeenCalledWith({}, null, TASK, [], 1, {
+      includeActorForOwnHost: true,
+    });
     expect(formulas.recalcCells).toHaveBeenCalledWith({}, null, PARENT, [], 1);
     expect(formulas.recalcCells).toHaveBeenCalledWith({}, null, OLD_PARENT, [], 1);
   });
@@ -98,6 +102,8 @@ describe('TaskFormulaRecalcHandler: task.updated (#632, Р4)', () => {
       {},
     );
     expect(formulas.recalcCells).toHaveBeenCalledTimes(1);
-    expect(formulas.recalcCells).toHaveBeenCalledWith({}, null, TASK, [], 1);
+    expect(formulas.recalcCells).toHaveBeenCalledWith({}, null, TASK, [], 1, {
+      includeActorForOwnHost: true,
+    });
   });
 });

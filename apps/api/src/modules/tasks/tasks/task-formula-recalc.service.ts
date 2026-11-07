@@ -43,6 +43,7 @@ export class TaskFormulaRecalcService {
       fieldId: string;
     }[],
     depth: number,
+    opts: { includeActor?: boolean } = {},
   ): Promise<void> {
     const row0 = await this.liveRowOrNull(tx, taskId);
     if (!row0) return;
@@ -65,7 +66,7 @@ export class TaskFormulaRecalcService {
             row,
             { customFields: { [cell.fieldId]: outcome.value } },
             ['customFields'],
-            { formulaWrite: true },
+            { formulaWrite: true, foreignWrite: opts.includeActor !== true },
           );
         } catch (error) {
           // Сбой одной ячейки не валит партию (Р4): «ядовитая» ячейка не
@@ -81,7 +82,9 @@ export class TaskFormulaRecalcService {
       // formula_changed — только при смене наличия ошибки (O4): успешный
       // пересчёт значения уже уезжает событием хоста от writer'а.
       if (outcome.errorChanged) {
-        await this.emitChanged(tx, actorId, taskId, cell.fieldId, outcome.error !== null);
+        await this.emitChanged(tx, actorId, taskId, cell.fieldId, outcome.error !== null, {
+          includeActor: opts.includeActor === true,
+        });
       }
     }
   }

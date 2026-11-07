@@ -69,7 +69,9 @@ describe('TaskRelationFormulaHandler: task.relation_changed (#632, Р4)', () => 
       logger() as never,
     );
     await handler.handle(event('task.relation_changed', base));
-    expect(formulas.recalcCells).toHaveBeenCalledWith({}, null, TASK, [], 1);
+    expect(formulas.recalcCells).toHaveBeenCalledWith({}, null, TASK, [], 1, {
+      includeActorForOwnHost: true,
+    });
   });
 
   it('невалидный payload игнорируется', async () => {

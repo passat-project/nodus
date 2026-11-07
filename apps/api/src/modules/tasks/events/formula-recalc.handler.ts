@@ -66,6 +66,8 @@ export class TaskFormulaRecalcHandler {
         payload.taskId,
         numbers,
         sourceDepth + 1,
+        // payload.taskId — запись, которую правил актёр: он в её аудитории.
+        { includeActorForOwnHost: true },
       );
       // Перепривязка (#632): состав подзадач сменился у старого и нового
       // родителя — их формулы-агрегаты пересчитываются (ручная правка — 1).

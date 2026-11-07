@@ -195,16 +195,25 @@ export class TaskFormulaService {
     const seen = new Set(mine.map((cell) => cell.cellId));
     const all = [...mine, ...own.filter((cell) => !seen.has(cell.cellId))];
     if (all.length === 0 || all.length > SYNC_RECALC_LIMIT) return;
-    await this.recalcOwn(tx, actorId, taskId, all, sourceDepth + 1);
+    await this.recalcOwn(tx, actorId, taskId, all, sourceDepth + 1, {
+      includeActor: true,
+    });
   }
 
-  /** Пересчёт ячеек задачи после изменения значений (Р4): общая точка. */
+  /**
+   * Пересчёт ячеек задачи после изменения значений (Р4): общая точка.
+   * `includeActorForOwnHost` — только для входов «запись = та, что правил
+   * актёр» (task.updated/связи своей записи, синхронный пересчёт PATCH):
+   * каскадные входы (значения проекта/письма, чужие хосты, смена компании)
+   * актёра-триггера в аудиторию чужих задач не добавляют (security #632).
+   */
   async recalcCells(
     tx: TransactionClient,
     actorId: string | null,
     taskId: string,
     numbers: readonly number[],
     depth: number,
+    opts: { includeActorForOwnHost?: boolean } = {},
   ): Promise<void> {
     // Свои ячейки (I3): значение пишется только в строку своего хоста.
     const dependent =
@@ -215,7 +224,10 @@ export class TaskFormulaService {
     const own = await this.cells.cellsForHost('task', taskId, tx);
     const seen = new Set(mine.map((cell) => cell.cellId));
     const all = [...mine, ...own.filter((cell) => !seen.has(cell.cellId))];
-    if (all.length > 0) await this.recalcOwn(tx, actorId, taskId, all, depth);
+    if (all.length > 0)
+      await this.recalcOwn(tx, actorId, taskId, all, depth, {
+        includeActor: opts.includeActorForOwnHost === true,
+      });
     // Зависимые задачи ТОГО ЖЕ модуля (формула ребёнка «Родитель · Поле»,
     // системные поля родителя): их строки пишет tasks — I3 не нарушается.
     // Глубина та же, что у своих: обработчик следующего события сам добавит
@@ -235,8 +247,9 @@ export class TaskFormulaService {
     taskId: string,
     cells: readonly FormulaCellRef[],
     depth: number,
+    opts: { includeActor?: boolean } = {},
   ): Promise<void> {
-    return this.recalcWriter.recalcOwn(tx, actorId, taskId, cells, depth);
+    return this.recalcWriter.recalcOwn(tx, actorId, taskId, cells, depth, opts);
   }
 
   /** Зависимые задачи модуля — писатель пересчёта (I5). */

@@ -47,7 +47,10 @@ export class TaskRelationFormulaHandler {
     const { taskId } = parsed.data;
     this.logger.debug({ taskId }, 'Пересчёт формул задачи после смены связей');
     await this.txRunner.run((tx) =>
-      this.formulas.recalcCells(tx, event.actorId ?? null, taskId, [], 1),
+      // Связи менял актёр этой записи — он в её аудитории (security #632).
+      this.formulas.recalcCells(tx, event.actorId ?? null, taskId, [], 1, {
+        includeActorForOwnHost: true,
+      }),
     );
   }
 }

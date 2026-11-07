@@ -174,6 +174,7 @@ describe('TaskFormulaService.recalcCells: партия уходит писате
       TASK,
       expect.arrayContaining([expect.objectContaining({ cellId: 'c1' })]),
       1,
+      { includeActor: false },
     );
     expect(recalcWriter.recalcForeign).toHaveBeenCalled();
   });
