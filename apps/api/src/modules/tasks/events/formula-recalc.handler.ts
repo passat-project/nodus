@@ -66,8 +66,11 @@ export class TaskFormulaRecalcHandler {
         payload.taskId,
         numbers,
         sourceDepth + 1,
-        // payload.taskId — запись, которую правил актёр: он в её аудитории.
-        { includeActorForOwnHost: true },
+        // Человеческая правка — актёр в аудитории своей записи; каскадная
+        // запись (formulaWrite) могла прийти для ЧУЖОГО хоста с исходным
+        // актёром в meta — второй хоп не «отмывает» его в аудиторию
+        // (security #632); своя запись пересчитана синхронно в tx PATCH.
+        { includeActorForOwnHost: parsed.data.formulaWrite !== true },
       );
       // Перепривязка (#632): состав подзадач сменился у старого и нового
       // родителя — их формулы-агрегаты пересчитываются (ручная правка — 1).

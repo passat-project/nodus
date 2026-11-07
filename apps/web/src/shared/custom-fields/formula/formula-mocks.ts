@@ -9,6 +9,7 @@ import type {
 } from '@nodus/contracts';
 import { customFieldValueSchemaOf, ErrorCode, sameCustomFieldValue } from '@nodus/contracts';
 import { evaluate, validateFormula } from '@nodus/formula-engine';
+import { HttpResponse } from 'msw';
 import type { FormulaValue } from '@nodus/formula-engine';
 
 import { demoCustomFieldDefinitions, demoFieldById } from '../../mocks/data/custom-fields.js';
@@ -242,6 +243,19 @@ export function removeOwnFormula(kind: FormulaHostKind, hostId: string, fieldId:
   // ячейка пуста или под формулой типа/вида, «снимка» больше нет.
   dropHostValue(kind, hostId, fieldId);
   return dropFormulaCell(kind, hostId, fieldId);
+}
+
+/** Готовый 422-ответ формульной блокировки для мок-хендлеров значений
+ *  (#660): null — блокировки нет, значение пишется. Паритет сервера:
+ *  проверяются только реальные изменения (включая null-очистку). */
+export function lockedPatchResponse(
+  kind: FormulaHostKind,
+  hostId: string,
+  current: Record<string, unknown> | null | undefined,
+  patch: Record<string, unknown>,
+): Response | null {
+  const error = mockLockedFieldError(kind, hostId, changedValueKeys(current, patch));
+  return error ? HttpResponse.json(error, { status: 422 }) : null;
 }
 
 /** Реально изменённые ключи патча значений (включая null-очистку) —

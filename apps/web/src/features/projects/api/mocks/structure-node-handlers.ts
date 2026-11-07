@@ -15,10 +15,7 @@ import {
 
 import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
 import { nodeWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
-import {
-  changedValueKeys,
-  mockLockedFieldError,
-} from '../../../../shared/custom-fields/formula/formula-mocks.js';
+import { lockedPatchResponse } from '../../../../shared/custom-fields/formula/formula-mocks.js';
 import {
   invalidMockValues,
   withStaticDefaults,
@@ -234,12 +231,8 @@ export const structureNodeHandlers = [
     );
     if (rule) return rule;
     // Формульная ячейка руками не пишется (#660): 422, как на сервере.
-    const lockedNode = mockLockedFieldError(
-      'node',
-      node.id,
-      changedValueKeys(node.customFields, patchValues),
-    );
-    if (lockedNode) return HttpResponse.json(lockedNode, { status: 422 });
+    const lockedNode = lockedPatchResponse('node', node.id, node.customFields, patchValues);
+    if (lockedNode) return lockedNode;
     if (kindChanged) node.kindId = body.kindId!;
     if (body.name) node.name = body.name;
     if (Object.keys(patchValues).length > 0) {

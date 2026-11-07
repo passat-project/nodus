@@ -47,10 +47,11 @@ export class TaskRelationFormulaHandler {
     const { taskId } = parsed.data;
     this.logger.debug({ taskId }, 'Пересчёт формул задачи после смены связей');
     await this.txRunner.run((tx) =>
-      // Связи менял актёр этой записи — он в её аудитории (security #632).
-      this.formulas.recalcCells(tx, event.actorId ?? null, taskId, [], 1, {
-        includeActorForOwnHost: true,
-      }),
+      // Связь эмитится по ОБЕИМ сторонам с одним актёром: вторая может быть
+      // ему невидима (конфиденциальная) — каскадный вход без актёра в
+      // аудитории (security #632); свежесть своей стороны закрывает прямое
+      // relation_changed своей аудитории и ответ мутации.
+      this.formulas.recalcCells(tx, event.actorId ?? null, taskId, [], 1),
     );
   }
 }
