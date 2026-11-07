@@ -136,7 +136,12 @@ export class TaskFormulaService {
     // Задача меняет папку — у СТАРОЙ и НОВОЙ папки меняется выборка «задачи
     // папки»: их формулы пересчитываются реальным переносом, значит и дифф
     // должен их показать (иначе окно обещает не то, что произойдёт).
-    const nodeIds = [...new Set([row.nodeId, nodeId].filter((id): id is string => id !== null))];
+    // Текущая папка тоже должна принадлежать проекту задачи: аномальный
+    // nodeId из чужих данных не должен раскрывать имя/значения чужой папки.
+    const currentNode = row.nodeId ? await this.records.record('node', row.nodeId) : null;
+    const currentNodeId =
+      row.nodeId && currentNode?.projectId === row.projectId ? row.nodeId : null;
+    const nodeIds = [...new Set([currentNodeId, nodeId].filter((id): id is string => id !== null))];
     const [taskChanges, nodeChanges] = await Promise.all([
       this.cells.preview('task', visible, override),
       nodeIds.length > 0 ? this.cells.preview('node', nodeIds, override) : Promise.resolve([]),
@@ -190,7 +195,8 @@ export class TaskFormulaService {
     }[],
     depth: number,
   ): Promise<void> {
-    const row = await this.repo.findWithParticipants(taskId, tx);
+    const row = await this.liveRowOrNull(tx, taskId);
+    if (!row) return;
     // Замок строки до ячеек: тот же порядок, что у PATCH задачи (хост →
     // формула), иначе конкурентная правка значения даёт 40P01.
     await this.repo.lock(tx, taskId);
@@ -247,7 +253,8 @@ export class TaskFormulaService {
     for (const cell of cells) {
       if (seen.has(cell.cellId)) continue;
       seen.add(cell.cellId);
-      const row = await this.repo.findWithParticipants(cell.hostId, tx);
+      const row = await this.liveRowOrNull(tx, cell.hostId);
+      if (!row) continue;
       const outcome = await this.recalcOrNull(tx, cell, depth);
       if (!outcome || outcome.silent) continue;
       const actor = { id: actorId ?? row.creatorId, permissions: [] as string[] };
@@ -311,6 +318,17 @@ export class TaskFormulaService {
     return row;
   }
 
+  /** Живая задача или null: `findUniqueOrThrow` вне изоляции ячейки давал
+   *  вечный retry события, если задачу удалили во время пересчёта. */
+  private async liveRowOrNull(tx: TransactionClient, taskId: string) {
+    try {
+      return await this.repo.findWithParticipants(taskId, tx);
+    } catch {
+      this.log.warn(`Формулы задачи ${taskId}: запись исчезла до пересчёта`);
+      return null;
+    }
+  }
+
   /** Адресное событие формулы (O4): без значений, только состояние ошибки. */
   private async emitChanged(
     tx: TransactionClient,
@@ -319,7 +337,9 @@ export class TaskFormulaService {
     fieldId: string,
     hasError: boolean,
   ): Promise<void> {
-    const after = await this.repo.findWithParticipants(taskId, tx);
+    const after = await this.liveRowOrNull(tx, taskId);
+    // Задачу удалили, пока шёл пересчёт: адресата у события больше нет.
+    if (!after) return;
     await this.eventBus.emit(
       tx,
       CUSTOM_FIELD_EVENTS.FORMULA_CHANGED,
