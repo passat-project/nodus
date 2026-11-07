@@ -6,6 +6,7 @@ import {
   customFieldValueSchemaOf,
   ErrorCode,
   isCompatibleTypeChange,
+  renderNumberTemplate,
   updateCustomFieldBodySchema,
 } from '@nodus/contracts';
 
@@ -198,6 +199,19 @@ export const definitionHandlers = [
       if (invalidTargets) return invalidTargets;
     }
 
+    if (body.numbering !== undefined && definition.type === 'counter') {
+      // Правило серии (#630): сводка обновляется целиком (preview + счёт).
+      definition.numbering = {
+        rule: body.numbering,
+        preview: renderNumberTemplate(body.numbering.template, {
+          seq: body.numbering.startValue,
+          year: new Date().getFullYear(),
+          month: new Date().getMonth() + 1,
+          field: () => '…',
+        }),
+        issuedCount: definition.numbering?.issuedCount ?? 0,
+      };
+    }
     if (body.name !== undefined) definition.name = body.name;
     if (body.hint !== undefined) definition.hint = body.hint;
     if (body.type !== undefined) definition.type = body.type;

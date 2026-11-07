@@ -2,6 +2,7 @@ import type { CreationForm, ProcessType, ProcessTypeRef, WorkflowDetail } from '
 import { customFieldKey } from '@nodus/contracts';
 
 import { quickDocument, simpleDocument, standardDocument } from './workflows-documents.js';
+import { stageInProgress } from './task-stages.js';
 import { letterProcessTypes, letterWorkflowDetails } from './letter-catalog.js';
 
 import { quickProcessType, systemProcessType } from './task-stages.js';
@@ -256,14 +257,41 @@ export const demoWorkflowDetails: Record<string, WorkflowDetail> = {
     document: quickDocument,
     stageEntityCounts: {},
   },
-  // «Комплект» (#632): быстрый маршрут + форма создания с формулой шифра.
+  // «Комплект» (#632): быстрый маршрут + форма создания с формулой шифра;
+  // кнопка «Выдать в печать» (#630) присваивает номера счётчиков — «Изм.»
+  // (разрез «папка», К2) и сквозной «Взял изм» (продолжение из Excel, К3).
   [KOMPLEKT_WORKFLOW_ID]: {
     id: KOMPLEKT_WORKFLOW_ID,
     typeIds: [komplektType.id],
     version: 1,
     publishedAt,
     publishedBy,
-    document: { ...quickDocument, creation: komplektCreationForm },
+    document: {
+      ...quickDocument,
+      creation: komplektCreationForm,
+      transitions: [
+        ...quickDocument.transitions,
+        {
+          id: '30000000-0000-4000-8000-999999999999',
+          code: 'issue_print',
+          name: 'Выдать в печать',
+          fromStageId: stageInProgress.id,
+          toStageId: stageInProgress.id,
+          display: 'button',
+          intent: 'action',
+          sortOrder: 2,
+          rules: {
+            conditions: [{ kind: 'role_in', roles: ['assignee', 'coexecutor'] }],
+            validators: [],
+            postFunctions: [
+              { kind: 'assign_number', fieldId: fieldIds.changeNumber },
+              { kind: 'assign_number', fieldId: fieldIds.tookChangeNumber },
+            ],
+          },
+          form: { enabled: false, sections: [] },
+        },
+      ],
+    },
     stageEntityCounts: {},
   },
   [ARCHIVED_WORKFLOW_ID]: {

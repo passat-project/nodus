@@ -92,3 +92,53 @@ export const numberSeriesRuleSchema = z
     }
   });
 export type NumberSeriesRule = z.infer<typeof numberSeriesRuleSchema>;
+
+/** Читатель поля-сегмента шаблона: значение атрибута записи (`self`) или её
+ *  проекта (`project`). Нет читателя или атрибут удалён/пуст — пустая
+ *  вставка: выдача номера не падает (Р2). Одна грамматика для сервера
+ *  (контекст записи), веба (предпросмотр диалога) и моков. */
+export type NumberTemplateFieldReader = (
+  segment: Extract<NumberTemplateSegment, { kind: 'field' }>,
+) => string;
+
+/** Ввод рендера: момент передан ГОТОВЫМИ частями (год/месяц), а не Date —
+ *  пояс компании у каждого контекста свой (сервер — `COMPANY_TIMEZONE`,
+ *  веб-предпросмотр — Минск), рендер остаётся чистым. */
+export interface NumberTemplateRenderInput {
+  seq: number;
+  year: number;
+  month: number;
+  field?: NumberTemplateFieldReader;
+}
+
+/** Рендер номера: «Вх-2026/118», «15-26», «Изм. 3», «ОВ1-И-0007». */
+export function renderNumberTemplate(
+  segments: readonly NumberTemplateSegment[],
+  input: NumberTemplateRenderInput,
+): string {
+  let out = '';
+  for (const segment of segments) {
+    switch (segment.kind) {
+      case 'counter': {
+        const digits = String(input.seq);
+        out += segment.minLength ? digits.padStart(segment.minLength, '0') : digits;
+        break;
+      }
+      case 'literal':
+        out += segment.text;
+        break;
+      case 'year': {
+        const year = String(input.year);
+        out += segment.digits === 2 ? year.slice(-2) : year;
+        break;
+      }
+      case 'month':
+        out += String(input.month).padStart(2, '0');
+        break;
+      case 'field':
+        out += input.field?.(segment) ?? '';
+        break;
+    }
+  }
+  return out;
+}

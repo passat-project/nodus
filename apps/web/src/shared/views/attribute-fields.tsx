@@ -54,6 +54,7 @@ const ATTRIBUTE_WIDTHS: Record<CustomFieldType, number> = {
   letter: 160,
   node: 160,
   link: 180,
+  counter: 150,
 };
 
 /** Место показа атрибута в видах (модуль без «Глобальных переменных»:

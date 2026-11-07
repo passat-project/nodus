@@ -32,13 +32,21 @@ export const WORKFLOW_SECTIONS_BY_CATEGORY = {
 export interface CategoryCheckOptions {
   category: ProcessCategory;
   /** У типа настроена серия номеров (`config.numbering`); без факта
-   *  проверка нумерации пропускается. */
+   *  проверка нумерации пропускается. Серия писем — из конфига типа (#55);
+   *  серия задач — из counter-атрибута `fieldId` (#630, Р5). */
   numberingConfigured?: boolean;
+  /** Поля атрибутов, привязанные к типу (task): «Присвоить номер» задач
+   *  указывает поле-цель `fieldId` (#630, Р4). Список не передан —
+   *  проверка цели пропускается (как `numberingConfigured`). */
+  customFieldIds?: readonly string[];
+  /** Среди полей типа — counter-поля с настроенным правилом серии (#630):
+   *  цель «Присвоить номер» обязана быть таким полем. */
+  counterFieldIds?: readonly string[];
 }
 
 export function checkCategoryDictionary(
   doc: WorkflowDraftDocument,
-  { category, numberingConfigured }: CategoryCheckOptions,
+  { category, numberingConfigured, customFieldIds, counterFieldIds }: CategoryCheckOptions,
 ): WorkflowProblem[] {
   const roles: readonly WorkflowActorRole[] = WORKFLOW_ROLES_BY_CATEGORY[category];
   const sections: readonly SectionKind[] = WORKFLOW_SECTIONS_BY_CATEGORY[category];
@@ -73,8 +81,22 @@ export function checkCategoryDictionary(
     }
 
     const assignsNumber = t.rules.postFunctions.some((pf) => pf.kind === 'assign_number');
-    if (assignsNumber && numberingConfigured === false) {
+    // Письмо: серия из конфига типа (#55). Задача: номер в counter-поле —
+    // конфиг типа не при чём (numbering_not_configured не проверяется).
+    if (category === 'letter' && assignsNumber && numberingConfigured === false) {
       problems.push({ code: 'numbering_not_configured', severity: 'error', ...refs });
+    }
+    if (category === 'task' && customFieldIds !== undefined) {
+      for (const pf of t.rules.postFunctions) {
+        if (pf.kind !== 'assign_number') continue;
+        if (!pf.fieldId || !customFieldIds.includes(pf.fieldId)) {
+          // Нет поля-цели (не выбрано) или поле не у типа.
+          problems.push({ code: 'number_field_not_in_type', severity: 'error', ...refs });
+        } else if (!counterFieldIds?.includes(pf.fieldId)) {
+          // Поле у типа есть, но это не counter-атрибут с правилом серии.
+          problems.push({ code: 'number_field_not_counter', severity: 'error', ...refs });
+        }
+      }
     }
     if (windowSections.some((s) => s.kind === 'registration') && !assignsNumber) {
       problems.push({ code: 'registration_without_number', severity: 'warning', ...refs });

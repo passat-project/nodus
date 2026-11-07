@@ -160,6 +160,11 @@ export function customFieldValueSchemaOf(
       return multiSchema;
     case 'link':
       return linkSchema;
+    case 'counter':
+      // Выданный номер — строка («Вх-2026/118», «Изм. 3»); пишет только
+      // движок (#630, Р10), ручной PATCH отклоняет сервер (422) — грамматика
+      // нужна чтению значений и фильтру «содержит».
+      return z.string().trim().min(1).max(CUSTOM_FIELD_LIMITS.text);
   }
 }
 

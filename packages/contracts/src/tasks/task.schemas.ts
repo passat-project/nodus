@@ -309,6 +309,10 @@ export type TaskUpdateBody = z.infer<typeof taskUpdateBodySchema>;
 export const executeTransitionResultSchema = z.object({
   task: taskListItemSchema,
   transitions: z.array(workflowTransitionSchema),
+  /** Номер, выданный пост-действием «Присвоить номер» (#630, Р4): тост
+   *  «Присвоен номер …» и оптимистичный патч counter-поля. Отсутствует у
+   *  переходов без выдачи. */
+  assignedNumber: z.string().min(1).optional(),
 });
 
 export type ExecuteTransitionResult = z.infer<typeof executeTransitionResultSchema>;

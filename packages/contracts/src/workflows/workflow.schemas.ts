@@ -133,17 +133,20 @@ export const workflowPostFunctionSchema = z.discriminatedUnion('kind', [
     when: z.enum(['creator_is_assignee', 'approver_is_actor']),
     toStageId: docIdSchema,
   }),
-  /** Присвоить номер серии типа (#55, Р1/O8): движок берёт серию из
-   *  `config.numbering` типа и выдаёт номер в той же транзакции перехода
-   *  (без пропусков); нет серии — 409 WORKFLOW_NUMBERING_NOT_CONFIGURED.
-   *  Отделён от ввода регистрации: исходящие нумеруются без формы (#464). */
-  z.object({ kind: z.literal('assign_number') }),
+  /** Присвоить номер (#55 Р1/O8 → #630 Р4): письмо (без `fieldId`) берёт
+   *  серию из `config.numbering` типа и пишет рег-поля; задача (task)
+   *  указывает counter-поле-цель `fieldId` — серия тянется из атрибута,
+   *  номер пишется в поле той же транзакцией. Выдача без пропусков; нет
+   *  серии/поля — 409 WORKFLOW_NUMBERING_NOT_CONFIGURED (письмо) или
+   *  ошибка публикации `number_field_*` (задача, Р5). */
+  z.object({ kind: z.literal('assign_number'), fieldId: z.uuid().optional() }),
 ]);
 export type WorkflowPostFunction = z.infer<typeof workflowPostFunctionSchema>;
 
-/** Пост-действия, допустимые в маршруте категории (Р6). */
+/** Пост-действия, допустимые в маршруте категории (Р6): `assign_number`
+ *  у задач — номер в поле-атрибут (#630, Р4), у писем — рег-номер (#55). */
 export const WORKFLOW_POST_FUNCTIONS_BY_CATEGORY = {
-  task: ['route_if_accept_required', 'route_if'],
+  task: ['route_if_accept_required', 'route_if', 'assign_number'],
   letter: ['assign_number'],
 } as const satisfies Record<ProcessCategory, readonly WorkflowPostFunction['kind'][]>;
 

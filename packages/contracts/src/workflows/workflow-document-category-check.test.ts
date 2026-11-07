@@ -130,11 +130,45 @@ describe('словарь категории в документе маршрут
     expect(codes(taskDoc, { category: 'task' })).toContain('error:role_not_in_category');
   });
 
-  it('регистрация и присвоение номера у задачи — чужие раздел и пост-действие', () => {
-    expect(codes(letterDoc(), { category: 'task' })).toEqual([
-      'error:section_not_in_category',
-      'error:post_function_not_in_category',
+  it('регистрация у задачи — чужой раздел; присвоение номера задач — легально (#630)', () => {
+    expect(codes(letterDoc(), { category: 'task' })).toEqual(['error:section_not_in_category']);
+  });
+
+  it('задача: номер в counter-поле типа — без проблем; не counter и не у типа — ошибки (Р5)', () => {
+    const FIELD = '00000000-0000-4000-8000-000000000901';
+    const doc = letterDoc({
+      rules: {
+        conditions: [],
+        validators: [],
+        postFunctions: [{ kind: 'assign_number', fieldId: FIELD }],
+      },
+      form: { enabled: false, sections: [] },
+    });
+    expect(
+      codes(doc, {
+        category: 'task',
+        customFieldIds: [FIELD],
+        counterFieldIds: [FIELD],
+      }),
+    ).toEqual([]);
+    expect(
+      codes(doc, {
+        category: 'task',
+        customFieldIds: [FIELD],
+        counterFieldIds: [],
+      }),
+    ).toEqual(['error:number_field_not_counter']);
+    expect(codes(doc, { category: 'task', customFieldIds: [], counterFieldIds: [] })).toEqual([
+      'error:number_field_not_in_type',
     ]);
+    // Поле-цель не выбрано — та же ошибка, что и «не у типа».
+    const noField = letterDoc({
+      rules: { conditions: [], validators: [], postFunctions: [{ kind: 'assign_number' }] },
+      form: { enabled: false, sections: [] },
+    });
+    expect(
+      codes(noField, { category: 'task', customFieldIds: [FIELD], counterFieldIds: [FIELD] }),
+    ).toEqual(['error:number_field_not_in_type']);
   });
 
   it('задачный гейт у письма — ошибка (у писем гейтов нет)', () => {

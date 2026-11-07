@@ -208,6 +208,21 @@ export function setRouteIfWhen(
   };
 }
 
+/** Поле-цель «Присвоить номер» (#630, Р4): null — пост-действия нет. */
+export function assignNumberFieldOf(rules: Rules): string | null {
+  const rule = rules.postFunctions.find((p) => p.kind === 'assign_number');
+  return rule?.kind === 'assign_number' ? (rule.fieldId ?? null) : null;
+}
+
+/** Включить/выключить присвоение номера в counter-поле (Р4). */
+export function setAssignNumber(rules: Rules, fieldId: string | null): Rules {
+  const rest = rules.postFunctions.filter((p) => p.kind !== 'assign_number');
+  return {
+    ...rules,
+    postFunctions: fieldId === null ? rest : [...rest, { kind: 'assign_number', fieldId }],
+  };
+}
+
 /** Цель по умолчанию при включении особого правила: успешный итог не цель. */
 export function defaultRouteIfTarget(
   doc: WorkflowDraftDocument,

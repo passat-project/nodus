@@ -3,7 +3,7 @@
  *  вынесен из custom-fields.ts, чтобы разорвать цикл импортов
  *  (custom-fields → task-item-factory → … → workflows → workflows-documents
  *  → custom-fields). Зависимости — только такие же чистые константы. */
-import { SYSTEM_FIELD_IDS } from '@nodus/contracts';
+import { SYSTEM_FIELD_IDS, type NumberSeriesRule } from '@nodus/contracts';
 
 import { MARKA_FIELD_ID } from './set-marks.js';
 
@@ -48,6 +48,35 @@ export const fieldIds = {
   komplektCipher: fid(29),
   /** «№ по ГП» — вид папки «Здание по генплану» (формула шифра комплекта). */
   buildingGp: fid(30),
+  /** Счётчики (#630): «Изм.» — разрез «папка» (К2), «Взял изм» — сквозной
+   *  с продолжением из Excel (К3); кнопка «Выдать в печать» «Комплекта». */
+  changeNumber: fid(32),
+  tookChangeNumber: fid(33),
+};
+
+/** Внутренние номера счётчиков (#630): явные, как у демо-формул —
+ *  sequence их не резервирует сам (формулы обходят фабрику). */
+export const COUNTER_FIELD_NUMBERS = {
+  changeNumber: 32,
+  tookChangeNumber: 33,
+} as const;
+
+/** Правила счётчиков демо-мира (#630): адресуются id атрибута-цели. */
+export const COUNTER_RULES: Record<'changeNumber' | 'tookChangeNumber', NumberSeriesRule> = {
+  changeNumber: {
+    scopeKind: 'folder',
+    scopeFormula: null,
+    period: 'none',
+    template: [{ kind: 'literal', text: 'Изм. ' }, { kind: 'counter' }],
+    startValue: 1,
+  },
+  tookChangeNumber: {
+    scopeKind: 'none',
+    scopeFormula: null,
+    period: 'none',
+    template: [{ kind: 'counter' }],
+    startValue: 1041,
+  },
 };
 
 /** Внутренние номера атрибутов, на которые ссылаются демо-формулы (#632):

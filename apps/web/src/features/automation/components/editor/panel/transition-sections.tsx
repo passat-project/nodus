@@ -18,10 +18,12 @@ import { useRouteDocStore } from '../../../model/route-doc-store.js';
 import {
   REQUIRABLE_FIELDS,
   VALIDATOR_KINDS,
+  assignNumberFieldOf,
   defaultRouteIfTarget,
   routeIfOf,
   routeIfWhenOf,
   setAllowReview,
+  setAssignNumber,
   setMinFiles,
   setRouteIf,
   setRouteIfWhen,
@@ -30,6 +32,7 @@ import {
   validatorOf,
 } from '../../../model/transition-rules.js';
 import { ModeChoices, PanelField, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
+import { useCustomFieldDefinitions } from '../../../../../shared/custom-fields/queries.js';
 import { CustomFieldChecks } from './custom-fields-checks.js';
 import { CheckRow } from './transition-roles-section.js';
 
@@ -154,6 +157,7 @@ export function RulesSection({
   document: doc,
   readOnly,
   category = 'task',
+  typeId,
 }: {
   transition: WorkflowDraftTransition;
   document: WorkflowDraftDocument;
@@ -161,9 +165,21 @@ export function RulesSection({
   /** Пост-действия категории (Р6): у письма — только «Присвоить номер»,
    *  правка каталога закрыта — показываем, что делает кнопка. */
   category?: ProcessCategory;
+  /** Тип процесса: counter-поля для «Присвоить номер» (#630, Р4). */
+  typeId?: string;
 }) {
   const patch = usePatchRules(transition);
   const target = routeIfOf(transition.rules);
+  // Counter-поля типа с настроенным правилом — цель «Присвоить номер»
+  // (#630, Р6); хук до условного return (правила хуков).
+  const definitions = useCustomFieldDefinitions('task');
+  const counterFields = (definitions.data ?? []).filter(
+    (entry) =>
+      entry.type === 'counter' &&
+      entry.numbering != null &&
+      (typeId ? entry.bindings.processTypeIds.includes(typeId) : true),
+  );
+  const assignField = assignNumberFieldOf(transition.rules);
   if (category !== 'task') {
     const posts = transition.rules.postFunctions;
     return (
@@ -242,6 +258,40 @@ export function RulesSection({
             </SelectContent>
           </Select>
         </PanelField>
+      ) : null}
+      <SwitchRow
+        title={ui.automation.postFunctions.assign_number}
+        hint={ui.automation.panel.assignNumberHint}
+        checked={assignField !== null}
+        disabled={readOnly || counterFields.length === 0}
+        onChange={(checked) =>
+          patch(setAssignNumber(transition.rules, checked ? counterFields[0]!.id : null))
+        }
+      />
+      {assignField !== null ? (
+        <PanelField label={ui.automation.panel.assignNumberField}>
+          <Select
+            value={assignField}
+            disabled={readOnly}
+            onValueChange={(value) => patch(setAssignNumber(transition.rules, value))}
+          >
+            <SelectTrigger
+              className="w-full min-w-0"
+              aria-label={ui.automation.panel.assignNumberField}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper" className="nokey">
+              {counterFields.map((entry) => (
+                <SelectItem key={entry.id} value={entry.id}>
+                  {entry.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </PanelField>
+      ) : counterFields.length === 0 ? (
+        <p className="text-xs text-muted-foreground">{ui.automation.panel.assignNumberNoFields}</p>
       ) : null}
     </>
   );

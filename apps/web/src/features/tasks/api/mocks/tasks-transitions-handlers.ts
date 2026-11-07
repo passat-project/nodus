@@ -14,9 +14,16 @@ import {
   demoSubtasks,
   demoTasks,
 } from '../../../../shared/mocks/data/tasks.js';
-import { quickDocument, standardDocument } from '../../../../shared/mocks/data/workflows.js';
+import {
+  demoWorkflowDetails,
+  KOMPLEKT_WORKFLOW_ID,
+  komplektType,
+  quickDocument,
+  standardDocument,
+} from '../../../../shared/mocks/data/workflows.js';
 import { quickProcessType } from '../../../../shared/mocks/data/task-stages.js';
 import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
+import { counterRuleOf, issueMockNumber } from '../../../../shared/mocks/data/numbering-store.js';
 import { applyForm, blockedByOf, checkWindow, postBlock } from './tasks-transitions-gates.js';
 
 function findTask(id: string): TaskListItem | undefined {
@@ -33,8 +40,13 @@ function findTask(id: string): TaskListItem | undefined {
  *  проверяются (демо-пользователь — полный доступ), показ (`display`) и
  *  порядок — как у сервера: кнопки статуса по sortOrder, затем «из любого»;
  *  встроенное правило «итог → итог» прячет «Отменить» у закрытых. */
+/** Маршрут «Комплекта» (#630): быстрый + кнопка «Выдать в печать». */
+const komplektDocument = demoWorkflowDetails[KOMPLEKT_WORKFLOW_ID]!.document;
+
 function documentOfTask(task: TaskListItem) {
-  return task.type.id === quickProcessType.id ? quickDocument : standardDocument;
+  if (task.type.id === quickProcessType.id) return quickDocument;
+  if (task.type.id === komplektType.id) return komplektDocument;
+  return standardDocument;
 }
 
 function transitionsOf(task: TaskListItem): WorkflowTransition[] {
@@ -47,7 +59,9 @@ function transitionsOf(task: TaskListItem): WorkflowTransition[] {
     if (!stageIds.has(task.stage.id) || !stageIds.has(t.toStageId)) continue;
     if (t.fromStageId !== null && t.fromStageId !== task.stage.id) continue;
     if (t.fromStageId === null && closed) continue; // «итог → итог» скрыт
-    if (t.toStageId === task.stage.id) continue;
+    // Само-петля без пост-действий — шум; с пост-действием («Выдать в
+    // печать» #630) кнопка меняет запись, не меняя статус — показываем.
+    if (t.toStageId === task.stage.id && t.rules.postFunctions.length === 0) continue;
     const target = stageDocOf(route, t.toStageId);
     const item: WorkflowTransition = {
       id: t.id,
@@ -169,12 +183,46 @@ export const tasksTransitionsHandlers = [
       );
     }
     postBlock(task, transition, parsed.data.form ?? {});
+    // Пост-действие «Присвоить номер» (#630, Р4): номера счётчиков до смены
+    // стадии; повторная выдача тому же полю — 409 (К5, номера не
+    // переиспользуются). Разрез записи в моке — проект (папок в списке нет).
+    const docTransition = documentOfTask(task).transitions.find((t) => t.id === transition.id);
+    const assignFieldIds = (docTransition?.rules.postFunctions ?? [])
+      .filter(
+        (pf): pf is { kind: 'assign_number'; fieldId?: string } => pf.kind === 'assign_number',
+      )
+      .map((pf) => pf.fieldId)
+      .filter((fieldId): fieldId is string => fieldId !== undefined);
+    let assignedNumber: string | undefined;
+    for (const fieldId of assignFieldIds) {
+      const rule = counterRuleOf(fieldId);
+      if (!rule) continue;
+      if (task.customFields[fieldId] !== undefined) {
+        return HttpResponse.json(
+          {
+            code: ErrorCode.NUMBER_ALREADY_ASSIGNED,
+            message: 'Number is already assigned to this record',
+          },
+          { status: 409 },
+        );
+      }
+      const scopePart =
+        rule.scopeKind === 'none' ? null : (task.nodeId ?? task.project?.id ?? task.id);
+      const display = issueMockNumber(fieldId, rule, scopePart);
+      task.customFields[fieldId] = display;
+      assignedNumber = assignedNumber ?? display;
+    }
     task.stage = resolveTarget(task, transition);
     // Встроенное автоперемещение «Моего плана» (ADR-0008) — как у переноса
     // по глобальной оси.
     autoMovePersonalPlacement(task, demoPersonalStages);
     task.updatedAt = new Date().toISOString();
-    // Контракт: строка задачи + НОВЫЕ кнопки нажавшего (одним ходом).
-    return HttpResponse.json({ task, transitions: transitionsOf(task) });
+    // Контракт: строка задачи + НОВЫЕ кнопки нажавшего (одним ходом);
+    // выданный номер — тосту и карточке (#630).
+    return HttpResponse.json({
+      task,
+      transitions: transitionsOf(task),
+      ...(assignedNumber ? { assignedNumber } : {}),
+    });
   }),
 ];

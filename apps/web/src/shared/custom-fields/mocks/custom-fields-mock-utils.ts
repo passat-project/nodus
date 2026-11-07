@@ -7,6 +7,7 @@ import { getMockActor } from '../../mocks/mock-actor.js';
 
 import { dictionaryById } from '../../mocks/data/dictionaries.js';
 import { demoCustomFieldDefinitions } from '../../mocks/data/custom-fields.js';
+import { mockIssuedCount } from '../../mocks/data/numbering-store.js';
 import { demoRefsForValues } from '../../mocks/data/custom-fields-refs.js';
 import { demoLetters } from '../../mocks/data/letters.js';
 import { demoNodeKinds, demoNodeRows } from '../../mocks/data/project-nodes.js';
@@ -52,6 +53,16 @@ function dto(definition: CustomFieldDefinition): CustomFieldDefinition {
   return {
     ...definition,
     processCategories: [...categories],
+    // Счётчик (#630): «Выдано номеров» — живой счёт мок-выдачи (сервер
+    // гидрирует агрегатом number_counters, Пакет 2).
+    ...(definition.type === 'counter' && definition.numbering
+      ? {
+          numbering: {
+            ...definition.numbering,
+            issuedCount: definition.numbering.issuedCount + mockIssuedCount(definition.id),
+          },
+        }
+      : {}),
     defaultRefs,
     companyRefs,
     dictionary: dictionary

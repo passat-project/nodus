@@ -110,7 +110,7 @@ export function CustomFieldsBlock({
               hintId={hintId}
               wide={definition.type === 'long_text'}
             >
-              {host ? (
+              {host && definition.type !== 'counter' ? (
                 <FormulaCell
                   definition={definition}
                   host={host}
@@ -130,6 +130,17 @@ export function CustomFieldsBlock({
                     onCommit={(value, pickedRefs) => onChange(definition.id, value, pickedRefs)}
                   />
                 </FormulaCell>
+              ) : definition.type === 'counter' ? (
+                /* Счётчик заморожен навсегда (#630, Р10): номер пишет только
+                   движок — ни редактора значения, ни формулы, ни fx. */
+                <CustomFieldEditor
+                  definition={definition}
+                  value={values[definition.id]}
+                  refs={refs}
+                  disabled
+                  variant="inline"
+                  onCommit={() => undefined}
+                />
               ) : (
                 <CustomFieldEditor
                   definition={definition}

@@ -7,6 +7,7 @@ import { definition, dictionaryRef, moneySettings } from './custom-field-demo-fa
 import { formulaDemoFields } from './formula-demo-fields.js';
 import { departmentIds } from './org-ids.js';
 import { processTypeIds } from './process-type-ids.js';
+import { COUNTER_FIELD_NUMBERS, COUNTER_RULES } from './field-ids.js';
 import { demoProjectTypeIds } from './projects.js';
 import { nodeKindIds } from './project-nodes.js';
 import { projectRefs, tid } from './task-item-factory.js';
@@ -197,6 +198,38 @@ export const demoCustomFieldDefinitions: CustomFieldDefinition[] = [
     },
   ),
   ...formulaDemoFields,
+  // Счётчики «Комплекта» (#630): «Изм.» — разрез «папка» (К2), «Взял изм» —
+  // сквозной с продолжением из Excel (К3); выдаёт кнопка «Выдать в печать».
+  definition(
+    fieldIds.changeNumber,
+    'counter',
+    'Изм.',
+    { processTypeIds: [processTypeIds.komplekt] },
+    {
+      hint: 'Номер изменения внутри комплекта',
+      number: COUNTER_FIELD_NUMBERS.changeNumber,
+      numbering: {
+        rule: COUNTER_RULES.changeNumber,
+        preview: 'Изм. 1',
+        issuedCount: 0,
+      },
+    },
+  ),
+  definition(
+    fieldIds.tookChangeNumber,
+    'counter',
+    'Взял изм',
+    { processTypeIds: [processTypeIds.komplekt] },
+    {
+      hint: 'Сквозной номер изменения — продолжение из Excel',
+      number: COUNTER_FIELD_NUMBERS.tookChangeNumber,
+      numbering: {
+        rule: COUNTER_RULES.tookChangeNumber,
+        preview: '1041',
+        issuedCount: 0,
+      },
+    },
+  ),
 ];
 
 // Глобальный порядок реестра (sortOrder): по порядку массива.

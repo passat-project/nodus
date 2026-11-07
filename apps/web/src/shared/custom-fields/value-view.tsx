@@ -176,7 +176,13 @@ export function CustomFieldValueView({
   // Легаси-маркер пустоты (`—`, `–`, `−`, `‐`…) — это пусто, а не дефис:
   // иначе он рисуется «кривым дефисом» в карточке и колонках.
   const empty = value === undefined || value === null || isDashOnly(value);
-  if (empty) return <span className="text-muted-foreground">{ui.customFields.value.empty}</span>;
+  if (empty) {
+    // Счётчик до первой выдачи — прочерк, не «Не задано» (#630, §4c).
+    if (definition.type === 'counter') {
+      return <span className="text-muted-foreground">—</span>;
+    }
+    return <span className="text-muted-foreground">{ui.customFields.value.empty}</span>;
+  }
 
   const line = cn('min-w-0', compact && 'truncate');
 
@@ -280,6 +286,11 @@ export function CustomFieldValueView({
         </span>
       );
     }
+    case 'counter':
+      // Выданный номер — моно-строка, как формульные значения (#630, Р6).
+      return (
+        <span className={cn(line, 'font-mono text-[13px] tabular-nums')}>{String(value)}</span>
+      );
     case 'link': {
       const text = String(value);
       const kind = linkKindOf(text);

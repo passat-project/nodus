@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import {
   numberTemplateSegmentSchema,
+  renderNumberTemplate as renderSegments,
   type NumberPeriod,
   type NumberTemplateSegment,
 } from '@nodus/contracts';
@@ -10,7 +11,8 @@ import { companyMonth, companyYear } from '../../../core/time/company-time.js';
 
 /**
  * Шаблон номера и ключ группы счёта (#630, Р2/Р3): чистые функции без БД —
- * рендер сегментов и нормализация ключа группы «разрез × период». Письмо-
+ * рендер сегментов (грамматика рендера — в contracts, одна для сервера,
+ * веба и моков) и нормализация ключа группы «разрез × период». Письмо-
  * формат «Вх-2026/118» и годовой переход 31.12→01.01 проверяются юнитами
  * без моков (фиксированный момент).
  */
@@ -39,36 +41,17 @@ export function parseNumberTemplate(
   return { ok: true, segments: parsed.data };
 }
 
-/** Рендер номера: «Вх-2026/118», «15-26», «Изм. 3», «ОВ1-И-0007». */
+/** Рендер номера в поясе компании: «Вх-2026/118», «15-26», «Изм. 3». */
 export function renderNumberTemplate(
   segments: readonly NumberTemplateSegment[],
   input: NumberRenderInput,
 ): string {
-  let out = '';
-  for (const segment of segments) {
-    switch (segment.kind) {
-      case 'counter': {
-        const digits = String(input.seq);
-        out += segment.minLength ? digits.padStart(segment.minLength, '0') : digits;
-        break;
-      }
-      case 'literal':
-        out += segment.text;
-        break;
-      case 'year': {
-        const year = String(companyYear(input.at));
-        out += segment.digits === 2 ? year.slice(-2) : year;
-        break;
-      }
-      case 'month':
-        out += String(companyMonth(input.at)).padStart(2, '0');
-        break;
-      case 'field':
-        out += input.field?.(segment) ?? '';
-        break;
-    }
-  }
-  return out;
+  return renderSegments(segments, {
+    seq: input.seq,
+    year: companyYear(input.at),
+    month: companyMonth(input.at),
+    field: input.field,
+  });
 }
 
 /** Период-часть ключа группы: границы — пояс компании (год/месяц момента). */

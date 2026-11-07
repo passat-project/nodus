@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { formulaNodeSchema } from './formula.js';
+import { numberSeriesRuleSchema } from '../workflows/number-series.schemas.js';
 
 import {
   customFieldValueSchema,
@@ -24,7 +25,9 @@ export type CustomFieldModule = z.infer<typeof customFieldModuleSchema>;
 
 /** Тип поля (Р1). UI показывает семейства — модификаторы типа («Многострочный»,
  *  «Несколько значений») включаются односторонне (Р3). Ссылки на записи
- *  (`task`, `letter`, `node`) — #631 Р5; «строка реестра» добавит #636. */
+ *  (`task`, `letter`, `node`) — #631 Р5; «строка реестра» добавит #636.
+ *  `counter` (#630, Р1): значение-номер, только чтение; пишет движок
+ *  (пост-функция `assign_number`), ручной ввод запрещён (Р10). */
 export const customFieldTypeSchema = z.enum([
   'text',
   'long_text',
@@ -45,6 +48,7 @@ export const customFieldTypeSchema = z.enum([
   'letter',
   'node',
   'link',
+  'counter',
 ]);
 export type CustomFieldType = z.infer<typeof customFieldTypeSchema>;
 
@@ -105,6 +109,20 @@ export const EMPTY_CUSTOM_FIELD_BINDINGS: CustomFieldBindings = {
   nodeKindIds: [],
 };
 
+/** Нумерация counter-атрибута (#630, Р1/Р6): сводка правила серии 1:1 с
+ *  определением. В DTO определения — readonly-гидрация (правится PATCH
+ *  определения с телом-правилом); `preview` — пример номера по текущему
+ *  шаблону, `issuedCount` — сколько номеров выдано всеми группами серии
+ *  (номера не переиспользуются: окно удаления показывает счёт). */
+export const customFieldNumberingSchema = z
+  .object({
+    rule: numberSeriesRuleSchema,
+    preview: z.string().min(1),
+    issuedCount: z.number().int().min(0),
+  })
+  .strict();
+export type CustomFieldNumbering = z.infer<typeof customFieldNumberingSchema>;
+
 export const customFieldDefinitionSchema = z.object({
   id: z.uuid(),
   /** Внутренний номер (Р2): выдаётся системой при создании, не переиспользуется,
@@ -143,6 +161,11 @@ export const customFieldDefinitionSchema = z.object({
    *  в список писем — letter-атрибуты. Производное поле (сервер считает по
    *  привязкам); старые моки могут его не присылать. */
   processCategories: z.array(z.enum(['task', 'letter'])).optional(),
+  /** Правило нумерации counter-атрибута (#630): null у не-счётчиков и у
+   *  счётчика без настроенного правила (незавершённая настройка — публикация
+   *  маршрута с таким полем отклоняется, Р5). Производное поле: старые
+   *  моки/клиенты могут не присылать (= нет правила). */
+  numbering: customFieldNumberingSchema.nullable().optional(),
   sortOrder: z.number().int().min(0),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
@@ -277,6 +300,13 @@ export function checkDefinitionShape(
     });
   }
 
+  if (type === 'counter' && defaultValue !== null) {
+    issues.push({
+      code: 'default_not_allowed',
+      path: 'defaultValue',
+      message: 'counter field value is assigned by the workflow engine',
+    });
+  }
   if (defaultValue?.kind === 'author_department' && type !== 'department') {
     issues.push({
       code: 'default_not_allowed',
@@ -329,6 +359,10 @@ export const createCustomFieldBodySchema = z
      *  схемы: это семантика, а не форма запроса). */
     bindings: customFieldBindingsSchema.optional(),
     bindingFormulas: z.record(z.uuid(), formulaNodeSchema).optional(),
+    /** Правило нумерации counter-атрибута (#630, Р6): только при
+     *  type='counter' (иначе доменная 422 на сервере); счётчик без правила
+     *  создаётся, но маршрут с ним не публикуется (Р5). */
+    numbering: numberSeriesRuleSchema.optional(),
   })
   .strict()
   .superRefine((body, ctx) => {
@@ -348,6 +382,9 @@ export const updateCustomFieldBodySchema = z
      *  PUT/DELETE .../bindings/:kind/:targetId. */
     bindings: customFieldBindingsSchema.optional(),
     bindingFormulas: z.record(z.uuid(), formulaNodeSchema).optional(),
+    /** Правило нумерации counter-атрибута (#630): замена целиком; только
+     *  для type='counter' (иначе доменная 422 на сервере). */
+    numbering: numberSeriesRuleSchema.optional(),
   })
   .strict()
   .refine((v) => Object.keys(v).length > 0, { message: 'empty update' });

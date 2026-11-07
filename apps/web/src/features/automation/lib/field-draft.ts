@@ -1,5 +1,6 @@
 import type {
   FormulaNode,
+  NumberSeriesRule,
   CreateCustomFieldBody,
   CustomFieldBindings,
   CustomFieldDefault,
@@ -22,6 +23,7 @@ import {
   typeWithModifier,
   type FieldFamily,
 } from './field-type-families.js';
+import { DEFAULT_COUNTER_RULE } from './counter-rule.js';
 
 /**
  * Черновик окна атрибута (#431, ревизия #631): окно правит черновик, сервер
@@ -74,6 +76,9 @@ export interface FieldDraft {
   bindings: CustomFieldBindings;
   /** Формулы типа/вида по привязкам (#632): id цели → AST. */
   bindingFormulas: Record<string, FormulaNode>;
+  /** Правило серии counter-атрибута (#630, Р6): живёт в черновике всегда,
+   *  отправляется только при family='counter'. */
+  numbering: NumberSeriesRule;
 }
 
 export const emptyDraft: FieldDraft = {
@@ -93,6 +98,7 @@ export const emptyDraft: FieldDraft = {
   reportIndexed: false,
   bindings: EMPTY_CUSTOM_FIELD_BINDINGS,
   bindingFormulas: {},
+  numbering: DEFAULT_COUNTER_RULE,
 };
 
 export function isListFamily(family: FieldFamily | null): boolean {
@@ -149,6 +155,7 @@ export function draftOf(
       nodeKindIds: [...definition.bindings.nodeKindIds],
     },
     bindingFormulas: { ...(definition.bindingFormulas ?? {}) },
+    numbering: definition.numbering?.rule ?? DEFAULT_COUNTER_RULE,
   };
 }
 
@@ -166,6 +173,7 @@ export function withFamily(draft: FieldDraft, family: FieldFamily): FieldDraft {
     defaultRefs: [],
     defaultOptionIds: [],
     options: family === 'list' ? draft.options : [],
+    numbering: family === 'counter' ? draft.numbering : DEFAULT_COUNTER_RULE,
   };
 }
 
@@ -204,7 +212,8 @@ export function draftDefinition(
   };
 }
 
-export type DraftIssue = 'name' | 'family' | 'options' | 'optionsDuplicate';
+export type DraftIssue =
+  'name' | 'family' | 'options' | 'optionsDuplicate' | 'numbering' | 'numberingFormula';
 
 /** Что мешает сохранить (кнопка неактивна, подсказка у поля). */
 export function draftIssues(draft: FieldDraft): DraftIssue[] {
@@ -215,6 +224,14 @@ export function draftIssues(draft: FieldDraft): DraftIssue[] {
     const names = draft.options.map((option) => option.name.trim().toLowerCase());
     if (names.length === 0 || names.some((name) => name.length === 0)) issues.push('options');
     if (new Set(names).size !== names.length) issues.push('optionsDuplicate');
+  }
+  if (draft.family === 'counter') {
+    // Ровно один counter-сегмент и формула разреза при scopeKind='formula'
+    // (#630, Р2): строки ошибок рисует секция «Счётчик».
+    if (draft.numbering.template.filter((s) => s.kind === 'counter').length !== 1)
+      issues.push('numbering');
+    if (draft.numbering.scopeKind === 'formula' && draft.numbering.scopeFormula == null)
+      issues.push('numberingFormula');
   }
   return issues;
 }
@@ -259,6 +276,7 @@ export function createBody(
     ...(draft.isCompany
       ? {}
       : { bindings: draft.bindings, bindingFormulas: draft.bindingFormulas }),
+    ...(type === 'counter' ? { numbering: draft.numbering } : {}),
   };
 }
 
@@ -292,6 +310,11 @@ export function patchBody(
     JSON.stringify(draft.bindingFormulas) !== JSON.stringify(definition.bindingFormulas ?? {})
   )
     body.bindingFormulas = draft.bindingFormulas;
+  if (
+    type === 'counter' &&
+    JSON.stringify(draft.numbering) !== JSON.stringify(definition.numbering?.rule ?? null)
+  )
+    body.numbering = draft.numbering;
   return Object.keys(body).length > 0 ? body : null;
 }
 

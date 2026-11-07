@@ -9,6 +9,7 @@ import type {
   WorkflowTransition,
   TransitionBlockReason,
 } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api, ApiError } from '../../../shared/api-client.js';
@@ -144,6 +145,10 @@ export function useExecuteTransition(taskId: string) {
       markFreshFromMutation(taskId);
       patchTask(queryClient, taskId, result.task);
       queryClient.setQueryData(tasksKeys.transitions(taskId), result.transitions);
+      // Тост с номером — письменный паттерн (#630, Р6): «Присвоен номер …».
+      if (result.assignedNumber) {
+        toast.success(`${ui.tasks.assignedNumberToast} ${result.assignedNumber}`);
+      }
     },
     onError: (error, _vars, context) => {
       if (context?.previous) patchTask(queryClient, taskId, { stage: context.previous.stage });

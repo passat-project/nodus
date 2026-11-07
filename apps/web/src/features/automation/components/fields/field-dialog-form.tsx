@@ -18,6 +18,7 @@ import {
 } from '../../lib/field-draft.js';
 import { familyModifier, modifierOf } from '../../lib/field-type-families.js';
 import { CustomFieldEditor } from '../../../../shared/custom-fields/value-editor.js';
+import { CounterRuleSection } from './counter-rule-section.js';
 import { FieldDefaultValue } from './field-default-value.js';
 import { KindOption } from './field-kind-option.js';
 import { FieldOptionsEditor } from './field-options-editor.js';
@@ -154,7 +155,7 @@ export function FieldDialogForm({
             title={ui.customFields.dialog.kindCompany}
             hint={ui.customFields.dialog.kindCompanyHint}
             on={draft.isCompany}
-            disabled={disabled || kindLocked}
+            disabled={disabled || kindLocked || family === 'counter'}
             onSelect={() =>
               onChange({
                 isCompany: true,
@@ -210,6 +211,15 @@ export function FieldDialogForm({
             onChange={(bindings) => onChange({ bindings })}
           />
         </Section>
+      ) : null}
+
+      {family === 'counter' && !draft.isCompany ? (
+        <CounterRuleSection
+          rule={draft.numbering}
+          disabled={disabled}
+          issuedCount={definition?.numbering?.issuedCount ?? null}
+          onChange={(numbering) => onChange({ numbering })}
+        />
       ) : null}
 
       {family ? (
@@ -284,7 +294,7 @@ export function FieldDialogForm({
         </section>
       ) : null}
 
-      {family && !list && !draft.isCompany && preview ? (
+      {family && !list && family !== 'counter' && !draft.isCompany && preview ? (
         <Section label={ui.customFields.dialog.defaultValue}>
           <FieldDefaultValue
             // Ремоунт при смене типа: редактор прежнего типа не держит

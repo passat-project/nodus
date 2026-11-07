@@ -6,6 +6,7 @@ import type {
 } from '@nodus/contracts';
 import {
   createCustomFieldBodySchema,
+  renderNumberTemplate,
   CUSTOM_FIELD_LIMITS,
   ErrorCode,
   reorderCustomFieldsBodySchema,
@@ -140,6 +141,21 @@ export const registryHandlers = [
       companyValue: null,
       bindings,
       bindingFormulas: body.bindingFormulas ?? {},
+      // Правило серии counter-атрибута (#630, Р1): сводка с предпросмотром.
+      ...(body.type === 'counter' && body.numbering
+        ? {
+            numbering: {
+              rule: body.numbering,
+              preview: renderNumberTemplate(body.numbering.template, {
+                seq: body.numbering.startValue,
+                year: new Date().getFullYear(),
+                month: new Date().getMonth() + 1,
+                field: () => '…',
+              }),
+              issuedCount: 0,
+            },
+          }
+        : {}),
       sortOrder: maxOrder + 1,
       createdAt: now,
       updatedAt: now,
