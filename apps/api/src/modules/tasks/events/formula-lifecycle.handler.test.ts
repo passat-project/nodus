@@ -61,7 +61,7 @@ function setup() {
 }
 
 describe('TaskRelationFormulaHandler: task.relation_changed (#632, Р4)', () => {
-  it('связи сменились — пересчёт всех своих ячеек задачи (глубина 1)', async () => {
+  it('связи сменились — пересчёт своих ячеек без актёра в аудитории (security)', async () => {
     const { formulas, txRunner } = setup();
     const handler = new TaskRelationFormulaHandler(
       txRunner as never,
@@ -69,9 +69,9 @@ describe('TaskRelationFormulaHandler: task.relation_changed (#632, Р4)', () => 
       logger() as never,
     );
     await handler.handle(event('task.relation_changed', base));
-    expect(formulas.recalcCells).toHaveBeenCalledWith({}, null, TASK, [], 1, {
-      includeActorForOwnHost: true,
-    });
+    // Связь эмитится по обеим сторонам с одним актёром: вторая сторона может
+    // быть ему невидима — каскадный вход без актёра (security #632).
+    expect(formulas.recalcCells).toHaveBeenCalledWith({}, null, TASK, [], 1);
   });
 
   it('невалидный payload игнорируется', async () => {
