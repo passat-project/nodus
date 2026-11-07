@@ -189,3 +189,29 @@ describe('DefinitionsService.create (#631, Р1/Р3)', () => {
     ).rejects.toMatchObject({ code: ErrorCode.VALIDATION_FAILED });
   });
 });
+
+describe('DefinitionsService.update: формулы мест (Г-1 #632)', () => {
+  it('тело bindingFormulas применяется и событие несёт defaultFormula', async () => {
+    const { service, bindingFormulas, eventBus } = makeService();
+    const ast = { kind: 'literal', value: 'шаблон' } as never;
+    await service.update(ROW.id, { bindingFormulas: { 'nk-1': ast } } as never, 'actor-1');
+    expect(bindingFormulas.applyWithinTx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: ROW.id }),
+      { 'nk-1': ast },
+      'actor-1',
+    );
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      expect.anything(),
+      'custom_field.definition_changed',
+      expect.objectContaining({ fields: expect.arrayContaining(['defaultFormula']) }),
+      expect.anything(),
+    );
+  });
+
+  it('без bindingFormulas сервис формулы мест не трогает', async () => {
+    const { service, bindingFormulas } = makeService();
+    await service.update(ROW.id, { name: 'Новое имя' } as never, 'actor-1');
+    expect(bindingFormulas.applyWithinTx).not.toHaveBeenCalled();
+  });
+});

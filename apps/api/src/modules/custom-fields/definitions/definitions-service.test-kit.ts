@@ -99,6 +99,7 @@ function makeService() {
     catalog as never,
   );
   const logger = { setContext: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  const bindingFormulas = { applyWithinTx: vi.fn(async () => undefined) };
   const service = new DefinitionsService(
     definitions as never,
     mapper as never,
@@ -109,6 +110,7 @@ function makeService() {
     catalog as never,
     targets as never,
     formCleaner as never,
+    bindingFormulas as never,
     processTypeCleaner as never,
     query as never,
     logger as never,
@@ -125,6 +127,7 @@ function makeService() {
     targets,
     formCleaner,
     processTypeCleaner,
+    bindingFormulas,
   };
 }
 

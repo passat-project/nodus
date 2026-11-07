@@ -3,14 +3,17 @@ import { PinoLogger } from 'nestjs-pino';
 import type { CustomFieldDefinition, FormulaHostKind, FormulaNode } from '@nodus/contracts';
 import { ErrorCode } from '@nodus/contracts';
 
-import { TransactionRunner } from '../../../core/database/transaction-runner.js';
+import {
+  TransactionRunner,
+  type TransactionClient,
+} from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { EventBus } from '../../../core/events/event-bus.js';
 import {
   PROCESS_CATALOG_READER,
   type ProcessCatalogReader,
 } from '../../workflows/ports/process-catalog-reader.port.js';
-import { DefinitionMapper } from '../definitions/definition.mapper.js';
+import { DefinitionMapper, type FieldDefinitionRow } from '../definitions/definition.mapper.js';
 import { emitDefinitionChanged } from '../definitions/definition-events.js';
 import { DefinitionsRepository } from '../definitions/definitions.repository.js';
 import { FORMULA_ENGINE, type FormulaEngine } from '../ports/formula-engine.port.js';
@@ -38,6 +41,57 @@ export class FormulaBindingService {
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(FormulaBindingService.name);
+  }
+
+  /**
+   * Замена всего набора формул места в транзакции вызывающего (#632):
+   * ключи записи — формулы привязок, привязки без ключа лишаются формулы
+   * (семантика тела PATCH/POST /custom-fields/definitions — фронт шлёт
+   * набор целиком, как и `bindings`). Событие `definition_changed` эмитит
+   * вызывающий своим списком полей (+'defaultFormula').
+   */
+  async applyWithinTx(
+    tx: TransactionClient,
+    row: Pick<FieldDefinitionRow, 'id' | 'isCompany' | 'type'>,
+    formulas: Readonly<Record<string, FormulaNode>>,
+    actorId: string,
+  ): Promise<void> {
+    if (row.isCompany) {
+      throw new DomainException(
+        ErrorCode.CUSTOM_FIELD_BINDING_INVALID,
+        'Company variable cannot have bindings',
+        { definitionId: row.id },
+      );
+    }
+    const fresh = (await this.definitions.findById(row.id, tx)) ?? null;
+    if (!fresh) throw DomainException.notFound('Custom field not found', { definitionId: row.id });
+    const bound = new Set(fresh.bindings.map((entry) => entry.targetId));
+    const orphan = Object.keys(formulas).filter((targetId) => !bound.has(targetId));
+    if (orphan.length > 0) {
+      throw new DomainException(
+        ErrorCode.CUSTOM_FIELD_BINDING_INVALID,
+        'Formula for unbound target',
+        { definitionId: row.id, targetIds: orphan },
+      );
+    }
+    // Сначала все проверки, потом записи: половинный набор не остаётся.
+    for (const binding of fresh.bindings) {
+      const ast = formulas[binding.targetId];
+      if (!ast) continue;
+      const hostKind = await this.hostKindOf(binding.targetKind, binding.targetId);
+      await this.assertValid(ast, hostKind, fresh.type, tx);
+    }
+    for (const binding of fresh.bindings) {
+      const ast = formulas[binding.targetId] ?? null;
+      await this.definitions.setBindingFormula(
+        row.id,
+        binding.targetKind as 'process_type' | 'project_type' | 'node_kind',
+        binding.targetId,
+        ast as never,
+        tx,
+      );
+    }
+    this.logger.debug({ definitionId: row.id, actorId }, 'Формулы привязок заменены');
   }
 
   /** Поставить/заменить формулу места. */
@@ -128,8 +182,9 @@ export class FormulaBindingService {
     ast: FormulaNode,
     hostKind: FormulaHostKind,
     fieldType: string,
+    tx?: TransactionClient,
   ): Promise<void> {
-    const snapshot = await this.meta.snapshot();
+    const snapshot = await this.meta.snapshot(tx);
     const validation = this.engine.validate(ast, {
       hostKind,
       meta: snapshot.meta,

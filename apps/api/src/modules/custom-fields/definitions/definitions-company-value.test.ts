@@ -71,6 +71,7 @@ function makeService() {
     catalog as never,
     targets as never,
     formCleaner as never,
+    { applyWithinTx: vi.fn(async () => undefined) } as never,
     processTypeCleaner as never,
     query as never,
     logger as never,
