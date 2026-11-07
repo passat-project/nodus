@@ -150,7 +150,7 @@ node_moved / node_deleted`; `node_updated` несёт `customFieldChanges` и
 | `PATCH /:id/nodes/:nodeId`                                            | руководство или `project.manage`                                       | имя / код (null очищает) / вид / значения атрибутов                                                                                                                      |
 | `POST /:id/nodes/:nodeId/move`                                        | руководство или `project.manage`                                       | перенос: parentId (null — корень) + якорь beforeId/afterId; цикл — 409                                                                                                   |
 | `DELETE /:id/nodes/:nodeId`                                           | руководство или `project.manage`                                       | удалить ПУСТОЙ узел (задачи/дети — 409)                                                                                                                                  |
-| `GET/PUT/DELETE /:id/custom-fields/:fieldId/formula`                  | чтение — видимость проекта; мутации — руководство или `project.manage` | формула ячейки атрибута проекта (#632, Р10): PUT — сохранить и посчитать, DELETE — снять (значение-снимок остаётся)                                                      |
+| `GET/PUT/DELETE /:id/custom-fields/:fieldId/formula`                  | чтение — видимость проекта; мутации — руководство или `project.manage` | формула ячейки атрибута проекта (#632, Р10): PUT — сохранить и посчитать, DELETE — снять (значение очищается, #660)                                                      |
 | `GET/PUT/DELETE /:id/nodes/:nodeId/custom-fields/:fieldId/formula`    | чтение — видимость проекта; мутации — руководство или `project.manage` | то же для атрибута папки структуры (архив проекта — заморозка)                                                                                                           |
 
 Права: `project.create` — всем ролям (CROSS JOIN миграцией);
@@ -191,8 +191,10 @@ node_moved / node_deleted`; `node_updated` несёт `customFieldChanges` и
   режиме `trusted` (Р4). События хоста (`project.updated` с `cf.<id>`,
   `project.node_updated` с `customFieldChanges`) — штатный payload; каскад
   затухает на неизменившихся значениях.
-- Вписанное значение снимает формулу в той же tx (Р5): `PATCH /:id` (через
-  `buildUpdatePatch`) и `PATCH /:id/nodes/:nodeId` — `FORMULA_CELLS.release`.
+- Формульная ячейка руками не пишется (#660): значение в атрибут со своей
+  формулой или формулой типа/вида — 422 `FORMULA_CELL_LOCKED`
+  (`buildUpdatePatch`, `project-structure-formulas.ts`). Пересчёт ячеек
+  папки/проекта — синхронно в tx PATCH: ответ несёт свежие значения.
 - Пересчёт по зависимостям (`events/formula-recalc.handler.ts`,
   `events/formula-definition.handler.ts`): `project.updated` и
   `project.node_updated` — значения; `project.node_moved` / `node_deleted` —
