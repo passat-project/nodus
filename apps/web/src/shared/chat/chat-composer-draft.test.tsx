@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, renderHook, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { apiMock } = vi.hoisted(() => ({ apiMock: vi.fn() }));
 vi.mock('../api-client.js', () => ({ api: apiMock, apiUpload: vi.fn() }));
@@ -17,6 +17,19 @@ import { useComposerInputActions } from './composer-input-utils.js';
  *  зафиксировать черновик ПРЕДЫДУЩЕЙ беседы, а инвалидация списка должна
  *  приходить ПОСЛЕ завершения PUT (иначе refetch обгонял PUT и список
  *  приходил без метки «Черновик»). */
+
+// RTL не регистрирует авто-cleanup без глобальных afterEach: компоненты
+// остальных describe жили до teardown jsdom, и отложенный React-таск падал
+// unhandled `window is not defined` (флейк покрытия CI, #668).
+afterEach(() => {
+  cleanup();
+});
+afterAll(async () => {
+  cleanup();
+  // React 19 планирует обновления через MessageChannel — даём кадру
+  // доработать, пока window ещё существует.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
 
 const CONV_A = '11111111-1111-4111-8111-111111111111';
 const CONV_B = '22222222-2222-4222-8222-222222222222';
