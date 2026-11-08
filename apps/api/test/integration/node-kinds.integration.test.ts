@@ -35,10 +35,12 @@ describe('Виды папок как настраиваемые типы (#556)'
     expect(set!.form.fields).toHaveLength(2);
     // Порядок слотов не значим (Р9 #631: слот «Кода» встал на место
     // отжившего form.code) — важна обязательность обоих.
-    const markSlot = formSlots(set!.form).find((slot) => slot.fieldId !== SYSTEM_FIELD_IDS.nodeCode);
-    expect(formSlots(set!.form).find((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)?.state).toBe(
-      'required',
+    const markSlot = formSlots(set!.form).find(
+      (slot) => slot.fieldId !== SYSTEM_FIELD_IDS.nodeCode,
     );
+    expect(
+      formSlots(set!.form).find((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)?.state,
+    ).toBe('required');
     expect(markSlot?.state).toBe('required');
     expect(set!.capabilities).toEqual(['document_changes', 'pulse_row', 'schema_row']);
 

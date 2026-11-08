@@ -181,7 +181,9 @@ export function effectiveProjectTypeForm(
   const form = projectTypeFormOf(type);
   const known = new Set(definitions.map((definition) => definition.id));
   return withProjectSystemElements({
-    fields: form.fields.filter((element) => !isFieldFormSlot(element) || known.has(element.fieldId)),
+    fields: form.fields.filter(
+      (element) => !isFieldFormSlot(element) || known.has(element.fieldId),
+    ),
   });
 }
 

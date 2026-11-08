@@ -125,7 +125,9 @@ function checkFieldElements(
   if (v.fields.length - keys.length > FORM_LAYOUT_LIMITS.decor) {
     ctx.addIssue({ code: 'custom', message: 'too many decor elements' });
   }
-  if (!Object.keys(v.formulas ?? {}).every((key) => keys.includes(key as TransitionWindowFieldKey))) {
+  if (
+    !Object.keys(v.formulas ?? {}).every((key) => keys.includes(key as TransitionWindowFieldKey))
+  ) {
     ctx.addIssue({ code: 'custom', message: 'formula for unknown field' });
   }
 }

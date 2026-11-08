@@ -199,7 +199,9 @@ export function effectiveNodeForm(
   const known = new Set(definitions.map((definition) => definition.id));
   // Оформление переживает снятие атрибута (#496, I-F1): фильтруются только слоты.
   return {
-    fields: form.fields.filter((element) => !isFieldFormSlot(element) || known.has(element.fieldId)),
+    fields: form.fields.filter(
+      (element) => !isFieldFormSlot(element) || known.has(element.fieldId),
+    ),
   };
 }
 

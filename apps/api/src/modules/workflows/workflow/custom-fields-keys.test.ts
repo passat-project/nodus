@@ -76,7 +76,15 @@ describe('гейт «Заполнены поля» с атрибутами (#431
 });
 
 describe('окно перехода: fields.customFields.<id> (#431)', () => {
-  const sections: EffectiveSection[] = [{ kind: 'fields', fields: [KEY as never], elements: [{ key: KEY as never }], gateKeys: [], origin: 'form' }];
+  const sections: EffectiveSection[] = [
+    {
+      kind: 'fields',
+      fields: [KEY as never],
+      elements: [{ key: KEY as never }],
+      gateKeys: [],
+      origin: 'form',
+    },
+  ];
   const input = (fields: NonNullable<TransitionFormInput['fields']>): TransitionFormInput => ({
     fields,
   });

@@ -146,7 +146,9 @@ export async function buildUpdatePatch(
       }
     }
     const cleared = clearedProjectFields(
-      formSlots(form).filter((slot) => slot.state === 'required').map((slot) => slot.fieldId),
+      formSlots(form)
+        .filter((slot) => slot.state === 'required')
+        .map((slot) => slot.fieldId),
       patchBody,
     );
     if (cleared.length > 0) {

@@ -154,12 +154,9 @@ describe('терпимое чтение со старого API (:5173 без #4
   });
 
   it('нет creationForm — форма по умолчанию категории', () => {
-    expect(creationSlots(typeCreationFormOf({ category: 'task' })).map((slot) => slot.key)).toEqual([
-      'description',
-      'assignee',
-      'deadline',
-      'project',
-    ]);
+    expect(creationSlots(typeCreationFormOf({ category: 'task' })).map((slot) => slot.key)).toEqual(
+      ['description', 'assignee', 'deadline', 'project'],
+    );
   });
 
   it('нет bindings — пустые привязки (атрибут нигде не показывается)', () => {
