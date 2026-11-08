@@ -26,7 +26,7 @@ import { NodeLabel } from '@nodus/ui/components/node-label';
 import type { ContainerNames } from '../../lib/counter-rule.js';
 import { CounterBackfillButton } from './counter-backfill-dialog.js';
 import { CounterCheck } from './counter-check.js';
-import { CounterIssuers, type CounterTarget } from './counter-issuers.js';
+import { CounterTriggerHints, CounterTriggerSelect } from './counter-issuers.js';
 import { CounterCounts } from './counter-counts.js';
 import { CounterCoverage } from './counter-coverage.js';
 import { CounterSection } from './counter-section.js';
@@ -107,10 +107,12 @@ export function CounterRuleDialog({
   const [onCreate, setOnCreate] = useState<string[]>([...initialOnCreate]);
   const hostKinds = kit.hostKindsOf(bindings);
   const locked = (definition?.numbering?.issuedCount ?? 0) > 0;
-  const targets: CounterTarget[] = idsOf(bindings).flatMap((id) => {
-    const host = kit.hostKindOf(id);
-    return host ? [{ id, name: kit.typeName(id) ?? '—', host }] : [];
-  });
+  const targets: { id: string; name: string; host: NumberHostKind }[] = idsOf(bindings).flatMap(
+    (id) => {
+      const host = kit.hostKindOf(id);
+      return host ? [{ id, name: kit.typeName(id) ?? '—', host }] : [];
+    },
+  );
   const chosen = targets.filter((target) => onCreate.includes(target.id)).map((t) => t.id);
   // Сохранить нельзя: папке/проекту номер выдать нечем без «при создании»;
   // письму «при создании» со счётом по месту или полями письма.
@@ -206,17 +208,24 @@ export function CounterRuleDialog({
                   disabled={disabled}
                   allowFormulas={false}
                   describeTarget={kit.describeTargetFor(rule)}
+                  targetAction={(_group, targetId) => {
+                    const target = targets.find((entry) => entry.id === targetId);
+                    return target ? (
+                      <CounterTriggerSelect
+                        targetId={target.id}
+                        host={target.host}
+                        rule={rule}
+                        onCreate={chosen}
+                        issuers={kit.issuers}
+                        disabled={disabled}
+                        onChange={setOnCreate}
+                      />
+                    ) : null;
+                  }}
                   hint={counter.recipientsHint}
                   onChange={changeBindings}
                 />
-                <CounterIssuers
-                  targets={targets}
-                  rule={rule}
-                  onCreate={chosen}
-                  issuers={kit.issuers}
-                  disabled={disabled}
-                  onChange={setOnCreate}
-                />
+                {targets.length > 0 ? <CounterTriggerHints broken={triggerBroken} /> : null}
               </section>
             }
           />

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Calculator, Check, ChevronDown, Minus } from 'lucide-react';
 import type { FormulaHostKind } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -54,8 +55,11 @@ export function Group({
   allowFormulas,
   onEditFormula,
   describe,
+  action,
 }: {
   describe?: (targetId: string, on: boolean) => TargetNote | null;
+  /** Элемент справа в строке отмеченной цели (способ выдачи номера, #630). */
+  action?: (targetId: string) => ReactNode;
   label: string;
   targets: readonly Target[];
   selected: ReadonlySet<string>;
@@ -175,6 +179,7 @@ export function Group({
                     <Calculator className="size-3.5" strokeWidth={1.75} />
                   </button>
                 ) : null}
+                {on && action ? action(target.id) : null}
               </div>
             );
           })}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type {
   CustomFieldBindings,
   CustomFieldDefinition,
@@ -30,10 +30,14 @@ export function FieldUsagePicker({
   disabled,
   allowFormulas = true,
   describeTarget,
+  targetAction,
   hint,
   onlyGroups,
   onChange,
 }: {
+  /** Элемент справа в строке ОТМЕЧЕННОЙ цели (счётчик: способ выдачи
+   *  номера — выпадающий список, #630); клик по нему выбор не меняет. */
+  targetAction?: (group: FormulaHostKind, targetId: string) => ReactNode;
   /** Показать только эти модули (счётчик: номер выдаёт кнопка маршрута —
    *  маршруты есть только у задач и писем). */
   onlyGroups?: readonly FormulaHostKind[];
@@ -168,6 +172,11 @@ export function FieldUsagePicker({
             describe={
               describeTarget
                 ? (targetId, on) => describeTarget(group.key as FormulaHostKind, targetId, on)
+                : undefined
+            }
+            action={
+              targetAction
+                ? (targetId) => targetAction(group.key as FormulaHostKind, targetId)
                 : undefined
             }
           />
