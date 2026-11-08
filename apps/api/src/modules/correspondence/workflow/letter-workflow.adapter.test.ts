@@ -38,6 +38,8 @@ function setup(overrides: Record<string, unknown> = {}, participants: { userId: 
     { apply: vi.fn() } as never,
     { run: vi.fn() } as never,
     { definitions: vi.fn(async () => [{ id: 'cf-1' }]) } as never,
+    undefined as never,
+    undefined as never,
   );
   return { adapter, letters };
 }

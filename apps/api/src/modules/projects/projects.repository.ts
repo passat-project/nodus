@@ -271,6 +271,65 @@ export class ProjectsRepository {
     }));
   }
 
+  /** Место счёта (#630): проекты пачкой со значениями, типом и портфелем. */
+  async numberContext(
+    ids: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<
+    {
+      id: string;
+      name: string;
+      typeId: string;
+      portfolioId: string | null;
+      customFields: unknown;
+      createdAt: Date;
+    }[]
+  > {
+    if (ids.length === 0) return [];
+    return (tx ?? this.prisma).project.findMany({
+      select: {
+        id: true,
+        name: true,
+        typeId: true,
+        portfolioId: true,
+        customFields: true,
+        createdAt: true,
+      },
+      where: { id: { in: [...new Set(ids)] } },
+    });
+  }
+
+  /** Записи-носители номера (#630): проекты отмеченных типов. */
+  async listByTypes(
+    typeIds: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<
+    {
+      id: string;
+      name: string;
+      typeId: string;
+      portfolioId: string | null;
+      customFields: unknown;
+      visibility: string;
+      createdAt: Date;
+    }[]
+  > {
+    if (typeIds.length === 0) return [];
+    return (tx ?? this.prisma).project.findMany({
+      select: {
+        id: true,
+        name: true,
+        typeId: true,
+        portfolioId: true,
+        customFields: true,
+        visibility: true,
+        createdAt: true,
+      },
+      where: { typeId: { in: [...new Set(typeIds)] } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
   // ===== Настройки портала (Р7) =====
 
   async settingValue(key: string): Promise<unknown | null> {

@@ -1,6 +1,7 @@
+/* eslint-disable nodus-internal/max-lines-warn -- движок перехода (#630): план номеров кнопки — до применения окна */
 import { randomUUID } from 'node:crypto';
 
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   ErrorCode,
   matchesDecider,
@@ -23,6 +24,12 @@ import type {
   WorkflowEnginePort,
 } from '../../ports/workflow-engine.port.js';
 import { NumberSeriesService } from '../../numbering/number-series.service.js';
+import {
+  NUMBER_ISSUE,
+  type NumberIssue,
+  type NumberPlan,
+  type NumberingFailure,
+} from '../../../custom-fields/ports/number-issue.port.js';
 import {
   effectiveTargetId,
   evaluateValidators,
@@ -58,6 +65,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
     private readonly adapters: WorkflowEntityRegistry,
     private readonly records: TransitionRecordsRepository,
     private readonly numbers: NumberSeriesService,
+    @Inject(NUMBER_ISSUE) private readonly numberIssue: NumberIssue,
   ) {}
 
   async available(
@@ -76,7 +84,12 @@ export class WorkflowEngine implements WorkflowEnginePort {
     category: ProcessCategory,
     actor: WorkflowActor,
     choice: TransitionChoice,
-    opts: { override?: boolean; reason?: string; form?: TransitionFormInput } = {},
+    opts: {
+      override?: boolean;
+      reason?: string;
+      form?: TransitionFormInput;
+      confirmEmptyNumberParts?: boolean;
+    } = {},
   ): Promise<TransitionExecution> {
     const adapter = this.adapters.get(category);
     await adapter.lock(tx, entityId);
@@ -105,6 +118,10 @@ export class WorkflowEngine implements WorkflowEnginePort {
     }
 
     const picked = this.pick(candidates, choice, opts.form);
+    // Пост-функция «Присвоить номер» с полем-счётчиком (#630): план ВСЕХ
+    // номеров кнопки — ДО применения окна и смены стадии. Нет места или
+    // пустая вставка без подтверждения — 409, действие откатывается целиком.
+    const numberPlan = await this.planNumbers(tx, adapter, entityId, picked, opts);
     const applied = await this.applyForm(adapter, category, tx, entityId, actor, picked, opts.form);
     // Гейты видят факты после окна; условия «кто» — по состоянию до окна.
     const subject1 = exec.hasApplied(applied)
@@ -140,6 +157,10 @@ export class WorkflowEngine implements WorkflowEnginePort {
     // Пост-действие «Присвоить номер» (#55, Р1): номер выдаётся в этой же
     // транзакции ДО смены стадии — откат перехода не сдвигает счётчик.
     const numbering = await exec.assignNumber(this.numbers, tx, subject1, pick.t);
+    const assignedNumbers = numberPlan.ok ? await numberPlan.issue(tx, entityId) : {};
+    if (numberPlan.ok && Object.keys(assignedNumbers).length > 0) {
+      await adapter.applyNumbers?.(tx, entityId, actor.id, assignedNumbers);
+    }
     const recordId = randomUUID();
     const fromStage =
       workflow.stages.find((s) => s.id === subject0.stageId) ??
@@ -182,7 +203,52 @@ export class WorkflowEngine implements WorkflowEnginePort {
         : applied.fields,
       timeEntryId: applied.timeEntryId,
     });
-    return { stage: target, recordId };
+    return {
+      stage: target,
+      recordId,
+      ...(Object.keys(assignedNumbers).length > 0
+        ? {
+            assignedNumbers: Object.entries(assignedNumbers).map(([fieldId, display]) => ({
+              fieldId,
+              display,
+            })),
+          }
+        : {}),
+    };
+  }
+
+  /** План номеров кнопки: только `assign_number {fieldId}`, только поля без
+   *  номера (кто первым заполнил — тот выдал). Письмо-серия — отдельный путь
+   *  `exec.assignNumber` (без fieldId). */
+  private async planNumbers(
+    tx: TransactionClient,
+    adapter: ReturnType<WorkflowEntityRegistry['get']>,
+    entityId: string,
+    picked: TransitionDef,
+    opts: { confirmEmptyNumberParts?: boolean },
+  ): Promise<NumberPlan> {
+    const fieldIds = picked.rules.postFunctions
+      .filter(
+        (pf): pf is { kind: 'assign_number'; fieldId: string } =>
+          pf.kind === 'assign_number' && pf.fieldId !== undefined,
+      )
+      .map((pf) => pf.fieldId);
+    if (fieldIds.length === 0 || !adapter.numberTarget)
+      return { ok: true, issue: async () => ({}) };
+    const target = await adapter.numberTarget(tx, entityId);
+    const empty = fieldIds.filter((fieldId) => {
+      const value = target.sources.self[fieldId];
+      return value === undefined || value === null || value === '';
+    });
+    if (empty.length === 0) return { ok: true, issue: async () => ({}) };
+    const plan = await this.numberIssue.plan(tx, empty, target, {
+      hostKind: target.host,
+      source: 'transition',
+      sourceLabel: picked.name,
+      confirmEmpty: opts.confirmEmptyNumberParts === true,
+    });
+    if (!plan.ok) throw numberingException(plan.failure);
+    return plan;
   }
 
   /** Выбор кнопки: явная — она; DnD/«Мой план» — первая без обязательного
@@ -327,4 +393,27 @@ export class WorkflowEngine implements WorkflowEnginePort {
     const subject = await this.adapters.get(category).subject(tx, entityId, actor);
     return { ...subject, permissions: actor.permissions };
   }
+}
+
+/** 409 выдачи номера: тот же формат `details`, что у мок-мира и API. */
+function numberingException(failure: NumberingFailure): DomainException {
+  if (failure.kind === 'empty') {
+    return new DomainException(ErrorCode.NUMBER_SEGMENT_EMPTY, 'Number has an empty part', {
+      fieldId: failure.fieldId,
+      fieldName: failure.fieldName,
+      segments: failure.segments,
+      example: failure.example,
+    });
+  }
+  return new DomainException(
+    ErrorCode.NUMBER_CONTAINER_MISSING,
+    `Number is not issued («${failure.fieldName}»)`,
+    {
+      fieldId: failure.fieldId,
+      fieldName: failure.fieldName,
+      reason: failure.reason,
+      index: failure.index,
+      name: failure.name,
+    },
+  );
 }

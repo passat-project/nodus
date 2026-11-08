@@ -22,6 +22,8 @@ import { TaskRefReaderProvider } from './ports/task-ref-reader.provider.js';
 import { TASK_FORMULA_VALUES } from './ports/task-formula-values.port.js';
 import { TaskFormulaValuesProvider } from './ports/task-formula-values.provider.js';
 import { TasksQueryRepository } from './tasks/tasks-query.repository.js';
+import { TasksRepository } from './tasks/tasks.repository.js';
+import { TaskNumberHostProvider } from './ports/number-host.provider.js';
 
 /**
  * Порты чтения задач (ADR-0012): тонкий модуль экспорта read-портов чужим
@@ -41,6 +43,9 @@ import { TasksQueryRepository } from './tasks/tasks-query.repository.js';
     TaskDeciderRecipients,
     TaskDeciders,
     TasksQueryRepository,
+    TasksRepository,
+    // Носитель номеров «задача» (#630): DiscoveryService.
+    TaskNumberHostProvider,
     TaskChatReaderProvider,
     { provide: TASK_CHAT_READER, useClass: TaskChatReaderProvider },
     TaskCustomFieldValuesProvider,

@@ -127,10 +127,12 @@ function setup() {
     {
       assertTaskProjectVisible: vi.fn(async () => void 0),
       assertMembersAllowed: vi.fn(async () => void 0),
+      numberContext: vi.fn(async () => ({ projects: [], nodes: [] })),
     } as never,
     customFields as never,
     { stateFor: vi.fn(async () => new Map()) } as never,
     new TaskCreatePolicy(profiles as never),
+    { planOnCreate: async () => ({ ok: true, issue: async () => ({}) }) } as never,
   );
   return { service, repo, placements, placementsRepo, txRunner, eventBus, catalog, boards, engine };
 }

@@ -4,6 +4,8 @@ import { DiscoveryModule } from '@nestjs/core';
 import { ROLE_MEMBERSHIP_READER } from '../../core/ports/role-membership.port.js';
 import { RoleMembershipProvider } from '../../core/ports/role-membership.provider.js';
 import { NumberSeriesService } from './numbering/number-series.service.js';
+import { NumberSeriesStoreProvider } from './numbering/number-series.provider.js';
+import { NUMBER_SERIES_STORE } from './ports/number-series.port.js';
 import { WorkflowEntityRegistry } from './workflow/engine/entity-adapter.registry.js';
 import { TransitionRecordsRepository } from './workflow/engine/transition-records.repository.js';
 import { WorkflowEngine } from './workflow/engine/workflow-engine.js';
@@ -45,6 +47,8 @@ import { ProcessTypesRepository } from './types/process-types.repository.js';
     WorkflowEntityRegistry,
     TransitionRecordsRepository,
     NumberSeriesService,
+    NumberSeriesStoreProvider,
+    { provide: NUMBER_SERIES_STORE, useExisting: NumberSeriesStoreProvider },
     WorkflowEngine,
     ProcessCatalogReaderProvider,
     { provide: WORKFLOW_ENGINE, useExisting: WorkflowEngine },
@@ -63,6 +67,7 @@ import { ProcessTypesRepository } from './types/process-types.repository.js';
     WORKFLOW_RULES_READER,
     PROCESS_TYPE_FORM_CLEANER,
     ROLE_MEMBERSHIP_READER,
+    NUMBER_SERIES_STORE,
     WorkflowEntityRegistry,
     WorkflowRepository,
     ProcessTypesRepository,

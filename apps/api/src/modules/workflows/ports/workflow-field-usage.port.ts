@@ -1,5 +1,7 @@
 import type { InjectionToken } from '@nestjs/common';
 
+import type { NumberIssuer } from '@nodus/contracts';
+
 /**
  * Порт «где атрибут используется в процессах» (#431; ревизия #631 — без
  * областей): окно последствий и публикация спрашивают порт, какие
@@ -39,4 +41,8 @@ export interface WorkflowFieldUsageReader {
   /** Слоты окон с формулой-подстановкой (#632, F1): окна перехода и формы
    *  создания, где `formulas` содержит ключ атрибута. */
   formulaSlotsUsingField(fieldId: string): Promise<number>;
+
+  /** Кнопки опубликованных маршрутов, выдающие номер этого счётчика
+   *  (#630): пост-функция `assign_number {fieldId}`. */
+  numberIssuers(fieldId: string): Promise<NumberIssuer[]>;
 }

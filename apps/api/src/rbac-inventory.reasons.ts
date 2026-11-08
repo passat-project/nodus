@@ -140,6 +140,11 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'GET /counterparties/:id': COUNTERPARTIES,
   'GET /dictionaries/:code/items': CATALOG,
   'GET /custom-fields/definitions': CUSTOM_FIELDS,
+  // Номера записи (#630): видимость записи проверяет реестр носителей —
+  // отдельного права нет, иначе наблюдатель без custom_field.manage не
+  // увидит номер своей задачи.
+  'GET /custom-fields/numbering/host/:kind/:id':
+    'номера записи видны тем, кто видит саму запись (проверка в сервисе)',
   'GET /files/:id/office-session': FILE_ACCESS,
   'GET /files/:id/versions': FILE_ACCESS,
   'GET /home/summary': HOME,

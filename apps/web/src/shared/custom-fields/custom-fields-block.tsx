@@ -11,6 +11,7 @@ import { NodeLabel } from '@nodus/ui/components/node-label';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 
 import { FieldRow } from '../ui/entity-fields.js';
+import { CounterAssignmentHint } from './counter-assignment-hint.js';
 import { CustomFieldTypeIcon } from './field-type-icon.js';
 import { FormulaCell } from './formula/formula-cell.js';
 import type { FormulaHost } from './formula/formula-api.js';
@@ -133,14 +134,23 @@ export function CustomFieldsBlock({
               ) : definition.type === 'counter' ? (
                 /* Счётчик заморожен навсегда (#630, Р10): номер пишет только
                    движок — ни редактора значения, ни формулы, ни fx. */
-                <CustomFieldEditor
-                  definition={definition}
-                  value={values[definition.id]}
-                  refs={refs}
-                  disabled
-                  variant="inline"
-                  onCommit={() => undefined}
-                />
+                <div className="flex flex-col gap-0.5">
+                  <CustomFieldEditor
+                    definition={definition}
+                    value={values[definition.id]}
+                    refs={refs}
+                    disabled
+                    variant="inline"
+                    onCommit={() => undefined}
+                  />
+                  {host && values[definition.id] ? (
+                    <CounterAssignmentHint
+                      fieldId={definition.id}
+                      kind={host.kind}
+                      hostId={host.id}
+                    />
+                  ) : null}
+                </div>
               ) : (
                 <CustomFieldEditor
                   definition={definition}

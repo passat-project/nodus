@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- чтения места счёта (#630) держат видимость и дерево в одной точке порта */
 import { Injectable } from '@nestjs/common';
 import { ErrorCode, Permission, type ProjectRef, type ProjectRole } from '@nodus/contracts';
 
@@ -11,6 +12,9 @@ import {
 import { ProjectNodesRepository } from '../project-nodes.repository.js';
 import { ProjectsRepository } from '../projects.repository.js';
 import type {
+  NumberNodeContext,
+  NumberProjectContext,
+  NumberProjectContexts,
   ProjectActor,
   ProjectChatReader,
   ProjectReader,
@@ -100,6 +104,53 @@ export class ProjectReaderProvider implements ProjectReader, ProjectChatReader {
       : [...new Set([...openIds, ...myProjectIds])];
     const hidden = seeSecret ? [] : secretIds.filter((id) => !mine.has(id));
     return { visibleProjectIds: visible, hiddenProjectIds: hidden };
+  }
+
+  async numberContext(
+    projectIds: readonly string[],
+    nodeIds: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<NumberProjectContexts> {
+    const seedNodes = await this.nodes.listByIds(nodeIds, tx);
+    const seedProjects = await this.projects.numberContext(
+      [...new Set([...projectIds, ...seedNodes.map((node) => node.projectId)])],
+      tx,
+    );
+    const allProjects = await this.projects.numberContext(
+      seedProjects.map((project) => project.id),
+      tx,
+    );
+    const allNodes = await this.nodes.listByProjects(
+      allProjects.map((project) => project.id),
+      tx,
+    );
+    return {
+      projects: allProjects.map(toProjectContext),
+      nodes: uniqueNodes([...allNodes, ...seedNodes]).map(toNodeContext),
+    };
+  }
+
+  async numberHostsOfTypes(
+    projectTypeIds: readonly string[],
+    nodeKindIds: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<NumberProjectContexts> {
+    const [projects, nodes] = await Promise.all([
+      this.projects.listByTypes(projectTypeIds, tx),
+      this.nodes.listByKinds(nodeKindIds, tx),
+    ]);
+    const allProjectIds = [
+      ...new Set([
+        ...projects.map((project) => project.id),
+        ...nodes.map((node) => node.projectId),
+      ]),
+    ];
+    const allProjects = await this.projects.numberContext(allProjectIds, tx);
+    const allNodes = await this.nodes.listByProjects(allProjectIds, tx);
+    return {
+      projects: allProjects.map(toProjectContext),
+      nodes: uniqueNodes([...allNodes, ...nodes]).map(toNodeContext),
+    };
   }
 
   async assertTaskProjectVisible(actor: ProjectActor, projectId: string): Promise<void> {
@@ -266,4 +317,50 @@ export class ProjectReaderProvider implements ProjectReader, ProjectChatReader {
     if (ids.length === 0 || !(await this.enabled())) return [];
     return this.projects.refsByIds([...ids]);
   }
+}
+
+function toProjectContext(row: {
+  id: string;
+  name: string;
+  typeId: string;
+  portfolioId: string | null;
+  customFields: unknown;
+  createdAt: Date;
+}): NumberProjectContext {
+  return {
+    id: row.id,
+    name: row.name,
+    typeId: row.typeId,
+    portfolioId: row.portfolioId,
+    values: asValues(row.customFields),
+    createdAt: row.createdAt,
+  };
+}
+
+function toNodeContext(row: {
+  id: string;
+  projectId: string;
+  parentId: string | null;
+  kindId: string;
+  name: string;
+  customFields: unknown;
+  createdAt: Date;
+}): NumberNodeContext {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    parentId: row.parentId,
+    kindId: row.kindId,
+    name: row.name,
+    values: asValues(row.customFields),
+    createdAt: row.createdAt,
+  };
+}
+
+function uniqueNodes<T extends { id: string }>(nodes: readonly T[]): T[] {
+  return [...new Map(nodes.map((node) => [node.id, node])).values()];
+}
+
+function asValues(raw: unknown): Record<string, unknown> {
+  return raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
 }

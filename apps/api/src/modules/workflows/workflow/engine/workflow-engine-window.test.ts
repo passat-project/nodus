@@ -96,6 +96,7 @@ function setup(transitions: TransitionDef[], subjectFacts: () => typeof facts = 
     { get: () => adapter } as never,
     records as never,
     { nextForType: vi.fn() } as never,
+    { plan: vi.fn(async () => ({ ok: true, issue: async () => ({}) })) } as never,
   );
   return { engine, adapter, records, order, wasApplied: () => applied };
 }

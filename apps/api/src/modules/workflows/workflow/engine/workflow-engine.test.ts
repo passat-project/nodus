@@ -109,6 +109,7 @@ function makeEngine(subject: Partial<WorkflowActorSubject> = {}) {
       registry as never,
       records as never,
       numbers as never,
+      { plan: vi.fn(async () => ({ ok: true, issue: async () => ({}) })) } as never,
     ),
     adapter,
     registry,

@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { DiscoveryModule } from '@nestjs/core';
 
 import { ORG_STRUCTURE_READER } from '../../core/ports/org-structure.port.js';
 import { OrgStructureProvider } from '../../core/ports/org-structure.provider.js';
@@ -9,6 +10,13 @@ import { CrmPortsModule } from '../crm/crm-ports.module.js';
 import { CorrespondencePortsModule } from '../correspondence/correspondence-ports.module.js';
 import { DictionariesPortsModule } from '../dictionaries/dictionaries-ports.module.js';
 import { TasksPortsModule } from '../tasks/tasks-ports.module.js';
+import { WorkflowsPortsModule } from '../workflows/workflows-ports.module.js';
+import { CounterSummaryService } from './numbering/counter-summary.provider.js';
+import { NumberHostRegistry } from './numbering/number-host.registry.js';
+import { NumberIssueService } from './numbering/number-issue.service.js';
+import { NumberRefService } from './numbering/number-ref.service.js';
+import { NUMBER_HOST_REGISTRY } from './ports/number-host.port.js';
+import { NUMBER_ISSUE } from './ports/number-issue.port.js';
 import { CustomFieldRegistryProvider } from './ports/custom-field-registry.provider.js';
 import { CUSTOM_FIELD_REGISTRY } from './ports/custom-field-registry.port.js';
 import { FormulaEngineProvider } from './ports/formula-engine.provider.js';
@@ -42,11 +50,13 @@ import { FormulaValuesService } from './formulas/formula-values.service.js';
  */
 @Module({
   imports: [
+    DiscoveryModule,
     DictionariesPortsModule,
     CrmPortsModule,
     ProjectsPortsModule,
     forwardRef(() => TasksPortsModule),
     CorrespondencePortsModule,
+    WorkflowsPortsModule,
   ],
   providers: [
     UserProfileProvider,
@@ -60,6 +70,13 @@ import { FormulaValuesService } from './formulas/formula-values.service.js';
     CustomFieldRefsHydrator,
     CustomFieldRegistryProvider,
     { provide: CUSTOM_FIELD_REGISTRY, useExisting: CustomFieldRegistryProvider },
+    // Счётчики (#630): реестр носителей, движок выдачи, сводки DTO.
+    NumberHostRegistry,
+    { provide: NUMBER_HOST_REGISTRY, useExisting: NumberHostRegistry },
+    NumberRefService,
+    NumberIssueService,
+    { provide: NUMBER_ISSUE, useExisting: NumberIssueService },
+    CounterSummaryService,
     // Формулы (#632): движок, чтение источников, ячейки.
     FormulaEngineProvider,
     { provide: FORMULA_ENGINE, useExisting: FormulaEngineProvider },
@@ -74,6 +91,9 @@ import { FormulaValuesService } from './formulas/formula-values.service.js';
   ],
   exports: [
     CUSTOM_FIELD_REGISTRY,
+    NUMBER_ISSUE,
+    NUMBER_HOST_REGISTRY,
+    CounterSummaryService,
     FORMULA_ENGINE,
     FORMULA_CELLS,
     RECORD_VALUES_READER,

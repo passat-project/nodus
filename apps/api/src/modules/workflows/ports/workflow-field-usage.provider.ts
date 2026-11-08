@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { customFieldKey } from '@nodus/contracts';
+import { customFieldKey, type NumberIssuer } from '@nodus/contracts';
 
 import { Prisma } from '../../../generated/prisma/client.js';
 import { PrismaService } from '../../../core/database/prisma.service.js';
@@ -100,5 +100,26 @@ export class WorkflowFieldUsageProvider implements WorkflowFieldUsageReader {
       )::int AS count
     `);
     return rows[0]?.count ?? 0;
+  }
+
+  async numberIssuers(fieldId: string): Promise<NumberIssuer[]> {
+    return this.prisma.$queryRaw<NumberIssuer[]>(Prisma.sql`
+      SELECT DISTINCT se.process_type_id AS "processTypeId",
+             t.id::text AS "transitionId",
+             t.name AS "transitionName"
+      FROM workflows w
+      JOIN workflow_transitions t
+        ON t.workflow_id = w.id AND t.archived_at IS NULL
+      JOIN workflow_scheme_entries se ON se.workflow_id = w.id
+      WHERE w.published_at IS NOT NULL
+        AND w.kind IN ('task', 'letter')
+        AND EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(COALESCE(t.rules->'postFunctions', '[]'::jsonb)) pf
+          WHERE pf->>'kind' = 'assign_number'
+            AND pf->>'fieldId' = ${fieldId}
+        )
+      ORDER BY t.name
+    `);
   }
 }

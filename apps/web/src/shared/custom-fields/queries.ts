@@ -1,5 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import type { CustomFieldDefinition, CustomFieldModule, CustomFieldValues } from '@nodus/contracts';
+import type {
+  CustomFieldDefinition,
+  CustomFieldModule,
+  CustomFieldValues,
+  NumberHostAssignments,
+  NumberHostKind,
+} from '@nodus/contracts';
 
 import { api } from '../api-client.js';
 
@@ -30,4 +36,14 @@ export function customFieldValuesOf(entity: {
   customFields?: CustomFieldValues;
 }): CustomFieldValues {
   return entity.customFields ?? {};
+}
+
+/** Номера одной записи (#630, П5): карточка «выдан когда, кем, в каком
+ *  счёте». Чтение — право на запись, проверяет сервер. */
+export function useNumberHostAssignments(kind: NumberHostKind, id: string | null) {
+  return useQuery({
+    queryKey: ['numbering', 'host', kind, id] as const,
+    queryFn: () => api<NumberHostAssignments>(`/custom-fields/numbering/host/${kind}/${id}`),
+    enabled: id !== null,
+  });
 }

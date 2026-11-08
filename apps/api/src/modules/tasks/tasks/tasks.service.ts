@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- создание задачи (#630): место счётчика и запись номеров — одна транзакция */
 import { Inject, Injectable } from '@nestjs/common';
 import {
   ErrorCode,
@@ -44,6 +45,12 @@ import { participantRows, taskCreateData, taskCreatedPayload } from './task-crea
 import { resolveCreateStage } from './task-create.stage.js';
 import { TasksQueryService } from './tasks-query.service.js';
 import { TaskCreatePolicy } from './task-create.policy.js';
+import {
+  NUMBER_ISSUE,
+  numberingFailureException,
+  type NumberIssue,
+} from '../../custom-fields/ports/number-issue.port.js';
+import type { NumberTarget } from '../../custom-fields/ports/number-host.port.js';
 import { DuplicateTaskSourceError, TasksRepository } from './tasks.repository.js';
 
 /**
@@ -73,6 +80,7 @@ export class TasksService {
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
     @Inject(FORMULA_CELLS) private readonly formulas: FormulaCells,
     private readonly policy: TaskCreatePolicy,
+    @Inject(NUMBER_ISSUE) private readonly numberIssue: NumberIssue,
   ) {}
 
   /** Подзадача/перепривязка: родителя правят только те, кто может править
@@ -180,6 +188,23 @@ export class TasksService {
         // Обязательные поля — после умолчаний: если сервер заполнил значение
         // сам, «не хватает» его не считает (Р5).
         this.policy.assertComplete(type, { ...body, customFields });
+        // Счётчики «при создании» (#630): место записи и пустые вставки
+        // проверяются ДО создания — отказ ничего не тратит; номера пишутся
+        // в customFields после создания, той же транзакцией.
+        const numberTarget = await this.numberTargetFor(tx, {
+          typeId,
+          nodeId: body.nodeId ?? null,
+          projectId: body.projectId ?? null,
+          parentId: body.parentId ?? null,
+          customFields,
+        });
+        const numberPlan = await this.numberIssue.planOnCreate(tx, numberTarget, {
+          source: 'create',
+          values: customFields,
+          confirmEmpty: body.confirmEmptyNumberParts === true,
+          actorId: user.id,
+        });
+        if (!numberPlan.ok) throw numberingFailureException(numberPlan.failure);
         // Узел проверен до транзакции; под advisory-локом структуры
         // перепроверяем — параллельное удаление узла не оставит висячий node_id.
         if (body.nodeId && body.projectId) {
@@ -202,6 +227,11 @@ export class TasksService {
         );
         await this.checklist.createInitial(tx, task.id, body.checklist ?? []);
         await this.placements.sync(tx, task, holders, user.id);
+        const numbers = await numberPlan.issue(tx, task.id);
+        if (Object.keys(numbers).length > 0) {
+          const withNumbers = { ...customFields, ...numbers };
+          await this.repo.updateFields(tx, task.id, { customFields: withNumbers as never });
+        }
         let finalStage: { id: string; systemState: string; outcome: string | null } = initial;
         if (!targetIsInitial && requested) {
           const execution = await this.engine.execute(tx, task.id, 'task', user, requested);
@@ -311,5 +341,50 @@ export class TasksService {
   private async findBySource(user: AuthUser, messageId: string): Promise<TaskListItem | null> {
     const found = await this.repo.findLiveIdBySource(user.id, messageId);
     return found ? this.listItem(user, found) : null;
+  }
+
+  /** Место счётчика новой/меняемой задачи (#630): папки снаружи, проект,
+   *  родитель, значения источников. */
+  async numberTargetFor(
+    tx: TransactionClient,
+    input: {
+      typeId: string;
+      nodeId: string | null;
+      projectId: string | null;
+      parentId: string | null;
+      customFields: Record<string, unknown>;
+    },
+  ): Promise<NumberTarget> {
+    const [contexts, parent] = await Promise.all([
+      this.projects.numberContext(
+        input.projectId ? [input.projectId] : [],
+        input.nodeId ? [input.nodeId] : [],
+        tx,
+      ),
+      input.parentId ? this.repo.findWithParticipants(input.parentId, tx) : Promise.resolve(null),
+    ]);
+    const project = contexts.projects[0];
+    const byId = new Map(contexts.nodes.map((node) => [node.id, node]));
+    const chain: typeof contexts.nodes = [];
+    let current = input.nodeId ? byId.get(input.nodeId) : undefined;
+    while (current) {
+      chain.push(current);
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+    return {
+      host: 'task',
+      typeId: input.typeId,
+      folders: chain.map((node) => ({ id: node.id, kindId: node.kindId })),
+      projectId: project?.id ?? null,
+      portfolioId: project?.portfolioId ?? null,
+      projectTypeId: project?.typeId ?? null,
+      parentTaskId: input.parentId,
+      sources: {
+        self: input.customFields,
+        project: project?.values ?? null,
+        parentTask: (parent?.customFields ?? null) as Record<string, unknown> | null,
+        folders: chain.map((node) => ({ kindId: node.kindId, values: node.values })),
+      },
+    };
   }
 }

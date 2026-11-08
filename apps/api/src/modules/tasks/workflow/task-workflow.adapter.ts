@@ -25,6 +25,10 @@ import { TaskDeciders } from '../access/task-deciders.service.js';
 import { TaskProjectRights } from '../access/task-project-rights.js';
 import { Placements } from '../personal/placements.js';
 import { TaskFactsRepository } from '../tasks/task-facts.repository.js';
+import { TasksQueryRepository } from '../tasks/tasks-query.repository.js';
+import { taskNumberTarget, type TaskNumberContext } from '../ports/number-host.provider.js';
+import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
+import type { NumberTarget } from '../../custom-fields/ports/number-host.port.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
 import { StageMover } from './stage-mover.js';
 import { TaskFormApplier } from './task-form.applier.js';
@@ -57,6 +61,8 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
     private readonly projectRights: TaskProjectRights,
     private readonly deciders: TaskDeciders,
     private readonly events: EventBus,
+    private readonly query: TasksQueryRepository,
+    @Inject(PROJECT_READER) private readonly projects: ProjectReader,
   ) {}
 
   lock(tx: TransactionClient, taskId: string): Promise<void> {
@@ -256,5 +262,64 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
   private async prepareHolders(taskId: string): Promise<void> {
     const roster = await this.txRunner.run((tx) => this.tasks.findLiveRoster(taskId, tx));
     if (roster) await this.placements.prepare(planHolderIds(roster));
+  }
+
+  async numberTarget(tx: TransactionClient, taskId: string): Promise<NumberTarget> {
+    const task = await this.tasks.findWithParticipants(taskId, tx);
+    const [contexts, parentValues] = await Promise.all([
+      this.projects.numberContext(
+        task.projectId ? [task.projectId] : [],
+        task.nodeId ? [task.nodeId] : [],
+        tx,
+      ),
+      task.parentId ? this.query.customFieldsOf([task.parentId], tx) : Promise.resolve(new Map()),
+    ]);
+    const context: TaskNumberContext = {
+      projects: new Map(contexts.projects.map((project) => [project.id, project])),
+      nodes: new Map(contexts.nodes.map((node) => [node.id, node])),
+      parents: new Map(
+        [...parentValues].map(([id, values]) => [
+          id,
+          values !== null && typeof values === 'object' ? (values as Record<string, unknown>) : {},
+        ]),
+      ),
+    };
+    return taskNumberTarget(
+      {
+        typeId: task.typeId,
+        nodeId: task.nodeId,
+        projectId: task.projectId,
+        parentId: task.parentId,
+        customFields: task.customFields,
+      },
+      context,
+    );
+  }
+
+  async applyNumbers(
+    tx: TransactionClient,
+    taskId: string,
+    actorId: string,
+    numbers: Readonly<Record<string, string>>,
+  ): Promise<void> {
+    const task = await this.tasks.findWithParticipants(taskId, tx);
+    const next = { ...(task.customFields as Record<string, unknown>), ...numbers };
+    await this.tasks.updateFields(tx, taskId, { customFields: next as never });
+    await this.events.emit(
+      tx,
+      TASK_EVENTS.UPDATED,
+      {
+        taskId: task.id,
+        number: task.number,
+        audience: audienceIds(task),
+        fields: Object.keys(numbers).map((fieldId) => `cf.${fieldId}`),
+        customFieldChanges: Object.entries(numbers).map(([fieldId, display]) => ({
+          fieldId,
+          from: null,
+          to: display,
+        })),
+      },
+      { actorId, aggregateType: 'task', aggregateId: task.id },
+    );
   }
 }

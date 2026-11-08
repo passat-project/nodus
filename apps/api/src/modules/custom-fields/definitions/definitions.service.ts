@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- реестр атрибутов (#630): правила счётчика и привязки — та же транзакция */
 import { Inject, Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 import type {
@@ -35,9 +36,10 @@ import {
   PROCESS_TYPE_FORM_CLEANER,
   type ProcessTypeFormCleaner,
 } from '../../workflows/ports/process-type-form-cleaner.port.js';
-import { DefinitionMapper, type FieldDefinitionRow } from './definition.mapper.js';
+import { DefinitionMapper, bindingsOf, type FieldDefinitionRow } from './definition.mapper.js';
 import { DefinitionsQueryService } from './definitions-query.service.js';
 import { emitDefinitionChanged } from './definition-events.js';
+import { CounterRuleService } from './counter-rule.service.js';
 import {
   assertBindingsUsable,
   createBindings,
@@ -75,6 +77,7 @@ export class DefinitionsService {
     @Inject(FIELD_BINDING_TARGET_READER) private readonly targets: FieldBindingTargetReader,
     @Inject(FIELD_BINDING_FORM_CLEANER) private readonly formCleaner: FieldBindingFormCleaner,
     private readonly bindingFormulas: FormulaBindingService,
+    private readonly counterRules: CounterRuleService,
     @Inject(PROCESS_TYPE_FORM_CLEANER) private readonly processTypeCleaner: ProcessTypeFormCleaner,
     private readonly query: DefinitionsQueryService,
     private readonly logger: PinoLogger,
@@ -103,6 +106,14 @@ export class DefinitionsService {
     );
     const bindings = createBindings(dto);
     await assertBindingsUsable(this.catalog, this.targets, bindings);
+    // Правило счётчика (#630): проверки формы, достижимости привязок и
+    // «при создании» — ДО мутации; номер при создании не тратится.
+    this.counterRules.assertShape(dto.type, dto);
+    const onCreate = dto.numberingOnCreate ?? [];
+    if (dto.numbering) {
+      await this.counterRules.assertReachable(dto.numbering, bindings);
+      await this.counterRules.assertTriggers(dto.numbering, onCreate, bindings);
+    }
 
     return this.txRunner.run(async (tx) => {
       await this.definitions.lockRegistry(tx);
@@ -132,6 +143,20 @@ export class DefinitionsService {
       const created = await this.definitions.create(data, tx);
       await replaceBindings(this.definitions, created.id, bindings, tx);
       let row = (await this.definitions.findById(created.id, tx)) ?? created;
+      // Счётчик (#630): серия 1:1 с определением, флаги «при создании» на
+      // привязках и продолжение сквозного счёта — той же транзакцией.
+      if (dto.type === 'counter' && dto.numbering) {
+        const seriesId = await this.counterRules.applyRule(
+          tx,
+          created.id,
+          null,
+          dto.name,
+          dto.numbering,
+        );
+        await this.counterRules.applyOnCreate(tx, created.id, onCreate);
+        await this.counterRules.applyNext(tx, seriesId, dto.numberingNext);
+        row = (await this.definitions.findById(created.id, tx)) ?? row;
+      }
       // Формулы мест в том же диалоге (Г-1 #632): раньше тело молча
       // игнорировалось сервером — формула типа ставилась только в моках.
       if (dto.bindingFormulas && Object.keys(dto.bindingFormulas).length > 0) {
@@ -145,6 +170,7 @@ export class DefinitionsService {
         ...Object.keys(data).filter((key) => key !== 'number' && key !== 'createdById'),
         'bindings',
         ...(dto.bindingFormulas ? ['defaultFormula'] : []),
+        ...(dto.numbering ? ['numberSeriesId', 'numberOnCreate'] : []),
       ]);
       return this.mapper.toDto(row, tx);
     });
@@ -156,7 +182,7 @@ export class DefinitionsService {
     actorId: string,
   ): Promise<CustomFieldDefinition> {
     const current = await requireDefinition(this.definitions, id);
-    const { nextSettings, nextDefault } = await assertUpdateAllowed(
+    const { nextType, nextSettings, nextDefault } = await assertUpdateAllowed(
       {
         validator: this.validator,
         dictionaries: this.dictionaries,
@@ -167,12 +193,38 @@ export class DefinitionsService {
       current,
       dto,
     );
+    this.counterRules.assertShape(nextType, dto);
 
     return this.txRunner.run(async (tx) => {
       await this.definitions.lockRegistry(tx);
       // Снимок привязок для дельты слотов — под локом и в транзакции:
       // внешний `current` мог устареть между чтением и мутацией (#646).
       const fresh = (await this.definitions.findById(id, tx)) ?? current;
+      // Счётчик (#630): условия после выдач заморожены, привязки достижимы,
+      // «при создании» — у привязанных типов. Проверки ДО мутации.
+      const nextBindings = dto.bindings ?? bindingsOf(fresh);
+      const currentOnCreate = fresh.bindings
+        .filter((binding) => binding.numberOnCreate === true)
+        .map((binding) => binding.targetId);
+      const boundIds = new Set([
+        ...nextBindings.processTypeIds,
+        ...nextBindings.projectTypeIds,
+        ...nextBindings.nodeKindIds,
+      ]);
+      const nextOnCreate =
+        dto.numberingOnCreate ?? currentOnCreate.filter((targetId) => boundIds.has(targetId));
+      const currentRule =
+        nextType === 'counter' && fresh.numberSeriesId
+          ? await this.counterRules.ruleOf(tx, fresh.numberSeriesId)
+          : null;
+      const nextRule = dto.numbering ?? currentRule;
+      if (dto.numbering) {
+        await this.counterRules.assertReachable(dto.numbering, nextBindings);
+        await this.counterRules.assertNotLocked(tx, fresh.numberSeriesId ?? null, dto.numbering);
+      }
+      if (nextType === 'counter' && nextRule) {
+        await this.counterRules.assertTriggers(nextRule, nextOnCreate, nextBindings);
+      }
       if (dto.name !== undefined && dto.name !== fresh.name) {
         const taken = await this.definitions.findByName(dto.name, id, tx);
         if (taken) throw nameTaken(taken.id, taken.name);
@@ -205,11 +257,30 @@ export class DefinitionsService {
         const withBindings = (await this.definitions.findById(id, tx)) ?? fresh;
         await this.bindingFormulas.applyWithinTx(tx, withBindings, dto.bindingFormulas, actorId);
       }
+      // Счётчик (#630): правило и «при создании» — после замены привязок
+      // (флаг живёт на привязке), той же транзакцией.
+      if (nextType === 'counter' && dto.numbering) {
+        await this.counterRules.applyRule(
+          tx,
+          id,
+          fresh.numberSeriesId ?? null,
+          fresh.name,
+          dto.numbering,
+        );
+      }
+      if (
+        nextType === 'counter' &&
+        (dto.numberingOnCreate !== undefined || dto.bindings !== undefined)
+      ) {
+        await this.counterRules.applyOnCreate(tx, id, nextOnCreate);
+      }
       const row = (await this.definitions.findById(id, tx)) ?? fresh;
       const fields = Object.keys(data);
       await this.emitChanged(tx, row, 'updated', actorId, [
         ...(dto.bindings === undefined ? fields : [...fields, 'bindings']),
         ...(dto.bindingFormulas !== undefined ? ['defaultFormula'] : []),
+        ...(dto.numbering !== undefined ? ['numberSeriesId'] : []),
+        ...(dto.numberingOnCreate !== undefined ? ['numberOnCreate'] : []),
       ]);
       return this.mapper.toDto(row, tx);
     });

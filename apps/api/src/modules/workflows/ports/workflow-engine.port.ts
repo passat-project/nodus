@@ -21,6 +21,9 @@ export type TransitionChoice =
 export interface TransitionExecution {
   stage: WorkflowEntityStage;
   recordId: string;
+  /** Номера, выданные пост-функциями `assign_number {fieldId}` этого
+   *  нажатия (#630): только новые — поле с номером кнопка не меняет. */
+  assignedNumbers?: { fieldId: string; display: string }[];
 }
 
 /**
@@ -51,7 +54,13 @@ export interface WorkflowEnginePort {
     category: ProcessCategory,
     actor: WorkflowActor,
     choice: TransitionChoice,
-    opts?: { override?: boolean; reason?: string; form?: TransitionFormInput },
+    opts?: {
+      override?: boolean;
+      reason?: string;
+      form?: TransitionFormInput;
+      /** Человек подтвердил номер с пустой вставкой (#630). */
+      confirmEmptyNumberParts?: boolean;
+    },
   ): Promise<TransitionExecution>;
 }
 

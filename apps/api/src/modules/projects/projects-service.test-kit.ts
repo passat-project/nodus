@@ -156,6 +156,7 @@ export function makeProjectsServiceKit() {
         customFields as never,
         formulaCells as never,
         kit.formulaRecalc as never,
+        { planOnCreate: async () => ({ ok: true, issue: async () => ({}) }) } as never,
       );
     },
   };

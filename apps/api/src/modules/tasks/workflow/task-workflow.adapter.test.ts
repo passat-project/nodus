@@ -76,6 +76,8 @@ function makeAdapter() {
     { supplement: vi.fn(async (roles: Set<string>) => roles) } as never,
     deciders as never,
     events as never,
+    { customFieldsOf: vi.fn(async () => new Map()) } as never,
+    { numberContext: vi.fn(async () => ({ projects: [], nodes: [] })) } as never,
   );
   return { adapter, mover, tasks, placements, deciders, events };
 }
