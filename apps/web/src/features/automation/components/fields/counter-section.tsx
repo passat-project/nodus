@@ -14,7 +14,11 @@ import {
   type ContainerNames,
 } from '../../lib/counter-rule.js';
 import { CounterContainerPick } from './counter-container-pick.js';
-import { CounterInsertPalette, CounterNumberLine } from './counter-template-editor.js';
+import {
+  CounterInsertPalette,
+  CounterNumberLine,
+  type SegmentFieldGroup,
+} from './counter-template-editor.js';
 
 const counter = ui.customFields.dialog.counter;
 
@@ -73,6 +77,7 @@ export function CounterSection({
   names,
   hostKinds,
   fields,
+  fieldGroups,
   recipients,
   coverage,
   disabled,
@@ -93,6 +98,8 @@ export function CounterSection({
   /** Виды записей из «Кто получает номер» — фильтр «Вести счёт отдельно для». */
   hostKinds: readonly NumberHostKind[];
   fields: readonly { number: number; name: string }[];
+  /** Палитра «Поле…» вида номера по источникам (запись, проект, папка, компания). */
+  fieldGroups: readonly SegmentFieldGroup[];
   /** «Кто получает номер» — первый шаг окна, до выбора счёта. */
   recipients: ReactNode;
   /** Охват правила на реальных данных — сразу под «Вести счёт отдельно для». */
@@ -105,7 +112,7 @@ export function CounterSection({
   const allowed = numberPeriodsAllowed(rule.template);
   const counterSegment = rule.template.find((segment) => segment.kind === 'counter');
   const needsCounter = counterSegment === undefined;
-  const company = rule.container.kind === 'company';
+  const company = rule.containers.length === 0;
   const sequence = needsCounter ? [] : counterSequence(rule, company && creating ? next : null);
   const templateChanged =
     locked &&
@@ -131,13 +138,13 @@ export function CounterSection({
       {recipients}
 
       <CounterContainerPick
-        container={rule.container}
+        containers={rule.containers}
         hostKinds={hostKinds}
         nodeKinds={nodeKinds}
         fields={fields}
         names={names}
         disabled={disabled || locked}
-        onChange={(container) => onChange({ ...rule, container })}
+        onChange={(containers) => onChange({ ...rule, containers })}
       />
       {coverage}
 
@@ -145,14 +152,15 @@ export function CounterSection({
         <span className="text-label text-muted-foreground">{counter.template}</span>
         <CounterNumberLine
           template={rule.template}
-          taskDefinitions={definitions}
+          definitions={definitions}
+          names={names}
           disabled={disabled}
           onChange={(template) => onChange(withTemplate(rule, template))}
         />
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CounterInsertPalette
             template={rule.template}
-            taskDefinitions={definitions}
+            fieldGroups={fieldGroups}
             disabled={disabled}
             onChange={(template) => onChange(withTemplate(rule, template))}
           />
@@ -257,6 +265,13 @@ export function CounterSection({
             onChange={(startValue) => onChange({ ...rule, startValue: startValue ?? 1 })}
           />
         ) : null}
+        <NumberInput
+          label={counter.step}
+          hint={counter.stepHint}
+          value={rule.step}
+          disabled={disabled}
+          onChange={(step) => onChange({ ...rule, step: Math.min(step ?? 1, 1000) })}
+        />
       </div>
     </section>
   );

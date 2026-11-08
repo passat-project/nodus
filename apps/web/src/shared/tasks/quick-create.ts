@@ -9,6 +9,7 @@ import {
 
 import { ApiError } from '../api-client.js';
 import { useCreateTask } from '../api/task-create.js';
+import { isNumberConfirmCancelled, numberingErrorText } from '../custom-fields/number-confirm.js';
 import { useCreatableProcessTypes } from '../api/process-types-api.js';
 import { DEFAULT_TASK_TYPE_CODE } from '@nodus/contracts';
 import { buildCreateBody, emptyDraft, type TaskCreatePrefill } from './task-create-draft.js';
@@ -47,6 +48,17 @@ export function useQuickCreate() {
         toast.success(ui.tasks.created);
       },
       onError: (error) => {
+        // Номер (#630): «Вернуться и заполнить» — окно создания с введённым;
+        // отказ выдачи (вне комплекта) — понятная причина тостом.
+        if (isNumberConfirmCancelled(error)) {
+          openTaskCreate(prefill);
+          return;
+        }
+        const numbering = numberingErrorText(error);
+        if (numbering) {
+          toast.error(numbering);
+          return;
+        }
         // Тип требует обязательных полей — окно с уже введённым.
         if (error instanceof ApiError && error.code === ErrorCode.PROCESS_TYPE_FIELDS_REQUIRED) {
           openTaskCreate(prefill);

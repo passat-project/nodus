@@ -12,6 +12,7 @@ import { ChatDialogHosts } from '../../shared/chat/dialog-hosts.js';
 import { TaskCreateHost } from '../../shared/tasks/task-create-host.js';
 import { ProjectCreateHost } from '../../features/projects/components/project-create-host.js';
 import { PortalSettingsHost } from '../../features/projects/components/portal-settings-host.js';
+import { NumberConfirmHost } from '../../shared/custom-fields/number-confirm.js';
 import { AttachmentViewer } from '../../shared/files/attachment-viewer.js';
 import { NotificationToasts } from '../../features/notifications/components/notification-toasts.js';
 import { useNotificationSink } from '../../features/notifications/model/use-notification-sink.js';
@@ -183,6 +184,9 @@ export function AppShell() {
       <ProjectCreateHost />
       {/* Окно «Настройки портала» (#52): раздел «Проекты» (дом — #276). */}
       <PortalSettingsHost />
+      {/* Окно «В номере есть незаполненное поле» (#630): одно на все
+          действия, выдающие номер (кнопка процесса, создание, смена типа). */}
+      <NumberConfirmHost />
       <AttachmentViewer stripW={viewerStripW} />
       <Toaster richColors theme={theme} />
     </TooltipProvider>

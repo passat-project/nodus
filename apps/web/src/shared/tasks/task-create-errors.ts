@@ -2,6 +2,7 @@ import type { CreationFieldKey } from '@nodus/contracts';
 import { ErrorCode, ui } from '@nodus/contracts';
 
 import { ApiError } from '../api-client.js';
+import { isNumberConfirmCancelled, numberingErrorText } from '../custom-fields/number-confirm.js';
 import { transitionErrorText } from './transition-error.js';
 
 /** Что окно создания показывает на отказ сервера (#432, Р9): текст в окне,
@@ -28,7 +29,13 @@ export function createFailureOf(error: unknown): CreateFailure {
     invalidKeys,
     refetchTypes,
   });
+  // «Вернуться и заполнить» в окне пустого поля номера (#630): окно создания
+  // остаётся с введённым, без строки ошибки.
+  if (isNumberConfirmCancelled(error)) return fail(null);
   if (!(error instanceof ApiError)) return fail(ui.taskCreate.submitFailed);
+  // Номер «при создании» не нашёл места (вне комплекта) — понятная причина.
+  const numbering = numberingErrorText(error);
+  if (numbering) return fail(numbering);
   switch (error.code) {
     case ErrorCode.PROCESS_TYPE_FORBIDDEN:
       return fail(ui.taskCreate.forbidden, NONE, true);

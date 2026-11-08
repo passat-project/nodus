@@ -33,6 +33,10 @@ import { Textarea } from '@nodus/ui/components/textarea';
 import { ApiError } from '../../../shared/api-client.js';
 import { usePortalSettings, useProjectTypes } from '../../../shared/api/projects-list.js';
 import { definitionsForTarget } from '../../../shared/custom-fields/module-target.js';
+import {
+  isNumberConfirmCancelled,
+  numberingErrorText,
+} from '../../../shared/custom-fields/number-confirm.js';
 import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import type { ProjectCreatePrefill } from '../../../shared/projects/project-create-store.js';
@@ -149,11 +153,16 @@ export function ProjectCreateDialog({
       { body: parsed.data, client },
       {
         onSuccess: onClose,
+        // Номер (#630): «Вернуться и заполнить» — окно с введённым, без
+        // ошибки; отказ выдачи — с причиной (нет портфеля и т.п.).
         onError: (failure) =>
           setError(
-            failure instanceof ApiError
-              ? (errorMessages[failure.code as ErrorCode] ?? ui.common.saveError)
-              : ui.common.saveError,
+            isNumberConfirmCancelled(failure)
+              ? null
+              : (numberingErrorText(failure) ??
+                  (failure instanceof ApiError
+                    ? (errorMessages[failure.code as ErrorCode] ?? ui.common.saveError)
+                    : ui.common.saveError)),
           ),
       },
     );

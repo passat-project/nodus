@@ -31,19 +31,16 @@ import {
 } from '../../api/dictionaries-api.js';
 import {
   companyValueChanged,
-  createBody,
   draftIssues,
   draftOf,
   draftType,
   emptyDraft,
   isListFamily,
-  listDefault,
-  patchBody,
-  scalarDefault,
   withFamily,
   type DraftIssue,
   type FieldDraft,
 } from '../../lib/field-draft.js';
+import { createBody, listDefault, patchBody, scalarDefault } from '../../lib/field-draft-bodies.js';
 import { FieldDialogForm } from './field-dialog-form.js';
 import { suggestionOf, type Errors } from './field-dialog-errors.js';
 import { useDefaultCurrencyId } from './field-settings.js';

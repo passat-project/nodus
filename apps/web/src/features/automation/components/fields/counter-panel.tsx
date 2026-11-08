@@ -15,14 +15,18 @@ import { useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { useProcessTypes } from '../../api/automation-api.js';
 import {
-  containerShort,
   counterPreviewOf,
   fill,
+  ruleShort,
   unreachableReason,
   type ContainerNames,
 } from '../../lib/counter-rule.js';
 import type { FieldDraft } from '../../lib/field-draft.js';
-import { CounterRuleDialog, type CounterRuleKit } from './counter-rule-dialog.js';
+import {
+  CounterRuleDialog,
+  type CounterRuleKit,
+  type SegmentFieldGroup,
+} from './counter-rule-dialog.js';
 import type { DescribeTarget } from './field-usage-picker.js';
 
 const counter = ui.customFields.dialog.counter;
@@ -40,12 +44,17 @@ const idsOf = (bindings: CustomFieldBindings) => [
   ...bindings.nodeKindIds,
 ];
 
+/** Атрибуты, которые можно вставить в номер: не счётчики и не формульные
+ *  «глобальные» — только значения записей. */
+const insertable = (entry: CustomFieldDefinition, self: string | undefined) =>
+  entry.id !== self && entry.type !== 'counter';
+
 /**
- * Счётчик в окне атрибута (#630): одна строка-сводка правила («Номер «Изм. 1»
- * получают «Изменение» — свой счёт в каждой папке «Комплект».») с кнопкой,
- * открывающей ОТДЕЛЬНОЕ окно «Правило номера». В окне — «Кто получает
- * номер» первым шагом, потом «Вести счёт отдельно для» и вид номера.
- * Правило одно на атрибут — у привязок нет своих формул и правил.
+ * Счётчик в окне атрибута (#630, модель v3): одна строка-сводка правила
+ * («Номер «Изм. 1» получают «Изменение» — свой счёт для каждой папки
+ * «Комплект».») с кнопкой, открывающей ОТДЕЛЬНОЕ окно «Правило номера». В
+ * окне — «Кто получает номер» и когда (у каждого типа свой способ), потом
+ * «Вести счёт отдельно для» и вид номера. Правило одно на атрибут.
  */
 export function CounterPanel({
   draft,
@@ -64,7 +73,22 @@ export function CounterPanel({
   const { data: processTypes } = useProcessTypes('include');
   const { data: projectTypes } = useProjectTypes(true);
   const { data: nodeKinds } = useNodeKinds();
-  const allDefinitions = useCustomFieldDefinitions('task').data ?? [];
+  const taskDefinitions = useCustomFieldDefinitions('task').data ?? [];
+  const letterDefinitions = useCustomFieldDefinitions('letter').data ?? [];
+  const projectDefinitions = useCustomFieldDefinitions('project').data ?? [];
+  const nodeDefinitions = useCustomFieldDefinitions('node').data ?? [];
+  const companyDefinitions = useCustomFieldDefinitions('company').data ?? [];
+  const allDefinitions = [
+    ...new Map(
+      [
+        ...taskDefinitions,
+        ...letterDefinitions,
+        ...projectDefinitions,
+        ...nodeDefinitions,
+        ...companyDefinitions,
+      ].map((entry) => [entry.id, entry]),
+    ).values(),
+  ];
   const issuers = definition?.numbering?.issuers ?? [];
 
   const names: ContainerNames = {
@@ -75,18 +99,26 @@ export function CounterPanel({
     processTypes?.find((type) => type.id === id)?.name ??
     projectTypes?.find((type) => type.id === id)?.name ??
     nodeKinds?.find((kind) => kind.id === id)?.name;
+  const hostKindOf = (id: string): NumberHostKind | null => {
+    const process = processTypes?.find((type) => type.id === id);
+    if (process) return process.category === 'letter' ? 'letter' : 'task';
+    if (projectTypes?.some((type) => type.id === id)) return 'project';
+    if (nodeKinds?.some((kind) => kind.id === id)) return 'node';
+    return null;
+  };
+  const alive = (nodeKinds ?? []).filter((kind) => kind.archivedAt === null);
 
   const kit: CounterRuleKit = {
     names,
     issuers,
     typeName: targetName,
+    hostKindOf,
     definitions: allDefinitions,
-    nodeKinds: (nodeKinds ?? []).filter((kind) => kind.archivedAt === null),
+    nodeKinds: alive,
     // Виды папок для «Каждой папки вида…»: если номер получают папки —
     // только виды, которые бывают в тех же типах проектов, что и они
     // (`kindIds` типа проекта, #556; null — все виды).
     nodeKindsFor: (bindings: CustomFieldBindings) => {
-      const alive = (nodeKinds ?? []).filter((kind) => kind.archivedAt === null);
       if (bindings.nodeKindIds.length === 0) return alive;
       const types = (projectTypes ?? []).filter(
         (type) =>
@@ -103,36 +135,23 @@ export function CounterPanel({
         .map((name) => `«${name}»`)
         .join(', ');
       return fill(counter.summary, {
-        example: counterPreviewOf(rule, rule.container.kind === 'company' ? next : null),
+        example: counterPreviewOf(rule, rule.containers.length === 0 ? next : null),
         who: who || counter.summaryNobody,
-        where: containerShort(rule.container, names),
+        where: ruleShort(rule, names),
       });
     },
     describeTargetFor:
       (rule: NumberSeriesRule): DescribeTarget =>
-      (group, targetId) => {
-        const reason = unreachableReason(rule.container, HOST_OF_GROUP[group]);
-        if (reason) return { text: reason, tone: 'danger', blocked: true };
-        if (group !== 'task' && group !== 'letter') return null;
-        const buttons = issuers.filter((issuer) => issuer.processTypeId === targetId);
-        return buttons.length > 0
-          ? {
-              text: fill(counter.issuedBy, {
-                buttons: buttons.map((issuer) => `«${issuer.transitionName}»`).join(', '),
-              }),
-              tone: 'muted',
-              blocked: false,
-            }
-          : { text: counter.notIssued, tone: 'warn', blocked: false };
+      (group) => {
+        const reason = unreachableReason(rule.containers, HOST_OF_GROUP[group]);
+        return reason ? { text: reason, tone: 'danger', blocked: true } : null;
       },
     hostKindsOf: (bindings: CustomFieldBindings) => {
       const kinds = new Set<NumberHostKind>();
-      for (const id of bindings.processTypeIds) {
-        const category = processTypes?.find((type) => type.id === id)?.category;
-        kinds.add(category === 'letter' ? 'letter' : 'task');
+      for (const id of idsOf(bindings)) {
+        const host = hostKindOf(id);
+        if (host) kinds.add(host);
       }
-      if (bindings.nodeKindIds.length > 0) kinds.add('node');
-      if (bindings.projectTypeIds.length > 0) kinds.add('project');
       return [...kinds];
     },
     // Поля «каждого значения поля»: ссылка или список, стоящие у КАЖДОГО
@@ -149,6 +168,35 @@ export function CounterPanel({
             chosen.every((id) => idsOf(entry.bindings).includes(id)),
         )
         .map((entry) => ({ number: entry.number, name: entry.name }));
+    },
+    // Палитра «Поле…» вида номера — по источникам: поля самой записи (у
+    // КАЖДОГО отмеченного типа), проекта, папки вида, компании.
+    segmentFieldsFor: (bindings: CustomFieldBindings): SegmentFieldGroup[] => {
+      const chosen = idsOf(bindings);
+      const self = allDefinitions.filter(
+        (entry) =>
+          insertable(entry, definition?.id) &&
+          !entry.isCompany &&
+          chosen.length > 0 &&
+          chosen.every((id) => idsOf(entry.bindings).includes(id)),
+      );
+      const project = projectDefinitions.filter((entry) => insertable(entry, definition?.id));
+      const company = companyDefinitions.filter((entry) => insertable(entry, definition?.id));
+      const groups: SegmentFieldGroup[] = [
+        { source: 'self', fields: self },
+        { source: 'project', fields: project },
+        ...alive.map((kind) => ({
+          source: 'folder' as const,
+          nodeKindId: kind.id,
+          kindName: kind.name,
+          fields: nodeDefinitions.filter(
+            (entry) =>
+              insertable(entry, definition?.id) && entry.bindings.nodeKindIds.includes(kind.id),
+          ),
+        })),
+        { source: 'company', fields: company },
+      ];
+      return groups.filter((group) => group.fields.length > 0);
     },
   };
 
@@ -178,12 +226,13 @@ export function CounterPanel({
           rule={draft.numbering}
           next={draft.numberingNext}
           bindings={draft.bindings}
+          onCreate={draft.numberingOnCreate}
           definition={definition}
           preview={preview}
           kit={kit}
           disabled={disabled}
-          onSave={(numbering, numberingNext, bindings) =>
-            onChange({ numbering, numberingNext, bindings })
+          onSave={(numbering, numberingNext, bindings, numberingOnCreate) =>
+            onChange({ numbering, numberingNext, bindings, numberingOnCreate })
           }
           onClose={() => setOpen(false)}
         />

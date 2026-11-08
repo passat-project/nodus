@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { api } from '../../../../shared/api-client.js';
 import { toastApiError } from '../../../../shared/api/error-toast.js';
 import { projectsKeys } from '../../../../shared/api/projects-list.js';
+import { withEmptyNumberConfirm } from '../../../../shared/custom-fields/number-confirm.js';
 import { applyNodeMove } from '../lib/structure-tree.js';
 
 export { useProjectStructure } from '../../../../shared/api/project-structure.js';
@@ -84,8 +85,14 @@ const zeroRollup = {
 export function useCreateNode(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    // Номер «при создании» с пустым полем (#630) — окно и повтор.
     mutationFn: (body: CreateProjectNodeBody) =>
-      api<ProjectNode>(`/projects/${projectId}/nodes`, { method: 'POST', body }),
+      withEmptyNumberConfirm((confirmed) =>
+        api<ProjectNode>(`/projects/${projectId}/nodes`, {
+          method: 'POST',
+          body: confirmed ? { ...body, confirmEmptyNumberParts: true } : body,
+        }),
+      ),
     onMutate: async (body) => {
       const snapshot = snapshotOf(queryClient, projectId);
       const tempId = `temp-${crypto.randomUUID()}`;
@@ -130,10 +137,12 @@ export function useBatchCreateNodes(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: BatchCreateProjectNodesBody) =>
-      api<BatchCreateProjectNodesResponse>(`/projects/${projectId}/nodes/batch`, {
-        method: 'POST',
-        body,
-      }),
+      withEmptyNumberConfirm((confirmed) =>
+        api<BatchCreateProjectNodesResponse>(`/projects/${projectId}/nodes/batch`, {
+          method: 'POST',
+          body: confirmed ? { ...body, confirmEmptyNumberParts: true } : body,
+        }),
+      ),
     onMutate: async (body) => {
       const snapshot = snapshotOf(queryClient, projectId);
       const prefix = `temp-${crypto.randomUUID()}`;
@@ -188,10 +197,14 @@ export function useUpdateNode(projectId: string) {
       const { nodeId, refs, ...body } = vars;
       // refs нужны только оптимистичному кэшу (onMutate), в тело не уходят.
       void refs;
-      return api<ProjectNode>(`/projects/${projectId}/nodes/${nodeId}`, {
-        method: 'PATCH',
-        body,
-      });
+      // Смена вида на вид с номером «при создании» (#630) выдаёт номер —
+      // пустое поле в номере: окно и повтор с подтверждением.
+      return withEmptyNumberConfirm((confirmed) =>
+        api<ProjectNode>(`/projects/${projectId}/nodes/${nodeId}`, {
+          method: 'PATCH',
+          body: confirmed ? { ...body, confirmEmptyNumberParts: true } : body,
+        }),
+      );
     },
     onMutate: async (vars) => {
       const snapshot = snapshotOf(queryClient, projectId);

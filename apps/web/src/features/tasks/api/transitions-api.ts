@@ -16,6 +16,10 @@ import { api, ApiError } from '../../../shared/api-client.js';
 import { markFreshFromMutation } from '../../../shared/api/fresh-from-mutation.js';
 import { projectsKeys } from '../../../shared/api/projects-list.js';
 import { mapTaskInPages, tasksKeys } from '../../../shared/api/tasks-keys.js';
+import {
+  isNumberConfirmCancelled,
+  withEmptyNumberConfirm,
+} from '../../../shared/custom-fields/number-confirm.js';
 import { transitionErrorText } from '../../../shared/tasks/transition-error.js';
 
 export { gateReasonsText, transitionErrorText } from '../../../shared/tasks/transition-error.js';
@@ -85,14 +89,19 @@ export function useSubmitTransitionWindow(taskId: string) {
   const queryClient = useQueryClient();
   const idempotencyKey = useRef<string | null>(null);
   return useMutation({
-    mutationFn: (vars: { transition: WorkflowTransition; body: ExecuteTransitionBody }) => {
-      idempotencyKey.current ??= crypto.randomUUID();
-      return api<ExecuteTransitionResult>(`/tasks/${taskId}/transitions/${vars.transition.id}`, {
-        method: 'POST',
-        body: vars.body,
-        idempotencyKey: idempotencyKey.current,
-      });
-    },
+    // Пустое поле в номере (#630): окно «Выдать так / Вернуться»; повтор с
+    // подтверждением — НОВОЙ попыткой (первая ничего не изменила — 409), со
+    // своим ключом: иначе сервер вернул бы запомненный отказ.
+    mutationFn: (vars: { transition: WorkflowTransition; body: ExecuteTransitionBody }) =>
+      withEmptyNumberConfirm((confirmed) => {
+        if (confirmed) idempotencyKey.current = crypto.randomUUID();
+        idempotencyKey.current ??= crypto.randomUUID();
+        return api<ExecuteTransitionResult>(`/tasks/${taskId}/transitions/${vars.transition.id}`, {
+          method: 'POST',
+          body: confirmed ? { ...vars.body, confirmEmptyNumberParts: true } : vars.body,
+          idempotencyKey: idempotencyKey.current,
+        });
+      }),
     onSuccess: (result) => {
       idempotencyKey.current = null;
       markFreshFromMutation(taskId);
@@ -115,6 +124,8 @@ export function useSubmitTransitionWindow(taskId: string) {
     onError: (error) => {
       // Окно остаётся открытым: 422/409 показывает строки внутри, остальное —
       // тостом. Ключ попытки не сбрасываем — повтор идёт с тем же ключом.
+      // «Вернуться и заполнить» — молча: окно с введённым остаётся.
+      if (isNumberConfirmCancelled(error)) return;
       if (!transitionWindowError(error)) toast.error(transitionErrorText(error));
     },
   });
@@ -127,11 +138,18 @@ export function useSubmitTransitionWindow(taskId: string) {
 export function useExecuteTransition(taskId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    // Пустое поле в номере (#630) — окно «Выдать так / Вернуться» и повтор.
     mutationFn: (vars: { transition: WorkflowTransition; override?: boolean; reason?: string }) =>
-      api<ExecuteTransitionResult>(`/tasks/${taskId}/transitions/${vars.transition.id}`, {
-        method: 'POST',
-        body: { override: vars.override, reason: vars.reason },
-      }),
+      withEmptyNumberConfirm((confirmed) =>
+        api<ExecuteTransitionResult>(`/tasks/${taskId}/transitions/${vars.transition.id}`, {
+          method: 'POST',
+          body: {
+            override: vars.override,
+            reason: vars.reason,
+            ...(confirmed ? { confirmEmptyNumberParts: true as const } : {}),
+          },
+        }),
+      ),
     onMutate: async ({ transition }) => {
       // Свежесть — с момента отправки: WS-эхо события может обогнать HTTP-ответ
       // (замер при 150 мс сети: эхо раньше ответа → лишний GET детали и кнопок).
@@ -155,7 +173,8 @@ export function useExecuteTransition(taskId: string) {
     },
     onError: (error, _vars, context) => {
       if (context?.previous) patchTask(queryClient, taskId, { stage: context.previous.stage });
-      toast.error(transitionErrorText(error));
+      // «Вернуться и заполнить» (#630): ничего не выдано — без тоста.
+      if (!isNumberConfirmCancelled(error)) toast.error(transitionErrorText(error));
     },
     onSettled: (_result, error) => {
       if (error) {

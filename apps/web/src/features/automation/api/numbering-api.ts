@@ -1,8 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  NumberBackfillBody,
+  NumberBackfillPreview,
+  NumberBackfillResult,
   NumberCoverageBody,
   NumberCoverageResult,
   NumberCountsResponse,
+  NumberHostAssignments,
+  NumberHostKind,
   NumberPreviewBody,
   NumberPreviewResult,
   SetNumberNextBody,
@@ -58,11 +63,51 @@ export function useNumberCoverage(body: NumberCoverageBody | null) {
   });
 }
 
-/** «Проверка на записи»: запись → её реальный контейнер → следующий номер.
+/** «Проверка на записи»: запись → значения её условий → следующий номер.
  *  Номер не тратится. */
 export function useNumberPreview() {
   return useMutation({
     mutationFn: (body: NumberPreviewBody) =>
       api<NumberPreviewResult>('/custom-fields/numbering/preview', { method: 'POST', body }),
+  });
+}
+
+/** Выдача существующим — предпросмотр (ничего не тратит): сколько, где,
+ *  первые/последние номера, кто не получит и почему. */
+export function useNumberBackfillPreview(definitionId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['numbering', 'backfill', definitionId] as const,
+    queryFn: () =>
+      api<NumberBackfillPreview>(
+        `/custom-fields/definitions/${definitionId}/numbering/backfill/preview`,
+        { method: 'POST', body: {} },
+      ),
+    enabled,
+  });
+}
+
+/** Выдача существующим — одобрение: число записей из предпросмотра
+ *  сверяется сервером (409 NUMBER_BACKFILL_STALE — показать свежий). */
+export function useNumberBackfill(definitionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: NumberBackfillBody) =>
+      api<NumberBackfillResult>(`/custom-fields/definitions/${definitionId}/numbering/backfill`, {
+        method: 'POST',
+        body,
+      }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: numberingKeys.all });
+      void queryClient.invalidateQueries({ queryKey: customFieldsKeys.all });
+    },
+  });
+}
+
+/** Номера одной записи: кто, когда, каким способом и в каком счёте выдал. */
+export function useNumberHostAssignments(kind: NumberHostKind, id: string | null) {
+  return useQuery({
+    queryKey: ['numbering', 'host', kind, id] as const,
+    queryFn: () => api<NumberHostAssignments>(`/custom-fields/numbering/host/${kind}/${id}`),
+    enabled: id !== null,
   });
 }

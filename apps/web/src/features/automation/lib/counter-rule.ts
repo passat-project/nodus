@@ -1,9 +1,12 @@
 import {
+  numberContainerKey,
   numberContainerReachable,
+  numberCreateTriggerProblem,
   numberPeriodsAllowed,
   renderNumberTemplate,
   ui,
   type NumberContainer,
+  type NumberContainerKind,
   type NumberHostKind,
   type NumberMoment,
   type NumberSeriesRule,
@@ -11,18 +14,19 @@ import {
 } from '@nodus/contracts';
 
 /**
- * Правило счётчика в окне атрибута (#630, концепция 08.11): дефолт, пример
- * последовательности, сводка-предложение и совместимость «кто получает ×
- * внутри чего». Чистые функции — окно и тесты читают одно и то же.
+ * Правило счётчика в окне (#630, модель v3): дефолт, пример
+ * последовательности, сводка-предложение, совместимость «кто получает ×
+ * отдельно для» и допустимость «при создании». Чистые функции — окно и
+ * тесты читают одно и то же.
  */
 
-/** Дефолт: вся компания, никогда не заново, вид «{Номер}», новый счёт с 1. */
+/** Дефолт: сквозная, никогда не заново, вид «{Номер}», новый счёт с 1, шаг 1. */
 export const DEFAULT_COUNTER_RULE: NumberSeriesRule = {
-  issueOnCreate: false,
-  container: { kind: 'company' },
+  containers: [],
   period: 'none',
   template: [{ kind: 'counter' }],
   startValue: 1,
+  step: 1,
 };
 
 const counter = ui.customFields.dialog.counter;
@@ -33,11 +37,11 @@ export function minskMoment(now: Date = new Date()): NumberMoment {
     timeZone: 'Europe/Minsk',
     year: 'numeric',
     month: '2-digit',
+    day: '2-digit',
   }).formatToParts(now);
-  return {
-    year: Number(parts.find((p) => p.type === 'year')?.value ?? 0),
-    month: Number(parts.find((p) => p.type === 'month')?.value ?? 0),
-  };
+  const pick = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return { year: pick('year'), month: pick('month'), day: pick('day') };
 }
 
 const render = (template: readonly NumberTemplateSegment[], seq: number, at: NumberMoment) =>
@@ -62,8 +66,38 @@ export interface SequenceItem {
   boundary?: string;
 }
 
-/** «Как пойдут номера»: три подряд и, если счёт начинается заново, первый
- *  номер нового периода — администратор видит последствие настройки. */
+/** Первый момент следующего периода (для примера «как пойдут номера»). */
+function nextPeriodMoment(rule: NumberSeriesRule, at: NumberMoment): NumberMoment | null {
+  switch (rule.period) {
+    case 'year':
+      return { year: at.year + 1, month: 1, day: 1 };
+    case 'quarter': {
+      const month = Math.ceil(at.month / 3) * 3 + 1;
+      return month > 12 ? { year: at.year + 1, month: 1, day: 1 } : { ...at, month, day: 1 };
+    }
+    case 'month':
+      return at.month === 12
+        ? { year: at.year + 1, month: 1, day: 1 }
+        : { ...at, month: at.month + 1, day: 1 };
+    case 'day': {
+      const next = new Date(Date.UTC(at.year, at.month - 1, at.day + 1));
+      return { year: next.getUTCFullYear(), month: next.getUTCMonth() + 1, day: next.getUTCDate() };
+    }
+    case 'none':
+      return null;
+  }
+}
+
+const BOUNDARY: Record<NumberSeriesRule['period'], string> = {
+  none: '',
+  year: counter.sequenceNewYear,
+  quarter: counter.sequenceNewQuarter,
+  month: counter.sequenceNewMonth,
+  day: counter.sequenceNewDay,
+};
+
+/** «Как пойдут номера»: три подряд (с шагом) и, если счёт начинается
+ *  заново, первый номер нового периода — администратор видит последствие. */
 export function counterSequence(
   rule: NumberSeriesRule,
   next: number | null = null,
@@ -72,19 +106,13 @@ export function counterSequence(
   const at = minskMoment(now);
   const first = next ?? rule.startValue;
   const items: SequenceItem[] = [0, 1, 2].map((offset) => ({
-    display: render(rule.template, first + offset, at),
+    display: render(rule.template, first + offset * rule.step, at),
   }));
-  if (rule.period === 'year') {
+  const after = nextPeriodMoment(rule, at);
+  if (after) {
     items.push({
-      boundary: counter.sequenceNewYear,
-      display: render(rule.template, rule.startValue, { year: at.year + 1, month: 1 }),
-    });
-  } else if (rule.period === 'month') {
-    const nextMonth =
-      at.month === 12 ? { year: at.year + 1, month: 1 } : { ...at, month: at.month + 1 };
-    items.push({
-      boundary: counter.sequenceNewMonth,
-      display: render(rule.template, rule.startValue, nextMonth),
+      boundary: BOUNDARY[rule.period],
+      display: render(rule.template, rule.startValue, after),
     });
   }
   return items;
@@ -105,23 +133,18 @@ export function withTemplate(
   return { ...rule, template, period: addedYear && period === 'none' ? 'year' : period };
 }
 
-/** Значение селекта «Свой счёт внутри»: `folder:<id>`, `field:<n>`, kind. */
-export function containerKey(container: NumberContainer): string {
-  if (container.kind === 'folder') return `folder:${container.nodeKindId}`;
-  if (container.kind === 'field') return `field:${container.fieldNumber}`;
-  return container.kind;
-}
+/** Значение селекта условия: `folder:<id>`, `field:<n>`, иначе вид. */
+export const containerKey = numberContainerKey;
 
 export function containerOf(key: string): NumberContainer {
   if (key.startsWith('folder:')) return { kind: 'folder', nodeKindId: key.slice(7) };
   if (key.startsWith('field:')) return { kind: 'field', fieldNumber: Number(key.slice(6)) };
   return {
-    kind: key as
-      'company' | 'parent_folder' | 'project' | 'project_type' | 'portfolio' | 'parent_task',
-  };
+    kind: key as Exclude<NumberContainerKind, 'folder' | 'field'>,
+  } as NumberContainer;
 }
 
-/** Имена для подписей контейнера: вид папки и атрибут по номеру. */
+/** Имена для подписей условий: вид папки и атрибут по номеру. */
 export interface ContainerNames {
   nodeKind: (id: string) => string | undefined;
   field: (fieldNumber: number) => string | undefined;
@@ -145,17 +168,42 @@ export function containerPath(container: NumberContainer, names: ContainerNames)
   return fill(counter.containerPath[container.kind], { name: nameOf(container, names) });
 }
 
-/** Сводка правила в одну строку: «свой счёт в каждой папке «Комплект»,
- *  заново каждый год» — панель кнопки и «Текущие счета». */
-export function ruleShort(rule: NumberSeriesRule, names: ContainerNames): string {
-  return `${containerShort(rule.container, names)}${counter.periodsShort[rule.period]}`;
+/** Условия одной фразой: «сквозная нумерация» или «свой счёт для каждой
+ *  папки «Здание» и каждого значения «Марка»». */
+export function containersShort(
+  containers: readonly NumberContainer[],
+  names: ContainerNames,
+): string {
+  if (containers.length === 0) return counter.containersShort.company;
+  const list = containers
+    .map((container) => containerShort(container, names))
+    .join(` ${counter.containerAnd} `);
+  return fill(counter.containersShortLead, { list });
 }
 
-/** Почему тип не может получать номер при таком «внутри чего» (null — может). */
-export function unreachableReason(container: NumberContainer, host: NumberHostKind): string | null {
-  if (numberContainerReachable(container, host)) return null;
+/** Сводка правила в одну строку: «свой счёт для каждой папки «Комплект»,
+ *  заново каждый год» — панель кнопки и «Текущие счета». */
+export function ruleShort(rule: NumberSeriesRule, names: ContainerNames): string {
+  return `${containersShort(rule.containers, names)}${counter.periodsShort[rule.period]}`;
+}
+
+/** Почему тип не может получать номер при таком условии (null — может). */
+export function unreachableReason(
+  containers: readonly NumberContainer[],
+  host: NumberHostKind,
+): string | null {
+  if (containers.every((container) => numberContainerReachable(container, host))) return null;
   if (host === 'letter') return counter.unreachable.letter;
   if (host === 'project') return counter.unreachable.project;
   if (host === 'node') return counter.unreachable.node;
   return counter.unreachable.generic;
+}
+
+/** Почему этому типу нельзя «при создании» (null — можно): письмо с почты
+ *  приходит без проекта и полей. */
+export function createTriggerReason(rule: NumberSeriesRule, host: NumberHostKind): string | null {
+  const problem = numberCreateTriggerProblem(rule, host);
+  if (problem === 'letter_place') return counter.triggerLetterPlace;
+  if (problem === 'letter_fields') return counter.triggerLetterFields;
+  return null;
 }

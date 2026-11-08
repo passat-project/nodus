@@ -30,11 +30,13 @@ export function CounterCoverage({
   );
   const data = coverage.data;
   if (!ready || !data) return null;
-  const kindName =
-    rule.container.kind === 'folder'
-      ? (names.nodeKind(rule.container.nodeKindId) ?? '')
-      : rule.container.kind === 'field'
-        ? (names.field(rule.container.fieldNumber) ?? '')
+  const folder = rule.containers.find((entry) => entry.kind === 'folder');
+  const field = rule.containers.find((entry) => entry.kind === 'field');
+  const nameFor = (reason: string) =>
+    reason === 'no_folder' && folder?.kind === 'folder'
+      ? (names.nodeKind(folder.nodeKindId) ?? '')
+      : reason === 'empty_field' && field?.kind === 'field'
+        ? (names.field(field.fieldNumber) ?? '')
         : '';
   const values = { total: String(data.total), inside: String(data.inside) };
   if (data.total === 0) {
@@ -70,11 +72,14 @@ export function CounterCoverage({
           {data.outside.map((entry) => (
             <li key={entry.id} className="truncate">
               {counter.checkKind[entry.kind]} «{entry.name}» —{' '}
-              {fill(counter.checkReasons[entry.reason], { name: kindName })
+              {fill(counter.checkReasons[entry.reason], { name: nameFor(entry.reason) })
                 .replace(/ — номер не будет выдан$/, '')
                 .toLowerCase()}
             </li>
           ))}
+          {data.hiddenOutside > 0 ? (
+            <li>{fill(counter.coverageHidden, { count: String(data.hiddenOutside) })}</li>
+          ) : null}
         </ul>
       ) : null}
     </div>

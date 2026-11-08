@@ -14,6 +14,7 @@ import { CustomFieldEditor } from '../../../../shared/custom-fields/value-editor
 import { SegmentedControl } from '../../../../shared/ui/segmented-control.js';
 import { useNumberPreview } from '../../api/numbering-api.js';
 import { fill, type ContainerNames } from '../../lib/counter-rule.js';
+import { countTitle, NextNumberEditor, useSaveNext } from './counter-counts.js';
 
 const counter = ui.customFields.dialog.counter;
 
@@ -46,17 +47,27 @@ function ResultLine({
   result,
   names,
   rule,
+  definitionId,
 }: {
   result: NumberPreviewResult;
   names: ContainerNames;
   rule: NumberSeriesRule;
+  definitionId: string | null;
 }) {
+  const [editing, setEditing] = useState(false);
+  const saver = useSaveNext(definitionId ?? '');
   if (!result.ok) {
+    // Имя в причине — у условия, которого не нашлось (вид папки, поле).
+    const missing = rule.containers.find(
+      (entry) =>
+        (result.reason === 'no_folder' && entry.kind === 'folder') ||
+        (result.reason === 'empty_field' && entry.kind === 'field'),
+    );
     const name =
-      rule.container.kind === 'folder'
-        ? (names.nodeKind(rule.container.nodeKindId) ?? '')
-        : rule.container.kind === 'field'
-          ? (names.field(rule.container.fieldNumber) ?? '')
+      missing?.kind === 'folder'
+        ? (names.nodeKind(missing.nodeKindId) ?? '')
+        : missing?.kind === 'field'
+          ? (names.field(missing.fieldNumber) ?? '')
           : '';
     return (
       <p className="flex items-start gap-1.5 text-sm text-danger">
@@ -68,12 +79,14 @@ function ResultLine({
       </p>
     );
   }
-  const container = result.container
-    ? [
-        ...result.container.path,
-        result.container.hidden ? counter.countsHidden : result.container.name,
-      ].join(' › ')
-    : counter.checkCompany;
+  const title = countTitle(result.containers);
+  const container =
+    result.containers.length === 0
+      ? counter.checkCompany
+      : title.path
+        ? `${title.path} › ${title.name}`
+        : title.name;
+  const nextValue = Number(result.nextDisplay.match(/\d+(?!.*\d)/)?.[0] ?? '1');
   return (
     <div className="flex flex-col gap-1">
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
@@ -88,6 +101,36 @@ function ResultLine({
         <p className="text-xs text-muted-foreground">
           {fill(counter.checkAlready, { number: result.alreadyAssigned })}
         </p>
+      ) : null}
+      {result.emptySegments.length > 0 ? (
+        <p className="text-xs text-warning">
+          {fill(counter.checkEmptySegments, { names: result.emptySegments.join('», «') })}
+        </p>
+      ) : null}
+      {/* «Задать следующий номер для…» записи, у счёта которой ещё нет
+          выдач: продолжение нумерации с бумаги — только вперёд. */}
+      {definitionId && !result.alreadyAssigned ? (
+        editing ? (
+          <NextNumberEditor
+            nextValue={Number.isFinite(nextValue) ? nextValue : 1}
+            disabled={saver.pending}
+            onSave={(value) =>
+              saver.save(
+                result.containers.map((ref) => ref.id),
+                value,
+              )
+            }
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="self-start rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring/40"
+          >
+            {counter.countsAddFolder.replace('…', '')} «{container}»
+          </button>
+        )
       ) : null}
     </div>
   );
@@ -163,7 +206,7 @@ export function CounterCheck({
         </div>
       </div>
       {preview.data ? (
-        <ResultLine result={preview.data} names={names} rule={rule} />
+        <ResultLine result={preview.data} names={names} rule={rule} definitionId={definitionId} />
       ) : (
         <p className="text-xs text-muted-foreground">{counter.checkPick}</p>
       )}

@@ -3,17 +3,14 @@ import type { CustomFieldDefinition, DictionaryItem } from '@nodus/contracts';
 import { createCustomFieldBodySchema, updateCustomFieldBodySchema } from '@nodus/contracts';
 
 import {
-  createBody,
   DRAFT_PREFIX,
   draftIssues,
   draftOf,
   draftType,
   emptyDraft,
-  listDefault,
-  patchBody,
-  scalarDefault,
   withFamily,
 } from './field-draft.js';
+import { createBody, listDefault, patchBody, scalarDefault } from './field-draft-bodies.js';
 
 const ID = '50000000-0000-4000-8000-000000000001';
 const DICT = '50000000-0000-4000-8000-000000000002';
@@ -99,6 +96,7 @@ describe('черновик окна атрибута (#431, ревизия UI)',
       bindingFormulas: text.bindingFormulas,
       numbering: {
         rule: counter.numbering,
+        onCreate: [],
         preview: '1',
         issuedCount: 0,
       },
