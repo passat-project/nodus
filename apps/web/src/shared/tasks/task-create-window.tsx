@@ -1,7 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { CreationForm, ProcessType } from '@nodus/contracts';
-import { typeConfigOf, typeCreationFormOf, ui, creationSlots } from '@nodus/contracts';
+import type {
+  CreationFieldKey,
+  CreationFieldSlot,
+  CreationForm,
+  ProcessType,
+} from '@nodus/contracts';
+import {
+  creationSlots,
+  hasPairedRow,
+  isFormDecor,
+  typeConfigOf,
+  typeCreationFormOf,
+  ui,
+} from '@nodus/contracts';
+import { cn } from '@nodus/ui/lib/utils';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
 import { Input } from '@nodus/ui/components/input';
@@ -39,6 +52,35 @@ import { useCreationFormulaPrefill } from './use-creation-formula-prefill.js';
 
 /** Форма без типа (типы не загрузились): пустая — низ окна покажет заглушку. */
 const EMPTY_FORM: CreationForm = { fields: [], chips: [] };
+
+/** Окно с двумя половинами в строке — широкий вариант (#496, Р2): узкое
+ *  окно сложило бы пару в одну колонку. */
+function wideWindow(form: CreationForm): boolean {
+  return hasPairedRow(
+    form.fields,
+    (element) => !isFormDecor(element) && element.preset === null && element.width === 'half',
+  );
+}
+
+/** Ключ названия в трассе префилла: человек тронул — формула не затирает. */
+const TITLE_KEY = 'title';
+
+/** Слоты формул окна + формула названия (#496, Р7) отдельным псевдо-слотом:
+ *  та же оценка, что у слотов, результат — текст. */
+function withTitleSlot(form: CreationForm): CreationFieldSlot[] {
+  const slots = creationSlots(form);
+  if (!form.titleFormula) return slots;
+  return [
+    ...slots,
+    {
+      key: TITLE_KEY as CreationFieldKey,
+      label: null,
+      required: false,
+      preset: null,
+      formula: form.titleFormula,
+    },
+  ];
+}
 
 /** Предпросмотр из редактора маршрута: тип и ЧЕРНОВАЯ форма узла «Создание». */
 export interface TaskCreatePreview {
@@ -92,6 +134,8 @@ export function TaskCreateWindow({
   // объектов; сбрасывается при каждом открытии окна (A8-4).
   const autoFilledRef = useRef<Record<string, unknown>>({});
   const touchedRef = useRef<Set<string>>(new Set());
+  /** Название, подставленное формулой (#496, Р7): ре-эвал заменяет только его. */
+  const autoTitleRef = useRef<string | null>(null);
 
   // Чистое окно при каждом открытии и смене заполнения (плюсик другой
   // колонки) — рендер-тайм сброс, канон React (аудит #45). `seq` — сигнал
@@ -107,6 +151,7 @@ export function TaskCreateWindow({
       setChecklistOpen(false);
       autoFilledRef.current = {};
       touchedRef.current = new Set();
+      autoTitleRef.current = null;
     }
   }
 
@@ -122,7 +167,7 @@ export function TaskCreateWindow({
   // Префилл формульных слотов (#632, Р12): считается при открытии и смене
   // места (проект/папка/родитель); значение остаётся редактируемым.
   const formulaPrefill = useCreationFormulaPrefill({
-    slots: creationSlots(form),
+    slots: withTitleSlot(form),
     hostKind: shownType?.category === 'letter' ? 'letter' : 'task',
     projectId: projectId ?? null,
     nodeId: draft.nodeId,
@@ -132,15 +177,24 @@ export function TaskCreateWindow({
   // Что из черновика подставлено формулой и ещё не тронуто человеком:
   // ре-эвал при смене места обновляет только такие слоты, ручной ввод и
   // осознанная очистка не затираются, а исчезнувший из формулы слот
-  // очищается (Р12, A8-3).
+  // очищается (Р12, A8-3). Название (#496, Р7) — та же логика: формула
+  // подставляет, пока человек не тронул поле.
   useEffect(() => {
     if (formulaPrefill.version === 0) return;
+    const { title: formulaTitle, ...slotValues } = formulaPrefill.values;
     setDraft((prev) => {
-      const applied = applyFormulaPrefill(prev, formulaPrefill.values, {
+      const applied = applyFormulaPrefill(prev, slotValues, {
         auto: autoFilledRef.current,
         touched: touchedRef.current,
       });
       autoFilledRef.current = applied.auto;
+      const titleUntouched =
+        !touchedRef.current.has(TITLE_KEY) &&
+        (prev.title === '' || prev.title === autoTitleRef.current);
+      if (typeof formulaTitle === 'string' && titleUntouched) {
+        autoTitleRef.current = formulaTitle;
+        return withTitle(applied.draft, formulaTitle);
+      }
       return applied.draft;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- версия и seq — сигналы применения
@@ -191,7 +245,7 @@ export function TaskCreateWindow({
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent
-        className="max-w-lg gap-0 overflow-hidden p-0"
+        className={cn('gap-0 overflow-hidden p-0', wideWindow(form) ? 'max-w-2xl' : 'max-w-lg')}
         aria-describedby={undefined}
         showCloseButton={false}
         onInteractOutside={(event) => event.preventDefault()}
@@ -210,7 +264,10 @@ export function TaskCreateWindow({
             <div className="flex min-w-0 items-center gap-2">
               <Input
                 value={draft.title}
-                onChange={(event) => setDraft(withTitle(draft, event.target.value))}
+                onChange={(event) => {
+                  touchedRef.current.add(TITLE_KEY);
+                  setDraft(withTitle(draft, event.target.value));
+                }}
                 placeholder={ui.taskCreate.titlePlaceholder}
                 aria-label={ui.taskCreate.titlePlaceholder}
                 className="h-9 min-w-0 flex-1 text-body-lg"
@@ -233,7 +290,7 @@ export function TaskCreateWindow({
               <p className="text-xs text-muted-foreground">{prefill.contextLabel}</p>
             ) : null}
 
-            <div className="grid grid-cols-[8rem_1fr] items-center gap-x-3">
+            <div className="flex min-w-0 flex-col gap-1.5">
               <NodeLabel label={ui.taskCreate.typeLabel} />
               <ProcessTypeField
                 types={types}

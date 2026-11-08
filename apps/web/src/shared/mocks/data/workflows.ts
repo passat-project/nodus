@@ -330,7 +330,29 @@ export const demoWorkflowDetails: Record<string, WorkflowDetail> = {
             validators: [],
             postFunctions: [{ kind: 'assign_number', fieldId: fieldIds.waybillNumber }],
           },
-          form: { enabled: false, sections: [] },
+          // Окно кнопки (#496, сценарий «Комплект»): «Файл» спрашивается и
+          // закрепляется — после выдачи руками не поменять (замок «никто»).
+          form: {
+            enabled: true,
+            sections: [
+              {
+                kind: 'fields',
+                fields: [
+                  { kind: 'heading', id: 'dissue01', text: 'Что выдаём' },
+                  {
+                    key: customFieldKey(fieldIds.issueFile),
+                    hint: 'Ссылка на PDF в хранилище проекта',
+                  },
+                  {
+                    kind: 'note',
+                    id: 'dissue02',
+                    text: 'После выдачи ссылку не поменять: новая версия — новым изменением',
+                  },
+                ],
+              },
+            ],
+            locks: [{ key: customFieldKey(fieldIds.issueFile), editors: 'none' }],
+          },
         },
       ],
     },

@@ -1,9 +1,10 @@
-import { ErrorCode, taskParticipantAddBodySchema } from '@nodus/contracts';
+import { ErrorCode, participantLockKey, taskParticipantAddBodySchema } from '@nodus/contracts';
 
 import { http, HttpResponse } from 'msw';
 
 import { demoTasks, detailsExtra, taskDetailOf } from '../../../../shared/mocks/data/tasks.js';
 import { userRef } from '../../../../shared/mocks/data/users.js';
+import { lockDenial } from '../../../../shared/mocks/data/task-locks.js';
 import { requiredKeysOf, typeOfTask } from './task-create-policy.js';
 
 function notFound(message: string) {
@@ -29,6 +30,9 @@ export const tasksParticipantsHandlers = [
       createdAt: task.updatedAt,
     });
     const { userId, role } = parsed.data;
+    // Закреплённые участники (#496, Р4): 422 FIELD_LOCKED или правка с причиной.
+    const locked = lockDenial(task, [participantLockKey(role)], parsed.data.lockReason);
+    if (locked) return locked;
     task.participants = task.participants.filter((p) => p.id !== userId);
     extra.observers = extra.observers.filter((p) => p.id !== userId);
     if (role === 'coexecutor') task.participants.push(userRef(userId));
@@ -36,11 +40,16 @@ export const tasksParticipantsHandlers = [
     return HttpResponse.json(taskDetailOf(task), { status: 201 });
   }),
 
-  http.delete('/api/v1/tasks/:id/participants/:userId', ({ params }) => {
+  http.delete('/api/v1/tasks/:id/participants/:userId', ({ params, request }) => {
     const task = demoTasks.find((t) => t.id === params.id);
     if (!task) return notFound('Task not found');
     const userId = String(params.userId);
     const extra = detailsExtra[task.id];
+    // Причина правки закреплённых участников — `?lockReason=` (#496, Р4).
+    const lockReason = new URL(request.url).searchParams.get('lockReason') ?? undefined;
+    const role = task.participants.some((p) => p.id === userId) ? 'coexecutor' : 'observer';
+    const locked = lockDenial(task, [participantLockKey(role)], lockReason);
+    if (locked) return locked;
     // Снятие последнего обязательного участника — 422 `reason: 'clear'` (#432, Р5).
     const type = typeOfTask(task.type.id);
     const required = requiredKeysOf(type);

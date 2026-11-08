@@ -1,25 +1,42 @@
 import { useMemo } from 'react';
 import type {
   CreationFieldKey,
+  CreationFieldSlot,
   CreationForm,
   CustomFieldDefinition,
+  FormHeight,
   ProcessType,
   RoleLabels,
 } from '@nodus/contracts';
-import { customFieldIdOfKey, slotLabel, typeConfigOf, ui, creationSlots } from '@nodus/contracts';
-import { NodeLabel } from '@nodus/ui/components/node-label';
-import { cn } from '@nodus/ui/lib/utils';
+import {
+  customFieldIdOfKey,
+  formFieldWidth,
+  isFormDecor,
+  slotLabel,
+  typeConfigOf,
+  ui,
+} from '@nodus/contracts';
 
-import { isWide, SlotControl } from './task-create-fields.js';
+import { FormDecorView, FormFieldShell, FormGrid, type FormGridItem } from '../forms/form-grid.js';
+import { WillLockNotice } from '../forms/lock-notice.js';
+import { SlotControl } from './task-create-fields.js';
+
+/** Высота многострочного поля (#496, Р1): описание и длинный текст. */
+function heightOf(
+  slot: CreationFieldSlot,
+  definition: CustomFieldDefinition | undefined,
+): FormHeight | undefined {
+  const multiline = slot.key === 'description' || definition?.type === 'long_text';
+  return multiline ? (slot.height ?? 'lines') : undefined;
+}
 
 /**
- * Низ окна создания (#432, Р9): поля эффективной формы выбранного типа —
- * системные и атрибуты типа, в порядке формы. Скрытые поля (со значением,
- * которое ставит система) сотруднику НЕ показываются. Подпись — своё
- * название слота, иначе название роли из настроек типа, иначе стандартное
- * (Р3). Поле с ошибкой 422 подсвечено; обязательное помечено звёздочкой —
- * `leading-none`, чтобы звёздочка не раздувала строку подписи и низ не
- * прыгал при смене типа.
+ * Низ окна создания (#432, Р9; #496, Р2/Р14): поля и оформление эффективной
+ * формы типа на общей сетке окна — подпись сверху, две половины рядом,
+ * подсказка под полем. Скрытые поля (значение ставит система) сотруднику НЕ
+ * показываются, как и поле удалённого атрибута. Подпись — своё название
+ * слота, иначе название роли из настроек типа, иначе стандартное (Р3). Поле,
+ * которое закрепит окно, помечено заранее: «Закрепится после создания».
  */
 export function TaskCreateFormBody({
   type,
@@ -41,49 +58,51 @@ export function TaskCreateFormBody({
     () => new Map(definitions.map((definition) => [definition.id, definition])),
     [definitions],
   );
-  const visible = creationSlots(form).filter((slot) => slot.preset === null);
+  const locked = new Set((form.locks ?? []).map((lock) => lock.key));
 
-  if (visible.length === 0) {
+  let fieldsShown = 0;
+  const items = form.fields.flatMap((element): FormGridItem[] => {
+    if (isFormDecor(element)) {
+      return [{ id: element.id, width: 'full', node: <FormDecorView decor={element} /> }];
+    }
+    if (element.preset !== null) return [];
+    const fieldId = customFieldIdOfKey(element.key);
+    const definition = fieldId ? byId.get(fieldId) : undefined;
+    if (fieldId && !definition) return [];
+    fieldsShown += 1;
+    const label = slotLabel(element, { roleLabels, definitions });
+    return [
+      {
+        id: element.key,
+        width: formFieldWidth(element),
+        node: (
+          <FormFieldShell
+            label={label}
+            required={element.required}
+            hint={element.hint}
+            height={heightOf(element, definition)}
+            notice={
+              locked.has(element.key) ? (
+                <WillLockNotice text={ui.forms.locks.willLockCreation} />
+              ) : null
+            }
+          >
+            <SlotControl
+              slot={element}
+              definition={definition}
+              value={values[element.key]}
+              invalid={invalidKeys?.has(element.key) ?? false}
+              label={label}
+              onChange={(value) => onChange(element.key, value)}
+            />
+          </FormFieldShell>
+        ),
+      },
+    ];
+  });
+
+  if (fieldsShown === 0) {
     return <p className="text-sm text-muted-foreground">{ui.taskCreate.noFields}</p>;
   }
-
-  return (
-    <div className="flex flex-col gap-3">
-      {visible.map((slot) => {
-        const fieldId = customFieldIdOfKey(slot.key);
-        const definition = fieldId ? byId.get(fieldId) : undefined;
-        const label = slotLabel(slot, { roleLabels, definitions });
-        const wide = isWide(slot, definition);
-        return (
-          <div
-            key={slot.key}
-            className={cn(
-              'min-w-0',
-              wide ? 'flex flex-col gap-1.5' : 'grid grid-cols-[8rem_1fr] items-center gap-x-3',
-            )}
-          >
-            <div className="flex min-w-0 items-center gap-1">
-              <NodeLabel label={label} className="min-w-0" />
-              {slot.required ? (
-                <span aria-hidden className="text-label leading-none text-danger">
-                  *
-                </span>
-              ) : null}
-              {slot.required ? <span className="sr-only">{ui.taskCreate.requiredMark}</span> : null}
-            </div>
-            <div className="min-w-0">
-              <SlotControl
-                slot={slot}
-                definition={definition}
-                value={values[slot.key]}
-                invalid={invalidKeys?.has(slot.key) ?? false}
-                label={label}
-                onChange={(value) => onChange(slot.key, value)}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+  return <FormGrid items={items} />;
 }

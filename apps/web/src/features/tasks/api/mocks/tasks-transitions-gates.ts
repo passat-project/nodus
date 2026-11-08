@@ -5,12 +5,18 @@ import type {
   TransitionFormInput,
   WorkflowTransition,
 } from '@nodus/contracts';
-import { customFieldIdOfKey, isCustomFieldValueFilled, isFinalState } from '@nodus/contracts';
+import {
+  customFieldIdOfKey,
+  isCustomFieldValueFilled,
+  isFinalState,
+  lockKeysOfPatch,
+} from '@nodus/contracts';
 
 import { demoConversations, demoMessages } from '../../../../shared/mocks/data/chat.js';
 import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
 import { demoSubtasks, detailsExtra, taskDetailOf } from '../../../../shared/mocks/data/tasks.js';
 import { userRef } from '../../../../shared/mocks/data/users.js';
+import { lockDenial } from '../../../../shared/mocks/data/task-locks.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import type { standardDocument } from '../../../../shared/mocks/data/workflows.js';
 
@@ -28,7 +34,7 @@ export function fileCount(messageIds: readonly string[]): number {
     );
 }
 
-function fieldFilled(task: TaskListItem, field: string): boolean {
+export function fieldFilled(task: TaskListItem, field: string): boolean {
   const detail = taskDetailOf(task);
   switch (field) {
     case 'description':
@@ -237,4 +243,22 @@ export function postBlock(
     createdAt: new Date().toISOString(),
   });
   conversation.lastMessage = demoMessages[demoMessages.length - 1] ?? null;
+}
+
+/** Запись окна в закреплённое (#496, Р4, В10): ключи настроенного раздела
+ *  окно пишет мимо замка; ключ, который добавило только условие «Заполнены
+ *  поля», — пока он пуст. Остальное закреплённое — 422 FIELD_LOCKED.
+ *  // #496 бэкенд снимает: writableKeys движка (Пакет 2, фаза 4). */
+export function windowLockDenial(
+  task: TaskListItem,
+  sections: readonly EffectiveSection[],
+  input: TransitionFormInput,
+): Response | null {
+  const fieldsSection = sections.find((section) => section.kind === 'fields');
+  if (fieldsSection?.kind !== 'fields' || !input.fields) return null;
+  const writable = new Set<string>([
+    ...fieldsSection.fields.filter((key) => !fieldsSection.gateKeys.includes(key)),
+    ...fieldsSection.gateKeys.filter((key) => !fieldFilled(task, key)),
+  ]);
+  return lockDenial(task, lockKeysOfPatch(input.fields), undefined, writable);
 }
