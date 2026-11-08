@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CustomFieldDefinition, ProjectType } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -50,7 +50,7 @@ vi.mock('../api/project-catalog-mutations.js', () => ({
   useCreateProjectGroup: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
-import { ProjectTypeFieldsSection } from './project-type-fields.js';
+import { ProjectWindowBuilder } from './project-window-builder.js';
 
 const TYPE: ProjectType = {
   id: TYPE_ID,
@@ -67,32 +67,35 @@ const TYPE: ProjectType = {
   },
 };
 
-describe('ProjectTypeFieldsSection: единый путь настройки (#496)', () => {
+describe('ProjectWindowBuilder: окно создания проекта (#496)', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it('даёт вход в редактор окна проекта, без старого списка слотов', () => {
-    render(<ProjectTypeFieldsSection type={TYPE} canSetup canCreateField={false} />);
-
-    expect(screen.getByRole('button', { name: ui.forms.builder.edit })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: ui.nodeKinds.form.addField })).toBeNull();
-    expect(screen.queryByText('Шифр')).toBeNull();
-  });
-
-  it('редактор открывается окном «Окно проекта · Договор»', () => {
-    render(<ProjectTypeFieldsSection type={TYPE} canSetup canCreateField={false} />);
-    fireEvent.click(screen.getByRole('button', { name: ui.forms.builder.edit }));
+  it('открывается с узла канваса окном «Окно проекта · Договор»', () => {
+    render(
+      <ProjectWindowBuilder open type={TYPE} canSetup canCreateField={false} onClose={vi.fn()} />,
+    );
 
     expect(screen.getByRole('dialog')).toBeTruthy();
     expect(screen.getByText('Окно проекта · Договор')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: ui.nodeKinds.form.addField })).toBeNull();
   });
 
-  it('без права project.setup.manage — только просмотр', () => {
-    render(<ProjectTypeFieldsSection type={TYPE} canSetup={false} canCreateField={false} />);
+  it('без права project.setup.manage — только просмотр, без «Готово»', () => {
+    render(
+      <ProjectWindowBuilder
+        open
+        type={TYPE}
+        canSetup={false}
+        canCreateField={false}
+        onClose={vi.fn()}
+      />,
+    );
 
-    expect(screen.getByRole('button', { name: ui.forms.builder.view })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: ui.forms.builder.edit })).toBeNull();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: ui.forms.builder.done })).toBeNull();
+    expect(screen.getByRole('button', { name: ui.forms.builder.close })).toBeTruthy();
   });
 });

@@ -13,6 +13,7 @@ import {
   ProjectTypeSettingsPanel,
   type ProjectTypeSection,
 } from '../components/project-type-settings.js';
+import { ProjectWindowBuilder } from '../components/project-window-builder.js';
 import { NodeKindPanel } from '../node-kinds/components/node-kind-panel.js';
 import type { RenderCreateField } from '../node-kinds/types.js';
 
@@ -52,6 +53,8 @@ export function ProjectSchemasPage({
   // Панель принадлежит типу, для которого открыта: архив этого типа её
   // закрывает, чужой тип в неё не подставляется.
   const [typePanel, setTypePanel] = useState<ProjectTypeSection | null>(null);
+  // Окно создания проекта — с узла на канвасе, как «создание» в «Процессах».
+  const [windowOpen, setWindowOpen] = useState(false);
   const [panelTypeId, setPanelTypeId] = useState<string | null>(null);
   const panelType = useMemo(
     () =>
@@ -78,6 +81,7 @@ export function ProjectSchemasPage({
     setTypePanel(null);
     setPanelTypeId(null);
     setKindBackToKinds(false);
+    setWindowOpen(false);
     go({ type: id, kind: undefined });
   };
 
@@ -131,6 +135,7 @@ export function ProjectSchemasPage({
             type={selectedType}
             canSetup={canSetup}
             onOpenSettings={() => openTypePanel(selectedType.id, 'root')}
+            onOpenWindow={() => setWindowOpen(true)}
           />
         ) : typesQuery.isLoading ? (
           <div className="flex flex-col gap-2 p-6">
@@ -151,8 +156,6 @@ export function ProjectSchemasPage({
         open={typePanel !== null && panelType !== null}
         section={typePanel ?? 'root'}
         canSetup={canSetup}
-        canCreateField={canCreateField}
-        renderCreateField={renderCreateField}
         onSection={setTypePanel}
         onClose={() => {
           setTypePanel(null);
@@ -160,6 +163,17 @@ export function ProjectSchemasPage({
         }}
         onOpenKind={openKind}
       />
+
+      {selectedType ? (
+        <ProjectWindowBuilder
+          open={windowOpen}
+          type={selectedType}
+          canSetup={canSetup}
+          canCreateField={canCreateField}
+          renderCreateField={renderCreateField}
+          onClose={() => setWindowOpen(false)}
+        />
+      ) : null}
 
       <NodeKindPanel
         kind={selectedKind}

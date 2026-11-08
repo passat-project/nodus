@@ -1,5 +1,5 @@
 import type { ProjectType } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { isFormDecor, projectTypeFormOf, ui, withProjectSystemElements } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Settings2, Workflow } from 'lucide-react';
 
@@ -14,20 +14,27 @@ const DOTS = {
 
 /**
  * Центральная панель «Схем проектов» (#556, каркас #38) — окно канваса как
- * колонка холста «Процессов»: верхний бар h-14 с линией (продолжает линию
- * шапки списка и шапки правой панели), ниже — холст с точечной сеткой, где
- * #38 нарисует схему типа (папки-комплекты, работы, связи). Пока холст пуст:
- * единственное действие типа — «Настройки типа» (то же, что в меню строки).
+ * колонка холста «Процессов»: верхний бар h-14 с линией, ниже — холст с
+ * точечной сеткой. На холсте постоянный узел «Создание проекта» (как
+ * «создание» в маршруте задачи): клик открывает окно создания проекта этого
+ * типа. Остальная схема (папки-комплекты, работы, связи) появится в #38.
  */
 export function ProjectSchemaCanvas({
   type,
   canSetup,
   onOpenSettings,
+  onOpenWindow,
 }: {
   type: ProjectType;
   canSetup: boolean;
   onOpenSettings: () => void;
+  /** Узел «Создание проекта»: редактор окна создания. */
+  onOpenWindow: () => void;
 }) {
+  const fields = withProjectSystemElements(projectTypeFormOf(type)).fields.filter(
+    (element) => !isFormDecor(element),
+  ).length;
+
   return (
     <>
       <header className="nokey @container flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
@@ -50,15 +57,37 @@ export function ProjectSchemaCanvas({
       </header>
 
       <div className="relative min-h-0 flex-1 overflow-hidden" style={DOTS}>
-        <div className="absolute inset-0 flex items-center justify-center p-6">
-          <div className="flex max-w-sm flex-col items-center gap-2 text-center">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-              <Workflow className="size-5" strokeWidth={1.5} />
+        <div className="absolute inset-0 flex flex-col gap-6 p-6">
+          {/* Старт схемы — та же пунктирная пилюля, что «Создание» в
+              «Процессах»: окно создания проекта открывается с неё, а не из
+              панели настроек типа (вердикт владельца 08.11.2026). */}
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={onOpenWindow}
+              title={ui.projects.schemasCreationNodeHint}
+              className="flow-node-card flex h-10 max-w-[260px] min-w-0 items-center gap-2 rounded-full border border-dashed border-border bg-card px-3 text-muted-foreground transition-colors hover:border-input hover:text-foreground"
+            >
+              <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
+              <span className="truncate pt-[1px] text-[11px] leading-none font-medium tracking-[0.08em] uppercase">
+                {ui.projects.schemasCreationNode}
+              </span>
+            </button>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {ui.forms.builder.summary(fields, 0)}
             </span>
-            <span className="text-sm font-medium">{ui.projects.schemasCanvasTitle}</span>
-            <span className="text-xs text-balance text-muted-foreground">
-              {ui.projects.schemasCanvasHint}
-            </span>
+          </div>
+
+          <div className="flex flex-1 items-center justify-center">
+            <div className="flex max-w-sm flex-col items-center gap-2 text-center">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                <Workflow className="size-5" strokeWidth={1.5} />
+              </span>
+              <span className="text-sm font-medium">{ui.projects.schemasCanvasTitle}</span>
+              <span className="text-xs text-balance text-muted-foreground">
+                {ui.projects.schemasCanvasHint}
+              </span>
+            </div>
           </div>
         </div>
       </div>

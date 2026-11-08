@@ -1,21 +1,13 @@
 import { useMemo, useState } from 'react';
 import type { ProjectType, ProjectTypeForm } from '@nodus/contracts';
-import {
-  bindingsOf,
-  isFormDecor,
-  projectTypeFormOf,
-  ui,
-  withProjectSystemElements,
-} from '@nodus/contracts';
+import { bindingsOf, projectTypeFormOf, ui, withProjectSystemElements } from '@nodus/contracts';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 
 import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries.js';
 import { AttributeWindowBuilder } from '../../../shared/forms/attribute-window-builder.js';
 import type { AttributeElement } from '../../../shared/forms/attribute-form-model.js';
-import { isSlotElement } from '../../../shared/forms/attribute-form-model.js';
 import type { AttributeSystemInfo } from '../../../shared/forms/attribute-window-builder.js';
 import { PreviewControl } from '../../../shared/forms/builder/preview-control.js';
-import { SectionLink } from '../../../shared/ui/panel/panel-kit.js';
 import { useUpdateProjectType } from '../api/project-catalog-mutations.js';
 import type { RenderCreateField } from '../node-kinds/types.js';
 
@@ -32,26 +24,31 @@ const SYSTEM_INFO: Readonly<Record<string, AttributeSystemInfo>> = {
 };
 
 /**
- * Раздел «Атрибуты» типа проекта (#631; #496 — единый путь настройки):
- * только вход в редактор окна. Атрибуты, системные строки проекта,
- * состояния, подписи, ширина и порядок — в общем редакторе окна.
+ * Окно создания проекта (#496, единое ядро): тот же редактор, что у задачи и
+ * кнопки, — вход с узла «Создание проекта» на канвасе схемы (как «создание»
+ * в «Процессах»), а не из панели настроек типа. Атрибуты привязываются к типу
+ * в справочнике «Атрибуты»; здесь — какие из них и системные строки проекта
+ * окно показывает и в каком порядке.
  */
-export function ProjectTypeFieldsSection({
+export function ProjectWindowBuilder({
+  open,
   type,
   canSetup,
   canCreateField,
   renderCreateField,
+  onClose,
 }: {
+  open: boolean;
   type: ProjectType;
   /** Право `project.setup.manage` — правка; иначе только просмотр. */
   canSetup: boolean;
   canCreateField: boolean;
   renderCreateField?: RenderCreateField;
+  onClose: () => void;
 }) {
   const update = useUpdateProjectType();
   const form = withProjectSystemElements(projectTypeFormOf(type));
   const query = useCustomFieldDefinitions('project');
-  const [open, setOpen] = useState(false);
   const [createField, setCreateField] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const definitions = useMemo(
@@ -61,25 +58,9 @@ export function ProjectTypeFieldsSection({
       ),
     [query.data, type.id],
   );
-  // Сводка окна в панели: что спросит проект этого типа, по порядку.
-  const summary = form.fields.flatMap((element) => {
-    if (isFormDecor(element)) return [];
-    if (isSlotElement(element)) {
-      const name = definitions.find((definition) => definition.id === element.fieldId)?.name;
-      return [name ?? b.unknownField];
-    }
-    return [SYSTEM_INFO[element.key]?.label ?? element.key];
-  });
 
   return (
-    <div className="flex min-w-0 flex-col gap-2">
-      {/* Вход в редактор — строка раздела с шевроном, как в остальных
-          панелях (#496, замечание владельца 08.11.2026). */}
-      <SectionLink
-        title={canSetup ? b.edit : b.view}
-        summary={summary.length > 0 ? summary.join(', ') : ui.projects.formEmpty}
-        onClick={() => setOpen(true)}
-      />
+    <>
       <AttributeWindowBuilder
         open={open}
         title={`${b.titles.project} · ${type.name}`}
@@ -96,12 +77,12 @@ export function ProjectTypeFieldsSection({
           update.mutate(
             { id: type.id, form: { fields: elements } as ProjectTypeForm },
             {
-              onSuccess: () => setOpen(false),
+              onSuccess: onClose,
               onError: () => setError(ui.common.saveError),
             },
           );
         }}
-        onClose={() => setOpen(false)}
+        onClose={onClose}
       />
       {createField && renderCreateField
         ? renderCreateField({
@@ -109,7 +90,7 @@ export function ProjectTypeFieldsSection({
             onCreated: () => setCreateField(false),
           })
         : null}
-    </div>
+    </>
   );
 }
 

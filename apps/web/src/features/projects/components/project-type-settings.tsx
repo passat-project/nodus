@@ -12,23 +12,21 @@ import {
   useSetProjectTypeArchived,
   useUpdateProjectType,
 } from '../api/project-catalog-mutations.js';
-import { fieldsSummary, kindsSummary } from '../lib/project-type-summary.js';
-import type { RenderCreateField } from '../node-kinds/types.js';
-import { ProjectTypeFieldsSection } from './project-type-fields.js';
+import { kindsSummary } from '../lib/project-type-summary.js';
 import { ProjectTypeKindsSection } from './project-type-kinds.js';
 
 /** Разделы панели типа: корень и страницы поверх него (как «Настройки
  *  типа» в «Процессах» — раздел заменяет содержимое, «назад» в шапке). */
-export type ProjectTypeSection = 'root' | 'kinds' | 'fields';
+export type ProjectTypeSection = 'root' | 'kinds';
 
 /**
  * Настройки типа проекта (#556) — правая панель окна-сплита и та же
  * анатомия, что у настроек типа процесса (#432): в корне — поля самого типа
- * (название, значок, цвет), дальше строки «›» со сводкой — «Виды папок» и
- * «Атрибуты»; каждая открывает свой раздел со стрелкой «назад» и первым
- * Esc. Атрибуты — слоты формы типа (Р10 #631): политика шифра стала обычным
- * слотом «Шифр». Всё сохраняется сразу (оптимистично); архив — внизу, это
- * не удаление.
+ * (название, значок, цвет) и строка «Виды папок» со сводкой. Окна создания
+ * проекта здесь НЕТ: оно открывается с узла «Создание проекта» на канвасе,
+ * как «создание» в «Процессах» (вердикт владельца 08.11.2026); атрибуты
+ * привязываются к типу в справочнике «Атрибуты». Всё сохраняется сразу
+ * (оптимистично); архив — внизу, это не удаление.
  */
 export function ProjectTypeSettingsPanel({
   type,
@@ -36,8 +34,6 @@ export function ProjectTypeSettingsPanel({
   open,
   section,
   canSetup,
-  canCreateField,
-  renderCreateField,
   onSection,
   onClose,
   onOpenKind,
@@ -48,8 +44,6 @@ export function ProjectTypeSettingsPanel({
   section: ProjectTypeSection;
   /** Право `project.setup.manage` — правка; иначе только просмотр. */
   canSetup: boolean;
-  canCreateField: boolean;
-  renderCreateField?: RenderCreateField;
   onSection: (section: ProjectTypeSection) => void;
   onClose: () => void;
   onOpenKind: (id: string) => void;
@@ -65,13 +59,7 @@ export function ProjectTypeSettingsPanel({
   return (
     <SidePanel
       open={open}
-      title={
-        section === 'root'
-          ? ui.projects.schemasTypeSettings
-          : section === 'kinds'
-            ? ui.projects.schemasKinds
-            : ui.customFields.block.title
-      }
+      title={section === 'root' ? ui.projects.schemasTypeSettings : ui.projects.schemasKinds}
       leading={
         <span
           aria-hidden
@@ -88,19 +76,12 @@ export function ProjectTypeSettingsPanel({
     >
       {section === 'root' ? (
         <TypeRoot type={type} kinds={kinds} canSetup={canSetup} onSection={onSection} />
-      ) : section === 'kinds' ? (
+      ) : (
         <ProjectTypeKindsSection
           type={type}
           kinds={kinds}
           canSetup={canSetup}
           onOpenKind={onOpenKind}
-        />
-      ) : (
-        <ProjectTypeFieldsSection
-          type={type}
-          canSetup={canSetup}
-          canCreateField={canCreateField}
-          renderCreateField={renderCreateField}
         />
       )}
     </SidePanel>
@@ -186,11 +167,6 @@ function TypeRoot({
           title={ui.projects.schemasKinds}
           summary={kindsSummary(type, kinds)}
           onClick={() => onSection('kinds')}
-        />
-        <SectionLink
-          title={ui.customFields.block.title}
-          summary={fieldsSummary(type)}
-          onClick={() => onSection('fields')}
         />
       </div>
 

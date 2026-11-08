@@ -97,7 +97,10 @@ describe('панель «Окно создания»: единый путь на
   it('даёт вход в редактор и сводку, без старого списка полей и просмотра', () => {
     renderPanel();
 
-    expect(screen.getByRole('button', { name: b.edit })).toBeTruthy();
+    // Вход — строка раздела (название + сводка + шеврон), не кнопка-пилюля.
+    expect(
+      screen.getByRole('button', { name: new RegExp(`${b.edit}.*${b.summary(2, 0)}`) }),
+    ).toBeTruthy();
     expect(screen.getByText(b.summary(2, 0))).toBeTruthy();
     expect(screen.queryByRole('button', { name: ui.automation.creation.addField })).toBeNull();
     expect(screen.queryByRole('button', { name: ui.automation.creation.previewOpen })).toBeNull();
