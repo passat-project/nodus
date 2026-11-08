@@ -62,6 +62,7 @@ export function StructureDialogHost({
         <TaskMoveDialog
           count={dialog.taskIds.length}
           nodes={nodes}
+          taskId={dialog.taskIds.length === 1 ? dialog.taskIds[0] : undefined}
           onPick={(nodeId) => {
             onMoveTasks(dialog.taskIds, nodeId);
             onClose();

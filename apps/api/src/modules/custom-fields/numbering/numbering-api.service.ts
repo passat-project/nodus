@@ -2,10 +2,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   ErrorCode,
-  numberCountKey,
   numberEmptySegments,
   numberPeriodKey,
-  renderNumberTemplate,
+  type NumberContainerMissingReason,
+  numberCountKey,
   resolveNumberContainers,
   type NumberBackfillGroup,
   type NumberBackfillPreview,
@@ -14,18 +14,14 @@ import {
   type NumberCount,
   type NumberCountsResponse,
   type NumberCoverageResult,
-  type NumberFieldSegment,
   type NumberHostAssignment,
   type NumberHostKind,
-  type NumberContainerMissingReason,
-  type NumberHostSample,
   type NumberPreviewResult,
   type NumberSeriesRule,
 } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
-import { companyDay, companyMonth, companyYear } from '../../../core/time/company-time.js';
 import {
   NUMBER_SERIES_STORE,
   type NumberSeriesData,
@@ -33,6 +29,15 @@ import {
 } from '../../workflows/ports/number-series.port.js';
 import { DefinitionsRepository } from '../definitions/definitions.repository.js';
 import type { FieldDefinitionRow } from '../definitions/definition.mapper.js';
+import {
+  momentNow,
+  nameOfSegment,
+  participantsOf,
+  placeOf,
+  readerOf,
+  render,
+  sampleOf,
+} from './numbering-api.helpers.js';
 import type { NumberActor, NumberHostRecord } from '../ports/number-host.port.js';
 import { NUMBER_HOST_REGISTRY, type NumberHostRegistry } from '../ports/number-host.port.js';
 import { NUMBER_ISSUE, type NumberIssue } from '../ports/number-issue.port.js';
@@ -450,84 +455,4 @@ export class NumberingApiService {
         return { entity: 'type', id };
     }
   }
-}
-
-function participantsOf(definition: FieldDefinitionRow): string[] {
-  return [
-    ...definition.bindings.filter((b) => b.targetKind === 'process_type').map((b) => b.targetId),
-    ...definition.bindings.filter((b) => b.targetKind === 'project_type').map((b) => b.targetId),
-    ...definition.bindings.filter((b) => b.targetKind === 'node_kind').map((b) => b.targetId),
-  ];
-}
-
-function placeOf(host: NumberHostRecord, definitions: readonly FieldDefinitionRow[]) {
-  const byNumber = new Map(definitions.map((row) => [row.number, row]));
-  return {
-    host: host.target.host,
-    typeId: host.target.typeId,
-    folders: host.target.folders,
-    projectId: host.target.projectId,
-    portfolioId: host.target.portfolioId,
-    projectTypeId: host.target.projectTypeId,
-    parentTaskId: host.target.parentTaskId,
-    fieldValue: (fieldNumber: number) => {
-      const fieldId = byNumber.get(fieldNumber)?.id;
-      const value = fieldId ? host.target.sources.self[fieldId] : undefined;
-      return typeof value === 'string' && value.length > 0 ? value : null;
-    },
-  };
-}
-
-function readerOf(
-  host: NumberHostRecord,
-  definitions: readonly FieldDefinitionRow[],
-): (segment: NumberFieldSegment) => string {
-  const byNumber = new Map(definitions.map((row) => [row.number, row]));
-  const valueOf = (values: Record<string, unknown> | null | undefined, number: number) => {
-    const fieldId = byNumber.get(number)?.id;
-    const value = fieldId ? values?.[fieldId] : undefined;
-    return typeof value === 'string' ? value : '';
-  };
-  return (segment) => {
-    switch (segment.source) {
-      case 'self':
-        return valueOf(host.target.sources.self, segment.fieldNumber);
-      case 'project':
-        return valueOf(host.target.sources.project, segment.fieldNumber);
-      case 'parent_task':
-        return valueOf(host.target.sources.parentTask, segment.fieldNumber);
-      case 'folder': {
-        const folder = host.target.sources.folders?.find(
-          (entry) => entry.kindId === segment.nodeKindId,
-        );
-        return valueOf(folder?.values, segment.fieldNumber);
-      }
-      case 'company':
-        return '';
-    }
-  };
-}
-
-function nameOfSegment(
-  segment: NumberFieldSegment,
-  definitions: readonly FieldDefinitionRow[],
-): string {
-  return definitions.find((row) => row.number === segment.fieldNumber)?.name ?? '—';
-}
-
-function render(
-  rule: NumberSeriesRule,
-  seq: number,
-  reader: (segment: NumberFieldSegment) => string = () => '…',
-): string {
-  return renderNumberTemplate(rule.template, { seq, ...momentNow(), field: reader });
-}
-
-function momentNow() {
-  const now = new Date();
-  return { year: companyYear(now), month: companyMonth(now), day: companyDay(now) };
-}
-
-function sampleOf(host: NumberHostRecord, reason: NumberContainerMissingReason): NumberHostSample {
-  return { kind: host.kind, id: host.id, name: host.name, reason };
 }
