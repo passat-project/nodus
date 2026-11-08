@@ -208,7 +208,11 @@ export interface WorkflowEntityAdapter {
 
   /** Место счётчика для кнопки `assign_number {fieldId}` (#630): папки,
    *  проект, родитель и значения источников. Адаптер знает своё дерево. */
-  numberTarget?(tx: TransactionClient, entityId: string): Promise<WorkflowNumberTarget>;
+  numberTarget?(
+    tx: TransactionClient,
+    entityId: string,
+    actor: WorkflowActor,
+  ): Promise<WorkflowNumberTarget>;
 
   /** Записать выданные номера в значения сущности (системная запись в tx). */
   applyNumbers?(

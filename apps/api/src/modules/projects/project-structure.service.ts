@@ -261,18 +261,22 @@ export class ProjectStructureService {
       } = {};
       let numberPlan: Awaited<ReturnType<NumberIssue['planOnCreate']>> | null = null;
       if (kindChanged) {
+        // Значения патча (без null-очисток) видны номеру: поле, заполненное
+        // в том же окне, не считается пустой вставкой (#630, code-review).
+        const planValues = {
+          ...(valuesOf(node) as Record<string, unknown>),
+          ...Object.fromEntries(
+            Object.entries((body.customFields ?? {}) as Record<string, unknown>).filter(
+              ([, value]) => value !== null,
+            ),
+          ),
+        };
         numberPlan = await this.numberIssue.planOnCreate(
           tx,
-          this.nodeNumberTarget(
-            project,
-            tree,
-            node.parentId,
-            kind.id,
-            valuesOf(node) as Record<string, unknown>,
-          ),
+          this.nodeNumberTarget(project, tree, node.parentId, kind.id, planValues),
           {
             source: 'type_change',
-            values: valuesOf(node) as Record<string, unknown>,
+            values: planValues,
             confirmEmpty: body.confirmEmptyNumberParts === true,
             actorId: user.id,
           },

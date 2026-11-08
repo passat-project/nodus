@@ -153,7 +153,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
     // Пост-функция «Присвоить номер» с полем-счётчиком (#630): план ВСЕХ
     // номеров ИСПОЛНЯЕМОЙ кнопки — после окна (его значения видны вставкам),
     // до смены стадии. Нет места/пустая вставка — 409, действие откатывается.
-    const numberPlan = await this.planNumbers(tx, adapter, entityId, pick.t, opts);
+    const numberPlan = await this.planNumbers(tx, adapter, entityId, pick.t, opts, actor);
     // Пост-действие «Присвоить номер» (#55, Р1): номер выдаётся в этой же
     // транзакции ДО смены стадии — откат перехода не сдвигает счётчик.
     const numbering = await exec.assignNumber(this.numbers, tx, subject1, pick.t);
@@ -226,6 +226,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
     entityId: string,
     picked: TransitionDef,
     opts: { confirmEmptyNumberParts?: boolean },
+    actor: WorkflowActor,
   ): Promise<NumberPlan> {
     const fieldIds = picked.rules.postFunctions
       .filter(
@@ -235,7 +236,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
       .map((pf) => pf.fieldId);
     if (fieldIds.length === 0 || !adapter.numberTarget)
       return { ok: true, issue: async () => ({}) };
-    const target = await adapter.numberTarget(tx, entityId);
+    const target = await adapter.numberTarget(tx, entityId, actor);
     const empty = fieldIds.filter((fieldId) => {
       const value = target.sources.self[fieldId];
       return value === undefined || value === null || value === '';

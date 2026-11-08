@@ -264,25 +264,42 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
     if (roster) await this.placements.prepare(planHolderIds(roster));
   }
 
-  async numberTarget(tx: TransactionClient, taskId: string): Promise<NumberTarget> {
+  async numberTarget(
+    tx: TransactionClient,
+    taskId: string,
+    actor: WorkflowActor,
+  ): Promise<NumberTarget> {
     const task = await this.tasks.findWithParticipants(taskId, tx);
-    const [contexts, parentValues] = await Promise.all([
+    const [contexts, parentValues, parent] = await Promise.all([
       this.projects.numberContext(
         task.projectId ? [task.projectId] : [],
         task.nodeId ? [task.nodeId] : [],
         tx,
       ),
       task.parentId ? this.query.customFieldsOf([task.parentId], tx) : Promise.resolve(new Map()),
+      task.parentId ? this.tasks.findWithParticipants(task.parentId, tx) : Promise.resolve(null),
     ]);
+    // Конфиденциальный родитель вне участия актора не раскрывается вставками
+    // номера (#630, security-ревью): источник «родительская задача» пуст.
+    const parentVisible =
+      !parent ||
+      !parent.confidential ||
+      parent.creatorId === actor.id ||
+      parent.assigneeId === actor.id ||
+      parent.participants.some((person) => person.userId === actor.id);
     const context: TaskNumberContext = {
       projects: new Map(contexts.projects.map((project) => [project.id, project])),
       nodes: new Map(contexts.nodes.map((node) => [node.id, node])),
-      parents: new Map(
-        [...parentValues].map(([id, values]) => [
-          id,
-          values !== null && typeof values === 'object' ? (values as Record<string, unknown>) : {},
-        ]),
-      ),
+      parents: parentVisible
+        ? new Map(
+            [...parentValues].map(([id, values]) => [
+              id,
+              values !== null && typeof values === 'object'
+                ? (values as Record<string, unknown>)
+                : {},
+            ]),
+          )
+        : new Map(),
     };
     return taskNumberTarget(
       {
