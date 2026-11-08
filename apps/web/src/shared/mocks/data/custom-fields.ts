@@ -233,6 +233,28 @@ export const demoCustomFieldDefinitions: CustomFieldDefinition[] = [
       numbering: { rule: COUNTER_RULES.permitNumber, preview: '15-26', issuedCount: 0 },
     },
   ),
+  definition(
+    fieldIds.komplektSeq,
+    'counter',
+    '№ комплекта',
+    { nodeKindIds: [nodeKindIds.komplekt] },
+    {
+      hint: 'Номер комплекта внутри папки, где он создан',
+      number: COUNTER_FIELD_NUMBERS.komplektSeq,
+      numbering: { rule: COUNTER_RULES.komplektSeq, preview: 'К-01', issuedCount: 0 },
+    },
+  ),
+  definition(
+    fieldIds.projectSeq,
+    'counter',
+    '№ договора в портфеле',
+    { projectTypeIds: [demoProjectTypeIds.contract] },
+    {
+      hint: 'Номер договора внутри портфеля, с начала каждого года',
+      number: COUNTER_FIELD_NUMBERS.projectSeq,
+      numbering: { rule: COUNTER_RULES.projectSeq, preview: '001/26', issuedCount: 0 },
+    },
+  ),
 ];
 
 // Глобальный порядок реестра (sortOrder): по порядку массива.

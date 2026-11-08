@@ -18,6 +18,16 @@ import {
 } from '../../../../shared/mocks/data/workflows.js';
 import { numberingHandlers } from '../../../../shared/custom-fields/mocks/numbering-handlers.js';
 import { tasksTransitionsHandlers } from './tasks-transitions-handlers.js';
+import {
+  issueOnCreate,
+  placeOfNewNode,
+  placeOfNewProject,
+} from '../../../../shared/mocks/data/numbering-create.js';
+import { nodeKindSeedIds } from '../../../../shared/mocks/data/node-kind-ids.js';
+import { demoProjectGroups, demoProjectTypeIds } from '../../../../shared/mocks/data/projects.js';
+import { projectRefs } from '../../../../shared/mocks/data/task-item-factory.js';
+
+const KZH_PROJECT = projectRefs.p4.id;
 
 /**
  * Паритет мок-мира счётчиков с сервером (#630, концепция 08.11): номера
@@ -50,7 +60,7 @@ async function press(taskId: string) {
 describe('мок счётчиков: паритет с сервером (#630)', () => {
   it('магазин содержит counter-определения с правилом «внутри чего»', () => {
     const counters = demoCustomFieldDefinitions.filter((entry) => entry.type === 'counter');
-    expect(counters.length).toBe(3);
+    expect(counters.length).toBe(5);
     for (const definition of counters) {
       expect(customFieldDefinitionSchema.safeParse(definition).success).toBe(true);
     }
@@ -141,5 +151,44 @@ describe('мок счётчиков: паритет с сервером (#630)',
       });
     expect((await put(5)).status).toBe(409);
     expect((await put(2000)).status).toBe(200);
+  });
+});
+
+describe('мок счётчиков: выдача «При создании записи» (#630)', () => {
+  it('папка «Комплект» получает № внутри папки, где создана; в корне — внутри проекта', () => {
+    const inKr = issueOnCreate(
+      placeOfNewNode(KZH_PROJECT, nodeIds.b1kr, {}),
+      nodeKindSeedIds.komplekt,
+      {},
+    );
+    expect(inKr).toEqual({ ok: true, values: { [fieldIds.komplektSeq]: 'К-03' } });
+    const inRoot = issueOnCreate(
+      placeOfNewNode(KZH_PROJECT, null, {}),
+      nodeKindSeedIds.komplekt,
+      {},
+    );
+    expect(inRoot).toEqual({ ok: true, values: { [fieldIds.komplektSeq]: 'К-01' } });
+  });
+
+  it('договор без портфеля — отказ с причиной, номер не тратится; с портфелем — 001/ГГ', () => {
+    const before = mockIssuedCount(fieldIds.projectSeq);
+    const refused = issueOnCreate(
+      placeOfNewProject(demoProjectTypeIds.contract, null, {}),
+      demoProjectTypeIds.contract,
+      {},
+    );
+    expect(refused).toMatchObject({
+      ok: false,
+      fieldId: fieldIds.projectSeq,
+      reason: 'no_portfolio',
+    });
+    expect(mockIssuedCount(fieldIds.projectSeq)).toBe(before);
+    const portfolio = demoProjectGroups[0]!.id;
+    const issued = issueOnCreate(
+      placeOfNewProject(demoProjectTypeIds.contract, portfolio, {}),
+      demoProjectTypeIds.contract,
+      {},
+    );
+    expect(issued.ok && issued.values[fieldIds.projectSeq]).toMatch(/^001\/\d{2}$/);
   });
 });

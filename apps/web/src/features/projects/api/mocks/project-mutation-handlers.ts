@@ -98,6 +98,12 @@ function valuesOfBody(body: {
 /** Запись проектов в моках (#52): создание/правка/статусы/руководство/
  *  участие — зеркало серверных правил, чтобы приёмка на демо-мире видела
  *  те же отказы (I8 на клиенте — только UX, сервер в проде истина). */
+import {
+  issueOnCreate,
+  placeOfNewProject,
+} from '../../../../shared/mocks/data/numbering-create.js';
+import { containerMissingOnCreate } from '../../../../shared/custom-fields/mocks/numbering-handlers.js';
+
 export const projectMutationHandlers = [
   http.post('/api/v1/projects', async ({ request }) => {
     const actor = getMockActor();
@@ -126,7 +132,17 @@ export const projectMutationHandlers = [
     if (malformed.length > 0) return valuesInvalid(malformed);
     const missing = missingProjectFields(form, { customFields: values });
     if (missing.length > 0) return fieldsRequired(type.id, missing, 'create');
-    const row = createDemoProject({ ...body, customFields: values as CustomFieldValues }, actor);
+    // Счётчики «При создании записи» (#630): номер проекта в портфеле/типе.
+    const numbered = issueOnCreate(
+      placeOfNewProject(type.id, body.portfolioId ?? null, values),
+      type.id,
+      values,
+    );
+    if (!numbered.ok) return containerMissingOnCreate(numbered);
+    const row = createDemoProject(
+      { ...body, customFields: numbered.values as CustomFieldValues },
+      actor,
+    );
     return HttpResponse.json(detailOf(row, actor), { status: 201 });
   }),
 

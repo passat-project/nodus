@@ -7,6 +7,7 @@ import type {
 } from '@nodus/contracts';
 import {
   ErrorCode,
+  errorMessages,
   numberContainerReachable,
   numberPreviewBodySchema,
   resolveNumberContainer,
@@ -125,6 +126,22 @@ export const numberingHandlers = [
     });
   }),
 ];
+
+/** 409 создания записи: у неё нет контейнера счётчика «при создании». */
+export function containerMissingOnCreate(failure: {
+  fieldId: string;
+  fieldName: string;
+  reason: string;
+}) {
+  return HttpResponse.json(
+    {
+      code: ErrorCode.NUMBER_CONTAINER_MISSING,
+      message: `${errorMessages[ErrorCode.NUMBER_CONTAINER_MISSING]} («${failure.fieldName}»)`,
+      details: { fieldId: failure.fieldId, reason: failure.reason },
+    },
+    { status: 409 },
+  );
+}
 
 /** Сид следующего номера общего счёта при создании (`numberingNext`). */
 export function seedCreatedCounter(definitionId: string, next: number | undefined): void {

@@ -56,6 +56,10 @@ export const fieldIds = {
   changeNumber: fid(32),
   tookChangeNumber: fid(33),
   permitNumber: fid(34),
+  /** «№ комплекта» (#630): папке «Комплект» при создании — свой счёт в
+   *  папке, где она лежит; «№ договора в портфеле» — проекту при создании. */
+  komplektSeq: fid(35),
+  projectSeq: fid(36),
 };
 
 /** Внутренние номера счётчиков (#630): явные, как у демо-формул —
@@ -64,11 +68,13 @@ export const COUNTER_FIELD_NUMBERS = {
   changeNumber: 32,
   tookChangeNumber: 33,
   permitNumber: 34,
+  komplektSeq: 35,
+  projectSeq: 36,
 } as const;
 
 /** Правила счётчиков демо-мира (#630): адресуются id атрибута-цели. */
 export const COUNTER_RULES: Record<
-  'changeNumber' | 'tookChangeNumber' | 'permitNumber',
+  'changeNumber' | 'tookChangeNumber' | 'permitNumber' | 'komplektSeq' | 'projectSeq',
   NumberSeriesRule
 > = {
   changeNumber: {
@@ -90,6 +96,27 @@ export const COUNTER_RULES: Record<
     container: { kind: 'company' },
     period: 'year',
     template: [{ kind: 'counter' }, { kind: 'literal', text: '-' }, { kind: 'year', digits: 2 }],
+    startValue: 1,
+  },
+  komplektSeq: {
+    issueOnCreate: true,
+    container: { kind: 'parent_folder' },
+    period: 'none',
+    template: [
+      { kind: 'literal', text: 'К-' },
+      { kind: 'counter', minLength: 2 },
+    ],
+    startValue: 1,
+  },
+  projectSeq: {
+    issueOnCreate: true,
+    container: { kind: 'portfolio' },
+    period: 'year',
+    template: [
+      { kind: 'counter', minLength: 3 },
+      { kind: 'literal', text: '/' },
+      { kind: 'year', digits: 2 },
+    ],
     startValue: 1,
   },
 };

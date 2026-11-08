@@ -189,7 +189,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     kindId: nodeKindIds.komplekt,
     name: 'КЖ-01',
     code: 'КЖ-01',
-    customFields: { [SYSTEM_FIELD_IDS.nodeCode]: 'КЖ-01' },
+    customFields: { [SYSTEM_FIELD_IDS.nodeCode]: 'КЖ-01', [fieldIds.komplektSeq]: 'К-01' },
     createdAt: isoAgo(70),
   },
   {
@@ -199,7 +199,7 @@ export const demoNodeRows: DemoNodeRow[] = [
     kindId: nodeKindIds.komplekt,
     name: 'КЖ-02',
     code: 'КЖ-02',
-    customFields: { [SYSTEM_FIELD_IDS.nodeCode]: 'КЖ-02' },
+    customFields: { [SYSTEM_FIELD_IDS.nodeCode]: 'КЖ-02', [fieldIds.komplektSeq]: 'К-02' },
     createdAt: isoAgo(69),
   },
   {

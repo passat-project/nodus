@@ -25,6 +25,8 @@ import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom
 import { findDemoProjectRow } from '../../../../shared/mocks/data/projects.js';
 import { canSeeProject } from '../../../../shared/mocks/data/project-views.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
+import { issueOnCreate, placeOfNewNode } from '../../../../shared/mocks/data/numbering-create.js';
+import { containerMissingOnCreate } from '../../../../shared/custom-fields/mocks/numbering-handlers.js';
 import {
   childNodeRows,
   demoNodeKinds,
@@ -113,13 +115,20 @@ export const structureNodeHandlers = [
     if ((parent.parent ? nodeDepthOf(parent.parent) + 1 : 0) + 1 > NODE_LIMITS.depth) {
       return conflict(ErrorCode.PROJECT_NODE_INVALID, 'Depth limit reached');
     }
+    // Счётчики «При создании записи» (#630): номер в той же «транзакции».
+    const numbered = issueOnCreate(
+      placeOfNewNode(guard.row.id, body.parentId ?? null, values),
+      body.kindId,
+      values,
+    );
+    if (!numbered.ok) return containerMissingOnCreate(numbered);
     const row = appendNode(
       guard.row.id,
       body.parentId ?? null,
       body.kindId,
       body.name,
       code,
-      values,
+      numbered.values as typeof values,
     );
     return HttpResponse.json(projectNodeDto(row), { status: 201 });
   }),

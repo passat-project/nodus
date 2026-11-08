@@ -13,6 +13,8 @@ import {
 } from '../../../../shared/mocks/data/tasks.js';
 import { demoProjects } from '../../../../shared/mocks/data/project-views.js';
 import { findDemoNodeRow } from '../../../../shared/mocks/data/project-nodes.js';
+import { issueOnCreate, placeOfNewTask } from '../../../../shared/mocks/data/numbering-create.js';
+import { containerMissingOnCreate } from '../../../../shared/custom-fields/mocks/numbering-handlers.js';
 import { demoStages } from '../../../../shared/mocks/data/task-stages.js';
 import { demoProcessTypes, demoWorkflowDetails } from '../../../../shared/mocks/data/workflows.js';
 import type { WorkflowDetail } from '@nodus/contracts';
@@ -196,6 +198,19 @@ export const tasksListHandlers = [
       }
       nodeId = node.id;
     }
+    // Счётчики «При создании записи» (#630): контейнеры ДО создания —
+    // нет хотя бы одного — 409, задача не создаётся, номера не тратятся.
+    const numbered = issueOnCreate(
+      placeOfNewTask({
+        nodeId,
+        projectId: project?.id ?? null,
+        parentId: parent?.id ?? null,
+        values: body.customFields ?? {},
+      }),
+      type.id,
+      body.customFields ?? {},
+    );
+    if (!numbered.ok) return containerMissingOnCreate(numbered);
     const task: TaskListItem = {
       id: crypto.randomUUID(),
       number: Math.max(...demoTasks.map((t) => t.number)) + 1,
@@ -210,7 +225,7 @@ export const tasksListHandlers = [
       },
       stage,
       personalStageId,
-      customFields: body.customFields ?? {},
+      customFields: numbered.values as TaskListItem['customFields'],
       priority: body.priority ?? 'normal',
       deadline: body.deadline ?? null,
       creator: userRef(actorId),

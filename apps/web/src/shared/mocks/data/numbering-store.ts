@@ -80,6 +80,14 @@ seed(fieldIds.permitNumber, {
   lastValue: 15,
 });
 
+seed(fieldIds.komplektSeq, {
+  containerKind: 'parent_folder',
+  containerId: nodeIds.b1kr,
+  periodKey: '',
+  lastValue: 2,
+});
+issued.set(fieldIds.komplektSeq, 2);
+
 /** Правило counter-атрибута из мок-магазина (null — атрибут не счётчик). */
 export function counterRuleOf(fieldId: string): NumberSeriesRule | null {
   const definition = demoCustomFieldDefinitions.find((entry) => entry.id === fieldId);
