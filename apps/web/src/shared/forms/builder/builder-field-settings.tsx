@@ -51,27 +51,31 @@ export function BuilderFieldSettings<X>({
   const lockable = host.lockMode !== null && info.lockable === true;
   return (
     <div className="flex flex-col gap-3">
-      <PanelField label={b.label} hint={b.labelHint}>
-        <Input
-          value={field.label ?? ''}
-          maxLength={60}
-          readOnly={readOnly}
-          placeholder={info.label}
-          aria-label={b.label}
-          onChange={(event) => onPatch({ label: event.target.value })}
-        />
-      </PanelField>
-      <PanelField label={b.hint}>
-        <Input
-          value={field.hint ?? ''}
-          maxLength={FORM_LAYOUT_LIMITS.hint}
-          readOnly={readOnly}
-          placeholder={b.hintPlaceholder}
-          aria-label={b.hint}
-          onChange={(event) => onPatch({ hint: event.target.value })}
-        />
-      </PanelField>
-      {info.multiline ? (
+      {info.noLayout ? null : (
+        <>
+          <PanelField label={b.label} hint={b.labelHint}>
+            <Input
+              value={field.label ?? ''}
+              maxLength={60}
+              readOnly={readOnly}
+              placeholder={info.label}
+              aria-label={b.label}
+              onChange={(event) => onPatch({ label: event.target.value })}
+            />
+          </PanelField>
+          <PanelField label={b.hint}>
+            <Input
+              value={field.hint ?? ''}
+              maxLength={FORM_LAYOUT_LIMITS.hint}
+              readOnly={readOnly}
+              placeholder={b.hintPlaceholder}
+              aria-label={b.hint}
+              onChange={(event) => onPatch({ hint: event.target.value })}
+            />
+          </PanelField>
+        </>
+      )}
+      {info.multiline && !info.noLayout ? (
         <PanelField label={b.height}>
           <SegmentedControl<FormHeight>
             value={field.height ?? 'lines'}

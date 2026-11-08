@@ -26,6 +26,9 @@ export interface BuilderFieldInfo {
   lockable?: boolean;
   /** Поле добавило условие перехода, а не окно (только показ). */
   fromGate?: boolean;
+  /** Поле-раздел окна (трудозатраты, итог, причина): без ширины, подписи,
+   *  подсказки и высоты — его настройки даёт хост. */
+  noLayout?: boolean;
 }
 
 export interface BuilderOption {

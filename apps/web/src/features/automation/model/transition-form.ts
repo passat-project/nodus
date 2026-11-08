@@ -55,7 +55,7 @@ export function setWindowTitle(form: Form, title: string): Form {
   return { ...form, title: title.trim().length > 0 ? title.slice(0, 60) : undefined };
 }
 
-function defaultSection(kind: TransitionFormSectionKind): Section {
+export function defaultWindowSection(kind: TransitionFormSectionKind): Section {
   switch (kind) {
     case 'fields':
       return { kind, fields: ['deadline'] };
@@ -79,7 +79,7 @@ export function toggleSection(form: Form, kind: TransitionFormSectionKind): Form
   const exists = form.sections.some((s) => s.kind === kind);
   const sections = exists
     ? form.sections.filter((s) => s.kind !== kind)
-    : [...form.sections, defaultSection(kind)];
+    : [...form.sections, defaultWindowSection(kind)];
   return { ...form, sections: sorted(sections) };
 }
 

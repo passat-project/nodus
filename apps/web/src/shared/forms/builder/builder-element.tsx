@@ -145,7 +145,7 @@ function FieldPreview<X>({
                     <span className="sr-only">{lockText}</span>
                   </span>
                 ) : null}
-                {readOnly || info.unknown ? null : (
+                {readOnly || info.unknown || info.noLayout ? null : (
                   <Button
                     type="button"
                     variant="ghost"

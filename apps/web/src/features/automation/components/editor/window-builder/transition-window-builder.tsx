@@ -3,6 +3,7 @@ import type {
   CustomFieldDefinition,
   CustomFieldModule,
   ProcessCategory,
+  TransitionFormSectionKind,
   TransitionWindowField,
   WorkflowDraftTransition,
 } from '@nodus/contracts';
@@ -10,6 +11,7 @@ import {
   CUSTOM_FIELD_LIMITS,
   FORM_LAYOUT_LIMITS,
   LOCKABLE_SYSTEM_KEYS,
+  WORKFLOW_SECTIONS_BY_CATEGORY,
   bindingsOf,
   customFieldIdOfKey,
   customFieldKey,
@@ -30,15 +32,28 @@ import { previewOfFieldType } from '../../../../../shared/forms/builder/preview-
 import { PanelField } from '../../../../../shared/ui/panel/panel-kit.js';
 import { useRouteDocStore } from '../../../model/route-doc-store.js';
 import {
+  rulesFromBuilder,
+  sectionKey,
+  sectionKindOf,
   transitionField,
   transitionFromBuilder,
   transitionToBuilder,
   type TransitionExtra,
 } from '../../../model/transition-builder.js';
+import { SectionSettings } from './section-settings.js';
+
+const SECTION_PREVIEW: Readonly<Record<TransitionFormSectionKind, PreviewKind>> = {
+  fields: 'input',
+  time: 'number',
+  result: 'text',
+  result_files: 'select',
+  result_messages: 'select',
+  comment: 'text',
+  registration: 'select',
+};
 import { WINDOW_FIELDS } from '../../../model/transition-form.js';
 import { validatorOf } from '../../../model/transition-rules.js';
 import { WINDOW_SLOT_TYPES } from '../panel/window-field-formulas.js';
-import { WindowSectionsControls } from '../panel/window-sections-controls.js';
 
 const b = ui.forms.builder;
 
@@ -76,7 +91,10 @@ export function TransitionWindowBuilder({
 }) {
   const { data: definitions } = useCustomFieldDefinitions(scope);
   const scoped = useMemo(() => definitions ?? [], [definitions]);
-  const value = useMemo(() => transitionToBuilder(transition.form), [transition.form]);
+  const value = useMemo(
+    () => transitionToBuilder(transition.form, transition.rules),
+    [transition.form, transition.rules],
+  );
   const host = useTransitionHost(transition, scoped, typeId, category, readOnly);
   return (
     <FormBuilder
@@ -88,6 +106,7 @@ export function TransitionWindowBuilder({
       onDone={(next) => {
         useRouteDocStore.getState().patchTransition(transition.id, {
           form: transitionFromBuilder(transition.form, next),
+          rules: rulesFromBuilder(transition.rules, value, next),
         });
         onClose();
       }}
@@ -109,6 +128,14 @@ function useTransitionHost(
     );
     const attributeKeys = inType.map((entry) => customFieldKey(entry.id));
     const info = (key: string): BuilderFieldInfo => {
+      const kind = sectionKindOf(key);
+      if (kind) {
+        return {
+          label: ui.automation.window.sections[kind],
+          preview: SECTION_PREVIEW[kind],
+          noLayout: true,
+        };
+      }
       const fieldId = customFieldIdOfKey(key);
       if (fieldId) {
         const definition = byId.get(fieldId);
@@ -139,13 +166,24 @@ function useTransitionHost(
       };
     };
     const hostKind = category === 'letter' ? 'letter' : 'task';
+    const sectionKeys = (
+      WORKFLOW_SECTIONS_BY_CATEGORY[category] as readonly TransitionFormSectionKind[]
+    )
+      .filter((kind) => kind !== 'fields')
+      .map(sectionKey);
     return {
       title: `${b.titles.transition} «${transition.name || ui.automation.window.preview}»`,
       info,
-      catalog: [...WINDOW_FIELDS, ...attributeKeys].map((key) => ({ key, label: info(key).label })),
+      catalog: [...WINDOW_FIELDS, ...attributeKeys, ...sectionKeys].map((key) => ({
+        key,
+        label: info(key).label,
+      })),
       makeField: transitionField,
       badges: (field) => (field.extra.formula ? [b.badgeFormula] : []),
       settings: (field, patch) => {
+        if (sectionKindOf(field.key)) {
+          return <SectionSettings field={field} readOnly={readOnly} patch={patch} />;
+        }
         const definition = byId.get(customFieldIdOfKey(field.key) ?? '');
         const label = info(field.key).label;
         return (
@@ -169,12 +207,7 @@ function useTransitionHost(
         ...LOCKABLE_SYSTEM_KEYS.filter((key) => key !== 'project' || projectsAvailable()),
         ...attributeKeys,
       ].map((key) => ({ key, label: info(key).label })),
-      footer: (
-        <>
-          <TransitionFooter transition={transition} labelOf={(key) => info(key).label} />
-          <WindowSectionsControls transition={transition} readOnly={readOnly} category={category} />
-        </>
-      ),
+      footer: <TransitionFooter transition={transition} labelOf={(key) => info(key).label} />,
       limits: { fields: CUSTOM_FIELD_LIMITS.windowFields, decor: FORM_LAYOUT_LIMITS.decor },
     };
   }, [transition, scoped, typeId, category, readOnly]);

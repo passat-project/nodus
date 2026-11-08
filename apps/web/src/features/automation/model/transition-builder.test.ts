@@ -50,8 +50,13 @@ describe('окно кнопки в редакторе', () => {
     expect(transitionFormSchema.safeParse(next).success).toBe(true);
   });
 
-  it('без полей раздел «Поля» снимается, остальные разделы — в каноне порядка', () => {
-    const value = { items: [], locks: [] };
+  it('без полей раздел «Поля» снимается, поле-раздел «Причина» остаётся', () => {
+    const value = {
+      items: transitionToBuilder(legacy).items.filter(
+        (item) => item.kind === 'field' && item.key.startsWith('section:'),
+      ),
+      locks: [],
+    };
     expect(transitionFromBuilder(legacy, value).sections).toEqual([
       { kind: 'comment', label: 'Причина', required: true },
     ]);
