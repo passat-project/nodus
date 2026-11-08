@@ -47,6 +47,7 @@ export function CreationSlotSection({
   readOnly,
   onChange,
   onRemove,
+  compact = false,
 }: {
   slot: CreationFieldSlot;
   /** Название без своего (роль типа или стандартное) — подсказка в поле. */
@@ -63,6 +64,9 @@ export function CreationSlotSection({
   readOnly: boolean;
   onChange: (patch: SlotPatch, coalesce?: string) => void;
   onRemove: () => void;
+  /** В настройках поля редактора окна (#496): подпись и «Убрать» показывает
+   *  сам редактор — здесь только своё окна создания. */
+  compact?: boolean;
 }) {
   const hidden = slot.preset !== null;
   const canHide = presetAllowed(slot.key);
@@ -89,17 +93,19 @@ export function CreationSlotSection({
         </div>
       ) : null}
 
-      <PanelField label={c.labelTitle} hint={c.labelHint}>
-        <CommitInput
-          key={slot.key}
-          value={slot.label ?? ''}
-          maxLength={60}
-          readOnly={readOnly}
-          placeholder={standardLabel}
-          aria-label={c.labelTitle}
-          onCommit={(label) => onChange({ label })}
-        />
-      </PanelField>
+      {compact ? null : (
+        <PanelField label={c.labelTitle} hint={c.labelHint}>
+          <CommitInput
+            key={slot.key}
+            value={slot.label ?? ''}
+            maxLength={60}
+            readOnly={readOnly}
+            placeholder={standardLabel}
+            aria-label={c.labelTitle}
+            onCommit={(label) => onChange({ label })}
+          />
+        </PanelField>
+      )}
 
       <SwitchRow
         title={c.required}
@@ -153,7 +159,9 @@ export function CreationSlotSection({
         />
       </PanelField>
 
-      {readOnly ? null : <PanelDanger onClick={onRemove}>{c.removeFromForm}</PanelDanger>}
+      {readOnly || compact ? null : (
+        <PanelDanger onClick={onRemove}>{c.removeFromForm}</PanelDanger>
+      )}
     </>
   );
 }

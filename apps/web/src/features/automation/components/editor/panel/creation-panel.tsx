@@ -35,7 +35,10 @@ import {
   creationSlots,
   isCreationSlot,
 } from '@nodus/contracts';
-import { Eye } from 'lucide-react';
+import { Eye, LayoutTemplate } from 'lucide-react';
+
+import { TypeFormulaControl } from '../../../../../shared/custom-fields/formula/type-formula-control.js';
+import { CreationWindowBuilder } from '../window-builder/creation-window-builder.js';
 
 import { projectsAvailable } from '../../../../../shared/api/projects-available.js';
 import { useProjectsList } from '../../../../../shared/api/projects-list.js';
@@ -92,6 +95,7 @@ export function CreationPanel({
 }) {
   const doc = useRouteDocStore((s) => s.document);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [builderOpen, setBuilderOpen] = useState(false);
   const { data: definitions } = useCustomFieldDefinitions(type.category);
   // Определения уже отфильтрованы по модулю запросом (`?module=`).
   const scoped = useMemo(() => definitions ?? [], [definitions]);
@@ -207,6 +211,30 @@ export function CreationPanel({
         {full ? <p className="text-xs text-muted-foreground">{c.fieldsLimit}</p> : null}
       </PanelField>
 
+      {/* Редактор окна (#496, В8): раскладка, оформление и замки — в окне
+          в натуральную величину; список выше — быстрый вход в поле. */}
+      <PanelAction icon={LayoutTemplate} onClick={() => setBuilderOpen(true)}>
+        {readOnly ? ui.forms.builder.view : ui.forms.builder.edit}
+      </PanelAction>
+      <p className="-mt-2 text-xs text-muted-foreground">
+        {ui.forms.builder.summary(slots.length, form.locks?.length ?? 0)}
+      </p>
+
+      {/* Формула названия (#496, Р7): строкой панели, не в редакторе окна —
+          название не элемент раскладки, оно всегда первым. */}
+      <PanelField label={ui.forms.builder.titleFormula} hint={ui.forms.builder.titleFormulaHint}>
+        <TypeFormulaControl
+          hostKind={type.category === 'letter' ? 'letter' : 'task'}
+          targetType="text"
+          label={ui.forms.builder.systemLabels.title}
+          ownDefinitions={scoped}
+          value={form.titleFormula ?? null}
+          readOnly={readOnly}
+          allowRelated
+          onChange={(ast) => update({ ...form, titleFormula: ast })}
+        />
+      </PanelField>
+
       <PanelField label={c.chipsTitle}>
         <div className="flex min-w-0 flex-col gap-3">
           <SwitchRow
@@ -234,6 +262,13 @@ export function CreationPanel({
         prefill={null}
         preview={{ type, form }}
         onClose={() => setPreviewOpen(false)}
+      />
+      <CreationWindowBuilder
+        open={builderOpen}
+        type={type}
+        form={form}
+        readOnly={readOnly}
+        onClose={() => setBuilderOpen(false)}
       />
     </>
   );
