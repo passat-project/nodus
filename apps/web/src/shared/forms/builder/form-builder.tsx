@@ -50,23 +50,37 @@ export function FormBuilder<X>({
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : onCancel())}>
       <DialogContent
-        overlay={false}
         showCloseButton={false}
         aria-describedby={undefined}
-        className="top-0 left-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 grid-rows-[auto_minmax(0,1fr)] gap-0 rounded-none bg-background p-0 ring-0 sm:max-w-none"
+        className={cn(
+          'max-h-[90vh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0',
+          wide ? 'max-w-3xl sm:max-w-3xl' : 'max-w-2xl sm:max-w-2xl',
+        )}
         onInteractOutside={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => {
           if (dirty) event.preventDefault();
         }}
       >
-        <DialogTitle className="sr-only">{host.title}</DialogTitle>
-        <header className="flex h-14 min-w-0 shrink-0 items-center gap-3 border-b border-border px-4">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{host.title}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {readOnly ? b.readOnly : dirty ? b.unsaved : b.lead}
-            </p>
+        <div className="flex min-w-0 flex-col gap-0.5 px-5 pt-4 pb-3">
+          <DialogTitle className="truncate text-base font-medium">{host.title}</DialogTitle>
+          <p className="text-xs text-muted-foreground">
+            {readOnly ? b.readOnly : dirty ? b.unsaved : b.lead}
+          </p>
+        </div>
+        <div className="min-h-0 overflow-y-auto px-5 pb-2">
+          <div className="flex w-full min-w-0 flex-col gap-4">
+            <div className="flex w-full min-w-0 flex-col gap-3 rounded-xl bg-background py-4 pr-4 pl-8 ring-1 ring-foreground/10">
+              {host.fixedTop}
+              <BuilderCanvas value={draft} host={host} readOnly={readOnly} onChange={setDraft} />
+              {host.footer}
+            </div>
+            {readOnly ? null : <BuilderTray value={draft} host={host} onChange={setDraft} />}
+            {host.lockMode ? (
+              <BuilderAlsoLocks value={draft} host={host} readOnly={readOnly} onChange={setDraft} />
+            ) : null}
           </div>
+        </div>
+        <div className="flex h-12 shrink-0 items-center justify-end gap-2 px-5">
           {readOnly ? (
             <Button type="button" variant="ghost" onClick={onCancel}>
               {b.close}
@@ -86,24 +100,6 @@ export function FormBuilder<X>({
               </Button>
             </>
           )}
-        </header>
-        <div className="min-h-0 overflow-y-auto">
-          <div className="mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-4 px-4 py-6">
-            <div
-              className={cn(
-                'mx-auto flex w-full min-w-0 flex-col gap-3 rounded-xl bg-popover py-5 pr-6 pl-8 text-popover-foreground ring-1 ring-foreground/10',
-                wide ? 'max-w-2xl' : 'max-w-lg',
-              )}
-            >
-              {host.fixedTop}
-              <BuilderCanvas value={draft} host={host} readOnly={readOnly} onChange={setDraft} />
-              {host.footer}
-            </div>
-            {readOnly ? null : <BuilderTray value={draft} host={host} onChange={setDraft} />}
-            {host.lockMode ? (
-              <BuilderAlsoLocks value={draft} host={host} readOnly={readOnly} onChange={setDraft} />
-            ) : null}
-          </div>
         </div>
       </DialogContent>
     </Dialog>

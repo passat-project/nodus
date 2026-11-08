@@ -1,18 +1,4 @@
 import { useMemo, useState } from 'react';
-import {
-  closestCenter,
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
 import type {
   CreationFieldKey,
   CreationFieldSlot,
@@ -24,7 +10,6 @@ import type {
   WorkflowProblem,
 } from '@nodus/contracts';
 import {
-  CREATION_FORM_LIMITS,
   bindingsOf,
   checkWorkflowDocument,
   customFieldIdOfKey,
@@ -33,7 +18,6 @@ import {
   typeConfigOf,
   ui,
   creationSlots,
-  isCreationSlot,
 } from '@nodus/contracts';
 import { Eye, LayoutTemplate } from 'lucide-react';
 
@@ -46,20 +30,8 @@ import { useUsersList } from '../../../../../shared/api/users-list.js';
 import { useCustomFieldDefinitions } from '../../../../../shared/custom-fields/queries.js';
 import { TaskCreateWindow } from '../../../../../shared/tasks/task-create-window.js';
 import { useRouteDocStore } from '../../../model/route-doc-store.js';
-import {
-  withChipToggled,
-  withSlotAdded,
-  withSlotMoved,
-  withSlotPatched,
-  withSlotRemoved,
-} from '../../../model/creation-form.js';
-import {
-  presetText,
-  slotSummary,
-  type SlotSummaryContext,
-} from '../../../model/creation-slot-summary.js';
-import { CreationFieldPicker } from './creation-field-picker.js';
-import { CreationSlotRow } from './creation-slot-row.js';
+import { withChipToggled, withSlotPatched, withSlotRemoved } from '../../../model/creation-form.js';
+import { presetText, type SlotSummaryContext } from '../../../model/creation-slot-summary.js';
 import { CreationSlotSection } from './creation-slot-section.js';
 import {
   PanelAction,
@@ -130,11 +102,6 @@ export function CreationPanel({
     ...lookups,
   });
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
   const opened = field ? slots.find((slot) => slot.key === field) : undefined;
   if (opened) {
     return (
@@ -157,59 +124,33 @@ export function CreationPanel({
     );
   }
 
-  function onDragEnd({ active, over }: DragEndEvent) {
-    if (!over || active.id === over.id) return;
-    const from = form.fields.findIndex((slot) => isCreationSlot(slot) && slot.key === active.id);
-    const to = form.fields.findIndex((slot) => isCreationSlot(slot) && slot.key === over.id);
-    if (from >= 0 && to >= 0) update(withSlotMoved(form, from, to));
-  }
-
-  const full = slots.length >= CREATION_FORM_LIMITS.fields;
-
   return (
     <>
       {doc.creation === null ? (
         <PanelNote title={c.defaultForm}>{c.defaultFormHint}</PanelNote>
       ) : null}
 
-      <PanelField label={c.fieldsTitle}>
-        {slots.length === 0 ? (
-          <p className="py-1 text-xs text-muted-foreground">{c.empty}</p>
-        ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext
-              items={slots.map((slot) => slot.key)}
-              strategy={verticalListSortingStrategy}
+      {/* Единый путь настройки (#496, вердикт владельца): поля, порядок и
+          раскладка — только в редакторе окна; здесь проблемы публикации
+          (клик — к полю) и вход в редактор. */}
+      {problems.length > 0 ? (
+        <div role="alert" className="flex min-w-0 flex-col gap-1">
+          {problems.map((problem, index) => (
+            <button
+              key={`${problem.code}-${index}`}
+              type="button"
+              className="text-left text-xs break-words text-danger hover:underline"
+              onClick={() =>
+                problem.creationField && slots.some((slot) => slot.key === problem.creationField)
+                  ? select(problem.creationField as CreationFieldKey)
+                  : setBuilderOpen(true)
+              }
             >
-              <div className="flex min-w-0 flex-col">
-                {slots.map((slot) => {
-                  const first = problemsOf(slot.key)[0];
-                  return (
-                    <CreationSlotRow
-                      key={slot.key}
-                      slot={slot}
-                      label={labelOf(slot)}
-                      summary={slotSummary(slot, summaryCtx(slot))}
-                      problem={first ? ui.automation.problems[first.code] : null}
-                      readOnly={readOnly}
-                      onOpen={() => select(slot.key)}
-                    />
-                  );
-                })}
-              </div>
-            </SortableContext>
-          </DndContext>
-        )}
-        {readOnly ? null : (
-          <CreationFieldPicker
-            type={type}
-            form={form}
-            disabled={full}
-            onPick={(key) => update(withSlotAdded(form, key))}
-          />
-        )}
-        {full ? <p className="text-xs text-muted-foreground">{c.fieldsLimit}</p> : null}
-      </PanelField>
+              {ui.automation.problems[problem.code]}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {/* Редактор окна (#496, В8): раскладка, оформление и замки — в окне
           в натуральную величину; список выше — быстрый вход в поле. */}
