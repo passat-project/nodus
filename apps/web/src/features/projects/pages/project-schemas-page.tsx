@@ -13,7 +13,7 @@ import {
   ProjectTypeSettingsPanel,
   type ProjectTypeSection,
 } from '../components/project-type-settings.js';
-import { ProjectWindowBuilder } from '../components/project-window-builder.js';
+import { ProjectWindowPanel } from '../components/project-window-panel.js';
 import { NodeKindPanel } from '../node-kinds/components/node-kind-panel.js';
 import type { RenderCreateField } from '../node-kinds/types.js';
 
@@ -49,11 +49,9 @@ export function ProjectSchemasPage({
     [types, alive, search.type],
   );
 
-  // Одна правая панель за раз: страницы типа (root/kinds/code) и панель вида.
-  // Панель принадлежит типу, для которого открыта: архив этого типа её
-  // закрывает, чужой тип в неё не подставляется.
+  // Одна правая панель за раз: страницы типа (root/kinds/code), панель вида и
+  // панель узла «Создание проекта» — как выбор узла на канвасе «Процессов».
   const [typePanel, setTypePanel] = useState<ProjectTypeSection | null>(null);
-  // Окно создания проекта — с узла на канвасе, как «создание» в «Процессах».
   const [windowOpen, setWindowOpen] = useState(false);
   const [panelTypeId, setPanelTypeId] = useState<string | null>(null);
   const panelType = useMemo(
@@ -89,6 +87,16 @@ export function ProjectSchemasPage({
     setPanelTypeId(id);
     setTypePanel(section);
     setKindBackToKinds(false);
+    setWindowOpen(false);
+    if (kindId) go({ kind: undefined });
+  };
+
+  /** Клик по узлу «Создание проекта»: панель узла, остальные панели закрыты. */
+  const openWindowPanel = () => {
+    setTypePanel(null);
+    setPanelTypeId(null);
+    setKindBackToKinds(false);
+    setWindowOpen(true);
     if (kindId) go({ kind: undefined });
   };
 
@@ -102,11 +110,13 @@ export function ProjectSchemasPage({
     }
     setPanelTypeId(id);
     setTypePanel('root');
+    setWindowOpen(false);
     setKindBackToKinds(false);
   };
 
   const openKind = (id: string) => {
     setTypePanel(null);
+    setWindowOpen(false);
     setKindBackToKinds(true);
     go({ kind: id });
   };
@@ -134,8 +144,9 @@ export function ProjectSchemasPage({
           <ProjectSchemaCanvas
             type={selectedType}
             canSetup={canSetup}
+            selected={windowOpen}
             onOpenSettings={() => openTypePanel(selectedType.id, 'root')}
-            onOpenWindow={() => setWindowOpen(true)}
+            onOpenWindow={openWindowPanel}
           />
         ) : typesQuery.isLoading ? (
           <div className="flex flex-col gap-2 p-6">
@@ -164,16 +175,14 @@ export function ProjectSchemasPage({
         onOpenKind={openKind}
       />
 
-      {selectedType ? (
-        <ProjectWindowBuilder
-          open={windowOpen}
-          type={selectedType}
-          canSetup={canSetup}
-          canCreateField={canCreateField}
-          renderCreateField={renderCreateField}
-          onClose={() => setWindowOpen(false)}
-        />
-      ) : null}
+      <ProjectWindowPanel
+        type={selectedType}
+        open={windowOpen && selectedType !== null}
+        canSetup={canSetup}
+        canCreateField={canCreateField}
+        renderCreateField={renderCreateField}
+        onClose={() => setWindowOpen(false)}
+      />
 
       <NodeKindPanel
         kind={selectedKind}
