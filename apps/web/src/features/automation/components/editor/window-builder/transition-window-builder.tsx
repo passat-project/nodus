@@ -38,6 +38,7 @@ import {
 import { WINDOW_FIELDS } from '../../../model/transition-form.js';
 import { validatorOf } from '../../../model/transition-rules.js';
 import { WINDOW_SLOT_TYPES } from '../panel/window-field-formulas.js';
+import { WindowSectionsControls } from '../panel/window-sections-controls.js';
 
 const b = ui.forms.builder;
 
@@ -168,7 +169,12 @@ function useTransitionHost(
         ...LOCKABLE_SYSTEM_KEYS.filter((key) => key !== 'project' || projectsAvailable()),
         ...attributeKeys,
       ].map((key) => ({ key, label: info(key).label })),
-      footer: <TransitionFooter transition={transition} labelOf={(key) => info(key).label} />,
+      footer: (
+        <>
+          <TransitionFooter transition={transition} labelOf={(key) => info(key).label} />
+          <WindowSectionsControls transition={transition} readOnly={readOnly} category={category} />
+        </>
+      ),
       limits: { fields: CUSTOM_FIELD_LIMITS.windowFields, decor: FORM_LAYOUT_LIMITS.decor },
     };
   }, [transition, scoped, typeId, category, readOnly]);
@@ -182,7 +188,6 @@ function TransitionFooter({
   transition: WorkflowDraftTransition;
   labelOf: (key: string) => string;
 }) {
-  const others = transition.form.sections.filter((section) => section.kind !== 'fields');
   const configured = new Set(
     transitionToBuilder(transition.form)
       .items.filter((item) => item.kind === 'field')
@@ -191,19 +196,12 @@ function TransitionFooter({
   const gateOnly = (validatorOf(transition.rules, 'fields_required')?.fields ?? []).filter(
     (key) => !configured.has(key) && key !== 'result',
   );
-  if (others.length === 0 && gateOnly.length === 0) return null;
+  if (gateOnly.length === 0) return null;
   return (
     <div className="flex min-w-0 flex-col gap-1.5 rounded-lg bg-muted/40 px-2 py-2 text-xs text-muted-foreground">
       {gateOnly.length > 0 ? (
         <p title={b.fromGateHint}>
           {b.fromGate}: {gateOnly.map(labelOf).join(', ')}
-        </p>
-      ) : null}
-      {others.length > 0 ? (
-        <p>
-          {b.sections}:{' '}
-          {others.map((section) => ui.automation.window.sections[section.kind]).join(', ')}.{' '}
-          {b.sectionsHint}
         </p>
       ) : null}
     </div>
