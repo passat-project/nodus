@@ -73,6 +73,9 @@ export class ParticipantsService {
     }
     await this.placements.prepare([body.userId]);
     await this.txRunner.run(async (tx) => {
+      // Замок строки — до чтения карты замков: параллельный переход с
+      // «Закрепить после нажатия» не должен потеряться (security #496).
+      await this.tasksRepo.lock(tx, taskId);
       const fresh = await this.tasksRepo.findWithParticipants(taskId, tx);
       // Замок записи (#496, Р4): закреплённые «Соисполнители»/«Наблюдатели»
       // меняет только постановщик (или task.edit_locked) с причиной.
@@ -98,6 +101,9 @@ export class ParticipantsService {
       throw DomainException.forbidden('Participants change not allowed');
     }
     await this.txRunner.run(async (tx) => {
+      // Замок строки — как у писателя полей и движка переходов: карта
+      // замков читается и пишется только под ним (security #496).
+      await this.tasksRepo.lock(tx, taskId);
       const fresh = await this.tasksRepo.findWithParticipants(taskId, tx);
       const role = selfObserver
         ? 'observer'

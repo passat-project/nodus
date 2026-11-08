@@ -25,7 +25,11 @@ function setup(removed = 1, opts: { required?: string[]; left?: number } = {}) {
     remove: vi.fn().mockResolvedValue(removed),
     countRole: vi.fn().mockResolvedValue(opts.left ?? 1),
   };
-  const tasksRepo = { findWithParticipants: vi.fn().mockResolvedValue(ROW), touch: vi.fn() };
+  const tasksRepo = {
+    findWithParticipants: vi.fn().mockResolvedValue(ROW),
+    lock: vi.fn(async () => void 0),
+    touch: vi.fn(),
+  };
   const query = {
     visibleRow: vi.fn().mockResolvedValue(ROW),
     detail: vi.fn().mockResolvedValue({ id: 't1' }),
@@ -161,6 +165,7 @@ describe('ParticipantsService: замок состава (#496, Р4)', () => {
     };
     const tasksRepo = {
       findWithParticipants: vi.fn().mockResolvedValue(task),
+      lock: vi.fn(async () => void 0),
       touch: vi.fn(),
       updateFields: vi.fn(async () => void 0),
     };

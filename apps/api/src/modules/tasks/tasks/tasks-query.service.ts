@@ -180,6 +180,8 @@ export class TasksQueryService {
         })
       ).map((definition) => definition.id),
     );
+    // Право пути — часть `canEdit` замка (Р10): без него PATCH даст 403.
+    const access = taskAccess(actorRoles(row, user.id), user.permissions);
     const lockKeys = detailLockKeys(row.fieldLocks, boundFieldIds);
     const refs = await this.mapper.refs([
       ...this.mapper.userIdsOf([row, ...children]),
@@ -245,10 +247,15 @@ export class TasksQueryService {
       layout,
       // Замки записи (#496, Р10): кто и почему закрепил, `canEdit` по
       // правилу замка без причины (окно причины решает клиент).
-      fieldLocks: detailFieldLocks(row.fieldLocks, lockKeys, user, row.creatorId, (userId) =>
-        this.mapper.ref(refs, userId),
+      fieldLocks: detailFieldLocks(
+        row.fieldLocks,
+        lockKeys,
+        user,
+        row.creatorId,
+        access.canEdit,
+        (userId) => this.mapper.ref(refs, userId),
       ),
-      access: taskAccess(actorRoles(row, user.id), user.permissions),
+      access,
       createdAt: full.createdAt.toISOString(),
     };
   }

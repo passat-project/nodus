@@ -70,22 +70,34 @@ describe('detailLockUserIds', () => {
 describe('detailFieldLocks: canEdit', () => {
   it('замок «постановщик» — постановщику можно, остальным нет; «никто» — никому', () => {
     const keys = detailLockKeys(LOCKS, new Set([FIELD]));
-    const asCreator = detailFieldLocks(LOCKS, keys, user(ALICE), ALICE, refOf);
+    const asCreator = detailFieldLocks(LOCKS, keys, user(ALICE), ALICE, true, refOf);
     expect(asCreator.find((lock) => lock.key === 'deadline')?.canEdit).toBe(true);
     expect(asCreator.find((lock) => lock.key === `cf.${FIELD}`)?.canEdit).toBe(false);
 
-    const asOther = detailFieldLocks(LOCKS, keys, user(BOB), ALICE, refOf);
+    const asOther = detailFieldLocks(LOCKS, keys, user(BOB), ALICE, true, refOf);
     expect(asOther.find((lock) => lock.key === 'deadline')?.canEdit).toBe(false);
+  });
+
+  it('нет права пути — canEdit=false даже у постановщика (Р10)', () => {
+    const [lock] = detailFieldLocks(LOCKS, ['deadline'], user(ALICE), ALICE, false, refOf);
+    expect(lock?.canEdit).toBe(false);
   });
 
   it('право task.edit_locked — canEdit у любого замка', () => {
     const keys = detailLockKeys(LOCKS, new Set([FIELD]));
-    const asForce = detailFieldLocks(LOCKS, keys, user(BOB, ['task.edit_locked']), ALICE, refOf);
+    const asForce = detailFieldLocks(
+      LOCKS,
+      keys,
+      user(BOB, ['task.edit_locked']),
+      ALICE,
+      true,
+      refOf,
+    );
     expect(asForce.every((lock) => lock.canEdit)).toBe(true);
   });
 
   it('ссылки и след правки — объектами', () => {
-    const [lock] = detailFieldLocks(LOCKS, ['deadline'], user(BOB), ALICE, refOf);
+    const [lock] = detailFieldLocks(LOCKS, ['deadline'], user(BOB), ALICE, true, refOf);
     expect(lock?.lockedBy).toMatchObject({ id: ALICE });
     expect(lock?.lastChange).toMatchObject({ by: { id: BOB }, reason: 'сдвиг срока' });
     expect(lock?.source).toEqual({ kind: 'creation' });

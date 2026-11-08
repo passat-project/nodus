@@ -32,12 +32,14 @@ export function detailLockUserIds(raw: unknown, keys: readonly string[]): string
   });
 }
 
-/** Замки в форме детали (Р10): `canEdit` — правило замка без причины. */
+/** Замки в форме детали (Р10): `canEdit` — право пути И правило замка без
+ *  причины (окно причины решает клиент; без права пути PATCH вернёт 403). */
 export function detailFieldLocks(
   raw: unknown,
   keys: readonly string[],
   actor: AuthUser,
   creatorId: string,
+  canEditPath: boolean,
   ref: (id: string) => UserRef,
 ): TaskFieldLock[] {
   const locks = fieldLocksOf(raw);
@@ -59,7 +61,8 @@ export function detailFieldLocks(
             },
           }
         : {}),
-      canEdit: lockAllowed(entry.editors, actorOf, null, { ignoreReason: true }).allowed,
+      canEdit:
+        canEditPath && lockAllowed(entry.editors, actorOf, null, { ignoreReason: true }).allowed,
     };
   });
 }
