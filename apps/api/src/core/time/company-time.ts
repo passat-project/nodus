@@ -38,6 +38,11 @@ export function companyMonth(at: Date, timeZone: string = companyTimeZone()): nu
   return Number(companyParts(at, timeZone).month);
 }
 
+/** День месяца по поясу компании (1–31) — период «каждый день» у серий (#630). */
+export function companyDay(at: Date, timeZone: string = companyTimeZone()): number {
+  return Number(companyParts(at, timeZone).day);
+}
+
 /** Дата по поясу компании в формате YYYY-MM-DD (дата регистрации письма). */
 export function companyDate(at: Date, timeZone: string = companyTimeZone()): string {
   const { year, month, day } = companyParts(at, timeZone);

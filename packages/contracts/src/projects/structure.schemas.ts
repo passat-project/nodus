@@ -90,8 +90,12 @@ export const createProjectNodeBodySchema = z.object({
   kindId: z.uuid(),
   name: z.string().trim().min(1).max(NODE_LIMITS.nameLength),
   code: z.string().trim().min(1).max(NODE_LIMITS.codeLength).optional(),
-  /** Значения атрибутов формы вида (#556): проверяет сервер (порт реестра). */
+  /** Значения атрибутов формы вида (#556): проверяет сервер (порт реестра).
+   *  Значения counter-полей отбрасываются молча (номер выдаёт процесс, #630). */
   customFields: customFieldValuesInputSchema.optional(),
+  /** Человек подтвердил номер «при создании» с пустым полем в виде номера
+   *  (#630, окно после 409 NUMBER_SEGMENT_EMPTY). */
+  confirmEmptyNumberParts: z.literal(true).optional(),
 });
 
 export type CreateProjectNodeBody = z.infer<typeof createProjectNodeBodySchema>;
@@ -107,6 +111,8 @@ export const batchCreateProjectNodesBodySchema = z.object({
     .min(1)
     .max(NODE_LIMITS.batch),
   customFields: customFieldValuesInputSchema.optional(),
+  /** Номера «при создании» с пустым полем — подтверждено для всей пачки (#630). */
+  confirmEmptyNumberParts: z.literal(true).optional(),
 });
 
 export type BatchCreateProjectNodesBody = z.infer<typeof batchCreateProjectNodesBodySchema>;
@@ -124,8 +130,12 @@ export const updateProjectNodeBodySchema = z
   .object({
     name: z.string().trim().min(1).max(NODE_LIMITS.nameLength).optional(),
     code: z.string().trim().min(1).max(NODE_LIMITS.codeLength).nullable().optional(),
+    /** Смена вида на вид с номером «при создании» выдаёт номер (#630,
+     *  вердикт 08.11); нет нужного места — 409, вид не меняется. */
     kindId: z.uuid().optional(),
     customFields: customFieldValuesPatchSchema.optional(),
+    /** Номер при смене вида с пустым полем в виде номера — подтверждено (#630). */
+    confirmEmptyNumberParts: z.literal(true).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'empty update' });
 

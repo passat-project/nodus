@@ -238,6 +238,9 @@ export const executeTransitionBodySchema = z
     override: z.boolean().optional(),
     reason: z.string().trim().min(1).max(500).optional(),
     form: transitionFormInputSchema.optional(),
+    /** Человек подтвердил выдачу номера с пустым полем в виде номера
+     *  (#630, окно «выдать так / вернуться» после 409 NUMBER_SEGMENT_EMPTY). */
+    confirmEmptyNumberParts: z.literal(true).optional(),
   })
   .strict();
 export type ExecuteTransitionBody = z.infer<typeof executeTransitionBodySchema>;

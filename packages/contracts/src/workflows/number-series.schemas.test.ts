@@ -1,224 +1,308 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  numberContainerReachable,
-  numberHostHasButtons,
-  resolveNumberContainer,
+  numberContainerKey,
+  numberContainersReachable,
+  resolveNumberContainers,
+  type NumberContainer,
   type NumberPlace,
 } from './number-container.js';
 import {
   numberCountKey,
+  numberCreateTriggerProblem,
+  numberEmptySegments,
   numberPeriodKey,
   numberPeriodsAllowed,
   numberSeriesRuleSchema,
   renderNumberTemplate,
+  type NumberSeriesRule,
+  type NumberTemplateSegment,
 } from './number-series.schemas.js';
 
-const RULE = {
-  container: { kind: 'company' },
-  period: 'year',
-  template: [
-    { kind: 'literal', text: 'Вх' },
-    { kind: 'literal', text: '-' },
-    { kind: 'year', digits: 4 },
-    { kind: 'literal', text: '/' },
-    { kind: 'counter' },
-  ],
+const KIND_KOMPLEKT = '11111111-1111-4111-8111-111111111111';
+const KIND_BUILDING = '22222222-2222-4222-8222-222222222222';
+const at = { year: 2026, month: 11, day: 8 };
+
+const rule = (over: Partial<NumberSeriesRule> = {}): NumberSeriesRule => ({
+  containers: [],
+  period: 'none',
+  template: [{ kind: 'counter' }],
   startValue: 1,
-} as const;
+  step: 1,
+  ...over,
+});
 
-const KOMPLEKT = '44000000-0000-4000-8000-000000000007';
-const OTHER_KIND = '44000000-0000-4000-8000-000000000005';
-const KZH01 = '43000000-0000-4000-8000-000000000101';
-const SUBFOLDER = '43000000-0000-4000-8000-000000000103';
+const place = (over: Partial<NumberPlace> = {}): NumberPlace => ({
+  host: 'task',
+  typeId: 'type-change',
+  folders: [],
+  projectId: null,
+  portfolioId: null,
+  projectTypeId: null,
+  parentTaskId: null,
+  fieldValue: () => null,
+  ...over,
+});
 
-function place(overrides: Partial<NumberPlace> = {}): NumberPlace {
-  return {
-    host: 'task',
-    folders: [],
-    projectId: null,
-    portfolioId: null,
-    projectTypeId: null,
-    parentTaskId: null,
-    fieldValue: () => null,
-    ...overrides,
-  };
-}
-
-describe('numberSeriesRuleSchema (#630)', () => {
-  it('письмо-правило «Вх-ГГГГ/N» валидно; без issueOnCreate — только внешние источники', () => {
-    expect(numberSeriesRuleSchema.parse(RULE)).toEqual({ ...RULE, issueOnCreate: false });
-    expect(numberSeriesRuleSchema.parse({ ...RULE, issueOnCreate: true }).issueOnCreate).toBe(true);
+describe('numberSeriesRuleSchema (#630, модель v3)', () => {
+  it('сквозная нумерация — пустой список условий', () => {
+    expect(numberSeriesRuleSchema.safeParse(rule()).success).toBe(true);
   });
 
-  it('кнопки процесса есть только у задач и писем', () => {
-    expect(numberHostHasButtons('task')).toBe(true);
-    expect(numberHostHasButtons('letter')).toBe(true);
-    expect(numberHostHasButtons('node')).toBe(false);
-    expect(numberHostHasButtons('project')).toBe(false);
-  });
-
-  it('папка, в которой лежит запись: ближайшая папка, в корне — проект', () => {
-    const container = { kind: 'parent_folder' } as const;
+  it('до трёх условий сразу («внутри здания по марке»), дубли запрещены', () => {
+    const two: NumberContainer[] = [
+      { kind: 'folder', nodeKindId: KIND_BUILDING },
+      { kind: 'field', fieldNumber: 7 },
+    ];
+    expect(numberSeriesRuleSchema.safeParse(rule({ containers: two })).success).toBe(true);
     expect(
-      resolveNumberContainer(
-        container,
-        place({ host: 'node', folders: [{ id: KZH01, kindId: KOMPLEKT }], projectId: 'p' }),
-      ),
-    ).toEqual({ ok: true, containerId: KZH01 });
-    expect(resolveNumberContainer(container, place({ host: 'node', projectId: 'p' }))).toEqual({
-      ok: true,
-      containerId: 'p',
-    });
-    expect(numberContainerReachable(container, 'letter')).toBe(false);
-  });
-
-  it('ровно один «Номер»: без него и с двумя — отказ', () => {
-    const noCounter = { ...RULE, period: 'none', template: [{ kind: 'literal', text: 'К' }] };
-    expect(numberSeriesRuleSchema.safeParse(noCounter).success).toBe(false);
-    const twoCounters = { ...RULE, template: [...RULE.template, { kind: 'counter' }] };
-    expect(numberSeriesRuleSchema.safeParse(twoCounters).success).toBe(false);
-  });
-
-  it('«заново каждый год» без года в номере — отказ (номера лет совпали бы)', () => {
-    const rule = { ...RULE, template: [{ kind: 'counter' }] };
-    expect(numberSeriesRuleSchema.safeParse(rule).success).toBe(false);
-    expect(numberSeriesRuleSchema.safeParse({ ...rule, period: 'none' }).success).toBe(true);
-    expect(numberSeriesRuleSchema.safeParse({ ...RULE, period: 'month' }).success).toBe(false);
-  });
-
-  it('контейнер — реальная запись: папка требует вид, поле — номер атрибута', () => {
-    expect(
-      numberSeriesRuleSchema.safeParse({ ...RULE, container: { kind: 'folder' } }).success,
+      numberSeriesRuleSchema.safeParse(
+        rule({ containers: [{ kind: 'project' }, { kind: 'project' }] }),
+      ).success,
     ).toBe(false);
     expect(
-      numberSeriesRuleSchema.safeParse({
-        ...RULE,
-        container: { kind: 'folder', nodeKindId: KOMPLEKT },
-      }).success,
-    ).toBe(true);
+      numberSeriesRuleSchema.safeParse(
+        rule({
+          containers: [
+            { kind: 'project' },
+            { kind: 'portfolio' },
+            { kind: 'record_type' },
+            { kind: 'parent_task' },
+          ],
+        }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it('ровно один «Номер» в виде номера', () => {
     expect(
-      numberSeriesRuleSchema.safeParse({ ...RULE, container: { kind: 'field', fieldNumber: 7 } })
+      numberSeriesRuleSchema.safeParse(rule({ template: [{ kind: 'year', digits: 4 }] })).success,
+    ).toBe(false);
+  });
+
+  it('поле из папки требует вид папки, и только оно', () => {
+    const folderField: NumberTemplateSegment = { kind: 'field', fieldNumber: 3, source: 'folder' };
+    expect(
+      numberSeriesRuleSchema.safeParse(rule({ template: [folderField, { kind: 'counter' }] }))
         .success,
+    ).toBe(false);
+    expect(
+      numberSeriesRuleSchema.safeParse(
+        rule({ template: [{ ...folderField, nodeKindId: KIND_KOMPLEKT }, { kind: 'counter' }] }),
+      ).success,
     ).toBe(true);
-  });
-
-  it('старт меньше 1 и пустой шаблон — отказ', () => {
-    expect(numberSeriesRuleSchema.safeParse({ ...RULE, startValue: 0 }).success).toBe(false);
-    expect(numberSeriesRuleSchema.safeParse({ ...RULE, template: [] }).success).toBe(false);
-  });
-});
-
-describe('период и ключ счёта', () => {
-  it('допустимые «заново» следуют за датами в номере', () => {
-    expect(numberPeriodsAllowed([{ kind: 'counter' }])).toEqual(['none']);
-    expect(numberPeriodsAllowed(RULE.template)).toEqual(['none', 'year']);
     expect(
-      numberPeriodsAllowed([{ kind: 'counter' }, { kind: 'month' }, { kind: 'year', digits: 2 }]),
-    ).toEqual(['none', 'year', 'month']);
+      numberSeriesRuleSchema.safeParse(
+        rule({
+          template: [
+            { kind: 'field', fieldNumber: 3, source: 'project', nodeKindId: KIND_KOMPLEKT },
+            { kind: 'counter' },
+          ],
+        }),
+      ).success,
+    ).toBe(false);
   });
 
-  it('ключ: письма — «2026» (формат прода), папка — «uuid|2026», общий — common', () => {
-    expect(numberCountKey(null, numberPeriodKey('year', { year: 2026, month: 3 }))).toBe('2026');
-    expect(numberCountKey(KZH01, numberPeriodKey('none', { year: 2026, month: 3 }))).toBe(KZH01);
-    expect(numberCountKey(KZH01, numberPeriodKey('month', { year: 2026, month: 3 }))).toBe(
-      `${KZH01}|2026-03`,
-    );
-    expect(numberCountKey(null, '')).toBe('common');
-  });
-
-  it('книга изменений «15-26»: добивка и год двумя цифрами', () => {
-    const template = [
-      { kind: 'counter', minLength: 2 },
-      { kind: 'literal', text: '-' },
-      { kind: 'year', digits: 2 },
-    ] as const;
-    expect(renderNumberTemplate(template, { seq: 1, year: 2027, month: 1 })).toBe('01-27');
+  it('шаг — от 1', () => {
+    expect(numberSeriesRuleSchema.safeParse(rule({ step: 0 })).success).toBe(false);
+    expect(numberSeriesRuleSchema.safeParse(rule({ step: 10 })).success).toBe(true);
   });
 });
 
-describe('resolveNumberContainer — реальное место записи', () => {
-  it('Кейс A: задача во вложенной папке — ближайшая «Комплект» выше', () => {
-    const result = resolveNumberContainer(
-      { kind: 'folder', nodeKindId: KOMPLEKT },
-      place({
-        folders: [
-          { id: SUBFOLDER, kindId: OTHER_KIND },
-          { id: KZH01, kindId: KOMPLEKT },
+describe('numberPeriodsAllowed: без года номера соседних лет совпадут', () => {
+  it('месяц без года — только «никогда»', () => {
+    expect(numberPeriodsAllowed([{ kind: 'month' }, { kind: 'counter' }])).toEqual(['none']);
+  });
+  it('год — каждый год; год+месяц — ещё квартал и месяц; +день — каждый день', () => {
+    expect(numberPeriodsAllowed([{ kind: 'counter' }, { kind: 'year', digits: 2 }])).toEqual([
+      'none',
+      'year',
+    ]);
+    expect(
+      numberPeriodsAllowed([{ kind: 'year', digits: 4 }, { kind: 'month' }, { kind: 'counter' }]),
+    ).toEqual(['none', 'year', 'quarter', 'month']);
+    expect(
+      numberPeriodsAllowed([
+        { kind: 'year', digits: 4 },
+        { kind: 'month' },
+        { kind: 'day' },
+        { kind: 'counter' },
+      ]),
+    ).toEqual(['none', 'year', 'quarter', 'month', 'day']);
+    expect(
+      numberPeriodsAllowed([{ kind: 'year', digits: 4 }, { kind: 'quarter' }, { kind: 'counter' }]),
+    ).toEqual(['none', 'year', 'quarter']);
+  });
+  it('правило с месяцем без года и заново каждый месяц не сохраняется', () => {
+    expect(
+      numberSeriesRuleSchema.safeParse(
+        rule({ period: 'month', template: [{ kind: 'month' }, { kind: 'counter' }] }),
+      ).success,
+    ).toBe(false);
+  });
+});
+
+describe('ключ счёта и период', () => {
+  it('письма — «2026» бит-в-бит (#55)', () => {
+    expect(numberCountKey([], numberPeriodKey('year', at))).toBe('2026');
+  });
+  it('условия через «|», без частей — common', () => {
+    expect(numberCountKey(['a', 'b'], '2026-Q4')).toBe('a|b|2026-Q4');
+    expect(numberCountKey([], '')).toBe('common');
+  });
+  it('квартал, месяц, день', () => {
+    expect(numberPeriodKey('quarter', at)).toBe('2026-Q4');
+    expect(numberPeriodKey('month', at)).toBe('2026-11');
+    expect(numberPeriodKey('day', at)).toBe('2026-11-08');
+  });
+});
+
+describe('renderNumberTemplate', () => {
+  it('книга «15-26», письмо «Вх-2026/118», накладная «0412-7», дата «20261108-1»', () => {
+    expect(
+      renderNumberTemplate(
+        [{ kind: 'counter' }, { kind: 'literal', text: '-' }, { kind: 'year', digits: 2 }],
+        { ...at, seq: 15 },
+      ),
+    ).toBe('15-26');
+    expect(
+      renderNumberTemplate(
+        [
+          { kind: 'literal', text: 'Вх' },
+          { kind: 'literal', text: '-' },
+          { kind: 'year', digits: 4 },
+          { kind: 'literal', text: '/' },
+          { kind: 'counter' },
         ],
-      }),
+        { ...at, seq: 118 },
+      ),
+    ).toBe('Вх-2026/118');
+    expect(
+      renderNumberTemplate(
+        [
+          { kind: 'field', fieldNumber: 9, source: 'project' },
+          { kind: 'literal', text: '-' },
+          { kind: 'counter' },
+        ],
+        { ...at, seq: 7, field: () => '0412' },
+      ),
+    ).toBe('0412-7');
+    expect(
+      renderNumberTemplate(
+        [
+          { kind: 'year', digits: 4 },
+          { kind: 'month' },
+          { kind: 'day' },
+          { kind: 'literal', text: '-' },
+          { kind: 'counter' },
+          { kind: 'literal', text: '/К' },
+          { kind: 'quarter' },
+        ],
+        { ...at, seq: 1 },
+      ),
+    ).toBe('20261108-1/К4');
+  });
+});
+
+describe('numberEmptySegments: пустое поле — окно «выдать так / вернуться»', () => {
+  it('находит пустые вставки', () => {
+    const template: NumberTemplateSegment[] = [
+      { kind: 'field', fieldNumber: 9, source: 'project' },
+      { kind: 'literal', text: '-' },
+      { kind: 'counter' },
+    ];
+    expect(numberEmptySegments(template, () => '  ')).toHaveLength(1);
+    expect(numberEmptySegments(template, () => '0412')).toHaveLength(0);
+  });
+});
+
+describe('resolveNumberContainers: значения условий по месту записи', () => {
+  const kzh01 = { id: 'kzh01', kindId: KIND_KOMPLEKT };
+  const building1 = { id: 'b1', kindId: KIND_BUILDING };
+
+  it('«Изм.» в КЖ-01 — ближайшая папка вида «Комплект»', () => {
+    const resolved = resolveNumberContainers(
+      [{ kind: 'folder', nodeKindId: KIND_KOMPLEKT }],
+      place({ folders: [kzh01, building1], projectId: 'p4' }),
     );
-    expect(result).toEqual({ ok: true, containerId: KZH01 });
+    expect(resolved).toEqual({ ok: true, hits: [{ entity: 'node', id: 'kzh01' }] });
   });
 
-  it('Кейс A: задача не в комплекте — no_folder, номер не выдаётся', () => {
-    const result = resolveNumberContainer(
-      { kind: 'folder', nodeKindId: KOMPLEKT },
-      place({ folders: [{ id: SUBFOLDER, kindId: OTHER_KIND }] }),
-    );
-    expect(result).toEqual({ ok: false, reason: 'no_folder' });
-  });
-
-  it('Кейс B: портфель через проект; без проекта или портфеля — причина', () => {
-    const portfolio = { kind: 'portfolio' } as const;
-    expect(resolveNumberContainer(portfolio, place({ projectId: 'p', portfolioId: 'g' }))).toEqual({
+  it('два условия: здание × марка; нет марки — причина и номер условия', () => {
+    const containers: NumberContainer[] = [
+      { kind: 'folder', nodeKindId: KIND_BUILDING },
+      { kind: 'field', fieldNumber: 7 },
+    ];
+    expect(
+      resolveNumberContainers(
+        containers,
+        place({ host: 'node', folders: [building1], projectId: 'p4', fieldValue: () => 'mark-ov' }),
+      ),
+    ).toEqual({
       ok: true,
-      containerId: 'g',
+      hits: [
+        { entity: 'node', id: 'b1' },
+        { entity: 'value', id: 'mark-ov' },
+      ],
     });
-    expect(resolveNumberContainer(portfolio, place({ projectId: 'p' }))).toEqual({
-      ok: false,
-      reason: 'no_portfolio',
+    expect(
+      resolveNumberContainers(
+        containers,
+        place({ host: 'node', folders: [building1], projectId: 'p4' }),
+      ),
+    ).toEqual({ ok: false, reason: 'empty_field', index: 1 });
+  });
+
+  it('«папка, где лежит»: в корне проекта — сам проект', () => {
+    expect(
+      resolveNumberContainers([{ kind: 'parent_folder' }], place({ projectId: 'p4' })),
+    ).toEqual({ ok: true, hits: [{ entity: 'project', id: 'p4' }] });
+  });
+
+  it('свой тип записи и портфель проекта-хоста', () => {
+    expect(
+      resolveNumberContainers(
+        [{ kind: 'record_type' }, { kind: 'portfolio' }],
+        place({ host: 'project', typeId: 'contract', portfolioId: 'metro' }),
+      ),
+    ).toEqual({
+      ok: true,
+      hits: [
+        { entity: 'type', id: 'contract' },
+        { entity: 'portfolio', id: 'metro' },
+      ],
     });
-    expect(resolveNumberContainer(portfolio, place())).toEqual({
-      ok: false,
-      reason: 'no_project',
-    });
-    expect(resolveNumberContainer(portfolio, place({ host: 'project', portfolioId: 'g' }))).toEqual(
-      { ok: true, containerId: 'g' },
+  });
+
+  it('письмо в папке не лежит — несовместимо', () => {
+    expect(
+      numberContainersReachable([{ kind: 'folder', nodeKindId: KIND_KOMPLEKT }], 'letter'),
+    ).toBe(false);
+    expect(numberContainerKey({ kind: 'field', fieldNumber: 7 })).toBe('field:7');
+  });
+});
+
+describe('numberCreateTriggerProblem: письмо с почты приходит без проекта и полей', () => {
+  it('сквозной номер письма при создании — можно', () => {
+    expect(numberCreateTriggerProblem(rule(), 'letter')).toBeNull();
+    expect(
+      numberCreateTriggerProblem(rule({ containers: [{ kind: 'record_type' }] }), 'letter'),
+    ).toBeNull();
+  });
+  it('по проекту или с полем письма — только кнопкой', () => {
+    expect(numberCreateTriggerProblem(rule({ containers: [{ kind: 'project' }] }), 'letter')).toBe(
+      'letter_place',
     );
-  });
-
-  it('тип проекта: все проекты типа — один счёт; без проекта — no_project', () => {
-    const container = { kind: 'project_type' } as const;
     expect(
-      resolveNumberContainer(container, place({ projectId: 'p', projectTypeId: 't' })),
-    ).toEqual({ ok: true, containerId: 't' });
-    expect(resolveNumberContainer(container, place())).toEqual({ ok: false, reason: 'no_project' });
+      numberCreateTriggerProblem(
+        rule({
+          template: [{ kind: 'field', fieldNumber: 2, source: 'self' }, { kind: 'counter' }],
+        }),
+        'letter',
+      ),
+    ).toBe('letter_fields');
     expect(
-      resolveNumberContainer(container, place({ host: 'project', projectTypeId: 't' })),
-    ).toEqual({ ok: true, containerId: 't' });
-  });
-
-  it('Кейс C: вся компания — контейнера нет (null), подходит любой записи', () => {
-    for (const host of ['task', 'letter', 'node', 'project'] as const) {
-      expect(resolveNumberContainer({ kind: 'company' }, place({ host }))).toEqual({
-        ok: true,
-        containerId: null,
-      });
-    }
-  });
-
-  it('совместимость: письма не в папках, проект не в проекте, подзадачи — только задачи', () => {
-    const folder = { kind: 'folder', nodeKindId: KOMPLEKT } as const;
-    expect(numberContainerReachable(folder, 'letter')).toBe(false);
-    expect(numberContainerReachable(folder, 'project')).toBe(false);
-    expect(numberContainerReachable({ kind: 'project' }, 'project')).toBe(false);
-    expect(numberContainerReachable({ kind: 'project' }, 'letter')).toBe(true);
-    expect(numberContainerReachable({ kind: 'parent_task' }, 'node')).toBe(false);
-    expect(resolveNumberContainer(folder, place({ host: 'letter' }))).toEqual({
-      ok: false,
-      reason: 'unreachable',
-    });
-  });
-
-  it('значение поля: пусто — empty_field, иначе id варианта/ссылки', () => {
-    const container = { kind: 'field', fieldNumber: 7 } as const;
-    expect(resolveNumberContainer(container, place())).toEqual({
-      ok: false,
-      reason: 'empty_field',
-    });
-    expect(
-      resolveNumberContainer(container, place({ fieldValue: (n) => (n === 7 ? 'v' : null) })),
-    ).toEqual({ ok: true, containerId: 'v' });
+      numberCreateTriggerProblem(rule({ containers: [{ kind: 'project' }] }), 'task'),
+    ).toBeNull();
   });
 });

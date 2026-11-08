@@ -102,7 +102,7 @@ export class CatalogRepository {
           prefix: def.prefix,
           reset: 'year',
           name: def.name,
-          containerKind: 'company',
+          containers: [],
           period: 'year',
           template: letterSeriesTemplate(def.prefix) as unknown as Prisma.InputJsonValue,
           startValue: 1,

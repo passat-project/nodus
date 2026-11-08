@@ -246,8 +246,12 @@ export const createTaskBodySchema = z.object({
    *  одна задача на сообщение). Поручения из писем создаёт обработчик
    *  события корреспонденции, не клиент. */
   sourceMessageId: z.uuid().optional(),
-  /** Значения кастомных полей области задачи; умолчания подставляет сервер. */
+  /** Значения кастомных полей области задачи; умолчания подставляет сервер.
+   *  Значения counter-полей отбрасываются молча (номер выдаёт процесс, #630). */
   customFields: customFieldValuesInputSchema.optional(),
+  /** Человек подтвердил номер «при создании» с пустым полем в виде номера
+   *  (#630, окно после 409 NUMBER_SEGMENT_EMPTY). */
+  confirmEmptyNumberParts: z.literal(true).optional(),
 });
 
 export type CreateTaskBody = z.infer<typeof createTaskBodySchema>;
@@ -325,6 +329,9 @@ export type ExecuteTransitionResult = z.infer<typeof executeTransitionResultSche
 export const changeTaskTypeBodySchema = z.object({
   typeId: z.uuid(),
   stageId: z.uuid().optional(),
+  /** Номер при смене типа на тип с «при создании» (#630, вердикт 08.11):
+   *  подтверждение пустого поля в виде номера (после 409 NUMBER_SEGMENT_EMPTY). */
+  confirmEmptyNumberParts: z.literal(true).optional(),
 });
 export type ChangeTaskTypeBody = z.infer<typeof changeTaskTypeBodySchema>;
 

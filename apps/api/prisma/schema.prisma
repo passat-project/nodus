@@ -1102,19 +1102,17 @@ model NumberSeries {
   reset     String   @default("year")
   /// Человекочитаемое имя: «Входящие письма», «Изм.».
   name      String
-  /// Выдавать номер при создании записи — один из источников выдачи (кнопки
-  /// маршрутов, позже правила #448/шаги #634/строки реестров #636 — свои).
-  issueOnCreate Boolean @default(false) @map("issue_on_create")
-  /// Где вести свой счёт: company|folder|parent_folder|project|project_type|portfolio|parent_task|field (CHECK).
-  containerKind String @default("company") @map("container_kind")
-  /// folder — id вида папки; field — внутренний номер атрибута; иначе null (CHECK).
-  containerRef  String? @map("container_ref")
-  /// Когда заново: none|year|month (CHECK); допустимость — по датам в шаблоне.
+  /// «Вести счёт отдельно для»: список условий 0–3 (`numberContainerSchema`),
+  /// пусто — сквозная. Когда выдаётся — у привязок (`FieldBinding.numberOnCreate`).
+  containers Json    @default("[]")
+  /// Когда заново: none|year|quarter|month|day (CHECK); допустимость — по датам в шаблоне.
   period    String   @default("none")
-  /// Шаблон номера: сегменты counter/literal/year/month/field (`numberSeriesRuleSchema`).
+  /// Шаблон номера: сегменты counter/literal/year/quarter/month/day/field.
   template  Json
   /// С какого номера начинается КАЖДЫЙ новый счёт (новая папка, новый год).
   startValue Int     @default(1) @map("start_value")
+  /// Шаг номера (1–1000, CHECK).
+  step      Int      @default(1)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
@@ -1135,17 +1133,17 @@ model NumberCounter {
   scopeKey    String   @map("scope_key")
   year        Int
   lastValue   Int      @default(0) @map("last_value")
-  /// Контейнер счёта (папка/проект/портфель/задача/значение) — plain UUID
-  /// без FK (полиморфный, чужие модули, I3); null — вся компания.
-  containerId String?  @map("container_id") @db.Uuid
-  /// '' | '2026' | '2026-11' — период счёта.
+  /// Значения условий счёта [{entity, id}] в порядке правила — plain UUID без
+  /// FK (полиморфные, чужие модули, I3); [] — сквозная.
+  containerRefs Json   @default("[]") @map("container_refs")
+  /// '' | '2026' | '2026-Q1' | '2026-11' | '2026-11-08' — период счёта.
   periodKey   String   @default("") @map("period_key")
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   series NumberSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
   @@id([seriesId, scopeKey])
-  @@index([seriesId, containerId])
+  @@index([containerRefs(ops: JsonbPathOps)], type: Gin)
   @@map("number_counters")
 }
 
@@ -1157,7 +1155,8 @@ model NumberAssignment {
   id          String   @id @default(uuid()) @db.Uuid
   seriesId    String   @map("series_id") @db.Uuid
   scopeKey    String   @map("scope_key")
-  containerId String?  @map("container_id") @db.Uuid
+  /// Значения условий счёта [{entity, id}] на момент выдачи.
+  containerRefs Json   @default("[]") @map("container_refs")
   periodKey   String   @map("period_key")
   seq         Int
   display     String
@@ -1168,10 +1167,17 @@ model NumberAssignment {
   fieldId     String?  @map("field_id") @db.Uuid
   /// Кто нажал — plain UUID без FK (пользователь живёт в auth, I3).
   actorId     String?  @map("actor_id") @db.Uuid
+  /// Способ выдачи: create|type_change|transition|backfill|rule|registry|import (CHECK).
+  source      String
+  /// Название кнопки на момент выдачи (у transition), иначе null.
+  sourceLabel String?  @map("source_label")
   assignedAt  DateTime @default(now()) @map("assigned_at") @db.Timestamptz()
 
   series NumberSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
+  /// Номер в счёте не повторяется; один номер счётчика на запись.
+  @@unique([seriesId, scopeKey, seq])
+  @@unique([seriesId, hostKind, hostId, fieldId])
   @@index([seriesId, assignedAt])
   @@index([hostKind, hostId])
   @@map("number_assignments")
@@ -1809,6 +1815,9 @@ model FieldBinding {
   /// значения и своей формулы. У каждой привязки своя формула — у одного
   /// атрибута в разных типах/видах формулы разные. JSONB — AST `formula.ts`.
   defaultFormula Json?  @map("default_formula")
+  /// Счётчик (#630, модель v3): этот тип получает номер при создании записи
+  /// и при смене типа/вида на этот. Кнопки — в маршрутах (`assign_number`).
+  numberOnCreate Boolean @default(false) @map("number_on_create")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
   definition FieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)

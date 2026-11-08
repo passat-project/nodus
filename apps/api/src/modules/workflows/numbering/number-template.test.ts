@@ -90,25 +90,31 @@ describe('parseNumberTemplate', () => {
   });
 });
 
-describe('numberCountOf (#630)', () => {
-  const key = (period: 'none' | 'year' | 'month', at: Date, container: string | null) =>
-    numberCountOf(period, at, container).scopeKey;
+describe('numberCountOf (#630, модель v3)', () => {
+  type Period = 'none' | 'year' | 'quarter' | 'month' | 'day';
+  const node = (id: string) => ({ entity: 'node' as const, id });
+  const key = (period: Period, at: Date, ids: string[] = []) =>
+    numberCountOf(period, at, ids.map(node)).scopeKey;
 
-  it('вся компания: год → «2026» (формат прода писем), месяц → «2026-06», никогда → common', () => {
-    expect(key('year', JUN_2026, null)).toBe('2026');
-    expect(key('month', JUN_2026, null)).toBe('2026-06');
-    expect(key('none', JUN_2026, null)).toBe('common');
+  it('сквозная: год → «2026» (формат прода писем), месяц → «2026-06», никогда → common', () => {
+    expect(key('year', JUN_2026)).toBe('2026');
+    expect(key('month', JUN_2026)).toBe('2026-06');
+    expect(key('quarter', JUN_2026)).toBe('2026-Q2');
+    expect(key('none', JUN_2026)).toBe('common');
   });
 
-  it('годовой переход 31.12→01.01: ключ меняется по Минску (К4)', () => {
-    expect(key('year', NEW_YEAR, null)).toBe('2027');
-    expect(numberCountOf('month', NEW_YEAR, null).periodKey).toBe('2027-01');
+  it('годовой переход 31.12→01.01: ключ меняется по Минску', () => {
+    expect(key('year', NEW_YEAR)).toBe('2027');
+    expect(numberCountOf('month', NEW_YEAR, []).periodKey).toBe('2027-01');
+    expect(numberCountOf('day', NEW_YEAR, []).periodKey).toBe('2027-01-01');
   });
 
-  it('контейнер + период через «|»; без периода — только id контейнера', () => {
+  it('значения условий + период через «|»; без периода — только id', () => {
     const folder = '0b2b4f3e-9c1e-4d5f-8a1b-2c3d4e5f6071';
-    expect(key('year', JUN_2026, folder)).toBe(`${folder}|2026`);
-    expect(key('none', JUN_2026, folder)).toBe(folder);
-    expect(numberCountOf('none', JUN_2026, folder).periodKey).toBe('');
+    const mark = '1c3c5f4f-0d2f-4e6a-9b2c-3d4e5f607182';
+    expect(key('year', JUN_2026, [folder])).toBe(`${folder}|2026`);
+    expect(key('none', JUN_2026, [folder])).toBe(folder);
+    expect(key('none', JUN_2026, [folder, mark])).toBe(`${folder}|${mark}`);
+    expect(numberCountOf('none', JUN_2026, [node(folder)]).periodKey).toBe('');
   });
 });

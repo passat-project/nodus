@@ -3,7 +3,9 @@ import {
   ErrorCode,
   normalizeTypeConfig,
   numberPeriodSchema,
+  type NumberContainerHit,
   type NumberHostKind,
+  type NumberIssueSource,
 } from '@nodus/contracts';
 
 import { Prisma } from '../../../generated/prisma/client.js';
@@ -12,13 +14,13 @@ import { DomainException } from '../../../core/errors/domain-exception.js';
 import { companyYear } from '../../../core/time/company-time.js';
 import { numberCountOf, parseNumberTemplate, renderNumberTemplate } from './number-template.js';
 
-/** Выданный номер: серия, счёт (контейнер × период), порядковый номер и печатная строка. */
+/** Выданный номер: серия, счёт (значения условий × период), порядковый номер и печатная строка. */
 export interface AssignedNumber {
   seriesId: string;
   /** Ключ счёта (PK строки `number_counters`). */
   scopeKey: string;
-  /** Контейнер счёта: id папки/проекта/портфеля/задачи/значения; null — вся компания. */
-  containerId: string | null;
+  /** Значения условий счёта в порядке правила; [] — сквозная. */
+  hits: NumberContainerHit[];
   periodKey: string;
   year: number;
   seq: number;
@@ -27,18 +29,22 @@ export interface AssignedNumber {
   assignedAt: Date;
 }
 
-/** Кому выдан номер — строка журнала `number_assignments`. */
+/** Кому и как выдан номер — строка журнала `number_assignments`. */
 export interface NumberHost {
   kind: NumberHostKind;
   id: string;
   /** Атрибут-цель (null у письмо-серий). */
   fieldId: string | null;
   actorId: string | null;
+  /** Способ выдачи: при создании, кнопкой, выдача существующим… */
+  source: NumberIssueSource;
+  /** Название кнопки на момент выдачи (у `transition`). */
+  sourceLabel?: string | null;
 }
 
 export interface NextNumberInput {
-  /** Контейнер счёта, найденный вызывающим (`resolveNumberContainer`); null — вся компания. */
-  containerId: string | null;
+  /** Значения условий, найденные вызывающим (`resolveNumberContainers`); [] — сквозная. */
+  hits: readonly NumberContainerHit[];
   at?: Date;
   /** Журнал выдачи: без host строка журнала не пишется (только тесты низкого уровня). */
   host?: NumberHost;
@@ -49,25 +55,28 @@ interface SeriesRow {
   period: string;
   template: unknown;
   startValue: number;
+  step: number;
 }
 
 /**
- * Серии номеров (#55 → #630): номер выдаётся в транзакции действия
- * (переход с `assign_number`), поэтому откат действия не сдвигает счётчик —
- * без пропусков и дублей. Счёт — строка `(series_id, scope_key)` = контейнер
- * × период; upsert `last_value + 1` сериализует параллельные выдачи. Первый
- * номер нового счёта — `start_value` серии; продолжение конкретного счёта
- * из Excel — `setNext` (только вперёд).
+ * Серии номеров (#55 → #630, модель v3): номер выдаётся в транзакции
+ * действия (создание, переход с `assign_number`, выдача существующим),
+ * поэтому откат действия не сдвигает счётчик — без пропусков и дублей. Счёт
+ * — строка `(series_id, scope_key)` = значения условий × период; upsert
+ * `last_value + step` сериализует параллельные выдачи. Первый номер нового
+ * счёта — `start_value` серии; продолжение конкретного счёта из Excel —
+ * `setNext` (только вперёд).
  *
  * Единственный писатель `number_counters` и `number_assignments`. Поиск
- * контейнера записи (порты модулей + `resolveNumberContainer`) — у
- * вызывающего: сервис получает готовый `containerId`.
+ * значений условий записи (порты модулей + `resolveNumberContainers`) — у
+ * вызывающего: сервис получает готовые `hits`. Порядок блокировок при
+ * нескольких номерах одного действия — по id серии (вызывающий сортирует).
  */
 @Injectable()
 export class NumberSeriesService {
   /**
    * Следующий номер типа процесса (письма): серия из `config.numbering`,
-   * контейнер — вся компания. Нет серии — 409 `WORKFLOW_NUMBERING_NOT_CONFIGURED`.
+   * сквозная. Нет серии — 409 `WORKFLOW_NUMBERING_NOT_CONFIGURED`.
    */
   async nextForType(
     tx: TransactionClient,
@@ -87,13 +96,13 @@ export class NumberSeriesService {
         { typeId },
       );
     }
-    return this.next(tx, seriesId, { containerId: null, at, host });
+    return this.next(tx, seriesId, { hits: [], at, host });
   }
 
   /**
-   * Следующий номер серии в счёте контейнера. Первый номер нового счёта —
-   * `startValue` серии (или «следующий номер», заданный `setNext`); откат
-   * транзакции не сдвигает счётчик.
+   * Следующий номер серии в счёте значений условий. Первый номер нового
+   * счёта — `startValue` серии (или «следующий номер», заданный `setNext`);
+   * откат транзакции не сдвигает счётчик.
    */
   async next(
     tx: TransactionClient,
@@ -112,15 +121,18 @@ export class NumberSeriesService {
         { seriesId },
       );
     }
-    const { periodKey, scopeKey } = numberCountOf(this.period(series), at, input.containerId);
+    const hits = [...input.hits];
+    const { periodKey, scopeKey } = numberCountOf(this.period(series), at, hits);
     const year = companyYear(at);
+    const refs = JSON.stringify(hits);
     const rows = await tx.$queryRaw<{ last_value: number }[]>(Prisma.sql`
       INSERT INTO "number_counters"
-        ("series_id", "scope_key", "year", "last_value", "container_id", "period_key")
+        ("series_id", "scope_key", "year", "last_value", "container_refs", "period_key")
       VALUES (${seriesId}::uuid, ${scopeKey}, ${year}, ${series.startValue},
-              ${input.containerId}::uuid, ${periodKey})
+              ${refs}::jsonb, ${periodKey})
       ON CONFLICT ("series_id", "scope_key")
-        DO UPDATE SET "last_value" = "number_counters"."last_value" + 1, "updated_at" = now()
+        DO UPDATE SET "last_value" = "number_counters"."last_value" + ${series.step},
+                      "updated_at" = now()
       RETURNING "last_value"
     `);
     const seq = rows[0]!.last_value;
@@ -130,7 +142,7 @@ export class NumberSeriesService {
         data: {
           seriesId,
           scopeKey,
-          containerId: input.containerId,
+          containerRefs: hits as unknown as Prisma.InputJsonValue,
           periodKey,
           seq,
           display,
@@ -138,42 +150,36 @@ export class NumberSeriesService {
           hostId: input.host.id,
           fieldId: input.host.fieldId,
           actorId: input.host.actorId,
+          source: input.host.source,
+          sourceLabel: input.host.sourceLabel ?? null,
           assignedAt: at,
         },
       });
     }
-    return {
-      seriesId,
-      scopeKey,
-      containerId: input.containerId,
-      periodKey,
-      year,
-      seq,
-      display,
-      assignedAt: at,
-    };
+    return { seriesId, scopeKey, hits, periodKey, year, seq, display, assignedAt: at };
   }
 
   /**
    * «Следующий номер» счёта текущего периода — только вперёд (продолжение
-   * из Excel/с бумаги). Счёта ещё нет — создаётся с `last_value = next - 1`.
+   * из Excel/с бумаги). Счёта ещё нет — создаётся с `last_value = next − step`.
    * Меньше уже выданного — 409 `NUMBER_NEXT_BACKWARDS` (номера не
    * переиспользуются); равный текущему следующему — без изменений.
    */
   async setNext(
     tx: TransactionClient,
     seriesId: string,
-    input: { containerId: string | null; nextValue: number; at?: Date },
+    input: { hits: readonly NumberContainerHit[]; nextValue: number; at?: Date },
   ): Promise<{ lastValue: number }> {
     const at = input.at ?? new Date();
     const series = await this.series(tx, seriesId);
-    const { periodKey, scopeKey } = numberCountOf(this.period(series), at, input.containerId);
-    const target = input.nextValue - 1;
+    const hits = [...input.hits];
+    const { periodKey, scopeKey } = numberCountOf(this.period(series), at, hits);
+    const target = input.nextValue - series.step;
     const rows = await tx.$queryRaw<{ last_value: number }[]>(Prisma.sql`
       INSERT INTO "number_counters"
-        ("series_id", "scope_key", "year", "last_value", "container_id", "period_key")
+        ("series_id", "scope_key", "year", "last_value", "container_refs", "period_key")
       VALUES (${seriesId}::uuid, ${scopeKey}, ${companyYear(at)}, ${target},
-              ${input.containerId}::uuid, ${periodKey})
+              ${JSON.stringify(hits)}::jsonb, ${periodKey})
       ON CONFLICT ("series_id", "scope_key")
         DO UPDATE SET "last_value" = EXCLUDED."last_value", "updated_at" = now()
         WHERE "number_counters"."last_value" <= EXCLUDED."last_value"
@@ -201,7 +207,7 @@ export class NumberSeriesService {
   private async series(tx: TransactionClient, seriesId: string): Promise<SeriesRow> {
     const series = await tx.numberSeries.findUnique({
       where: { id: seriesId },
-      select: { id: true, period: true, template: true, startValue: true },
+      select: { id: true, period: true, template: true, startValue: true, step: true },
     });
     if (!series) {
       throw new DomainException(

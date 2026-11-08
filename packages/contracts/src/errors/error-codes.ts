@@ -169,6 +169,16 @@ export const ErrorCode = {
   COUNTER_FORMULA_FORBIDDEN: 'COUNTER_FORMULA_FORBIDDEN',
   /** Счётчик руками не пишется (#630, Р10): номер выдаёт только движок. */
   NUMBER_CELL_IMMUTABLE: 'NUMBER_CELL_IMMUTABLE',
+  /** В виде номера есть поле, пустое у этой записи (#630, вердикт 08.11):
+   *  без подтверждения (`confirmEmptyNumberParts`) номер не выдан и не
+   *  потрачен — окно «выдать так / вернуться». `details.segments` — какие. */
+  NUMBER_SEGMENT_EMPTY: 'NUMBER_SEGMENT_EMPTY',
+  /** «При создании» указан для не привязанного типа или невозможен этому
+   *  виду записей (письмо со счётом по месту или полями письма) (#630). */
+  NUMBER_TRIGGER_INVALID: 'NUMBER_TRIGGER_INVALID',
+  /** Выдача существующим: записей без номера стало другое число, чем в
+   *  предпросмотре (#630) — показать свежий предпросмотр. */
+  NUMBER_BACKFILL_STALE: 'NUMBER_BACKFILL_STALE',
   /** Системный справочник защищён от удаления вариантов и переименования (#431, Р10). */
   DICTIONARY_SYSTEM_LOCKED: 'DICTIONARY_SYSTEM_LOCKED',
   /** Вариант с таким названием уже есть среди активных (#431). */
