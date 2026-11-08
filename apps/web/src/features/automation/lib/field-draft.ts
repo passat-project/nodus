@@ -13,7 +13,12 @@ import type {
   StageColor,
   UpdateCustomFieldBody,
 } from '@nodus/contracts';
-import { EMPTY_CUSTOM_FIELD_BINDINGS } from '@nodus/contracts';
+import type { NumberHostKind } from '@nodus/contracts';
+import {
+  EMPTY_CUSTOM_FIELD_BINDINGS,
+  numberContainerReachable,
+  numberSeriesRuleSchema,
+} from '@nodus/contracts';
 
 import {
   baseTypeOf,
@@ -76,9 +81,12 @@ export interface FieldDraft {
   bindings: CustomFieldBindings;
   /** Формулы типа/вида по привязкам (#632): id цели → AST. */
   bindingFormulas: Record<string, FormulaNode>;
-  /** Правило серии counter-атрибута (#630, Р6): живёт в черновике всегда,
-   *  отправляется только при family='counter'. */
+  /** Правило счётчика (#630): живёт в черновике всегда, отправляется только
+   *  при family='counter'. */
   numbering: NumberSeriesRule;
+  /** «Следующий номер» общего счёта при создании (контейнер «вся
+   *  компания»); null — с начала («Каждый новый счёт начинается с»). */
+  numberingNext: number | null;
 }
 
 export const emptyDraft: FieldDraft = {
@@ -99,6 +107,7 @@ export const emptyDraft: FieldDraft = {
   bindings: EMPTY_CUSTOM_FIELD_BINDINGS,
   bindingFormulas: {},
   numbering: DEFAULT_COUNTER_RULE,
+  numberingNext: null,
 };
 
 export function isListFamily(family: FieldFamily | null): boolean {
@@ -156,6 +165,7 @@ export function draftOf(
     },
     bindingFormulas: definition.type === 'counter' ? {} : { ...(definition.bindingFormulas ?? {}) },
     numbering: definition.numbering?.rule ?? DEFAULT_COUNTER_RULE,
+    numberingNext: null,
   };
 }
 
@@ -214,10 +224,27 @@ export function draftDefinition(
 }
 
 export type DraftIssue =
-  'name' | 'family' | 'options' | 'optionsDuplicate' | 'numbering' | 'numberingFormula';
+  'name' | 'family' | 'options' | 'optionsDuplicate' | 'numbering' | 'numberingUnreachable';
+
+/** Вид записи привязки — для совместимости с «внутри чего свой счёт». */
+export type BindingHostKindOf = (targetId: string) => NumberHostKind | null;
+
+/** Привязки, чьи записи не лежат в контейнере счётчика (письмо — в папке,
+ *  проект — в проекте): пока они отмечены, сохранить нельзя. */
+export function unreachableBindings(draft: FieldDraft, hostKindOf: BindingHostKindOf): string[] {
+  const ids = [
+    ...draft.bindings.processTypeIds,
+    ...draft.bindings.projectTypeIds,
+    ...draft.bindings.nodeKindIds,
+  ];
+  return ids.filter((id) => {
+    const host = hostKindOf(id);
+    return host !== null && !numberContainerReachable(draft.numbering.container, host);
+  });
+}
 
 /** Что мешает сохранить (кнопка неактивна, подсказка у поля). */
-export function draftIssues(draft: FieldDraft): DraftIssue[] {
+export function draftIssues(draft: FieldDraft, hostKindOf?: BindingHostKindOf): DraftIssue[] {
   const issues: DraftIssue[] = [];
   if (draft.name.trim().length === 0) issues.push('name');
   if (!draft.family) issues.push('family');
@@ -226,13 +253,12 @@ export function draftIssues(draft: FieldDraft): DraftIssue[] {
     if (names.length === 0 || names.some((name) => name.length === 0)) issues.push('options');
     if (new Set(names).size !== names.length) issues.push('optionsDuplicate');
   }
-  if (draft.family === 'counter') {
-    // Ровно один counter-сегмент и формула разреза при scopeKind='formula'
-    // (#630, Р2): строки ошибок рисует секция «Счётчик».
-    if (draft.numbering.template.filter((s) => s.kind === 'counter').length !== 1)
-      issues.push('numbering');
-    if (draft.numbering.scopeKind === 'formula' && draft.numbering.scopeFormula == null)
-      issues.push('numberingFormula');
+  if (draft.family === 'counter' && !draft.isCompany) {
+    // Ровно один «Номер» и совместимость привязок с контейнером (#630):
+    // строки ошибок рисует секция «Счётчик» и «Кто получает номер».
+    if (!numberSeriesRuleSchema.safeParse(draft.numbering).success) issues.push('numbering');
+    if (hostKindOf && unreachableBindings(draft, hostKindOf).length > 0)
+      issues.push('numberingUnreachable');
   }
   return issues;
 }
@@ -281,6 +307,11 @@ export function createBody(
           ...(type === 'counter' ? {} : { bindingFormulas: draft.bindingFormulas }),
         }),
     ...(type === 'counter' ? { numbering: draft.numbering } : {}),
+    ...(type === 'counter' &&
+    draft.numbering.container.kind === 'company' &&
+    draft.numberingNext !== null
+      ? { numberingNext: draft.numberingNext }
+      : {}),
   };
 }
 

@@ -2,7 +2,9 @@ import type { WorkflowDraftTransition } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Check } from 'lucide-react';
 
+import { useNodeKinds } from '../../../../../shared/api/node-kinds.js';
 import { useCustomFieldDefinitions } from '../../../../../shared/custom-fields/queries.js';
+import { ruleShort, type ContainerNames } from '../../../lib/counter-rule.js';
 import { PanelField, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
 import { cn } from '@nodus/ui/lib/utils';
 import {
@@ -39,6 +41,11 @@ export function AssignNumberRule({
       (typeId ? entry.bindings.processTypeIds.includes(typeId) : true),
   );
   const assignFields = assignNumberFieldsOf(transition.rules);
+  const { data: nodeKinds } = useNodeKinds();
+  const names: ContainerNames = {
+    nodeKind: (id) => nodeKinds?.find((kind) => kind.id === id)?.name,
+    field: (number) => definitions.data?.find((entry) => entry.number === number)?.name,
+  };
   return (
     <>
       <SwitchRow
@@ -89,7 +96,14 @@ export function AssignNumberRule({
                   >
                     {checked ? <Check className="size-3" strokeWidth={3} /> : null}
                   </span>
-                  <span className="min-w-0 truncate">{entry.name}</span>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate">{entry.name}</span>
+                    {entry.numbering ? (
+                      <span className="truncate text-xs text-muted-foreground">
+                        {ruleShort(entry.numbering.rule, names)}
+                      </span>
+                    ) : null}
+                  </span>
                 </button>
               );
             })}

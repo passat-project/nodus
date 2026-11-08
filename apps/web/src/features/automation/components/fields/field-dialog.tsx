@@ -48,6 +48,7 @@ import { FieldDialogForm } from './field-dialog-form.js';
 import { suggestionOf, type Errors } from './field-dialog-errors.js';
 import { useDefaultCurrencyId } from './field-settings.js';
 import { FieldTypePicker } from './field-type-picker.js';
+import { useBindingHostKinds } from './use-binding-host-kinds.js';
 
 export type FieldDialogMode =
   { kind: 'create' } | { kind: 'edit'; definition: CustomFieldDefinition };
@@ -116,7 +117,8 @@ export function FieldDialog({
     definition?.settings.dictionaryId !== undefined &&
     definitions.filter((d) => d.settings.dictionaryId === definition.settings.dictionaryId).length >
       1;
-  const issues: DraftIssue[] = draft ? draftIssues(draft) : ['family'];
+  const hostKindOf = useBindingHostKinds();
+  const issues: DraftIssue[] = draft ? draftIssues(draft, hostKindOf) : ['family'];
   const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(initial);
   const canSave = !readOnly && draft !== null && issues.length === 0 && !pending && dirty;
 

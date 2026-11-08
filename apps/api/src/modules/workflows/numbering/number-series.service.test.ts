@@ -7,16 +7,21 @@ import { NumberSeriesService } from './number-series.service.js';
 
 const SERIES_ID = '00000000-0000-4000-8000-000000000501';
 const TYPE_ID = '00000000-0000-4000-8000-000000000502';
+const FOLDER_ID = '00000000-0000-4000-8000-000000000503';
+const TASK_ID = '00000000-0000-4000-8000-000000000504';
 
 function txOf(overrides: {
   typeConfig?: unknown;
   series?: { id: string; period: string; template: unknown; startValue: number } | null;
-  lastValue?: number;
+  rows?: { last_value: number }[];
+  current?: { lastValue: number } | null;
 }) {
   const tx = {
     processType: { findUnique: vi.fn().mockResolvedValue({ config: overrides.typeConfig ?? {} }) },
     numberSeries: { findUnique: vi.fn().mockResolvedValue(overrides.series ?? null) },
-    $queryRaw: vi.fn().mockResolvedValue([{ last_value: overrides.lastValue ?? 1 }]),
+    numberCounter: { findUnique: vi.fn().mockResolvedValue(overrides.current ?? null) },
+    numberAssignment: { create: vi.fn().mockResolvedValue({}), count: vi.fn() },
+    $queryRaw: vi.fn().mockResolvedValue(overrides.rows ?? [{ last_value: 1 }]),
   };
   return tx as unknown as TransactionClient & typeof tx;
 }
@@ -28,71 +33,103 @@ const LETTER_SERIES = {
   startValue: 1,
 };
 
-describe('NumberSeriesService (#55 → #630, Р3)', () => {
+const IZM_SERIES = {
+  id: SERIES_ID,
+  period: 'none',
+  template: [{ kind: 'literal', text: 'Изм. ' }, { kind: 'counter' }],
+  startValue: 1,
+};
+
+const sqlOf = (tx: ReturnType<typeof txOf>, call = 0) =>
+  tx.$queryRaw.mock.calls[call]![0] as unknown as { values: unknown[] };
+
+describe('NumberSeriesService (#55 → #630)', () => {
   it('номер типа без серии — 409 WORKFLOW_NUMBERING_NOT_CONFIGURED', async () => {
-    const service = new NumberSeriesService();
     const tx = txOf({ typeConfig: { card: {}, access: {} } });
-    await expect(service.nextForType(tx, TYPE_ID)).rejects.toMatchObject({
+    await expect(new NumberSeriesService().nextForType(tx, TYPE_ID)).rejects.toMatchObject({
       code: ErrorCode.WORKFLOW_NUMBERING_NOT_CONFIGURED,
     });
   });
 
-  it('номер по серии типа: «Вх-ГГГГ/N» из шаблона, год и ключ — по Минску', async () => {
-    const service = new NumberSeriesService();
+  it('письмо: «Вх-ГГГГ/N», вся компания, ключ — год по Минску (формат прода)', async () => {
     const tx = txOf({
       typeConfig: { numbering: { seriesId: SERIES_ID } },
       series: LETTER_SERIES,
-      lastValue: 118,
+      rows: [{ last_value: 118 }],
     });
     // 31.12.2026 23:30 UTC = 01.01.2027 02:30 в Минске.
-    const number = await service.nextForType(tx, TYPE_ID, new Date('2026-12-31T23:30:00.000Z'));
+    const number = await new NumberSeriesService().nextForType(
+      tx,
+      TYPE_ID,
+      new Date('2026-12-31T23:30:00.000Z'),
+    );
     expect(number).toMatchObject({
-      seriesId: SERIES_ID,
       scopeKey: '2027',
+      containerId: null,
+      periodKey: '2027',
       year: 2027,
       seq: 118,
       display: 'Вх-2027/118',
     });
-    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.numberAssignment.create).not.toHaveBeenCalled();
   });
 
-  it('отсутствующая серия — 409, а не «номер без шаблона»', async () => {
-    const service = new NumberSeriesService();
-    const tx = txOf({ series: null });
-    await expect(service.next(tx, SERIES_ID, 'common')).rejects.toMatchObject({
-      code: ErrorCode.WORKFLOW_NUMBERING_NOT_CONFIGURED,
+  it('контейнер: ключ = id папки, журнал помнит запись, атрибут и нажавшего', async () => {
+    const tx = txOf({ series: IZM_SERIES, rows: [{ last_value: 3 }] });
+    const number = await new NumberSeriesService().next(tx, SERIES_ID, {
+      containerId: FOLDER_ID,
+      host: { kind: 'task', id: TASK_ID, fieldId: TYPE_ID, actorId: null },
     });
-    expect(tx.$queryRaw).not.toHaveBeenCalled();
+    expect(number).toMatchObject({ scopeKey: FOLDER_ID, seq: 3, display: 'Изм. 3' });
+    expect(sqlOf(tx).values).toContain(FOLDER_ID);
+    expect(tx.numberAssignment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        seriesId: SERIES_ID,
+        containerId: FOLDER_ID,
+        seq: 3,
+        display: 'Изм. 3',
+        hostKind: 'task',
+        hostId: TASK_ID,
+        fieldId: TYPE_ID,
+      }),
+    });
   });
 
-  it('битый шаблон серии — 409 (сломанная конфигурация)', async () => {
-    const service = new NumberSeriesService();
-    const tx = txOf({
-      typeConfig: { numbering: { seriesId: SERIES_ID } },
-      series: { ...LETTER_SERIES, template: [{ kind: 'literal', text: 'Книга' }] },
-    });
-    await expect(service.nextForType(tx, TYPE_ID)).rejects.toMatchObject({
-      code: ErrorCode.WORKFLOW_NUMBERING_NOT_CONFIGURED,
-      message: 'Number series template is invalid',
-    });
-    expect(tx.$queryRaw).not.toHaveBeenCalled();
+  it('отсутствующая серия и битый шаблон — 409 до выдачи', async () => {
+    const missing = txOf({ series: null });
+    await expect(
+      new NumberSeriesService().next(missing, SERIES_ID, { containerId: null }),
+    ).rejects.toMatchObject({ code: ErrorCode.WORKFLOW_NUMBERING_NOT_CONFIGURED });
+    const broken = txOf({ series: { ...IZM_SERIES, template: [{ kind: 'literal', text: 'К' }] } });
+    await expect(
+      new NumberSeriesService().next(broken, SERIES_ID, { containerId: null }),
+    ).rejects.toMatchObject({ message: 'Number series template is invalid' });
+    expect(broken.$queryRaw).not.toHaveBeenCalled();
   });
 
-  it('стартовое значение ложится в INSERT первой выдачи группы', async () => {
-    const service = new NumberSeriesService();
-    const tx = txOf({
-      series: {
-        id: SERIES_ID,
-        period: 'none',
-        template: [{ kind: 'literal', text: 'Изм. ' }, { kind: 'counter' }],
-        startValue: 1041,
-      },
-      lastValue: 1041,
+  it('старт нового счёта ложится в INSERT (каждая новая папка — с startValue)', async () => {
+    const tx = txOf({ series: { ...IZM_SERIES, startValue: 5 }, rows: [{ last_value: 5 }] });
+    await new NumberSeriesService().next(tx, SERIES_ID, { containerId: FOLDER_ID });
+    expect(sqlOf(tx).values).toContain(5);
+  });
+
+  it('следующий номер: счёт создаётся/двигается на next-1', async () => {
+    const tx = txOf({ series: IZM_SERIES, rows: [{ last_value: 1040 }] });
+    const result = await new NumberSeriesService().setNext(tx, SERIES_ID, {
+      containerId: null,
+      nextValue: 1041,
     });
-    const number = await service.next(tx, SERIES_ID, 'common');
-    expect(number).toMatchObject({ seq: 1041, display: 'Изм. 1041', scopeKey: 'common' });
-    // Первый номер группы = startValue (продолжение из Excel), не 1.
-    const sql = tx.$queryRaw.mock.calls[0]![0] as unknown as { values: unknown[] };
-    expect(sql.values).toContain(1041);
+    expect(result).toEqual({ lastValue: 1040 });
+    expect(sqlOf(tx).values).toContain(1040);
+  });
+
+  it('следующий номер назад — 409 NUMBER_NEXT_BACKWARDS с текущим значением', async () => {
+    const tx = txOf({ series: IZM_SERIES, rows: [], current: { lastValue: 12 } });
+    await expect(
+      new NumberSeriesService().setNext(tx, SERIES_ID, { containerId: FOLDER_ID, nextValue: 3 }),
+    ).rejects.toMatchObject({
+      code: ErrorCode.NUMBER_NEXT_BACKWARDS,
+      details: { lastValue: 12, nextValue: 3 },
+    });
   });
 });

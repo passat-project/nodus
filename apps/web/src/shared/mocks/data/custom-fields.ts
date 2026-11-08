@@ -198,36 +198,39 @@ export const demoCustomFieldDefinitions: CustomFieldDefinition[] = [
     },
   ),
   ...formulaDemoFields,
-  // Счётчики «Комплекта» (#630): «Изм.» — разрез «папка» (К2), «Взял изм» —
-  // сквозной с продолжением из Excel (К3); выдаёт кнопка «Выдать в печать».
+  // Счётчики (#630): номера работ «Изменение» внутри папок «Комплект».
+  // «Выдано номеров» и пример гидрирует мок-стор счетов (numbering-store).
   definition(
     fieldIds.changeNumber,
     'counter',
     'Изм.',
-    { processTypeIds: [processTypeIds.komplekt] },
+    { processTypeIds: [processTypeIds.change] },
     {
       hint: 'Номер изменения внутри комплекта',
       number: COUNTER_FIELD_NUMBERS.changeNumber,
-      numbering: {
-        rule: COUNTER_RULES.changeNumber,
-        preview: 'Изм. 1',
-        issuedCount: 12,
-      },
+      numbering: { rule: COUNTER_RULES.changeNumber, preview: 'Изм. 1', issuedCount: 0 },
     },
   ),
   definition(
     fieldIds.tookChangeNumber,
     'counter',
     'Взял изм',
-    { processTypeIds: [processTypeIds.komplekt] },
+    { processTypeIds: [processTypeIds.change] },
     {
-      hint: 'Сквозной номер изменения — продолжение из Excel',
+      hint: 'Сквозной номер изменения — продолжение журнала нормоконтроля из Excel',
       number: COUNTER_FIELD_NUMBERS.tookChangeNumber,
-      numbering: {
-        rule: COUNTER_RULES.tookChangeNumber,
-        preview: '1041',
-        issuedCount: 0,
-      },
+      numbering: { rule: COUNTER_RULES.tookChangeNumber, preview: '1041', issuedCount: 0 },
+    },
+  ),
+  definition(
+    fieldIds.permitNumber,
+    'counter',
+    '№ разрешения',
+    { processTypeIds: [processTypeIds.change] },
+    {
+      hint: 'Номер в книге изменений: счёт с начала года',
+      number: COUNTER_FIELD_NUMBERS.permitNumber,
+      numbering: { rule: COUNTER_RULES.permitNumber, preview: '15-26', issuedCount: 0 },
     },
   ),
 ];
@@ -274,6 +277,12 @@ function markIdOf(code: string): string {
 
 /** Значения демо-задач: часть задач заполнена, остальные — `{}`. */
 export const demoTaskCustomFields: Record<string, CustomFieldValues> = {
+  // Работа «Изменение КЖ-01: отверстия в плите» (#630): номера уже выданы.
+  [tid(630)]: {
+    [fieldIds.changeNumber]: 'Изм. 1',
+    [fieldIds.tookChangeNumber]: '1041',
+    [fieldIds.permitNumber]: '15-26',
+  },
   [tid(2)]: {
     [fieldIds.invoiceNumber]: '№ 118-2026',
     [fieldIds.handoverDate]: '2026-10-20',

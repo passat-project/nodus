@@ -202,8 +202,9 @@ export const automationStrings = {
   creation: creationStrings,
   /** Правая панель редактора (#378 ред. 2): разделы с переходом внутрь. */
   panel: {
-    assignNumberHint: 'Номер счётчика запишется в поле при нажатии кнопки — без пропусков',
-    assignNumberField: 'Поле с номером',
+    assignNumberHint:
+      'Номер запишется в поле при нажатии. Если номер уже есть — кнопка его не меняет',
+    assignNumberField: 'Какие номера выдать',
     assignNumberNoFields:
       'У типа нет атрибута-счётчика — создайте его на вкладке «Атрибуты» и привяжите к этому типу',
     ...intentStrings,

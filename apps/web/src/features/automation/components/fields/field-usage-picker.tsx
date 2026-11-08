@@ -26,6 +26,21 @@ interface Target {
   name: string;
 }
 
+/** Подпись под целью привязки (#630, счётчик): «Выдаёт кнопка …» или
+ *  причина несовместимости. `blocked` — новую отметку поставить нельзя
+ *  (уже отмеченная остаётся снимаемой — иначе её не убрать). */
+export interface TargetNote {
+  text: string;
+  tone: 'muted' | 'warn' | 'danger';
+  blocked: boolean;
+}
+
+export type DescribeTarget = (
+  group: FormulaHostKind,
+  targetId: string,
+  on: boolean,
+) => TargetNote | null;
+
 /** Индикатор выбора — ведущий, у самого названия (как в FieldTypesPicker). */
 function Mark({ state }: { state: 'on' | 'off' | 'some' }) {
   return (
@@ -53,7 +68,9 @@ function Group({
   disabled,
   allowFormulas,
   onEditFormula,
+  describe,
 }: {
+  describe?: (targetId: string, on: boolean) => TargetNote | null;
   label: string;
   targets: readonly Target[];
   selected: ReadonlySet<string>;
@@ -111,6 +128,8 @@ function Group({
         <div className="flex flex-col gap-0.5 border-t py-1.5">
           {targets.map((target) => {
             const on = selected.has(target.id);
+            const note = describe?.(target.id, on) ?? null;
+            const blocked = !on && note?.blocked === true;
             return (
               <div
                 key={target.id}
@@ -120,16 +139,33 @@ function Group({
                   type="button"
                   role="checkbox"
                   aria-checked={on}
-                  disabled={disabled}
+                  disabled={disabled || blocked}
+                  title={blocked ? note?.text : undefined}
                   onClick={() => onToggleOne(target.id)}
                   className={cn(
                     'flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60',
                     on ? 'text-foreground' : 'text-secondary-foreground',
-                    disabled && 'cursor-not-allowed opacity-60',
+                    (disabled || blocked) && 'cursor-not-allowed opacity-60',
                   )}
                 >
                   <Mark state={on ? 'on' : 'off'} />
-                  <span className="min-w-0 flex-1 truncate">{target.name}</span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate">{target.name}</span>
+                    {note && (on || blocked) ? (
+                      <span
+                        className={cn(
+                          'truncate text-xs',
+                          note.tone === 'danger'
+                            ? 'text-danger'
+                            : note.tone === 'warn'
+                              ? 'text-warning'
+                              : 'text-muted-foreground',
+                        )}
+                      >
+                        {note.text}
+                      </span>
+                    ) : null}
+                  </span>
                 </button>
                 {on && allowFormulas ? (
                   <button
@@ -159,6 +195,8 @@ export function FieldUsagePicker({
   onBindingFormulasChange,
   disabled,
   allowFormulas = true,
+  describeTarget,
+  hint,
   onChange,
 }: {
   definition: CustomFieldDefinition | null;
@@ -166,8 +204,12 @@ export function FieldUsagePicker({
   bindingFormulas: Record<string, FormulaNode>;
   onBindingFormulasChange: (formulas: Record<string, FormulaNode>) => void;
   disabled: boolean;
-  /** Counter получает значение из серии, а не из формулы места (#630). */
+  /** Counter получает значение по кнопке процесса, а не из формулы места (#630). */
   allowFormulas?: boolean;
+  /** Подпись под целью (счётчик: кто выдаёт, совместимость). */
+  describeTarget?: DescribeTarget;
+  /** Подсказка под пикером вместо общей. */
+  hint?: string;
   onChange: (bindings: CustomFieldBindings) => void;
 }) {
   const [formulaTarget, setFormulaTarget] = useState<{
@@ -284,11 +326,16 @@ export function FieldUsagePicker({
             onEditFormula={(target) =>
               setFormulaTarget({ target, hostKind: group.key as FormulaHostKind })
             }
+            describe={
+              describeTarget
+                ? (targetId, on) => describeTarget(group.key as FormulaHostKind, targetId, on)
+                : undefined
+            }
           />
         ))}
       </div>
       <p className="text-xs break-words text-muted-foreground">
-        {allowFormulas ? ui.customFields.bind.usageHint : ui.customFields.bind.usageHintCounter}
+        {hint ?? ui.customFields.bind.usageHint}
       </p>
       {allowFormulas && formulaTarget && definition ? (
         <BindingFormulaDialog

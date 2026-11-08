@@ -6,7 +6,6 @@ import type {
 } from '@nodus/contracts';
 import {
   createCustomFieldBodySchema,
-  renderNumberTemplate,
   CUSTOM_FIELD_LIMITS,
   ErrorCode,
   reorderCustomFieldsBodySchema,
@@ -27,6 +26,8 @@ import {
   nameTaken,
   typeCategorySets,
 } from './custom-fields-mock-utils.js';
+import { counterPreview } from '../../mocks/data/numbering-store.js';
+import { seedCreatedCounter, unreachableTargets } from './numbering-handlers.js';
 
 /** Хендлеры коллекции реестра атрибутов (#631): список с фильтром модуля,
  *  создание (уникальность имени 409 с suggestion, потолок 1000, цели
@@ -141,17 +142,12 @@ export const registryHandlers = [
       companyValue: null,
       bindings,
       bindingFormulas: body.bindingFormulas ?? {},
-      // Правило серии counter-атрибута (#630, Р1): сводка с предпросмотром.
+      // Правило счётчика (#630): одно на атрибут, сводка — из мок-стора.
       ...(body.type === 'counter' && body.numbering
         ? {
             numbering: {
               rule: body.numbering,
-              preview: renderNumberTemplate(body.numbering.template, {
-                seq: body.numbering.startValue,
-                year: new Date().getFullYear(),
-                month: new Date().getMonth() + 1,
-                field: () => '…',
-              }),
+              preview: counterPreview(body.numbering),
               issuedCount: 0,
             },
           }
@@ -160,7 +156,16 @@ export const registryHandlers = [
       createdAt: now,
       updatedAt: now,
     };
+    if (body.type === 'counter' && body.numbering) {
+      const targets = unreachableTargets(body.numbering, bindings);
+      if (targets.length > 0) {
+        return error(ErrorCode.NUMBER_CONTAINER_UNREACHABLE, 'Unreachable container', 422, {
+          targets,
+        });
+      }
+    }
     demoCustomFieldDefinitions.push(definition);
+    seedCreatedCounter(definition.id, body.numberingNext);
     return HttpResponse.json(dto(definition), { status: 201 });
   }),
 

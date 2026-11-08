@@ -1,6 +1,7 @@
 import { definitionHandlers } from './custom-fields-definition-handlers.js';
 import { registryHandlers } from './custom-fields-registry-handlers.js';
 import { formulaHandlers } from '../formula/formula-handlers.js';
+import { numberingHandlers } from './numbering-handlers.js';
 
 /** Мок-сервер реестра атрибутов портала (#631): правила те же, что у
  *  бэкенда — имя уникально на портале (409 с suggestion существующего),
@@ -18,6 +19,7 @@ import { formulaHandlers } from '../formula/formula-handlers.js';
  *  оригинального массива: буквальные пути (`/order`, `/bindings/...`,
  *  `/formulas/...`) раньше `:id`-маршрутов (gotcha msw-query). */
 export const customFieldsHandlers = [
+  ...numberingHandlers,
   ...formulaHandlers,
   ...registryHandlers,
   ...definitionHandlers,

@@ -1086,11 +1086,12 @@ model WorkflowSchemeEntry {
   @@map("workflow_scheme_entries")
 }
 
-/// Серия номеров (#630, ADR-0037 §8): единое правило нумерации «разрез ×
-/// период × шаблон × старт». Серия связана 1:1 с определением атрибута типа
-/// `counter` (письмо-серии — без атрибута, из `config.numbering` типа).
-/// `prefix`/`reset` (#55) остаются до contract-шага #630: письмо-рендер
-/// переехал на шаблон бит-в-бит, колонки читаются только старым контрактом.
+/// Серия номеров (#630, ADR-0037 §8, концепция 08.11): правило «внутри чего
+/// свой счёт × когда заново × вид номера × старт нового счёта». Серия 1:1 с
+/// определением атрибута типа `counter` — правило одно на атрибут, все его
+/// привязки получают номера из одного счётчика (письмо-серии — без
+/// атрибута, из `config.numbering` типа). `prefix`/`reset` (#55) остаются до
+/// contract-шага #630: читаются только старым DTO типа.
 /// Серии `letter-incoming`/`letter-outgoing` засевает каталог.
 model NumberSeries {
   id        String   @id @default(uuid()) @db.Uuid
@@ -1101,41 +1102,76 @@ model NumberSeries {
   reset     String   @default("year")
   /// Человекочитаемое имя: «Входящие письма», «Изм.».
   name      String
-  /// Разрез счёта: none|self|project|portfolio|folder|formula (CHECK).
-  scopeKind String   @default("none") @map("scope_kind")
-  /// Формула разреза (AST формул #632) — только при scope_kind='formula'.
-  scopeFormula Json? @map("scope_formula")
-  /// Период сброса: none|year|month (CHECK); границы — пояс компании.
+  /// Внутри чего свой счёт: company|folder|project|portfolio|parent_task|field (CHECK).
+  containerKind String @default("company") @map("container_kind")
+  /// folder — id вида папки; field — внутренний номер атрибута; иначе null (CHECK).
+  containerRef  String? @map("container_ref")
+  /// Когда заново: none|year|month (CHECK); допустимость — по датам в шаблоне.
   period    String   @default("none")
   /// Шаблон номера: сегменты counter/literal/year/month/field (`numberSeriesRuleSchema`).
   template  Json
-  /// Первый номер группы: продолжение нумерации из Excel.
+  /// С какого номера начинается КАЖДЫЙ новый счёт (новая папка, новый год).
   startValue Int     @default(1) @map("start_value")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  counters  NumberCounter[]
-  attribute FieldDefinition?
+  counters    NumberCounter[]
+  assignments NumberAssignment[]
+  attribute   FieldDefinition?
 
   @@map("number_series")
 }
 
-/// Счётчик серии в группе (#630, Р3): группа = разрез × период, ключ —
-/// нормализованная строка (`'2026'`, `'folder:<uuid>|2026'`). Единственный
-/// писатель — `NumberSeriesService.next` (upsert `last_value + 1` в tx
-/// действия): строка сериализует параллельные выдачи, откат транзакции не
-/// сдвигает счётчик → без дублей и потерь. `year` — информационная колонка
-/// (год момента выдачи по поясу компании); границу периода считает сервис.
+/// Счёт серии: контейнер × период (#630). Ключ `scope_key` — `numberCountKey`
+/// («uuid|2026», письма — «2026»), PRIMARY KEY вместе с series_id. Писатели —
+/// только `NumberSeriesService`: `next` (upsert `last_value + 1` в tx
+/// действия, сериализует параллельные выдачи; откат не сдвигает счётчик) и
+/// `setNext` (только вперёд). `year` — информационная колонка.
 model NumberCounter {
-  seriesId  String @map("series_id") @db.Uuid
-  scopeKey  String @map("scope_key")
-  year      Int
-  lastValue Int    @default(0) @map("last_value")
+  seriesId    String   @map("series_id") @db.Uuid
+  scopeKey    String   @map("scope_key")
+  year        Int
+  lastValue   Int      @default(0) @map("last_value")
+  /// Контейнер счёта (папка/проект/портфель/задача/значение) — plain UUID
+  /// без FK (полиморфный, чужие модули, I3); null — вся компания.
+  containerId String?  @map("container_id") @db.Uuid
+  /// '' | '2026' | '2026-11' — период счёта.
+  periodKey   String   @default("") @map("period_key")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   series NumberSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
   @@id([seriesId, scopeKey])
+  @@index([seriesId, containerId])
   @@map("number_counters")
+}
+
+/// Журнал выдач номеров (#630): только дописывается, писатель —
+/// `NumberSeriesService.next`. Помнит контейнер, запись, атрибут и того, кто
+/// нажал: номер у записи заморожен, перенос и удаление атрибута историю не
+/// стирают; «выдано номеров» — count по серии.
+model NumberAssignment {
+  id          String   @id @default(uuid()) @db.Uuid
+  seriesId    String   @map("series_id") @db.Uuid
+  scopeKey    String   @map("scope_key")
+  containerId String?  @map("container_id") @db.Uuid
+  periodKey   String   @map("period_key")
+  seq         Int
+  display     String
+  /// task | letter | node | project (CHECK).
+  hostKind    String   @map("host_kind")
+  hostId      String   @map("host_id") @db.Uuid
+  /// Атрибут-цель (null у письмо-серий), без FK — переживает удаление.
+  fieldId     String?  @map("field_id") @db.Uuid
+  /// Кто нажал — plain UUID без FK (пользователь живёт в auth, I3).
+  actorId     String?  @map("actor_id") @db.Uuid
+  assignedAt  DateTime @default(now()) @map("assigned_at") @db.Timestamptz()
+
+  series NumberSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@index([seriesId, assignedAt])
+  @@index([hostKind, hostId])
+  @@map("number_assignments")
 }
 
 /// Задача. Проект необязателен (projectId nullable, без FK — I3): задача без

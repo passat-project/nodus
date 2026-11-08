@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { formulaNodeSchema } from './formula.js';
 import { numberSeriesRuleSchema } from '../workflows/number-series.schemas.js';
+import { NUMBER_TEMPLATE_LIMITS } from '../workflows/number-series.schemas.js';
+import { numberIssuerSchema } from '../workflows/number-series-api.schemas.js';
 
 import {
   customFieldValueSchema,
@@ -109,16 +111,19 @@ export const EMPTY_CUSTOM_FIELD_BINDINGS: CustomFieldBindings = {
   nodeKindIds: [],
 };
 
-/** Нумерация counter-атрибута (#630, Р1/Р6): сводка правила серии 1:1 с
- *  определением. В DTO определения — readonly-гидрация (правится PATCH
- *  определения с телом-правилом); `preview` — пример номера по текущему
- *  шаблону, `issuedCount` — сколько номеров выдано всеми группами серии
- *  (номера не переиспользуются: окно удаления показывает счёт). */
+/** Нумерация counter-атрибута (#630, концепция 08.11): сводка правила серии
+ *  1:1 с определением — правило ОДНО на атрибут. В DTO определения —
+ *  readonly-гидрация (правится PATCH определения с телом-правилом);
+ *  `preview` — пример номера по текущему виду, `issuedCount` — сколько
+ *  номеров выдано всеми счетами (после первой выдачи «внутри чего» и
+ *  «начинать заново» не меняются — 409 `NUMBER_RULE_LOCKED`); `issuers` —
+ *  кнопки опубликованных маршрутов, выдающие номер (только чтение). */
 export const customFieldNumberingSchema = z
   .object({
     rule: numberSeriesRuleSchema,
     preview: z.string().min(1),
     issuedCount: z.number().int().min(0),
+    issuers: z.array(numberIssuerSchema).optional(),
   })
   .strict();
 export type CustomFieldNumbering = z.infer<typeof customFieldNumberingSchema>;
@@ -359,10 +364,15 @@ export const createCustomFieldBodySchema = z
      *  схемы: это семантика, а не форма запроса). */
     bindings: customFieldBindingsSchema.optional(),
     bindingFormulas: z.record(z.uuid(), formulaNodeSchema).optional(),
-    /** Правило нумерации counter-атрибута (#630, Р6): только при
+    /** Правило нумерации counter-атрибута (#630): только при
      *  type='counter' (иначе доменная 422 на сервере); счётчик без правила
-     *  создаётся, но маршрут с ним не публикуется (Р5). */
+     *  создаётся, но маршрут с ним не публикуется. Совместимость с
+     *  привязками — 422 `NUMBER_CONTAINER_UNREACHABLE`. */
     numbering: numberSeriesRuleSchema.optional(),
+    /** «Следующий номер» общего счёта при создании (контейнер «вся
+     *  компания»): продолжение нумерации из Excel в текущем периоде, в той
+     *  же транзакции. У контейнеров — только через «Текущие счета». */
+    numberingNext: z.number().int().min(1).max(NUMBER_TEMPLATE_LIMITS.value).optional(),
   })
   .strict()
   .superRefine((body, ctx) => {
@@ -383,7 +393,9 @@ export const updateCustomFieldBodySchema = z
     bindings: customFieldBindingsSchema.optional(),
     bindingFormulas: z.record(z.uuid(), formulaNodeSchema).optional(),
     /** Правило нумерации counter-атрибута (#630): замена целиком; только
-     *  для type='counter' (иначе доменная 422 на сервере). */
+     *  для type='counter' (иначе доменная 422 на сервере). После первой
+     *  выдачи меняются только вид номера и старт новых счетов — смена
+     *  контейнера/периода — 409 `NUMBER_RULE_LOCKED`. */
     numbering: numberSeriesRuleSchema.optional(),
   })
   .strict()

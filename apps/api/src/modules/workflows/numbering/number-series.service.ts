@@ -1,17 +1,25 @@
 import { Injectable } from '@nestjs/common';
-import { ErrorCode, normalizeTypeConfig, numberPeriodSchema } from '@nodus/contracts';
+import {
+  ErrorCode,
+  normalizeTypeConfig,
+  numberPeriodSchema,
+  type NumberHostKind,
+} from '@nodus/contracts';
 
 import { Prisma } from '../../../generated/prisma/client.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { companyYear } from '../../../core/time/company-time.js';
-import { numberScopeKey, parseNumberTemplate, renderNumberTemplate } from './number-template.js';
+import { numberCountOf, parseNumberTemplate, renderNumberTemplate } from './number-template.js';
 
-/** Выданный номер: серия, группа счёта, год, порядковый номер и печатная строка. */
+/** Выданный номер: серия, счёт (контейнер × период), порядковый номер и печатная строка. */
 export interface AssignedNumber {
   seriesId: string;
-  /** Ключ группы «разрез × период» (аудит выдачи; PK строки счётчика). */
+  /** Ключ счёта (PK строки `number_counters`). */
   scopeKey: string;
+  /** Контейнер счёта: id папки/проекта/портфеля/задачи/значения; null — вся компания. */
+  containerId: string | null;
+  periodKey: string;
   year: number;
   seq: number;
   /** «Вх-2026/118» — то, что видит человек и журнал перехода. */
@@ -19,31 +27,53 @@ export interface AssignedNumber {
   assignedAt: Date;
 }
 
+/** Кому выдан номер — строка журнала `number_assignments`. */
+export interface NumberHost {
+  kind: NumberHostKind;
+  id: string;
+  /** Атрибут-цель (null у письмо-серий). */
+  fieldId: string | null;
+  actorId: string | null;
+}
+
+export interface NextNumberInput {
+  /** Контейнер счёта, найденный вызывающим (`resolveNumberContainer`); null — вся компания. */
+  containerId: string | null;
+  at?: Date;
+  /** Журнал выдачи: без host строка журнала не пишется (только тесты низкого уровня). */
+  host?: NumberHost;
+}
+
+interface SeriesRow {
+  id: string;
+  period: string;
+  template: unknown;
+  startValue: number;
+}
+
 /**
- * Серии номеров «Процессов» (#55 → #630, Р3): номер выдаётся в транзакции
- * действия (переход с `assign_number`), поэтому откат действия не сдвигает
- * счётчик — номеров без пропусков. Серия несёт правило «разрез × период ×
- * шаблон × старт»; группа счёта — строка `(series_id, scope_key)`, upsert
- * с `last_value + 1` сериализует параллельные выдачи серии (30/день —
- * норма, очередь на строке незаметна). Год/месяц — по поясу компании
- * (`COMPANY_TIMEZONE`): письмо, зарегистрированное 1 января в 02:30 по
- * Минску, получает новый год.
+ * Серии номеров (#55 → #630): номер выдаётся в транзакции действия
+ * (переход с `assign_number`), поэтому откат действия не сдвигает счётчик —
+ * без пропусков и дублей. Счёт — строка `(series_id, scope_key)` = контейнер
+ * × период; upsert `last_value + 1` сериализует параллельные выдачи. Первый
+ * номер нового счёта — `start_value` серии; продолжение конкретного счёта
+ * из Excel — `setNext` (только вперёд).
  *
- * Единственный писатель `number_counters` — этот сервис (единая точка
- * сериализации гонок). Вычисление разреза записи (заготовки/формула,
- * `NUMBER_SCOPE_*`) — Пакет 2 #630; письмо-серии считаются общим счётом.
+ * Единственный писатель `number_counters` и `number_assignments`. Поиск
+ * контейнера записи (порты модулей + `resolveNumberContainer`) — у
+ * вызывающего: сервис получает готовый `containerId`.
  */
 @Injectable()
 export class NumberSeriesService {
   /**
-   * Следующий номер типа процесса: серия берётся из `config.numbering`.
-   * Нет серии у типа — 409 `WORKFLOW_NUMBERING_NOT_CONFIGURED` (маршрут с
-   * `assign_number` без нумерации — ошибка конфигурации, а не письма).
+   * Следующий номер типа процесса (письма): серия из `config.numbering`,
+   * контейнер — вся компания. Нет серии — 409 `WORKFLOW_NUMBERING_NOT_CONFIGURED`.
    */
   async nextForType(
     tx: TransactionClient,
     typeId: string,
     at = new Date(),
+    host?: NumberHost,
   ): Promise<AssignedNumber> {
     const type = await tx.processType.findUnique({
       where: { id: typeId },
@@ -57,46 +87,21 @@ export class NumberSeriesService {
         { typeId },
       );
     }
-    const series = await tx.numberSeries.findUnique({
-      where: { id: seriesId },
-      select: { period: true },
-    });
-    if (!series) {
-      throw new DomainException(
-        ErrorCode.WORKFLOW_NUMBERING_NOT_CONFIGURED,
-        'Number series not found',
-        { seriesId },
-      );
-    }
-    // Письмо-серии — общий разрез (scope_kind='none'): группа = только
-    // период-часть ключа. Разрезы записи приедут с Пакетом 2 #630.
-    // Домен period гарантирован CHECK миграции — parse только сужает тип.
-    const period = numberPeriodSchema.parse(series.period);
-    return this.next(tx, seriesId, numberScopeKey(period, at, null), at);
+    return this.next(tx, seriesId, { containerId: null, at, host });
   }
 
   /**
-   * Следующий номер серии в группе `scopeKey` (вычислен вызывающим по
-   * правилу серии и записи). Первый номер группы — `startValue` серии
-   * (продолжение нумерации из Excel); откат транзакции не сдвигает счётчик.
+   * Следующий номер серии в счёте контейнера. Первый номер нового счёта —
+   * `startValue` серии (или «следующий номер», заданный `setNext`); откат
+   * транзакции не сдвигает счётчик.
    */
   async next(
     tx: TransactionClient,
     seriesId: string,
-    scopeKey: string,
-    at = new Date(),
+    input: NextNumberInput,
   ): Promise<AssignedNumber> {
-    const series = await tx.numberSeries.findUnique({
-      where: { id: seriesId },
-      select: { id: true, template: true, startValue: true },
-    });
-    if (!series) {
-      throw new DomainException(
-        ErrorCode.WORKFLOW_NUMBERING_NOT_CONFIGURED,
-        'Number series not found',
-        { seriesId },
-      );
-    }
+    const at = input.at ?? new Date();
+    const series = await this.series(tx, seriesId);
     const template = parseNumberTemplate(series.template);
     if (!template.ok) {
       // Правило пишется только валидным путём; битый JSONB — сломанная
@@ -107,22 +112,109 @@ export class NumberSeriesService {
         { seriesId },
       );
     }
+    const { periodKey, scopeKey } = numberCountOf(this.period(series), at, input.containerId);
     const year = companyYear(at);
     const rows = await tx.$queryRaw<{ last_value: number }[]>(Prisma.sql`
-      INSERT INTO "number_counters" ("series_id", "scope_key", "year", "last_value")
-      VALUES (${seriesId}::uuid, ${scopeKey}, ${year}, ${series.startValue})
+      INSERT INTO "number_counters"
+        ("series_id", "scope_key", "year", "last_value", "container_id", "period_key")
+      VALUES (${seriesId}::uuid, ${scopeKey}, ${year}, ${series.startValue},
+              ${input.containerId}::uuid, ${periodKey})
       ON CONFLICT ("series_id", "scope_key")
-        DO UPDATE SET "last_value" = "number_counters"."last_value" + 1
+        DO UPDATE SET "last_value" = "number_counters"."last_value" + 1, "updated_at" = now()
       RETURNING "last_value"
     `);
     const seq = rows[0]!.last_value;
+    const display = renderNumberTemplate(template.segments, { seq, at });
+    if (input.host) {
+      await tx.numberAssignment.create({
+        data: {
+          seriesId,
+          scopeKey,
+          containerId: input.containerId,
+          periodKey,
+          seq,
+          display,
+          hostKind: input.host.kind,
+          hostId: input.host.id,
+          fieldId: input.host.fieldId,
+          actorId: input.host.actorId,
+          assignedAt: at,
+        },
+      });
+    }
     return {
-      seriesId: series.id,
+      seriesId,
       scopeKey,
+      containerId: input.containerId,
+      periodKey,
       year,
       seq,
-      display: renderNumberTemplate(template.segments, { seq, at }),
+      display,
       assignedAt: at,
     };
+  }
+
+  /**
+   * «Следующий номер» счёта текущего периода — только вперёд (продолжение
+   * из Excel/с бумаги). Счёта ещё нет — создаётся с `last_value = next - 1`.
+   * Меньше уже выданного — 409 `NUMBER_NEXT_BACKWARDS` (номера не
+   * переиспользуются); равный текущему следующему — без изменений.
+   */
+  async setNext(
+    tx: TransactionClient,
+    seriesId: string,
+    input: { containerId: string | null; nextValue: number; at?: Date },
+  ): Promise<{ lastValue: number }> {
+    const at = input.at ?? new Date();
+    const series = await this.series(tx, seriesId);
+    const { periodKey, scopeKey } = numberCountOf(this.period(series), at, input.containerId);
+    const target = input.nextValue - 1;
+    const rows = await tx.$queryRaw<{ last_value: number }[]>(Prisma.sql`
+      INSERT INTO "number_counters"
+        ("series_id", "scope_key", "year", "last_value", "container_id", "period_key")
+      VALUES (${seriesId}::uuid, ${scopeKey}, ${companyYear(at)}, ${target},
+              ${input.containerId}::uuid, ${periodKey})
+      ON CONFLICT ("series_id", "scope_key")
+        DO UPDATE SET "last_value" = EXCLUDED."last_value", "updated_at" = now()
+        WHERE "number_counters"."last_value" <= EXCLUDED."last_value"
+      RETURNING "last_value"
+    `);
+    if (rows.length === 0) {
+      const current = await tx.numberCounter.findUnique({
+        where: { seriesId_scopeKey: { seriesId, scopeKey } },
+        select: { lastValue: true },
+      });
+      throw new DomainException(
+        ErrorCode.NUMBER_NEXT_BACKWARDS,
+        'Next number is below the already issued one',
+        { seriesId, lastValue: current?.lastValue ?? null, nextValue: input.nextValue },
+      );
+    }
+    return { lastValue: rows[0]!.last_value };
+  }
+
+  /** Сколько номеров выдано серией (журнал выдач). */
+  async issuedCount(tx: TransactionClient, seriesId: string): Promise<number> {
+    return tx.numberAssignment.count({ where: { seriesId } });
+  }
+
+  private async series(tx: TransactionClient, seriesId: string): Promise<SeriesRow> {
+    const series = await tx.numberSeries.findUnique({
+      where: { id: seriesId },
+      select: { id: true, period: true, template: true, startValue: true },
+    });
+    if (!series) {
+      throw new DomainException(
+        ErrorCode.WORKFLOW_NUMBERING_NOT_CONFIGURED,
+        'Number series not found',
+        { seriesId },
+      );
+    }
+    return series;
+  }
+
+  /** Домен period гарантирован CHECK миграции — parse только сужает тип. */
+  private period(series: SeriesRow) {
+    return numberPeriodSchema.parse(series.period);
   }
 }

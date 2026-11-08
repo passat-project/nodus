@@ -146,8 +146,11 @@ export function useExecuteTransition(taskId: string) {
       patchTask(queryClient, taskId, result.task);
       queryClient.setQueryData(tasksKeys.transitions(taskId), result.transitions);
       // Тост с номером — письменный паттерн (#630, Р6): «Присвоен номер …».
-      if (result.assignedNumber) {
-        toast.success(`${ui.tasks.assignedNumberToast} ${result.assignedNumber}`);
+      const numbers = result.assignedNumbers ?? [];
+      if (numbers.length > 0) {
+        const label =
+          numbers.length === 1 ? ui.tasks.assignedNumberToast : ui.tasks.assignedNumbersToast;
+        toast.success(`${label} ${numbers.map((entry) => entry.display).join(' · ')}`);
       }
     },
     onError: (error, _vars, context) => {

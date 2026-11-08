@@ -18,7 +18,7 @@ import {
 } from '../../lib/field-draft.js';
 import { familyModifier, modifierOf } from '../../lib/field-type-families.js';
 import { CustomFieldEditor } from '../../../../shared/custom-fields/value-editor.js';
-import { CounterRuleSection } from './counter-rule-section.js';
+import { CounterPanel } from './counter-panel.js';
 import { FieldDefaultValue } from './field-default-value.js';
 import { KindOption } from './field-kind-option.js';
 import { FieldOptionsEditor } from './field-options-editor.js';
@@ -201,16 +201,16 @@ export function FieldDialogForm({
       </Section>
 
       {family === 'counter' && !draft.isCompany ? (
-        <CounterRuleSection
-          rule={draft.numbering}
-          name={draft.name}
+        <CounterPanel
+          draft={draft}
+          definition={definition}
+          preview={preview}
           disabled={disabled}
-          issuedCount={definition?.numbering?.issuedCount ?? null}
-          onChange={(numbering) => onChange({ numbering })}
+          onChange={onChange}
         />
       ) : null}
 
-      {!draft.isCompany ? (
+      {!draft.isCompany && family !== 'counter' ? (
         <Section label={ui.customFields.bind.field}>
           <FieldUsagePicker
             definition={preview}
@@ -218,7 +218,6 @@ export function FieldDialogForm({
             bindingFormulas={draft.bindingFormulas}
             onBindingFormulasChange={(bindingFormulas) => onChange({ bindingFormulas })}
             disabled={disabled}
-            allowFormulas={family !== 'counter'}
             onChange={(bindings) => onChange({ bindings })}
           />
         </Section>

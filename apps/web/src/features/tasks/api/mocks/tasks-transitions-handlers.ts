@@ -1,7 +1,14 @@
-import type { TaskListItem, TaskStage, WorkflowTransition } from '@nodus/contracts';
+import type {
+  NumberSeriesRule,
+  TaskListItem,
+  TaskStage,
+  WorkflowTransition,
+} from '@nodus/contracts';
 import {
   effectiveWindowSections,
   ErrorCode,
+  errorMessages,
+  resolveNumberContainer,
   executeTransitionBodySchema,
   isFinalState,
   ui,
@@ -15,6 +22,8 @@ import {
   demoTasks,
 } from '../../../../shared/mocks/data/tasks.js';
 import {
+  CHANGE_WORKFLOW_ID,
+  changeType,
   demoWorkflowDetails,
   KOMPLEKT_WORKFLOW_ID,
   komplektType,
@@ -23,7 +32,11 @@ import {
 } from '../../../../shared/mocks/data/workflows.js';
 import { quickProcessType } from '../../../../shared/mocks/data/task-stages.js';
 import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
-import { counterRuleOf, issueMockNumber } from '../../../../shared/mocks/data/numbering-store.js';
+import {
+  counterRuleOf,
+  issueMockNumber,
+  placeOfTask,
+} from '../../../../shared/mocks/data/numbering-store.js';
 import { applyForm, blockedByOf, checkWindow, postBlock } from './tasks-transitions-gates.js';
 
 function findTask(id: string): TaskListItem | undefined {
@@ -40,12 +53,12 @@ function findTask(id: string): TaskListItem | undefined {
  *  проверяются (демо-пользователь — полный доступ), показ (`display`) и
  *  порядок — как у сервера: кнопки статуса по sortOrder, затем «из любого»;
  *  встроенное правило «итог → итог» прячет «Отменить» у закрытых. */
-/** Маршрут «Комплекта» (#630): быстрый + кнопка «Выдать в печать». */
-const komplektDocument = demoWorkflowDetails[KOMPLEKT_WORKFLOW_ID]!.document;
-
+/** Маршруты типов с собственным документом: «Комплект» (#632), «Изменение»
+ *  с кнопкой «Выдать в печать» (#630). */
 function documentOfTask(task: TaskListItem) {
   if (task.type.id === quickProcessType.id) return quickDocument;
-  if (task.type.id === komplektType.id) return komplektDocument;
+  if (task.type.id === komplektType.id) return demoWorkflowDetails[KOMPLEKT_WORKFLOW_ID]!.document;
+  if (task.type.id === changeType.id) return demoWorkflowDetails[CHANGE_WORKFLOW_ID]!.document;
   return standardDocument;
 }
 
@@ -193,25 +206,34 @@ export const tasksTransitionsHandlers = [
       )
       .map((pf) => pf.fieldId)
       .filter((fieldId): fieldId is string => fieldId !== undefined);
-    let assignedNumber: string | undefined;
+    // Сначала находим контейнеры ВСЕХ номеров кнопки: нет хотя бы одного —
+    // 409 до любой выдачи (как откат транзакции сервера: ничего не тратится).
+    // Поле, где номер уже есть, кнопка не меняет (повторное нажатие проходит).
+    const place = placeOfTask(task);
+    const pending: { fieldId: string; rule: NumberSeriesRule; containerId: string | null }[] = [];
     for (const fieldId of assignFieldIds) {
       const rule = counterRuleOf(fieldId);
-      if (!rule) continue;
-      if (task.customFields[fieldId] !== undefined) {
+      if (!rule || task.customFields[fieldId] !== undefined) continue;
+      const resolved = resolveNumberContainer(rule.container, place);
+      if (!resolved.ok) {
         return HttpResponse.json(
           {
-            code: ErrorCode.NUMBER_ALREADY_ASSIGNED,
-            message: 'Number is already assigned to this record',
+            code: ErrorCode.NUMBER_CONTAINER_MISSING,
+            message: errorMessages[ErrorCode.NUMBER_CONTAINER_MISSING],
+            details: { fieldId, reason: resolved.reason },
           },
           { status: 409 },
         );
       }
-      const scopePart =
-        rule.scopeKind === 'none' ? null : (task.nodeId ?? task.project?.id ?? task.id);
-      const display = issueMockNumber(fieldId, rule, scopePart);
-      task.customFields[fieldId] = display;
-      assignedNumber = assignedNumber ?? display;
+      pending.push({ fieldId, rule, containerId: resolved.containerId });
     }
+    const assignedNumbers = pending.map(({ fieldId, rule, containerId }) => {
+      const display = issueMockNumber(fieldId, rule, containerId);
+      // Присваивание целиком: customFields демо-задачи — ленивый геттер
+      // стора значений, мутация вложенного объекта терялась бы.
+      task.customFields = { ...task.customFields, [fieldId]: display };
+      return { fieldId, display };
+    });
     task.stage = resolveTarget(task, transition);
     // Встроенное автоперемещение «Моего плана» (ADR-0008) — как у переноса
     // по глобальной оси.
@@ -222,7 +244,7 @@ export const tasksTransitionsHandlers = [
     return HttpResponse.json({
       task,
       transitions: transitionsOf(task),
-      ...(assignedNumber ? { assignedNumber } : {}),
+      ...(assignedNumbers.length > 0 ? { assignedNumbers } : {}),
     });
   }),
 ];

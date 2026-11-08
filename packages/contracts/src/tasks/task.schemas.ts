@@ -309,10 +309,11 @@ export type TaskUpdateBody = z.infer<typeof taskUpdateBodySchema>;
 export const executeTransitionResultSchema = z.object({
   task: taskListItemSchema,
   transitions: z.array(workflowTransitionSchema),
-  /** Номер, выданный пост-действием «Присвоить номер» (#630, Р4): тост
-   *  «Присвоен номер …» и оптимистичный патч counter-поля. Отсутствует у
+  /** Номера, выданные пост-действиями «Присвоить номер» этого нажатия
+   *  (#630): тост «Присвоены номера: Изм. 3 · 1042». Только НОВЫЕ — поле, где
+   *  номер уже был, кнопка не меняет и сюда не попадает. Отсутствует у
    *  переходов без выдачи. */
-  assignedNumber: z.string().min(1).optional(),
+  assignedNumbers: z.array(z.object({ fieldId: z.uuid(), display: z.string().min(1) })).optional(),
 });
 
 export type ExecuteTransitionResult = z.infer<typeof executeTransitionResultSchema>;

@@ -181,6 +181,27 @@ export const demoNodeRows: DemoNodeRow[] = [
     customFields: { [MARKA_FIELD_ID]: SET_MARK_OV_ID, [SYSTEM_FIELD_IDS.nodeCode]: 'ОВ1.1' },
     createdAt: isoAgo(76),
   },
+  // Комплекты КЖ (#630): работы «Изменение» внутри — свой счёт «Изм.».
+  {
+    id: nodeIds.kzh01,
+    projectId: projectRefs.p4.id,
+    parentId: nodeIds.b1kr,
+    kindId: nodeKindIds.komplekt,
+    name: 'КЖ-01',
+    code: 'КЖ-01',
+    customFields: { [SYSTEM_FIELD_IDS.nodeCode]: 'КЖ-01' },
+    createdAt: isoAgo(70),
+  },
+  {
+    id: nodeIds.kzh02,
+    projectId: projectRefs.p4.id,
+    parentId: nodeIds.b1kr,
+    kindId: nodeKindIds.komplekt,
+    name: 'КЖ-02',
+    code: 'КЖ-02',
+    customFields: { [SYSTEM_FIELD_IDS.nodeCode]: 'КЖ-02' },
+    createdAt: isoAgo(69),
+  },
   {
     id: nodeIds.b2,
     projectId: projectRefs.p4.id,

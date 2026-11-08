@@ -6,6 +6,7 @@
 import { SYSTEM_FIELD_IDS, type NumberSeriesRule } from '@nodus/contracts';
 
 import { MARKA_FIELD_ID } from './set-marks.js';
+import { nodeKindSeedIds } from './node-kind-ids.js';
 
 const fid = (n: number): string => `c0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -48,10 +49,13 @@ export const fieldIds = {
   komplektCipher: fid(29),
   /** «№ по ГП» — вид папки «Здание по генплану» (формула шифра комплекта). */
   buildingGp: fid(30),
-  /** Счётчики (#630): «Изм.» — разрез «папка» (К2), «Взял изм» — сквозной
-   *  с продолжением из Excel (К3); кнопка «Выдать в печать» «Комплекта». */
+  /** Счётчики (#630): «Изм.» — свой счёт в каждой папке «Комплект» (Кейс A),
+   *  «Взял изм» — общий счёт компании, продолжение из Excel (Кейс C), «№
+   *  разрешения» — книга «NN-ГГ», заново каждый год (Кейс D). Выдаёт кнопка
+   *  «Выдать в печать» типа «Изменение». */
   changeNumber: fid(32),
   tookChangeNumber: fid(33),
+  permitNumber: fid(34),
 };
 
 /** Внутренние номера счётчиков (#630): явные, как у демо-формул —
@@ -59,23 +63,31 @@ export const fieldIds = {
 export const COUNTER_FIELD_NUMBERS = {
   changeNumber: 32,
   tookChangeNumber: 33,
+  permitNumber: 34,
 } as const;
 
 /** Правила счётчиков демо-мира (#630): адресуются id атрибута-цели. */
-export const COUNTER_RULES: Record<'changeNumber' | 'tookChangeNumber', NumberSeriesRule> = {
+export const COUNTER_RULES: Record<
+  'changeNumber' | 'tookChangeNumber' | 'permitNumber',
+  NumberSeriesRule
+> = {
   changeNumber: {
-    scopeKind: 'folder',
-    scopeFormula: null,
+    container: { kind: 'folder', nodeKindId: nodeKindSeedIds.komplekt },
     period: 'none',
     template: [{ kind: 'literal', text: 'Изм. ' }, { kind: 'counter' }],
     startValue: 1,
   },
   tookChangeNumber: {
-    scopeKind: 'none',
-    scopeFormula: null,
+    container: { kind: 'company' },
     period: 'none',
     template: [{ kind: 'counter' }],
-    startValue: 1041,
+    startValue: 1,
+  },
+  permitNumber: {
+    container: { kind: 'company' },
+    period: 'year',
+    template: [{ kind: 'counter' }, { kind: 'literal', text: '-' }, { kind: 'year', digits: 2 }],
+    startValue: 1,
   },
 };
 

@@ -27,6 +27,8 @@ export const OVERTIME_WORKFLOW_ID = wid(53);
 export const HR_WORKFLOW_ID = wid(54);
 /** Маршрут типа «Комплект» (#632): быстрый маршрут + форма с формулой. */
 export const KOMPLEKT_WORKFLOW_ID = wid(55);
+/** Маршрут типа «Изменение» (#630): быстрый + «Выдать в печать». */
+export const CHANGE_WORKFLOW_ID = wid(56);
 
 /** Тип мок-библиотеки: `viewer` и `creationForm` считает хендлер — они
  *  зависят от актёра и опубликованного документа (Р6, Р2). */
@@ -140,6 +142,35 @@ export const komplektType: DemoProcessType = {
   config: { card: { hiddenBlocks: [], roleLabels: {} }, access: allAccess },
 };
 
+/** Тип «Изменение» (#630): работа внутри папки «Комплект» — носитель
+ *  счётчиков Изм./«Взял изм»/№ разрешения и кнопки «Выдать в печать». */
+export const changeType: DemoProcessType = {
+  id: processTypeIds.change,
+  code: 'change',
+  name: 'Изменение',
+  icon: 'pencil-ruler',
+  color: 'warning',
+  description: 'Изменение выпущенного комплекта: Изм. N по папке и номер книги',
+  creatable: true,
+  category: 'task',
+  direction: null,
+  isSystem: false,
+  sortOrder: 5,
+  archivedAt: null,
+  workflowId: CHANGE_WORKFLOW_ID,
+  numbering: null,
+  config: { card: { hiddenBlocks: [], roleLabels: {} }, access: allAccess },
+};
+
+export const changeTypeRef: ProcessTypeRef = {
+  id: changeType.id,
+  code: changeType.code,
+  name: changeType.name,
+  category: changeType.category,
+  icon: changeType.icon,
+  color: changeType.color,
+};
+
 /** Ссылка типа для демо-задач комплектов (TaskListItem.type). */
 export const komplektTypeRef: ProcessTypeRef = {
   id: komplektType.id,
@@ -196,6 +227,7 @@ export const demoProcessTypes: DemoProcessType[] = [
   overtimeType,
   hrType,
   komplektType,
+  changeType,
   archivedDemoType,
   ...letterProcessTypes,
 ];
@@ -266,9 +298,20 @@ export const demoWorkflowDetails: Record<string, WorkflowDetail> = {
     version: 1,
     publishedAt,
     publishedBy,
+    document: { ...quickDocument, creation: komplektCreationForm },
+    stageEntityCounts: {},
+  },
+  // «Изменение» (#630): работа в папке «Комплект»; действие «Выдать в печать»
+  // выдаёт три номера одним нажатием — Изм. по папке, сквозной «Взял изм» и
+  // № разрешения книги (Кейс F).
+  [CHANGE_WORKFLOW_ID]: {
+    id: CHANGE_WORKFLOW_ID,
+    typeIds: [changeType.id],
+    version: 1,
+    publishedAt,
+    publishedBy,
     document: {
       ...quickDocument,
-      creation: komplektCreationForm,
       transitions: [
         ...quickDocument.transitions,
         {
@@ -286,6 +329,7 @@ export const demoWorkflowDetails: Record<string, WorkflowDetail> = {
             postFunctions: [
               { kind: 'assign_number', fieldId: fieldIds.changeNumber },
               { kind: 'assign_number', fieldId: fieldIds.tookChangeNumber },
+              { kind: 'assign_number', fieldId: fieldIds.permitNumber },
             ],
           },
           form: { enabled: false, sections: [] },

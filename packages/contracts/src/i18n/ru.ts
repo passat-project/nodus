@@ -96,9 +96,15 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.FORMULA_SOURCE_FORBIDDEN]: 'В этой формуле нельзя использовать выбранный источник',
   [ErrorCode.FORMULA_LIMIT_EXCEEDED]: 'Формула слишком большая — упростите её',
   [ErrorCode.FORMULA_CELL_LOCKED]: 'Ячейку считает формула — вписать значение нельзя',
-  [ErrorCode.NUMBER_SCOPE_EMPTY]: 'Номер не выдан: у записи нет значения для разреза счёта',
-  [ErrorCode.NUMBER_SCOPE_FAILED]: 'Номер не выдан: формула разреза счёта сломана',
-  [ErrorCode.NUMBER_ALREADY_ASSIGNED]: 'Номер этой записи уже выдан — повторно не выдаётся',
+  [ErrorCode.NUMBER_CONTAINER_MISSING]:
+    'Номер не выдан: запись не лежит там, где ведётся счёт (папка, проект или портфель)',
+  [ErrorCode.NUMBER_CONTAINER_UNREACHABLE]:
+    'Такие записи не лежат там, где ведётся счёт, — выберите другое «внутри чего» или уберите тип',
+  [ErrorCode.NUMBER_RULE_LOCKED]:
+    'Номера уже выдавались — «внутри чего» и «начинать заново» не меняются. Создайте новый счётчик',
+  [ErrorCode.NUMBER_NEXT_BACKWARDS]:
+    'Следующий номер не может быть меньше уже выданного — номера не повторяются',
+  [ErrorCode.COUNTER_FORMULA_FORBIDDEN]: 'У счётчика нет формулы — номер выдаёт кнопка процесса',
   [ErrorCode.NUMBER_CELL_IMMUTABLE]: 'Номер счётчика выдаёт процесс — вписать вручную нельзя',
   [ErrorCode.DICTIONARY_SYSTEM_LOCKED]: 'Системный справочник изменить нельзя',
   [ErrorCode.DICTIONARY_ITEM_NAME_TAKEN]: 'Такой вариант уже есть в списке',

@@ -5,121 +5,141 @@ import { setupServer } from 'msw/node';
 
 import {
   counterRuleOf,
-  issueMockNumber,
+  mockCounts,
   mockIssuedCount,
 } from '../../../../shared/mocks/data/numbering-store.js';
 import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
 import { fieldIds } from '../../../../shared/mocks/data/field-ids.js';
+import { nodeIds } from '../../../../shared/mocks/data/project-node-ids.js';
 import { demoTasks } from '../../../../shared/mocks/data/task-items.js';
 import {
+  CHANGE_WORKFLOW_ID,
   demoWorkflowDetails,
-  KOMPLEKT_WORKFLOW_ID,
 } from '../../../../shared/mocks/data/workflows.js';
-import { stageInProgress } from '../../../../shared/mocks/data/task-stages.js';
+import { numberingHandlers } from '../../../../shared/custom-fields/mocks/numbering-handlers.js';
 import { tasksTransitionsHandlers } from './tasks-transitions-handlers.js';
 
 /**
- * Паритет мок-мира счётчиков с сервером (#630, §6): магазин несёт counter-
- * определения с numbering-сводкой ДО первого показа диалога; кнопка
- * «Выдать в печать» несёт пост-функции с полями-целями; мок-выдача растит
- * seq от startValue (разрез — отдельный счёт, год — новая группа);
- * повторная выдача — 409 NUMBER_ALREADY_ASSIGNED; коды ошибок — контракты.
+ * Паритет мок-мира счётчиков с сервером (#630, концепция 08.11): номера
+ * работ «Изменение» внутри РЕАЛЬНЫХ папок «Комплект». Кейсы: A — КЖ-01
+ * продолжает свой счёт, КЖ-02 начинает с 1; C — общий счёт с 1041; D —
+ * книга года; F — три номера одним нажатием; работа вне комплекта — 409
+ * NUMBER_CONTAINER_MISSING и ни один номер не тратится; повторное нажатие
+ * номер не меняет.
  */
-const server = setupServer(...tasksTransitionsHandlers);
+const server = setupServer(...tasksTransitionsHandlers, ...numberingHandlers);
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 
-/** Документ магазина — служебные id-коды (trid), не uuid: структурная
- *  проверка без парса опубликованной схемы, как соседние мок-тесты. */
-const komplektDocument = () => demoWorkflowDetails[KOMPLEKT_WORKFLOW_ID]!.document;
+const issue = () =>
+  demoWorkflowDetails[CHANGE_WORKFLOW_ID]!.document.transitions.find(
+    (t) => t.code === 'issue_print',
+  )!;
 
-/** Демо-комплект в работе — носитель кнопки «Выдать в печать». */
-function komplektTaskInProgress() {
-  return demoTasks.find(
-    (entry) =>
-      entry.stage.id === stageInProgress.id &&
-      demoWorkflowDetails[KOMPLEKT_WORKFLOW_ID]!.typeIds.includes(entry.type.id),
-  );
+const taskIn = (title: string) => demoTasks.find((task) => task.title === title)!;
+
+async function press(taskId: string) {
+  const response = await fetch(`/api/v1/tasks/${taskId}/transitions/${issue().id}`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+    headers: { 'content-type': 'application/json' },
+  });
+  return { status: response.status, body: (await response.json()) as Record<string, unknown> };
 }
 
 describe('мок счётчиков: паритет с сервером (#630)', () => {
-  it('магазин содержит counter-определения с валидной numbering-сводкой', () => {
+  it('магазин содержит counter-определения с правилом «внутри чего»', () => {
     const counters = demoCustomFieldDefinitions.filter((entry) => entry.type === 'counter');
-    expect(counters.length).toBeGreaterThanOrEqual(2);
+    expect(counters.length).toBe(3);
     for (const definition of counters) {
       expect(customFieldDefinitionSchema.safeParse(definition).success).toBe(true);
-      expect(definition.numbering?.rule).toBeDefined();
-      expect(definition.numbering!.preview.length).toBeGreaterThan(0);
     }
-    const izm = counters.find((entry) => entry.id === fieldIds.changeNumber)!;
-    expect(izm.numbering!.rule).toMatchObject({ scopeKind: 'folder', startValue: 1 });
-    expect(mockIssuedCount(fieldIds.changeNumber)).toBe(12);
-    const took = counters.find((entry) => entry.id === fieldIds.tookChangeNumber)!;
-    expect(took.numbering!.rule).toMatchObject({ scopeKind: 'none', startValue: 1041 });
+    expect(counterRuleOf(fieldIds.changeNumber)!.container.kind).toBe('folder');
+    expect(counterRuleOf(fieldIds.tookChangeNumber)!.container.kind).toBe('company');
+    expect(counterRuleOf(fieldIds.permitNumber)!.period).toBe('year');
   });
 
-  it('маршрут «Комплекта» несёт кнопку с двумя полями-целями (К2/К3)', () => {
-    const doc = komplektDocument();
-    const issue = doc.transitions.find((t) => t.code === 'issue_print')!;
-    expect(issue).toBeDefined();
-    expect(issue.rules.postFunctions).toEqual([
-      { kind: 'assign_number', fieldId: fieldIds.changeNumber },
-      { kind: 'assign_number', fieldId: fieldIds.tookChangeNumber },
-    ]);
-    // Кнопка — само-петля на «В работе»: номер без смены статуса.
-    expect(issue.fromStageId).toBe(issue.toStageId);
+  it('Кейсы A/C/D/F: одно нажатие — три номера; КЖ-02 начинает с «Изм. 1»', async () => {
+    const kzh01 = taskIn('Изменение КЖ-01: армирование ростверка');
+    const first = await press(kzh01.id);
+    expect(first.status).toBe(200);
+    const numbers = first.body.assignedNumbers as { fieldId: string; display: string }[];
+    expect(numbers.map((entry) => entry.display)).toEqual(
+      expect.arrayContaining(['Изм. 2', '1042']),
+    );
+    expect(numbers.find((entry) => entry.fieldId === fieldIds.permitNumber)?.display).toMatch(
+      /^16-\d{2}$/,
+    );
+
+    const kzh02 = taskIn('Изменение КЖ-02: закладные детали');
+    const second = await press(kzh02.id);
+    const displays = (second.body.assignedNumbers as { display: string }[]).map((e) => e.display);
+    expect(displays).toContain('Изм. 1');
+    expect(displays).toContain('1043');
+
+    const counts = mockCounts(fieldIds.changeNumber, counterRuleOf(fieldIds.changeNumber)!, '');
+    expect(counts.find((c) => c.container?.id === nodeIds.kzh02)?.nextDisplay).toBe('Изм. 2');
   });
 
-  it('демо-комплект в работе существует — сценарий чекпоинта живой', () => {
-    expect(komplektTaskInProgress()).toBeDefined();
+  it('повторное нажатие номер не меняет и счётчик не двигает', async () => {
+    const task = taskIn('Изменение КЖ-01: отверстия в плите');
+    const before = mockIssuedCount(fieldIds.changeNumber);
+    const again = await press(task.id);
+    expect(again.status).toBe(200);
+    expect(again.body.assignedNumbers).toBeUndefined();
+    expect(task.customFields[fieldIds.changeNumber]).toBe('Изм. 1');
+    expect(mockIssuedCount(fieldIds.changeNumber)).toBe(before);
   });
 
-  it('мок-выдача растит seq от startValue; разрез и год — отдельные группы', () => {
-    const rule = counterRuleOf(fieldIds.tookChangeNumber)!;
-    expect(rule.startValue).toBe(1041);
-    expect(issueMockNumber(fieldIds.tookChangeNumber, rule, null)).toBe('1041');
-    expect(issueMockNumber(fieldIds.tookChangeNumber, rule, null)).toBe('1042');
-
-    const izm = counterRuleOf(fieldIds.changeNumber)!;
-    // Разные папки — независимые группы (К2): «Изм. 1» и снова «Изм. 1».
-    expect(issueMockNumber(fieldIds.changeNumber, izm, 'folder-a')).toBe('Изм. 1');
-    expect(issueMockNumber(fieldIds.changeNumber, izm, 'folder-b')).toBe('Изм. 1');
-    expect(issueMockNumber(fieldIds.changeNumber, izm, 'folder-a')).toBe('Изм. 2');
-
-    const yearRule = { ...rule, period: 'year' as const };
-    const late2026 = new Date('2026-12-31T20:00:00.000Z'); // Минск: 31.12.2026
-    const early2027 = new Date('2026-12-31T23:30:00.000Z'); // Минск: 01.01.2027
-    expect(issueMockNumber('x-year', yearRule, null, late2026)).toBe('1041');
-    expect(issueMockNumber('x-year', yearRule, null, late2026)).toBe('1042');
-    // Новый год — новая группа счёта (К4): снова первый номер.
-    expect(issueMockNumber('x-year', yearRule, null, early2027)).toBe('1041');
+  it('работа вне комплекта — 409 NUMBER_CONTAINER_MISSING, общий счёт не тратится', async () => {
+    const task = taskIn('Изменение без комплекта: план кровли');
+    const before = mockIssuedCount(fieldIds.tookChangeNumber);
+    const result = await press(task.id);
+    expect(result.status).toBe(409);
+    expect(result.body.code).toBe(ErrorCode.NUMBER_CONTAINER_MISSING);
+    expect(mockIssuedCount(fieldIds.tookChangeNumber)).toBe(before);
+    expect(task.customFields[fieldIds.tookChangeNumber]).toBeUndefined();
   });
 
-  it('повторная выдача того же поля — 409 NUMBER_ALREADY_ASSIGNED (К5)', async () => {
-    const task = komplektTaskInProgress()!;
-    const issue = komplektDocument().transitions.find((t) => t.code === 'issue_print')!;
-    // Поле уже заполнено первой выдачей — второй клик обязан получить отказ.
+  it('проверка на записи: задача → КЖ-01 → следующий номер; чужой тип — not_participant', async () => {
     const rule = counterRuleOf(fieldIds.changeNumber)!;
-    task.customFields[fieldIds.changeNumber] = issueMockNumber(
-      fieldIds.changeNumber,
-      rule,
-      task.nodeId,
-    );
-    const response = await fetch(`/api/v1/tasks/${task.id}/transitions/${issue.id}`, {
+    const task = taskIn('Изменение КЖ-01: отверстия в плите');
+    const response = await fetch('/api/v1/custom-fields/numbering/preview', {
       method: 'POST',
-      body: JSON.stringify({}),
       headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        definitionId: fieldIds.changeNumber,
+        rule,
+        participantTypeIds: [task.type.id],
+        host: { kind: 'task', id: task.id },
+      }),
     });
-    expect(response.status).toBe(409);
-    expect(((await response.json()) as { code: string }).code).toBe(
-      ErrorCode.NUMBER_ALREADY_ASSIGNED,
-    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      container: { name: string; path: string[] };
+      alreadyAssigned: string | null;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.container.name).toBe('КЖ-01');
+    expect(body.container.path[0]).toBe('Главный корпус галургической фабрики');
+    expect(body.alreadyAssigned).toBe('Изм. 1');
+
+    const foreign = await fetch('/api/v1/custom-fields/numbering/preview', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rule, participantTypeIds: [], host: { kind: 'task', id: task.id } }),
+    });
+    expect(((await foreign.json()) as { reason: string }).reason).toBe('not_participant');
   });
 
-  it('коды ошибок нумерации объявлены контрактом (2 карты — Пакет 2)', () => {
-    expect(ErrorCode.NUMBER_ALREADY_ASSIGNED).toBeDefined();
-    expect(ErrorCode.NUMBER_SCOPE_EMPTY).toBeDefined();
-    expect(ErrorCode.NUMBER_SCOPE_FAILED).toBeDefined();
-    expect(ErrorCode.NUMBER_CELL_IMMUTABLE).toBeDefined();
+  it('следующий номер — только вперёд (409 NUMBER_NEXT_BACKWARDS)', async () => {
+    const put = (nextValue: number) =>
+      fetch(`/api/v1/custom-fields/definitions/${fieldIds.tookChangeNumber}/numbering/next`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ containerId: null, nextValue }),
+      });
+    expect((await put(5)).status).toBe(409);
+    expect((await put(2000)).status).toBe(200);
   });
 });

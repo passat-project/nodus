@@ -1,38 +1,26 @@
 import { z } from 'zod';
 
-import { formulaNodeSchema } from '../custom-fields/formula.js';
+import { numberContainerSchema } from './number-container.js';
 
 /**
- * Серии номеров (#630, ADR-0037 §8): один механизм для всех нумераций —
- * правило «разрез × период × шаблон × старт» на сущности `number_series`.
- * Серия связывается 1:1 с определением атрибута типа `counter` (правило
- * одно на портал, привязки атрибута = сумма областей — один счёт); письмо-
- * серии живут там же без атрибута (серия из `config.numbering` типа).
+ * Серии номеров (#630, ADR-0037 §8, концепция 08.11): один механизм для всех
+ * нумераций — правило «внутри чего свой счёт × когда заново × вид номера ×
+ * с чего начинается новый счёт» на сущности `number_series`. Серия 1:1 с
+ * определением атрибута типа `counter`: правило ОДНО на атрибут, все его
+ * привязки получают номера из одного счётчика (свой счёт — у каждого
+ * контейнера: реальной папки/проекта/портфеля, в которой лежит запись).
+ * Письмо-серии живут там же без атрибута (серия из `config.numbering` типа).
  */
 
-/** Разрез счёта — где у серии отдельный счётчик. `none` — общий счёт на
- *  портал; `self`/`project`/`portfolio`/`folder` — заготовки по записи
- *  (отдельный счёт у каждой записи/проекта/портфеля/папки); `formula` —
- *  произвольный ключ формулой от записи (В2: абстрактная автоматизация,
- *  заготовки — лишь пресеты). Комбинируются формулой. */
-export const numberScopeKindSchema = z.enum([
-  'none',
-  'self',
-  'project',
-  'portfolio',
-  'folder',
-  'formula',
-]);
-export type NumberScopeKind = z.infer<typeof numberScopeKindSchema>;
-
-/** Период сброса счёта: `none` — сквозной, `year` — «в каждом году»,
- *  `month` — «в каждом месяце». Границы — по поясу компании. */
+/** Когда счёт начинается заново: `none` — никогда, `year` — каждый год,
+ *  `month` — каждый месяц. Границы — по поясу компании. Допустимость
+ *  зависит от вида номера (`numberPeriodsAllowed`): заново «каждый год»
+ *  только если в номере есть год — иначе номера разных лет совпадут. */
 export const numberPeriodSchema = z.enum(['none', 'year', 'month']);
 export type NumberPeriod = z.infer<typeof numberPeriodSchema>;
 
-/** Сегменты шаблона номера. Ровно один `counter` — шаблон без номера не
- *  имеет смысла (refine правила). Письмо-формат «Вх-2026/118» — это
- *  `[literal 'Вх', literal '-', year 4, literal '/', counter]`. */
+/** Сегменты вида номера. Ровно один `counter`. Письмо-формат «Вх-2026/118»
+ *  — это `[literal 'Вх', literal '-', year 4, literal '/', counter]`. */
 export const numberTemplateSegmentSchema = z.discriminatedUnion('kind', [
   /** Порядковый номер; `minLength` — добивка нулями слева (3 → «007»). */
   z
@@ -46,7 +34,7 @@ export const numberTemplateSegmentSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('month') }).strict(),
   /** Значение атрибута записи (`self`) или её проекта (`project`) — «код по
    *  реквизиту» в номере (инв. № в накладной). Атрибут удалён или пуст —
-   *  пустая вставка, выдача не падает (Р2). */
+   *  пустая вставка, выдача не падает. */
   z
     .object({
       kind: z.literal('field'),
@@ -57,32 +45,33 @@ export const numberTemplateSegmentSchema = z.discriminatedUnion('kind', [
 ]);
 export type NumberTemplateSegment = z.infer<typeof numberTemplateSegmentSchema>;
 
-export const NUMBER_TEMPLATE_LIMITS = { segments: 12 } as const;
+export const NUMBER_TEMPLATE_LIMITS = { segments: 12, value: 999_999_999 } as const;
 
-/** Правило серии: разрез × период × шаблон × старт. Хранится колонками
- *  `number_series`; стартовое значение — продолжение нумерации из Excel
- *  (первый номер группы = startValue). */
+/** Какие «начинать заново» допускает вид номера: «никогда» — всегда; «каждый
+ *  год» — только с годом в номере; «каждый месяц» — только с месяцем. Одна
+ *  функция для диалога (что показать), zod-правила и сервера. */
+export function numberPeriodsAllowed(
+  template: readonly NumberTemplateSegment[],
+): readonly NumberPeriod[] {
+  const out: NumberPeriod[] = ['none'];
+  if (template.some((segment) => segment.kind === 'year')) out.push('year');
+  if (template.some((segment) => segment.kind === 'month')) out.push('month');
+  return out;
+}
+
+/** Правило серии. `startValue` — с какого номера начинается КАЖДЫЙ новый
+ *  счёт (новая папка, новый год); продолжение нумерации конкретного счёта
+ *  из Excel/бумаги — «следующий номер» этого счёта (только вперёд), а не
+ *  старт правила: иначе «книга со старта 15» начинала бы с 15 каждый год. */
 export const numberSeriesRuleSchema = z
   .object({
-    scopeKind: numberScopeKindSchema,
-    /** Формула разреза (AST формул #632) — только при `scopeKind='formula'`. */
-    scopeFormula: formulaNodeSchema.nullable().optional(),
+    container: numberContainerSchema,
     period: numberPeriodSchema,
     template: z.array(numberTemplateSegmentSchema).min(1).max(NUMBER_TEMPLATE_LIMITS.segments),
-    startValue: z.number().int().min(1).max(999_999_999),
+    startValue: z.number().int().min(1).max(NUMBER_TEMPLATE_LIMITS.value),
   })
   .strict()
   .superRefine((rule, ctx) => {
-    if (rule.scopeKind === 'formula' && rule.scopeFormula == null) {
-      ctx.addIssue({ code: 'custom', path: ['scopeFormula'], message: 'scope formula required' });
-    }
-    if (rule.scopeKind !== 'formula' && rule.scopeFormula != null) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['scopeFormula'],
-        message: 'scope formula allowed only for scopeKind=formula',
-      });
-    }
     if (rule.template.filter((s) => s.kind === 'counter').length !== 1) {
       ctx.addIssue({
         code: 'custom',
@@ -90,24 +79,54 @@ export const numberSeriesRuleSchema = z
         message: 'exactly one counter segment required',
       });
     }
+    if (!numberPeriodsAllowed(rule.template).includes(rule.period)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['period'],
+        message: 'period requires the matching date segment in the template',
+      });
+    }
   });
 export type NumberSeriesRule = z.infer<typeof numberSeriesRuleSchema>;
 
+/** Части момента выдачи (по поясу компании — у каждого контекста свой). */
+export interface NumberMoment {
+  year: number;
+  month: number;
+}
+
+/** Период-часть ключа счёта: '' (никогда), '2026' (год), '2026-11' (месяц). */
+export function numberPeriodKey(period: NumberPeriod, at: NumberMoment): string {
+  switch (period) {
+    case 'year':
+      return String(at.year);
+    case 'month':
+      return `${at.year}-${String(at.month).padStart(2, '0')}`;
+    case 'none':
+      return '';
+  }
+}
+
+/** Ключ счёта (PRIMARY KEY строки `number_counters` вместе с series_id):
+ *  «id контейнера|период», пустые части не пишутся, без частей — 'common'.
+ *  Письмо-серии (вся компания × год) дают '2026' — формат живых строк прода
+ *  #55, менять нельзя. Стабилен при переименовании контейнера (uuid). */
+export function numberCountKey(containerId: string | null, periodKey: string): string {
+  const parts = [containerId ?? '', periodKey].filter((part) => part.length > 0);
+  return parts.length > 0 ? parts.join('|') : 'common';
+}
+
 /** Читатель поля-сегмента шаблона: значение атрибута записи (`self`) или её
  *  проекта (`project`). Нет читателя или атрибут удалён/пуст — пустая
- *  вставка: выдача номера не падает (Р2). Одна грамматика для сервера
- *  (контекст записи), веба (предпросмотр диалога) и моков. */
+ *  вставка. Одна грамматика для сервера, веба и моков. */
 export type NumberTemplateFieldReader = (
   segment: Extract<NumberTemplateSegment, { kind: 'field' }>,
 ) => string;
 
 /** Ввод рендера: момент передан ГОТОВЫМИ частями (год/месяц), а не Date —
- *  пояс компании у каждого контекста свой (сервер — `COMPANY_TIMEZONE`,
- *  веб-предпросмотр — Минск), рендер остаётся чистым. */
-export interface NumberTemplateRenderInput {
+ *  пояс компании у каждого контекста свой, рендер остаётся чистым. */
+export interface NumberTemplateRenderInput extends NumberMoment {
   seq: number;
-  year: number;
-  month: number;
   field?: NumberTemplateFieldReader;
 }
 
