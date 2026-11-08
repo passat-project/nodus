@@ -13,13 +13,11 @@ import {
   ui,
   creationSlots,
 } from '@nodus/contracts';
-import { LayoutTemplate } from 'lucide-react';
-
 import { projectsAvailable } from '../../../../../shared/api/projects-available.js';
 import { useCustomFieldDefinitions } from '../../../../../shared/custom-fields/queries.js';
 import { useRouteDocStore } from '../../../model/route-doc-store.js';
 import { CreationWindowBuilder } from '../window-builder/creation-window-builder.js';
-import { PanelAction, PanelNote } from '../../../../../shared/ui/panel/panel-kit.js';
+import { PanelNote, SectionLink } from '../../../../../shared/ui/panel/panel-kit.js';
 
 const c = ui.automation.creation;
 
@@ -78,12 +76,14 @@ export function CreationPanel({
         </div>
       ) : null}
 
-      <PanelAction icon={LayoutTemplate} onClick={() => open()}>
-        {readOnly ? ui.forms.builder.view : ui.forms.builder.edit}
-      </PanelAction>
-      <p className="-mt-2 text-xs text-muted-foreground">
-        {ui.forms.builder.summary(slots.length, form.locks?.length ?? 0)}
-      </p>
+      {/* Вход в редактор — строка раздела, как «Кнопки из статуса» и «Окно
+          перехода»: название, сводка состава, шеврон. Без кнопки-пилюли
+          (замечание владельца 08.11.2026). */}
+      <SectionLink
+        title={readOnly ? ui.forms.builder.view : ui.forms.builder.edit}
+        summary={ui.forms.builder.summary(slots.length, form.locks?.length ?? 0)}
+        onClick={() => open()}
+      />
 
       <CreationWindowBuilder
         open={builderOpen}

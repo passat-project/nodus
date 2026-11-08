@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { NodeKind, NodeKindForm } from '@nodus/contracts';
 import { bindingsOf, formSlots, isFormDecor, nodeKindFormOf, ui } from '@nodus/contracts';
-import { LayoutTemplate } from 'lucide-react';
 
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { AttributeWindowBuilder } from '../../../../shared/forms/attribute-window-builder.js';
@@ -9,7 +8,7 @@ import type { AttributeElement } from '../../../../shared/forms/attribute-form-m
 import { isSlotElement } from '../../../../shared/forms/attribute-form-model.js';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { PreviewControl } from '../../../../shared/forms/builder/preview-control.js';
-import { PanelAction } from '../../../../shared/ui/panel/panel-kit.js';
+import { SectionLink } from '../../../../shared/ui/panel/panel-kit.js';
 import type { RenderCreateField } from '../types.js';
 
 const b = ui.forms.builder;
@@ -52,14 +51,13 @@ export function NodeKindFormSection({
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      {formSlots(form).length === 0 ? (
-        <p className="text-xs break-words text-muted-foreground">{ui.nodeKinds.form.empty}</p>
-      ) : (
-        <p className="text-xs break-words text-muted-foreground">{summary.join(', ')}</p>
-      )}
-      <PanelAction icon={LayoutTemplate} onClick={() => setOpen(true)}>
-        {canSetup ? b.edit : b.view}
-      </PanelAction>
+      {/* Вход в редактор — строка раздела с шевроном, как в остальных
+          панелях (#496, замечание владельца 08.11.2026). */}
+      <SectionLink
+        title={canSetup ? b.edit : b.view}
+        summary={formSlots(form).length === 0 ? ui.nodeKinds.form.empty : summary.join(', ')}
+        onClick={() => setOpen(true)}
+      />
       <AttributeWindowBuilder
         open={open}
         title={`${b.titles.folder} · ${kind.name}`}

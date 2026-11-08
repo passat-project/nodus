@@ -8,7 +8,6 @@ import {
   withProjectSystemElements,
 } from '@nodus/contracts';
 import { NodeLabel } from '@nodus/ui/components/node-label';
-import { LayoutTemplate } from 'lucide-react';
 
 import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries.js';
 import { AttributeWindowBuilder } from '../../../shared/forms/attribute-window-builder.js';
@@ -16,7 +15,7 @@ import type { AttributeElement } from '../../../shared/forms/attribute-form-mode
 import { isSlotElement } from '../../../shared/forms/attribute-form-model.js';
 import type { AttributeSystemInfo } from '../../../shared/forms/attribute-window-builder.js';
 import { PreviewControl } from '../../../shared/forms/builder/preview-control.js';
-import { PanelAction } from '../../../shared/ui/panel/panel-kit.js';
+import { SectionLink } from '../../../shared/ui/panel/panel-kit.js';
 import { useUpdateProjectType } from '../api/project-catalog-mutations.js';
 import type { RenderCreateField } from '../node-kinds/types.js';
 
@@ -74,14 +73,13 @@ export function ProjectTypeFieldsSection({
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <PanelAction icon={LayoutTemplate} onClick={() => setOpen(true)}>
-        {canSetup ? b.edit : b.view}
-      </PanelAction>
-      {summary.length > 0 ? (
-        <p className="text-xs break-words text-muted-foreground">{summary.join(', ')}</p>
-      ) : (
-        <p className="text-xs break-words text-muted-foreground">{ui.projects.formEmpty}</p>
-      )}
+      {/* Вход в редактор — строка раздела с шевроном, как в остальных
+          панелях (#496, замечание владельца 08.11.2026). */}
+      <SectionLink
+        title={canSetup ? b.edit : b.view}
+        summary={summary.length > 0 ? summary.join(', ') : ui.projects.formEmpty}
+        onClick={() => setOpen(true)}
+      />
       <AttributeWindowBuilder
         open={open}
         title={`${b.titles.project} · ${type.name}`}

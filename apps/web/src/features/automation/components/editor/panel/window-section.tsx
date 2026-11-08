@@ -4,11 +4,10 @@ import { ui, windowFieldKeys } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
 import { Input } from '@nodus/ui/components/input';
-import { LayoutTemplate } from 'lucide-react';
 
 import { useRouteDocStore } from '../../../model/route-doc-store.js';
 import { sectionOf, setWindowEnabled, setWindowTitle } from '../../../model/transition-form.js';
-import { PanelAction, PanelField, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
+import { PanelField, SectionLink, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
 import { TransitionWindowBuilder } from '../window-builder/transition-window-builder.js';
 
 const l = ui.forms.locks;
@@ -73,17 +72,16 @@ export function WindowSection({
               onChange={(e) => patch(setWindowTitle(form, e.target.value))}
             />
           </PanelField>
-          <div className="flex min-w-0 flex-col gap-1">
-            <p className="text-sm">{ui.forms.builder.summary(fieldCount, lockCount)}</p>
-            {otherSections.length > 0 ? (
-              <p className="text-xs break-words text-muted-foreground">
-                {otherSections.join(', ')}
-              </p>
-            ) : null}
-          </div>
-          <PanelAction icon={LayoutTemplate} onClick={() => setBuilderOpen(true)}>
-            {readOnly ? ui.forms.builder.view : ui.forms.builder.edit}
-          </PanelAction>
+          {/* Вход в редактор — строка раздела, как «Кнопки из статуса»:
+              название, сводка состава (поля · разделы · замки), шеврон. */}
+          <SectionLink
+            title={readOnly ? ui.forms.builder.view : ui.forms.builder.edit}
+            summary={[
+              ui.forms.builder.summary(fieldCount, lockCount),
+              ...(otherSections.length > 0 ? [otherSections.join(', ')] : []),
+            ].join(' · ')}
+            onClick={() => setBuilderOpen(true)}
+          />
           <TransitionWindowBuilder
             open={builderOpen}
             transition={transition}
