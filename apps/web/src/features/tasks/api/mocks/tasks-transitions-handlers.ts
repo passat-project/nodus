@@ -1,14 +1,7 @@
-import type {
-  NumberSeriesRule,
-  TaskListItem,
-  TaskStage,
-  WorkflowTransition,
-} from '@nodus/contracts';
+import type { TaskListItem, TaskStage, WorkflowTransition } from '@nodus/contracts';
 import {
   effectiveWindowSections,
   ErrorCode,
-  errorMessages,
-  resolveNumberContainer,
   executeTransitionBodySchema,
   isFinalState,
   ui,
@@ -32,11 +25,9 @@ import {
 } from '../../../../shared/mocks/data/workflows.js';
 import { quickProcessType } from '../../../../shared/mocks/data/task-stages.js';
 import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
-import {
-  counterRuleOf,
-  issueMockNumber,
-  placeOfTask,
-} from '../../../../shared/mocks/data/numbering-store.js';
+import { placeOfTask, segmentReaderOfTask } from '../../../../shared/mocks/data/numbering-store.js';
+import { planNumbers } from '../../../../shared/mocks/data/numbering-create.js';
+import { numberingFailureResponse } from '../../../../shared/custom-fields/mocks/numbering-responses.js';
 import { applyForm, blockedByOf, checkWindow, postBlock } from './tasks-transitions-gates.js';
 
 function findTask(id: string): TaskListItem | undefined {
@@ -183,6 +174,30 @@ export const tasksTransitionsHandlers = [
         );
       }
     }
+    // Пост-действие «Присвоить номер» (#630, модель v3): номера ВСЕХ полей
+    // кнопки планируются ДО любых изменений — нет места для счёта или
+    // пустое поле в номере без подтверждения — 409, ничего не меняется и не
+    // тратится (как откат транзакции сервера). Поле, где номер уже есть,
+    // кнопка не трогает: кто первым заполнил — тот выдал.
+    const docTransition = documentOfTask(task).transitions.find((t) => t.id === transition.id);
+    const assignFieldIds = (docTransition?.rules.postFunctions ?? [])
+      .filter(
+        (pf): pf is { kind: 'assign_number'; fieldId?: string } => pf.kind === 'assign_number',
+      )
+      .map((pf) => pf.fieldId)
+      .filter((fieldId): fieldId is string => fieldId !== undefined)
+      .filter((fieldId) => task.customFields[fieldId] === undefined);
+    const numbering = planNumbers(
+      assignFieldIds,
+      { place: placeOfTask(task), field: segmentReaderOfTask(task) },
+      {
+        hostKind: 'task',
+        source: 'transition',
+        sourceLabel: transition.name,
+        confirmEmpty: parsed.data.confirmEmptyNumberParts === true,
+      },
+    );
+    if (!numbering.ok) return numberingFailureResponse(numbering.failure);
     applyForm(task, parsed.data.form ?? {});
     const reasons = blockedByOf(task, documentOfTask(task), transition.id);
     if (reasons.length > 0 && !(parsed.data.override && parsed.data.reason?.trim())) {
@@ -196,44 +211,14 @@ export const tasksTransitionsHandlers = [
       );
     }
     postBlock(task, transition, parsed.data.form ?? {});
-    // Пост-действие «Присвоить номер» (#630, Р4): номера счётчиков до смены
-    // стадии; повторная выдача тому же полю — 409 (К5, номера не
-    // переиспользуются). Разрез записи в моке — проект (папок в списке нет).
-    const docTransition = documentOfTask(task).transitions.find((t) => t.id === transition.id);
-    const assignFieldIds = (docTransition?.rules.postFunctions ?? [])
-      .filter(
-        (pf): pf is { kind: 'assign_number'; fieldId?: string } => pf.kind === 'assign_number',
-      )
-      .map((pf) => pf.fieldId)
-      .filter((fieldId): fieldId is string => fieldId !== undefined);
-    // Сначала находим контейнеры ВСЕХ номеров кнопки: нет хотя бы одного —
-    // 409 до любой выдачи (как откат транзакции сервера: ничего не тратится).
-    // Поле, где номер уже есть, кнопка не меняет (повторное нажатие проходит).
-    const place = placeOfTask(task);
-    const pending: { fieldId: string; rule: NumberSeriesRule; containerId: string | null }[] = [];
-    for (const fieldId of assignFieldIds) {
-      const rule = counterRuleOf(fieldId);
-      if (!rule || task.customFields[fieldId] !== undefined) continue;
-      const resolved = resolveNumberContainer(rule.container, place);
-      if (!resolved.ok) {
-        return HttpResponse.json(
-          {
-            code: ErrorCode.NUMBER_CONTAINER_MISSING,
-            message: errorMessages[ErrorCode.NUMBER_CONTAINER_MISSING],
-            details: { fieldId, reason: resolved.reason },
-          },
-          { status: 409 },
-        );
-      }
-      pending.push({ fieldId, rule, containerId: resolved.containerId });
-    }
-    const assignedNumbers = pending.map(({ fieldId, rule, containerId }) => {
-      const display = issueMockNumber(fieldId, rule, containerId);
-      // Присваивание целиком: customFields демо-задачи — ленивый геттер
-      // стора значений, мутация вложенного объекта терялась бы.
-      task.customFields = { ...task.customFields, [fieldId]: display };
-      return { fieldId, display };
-    });
+    const numbers = numbering.issue(task.id);
+    // Присваивание целиком: customFields демо-задачи — ленивый геттер стора
+    // значений, мутация вложенного объекта терялась бы.
+    if (Object.keys(numbers).length > 0) task.customFields = { ...task.customFields, ...numbers };
+    const assignedNumbers = Object.entries(numbers).map(([fieldId, display]) => ({
+      fieldId,
+      display,
+    }));
     task.stage = resolveTarget(task, transition);
     // Встроенное автоперемещение «Моего плана» (ADR-0008) — как у переноса
     // по глобальной оси.

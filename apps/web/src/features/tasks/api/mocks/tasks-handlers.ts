@@ -32,6 +32,7 @@ import { tasksParticipantsHandlers } from './tasks-participants-handlers.js';
 import { tasksPersonalStagesHandlers } from './tasks-personal-stages-handlers.js';
 import { tasksTransitionsHandlers } from './tasks-transitions-handlers.js';
 import { tasksWorkHandlers } from './tasks-work-handlers.js';
+import { counterWriteResponse } from '../../../../shared/custom-fields/mocks/numbering-responses.js';
 
 function notFound(message: string) {
   return HttpResponse.json({ code: ErrorCode.NOT_FOUND, message }, { status: 404 });
@@ -157,6 +158,9 @@ export const tasksHandlers = [
     if (!parsed.data.stageId && !parsed.data.personalStageId) {
       const body = parsed.data;
       const type = typeOfTask(task.type.id);
+      // Номер счётчика руками не пишется (#630): 422 NUMBER_CELL_IMMUTABLE.
+      const counterWrite = counterWriteResponse(body.customFields ?? {});
+      if (counterWrite) return counterWrite;
       // Обязательное при создании поле нельзя очистить (#432, Р5) и значение
       // непривязанного к типу атрибута записать нельзя (Р8).
       const unbound = checkUnboundValues(type, body.customFields ?? {});

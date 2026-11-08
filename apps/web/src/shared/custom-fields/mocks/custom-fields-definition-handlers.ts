@@ -9,8 +9,7 @@ import {
   updateCustomFieldBodySchema,
 } from '@nodus/contracts';
 
-import { counterPreview, mockIssuedCount } from '../../mocks/data/numbering-store.js';
-import { unreachableTargets } from './numbering-handlers.js';
+import { counterUpdateResponse } from './numbering-responses.js';
 
 import { demoCustomFieldDefinitions, demoFieldById } from '../../mocks/data/custom-fields.js';
 import { demoNodeKinds } from '../../mocks/data/project-nodes.js';
@@ -202,34 +201,9 @@ export const definitionHandlers = [
     }
 
     if (definition.type === 'counter') {
-      // Счётчик (#630): после выдач «внутри чего»/«заново» заморожены (409);
-      // несовместимые привязки — 422 (как сервер, до мутации).
-      const before = definition.numbering?.rule ?? null;
-      const nextRule = body.numbering ?? before;
-      if (
-        body.numbering &&
-        before &&
-        mockIssuedCount(definition.id) > 0 &&
-        (JSON.stringify(body.numbering.container) !== JSON.stringify(before.container) ||
-          body.numbering.period !== before.period)
-      ) {
-        return error(ErrorCode.NUMBER_RULE_LOCKED, 'Counter rule is locked', 409);
-      }
-      const targets = nextRule
-        ? unreachableTargets(nextRule, body.bindings ?? definition.bindings)
-        : [];
-      if (targets.length > 0) {
-        return error(ErrorCode.NUMBER_CONTAINER_UNREACHABLE, 'Unreachable container', 422, {
-          targets,
-        });
-      }
-      if (body.numbering) {
-        definition.numbering = {
-          rule: body.numbering,
-          preview: counterPreview(body.numbering),
-          issuedCount: mockIssuedCount(definition.id),
-        };
-      }
+      // Счётчик (#630): заморозка после выдач и совместимость — как сервер.
+      const counterError = counterUpdateResponse(definition, body);
+      if (counterError) return counterError;
     }
     if (body.name !== undefined) definition.name = body.name;
     if (body.hint !== undefined) definition.hint = body.hint;

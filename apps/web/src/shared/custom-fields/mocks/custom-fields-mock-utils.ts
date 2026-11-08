@@ -8,6 +8,7 @@ import { getMockActor } from '../../mocks/mock-actor.js';
 import { dictionaryById } from '../../mocks/data/dictionaries.js';
 import { demoCustomFieldDefinitions } from '../../mocks/data/custom-fields.js';
 import { counterPreview, mockIssuedCount, mockIssuers } from '../../mocks/data/numbering-store.js';
+import { mockWithoutNumber } from './numbering-hosts.js';
 import { demoRefsForValues } from '../../mocks/data/custom-fields-refs.js';
 import { demoLetters } from '../../mocks/data/letters.js';
 import { demoNodeKinds, demoNodeRows } from '../../mocks/data/project-nodes.js';
@@ -53,14 +54,17 @@ function dto(definition: CustomFieldDefinition): CustomFieldDefinition {
   return {
     ...definition,
     processCategories: [...categories],
-    // Счётчик (#630): «Выдано номеров», пример и кнопки-выдатчики — из
-    // мок-стора счетов (сервер — журнал выдач и опубликованные маршруты).
+    // Счётчик (#630, модель v3): «Выдано номеров», пример, «при создании»
+    // по типам, кнопки-выдатчики и «без номера» — из мок-стора счетов
+    // (сервер — журнал выдач, привязки и опубликованные маршруты).
     ...(definition.type === 'counter' && definition.numbering
       ? {
           numbering: {
             rule: definition.numbering.rule,
+            onCreate: definition.numbering.onCreate,
             preview: counterPreview(definition.numbering.rule),
             issuedCount: mockIssuedCount(definition.id),
+            withoutNumber: mockWithoutNumber(definition.id),
             issuers: mockIssuers(definition.id),
           },
         }

@@ -12,6 +12,7 @@ import { SYSTEM_FIELD_IDS } from '@nodus/contracts';
 
 import { counterpartyIds } from './counterparties.js';
 import { isoAgo, isoDateIn } from './dates.js';
+import { fieldIds } from './field-ids.js';
 import { typeId } from './project-types.js';
 import { projectRefs } from './task-item-factory.js';
 import { userIds } from './users.js';
@@ -150,8 +151,12 @@ export const demoProjectRows: DemoProjectRow[] = [
     endDate: isoDateIn(120),
     completedAt: null,
     archivedAt: null,
-    // «Шифр» (#632): формула шифра комплекта читает его у проекта.
-    customFields: { [SYSTEM_FIELD_IDS.projectCode]: projectRefs.p4.code },
+    // «Шифр» (#632): формула шифра комплекта читает его у проекта; «Инв. №»
+    // (#630) — вставка в номер накладной выдачи.
+    customFields: {
+      [SYSTEM_FIELD_IDS.projectCode]: projectRefs.p4.code,
+      [fieldIds.projectInventory]: '0412',
+    },
     creatorId: userIds.vinnichek,
     createdAt: isoAgo(90),
     updatedAt: isoAgo(0, 11, 45),

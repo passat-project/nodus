@@ -301,9 +301,11 @@ export const demoWorkflowDetails: Record<string, WorkflowDetail> = {
     document: { ...quickDocument, creation: komplektCreationForm },
     stageEntityCounts: {},
   },
-  // «Изменение» (#630): работа в папке «Комплект»; действие «Выдать в печать»
-  // выдаёт три номера одним нажатием — Изм. по папке, сквозной «Взял изм» и
-  // № разрешения книги (Кейс F).
+  // «Изменение» (#630, модель v3): работа в папке «Комплект»; Изм. и №
+  // разрешения выдаются при создании (их пишут в штамп), действие «Выдать в
+  // печать» выдаёт номер накладной выдачи `{Инв. № проекта}-{N}`. Пост-функции
+  // на уже выданные поля оставлены нарочно: «кто первым заполнил — тот выдал»,
+  // кнопка их не меняет (старые работы без номера получат их кнопкой).
   [CHANGE_WORKFLOW_ID]: {
     id: CHANGE_WORKFLOW_ID,
     typeIds: [changeType.id],
@@ -326,11 +328,7 @@ export const demoWorkflowDetails: Record<string, WorkflowDetail> = {
           rules: {
             conditions: [{ kind: 'role_in', roles: ['assignee', 'coexecutor'] }],
             validators: [],
-            postFunctions: [
-              { kind: 'assign_number', fieldId: fieldIds.changeNumber },
-              { kind: 'assign_number', fieldId: fieldIds.tookChangeNumber },
-              { kind: 'assign_number', fieldId: fieldIds.permitNumber },
-            ],
+            postFunctions: [{ kind: 'assign_number', fieldId: fieldIds.waybillNumber }],
           },
           form: { enabled: false, sections: [] },
         },

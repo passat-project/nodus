@@ -49,68 +49,76 @@ export const fieldIds = {
   komplektCipher: fid(29),
   /** «№ по ГП» — вид папки «Здание по генплану» (формула шифра комплекта). */
   buildingGp: fid(30),
-  /** Счётчики (#630): «Изм.» — свой счёт в каждой папке «Комплект» (Кейс A),
-   *  «Взял изм» — общий счёт компании, продолжение из Excel (Кейс C), «№
-   *  разрешения» — книга «NN-ГГ», заново каждый год (Кейс D). Выдаёт кнопка
-   *  «Выдать в печать» типа «Изменение». */
+  /** Счётчики (#630, модель v3 — по глоссарию и #557): работа «Изменение»
+   *  получает «Изм.» (свой счёт в каждой папке «Комплект») и «№ разрешения»
+   *  (книга «NN-ГГ», сквозная, заново каждый год) СРАЗУ при создании — их
+   *  пишут в штамп; «№ накладной выдачи» `{Проект · Инв. №}-{N}` (свой счёт в
+   *  каждом проекте) выдаёт кнопка «Выдать в печать». */
   changeNumber: fid(32),
-  tookChangeNumber: fid(33),
+  waybillNumber: fid(33),
   permitNumber: fid(34),
   /** «№ комплекта» (#630): папке «Комплект» при создании — свой счёт в
    *  папке, где она лежит; «№ договора в портфеле» — проекту при создании. */
   komplektSeq: fid(35),
   projectSeq: fid(36),
+  /** «Инв. №» проекта — вставка в номер накладной (#630). */
+  projectInventory: fid(37),
 };
 
 /** Внутренние номера счётчиков (#630): явные, как у демо-формул —
  *  sequence их не резервирует сам (формулы обходят фабрику). */
 export const COUNTER_FIELD_NUMBERS = {
   changeNumber: 32,
-  tookChangeNumber: 33,
+  waybillNumber: 33,
   permitNumber: 34,
   komplektSeq: 35,
   projectSeq: 36,
+  projectInventory: 37,
 } as const;
 
-/** Правила счётчиков демо-мира (#630): адресуются id атрибута-цели. */
+/** Правила счётчиков демо-мира (#630): адресуются id атрибута-цели. Когда
+ *  выдаётся номер — у привязок (`numbering.onCreate` определения). */
 export const COUNTER_RULES: Record<
-  'changeNumber' | 'tookChangeNumber' | 'permitNumber' | 'komplektSeq' | 'projectSeq',
+  'changeNumber' | 'waybillNumber' | 'permitNumber' | 'komplektSeq' | 'projectSeq',
   NumberSeriesRule
 > = {
   changeNumber: {
-    issueOnCreate: false,
-    container: { kind: 'folder', nodeKindId: nodeKindSeedIds.komplekt },
+    containers: [{ kind: 'folder', nodeKindId: nodeKindSeedIds.komplekt }],
     period: 'none',
     template: [{ kind: 'literal', text: 'Изм. ' }, { kind: 'counter' }],
     startValue: 1,
+    step: 1,
   },
-  tookChangeNumber: {
-    issueOnCreate: false,
-    container: { kind: 'company' },
+  waybillNumber: {
+    containers: [{ kind: 'project' }],
     period: 'none',
-    template: [{ kind: 'counter' }],
+    template: [
+      { kind: 'field', fieldNumber: COUNTER_FIELD_NUMBERS.projectInventory, source: 'project' },
+      { kind: 'literal', text: '-' },
+      { kind: 'counter' },
+    ],
     startValue: 1,
+    step: 1,
   },
   permitNumber: {
-    issueOnCreate: false,
-    container: { kind: 'company' },
+    containers: [],
     period: 'year',
     template: [{ kind: 'counter' }, { kind: 'literal', text: '-' }, { kind: 'year', digits: 2 }],
     startValue: 1,
+    step: 1,
   },
   komplektSeq: {
-    issueOnCreate: true,
-    container: { kind: 'parent_folder' },
+    containers: [{ kind: 'parent_folder' }],
     period: 'none',
     template: [
       { kind: 'literal', text: 'К-' },
       { kind: 'counter', minLength: 2 },
     ],
     startValue: 1,
+    step: 1,
   },
   projectSeq: {
-    issueOnCreate: true,
-    container: { kind: 'portfolio' },
+    containers: [{ kind: 'portfolio' }],
     period: 'year',
     template: [
       { kind: 'counter', minLength: 3 },
@@ -118,6 +126,7 @@ export const COUNTER_RULES: Record<
       { kind: 'year', digits: 2 },
     ],
     startValue: 1,
+    step: 1,
   },
 };
 

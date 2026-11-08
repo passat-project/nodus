@@ -1,120 +1,66 @@
 import { http, HttpResponse } from 'msw';
-import type {
-  CustomFieldBindings,
-  NumberHostKind,
-  NumberPlace,
-  NumberSeriesRule,
-} from '@nodus/contracts';
+import type { NumberBackfillGroup, NumberContainerHit } from '@nodus/contracts';
 import {
   ErrorCode,
-  errorMessages,
-  numberContainerReachable,
+  numberBackfillBodySchema,
+  numberCountKey,
   numberCoverageBodySchema,
+  numberEmptySegments,
+  numberHostKindSchema,
   numberPreviewBodySchema,
-  resolveNumberContainer,
+  renderNumberTemplate,
+  resolveNumberContainers,
   setNumberNextBodySchema,
 } from '@nodus/contracts';
 
 import { demoCustomFieldDefinitions } from '../../mocks/data/custom-fields.js';
 import {
   counterRuleOf,
+  issueMockNumber,
+  minskParts,
   mockContainerRef,
   mockCounts,
+  mockHostAssignments,
   mockIssuedCount,
   peekMockNumber,
-  placeOfTask,
   setMockNext,
 } from '../../mocks/data/numbering-store.js';
-import { mockTypes } from '../../mocks/data/process-types-store.js';
-import { placeOfNewNode, placeOfNewProject } from '../../mocks/data/numbering-create.js';
-import { demoNodeRows } from '../../mocks/data/project-nodes.js';
-import { demoProjectRows } from '../../mocks/data/projects.js';
+import { findDemoNodeRow } from '../../mocks/data/project-nodes.js';
 import { demoTasks } from '../../mocks/data/tasks.js';
 import { error } from './custom-fields-mock-utils.js';
-
-/** Вид записи цели привязки (мок-мир): тип процесса → task/letter,
- *  тип проекта → project, вид папки → node. */
-function hostOfType(typeId: string): NumberHostKind | null {
-  const type = mockTypes.find((entry) => entry.id === typeId);
-  return type ? (type.category === 'letter' ? 'letter' : 'task') : null;
-}
-
-/** Привязки, чьи записи не лежат в контейнере правила (422 у сервера). */
-export function unreachableTargets(
-  rule: NumberSeriesRule,
-  bindings: CustomFieldBindings,
-): string[] {
-  const out: string[] = [];
-  for (const id of bindings.processTypeIds) {
-    const host = hostOfType(id);
-    if (host && !numberContainerReachable(rule.container, host)) out.push(id);
-  }
-  if (!numberContainerReachable(rule.container, 'project')) out.push(...bindings.projectTypeIds);
-  if (!numberContainerReachable(rule.container, 'node')) out.push(...bindings.nodeKindIds);
-  return out;
-}
-
-const emptyPlace = (host: NumberHostKind): NumberPlace => ({
-  host,
-  folders: [],
-  projectId: null,
-  portfolioId: null,
-  projectTypeId: null,
-  parentTaskId: null,
-  fieldValue: () => null,
-});
+import {
+  backfillPlan,
+  hitsOfIds,
+  hostsOf,
+  sampleOf,
+  type BackfillPlanItem,
+} from './numbering-hosts.js';
 
 /**
- * API счётчиков мок-мира (#630): «Текущие счета», «Следующий номер» (только
- * вперёд) и «Проверка на записи». Правила — как у сервера (техплан, Пакет
- * B4): 409 NUMBER_NEXT_BACKWARDS, причина отсутствия контейнера, «тип не
- * получает номер». Проверка мок-мира — по задачам (письма/папки/проекты —
- * без дерева, только «вся компания»).
+ * API счётчиков мок-мира (#630, модель v3): охват, «Проверка на записи»,
+ * «Текущие счета», «Следующий номер» (только вперёд), выдача существующим
+ * (предпросмотр + одобрение), номера записи. Правила — как у сервера: 409
+ * NUMBER_NEXT_BACKWARDS / NUMBER_BACKFILL_STALE, причины отсутствия места,
+ * «тип не получает номер», невидимые записи — только числом.
  */
 export const numberingHandlers = [
-  // Охват правила: существующие записи отмеченных типов → лежат ли внутри
-  // выбранного счёта (папки, задачи, проекты мок-мира).
   http.post('/api/v1/custom-fields/numbering/coverage', async ({ request }) => {
     const parsed = numberCoverageBodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400);
     const { rule, participantTypeIds } = parsed.data;
-    const ids = new Set(participantTypeIds);
-    const hosts: { kind: NumberHostKind; id: string; name: string; place: NumberPlace }[] = [
-      ...demoTasks
-        .filter((task) => ids.has(task.type.id))
-        .map((task) => ({
-          kind: 'task' as const,
-          id: task.id,
-          name: task.title,
-          place: placeOfTask(task),
-        })),
-      ...demoNodeRows
-        .filter((node) => ids.has(node.kindId))
-        .map((node) => ({
-          kind: 'node' as const,
-          id: node.id,
-          name: node.name,
-          place: placeOfNewNode(node.projectId, node.parentId, node.customFields ?? {}),
-        })),
-      ...demoProjectRows
-        .filter((project) => ids.has(project.typeId))
-        .map((project) => ({
-          kind: 'project' as const,
-          id: project.id,
-          name: project.name,
-          place: placeOfNewProject(project.typeId, project.portfolioId ?? null, {}),
-        })),
-    ];
+    const hosts = hostsOf(participantTypeIds);
     const outside = hosts.flatMap((host) => {
-      const resolved = resolveNumberContainer(rule.container, host.place);
-      return resolved.ok
-        ? []
-        : [{ kind: host.kind, id: host.id, name: host.name, reason: resolved.reason }];
+      const resolved = resolveNumberContainers(rule.containers, host.target.place);
+      return resolved.ok ? [] : [{ host, reason: resolved.reason }];
     });
     return HttpResponse.json({
       total: hosts.length,
       inside: hosts.length - outside.length,
-      outside: outside.slice(0, 5),
+      outside: outside
+        .filter((entry) => entry.host.visible)
+        .slice(0, 5)
+        .map((entry) => sampleOf(entry.host, entry.reason)),
+      hiddenOutside: outside.filter((entry) => !entry.host.visible).length,
     });
   }),
 
@@ -122,28 +68,27 @@ export const numberingHandlers = [
     const parsed = numberPreviewBodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400);
     const { rule, host, participantTypeIds, definitionId } = parsed.data;
-    const task = host.kind === 'task' ? demoTasks.find((entry) => entry.id === host.id) : undefined;
-    const hostName = task?.title ?? host.id;
-    if (task && !participantTypeIds.includes(task.type.id)) {
-      return HttpResponse.json({ ok: false, hostName, reason: 'not_participant' });
-    }
-    const resolved = resolveNumberContainer(
-      rule.container,
-      task ? placeOfTask(task) : emptyPlace(host.kind),
+    const record = hostsOf(participantTypeIds).find(
+      (entry) => entry.kind === host.kind && entry.id === host.id,
     );
+    const task = demoTasks.find((entry) => entry.id === host.id);
+    const hostName = record?.name ?? task?.title ?? findDemoNodeRow(host.id)?.name ?? host.id;
+    if (!record) return HttpResponse.json({ ok: false, hostName, reason: 'not_participant' });
+    const resolved = resolveNumberContainers(rule.containers, record.target.place);
     if (!resolved.ok) return HttpResponse.json({ ok: false, hostName, reason: resolved.reason });
-    const next = definitionId
-      ? peekMockNumber(definitionId, rule, resolved.containerId)
-      : peekMockNumber('draft', rule, resolved.containerId);
-    const existing = definitionId ? task?.customFields[definitionId] : undefined;
+    const next = peekMockNumber(definitionId ?? 'draft', rule, resolved.hits, record.target.field);
+    const existing = definitionId ? record.values()[definitionId] : undefined;
     return HttpResponse.json({
       ok: true,
       hostName,
-      container: resolved.containerId
-        ? mockContainerRef(rule.container.kind, resolved.containerId)
-        : null,
+      containers: resolved.hits.map(mockContainerRef),
       nextDisplay: next.display,
       alreadyAssigned: typeof existing === 'string' ? existing : null,
+      emptySegments: numberEmptySegments(rule.template, record.target.field).map(
+        (segment) =>
+          demoCustomFieldDefinitions.find((entry) => entry.number === segment.fieldNumber)?.name ??
+          '—',
+      ),
     });
   }),
 
@@ -152,9 +97,8 @@ export const numberingHandlers = [
     const rule = counterRuleOf(id);
     if (!rule) return error(ErrorCode.NOT_FOUND, 'Counter not found', 404);
     const q = new URL(request.url).searchParams.get('q') ?? '';
-    const items = mockCounts(id, rule, q);
     return HttpResponse.json({
-      items,
+      items: mockCounts(id, rule, q),
       nextCursor: null,
       totals: { counts: mockCounts(id, rule, '').length, issued: mockIssuedCount(id) },
     });
@@ -166,7 +110,9 @@ export const numberingHandlers = [
     if (!rule) return error(ErrorCode.NOT_FOUND, 'Counter not found', 404);
     const parsed = setNumberNextBodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400);
-    if (!setMockNext(id, rule, parsed.data.containerId, parsed.data.nextValue)) {
+    const hits = hitsOfIds(rule, parsed.data.containerIds);
+    if (!hits) return error(ErrorCode.VALIDATION_FAILED, 'containerIds do not match the rule', 422);
+    if (!setMockNext(id, rule, hits, parsed.data.nextValue)) {
       return error(ErrorCode.NUMBER_NEXT_BACKWARDS, 'Next number is below issued', 409);
     }
     return HttpResponse.json({
@@ -175,29 +121,96 @@ export const numberingHandlers = [
       totals: { counts: mockCounts(id, rule, '').length, issued: mockIssuedCount(id) },
     });
   }),
-];
 
-/** 409 создания записи: у неё нет контейнера счётчика «при создании». */
-export function containerMissingOnCreate(failure: {
-  fieldId: string;
-  fieldName: string;
-  reason: string;
-}) {
-  return HttpResponse.json(
-    {
-      code: ErrorCode.NUMBER_CONTAINER_MISSING,
-      message: `${errorMessages[ErrorCode.NUMBER_CONTAINER_MISSING]} («${failure.fieldName}»)`,
-      details: { fieldId: failure.fieldId, reason: failure.reason },
+  // Выдача существующим: предпросмотр — сколько, где, первые/последние
+  // номера, кто не получит и почему; ничего не тратит.
+  http.post('/api/v1/custom-fields/definitions/:id/numbering/backfill/preview', ({ params }) => {
+    const id = String(params.id);
+    const definition = demoCustomFieldDefinitions.find((entry) => entry.id === id);
+    const rule = definition?.numbering?.rule;
+    if (!definition || !rule) return error(ErrorCode.NOT_FOUND, 'Counter not found', 404);
+    const { items, blocked } = backfillPlan(id, rule, definition.bindings);
+    const groups = new Map<
+      string,
+      {
+        hits: NumberContainerHit[];
+        seqs: number[];
+        field: BackfillPlanItem['host']['target']['field'];
+      }
+    >();
+    const at = minskParts();
+    for (const item of items) {
+      const key = numberCountKey(
+        item.hits.map((hit) => hit.id),
+        '',
+      );
+      const group = groups.get(key) ?? { hits: item.hits, seqs: [], field: item.host.target.field };
+      const base =
+        group.seqs.length === 0
+          ? peekMockNumber(id, rule, item.hits).value
+          : group.seqs.at(-1)! + rule.step;
+      group.seqs.push(base);
+      groups.set(key, group);
+    }
+    const display = (seq: number, field: BackfillPlanItem['host']['target']['field']) =>
+      renderNumberTemplate(rule.template, { seq, ...at, field });
+    const out: NumberBackfillGroup[] = [...groups.values()]
+      .sort((a, b) => b.seqs.length - a.seqs.length)
+      .slice(0, 20)
+      .map((group) => ({
+        containers: group.hits.map(mockContainerRef),
+        count: group.seqs.length,
+        firstDisplay: display(group.seqs[0]!, group.field),
+        lastDisplay: display(group.seqs.at(-1)!, group.field),
+      }));
+    return HttpResponse.json({
+      total: items.length,
+      groups: out,
+      blocked: blocked
+        .filter((entry) => entry.host.visible)
+        .slice(0, 5)
+        .map((entry) => sampleOf(entry.host, entry.reason)),
+      blockedTotal: blocked.length,
+      emptyParts: items.filter((item) => item.empty).length,
+    });
+  }),
+
+  http.post(
+    '/api/v1/custom-fields/definitions/:id/numbering/backfill',
+    async ({ params, request }) => {
+      const id = String(params.id);
+      const definition = demoCustomFieldDefinitions.find((entry) => entry.id === id);
+      const rule = definition?.numbering?.rule;
+      if (!definition || !rule) return error(ErrorCode.NOT_FOUND, 'Counter not found', 404);
+      const parsed = numberBackfillBodySchema.safeParse(await request.json().catch(() => null));
+      if (!parsed.success) return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400);
+      const { items } = backfillPlan(id, rule, definition.bindings);
+      if (items.length !== parsed.data.expectedTotal) {
+        return error(ErrorCode.NUMBER_BACKFILL_STALE, 'Records changed since preview', 409, {
+          total: items.length,
+        });
+      }
+      let issued = 0;
+      for (const item of items) {
+        if (item.empty && !parsed.data.confirmEmptyNumberParts) continue;
+        const display = issueMockNumber(
+          id,
+          rule,
+          item.hits,
+          { hostKind: item.host.kind, hostId: item.host.id, source: 'backfill' },
+          item.host.target.field,
+        );
+        item.host.write(id, display);
+        issued += 1;
+      }
+      return HttpResponse.json({ issued });
     },
-    { status: 409 },
-  );
-}
+  ),
 
-/** Сид следующего номера общего счёта при создании (`numberingNext`). */
-export function seedCreatedCounter(definitionId: string, next: number | undefined): void {
-  const definition = demoCustomFieldDefinitions.find((entry) => entry.id === definitionId);
-  const rule = definition?.numbering?.rule;
-  if (rule && next !== undefined && rule.container.kind === 'company') {
-    setMockNext(definitionId, rule, null, next);
-  }
-}
+  // Номера записи: карточка («выдан в КЖ-01, кем, как») и окно переноса.
+  http.get('/api/v1/custom-fields/numbering/host/:kind/:id', ({ params }) => {
+    const kind = numberHostKindSchema.safeParse(params.kind);
+    if (!kind.success) return error(ErrorCode.VALIDATION_FAILED, 'Unknown host kind', 400);
+    return HttpResponse.json({ items: mockHostAssignments(kind.data, String(params.id)) });
+  }),
+];

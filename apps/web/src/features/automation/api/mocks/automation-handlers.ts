@@ -17,6 +17,9 @@ import {
   isLockedLetterType,
   letterCatalogLocked,
 } from './automation-type-handlers.js';
+import { placeOfTask, segmentReaderOfTask } from '../../../../shared/mocks/data/numbering-store.js';
+import { planOnCreate } from '../../../../shared/mocks/data/numbering-create.js';
+import { numberingFailureResponse } from '../../../../shared/custom-fields/mocks/numbering-responses.js';
 
 /** Моки «Автоматизации» (#378; форма создания — #432): чтение и публикация
  *  маршрутов (проверки, конфликт версий, переносы), расстановка холста и
@@ -155,7 +158,11 @@ export const automationHandlers = [
   // --- Смена типа задачи ----------------------------------------------------
 
   http.post('/api/v1/tasks/:id/type', async ({ request, params }) => {
-    const body = (await request.json()) as { typeId?: string; stageId?: string };
+    const body = (await request.json()) as {
+      typeId?: string;
+      stageId?: string;
+      confirmEmptyNumberParts?: true;
+    };
     const task = findTask(params.id);
     const type = mockTypes.find((t) => t.id === body.typeId);
     if (!task || !type) return notFound();
@@ -180,6 +187,18 @@ export const automationHandlers = [
         { status: 422 },
       );
     }
+    // Смена типа на тип с номером «при создании» (#630, вердикт 08.11):
+    // номер выдаётся в этот момент; нет нужной папки — 409, тип не меняется,
+    // номер не тратится; уже выданный номер не трогается.
+    const place = placeOfTask(task);
+    const retyped = planOnCreate(
+      { place: { ...place, typeId: type.id }, field: segmentReaderOfTask(task) },
+      task.customFields,
+      { source: 'type_change', confirmEmpty: body.confirmEmptyNumberParts === true },
+    );
+    if (!retyped.ok) return numberingFailureResponse(retyped.failure);
+    const numbers = retyped.issue(task.id);
+    if (Object.keys(numbers).length > 0) task.customFields = { ...task.customFields, ...numbers };
     task.type = {
       id: type.id,
       code: type.code,

@@ -4,10 +4,10 @@ import { SystemDictionary } from '@nodus/contracts';
 import { currencyIds, dictionaryByCode, itemsOf, workKindIds } from './dictionaries.js';
 import { fieldIds } from './field-ids.js';
 import { definition, dictionaryRef, moneySettings } from './custom-field-demo-factory.js';
+import { counterDemoFields } from './counter-demo-fields.js';
 import { formulaDemoFields } from './formula-demo-fields.js';
 import { departmentIds } from './org-ids.js';
 import { processTypeIds } from './process-type-ids.js';
-import { COUNTER_FIELD_NUMBERS, COUNTER_RULES } from './field-ids.js';
 import { demoProjectTypeIds } from './projects.js';
 import { nodeKindIds } from './project-nodes.js';
 import { projectRefs, tid } from './task-item-factory.js';
@@ -198,63 +198,8 @@ export const demoCustomFieldDefinitions: CustomFieldDefinition[] = [
     },
   ),
   ...formulaDemoFields,
-  // Счётчики (#630): номера работ «Изменение» внутри папок «Комплект».
-  // «Выдано номеров» и пример гидрирует мок-стор счетов (numbering-store).
-  definition(
-    fieldIds.changeNumber,
-    'counter',
-    'Изм.',
-    { processTypeIds: [processTypeIds.change] },
-    {
-      hint: 'Номер изменения внутри комплекта',
-      number: COUNTER_FIELD_NUMBERS.changeNumber,
-      numbering: { rule: COUNTER_RULES.changeNumber, preview: 'Изм. 1', issuedCount: 0 },
-    },
-  ),
-  definition(
-    fieldIds.tookChangeNumber,
-    'counter',
-    'Взял изм',
-    { processTypeIds: [processTypeIds.change] },
-    {
-      hint: 'Сквозной номер изменения — продолжение журнала нормоконтроля из Excel',
-      number: COUNTER_FIELD_NUMBERS.tookChangeNumber,
-      numbering: { rule: COUNTER_RULES.tookChangeNumber, preview: '1041', issuedCount: 0 },
-    },
-  ),
-  definition(
-    fieldIds.permitNumber,
-    'counter',
-    '№ разрешения',
-    { processTypeIds: [processTypeIds.change] },
-    {
-      hint: 'Номер в книге изменений: счёт с начала года',
-      number: COUNTER_FIELD_NUMBERS.permitNumber,
-      numbering: { rule: COUNTER_RULES.permitNumber, preview: '15-26', issuedCount: 0 },
-    },
-  ),
-  definition(
-    fieldIds.komplektSeq,
-    'counter',
-    '№ комплекта',
-    { nodeKindIds: [nodeKindIds.komplekt] },
-    {
-      hint: 'Номер комплекта внутри папки, где он создан',
-      number: COUNTER_FIELD_NUMBERS.komplektSeq,
-      numbering: { rule: COUNTER_RULES.komplektSeq, preview: 'К-01', issuedCount: 0 },
-    },
-  ),
-  definition(
-    fieldIds.projectSeq,
-    'counter',
-    '№ договора в портфеле',
-    { projectTypeIds: [demoProjectTypeIds.contract] },
-    {
-      hint: 'Номер договора внутри портфеля, с начала каждого года',
-      number: COUNTER_FIELD_NUMBERS.projectSeq,
-      numbering: { rule: COUNTER_RULES.projectSeq, preview: '001/26', issuedCount: 0 },
-    },
-  ),
+  // Счётчики (#630, модель v3) — на своём месте в sequence номеров.
+  ...counterDemoFields(),
 ];
 
 // Глобальный порядок реестра (sortOrder): по порядку массива.
@@ -299,11 +244,19 @@ function markIdOf(code: string): string {
 
 /** Значения демо-задач: часть задач заполнена, остальные — `{}`. */
 export const demoTaskCustomFields: Record<string, CustomFieldValues> = {
-  // Работа «Изменение КЖ-01: отверстия в плите» (#630): номера уже выданы.
+  // Работы «Изменение» (#630): Изм. и № разрешения выданы при создании
+  // (журнал — numbering-store); накладных ещё нет — их выдаёт «Выдать в печать».
   [tid(630)]: {
     [fieldIds.changeNumber]: 'Изм. 1',
-    [fieldIds.tookChangeNumber]: '1041',
     [fieldIds.permitNumber]: '15-26',
+  },
+  [tid(631)]: {
+    [fieldIds.changeNumber]: 'Изм. 2',
+    [fieldIds.permitNumber]: '16-26',
+  },
+  [tid(632)]: {
+    [fieldIds.changeNumber]: 'Изм. 1',
+    [fieldIds.permitNumber]: '17-26',
   },
   [tid(2)]: {
     [fieldIds.invoiceNumber]: '№ 118-2026',
