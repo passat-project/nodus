@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import type { BuilderField, FieldPatch } from './builder-model.js';
+import type { BlockPatch, BuilderBlock, BuilderField, FieldPatch } from './builder-model.js';
 
 /**
  * Хост редактора окна (#496): что за окно и какие у него поля. Редактор
@@ -26,14 +26,26 @@ export interface BuilderFieldInfo {
   lockable?: boolean;
   /** Поле добавило условие перехода, а не окно (только показ). */
   fromGate?: boolean;
-  /** Поле-раздел окна (трудозатраты, итог, причина): без ширины, подписи,
-   *  подсказки и высоты — его настройки даёт хост. */
-  noLayout?: boolean;
+  /** Строка без подписи (название окна создания). */
+  hideLabel?: boolean;
+  /** У строки нет подсказки (системные строки проекта). */
+  hideHint?: boolean;
+  /** В настройках нет подписи/подсказки/высоты — только своё хоста. */
+  hideLayout?: boolean;
 }
 
 export interface BuilderOption {
   key: string;
   label: string;
+}
+
+/** Блок окна в палитре: трудозатраты, итог, файлы, причина, чек-лист.
+ *  `layout` — у блока есть своя подпись и подсказка (у чипов — нет). */
+export interface BuilderBlockOption {
+  block: string;
+  label: string;
+  preview: PreviewKind;
+  layout?: boolean;
 }
 
 export interface FormBuilderHost<X> {
@@ -43,6 +55,15 @@ export interface FormBuilderHost<X> {
   /** Поля, которых нет в окне и которые можно добавить. */
   catalog: readonly BuilderOption[];
   makeField: (key: string) => BuilderField<X>;
+  /** Блоки окна: доступные виды и создание элемента. */
+  blocks?: readonly BuilderBlockOption[];
+  makeBlock?: (block: string) => BuilderBlock<X>;
+  /** Свои параметры блока (режим, обязательность, минимум файлов). */
+  blockSettings?: (block: BuilderBlock<X>, patch: (patch: BlockPatch<X>) => void) => ReactNode;
+  /** Настоящий вид блока в превью (то, что увидит сотрудник). */
+  renderBlock?: (block: BuilderBlock<X>) => ReactNode;
+  /** Право создавать атрибут: кнопка в лотке «Создать атрибут». */
+  onCreateField?: () => void;
   /** Метки у подписи в превью: «скрыто», «по формуле». */
   badges?: (field: BuilderField<X>) => string[];
   /** Обязательное поле — звёздочка в превью. */

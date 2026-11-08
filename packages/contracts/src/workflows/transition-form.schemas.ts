@@ -12,6 +12,7 @@ import {
   FORM_LAYOUT_LIMITS,
   formDecorSchema,
   formFieldLayoutShape,
+  formHintSchema,
   isFormDecor,
   type FormDecor,
   type FormFieldLayout,
@@ -58,8 +59,11 @@ export const TRANSITION_FORM_SECTION_ORDER = [
 ] as const;
 export type TransitionFormSectionKind = (typeof TRANSITION_FORM_SECTION_ORDER)[number];
 
-const strictLabel = z.string().trim().min(1).max(60);
-const draftLabel = z.string().max(60);
+/** Подпись и подсказка блока окна (#496): та же настройка, что у поля.
+ *  Пусто — стандартное название раздела из i18n. Схема публикации не
+ *  требует непустую подпись: блок — не поле, его подпись не ввод данных. */
+const sectionLabel = z.string().trim().max(60);
+const sectionLabelDraft = z.string().max(60);
 
 /** Поле окна с раскладкой (#496, Р3): своя подпись в этом окне, подсказка,
  *  ширина и высота. Редактор пишет поля объектами; строка-ключ (наследие
@@ -134,9 +138,15 @@ function checkFieldElements(
 
 const FIELD_ELEMENTS_MAX = CUSTOM_FIELD_LIMITS.windowFields + FORM_LAYOUT_LIMITS.decor;
 
-/** Раздел окна на границе публикации: подписи обязательны. */
+/** Раздел окна на границе публикации. */
 export const transitionFormSectionSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('registration') }).strict(),
+  z
+    .object({
+      kind: z.literal('registration'),
+      label: sectionLabel.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal('fields'),
@@ -149,18 +159,57 @@ export const transitionFormSectionSchema = z.discriminatedUnion('kind', [
     })
     .strict()
     .superRefine(checkFieldElements),
-  z.object({ kind: z.literal('time'), mode: z.enum(['if_empty', 'always']) }).strict(),
-  z.object({ kind: z.literal('result') }).strict(),
-  z.object({ kind: z.literal('result_files'), label: strictLabel }).strict(),
-  z.object({ kind: z.literal('result_messages'), required: z.boolean() }).strict(),
-  z.object({ kind: z.literal('comment'), label: strictLabel, required: z.boolean() }).strict(),
+  z
+    .object({
+      kind: z.literal('time'),
+      mode: z.enum(['if_empty', 'always']),
+      label: sectionLabel.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('result'),
+      label: sectionLabel.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('result_files'),
+      label: sectionLabel.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('result_messages'),
+      required: z.boolean(),
+      label: sectionLabel.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('comment'),
+      label: sectionLabel.optional(),
+      required: z.boolean(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
 ]);
 export type TransitionFormSection = z.infer<typeof transitionFormSectionSchema>;
 
 /** Раздел черновика редактора: подпись может быть пустой — её ловит
  *  `checkWorkflowDocument` (form_empty_label), а не zod. */
 export const transitionFormSectionDraftSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('registration') }).strict(),
+  z
+    .object({
+      kind: z.literal('registration'),
+      label: sectionLabelDraft.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal('fields'),
@@ -169,11 +218,44 @@ export const transitionFormSectionDraftSchema = z.discriminatedUnion('kind', [
     })
     .strict()
     .superRefine(checkFieldElements),
-  z.object({ kind: z.literal('time'), mode: z.enum(['if_empty', 'always']) }).strict(),
-  z.object({ kind: z.literal('result') }).strict(),
-  z.object({ kind: z.literal('result_files'), label: draftLabel }).strict(),
-  z.object({ kind: z.literal('result_messages'), required: z.boolean() }).strict(),
-  z.object({ kind: z.literal('comment'), label: draftLabel, required: z.boolean() }).strict(),
+  z
+    .object({
+      kind: z.literal('time'),
+      mode: z.enum(['if_empty', 'always']),
+      label: sectionLabelDraft.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('result'),
+      label: sectionLabelDraft.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('result_files'),
+      label: sectionLabelDraft.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('result_messages'),
+      required: z.boolean(),
+      label: sectionLabelDraft.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('comment'),
+      label: sectionLabelDraft.optional(),
+      required: z.boolean(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
 ]);
 export type TransitionFormSectionDraft = z.infer<typeof transitionFormSectionDraftSchema>;
 

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CustomFieldDefinition, ProjectType } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -36,15 +36,11 @@ function definition(
   };
 }
 
-const AREA_ID = 'c0000000-0000-4000-8000-0000000000f2';
-
 vi.mock('../../../shared/custom-fields/queries.js', () => ({
   useCustomFieldDefinitions: () => ({
-    // Реестр области «Проекты»: два слота формы + «Площадь» вне формы.
     data: [
       definition(fieldIds.projectCode, 'text', 'Шифр'),
       definition(fieldIds.projectClient, 'counterparty', 'Заказчик'),
-      definition(AREA_ID, 'number', 'Площадь, м²'),
     ],
   }),
 }));
@@ -71,79 +67,32 @@ const TYPE: ProjectType = {
   },
 };
 
-describe('ProjectTypeFieldsSection: форма атрибутов типа проекта (#631, Р10)', () => {
+describe('ProjectTypeFieldsSection: единый путь настройки (#496)', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it('смена состояния слота сохраняет форму целиком', () => {
+  it('даёт вход в редактор окна проекта, без старого списка слотов', () => {
     render(<ProjectTypeFieldsSection type={TYPE} canSetup canCreateField={false} />);
 
-    const row = screen.getByText('Заказчик').closest('li') as HTMLElement;
-    fireEvent.click(within(row).getByRole('radio', { name: ui.nodeKinds.form.state.required }));
-
-    expect(updateMutate).toHaveBeenCalledWith({
-      id: TYPE_ID,
-      form: {
-        fields: [
-          { fieldId: fieldIds.projectCode, state: 'required' },
-          { fieldId: fieldIds.projectClient, state: 'required' },
-        ],
-      },
-    });
+    expect(screen.getByRole('button', { name: ui.forms.builder.edit })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: ui.nodeKinds.form.addField })).toBeNull();
+    expect(screen.queryByText('Шифр')).toBeNull();
   });
 
-  it('крестик убирает слот из формы', () => {
+  it('редактор открывается окном «Окно проекта · Договор»', () => {
     render(<ProjectTypeFieldsSection type={TYPE} canSetup canCreateField={false} />);
+    fireEvent.click(screen.getByRole('button', { name: ui.forms.builder.edit }));
 
-    fireEvent.click(screen.getAllByRole('button', { name: ui.nodeKinds.form.remove })[1]!);
-
-    expect(updateMutate).toHaveBeenCalledWith({
-      id: TYPE_ID,
-      form: { fields: [{ fieldId: fieldIds.projectCode, state: 'required' }] },
-    });
-  });
-
-  it('пикер добавляет атрибут «По желанию»', () => {
-    render(<ProjectTypeFieldsSection type={TYPE} canSetup canCreateField={false} />);
-
-    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.form.addField }));
-    // В пикере только атрибуты вне формы («Площадь»), уже стоящих нет.
-    expect(screen.getByText(ui.customFields.typeForm.pickerTitle)).toBeTruthy();
-    expect(screen.queryByRole('option', { name: /Шифр/ })).toBeNull();
-
-    fireEvent.click(screen.getByRole('option', { name: /Площадь/ }));
-
-    expect(updateMutate).toHaveBeenCalledWith({
-      id: TYPE_ID,
-      form: {
-        fields: [
-          { fieldId: fieldIds.projectCode, state: 'required' },
-          { fieldId: fieldIds.projectClient, state: 'optional' },
-          { fieldId: AREA_ID, state: 'optional' },
-        ],
-      },
-    });
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByText('Окно проекта · Договор')).toBeTruthy();
   });
 
   it('без права project.setup.manage — только просмотр', () => {
     render(<ProjectTypeFieldsSection type={TYPE} canSetup={false} canCreateField={false} />);
 
-    expect(screen.queryByRole('button', { name: ui.nodeKinds.form.addField })).toBeNull();
-    expect(screen.queryByRole('button', { name: ui.nodeKinds.form.remove })).toBeNull();
-
-    const row = screen.getByText('Шифр').closest('li') as HTMLElement;
-    const segment = within(row).getByRole('radio', { name: ui.nodeKinds.form.state.optional });
-    expect(segment).toHaveProperty('disabled', true);
-    fireEvent.click(segment);
-    expect(updateMutate).not.toHaveBeenCalled();
-  });
-
-  it('пустая форма — честная пустота', () => {
-    const emptyType: ProjectType = { ...TYPE, form: { fields: [] } };
-    render(<ProjectTypeFieldsSection type={emptyType} canSetup canCreateField={false} />);
-
-    expect(screen.getByText(ui.customFields.typeForm.empty)).toBeTruthy();
+    expect(screen.getByRole('button', { name: ui.forms.builder.view })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: ui.forms.builder.edit })).toBeNull();
   });
 });

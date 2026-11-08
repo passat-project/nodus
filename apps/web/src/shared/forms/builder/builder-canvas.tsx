@@ -7,13 +7,17 @@ import type { FormBuilderHost } from './builder-host.js';
 import { InsertPoint } from './builder-insert.js';
 import {
   availableOf,
+  blocksStart,
+  clampInsert,
   decorCount,
   fieldCount,
   insertItem,
+  isBuilderBlock,
   isBuilderField,
   itemId,
   moveItem,
   newDecor,
+  patchBlock,
   patchDecorText,
   patchField,
   removeItem,
@@ -34,22 +38,25 @@ export function BuilderCanvas<X>({
   value,
   host,
   readOnly,
+  focusKey,
   onChange,
 }: {
   value: BuilderValue<X>;
   host: FormBuilderHost<X>;
   readOnly: boolean;
+  focusKey?: string | null;
   onChange: (next: BuilderValue<X>) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const items = value.items;
   const setItems = (next: typeof items) => onChange({ ...value, items: next });
   const { drag, begin } = usePointerDrag(containerRef, (from, before) =>
-    setItems(moveItem(items, from, before)),
+    setItems(moveItem(items, from, clampInsert(items, from, before))),
   );
 
   const actions: ElementActions<X> = {
     patchField: (key, patch) => setItems(patchField(items, key, patch)),
+    patchBlock: (block, patch) => setItems(patchBlock(items, block, patch)),
     patchDecor: (id, text) => setItems(patchDecorText(items, id, text)),
     remove: (id) => {
       const removed = items.find((item) => itemId(item) === id);
@@ -69,14 +76,24 @@ export function BuilderCanvas<X>({
   const fieldsFull = fieldCount(items) >= host.limits.fields;
   const decorFull = decorCount(items) >= host.limits.decor;
   const available = availableOf(host.catalog, items);
+  const availableBlocks = (host.blocks ?? []).filter(
+    (option) => !items.some((item) => isBuilderBlock(item) && item.block === option.block),
+  );
+  const boundary = blocksStart(items);
   const insertAt = (index: number) => (
     <InsertPoint
-      available={available}
+      available={index <= boundary ? available : []}
+      blocks={index >= boundary ? availableBlocks : []}
       fieldsFull={fieldsFull}
       decorFull={decorFull}
+      decorAllowed={index <= boundary}
       readOnly={readOnly}
-      onField={(key) => setItems(insertItem(items, index, host.makeField(key)))}
-      onDecor={(kind) => setItems(insertItem(items, index, newDecor(kind)))}
+      onField={(key) => setItems(insertItem(items, Math.min(index, boundary), host.makeField(key)))}
+      onBlock={(block) => {
+        if (!host.makeBlock) return;
+        setItems(insertItem(items, Math.max(index, boundary), host.makeBlock(block)));
+      }}
+      onDecor={(kind) => setItems(insertItem(items, Math.min(index, boundary), newDecor(kind)))}
     />
   );
 
@@ -110,6 +127,7 @@ export function BuilderCanvas<X>({
                   host={host}
                   locks={value.locks}
                   readOnly={readOnly}
+                  focusKey={focusKey}
                   actions={actions}
                 />
               </div>

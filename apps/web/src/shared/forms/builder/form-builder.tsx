@@ -26,6 +26,7 @@ export function FormBuilder<X>({
   value,
   readOnly,
   blockEmptyDecor = false,
+  focusKey,
   onCancel,
   onDone,
 }: {
@@ -34,6 +35,8 @@ export function FormBuilder<X>({
   value: BuilderValue<X>;
   readOnly: boolean;
   blockEmptyDecor?: boolean;
+  /** Ключ поля, чьи настройки открыть сразу (переход из проблемы публикации). */
+  focusKey?: string | null;
   onCancel: () => void;
   onDone: (next: BuilderValue<X>) => void;
 }) {
@@ -71,7 +74,13 @@ export function FormBuilder<X>({
           <div className="flex w-full min-w-0 flex-col gap-4">
             <div className="flex w-full min-w-0 flex-col gap-3 rounded-xl bg-background py-4 pr-4 pl-8 ring-1 ring-foreground/10">
               {host.fixedTop}
-              <BuilderCanvas value={draft} host={host} readOnly={readOnly} onChange={setDraft} />
+              <BuilderCanvas
+                value={draft}
+                host={host}
+                readOnly={readOnly}
+                focusKey={focusKey}
+                onChange={setDraft}
+              />
               {host.footer}
             </div>
             {readOnly ? null : <BuilderTray value={draft} host={host} onChange={setDraft} />}

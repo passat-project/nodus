@@ -195,12 +195,8 @@ export function checkWorkflowDocument(
         problems.push(error('form_duplicate_section', { transitionId: t.id }));
       }
       kinds.add(section.kind);
-      if (
-        (section.kind === 'result_files' || section.kind === 'comment') &&
-        section.label.trim().length === 0
-      ) {
-        problems.push(error('form_empty_label', { transitionId: t.id }));
-      }
+      // Пустая подпись блока — стандартное название раздела (#496): блок
+      // настраивается теми же полями, что и поле, и «пусто» здесь законно.
     }
     const hasResult = kinds.has('result');
     const files = form.sections.find((s) => s.kind === 'result_files');

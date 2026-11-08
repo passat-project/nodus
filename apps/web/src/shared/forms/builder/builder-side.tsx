@@ -15,6 +15,7 @@ import type { FormBuilderHost } from './builder-host.js';
 import {
   availableOf,
   fieldCount,
+  isBuilderBlock,
   isBuilderField,
   setLock,
   type BuilderValue,
@@ -39,30 +40,75 @@ export function BuilderTray<X>({
 }) {
   const full = fieldCount(value.items) >= host.limits.fields;
   const available = availableOf(host.catalog, value.items);
+  const blocks = (host.blocks ?? []).filter(
+    (option) => !value.items.some((item) => isBuilderBlock(item) && item.block === option.block),
+  );
   return (
     <section className="flex flex-col gap-2 rounded-xl bg-muted/40 p-4">
-      <h3 className="text-sm font-medium">{b.tray}</h3>
-      {available.length === 0 ? (
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <h3 className="text-sm font-medium">{b.tray}</h3>
+        {host.onCreateField ? (
+          <Button type="button" variant="ghost" size="xs" onClick={host.onCreateField}>
+            <Plus className="size-3" strokeWidth={2} />
+            {b.createField}
+          </Button>
+        ) : null}
+      </div>
+      {available.length === 0 && blocks.length === 0 ? (
         <p className="text-xs text-muted-foreground">{b.trayEmpty}</p>
       ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {available.map((option) => (
-            <Button
-              key={option.key}
-              type="button"
-              variant="outline"
-              size="xs"
-              disabled={full}
-              title={full ? b.fieldsLimit : undefined}
-              onClick={() =>
-                onChange({ ...value, items: [...value.items, host.makeField(option.key)] })
-              }
-            >
-              <Plus className="size-3" strokeWidth={2} />
-              {option.label}
-            </Button>
-          ))}
-        </div>
+        <>
+          {available.length > 0 ? (
+            <div className="flex flex-col gap-1.5">
+              {/* Группы подписаны, когда в лотке и поля, и блоки: различие
+                  «поле / блок окна» видно и здесь, а не только в «+» (#496). */}
+              {blocks.length > 0 ? (
+                <p className="text-label-xs text-muted-foreground">{b.insertFields}</p>
+              ) : null}
+              <div className="flex flex-wrap gap-1.5">
+                {available.map((option) => (
+                  <Button
+                    key={option.key}
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    disabled={full}
+                    title={full ? b.fieldsLimit : undefined}
+                    onClick={() =>
+                      onChange({ ...value, items: [...value.items, host.makeField(option.key)] })
+                    }
+                  >
+                    <Plus className="size-3" strokeWidth={2} />
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {blocks.length > 0 && host.makeBlock ? (
+            <div className="flex flex-col gap-1.5">
+              {available.length > 0 ? (
+                <p className="text-label-xs text-muted-foreground">{b.insertBlocks}</p>
+              ) : null}
+              <div className="flex flex-wrap gap-1.5">
+                {blocks.map((option) => (
+                  <Button
+                    key={option.block}
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    onClick={() =>
+                      onChange({ ...value, items: [...value.items, host.makeBlock!(option.block)] })
+                    }
+                  >
+                    <Plus className="size-3" strokeWidth={2} />
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </>
       )}
     </section>
   );

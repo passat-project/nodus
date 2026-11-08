@@ -25,10 +25,24 @@ export interface BuilderField<X = unknown> {
   hint: string | null;
   width: FormWidth;
   height?: FormHeight;
+  /** Неподвижная строка окна (название создания): не двигается и не убирается. */
+  fixed?: boolean;
   extra: X;
 }
 
-export type BuilderItem<X = unknown> = BuilderField<X> | FormDecor;
+/** Блок окна — раздел, который рисует не поле, а своя форма (трудозатраты,
+ *  итог, файлы, причина, чек-лист). Тот же элемент списка, что поле: своя
+ *  подпись, подсказка, настройки и место; отличие — содержимое и параметры
+ *  (`extra`). `block` — вид блока у хоста (`time`, `result`, `chip:...`). */
+export interface BuilderBlock<X = unknown> {
+  kind: 'block';
+  block: string;
+  label: string | null;
+  hint: string | null;
+  extra: X;
+}
+
+export type BuilderItem<X = unknown> = BuilderField<X> | BuilderBlock<X> | FormDecor;
 
 export interface BuilderValue<X = unknown> {
   items: BuilderItem<X>[];
@@ -36,16 +50,48 @@ export interface BuilderValue<X = unknown> {
 }
 
 export function isBuilderField<X>(item: BuilderItem<X>): item is BuilderField<X> {
-  return !isFormDecor(item);
+  return item.kind === 'field';
 }
 
-/** Устойчивый id элемента: ключ поля или id оформления. */
+export function isBuilderBlock<X>(item: BuilderItem<X>): item is BuilderBlock<X> {
+  return item.kind === 'block';
+}
+
+/** Устойчивый id элемента: ключ поля, вид блока или id оформления. */
 export function itemId(item: BuilderItem<unknown>): string {
-  return isFormDecor(item) ? item.id : `f:${item.key}`;
+  if (isFormDecor(item)) return item.id;
+  if (isBuilderBlock(item)) return `b:${item.block}`;
+  return `f:${item.key}`;
 }
 
 export function fieldCount(items: readonly BuilderItem<unknown>[]): number {
-  return items.filter((item) => !isFormDecor(item)).length;
+  return items.filter(isBuilderField).length;
+}
+
+export function blockCount(items: readonly BuilderItem<unknown>[]): number {
+  return items.filter(isBuilderBlock).length;
+}
+
+/** Индекс первого блока: до него — поля и оформление, после — только блоки.
+ *  Блоки нельзя ставить между полями: сотрудник видит поля одним списком,
+ *  а блоки — своим порядком (порядок блоков редактор соблюдает). */
+export function blocksStart(items: readonly BuilderItem<unknown>[]): number {
+  const index = items.findIndex(isBuilderBlock);
+  return index < 0 ? items.length : index;
+}
+
+/** Куда встанет элемент при перетаскивании: поля — до блоков, блоки — после
+ *  полей. Возвращает допустимый индекс вставки (0..n). */
+export function clampInsert<X>(
+  items: readonly BuilderItem<X>[],
+  from: number,
+  before: number,
+): number {
+  const item = items[from];
+  if (!item) return before;
+  const boundary = blocksStart(items);
+  if (isBuilderBlock(item)) return Math.max(boundary, Math.min(before, items.length));
+  return Math.max(0, Math.min(before, boundary));
 }
 
 export function decorCount(items: readonly BuilderItem<unknown>[]): number {
@@ -94,9 +140,30 @@ export function patchField<X>(
   patch: FieldPatch<X>,
 ): BuilderItem<X>[] {
   return items.map((item) => {
-    if (isFormDecor(item) || item.key !== key) return item;
+    if (!isBuilderField(item) || item.key !== key) return item;
     const { extra, ...layout } = patch;
     const next: BuilderField<X> = { ...item, ...layout };
+    if ('label' in patch) next.label = patch.label?.trim() ? patch.label.trim() : null;
+    if ('hint' in patch) next.hint = patch.hint?.trim() ? patch.hint.trim() : null;
+    if (extra) next.extra = { ...item.extra, ...extra };
+    return next;
+  });
+}
+
+export type BlockPatch<X> = Partial<Pick<BuilderBlock<X>, 'label' | 'hint'>> & {
+  extra?: Partial<X>;
+};
+
+/** Правка блока: пустая подпись/подсказка → null (стандартная, без подсказки). */
+export function patchBlock<X>(
+  items: readonly BuilderItem<X>[],
+  block: string,
+  patch: BlockPatch<X>,
+): BuilderItem<X>[] {
+  return items.map((item) => {
+    if (!isBuilderBlock(item) || item.block !== block) return item;
+    const { extra, ...layout } = patch;
+    const next: BuilderBlock<X> = { ...item, ...layout };
     if ('label' in patch) next.label = patch.label?.trim() ? patch.label.trim() : null;
     if ('hint' in patch) next.hint = patch.hint?.trim() ? patch.hint.trim() : null;
     if (extra) next.extra = { ...item.extra, ...extra };

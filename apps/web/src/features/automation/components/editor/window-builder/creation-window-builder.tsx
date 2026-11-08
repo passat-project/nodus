@@ -1,83 +1,102 @@
-import { useMemo } from 'react';
-import type { CreationForm, CustomFieldDefinition, ProcessType } from '@nodus/contracts';
+import { useMemo, useState } from 'react';
+import type {
+  CreationChip,
+  CreationFieldKey,
+  CreationForm,
+  CustomFieldDefinition,
+  FormulaNode,
+  ProcessType,
+} from '@nodus/contracts';
 import {
   CREATION_FORM_LIMITS,
   LOCKABLE_SYSTEM_KEYS,
   TASK_CREATION_SYSTEM_KEYS,
   bindingsOf,
+  creationChipSchema,
   customFieldIdOfKey,
   customFieldKey,
+  requiredAllowed,
   slotLabel,
   typeConfigOf,
   ui,
 } from '@nodus/contracts';
-import { NodeLabel } from '@nodus/ui/components/node-label';
 
 import { projectsAvailable } from '../../../../../shared/api/projects-available.js';
 import { useCustomFieldDefinitions } from '../../../../../shared/custom-fields/queries.js';
-import { FormBuilder } from '../../../../../shared/forms/builder/form-builder.js';
 import type {
+  BuilderBlockOption,
   BuilderFieldInfo,
   FormBuilderHost,
-  PreviewKind,
 } from '../../../../../shared/forms/builder/builder-host.js';
+import { FormBuilder } from '../../../../../shared/forms/builder/form-builder.js';
 import { previewOfFieldType } from '../../../../../shared/forms/builder/preview-kind.js';
-import { PreviewControl } from '../../../../../shared/forms/builder/preview-control.js';
 import {
+  CHIP_HINT,
+  CHIP_LABEL,
+  ChipPreview,
+  CreationFieldSettings,
+  CreationFixedRows,
+  SYSTEM_PREVIEW,
+} from './creation-window-parts.js';
+import {
+  creationBlock,
   creationField,
   creationFromBuilder,
   creationToBuilder,
   type CreationExtra,
 } from '../../../model/creation-builder.js';
-import { withSlotPatched } from '../../../model/creation-form.js';
 import { useRouteDocStore } from '../../../model/route-doc-store.js';
-import { CreationSlotSection } from '../panel/creation-slot-section.js';
 
 const b = ui.forms.builder;
-
-const SYSTEM_PREVIEW: Readonly<Record<string, PreviewKind>> = {
-  description: 'text',
-  assignee: 'people',
-  coexecutors: 'people',
-  observers: 'people',
-  deadline: 'date',
-  priority: 'select',
-  project: 'select',
-};
+const c = ui.automation.creation;
 
 /**
- * Редактор окна создания (#496, В8) — вход из панели «Окно создания»:
- * общий редактор окна + своё окна создания (обязательность, скрытое
- * значение, формула слота — тот же раздел, что в панели) и замки «после
- * создания». «Готово» — одна правка документа маршрута (история, черновик,
- * публикация — как у статусов и кнопок).
+ * Редактор окна создания (#496, единое ядро) — вход из панели «Окно
+ * создания». Поля, атрибуты и блоки окна — один список с одними настройками:
+ * подпись, подсказка, обязательность, скрытое значение, формула, замок.
+ * Название и тип — неподвижный верх окна; формула названия (#632) — в
+ * настройках названия, а не отдельной строкой панели. «Готово» — одна правка
+ * документа маршрута (история, черновик, публикация — как у кнопок).
  */
 export function CreationWindowBuilder({
   open,
   type,
   form,
   readOnly,
+  focusKey,
   onClose,
 }: {
   open: boolean;
   type: ProcessType;
   form: CreationForm;
   readOnly: boolean;
+  /** Поле, к которому пришли из проблемы публикации: настройки откроются. */
+  focusKey?: string | null;
   onClose: () => void;
 }) {
   const { data: definitions } = useCustomFieldDefinitions(type.category);
   const scoped = useMemo(() => definitions ?? [], [definitions]);
+  const [titleFormula, setTitleFormula] = useState<FormulaNode | null>(form.titleFormula ?? null);
+  const [openedFor, setOpenedFor] = useState(open);
+  if (openedFor !== open) {
+    setOpenedFor(open);
+    if (open) setTitleFormula(form.titleFormula ?? null);
+  }
   const value = useMemo(() => creationToBuilder(form), [form]);
-  const host = useCreationHost(type, scoped, readOnly);
+  const host = useCreationHost(type, scoped, readOnly, titleFormula, setTitleFormula);
   return (
     <FormBuilder
       open={open}
       host={host}
       value={value}
       readOnly={readOnly}
+      focusKey={focusKey ?? null}
       onCancel={onClose}
       onDone={(next) => {
-        useRouteDocStore.getState().setCreationForm(creationFromBuilder(form, next));
+        const base = creationFromBuilder(form, next);
+        useRouteDocStore
+          .getState()
+          .setCreationForm(titleFormula ? { ...base, titleFormula } : base);
         onClose();
       }}
     />
@@ -88,6 +107,8 @@ function useCreationHost(
   type: ProcessType,
   scoped: readonly CustomFieldDefinition[],
   readOnly: boolean,
+  titleFormula: FormulaNode | null,
+  setTitleFormula: (formula: FormulaNode | null) => void,
 ): FormBuilderHost<CreationExtra> {
   return useMemo(() => {
     const roleLabels = typeConfigOf(type).card.roleLabels;
@@ -124,72 +145,68 @@ function useCreationHost(
       (key) => key !== 'project' || projectsAvailable(),
     );
     const attributeKeys = inType.map((entry) => customFieldKey(entry.id));
+    const blocks: BuilderBlockOption[] = creationChipSchema.options.map((chip) => ({
+      block: `chip:${chip}`,
+      label: CHIP_LABEL[chip],
+      preview: 'toggle',
+      layout: false,
+    }));
+    const requiredHintOf = (field: { key: string; extra: CreationExtra }) =>
+      !requiredAllowed(field.key as CreationFieldKey)
+        ? c.requiredAlways
+        : field.extra.preset !== null
+          ? ui.automation.problems.creation_hidden_required
+          : c.requiredHint;
     return {
       title: `${b.titles.creation} · ${type.name}`,
       info,
-      catalog: [...systemKeys, ...attributeKeys].map((key) => ({ key, label: info(key).label })),
+      catalog: [...systemKeys, ...attributeKeys].map((key) => ({
+        key,
+        label: info(key).label,
+      })),
       makeField: creationField,
+      blocks,
+      makeBlock: (block) => creationBlock(block.replace('chip:', '') as CreationChip),
+      renderBlock: (block) => <ChipPreview block={block} />,
+      blockSettings: (block) => {
+        const chip = block.block.replace('chip:', '') as CreationChip;
+        return <p className="text-xs text-muted-foreground">{CHIP_HINT[chip]}</p>;
+      },
       required: (field) => field.extra.required,
       badges: (field) => [
         ...(field.extra.preset !== null ? [b.badgeHidden] : []),
         ...(field.extra.formula ? [b.badgeFormula] : []),
       ],
-      settings: (field, patch) => {
-        const definition = byId.get(customFieldIdOfKey(field.key) ?? '');
-        const slot = {
-          key: field.key as never,
-          label: field.label,
-          ...field.extra,
-        };
-        return (
-          <CreationSlotSection
-            compact
-            slot={slot}
-            standardLabel={info(field.key).label}
-            definition={definition}
-            ownDefinitions={scoped}
-            hostKind={type.category === 'letter' ? 'letter' : 'task'}
-            presetLabel={null}
-            problems={[]}
-            readOnly={readOnly}
-            onChange={(slotPatch) => {
-              const next = withSlotPatched({ fields: [slot], chips: [] }, slot.key, slotPatch)
-                .fields[0] as typeof slot;
-              patch({
-                extra: { required: next.required, preset: next.preset, formula: next.formula },
-              });
-            }}
-            onRemove={() => {}}
-          />
-        );
-      },
+      settings: (field, patch) => (
+        <CreationFieldSettings
+          field={field}
+          definition={byId.get(customFieldIdOfKey(field.key) ?? '')}
+          standardLabel={info(field.key).label}
+          ownDefinitions={scoped}
+          hostKind={type.category === 'letter' ? 'letter' : 'task'}
+          readOnly={readOnly}
+          requiredHint={requiredHintOf(field)}
+          onFormula={(formula) => patch({ extra: { formula: formula ?? undefined } })}
+          onRequired={(required) => patch({ extra: { required } })}
+          onPreset={(preset) => patch({ extra: { preset } })}
+        />
+      ),
       lockMode: 'creation',
       lockable: [
         ...LOCKABLE_SYSTEM_KEYS.filter((key) => key !== 'project' || projectsAvailable()),
         ...attributeKeys,
       ].map((key) => ({ key, label: info(key).label })),
-      fixedTop: <CreationFixedRows typeName={type.name} />,
+      fixedTop: (
+        <CreationFixedRows
+          typeName={type.name}
+          titleFormula={titleFormula}
+          ownDefinitions={scoped}
+          hostKind={type.category === 'letter' ? 'letter' : 'task'}
+          readOnly={readOnly}
+          onChange={setTitleFormula}
+        />
+      ),
       limits: { fields: CREATION_FORM_LIMITS.fields, decor: CREATION_FORM_LIMITS.decor },
     };
-  }, [type, scoped, readOnly]);
-}
-
-/** Неподвижные строки окна создания: название и тип — всегда первыми. */
-function CreationFixedRows({ typeName }: { typeName: string }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-3 px-2" title={b.fixedRow}>
-      <span className="flex h-9 min-w-0 items-center rounded-lg border border-input px-2.5 text-body-lg text-muted-foreground dark:bg-input/30">
-        {ui.taskCreate.titlePlaceholder}
-      </span>
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <NodeLabel label={ui.taskCreate.typeLabel} />
-        <span className="relative">
-          <PreviewControl kind="select" />
-          <span className="absolute inset-y-0 left-2.5 flex items-center truncate text-sm">
-            {typeName}
-          </span>
-        </span>
-      </div>
-    </div>
-  );
+  }, [type, scoped, readOnly, titleFormula, setTitleFormula]);
 }

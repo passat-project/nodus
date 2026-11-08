@@ -1,19 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type {
-  CreationFieldKey,
-  CreationFieldSlot,
-  CreationForm,
-  ProcessType,
-} from '@nodus/contracts';
-import {
-  creationSlots,
-  hasPairedRow,
-  isFormDecor,
-  typeConfigOf,
-  typeCreationFormOf,
-  ui,
-} from '@nodus/contracts';
+import type { ProcessType } from '@nodus/contracts';
+import { typeConfigOf, typeCreationFormOf, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
@@ -49,44 +37,15 @@ import { TaskCreateFormBody } from './task-create-form-body.js';
 import { FormSkeleton } from './task-create-skeleton.js';
 import { TaskCreateStructure, useTaskCreateStructure } from './task-create-structure.js';
 import { useCreationFormulaPrefill } from './use-creation-formula-prefill.js';
+import {
+  EMPTY_FORM,
+  TITLE_KEY,
+  wideWindow,
+  withTitleSlot,
+  type TaskCreatePreview,
+} from './task-create-window-model.js';
 
-/** Форма без типа (типы не загрузились): пустая — низ окна покажет заглушку. */
-const EMPTY_FORM: CreationForm = { fields: [], chips: [] };
-
-/** Окно с двумя половинами в строке — широкий вариант (#496, Р2): узкое
- *  окно сложило бы пару в одну колонку. */
-function wideWindow(form: CreationForm): boolean {
-  return hasPairedRow(
-    form.fields,
-    (element) => !isFormDecor(element) && element.preset === null && element.width === 'half',
-  );
-}
-
-/** Ключ названия в трассе префилла: человек тронул — формула не затирает. */
-const TITLE_KEY = 'title';
-
-/** Слоты формул окна + формула названия (#496, Р7) отдельным псевдо-слотом:
- *  та же оценка, что у слотов, результат — текст. */
-function withTitleSlot(form: CreationForm): CreationFieldSlot[] {
-  const slots = creationSlots(form);
-  if (!form.titleFormula) return slots;
-  return [
-    ...slots,
-    {
-      key: TITLE_KEY as CreationFieldKey,
-      label: null,
-      required: false,
-      preset: null,
-      formula: form.titleFormula,
-    },
-  ];
-}
-
-/** Предпросмотр из редактора маршрута: тип и ЧЕРНОВАЯ форма узла «Создание». */
-export interface TaskCreatePreview {
-  type: ProcessType;
-  form: CreationForm;
-}
+export type { TaskCreatePreview };
 
 /**
  * Единое окно создания задачи (#432, В1/Р9): верх зафиксирован — строка

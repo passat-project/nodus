@@ -5,11 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CreationForm, ProcessType, WorkflowDetail } from '@nodus/contracts';
 import { customFieldKey, ui } from '@nodus/contracts';
 
-/** Панель «Окно создания» (#432): список полей формы с подписями атрибутов
- *  типа (#631 — привязка по bindingsOf) и предупреждением публикации об
- *  атрибуте, которого нет в типе. */
+/** Панель «Окно создания» (#496): единственный путь настройки — редактор
+ *  окна. Старого списка полей, чипов и «Посмотреть окно» здесь нет. */
 
-const c = ui.automation.creation;
+const b = ui.forms.builder;
 
 const fixtures = vi.hoisted(() => ({
   type: { id: '20000000-0000-4000-8000-000000000901', category: 'task' },
@@ -42,7 +41,6 @@ vi.mock('../../../../../shared/api/projects-list.js', async (importOriginal) => 
   useProjectsList: () => ({ data: [] }),
   useProjectTypes: () => ({ data: [] }),
 }));
-vi.mock('./window-preview.js', () => ({ WindowPreview: () => null }));
 
 vi.mock('../../../model/route-doc-store.js', () => {
   const creation: CreationForm = {
@@ -95,13 +93,14 @@ afterEach(() => {
   queryClient.clear();
 });
 
-describe('панель «Окно создания»: поля и атрибуты типа (#432/#631)', () => {
-  it('показывает поля формы с именами атрибутов и «+ Поле»', () => {
+describe('панель «Окно создания»: единый путь настройки (#496)', () => {
+  it('даёт вход в редактор и сводку, без старого списка полей и просмотра', () => {
     renderPanel();
 
-    expect(screen.getByText(c.fieldsTitle)).toBeTruthy();
-    expect(screen.getByText('№ накладной')).toBeTruthy();
-    expect(screen.getByText(ui.taskCreate.fields.assignee)).toBeTruthy();
-    expect(screen.getByRole('button', { name: c.addField })).toBeTruthy();
+    expect(screen.getByRole('button', { name: b.edit })).toBeTruthy();
+    expect(screen.getByText(b.summary(2, 0))).toBeTruthy();
+    expect(screen.queryByRole('button', { name: ui.automation.creation.addField })).toBeNull();
+    expect(screen.queryByRole('button', { name: ui.automation.creation.previewOpen })).toBeNull();
+    expect(screen.queryByText(ui.automation.creation.fieldsTitle)).toBeNull();
   });
 });

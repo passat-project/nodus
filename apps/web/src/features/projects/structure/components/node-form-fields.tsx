@@ -7,13 +7,26 @@ import type {
   NodeKind,
   NodeKindFormField,
 } from '@nodus/contracts';
-import { effectiveNodeForm, isCustomFieldValueFilled, ui, formSlots } from '@nodus/contracts';
+import {
+  effectiveNodeForm,
+  formFieldWidth,
+  isCustomFieldValueFilled,
+  isFormDecor,
+  ui,
+  formSlots,
+} from '@nodus/contracts';
 
 import { CustomFieldTypeIcon } from '../../../../shared/custom-fields/field-type-icon.js';
 import { FormulaCell } from '../../../../shared/custom-fields/formula/formula-cell.js';
 import type { FormulaHost } from '../../../../shared/custom-fields/formula/formula-api.js';
 import type { FormulaHostContext } from '../../../../shared/custom-fields/formula/formula-editor.js';
 import { CustomFieldEditor } from '../../../../shared/custom-fields/value-editor.js';
+import {
+  FormDecorView,
+  FormFieldShell,
+  FormGrid,
+  type FormGridItem,
+} from '../../../../shared/forms/form-grid.js';
 import { FieldRow } from '../../../../shared/ui/entity-fields.js';
 
 /**
@@ -35,15 +48,6 @@ function slotDefinitions(
   });
 }
 
-/** Метка обязательности у метки поля: слово, а не звёздочка-загадка —
- *  состояние «обязательно» читается (вердикт владельца, #556). Точка-разделитель
- *  отделяет метку от названия поля. */
-function RequiredMark() {
-  return (
-    <span className="text-xs font-normal text-muted-foreground">· {ui.structure.requiredMark}</span>
-  );
-}
-
 /** Окно «Создать папку»: атрибуты формы (скрытые не спрашиваются). */
 export function NodeCreateFields({
   kind,
@@ -61,34 +65,43 @@ export function NodeCreateFields({
   /** Id обязательных пустых полей (после ответа 422). */
   errors?: ReadonlySet<string>;
 }) {
-  const slots = slotDefinitions(kind, definitions).filter(({ slot }) => slot.state !== 'hidden');
-
-  return slots.map(({ slot, definition }) => {
-    const required = slot.state === 'required';
+  const form = effectiveNodeForm(kind, definitions);
+  const byId = new Map(definitions.map((definition) => [definition.id, definition]));
+  const items = form.fields.flatMap((element): FormGridItem[] => {
+    if (isFormDecor(element)) {
+      return [{ id: element.id, width: 'full', node: <FormDecorView decor={element} /> }];
+    }
+    const definition = byId.get(element.fieldId);
+    if (!definition || element.state === 'hidden') return [];
+    const required = element.state === 'required';
     const missing = required && !isCustomFieldValueFilled(values[definition.id]);
-    return (
-      <div key={definition.id} className="flex min-w-0 flex-col gap-1">
-        <span className="flex items-center gap-2">
-          <CustomFieldTypeIcon
-            type={definition.type}
-            className="size-3.5 shrink-0 text-muted-foreground"
-          />
-          <span className="text-label text-muted-foreground">{definition.name}</span>
-          {required ? <RequiredMark /> : null}
-        </span>
-        <CustomFieldEditor
-          definition={definition}
-          value={values[definition.id]}
-          refs={refs}
-          variant="form"
-          onCommit={(value, picked) => onChange(definition.id, value, picked)}
-        />
-        {missing && errors?.has(definition.id) ? (
-          <span className="text-xs text-danger">{ui.structure.requiredEmpty}</span>
-        ) : null}
-      </div>
-    );
+    return [
+      {
+        id: definition.id,
+        width: formFieldWidth(element),
+        node: (
+          <FormFieldShell
+            label={element.label ?? definition.name}
+            required={required}
+            hint={element.hint ?? definition.hint}
+            height={definition.type === 'long_text' ? (element.height ?? 'lines') : undefined}
+          >
+            <CustomFieldEditor
+              definition={definition}
+              value={values[definition.id]}
+              refs={refs}
+              variant="form"
+              onCommit={(value, picked) => onChange(definition.id, value, picked)}
+            />
+            {missing && errors?.has(definition.id) ? (
+              <span className="text-xs text-danger">{ui.structure.requiredEmpty}</span>
+            ) : null}
+          </FormFieldShell>
+        ),
+      },
+    ];
   });
+  return items.length === 0 ? null : <FormGrid items={items} />;
 }
 
 /** Панель «Свойства папки»: те же слоты формы, включая «скрыто» (Р6). */

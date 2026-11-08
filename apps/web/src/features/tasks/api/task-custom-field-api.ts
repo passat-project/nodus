@@ -15,6 +15,7 @@ import {
   patchedValues,
 } from '../../../shared/custom-fields/value-patch.js';
 import { mapTaskInPages, taskDependentKeys, tasksKeys } from '../../../shared/api/tasks-keys.js';
+import { fieldLockedText } from '../../../shared/forms/field-lock-ui.js';
 
 /** Правка одного кастомного поля карточки (#431, I4): значение в детали и
  *  журналах меняется сразу, `null` удаляет ключ; ссылка выбора (имя, аватар)
@@ -28,10 +29,15 @@ export function useUpdateTaskCustomField(taskId: string) {
       value: CustomFieldValue | null;
       /** Ссылка выбора — для мгновенного показа имени (в тело не уходит). */
       refs?: readonly CustomFieldRef[];
+      /** Причина правки закреплённого поля (#496). */
+      lockReason?: string;
     }) =>
       api<TaskListItem>(`/tasks/${taskId}`, {
         method: 'PATCH',
-        body: { customFields: { [vars.fieldId]: vars.value } },
+        body: {
+          customFields: { [vars.fieldId]: vars.value },
+          ...(vars.lockReason ? { lockReason: vars.lockReason } : {}),
+        },
       }),
     onMutate: async (vars) => {
       await Promise.all([
@@ -62,7 +68,7 @@ export function useUpdateTaskCustomField(taskId: string) {
     onError: (error, _vars, context) => {
       if (context?.previous) queryClient.setQueryData(tasksKeys.detail(taskId), context.previous);
       for (const [key, data] of context?.previousPages ?? []) queryClient.setQueryData(key, data);
-      toast.error(fieldErrorText(error));
+      toast.error(fieldLockedText(error) ?? fieldErrorText(error));
     },
     onSettled: () => {
       for (const key of taskDependentKeys(taskId)) {

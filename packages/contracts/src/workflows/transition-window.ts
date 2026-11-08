@@ -21,12 +21,20 @@ import type { TransitionBlockReason, WorkflowTransitionRules } from './workflow.
  * совпадать байт-в-байт.
  */
 
+/** Подпись и подсказка блока окна: те же настройки, что у поля (#496). */
+export interface EffectiveSectionLayout {
+  /** Своё название блока в этом окне; пусто — стандартное (i18n). */
+  label?: string;
+  hint?: string | null;
+}
+
 /** Раздел эффективного окна: `origin` — настройка кнопки или гейт (веб
  *  показывает подпись по умолчанию для гейтового раздела). */
 export type EffectiveSection =
-  | { kind: 'registration'; origin: 'form' | 'gate' }
+  | ({ kind: 'registration'; origin: 'form' | 'gate' } & EffectiveSectionLayout)
   | {
       kind: 'fields';
+      hint?: string | null;
       /** Ключи полей окна: настроенные + добавленные гейтом (сверка ввода). */
       fields: TransitionWindowFieldKey[];
       /** Порядок окна (#496, Р3): поля-объекты и оформление настроенного
@@ -41,21 +49,39 @@ export type EffectiveSection =
       formulas?: Record<string, FormulaNode>;
       origin: 'form' | 'gate';
     }
-  | { kind: 'time'; mode: 'if_empty' | 'always'; origin: 'form' | 'gate' }
-  | { kind: 'result'; origin: 'form' | 'gate' }
-  | { kind: 'result_files'; label: string; origin: 'form' | 'gate' }
-  | { kind: 'result_messages'; required: boolean; origin: 'form' | 'gate' }
-  | { kind: 'comment'; label: string; required: boolean; origin: 'form' | 'gate' };
+  | ({
+      kind: 'time';
+      mode: 'if_empty' | 'always';
+      origin: 'form' | 'gate';
+    } & EffectiveSectionLayout)
+  | ({ kind: 'result'; origin: 'form' | 'gate' } & EffectiveSectionLayout)
+  | ({
+      kind: 'result_files';
+      label: string;
+      origin: 'form' | 'gate';
+    } & EffectiveSectionLayout)
+  | ({
+      kind: 'result_messages';
+      required: boolean;
+      origin: 'form' | 'gate';
+    } & EffectiveSectionLayout)
+  | ({
+      kind: 'comment';
+      label: string;
+      required: boolean;
+      origin: 'form' | 'gate';
+    } & EffectiveSectionLayout);
 
 export function effectiveWindowSections(
   form: TransitionForm | null,
   rules: Pick<WorkflowTransitionRules, 'validators'>,
 ): EffectiveSection[] {
   const sections = new Map<TransitionFormSectionKind, EffectiveSection>();
+  const ordered: EffectiveSection[] = [];
   if (form?.enabled) {
     for (const section of form.sections) {
-      sections.set(
-        section.kind,
+      if (sections.has(section.kind)) continue;
+      const effective: EffectiveSection =
         section.kind === 'fields'
           ? {
               kind: 'fields',
@@ -65,8 +91,13 @@ export function effectiveWindowSections(
               ...(section.formulas ? { formulas: section.formulas } : {}),
               origin: 'form',
             }
-          : { ...section, origin: 'form' },
-      );
+          : section.kind === 'result_files'
+            ? { ...section, label: section.label ?? '', origin: 'form' }
+            : section.kind === 'comment'
+              ? { ...section, label: section.label ?? '', origin: 'form' }
+              : { ...section, origin: 'form' };
+      sections.set(section.kind, effective);
+      ordered.push(effective);
     }
   }
 
@@ -121,7 +152,18 @@ export function effectiveWindowSections(
     sections.set('result_files', { kind: 'result_files', label: '', origin: 'gate' });
   }
 
-  return TRANSITION_FORM_SECTION_ORDER.flatMap((kind) => {
+  // Порядок окна (#496): настроенные блоки идут в порядке редактора, а не
+  // канона — сотрудник видит ровно тот порядок, что собрал администратор.
+  // «Регистрация» письма всегда первой (ввод номера), блоки из одних гейтов
+  // добавляются после настроенных в каноническом порядке.
+  const configured = ordered.map((section) => section.kind);
+  const configuredSet = new Set(configured);
+  const head = configured.filter((kind) => kind === 'registration');
+  const tail = configured.filter((kind) => kind !== 'registration');
+  const gateOnly = TRANSITION_FORM_SECTION_ORDER.filter(
+    (kind) => !configuredSet.has(kind) && sections.has(kind),
+  );
+  return [...head, ...tail, ...gateOnly].flatMap((kind) => {
     const section = sections.get(kind);
     return section ? [section] : [];
   });

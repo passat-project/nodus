@@ -41,7 +41,7 @@ describe('effectiveWindowSections (#380, Р4)', () => {
     expect(sections.every((s) => s.origin === 'gate')).toBe(true);
   });
 
-  it('настройка ∪ гейты: поля сливаются, подпись раздела — из настройки', () => {
+  it('настройка ∪ гейты: порядок блоков — из редактора, гейт добавляет в конец', () => {
     const sections = effectiveWindowSections(
       form([
         { kind: 'fields', fields: ['assignee'] },
@@ -50,17 +50,17 @@ describe('effectiveWindowSections (#380, Р4)', () => {
       ]),
       rules([{ kind: 'fields_required', fields: ['deadline'] }, { kind: 'result_present' }]),
     );
-    expect(sections.map((s) => s.kind)).toEqual(['fields', 'result', 'result_files', 'comment']);
+    expect(sections.map((s) => s.kind)).toEqual(['fields', 'result_files', 'comment', 'result']);
     expect(sections[0]).toMatchObject({
       kind: 'fields',
       fields: ['assignee', 'deadline'],
       origin: 'form',
     });
-    expect(sections[2]).toMatchObject({ kind: 'result_files', label: 'Акт', origin: 'form' });
-    expect(sections[3]).toMatchObject({ kind: 'comment', label: 'Причина', required: true });
+    expect(sections[1]).toMatchObject({ kind: 'result_files', label: 'Акт', origin: 'form' });
+    expect(sections[2]).toMatchObject({ kind: 'comment', label: 'Причина', required: true });
   });
 
-  it('обязательные разделы окна — причина и сообщения', () => {
+  it('обязательные разделы окна — причина и сообщения, в порядке окна', () => {
     const sections = effectiveWindowSections(
       form([
         { kind: 'comment', label: 'Причина', required: true },
@@ -68,7 +68,7 @@ describe('effectiveWindowSections (#380, Р4)', () => {
       ]),
       rules([]),
     );
-    expect(requiredWindowSections(sections)).toEqual(['result_messages', 'comment']);
+    expect(requiredWindowSections(sections)).toEqual(['comment', 'result_messages']);
   });
 });
 

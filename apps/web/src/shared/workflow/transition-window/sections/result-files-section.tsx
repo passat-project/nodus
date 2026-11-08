@@ -57,7 +57,7 @@ export function ResultFilesSection({
       }
       if (uploaded.length === 0) return;
       const message = await send.mutateAsync({
-        text: section.label,
+        text: section.label || ui.tasks.window.filesLabel,
         attachmentIds: uploaded.map((a) => a.id),
         attachments: uploaded,
       });

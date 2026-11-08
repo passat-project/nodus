@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@nodus/ui/components/po
 import { cn } from '@nodus/ui/lib/utils';
 import { AlignLeft, Heading, Plus, Space } from 'lucide-react';
 
-import type { BuilderOption } from './builder-host.js';
+import type { BuilderBlockOption, BuilderOption } from './builder-host.js';
 
 const b = ui.forms.builder;
 
@@ -18,17 +18,23 @@ const DECOR_ICONS = { heading: Heading, note: AlignLeft, gap: Space } as const;
  */
 export function InsertPoint({
   available,
+  blocks = [],
   fieldsFull,
   decorFull,
+  decorAllowed = true,
   readOnly,
   onField,
+  onBlock,
   onDecor,
 }: {
   available: readonly BuilderOption[];
+  blocks?: readonly BuilderBlockOption[];
   fieldsFull: boolean;
   decorFull: boolean;
+  decorAllowed?: boolean;
   readOnly: boolean;
   onField: (key: string) => void;
+  onBlock?: (block: string) => void;
   onDecor: (kind: FormDecorKind) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -52,11 +58,17 @@ export function InsertPoint({
         <PopoverContent align="center" className="w-64 p-1.5">
           <InsertMenu
             available={available}
+            blocks={blocks}
             fieldsFull={fieldsFull}
             decorFull={decorFull}
+            decorAllowed={decorAllowed}
             onField={(key) => {
               setOpen(false);
               onField(key);
+            }}
+            onBlock={(block) => {
+              setOpen(false);
+              onBlock?.(block);
             }}
             onDecor={(kind) => {
               setOpen(false);
@@ -71,47 +83,71 @@ export function InsertPoint({
 
 function InsertMenu({
   available,
+  blocks,
   fieldsFull,
   decorFull,
+  decorAllowed,
   onField,
+  onBlock,
   onDecor,
 }: {
   available: readonly BuilderOption[];
+  blocks: readonly BuilderBlockOption[];
   fieldsFull: boolean;
   decorFull: boolean;
+  decorAllowed: boolean;
   onField: (key: string) => void;
+  onBlock: (block: string) => void;
   onDecor: (kind: FormDecorKind) => void;
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <p className="px-2 pt-1 text-label-xs text-muted-foreground">{b.insertFields}</p>
       {fieldsFull ? (
         <p className="px-2 pb-1 text-xs text-muted-foreground">{b.fieldsLimit}</p>
-      ) : available.length === 0 ? (
-        <p className="px-2 pb-1 text-xs text-muted-foreground">{b.insertEmpty}</p>
       ) : (
-        <div className="flex max-h-56 flex-col overflow-y-auto">
-          {available.map((option) => (
-            <MenuButton key={option.key} onClick={() => onField(option.key)}>
+        <>
+          <p className="px-2 pt-1 text-label-xs text-muted-foreground">{b.insertFields}</p>
+          {available.length === 0 ? (
+            <p className="px-2 pb-1 text-xs text-muted-foreground">{b.insertEmpty}</p>
+          ) : (
+            <div className="flex max-h-56 flex-col overflow-y-auto">
+              {available.map((option) => (
+                <MenuButton key={option.key} onClick={() => onField(option.key)}>
+                  <span className="truncate">{option.label}</span>
+                </MenuButton>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      {blocks.length > 0 ? (
+        <>
+          <p className="px-2 pt-1 text-label-xs text-muted-foreground">{b.insertBlocks}</p>
+          {blocks.map((option) => (
+            <MenuButton key={option.block} onClick={() => onBlock(option.block)}>
               <span className="truncate">{option.label}</span>
             </MenuButton>
           ))}
-        </div>
-      )}
-      <p className="px-2 pt-1 text-label-xs text-muted-foreground">{b.insertDecor}</p>
-      {decorFull ? (
-        <p className="px-2 pb-1 text-xs text-muted-foreground">{b.decorLimit}</p>
-      ) : (
-        FORM_DECOR_KINDS.map((kind) => {
-          const Icon = DECOR_ICONS[kind];
-          return (
-            <MenuButton key={kind} onClick={() => onDecor(kind)}>
-              <Icon className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-              {b.decor[kind]}
-            </MenuButton>
-          );
-        })
-      )}
+        </>
+      ) : null}
+      {decorAllowed ? (
+        <>
+          <p className="px-2 pt-1 text-label-xs text-muted-foreground">{b.insertDecor}</p>
+          {decorFull ? (
+            <p className="px-2 pb-1 text-xs text-muted-foreground">{b.decorLimit}</p>
+          ) : (
+            FORM_DECOR_KINDS.map((kind) => {
+              const Icon = DECOR_ICONS[kind];
+              return (
+                <MenuButton key={kind} onClick={() => onDecor(kind)}>
+                  <Icon className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+                  {b.decor[kind]}
+                </MenuButton>
+              );
+            })
+          )}
+        </>
+      ) : null}
     </div>
   );
 }

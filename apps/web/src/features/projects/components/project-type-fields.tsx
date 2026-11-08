@@ -1,23 +1,41 @@
-import { useState } from 'react';
-import { X } from 'lucide-react';
-import type { FieldFormState, ProjectType, ProjectTypeForm } from '@nodus/contracts';
-import { projectTypeFormOf, ui, formSlots, isFieldFormSlot } from '@nodus/contracts';
-import { Button } from '@nodus/ui/components/button';
+import { useMemo, useState } from 'react';
+import type { ProjectType, ProjectTypeForm } from '@nodus/contracts';
+import {
+  bindingsOf,
+  isFormDecor,
+  projectTypeFormOf,
+  ui,
+  withProjectSystemElements,
+} from '@nodus/contracts';
+import { NodeLabel } from '@nodus/ui/components/node-label';
+import { LayoutTemplate } from 'lucide-react';
 
-import { CustomFieldTypeIcon } from '../../../shared/custom-fields/field-type-icon.js';
 import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries.js';
-import { Segmented } from '../../../shared/ui/panel/panel-kit.js';
+import { AttributeWindowBuilder } from '../../../shared/forms/attribute-window-builder.js';
+import type { AttributeElement } from '../../../shared/forms/attribute-form-model.js';
+import { isSlotElement } from '../../../shared/forms/attribute-form-model.js';
+import type { AttributeSystemInfo } from '../../../shared/forms/attribute-window-builder.js';
+import { PreviewControl } from '../../../shared/forms/builder/preview-control.js';
+import { PanelAction } from '../../../shared/ui/panel/panel-kit.js';
 import { useUpdateProjectType } from '../api/project-catalog-mutations.js';
-import { stateOptions } from '../node-kinds/components/node-kind-summary.js';
 import type { RenderCreateField } from '../node-kinds/types.js';
-import { ProjectTypeFieldPicker } from './project-type-field-picker.js';
+
+const b = ui.forms.builder;
+
+const SYSTEM_INFO: Readonly<Record<string, AttributeSystemInfo>> = {
+  manager: { label: ui.projects.manager, preview: 'people' },
+  assistants: { label: ui.projects.assistants, preview: 'people' },
+  observers: { label: ui.projects.observers, preview: 'people' },
+  portfolio: { label: ui.projects.filterPortfolio, preview: 'select' },
+  visibility: { label: ui.projects.fieldVisibility, preview: 'select' },
+  endDate: { label: ui.projects.deadline, preview: 'date' },
+  description: { label: ui.projects.fieldDescription, preview: 'text', multiline: true },
+};
 
 /**
- * Раздел «Атрибуты» типа проекта (#631, Р10): слоты формы типа — атрибут ×
- * состояние «Скрыто / По желанию / Обязательно», грамматика раздела «При
- * создании папки» вида папки. Форма сохраняется целиком на каждое
- * изменение; сервер вместе со слотом привязывает атрибут к типу (и снимает
- * привязку убранного) — диалоги проекта показывают атрибуты формы типа.
+ * Раздел «Атрибуты» типа проекта (#631; #496 — единый путь настройки):
+ * только вход в редактор окна. Атрибуты, системные строки проекта,
+ * состояния, подписи, ширина и порядок — в общем редакторе окна.
  */
 export function ProjectTypeFieldsSection({
   type,
@@ -32,111 +50,87 @@ export function ProjectTypeFieldsSection({
   renderCreateField?: RenderCreateField;
 }) {
   const update = useUpdateProjectType();
-  const form = projectTypeFormOf(type);
+  const form = withProjectSystemElements(projectTypeFormOf(type));
   const query = useCustomFieldDefinitions('project');
-  const byId = new Map((query.data ?? []).map((definition) => [definition.id, definition]));
+  const [open, setOpen] = useState(false);
   const [createField, setCreateField] = useState(false);
-
-  function save(next: ProjectTypeForm) {
-    if (!canSetup) return;
-    update.mutate({ id: type.id, form: next });
-  }
-
-  function setState(fieldId: string, state: FieldFormState) {
-    save({
-      ...form,
-      fields: form.fields.map((slot) =>
-        isFieldFormSlot(slot) && slot.fieldId === fieldId ? { ...slot, state } : slot,
+  const [error, setError] = useState<string | null>(null);
+  const definitions = useMemo(
+    () =>
+      (query.data ?? []).filter((definition) =>
+        bindingsOf(definition).projectTypeIds.includes(type.id),
       ),
-    });
-  }
-
-  function remove(fieldId: string) {
-    save({
-      ...form,
-      fields: form.fields.filter((slot) => !isFieldFormSlot(slot) || slot.fieldId !== fieldId),
-    });
-  }
-
-  function add(fieldId: string) {
-    if (formSlots(form).some((slot) => slot.fieldId === fieldId)) return;
-    save({ ...form, fields: [...form.fields, { fieldId, state: 'optional' }] });
-  }
+    [query.data, type.id],
+  );
+  // Сводка окна в панели: что спросит проект этого типа, по порядку.
+  const summary = form.fields.flatMap((element) => {
+    if (isFormDecor(element)) return [];
+    if (isSlotElement(element)) {
+      const name = definitions.find((definition) => definition.id === element.fieldId)?.name;
+      return [name ?? b.unknownField];
+    }
+    return [SYSTEM_INFO[element.key]?.label ?? element.key];
+  });
 
   return (
-    <div className="flex min-w-0 flex-col gap-4">
-      {formSlots(form).length === 0 ? (
-        <p className="text-xs break-words text-muted-foreground">
-          {ui.customFields.typeForm.empty}
-        </p>
+    <div className="flex min-w-0 flex-col gap-2">
+      <PanelAction icon={LayoutTemplate} onClick={() => setOpen(true)}>
+        {canSetup ? b.edit : b.view}
+      </PanelAction>
+      {summary.length > 0 ? (
+        <p className="text-xs break-words text-muted-foreground">{summary.join(', ')}</p>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {formSlots(form).map((slot) => {
-            const definition = byId.get(slot.fieldId);
-            return (
-              <li
-                key={slot.fieldId}
-                className="flex min-w-0 flex-col gap-1.5 rounded-lg px-1 py-1.5 transition-colors hover:bg-accent/40"
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  {definition ? (
-                    <CustomFieldTypeIcon
-                      type={definition.type}
-                      className="size-3.5 shrink-0 text-muted-foreground"
-                    />
-                  ) : null}
-                  <span
-                    className="min-w-0 flex-1 truncate text-sm"
-                    title={definition?.name ?? undefined}
-                  >
-                    {definition?.name ?? ui.customFields.issues.unknown}
-                  </span>
-                  {canSetup ? (
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label={ui.nodeKinds.form.remove}
-                      title={ui.nodeKinds.form.remove}
-                      className="shrink-0 text-muted-foreground"
-                      onClick={() => remove(slot.fieldId)}
-                    >
-                      <X className="size-3.5" strokeWidth={2} />
-                    </Button>
-                  ) : null}
-                </div>
-                <Segmented
-                  layout="grid"
-                  className="w-full"
-                  value={slot.state}
-                  options={stateOptions()}
-                  disabled={!canSetup}
-                  onChange={(state) => setState(slot.fieldId, state)}
-                />
-              </li>
-            );
-          })}
-        </ul>
+        <p className="text-xs break-words text-muted-foreground">{ui.projects.formEmpty}</p>
       )}
-
-      {canSetup ? (
-        <ProjectTypeFieldPicker
-          inForm={new Set(formSlots(form).map((slot) => slot.fieldId))}
-          disabled={!canSetup}
-          canCreateField={canCreateField}
-          onPick={add}
-          onCreateField={renderCreateField ? () => setCreateField(true) : undefined}
-        />
-      ) : null}
-
+      <AttributeWindowBuilder
+        open={open}
+        title={`${b.titles.project} · ${type.name}`}
+        elements={form.fields}
+        definitions={definitions}
+        systemInfo={(key) => SYSTEM_INFO[key] ?? { label: key, preview: 'input' }}
+        formulaHostKind="project"
+        readOnly={!canSetup}
+        error={error}
+        fixedTop={<ProjectFixedRows typeName={type.name} />}
+        onCreateField={canCreateField && renderCreateField ? () => setCreateField(true) : undefined}
+        onDone={(elements: AttributeElement[]) => {
+          setError(null);
+          update.mutate(
+            { id: type.id, form: { fields: elements } as ProjectTypeForm },
+            {
+              onSuccess: () => setOpen(false),
+              onError: () => setError(ui.common.saveError),
+            },
+          );
+        }}
+        onClose={() => setOpen(false)}
+      />
       {createField && renderCreateField
         ? renderCreateField({
             onClose: () => setCreateField(false),
-            onCreated: (fieldId) => {
-              setCreateField(false);
-              add(fieldId);
-            },
+            onCreated: () => setCreateField(false),
           })
         : null}
+    </div>
+  );
+}
+
+/** Неподвижный верх окна проекта: название и тип — всегда первыми. */
+function ProjectFixedRows({ typeName }: { typeName: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-3 px-2" title={b.fixedRow}>
+      <span className="flex h-9 min-w-0 items-center rounded-lg border border-input px-2.5 text-body-lg text-muted-foreground dark:bg-input/30">
+        {ui.projects.fieldName}
+      </span>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <NodeLabel label={ui.projects.fieldType} />
+        <span className="relative">
+          <PreviewControl kind="select" />
+          <span className="absolute inset-y-0 left-2.5 flex items-center truncate text-sm">
+            {typeName}
+          </span>
+        </span>
+      </div>
     </div>
   );
 }

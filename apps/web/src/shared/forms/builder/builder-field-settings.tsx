@@ -15,6 +15,52 @@ const l = ui.forms.locks;
 const HEIGHTS: readonly FormHeight[] = ['line', 'lines', 'large'];
 type LockChoice = 'off' | LockEditors;
 
+/** Общие настройки элемента окна — поля и блока: своя подпись и подсказка.
+ *  Один и тот же блок в настройках всех элементов (#496, единое ядро). */
+export function LayoutInputs({
+  label,
+  hint,
+  defaultLabel,
+  readOnly,
+  showHint = true,
+  onChange,
+}: {
+  label: string | null;
+  hint: string | null;
+  defaultLabel: string;
+  readOnly: boolean;
+  /** У строки нет подсказки (системные строки проекта). */
+  showHint?: boolean;
+  onChange: (patch: { label?: string; hint?: string }) => void;
+}) {
+  return (
+    <>
+      <PanelField label={b.label} hint={b.labelHint}>
+        <Input
+          value={label ?? ''}
+          maxLength={60}
+          readOnly={readOnly}
+          placeholder={defaultLabel}
+          aria-label={b.label}
+          onChange={(event) => onChange({ label: event.target.value })}
+        />
+      </PanelField>
+      {showHint ? (
+        <PanelField label={b.hint}>
+          <Input
+            value={hint ?? ''}
+            maxLength={FORM_LAYOUT_LIMITS.hint}
+            readOnly={readOnly}
+            placeholder={b.hintPlaceholder}
+            aria-label={b.hint}
+            onChange={(event) => onChange({ hint: event.target.value })}
+          />
+        </PanelField>
+      ) : null}
+    </>
+  );
+}
+
 /**
  * Настройки поля окна (#496): подпись в окне, подсказка, высота текста,
  * замок «после создания / после нажатия» и своё хоста. Всё правит черновик
@@ -51,31 +97,17 @@ export function BuilderFieldSettings<X>({
   const lockable = host.lockMode !== null && info.lockable === true;
   return (
     <div className="flex flex-col gap-3">
-      {info.noLayout ? null : (
-        <>
-          <PanelField label={b.label} hint={b.labelHint}>
-            <Input
-              value={field.label ?? ''}
-              maxLength={60}
-              readOnly={readOnly}
-              placeholder={info.label}
-              aria-label={b.label}
-              onChange={(event) => onPatch({ label: event.target.value })}
-            />
-          </PanelField>
-          <PanelField label={b.hint}>
-            <Input
-              value={field.hint ?? ''}
-              maxLength={FORM_LAYOUT_LIMITS.hint}
-              readOnly={readOnly}
-              placeholder={b.hintPlaceholder}
-              aria-label={b.hint}
-              onChange={(event) => onPatch({ hint: event.target.value })}
-            />
-          </PanelField>
-        </>
+      {info.hideLayout ? null : (
+        <LayoutInputs
+          label={field.label}
+          hint={field.hint}
+          defaultLabel={info.label}
+          readOnly={readOnly}
+          showHint={!info.hideHint}
+          onChange={onPatch}
+        />
       )}
-      {info.multiline && !info.noLayout ? (
+      {info.multiline && !info.hideLayout ? (
         <PanelField label={b.height}>
           <SegmentedControl<FormHeight>
             value={field.height ?? 'lines'}
@@ -108,7 +140,9 @@ export function BuilderFieldSettings<X>({
       ) : null}
       {host.settings?.(field, onPatch)}
       {readOnly || info.fixed ? null : <RemoveButton onClick={onRemove} />}
-      {info.fixed ? <p className="text-xs text-muted-foreground">{b.systemRow}</p> : null}
+      {info.fixed && !info.hideLayout ? (
+        <p className="text-xs text-muted-foreground">{b.systemRow}</p>
+      ) : null}
     </div>
   );
 }

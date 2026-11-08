@@ -12,6 +12,7 @@ import {
 import { Permission, permissionsOfModule, ui, type AccessModule } from '@nodus/contracts';
 
 import { resolveLettersTab } from '../../features/correspondence/lib/letters-tab.js';
+import { registriesAvailable } from '../../shared/api/registries-available.js';
 
 /** Вкладка модуля топбара (подмодуль): search-параметр + предикат активности.
  *  `permission` — вкладка видна только держателю права (#55: «Новые» — у
@@ -23,12 +24,17 @@ export interface NavTabDef {
   label: string;
   search: Record<string, string>;
   permission?: Permission;
+  /** Вкладка только при включённом модуле (реестры, #496). */
+  enabled?: () => boolean;
   isActive: (search: URLSearchParams, permissions: readonly string[]) => boolean;
 }
 
 /** Вкладки модуля, видимые сотруднику с этими правами. */
 export function visibleNavTabs(module: NavModuleDef, permissions: readonly string[]): NavTabDef[] {
-  return module.tabs.filter((tab) => !tab.permission || permissions.includes(tab.permission));
+  return module.tabs.filter(
+    (tab) =>
+      (!tab.permission || permissions.includes(tab.permission)) && (!tab.enabled || tab.enabled()),
+  );
 }
 
 /** Модуль левой рейки: id — ключ персонализации порядка (UiPreferences). */
@@ -235,6 +241,14 @@ export const NAV_MODULES: NavModuleDef[] = [
         search: { tab: 'project-schemas' },
         permission: Permission.PROJECT_SETUP_MANAGE,
         isActive: (s) => s.get('tab') === 'project-schemas',
+      },
+      {
+        id: 'registries',
+        label: ui.forms.registries.tab,
+        search: { tab: 'registries' },
+        permission: Permission.WORKFLOW_MANAGE,
+        enabled: registriesAvailable,
+        isActive: (s) => s.get('tab') === 'registries',
       },
       ...accessTab('automation'),
     ],

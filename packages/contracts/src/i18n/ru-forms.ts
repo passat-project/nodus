@@ -34,8 +34,11 @@ export const formsStrings = {
     widthFull: 'На всю строку',
     settings: 'Настроить',
     remove: 'Убрать из окна',
+    yes: 'Да',
+    no: 'Нет',
     insert: 'Добавить сюда',
     insertFields: 'Поля',
+    insertBlocks: 'Блоки',
     insertDecor: 'Оформление',
     insertEmpty: 'Все поля уже в окне',
     decor: { heading: 'Заголовок', note: 'Пояснение', gap: 'Отступ' },
@@ -44,8 +47,9 @@ export const formsStrings = {
     decorEmpty: 'Впишите текст или уберите элемент',
     decorLimit: 'В окне не больше 10 элементов оформления',
     fieldsLimit: 'В окне больше нет места для полей',
-    tray: 'Поля, которых нет в окне',
-    trayEmpty: 'Все поля уже в окне',
+    tray: 'Добавить в окно',
+    trayEmpty: 'Все поля и блоки уже в окне',
+    createField: 'Создать атрибут',
     unknownField: 'Атрибут удалён',
     unknownFieldHint: 'Атрибута больше нет — уберите его из окна',
     fromGate: 'Из условия перехода',
@@ -61,13 +65,11 @@ export const formsStrings = {
     heights: { line: 'Строка', lines: 'Несколько строк', large: 'Большое' },
     titleFormula: 'Название по формуле',
     titleFormulaHint: 'Подставится при открытии окна — сотрудник может исправить',
-    emptyWindow: 'В окне пока нет полей — добавьте их через «+»',
+    emptyWindow: 'В окне пока нет элементов — добавьте поле или блок',
     badgeHidden: 'скрыто',
     badgeFormula: 'по формуле',
     /** Поля задачи вне формы создания — для «Закрепить также». */
     systemLabels: { title: 'Название', plannedMinutes: 'Плановое время' },
-    sections: 'Ниже полей — разделы окна',
-    sectionsHint: 'Время, итог, файлы и причина включаются в панели кнопки',
     unsaved: 'Изменения окна не сохранены',
     summary: (fields: number, locked: number): string =>
       `${fields} ${plural(fields, ['поле', 'поля', 'полей'])}` +
@@ -118,6 +120,10 @@ export const formsStrings = {
     lead: 'Заготовка: реестр выдачи заданий с окном строки — данные демонстрационные',
     demoName: 'Выдачи заданий',
     rows: 'Строк',
+    /** Демо-число строк заготовки (#496): данных нет, пока не подключён #636. */
+    demoRows: '12',
+    /** Демо-исполнитель заготовки реестра (#496). */
+    demoAssignee: 'Петров П.',
     editRow: 'Окно строки',
   },
 } as const;

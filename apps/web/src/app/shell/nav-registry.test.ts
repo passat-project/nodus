@@ -14,6 +14,7 @@ describe('реестр навигации: вкладка «Права дост�
       'processes',
       'fields',
       'project-schemas',
+      'registries',
       'access',
     ]);
     const access = automation.tabs.at(-1)!;

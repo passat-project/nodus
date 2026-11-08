@@ -1,22 +1,15 @@
 import { useState } from 'react';
-import type {
-  CustomFieldModule,
-  ProcessCategory,
-  WorkflowDraftDocument,
-  WorkflowDraftTransition,
-} from '@nodus/contracts';
+import type { CustomFieldModule, ProcessCategory, WorkflowDraftTransition } from '@nodus/contracts';
 import { ui, windowFieldKeys } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
 import { Input } from '@nodus/ui/components/input';
-import { Eye, LayoutTemplate } from 'lucide-react';
+import { LayoutTemplate } from 'lucide-react';
 
-import { useCustomFieldDefinitions } from '../../../../../shared/custom-fields/queries.js';
 import { useRouteDocStore } from '../../../model/route-doc-store.js';
 import { sectionOf, setWindowEnabled, setWindowTitle } from '../../../model/transition-form.js';
 import { PanelAction, PanelField, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
 import { TransitionWindowBuilder } from '../window-builder/transition-window-builder.js';
-import { WindowPreview } from './window-preview.js';
 
 const l = ui.forms.locks;
 
@@ -30,14 +23,12 @@ const l = ui.forms.locks;
  */
 export function WindowSection({
   transition,
-  document: doc,
   scope,
   typeId,
   readOnly,
   category = 'task',
 }: {
   transition: WorkflowDraftTransition;
-  document: WorkflowDraftDocument;
   scope: CustomFieldModule;
   /** Тип процесса: в окно выбираются только его атрибуты (#432, Р8). */
   typeId?: string;
@@ -46,10 +37,8 @@ export function WindowSection({
   category?: ProcessCategory;
 }) {
   const form = transition.form;
-  const [previewOpen, setPreviewOpen] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
-  const { data: definitions } = useCustomFieldDefinitions(scope);
   const patch = (next: Partial<WorkflowDraftTransition['form']>) =>
     useRouteDocStore.getState().patchTransition(transition.id, { form: { ...form, ...next } });
   const fieldsSection = sectionOf(form, 'fields');
@@ -57,7 +46,9 @@ export function WindowSection({
   const lockCount = form.locks?.length ?? 0;
   const otherSections = form.sections
     .filter((section) => section.kind !== 'fields')
-    .map((section) => ui.automation.window.sections[section.kind]);
+    .map((section) =>
+      section.label?.trim() ? section.label : ui.automation.window.sections[section.kind],
+    );
 
   return (
     <>
@@ -93,16 +84,6 @@ export function WindowSection({
           <PanelAction icon={LayoutTemplate} onClick={() => setBuilderOpen(true)}>
             {readOnly ? ui.forms.builder.view : ui.forms.builder.edit}
           </PanelAction>
-          <PanelAction icon={Eye} onClick={() => setPreviewOpen(true)}>
-            {ui.automation.window.preview}
-          </PanelAction>
-          <WindowPreview
-            open={previewOpen}
-            transition={transition}
-            document={doc}
-            definitions={definitions ?? []}
-            onClose={() => setPreviewOpen(false)}
-          />
           <TransitionWindowBuilder
             open={builderOpen}
             transition={transition}

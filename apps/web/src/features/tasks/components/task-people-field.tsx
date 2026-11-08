@@ -1,9 +1,10 @@
 import { Plus, X } from 'lucide-react';
-import type { TaskDetail, TaskParticipantRole, UserRef } from '@nodus/contracts';
+import type { TaskDetail, TaskFieldLock, TaskParticipantRole, UserRef } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useAuthStore } from '../../../shared/auth-store.js';
+import { useFieldLock } from '../../../shared/forms/field-lock-ui.js';
 import { withoutPatronymic } from '../../../shared/lib/format.js';
 import { PeoplePicker } from '../../../shared/ui/people-picker.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
@@ -20,17 +21,30 @@ import {
  * права — `access.canManageParticipants`, наблюдатель может снять себя.
  * Сервер — истина прав; клиент только прячет недоступные кнопки.
  */
-export function TaskPeopleField({ task, role }: { task: TaskDetail; role: TaskParticipantRole }) {
+export function TaskPeopleField({
+  task,
+  role,
+  lock,
+}: {
+  task: TaskDetail;
+  role: TaskParticipantRole;
+  /** Замок участников (#496): без `canEdit` — только чтение, иначе причина. */
+  lock?: TaskFieldLock;
+}) {
   const meId = useAuthStore((s) => s.user?.id);
   const add = useAddTaskParticipant(task.id);
   const remove = useRemoveTaskParticipant(task.id);
   const people = role === 'coexecutor' ? task.participants : task.observers;
-  const canManage = task.access.canManageParticipants;
+  const { editable, request, dialog } = useFieldLock(lock);
+  const canManage = task.access.canManageParticipants && editable;
   const label = role === 'coexecutor' ? ui.tasks.participants : ui.tasks.watchers;
 
   function toggle(userId: string) {
-    if (people.some((p) => p.id === userId)) remove.mutate(userId);
-    else add.mutate({ userId, role });
+    const exists = people.some((p) => p.id === userId);
+    request((reason) => {
+      if (exists) remove.mutate({ userId, ...(reason ? { lockReason: reason } : {}) });
+      else add.mutate({ userId, role, ...(reason ? { lockReason: reason } : {}) });
+    });
   }
 
   return (
@@ -42,11 +56,15 @@ export function TaskPeopleField({ task, role }: { task: TaskDetail; role: TaskPa
           person={p}
           onRemove={
             canManage || (role === 'observer' && p.id === meId)
-              ? () => remove.mutate(p.id)
+              ? () =>
+                  request((reason) =>
+                    remove.mutate({ userId: p.id, ...(reason ? { lockReason: reason } : {}) }),
+                  )
               : undefined
           }
         />
       ))}
+      {dialog}
       {canManage ? (
         <PeoplePicker
           multiple
@@ -75,25 +93,40 @@ export function TaskPeopleField({ task, role }: { task: TaskDetail; role: TaskPa
 }
 
 /** Ответственный: имя — триггер смены (право `canEdit`). */
-export function TaskAssigneeField({ task }: { task: TaskDetail }) {
+export function TaskAssigneeField({
+  task,
+  lock,
+}: {
+  task: TaskDetail;
+  /** Замок ответственного (#496): причина правки или только чтение. */
+  lock?: TaskFieldLock;
+}) {
   const setAssignee = useSetTaskAssignee(task.id);
+  const { editable, request, dialog } = useFieldLock(lock);
   const current = task.assignee ? <PersonChip person={task.assignee} /> : ui.common.notSet;
-  if (!task.access.canEdit) return <>{current}</>;
+  if (!task.access.canEdit || !editable) return <>{current}</>;
   return (
-    <PeoplePicker
-      selectedIds={task.assignee ? [task.assignee.id] : []}
-      onToggle={(userId) => {
-        if (userId !== task.assignee?.id) setAssignee.mutate(userId);
-      }}
-      ariaLabel={ui.tasks.assignee}
-    >
-      <button
-        type="button"
-        className="-mx-1 flex h-6 min-w-0 items-center rounded-md px-1 text-left transition-colors hover:bg-accent"
+    <>
+      <PeoplePicker
+        selectedIds={task.assignee ? [task.assignee.id] : []}
+        onToggle={(userId) => {
+          if (userId !== task.assignee?.id) {
+            request((reason) =>
+              setAssignee.mutate({ assigneeId: userId, ...(reason ? { lockReason: reason } : {}) }),
+            );
+          }
+        }}
+        ariaLabel={ui.tasks.assignee}
       >
-        {current}
-      </button>
-    </PeoplePicker>
+        <button
+          type="button"
+          className="-mx-1 flex h-6 min-w-0 items-center rounded-md px-1 text-left transition-colors hover:bg-accent"
+        >
+          {current}
+        </button>
+      </PeoplePicker>
+      {dialog}
+    </>
   );
 }
 

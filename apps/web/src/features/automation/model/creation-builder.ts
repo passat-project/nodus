@@ -1,7 +1,18 @@
-import type { CreationFieldKey, CreationFieldSlot, CreationForm } from '@nodus/contracts';
-import { isFormDecor } from '@nodus/contracts';
+import type {
+  CreationChip,
+  CreationElement,
+  CreationFieldKey,
+  CreationFieldSlot,
+  CreationForm,
+} from '@nodus/contracts';
+import { creationChipSchema, isFormDecor } from '@nodus/contracts';
 
-import type { BuilderField, BuilderValue } from '../../../shared/forms/builder/builder-model.js';
+import type {
+  BuilderBlock,
+  BuilderField,
+  BuilderItem,
+  BuilderValue,
+} from '../../../shared/forms/builder/builder-model.js';
 
 /**
  * Окно создания ↔ редактор окна (#496): слоты и оформление — элементы
@@ -10,7 +21,26 @@ import type { BuilderField, BuilderValue } from '../../../shared/forms/builder/b
  * форма туда-обратно остаётся байт-в-байт (совместимость, I-C).
  */
 
-export type CreationExtra = Pick<CreationFieldSlot, 'required' | 'preset' | 'formula'>;
+export type CreationExtra = Pick<CreationFieldSlot, 'required' | 'preset'> &
+  Pick<CreationFieldSlot, 'formula'>;
+
+const CHIP_PREFIX = 'chip:';
+
+export function chipOfBlock(block: string): CreationChip | null {
+  if (!block.startsWith(CHIP_PREFIX)) return null;
+  const parsed = creationChipSchema.safeParse(block.slice(CHIP_PREFIX.length));
+  return parsed.success ? parsed.data : null;
+}
+
+export function creationBlock(chip: CreationChip): BuilderBlock<CreationExtra> {
+  return {
+    kind: 'block',
+    block: `${CHIP_PREFIX}${chip}`,
+    label: null,
+    hint: null,
+    extra: { required: false, preset: null },
+  };
+}
 
 export function creationField(key: string): BuilderField<CreationExtra> {
   return {
@@ -24,20 +54,21 @@ export function creationField(key: string): BuilderField<CreationExtra> {
 }
 
 export function creationToBuilder(form: CreationForm): BuilderValue<CreationExtra> {
+  const items: BuilderItem<CreationExtra>[] = form.fields.map((element) => {
+    if (isFormDecor(element)) return element;
+    const { key, label, required, preset, formula, hint, width, height } = element;
+    return {
+      kind: 'field',
+      key,
+      label,
+      hint: hint ?? null,
+      width: width ?? 'full',
+      ...(height ? { height } : {}),
+      extra: { required, preset, ...(formula !== undefined ? { formula } : {}) },
+    };
+  });
   return {
-    items: form.fields.map((element) => {
-      if (isFormDecor(element)) return element;
-      const { key, label, required, preset, formula, hint, width, height } = element;
-      return {
-        kind: 'field',
-        key,
-        label,
-        hint: hint ?? null,
-        width: width ?? 'full',
-        ...(height ? { height } : {}),
-        extra: { required, preset, ...(formula !== undefined ? { formula } : {}) },
-      };
-    }),
+    items: [...items, ...form.chips.map(creationBlock)],
     locks: form.locks ?? [],
   };
 }
@@ -60,11 +91,23 @@ export function creationFromBuilder(
   form: CreationForm,
   value: BuilderValue<CreationExtra>,
 ): CreationForm {
-  const { locks: _previous, ...rest } = form;
-  void _previous;
+  const { locks: _locks, titleFormula: _title, ...rest } = form;
+  void _locks;
+  void _title;
+  const fields: CreationElement[] = [];
+  const chips: CreationChip[] = [];
+  for (const item of value.items) {
+    if (isFormDecor(item)) fields.push(item);
+    else if (item.kind === 'field') fields.push(slotOf(item));
+    else {
+      const chip = chipOfBlock(item.block);
+      if (chip) chips.push(chip);
+    }
+  }
   return {
     ...rest,
-    fields: value.items.map((item) => (isFormDecor(item) ? item : slotOf(item))),
+    fields,
+    chips,
     ...(value.locks.length > 0 ? { locks: value.locks } : {}),
   };
 }

@@ -50,11 +50,9 @@ describe('окно кнопки в редакторе', () => {
     expect(transitionFormSchema.safeParse(next).success).toBe(true);
   });
 
-  it('без полей раздел «Поля» снимается, поле-раздел «Причина» остаётся', () => {
+  it('без полей раздел «Поля» снимается, блок «Причина» остаётся', () => {
     const value = {
-      items: transitionToBuilder(legacy).items.filter(
-        (item) => item.kind === 'field' && item.key.startsWith('section:'),
-      ),
+      items: transitionToBuilder(legacy).items.filter((item) => item.kind === 'block'),
       locks: [],
     };
     expect(transitionFromBuilder(legacy, value).sections).toEqual([

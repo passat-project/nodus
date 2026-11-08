@@ -93,16 +93,18 @@ export function FormFieldShell({
 }) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-1.5', formHeightClass(height))}>
-      <div className="flex min-w-0 items-center gap-1">
-        <NodeLabel label={label} className="min-w-0" />
-        {required ? (
-          <span aria-hidden className="text-label leading-none text-danger">
-            *
-          </span>
-        ) : null}
-        {required ? <span className="sr-only">{ui.taskCreate.requiredMark}</span> : null}
-        {notice ? <span className="ml-auto flex shrink-0 items-center">{notice}</span> : null}
-      </div>
+      {label || notice ? (
+        <div className="flex min-w-0 items-center gap-1">
+          {label ? <NodeLabel label={label} className="min-w-0" /> : null}
+          {required ? (
+            <span aria-hidden className="text-label leading-none text-danger">
+              *
+            </span>
+          ) : null}
+          {required ? <span className="sr-only">{ui.taskCreate.requiredMark}</span> : null}
+          {notice ? <span className="ml-auto flex shrink-0 items-center">{notice}</span> : null}
+        </div>
+      ) : null}
       <div className="min-w-0">{children}</div>
       {hint ? <p className="text-xs wrap-anywhere text-muted-foreground">{hint}</p> : null}
     </div>

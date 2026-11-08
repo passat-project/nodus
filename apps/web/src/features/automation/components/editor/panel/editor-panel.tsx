@@ -5,7 +5,7 @@ import type {
   WorkflowDetail,
   WorkflowStageName,
 } from '@nodus/contracts';
-import { effectiveCreationForm, ui, creationSlots } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 
 import { useRouteDocStore, type SelectionRef } from '../../../model/route-doc-store.js';
 import { CreationPanel } from './creation-panel.js';
@@ -86,48 +86,23 @@ export function EditorPanel({
     shown?.kind === 'transition' ? (doc.transitions.find((t) => t.id === shown.id) ?? null) : null;
   const creation = shown?.kind === 'creation';
   const open = selection !== null && (stage !== null || transition !== null || creation);
-  // Открыто поле окна создания, которое есть в форме ('*' и убранное — корень).
-  const field = shown?.kind === 'creation' ? shown.field : undefined;
-  const fieldOpen =
-    field !== undefined &&
-    creationSlots(effectiveCreationForm(doc.creation, type.category)).some(
-      (slot) => slot.key === field,
-    );
 
   const close = useCallback(() => useRouteDocStore.getState().select(null), []);
   const back = useCallback(() => setSection('root'), []);
-  const backToCreation = useCallback(
-    () => useRouteDocStore.getState().select({ kind: 'creation', id: 'creation' }),
-    [],
-  );
   const inSection = (stage !== null || transition !== null) && section !== 'root';
 
   // Шапка — вид элемента или раздел; название — первое поле панели.
   const title = inSection
     ? SECTION_TITLE[section as Exclude<PanelSection, 'root'>]
     : creation
-      ? fieldOpen
-        ? ui.automation.creation.slotTitle
-        : ui.automation.creation.title
+      ? ui.automation.creation.title
       : stage
         ? ui.automation.panel.kindStage
         : ui.automation.panel.kindTransition;
 
   return (
-    <SidePanel
-      open={open}
-      title={title}
-      onClose={close}
-      onBack={inSection ? back : fieldOpen ? backToCreation : undefined}
-    >
-      {creation ? (
-        <CreationPanel
-          workflow={workflow}
-          type={type}
-          readOnly={readOnly}
-          field={fieldOpen ? field : undefined}
-        />
-      ) : null}
+    <SidePanel open={open} title={title} onClose={close} onBack={inSection ? back : undefined}>
+      {creation ? <CreationPanel workflow={workflow} type={type} readOnly={readOnly} /> : null}
       {stage && section === 'root' ? (
         <StagePanel
           key={stage.id}
@@ -182,7 +157,6 @@ export function EditorPanel({
       {transition && section === 'window' ? (
         <WindowSection
           transition={transition}
-          document={doc}
           scope={scope}
           typeId={type.id}
           readOnly={readOnly}

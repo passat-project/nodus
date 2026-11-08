@@ -36,6 +36,8 @@ export const projectsStrings = {
   fieldClient: 'Заказчик',
   fieldVisibility: 'Видимость',
   fieldStatus: 'Статус',
+  /** Сводка раздела «Атрибуты» типа: полей нет — окно проекта минимально. */
+  formEmpty: 'Полей нет — окно проекта спрашивает только название и тип',
   manager: 'Руководитель проекта',
   assistants: 'Помощники',
   creator: 'Создатель',

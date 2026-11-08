@@ -1,4 +1,5 @@
 import type {
+  CustomFieldType,
   FormulaNode,
   TransitionFormSectionDraft,
   TransitionFormSectionKind,
@@ -6,9 +7,10 @@ import type {
   TransitionWindowFieldKey,
   WorkflowDraftTransition,
 } from '@nodus/contracts';
-import { TRANSITION_FORM_SECTION_ORDER, isFormDecor, windowItems } from '@nodus/contracts';
+import { isFormDecor, windowItems } from '@nodus/contracts';
 
 import type {
+  BuilderBlock,
   BuilderField,
   BuilderItem,
   BuilderValue,
@@ -17,49 +19,107 @@ import { defaultWindowSection, sectionOf } from './transition-form.js';
 import { setMinFiles, toggleValidator, validatorOf } from './transition-rules.js';
 
 /**
- * Окно кнопки ↔ редактор окна (#496, Р3; вердикт владельца — единый путь):
- * поля раздела «Поля» и разделы окна (трудозатраты, итог, файлы, сообщения,
- * причина, регистрация) — ОБЫЧНЫЕ поля редактора: добавляются через «+»,
- * убираются, настраиваются в настройках поля. Поле без своей раскладки
- * пишется строкой-ключом, как раньше: старое окно туда-обратно не меняется
- * (I-C). Разделы у сотрудника идут после полей в каноне порядка.
+ * Окно кнопки ↔ редактор окна (#496, единое ядро). Поля раздела «Поля» —
+ * обычные поля редактора; трудозатраты, итог, файлы, сообщения, причина и
+ * регистрация — обычные БЛОКИ редактора: та же подпись, подсказка, настройки
+ * и место. Поле без своей раскладки пишется строкой-ключом, как раньше:
+ * старое окно туда-обратно не меняется (I-C).
  */
 
 type Form = WorkflowDraftTransition['form'];
 type Rules = WorkflowDraftTransition['rules'];
 
-const SECTION_PREFIX = 'section:';
+/** Тип стандартного поля окна — результат формулы обязан подходить (Р12). */
+export const WINDOW_SLOT_TYPES: Readonly<Record<string, CustomFieldType>> = {
+  description: 'long_text',
+  deadline: 'datetime',
+  assignee: 'user',
+  plannedMinutes: 'number',
+};
 
-export function sectionKey(kind: TransitionFormSectionKind): string {
-  return `${SECTION_PREFIX}${kind}`;
-}
-
-export function sectionKindOf(key: string): TransitionFormSectionKind | null {
-  return key.startsWith(SECTION_PREFIX)
-    ? (key.slice(SECTION_PREFIX.length) as TransitionFormSectionKind)
-    : null;
-}
-
+/** Своё поля и блока: у поля — формула, у блока — параметры его раздела. */
 export interface TransitionExtra {
   formula?: FormulaNode;
-  /** Раздел окна (у поля-раздела): его настройки. */
-  section?: TransitionFormSectionDraft;
+  mode?: 'if_empty' | 'always';
   /** «Обязательно» у трудозатрат и итога — гейт кнопки (Р3). */
   gate?: boolean;
   /** Минимум файлов итога — гейт `result_files`. */
   minFiles?: number;
+  /** Обязательность раздела с собственным флагом (сообщения, причина). */
+  required?: boolean;
 }
 
 export function transitionField(key: string): BuilderField<TransitionExtra> {
-  const kind = sectionKindOf(key);
   return {
     kind: 'field',
     key,
     label: null,
     hint: null,
     width: 'full',
-    extra: kind ? { section: defaultWindowSection(kind) } : {},
+    extra: {},
   };
+}
+
+/** Блок окна по умолчанию: те же значения, что у прежнего раздела. */
+export function transitionBlock(kind: TransitionFormSectionKind): BuilderBlock<TransitionExtra> {
+  return {
+    kind: 'block',
+    block: kind,
+    label: null,
+    hint: null,
+    extra: blockExtra(defaultWindowSection(kind)),
+  };
+}
+
+function blockExtra(section: TransitionFormSectionDraft): TransitionExtra {
+  switch (section.kind) {
+    case 'time':
+      return { mode: section.mode };
+    case 'result_files':
+      return { minFiles: 0 };
+    case 'result_messages':
+    case 'comment':
+      return { required: section.required };
+    default:
+      return {};
+  }
+}
+
+function sectionOfBlock(block: BuilderBlock<TransitionExtra>): TransitionFormSectionDraft {
+  const kind = block.block as TransitionFormSectionKind;
+  const base = defaultWindowSection(kind);
+  const label = block.label ?? undefined;
+  const hint = block.hint ?? undefined;
+  switch (base.kind) {
+    case 'time':
+      return {
+        kind: 'time',
+        mode: block.extra.mode ?? base.mode,
+        ...(label ? { label } : {}),
+        ...(hint ? { hint } : {}),
+      };
+    case 'result':
+    case 'registration':
+      return { kind: base.kind, ...(label ? { label } : {}), ...(hint ? { hint } : {}) };
+    case 'result_files':
+      return { kind: 'result_files', ...(label ? { label } : {}), ...(hint ? { hint } : {}) };
+    case 'result_messages':
+      return {
+        kind: 'result_messages',
+        required: block.extra.required ?? false,
+        ...(label ? { label } : {}),
+        ...(hint ? { hint } : {}),
+      };
+    case 'comment':
+      return {
+        kind: 'comment',
+        required: block.extra.required ?? base.required,
+        ...(label ? { label } : {}),
+        ...(hint ? { hint } : {}),
+      };
+    case 'fields':
+      return base;
+  }
 }
 
 export function transitionToBuilder(form: Form, rules?: Rules): BuilderValue<TransitionExtra> {
@@ -80,16 +140,15 @@ export function transitionToBuilder(form: Form, rules?: Rules): BuilderValue<Tra
         };
       })
     : [];
-  const sections = form.sections
+  const blocks = form.sections
     .filter((entry) => entry.kind !== 'fields')
-    .map((entry): BuilderField<TransitionExtra> => ({
-      kind: 'field',
-      key: sectionKey(entry.kind),
-      label: null,
-      hint: null,
-      width: 'full',
+    .map((entry): BuilderBlock<TransitionExtra> => ({
+      kind: 'block',
+      block: entry.kind,
+      label: entry.label ?? null,
+      hint: entry.hint ?? null,
       extra: {
-        section: entry,
+        ...blockExtra(entry),
         ...(entry.kind === 'time' && rules ? { gate: !!validatorOf(rules, 'time_logged') } : {}),
         ...(entry.kind === 'result' && rules
           ? { gate: !!validatorOf(rules, 'result_present') }
@@ -99,7 +158,7 @@ export function transitionToBuilder(form: Form, rules?: Rules): BuilderValue<Tra
           : {}),
       },
     }));
-  return { items: [...fields, ...sections], locks: form.locks ?? [] };
+  return { items: [...fields, ...blocks], locks: form.locks ?? [] };
 }
 
 function elementOf(field: BuilderField<TransitionExtra>): TransitionWindowElement {
@@ -116,60 +175,65 @@ function elementOf(field: BuilderField<TransitionExtra>): TransitionWindowElemen
   };
 }
 
-const isSection = (item: BuilderItem<TransitionExtra>): item is BuilderField<TransitionExtra> =>
-  !isFormDecor(item) && sectionKindOf(item.key) !== null;
-
 export function transitionFromBuilder(form: Form, value: BuilderValue<TransitionExtra>): Form {
-  const windowElements = value.items.filter((item) => !isSection(item));
-  const fields = windowElements.filter(
-    (item) => !isFormDecor(item),
-  ) as BuilderField<TransitionExtra>[];
-  const formulas = Object.fromEntries(
-    fields.flatMap((field) => (field.extra.formula ? [[field.key, field.extra.formula]] : [])),
-  ) as Record<string, FormulaNode>;
-  const sections: TransitionFormSectionDraft[] = value.items
-    .filter(isSection)
-    .map((item) => item.extra.section ?? defaultWindowSection(sectionKindOf(item.key)!));
-  if (fields.length > 0) {
-    sections.push({
-      kind: 'fields',
-      fields: windowElements.map((item) => (isFormDecor(item) ? item : elementOf(item))),
-      ...(Object.keys(formulas).length > 0 ? { formulas } : {}),
-    });
+  const fieldElements: TransitionWindowElement[] = [];
+  const blocks: BuilderBlock<TransitionExtra>[] = [];
+  for (const item of value.items) {
+    if (isFormDecor(item)) {
+      if (blocks.length === 0) fieldElements.push(item);
+      continue;
+    }
+    if (item.kind === 'block') {
+      blocks.push(item);
+      continue;
+    }
+    if (blocks.length === 0) fieldElements.push(elementOf(item));
   }
-  sections.sort(
-    (a, b) =>
-      TRANSITION_FORM_SECTION_ORDER.indexOf(a.kind) - TRANSITION_FORM_SECTION_ORDER.indexOf(b.kind),
-  );
+  const formulas = Object.fromEntries(
+    value.items.flatMap((item) =>
+      item.kind === 'field' && item.extra.formula ? [[item.key, item.extra.formula]] : [],
+    ),
+  ) as Record<string, FormulaNode>;
+  const sections: TransitionFormSectionDraft[] = [
+    ...(fieldElements.length > 0
+      ? [
+          {
+            kind: 'fields' as const,
+            fields: fieldElements,
+            ...(Object.keys(formulas).length > 0 ? { formulas } : {}),
+          },
+        ]
+      : []),
+    ...blocks.map(sectionOfBlock),
+  ];
   const { locks: _previous, ...rest } = form;
   void _previous;
   return { ...rest, sections, ...(value.locks.length > 0 ? { locks: value.locks } : {}) };
 }
 
-/** Гейты разделов (Р3) по итогам редактора: «Обязательно» у трудозатрат и
- *  итога, минимум файлов. Гейт без раздела, поставленный в «Условиях
- *  перехода», не трогается — только разделы, бывшие или ставшие в окне. */
+/** Гейты блоков (Р3) по итогам редактора: «Обязательно» у трудозатрат и
+ *  итога, минимум файлов. Гейт без блока, поставленный в «Условиях
+ *  перехода», не трогается — только блоки, бывшие или ставшие в окне. */
 export function rulesFromBuilder(
   rules: Rules,
   before: BuilderValue<TransitionExtra>,
   after: BuilderValue<TransitionExtra>,
 ): Rules {
-  const itemOf = (value: BuilderValue<TransitionExtra>, kind: TransitionFormSectionKind) =>
+  const blockOf = (value: BuilderValue<TransitionExtra>, kind: TransitionFormSectionKind) =>
     value.items.find(
-      (item): item is BuilderField<TransitionExtra> =>
-        !isFormDecor(item) && item.key === sectionKey(kind),
+      (item): item is BuilderBlock<TransitionExtra> => item.kind === 'block' && item.block === kind,
     );
   let next = rules;
   for (const [gate, kind] of [
     ['time_logged', 'time'],
     ['result_present', 'result'],
   ] as const) {
-    if (!itemOf(before, kind) && !itemOf(after, kind)) continue;
-    const want = itemOf(after, kind)?.extra.gate === true;
+    if (!blockOf(before, kind) && !blockOf(after, kind)) continue;
+    const want = blockOf(after, kind)?.extra.gate === true;
     if ((validatorOf(next, gate) !== undefined) !== want) next = toggleValidator(next, gate);
   }
-  if (itemOf(before, 'result_files') || itemOf(after, 'result_files')) {
-    next = setMinFiles(next, itemOf(after, 'result_files')?.extra.minFiles ?? 0);
+  if (blockOf(before, 'result_files') || blockOf(after, 'result_files')) {
+    next = setMinFiles(next, blockOf(after, 'result_files')?.extra.minFiles ?? 0);
   }
   return next;
 }
