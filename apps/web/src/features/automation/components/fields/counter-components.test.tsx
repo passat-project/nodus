@@ -40,8 +40,8 @@ describe('счётчик: чистые компоненты окна прави�
         nodeKinds={[{ id: 'kind-1', name: 'Комплект' }]}
         names={names}
         hostKinds={['task']}
-        fields={[{ number: 7, name: 'Инв. №' }]}
-        fieldGroups={[{ source: 'self', label: 'Запись', fields: [{ number: 7, name: 'Инв. №' }] }]}
+        fields={[]}
+        fieldGroups={[{ source: 'self', fields: [] }]}
         recipients={<p>Кто получает</p>}
         coverage={<p>Охват</p>}
         disabled={false}
@@ -89,7 +89,7 @@ describe('счётчик: чистые компоненты окна прави�
         containers={[{ kind: 'folder', nodeKindId: 'kind-1' }]}
         hostKinds={['task']}
         nodeKinds={[{ id: 'kind-1', name: 'Комплект' }]}
-        fields={[{ number: 7, name: 'Инв. №' }]}
+        fields={[]}
         names={names}
         disabled={false}
         onChange={onChange}
@@ -130,9 +130,7 @@ describe('счётчик: чистые компоненты окна прави�
         />
         <CounterInsertPalette
           template={rule.template}
-          fieldGroups={[
-            { source: 'self', label: 'Запись', fields: [{ number: 7, name: 'Инв. №' }] },
-          ]}
+          fieldGroups={[{ source: 'self', fields: [] }]}
           disabled={false}
           onChange={onChange}
         />
@@ -157,7 +155,6 @@ describe('счётчик: чистые компоненты окна прави�
               processTypeId: 'type-1',
               transitionId: 't-1',
               transitionName: 'Выдать в печать',
-              fieldId: 'f-1',
             },
           ]}
           disabled={false}
