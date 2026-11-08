@@ -32,6 +32,8 @@ import {
   slotLabel,
   typeConfigOf,
   ui,
+  creationSlots,
+  isCreationSlot,
 } from '@nodus/contracts';
 import { Eye } from 'lucide-react';
 
@@ -94,6 +96,7 @@ export function CreationPanel({
   // Определения уже отфильтрованы по модулю запросом (`?module=`).
   const scoped = useMemo(() => definitions ?? [], [definitions]);
   const form = effectiveCreationForm(doc.creation, type.category);
+  const slots = creationSlots(form);
   // `workflow.version` — подсказки пересчитываются после публикации.
   const problems = useMemo(
     () => creationProblems(doc, scoped, type, workflow.version),
@@ -128,7 +131,7 @@ export function CreationPanel({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const opened = field ? form.fields.find((slot) => slot.key === field) : undefined;
+  const opened = field ? slots.find((slot) => slot.key === field) : undefined;
   if (opened) {
     return (
       <CreationSlotSection
@@ -152,12 +155,12 @@ export function CreationPanel({
 
   function onDragEnd({ active, over }: DragEndEvent) {
     if (!over || active.id === over.id) return;
-    const from = form.fields.findIndex((slot) => slot.key === active.id);
-    const to = form.fields.findIndex((slot) => slot.key === over.id);
+    const from = form.fields.findIndex((slot) => isCreationSlot(slot) && slot.key === active.id);
+    const to = form.fields.findIndex((slot) => isCreationSlot(slot) && slot.key === over.id);
     if (from >= 0 && to >= 0) update(withSlotMoved(form, from, to));
   }
 
-  const full = form.fields.length >= CREATION_FORM_LIMITS.fields;
+  const full = slots.length >= CREATION_FORM_LIMITS.fields;
 
   return (
     <>
@@ -166,16 +169,16 @@ export function CreationPanel({
       ) : null}
 
       <PanelField label={c.fieldsTitle}>
-        {form.fields.length === 0 ? (
+        {slots.length === 0 ? (
           <p className="py-1 text-xs text-muted-foreground">{c.empty}</p>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
             <SortableContext
-              items={form.fields.map((slot) => slot.key)}
+              items={slots.map((slot) => slot.key)}
               strategy={verticalListSortingStrategy}
             >
               <div className="flex min-w-0 flex-col">
-                {form.fields.map((slot) => {
+                {slots.map((slot) => {
                   const first = problemsOf(slot.key)[0];
                   return (
                     <CreationSlotRow

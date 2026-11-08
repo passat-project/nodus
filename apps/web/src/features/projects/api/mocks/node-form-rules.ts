@@ -11,6 +11,7 @@ import {
   missingNodeFields,
   nodeFormKey,
   requiredNodeFields,
+  formSlots,
 } from '@nodus/contracts';
 
 import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
@@ -142,7 +143,7 @@ export function kindFormIssues(
 ): { fieldId: string; reason: 'unknown_field' | 'not_bindable' }[] {
   const byId = new Map(demoCustomFieldDefinitions.map((definition) => [definition.id, definition]));
   const issues: { fieldId: string; reason: 'unknown_field' | 'not_bindable' }[] = [];
-  for (const slot of form.fields) {
+  for (const slot of formSlots(form)) {
     const definition = byId.get(slot.fieldId);
     if (!definition) issues.push({ fieldId: slot.fieldId, reason: 'unknown_field' });
     else if (definition.isCompany) issues.push({ fieldId: slot.fieldId, reason: 'not_bindable' });

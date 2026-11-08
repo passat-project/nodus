@@ -5,7 +5,7 @@ import type {
   TransitionWindowFieldKey,
   WorkflowDraftTransition,
 } from '@nodus/contracts';
-import { customFieldIdOfKey, ui } from '@nodus/contracts';
+import { customFieldIdOfKey, ui, windowFieldKeys } from '@nodus/contracts';
 
 import { TypeFormulaControl } from '../../../../../shared/custom-fields/formula/type-formula-control.js';
 import { sectionOf } from '../../../model/transition-form.js';
@@ -37,7 +37,7 @@ export function WindowFieldFormulas({
   ) => void;
 }) {
   const section = sectionOf(form, 'fields');
-  const fields = section?.fields ?? [];
+  const fields = section ? windowFieldKeys(section) : [];
   if (fields.length === 0) return null;
   return (
     <div className="flex flex-col gap-2 border-t border-border pt-2">

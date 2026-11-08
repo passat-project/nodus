@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import { useState } from 'react';
 import type { NodeKind, NodeKindFieldState, NodeKindForm } from '@nodus/contracts';
-import { nodeKindFormOf, ui } from '@nodus/contracts';
+import { nodeKindFormOf, ui, formSlots, isFieldFormSlot } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 
 import { CustomFieldTypeIcon } from '../../../../shared/custom-fields/field-type-icon.js';
@@ -43,26 +43,31 @@ export function NodeKindFormSection({
   function setState(fieldId: string, state: NodeKindFieldState) {
     save({
       ...form,
-      fields: form.fields.map((slot) => (slot.fieldId === fieldId ? { ...slot, state } : slot)),
+      fields: form.fields.map((slot) =>
+        isFieldFormSlot(slot) && slot.fieldId === fieldId ? { ...slot, state } : slot,
+      ),
     });
   }
 
   function remove(fieldId: string) {
-    save({ ...form, fields: form.fields.filter((slot) => slot.fieldId !== fieldId) });
+    save({
+      ...form,
+      fields: form.fields.filter((slot) => !isFieldFormSlot(slot) || slot.fieldId !== fieldId),
+    });
   }
 
   function add(fieldId: string) {
-    if (form.fields.some((slot) => slot.fieldId === fieldId)) return;
+    if (formSlots(form).some((slot) => slot.fieldId === fieldId)) return;
     save({ ...form, fields: [...form.fields, { fieldId, state: 'optional' }] });
   }
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      {form.fields.length === 0 ? (
+      {formSlots(form).length === 0 ? (
         <p className="text-xs break-words text-muted-foreground">{ui.nodeKinds.form.empty}</p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {form.fields.map((slot) => {
+          {formSlots(form).map((slot) => {
             const definition = byId.get(slot.fieldId);
             return (
               <li

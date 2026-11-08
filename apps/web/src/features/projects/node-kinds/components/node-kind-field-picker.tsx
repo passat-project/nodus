@@ -1,7 +1,7 @@
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import type { NodeKind } from '@nodus/contracts';
-import { nodeKindFormOf, ui } from '@nodus/contracts';
+import { nodeKindFormOf, ui, formSlots } from '@nodus/contracts';
 import { Popover, PopoverContent, PopoverTrigger } from '@nodus/ui/components/popover';
 
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
@@ -30,7 +30,7 @@ export function NodeKindFieldPicker({
 }) {
   const [open, setOpen] = useState(false);
   const query = useCustomFieldDefinitions();
-  const inForm = new Set(nodeKindFormOf(kind).fields.map((slot) => slot.fieldId));
+  const inForm = new Set(formSlots(nodeKindFormOf(kind)).map((slot) => slot.fieldId));
   const options = (query.data ?? []).filter(
     (definition) => !definition.isCompany && !inForm.has(definition.id),
   );

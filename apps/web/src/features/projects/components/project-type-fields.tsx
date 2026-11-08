@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import type { FieldFormState, ProjectType, ProjectTypeForm } from '@nodus/contracts';
-import { projectTypeFormOf, ui } from '@nodus/contracts';
+import { projectTypeFormOf, ui, formSlots, isFieldFormSlot } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 
 import { CustomFieldTypeIcon } from '../../../shared/custom-fields/field-type-icon.js';
@@ -45,28 +45,33 @@ export function ProjectTypeFieldsSection({
   function setState(fieldId: string, state: FieldFormState) {
     save({
       ...form,
-      fields: form.fields.map((slot) => (slot.fieldId === fieldId ? { ...slot, state } : slot)),
+      fields: form.fields.map((slot) =>
+        isFieldFormSlot(slot) && slot.fieldId === fieldId ? { ...slot, state } : slot,
+      ),
     });
   }
 
   function remove(fieldId: string) {
-    save({ ...form, fields: form.fields.filter((slot) => slot.fieldId !== fieldId) });
+    save({
+      ...form,
+      fields: form.fields.filter((slot) => !isFieldFormSlot(slot) || slot.fieldId !== fieldId),
+    });
   }
 
   function add(fieldId: string) {
-    if (form.fields.some((slot) => slot.fieldId === fieldId)) return;
+    if (formSlots(form).some((slot) => slot.fieldId === fieldId)) return;
     save({ ...form, fields: [...form.fields, { fieldId, state: 'optional' }] });
   }
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      {form.fields.length === 0 ? (
+      {formSlots(form).length === 0 ? (
         <p className="text-xs break-words text-muted-foreground">
           {ui.customFields.typeForm.empty}
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {form.fields.map((slot) => {
+          {formSlots(form).map((slot) => {
             const definition = byId.get(slot.fieldId);
             return (
               <li
@@ -115,7 +120,7 @@ export function ProjectTypeFieldsSection({
 
       {canSetup ? (
         <ProjectTypeFieldPicker
-          inForm={new Set(form.fields.map((slot) => slot.fieldId))}
+          inForm={new Set(formSlots(form).map((slot) => slot.fieldId))}
           disabled={!canSetup}
           canCreateField={canCreateField}
           onPick={add}

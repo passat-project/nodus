@@ -14,6 +14,7 @@ import {
   missingCreateFields,
   requiredCreateKeys,
   typeAccessFor,
+  creationSlots,
 } from '@nodus/contracts';
 
 import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
@@ -101,7 +102,7 @@ function unboundIssues(
 /** Пресет сотрудника/списка сотрудников должен ссылаться на живых (Р4). */
 function invalidPresetKeys(form: CreationForm): string[] {
   const invalid: string[] = [];
-  for (const slot of form.fields) {
+  for (const slot of creationSlots(form)) {
     if (slot.preset === null) continue;
     const ids =
       slot.key === 'assignee'

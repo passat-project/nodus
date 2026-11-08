@@ -6,7 +6,7 @@ import type {
   ProcessType,
   RoleLabels,
 } from '@nodus/contracts';
-import { customFieldIdOfKey, slotLabel, typeConfigOf, ui } from '@nodus/contracts';
+import { customFieldIdOfKey, slotLabel, typeConfigOf, ui, creationSlots } from '@nodus/contracts';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { cn } from '@nodus/ui/lib/utils';
 
@@ -41,7 +41,7 @@ export function TaskCreateFormBody({
     () => new Map(definitions.map((definition) => [definition.id, definition])),
     [definitions],
   );
-  const visible = form.fields.filter((slot) => slot.preset === null);
+  const visible = creationSlots(form).filter((slot) => slot.preset === null);
 
   if (visible.length === 0) {
     return <p className="text-sm text-muted-foreground">{ui.taskCreate.noFields}</p>;

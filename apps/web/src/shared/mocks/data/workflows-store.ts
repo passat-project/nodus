@@ -1,5 +1,5 @@
 import type { WorkflowDetail } from '@nodus/contracts';
-import { customFieldKey } from '@nodus/contracts';
+import { customFieldKey, windowFieldKeys } from '@nodus/contracts';
 
 import { demoProcessTypes, demoWorkflowDetails } from './workflows.js';
 
@@ -45,7 +45,7 @@ export function workflowsUsingField(fieldId: string): { id: string; name: string
     const used = detail.document.transitions.some(
       (t) =>
         (t.form.enabled &&
-          t.form.sections.some((s) => s.kind === 'fields' && s.fields.includes(key))) ||
+          t.form.sections.some((s) => s.kind === 'fields' && windowFieldKeys(s).includes(key))) ||
         t.rules.validators.some((v) => v.kind === 'fields_required' && v.fields.includes(key)) ||
         t.rules.conditions.some(
           (c) => c.kind === 'decider_in' && c.source.kind === 'field' && c.source.field === key,

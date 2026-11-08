@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CreationForm } from '@nodus/contracts';
+import { creationSlots } from '@nodus/contracts';
 
 import {
   hasSlot,
@@ -28,7 +29,7 @@ const base = (): CreationForm => ({
 describe('слоты формы', () => {
   it('добавление в конец; дубль не добавляется', () => {
     const form = withSlotAdded(base(), KEY);
-    expect(form.fields.map((s) => s.key)).toEqual(['description', 'assignee', KEY]);
+    expect(creationSlots(form).map((s) => s.key)).toEqual(['description', 'assignee', KEY]);
     expect(withSlotAdded(form, KEY)).toBe(form);
   });
 
@@ -47,23 +48,23 @@ describe('слоты формы', () => {
 
   it('подпись: пустая строка — стандартное название (null)', () => {
     const form = withSlotPatched(base(), 'description', { label: 'Причина' });
-    expect(form.fields[0]!.label).toBe('Причина');
+    expect(creationSlots(form)[0]!.label).toBe('Причина');
     const cleared = withSlotPatched(form, 'description', { label: '   ' });
-    expect(cleared.fields[0]!.label).toBeNull();
+    expect(creationSlots(cleared)[0]!.label).toBeNull();
   });
 
   it('скрытое значение снимает обязательность, обязательность снимает пресет', () => {
     const required = withSlotPatched(base(), 'description', { required: true });
     const hidden = withSlotPatched(required, 'description', { preset: 'Причина' });
-    expect(hidden.fields[0]).toMatchObject({ required: false, preset: 'Причина' });
+    expect(creationSlots(hidden)[0]).toMatchObject({ required: false, preset: 'Причина' });
     const back = withSlotPatched(hidden, 'description', { required: true });
-    expect(back.fields[0]!.required).toBe(true);
+    expect(creationSlots(back)[0]!.required).toBe(true);
   });
 
   it('удаление и перестановка', () => {
     const form = withSlotRemoved(base(), 'description');
-    expect(form.fields.map((s) => s.key)).toEqual(['assignee']);
-    expect(withSlotMoved(base(), 1, 0).fields.map((s) => s.key)).toEqual([
+    expect(creationSlots(form).map((s) => s.key)).toEqual(['assignee']);
+    expect(creationSlots(withSlotMoved(base(), 1, 0)).map((s) => s.key)).toEqual([
       'assignee',
       'description',
     ]);

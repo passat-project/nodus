@@ -5,7 +5,7 @@ import type {
   WorkflowDetail,
   WorkflowStageName,
 } from '@nodus/contracts';
-import { effectiveCreationForm, ui } from '@nodus/contracts';
+import { effectiveCreationForm, ui, creationSlots } from '@nodus/contracts';
 
 import { useRouteDocStore, type SelectionRef } from '../../../model/route-doc-store.js';
 import { CreationPanel } from './creation-panel.js';
@@ -90,7 +90,9 @@ export function EditorPanel({
   const field = shown?.kind === 'creation' ? shown.field : undefined;
   const fieldOpen =
     field !== undefined &&
-    effectiveCreationForm(doc.creation, type.category).fields.some((slot) => slot.key === field);
+    creationSlots(effectiveCreationForm(doc.creation, type.category)).some(
+      (slot) => slot.key === field,
+    );
 
   const close = useCallback(() => useRouteDocStore.getState().select(null), []);
   const back = useCallback(() => setSection('root'), []);

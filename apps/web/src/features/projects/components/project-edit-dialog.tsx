@@ -16,6 +16,7 @@ import {
   SYSTEM_FIELD_IDS,
   ui,
   updateProjectBodySchema,
+  formSlots,
 } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
@@ -129,7 +130,7 @@ export function ProjectEditDialog({
     }
     // Заказчик виден строке журнала: ссылку обновляем, только если поле
     // вообще есть в форме типа (нет — не трогаем витрину).
-    const clientShown = form.fields.some(
+    const clientShown = formSlots(form).some(
       (slot) => slot.fieldId === SYSTEM_FIELD_IDS.projectClient && slot.state !== 'hidden',
     );
     update.mutate(

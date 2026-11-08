@@ -176,6 +176,7 @@ export function taskDetailOf(task: TaskListItem): TaskDetail {
     completedAt: closed ? task.updatedAt : null,
     // Состав карточки по типу (#432): блоки, названия ролей, обязательные поля.
     layout: layoutOf(task),
+    fieldLocks: [],
     // Мок-мир: демо-пользователь — полный доступ (права проверяет бэкенд, #37).
     access: {
       canEdit: true,

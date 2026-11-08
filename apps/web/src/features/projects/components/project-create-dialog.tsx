@@ -16,6 +16,7 @@ import {
   missingProjectFields,
   SYSTEM_FIELD_IDS,
   ui,
+  formSlots,
 } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
@@ -129,7 +130,7 @@ export function ProjectCreateDialog({
     setError(null);
     // В тело идут только значения слотов выбранного типа: пережитки смены
     // типа сервер режет как «не привязан к типу» (422 not_in_type).
-    const formIds = new Set(form.fields.map((slot) => slot.fieldId));
+    const formIds = new Set(formSlots(form).map((slot) => slot.fieldId));
     const customFields = Object.fromEntries(
       Object.entries(values).filter(([fieldId]) => formIds.has(fieldId)),
     );

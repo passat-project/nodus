@@ -5,7 +5,7 @@ import type {
   CustomFieldValues,
   ProjectType,
 } from '@nodus/contracts';
-import { projectTypeFormOf, ui } from '@nodus/contracts';
+import { projectTypeFormOf, ui, formSlots } from '@nodus/contracts';
 
 import { CustomFieldTypeIcon } from '../../../shared/custom-fields/field-type-icon.js';
 import { definitionsForTarget } from '../../../shared/custom-fields/module-target.js';
@@ -49,7 +49,7 @@ export function ProjectAttributeRows({
   const form = projectTypeFormOf(type ?? {});
   const definitions = definitionsForTarget(query.data, 'project', type?.id);
   const byId = new Map(definitions.map((definition) => [definition.id, definition]));
-  const slots = form.fields.flatMap((slot) => {
+  const slots = formSlots(form).flatMap((slot) => {
     if (slot.state === 'hidden') return [];
     const definition = byId.get(slot.fieldId);
     return definition ? [{ slot, definition }] : [];

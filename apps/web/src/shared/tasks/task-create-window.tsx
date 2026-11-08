@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { CreationForm, ProcessType } from '@nodus/contracts';
-import { typeConfigOf, typeCreationFormOf, ui } from '@nodus/contracts';
+import { typeConfigOf, typeCreationFormOf, ui, creationSlots } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
 import { Input } from '@nodus/ui/components/input';
@@ -122,7 +122,7 @@ export function TaskCreateWindow({
   // Префилл формульных слотов (#632, Р12): считается при открытии и смене
   // места (проект/папка/родитель); значение остаётся редактируемым.
   const formulaPrefill = useCreationFormulaPrefill({
-    slots: form.fields,
+    slots: creationSlots(form),
     hostKind: shownType?.category === 'letter' ? 'letter' : 'task',
     projectId: projectId ?? null,
     nodeId: draft.nodeId,

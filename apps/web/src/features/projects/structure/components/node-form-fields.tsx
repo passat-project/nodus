@@ -7,7 +7,7 @@ import type {
   NodeKind,
   NodeKindFormField,
 } from '@nodus/contracts';
-import { effectiveNodeForm, isCustomFieldValueFilled, ui } from '@nodus/contracts';
+import { effectiveNodeForm, isCustomFieldValueFilled, ui, formSlots } from '@nodus/contracts';
 
 import { CustomFieldTypeIcon } from '../../../../shared/custom-fields/field-type-icon.js';
 import { FormulaCell } from '../../../../shared/custom-fields/formula/formula-cell.js';
@@ -29,7 +29,7 @@ function slotDefinitions(
   definitions: readonly CustomFieldDefinition[],
 ): { slot: NodeKindFormField; definition: CustomFieldDefinition }[] {
   const byId = new Map(definitions.map((definition) => [definition.id, definition]));
-  return effectiveNodeForm(kind, definitions).fields.flatMap((slot) => {
+  return formSlots(effectiveNodeForm(kind, definitions)).flatMap((slot) => {
     const definition = byId.get(slot.fieldId);
     return definition ? [{ slot, definition }] : [];
   });

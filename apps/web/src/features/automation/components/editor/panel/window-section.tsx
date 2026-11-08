@@ -5,7 +5,12 @@ import type {
   WorkflowDraftDocument,
   WorkflowDraftTransition,
 } from '@nodus/contracts';
-import { CUSTOM_FIELD_LIMITS, WORKFLOW_SECTIONS_BY_CATEGORY, ui } from '@nodus/contracts';
+import {
+  CUSTOM_FIELD_LIMITS,
+  WORKFLOW_SECTIONS_BY_CATEGORY,
+  ui,
+  windowFieldKeys,
+} from '@nodus/contracts';
 import { Checkbox } from '@nodus/ui/components/checkbox';
 import { Input } from '@nodus/ui/components/input';
 import { Eye } from 'lucide-react';
@@ -114,12 +119,13 @@ export function WindowSection({
               <div className="flex flex-col gap-1.5">
                 {WINDOW_FIELDS.map((field) => {
                   const section = sectionOf(form, 'fields');
-                  const checked = section?.fields.includes(field) ?? false;
+                  const keys = section ? windowFieldKeys(section) : [];
+                  const checked = keys.includes(field);
                   return (
                     <label key={field} className="flex items-center gap-2 text-sm">
                       <Checkbox
                         checked={checked}
-                        disabled={readOnly || (checked && (section?.fields.length ?? 0) === 1)}
+                        disabled={readOnly || (checked && keys.length === 1)}
                         onCheckedChange={() => patch(toggleWindowField(form, field))}
                       />
                       {ui.automation.requirableFields[field]}
@@ -129,7 +135,7 @@ export function WindowSection({
                 <CustomFieldChecks
                   scope={scope}
                   typeId={typeId}
-                  selected={sectionOf(form, 'fields')?.fields ?? []}
+                  selected={fieldKeysOf(form)}
                   disabled={readOnly}
                   limit={CUSTOM_FIELD_LIMITS.windowFields}
                   onToggle={(key) => patch(toggleWindowField(form, key))}
@@ -282,4 +288,10 @@ export function WindowSection({
       ) : null}
     </>
   );
+}
+
+/** Ключи полей окна без оформления (#496). */
+function fieldKeysOf(form: WorkflowDraftTransition['form']) {
+  const section = sectionOf(form, 'fields');
+  return section ? windowFieldKeys(section) : [];
 }

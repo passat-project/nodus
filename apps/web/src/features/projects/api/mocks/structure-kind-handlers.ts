@@ -6,6 +6,7 @@ import {
   nodeKindUpdateBodySchema,
   normalizeNodeKindCapabilities,
   type NodeKind,
+  formSlots,
 } from '@nodus/contracts';
 
 import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
@@ -88,8 +89,8 @@ export const structureKindHandlers = [
       if (response) return response;
       syncKindBindings(
         kind.id,
-        kind.form.fields.map((slot) => slot.fieldId),
-        parsed.data.form.fields.map((slot) => slot.fieldId),
+        formSlots(kind.form).map((slot) => slot.fieldId),
+        formSlots(parsed.data.form).map((slot) => slot.fieldId),
       );
       kind.form = parsed.data.form;
     }
