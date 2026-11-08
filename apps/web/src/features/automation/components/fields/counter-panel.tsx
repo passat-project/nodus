@@ -82,6 +82,20 @@ export function CounterPanel({
     typeName: targetName,
     definitions: allDefinitions,
     nodeKinds: (nodeKinds ?? []).filter((kind) => kind.archivedAt === null),
+    // Виды папок для «Каждой папки вида…»: если номер получают папки —
+    // только виды, которые бывают в тех же типах проектов, что и они
+    // (`kindIds` типа проекта, #556; null — все виды).
+    nodeKindsFor: (bindings: CustomFieldBindings) => {
+      const alive = (nodeKinds ?? []).filter((kind) => kind.archivedAt === null);
+      if (bindings.nodeKindIds.length === 0) return alive;
+      const types = (projectTypes ?? []).filter(
+        (type) =>
+          type.kindIds === null || bindings.nodeKindIds.some((id) => type.kindIds!.includes(id)),
+      );
+      if (types.length === 0 || types.some((type) => type.kindIds === null)) return alive;
+      const allowed = new Set(types.flatMap((type) => type.kindIds ?? []));
+      return alive.filter((kind) => allowed.has(kind.id));
+    },
     summaryOf: (rule: NumberSeriesRule, next: number | null, bindings: CustomFieldBindings) => {
       const who = idsOf(bindings)
         .map(targetName)

@@ -27,6 +27,7 @@ import { CounterCheck } from './counter-check.js';
 import { CounterIssuers } from './counter-issuers.js';
 import { containerKindsFor } from './counter-container-pick.js';
 import { CounterCounts } from './counter-counts.js';
+import { CounterCoverage } from './counter-coverage.js';
 import { CounterSection } from './counter-section.js';
 import { FieldUsagePicker, type DescribeTarget } from './field-usage-picker.js';
 
@@ -37,6 +38,7 @@ export interface CounterRuleKit {
   names: ContainerNames;
   definitions: readonly CustomFieldDefinition[];
   nodeKinds: readonly { id: string; name: string }[];
+  nodeKindsFor: (bindings: CustomFieldBindings) => readonly { id: string; name: string }[];
   summaryOf: (rule: NumberSeriesRule, next: number | null, bindings: CustomFieldBindings) => string;
   describeTargetFor: (rule: NumberSeriesRule) => DescribeTarget;
   hostKindsOf: (bindings: CustomFieldBindings) => NumberHostKind[];
@@ -140,13 +142,20 @@ export function CounterRuleDialog({
             issuedCount={definition?.numbering?.issuedCount ?? 0}
             savedTemplate={definition?.numbering?.rule.template ?? null}
             definitions={kit.definitions}
-            nodeKinds={kit.nodeKinds}
+            nodeKinds={kit.nodeKindsFor(bindings)}
             names={kit.names}
             hostKinds={hostKinds}
             fields={kit.fieldsFor(bindings)}
             disabled={disabled}
             onChange={setRule}
             onNextChange={setNext}
+            coverage={
+              <CounterCoverage
+                rule={rule}
+                participantTypeIds={participantTypeIds}
+                names={kit.names}
+              />
+            }
             recipients={
               <section className="flex flex-col gap-2">
                 <NodeLabel label={counter.recipients} />

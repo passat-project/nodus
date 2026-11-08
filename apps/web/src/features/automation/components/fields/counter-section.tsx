@@ -74,6 +74,7 @@ export function CounterSection({
   hostKinds,
   fields,
   recipients,
+  coverage,
   disabled,
   onChange,
   onNextChange,
@@ -94,6 +95,8 @@ export function CounterSection({
   fields: readonly { number: number; name: string }[];
   /** «Кто получает номер» — первый шаг окна, до выбора счёта. */
   recipients: ReactNode;
+  /** Охват правила на реальных данных — сразу под «Вести счёт отдельно для». */
+  coverage?: ReactNode;
   disabled: boolean;
   onChange: (rule: NumberSeriesRule) => void;
   onNextChange: (next: number | null) => void;
@@ -136,6 +139,7 @@ export function CounterSection({
         disabled={disabled || locked}
         onChange={(container) => onChange({ ...rule, container })}
       />
+      {coverage}
 
       <div className="flex flex-col gap-2">
         <span className="text-label text-muted-foreground">{counter.template}</span>

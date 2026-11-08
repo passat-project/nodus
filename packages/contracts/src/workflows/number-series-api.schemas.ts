@@ -110,6 +110,34 @@ export const numberPreviewResultSchema = z.discriminatedUnion('ok', [
 ]);
 export type NumberPreviewResult = z.infer<typeof numberPreviewResultSchema>;
 
+/** «Охват» правила (#630): сколько СУЩЕСТВУЮЩИХ записей отмеченных типов
+ *  лежат внутри выбранного «вести счёт отдельно для» и какие — нет (они
+ *  номер не получат). Ответ на «привязал «Очередь», счёт по «Этапу» — а
+ *  лежит ли вообще «Очередь» внутри «Этапа»?» на реальных данных: правила
+ *  вложенности видов папок в системе нет, любая папка может лежать в любой. */
+export const numberCoverageBodySchema = z
+  .object({
+    rule: numberSeriesRuleSchema,
+    participantTypeIds: z.array(z.uuid()).max(200),
+  })
+  .strict();
+export type NumberCoverageBody = z.infer<typeof numberCoverageBodySchema>;
+
+export const numberCoverageResultSchema = z.object({
+  total: z.number().int().min(0),
+  inside: z.number().int().min(0),
+  /** До 5 примеров записей, которые номер не получат. */
+  outside: z.array(
+    z.object({
+      kind: numberHostKindSchema,
+      id: z.uuid(),
+      name: z.string(),
+      reason: numberContainerMissingReasonSchema,
+    }),
+  ),
+});
+export type NumberCoverageResult = z.infer<typeof numberCoverageResultSchema>;
+
 /** Кнопка маршрута, которая выдаёт номер этого атрибута (опубликованный
  *  маршрут, пост-функция `assign_number` с `fieldId`). */
 export const numberIssuerSchema = z.object({

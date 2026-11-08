@@ -9,6 +9,7 @@ import {
   ErrorCode,
   errorMessages,
   numberContainerReachable,
+  numberCoverageBodySchema,
   numberPreviewBodySchema,
   resolveNumberContainer,
   setNumberNextBodySchema,
@@ -25,6 +26,9 @@ import {
   setMockNext,
 } from '../../mocks/data/numbering-store.js';
 import { mockTypes } from '../../mocks/data/process-types-store.js';
+import { placeOfNewNode, placeOfNewProject } from '../../mocks/data/numbering-create.js';
+import { demoNodeRows } from '../../mocks/data/project-nodes.js';
+import { demoProjectRows } from '../../mocks/data/projects.js';
 import { demoTasks } from '../../mocks/data/tasks.js';
 import { error } from './custom-fields-mock-utils.js';
 
@@ -68,6 +72,52 @@ const emptyPlace = (host: NumberHostKind): NumberPlace => ({
  * без дерева, только «вся компания»).
  */
 export const numberingHandlers = [
+  // Охват правила: существующие записи отмеченных типов → лежат ли внутри
+  // выбранного счёта (папки, задачи, проекты мок-мира).
+  http.post('/api/v1/custom-fields/numbering/coverage', async ({ request }) => {
+    const parsed = numberCoverageBodySchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400);
+    const { rule, participantTypeIds } = parsed.data;
+    const ids = new Set(participantTypeIds);
+    const hosts: { kind: NumberHostKind; id: string; name: string; place: NumberPlace }[] = [
+      ...demoTasks
+        .filter((task) => ids.has(task.type.id))
+        .map((task) => ({
+          kind: 'task' as const,
+          id: task.id,
+          name: task.title,
+          place: placeOfTask(task),
+        })),
+      ...demoNodeRows
+        .filter((node) => ids.has(node.kindId))
+        .map((node) => ({
+          kind: 'node' as const,
+          id: node.id,
+          name: node.name,
+          place: placeOfNewNode(node.projectId, node.parentId, node.customFields ?? {}),
+        })),
+      ...demoProjectRows
+        .filter((project) => ids.has(project.typeId))
+        .map((project) => ({
+          kind: 'project' as const,
+          id: project.id,
+          name: project.name,
+          place: placeOfNewProject(project.typeId, project.portfolioId ?? null, {}),
+        })),
+    ];
+    const outside = hosts.flatMap((host) => {
+      const resolved = resolveNumberContainer(rule.container, host.place);
+      return resolved.ok
+        ? []
+        : [{ kind: host.kind, id: host.id, name: host.name, reason: resolved.reason }];
+    });
+    return HttpResponse.json({
+      total: hosts.length,
+      inside: hosts.length - outside.length,
+      outside: outside.slice(0, 5),
+    });
+  }),
+
   http.post('/api/v1/custom-fields/numbering/preview', async ({ request }) => {
     const parsed = numberPreviewBodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400);

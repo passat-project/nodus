@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  NumberCoverageBody,
+  NumberCoverageResult,
   NumberCountsResponse,
   NumberPreviewBody,
   NumberPreviewResult,
@@ -41,6 +43,18 @@ export function useSetNumberNext(definitionId: string) {
       void queryClient.invalidateQueries({ queryKey: numberingKeys.all });
       void queryClient.invalidateQueries({ queryKey: customFieldsKeys.all });
     },
+  });
+}
+
+/** Охват правила: сколько существующих записей отмеченных типов лежат
+ *  внутри выбранного счёта (пересчёт при каждой правке черновика). */
+export function useNumberCoverage(body: NumberCoverageBody | null) {
+  return useQuery({
+    queryKey: ['numbering', 'coverage', body] as const,
+    queryFn: () =>
+      api<NumberCoverageResult>('/custom-fields/numbering/coverage', { method: 'POST', body }),
+    enabled: body !== null,
+    placeholderData: (previous) => previous,
   });
 }
 
