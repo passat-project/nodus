@@ -11,7 +11,7 @@ import {
 import { Lock, Plus, X } from 'lucide-react';
 
 import { SegmentedControl } from '../../ui/segmented-control.js';
-import type { FormBuilderHost } from './builder-host.js';
+import { fieldGroups, type FormBuilderHost } from './builder-host.js';
 import {
   availableOf,
   fieldCount,
@@ -43,6 +43,9 @@ export function BuilderTray<X>({
   const blocks = (host.blocks ?? []).filter(
     (option) => !value.items.some((item) => isBuilderBlock(item) && item.block === option.block),
   );
+  // Системные поля и свои атрибуты — разными группами: настройщик видит, что
+  // пришло с сущностью, а что создано в справочнике (#496, 08.11.2026).
+  const groups = fieldGroups(available);
   return (
     <section className="flex flex-col gap-2 rounded-xl bg-muted/40 p-4">
       <div className="flex min-w-0 items-center justify-between gap-2">
@@ -58,15 +61,15 @@ export function BuilderTray<X>({
         <p className="text-xs text-muted-foreground">{b.trayEmpty}</p>
       ) : (
         <>
-          {available.length > 0 ? (
-            <div className="flex flex-col gap-1.5">
-              {/* Группы подписаны, когда в лотке и поля, и блоки: различие
-                  «поле / блок окна» видно и здесь, а не только в «+» (#496). */}
-              {blocks.length > 0 ? (
-                <p className="text-label-xs text-muted-foreground">{b.insertFields}</p>
+          {groups.map((group) => (
+            <div key={group.label ?? 'fields'} className="flex flex-col gap-1.5">
+              {/* Подпись группы — когда полей и блоков несколько категорий:
+                  иначе лишний шум (вердикт владельца 08.11.2026). */}
+              {group.label ? (
+                <p className="text-label-xs text-muted-foreground">{group.label}</p>
               ) : null}
               <div className="flex flex-wrap gap-1.5">
-                {available.map((option) => (
+                {group.options.map((option) => (
                   <Button
                     key={option.key}
                     type="button"
@@ -84,7 +87,7 @@ export function BuilderTray<X>({
                 ))}
               </div>
             </div>
-          ) : null}
+          ))}
           {blocks.length > 0 && host.makeBlock ? (
             <div className="flex flex-col gap-1.5">
               {available.length > 0 ? (
@@ -150,6 +153,8 @@ export function BuilderAlsoLocks<X>({
             value={lock.editors}
             disabled={readOnly}
             size="sm"
+            ariaLabel={l.also}
+            className="w-56 shrink-0"
             options={[
               { value: 'none', label: l.none },
               { value: 'owners', label: l.owners },

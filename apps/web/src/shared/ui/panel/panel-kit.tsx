@@ -127,7 +127,9 @@ export function SectionLink({
 /** Тихое действие панели («+ Поле», «Посмотреть окно», «+ Добавить
  *  переход»): ghost-кнопка без заливки и рамки, отклик — подложка на ховере.
  *  Заливка primary — только у главного действия окна («Опубликовать»,
- *  «Создать»); outline-кнопок в панелях нет (вердикт владельца 26.10.2026). */
+ *  «Создать»); outline-кнопок в панелях нет (вердикт владельца 26.10.2026).
+ *  08.11.2026: не-главное действие — строка во всю ширину панели, текст
+ *  слева (как «Удалить кнопку»), без «таблетки» по ширине текста. */
 export function PanelAction({
   icon: Icon,
   className,
@@ -139,11 +141,14 @@ export function PanelAction({
       type="button"
       variant="ghost"
       size="sm"
-      className={cn('-ml-2 self-start', className)}
+      className={cn(
+        'h-auto min-h-8 w-full justify-start py-1.5 text-left whitespace-normal',
+        className,
+      )}
       {...props}
     >
-      <Icon className="size-3.5" strokeWidth={1.75} />
-      {children}
+      <Icon className="size-3.5 shrink-0" strokeWidth={1.75} />
+      <span className="min-w-0">{children}</span>
     </Button>
   );
 }

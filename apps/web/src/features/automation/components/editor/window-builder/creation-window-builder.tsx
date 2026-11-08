@@ -160,10 +160,14 @@ function useCreationHost(
     return {
       title: `${b.titles.creation} · ${type.name}`,
       info,
-      catalog: [...systemKeys, ...attributeKeys].map((key) => ({
-        key,
-        label: info(key).label,
-      })),
+      catalog: [
+        ...systemKeys.map((key) => ({ key, label: info(key).label, group: 'system' as const })),
+        ...attributeKeys.map((key) => ({
+          key,
+          label: info(key).label,
+          group: 'attribute' as const,
+        })),
+      ],
       makeField: creationField,
       blocks,
       makeBlock: (block) => creationBlock(block.replace('chip:', '') as CreationChip),

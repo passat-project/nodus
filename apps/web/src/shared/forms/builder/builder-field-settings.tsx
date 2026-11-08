@@ -4,8 +4,7 @@ import { Button } from '@nodus/ui/components/button';
 import { Input } from '@nodus/ui/components/input';
 import { Trash2 } from 'lucide-react';
 
-import { PanelField } from '../../ui/panel/panel-kit.js';
-import { SegmentedControl } from '../../ui/segmented-control.js';
+import { ModeChoices, PanelField } from '../../ui/panel/panel-kit.js';
 import type { BuilderFieldInfo, FormBuilderHost } from './builder-host.js';
 import type { BuilderField, FieldPatch } from './builder-model.js';
 
@@ -109,30 +108,29 @@ export function BuilderFieldSettings<X>({
       )}
       {info.multiline && !info.hideLayout ? (
         <PanelField label={b.height}>
-          <SegmentedControl<FormHeight>
+          {/* Строки, а не сегменты: «Несколько строк» в узком сегменте
+              обрезалось (замечание владельца 08.11.2026). */}
+          <ModeChoices<FormHeight>
             value={field.height ?? 'lines'}
             disabled={readOnly}
-            layout="grid"
-            className="w-full"
-            options={HEIGHTS.map((height) => ({ value: height, label: b.heights[height] }))}
+            options={HEIGHTS.map((height) => ({
+              value: height,
+              label: b.heights[height],
+              hint: b.heightHints[height],
+            }))}
             onChange={(height) => onPatch({ height })}
           />
         </PanelField>
       ) : null}
       {lockable ? (
-        <PanelField
-          label={host.lockMode === 'creation' ? l.afterCreation : l.afterTransition}
-          hint={lockHint(lock, host.lockMode)}
-        >
-          <SegmentedControl<LockChoice>
+        <PanelField label={host.lockMode === 'creation' ? l.afterCreation : l.afterTransition}>
+          <ModeChoices<LockChoice>
             value={lock ?? 'off'}
             disabled={readOnly}
-            layout="grid"
-            className="w-full"
             options={[
-              { value: 'off', label: l.off },
-              { value: 'none', label: l.none },
-              { value: 'owners', label: l.owners },
+              { value: 'off', label: l.off, hint: l.offHint },
+              { value: 'none', label: l.none, hint: l.noneHint },
+              { value: 'owners', label: l.owners, hint: ownersHint(host.lockMode) },
             ]}
             onChange={(choice) => onLock(choice === 'off' ? null : choice)}
           />
@@ -147,10 +145,10 @@ export function BuilderFieldSettings<X>({
   );
 }
 
-function lockHint(lock: LockEditors | null, mode: FormBuilderHost<unknown>['lockMode']) {
-  const base = lock === 'none' ? l.noneHint : lock === 'owners' ? l.ownersHint : undefined;
-  if (mode !== 'transition') return base;
-  return base ? `${base}. ${l.transitionHint}` : l.transitionHint;
+/** Пояснение «кто меняет»: в окне кнопки к нему добавляется правило про
+ *  окно кнопки, которое снова спрашивает поле. */
+function ownersHint(mode: FormBuilderHost<unknown>['lockMode']): string {
+  return mode === 'transition' ? `${l.ownersHint}. ${l.transitionHint}` : l.ownersHint;
 }
 
 function RemoveButton({ onClick }: { onClick: () => void }) {

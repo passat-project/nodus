@@ -133,6 +133,7 @@ function useAttributeHost(
       catalog: definitions.map((definition) => ({
         key: attributeFieldKey(definition.id),
         label: definition.name,
+        group: 'attribute' as const,
       })),
       makeField: (key) => attributeField(key),
       required: (field) => field.extra.state === 'required',

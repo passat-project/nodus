@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ui } from '@nodus/contracts';
 
 import type { BlockPatch, BuilderBlock, BuilderField, FieldPatch } from './builder-model.js';
 
@@ -37,6 +38,26 @@ export interface BuilderFieldInfo {
 export interface BuilderOption {
   key: string;
   label: string;
+  /** Откуда поле: системное поле сущности или созданный атрибут. В лотке
+   *  и «+» они показаны отдельными группами — различие для настройщика
+   *  (системное нельзя удалить из справочника, атрибут — можно), у
+   *  сотрудника в окне форма одна (#496). */
+  group?: 'system' | 'attribute';
+}
+
+/** Группы полей палитры по происхождению: системные, атрибуты, прочее.
+ *  Подписи показываются, только когда категорий больше одной — один
+ *  список без заголовка не шумит. */
+export function fieldGroups(
+  options: readonly BuilderOption[],
+): readonly { label: string | null; options: readonly BuilderOption[] }[] {
+  const b = ui.forms.builder;
+  const groups = [
+    { label: b.groupSystem, options: options.filter((option) => option.group === 'system') },
+    { label: b.groupAttributes, options: options.filter((option) => option.group === 'attribute') },
+    { label: null, options: options.filter((option) => option.group === undefined) },
+  ].filter((group) => group.options.length > 0);
+  return groups.length > 1 ? groups : groups.map((group) => ({ ...group, label: null }));
 }
 
 /** Блок окна в палитре: трудозатраты, итог, файлы, причина, чек-лист.

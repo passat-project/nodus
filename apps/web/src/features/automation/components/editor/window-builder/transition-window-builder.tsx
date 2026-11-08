@@ -198,10 +198,14 @@ function useTransitionHost(
     return {
       title: `${b.titles.transition} «${transition.name || w.preview}»`,
       info,
-      catalog: [...WINDOW_FIELDS, ...attributeKeys].map((key) => ({
-        key,
-        label: info(key).label,
-      })),
+      catalog: [
+        ...WINDOW_FIELDS.map((key) => ({ key, label: info(key).label, group: 'system' as const })),
+        ...attributeKeys.map((key) => ({
+          key,
+          label: info(key).label,
+          group: 'attribute' as const,
+        })),
+      ],
       makeField: transitionField,
       blocks,
       makeBlock: (block) => transitionBlock(block as TransitionFormSectionKind),

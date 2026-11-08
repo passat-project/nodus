@@ -6,6 +6,7 @@ import { cn } from '@nodus/ui/lib/utils';
 import { AlignLeft, Heading, Plus, Space } from 'lucide-react';
 
 import type { BuilderBlockOption, BuilderOption } from './builder-host.js';
+import { fieldGroups } from './builder-host.js';
 
 const b = ui.forms.builder;
 
@@ -106,17 +107,26 @@ function InsertMenu({
         <p className="px-2 pb-1 text-xs text-muted-foreground">{b.fieldsLimit}</p>
       ) : (
         <>
-          <p className="px-2 pt-1 text-label-xs text-muted-foreground">{b.insertFields}</p>
           {available.length === 0 ? (
-            <p className="px-2 pb-1 text-xs text-muted-foreground">{b.insertEmpty}</p>
+            <>
+              <p className="px-2 pt-1 text-label-xs text-muted-foreground">{b.insertFields}</p>
+              <p className="px-2 pb-1 text-xs text-muted-foreground">{b.insertEmpty}</p>
+            </>
           ) : (
-            <div className="flex max-h-56 flex-col overflow-y-auto">
-              {available.map((option) => (
-                <MenuButton key={option.key} onClick={() => onField(option.key)}>
-                  <span className="truncate">{option.label}</span>
-                </MenuButton>
-              ))}
-            </div>
+            fieldGroups(available).map((group) => (
+              <div key={group.label ?? 'fields'} className="flex flex-col gap-0.5">
+                <p className="px-2 pt-1 text-label-xs text-muted-foreground">
+                  {group.label ?? b.insertFields}
+                </p>
+                <div className="flex max-h-56 flex-col overflow-y-auto">
+                  {group.options.map((option) => (
+                    <MenuButton key={option.key} onClick={() => onField(option.key)}>
+                      <span className="truncate">{option.label}</span>
+                    </MenuButton>
+                  ))}
+                </div>
+              </div>
+            ))
           )}
         </>
       )}
