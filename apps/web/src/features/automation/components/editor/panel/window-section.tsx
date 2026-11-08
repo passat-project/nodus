@@ -5,29 +5,22 @@ import type {
   WorkflowDraftDocument,
   WorkflowDraftTransition,
 } from '@nodus/contracts';
-import {
-  CUSTOM_FIELD_LIMITS,
-  WORKFLOW_SECTIONS_BY_CATEGORY,
-  ui,
-  windowFieldKeys,
-} from '@nodus/contracts';
-import { Checkbox } from '@nodus/ui/components/checkbox';
+import { WORKFLOW_SECTIONS_BY_CATEGORY, ui, windowFieldKeys } from '@nodus/contracts';
+import { Button } from '@nodus/ui/components/button';
+import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
 import { Input } from '@nodus/ui/components/input';
-import { Eye } from 'lucide-react';
+import { Eye, LayoutTemplate } from 'lucide-react';
 
 import { useCustomFieldDefinitions } from '../../../../../shared/custom-fields/queries.js';
 import { useRouteDocStore } from '../../../model/route-doc-store.js';
 import {
-  WINDOW_FIELDS,
   sectionOf,
   setLabel,
   setRequired,
   setTimeMode,
   setWindowEnabled,
-  setWindowFieldFormula,
   setWindowTitle,
   toggleSection,
-  toggleWindowField,
 } from '../../../model/transition-form.js';
 import { setMinFiles, validatorOf } from '../../../model/transition-rules.js';
 import {
@@ -36,17 +29,21 @@ import {
   PanelField,
   SwitchRow,
 } from '../../../../../shared/ui/panel/panel-kit.js';
-import { CustomFieldChecks } from './custom-fields-checks.js';
-import { WindowFieldFormulas } from './window-field-formulas.js';
+import { TransitionWindowBuilder } from '../window-builder/transition-window-builder.js';
 import { GateCheck, RequiredCheck, SectionToggle } from './window-section-rows.js';
 import { WindowPreview } from './window-preview.js';
 
+const l = ui.forms.locks;
+
 /**
  * Раздел «Окно перехода» инспектора кнопки (#380): тумблер окна,
- * заголовок, шесть разделов в фиксированном порядке. «Обязательно» у
+ * заголовок, разделы в фиксированном порядке. «Обязательно» у
  * времени/итога/файлов правит ГЕЙТЫ (Р3: обязательность — только
  * валидаторы), у причины и сообщений — собственную настройку раздела.
- * Поля процесса (#431) — подгруппой в разделе «Поля».
+ * Поля окна (#431/#632) и их раскладка, оформление и замки (#496) — в
+ * редакторе окна («Редактировать окно»): здесь сводка «3 поля · 1
+ * закреплено». Выключение окна с замками — с подтверждением: пока окно
+ * выключено, кнопка ничего не закрепляет (В13).
  */
 export function WindowSection({
   transition,
@@ -70,10 +67,15 @@ export function WindowSection({
   const allowedSections = WORKFLOW_SECTIONS_BY_CATEGORY[category] as readonly string[];
   const has = (kind: string) => allowedSections.includes(kind);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [confirmOff, setConfirmOff] = useState(false);
   const { data: definitions } = useCustomFieldDefinitions(scope);
   const patch = (next: Partial<WorkflowDraftTransition['form']>) =>
     useRouteDocStore.getState().patchTransition(transition.id, { form: { ...form, ...next } });
   const toggle = (kind: Parameters<typeof toggleSection>[1]) => patch(toggleSection(form, kind));
+  const fieldsSection = sectionOf(form, 'fields');
+  const fieldCount = fieldsSection ? windowFieldKeys(fieldsSection).length : 0;
+  const lockCount = form.locks?.length ?? 0;
 
   return (
     <>
@@ -82,7 +84,10 @@ export function WindowSection({
         hint={ui.automation.window.titleHint}
         checked={form.enabled}
         disabled={readOnly}
-        onChange={(checked) => patch(setWindowEnabled(form, checked))}
+        onChange={(checked) => {
+          if (!checked && lockCount > 0) setConfirmOff(true);
+          else patch(setWindowEnabled(form, checked));
+        }}
       />
       {form.enabled ? (
         <>
@@ -110,46 +115,15 @@ export function WindowSection({
           ) : null}
 
           {has('fields') ? (
-            <SectionToggle
-              kind="fields"
-              transition={transition}
-              readOnly={readOnly}
-              onToggle={() => toggle('fields')}
+            <PanelField
+              label={ui.automation.window.sections.fields}
+              hint={ui.automation.window.fieldsHint}
             >
-              <div className="flex flex-col gap-1.5">
-                {WINDOW_FIELDS.map((field) => {
-                  const section = sectionOf(form, 'fields');
-                  const keys = section ? windowFieldKeys(section) : [];
-                  const checked = keys.includes(field);
-                  return (
-                    <label key={field} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={checked}
-                        disabled={readOnly || (checked && keys.length === 1)}
-                        onCheckedChange={() => patch(toggleWindowField(form, field))}
-                      />
-                      {ui.automation.requirableFields[field]}
-                    </label>
-                  );
-                })}
-                <CustomFieldChecks
-                  scope={scope}
-                  typeId={typeId}
-                  selected={fieldKeysOf(form)}
-                  disabled={readOnly}
-                  limit={CUSTOM_FIELD_LIMITS.windowFields}
-                  onToggle={(key) => patch(toggleWindowField(form, key))}
-                />
-                <p className="text-xs text-muted-foreground">{ui.automation.window.fieldsHint}</p>
-                <WindowFieldFormulas
-                  form={form}
-                  hostKind={category === 'letter' ? 'letter' : 'task'}
-                  definitions={definitions ?? []}
-                  readOnly={readOnly}
-                  onChange={(field, ast) => patch(setWindowFieldFormula(form, field, ast))}
-                />
-              </div>
-            </SectionToggle>
+              <p className="text-sm">{ui.forms.builder.summary(fieldCount, lockCount)}</p>
+              <PanelAction icon={LayoutTemplate} onClick={() => setBuilderOpen(true)}>
+                {readOnly ? ui.forms.builder.view : ui.forms.builder.edit}
+              </PanelAction>
+            </PanelField>
           ) : null}
 
           {has('time') ? (
@@ -284,14 +258,37 @@ export function WindowSection({
             definitions={definitions ?? []}
             onClose={() => setPreviewOpen(false)}
           />
+          <TransitionWindowBuilder
+            open={builderOpen}
+            transition={transition}
+            scope={scope}
+            typeId={typeId}
+            category={category}
+            readOnly={readOnly}
+            onClose={() => setBuilderOpen(false)}
+          />
         </>
       ) : null}
+      <Dialog open={confirmOff} onOpenChange={setConfirmOff}>
+        <DialogContent className="max-w-sm" aria-describedby={undefined}>
+          <DialogTitle className="text-base font-medium">{l.disableTitle}</DialogTitle>
+          <p className="text-sm text-muted-foreground">{l.disableLead}</p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setConfirmOff(false)}>
+              {ui.common.cancel}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setConfirmOff(false);
+                patch(setWindowEnabled(form, false));
+              }}
+            >
+              {l.disableConfirm}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
-}
-
-/** Ключи полей окна без оформления (#496). */
-function fieldKeysOf(form: WorkflowDraftTransition['form']) {
-  const section = sectionOf(form, 'fields');
-  return section ? windowFieldKeys(section) : [];
 }

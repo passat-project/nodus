@@ -11,7 +11,7 @@ import { TypeFormulaControl } from '../../../../../shared/custom-fields/formula/
 import { sectionOf } from '../../../model/transition-form.js';
 
 /** Тип стандартного поля окна — результат формулы обязан подходить (Р12). */
-const SLOT_TYPES: Readonly<Record<string, CustomFieldType>> = {
+export const WINDOW_SLOT_TYPES: Readonly<Record<string, CustomFieldType>> = {
   description: 'long_text',
   deadline: 'datetime',
   assignee: 'user',
@@ -56,7 +56,7 @@ export function WindowFieldFormulas({
               hostKind={hostKind}
               {...(definition
                 ? { definition }
-                : { targetType: SLOT_TYPES[field] ?? 'text', label })}
+                : { targetType: WINDOW_SLOT_TYPES[field] ?? 'text', label })}
               ownDefinitions={definitions}
               value={section?.formulas?.[field] ?? null}
               readOnly={readOnly}
