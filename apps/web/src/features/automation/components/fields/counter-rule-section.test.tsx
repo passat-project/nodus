@@ -53,6 +53,25 @@ describe('единый конструктор правила счётчика (#
     expect(screen.queryByText(counter.dialogTitle)).toBeNull();
   });
 
+  it('текстовый сегмент удаляется своим крестиком, как остальные сегменты', () => {
+    const onChange = renderSection();
+
+    fireEvent.click(screen.getByRole('button', { name: counter.edit }));
+    fireEvent.click(screen.getByRole('button', { name: `+ ${counter.literalPlaceholder}` }));
+    const input = screen.getByRole('textbox', { name: counter.literalPlaceholder });
+    fireEvent.change(input, { target: { value: 'лорлорлор' } });
+    expect((input as HTMLInputElement).value).toBe('лорлорлор');
+
+    const removeButtons = screen.getAllByRole('button', { name: counter.segRemove });
+    expect(removeButtons).toHaveLength(2);
+    fireEvent.click(removeButtons[1]!);
+
+    expect(screen.queryByRole('textbox', { name: counter.literalPlaceholder })).toBeNull();
+    expect(screen.getAllByRole('button', { name: counter.segRemove })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: ui.customFields.dialog.save }));
+    expect(onChange).toHaveBeenCalledWith(DEFAULT_COUNTER_RULE);
+  });
+
   it('своя формула разреза открывает формульный редактор и возвращается в правило', () => {
     const onChange = renderSection({
       ...DEFAULT_COUNTER_RULE,

@@ -32,6 +32,20 @@ const TONES = {
 const INSERT =
   'h-7 rounded-lg border border-dashed border-input px-2.5 text-xs text-muted-foreground transition-colors outline-none hover:bg-accent/40 hover:text-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30 disabled:opacity-40';
 
+function RemoveSegmentButton({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      aria-label={ui.customFields.dialog.counter.segRemove}
+      onClick={onClick}
+      className="-mr-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm outline-none transition-colors hover:text-danger focus-visible:text-danger focus-visible:ring-1 focus-visible:ring-ring/40 disabled:opacity-30"
+    >
+      <X aria-hidden="true" className="size-3" strokeWidth={2.5} />
+    </button>
+  );
+}
+
 /** Строка вида номера: сегменты-плашки и редактируемые литералы на месте. */
 export function CounterNumberLine({
   template,
@@ -61,28 +75,22 @@ export function CounterNumberLine({
     <div className="flex min-h-10 flex-wrap items-center gap-1 rounded-xl border border-input bg-card px-2.5 py-2">
       {template.map((segment, index) =>
         segment.kind === 'literal' ? (
-          // Литерал — не «поле в поле»: текст номера, который правится на
-          // месте. Ширина по содержимому (моно → `ch`), пустой — пунктирная
-          // подчёркивалка «здесь можно печатать».
-          <input
-            key={index}
-            value={segment.text}
-            maxLength={50}
-            disabled={disabled}
-            aria-label={counter.literalPlaceholder}
-            placeholder={counter.literalPlaceholder}
-            onChange={(e) => setSegment(index, { kind: 'literal', text: e.target.value || ' ' })}
-            onBlur={(e) => {
-              if (!e.target.value.trim()) setSegment(index, null);
-            }}
-            style={{ width: `${Math.min(50, Math.max(2, segment.text.length + 1))}ch` }}
-            className={cn(
-              'min-w-4 shrink-0 rounded-sm bg-transparent px-0.5 font-mono text-xs tabular-nums outline-none',
-              'transition-colors placeholder:text-muted-foreground/60 hover:bg-accent/40',
-              'focus:bg-accent/50 focus:ring-1 focus:ring-ring/30',
-              segment.text.trim() === '' && 'border-b border-dashed border-input',
-            )}
-          />
+          <span key={index} className={cn(CHIP, TONES.year)}>
+            <input
+              value={segment.text}
+              maxLength={50}
+              disabled={disabled}
+              aria-label={counter.literalPlaceholder}
+              placeholder={counter.literalPlaceholder}
+              onChange={(e) => setSegment(index, { kind: 'literal', text: e.target.value || ' ' })}
+              onBlur={(e) => {
+                if (!e.target.value.trim()) setSegment(index, null);
+              }}
+              style={{ width: `${Math.min(50, Math.max(2, segment.text.length + 1))}ch` }}
+              className="min-w-4 shrink-0 rounded-sm bg-transparent px-0.5 font-mono text-xs font-medium text-foreground tabular-nums outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring/30"
+            />
+            <RemoveSegmentButton disabled={disabled} onClick={() => setSegment(index, null)} />
+          </span>
         ) : (
           <span
             key={index}
@@ -104,15 +112,7 @@ export function CounterNumberLine({
                 : segment.kind === 'month'
                   ? counter.segMonth
                   : `${counter.segField} ${labelOf(segment.fieldNumber)}`}
-            <button
-              type="button"
-              disabled={disabled}
-              aria-label={counter.segRemove}
-              onClick={() => setSegment(index, null)}
-              className="-mr-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm opacity-60 outline-none transition-[color,opacity] hover:text-danger hover:opacity-100 focus-visible:ring-1 focus-visible:ring-ring/40 focus-visible:opacity-100 disabled:opacity-30"
-            >
-              <X aria-hidden="true" className="size-3" strokeWidth={2.5} />
-            </button>
+            <RemoveSegmentButton disabled={disabled} onClick={() => setSegment(index, null)} />
           </span>
         ),
       )}
