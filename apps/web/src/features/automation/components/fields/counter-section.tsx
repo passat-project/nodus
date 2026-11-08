@@ -1,31 +1,19 @@
-import type { CustomFieldDefinition, NumberSeriesRule } from '@nodus/contracts';
-import { NUMBER_CONTAINER_FIELD_TYPES, numberPeriodsAllowed, ui } from '@nodus/contracts';
+import type { ReactNode } from 'react';
+import type { CustomFieldDefinition, NumberHostKind, NumberSeriesRule } from '@nodus/contracts';
+import { numberPeriodsAllowed, ui } from '@nodus/contracts';
 import { Input } from '@nodus/ui/components/input';
 import { NodeLabel } from '@nodus/ui/components/node-label';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from '@nodus/ui/components/select';
 import { CircleAlert, Lock } from 'lucide-react';
 
 import { SegmentedControl } from '../../../../shared/ui/segmented-control.js';
 import {
-  containerKey,
-  containerLabel,
-  containerOf,
-  containerPath,
   counterSequence,
   fill,
   minskMoment,
   withTemplate,
   type ContainerNames,
 } from '../../lib/counter-rule.js';
+import { CounterContainerPick } from './counter-container-pick.js';
 import { CounterInsertPalette, CounterNumberLine } from './counter-template-editor.js';
 
 const counter = ui.customFields.dialog.counter;
@@ -68,11 +56,10 @@ function NumberInput({
 }
 
 /**
- * Счётчик в окне атрибута (#630, концепция 08.11) — одним экраном, без
- * вложенных калькуляторов: живая сводка-предложение, «Как выглядит номер»,
- * «Свой счёт внутри» (реальная папка/проект/портфель записи), «Начинать
- * счёт заново» (только если в номере есть дата) и старт. «Кто получает
- * номер», «Проверка на записи» и «Текущие счета» — соседние секции окна.
+ * Тело окна «Правило номера» (#630): сводка-предложение, «Кто получает
+ * номер» (первый шаг), «Вести счёт отдельно для» (только варианты,
+ * подходящие отмеченным типам), «Как выглядит номер», «Начинать счёт
+ * заново» (только если в номере есть дата) и старт.
  */
 export function CounterSection({
   rule,
@@ -84,6 +71,9 @@ export function CounterSection({
   definitions,
   nodeKinds,
   names,
+  hostKinds,
+  fields,
+  recipients,
   disabled,
   onChange,
   onNextChange,
@@ -99,6 +89,11 @@ export function CounterSection({
   definitions: readonly CustomFieldDefinition[];
   nodeKinds: readonly { id: string; name: string }[];
   names: ContainerNames;
+  /** Виды записей из «Кто получает номер» — фильтр «Вести счёт отдельно для». */
+  hostKinds: readonly NumberHostKind[];
+  fields: readonly { number: number; name: string }[];
+  /** «Кто получает номер» — первый шаг окна, до выбора счёта. */
+  recipients: ReactNode;
   disabled: boolean;
   onChange: (rule: NumberSeriesRule) => void;
   onNextChange: (next: number | null) => void;
@@ -108,10 +103,6 @@ export function CounterSection({
   const counterSegment = rule.template.find((segment) => segment.kind === 'counter');
   const needsCounter = counterSegment === undefined;
   const company = rule.container.kind === 'company';
-  const fieldOptions = definitions.filter(
-    (entry) =>
-      !entry.isCompany && (NUMBER_CONTAINER_FIELD_TYPES as readonly string[]).includes(entry.type),
-  );
   const sequence = needsCounter ? [] : counterSequence(rule, company && creating ? next : null);
   const templateChanged =
     locked &&
@@ -133,6 +124,18 @@ export function CounterSection({
           </p>
         ) : null}
       </div>
+
+      {recipients}
+
+      <CounterContainerPick
+        container={rule.container}
+        hostKinds={hostKinds}
+        nodeKinds={nodeKinds}
+        fields={fields}
+        names={names}
+        disabled={disabled || locked}
+        onChange={(container) => onChange({ ...rule, container })}
+      />
 
       <div className="flex flex-col gap-2">
         <span className="text-label text-muted-foreground">{counter.template}</span>
@@ -209,51 +212,6 @@ export function CounterSection({
           </p>
         ) : null}
       </div>
-
-      <label className="flex flex-col gap-1.5">
-        <span className="text-label text-muted-foreground">{counter.container}</span>
-        <Select
-          value={containerKey(rule.container)}
-          disabled={disabled || locked}
-          onValueChange={(key) => onChange({ ...rule, container: containerOf(key) })}
-        >
-          <SelectTrigger className="h-8 w-full" aria-label={counter.container}>
-            <SelectValue>{containerLabel(rule.container, names)}</SelectValue>
-          </SelectTrigger>
-          <SelectContent position="popper" className="nokey">
-            <SelectItem value="company">{counter.containers.company}</SelectItem>
-            <SelectSeparator />
-            <SelectGroup>
-              <SelectLabel>{counter.containers.folderGroup}</SelectLabel>
-              {nodeKinds.map((kind) => (
-                <SelectItem key={kind.id} value={`folder:${kind.id}`}>
-                  {fill(counter.containers.folder, { name: kind.name })}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-            <SelectSeparator />
-            <SelectItem value="project">{counter.containers.project}</SelectItem>
-            <SelectItem value="portfolio">{counter.containers.portfolio}</SelectItem>
-            <SelectItem value="parent_task">{counter.containers.parent_task}</SelectItem>
-            {fieldOptions.length > 0 ? (
-              <>
-                <SelectSeparator />
-                <SelectGroup>
-                  <SelectLabel>{counter.containers.fieldGroup}</SelectLabel>
-                  {fieldOptions.map((entry) => (
-                    <SelectItem key={entry.id} value={`field:${entry.number}`}>
-                      {fill(counter.containers.field, { name: entry.name })}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </>
-            ) : null}
-          </SelectContent>
-        </Select>
-        <span className="text-xs text-muted-foreground">
-          {containerPath(rule.container, names)}
-        </span>
-      </label>
 
       <div className="flex flex-col gap-1.5">
         <span className="text-label text-muted-foreground">{counter.period}</span>

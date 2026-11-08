@@ -30,6 +30,9 @@ export const numberContainerSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('folder'), nodeKindId: z.uuid() }).strict(),
   /** Каждый проект записи. */
   z.object({ kind: z.literal('project') }).strict(),
+  /** Каждый тип проекта записи: все проекты одного типа — один сквозной
+   *  счёт («все жилые дома вместе, все школы отдельно»). */
+  z.object({ kind: z.literal('project_type') }).strict(),
   /** Каждый портфель проекта записи. */
   z.object({ kind: z.literal('portfolio') }).strict(),
   /** Каждая родительская задача (подзадачи нумеруются внутри работы). */
@@ -56,6 +59,7 @@ export function numberContainerReachable(
   switch (container.kind) {
     case 'company':
     case 'portfolio':
+    case 'project_type':
     case 'field':
       return true;
     case 'folder':
@@ -78,6 +82,8 @@ export interface NumberPlace {
   projectId: string | null;
   /** Портфель проекта записи (у проекта-хоста — его портфель). */
   portfolioId: string | null;
+  /** Тип проекта записи (у проекта-хоста — его собственный тип). */
+  projectTypeId: string | null;
   /** Родительская задача (только у задачи). */
   parentTaskId: string | null;
   /** Значение одиночного поля по внутреннему номеру атрибута (uuid ссылки
@@ -117,6 +123,10 @@ export function resolveNumberContainer(
     case 'project':
       return place.projectId
         ? { ok: true, containerId: place.projectId }
+        : { ok: false, reason: 'no_project' };
+    case 'project_type':
+      return place.projectTypeId
+        ? { ok: true, containerId: place.projectTypeId }
         : { ok: false, reason: 'no_project' };
     case 'portfolio':
       if (place.host !== 'project' && !place.projectId) return { ok: false, reason: 'no_project' };

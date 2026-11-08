@@ -54,6 +54,7 @@ const emptyPlace = (host: NumberHostKind): NumberPlace => ({
   folders: [],
   projectId: null,
   portfolioId: null,
+  projectTypeId: null,
   parentTaskId: null,
   fieldValue: () => null,
 });

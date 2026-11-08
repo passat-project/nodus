@@ -37,6 +37,7 @@ function place(overrides: Partial<NumberPlace> = {}): NumberPlace {
     folders: [],
     projectId: null,
     portfolioId: null,
+    projectTypeId: null,
     parentTaskId: null,
     fieldValue: () => null,
     ...overrides,
@@ -151,6 +152,17 @@ describe('resolveNumberContainer — реальное место записи', 
     expect(resolveNumberContainer(portfolio, place({ host: 'project', portfolioId: 'g' }))).toEqual(
       { ok: true, containerId: 'g' },
     );
+  });
+
+  it('тип проекта: все проекты типа — один счёт; без проекта — no_project', () => {
+    const container = { kind: 'project_type' } as const;
+    expect(
+      resolveNumberContainer(container, place({ projectId: 'p', projectTypeId: 't' })),
+    ).toEqual({ ok: true, containerId: 't' });
+    expect(resolveNumberContainer(container, place())).toEqual({ ok: false, reason: 'no_project' });
+    expect(
+      resolveNumberContainer(container, place({ host: 'project', projectTypeId: 't' })),
+    ).toEqual({ ok: true, containerId: 't' });
   });
 
   it('Кейс C: вся компания — контейнера нет (null), подходит любой записи', () => {

@@ -12,7 +12,7 @@ import { numberCountKey, numberPeriodKey, renderNumberTemplate } from '@nodus/co
 import { demoCustomFieldDefinitions } from './custom-fields.js';
 import { fieldIds } from './field-ids.js';
 import { findDemoNodeRow } from './project-nodes.js';
-import { demoProjectGroups, demoProjectRows } from './projects.js';
+import { demoProjectGroups, demoProjectRows, demoProjectTypes } from './projects.js';
 import { nodeIds } from './project-node-ids.js';
 import { demoTasks } from './tasks.js';
 import { demoWorkflowDetails } from './workflows.js';
@@ -100,6 +100,7 @@ export function placeOfTask(task: TaskListItem): NumberPlace {
     folders,
     projectId: project?.id ?? null,
     portfolioId: project?.portfolioId ?? null,
+    projectTypeId: project?.typeId ?? null,
     parentTaskId: task.parentId,
     fieldValue: (number) => {
       const definition = demoCustomFieldDefinitions.find((entry) => entry.number === number);
@@ -223,6 +224,8 @@ export function mockContainerRef(kind: NumberContainerKind, id: string): NumberC
     }
     case 'project':
       return ref(demoProjectRows.find((row) => row.id === id)?.name ?? 'Проект');
+    case 'project_type':
+      return ref(demoProjectTypes.find((type) => type.id === id)?.name ?? 'Тип проекта');
     case 'portfolio':
       return ref(demoProjectGroups.find((group) => group.id === id)?.name ?? 'Портфель');
     case 'parent_task':
