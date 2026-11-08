@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- дерево проекта (#630): создание пачки и смена вида с номерами — одна транзакция */
 import { Inject, Injectable } from '@nestjs/common';
 import {
   ErrorCode,
@@ -34,6 +35,12 @@ import { nodeToDto } from './project-structure.mapper.js';
 import { assertNodeCellsWritable } from './project-structure-formulas.js';
 import { eventValue, valuesOf } from './project-structure.values.js';
 import { ProjectFormulaEvents } from './project-formula-events.js';
+import {
+  NUMBER_ISSUE,
+  numberingFailureException,
+  type NumberIssue,
+} from '../custom-fields/ports/number-issue.port.js';
+import type { NumberTarget } from '../custom-fields/ports/number-host.port.js';
 import { ProjectFormulaRecalcService } from './project-formula-recalc.service.js';
 import { NodeKindsRepository } from './project-node-kinds.repository.js';
 import { ProjectNodesRepository, type ProjectNodeRow } from './project-nodes.repository.js';
@@ -76,6 +83,7 @@ export class ProjectStructureService {
     @Inject(FORMULA_CELLS) private readonly formulas: FormulaCells,
     private readonly formulaRecalc: ProjectFormulaRecalcService,
     private readonly formulaEvents: ProjectFormulaEvents,
+    @Inject(NUMBER_ISSUE) private readonly numberIssue: NumberIssue,
   ) {}
 
   /** GET /projects/:id/structure: папки (плоско, по order) + rollups + виды +
@@ -119,6 +127,7 @@ export class ProjectStructureService {
       names: [body.name],
       code: body.code,
       customFields: body.customFields,
+      confirmEmptyNumberParts: body.confirmEmptyNumberParts,
     });
     return created[0]!;
   }
@@ -135,6 +144,7 @@ export class ProjectStructureService {
       names: string[];
       code?: string;
       customFields?: CustomFieldValues;
+      confirmEmptyNumberParts?: true;
     },
   ): Promise<ProjectNode[]> {
     const { row: project } = await loadForStructureManage(this.projects, user, projectId);
@@ -160,6 +170,22 @@ export class ProjectStructureService {
         user,
         tx,
       );
+      // Счётчики «при создании» (#630): место пачки — общий родитель; нет
+      // места — 409 до создания, номера не тратятся.
+      const target = this.nodeNumberTarget(
+        project,
+        tree,
+        parent?.id ?? null,
+        kind.id,
+        values as Record<string, unknown>,
+      );
+      const numberPlan = await this.numberIssue.planOnCreate(tx, target, {
+        source: 'create',
+        values: values as Record<string, unknown>,
+        confirmEmpty: body.confirmEmptyNumberParts === true,
+        actorId: user.id,
+      });
+      if (!numberPlan.ok) throw numberingFailureException(numberPlan.failure);
       const meta = { actorId: user.id, aggregateType: 'project_node' };
       const created: ProjectNodeRow[] = [];
       for (const name of body.names) {
@@ -172,6 +198,14 @@ export class ProjectStructureService {
           order: orderKeyFor(orders, null, 'end'),
           customFields: values as Prisma.InputJsonValue,
         });
+        const numbers = await numberPlan.issue(tx, node.id);
+        if (Object.keys(numbers).length > 0) {
+          const withNumbers = { ...(values as Record<string, unknown>), ...numbers };
+          await this.nodes.update(tx, node.id, {
+            customFields: withNumbers as Prisma.InputJsonValue,
+          });
+          node.customFields = withNumbers as never;
+        }
         created.push(node);
         await this.eventBus.emit(
           tx,
@@ -209,6 +243,7 @@ export class ProjectStructureService {
     const { row: project } = await loadForStructureManage(this.projects, user, projectId);
     return this.txRunner.run(async (tx) => {
       await this.nodes.lockStructure(tx, projectId);
+      const tree = await this.nodes.listByProject(projectId, tx);
       // Чтение ВНУТРИ tx после лока (F2): гонка двух PATCH сериализуется.
       // Строковый лок узла — против bulk-уборки значений удалённого атрибута
       // (у неё другой advisory-ключ): иначе запись вернула бы стёртый ключ.
@@ -224,6 +259,30 @@ export class ProjectStructureService {
         kindId?: string;
         customFields?: Prisma.InputJsonValue;
       } = {};
+      let numberPlan: Awaited<ReturnType<NumberIssue['planOnCreate']>> | null = null;
+      if (kindChanged) {
+        // Значения патча (без null-очисток) видны номеру: поле, заполненное
+        // в том же окне, не считается пустой вставкой (#630, code-review).
+        const planValues = {
+          ...(valuesOf(node) as Record<string, unknown>),
+          ...Object.fromEntries(
+            Object.entries((body.customFields ?? {}) as Record<string, unknown>).filter(
+              ([, value]) => value !== null,
+            ),
+          ),
+        };
+        numberPlan = await this.numberIssue.planOnCreate(
+          tx,
+          this.nodeNumberTarget(project, tree, node.parentId, kind.id, planValues),
+          {
+            source: 'type_change',
+            values: planValues,
+            confirmEmpty: body.confirmEmptyNumberParts === true,
+            actorId: user.id,
+          },
+        );
+        if (!numberPlan.ok) throw numberingFailureException(numberPlan.failure);
+      }
       let pendingLockCheck: RegistryFieldChange[] = [];
       const fields: string[] = [];
       let changes: RegistryFieldChange[] = [];
@@ -251,6 +310,16 @@ export class ProjectStructureService {
       if (kindChanged) {
         patch.kindId = kind.id;
         fields.push('kindId');
+      }
+      if (numberPlan?.ok) {
+        const numbers = await numberPlan.issue(tx, node.id);
+        if (Object.keys(numbers).length > 0) {
+          patch.customFields = {
+            ...((patch.customFields as Record<string, unknown> | undefined) ??
+              (valuesOf(node) as Record<string, unknown>)),
+            ...numbers,
+          } as Prisma.InputJsonValue;
+        }
       }
       await this.nodes.update(tx, node.id, patch);
       // Формульная блокировка по фактическому (возможно новому) виду папки.
@@ -325,6 +394,47 @@ export class ProjectStructureService {
         { actorId: user.id, aggregateType: 'project_node', aggregateId: node.id },
       );
     });
+  }
+
+  /** Место счётчика папки (#630): предки, проект, портфель, значения. */
+  private nodeNumberTarget(
+    project: { id: string; typeId: string; portfolioId: string | null; customFields: unknown },
+    tree: readonly ProjectNodeRow[],
+    parentId: string | null,
+    kindId: string,
+    values: Record<string, unknown>,
+  ): NumberTarget {
+    const byId = new Map(tree.map((node) => [node.id, node]));
+    const chain: ProjectNodeRow[] = [];
+    let current = parentId ? byId.get(parentId) : undefined;
+    while (current) {
+      chain.push(current);
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+    const projectValues =
+      project.customFields !== null && typeof project.customFields === 'object'
+        ? (project.customFields as Record<string, unknown>)
+        : {};
+    return {
+      host: 'node',
+      typeId: kindId,
+      folders: chain.map((node) => ({ id: node.id, kindId: node.kindId })),
+      projectId: project.id,
+      portfolioId: project.portfolioId,
+      projectTypeId: project.typeId,
+      parentTaskId: null,
+      sources: {
+        self: values,
+        project: projectValues,
+        folders: chain.map((node) => ({
+          kindId: node.kindId,
+          values:
+            node.customFields !== null && typeof node.customFields === 'object'
+              ? (node.customFields as Record<string, unknown>)
+              : {},
+        })),
+      },
+    };
   }
 }
 

@@ -2,6 +2,7 @@ import type { ErrorCode, TransitionBlockReason } from '@nodus/contracts';
 import { errorMessages, ui } from '@nodus/contracts';
 
 import { ApiError } from '../api-client.js';
+import { numberingErrorText } from '../custom-fields/number-confirm.js';
 
 /** Причины гейтов строкой для тоста (общий текст отказа). */
 export function gateReasonsText(reasons: readonly TransitionBlockReason[]): string {
@@ -13,6 +14,10 @@ export function gateReasonsText(reasons: readonly TransitionBlockReason[]): stri
 export function transitionErrorText(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === 'WORKFLOW_TRANSITION_FORM_INVALID') return ui.tasks.transitionNeedsWindow;
+    // Отказ выдачи номера (#630): «Номер «Изм.» не выдан: запись не лежит в
+    // папке вида «Комплект»» — а не общий «не удалось сменить стадию».
+    const numbering = numberingErrorText(error);
+    if (numbering) return numbering;
     const reasons = (error.details?.reasons ?? []) as TransitionBlockReason[];
     if (reasons.length > 0)
       return `${errorMessages[error.code as ErrorCode]}: ${gateReasonsText(reasons)}`;

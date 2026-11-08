@@ -93,5 +93,16 @@ export function CustomFieldEditor(props: CustomFieldEditorProps) {
       return <NodeEditor {...editorProps} />;
     case 'link':
       return <LinkEditor {...editorProps} />;
+    case 'counter':
+      // Счётчик руками не пишется (#630, Р10): редактора нет, только чтение.
+      return (
+        <div className="flex min-h-7 min-w-0 items-center text-sm">
+          <CustomFieldValueView
+            definition={props.definition}
+            value={props.value}
+            refs={refsById(props.refs)}
+          />
+        </div>
+      );
   }
 }

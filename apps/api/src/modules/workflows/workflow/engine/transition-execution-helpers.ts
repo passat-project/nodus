@@ -27,13 +27,17 @@ export function requiresWindow(t: TransitionDef): boolean {
   return windowOf(t.form, t.rules).required.length > 0;
 }
 
-/** Пост-функция «Присвоить номер»: номер из серии типа сущности. */
+/** Пост-функция «Присвоить номер» письма: номер из серии типа сущности.
+ *  Пост-функции с `fieldId` (номер в атрибут-счётчик задачи, #630) этот
+ *  путь не трогает — их выдаёт адаптер задач (Пакет B3 техплана). */
 export async function assignNumber(
   numbers: NumberSeriesService,
   tx: TransactionClient,
   subject: { typeId: string },
   t: TransitionDef,
 ): Promise<WorkflowStageChangeMeta['numbering']> {
-  if (!t.rules.postFunctions.some((pf) => pf.kind === 'assign_number')) return undefined;
+  if (!t.rules.postFunctions.some((pf) => pf.kind === 'assign_number' && !pf.fieldId)) {
+    return undefined;
+  }
   return numbers.nextForType(tx, subject.typeId);
 }

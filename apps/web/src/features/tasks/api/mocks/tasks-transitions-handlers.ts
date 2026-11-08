@@ -14,9 +14,20 @@ import {
   demoSubtasks,
   demoTasks,
 } from '../../../../shared/mocks/data/tasks.js';
-import { quickDocument, standardDocument } from '../../../../shared/mocks/data/workflows.js';
+import {
+  CHANGE_WORKFLOW_ID,
+  changeType,
+  demoWorkflowDetails,
+  KOMPLEKT_WORKFLOW_ID,
+  komplektType,
+  quickDocument,
+  standardDocument,
+} from '../../../../shared/mocks/data/workflows.js';
 import { quickProcessType } from '../../../../shared/mocks/data/task-stages.js';
 import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
+import { placeOfTask, segmentReaderOfTask } from '../../../../shared/mocks/data/numbering-store.js';
+import { planNumbers } from '../../../../shared/mocks/data/numbering-create.js';
+import { numberingFailureResponse } from '../../../../shared/custom-fields/mocks/numbering-responses.js';
 import { applyForm, blockedByOf, checkWindow, postBlock } from './tasks-transitions-gates.js';
 
 function findTask(id: string): TaskListItem | undefined {
@@ -33,8 +44,13 @@ function findTask(id: string): TaskListItem | undefined {
  *  проверяются (демо-пользователь — полный доступ), показ (`display`) и
  *  порядок — как у сервера: кнопки статуса по sortOrder, затем «из любого»;
  *  встроенное правило «итог → итог» прячет «Отменить» у закрытых. */
+/** Маршруты типов с собственным документом: «Комплект» (#632), «Изменение»
+ *  с кнопкой «Выдать в печать» (#630). */
 function documentOfTask(task: TaskListItem) {
-  return task.type.id === quickProcessType.id ? quickDocument : standardDocument;
+  if (task.type.id === quickProcessType.id) return quickDocument;
+  if (task.type.id === komplektType.id) return demoWorkflowDetails[KOMPLEKT_WORKFLOW_ID]!.document;
+  if (task.type.id === changeType.id) return demoWorkflowDetails[CHANGE_WORKFLOW_ID]!.document;
+  return standardDocument;
 }
 
 function transitionsOf(task: TaskListItem): WorkflowTransition[] {
@@ -47,7 +63,9 @@ function transitionsOf(task: TaskListItem): WorkflowTransition[] {
     if (!stageIds.has(task.stage.id) || !stageIds.has(t.toStageId)) continue;
     if (t.fromStageId !== null && t.fromStageId !== task.stage.id) continue;
     if (t.fromStageId === null && closed) continue; // «итог → итог» скрыт
-    if (t.toStageId === task.stage.id) continue;
+    // Само-петля без пост-действий — шум; с пост-действием («Выдать в
+    // печать» #630) кнопка меняет запись, не меняя статус — показываем.
+    if (t.toStageId === task.stage.id && t.rules.postFunctions.length === 0) continue;
     const target = stageDocOf(route, t.toStageId);
     const item: WorkflowTransition = {
       id: t.id,
@@ -156,6 +174,30 @@ export const tasksTransitionsHandlers = [
         );
       }
     }
+    // Пост-действие «Присвоить номер» (#630, модель v3): номера ВСЕХ полей
+    // кнопки планируются ДО любых изменений — нет места для счёта или
+    // пустое поле в номере без подтверждения — 409, ничего не меняется и не
+    // тратится (как откат транзакции сервера). Поле, где номер уже есть,
+    // кнопка не трогает: кто первым заполнил — тот выдал.
+    const docTransition = documentOfTask(task).transitions.find((t) => t.id === transition.id);
+    const assignFieldIds = (docTransition?.rules.postFunctions ?? [])
+      .filter(
+        (pf): pf is { kind: 'assign_number'; fieldId?: string } => pf.kind === 'assign_number',
+      )
+      .map((pf) => pf.fieldId)
+      .filter((fieldId): fieldId is string => fieldId !== undefined)
+      .filter((fieldId) => task.customFields[fieldId] === undefined);
+    const numbering = planNumbers(
+      assignFieldIds,
+      { place: placeOfTask(task), field: segmentReaderOfTask(task) },
+      {
+        hostKind: 'task',
+        source: 'transition',
+        sourceLabel: transition.name,
+        confirmEmpty: parsed.data.confirmEmptyNumberParts === true,
+      },
+    );
+    if (!numbering.ok) return numberingFailureResponse(numbering.failure);
     applyForm(task, parsed.data.form ?? {});
     const reasons = blockedByOf(task, documentOfTask(task), transition.id);
     if (reasons.length > 0 && !(parsed.data.override && parsed.data.reason?.trim())) {
@@ -169,12 +211,25 @@ export const tasksTransitionsHandlers = [
       );
     }
     postBlock(task, transition, parsed.data.form ?? {});
+    const numbers = numbering.issue(task.id);
+    // Присваивание целиком: customFields демо-задачи — ленивый геттер стора
+    // значений, мутация вложенного объекта терялась бы.
+    if (Object.keys(numbers).length > 0) task.customFields = { ...task.customFields, ...numbers };
+    const assignedNumbers = Object.entries(numbers).map(([fieldId, display]) => ({
+      fieldId,
+      display,
+    }));
     task.stage = resolveTarget(task, transition);
     // Встроенное автоперемещение «Моего плана» (ADR-0008) — как у переноса
     // по глобальной оси.
     autoMovePersonalPlacement(task, demoPersonalStages);
     task.updatedAt = new Date().toISOString();
-    // Контракт: строка задачи + НОВЫЕ кнопки нажавшего (одним ходом).
-    return HttpResponse.json({ task, transitions: transitionsOf(task) });
+    // Контракт: строка задачи + НОВЫЕ кнопки нажавшего (одним ходом);
+    // выданный номер — тосту и карточке (#630).
+    return HttpResponse.json({
+      task,
+      transitions: transitionsOf(task),
+      ...(assignedNumbers.length > 0 ? { assignedNumbers } : {}),
+    });
   }),
 ];

@@ -4,6 +4,11 @@ import { DEFAULT_TASK_TYPE_CODE, typeViewerOf, ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api } from '../api-client.js';
+import {
+  isNumberConfirmCancelled,
+  numberingErrorText,
+  withEmptyNumberConfirm,
+} from '../custom-fields/number-confirm.js';
 import { automationKeys } from './automation-keys.js';
 import { tasksKeys } from './tasks-keys.js';
 
@@ -53,12 +58,19 @@ export function useAliveProcessTypes() {
 }
 
 /** Смена типа задачи (#378): если текущего статуса нет в новом маршруте —
- *  обязателен stageId. Доступ к целевому типу проверяет сервер (403). */
+ *  обязателен stageId. Доступ к целевому типу проверяет сервер (403). Тип с
+ *  номером «при создании» выдаёт номер в этот момент (#630): вне нужной
+ *  папки — отказ с причиной, пустое поле в номере — окно и повтор. */
 export function useChangeProcessType(taskId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: { typeId: string; stageId?: string }) =>
-      api<TaskListItem>(`/tasks/${taskId}/type`, { method: 'POST', body }),
+      withEmptyNumberConfirm((confirmed) =>
+        api<TaskListItem>(`/tasks/${taskId}/type`, {
+          method: 'POST',
+          body: confirmed ? { ...body, confirmEmptyNumberParts: true } : body,
+        }),
+      ),
     onSuccess: (item) => {
       // Ответ — строка задачи (контракт), не деталь: мержим поля строки,
       // деталь (маршрут задачи сменился) — перезапрос.
@@ -70,6 +82,9 @@ export function useChangeProcessType(taskId: string) {
       void queryClient.invalidateQueries({ queryKey: tasksKeys.transitions(taskId) });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.kanbanAll() });
     },
-    onError: () => toast.error(ui.common.saveError),
+    onError: (error) => {
+      if (isNumberConfirmCancelled(error)) return;
+      toast.error(numberingErrorText(error) ?? ui.common.saveError);
+    },
   });
 }

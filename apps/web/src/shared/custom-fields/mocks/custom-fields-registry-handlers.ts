@@ -26,6 +26,9 @@ import {
   nameTaken,
   typeCategorySets,
 } from './custom-fields-mock-utils.js';
+import { counterPreview } from '../../mocks/data/numbering-store.js';
+import { invalidTriggers, unreachableTargets } from './numbering-hosts.js';
+import { seedCreatedCounter } from './numbering-responses.js';
 
 /** Хендлеры коллекции реестра атрибутов (#631): список с фильтром модуля,
  *  создание (уникальность имени 409 с suggestion, потолок 1000, цели
@@ -140,11 +143,38 @@ export const registryHandlers = [
       companyValue: null,
       bindings,
       bindingFormulas: body.bindingFormulas ?? {},
+      // Правило счётчика (#630): одно на атрибут, «при создании» — у типов,
+      // сводка — из мок-стора.
+      ...(body.type === 'counter' && body.numbering
+        ? {
+            numbering: {
+              rule: body.numbering,
+              onCreate: body.numberingOnCreate ?? [],
+              preview: counterPreview(body.numbering),
+              issuedCount: 0,
+            },
+          }
+        : {}),
       sortOrder: maxOrder + 1,
       createdAt: now,
       updatedAt: now,
     };
+    if (body.type === 'counter' && body.numbering) {
+      const targets = unreachableTargets(body.numbering, bindings);
+      if (targets.length > 0) {
+        return error(ErrorCode.NUMBER_CONTAINER_UNREACHABLE, 'Unreachable container', 422, {
+          targets,
+        });
+      }
+      const triggers = invalidTriggers(body.numbering, body.numberingOnCreate ?? [], bindings);
+      if (triggers.length > 0) {
+        return error(ErrorCode.NUMBER_TRIGGER_INVALID, 'Invalid create trigger', 422, {
+          targets: triggers,
+        });
+      }
+    }
     demoCustomFieldDefinitions.push(definition);
+    seedCreatedCounter(definition.id, body.numberingNext);
     return HttpResponse.json(dto(definition), { status: 201 });
   }),
 

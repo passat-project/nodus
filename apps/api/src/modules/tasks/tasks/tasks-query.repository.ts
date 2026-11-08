@@ -107,6 +107,100 @@ export class TasksQueryRepository {
     return { rows, sortKeys: new Map() };
   }
 
+  /** Записи-носители номера (#630): задачи отмеченных типов, включая
+   *  невидимые смотрящему — флаг видимости считает провайдер. */
+  listNumberHosts(
+    typeIds: readonly string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<
+    {
+      id: string;
+      title: string;
+      typeId: string;
+      nodeId: string | null;
+      projectId: string | null;
+      parentId: string | null;
+      customFields: unknown;
+      number: number;
+      createdAt: Date;
+    }[]
+  > {
+    if (typeIds.length === 0) return Promise.resolve([]);
+    return (tx ?? this.prisma).task.findMany({
+      where: { typeId: { in: [...new Set(typeIds)] }, deletedAt: null },
+      select: {
+        id: true,
+        title: true,
+        typeId: true,
+        nodeId: true,
+        projectId: true,
+        parentId: true,
+        customFields: true,
+        number: true,
+        createdAt: true,
+      },
+      orderBy: [{ number: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /** Одна задача-носитель номера (#630). */
+  numberHostById(
+    id: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{
+    id: string;
+    title: string;
+    typeId: string;
+    nodeId: string | null;
+    projectId: string | null;
+    parentId: string | null;
+    customFields: unknown;
+    number: number;
+    createdAt: Date;
+  } | null> {
+    return (tx ?? this.prisma).task.findFirst({
+      where: { id, deletedAt: null },
+      select: {
+        id: true,
+        title: true,
+        typeId: true,
+        nodeId: true,
+        projectId: true,
+        parentId: true,
+        customFields: true,
+        number: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  /** Значения атрибутов задач пачкой (родительская задача в номере, #630). */
+  async customFieldsOf(
+    ids: readonly string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<Map<string, unknown>> {
+    if (ids.length === 0) return new Map();
+    const rows = await (tx ?? this.prisma).task.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      select: { id: true, customFields: true },
+    });
+    return new Map(rows.map((row) => [row.id, row.customFields]));
+  }
+
+  /** Задача видна смотрящему (#630): те же правила, что у списка и детали. */
+  async numberHostVisibleIds(
+    ids: readonly string[],
+    visible: Prisma.TaskWhereInput,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const rows = await (tx ?? this.prisma).task.findMany({
+      where: { AND: [{ id: { in: [...ids] } }, visible] },
+      select: { id: true },
+    });
+    return new Set(rows.map((row) => row.id));
+  }
+
   /** Подзадачи карточки — ПЕРВЫЕ limit по номеру (порядок создания): при
    *  переполнении теряются поздние, а не ранние (ранние — костяк ветки). */
   listSubtasks(

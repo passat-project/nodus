@@ -43,7 +43,11 @@ function make() {
       ],
     ),
   };
-  const mapper = new DefinitionMapper(dictionaries as never, refs as never);
+  const mapper = new DefinitionMapper(
+    dictionaries as never,
+    refs as never,
+    { summaries: async () => new Map() } as never,
+  );
   return { mapper, refs };
 }
 

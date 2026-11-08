@@ -81,10 +81,15 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
     );
     // Формульная ячейка руками не пишется (решение владельца по #660):
     // введённое в окне создания значение атрибута с формулой места не
-    // сохраняется — считаться будет формула.
+    // сохраняется — считаться будет формула. Номер счётчика (#630) в теле
+    // создания отбрасывается молча: выдаёт движок, ручной записи нет.
+    const counterIds = new Set(
+      definitions.filter((definition) => definition.type === 'counter').map(({ id }) => id),
+    );
     const input = Object.fromEntries(
       Object.entries(args.input).filter(
-        ([fieldId, value]) => !formulaBound.has(fieldId) && !isDashOnlyMarker(value),
+        ([fieldId, value]) =>
+          !formulaBound.has(fieldId) && !counterIds.has(fieldId) && !isDashOnlyMarker(value),
       ),
     );
     const candidates = await this.defaults.resolve(
@@ -123,6 +128,18 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
 
     const all = await this.definitions({}, tx);
     const definitions = boundList(all, args).filter((definition) => !definition.isCompany);
+    // Номер счётчика руками не пишется (#630): PATCH значения — 422
+    // NUMBER_CELL_IMMUTABLE, даже очистка (номер не переиспользуется).
+    const counters = definitions.filter(
+      (definition) => definition.type === 'counter' && definition.id in patch,
+    );
+    if (counters.length > 0) {
+      throw new DomainException(
+        ErrorCode.NUMBER_CELL_IMMUTABLE,
+        'Counter value is assigned by the workflow engine',
+        { fieldIds: counters.map((definition) => definition.id) },
+      );
+    }
     // Запись непривязанного — ошибка; очистка (`null`) разрешена всегда:
     // снятие привязки не должно блокировать уборку старого значения (Р8).
     const unbound = unboundIssues(all, definitions, changed);

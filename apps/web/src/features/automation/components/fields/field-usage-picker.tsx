@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Calculator, Check, ChevronDown, Minus } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import type {
   CustomFieldBindings,
   CustomFieldDefinition,
@@ -7,12 +6,14 @@ import type {
   FormulaNode,
 } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
-import { cn } from '@nodus/ui/lib/utils';
 
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
 import { useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useProcessTypes } from '../../api/automation-api.js';
 import { BindingFormulaDialog } from './binding-formula-dialog.js';
+import { Group, type DescribeTarget, type Target } from './field-usage-group.js';
+
+export type { DescribeTarget, TargetNote } from './field-usage-group.js';
 
 /**
  * «Где используется» окна атрибута (#631, Р11): галочки модулей с
@@ -21,148 +22,36 @@ import { BindingFormulaDialog } from './binding-formula-dialog.js';
  * привязок не имеет — пикер скрыт (Р7).
  */
 
-interface Target {
-  id: string;
-  name: string;
-}
-
-/** Индикатор выбора — ведущий, у самого названия (как в FieldTypesPicker). */
-function Mark({ state }: { state: 'on' | 'off' | 'some' }) {
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        'flex size-4 shrink-0 items-center justify-center rounded-[0.25rem] border transition-colors',
-        state === 'off' ? 'border-input' : 'border-primary bg-primary text-primary-foreground',
-      )}
-    >
-      {state === 'on' ? <Check className="size-3" strokeWidth={2.5} /> : null}
-      {state === 'some' ? <Minus className="size-3" strokeWidth={2.5} /> : null}
-    </span>
-  );
-}
-
-function Group({
-  label,
-  targets,
-  selected,
-  expanded,
-  onToggleExpand,
-  onToggleAll,
-  onToggleOne,
-  disabled,
-  onEditFormula,
-}: {
-  label: string;
-  targets: readonly Target[];
-  selected: ReadonlySet<string>;
-  expanded: boolean;
-  onToggleExpand: () => void;
-  onToggleAll: () => void;
-  onToggleOne: (id: string) => void;
-  disabled: boolean;
-  onEditFormula: (target: Target) => void;
-}) {
-  const chosen = targets.filter((target) => selected.has(target.id));
-  const state = chosen.length === 0 ? 'off' : chosen.length === targets.length ? 'on' : 'some';
-  const expandable = targets.length > 0;
-  return (
-    <div className="rounded-lg border border-input">
-      {/* Строка группы: чекбокс «все» — сам по себе (клик по нему не
-          раскрывает и не сбрасывает выбор), клик по остальной строке —
-          раскрытие/сворачивание (вердикт владельца 06.11: случайный клик по
-          строке не должен терять выбранные типы). Ховер раскрытия — до
-          правого края, включая шеврон. */}
-      <div className="flex items-stretch">
-        <button
-          type="button"
-          role="checkbox"
-          aria-checked={state === 'some' ? 'mixed' : state === 'on'}
-          aria-label={label}
-          disabled={disabled || !expandable}
-          onClick={onToggleAll}
-          className="flex w-9 shrink-0 items-center justify-center rounded-l-lg text-secondary-foreground transition-colors hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <Mark state={state} />
-        </button>
-        <button
-          type="button"
-          onClick={onToggleExpand}
-          disabled={!expandable}
-          aria-expanded={expanded}
-          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-r-lg py-2 pr-1.5 pl-0.5 text-left text-sm text-secondary-foreground transition-colors hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <span className="min-w-0 flex-1 truncate">{label}</span>
-          <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
-            {chosen.length}/{targets.length}
-          </span>
-          <ChevronDown
-            className={cn(
-              'size-3.5 shrink-0 text-muted-foreground transition-transform',
-              expanded && 'rotate-180',
-            )}
-            strokeWidth={1.75}
-          />
-        </button>
-      </div>
-      {expanded && expandable ? (
-        <div className="flex flex-col gap-0.5 border-t py-1.5">
-          {targets.map((target) => {
-            const on = selected.has(target.id);
-            return (
-              <div
-                key={target.id}
-                className="mx-1.5 flex w-[calc(100%-0.75rem)] items-center gap-1"
-              >
-                <button
-                  type="button"
-                  role="checkbox"
-                  aria-checked={on}
-                  disabled={disabled}
-                  onClick={() => onToggleOne(target.id)}
-                  className={cn(
-                    'flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60',
-                    on ? 'text-foreground' : 'text-secondary-foreground',
-                    disabled && 'cursor-not-allowed opacity-60',
-                  )}
-                >
-                  <Mark state={on ? 'on' : 'off'} />
-                  <span className="min-w-0 flex-1 truncate">{target.name}</span>
-                </button>
-                {on ? (
-                  <button
-                    type="button"
-                    aria-label={ui.formulas.typeFormula.set}
-                    title={ui.formulas.typeFormula.hint}
-                    disabled={disabled}
-                    onClick={() => onEditFormula(target)}
-                    className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Calculator className="size-3.5" strokeWidth={1.75} />
-                  </button>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function FieldUsagePicker({
   definition,
   bindings,
   bindingFormulas,
   onBindingFormulasChange,
   disabled,
+  allowFormulas = true,
+  describeTarget,
+  targetAction,
+  hint,
+  onlyGroups,
   onChange,
 }: {
+  /** Элемент справа в строке ОТМЕЧЕННОЙ цели (счётчик: способ выдачи
+   *  номера — выпадающий список, #630); клик по нему выбор не меняет. */
+  targetAction?: (group: FormulaHostKind, targetId: string) => ReactNode;
+  /** Показать только эти модули (счётчик: номер выдаёт кнопка маршрута —
+   *  маршруты есть только у задач и писем). */
+  onlyGroups?: readonly FormulaHostKind[];
   definition: CustomFieldDefinition | null;
   bindings: CustomFieldBindings;
   bindingFormulas: Record<string, FormulaNode>;
   onBindingFormulasChange: (formulas: Record<string, FormulaNode>) => void;
   disabled: boolean;
+  /** Counter получает значение по кнопке процесса, а не из формулы места (#630). */
+  allowFormulas?: boolean;
+  /** Подпись под целью (счётчик: кто выдаёт, совместимость). */
+  describeTarget?: DescribeTarget;
+  /** Подсказка под пикером вместо общей. */
+  hint?: string;
   onChange: (bindings: CustomFieldBindings) => void;
 }) {
   const [formulaTarget, setFormulaTarget] = useState<{
@@ -216,7 +105,7 @@ export function FieldUsagePicker({
     current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
 
   const groups: Array<{
-    key: string;
+    key: FormulaHostKind;
     label: string;
     targets: readonly Target[];
     selected: string[];
@@ -251,11 +140,12 @@ export function FieldUsagePicker({
       list: 'nodeKindIds',
     },
   ];
+  const shown = onlyGroups ? groups.filter((group) => onlyGroups.includes(group.key)) : groups;
 
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-col gap-1.5">
-        {groups.map((group) => (
+        {shown.map((group) => (
           <Group
             key={group.key}
             label={group.label}
@@ -275,14 +165,27 @@ export function FieldUsagePicker({
               onChange({ ...bindings, [group.list]: toggleOne(bindings[group.list], id) })
             }
             disabled={disabled}
+            allowFormulas={allowFormulas}
             onEditFormula={(target) =>
               setFormulaTarget({ target, hostKind: group.key as FormulaHostKind })
+            }
+            describe={
+              describeTarget
+                ? (targetId, on) => describeTarget(group.key as FormulaHostKind, targetId, on)
+                : undefined
+            }
+            action={
+              targetAction
+                ? (targetId) => targetAction(group.key as FormulaHostKind, targetId)
+                : undefined
             }
           />
         ))}
       </div>
-      <p className="text-xs break-words text-muted-foreground">{ui.customFields.bind.usageHint}</p>
-      {formulaTarget && definition ? (
+      <p className="text-xs break-words text-muted-foreground">
+        {hint ?? ui.customFields.bind.usageHint}
+      </p>
+      {allowFormulas && formulaTarget && definition ? (
         <BindingFormulaDialog
           targetId={formulaTarget.target.id}
           hostKind={formulaTarget.hostKind}

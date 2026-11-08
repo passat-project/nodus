@@ -2,6 +2,7 @@ import type { CreationForm, ProcessType, ProcessTypeRef, WorkflowDetail } from '
 import { customFieldKey } from '@nodus/contracts';
 
 import { quickDocument, simpleDocument, standardDocument } from './workflows-documents.js';
+import { stageInProgress } from './task-stages.js';
 import { letterProcessTypes, letterWorkflowDetails } from './letter-catalog.js';
 
 import { quickProcessType, systemProcessType } from './task-stages.js';
@@ -26,6 +27,8 @@ export const OVERTIME_WORKFLOW_ID = wid(53);
 export const HR_WORKFLOW_ID = wid(54);
 /** Маршрут типа «Комплект» (#632): быстрый маршрут + форма с формулой. */
 export const KOMPLEKT_WORKFLOW_ID = wid(55);
+/** Маршрут типа «Изменение» (#630): быстрый + «Выдать в печать». */
+export const CHANGE_WORKFLOW_ID = wid(56);
 
 /** Тип мок-библиотеки: `viewer` и `creationForm` считает хендлер — они
  *  зависят от актёра и опубликованного документа (Р6, Р2). */
@@ -139,6 +142,35 @@ export const komplektType: DemoProcessType = {
   config: { card: { hiddenBlocks: [], roleLabels: {} }, access: allAccess },
 };
 
+/** Тип «Изменение» (#630): работа внутри папки «Комплект» — носитель
+ *  счётчиков Изм./«Взял изм»/№ разрешения и кнопки «Выдать в печать». */
+export const changeType: DemoProcessType = {
+  id: processTypeIds.change,
+  code: 'change',
+  name: 'Изменение',
+  icon: 'pencil-ruler',
+  color: 'warning',
+  description: 'Изменение выпущенного комплекта: Изм. N по папке и номер книги',
+  creatable: true,
+  category: 'task',
+  direction: null,
+  isSystem: false,
+  sortOrder: 5,
+  archivedAt: null,
+  workflowId: CHANGE_WORKFLOW_ID,
+  numbering: null,
+  config: { card: { hiddenBlocks: [], roleLabels: {} }, access: allAccess },
+};
+
+export const changeTypeRef: ProcessTypeRef = {
+  id: changeType.id,
+  code: changeType.code,
+  name: changeType.name,
+  category: changeType.category,
+  icon: changeType.icon,
+  color: changeType.color,
+};
+
 /** Ссылка типа для демо-задач комплектов (TaskListItem.type). */
 export const komplektTypeRef: ProcessTypeRef = {
   id: komplektType.id,
@@ -195,6 +227,7 @@ export const demoProcessTypes: DemoProcessType[] = [
   overtimeType,
   hrType,
   komplektType,
+  changeType,
   archivedDemoType,
   ...letterProcessTypes,
 ];
@@ -256,7 +289,9 @@ export const demoWorkflowDetails: Record<string, WorkflowDetail> = {
     document: quickDocument,
     stageEntityCounts: {},
   },
-  // «Комплект» (#632): быстрый маршрут + форма создания с формулой шифра.
+  // «Комплект» (#632): быстрый маршрут + форма создания с формулой шифра;
+  // кнопка «Выдать в печать» (#630) присваивает номера счётчиков — «Изм.»
+  // (разрез «папка», К2) и сквозной «Взял изм» (продолжение из Excel, К3).
   [KOMPLEKT_WORKFLOW_ID]: {
     id: KOMPLEKT_WORKFLOW_ID,
     typeIds: [komplektType.id],
@@ -264,6 +299,41 @@ export const demoWorkflowDetails: Record<string, WorkflowDetail> = {
     publishedAt,
     publishedBy,
     document: { ...quickDocument, creation: komplektCreationForm },
+    stageEntityCounts: {},
+  },
+  // «Изменение» (#630, модель v3): работа в папке «Комплект»; Изм. и №
+  // разрешения выдаются при создании (их пишут в штамп), действие «Выдать в
+  // печать» выдаёт номер накладной выдачи `{Инв. № проекта}-{N}`. Пост-функции
+  // на уже выданные поля оставлены нарочно: «кто первым заполнил — тот выдал»,
+  // кнопка их не меняет (старые работы без номера получат их кнопкой).
+  [CHANGE_WORKFLOW_ID]: {
+    id: CHANGE_WORKFLOW_ID,
+    typeIds: [changeType.id],
+    version: 1,
+    publishedAt,
+    publishedBy,
+    document: {
+      ...quickDocument,
+      transitions: [
+        ...quickDocument.transitions,
+        {
+          id: '30000000-0000-4000-8000-999999999999',
+          code: 'issue_print',
+          name: 'Выдать в печать',
+          fromStageId: stageInProgress.id,
+          toStageId: stageInProgress.id,
+          display: 'button',
+          intent: 'action',
+          sortOrder: 2,
+          rules: {
+            conditions: [{ kind: 'role_in', roles: ['assignee', 'coexecutor'] }],
+            validators: [],
+            postFunctions: [{ kind: 'assign_number', fieldId: fieldIds.waybillNumber }],
+          },
+          form: { enabled: false, sections: [] },
+        },
+      ],
+    },
     stageEntityCounts: {},
   },
   [ARCHIVED_WORKFLOW_ID]: {

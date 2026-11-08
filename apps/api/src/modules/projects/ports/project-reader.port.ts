@@ -28,6 +28,32 @@ export interface ProjectViewScope {
   hiddenProjectIds: string[];
 }
 
+/** Проект для места счёта (#630): тип, портфель и значения атрибутов. */
+export interface NumberProjectContext {
+  id: string;
+  name: string;
+  typeId: string;
+  portfolioId: string | null;
+  values: Record<string, unknown>;
+  createdAt: Date;
+}
+
+/** Папка для места счёта (#630): цепочка предков, вид и значения. */
+export interface NumberNodeContext {
+  id: string;
+  projectId: string;
+  parentId: string | null;
+  kindId: string;
+  name: string;
+  values: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export interface NumberProjectContexts {
+  projects: NumberProjectContext[];
+  nodes: NumberNodeContext[];
+}
+
 export interface ProjectReader {
   /** Ссылки проектов, видимых актёру; невидимые — пропущены (без оракула). */
   refsFor(actor: ProjectActor, ids: readonly string[]): Promise<ProjectRef[]>;
@@ -86,6 +112,21 @@ export interface ProjectReader {
     roles: readonly ProjectRole[],
     tx?: TransactionClient,
   ): Promise<string[]>;
+
+  /** Место счёта (#630): проекты и папки (включая всех предков проектов)
+   *  со значениями — одним вызовом, без N+1 по задачам/папкам. */
+  numberContext(
+    projectIds: readonly string[],
+    nodeIds: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<NumberProjectContexts>;
+
+  /** Проекты и папки отмеченных типов (охват и выдача существующим, #630). */
+  numberHostsOfTypes(
+    projectTypeIds: readonly string[],
+    nodeKindIds: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<NumberProjectContexts>;
 }
 
 /**

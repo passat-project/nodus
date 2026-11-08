@@ -13,6 +13,12 @@ import {
 } from '../../../../shared/mocks/data/tasks.js';
 import { demoProjects } from '../../../../shared/mocks/data/project-views.js';
 import { findDemoNodeRow } from '../../../../shared/mocks/data/project-nodes.js';
+import {
+  placeOfNewTask,
+  planOnCreate,
+  stripCounterValues,
+} from '../../../../shared/mocks/data/numbering-create.js';
+import { numberingFailureResponse } from '../../../../shared/custom-fields/mocks/numbering-responses.js';
 import { demoStages } from '../../../../shared/mocks/data/task-stages.js';
 import { demoProcessTypes, demoWorkflowDetails } from '../../../../shared/mocks/data/workflows.js';
 import type { WorkflowDetail } from '@nodus/contracts';
@@ -196,8 +202,28 @@ export const tasksListHandlers = [
       }
       nodeId = node.id;
     }
+    // Счётчики «при создании» (#630, модель v3): номер из тела молча
+    // отбрасывается (выдаёт процесс); значения условий и пустые поля в
+    // номере — ДО создания: нет места — 409, пустое поле без подтверждения
+    // — 409 NUMBER_SEGMENT_EMPTY; задача не создаётся, номера не тратятся.
+    const values = stripCounterValues(body.customFields ?? {});
+    const numbering = planOnCreate(
+      placeOfNewTask({
+        nodeId,
+        projectId: project?.id ?? null,
+        parentId: parent?.id ?? null,
+        typeId: type.id,
+        values,
+        parentValues: parent?.customFields,
+      }),
+      values,
+      { source: 'create', confirmEmpty: body.confirmEmptyNumberParts === true },
+    );
+    if (!numbering.ok) return numberingFailureResponse(numbering.failure);
+    const taskId = crypto.randomUUID();
+    const numbered = { ...values, ...numbering.issue(taskId) };
     const task: TaskListItem = {
-      id: crypto.randomUUID(),
+      id: taskId,
       number: Math.max(...demoTasks.map((t) => t.number)) + 1,
       title: body.title,
       type: {
@@ -210,7 +236,7 @@ export const tasksListHandlers = [
       },
       stage,
       personalStageId,
-      customFields: body.customFields ?? {},
+      customFields: numbered as TaskListItem['customFields'],
       priority: body.priority ?? 'normal',
       deadline: body.deadline ?? null,
       creator: userRef(actorId),

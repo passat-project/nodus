@@ -1,4 +1,4 @@
-import type { TransitionFormInput, WorkflowDeciderFacts } from '@nodus/contracts';
+import type { NumberHostKind, TransitionFormInput, WorkflowDeciderFacts } from '@nodus/contracts';
 
 import type { TransactionClient } from '../database/transaction-runner.js';
 
@@ -128,6 +128,25 @@ export interface WorkflowStageChangeMeta {
 /** Что применило окно перехода (#380): дифф полей, запись времени, ревизия
  *  итога. Движок кладёт это в журнал и в событие; адаптер — единственный,
  *  кто пишет поля сущности (ADR-0024 п.3). */
+/** Место счётчика для кнопки `assign_number {fieldId}` (#630): структурный
+ *  тип ядра, чтобы core не импортировал модуль атрибутов (направление
+ *  modules → core). Совпадает с `NumberTarget` порта custom-fields. */
+export interface WorkflowNumberTarget {
+  host: NumberHostKind;
+  typeId: string | null;
+  folders: readonly { id: string; kindId: string }[];
+  projectId: string | null;
+  portfolioId: string | null;
+  projectTypeId: string | null;
+  parentTaskId: string | null;
+  sources: {
+    self: Readonly<Record<string, unknown>>;
+    project?: Readonly<Record<string, unknown>> | null;
+    parentTask?: Readonly<Record<string, unknown>> | null;
+    folders?: readonly { kindId: string; values: Readonly<Record<string, unknown>> }[];
+  };
+}
+
 export interface WorkflowFormApplied {
   /** Только реально изменённые поля: `{ deadline: { from, to } }`. */
   fields: Record<string, { from: unknown; to: unknown }>;
@@ -186,4 +205,20 @@ export interface WorkflowEntityAdapter {
 
   /** Пересчёт сущностей стадии после смены её системной группы (фоном). */
   restateStage(stageId: string, systemState: string): Promise<number>;
+
+  /** Место счётчика для кнопки `assign_number {fieldId}` (#630): папки,
+   *  проект, родитель и значения источников. Адаптер знает своё дерево. */
+  numberTarget?(
+    tx: TransactionClient,
+    entityId: string,
+    actor: WorkflowActor,
+  ): Promise<WorkflowNumberTarget>;
+
+  /** Записать выданные номера в значения сущности (системная запись в tx). */
+  applyNumbers?(
+    tx: TransactionClient,
+    entityId: string,
+    actorId: string,
+    numbers: Readonly<Record<string, string>>,
+  ): Promise<void>;
 }

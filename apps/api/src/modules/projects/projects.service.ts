@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- создание проекта (#630): место счёта и запись — одна транзакция */
 import { Inject, Injectable } from '@nestjs/common';
 import {
   customFieldKey,
@@ -35,6 +36,11 @@ import { ProjectMembersService } from './project-members.service.js';
 import { ProjectParticipantsRepository } from './project-participants.repository.js';
 import { ProjectTypesRepository } from './project-types.repository.js';
 import { ProjectsRepository, type ProjectRow } from './projects.repository.js';
+import {
+  NUMBER_ISSUE,
+  numberingFailureException,
+  type NumberIssue,
+} from '../custom-fields/ports/number-issue.port.js';
 
 const DEFAULT_VISIBILITY = 'open' as const;
 const SETTING_VISIBILITY = 'projects.defaultVisibility';
@@ -61,6 +67,7 @@ export class ProjectsService {
     // Снятие формулы ячейки при обычной записи значения (Р5 #632).
     @Inject(FORMULA_CELLS) private readonly formulaCells: FormulaCells,
     private readonly formulaRecalc: ProjectFormulaRecalcService,
+    @Inject(NUMBER_ISSUE) private readonly numberIssue: NumberIssue,
   ) {}
 
   async create(user: AuthUser, body: CreateProjectBody): Promise<ProjectDetail> {
@@ -118,6 +125,28 @@ export class ProjectsService {
           },
         );
       }
+      // Счётчики «при создании» (#630): портфель/тип — место счёта;
+      // отказ — проект не создаётся, номера не тратятся.
+      const numberPlan = await this.numberIssue.planOnCreate(
+        tx,
+        {
+          host: 'project',
+          typeId: body.typeId,
+          folders: [],
+          projectId: null,
+          portfolioId: body.portfolioId ?? null,
+          projectTypeId: body.typeId,
+          parentTaskId: null,
+          sources: { self: customFields },
+        },
+        {
+          source: 'create',
+          values: customFields,
+          confirmEmpty: body.confirmEmptyNumberParts === true,
+          actorId: user.id,
+        },
+      );
+      if (!numberPlan.ok) throw numberingFailureException(numberPlan.failure);
       const row = await this.repo.create(
         {
           name: body.name,
@@ -135,6 +164,12 @@ export class ProjectsService {
         },
         tx,
       );
+      const numbers = await numberPlan.issue(tx, row.id);
+      if (Object.keys(numbers).length > 0) {
+        await this.repo.update(tx, row.id, {
+          customFields: { ...customFields, ...numbers } as Prisma.InputJsonValue,
+        });
+      }
       await this.members.syncManagement(tx, row.id, { managerId, assistantIds });
       if (observerIds.length > 0) {
         await this.participantsRepo.add(

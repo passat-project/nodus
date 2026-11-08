@@ -3,6 +3,7 @@ import type { TransitionForm, WorkflowTransitionRules } from '@nodus/contracts';
 
 import type { Prisma } from '../../../generated/prisma/client.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import { letterSeriesTemplate } from '../numbering/number-template.js';
 
 export interface CatalogStageData {
   name: string;
@@ -88,12 +89,25 @@ export class CatalogRepository {
     });
   }
 
-  /** Серия нумерации по коду (#55): существующая не перетирается — правка
-   *  префикса администратором (N7) переживает рестарты. */
-  async ensureSeries(tx: TransactionClient, def: { code: string; prefix: string }) {
+  /** Серия нумерации по коду (#55 → #630): существующая не перетирается —
+   *  правка правила администратором (N7) переживает рестарты. Новые ряды
+   *  создаются по схеме правил #630: письмо-шаблон бит-в-бит из prefix,
+   *  период «год» (миграция 20261121120000 так же перевела существующие). */
+  async ensureSeries(tx: TransactionClient, def: { code: string; prefix: string; name: string }) {
     return (
       (await tx.numberSeries.findUnique({ where: { code: def.code } })) ??
-      (await tx.numberSeries.create({ data: { code: def.code, prefix: def.prefix } }))
+      (await tx.numberSeries.create({
+        data: {
+          code: def.code,
+          prefix: def.prefix,
+          reset: 'year',
+          name: def.name,
+          containers: [],
+          period: 'year',
+          template: letterSeriesTemplate(def.prefix) as unknown as Prisma.InputJsonValue,
+          startValue: 1,
+        },
+      }))
     );
   }
 

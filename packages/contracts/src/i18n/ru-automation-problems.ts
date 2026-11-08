@@ -39,6 +39,8 @@ export const problemStrings = {
   post_function_not_in_category: 'Особое правило не работает в этой категории процесса',
   numbering_not_configured: 'Кнопка присваивает номер, а у типа нет серии номеров',
   registration_without_number: 'Окно регистрации без присвоения номера — номер не выдастся',
+  number_field_not_in_type: 'Кнопка присваивает номер в поле, которого нет у этого типа процесса',
+  number_field_not_counter: 'Поле для номера не является счётчиком с настроенной серией',
   action_without_visibility:
     'Кнопка-действие без условий «кто видит» — в «Мои действия» попадёт ответственному',
   stage_name_shared:

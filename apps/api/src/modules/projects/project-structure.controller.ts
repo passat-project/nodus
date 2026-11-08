@@ -125,6 +125,7 @@ export class ProjectStructureController {
         kindId: dto.kindId,
         names: dto.names,
         customFields: dto.customFields,
+        confirmEmptyNumberParts: dto.confirmEmptyNumberParts,
       })
       .then((nodes) => ({ nodes }));
   }

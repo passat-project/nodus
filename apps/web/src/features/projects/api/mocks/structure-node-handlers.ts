@@ -5,11 +5,9 @@ import {
   SYSTEM_FIELD_IDS,
   batchCreateProjectNodesBodySchema,
   createProjectNodeBodySchema,
-  moveProjectNodeBodySchema,
   nodeFormKey,
   updateProjectNodeBodySchema,
   type CustomFieldValues,
-  type FormulaMovePreviewResponse,
   type ProjectNode,
 } from '@nodus/contracts';
 
@@ -26,11 +24,16 @@ import { findDemoProjectRow } from '../../../../shared/mocks/data/projects.js';
 import { canSeeProject } from '../../../../shared/mocks/data/project-views.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import {
-  childNodeRows,
+  placeOfNewNode,
+  planOnCreate,
+  stripCounterValues,
+} from '../../../../shared/mocks/data/numbering-create.js';
+import {
+  counterWriteResponse,
+  numberingFailureResponse,
+} from '../../../../shared/custom-fields/mocks/numbering-responses.js';
+import {
   demoNodeKinds,
-  demoNodeRows,
-  descendantIdsOf,
-  directTasksOf,
   findDemoNodeRow,
   nodeDepthOf,
   nodesOfProject,
@@ -50,10 +53,11 @@ import {
   manageableProject,
   nodeNotFound,
   ruleResponse,
-  subtreeHeight,
   valuesInvalid,
 } from './structure-mock-kit.js';
 import { createIssues, formOfKind, updateIssues } from './node-form-rules.js';
+import { structureNodeMoveHandlers } from './structure-node-move-handlers.js';
+
 export const structureNodeHandlers = [
   http.get('/api/v1/projects/:id/structure', ({ params }) => {
     const row = findDemoProjectRow(String(params.id));
@@ -113,14 +117,26 @@ export const structureNodeHandlers = [
     if ((parent.parent ? nodeDepthOf(parent.parent) + 1 : 0) + 1 > NODE_LIMITS.depth) {
       return conflict(ErrorCode.PROJECT_NODE_INVALID, 'Depth limit reached');
     }
+    // Счётчики «при создании» (#630, модель v3): номер из тела отбрасывается,
+    // значения условий — ДО создания (нет места — 409, ничего не тратится),
+    // выдача — в той же «транзакции», что и папка.
+    const clean = stripCounterValues(values);
+    const numbering = planOnCreate(
+      placeOfNewNode(guard.row.id, body.parentId ?? null, body.kindId, clean),
+      clean,
+      { source: 'create', confirmEmpty: body.confirmEmptyNumberParts === true },
+    );
+    if (!numbering.ok) return numberingFailureResponse(numbering.failure);
     const row = appendNode(
       guard.row.id,
       body.parentId ?? null,
       body.kindId,
       body.name,
       code,
-      values,
+      clean as typeof values,
     );
+    const numbers = numbering.issue(row.id);
+    if (Object.keys(numbers).length > 0) row.customFields = { ...row.customFields, ...numbers };
     return HttpResponse.json(projectNodeDto(row), { status: 201 });
   }),
 
@@ -167,18 +183,22 @@ export const structureNodeHandlers = [
     if (nodesOfProject(guard.row.id).length + body.names.length > NODE_LIMITS.nodesPerProject) {
       return conflict(ErrorCode.PROJECT_NODE_LIMIT_REACHED, 'Node limit reached');
     }
-    const nodes: ProjectNode[] = body.names.map((name) =>
-      projectNodeDto(
-        appendNode(
-          guard.row.id,
-          body.parentId ?? null,
-          body.kindId,
-          name,
-          null,
-          body.customFields ?? {},
-        ),
-      ),
-    );
+    // Счётчики «при создании» (#630): пачка — одна «транзакция»: место для
+    // счёта проверяется ДО создания (у всех папок пачки оно общее — один
+    // родитель), номера выдаются по порядку имён пачки.
+    const clean = stripCounterValues(body.customFields ?? {});
+    const target = placeOfNewNode(guard.row.id, body.parentId ?? null, body.kindId, clean);
+    const numbering = planOnCreate(target, clean, {
+      source: 'create',
+      confirmEmpty: body.confirmEmptyNumberParts === true,
+    });
+    if (!numbering.ok) return numberingFailureResponse(numbering.failure);
+    const nodes: ProjectNode[] = body.names.map((name) => {
+      const row = appendNode(guard.row.id, body.parentId ?? null, body.kindId, name, null, clean);
+      const numbers = numbering.issue(row.id);
+      if (Object.keys(numbers).length > 0) row.customFields = { ...row.customFields, ...numbers };
+      return projectNodeDto(row);
+    });
     return HttpResponse.json({ nodes }, { status: 201 });
   }),
 
@@ -233,7 +253,24 @@ export const structureNodeHandlers = [
     // Формульная ячейка руками не пишется (#660): 422, как на сервере.
     const lockedNode = lockedPatchResponse('node', node.id, node.customFields, patchValues);
     if (lockedNode) return lockedNode;
+    // Номер счётчика руками не пишется (#630): 422 NUMBER_CELL_IMMUTABLE.
+    const counterWrite = counterWriteResponse(patchValues);
+    if (counterWrite) return counterWrite;
+    // Смена вида на вид с номером «при создании» (#630, вердикт 08.11):
+    // номер выдаётся в этот момент; нет нужного места — 409, вид не меняется.
+    const retyped = kindChanged
+      ? planOnCreate(
+          placeOfNewNode(guard.row.id, node.parentId, body.kindId!, node.customFields),
+          node.customFields,
+          { source: 'type_change', confirmEmpty: body.confirmEmptyNumberParts === true },
+        )
+      : null;
+    if (retyped && !retyped.ok) return numberingFailureResponse(retyped.failure);
     if (kindChanged) node.kindId = body.kindId!;
+    if (retyped?.ok) {
+      const numbers = retyped.issue(node.id);
+      if (Object.keys(numbers).length > 0) node.customFields = { ...node.customFields, ...numbers };
+    }
     if (body.name) node.name = body.name;
     if (Object.keys(patchValues).length > 0) {
       const next: DemoNodeRow['customFields'] = { ...node.customFields };
@@ -247,75 +284,6 @@ export const structureNodeHandlers = [
     return HttpResponse.json(nodeWithFormulas(projectNodeDto(node), node.kindId));
   }),
 
-  // Превью формульного диффа переноса (#632, критерий 1): демо-мир без
-  // формульных переносов — дифф пуст, окно подтверждения не открывается.
-  // Права те же, что у переноса (structure manage), 404 — как у move.
-  http.post('/api/v1/projects/:id/nodes/:nodeId/move-preview', ({ params }) => {
-    const guard = manageableProject(String(params.id));
-    if (typeof guard === 'string') return guardResponse(guard);
-    const node = findDemoNodeRow(String(params.nodeId));
-    if (!node || node.projectId !== guard.row.id) return nodeNotFound();
-    return HttpResponse.json({ changes: [] } satisfies FormulaMovePreviewResponse);
-  }),
-
-  http.post('/api/v1/projects/:id/nodes/:nodeId/move', async ({ params, request }) => {
-    const guard = manageableProject(String(params.id));
-    if (typeof guard === 'string') return guardResponse(guard);
-    const parsed = moveProjectNodeBodySchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return invalid();
-    const body = parsed.data;
-    const node = findDemoNodeRow(String(params.nodeId));
-    if (!node || node.projectId !== guard.row.id) return nodeNotFound();
-    const parent = checkedParent(guard.row.id, body.parentId);
-    if (typeof parent === 'string') return nodeNotFound();
-    if (
-      body.parentId !== null &&
-      (body.parentId === node.id || descendantIdsOf(node.id).has(body.parentId))
-    ) {
-      return conflict(ErrorCode.PROJECT_NODE_CYCLE, 'Cannot move node into itself');
-    }
-    const newDepth = body.parentId && parent.parent ? nodeDepthOf(parent.parent) + 1 : 0;
-    if (newDepth + subtreeHeight(node) - 1 > NODE_LIMITS.depth) {
-      return conflict(ErrorCode.PROJECT_NODE_INVALID, 'Depth limit reached');
-    }
-    if (
-      body.parentId !== null &&
-      childNodeRows(body.parentId, guard.row.id).length >= NODE_LIMITS.childrenPerParent
-    ) {
-      return conflict(ErrorCode.PROJECT_NODE_LIMIT_REACHED, 'Children limit reached');
-    }
-    const anchorOf = (id: string | null | undefined) =>
-      id ? demoNodeRows.find((row) => row.id === id && row.parentId === body.parentId) : undefined;
-    const before = anchorOf(body.beforeId);
-    const after = anchorOf(body.afterId);
-    if ((body.beforeId && !before) || (body.afterId && !after)) return invalid();
-    // Порядок сиблингов = порядок в массиве: вынимаем и вставляем по якорю,
-    // без якоря — последним ребёнком родителя.
-    demoNodeRows.splice(demoNodeRows.indexOf(node), 1);
-    node.parentId = body.parentId;
-    if (before) demoNodeRows.splice(demoNodeRows.indexOf(before), 0, node);
-    else if (after) demoNodeRows.splice(demoNodeRows.indexOf(after) + 1, 0, node);
-    else {
-      const children = childNodeRows(body.parentId, guard.row.id).filter(
-        (row) => row.id !== node.id,
-      );
-      const last = children[children.length - 1];
-      if (last) demoNodeRows.splice(demoNodeRows.indexOf(last) + 1, 0, node);
-      else demoNodeRows.push(node);
-    }
-    return HttpResponse.json(projectNodeDto(node));
-  }),
-
-  http.delete('/api/v1/projects/:id/nodes/:nodeId', ({ params }) => {
-    const guard = manageableProject(String(params.id));
-    if (typeof guard === 'string') return guardResponse(guard);
-    const node = findDemoNodeRow(String(params.nodeId));
-    if (!node || node.projectId !== guard.row.id) return nodeNotFound();
-    const hasChildren = demoNodeRows.some((row) => row.parentId === node.id);
-    if (hasChildren || directTasksOf(node.id).length > 0) {
-      return conflict(ErrorCode.PROJECT_NODE_NOT_EMPTY, 'Node is not empty');
-    }
-    demoNodeRows.splice(demoNodeRows.indexOf(node), 1);
-    return new HttpResponse(null, { status: 204 });
-  }),
+  // Перенос и удаление папок — соседний модуль (I5).
+  ...structureNodeMoveHandlers,
 ];

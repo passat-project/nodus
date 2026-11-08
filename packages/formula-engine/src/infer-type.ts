@@ -16,10 +16,12 @@ const ORDERED_TYPES = new Set<FormulaValueType>(['number', 'money', 'date', 'dat
  *  ссылки — id (ref), списки — массив id (list), текст/ссылка-путь — string. */
 export function formulaTypeOfField(type: CustomFieldType): FormulaValueType {
   switch (type) {
+    case 'counter':
     case 'text':
     case 'long_text':
     case 'link':
     case 'enum':
+      // Счётчик (#630) — номер-строка: выдан движком, в формулах не считается.
       return 'string';
     case 'number':
     case 'duration':

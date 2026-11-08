@@ -31,6 +31,7 @@ import {
 } from '../../../model/transition-rules.js';
 import { ModeChoices, PanelField, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
 import { CustomFieldChecks } from './custom-fields-checks.js';
+import { AssignNumberRule } from './assign-number-rule.js';
 import { CheckRow } from './transition-roles-section.js';
 
 /**
@@ -154,6 +155,7 @@ export function RulesSection({
   document: doc,
   readOnly,
   category = 'task',
+  typeId,
 }: {
   transition: WorkflowDraftTransition;
   document: WorkflowDraftDocument;
@@ -161,6 +163,8 @@ export function RulesSection({
   /** Пост-действия категории (Р6): у письма — только «Присвоить номер»,
    *  правка каталога закрыта — показываем, что делает кнопка. */
   category?: ProcessCategory;
+  /** Тип процесса: counter-поля для «Присвоить номер» (#630, Р4). */
+  typeId?: string;
 }) {
   const patch = usePatchRules(transition);
   const target = routeIfOf(transition.rules);
@@ -243,6 +247,7 @@ export function RulesSection({
           </Select>
         </PanelField>
       ) : null}
+      <AssignNumberRule transition={transition} typeId={typeId} readOnly={readOnly} patch={patch} />
     </>
   );
 }

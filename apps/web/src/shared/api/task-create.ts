@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateTaskBody, TaskListItem, TaskStageWithCount } from '@nodus/contracts';
 
 import { api } from '../api-client.js';
+import { withEmptyNumberConfirm } from '../custom-fields/number-confirm.js';
 import { tasksKeys } from './tasks-keys.js';
 
 /** Личная схема «Мой план» (ADR-0008): колонки личной доски со счётчиками.
@@ -23,7 +24,15 @@ export function usePersonalStages() {
 export function useCreateTask() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: CreateTaskBody) => api<TaskListItem>('/tasks', { method: 'POST', body }),
+    // Номер «при создании» с пустым полем (#630): окно «Выдать так /
+    // Вернуться» и повтор с подтверждением — задача создаётся один раз.
+    mutationFn: (body: CreateTaskBody) =>
+      withEmptyNumberConfirm((confirmed) =>
+        api<TaskListItem>('/tasks', {
+          method: 'POST',
+          body: confirmed ? { ...body, confirmEmptyNumberParts: true } : body,
+        }),
+      ),
     onSettled: (_data, _error, body) => {
       void queryClient.invalidateQueries({ queryKey: tasksKeys.personalStages() });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.listPages() });

@@ -19,7 +19,10 @@ const definitionSelect = {
   sortOrder: true,
   createdAt: true,
   updatedAt: true,
-  bindings: { select: { targetKind: true, targetId: true, defaultFormula: true } },
+  numberSeriesId: true,
+  bindings: {
+    select: { targetKind: true, targetId: true, defaultFormula: true, numberOnCreate: true },
+  },
   companyValue: { select: { value: true } },
 } as const;
 
@@ -126,6 +129,31 @@ export class DefinitionsRepository {
       },
       select: definitionSelect,
     });
+  }
+
+  /** Серия нумерации counter-атрибута (#630): правило 1:1, null — нет. */
+  async setNumberSeries(id: string, seriesId: string | null, tx: TransactionClient): Promise<void> {
+    await tx.fieldDefinition.update({ where: { id }, data: { numberSeriesId: seriesId } });
+  }
+
+  /** «При создании» по привязкам (#630): флаг — свойство привязки. */
+  async setNumberOnCreate(
+    definitionId: string,
+    onCreate: readonly string[],
+    tx: TransactionClient,
+  ): Promise<void> {
+    const wanted = new Set(onCreate);
+    const condition =
+      wanted.size === 0
+        ? Prisma.sql`false`
+        : Prisma.sql`target_id IN (${Prisma.join(
+            [...wanted].map((id) => Prisma.sql`${id}::uuid`),
+          )})`;
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE field_bindings
+      SET number_on_create = ${condition}
+      WHERE definition_id = ${definitionId}::uuid
+    `);
   }
 
   /** Удаление всегда разрешено (Р8): bindings/company_value — каскадом,

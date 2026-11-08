@@ -4,6 +4,26 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectNode } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
+vi.mock('../../../../shared/custom-fields/queries.js', () => ({
+  useNumberHostAssignments: () => ({
+    data: {
+      items: [
+        {
+          fieldId: 'f-1',
+          display: 'Изм. 2',
+          source: 'create',
+          sourceLabel: null,
+          actorName: null,
+          containers: [
+            { entity: 'node', id: 'n', name: 'КЖ-01', path: [], hidden: false, deleted: false },
+          ],
+          assignedAt: '2026-11-08T10:00:00.000Z',
+        },
+      ],
+    },
+  }),
+}));
+
 import { TaskMoveDialog } from './task-move-dialog.js';
 
 const ZERO_ROLLUP = {
@@ -65,4 +85,13 @@ describe('TaskMoveDialog: цель переноса и её подпись (A9-6
     fireEvent.click(screen.getByRole('button', { name: ui.structure.move }));
     expect(onPick).toHaveBeenCalledWith(null);
   });
+});
+
+it('одна задача с номером: «номер останется прежним» и счёт', () => {
+  render(
+    <TaskMoveDialog count={1} taskId="t-1" nodes={[BUILDING]} onPick={vi.fn()} onClose={vi.fn()} />,
+  );
+  expect(screen.getByText(/Изм\. 2/)).toBeTruthy();
+  expect(screen.getByText(/останется прежним/)).toBeTruthy();
+  expect(screen.getByText(/КЖ-01/)).toBeTruthy();
 });

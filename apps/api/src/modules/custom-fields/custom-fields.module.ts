@@ -18,6 +18,9 @@ import { DefinitionsBindingService } from './definitions/definitions-binding.ser
 import { DefinitionsService } from './definitions/definitions.service.js';
 import { DefinitionsQueryService } from './definitions/definitions-query.service.js';
 import { DefinitionsUsageService } from './definitions/definitions-usage.service.js';
+import { CounterRuleService } from './definitions/counter-rule.service.js';
+import { NumberingApiService } from './numbering/numbering-api.service.js';
+import { NumberingController } from './numbering/numbering.controller.js';
 import { FormulaApiService } from './formulas/formula-api.service.js';
 import { FormulaBindingService } from './formulas/formula-binding.service.js';
 import { FormulaBindingsController } from './formulas/formula-bindings.controller.js';
@@ -42,7 +45,12 @@ import { CustomFieldValueValidator } from './values/value-validator.js';
     ProjectsPortsModule,
     CustomFieldsPortsModule,
   ],
-  controllers: [DefinitionsController, FormulasController, FormulaBindingsController],
+  controllers: [
+    DefinitionsController,
+    FormulasController,
+    FormulaBindingsController,
+    NumberingController,
+  ],
   providers: [
     UserProfileProvider,
     { provide: USER_PROFILE_READER, useClass: UserProfileProvider },
@@ -57,6 +65,8 @@ import { CustomFieldValueValidator } from './values/value-validator.js';
     CustomFieldRefsHydrator,
     DefinitionsService,
     DefinitionsBindingService,
+    CounterRuleService,
+    NumberingApiService,
     FormulaApiService,
     FormulaBindingService,
   ],

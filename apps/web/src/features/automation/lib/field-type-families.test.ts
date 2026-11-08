@@ -10,8 +10,8 @@ import {
 } from './field-type-families.js';
 
 describe('семейства типов полей (#431)', () => {
-  it('16 плиток «Нового поля», 19 типов сводятся в семейства (Р5 #631)', () => {
-    expect(FIELD_FAMILIES).toHaveLength(16);
+  it('17 плиток «Нового поля», 20 типов сводятся в семейства (Р5 #631, счётчик — #630)', () => {
+    expect(FIELD_FAMILIES).toHaveLength(17);
     expect(familyOf('text')).toBe('text');
     expect(familyOf('long_text')).toBe('text');
     expect(familyOf('enum')).toBe('list');

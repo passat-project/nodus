@@ -17,6 +17,7 @@ import { api } from '../../../shared/api-client.js';
 import { toastApiError } from '../../../shared/api/error-toast.js';
 import { projectsKeys } from '../../../shared/api/projects-list.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
+import { withEmptyNumberConfirm } from '../../../shared/custom-fields/number-confirm.js';
 import { matchesProjectFilters, type ProjectJournalFilters } from '../lib/project-journal.js';
 import {
   JOURNAL_PREFIX,
@@ -55,8 +56,14 @@ function valuesPatched(
 export function useCreateProject() {
   const queryClient = useQueryClient();
   return useMutation({
+    // Номер «при создании» с пустым полем (#630) — окно и повтор.
     mutationFn: (vars: { body: CreateProjectBody; client?: CounterpartyRef | null }) =>
-      api<ProjectDetail>('/projects', { method: 'POST', body: vars.body }),
+      withEmptyNumberConfirm((confirmed) =>
+        api<ProjectDetail>('/projects', {
+          method: 'POST',
+          body: confirmed ? { ...vars.body, confirmEmptyNumberParts: true } : vars.body,
+        }),
+      ),
     onMutate: async ({ body, client }) => {
       await queryClient.cancelQueries({ queryKey: JOURNAL_PREFIX });
       const snapshot = queryClient.getQueriesData<JournalPages>({ queryKey: JOURNAL_PREFIX });

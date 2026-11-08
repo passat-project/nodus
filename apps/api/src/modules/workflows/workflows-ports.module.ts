@@ -1,9 +1,12 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 
 import { ROLE_MEMBERSHIP_READER } from '../../core/ports/role-membership.port.js';
+import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.module.js';
 import { RoleMembershipProvider } from '../../core/ports/role-membership.provider.js';
 import { NumberSeriesService } from './numbering/number-series.service.js';
+import { NumberSeriesStoreProvider } from './numbering/number-series.provider.js';
+import { NUMBER_SERIES_STORE } from './ports/number-series.port.js';
 import { WorkflowEntityRegistry } from './workflow/engine/entity-adapter.registry.js';
 import { TransitionRecordsRepository } from './workflow/engine/transition-records.repository.js';
 import { WorkflowEngine } from './workflow/engine/workflow-engine.js';
@@ -36,7 +39,9 @@ import { ProcessTypesRepository } from './types/process-types.repository.js';
 @Module({
   // DiscoveryService — скан провайдеров со `static readonly workflowCategory`
   // при bootstrap (тот же приём, что eventType у обработчиков событий).
-  imports: [DiscoveryModule],
+  // NUMBER_ISSUE движка выдачи (#630) живёт в custom-fields; цикл портов
+  // разорван forwardRef (оба модуля — тонкие адаптеры, не домены).
+  imports: [DiscoveryModule, forwardRef(() => CustomFieldsPortsModule)],
   providers: [
     RoleMembershipProvider,
     { provide: ROLE_MEMBERSHIP_READER, useClass: RoleMembershipProvider },
@@ -45,6 +50,8 @@ import { ProcessTypesRepository } from './types/process-types.repository.js';
     WorkflowEntityRegistry,
     TransitionRecordsRepository,
     NumberSeriesService,
+    NumberSeriesStoreProvider,
+    { provide: NUMBER_SERIES_STORE, useExisting: NumberSeriesStoreProvider },
     WorkflowEngine,
     ProcessCatalogReaderProvider,
     { provide: WORKFLOW_ENGINE, useExisting: WorkflowEngine },
@@ -63,6 +70,7 @@ import { ProcessTypesRepository } from './types/process-types.repository.js';
     WORKFLOW_RULES_READER,
     PROCESS_TYPE_FORM_CLEANER,
     ROLE_MEMBERSHIP_READER,
+    NUMBER_SERIES_STORE,
     WorkflowEntityRegistry,
     WorkflowRepository,
     ProcessTypesRepository,

@@ -23,6 +23,7 @@ export const FIELD_FAMILIES = [
   'letter',
   'node',
   'link',
+  'counter',
 ] as const;
 
 export type FieldFamily = (typeof FIELD_FAMILIES)[number];
@@ -45,6 +46,7 @@ const BASE_TYPE: Record<FieldFamily, CustomFieldType> = {
   letter: 'letter',
   node: 'node',
   link: 'link',
+  counter: 'counter',
 };
 
 export function familyOf(type: CustomFieldType): FieldFamily {

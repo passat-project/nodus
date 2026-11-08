@@ -64,7 +64,19 @@ function setup(
     placements: { prepare: vi.fn(async () => void 0) },
     mover: { apply: vi.fn(async () => void 0) },
     eventBus: { emit: vi.fn(async () => void 0) },
-    taskService: { listItem: vi.fn(async () => ({ id: 't1' })) },
+    taskService: {
+      listItem: vi.fn(async () => ({ id: 't1' })),
+      numberTargetFor: vi.fn(async () => ({
+        host: 'task',
+        typeId: 't1',
+        folders: [],
+        projectId: null,
+        portfolioId: null,
+        projectTypeId: null,
+        parentTaskId: null,
+        sources: { self: {} },
+      })),
+    },
   };
   const service = new TaskTypeChangeService(
     deps.txRunner as never,
@@ -75,6 +87,7 @@ function setup(
     deps.mover as never,
     deps.eventBus as never,
     deps.taskService as never,
+    { planOnCreate: async () => ({ ok: true, issue: async () => ({}) }) } as never,
   );
   return { service, ...deps };
 }

@@ -72,6 +72,29 @@ export class ProjectNodesRepository {
     });
   }
 
+  /** Папки проектов пачкой (#630): цепочки места и имена значений условий. */
+  async listByProjects(
+    projectIds: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<ProjectNodeRow[]> {
+    if (projectIds.length === 0) return [];
+    return (tx ?? this.prisma).projectNode.findMany({
+      select: nodeSelect,
+      where: { projectId: { in: [...new Set(projectIds)] } },
+      orderBy: [{ order: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /** Папки отмеченных видов (#630): охват и выдача существующим. */
+  async listByKinds(kindIds: readonly string[], tx?: TransactionClient): Promise<ProjectNodeRow[]> {
+    if (kindIds.length === 0) return [];
+    return (tx ?? this.prisma).projectNode.findMany({
+      select: nodeSelect,
+      where: { kindId: { in: [...new Set(kindIds)] } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
   /** Узлы вида (событие каталога видов, #632): смена формы вида меняет
    *  доступность атрибутов у всех его папок — пересчёт по проектам. */
   async listByKind(

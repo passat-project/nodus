@@ -3,17 +3,14 @@ import type { CustomFieldDefinition, DictionaryItem } from '@nodus/contracts';
 import { createCustomFieldBodySchema, updateCustomFieldBodySchema } from '@nodus/contracts';
 
 import {
-  createBody,
   DRAFT_PREFIX,
   draftIssues,
   draftOf,
   draftType,
   emptyDraft,
-  listDefault,
-  patchBody,
-  scalarDefault,
   withFamily,
 } from './field-draft.js';
+import { createBody, listDefault, patchBody, scalarDefault } from './field-draft-bodies.js';
 
 const ID = '50000000-0000-4000-8000-000000000001';
 const DICT = '50000000-0000-4000-8000-000000000002';
@@ -80,6 +77,32 @@ describe('черновик окна атрибута (#431, ревизия UI)',
     expect(text.settings).toEqual({});
     expect(text.defaultMode).toBe('none');
     expect(withFamily(emptyDraft, 'number').settings).toEqual({ precision: 0 });
+  });
+
+  it('counter не принимает и не отправляет обычные формулы мест (#630)', () => {
+    const text = {
+      ...withFamily(emptyDraft, 'text'),
+      bindingFormulas: { [ID]: { kind: 'literal' as const, value: 'текст' } },
+    };
+    const counter = { ...withFamily(text, 'counter'), name: 'Номер' };
+    expect(counter.bindingFormulas).toEqual({});
+
+    const body = createBody(counter, {});
+    expect(body.bindingFormulas).toBeUndefined();
+    expect(createCustomFieldBodySchema.safeParse(body).success).toBe(true);
+
+    const legacy = definition({
+      type: 'counter',
+      bindingFormulas: text.bindingFormulas,
+      numbering: {
+        rule: counter.numbering,
+        onCreate: [],
+        preview: '1',
+        issuedCount: 0,
+      },
+    });
+    expect(draftOf(legacy, []).bindingFormulas).toEqual({});
+    expect(patchBody(legacy, draftOf(legacy, []), null)).toBeNull();
   });
 
   it('проверка: имя, тип, варианты без пустых и повторов', () => {

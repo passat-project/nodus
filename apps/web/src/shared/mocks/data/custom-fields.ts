@@ -4,6 +4,7 @@ import { SystemDictionary } from '@nodus/contracts';
 import { currencyIds, dictionaryByCode, itemsOf, workKindIds } from './dictionaries.js';
 import { fieldIds } from './field-ids.js';
 import { definition, dictionaryRef, moneySettings } from './custom-field-demo-factory.js';
+import { counterDemoFields } from './counter-demo-fields.js';
 import { formulaDemoFields } from './formula-demo-fields.js';
 import { departmentIds } from './org-ids.js';
 import { processTypeIds } from './process-type-ids.js';
@@ -197,6 +198,8 @@ export const demoCustomFieldDefinitions: CustomFieldDefinition[] = [
     },
   ),
   ...formulaDemoFields,
+  // Счётчики (#630, модель v3) — на своём месте в sequence номеров.
+  ...counterDemoFields(),
 ];
 
 // Глобальный порядок реестра (sortOrder): по порядку массива.
@@ -241,6 +244,20 @@ function markIdOf(code: string): string {
 
 /** Значения демо-задач: часть задач заполнена, остальные — `{}`. */
 export const demoTaskCustomFields: Record<string, CustomFieldValues> = {
+  // Работы «Изменение» (#630): Изм. и № разрешения выданы при создании
+  // (журнал — numbering-store); накладных ещё нет — их выдаёт «Выдать в печать».
+  [tid(630)]: {
+    [fieldIds.changeNumber]: 'Изм. 1',
+    [fieldIds.permitNumber]: '15-26',
+  },
+  [tid(631)]: {
+    [fieldIds.changeNumber]: 'Изм. 2',
+    [fieldIds.permitNumber]: '16-26',
+  },
+  [tid(632)]: {
+    [fieldIds.changeNumber]: 'Изм. 1',
+    [fieldIds.permitNumber]: '17-26',
+  },
   [tid(2)]: {
     [fieldIds.invoiceNumber]: '№ 118-2026',
     [fieldIds.handoverDate]: '2026-10-20',

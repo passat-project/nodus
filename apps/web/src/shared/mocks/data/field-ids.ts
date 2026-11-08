@@ -3,9 +3,10 @@
  *  вынесен из custom-fields.ts, чтобы разорвать цикл импортов
  *  (custom-fields → task-item-factory → … → workflows → workflows-documents
  *  → custom-fields). Зависимости — только такие же чистые константы. */
-import { SYSTEM_FIELD_IDS } from '@nodus/contracts';
+import { SYSTEM_FIELD_IDS, type NumberSeriesRule } from '@nodus/contracts';
 
 import { MARKA_FIELD_ID } from './set-marks.js';
+import { nodeKindSeedIds } from './node-kind-ids.js';
 
 const fid = (n: number): string => `c0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -48,6 +49,85 @@ export const fieldIds = {
   komplektCipher: fid(29),
   /** «№ по ГП» — вид папки «Здание по генплану» (формула шифра комплекта). */
   buildingGp: fid(30),
+  /** Счётчики (#630, модель v3 — по глоссарию и #557): работа «Изменение»
+   *  получает «Изм.» (свой счёт в каждой папке «Комплект») и «№ разрешения»
+   *  (книга «NN-ГГ», сквозная, заново каждый год) СРАЗУ при создании — их
+   *  пишут в штамп; «№ накладной выдачи» `{Проект · Инв. №}-{N}` (свой счёт в
+   *  каждом проекте) выдаёт кнопка «Выдать в печать». */
+  changeNumber: fid(32),
+  waybillNumber: fid(33),
+  permitNumber: fid(34),
+  /** «№ комплекта» (#630): папке «Комплект» при создании — свой счёт в
+   *  папке, где она лежит; «№ договора в портфеле» — проекту при создании. */
+  komplektSeq: fid(35),
+  projectSeq: fid(36),
+  /** «Инв. №» проекта — вставка в номер накладной (#630). */
+  projectInventory: fid(37),
+};
+
+/** Внутренние номера счётчиков (#630): явные, как у демо-формул —
+ *  sequence их не резервирует сам (формулы обходят фабрику). */
+export const COUNTER_FIELD_NUMBERS = {
+  changeNumber: 32,
+  waybillNumber: 33,
+  permitNumber: 34,
+  komplektSeq: 35,
+  projectSeq: 36,
+  projectInventory: 37,
+} as const;
+
+/** Правила счётчиков демо-мира (#630): адресуются id атрибута-цели. Когда
+ *  выдаётся номер — у привязок (`numbering.onCreate` определения). */
+export const COUNTER_RULES: Record<
+  'changeNumber' | 'waybillNumber' | 'permitNumber' | 'komplektSeq' | 'projectSeq',
+  NumberSeriesRule
+> = {
+  changeNumber: {
+    containers: [{ kind: 'folder', nodeKindId: nodeKindSeedIds.komplekt }],
+    period: 'none',
+    template: [{ kind: 'literal', text: 'Изм. ' }, { kind: 'counter' }],
+    startValue: 1,
+    step: 1,
+  },
+  waybillNumber: {
+    containers: [{ kind: 'project' }],
+    period: 'none',
+    template: [
+      { kind: 'field', fieldNumber: COUNTER_FIELD_NUMBERS.projectInventory, source: 'project' },
+      { kind: 'literal', text: '-' },
+      { kind: 'counter' },
+    ],
+    startValue: 1,
+    step: 1,
+  },
+  permitNumber: {
+    containers: [],
+    period: 'year',
+    template: [{ kind: 'counter' }, { kind: 'literal', text: '-' }, { kind: 'year', digits: 2 }],
+    startValue: 1,
+    step: 1,
+  },
+  komplektSeq: {
+    containers: [{ kind: 'parent_folder' }],
+    period: 'none',
+    template: [
+      { kind: 'literal', text: 'К-' },
+      { kind: 'counter', minLength: 2 },
+    ],
+    startValue: 1,
+    step: 1,
+  },
+  projectSeq: {
+    containers: [{ kind: 'portfolio' }],
+    period: 'year',
+    template: [
+      { kind: 'counter', minLength: 3 },
+      { kind: 'literal', text: '/' },
+      { kind: 'year', digits: 2 },
+    ],
+    startValue: 1,
+    step: 1,
+  },
 };
 
 /** Внутренние номера атрибутов, на которые ссылаются демо-формулы (#632):

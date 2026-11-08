@@ -14,6 +14,7 @@ import {
   type DictionaryReader,
 } from '../../dictionaries/ports/dictionary-reader.port.js';
 import type { ProjectActor } from '../../projects/ports/project-reader.port.js';
+import { CounterSummaryService } from '../numbering/counter-summary.provider.js';
 import { CustomFieldRefsHydrator } from '../values/refs-hydrator.js';
 
 /** Строка `field_definitions` в объёме DTO (схема — ADR-0029, ревизия #631). */
@@ -31,8 +32,16 @@ export interface FieldDefinitionRow {
   createdAt: Date;
   updatedAt: Date;
   /** Привязки «Где используется» (Р3); глобальная переменная — пусто.
-   *  `defaultFormula` — формула места (#632, Р6), вычисляется на чтении. */
-  bindings: { targetKind: string; targetId: string; defaultFormula?: unknown }[];
+   *  `defaultFormula` — формула места (#632, Р6), вычисляется на чтении;
+   *  `numberOnCreate` — тип получает номер при создании (#630). */
+  bindings: {
+    targetKind: string;
+    targetId: string;
+    defaultFormula?: unknown;
+    numberOnCreate?: boolean;
+  }[];
+  /** Серия нумерации counter-атрибута (#630): правило 1:1. */
+  numberSeriesId?: string | null;
   /** Значение глобальной переменной (null — не задано). */
   companyValue: { value: unknown } | null;
 }
@@ -49,6 +58,7 @@ export class DefinitionMapper {
   constructor(
     @Inject(DICTIONARY_READER) private readonly dictionaries: DictionaryReader,
     private readonly refs: CustomFieldRefsHydrator,
+    private readonly counters: CounterSummaryService,
   ) {}
 
   async toDtos(
@@ -99,6 +109,9 @@ export class DefinitionMapper {
     ]);
     const refsByKey = new Map(defaultRefs.map((ref) => [`${ref.kind}:${ref.id}`, ref]));
     const companyRefsByKey = new Map(companyRefs.map((ref) => [`${ref.kind}:${ref.id}`, ref]));
+    // Счётчики (#630): правило, «при создании», пример, выдачи — один ответ
+    // карточке; у остальных типов numbering = null.
+    const counters = await this.counters.summaries(rows, tx);
 
     return definitions.map((definition) => {
       const dictionaryId =
@@ -108,6 +121,7 @@ export class DefinitionMapper {
       const dictionary = dictionaryId ? dictionaryById.get(dictionaryId) : undefined;
       return {
         ...definition,
+        numbering: definition.type === 'counter' ? (counters.get(definition.id) ?? null) : null,
         dictionary: dictionary
           ? {
               id: dictionary.id,

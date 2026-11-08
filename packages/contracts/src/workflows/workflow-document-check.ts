@@ -44,6 +44,10 @@ export interface WorkflowCheckOptions {
   category?: ProcessCategory;
   /** У типа настроена серия номеров (#55) — для `numbering_not_configured`. */
   numberingConfigured?: boolean;
+  /** Поля типа и его counter-поля с правилом серии (#630, Р5): цель
+   *  «Присвоить номер» задачи проверяется словарём категории. */
+  customFieldIds?: readonly string[];
+  counterFieldIds?: readonly string[];
   /** Определения — тип и настройки для проверки пресетов. */
   definitions?: readonly Pick<CustomFieldDefinition, 'id' | 'type' | 'settings'>[];
   /** Модуль проектов включён (поле «Проект» доступно в форме). */
@@ -265,6 +269,8 @@ export function checkWorkflowDocument(
       ...checkCategoryDictionary(doc, {
         category: opts.category,
         numberingConfigured: opts.numberingConfigured,
+        customFieldIds: opts.customFieldIds,
+        counterFieldIds: opts.counterFieldIds,
       }),
     );
   }

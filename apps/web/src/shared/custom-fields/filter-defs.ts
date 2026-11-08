@@ -131,6 +131,7 @@ export function customFieldFilterDef<T>(
     case 'text':
     case 'long_text':
     case 'link':
+    case 'counter':
       return [
         {
           ...base,

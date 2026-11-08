@@ -18,6 +18,7 @@ import {
   systemProcessType,
 } from './task-stages.js';
 import { formulaDemoTasks } from './formula-demo-tasks.js';
+import { counterDemoTasks } from './counter-demo-tasks.js';
 import { userIds, userRef } from './users.js';
 
 export { projectRefs, tid };
@@ -197,6 +198,7 @@ export const demoTasks: TaskListItem[] = [
     updatedAt: isoAgo(2, 9, 10),
   }),
   ...formulaDemoTasks,
+  ...counterDemoTasks,
   // Вольная личная колонка «Стратегические» (active) — демонстрация
   // личной организации внутри системного состояния (ADR-0008).
   mk(

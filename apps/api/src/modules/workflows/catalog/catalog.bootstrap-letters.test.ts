@@ -17,10 +17,12 @@ describe('CatalogBootstrap — письма (#55, Р5)', () => {
     expect(repo.ensureSeries).toHaveBeenCalledWith(expect.anything(), {
       code: 'letter-incoming',
       prefix: 'Вх',
+      name: 'Входящие письма',
     });
     expect(repo.ensureSeries).toHaveBeenCalledWith(expect.anything(), {
       code: 'letter-outgoing',
       prefix: 'Исх',
+      name: 'Исходящие письма',
     });
     expect(repo.ensureType).toHaveBeenCalledWith(
       expect.anything(),

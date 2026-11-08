@@ -242,6 +242,10 @@ export const workflowProblemCodeSchema = z.enum([
   'post_function_not_in_category',
   'numbering_not_configured',
   'registration_without_number',
+  /** «Присвоить номер» задачи (#630, Р5): поле-цель не выбрано или не
+   *  привязано к типу / поле не counter-атрибут с правилом серии. */
+  'number_field_not_in_type',
+  'number_field_not_counter',
   /** Кнопка-действие без условий «кто видит» (#430): в «Мои действия»
    *  держателем станет ответственный — предупреждение, не ошибка. */
   'action_without_visibility',

@@ -1086,37 +1086,101 @@ model WorkflowSchemeEntry {
   @@map("workflow_scheme_entries")
 }
 
-/// Серия номеров «Процессов» (#55, ADR-0027 доп. O1): префикс и правило
-/// сброса. Регистрационный номер письма выдаёт движок в транзакции перехода
-/// (`assign_number`), поэтому серии живут в модуле процессов, а не в письмах.
-/// Серии `letter-incoming` «Вх» и `letter-outgoing` «Исх» засевает каталог.
+/// Серия номеров (#630, ADR-0037 §8, концепция 08.11): правило «внутри чего
+/// свой счёт × когда заново × вид номера × старт нового счёта». Серия 1:1 с
+/// определением атрибута типа `counter` — правило одно на атрибут, все его
+/// привязки получают номера из одного счётчика (письмо-серии — без
+/// атрибута, из `config.numbering` типа). `prefix`/`reset` (#55) остаются до
+/// contract-шага #630: читаются только старым DTO типа.
+/// Серии `letter-incoming`/`letter-outgoing` засевает каталог.
 model NumberSeries {
   id        String   @id @default(uuid()) @db.Uuid
   code      String   @unique
-  /// Префикс номера: «Вх» → «Вх-2026/118».
+  /// Префикс номера: «Вх» → «Вх-2026/118» (уходит в contract-шаге #630).
   prefix    String
   /// Правило сброса счётчика: year (единственное в #55; CHECK в миграции).
   reset     String   @default("year")
+  /// Человекочитаемое имя: «Входящие письма», «Изм.».
+  name      String
+  /// «Вести счёт отдельно для»: список условий 0–3 (`numberContainerSchema`),
+  /// пусто — сквозная. Когда выдаётся — у привязок (`FieldBinding.numberOnCreate`).
+  containers Json    @default("[]")
+  /// Когда заново: none|year|quarter|month|day (CHECK); допустимость — по датам в шаблоне.
+  period    String   @default("none")
+  /// Шаблон номера: сегменты counter/literal/year/quarter/month/day/field.
+  template  Json
+  /// С какого номера начинается КАЖДЫЙ новый счёт (новая папка, новый год).
+  startValue Int     @default(1) @map("start_value")
+  /// Шаг номера (1–1000, CHECK).
+  step      Int      @default(1)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  counters NumberCounter[]
+  counters    NumberCounter[]
+  assignments NumberAssignment[]
+  attribute   FieldDefinition?
 
   @@map("number_series")
 }
 
-/// Счётчик серии на год. Строка сериализует регистрации серии (upsert с
-/// `last_value + 1`): откат транзакции не сдвигает счётчик → номеров без
-/// пропусков. Год — по часовому поясу компании (`COMPANY_TIMEZONE`).
+/// Счёт серии: контейнер × период (#630). Ключ `scope_key` — `numberCountKey`
+/// («uuid|2026», письма — «2026»), PRIMARY KEY вместе с series_id. Писатели —
+/// только `NumberSeriesService`: `next` (upsert `last_value + 1` в tx
+/// действия, сериализует параллельные выдачи; откат не сдвигает счётчик) и
+/// `setNext` (только вперёд). `year` — информационная колонка.
 model NumberCounter {
-  seriesId  String @map("series_id") @db.Uuid
-  year      Int
-  lastValue Int    @default(0) @map("last_value")
+  seriesId    String   @map("series_id") @db.Uuid
+  scopeKey    String   @map("scope_key")
+  year        Int
+  lastValue   Int      @default(0) @map("last_value")
+  /// Значения условий счёта [{entity, id}] в порядке правила — plain UUID без
+  /// FK (полиморфные, чужие модули, I3); [] — сквозная.
+  containerRefs Json   @default("[]") @map("container_refs")
+  /// '' | '2026' | '2026-Q1' | '2026-11' | '2026-11-08' — период счёта.
+  periodKey   String   @default("") @map("period_key")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   series NumberSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
-  @@id([seriesId, year])
+  @@id([seriesId, scopeKey])
+  @@index([containerRefs(ops: JsonbPathOps)], type: Gin)
   @@map("number_counters")
+}
+
+/// Журнал выдач номеров (#630): только дописывается, писатель —
+/// `NumberSeriesService.next`. Помнит контейнер, запись, атрибут и того, кто
+/// нажал: номер у записи заморожен, перенос и удаление атрибута историю не
+/// стирают; «выдано номеров» — count по серии.
+model NumberAssignment {
+  id          String   @id @default(uuid()) @db.Uuid
+  seriesId    String   @map("series_id") @db.Uuid
+  scopeKey    String   @map("scope_key")
+  /// Значения условий счёта [{entity, id}] на момент выдачи.
+  containerRefs Json   @default("[]") @map("container_refs")
+  periodKey   String   @map("period_key")
+  seq         Int
+  display     String
+  /// task | letter | node | project (CHECK).
+  hostKind    String   @map("host_kind")
+  hostId      String   @map("host_id") @db.Uuid
+  /// Атрибут-цель (null у письмо-серий), без FK — переживает удаление.
+  fieldId     String?  @map("field_id") @db.Uuid
+  /// Кто нажал — plain UUID без FK (пользователь живёт в auth, I3).
+  actorId     String?  @map("actor_id") @db.Uuid
+  /// Способ выдачи: create|type_change|transition|backfill|rule|registry|import (CHECK).
+  source      String
+  /// Название кнопки на момент выдачи (у transition), иначе null.
+  sourceLabel String?  @map("source_label")
+  assignedAt  DateTime @default(now()) @map("assigned_at") @db.Timestamptz()
+
+  series NumberSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  /// Номер в счёте не повторяется; один номер счётчика на запись.
+  @@unique([seriesId, scopeKey, seq])
+  @@unique([seriesId, hostKind, hostId, fieldId])
+  @@index([seriesId, assignedAt])
+  @@index([hostKind, hostId])
+  @@map("number_assignments")
 }
 
 /// Задача. Проект необязателен (projectId nullable, без FK — I3): задача без
@@ -1719,6 +1783,9 @@ model FieldDefinition {
   sortOrder     Int     @default(0) @map("sort_order")
   /// Автор определения — plain UUID без FK (пользователь живёт в auth, I3).
   createdById   String? @map("created_by_id") @db.Uuid
+  /// Серия нумерации при типе `counter` (#630, Р1): правило 1:1 с серией.
+  /// Удаление атрибута серию не удаляет — номера не переиспользуются (Р10).
+  numberSeriesId String? @unique @map("number_series_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
@@ -1726,6 +1793,7 @@ model FieldDefinition {
   bindings     FieldBinding[]
   companyValue CompanyValue?
   formulaCells FormulaCell[]
+  numberSeries NumberSeries? @relation(fields: [numberSeriesId], references: [id], onDelete: SetNull)
 
   /// Выдача реестра портала в порядке карточки: (sort_order, id). Имя
   /// уникально глобально — выраженный индекс lower(btrim(name)) в миграции.
@@ -1747,6 +1815,9 @@ model FieldBinding {
   /// значения и своей формулы. У каждой привязки своя формула — у одного
   /// атрибута в разных типах/видах формулы разные. JSONB — AST `formula.ts`.
   defaultFormula Json?  @map("default_formula")
+  /// Счётчик (#630, модель v3): этот тип получает номер при создании записи
+  /// и при смене типа/вида на этот. Кнопки — в маршрутах (`assign_number`).
+  numberOnCreate Boolean @default(false) @map("number_on_create")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
   definition FieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)

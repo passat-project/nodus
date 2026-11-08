@@ -9,6 +9,8 @@ import {
   updateCustomFieldBodySchema,
 } from '@nodus/contracts';
 
+import { counterUpdateResponse } from './numbering-responses.js';
+
 import { demoCustomFieldDefinitions, demoFieldById } from '../../mocks/data/custom-fields.js';
 import { demoNodeKinds } from '../../mocks/data/project-nodes.js';
 import { demoProjectTypes } from '../../mocks/data/projects.js';
@@ -198,6 +200,11 @@ export const definitionHandlers = [
       if (invalidTargets) return invalidTargets;
     }
 
+    if (definition.type === 'counter') {
+      // Счётчик (#630): заморозка после выдач и совместимость — как сервер.
+      const counterError = counterUpdateResponse(definition, body);
+      if (counterError) return counterError;
+    }
     if (body.name !== undefined) definition.name = body.name;
     if (body.hint !== undefined) definition.hint = body.hint;
     if (body.type !== undefined) definition.type = body.type;

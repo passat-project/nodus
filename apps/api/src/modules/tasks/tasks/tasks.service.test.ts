@@ -127,10 +127,12 @@ function setup() {
     {
       assertTaskProjectVisible: vi.fn(async () => void 0),
       assertMembersAllowed: vi.fn(async () => void 0),
+      numberContext: vi.fn(async () => ({ projects: [], nodes: [] })),
     } as never,
     customFields as never,
     { stateFor: vi.fn(async () => new Map()) } as never,
     new TaskCreatePolicy(profiles as never),
+    { planOnCreate: async () => ({ ok: true, issue: async () => ({}) }) } as never,
   );
   return { service, repo, placements, placementsRepo, txRunner, eventBus, catalog, boards, engine };
 }
@@ -189,10 +191,14 @@ describe('TasksService', () => {
       stageId: 's-new',
       systemState: 'backlog',
     });
-    expect(engine.execute).toHaveBeenCalledWith(TX, 't1', 'task', USER, {
-      systemState: 'active',
-      outcome: null,
-    });
+    expect(engine.execute).toHaveBeenCalledWith(
+      TX,
+      't1',
+      'task',
+      USER,
+      { systemState: 'active', outcome: null },
+      { confirmEmptyNumberParts: undefined },
+    );
     expect(placementsRepo.move).toHaveBeenCalledWith(TX, {
       taskId: 't1',
       userId: 'alice',
@@ -236,7 +242,14 @@ describe('TasksService', () => {
     engine.execute.mockResolvedValueOnce({ stage: secondBacklog, recordId: 'rec-1' } as never);
     await service.create(USER, { title: 'Т', stageId: 's-new-2' } as never);
     expect(repo.create.mock.calls[0]![0]).toMatchObject({ stageId: 's-new' });
-    expect(engine.execute).toHaveBeenCalledWith(TX, 't1', 'task', USER, { stageId: 's-new-2' });
+    expect(engine.execute).toHaveBeenCalledWith(
+      TX,
+      't1',
+      'task',
+      USER,
+      { stageId: 's-new-2' },
+      { confirmEmptyNumberParts: undefined },
+    );
   });
 
   it('явный stageId: движок ушёл в другую стадию — NOT_ALLOWED', async () => {

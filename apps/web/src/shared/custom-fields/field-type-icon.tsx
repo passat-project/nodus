@@ -1,6 +1,7 @@
 import {
   AlignLeft,
   Banknote,
+  Barcode,
   Building2,
   Calendar,
   CalendarClock,
@@ -45,6 +46,7 @@ const TYPE_ICONS: Record<CustomFieldType, LucideIcon> = {
   letter: Mail,
   node: Folder,
   link: Link2,
+  counter: Barcode,
 };
 
 export function fieldTypeIcon(type: CustomFieldType): LucideIcon {

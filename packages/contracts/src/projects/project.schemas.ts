@@ -288,7 +288,10 @@ export const createProjectBodySchema = z.object({
   visibility: projectVisibilitySchema.optional(),
   startDate: z.iso.date().nullable().optional(),
   endDate: z.iso.date().nullable().optional(),
+  /** Значения counter-полей отбрасываются молча (номер выдаёт процесс, #630). */
   customFields: customFieldValuesInputSchema.optional(),
+  /** Номер «при создании» с пустым полем в виде номера — подтверждено (#630). */
+  confirmEmptyNumberParts: z.literal(true).optional(),
 });
 
 export type CreateProjectBody = z.infer<typeof createProjectBodySchema>;

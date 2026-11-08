@@ -52,6 +52,7 @@ function makeAdapter() {
       { stageId: FROM, count: 2 },
       { stageId: TO, count: 0 },
     ]),
+    updateFields: vi.fn(async () => void 0),
   };
   const factRepo = { gateFacts: vi.fn(async () => facts) };
   const placements = { prepare: vi.fn(async () => void 0) };
@@ -64,6 +65,34 @@ function makeAdapter() {
     insertObserverIfAbsent: vi.fn(async () => false),
   };
   const events = { emit: vi.fn(async () => void 0) };
+  const query = {
+    customFieldsOf: vi.fn(async () => new Map([['parent', { f: 'P' }]])),
+  };
+  const projects = {
+    numberContext: vi.fn(async () => ({
+      projects: [
+        {
+          id: 'project',
+          name: 'Дом',
+          typeId: 'pt',
+          portfolioId: 'pf',
+          values: {},
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+        },
+      ],
+      nodes: [
+        {
+          id: 'node',
+          name: 'КЖ-01',
+          kindId: 'kind',
+          projectId: 'project',
+          parentId: null,
+          values: {},
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+        },
+      ],
+    })),
+  };
   const adapter = new TaskWorkflowAdapter(
     { run: vi.fn(async (fn: (t: unknown) => unknown) => fn({})) } as never,
     tasks as never,
@@ -76,8 +105,10 @@ function makeAdapter() {
     { supplement: vi.fn(async (roles: Set<string>) => roles) } as never,
     deciders as never,
     events as never,
+    query as never,
+    projects as never,
   );
-  return { adapter, mover, tasks, placements, deciders, events };
+  return { adapter, mover, tasks, placements, deciders, events, query, projects };
 }
 
 describe('TaskWorkflowAdapter (#428, ADR-0024)', () => {
@@ -191,4 +222,36 @@ describe('TaskWorkflowAdapter (#428, ADR-0024)', () => {
       'active',
     );
   });
+});
+
+it('numberTarget: конфиденциальный родитель не раскрывается; applyNumbers пишет номер', async () => {
+  const { adapter, tasks, events } = makeAdapter();
+  const parent = {
+    ...task,
+    id: 'parent',
+    confidential: true,
+    participants: [{ userId: 'u3' }],
+  };
+  const child = {
+    ...task,
+    typeId: 'type',
+    nodeId: 'node',
+    projectId: 'project',
+    parentId: 'parent',
+    customFields: { f: 'Изм. 1' },
+  };
+  tasks.findWithParticipants = vi.fn(async (id: string) =>
+    id === 'parent' ? parent : child,
+  ) as never;
+  const target = await adapter.numberTarget({} as never, TASK, { id: 'u4', permissions: [] });
+  expect(target).toMatchObject({ host: 'task', projectId: 'project' });
+  expect(target.sources.parentTask).toBeNull();
+  const participant = await adapter.numberTarget({} as never, TASK, {
+    id: 'u3',
+    permissions: [],
+  });
+  expect(participant.sources.parentTask).toMatchObject({ f: 'P' });
+  await adapter.applyNumbers({} as never, TASK, 'u2', { f: 'Изм. 2' });
+  expect(tasks.updateFields).toHaveBeenCalled();
+  expect(events.emit).toHaveBeenCalled();
 });

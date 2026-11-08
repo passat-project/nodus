@@ -62,6 +62,15 @@ CUSTOM_FIELD_REGISTRY: CustomFieldRegistry {
 
 Правила: `sortOrder = max+1` при создании; `reorder` — по всем атрибутам портала; порядок выдачи `(sort_order, id)`.
 
+## Счётчики номеров (#630, модель v3)
+
+Счётчик — тип атрибута `counter`; правило 1:1 с определением (`number_series`, порт `NUMBER_SERIES_STORE`). Правило: условия «Вести счёт отдельно для» (0–3 реальные записи: папка вида, проект, портфель, тип проекта, родительская задача, значение поля, свой тип), период, шаблон, старт и шаг. «При создании» — флаг привязки `field_bindings.number_on_create`, а не правила.
+
+- `NumberIssueService` (`NUMBER_ISSUE`) — движок: `plan` проверяет ВСЕ номера действия до выдачи (нет места — 409 `NUMBER_CONTAINER_MISSING`, пустая вставка — 409 `NUMBER_SEGMENT_EMPTY`), `planOnCreate` фильтрует типы и уже заполненные поля; выдача — в транзакции действия, журнал `number_assignments` помнит счёт, способ и подпись кнопки.
+- Носители (`NUMBER_HOST_REGISTRY`, DiscoveryService): задача (`TaskNumberHostProvider`), проект и папка (`ProjectNumberHostProvider`) — место, значения источников, имена/пути и запись номера. Чужие таблицы модуль атрибутов не читает (I3).
+- Номера не переиспользуются: откат транзакции не сдвигает счётчик; повтор кнопки/перенос номер не меняют; ручная запись значения — 422 `NUMBER_CELL_IMMUTABLE`, в теле создания counter отбрасывается молча.
+- API (`/api/v1/custom-fields`): `POST numbering/coverage`, `POST numbering/preview`, `GET definitions/:id/numbering/counts`, `PUT definitions/:id/numbering/next` (только вперёд, 409 `NUMBER_NEXT_BACKWARDS`), `POST definitions/:id/numbering/backfill/preview`, `POST definitions/:id/numbering/backfill` (409 `NUMBER_BACKFILL_STALE`), `GET numbering/host/:kind/:id`. Права — `custom_field.manage`, кроме номеров записи (видимость записи).
+
 ## События (outbox, I9)
 
 `custom_field.definition_changed {definitionId, change: created|updated|deleted|reordered, fields?}` — каталожное (gateway рассылает в presence-комнату): клиенты инвалидируют реестр, блок «Атрибуты» карточек и подписи вариантов. `fields` содержит `bindings`/`companyValue` при их изменении.

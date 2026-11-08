@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
 import { formulaNodeSchema } from './formula.js';
+import { numberSeriesRuleSchema } from '../workflows/number-series.schemas.js';
+import { NUMBER_TEMPLATE_LIMITS } from '../workflows/number-series.schemas.js';
+import { numberIssuerSchema } from '../workflows/number-series-api.schemas.js';
 
 import {
   customFieldValueSchema,
@@ -24,7 +27,9 @@ export type CustomFieldModule = z.infer<typeof customFieldModuleSchema>;
 
 /** Тип поля (Р1). UI показывает семейства — модификаторы типа («Многострочный»,
  *  «Несколько значений») включаются односторонне (Р3). Ссылки на записи
- *  (`task`, `letter`, `node`) — #631 Р5; «строка реестра» добавит #636. */
+ *  (`task`, `letter`, `node`) — #631 Р5; «строка реестра» добавит #636.
+ *  `counter` (#630, Р1): значение-номер, только чтение; пишет движок
+ *  (пост-функция `assign_number`), ручной ввод запрещён (Р10). */
 export const customFieldTypeSchema = z.enum([
   'text',
   'long_text',
@@ -45,6 +50,7 @@ export const customFieldTypeSchema = z.enum([
   'letter',
   'node',
   'link',
+  'counter',
 ]);
 export type CustomFieldType = z.infer<typeof customFieldTypeSchema>;
 
@@ -105,6 +111,33 @@ export const EMPTY_CUSTOM_FIELD_BINDINGS: CustomFieldBindings = {
   nodeKindIds: [],
 };
 
+/** Нумерация counter-атрибута (#630, модель v3): сводка правила серии 1:1 с
+ *  определением — правило ОДНО на атрибут. В DTO определения —
+ *  readonly-гидрация (правится PATCH определения с телом-правилом);
+ *  `preview` — пример номера по текущему виду, `issuedCount` — сколько
+ *  номеров выдано всеми счетами (после первой выдачи условия «отдельно для»
+ *  и «начинать заново» не меняются — 409 `NUMBER_RULE_LOCKED`).
+ *
+ *  КОГДА выдаётся номер — у каждого типа из «Кто получает номер» свой
+ *  способ (вердикт владельца 08.11: «проекты во время создания, письмо во
+ *  время регистрации, задача во время выдачи»): `onCreate` — цели привязок,
+ *  получающие номер при создании записи и при смене типа/вида на этот;
+ *  `issuers` — кнопки опубликованных маршрутов (настраиваются в редакторе
+ *  процесса, здесь только чтение). Кто первым заполнил поле — тот выдал. */
+export const customFieldNumberingSchema = z
+  .object({
+    rule: numberSeriesRuleSchema,
+    onCreate: z.array(z.uuid()).max(200),
+    preview: z.string().min(1),
+    issuedCount: z.number().int().min(0),
+    /** Сколько существующих записей отмеченных типов ещё без номера —
+     *  повод предложить «Выдать номера существующим». */
+    withoutNumber: z.number().int().min(0).optional(),
+    issuers: z.array(numberIssuerSchema).optional(),
+  })
+  .strict();
+export type CustomFieldNumbering = z.infer<typeof customFieldNumberingSchema>;
+
 export const customFieldDefinitionSchema = z.object({
   id: z.uuid(),
   /** Внутренний номер (Р2): выдаётся системой при создании, не переиспользуется,
@@ -143,6 +176,11 @@ export const customFieldDefinitionSchema = z.object({
    *  в список писем — letter-атрибуты. Производное поле (сервер считает по
    *  привязкам); старые моки могут его не присылать. */
   processCategories: z.array(z.enum(['task', 'letter'])).optional(),
+  /** Правило нумерации counter-атрибута (#630): null у не-счётчиков и у
+   *  счётчика без настроенного правила (незавершённая настройка — публикация
+   *  маршрута с таким полем отклоняется, Р5). Производное поле: старые
+   *  моки/клиенты могут не присылать (= нет правила). */
+  numbering: customFieldNumberingSchema.nullable().optional(),
   sortOrder: z.number().int().min(0),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
@@ -277,6 +315,13 @@ export function checkDefinitionShape(
     });
   }
 
+  if (type === 'counter' && defaultValue !== null) {
+    issues.push({
+      code: 'default_not_allowed',
+      path: 'defaultValue',
+      message: 'counter field value is assigned by the workflow engine',
+    });
+  }
   if (defaultValue?.kind === 'author_department' && type !== 'department') {
     issues.push({
       code: 'default_not_allowed',
@@ -329,6 +374,19 @@ export const createCustomFieldBodySchema = z
      *  схемы: это семантика, а не форма запроса). */
     bindings: customFieldBindingsSchema.optional(),
     bindingFormulas: z.record(z.uuid(), formulaNodeSchema).optional(),
+    /** Правило нумерации counter-атрибута (#630): только при
+     *  type='counter' (иначе доменная 422 на сервере); счётчик без правила
+     *  создаётся, но маршрут с ним не публикуется. Совместимость с
+     *  привязками — 422 `NUMBER_CONTAINER_UNREACHABLE`. */
+    numbering: numberSeriesRuleSchema.optional(),
+    /** Цели привязок, получающие номер при создании (и смене типа/вида на
+     *  этот). Не привязанная цель, «при создании» письма со счётом по месту
+     *  или с полями письма в номере — 422 `NUMBER_TRIGGER_INVALID`. */
+    numberingOnCreate: z.array(z.uuid()).max(200).optional(),
+    /** «Следующий номер» сквозного счёта при создании (без условий
+     *  «отдельно для»): продолжение нумерации из Excel в текущем периоде, в
+     *  той же транзакции. У счетов с условиями — «Текущие счета». */
+    numberingNext: z.number().int().min(1).max(NUMBER_TEMPLATE_LIMITS.value).optional(),
   })
   .strict()
   .superRefine((body, ctx) => {
@@ -348,6 +406,13 @@ export const updateCustomFieldBodySchema = z
      *  PUT/DELETE .../bindings/:kind/:targetId. */
     bindings: customFieldBindingsSchema.optional(),
     bindingFormulas: z.record(z.uuid(), formulaNodeSchema).optional(),
+    /** Правило нумерации counter-атрибута (#630): замена целиком; только
+     *  для type='counter' (иначе доменная 422 на сервере). После первой
+     *  выдачи меняются только вид номера, шаг и старт новых счетов — смена
+     *  условий «отдельно для» или периода — 409 `NUMBER_RULE_LOCKED`. */
+    numbering: numberSeriesRuleSchema.optional(),
+    /** «При создании» по типам — замена целиком (см. create). */
+    numberingOnCreate: z.array(z.uuid()).max(200).optional(),
   })
   .strict()
   .refine((v) => Object.keys(v).length > 0, { message: 'empty update' });

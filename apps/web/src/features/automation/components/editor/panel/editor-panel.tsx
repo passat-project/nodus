@@ -174,6 +174,7 @@ export function EditorPanel({
           document={doc}
           readOnly={readOnly}
           category={type.category}
+          typeId={type.id}
         />
       ) : null}
       {transition && section === 'window' ? (

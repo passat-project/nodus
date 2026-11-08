@@ -18,6 +18,10 @@ import {
   type CustomFieldRegistry,
 } from '../../custom-fields/ports/custom-field-registry.port.js';
 import { LettersRepository } from '../letters/letters.repository.js';
+import { EventBus } from '../../../core/events/event-bus.js';
+import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
+import type { NumberTarget } from '../../custom-fields/ports/number-host.port.js';
+import { CORRESPONDENCE_EVENTS } from '@nodus/contracts';
 import { LetterFormApplier } from './letter-form.applier.js';
 import { LetterStageMover } from './letter-stage.mover.js';
 
@@ -41,6 +45,8 @@ export class LetterWorkflowAdapter implements WorkflowEntityAdapter {
     private readonly mover: LetterStageMover,
     private readonly txRunner: TransactionRunner,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
+    @Inject(PROJECT_READER) private readonly projects: ProjectReader,
+    private readonly events: EventBus,
   ) {}
 
   async lock(tx: TransactionClient, letterId: string): Promise<void> {
@@ -161,5 +167,52 @@ export class LetterWorkflowAdapter implements WorkflowEntityAdapter {
       customFields: (customFields ?? {}) as CustomFieldValues,
       activeCustomFieldIds: new Set(activeCustomFieldIds),
     };
+  }
+
+  async numberTarget(tx: TransactionClient, letterId: string): Promise<NumberTarget> {
+    const letter = await this.letters.findDetailById(letterId, tx);
+    if (!letter) throw DomainException.notFound('Letter not found');
+    const contexts = letter.projectId
+      ? await this.projects.numberContext([letter.projectId], [], tx)
+      : { projects: [], nodes: [] };
+    const project = contexts.projects[0];
+    return {
+      host: 'letter',
+      typeId: letter.typeId,
+      folders: [],
+      projectId: project?.id ?? null,
+      portfolioId: project?.portfolioId ?? null,
+      projectTypeId: project?.typeId ?? null,
+      parentTaskId: null,
+      sources: {
+        self: (letter.customFields ?? {}) as Record<string, unknown>,
+        project: project?.values ?? null,
+      },
+    };
+  }
+
+  async applyNumbers(
+    tx: TransactionClient,
+    letterId: string,
+    actorId: string,
+    numbers: Readonly<Record<string, string>>,
+  ): Promise<void> {
+    const letter = await this.letters.findDetailById(letterId, tx);
+    if (!letter) return;
+    const next = { ...((letter.customFields ?? {}) as Record<string, unknown>), ...numbers };
+    await this.letters.update(tx, letterId, { customFields: next as never });
+    await this.events.emit(
+      tx,
+      CORRESPONDENCE_EVENTS.LETTER_UPDATED,
+      {
+        letterId,
+        changes: Object.entries(numbers).map(([fieldId, display]) => ({
+          field: `cf.${fieldId}`,
+          from: null,
+          to: display,
+        })),
+      },
+      { actorId, aggregateType: 'letter', aggregateId: letterId },
+    );
   }
 }

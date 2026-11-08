@@ -18,6 +18,7 @@ import {
 } from '../../lib/field-draft.js';
 import { familyModifier, modifierOf } from '../../lib/field-type-families.js';
 import { CustomFieldEditor } from '../../../../shared/custom-fields/value-editor.js';
+import { CounterPanel } from './counter-panel.js';
 import { FieldDefaultValue } from './field-default-value.js';
 import { KindOption } from './field-kind-option.js';
 import { FieldOptionsEditor } from './field-options-editor.js';
@@ -152,9 +153,13 @@ export function FieldDialogForm({
           />
           <KindOption
             title={ui.customFields.dialog.kindCompany}
-            hint={ui.customFields.dialog.kindCompanyHint}
+            hint={
+              family === 'counter'
+                ? ui.customFields.dialog.counter.kindCompanyUnavailable
+                : ui.customFields.dialog.kindCompanyHint
+            }
             on={draft.isCompany}
-            disabled={disabled || kindLocked}
+            disabled={disabled || kindLocked || family === 'counter'}
             onSelect={() =>
               onChange({
                 isCompany: true,
@@ -199,7 +204,17 @@ export function FieldDialogForm({
           : null}
       </Section>
 
-      {!draft.isCompany ? (
+      {family === 'counter' && !draft.isCompany ? (
+        <CounterPanel
+          draft={draft}
+          definition={definition}
+          preview={preview}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      ) : null}
+
+      {!draft.isCompany && family !== 'counter' ? (
         <Section label={ui.customFields.bind.field}>
           <FieldUsagePicker
             definition={preview}
@@ -284,7 +299,7 @@ export function FieldDialogForm({
         </section>
       ) : null}
 
-      {family && !list && !draft.isCompany && preview ? (
+      {family && !list && family !== 'counter' && !draft.isCompany && preview ? (
         <Section label={ui.customFields.dialog.defaultValue}>
           <FieldDefaultValue
             // Ремоунт при смене типа: редактор прежнего типа не держит

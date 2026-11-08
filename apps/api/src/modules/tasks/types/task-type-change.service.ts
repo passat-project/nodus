@@ -20,6 +20,11 @@ import { TasksQueryService } from '../tasks/tasks-query.service.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
 import { TasksService } from '../tasks/tasks.service.js';
 import { StageMover } from '../workflow/stage-mover.js';
+import {
+  NUMBER_ISSUE,
+  numberingFailureException,
+  type NumberIssue,
+} from '../../custom-fields/ports/number-issue.port.js';
 
 /**
  * Смена типа задачи (#378): право правки (постановщик / исполнитель /
@@ -39,6 +44,7 @@ export class TaskTypeChangeService {
     private readonly mover: StageMover,
     private readonly eventBus: EventBus,
     private readonly taskService: TasksService,
+    @Inject(NUMBER_ISSUE) private readonly numberIssue: NumberIssue,
   ) {}
 
   async change(user: AuthUser, taskId: string, body: ChangeTaskTypeBody): Promise<TaskListItem> {
@@ -80,12 +86,34 @@ export class TaskTypeChangeService {
       // архивировать её после проверки выше (security #378, целостность).
       const freshTarget = await this.catalog.findLiveStage(stageId);
       if (!freshTarget) throw DomainException.notFound('Stage not found');
+      // Смена типа на тип с «при создании» (#630): место счёта проверяется
+      // ДО мутации; нет папки/проекта — 409, тип не меняется.
+      const target = await this.taskService.numberTargetFor(tx, {
+        typeId: nextType.id,
+        nodeId: task.nodeId,
+        projectId: task.projectId,
+        parentId: task.parentId,
+        customFields: (task.customFields ?? {}) as Record<string, unknown>,
+      });
+      const plan = await this.numberIssue.planOnCreate(tx, target, {
+        source: 'type_change',
+        values: (task.customFields ?? {}) as Record<string, unknown>,
+        confirmEmpty: body.confirmEmptyNumberParts === true,
+        actorId: user.id,
+      });
+      if (!plan.ok) throw numberingFailureException(plan.failure);
       await this.tasks.setType(tx, taskId, { typeId: nextType.id, workflowId });
       // Статус есть и в новом маршруте — стадия не меняется (без шума событий).
       if (freshTarget.id !== task.stageId) {
         await this.mover.apply(tx, task, freshTarget, user.id, {
           transitionId: null,
           cause: 'type_change',
+        });
+      }
+      const numbers = await plan.issue(tx, taskId);
+      if (Object.keys(numbers).length > 0) {
+        await this.tasks.updateFields(tx, taskId, {
+          customFields: { ...(task.customFields as Record<string, unknown>), ...numbers } as never,
         });
       }
       await this.eventBus.emit(

@@ -98,6 +98,16 @@ function valuesOfBody(body: {
 /** Запись проектов в моках (#52): создание/правка/статусы/руководство/
  *  участие — зеркало серверных правил, чтобы приёмка на демо-мире видела
  *  те же отказы (I8 на клиенте — только UX, сервер в проде истина). */
+import {
+  placeOfNewProject,
+  planOnCreate,
+  stripCounterValues,
+} from '../../../../shared/mocks/data/numbering-create.js';
+import {
+  counterWriteResponse,
+  numberingFailureResponse,
+} from '../../../../shared/custom-fields/mocks/numbering-responses.js';
+
 export const projectMutationHandlers = [
   http.post('/api/v1/projects', async ({ request }) => {
     const actor = getMockActor();
@@ -126,7 +136,22 @@ export const projectMutationHandlers = [
     if (malformed.length > 0) return valuesInvalid(malformed);
     const missing = missingProjectFields(form, { customFields: values });
     if (missing.length > 0) return fieldsRequired(type.id, missing, 'create');
-    const row = createDemoProject({ ...body, customFields: values as CustomFieldValues }, actor);
+    // Счётчики «при создании» (#630, модель v3): номер из тела отбрасывается;
+    // портфель/тип — ДО создания (нет портфеля при «каждого портфеля» —
+    // 409, проект не создаётся, номер не тратится).
+    const clean = stripCounterValues(values);
+    const numbering = planOnCreate(
+      placeOfNewProject(type.id, body.portfolioId ?? null, clean),
+      clean,
+      {
+        source: 'create',
+        confirmEmpty: body.confirmEmptyNumberParts === true,
+      },
+    );
+    if (!numbering.ok) return numberingFailureResponse(numbering.failure);
+    const row = createDemoProject({ ...body, customFields: clean as CustomFieldValues }, actor);
+    const numbers = numbering.issue(row.id);
+    if (Object.keys(numbers).length > 0) row.customFields = { ...row.customFields, ...numbers };
     return HttpResponse.json(detailOf(row, actor), { status: 201 });
   }),
 
@@ -175,6 +200,9 @@ export const projectMutationHandlers = [
     // Формульная ячейка руками не пишется (#660): 422, как на сервере.
     const lockedProject = lockedPatchResponse('project', row.id, row.customFields, values);
     if (lockedProject) return lockedProject;
+    // Номер счётчика руками не пишется (#630): 422 NUMBER_CELL_IMMUTABLE.
+    const counterWrite = counterWriteResponse(values);
+    if (counterWrite) return counterWrite;
     const updated = updateDemoProject(row.id, body, actor.id);
     return updated
       ? HttpResponse.json(projectWithFormulas(detailOf(updated, actor), updated.typeId))
