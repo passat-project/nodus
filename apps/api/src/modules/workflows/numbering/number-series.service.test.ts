@@ -64,6 +64,38 @@ describe('NumberSeriesService (#55 → #630, модель v3)', () => {
     });
   });
 
+  it('поля-вставки рендерятся при выдаче, а не только в preview (#630)', async () => {
+    const tx = txOf({
+      series: {
+        id: SERIES_ID,
+        period: 'none',
+        template: [
+          { kind: 'field', fieldNumber: 7, source: 'self' },
+          { kind: 'literal', text: '-' },
+          { kind: 'counter' },
+        ],
+        startValue: 1,
+        step: 1,
+      },
+      rows: [{ last_value: 5 }],
+    });
+    const number = await new NumberSeriesService().next(tx, SERIES_ID, {
+      hits: [],
+      field: (segment) => (segment.fieldNumber === 7 ? 'А-101' : ''),
+      host: {
+        kind: 'task',
+        id: TASK_ID,
+        fieldId: '00000000-0000-4000-8000-000000000599',
+        actorId: null,
+        source: 'transition',
+      },
+    });
+    expect(number.display).toBe('А-101-5');
+    expect(tx.numberAssignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ display: 'А-101-5' }) }),
+    );
+  });
+
   it('письмо: «Вх-ГГГГ/N», сквозная, ключ — год по Минску (формат прода)', async () => {
     const tx = txOf({
       typeConfig: { numbering: { seriesId: SERIES_ID } },

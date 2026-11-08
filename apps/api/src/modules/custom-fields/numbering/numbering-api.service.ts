@@ -109,7 +109,8 @@ export class NumberingApiService {
     const resolved = resolveNumberContainers(body.rule.containers, place);
     if (!resolved.ok) return { ok: false, hostName: record.name, reason: resolved.reason };
     const definitions = await this.definitions.list(tx);
-    const reader = readerOf(record, definitions);
+    const company = companyValuesOf(definitions);
+    const reader = readerOf(record, definitions, company);
     const counter =
       body.definitionId && (await this.counterOf(tx, body.definitionId))
         ? await this.peek(tx, body.definitionId, resolved.hits)
@@ -190,6 +191,8 @@ export class NumberingApiService {
   ): Promise<NumberBackfillPreview> {
     const counter = await this.counterOrThrow(tx, definitionId);
     const { items, blocked } = await this.backfillPlan(tx, actor, counter);
+    const definitions = await this.definitions.list(tx);
+    const company = companyValuesOf(definitions);
     const groups = new Map<
       string,
       {
@@ -230,12 +233,12 @@ export class NumberingApiService {
         firstDisplay: render(
           counter.rule,
           group.first,
-          readerOf(group.record, await this.definitions.list(tx)),
+          readerOf(group.readerRecord ?? group.record, definitions, company),
         ),
         lastDisplay: render(
           counter.rule,
           group.last,
-          readerOf(group.record, await this.definitions.list(tx)),
+          readerOf(group.readerRecord ?? group.record, definitions, company),
         ),
       });
     }
@@ -264,6 +267,7 @@ export class NumberingApiService {
         total: plan.items.length,
       });
     }
+    const definitions = await txRunner.run((tx) => this.definitions.list(tx));
     const groups = new Map<string, typeof plan.items>();
     for (const item of plan.items) {
       const key = numberCountKey(
@@ -280,7 +284,7 @@ export class NumberingApiService {
           if (item.empty && !body.confirmEmptyNumberParts) continue;
           const assigned = await this.series.next(tx, counter.series.id, {
             hits: item.hits,
-            field: readerOf(item.host, await this.definitions.list(tx)),
+            field: readerOf(item.host, definitions, companyValuesOf(definitions)),
             host: {
               kind: item.host.kind,
               id: item.host.id,
@@ -401,7 +405,11 @@ export class NumberingApiService {
         host,
         hits: resolved.hits,
         seq,
-        empty: numberEmptySegments(counter.rule.template, readerOf(host, definitions)).length > 0,
+        empty:
+          numberEmptySegments(
+            counter.rule.template,
+            readerOf(host, definitions, companyValuesOf(definitions)),
+          ).length > 0,
       });
     }
     return { items, blocked };
@@ -473,4 +481,13 @@ export class NumberingApiService {
         return hit('type');
     }
   }
+}
+
+/** Значения глобальных переменных по внутреннему номеру (#630). */
+function companyValuesOf(definitions: readonly FieldDefinitionRow[]): Map<number, string> {
+  return new Map(
+    definitions
+      .filter((row) => row.isCompany && row.companyValue !== null)
+      .map((row) => [row.number, String(row.companyValue!.value)] as const),
+  );
 }

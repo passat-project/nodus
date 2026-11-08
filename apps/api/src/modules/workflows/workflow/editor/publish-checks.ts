@@ -101,6 +101,19 @@ export async function checkDocumentForPublish(
   },
 ): Promise<void> {
   const customFields = await customFieldFactsOf(deps.registry, ctx.tx, ctx.typeIds ?? ctx.typeId);
+  // Цель «Присвоить номер» (#630): поле обязано быть у типа и быть счётчиком
+  // с правилом серии. Без этих фактов проверка contracts — мёртвый код.
+  const customFieldIds = customFields.inType ? [...customFields.inType] : undefined;
+  const counterFieldIds = customFieldIds
+    ? (await deps.registry.definitions({}, ctx.tx))
+        .filter(
+          (definition) =>
+            customFieldIds.includes(definition.id) &&
+            definition.type === 'counter' &&
+            definition.numbering !== null,
+        )
+        .map((definition) => definition.id)
+    : undefined;
   const creation = await creationFactsOf(
     deps.registry,
     deps.profiles,
@@ -131,6 +144,8 @@ export async function checkDocumentForPublish(
     // окно показывает подсказку «недоступно» (веб, projectsAvailable).
     projectsAvailable: true,
     numberingConfigured: ctx.numberingConfigured ?? true,
+    ...(customFieldIds ? { customFieldIds } : {}),
+    ...(counterFieldIds ? { counterFieldIds } : {}),
   });
   // Формулы слотов (#632, Р12; A8-1): форма AST проверена общей грамматикой,
   // типы и совместимость с типом поля выводит движок — для этого нужен реестр

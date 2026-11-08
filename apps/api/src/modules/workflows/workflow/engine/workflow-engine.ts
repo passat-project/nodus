@@ -118,10 +118,6 @@ export class WorkflowEngine implements WorkflowEnginePort {
     }
 
     const picked = this.pick(candidates, choice, opts.form);
-    // Пост-функция «Присвоить номер» с полем-счётчиком (#630): план ВСЕХ
-    // номеров кнопки — ДО применения окна и смены стадии. Нет места или
-    // пустая вставка без подтверждения — 409, действие откатывается целиком.
-    const numberPlan = await this.planNumbers(tx, adapter, entityId, picked, opts);
     const applied = await this.applyForm(adapter, category, tx, entityId, actor, picked, opts.form);
     // Гейты видят факты после окна; условия «кто» — по состоянию до окна.
     const subject1 = exec.hasApplied(applied)
@@ -154,6 +150,10 @@ export class WorkflowEngine implements WorkflowEnginePort {
       workflow,
       effectiveTargetId(pick.t, targetFacts, workflow.stages, targetCtx1),
     );
+    // Пост-функция «Присвоить номер» с полем-счётчиком (#630): план ВСЕХ
+    // номеров ИСПОЛНЯЕМОЙ кнопки — после окна (его значения видны вставкам),
+    // до смены стадии. Нет места/пустая вставка — 409, действие откатывается.
+    const numberPlan = await this.planNumbers(tx, adapter, entityId, pick.t, opts);
     // Пост-действие «Присвоить номер» (#55, Р1): номер выдаётся в этой же
     // транзакции ДО смены стадии — откат перехода не сдвигает счётчик.
     const numbering = await exec.assignNumber(this.numbers, tx, subject1, pick.t);

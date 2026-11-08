@@ -10,6 +10,7 @@ import { LETTER_FORMULA_VALUES } from './ports/letter-formula-values.port.js';
 import { LetterRefReaderProvider } from './ports/letter-ref-reader.provider.js';
 import { LETTER_REF_READER } from './ports/letter-ref-reader.port.js';
 import { LetterVisibilityProvider } from './ports/letter-visibility.provider.js';
+import { LetterNumberHostProvider } from './ports/number-host.provider.js';
 import { LETTER_VISIBILITY_READER } from './ports/letter-visibility.port.js';
 
 /**
@@ -30,6 +31,8 @@ import { LETTER_VISIBILITY_READER } from './ports/letter-visibility.port.js';
     { provide: LETTER_FIELD_VALUES_READER, useExisting: LetterFieldValuesProvider },
     LetterVisibilityProvider,
     { provide: LETTER_VISIBILITY_READER, useExisting: LetterVisibilityProvider },
+    // Носитель номеров «письмо» (#630): DiscoveryService.
+    LetterNumberHostProvider,
     LetterRefReaderProvider,
     { provide: LETTER_REF_READER, useExisting: LetterRefReaderProvider },
     // Письма как источники формул (#632, Р7/Р11): значения и системные поля

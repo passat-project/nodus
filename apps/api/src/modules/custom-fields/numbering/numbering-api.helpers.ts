@@ -41,6 +41,7 @@ export function placeOf(host: NumberHostRecord, definitions: readonly FieldDefin
 export function readerOf(
   host: NumberHostRecord,
   definitions: readonly FieldDefinitionRow[],
+  companyByNumber: ReadonlyMap<number, string> = new Map(),
 ): (segment: NumberFieldSegment) => string {
   const byNumber = new Map(definitions.map((row) => [row.number, row]));
   const valueOf = (values: Record<string, unknown> | null | undefined, number: number) => {
@@ -63,7 +64,7 @@ export function readerOf(
         return valueOf(folder?.values, segment.fieldNumber);
       }
       case 'company':
-        return '';
+        return companyByNumber.get(segment.fieldNumber) ?? '';
     }
   };
 }
