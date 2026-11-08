@@ -1,9 +1,15 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type {
-  AuthUser,
-  FormulaMovePreviewResponse,
-  FormulaNode,
-  FormulaResponse,
+import {
+  customFieldKey,
+  ErrorCode,
+  fieldLocksAfterChange,
+  fieldLocksOf,
+  lockActorOf,
+  lockDenialOf,
+  type AuthUser,
+  type FormulaMovePreviewResponse,
+  type FormulaNode,
+  type FormulaResponse,
 } from '@nodus/contracts';
 
 import {
@@ -71,6 +77,7 @@ export class TaskFormulaService {
     taskId: string,
     fieldId: string,
     ast: FormulaNode,
+    lockReason?: string,
   ): Promise<FormulaResponse> {
     const row = await this.requireEdit(user, taskId);
     return this.txRunner.run(async (tx) => {
@@ -78,6 +85,9 @@ export class TaskFormulaService {
       // параллельные «правка значения» и «поставить формулу» берут строки в
       // разном порядке и ловят 40P01 (как уже сделано у письма).
       await this.repo.lock(tx, taskId);
+      // Формула руками — ручная правка (#496, Р4): закреплённая ячейка
+      // требует причины, иначе 422 `FIELD_LOCKED` (не только в UI — I8).
+      await this.assertFormulaLock(tx, taskId, row.creatorId, user, fieldId, lockReason);
       const outcome = await this.cells.save(tx, {
         hostKind: 'task',
         hostId: taskId,
@@ -102,9 +112,18 @@ export class TaskFormulaService {
    *  пуста или под формулой типа/вида («снимок» больше не остаётся:
    *  иначе он подавлял бы формулу типа, а без неё висел бы значением
    *  без источника). */
-  async remove(user: AuthUser, taskId: string, fieldId: string): Promise<void> {
+  async remove(
+    user: AuthUser,
+    taskId: string,
+    fieldId: string,
+    lockReason?: string,
+  ): Promise<void> {
     const row = await this.requireEdit(user, taskId);
     await this.txRunner.run(async (tx) => {
+      // Снятие формулы тоже меняет закреплённое значение — под тем же
+      // замком и в том же порядке захвата, что PATCH (строка → ячейки).
+      await this.repo.lock(tx, taskId);
+      await this.assertFormulaLock(tx, taskId, row.creatorId, user, fieldId, lockReason);
       await this.cells.remove(tx, { hostKind: 'task', hostId: taskId, fieldId });
       await this.writer.apply(
         tx,
@@ -271,6 +290,35 @@ export class TaskFormulaService {
     hasError: boolean,
   ): Promise<void> {
     return this.recalcWriter.emitChanged(tx, actorId, taskId, fieldId, hasError);
+  }
+
+  /**
+   * Замок ячейки перед правкой формулы (#496, Р4): закреплённый атрибут
+   * меняет только постановщик/`task.manage_any` или право `task.edit_locked`
+   * — с причиной 3..500; успех пишет `lastChange` в той же транзакции.
+   */
+  private async assertFormulaLock(
+    tx: TransactionClient,
+    taskId: string,
+    creatorId: string,
+    user: AuthUser,
+    fieldId: string,
+    reason?: string,
+  ): Promise<void> {
+    const task = await this.repo.findWithParticipants(taskId, tx);
+    const locks = fieldLocksOf(task.fieldLocks);
+    const key = customFieldKey(fieldId);
+    const denial = lockDenialOf(locks, [key], lockActorOf(user, creatorId), reason);
+    if (denial) {
+      throw new DomainException(ErrorCode.FIELD_LOCKED, 'Field is locked', denial, 422);
+    }
+    if (locks[key] === undefined) return;
+    const next = fieldLocksAfterChange(locks, [key], {
+      at: new Date().toISOString(),
+      by: user.id,
+      reason: reason ?? '',
+    });
+    if (next !== locks) await this.repo.updateFields(tx, taskId, { fieldLocks: next });
   }
 
   /** Право правки задачи (как у PATCH полей). */

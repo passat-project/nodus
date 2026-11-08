@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ErrorCode, type AuthUser } from '@nodus/contracts';
+import { ErrorCode, type AuthUser, type FieldLocks } from '@nodus/contracts';
 
 import { TaskFormulaService } from './task-formula.service.js';
 
@@ -43,19 +43,25 @@ const entry = (hostId: string) => ({
   to: 20,
 });
 
-function setup(options: { nodeProjectId?: string | null } = {}) {
+function setup(options: { nodeProjectId?: string | null; locks?: FieldLocks } = {}) {
   const txRunner = { run: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})) };
   const query = {
     visibleRow: vi.fn(async () => row),
     subtreeIds: vi.fn(async () => [TASK, CHILD, HIDDEN]),
     visibleIdsAmong: vi.fn(async () => [TASK, CHILD]),
   };
-  const repo = { findWithParticipants: vi.fn(async () => row), lock: vi.fn(async () => void 0) };
+  const repo = {
+    findWithParticipants: vi.fn(async () => ({ ...row, fieldLocks: options.locks ?? {} })),
+    lock: vi.fn(async () => void 0),
+    updateFields: vi.fn(async () => void 0),
+  };
   const writer = { apply: vi.fn(async () => void 0) };
   const eventBus = { emit: vi.fn(async () => void 0) };
   const projectRights = { supplement: vi.fn(async (roles: unknown) => roles) };
   const cells = {
     read: vi.fn(async () => ({ ast: null, origin: null })),
+    save: vi.fn(async () => ({ value: 10, error: null })),
+    remove: vi.fn(async () => void 0),
     preview: vi.fn<(...args: unknown[]) => Promise<unknown[]>>(async () => []),
     dependentCellsByValues: vi.fn(async () => []),
     cellsForHost: vi.fn(
@@ -94,7 +100,7 @@ function setup(options: { nodeProjectId?: string | null } = {}) {
     records as never,
     recalcWriter as never,
   );
-  return { service, query, cells, records, writer, eventBus, recalcWriter };
+  return { service, query, repo, cells, records, writer, eventBus, recalcWriter };
 }
 
 describe('TaskFormulaService.movePreview (#632, Р10, критерий 1)', () => {
@@ -177,5 +183,64 @@ describe('TaskFormulaService.recalcCells: партия уходит писате
       { includeActor: false },
     );
     expect(recalcWriter.recalcForeign).toHaveBeenCalled();
+  });
+});
+
+/** Замок записи (#496, Р4): формула ячейки — ручная правка закреплённого. */
+describe('TaskFormulaService: замок ячейки (#496)', () => {
+  const fieldKey = 'cf.63200000-0000-4000-8000-000000000306';
+  const locks = (editors: 'none' | 'owners'): FieldLocks => ({
+    [fieldKey]: {
+      editors,
+      lockedAt: '2026-11-09T00:00:00.000Z',
+      lockedBy: CREATOR,
+      source: { kind: 'creation' },
+    },
+  });
+
+  it('замок «никто»: поставить формулу нельзя даже постановщику — 422', async () => {
+    const { service, cells } = setup({ locks: locks('none') });
+    await expect(
+      service.save(creator, TASK, FIELD, { kind: 'literal', value: 1 } as never),
+    ).rejects.toMatchObject({
+      code: ErrorCode.FIELD_LOCKED,
+      details: { keys: [fieldKey], reason: 'locked' },
+    });
+    expect(cells.save).not.toHaveBeenCalled();
+  });
+
+  it('замок «постановщик»: без причины — 422, с причиной — lastChange', async () => {
+    const { service, repo } = setup({ locks: locks('owners') });
+    await expect(
+      service.save(creator, TASK, FIELD, { kind: 'literal', value: 1 } as never),
+    ).rejects.toMatchObject({ details: { reason: 'reason_required' } });
+    await service.save(creator, TASK, FIELD, { kind: 'literal', value: 1 } as never, 'пересчёт');
+    const data = (
+      repo.updateFields.mock.calls[0] as unknown as [
+        unknown,
+        string,
+        {
+          fieldLocks: FieldLocks;
+        },
+      ]
+    )[2]!;
+    expect(data.fieldLocks[fieldKey]?.lastChange).toMatchObject({
+      by: CREATOR,
+      reason: 'пересчёт',
+    });
+  });
+
+  it('снятие формулы закреплённой ячейки — 422', async () => {
+    const { service, cells } = setup({ locks: locks('none') });
+    await expect(service.remove(creator, TASK, FIELD)).rejects.toMatchObject({
+      code: ErrorCode.FIELD_LOCKED,
+    });
+    expect(cells.remove).not.toHaveBeenCalled();
+  });
+
+  it('без замка формула ставится как раньше', async () => {
+    const { service, cells } = setup();
+    await service.save(creator, TASK, FIELD, { kind: 'literal', value: 1 } as never);
+    expect(cells.save).toHaveBeenCalled();
   });
 });

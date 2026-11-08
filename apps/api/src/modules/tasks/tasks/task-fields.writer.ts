@@ -115,7 +115,7 @@ export class TaskFieldsWriter {
     // не трогает). Формульная запись — не ручная правка (как с обязательными
     // полями): ячейку пишет система.
     const before = await this.repo.findWithParticipants(row.id, tx);
-    const nextLocks = opts.formulaWrite
+    const lockResult = opts.formulaWrite
       ? null
       : assertFieldLocks(
           before.fieldLocks,
@@ -164,7 +164,7 @@ export class TaskFieldsWriter {
     if (!opts.formulaWrite) await this.assertRequiredKept(row.typeId, patch);
     const data: TaskFieldsPatch = {};
     // Накопитель замков после разрешённой ручной правки (lastChange, Р4).
-    if (nextLocks) data.fieldLocks = nextLocks;
+    if (lockResult) data.fieldLocks = lockResult.locks;
     // Значения атрибутов читаются и пишутся под замком строки: параллельные
     // PATCH сливаются по ключам, а не перетирают карту целиком (#431).
     let fieldChanges: RegistryFieldChange[] = [];
@@ -264,6 +264,10 @@ export class TaskFieldsWriter {
       );
     }
     const changedKeys = fieldChanges.map((change) => `cf.${change.fieldId}`);
+    // Правка закреплённого — маркер и причина в событии (#496, Р9): история
+    // и аудит видят, кто и почему снял запрет; пересчёт формул на payload
+    // без `customFieldChanges` ничего не делает.
+    const eventFields = [...fields, ...changedKeys, ...(lockResult ? ['locks'] : [])];
     await this.eventBus.emit(
       tx,
       TASK_EVENTS.UPDATED,
@@ -273,10 +277,16 @@ export class TaskFieldsWriter {
         // правки — пересчёт идёт ПОСЛЕ ответа мутации, и без этого карточка
         // держит старое значение до перезагрузки.
         ...(opts.formulaWrite ? { formulaWrite: true } : {}),
-        fields: changedKeys.length > 0 ? [...fields, ...changedKeys] : fields,
+        fields: eventFields,
         // Обрезка длинного текста и числа изменений — лимит события (Р12).
         ...(fieldChanges.length > 0
           ? { customFieldChanges: fieldChanges.map(eventSafeChange) }
+          : {}),
+        ...(lockResult
+          ? {
+              locks: lockResult.changed,
+              ...(opts.lockReason !== undefined ? { lockReason: opts.lockReason } : {}),
+            }
           : {}),
         ...(patch.title !== undefined ? { title: after.title } : {}),
         ...(patch.deadline !== undefined

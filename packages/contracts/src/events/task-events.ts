@@ -89,15 +89,17 @@ export const taskUpdatedPayloadSchema = taskEventBaseSchema.extend({
   /** Формульная запись (#632): значение посчитано пересчётом ПОСЛЕ правки
    *  источника — клиент обязан перечитать деталь даже у автора мутации. */
   formulaWrite: z.boolean().optional(),
-  /** Поставленные замки (#496, Р9): `fields` содержит `'locks'` — окно
-   *  создания или выполненная кнопка закрепили поля. Обработчики формул и
-   *  участия на payload только с `'locks'` выходят сразу. */
+  /** Поставленные/тронутые замки (#496, Р4/Р9): ручная правка закреплённого
+   *  (PATCH, окно кнопки) и нажатие кнопки с «Закрепить после нажатия».
+   *  `fields` содержит `'locks'`, `customFieldChanges` при этом нет —
+   *  пересчёт формул на таком payload ничего не делает. Окно создания
+   *  кладёт замки в саму строку `task.created`. */
   locks: z
     .array(z.object({ key: z.string().min(1).max(64), editors: lockEditorsSchema }))
     .max(30)
     .optional(),
   /** Причина ручной правки закреплённого (#496, Р4): постановщик или право
-   *  `task.edit_locked` — история задачи и аудит. */
+   *  `task.edit_locked` — история и аудит; приходит вместе с `locks`. */
   lockReason: z.string().max(500).optional(),
 });
 export type TaskUpdatedPayload = z.infer<typeof taskUpdatedPayloadSchema>;

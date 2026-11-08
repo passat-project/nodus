@@ -81,7 +81,14 @@ export class ParticipantsService {
       // меняет только постановщик (или task.edit_locked) с причиной.
       await this.assertParticipantLocked(tx, fresh, body.role, user, body.lockReason);
       await this.repo.assignRole(tx, taskId, body.userId, body.role);
-      await this.afterChange(tx, user.id, taskId, [{ userId: body.userId, role: body.role }], []);
+      await this.afterChange(
+        tx,
+        user.id,
+        taskId,
+        [{ userId: body.userId, role: body.role }],
+        [],
+        body.lockReason,
+      );
     });
     return this.query.detail(user, taskId);
   }
@@ -125,7 +132,7 @@ export class ParticipantsService {
       // Обязательные при создании участники (#432, Р5): снятие последнего
       // соисполнителя/наблюдателя запрещено — форма типа требует хотя бы одного.
       await this.assertRequiredKept(tx, row.typeId, taskId, role);
-      await this.afterChange(tx, user.id, taskId, [], [userId]);
+      await this.afterChange(tx, user.id, taskId, [], [userId], lockReason);
     });
     // Снявший себя наблюдатель может потерять видимость — тогда ответ пустой.
     return this.query.detail(user, taskId).catch(() => null);
@@ -187,6 +194,7 @@ export class ParticipantsService {
     taskId: string,
     added: { userId: string; role: string }[],
     removed: string[],
+    lockReason?: string,
   ): Promise<void> {
     const task = await this.tasksRepo.findWithParticipants(taskId, tx);
     await this.placements.sync(tx, task, planHolderIds(task), actorId);
@@ -202,6 +210,8 @@ export class ParticipantsService {
         title: task.title,
         added,
         removed,
+        // Причина правки закреплённого состава (#496, Р4) — история/аудит.
+        ...(lockReason !== undefined ? { lockReason } : {}),
       },
       { actorId, aggregateType: 'task', aggregateId: taskId },
     );

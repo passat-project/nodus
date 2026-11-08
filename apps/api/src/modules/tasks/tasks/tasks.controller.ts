@@ -23,7 +23,8 @@ import {
   changeTaskTypeBodySchema,
   createSubtaskBodySchema,
   createTaskBodySchema,
-  formulaBodySchema,
+  lockReasonQuerySchema,
+  taskFormulaBodySchema,
   formulaMovePreviewResponseSchema,
   formulaResponseSchema,
   listTasksQuerySchema,
@@ -39,10 +40,11 @@ import {
   type ChangeTaskTypeBody,
   type CreateSubtaskBody,
   type CreateTaskBody,
-  type FormulaBody,
+  type TaskFormulaBody,
   type FormulaMovePreviewResponse,
   type FormulaResponse,
   type ListTasksQuery,
+  type LockReasonQuery,
   type Paginated,
   type TaskBranch,
   type TaskBulkBody,
@@ -229,10 +231,13 @@ export class TasksController {
     @GetUser() user: AuthUser,
     @Param('id', uuid) id: string,
     @Param('fieldId', uuid) fieldId: string,
-    @Body({ schema: formulaBodySchema, pipes: [new ZodValidationPipe(formulaBodySchema)] })
-    body: FormulaBody,
+    @Body({
+      schema: taskFormulaBodySchema,
+      pipes: [new ZodValidationPipe(taskFormulaBodySchema)],
+    })
+    body: TaskFormulaBody,
   ): Promise<FormulaResponse> {
-    return this.formulas.save(user, id, fieldId, body.ast);
+    return this.formulas.save(user, id, fieldId, body.ast, body.lockReason);
   }
 
   @Delete(':id/custom-fields/:fieldId/formula')
@@ -245,8 +250,13 @@ export class TasksController {
     @GetUser() user: AuthUser,
     @Param('id', uuid) id: string,
     @Param('fieldId', uuid) fieldId: string,
+    @Query({
+      schema: lockReasonQuerySchema,
+      pipes: [new ZodValidationPipe(lockReasonQuerySchema)],
+    })
+    q: LockReasonQuery,
   ): Promise<void> {
-    return this.formulas.remove(user, id, fieldId);
+    return this.formulas.remove(user, id, fieldId, q.lockReason);
   }
 
   @Post(':id/move-preview')

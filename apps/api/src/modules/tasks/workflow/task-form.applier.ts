@@ -2,12 +2,14 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   fieldLocksOf,
   mergeLocks,
+  TASK_EVENTS,
   type FormLock,
   type TransitionFormInput,
 } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
+import { EventBus } from '../../../core/events/event-bus.js';
 import type {
   WorkflowActor,
   WorkflowFormApplied,
@@ -17,7 +19,7 @@ import type {
 import { CHAT_MESSAGE_ACCESS, type ChatMessageAccess } from '../../chat/message-access.port.js';
 import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
-import { actorRoles, taskAccess } from '../access/task-access.js';
+import { actorRoles, audienceIds, taskAccess } from '../access/task-access.js';
 import { ResultRevisions } from '../activity/result-revisions.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
 import { TaskFieldsWriter, type TaskFieldsWrite } from '../tasks/task-fields.writer.js';
@@ -42,6 +44,7 @@ export class TaskFormApplier {
     @Inject(CHAT_MESSAGE_ACCESS) private readonly messages: ChatMessageAccess,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     @Inject(FORMULA_CELLS) private readonly formulaCells: FormulaCells,
+    private readonly eventBus: EventBus,
   ) {}
 
   async apply(
@@ -189,11 +192,30 @@ export class TaskFormApplier {
     if (locks.length === 0) return;
     const task = await this.tasks.findWithParticipants(taskId, tx);
     const current = fieldLocksOf(task.fieldLocks);
-    const next = mergeLocks(current, locks, {
+    const merged = mergeLocks(current, locks, {
       lockedAt: new Date().toISOString(),
       lockedBy: actorId,
       source: { kind: 'transition', transitionId: meta.transitionId, name: meta.transitionName },
     });
-    if (next !== current) await this.tasks.updateFields(tx, taskId, { fieldLocks: next });
+    const next = merged;
+    const changed = locks
+      .filter((lock) => current[lock.key] !== next[lock.key])
+      .map((lock) => ({ key: lock.key, editors: next[lock.key]!.editors }));
+    if (changed.length === 0) return;
+    await this.tasks.updateFields(tx, taskId, { fieldLocks: next });
+    // Маркер замков (#496, Р9): без `customFieldChanges` пересчёт формул на
+    // этом payload ничего не делает; история и аудит видят кнопку-источник.
+    await this.eventBus.emit(
+      tx,
+      TASK_EVENTS.UPDATED,
+      {
+        taskId,
+        number: task.number,
+        audience: audienceIds(task),
+        fields: ['locks'],
+        locks: changed,
+      },
+      { actorId, aggregateType: 'task', aggregateId: taskId },
+    );
   }
 }

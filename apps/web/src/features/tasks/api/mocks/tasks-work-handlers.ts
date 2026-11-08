@@ -1,5 +1,13 @@
-import type { RunningTimer, TaskListItem, TaskResult, TimeEntry } from '@nodus/contracts';
+import type {
+  LockablePatch,
+  LockableValues,
+  RunningTimer,
+  TaskListItem,
+  TaskResult,
+  TimeEntry,
+} from '@nodus/contracts';
 import {
+  changedLockKeys,
   ErrorCode,
   taskBulkBodySchema,
   taskResultCreateBodySchema,
@@ -17,10 +25,50 @@ import {
 import { findDemoNodeRow } from '../../../../shared/mocks/data/project-nodes.js';
 import { demoStages } from '../../../../shared/mocks/data/task-stages.js';
 import { currentAuthUser, userRef } from '../../../../shared/mocks/data/users.js';
+import { lockDenial } from '../../../../shared/mocks/data/task-locks.js';
 
 /** Работа по задаче в демо-режиме (#311): типы, учёт времени и таймер,
  *  результат, массовые операции. Права не моделируются — демо-пользователь
  *  может всё (их проверяет бэкенд #37). */
+
+/** Патч массовой операции для карты замков (#496, Р4): смена стадии полей не
+ *  трогает, остальные действия — те же ключи, что у PATCH. */
+function bulkPatch(action: {
+  kind: string;
+  deadline?: string | null;
+  priority?: string;
+  assigneeId?: string;
+  nodeId?: string | null;
+}): LockablePatch {
+  switch (action.kind) {
+    case 'set_deadline':
+      return { deadline: action.deadline };
+    case 'set_priority':
+      return { priority: action.priority };
+    case 'set_assignee':
+      return { assigneeId: action.assigneeId };
+    case 'set_node':
+      return { nodeId: action.nodeId };
+    default:
+      return {};
+  }
+}
+
+/** Значения записи для сравнения (как у сервера: только фактическая правка). */
+function lockableValues(task: TaskListItem): LockableValues {
+  const detail = taskDetailOf(task);
+  return {
+    title: task.title,
+    description: detail.description,
+    deadline: task.deadline,
+    priority: task.priority,
+    plannedMinutes: detail.plannedMinutes,
+    assigneeId: task.assignee?.id ?? null,
+    projectId: task.project?.id ?? null,
+    nodeId: task.nodeId ?? null,
+    customFields: task.customFields,
+  };
+}
 
 function findTask(id: unknown): TaskListItem | undefined {
   return (
@@ -183,6 +231,12 @@ export const tasksWorkHandlers = [
     const results = parsed.data.taskIds.map((taskId) => {
       const task = findTask(taskId);
       if (!task) return { taskId, ok: false, code: ErrorCode.NOT_FOUND };
+      // Замок записи (#496, Р4): массовая правка не обходит закреплённое —
+      // ответ по задаче, как у серверного bulk (причины в bulk не бывает).
+      const locked = changedLockKeys(lockableValues(task), bulkPatch(action));
+      if (lockDenial(task, locked, undefined)) {
+        return { taskId, ok: false, code: ErrorCode.FIELD_LOCKED };
+      }
       if (action.kind === 'set_deadline') task.deadline = action.deadline;
       if (action.kind === 'set_priority') task.priority = action.priority;
       if (action.kind === 'set_assignee') task.assignee = userRef(action.assigneeId);

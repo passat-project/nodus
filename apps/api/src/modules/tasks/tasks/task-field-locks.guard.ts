@@ -6,6 +6,7 @@ import {
   lockActorOf,
   lockDenialOf,
   type FieldLocks,
+  type LockEditors,
   type LockablePatch,
   type LockableValues,
 } from '@nodus/contracts';
@@ -51,6 +52,13 @@ export function lockValuesOf(row: {
  * поле, пишет его мимо замка (В10) — `writableKeys`. Успех ручной правки
  * возвращает накопитель с `lastChange`; иначе `null` (колонка не пишется).
  */
+export interface FieldLocksApplied {
+  /** Накопитель с `lastChange` у затронутых замков. */
+  locks: FieldLocks;
+  /** Замки, которые эта правка задела: payload `task.updated.locks` (Р9). */
+  changed: { key: string; editors: LockEditors }[];
+}
+
 export function assertFieldLocks(
   rawLocks: unknown,
   creatorId: string,
@@ -58,7 +66,7 @@ export function assertFieldLocks(
   actor: { id: string; permissions: readonly string[] },
   patch: LockablePatch,
   opts: { writableKeys?: ReadonlySet<string>; lockReason?: string },
-): FieldLocks | null {
+): FieldLocksApplied | null {
   const locks = fieldLocksOf(rawLocks);
   const keys = changedLockKeys(values, patch);
   const denial = lockDenialOf(locks, keys, lockActorOf(actor, creatorId), opts.lockReason, {
@@ -69,9 +77,12 @@ export function assertFieldLocks(
   }
   const affected = keys.filter((key) => locks[key] !== undefined && !opts.writableKeys?.has(key));
   if (affected.length === 0) return null;
-  return fieldLocksAfterChange(locks, affected, {
-    at: new Date().toISOString(),
-    by: actor.id,
-    reason: opts.lockReason ?? '',
-  });
+  return {
+    locks: fieldLocksAfterChange(locks, affected, {
+      at: new Date().toISOString(),
+      by: actor.id,
+      reason: opts.lockReason ?? '',
+    }),
+    changed: affected.map((key) => ({ key, editors: locks[key]!.editors })),
+  };
 }
