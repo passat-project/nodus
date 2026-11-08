@@ -6,6 +6,7 @@ import {
   type NumberContainerHit,
   type NumberHostKind,
   type NumberIssueSource,
+  type NumberTemplateFieldReader,
 } from '@nodus/contracts';
 
 import { Prisma } from '../../../generated/prisma/client.js';
@@ -48,6 +49,8 @@ export interface NextNumberInput {
   at?: Date;
   /** Журнал выдачи: без host строка журнала не пишется (только тесты низкого уровня). */
   host?: NumberHost;
+  /** Поля-вставки номера (#630): значения источников записи. */
+  field?: NumberTemplateFieldReader;
 }
 
 interface SeriesRow {
@@ -136,7 +139,7 @@ export class NumberSeriesService {
       RETURNING "last_value"
     `);
     const seq = rows[0]!.last_value;
-    const display = renderNumberTemplate(template.segments, { seq, at });
+    const display = renderNumberTemplate(template.segments, { seq, at, field: input.field });
     if (input.host) {
       await tx.numberAssignment.create({
         data: {

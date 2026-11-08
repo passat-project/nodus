@@ -24,7 +24,7 @@ const definition = (overrides: Partial<FieldDefinitionRow> = {}): FieldDefinitio
     type: 'counter',
     name: 'Изм.',
     numberSeriesId: 'series-1',
-    bindings: [],
+    bindings: [{ targetKind: 'process_type', targetId: TYPE_ID }],
     companyValue: null,
     ...overrides,
   }) as never;

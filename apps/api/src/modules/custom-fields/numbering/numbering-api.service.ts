@@ -171,7 +171,7 @@ export class NumberingApiService {
     body: { containerIds: readonly string[]; nextValue: number },
   ): Promise<NumberCountsResponse> {
     const counter = await this.counterOrThrow(tx, definitionId);
-    const hits = await this.hitsOfIds(tx, counter.rule, body.containerIds);
+    const hits = await this.hitsOfIds(tx, counter.rule, body.containerIds, actor);
     if (!hits) {
       throw new DomainException(
         ErrorCode.VALIDATION_FAILED,
@@ -198,6 +198,7 @@ export class NumberingApiService {
         first: number;
         last: number;
         record: NumberHostRecord;
+        readerRecord: NumberHostRecord | null;
       }
     >();
     for (const item of items) {
@@ -213,10 +214,12 @@ export class NumberingApiService {
           first: item.seq,
           last: item.seq,
           record: item.host,
+          readerRecord: item.host.visible ? item.host : null,
         });
       } else {
         group.count += 1;
         group.last = item.seq;
+        if (!group.readerRecord && item.host.visible) group.readerRecord = item.host;
       }
     }
     const out: NumberBackfillGroup[] = [];
@@ -277,6 +280,7 @@ export class NumberingApiService {
           if (item.empty && !body.confirmEmptyNumberParts) continue;
           const assigned = await this.series.next(tx, counter.series.id, {
             hits: item.hits,
+            field: readerOf(item.host, await this.definitions.list(tx)),
             host: {
               kind: item.host.kind,
               id: item.host.id,
@@ -412,47 +416,61 @@ export class NumberingApiService {
     tx: TransactionClient,
     rule: NumberSeriesRule,
     ids: readonly string[],
+    actor: NumberActor,
   ): Promise<NumberContainerHit[] | null> {
     if (ids.length !== rule.containers.length) return null;
     const out: NumberContainerHit[] = [];
     for (const [index, container] of rule.containers.entries()) {
       const id = ids[index]!;
-      out.push(await this.hitOf(tx, container, id));
+      out.push(await this.hitOf(tx, container, id, actor));
     }
     return out;
   }
 
+  /** Значение условия по id: существование проверяется реальным актёром
+   *  (#630, security-ревью) — мусорный uuid не создаёт висячий счёт. */
   private async hitOf(
     tx: TransactionClient,
     container: NumberContainer,
     id: string,
+    actor: NumberActor,
   ): Promise<NumberContainerHit> {
+    const hit = (entity: NumberContainerHit['entity']): NumberContainerHit => ({ entity, id });
+    const ensure = async (entity: NumberContainerHit['entity']) => {
+      const ref = await this.hosts.resolveRef(tx, hit(entity), actor);
+      if (!ref) {
+        throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Container does not exist', {
+          container: container.kind,
+          id,
+        });
+      }
+      return hit(entity);
+    };
     switch (container.kind) {
       case 'folder':
-        return { entity: 'node', id };
+        return ensure('node');
       case 'parent_folder': {
-        const node = await this.hosts.resolveRef(
-          tx,
-          { entity: 'node', id },
-          {
-            id: '',
-            permissions: [],
-          },
-        );
-        return node ? { entity: 'node', id } : { entity: 'project', id };
+        const node = await this.hosts.resolveRef(tx, hit('node'), actor);
+        if (node) return hit('node');
+        const project = await this.hosts.resolveRef(tx, hit('project'), actor);
+        if (project) return hit('project');
+        throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Container does not exist', {
+          container: container.kind,
+          id,
+        });
       }
       case 'project':
-        return { entity: 'project', id };
+        return ensure('project');
       case 'project_type':
-        return { entity: 'project_type', id };
+        return ensure('project_type');
       case 'portfolio':
-        return { entity: 'portfolio', id };
+        return ensure('portfolio');
       case 'parent_task':
-        return { entity: 'task', id };
+        return ensure('task');
       case 'field':
-        return { entity: 'value', id };
+        return hit('value');
       case 'record_type':
-        return { entity: 'type', id };
+        return hit('type');
     }
   }
 }

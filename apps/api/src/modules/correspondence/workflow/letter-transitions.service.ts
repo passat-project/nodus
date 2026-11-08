@@ -58,7 +58,12 @@ export class LetterTransitionsService {
           'letter',
           { id: user.id, permissions: user.permissions },
           { transitionId },
-          { form: body.form, override: body.override, reason: body.reason },
+          {
+            form: body.form,
+            override: body.override,
+            reason: body.reason,
+            confirmEmptyNumberParts: body.confirmEmptyNumberParts,
+          },
         );
         // Событие закрытия без регистрации дублируется сервисом (адаптер уже
         // его шлёт) — здесь только аудит-след причины в журнале переходов.

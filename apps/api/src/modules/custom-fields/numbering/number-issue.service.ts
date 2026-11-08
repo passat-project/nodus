@@ -1,4 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ErrorCode } from '@nodus/contracts';
+
+import { DomainException } from '../../../core/errors/domain-exception.js';
 import {
   numberEmptySegments,
   renderNumberTemplate,
@@ -82,6 +85,19 @@ export class NumberIssueService implements NumberIssue {
       if (definition?.type !== 'counter' || !definition.numberSeriesId) continue;
       const series = await this.series.byId(tx, definition.numberSeriesId);
       if (!series) continue;
+      // Кнопка/создание не выдают номер атрибуту, не привязанному к этому
+      // типу записи (#630, security-ревью): иначе серия тратится в чужом счёте.
+      const targetKind = targetKindOf(target.host);
+      const bound = definition.bindings.some(
+        (binding) => binding.targetKind === targetKind && binding.targetId === target.typeId,
+      );
+      if (!bound) {
+        throw new DomainException(
+          ErrorCode.NUMBER_TRIGGER_INVALID,
+          'Number field is not bound to this record type',
+          { fieldId, typeId: target.typeId },
+        );
+      }
       const resolved = resolveNumberContainers(series.containers, context.place);
       if (!resolved.ok) {
         return {
@@ -122,6 +138,7 @@ export class NumberIssueService implements NumberIssue {
         for (const item of pending) {
           const issued = await this.series.next(issueTx, item.series.id, {
             hits: item.hits,
+            field: context.reader,
             host: {
               kind: opts.hostKind,
               id: hostId,

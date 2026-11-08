@@ -234,7 +234,9 @@ export class TasksService {
         }
         let finalStage: { id: string; systemState: string; outcome: string | null } = initial;
         if (!targetIsInitial && requested) {
-          const execution = await this.engine.execute(tx, task.id, 'task', user, requested);
+          const execution = await this.engine.execute(tx, task.id, 'task', user, requested, {
+            confirmEmptyNumberParts: body.confirmEmptyNumberParts,
+          });
           finalStage = execution.stage;
         }
         const wrongStage =

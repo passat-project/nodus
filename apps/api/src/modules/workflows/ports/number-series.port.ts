@@ -6,6 +6,7 @@ import type {
   NumberIssueSource,
   NumberPeriod,
   NumberSeriesRule,
+  NumberTemplateFieldReader,
   NumberTemplateSegment,
 } from '@nodus/contracts';
 
@@ -91,6 +92,8 @@ export interface IssueNumberInput {
   at?: Date;
   /** Журнал выдачи: без host строка журнала не пишется. */
   host?: NumberHost;
+  /** Поля-вставки номера: значения источников записи. */
+  field?: NumberTemplateFieldReader;
 }
 
 export interface NumberSeriesStore {

@@ -191,10 +191,14 @@ describe('TasksService', () => {
       stageId: 's-new',
       systemState: 'backlog',
     });
-    expect(engine.execute).toHaveBeenCalledWith(TX, 't1', 'task', USER, {
-      systemState: 'active',
-      outcome: null,
-    });
+    expect(engine.execute).toHaveBeenCalledWith(
+      TX,
+      't1',
+      'task',
+      USER,
+      { systemState: 'active', outcome: null },
+      { confirmEmptyNumberParts: undefined },
+    );
     expect(placementsRepo.move).toHaveBeenCalledWith(TX, {
       taskId: 't1',
       userId: 'alice',
@@ -238,7 +242,14 @@ describe('TasksService', () => {
     engine.execute.mockResolvedValueOnce({ stage: secondBacklog, recordId: 'rec-1' } as never);
     await service.create(USER, { title: 'Т', stageId: 's-new-2' } as never);
     expect(repo.create.mock.calls[0]![0]).toMatchObject({ stageId: 's-new' });
-    expect(engine.execute).toHaveBeenCalledWith(TX, 't1', 'task', USER, { stageId: 's-new-2' });
+    expect(engine.execute).toHaveBeenCalledWith(
+      TX,
+      't1',
+      'task',
+      USER,
+      { stageId: 's-new-2' },
+      { confirmEmptyNumberParts: undefined },
+    );
   });
 
   it('явный stageId: движок ушёл в другую стадию — NOT_ALLOWED', async () => {
