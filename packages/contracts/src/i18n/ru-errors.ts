@@ -79,6 +79,7 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.FORMULA_SOURCE_FORBIDDEN]: 'В этой формуле нельзя использовать выбранный источник',
   [ErrorCode.FORMULA_LIMIT_EXCEEDED]: 'Формула слишком большая — упростите её',
   [ErrorCode.FORMULA_CELL_LOCKED]: 'Ячейку считает формула — вписать значение нельзя',
+  [ErrorCode.FIELD_LOCKED]: 'Поле закреплено — изменить его вручную нельзя',
   [ErrorCode.NUMBER_CONTAINER_MISSING]:
     'Номер не выдан: запись не лежит там, где ведётся счёт (папка, проект или портфель)',
   [ErrorCode.NUMBER_CONTAINER_UNREACHABLE]:

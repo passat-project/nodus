@@ -8,6 +8,7 @@ import {
 import { customFieldRefSchema } from '../custom-fields/custom-field-refs.js';
 import { customFieldFormulasSchema } from '../custom-fields/formula-api.schemas.js';
 import { userRefSchema } from '../directory/user-ref.schema.js';
+import { lockReasonSchema, taskFieldLockSchema } from '../forms/field-lock.js';
 import { cursorQuerySchema } from '../pagination/paginated.schema.js';
 import { projectRefSchema } from '../projects/project.schemas.js';
 import { processTypeRefSchema } from '../workflows/process-type.schemas.js';
@@ -197,6 +198,9 @@ export const taskDetailSchema = taskListItemSchema.extend({
    *  обязательные при создании поля. Собирает сервер — работает и для типа,
    *  невидимого зрителю. */
   layout: taskCardLayoutSchema,
+  /** Закреплённые поля (#496, Р10): только ключи текущего типа; `canEdit`
+   *  считает сервер. Список и канбан замков не несут — отказ 422 тостом. */
+  fieldLocks: z.array(taskFieldLockSchema).max(40),
   createdAt: z.iso.datetime(),
 });
 
@@ -303,8 +307,13 @@ export const taskUpdateBodySchema = z
     nodeId: z.uuid().nullable().optional(),
     /** Патч значений кастомных полей: `null` — очистить поле (#431). */
     customFields: customFieldValuesPatchSchema.optional(),
+    /** Причина правки закреплённого поля (#496, Р4): постановщик или право
+     *  `task.edit_locked`; без изменения закреплённых ключей игнорируется. */
+    lockReason: lockReasonSchema.optional(),
   })
-  .refine((v) => Object.keys(v).some((k) => k !== 'index'), { message: 'empty update' });
+  .refine((v) => Object.keys(v).some((k) => k !== 'index' && k !== 'lockReason'), {
+    message: 'empty update',
+  });
 
 export type TaskUpdateBody = z.infer<typeof taskUpdateBodySchema>;
 

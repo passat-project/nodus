@@ -7,6 +7,7 @@ import {
   type NodeKindCreateBody,
   type NodeKindForm,
   type NodeKindUpdateBody,
+  formSlots,
 } from '@nodus/contracts';
 
 import {
@@ -67,8 +68,8 @@ export class NodeKindsService {
         await this.assertForm(tx, dto.form);
         // Слот — привязка (Р3): добавленный слот привязывает, снятый —
         // снимает; привязки без слотов (посев/диалог) не трогаются (#646).
-        const previous = current.form.fields.map((slot) => slot.fieldId);
-        const next = dto.form.fields.map((slot) => slot.fieldId);
+        const previous = formSlots(current.form).map((slot) => slot.fieldId);
+        const next = formSlots(dto.form).map((slot) => slot.fieldId);
         await this.registry.syncPlaceBindings(
           { kind: 'node_kind', id },
           next,
@@ -124,7 +125,7 @@ export class NodeKindsService {
     const definitions = await this.registry.definitions({}, tx);
     const byId = new Map(definitions.map((definition) => [definition.id, definition]));
     const issues: { fieldId: string; reason: 'unknown_field' | 'not_bindable' }[] = [];
-    for (const slot of form.fields) {
+    for (const slot of formSlots(form)) {
       const definition = byId.get(slot.fieldId);
       if (!definition) issues.push({ fieldId: slot.fieldId, reason: 'unknown_field' });
       else if (definition.isCompany) {

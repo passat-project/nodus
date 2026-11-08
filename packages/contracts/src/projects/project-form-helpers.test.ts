@@ -5,7 +5,7 @@ import {
   systemFieldValue,
   isSystemFieldId,
 } from '../custom-fields/system-fields.js';
-import { hasDuplicateSlots } from '../custom-fields/field-form.schemas.js';
+import { formSlots, hasDuplicateSlots } from '../custom-fields/field-form.schemas.js';
 import {
   effectiveProjectTypeForm,
   projectTypeFormOf,
@@ -102,7 +102,7 @@ describe('effectiveProjectTypeForm (#646)', () => {
     };
     // В реестре осталось только «Шифр»: слот удалённого отфильтрован.
     const effective = effectiveProjectTypeForm(type, [{ id: CODE }]);
-    expect(effective.fields).toEqual([{ fieldId: CODE, state: 'required' }]);
+    expect(formSlots(effective)).toEqual([{ fieldId: CODE, state: 'required' }]);
     expect(missingProjectFields(effective, { customFields: { [CODE]: 'ПР-1' } })).toEqual([]);
   });
 
@@ -116,6 +116,6 @@ describe('effectiveProjectTypeForm (#646)', () => {
       },
     };
     const effective = effectiveProjectTypeForm(type, [{ id: CODE }]);
-    expect(effective.fields.map((slot) => slot.fieldId)).toEqual([CODE]);
+    expect(formSlots(effective).map((slot) => slot.fieldId)).toEqual([CODE]);
   });
 });

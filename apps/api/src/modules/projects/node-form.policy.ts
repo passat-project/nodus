@@ -12,6 +12,7 @@ import {
   type NodeFormKey,
   type NodeKind,
   type NodeKindForm,
+  formSlots,
 } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../core/database/transaction-runner.js';
@@ -95,7 +96,7 @@ export class NodeFormPolicy {
     tx?: TransactionClient,
   ): Promise<{ values: CustomFieldValues; changes: RegistryFieldChange[] }> {
     const form = await this.formOf(kind, tx);
-    const fieldIds = form.fields.map((slot) => slot.fieldId);
+    const fieldIds = formSlots(form).map((slot) => slot.fieldId);
     const patchValues: Record<string, CustomFieldValue | null> = { ...(patch.customFields ?? {}) };
     // Legacy-код → атрибут «Код» (десктоп); явное customFields важнее.
     if (
@@ -177,7 +178,7 @@ function withLegacyCode(input: NodeFormCreateInput, form: NodeKindForm): CustomF
   if (
     input.code != null &&
     values[SYSTEM_FIELD_IDS.nodeCode] === undefined &&
-    form.fields.some((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)
+    formSlots(form).some((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)
   ) {
     values[SYSTEM_FIELD_IDS.nodeCode] = input.code;
   }

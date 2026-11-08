@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ErrorCode } from '@nodus/contracts';
+import { ErrorCode, creationSlots } from '@nodus/contracts';
 
 import { ProcessTypesService } from './process-types.service.js';
 
@@ -285,7 +285,7 @@ describe('ProcessTypesService: скрытые значения формы (#432,
     repo.creationMap.mockResolvedValue(new Map([['wf-1', form]]));
     workflows.creationOf.mockResolvedValue(form);
     const [type] = await service.list(USER, 'exclude');
-    const slot = type!.creationForm.fields[0]!;
+    const slot = creationSlots(type!.creationForm)[0]!;
     expect(slot.preset).toBe('');
     expect(slot.preset).not.toBeNull();
   });
@@ -299,6 +299,6 @@ describe('ProcessTypesService: скрытые значения формы (#432,
       { id: 'u1', permissions: ['workflow.manage'] } as never,
       'exclude',
     );
-    expect(type!.creationForm.fields[0]!.preset).toBe('user-secret');
+    expect(creationSlots(type!.creationForm)[0]!.preset).toBe('user-secret');
   });
 });

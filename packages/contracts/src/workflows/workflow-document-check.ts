@@ -6,6 +6,8 @@ import { checkCategoryDictionary } from './workflow-document-category-check.js';
 import { checkDeciderRules, type WorkflowPositionFact } from './workflow-document-deciders.js';
 import { checkExtraRules } from './workflow-document-extra-checks.js';
 import { checkFormulaSlots } from './workflow-document-formula-check.js';
+import { windowFieldKeys } from './transition-form.schemas.js';
+import { checkWindowLayoutAndLocks } from './workflow-document-window-check.js';
 import type {
   WorkflowDraftDocument,
   WorkflowDraftStage,
@@ -216,6 +218,10 @@ export function checkWorkflowDocument(
 
   if (opts.category) problems.push(...checkFormulaSlots(doc, opts.category));
 
+  // --- Конструктор окна: оформление и замки (#496, Р8) --------------------
+
+  problems.push(...checkWindowLayoutAndLocks(doc, opts.customFields));
+
   // --- Кастомные поля в окне и гейтах (#431, Р7) ---------------------------
 
   const fields = opts.customFields;
@@ -233,7 +239,7 @@ export function checkWorkflowDocument(
     for (const t of transitions) {
       for (const section of t.form?.enabled ? t.form.sections : []) {
         if (section.kind === 'fields') {
-          for (const key of section.fields) checkKey(key, { transitionId: t.id });
+          for (const key of windowFieldKeys(section)) checkKey(key, { transitionId: t.id });
         }
       }
       for (const validator of t.rules.validators) {

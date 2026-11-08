@@ -11,6 +11,7 @@ import {
   typeAccessFor,
   type CreationForm,
   type TypeAccessSubject,
+  isCreationSlot,
 } from '@nodus/contracts';
 
 /** Строка `process_types` в объёме DTO (поля — ADR-0024, #378/#432). */
@@ -98,6 +99,8 @@ export function maskCreationPresets(type: ProcessType): ProcessType {
 export function maskCreationForm(form: CreationForm): CreationForm {
   return {
     ...form,
-    fields: form.fields.map((slot) => (slot.preset === null ? slot : { ...slot, preset: '' })),
+    fields: form.fields.map((slot) =>
+      !isCreationSlot(slot) || slot.preset === null ? slot : { ...slot, preset: '' },
+    ),
   };
 }

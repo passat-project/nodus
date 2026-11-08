@@ -7,6 +7,7 @@ import {
   Permission,
   PROJECT_LIMITS,
   SYSTEM_FIELD_IDS,
+  formSlots,
 } from '@nodus/contracts';
 
 import type { Prisma } from '../../generated/prisma/client.js';
@@ -145,7 +146,7 @@ export async function buildUpdatePatch(
       }
     }
     const cleared = clearedProjectFields(
-      form.fields.filter((slot) => slot.state === 'required').map((slot) => slot.fieldId),
+      formSlots(form).filter((slot) => slot.state === 'required').map((slot) => slot.fieldId),
       patchBody,
     );
     if (cleared.length > 0) {

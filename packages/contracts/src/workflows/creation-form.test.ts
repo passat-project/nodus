@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { CreationForm, CreationFormFacts } from './creation-form.js';
+import type { CreationFieldSlot, CreationForm, CreationFormFacts } from './creation-form.js';
 import {
   checkCreationForm,
+  creationSlots,
   defaultCreationForm,
   effectiveCreationForm,
   isCreationValueFilled,
@@ -16,9 +17,9 @@ import type { CustomFieldDefinition } from '../custom-fields/custom-field.schema
  *  слотов — по одному коду проблемы на правило. */
 
 const slot = (
-  key: CreationForm['fields'][number]['key'],
-  extra: Partial<CreationForm['fields'][number]> = {},
-): CreationForm['fields'][number] => ({
+  key: CreationFieldSlot['key'],
+  extra: Partial<CreationFieldSlot> = {},
+): CreationFieldSlot => ({
   key,
   label: null,
   required: false,
@@ -48,7 +49,7 @@ const definition = (
 describe('форма создания: умолчание и чтение', () => {
   it('форма задачи по умолчанию — нынешняя экспресс-форма', () => {
     const form = defaultCreationForm('task');
-    expect(form.fields.map((f) => f.key)).toEqual([
+    expect(creationSlots(form).map((f) => f.key)).toEqual([
       'description',
       'assignee',
       'deadline',

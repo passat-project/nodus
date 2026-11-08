@@ -4,6 +4,7 @@ import {
   customFieldChangeSchema,
   CUSTOM_FIELD_LIMITS,
 } from '../custom-fields/custom-field-values.js';
+import { lockEditorsSchema } from '../forms/field-lock.js';
 
 /**
  * Каталог доменных событий модуля tasks (I9; каталог api-conventions.md,
@@ -88,6 +89,16 @@ export const taskUpdatedPayloadSchema = taskEventBaseSchema.extend({
   /** Формульная запись (#632): значение посчитано пересчётом ПОСЛЕ правки
    *  источника — клиент обязан перечитать деталь даже у автора мутации. */
   formulaWrite: z.boolean().optional(),
+  /** Поставленные замки (#496, Р9): `fields` содержит `'locks'` — окно
+   *  создания или выполненная кнопка закрепили поля. Обработчики формул и
+   *  участия на payload только с `'locks'` выходят сразу. */
+  locks: z
+    .array(z.object({ key: z.string().min(1).max(64), editors: lockEditorsSchema }))
+    .max(30)
+    .optional(),
+  /** Причина ручной правки закреплённого (#496, Р4): постановщик или право
+   *  `task.edit_locked` — история задачи и аудит. */
+  lockReason: z.string().max(500).optional(),
 });
 export type TaskUpdatedPayload = z.infer<typeof taskUpdatedPayloadSchema>;
 
@@ -152,6 +163,8 @@ export const taskParticipantsChangedPayloadSchema = taskEventBaseSchema.extend({
   removed: z.array(z.uuid()),
   /** Проект задачи (#52): проекция участников проекта слушает. */
   projectId: z.uuid().nullable(),
+  /** Причина правки закреплённых участников (#496, Р4). */
+  lockReason: z.string().max(500).optional(),
 });
 export type TaskParticipantsChangedPayload = z.infer<typeof taskParticipantsChangedPayloadSchema>;
 

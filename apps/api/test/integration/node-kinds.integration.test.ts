@@ -6,6 +6,7 @@ import {
   projectNodeSchema,
   projectStructureResponseSchema,
   type ProjectNode,
+  formSlots,
 } from '@nodus/contracts';
 
 import { setupNodeKindsFixture, type NodeKindsFixture } from './node-kinds.fixtures.js';
@@ -34,8 +35,8 @@ describe('Виды папок как настраиваемые типы (#556)'
     expect(set!.form.fields).toHaveLength(2);
     // Порядок слотов не значим (Р9 #631: слот «Кода» встал на место
     // отжившего form.code) — важна обязательность обоих.
-    const markSlot = set!.form.fields.find((slot) => slot.fieldId !== SYSTEM_FIELD_IDS.nodeCode);
-    expect(set!.form.fields.find((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)?.state).toBe(
+    const markSlot = formSlots(set!.form).find((slot) => slot.fieldId !== SYSTEM_FIELD_IDS.nodeCode);
+    expect(formSlots(set!.form).find((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)?.state).toBe(
       'required',
     );
     expect(markSlot?.state).toBe('required');
@@ -49,7 +50,7 @@ describe('Виды папок как настраиваемые типы (#556)'
   it('конфигурация вида: возможности в порядке enum, чужой атрибут — 422', async () => {
     expect(f.kindB.capabilities).toEqual(['document_changes', 'schema_row']);
     expect(
-      f.kindA.form.fields.find((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)?.state,
+      formSlots(f.kindA.form).find((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)?.state,
     ).toBe('optional');
 
     const unknown = await f.fx.fx.api(f.admin, 'PATCH', `/projects/node-kinds/${f.kindA.id}`, {

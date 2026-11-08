@@ -13,6 +13,50 @@ describe('окно перехода на сервере (#380)', () => {
     expect(() => parseForm({ enabled: true, sections: [{ kind: 'questions' }] })).toThrow();
   });
 
+  it('parseForm (#496, I-P1): неизвестные свойства поля и виды оформления пропускаются', () => {
+    const form = parseForm({
+      enabled: true,
+      sections: [
+        {
+          kind: 'fields',
+          fields: [
+            'deadline',
+            { key: 'description', width: 'half', future: true },
+            { kind: 'heading', id: 'dabcdef1', text: 'Кому и что', color: 'red' },
+            { kind: 'divider', id: 'dabcdef2' },
+          ],
+        },
+      ],
+    });
+    expect(form.sections).toEqual([
+      {
+        kind: 'fields',
+        fields: [
+          'deadline',
+          { key: 'description', width: 'half' },
+          { kind: 'heading', id: 'dabcdef1', text: 'Кому и что' },
+        ],
+      },
+    ]);
+  });
+
+  it('parseForm (#496, I-P1): негодные замки — ошибка, годные читаются', () => {
+    const base = { enabled: true, sections: [{ kind: 'fields', fields: ['deadline'] }] };
+    expect(() => parseForm({ ...base, locks: [{ key: 'deadline' }] })).toThrow();
+    expect(() =>
+      parseForm({
+        ...base,
+        locks: [
+          { key: 'deadline', editors: 'none' },
+          { key: 'deadline', editors: 'owners' },
+        ],
+      }),
+    ).toThrow();
+    expect(parseForm({ ...base, locks: [{ key: 'deadline', editors: 'owners' }] }).locks).toEqual([
+      { key: 'deadline', editors: 'owners' },
+    ]);
+  });
+
   it('обязательная причина отсутствует — missing', () => {
     const sections = sectionsOf({
       enabled: true,

@@ -8,6 +8,15 @@ import {
   isCustomFieldValueFilled,
   moneyValueSchema,
 } from '../custom-fields/custom-field-values.js';
+import { formLocksSchema, isLockableKey } from '../forms/field-lock.js';
+import {
+  checkFormDecor,
+  FORM_LAYOUT_LIMITS,
+  formDecorSchema,
+  formFieldLayoutShape,
+  isFormDecor,
+  type FormDecor,
+} from '../forms/form-layout.js';
 import { ui } from '../i18n/ru.js';
 import type { ProcessCategory } from './process-type.schemas.js';
 import type { WorkflowProblem } from './workflow-document.schemas.js';
@@ -71,17 +80,11 @@ export const creationFieldSlotSchema = z
     /** Формула-подстановка (#632, Р12): значение считается при открытии окна,
      *  человек может поправить; в тело создания едет значением. */
     formula: formulaNodeSchema.nullable().optional(),
+    /** Раскладка в окне (#496, Р1): подсказка, ширина, высота текста. */
+    ...formFieldLayoutShape,
   })
   .strict();
 export type CreationFieldSlot = z.infer<typeof creationFieldSlotSchema>;
-
-export const creationFormSchema = z
-  .object({
-    fields: z.array(creationFieldSlotSchema).max(30),
-    chips: z.array(creationChipSchema).max(5),
-  })
-  .strict();
-export type CreationForm = z.infer<typeof creationFormSchema>;
 
 /** Лимиты формы — подсказки редактора берут числа отсюда. */
 export const CREATION_FORM_LIMITS = {
@@ -90,7 +93,51 @@ export const CREATION_FORM_LIMITS = {
   label: 60,
   presetText: 5000,
   presetList: 50,
+  /** Элементов оформления (#496). */
+  decor: FORM_LAYOUT_LIMITS.decor,
 } as const;
+
+/** Элемент окна создания (#496, Р3): поле-слот или оформление. */
+export const creationElementSchema = z.union([creationFieldSlotSchema, formDecorSchema]);
+export type CreationElement = CreationFieldSlot | FormDecor;
+
+/** Элемент — поле-слот (не оформление). */
+export function isCreationSlot(element: CreationElement): element is CreationFieldSlot {
+  return !isFormDecor(element);
+}
+
+const creationElementsSchema = z
+  .array(creationElementSchema)
+  .max(CREATION_FORM_LIMITS.fields + CREATION_FORM_LIMITS.decor)
+  .superRefine((elements, ctx) => {
+    const decor = elements.filter(isFormDecor).length;
+    if (elements.length - decor > CREATION_FORM_LIMITS.fields) {
+      ctx.addIssue({ code: 'custom', message: 'too many fields' });
+    }
+    if (decor > CREATION_FORM_LIMITS.decor) {
+      ctx.addIssue({ code: 'custom', message: 'too many decor elements' });
+    }
+  });
+
+export const creationFormSchema = z
+  .object({
+    /** Порядок окна: поля и оформление одним списком (#496, Р1/Р2). */
+    fields: creationElementsSchema,
+    chips: z.array(creationChipSchema).max(5),
+    /** Формула названия (#496, Р7): считается при открытии окна, правится
+     *  человеком; быстрые входы без окна её не применяют. */
+    titleFormula: formulaNodeSchema.nullable().optional(),
+    /** Замки окна создания (#496, Р4): закрепить после создания. */
+    locks: formLocksSchema.optional(),
+  })
+  .strict();
+export type CreationForm = z.infer<typeof creationFormSchema>;
+
+/** Поля-слоты формы без оформления — ЕДИНСТВЕННЫЙ способ читать слоты
+ *  (#496, Пакет 0): ключи, обязательность, пресеты, формулы. */
+export function creationSlots(form: Pick<CreationForm, 'fields'>): CreationFieldSlot[] {
+  return form.fields.filter(isCreationSlot);
+}
 
 /** Форма по умолчанию — нынешняя экспресс-форма задачи (Р2): описание,
  *  ответственный, срок, проект + чипы «Чек-лист» и «Планируемое время». */
@@ -217,7 +264,7 @@ export function checkCreationForm(form: CreationForm, facts: CreationFormFacts):
   const problems: WorkflowProblem[] = [];
   const seen = new Set<string>();
 
-  for (const slot of form.fields) {
+  for (const slot of creationSlots(form)) {
     const key = slot.key;
     if (seen.has(key)) problems.push(creationProblem('creation_duplicate_field', key));
     seen.add(key);
@@ -245,6 +292,23 @@ export function checkCreationForm(form: CreationForm, facts: CreationFormFacts):
       }
     } else if (slot.required && !requiredAllowed(key)) {
       problems.push(creationProblem('creation_required_not_allowed', key));
+    }
+  }
+
+  // Оформление (#496, Р8): пустой заголовок/пояснение не публикуется.
+  for (const id of checkFormDecor(form.fields)) {
+    problems.push(creationProblem('form_decor_empty', id));
+  }
+  // Замки окна создания (#496, Р4/Р8): ключ — системное поле из списка или
+  // атрибут, привязанный к типу.
+  for (const lock of form.locks ?? []) {
+    const fieldId = customFieldIdOfKey(lock.key);
+    if (!isLockableKey(lock.key)) {
+      problems.push(creationProblem('form_lock_key_invalid', lock.key));
+    } else if (fieldId !== null && !facts.customFields.active.has(fieldId)) {
+      problems.push(creationProblem('custom_field_unknown', lock.key));
+    } else if (fieldId !== null && !facts.customFields.inType.has(fieldId)) {
+      problems.push(creationProblem('form_lock_field_not_in_type', lock.key));
     }
   }
 

@@ -272,6 +272,12 @@ export const workflowProblemCodeSchema = z.enum([
    *  или результат не подходит к типу поля. Публикация с такой формулой дала
    *  бы пустой слот в окне или 422 на сохранении — отклоняем заранее. */
   'formula_invalid',
+  /** Конструктор окон (#496, Р8): пустой заголовок или пояснение в окне;
+   *  замок на незакрепляемом ключе (чек-лист, итог, время, неизвестное
+   *  системное поле); замок на атрибуте, не привязанном к типу маршрута. */
+  'form_decor_empty',
+  'form_lock_key_invalid',
+  'form_lock_field_not_in_type',
 ]);
 export type WorkflowProblemCode = z.infer<typeof workflowProblemCodeSchema>;
 

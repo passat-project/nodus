@@ -231,6 +231,9 @@ export class TasksQueryService {
       completedAt: full.completedAt?.toISOString() ?? null,
       customFieldRefs: withFormulasParent?.customFieldRefs ?? [],
       layout,
+      // #496 бэкенд снимает: замки детали (Р10) — колонка tasks.field_locks,
+      // ключи текущего типа, canEdit по lockAllowed (Пакет 2, фаза 6).
+      fieldLocks: [],
       access: taskAccess(actorRoles(row, user.id), user.permissions),
       createdAt: full.createdAt.toISOString(),
     };

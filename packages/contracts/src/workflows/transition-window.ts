@@ -3,8 +3,13 @@ import type {
   TransitionForm,
   TransitionFormSectionKind,
   TransitionWindowFieldKey,
+  TransitionWindowItem,
 } from './transition-form.schemas.js';
-import { TRANSITION_FORM_SECTION_ORDER } from './transition-form.schemas.js';
+import {
+  TRANSITION_FORM_SECTION_ORDER,
+  windowFieldKeys,
+  windowItems,
+} from './transition-form.schemas.js';
 import type { TransitionBlockReason, WorkflowTransitionRules } from './workflow.schemas.js';
 
 /**
@@ -22,7 +27,15 @@ export type EffectiveSection =
   | { kind: 'registration'; origin: 'form' | 'gate' }
   | {
       kind: 'fields';
+      /** Ключи полей окна: настроенные + добавленные гейтом (сверка ввода). */
       fields: TransitionWindowFieldKey[];
+      /** Порядок окна (#496, Р3): поля-объекты и оформление настроенного
+       *  раздела, затем поля, которые добавил только гейт (`{ key }`). */
+      elements: TransitionWindowItem[];
+      /** Ключи, которых нет в настроенном разделе — их добавило условие
+       *  «Заполнены поля» (редактор: «из условия перехода»; сервер: пишутся
+       *  в закреплённое, только пока пусты, Р4). */
+      gateKeys: TransitionWindowFieldKey[];
       /** Формулы-подстановки слотов (#632, Р12): веб применяет префилл и
        *  всегда отправляет такой слот, чтобы снимок сохранился. */
       formulas?: Record<string, FormulaNode>;
@@ -40,7 +53,21 @@ export function effectiveWindowSections(
 ): EffectiveSection[] {
   const sections = new Map<TransitionFormSectionKind, EffectiveSection>();
   if (form?.enabled) {
-    for (const section of form.sections) sections.set(section.kind, { ...section, origin: 'form' });
+    for (const section of form.sections) {
+      sections.set(
+        section.kind,
+        section.kind === 'fields'
+          ? {
+              kind: 'fields',
+              fields: windowFieldKeys(section),
+              elements: windowItems(section),
+              gateKeys: [],
+              ...(section.formulas ? { formulas: section.formulas } : {}),
+              origin: 'form',
+            }
+          : { ...section, origin: 'form' },
+      );
+    }
   }
 
   const gateFields = new Set<TransitionWindowFieldKey>();
@@ -69,13 +96,16 @@ export function effectiveWindowSections(
 
   if (gateFields.size > 0) {
     const existing = sections.get('fields');
-    const fields = new Set<TransitionWindowFieldKey>(
-      existing?.kind === 'fields' ? existing.fields : [],
-    );
-    for (const field of gateFields) fields.add(field);
+    const configured = existing?.kind === 'fields' ? existing.fields : [];
+    const gateKeys = [...gateFields].filter((field) => !configured.includes(field));
     sections.set('fields', {
       kind: 'fields',
-      fields: [...fields],
+      fields: [...configured, ...gateKeys],
+      elements: [
+        ...(existing?.kind === 'fields' ? existing.elements : []),
+        ...gateKeys.map((key) => ({ key })),
+      ],
+      gateKeys,
       ...(existing?.kind === 'fields' && existing.formulas ? { formulas: existing.formulas } : {}),
       origin: existing ? 'form' : 'gate',
     });
