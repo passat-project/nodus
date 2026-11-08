@@ -1,11 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { TransitionFormInput } from '@nodus/contracts';
+import {
+  fieldLocksOf,
+  mergeLocks,
+  type FormLock,
+  type TransitionFormInput,
+} from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import type {
   WorkflowActor,
   WorkflowFormApplied,
+  WorkflowFormMeta,
+  WorkflowLockMeta,
 } from '../../../core/ports/workflow-entity.port.js';
 import { CHAT_MESSAGE_ACCESS, type ChatMessageAccess } from '../../chat/message-access.port.js';
 import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
@@ -42,6 +49,7 @@ export class TaskFormApplier {
     taskId: string,
     actor: WorkflowActor,
     input: TransitionFormInput,
+    meta?: WorkflowFormMeta,
   ): Promise<WorkflowFormApplied> {
     const task = await this.tasks.findWithParticipants(taskId, tx);
     let current = task;
@@ -102,7 +110,11 @@ export class TaskFormApplier {
       );
       if (Object.keys(unlockedPatch).length > 0) patch.customFields = unlockedPatch;
       if (keys.length > 0 || patch.customFields) {
-        const written = await this.writer.apply(tx, actor, task, patch, keys);
+        // Окно пишет свои поля мимо замка записи (В10), остальное закреплённое
+        // — 422 `FIELD_LOCKED`; причины окно не спрашивает (её даёт PATCH).
+        const written = await this.writer.apply(tx, actor, task, patch, keys, {
+          ...(meta ? { writableKeys: meta.writableKeys } : {}),
+        });
         for (const change of written.customFieldChanges) {
           fields[`cf.${change.fieldId}`] = { from: change.from, to: change.to };
         }
@@ -160,5 +172,28 @@ export class TaskFormApplier {
     }
 
     return { fields, timeEntryId, result };
+  }
+
+  /**
+   * Замки нажатой кнопки (#496, Р4): «Закрепить после нажатия» ставится в
+   * той же транзакции. Слияние — контрактное (`mergeLocks`, I-L8): строже
+   * побеждает, повтор идемпотентен; сам замок не снимается никогда.
+   */
+  async applyLocks(
+    tx: TransactionClient,
+    taskId: string,
+    actorId: string,
+    locks: readonly FormLock[],
+    meta: WorkflowLockMeta,
+  ): Promise<void> {
+    if (locks.length === 0) return;
+    const task = await this.tasks.findWithParticipants(taskId, tx);
+    const current = fieldLocksOf(task.fieldLocks);
+    const next = mergeLocks(current, locks, {
+      lockedAt: new Date().toISOString(),
+      lockedBy: actorId,
+      source: { kind: 'transition', transitionId: meta.transitionId, name: meta.transitionName },
+    });
+    if (next !== current) await this.tasks.updateFields(tx, taskId, { fieldLocks: next });
   }
 }

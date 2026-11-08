@@ -4,7 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   ErrorCode,
+  lockFieldFilled,
   matchesDecider,
+  windowWritableKeys,
   type ProcessCategory,
   type TransitionFormInput,
   type WorkflowTransition,
@@ -16,6 +18,8 @@ import type {
   WorkflowActor,
   WorkflowActorSubject,
   WorkflowFormApplied,
+  WorkflowFormMeta,
+  WorkflowGateFacts,
   WorkflowStageChangeMeta,
 } from '../../../../core/ports/workflow-entity.port.js';
 import type {
@@ -118,7 +122,25 @@ export class WorkflowEngine implements WorkflowEnginePort {
     }
 
     const picked = this.pick(candidates, choice, opts.form);
-    const applied = await this.applyForm(adapter, category, tx, entityId, actor, picked, opts.form);
+    const applied = await this.applyForm(
+      adapter,
+      category,
+      tx,
+      entityId,
+      actor,
+      picked,
+      opts.form,
+      subject0.facts,
+    );
+    // Замки нажатой кнопки (#496, Р4): «Закрепить после нажатия» — в той же
+    // транзакции, что и переход; откат перехода откатывает и замок. Замки
+    // выключенного окна не действуют (В13) — как и в проверке документа.
+    if (picked.form?.enabled && picked.form.locks?.length) {
+      await adapter.applyLocks?.(tx, entityId, actor.id, picked.form.locks, {
+        transitionId: picked.id,
+        transitionName: picked.name,
+      });
+    }
     // Гейты видят факты после окна; условия «кто» — по состоянию до окна.
     const subject1 = exec.hasApplied(applied)
       ? await this.subjectWithPermissions(tx, entityId, category, actor)
@@ -300,8 +322,10 @@ export class WorkflowEngine implements WorkflowEnginePort {
     actor: WorkflowActor,
     t: TransitionDef,
     form: TransitionFormInput | undefined,
+    facts: WorkflowGateFacts,
   ): Promise<WorkflowFormApplied> {
     if (!form || Object.keys(form).length === 0) return exec.EMPTY_APPLIED;
+    const meta = this.formMeta(t, facts);
     // Раздел «Трудозатраты» режима «если ещё не списаны»: сервер решает по
     // факту, а не по вере клиента (запись времени не задваивается).
     if (form.time && t.form?.enabled) {
@@ -312,11 +336,21 @@ export class WorkflowEngine implements WorkflowEnginePort {
           const rest = { ...form };
           delete rest.time;
           if (Object.keys(rest).length === 0) return exec.EMPTY_APPLIED;
-          return adapter.applyForm(tx, entityId, actor, rest);
+          return adapter.applyForm(tx, entityId, actor, rest, meta);
         }
       }
     }
-    return adapter.applyForm(tx, entityId, actor, form);
+    return adapter.applyForm(tx, entityId, actor, form, meta);
+  }
+
+  /** Ключи окна, которые оно пишет мимо замка записи (#496, Р4, В10):
+   *  настроенный раздел «Поля» и пустые поля из условия «Заполнены поля».
+   *  Факты — состояние ДО окна (окно не даёт права писать закреплённое). */
+  private formMeta(t: TransitionDef, facts: WorkflowGateFacts): WorkflowFormMeta {
+    const { sections } = windowOf(t.form, t.rules);
+    return {
+      writableKeys: windowWritableKeys(sections, (key) => lockFieldFilled(key, facts)),
+    };
   }
 
   private assertOverride(

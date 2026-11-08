@@ -1,6 +1,8 @@
 /* eslint-disable nodus-internal/max-lines-warn -- создание задачи (#630): место счётчика и запись номеров — одна транзакция */
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  buildCreationLocks,
+  effectiveCreationForm,
   ErrorCode,
   TASK_EVENTS,
   type AuthUser,
@@ -170,6 +172,14 @@ export class TasksService {
     );
     const holders = planHolderIds({ creatorId: user.id, assigneeId, participants });
     await this.placements.prepare(holders);
+    // Замки окна создания (#496, Р4): «Закрепить после создания» ставится в
+    // строку той же транзакцией, что и сама задача. Ключи проверены
+    // публикацией формы; снять замок может только правка с причиной.
+    const fieldLocks = buildCreationLocks(
+      effectiveCreationForm(type.creationForm, type.category),
+      user.id,
+      new Date().toISOString(),
+    );
 
     const id = await this.txRunner
       .run(async (tx) => {
@@ -222,6 +232,7 @@ export class TasksService {
             assigneeId,
             participants,
             customFields,
+            fieldLocks,
           }),
           tx,
         );

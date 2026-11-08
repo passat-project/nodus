@@ -200,3 +200,21 @@ export function requiredWindowSections(sections: readonly EffectiveSection[]): s
     return [];
   });
 }
+
+/**
+ * Ключи окна, которые оно пишет мимо замка записи (#496, Р4, В10): поля
+ * настроенного раздела и поля, добавленные ТОЛЬКО условием «Заполнены
+ * поля», — пока они пусты (иначе условие уже выполнено и окно их не
+ * спрашивает). Одна грамматика сервера и моков.
+ */
+export function windowWritableKeys(
+  sections: readonly EffectiveSection[],
+  filled: (key: TransitionWindowFieldKey) => boolean,
+): Set<string> {
+  const fieldsSection = sections.find((section) => section.kind === 'fields');
+  if (fieldsSection?.kind !== 'fields') return new Set();
+  return new Set<string>([
+    ...fieldsSection.fields.filter((key) => !fieldsSection.gateKeys.includes(key)),
+    ...fieldsSection.gateKeys.filter((key) => !filled(key)),
+  ]);
+}

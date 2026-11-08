@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
+import { Permission } from '../auth/permission.js';
 import { customFieldIdOfKey, customFieldKey } from '../custom-fields/custom-field-key.js';
+import { isCustomFieldValueFilled } from '../custom-fields/custom-field-values.js';
 import { userRefSchema } from '../directory/user-ref.schema.js';
 
 /**
@@ -253,6 +255,139 @@ export const fieldLockedDetailsSchema = z.object({
   reason: lockDenialSchema,
 });
 export type FieldLockedDetails = z.infer<typeof fieldLockedDetailsSchema>;
+
+/** Текущие значения записи для сравнения с патчем (замок — только на
+ *  реально меняющемся значении, как FORMULA_CELL_LOCKED). */
+export interface LockableValues {
+  title: string;
+  description: string;
+  deadline: string | null;
+  priority: string;
+  plannedMinutes: number | null;
+  assigneeId: string | null;
+  projectId: string | null;
+  nodeId: string | null;
+  customFields: Readonly<Record<string, unknown>>;
+}
+
+const sameValue = (a: unknown, b: unknown) =>
+  JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/**
+ * Ключи замка, значение которых патч действительно меняет (карта Р4).
+ * Одна грамматика для сервера, моков и веба (исключение patterns.md —
+ * как у transition-window): правка «тем же значением» замок не трогает.
+ */
+export function changedLockKeys(current: LockableValues, patch: LockablePatch): string[] {
+  return lockKeysOfPatch(patch).filter((key) => {
+    switch (key) {
+      case 'title':
+      case 'description':
+      case 'deadline':
+      case 'priority':
+      case 'plannedMinutes':
+        return !sameValue(patch[key], current[key]);
+      case 'assignee':
+        return !sameValue(patch.assigneeId, current.assigneeId);
+      case 'project':
+        return (
+          (patch.projectId !== undefined && !sameValue(patch.projectId, current.projectId)) ||
+          (patch.nodeId !== undefined && !sameValue(patch.nodeId, current.nodeId))
+        );
+      default: {
+        const fieldId = customFieldIdOfKey(key);
+        return (
+          fieldId !== null &&
+          !sameValue(patch.customFields?.[fieldId], current.customFields[fieldId])
+        );
+      }
+    }
+  });
+}
+
+/** Кто правит закреплённое: постановщик задачи и права токена. */
+export function lockActorOf(
+  actor: { id: string; permissions: readonly string[] },
+  creatorId: string,
+): LockActor {
+  return {
+    isCreator: creatorId === actor.id,
+    canManageAny: actor.permissions.includes(Permission.TASK_MANAGE_ANY),
+    canEditLocked: actor.permissions.includes(Permission.TASK_EDIT_LOCKED),
+  };
+}
+
+/**
+ * Отказ ручной правки закреплённого (Р4) или `null`, если можно.
+ * `writable` — ключи окна кнопки, которые оно пишет мимо замка (В10).
+ * Одна грамматика сервера и моков: тот же ответ 422 `FIELD_LOCKED`.
+ */
+export function lockDenialOf(
+  locks: FieldLocks,
+  keys: readonly string[],
+  actor: LockActor,
+  reason?: string | null,
+  opts: { writable?: ReadonlySet<string> } = {},
+): FieldLockedDetails | null {
+  const locked = keys.filter((key) => locks[key] !== undefined && !opts.writable?.has(key));
+  if (locked.length === 0) return null;
+  for (const key of locked) {
+    const verdict = lockAllowed(locks[key]!.editors, actor, reason);
+    if (!verdict.allowed) return { keys: locked, reason: verdict.reason };
+  }
+  return null;
+}
+
+/** Накопитель после разрешённой ручной правки: `lastChange` у затронутых. */
+export function fieldLocksAfterChange(
+  locks: FieldLocks,
+  keys: readonly string[],
+  change: { at: string; by: string; reason: string },
+): FieldLocks {
+  const affected = keys.filter((key) => locks[key] !== undefined);
+  if (affected.length === 0) return locks;
+  const next: FieldLocks = { ...locks };
+  for (const key of affected) {
+    next[key] = { ...next[key]!, lastChange: { ...change, reason: change.reason.trim() } };
+  }
+  return next;
+}
+
+/** Значения записи, которых хватает правилу «поле из условия пишется мимо
+ *  замка, только пока пусто» (Р4, В10). */
+export interface LockFieldValues {
+  description: string;
+  deadline: unknown;
+  assigneeId: string | null;
+  plannedMinutes: number | null;
+  hasResult: boolean;
+  customFields: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Заполнено ли поле записи (Р4, В10). Одна грамматика сервера и моков:
+ * неизвестный ключ считается заполненным — он не даёт окну права писать
+ * мимо замка. Ключи без значения в карточке (title, priority) сюда не
+ * попадают: у них значение есть всегда.
+ */
+export function lockFieldFilled(key: string, values: LockFieldValues): boolean {
+  switch (key) {
+    case 'description':
+      return values.description.trim().length > 0;
+    case 'deadline':
+      return values.deadline !== null && values.deadline !== undefined;
+    case 'assignee':
+      return values.assigneeId !== null;
+    case 'plannedMinutes':
+      return values.plannedMinutes !== null;
+    case 'result':
+      return values.hasResult;
+    default: {
+      const fieldId = customFieldIdOfKey(key);
+      return fieldId === null ? true : isCustomFieldValueFilled(values.customFields[fieldId]);
+    }
+  }
+}
 
 /** Замок в детали задачи (Р10): только ключи текущего типа; `canEdit`
  *  считает сервер — право пути И правило замка без учёта причины. */

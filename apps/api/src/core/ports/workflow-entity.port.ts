@@ -1,4 +1,9 @@
-import type { NumberHostKind, TransitionFormInput, WorkflowDeciderFacts } from '@nodus/contracts';
+import type {
+  FormLock,
+  NumberHostKind,
+  TransitionFormInput,
+  WorkflowDeciderFacts,
+} from '@nodus/contracts';
 
 import type { TransactionClient } from '../database/transaction-runner.js';
 
@@ -159,6 +164,20 @@ export interface WorkflowActor {
   permissions: readonly string[];
 }
 
+/** Окно перехода для записи полей (#496, Р4, В10): ключи, которые окно
+ *  пишет мимо замка записи. Считает движок по эффективному окну и фактам
+ *  ДО окна — адаптер не пересобирает грамматику окон. */
+export interface WorkflowFormMeta {
+  writableKeys: ReadonlySet<string>;
+}
+
+/** Нажатая кнопка для замков (#496, Р4): имя на момент нажатия — подпись
+ *  «Закреплено после «Выдать в печать»». */
+export interface WorkflowLockMeta {
+  transitionId: string;
+  transitionName: string;
+}
+
 export interface WorkflowEntityAdapter {
   /** Категория типа процесса (`task` | `letter`) — ключ реестра адаптеров. */
   readonly category: string;
@@ -191,7 +210,19 @@ export interface WorkflowEntityAdapter {
     entityId: string,
     actor: WorkflowActor,
     input: TransitionFormInput,
+    meta?: WorkflowFormMeta,
   ): Promise<WorkflowFormApplied>;
+
+  /** Замки, которые ставит нажатая кнопка (#496, Р4): окно перехода снова
+   *  просит закреплённое поле и/или закрепляет его после нажатия. Адаптеры
+   *  без замков метод не реализуют (письма). */
+  applyLocks?(
+    tx: TransactionClient,
+    entityId: string,
+    actorId: string,
+    locks: readonly FormLock[],
+    meta: WorkflowLockMeta,
+  ): Promise<void>;
 
   /** Сколько сущностей в каждой из стадий (диалог публикации, мета списка). */
   countByStages(

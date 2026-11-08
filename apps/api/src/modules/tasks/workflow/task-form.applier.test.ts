@@ -17,7 +17,10 @@ const TASK = {
 };
 
 function setup(overrides: Record<string, unknown> = {}) {
-  const tasks = { findWithParticipants: vi.fn(async () => ({ ...TASK, ...overrides })) };
+  const tasks = {
+    findWithParticipants: vi.fn(async () => ({ ...TASK, ...overrides })),
+    updateFields: vi.fn(async () => void 0),
+  };
   const writer = { apply: vi.fn(async () => ({ customFieldChanges: [] })) };
   const time = { addManualInTx: vi.fn(async () => ({ id: 'entry-1' })) };
   const revisions = {
@@ -69,6 +72,8 @@ describe('TaskFormApplier — окно перехода задачи (#380)', ()
       expect.objectContaining({ id: 't1' }),
       { description: 'Новое', assigneeId: 'dave' },
       ['description', 'assigneeId'],
+      // Окно без meta (движок не передал) — замков записи не касается.
+      {},
     );
     expect(applied.fields).toEqual({
       description: { from: 'Старое', to: 'Новое' },
@@ -150,5 +155,95 @@ describe('TaskFormApplier: синхронный пересчёт формул в
       't1',
       [fieldId],
     );
+  });
+});
+
+/** Замки записи в окне кнопки (#496, Р4, В10). */
+describe('TaskFormApplier — замки записи (#496)', () => {
+  it('окно пишет свои поля мимо замка: writableKeys — в писатель', async () => {
+    const { applier, writer } = setup();
+    await applier.apply(
+      TX,
+      't1',
+      actor('bob'),
+      { fields: { description: 'Новое' } },
+      { writableKeys: new Set(['description']) },
+    );
+    expect(writer.apply).toHaveBeenLastCalledWith(
+      TX,
+      expect.objectContaining({ id: 'bob' }),
+      expect.objectContaining({ id: 't1' }),
+      { description: 'Новое' },
+      ['description'],
+      { writableKeys: new Set(['description']) },
+    );
+  });
+
+  it('замки кнопки ставятся с источником «кнопка», строже побеждает', async () => {
+    const { applier, tasks } = setup({
+      fieldLocks: {
+        deadline: {
+          editors: 'owners',
+          lockedAt: '2026-11-09T00:00:00.000Z',
+          lockedBy: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          source: { kind: 'creation' },
+        },
+      },
+    });
+    await applier.applyLocks(
+      TX,
+      't1',
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      [
+        { key: 'deadline', editors: 'none' },
+        { key: 'description', editors: 'owners' },
+      ],
+      { transitionId: '11111111-2222-4333-8444-555555555555', transitionName: 'Выдать в печать' },
+    );
+    const data = (
+      tasks.updateFields.mock.calls[0] as unknown as [
+        unknown,
+        string,
+        {
+          fieldLocks: Record<string, { editors: string; source: unknown; lockedBy: string }>;
+        },
+      ]
+    )[2]!;
+    // Строже побеждает: owners → none заменяет запись целиком.
+    expect(data.fieldLocks.deadline).toMatchObject({
+      editors: 'none',
+      source: {
+        kind: 'transition',
+        transitionId: '11111111-2222-4333-8444-555555555555',
+        name: 'Выдать в печать',
+      },
+      lockedBy: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    });
+    expect(data.fieldLocks.description).toMatchObject({ editors: 'owners' });
+  });
+
+  it('повтор кнопки без изменений не пишет колонку', async () => {
+    const { applier, tasks } = setup({
+      fieldLocks: {
+        deadline: {
+          editors: 'none',
+          lockedAt: '2026-11-09T00:00:00.000Z',
+          lockedBy: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          source: {
+            kind: 'transition',
+            transitionId: '11111111-2222-4333-8444-555555555555',
+            name: 'Старое имя',
+          },
+        },
+      },
+    });
+    await applier.applyLocks(
+      TX,
+      't1',
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      [{ key: 'deadline', editors: 'owners' }],
+      { transitionId: '11111111-2222-4333-8444-555555555555', transitionName: 'Выдать' },
+    );
+    expect(tasks.updateFields).not.toHaveBeenCalled();
   });
 });

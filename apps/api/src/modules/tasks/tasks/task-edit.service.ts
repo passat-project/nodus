@@ -174,6 +174,9 @@ export class TaskEditService {
         customFields: body.customFields,
       },
       fields,
+      // Причина правки закреплённого (#496, Р4): постановщик и право
+      // `task.edit_locked` без неё получат 422 `FIELD_LOCKED`.
+      { ...(body.lockReason !== undefined ? { lockReason: body.lockReason } : {}) },
     );
     // Синхронный пересчёт формул в той же tx (#632): ответ PATCH и любой
     // следующий GET обязаны нести свежие значения — асинхронный обработчик

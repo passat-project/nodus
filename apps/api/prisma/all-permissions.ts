@@ -18,6 +18,8 @@ export const ALL_PERMISSIONS = [
   'task.view_all',
   'task.manage_any',
   'task.override_gate',
+  // #496: форс-мажор правки закреплённого поля (окна ввода, замок записи).
+  'task.edit_locked',
   'workflow.manage',
   'directory.read',
   'directory.manage',

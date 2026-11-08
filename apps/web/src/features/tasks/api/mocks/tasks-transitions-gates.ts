@@ -6,10 +6,10 @@ import type {
   WorkflowTransition,
 } from '@nodus/contracts';
 import {
-  customFieldIdOfKey,
-  isCustomFieldValueFilled,
   isFinalState,
+  lockFieldFilled,
   lockKeysOfPatch,
+  windowWritableKeys,
 } from '@nodus/contracts';
 
 import { demoConversations, demoMessages } from '../../../../shared/mocks/data/chat.js';
@@ -36,24 +36,15 @@ export function fileCount(messageIds: readonly string[]): number {
 
 export function fieldFilled(task: TaskListItem, field: string): boolean {
   const detail = taskDetailOf(task);
-  switch (field) {
-    case 'description':
-      return detail.description.trim().length > 0;
-    case 'deadline':
-      return task.deadline !== null;
-    case 'assignee':
-      return task.assignee !== null;
-    case 'plannedMinutes':
-      return detail.plannedMinutes !== null;
-    case 'result':
-      return Boolean(detail.result?.text.trim());
-    default: {
-      // Поле процесса (#431): неизвестное/архивное не блокирует (Р7).
-      const id = customFieldIdOfKey(field);
-      if (id === null) return true;
-      return isCustomFieldValueFilled(task.customFields[id]);
-    }
-  }
+  // Грамматика заполненности — общая с сервером (#496, Р4, В10).
+  return lockFieldFilled(field, {
+    description: detail.description,
+    deadline: task.deadline,
+    assigneeId: task.assignee?.id ?? null,
+    plannedMinutes: detail.plannedMinutes,
+    hasResult: Boolean(detail.result?.text.trim()),
+    customFields: task.customFields,
+  });
 }
 
 /** Гейты мока — та же грамматика, что у сервера (ADR-0020). */
@@ -247,18 +238,14 @@ export function postBlock(
 
 /** Запись окна в закреплённое (#496, Р4, В10): ключи настроенного раздела
  *  окно пишет мимо замка; ключ, который добавило только условие «Заполнены
- *  поля», — пока он пуст. Остальное закреплённое — 422 FIELD_LOCKED.
- *  // #496 бэкенд снимает: writableKeys движка (Пакет 2, фаза 4). */
+ *  поля», — пока он пуст. Грамматика — общая с сервером (`windowWritableKeys`
+ *  контрактов); остальное закреплённое — 422 FIELD_LOCKED. */
 export function windowLockDenial(
   task: TaskListItem,
   sections: readonly EffectiveSection[],
   input: TransitionFormInput,
 ): Response | null {
-  const fieldsSection = sections.find((section) => section.kind === 'fields');
-  if (fieldsSection?.kind !== 'fields' || !input.fields) return null;
-  const writable = new Set<string>([
-    ...fieldsSection.fields.filter((key) => !fieldsSection.gateKeys.includes(key)),
-    ...fieldsSection.gateKeys.filter((key) => !fieldFilled(task, key)),
-  ]);
+  if (!input.fields) return null;
+  const writable = windowWritableKeys(sections, (key) => fieldFilled(task, key));
   return lockDenial(task, lockKeysOfPatch(input.fields), undefined, writable);
 }

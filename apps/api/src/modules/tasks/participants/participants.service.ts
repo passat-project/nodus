@@ -2,6 +2,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   effectiveCreationForm,
   ErrorCode,
+  fieldLocksAfterChange,
+  fieldLocksOf,
+  lockActorOf,
+  lockDenialOf,
+  participantLockKey,
   requiredCreateKeys,
   TASK_EVENTS,
   type AuthUser,
@@ -68,13 +73,22 @@ export class ParticipantsService {
     }
     await this.placements.prepare([body.userId]);
     await this.txRunner.run(async (tx) => {
+      const fresh = await this.tasksRepo.findWithParticipants(taskId, tx);
+      // Замок записи (#496, Р4): закреплённые «Соисполнители»/«Наблюдатели»
+      // меняет только постановщик (или task.edit_locked) с причиной.
+      await this.assertParticipantLocked(tx, fresh, body.role, user, body.lockReason);
       await this.repo.assignRole(tx, taskId, body.userId, body.role);
       await this.afterChange(tx, user.id, taskId, [{ userId: body.userId, role: body.role }], []);
     });
     return this.query.detail(user, taskId);
   }
 
-  async remove(user: AuthUser, taskId: string, userId: string): Promise<TaskDetail | null> {
+  async remove(
+    user: AuthUser,
+    taskId: string,
+    userId: string,
+    lockReason?: string,
+  ): Promise<TaskDetail | null> {
     const row = await this.query.visibleRow(user, taskId);
     const manager = taskAccess(actorRoles(row, user.id), user.permissions).canManageParticipants;
     // Самоснятие — только наблюдателю; соисполнителя снимает постановщик/
@@ -84,7 +98,13 @@ export class ParticipantsService {
       throw DomainException.forbidden('Participants change not allowed');
     }
     await this.txRunner.run(async (tx) => {
-      const role = selfObserver ? 'observer' : await this.roleOf(tx, taskId, userId);
+      const fresh = await this.tasksRepo.findWithParticipants(taskId, tx);
+      const role = selfObserver
+        ? 'observer'
+        : (fresh.participants.find((p) => p.userId === userId)?.role as
+            'coexecutor' | 'observer' | undefined);
+      // Замок записи (#496, Р4): снятие закреплённых участников — с причиной.
+      await this.assertParticipantLocked(tx, fresh, role, user, lockReason);
       const count = await this.repo.remove(
         tx,
         taskId,
@@ -105,15 +125,33 @@ export class ParticipantsService {
     return this.query.detail(user, taskId).catch(() => null);
   }
 
-  /** Роль снимаемого участника (для проверки обязательного состава). */
-  private async roleOf(
+  /**
+   * Замок состава (#496, Р4): закреплённые «Соисполнители»/«Наблюдатели»
+   * меняет только постановщик (или `task.edit_locked`) с причиной 3..500;
+   * успешная правка пишет `lastChange`. Роль неизвестна (снимают не
+   * участника) — замка нет, ответит 404.
+   */
+  private async assertParticipantLocked(
     tx: TransactionClient,
-    taskId: string,
-    userId: string,
-  ): Promise<'coexecutor' | 'observer' | undefined> {
-    const task = await this.tasksRepo.findWithParticipants(taskId, tx);
-    return task.participants.find((p) => p.userId === userId)?.role as
-      'coexecutor' | 'observer' | undefined;
+    task: { id: string; creatorId: string; fieldLocks: unknown },
+    role: string | undefined,
+    user: AuthUser,
+    reason?: string,
+  ): Promise<void> {
+    if (role !== 'coexecutor' && role !== 'observer') return;
+    const key = participantLockKey(role);
+    const locks = fieldLocksOf(task.fieldLocks);
+    const denial = lockDenialOf(locks, [key], lockActorOf(user, task.creatorId), reason);
+    if (denial) {
+      throw new DomainException(ErrorCode.FIELD_LOCKED, 'Field is locked', denial, 422);
+    }
+    if (locks[key] === undefined) return;
+    const next = fieldLocksAfterChange(locks, [key], {
+      at: new Date().toISOString(),
+      by: user.id,
+      reason: reason ?? '',
+    });
+    if (next !== locks) await this.tasksRepo.updateFields(tx, task.id, { fieldLocks: next });
   }
 
   /** Последний обязательный участник не снимается (#432, Р5). */

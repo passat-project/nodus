@@ -12,6 +12,7 @@ import {
   checklistItemSchema,
   checklistItemUpdateBodySchema,
   cursorQuerySchema,
+  lockReasonQuerySchema,
   paginatedSchema,
   taskDetailSchema,
   taskHistoryItemSchema,
@@ -25,6 +26,7 @@ import {
   type ChecklistItemCreateBody,
   type ChecklistItemUpdateBody,
   type CursorQuery,
+  type LockReasonQuery,
   type Paginated,
   type TaskDetail,
   type TaskHistoryItem,
@@ -94,8 +96,13 @@ export class TaskPartsController {
     @GetUser() user: AuthUser,
     @Param('id', uuid) id: string,
     @Param('userId', uuid) userId: string,
+    @Query({
+      schema: lockReasonQuerySchema,
+      pipes: [new ZodValidationPipe(lockReasonQuerySchema)],
+    })
+    q: LockReasonQuery,
   ): Promise<TaskDetail | null> {
-    return this.participants.remove(user, id, userId);
+    return this.participants.remove(user, id, userId, q.lockReason);
   }
 
   @Post('checklist')

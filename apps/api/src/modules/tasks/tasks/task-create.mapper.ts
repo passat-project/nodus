@@ -39,6 +39,7 @@ export function taskCreateData(
     assigneeId: string;
     participants: TaskCreateData['participants'];
     customFields: TaskCreateData['customFields'];
+    fieldLocks: TaskCreateData['fieldLocks'];
   },
 ): TaskCreateData {
   return {
@@ -64,6 +65,8 @@ export function taskCreateData(
     checklistTotal: body.checklist?.length ?? 0,
     participants: args.participants,
     customFields: args.customFields,
+    // Замки окна создания (#496, Р4): «Закрепить после создания».
+    fieldLocks: args.fieldLocks,
   };
 }
 
