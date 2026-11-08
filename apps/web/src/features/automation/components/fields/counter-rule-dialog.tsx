@@ -25,6 +25,12 @@ import { FieldUsagePicker, type DescribeTarget } from './field-usage-picker.js';
 
 const counter = ui.customFields.dialog.counter;
 
+/** Номер выдаёт кнопка маршрута, а маршруты есть только у задач и писем
+ *  (`processCategorySchema` — task|letter): папки и проекты номер получить
+ *  не могут — их нет в «Кто получает номер». Номер папке/проекту «при
+ *  создании» — отдельная будущая возможность (#630 §12). */
+const COUNTER_GROUPS = ['task', 'letter'] as const;
+
 /** Справочники и вычисления окна, собранные панелью (одни запросы). */
 export interface CounterRuleKit {
   names: ContainerNames;
@@ -139,6 +145,7 @@ export function CounterRuleDialog({
                   onBindingFormulasChange={() => undefined}
                   disabled={disabled}
                   allowFormulas={false}
+                  onlyGroups={COUNTER_GROUPS}
                   describeTarget={kit.describeTargetFor(rule)}
                   hint={counter.recipientsHint}
                   onChange={changeBindings}

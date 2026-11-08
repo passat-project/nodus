@@ -197,8 +197,12 @@ export function FieldUsagePicker({
   allowFormulas = true,
   describeTarget,
   hint,
+  onlyGroups,
   onChange,
 }: {
+  /** Показать только эти модули (счётчик: номер выдаёт кнопка маршрута —
+   *  маршруты есть только у задач и писем). */
+  onlyGroups?: readonly FormulaHostKind[];
   definition: CustomFieldDefinition | null;
   bindings: CustomFieldBindings;
   bindingFormulas: Record<string, FormulaNode>;
@@ -263,7 +267,7 @@ export function FieldUsagePicker({
     current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
 
   const groups: Array<{
-    key: string;
+    key: FormulaHostKind;
     label: string;
     targets: readonly Target[];
     selected: string[];
@@ -298,11 +302,12 @@ export function FieldUsagePicker({
       list: 'nodeKindIds',
     },
   ];
+  const shown = onlyGroups ? groups.filter((group) => onlyGroups.includes(group.key)) : groups;
 
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-col gap-1.5">
-        {groups.map((group) => (
+        {shown.map((group) => (
           <Group
             key={group.key}
             label={group.label}
