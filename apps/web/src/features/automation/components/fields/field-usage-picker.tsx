@@ -92,7 +92,15 @@ function Group({
           раскрытие/сворачивание (вердикт владельца 06.11: случайный клик по
           строке не должен терять выбранные типы). Ховер раскрытия — до
           правого края, включая шеврон. */}
-      <div className="flex items-stretch">
+      {/* Ховер — один на всю строку (чекбокс + название + шеврон), как у
+          строки списка; чекбокс поверх добавляет свой акцент. */}
+      <div
+        className={cn(
+          'flex items-stretch rounded-lg transition-colors',
+          expandable && 'hover:bg-accent/40',
+          expanded && 'rounded-b-none',
+        )}
+      >
         <button
           type="button"
           role="checkbox"
@@ -100,7 +108,7 @@ function Group({
           aria-label={label}
           disabled={disabled || !expandable}
           onClick={onToggleAll}
-          className="flex w-9 shrink-0 items-center justify-center rounded-l-lg text-secondary-foreground transition-colors hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex w-9 shrink-0 items-center justify-center rounded-l-lg text-secondary-foreground transition-colors hover:bg-accent/60 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Mark state={state} />
         </button>
@@ -109,7 +117,7 @@ function Group({
           onClick={onToggleExpand}
           disabled={!expandable}
           aria-expanded={expanded}
-          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-r-lg py-2 pr-1.5 pl-0.5 text-left text-sm text-secondary-foreground transition-colors hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-r-lg py-2 pr-1.5 pl-0.5 text-left text-sm text-secondary-foreground disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span className="min-w-0 flex-1 truncate">{label}</span>
           <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
@@ -133,7 +141,10 @@ function Group({
             return (
               <div
                 key={target.id}
-                className="mx-1.5 flex w-[calc(100%-0.75rem)] items-center gap-1"
+                className={cn(
+                  'mx-1.5 flex w-[calc(100%-0.75rem)] items-center gap-1 rounded-md pr-0.5 transition-colors',
+                  !(disabled || blocked) && 'hover:bg-accent/60',
+                )}
               >
                 <button
                   type="button"
@@ -143,7 +154,7 @@ function Group({
                   title={blocked ? note?.text : undefined}
                   onClick={() => onToggleOne(target.id)}
                   className={cn(
-                    'flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60',
+                    'flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm',
                     on ? 'text-foreground' : 'text-secondary-foreground',
                     (disabled || blocked) && 'cursor-not-allowed opacity-60',
                   )}
