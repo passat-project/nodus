@@ -57,7 +57,9 @@ export function issueMockNumber(
 
 /** Сколько номеров выдано атрибуту (сводка «Выдано номеров» в диалоге). */
 export function mockIssuedCount(fieldId: string): number {
-  return issuedTotals.get(fieldId) ?? 0;
+  const initial = demoCustomFieldDefinitions.find((entry) => entry.id === fieldId)?.numbering
+    ?.issuedCount;
+  return (initial ?? 0) + (issuedTotals.get(fieldId) ?? 0);
 }
 
 export { fieldIds };

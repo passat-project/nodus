@@ -57,7 +57,7 @@ vi.mock('../../api/automation-api.js', () => ({
 
 const EMPTY: CustomFieldBindings = { processTypeIds: [], projectTypeIds: [], nodeKindIds: [] };
 
-function renderPicker(bindings: CustomFieldBindings, disabled = false) {
+function renderPicker(bindings: CustomFieldBindings, disabled = false, allowFormulas = true) {
   const onChange = vi.fn();
   render(
     <FieldUsagePicker
@@ -66,6 +66,7 @@ function renderPicker(bindings: CustomFieldBindings, disabled = false) {
       bindingFormulas={{}}
       onBindingFormulasChange={() => undefined}
       disabled={disabled}
+      allowFormulas={allowFormulas}
       onChange={onChange}
     />,
   );
@@ -189,6 +190,21 @@ describe('пикер «Где используется» (#631)', () => {
       name: ui.customFields.bind.groupProjectTypes,
     });
     expect((projectsAll as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('counter: калькулятор обычной формулы места не показывается', () => {
+    renderPicker({ ...EMPTY, processTypeIds: [TASK_A] }, false, false);
+
+    const group = expandGroup(ui.customFields.bind.groupTaskTypes);
+    expect(within(group).getByRole('checkbox', { name: 'Стандартный' })).toBeTruthy();
+    expect(within(group).queryByRole('button', { name: ui.formulas.typeFormula.set })).toBeNull();
+  });
+
+  it('обычный атрибут: калькулятор формулы места доступен у выбранного типа', () => {
+    renderPicker({ ...EMPTY, processTypeIds: [TASK_A] });
+
+    const group = expandGroup(ui.customFields.bind.groupTaskTypes);
+    expect(within(group).getByRole('button', { name: ui.formulas.typeFormula.set })).toBeTruthy();
   });
 
   it('в заблокированном пикере типы не кликаются', () => {

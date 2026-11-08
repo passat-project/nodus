@@ -200,6 +200,16 @@ export function FieldDialogForm({
           : null}
       </Section>
 
+      {family === 'counter' && !draft.isCompany ? (
+        <CounterRuleSection
+          rule={draft.numbering}
+          name={draft.name}
+          disabled={disabled}
+          issuedCount={definition?.numbering?.issuedCount ?? null}
+          onChange={(numbering) => onChange({ numbering })}
+        />
+      ) : null}
+
       {!draft.isCompany ? (
         <Section label={ui.customFields.bind.field}>
           <FieldUsagePicker
@@ -208,18 +218,10 @@ export function FieldDialogForm({
             bindingFormulas={draft.bindingFormulas}
             onBindingFormulasChange={(bindingFormulas) => onChange({ bindingFormulas })}
             disabled={disabled}
+            allowFormulas={family !== 'counter'}
             onChange={(bindings) => onChange({ bindings })}
           />
         </Section>
-      ) : null}
-
-      {family === 'counter' && !draft.isCompany ? (
-        <CounterRuleSection
-          rule={draft.numbering}
-          disabled={disabled}
-          issuedCount={definition?.numbering?.issuedCount ?? null}
-          onChange={(numbering) => onChange({ numbering })}
-        />
       ) : null}
 
       {family ? (

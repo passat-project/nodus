@@ -51,6 +51,7 @@ function Group({
   onToggleAll,
   onToggleOne,
   disabled,
+  allowFormulas,
   onEditFormula,
 }: {
   label: string;
@@ -61,6 +62,7 @@ function Group({
   onToggleAll: () => void;
   onToggleOne: (id: string) => void;
   disabled: boolean;
+  allowFormulas: boolean;
   onEditFormula: (target: Target) => void;
 }) {
   const chosen = targets.filter((target) => selected.has(target.id));
@@ -129,7 +131,7 @@ function Group({
                   <Mark state={on ? 'on' : 'off'} />
                   <span className="min-w-0 flex-1 truncate">{target.name}</span>
                 </button>
-                {on ? (
+                {on && allowFormulas ? (
                   <button
                     type="button"
                     aria-label={ui.formulas.typeFormula.set}
@@ -156,6 +158,7 @@ export function FieldUsagePicker({
   bindingFormulas,
   onBindingFormulasChange,
   disabled,
+  allowFormulas = true,
   onChange,
 }: {
   definition: CustomFieldDefinition | null;
@@ -163,6 +166,8 @@ export function FieldUsagePicker({
   bindingFormulas: Record<string, FormulaNode>;
   onBindingFormulasChange: (formulas: Record<string, FormulaNode>) => void;
   disabled: boolean;
+  /** Counter получает значение из серии, а не из формулы места (#630). */
+  allowFormulas?: boolean;
   onChange: (bindings: CustomFieldBindings) => void;
 }) {
   const [formulaTarget, setFormulaTarget] = useState<{
@@ -275,14 +280,17 @@ export function FieldUsagePicker({
               onChange({ ...bindings, [group.list]: toggleOne(bindings[group.list], id) })
             }
             disabled={disabled}
+            allowFormulas={allowFormulas}
             onEditFormula={(target) =>
               setFormulaTarget({ target, hostKind: group.key as FormulaHostKind })
             }
           />
         ))}
       </div>
-      <p className="text-xs break-words text-muted-foreground">{ui.customFields.bind.usageHint}</p>
-      {formulaTarget && definition ? (
+      <p className="text-xs break-words text-muted-foreground">
+        {allowFormulas ? ui.customFields.bind.usageHint : ui.customFields.bind.usageHintCounter}
+      </p>
+      {allowFormulas && formulaTarget && definition ? (
         <BindingFormulaDialog
           targetId={formulaTarget.target.id}
           hostKind={formulaTarget.hostKind}

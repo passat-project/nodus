@@ -211,7 +211,7 @@ export const demoCustomFieldDefinitions: CustomFieldDefinition[] = [
       numbering: {
         rule: COUNTER_RULES.changeNumber,
         preview: 'Изм. 1',
-        issuedCount: 0,
+        issuedCount: 12,
       },
     },
   ),

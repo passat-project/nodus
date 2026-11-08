@@ -82,6 +82,31 @@ describe('черновик окна атрибута (#431, ревизия UI)',
     expect(withFamily(emptyDraft, 'number').settings).toEqual({ precision: 0 });
   });
 
+  it('counter не принимает и не отправляет обычные формулы мест (#630)', () => {
+    const text = {
+      ...withFamily(emptyDraft, 'text'),
+      bindingFormulas: { [ID]: { kind: 'literal' as const, value: 'текст' } },
+    };
+    const counter = { ...withFamily(text, 'counter'), name: 'Номер' };
+    expect(counter.bindingFormulas).toEqual({});
+
+    const body = createBody(counter, {});
+    expect(body.bindingFormulas).toBeUndefined();
+    expect(createCustomFieldBodySchema.safeParse(body).success).toBe(true);
+
+    const legacy = definition({
+      type: 'counter',
+      bindingFormulas: text.bindingFormulas,
+      numbering: {
+        rule: counter.numbering,
+        preview: '1',
+        issuedCount: 0,
+      },
+    });
+    expect(draftOf(legacy, []).bindingFormulas).toEqual({});
+    expect(patchBody(legacy, draftOf(legacy, []), null)).toBeNull();
+  });
+
   it('проверка: имя, тип, варианты без пустых и повторов', () => {
     expect(draftIssues(emptyDraft)).toEqual(['name', 'family']);
     const list = { ...withFamily(emptyDraft, 'list'), name: 'Вид' };

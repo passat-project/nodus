@@ -3,7 +3,11 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { customFieldDefinitionSchema, ErrorCode } from '@nodus/contracts';
 import { setupServer } from 'msw/node';
 
-import { counterRuleOf, issueMockNumber } from '../../../../shared/mocks/data/numbering-store.js';
+import {
+  counterRuleOf,
+  issueMockNumber,
+  mockIssuedCount,
+} from '../../../../shared/mocks/data/numbering-store.js';
 import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
 import { fieldIds } from '../../../../shared/mocks/data/field-ids.js';
 import { demoTasks } from '../../../../shared/mocks/data/task-items.js';
@@ -49,6 +53,7 @@ describe('мок счётчиков: паритет с сервером (#630)',
     }
     const izm = counters.find((entry) => entry.id === fieldIds.changeNumber)!;
     expect(izm.numbering!.rule).toMatchObject({ scopeKind: 'folder', startValue: 1 });
+    expect(mockIssuedCount(fieldIds.changeNumber)).toBe(12);
     const took = counters.find((entry) => entry.id === fieldIds.tookChangeNumber)!;
     expect(took.numbering!.rule).toMatchObject({ scopeKind: 'none', startValue: 1041 });
   });

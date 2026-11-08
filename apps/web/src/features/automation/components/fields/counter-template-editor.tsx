@@ -1,6 +1,5 @@
 import type { CustomFieldDefinition, NumberTemplateSegment } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
-import { Input } from '@nodus/ui/components/input';
 import {
   Select,
   SelectContent,
@@ -8,15 +7,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@nodus/ui/components/select';
+import { cn } from '@nodus/ui/lib/utils';
+import { X } from 'lucide-react';
 
 /**
- * Конструктор вида номера счётчика (#630, §4c): строка сегментов (текст —
- * инпуты, номера/даты/поля — плашки с удалением) и вставка новых сегментов;
- * «длина числа» — добивка нулями counter-плашки. Ровно один «Номер» —
- * вставка второго заблокирована, удаление единственного — ошибка строки
- * (валидация в counter-rule-section). Механика; вкус — ui-writer (1b).
+ * Конструктор вида номера счётчика (#630, §4c): строка сегментов и вставка
+ * новых. Строка — ОДИН контрол в визуальном языке калькулятора #632
+ * (`FormulaLine`): рамка `input`, `bg-card`, моно-данные внутри. Плашки —
+ * sans-метки (моно остаётся данным: литералы и предпросмотр), тон плашки
+ * говорит о природе сегмента: `primary` — выдаваемый номер, `info` — значение
+ * атрибута, нейтральный — календарь. Ровно один «Номер»: вставка второго
+ * заблокирована, отсутствие — error-строка (валидация в counter-rule-section).
  */
-export function CounterTemplateEditor({
+const CHIP =
+  'inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 font-sans text-xs font-medium';
+
+const TONES = {
+  counter: 'border-primary/30 bg-primary/10 text-primary',
+  year: 'border-input bg-muted text-secondary-foreground',
+  month: 'border-input bg-muted text-secondary-foreground',
+  field: 'border-info/30 bg-info/10 text-info',
+} as const;
+
+const INSERT =
+  'h-7 rounded-lg border border-dashed border-input px-2.5 text-xs text-muted-foreground transition-colors outline-none hover:bg-accent/40 hover:text-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30 disabled:opacity-40';
+
+/** Строка вида номера: сегменты-плашки и редактируемые литералы на месте. */
+export function CounterNumberLine({
   template,
   taskDefinitions,
   disabled,
@@ -28,7 +45,7 @@ export function CounterTemplateEditor({
   disabled: boolean;
   onChange: (template: NumberTemplateSegment[]) => void;
 }) {
-  const counter = template.find((s) => s.kind === 'counter');
+  const counter = ui.customFields.dialog.counter;
   const labelOf = (fieldNumber: number) =>
     taskDefinitions.find((entry) => entry.number === fieldNumber)?.name ?? `№${fieldNumber}`;
 
@@ -40,151 +57,156 @@ export function CounterTemplateEditor({
     );
   }
 
-  function addSegment(segment: NumberTemplateSegment) {
-    onChange([...template, segment]);
-  }
+  return (
+    <div className="flex min-h-10 flex-wrap items-center gap-1 rounded-xl border border-input bg-card px-2.5 py-2">
+      {template.map((segment, index) =>
+        segment.kind === 'literal' ? (
+          // Литерал — не «поле в поле»: текст номера, который правится на
+          // месте. Ширина по содержимому (моно → `ch`), пустой — пунктирная
+          // подчёркивалка «здесь можно печатать».
+          <input
+            key={index}
+            value={segment.text}
+            maxLength={50}
+            disabled={disabled}
+            aria-label={counter.literalPlaceholder}
+            placeholder={counter.literalPlaceholder}
+            onChange={(e) => setSegment(index, { kind: 'literal', text: e.target.value || ' ' })}
+            onBlur={(e) => {
+              if (!e.target.value.trim()) setSegment(index, null);
+            }}
+            style={{ width: `${Math.min(50, Math.max(2, segment.text.length + 1))}ch` }}
+            className={cn(
+              'min-w-4 shrink-0 rounded-sm bg-transparent px-0.5 font-mono text-xs tabular-nums outline-none',
+              'transition-colors placeholder:text-muted-foreground/60 hover:bg-accent/40',
+              'focus:bg-accent/50 focus:ring-1 focus:ring-ring/30',
+              segment.text.trim() === '' && 'border-b border-dashed border-input',
+            )}
+          />
+        ) : (
+          <span
+            key={index}
+            className={cn(
+              CHIP,
+              segment.kind === 'counter'
+                ? TONES.counter
+                : segment.kind === 'field'
+                  ? TONES.field
+                  : TONES.year,
+            )}
+          >
+            {segment.kind === 'counter'
+              ? counter.segCounter
+              : segment.kind === 'year'
+                ? segment.digits === 2
+                  ? counter.segYear2
+                  : counter.segYear4
+                : segment.kind === 'month'
+                  ? counter.segMonth
+                  : `${counter.segField} ${labelOf(segment.fieldNumber)}`}
+            <button
+              type="button"
+              disabled={disabled}
+              aria-label={counter.segRemove}
+              onClick={() => setSegment(index, null)}
+              className="-mr-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm opacity-60 outline-none transition-[color,opacity] hover:text-danger hover:opacity-100 focus-visible:ring-1 focus-visible:ring-ring/40 focus-visible:opacity-100 disabled:opacity-30"
+            >
+              <X aria-hidden="true" className="size-3" strokeWidth={2.5} />
+            </button>
+          </span>
+        ),
+      )}
+    </div>
+  );
+}
 
-  const insert =
-    'h-7 rounded-lg border border-dashed border-input px-2.5 text-xs hover:bg-accent/40 disabled:opacity-40';
+/** Палитра вставок: пунктир — «добавить», тише плашек строки (ось акцентов). */
+export function CounterInsertPalette({
+  template,
+  taskDefinitions,
+  disabled,
+  onChange,
+}: {
+  template: readonly NumberTemplateSegment[];
+  taskDefinitions: readonly CustomFieldDefinition[];
+  disabled: boolean;
+  onChange: (template: NumberTemplateSegment[]) => void;
+}) {
+  const counter = ui.customFields.dialog.counter;
+  const hasCounter = template.some((segment) => segment.kind === 'counter');
+  const add = (segment: NumberTemplateSegment) => onChange([...template, segment]);
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        {template.map((segment, index) =>
-          segment.kind === 'literal' ? (
-            <Input
-              key={index}
-              value={segment.text}
-              maxLength={50}
-              disabled={disabled}
-              placeholder={ui.customFields.dialog.counter.literalPlaceholder}
-              onChange={(e) => setSegment(index, { kind: 'literal', text: e.target.value || ' ' })}
-              onBlur={(e) => {
-                if (!e.target.value.trim()) setSegment(index, null);
-              }}
-              className="h-8 w-24 text-sm"
-            />
-          ) : (
-            <span
-              key={index}
-              className="inline-flex h-8 items-center gap-1 rounded-lg border border-input bg-muted/40 px-2.5 text-sm"
-            >
-              {segment.kind === 'counter'
-                ? ui.customFields.dialog.counter.segCounter
-                : segment.kind === 'year'
-                  ? segment.digits === 2
-                    ? ui.customFields.dialog.counter.segYear2
-                    : ui.customFields.dialog.counter.segYear4
-                  : segment.kind === 'month'
-                    ? ui.customFields.dialog.counter.segMonth
-                    : `${ui.customFields.dialog.counter.segField} ${labelOf(segment.fieldNumber)}`}
-              <button
-                type="button"
-                disabled={disabled}
-                aria-label={ui.customFields.dialog.counter.segRemove}
-                onClick={() => setSegment(index, null)}
-                className="ml-0.5 text-muted-foreground hover:text-danger"
-              >
-                ×
-              </button>
-            </span>
-          ),
-        )}
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <button
-          type="button"
-          disabled={disabled || counter !== undefined}
-          onClick={() => addSegment({ kind: 'counter' })}
-          className={insert}
-        >
-          + {ui.customFields.dialog.counter.segCounter}
-        </button>
+    <div className="flex flex-wrap items-center gap-1.5">
+      {/* Второго «Номера» не бывает — вставка исчезает вместе с плашкой в
+          строке, а не висит выключенной (мёртвая кнопка = шум). */}
+      {hasCounter ? null : (
         <button
           type="button"
           disabled={disabled}
-          onClick={() => addSegment({ kind: 'year', digits: 4 })}
-          className={insert}
+          onClick={() => add({ kind: 'counter' })}
+          className={INSERT}
         >
-          + {ui.customFields.dialog.counter.segYear4}
+          + {counter.segCounter}
         </button>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => addSegment({ kind: 'year', digits: 2 })}
-          className={insert}
+      )}
+      <button
+        type="button"
+        disabled={disabled}
+        title={counter.segYear4Hint}
+        onClick={() => add({ kind: 'year', digits: 4 })}
+        className={INSERT}
+      >
+        + {counter.segYear4}
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        title={counter.segYear2Hint}
+        onClick={() => add({ kind: 'year', digits: 2 })}
+        className={INSERT}
+      >
+        + {counter.segYear2}
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        title={counter.segMonthHint}
+        onClick={() => add({ kind: 'month' })}
+        className={INSERT}
+      >
+        + {counter.segMonth}
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => add({ kind: 'literal', text: ' ' })}
+        className={INSERT}
+      >
+        + {counter.literalPlaceholder}
+      </button>
+      <Select
+        value=""
+        disabled={disabled}
+        onValueChange={(fieldNumber) => {
+          if (fieldNumber) add({ kind: 'field', fieldNumber: Number(fieldNumber), source: 'self' });
+        }}
+      >
+        <SelectTrigger
+          className="h-7 w-fit gap-1 border-dashed px-2.5 text-xs text-muted-foreground"
+          aria-label={counter.segField}
+          title={counter.segFieldHint}
         >
-          + {ui.customFields.dialog.counter.segYear2}
-        </button>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => addSegment({ kind: 'month' })}
-          className={insert}
-        >
-          + {ui.customFields.dialog.counter.segMonth}
-        </button>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => addSegment({ kind: 'literal', text: ' ' })}
-          className={insert}
-        >
-          + {ui.customFields.dialog.counter.literalPlaceholder}
-        </button>
-        <Select
-          value=""
-          disabled={disabled}
-          onValueChange={(fieldNumber) => {
-            if (fieldNumber)
-              addSegment({ kind: 'field', fieldNumber: Number(fieldNumber), source: 'self' });
-          }}
-        >
-          <SelectTrigger
-            className="h-7 w-fit gap-1 border-dashed px-2.5 text-xs"
-            aria-label={ui.customFields.dialog.counter.segField}
-          >
-            <SelectValue placeholder={`+ ${ui.customFields.dialog.counter.segField}`} />
-          </SelectTrigger>
-          <SelectContent position="popper" className="nokey">
-            {taskDefinitions.map((definition) => (
-              <SelectItem key={definition.id} value={String(definition.number)}>
-                {definition.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      {counter?.kind === 'counter' ? (
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{ui.customFields.dialog.counter.segCounterLength}</span>
-          <Input
-            type="number"
-            min={0}
-            max={10}
-            value={counter.minLength ?? 0}
-            disabled={disabled}
-            aria-label={ui.customFields.dialog.counter.segCounterLength}
-            onChange={(e) => {
-              const next = Number(e.target.value);
-              if (Number.isFinite(next) && next >= 0 && next <= 10) {
-                onChange(
-                  template.map((entry) =>
-                    entry.kind === 'counter'
-                      ? { ...entry, minLength: next > 0 ? Math.trunc(next) : undefined }
-                      : entry,
-                  ),
-                );
-              }
-            }}
-            className="h-7 w-16 text-sm"
-          />
-          <span>{ui.customFields.dialog.counter.segCounterLengthHint}</span>
-        </label>
-      ) : null}
-      {counter === undefined ? (
-        <p className="text-xs text-danger">{ui.customFields.dialog.counter.templateNeedsCounter}</p>
-      ) : null}
+          <SelectValue placeholder={`+ ${counter.segField}`} />
+        </SelectTrigger>
+        <SelectContent position="popper" className="nokey">
+          {taskDefinitions.map((definition) => (
+            <SelectItem key={definition.id} value={String(definition.number)}>
+              {definition.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

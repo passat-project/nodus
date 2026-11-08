@@ -154,7 +154,7 @@ export function draftOf(
       projectTypeIds: [...definition.bindings.projectTypeIds],
       nodeKindIds: [...definition.bindings.nodeKindIds],
     },
-    bindingFormulas: { ...(definition.bindingFormulas ?? {}) },
+    bindingFormulas: definition.type === 'counter' ? {} : { ...(definition.bindingFormulas ?? {}) },
     numbering: definition.numbering?.rule ?? DEFAULT_COUNTER_RULE,
   };
 }
@@ -173,6 +173,7 @@ export function withFamily(draft: FieldDraft, family: FieldFamily): FieldDraft {
     defaultRefs: [],
     defaultOptionIds: [],
     options: family === 'list' ? draft.options : [],
+    bindingFormulas: family === 'counter' ? {} : draft.bindingFormulas,
     numbering: family === 'counter' ? draft.numbering : DEFAULT_COUNTER_RULE,
   };
 }
@@ -275,7 +276,10 @@ export function createBody(
     isCompany: draft.isCompany,
     ...(draft.isCompany
       ? {}
-      : { bindings: draft.bindings, bindingFormulas: draft.bindingFormulas }),
+      : {
+          bindings: draft.bindings,
+          ...(type === 'counter' ? {} : { bindingFormulas: draft.bindingFormulas }),
+        }),
     ...(type === 'counter' ? { numbering: draft.numbering } : {}),
   };
 }
@@ -306,6 +310,7 @@ export function patchBody(
     body.bindings = draft.bindings;
   if (draft.reportIndexed !== definition.reportIndexed) body.reportIndexed = draft.reportIndexed;
   if (
+    type !== 'counter' &&
     !definition.isCompany &&
     JSON.stringify(draft.bindingFormulas) !== JSON.stringify(definition.bindingFormulas ?? {})
   )

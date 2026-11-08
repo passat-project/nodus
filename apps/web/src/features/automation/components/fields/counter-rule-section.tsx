@@ -1,190 +1,105 @@
 import { useState } from 'react';
+import { Calculator } from 'lucide-react';
 import type { NumberSeriesRule } from '@nodus/contracts';
-import { formulaToText, ui } from '@nodus/contracts';
-import { Input } from '@nodus/ui/components/input';
+import { ui } from '@nodus/contracts';
 import { NodeLabel } from '@nodus/ui/components/node-label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@nodus/ui/components/select';
 
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { TypeFormulaDialog } from '../../../../shared/custom-fields/formula/type-formula-dialog.js';
-import { SegmentedControl } from '../../../../shared/ui/segmented-control.js';
-import { COUNTER_SCOPE_PRESETS, counterPreviewOf } from '../../lib/counter-rule.js';
-import { CounterTemplateEditor } from './counter-template-editor.js';
+import { counterPreviewOf } from '../../lib/counter-rule.js';
+import { CounterRuleDialog } from './counter-rule-dialog.js';
 
 /**
- * Секция «Счётчик» окна атрибута (#630, Р6/§4c): правило серии — разрез
- * (заготовки + своя формула), период, вид номера (конструктор —
- * counter-template-editor), старт и живой предпросмотр со счётом выданных.
- * Механика; визуальный канон доводит ui-writer (Пакет 1b).
+ * Единое правило counter-атрибута (#630): в основном окне — ОДНА строка
+ * «Правило номера» (пример + сводка разреза и периода), полный конструктор
+ * открывается кнопкой-калькулятором. Обычных формул мест у счётчика нет —
+ * значение выдаёт серия по кнопке процесса; формульный редактор нужен только
+ * для произвольного разреза и заменяет окно правила.
  */
 export function CounterRuleSection({
   rule,
+  name,
   disabled,
   issuedCount,
   onChange,
 }: {
   rule: NumberSeriesRule;
+  /** Имя атрибута — подзаголовок конструктора. */
+  name?: string;
   disabled: boolean;
   /** Выдано номеров серией (редактирование; null — создание). */
   issuedCount: number | null;
   onChange: (rule: NumberSeriesRule) => void;
 }) {
-  const [formulaOpen, setFormulaOpen] = useState(false);
-  // Атрибуты задач: адреса плашек «Поле…» и подписи формулы разреза.
+  const [editor, setEditor] = useState<'rule' | 'scope' | null>(null);
+  const [draft, setDraft] = useState(rule);
   const definitions = useCustomFieldDefinitions('task');
   const taskDefinitions = definitions.data ?? [];
-  const labelOf = (fieldNumber: number) =>
-    taskDefinitions.find((entry) => entry.number === fieldNumber)?.name ?? `№${fieldNumber}`;
+  const counter = ui.customFields.dialog.counter;
+  const preview = counterPreviewOf(rule);
+  const summary = `${counter.scopeShort[rule.scopeKind]}, ${counter.periodShort[rule.period]}`;
 
-  const needsFormula = rule.scopeKind === 'formula' && rule.scopeFormula == null;
-
-  function patchRule(patch: Partial<NumberSeriesRule>) {
-    onChange({ ...rule, ...patch });
+  function openRule() {
+    setDraft(rule);
+    setEditor('rule');
   }
 
   return (
-    <section className="flex flex-col gap-3">
-      <NodeLabel label={ui.customFields.dialog.counter.title} />
-      <p className="text-xs text-muted-foreground">{ui.customFields.dialog.counter.hint}</p>
-
-      <div className="grid grid-cols-2 gap-3">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-label text-muted-foreground">
-            {ui.customFields.dialog.counter.scope}
-          </span>
-          <Select
-            value={rule.scopeKind}
-            disabled={disabled}
-            onValueChange={(scopeKind) =>
-              patchRule({
-                scopeKind: scopeKind as NumberSeriesRule['scopeKind'],
-                scopeFormula: scopeKind === 'formula' ? rule.scopeFormula : null,
-              })
-            }
-          >
-            <SelectTrigger className="h-8 w-full" aria-label={ui.customFields.dialog.counter.scope}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent position="popper" className="nokey">
-              {COUNTER_SCOPE_PRESETS.map((kind) => (
-                <SelectItem key={kind} value={kind}>
-                  {ui.customFields.dialog.counter.scopeKinds[kind]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-label text-muted-foreground">
-            {ui.customFields.dialog.counter.start}
-          </span>
-          <Input
-            type="number"
-            min={1}
-            value={rule.startValue}
-            disabled={disabled}
-            aria-label={ui.customFields.dialog.counter.start}
-            title={ui.customFields.dialog.counter.startHint}
-            onChange={(e) => {
-              const next = Number(e.target.value);
-              if (Number.isFinite(next) && next >= 1) patchRule({ startValue: Math.trunc(next) });
-            }}
-            className="h-8 text-sm"
-          />
-        </label>
-      </div>
-
-      {rule.scopeKind === 'formula' ? (
-        <div className="flex flex-col gap-1.5">
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => setFormulaOpen(true)}
-            className="flex h-8 min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-background px-2.5 text-left text-sm hover:bg-accent/40 disabled:opacity-50"
-          >
-            <span className="min-w-0 truncate">
-              {rule.scopeFormula
-                ? formulaToText(rule.scopeFormula, labelOf)
-                : ui.customFields.dialog.counter.scopeFormulaRequired}
-            </span>
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {ui.formulas.typeFormula.edit}
-            </span>
-          </button>
-          {needsFormula ? (
-            <p className="text-xs text-danger">
-              {ui.customFields.dialog.counter.scopeFormulaRequired}
-            </p>
-          ) : null}
-          {formulaOpen ? (
-            <TypeFormulaDialog
-              open={formulaOpen}
-              hostKind="task"
-              targetType="text"
-              label={ui.customFields.dialog.counter.scopeFormula}
-              ownDefinitions={taskDefinitions}
-              initial={rule.scopeFormula ?? null}
-              onSave={(ast) => {
-                patchRule({ scopeFormula: ast });
-                setFormulaOpen(false);
-              }}
-              onClose={() => setFormulaOpen(false)}
-            />
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-label text-muted-foreground">
-          {ui.customFields.dialog.counter.period}
+    <section className="flex flex-col gap-2">
+      <NodeLabel label={counter.title} />
+      {/* Строка-сводка: подпись · пример номера · сводка правила · калькулятор.
+          Один контрол-кнопка: поля-рамки здесь нет — это вход в настройку. */}
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label={counter.edit}
+        onClick={openRule}
+        className="group flex min-w-0 items-center gap-3 rounded-lg border border-input bg-background py-2 pr-2 pl-3 text-left transition-colors outline-none hover:bg-accent/40 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30 disabled:opacity-50"
+      >
+        <span className="shrink-0 text-label text-muted-foreground">{counter.rule}</span>
+        <span className="min-w-0 max-w-[50%] shrink truncate font-mono text-sm font-medium tabular-nums">
+          {preview === '' ? '—' : preview}
         </span>
-        {/* Выбор в форме — accent-актив примитива (грамматика форм), не
-            заливка действия: конкурировала с primary-кнопкой окна. */}
-        <SegmentedControl
-          value={rule.period}
+        <span className="min-w-0 truncate text-xs text-muted-foreground">· {summary}</span>
+        <span
+          aria-hidden="true"
+          className="ml-auto flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary"
+        >
+          <Calculator className="size-4" strokeWidth={1.75} />
+        </span>
+      </button>
+
+      {editor === 'rule' ? (
+        <CounterRuleDialog
+          rule={draft}
+          name={name}
           disabled={disabled}
-          ariaLabel={ui.customFields.dialog.counter.period}
-          activeClassName="bg-accent text-foreground"
-          layout="grid"
-          options={(['none', 'year', 'month'] as const).map((period) => ({
-            value: period,
-            label: ui.customFields.dialog.counter.periods[period],
-          }))}
-          onChange={(period) => patchRule({ period })}
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-label text-muted-foreground">
-          {ui.customFields.dialog.counter.template}
-        </span>
-        <CounterTemplateEditor
-          template={rule.template}
+          issuedCount={issuedCount}
           taskDefinitions={taskDefinitions}
-          disabled={disabled}
-          onChange={(template) => patchRule({ template })}
+          onChange={setDraft}
+          onEditScopeFormula={() => setEditor('scope')}
+          onSave={() => {
+            onChange(draft);
+            setEditor(null);
+          }}
+          onClose={() => setEditor(null)}
         />
-      </div>
-
-      <div className="flex items-baseline gap-2 rounded-lg border border-input bg-muted/30 px-3 py-2">
-        <span className="text-label text-muted-foreground">
-          {ui.customFields.dialog.counter.preview}
-        </span>
-        <span className="min-w-0 truncate font-mono text-sm tabular-nums">
-          {counterPreviewOf(rule)}
-        </span>
-        {issuedCount !== null && issuedCount > 0 ? (
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-            {ui.customFields.dialog.counter.issuedCount}: {issuedCount}
-          </span>
-        ) : null}
-      </div>
+      ) : null}
+      {editor === 'scope' ? (
+        <TypeFormulaDialog
+          open
+          hostKind="task"
+          targetType="text"
+          label={counter.scopeFormula}
+          ownDefinitions={taskDefinitions}
+          initial={draft.scopeFormula ?? null}
+          onSave={(scopeFormula) => {
+            setDraft((current) => ({ ...current, scopeFormula }));
+            setEditor('rule');
+          }}
+          onClose={() => setEditor('rule')}
+        />
+      ) : null}
     </section>
   );
 }
