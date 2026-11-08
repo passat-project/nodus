@@ -3,9 +3,15 @@ import type {
   CustomFieldBindings,
   CustomFieldDefinition,
   NumberHostKind,
+  NumberIssuer,
   NumberSeriesRule,
 } from '@nodus/contracts';
-import { numberContainerReachable, numberSeriesRuleSchema, ui } from '@nodus/contracts';
+import {
+  numberContainerReachable,
+  numberHostHasButtons,
+  numberSeriesRuleSchema,
+  ui,
+} from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
   Dialog,
@@ -18,18 +24,13 @@ import { NodeLabel } from '@nodus/ui/components/node-label';
 
 import type { ContainerNames } from '../../lib/counter-rule.js';
 import { CounterCheck } from './counter-check.js';
+import { CounterIssuers } from './counter-issuers.js';
 import { containerKindsFor } from './counter-container-pick.js';
 import { CounterCounts } from './counter-counts.js';
 import { CounterSection } from './counter-section.js';
 import { FieldUsagePicker, type DescribeTarget } from './field-usage-picker.js';
 
 const counter = ui.customFields.dialog.counter;
-
-/** Номер выдаёт кнопка маршрута, а маршруты есть только у задач и писем
- *  (`processCategorySchema` — task|letter): папки и проекты номер получить
- *  не могут — их нет в «Кто получает номер». Номер папке/проекту «при
- *  создании» — отдельная будущая возможность (#630 §12). */
-const COUNTER_GROUPS = ['task', 'letter'] as const;
 
 /** Справочники и вычисления окна, собранные панелью (одни запросы). */
 export interface CounterRuleKit {
@@ -40,6 +41,9 @@ export interface CounterRuleKit {
   describeTargetFor: (rule: NumberSeriesRule) => DescribeTarget;
   hostKindsOf: (bindings: CustomFieldBindings) => NumberHostKind[];
   fieldsFor: (bindings: CustomFieldBindings) => { number: number; name: string }[];
+  /** Кнопки опубликованных маршрутов, выдающие номер (только чтение). */
+  issuers: readonly NumberIssuer[];
+  typeName: (typeId: string) => string | undefined;
 }
 
 /**
@@ -77,8 +81,10 @@ export function CounterRuleDialog({
   const [bindings, setBindings] = useState(initialBindings);
   const hostKinds = kit.hostKindsOf(bindings);
   const locked = (definition?.numbering?.issuedCount ?? 0) > 0;
+  const needsCreate = hostKinds.some((host) => !numberHostHasButtons(host)) && !rule.issueOnCreate;
   const valid =
     numberSeriesRuleSchema.safeParse(rule).success &&
+    !needsCreate &&
     hostKinds.every((host) => numberContainerReachable(rule.container, host));
   const participantTypeIds = [
     ...bindings.processTypeIds,
@@ -91,9 +97,15 @@ export function CounterRuleDialog({
     // Отметили тип, которому выбранный счёт не подходит (письмо при папке),
     // — счёт сбрасывается на общий, пока номера не выдавались.
     const kinds = kit.hostKindsOf(nextBindings);
+    let nextRule = rule;
     if (!locked && !containerKindsFor(kinds).includes(rule.container.kind)) {
-      setRule({ ...rule, container: { kind: 'company' } });
+      nextRule = { ...nextRule, container: { kind: 'company' } };
     }
+    // У папок нет кнопок процесса: отметили папку — включаем «при создании».
+    if (kinds.some((host) => !numberHostHasButtons(host)) && !nextRule.issueOnCreate) {
+      nextRule = { ...nextRule, issueOnCreate: true };
+    }
+    if (nextRule !== rule) setRule(nextRule);
   }
 
   return (
@@ -145,10 +157,17 @@ export function CounterRuleDialog({
                   onBindingFormulasChange={() => undefined}
                   disabled={disabled}
                   allowFormulas={false}
-                  onlyGroups={COUNTER_GROUPS}
                   describeTarget={kit.describeTargetFor(rule)}
                   hint={counter.recipientsHint}
                   onChange={changeBindings}
+                />
+                <CounterIssuers
+                  rule={rule}
+                  issuers={kit.issuers}
+                  typeName={kit.typeName}
+                  needsCreate={needsCreate}
+                  disabled={disabled}
+                  onChange={(issueOnCreate) => setRule({ ...rule, issueOnCreate })}
                 />
               </section>
             }

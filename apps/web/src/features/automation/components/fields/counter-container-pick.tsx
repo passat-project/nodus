@@ -19,6 +19,7 @@ const KINDS: readonly NumberContainerKind[] = [
   'project_type',
   'portfolio',
   'project',
+  'parent_folder',
   'folder',
   'parent_task',
   'field',

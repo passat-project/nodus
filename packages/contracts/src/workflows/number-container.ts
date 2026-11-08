@@ -30,6 +30,10 @@ export const numberContainerSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('folder'), nodeKindId: z.uuid() }).strict(),
   /** Каждый проект записи. */
   z.object({ kind: z.literal('project') }).strict(),
+  /** Каждая папка, в которой лежит запись (любого вида): у задачи — её
+   *  папка, у папки — родительская; в корне проекта — сам проект. «Номер
+   *  комплекта внутри своего здания» без выбора вида. */
+  z.object({ kind: z.literal('parent_folder') }).strict(),
   /** Каждый тип проекта записи: все проекты одного типа — один сквозной
    *  счёт («все жилые дома вместе, все школы отдельно»). */
   z.object({ kind: z.literal('project_type') }).strict(),
@@ -48,6 +52,13 @@ export type NumberContainerKind = NumberContainer['kind'];
 export const numberHostKindSchema = z.enum(['task', 'letter', 'node', 'project']);
 export type NumberHostKind = z.infer<typeof numberHostKindSchema>;
 
+/** У кого есть кнопки процесса (`processCategorySchema` — task|letter).
+ *  Папки и проекты кнопок не имеют: номер им выдаётся при создании (а с
+ *  #448/#634 — правилом/шагом автоматизации). */
+export function numberHostHasButtons(host: NumberHostKind): boolean {
+  return host === 'task' || host === 'letter';
+}
+
 /** Может ли запись этого вида вообще лежать внутри такого контейнера.
  *  «Нет» — несовместимая привязка: интерфейс её не даёт выбрать, сервер
  *  отклоняет 422 `NUMBER_CONTAINER_UNREACHABLE`. Контейнер всегда СНАРУЖИ
@@ -63,6 +74,7 @@ export function numberContainerReachable(
     case 'field':
       return true;
     case 'folder':
+    case 'parent_folder':
       return host === 'task' || host === 'node';
     case 'project':
       return host !== 'project';
@@ -124,6 +136,10 @@ export function resolveNumberContainer(
       return place.projectId
         ? { ok: true, containerId: place.projectId }
         : { ok: false, reason: 'no_project' };
+    case 'parent_folder': {
+      const parent = place.folders[0]?.id ?? place.projectId;
+      return parent ? { ok: true, containerId: parent } : { ok: false, reason: 'no_project' };
+    }
     case 'project_type':
       return place.projectTypeId
         ? { ok: true, containerId: place.projectTypeId }

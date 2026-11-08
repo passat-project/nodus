@@ -72,18 +72,21 @@ export const COUNTER_RULES: Record<
   NumberSeriesRule
 > = {
   changeNumber: {
+    issueOnCreate: false,
     container: { kind: 'folder', nodeKindId: nodeKindSeedIds.komplekt },
     period: 'none',
     template: [{ kind: 'literal', text: 'Изм. ' }, { kind: 'counter' }],
     startValue: 1,
   },
   tookChangeNumber: {
+    issueOnCreate: false,
     container: { kind: 'company' },
     period: 'none',
     template: [{ kind: 'counter' }],
     startValue: 1,
   },
   permitNumber: {
+    issueOnCreate: false,
     container: { kind: 'company' },
     period: 'year',
     template: [{ kind: 'counter' }, { kind: 'literal', text: '-' }, { kind: 'year', digits: 2 }],

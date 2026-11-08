@@ -14,7 +14,15 @@ import { NUMBER_TEMPLATE_LIMITS, numberSeriesRuleSchema } from './number-series.
  *  `hidden` — секретный проект, которого администратор не видит: имя и путь
  *  не раскрываются («Скрытый проект»), счёт виден. */
 export const numberContainerRefSchema = z.object({
-  kind: z.enum(['folder', 'project', 'project_type', 'portfolio', 'parent_task', 'field']),
+  kind: z.enum([
+    'folder',
+    'parent_folder',
+    'project',
+    'project_type',
+    'portfolio',
+    'parent_task',
+    'field',
+  ]),
   id: z.uuid(),
   name: z.string(),
   /** Путь от проекта вниз («ЖК Минск-Мир › Здание 1»), без самого контейнера. */

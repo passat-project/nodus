@@ -210,7 +210,12 @@ export function mockContainerRef(kind: NumberContainerKind, id: string): NumberC
   switch (kind) {
     case 'company':
       return null;
+    case 'parent_folder':
     case 'folder': {
+      // Папка, где лежит запись; в корне проекта — сам проект.
+      if (kind === 'parent_folder' && !findDemoNodeRow(id)) {
+        return ref(demoProjectRows.find((row) => row.id === id)?.name ?? 'Проект');
+      }
       const node = findDemoNodeRow(id);
       if (!node) return ref('Папка', [], true);
       const path: string[] = [];

@@ -18,6 +18,7 @@ import {
 
 /** Дефолт: вся компания, никогда не заново, вид «{Номер}», новый счёт с 1. */
 export const DEFAULT_COUNTER_RULE: NumberSeriesRule = {
+  issueOnCreate: false,
   container: { kind: 'company' },
   period: 'none',
   template: [{ kind: 'counter' }],
@@ -114,7 +115,10 @@ export function containerKey(container: NumberContainer): string {
 export function containerOf(key: string): NumberContainer {
   if (key.startsWith('folder:')) return { kind: 'folder', nodeKindId: key.slice(7) };
   if (key.startsWith('field:')) return { kind: 'field', fieldNumber: Number(key.slice(6)) };
-  return { kind: key as 'company' | 'project' | 'portfolio' | 'parent_task' };
+  return {
+    kind: key as
+      'company' | 'parent_folder' | 'project' | 'project_type' | 'portfolio' | 'parent_task',
+  };
 }
 
 /** Имена для подписей контейнера: вид папки и атрибут по номеру. */

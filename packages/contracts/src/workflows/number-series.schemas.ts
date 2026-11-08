@@ -65,6 +65,12 @@ export function numberPeriodsAllowed(
  *  старт правила: иначе «книга со старта 15» начинала бы с 15 каждый год. */
 export const numberSeriesRuleSchema = z
   .object({
+    /** Выдавать номер в момент создания записи (в той же транзакции). Это
+     *  ОДИН из источников выдачи, не «вместо»: кнопки маршрутов с действием
+     *  «Присвоить номер» (#630), правила/шаги автоматизации (#448/#634) и
+     *  строки реестров (#636) — свои источники; кто первым заполнил поле,
+     *  тот и выдал, остальные номер не меняют. Старые правила — false. */
+    issueOnCreate: z.boolean().default(false),
     container: numberContainerSchema,
     period: numberPeriodSchema,
     template: z.array(numberTemplateSegmentSchema).min(1).max(NUMBER_TEMPLATE_LIMITS.segments),

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   numberContainerReachable,
+  numberHostHasButtons,
   resolveNumberContainer,
   type NumberPlace,
 } from './number-container.js';
@@ -45,8 +46,31 @@ function place(overrides: Partial<NumberPlace> = {}): NumberPlace {
 }
 
 describe('numberSeriesRuleSchema (#630)', () => {
-  it('письмо-правило «Вх-ГГГГ/N» валидно (бит-в-бит)', () => {
-    expect(numberSeriesRuleSchema.parse(RULE)).toEqual({ ...RULE });
+  it('письмо-правило «Вх-ГГГГ/N» валидно; без issueOnCreate — только внешние источники', () => {
+    expect(numberSeriesRuleSchema.parse(RULE)).toEqual({ ...RULE, issueOnCreate: false });
+    expect(numberSeriesRuleSchema.parse({ ...RULE, issueOnCreate: true }).issueOnCreate).toBe(true);
+  });
+
+  it('кнопки процесса есть только у задач и писем', () => {
+    expect(numberHostHasButtons('task')).toBe(true);
+    expect(numberHostHasButtons('letter')).toBe(true);
+    expect(numberHostHasButtons('node')).toBe(false);
+    expect(numberHostHasButtons('project')).toBe(false);
+  });
+
+  it('папка, в которой лежит запись: ближайшая папка, в корне — проект', () => {
+    const container = { kind: 'parent_folder' } as const;
+    expect(
+      resolveNumberContainer(
+        container,
+        place({ host: 'node', folders: [{ id: KZH01, kindId: KOMPLEKT }], projectId: 'p' }),
+      ),
+    ).toEqual({ ok: true, containerId: KZH01 });
+    expect(resolveNumberContainer(container, place({ host: 'node', projectId: 'p' }))).toEqual({
+      ok: true,
+      containerId: 'p',
+    });
+    expect(numberContainerReachable(container, 'letter')).toBe(false);
   });
 
   it('ровно один «Номер»: без него и с двумя — отказ', () => {

@@ -1102,7 +1102,10 @@ model NumberSeries {
   reset     String   @default("year")
   /// Человекочитаемое имя: «Входящие письма», «Изм.».
   name      String
-  /// Где вести свой счёт: company|folder|project|project_type|portfolio|parent_task|field (CHECK).
+  /// Выдавать номер при создании записи — один из источников выдачи (кнопки
+  /// маршрутов, позже правила #448/шаги #634/строки реестров #636 — свои).
+  issueOnCreate Boolean @default(false) @map("issue_on_create")
+  /// Где вести свой счёт: company|folder|parent_folder|project|project_type|portfolio|parent_task|field (CHECK).
   containerKind String @default("company") @map("container_kind")
   /// folder — id вида папки; field — внутренний номер атрибута; иначе null (CHECK).
   containerRef  String? @map("container_ref")

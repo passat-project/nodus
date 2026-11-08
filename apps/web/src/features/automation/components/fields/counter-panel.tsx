@@ -78,6 +78,8 @@ export function CounterPanel({
 
   const kit: CounterRuleKit = {
     names,
+    issuers,
+    typeName: targetName,
     definitions: allDefinitions,
     nodeKinds: (nodeKinds ?? []).filter((kind) => kind.archivedAt === null),
     summaryOf: (rule: NumberSeriesRule, next: number | null, bindings: CustomFieldBindings) => {
