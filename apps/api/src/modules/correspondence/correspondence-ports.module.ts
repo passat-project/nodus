@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 
+import { ProjectsPortsModule } from '../projects/projects-ports.module.js';
+
 import { LettersRepository } from './letters/letters.repository.js';
 import { LetterChatReaderProvider } from './ports/letter-chat-reader.provider.js';
 import { LETTER_CHAT_READER } from './ports/letter-chat-reader.port.js';
@@ -23,6 +25,7 @@ import { LETTER_VISIBILITY_READER } from './ports/letter-visibility.port.js';
  * импорта; доменные сервисы наружу не экспортируются.
  */
 @Module({
+  imports: [ProjectsPortsModule],
   providers: [
     LettersRepository,
     LetterChatReaderProvider,

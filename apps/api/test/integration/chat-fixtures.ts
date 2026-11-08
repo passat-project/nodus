@@ -101,6 +101,7 @@ export async function setupChatFixture<T extends string>(
 
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
     logger: false,
+    abortOnError: false,
   });
   // Сквозные плагины — та же точка, что и main.ts (cookie, multipart #57).
   await registerCoreFastifyPlugins(app);

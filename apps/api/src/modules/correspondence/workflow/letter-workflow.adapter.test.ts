@@ -31,17 +31,33 @@ function setup(overrides: Record<string, unknown> = {}, participants: { userId: 
     countByStages: vi.fn(async () => ({ 'stage-new': 2 })),
     restateStage: vi.fn(async () => 1),
     byStagePage: vi.fn(async () => []),
+    update: vi.fn(async () => void 0),
   };
+  const events = { emit: vi.fn(async () => void 0) };
   const adapter = new LetterWorkflowAdapter(
     letters as never,
     { apply: vi.fn() } as never,
     { apply: vi.fn() } as never,
     { run: vi.fn() } as never,
     { definitions: vi.fn(async () => [{ id: 'cf-1' }]) } as never,
-    undefined as never,
-    undefined as never,
+    {
+      numberContext: vi.fn(async () => ({
+        projects: [
+          {
+            id: 'project',
+            name: 'Дом',
+            typeId: 'pt',
+            portfolioId: 'pf',
+            values: { f: 'П-1' },
+            createdAt: new Date('2026-01-01T00:00:00Z'),
+          },
+        ],
+        nodes: [],
+      })),
+    } as never,
+    events as never,
   );
-  return { adapter, letters };
+  return { adapter, letters, events };
 }
 
 const actor = { id: ACTOR, permissions: [] };
@@ -94,4 +110,15 @@ describe('адаптер письма (#55, Р6)', () => {
     expect(await adapter.restateStage('stage-new', 'active')).toBe(1);
     expect(letters.restateStage).toHaveBeenCalledWith('stage-new', 'active');
   });
+});
+
+it('numberTarget/applyNumbers: проект письма и запись номера', async () => {
+  const { adapter, letters, events } = setup({ projectId: 'project', customFields: { f: 'Вх-1' } });
+  const target = await adapter.numberTarget({} as never, LETTER);
+  expect(target).toMatchObject({ host: 'letter', projectId: 'project', portfolioId: 'pf' });
+  expect(target.sources.self).toMatchObject({ f: 'Вх-1' });
+  expect(target.sources.project).toMatchObject({ f: 'П-1' });
+  await adapter.applyNumbers({} as never, LETTER, ACTOR, { f: 'Вх-2' });
+  expect(letters.update).toHaveBeenCalled();
+  expect(events.emit).toHaveBeenCalled();
 });

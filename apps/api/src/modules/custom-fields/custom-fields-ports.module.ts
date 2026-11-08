@@ -56,7 +56,7 @@ import { FormulaValuesService } from './formulas/formula-values.service.js';
     ProjectsPortsModule,
     forwardRef(() => TasksPortsModule),
     CorrespondencePortsModule,
-    WorkflowsPortsModule,
+    forwardRef(() => WorkflowsPortsModule),
   ],
   providers: [
     UserProfileProvider,
@@ -93,6 +93,7 @@ import { FormulaValuesService } from './formulas/formula-values.service.js';
     CUSTOM_FIELD_REGISTRY,
     NUMBER_ISSUE,
     NUMBER_HOST_REGISTRY,
+    NumberRefService,
     CounterSummaryService,
     FORMULA_ENGINE,
     FORMULA_CELLS,

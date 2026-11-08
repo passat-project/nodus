@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { NodeKindsRepository } from './project-node-kinds.repository.js';
+import { ProjectGroupsRepository } from './project-groups.repository.js';
 import { ProjectParticipantsRepository } from './project-participants.repository.js';
 import { ProjectNodesRepository } from './project-nodes.repository.js';
 import { ProjectTypesRepository } from './project-types.repository.js';
@@ -34,6 +35,7 @@ import {
 @Module({
   providers: [
     ProjectsRepository,
+    ProjectGroupsRepository,
     ProjectParticipantsRepository,
     ProjectNodesRepository,
     NodeKindsRepository,
