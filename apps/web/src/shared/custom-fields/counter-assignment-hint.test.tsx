@@ -40,6 +40,7 @@ vi.mock('../api-client.js', () => ({
         ['field-5', 'rule', '2026-11-04T10:00:00.000Z'],
         ['field-6', 'registry', '2026-11-03T10:00:00.000Z'],
         ['field-7', 'import', '2026-11-02T10:00:00.000Z'],
+        ['field-8', 'unknown', '2026-11-01T10:00:00.000Z'],
       ].map(([fieldId, source, assignedAt]) => ({
         fieldId,
         display: 'N',

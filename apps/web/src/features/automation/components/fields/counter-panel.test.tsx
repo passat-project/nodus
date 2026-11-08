@@ -63,6 +63,9 @@ vi.mock('../../../../shared/api/node-kinds.js', () => ({
 vi.mock('../../../../shared/api/projects-list.js', () => ({
   useProjectTypes: () => ({ data: [] }),
 }));
+vi.mock('../../../../shared/custom-fields/value-editor.js', () => ({
+  CustomFieldEditor: () => <span>ref</span>,
+}));
 vi.mock('../../../../shared/custom-fields/queries.js', () => ({
   useCustomFieldDefinitions: () => ({ data: [] }),
   useNumberHostAssignments: () => ({ data: { items: [] } }),
@@ -72,6 +75,7 @@ import { CounterPanel } from './counter-panel.js';
 import { CounterCounts } from './counter-counts.js';
 import { CounterCoverage } from './counter-coverage.js';
 import { CounterBackfillButton } from './counter-backfill-dialog.js';
+import { CounterCheck } from './counter-check.js';
 
 afterEach(cleanup);
 
@@ -134,4 +138,17 @@ describe('счётчик: панель, счета, охват, выдача с�
     fireEvent.click(screen.getByRole('button', { name: /Выдать номера существующим/i }));
     expect(screen.getAllByText(/Выдать номера существующим/i).length).toBeGreaterThan(0);
   });
+});
+
+it('CounterCheck: проверка на записи рендерится', () => {
+  const { container } = render(
+    <CounterCheck
+      rule={rule}
+      definitionId="def-1"
+      participantTypeIds={['type-1']}
+      kinds={['task']}
+      names={names}
+    />,
+  );
+  expect(container.firstChild).not.toBeNull();
 });

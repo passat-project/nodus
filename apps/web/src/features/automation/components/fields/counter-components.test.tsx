@@ -41,7 +41,12 @@ describe('счётчик: чистые компоненты окна прави�
         names={names}
         hostKinds={['task']}
         fields={[]}
-        fieldGroups={[{ source: 'self', fields: [] }]}
+        fieldGroups={[
+          {
+            source: 'self',
+            fields: [{ id: 'field-7', number: 7, type: 'text', name: 'Инв. №' } as never],
+          },
+        ]}
         recipients={<p>Кто получает</p>}
         coverage={<p>Охват</p>}
         disabled={false}
@@ -130,7 +135,12 @@ describe('счётчик: чистые компоненты окна прави�
         />
         <CounterInsertPalette
           template={rule.template}
-          fieldGroups={[{ source: 'self', fields: [] }]}
+          fieldGroups={[
+            {
+              source: 'self',
+              fields: [{ id: 'field-7', number: 7, type: 'text', name: 'Инв. №' } as never],
+            },
+          ]}
           disabled={false}
           onChange={onChange}
         />
@@ -138,6 +148,14 @@ describe('счётчик: чистые компоненты окна прави�
     );
     const literal = screen.getByDisplayValue('-');
     fireEvent.change(literal, { target: { value: '/' } });
+    expect(onChange).toHaveBeenCalled();
+    const remove = screen.getAllByRole('button', {
+      name: ui.customFields.dialog.counter.segRemove,
+    });
+    fireEvent.click(remove[0]!);
+    expect(onChange).toHaveBeenCalled();
+    const add = screen.getAllByRole('button').find((button) => button.textContent?.includes('+'));
+    fireEvent.click(add!);
     expect(onChange).toHaveBeenCalled();
   });
 
