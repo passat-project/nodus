@@ -96,9 +96,9 @@ function Group({
           строки списка; чекбокс поверх добавляет свой акцент. */}
       <div
         className={cn(
-          'flex items-stretch rounded-lg transition-colors',
+          'flex items-stretch rounded-t-lg transition-colors',
           expandable && 'hover:bg-accent/40',
-          expanded && 'rounded-b-none',
+          !expanded && 'rounded-b-lg',
         )}
       >
         <button
