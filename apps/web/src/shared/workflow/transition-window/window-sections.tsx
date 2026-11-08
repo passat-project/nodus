@@ -44,6 +44,9 @@ export interface WindowSectionApi {
   toggleMessage: (messageId: string) => void;
   setRegistration: (value: LetterRegistrationInput | null) => void;
   renderSection?: RenderWindowSection;
+  /** Ключи, которые кнопка закрепит после нажатия, и её название (#496). */
+  lockKeys?: readonly string[];
+  transitionName?: string;
 }
 
 /** Реестр разделов: вид → компонент. Исчерпывающий switch — новый вид
@@ -77,6 +80,8 @@ export function WindowSection({
           draft={api.draft}
           setFields={api.setFields}
           disabled={api.disabled}
+          lockKeys={api.lockKeys}
+          transitionName={api.transitionName}
         />
       );
     case 'time':

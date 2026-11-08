@@ -1,5 +1,5 @@
 import type { EffectiveSection, TransitionWindowFieldKey } from '@nodus/contracts';
-import { customFieldIdOfKey, ui } from '@nodus/contracts';
+import { customFieldIdOfKey, formFieldWidth, isFormDecor, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Input } from '@nodus/ui/components/input';
 import { Textarea } from '@nodus/ui/components/textarea';
@@ -11,9 +11,18 @@ import { DateTimePicker } from '../../../ui/date-time-picker.js';
 import { PeoplePicker } from '../../../ui/people-picker.js';
 import type { WindowDraft } from '../use-window-draft.js';
 import type { TransitionWindowContext, WindowFieldValues } from '../window-context.js';
+import {
+  FormDecorView,
+  FormFieldShell,
+  FormGrid,
+  type FormGridItem,
+} from '../../../forms/form-grid.js';
+import { WillLockNotice } from '../../../forms/lock-notice.js';
 
 /**
  * «Дозаполнить поля»: текущие значения, меняются только выбранные в окне.
+ * Раскладка окна (#496): общая сетка — половины рядом, подпись и подсказка
+ * из окна (иначе имя и подсказка атрибута), метка «Закрепится после «…»».
  * Сначала системные поля, затем поля процесса (#431, Р7): редакторы
  * `variant="form"` в той же грамматике, подсказка поля — мелким текстом.
  * Архивные определения в контекст не попадают и не показываются.
@@ -24,49 +33,80 @@ export function FieldsSection({
   draft,
   setFields,
   disabled,
+  lockKeys = [],
+  transitionName,
 }: {
   section: Extract<EffectiveSection, { kind: 'fields' }>;
   context: TransitionWindowContext;
   draft: WindowDraft;
   setFields: (fields: WindowFieldValues) => void;
   disabled: boolean;
+  /** Ключи, которые кнопка закрепит после нажатия (#496, Р4) — метка у поля. */
+  lockKeys?: readonly string[];
+  /** Название кнопки — в метке «Закрепится после «…»». */
+  transitionName?: string;
 }) {
   const patch = (next: Partial<WindowFieldValues>) => setFields({ ...draft.fields, ...next });
   const editable = !disabled && context.access.canEdit;
-  const systemKeys = section.fields.filter((key) => customFieldIdOfKey(key) === null);
-  const customKeys = section.fields.filter((key) => customFieldIdOfKey(key) !== null);
   const hasFormula = (key: string) => Boolean(section.formulas?.[key]);
+  const locked = new Set(lockKeys);
   const formulaBadge = (
     <span className="text-[10px] leading-none text-info" title={ui.formulas.prefill.badge}>
       fx
     </span>
   );
+  const notice = (key: string, showFormula: boolean) =>
+    showFormula || locked.has(key) ? (
+      <span className="flex items-center gap-1.5">
+        {showFormula ? formulaBadge : null}
+        {locked.has(key) ? (
+          <WillLockNotice text={ui.forms.locks.willLock(transitionName ?? '')} />
+        ) : null}
+      </span>
+    ) : null;
 
-  return (
-    <div className="flex flex-col gap-3">
-      {systemKeys.map((field) => (
-        <div key={field} className="flex flex-col gap-1">
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-            {labelOf(field)}
-            {hasFormula(field) ? formulaBadge : null}
-          </span>
-          <FieldEditor field={field} value={draft.fields} editable={editable} onChange={patch} />
-        </div>
-      ))}
-      {customKeys.map((key) => {
-        const id = customFieldIdOfKey(key);
-        const definition = id
-          ? context.customFieldDefinitions.find((item) => item.id === id)
-          : undefined;
-        if (!definition) return null;
-        return (
-          <div key={key} className="flex flex-col gap-1">
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              {definition.name}
-              {hasFormula(key) && draft.fields.customFields[definition.id] != null
-                ? formulaBadge
-                : null}
-            </span>
+  // Раскладка окна (#496, Р2/Р3): порядок, ширина, подпись и подсказка —
+  // из настроенного раздела; поля, которые добавило условие, — в конце.
+  const items = section.elements.flatMap((element): FormGridItem[] => {
+    if (isFormDecor(element)) {
+      return [{ id: element.id, width: 'full', node: <FormDecorView decor={element} /> }];
+    }
+    const key = element.key;
+    const id = customFieldIdOfKey(key);
+    if (id === null) {
+      return [
+        {
+          id: key,
+          width: formFieldWidth(element),
+          node: (
+            <FormFieldShell
+              label={element.label ?? labelOf(key)}
+              hint={element.hint}
+              height={key === 'description' ? (element.height ?? 'lines') : undefined}
+              notice={notice(key, hasFormula(key))}
+            >
+              <FieldEditor field={key} value={draft.fields} editable={editable} onChange={patch} />
+            </FormFieldShell>
+          ),
+        },
+      ];
+    }
+    const definition = context.customFieldDefinitions.find((item) => item.id === id);
+    if (!definition) return [];
+    return [
+      {
+        id: key,
+        width: formFieldWidth(element),
+        node: (
+          <FormFieldShell
+            label={element.label ?? definition.name}
+            hint={element.hint ?? definition.hint}
+            height={definition.type === 'long_text' ? (element.height ?? 'lines') : undefined}
+            notice={notice(
+              key,
+              hasFormula(key) && draft.fields.customFields[definition.id] != null,
+            )}
+          >
             <CustomFieldEditor
               definition={definition}
               value={draft.fields.customFields[definition.id]}
@@ -80,14 +120,13 @@ export function FieldsSection({
                 patch({ customFields: next });
               }}
             />
-            {definition.hint ? (
-              <p className="text-xs text-muted-foreground">{definition.hint}</p>
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
-  );
+          </FormFieldShell>
+        ),
+      },
+    ];
+  });
+
+  return <FormGrid items={items} />;
 }
 
 function labelOf(field: TransitionWindowFieldKey): string {

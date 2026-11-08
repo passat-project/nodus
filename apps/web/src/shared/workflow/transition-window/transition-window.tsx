@@ -162,6 +162,11 @@ export function TransitionWindow({
         toggleMessage,
         setRegistration,
         renderSection: mode === 'live' ? renderSection : undefined,
+        // Замки окна (#496, Р4): метка «Закрепится после «…»» у полей.
+        lockKeys: transition.form?.enabled
+          ? (transition.form.locks ?? []).map((lock) => lock.key)
+          : [],
+        transitionName: transition.name,
       }
     : null;
 
