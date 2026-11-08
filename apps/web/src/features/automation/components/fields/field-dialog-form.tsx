@@ -153,7 +153,11 @@ export function FieldDialogForm({
           />
           <KindOption
             title={ui.customFields.dialog.kindCompany}
-            hint={ui.customFields.dialog.kindCompanyHint}
+            hint={
+              family === 'counter'
+                ? ui.customFields.dialog.counter.kindCompanyUnavailable
+                : ui.customFields.dialog.kindCompanyHint
+            }
             on={draft.isCompany}
             disabled={disabled || kindLocked || family === 'counter'}
             onSelect={() =>

@@ -6,6 +6,9 @@ export const customFieldCounterStrings = {
   title: 'Счётчик',
   /** Окно правила счётчика — отдельно от окна атрибута (владелец 08.11). */
   dialogTitle: 'Правило номера',
+  /** Почему счётчик не бывает глобальной переменной (подсказка у варианта). */
+  kindCompanyUnavailable:
+    'Недоступно для счётчика: он выдаёт свой номер каждой задаче или письму, а глобальная переменная — одно значение на всю компанию',
   edit: 'Настроить номер',
   apply: 'Готово',
   /** Живая сводка-предложение вверху секции. */
@@ -49,7 +52,7 @@ export const customFieldCounterStrings = {
   container: 'Вести счёт отдельно для',
   containerNeedsRecipients: 'Сначала отметьте, кто получает номер',
   containers: {
-    company: 'Не делить — один общий счёт компании',
+    company: 'Не делить — сквозная нумерация',
     folder: 'Каждой папки вида «{name}»',
     folderGroup: 'Каждой папки вида…',
     project: 'Каждого проекта',
@@ -66,7 +69,7 @@ export const customFieldCounterStrings = {
   pickEmpty: 'Ничего не найдено',
   /** Короткие формы — в предложении-сводке и в панели кнопки. */
   containersShort: {
-    company: 'общий счёт компании',
+    company: 'сквозная нумерация без деления',
     folder: 'свой счёт в каждой папке «{name}»',
     project: 'свой счёт в каждом проекте',
     project_type: 'свой счёт для каждого типа проекта',
@@ -76,7 +79,7 @@ export const customFieldCounterStrings = {
   },
   /** Путь, по которому система находит контейнер записи. */
   containerPath: {
-    company: 'Все записи — в одном счёте',
+    company: 'Все номера идут подряд одной очередью: 1, 2, 3…',
     folder:
       'Задача — её папка или ближайшая папка «{name}» выше по дереву; папка — ближайшая «{name}» выше неё',
     project: 'У каждого проекта свой счёт с начала',
@@ -116,7 +119,7 @@ export const customFieldCounterStrings = {
     project: 'Проект',
   },
   checkResult: '{host} → {container} → следующий номер: {next}',
-  checkCompany: 'общий счёт компании',
+  checkCompany: 'сквозная нумерация',
   checkAlready: 'У записи уже есть номер {number} — кнопка его не изменит',
   checkReasons: {
     unreachable: 'Такие записи не лежат там, где ведётся счёт — номер не будет выдан',
@@ -137,7 +140,7 @@ export const customFieldCounterStrings = {
   countsNext: 'следующий {number}',
   countsHidden: 'Скрытый проект',
   countsDeleted: 'удалена',
-  countsCompany: 'Вся компания',
+  countsCompany: 'Сквозная нумерация',
   countsEdit: 'Изменить следующий номер',
   countsSave: 'Сохранить',
   countsCancel: 'Отмена',
