@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ui, type WorkflowDraftTransition } from '@nodus/contracts';
+import { ui, type WorkflowDraftTransition, windowFieldKeys } from '@nodus/contracts';
 
 import {
   hasFilesSection,
@@ -53,7 +53,7 @@ describe('правки окна в редакторе (#380)', () => {
     let form = toggleSection(empty, 'fields');
     form = toggleWindowField(form, 'assignee');
     form = toggleWindowField(form, 'deadline');
-    expect(sectionOf(form, 'fields')?.fields).toEqual(['assignee']);
+    expect(windowFieldKeys(sectionOf(form, 'fields')!)).toEqual(['assignee']);
     expect(toggleWindowField(form, 'assignee')).toEqual(form);
   });
 
@@ -73,9 +73,9 @@ describe('поля процесса в окне (#431, Р7)', () => {
   it('ключ cf.* добавляется в тот же раздел и снимается', () => {
     let form = toggleSection(empty, 'fields');
     form = toggleWindowField(form, `cf.${CF}`);
-    expect(sectionOf(form, 'fields')?.fields).toEqual(['deadline', `cf.${CF}`]);
+    expect(windowFieldKeys(sectionOf(form, 'fields')!)).toEqual(['deadline', `cf.${CF}`]);
     form = toggleWindowField(form, `cf.${CF}`);
-    expect(sectionOf(form, 'fields')?.fields).toEqual(['deadline']);
+    expect(windowFieldKeys(sectionOf(form, 'fields')!)).toEqual(['deadline']);
   });
 
   it('лимит раздела — 12 полей (Р7)', () => {
