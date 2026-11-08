@@ -96,6 +96,10 @@
 - **Подсказки имён** — `GET /workflows/stage-names` (`workflow.manage`): имена неархивных стадий системного каталога (по `code`) и опубликованных маршрутов категории с числом маршрутов; подсказки показывают все, warning-и имён включены для пользовательских маршрутов (системные не шумят). В редакторе — комбоподсказки; публикация даёт warning-и `stage_name_shared`/`stage_name_similar`.
 - **Проверки публикации** — `workflow-document-extra-checks.ts`: имена, дубли целей (`duplicate_transition_target`), разрешимость `approver_is_actor` (`approver_rule_unresolvable`); `action_without_visibility` — для задач, не для писем. Warnings не блокируют публикацию; сервер отдаёт только 422 при ошибках, live-список показывает веб.
 
+## Серии номеров (#630)
+
+`number_series` / `number_counters` / `number_assignments` — таблицы «Процессов»; модуль атрибутов читает и пишет их только через порт `NUMBER_SERIES_STORE` (`ports/number-series.port.ts`, реализация `numbering/number-series.provider.ts`). Письмо-серии (`config.numbering` типа) живут там же: `nextForType` выдаёт «Вх-ГГГГ/N» без атрибута; счётчики атрибутов — серия 1:1 с определением. Счёт — `(series_id, scope_key)` = значения условий × период; upsert `last_value + step` сериализует параллельные выдачи; откат транзакции не тратит номер.
+
 ## Решающие вне задачи (#433)
 
 - `decider_in` — третье условие «кто»: `{ kind: 'decider_in', source }`,
