@@ -34,5 +34,10 @@ commands.allow = ["popup_get_data", "popup_close", "popup_set_expanded", "popup_
 
 [[permission]]
 identifier = "allow-popup-actions"
-description = "Действия попапа: отправить быстрый ответ, открыть беседу, скрыть все."
-commands.allow = ["popup_submit_reply", "popup_open", "popup_close_all"]
+description = "Действия попапа: отправить быстрый ответ, открыть беседу, скрыть все, показать скачанный файл в папке."
+commands.allow = [
+    "popup_submit_reply",
+    "popup_open",
+    "popup_close_all",
+    "popup_reveal_download",
+]

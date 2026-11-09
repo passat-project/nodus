@@ -7,7 +7,7 @@ const leaveConversation = vi.fn();
 vi.mock('../socket/socket-client.js', () => ({ joinConversation, leaveConversation }));
 const release = vi.fn();
 const acquireOpenConversation = vi.fn(() => release);
-vi.mock('./notifications.js', () => ({ acquireOpenConversation }));
+vi.mock('./open-conversation.js', () => ({ acquireOpenConversation }));
 
 const { useConversationHost } = await import('./use-conversation-host.js');
 

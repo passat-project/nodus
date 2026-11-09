@@ -62,6 +62,9 @@ pub(crate) struct ActivePopup {
     pub(crate) replying: bool,
     /// Окно показано (popup_ready или fallback): повторный show не нужен.
     pub(crate) shown: bool,
+    /// Абсолютный путь скачанного файла (#647) — ТОЛЬКО в Rust: мини-UI его
+    /// не получает, «Показать в папке» берёт путь отсюда по метке окна.
+    pub(crate) download_path: Option<String>,
     /// Payload для pull-модели: окно забирает данные само после загрузки
     /// (push-событие проигрывал бы гонку со скоростью монтирования React).
     payload: serde_json::Value,
@@ -135,6 +138,11 @@ fn payload_to_json(payload: &PopupPayload, theme: &str) -> serde_json::Value {
         "previewAttachment": payload.preview_attachment.unwrap_or(false),
         "urgent": payload.urgent,
         "canReply": payload.can_reply,
+        // Путь файла НЕ отдаём: мини-UI знает только имя и факт успеха (#647).
+        "download": payload.download.as_ref().map(|d| serde_json::json!({
+            "fileName": d.file_name,
+            "success": d.success,
+        })),
         "theme": theme,
     })
 }
@@ -148,6 +156,7 @@ pub(crate) fn stack(app: &AppHandle) -> std::sync::MutexGuard<'_, PopupStack> {
 pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
     let payload_json = payload_to_json(&payload, bridge::ui_theme());
     let dismiss_key = payload.dismiss_key().to_string();
+    let download_path = payload.download.as_ref().and_then(|d| d.path.clone());
     let (label, _slot) = {
         let mut s = stack(app);
         // Полный стек: новое вытесняет старейший спокойный (очередь-сдвиг);
@@ -182,6 +191,7 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
             hover: false,
             replying: false,
             shown: false,
+            download_path,
             payload: payload_json,
         });
         (label, slot)
@@ -557,6 +567,7 @@ mod tests {
             preview_attachment: None,
             urgent: false,
             can_reply: true,
+            download: None,
         }
     }
 
@@ -585,6 +596,7 @@ mod tests {
                 hover: false,
                 replying: false,
                 shown: false,
+                download_path: None,
                 payload: serde_json::Value::Null,
             });
         }

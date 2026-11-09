@@ -10,9 +10,23 @@ import { z } from 'zod';
  * (apps/desktop/src-tauri/src/bridge.rs — рассинхрон = баг).
  */
 
+/** Скачивание файла в оболочке (#647): карточка «Файл скачан» с кнопкой
+ *  «Показать в папке». Абсолютный путь файла в контракт НЕ входит — оболочка
+ *  держит его у себя (Rust) и сама проверяет каталог «Загрузки» перед
+ *  открытием проводника; мини-UI знает только имя файла и факт успеха. */
+export const popupDownloadSchema = z.object({
+  /** Имя файла для показа (длинное переносится в две строки). */
+  fileName: z.string().trim().min(1).max(255),
+  /** Успех скачивания: false — карточка ошибки без кнопки. */
+  success: z.boolean(),
+});
+export type PopupDownload = z.infer<typeof popupDownloadSchema>;
+
 /** Запрос оболочке показать попап уведомления (стек право-низ, ADR-0019 п.4).
- *  Цель попапа — ровно ОДНА: беседа (сообщение чата) или письмо (#618:
- *  «Поступило письмо» канцелярии); клик открывает её в портале. */
+ *  Цель попапа — ровно ОДНА: беседа (сообщение чата), письмо (#618:
+ *  «Поступило письмо» канцелярии) или скачанный файл (#647); клик открывает
+ *  источник в портале, у скачивания клика нет — только кнопка «Показать
+ *  в папке». */
 export const popupPayloadSchema = z
   .object({
     /** Ключ дедупликации: id сообщения или уведомления журнала. */
@@ -35,9 +49,11 @@ export const popupPayloadSchema = z
     urgent: z.boolean(),
     /** Разрешён ли быстрый ответ из попапа (только личные/групповые беседы). */
     canReply: z.boolean(),
+    /** Файл скачан (#647): карточка с кнопкой «Показать в папке». */
+    download: popupDownloadSchema.nullable().optional(),
   })
-  .refine((p) => Boolean(p.conversationId) !== Boolean(p.letterId), {
-    message: 'цель попапа ровно одна: conversationId или letterId',
+  .refine((p) => [p.conversationId, p.letterId, p.download].filter(Boolean).length === 1, {
+    message: 'цель попапа ровно одна: conversationId, letterId или download',
     path: ['conversationId'],
   });
 export type PopupPayload = z.infer<typeof popupPayloadSchema>;

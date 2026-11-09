@@ -6,8 +6,8 @@ import {
   popupPayloadSchema,
 } from './desktop-bridge.schema.js';
 
-/** Протокол моста оболочки (#618): цель попапа — ровно одна (беседа или
- *  письмо), событие open-letter валидирует letterId. */
+/** Протокол моста оболочки (#618, #647): цель попапа — ровно одна (беседа,
+ *  письмо или скачанный файл), событие open-letter валидирует letterId. */
 
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
 const LETTER_ID = '22222222-2222-4222-8222-222222222222';
@@ -44,6 +44,54 @@ describe('popupPayloadSchema (#618)', () => {
       }).success,
     ).toBe(false);
     expect(popupPayloadSchema.safeParse(base).success).toBe(false);
+  });
+
+  it('скачанный файл — третья цель, без беседы и письма (#647)', () => {
+    expect(
+      popupPayloadSchema.safeParse({
+        ...base,
+        canReply: false,
+        download: { fileName: 'Смета.xlsx', success: true },
+      }).success,
+    ).toBe(true);
+    // Ошибка скачивания — та же цель, карточка без кнопки.
+    expect(
+      popupPayloadSchema.safeParse({
+        ...base,
+        canReply: false,
+        download: { fileName: 'Смета.xlsx', success: false },
+      }).success,
+    ).toBe(true);
+  });
+
+  it('скачивание вместе с беседой/письмом — невалидно (ровно одна цель)', () => {
+    const download = { fileName: 'Смета.xlsx', success: true };
+    expect(
+      popupPayloadSchema.safeParse({
+        ...base,
+        conversationId: CONVERSATION_ID,
+        download,
+      }).success,
+    ).toBe(false);
+    expect(
+      popupPayloadSchema.safeParse({
+        ...base,
+        letterId: LETTER_ID,
+        download,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('скачивание требует непустого имени файла', () => {
+    for (const fileName of ['', '   ', 'x'.repeat(256)]) {
+      expect(
+        popupPayloadSchema.safeParse({
+          ...base,
+          canReply: false,
+          download: { fileName, success: true },
+        }).success,
+      ).toBe(false);
+    }
   });
 });
 

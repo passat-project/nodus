@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { ui } from '@nodus/contracts';
 
 import type { PopupData } from '../shell/shell-ipc.js';
+import { DownloadCard } from './download-card.js';
 
 const t = ui.desktop;
 
@@ -50,6 +51,8 @@ export function PopupView() {
   const [fade, setFade] = useState<FadePhase>('idle');
   /** Первая измеренная высота применена — можно показывать окно. */
   const [measured, setMeasured] = useState(false);
+  /** Курсор на карточке скачивания: автоскрытие на паузе. */
+  const [hovered, setHovered] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -195,8 +198,14 @@ export function PopupView() {
     <div
       ref={cardRef}
       className={`group bg-card text-card-foreground relative flex h-screen w-screen flex-col overflow-clip rounded-xl border p-2 font-sans ${fadeClass}`}
-      onMouseEnter={() => void invoke('popup_set_hover', { hover: true })}
-      onMouseLeave={() => void invoke('popup_set_hover', { hover: false })}
+      onMouseEnter={() => {
+        setHovered(true);
+        void invoke('popup_set_hover', { hover: true });
+      }}
+      onMouseLeave={() => {
+        setHovered(false);
+        void invoke('popup_set_hover', { hover: false });
+      }}
       onKeyDown={(e) => {
         if (e.key !== 'Escape') return;
         if (replying) {
@@ -209,38 +218,42 @@ export function PopupView() {
     >
       {/* Контент — естественная высота: оболочка узнаёт её и растит окно. */}
       <div ref={contentRef} className="flex shrink-0 flex-col">
-        {/* Клик по карточке — открыть источник (как клик по уведомлению в Telegram):
-         *  беседу (#300) или карточку письма (#618). */}
-        <button
-          type="button"
-          onClick={openTarget}
-          className="flex min-w-0 shrink-0 cursor-pointer items-start gap-2.5 text-left"
-          title={t.popupOpen}
-        >
-          <Avatar url={data.avatarUrl} name={data.title} />
-          <span className="min-w-0 flex-1">
-            {/* Отступ под крестик — только у строки заголовка: превью ниже
-             *  крестика и может использовать всю ширину (короткая фраза
-             *  не уезжает на вторую строку из-за лишнего запаса). */}
-            <span className="flex items-center gap-1.5 pr-6">
-              <span className="truncate text-[13px] leading-4 font-semibold">{data.title}</span>
-              {data.urgent ? (
-                <span className="bg-warning-soft text-warning rounded px-1 py-px text-[10px] leading-3 font-medium">
-                  {t.urgentLabel}
-                </span>
-              ) : null}
+        {data.download ? (
+          <DownloadCard download={data.download} paused={hovered} />
+        ) : (
+          /* Клик по карточке — открыть источник (как клик по уведомлению в Telegram):
+           *  беседу (#300) или карточку письма (#618). */
+          <button
+            type="button"
+            onClick={openTarget}
+            className="flex min-w-0 shrink-0 cursor-pointer items-start gap-2.5 text-left"
+            title={t.popupOpen}
+          >
+            <Avatar url={data.avatarUrl} name={data.title} />
+            <span className="min-w-0 flex-1">
+              {/* Отступ под крестик — только у строки заголовка: превью ниже
+               *  крестика и может использовать всю ширину (короткая фраза
+               *  не уезжает на вторую строку из-за лишнего запаса). */}
+              <span className="flex items-center gap-1.5 pr-6">
+                <span className="truncate text-[13px] leading-4 font-semibold">{data.title}</span>
+                {data.urgent ? (
+                  <span className="bg-warning-soft text-warning rounded px-1 py-px text-[10px] leading-3 font-medium">
+                    {t.urgentLabel}
+                  </span>
+                ) : null}
+              </span>
+              {/* line-clamp-2 ставит display:-webkit-box; block/display-утилиты его
+               *  перебивают — многоточие пропадает (docs/gotchas/frontend.md, #652). */}
+              <span
+                className={`mt-1 line-clamp-2 max-h-8 overflow-hidden text-[12px] leading-4 [overflow-wrap:anywhere] ${
+                  data.previewAttachment ? 'text-info' : 'text-muted-foreground'
+                }`}
+              >
+                {data.preview}
+              </span>
             </span>
-            {/* line-clamp-2 ставит display:-webkit-box; block/display-утилиты его
-             *  перебивают — многоточие пропадает (docs/gotchas/frontend.md, #652). */}
-            <span
-              className={`mt-1 line-clamp-2 max-h-8 overflow-hidden text-[12px] leading-4 [overflow-wrap:anywhere] ${
-                data.previewAttachment ? 'text-info' : 'text-muted-foreground'
-              }`}
-            >
-              {data.preview}
-            </span>
-          </span>
-        </button>
+          </button>
+        )}
 
         {replying ? (
           // Поле мягкое как композер: БЕЗ бордера и БЕЗ рамки фокуса (фон

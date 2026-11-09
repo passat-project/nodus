@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 import { useConvRoom } from '../socket/use-conv-room.js';
-import { acquireOpenConversation } from './notifications.js';
+import { acquireOpenConversation } from './open-conversation.js';
 
 /**
  * Хост ленты беседы (лента, тред, заметки, «Новости» — в мессенджере,

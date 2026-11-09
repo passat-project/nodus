@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { NotificationSnapshot } from '@nodus/contracts';
 
 import { useAuthStore } from '../../../shared/auth-store.js';
-import { getOpenConversation } from '../../../shared/chat/notifications.js';
+import { getOpenConversation } from '../../../shared/chat/open-conversation.js';
 
 /**
  * Тост-контур уведомлений (#100, вердикты 30.09): стак личного (каждое

@@ -19,7 +19,6 @@ import { isDomainMocked } from '../api/api-mock-config.js';
 import { useAuthStore } from '../auth-store.js';
 import { chatKeys } from '../chat/chat-keys.js';
 import { usePresenceStore } from './presence-store.js';
-import { notifySentMessage } from '../chat/notifications.js';
 import { notifyDesktopMessage } from '../desktop/desktop-notify.js';
 import { notificationDispatched, notificationRead } from './notification-bridge.js';
 import { createRealtimeInvalidator, type RealtimeInvalidator } from './socket-invalidation.js';
@@ -227,10 +226,9 @@ export function connectChatSocket(queryClient: QueryClient): void {
       const parsed = realtimeEnvelopeSchema.safeParse(raw);
       if (parsed.success) {
         invalidator?.handle(parsed.data satisfies RealtimeEnvelope);
-        // Сигнал фоновой вкладке (#124): гейт внутри (opt-in/фон/не своя).
+        // Уведомления — только попапы десктоп-оболочки (#650, #254): гейты
+        // (не своё, беседа не открыта, трэд) внутри.
         if (parsed.data.type === CHAT_EVENTS.MESSAGE_SENT && isFirstDelivery(parsed.data.payload)) {
-          notifySentMessage(parsed.data.payload, queryClient);
-          // Десктоп-оболочка (#254): попап с быстрым ответом (гейты внутри).
           notifyDesktopMessage(parsed.data.payload, queryClient);
         }
         wsDebugLog('domain event:', parsed.data.type);

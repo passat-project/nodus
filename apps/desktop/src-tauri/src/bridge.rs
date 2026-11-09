@@ -108,8 +108,24 @@ pub fn is_valid_conversation(s: &str) -> bool {
         })
 }
 
+/// Скачивание файла (#647): карточка «Файл скачан» с кнопкой «Показать в
+/// папке». Зеркало contracts `popupDownloadSchema` — но абсолютный путь
+/// живёт ТОЛЬКО в Rust: в JSON мини-UI он не уходит (payload_to_json
+/// перечисляет поля явно), кнопка путь из JS не принимает.
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PopupDownload {
+    /// Имя файла для карточки (длинное переносится в две строки).
+    pub file_name: String,
+    /// Успех скачивания: false — карточка ошибки без кнопки.
+    pub success: bool,
+    /// Абсолютный путь скачанного файла (для reveal). В JSON не сериализуется.
+    #[serde(default)]
+    pub path: Option<String>,
+}
+
 /// Зеркало contracts `popupPayloadSchema` (desktop-bridge.schema.ts).
-/// Цель попапа — ровно одна: беседа или письмо (#618).
+/// Цель попапа — ровно одна: беседа, письмо (#618) или скачанный файл (#647).
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PopupPayload {
@@ -126,6 +142,8 @@ pub struct PopupPayload {
     pub preview_attachment: Option<bool>,
     pub urgent: bool,
     pub can_reply: bool,
+    /// Файл скачан (#647): создаёт ТОЛЬКО оболочка (не портал).
+    pub download: Option<PopupDownload>,
 }
 
 impl PopupPayload {
@@ -155,6 +173,9 @@ pub struct PopupReply {
 pub async fn notify_popup(app: AppHandle, payload: PopupPayload) -> Result<(), String> {
     // Граница контракта на Rust-стороне (security-аудит #254, подозрение 5).
     // Цель — ровно одна (#618): беседа ИЛИ письмо, обе/ни одной — отказ.
+    // Скачивание (#647) портал не создаёт вовсе: такую карточку показывает
+    // только оболочка по своему событию загрузки — путь файла приходит не из
+    // веб-контента.
     let target_ok = match (
         payload.conversation_id.as_deref(),
         payload.letter_id.as_deref(),
@@ -166,6 +187,7 @@ pub async fn notify_popup(app: AppHandle, payload: PopupPayload) -> Result<(), S
     if payload.id.is_empty()
         || payload.id.len() > 200
         || !target_ok
+        || payload.download.is_some()
         || payload
             .thread_root_id
             .as_deref()

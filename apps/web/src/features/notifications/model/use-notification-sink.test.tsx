@@ -28,7 +28,7 @@ vi.mock('../../../shared/socket/notification-bridge.js', () => ({
 vi.mock('../../../shared/auth-store.js', () => ({
   useAuthStore: { getState: () => ({ user: { id: ME } }) },
 }));
-vi.mock('../../../shared/chat/notifications.js', () => ({
+vi.mock('../../../shared/chat/open-conversation.js', () => ({
   getOpenConversation: () => null,
 }));
 
