@@ -86,6 +86,19 @@ function taskOf(extra: Partial<TaskListItem> = {}): TaskListItem {
 
 afterEach(cleanup);
 
+describe('makeTaskTableFields: значок типа в названии (#670)', () => {
+  it('тип виден в ячейке названия, отдельной колонки нет', () => {
+    const fields = makeTaskTableFields();
+    expect(fields.some((f) => f.id === 'type')).toBe(false);
+    const title = fields.find((f) => f.id === 'title')!;
+
+    render(<span>{title.render(taskOf())}</span>);
+    expect(screen.getByRole('img', { name: 'Стандартный' })).toBeTruthy();
+    expect(screen.getByText('Согласовать АР')).toBeTruthy();
+    expect(title.sortValue?.(taskOf())).toBe('Согласовать АР');
+  });
+});
+
 describe('makeTaskTableFields: атрибутные колонки (#632)', () => {
   it('без определений колонок-атрибутов нет', () => {
     expect(makeTaskTableFields().some((f) => f.group === 'attributes')).toBe(false);

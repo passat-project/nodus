@@ -113,7 +113,7 @@ export function ThreadLevel({
                     </span>
                   ) : null}
                 </span>
-                <span className="mt-0.5 line-clamp-2 block text-xs text-muted-foreground">
+                <span className="mt-0.5 line-clamp-2 text-xs wrap-anywhere text-muted-foreground">
                   {root.text}
                 </span>
               </span>

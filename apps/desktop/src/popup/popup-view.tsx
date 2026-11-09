@@ -230,8 +230,10 @@ export function PopupView() {
                 </span>
               ) : null}
             </span>
+            {/* line-clamp-2 ставит display:-webkit-box; block/display-утилиты его
+             *  перебивают — многоточие пропадает (docs/gotchas/frontend.md, #652). */}
             <span
-              className={`mt-1 line-clamp-2 block max-h-8 overflow-hidden text-[12px] leading-4 [overflow-wrap:anywhere] ${
+              className={`mt-1 line-clamp-2 max-h-8 overflow-hidden text-[12px] leading-4 [overflow-wrap:anywhere] ${
                 data.previewAttachment ? 'text-info' : 'text-muted-foreground'
               }`}
             >

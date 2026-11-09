@@ -81,6 +81,8 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-segmented-active: var(--segmented-active);
+  --color-segmented-active-foreground: var(--segmented-active-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
@@ -217,6 +219,11 @@
   --muted-foreground: #6b6d72;
   --accent: #e7e5e1;
   --accent-foreground: #26272a;
+  /* Активный сегмент переключателя-«пилюли» (#664): светлая — прежняя ступень
+     accent (вид не меняется), тёмная — primary (accent #1B1B1F на поповере
+     #17171A даёт 1.04:1 и не читается). */
+  --segmented-active: var(--accent);
+  --segmented-active-foreground: var(--accent-foreground);
   --destructive: #c0392b;
   --destructive-foreground: #fbfaf8;
   --border: rgb(0 0 0 / 0.09);
@@ -372,6 +379,10 @@
   --muted-foreground: #8a8a8e;
   --accent: #1b1b1f;
   --accent-foreground: #e8e8e6;
+  /* #664: активный сегмент-«пилюля» — primary (3.81:1 к поповеру #17171A,
+     подпись 4.51:1 — WCAG AA); accent на этом фоне невидим (1.04:1). */
+  --segmented-active: var(--primary);
+  --segmented-active-foreground: var(--primary-foreground);
   --destructive: #c8584a;
   --destructive-foreground: #0a0a0b;
   --border: rgb(255 255 255 / 0.09);
