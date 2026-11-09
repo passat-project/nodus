@@ -1,5 +1,7 @@
 import type { TaskStage } from '@nodus/contracts';
 
+import { processTypeIds } from './process-type-ids.js';
+
 const sid = (n: number): string => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 /** Стадии маршрута «Стандартный» (ревизия 2, #378) — зеркало каталога API
@@ -57,6 +59,29 @@ export const stageCancelled: TaskStage = {
   color: 'danger',
 };
 
+/** Стадии демо-типа «Заявка» (#434): ознакомление всей компании. */
+export const requestReviewStage: TaskStage = {
+  id: '20000000-0000-4000-8000-000000000021',
+  name: 'Ознакомление',
+  order: 0,
+  systemState: 'active',
+  color: 'warning',
+};
+export const requestDoneStage: TaskStage = {
+  id: '20000000-0000-4000-8000-000000000022',
+  name: 'Ознакомлена',
+  order: 1,
+  systemState: 'closed',
+  color: 'info',
+};
+export const requestCancelledStage: TaskStage = {
+  id: '20000000-0000-4000-8000-000000000023',
+  name: 'Отменена',
+  order: 2,
+  systemState: 'closed',
+  color: 'danger',
+};
+
 export const demoStages: TaskStage[] = [
   stageNew,
   stageInProgress,
@@ -65,6 +90,9 @@ export const demoStages: TaskStage[] = [
   stageOnControl,
   stageDone,
   stageCancelled,
+  requestReviewStage,
+  requestDoneStage,
+  requestCancelledStage,
 ];
 
 /** Системные типы задач (ревизия 2): «Стандартный» — с утверждением,
@@ -85,4 +113,14 @@ export const quickProcessType = {
   category: 'task',
   icon: 'zap',
   color: 'success',
+} as const;
+
+/** Демо-тип «Заявка» (#434): обычный тип с кнопкой «Ознакомлен». */
+export const requestProcessType = {
+  id: processTypeIds.request,
+  code: 'request',
+  name: 'Заявка',
+  category: 'task',
+  icon: 'clipboard-check',
+  color: 'info',
 } as const;

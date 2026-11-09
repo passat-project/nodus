@@ -8,6 +8,8 @@ import {
 } from '@nodus/contracts';
 import { http, HttpResponse } from 'msw';
 
+import { pressOf } from '../../../../shared/mocks/data/press.js';
+import { requestDocument } from '../../../../shared/mocks/data/request-workflow-document.js';
 import {
   autoMovePersonalPlacement,
   demoPersonalStages,
@@ -23,7 +25,7 @@ import {
   quickDocument,
   standardDocument,
 } from '../../../../shared/mocks/data/workflows.js';
-import { quickProcessType } from '../../../../shared/mocks/data/task-stages.js';
+import { quickProcessType, requestProcessType } from '../../../../shared/mocks/data/task-stages.js';
 import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
 import { placeOfTask, segmentReaderOfTask } from '../../../../shared/mocks/data/numbering-store.js';
 import { planNumbers } from '../../../../shared/mocks/data/numbering-create.js';
@@ -54,17 +56,19 @@ function findTask(id: string): TaskListItem | undefined {
  *  встроенное правило «итог → итог» прячет «Отменить» у закрытых. */
 /** Маршруты типов с собственным документом: «Комплект» (#632), «Изменение»
  *  с кнопкой «Выдать в печать» (#630). */
-function documentOfTask(task: TaskListItem) {
+export function documentOfTask(task: TaskListItem) {
   if (task.type.id === quickProcessType.id) return quickDocument;
+  if (task.type.id === requestProcessType.id) return requestDocument;
   if (task.type.id === komplektType.id) return demoWorkflowDetails[KOMPLEKT_WORKFLOW_ID]!.document;
   if (task.type.id === changeType.id) return demoWorkflowDetails[CHANGE_WORKFLOW_ID]!.document;
   return standardDocument;
 }
 
-function transitionsOf(task: TaskListItem): WorkflowTransition[] {
+export function transitionsOf(task: TaskListItem): WorkflowTransition[] {
   const route = documentOfTask(task);
   const closed = isFinalState(task.stage.systemState);
   const stageIds = new Set(route.stages.map((s) => s.id));
+  const press = pressOf(task.id, currentAuthUser.id);
   const own: WorkflowTransition[] = [];
   const anyFrom: WorkflowTransition[] = [];
   for (const t of route.transitions) {
@@ -74,6 +78,9 @@ function transitionsOf(task: TaskListItem): WorkflowTransition[] {
     // Само-петля без пост-действий — шум; с пост-действием («Выдать в
     // печать» #630) кнопка меняет запись, не меняя статус — показываем.
     if (t.toStageId === task.stage.id && t.rules.postFunctions.length === 0) continue;
+    // Коллективная кнопка (#434): уже нажавшему/не-участнику она не видна;
+    // после кворума перехода в списке уже нет — задачу двигает движок.
+    if (press && t.id === press.transitionId && !press.canSubmit) continue;
     const target = stageDocOf(route, t.toStageId);
     const item: WorkflowTransition = {
       id: t.id,
@@ -105,20 +112,26 @@ function orderOf(route: typeof standardDocument, transitionId: string): number {
   return route.transitions.find((t) => t.id === transitionId)?.sortOrder ?? 0;
 }
 
-/** Пост-эффект `route_if` («Завершить»): постановщик сам себе исполнитель —
- *  цель подменяется (утверждение пропускается, #378). */
-function resolveTarget(task: TaskListItem, transition: WorkflowTransition): TaskStage {
+/** Пост-эффект `route_if` («Завершить»): актор сам является утверждающим
+ *  целевого статуса — цель подменяется (утверждение пропускается, #430).
+ *  `creator_is_assignee` — наследие; `approver_is_actor` — текущий актор
+ *  (в демо-маршруте утверждает постановщик). */
+export function resolveTarget(
+  task: TaskListItem,
+  transition: Pick<WorkflowTransition, 'id' | 'toStageId'>,
+): TaskStage {
   const route = documentOfTask(task);
   const doc = route.transitions.find((t) => t.id === transition.id);
   const routeIf = doc?.rules.postFunctions.find((p) => p.kind === 'route_if');
-  if (
-    routeIf &&
-    routeIf.kind === 'route_if' &&
-    task.creator.id === task.assignee?.id &&
-    route.stages.some((s) => s.id === routeIf.toStageId)
-  ) {
-    const substituted = stageDocOf(route, routeIf.toStageId);
-    return { ...substituted, order: substituted.sortOrder };
+  if (routeIf?.kind === 'route_if' && route.stages.some((s) => s.id === routeIf.toStageId)) {
+    const skip =
+      routeIf.when === 'creator_is_assignee'
+        ? task.creator.id === task.assignee?.id
+        : currentAuthUser.id === task.creator.id;
+    if (skip) {
+      const substituted = stageDocOf(route, routeIf.toStageId);
+      return { ...substituted, order: substituted.sortOrder };
+    }
   }
   const target = stageDocOf(route, transition.toStageId);
   return { ...target, order: target.sortOrder };

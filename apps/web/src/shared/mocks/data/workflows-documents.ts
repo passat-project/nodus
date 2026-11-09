@@ -1,6 +1,5 @@
 import type { WorkflowCondition, WorkflowDocument, WorkflowValidator } from '@nodus/contracts';
 
-import { fieldIds } from './field-ids.js';
 import {
   stageCancelled,
   stageDone,
@@ -16,6 +15,8 @@ import {
 
 const trid = (code: string): string =>
   `30000000-0000-4000-8000-${code.padEnd(12, '0').slice(0, 12)}`;
+
+export const STANDARD_COMPLETE_TRANSITION_ID = trid('complete');
 
 /** Правила-сокращения ревизии 2. */
 const doers: WorkflowCondition = { kind: 'role_in', roles: ['assignee', 'coexecutor'] };
@@ -65,23 +66,28 @@ export const standardDocument: WorkflowDocument = {
       sortOrder: 0,
       rules: {
         conditions: [executor],
-        validators: [
-          noOpenSubtasks,
-          // Демо кастомного поля в гейте (#431): «Заполнены поля» —
-          // «№ накладной» задачи.
-          { kind: 'fields_required', fields: [`cf.${fieldIds.invoiceNumber}`] },
-        ],
+        validators: [noOpenSubtasks],
         postFunctions: [{ kind: 'route_if', when: 'approver_is_actor', toStageId: stageDone.id }],
       },
-      // Окно «Завершение» показывает поле процесса в разделе «Поля» (#431).
+      // Окно «Завершение»: участник сдаёт результат; реквизиты карточки
+      // (описание, № накладной) здесь не спрашиваются — их правят в карточке.
       form: {
         enabled: true,
         title: 'Завершение работы',
         sections: [
-          { kind: 'fields', fields: ['description', `cf.${fieldIds.invoiceNumber}`] },
+          { kind: 'time', mode: 'if_empty' },
           { kind: 'result' },
-          { kind: 'comment', label: 'Комментарий', required: false },
+          { kind: 'comment', label: 'Комментарий к переходу', required: false },
         ],
+      },
+      // Коллективное нажатие (#434): обычная кнопка «Завершить»; кворум
+      // собирают соисполнители, после последнего переход выполняется. Что
+      // заполняет каждый — окно кнопки выше (отдельный редактор окна, #496).
+      press: {
+        sources: [{ kind: 'coexecutors' }],
+        quorum: { kind: 'all' },
+        order: 'parallel',
+        excludeAuthor: true,
       },
     },
     {

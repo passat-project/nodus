@@ -33,7 +33,7 @@ import { EdgeScrollbar } from './edge-scrollbar.js';
 import { LiveGraph } from './live-graph.js';
 import { startLayoutJitterLogger } from './layout-jitter-logger.js';
 import { NodeRail } from './node-rail.js';
-import { EDGE_W_COLLAPSED, EDGE_W_EXPANDED, RightRail } from './right-rail.js';
+import { EDGE_GAP, EDGE_W_COLLAPSED, EDGE_W_EXPANDED, RightRail } from './right-rail.js';
 import { useRailHidden } from './rail-visibility.js';
 import { useShellStore } from './shell-store.js';
 import { TopBar } from './top-bar.js';
@@ -67,7 +67,7 @@ export function AppShell() {
   // служебной полосы; на модуле мессенджера полоса скрыта — stripW=0.
   const edgeOpen = useShellStore((s) => s.edgeOpen);
   const railHidden = useRailHidden();
-  const viewerStripW = railHidden ? 0 : edgeOpen ? EDGE_W_EXPANDED : EDGE_W_COLLAPSED;
+  const viewerStripW = railHidden ? 0 : (edgeOpen ? EDGE_W_EXPANDED : EDGE_W_COLLAPSED) + EDGE_GAP;
   // WS чата (#104): живёт с сессией, тихий статус; поллинг — fallback.
   useChatSocket();
   useNotificationSink();

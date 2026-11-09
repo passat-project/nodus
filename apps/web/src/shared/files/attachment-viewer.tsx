@@ -22,9 +22,9 @@ import { VideoPlayerView } from './video-player-view.js';
  * встроенным редактором, правка отдельным режимом.
  *
  * Геометрия окна = канон карточек сущностей (ADR-0009): рама inset-2,
- * правый край у служебной полосы (stripW передаёт app-shell из состояния
- * полосы — общие константы слою shared недоступны), скругление карточки,
- * transition-[right] синхронно с раскрытием полосы.
+ * правый край у левого края служебной полосы (app-shell передаёт ширину
+ * полосы вместе с её правым отступом — общие константы слою shared
+ * недоступны), скругление карточки, transition-[right] синхронно с полосой.
  *
  * Видео исключение (#787, решение владельца 11.11.2026): открывается в
  * «кинозале» `VideoPlayerView` — тёмный экран с плеером и тонкой строкой
@@ -98,7 +98,7 @@ export function AttachmentViewer({ stripW = 0 }: { stripW?: number }) {
       <div className="absolute inset-0 bg-background/80" onClick={closeWithInvalidate} />
       <div
         className="absolute inset-y-2 left-2 flex flex-col overflow-hidden rounded-2xl border bg-card shadow-xl transition-[right] duration-200"
-        style={{ right: stripW + 8 }}
+        style={{ right: stripW }}
       >
         <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
           <div className="min-w-0 flex-1">

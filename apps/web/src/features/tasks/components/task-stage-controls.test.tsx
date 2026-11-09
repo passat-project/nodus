@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { Check, X } from 'lucide-react';
 import type { TaskDetail, WorkflowTransition } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
 
 vi.mock('../api/transitions-api.js', () => ({
   useWorkflowTransitions: () => ({ data: [] }),
@@ -11,6 +10,10 @@ vi.mock('../api/transitions-api.js', () => ({
 }));
 vi.mock('./task-transition-dialog.js', () => ({
   useTransitionRunner: () => ({ runningId: null, run: vi.fn(), dialog: null }),
+}));
+vi.mock('../api/press-api.js', () => ({
+  useSubmitPress: () => ({ mutate: vi.fn() }),
+  useWithdrawPress: () => ({ mutate: vi.fn() }),
 }));
 vi.mock('./task-time.js', () => ({ TaskTimerButton: () => null }));
 
@@ -43,6 +46,6 @@ describe('TaskActionBar: итог «Отклонена» (#430)', () => {
     render(<TaskActionBar task={task} showTime={false} />);
 
     expect(screen.getByText('Отклонена')).toBeTruthy();
-    expect(screen.getByText(ui.tasks.processNoActions)).toBeTruthy();
+    expect(screen.queryByText('Нет доступных действий')).toBeNull();
   });
 });

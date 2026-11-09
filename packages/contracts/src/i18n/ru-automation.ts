@@ -3,6 +3,7 @@ import { deciderStrings } from './ru-automation-deciders.js';
 import { problemStrings } from './ru-automation-problems.js';
 import { intentStrings } from './ru-automation-intent.js';
 import { outcomeStrings } from './ru-automation-outcome.js';
+import { pressStrings } from './ru-press.js';
 import { publishPreviewStrings } from './ru-automation-publish.js';
 
 /** UI-строки раздела «Автоматизация» (#378, эпик #377; «Процессы» — #428,
@@ -165,7 +166,7 @@ export const automationStrings = {
     titlePlaceholder: 'Название кнопки',
     sections: {
       registration: 'Регистрация',
-      fields: 'Дозаполнить поля',
+      fields: 'Поля задачи',
       time: 'Трудозатраты',
       result: 'Итог',
       result_files: 'Файлы итога',
@@ -202,6 +203,7 @@ export const automationStrings = {
     summaryEmpty: 'Разделы не выбраны',
   },
   deleteTransition: 'Удалить кнопку',
+  press: pressStrings.automation,
   creation: creationStrings,
   /** Правая панель редактора (#378 ред. 2): разделы с переходом внутрь. */
   panel: {
