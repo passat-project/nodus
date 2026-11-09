@@ -192,7 +192,12 @@ function useCreationHost(
           requiredHint={requiredHintOf(field)}
           onFormula={(formula) => patch({ extra: { formula: formula ?? undefined } })}
           onRequired={(required) => patch({ extra: { required } })}
-          onPreset={(preset) => patch({ extra: { preset } })}
+          onPreset={(preset) =>
+            // Скрытое значение снимает обязательность в ТОЙ ЖЕ правке: два
+            // отдельных patch из одного обработчика теряли первый (черновик
+            // редактора правится одним шагом).
+            patch({ extra: preset === null ? { preset } : { preset, required: false } })
+          }
         />
       ),
       lockMode: 'creation',

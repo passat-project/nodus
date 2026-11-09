@@ -98,10 +98,7 @@ export function CreationFieldSettings({
         hint={canHide ? c.hideHint : c.hideNotAllowed}
         checked={hidden}
         disabled={readOnly || !canHide}
-        onChange={(hide) => {
-          onPreset(hide ? initialPreset(key) : null);
-          if (hide) onRequired(false);
-        }}
+        onChange={(hide) => onPreset(hide ? initialPreset(key) : null)}
       />
       {hidden ? (
         <PanelField label={c.preset}>

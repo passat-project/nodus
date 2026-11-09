@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { CreationFieldSlot, CreationForm, CreationFormFacts } from './creation-form.js';
 import {
   checkCreationForm,
+  creationFormSchema,
   creationSlots,
   defaultCreationForm,
   effectiveCreationForm,
@@ -200,6 +201,48 @@ describe('checkCreationForm', () => {
         dateFacts,
       ),
     ).toEqual([]);
+  });
+});
+
+describe('форма создания: границы схемы и замки окна (#496)', () => {
+  it('больше 30 полей или 10 элементов оформления — схема не пропускает', () => {
+    const tooManyFields = {
+      fields: Array.from({ length: 31 }, () => slot('description')),
+      chips: [],
+    };
+    expect(creationFormSchema.safeParse(tooManyFields).success).toBe(false);
+
+    const tooMuchDecor = {
+      fields: Array.from({ length: 11 }, (_, index) => ({
+        kind: 'gap' as const,
+        id: `dgap${String(index).padStart(5, '0')}`,
+      })),
+      chips: [],
+    };
+    expect(creationFormSchema.safeParse(tooMuchDecor).success).toBe(false);
+  });
+
+  it('пустое оформление, чужой ключ замка и атрибут вне типа — проблемы публикации', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    const form: CreationForm = {
+      fields: [slot('description'), { kind: 'heading', id: 'dhead001', text: '   ' }],
+      chips: [],
+      locks: [
+        { key: 'bogus', editors: 'none' },
+        { key: `cf.${id}`, editors: 'owners' },
+      ],
+    };
+    expect(
+      checkCreationForm(
+        form,
+        facts({
+          customFields: {
+            active: new Set([id]),
+            inType: new Set<string>(),
+          },
+        }),
+      ).map((p) => p.code),
+    ).toEqual(['form_decor_empty', 'form_lock_key_invalid', 'form_lock_field_not_in_type']);
   });
 });
 
