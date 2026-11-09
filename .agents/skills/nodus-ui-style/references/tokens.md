@@ -14,6 +14,7 @@
 | `--muted-foreground` | `#6B6D72` | вторичный текст |
 | `--primary` / `--primary-foreground` / `--primary-hover` | `#4B57C8` / `#FBFAF8` / `#434EB5` | действие — индиго-кнопка, ховер темнее базы (подпись AA 6.0/7.0, #404) |
 | `--secondary`,`--muted` / `--accent` | `#EDEBE8` / `#E7E5E1` | ступени поверхностей |
+| `--segmented-active` / `--segmented-active-foreground` | `--accent` / `--accent-foreground` | активный сегмент-«пилюля» (`SEGMENTED_ACTIVE_TONAL`): в светлой — прежний accent, вид не менялся (#664) |
 | `--border` / `--input` | black/9% / black/14% | бордюры hairline |
 | `--success` `#2E7D57` · `--warning` `#8F6A10` · `--danger` `#C0392B` · `--info` `#3D6BA6` | семантика (+`-soft` пастель) |
 | `--tone-violet` `#6A4FB3` · `--tone-teal` `#16736F` · `--tone-orange` `#A8541A` · `--tone-pink` `#A63C6F` · `--tone-cyan` `#1C6F91` | палитра тонов стадий/типов (#403) + `-soft` пастель; данные, не хром |
@@ -36,6 +37,7 @@
 | `--foreground` | `#E8E8E6` | основной текст |
 | `--muted-foreground` | `#8A8A8E` | вторичный текст |
 | `--primary` / `--primary-foreground` / `--primary-hover` | `#5E6AD2` / `#FBFAF8` / `#525EC4` | действие — индиго-кнопка, ховер темнее базы (подпись AA 4.7/5.6, #404) |
+| `--segmented-active` / `--segmented-active-foreground` | `--primary` / `--primary-foreground` | активный сегмент-«пилюля» (`SEGMENTED_ACTIVE_TONAL`): accent на поповере даёт 1.04:1 и невидим, primary — 3.81:1 к фону, подпись 4.51:1 (AA), #664 |
 | `--border` / `--input` | white/9% / white/14% | бордюры hairline |
 | `--success` `#6FA287` · `--warning` `#C9A45B` · `--danger` `#C8584A` · `--info` `#7A93B2` | семантика приглушённая холодная (+`-soft` пары) |
 | `--tone-violet` `#B0A0F0` · `--tone-teal` `#6FC6C2` · `--tone-orange` `#E0A06A` · `--tone-pink` `#E29AB9` · `--tone-cyan` `#78C2DD` | палитра тонов стадий/типов (#403), осветлённые производные (+`-soft`) |

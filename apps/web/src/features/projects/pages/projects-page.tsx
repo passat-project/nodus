@@ -8,7 +8,7 @@ import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { primaryProjectRole } from '../../../shared/lib/project-role.js';
 import { openProjectCreate } from '../../../shared/projects/project-create-store.js';
-import { SegmentedControl } from '../../../shared/ui/segmented-control.js';
+import { SEGMENTED_ACTIVE_TONAL, SegmentedControl } from '../../../shared/ui/segmented-control.js';
 import { DataTable } from '../../../shared/views/data-table.js';
 import { ListToolbar } from '../../../shared/views/list-toolbar.js';
 import { activeFiltersCount } from '../../../shared/views/list-filters.js';
@@ -150,7 +150,7 @@ export function ProjectsPage() {
                   { value: 'mine', label: ui.projects.scopeMine },
                 ]}
                 onChange={setScope}
-                activeClassName="bg-accent text-foreground"
+                activeClassName={SEGMENTED_ACTIVE_TONAL}
                 className="w-32 shrink-0"
               />
               <ViewSettings viewKey="projects.list" defs={fields} />
