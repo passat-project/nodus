@@ -17,6 +17,15 @@ export const SEGMENTED_PADDING = '0.125rem';
 export const SEGMENTED_BORDER = '1px';
 export const SEGMENTED_INNER_RADIUS = `calc(${SEGMENTED_OUTER_RADIUS} - ${SEGMENTED_PADDING} - ${SEGMENTED_BORDER})`;
 
+/**
+ * Активный сегмент-«пилюля» (#664): единый класс на токенах
+ * `--segmented-active`. В светлой теме это прежняя ступень accent (вид не
+ * меняется), в тёмной — primary (accent #1B1B1F на поповере #17171A даёт
+ * 1.04:1 и сливается). Литерал `bg-accent text-foreground` в вызовах больше
+ * не писать: он снова разъедет темы.
+ */
+export const SEGMENTED_ACTIVE_TONAL = 'bg-segmented-active text-segmented-active-foreground';
+
 export function SegmentedControl<T extends string>({
   value,
   options,
@@ -34,7 +43,8 @@ export function SegmentedControl<T extends string>({
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;
-  /** Активный сегмент: по умолчанию primary; переключатели-«пилюли» — accent. */
+  /** Активный сегмент: по умолчанию primary; тональные «пилюли» —
+   *  SEGMENTED_ACTIVE_TONAL (светлая — accent, тёмная — primary, #664). */
   activeClassName?: string;
   /** sm — компактные переключатели шапок (px-2 py-0.5). */
   size?: 'sm' | 'md';

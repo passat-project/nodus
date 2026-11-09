@@ -5,7 +5,10 @@ import { Input } from '@nodus/ui/components/input';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { CircleAlert, Lock } from 'lucide-react';
 
-import { SegmentedControl } from '../../../../shared/ui/segmented-control.js';
+import {
+  SEGMENTED_ACTIVE_TONAL,
+  SegmentedControl,
+} from '../../../../shared/ui/segmented-control.js';
 import {
   counterSequence,
   fill,
@@ -232,7 +235,7 @@ export function CounterSection({
             value={rule.period}
             disabled={disabled || locked}
             ariaLabel={counter.period}
-            activeClassName="bg-accent text-foreground"
+            activeClassName={SEGMENTED_ACTIVE_TONAL}
             options={allowed.map((period) => ({ value: period, label: counter.periods[period] }))}
             onChange={(period) => onChange({ ...rule, period })}
           />

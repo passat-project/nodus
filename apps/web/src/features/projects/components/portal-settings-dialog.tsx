@@ -7,7 +7,7 @@ import { NodeLabel } from '@nodus/ui/components/node-label';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 
 import { usePortalSettings } from '../../../shared/api/projects-list.js';
-import { SegmentedControl } from '../../../shared/ui/segmented-control.js';
+import { SEGMENTED_ACTIVE_TONAL, SegmentedControl } from '../../../shared/ui/segmented-control.js';
 import { useUpdatePortalSettings } from '../api/project-catalog-mutations.js';
 
 /**
@@ -61,7 +61,7 @@ export function PortalSettingsDialog({ onClose }: { onClose: () => void }) {
                       { value: 'secret', label: ui.projects.visibility.secret },
                     ]}
                     onChange={setVisibility}
-                    activeClassName="bg-accent text-foreground"
+                    activeClassName={SEGMENTED_ACTIVE_TONAL}
                     className="max-w-64"
                   />
                   <span className="text-xs text-muted-foreground">
