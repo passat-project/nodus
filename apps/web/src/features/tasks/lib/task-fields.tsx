@@ -7,6 +7,7 @@ import { NodeChip } from '@nodus/ui/components/node-chip';
 import { formatDateTime, formatMinutes } from '../../../shared/lib/format.js';
 import { DeadlineChip } from '../../../shared/ui/deadline-chip.js';
 import { monoCell, PersonCell } from '../../../shared/ui/person-cell.js';
+import { TaskTypeIcon } from '../../../shared/ui/task-type-icon.js';
 import { priorityTone } from '../../../shared/views/task-table-fields.js';
 import { attributeColumnFields } from '../../../shared/views/attribute-fields.js';
 import type { FieldDef } from '../../../shared/views/use-view-fields.js';
@@ -62,6 +63,7 @@ export const taskListFields: ListFieldDef[] = [
     locked: true,
     render: (task, ctx) => (
       <>
+        <TaskTypeIcon type={task.type} />
         <SourceIcon task={task} />
         <span className="truncate text-sm font-medium">{task.title}</span>
         {ctx.branchCollapsed && (ctx.childCount ?? 0) > 0 ? (
