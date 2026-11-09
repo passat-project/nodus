@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { Notification, NotificationPage } from '@nodus/contracts';
 
@@ -20,6 +20,17 @@ vi.mock('../../../app/shell/use-card-stack.js', () => ({
 vi.mock('../../../shared/api-client.js', () => ({
   api: vi.fn(),
 }));
+
+/**
+ * Гигиена файла: тест открывает глобальный стор деталей — после теста
+ * закрываем, чтобы состояние не влияло на будущие тесты в этом файле.
+ * `cleanup()` нужен явно: RTL-автоочистка не включается без `globals: true`.
+ * (Межфайлового протекания нет — Vitest изолирует модули по файлам.)
+ */
+afterEach(() => {
+  cleanup();
+  useNotificationDetailStore.getState().close();
+});
 
 /** #244: просмотр = прочтение — открытие карточки сразу гасит уведомление
  *  (POST /read уходит сам, без кнопки «Прочитать»), карточка остаётся
@@ -65,10 +76,16 @@ describe('NotificationReader: авто-прочтение при открыти�
     render(<NotificationReader />, { wrapper });
 
     // Read ушёл сам — ровно один вызов на открытие (рефетчи его не множат).
-    await waitFor(() => {
-      const reads = vi.mocked(api).mock.calls.filter(([url]) => String(url).endsWith('/read'));
-      expect(reads).toHaveLength(1);
-    });
+    // Явный таймаут вместо дефолтной секунды: под параллельным turbo-прогоном
+    // (api+web+contracts одновременно) первый запрос карточки выходит за 1 с и
+    // тест флакал (#554).
+    await waitFor(
+      () => {
+        const reads = vi.mocked(api).mock.calls.filter(([url]) => String(url).endsWith('/read'));
+        expect(reads).toHaveLength(1);
+      },
+      { timeout: 5_000 },
+    );
     // Кнопки «Прочитать» больше нет; переход к источнику остался.
     expect(screen.queryByText('Прочитать')).toBeNull();
     expect(screen.getByRole('button', { name: 'Перейти к источнику' })).toBeTruthy();
