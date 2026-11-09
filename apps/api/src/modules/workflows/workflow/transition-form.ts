@@ -16,9 +16,52 @@ import type { WorkflowTransitionRules } from '@nodus/contracts';
  * ADR-0020: правило в данных без исполнителя в коде — ложная безопасность).
  */
 
+/** Свойства поля-объекта и виды оформления, которые этот релиз умеет
+ *  показывать (#496, Р3). */
+const FIELD_ELEMENT_KEYS = ['key', 'label', 'hint', 'width', 'height'] as const;
+const DECOR_KEYS: Record<string, readonly string[]> = {
+  heading: ['kind', 'id', 'text'],
+  note: ['kind', 'id', 'text'],
+  gap: ['kind', 'id'],
+};
+
+function pick(source: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
+  return Object.fromEntries(keys.filter((key) => key in source).map((key) => [key, source[key]]));
+}
+
+/**
+ * F5 (#496, I-P1, ADR-0020): элементы раздела «Поля» читаются терпимо —
+ * неизвестные свойства поля и неизвестные виды оформления отбрасываются:
+ * это только показ, исполнителя у них нет. Неизвестный РАЗДЕЛ и негодный
+ * `locks` по-прежнему дают ошибку разбора — правило в данных без
+ * исполнителя в коде было бы ложной безопасностью.
+ */
+function tolerantFieldElements(raw: unknown): unknown {
+  if (raw === null || typeof raw !== 'object') return raw;
+  const form = raw as { sections?: unknown };
+  if (!Array.isArray(form.sections)) return raw;
+  return {
+    ...form,
+    sections: form.sections.map((section: unknown) => {
+      const s = section as { kind?: unknown; fields?: unknown } | null;
+      if (!s || s.kind !== 'fields' || !Array.isArray(s.fields)) return section;
+      return {
+        ...s,
+        fields: s.fields.flatMap((element: unknown) => {
+          if (element === null || typeof element !== 'object') return [element];
+          const source = element as Record<string, unknown>;
+          if (!('kind' in source)) return [pick(source, FIELD_ELEMENT_KEYS)];
+          const allowed = typeof source.kind === 'string' ? DECOR_KEYS[source.kind] : undefined;
+          return allowed ? [pick(source, allowed)] : [];
+        }),
+      };
+    }),
+  };
+}
+
 /** Разбор формы из БД: `{}` → выключенное окно. */
 export function parseForm(raw: unknown): TransitionForm {
-  return transitionFormSchema.parse(raw ?? {});
+  return transitionFormSchema.parse(tolerantFieldElements(raw ?? {}));
 }
 
 export interface FormInputCheck {

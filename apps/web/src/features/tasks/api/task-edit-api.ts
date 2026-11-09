@@ -14,11 +14,15 @@ import { toast } from 'sonner';
 
 import { api } from '../../../shared/api-client.js';
 import { mapTaskInPages, taskDependentKeys, tasksKeys } from '../../../shared/api/tasks-keys.js';
+import { fieldLockedText } from '../../../shared/forms/field-lock-ui.js';
 
 /** Правка полей карточки — подмножество PATCH без переноса по осям. */
 export type TaskFieldsPatch = Partial<
   Pick<TaskUpdateBody, 'title' | 'description' | 'priority' | 'deadline' | 'plannedMinutes'>
->;
+> & {
+  /** Причина правки закреплённого поля (#496): сервер требует 3..500. */
+  lockReason?: string;
+};
 
 /** Правка полей задачи (I4): значение в карточке и журнале меняется сразу,
  *  откат по снапшоту; после ответа — переходы (гейты читают поля), доски и
@@ -50,12 +54,12 @@ export function useUpdateTask(taskId: string) {
       );
       return { previous, previousPages };
     },
-    onError: (_error, _patch, context) => {
+    onError: (error, _patch, context) => {
       if (context?.previous) queryClient.setQueryData(tasksKeys.detail(taskId), context.previous);
       for (const [key, data] of context?.previousPages ?? []) {
         queryClient.setQueryData(key, data);
       }
-      toast.error(ui.common.saveError);
+      toast.error(fieldLockedText(error) ?? ui.common.saveError);
     },
     onSettled: () => {
       for (const key of taskDependentKeys(taskId)) {

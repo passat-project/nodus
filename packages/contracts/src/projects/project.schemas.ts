@@ -9,8 +9,21 @@ import {
   isCustomFieldValueFilled,
   type CustomFieldValues,
 } from '../custom-fields/custom-field-values.js';
-import { fieldFormSlotSchema, hasDuplicateSlots } from '../custom-fields/field-form.schemas.js';
+import {
+  fieldFormSlotSchema,
+  formSlots,
+  isFieldFormSlot,
+  type FieldFormSlot,
+} from '../custom-fields/field-form.schemas.js';
 import { customFieldFormulasSchema } from '../custom-fields/formula-api.schemas.js';
+import { refineAttributeElements } from '../forms/attribute-form.js';
+import {
+  FORM_LAYOUT_LIMITS,
+  formDecorSchema,
+  formHeightSchema,
+  formWidthSchema,
+  type FormDecor,
+} from '../forms/form-layout.js';
 import { userRefSchema } from '../directory/user-ref.schema.js';
 import { processTypeIconSchema } from '../workflows/process-type.schemas.js';
 import { cursorQuerySchema } from '../pagination/paginated.schema.js';
@@ -74,14 +87,66 @@ export const PROJECT_TYPE_LIMITS = {
   fields: 30,
 } as const;
 
+/** Системные строки окна проекта (#496, Р3, В16): двигаются, растягиваются
+ *  и переименовываются, но не убираются. Порядок — нынешнее окно проекта
+ *  (`project-create-dialog.tsx`): после атрибутов типа. Название и тип —
+ *  не элементы, всегда первыми. */
+export const PROJECT_SYSTEM_KEYS = [
+  'manager',
+  'assistants',
+  'observers',
+  'portfolio',
+  'visibility',
+  'endDate',
+  'description',
+] as const;
+export const projectSystemKeySchema = z.enum(PROJECT_SYSTEM_KEYS);
+export type ProjectSystemKey = z.infer<typeof projectSystemKeySchema>;
+
+export const projectSystemElementSchema = z
+  .object({
+    kind: z.literal('system'),
+    key: projectSystemKeySchema,
+    /** Подпись строки в окне; null — стандартная. */
+    label: z.string().trim().min(1).max(60).nullable().optional(),
+    width: formWidthSchema.optional(),
+    /** Высота — только у «Описания». */
+    height: formHeightSchema.optional(),
+  })
+  .strict();
+export type ProjectSystemElement = z.infer<typeof projectSystemElementSchema>;
+
+/** Элемент окна проекта: слот атрибута, оформление или системная строка. */
+export const projectTypeFormElementSchema = z.union([
+  fieldFormSlotSchema,
+  formDecorSchema,
+  projectSystemElementSchema,
+]);
+export type ProjectTypeFormElement = FieldFormSlot | FormDecor | ProjectSystemElement;
+
+export function isProjectSystemElement(element: unknown): element is ProjectSystemElement {
+  return (
+    element !== null &&
+    typeof element === 'object' &&
+    (element as { kind?: unknown }).kind === 'system'
+  );
+}
+
 export const projectTypeFormSchema = z
   .object({
-    fields: z.array(fieldFormSlotSchema).max(PROJECT_TYPE_LIMITS.fields),
+    fields: z
+      .array(projectTypeFormElementSchema)
+      .max(PROJECT_TYPE_LIMITS.fields + FORM_LAYOUT_LIMITS.decor + PROJECT_SYSTEM_KEYS.length),
   })
   .strict()
   .superRefine((form, ctx) => {
-    if (hasDuplicateSlots(form.fields)) {
-      ctx.addIssue({ code: 'custom', path: ['fields'], message: 'duplicate field' });
+    refineAttributeElements(form.fields, ctx, {
+      fields: PROJECT_TYPE_LIMITS.fields,
+      decor: FORM_LAYOUT_LIMITS.decor,
+    });
+    const systemKeys = form.fields.filter(isProjectSystemElement).map((element) => element.key);
+    if (new Set(systemKeys).size !== systemKeys.length) {
+      ctx.addIssue({ code: 'custom', path: ['fields'], message: 'duplicate system element' });
     }
   });
 export type ProjectTypeForm = z.infer<typeof projectTypeFormSchema>;
@@ -95,21 +160,38 @@ export function projectTypeFormOf(type: { form?: unknown }): ProjectTypeForm {
   return parsed.success ? parsed.data : DEFAULT_PROJECT_TYPE_FORM;
 }
 
-/** Эффективная форма типа: только слоты существующих определений (#646).
- *  Зеркало `effectiveNodeForm`: удалённый атрибут не должен блокировать
- *  создание проекта required-слотом, которого нет в форме. */
+/** Недостающие системные строки — в конец, в нынешнем порядке окна (C20):
+ *  окно по умолчанию совпадает с сегодняшним. */
+export function withProjectSystemElements(form: ProjectTypeForm): ProjectTypeForm {
+  const present = new Set(form.fields.filter(isProjectSystemElement).map((element) => element.key));
+  const missing = PROJECT_SYSTEM_KEYS.filter((key) => !present.has(key)).map(
+    (key): ProjectSystemElement => ({ kind: 'system', key }),
+  );
+  return missing.length === 0 ? form : { fields: [...form.fields, ...missing] };
+}
+
+/** Эффективная форма типа: только слоты существующих определений (#646),
+ *  оформление и все системные строки (#496, C20). Зеркало
+ *  `effectiveNodeForm`: удалённый атрибут не должен блокировать создание
+ *  проекта required-слотом, которого нет в форме. */
 export function effectiveProjectTypeForm(
   type: { form?: unknown },
   definitions: readonly { id: string }[],
 ): ProjectTypeForm {
   const form = projectTypeFormOf(type);
   const known = new Set(definitions.map((definition) => definition.id));
-  return { fields: form.fields.filter((slot) => known.has(slot.fieldId)) };
+  return withProjectSystemElements({
+    fields: form.fields.filter(
+      (element) => !isFieldFormSlot(element) || known.has(element.fieldId),
+    ),
+  });
 }
 
 /** Обязательные слоты формы типа (id атрибутов). */
 export function requiredProjectFields(form: ProjectTypeForm): string[] {
-  return form.fields.filter((slot) => slot.state === 'required').map((slot) => slot.fieldId);
+  return formSlots(form)
+    .filter((slot) => slot.state === 'required')
+    .map((slot) => slot.fieldId);
 }
 
 /** Чего не хватает для формы типа (обязательные слоты после умолчаний):

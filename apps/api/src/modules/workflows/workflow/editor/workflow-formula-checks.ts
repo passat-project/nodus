@@ -9,7 +9,7 @@ import type {
   WorkflowDraftDocument,
   WorkflowProblem,
 } from '@nodus/contracts';
-import { customFieldIdOfKey, slotLabel, ui } from '@nodus/contracts';
+import { customFieldIdOfKey, slotLabel, ui, creationSlots } from '@nodus/contracts';
 import {
   validateFormula,
   type FormulaFieldMeta,
@@ -64,7 +64,7 @@ export function hasSlotFormulas(doc: WorkflowDraftDocument): boolean {
     );
     if (withFormulas) return true;
   }
-  return (doc.creation?.fields ?? []).some(
+  return (doc.creation ? creationSlots(doc.creation) : []).some(
     (slot) => slot.formula !== null && slot.formula !== undefined,
   );
 }
@@ -141,7 +141,7 @@ export function checkWorkflowFormulas(
       }
     }
   }
-  for (const slot of doc.creation?.fields ?? []) {
+  for (const slot of doc.creation ? creationSlots(doc.creation) : []) {
     const ast = slot.formula;
     if (ast === null || ast === undefined) continue;
     // Запись ещё не создана: related и цепочка папок недоступны (как в

@@ -62,12 +62,12 @@ function doc(t: WorkflowDraftTransition): WorkflowDraftDocument {
 const codes = (d: WorkflowDraftDocument) => checkWorkflowDocument(d).map((p) => p.code);
 
 describe('проверки окна перехода в документе (#380)', () => {
-  it('пустая подпись раздела — ошибка', () => {
+  it('пустая подпись блока — стандартное название, не ошибка (#496)', () => {
     const t = transition({
       enabled: true,
       sections: [{ kind: 'comment', label: '', required: true }],
     });
-    expect(codes(doc(t))).toContain('form_empty_label');
+    expect(codes(doc(t))).not.toContain('form_empty_label');
   });
 
   it('дубль раздела — ошибка', () => {

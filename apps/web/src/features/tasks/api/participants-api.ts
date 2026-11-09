@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { api } from '../../../shared/api-client.js';
 import { chatKeys } from '../../../shared/chat/chat-keys.js';
 import { tasksKeys } from '../../../shared/api/tasks-keys.js';
+import { fieldLockedText } from '../../../shared/forms/field-lock-ui.js';
 
 /** Состав задачи поменялся: деталь — ответом сервера, доски/списки и чат
  *  задачи (состав беседы = участники, #252) — инвалидацией. */
@@ -27,7 +28,7 @@ export function useAddTaskParticipant(taskId: string) {
     mutationFn: (body: TaskParticipantAddBody) =>
       api<TaskDetail>(`/tasks/${taskId}/participants`, { method: 'POST', body }),
     onSuccess: (detail) => settle(detail),
-    onError: () => toast.error(ui.common.saveError),
+    onError: (error) => toast.error(fieldLockedText(error) ?? ui.common.saveError),
   });
 }
 
@@ -35,10 +36,15 @@ export function useAddTaskParticipant(taskId: string) {
 export function useRemoveTaskParticipant(taskId: string) {
   const settle = useSettle(taskId);
   return useMutation({
-    mutationFn: (userId: string) =>
-      api<TaskDetail | null>(`/tasks/${taskId}/participants/${userId}`, { method: 'DELETE' }),
+    mutationFn: (vars: { userId: string; lockReason?: string }) =>
+      api<TaskDetail | null>(
+        `/tasks/${taskId}/participants/${vars.userId}${
+          vars.lockReason ? `?lockReason=${encodeURIComponent(vars.lockReason)}` : ''
+        }`,
+        { method: 'DELETE' },
+      ),
     onSuccess: (detail) => settle(detail),
-    onError: () => toast.error(ui.common.saveError),
+    onError: (error) => toast.error(fieldLockedText(error) ?? ui.common.saveError),
   });
 }
 
@@ -46,9 +52,15 @@ export function useRemoveTaskParticipant(taskId: string) {
 export function useSetTaskAssignee(taskId: string) {
   const settle = useSettle(taskId);
   return useMutation({
-    mutationFn: (assigneeId: string) =>
-      api<TaskListItem>(`/tasks/${taskId}`, { method: 'PATCH', body: { assigneeId } }),
+    mutationFn: (vars: { assigneeId: string; lockReason?: string }) =>
+      api<TaskListItem>(`/tasks/${taskId}`, {
+        method: 'PATCH',
+        body: {
+          assigneeId: vars.assigneeId,
+          ...(vars.lockReason ? { lockReason: vars.lockReason } : {}),
+        },
+      }),
     onSuccess: () => settle(),
-    onError: () => toast.error(ui.common.saveError),
+    onError: (error) => toast.error(fieldLockedText(error) ?? ui.common.saveError),
   });
 }

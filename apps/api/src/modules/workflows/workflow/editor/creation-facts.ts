@@ -1,3 +1,4 @@
+import { creationSlots } from '@nodus/contracts';
 import type { CreationForm, CustomFieldDefinition } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../../core/database/transaction-runner.js';
@@ -31,7 +32,7 @@ export async function creationFactsOf(
 export function presetUserIdsOf(creation: CreationForm | null | undefined): string[] {
   if (!creation) return [];
   const ids: string[] = [];
-  for (const slot of creation.fields) {
+  for (const slot of creationSlots(creation)) {
     if (slot.preset === null) continue;
     if (slot.key === 'assignee' && typeof slot.preset === 'string') ids.push(slot.preset);
     if ((slot.key === 'coexecutors' || slot.key === 'observers') && Array.isArray(slot.preset)) {

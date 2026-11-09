@@ -20,7 +20,6 @@ import { PeoplePicker } from '../../../shared/ui/people-picker.js';
 import { SegmentedControl } from '../../../shared/ui/segmented-control.js';
 import { useCreateProjectGroup } from '../api/project-catalog-mutations.js';
 
-export { ProjectAttributeRows } from './project-attribute-rows.js';
 export { ProjectDeadlineField } from './project-deadline-field.js';
 
 const triggerClass =

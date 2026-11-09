@@ -1,5 +1,5 @@
 import type { NodeKind, NodeKindFieldState } from '@nodus/contracts';
-import { nodeKindFormOf, ui } from '@nodus/contracts';
+import { nodeKindFormOf, ui, formSlots } from '@nodus/contracts';
 
 import { plural } from '../../../../shared/lib/format.js';
 
@@ -13,7 +13,7 @@ export function stateOptions() {
 
 /** Обязательные слоты формы вида (состояние «обязательно»). */
 function requiredCount(kind: NodeKind): number {
-  return nodeKindFormOf(kind).fields.filter((slot) => slot.state === 'required').length;
+  return formSlots(nodeKindFormOf(kind)).filter((slot) => slot.state === 'required').length;
 }
 
 /** Сводка формы для строки-ссылки панели: «1 атрибут · обязательных: 1»
@@ -21,7 +21,7 @@ function requiredCount(kind: NodeKind): number {
  *  слот атрибута «Код», отдельной сводки шифра нет (ревизия #631). */
 export function formSummary(kind: NodeKind): string {
   const form = nodeKindFormOf(kind);
-  if (form.fields.length === 0) {
+  if (formSlots(form).length === 0) {
     return ui.nodeKinds.panel.formSummaryEmpty;
   }
   const parts: string[] = [fieldsCountLabel(kind)];
@@ -34,7 +34,7 @@ export function formSummary(kind: NodeKind): string {
 
 /** Счётчик атрибутов формы в строке вида: «1 атрибут» (моно, тихо). */
 export function fieldsCountLabel(kind: NodeKind): string {
-  const count = nodeKindFormOf(kind).fields.length;
+  const count = formSlots(nodeKindFormOf(kind)).length;
   return `${count} ${plural(count, ui.nodeKinds.fieldsCount)}`;
 }
 
@@ -46,7 +46,7 @@ export function kindRowSummary(kind: NodeKind): string {
 
 /** Тот же счётчик коротко для узкой строки вида: «1 атр.». */
 export function fieldsCountShort(kind: NodeKind): string {
-  return `${nodeKindFormOf(kind).fields.length} ${ui.nodeKinds.fieldsCountShort}`;
+  return `${formSlots(nodeKindFormOf(kind)).length} ${ui.nodeKinds.fieldsCountShort}`;
 }
 
 /** Сводка возможностей для строки-ссылки: «Включено: 2» или «Нет». */

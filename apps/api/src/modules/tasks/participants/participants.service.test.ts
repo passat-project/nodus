@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ErrorCode, type AuthUser } from '@nodus/contracts';
+import { ErrorCode, type AuthUser, type FieldLocks } from '@nodus/contracts';
 
 import { ParticipantsRepository } from './participants.repository.js';
 import { ParticipantsService } from './participants.service.js';
@@ -25,7 +25,11 @@ function setup(removed = 1, opts: { required?: string[]; left?: number } = {}) {
     remove: vi.fn().mockResolvedValue(removed),
     countRole: vi.fn().mockResolvedValue(opts.left ?? 1),
   };
-  const tasksRepo = { findWithParticipants: vi.fn().mockResolvedValue(ROW), touch: vi.fn() };
+  const tasksRepo = {
+    findWithParticipants: vi.fn().mockResolvedValue(ROW),
+    lock: vi.fn(async () => void 0),
+    touch: vi.fn(),
+  };
   const query = {
     visibleRow: vi.fn().mockResolvedValue(ROW),
     detail: vi.fn().mockResolvedValue({ id: 't1' }),
@@ -127,5 +131,100 @@ describe('ParticipantsService: обязательные участники (#432
   it('участник не обязателен — снятие последнего проходит', async () => {
     const { service } = setup(1, { required: [], left: 0 });
     await service.remove(user('alice'), 't1', 'dave');
+  });
+});
+
+/**
+ * Замок состава (#496, Р4): закреплённые «Соисполнители»/«Наблюдатели»
+ * меняет только постановщик (или `task.edit_locked`) с причиной; отказ —
+ * 422 `FIELD_LOCKED`, успешная правка пишет `lastChange`.
+ */
+describe('ParticipantsService: замок состава (#496, Р4)', () => {
+  const ALICE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const locks = (editors: 'none' | 'owners'): FieldLocks => ({
+    observers: {
+      editors,
+      lockedAt: '2026-11-09T00:00:00.000Z',
+      lockedBy: ALICE,
+      source: { kind: 'creation' },
+    },
+    coexecutors: {
+      editors,
+      lockedAt: '2026-11-09T00:00:00.000Z',
+      lockedBy: ALICE,
+      source: { kind: 'creation' },
+    },
+  });
+
+  function lockSetup(fieldLocks: FieldLocks) {
+    const task = { ...ROW, creatorId: ALICE, fieldLocks };
+    const repo = {
+      assignRole: vi.fn(),
+      remove: vi.fn().mockResolvedValue(1),
+      countRole: vi.fn().mockResolvedValue(2),
+    };
+    const tasksRepo = {
+      findWithParticipants: vi.fn().mockResolvedValue(task),
+      lock: vi.fn(async () => void 0),
+      touch: vi.fn(),
+      updateFields: vi.fn(async () => void 0),
+    };
+    const service = new ParticipantsService(
+      { run: (fn: (tx: unknown) => unknown) => fn(TX) } as never,
+      { emit: vi.fn() } as never,
+      { prepare: vi.fn(), sync: vi.fn() } as never,
+      { visibleRow: vi.fn().mockResolvedValue(task), detail: vi.fn() } as never,
+      { assertActiveUsers: vi.fn() } as never,
+      tasksRepo as never,
+      repo as never,
+      {
+        typeById: vi.fn().mockResolvedValue({
+          id: 'type-1',
+          category: 'task',
+          creationForm: { fields: [], chips: [] },
+        }),
+      } as never,
+      { assertMembersAllowed: vi.fn() } as never,
+    );
+    return { service, repo, tasksRepo };
+  }
+
+  it('замок «никто»: добавление наблюдателя — 422 FIELD_LOCKED', async () => {
+    const { service, repo } = lockSetup(locks('none'));
+    await expect(
+      service.add(user('bob'), 't1', { userId: 'new', role: 'observer' }),
+    ).rejects.toMatchObject({
+      code: ErrorCode.FIELD_LOCKED,
+      details: { keys: ['observers'], reason: 'locked' },
+    });
+    expect(repo.assignRole).not.toHaveBeenCalled();
+  });
+
+  it('постановщик с причиной добавляет — lastChange в колонке', async () => {
+    const { service, tasksRepo } = lockSetup(locks('owners'));
+    await service.add(user(ALICE), 't1', {
+      userId: 'new',
+      role: 'observer',
+      lockReason: 'нужен контролёр',
+    });
+    const data = (
+      tasksRepo.updateFields.mock.calls[0] as unknown as [
+        unknown,
+        string,
+        { fieldLocks: FieldLocks },
+      ]
+    )[2]!;
+    expect(data.fieldLocks.observers?.lastChange).toMatchObject({
+      by: ALICE,
+      reason: 'нужен контролёр',
+    });
+  });
+
+  it('снятие соисполнителя при замке «постановщик» не-постановщиком — owners_only', async () => {
+    const { service } = lockSetup(locks('owners'));
+    await expect(service.remove(user('bob'), 't1', 'dave', undefined)).rejects.toMatchObject({
+      code: ErrorCode.FIELD_LOCKED,
+      details: { keys: ['coexecutors'], reason: 'owners_only' },
+    });
   });
 });

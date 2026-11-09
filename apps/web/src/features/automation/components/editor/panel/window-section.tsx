@@ -1,74 +1,53 @@
 import { useState } from 'react';
-import type {
-  CustomFieldModule,
-  ProcessCategory,
-  WorkflowDraftDocument,
-  WorkflowDraftTransition,
-} from '@nodus/contracts';
-import { CUSTOM_FIELD_LIMITS, WORKFLOW_SECTIONS_BY_CATEGORY, ui } from '@nodus/contracts';
-import { Checkbox } from '@nodus/ui/components/checkbox';
+import type { CustomFieldModule, ProcessCategory, WorkflowDraftTransition } from '@nodus/contracts';
+import { ui, windowFieldKeys } from '@nodus/contracts';
+import { Button } from '@nodus/ui/components/button';
+import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
 import { Input } from '@nodus/ui/components/input';
-import { Eye } from 'lucide-react';
 
-import { useCustomFieldDefinitions } from '../../../../../shared/custom-fields/queries.js';
 import { useRouteDocStore } from '../../../model/route-doc-store.js';
-import {
-  WINDOW_FIELDS,
-  sectionOf,
-  setLabel,
-  setRequired,
-  setTimeMode,
-  setWindowEnabled,
-  setWindowFieldFormula,
-  setWindowTitle,
-  toggleSection,
-  toggleWindowField,
-} from '../../../model/transition-form.js';
-import { setMinFiles, validatorOf } from '../../../model/transition-rules.js';
-import {
-  ModeChoices,
-  PanelAction,
-  PanelField,
-  SwitchRow,
-} from '../../../../../shared/ui/panel/panel-kit.js';
-import { CustomFieldChecks } from './custom-fields-checks.js';
-import { WindowFieldFormulas } from './window-field-formulas.js';
-import { GateCheck, RequiredCheck, SectionToggle } from './window-section-rows.js';
-import { WindowPreview } from './window-preview.js';
+import { sectionOf, setWindowEnabled, setWindowTitle } from '../../../model/transition-form.js';
+import { PanelField, SectionLink, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
+import { TransitionWindowBuilder } from '../window-builder/transition-window-builder.js';
+
+const l = ui.forms.locks;
 
 /**
- * Раздел «Окно перехода» инспектора кнопки (#380): тумблер окна,
- * заголовок, шесть разделов в фиксированном порядке. «Обязательно» у
- * времени/итога/файлов правит ГЕЙТЫ (Р3: обязательность — только
- * валидаторы), у причины и сообщений — собственную настройку раздела.
- * Поля процесса (#431) — подгруппой в разделе «Поля».
+ * Раздел «Окно перехода» инспектора кнопки (#380; #496 — единый путь
+ * настройки): тумблер окна, заголовок и вход «Редактировать окно». Поля,
+ * их раскладка, оформление, замки и разделы окна (время, итог, файлы,
+ * сообщения, причина, регистрация) — только в редакторе окна, здесь
+ * сводка. Выключение окна с замками — с подтверждением: пока окно
+ * выключено, кнопка ничего не закрепляет (В13).
  */
 export function WindowSection({
   transition,
-  document: doc,
   scope,
   typeId,
   readOnly,
   category = 'task',
 }: {
   transition: WorkflowDraftTransition;
-  document: WorkflowDraftDocument;
   scope: CustomFieldModule;
   /** Тип процесса: в окно выбираются только его атрибуты (#432, Р8). */
   typeId?: string;
   readOnly: boolean;
-  /** Разделы окна категории (Р6): у письма — «Регистрация» и «Причина /
-   *  комментарий», задачных (время, итог, файлы) нет. */
+  /** Разделы окна категории (Р6). */
   category?: ProcessCategory;
 }) {
   const form = transition.form;
-  const allowedSections = WORKFLOW_SECTIONS_BY_CATEGORY[category] as readonly string[];
-  const has = (kind: string) => allowedSections.includes(kind);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const { data: definitions } = useCustomFieldDefinitions(scope);
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [confirmOff, setConfirmOff] = useState(false);
   const patch = (next: Partial<WorkflowDraftTransition['form']>) =>
     useRouteDocStore.getState().patchTransition(transition.id, { form: { ...form, ...next } });
-  const toggle = (kind: Parameters<typeof toggleSection>[1]) => patch(toggleSection(form, kind));
+  const fieldsSection = sectionOf(form, 'fields');
+  const fieldCount = fieldsSection ? windowFieldKeys(fieldsSection).length : 0;
+  const lockCount = form.locks?.length ?? 0;
+  const otherSections = form.sections
+    .filter((section) => section.kind !== 'fields')
+    .map((section) =>
+      section.label?.trim() ? section.label : ui.automation.window.sections[section.kind],
+    );
 
   return (
     <>
@@ -77,7 +56,10 @@ export function WindowSection({
         hint={ui.automation.window.titleHint}
         checked={form.enabled}
         disabled={readOnly}
-        onChange={(checked) => patch(setWindowEnabled(form, checked))}
+        onChange={(checked) => {
+          if (!checked && lockCount > 0) setConfirmOff(true);
+          else patch(setWindowEnabled(form, checked));
+        }}
       />
       {form.enabled ? (
         <>
@@ -90,196 +72,47 @@ export function WindowSection({
               onChange={(e) => patch(setWindowTitle(form, e.target.value))}
             />
           </PanelField>
-
-          {has('registration') ? (
-            <SectionToggle
-              kind="registration"
-              transition={transition}
-              readOnly={readOnly}
-              onToggle={() => toggle('registration')}
-            >
-              <p className="text-xs text-muted-foreground">
-                {ui.automation.window.registrationHint}
-              </p>
-            </SectionToggle>
-          ) : null}
-
-          {has('fields') ? (
-            <SectionToggle
-              kind="fields"
-              transition={transition}
-              readOnly={readOnly}
-              onToggle={() => toggle('fields')}
-            >
-              <div className="flex flex-col gap-1.5">
-                {WINDOW_FIELDS.map((field) => {
-                  const section = sectionOf(form, 'fields');
-                  const checked = section?.fields.includes(field) ?? false;
-                  return (
-                    <label key={field} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={checked}
-                        disabled={readOnly || (checked && (section?.fields.length ?? 0) === 1)}
-                        onCheckedChange={() => patch(toggleWindowField(form, field))}
-                      />
-                      {ui.automation.requirableFields[field]}
-                    </label>
-                  );
-                })}
-                <CustomFieldChecks
-                  scope={scope}
-                  typeId={typeId}
-                  selected={sectionOf(form, 'fields')?.fields ?? []}
-                  disabled={readOnly}
-                  limit={CUSTOM_FIELD_LIMITS.windowFields}
-                  onToggle={(key) => patch(toggleWindowField(form, key))}
-                />
-                <p className="text-xs text-muted-foreground">{ui.automation.window.fieldsHint}</p>
-                <WindowFieldFormulas
-                  form={form}
-                  hostKind={category === 'letter' ? 'letter' : 'task'}
-                  definitions={definitions ?? []}
-                  readOnly={readOnly}
-                  onChange={(field, ast) => patch(setWindowFieldFormula(form, field, ast))}
-                />
-              </div>
-            </SectionToggle>
-          ) : null}
-
-          {has('time') ? (
-            <SectionToggle
-              kind="time"
-              transition={transition}
-              readOnly={readOnly}
-              onToggle={() => toggle('time')}
-            >
-              <div className="flex flex-col gap-2">
-                <ModeChoices
-                  value={sectionOf(form, 'time')?.mode ?? 'if_empty'}
-                  disabled={readOnly}
-                  options={[
-                    {
-                      value: 'if_empty',
-                      label: ui.automation.window.modeIfEmpty,
-                      hint: ui.automation.window.modeIfEmptyHint,
-                    },
-                    {
-                      value: 'always',
-                      label: ui.automation.window.modeAlways,
-                      hint: ui.automation.window.modeAlwaysHint,
-                    },
-                  ]}
-                  onChange={(mode) => patch(setTimeMode(form, mode))}
-                />
-                <GateCheck transition={transition} kind="time_logged" disabled={readOnly} />
-              </div>
-            </SectionToggle>
-          ) : null}
-
-          {has('result') ? (
-            <SectionToggle
-              kind="result"
-              transition={transition}
-              readOnly={readOnly}
-              onToggle={() => toggle('result')}
-            >
-              <GateCheck transition={transition} kind="result_present" disabled={readOnly} />
-            </SectionToggle>
-          ) : null}
-
-          {has('result_files') ? (
-            <SectionToggle
-              kind="result_files"
-              transition={transition}
-              readOnly={readOnly}
-              onToggle={() => toggle('result_files')}
-            >
-              <div className="flex flex-col gap-2">
-                <PanelField label={ui.automation.window.label}>
-                  <Input
-                    value={sectionOf(form, 'result_files')?.label ?? ''}
-                    maxLength={60}
-                    readOnly={readOnly}
-                    placeholder={ui.automation.window.labelPlaceholder}
-                    onChange={(e) => patch(setLabel(form, 'result_files', e.target.value))}
-                  />
-                </PanelField>
-                <PanelField
-                  label={ui.automation.window.minFiles}
-                  hint={ui.automation.window.filesHint}
-                >
-                  <Input
-                    type="number"
-                    min={0}
-                    max={5}
-                    value={validatorOf(transition.rules, 'result_files')?.min ?? 0}
-                    readOnly={readOnly}
-                    aria-label={ui.automation.window.minFiles}
-                    onChange={(e) =>
-                      useRouteDocStore.getState().patchTransition(transition.id, {
-                        rules: setMinFiles(transition.rules, Number(e.target.value)),
-                      })
-                    }
-                  />
-                </PanelField>
-              </div>
-            </SectionToggle>
-          ) : null}
-
-          {has('result_messages') ? (
-            <SectionToggle
-              kind="result_messages"
-              transition={transition}
-              readOnly={readOnly}
-              onToggle={() => toggle('result_messages')}
-            >
-              <RequiredCheck
-                checked={sectionOf(form, 'result_messages')?.required ?? false}
-                disabled={readOnly}
-                onChange={(checked) => patch(setRequired(form, 'result_messages', checked))}
-              />
-            </SectionToggle>
-          ) : null}
-
-          {has('comment') ? (
-            <SectionToggle
-              kind="comment"
-              transition={transition}
-              readOnly={readOnly}
-              onToggle={() => toggle('comment')}
-            >
-              <div className="flex flex-col gap-2">
-                <PanelField label={ui.automation.window.label}>
-                  <Input
-                    value={sectionOf(form, 'comment')?.label ?? ''}
-                    maxLength={60}
-                    readOnly={readOnly}
-                    placeholder={ui.automation.window.labelPlaceholder}
-                    onChange={(e) => patch(setLabel(form, 'comment', e.target.value))}
-                  />
-                </PanelField>
-                <RequiredCheck
-                  checked={sectionOf(form, 'comment')?.required ?? false}
-                  disabled={readOnly}
-                  onChange={(checked) => patch(setRequired(form, 'comment', checked))}
-                />
-                <p className="text-xs text-muted-foreground">{ui.automation.window.commentHint}</p>
-              </div>
-            </SectionToggle>
-          ) : null}
-
-          <PanelAction icon={Eye} onClick={() => setPreviewOpen(true)}>
-            {ui.automation.window.preview}
-          </PanelAction>
-          <WindowPreview
-            open={previewOpen}
+          {/* Вход в редактор — строка раздела, как «Кнопки из статуса»:
+              название, сводка состава (поля · разделы · замки), шеврон. */}
+          <SectionLink
+            title={readOnly ? ui.forms.builder.view : ui.forms.builder.edit}
+            summary={[
+              ui.forms.builder.summary(fieldCount, lockCount),
+              ...(otherSections.length > 0 ? [otherSections.join(', ')] : []),
+            ].join(' · ')}
+            onClick={() => setBuilderOpen(true)}
+          />
+          <TransitionWindowBuilder
+            open={builderOpen}
             transition={transition}
-            document={doc}
-            definitions={definitions ?? []}
-            onClose={() => setPreviewOpen(false)}
+            scope={scope}
+            typeId={typeId}
+            category={category}
+            readOnly={readOnly}
+            onClose={() => setBuilderOpen(false)}
           />
         </>
       ) : null}
+      <Dialog open={confirmOff} onOpenChange={setConfirmOff}>
+        <DialogContent className="max-w-sm" aria-describedby={undefined}>
+          <DialogTitle className="text-base font-medium">{l.disableTitle}</DialogTitle>
+          <p className="text-sm text-muted-foreground">{l.disableLead}</p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setConfirmOff(false)}>
+              {ui.common.cancel}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setConfirmOff(false);
+                patch(setWindowEnabled(form, false));
+              }}
+            >
+              {l.disableConfirm}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

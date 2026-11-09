@@ -14,6 +14,7 @@ import {
   NODE_LIMITS,
   SYSTEM_FIELD_IDS,
   ui,
+  formSlots,
 } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
@@ -78,7 +79,7 @@ export function NodeCreateDialog({
     () => (kind ? effectiveNodeForm(kind, definitions.data ?? []) : null),
     [kind, definitions.data],
   );
-  const codeRequired = form?.fields.some(
+  const codeRequired = (form ? formSlots(form) : []).some(
     (slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode && slot.state === 'required',
   );
   const missing = form ? missingNodeFields(form, { customFields: values }) : [];
@@ -190,7 +191,7 @@ export function NodeCreateDialog({
                 const nextKind = active.find((entry) => entry.id === id);
                 if (nextKind && definitions.data) {
                   const allowed = new Set(
-                    effectiveNodeForm(nextKind, definitions.data).fields.map(
+                    formSlots(effectiveNodeForm(nextKind, definitions.data)).map(
                       (slot) => slot.fieldId,
                     ),
                   );

@@ -9,15 +9,15 @@ import {
   requiredCreateKeys,
   withCreateBodyValue,
 } from './task-create-form.js';
-import type { CreationForm } from '../workflows/creation-form.js';
+import type { CreationFieldSlot, CreationForm } from '../workflows/creation-form.js';
 
 /** Форма создания ↔ тело POST /tasks (#432): скрытые значения важнее
  *  введённого, «не хватает» — после умолчаний, очистка обязательного. */
 
 const slot = (
-  key: CreationForm['fields'][number]['key'],
-  extra: Partial<CreationForm['fields'][number]> = {},
-): CreationForm['fields'][number] => ({
+  key: CreationFieldSlot['key'],
+  extra: Partial<CreationFieldSlot> = {},
+): CreationFieldSlot => ({
   key,
   label: null,
   required: false,

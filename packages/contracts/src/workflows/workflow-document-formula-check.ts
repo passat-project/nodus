@@ -1,6 +1,7 @@
 import type { FormulaHostKind, FormulaNode } from '../custom-fields/formula.js';
 import { checkFormulaShape } from '../custom-fields/formula-validation.js';
 import { ui } from '../i18n/ru.js';
+import { creationSlots } from './creation-form.js';
 import type { ProcessCategory } from './process-type.schemas.js';
 import type { WorkflowDraftDocument, WorkflowProblem } from './workflow-document.schemas.js';
 
@@ -61,10 +62,15 @@ export function checkFormulaSlots(
       }
     }
   }
-  for (const slot of doc.creation?.fields ?? []) {
+  for (const slot of doc.creation ? creationSlots(doc.creation) : []) {
     const ast: FormulaNode | null | undefined = slot.formula;
     if (ast === null || ast === undefined) continue;
     report(ast, true, { creationField: slot.key });
+  }
+  // Формула названия (#496, Р7) — та же грамматика слота формы создания.
+  const titleFormula = doc.creation?.titleFormula;
+  if (titleFormula !== null && titleFormula !== undefined) {
+    report(titleFormula, true, { creationField: 'title' });
   }
   return problems;
 }

@@ -42,13 +42,12 @@ describe('transitionFormSchema (#380)', () => {
     expect(() => transitionFormSchema.parse({ enabled: true, sections: [], extra: 1 })).toThrow();
   });
 
-  it('подпись ≤ 60 и не пустая на границе публикации', () => {
-    expect(() =>
-      transitionFormSchema.parse({
-        enabled: true,
-        sections: [{ kind: 'comment', label: ' ', required: false }],
-      }),
-    ).toThrow();
+  it('подпись блока ≤ 60, пустая — стандартное название раздела (#496)', () => {
+    const parsed = transitionFormSchema.parse({
+      enabled: true,
+      sections: [{ kind: 'comment', label: ' ', required: false }],
+    });
+    expect(parsed.sections[0]).toMatchObject({ kind: 'comment', label: '' });
     expect(() =>
       transitionFormSchema.parse({
         enabled: true,

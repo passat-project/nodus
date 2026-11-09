@@ -70,13 +70,15 @@ export class TasksRepository {
   }
 
   async create(data: NewTaskData, tx: TransactionClient) {
-    const { participants, customFields, ...task } = data;
+    const { participants, customFields, fieldLocks, ...task } = data;
     try {
       return await tx.task.create({
         data: {
           ...task,
           // JSONB-колонка: значения уже проверены портом реестра (#431).
           customFields: (customFields ?? {}) as Prisma.InputJsonValue,
+          // Замки окна создания (#496, Р4): карта собрана контрактом.
+          fieldLocks: (fieldLocks ?? {}) as Prisma.InputJsonValue,
           participants: { create: participants },
         },
       });
@@ -89,7 +91,7 @@ export class TasksRepository {
   }
 
   async updateFields(tx: TransactionClient, id: string, patch: TaskFieldsPatch): Promise<void> {
-    const { customFields, ...rest } = patch;
+    const { customFields, fieldLocks, ...rest } = patch;
     await tx.task.update({
       where: { id },
       data: {
@@ -97,6 +99,7 @@ export class TasksRepository {
         ...(customFields === undefined
           ? {}
           : { customFields: customFields as Prisma.InputJsonValue }),
+        ...(fieldLocks === undefined ? {} : { fieldLocks: fieldLocks as Prisma.InputJsonValue }),
       },
     });
   }

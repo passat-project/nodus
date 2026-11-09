@@ -76,7 +76,15 @@ describe('гейт «Заполнены поля» с атрибутами (#431
 });
 
 describe('окно перехода: fields.customFields.<id> (#431)', () => {
-  const sections: EffectiveSection[] = [{ kind: 'fields', fields: [KEY as never], origin: 'form' }];
+  const sections: EffectiveSection[] = [
+    {
+      kind: 'fields',
+      fields: [KEY as never],
+      elements: [{ key: KEY as never }],
+      gateKeys: [],
+      origin: 'form',
+    },
+  ];
   const input = (fields: NonNullable<TransitionFormInput['fields']>): TransitionFormInput => ({
     fields,
   });
@@ -98,7 +106,13 @@ describe('окно перехода: fields.customFields.<id> (#431)', () => {
 
   it('системные поля и атрибуты в одном окне — оба приняты', () => {
     const both: EffectiveSection[] = [
-      { kind: 'fields', fields: ['deadline', KEY as never], origin: 'form' },
+      {
+        kind: 'fields',
+        fields: ['deadline', KEY as never],
+        elements: [{ key: 'deadline' }, { key: KEY as never }],
+        gateKeys: [],
+        origin: 'form',
+      },
     ];
     expect(
       checkFormInput(

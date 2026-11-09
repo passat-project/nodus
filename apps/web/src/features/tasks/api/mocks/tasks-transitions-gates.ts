@@ -5,12 +5,18 @@ import type {
   TransitionFormInput,
   WorkflowTransition,
 } from '@nodus/contracts';
-import { customFieldIdOfKey, isCustomFieldValueFilled, isFinalState } from '@nodus/contracts';
+import {
+  isFinalState,
+  lockFieldFilled,
+  lockKeysOfPatch,
+  windowWritableKeys,
+} from '@nodus/contracts';
 
 import { demoConversations, demoMessages } from '../../../../shared/mocks/data/chat.js';
 import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
 import { demoSubtasks, detailsExtra, taskDetailOf } from '../../../../shared/mocks/data/tasks.js';
 import { userRef } from '../../../../shared/mocks/data/users.js';
+import { lockDenial } from '../../../../shared/mocks/data/task-locks.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import type { standardDocument } from '../../../../shared/mocks/data/workflows.js';
 
@@ -28,26 +34,17 @@ export function fileCount(messageIds: readonly string[]): number {
     );
 }
 
-function fieldFilled(task: TaskListItem, field: string): boolean {
+export function fieldFilled(task: TaskListItem, field: string): boolean {
   const detail = taskDetailOf(task);
-  switch (field) {
-    case 'description':
-      return detail.description.trim().length > 0;
-    case 'deadline':
-      return task.deadline !== null;
-    case 'assignee':
-      return task.assignee !== null;
-    case 'plannedMinutes':
-      return detail.plannedMinutes !== null;
-    case 'result':
-      return Boolean(detail.result?.text.trim());
-    default: {
-      // Поле процесса (#431): неизвестное/архивное не блокирует (Р7).
-      const id = customFieldIdOfKey(field);
-      if (id === null) return true;
-      return isCustomFieldValueFilled(task.customFields[id]);
-    }
-  }
+  // Грамматика заполненности — общая с сервером (#496, Р4, В10).
+  return lockFieldFilled(field, {
+    description: detail.description,
+    deadline: task.deadline,
+    assigneeId: task.assignee?.id ?? null,
+    plannedMinutes: detail.plannedMinutes,
+    hasResult: Boolean(detail.result?.text.trim()),
+    customFields: task.customFields,
+  });
 }
 
 /** Гейты мока — та же грамматика, что у сервера (ADR-0020). */
@@ -237,4 +234,18 @@ export function postBlock(
     createdAt: new Date().toISOString(),
   });
   conversation.lastMessage = demoMessages[demoMessages.length - 1] ?? null;
+}
+
+/** Запись окна в закреплённое (#496, Р4, В10): ключи настроенного раздела
+ *  окно пишет мимо замка; ключ, который добавило только условие «Заполнены
+ *  поля», — пока он пуст. Грамматика — общая с сервером (`windowWritableKeys`
+ *  контрактов); остальное закреплённое — 422 FIELD_LOCKED. */
+export function windowLockDenial(
+  task: TaskListItem,
+  sections: readonly EffectiveSection[],
+  input: TransitionFormInput,
+): Response | null {
+  if (!input.fields) return null;
+  const writable = windowWritableKeys(sections, (key) => fieldFilled(task, key));
+  return lockDenial(task, lockKeysOfPatch(input.fields), undefined, writable);
 }

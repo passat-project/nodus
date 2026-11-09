@@ -1,5 +1,5 @@
 import type { NodeKind, ProjectType } from '@nodus/contracts';
-import { allowedNodeKinds, projectTypeFormOf, ui } from '@nodus/contracts';
+import { allowedNodeKinds, ui } from '@nodus/contracts';
 
 import { plural } from '../../../shared/lib/format.js';
 
@@ -23,19 +23,6 @@ export function allowedTypeKinds(type: ProjectType, kinds: readonly NodeKind[]):
 /** «7 видов» — счётчик меты строки левой колонки. */
 export function kindsCountLabel(count: number): string {
   return `${count} ${plural(count, ui.projects.schemasKindsCount)}`;
-}
-
-/** Сводка строки-ссылки «Атрибуты» (Р10 #631): «2 атрибута · обязательных: 1»
- *  или «Атрибутов нет» — счётчики слотов формы типа, как у вида папки. */
-export function fieldsSummary(type: ProjectType): string {
-  const form = projectTypeFormOf(type);
-  if (form.fields.length === 0) return ui.customFields.typeForm.empty;
-  const required = form.fields.filter((slot) => slot.state === 'required').length;
-  const parts = [`${form.fields.length} ${plural(form.fields.length, ui.nodeKinds.fieldsCount)}`];
-  if (required > 0) {
-    parts.push(ui.nodeKinds.panel.fieldsRequired.replace('{count}', String(required)));
-  }
-  return parts.join(' · ');
 }
 
 /** Мета строки типа — грамматика «7 статусов · 128 задач» из «Процессов»:

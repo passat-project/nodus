@@ -7,6 +7,16 @@ import {
   customFieldValuesInputSchema,
   CUSTOM_FIELD_LIMITS,
 } from '../custom-fields/custom-field-values.js';
+import { formLocksSchema } from '../forms/field-lock.js';
+import {
+  FORM_LAYOUT_LIMITS,
+  formDecorSchema,
+  formFieldLayoutShape,
+  formHintSchema,
+  isFormDecor,
+  type FormDecor,
+  type FormFieldLayout,
+} from '../forms/form-layout.js';
 
 /**
  * Окно перехода (#380, ADR-0021/ADR-0024): часть документа маршрута —
@@ -49,62 +59,203 @@ export const TRANSITION_FORM_SECTION_ORDER = [
 ] as const;
 export type TransitionFormSectionKind = (typeof TRANSITION_FORM_SECTION_ORDER)[number];
 
-const strictLabel = z.string().trim().min(1).max(60);
-const draftLabel = z.string().max(60);
+/** Подпись и подсказка блока окна (#496): та же настройка, что у поля.
+ *  Пусто — стандартное название раздела из i18n. Схема публикации не
+ *  требует непустую подпись: блок — не поле, его подпись не ввод данных. */
+const sectionLabel = z.string().trim().max(60);
+const sectionLabelDraft = z.string().max(60);
 
-/** Раздел окна на границе публикации: подписи обязательны. */
+/** Поле окна с раскладкой (#496, Р3): своя подпись в этом окне, подсказка,
+ *  ширина и высота. Редактор пишет поля объектами; строка-ключ (наследие
+ *  #380/#431) читается вечно как поле на всю строку. */
+export const transitionWindowFieldElementSchema = z
+  .object({
+    key: transitionWindowFieldKeySchema,
+    /** Подпись поля в этом окне; null — стандартная (имя атрибута/поля). */
+    label: z.string().trim().min(1).max(60).nullable().optional(),
+    ...formFieldLayoutShape,
+  })
+  .strict();
+export type TransitionWindowFieldElement = z.infer<typeof transitionWindowFieldElementSchema>;
+
+/** Элемент раздела «Поля»: ключ (наследие), поле-объект или оформление. */
+export const transitionWindowElementSchema = z.union([
+  transitionWindowFieldKeySchema,
+  transitionWindowFieldElementSchema,
+  formDecorSchema,
+]);
+export type TransitionWindowElement = z.infer<typeof transitionWindowElementSchema>;
+
+/** Нормализованный элемент: поле всегда объектом или оформление. */
+export type TransitionWindowItem = TransitionWindowFieldElement | FormDecor;
+
+/** Ключи полей раздела без оформления — ЕДИНСТВЕННЫЙ способ читать поля
+ *  окна кнопки (#496, Пакет 0): дубли, формулы, гейты, сверка ввода. */
+export function windowFieldKeys(section: {
+  fields: readonly TransitionWindowElement[];
+}): TransitionWindowFieldKey[] {
+  return section.fields.flatMap((element) => {
+    if (typeof element === 'string') return [element];
+    return isFormDecor(element) ? [] : [element.key];
+  });
+}
+
+/** Элементы раздела в нормализованном виде: строка-ключ → `{ key }`. */
+export function windowItems(section: {
+  fields: readonly TransitionWindowElement[];
+}): TransitionWindowItem[] {
+  return section.fields.map((element) =>
+    typeof element === 'string' ? { key: element } : element,
+  );
+}
+
+/** Раскладка поля окна (пусто у строки-ключа: вся строка, без подсказки). */
+export function windowFieldLayout(element: TransitionWindowItem): FormFieldLayout {
+  return isFormDecor(element) ? {} : element;
+}
+
+function checkFieldElements(
+  v: { fields: readonly TransitionWindowElement[]; formulas?: Record<string, unknown> },
+  ctx: z.RefinementCtx,
+): void {
+  const keys = windowFieldKeys(v);
+  if (keys.length === 0) ctx.addIssue({ code: 'custom', message: 'no fields' });
+  if (new Set(keys).size !== keys.length) {
+    ctx.addIssue({ code: 'custom', message: 'duplicate fields' });
+  }
+  if (keys.length > CUSTOM_FIELD_LIMITS.windowFields) {
+    ctx.addIssue({ code: 'custom', message: 'too many fields' });
+  }
+  if (v.fields.length - keys.length > FORM_LAYOUT_LIMITS.decor) {
+    ctx.addIssue({ code: 'custom', message: 'too many decor elements' });
+  }
+  if (
+    !Object.keys(v.formulas ?? {}).every((key) => keys.includes(key as TransitionWindowFieldKey))
+  ) {
+    ctx.addIssue({ code: 'custom', message: 'formula for unknown field' });
+  }
+}
+
+const FIELD_ELEMENTS_MAX = CUSTOM_FIELD_LIMITS.windowFields + FORM_LAYOUT_LIMITS.decor;
+
+/** Раздел окна на границе публикации. */
 export const transitionFormSectionSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('registration') }).strict(),
+  z
+    .object({
+      kind: z.literal('registration'),
+      label: sectionLabel.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal('fields'),
-      fields: z.array(transitionWindowFieldKeySchema).min(1).max(CUSTOM_FIELD_LIMITS.windowFields),
+      /** Поля и оформление одним списком в порядке окна (#496, Р3). */
+      fields: z.array(transitionWindowElementSchema).min(1).max(FIELD_ELEMENTS_MAX),
       /** Формулы-подстановки полей окна (#632, Р12): ключ — поле раздела,
        *  значение считается при открытии окна; человек может поправить,
        *  сохраняется значением (снимок в журнале перехода). */
       formulas: z.record(z.string(), formulaNodeSchema).optional(),
     })
     .strict()
-    .refine((v) => new Set(v.fields).size === v.fields.length, { message: 'duplicate fields' })
-    .refine(
-      (v) =>
-        Object.keys(v.formulas ?? {}).every((key) =>
-          v.fields.includes(key as TransitionWindowFieldKey),
-        ),
-      { message: 'formula for unknown field' },
-    ),
-  z.object({ kind: z.literal('time'), mode: z.enum(['if_empty', 'always']) }).strict(),
-  z.object({ kind: z.literal('result') }).strict(),
-  z.object({ kind: z.literal('result_files'), label: strictLabel }).strict(),
-  z.object({ kind: z.literal('result_messages'), required: z.boolean() }).strict(),
-  z.object({ kind: z.literal('comment'), label: strictLabel, required: z.boolean() }).strict(),
+    .superRefine(checkFieldElements),
+  z
+    .object({
+      kind: z.literal('time'),
+      mode: z.enum(['if_empty', 'always']),
+      label: sectionLabel.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('result'),
+      label: sectionLabel.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('result_files'),
+      label: sectionLabel.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('result_messages'),
+      required: z.boolean(),
+      label: sectionLabel.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('comment'),
+      label: sectionLabel.optional(),
+      required: z.boolean(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
 ]);
 export type TransitionFormSection = z.infer<typeof transitionFormSectionSchema>;
 
 /** Раздел черновика редактора: подпись может быть пустой — её ловит
  *  `checkWorkflowDocument` (form_empty_label), а не zod. */
 export const transitionFormSectionDraftSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('registration') }).strict(),
+  z
+    .object({
+      kind: z.literal('registration'),
+      label: sectionLabelDraft.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal('fields'),
-      fields: z.array(transitionWindowFieldKeySchema).min(1).max(CUSTOM_FIELD_LIMITS.windowFields),
+      fields: z.array(transitionWindowElementSchema).min(1).max(FIELD_ELEMENTS_MAX),
       formulas: z.record(z.string(), formulaNodeSchema).optional(),
     })
     .strict()
-    .refine((v) => new Set(v.fields).size === v.fields.length, { message: 'duplicate fields' })
-    .refine(
-      (v) =>
-        Object.keys(v.formulas ?? {}).every((key) =>
-          v.fields.includes(key as TransitionWindowFieldKey),
-        ),
-      { message: 'formula for unknown field' },
-    ),
-  z.object({ kind: z.literal('time'), mode: z.enum(['if_empty', 'always']) }).strict(),
-  z.object({ kind: z.literal('result') }).strict(),
-  z.object({ kind: z.literal('result_files'), label: draftLabel }).strict(),
-  z.object({ kind: z.literal('result_messages'), required: z.boolean() }).strict(),
-  z.object({ kind: z.literal('comment'), label: draftLabel, required: z.boolean() }).strict(),
+    .superRefine(checkFieldElements),
+  z
+    .object({
+      kind: z.literal('time'),
+      mode: z.enum(['if_empty', 'always']),
+      label: sectionLabelDraft.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('result'),
+      label: sectionLabelDraft.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('result_files'),
+      label: sectionLabelDraft.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('result_messages'),
+      required: z.boolean(),
+      label: sectionLabelDraft.optional(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('comment'),
+      label: sectionLabelDraft.optional(),
+      required: z.boolean(),
+      hint: formHintSchema.optional(),
+    })
+    .strict(),
 ]);
 export type TransitionFormSectionDraft = z.infer<typeof transitionFormSectionDraftSchema>;
 
@@ -115,6 +266,9 @@ export const transitionFormSchema = z
     /** Пусто — заголовок окна = название кнопки. */
     title: z.string().trim().max(60).optional(),
     sections: z.array(transitionFormSectionSchema).max(12).default([]),
+    /** Замки окна (#496, Р4): «закрепить после нажатия». Действуют только
+     *  при `enabled` — замок часть окна (В13); выключенное окно их хранит. */
+    locks: formLocksSchema.optional(),
   })
   .strict();
 export type TransitionForm = z.infer<typeof transitionFormSchema>;
@@ -124,6 +278,7 @@ export const transitionFormDraftSchema = z
     enabled: z.boolean().default(false),
     title: z.string().max(60).optional(),
     sections: z.array(transitionFormSectionDraftSchema).max(12).default([]),
+    locks: formLocksSchema.optional(),
   })
   .strict();
 export type TransitionFormDraft = z.infer<typeof transitionFormDraftSchema>;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { creationSlots } from './creation-form.js';
 import {
   DEFAULT_PROCESS_TYPE_CONFIG,
   DEFAULT_TASK_CARD_LAYOUT,
@@ -153,12 +154,9 @@ describe('терпимое чтение со старого API (:5173 без #4
   });
 
   it('нет creationForm — форма по умолчанию категории', () => {
-    expect(typeCreationFormOf({ category: 'task' }).fields.map((slot) => slot.key)).toEqual([
-      'description',
-      'assignee',
-      'deadline',
-      'project',
-    ]);
+    expect(creationSlots(typeCreationFormOf({ category: 'task' })).map((slot) => slot.key)).toEqual(
+      ['description', 'assignee', 'deadline', 'project'],
+    );
   });
 
   it('нет bindings — пустые привязки (атрибут нигде не показывается)', () => {

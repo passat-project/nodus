@@ -28,6 +28,7 @@ import {
   type ProcessCatalogReader,
 } from '../../workflows/ports/process-catalog-reader.port.js';
 import { TaskFactsRepository } from './task-facts.repository.js';
+import { assertFieldLocks, lockValuesOf } from './task-field-locks.guard.js';
 import { TasksRepository, type TaskFieldsPatch } from './tasks.repository.js';
 
 /** Строка задачи для правки полей: хватает идентичности, типа (обязательные
@@ -91,7 +92,16 @@ export class TaskFieldsWriter {
     row: TaskFieldsRow,
     patch: TaskFieldsWrite,
     fields: readonly string[],
-    opts: { formulaWrite?: boolean; foreignWrite?: boolean } = {},
+    opts: {
+      formulaWrite?: boolean;
+      foreignWrite?: boolean;
+      /** Ключи окна кнопки, которые оно пишет мимо замка (Р4, В10):
+       *  настроенный раздел «Поля» и пустые поля из условия «Заполнены». */
+      writableKeys?: ReadonlySet<string>;
+      /** Причина ручной правки закреплённого (3..500): только PATCH карточки
+       *  и участники; окно кнопки причины не спрашивает. */
+      lockReason?: string;
+    } = {},
   ): Promise<{ customFieldChanges: RegistryFieldChange[] }> {
     const reparent = patch.parentId !== undefined;
     // Смены родителя сериализуются одной advisory-блокировкой транзакции
@@ -100,6 +110,21 @@ export class TaskFieldsWriter {
     // FK-проверкой parent_id (security-гейт #37, р.2–3). Смены редки.
     if (reparent) await this.repo.lockTree(tx);
     await this.repo.lock(tx, row.id);
+    // Замки записи (#496, Р4): проверка — на ЗАФИКСИРОВАННОЙ строке, до
+    // записи, и по фактическим изменениям (правка «тем же значением» замок
+    // не трогает). Формульная запись — не ручная правка (как с обязательными
+    // полями): ячейку пишет система.
+    const before = await this.repo.findWithParticipants(row.id, tx);
+    const lockResult = opts.formulaWrite
+      ? null
+      : assertFieldLocks(
+          before.fieldLocks,
+          before.creatorId,
+          lockValuesOf(before),
+          actor,
+          patch,
+          opts,
+        );
     if (reparent) {
       // Права на прежнего родителя проверены по снимку до транзакции —
       // параллельная перепривязка их обесценивает: конфликт, а не обход.
@@ -138,6 +163,8 @@ export class TaskFieldsWriter {
     // (Р13: ошибка живёт в ячейке, а не отменяет действие).
     if (!opts.formulaWrite) await this.assertRequiredKept(row.typeId, patch);
     const data: TaskFieldsPatch = {};
+    // Накопитель замков после разрешённой ручной правки (lastChange, Р4).
+    if (lockResult) data.fieldLocks = lockResult.locks;
     // Значения атрибутов читаются и пишутся под замком строки: параллельные
     // PATCH сливаются по ключам, а не перетирают карту целиком (#431).
     let fieldChanges: RegistryFieldChange[] = [];
@@ -237,6 +264,10 @@ export class TaskFieldsWriter {
       );
     }
     const changedKeys = fieldChanges.map((change) => `cf.${change.fieldId}`);
+    // Правка закреплённого — маркер и причина в событии (#496, Р9): история
+    // и аудит видят, кто и почему снял запрет; пересчёт формул на payload
+    // без `customFieldChanges` ничего не делает.
+    const eventFields = [...fields, ...changedKeys, ...(lockResult ? ['locks'] : [])];
     await this.eventBus.emit(
       tx,
       TASK_EVENTS.UPDATED,
@@ -246,10 +277,16 @@ export class TaskFieldsWriter {
         // правки — пересчёт идёт ПОСЛЕ ответа мутации, и без этого карточка
         // держит старое значение до перезагрузки.
         ...(opts.formulaWrite ? { formulaWrite: true } : {}),
-        fields: changedKeys.length > 0 ? [...fields, ...changedKeys] : fields,
+        fields: eventFields,
         // Обрезка длинного текста и числа изменений — лимит события (Р12).
         ...(fieldChanges.length > 0
           ? { customFieldChanges: fieldChanges.map(eventSafeChange) }
+          : {}),
+        ...(lockResult
+          ? {
+              locks: lockResult.changed,
+              ...(opts.lockReason !== undefined ? { lockReason: opts.lockReason } : {}),
+            }
           : {}),
         ...(patch.title !== undefined ? { title: after.title } : {}),
         ...(patch.deadline !== undefined

@@ -15,6 +15,14 @@ import { formulaHostKindSchema, formulaNodeSchema, formulaValueTypeSchema } from
 export const formulaBodySchema = z.object({ ast: formulaNodeSchema }).strict();
 export type FormulaBody = z.infer<typeof formulaBodySchema>;
 
+/** PUT формулы ячейки задачи (#496, Р4): формула руками — ручная правка,
+ *  закреплённая ячейка требует причины (у DELETE — `?lockReason=`). Длина —
+ *  `lockReasonSchema` (3..500); без импорта forms/: цикл custom-fields ↔ forms. */
+export const taskFormulaBodySchema = z
+  .object({ ast: formulaNodeSchema, lockReason: z.string().trim().min(3).max(500).optional() })
+  .strict();
+export type TaskFormulaBody = z.infer<typeof taskFormulaBodySchema>;
+
 /** Ответ чтения формулы ячейки (GET у владельца хоста): null — формулы нет.
  *  `origin` — откуда эффективная формула: своя ячейка или формула типа/вида
  *  (в задаче формула типа только просматривается — правится в «Атрибутах»). */

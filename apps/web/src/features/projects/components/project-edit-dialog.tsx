@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import type {
   CounterpartyRef,
   CustomFieldRef,
@@ -16,6 +16,7 @@ import {
   SYSTEM_FIELD_IDS,
   ui,
   updateProjectBodySchema,
+  formSlots,
 } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
@@ -32,18 +33,10 @@ import {
   mergeFieldRefs,
   PeopleMultiField,
   PortfolioField,
-  ProjectAttributeRows,
   ProjectDeadlineField,
   VisibilityField,
 } from './project-form-fields.js';
-
-function FieldLabel({ children }: { children: ReactNode }) {
-  return (
-    <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-      {children}
-    </span>
-  );
-}
+import { PROJECT_SYSTEM_LABELS, ProjectFormGrid } from './project-form-grid.js';
 
 /**
  * «Поля проекта»: правка системных полей руководством (руководитель,
@@ -129,7 +122,7 @@ export function ProjectEditDialog({
     }
     // Заказчик виден строке журнала: ссылку обновляем, только если поле
     // вообще есть в форме типа (нет — не трогаем витрину).
-    const clientShown = form.fields.some(
+    const clientShown = formSlots(form).some(
       (slot) => slot.fieldId === SYSTEM_FIELD_IDS.projectClient && slot.state !== 'hidden',
     );
     update.mutate(
@@ -168,51 +161,64 @@ export function ProjectEditDialog({
               className="h-9 text-body-lg"
             />
 
-            <div className="grid grid-cols-[7.5rem_1fr] items-center gap-x-3 gap-y-3">
-              {/* Атрибуты слотов формы типа проекта — на месте бывших спец-полей
-                  «Шифр»/«Заказчик» (Р10 #631). */}
-              <ProjectAttributeRows
-                type={type}
-                values={values}
-                refs={refs}
-                errors={attempted ? new Set(missing) : undefined}
-                onChange={onField}
-              />
-
-              <FieldLabel>{ui.projects.assistants}</FieldLabel>
-              <PeopleMultiField
-                value={assistantIds}
-                label={ui.projects.assistants}
-                excludeIds={project.manager ? [project.manager.id] : []}
-                onChange={setAssistantIds}
-              />
-
-              <FieldLabel>{ui.projects.filterPortfolio}</FieldLabel>
-              <PortfolioField
-                value={portfolioId}
-                label={ui.projects.filterPortfolio}
-                onChange={setPortfolioId}
-              />
-
-              <FieldLabel>{ui.projects.fieldVisibility}</FieldLabel>
-              <VisibilityField
-                value={visibility}
-                label={ui.projects.fieldVisibility}
-                canMakeSecret={canMakeSecret}
-                onChange={setVisibility}
-              />
-
-              <FieldLabel>{ui.projects.deadline}</FieldLabel>
-              <ProjectDeadlineField value={endDate} onChange={setEndDate} />
-            </div>
-
-            <Textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder={ui.projects.fieldDescription}
-              aria-label={ui.projects.fieldDescription}
-              rows={3}
-              className="text-sm"
+            {/* Окно проекта — на общей сетке (#496): атрибуты типа, системные
+                строки и оформление в порядке редактора окна. Руководитель
+                меняется отдельным действием карточки — здесь не показывается. */}
+            <ProjectFormGrid
+              type={type}
+              definitions={boundDefinitions}
+              values={values}
+              refs={refs}
+              errors={attempted ? new Set(missing) : undefined}
+              onChange={onField}
+              systemLabel={(key) => PROJECT_SYSTEM_LABELS[key]}
+              renderSystem={(key) => {
+                switch (key) {
+                  case 'assistants':
+                    return (
+                      <PeopleMultiField
+                        value={assistantIds}
+                        label={ui.projects.assistants}
+                        excludeIds={project.manager ? [project.manager.id] : []}
+                        onChange={setAssistantIds}
+                      />
+                    );
+                  case 'observers':
+                    return null;
+                  case 'portfolio':
+                    return (
+                      <PortfolioField
+                        value={portfolioId}
+                        label={ui.projects.filterPortfolio}
+                        onChange={setPortfolioId}
+                      />
+                    );
+                  case 'visibility':
+                    return (
+                      <VisibilityField
+                        value={visibility}
+                        label={ui.projects.fieldVisibility}
+                        canMakeSecret={canMakeSecret}
+                        onChange={setVisibility}
+                      />
+                    );
+                  case 'endDate':
+                    return <ProjectDeadlineField value={endDate} onChange={setEndDate} />;
+                  case 'description':
+                    return (
+                      <Textarea
+                        value={description}
+                        onChange={(event) => setDescription(event.target.value)}
+                        placeholder={ui.projects.fieldDescription}
+                        aria-label={ui.projects.fieldDescription}
+                        rows={3}
+                        className="text-sm"
+                      />
+                    );
+                  default:
+                    return null;
+                }
+              }}
             />
 
             {error ? (

@@ -7,6 +7,7 @@ import {
   ErrorCode,
   isCompatibleTypeChange,
   updateCustomFieldBodySchema,
+  isFieldFormSlot,
 } from '@nodus/contracts';
 
 import { counterUpdateResponse } from './numbering-responses.js';
@@ -297,14 +298,18 @@ export const definitionHandlers = [
     for (const kind of demoNodeKinds) {
       kind.form = {
         ...kind.form,
-        fields: kind.form.fields.filter((slot) => slot.fieldId !== definition.id),
+        fields: kind.form.fields.filter(
+          (slot) => !isFieldFormSlot(slot) || slot.fieldId !== definition.id,
+        ),
       };
     }
     for (const type of demoProjectTypes) {
       if (!type.form) continue;
       type.form = {
         ...type.form,
-        fields: type.form.fields.filter((slot) => slot.fieldId !== definition.id),
+        fields: type.form.fields.filter(
+          (slot) => !isFieldFormSlot(slot) || slot.fieldId !== definition.id,
+        ),
       };
     }
     demoCustomFieldDefinitions.splice(demoCustomFieldDefinitions.indexOf(definition), 1);

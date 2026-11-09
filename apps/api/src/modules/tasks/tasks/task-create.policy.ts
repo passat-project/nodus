@@ -9,6 +9,7 @@ import {
   type CreationFieldKey,
   type CreationForm,
   type ProcessType,
+  creationSlots,
 } from '@nodus/contracts';
 
 import { DomainException } from '../../../core/errors/domain-exception.js';
@@ -64,7 +65,7 @@ export class TaskCreatePolicy {
 
   /** Слоты-пресеты сотрудников, чьи значения не ссылаются на живых. */
   private async invalidPresetFields(form: CreationForm): Promise<CreationFieldKey[]> {
-    const slots = form.fields.filter(
+    const slots = creationSlots(form).filter(
       (slot) =>
         slot.preset !== null &&
         (slot.key === 'assignee' || slot.key === 'coexecutors' || slot.key === 'observers'),

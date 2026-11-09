@@ -25,15 +25,6 @@ import { FilterCombobox } from '../views/filter-combobox.js';
  * Вынесены из тела формы (I5): тело — раскладка и подписи, здесь — ввод.
  */
 
-/** Широкие поля — подпись над контролом (текст, многострочный атрибут). */
-export function isWide(
-  slot: CreationFieldSlot,
-  definition: CustomFieldDefinition | undefined,
-): boolean {
-  if (slot.key === 'description') return true;
-  return definition?.type === 'long_text';
-}
-
 /** Контрол поля: тот же и в окне создания, и в редакторе скрытого значения
  *  («Окно создания» — администратор видит ровно то, что увидит сотрудник). */
 export function SlotControl({

@@ -5,6 +5,7 @@ import { lettersStrings } from './ru-correspondence.js';
 import { counterpartiesStrings } from './ru-crm.js';
 import { customFieldsStrings } from './ru-custom-fields.js';
 import { formulasStrings } from './ru-formulas.js';
+import { formsStrings } from './ru-forms.js';
 import { employeesStrings } from './ru-employees.js';
 import { filesStrings } from './ru-files.js';
 import { notificationsStrings } from './ru-notifications.js';
@@ -195,6 +196,8 @@ export const ui = {
   customFields: customFieldsStrings,
   /** Формулы в ячейках атрибутов (#632): редактор, ячейка, колонки, перенос. */
   formulas: formulasStrings,
+  /** Конструктор окон ввода и замок записи (#496). */
+  forms: formsStrings,
   letters: lettersStrings,
   counterparties: counterpartiesStrings,
   projects: projectsStrings,

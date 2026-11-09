@@ -1228,6 +1228,11 @@ model Task {
   commentsCount     Int       @default(0) @map("comments_count")
   /// Кастомные поля (FieldDefinition, data-model.md); GIN — в миграции.
   customFields      Json      @default("{}") @map("custom_fields")
+  /// Замки записи (#496, Р4): ключ поля → { editors, lockedAt, lockedBy,
+  /// source, lastChange }. Ставит окно создания или выполненная кнопка;
+  /// сам не снимается (ни возвратом по маршруту, ни сменой типа). Строже
+  /// побеждает (mergeLocks, I-L8). Читается деталью (Р10).
+  fieldLocks        Json      @default("{}") @map("field_locks")
   /// «Конфиденциально» (#461, Р5): задача видна ТОЛЬКО участникам (создатель,
   /// ответственный, соисполнители, наблюдатели) — без руководителей по
   /// оргструктуре, видимых проектов и `task.view_all`; список/карточка/ветка/

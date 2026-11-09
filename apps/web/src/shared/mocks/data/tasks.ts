@@ -16,6 +16,7 @@ import { demoPlannedMinutes } from './task-item-factory.js';
 import { demoTasks, kjSubtask, tid } from './task-items.js';
 import { stageNew, systemProcessType } from './task-stages.js';
 import { layoutOf } from './task-layout.js';
+import { fieldLocksDto } from './task-locks.js';
 import { QUICK_WORKFLOW_ID, STANDARD_WORKFLOW_ID } from './workflows.js';
 import { quickProcessType } from './task-stages.js';
 import { currentAuthUser, userIds, userRef } from './users.js';
@@ -176,6 +177,7 @@ export function taskDetailOf(task: TaskListItem): TaskDetail {
     completedAt: closed ? task.updatedAt : null,
     // Состав карточки по типу (#432): блоки, названия ролей, обязательные поля.
     layout: layoutOf(task),
+    fieldLocks: fieldLocksDto(task),
     // Мок-мир: демо-пользователь — полный доступ (права проверяет бэкенд, #37).
     access: {
       canEdit: true,

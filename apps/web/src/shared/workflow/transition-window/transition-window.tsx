@@ -1,7 +1,6 @@
 import { Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type {
-  EffectiveSection,
   ExecuteTransitionBody,
   TransitionBlockReason,
   WorkflowTransition,
@@ -25,6 +24,7 @@ import { ConditionsList } from './conditions-list.js';
 import type { GateDetailsHost } from './gate-details.js';
 import { SubmissionBlock } from './submission-block.js';
 import { useWindowDraft, draftMessageIds } from './use-window-draft.js';
+import { missingLabel, PREVIEW_CONTEXT, sectionTitle } from './window-labels.js';
 import {
   windowCanSubmit,
   windowConditionLines,
@@ -42,26 +42,6 @@ export interface TransitionWindowError {
   missing?: string[];
   reasons?: TransitionBlockReason[];
 }
-
-const PREVIEW_CONTEXT: TransitionWindowContext = {
-  entityId: '',
-  conversationId: null,
-  currentStageName: '—',
-  fields: {
-    description: '',
-    deadline: null,
-    assigneeId: null,
-    plannedMinutes: null,
-    customFields: {},
-  },
-  spentMinutes: 0,
-  lastResult: null,
-  access: { canEdit: true, canLogTime: true, canCheck: true },
-  submission: null,
-  scope: 'entity',
-  customFieldDefinitions: [],
-  customFieldRefs: [],
-};
 
 /**
  * Окно перехода (#380): диалог по центру (≈640, радиус 14, канон диалогов),
@@ -162,6 +142,11 @@ export function TransitionWindow({
         toggleMessage,
         setRegistration,
         renderSection: mode === 'live' ? renderSection : undefined,
+        // Замки окна (#496, Р4): метка «Закрепится после «…»» у полей.
+        lockKeys: transition.form?.enabled
+          ? (transition.form.locks ?? []).map((lock) => lock.key)
+          : [],
+        transitionName: transition.name,
       }
     : null;
 
@@ -217,6 +202,9 @@ export function TransitionWindow({
               {sections.map((section) => (
                 <section key={section.kind} className="flex flex-col gap-1.5">
                   <NodeLabel label={sectionTitle(section)} />
+                  {section.hint ? (
+                    <p className="text-xs break-words text-muted-foreground">{section.hint}</p>
+                  ) : null}
                   <WindowSection section={section} api={api} />
                 </section>
               ))}
@@ -286,36 +274,4 @@ export function TransitionWindow({
       </DialogContent>
     </Dialog>
   );
-}
-
-function sectionTitle(section: EffectiveSection): string {
-  switch (section.kind) {
-    case 'registration':
-      return ui.automation.window.sections.registration;
-    case 'fields':
-      return ui.tasks.window.fieldsLabel;
-    case 'time':
-      return ui.tasks.window.timeLabel;
-    case 'result':
-      return ui.tasks.window.resultLabel;
-    case 'result_files':
-      return section.label || ui.tasks.window.filesLabel;
-    case 'result_messages':
-      return ui.tasks.window.messagesLabel;
-    case 'comment':
-      return section.label || ui.tasks.window.commentLabel;
-  }
-}
-
-function missingLabel(key: string): string {
-  switch (key) {
-    case 'comment':
-      return ui.tasks.window.commentLabel;
-    case 'result_messages':
-      return ui.tasks.window.messagesLabel;
-    case 'registration':
-      return ui.automation.window.sections.registration;
-    default:
-      return key;
-  }
 }

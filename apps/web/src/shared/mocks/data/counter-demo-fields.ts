@@ -117,5 +117,14 @@ export function counterDemoFields(): CustomFieldDefinition[] {
         },
       },
     ),
+    // «Файл» (#496, сценарий «Комплект»): окно «Выдать в печать» спрашивает
+    // ссылку и закрепляет её — после выдачи руками не поменять.
+    definition(
+      fieldIds.issueFile,
+      'link',
+      'Файл',
+      { processTypeIds: change },
+      { hint: 'Ссылка на выпущенный файл в хранилище' },
+    ),
   ];
 }

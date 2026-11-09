@@ -1,6 +1,6 @@
 import { HttpResponse } from 'msw';
 import type { CustomFieldDefinition, CustomFieldValues } from '@nodus/contracts';
-import { ErrorCode, Permission } from '@nodus/contracts';
+import { ErrorCode, Permission, creationSlots, formSlots, isFieldFormSlot } from '@nodus/contracts';
 import { customFieldKey, customFieldValueSchemaOf } from '@nodus/contracts';
 
 import { getMockActor } from '../../mocks/mock-actor.js';
@@ -195,17 +195,17 @@ function entitiesWithValue(fieldId: string) {
 function formsUsingField(fieldId: string) {
   const key = customFieldKey(fieldId);
   const processForms = mockTypes
-    .filter((type) => creationFormOf(type).fields.some((slot) => slot.key === key) === true)
+    .filter((type) => creationSlots(creationFormOf(type)).some((slot) => slot.key === key) === true)
     .map((type) => ({
       kind: type.category as 'task' | 'letter',
       name: type.name,
       draft: mockWorkflows.get(type.workflowId)?.publishedAt == null,
     }));
   const projectForms = demoProjectTypes
-    .filter((type) => type.form.fields.some((slot) => slot.fieldId === fieldId))
+    .filter((type) => formSlots(type.form).some((slot) => slot.fieldId === fieldId))
     .map((type) => ({ kind: 'project_type' as const, name: type.name, draft: false }));
   const nodeForms = demoNodeKinds
-    .filter((kind) => kind.form.fields.some((slot) => slot.fieldId === fieldId))
+    .filter((kind) => formSlots(kind.form).some((slot) => slot.fieldId === fieldId))
     .map((kind) => ({ kind: 'node_kind' as const, name: kind.name, draft: false }));
   return [...processForms, ...projectForms, ...nodeForms];
 }
@@ -228,7 +228,9 @@ export function removeFormSlot(kind: string, targetId: string, fieldId: string):
     if (type) {
       type.form = {
         ...type.form,
-        fields: type.form.fields.filter((slot) => slot.fieldId !== fieldId),
+        fields: type.form.fields.filter(
+          (slot) => !isFieldFormSlot(slot) || slot.fieldId !== fieldId,
+        ),
       };
     }
     return;
@@ -238,7 +240,9 @@ export function removeFormSlot(kind: string, targetId: string, fieldId: string):
     if (nodeKind) {
       nodeKind.form = {
         ...nodeKind.form,
-        fields: nodeKind.form.fields.filter((slot) => slot.fieldId !== fieldId),
+        fields: nodeKind.form.fields.filter(
+          (slot) => !isFieldFormSlot(slot) || slot.fieldId !== fieldId,
+        ),
       };
     }
   }

@@ -58,6 +58,7 @@ const PERMISSION_MODULE = {
   'task.view_all': 'tasks',
   'task.manage_any': 'tasks',
   'task.override_gate': 'tasks',
+  'task.edit_locked': 'tasks',
   'correspondence.register': 'correspondence',
   'correspondence.resolve': 'correspondence',
   'correspondence.view_confidential': 'correspondence',

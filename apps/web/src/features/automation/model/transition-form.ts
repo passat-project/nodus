@@ -5,7 +5,12 @@ import type {
   TransitionWindowFieldKey,
   WorkflowDraftTransition,
 } from '@nodus/contracts';
-import { CUSTOM_FIELD_LIMITS, TRANSITION_FORM_SECTION_ORDER, ui } from '@nodus/contracts';
+import {
+  CUSTOM_FIELD_LIMITS,
+  TRANSITION_FORM_SECTION_ORDER,
+  ui,
+  windowFieldKeys,
+} from '@nodus/contracts';
 
 /**
  * Чистые правки «Окна при нажатии» в черновике кнопки (#380): панель
@@ -50,7 +55,7 @@ export function setWindowTitle(form: Form, title: string): Form {
   return { ...form, title: title.trim().length > 0 ? title.slice(0, 60) : undefined };
 }
 
-function defaultSection(kind: TransitionFormSectionKind): Section {
+export function defaultWindowSection(kind: TransitionFormSectionKind): Section {
   switch (kind) {
     case 'fields':
       return { kind, fields: ['deadline'] };
@@ -74,7 +79,7 @@ export function toggleSection(form: Form, kind: TransitionFormSectionKind): Form
   const exists = form.sections.some((s) => s.kind === kind);
   const sections = exists
     ? form.sections.filter((s) => s.kind !== kind)
-    : [...form.sections, defaultSection(kind)];
+    : [...form.sections, defaultWindowSection(kind)];
   return { ...form, sections: sorted(sections) };
 }
 
@@ -104,15 +109,20 @@ export function setRequired(
 export function toggleWindowField(form: Form, field: TransitionWindowFieldKey): Form {
   const section = sectionOf(form, 'fields');
   if (!section) return form;
-  const fields = new Set<string>(section.fields);
-  if (fields.has(field)) fields.delete(field);
-  else {
-    if (fields.size >= CUSTOM_FIELD_LIMITS.windowFields) return form;
-    fields.add(field);
-  }
-  if (fields.size === 0) return form; // раздел без полей бессмыслен — не снимаем последнее
+  const keys = windowFieldKeys(section);
+  const present = keys.includes(field);
+  if (!present && keys.length >= CUSTOM_FIELD_LIMITS.windowFields) return form;
+  // Раздел без полей бессмыслен — последнее поле не снимаем (#496: убрать его
+  // можно только вместе с оформлением, решение редактора окна).
+  if (present && keys.length === 1) return form;
+  // Поля-объекты и оформление сохраняются как есть; новое поле — объектом
+  // (#496, Р3: редактор пишет поля объектами).
+  const fields = present
+    ? section.fields.filter((element) => windowFieldKeys({ fields: [element] })[0] !== field)
+    : [...section.fields, { key: field }];
+  const kept = new Set<string>(windowFieldKeys({ fields }));
   const formulas = Object.fromEntries(
-    Object.entries(section.formulas ?? {}).filter(([key]) => fields.has(key)),
+    Object.entries(section.formulas ?? {}).filter(([key]) => kept.has(key)),
   );
   return {
     ...form,
@@ -120,7 +130,7 @@ export function toggleWindowField(form: Form, field: TransitionWindowFieldKey): 
       s.kind === 'fields'
         ? {
             kind: 'fields',
-            fields: [...fields] as TransitionWindowFieldKey[],
+            fields,
             ...(Object.keys(formulas).length > 0 ? { formulas } : {}),
           }
         : s,
@@ -135,7 +145,7 @@ export function setWindowFieldFormula(
   ast: import('@nodus/contracts').FormulaNode | null,
 ): Form {
   const section = sectionOf(form, 'fields');
-  if (!section || !section.fields.includes(field)) return form;
+  if (!section || !windowFieldKeys(section).includes(field)) return form;
   const formulas = { ...(section.formulas ?? {}) };
   if (ast) formulas[field] = ast;
   else delete formulas[field];

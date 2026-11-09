@@ -1,5 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ErrorCode, Permission, TASK_EVENTS, type TransitionFormInput } from '@nodus/contracts';
+import {
+  ErrorCode,
+  Permission,
+  TASK_EVENTS,
+  type FormLock,
+  type TransitionFormInput,
+} from '@nodus/contracts';
 
 import {
   TransactionRunner,
@@ -13,6 +19,8 @@ import type {
   WorkflowEntityAdapter,
   WorkflowEntityStage,
   WorkflowFormApplied,
+  WorkflowFormMeta,
+  WorkflowLockMeta,
   WorkflowStageChangeMeta,
 } from '../../../core/ports/workflow-entity.port.js';
 import { CHAT_MESSAGE_ACCESS, type ChatMessageAccess } from '../../chat/message-access.port.js';
@@ -134,6 +142,7 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
     taskId: string,
     actor: WorkflowActor,
     input: TransitionFormInput,
+    meta?: WorkflowFormMeta,
   ): Promise<WorkflowFormApplied> {
     // Раздел «Регистрация» есть только у писем; задача его не исполняет
     // (страховка поверх сверки окна — проверки документа не пускают раздел
@@ -145,7 +154,18 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
         { missing: [], unexpected: ['registration'] },
       );
     }
-    return this.forms.apply(tx, taskId, actor, input);
+    return this.forms.apply(tx, taskId, actor, input, meta);
+  }
+
+  /** Замки нажатой кнопки (#496, Р4): «Закрепить после нажатия». */
+  applyLocks(
+    tx: TransactionClient,
+    taskId: string,
+    actorId: string,
+    locks: readonly FormLock[],
+    meta: WorkflowLockMeta,
+  ): Promise<void> {
+    return this.forms.applyLocks(tx, taskId, actorId, locks, meta);
   }
 
   async applyStage(

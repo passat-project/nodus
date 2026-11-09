@@ -4,6 +4,7 @@ import {
   taskDetailSchema,
   taskListItemSchema,
   type WorkflowDetail,
+  creationSlots,
 } from '@nodus/contracts';
 
 import { setupTypeFormsFixture, type TypeFormsFixture } from './type-forms-fixtures.js';
@@ -37,9 +38,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const detail = (await (
         await cf.fx.api(cf.admin, 'GET', `/workflows/${cf.workflowId}`)
       ).json()) as WorkflowDetail;
-      expect(detail.document.creation?.fields.map((slot) => slot.key)).toEqual(
-        cf.creationForm().fields.map((slot) => slot.key),
-      );
+      expect(
+        (detail.document.creation ? creationSlots(detail.document.creation) : undefined)?.map(
+          (slot) => slot.key,
+        ),
+      ).toEqual(cf.creationForm().fields.map((slot) => slot.key));
       expect(detail.document.creation?.chips).toEqual(['checklist']);
     });
 

@@ -19,6 +19,7 @@ import {
   makeSubtask,
   taskDetailOf,
 } from '../../../../shared/mocks/data/tasks.js';
+import { changedLockKeys, lockDenial } from '../../../../shared/mocks/data/task-locks.js';
 import { demoStages } from '../../../../shared/mocks/data/task-stages.js';
 import { findDemoNodeRow } from '../../../../shared/mocks/data/project-nodes.js';
 import { userRef } from '../../../../shared/mocks/data/users.js';
@@ -161,6 +162,27 @@ export const tasksHandlers = [
       // Номер счётчика руками не пишется (#630): 422 NUMBER_CELL_IMMUTABLE.
       const counterWrite = counterWriteResponse(body.customFields ?? {});
       if (counterWrite) return counterWrite;
+      // Закреплённое окном поле (#496, Р4): 422 FIELD_LOCKED или правка с причиной.
+      const current = taskDetailOf(task);
+      const locked = lockDenial(
+        task,
+        changedLockKeys(
+          {
+            title: task.title,
+            description: current.description,
+            deadline: task.deadline,
+            priority: task.priority,
+            plannedMinutes: current.plannedMinutes,
+            assigneeId: task.assignee?.id ?? null,
+            projectId: task.project?.id ?? null,
+            nodeId: task.nodeId ?? null,
+            customFields: task.customFields ?? {},
+          },
+          body,
+        ),
+        body.lockReason,
+      );
+      if (locked) return locked;
       // Обязательное при создании поле нельзя очистить (#432, Р5) и значение
       // непривязанного к типу атрибута записать нельзя (Р8).
       const unbound = checkUnboundValues(type, body.customFields ?? {});

@@ -34,6 +34,7 @@ import { withFormulaState } from './task-formula-state.js';
 import { stagesCatalog } from './task-stages-catalog.js';
 import { TasksQueryRepository, type TaskOrder } from './tasks-query.repository.js';
 import { TasksRepository } from './tasks.repository.js';
+import { detailFieldLocks, detailLockKeys, detailLockUserIds } from './task-field-locks.dto.js';
 import { CHAT_MESSAGE_ACCESS, type ChatMessageAccess } from '../../chat/message-access.port.js';
 import { ResultsRepository } from '../activity/results.repository.js';
 
@@ -167,17 +168,30 @@ export class TasksQueryService {
       this.results.findCurrent(id),
     ]);
     const observerIds = row.participants.filter((p) => p.role === 'observer').map((p) => p.userId);
+    // Состав карточки по типу (#432, Р7): сервер собирает его сам, поэтому
+    // он работает и для типа, невидимого зрителю (имя типа не раскрывается).
+    const type = await this.catalog.typeById(row.typeId);
+    // Замки записи (#496, Р10): только ключи ТЕКУЩЕГО типа — атрибут могли
+    // снять с типа, и его замок в карточке уже мёртв (не показывается).
+    const boundFieldIds = new Set(
+      (
+        await this.customFields.definitions({
+          target: { kind: 'process_type', id: row.typeId },
+        })
+      ).map((definition) => definition.id),
+    );
+    // Право пути — часть `canEdit` замка (Р10): без него PATCH даст 403.
+    const access = taskAccess(actorRoles(row, user.id), user.permissions);
+    const lockKeys = detailLockKeys(row.fieldLocks, boundFieldIds);
     const refs = await this.mapper.refs([
       ...this.mapper.userIdsOf([row, ...children]),
       ...observerIds,
       ...(result ? [result.authorId] : []),
+      ...detailLockUserIds(row.fieldLocks, lockKeys),
     ]);
     const catalog = await this.mapper.catalogOf([row, ...children]);
     // Проект задачи — ссылка видна только участнику секретного (Т1).
     const projectRefs = await this.projectsRefsFor(user, [row, ...children]);
-    // Состав карточки по типу (#432, Р7): сервер собирает его сам, поэтому
-    // он работает и для типа, невидимого зрителю (имя типа не раскрывается).
-    const type = await this.catalog.typeById(row.typeId);
     const cardConfig = normalizeTypeConfig(type?.config);
     const layout = {
       hiddenBlocks: cardConfig.card.hiddenBlocks,
@@ -231,7 +245,17 @@ export class TasksQueryService {
       completedAt: full.completedAt?.toISOString() ?? null,
       customFieldRefs: withFormulasParent?.customFieldRefs ?? [],
       layout,
-      access: taskAccess(actorRoles(row, user.id), user.permissions),
+      // Замки записи (#496, Р10): кто и почему закрепил, `canEdit` по
+      // правилу замка без причины (окно причины решает клиент).
+      fieldLocks: detailFieldLocks(
+        row.fieldLocks,
+        lockKeys,
+        user,
+        row.creatorId,
+        access.canEdit,
+        (userId) => this.mapper.ref(refs, userId),
+      ),
+      access,
       createdAt: full.createdAt.toISOString(),
     };
   }

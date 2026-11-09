@@ -19,6 +19,7 @@ import { ui } from '@nodus/contracts';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { projectsAvailable } from '../../../shared/api/projects-available.js';
+import { TaskLockBadge } from '../../../shared/forms/field-lock-ui.js';
 import { formatDateTime } from '../../../shared/lib/format.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { EntityFields, type EntityFieldDef } from '../../../shared/ui/entity-fields.js';
@@ -51,6 +52,11 @@ export const TaskFields = memo(function TaskFields({
   onOpenSubtask?: (id: string) => void;
 }) {
   const openCard = useOpenCard();
+  const lockOf = (key: string) => task.fieldLocks.find((lock) => lock.key === key);
+  const lockAddon = (key: string) => {
+    const lock = lockOf(key);
+    return lock ? <TaskLockBadge lock={lock} /> : undefined;
+  };
 
   const project: EntityFieldDef = {
     key: 'project',
@@ -120,19 +126,28 @@ export const TaskFields = memo(function TaskFields({
       key: 'priority',
       icon: <Flag className="size-3.5" />,
       label: ui.tasks.fieldPriority,
-      render: () => <TaskPriorityField task={task} />,
+      labelAddon: lockAddon('priority'),
+      render: () => <TaskPriorityField task={task} lock={lockOf('priority')} />,
     },
     {
       key: 'deadline',
       icon: <CalendarClock className="size-3.5" />,
       label: ui.tasks.deadline,
-      render: () => <TaskDeadlineField task={task} required={layout.isRequired('deadline')} />,
+      labelAddon: lockAddon('deadline'),
+      render: () => (
+        <TaskDeadlineField
+          task={task}
+          required={layout.isRequired('deadline')}
+          lock={lockOf('deadline')}
+        />
+      ),
     },
     {
       key: 'assignee',
       icon: <User className="size-3.5" />,
       label: layout.roleLabel('assignee'),
-      render: () => <TaskAssigneeField task={task} />,
+      labelAddon: lockAddon('assignee'),
+      render: () => <TaskAssigneeField task={task} lock={lockOf('assignee')} />,
     },
     {
       key: 'creator',
@@ -154,7 +169,8 @@ export const TaskFields = memo(function TaskFields({
       key: 'participants',
       icon: <Users className="size-3.5" />,
       label: layout.roleLabel('coexecutor'),
-      render: () => <TaskPeopleField task={task} role="coexecutor" />,
+      labelAddon: lockAddon('coexecutors'),
+      render: () => <TaskPeopleField task={task} role="coexecutor" lock={lockOf('coexecutors')} />,
     },
     {
       key: 'stage',
@@ -166,7 +182,8 @@ export const TaskFields = memo(function TaskFields({
       key: 'observers',
       icon: <Eye className="size-3.5" />,
       label: layout.roleLabel('observer'),
-      render: () => <TaskPeopleField task={task} role="observer" />,
+      labelAddon: lockAddon('observers'),
+      render: () => <TaskPeopleField task={task} role="observer" lock={lockOf('observers')} />,
     },
     // Блок «Время» скрыт типом — нет «Затрачено» и «Плановое время» (#432, Р7).
     ...(layout.blockVisible('time')
@@ -181,7 +198,8 @@ export const TaskFields = memo(function TaskFields({
             key: 'planned',
             icon: <Hourglass className="size-3.5" />,
             label: ui.tasks.plannedTime,
-            render: () => <TaskPlannedField task={task} />,
+            labelAddon: lockAddon('plannedMinutes'),
+            render: () => <TaskPlannedField task={task} lock={lockOf('plannedMinutes')} />,
           },
         ]
       : []),

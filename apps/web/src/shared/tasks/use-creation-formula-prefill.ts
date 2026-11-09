@@ -8,6 +8,8 @@ import { api } from '../api-client.js';
  *  грамматикой поля (дата — ISO, сотрудник — id). `priority` — строковый
  *  enum карточки без типа атрибута, проверяется на клиенте (A8-7). */
 const SLOT_TYPES: Readonly<Record<string, CustomFieldType>> = {
+  // Формула названия (#496, Р7): результат — текст.
+  title: 'text',
   description: 'long_text',
   deadline: 'datetime',
   assignee: 'user',

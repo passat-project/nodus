@@ -1,4 +1,4 @@
-import type { CustomFieldValues } from '@nodus/contracts';
+import type { CustomFieldValues, FieldLocks } from '@nodus/contracts';
 
 import type { WorkflowGateFacts } from '../../../core/ports/workflow-entity.port.js';
 
@@ -39,6 +39,8 @@ export interface NewTaskData {
   participants: { userId: string; role: string; muted: boolean }[];
   /** Значения кастомных атрибутов (#431): умолчания + ввод, проверено портом. */
   customFields?: CustomFieldValues;
+  /** Замки окна создания (#496, Р4): «Закрепить после создания». */
+  fieldLocks?: FieldLocks;
 }
 
 /** Правка полей задачи (PATCH): только переданные ключи. */
@@ -58,6 +60,8 @@ export interface TaskFieldsPatch {
   nodeId?: string | null;
   /** Полный набор значений кастомных атрибутов после правки (#431). */
   customFields?: CustomFieldValues;
+  /** Накопитель замков после разрешённой правки закреплённого (#496). */
+  fieldLocks?: FieldLocks;
 }
 
 /** Смена стадии задачи (переход маршрута; проверки — у вызывающего). */

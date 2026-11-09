@@ -28,7 +28,15 @@ import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rule
 import { placeOfTask, segmentReaderOfTask } from '../../../../shared/mocks/data/numbering-store.js';
 import { planNumbers } from '../../../../shared/mocks/data/numbering-create.js';
 import { numberingFailureResponse } from '../../../../shared/custom-fields/mocks/numbering-responses.js';
-import { applyForm, blockedByOf, checkWindow, postBlock } from './tasks-transitions-gates.js';
+import {
+  applyForm,
+  blockedByOf,
+  checkWindow,
+  postBlock,
+  windowLockDenial,
+} from './tasks-transitions-gates.js';
+import { addTaskLocks } from '../../../../shared/mocks/data/task-locks.js';
+import { currentAuthUser } from '../../../../shared/mocks/data/users.js';
 
 function findTask(id: string): TaskListItem | undefined {
   return (
@@ -198,6 +206,10 @@ export const tasksTransitionsHandlers = [
       },
     );
     if (!numbering.ok) return numberingFailureResponse(numbering.failure);
+    // Замки (#496, Р4, В10): окно пишет закреплённые поля СВОИХ ключей;
+    // поле, которое добавило только условие «Заполнены поля», — пока пусто.
+    const lockedWrite = windowLockDenial(task, sections, parsed.data.form ?? {});
+    if (lockedWrite) return lockedWrite;
     applyForm(task, parsed.data.form ?? {});
     const reasons = blockedByOf(task, documentOfTask(task), transition.id);
     if (reasons.length > 0 && !(parsed.data.override && parsed.data.reason?.trim())) {
@@ -220,6 +232,14 @@ export const tasksTransitionsHandlers = [
       display,
     }));
     task.stage = resolveTarget(task, transition);
+    // Замки окна кнопки (#496, Р4): только у включённого окна (В13).
+    if (transition.form?.enabled) {
+      addTaskLocks(task.id, transition.form.locks ?? [], {
+        lockedAt: new Date().toISOString(),
+        lockedBy: currentAuthUser.id,
+        source: { kind: 'transition', transitionId: transition.id, name: transition.name },
+      });
+    }
     // Встроенное автоперемещение «Моего плана» (ADR-0008) — как у переноса
     // по глобальной оси.
     autoMovePersonalPlacement(task, demoPersonalStages);

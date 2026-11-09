@@ -5,7 +5,7 @@ import type {
   CreationForm,
   CreationPreset,
 } from '@nodus/contracts';
-import { CREATION_FORM_LIMITS } from '@nodus/contracts';
+import { CREATION_FORM_LIMITS, creationSlots, isCreationSlot } from '@nodus/contracts';
 
 /**
  * Операции формы создания в редакторе маршрута (#432, Р2/Р12): чистые
@@ -20,7 +20,7 @@ export function emptySlot(key: CreationFieldKey): CreationFieldSlot {
 }
 
 export function hasSlot(form: CreationForm, key: CreationFieldKey): boolean {
-  return form.fields.some((slot) => slot.key === key);
+  return creationSlots(form).some((slot) => slot.key === key);
 }
 
 /** Ключи, которых ещё нет в форме (порядок входа сохраняется). */
@@ -33,7 +33,7 @@ export function unusedKeys(
 
 /** Добавить поле в конец; дубль и переполнение лимита — форма без изменений. */
 export function withSlotAdded(form: CreationForm, key: CreationFieldKey): CreationForm {
-  if (hasSlot(form, key) || form.fields.length >= CREATION_FORM_LIMITS.fields) return form;
+  if (hasSlot(form, key) || creationSlots(form).length >= CREATION_FORM_LIMITS.fields) return form;
   return { ...form, fields: [...form.fields, emptySlot(key)] };
 }
 
@@ -52,7 +52,7 @@ export function withSlotPatched(
   return {
     ...form,
     fields: form.fields.map((slot) => {
-      if (slot.key !== key) return slot;
+      if (!isCreationSlot(slot) || slot.key !== key) return slot;
       const next: CreationFieldSlot = { ...slot, ...patch };
       if ('label' in patch) next.label = patch.label?.trim() ? patch.label.trim() : null;
       // Взаимоисключающие состояния (Р2): скрытое не бывает обязательным,
@@ -66,7 +66,12 @@ export function withSlotPatched(
 }
 
 export function withSlotRemoved(form: CreationForm, key: CreationFieldKey): CreationForm {
-  return { ...form, fields: form.fields.filter((slot) => slot.key !== key) };
+  return {
+    ...form,
+    fields: form.fields.filter((slot) => !isCreationSlot(slot) || slot.key !== key),
+    // Замок убранного поля уходит вместе с ним — «Закрепить также» его вернёт.
+    ...(form.locks ? { locks: form.locks.filter((lock) => lock.key !== key) } : {}),
+  };
 }
 
 /** Перестановка слота (dnd и «Выше/Ниже» с клавиатуры). */

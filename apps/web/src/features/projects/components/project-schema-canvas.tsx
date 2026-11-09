@@ -1,7 +1,8 @@
 import type { ProjectType } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
-import { Settings2, Workflow } from 'lucide-react';
+import { cn } from '@nodus/ui/lib/utils';
+import { Settings2 } from 'lucide-react';
 
 import { ProcessTypeGlyph } from '../../../shared/workflow/process-type-icon.js';
 
@@ -14,19 +15,26 @@ const DOTS = {
 
 /**
  * Центральная панель «Схем проектов» (#556, каркас #38) — окно канваса как
- * колонка холста «Процессов»: верхний бар h-14 с линией (продолжает линию
- * шапки списка и шапки правой панели), ниже — холст с точечной сеткой, где
- * #38 нарисует схему типа (папки-комплекты, работы, связи). Пока холст пуст:
- * единственное действие типа — «Настройки типа» (то же, что в меню строки).
+ * колонка холста «Процессов»: верхний бар h-14 с линией, ниже — холст с
+ * точечной сеткой. По центру постоянный узел «Создание проекта» (как
+ * «создание» в маршруте задачи): клик открывает правую панель «Окно создания
+ * проекта» с настройкой формы — тот же сценарий, что у статуса в задачах.
+ * Остальная схема (папки-комплекты, работы, связи) появится в #38.
  */
 export function ProjectSchemaCanvas({
   type,
   canSetup,
+  selected,
   onOpenSettings,
+  onOpenWindow,
 }: {
   type: ProjectType;
   canSetup: boolean;
+  /** Узел выбран — открыта его панель (кольцо выделения, как у статуса). */
+  selected: boolean;
   onOpenSettings: () => void;
+  /** Узел «Создание проекта»: панель настроек окна создания. */
+  onOpenWindow: () => void;
 }) {
   return (
     <>
@@ -50,16 +58,30 @@ export function ProjectSchemaCanvas({
       </header>
 
       <div className="relative min-h-0 flex-1 overflow-hidden" style={DOTS}>
-        <div className="absolute inset-0 flex items-center justify-center p-6">
-          <div className="flex max-w-sm flex-col items-center gap-2 text-center">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-              <Workflow className="size-5" strokeWidth={1.5} />
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6">
+          {/* Старт схемы — та же пунктирная пилюля, что «Создание» в
+              «Процессах»: клик открывает правую панель, а не окно поверх
+              экрана (вердикт владельца 09.11.2026). */}
+          <button
+            type="button"
+            onClick={onOpenWindow}
+            title={ui.projects.schemasCreationNodeHint}
+            aria-pressed={selected}
+            className={cn(
+              'flow-node-card flex h-10 max-w-[280px] min-w-0 items-center gap-2 rounded-full border bg-card px-3 transition-colors',
+              selected
+                ? 'border-ring text-foreground ring-1 ring-ring/30'
+                : 'border-dashed border-border text-muted-foreground hover:border-input hover:text-foreground',
+            )}
+          >
+            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
+            <span className="truncate pt-[1px] text-[11px] leading-none font-medium tracking-[0.08em] uppercase">
+              {ui.projects.schemasCreationNode}
             </span>
-            <span className="text-sm font-medium">{ui.projects.schemasCanvasTitle}</span>
-            <span className="text-xs text-balance text-muted-foreground">
-              {ui.projects.schemasCanvasHint}
-            </span>
-          </div>
+          </button>
+          <p className="max-w-sm text-center text-xs text-balance text-muted-foreground">
+            {ui.projects.schemasCanvasHint}
+          </p>
         </div>
       </div>
     </>

@@ -15,8 +15,8 @@ import {
 } from '@nodus/ui/components/message-scroller';
 
 import { useAuthStore } from '../auth-store.js';
-import { withoutPatronymic } from '../lib/format.js';
 import { useThreadMessages, useThreadStates } from './chat-queries.js';
+import { useThreadTyping } from './use-thread-typing.js';
 import { useWatchThread } from './conversation-actions.js';
 import { ChatComposer } from './chat-composer.js';
 import { ChatMessageItem } from './chat-message.js';
@@ -32,29 +32,11 @@ import { useFeedViewportRead } from './use-viewport-read.js';
 import { useIncomingFollow } from './use-incoming-follow.js';
 import { useBoxSelection } from './use-box-selection.js';
 import { ConversationViewsLine } from './views-line.js';
-import { useConversations } from './chat-queries.js';
-import { typingKey, useTypingStore } from '../socket/typing-store.js';
 import { ScrollEndResponder } from './scroll-end-responder.js';
 import { useHistoryLoader } from './use-history-loader.js';
 import { JumpResponder } from './use-jump-responder.js';
 import { useFeedSubmit } from './use-feed-submit.js';
 import { useConversationHost } from './use-conversation-host.js';
-// >300 строк — обоснование (I5, валидатор #164): окно треда — шапка
-// (наблюдение/печать/закрытие), корневой пост + лента ответов на run-grid
-// и композер в одном колонке-хосте; деление размыло бы поток колонки.
-
-/** «печатает в обсуждении…» — по typing-записи ТРЕДА (ключ conv:root). */
-function useThreadTyping(conversationId: string, threadRootId: string): string | null {
-  const meId = useAuthStore((s) => s.user?.id);
-  const typing = useTypingStore((s) => s.entries[typingKey(conversationId, threadRootId)] ?? null);
-  const { data } = useConversations();
-  if (!typing || typing.expiresAt <= Date.now() || typing.userId === meId) return null;
-  const name = data?.items
-    .find((c) => c.id === conversationId)
-    ?.membersPreview.find((m) => m.id === typing.userId)?.displayName;
-  return name ? `${withoutPatronymic(name)} ${ui.chat.typingThread}` : ui.chat.typingThread;
-}
-
 /**
  * Тред канала (вердикт владельца): «провалиться внутрь — обычный чат».
  * Шапка — моно-метка «Обсуждение»; корневой пост отделён штриховой линией и

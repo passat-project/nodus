@@ -4,6 +4,7 @@ import {
   type ProjectTypeCreateBody,
   type ProjectTypeForm,
   type ProjectTypeUpdateBody,
+  formSlots,
 } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../core/database/transaction-runner.js';
@@ -24,7 +25,7 @@ export async function assertProjectTypeForm(
   const definitions = await registry.definitions({}, tx);
   const byId = new Map(definitions.map((definition) => [definition.id, definition]));
   const issues: { fieldId: string; reason: 'unknown_field' | 'not_bindable' }[] = [];
-  for (const slot of form.fields) {
+  for (const slot of formSlots(form)) {
     const definition = byId.get(slot.fieldId);
     if (!definition) issues.push({ fieldId: slot.fieldId, reason: 'unknown_field' });
     else if (definition.isCompany) {
@@ -50,7 +51,7 @@ export function syncProjectTypeForm(
   form: ProjectTypeForm,
   previousFieldIds: readonly string[] = [],
 ): Promise<void> {
-  const next = form.fields.map((slot) => slot.fieldId);
+  const next = formSlots(form).map((slot) => slot.fieldId);
   const removed = previousFieldIds.filter((fieldId) => !next.includes(fieldId));
   return registry.syncPlaceBindings({ kind: 'project_type', id }, next, removed, tx);
 }
@@ -101,7 +102,7 @@ export async function updateProjectType(
   let previousFormIds: string[] = [];
   if (dto.form !== undefined) {
     await assertProjectTypeForm(deps.registry, tx, dto.form);
-    previousFormIds = current.form.fields.map((slot) => slot.fieldId);
+    previousFormIds = formSlots(current.form).map((slot) => slot.fieldId);
   }
   if (dto.name !== undefined && (await deps.types.nameTaken(dto.name, id, tx))) {
     throw DomainException.conflict('Project type name is already taken');

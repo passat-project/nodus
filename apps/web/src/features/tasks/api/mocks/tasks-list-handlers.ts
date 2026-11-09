@@ -26,6 +26,8 @@ import { userRef } from '../../../../shared/mocks/data/users.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import { taskWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
 import { prepareCreateBody, resolveCreateType } from './task-create-policy.js';
+import { creationFormOf } from '../../../../shared/mocks/data/process-types-store.js';
+import { addTaskLocks } from '../../../../shared/mocks/data/task-locks.js';
 
 function notFound(message: string) {
   return HttpResponse.json({ code: ErrorCode.NOT_FOUND, message }, { status: 404 });
@@ -256,6 +258,12 @@ export const tasksListHandlers = [
       updatedAt: new Date().toISOString(),
     };
     demoTasks.push(task);
+    // Замки окна создания (#496, Р4): из формы типа, включая скрытые слоты.
+    addTaskLocks(task.id, creationFormOf(type).locks ?? [], {
+      lockedAt: task.updatedAt,
+      lockedBy: actorId,
+      source: { kind: 'creation' },
+    });
     // Деталь (описание/чек-лист/наблюдатели/план) — карточка видит их сразу.
     detailsExtra[task.id] = {
       description: body.description?.trim() ?? '',

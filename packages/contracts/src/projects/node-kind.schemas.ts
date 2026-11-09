@@ -8,8 +8,10 @@ import { customFieldKey } from '../custom-fields/custom-field-key.js';
 import {
   fieldFormSlotSchema,
   fieldFormStateSchema,
-  hasDuplicateSlots,
+  formSlots,
+  isFieldFormSlot,
 } from '../custom-fields/field-form.schemas.js';
+import { attributeFormSchema } from '../forms/attribute-form.js';
 import { projectColorSchema } from './project.schemas.js';
 
 /**
@@ -71,16 +73,10 @@ export type NodeKindFieldState = z.infer<typeof nodeKindFieldStateSchema>;
 export const nodeKindFormFieldSchema = fieldFormSlotSchema;
 export type NodeKindFormField = z.infer<typeof nodeKindFormFieldSchema>;
 
-export const nodeKindFormSchema = z
-  .object({
-    fields: z.array(nodeKindFormFieldSchema).max(NODE_KIND_LIMITS.fields),
-  })
-  .strict()
-  .superRefine((form, ctx) => {
-    if (hasDuplicateSlots(form.fields)) {
-      ctx.addIssue({ code: 'custom', path: ['fields'], message: 'duplicate field' });
-    }
-  });
+/** Форма вида (#496, Р3): слоты атрибутов с раскладкой и оформление —
+ *  общая форма атрибутов (≤ 30 слотов, ≤ 10 оформления, без дублей).
+ *  Слоты читаются через `formSlots`. */
+export const nodeKindFormSchema = attributeFormSchema;
 export type NodeKindForm = z.infer<typeof nodeKindFormSchema>;
 
 /** Возможности: без дублей, ≤ 3. Порядок нормализуется к порядку enum. */
@@ -201,7 +197,12 @@ export function effectiveNodeForm(
   const form = nodeKindFormOf(kind);
   if (!definitions) return form;
   const known = new Set(definitions.map((definition) => definition.id));
-  return { fields: form.fields.filter((slot) => known.has(slot.fieldId)) };
+  // Оформление переживает снятие атрибута (#496, I-F1): фильтруются только слоты.
+  return {
+    fields: form.fields.filter(
+      (element) => !isFieldFormSlot(element) || known.has(element.fieldId),
+    ),
+  };
 }
 
 /**
@@ -218,7 +219,7 @@ export function nodeFormValues(
   if (!values) return {};
   const form = effectiveNodeForm(kind, definitions);
   const out: CustomFieldValues = {};
-  for (const slot of form.fields) {
+  for (const slot of formSlots(form)) {
     const value = values[slot.fieldId];
     if (value !== undefined) out[slot.fieldId] = value;
   }
@@ -234,7 +235,7 @@ export function nodeFormKey(fieldId: string): NodeFormKey {
 
 /** Обязательные слоты формы (состояние «обязательно»). */
 export function requiredNodeFields(form: NodeKindForm): NodeFormKey[] {
-  return form.fields
+  return formSlots(form)
     .filter((slot) => slot.state === 'required')
     .map((slot) => nodeFormKey(slot.fieldId));
 }

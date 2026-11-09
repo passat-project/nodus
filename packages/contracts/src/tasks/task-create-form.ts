@@ -2,6 +2,7 @@ import type { CustomFieldValue } from '../custom-fields/custom-field-values.js';
 import { customFieldIdOfKey } from '../custom-fields/custom-field-key.js';
 import type { CreateTaskBody, TaskPriority } from './task.schemas.js';
 import {
+  creationSlots,
   isCreationValueFilled,
   type CreationFieldKey,
   type CreationForm,
@@ -73,7 +74,7 @@ export function withCreateBodyValue(
 /** Скрытые значения формы ставятся поверх введённого: значение формы важнее
  *  (Р4) — на всех путях создания, включая API и будущего ИИ-агента. */
 export function applyCreationPresets(form: CreationForm, body: CreateTaskBody): CreateTaskBody {
-  return form.fields
+  return creationSlots(form)
     .filter((slot) => slot.preset !== null)
     .reduce((acc, slot) => withCreateBodyValue(acc, slot.key, slot.preset), body);
 }
@@ -85,7 +86,7 @@ export function isCreateValueFilled(key: CreationFieldKey, value: unknown): bool
 
 /** Обязательные при создании ключи формы (без скрытых: их ставит сервер). */
 export function requiredCreateKeys(form: CreationForm): CreationFieldKey[] {
-  return form.fields
+  return creationSlots(form)
     .filter((slot) => slot.required && slot.preset === null)
     .map((slot) => slot.key);
 }

@@ -35,7 +35,13 @@ const sections = (...kinds: EffectiveSection[]): EffectiveSection[] => kinds;
 describe('buildExecuteBody (#380)', () => {
   it('отправляет только изменённые поля и не дублирует неизменённый итог', () => {
     const body = buildExecuteBody({
-      sections: sections({ kind: 'fields', fields: ['description', 'deadline'], origin: 'form' }),
+      sections: sections({
+        kind: 'fields',
+        fields: ['description', 'deadline'],
+        elements: ['description', 'deadline'].map((key) => ({ key })) as never,
+        gateKeys: [],
+        origin: 'form',
+      }),
       context,
       draft: draft({
         fields: {
@@ -105,6 +111,8 @@ describe('поля процесса в теле перехода (#431, Р7)', (
       sections: sections({
         kind: 'fields',
         fields: [`cf.${CF}`, `cf.${CF_CLEARED}`],
+        elements: [`cf.${CF}`, `cf.${CF_CLEARED}`].map((key) => ({ key })) as never,
+        gateKeys: [],
         origin: 'form',
       }),
       context: {
@@ -123,7 +131,13 @@ describe('поля процесса в теле перехода (#431, Р7)', (
 
   it('поле вне окна не отправляется', () => {
     const body = buildExecuteBody({
-      sections: sections({ kind: 'fields', fields: ['deadline'], origin: 'form' }),
+      sections: sections({
+        kind: 'fields',
+        fields: ['deadline'],
+        elements: ['deadline'].map((key) => ({ key })) as never,
+        gateKeys: [],
+        origin: 'form',
+      }),
       context,
       draft: draft({
         fields: { ...context.fields, customFields: { [CF]: '№ 12' } },
@@ -137,6 +151,8 @@ describe('поля процесса в теле перехода (#431, Р7)', (
       sections: sections({
         kind: 'fields',
         fields: [`cf.${CF}`],
+        elements: [`cf.${CF}`].map((key) => ({ key })) as never,
+        gateKeys: [],
         formulas: { [`cf.${CF}`]: { kind: 'literal', value: null } as never },
         origin: 'form',
       }),

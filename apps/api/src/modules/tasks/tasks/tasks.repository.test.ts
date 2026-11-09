@@ -21,6 +21,8 @@ describe('TasksRepository.create', () => {
         sourceId: 'm1',
         source: 'chat_message',
         customFields: {},
+        // Замки окна создания (#496): карта в той же строке.
+        fieldLocks: {},
         participants: { create: DATA.participants },
       },
     });

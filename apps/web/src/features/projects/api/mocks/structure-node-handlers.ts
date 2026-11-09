@@ -9,6 +9,7 @@ import {
   updateProjectNodeBodySchema,
   type CustomFieldValues,
   type ProjectNode,
+  formSlots,
 } from '@nodus/contracts';
 
 import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
@@ -102,7 +103,7 @@ export const structureNodeHandlers = [
     if (
       body.code != null &&
       values[SYSTEM_FIELD_IDS.nodeCode] === undefined &&
-      formOfKind(kind!).fields.some((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)
+      formSlots(formOfKind(kind!)).some((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)
     ) {
       values[SYSTEM_FIELD_IDS.nodeCode] = body.code;
     }
@@ -161,7 +162,7 @@ export const structureNodeHandlers = [
     }
     // Пачка при обязательном «Коде» вида невозможна: у каждой папки свой код (В1).
     if (
-      formOfKind(kind!).fields.some(
+      formSlots(formOfKind(kind!)).some(
         (slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode && slot.state === 'required',
       )
     ) {
@@ -232,7 +233,7 @@ export const structureNodeHandlers = [
     if (
       body.code !== undefined &&
       patchValues[SYSTEM_FIELD_IDS.nodeCode] === undefined &&
-      formOfKind(kind).fields.some((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)
+      formSlots(formOfKind(kind)).some((slot) => slot.fieldId === SYSTEM_FIELD_IDS.nodeCode)
     ) {
       patchValues[SYSTEM_FIELD_IDS.nodeCode] = body.code;
     }

@@ -5,11 +5,13 @@ import type {
   CustomFieldRef,
   CustomFieldValue,
   CustomFieldValues,
+  TaskFieldLock,
 } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { customFieldKey, ui } from '@nodus/contracts';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 
+import { TaskLockBadge } from '../forms/field-lock-ui.js';
 import { FieldRow } from '../ui/entity-fields.js';
 import { CounterAssignmentHint } from './counter-assignment-hint.js';
 import { CustomFieldTypeIcon } from './field-type-icon.js';
@@ -44,6 +46,7 @@ export function CustomFieldsBlock({
   host,
   hostContext,
   formulas,
+  locks,
 }: {
   module: Exclude<CustomFieldModule, 'company'>;
   /** Тип процесса / тип проекта / вид папки: показываются только его
@@ -58,6 +61,8 @@ export function CustomFieldsBlock({
   hostContext?: FormulaHostContext;
   /** Состояние формульных ячеек из DTO (`customFieldFormulas`). */
   formulas?: CustomFieldFormulas;
+  /** Замки полей задачи (#496): значок у метки и режим только для чтения. */
+  locks?: readonly TaskFieldLock[];
 }) {
   const query = useCustomFieldDefinitions(module);
   // Стабильный массив определений (A6-10): он уходит в `useFormulaEditor`
@@ -102,11 +107,14 @@ export function CustomFieldsBlock({
       <div className="mt-1 grid grid-cols-1 gap-x-12 gap-y-0.5 @min-[55rem]:grid-cols-2">
         {definitions.map((definition) => {
           const hintId = `cf-hint-${definition.id}`;
+          const lock = locks?.find((entry) => entry.key === customFieldKey(definition.id));
+          const fieldEditable = canEdit && (!lock || lock.canEdit);
           return (
             <FieldRow
               key={definition.id}
               icon={<CustomFieldTypeIcon type={definition.type} className="size-3.5" />}
               label={definition.name}
+              labelAddon={lock ? <TaskLockBadge lock={lock} /> : undefined}
               hint={definition.hint}
               hintId={hintId}
               wide={definition.type === 'long_text'}
@@ -119,14 +127,14 @@ export function CustomFieldsBlock({
                   info={formulas?.[definition.id]}
                   value={values[definition.id]}
                   refs={refs}
-                  canEdit={canEdit}
+                  canEdit={fieldEditable}
                   ownDefinitions={definitions}
                 >
                   <CustomFieldEditor
                     definition={definition}
                     value={values[definition.id]}
                     refs={refs}
-                    disabled={!canEdit}
+                    disabled={!fieldEditable}
                     variant="inline"
                     onCommit={(value, pickedRefs) => onChange(definition.id, value, pickedRefs)}
                   />
@@ -156,7 +164,7 @@ export function CustomFieldsBlock({
                   definition={definition}
                   value={values[definition.id]}
                   refs={refs}
-                  disabled={!canEdit}
+                  disabled={!fieldEditable}
                   variant="inline"
                   onCommit={(value, pickedRefs) => onChange(definition.id, value, pickedRefs)}
                 />

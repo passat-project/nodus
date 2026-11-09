@@ -3,6 +3,7 @@ import { useSearch } from '@tanstack/react-router';
 import { ModuleAccessMatrix } from '../../../shared/access/module-access-matrix.js';
 import { FieldsTab } from '../components/fields/fields-tab.js';
 import { ProcessesTab } from '../components/processes/processes-tab.js';
+import { RegistriesTab } from '../components/registries/registries-tab.js';
 
 /**
  * Раздел «Автоматизация» (эпик #377): единый дом настройки.
@@ -18,5 +19,6 @@ import { ProcessesTab } from '../components/processes/processes-tab.js';
 export function AutomationPage() {
   const search = useSearch({ strict: false }) as { tab?: string };
   if (search.tab === 'access') return <ModuleAccessMatrix module="automation" />;
+  if (search.tab === 'registries') return <RegistriesTab />;
   return search.tab === 'fields' ? <FieldsTab /> : <ProcessesTab />;
 }

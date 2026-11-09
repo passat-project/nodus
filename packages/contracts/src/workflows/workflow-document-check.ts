@@ -6,6 +6,8 @@ import { checkCategoryDictionary } from './workflow-document-category-check.js';
 import { checkDeciderRules, type WorkflowPositionFact } from './workflow-document-deciders.js';
 import { checkExtraRules } from './workflow-document-extra-checks.js';
 import { checkFormulaSlots } from './workflow-document-formula-check.js';
+import { windowFieldKeys } from './transition-form.schemas.js';
+import { checkWindowLayoutAndLocks } from './workflow-document-window-check.js';
 import type {
   WorkflowDraftDocument,
   WorkflowDraftStage,
@@ -193,12 +195,8 @@ export function checkWorkflowDocument(
         problems.push(error('form_duplicate_section', { transitionId: t.id }));
       }
       kinds.add(section.kind);
-      if (
-        (section.kind === 'result_files' || section.kind === 'comment') &&
-        section.label.trim().length === 0
-      ) {
-        problems.push(error('form_empty_label', { transitionId: t.id }));
-      }
+      // Пустая подпись блока — стандартное название раздела (#496): блок
+      // настраивается теми же полями, что и поле, и «пусто» здесь законно.
     }
     const hasResult = kinds.has('result');
     const files = form.sections.find((s) => s.kind === 'result_files');
@@ -215,6 +213,10 @@ export function checkWorkflowDocument(
   // --- Формулы слотов окна и формы создания (#632, Р12) --------------------
 
   if (opts.category) problems.push(...checkFormulaSlots(doc, opts.category));
+
+  // --- Конструктор окна: оформление и замки (#496, Р8) --------------------
+
+  problems.push(...checkWindowLayoutAndLocks(doc, opts.customFields));
 
   // --- Кастомные поля в окне и гейтах (#431, Р7) ---------------------------
 
@@ -233,7 +235,7 @@ export function checkWorkflowDocument(
     for (const t of transitions) {
       for (const section of t.form?.enabled ? t.form.sections : []) {
         if (section.kind === 'fields') {
-          for (const key of section.fields) checkKey(key, { transitionId: t.id });
+          for (const key of windowFieldKeys(section)) checkKey(key, { transitionId: t.id });
         }
       }
       for (const validator of t.rules.validators) {

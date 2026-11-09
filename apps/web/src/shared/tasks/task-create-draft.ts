@@ -6,7 +6,12 @@ import type {
   RoleLabels,
   TaskListItem,
 } from '@nodus/contracts';
-import { missingCreateFields, slotLabel, withCreateBodyValue } from '@nodus/contracts';
+import {
+  missingCreateFields,
+  slotLabel,
+  withCreateBodyValue,
+  creationSlots,
+} from '@nodus/contracts';
 
 import type { DraftChecklistItem } from './task-checklist-sheet.js';
 
@@ -160,7 +165,7 @@ export function missingTextOf(
   return missing
     .map((key) =>
       slotLabel(
-        form.fields.find((slot) => slot.key === key) ?? {
+        creationSlots(form).find((slot) => slot.key === key) ?? {
           key,
           label: null,
           required: true,
@@ -213,7 +218,7 @@ export function buildCreateBody(
 ): CreateTaskBody {
   // Тело — только слоты АКТИВНОЙ формы: значение, оставшееся от прежнего типа,
   // не должно уезжать в customFields невидимо для человека (Р9).
-  const allowed = new Set(form.fields.map((slot) => slot.key));
+  const allowed = new Set(creationSlots(form).map((slot) => slot.key));
   const visibleValues = Object.fromEntries(
     Object.entries(draft.values).filter(([key]) => allowed.has(key as CreationFieldKey)),
   );

@@ -10,6 +10,7 @@ import {
   projectTypeUpdateBodySchema,
   type ProjectGroup,
   type ProjectType,
+  formSlots,
 } from '@nodus/contracts';
 
 import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
@@ -30,11 +31,11 @@ const invalid = () =>
 /** Слоты формы типа — существующие определения, не глобальные переменные
  *  (зеркало `assertProjectTypeForm`). */
 function projectTypeFormIssues(form: {
-  fields: readonly { fieldId: string }[];
+  fields: readonly unknown[];
 }): { fieldId: string; reason: 'unknown_field' | 'not_bindable' }[] {
   const byId = new Map(demoCustomFieldDefinitions.map((definition) => [definition.id, definition]));
   const issues: { fieldId: string; reason: 'unknown_field' | 'not_bindable' }[] = [];
-  for (const slot of form.fields) {
+  for (const slot of formSlots(form)) {
     const definition = byId.get(slot.fieldId);
     if (!definition) issues.push({ fieldId: slot.fieldId, reason: 'unknown_field' });
     else if (definition.isCompany) issues.push({ fieldId: slot.fieldId, reason: 'not_bindable' });
@@ -129,7 +130,7 @@ export const projectCatalogHandlers = [
     syncFieldBindings(
       type.id,
       [],
-      type.form.fields.map((slot) => slot.fieldId),
+      formSlots(type.form).map((slot) => slot.fieldId),
     );
     demoProjectTypes.push(type);
     return HttpResponse.json(type, { status: 201 });
@@ -170,8 +171,8 @@ export const projectCatalogHandlers = [
     if (parsed.data.form) {
       syncFieldBindings(
         type.id,
-        type.form.fields.map((slot) => slot.fieldId),
-        parsed.data.form.fields.map((slot) => slot.fieldId),
+        formSlots(type.form).map((slot) => slot.fieldId),
+        formSlots(parsed.data.form).map((slot) => slot.fieldId),
       );
       type.form = parsed.data.form;
     }

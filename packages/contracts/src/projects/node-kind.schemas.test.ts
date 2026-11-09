@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { formSlots } from '../custom-fields/field-form.schemas.js';
 import {
   clearedNodeFields,
   DEFAULT_NODE_KIND_CONFIG,
@@ -89,7 +90,7 @@ describe('effectiveNodeForm', () => {
       }),
       definitions,
     );
-    expect(form.fields.map((slot) => slot.fieldId)).toEqual([MARKA, GIP]);
+    expect(formSlots(form).map((slot) => slot.fieldId)).toEqual([MARKA, GIP]);
   });
 
   it('неизвестный id (удалённый атрибут) исключается из формы (C2)', () => {
