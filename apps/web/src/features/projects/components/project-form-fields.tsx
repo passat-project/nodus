@@ -17,7 +17,7 @@ import { useProjectGroups } from '../../../shared/api/projects-list.js';
 import { useUsersList } from '../../../shared/api/users-list.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { PeoplePicker } from '../../../shared/ui/people-picker.js';
-import { SegmentedControl } from '../../../shared/ui/segmented-control.js';
+import { SEGMENTED_ACTIVE_TONAL, SegmentedControl } from '../../../shared/ui/segmented-control.js';
 import { useCreateProjectGroup } from '../api/project-catalog-mutations.js';
 
 export { ProjectDeadlineField } from './project-deadline-field.js';
@@ -257,7 +257,7 @@ export function VisibilityField({
         onChange(next);
       }}
       disabled={disabled}
-      activeClassName="bg-accent text-foreground"
+      activeClassName={SEGMENTED_ACTIVE_TONAL}
       className={cn('max-w-64', disabled && 'opacity-60')}
     />
   );
