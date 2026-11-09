@@ -7,7 +7,10 @@ import type {
 import { ui } from '@nodus/contracts';
 
 import { CustomFieldEditor } from '../../../../shared/custom-fields/value-editor.js';
-import { SEGMENTED_ACTIVE_TONAL, SegmentedControl } from '../../../../shared/ui/segmented-control.js';
+import {
+  SEGMENTED_ACTIVE_TONAL,
+  SegmentedControl,
+} from '../../../../shared/ui/segmented-control.js';
 import type { DefaultMode } from '../../lib/field-draft.js';
 
 type Mode = DefaultMode;

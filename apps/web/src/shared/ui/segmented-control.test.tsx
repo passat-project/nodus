@@ -40,11 +40,7 @@ describe('SegmentedControl (#664)', () => {
 
   it('без activeClassName остаётся канонический primary', () => {
     render(
-      <SegmentedControl
-        value="a"
-        options={[{ value: 'a', label: 'Один' }]}
-        onChange={vi.fn()}
-      />,
+      <SegmentedControl value="a" options={[{ value: 'a', label: 'Один' }]} onChange={vi.fn()} />,
     );
 
     expect(screen.getByRole('radio', { name: 'Один' }).className).toContain('bg-primary');

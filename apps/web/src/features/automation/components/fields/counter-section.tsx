@@ -5,7 +5,10 @@ import { Input } from '@nodus/ui/components/input';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { CircleAlert, Lock } from 'lucide-react';
 
-import { SEGMENTED_ACTIVE_TONAL, SegmentedControl } from '../../../../shared/ui/segmented-control.js';
+import {
+  SEGMENTED_ACTIVE_TONAL,
+  SegmentedControl,
+} from '../../../../shared/ui/segmented-control.js';
 import {
   counterSequence,
   fill,
