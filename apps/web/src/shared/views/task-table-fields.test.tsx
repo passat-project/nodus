@@ -95,6 +95,7 @@ describe('makeTaskTableFields: значок типа в названии (#670)'
     render(<span>{title.render(taskOf())}</span>);
     expect(screen.getByRole('img', { name: 'Стандартный' })).toBeTruthy();
     expect(screen.getByText('Согласовать АР')).toBeTruthy();
+    expect(title.sortValue?.(taskOf())).toBe('Согласовать АР');
   });
 });
 

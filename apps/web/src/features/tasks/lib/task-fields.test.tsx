@@ -81,6 +81,10 @@ describe('taskListFields: значок типа в названии (#670)', () 
     expect(screen.getByText('Согласовать АР')).toBeTruthy();
   });
 
+  it('сортировка по названию сохранена', () => {
+    expect(titleOf().sortValue?.(taskOf())).toBe('Согласовать АР');
+  });
+
   it('свёрнутая ветка сохраняет значок типа и счётчик скрытых потомков', () => {
     const { container } = renderTitle({ branchCollapsed: true, childCount: 2 });
     expect(screen.getByRole('img', { name: 'Переработка' })).toBeTruthy();
