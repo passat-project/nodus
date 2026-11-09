@@ -11,7 +11,7 @@ import { cn } from '@nodus/ui/lib/utils';
 import { ArrowRight, CircleAlert } from 'lucide-react';
 
 import { CustomFieldEditor } from '../../../../shared/custom-fields/value-editor.js';
-import { SegmentedControl } from '../../../../shared/ui/segmented-control.js';
+import { SEGMENTED_ACTIVE_TONAL, SegmentedControl } from '../../../../shared/ui/segmented-control.js';
 import { useNumberPreview } from '../../api/numbering-api.js';
 import { fill, type ContainerNames } from '../../lib/counter-rule.js';
 import { countTitle, NextNumberEditor, useSaveNext } from './counter-counts.js';
@@ -177,7 +177,7 @@ export function CounterCheck({
           <SegmentedControl
             value={active}
             ariaLabel={counter.check}
-            activeClassName="bg-accent text-foreground"
+            activeClassName={SEGMENTED_ACTIVE_TONAL}
             options={kinds.map((entry) => ({ value: entry, label: counter.checkKind[entry] }))}
             onChange={(next) => {
               setKind(next);

@@ -13,7 +13,7 @@ import { flattenDepartments, useDepartmentTreeManagement } from '../api/departme
 import { useUsersSearch } from '../api/users-list.js';
 import { withoutPatronymic } from '../lib/format.js';
 import { PersonAvatar } from '../ui/person-avatar.js';
-import { SegmentedControl } from '../ui/segmented-control.js';
+import { SEGMENTED_ACTIVE_TONAL, SegmentedControl } from '../ui/segmented-control.js';
 import { isLockedRole } from './access-model.js';
 
 type Tab = 'users' | 'departments';
@@ -81,7 +81,7 @@ export function RoleMembersPopover({ role, canManage }: { role: Role; canManage:
             }}
             size="sm"
             className="mb-2 w-full [&>button]:flex-1"
-            activeClassName="bg-accent text-foreground"
+            activeClassName={SEGMENTED_ACTIVE_TONAL}
           />
         ) : null}
         <div className="relative mb-1.5">

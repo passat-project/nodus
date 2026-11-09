@@ -1,7 +1,7 @@
 import type { OrgUnitKind } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
-import { SegmentedControl } from '../../../shared/ui/segmented-control.js';
+import { SEGMENTED_ACTIVE_TONAL, SegmentedControl } from '../../../shared/ui/segmented-control.js';
 
 /**
  * Переключатель управленческая/юридическая структура — пилюля ТОГО же образца,
@@ -31,7 +31,7 @@ export function StructureKindSwitcher({
       className={cn('w-max shrink-0', className)}
       size="sm"
       layout="grid"
-      activeClassName="bg-accent text-foreground"
+      activeClassName={SEGMENTED_ACTIVE_TONAL}
     />
   );
 }
