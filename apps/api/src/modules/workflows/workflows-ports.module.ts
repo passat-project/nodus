@@ -20,6 +20,8 @@ import { PROCESS_TYPE_FORM_CLEANER } from './ports/process-type-form-cleaner.por
 import { WORKFLOW_ENGINE } from './ports/workflow-engine.port.js';
 import { WorkflowRulesReaderProvider } from './ports/workflow-rules-reader.provider.js';
 import { WORKFLOW_RULES_READER } from './ports/workflow-rules-reader.port.js';
+import { WorkflowPressReaderProvider } from './ports/workflow-press-reader.provider.js';
+import { WORKFLOW_PRESS_READER } from './ports/workflow-press-reader.port.js';
 import { ProcessTypesRepository } from './types/process-types.repository.js';
 
 /**
@@ -62,12 +64,15 @@ import { ProcessTypesRepository } from './types/process-types.repository.js';
     { provide: PROCESS_TYPE_FORM_CLEANER, useExisting: ProcessTypeFormCleanerProvider },
     WorkflowRulesReaderProvider,
     { provide: WORKFLOW_RULES_READER, useExisting: WorkflowRulesReaderProvider },
+    WorkflowPressReaderProvider,
+    { provide: WORKFLOW_PRESS_READER, useExisting: WorkflowPressReaderProvider },
   ],
   exports: [
     WORKFLOW_ENGINE,
     PROCESS_CATALOG_READER,
     WORKFLOW_FIELD_USAGE_READER,
     WORKFLOW_RULES_READER,
+    WORKFLOW_PRESS_READER,
     PROCESS_TYPE_FORM_CLEANER,
     ROLE_MEMBERSHIP_READER,
     NUMBER_SERIES_STORE,

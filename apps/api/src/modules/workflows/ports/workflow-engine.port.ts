@@ -60,6 +60,9 @@ export interface WorkflowEnginePort {
       form?: TransitionFormInput;
       /** Человек подтвердил номер с пустой вставкой (#630). */
       confirmEmptyNumberParts?: boolean;
+      /** Завершение раунда сбора (#434): разрешает коллективную кнопку и
+       *  обходит обычные условия «кто» — кворум уже собран. Гейты остаются. */
+      pressCompletion?: boolean;
     },
   ): Promise<TransitionExecution>;
 }

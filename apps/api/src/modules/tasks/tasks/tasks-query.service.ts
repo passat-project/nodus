@@ -15,6 +15,7 @@ import type {
 import { normalizeTypeConfig, requiredCreateKeys } from '@nodus/contracts';
 
 import { DomainException } from '../../../core/errors/domain-exception.js';
+import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import { decodeCursor, encodeCursor } from '../../../core/pagination/cursor.util.js';
 import type { Prisma } from '../../../generated/prisma/client.js';
 import { actorRoles, taskAccess } from '../access/task-access.js';
@@ -37,6 +38,7 @@ import { TasksRepository } from './tasks.repository.js';
 import { detailFieldLocks, detailLockKeys, detailLockUserIds } from './task-field-locks.dto.js';
 import { CHAT_MESSAGE_ACCESS, type ChatMessageAccess } from '../../chat/message-access.port.js';
 import { ResultsRepository } from '../activity/results.repository.js';
+import { PressRoundsService } from '../press/press-rounds.service.js';
 
 const keyCursor = z.object({ o: z.string(), id: z.uuid() });
 const numberCursor = z.object({ n: z.number().int() });
@@ -60,6 +62,8 @@ export class TasksQueryService {
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     @Inject(FORMULA_CELLS) private readonly formulas: FormulaCells,
+    private readonly press: PressRoundsService,
+    private readonly txRunner: TransactionRunner,
   ) {}
 
   viewer(user: Pick<AuthUser, 'id' | 'permissions'>): Promise<Viewer> {
@@ -161,6 +165,10 @@ export class TasksQueryService {
 
   async detail(user: AuthUser, id: string): Promise<TaskDetail> {
     const row = await this.visibleRow(user, id);
+    // Ленивый старт раунда сбора (#434) для задач, вошедших в стадию до
+    // релиза: карточка сразу видит прогресс, а не «мёртвую» коллективную
+    // кнопку. Повторный вызов идемпотентен (открытый раунд уже есть).
+    await this.txRunner.run(async (tx) => this.press.ensureForStage(tx, id, row.stageId));
     const viewer = await this.viewer(user);
     const [full, children, result] = await Promise.all([
       this.reads.findDetail(id),
@@ -256,6 +264,7 @@ export class TasksQueryService {
         (userId) => this.mapper.ref(refs, userId),
       ),
       access,
+      press: await this.press.viewForTask(full.id, full.stageId, user.id),
       createdAt: full.createdAt.toISOString(),
     };
   }

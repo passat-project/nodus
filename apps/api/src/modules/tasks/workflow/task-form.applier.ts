@@ -144,7 +144,9 @@ export class TaskFormApplier {
     }
 
     if (input.time) {
-      if (!access.canLogTime) throw DomainException.forbidden('Time logging not allowed');
+      if (!access.canLogTime && !meta?.pressCompletion) {
+        throw DomainException.forbidden('Time logging not allowed');
+      }
       const entry = await this.time.addManualInTx(
         tx,
         actor.id,
@@ -155,7 +157,9 @@ export class TaskFormApplier {
     }
 
     if (input.result) {
-      if (!access.canCheck) throw DomainException.forbidden('Result change not allowed');
+      if (!access.canCheck && !meta?.pressCompletion) {
+        throw DomainException.forbidden('Result change not allowed');
+      }
       const messageIds = [...new Set(input.result.messageIds)];
       // Чужое/удалённое/чужая беседа — одинаковый 404 (без оракула).
       const snaps = await this.messages.taskMessages(taskId, messageIds, actor.id, tx);

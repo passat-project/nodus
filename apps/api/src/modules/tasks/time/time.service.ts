@@ -118,6 +118,15 @@ export class TimeService {
     return created;
   }
 
+  /** Удаление записи в транзакции вызывающего (#434: отзыв отметки снимает
+   *  записанное ею время). Право проверяет вызывающий — здесь только запись. */
+  async removeInTx(tx: TransactionClient, actorId: string, entryId: string): Promise<void> {
+    const entry = await this.repo.findByIdInTx(tx, entryId);
+    if (!entry) return;
+    await this.repo.delete(tx, entryId);
+    if (entry.taskId) await this.logged(tx, actorId, entry.taskId, entryId, -entry.minutes);
+  }
+
   async remove(user: AuthUser, entryId: string): Promise<void> {
     const entry = await this.repo.findById(entryId);
     if (!entry?.taskId) throw DomainException.notFound('Time entry not found');

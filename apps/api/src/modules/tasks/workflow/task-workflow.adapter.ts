@@ -40,6 +40,7 @@ import type { NumberTarget } from '../../custom-fields/ports/number-host.port.js
 import { TasksRepository } from '../tasks/tasks.repository.js';
 import { StageMover } from './stage-mover.js';
 import { TaskFormApplier } from './task-form.applier.js';
+import { PressRoundsService } from '../press/press-rounds.service.js';
 
 /** Пачка переноса/пересчёта задач публикации (своя транзакция на задачу). */
 const BATCH = 100;
@@ -71,6 +72,7 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
     private readonly events: EventBus,
     private readonly query: TasksQueryRepository,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
+    private readonly press: PressRoundsService,
   ) {}
 
   lock(tx: TransactionClient, taskId: string): Promise<void> {
@@ -115,6 +117,7 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
       },
       actor.id,
     );
+    const pressTransitionIds = await this.press.submittableTransitionIds(tx, taskId, actor.id);
     return {
       workflowId: task.workflowId,
       typeId: task.typeId,
@@ -129,6 +132,7 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
             vacantDeciderTransitionIds: deciderContext.vacantTransitionIds,
           }
         : {}),
+      ...(pressTransitionIds.size > 0 ? { pressTransitionIds } : {}),
       facts: {
         ...gateFacts,
         activeCustomFieldIds: new Set(definitions.map((definition) => definition.id)),
@@ -201,6 +205,10 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
       ...meta,
       ...(deciderIds.length > 0 ? { deciderIds } : {}),
     });
+    // Вход в стадию с коллективной кнопкой (#434): раунд и снимок состава
+    // стартуют той же транзакцией, что и смена стадии; выход из такой стадии
+    // закрывает открытый раунд.
+    await this.press.ensureForStage(tx, taskId, target.id);
     // После решения решающий остаётся наблюдателем без звука (В2).
     if (meta.wasDeciderOfTransition && actorId) {
       const added = await this.deciders.insertObserverIfAbsent(tx, deciderTask, actorId);
@@ -252,6 +260,7 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
             transitionId: null,
             cause: 'workflow_migration',
           });
+          await this.press.ensureForStage(tx, id, toStage.id);
         });
         moved += 1;
       }

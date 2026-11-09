@@ -274,6 +274,17 @@ export const workflowProblemCodeSchema = z.enum([
   'decider_position_empty',
   'decider_window_needs_rights',
   'decider_source_empty',
+  /** Сбор отметок (#434): кнопка «жмут несколько» — только задача; источники,
+   *  роли/поля/должности и одна коллективная кнопка на статус. */
+  'press_not_in_category',
+  'press_source_empty',
+  'press_source_invalid',
+  'press_role_not_in_category',
+  'press_field_not_user',
+  'press_position_missing',
+  'press_position_empty',
+  'press_multiple_per_stage',
+  'press_button_invalid',
   /** Формула-подстановка слота (#632, Р12): AST не проходит грамматику языка
    *  (глубина, арность, матрица источников, запрет related в форме создания)
    *  или результат не подходит к типу поля. Публикация с такой формулой дала

@@ -3,7 +3,9 @@ import {
   isCustomFieldValueFilled,
   isFinalState,
   matchesDecider,
+  pressConfigSchema,
   workflowTransitionRulesSchema,
+  type PressConfig,
   type TransitionBlockReason,
   type TransitionDisplay,
   type TransitionForm,
@@ -42,6 +44,9 @@ export interface TransitionDef {
    *  Необязательное — толерантность к снимкам до #380 и тестовым фикстурам;
    *  репозиторий маршрута всегда заполняет. */
   form?: TransitionForm;
+  /** Коллективное нажатие (#434): null/undefined — обычная кнопка; объект —
+   *  опубликованная настройка сбора (источники уже непустые). */
+  press?: PressConfig | null;
 }
 
 export interface StageDef {
@@ -55,6 +60,13 @@ export interface StageDef {
 /** Разбор правил из БД: неизвестный вид — ошибка (ложной безопасности нет). */
 export function parseRules(raw: unknown): WorkflowTransitionRules {
   return workflowTransitionRulesSchema.parse(raw ?? {});
+}
+
+/** Разбор настройки сбора отметок (#434): NULL — обычная кнопка; иначе
+ *  опубликованная схема (пустые источники отсекает публикация, не чтение). */
+export function parsePress(raw: unknown): PressConfig | null {
+  if (raw === null || raw === undefined) return null;
+  return pressConfigSchema.parse(raw);
 }
 
 /** Может ли актор нажать кнопку (условия «кто»). Флаги «проходит всегда» и

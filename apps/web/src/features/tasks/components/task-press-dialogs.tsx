@@ -1,5 +1,5 @@
 import type { PressRoundView, TaskDetail, WorkflowTransition } from '@nodus/contracts';
-import { effectiveWindowSections, ui } from '@nodus/contracts';
+import { effectiveWindowSections, PRESS_WINDOW_SECTION_KINDS, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
   Dialog,
@@ -26,9 +26,9 @@ import { downloadPressCsv, pressStateClass, pressStateLabel } from './task-press
  *  условия проверяются при кворуме. */
 export function pressHasWindow(transition: WorkflowTransition | null): boolean {
   if (!transition?.form) return false;
-  return (
-    effectiveWindowSections(transition.form, { validators: transition.validators }).length > 0
-  );
+  return effectiveWindowSections(transition.form, {
+    validators: transition.validators,
+  }).some((section) => (PRESS_WINDOW_SECTION_KINDS as readonly string[]).includes(section.kind));
 }
 
 export function PressSubmitDialog({

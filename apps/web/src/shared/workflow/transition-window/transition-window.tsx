@@ -5,7 +5,7 @@ import type {
   TransitionBlockReason,
   WorkflowTransition,
 } from '@nodus/contracts';
-import { effectiveWindowSections, ui } from '@nodus/contracts';
+import { effectiveWindowSections, PRESS_WINDOW_SECTION_KINDS, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
   Dialog,
@@ -101,10 +101,14 @@ export function TransitionWindow({
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
 
-  const sections = useMemo(
-    () => effectiveWindowSections(transition.form, { validators: transition.validators }),
-    [transition.form, transition.validators],
-  );
+  const sections = useMemo(() => {
+    const all = effectiveWindowSections(transition.form, { validators: transition.validators });
+    return variant === 'press'
+      ? all.filter((section) =>
+          (PRESS_WINDOW_SECTION_KINDS as readonly string[]).includes(section.kind),
+        )
+      : all;
+  }, [transition.form, transition.validators, variant]);
   const conversationId = effectiveContext?.conversationId ?? null;
   const resultIds = draftMessageIds(draft);
   const { data: resultMessages } = useMessagesLookup(

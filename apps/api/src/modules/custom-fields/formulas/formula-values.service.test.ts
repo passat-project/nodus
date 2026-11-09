@@ -50,6 +50,7 @@ function profiles(): UserProfileReader {
     findRefs: vi.fn(async () => []),
     searchByDisplayName: vi.fn(async () => []),
     filterActiveUserIds: vi.fn(async (ids: string[]) => ids.filter((id) => id !== U3)),
+    listActiveIds: vi.fn(async () => []),
   };
 }
 

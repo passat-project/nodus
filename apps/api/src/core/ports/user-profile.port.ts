@@ -26,6 +26,10 @@ export interface UserProfileReader {
    *  только действующих — деактивированный остаётся чипом-ссылкой в истории.
    *  tx: чтение по соединению транзакции отправителя. */
   filterActiveUserIds(userIds: string[], tx?: TransactionClient): Promise<string[]>;
+
+  /** Все активные сотрудники (#434, источник «Все сотрудники»): снимок
+   *  состава на старте сбора; порядок — по ФИО для стабильных отметок. */
+  listActiveIds(tx?: TransactionClient): Promise<string[]>;
 }
 
 export const USER_PROFILE_READER: InjectionToken = 'USER_PROFILE_READER';

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-import { TaskPressButton } from './task-press-button.js';
+import { TaskPressButton, TaskPressStatus } from './task-press-button.js';
 
 afterEach(cleanup);
 
@@ -44,5 +44,15 @@ describe('кнопка коллективного действия (#434)', () =
     fireEvent.mouseEnter(screen.getByRole('button', { name: 'Статусы участников: 5 / 9' }));
     expect(await screen.findByText('5 / 9')).toBeTruthy();
     expect(screen.queryByText('Кто нажал')).toBeNull();
+  });
+
+  it('индикатор после нажатия открывает статусы без действия кнопки', async () => {
+    const onOpenStatuses = vi.fn();
+    render(<TaskPressStatus pressed={5} total={9} onOpenStatuses={onOpenStatuses} />);
+    const chip = screen.getByRole('button', { name: 'Статусы участников: 5 / 9' });
+    expect(screen.queryByRole('button', { name: 'Ознакомлен' })).toBeNull();
+    fireEvent.mouseEnter(chip);
+    fireEvent.click(await screen.findByRole('button', { name: 'Статусы участников' }));
+    expect(onOpenStatuses).toHaveBeenCalledTimes(1);
   });
 });

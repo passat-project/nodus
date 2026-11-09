@@ -13,21 +13,22 @@ function logger() {
 function makeService(
   deps: Partial<
     Record<
-      'txRunner' | 'query' | 'placements' | 'taskService' | 'engine' | 'cells' | 'projects',
+      'txRunner' | 'query' | 'placements' | 'taskService' | 'engine' | 'cells' | 'press' | 'projects',
       unknown
     >
   >,
   log = logger(),
 ) {
   return new TaskTransitionsService(
-    (deps.txRunner ?? {}) as never,
-    (deps.query ?? {}) as never,
+    (deps.txRunner ?? { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn(TX)) }) as never,
+    (deps.query ?? { visibleRow: vi.fn(async () => ({ stageId: 's1' })) }) as never,
     (deps.placements ?? {}) as never,
     (deps.taskService ?? {}) as never,
     (deps.engine ?? {}) as never,
     (deps.cells ?? {}) as never,
     (deps.projects ?? { lockProject: vi.fn() }) as never,
     log as never,
+    (deps.press ?? { ensureForStage: vi.fn(async () => void 0) }) as never,
   );
 }
 

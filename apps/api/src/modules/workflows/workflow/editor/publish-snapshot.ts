@@ -35,6 +35,7 @@ export async function publishSnapshot(
       sortOrder: t.sortOrder,
       rules: t.rules,
       form: t.form,
+      press: t.press ?? null,
     })),
     taskCounts: await adapters.get(category).countByStages(
       loaded.stages.map((s) => s.id),

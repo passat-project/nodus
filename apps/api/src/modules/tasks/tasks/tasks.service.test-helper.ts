@@ -153,6 +153,7 @@ export function setup(): TasksServiceFixture {
     { stateFor: vi.fn(async () => new Map()) } as never,
     new TaskCreatePolicy(profiles as never),
     { planOnCreate: async () => ({ ok: true, issue: async () => ({}) }) } as never,
+    { ensureForStage: vi.fn(async () => void 0) } as never,
   );
   return { service, repo, placements, placementsRepo, txRunner, eventBus, catalog, boards, engine };
 }

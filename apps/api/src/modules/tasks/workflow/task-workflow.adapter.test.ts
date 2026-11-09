@@ -107,6 +107,10 @@ function makeAdapter() {
     events as never,
     query as never,
     projects as never,
+    {
+      submittableTransitionIds: vi.fn(async () => new Set<string>()),
+      ensureForStage: vi.fn(async () => void 0),
+    } as never,
   );
   return { adapter, mover, tasks, placements, deciders, events, query, projects };
 }

@@ -309,6 +309,8 @@ export class WorkflowEditorService {
       ) as Prisma.InputJsonValue,
       form: (document.transitions.find((t) => t.id === write.id)?.form ??
         DEFAULT_TRANSITION_FORM) as Prisma.InputJsonValue,
+      press: (document.transitions.find((t) => t.id === write.id)?.press ??
+        null) as Prisma.InputJsonValue | null,
     });
     for (const write of plan.transitionCreates) {
       transitions.set(write.id, await this.writes.createTransition(tx, workflowId, rowOf(write)));

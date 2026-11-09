@@ -19,6 +19,7 @@ import {
 } from '../../workflows/ports/workflow-engine.port.js';
 import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
 import { actorRoles, planHolderIds, taskAccess } from '../access/task-access.js';
+import { PressRoundsService } from '../press/press-rounds.service.js';
 import { Placements } from '../personal/placements.js';
 import { TasksQueryService } from '../tasks/tasks-query.service.js';
 import { TasksService } from '../tasks/tasks.service.js';
@@ -64,6 +65,7 @@ export class TaskTransitionsService {
     @Inject(FORMULA_CELLS) private readonly cells: FormulaCells,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     private readonly logger: PinoLogger,
+    private readonly press: PressRoundsService,
   ) {
     this.logger.setContext(TaskTransitionsService.name);
   }
@@ -72,8 +74,12 @@ export class TaskTransitionsService {
    *  слоты окна получают посчитанный префилл (Р12): значение видно сразу,
    *  человек может поправить, в тело уйдёт значением. */
   async listFor(user: AuthUser, taskId: string): Promise<WorkflowTransition[]> {
-    await this.query.visibleRow(user, taskId);
+    const row = await this.query.visibleRow(user, taskId);
     return this.txRunner.run(async (tx) => {
+      // Ленивый старт раунда (#434): задачи, вошедшие в стадию до релиза,
+      // получают раунд при первом открытии карточки, а не остаются с
+      // коллективной кнопкой без права прямого нажатия.
+      await this.press.ensureForStage(tx, taskId, row.stageId);
       const transitions = await this.engine.available(tx, taskId, 'task', user);
       return this.withPrefill(transitions, taskId, user, tx);
     });

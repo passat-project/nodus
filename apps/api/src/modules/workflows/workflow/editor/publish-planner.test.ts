@@ -84,6 +84,7 @@ function doc(
     intent?: string;
     rules?: unknown;
     form?: unknown;
+    press?: unknown;
   }[] = [],
 ) {
   const stageBase = { code: null, color: 'neutral', outcome: null, isInitial: false };

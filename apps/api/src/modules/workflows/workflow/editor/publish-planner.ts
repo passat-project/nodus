@@ -1,4 +1,5 @@
 import type {
+  PressConfig,
   WorkflowDocument,
   WorkflowMigration,
   WorkflowTransitionIntent,
@@ -34,6 +35,8 @@ export interface PlannerTransition {
   rules: unknown;
   /** Разобранная форма окна (#380): публикуется вместе с кнопкой. */
   form: unknown;
+  /** Настройка сбора отметок (#434): null — обычная кнопка. */
+  press?: PressConfig | null;
 }
 
 export interface PlannerSnapshot {
@@ -77,6 +80,8 @@ export interface TransitionWrite {
   sortOrder: number;
   /** Окно при нажатии (#380) — часть документа, пишется вместе с кнопкой. */
   form: unknown;
+  /** Коллективное нажатие (#434) — часть документа; null — обычная кнопка. */
+  press: PressConfig | null;
 }
 
 export interface WorkflowPublishPlan {
@@ -159,6 +164,7 @@ export function planWorkflowPublish(
       intent: t.intent ?? 'action',
       sortOrder: t.sortOrder,
       form: t.form,
+      press: t.press ?? null,
     };
     if (isNew(t.id) || !currentTransitionsById.has(t.id)) {
       transitionCreates.push(write);
@@ -173,7 +179,8 @@ export function planWorkflowPublish(
       (existing.intent ?? 'action') === write.intent &&
       existing.sortOrder === write.sortOrder &&
       sameRules(existing.rules, t.rules) &&
-      sameForm(existing.form, write.form);
+      sameForm(existing.form, write.form) &&
+      sameForm(existing.press ?? null, write.press);
     if (!unchanged) transitionUpdates.push(write);
   }
   const docTransitionIds = new Set(document.transitions.map((t) => t.id));

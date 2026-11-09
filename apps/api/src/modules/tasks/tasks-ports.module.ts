@@ -25,6 +25,7 @@ import { TaskFormulaValuesProvider } from './ports/task-formula-values.provider.
 import { TasksQueryRepository } from './tasks/tasks-query.repository.js';
 import { TasksRepository } from './tasks/tasks.repository.js';
 import { TaskNumberHostProvider } from './ports/number-host.provider.js';
+import { PressRepository } from './press/press.repository.js';
 
 /**
  * Порты чтения задач (ADR-0012): тонкий модуль экспорта read-портов чужим
@@ -40,6 +41,9 @@ import { TaskNumberHostProvider } from './ports/number-host.provider.js';
     UserProfileProvider,
     { provide: USER_PROFILE_READER, useClass: UserProfileProvider },
     ViewerResolver,
+    // Ветка видимости «Статусы участников» (#434): порт-модуль читает отметки
+    // открытого раунда; доменный PressService остаётся в TasksModule.
+    PressRepository,
     TaskDecidersRepository,
     TaskDeciderRecipients,
     TaskDeciders,

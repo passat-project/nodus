@@ -29,7 +29,7 @@ import { stageTone } from '../../../shared/ui/board/stage-tone.js';
 import { groupProcessButtons } from '../../../shared/workflow/process-buttons.js';
 import { RouteViewDialog } from '../../../shared/workflow/route-view-dialog.js';
 import { PressAnalyticsDialog, PressSubmitDialog, pressHasWindow } from './task-press-dialogs.js';
-import { TaskPressButton } from './task-press-button.js';
+import { TaskPressButton, TaskPressStatus } from './task-press-button.js';
 import { TaskTimerButton } from './task-time.js';
 import { useTransitionRunner } from './task-transition-dialog.js';
 
@@ -197,6 +197,13 @@ export function TaskActionBar({
       ) : null}
       {primary ? renderButton(primary, true) : null}
       {visible.map((t) => renderButton(t, false))}
+      {press && !press.canSubmit ? (
+        <TaskPressStatus
+          pressed={press.pressed}
+          total={press.total}
+          onOpenStatuses={() => setAnalyticsOpen(true)}
+        />
+      ) : null}
       {menu.length > 0 ? (
         <DropdownMenu>
           <DropdownMenuTrigger

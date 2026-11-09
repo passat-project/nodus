@@ -54,6 +54,7 @@ import {
 } from '../../custom-fields/ports/number-issue.port.js';
 import type { NumberTarget } from '../../custom-fields/ports/number-host.port.js';
 import { DuplicateTaskSourceError, TasksRepository } from './tasks.repository.js';
+import { PressRoundsService } from '../press/press-rounds.service.js';
 
 /**
  * Создание и удаление задач (правка и перенос — TaskEditService). Задача без
@@ -83,6 +84,7 @@ export class TasksService {
     @Inject(FORMULA_CELLS) private readonly formulas: FormulaCells,
     private readonly policy: TaskCreatePolicy,
     @Inject(NUMBER_ISSUE) private readonly numberIssue: NumberIssue,
+    private readonly press: PressRoundsService,
   ) {}
 
   /** Подзадача/перепривязка: родителя правят только те, кто может править
@@ -274,6 +276,7 @@ export class TasksService {
             { fromStageName: initial.name },
           );
         }
+        await this.press.ensureForStage(tx, task.id, finalStage.id);
         if (personalColumn) await this.placeInColumn(tx, task.id, user.id, personalColumn.id);
         await this.eventBus.emit(
           tx,

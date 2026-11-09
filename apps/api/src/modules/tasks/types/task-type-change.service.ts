@@ -20,6 +20,7 @@ import { TasksQueryService } from '../tasks/tasks-query.service.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
 import { TasksService } from '../tasks/tasks.service.js';
 import { StageMover } from '../workflow/stage-mover.js';
+import { PressRoundsService } from '../press/press-rounds.service.js';
 import {
   NUMBER_ISSUE,
   numberingFailureException,
@@ -45,6 +46,7 @@ export class TaskTypeChangeService {
     private readonly eventBus: EventBus,
     private readonly taskService: TasksService,
     @Inject(NUMBER_ISSUE) private readonly numberIssue: NumberIssue,
+    private readonly press: PressRoundsService,
   ) {}
 
   async change(user: AuthUser, taskId: string, body: ChangeTaskTypeBody): Promise<TaskListItem> {
@@ -110,6 +112,9 @@ export class TaskTypeChangeService {
           cause: 'type_change',
         });
       }
+      // Смена типа могла сменить маршрут/стадию: старый раунд закрывается,
+      // новый стартует по кнопке новой стадии (или не стартует — обычная).
+      await this.press.ensureForStage(tx, taskId, freshTarget.id);
       const numbers = await plan.issue(tx, taskId);
       if (Object.keys(numbers).length > 0) {
         await this.tasks.updateFields(tx, taskId, {

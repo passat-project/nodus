@@ -93,6 +93,16 @@ export const pressEntryResultSchema = z.object({
 });
 export type PressEntryResult = z.infer<typeof pressEntryResultSchema>;
 
+/** Личные разделы отметки: что участник пишет «про своё» (#434). Поля
+ *  карточки и регистрация в сбор не входят — их правит обычная кнопка/карточка. */
+export const PRESS_WINDOW_SECTION_KINDS = [
+  'time',
+  'result',
+  'result_files',
+  'result_messages',
+  'comment',
+] as const;
+
 /** Проекция ввода окна кнопки в строку «Статусы участников». */
 export function pressEntryResultOf(form: TransitionFormInput): PressEntryResult {
   const messageIds = [...new Set(form.result?.messageIds ?? [])];
