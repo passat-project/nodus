@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueryClient } from '@tanstack/react-query';
 
 import { useAuthStore } from '../auth-store.js';
-import { acquireOpenConversation, resetOpenConversationRegistry } from '../chat/notifications.js';
+import {
+  acquireOpenConversation,
+  resetOpenConversationRegistry,
+} from '../chat/open-conversation.js';
 import { setShellVisibleFromShell } from './desktop-bridge.js';
 import { notifyDesktopMessage } from './desktop-notify.js';
 

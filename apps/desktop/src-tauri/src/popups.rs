@@ -62,6 +62,9 @@ pub(crate) struct ActivePopup {
     pub(crate) replying: bool,
     /// Окно показано (popup_ready или fallback): повторный show не нужен.
     pub(crate) shown: bool,
+    /// Абсолютный путь скачанного файла (#647) — ТОЛЬКО в Rust: мини-UI его
+    /// не получает, «Показать в папке» берёт путь отсюда по метке окна.
+    pub(crate) download_path: Option<String>,
     /// Payload для pull-модели: окно забирает данные само после загрузки
     /// (push-событие проигрывал бы гонку со скоростью монтирования React).
     payload: serde_json::Value,
@@ -135,6 +138,11 @@ fn payload_to_json(payload: &PopupPayload, theme: &str) -> serde_json::Value {
         "previewAttachment": payload.preview_attachment.unwrap_or(false),
         "urgent": payload.urgent,
         "canReply": payload.can_reply,
+        // Путь файла НЕ отдаём: мини-UI знает только имя и факт успеха (#647).
+        "download": payload.download.as_ref().map(|d| serde_json::json!({
+            "fileName": d.file_name,
+            "success": d.success,
+        })),
         "theme": theme,
     })
 }
@@ -148,6 +156,7 @@ pub(crate) fn stack(app: &AppHandle) -> std::sync::MutexGuard<'_, PopupStack> {
 pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
     let payload_json = payload_to_json(&payload, bridge::ui_theme());
     let dismiss_key = payload.dismiss_key().to_string();
+    let download_path = payload.download.as_ref().and_then(|d| d.path.clone());
     let (label, _slot) = {
         let mut s = stack(app);
         // Полный стек: новое вытесняет старейший спокойный (очередь-сдвиг);
@@ -182,6 +191,7 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
             hover: false,
             replying: false,
             shown: false,
+            download_path,
             payload: payload_json,
         });
         (label, slot)
@@ -557,6 +567,7 @@ mod tests {
             preview_attachment: None,
             urgent: false,
             can_reply: true,
+            download: None,
         }
     }
 
@@ -585,6 +596,7 @@ mod tests {
                 hover: false,
                 replying: false,
                 shown: false,
+                download_path: None,
                 payload: serde_json::Value::Null,
             });
         }
@@ -667,5 +679,45 @@ mod tests {
         assert_eq!(json["letterId"], "letter-9");
         assert!(json["conversationId"].is_null());
         assert_eq!(json["canReply"], false);
+    }
+
+    /** Скачивание (#647): мини-UI получает имя и успех, но НЕ путь — инвариант
+     *  «путь только в Rust» держится и маппингом, и `skip_serializing`. */
+    fn download_payload() -> PopupPayload {
+        PopupPayload {
+            id: "download-1".into(),
+            conversation_id: None,
+            letter_id: None,
+            thread_root_id: None,
+            title: "Смета.xlsx".into(),
+            avatar_url: None,
+            preview: String::new(),
+            preview_attachment: None,
+            urgent: false,
+            can_reply: false,
+            download: Some(crate::bridge::PopupDownload {
+                file_name: "Смета.xlsx".into(),
+                success: true,
+                path: Some(r"C:\Users\user\Downloads\Смета.xlsx".into()),
+            }),
+        }
+    }
+
+    #[test]
+    fn payload_скачивания_не_отдаёт_путь() {
+        let payload = download_payload();
+        let json = payload_to_json(&payload, "light");
+        assert_eq!(json["download"]["fileName"], "Смета.xlsx");
+        assert_eq!(json["download"]["success"], true);
+        assert!(
+            json["download"].get("path").is_none(),
+            "путь не уходит в мини-UI"
+        );
+        // Полная serde-сериализация тоже не несёт путь (skip_serializing).
+        let full = serde_json::to_value(&payload).expect("payload сериализуется");
+        assert!(
+            full["download"].get("path").is_none(),
+            "path помечен skip_serializing"
+        );
     }
 }

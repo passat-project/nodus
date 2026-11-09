@@ -28,7 +28,7 @@ function snap(n: number, overrides: Partial<NotificationSnapshot> = {}): Notific
 vi.mock('../../../shared/auth-store.js', () => ({
   useAuthStore: { getState: () => ({ user: { id: ME } }) },
 }));
-vi.mock('../../../shared/chat/notifications.js', () => ({
+vi.mock('../../../shared/chat/open-conversation.js', () => ({
   getOpenConversation: () => null,
 }));
 

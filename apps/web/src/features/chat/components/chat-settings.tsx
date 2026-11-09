@@ -1,17 +1,9 @@
 import { Check } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
 import { ui } from '@nodus/contracts';
-import { Switch } from '@nodus/ui/components/switch';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useChatPrefs, type ChatAlign } from '../../../shared/chat/chat-prefs.js';
-import {
-  disableNotifications,
-  enableNotifications,
-  notificationsEnabled,
-  notificationsSupported,
-} from '../../../shared/chat/notifications.js';
 
 /** Плитка-радио с мини-схемой ленты (модель Битрикс24 «Выравнивание
  *  сообщений»: выбор виден на превью, а не в тексте). */
@@ -63,19 +55,8 @@ const bubbleMine = 'h-3 w-16 rounded-md bg-bubble-out';
 export function ChatSettings() {
   const align = useChatPrefs((s) => s.align);
   const setAlign = useChatPrefs((s) => s.setAlign);
-  const [notif, setNotif] = useState(notificationsEnabled);
 
   const pick = (value: ChatAlign) => () => setAlign(value);
-
-  /** Permission браузер отдаёт только жесту — Switch и есть жест (#124). */
-  function toggleNotif(next: boolean): void {
-    if (!next) {
-      disableNotifications();
-      setNotif(false);
-      return;
-    }
-    void enableNotifications().then(setNotif);
-  }
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -110,19 +91,6 @@ export function ChatSettings() {
             {ui.chat.alignHint}
           </p>
         </section>
-        {/* Уведомления фоновой вкладки (#124): минимум живости до контура #100. */}
-        {notificationsSupported() ? (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-semibold text-foreground">{ui.chat.notificationsTitle}</h2>
-            <label className="flex w-fit cursor-pointer items-center gap-3">
-              <Switch checked={notif} onCheckedChange={toggleNotif} />
-              <span className="text-sm text-foreground">{ui.chat.notificationsTitle}</span>
-            </label>
-            <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">
-              {ui.chat.notificationsHint}
-            </p>
-          </section>
-        ) : null}
       </div>
     </div>
   );

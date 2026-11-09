@@ -3,6 +3,7 @@ mod anchor;
 mod badge;
 mod bridge;
 mod deep_link;
+mod downloads;
 mod fade;
 mod layout;
 mod popups;
@@ -122,6 +123,7 @@ pub fn run() {
             popups::popup_close_all,
             popups::popup_submit_reply,
             popups::popup_open,
+            downloads::popup_reveal_download,
         ])
         .run(tauri::generate_context!())
         .expect("оболочка Nodus упала");
@@ -133,6 +135,7 @@ fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
     let version = app.package_info().version.to_string();
     let nav_app = app.clone();
     let new_window_app = app.clone();
+    let download_app = app.clone();
     let win =
         tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
             .title("Nodus")
@@ -149,6 +152,19 @@ fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
             .on_new_window(move |url, _features| {
                 open_in_system(&new_window_app, &url);
                 NewWindowResponse::Deny
+            })
+            // Скачивания (#647): wry по умолчанию молча кладёт файл в
+            // «Загрузки» (download_completed_handler = None) — на завершении
+            // показываем попап оболочки. Обработчик синхронный (event loop),
+            // поэтому окно попапа создаём ТОЛЬКО из async-контекста (gotcha).
+            .on_download(move |_webview, event| {
+                if let tauri::webview::DownloadEvent::Finished { url, path, success } = event {
+                    let app = download_app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        downloads::notify_finished(&app, &url, path, success);
+                    });
+                }
+                true
             })
             .build()?;
     let _ = win.show();

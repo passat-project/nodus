@@ -4,7 +4,7 @@ import { chatMessageSentPayloadSchema, stripMentionTokens, ui } from '@nodus/con
 import { useAuthStore } from '../auth-store.js';
 import { withoutPatronymic } from '../lib/format.js';
 import { chatKeys } from '../chat/chat-keys.js';
-import { getOpenConversation } from '../chat/notifications.js';
+import { getOpenConversation } from '../chat/open-conversation.js';
 import { threadNotifyAllowed } from '../chat/thread-notify-gate.js';
 import {
   desktopFlashTaskbar,
@@ -20,8 +20,9 @@ import {
  * беседа открыта) — ПОЛНАЯ тишина, включая «Важное» (#300, вердикт владельца
  * 15.10; зеркало Slack/Telegram: сообщение и так на экране); «Важное»
  * пробивает только «Заглушено» и «Посмотреть позже». Ответы в трэдах —
- * только наблюдателям/@упомянутым (канон раунда 3, #300). Опти-ин браузерных
- * уведомлений (#124) тут НЕ действует: оболочку ставят осознанно.
+ * только наблюдателям/@упомянутым (канон раунда 3, #300). С #650 попапы —
+ * единственный канал уведомлений (браузерный opt-in удалён): в оболочке они
+ * показываются всегда по этим правилам тишины.
  */
 export function notifyDesktopMessage(payload: unknown, queryClient: QueryClient): void {
   if (!isDesktopShell()) return;
