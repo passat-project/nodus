@@ -9,6 +9,7 @@ import { DeadlineChip } from '../ui/deadline-chip.js';
 import { identityTone } from '../ui/identity-tone.js';
 import { monoCell, PersonCell } from '../ui/person-cell.js';
 import { TaskStatusBadge } from '../ui/task-status-badge.js';
+import { TaskTypeIcon } from '../ui/task-type-icon.js';
 import { attributeColumnFields } from './attribute-fields.js';
 import type { DataTableField } from './data-table.js';
 import { CommentsCount } from '../tasks/comments-count.js';
@@ -61,7 +62,12 @@ export function makeTaskTableFields({
       minWidth: 160,
       maxWidth: 640,
       locked: true,
-      render: (task) => <span className="truncate text-sm font-medium">{task.title}</span>,
+      render: (task) => (
+        <>
+          <TaskTypeIcon type={task.type} />
+          <span className="truncate text-sm font-medium">{task.title}</span>
+        </>
+      ),
       sortValue: (task) => task.title,
     },
     {
