@@ -119,8 +119,9 @@ pub struct PopupDownload {
     pub file_name: String,
     /// Успех скачивания: false — карточка ошибки без кнопки.
     pub success: bool,
-    /// Абсолютный путь скачанного файла (для reveal). В JSON не сериализуется.
-    #[serde(default)]
+    /// Абсолютный путь скачанного файла (для reveal). `skip_serializing` —
+    /// инвариант «путь только в Rust» держится типом, а не местом вызова.
+    #[serde(default, skip_serializing)]
     pub path: Option<String>,
 }
 

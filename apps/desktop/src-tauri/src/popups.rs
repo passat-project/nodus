@@ -680,4 +680,44 @@ mod tests {
         assert!(json["conversationId"].is_null());
         assert_eq!(json["canReply"], false);
     }
+
+    /** Скачивание (#647): мини-UI получает имя и успех, но НЕ путь — инвариант
+     *  «путь только в Rust» держится и маппингом, и `skip_serializing`. */
+    fn download_payload() -> PopupPayload {
+        PopupPayload {
+            id: "download-1".into(),
+            conversation_id: None,
+            letter_id: None,
+            thread_root_id: None,
+            title: "Смета.xlsx".into(),
+            avatar_url: None,
+            preview: String::new(),
+            preview_attachment: None,
+            urgent: false,
+            can_reply: false,
+            download: Some(crate::bridge::PopupDownload {
+                file_name: "Смета.xlsx".into(),
+                success: true,
+                path: Some(r"C:\Users\user\Downloads\Смета.xlsx".into()),
+            }),
+        }
+    }
+
+    #[test]
+    fn payload_скачивания_не_отдаёт_путь() {
+        let payload = download_payload();
+        let json = payload_to_json(&payload, "light");
+        assert_eq!(json["download"]["fileName"], "Смета.xlsx");
+        assert_eq!(json["download"]["success"], true);
+        assert!(
+            json["download"].get("path").is_none(),
+            "путь не уходит в мини-UI"
+        );
+        // Полная serde-сериализация тоже не несёт путь (skip_serializing).
+        let full = serde_json::to_value(&payload).expect("payload сериализуется");
+        assert!(
+            full["download"].get("path").is_none(),
+            "path помечен skip_serializing"
+        );
+    }
 }

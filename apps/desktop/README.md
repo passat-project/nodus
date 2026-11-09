@@ -49,6 +49,15 @@ apps/desktop/
   payload попапа и проверяет каталог «Загрузки» (симлинки наружу
   отвергаются), открытие — `reveal_item_in_dir` (проводник с выделением).
 
+- Обновления: `GET <портал>/desktop/latest.json` + установщики (`/desktop/`
+  статика nginx, env `NODUS_DESKTOP_DIR`); pubkey зашит в `tauri.conf.json`.
+- Ссылки (#644): JS-перехват `<a target="_blank">` плагина opener **выключен**
+  (`open_js_links_on_click(false)`) — он глушил клики отказом ACL. Решение
+  принимает веб-перехватчик `apps/web/src/app/shell/use-link-interception.ts`:
+  внутренние карточки открываются стеком, внешние http(s) и `mailto:`/`tel:` —
+  командой моста `open_external` (системные приложения). `on_new_window`
+  остаётся страховкой: URL уходит в систему, окно WebView2 не создаётся.
+
 ## Уведомления — только попапы оболочки (#650)
 
 Единственный канал уведомлений — попапы оболочки (ADR-0019). Браузерного
@@ -64,14 +73,6 @@ apps/desktop/
   `urgent` висит до реакции; карточка скачивания информационная —
   автоскрытие 8 с, hover держит паузу; «Скрыть все» гасит стек.
 - Тема — тема приложения (не Windows), строки — i18n `ui.desktop`.
-- Обновления: `GET <портал>/desktop/latest.json` + установщики (`/desktop/`
-  статика nginx, env `NODUS_DESKTOP_DIR`); pubkey зашит в `tauri.conf.json`.
-- Ссылки (#644): JS-перехват `<a target="_blank">` плагина opener **выключен**
-  (`open_js_links_on_click(false)`) — он глушил клики отказом ACL. Решение
-  принимает веб-перехватчик `apps/web/src/app/shell/use-link-interception.ts`:
-  внутренние карточки открываются стеком, внешние http(s) и `mailto:`/`tel:` —
-  командой моста `open_external` (системные приложения). `on_new_window`
-  остаётся страховкой: URL уходит в систему, окно WebView2 не создаётся.
 
 ## Автообновление (пассивный поток, #263)
 
