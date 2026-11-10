@@ -10,7 +10,7 @@ import type {
   ReorderCustomFieldsBody,
   UpdateCustomFieldBody,
 } from '@nodus/contracts';
-import { CUSTOM_FIELD_LIMITS, ErrorCode, Permission } from '@nodus/contracts';
+import { CUSTOM_FIELD_LIMITS, ErrorCode } from '@nodus/contracts';
 
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
@@ -42,6 +42,7 @@ import { emitDefinitionChanged } from './definition-events.js';
 import { CounterRuleService } from './counter-rule.service.js';
 import {
   assertBindingsUsable,
+  assertDictionaryManage,
   createBindings,
   assertDefaultUsable,
   assertSettingsUsable,
@@ -64,37 +65,6 @@ import { CustomFieldValueValidator } from '../values/value-validator.js';
  * (Р12, техническая страховка). Мутации — транзакция + outbox
  * `custom_field.definition_changed` (I9), аудит — контроллером.
  */
-/** id справочника из настроек определения (невалидное — null). */
-function dictionaryIdOf(settings: unknown): string | null {
-  const id = (settings as { dictionaryId?: unknown } | undefined)?.dictionaryId;
-  return typeof id === 'string' ? id : null;
-}
-
-/**
- * #604: работа со справочником требует `dictionary.manage` (I8 — сервер не
- * доверяет UI #491). Триггеры: появился/сменился `settings.dictionaryId` или
- * тип переводится в списковое семейство. Правка имени/подсказки/умолчания
- * существующего списка с одним `custom_field.manage` разрешена — контракт
- * #491. Fail-closed: забытый вызывающим список прав = отказ, не обход.
- */
-function assertDictionaryManage(
-  permissions: readonly string[],
-  current: { type: string; settings: unknown } | null,
-  nextType: string,
-  nextSettings: unknown,
-): void {
-  if (permissions.includes(Permission.DICTIONARY_MANAGE)) return;
-  const nextDictionaryId = dictionaryIdOf(nextSettings);
-  const currentDictionaryId = dictionaryIdOf(current?.settings);
-  const becomesList = nextType === 'enum' || nextType === 'multienum';
-  const wasList = current?.type === 'enum' || current?.type === 'multienum';
-  if (nextDictionaryId !== currentDictionaryId || (becomesList && !wasList)) {
-    throw DomainException.forbidden('Dictionary management permission required', {
-      permission: Permission.DICTIONARY_MANAGE,
-    });
-  }
-}
-
 @Injectable()
 export class DefinitionsService {
   constructor(
