@@ -38,37 +38,49 @@ const ANY = 'any';
 const DISPLAYS: readonly TransitionDisplay[] = ['primary', 'button', 'menu'];
 const INTENTS = ['action', 'service'] as const;
 
+/** Сводка «Кто видит»: роли категории, решающие (#433) или «Никто». */
+export function rolesSummary(rules: WorkflowDraftTransition['rules'], category: ProcessCategory) {
+  const roles = rolesOf(rules);
+  const deciderSources = deciderSourcesOf(rules);
+  const roleOrder = WORKFLOW_ROLES_BY_CATEGORY[category];
+  if (roles.size > 0) {
+    return roleOrder
+      .filter((r) => roles.has(r))
+      .map((r) => ui.automation.roles[r])
+      .join(', ');
+  }
+  return deciderSources.length > 0
+    ? ui.automation.deciders.rolesOnlyDeciders
+    : ui.automation.panel.nobody;
+}
+
+/** Сводка «Окно»: выключено, пустое или состав разделов. */
+export function windowSummary(form: WorkflowDraftTransition['form']): string {
+  if (!form.enabled) return ui.automation.window.summaryOff;
+  if (form.sections.length === 0) return ui.automation.window.summaryEmpty;
+  return form.sections
+    .map((section) =>
+      'label' in section && section.label?.trim()
+        ? section.label
+        : ui.automation.window.sections[section.kind],
+    )
+    .join(', ');
+}
+
 /** Сводки разделов (строка под названием раздела). */
 export function sectionSummaries(
   transition: WorkflowDraftTransition,
   doc: WorkflowDraftDocument,
   category: ProcessCategory = 'task',
 ) {
-  const roles = rolesOf(transition.rules);
   const deciderSources = deciderSourcesOf(transition.rules);
-  const roleOrder = WORKFLOW_ROLES_BY_CATEGORY[category];
   const validatorOrder = WORKFLOW_VALIDATORS_BY_CATEGORY[category] as readonly string[];
   const validators = VALIDATOR_KINDS.filter(
     (kind) => validatorOrder.includes(kind) && validatorOf(transition.rules, kind),
   );
   const routeIf = routeIfOf(transition.rules);
-  const windowSummary = !transition.form.enabled
-    ? ui.automation.window.summaryOff
-    : transition.form.sections.length === 0
-      ? ui.automation.window.summaryEmpty
-      : transition.form.sections
-          .map((section) => ui.automation.window.sections[section.kind])
-          .join(', ');
   return {
-    roles:
-      roles.size > 0
-        ? roleOrder
-            .filter((r) => roles.has(r))
-            .map((r) => ui.automation.roles[r])
-            .join(', ')
-        : deciderSources.length > 0
-          ? ui.automation.deciders.rolesOnlyDeciders
-          : ui.automation.panel.nobody,
+    roles: rolesSummary(transition.rules, category),
     deciders:
       deciderSources.length === 0
         ? ui.automation.deciders.summaryEmpty
@@ -102,7 +114,7 @@ export function sectionSummaries(
               : ui.automation.panel.routeIfSummaryCreator
           } ${doc.stages.find((s) => s.id === routeIf)?.name ?? ''}`
         : ui.automation.panel.noRules,
-    window: windowSummary,
+    window: windowSummary(transition.form),
   };
 }
 

@@ -18,6 +18,10 @@ import { CUSTOM_FIELD_LIMITS } from '@nodus/contracts';
 
 export type Rules = WorkflowDraftTransition['rules'];
 
+/** Владелец «кто видит» и окна: у кнопки-перехода и действия одинаковые
+ *  разделы панели (#633), поэтому разделы принимают общий тип. */
+export type RuleFormOwner = Pick<WorkflowDraftTransition, 'id' | 'name' | 'rules' | 'form'>;
+
 export const ACTOR_ROLES: readonly WorkflowActorRole[] = [
   'creator',
   'assignee',

@@ -5,7 +5,6 @@ import type {
   ProcessCategory,
   TransitionFormSectionKind,
   TransitionWindowField,
-  WorkflowDraftTransition,
 } from '@nodus/contracts';
 import {
   CUSTOM_FIELD_LIMITS,
@@ -51,7 +50,7 @@ import {
   type TransitionExtra,
 } from '../../../model/transition-builder.js';
 import { WINDOW_FIELDS } from '../../../model/transition-form.js';
-import { validatorOf } from '../../../model/transition-rules.js';
+import { validatorOf, type RuleFormOwner } from '../../../model/transition-rules.js';
 import { BlockSettings } from './block-settings.js';
 
 const b = ui.forms.builder;
@@ -104,6 +103,7 @@ const BLOCK_PREVIEW: Readonly<Record<TransitionFormSectionKind, PreviewKind>> = 
 export function TransitionWindowBuilder({
   open,
   transition,
+  kind = 'transition',
   scope,
   typeId,
   category,
@@ -111,7 +111,9 @@ export function TransitionWindowBuilder({
   onClose,
 }: {
   open: boolean;
-  transition: WorkflowDraftTransition;
+  transition: RuleFormOwner;
+  /** Действие (#633): то же окно, но правки идут в `patchAction`. */
+  kind?: 'transition' | 'action';
   scope: CustomFieldModule;
   typeId?: string;
   category: ProcessCategory;
@@ -124,7 +126,7 @@ export function TransitionWindowBuilder({
     () => transitionToBuilder(transition.form, transition.rules),
     [transition.form, transition.rules],
   );
-  const host = useTransitionHost(transition, scoped, typeId, category, readOnly);
+  const host = useTransitionHost(transition, scoped, typeId, category, readOnly, kind);
   return (
     <FormBuilder
       open={open}
@@ -133,10 +135,13 @@ export function TransitionWindowBuilder({
       readOnly={readOnly}
       onCancel={onClose}
       onDone={(next) => {
-        useRouteDocStore.getState().patchTransition(transition.id, {
+        const store = useRouteDocStore.getState();
+        const patch = {
           form: transitionFromBuilder(transition.form, next),
           rules: rulesFromBuilder(transition.rules, value, next),
-        });
+        };
+        if (kind === 'action') store.patchAction(transition.id, patch);
+        else store.patchTransition(transition.id, patch);
         onClose();
       }}
     />
@@ -144,11 +149,12 @@ export function TransitionWindowBuilder({
 }
 
 function useTransitionHost(
-  transition: WorkflowDraftTransition,
+  transition: RuleFormOwner,
   scoped: readonly CustomFieldDefinition[],
   typeId: string | undefined,
   category: ProcessCategory,
   readOnly: boolean,
+  kind: 'transition' | 'action',
 ): FormBuilderHost<TransitionExtra> {
   return useMemo(() => {
     const byId = new Map(scoped.map((entry) => [entry.id, entry]));
@@ -196,7 +202,7 @@ function useTransitionHost(
       preview: BLOCK_PREVIEW[kind],
     }));
     return {
-      title: `${b.titles.transition} «${transition.name || w.preview}»`,
+      title: `${kind === 'action' ? b.titles.action : b.titles.transition} «${transition.name || w.preview}»`,
       info,
       catalog: [
         ...WINDOW_FIELDS.map((key) => ({ key, label: info(key).label, group: 'system' as const })),
@@ -241,7 +247,7 @@ function useTransitionHost(
       footer: <TransitionFooter transition={transition} labelOf={(key) => info(key).label} />,
       limits: { fields: CUSTOM_FIELD_LIMITS.windowFields, decor: FORM_LAYOUT_LIMITS.decor },
     };
-  }, [transition, scoped, typeId, category, readOnly]);
+  }, [transition, scoped, typeId, category, readOnly, kind]);
 }
 
 /** Настоящий вид блока в редакторе — тот же, что увидит сотрудник. */
@@ -285,7 +291,7 @@ function TransitionFooter({
   transition,
   labelOf,
 }: {
-  transition: WorkflowDraftTransition;
+  transition: RuleFormOwner;
   labelOf: (key: string) => string;
 }) {
   const configured = new Set(

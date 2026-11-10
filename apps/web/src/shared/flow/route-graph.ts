@@ -52,6 +52,17 @@ export function buildRouteGraph(
     options.selection?.kind === kind && options.selection.id === id;
   const initial = doc.stages.find((s) => s.isInitial);
 
+  // Действия (#633) — у статуса на холсте только бейдж со счётчиком:
+  // статус они не меняют, стрелки у них нет.
+  const actions = [...(doc.actions ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
+  const stageActionList = (stageId: string) =>
+    actions.filter((a) => a.stageId === stageId).map((a) => ({ id: a.id, name: a.name }));
+  const selectedAction =
+    options.selection?.kind === 'action'
+      ? (actions.find((a) => a.id === options.selection!.id) ?? null)
+      : null;
+  const selectedActionStageId = selectedAction?.stageId ?? null;
+
   // Занятые точки подключения статусов — кружки, к которым приходят стрелки.
   const ports = new Map<string, Set<string>>();
   const markPort = (nodeId: string, handle: string) =>
@@ -85,7 +96,7 @@ export function buildRouteGraph(
         id: stage.id,
         type: 'status',
         position: route.positions.get(stage.id)!,
-        selected: isSelected('stage', stage.id),
+        selected: isSelected('stage', stage.id) || selectedActionStageId === stage.id,
         draggable: !readOnly,
         connectable: !readOnly,
         deletable: !readOnly,
@@ -99,6 +110,9 @@ export function buildRouteGraph(
           current: options.currentStageId === stage.id,
           readOnly,
           taskCount: options.stageEntityCounts?.[stage.id] ?? 0,
+          actions: stageActionList(stage.id),
+          selectedActionId:
+            selectedActionStageId === stage.id ? (selectedAction?.id ?? null) : null,
           ports: [...(ports.get(stage.id) ?? [])],
           selectedPorts: selectedPorts.get(stage.id) ?? [],
         },

@@ -108,4 +108,32 @@ describe('route-doc-store: действия маршрута (#633)', () => {
     store.getState().removeAction(id);
     expect(store.getState().document.actions ?? []).toHaveLength(0);
   });
+
+  it('moveAction переставляет порядок действий внутри статуса', () => {
+    const store = freshStore();
+    const first = store.getState().addAction(S2);
+    const second = store.getState().addAction(S2);
+    store.getState().moveAction(second, 0);
+
+    const order = (store.getState().document.actions ?? [])
+      .filter((a) => a.stageId === S2)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((a) => a.id);
+    expect(order).toEqual([second, first]);
+  });
+
+  it('setActionPrimary: прежнее главное действие статуса становится кнопкой', () => {
+    const store = freshStore();
+    const first = store.getState().addAction(S2);
+    const other = store.getState().addAction(S1);
+    store.getState().setActionPrimary(first);
+    const second = store.getState().addAction(S2);
+    store.getState().setActionPrimary(second);
+
+    const byId = new Map((store.getState().document.actions ?? []).map((a) => [a.id, a]));
+    expect(byId.get(second)?.display).toBe('primary');
+    expect(byId.get(first)?.display).toBe('button');
+    // У другого статуса главное действие не тронуто.
+    expect(byId.get(other)?.display).toBe('button');
+  });
 });

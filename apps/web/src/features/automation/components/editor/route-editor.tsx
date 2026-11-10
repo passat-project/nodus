@@ -211,7 +211,8 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
       store.select({ kind: 'creation', id: 'creation', field: problem.creationField });
       return;
     }
-    if (problem.transitionId) store.select({ kind: 'transition', id: problem.transitionId });
+    if (problem.actionId) store.select({ kind: 'action', id: problem.actionId });
+    else if (problem.transitionId) store.select({ kind: 'transition', id: problem.transitionId });
     else if (problem.stageId) store.select({ kind: 'stage', id: problem.stageId });
   };
 
