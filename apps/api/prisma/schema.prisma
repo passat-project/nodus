@@ -403,9 +403,10 @@ model Message {
   authorId             String    @map("author_id") @db.Uuid
   clientMessageId      String    @map("client_message_id")
   text                 String    @default("")
-  /// Вид сообщения (#380): text | task_transition (#313 добавит system).
+  /// Вид сообщения (#380): text | task_transition | letter_transition | task_action.
   kind                 String    @default("text")
-  /// Данные блока по виду сообщения (task_transition: TaskTransitionBlock).
+  /// Данные блока по виду сообщения (task_transition: TaskTransitionBlock,
+  /// task_action: TaskActionBlock — #633).
   payload              Json?
   replyToId            String?   @map("reply_to_id") @db.Uuid
   /// Замороженный снапшот цитаты {authorId, text, quoteText, attachmentKind}:

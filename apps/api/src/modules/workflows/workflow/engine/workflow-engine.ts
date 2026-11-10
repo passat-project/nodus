@@ -9,6 +9,7 @@ import {
   windowWritableKeys,
   type ProcessCategory,
   type TransitionFormInput,
+  type WorkflowAction,
   type WorkflowTransition,
 } from '@nodus/contracts';
 
@@ -43,7 +44,12 @@ import {
   type TransitionDef,
 } from '../transition-rules.js';
 import { approverContext } from './approver-context.js';
-import { canShow, transitionOptions, vacancyReasons } from './transition-availability.js';
+import {
+  canShow,
+  actionOptions,
+  transitionOptions,
+  vacancyReasons,
+} from './transition-availability.js';
 import * as exec from './transition-execution-helpers.js';
 import { checkFormInput, windowOf } from '../transition-form.js';
 import { WorkflowEntityRegistry } from './entity-adapter.registry.js';
@@ -80,6 +86,18 @@ export class WorkflowEngine implements WorkflowEnginePort {
   ): Promise<WorkflowTransition[]> {
     const { workflow, subject } = await this.context(tx, entityId, category, actor);
     return this.options(workflow, subject, approverContext(workflow, subject));
+  }
+
+  /** Действия текущего статуса для панели карточки (#633): видимые актору,
+   *  свои раньше «из любого»; окно — если включено. */
+  async availableActions(
+    tx: TransactionClient,
+    entityId: string,
+    category: ProcessCategory,
+    actor: WorkflowActor,
+  ): Promise<WorkflowAction[]> {
+    const { workflow, subject } = await this.context(tx, entityId, category, actor);
+    return actionOptions(workflow, subject);
   }
 
   async execute(
@@ -251,7 +269,14 @@ export class WorkflowEngine implements WorkflowEnginePort {
     actor: WorkflowActor,
     actionId: string,
     opts: { form?: TransitionFormInput } = {},
-  ): Promise<{ actionName: string; fields: Record<string, unknown> }> {
+  ): Promise<{
+    actionName: string;
+    stageName: string;
+    recordId: string;
+    fields: Record<string, unknown>;
+    commentLabel?: string;
+    result?: { resultId: string; fileCount: number; messageCount: number };
+  }> {
     const adapter = this.adapters.get(category);
     await adapter.lock(tx, entityId);
     const subject = await this.subjectWithPermissions(tx, entityId, category, actor);
@@ -282,8 +307,9 @@ export class WorkflowEngine implements WorkflowEnginePort {
         transitionName: action.name,
       });
     }
+    const recordId = randomUUID();
     await this.records.insert(tx, {
-      id: randomUUID(),
+      id: recordId,
       entityKind: category,
       entityId,
       transitionId: null,
@@ -299,7 +325,16 @@ export class WorkflowEngine implements WorkflowEnginePort {
       fields: applied.fields,
       timeEntryId: applied.timeEntryId,
     });
-    return { actionName: action.name, fields: applied.fields };
+    return {
+      actionName: action.name,
+      stageName: this.stage(workflow, subject.stageId).name,
+      recordId,
+      fields: applied.fields,
+      ...(exec.commentLabelOf(asTransition)
+        ? { commentLabel: exec.commentLabelOf(asTransition) }
+        : {}),
+      ...(applied.result ? { result: applied.result } : {}),
+    };
   }
 
   /** План номеров кнопки: только `assign_number {fieldId}`, только поля без

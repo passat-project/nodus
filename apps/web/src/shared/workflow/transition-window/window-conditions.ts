@@ -20,7 +20,7 @@ export interface WindowConditionLine {
 
 /** Причина блокировки этого вида из ответа сервера (если кнопка уже блокировалась). */
 function reasonOf(
-  transition: WorkflowTransition,
+  transition: Pick<WorkflowTransition, 'blockedBy'>,
   kind: TransitionBlockReason['kind'],
 ): TransitionBlockReason | undefined {
   return transition.blockedBy.find((r) => r.kind === kind);
@@ -66,7 +66,7 @@ export function windowConditionLines({
   draft,
   attachmentCount,
 }: {
-  transition: WorkflowTransition;
+  transition: Pick<WorkflowTransition, 'validators' | 'blockedBy'>;
   context: TransitionWindowContext;
   draft: WindowDraft;
   attachmentCount: number;

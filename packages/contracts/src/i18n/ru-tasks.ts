@@ -213,6 +213,8 @@ export const tasksStrings = {
    *  кнопок задаёт маршрут, главная слева, «Ещё ⋯» — меню. */
   processObserving: 'Вы наблюдаете за задачей',
   processNoActions: 'Нет доступных действий',
+  /** Действие без смены статуса (#633): тост после нажатия. */
+  actionDone: 'Действие выполнено',
   processRouteView: 'Схема маршрута',
   processBlockedMissing: 'Не хватает:',
   processOutcomeSuccess: 'Завершена',

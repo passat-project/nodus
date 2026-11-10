@@ -14,7 +14,8 @@ import { workflowTransitionRulesSchema } from './workflow.schemas.js';
 import { workflowDocActionSchema, workflowDraftActionSchema } from './workflow-action.schemas.js';
 
 export { workflowDraftActionSchema } from './workflow-action.schemas.js';
-export type { WorkflowDraftAction } from './workflow-action.schemas.js';
+export { workflowActionSchema } from './workflow-action.schemas.js';
+export type { WorkflowAction, WorkflowDraftAction } from './workflow-action.schemas.js';
 
 /**
  * Документ маршрута — рабочая копия редактора (#378, ADR-0021): стадии и

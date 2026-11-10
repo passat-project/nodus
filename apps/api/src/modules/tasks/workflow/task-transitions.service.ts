@@ -6,18 +6,20 @@ import type {
   CustomFieldValue,
   ExecuteTransitionBody,
   ExecuteTransitionResult,
+  WorkflowAction,
   WorkflowTransition,
 } from '@nodus/contracts';
-import { customFieldIdOfKey, CUSTOM_FIELD_LIMITS } from '@nodus/contracts';
+import { TASK_EVENTS, customFieldIdOfKey, CUSTOM_FIELD_LIMITS } from '@nodus/contracts';
 
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import { EventBus } from '../../../core/events/event-bus.js';
 import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import {
   WORKFLOW_ENGINE,
   type WorkflowEnginePort,
 } from '../../workflows/ports/workflow-engine.port.js';
-import { actorRoles, planHolderIds, taskAccess } from '../access/task-access.js';
+import { actorRoles, audienceIds, planHolderIds, taskAccess } from '../access/task-access.js';
 import { Placements } from '../personal/placements.js';
 import { TasksQueryService } from '../tasks/tasks-query.service.js';
 import { TasksService } from '../tasks/tasks.service.js';
@@ -61,6 +63,7 @@ export class TaskTransitionsService {
     private readonly taskService: TasksService,
     @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
     @Inject(FORMULA_CELLS) private readonly cells: FormulaCells,
+    private readonly events: EventBus,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(TaskTransitionsService.name);
@@ -75,6 +78,13 @@ export class TaskTransitionsService {
       const transitions = await this.engine.available(tx, taskId, 'task', user);
       return this.withPrefill(transitions, taskId, user, tx);
     });
+  }
+
+  /** GET /tasks/:id/actions — действия без смены статуса (#633), видимые
+   *  актору. Шагов у них нет: действие с шагами пока не исполняется. */
+  async listActionsFor(user: AuthUser, taskId: string): Promise<WorkflowAction[]> {
+    await this.query.visibleRow(user, taskId);
+    return this.txRunner.run((tx) => this.engine.availableActions(tx, taskId, 'task', user));
   }
 
   /** Префилл формульных слотов: ошибка/пусто — слот остаётся пустым (Р13).
@@ -167,9 +177,30 @@ export class TaskTransitionsService {
     actionId: string,
     body: ExecuteTransitionBody,
   ): Promise<ExecuteTransitionResult> {
-    await this.query.visibleRow(user, taskId);
+    const row = await this.query.visibleRow(user, taskId);
     const transitions = await this.txRunner.run(async (tx) => {
-      await this.engine.pressAction(tx, taskId, 'task', user, actionId, { form: body.form });
+      const pressed = await this.engine.pressAction(tx, taskId, 'task', user, actionId, {
+        form: body.form,
+      });
+      // Журнал и лента задачи видят нажатие как событие (I3): статус тот же,
+      // поэтому отдельное событие, а не stage_changed.
+      await this.events.emit(
+        tx,
+        TASK_EVENTS.ACTION_PRESSED,
+        {
+          taskId,
+          number: row.number,
+          audience: audienceIds(row),
+          actionId,
+          actionName: pressed.actionName,
+          stageName: pressed.stageName,
+          recordId: pressed.recordId,
+          ...(body.form?.comment ? { comment: body.form.comment.slice(0, 2000) } : {}),
+          ...(pressed.commentLabel ? { commentLabel: pressed.commentLabel.slice(0, 60) } : {}),
+          ...(pressed.result ? { result: pressed.result } : {}),
+        },
+        { actorId: user.id, aggregateType: 'task', aggregateId: taskId },
+      );
       return this.withPrefill(
         await this.engine.available(tx, taskId, 'task', user),
         taskId,

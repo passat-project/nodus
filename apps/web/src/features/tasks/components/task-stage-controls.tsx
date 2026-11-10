@@ -9,8 +9,9 @@ import {
   Undo2,
   Workflow,
   X,
+  Zap,
 } from 'lucide-react';
-import type { TaskDetail, WorkflowTransition } from '@nodus/contracts';
+import type { TaskDetail, WorkflowAction, WorkflowTransition } from '@nodus/contracts';
 import { isFinalState, isReviewState, ui } from '@nodus/contracts';
 import {
   DropdownMenu,
@@ -25,8 +26,9 @@ import type { LucideIcon } from 'lucide-react';
 import { gateReasonsText, useWorkflowTransitions } from '../api/transitions-api.js';
 import { PauseGlyph } from '../../../shared/ui/pause-glyph.js';
 import { stageTone } from '../../../shared/ui/board/stage-tone.js';
-import { groupProcessButtons } from '../../../shared/workflow/process-buttons.js';
+import { groupByDisplay, groupProcessButtons } from '../../../shared/workflow/process-buttons.js';
 import { RouteViewDialog } from '../../../shared/workflow/route-view-dialog.js';
+import { useActionRunner } from './task-action-runner.js';
 import { TaskTimerButton } from './task-time.js';
 import { useTransitionRunner } from './task-transition-dialog.js';
 
@@ -70,6 +72,7 @@ export function TaskActionBar({
 }) {
   const { data: transitions } = useWorkflowTransitions(task.id);
   const runner = useTransitionRunner(task, onOpenSubtask);
+  const actionRunner = useActionRunner(task);
 
   if (!transitions) {
     return (
@@ -81,10 +84,49 @@ export function TaskActionBar({
   }
 
   const { primary, visible, menu } = groupProcessButtons(transitions);
+  // Действия (#633) — первыми в панели; залитая кнопка в баре одна: главная
+  // кнопка перехода сильнее, иначе главным становится действие.
+  const actionGroups = groupByDisplay(actionRunner.actions);
+  const primaryAction = primary ? null : actionGroups.primary;
+  const actionVisible: WorkflowAction[] = (
+    primary ? [actionGroups.primary, ...actionGroups.visible] : actionGroups.visible
+  ).filter((action): action is WorkflowAction => action !== null);
   const closed = isFinalState(task.stage.systemState);
   const cancelled = closed && task.stage.outcome === 'cancelled';
   const rejected = closed && task.stage.outcome === 'rejected';
   const negative = cancelled || rejected;
+  const noButtons = transitions.length + actionRunner.actions.length === 0;
+
+  const renderAction = (action: WorkflowAction, main: boolean) => {
+    const running = actionRunner.runningId === action.id;
+    const Icon = running ? Loader2 : Zap;
+    return (
+      <button
+        key={action.id}
+        type="button"
+        aria-busy={running || undefined}
+        aria-label={action.name}
+        title={action.name}
+        onClick={() => actionRunner.run(action)}
+        className={cn(
+          btn,
+          main
+            ? 'bg-primary text-primary-foreground hover:bg-primary-hover'
+            : 'min-w-0 shrink text-muted-foreground hover:bg-accent hover:text-foreground',
+        )}
+      >
+        <Icon className={cn('size-4 shrink-0', running && 'animate-spin')} strokeWidth={1.75} />
+        <span
+          className={cn(
+            'max-w-36 min-w-0 truncate @max-[420px]:max-w-24',
+            !main && '@max-[420px]:hidden',
+          )}
+        >
+          {action.name}
+        </span>
+      </button>
+    );
+  };
 
   const renderButton = (t: WorkflowTransition, main: boolean) => {
     const blocked = t.blockedBy.length > 0;
@@ -128,9 +170,12 @@ export function TaskActionBar({
     );
   };
 
+  const menuCount = menu.length + actionGroups.menu.length;
+
   return (
     <div className="flex w-full min-w-0 items-center gap-1.5">
       {runner.dialog}
+      {actionRunner.dialog}
       {closed ? (
         <span
           className={cn(
@@ -146,9 +191,14 @@ export function TaskActionBar({
           {task.stage.name}
         </span>
       ) : null}
+      {primaryAction ? renderAction(primaryAction, true) : null}
+      {actionVisible.map((action) => renderAction(action, false))}
+      {actionRunner.actions.length > 0 && transitions.length > 0 ? (
+        <span className="h-5 w-px shrink-0 bg-border" aria-hidden />
+      ) : null}
       {primary ? renderButton(primary, true) : null}
       {visible.map((t) => renderButton(t, false))}
-      {menu.length > 0 ? (
+      {menuCount > 0 ? (
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label={ui.tasks.moreActions}
@@ -158,6 +208,17 @@ export function TaskActionBar({
             <MoreHorizontal className="size-4" strokeWidth={1.75} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="top" className="w-52">
+            {actionGroups.menu.map((action) => (
+              <DropdownMenuItem
+                key={action.id}
+                title={action.name}
+                onSelect={() => actionRunner.run(action)}
+              >
+                <Zap className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+                {action.name}
+              </DropdownMenuItem>
+            ))}
+            {actionGroups.menu.length > 0 && menu.length > 0 ? <DropdownMenuSeparator /> : null}
             {menu.map((t) => (
               <DropdownMenuItem
                 key={t.id}
@@ -175,7 +236,7 @@ export function TaskActionBar({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-      {transitions.length === 0 ? (
+      {noButtons ? (
         <span className="px-1 text-sm text-muted-foreground">
           {task.access.canEdit ? ui.tasks.processNoActions : ui.tasks.processObserving}
         </span>
