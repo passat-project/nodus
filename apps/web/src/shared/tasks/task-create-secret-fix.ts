@@ -22,7 +22,7 @@ export function useTaskCreateSecretFix({
   retryCreate: () => void;
 }) {
   const secretMembers = failure?.secretMembers;
-  const { canFix, names } = useSecretMembersNotice(secretMembers);
+  const { canFix, names, projectName } = useSecretMembersNotice(secretMembers);
   const addMembers = useAddProjectMembers(secretMembers?.projectId ?? '');
   const fixable = Boolean(secretMembers && canFix);
 
@@ -35,5 +35,10 @@ export function useTaskCreateSecretFix({
     });
   }
 
-  return { fixable, names, canFix, fixing: addMembers.isPending, fixAndCreate };
+  return {
+    fixable,
+    notice: { names, canFix, projectName },
+    fixing: addMembers.isPending,
+    fixAndCreate,
+  };
 }

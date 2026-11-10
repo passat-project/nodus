@@ -28,4 +28,12 @@ describe('TaskCreateSecretMembers (#674)', () => {
     expect(alert.textContent).toContain(ui.projects.secretMembersCanAdd);
     expect(alert.querySelectorAll('p')).toHaveLength(2);
   });
+
+  it('называет проект, когда название загружено (#674)', () => {
+    render(<TaskCreateSecretMembers names={['Иванов И.']} canFix projectName="Космос" />);
+
+    expect(screen.getByRole('alert').textContent).toContain(
+      ui.projects.secretMembersNoAccessNamed.replace('{name}', 'Космос'),
+    );
+  });
 });

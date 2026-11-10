@@ -192,7 +192,7 @@ export function TaskCreateWindow({
     onClose,
   });
 
-  const { fixable, names, canFix, fixing, fixAndCreate } = useTaskCreateSecretFix({
+  const { fixable, notice, fixing, fixAndCreate } = useTaskCreateSecretFix({
     failure,
     create,
     retryCreate,
@@ -304,7 +304,7 @@ export function TaskCreateWindow({
               onOpenChecklist={() => setChecklistOpen(true)}
             />
 
-            {failure ? <TaskCreateFailure failure={failure} names={names} canFix={canFix} /> : null}
+            {failure ? <TaskCreateFailure failure={failure} {...notice} /> : null}
             {missingCount > 0 ? (
               <p
                 id="task-create-missing"

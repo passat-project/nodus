@@ -22,7 +22,7 @@ export function useSecretMembersNotice(members: SecretProjectMembers | undefined
   const names = (members?.userIds ?? [])
     .map((id) => usersById.get(id)?.displayName)
     .filter((name): name is string => Boolean(name));
-  return { canFix, names };
+  return { canFix, names, projectName: project?.name };
 }
 
 /**
@@ -33,16 +33,21 @@ export function useSecretMembersNotice(members: SecretProjectMembers | undefined
 export function TaskCreateSecretMembers({
   names,
   canFix,
+  projectName,
 }: {
   names: readonly string[];
   canFix: boolean;
+  projectName?: string;
 }) {
   const list = names.join(', ');
   const end = /[.!?]$/.test(list) ? '' : '.';
+  const reason = projectName
+    ? ui.projects.secretMembersNoAccessNamed.replace('{name}', projectName)
+    : ui.projects.secretMembersNoAccess;
   return (
     <div role="alert" className="flex flex-col gap-1 text-sm text-danger">
       <p>
-        {ui.projects.secretMembersNoAccess}
+        {reason}
         {names.length > 0 ? `: ${list}${end}` : null}
       </p>
       {canFix ? (
@@ -60,12 +65,16 @@ export function TaskCreateFailure({
   failure,
   names,
   canFix,
+  projectName,
 }: {
   failure: CreateFailure;
   names: readonly string[];
   canFix: boolean;
+  projectName?: string;
 }) {
-  if (failure.secretMembers) return <TaskCreateSecretMembers names={names} canFix={canFix} />;
+  if (failure.secretMembers) {
+    return <TaskCreateSecretMembers names={names} canFix={canFix} projectName={projectName} />;
+  }
   if (!failure.message) return null;
   return (
     <p role="alert" className="text-sm text-danger">
