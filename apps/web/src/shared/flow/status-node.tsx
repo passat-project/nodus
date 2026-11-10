@@ -98,10 +98,8 @@ export const StatusNode = memo(function StatusNode({
                   .map((action) => action.name)
                   .join(', ')}`}
                 className={cn(
-                  'inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] leading-none font-semibold tabular-nums',
-                  data.selectedActionId
-                    ? 'bg-primary/15 text-primary'
-                    : 'bg-accent text-muted-foreground',
+                  'mr-1 inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] leading-none font-semibold tabular-nums',
+                  data.selectedActionId ? 'bg-primary/15 text-ring' : 'bg-accent text-foreground',
                 )}
               >
                 <Zap className="size-3" strokeWidth={1.75} aria-hidden />

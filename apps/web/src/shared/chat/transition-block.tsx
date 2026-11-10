@@ -1,4 +1,4 @@
-import { CornerDownRight } from 'lucide-react';
+import { CornerDownRight, Zap } from 'lucide-react';
 import type { ChatMessage } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
@@ -61,7 +61,11 @@ export function TransitionBlock({
         ) : null}
         <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-muted/30 px-3 py-2">
           <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-            <CornerDownRight className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            {block.kind === 'task_action' ? (
+              <Zap className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            ) : (
+              <CornerDownRight className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            )}
             <span className="font-medium text-foreground">
               {block.kind === 'task_action'
                 ? `${ui.chat.transitionBlock.action}: ${block.actionName}`

@@ -244,18 +244,17 @@ export const automationStrings = {
     noRules: 'Нет',
     /** Действие — кнопка без смены статуса (#633). */
     sectionActions: 'Действия',
+    actionsLead: 'Кнопки, которые не меняют статус задачи',
     noActions: 'Нет действий',
     addActionLabel: 'Добавить действие',
     moreActions: 'ещё',
     actionName: 'Название действия',
-    actionStage: 'В каком статусе',
+    actionStage: 'Статус',
     actionAtAny: 'В любом статусе',
     actionWhoSees: 'Кто видит',
     actionWindow: 'Окно действия',
     deleteAction: 'Удалить действие',
     actionSteps: 'Шаги действия',
-    actionStepsHint:
-      'Шаги выполнятся при нажатии, статус задачи не изменится. Каталог шагов появится отдельной задачей',
     actionStepsEmpty: 'Шаги не настроены',
     actionNeedsFormOrSteps: 'Действию нужно окно или шаги — иначе публикация остановится с ошибкой',
     /** Подгруппа атрибутов гейта «Заполнены поля» (#431): подпись

@@ -121,31 +121,36 @@ export function ActionPanel({
         />
         <SectionLink
           title={ui.automation.panel.actionWindow}
-          summary={windowSummary(action.form)}
+          summary={
+            action.form?.enabled && action.form.title?.trim()
+              ? action.form.title
+              : windowSummary(action.form)
+          }
           onClick={() => onOpenSection('window')}
         />
       </div>
 
-      <PanelField
-        label={ui.automation.panel.actionSteps}
-        hint={
-          needsWindowOrSteps
-            ? ui.automation.panel.actionNeedsFormOrSteps
-            : ui.automation.panel.actionStepsHint
-        }
-      >
-        {action.steps.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{ui.automation.panel.actionStepsEmpty}</p>
-        ) : (
-          <ul className="flex min-w-0 flex-col gap-1 text-sm">
-            {action.steps.map((step, index) => (
-              <li key={`${step.kind}-${index}`} className="truncate">
-                {STEP_LABELS[step.kind] ?? step.kind}
-              </li>
-            ))}
-          </ul>
-        )}
-      </PanelField>
+      {/* Шаги: показываем только когда есть что показать (шаги) или когда
+          без них действие не опубликуется — поле без содержимого и без
+          возможности настроить было тупиком. */}
+      {action.steps.length > 0 || needsWindowOrSteps ? (
+        <PanelField
+          label={ui.automation.panel.actionSteps}
+          hint={needsWindowOrSteps ? ui.automation.panel.actionNeedsFormOrSteps : undefined}
+        >
+          {action.steps.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{ui.automation.panel.actionStepsEmpty}</p>
+          ) : (
+            <ul className="flex min-w-0 flex-col gap-1 text-sm">
+              {action.steps.map((step, index) => (
+                <li key={`${step.kind}-${index}`} className="truncate">
+                  {STEP_LABELS[step.kind] ?? step.kind}
+                </li>
+              ))}
+            </ul>
+          )}
+        </PanelField>
+      ) : null}
 
       {!readOnly ? (
         <PanelDanger onClick={() => store().removeAction(action.id)}>
