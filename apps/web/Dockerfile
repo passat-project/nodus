@@ -14,6 +14,8 @@ WORKDIR /app
 ARG VITE_API_MOCK=true
 RUN npm install --global pnpm@11.25.0
 COPY --from=pruner /app/out/json/ .
+# prepare ставит git-хуки; в образе это no-op, но файл нужен (нет .git)
+COPY --from=pruner /app/scripts/install-hooks.mjs ./scripts/
 RUN pnpm install --frozen-lockfile
 COPY --from=pruner /app/out/full/ .
 RUN pnpm turbo build --filter=@nodus/web

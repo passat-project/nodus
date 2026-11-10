@@ -22,7 +22,7 @@
     "live-stack": "node scripts/live-stack.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky",
+    "prepare": "node scripts/install-hooks.mjs",
     "plan:check": "node scripts/check-plan.mjs",
     "incubator:check": "node scripts/check-incubator.mjs"
   },
@@ -31,7 +31,7 @@
     "@types/node": "^24.19.2",
     "@vitest/coverage-v8": "4.1.12",
     "eslint": "^10.14.0",
-    "husky": "^9.1.7",
+    "lefthook": "^2.2.2",
     "lint-staged": "^17.6.0",
     "prettier": "^3.9.10",
     "turbo": "^2.11.10",

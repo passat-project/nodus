@@ -1,0 +1,16 @@
+# Хуки коммита (#706).
+#
+# lefthook — нативный бинарь, поэтому не зависит от того, видит ли shell git'а
+# node/npx (husky на Windows падал с `code 127`). Конфиг читается из корня репо;
+# после `pnpm install` хук активируется командой `prepare: lefthook install`.
+#
+# pre-commit быстрый: только staged-файлы.
+# gitleaks есть в PATH — блокирует; нет — предупреждает (жёсткий барьер в CI).
+
+pre-commit:
+  parallel: true
+  commands:
+    lint-staged:
+      run: pnpm lint-staged
+    secrets:
+      run: node scripts/secret-scan.mjs --staged
