@@ -192,7 +192,15 @@ fn open_in_system(app: &AppHandle, url: &Url) {
 /// Гвард навигации: локальный мини-UI и origin портала — можно; всё прочее —
 /// в системный браузер, webview остаётся на портале (security-рамка ADR-0019).
 fn navigation_allowed(app: &AppHandle, url: &Url) -> bool {
-    if url.host_str() == Some("tauri.localhost") {
+    // Схема приложения проверяется ДО host: с нативным HTML5 drag&drop (#716)
+    // WebView2 сам навигирует на file://-URL брошенного файла, а UNC-форма
+    // file://tauri.localhost/… иначе прошла бы проверку host и загрузила
+    // сторонний HTML в окно с внедрённым мостом оболочки (security-ревью #716).
+    // file: в системный браузер не отдаём вовсе (open_in_system его не пустит),
+    // mailto:/tel: — по-прежнему отдаёт внешнему обработчику ниже.
+    if matches!(url.scheme(), "http" | "https" | "tauri")
+        && url.host_str() == Some("tauri.localhost")
+    {
         return true;
     }
     if let Some(root) = portal::portal_root(app) {
