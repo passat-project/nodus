@@ -8,9 +8,7 @@ import { Dialog, DialogClose, DialogContent, DialogTitle } from '@nodus/ui/compo
 import { Input } from '@nodus/ui/components/input';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { X } from 'lucide-react';
-import { toast } from 'sonner';
 
-import { automationKeys } from '../api/automation-keys.js';
 import { defaultTaskType, useCreatableProcessTypes } from '../api/process-types-api.js';
 import { useCreateTask } from '../api/task-create.js';
 import { useCanManageWorkflows } from '../api/use-can-manage-workflows.js';
@@ -20,7 +18,6 @@ import { TaskChecklistSheet } from './task-checklist-sheet.js';
 import { TaskCreateChips } from './task-create-chips.js';
 import {
   applyFormulaPrefill,
-  buildCreateBody,
   emptyDraft,
   missingFor,
   missingTextOf,
@@ -32,10 +29,13 @@ import {
   type TaskCreateDraft,
   type TaskCreatePrefill,
 } from './task-create-draft.js';
-import { createFailureOf } from './task-create-errors.js';
+import { type CreateFailure } from './task-create-errors.js';
 import { TaskCreateFormBody } from './task-create-form-body.js';
 import { FormSkeleton } from './task-create-skeleton.js';
+import { TaskCreateFailure } from './task-create-secret-members.js';
+import { useTaskCreateSecretFix } from './task-create-secret-fix.js';
 import { TaskCreateStructure, useTaskCreateStructure } from './task-create-structure.js';
+import { taskCreateSubmit } from './task-create-submit.js';
 import { useCreationFormulaPrefill } from './use-creation-formula-prefill.js';
 import {
   EMPTY_FORM,
@@ -84,7 +84,7 @@ export function TaskCreateWindow({
   const initial = useMemo(() => emptyDraft(prefill ?? {}), [prefill]);
   const [draft, setDraft] = useState<TaskCreateDraft>(initial);
   const [invalidKeys, setInvalidKeys] = useState<ReadonlySet<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<CreateFailure | null>(null);
   const [checklistOpen, setChecklistOpen] = useState(false);
   const projectId = (draft.values.project as string | undefined) ?? prefill?.projectId;
   const structure = useTaskCreateStructure(projectId, prefill?.parentId);
@@ -106,7 +106,7 @@ export function TaskCreateWindow({
     if (open) {
       setDraft(initial);
       setInvalidKeys(new Set());
-      setError(null);
+      setFailure(null);
       setChecklistOpen(false);
       autoFilledRef.current = {};
       touchedRef.current = new Set();
@@ -179,27 +179,24 @@ export function TaskCreateWindow({
   const missingCount = missing.length + (missingStructure ? 1 : 0);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
 
-  function submit(event?: React.FormEvent) {
-    event?.preventDefault();
-    if (!canSubmit || create.isPending) return;
-    setError(null);
-    setInvalidKeys(new Set());
-    create.mutate(buildCreateBody(draft, prefill ?? {}, form), {
-      onSuccess: (task) => {
-        prefill?.onCreated?.(task);
-        toast.success(ui.tasks.created);
-        onClose();
-      },
-      onError: (failure) => {
-        const { message, invalidKeys: keys, refetchTypes } = createFailureOf(failure);
-        setError(message);
-        setInvalidKeys(keys);
-        if (refetchTypes) {
-          void queryClient.invalidateQueries({ queryKey: automationKeys.types('exclude', 'task') });
-        }
-      },
-    });
-  }
+  const { submit, retryCreate, editDraft } = taskCreateSubmit({
+    create,
+    draft,
+    prefill,
+    form,
+    canSubmit,
+    setDraft,
+    setFailure,
+    setInvalidKeys,
+    queryClient,
+    onClose,
+  });
+
+  const { fixable, notice, fixing, fixAndCreate } = useTaskCreateSecretFix({
+    failure,
+    create,
+    retryCreate,
+  });
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
@@ -218,14 +215,17 @@ export function TaskCreateWindow({
         }}
       >
         <DialogTitle className="sr-only">{ui.taskCreate.title}</DialogTitle>
-        <form onSubmit={submit} className="relative flex max-h-[80vh] min-w-0 flex-col">
+        <form
+          onSubmit={fixable ? fixAndCreate : submit}
+          className="relative flex max-h-[80vh] min-w-0 flex-col"
+        >
           <div className="flex flex-col gap-3 overflow-y-auto p-4 pb-3">
             <div className="flex min-w-0 items-center gap-2">
               <Input
                 value={draft.title}
                 onChange={(event) => {
                   touchedRef.current.add(TITLE_KEY);
-                  setDraft(withTitle(draft, event.target.value));
+                  editDraft(withTitle(draft, event.target.value));
                 }}
                 placeholder={ui.taskCreate.titlePlaceholder}
                 aria-label={ui.taskCreate.titlePlaceholder}
@@ -258,7 +258,7 @@ export function TaskCreateWindow({
                 showSettings={canManage && !preview}
                 dirty={dirty}
                 onChange={(typeId) => {
-                  setDraft(withType(draft, typeId));
+                  editDraft(withType(draft, typeId));
                   setInvalidKeys(new Set());
                 }}
                 onLeave={onClose}
@@ -280,7 +280,7 @@ export function TaskCreateWindow({
                   touchedRef.current.add(key);
                   delete autoFilledRef.current[key];
                   const next = withValue(draft, key, value);
-                  setDraft(
+                  editDraft(
                     key === 'project' && value !== draft.values.project
                       ? withNode(next, null)
                       : next,
@@ -294,21 +294,17 @@ export function TaskCreateWindow({
             <TaskCreateStructure
               structure={structure}
               value={draft.nodeId}
-              onChange={(nodeId) => setDraft(withNode(draft, nodeId))}
+              onChange={(nodeId) => editDraft(withNode(draft, nodeId))}
             />
 
             <TaskCreateChips
               chips={form.chips}
               draft={draft}
-              onChange={setDraft}
+              onChange={editDraft}
               onOpenChecklist={() => setChecklistOpen(true)}
             />
 
-            {error ? (
-              <p role="alert" className="text-sm text-danger">
-                {error}
-              </p>
-            ) : null}
+            {failure ? <TaskCreateFailure failure={failure} {...notice} /> : null}
             {missingCount > 0 ? (
               <p
                 id="task-create-missing"
@@ -329,10 +325,14 @@ export function TaskCreateWindow({
             <Button
               size="sm"
               type="submit"
-              disabled={!canSubmit || create.isPending}
+              disabled={!canSubmit || create.isPending || fixing}
               aria-describedby={missingCount > 0 ? 'task-create-missing' : undefined}
             >
-              {ui.common.create}
+              {fixing
+                ? ui.taskCreate.secretMembersAdding
+                : fixable
+                  ? ui.taskCreate.secretMembersAdd
+                  : ui.common.create}
             </Button>
           </div>
           {preview ? (
@@ -342,7 +342,7 @@ export function TaskCreateWindow({
           {checklistOpen ? (
             <TaskChecklistSheet
               items={draft.checklist}
-              onChange={(items) => setDraft(withChecklist(draft, items))}
+              onChange={(items) => editDraft(withChecklist(draft, items))}
               onClose={() => setChecklistOpen(false)}
             />
           ) : null}

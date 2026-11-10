@@ -39,11 +39,17 @@ export function TaskPeopleField({
   const canManage = task.access.canManageParticipants && editable;
   const label = role === 'coexecutor' ? ui.tasks.participants : ui.tasks.watchers;
 
-  function toggle(userId: string) {
+  function toggle(userId: string, user?: { displayName: string }) {
     const exists = people.some((p) => p.id === userId);
     request((reason) => {
       if (exists) remove.mutate({ userId, ...(reason ? { lockReason: reason } : {}) });
-      else add.mutate({ userId, role, ...(reason ? { lockReason: reason } : {}) });
+      else
+        add.mutate({
+          userId,
+          role,
+          ...(user ? { userName: user.displayName } : {}),
+          ...(reason ? { lockReason: reason } : {}),
+        });
     });
   }
 
@@ -109,10 +115,14 @@ export function TaskAssigneeField({
     <>
       <PeoplePicker
         selectedIds={task.assignee ? [task.assignee.id] : []}
-        onToggle={(userId) => {
+        onToggle={(userId, user) => {
           if (userId !== task.assignee?.id) {
             request((reason) =>
-              setAssignee.mutate({ assigneeId: userId, ...(reason ? { lockReason: reason } : {}) }),
+              setAssignee.mutate({
+                assigneeId: userId,
+                ...(user ? { userName: user.displayName } : {}),
+                ...(reason ? { lockReason: reason } : {}),
+              }),
             );
           }
         }}

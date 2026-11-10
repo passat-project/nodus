@@ -53,7 +53,8 @@
 из живых задач. `membersCount`/`membersPreview` — участники БЕЗ наблюдателей;
 наблюдатели — отдельное поле карточки (`observers`). Секретный: задачи состав не
 расширяют конструктивно — в задачу нельзя назначить (любой ролью, включая
-наблюдателя) того, кто не состоит в проекте (`assertMembersAllowed` → 422).
+наблюдателя) того, кто не состоит в проекте (`assertMembersAllowed` → 422
+`PROJECT_TASK_MEMBERS_INVALID {projectId, userIds}`, #674).
 
 События: `project.created` / `project.updated` (поля + clientId/
 previousClientId для crm-проекции, `status` при статусном действии) /

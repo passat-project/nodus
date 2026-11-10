@@ -69,7 +69,7 @@ export class TaskPartsController {
   @Audit({ action: 'task.participant_add', entity: 'task' })
   @ApiOperation({ summary: 'Добавить соисполнителя/наблюдателя (или сменить роль)' })
   @ApiCreatedResponse({ standardSchema: taskDetailSchema })
-  @ApiErrors(400, 401, 403, 404, 409)
+  @ApiErrors(400, 401, 403, 404, 409, 422)
   @ApiIdempotencyKey()
   addParticipant(
     @GetUser() user: AuthUser,

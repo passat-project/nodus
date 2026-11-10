@@ -128,6 +128,9 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.NUMBER_TRIGGER_INVALID]: HttpStatus.UNPROCESSABLE_ENTITY,
   [ErrorCode.NUMBER_BACKFILL_STALE]: HttpStatus.CONFLICT,
   [ErrorCode.PROJECT_FIELDS_REQUIRED]: HttpStatus.UNPROCESSABLE_ENTITY,
+  // Состав задачи секретного проекта (#674): запрос корректен, но выбранные
+  // сотрудники не могут получать задачи — 422, чтобы клиент показал причину.
+  [ErrorCode.PROJECT_TASK_MEMBERS_INVALID]: HttpStatus.UNPROCESSABLE_ENTITY,
   [ErrorCode.DICTIONARY_SYSTEM_LOCKED]: HttpStatus.CONFLICT,
   [ErrorCode.DICTIONARY_ITEM_NAME_TAKEN]: HttpStatus.CONFLICT,
   // Права доступа модулей (#379, ADR-0034): неизменяемая роль администратора —

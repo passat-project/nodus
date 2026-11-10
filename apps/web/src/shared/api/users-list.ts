@@ -62,9 +62,10 @@ export function useUsersSearch(search: string) {
 /** Справочник ЦЕЛИКОМ на клиенте (~170 человек — канон «малый справочник
  *  целиком»): добор всех страниц внутри queryFn, иначе журнал сотрудников,
  *  пикеры и фильтры молча теряли людей за первой страницей. */
-export function useUsersList() {
+export function useUsersList(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: usersListKey,
     queryFn: fetchAllUsers,
+    enabled: options.enabled ?? true,
   });
 }
