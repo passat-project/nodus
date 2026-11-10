@@ -25,6 +25,7 @@ import {
   SwitchRow,
 } from '../../../../../shared/ui/panel/panel-kit.js';
 import { stageButtonsSummary } from './stage-buttons-section.js';
+import { stageActionsSummary } from './stage-actions-section.js';
 import { StageNameField } from './stage-name-field.js';
 
 const GROUPS: readonly TaskSystemState[] = ['backlog', 'active', 'paused', 'done', 'closed'];
@@ -51,6 +52,7 @@ export function StagePanel({
   readOnly,
   autoFocusName,
   onOpenButtons,
+  onOpenActions,
   stageNameSuggestions = [],
   stageNameLoading = false,
 }: {
@@ -60,6 +62,7 @@ export function StagePanel({
   readOnly: boolean;
   autoFocusName: boolean;
   onOpenButtons: () => void;
+  onOpenActions: () => void;
   stageNameSuggestions?: readonly WorkflowStageName[];
   stageNameLoading?: boolean;
 }) {
@@ -171,6 +174,11 @@ export function StagePanel({
             onClick={() => store().select({ kind: 'transition', id: anyButton.id })}
           />
         ) : null}
+        <SectionLink
+          title={ui.automation.panel.sectionActions}
+          summary={stageActionsSummary(doc, stage.id)}
+          onClick={onOpenActions}
+        />
         <SectionLink
           title={ui.automation.panel.sectionButtons}
           summary={stageButtonsSummary(doc, stage.id)}

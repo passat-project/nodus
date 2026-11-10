@@ -4,7 +4,7 @@ import type { Node } from '@xyflow/react';
 import type { StageColor, StageOutcome, TaskSystemState } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
-import { Check, CircleAlert, X } from 'lucide-react';
+import { Check, CircleAlert, X, Zap } from 'lucide-react';
 
 import { stageTone } from '../ui/board/stage-tone.js';
 import { FLOW_HANDLE_IDS, SIDE_POSITION, handleRatio, handleSide } from './flow-handles.js';
@@ -23,6 +23,10 @@ export interface StatusNodeData extends Record<string, unknown> {
   readOnly: boolean;
   /** Сколько задач стоит в статусе (редактор; 0 — не показывается). */
   taskCount?: number;
+  /** Действия статуса (#633) — кнопки без смены статуса: бейдж и подсказка. */
+  actions?: readonly { id: string; name: string }[];
+  /** Какое из действий выделено в редакторе — бейдж подсвечен. */
+  selectedActionId?: string | null;
   /** Занятые точки подключения (к ним приходят стрелки) — кружки всегда. */
   ports?: readonly string[];
   /** Точки на концах выделенной стрелки — подсвечены. */
@@ -88,6 +92,22 @@ export const StatusNode = memo(function StatusNode({
             </span>
           ) : null}
           <span className="flex items-center gap-1 text-muted-foreground">
+            {data.actions && data.actions.length > 0 ? (
+              <span
+                title={`${ui.automation.panel.sectionActions}: ${data.actions
+                  .map((action) => action.name)
+                  .join(', ')}`}
+                className={cn(
+                  'inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] leading-none font-semibold tabular-nums',
+                  data.selectedActionId
+                    ? 'bg-primary/15 text-primary'
+                    : 'bg-accent text-muted-foreground',
+                )}
+              >
+                <Zap className="size-3" strokeWidth={1.75} aria-hidden />
+                {data.actions.length}
+              </span>
+            ) : null}
             {data.taskCount ? (
               <span
                 className="font-mono text-[11px] leading-none tabular-nums"

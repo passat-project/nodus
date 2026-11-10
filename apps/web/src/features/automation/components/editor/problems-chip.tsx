@@ -43,7 +43,7 @@ export function ProblemsChip({
       <PopoverContent align="start" className="nokey w-80 rounded-[14px] p-1.5">
         {problems.map((problem, index) => (
           <button
-            key={`${problem.code}-${problem.stageId ?? problem.transitionId ?? index}`}
+            key={`${problem.code}-${problem.actionId ?? problem.stageId ?? problem.transitionId ?? index}`}
             type="button"
             onClick={() => onProblemClick(problem)}
             className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/60"

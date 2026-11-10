@@ -160,6 +160,24 @@ export function RouteCanvas({
     return () => window.removeEventListener('keydown', handler);
   }, [editable]);
 
+  // Действие (#633) не узел холста: Delete снимает его, пока оно выделено
+  // в панели. Статусы и стрелки удаляет сам React Flow (onDelete).
+  useEffect(() => {
+    if (!editable) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      const selection = useRouteDocStore.getState().selection;
+      if (selection?.kind !== 'action') return;
+      event.preventDefault();
+      useRouteDocStore.getState().removeAction(selection.id);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [editable]);
+
   return (
     <FlowCanvas
       nodes={nodes}

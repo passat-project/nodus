@@ -7,6 +7,7 @@ import { Input } from '@nodus/ui/components/input';
 
 import { useRouteDocStore } from '../../../model/route-doc-store.js';
 import { sectionOf, setWindowEnabled, setWindowTitle } from '../../../model/transition-form.js';
+import type { RuleFormOwner } from '../../../model/transition-rules.js';
 import { PanelField, SectionLink, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
 import { TransitionWindowBuilder } from '../window-builder/transition-window-builder.js';
 
@@ -26,20 +27,27 @@ export function WindowSection({
   typeId,
   readOnly,
   category = 'task',
+  kind = 'transition',
 }: {
-  transition: WorkflowDraftTransition;
+  transition: RuleFormOwner;
   scope: CustomFieldModule;
   /** Тип процесса: в окно выбираются только его атрибуты (#432, Р8). */
   typeId?: string;
   readOnly: boolean;
   /** Разделы окна категории (Р6). */
   category?: ProcessCategory;
+  /** Окно действия (#633) правится методом стора `patchAction`. */
+  kind?: 'transition' | 'action';
 }) {
   const form = transition.form;
   const [builderOpen, setBuilderOpen] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
-  const patch = (next: Partial<WorkflowDraftTransition['form']>) =>
-    useRouteDocStore.getState().patchTransition(transition.id, { form: { ...form, ...next } });
+  const patch = (next: Partial<WorkflowDraftTransition['form']>) => {
+    const store = useRouteDocStore.getState();
+    const formNext = { ...form, ...next };
+    if (kind === 'action') store.patchAction(transition.id, { form: formNext });
+    else store.patchTransition(transition.id, { form: formNext });
+  };
   const fieldsSection = sectionOf(form, 'fields');
   const fieldCount = fieldsSection ? windowFieldKeys(fieldsSection).length : 0;
   const lockCount = form.locks?.length ?? 0;
@@ -85,6 +93,7 @@ export function WindowSection({
           <TransitionWindowBuilder
             open={builderOpen}
             transition={transition}
+            kind={kind}
             scope={scope}
             typeId={typeId}
             category={category}
