@@ -18,8 +18,8 @@ use tauri::{AppHandle, Manager};
 
 use crate::anchor::{remember_anchor, resolve_anchor, Anchor};
 use crate::popups::{
-    build_popup_window, spawn_ready_fallback, stack, ActivePopup, GAP, HIDE_ALL_H, HIDE_ALL_LABEL,
-    MAX_STACK, POPUP_MAX_H, POPUP_MIN_H, POPUP_W,
+    build_popup_window, show_without_activation, spawn_ready_fallback, stack, ActivePopup, GAP,
+    HIDE_ALL_H, HIDE_ALL_LABEL, MAX_STACK, POPUP_MAX_H, POPUP_MIN_H, POPUP_W,
 };
 
 /// Готовая раскладка одного окна: координаты и размер — физические px.
@@ -196,7 +196,7 @@ fn place_hide_all(app: &AppHandle, anchor: &Anchor) {
                 // стек снова полон — контент давно отрисован, показываем
                 // через тот же одноразовый гейт (повтор — no-op).
                 if stack(app).mark_shown(HIDE_ALL_LABEL) {
-                    let _ = win.show();
+                    show_without_activation(&win);
                 }
             }
         }

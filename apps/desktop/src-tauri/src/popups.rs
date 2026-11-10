@@ -4,6 +4,11 @@ use std::time::{Duration, Instant};
 
 use tauri::webview::WebviewWindowBuilder;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow};
+use windows::Win32::Foundation::HWND;
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetForegroundWindow, GetWindowLongPtrW, IsWindow, SetForegroundWindow, SetWindowLongPtrW,
+    GWL_EXSTYLE,
+};
 
 use crate::activity;
 use crate::bridge::{self, PopupPayload, PopupReply};
@@ -65,6 +70,10 @@ pub(crate) struct ActivePopup {
     /// Абсолютный путь скачанного файла (#647) — ТОЛЬКО в Rust: мини-UI его
     /// не получает, «Показать в папке» берёт путь отсюда по метке окна.
     pub(crate) download_path: Option<String>,
+    /// Кто был системным foreground перед активацией окна в режиме ответа
+    /// (HWND, #709): после Esc/закрытия фокус возвращается туда — «забрали у
+    /// Word, вернули Word», а не оставили клавиатуру в неактивируемом окне.
+    pub(crate) activated_from: Option<isize>,
     /// Payload для pull-модели: окно забирает данные само после загрузки
     /// (push-событие проигрывал бы гонку со скоростью монтирования React).
     payload: serde_json::Value,
@@ -192,6 +201,7 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
             replying: false,
             shown: false,
             download_path,
+            activated_from: None,
             payload: payload_json,
         });
         (label, slot)
@@ -219,7 +229,7 @@ pub(crate) fn show_if_ready(app: &AppHandle, label: &str) {
         return;
     }
     if let Some(win) = app.get_webview_window(label) {
-        let _ = win.show();
+        show_without_activation(&win);
     }
 }
 
@@ -241,10 +251,13 @@ pub fn popup_ready(app: AppHandle, window: WebviewWindow) {
     show_if_ready(&app, window.label());
 }
 
-/// Общий билдер popup-окон (карточка + плашка «Скрыть все»). Окно НЕАКТИВИ-
-/// РУЕМОЕ (WS_EX_NOACTIVATE, канон Telegram и Raymond Chen / Old New Thing):
-/// показ и клики НЕ крадут фокус у портала — супер-курсор композера живёт.
-/// Для печати в поле ответа флаг снимается (popup_set_expanded → allow_focus).
+/// Общий билдер popup-окон (карточка + плашка «Скрыть все»). Окно
+/// НЕАКТИВИРУЕМОЕ: неактивируемость держит tao — `.focusable(false)` кладёт
+/// `WS_EX_NOACTIVATE` в ex-style и сохраняет его при каждой перезаписи стиля
+/// (#709). Ручной бит после билда НЕ работает: `win.show()` → `apply_diff`
+/// стирает его (tao-0.37.1 `window_state.rs:412-431`). Показ и клики фокус у
+/// портала не крадут — супер-курсор композера живёт. Для печати в поле ответа
+/// окно временно делается фокусируемым (`popup_set_expanded` → `set_focusable`).
 /// `position` — логические px правого нижнего угла рабочей области (#588):
 /// окно создаётся уже на своём месте, не на системном каскаде.
 pub(crate) fn build_popup_window(
@@ -262,6 +275,9 @@ pub(crate) fn build_popup_window(
         .maximizable(false)
         .minimizable(false)
         .focused(false)
+        // Неактивируемое окно: tao сам держит WS_EX_NOACTIVATE (ex-style
+        // пересобирается из WindowFlags при каждом apply_diff, #709).
+        .focusable(false)
         .inner_size(POPUP_W, height)
         .visible(false)
         // Прозрачное окно: скруглённые углы и тень рисует карточка (CSS).
@@ -279,7 +295,6 @@ pub(crate) fn build_popup_window(
             return None;
         }
     };
-    set_noactivate(&win, true);
     // Тема попапа = тема ПРИЛОЖЕНИЯ (портал сообщил через set_ui_theme).
     crate::bridge::apply_ui_theme(&win);
     Some(win)
@@ -288,11 +303,17 @@ pub(crate) fn build_popup_window(
 /// WS_EX_NOACTIVATE на топ-левел окно попапа (GWL_EXSTYLE).
 const WS_EX_NOACTIVATE: isize = 0x0800_0000;
 
+/// Есть ли в ex-style окна `WS_EX_NOACTIVATE` (`None` — окно недоступно).
+fn has_noactivate(win: &WebviewWindow) -> Option<bool> {
+    let hwnd = win.hwnd().ok()?;
+    let style = unsafe { GetWindowLongPtrW(HWND(hwnd.0), GWL_EXSTYLE) };
+    Some(style & WS_EX_NOACTIVATE != 0)
+}
+
+/// Аварийный ремонт ex-style: ручной бит живёт только до следующего
+/// `apply_diff` (tao пересобирает стиль целиком) — применяется лишь если
+/// `show_without_activation` обнаружил потерю флага (#709).
 fn set_noactivate(win: &WebviewWindow, on: bool) {
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE,
-    };
     let Ok(hwnd) = win.hwnd() else { return };
     let hwnd = HWND(hwnd.0);
     unsafe {
@@ -308,25 +329,93 @@ fn set_noactivate(win: &WebviewWindow, on: bool) {
     }
 }
 
-/// Вернуть фокус окну портала: клик по попапу глушит каретку композера
-/// (blur документа) — после закрытия попапа руками вернём фокус порталу,
-/// супер-курсор поднимется сам.
-fn refocus_portal(app: &AppHandle) {
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
-    if let Some(main) = app.get_webview_window("main") {
-        // Возвращаем фокус ТОЛЬКО если портал сейчас в фокусе системы
-        // (пользователь печатал в нём). Перекрытый другим окном / свёрнутый /
-        // в трее портал не трогаем: клик по попапу = «пользователь занят»,
-        // поднимать окно поверх чужого нельзя (фидбек 08.10). Попап не
-        // активируется (WS_EX_NOACTIVATE), поэтому foreground не менялся.
-        let Ok(hwnd) = main.hwnd() else { return };
-        unsafe {
-            if GetForegroundWindow() != HWND(hwnd.0) {
-                return;
+fn hwnd_of(win: &WebviewWindow) -> Option<isize> {
+    win.hwnd().ok().map(|hwnd| hwnd.0 as isize)
+}
+
+fn foreground_hwnd() -> isize {
+    unsafe { GetForegroundWindow().0 as isize }
+}
+
+fn is_window(hwnd: isize) -> bool {
+    unsafe { IsWindow(Some(HWND(hwnd as *mut std::ffi::c_void))).as_bool() }
+}
+
+/// Показать попап, НЕ забирая системный фокус.
+///
+/// Неактивируемость задаёт `.focusable(false)` в билдере: tao держит
+/// `WS_EX_NOACTIVATE` в ex-style сам (tao-0.37.1 `window_state.rs:293-295`).
+/// Проверка ниже — страховка от регрессии tao: без бита `ShowWindow(SW_SHOW)`
+/// (`window_state.rs:459-466`) снова активирует topmost-окно поверх чужой
+/// программы и «убивает» каретку пользователя (#709).
+///
+/// Показ и проверка — ТОЛЬКО на главном потоке (`run_on_main_thread`): с
+/// фонового потока `win.show()` лишь постит сообщение в event loop и
+/// возвращается — `apply_diff` ещё не применён, и проверка ex-style читала бы
+/// старый стиль (валидация #709).
+pub(crate) fn show_without_activation(win: &WebviewWindow) {
+    let win = win.clone();
+    let app = win.app_handle().clone();
+    let _ = app.run_on_main_thread(move || {
+        let Ok(hwnd) = win.hwnd() else { return };
+        let popup = HWND(hwnd.0);
+        let previous = unsafe { GetForegroundWindow() };
+        let _ = win.show();
+        if has_noactivate(&win) != Some(false) {
+            return;
+        }
+        log::error!("попап: WS_EX_NOACTIVATE потерян после show() — аварийный ремонт");
+        set_noactivate(&win, true);
+        // Окно всё же стало foreground — вернуть фокус прежнему владельцу.
+        if unsafe { GetForegroundWindow() } == popup && !previous.0.is_null() {
+            unsafe {
+                let _ = SetForegroundWindow(previous);
             }
         }
-        let _ = main.set_focus();
+    });
+}
+
+/// Куда вернуть фокус после сворачивания/закрытия попапа. Возврат — ТОЛЬКО
+/// когда foreground сейчас наше попап-окно: если пользователь уже ушёл в
+/// другое приложение, его фокус не трогаем.
+/// Приоритет: прежний владелец (его мы и обделили) → главное окно, если видимо.
+fn restore_target(
+    foreground: isize,
+    popup: isize,
+    previous: Option<isize>,
+    main: isize,
+    main_visible: bool,
+) -> Option<isize> {
+    if foreground == 0 || foreground != popup {
+        return None;
+    }
+    if let Some(previous) = previous {
+        if previous != 0 && previous != popup {
+            return Some(previous);
+        }
+    }
+    if main_visible && main != 0 {
+        return Some(main);
+    }
+    None
+}
+
+/// Вернуть фокус из активированного попапа (режим ответа): `previous` —
+/// `activated_from`, снятый при раскрытии поля ответа.
+fn restore_focus(app: &AppHandle, win: &WebviewWindow, previous: Option<isize>) {
+    let Some(popup) = hwnd_of(win) else { return };
+    let (main, main_visible) = match app.get_webview_window("main") {
+        Some(main) => (
+            hwnd_of(&main).unwrap_or(0),
+            main.is_visible().unwrap_or(false),
+        ),
+        None => (0, false),
+    };
+    let previous = previous.filter(|hwnd| is_window(*hwnd));
+    if let Some(target) = restore_target(foreground_hwnd(), popup, previous, main, main_visible) {
+        unsafe {
+            let _ = SetForegroundWindow(HWND(target as *mut std::ffi::c_void));
+        }
     }
 }
 
@@ -384,6 +473,23 @@ pub fn popup_close_all(app: AppHandle) {
         s.hide_all_shown = false;
         s.active.iter().map(|p| p.label.clone()).collect()
     };
+    // Режим ответа держал фокус в одном из попапов: вернуть его ДО close() —
+    // после уничтожения окна прежний владелец уже неизвестен (#709).
+    let foreground = foreground_hwnd();
+    for label in &labels {
+        let Some(win) = app.get_webview_window(label) else {
+            continue;
+        };
+        if hwnd_of(&win) == Some(foreground) {
+            let previous = stack(&app)
+                .active
+                .iter()
+                .find(|p| p.label == *label)
+                .and_then(|p| p.activated_from);
+            restore_focus(&app, &win, previous);
+            break;
+        }
+    }
     for label in labels {
         if let Some(w) = app.get_webview_window(&label) {
             let _ = w.close();
@@ -392,7 +498,6 @@ pub fn popup_close_all(app: AppHandle) {
     if let Some(w) = app.get_webview_window(HIDE_ALL_LABEL) {
         let _ = w.close();
     }
-    refocus_portal(&app);
 }
 
 /// Курсор на попапе (mouseenter/leave из UI): пауза угасания + возврат
@@ -425,11 +530,17 @@ pub fn popup_get_data(app: AppHandle, window: WebviewWindow) -> Option<serde_jso
 }
 
 /// Закрыть попап — вызывает само окно (крестик/Esc/после действия).
-/// Клики по попапу глушат каретку портала (blur) — возвращаем фокус.
+/// Если окно было активировано режимом ответа, фокус возвращается прежнему
+/// владельцу ДО close(): после уничтожения окна это уже не определить.
 #[tauri::command]
 pub fn popup_close(app: AppHandle, window: WebviewWindow) {
+    let previous = stack(&app)
+        .active
+        .iter()
+        .find(|p| p.label == window.label())
+        .and_then(|p| p.activated_from);
+    restore_focus(&app, &window, previous);
     let _ = window.close();
-    refocus_portal(&app);
 }
 
 /// Фактическая высота окна от мини-UI (#406): карточка измерила контент
@@ -464,19 +575,39 @@ pub fn popup_set_height(app: AppHandle, window: WebviewWindow, height: f64) -> R
 /// Режим ответа: пауза угасания и фокус окна (печать требует активности).
 /// Высоту окна задаёт НЕ эта команда, а `popup_set_height` по измерению
 /// мини-UI: константы «88/124» разъезжались с реальным ui-scale (#406).
-/// Открыли поле — снимаем NOACTIVATE и даём фокус; закрытие — обратно.
+/// Открыли поле — `set_focusable(true)` + фокус; закрытие — обратно
+/// `set_focusable(false)` и возврат фокуса прежнему foreground-окну (#709).
 #[tauri::command]
 pub fn popup_set_expanded(app: AppHandle, window: WebviewWindow, expanded: bool) {
     let label = window.label().to_string();
-    {
+    let previous = {
         let mut s = stack(&app);
-        if let Some(p) = s.active.iter_mut().find(|p| p.label == label) {
-            p.replying = expanded;
+        match s.active.iter_mut().find(|p| p.label == label) {
+            Some(p) => {
+                p.replying = expanded;
+                if expanded {
+                    // Запоминаем, у кого забираем фокус (клик по неактивируемому
+                    // попапу foreground не меняет — это чужая программа/портал).
+                    // Повторный expand уже активированного окна владельца не
+                    // перезаписывает: foreground там — сам попап.
+                    let foreground = foreground_hwnd();
+                    let popup = hwnd_of(&window).unwrap_or(0);
+                    if foreground != 0 && foreground != popup {
+                        p.activated_from = Some(foreground);
+                    }
+                }
+                p.activated_from
+            }
+            None => None,
         }
-    }
-    set_noactivate(&window, !expanded);
+    };
+    // `focusable` — единственный механизм, который tao удерживает сам:
+    // ручной WS_EX_NOACTIVATE стирается apply_diff при show()/смене флагов.
+    let _ = window.set_focusable(expanded);
     if expanded {
         let _ = window.set_focus();
+    } else {
+        restore_focus(&app, &window, previous);
     }
     crate::layout::reposition_all(&app);
 }
@@ -497,6 +628,13 @@ pub fn popup_submit_reply(
         return Err("invalid_payload".into());
     }
     bridge::push_to_portal(&app, "popup-reply", &payload);
+    // Ответ отправлен — окно закрывается; фокус возвращаем ДО close().
+    let previous = stack(&app)
+        .active
+        .iter()
+        .find(|p| p.label == window.label())
+        .and_then(|p| p.activated_from);
+    restore_focus(&app, &window, previous);
     let _ = window.close();
     Ok(())
 }
@@ -597,6 +735,7 @@ mod tests {
                 replying: false,
                 shown: false,
                 download_path: None,
+                activated_from: None,
                 payload: serde_json::Value::Null,
             });
         }
@@ -653,6 +792,23 @@ mod tests {
         assert!(!s.mark_shown("popup-0"), "повторный show — no-op");
         // Закрытого попапа нет в стеке — показывать нечего.
         assert!(!s.mark_shown("popup-9"));
+    }
+
+    /** Возврат фокуса (#709): трогаем только наш попап, приоритет — прежний
+     *  владелец; main — лишь резерв, когда прежнего владельца уже нет. */
+    #[test]
+    fn фокус_возвращается_только_из_нашего_попапа() {
+        // Чужое окно в фокусе — не трогаем (пользователь уже переключился).
+        assert_eq!(restore_target(500, 100, Some(400), 200, true), None);
+        // Наш попап был foreground: возвращаем прежнего владельца (чужое окно).
+        assert_eq!(restore_target(100, 100, Some(400), 200, true), Some(400));
+        // Прежний владелец неизвестен — главное окно, если видимо.
+        assert_eq!(restore_target(100, 100, None, 200, true), Some(200));
+        assert_eq!(restore_target(100, 100, None, 200, false), None);
+        // previous == popup — мусор, не «возвращаем в себя».
+        assert_eq!(restore_target(100, 100, Some(100), 200, true), Some(200));
+        // Нет foreground (локскрин/смена сессии) — ничего.
+        assert_eq!(restore_target(0, 100, Some(400), 200, true), None);
     }
 
     #[test]
