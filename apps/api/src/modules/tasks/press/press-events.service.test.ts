@@ -79,7 +79,10 @@ describe('PressEvents (#434)', () => {
   it('broadcast-возврат адресует только возвращённым (и ролям задачи)', async () => {
     const emit = vi.fn(async () => void 0);
     const events = new PressEvents({ emit } as never);
-    const wide = { entries: [{ userId: 'u1' }, { userId: 'u2' }, { userId: 'u3' }] };
+    const wide = {
+      entries: [{ userId: 'u1' }, { userId: 'u2' }, { userId: 'u3' }],
+      transitionName: 'Завершить',
+    };
     await events.returned({} as never, TASK as never, 'a', wide, ['u3'], 'Причина', true);
     const payload = (emit.mock.calls[0] as unknown[])[2] as { audience: string[] };
     expect(payload.audience).toContain('u3');
