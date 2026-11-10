@@ -80,6 +80,22 @@ jobs:
             echo "data=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # Секреты (#706): рабочее дерево без истории — быстро и ловит ровно то, что
+  # попадает в PR. Без `needs: changes` намеренно: секрет прячется и в docs.
+  secrets:
+    name: Секреты (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Образ пиннится по digest, монтируется только чтение, сеть отключена.
+      - name: gitleaks
+        run: |
+          docker run --rm --network none \
+            -v "$PWD:/repo:ro" -w /repo \
+            ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            dir . --config .gitleaks.toml --redact --verbose
+
   quality:
     name: lint → typecheck → test → build
     needs: changes
