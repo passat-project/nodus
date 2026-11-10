@@ -52,7 +52,7 @@ describe('applySentMessage: счётчик ответов трэда (#303)', ()
   it('дубль доставки (conv + user комната): счётчик корня растёт РОВНО на 1', () => {
     // Повтор события попадает в «уже применено» и не имеет права снова
     // тикать счётчик — иначе каждая отправка считалась дважды.
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [msg({ id: ROOT, seq: 3, threadRepliesCount: 2 })],
       nextCursor: null,
@@ -71,7 +71,7 @@ describe('applySentMessage: счётчик ответов трэда (#303)', ()
     // onMutate больше не тикает счётчик ленты (убран #303): темп реплая
     // живёт в кэше окна треда; эхо вставляет запись в ленту и +1, дубль эха
     // молчит — ровно +1 на отправку, как на сервере.
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [msg({ id: ROOT, seq: 3, threadRepliesCount: 2 })],
       nextCursor: null,
@@ -105,7 +105,7 @@ describe('applySentMessage: счётчик ответов трэда (#303)', ()
   it('эхо темпа ленты в ОТКРЫТОМ окне без темпа → false (рефетч окна)', () => {
     // Защитный случай: темп жил в ленте, окно трэда его не видело —
     // подтвердить окно может только рефеч (инвалидация), не молчание.
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [
         msg({ id: ROOT, seq: 3 }),

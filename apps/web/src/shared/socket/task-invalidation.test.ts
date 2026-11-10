@@ -39,7 +39,7 @@ const PROJECT = tasksKeys.kanban('project:p1');
 
 /** Две открытые доски: «Мой план» (колонки m1..m4) и проектная (s1..s4). */
 function boardsInCache(): QueryClient {
-  const client = new QueryClient();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(kanbanColumnKey(PERSONAL, 'm1'), page('t1', 't2'));
   client.setQueryData(kanbanColumnKey(PERSONAL, 'm2'), page('t3'));
   client.setQueryData(kanbanColumnKey(PERSONAL, 'm3'), longPage('t5'));
@@ -58,11 +58,16 @@ describe('pushTaskKeys (#311, #317)', () => {
   it('эхо своей кнопки: деталь и кнопки не перезапрашиваются (свежие из ответа), доски — да (#378)', () => {
     markFreshFromMutation('t-fresh');
     const { batcher, keys } = recordingBatcher();
-    pushTaskKeys(batcher, new QueryClient(), 'task.stage_changed', {
-      taskId: 't-fresh',
-      fromStageId: 's1',
-      toStageId: 's2',
-    });
+    pushTaskKeys(
+      batcher,
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+      'task.stage_changed',
+      {
+        taskId: 't-fresh',
+        fromStageId: 's1',
+        toStageId: 's2',
+      },
+    );
     expect(has(keys, tasksKeys.detail('t-fresh'))).toBe(false);
     expect(has(keys, tasksKeys.transitions('t-fresh'))).toBe(false);
     expect(has(keys, tasksKeys.listPages())).toBe(true);
@@ -72,7 +77,7 @@ describe('pushTaskKeys (#311, #317)', () => {
 
   it('формульная запись перечитывает деталь даже у автора (пересчёт после ответа)', () => {
     const { batcher } = recordingBatcher();
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const cancel = vi.spyOn(client, 'cancelQueries');
     markFreshFromMutation('t-formula');
     pushTaskKeys(batcher, client, 'task.updated', {
@@ -86,21 +91,36 @@ describe('pushTaskKeys (#311, #317)', () => {
 
   it('task.relation_changed обновляет список связей своей карточки', () => {
     const { batcher, keys } = recordingBatcher();
-    pushTaskKeys(batcher, new QueryClient(), 'task.relation_changed', { taskId: 't1' });
+    pushTaskKeys(
+      batcher,
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+      'task.relation_changed',
+      { taskId: 't1' },
+    );
     expect(has(keys, tasksKeys.relations('t1'))).toBe(true);
     expect(has(keys, tasksKeys.detail('t1'))).toBe(true);
   });
 
   it('прочие события связей не трогают, ветки — через фабрику branchAll', () => {
     const { batcher, keys } = recordingBatcher();
-    pushTaskKeys(batcher, new QueryClient(), 'task.updated', { taskId: 't1' });
+    pushTaskKeys(
+      batcher,
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+      'task.updated',
+      { taskId: 't1' },
+    );
     expect(has(keys, tasksKeys.relations('t1'))).toBe(false);
     expect(has(keys, tasksKeys.branchAll())).toBe(true);
   });
 
   it('личные колонки — только доска и каталог', () => {
     const { batcher, keys } = recordingBatcher();
-    pushTaskKeys(batcher, new QueryClient(), 'task.personal_stage_created', {});
+    pushTaskKeys(
+      batcher,
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+      'task.personal_stage_created',
+      {},
+    );
     expect(keys.map(([k]) => k)).toEqual([
       [...tasksKeys.personalStages()],
       [...tasksKeys.kanbanAll()],
@@ -119,12 +139,22 @@ describe('pushTaskKeys (#311, #317)', () => {
       'task.timer_stopped',
     ]) {
       const { batcher, keys } = recordingBatcher();
-      pushTaskKeys(batcher, new QueryClient(), type, { taskId: 't1' });
+      pushTaskKeys(
+        batcher,
+        new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+        type,
+        { taskId: 't1' },
+      );
       expect(has(keys, projectsKeys.structures()), type).toBe(true);
     }
     // Состав участников на агрегаты узлов не влияет — лишнего запроса нет.
     const { batcher, keys } = recordingBatcher();
-    pushTaskKeys(batcher, new QueryClient(), 'task.assigned', { taskId: 't1' });
+    pushTaskKeys(
+      batcher,
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+      'task.assigned',
+      { taskId: 't1' },
+    );
     expect(has(keys, projectsKeys.structures())).toBe(false);
   });
 });

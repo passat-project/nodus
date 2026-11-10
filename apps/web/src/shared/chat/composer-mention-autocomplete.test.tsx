@@ -128,7 +128,7 @@ describe('автокомплит @упоминаний (#176)', () => {
     view.rerender(
       createElement(
         QueryClientProvider,
-        { client: new QueryClient() },
+        { client: new QueryClient({ defaultOptions: { queries: { retry: false } } }) },
         createElement(ChatComposer, {
           placeholder: 'Поле',
           focusId: `conversation:${CONV}`,

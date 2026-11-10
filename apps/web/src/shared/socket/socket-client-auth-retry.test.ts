@@ -38,7 +38,7 @@ describe('socket-client: повтор хендшейка после refresh', ()
     handlers.clear();
     vi.clearAllMocks();
     auth.status = 'authenticated';
-    connectChatSocket(new QueryClient());
+    connectChatSocket(new QueryClient({ defaultOptions: { queries: { retry: false } } }));
   });
 
   afterEach(() => {

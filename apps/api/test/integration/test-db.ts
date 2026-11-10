@@ -22,6 +22,31 @@ export function testDatabaseUrl(): string {
 }
 
 /**
+ * Изоляция общего каталога между наборами (#524): публикация системного
+ * маршрута ставит `customizedAt`, и `seedOnce` («засев один раз») больше не
+ * перетирает каталог — следующий набор видит форму окна прошлого набора.
+ * Перед каждым набором снимаем признак кастомизации и ревизию у ЗАТРОНУТЫХ
+ * системных сущностей: `onApplicationBootstrap` заново применит каталог
+ * (чистые сущности не трогаем — лишних событий и записей не будет).
+ */
+async function resetCustomizedSystemCatalog(testUrl: string): Promise<void> {
+  const client = new pg.Client({ connectionString: testUrl });
+  await client.connect();
+  try {
+    await client.query(
+      `UPDATE workflows SET customized_at = NULL, catalog_revision = 0
+        WHERE is_system = true AND customized_at IS NOT NULL`,
+    );
+    await client.query(
+      `UPDATE process_types SET customized_at = NULL
+        WHERE is_system = true AND customized_at IS NOT NULL`,
+    );
+  } finally {
+    await client.end();
+  }
+}
+
+/**
  * Готовит тестовую БД: создаёт nodus_test при отсутствии и применяет миграции.
  * Идемпотентно — вызывается в beforeAll каждого набора, работающего с БД.
  */
@@ -49,5 +74,6 @@ export async function ensureTestDatabase(appRoot: string): Promise<string> {
     env: { ...process.env, DATABASE_URL: testUrl },
     stdio: 'inherit',
   });
+  await resetCustomizedSystemCatalog(testUrl);
   return testUrl;
 }

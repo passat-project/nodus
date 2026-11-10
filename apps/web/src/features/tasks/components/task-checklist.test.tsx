@@ -27,7 +27,9 @@ describe('TaskChecklist: темп-пункт до подтверждения', (
     const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     render(
-      <QueryClientProvider client={new QueryClient()}>
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
         <TaskChecklist task={TASK} />
       </QueryClientProvider>,
     );

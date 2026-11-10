@@ -18,7 +18,7 @@ import { api } from '../api-client.js';
  * просмотров / в режиме селекта — подменю нет. Спека владельца: прежний
  * пункт с попапом «мгновенно пропадал» (война фокуса). */
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 const msg = (overrides: Partial<ChatMessage> = {}): ChatMessage => ({
   id: 'm1',

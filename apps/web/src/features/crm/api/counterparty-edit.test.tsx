@@ -83,7 +83,7 @@ afterEach(() => {
 
 describe('патч списка в onMutate не падает на InfiniteData (баг 25.10.2026)', () => {
   it('архив: строка реестра помечается ДО ответа, запрос уходит', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seed(client);
     const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(async () =>
       jsonResponse(200, { ...card, archivedAt: '2026-10-25T12:00:00.000Z' }),
@@ -105,7 +105,7 @@ describe('патч списка в onMutate не падает на InfiniteData 
   });
 
   it('правка реквизитов: строка реестра обновляется, ошибки в onMutate нет', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seed(client);
     const fetchMock = vi.fn(async () => jsonResponse(200, { ...card, phone: '+375 17 000-00-00' }));
     vi.stubGlobal('fetch', fetchMock);

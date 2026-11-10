@@ -93,7 +93,7 @@ function taskInStage(stage: typeof STAGE_A | typeof STAGE_B): TaskListItem {
 
 describe('useUpdateTaskStage: оптимистичность переноса (I4)', () => {
   it('стадия в кэше меняется ДО ответа сервера; ошибка → откат', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(tasksKeys.stages(), [STAGE_A, STAGE_B]);
     client.setQueryData(tasksKeys.listPages(), {
       pages: [{ items: [taskInStage(STAGE_A)], nextCursor: null }],
@@ -136,7 +136,7 @@ describe('useUpdateTaskStage: оптимистичность переноса (I
  */
 describe('usePrefetchTask: ховер не превращается в поток GET (A6-3)', () => {
   it('повторный префетч того же id в окне не зовёт queryFn — даже после инвалидации', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const fetchMock = vi.fn(async () => jsonResponse(200, { id: TASK_ID }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -164,7 +164,7 @@ describe('usePrefetchTask: ховер не превращается в пото�
   });
 
   it('за окном повтора префетч снова запрашивает деталь', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const fetchMock = vi.fn(async () => jsonResponse(200, { id: TASK_ID }));
     vi.stubGlobal('fetch', fetchMock);
 

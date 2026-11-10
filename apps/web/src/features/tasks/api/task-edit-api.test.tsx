@@ -55,7 +55,7 @@ describe('useUpdateTask: канон оптимистичной правки по
   });
 
   it('cancel → патч детали и ВСЕХ журналов до ответа; ошибка → откат всех', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const mineKey = tasksKeys.listPages();
     const allKey = tasksKeys.listPages({ scope: 'all' });
     client.setQueryData<TaskDetail>(tasksKeys.detail(TASK_ID), {

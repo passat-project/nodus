@@ -107,7 +107,9 @@ const workflow = {
 describe('RouteEditor: производные подсказки и публикация (#430)', () => {
   it('строит подсказки имён и открывает диалог публикации', () => {
     render(
-      <QueryClientProvider client={new QueryClient()}>
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
         <RouteEditor type={type} workflow={workflow} />
       </QueryClientProvider>,
     );

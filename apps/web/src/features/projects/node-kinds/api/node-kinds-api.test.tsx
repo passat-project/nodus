@@ -58,7 +58,7 @@ afterEach(() => {
 
 describe('useUpdateNodeKind: оптимистичная правка вида (I4, Р17)', () => {
   it('форма вида меняется в реестре и в кэшах структур ДО ответа', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(nodeKindsKeys.list(), [kind]);
     client.setQueryData(projectsKeys.structure('p1'), {
       nodes: [],
@@ -91,7 +91,7 @@ describe('useUpdateNodeKind: оптимистичная правка вида (I
   });
 
   it('ошибка — откат обоих кэшей по снапшоту', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(nodeKindsKeys.list(), [kind]);
     client.setQueryData(projectsKeys.structure('p1'), {
       nodes: [],

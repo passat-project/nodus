@@ -53,7 +53,7 @@ describe('read-one оптимистичность', () => {
     vi.mocked(api).mockReturnValueOnce(promise);
 
     const { useReadNotification } = await import('../api/notifications-api.js');
-    const queryClient = new QueryClient();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData(['notifications', 'list', 'attention'], page([item]));
     queryClient.setQueryData(['notifications', 'list', 'all'], page([item]));
     queryClient.setQueryData(['notifications', 'summary'], summary);

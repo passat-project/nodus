@@ -84,7 +84,11 @@ function fakeViewport(height: () => number): HTMLDivElement {
 }
 
 function withClient(node: ReactNode): ReactNode {
-  return createElement(QueryClientProvider, { client: new QueryClient() }, node);
+  return createElement(
+    QueryClientProvider,
+    { client: new QueryClient({ defaultOptions: { queries: { retry: false } } }) },
+    node,
+  );
 }
 
 describe('useHistoryLoader — компенсация скролла (#307)', () => {

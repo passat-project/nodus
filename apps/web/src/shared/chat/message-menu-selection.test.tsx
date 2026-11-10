@@ -45,7 +45,7 @@ const msg = (id: string, overrides: Partial<ChatMessage> = {}): ChatMessage => (
   ...overrides,
 });
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 const toggles: string[] = [];
 

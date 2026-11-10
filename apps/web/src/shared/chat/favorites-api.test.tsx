@@ -152,7 +152,7 @@ afterEach(() => {
 
 describe('favorites-api (#171): оптимистичность', () => {
   it('add: прогноз карточки вставлен ДО resolve; onSuccess заменяет серверной', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData<Paginated<ChatMessage>>(chatKeys.messages(CONV), {
       items: [message],
       nextCursor: null,
@@ -198,7 +198,7 @@ describe('favorites-api (#171): оптимистичность', () => {
   });
 
   it('add: reject → откат по снапшоту (прогноза в кэше нет)', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData<Paginated<ChatMessage>>(chatKeys.messages(CONV), {
       items: [message],
       nextCursor: null,
@@ -227,7 +227,7 @@ describe('favorites-api (#171): оптимистичность', () => {
   });
 
   it('update: метки патчатся ДО resolve и остаются после onSuccess', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const initial = { pages: [{ items: [card()], nextCursor: null }], pageParams: [null] };
     client.setQueryData(favoriteKeys.list(), initial as never);
     const server = card({ labels: ['🔑'] });
@@ -265,7 +265,7 @@ describe('favorites-api (#171): оптимистичность', () => {
     // Ревизия приёмки: вставка прогноза-карточки в кэш списка дёргала ленту
     // на первом выставлении после загрузки страницы. Мгновенность чипов —
     // локальный оптимистичный стор (витрина мерджит его в labelTarget).
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData<Paginated<ChatMessage>>(chatKeys.messages(CONV), {
       items: [message],
       nextCursor: null,
@@ -323,7 +323,7 @@ describe('favorites-api (#171): оптимистичность', () => {
   });
 
   it('remove: карточка исчезает ДО resolve', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const initial = { pages: [{ items: [card()], nextCursor: null }], pageParams: [null] };
     client.setQueryData(favoriteKeys.list(), initial as never);
     const gate = deferred<Response>();
@@ -351,7 +351,7 @@ describe('favorites-api (#171): оптимистичность', () => {
     // Префикс all накрывает и запрос labels ({items} без страниц): без
     // защиты patchCard/removeCard падали TypeError'ом в onMutate — мутация
     // умирала ДО сети («не удалось сохранить изменение», сервер не тронут).
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const initial = { pages: [{ items: [card()], nextCursor: null }], pageParams: [null] };
     client.setQueryData(favoriteKeys.list(), initial as never);
     client.setQueryData(favoriteKeys.labels(), { items: ['⭐'] });

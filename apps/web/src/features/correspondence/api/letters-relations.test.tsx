@@ -114,7 +114,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('связи писем — оптимистичны (#461, I4)', () => {
   it('«Вложено в» встаёт в дерево ДО ответа; ответ заменяет дерево рефетчем', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(lettersKeys.tree(ROOT), tree(node(ROOT, [node(CHILD)])));
     const gate = deferred<Response>();
     const fetchMock = vi.fn(() => gate.promise);
@@ -141,7 +141,7 @@ describe('связи писем — оптимистичны (#461, I4)', () => 
   });
 
   it('422 «цикл» — дерево откатывается, текст причины в тосте', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(lettersKeys.tree(ROOT), tree(node(ROOT)));
     vi.stubGlobal(
       'fetch',
@@ -170,7 +170,7 @@ describe('связи писем — оптимистичны (#461, I4)', () => 
   });
 
   it('снятие убирает узел ДО ответа; ошибка возвращает', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const child = { ...node(CHILD), relationId: 'r1', relationKind: 'reply_to' as const };
     client.setQueryData(lettersKeys.tree(ROOT), tree(node(ROOT, [child])));
     const gate = deferred<Response>();

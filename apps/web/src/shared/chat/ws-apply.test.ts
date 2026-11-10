@@ -50,7 +50,7 @@ function feed(client: QueryClient): ChatMessage[] {
 
 describe('applySentMessage', () => {
   it('непрерывный seq → дописывается в ленту БЕЗ рефеча (true)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [msg({ id: 'a', seq: 5 })],
       nextCursor: null,
@@ -65,7 +65,7 @@ describe('applySentMessage', () => {
   });
 
   it('дыра в seq → false (вызывающий инвалидирует)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [msg({ id: 'a', seq: 5 })],
       nextCursor: null,
@@ -80,7 +80,7 @@ describe('applySentMessage', () => {
   });
 
   it('сообщение уже в кэше (своя отправка мутацией) → true, без изменений', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [msg({ id: 'a', seq: 5 }), msg({ id: 'b', seq: 6 })],
       nextCursor: null,
@@ -95,7 +95,7 @@ describe('applySentMessage', () => {
   });
 
   it('нет кэша ленты → false (беседа не открыта)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const applied = applySentMessage(client, {
       conversationId: CONV,
       threadRootId: null,
@@ -105,7 +105,7 @@ describe('applySentMessage', () => {
   });
 
   it('чужой темп (seq=0) в хвосте, непрерывный seq → вставка ПЕРЕД темпом, true (#243)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [msg({ id: 'a', seq: 5 }), msg({ id: 'temp', seq: 0, clientMessageId: 'temp-1' })],
       nextCursor: null,
@@ -121,7 +121,7 @@ describe('applySentMessage', () => {
   });
 
   it('эхо СВОЕГО темпа по clientMessageId → замена на месте, true, без рефеча (#243)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [
         msg({ id: 'a', seq: 5 }),
@@ -143,7 +143,7 @@ describe('applySentMessage', () => {
   });
 
   it('эхо своего темпа при ДЫРЕ в seq → замена всё равно точна, true (#243)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [msg({ id: 'a', seq: 5 }), msg({ id: 'temp-1', seq: 0, clientMessageId: 'temp-1' })],
       nextCursor: null,
@@ -159,7 +159,7 @@ describe('applySentMessage', () => {
   });
 
   it('ЧУЖАЯ запись с clientMessageId темпа темп не забирает (ключ уникален в рамках автора)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [
         msg({ id: 'a', seq: 5 }),
@@ -184,7 +184,7 @@ describe('applySentMessage', () => {
   });
 
   it('дыра в seq при темпе в хвосте (чужом) → false (рефетч заменит)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [msg({ id: 'a', seq: 5 }), msg({ id: 'temp', seq: 0, clientMessageId: 'temp-1' })],
       nextCursor: null,
@@ -198,7 +198,7 @@ describe('applySentMessage', () => {
   });
 
   it('ответ треда: лента + кэш треда + счётчик корня', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [
         msg({ id: ROOT, seq: 3, threadRepliesCount: 2 }),
@@ -226,7 +226,7 @@ describe('applySentMessage', () => {
   });
 
   it('ответ треда без кэша треда: лента + счётчик корня (окно треда не открыто)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [msg({ id: ROOT, seq: 3, threadRepliesCount: 0 })],
       nextCursor: null,
@@ -245,7 +245,7 @@ describe('applySentMessage', () => {
   it('лента применилась, но окно ОТКРЫТОГО треда с дырой → false (рефетч окна)', () => {
     // seq беседы общий: между ответами треда были чужие сообщения ленты —
     // в окне треда непрерывности нет, молчать нельзя (замечание валидатора).
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [
         msg({ id: ROOT, seq: 3 }),
@@ -273,7 +273,7 @@ describe('applySentMessage', () => {
   });
 
   it('нет DTO в событии (старый издатель) → false', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), { items: [], nextCursor: null });
     const applied = applySentMessage(client, {
       conversationId: CONV,
@@ -323,7 +323,7 @@ describe('applyReactionEvent (#124)', () => {
   }
 
   it('added: чип патчится в ленте без рефеча (актор не я, users из кэша)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedConvWithReader(client);
     client.setQueryData(chatKeys.messages(CONV), { items: [msg()], nextCursor: null });
     const applied = applyReactionEvent(
@@ -338,7 +338,7 @@ describe('applyReactionEvent (#124)', () => {
   });
 
   it('added-эхо актёра уже в users (беседа с собой) — дубль не растит count', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedConvWithReader(client);
     // В беседе с собой membersPreview = сам зритель (канон #186): WS-эхо
     // собственной реакции приносит reader == уже записанный актёр.
@@ -359,7 +359,7 @@ describe('applyReactionEvent (#124)', () => {
   });
 
   it('removed: декремент; ноль убирает чип', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [msg({ reactions: [{ emoji: '👍', count: 1, mine: false, users: [READER] }] })],
       nextCursor: null,
@@ -374,7 +374,7 @@ describe('applyReactionEvent (#124)', () => {
   });
 
   it('сообщения нет в кэше — false (вызывающий инвалидирует)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const applied = applyReactionEvent(
       client,
       { conversationId: CONV, messageId: 'm1', emoji: '👍', userId: 'u2' },
@@ -434,7 +434,7 @@ describe('applyReadEvent (#124)', () => {
   });
 
   it('чужое прочтение: readBy/readAt моих сообщений до upToSeq', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedConversations(client, [{ id: READER, displayName: 'Читатель', avatarUrl: null }]);
     client.setQueryData(chatKeys.messages(CONV), {
       items: [
@@ -457,7 +457,7 @@ describe('applyReadEvent (#124)', () => {
   });
 
   it('своё прочтение — true без патча (readBy себя не включает)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), { items: [msg()], nextCursor: null });
     const applied = applyReadEvent(client, {
       conversationId: CONV,
@@ -470,7 +470,7 @@ describe('applyReadEvent (#124)', () => {
   });
 
   it('читателя нет в membersPreview — false (вызывающий инвалидирует)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedConversations(client, []);
     client.setQueryData(chatKeys.messages(CONV), { items: [msg()], nextCursor: null });
     const applied = applyReadEvent(client, {
@@ -501,7 +501,7 @@ describe('applyAttachmentPreviewEvent (#221)', () => {
     }) as import('@nodus/contracts').MessageAttachment;
 
   it('патчит thumbnailUrl вложения на месте, без рефеча и чужих сообщений', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.messages(CONV), {
       items: [
         msg({ id: 'm1', attachments: [att('a1', null), att('a2', '/thumb/old')] }),

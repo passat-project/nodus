@@ -52,7 +52,7 @@ describe('ensureOlderPage (#307)', () => {
   });
 
   it('преппендит страницу старее границы и обновляет курсор+маркер', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData<HistoryPage>(chatKeys.messages(CONV), {
       items: [m('w1', 101), m('w2', 102)],
       nextCursor: 'cur-100',
@@ -73,7 +73,7 @@ describe('ensureOlderPage (#307)', () => {
   });
 
   it('тред грузит с threadRootId и кладёт в свой ключ', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData<HistoryPage>(chatKeys.thread(CONV, ROOT), {
       items: [m('r1', 30)],
       nextCursor: 'cur-29',
@@ -89,7 +89,7 @@ describe('ensureOlderPage (#307)', () => {
   });
 
   it('исчерпание (nextCursor=null) и пустой кэш — false без запроса', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData<HistoryPage>(chatKeys.messages(CONV), {
       items: [m('a', 1)],
       nextCursor: null,
@@ -102,7 +102,7 @@ describe('ensureOlderPage (#307)', () => {
   });
 
   it('сетевой отказ — false, кэш не тронут; повтор позже сможет загрузить', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData<HistoryPage>(chatKeys.messages(CONV), {
       items: [m('w1', 5)],
       nextCursor: 'cur-4',
@@ -114,7 +114,7 @@ describe('ensureOlderPage (#307)', () => {
   });
 
   it('параллельные вызовы одного ключа — один полёт (общий промис)', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData<HistoryPage>(chatKeys.messages(CONV), {
       items: [m('w1', 5)],
       nextCursor: 'cur-4',
@@ -137,7 +137,7 @@ describe('ensureOlderPage (#307)', () => {
 
 describe('hasOlderMessages (#307)', () => {
   it('true при живой границе, false при исчерпании/пустом кэше', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     expect(hasOlderMessages(client, CONV)).toBe(false);
     client.setQueryData<HistoryPage>(chatKeys.messages(CONV), {
       items: [m('a', 1)],

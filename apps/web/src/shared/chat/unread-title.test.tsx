@@ -52,7 +52,7 @@ describe('цепочка бейджа непрочитанных', () => {
   });
 
   it('applyReadToCache зануляет только прочитанную беседу и её вкладку', () => {
-    const qc = new QueryClient();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     qc.setQueryData(chatKeys.conversations(), {
       items: [
         { id: CONV, type: 'direct', unreadCount: 4, snoozed: false },
@@ -78,7 +78,7 @@ describe('цепочка бейджа непрочитанных', () => {
   });
 
   it('snoozed-беседа не вычитается из сводки (её там не было)', () => {
-    const qc = new QueryClient();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     qc.setQueryData(chatKeys.conversations(), {
       items: [{ id: CONV, type: 'direct', unreadCount: 4, snoozed: true }],
     });

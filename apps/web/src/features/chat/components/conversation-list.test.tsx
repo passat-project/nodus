@@ -46,7 +46,7 @@ function conv(id: string, pinned = false): ConversationListItem {
 }
 
 function renderList(conversations: ConversationListItem[]) {
-  const client = new QueryClient();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client }, children);
   return render(

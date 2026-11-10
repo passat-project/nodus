@@ -80,7 +80,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('useRenameConversation — оптимистичность', () => {
   it('название применяется к кэшу ДО ответа сервера; reject → откат', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(chatKeys.conversations(), { items: [item('Старое')], nextCursor: null });
     const gate = deferred<Response>();
     vi.stubGlobal(

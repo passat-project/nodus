@@ -11,7 +11,7 @@ import { useChatPrefs } from './chat-prefs.js';
 import { useJumpStore } from './jump-store.js';
 
 // QueryClient остаётся: пузырь живёт в дереве с запросами ленты.
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const renderMessage = (node: React.ReactElement) =>
   render(
     <QueryClientProvider client={queryClient}>

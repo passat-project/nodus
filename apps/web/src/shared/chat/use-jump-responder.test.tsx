@@ -77,7 +77,7 @@ describe('useJumpResponder — бэкфилл истории (#307)', () => {
   });
 
   it('цель старее окна: догружает страницу, на выросшем кэше — reveal+вспышка', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData<HistoryPage>(chatKeys.messages(CONV), {
       items: [m('new', 100)],
       nextCursor: 'cur-99',
@@ -109,7 +109,7 @@ describe('useJumpResponder — бэкфилл истории (#307)', () => {
   });
 
   it('исчерпание истории без цели — тост «не найдено» и consume', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData<HistoryPage>(chatKeys.messages(CONV), {
       items: [m('new', 100)],
       nextCursor: 'cur-99',

@@ -25,7 +25,11 @@ const has = (keys: Array<[unknown[], InvalidationTier]>, key: readonly unknown[]
 describe('pushNodeKindKeys (#556, Р10)', () => {
   it('смена вида инвалидирует реестр видов и структуры проектов', () => {
     const { batcher, keys } = recordingBatcher();
-    const handled = pushNodeKindKeys(batcher, new QueryClient(), 'project.node_kind_changed');
+    const handled = pushNodeKindKeys(
+      batcher,
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+      'project.node_kind_changed',
+    );
     expect(handled).toBe(true);
     expect(has(keys, nodeKindsKeys.all)).toBe(true);
     expect(has(keys, projectsKeys.structures())).toBe(true);
@@ -34,7 +38,11 @@ describe('pushNodeKindKeys (#556, Р10)', () => {
 
   it('смена типа проекта инвалидирует типы и реестр атрибутов (#631)', () => {
     const { batcher, keys } = recordingBatcher();
-    const handled = pushNodeKindKeys(batcher, new QueryClient(), 'project.type_changed');
+    const handled = pushNodeKindKeys(
+      batcher,
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+      'project.type_changed',
+    );
     expect(handled).toBe(true);
     expect(has(keys, projectsKeys.types())).toBe(true);
     expect(has(keys, customFieldsKeys.all)).toBe(true);
@@ -42,7 +50,11 @@ describe('pushNodeKindKeys (#556, Р10)', () => {
 
   it('чужие события не обрабатывает', () => {
     const { batcher, keys } = recordingBatcher();
-    const handled = pushNodeKindKeys(batcher, new QueryClient(), 'project.node_updated');
+    const handled = pushNodeKindKeys(
+      batcher,
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+      'project.node_updated',
+    );
     expect(handled).toBe(false);
     expect(keys).toEqual([]);
   });
