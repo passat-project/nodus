@@ -38,7 +38,10 @@ export interface PendingAttachment {
   size: number;
   /** 0..1 — для кольца/бара прогресса. */
   progress: number;
-  status: 'uploading' | 'ready' | 'error';
+  /** `processing` — тело уже принято сервером, но ответа ещё нет: сервер
+   *  стримит файл в хранилище и пишет строки БД (#717). Отдельное состояние,
+   *  чтобы окно объясняло паузу, а не выглядело залипшим на 100%. */
+  status: 'uploading' | 'processing' | 'ready' | 'error';
   /** Заполняется по завершении загрузки (attachmentIds отправки). */
   attachment: MessageAttachment | null;
   /** Превью трей (локальный objectURL изображения). */

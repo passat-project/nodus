@@ -1,4 +1,4 @@
-import { Ellipsis, FilePen, GripVertical, Replace, RotateCw, X } from 'lucide-react';
+import { Ellipsis, FilePen, GripVertical, Loader2, Replace, RotateCw, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
@@ -65,6 +65,20 @@ function ProgressRing({ progress }: { progress: number }) {
   );
 }
 
+/** Наложение на миниатюру: кольцо процента пока идёт загрузка, спиннер —
+ *  пока сервер обрабатывает уже принятый файл (#717). */
+function BusyOverlay({ uploading, progress }: { uploading: boolean; progress: number }) {
+  return (
+    <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-background/55">
+      {uploading ? (
+        <ProgressRing progress={progress} />
+      ) : (
+        <Loader2 className="size-5 animate-spin text-foreground" strokeWidth={1.75} />
+      )}
+    </span>
+  );
+}
+
 export function AttachSendRow({
   scope,
   item,
@@ -95,6 +109,9 @@ export function AttachSendRow({
   onRenameMode?: (active: boolean) => void;
 }) {
   const uploading = item.status === 'uploading';
+  // Тело принято, ответа ещё нет (#717): процент заменяется спиннером —
+  // замершие 100% читались как «интерфейс залип».
+  const busy = uploading || item.status === 'processing';
   const [renaming, setRenaming] = useState(false);
   const [draftName, setDraftName] = useState(item.fileName);
   // Расширение НЕ редактируется (вердикт владельца 04.10: не должны случайно
@@ -205,11 +222,7 @@ export function AttachSendRow({
           <span className="block size-full overflow-hidden rounded-lg border border-border">
             <img src={previewSrc} alt="" className="size-full object-cover" />
           </span>
-          {uploading ? (
-            <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-background/55">
-              <ProgressRing progress={item.progress} />
-            </span>
-          ) : null}
+          {busy ? <BusyOverlay uploading={uploading} progress={item.progress} /> : null}
         </button>
       ) : (
         <span className="relative size-10 shrink-0">
@@ -218,11 +231,7 @@ export function AttachSendRow({
               <FileTypeIcon mime={item.mime} className="size-5" />
             </span>
           </span>
-          {uploading ? (
-            <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-background/55">
-              <ProgressRing progress={item.progress} />
-            </span>
-          ) : null}
+          {busy ? <BusyOverlay uploading={uploading} progress={item.progress} /> : null}
         </span>
       )}
       <span className="min-w-0 flex-1">
@@ -271,9 +280,11 @@ export function AttachSendRow({
             <span className="block truncate font-mono text-badge text-muted-foreground tabular-nums">
               {uploading
                 ? `${Math.round(item.progress * 100)}%`
-                : item.status === 'error'
-                  ? ui.chat.uploadFailed
-                  : formatBytes(item.size)}
+                : item.status === 'processing'
+                  ? ui.chat.attachProcessing
+                  : item.status === 'error'
+                    ? ui.chat.uploadFailed
+                    : formatBytes(item.size)}
             </span>
           </>
         )}
@@ -336,10 +347,10 @@ export function AttachSendRow({
       <button
         type="button"
         onClick={() =>
-          uploading ? cancelUpload(scope, item.localId) : removePending(scope, item.localId)
+          busy ? cancelUpload(scope, item.localId) : removePending(scope, item.localId)
         }
-        aria-label={uploading ? ui.chat.uploadCancel : ui.chat.uploadRemove}
-        title={uploading ? ui.chat.uploadCancel : ui.chat.uploadRemove}
+        aria-label={busy ? ui.chat.uploadCancel : ui.chat.uploadRemove}
+        title={busy ? ui.chat.uploadCancel : ui.chat.uploadRemove}
         className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
       >
         <X className="size-4" strokeWidth={1.75} />

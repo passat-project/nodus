@@ -18,6 +18,10 @@ import { uploadAttachment, validateFiles, type UploadHandle } from './upload-att
 const handles = new Map<string, UploadHandle>();
 const sourceFiles = new Map<string, File>();
 
+/** Порог показа второй фазы (#717): ответ сервера у малых файлов почти
+ *  мгновенный — «Обработка…» не должна мигать на доли секунды. */
+export const PROCESSING_HINT_MS = 350;
+
 export function addFiles(draftKey: string, incoming: File[]): void {
   if (incoming.length === 0) return;
   const store = useChatDrafts.getState();
@@ -100,13 +104,30 @@ function startUpload(draftKey: string, file: File): void {
 
 function runUpload(draftKey: string, localId: string, file: File): void {
   const store = () => useChatDrafts.getState();
+  // Вторая фаза (#717): к 100% тело лишь принято сервером — дальше он стримит
+  // файл в хранилище и пишет строки БД (80 МБ ≈ 2–3 с). Показываем её явно,
+  // но только если она длится заметно (порог — см. PROCESSING_HINT_MS).
+  let processingTimer = 0;
   const handle = uploadAttachment(file, (progress) => {
     store().patchAttachment(draftKey, localId, { progress });
+    if (progress < 1 || processingTimer !== 0) return;
+    processingTimer = window.setTimeout(() => {
+      processingTimer = 0;
+      store().patchAttachment(draftKey, localId, { status: 'processing' });
+    }, PROCESSING_HINT_MS);
   });
   handles.set(localId, handle);
   handle.promise
     .then((attachment) => {
+      window.clearTimeout(processingTimer);
       handles.delete(localId);
+      // Строку сняли, пока сервер дорабатывал файл (отмена в фазе
+      // «Обработка…»): вложение уже создано — освобождаем его, иначе оно
+      // живёт невидимым до ленивой уборки (48 ч).
+      if (!hasAttachmentRow(draftKey, localId)) {
+        void api(`/chat/attachments/${attachment.id}`, { method: 'DELETE' }).catch(() => undefined);
+        return;
+      }
       store().patchAttachment(draftKey, localId, {
         status: 'ready',
         progress: 1,
@@ -114,16 +135,32 @@ function runUpload(draftKey: string, localId: string, file: File): void {
       });
     })
     .catch((error: unknown) => {
+      window.clearTimeout(processingTimer);
       handles.delete(localId);
       // Отмена — карточка уже убрана из трея, ошибка не нужна.
       if (error instanceof DOMException && error.name === 'AbortError') return;
+      // Сбой дочитки в фазе «Обработка…»: строки нет — пользователю о нём
+      // сообщать нечем (отмена была намеренной).
+      if (!hasAttachmentRow(draftKey, localId)) return;
       store().patchAttachment(draftKey, localId, { status: 'error' });
       toast.error(ui.chat.uploadFailed);
     });
 }
 
+function hasAttachmentRow(draftKey: string, localId: string): boolean {
+  return (useChatDrafts.getState().drafts[draftKey] ?? EMPTY_DRAFT).attachments.some(
+    (attachment) => attachment.localId === localId,
+  );
+}
+
 export function cancelUpload(draftKey: string, localId: string): void {
-  handles.get(localId)?.cancel();
+  const item = (useChatDrafts.getState().drafts[draftKey] ?? EMPTY_DRAFT).attachments.find(
+    (attachment) => attachment.localId === localId,
+  );
+  // Фаза «Обработка…» (#717): тело уже принято — abort не отменит работу
+  // сервера, а только потеряет id готового вложения. Дочитываем ответ:
+  // runUpload увидит снятую строку и удалит вложение на сервере.
+  if (item?.status === 'uploading') handles.get(localId)?.cancel();
   handles.delete(localId);
   removePending(draftKey, localId);
 }

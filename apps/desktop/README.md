@@ -102,8 +102,10 @@ apps/desktop/
 - Токены/креды не покидают веб-приложение: мост переносит только команды
   дисплея; ACL моста выдаётся runtime-capability РОВНО origin'у портала
   (`dynamic-acl`, минимальный набор прав в `permissions/shell-bridge.toml`).
-- Гвард навигации: локальный мини-UI и origin портала; всё прочее — системный
-  браузер. `open_external` принимает только http/https/mailto/tel; новые окна
+- Гвард навигации: локальный мини-UI (схема app (`http`/`https`/`tauri`) И
+  host `tauri.localhost` — схема проверяется ДО host: `file://tauri.localhost/…`
+  отклоняется, #716) и origin портала; всё прочее — системный браузер.
+  `open_external` принимает только http/https/mailto/tel; новые окна
   WebView2 не создаются (`on_new_window` → системное приложение, #644).
 - Адрес портала валидируется (схема/хост, без пути и user-info).
 

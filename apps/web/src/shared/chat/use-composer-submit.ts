@@ -44,7 +44,11 @@ export function useComposerSubmit({
 }) {
   const forward = useForwardMessages();
   const text = draft.text;
-  const uploading = draft.attachments.some((a) => a.status === 'uploading');
+  // Загрузка ИЛИ серверная обработка держит отправку (#717): в фазе
+  // «Обработка…» attachmentIds ещё нет — без гейта текст ушёл бы без файла.
+  const uploading = draft.attachments.some(
+    (a) => a.status === 'uploading' || a.status === 'processing',
+  );
   const readyAttachments = draft.attachments.filter((a) => a.status === 'ready' && a.attachment);
   const hasContent = text.trim().length > 0 || readyAttachments.length > 0;
   // Превалидация лимита (раунд 3): счётчик у черты, отправка заблокирована,

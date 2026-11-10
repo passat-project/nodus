@@ -21,6 +21,7 @@ import { MentionAutocompletePanel } from './composer-mention-autocomplete.js';
 import { useAttachSendDialog } from './dialog-stores.js';
 import { ImageLightbox } from './image-lightbox.js';
 import { ComposerBanner } from './composer-banner.js';
+import { FileDropOverlay, useFileDrop } from './feed-dropzone.js';
 import { isSendShortcut } from './send-keys.js';
 import { useAttachSend } from './use-attach-send.js';
 import { useCaptionMentions } from './use-caption-mentions.js';
@@ -77,7 +78,7 @@ export function AttachSendDialogHost() {
   const fileRef = useRef<HTMLInputElement>(null);
   const captionMentions = useCaptionMentions({ scope, caption, setCaption, captionRef });
   const { mentions, mentionList, editToken } = captionMentions;
-  const { items, shownReply, editMode, sending, uploading, limit, canSend, cancelAll, send } =
+  const { items, shownReply, editMode, sending, sendHint, limit, canSend, cancelAll, send } =
     useAttachSend({
       scope,
       draft,
@@ -85,6 +86,12 @@ export function AttachSendDialogHost() {
       close,
       mentionListRef: captionMentions.mentionListRef,
     });
+  // Дроп файлов прямо в открытое окно (#716, канон Telegram/Discord): тот же
+  // приём, что у ленты (guard внутренних драгов #242), но обработчики — на
+  // контейнере диалога: обёртка стала бы лишним grid-элементом окна.
+  const drop = useFileDrop((files) => {
+    if (scope) addFiles(scope, files);
+  });
 
   function handleRenameMode(active: boolean) {
     setRenameActive(active);
@@ -170,6 +177,9 @@ export function AttachSendDialogHost() {
     >
       <DialogContent
         className="sm:max-w-md"
+        /* Дроп файла в ЛЮБОЕ место окна (#716) — обработчики drop-зоны на
+           самом контенте диалога, оверлей — его абсолютным ребёнком. */
+        {...drop.handlers}
         /* Крестик окна НЕ нужен (вердикт 29.09.2026): отмена — кнопкой
            «Отмена» в футере; крестики остаются ТОЛЬКО на строках вложений. */
         showCloseButton={false}
@@ -210,6 +220,7 @@ export function AttachSendDialogHost() {
           refocusCaption();
         }}
       >
+        <FileDropOverlay active={drop.active} />
         <DialogHeader>
           <DialogTitle>
             {editMode
@@ -350,12 +361,7 @@ export function AttachSendDialogHost() {
           <Button type="button" variant="ghost" onClick={cancelAll}>
             {ui.common.cancel}
           </Button>
-          <Button
-            type="button"
-            onClick={() => void send()}
-            disabled={!canSend}
-            title={uploading ? ui.chat.attachWaitUpload : undefined}
-          >
+          <Button type="button" onClick={() => void send()} disabled={!canSend} title={sendHint}>
             {editMode ? ui.common.save : ui.chat.attachSend}
           </Button>
         </DialogFooter>

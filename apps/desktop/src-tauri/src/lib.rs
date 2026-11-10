@@ -143,6 +143,12 @@ fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
             .min_inner_size(1024.0, 660.0)
             .center()
             .visible(false)
+            // HTML5 drag&drop файлов (#716): tauri по умолчанию подменяет
+            // drop-обработчик WebView2 своим (DragDropEvent) — на Windows
+            // нативные DOM-события дропа не приходят, и чат не принимает файл
+            // из Проводника. Метод документирован ровно для этого
+            // (tauri 2.12.1: WebviewWindowBuilder::disable_drag_drop_handler).
+            .disable_drag_drop_handler()
             .additional_browser_args(WEBVIEW2_BROWSER_ARGS)
             .initialization_script(bridge::initialization_script(&version))
             .on_navigation(move |url| navigation_allowed(&nav_app, url))
@@ -183,12 +189,23 @@ fn open_in_system(app: &AppHandle, url: &Url) {
     }
 }
 
+/// Локальный мини-UI оболочки: схемы приложения И точный host
+/// `tauri.localhost`. Схема проверяется ДО host намеренно (#716): с нативным
+/// HTML5 drag&drop WebView2 навигирует на `file://`-URL брошенного файла, и
+/// UNC-форма `file://tauri.localhost/…` иначе сошла бы за локальный UI и
+/// загрузила сторонний HTML в окно с внедрённым мостом (security-ревью #716).
+fn is_local_ui_url(url: &Url) -> bool {
+    matches!(url.scheme(), "http" | "https" | "tauri") && url.host_str() == Some("tauri.localhost")
+}
+
 /// Гвард навигации: локальный мини-UI и origin портала — можно; всё прочее —
 /// в системный браузер, webview остаётся на портале (security-рамка ADR-0019).
 fn navigation_allowed(app: &AppHandle, url: &Url) -> bool {
-    if url.host_str() == Some("tauri.localhost") {
+    if is_local_ui_url(url) {
         return true;
     }
+    // `file:` внешнему обработчику не отдаём (open_in_system пускает только
+    // http/https/mailto/tel), mailto:/tel: — по-прежнему уходят в систему.
     if let Some(root) = portal::portal_root(app) {
         if let Ok(root_url) = Url::parse(&root) {
             let same_origin = url.scheme() == root_url.scheme()
@@ -215,4 +232,40 @@ pub fn show_main(app: &AppHandle) {
         "shell-visibility",
         &serde_json::json!({ "visible": true }),
     );
+}
+
+#[cfg(test)]
+mod navigation_tests {
+    use super::is_local_ui_url;
+    use tauri::Url;
+
+    /// Таблица гварда навигации (#716): локальный UI — только схемы приложения
+    /// с точным host; file://-формы (в т.ч. UNC-подмена host) и чужие хосты —
+    /// отказ (иначе сторонний HTML грузится в окно с мостом оболочки).
+    #[test]
+    fn local_ui_url_checks_scheme_before_host() {
+        let allowed = [
+            "http://tauri.localhost/index.html",
+            "https://tauri.localhost/index.html",
+        ];
+        for raw in allowed {
+            assert!(
+                is_local_ui_url(&Url::parse(raw).unwrap()),
+                "должен пройти: {raw}"
+            );
+        }
+        let denied = [
+            "file://tauri.localhost/share/evil.html",
+            "file:///C:/Windows/evil.html",
+            "http://tauri.localhost.evil.com/",
+            "https://example.com/",
+            "data:text/html,<script>1</script>",
+        ];
+        for raw in denied {
+            assert!(
+                !is_local_ui_url(&Url::parse(raw).unwrap()),
+                "должен отклониться: {raw}"
+            );
+        }
+    }
 }
