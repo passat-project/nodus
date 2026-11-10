@@ -98,7 +98,7 @@ export class DefinitionsController {
     dto: CreateCustomFieldBody,
     @GetUser() actor: AuthUser,
   ): Promise<CustomFieldDefinition> {
-    return this.definitions.create(dto, actor.id);
+    return this.definitions.create(dto, actor.id, actor.permissions);
   }
 
   // Буквальный сегмент объявлен раньше `:id` (Fastify матчит его первым).
@@ -248,7 +248,7 @@ export class DefinitionsController {
     dto: UpdateCustomFieldBody,
     @GetUser() actor: AuthUser,
   ): Promise<CustomFieldDefinition> {
-    return this.definitions.update(id, dto, actor.id);
+    return this.definitions.update(id, dto, actor.id, actor.permissions);
   }
 
   @Delete(':id')

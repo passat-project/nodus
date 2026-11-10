@@ -48,19 +48,21 @@ CUSTOM_FIELD_REGISTRY: CustomFieldRegistry {
 
 ## Эндпоинты (`/api/v1/custom-fields`)
 
-| Маршрут                                            | Права                 | Назначение                                                                                                                                |
-| -------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /definitions?module=`                         | auth                  | Реестр портала (массив, без курсора — О9: потолок 1000); `module`: task/letter (привязка к живому типу категории), project, node, company |
-| `POST /definitions`                                | `custom_field.manage` | 201; 409 дубль имени (с suggestion)/потолок; 422 недоступная цель привязки; `bindings` сразу                                              |
-| `PUT /definitions/order`                           | `custom_field.manage` | `ids` = ровно все атрибуты портала, иначе 409 `CONFLICT`                                                                                  |
-| `GET /definitions/:id/usage`                       | `custom_field.manage` | Агрегат последствий удаления (Р8)                                                                                                         |
-| `PUT /definitions/:id/bindings/:kind/:targetId`    | `custom_field.manage` | Привязка (kind: process-type/project-type/node-kind), идемпотентна; 404 неизвестная цель, 422 архивный тип процесса                       |
-| `DELETE /definitions/:id/bindings/:kind/:targetId` | `custom_field.manage` | Снятие привязки — всегда разрешено (О3), идемпотентно                                                                                     |
-| `PUT /definitions/:id/company-value`               | `custom_field.manage` | Значение глобальной (null — очистить); не-глобальному — 422                                                                               |
-| `PATCH /definitions/:id`                           | `custom_field.manage` | 200; 409 тип/имя; 422 форма настроек; `bindings` — замена целиком                                                                         |
-| `DELETE /definitions/:id`                          | `custom_field.manage` | 204 всегда (В4); значения стирают владельцы по событию                                                                                    |
+| Маршрут                                            | Права                                                                                 | Назначение                                                                                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /definitions?module=`                         | auth                                                                                  | Реестр портала (массив, без курсора — О9: потолок 1000); `module`: task/letter (привязка к живому типу категории), project, node, company |
+| `POST /definitions`                                | `custom_field.manage` (+ `dictionary.manage` для списка)                              | 201; 409 дубль имени (с suggestion)/потолок; 422 недоступная цель привязки; `bindings` сразу                                              |
+| `PUT /definitions/order`                           | `custom_field.manage`                                                                 | `ids` = ровно все атрибуты портала, иначе 409 `CONFLICT`                                                                                  |
+| `GET /definitions/:id/usage`                       | `custom_field.manage`                                                                 | Агрегат последствий удаления (Р8)                                                                                                         |
+| `PUT /definitions/:id/bindings/:kind/:targetId`    | `custom_field.manage`                                                                 | Привязка (kind: process-type/project-type/node-kind), идемпотентна; 404 неизвестная цель, 422 архивный тип процесса                       |
+| `DELETE /definitions/:id/bindings/:kind/:targetId` | `custom_field.manage`                                                                 | Снятие привязки — всегда разрешено (О3), идемпотентно                                                                                     |
+| `PUT /definitions/:id/company-value`               | `custom_field.manage`                                                                 | Значение глобальной (null — очистить); не-глобальному — 422                                                                               |
+| `PATCH /definitions/:id`                           | `custom_field.manage` (+ `dictionary.manage` при смене `dictionaryId`/типа на список) | 200; 409 тип/имя; 422 форма настроек; `bindings` — замена целиком                                                                         |
+| `DELETE /definitions/:id`                          | `custom_field.manage`                                                                 | 204 всегда (В4); значения стирают владельцы по событию                                                                                    |
 
 Правила: `sortOrder = max+1` при создании; `reorder` — по всем атрибутам портала; порядок выдачи `(sort_order, id)`.
+
+Списковые операции (#604, I8): создание атрибута `enum`/`multienum` или смена `settings.dictionaryId` требует `dictionary.manage` — сервер не полагается на блокировку UI #491 (403 `FORBIDDEN`, проверка до существования словаря). Правка имени/подсказки/умолчания уже созданного списка доступна с одним `custom_field.manage`.
 
 ## Счётчики номеров (#630, модель v3)
 

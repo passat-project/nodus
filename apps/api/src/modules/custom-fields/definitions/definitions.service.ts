@@ -42,6 +42,7 @@ import { emitDefinitionChanged } from './definition-events.js';
 import { CounterRuleService } from './counter-rule.service.js';
 import {
   assertBindingsUsable,
+  assertDictionaryManage,
   createBindings,
   assertDefaultUsable,
   assertSettingsUsable,
@@ -90,7 +91,14 @@ export class DefinitionsService {
     return this.query.list(module, actor);
   }
 
-  async create(dto: CreateCustomFieldBody, actorId: string): Promise<CustomFieldDefinition> {
+  async create(
+    dto: CreateCustomFieldBody,
+    actorId: string,
+    permissions: readonly string[] = [],
+  ): Promise<CustomFieldDefinition> {
+    // #604: список на существующем справочнике — это управление справочником.
+    // Проверка ДО существования словаря: 403, а не 404/422-оракул (I8).
+    assertDictionaryManage(permissions, null, dto.type, dto.settings);
     await assertSettingsUsable(
       this.dictionaries,
       dto.type,
@@ -180,8 +188,17 @@ export class DefinitionsService {
     id: string,
     dto: UpdateCustomFieldBody,
     actorId: string,
+    permissions: readonly string[] = [],
   ): Promise<CustomFieldDefinition> {
     const current = await requireDefinition(this.definitions, id);
+    // #604: смена dictionaryId (в т.ч. первый после типа) или перевод типа в
+    // списковое семейство — управление справочником. Проверка ДО существования
+    // словаря: 403, а не 404/422-оракул (I8). Правка имени/подсказки/умолчания
+    // существующего списка остаётся с одним custom_field.manage.
+    assertDictionaryManage(permissions, current, dto.type ?? current.type, {
+      ...(current.settings as Record<string, unknown>),
+      ...(dto.settings ?? {}),
+    });
     const { nextType, nextSettings, nextDefault } = await assertUpdateAllowed(
       {
         validator: this.validator,
