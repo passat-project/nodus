@@ -71,6 +71,8 @@ export const automationStrings = {
   },
   addStage: 'Добавить статус',
   newStageName: 'Новый статус',
+  /** Действие — кнопка без смены статуса (#633). */
+  newActionName: 'Новое действие',
   startNode: 'Создание',
   initialMark: 'Начальный',
   stageAria: 'Статус',
