@@ -3,19 +3,19 @@ import {
   ErrorCode,
   pressConfigSchema,
   pressEntryResultOf,
-  TASK_EVENTS,
   transitionFormSchema,
   type AuthUser,
+  type PressReturnBody,
   type PressRoundView,
   type TransitionFormInput,
 } from '@nodus/contracts';
 
 import { TransactionRunner, type TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
-import { EventBus } from '../../../core/events/event-bus.js';
-import { audienceIds } from '../access/task-access.js';
+import { actorRoles, taskAccess } from '../access/task-access.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
 import { TimeService } from '../time/time.service.js';
+import { PressEvents } from './press-events.service.js';
 import {
   WORKFLOW_ENGINE,
   type WorkflowEnginePort,
@@ -45,7 +45,7 @@ export class PressService {
     private readonly rounds: PressRoundsService,
     private readonly tasks: TasksRepository,
     private readonly time: TimeService,
-    private readonly events: EventBus,
+    private readonly pressEvents: PressEvents,
     @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
     @Inject(WORKFLOW_PRESS_READER) private readonly pressReader: WorkflowPressReader,
   ) {}
@@ -58,6 +58,20 @@ export class PressService {
     return this.txRunner.run(async (tx) => this.withdrawInTx(tx, user, taskId));
   }
 
+  /** Выборочный возврат (#434): ответственный возвращает результаты тех, кому
+   *  нужно доработать; остальные остаются сданными, раунд не закрывается. */
+  returnEntries(
+    user: AuthUser,
+    taskId: string,
+    body: PressReturnBody,
+  ): Promise<PressRoundView | null> {
+    return this.txRunner.run(async (tx) => this.returnInTx(tx, user, taskId, body));
+  }
+
+  private canManage(task: PressTask, user: AuthUser): boolean {
+    return taskAccess(actorRoles(task, user.id), user.permissions).canEdit;
+  }
+
   private async submitInTx(
     tx: TransactionClient,
     user: AuthUser,
@@ -66,6 +80,7 @@ export class PressService {
   ): Promise<PressRoundView | null> {
     await this.tasks.lock(tx, taskId);
     const task = await this.tasks.findWithParticipants(taskId, tx);
+    const canManage = this.canManage(task, user);
     const round = await this.repo.findOpenRound(tx, 'task', taskId);
     if (!round || round.stageId !== task.stageId) {
       throw DomainException.notFound('Press round not found');
@@ -74,7 +89,7 @@ export class PressService {
     if (!entry) throw DomainException.forbidden('Press is not allowed');
     if (entry.state === 'pressed') {
       // Идемпотентность повторного клика с новым ключом запроса.
-      return this.rounds.viewForTask(taskId, round.stageId, user.id, tx);
+      return this.rounds.viewForTask(taskId, round.stageId, user.id, canManage, tx);
     }
     const config = pressConfigSchema.parse(round.config);
     if (entry.state !== 'waiting' && entry.state !== 'returned') {
@@ -105,20 +120,33 @@ export class PressService {
             input.time,
           )
         : null;
+    const result = pressEntryResultOf(input);
     await this.repo.updateEntry(tx, entry.id, {
       state: 'pressed',
       pressedAt: new Date(),
       input,
-      result: pressEntryResultOf(input),
+      result,
       timeEntryId: timeEntry?.id ?? null,
       returnReason: null,
     });
-    await this.emitPressUpdated(tx, task, user.id);
-
     const pressed = round.entries.filter(
       (item) => item.state === 'pressed' || item.userId === user.id,
     ).length;
     const total = round.entries.filter((item) => item.state !== 'excluded').length;
+    const broadcast = this.pressEvents.isBroadcast(config);
+    await this.pressEvents.updated(tx, task, user.id, round, config);
+    if (!broadcast) {
+      await this.pressEvents.submitted(
+        tx,
+        task,
+        user.id,
+        round.transitionName,
+        result,
+        pressed,
+        total,
+      );
+    }
+
     const required =
       config.quorum.kind === 'all'
         ? total
@@ -126,7 +154,7 @@ export class PressService {
           ? 1
           : config.quorum.count;
     if (pressed < required) {
-      return this.rounds.viewForTask(taskId, round.stageId, user.id, tx);
+      return this.rounds.viewForTask(taskId, round.stageId, user.id, canManage, tx);
     }
 
     // Кворум: переход выполняет движок, ввод закрывающего — итог и блок в чате.
@@ -153,6 +181,7 @@ export class PressService {
   ): Promise<PressRoundView | null> {
     await this.tasks.lock(tx, taskId);
     const task = await this.tasks.findWithParticipants(taskId, tx);
+    const canManage = this.canManage(task, user);
     const round = await this.repo.findOpenRound(tx, 'task', taskId);
     if (!round || round.stageId !== task.stageId) {
       throw DomainException.notFound('Press round not found');
@@ -160,7 +189,7 @@ export class PressService {
     const entry = round.entries.find((item) => item.userId === user.id);
     if (!entry) throw DomainException.forbidden('Press is not allowed');
     if (entry.state !== 'pressed') {
-      return this.rounds.viewForTask(taskId, round.stageId, user.id, tx);
+      return this.rounds.viewForTask(taskId, round.stageId, user.id, canManage, tx);
     }
     if (entry.timeEntryId) await this.time.removeInTx(tx, user.id, entry.timeEntryId);
     await this.repo.updateEntry(tx, entry.id, {
@@ -170,22 +199,52 @@ export class PressService {
       result: null,
       timeEntryId: null,
     });
-    await this.emitPressUpdated(tx, task, user.id);
-    return this.rounds.viewForTask(taskId, round.stageId, user.id, tx);
+    const config = pressConfigSchema.parse(round.config);
+    await this.pressEvents.updated(tx, task, user.id, round, config);
+    return this.rounds.viewForTask(taskId, round.stageId, user.id, canManage, tx);
   }
 
-  /** Сигнал остальным: прогресс в карточке перечитать (payload task.updated). */
-  private async emitPressUpdated(tx: TransactionClient, task: PressTask, actorId: string) {
-    await this.events.emit(
-      tx,
-      TASK_EVENTS.UPDATED,
-      {
-        taskId: task.id,
-        number: task.number,
-        audience: audienceIds(task),
-        fields: ['press'],
-      },
-      { actorId, aggregateType: 'task', aggregateId: task.id },
+  private async returnInTx(
+    tx: TransactionClient,
+    user: AuthUser,
+    taskId: string,
+    body: PressReturnBody,
+  ): Promise<PressRoundView | null> {
+    await this.tasks.lock(tx, taskId);
+    const task = await this.tasks.findWithParticipants(taskId, tx);
+    if (!this.canManage(task, user)) throw DomainException.forbidden('Press return is not allowed');
+    const round = await this.repo.findOpenRound(tx, 'task', taskId);
+    if (!round || round.stageId !== task.stageId) {
+      throw DomainException.notFound('Press round not found');
+    }
+    const requested = new Set(body.userIds);
+    const targets = round.entries.filter(
+      (item) => requested.has(item.userId) && item.state === 'pressed',
     );
+    if (targets.length === 0) {
+      throw new DomainException(
+        ErrorCode.VALIDATION_FAILED,
+        'No pressed entries to return',
+        { userIds: body.userIds },
+      );
+    }
+    for (const target of targets) {
+      await this.repo.updateEntry(tx, target.id, {
+        state: 'returned',
+        returnReason: body.reason,
+      });
+    }
+    const config = pressConfigSchema.parse(round.config);
+    await this.pressEvents.updated(tx, task, user.id, round, config);
+    await this.pressEvents.returned(
+      tx,
+      task,
+      user.id,
+      round,
+      targets.map((target) => target.userId),
+      body.reason,
+      this.pressEvents.isBroadcast(config),
+    );
+    return this.rounds.viewForTask(taskId, round.stageId, user.id, true, tx);
   }
 }

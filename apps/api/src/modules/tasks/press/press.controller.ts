@@ -3,9 +3,11 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swa
 import { z } from 'zod';
 import {
   pressExecuteResultSchema,
+  pressReturnBodySchema,
   pressSubmitBodySchema,
   type AuthUser,
   type PressExecuteResult,
+  type PressReturnBody,
   type PressSubmitBody,
 } from '@nodus/contracts';
 
@@ -72,6 +74,27 @@ export class TaskPressController {
   ): Promise<PressExecuteResult> {
     await this.query.visibleRow(user, id);
     await this.press.withdraw(user, id);
+    return this.result(user, id);
+  }
+
+  @Post(':id/press/return')
+  @HttpCode(200)
+  @Audit({ action: 'task.press_return', entity: 'task' })
+  @ApiOperation({ summary: 'Вернуть выбранные отметки на доработку (ответственный)' })
+  @ApiOkResponse({ standardSchema: pressExecuteResultSchema })
+  @ApiErrors(400, 401, 403, 404, 409, 422)
+  @ApiIdempotencyKey()
+  async returnSelected(
+    @GetUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Body({
+      schema: pressReturnBodySchema,
+      pipes: [new ZodValidationPipe(pressReturnBodySchema)],
+    })
+    body: PressReturnBody,
+  ): Promise<PressExecuteResult> {
+    await this.query.visibleRow(user, id);
+    await this.press.returnEntries(user, id, body);
     return this.result(user, id);
   }
 

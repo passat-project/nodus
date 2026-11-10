@@ -261,6 +261,7 @@ export function buildMessageItems(input: MessageMenuInput): {
     !isSticker &&
     message.kind !== 'task_transition' &&
     message.kind !== 'letter_transition' &&
+    message.kind !== 'task_press' &&
     variant !== 'source-window';
   return {
     items: items.filter((item) => {

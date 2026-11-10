@@ -5,6 +5,7 @@ import { PressService } from './press.service.js';
 const TASK = {
   id: 't1',
   number: 17,
+  title: 'Проверить раздел',
   projectId: null,
   stageId: 's1',
   creatorId: 'creator',
@@ -71,7 +72,13 @@ function setup(state = 'waiting', config = { quorum: { kind: 'all' }, order: 'pa
     addManualInTx: vi.fn(async () => ({ id: 'time1' })),
     removeInTx: vi.fn(async () => void 0),
   };
-  const events = { emit: vi.fn(async () => void 0) };
+  const pressEvents = {
+    isBroadcast: (config: { sources?: { kind: string }[] }) =>
+      config.sources?.some((source) => source.kind === 'all_employees') ?? false,
+    updated: vi.fn(async () => void 0),
+    submitted: vi.fn(async () => void 0),
+    returned: vi.fn(async () => void 0),
+  };
   const engine = { execute: vi.fn(async () => ({ stage: {}, recordId: 'rec' })) };
   const reader = { checkPressInput: vi.fn(() => ({ missing: [], unexpected: [] })) };
   const service = new PressService(
@@ -80,11 +87,11 @@ function setup(state = 'waiting', config = { quorum: { kind: 'all' }, order: 'pa
     rounds as never,
     tasks as never,
     time as never,
-    events as never,
+    pressEvents as never,
     engine as never,
     reader as never,
   );
-  return { service, repo, rounds, tasks, time, events, engine, reader, round };
+  return { service, repo, rounds, tasks, time, pressEvents, engine, reader, round };
 }
 
 describe('PressService (#434)', () => {
@@ -147,6 +154,90 @@ describe('PressService (#434)', () => {
     });
     await expect(
       service.submit({ id: 'other', permissions: [] } as never, 't1', {}),
+    ).rejects.toThrow();
+  });
+
+  it('сдача отметки пишет событие блока чата для адресного раунда', async () => {
+    const { service, pressEvents } = setup();
+    await service.submit({ id: 'u1', permissions: [] } as never, 't1', {});
+    expect(pressEvents.submitted).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      'u1',
+      'Ознакомлен',
+      expect.anything(),
+      1,
+      1,
+    );
+  });
+
+  it('«Все сотрудники» — без событий блоков чата (анти-спам)', async () => {
+    const { service, pressEvents, repo, round } = setup(undefined, {
+      quorum: { kind: 'all' },
+      order: 'parallel',
+    });
+    repo.findOpenRound.mockResolvedValue({
+      ...round,
+      config: { ...round.config, sources: [{ kind: 'all_employees' }] },
+    });
+    await service.submit({ id: 'u1', permissions: [] } as never, 't1', {});
+    expect(pressEvents.submitted).not.toHaveBeenCalled();
+  });
+
+  it('ответственный возвращает выбранную отметку на доработку', async () => {
+    const { service, repo, pressEvents, round } = setup('pressed');
+    repo.findOpenRound.mockResolvedValue({
+      ...round,
+      entries: [{ ...entry('pressed'), userId: 'assignee' }],
+    });
+    await service.returnEntries(
+      { id: 'assignee', permissions: [] } as never,
+      't1',
+      { userIds: ['assignee'], reason: 'Доработать раздел' },
+    );
+    expect(repo.updateEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      'e1',
+      expect.objectContaining({ state: 'returned', returnReason: 'Доработать раздел' }),
+    );
+    expect(pressEvents.returned).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      'assignee',
+      expect.anything(),
+      ['assignee'],
+      'Доработать раздел',
+      false,
+    );
+  });
+
+  it('возврат чужих отметок доступен только ответственному/праву правки', async () => {
+    const { service, repo, round } = setup('pressed');
+    repo.findOpenRound.mockResolvedValue({
+      ...round,
+      entries: [{ ...entry('pressed'), userId: 'assignee' }],
+    });
+    await expect(
+      service.returnEntries(
+        { id: 'u1', permissions: [] } as never,
+        't1',
+        { userIds: ['assignee'], reason: 'Причина' },
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('возврат без нажатых отметок — ошибка валидации', async () => {
+    const { service, repo, round } = setup('waiting');
+    repo.findOpenRound.mockResolvedValue({
+      ...round,
+      entries: [{ ...entry('waiting'), userId: 'assignee' }],
+    });
+    await expect(
+      service.returnEntries(
+        { id: 'assignee', permissions: [] } as never,
+        't1',
+        { userIds: ['assignee'], reason: 'Причина' },
+      ),
     ).rejects.toThrow();
   });
 });

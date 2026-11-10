@@ -1,5 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { PressExecuteResult, PressSubmitBody, TaskDetail } from '@nodus/contracts';
+import type {
+  PressExecuteResult,
+  PressReturnBody,
+  PressSubmitBody,
+  TaskDetail,
+} from '@nodus/contracts';
 import { pressEntryResultOf, ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
@@ -78,6 +83,21 @@ export function useWithdrawPress(taskId: string) {
     mutationFn: () =>
       api<PressExecuteResult>(`/tasks/${taskId}/press/withdraw`, { method: 'POST' }),
     onSuccess: (result) => patchPress(queryClient, taskId, result),
+    onError: (error) => toast.error(transitionErrorText(error)),
+  });
+}
+
+/** Выборочный возврат (#434): ответственный возвращает результаты выбранным,
+ *  остальные остаются сданными. После ответа карточка и кнопки пересчитаны. */
+export function useReturnPress(taskId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PressReturnBody) =>
+      api<PressExecuteResult>(`/tasks/${taskId}/press/return`, { method: 'POST', body }),
+    onSuccess: (result) => {
+      patchPress(queryClient, taskId, result);
+      toast.success(ui.tasks.press.returnedToast);
+    },
     onError: (error) => toast.error(transitionErrorText(error)),
   });
 }

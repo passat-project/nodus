@@ -210,7 +210,10 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
     // Вход в стадию с коллективной кнопкой (#434): раунд и снимок состава
     // стартуют той же транзакцией, что и смена стадии; выход из такой стадии
     // закрывает открытый раунд.
-    await this.press.ensureForStage(tx, taskId, target.id);
+    await this.press.ensureForStage(tx, taskId, target.id, {
+      notify: true,
+      actorId,
+    });
     // После решения решающий остаётся наблюдателем без звука (В2).
     if (meta.wasDeciderOfTransition && actorId) {
       const added = await this.deciders.insertObserverIfAbsent(tx, deciderTask, actorId);

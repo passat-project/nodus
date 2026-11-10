@@ -229,6 +229,7 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'POST /tasks/:id/transitions/:transitionId': TASK_ACCESS,
   'POST /tasks/:id/press/submit': TASK_ACCESS,
   'POST /tasks/:id/press/withdraw': TASK_ACCESS,
+  'POST /tasks/:id/press/return': TASK_ACCESS,
   'POST /tasks/:id/type': TASK_ACCESS,
   'POST /tasks/:id/time-entries': TASK_ACCESS,
   'DELETE /tasks/time-entries/:entryId': TASK_ACCESS,

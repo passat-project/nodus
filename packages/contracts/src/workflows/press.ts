@@ -142,6 +142,9 @@ export const pressRoundViewSchema = z.object({
   myEntry: pressEntryViewSchema.nullable(),
   canSubmit: z.boolean(),
   canWithdraw: z.boolean(),
+  /** Ответственный (или право правки задачи) может вернуть чужие отметки
+   *  на доработку, пока раунд открыт: остальные остаются сданными. */
+  canReturn: z.boolean(),
   completed: z.boolean(),
 });
 export type PressRoundView = z.infer<typeof pressRoundViewSchema>;
@@ -151,10 +154,11 @@ export type PressRoundView = z.infer<typeof pressRoundViewSchema>;
 export const pressSubmitBodySchema = transitionFormInputSchema;
 export type PressSubmitBody = z.infer<typeof pressSubmitBodySchema>;
 
-/** Возврат выборочно — задел для ответственного (не в первом UI-срезе). */
+/** Выборочный возврат: ответственный отмечает, чьи результаты переделать,
+ *  и указывает причину; остальные отметки остаются сданными. */
 export const pressReturnBodySchema = z
   .object({
-    userIds: z.array(z.uuid()).min(1).max(100),
+    userIds: z.array(z.uuid()).min(1).max(500),
     reason: z.string().trim().min(1).max(500),
   })
   .strict();

@@ -181,8 +181,12 @@ export function taskDetailOf(task: TaskListItem): TaskDetail {
     acceptRequired: extra.acceptRequired ?? false,
     result: extra.result ?? null,
     press:
-      pressOf(task.id, currentAuthUser.id)?.stageId === task.stage.id
-        ? pressOf(task.id, currentAuthUser.id)
+      pressOf(
+        task.id,
+        currentAuthUser.id,
+        task.assignee?.id === currentAuthUser.id,
+      )?.stageId === task.stage.id
+        ? pressOf(task.id, currentAuthUser.id, task.assignee?.id === currentAuthUser.id)
         : null,
     completedAt: closed ? task.updatedAt : null,
     // Состав карточки по типу (#432): блоки, названия ролей, обязательные поля.

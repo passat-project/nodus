@@ -198,6 +198,76 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks press (integration)', () => {
     });
   });
 
+  it('ответственный возвращает выбранную отметку — участник снова видит кнопку', async () => {
+    const created = await fx.api(alice, 'POST', '/tasks', {
+      body: {
+        title: `Возврат ${fx.runId}`,
+        assigneeId: alice.id,
+        coexecutorIds: [bob.id, fx.users.carol.id],
+      },
+      key: `press-return-create-${fx.runId}`,
+    });
+    expect(created.status).toBe(201);
+    const task = taskListItemSchema.parse(await created.json());
+    taskIds.push(task.id);
+
+    const transitions = await fx.api(alice, 'GET', `/tasks/${task.id}/transitions`);
+    const start = ((await transitions.json()) as Array<{ id: string; toStageState: string }>).find(
+      (transition) => transition.toStageState === 'active',
+    );
+    await fx.api(alice, 'POST', `/tasks/${task.id}/transitions/${start!.id}`, {
+      body: {},
+      key: `press-return-start-${fx.runId}`,
+    });
+    const submitted = await fx.api(bob, 'POST', `/tasks/${task.id}/press/submit`, {
+      body: { result: { text: 'Черновик Бориса', messageIds: [] } },
+      key: `press-return-submit-${fx.runId}`,
+    });
+    expect(submitted.status).toBe(200);
+
+    // Ответственный видит возврат; участник без прав — нет.
+    const ownerView = taskDetailSchema.parse(
+      await (await fx.api(alice, 'GET', `/tasks/${task.id}`)).json(),
+    );
+    expect(ownerView.press).toMatchObject({ pressed: 1, canReturn: true });
+    const forbidden = await fx.api(fx.users.carol, 'POST', `/tasks/${task.id}/press/return`, {
+      body: { userIds: [bob.id], reason: 'Не твоё дело' },
+      key: `press-return-forbidden-${fx.runId}`,
+    });
+    expect(forbidden.status).toBe(403);
+
+    const returned = await fx.api(alice, 'POST', `/tasks/${task.id}/press/return`, {
+      body: { userIds: [bob.id], reason: 'Уточнить смету' },
+      key: `press-return-${fx.runId}`,
+    });
+    expect(returned.status).toBe(200);
+    const afterReturn = pressExecuteResultSchema.parse(await returned.json());
+    expect(afterReturn.press).toMatchObject({ pressed: 0, total: 2 });
+    expect(afterReturn.press?.entries.find((entry) => entry.userId === bob.id)).toMatchObject({
+      state: 'returned',
+      returnReason: 'Уточнить смету',
+    });
+
+    const bobView = taskDetailSchema.parse(
+      await (await fx.api(bob, 'GET', `/tasks/${task.id}`)).json(),
+    );
+    expect(bobView.press).toMatchObject({ canSubmit: true });
+    expect(bobView.press?.myEntry?.returnReason).toBe('Уточнить смету');
+
+    // Возвращённый сдаёт снова; кворум по второй отметке закрывает задачу.
+    const resubmitted = await fx.api(bob, 'POST', `/tasks/${task.id}/press/submit`, {
+      body: { result: { text: 'Смета уточнена', messageIds: [] } },
+      key: `press-return-resubmit-${fx.runId}`,
+    });
+    expect(resubmitted.status).toBe(200);
+    const completed = await fx.api(fx.users.carol, 'POST', `/tasks/${task.id}/press/submit`, {
+      body: { result: { text: 'Отчёт Каролины', messageIds: [] } },
+      key: `press-return-carol-${fx.runId}`,
+    });
+    expect(completed.status).toBe(200);
+    expect(pressExecuteResultSchema.parse(await completed.json()).press).toBeNull();
+  });
+
   it('пустые источники — коллективная кнопка работает как обычная', async () => {
     await fx.prisma.workflowTransition.update({
       where: { id: completeId },

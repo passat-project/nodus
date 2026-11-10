@@ -114,7 +114,10 @@ export class TaskTypeChangeService {
       }
       // Смена типа могла сменить маршрут/стадию: старый раунд закрывается,
       // новый стартует по кнопке новой стадии (или не стартует — обычная).
-      await this.press.ensureForStage(tx, taskId, freshTarget.id);
+      await this.press.ensureForStage(tx, taskId, freshTarget.id, {
+        notify: true,
+        actorId: user.id,
+      });
       const numbers = await plan.issue(tx, taskId);
       if (Object.keys(numbers).length > 0) {
         await this.tasks.updateFields(tx, taskId, {

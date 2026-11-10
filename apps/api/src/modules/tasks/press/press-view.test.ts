@@ -84,6 +84,14 @@ describe('PressRoundView (#434)', () => {
     expect(pressRoundViewOf(sequential, 'u3', names).canSubmit).toBe(false);
   });
 
+  it('возврат: только ответственный/право правки и пока раунд открыт', () => {
+    expect(pressRoundViewOf(round(), 'owner', names, true).canReturn).toBe(true);
+    expect(pressRoundViewOf(round(), 'u1', names, false).canReturn).toBe(false);
+    expect(
+      pressRoundViewOf(round({ completedAt: new Date() }), 'owner', names, true).canReturn,
+    ).toBe(false);
+  });
+
   it('после кворума нажатия и отзыв закрыты', () => {
     const done = pressRoundViewOf(round({ completedAt: new Date() }), 'u1', names);
     expect(done).toMatchObject({ completed: true, canSubmit: false, canWithdraw: false });

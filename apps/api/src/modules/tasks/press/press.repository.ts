@@ -133,6 +133,25 @@ export class PressRepository {
     });
     return (last?.cycle ?? 0) + 1;
   }
+
+  /** Кнопки с открытыми раундами в маршруте — защита публикации (#434):
+   *  менять/архивировать коллективную кнопку посреди сбора нельзя. */
+  async openTransitionIdsForWorkflow(
+    workflowId: string,
+    tx?: TransactionClient,
+  ): Promise<string[]> {
+    const rows = await (tx ?? this.prisma).$queryRaw<{ transition_id: string }[]>`
+      SELECT DISTINCT r.transition_id
+      FROM press_rounds r
+      JOIN tasks t ON t.id = r.entity_id
+      WHERE r.entity_kind = 'task'
+        AND r.completed_at IS NULL
+        AND r.cancelled_at IS NULL
+        AND t.deleted_at IS NULL
+        AND t.workflow_id = ${workflowId}::uuid
+    `;
+    return rows.map((row) => row.transition_id);
+  }
 }
 
 export type PressRoundRow = NonNullable<Round>;

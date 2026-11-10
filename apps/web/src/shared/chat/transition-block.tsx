@@ -38,7 +38,7 @@ export function TransitionBlock({
   avatarSlot: 'avatar' | 'none';
 }) {
   const block = message.block;
-  if (!block) return null;
+  if (!block || block.kind === 'task_press') return null;
   return (
     <div className={cn('flex w-full min-w-0 gap-2 py-0.5', mine && 'flex-row-reverse')}>
       {avatarSlot === 'avatar' ? (

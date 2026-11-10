@@ -1,8 +1,14 @@
 import type { TaskListItem, TransitionFormInput, WorkflowTransition } from '@nodus/contracts';
-import { effectiveWindowSections, ErrorCode, pressSubmitBodySchema, ui } from '@nodus/contracts';
+import {
+  effectiveWindowSections,
+  ErrorCode,
+  pressReturnBodySchema,
+  pressSubmitBodySchema,
+  ui,
+} from '@nodus/contracts';
 import { http, HttpResponse } from 'msw';
 
-import { pressOf, submitPress, withdrawPress } from '../../../../shared/mocks/data/press.js';
+import { pressOf, returnPress, submitPress, withdrawPress } from '../../../../shared/mocks/data/press.js';
 import {
   autoMovePersonalPlacement,
   demoPersonalStages,
@@ -79,10 +85,14 @@ function applyCollectiveTransition(
 export const tasksPressHandlers = [
   http.post('/api/v1/tasks/:id/press/submit', async ({ params, request }) => {
     const taskId = String(params.id);
-    const current = pressOf(taskId, currentAuthUser.id);
+    const task = findTask(taskId);
+    const current = pressOf(
+      taskId,
+      currentAuthUser.id,
+      task?.assignee?.id === currentAuthUser.id,
+    );
     if (!current) return notFound();
     if (!current.canSubmit) return noRights();
-    const task = findTask(taskId);
     const doc = task ? documentOfTask(task) : null;
     const transition = doc?.transitions.find((t) => t.id === current.transitionId);
     if (!task || !transition) return notFound();
@@ -126,11 +136,38 @@ export const tasksPressHandlers = [
 
   http.post('/api/v1/tasks/:id/press/withdraw', ({ params }) => {
     const taskId = String(params.id);
-    const current = pressOf(taskId, currentAuthUser.id);
+    const task = findTask(taskId);
+    const current = pressOf(
+      taskId,
+      currentAuthUser.id,
+      task?.assignee?.id === currentAuthUser.id,
+    );
     if (!current) return notFound();
     if (!current.canWithdraw) return noRights();
     const press = withdrawPress(taskId, currentAuthUser.id);
+    if (!task) return notFound();
+    return HttpResponse.json({
+      press,
+      task: taskDetailOf(task),
+      transitions: transitionsOf(task),
+    });
+  }),
+
+  http.post('/api/v1/tasks/:id/press/return', async ({ params, request }) => {
+    const taskId = String(params.id);
     const task = findTask(taskId);
+    const canManage = task?.assignee?.id === currentAuthUser.id;
+    const current = pressOf(taskId, currentAuthUser.id, canManage);
+    if (!current) return notFound();
+    if (!current.canReturn) return noRights();
+    const parsed = pressReturnBodySchema.safeParse(await request.json().catch(() => ({})));
+    if (!parsed.success) {
+      return HttpResponse.json(
+        { code: ErrorCode.VALIDATION_FAILED, message: 'Invalid body' },
+        { status: 400 },
+      );
+    }
+    const press = returnPress(taskId, parsed.data.userIds, parsed.data.reason, currentAuthUser.id);
     if (!task) return notFound();
     return HttpResponse.json({
       press,

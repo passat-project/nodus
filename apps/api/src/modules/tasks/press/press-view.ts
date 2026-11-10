@@ -15,6 +15,7 @@ export function pressRoundViewOf(
   round: PressRoundRow,
   viewerId: string,
   displayNameOf: (userId: string) => string,
+  canManage = false,
 ): PressRoundView {
   const config = pressConfigSchema.parse(round.config);
   const entries = round.entries.map((entry) => ({
@@ -52,6 +53,10 @@ export function pressRoundViewOf(
       myEntry !== null &&
       (myEntry.state === 'waiting' || myEntry.state === 'returned'),
     canWithdraw: !completed && myEntry?.state === 'pressed',
+    canReturn:
+      canManage &&
+      !completed &&
+      entries.some((entry) => entry.state === 'pressed'),
     completed,
   };
 }

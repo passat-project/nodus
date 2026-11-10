@@ -264,7 +264,7 @@ export class TasksQueryService {
         (userId) => this.mapper.ref(refs, userId),
       ),
       access,
-      press: await this.press.viewForTask(full.id, full.stageId, user.id),
+      press: await this.press.viewForTask(full.id, full.stageId, user.id, access.canEdit),
       createdAt: full.createdAt.toISOString(),
     };
   }

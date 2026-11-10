@@ -81,6 +81,7 @@ import { TaskFormApplier } from './workflow/task-form.applier.js';
 import { TaskTransitionsService } from './workflow/task-transitions.service.js';
 import { TaskWorkflowAdapter } from './workflow/task-workflow.adapter.js';
 import { PressRepository } from './press/press.repository.js';
+import { PressEvents } from './press/press-events.service.js';
 import { PressRoundsService } from './press/press-rounds.service.js';
 import { PressService } from './press/press.service.js';
 import { PressSourcesService } from './press/press-sources.service.js';
@@ -129,6 +130,7 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
     PressRepository,
     PressSourcesService,
     PressRoundsService,
+    PressEvents,
     PressService,
     // Решающие (#433): факты актора, вакансии, видимость и адресаты.
     TaskDecidersRepository,

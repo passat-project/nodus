@@ -276,7 +276,10 @@ export class TasksService {
             { fromStageName: initial.name },
           );
         }
-        await this.press.ensureForStage(tx, task.id, finalStage.id);
+        await this.press.ensureForStage(tx, task.id, finalStage.id, {
+          notify: true,
+          actorId: user.id,
+        });
         if (personalColumn) await this.placeInColumn(tx, task.id, user.id, personalColumn.id);
         await this.eventBus.emit(
           tx,
@@ -321,6 +324,9 @@ export class TasksService {
       await this.repo.softDelete(tx, id, new Date());
       await this.repo.reparentChildren(tx, id, heir);
       await this.placementsRepo.removeAllForTask(tx, id);
+      // Удалённая задача не держит открытый раунд сбора (#434): иначе он
+      // навсегда блокировал бы публикацию своей кнопки.
+      await this.press.cancelForTask(tx, id);
       await this.eventBus.emit(
         tx,
         TASK_EVENTS.DELETED,

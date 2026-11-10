@@ -1,6 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
-  DEFAULT_TRANSITION_FORM,
   ErrorCode,
   normalizeTypeConfig,
   Permission,
@@ -11,7 +10,6 @@ import {
   type SaveWorkflowLayoutBody,
   type SaveWorkflowLayoutResult,
   type WorkflowDetail,
-  type WorkflowDocument,
 } from '@nodus/contracts';
 
 import type { Prisma } from '../../../../generated/prisma/client.js';
@@ -37,26 +35,26 @@ import {
   CUSTOM_FIELD_REGISTRY,
   type CustomFieldRegistry,
 } from '../../../custom-fields/ports/custom-field-registry.port.js';
+import {
+  WORKFLOW_PRESS_ROUNDS_READER,
+  type WorkflowPressRoundsReader,
+} from '../../ports/workflow-press-rounds.port.js';
 import { assertLetterCatalogEditable } from '../../catalog/letter-lock.js';
 import { documentOf } from './document-of.js';
 import { liveLayout, resolveLayout } from './layout.js';
+import { applyPublishPlan } from './publish-apply.js';
 import { assertPublishable } from './publish-checks.js';
 import { publishSnapshot } from './publish-snapshot.js';
 import {
   missingMigrations,
   planWorkflowPublish,
-  resolveDocId,
-  resolveRules,
   type PlannerSnapshot,
-  type WorkflowPublishPlan,
 } from './publish-planner.js';
 import { WorkflowPublishRepository } from './publish.repository.js';
 import { ProcessTypesRepository } from '../../types/process-types.repository.js';
 import { WorkflowRepository, type LoadedWorkflow } from '../workflow.repository.js';
 import { assertWorkflowVisible } from './workflow-visibility.js';
 import { WorkflowEntityRegistry } from '../engine/entity-adapter.registry.js';
-
-const NO_RULES = { conditions: [], validators: [], postFunctions: [] };
 
 /**
  * Чтение и публикация маршрута (#378, ADR-0021; «Процессы» — ADR-0024).
@@ -79,6 +77,7 @@ export class WorkflowEditorService {
     @Inject(ROLE_MEMBERSHIP_READER) private readonly membership: RoleMembershipReader,
     @Inject(ORG_STRUCTURE_READER) private readonly org: OrgStructureReader,
     private readonly types: ProcessTypesRepository,
+    @Inject(WORKFLOW_PRESS_ROUNDS_READER) private readonly pressRounds: WorkflowPressRoundsReader,
   ) {}
 
   /** GET /workflows/:id — документ живого маршрута + счётчики. Маршрут
@@ -163,6 +162,20 @@ export class WorkflowEditorService {
 
       const snapshot = await this.snapshotOf(tx, loaded, category);
       const plan = planWorkflowPublish(snapshot, body.document, body.migrations);
+      // Коллективная кнопка (#434): пока раунд открыт, менять/архивировать её
+      // нельзя — движок при кворуме выполнил бы уже другой переход.
+      const openPress = await this.pressRounds.openTransitionIds(workflowId, tx);
+      const touched = [
+        ...plan.transitionArchives.map((archive) => archive.transitionId),
+        ...plan.transitionUpdates.map((update) => update.id),
+      ].filter((transitionId) => openPress.has(transitionId));
+      if (touched.length > 0) {
+        throw new DomainException(
+          ErrorCode.CONFLICT,
+          'Press rounds are open for changed buttons',
+          { transitionIds: touched },
+        );
+      }
       const gaps = missingMigrations(plan);
       if (gaps.length > 0) {
         throw new DomainException(
@@ -173,7 +186,14 @@ export class WorkflowEditorService {
       }
 
       const now = new Date();
-      const created = await this.apply(tx, workflowId, body.document, plan, now);
+      const created = await applyPublishPlan(
+        this.writes,
+        tx,
+        workflowId,
+        body.document,
+        plan,
+        now,
+      );
       const live = {
         stageIds: new Set(body.document.stages.map((s) => created.resolve(s.id)!)),
         transitionIds: new Set(
@@ -278,51 +298,6 @@ export class WorkflowEditorService {
     category: Awaited<ReturnType<WorkflowRepository['categoryOf']>>,
   ): Promise<PlannerSnapshot> {
     return publishSnapshot(tx, loaded, category, this.adapters);
-  }
-
-  /** Применение плана: создание (new:* → uuid), правки, архив. */
-  private async apply(
-    tx: TransactionClient,
-    workflowId: string,
-    document: WorkflowDocument,
-    plan: WorkflowPublishPlan,
-    now: Date,
-  ) {
-    const stages = new Map<string, string>();
-    const transitions = new Map<string, string>();
-    for (const { docId, ...stage } of plan.stageCreates) {
-      stages.set(docId, await this.writes.createStage(tx, workflowId, stage));
-    }
-    for (const update of plan.stageUpdates) await this.writes.updateStage(tx, update);
-
-    const resolve = (docId: string): string | undefined => resolveDocId(docId, stages);
-    const rowOf = (write: WorkflowPublishPlan['transitionCreates'][number]) => ({
-      name: write.name,
-      fromStageId: write.fromStageId === null ? null : (resolve(write.fromStageId) ?? null),
-      toStageId: resolve(write.toStageId)!,
-      display: write.display,
-      intent: write.intent,
-      sortOrder: write.sortOrder,
-      rules: resolveRules(
-        document.transitions.find((t) => t.id === write.id)?.rules ?? NO_RULES,
-        stages,
-      ) as Prisma.InputJsonValue,
-      form: (document.transitions.find((t) => t.id === write.id)?.form ??
-        DEFAULT_TRANSITION_FORM) as Prisma.InputJsonValue,
-      press: (document.transitions.find((t) => t.id === write.id)?.press ??
-        null) as Prisma.InputJsonValue | null,
-    });
-    for (const write of plan.transitionCreates) {
-      transitions.set(write.id, await this.writes.createTransition(tx, workflowId, rowOf(write)));
-    }
-    for (const write of plan.transitionUpdates) {
-      await this.writes.updateTransition(tx, write.id, rowOf(write));
-    }
-    for (const { transitionId } of plan.transitionArchives) {
-      await this.writes.archiveTransition(tx, transitionId, now);
-    }
-    for (const { stageId } of plan.stageArchives) await this.writes.archiveStage(tx, stageId, now);
-    return { stages, transitions, resolve };
   }
 
   /** Редактору доступны только маршруты типов — allow-list `task | letter`:

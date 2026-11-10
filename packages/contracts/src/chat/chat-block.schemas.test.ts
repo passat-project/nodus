@@ -60,6 +60,22 @@ describe('вид сообщения и блок перехода (#380)', () => 
     expect(() => chatMessageBlockSchema.parse({ ...letterBlock, letterId: undefined })).toThrow();
   });
 
+  it('блок отметки сбора (#434): pressed/returned, лимиты полей', () => {
+    const pressBlock = {
+      kind: 'task_press',
+      taskId: crypto.randomUUID(),
+      transitionName: 'Завершить',
+      state: 'pressed',
+      fileCount: 2,
+      returnCount: null,
+    };
+    expect(chatMessageKindSchema.parse('task_press')).toBe('task_press');
+    expect(chatMessageBlockSchema.parse(pressBlock)).toEqual(pressBlock);
+    expect(() =>
+      chatMessageBlockSchema.parse({ ...pressBlock, state: 'waiting' }),
+    ).toThrow();
+  });
+
   it('ids lookup: 1..50 уникальных, разбор строки', () => {
     const ids = [crypto.randomUUID(), crypto.randomUUID()];
     expect(lookupMessagesQuerySchema.parse({ ids: ids.join(',') }).ids).toEqual(ids);

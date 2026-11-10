@@ -14,7 +14,7 @@ import { STANDARD_COMPLETE_TRANSITION_ID } from './workflows-documents.js';
 
 type MutableRound = Omit<
   PressRoundView,
-  'pressed' | 'total' | 'myEntry' | 'canSubmit' | 'canWithdraw' | 'completed'
+  'pressed' | 'total' | 'myEntry' | 'canSubmit' | 'canWithdraw' | 'canReturn' | 'completed'
 > & {
   completed: boolean;
 };
@@ -122,7 +122,11 @@ function isQuorum(round: MutableRound): boolean {
   return pressedCount(round) >= requiredCount(round);
 }
 
-export function pressOf(taskId: string, viewerId: string): PressRoundView | null {
+export function pressOf(
+  taskId: string,
+  viewerId: string,
+  canManage = false,
+): PressRoundView | null {
   const round = rounds.get(taskId);
   if (!round) return null;
   const myEntry = round.entries.find((e) => e.userId === viewerId) ?? null;
@@ -141,6 +145,8 @@ export function pressOf(taskId: string, viewerId: string): PressRoundView | null
       myEntry !== null &&
       (myEntry.state === 'waiting' || myEntry.state === 'returned'),
     canWithdraw: !round.completed && myEntry?.state === 'pressed',
+    canReturn:
+      canManage && !round.completed && round.entries.some((entry) => entry.state === 'pressed'),
     completed: round.completed,
     entries: round.entries.map((e) => ({ ...e })),
   };

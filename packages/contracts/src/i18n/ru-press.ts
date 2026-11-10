@@ -19,6 +19,13 @@ export const pressStrings = {
     result: 'Результат',
     exportCsv: 'Выгрузить CSV',
     close: 'Закрыть',
+    returnSelected: 'Вернуть выбранным',
+    returnReasonLabel: 'Причина возврата',
+    returnReasonPlaceholder: 'Что нужно доработать',
+    returnConfirm: 'Вернуть',
+    returnCancel: 'Отмена',
+    returnedToast: 'Результат возвращён на доработку',
+    selectAllPressed: 'Выбрать всех сдавших',
   },
   automation: {
     sectionTitle: 'Кнопку жмут несколько',

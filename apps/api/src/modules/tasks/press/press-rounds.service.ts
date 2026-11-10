@@ -1,7 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { pressConfigSchema, type PressRoundView } from '@nodus/contracts';
+import {
+  pressConfigSchema,
+  TASK_EVENTS,
+  type PressRoundView,
+} from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import { EventBus } from '../../../core/events/event-bus.js';
 import {
   USER_PROFILE_READER,
   type UserProfileReader,
@@ -10,6 +15,7 @@ import {
   WORKFLOW_PRESS_READER,
   type WorkflowPressReader,
 } from '../../workflows/ports/workflow-press-reader.port.js';
+import { audienceIds } from '../access/task-access.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
 import { PressRepository } from './press.repository.js';
 import { PressSourcesService } from './press-sources.service.js';
@@ -30,15 +36,20 @@ export class PressRoundsService {
     private readonly repo: PressRepository,
     private readonly sources: PressSourcesService,
     private readonly tasks: TasksRepository,
+    private readonly events: EventBus,
     @Inject(WORKFLOW_PRESS_READER) private readonly pressReader: WorkflowPressReader,
     @Inject(USER_PROFILE_READER) private readonly users: UserProfileReader,
   ) {}
 
-  /** Вызывается в транзакции создания задачи и смены стадии. */
+  /** Вызывается в транзакции создания задачи и смены стадии. `notify` — только
+   *  для путей-мутаций: ленивый старт при чтении карточки уведомлений не шлёт.
+   *  «Все сотрудники» считается broadcast-раундом: событие не эмитится, чтобы
+   *  не рассылать уведомления по всему штату (анти-спам #434). */
   async ensureForStage(
     tx: TransactionClient,
     taskId: string,
     stageId: string,
+    options: { notify?: boolean; actorId?: string | null } = {},
   ): Promise<void> {
     const task = await this.tasks.findWithParticipants(taskId, tx);
     const transitions = (
@@ -79,6 +90,29 @@ export class PressRoundsService {
       form: transition.form,
       entries,
     });
+    const broadcast = transition.press.sources.some((source) => source.kind === 'all_employees');
+    if (options.notify && !broadcast) {
+      await this.events.emit(
+        tx,
+        TASK_EVENTS.PRESS_REQUESTED,
+        {
+          taskId,
+          number: task.number,
+          title: task.title,
+          audience: [...new Set([...audienceIds(task), ...entries.map((entry) => entry.userId)])],
+          transitionName: transition.name,
+          broadcast,
+          participantIds: entries.map((entry) => entry.userId),
+        },
+        { actorId: options.actorId ?? null, aggregateType: 'task', aggregateId: taskId },
+      );
+    }
+  }
+
+  /** Задача удалена: открытый раунд закрывается, чтобы не держать публикацию
+   *  маршрута и не оставлять «вечный» сбор (#434). */
+  async cancelForTask(tx: TransactionClient, taskId: string): Promise<void> {
+    await this.repo.cancelOpenRound(tx, 'task', taskId, new Date());
   }
 
   /** Есть ли открытый раунд (#434): false — источники пусты или задача
@@ -114,6 +148,7 @@ export class PressRoundsService {
     taskId: string,
     stageId: string,
     viewerId: string,
+    canManage = false,
     tx?: TransactionClient,
   ): Promise<PressRoundView | null> {
     const round = await this.repo.findOpenRound(tx, 'task', taskId);
@@ -123,6 +158,6 @@ export class PressRoundsService {
       tx,
     );
     const names = new Map(refs.map((ref) => [ref.id, ref.displayName]));
-    return pressRoundViewOf(round, viewerId, (userId) => names.get(userId) ?? '—');
+    return pressRoundViewOf(round, viewerId, (userId) => names.get(userId) ?? '—', canManage);
   }
 }
