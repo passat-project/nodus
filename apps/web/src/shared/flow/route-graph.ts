@@ -34,7 +34,7 @@ export interface RouteGraphOptions {
   stageEntityCounts?: Readonly<Record<string, number>>;
   /** Выделение редактора (кольцо узла, подсветка стрелки и её подписи);
    *  `creation` — выделен узел «Создание» (#432). */
-  selection?: { kind: 'stage' | 'transition' | 'creation'; id: string } | null;
+  selection?: { kind: 'stage' | 'transition' | 'action' | 'creation'; id: string } | null;
   onSelectTransition?: (id: string) => void;
   /** Подпись перетащили вдоль стрелки (только редактор). */
   onLabelT?: (transitionId: string, t: number) => void;
