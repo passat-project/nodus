@@ -74,7 +74,20 @@ export function visibleTasksWhere(
   // (removeManual, open→secret) не сохраняет доступ к его задачам через
   // роль постановщика/ответственного (вердикт 29.10).
   const mineGated: Prisma.TaskWhereInput = gate ? { AND: [{ OR: mine }, gate] } : { OR: mine };
-  if (scope === 'mine') return { ...alive, ...mineGated };
+  // Участник сбора (#434): карточка нужна, чтобы нажать свою кнопку. Явный
+  // источник может быть и вне ролей задачи; скрытый секретный проект закрыт
+  // той же щелью. В «Мои задачи» ветка тоже нужна — иначе внешний сотрудник
+  // не найдёт запрос, пока идёт сбор.
+  const pressIds = viewer.pressTaskIds ?? [];
+  const pressBranch: Prisma.TaskWhereInput | null =
+    pressIds.length > 0
+      ? { AND: [{ id: { in: [...pressIds] } }, ...(gate ? [gate] : [])] }
+      : null;
+  if (scope === 'mine') {
+    return pressBranch
+      ? { ...alive, OR: [mineGated, pressBranch] }
+      : { ...alive, ...mineGated };
+  }
   const or: Prisma.TaskWhereInput[] = [mineGated];
   // Решающий видит задачу, даже не участвуя (#433): только не конфиденциальную
   // и не из скрытого секретного проекта — те же гейты, что у руководителей.
@@ -82,15 +95,6 @@ export function visibleTasksWhere(
   const deciderBranch: Prisma.TaskWhereInput | null =
     deciderIds.length > 0
       ? { AND: [{ id: { in: [...deciderIds] } }, openOnly, ...(gate ? [gate] : [])] }
-      : null;
-  // Участник сбора (#434): карточка нужна, чтобы нажать свою кнопку. Явный
-  // источник может быть и вне ролей задачи; конфиденциальность не снимается
-  // только для «Все сотрудники» (источник не разворачивается на такой задаче),
-  // а скрытый секретный проект закрыт той же щелью.
-  const pressIds = viewer.pressTaskIds ?? [];
-  const pressBranch: Prisma.TaskWhereInput | null =
-    pressIds.length > 0
-      ? { AND: [{ id: { in: [...pressIds] } }, ...(gate ? [gate] : [])] }
       : null;
   if (viewer.subordinateIds.length > 0) {
     const subordinateTasks: Prisma.TaskWhereInput = { OR: involves(viewer.subordinateIds) };

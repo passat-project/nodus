@@ -109,14 +109,16 @@ export class PressRepository {
     });
   }
 
-  /** Задачи, где у сотрудника есть отметка сбора — ветка видимости карточки
-   *  (аналог решающих, #433). Нажавший остаётся зрителем и после кворума:
-   *  он открывает «Статусы участников» и видит итог. */
+  /** Задачи, где у сотрудника есть отметка ОТКРЫТОГО раунда — ветка
+   *  видимости карточки и списка «Мои задачи» (аналог решающих, #433):
+   *  внешний участник видит запрос, пока идёт сбор. После кворума доступ
+   *  определяется обычными ролями (запрос ушёл в следующий статус). */
   async waitingTaskIds(userId: string, tx?: TransactionClient): Promise<string[]> {
     const rows = await (tx ?? this.prisma).pressEntry.findMany({
       where: {
         userId,
         state: { in: ['waiting', 'returned', 'pressed', 'withdrawn'] },
+        round: { completedAt: null, cancelledAt: null },
       },
       select: { round: { select: { entityId: true } } },
     });
