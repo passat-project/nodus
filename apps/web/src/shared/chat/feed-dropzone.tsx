@@ -1,10 +1,10 @@
 import { Paperclip } from 'lucide-react';
-import { useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useRef, useState, type DOMAttributes, type DragEvent, type ReactNode } from 'react';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 /**
- * Drop-зона файлов ленты (A1, #87): перетаскивание файлов на область чата —
+ * Drop-зона файлов (A1, #87): перетаскивание файлов на область чата —
  * оверлей «Отпустите, чтобы прикрепить» (Discord/Telegram-канон). Guard от
  * классического бага dragleave на детях — счётчик enter/leave (research).
  * Пунктирная рама — разрешённый affordance переноса (исключение канона
@@ -12,17 +12,20 @@ import { cn } from '@nodus/ui/lib/utils';
  * disabled (вердикт 25.09, гейт вложений в live-режиме): зона не активируется
  * вовсе — ни оверлея, ни приёма.
  */
-export function FeedDropzone({
-  onFiles,
+
+/** Приём файлового драга без своей обёртки (#716): лента монтирует его через
+ *  `FeedDropzone`, окно отправки — прямо на контейнер диалога (обёртка стала
+ *  бы лишним grid-элементом и сломала бы раскладку окна). */
+export function useFileDrop(
+  onFiles: (files: File[]) => void,
   disabled = false,
-  className,
-  children,
-}: {
-  onFiles: (files: File[]) => void;
-  disabled?: boolean;
-  className?: string;
-  children: ReactNode;
-}) {
+): {
+  active: boolean;
+  handlers: Pick<
+    DOMAttributes<HTMLElement>,
+    'onDragEnter' | 'onDragOver' | 'onDragLeave' | 'onDrop'
+  >;
+} {
   const [active, setActive] = useState(false);
   const depth = useRef(0);
 
@@ -37,47 +40,71 @@ export function FeedDropzone({
     return !types.includes('text/html') && !types.includes('text/uri-list');
   }
 
-  return (
-    <div
-      className={cn('relative min-h-0 min-w-0', className)}
-      onDragEnter={(event) => {
+  return {
+    active,
+    handlers: {
+      onDragEnter: (event) => {
         if (!hasFiles(event)) return;
         event.preventDefault();
         depth.current += 1;
         setActive(true);
-      }}
-      onDragOver={(event) => {
+      },
+      onDragOver: (event) => {
         if (!hasFiles(event)) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = 'copy';
-      }}
-      onDragLeave={(event) => {
+      },
+      onDragLeave: (event) => {
         if (!hasFiles(event)) return;
         depth.current -= 1;
         if (depth.current <= 0) {
           depth.current = 0;
           setActive(false);
         }
-      }}
-      onDrop={(event) => {
+      },
+      onDrop: (event) => {
         if (!hasFiles(event)) return;
         event.preventDefault();
         depth.current = 0;
         setActive(false);
         const files = Array.from(event.dataTransfer?.files ?? []);
         if (files.length > 0) onFiles(files);
-      }}
+      },
+    },
+  };
+}
+
+/** Оверлей активного драга: в пределах своего контейнера (relative/fixed). */
+export function FileDropOverlay({ active }: { active: boolean }) {
+  if (!active) return null;
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-1.5 z-20 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-info/60 bg-background/85"
     >
+      <Paperclip className="size-6 text-info" strokeWidth={1.75} />
+      <span className="text-sm font-medium text-foreground">{ui.chat.dropToAttach}</span>
+    </div>
+  );
+}
+
+export function FeedDropzone({
+  onFiles,
+  disabled = false,
+  className,
+  children,
+}: {
+  onFiles: (files: File[]) => void;
+  disabled?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  const drop = useFileDrop(onFiles, disabled);
+
+  return (
+    <div className={cn('relative min-h-0 min-w-0', className)} {...drop.handlers}>
       {children}
-      {active ? (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-1.5 z-20 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-info/60 bg-background/85"
-        >
-          <Paperclip className="size-6 text-info" strokeWidth={1.75} />
-          <span className="text-sm font-medium text-foreground">{ui.chat.dropToAttach}</span>
-        </div>
-      ) : null}
+      <FileDropOverlay active={drop.active} />
     </div>
   );
 }

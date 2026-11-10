@@ -143,6 +143,12 @@ fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
             .min_inner_size(1024.0, 660.0)
             .center()
             .visible(false)
+            // HTML5 drag&drop файлов (#716): tauri по умолчанию подменяет
+            // drop-обработчик WebView2 своим (DragDropEvent) — на Windows
+            // нативные DOM-события дропа не приходят, и чат не принимает файл
+            // из Проводника. Метод документирован ровно для этого
+            // (tauri 2.12.1: WebviewWindowBuilder::disable_drag_drop_handler).
+            .disable_drag_drop_handler()
             .additional_browser_args(WEBVIEW2_BROWSER_ARGS)
             .initialization_script(bridge::initialization_script(&version))
             .on_navigation(move |url| navigation_allowed(&nav_app, url))

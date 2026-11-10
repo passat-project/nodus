@@ -1,4 +1,5 @@
 import { useEffect, useState, type RefObject } from 'react';
+import { ui } from '@nodus/contracts';
 
 import { messageLimitState, type ComposerSubmit } from './composer-submit.js';
 import {
@@ -68,6 +69,9 @@ export function useAttachSend({
   }, [scope, items.length, editMode, sending, close, mentionListRef]);
 
   const uploading = items.some((item) => item.status === 'uploading');
+  // Тело принято, ответа ещё нет (#717): id вложения не выдан — отправлять
+  // нельзя, но это уже не «загрузка», а серверная обработка.
+  const processing = items.some((item) => item.status === 'processing');
   const errored = items.some((item) => item.status === 'error');
   // Лимит — по WIRE-длине (отправляемое = измеряемое, канон композера #228).
   const limit = messageLimitState(captionWireOf(mentionListRef).length);
@@ -75,9 +79,17 @@ export function useAttachSend({
   const canSend =
     (editMode ? caption.trim().length > 0 || readyCount > 0 : items.length > 0) &&
     !uploading &&
+    !processing &&
     !errored &&
     !limit.over &&
     !sending;
+  // Почему кнопка «Отправить» неактивна (#717): «обработка» — ожидание
+  // сервера, а не загрузка, и подсказка это называет.
+  const sendHint = processing
+    ? ui.chat.attachWaitProcessing
+    : uploading
+      ? ui.chat.attachWaitUpload
+      : undefined;
 
   /** Отмена (Esc/«Отмена»): правка — сообщение не тронуто (исходные строки
    *  отвязаны только локально, новые загрузки сняты, текст композера
@@ -144,5 +156,17 @@ export function useAttachSend({
     }
   }
 
-  return { items, shownReply, editMode, sending, uploading, limit, canSend, cancelAll, send };
+  return {
+    items,
+    shownReply,
+    editMode,
+    sending,
+    uploading,
+    processing,
+    sendHint,
+    limit,
+    canSend,
+    cancelAll,
+    send,
+  };
 }
