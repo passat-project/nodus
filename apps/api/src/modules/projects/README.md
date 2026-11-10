@@ -153,6 +153,8 @@ node_moved / node_deleted`; `node_updated` несёт `customFieldChanges` и
 | `GET/PUT/DELETE /:id/custom-fields/:fieldId/formula`                  | чтение — видимость проекта; мутации — руководство или `project.manage` | формула ячейки атрибута проекта (#632, Р10): PUT — сохранить и посчитать, DELETE — снять идемпотентно (значение очищается, #660; нет ячейки — no-op без события, #658)   |
 | `GET/PUT/DELETE /:id/nodes/:nodeId/custom-fields/:fieldId/formula`    | чтение — видимость проекта; мутации — руководство или `project.manage` | то же для атрибута папки структуры (архив проекта — заморозка)                                                                                                           |
 
+Снятие формулы (DELETE) берёт те же замки, что и сохранение, — строку проекта / структуру и узел папки — до проверки ячейки: два конкурентных DELETE с разными ключами идемпотентности не эмитят `formula_changed` дважды (#698).
+
 Права: `project.create` — всем ролям (CROSS JOIN миграцией);
 `project.manage`/`project.setup.manage` — админ; `project.view_secret` —
 роль «Системный надзор»; `project.channel.post` — **никому** по умолчанию,
