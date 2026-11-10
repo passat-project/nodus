@@ -45,7 +45,11 @@ export function TaskCreateSecretMembers({
         {ui.projects.secretMembersNoAccess}
         {names.length > 0 ? `: ${list}${end}` : null}
       </p>
-      {canFix ? null : <p className="text-muted-foreground">{ui.projects.secretMembersCanAdd}</p>}
+      {canFix ? (
+        <p className="text-muted-foreground">{ui.projects.secretMembersAccess}</p>
+      ) : (
+        <p className="text-muted-foreground">{ui.projects.secretMembersCanAdd}</p>
+      )}
     </div>
   );
 }

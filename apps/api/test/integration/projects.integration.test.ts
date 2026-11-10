@@ -446,6 +446,40 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: трассы Т1/Т2/Т2b 
       await fx.prisma.task.update({ where: { id: task.id }, data: { projectId: null } });
     });
 
+    it('перенос в секретный проект с не-участником в составе задачи → 422 PROJECT_TASK_MEMBERS_INVALID', async () => {
+      const from = await createProject(alice, { name: `Из состава ${fx.runId}` });
+      const secret = await createProject(bob, {
+        name: `Секрет состава ${fx.runId}`,
+        visibility: 'secret',
+        managerId: bob.id,
+      });
+      // Переносящий — участник целевого секретного проекта; состав задачи
+      // содержит постороннего (carol) — отказ по составу, а не по видимости.
+      const addAlice = await fx.api(bob, 'POST', `/projects/${secret.id}/members`, {
+        body: { userId: alice.id, kind: 'member' },
+      });
+      expect(addAlice.status).toBe(201);
+
+      const created = await fx.api(alice, 'POST', '/tasks', {
+        body: { title: `Перенос состава ${fx.runId}`, projectId: from.id },
+        key: `move-roster-create-${fx.runId}`,
+      });
+      expect(created.status).toBe(201);
+      const task = (await created.json()) as { id: string };
+      const addCarol = await fx.api(alice, 'POST', `/tasks/${task.id}/participants`, {
+        body: { userId: carol.id, role: 'coexecutor' },
+      });
+      expect(addCarol.status).toBe(201);
+
+      const moved = await fx.api(alice, 'PATCH', `/tasks/${task.id}`, {
+        body: { projectId: secret.id },
+      });
+      expect(moved.status).toBe(422);
+      const error = apiErrorResponseSchema.parse(await moved.json());
+      expect(error.code).toBe(ErrorCode.PROJECT_TASK_MEMBERS_INVALID);
+      expect(error.details?.userIds).toContain(carol.id);
+    });
+
     it('лимиты контракта: 11 помощников и описание >2000 → 400', async () => {
       const eleven = Array.from({ length: 11 }, () => crypto.randomUUID());
       const tooMany = await fx.api(alice, 'POST', '/projects', {

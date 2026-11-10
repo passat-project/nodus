@@ -11,9 +11,12 @@ describe('TaskCreateSecretMembers (#674)', () => {
   it('показывает только имена без лишних подсказок', () => {
     render(<TaskCreateSecretMembers names={['Иванов И.', 'Петров П.']} canFix />);
 
-    expect(screen.getByRole('alert').textContent).toBe(
+    const alert = screen.getByRole('alert');
+    expect(alert.querySelectorAll('p')).toHaveLength(2);
+    expect(alert.querySelectorAll('p')[0]?.textContent).toBe(
       `${ui.projects.secretMembersNoAccess}: Иванов И., Петров П.`,
     );
+    expect(alert.textContent).toContain(ui.projects.secretMembersAccess);
     expect(screen.queryByText(ui.projects.secretMembersCanAdd)).toBeNull();
   });
 
