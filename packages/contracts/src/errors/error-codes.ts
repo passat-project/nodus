@@ -221,6 +221,13 @@ export const ErrorCode = {
    *  задачи: не участники проекта или только наблюдатели; details — { projectId, userIds }
    *  (422; #674). */
   PROJECT_TASK_MEMBERS_INVALID: 'PROJECT_TASK_MEMBERS_INVALID',
+  /** Сотрудник назначен в задачах секретного проекта — снять/понизить его
+   *  нельзя, пока он держит роли в задачах (422, `details.userId`; #714). */
+  PROJECT_MEMBER_HAS_TASKS: 'PROJECT_MEMBER_HAS_TASKS',
+  /** Сотрудник уже участвует в проекте из задач (открытый проект): вручную
+   *  наблюдателя не выдают и снять такую строку нельзя (422,
+   *  `details.userId`; #714). */
+  PROJECT_MEMBER_ALREADY_PARTICIPANT: 'PROJECT_MEMBER_ALREADY_PARTICIPANT',
   /** Обязательные слоты формы типа проекта не заполнены/очищаются
    *  (`details.reason`: create | clear; 422; #631 Р10). */
   PROJECT_FIELDS_REQUIRED: 'PROJECT_FIELDS_REQUIRED',

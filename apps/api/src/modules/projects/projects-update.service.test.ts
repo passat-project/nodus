@@ -62,6 +62,9 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
         ID,
         expect.objectContaining({ visibility: 'open' }),
       );
+      // Ручной состав секретного снимается в той же транзакции (#714), затем —
+      // пересчёт из задач.
+      expect(members.dropManualRoster).toHaveBeenCalledWith({}, ID);
       expect(members.recomputeTaskSource).toHaveBeenCalledWith(ID);
     });
 

@@ -138,7 +138,14 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
       expect(participantsRepo.add).toHaveBeenCalledWith({}, [
         { projectId: ID, userId: HIP, source: 'observer', observerKind: 'invited' },
       ]);
-      expect(members.emitChanged).toHaveBeenCalledWith({}, ID, [HIP]);
+      // Синк руководства на создании — без служебного события состава (#699).
+      expect(members.syncManagement).toHaveBeenCalledWith(
+        {},
+        ID,
+        { managerId: CREATOR, assistantIds: [HELPER] },
+        { notify: false },
+      );
+      expect(eventBus.emit).toHaveBeenCalledTimes(1);
       expect(eventBus.emit).toHaveBeenCalledWith(
         {},
         PROJECT_EVENTS.CREATED,

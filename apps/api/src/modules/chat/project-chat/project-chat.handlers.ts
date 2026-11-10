@@ -46,5 +46,11 @@ export class ProjectParticipantsChatHandler extends handlerFor(
   PROJECT_EVENTS.PARTICIPANTS_CHANGED,
   'participantsChanged',
 ) {}
+/** Автопересчёт состава (#699): для ростера канала — то же изменение. */
+@Injectable()
+export class ProjectRosterSyncedChatHandler extends handlerFor(
+  PROJECT_EVENTS.ROSTER_SYNCED,
+  'participantsChanged',
+) {}
 @Injectable()
 export class ProjectUpdatedChatHandler extends handlerFor(PROJECT_EVENTS.UPDATED, 'updated') {}

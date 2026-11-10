@@ -6,6 +6,7 @@ import { ProjectsQueryService } from './projects-query.service.js';
 const ID = '00000000-0000-4000-8000-000000000001';
 const ACTOR = '00000000-0000-4000-8000-0000000000a1';
 const MEMBER = '00000000-0000-4000-8000-0000000000a2';
+const EXTRA = '00000000-0000-4000-8000-0000000000a3';
 
 function user(id: string, permissions: string[] = []): AuthUser {
   return { id, email: 'u@nodus.by', displayName: 'u', permissions };
@@ -33,7 +34,7 @@ describe('ProjectsQueryService.history (#52)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     repo.findById.mockResolvedValue({ id: ID, visibility: 'open' });
-    profiles.findRefs.mockResolvedValue([ref(ACTOR), ref(MEMBER)]);
+    profiles.findRefs.mockImplementation(async (ids: string[]) => ids.map(ref));
   });
 
   it('outbox-события агрегата → лента: created / status_changed / participants_changed', async () => {
@@ -73,10 +74,75 @@ describe('ProjectsQueryService.history (#52)', () => {
       'created',
     ]);
     expect(page.items[0]?.users).toEqual([ref(MEMBER)]);
+    // Запись старого формата: семантики нет, клиент рендерит сводку по людям.
+    expect(page.items[0]?.members).toEqual([]);
+    expect(page.items[0]?.reason).toBeNull();
+    expect(page.items[0]?.visibility).toBeNull();
     expect(page.items[1]?.status).toBe('completed');
     expect(page.items[1]?.actor).toEqual(ref(ACTOR));
     expect(page.items[2]?.name).toBe('Тендер УП');
     expect(page.items[2]?.actor).toBeNull();
+    expect(page.items[2]?.automatic).toBe(false);
+  });
+
+  it('пересчёт формулы — automatic: история пометит «Автоматически» (#699)', async () => {
+    historyRepo.findPage.mockResolvedValue([
+      {
+        id: 'e-1',
+        type: 'project.updated',
+        actorId: ACTOR,
+        payload: { projectId: ID, fields: ['cf.f-1'], automatic: true },
+        createdAt: new Date('2026-11-08T10:00:00.000Z'),
+        seq: 10n,
+      },
+    ]);
+    const page = await service.history(user(ACTOR), ID, null, 10);
+    expect(page.items[0]?.automatic).toBe(true);
+    expect(page.items[0]?.fields).toEqual(['cf.f-1']);
+  });
+
+  it('семантика состава (#699): действия, причина и направление видимости', async () => {
+    historyRepo.findPage.mockResolvedValue([
+      {
+        id: 'e-2',
+        type: 'project.participants_changed',
+        actorId: ACTOR,
+        payload: {
+          projectId: ID,
+          changedUserIds: [MEMBER],
+          reason: 'manual',
+          changes: [{ userId: MEMBER, action: 'role_changed', from: 'observer', to: 'member' }],
+        },
+        createdAt: new Date('2026-11-08T10:00:00.000Z'),
+        seq: 20n,
+      },
+      {
+        id: 'e-1',
+        type: 'project.participants_changed',
+        actorId: null,
+        payload: {
+          projectId: ID,
+          changedUserIds: [EXTRA],
+          reason: 'visibility',
+          visibility: 'secret',
+          changes: [{ userId: EXTRA, action: 'removed', from: 'task', to: null }],
+        },
+        createdAt: new Date('2026-11-07T10:00:00.000Z'),
+        seq: 10n,
+      },
+    ]);
+
+    const page = await service.history(user(ACTOR), ID, null, 10);
+
+    expect(page.items[0]?.reason).toBe('manual');
+    expect(page.items[0]?.members).toEqual([
+      { user: ref(MEMBER), action: 'role_changed', from: 'observer', to: 'member' },
+    ]);
+    expect(page.items[1]?.reason).toBe('visibility');
+    expect(page.items[1]?.visibility).toBe('secret');
+    expect(page.items[1]?.members).toEqual([
+      { user: ref(EXTRA), action: 'removed', from: 'task', to: null },
+    ]);
   });
 
   it('есть лишняя строка — nextCursor по seq последней страницы', async () => {

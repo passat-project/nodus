@@ -4,7 +4,11 @@ import {
   CUSTOM_FIELD_LIMITS,
   customFieldChangeSchema,
 } from '../custom-fields/custom-field-values.js';
-import { projectStatusSchema, projectVisibilitySchema } from '../projects/project.schemas.js';
+import {
+  projectParticipantSourceSchema,
+  projectStatusSchema,
+  projectVisibilitySchema,
+} from '../projects/project.schemas.js';
 
 /**
  * Каталог доменных событий модуля projects (#52, I9; каталог
@@ -15,7 +19,14 @@ import { projectStatusSchema, projectVisibilitySchema } from '../projects/projec
 export const PROJECT_EVENTS = {
   CREATED: 'project.created',
   UPDATED: 'project.updated',
+  /** Состав изменился действием человека (руководство/вступление/уход) или
+   *  следствием смены видимости — попадает в ленту «История» (#699). */
   PARTICIPANTS_CHANGED: 'project.participants_changed',
+  /** Автоматический пересчёт состава: проекция из задач и синк руководства
+   *  (#699). Потребителям ростера (канал, кэш видимости, веб-инвалидация)
+   *  обрабатывается наравне с participants_changed, но в историю не пишется:
+   *  суть уже читается строкой изменённого поля. */
+  ROSTER_SYNCED: 'project.roster_synced',
   /** Дерево проекта (#467): события узлов — они же аудит-след структуры
    *  (gateway маршрутизирует только node_updated — адресно участникам,
    *  #632: правка атрибутов папки обновляет дерево и формулы наследников;
@@ -54,6 +65,7 @@ export const PROJECT_AUDIENCE_EVENTS = [
   PROJECT_EVENTS.CREATED,
   PROJECT_EVENTS.UPDATED,
   PROJECT_EVENTS.PARTICIPANTS_CHANGED,
+  PROJECT_EVENTS.ROSTER_SYNCED,
   PROJECT_EVENTS.NODE_UPDATED,
 ] as const;
 
@@ -90,22 +102,61 @@ export const projectUpdatedPayloadSchema = z.object({
   clientId: z.uuid().nullable().optional(),
   /** Прежний заказчик — crm убирает строку использования при смене/снятии. */
   previousClientId: z.uuid().nullable().optional(),
+  /** Правку сделал движок формул, а не человек (#699): история помечает
+   *  строку «Автоматически», актёр — лишь триггер пересчёта. */
+  automatic: z.boolean().optional(),
   /** Кому доставить событие (участники проекта); gateway снимает. */
   audience: z.array(z.uuid()).optional(),
 });
 export type ProjectUpdatedPayload = z.infer<typeof projectUpdatedPayloadSchema>;
 
-/** Состав участников проекта изменился (любой источник): канал проекта
- *  пересобирает roster (Р8), вкладка «Участники» перечитывается. */
+/** Действие над участием сотрудника (#699): добавлен, снят, смена роли. */
+export const projectParticipantChangeSchema = z.object({
+  userId: z.uuid(),
+  action: z.enum(['added', 'removed', 'role_changed']),
+  /** Источник участия до действия; null — строки не было. */
+  from: projectParticipantSourceSchema.nullable(),
+  /** Источник участия после действия; null — строки не стало. */
+  to: projectParticipantSourceSchema.nullable(),
+});
+export type ProjectParticipantChange = z.infer<typeof projectParticipantChangeSchema>;
+
+/** Причина изменения состава, видимая в истории (#699). */
+export const projectParticipantsReasonSchema = z.enum(['manual', 'join', 'leave', 'visibility']);
+export type ProjectParticipantsReason = z.infer<typeof projectParticipantsReasonSchema>;
+
+/** Состав участников проекта изменился действием (#699): канал проекта
+ *  пересобирает roster (Р8), вкладка «Участники» и «История» перечитываются.
+ *  `changes` — семантика действий: кто добавлен/снят/сменил роль. Записи
+ *  старого формата (до #699) несут только `changedUserIds`. */
 export const projectParticipantsChangedPayloadSchema = z.object({
   projectId: z.uuid(),
   changedUserIds: z.array(z.uuid()),
+  /** Причина; отсутствует у автоматических записей старого формата. */
+  reason: projectParticipantsReasonSchema.optional(),
+  /** Действия состава; пусто — запись старого формата. */
+  changes: z.array(projectParticipantChangeSchema).optional(),
+  /** Новое значение видимости, вызвавшей очистку состава
+   *  (`reason='visibility'`). */
+  visibility: projectVisibilitySchema.optional(),
   /** Кому доставить событие (участники проекта); gateway снимает. */
   audience: z.array(z.uuid()).optional(),
 });
 export type ProjectParticipantsChangedPayload = z.infer<
   typeof projectParticipantsChangedPayloadSchema
 >;
+
+/** Автоматический пересчёт состава (#699): проекция из задач и синк
+ *  руководства. Не пишется в ленту «История» — для потребителей ростера
+ *  (канал, кэш видимости) это то же изменение состава, что и
+ *  `participants_changed`. */
+export const projectRosterSyncedPayloadSchema = z.object({
+  projectId: z.uuid(),
+  changedUserIds: z.array(z.uuid()),
+  /** Кому доставить событие (участники проекта); gateway снимает. */
+  audience: z.array(z.uuid()).optional(),
+});
+export type ProjectRosterSyncedPayload = z.infer<typeof projectRosterSyncedPayloadSchema>;
 
 // ===== Дерево проекта (#467) =====
 

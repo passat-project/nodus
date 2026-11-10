@@ -1,4 +1,10 @@
-import type { ProjectHistoryKind, ProjectStatus } from '@nodus/contracts';
+import type {
+  ProjectHistoryKind,
+  ProjectParticipantChange,
+  ProjectParticipantsReason,
+  ProjectStatus,
+  ProjectVisibility,
+} from '@nodus/contracts';
 
 import { isoAgo } from './dates.js';
 import { demoProjectRows } from './projects.js';
@@ -15,6 +21,14 @@ export interface DemoProjectEvent {
   fields: string[];
   status: ProjectStatus | null;
   userIds: string[];
+  /** Семантика состава (#699): кто, что и в какой роли. */
+  members: ProjectParticipantChange[];
+  /** Причина изменения состава; null — запись старого формата. */
+  reason: ProjectParticipantsReason | null;
+  /** Направление смены видимости у системной строки очистки. */
+  visibility: ProjectVisibility | null;
+  /** Значение пересчитал движок формул (#699). */
+  automatic?: boolean;
   name: string | null;
 }
 
@@ -30,6 +44,9 @@ export const demoProjectEvents: DemoProjectEvent[] = [
     fields: [],
     status: null,
     userIds: [],
+    members: [],
+    reason: null,
+    visibility: null,
     name: project.name,
   })),
   {
@@ -41,6 +58,9 @@ export const demoProjectEvents: DemoProjectEvent[] = [
     fields: [],
     status: null,
     userIds: [userIds.voronina],
+    members: [{ userId: userIds.voronina, action: 'added', from: null, to: 'observer' }],
+    reason: 'manual',
+    visibility: null,
     name: null,
   },
   {
@@ -52,6 +72,9 @@ export const demoProjectEvents: DemoProjectEvent[] = [
     fields: ['description', 'endDate'],
     status: null,
     userIds: [],
+    members: [],
+    reason: null,
+    visibility: null,
     name: null,
   },
 ];

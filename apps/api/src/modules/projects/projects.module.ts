@@ -12,6 +12,7 @@ import { ProjectMembersController } from './project-members.controller.js';
 import { ProjectNodeKindsController } from './project-node-kinds.controller.js';
 import { ProjectLifecycleService } from './project-lifecycle.service.js';
 import { ProjectMembersService } from './project-members.service.js';
+import { ProjectManualMembersService } from './project-manual-members.service.js';
 import { ProjectParticipantsRepository } from './project-participants.repository.js';
 import { ProjectTypesRepository } from './project-types.repository.js';
 import { ProjectDtoMapper } from './project-dto.mapper.js';
@@ -83,6 +84,7 @@ import {
     ProjectHistoryRepository,
     ProjectDtoMapper,
     ProjectMembersService,
+    ProjectManualMembersService,
     ProjectsService,
     ProjectsQueryService,
     ProjectLifecycleService,

@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectMember } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 
-import { groupProjectMembers, manualMembershipKind } from './project-members.js';
+import {
+  groupProjectMembers,
+  manualMembershipKind,
+  memberRemovalLabel,
+  taskParticipantIds,
+} from './project-members.js';
 
 function member(
   userId: string,
@@ -61,5 +67,19 @@ describe('manualMembershipKind', () => {
       member('u1', 'member'),
     ]);
     expect(manualMembershipKind(group!)).toBe('member');
+  });
+});
+
+describe('memberRemovalLabel (#714)', () => {
+  it('подпись называет реально снимаемую роль', () => {
+    expect(memberRemovalLabel('observer')).toBe(ui.projects.removeObserver);
+    expect(memberRemovalLabel('member')).toBe(ui.projects.removeMember);
+  });
+});
+
+describe('taskParticipantIds (#714)', () => {
+  it('участники из задач — для исключения из пикера наблюдателей', () => {
+    const rows = [member('u1', 'task'), member('u2', 'observer', 'invited'), member('u3', 'task')];
+    expect(taskParticipantIds(rows)).toEqual(['u1', 'u3']);
   });
 });

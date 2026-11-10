@@ -32,7 +32,18 @@ const facts: ProjectFacts = {
   status: 'active',
 };
 
-const row = { typeId: TYPE, visibility: 'open', customFields: {} } as ProjectRow;
+const row = {
+  typeId: TYPE,
+  name: 'Тендер УП',
+  description: '',
+  color: 'blue',
+  portfolioId: null,
+  visibility: 'open',
+  startedAt: null,
+  endsAt: null,
+  assistantIds: [],
+  customFields: {},
+} as unknown as ProjectRow;
 
 interface Ctx {
   groups: { findActive: ReturnType<typeof vi.fn> };
@@ -61,11 +72,17 @@ function makeCtx(): Ctx {
 describe('buildUpdatePatch (#52/#631)', () => {
   it('скалярные поля: description null → пустая строка, color и name — как есть', async () => {
     const ctx = makeCtx();
-    const { patch, fields } = await buildUpdatePatch(ctx as never, user(MANAGER), row, facts, {
-      name: 'Тендер УП-2',
-      description: null,
-      color: 'red',
-    } as never);
+    const { patch, fields } = await buildUpdatePatch(
+      ctx as never,
+      user(MANAGER),
+      { ...row, description: 'старое описание' } as ProjectRow,
+      facts,
+      {
+        name: 'Тендер УП-2',
+        description: null,
+        color: 'red',
+      } as never,
+    );
     expect(patch).toEqual({ name: 'Тендер УП-2', description: '', color: 'red' });
     expect(fields).toEqual(['name', 'description', 'color']);
   });
@@ -77,9 +94,15 @@ describe('buildUpdatePatch (#52/#631)', () => {
       buildUpdatePatch(ctx as never, user(MANAGER), row, facts, { portfolioId: 'g-x' } as never),
     ).rejects.toMatchObject({ code: ErrorCode.VALIDATION_FAILED });
 
-    const cleared = await buildUpdatePatch(ctx as never, user(MANAGER), row, facts, {
-      portfolioId: null,
-    } as never);
+    const cleared = await buildUpdatePatch(
+      ctx as never,
+      user(MANAGER),
+      { ...row, portfolioId: 'g-1' } as ProjectRow,
+      facts,
+      {
+        portfolioId: null,
+      } as never,
+    );
     expect(cleared.patch.portfolioId).toBeNull();
 
     ctx.groups.findActive.mockResolvedValue({ id: 'g-1' });
@@ -91,16 +114,46 @@ describe('buildUpdatePatch (#52/#631)', () => {
   });
 
   it('даты: ISO → Date, null очищает startedAt/endsAt', async () => {
+    const dated = {
+      ...row,
+      startedAt: new Date('2026-10-01T00:00:00.000Z'),
+      endsAt: new Date('2026-10-15T00:00:00.000Z'),
+    } as ProjectRow;
     const { patch, fields } = await buildUpdatePatch(
       makeCtx() as never,
       user(MANAGER),
-      row,
+      dated,
       facts,
-      { startDate: '2026-11-01T00:00:00.000Z', endDate: null } as never,
+      { startDate: '2026-11-01', endDate: null } as never,
     );
-    expect(patch.startedAt).toEqual(new Date('2026-11-01T00:00:00.000Z'));
+    expect(patch.startedAt).toEqual(new Date('2026-11-01'));
     expect(patch.endsAt).toBeNull();
     expect(fields).toEqual(['startDate', 'endDate']);
+  });
+
+  it('повтор тех же значений не попадает в fields (#699)', async () => {
+    const current = {
+      ...row,
+      startedAt: new Date('2026-11-01T00:00:00.000Z'),
+      endsAt: new Date('2026-10-15T00:00:00.000Z'),
+    } as ProjectRow;
+    const { patch, fields } = await buildUpdatePatch(
+      makeCtx() as never,
+      user(MANAGER),
+      current,
+      { ...facts, assistantIds: ['a-1'] },
+      {
+        name: 'Тендер УП',
+        description: null,
+        color: 'blue',
+        portfolioId: null,
+        startDate: '2026-11-01',
+        endDate: '2026-10-15',
+        assistantIds: ['a-1'],
+      } as never,
+    );
+    expect(fields).toEqual([]);
+    expect(patch).toEqual({});
   });
 
   it('помощники: дедупликация, руководитель исключается, лимит 10 и активность', async () => {
@@ -130,7 +183,7 @@ describe('buildUpdatePatch (#52/#631)', () => {
     ).rejects.toMatchObject({ code: ErrorCode.VALIDATION_FAILED });
   });
 
-  it('legacy шифр/заказчик без изменений реестра всё равно попадают в fields', async () => {
+  it('legacy шифр/заказчик без изменений реестра не попадают в fields (#699)', async () => {
     const ctx = makeCtx();
     const { patch, fields } = await buildUpdatePatch(ctx as never, user(MANAGER), row, facts, {
       code: 'ПР-1',
@@ -145,7 +198,8 @@ describe('buildUpdatePatch (#52/#631)', () => {
       undefined,
     );
     expect(patch.customFields).toEqual({ x: 1 });
-    expect(fields).toEqual([`cf.${CODE}`, `cf.${CLIENT}`]);
+    // Реестр не сообщил изменений — повтора значения в истории нет.
+    expect(fields).toEqual([]);
   });
 
   it('изменения реестра домешиваются к legacy-полям без дублей', async () => {

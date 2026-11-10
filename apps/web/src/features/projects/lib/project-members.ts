@@ -4,6 +4,7 @@ import type {
   ProjectParticipantSource,
   UserRef,
 } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 
 export interface ProjectMemberGroup {
   user: UserRef;
@@ -53,4 +54,17 @@ export function manualMembershipKind(group: ProjectMemberGroup): 'member' | 'obs
   if (group.sources.includes('member')) return 'member';
   if (group.sources.includes('observer')) return 'observer';
   return null;
+}
+
+/** Подпись кнопки снятия — по реально снимаемой роли (#714): у участника из
+ *  задач в открытом проекте снимается только наблюдатель, и «Убрать из
+ *  состава» врала бы о том, что человек покинет проект. */
+export function memberRemovalLabel(kind: 'member' | 'observer'): string {
+  return kind === 'observer' ? ui.projects.removeObserver : ui.projects.removeMember;
+}
+
+/** Участники из задач (открытый проект): наблюдателя им не выдают — роль не
+ *  добавляет доступа (#714). Пикер наблюдателей их не предлагает. */
+export function taskParticipantIds(rows: readonly ProjectMember[]): string[] {
+  return rows.filter((row) => row.source === 'task').map((row) => row.user.id);
 }

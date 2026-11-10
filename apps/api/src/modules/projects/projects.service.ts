@@ -170,7 +170,7 @@ export class ProjectsService {
           customFields: { ...customFields, ...numbers } as Prisma.InputJsonValue,
         });
       }
-      await this.members.syncManagement(tx, row.id, { managerId, assistantIds });
+      await this.members.syncManagement(tx, row.id, { managerId, assistantIds }, { notify: false });
       if (observerIds.length > 0) {
         await this.participantsRepo.add(
           tx,
@@ -181,7 +181,6 @@ export class ProjectsService {
             observerKind: 'invited',
           })),
         );
-        await this.members.emitChanged(tx, row.id, observerIds);
       }
       // Создатель, назначивший руководство другим, — наблюдатель-создатель
       // (Т5); создатель-руководитель уже в составе источником manager.
@@ -257,6 +256,12 @@ export class ProjectsService {
       if (built.patch.visibility === 'secret') {
         await this.members.dropOpenRoster(tx, id);
       }
+      // Раскрытие: ручной состав секретного снимается в той же транзакции —
+      // состав открытого проекта живёт из задач (#714); строка истории о
+      // смене видимости получит системную причину очистки (#699).
+      if (built.patch.visibility === 'open') {
+        await this.members.dropManualRoster(tx, id);
+      }
       const nextValues =
         (built.patch.customFields as Prisma.JsonValue | undefined) ?? fresh.customFields;
       // Синхронный пересчёт формул проекта в той же tx (#632): ответ PATCH
@@ -267,28 +272,32 @@ export class ProjectsService {
       if (changedFieldIds.length > 0) {
         await this.formulaRecalc.recalcProjectAfterValuesChange(tx, user.id, id, changedFieldIds);
       }
-      await this.eventBus.emit(
-        tx,
-        PROJECT_EVENTS.UPDATED,
-        {
-          projectId: id,
-          fields: built.fields,
-          ...(built.patch.name !== undefined ? { name: built.patch.name } : {}),
-          ...(built.fields.some((field) => field === `cf.${SYSTEM_FIELD_IDS.projectCode}`)
-            ? { code: codeOf(nextValues) }
-            : {}),
-          ...(built.fields.some((field) => field === `cf.${SYSTEM_FIELD_IDS.projectClient}`)
-            ? {
-                clientId: clientOf(nextValues),
-                previousClientId: clientOf(fresh.customFields),
-              }
-            : {}),
-          audience: [
-            ...new Set([...(await projectAudience(this.participantsRepo, next, tx)), user.id]),
-          ],
-        },
-        { actorId: user.id, aggregateType: 'project', aggregateId: id },
-      );
+      // Правка без реальных отличий (окно отправляет форму целиком) — не
+      // событие: история не пересказывает тело запроса (#699).
+      if (built.fields.length > 0) {
+        await this.eventBus.emit(
+          tx,
+          PROJECT_EVENTS.UPDATED,
+          {
+            projectId: id,
+            fields: built.fields,
+            ...(built.patch.name !== undefined ? { name: built.patch.name } : {}),
+            ...(built.fields.some((field) => field === `cf.${SYSTEM_FIELD_IDS.projectCode}`)
+              ? { code: codeOf(nextValues) }
+              : {}),
+            ...(built.fields.some((field) => field === `cf.${SYSTEM_FIELD_IDS.projectClient}`)
+              ? {
+                  clientId: clientOf(nextValues),
+                  previousClientId: clientOf(fresh.customFields),
+                }
+              : {}),
+            audience: [
+              ...new Set([...(await projectAudience(this.participantsRepo, next, tx)), user.id]),
+            ],
+          },
+          { actorId: user.id, aggregateType: 'project', aggregateId: id },
+        );
+      }
       return { patch: built.patch };
     });
     if (patch.visibility === 'open') {

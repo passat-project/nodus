@@ -48,20 +48,36 @@
 Открытый проект: участники руками не добавляются (живут из задач), но
 руководство может вручную добавлять и снимать НАБЛЮДАТЕЛЕЙ (просмотр без прав
 правки — вердикт 29.10 В2: «задавали наблюдателей для проектов, а участники
-добавлялись бы автоматически из задач»); `open→secret` снимает динамику задач
-(состав секретного полностью ручной), `secret→open` немедленно пересчитывает
-из живых задач. `membersCount`/`membersPreview` — участники БЕЗ наблюдателей;
+добавлялись бы автоматически из задач»); участнику из задач наблюдатель не
+выдаётся — роль не добавляет доступа (422 `PROJECT_MEMBER_ALREADY_PARTICIPANT`,
+#714). `open→secret` снимает динамику задач (состав секретного полностью
+ручной), `secret→open` в той же транзакции снимает ручных участников `member`
+(состав открытого живёт из задач) и немедленно пересчитывает из живых задач.
+`membersCount`/`membersPreview` — участники БЕЗ наблюдателей;
 наблюдатели — отдельное поле карточки (`observers`). Секретный: задачи состав не
 расширяют конструктивно — в задачу нельзя назначить (любой ролью, включая
 наблюдателя) того, кто не состоит в проекте (`assertMembersAllowed` → 422
-`PROJECT_TASK_MEMBERS_INVALID {projectId, userIds}`, #674).
+`PROJECT_TASK_MEMBERS_INVALID {projectId, userIds}`, #674); снятие/понижение
+участника, держащего роли в задачах, — 422 `PROJECT_MEMBER_HAS_TASKS {userId}`
+(#714). Снятие ручной строки, которой нет, — 404 (участнику из задач открытого
+проекта — 422 `PROJECT_MEMBER_ALREADY_PARTICIPANT`): ложного «убран» не бывает.
 
 События: `project.created` / `project.updated` (поля + clientId/
 previousClientId для crm-проекции, `status` при статусном действии) /
 `project.participants_changed` — outbox в той же транзакции (I9); изменение
-состава поднимает `updated_at` проекта. Тот же журнал читает вкладка
-«История» (`GET /projects/:id/history`, keyset по `seq`) — своей таблицы
-история не заводит.
+состава поднимает `updated_at` проекта. `participants_changed` — только
+действия и их следствия: `reason` (`manual` | `join` | `leave` | `visibility`)
+и `changes[] {userId, action: added|removed|role_changed, from, to}` (#699);
+создание проекта служебного события состава не пишет. Автоматический пересчёт
+(проекция из задач, синк руководства при передаче/правке помощников) —
+`project.roster_synced`: потребители ростера (канал, кэш видимости) обрабатывают
+его наравне, а вкладка «История» не показывает — суть читается строкой
+изменённого поля или системной строкой очистки. Пересчёт формулы проекта
+эмитит `project.updated` с `automatic: true` (#699): лента помечает строку
+«Автоматически», хотя актёр-триггер в событии есть. Тот же журнал читает
+вкладка «История» (`GET /projects/:id/history`, keyset по `seq`) — своей
+таблицы история не заводит; записи старого формата (только `changedUserIds`)
+читаются прежней сводкой.
 
 Обязательные слоты формы типа (I7/I8): создание без значения / очистка
 патчем — 422 `PROJECT_FIELDS_REQUIRED {typeId, fields, reason: create|clear}`
@@ -141,7 +157,7 @@ node_moved / node_deleted`; `node_updated` несёт `customFieldChanges` и
 | `POST /:id/transfer`                                                  | действующий руководитель                                               | передача руководства; прежний без иных источников — наблюдатель-создатель                                                                                                |
 | `GET /:id/members?cursor=&limit=`                                     | —                                                                      | вкладка «Участники»: строки-источники                                                                                                                                    |
 | `POST /:id/join` · `POST /:id/leave`                                  | —                                                                      | вступление/выход (открытый; leave — только свой ряд вступившего)                                                                                                         |
-| `POST /:id/members` · `DELETE /:id/members/:userId`                   | руководство (секретный)                                                | ручной состав member/observer (замена второй роли того же человека)                                                                                                      |
+| `POST /:id/members` · `DELETE /:id/members/:userId`                   | руководство проекта                                                    | ручной состав: секретный — member/observer, открытый — только observer; замена второй роли; причины отказа — 422 доменными кодами (#714)                                 |
 | `GET/PUT /settings/portal`                                            | PUT: `project.setup.manage`                                            | дефолт видимости новых проектов (окно «Настройки портала»)                                                                                                               |
 | `GET/POST /types`, `PATCH /types/:id` (+archive/restore)              | `project.setup.manage`                                                 | типы проектов: имя, значок, цвет, форма слотов `form` (слот = привязка атрибута, Р10), допустимые виды папок `kindIds` (null — все; негодный id — 422)                   |
 | `GET/POST /groups`, `PATCH /groups/:id` (+archive/restore)            | `project.manage`                                                       | портфели (плоский список)                                                                                                                                                |
@@ -232,8 +248,13 @@ projects.service.ts             создание/правка полей, нас
 project-structure.service.ts    дерево #467: structure/create/batch/update/move/remove
 project-structure.controller.ts маршруты структуры и узлов
 project-lifecycle.service.ts    статусы (заморозка) и передача руководства
-project-members.service.ts      двухрежимное участие: join/leave, ручной состав,
-                                проекция из задач, onVisibilityChanged
+project-members.service.ts      двухрежимное участие: чтение состава, join/leave,
+                                проекция из задач и синк руководства (события #699)
+project-manual-members.service.ts  ручной состав руководством: добавление/снятие ролей,
+                                доменные отказы (#714)
+project-members.access.ts       видимость проекта и руководство актёра (404 без оракула)
+project-members.events.ts       события состава: participants_changed (действие, история)
+                                и roster_synced (автопересчёт, без истории)
 projects-query.service.ts       журнал и карточка (гидратация ссылок)
 project-dto.mapper.ts           DTO: myMembership/access, structureSummary карточки
 project-formula.service.ts      формулы ячеек проекта и папки (#632): read/save/remove,

@@ -29,6 +29,7 @@ import { ApiIdempotencyKey } from '../../core/openapi/api-idempotency.decorator.
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { decodeCursor } from '../../core/pagination/cursor.util.js';
 import { ProjectMembersService } from './project-members.service.js';
+import { ProjectManualMembersService } from './project-manual-members.service.js';
 
 const idParamSchema = z.uuid();
 const membersQuerySchema = cursorQuerySchema;
@@ -43,7 +44,10 @@ const membersQuerySchema = cursorQuerySchema;
 @RequireFeature('projects')
 @Controller('projects')
 export class ProjectMembersController {
-  constructor(private readonly members: ProjectMembersService) {}
+  constructor(
+    private readonly members: ProjectMembersService,
+    private readonly manual: ProjectManualMembersService,
+  ) {}
 
   @Get(':id/members')
   @ApiParam({ name: 'id', description: 'UUID проекта', schema: { type: 'string', format: 'uuid' } })
@@ -104,7 +108,8 @@ export class ProjectMembersController {
   @Audit({ action: 'project.member_add', entity: 'project' })
   @ApiParam({ name: 'id', description: 'UUID проекта', schema: { type: 'string', format: 'uuid' } })
   @ApiOperation({
-    summary: 'Добавить в состав секретного проекта (руководство): участник или наблюдатель',
+    summary:
+      'Добавить в состав (руководство): секретный — участник/наблюдатель, открытый — наблюдатель',
   })
   @ApiCreatedResponse()
   @ApiErrors(400, 401, 403, 404, 422)
@@ -118,7 +123,7 @@ export class ProjectMembersController {
     dto: ProjectMemberAddBody,
     @GetUser() user: AuthUser,
   ): Promise<void> {
-    return this.members.addManual(user, id, dto.userId, dto.kind);
+    return this.manual.addManual(user, id, dto.userId, dto.kind);
   }
 
   @Delete(':id/members/:userId')
@@ -129,15 +134,18 @@ export class ProjectMembersController {
     description: 'UUID сотрудника',
     schema: { type: 'string', format: 'uuid' },
   })
-  @ApiOperation({ summary: 'Убрать из состава секретного проекта (руководство)' })
+  @ApiOperation({
+    summary:
+      'Убрать ручную роль (руководство): секретный — участника/наблюдателя, открытый — наблюдателя',
+  })
   @ApiNoContentResponse()
-  @ApiErrors(400, 401, 403, 404)
+  @ApiErrors(400, 401, 403, 404, 422)
   remove(
     @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
     @Param('userId', new ZodValidationPipe(idParamSchema)) userId: string,
     @GetUser() user: AuthUser,
   ): Promise<void> {
-    return this.members.removeManual(user, id, userId);
+    return this.manual.removeManual(user, id, userId);
   }
 }
 

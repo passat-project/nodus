@@ -109,7 +109,10 @@ export class ProjectParticipantsRepository {
   }
 
   /** Пересчёт источника `task` открытого проекта: истина — membersOf порта
-   *  задач; идемпотентен (upsert/deleteMany, паттерн letter-usage). */
+   *  задач; идемпотентен (upsert/deleteMany, паттерн letter-usage). Заодно
+   *  снимает осевшие ручные строки `member` (#714): в открытом проекте
+   *  участие живёт из задач, а ручные строки — наследие secret→open до
+   *  фикса. */
   async replaceTaskSource(
     tx: TransactionClient,
     projectId: string,
@@ -134,7 +137,17 @@ export class ProjectParticipantsRepository {
         where: { projectId, userId: { in: removed }, source: 'task' },
       });
     }
-    return { added, removed };
+    const leftover = await tx.projectParticipant.findMany({
+      select: { userId: true },
+      where: { projectId, source: 'member' },
+    });
+    if (leftover.length > 0) {
+      await tx.projectParticipant.deleteMany({ where: { projectId, source: 'member' } });
+    }
+    return {
+      added,
+      removed: [...new Set([...removed, ...leftover.map((row) => row.userId)])],
+    };
   }
 
   /** Синк строк руководства из полей проекта (create/update/transfer). */

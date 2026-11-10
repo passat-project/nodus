@@ -163,7 +163,7 @@ describe('ProjectLifecycleService (#52: статусы и передача, Т5/
         {},
         ID,
         { managerId: HIP, assistantIds: [HELPER] },
-        [MANAGER, HIP],
+        { extraChanged: [MANAGER, HIP] },
       );
     });
 

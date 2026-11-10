@@ -107,7 +107,12 @@ export class ProjectLifecycleService {
           { projectId: id, userId: user.id, source: 'observer', observerKind: 'creator' },
         ]);
       }
-      await this.members.syncManagement(tx, id, { managerId, assistantIds }, [user.id, managerId]);
+      await this.members.syncManagement(
+        tx,
+        id,
+        { managerId, assistantIds },
+        { extraChanged: [user.id, managerId] },
+      );
       await this.eventBus.emit(
         tx,
         PROJECT_EVENTS.UPDATED,

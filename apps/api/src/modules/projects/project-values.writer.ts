@@ -80,6 +80,9 @@ export class ProjectValuesWriter {
       {
         projectId,
         fields: prepared.changes.map((change) => `cf.${change.fieldId}`),
+        // Пересчёт формулы — не правка человека: история пометит строку
+        // «Автоматически» (#699).
+        automatic: true,
         // Аудитория — состояние ПОСЛЕ правки и в той же tx (#646).
         audience: await projectAudience(this.participants, next, tx),
       },
