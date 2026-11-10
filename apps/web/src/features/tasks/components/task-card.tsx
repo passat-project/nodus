@@ -2,16 +2,22 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { ErrorCode, errorMessages, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { CardHeaderActionsPortal } from '../../../app/shell/card-header-actions.js';
 import { useReplaceTopCard } from '../../../app/shell/use-card-stack.js';
 import { ApiError } from '../../../shared/api-client.js';
 import { useReadEntityNotifications } from '../../../shared/api/read-entity-notifications.js';
 import { useTaskConversation } from '../../../shared/chat/chat-queries.js';
 import { ViewerHostProvider } from '../../../shared/files/viewer-host.js';
 import { CardDataSplitter } from '../../../shared/ui/entity-card/card-data-splitter.js';
+import { CardLayoutButton } from '../../../shared/ui/entity-card/card-layout-button.js';
 import {
   CardWidthHint,
   PANEL_HIDDEN_HINT,
 } from '../../../shared/ui/entity-card/card-width-hint.js';
+import {
+  mergeAllGroups,
+  splitActiveTab,
+} from '../../../shared/ui/entity-card/card-tabs-actions.js';
 import { solveCardWidths } from '../../../shared/ui/entity-card/card-tabs-width.js';
 import { useCardTabs } from '../../../shared/ui/entity-card/use-card-tabs.js';
 import { useElementWidth } from '../../../shared/ui/use-element-width.js';
@@ -148,7 +154,7 @@ export function TaskCard({ taskId }: { taskId: string }) {
   return (
     <ViewerHostProvider open={openFile}>
       <div className="flex h-full min-w-0">
-        <div ref={rowRef} className="relative flex min-h-0 flex-1">
+        <div ref={rowRef} className="relative flex min-h-0 min-w-0 flex-1">
           <div
             ref={branchRef}
             className={cn(
@@ -247,6 +253,14 @@ export function TaskCard({ taskId }: { taskId: string }) {
           </div>
         </div>
       </div>
+
+      <CardHeaderActionsPortal>
+        <CardLayoutButton
+          groupCount={state.groups.length}
+          onSplit={() => cardTabs.setState(splitActiveTab(state))}
+          onMerge={() => cardTabs.setState(mergeAllGroups(state))}
+        />
+      </CardHeaderActionsPortal>
     </ViewerHostProvider>
   );
 }

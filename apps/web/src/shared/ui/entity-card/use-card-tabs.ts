@@ -132,6 +132,42 @@ export function useCardTabs(options: UseCardTabsOptions) {
     );
   }, [options.requestedActive]);
 
+  // Внешнее обновление prefs (серверный GET после логина, другой таб) может
+  // прийти ПОЗЖЕ маунта карточки — тогда локальное состояние уже собрано по
+  // пустым prefs. Применяем новое значение, если оно отличается от текущего:
+  // свои же записи (setCardTabs) сюда возвращаются равными и no-op'ятся.
+  const currentPrefKey = useMemo(() => {
+    const pref = prefFromState(state, { hidden, widths, panelOpen });
+    return pref ? JSON.stringify(pref) : '';
+  }, [hidden, panelOpen, state, widths]);
+  useEffect(() => {
+    if (!storedPref) return;
+    if (JSON.stringify(storedPref) === currentPrefKey) return;
+    const nextHidden = hiddenFromPref(storedPref, options.stableTabs);
+    setHidden(nextHidden);
+    setWidths(storedPref.widths ?? {});
+    setPanelOpen(Boolean(storedPref.panelOpen));
+    setState((previous) => {
+      const groups = groupsFromPref(storedPref, {
+        stableTabs: options.stableTabs,
+        fileTabs: options.fileTabs ?? [],
+        hidden: nextHidden,
+      });
+      return createCardTabsState(groups, {
+        activeTab: options.requestedActive ?? options.defaultActive,
+        visited: Object.keys(previous.visited),
+        focusGroupId: previous.focusGroupId,
+      });
+    });
+  }, [
+    currentPrefKey,
+    options.defaultActive,
+    options.fileTabs,
+    options.requestedActive,
+    options.stableTabs,
+    storedPref,
+  ]);
+
   const persist = useCallback(
     (
       nextState: CardTabsState,

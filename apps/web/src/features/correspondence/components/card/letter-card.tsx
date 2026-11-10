@@ -4,6 +4,7 @@ import type { LetterDetail } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { CardHeaderActionsPortal } from '../../../../app/shell/card-header-actions.js';
 import { useCloseCard } from '../../../../app/shell/use-card-stack.js';
 import { ApiError } from '../../../../shared/api-client.js';
 import { useReadEntityNotifications } from '../../../../shared/api/read-entity-notifications.js';
@@ -11,11 +12,16 @@ import { useLetterConversation } from '../../../../shared/chat/chat-queries.js';
 import { ChatSidePanel } from '../../../../shared/chat/chat-side-panel.js';
 import { CardDataColumn } from '../../../../shared/ui/entity-card/card-data-column.js';
 import { CardDataSplitter } from '../../../../shared/ui/entity-card/card-data-splitter.js';
+import { CardLayoutButton } from '../../../../shared/ui/entity-card/card-layout-button.js';
 import {
   CardWidthHint,
   PANEL_HIDDEN_HINT,
 } from '../../../../shared/ui/entity-card/card-width-hint.js';
 import { solveCardWidths } from '../../../../shared/ui/entity-card/card-tabs-width.js';
+import {
+  mergeAllGroups,
+  splitActiveTab,
+} from '../../../../shared/ui/entity-card/card-tabs-actions.js';
 import { useCardTabs } from '../../../../shared/ui/entity-card/use-card-tabs.js';
 import { useElementWidth } from '../../../../shared/ui/use-element-width.js';
 import { useDeleteSpamLetter, useJoinLetter } from '../../api/letters-mutations.js';
@@ -172,7 +178,7 @@ export function LetterCard({ letterId }: { letterId: string }) {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <div ref={rowRef} className="relative flex min-h-0 flex-1">
+      <div ref={rowRef} className="relative flex min-h-0 min-w-0 flex-1">
         <div
           ref={branchRef}
           className={cn(
@@ -289,6 +295,14 @@ export function LetterCard({ letterId }: { letterId: string }) {
           />
         ) : null}
       </div>
+
+      <CardHeaderActionsPortal>
+        <CardLayoutButton
+          groupCount={state.groups.length}
+          onSplit={() => cardTabs.setState(splitActiveTab(state))}
+          onMerge={() => cardTabs.setState(mergeAllGroups(state))}
+        />
+      </CardHeaderActionsPortal>
 
       <SpamConfirmDialog
         open={spamOpen}
