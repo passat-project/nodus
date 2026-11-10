@@ -168,13 +168,30 @@ describe('route-graph: холст из документа (#378 ред. 2)', () 
           form: { enabled: true, sections: [] },
           steps: [],
         },
+        {
+          id: 'a2',
+          code: null,
+          name: 'Запросить уточнение',
+          stageId: null,
+          display: 'button',
+          sortOrder: 1,
+          rules,
+          form: { enabled: true, sections: [] },
+          steps: [],
+        },
       ],
     };
     const plain = buildRouteGraph(withActions, { readOnly: false });
     expect(plain.nodes.find((n) => n.id === B)!.data).toMatchObject({
-      actions: [{ id: 'a1', name: 'Добавить замечание' }],
+      actions: [
+        { id: 'a1', name: 'Добавить замечание' },
+        { id: 'a2', name: 'Запросить уточнение' },
+      ],
     });
-    expect(plain.nodes.find((n) => n.id === A)!.data).toMatchObject({ actions: [] });
+    // Действие «в любом статусе» доступно и здесь — бейдж считает и его.
+    expect(plain.nodes.find((n) => n.id === A)!.data).toMatchObject({
+      actions: [{ id: 'a2', name: 'Запросить уточнение' }],
+    });
 
     const selected = buildRouteGraph(withActions, {
       readOnly: false,

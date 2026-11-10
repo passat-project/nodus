@@ -73,7 +73,7 @@ export function StageActionsSection({
       actions={
         readOnly ? undefined : (
           <span className="flex shrink-0 items-center">
-            {action.stageId === null ? null : (
+            {action.stageId === null || own.length < 2 ? null : (
               <ReorderButtons
                 index={index}
                 count={own.length}
@@ -97,6 +97,7 @@ export function StageActionsSection({
 
   return (
     <div className="flex min-w-0 flex-col">
+      <p className="pb-1.5 text-xs text-muted-foreground">{ui.automation.panel.actionsLead}</p>
       {own.map((action, index) => row(action, index))}
       {fromAny.map((action, index) => row(action, index))}
       {own.length + fromAny.length === 0 ? (

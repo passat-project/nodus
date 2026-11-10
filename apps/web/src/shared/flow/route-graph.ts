@@ -53,10 +53,15 @@ export function buildRouteGraph(
   const initial = doc.stages.find((s) => s.isInitial);
 
   // Действия (#633) — у статуса на холсте только бейдж со счётчиком:
-  // статус они не меняют, стрелки у них нет.
-  const actions = [...(doc.actions ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
+  // статус они не меняют, стрелки у них нет. Действия «в любом статусе»
+  // доступны и здесь — считаем их вместе со своими (свои первыми).
+  const actions = [...(doc.actions ?? [])].sort(
+    (a, b) => Number(a.stageId === null) - Number(b.stageId === null) || a.sortOrder - b.sortOrder,
+  );
   const stageActionList = (stageId: string) =>
-    actions.filter((a) => a.stageId === stageId).map((a) => ({ id: a.id, name: a.name }));
+    actions
+      .filter((a) => a.stageId === null || a.stageId === stageId)
+      .map((a) => ({ id: a.id, name: a.name }));
   const selectedAction =
     options.selection?.kind === 'action'
       ? (actions.find((a) => a.id === options.selection!.id) ?? null)
