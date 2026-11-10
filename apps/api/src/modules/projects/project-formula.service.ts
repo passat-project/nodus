@@ -99,6 +99,9 @@ export class ProjectFormulaService {
   async remove(user: AuthUser, projectId: string, fieldId: string): Promise<void> {
     await this.requireManage(user, projectId);
     await this.txRunner.run(async (tx) => {
+      // Порядок замков как у save: строка проекта → ячейки — два конкурентных
+      // DELETE с разными ключами иначе оба увидят ячейку и дважды эмитят событие.
+      await this.writer.lockProject(tx, projectId);
       // #658: снятие идемпотентно — нет ячейки, нет ни очистки значения,
       // ни второго события (адресное formula_changed шлём только по факту).
       if ((await this.cells.depthOf('project', projectId, fieldId, tx)) === null) return;
@@ -165,6 +168,8 @@ export class ProjectFormulaService {
     await loadForStructureManage(this.projects, user, projectId);
     if (!(await this.nodes.findInProject(projectId, nodeId))) throw nodeInvalid(nodeId);
     await this.txRunner.run(async (tx) => {
+      // Порядок замков как у saveNode: структура → узел → ячейки (#698).
+      await this.writer.lockNode(tx, projectId, nodeId);
       // #658: идемпотентность — см. remove проекта.
       if ((await this.cells.depthOf('node', nodeId, fieldId, tx)) === null) return;
       await this.cells.remove(tx, { hostKind: 'node', hostId: nodeId, fieldId });

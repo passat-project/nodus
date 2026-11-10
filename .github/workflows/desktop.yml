@@ -93,6 +93,15 @@ jobs:
           cargo fmt --check
           cargo clippy --all-targets -- -D warnings
 
+      # Rust-гварды оболочки (#687): стек попапов, якорная геометрия,
+      # валидация пути скачивания. После сборки тесты идут секунды и не
+      # удлиняют прогон заметно — регресс не пройдёт CI незамеченным.
+      - name: Rust-тесты оболочки
+        shell: bash
+        run: |
+          cd apps/desktop/src-tauri
+          cargo test --lib
+
       - name: Сборка установщиков
         shell: bash
         run: |

@@ -2,8 +2,6 @@
 name: "plan-critic-along"
 description: "Исполнитель без контекста сессии планирования, режим ВДОЛЬ (навык feature-architect, фаза Ф5): сухой прогон самого рискованного пакета плана файл за файлом, пометки [план отвечает]/[догадка]/[STOP], полный список догадок и STOP-ов. Read-only. Дешёвая модель — не наследует модель родителя."
 color: cyan
-model: "account:zai-individual-coding-plan/GLM-5.3"
-thoughtLevel: max
 tools:
   - Read
   - Grep

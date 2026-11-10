@@ -2,8 +2,6 @@
 name: "plan-critic-across"
 description: "Независимый критик техплана Nodus, режим ПОПЕРЁК (навык feature-architect, фаза Ф5): свежим контекстом ищет решения без источников, противоречия коду и канону, дыры фаз и критерии приёмки без команды. Read-only, находки таблицей с серьёзностью. Дешёвая модель — не наследует модель родителя."
 color: yellow
-model: "account:zai-individual-coding-plan/GLM-5.3"
-thoughtLevel: max
 tools:
   - Read
   - Grep

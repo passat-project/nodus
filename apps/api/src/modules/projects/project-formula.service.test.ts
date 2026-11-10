@@ -244,6 +244,26 @@ describe('ProjectFormulaService.movePreview (#632, Р10, критерий 1)', (
     expect(eventBus.emit).not.toHaveBeenCalled();
   });
 
+  it('снятие формулы проекта: замок строки берётся до проверки ячейки (#698)', async () => {
+    const { service, writer, cells } = make();
+    await service.remove(user, PROJECT, FIELD);
+    expect(writer.lockProject).toHaveBeenCalledWith({}, PROJECT);
+    expect(writer.lockProject.mock.invocationCallOrder[0]!).toBeLessThan(
+      cells.depthOf.mock.invocationCallOrder[0]!,
+    );
+    expect(cells.remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('снятие формулы папки: замок структуры и узла до проверки ячейки (#698)', async () => {
+    const { service, writer, cells } = make();
+    await service.removeNode(user, PROJECT, NODE, FIELD);
+    expect(writer.lockNode).toHaveBeenCalledWith({}, PROJECT, NODE);
+    expect(writer.lockNode.mock.invocationCallOrder[0]!).toBeLessThan(
+      cells.depthOf.mock.invocationCallOrder[0]!,
+    );
+    expect(cells.remove).toHaveBeenCalledTimes(1);
+  });
+
   it('ничего не меняется — пустой список (диалог «изменений нет»)', async () => {
     const { service } = make({ tree });
     expect(await service.movePreview(user, PROJECT, NODE, null)).toEqual({ changes: [] });
