@@ -121,6 +121,26 @@ export class TaskWorkflowController {
     return this.transitions.listFor(user, id);
   }
 
+  @Post(':id/actions/:actionId/press')
+  @HttpCode(200)
+  @Audit({ action: 'task.action', entity: 'task' })
+  @ApiOperation({ summary: 'Нажать действие маршрута: данные окна, статус не меняется' })
+  @ApiOkResponse({ standardSchema: executeTransitionResultSchema })
+  @ApiErrors(400, 401, 403, 404, 409, 422)
+  @ApiIdempotencyKey()
+  press(
+    @GetUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Param('actionId', uuid) actionId: string,
+    @Body({
+      schema: executeTransitionBodySchema,
+      pipes: [new ZodValidationPipe(executeTransitionBodySchema)],
+    })
+    body: ExecuteTransitionBody,
+  ): Promise<ExecuteTransitionResult> {
+    return this.transitions.pressActionFor(user, id, actionId, body);
+  }
+
   @Post(':id/transitions/:transitionId')
   @HttpCode(200)
   @Audit({ action: 'task.transition', entity: 'task' })

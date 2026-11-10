@@ -16,11 +16,13 @@ export interface TransitionRecordRow {
   entityKind: string;
   entityId: string;
   transitionId: string | null;
+  /** Действие без смены статуса (#633); null — запись перехода/сбора. */
+  actionId?: string | null;
   fromStageId: string;
   toStageId: string;
   actorId: string | null;
   rule: string | null;
-  recordKind: 'transition' | 'press' | 'return' | 'withdraw' | 'exclude';
+  recordKind: 'transition' | 'action' | 'press' | 'return' | 'withdraw' | 'exclude';
   participantId: string | null;
   comment: string | null;
   /** Ревизия итога сущности (TaskResult у задач), а не исход перехода. */
@@ -39,6 +41,7 @@ export class TransitionRecordsRepository {
         entityKind: row.entityKind,
         entityId: row.entityId,
         transitionId: row.transitionId,
+        actionId: row.actionId ?? null,
         fromStageId: row.fromStageId,
         toStageId: row.toStageId,
         actorId: row.actorId,

@@ -62,6 +62,16 @@ export interface WorkflowEnginePort {
       confirmEmptyNumberParts?: boolean;
     },
   ): Promise<TransitionExecution>;
+
+  /** Нажатие действия (#633): окно и запись журнала, статус не меняется. */
+  pressAction(
+    tx: TransactionClient,
+    entityId: string,
+    category: ProcessCategory,
+    actor: WorkflowActor,
+    actionId: string,
+    opts?: { form?: TransitionFormInput },
+  ): Promise<{ actionName: string; fields: Record<string, unknown> }>;
 }
 
 /** Тип процесса с маршрутом — то, что нужно модулю-владельцу для создания

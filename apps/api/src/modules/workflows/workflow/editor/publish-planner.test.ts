@@ -19,6 +19,7 @@ const RULES = {
 
 function snapshot(overrides: Partial<PlannerSnapshot> = {}): PlannerSnapshot {
   return {
+    actions: [],
     stages: [
       {
         id: S1,

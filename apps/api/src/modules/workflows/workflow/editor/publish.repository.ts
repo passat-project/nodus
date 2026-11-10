@@ -17,6 +17,17 @@ export interface TransitionRow {
   form: Prisma.InputJsonValue;
 }
 
+/** Действие маршрута (#633): без смены статуса, стадия может быть null. */
+export interface ActionRow {
+  name: string;
+  stageId: string | null;
+  display: string;
+  sortOrder: number;
+  rules: Prisma.InputJsonValue;
+  form: Prisma.InputJsonValue;
+  steps: Prisma.InputJsonValue;
+}
+
 /**
  * Записи публикации маршрута (#378, ADR-0021): применение плана внутри
  * транзакции сервиса. Новые стадии и переходы — без кода (сервер верит
@@ -76,6 +87,22 @@ export class WorkflowPublishRepository {
 
   async archiveTransition(tx: TransactionClient, id: string, at: Date): Promise<void> {
     await tx.workflowTransition.update({ where: { id }, data: { archivedAt: at } });
+  }
+
+  async createAction(tx: TransactionClient, workflowId: string, row: ActionRow): Promise<string> {
+    const created = await tx.workflowAction.create({
+      data: { workflowId, code: null, ...row },
+      select: { id: true },
+    });
+    return created.id;
+  }
+
+  async updateAction(tx: TransactionClient, id: string, row: ActionRow): Promise<void> {
+    await tx.workflowAction.update({ where: { id }, data: { ...row, archivedAt: null } });
+  }
+
+  async archiveAction(tx: TransactionClient, id: string, at: Date): Promise<void> {
+    await tx.workflowAction.update({ where: { id }, data: { archivedAt: at } });
   }
 
   /** Только раскладка холста — версия, дата и автор публикации не меняются
