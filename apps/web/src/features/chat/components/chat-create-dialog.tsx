@@ -259,8 +259,10 @@ export function ChatCreateDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
+      {/* #694: карточка не выходит за экран — шапка и футер закреплены,
+          прокручивается только тело (оба раскрытых раздела дают ~900px). */}
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="px-5 pt-4 pr-12 pb-2">
           <DialogTitle>
             {kind === 'group' ? ui.chat.createGroupChat : ui.chat.createChannel}
           </DialogTitle>
@@ -268,7 +270,7 @@ export function ChatCreateDialog({
         {/* min-w-0 (#277, ловушка field-sizing+grid): без него прямые grid-дети
             DialogContent получают авто-минимум = min-content Textarea, и
             длинная однострочная подпись/описание распирает окно. */}
-        <div className="flex min-w-0 flex-col gap-4">
+        <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto px-5 pb-2">
           <div className="flex items-center gap-3">
             {/* Аватарка группы/канала (#186): выбор файла сразу (превью в
                 кнопке, «×» сбрасывает), загрузка после создания беседы;
@@ -463,7 +465,7 @@ export function ChatCreateDialog({
             ))}
           </CreateSection>
         </div>
-        <DialogFooter>
+        <DialogFooter className="px-5 pb-4 pt-3">
           <Button variant="ghost" onClick={onClose}>
             {ui.common.cancel}
           </Button>
