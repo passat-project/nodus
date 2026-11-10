@@ -14,20 +14,30 @@ export function ProblemsChip({
   onProblemClick: (problem: WorkflowProblem) => void;
 }) {
   const errors = problems.filter((p) => p.severity === 'error').length;
+  const label = `${ui.automation.problemsChip} · ${problems.length}`;
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
+          aria-label={label}
+          title={label}
           className={cn(
-            'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors',
+            // Строка инструментов сужается до ~286px: подпись уходит первой,
+            // затем счётчик — приоритет у имени типа и действий бара. Чип не
+            // прячется целиком: иначе заблокированная «Опубликовать» остаётся
+            // без объяснения (счётчик и имя — в title/aria-label).
+            'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors @max-[560px]:px-1',
             errors > 0
               ? 'border-danger/40 bg-danger-soft/60 text-danger'
               : 'border-warning/40 bg-warning-soft/60 text-warning',
           )}
         >
           <CircleAlert className="size-3.5" strokeWidth={1.75} />
-          {ui.automation.problemsChip} · {problems.length}
+          <span className="@max-[640px]:hidden">
+            {ui.automation.problemsChip} · {problems.length}
+          </span>
+          <span className="hidden @max-[640px]:inline @max-[560px]:hidden">{problems.length}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="nokey w-80 rounded-[14px] p-1.5">

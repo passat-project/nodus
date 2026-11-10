@@ -4,9 +4,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { bindingsOf, checkWorkflowDocument } from '@nodus/contracts';
 import type { ProcessType, WorkflowDetail, WorkflowProblem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
-import { Button } from '@nodus/ui/components/button';
-import { Plus } from 'lucide-react';
-
 import { workflowKeys } from '../../../../shared/workflow/workflow-api.js';
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { useAllPositions } from '../../../../shared/api/positions.js';
@@ -230,23 +227,13 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
           problems={problems}
           publishBlocked={!dirty}
           onAddStage={addStage}
-          addTransition={
+          addTransition={(trigger) => (
             <AddTransitionPopover
               document={doc}
               onPick={(from, to) => useRouteDocStore.getState().addTransition(from, to)}
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="shrink-0"
-                  title={ui.automation.addTransitionLabel}
-                >
-                  <Plus className="size-3.5" strokeWidth={1.75} />
-                  <span className="@max-[760px]:hidden">{ui.automation.addTransitionLabel}</span>
-                </Button>
-              }
+              trigger={trigger}
             />
-          }
+          )}
           onTidy={() => {
             // «Упорядочить»: авторасстановка в общую раскладку и вписать.
             useRouteDocStore.getState().arrange();
