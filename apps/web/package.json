@@ -22,17 +22,17 @@
     "@nodus/contracts": "workspace:*",
     "@nodus/formula-engine": "workspace:*",
     "@nodus/ui": "workspace:*",
-    "@tanstack/react-query": "5.104.5",
+    "@tanstack/react-query": "5.107.1",
     "@tanstack/react-router": "^1.170.46",
-    "@xyflow/react": "12.12.0",
-    "lucide-react": "^1.66.0",
-    "pdfjs-dist": "^6.4.299",
+    "@xyflow/react": "12.12.1",
+    "lucide-react": "^1.70.0",
+    "pdfjs-dist": "^6.5.438",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "socket.io-client": "^4.8.4",
     "sonner": "^2.0.8",
     "zod": "^4.6.7",
-    "zustand": "^5.0.16"
+    "zustand": "^5.1.0"
   },
   "devDependencies": {
     "@nodus/config": "workspace:*",
