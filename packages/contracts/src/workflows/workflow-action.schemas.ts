@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { customFieldValueSchema } from '../custom-fields/custom-field-values.js';
 import { transitionFormDraftSchema, transitionFormSchema } from './transition-form.schemas.js';
 import { workflowPostFunctionSchema, workflowTransitionRulesSchema } from './workflow.schemas.js';
 import { docIdSchema } from './workflow-primitives.schemas.js';
@@ -50,5 +51,8 @@ export const workflowActionSchema = z.object({
   display: transitionDisplaySchema,
   /** Окно при нажатии: null — окно выключено (действие — просто запись). */
   form: transitionFormSchema.nullable(),
+  /** Префилл формульных слотов окна (#632, Р12): сервер посчитал значения
+   *  при открытии — тот же контракт, что у кнопки-перехода. */
+  formPrefill: z.record(z.string(), customFieldValueSchema).optional(),
 });
 export type WorkflowAction = z.infer<typeof workflowActionSchema>;

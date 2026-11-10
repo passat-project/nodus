@@ -138,6 +138,31 @@ describe('TaskTransitionsService — действия без смены стат
     expect(txRunner.run).not.toHaveBeenCalled();
   });
 
+  it('listActionsFor: формульный слот окна действия получает префилл (#632)', async () => {
+    const actions = [
+      {
+        id: 'a1',
+        name: 'Замечание',
+        display: 'button',
+        form: {
+          enabled: true,
+          sections: [
+            { kind: 'fields', fields: ['plannedMinutes'], formulas: { plannedMinutes: 'a' } },
+          ],
+        },
+      },
+    ];
+    const cells = { evaluate: vi.fn(async () => ({ value: 5000, error: null })) };
+    const service = makeService({
+      query: { visibleRow: vi.fn(async () => ({ id: 't1' })) },
+      txRunner: { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn(TX)) },
+      engine: { availableActions: vi.fn(async () => actions) },
+      cells,
+    });
+    const [only] = await service.listActionsFor(USER, 't1');
+    expect(only?.formPrefill).toEqual({ plannedMinutes: 5000 });
+  });
+
   it('pressActionFor: нажатие с окном → событие журнала, новые кнопки и карточка', async () => {
     const row = { id: 't1', number: 12, creatorId: 'alice', assigneeId: 'bob', participants: [] };
     const query = { visibleRow: vi.fn(async () => row) };

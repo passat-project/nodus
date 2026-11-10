@@ -3,6 +3,7 @@ import { ErrorCode } from '@nodus/contracts';
 
 import { parseForm } from '../transition-form.js';
 import { parseRules } from '../transition-rules.js';
+import { gateFacts } from '../gate-facts.test-helper.js';
 import type { ActionDef } from '../workflow.repository.js';
 import { ACTIVE, DONE, TX, USER, facts, setup } from './workflow-engine.test-helper.js';
 
@@ -36,7 +37,7 @@ describe('WorkflowEngine — действие без смены статуса (
     expect(result.actionName).toBe('Запросить уточнение');
     expect(result.stageName).toBe('В работе');
     expect(result.recordId).toMatch(/[0-9a-f-]{36}/);
-    expect(order).toEqual(['lock', 'subject', 'applyForm', 'journal']);
+    expect(order).toEqual(['lock', 'subject', 'applyForm', 'subject', 'journal']);
     expect(adapter.applyStage).not.toHaveBeenCalled();
     expect(records.insert).toHaveBeenCalledWith(
       TX,
@@ -123,5 +124,29 @@ describe('WorkflowEngine — действие без смены статуса (
       details: { reasons: [{ kind: 'time_logged' }] },
     });
     expect(records.insert).not.toHaveBeenCalled();
+  });
+
+  it('гейт считается ПОСЛЕ окна: результат из окна закрывает result_present', async () => {
+    const { engine, records, wasApplied } = setup(
+      [],
+      () => gateFacts({ assigneeId: 'bob', hasResult: wasApplied() }),
+      [
+        action({
+          rules: parseRules({
+            conditions: [{ kind: 'role_in', roles: ['assignee'] }],
+            validators: [{ kind: 'result_present' }],
+          }),
+          form: parseForm({
+            enabled: true,
+            sections: [{ kind: 'result' }],
+          }),
+        }),
+      ],
+    );
+
+    await engine.pressAction(TX, 't1', 'task', USER, 'act', {
+      form: { result: { text: 'Готово', messageIds: [] } },
+    });
+    expect(records.insert).toHaveBeenCalled();
   });
 });

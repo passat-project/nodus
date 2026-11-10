@@ -21,6 +21,7 @@ function windowSourceOf(action: WorkflowAction): WindowSource {
     id: action.id,
     name: action.name,
     form: action.form,
+    ...(action.formPrefill ? { formPrefill: action.formPrefill } : {}),
     validators: [],
     blockedBy: [],
     canOverride: false,
