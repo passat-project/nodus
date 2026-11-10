@@ -157,6 +157,11 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.STORAGE_ACCESS_KEY)(
       expect(content.status).toBe(200);
       expect(Number(content.headers.get('content-length'))).toBe(size);
       expect((await content.arrayBuffer()).byteLength).toBe(size);
+
+      // 64 МиБ в тест-бакете не оставляем: отмена неотправленного вложения
+      // удаляет и строку, и объект хранилища (файл после проверки не нужен).
+      const cancelled = await fx.api(alice, 'DELETE', `/chat/attachments/${attachment.id}`);
+      expect(cancelled.status).toBe(204);
     });
 
     it('подпись: чужая/битая/просроченная — 401 единым конвертом', async () => {
