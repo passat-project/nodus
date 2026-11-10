@@ -99,7 +99,7 @@ beforeEach(() => {
 
 describe('useEditMessage — оптимистичность (A4)', () => {
   it('текст/editedAt/readAt=null в кэше ДО ответа сервера, onSuccess — серверная версия', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seed(client, message());
     const gate = deferred<Response>();
     stubFetch(gate.promise);
@@ -131,7 +131,7 @@ describe('useEditMessage — оптимистичность (A4)', () => {
   });
 
   it('ошибка сервера — откат по снапшоту', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seed(client, message());
     const gate = deferred<Response>();
     stubFetch(gate.promise);
@@ -153,7 +153,7 @@ describe('useEditMessage — оптимистичность (A4)', () => {
   });
 
   it('состав вложений (#188): оптимистичный список ДО ответа, PATCH несёт attachmentIds/renames', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seed(
       client,
       message({
@@ -254,7 +254,7 @@ describe('useDeleteMessage — прогноз правила следа «по �
   }
 
   it('есть живой ответ — оптимистичное надгробие ДО ответа; сервер подтверждает', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedAll(client, [message({ readAt: null }), replyOn(REPLY_ID, M1)]);
     const gate = deferred<Response>();
     stubFetch(gate.promise);
@@ -282,7 +282,7 @@ describe('useDeleteMessage — прогноз правила следа «по �
   });
 
   it('ответов нет — исчезает бесследно (204), даже если прочитано', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedAll(client, [message({ readAt: '2026-09-24T10:00:00Z' })]);
     const gate = deferred<Response>();
     stubFetch(gate.promise);
@@ -301,7 +301,7 @@ describe('useDeleteMessage — прогноз правила следа «по �
   });
 
   it('прогноз разошёлся (ответ вне окна кэша) — серверная истина: надгробие появляется', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedAll(client, [message({ readAt: null })]);
     const gate = deferred<Response>();
     stubFetch(gate.promise);
@@ -377,7 +377,7 @@ describe('useReactionToggle — оптимистичность (#124)', () => {
   }
 
   it('add: чип mine:true ДО ответа; ошибка — откат по снапшоту', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seed(client, message());
     const gate = deferred<Response>();
     stubPost(gate.promise);
@@ -400,7 +400,7 @@ describe('useReactionToggle — оптимистичность (#124)', () => {
   });
 
   it('remove своей: декремент до ответа; onSuccess — серверная версия', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seed(
       client,
       message({ reactions: [{ emoji: '👍', count: 2, mine: true, users: [ME_REF, U2_REF] }] }),

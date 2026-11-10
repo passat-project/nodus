@@ -56,7 +56,7 @@ describe('useUpdateTaskCustomField: оптимистичная правка по
   });
 
   it('значение и ссылка в кэше до ответа; null удаляет ключ; ошибка — откат', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const mineKey = tasksKeys.listPages();
     const allKey = tasksKeys.listPages({ scope: 'all' });
     client.setQueryData<TaskDetail>(tasksKeys.detail(TASK_ID), {
@@ -109,7 +109,7 @@ describe('useUpdateTaskCustomField: оптимистичная правка по
   });
 
   it('null очищает значение в детали и журналах', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const mineKey = tasksKeys.listPages();
     const filled = { ...row, customFields: { [FIELD_ID]: '№ 12' } } as TaskListItem;
     client.setQueryData<TaskDetail>(tasksKeys.detail(TASK_ID), {

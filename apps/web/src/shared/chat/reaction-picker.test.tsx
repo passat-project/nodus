@@ -55,7 +55,7 @@ function emojiButton(label: string): Element | null {
 }
 
 function setup() {
-  const client = new QueryClient();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData<Paginated<ChatMessage>>(chatKeys.messages(CONV), {
     items: [message()],
     nextCursor: null,

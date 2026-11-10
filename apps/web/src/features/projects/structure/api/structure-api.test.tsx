@@ -81,7 +81,7 @@ afterEach(() => {
 
 describe('useUpdateNode: значения и ссылки оптимистично (Р17)', () => {
   it('патч значений и ссылка выбора ложатся в кэш структуры ДО ответа', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(projectsKeys.structure('p1'), structure);
     const gate = deferred<Response>();
     vi.stubGlobal(
@@ -112,7 +112,7 @@ describe('useUpdateNode: значения и ссылки оптимистичн
   });
 
   it('null очищает значение; отказ сервера — откат снапшотом', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(projectsKeys.structure('p1'), {
       ...structure,
       nodes: [{ ...node, customFields: { [MARKA]: ITEM } }],

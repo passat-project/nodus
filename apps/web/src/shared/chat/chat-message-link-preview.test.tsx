@@ -9,7 +9,7 @@ import { ChatMessageItem } from './chat-message.js';
 
 // Вынесено из chat-message.test.tsx (I5: >500 строк недопустимо).
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const renderMessage = (node: React.ReactElement) =>
   render(
     <QueryClientProvider client={queryClient}>

@@ -118,7 +118,7 @@ describe('useSendChatMessage — шквальная отправка (#243)', ()
   it('каждое сообщение видно сразу; POST-ы сериализованы; порядок неподвижен', async () => {
     const captured: Captured[] = [];
     stubDeferredPost(captured);
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedFeed(client);
     const { result } = renderHook(() => useSendChatMessage(CONV), {
       wrapper: makeWrapper(client),
@@ -168,7 +168,7 @@ describe('useSendChatMessage — шквальная отправка (#243)', ()
   it('WS-эхо обгоняет REST: темп заменён на месте, REST не дублирует', async () => {
     const captured: Captured[] = [];
     stubDeferredPost(captured);
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedFeed(client);
     const { result } = renderHook(() => useSendChatMessage(CONV), {
       wrapper: makeWrapper(client),
@@ -209,7 +209,7 @@ describe('useSendChatMessage — шквальная отправка (#243)', ()
   it('ошибка откатывает ТОЛЬКО свой темп; хвост очереди доезжает', async () => {
     const captured: Captured[] = [];
     stubDeferredPost(captured);
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedFeed(client);
     const { result } = renderHook(() => useSendChatMessage(CONV), {
       wrapper: makeWrapper(client),
@@ -238,7 +238,7 @@ describe('useSendChatMessage — шквальная отправка (#243)', ()
   it('рефетч ленты между отправками не съедает летящие темпы (мердж страницы)', async () => {
     const captured: Captured[] = [];
     stubDeferredPost(captured);
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedFeed(client);
     const { result } = renderHook(() => useSendChatMessage(CONV), {
       wrapper: makeWrapper(client),

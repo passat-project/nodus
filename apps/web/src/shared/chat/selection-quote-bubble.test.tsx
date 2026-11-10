@@ -61,7 +61,7 @@ describe('applyFavoriteCardQuote — цитата с карточки избра
   beforeEach(resetStores);
 
   it('ставит ответ в scope беседы, прыгает и открывает исходный чат', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedFavorites(client, [card()]);
 
     applyFavoriteCardQuote(client, MSG, 'выделенный кусок');
@@ -81,7 +81,7 @@ describe('applyFavoriteCardQuote — цитата с карточки избра
   });
 
   it('ответ трэда кладётся в scope окна трэда', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedFavorites(client, [card({ threadRootId: ROOT })]);
 
     applyFavoriteCardQuote(client, MSG, 'фрагмент');
@@ -96,7 +96,7 @@ describe('applyFavoriteCardQuote — цитата с карточки избра
   });
 
   it('карточки нет в кэше — тихий no-op', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedFavorites(client, []);
 
     applyFavoriteCardQuote(client, MSG, 'фрагмент');
@@ -107,7 +107,7 @@ describe('applyFavoriteCardQuote — цитата с карточки избра
   });
 
   it('удалённая карточка — no-op (цитировать нечего)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seedFavorites(client, [card({ deletedAt: '2026-10-05T10:00:00Z' })]);
 
     applyFavoriteCardQuote(client, MSG, 'фрагмент');
@@ -117,7 +117,7 @@ describe('applyFavoriteCardQuote — цитата с карточки избра
   });
 
   it('не-страничный кэш labels не роняет поиск карточки', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(favoriteKeys.labels(), { items: [] });
     seedFavorites(client, [card()]);
 

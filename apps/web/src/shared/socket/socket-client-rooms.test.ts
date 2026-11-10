@@ -29,7 +29,7 @@ const emitted = (event: string) => fakeSocket.emit.mock.calls.filter(([e]) => e 
 describe('socket-client: комната беседы со счётчиком хостов (#351)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    connectChatSocket(new QueryClient());
+    connectChatSocket(new QueryClient({ defaultOptions: { queries: { retry: false } } }));
   });
 
   afterEach(() => {

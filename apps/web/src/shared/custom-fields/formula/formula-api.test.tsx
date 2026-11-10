@@ -27,7 +27,7 @@ const FIELD_ID = '53000000-0000-4000-8000-000000000001';
 const AST: FormulaNode = { kind: 'literal', value: 1 };
 
 function setup(host: FormulaHost) {
-  const client = new QueryClient();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const spy = vi.spyOn(client, 'invalidateQueries');
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>

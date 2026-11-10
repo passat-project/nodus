@@ -7,7 +7,7 @@ import type { ChatMessage } from '@nodus/contracts';
 
 import { PostCard } from './post-card.js';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const renderCard = (node: React.ReactElement) =>
   render(
     <QueryClientProvider client={queryClient}>

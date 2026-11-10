@@ -46,7 +46,7 @@ describe('useSendChatMessage — идемпотентность отправки
     const keys: string[] = [];
     stubPostFetch(keys);
 
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useSendChatMessage(CONV), {
       wrapper: makeWrapper(client),
     });
@@ -69,7 +69,7 @@ describe('useSendChatMessage — идемпотентность отправки
     const keys: string[] = [];
     stubPostFetch(keys);
 
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useSendChatMessage(CONV), {
       wrapper: makeWrapper(client),
     });

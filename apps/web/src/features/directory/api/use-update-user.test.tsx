@@ -88,7 +88,7 @@ afterEach(() => {
 
 describe('useUpdateUser — оптимистичность (#441)', () => {
   it('патч карточки в кэше ДО ответа сервера, onSuccess — серверная версия', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(directoryKeys.userCard(USER_ID), card());
     const gate = deferred<Response>();
     stubPatch(gate.promise);
@@ -120,7 +120,7 @@ describe('useUpdateUser — оптимистичность (#441)', () => {
   });
 
   it('ошибка сервера — откат кэша к исходной карточке', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(directoryKeys.userCard(USER_ID), card());
     const gate = deferred<Response>();
     stubPatch(gate.promise);

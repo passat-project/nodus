@@ -11,7 +11,7 @@ import { ConversationViewsLine } from './views-line.js';
 /** Строка просмотров над композером (#102 раунд 2): одна строка на беседу для
  *  СВОЕГО последнего сообщения; группы — «Имя и ещё N» с попапом, direct —
  *  «дата, время»; не просмотрено / нет своих — строки нет. */
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 const conv = (type: 'group' | 'direct'): ConversationListItem =>
   ({

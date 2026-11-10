@@ -25,9 +25,14 @@ const has = (keys: Array<[unknown[], InvalidationTier]>, key: readonly unknown[]
 describe('pushWorkflowKeys (#428, ADR-0024)', () => {
   it('каталожные события инвалидируют типы, стадии, маршруты и переходы задач', () => {
     const { batcher, keys } = recordingBatcher();
-    const handled = pushWorkflowKeys(batcher, new QueryClient(), 'workflow.published', {
-      workflowId: 'w1',
-    });
+    const handled = pushWorkflowKeys(
+      batcher,
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+      'workflow.published',
+      {
+        workflowId: 'w1',
+      },
+    );
     expect(handled).toBe(true);
     expect(has(keys, automationKeys.all)).toBe(true);
     expect(has(keys, workflowKeys.all)).toBe(true);
@@ -38,15 +43,25 @@ describe('pushWorkflowKeys (#428, ADR-0024)', () => {
 
   it('расстановка холста — только документ этого маршрута', () => {
     const { batcher, keys } = recordingBatcher();
-    pushWorkflowKeys(batcher, new QueryClient(), 'workflow.layout_changed', { workflowId: 'w1' });
+    pushWorkflowKeys(
+      batcher,
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+      'workflow.layout_changed',
+      { workflowId: 'w1' },
+    );
     expect(keys).toEqual([[workflowKeys.detail('w1'), 'list']]);
   });
 
   it('чужие события не обрабатывает (не workflow.*)', () => {
     const { batcher, keys } = recordingBatcher();
-    const handled = pushWorkflowKeys(batcher, new QueryClient(), 'task.stage_changed', {
-      taskId: 't1',
-    });
+    const handled = pushWorkflowKeys(
+      batcher,
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+      'task.stage_changed',
+      {
+        taskId: 't1',
+      },
+    );
     expect(handled).toBe(false);
     expect(keys).toEqual([]);
   });

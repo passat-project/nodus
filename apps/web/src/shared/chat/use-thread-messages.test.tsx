@@ -61,7 +61,9 @@ describe('useThreadMessages: открытие окна всегда сверяе
   });
 
   it('СВЕЖИЙ кэш окна (моложе staleTime) пересматривается при монтировании', async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: 30_000, retry: false } },
+    });
     // «Старый» снимок в кэше: только корень, без нового ответа r2; запись
     // только что — по staleTime кэш «свеж», refetchOnMount по умолчанию молчал бы.
     client.setQueryData(chatKeys.thread(CONV, ROOT), page([msg(ROOT, 1)]));
@@ -78,7 +80,9 @@ describe('useThreadMessages: открытие окна всегда сверяе
   });
 
   it('повторное открытие (размонтирование → монтаж) снова сверяется', async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: 30_000, retry: false } },
+    });
     client.setQueryData(chatKeys.thread(CONV, ROOT), page([msg(ROOT, 1)]));
     vi.mocked(api).mockResolvedValue(page([msg(ROOT, 1), msg('r2', 2)]));
 

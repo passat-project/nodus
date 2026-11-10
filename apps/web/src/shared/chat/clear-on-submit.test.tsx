@@ -168,7 +168,7 @@ describe('useSendChatMessage — чистка черновика на сабми
     const captured: Captured[] = [];
     stubFetch(captured);
     useChatDrafts.setState({ drafts: { [SCOPE]: draft({ text: 'привет' }) } });
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useSendChatMessage(CONV, SCOPE), {
       wrapper: makeWrapper(client),
     });
@@ -190,7 +190,7 @@ describe('useSendChatMessage — чистка черновика на сабми
     const captured: Captured[] = [];
     stubFetch(captured);
     useChatDrafts.setState({ drafts: { [SCOPE]: draft({ text: 'привет Анна пока' }) } });
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useSendChatMessage(CONV, SCOPE), {
       wrapper: makeWrapper(client),
     });
@@ -225,7 +225,7 @@ describe('useSendChatMessage — чистка черновика на сабми
     const captured: Captured[] = [];
     stubFetch(captured);
     useChatDrafts.setState({ drafts: { [SCOPE]: draft({ text: 'упавшее' }) } });
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useSendChatMessage(CONV, SCOPE), {
       wrapper: makeWrapper(client),
     });
@@ -256,7 +256,7 @@ describe('useSendChatMessage — чистка черновика на сабми
     const captured: Captured[] = [];
     stubFetch(captured);
     useChatDrafts.setState({ drafts: { [SCOPE]: draft({ text: 'первое' }) } });
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useSendChatMessage(CONV, SCOPE), {
       wrapper: makeWrapper(client),
     });
@@ -277,7 +277,7 @@ describe('useSendChatMessage — чистка черновика на сабми
     const captured: Captured[] = [];
     stubFetch(captured);
     useChatDrafts.setState({ drafts: { [SCOPE]: draft({ text: 'набираю' }) } });
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useSendChatMessage(CONV, SCOPE), {
       wrapper: makeWrapper(client),
     });
@@ -318,7 +318,7 @@ describe('useSendChatMessage — чистка черновика на сабми
       obliterated: false,
     };
     useChatDrafts.setState({ drafts: { [SCOPE]: draft({ text: 'набираю', reply }) } });
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useSendChatMessage(CONV, SCOPE), {
       wrapper: makeWrapper(client),
     });
@@ -362,7 +362,7 @@ describe('пересылка с комментарием — чистка на �
         },
       },
     });
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const view = render(
       createElement(
         QueryClientProvider,

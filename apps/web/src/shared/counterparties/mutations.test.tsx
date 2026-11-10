@@ -100,7 +100,7 @@ afterEach(() => {
 
 describe('useCreateCounterparty: оптимистичное создание (I4)', () => {
   it('временная запись — в первой странице ДО ответа, затем заменяется серверной', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seed(client);
     const gate = deferred<Response>();
     vi.stubGlobal(
@@ -135,7 +135,7 @@ describe('useCreateCounterparty: оптимистичное создание (I4
   });
 
   it('ошибка сервера — откат по снапшоту (временная запись исчезает)', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     seed(client);
     const gate = deferred<Response>();
     vi.stubGlobal(

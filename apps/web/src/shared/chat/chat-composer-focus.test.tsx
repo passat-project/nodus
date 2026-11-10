@@ -62,13 +62,20 @@ describe('ChatComposer — «вечный курсор» переживает с
 
   beforeEach(() => {
     apiMock.mockReset();
-    // Политика важных (#177) на монтировании композера — валидный ответ.
-    apiMock.mockImplementation((path: string) =>
-      path === '/chat/urgent/policy'
-        ? Promise.resolve({ remaining: 3, limit: 3, resetAt: null, groupMax: 20 })
-        : Promise.resolve(undefined),
-    );
-    client = new QueryClient();
+    // Политика важных (#177) на монтировании композера — валидный ответ;
+    // список бесед читает useCanModerateMessages (модераторское «Удалить»,
+    // #245) — пустая страница, а не undefined: иначе queryFn уходит в
+    // «Query data cannot be undefined» (#629).
+    apiMock.mockImplementation((path: string) => {
+      if (path === '/chat/urgent/policy') {
+        return Promise.resolve({ remaining: 3, limit: 3, resetAt: null, groupMax: 20 });
+      }
+      if (path === '/chat/conversations') {
+        return Promise.resolve({ items: [], nextCursor: null });
+      }
+      return Promise.resolve(undefined);
+    });
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   });
   afterEach(() => {
     cleanup();

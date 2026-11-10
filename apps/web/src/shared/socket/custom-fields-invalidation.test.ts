@@ -33,7 +33,7 @@ describe('pushCustomFieldKeys (#431, ADR-0029)', () => {
     const { batcher, keys } = recordingBatcher();
     const handled = pushCustomFieldKeys(
       batcher,
-      new QueryClient(),
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
       'custom_field.definition_changed',
     );
     expect(handled).toBe(true);
@@ -47,14 +47,22 @@ describe('pushCustomFieldKeys (#431, ADR-0029)', () => {
 
   it('события справочников — тоже каталожные', () => {
     const { batcher, keys } = recordingBatcher();
-    const handled = pushCustomFieldKeys(batcher, new QueryClient(), 'dictionary.item_updated');
+    const handled = pushCustomFieldKeys(
+      batcher,
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+      'dictionary.item_updated',
+    );
     expect(handled).toBe(true);
     expect(has(keys, dictionariesKeys.all)).toBe(true);
   });
 
   it('чужие события не обрабатывает', () => {
     const { batcher, keys } = recordingBatcher();
-    const handled = pushCustomFieldKeys(batcher, new QueryClient(), 'task.updated');
+    const handled = pushCustomFieldKeys(
+      batcher,
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+      'task.updated',
+    );
     expect(handled).toBe(false);
     expect(keys).toEqual([]);
   });
@@ -70,7 +78,7 @@ describe('pushCustomFieldKeys: формула ячейки (#632, O4)', () => {
     const { batcher, keys } = recordingBatcher();
     const handled = pushCustomFieldKeys(
       batcher,
-      new QueryClient(),
+      new QueryClient({ defaultOptions: { queries: { retry: false } } }),
       'custom_field.formula_changed',
       payload,
     );
@@ -130,7 +138,7 @@ describe('pushCustomFieldKeys: эхо своей мутации и доски (A
     holding: unknown[];
     other: unknown[];
   } {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const board = tasksKeys.kanban('personal');
     const holding = kanbanColumnKey(board, STAGE_ID);
     const other = kanbanColumnKey(board, OTHER_STAGE_ID);
@@ -171,7 +179,7 @@ describe('pushCustomFieldKeys: эхо своей мутации и доски (A
   });
 
   it('письмо: свежесть мутации деталь не отменяет (эхо — единственный канал)', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     markFreshFromMutation(LETTER_ID);
     const keys = push(client, { hostKind: 'letter', hostId: LETTER_ID, hasError: true });
     expect(has(keys, lettersKeys.detail(LETTER_ID))).toBe(true);

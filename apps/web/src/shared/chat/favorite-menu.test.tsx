@@ -36,7 +36,7 @@ const card = (overrides: Partial<FavoriteCard> = {}): FavoriteCard => ({
   ...overrides,
 });
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 function renderMenu(props: { scope?: string; selectionActive?: boolean }) {
   return render(

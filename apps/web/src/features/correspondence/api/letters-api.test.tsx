@@ -133,7 +133,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('useUpdateLetter — правка оптимистична (#55, I4)', () => {
   it('значение в карточке и журнале «Входящие» ДО ответа; один fetch; ответ заменяет', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(lettersKeys.detail(ID), detail());
     client.setQueryData(lettersKeys.list('incoming'), pages([listItemOf(detail())]));
     const gate = deferred<Response>();
@@ -162,7 +162,7 @@ describe('useUpdateLetter — правка оптимистична (#55, I4)', 
   });
 
   it('ошибка сервера — откат карточки и списка', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(lettersKeys.detail(ID), detail());
     client.setQueryData(lettersKeys.list('incoming'), pages([listItemOf(detail())]));
     vi.stubGlobal(
@@ -186,7 +186,7 @@ describe('useDeleteSpamLetter — удаление спама оптимисти
   const fresh = listItemOf(unregistered(SPAM_ID, 'Спам'));
 
   it('строка уходит из «Новых» ДО ответа; один fetch', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(lettersKeys.list('new'), pages([fresh]));
     const gate = deferred<Response>();
     const fetchMock = vi.fn(() => gate.promise);
@@ -203,7 +203,7 @@ describe('useDeleteSpamLetter — удаление спама оптимисти
   });
 
   it('ошибка (уже зарегистрировано) — строка возвращается', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(lettersKeys.list('new'), pages([fresh]));
     vi.stubGlobal(
       'fetch',
@@ -223,7 +223,7 @@ describe('useDeleteSpamLetter — удаление спама оптимисти
 
 describe('useUpdateLetter — параллельные мутации (patterns.md:108)', () => {
   it('откат одной правки не затирает подтверждённый патч другого письма', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const letterX = detail({ id: '80000000-0000-4000-8000-000000000101', subject: 'X original' });
     const letterY = detail({ id: '80000000-0000-4000-8000-000000000102', subject: 'Y original' });
     client.setQueryData(lettersKeys.detail(letterX.id), letterX);
@@ -270,7 +270,7 @@ describe('useUpdateLetter — параллельные мутации (patterns.
 
 describe('useDeleteSpamLetter — параллельные мутации (patterns.md:108)', () => {
   it('откат удаления одного письма не затимает удаление другого', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const itemX = listItemOf(unregistered('80000000-0000-4000-8000-000000000103', 'X spam'));
     const itemY = listItemOf(unregistered('80000000-0000-4000-8000-000000000104', 'Y spam'));
     client.setQueryData(lettersKeys.list('new'), pages([itemX, itemY]));
