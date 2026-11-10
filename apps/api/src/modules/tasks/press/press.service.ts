@@ -5,7 +5,6 @@ import {
   pressEntryResultOf,
   transitionFormSchema,
   type AuthUser,
-  type PressReturnBody,
   type PressRoundView,
   type TransitionFormInput,
 } from '@nodus/contracts';
@@ -63,16 +62,6 @@ export class PressService {
 
   withdraw(user: AuthUser, taskId: string): Promise<PressRoundView | null> {
     return this.txRunner.run(async (tx) => this.withdrawInTx(tx, user, taskId));
-  }
-
-  /** Выборочный возврат (#434): ответственный возвращает результаты тех, кому
-   *  нужно доработать; остальные остаются сданными, раунд не закрывается. */
-  returnEntries(
-    user: AuthUser,
-    taskId: string,
-    body: PressReturnBody,
-  ): Promise<PressRoundView | null> {
-    return this.txRunner.run(async (tx) => this.returnInTx(tx, user, taskId, body));
   }
 
   private canManage(task: PressTask, user: AuthUser): boolean {
@@ -244,60 +233,5 @@ export class PressService {
     const config = pressConfigSchema.parse(round.config);
     await this.pressEvents.updated(tx, task, user.id, round, config);
     return this.rounds.viewForTask(taskId, round.stageId, user.id, canManage, tx);
-  }
-
-  private async returnInTx(
-    tx: TransactionClient,
-    user: AuthUser,
-    taskId: string,
-    body: PressReturnBody,
-  ): Promise<PressRoundView | null> {
-    await this.tasks.lock(tx, taskId);
-    const task = await this.tasks.findWithParticipants(taskId, tx);
-    if (!this.canManage(task, user)) throw DomainException.forbidden('Press return is not allowed');
-    const round = await this.repo.findOpenRound(tx, 'task', taskId);
-    if (!round || round.stageId !== task.stageId) {
-      throw DomainException.notFound('Press round not found');
-    }
-    const requested = new Set(body.userIds);
-    const targets = round.entries.filter(
-      (item) => requested.has(item.userId) && item.state === 'pressed',
-    );
-    if (targets.length === 0) {
-      throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
-        'No pressed entries to return',
-        { userIds: body.userIds },
-      );
-    }
-    for (const target of targets) {
-      await this.repo.updateEntry(tx, target.id, {
-        state: 'returned',
-        returnReason: body.reason,
-      });
-      await this.records.write(tx, {
-        entityKind: 'task',
-        entityId: taskId,
-        transitionId: round.transitionId,
-        stageId: round.stageId,
-        actorId: user.id,
-        recordKind: 'return',
-        participantId: target.userId,
-        comment: body.reason,
-        fields: { reason: body.reason },
-      });
-    }
-    const config = pressConfigSchema.parse(round.config);
-    await this.pressEvents.updated(tx, task, user.id, round, config);
-    await this.pressEvents.returned(
-      tx,
-      task,
-      user.id,
-      round,
-      targets.map((target) => target.userId),
-      body.reason,
-      this.pressEvents.isBroadcast(config),
-    );
-    return this.rounds.viewForTask(taskId, round.stageId, user.id, true, tx);
   }
 }

@@ -55,11 +55,7 @@ function setup(state = 'waiting', config = { quorum: { kind: 'all' }, order: 'pa
   };
   const repo = {
     findOpenRound: vi.fn(async () => round),
-    updateEntry: vi.fn(async (_tx, id, data) => {
-      const target = round.entries.find((item) => item.id === id)!;
-      Object.assign(target, data);
-      return target;
-    }),
+    updateEntry: vi.fn(async (_tx, id, data) => ({ id, ...data })),
     completeRound: vi.fn(async () => ({ ...round, completedAt: new Date() })),
   };
   const view = { id: 'r1', pressed: 1, total: 1 } as never;
@@ -223,70 +219,5 @@ describe('PressService (#434)', () => {
     });
     await service.submit({ id: 'u1', permissions: [] } as never, 't1', {});
     expect(pressEvents.submitted).not.toHaveBeenCalled();
-  });
-
-  it('ответственный возвращает выбранную отметку на доработку', async () => {
-    const { service, repo, pressEvents, records, round } = setup('pressed');
-    repo.findOpenRound.mockResolvedValue({
-      ...round,
-      entries: [{ ...entry('pressed'), userId: 'assignee' }],
-    });
-    await service.returnEntries(
-      { id: 'assignee', permissions: [] } as never,
-      't1',
-      { userIds: ['assignee'], reason: 'Доработать раздел' },
-    );
-    expect(repo.updateEntry).toHaveBeenCalledWith(
-      expect.anything(),
-      'e1',
-      expect.objectContaining({ state: 'returned', returnReason: 'Доработать раздел' }),
-    );
-    expect(records.write).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        recordKind: 'return',
-        participantId: 'assignee',
-        comment: 'Доработать раздел',
-      }),
-    );
-    expect(pressEvents.returned).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      'assignee',
-      expect.anything(),
-      ['assignee'],
-      'Доработать раздел',
-      false,
-    );
-  });
-
-  it('возврат чужих отметок доступен только ответственному/праву правки', async () => {
-    const { service, repo, round } = setup('pressed');
-    repo.findOpenRound.mockResolvedValue({
-      ...round,
-      entries: [{ ...entry('pressed'), userId: 'assignee' }],
-    });
-    await expect(
-      service.returnEntries(
-        { id: 'u1', permissions: [] } as never,
-        't1',
-        { userIds: ['assignee'], reason: 'Причина' },
-      ),
-    ).rejects.toThrow();
-  });
-
-  it('возврат без нажатых отметок — ошибка валидации', async () => {
-    const { service, repo, round } = setup('waiting');
-    repo.findOpenRound.mockResolvedValue({
-      ...round,
-      entries: [{ ...entry('waiting'), userId: 'assignee' }],
-    });
-    await expect(
-      service.returnEntries(
-        { id: 'assignee', permissions: [] } as never,
-        't1',
-        { userIds: ['assignee'], reason: 'Причина' },
-      ),
-    ).rejects.toThrow();
   });
 });

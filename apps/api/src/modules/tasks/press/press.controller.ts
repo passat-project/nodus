@@ -3,9 +3,11 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swa
 import { z } from 'zod';
 import {
   pressExecuteResultSchema,
+  pressExcludeBodySchema,
   pressReturnBodySchema,
   pressSubmitBodySchema,
   type AuthUser,
+  type PressExcludeBody,
   type PressExecuteResult,
   type PressReturnBody,
   type PressSubmitBody,
@@ -19,6 +21,7 @@ import { ApiIdempotencyKey } from '../../../core/openapi/api-idempotency.decorat
 import { ZodValidationPipe } from '../../../core/pipes/zod-validation.pipe.js';
 import { TasksQueryService } from '../tasks/tasks-query.service.js';
 import { TaskTransitionsService } from '../workflow/task-transitions.service.js';
+import { PressAdminService } from './press-admin.service.js';
 import { PressService } from './press.service.js';
 
 const uuid = new ZodValidationPipe(z.uuid());
@@ -36,6 +39,7 @@ const uuid = new ZodValidationPipe(z.uuid());
 export class TaskPressController {
   constructor(
     private readonly press: PressService,
+    private readonly admin: PressAdminService,
     private readonly query: TasksQueryService,
     private readonly transitions: TaskTransitionsService,
   ) {}
@@ -94,7 +98,28 @@ export class TaskPressController {
     body: PressReturnBody,
   ): Promise<PressExecuteResult> {
     await this.query.visibleRow(user, id);
-    await this.press.returnEntries(user, id, body);
+    await this.admin.returnEntries(user, id, body);
+    return this.result(user, id);
+  }
+
+  @Post(':id/press/exclude')
+  @HttpCode(200)
+  @Audit({ action: 'task.press_exclude', entity: 'task' })
+  @ApiOperation({ summary: 'Снять участников с открытого сбора (ответственный)' })
+  @ApiOkResponse({ standardSchema: pressExecuteResultSchema })
+  @ApiErrors(400, 401, 403, 404, 409)
+  @ApiIdempotencyKey()
+  async excludeSelected(
+    @GetUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Body({
+      schema: pressExcludeBodySchema,
+      pipes: [new ZodValidationPipe(pressExcludeBodySchema)],
+    })
+    body: PressExcludeBody,
+  ): Promise<PressExecuteResult> {
+    await this.query.visibleRow(user, id);
+    await this.admin.excludeEntries(user, id, body);
     return this.result(user, id);
   }
 

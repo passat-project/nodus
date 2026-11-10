@@ -26,6 +26,11 @@ export const pressStrings = {
     returnConfirm: 'Вернуть',
     returnCancel: 'Отмена',
     returnedToast: 'Результат возвращён на доработку',
+    excludeSelected: 'Снять с сбора',
+    excludeReasonLabel: 'Причина снятия',
+    excludeReasonPlaceholder: 'Почему участник больше не нужен',
+    excludeConfirm: 'Снять',
+    excludedToast: 'Участник снят со сбора',
     selectAllPressed: 'Выбрать всех сдавших',
   },
   automation: {

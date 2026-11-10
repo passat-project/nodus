@@ -57,6 +57,10 @@ export function pressRoundViewOf(
       canManage &&
       !completed &&
       entries.some((entry) => entry.state === 'pressed'),
+    canExclude:
+      canManage &&
+      !completed &&
+      entries.filter((entry) => entry.state !== 'excluded').length > 1,
     completed,
   };
 }

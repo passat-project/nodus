@@ -145,6 +145,9 @@ export const pressRoundViewSchema = z.object({
   /** Ответственный (или право правки задачи) может вернуть чужие отметки
    *  на доработку, пока раунд открыт: остальные остаются сданными. */
   canReturn: z.boolean(),
+  /** Тот же ответственный может снять участника с открытого сбора
+   *  (`excluded` + причина): уволенный/выбывший не держит кворум. */
+  canExclude: z.boolean(),
   completed: z.boolean(),
 });
 export type PressRoundView = z.infer<typeof pressRoundViewSchema>;
@@ -163,3 +166,7 @@ export const pressReturnBodySchema = z
   })
   .strict();
 export type PressReturnBody = z.infer<typeof pressReturnBodySchema>;
+
+/** Снятие с открытого сбора: тот же адресный список и причина. */
+export const pressExcludeBodySchema = pressReturnBodySchema;
+export type PressExcludeBody = PressReturnBody;

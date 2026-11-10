@@ -83,6 +83,21 @@ export class PressSourcesService {
   ): Promise<string[]> {
     if (ids.length === 0) return ids;
     const taskRoles = new Set(audienceIds(task));
+    if (task.projectId) {
+      if ((await this.projects.visibilityOf(task.projectId)) !== 'secret') return ids;
+      // Секретный проект: только реальные участники проекта. Роли задачи
+      // сами по себе не дают видимости после open→secret — бывшие участники
+      // не должны получить push и вечный кворум (#434, security).
+      const roster = await this.projectChat.roster(task.projectId);
+      const allowed = new Set(roster?.memberIds ?? []);
+      const filtered = ids.filter((id) => allowed.has(id));
+      if (filtered.length !== ids.length) {
+        this.logger.warn(
+          `Сбор: ${ids.length - filtered.length} участников вне секретного проекта ${task.projectId} пропущены`,
+        );
+      }
+      return filtered;
+    }
     if (task.confidential) {
       const filtered = ids.filter((id) => taskRoles.has(id));
       if (filtered.length !== ids.length) {
@@ -92,17 +107,7 @@ export class PressSourcesService {
       }
       return filtered;
     }
-    if (task.projectId === null) return ids;
-    if ((await this.projects.visibilityOf(task.projectId)) !== 'secret') return ids;
-    const roster = await this.projectChat.roster(task.projectId);
-    const allowed = new Set([...(roster?.memberIds ?? []), ...taskRoles]);
-    const filtered = ids.filter((id) => allowed.has(id));
-    if (filtered.length !== ids.length) {
-      this.logger.warn(
-        `Сбор: ${ids.length - filtered.length} участников вне секретного проекта ${task.projectId} пропущены`,
-      );
-    }
-    return filtered;
+    return ids;
   }
 
   private async sourceIds(
@@ -132,7 +137,7 @@ export class PressSourcesService {
           );
           return [];
         }
-        if (task.projectId !== null) {
+        if (task.projectId) {
           // Секретный проект не раскрываем всему штату: для проектных задач
           // используются явные источники (сотрудники/роль/должность).
           this.logger.warn(`Сбор «Все сотрудники» пропущен для задачи проекта ${task.id}`);

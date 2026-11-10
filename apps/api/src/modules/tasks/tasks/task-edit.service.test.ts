@@ -59,6 +59,8 @@ function setup(opts: { placementStage?: string } = {}) {
     { emit: vi.fn() } as never,
     {
       stageIdOf: vi.fn(async () => 's1'),
+      lock: vi.fn(async () => void 0),
+      findWithParticipants: vi.fn(async () => ROW),
     } as never,
     {
       visibleRow: vi.fn(async () => ROW),

@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
+  PressExcludeBody,
   PressExecuteResult,
   PressReturnBody,
   PressSubmitBody,
@@ -97,6 +98,20 @@ export function useReturnPress(taskId: string) {
     onSuccess: (result) => {
       patchPress(queryClient, taskId, result);
       toast.success(ui.tasks.press.returnedToast);
+    },
+    onError: (error) => toast.error(transitionErrorText(error)),
+  });
+}
+
+/** Снятие с открытого сбора (#434): уволенный/выбывший не держит кворум. */
+export function useExcludePress(taskId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PressExcludeBody) =>
+      api<PressExecuteResult>(`/tasks/${taskId}/press/exclude`, { method: 'POST', body }),
+    onSuccess: (result) => {
+      patchPress(queryClient, taskId, result);
+      toast.success(ui.tasks.press.excludedToast);
     },
     onError: (error) => toast.error(transitionErrorText(error)),
   });

@@ -86,6 +86,7 @@ describe('PressRoundView (#434)', () => {
 
   it('возврат: только ответственный/право правки и пока раунд открыт', () => {
     expect(pressRoundViewOf(round(), 'owner', names, true).canReturn).toBe(true);
+    expect(pressRoundViewOf(round(), 'owner', names, true).canExclude).toBe(true);
     expect(pressRoundViewOf(round(), 'u1', names, false).canReturn).toBe(false);
     expect(
       pressRoundViewOf(round({ completedAt: new Date() }), 'owner', names, true).canReturn,

@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from '@nodus/ui/components/dialog';
 import { Textarea } from '@nodus/ui/components/textarea';
-import { Download, Undo2 } from 'lucide-react';
+import { Download, Undo2, UserMinus } from 'lucide-react';
 
 import { useTaskConversation } from '../../../shared/chat/chat-queries.js';
 import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries.js';
@@ -19,7 +19,7 @@ import { formatDateTimeShort } from '../../../shared/lib/format.js';
 import { TransitionWindow } from '../../../shared/workflow/transition-window/transition-window.js';
 import { windowContextOf } from './task-transition-dialog.js';
 import { transitionWindowError } from '../api/transitions-api.js';
-import { useReturnPress, useSubmitPress, useWithdrawPress } from '../api/press-api.js';
+import { useExcludePress, useReturnPress, useSubmitPress, useWithdrawPress } from '../api/press-api.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { downloadPressCsv, pressStateClass, pressStateLabel } from './task-press-format.js';
 
@@ -79,18 +79,27 @@ export function PressAnalyticsDialog({
 }) {
   const withdraw = useWithdrawPress(taskId);
   const returnEntries = useReturnPress(taskId);
-  const [selecting, setSelecting] = useState(false);
+  const excludeEntries = useExcludePress(taskId);
+  const [mode, setMode] = useState<'return' | 'exclude' | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [reason, setReason] = useState('');
-  const pressedIds = press.entries
-    .filter((entry) => entry.state === 'pressed')
+  const selecting = mode !== null;
+  const eligibleIds = press.entries
+    .filter((entry) =>
+      mode === 'exclude' ? entry.state !== 'excluded' : entry.state === 'pressed',
+    )
     .map((entry) => entry.userId);
   const toggle = (userId: string) =>
     setSelected((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
     );
   const closeSelecting = () => {
-    setSelecting(false);
+    setMode(null);
+    setSelected([]);
+    setReason('');
+  };
+  const startSelecting = (next: 'return' | 'exclude') => {
+    setMode(next);
     setSelected([]);
     setReason('');
   };
@@ -98,7 +107,8 @@ export function PressAnalyticsDialog({
     closeSelecting();
     onClose();
   };
-  const allSelected = pressedIds.length > 0 && selected.length === pressedIds.length;
+  const allSelected = eligibleIds.length > 0 && selected.length === eligibleIds.length;
+  const pending = mode === 'exclude' ? excludeEntries.isPending : returnEntries.isPending;
   const gridCols = selecting
     ? 'grid-cols-[24px_minmax(0,1.4fr)_100px_120px_minmax(0,1.2fr)]'
     : 'grid-cols-[minmax(0,1.4fr)_100px_120px_minmax(0,1.2fr)]';
@@ -120,7 +130,7 @@ export function PressAnalyticsDialog({
                 <Checkbox
                   checked={allSelected}
                   aria-label={ui.tasks.press.selectAllPressed}
-                  onCheckedChange={(value) => setSelected(value === true ? pressedIds : [])}
+                  onCheckedChange={(value) => setSelected(value === true ? eligibleIds : [])}
                 />
               ) : null}
               <span>{ui.tasks.press.employee}</span>
@@ -135,7 +145,7 @@ export function PressAnalyticsDialog({
                   className={`grid ${gridCols} items-center gap-3 border-b border-border/60 px-3 py-2 last:border-b-0`}
                 >
                   {selecting ? (
-                    entry.state === 'pressed' ? (
+                    eligibleIds.includes(entry.userId) ? (
                       <Checkbox
                         checked={selected.includes(entry.userId)}
                         aria-label={entry.displayName}
@@ -170,12 +180,18 @@ export function PressAnalyticsDialog({
         {selecting ? (
           <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3">
             <span className="text-[12px] text-muted-foreground">
-              {ui.tasks.press.returnReasonLabel}
+              {mode === 'exclude'
+                ? ui.tasks.press.excludeReasonLabel
+                : ui.tasks.press.returnReasonLabel}
             </span>
             <Textarea
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              placeholder={ui.tasks.press.returnReasonPlaceholder}
+              placeholder={
+                mode === 'exclude'
+                  ? ui.tasks.press.excludeReasonPlaceholder
+                  : ui.tasks.press.returnReasonPlaceholder
+              }
               maxLength={500}
               className="min-h-16 text-sm"
             />
@@ -188,18 +204,22 @@ export function PressAnalyticsDialog({
                 {ui.tasks.press.returnCancel}
               </Button>
               <Button
-                disabled={
-                  selected.length === 0 || reason.trim().length === 0 || returnEntries.isPending
-                }
+                disabled={selected.length === 0 || reason.trim().length === 0 || pending}
                 onClick={() =>
-                  returnEntries.mutate(
+                  (mode === 'exclude' ? excludeEntries : returnEntries).mutate(
                     { userIds: selected, reason: reason.trim() },
                     { onSuccess: closeSelecting },
                   )
                 }
               >
-                <Undo2 className="size-4" />
-                {ui.tasks.press.returnConfirm}
+                {mode === 'exclude' ? (
+                  <UserMinus className="size-4" />
+                ) : (
+                  <Undo2 className="size-4" />
+                )}
+                {mode === 'exclude'
+                  ? ui.tasks.press.excludeConfirm
+                  : ui.tasks.press.returnConfirm}
                 {selected.length > 0 ? ` · ${selected.length}` : ''}
               </Button>
             </>
@@ -215,9 +235,15 @@ export function PressAnalyticsDialog({
                 </Button>
               ) : null}
               {press.canReturn ? (
-                <Button variant="ghost" onClick={() => setSelecting(true)}>
+                <Button variant="ghost" onClick={() => startSelecting('return')}>
                   <Undo2 className="size-4" />
                   {ui.tasks.press.returnSelected}
+                </Button>
+              ) : null}
+              {press.canExclude ? (
+                <Button variant="ghost" onClick={() => startSelecting('exclude')}>
+                  <UserMinus className="size-4" />
+                  {ui.tasks.press.excludeSelected}
                 </Button>
               ) : null}
               <Button variant="outline" onClick={() => downloadPressCsv(press)}>
