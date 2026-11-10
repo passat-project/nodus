@@ -110,6 +110,7 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.PROJECT_NODE_KIND_ARCHIVED]: 'Этот вид папки в архиве — выберите другой',
   [ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN]: 'Вид папки с таким названием уже есть',
   [ErrorCode.PROJECT_NODE_FIELDS_REQUIRED]: 'Заполните обязательные поля папки',
+  [ErrorCode.PROJECT_TASK_MEMBERS_INVALID]: 'У сотрудников нет доступа к секретному проекту',
   [ErrorCode.PROJECT_FIELDS_REQUIRED]: 'Заполните обязательные атрибуты проекта',
   [ErrorCode.PROJECT_NODE_KIND_FORM_INVALID]: 'Форма вида ссылается на негодные атрибуты',
   [ErrorCode.PROJECT_TYPE_FORM_INVALID]: 'Форма типа проекта ссылается на негодные атрибуты',

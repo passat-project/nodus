@@ -216,7 +216,7 @@ export class ProjectReaderProvider implements ProjectReader, ProjectChatReader {
     const outsiders = unique.filter((id) => !members.has(id));
     if (outsiders.length > 0) {
       throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
+        ErrorCode.PROJECT_TASK_MEMBERS_INVALID,
         'Task members must be project participants (secret project)',
         { projectId, userIds: outsiders },
       );

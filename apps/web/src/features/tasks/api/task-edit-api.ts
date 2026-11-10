@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { api } from '../../../shared/api-client.js';
 import { mapTaskInPages, taskDependentKeys, tasksKeys } from '../../../shared/api/tasks-keys.js';
 import { fieldLockedText } from '../../../shared/forms/field-lock-ui.js';
+import { secretProjectMembersText } from '../../../shared/tasks/secret-project-members.js';
 
 /** Правка полей карточки — подмножество PATCH без переноса по осям. */
 export type TaskFieldsPatch = Partial<
@@ -59,7 +60,7 @@ export function useUpdateTask(taskId: string) {
       for (const [key, data] of context?.previousPages ?? []) {
         queryClient.setQueryData(key, data);
       }
-      toast.error(fieldLockedText(error) ?? ui.common.saveError);
+      toast.error(secretProjectMembersText(error) ?? fieldLockedText(error) ?? ui.common.saveError);
     },
     onSettled: () => {
       for (const key of taskDependentKeys(taskId)) {

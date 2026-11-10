@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ErrorCode, ui } from '@nodus/contracts';
 
 import { ApiError } from '../api-client.js';
-import { createFailureOf } from './task-create-errors.js';
+import { createFailureOf, secretMemberKeys } from './task-create-errors.js';
 
 /** Отказы сервера в окне создания (#432, Р9): текст, подсветка, перечитка типов. */
 
@@ -53,5 +53,30 @@ describe('createFailureOf', () => {
       ui.taskCreate.presetInvalid,
     );
     expect(createFailureOf(new Error('network')).message).toBe(ui.taskCreate.submitFailed);
+  });
+
+  it('секретный проект: причина и список людей для баннера (#674)', () => {
+    const failure = createFailureOf(
+      apiError(ErrorCode.PROJECT_TASK_MEMBERS_INVALID, {
+        projectId: 'p-1',
+        userIds: ['u-1', 'u-2'],
+      }),
+    );
+    expect(failure.message).toBe(ui.projects.secretMembersNoAccess);
+    expect(failure.secretMembers).toEqual({ projectId: 'p-1', userIds: ['u-1', 'u-2'] });
+  });
+
+  it('secretMemberKeys подсвечивает поля с этими людьми (#674)', () => {
+    expect(
+      secretMemberKeys(
+        {
+          title: 'Задача',
+          assigneeId: 'u-1',
+          coexecutorIds: ['u-2'],
+          observerIds: ['u-3'],
+        },
+        ['u-1', 'u-3'],
+      ),
+    ).toEqual(['assignee', 'observers']);
   });
 });

@@ -149,7 +149,7 @@ export class TasksController {
   @Audit({ action: 'task.create', entity: 'task' })
   @ApiOperation({ summary: 'Создание задачи (проект и колонка необязательны)' })
   @ApiCreatedResponse({ standardSchema: taskListItemSchema })
-  @ApiErrors(400, 401, 403, 404)
+  @ApiErrors(400, 401, 403, 404, 422)
   @ApiIdempotencyKey()
   create(
     @GetUser() user: AuthUser,
@@ -187,7 +187,7 @@ export class TasksController {
   @Audit({ action: 'task.update', entity: 'task' })
   @ApiOperation({ summary: 'Правка полей и перенос по осям (перенос = переход маршрута)' })
   @ApiOkResponse({ standardSchema: taskListItemSchema })
-  @ApiErrors(400, 401, 403, 404, 409)
+  @ApiErrors(400, 401, 403, 404, 409, 422)
   @ApiIdempotencyKey()
   update(
     @GetUser() user: AuthUser,
@@ -293,7 +293,7 @@ export class TasksController {
   @Audit({ action: 'task.create', entity: 'task' })
   @ApiOperation({ summary: 'Подзадача (ответственный по умолчанию — постановщик)' })
   @ApiCreatedResponse({ standardSchema: taskListItemSchema })
-  @ApiErrors(400, 401, 403, 404)
+  @ApiErrors(400, 401, 403, 404, 422)
   @ApiIdempotencyKey()
   subtask(
     @GetUser() user: AuthUser,

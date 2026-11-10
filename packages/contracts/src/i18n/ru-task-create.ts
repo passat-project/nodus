@@ -33,6 +33,9 @@ export const taskCreateStrings = {
     checklist: 'Чек-лист',
     planned: 'Планируемое время',
   },
+  /** Секретный проект: выбранные люди не могут получать задачи (#674). */
+  secretMembersAdd: 'Добавить в участники и создать',
+  secretMembersAdding: 'Добавляем…',
   /** Ошибки окна. */
   submitFailed: 'Не удалось создать задачу — проверьте поля и повторите',
   columnWindowRequired:

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ErrorCode } from '@nodus/contracts';
 
 import { ProjectReaderProvider } from './project-reader.provider.js';
 
@@ -60,5 +61,70 @@ describe('ProjectReaderProvider — роли решающих (#433)', () => {
     await expect(provider.usersWithRoles('p-1', [])).resolves.toEqual([]);
     const disabled = make(false);
     await expect(disabled.provider.usersWithRoles('p-1', ['manager'])).resolves.toEqual([]);
+  });
+});
+
+describe('ProjectReaderProvider — состав задачи секретного проекта (#674)', () => {
+  function makeMembers(visibility: 'open' | 'secret', status: 'active' | 'archived' = 'active') {
+    const projects = {
+      findById: vi.fn(async () => ({ id: 'p-1', visibility, status })),
+    };
+    const participants = {
+      rowsOfProject: vi.fn(async () => [
+        {
+          projectId: 'p-1',
+          userId: 'manager-1',
+          source: 'manager',
+          observerKind: null,
+          createdAt: new Date(),
+        },
+        {
+          projectId: 'p-1',
+          userId: 'member-1',
+          source: 'member',
+          observerKind: null,
+          createdAt: new Date(),
+        },
+        {
+          projectId: 'p-1',
+          userId: 'observer-1',
+          source: 'observer',
+          observerKind: 'invited',
+          createdAt: new Date(),
+        },
+      ]),
+    };
+    const featureFlags = { isEnabled: vi.fn(async () => true) };
+    return new ProjectReaderProvider(
+      projects as never,
+      participants as never,
+      {} as never,
+      featureFlags as never,
+    );
+  }
+
+  it('открытый проект — любые сотрудники', async () => {
+    await expect(
+      makeMembers('open').assertMembersAllowed('p-1', ['outsider']),
+    ).resolves.toBeUndefined();
+  });
+
+  it('секретный — руководство и участники проходят, наблюдатель и посторонний — нет', async () => {
+    const provider = makeMembers('secret');
+    await expect(
+      provider.assertMembersAllowed('p-1', ['manager-1', 'member-1']),
+    ).resolves.toBeUndefined();
+    await expect(
+      provider.assertMembersAllowed('p-1', ['observer-1', 'outsider']),
+    ).rejects.toMatchObject({
+      code: ErrorCode.PROJECT_TASK_MEMBERS_INVALID,
+      details: { projectId: 'p-1', userIds: ['observer-1', 'outsider'] },
+    });
+  });
+
+  it('архивный проект — отказ как раньше', async () => {
+    await expect(
+      makeMembers('secret', 'archived').assertMembersAllowed('p-1', ['manager-1']),
+    ).rejects.toMatchObject({ code: ErrorCode.VALIDATION_FAILED });
   });
 });

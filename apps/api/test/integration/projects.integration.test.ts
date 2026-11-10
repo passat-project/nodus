@@ -333,10 +333,10 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: трассы Т1/Т2/Т2b 
           body: { title: `Поручение ${fx.runId}`, projectId: secret.id, ...body },
           key: `t2b-${fx.runId}-${Math.random().toString(36).slice(2, 8)}`,
         });
-        expect(res.status).toBe(400);
-        expect(apiErrorResponseSchema.parse(await res.json()).code).toBe(
-          ErrorCode.VALIDATION_FAILED,
-        );
+        expect(res.status).toBe(422);
+        const error = apiErrorResponseSchema.parse(await res.json());
+        expect(error.code).toBe(ErrorCode.PROJECT_TASK_MEMBERS_INVALID);
+        expect(error.details?.userIds).toContain(carol.id);
       }
 
       // carol в составе (member) — назначение проходит
