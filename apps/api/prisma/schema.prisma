@@ -1299,7 +1299,8 @@ model TaskParticipant {
   @@map("task_participants")
 }
 
-/// Общий журнал переходов «Процессов» (ADR-0024 п.4): пишет движок (#380)./// Сущность — (entity_kind, entity_id) plain UUID: задачи и письма живут в
+/// Общий журнал переходов «Процессов» (ADR-0024 п.4): пишет движок (#380).
+/// Сущность — (entity_kind, entity_id) plain UUID: задачи и письма живут в
 /// своих модулях. Переход null — запись сбора отметок. Создана пустой в #428.
 model TransitionRecord {
   id            String   @id @default(uuid()) @db.Uuid
@@ -1316,7 +1317,8 @@ model TransitionRecord {
   actorId       String?  @map("actor_id") @db.Uuid
   /// Правило, породившее запись (postFunction/validator), если актёра нет.
   rule          String?
-  /// transition | press | return | withdraw | exclude (ADR-0024/0025).
+  /// transition | action | press | return | withdraw | exclude (ADR-0024/0025;
+  /// action — нажатие кнопки без смены статуса, #633).
   recordKind    String   @map("record_kind")
   /// Участник сбора отметок (press/return/withdraw/exclude).
   participantId String?  @map("participant_id") @db.Uuid

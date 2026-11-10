@@ -290,7 +290,17 @@ export class WorkflowEngine implements WorkflowEnginePort {
     if ((action.steps as unknown[]).length > 0) {
       throw new DomainException(ErrorCode.WORKFLOW_INVALID, 'Action steps are not supported yet');
     }
+    // Окно действия — та же граница, что у перехода: состав ввода сверяется
+    // с настройкой окна (иначе обязательные разделы обходились бы пустым
+    // телом, а лишние поля писались мимо окна).
     const asTransition = action as unknown as TransitionDef;
+    this.assertFormAllowed(asTransition, opts.form);
+    const gateReasons = evaluateValidators(action.rules, subject.facts);
+    if (gateReasons.length > 0) {
+      throw new DomainException(ErrorCode.WORKFLOW_TRANSITION_BLOCKED, 'Action gates not passed', {
+        reasons: gateReasons,
+      });
+    }
     const applied = await this.applyForm(
       adapter,
       category,

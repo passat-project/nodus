@@ -12,6 +12,7 @@ import {
 } from './workflow-primitives.schemas.js';
 import { workflowTransitionRulesSchema } from './workflow.schemas.js';
 import { workflowDocActionSchema, workflowDraftActionSchema } from './workflow-action.schemas.js';
+import { MAX_ACTIONS } from './workflow-document-actions-check.js';
 
 export { workflowDraftActionSchema } from './workflow-action.schemas.js';
 export { workflowActionSchema } from './workflow-action.schemas.js';
@@ -145,7 +146,7 @@ export const workflowDocumentSchema = z.object({
   stages: z.array(workflowDocStageSchema).min(1).max(20),
   transitions: z.array(workflowDocTransitionSchema).max(80),
   /** Действия (#633): на границе публикации имена обязательны. */
-  actions: z.array(workflowDocActionSchema).max(40).optional(),
+  actions: z.array(workflowDocActionSchema).max(MAX_ACTIONS).optional(),
   layout: workflowLayoutSchema.optional(),
   /** Форма создания типа (#432): публикуется вместе с маршрутом. */
   creation: creationFormSchema.nullable().optional(),
@@ -267,10 +268,14 @@ export const workflowProblemCodeSchema = z.enum([
   'stage_name_similar',
   /** Две кнопки из одного статуса ведут в один статус (#430) — дубль. */
   'duplicate_transition_target',
-  /** Действия (#633): пустое действие — ни окна, ни шагов; и дубль имени
-   *  действия в одном статусе (или в «любом»). */
+  /** Действия (#633): пустое действие — ни окна, ни шагов; дубль имени
+   *  действия в одном статусе (или в «любом»); действие ссылается на статус,
+   *  которого нет в документе; две «главные» кнопки-действия в одной группе;
+   *  больше 40 действий. */
   'action_without_form_and_steps',
   'action_duplicate_name',
+  'action_stage_unknown',
+  'too_many_actions',
   /** Правило `approver_is_actor` не сможет определить утверждающего:
    *  у целевого статуса нет единственной основной action-кнопки с условиями. */
   'approver_rule_unresolvable',

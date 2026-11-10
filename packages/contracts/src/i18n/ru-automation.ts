@@ -251,7 +251,6 @@ export const automationStrings = {
     actionName: 'Название действия',
     actionStage: 'Статус',
     actionAtAny: 'В любом статусе',
-    actionWhoSees: 'Кто видит',
     actionWindow: 'Окно действия',
     deleteAction: 'Удалить действие',
     actionSteps: 'Шаги действия',

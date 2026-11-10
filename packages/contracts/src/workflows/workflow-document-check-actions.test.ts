@@ -161,6 +161,33 @@ describe('действия маршрута (#633)', () => {
     expect(codes(doc)).toContain('self_loop');
   });
 
+  it('действие на статус вне документа — ошибка action_stage_unknown', () => {
+    const doc = baseDocument([mkAction('a1', 'Замечание', { stageId: 'missing' })]);
+    const problem = checkWorkflowDocument(doc).find((p) => p.code === 'action_stage_unknown');
+    expect(problem?.severity).toBe('error');
+    expect(problem?.actionId).toBe('a1');
+  });
+
+  it('две главные кнопки-действия в одной группе — multiple_primary', () => {
+    const doc = baseDocument([
+      mkAction('a1', 'Замечание', { display: 'primary' }),
+      mkAction('a2', 'Уточнение', { display: 'primary' }),
+    ]);
+    const problems = checkWorkflowDocument(doc).filter((p) => p.code === 'multiple_primary');
+    expect(problems.some((p) => p.actionId === 'a2')).toBe(true);
+  });
+
+  it('главное действие в статусе и в «любом» — не конфликт групп', () => {
+    const doc = baseDocument([
+      mkAction('a1', 'Замечание', { display: 'primary' }),
+      mkAction('a2', 'Уточнение', { display: 'primary', stageId: null }),
+    ]);
+    const problems = checkWorkflowDocument(doc).filter(
+      (p) => p.code === 'multiple_primary' && p.actionId !== undefined,
+    );
+    expect(problems).toEqual([]);
+  });
+
   it('схема черновика: действия валидны, старый документ без них тоже', () => {
     // id в схеме — uuid | new:*: для проверки схемы берём валидные uuid.
     const u = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;

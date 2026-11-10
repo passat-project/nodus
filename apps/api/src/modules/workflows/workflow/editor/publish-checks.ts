@@ -72,6 +72,22 @@ export function serverChecksOf(
       );
     }
   }
+  // Действия (#633): uuid-действия — только свои; ссылка на статус — только
+  // статус этого документа (кросс-маршрутная ссылка не должна дойти до БД).
+  const foreignActions = (document.actions ?? []).filter(
+    (a) => !a.id.startsWith('new:') && !loaded.actions.some((live) => live.id === a.id),
+  );
+  if (foreignActions.length > 0) {
+    throw new DomainException(ErrorCode.WORKFLOW_INVALID, 'Document references foreign actions');
+  }
+  for (const action of document.actions ?? []) {
+    if (action.stageId !== null && !docStageIds.has(action.stageId)) {
+      throw new DomainException(
+        ErrorCode.WORKFLOW_INVALID,
+        'Action stage is not a stage of the document',
+      );
+    }
+  }
 }
 
 /**

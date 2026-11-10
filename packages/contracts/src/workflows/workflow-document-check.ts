@@ -145,7 +145,9 @@ export function checkWorkflowDocument(
   }
 
   // --- Действия (#633): самостоятельные правила, см. actions-check ---
-  problems.push(...checkActionProblems(doc.actions ?? [], opts.category));
+  problems.push(
+    ...checkActionProblems(doc.actions ?? [], opts.category, new Set(doc.stages.map((s) => s.id))),
+  );
 
   // --- Кнопки: петли, роли, главные, route_if ------------------------------
 

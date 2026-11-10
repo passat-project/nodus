@@ -19,7 +19,11 @@ import {
   withHistory,
 } from './route-doc-helpers.js';
 import * as ops from './route-doc-ops.js';
-import { createActionOps, type RouteDocActionOps } from './route-doc-actions.js';
+import {
+  createActionOps,
+  removeAction as removeActionOp,
+  type RouteDocActionOps,
+} from './route-doc-actions.js';
 import { freezeLayout, settleLabels, settleLoops } from './route-doc-layout.js';
 import { adoptedLayoutState, loadedState } from './route-doc-load.js';
 
@@ -280,6 +284,13 @@ export function createRouteDocStore(workflowId: string) {
         commitDoc: (doc, meta, coalesce) => commit(normalize(doc), meta ?? {}, coalesce),
         newName: ui.automation.newActionName,
       }),
+
+      // Удаление действия сбрасывает выделение (как у переходов): иначе
+      // Delete/undo работали бы по несуществующему id, а панель закрыта.
+      removeAction: (id) =>
+        commit(normalize(removeActionOp(get().document, id)), {
+          selection: dropSelectionOf(new Set([id])),
+        }),
 
       removeTransition: (id) => get().removeElements([], [id]),
 

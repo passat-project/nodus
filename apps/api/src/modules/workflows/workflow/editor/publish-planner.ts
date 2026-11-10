@@ -245,8 +245,12 @@ export function planWorkflowPublish(
     if (!unchanged) actionUpdates.push(write);
   }
   const docActionIds = new Set((document.actions ?? []).map((a) => a.id));
-  for (const a of current.actions ?? []) {
-    if (!docActionIds.has(a.id)) actionArchives.push({ actionId: a.id });
+  // Секции нет — «действий не трогаем»: документ без раздела (старый кэш,
+  // скрипт по API) не должен молча сносить живые кнопки маршрута.
+  if (document.actions !== undefined) {
+    for (const a of current.actions ?? []) {
+      if (!docActionIds.has(a.id)) actionArchives.push({ actionId: a.id });
+    }
   }
 
   // Переносы: только для архивируемых стадий (лишнее игнорируем).

@@ -166,4 +166,23 @@ describe('route-doc-store: действия маршрута (#633)', () => {
     // Раздел документа, а не правка: загрузка не делает черновик грязным.
     expect(store.getState().dirty).toBe(false);
   });
+
+  it('удаление статуса сносит его действия, «в любом статусе» остаётся', () => {
+    const store = freshStore();
+    const own = store.getState().addAction(S2);
+    const any = store.getState().addAction(null);
+    store.getState().removeElements([S2], []);
+
+    const ids = (store.getState().document.actions ?? []).map((a) => a.id);
+    expect(ids).toEqual([any]);
+    expect(ids).not.toContain(own);
+  });
+
+  it('удаление действия сбрасывает выделение', () => {
+    const store = freshStore();
+    const id = store.getState().addAction(S2);
+    expect(store.getState().selection).toEqual({ kind: 'action', id });
+    store.getState().removeAction(id);
+    expect(store.getState().selection).toBeNull();
+  });
 });

@@ -7,7 +7,7 @@
 ## Что здесь живёт
 
 - `process_types` — типы процессов: категория `task | letter` (неизменяема), направление письма, значок/цвет/описание, `creatable`, системность, порядок, архивация, `customized_at` + `catalog_revision` («засев один раз»).
-- `workflows` (`kind: task | letter`), `workflow_stages`, `workflow_transitions`, `workflow_schemes`, `workflow_scheme_entries` — маршрут типа: стадии-колонки, кнопки-переходы с закрытым реестром правил (`conditions` / `validators` / `postFunctions`), версия публикации, раскладка холста.
+- `workflows` (`kind: task | letter`), `workflow_stages`, `workflow_transitions`, `workflow_actions`, `workflow_schemes`, `workflow_scheme_entries` — маршрут типа: стадии-колонки, кнопки-переходы и действия без смены статуса (#633) с закрытым реестром правил (`conditions` / `validators` / `postFunctions`), версия публикации, раскладка холста.
 - `transition_records` — общий журнал переходов (схема ADR-0024 п.4, создан пустым в #428; пишет движок в #380).
 - **Временное исключение ADR-0024:** личные маршруты «Моего плана» (`workflows.kind = personal`) и их стадии — данные модуля `tasks` до #438/#439. Здесь они не читаются и не пишутся; редактор отдаёт на них 404. Засев шаблона — `PersonalTemplateBootstrap` модуля задач.
 
@@ -74,7 +74,7 @@
 
 - Движок не пишет таблицы сущностей и не знает их прав/ролей — только через адаптер.
 - Личные маршруты «Моего плана» — не здесь (временное исключение ADR-0024).
-- Журнал `transition_records` пишет **движок** в транзакции перехода (адаптеры его не трогают): одна строка на каждый `execute` — кнопка, DnD, «Мой план». Колонки: `entity_kind/entity_id`, `transition_id`, `from_stage_id/to_stage_id` (фактическая цель после `route_if`), актор или правило, `record_kind`, `comment`, `result_id` (ревизия итога, uuid), `fields` (только изменённое окном), `time_entry_id`, `answers` (задел #381). Индекс `(entity_kind, entity_id, created_at DESC)` покрывает историю карточки и «кто сдал работу» (#430).
+- Журнал `transition_records` пишет **движок** в транзакции перехода (адаптеры его не трогают): одна строка на каждый `execute` — кнопка, DnD, «Мой план». Действие без смены статуса (#633) пишет строку `record_kind = action` с `action_id`, `from_stage_id = to_stage_id` (время в статусах не разрывается). Колонки: `entity_kind/entity_id`, `transition_id`, `action_id`, `from_stage_id/to_stage_id` (фактическая цель после `route_if`), актор или правило, `record_kind`, `comment`, `result_id` (ревизия итога, uuid), `fields` (только изменённое окном), `time_entry_id`, `answers` (задел #381). Индекс `(entity_kind, entity_id, created_at DESC)` покрывает историю карточки и «кто сдал работу» (#430).
 
 ## Окно перехода (#380)
 
