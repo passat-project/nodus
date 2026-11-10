@@ -2,6 +2,7 @@ import { customFieldIdOfKey } from '../custom-fields/custom-field-key.js';
 import type { CustomFieldDefinition } from '../custom-fields/custom-field.schemas.js';
 import { checkCreationForm } from './creation-form.js';
 import type { ProcessCategory } from './process-type.schemas.js';
+import { checkActionProblems } from './workflow-document-actions-check.js';
 import { checkCategoryDictionary } from './workflow-document-category-check.js';
 import { checkDeciderRules, type WorkflowPositionFact } from './workflow-document-deciders.js';
 import { checkExtraRules } from './workflow-document-extra-checks.js';
@@ -72,14 +73,14 @@ export interface WorkflowCheckOptions {
 
 function error(
   code: WorkflowProblem['code'],
-  refs: Pick<WorkflowProblem, 'stageId' | 'transitionId'> = {},
+  refs: Pick<WorkflowProblem, 'stageId' | 'transitionId' | 'actionId'> = {},
 ): WorkflowProblem {
   return { code, severity: 'error', ...refs };
 }
 
 function warning(
   code: WorkflowProblem['code'],
-  refs: Pick<WorkflowProblem, 'stageId' | 'transitionId'> = {},
+  refs: Pick<WorkflowProblem, 'stageId' | 'transitionId' | 'actionId'> = {},
 ): WorkflowProblem {
   return { code, severity: 'warning', ...refs };
 }
@@ -142,6 +143,9 @@ export function checkWorkflowDocument(
     }
     seenButtonKeys.add(key);
   }
+
+  // --- Действия (#633): самостоятельные правила, см. actions-check ---
+  problems.push(...checkActionProblems(doc.actions ?? [], opts.category));
 
   // --- Кнопки: петли, роли, главные, route_if ------------------------------
 

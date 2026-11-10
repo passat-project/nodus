@@ -11,6 +11,10 @@ import {
   workflowTransitionIntentSchema,
 } from './workflow-primitives.schemas.js';
 import { workflowTransitionRulesSchema } from './workflow.schemas.js';
+import { workflowDocActionSchema, workflowDraftActionSchema } from './workflow-action.schemas.js';
+
+export { workflowDraftActionSchema } from './workflow-action.schemas.js';
+export type { WorkflowDraftAction } from './workflow-action.schemas.js';
 
 /**
  * Документ маршрута — рабочая копия редактора (#378, ADR-0021): стадии и
@@ -113,6 +117,9 @@ export type WorkflowLayout = z.infer<typeof workflowLayoutSchema>;
 export const workflowDraftDocumentSchema = z.object({
   stages: z.array(workflowDraftStageSchema),
   transitions: z.array(workflowDraftTransitionSchema),
+  /** Действия — кнопки без смены статуса (#633). Опционально: старые
+   *  черновики без раздела валидны. */
+  actions: z.array(workflowDraftActionSchema).optional(),
   layout: workflowLayoutSchema.optional(),
   /** Окно узла «Создание» (#432, В1): форма создания типа — раздел
    *  документа, публикуется версиями вместе с маршрутом; `null` — форма по
@@ -136,6 +143,8 @@ export const workflowDocTransitionSchema = workflowDraftTransitionSchema.extend(
 export const workflowDocumentSchema = z.object({
   stages: z.array(workflowDocStageSchema).min(1).max(20),
   transitions: z.array(workflowDocTransitionSchema).max(80),
+  /** Действия (#633): на границе публикации имена обязательны. */
+  actions: z.array(workflowDocActionSchema).max(40).optional(),
   layout: workflowLayoutSchema.optional(),
   /** Форма создания типа (#432): публикуется вместе с маршрутом. */
   creation: creationFormSchema.nullable().optional(),
@@ -257,6 +266,10 @@ export const workflowProblemCodeSchema = z.enum([
   'stage_name_similar',
   /** Две кнопки из одного статуса ведут в один статус (#430) — дубль. */
   'duplicate_transition_target',
+  /** Действия (#633): пустое действие — ни окна, ни шагов; и дубль имени
+   *  действия в одном статусе (или в «любом»). */
+  'action_without_form_and_steps',
+  'action_duplicate_name',
   /** Правило `approver_is_actor` не сможет определить утверждающего:
    *  у целевого статуса нет единственной основной action-кнопки с условиями. */
   'approver_rule_unresolvable',
@@ -286,6 +299,8 @@ export const workflowProblemSchema = z.object({
   severity: z.enum(['error', 'warning']),
   stageId: docIdSchema.optional(),
   transitionId: docIdSchema.optional(),
+  /** Действие-кнопка без смены статуса (#633): подсветка в редакторе. */
+  actionId: docIdSchema.optional(),
   /** Ключ слота формы создания (#432); `'*'` — форма целиком. */
   creationField: z.string().min(1).optional(),
   /** Человекочитаемая деталь проблемы (какой именно слот/узел формулы):
