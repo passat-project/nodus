@@ -348,22 +348,31 @@ fn is_window(hwnd: isize) -> bool {
 /// Проверка ниже — страховка от регрессии tao: без бита `ShowWindow(SW_SHOW)`
 /// (`window_state.rs:459-466`) снова активирует topmost-окно поверх чужой
 /// программы и «убивает» каретку пользователя (#709).
+///
+/// Показ и проверка — ТОЛЬКО на главном потоке (`run_on_main_thread`): с
+/// фонового потока `win.show()` лишь постит сообщение в event loop и
+/// возвращается — `apply_diff` ещё не применён, и проверка ex-style читала бы
+/// старый стиль (валидация #709).
 pub(crate) fn show_without_activation(win: &WebviewWindow) {
-    let Ok(hwnd) = win.hwnd() else { return };
-    let popup = HWND(hwnd.0);
-    let previous = unsafe { GetForegroundWindow() };
-    let _ = win.show();
-    if has_noactivate(win) != Some(false) {
-        return;
-    }
-    log::error!("попап: WS_EX_NOACTIVATE потерян после show() — аварийный ремонт");
-    set_noactivate(win, true);
-    // Окно всё же стало foreground — вернуть фокус прежнему владельцу.
-    if unsafe { GetForegroundWindow() } == popup && !previous.0.is_null() {
-        unsafe {
-            let _ = SetForegroundWindow(previous);
+    let win = win.clone();
+    let app = win.app_handle().clone();
+    let _ = app.run_on_main_thread(move || {
+        let Ok(hwnd) = win.hwnd() else { return };
+        let popup = HWND(hwnd.0);
+        let previous = unsafe { GetForegroundWindow() };
+        let _ = win.show();
+        if has_noactivate(&win) != Some(false) {
+            return;
         }
-    }
+        log::error!("попап: WS_EX_NOACTIVATE потерян после show() — аварийный ремонт");
+        set_noactivate(&win, true);
+        // Окно всё же стало foreground — вернуть фокус прежнему владельцу.
+        if unsafe { GetForegroundWindow() } == popup && !previous.0.is_null() {
+            unsafe {
+                let _ = SetForegroundWindow(previous);
+            }
+        }
+    });
 }
 
 /// Куда вернуть фокус после сворачивания/закрытия попапа. Возврат — ТОЛЬКО
