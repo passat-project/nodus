@@ -75,8 +75,18 @@ export function structureChanged(
   baseline: WorkflowDraftDocument,
 ): boolean {
   return (
-    JSON.stringify([document.stages, document.transitions, document.creation ?? null]) !==
-    JSON.stringify([baseline.stages, baseline.transitions, baseline.creation ?? null])
+    JSON.stringify([
+      document.stages,
+      document.transitions,
+      document.actions ?? [],
+      document.creation ?? null,
+    ]) !==
+    JSON.stringify([
+      baseline.stages,
+      baseline.transitions,
+      baseline.actions ?? [],
+      baseline.creation ?? null,
+    ])
   );
 }
 
