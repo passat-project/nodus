@@ -243,6 +243,7 @@ export class ProcessTypesRepository {
 /** Минимальный маршрут «в памяти» для основы simple. */
 const SIMPLE_WORKFLOW: LoadedWorkflow = {
   id: 'simple',
+  actions: [],
   stages: [
     {
       id: 's-new',

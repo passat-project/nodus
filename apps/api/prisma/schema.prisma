@@ -984,6 +984,7 @@ model Workflow {
 
   stages        WorkflowStage[]
   transitions   WorkflowTransition[]
+  actions       WorkflowAction[]
   schemeEntries WorkflowSchemeEntry[]
 
   @@index([kind, ownerId])
@@ -1016,6 +1017,7 @@ model WorkflowStage {
   workflow        Workflow                @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   transitionsFrom WorkflowTransition[]    @relation("TransitionFrom")
   transitionsTo   WorkflowTransition[]    @relation("TransitionTo")
+  actionStages    WorkflowAction[]        @relation("ActionStage")
   placements      TaskPersonalPlacement[]
 
   @@unique([workflowId, code])
@@ -1296,8 +1298,7 @@ model TaskParticipant {
   @@map("task_participants")
 }
 
-/// Общий журнал переходов «Процессов» (ADR-0024 п.4): пишет движок (#380).
-/// Сущность — (entity_kind, entity_id) plain UUID: задачи и письма живут в
+/// Общий журнал переходов «Процессов» (ADR-0024 п.4): пишет движок (#380)./// Сущность — (entity_kind, entity_id) plain UUID: задачи и письма живут в
 /// своих модулях. Переход null — запись сбора отметок. Создана пустой в #428.
 model TransitionRecord {
   id            String   @id @default(uuid()) @db.Uuid
@@ -1306,6 +1307,8 @@ model TransitionRecord {
   entityId      String   @map("entity_id") @db.Uuid
   /// Переход маршрута; null — отметка сбора/возврат/снятие.
   transitionId  String?  @map("transition_id") @db.Uuid
+  /// Действие без смены статуса (#633); null — запись перехода/сбора.
+  actionId      String?  @map("action_id") @db.Uuid
   fromStageId   String   @map("from_stage_id") @db.Uuid
   toStageId     String   @map("to_stage_id") @db.Uuid
   /// Актёр (сотрудник) или null, когда запись породило правило/система.
@@ -1328,6 +1331,36 @@ model TransitionRecord {
 
   @@index([entityKind, entityId, createdAt(sort: Desc)])
   @@map("transition_records")
+}
+
+/// Действия маршрута (#633): кнопка без смены статуса — окно и/или шаги.
+/// Хранение построчно, как у переходов (ADR-0021); удаление = архивация.
+model WorkflowAction {
+  id         String    @id @default(uuid()) @db.Uuid
+  workflowId String    @map("workflow_id") @db.Uuid
+  code       String?
+  name       String
+  /// null — «в любом статусе».
+  stageId    String?   @map("stage_id") @db.Uuid
+  /// Показ кнопки: primary | button | menu.
+  display    String    @default("button")
+  sortOrder  Int       @default(0) @map("sort_order")
+  /// Условия «кто видит» + (позже) правила.
+  rules      Json      @default("{}")
+  /// Окно при нажатии (#496) — часть документа маршрута.
+  form       Json      @default("{}")
+  /// Шаги действия (пост-функции ядра), JSONB-массив.
+  steps      Json      @default("[]")
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz()
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  workflow Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  stage    WorkflowStage? @relation("ActionStage", fields: [stageId], references: [id], onDelete: Restrict)
+
+  @@unique([workflowId, code])
+  @@index([workflowId, stageId])
+  @@map("workflow_actions")
 }
 
 /// Размещение задачи на личной доске «Мой план» (ADR-0008).

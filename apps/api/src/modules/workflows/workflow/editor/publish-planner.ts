@@ -39,8 +39,23 @@ export interface PlannerTransition {
 export interface PlannerSnapshot {
   stages: PlannerStage[];
   transitions: PlannerTransition[];
+  /** Живые действия маршрута (#633). */
+  actions: PlannerAction[];
   /** Живые задачи по стадиям (для обязательных переносов). */
   taskCounts: Record<string, number>;
+}
+
+/** Действие маршрута (#633): кнопка без смены статуса. */
+export interface PlannerAction {
+  id: string;
+  name: string;
+  /** null — «в любом статусе». */
+  stageId: string | null;
+  display: string;
+  sortOrder: number;
+  rules?: unknown;
+  form: unknown;
+  steps: unknown;
 }
 
 export interface StageCreate {
@@ -79,6 +94,19 @@ export interface TransitionWrite {
   form: unknown;
 }
 
+export interface ActionWrite {
+  /** docId нового действия (new:*) или uuid существующего. */
+  id: string;
+  name: string;
+  /** docId стадии, null — «любой статус» (в service мапится в uuid). */
+  stageId: string | null;
+  display: string;
+  sortOrder: number;
+  rules: unknown;
+  form: unknown;
+  steps: unknown;
+}
+
 export interface WorkflowPublishPlan {
   stageCreates: StageCreate[];
   stageUpdates: StageUpdate[];
@@ -87,6 +115,10 @@ export interface WorkflowPublishPlan {
   transitionCreates: TransitionWrite[];
   transitionUpdates: TransitionWrite[];
   transitionArchives: { transitionId: string }[];
+  /** Действия (#633) — рядом с переходами. */
+  actionCreates: ActionWrite[];
+  actionUpdates: ActionWrite[];
+  actionArchives: { actionId: string }[];
   /** Переносы задач (uuid стадии → docId цели, из body публикации). */
   moves: { fromStageId: string; toDocId: string }[];
   /** Стадии со сменой этапа (событие публикации, пересчёт денормализации). */
@@ -181,6 +213,42 @@ export function planWorkflowPublish(
     if (!docTransitionIds.has(t.id)) transitionArchives.push({ transitionId: t.id });
   }
 
+  // Действия (#633): та же схема «создать / обновить / архивировать».
+  const currentActionsById = new Map((current.actions ?? []).map((a) => [a.id, a]));
+  const actionCreates: ActionWrite[] = [];
+  const actionUpdates: ActionWrite[] = [];
+  const actionArchives: WorkflowPublishPlan['actionArchives'] = [];
+  for (const a of document.actions ?? []) {
+    const write: ActionWrite = {
+      id: a.id,
+      name: a.name,
+      stageId: a.stageId,
+      display: a.display,
+      sortOrder: a.sortOrder,
+      rules: a.rules,
+      form: a.form,
+      steps: a.steps,
+    };
+    if (isNew(a.id) || !currentActionsById.has(a.id)) {
+      actionCreates.push(write);
+      continue;
+    }
+    const existing = currentActionsById.get(a.id)!;
+    const unchanged =
+      existing.name === write.name &&
+      existing.stageId === write.stageId &&
+      existing.display === write.display &&
+      existing.sortOrder === write.sortOrder &&
+      sameRules(existing.rules, a.rules) &&
+      sameForm(existing.form, write.form) &&
+      JSON.stringify(existing.steps) === JSON.stringify(write.steps);
+    if (!unchanged) actionUpdates.push(write);
+  }
+  const docActionIds = new Set((document.actions ?? []).map((a) => a.id));
+  for (const a of current.actions ?? []) {
+    if (!docActionIds.has(a.id)) actionArchives.push({ actionId: a.id });
+  }
+
   // Переносы: только для архивируемых стадий (лишнее игнорируем).
   const archivedIds = new Set(stageArchives.map((a) => a.stageId));
   const moves = migrations
@@ -194,6 +262,9 @@ export function planWorkflowPublish(
     transitionCreates,
     transitionUpdates,
     transitionArchives,
+    actionCreates,
+    actionUpdates,
+    actionArchives,
     moves,
     restates,
   };

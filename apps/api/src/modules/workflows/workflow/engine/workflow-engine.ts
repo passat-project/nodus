@@ -239,6 +239,69 @@ export class WorkflowEngine implements WorkflowEnginePort {
     };
   }
 
+  /**
+   * Нажатие действия (#633): окно и запись в журнал, статус НЕ меняется.
+   * Шаги (каталог ядра) в этой версии ещё не исполняются — действие с шагами
+   * отклоняется явно, чтобы не было «нажал — и ничего» (STOP-условие плана).
+   */
+  async pressAction(
+    tx: TransactionClient,
+    entityId: string,
+    category: ProcessCategory,
+    actor: WorkflowActor,
+    actionId: string,
+    opts: { form?: TransitionFormInput } = {},
+  ): Promise<{ actionName: string; fields: Record<string, unknown> }> {
+    const adapter = this.adapters.get(category);
+    await adapter.lock(tx, entityId);
+    const subject = await this.subjectWithPermissions(tx, entityId, category, actor);
+    const workflow = await this.workflows.load(subject.workflowId, tx);
+    const action = workflow.actions.find(
+      (a) => a.id === actionId && (a.stageId === null || a.stageId === subject.stageId),
+    );
+    if (!action || !canShow(action, subject)) {
+      throw new DomainException(ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED, 'Action not allowed');
+    }
+    if ((action.steps as unknown[]).length > 0) {
+      throw new DomainException(ErrorCode.WORKFLOW_INVALID, 'Action steps are not supported yet');
+    }
+    const asTransition = action as unknown as TransitionDef;
+    const applied = await this.applyForm(
+      adapter,
+      category,
+      tx,
+      entityId,
+      actor,
+      asTransition,
+      opts.form,
+      subject.facts,
+    );
+    if (action.form.enabled && action.form.locks?.length) {
+      await adapter.applyLocks?.(tx, entityId, actor.id, action.form.locks, {
+        transitionId: action.id,
+        transitionName: action.name,
+      });
+    }
+    await this.records.insert(tx, {
+      id: randomUUID(),
+      entityKind: category,
+      entityId,
+      transitionId: null,
+      actionId: action.id,
+      fromStageId: subject.stageId,
+      toStageId: subject.stageId,
+      actorId: actor.id,
+      rule: null,
+      recordKind: 'action',
+      participantId: null,
+      comment: opts.form?.comment ?? null,
+      resultId: applied.result?.resultId ?? null,
+      fields: applied.fields,
+      timeEntryId: applied.timeEntryId,
+    });
+    return { actionName: action.name, fields: applied.fields };
+  }
+
   /** План номеров кнопки: только `assign_number {fieldId}`, только поля без
    *  номера (кто первым заполнил — тот выдал). Письмо-серия — отдельный путь
    *  `exec.assignNumber` (без fieldId). */

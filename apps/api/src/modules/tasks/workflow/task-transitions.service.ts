@@ -158,4 +158,25 @@ export class TaskTransitionsService {
       ...(assignedNumbers ? { assignedNumbers } : {}),
     };
   }
+
+  /** POST /tasks/:id/actions/:actionId/press — нажать «Действие» (#633):
+   *  данные окна пишутся, запись уходит в журнал, статус не меняется. */
+  async pressActionFor(
+    user: AuthUser,
+    taskId: string,
+    actionId: string,
+    body: ExecuteTransitionBody,
+  ): Promise<ExecuteTransitionResult> {
+    await this.query.visibleRow(user, taskId);
+    const transitions = await this.txRunner.run(async (tx) => {
+      await this.engine.pressAction(tx, taskId, 'task', user, actionId, { form: body.form });
+      return this.withPrefill(
+        await this.engine.available(tx, taskId, 'task', user),
+        taskId,
+        user,
+        tx,
+      );
+    });
+    return { task: await this.taskService.listItem(user, taskId), transitions };
+  }
 }
