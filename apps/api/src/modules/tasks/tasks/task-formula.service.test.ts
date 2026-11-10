@@ -62,6 +62,7 @@ function setup(options: { nodeProjectId?: string | null; locks?: FieldLocks } = 
     read: vi.fn(async () => ({ ast: null, origin: null })),
     save: vi.fn(async () => ({ value: 10, error: null })),
     remove: vi.fn(async () => void 0),
+    depthOf: vi.fn(async () => 0 as number | null),
     preview: vi.fn<(...args: unknown[]) => Promise<unknown[]>>(async () => []),
     dependentCellsByValues: vi.fn(async () => []),
     cellsForHost: vi.fn(
@@ -236,6 +237,15 @@ describe('TaskFormulaService: замок ячейки (#496)', () => {
       code: ErrorCode.FIELD_LOCKED,
     });
     expect(cells.remove).not.toHaveBeenCalled();
+  });
+
+  it('снятие формулы без ячейки — no-op: значение и события не трогаются (#658)', async () => {
+    const { service, cells, writer, recalcWriter } = setup();
+    cells.depthOf.mockResolvedValueOnce(null);
+    await service.remove(creator, TASK, FIELD);
+    expect(cells.remove).not.toHaveBeenCalled();
+    expect(writer.apply).not.toHaveBeenCalled();
+    expect(recalcWriter.emitChanged).not.toHaveBeenCalled();
   });
 
   it('без замка формула ставится как раньше', async () => {

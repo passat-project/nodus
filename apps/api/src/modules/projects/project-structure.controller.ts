@@ -207,7 +207,9 @@ export class ProjectStructureController {
     description: 'UUID узла',
     schema: { type: 'string', format: 'uuid' },
   })
-  @ApiOperation({ summary: 'Снять формулу папки (значение-снимок остаётся)' })
+  @ApiOperation({
+    summary: 'Снять формулу папки (значение очищается; ячейка пуста или под формулой вида)',
+  })
   @ApiErrors(400, 401, 403, 404, 422)
   @ApiIdempotencyKey()
   removeNodeFormula(

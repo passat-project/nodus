@@ -71,7 +71,9 @@ export class LetterFormulaController {
   @Delete(':id/custom-fields/:fieldId/formula')
   @HttpCode(204)
   @Audit({ action: 'custom_field.formula_remove', entity: 'letter' })
-  @ApiOperation({ summary: 'Снять формулу ячейки письма (значение-снимок остаётся)' })
+  @ApiOperation({
+    summary: 'Снять формулу ячейки письма (значение очищается; ячейка пуста или под формулой типа)',
+  })
   @ApiNoContentResponse()
   @ApiErrors(400, 401, 403, 404)
   @ApiIdempotencyKey()

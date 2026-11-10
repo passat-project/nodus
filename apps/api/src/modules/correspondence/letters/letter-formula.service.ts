@@ -91,6 +91,9 @@ export class LetterFormulaService {
     await this.requireEdit(user, letterId);
     await this.txRunner.run(async (tx) => {
       await this.repo.lock(tx, letterId);
+      // #658: снятие идемпотентно — нет ячейки, нет ни очистки значения,
+      // ни второго события (адресное formula_changed шлём только по факту).
+      if ((await this.cells.depthOf('letter', letterId, fieldId, tx)) === null) return;
       await this.cells.remove(tx, { hostKind: 'letter', hostId: letterId, fieldId });
       await this.fields.applyFormulaValues(tx, {
         letterId,
