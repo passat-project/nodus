@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CustomFieldType } from '@nodus/contracts';
-import { ErrorCode, isCompatibleTypeChange } from '@nodus/contracts';
+import { ErrorCode, Permission, isCompatibleTypeChange } from '@nodus/contracts';
 
 import type { FieldDefinitionRow } from './definition.mapper.js';
 import { makeService, ROW, row } from './definitions-service.test-kit.js';
@@ -112,6 +112,57 @@ describe('DefinitionsService.update (#631, Р3)', () => {
     await expect(
       service.update(ROW.id, { bindings: { processTypeIds: ['t-1'] } } as never, 'actor-1'),
     ).rejects.toMatchObject({ code: ErrorCode.CUSTOM_FIELD_BINDING_INVALID });
+  });
+});
+
+describe('DefinitionsService.update: dictionary.manage (#604)', () => {
+  const LIST = [{ id: 'dict-a', code: 'list-1', name: 'Список', isSystem: false }];
+
+  it('правка имени существующего списка без dictionary.manage — разрешена (#491)', async () => {
+    const { service, definitions, dictionaries } = makeService();
+    definitions.findById.mockResolvedValue(
+      row({ type: 'enum', settings: { dictionaryId: 'dict-a' } }),
+    );
+    dictionaries.dictionaryRefs.mockResolvedValue(LIST);
+    await service.update(ROW.id, { name: 'Новое имя' } as never, 'actor-1');
+    expect(definitions.update).toHaveBeenCalled();
+  });
+
+  it('смена dictionaryId без dictionary.manage — 403', async () => {
+    const { service, definitions } = makeService();
+    definitions.findById.mockResolvedValue(
+      row({ type: 'enum', settings: { dictionaryId: 'dict-a' } }),
+    );
+    await expect(
+      service.update(ROW.id, { settings: { dictionaryId: 'dict-b' } } as never, 'actor-1'),
+    ).rejects.toMatchObject({
+      code: ErrorCode.FORBIDDEN,
+      details: { permission: Permission.DICTIONARY_MANAGE },
+    });
+    expect(definitions.update).not.toHaveBeenCalled();
+  });
+
+  it('перевод text→enum без dictionary.manage — 403', async () => {
+    const { service } = makeService();
+    await expect(
+      service.update(
+        ROW.id,
+        { type: 'enum', settings: { dictionaryId: 'dict-a' } } as never,
+        'actor-1',
+      ),
+    ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN });
+  });
+
+  it('с dictionary.manage смена dictionaryId проходит', async () => {
+    const { service, definitions, dictionaries } = makeService();
+    definitions.findById.mockResolvedValue(
+      row({ type: 'enum', settings: { dictionaryId: 'dict-a' } }),
+    );
+    dictionaries.dictionaryRefs.mockResolvedValue(LIST);
+    await service.update(ROW.id, { settings: { dictionaryId: 'dict-b' } } as never, 'actor-1', [
+      Permission.DICTIONARY_MANAGE,
+    ]);
+    expect(definitions.update).toHaveBeenCalled();
   });
 });
 

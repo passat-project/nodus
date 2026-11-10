@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CUSTOM_FIELD_LIMITS, ErrorCode } from '@nodus/contracts';
+import { CUSTOM_FIELD_LIMITS, ErrorCode, Permission } from '@nodus/contracts';
 
 import { makeService, ROW } from './definitions-service.test-kit.js';
 
@@ -169,11 +169,27 @@ describe('DefinitionsService.create (#631, Р1/Р3)', () => {
       service.create(
         { type: 'enum', name: 'Список', settings: { dictionaryId: 'dict-x' } } as never,
         'actor-1',
+        [Permission.DICTIONARY_MANAGE],
       ),
     ).rejects.toMatchObject({
       code: ErrorCode.VALIDATION_FAILED,
       details: { dictionaryId: 'dict-x' },
     });
+  });
+
+  it('список на справочнике без dictionary.manage — 403 до проверки словаря (#604)', async () => {
+    const { service, dictionaries, definitions } = makeService();
+    await expect(
+      service.create(
+        { type: 'enum', name: 'Чужой список', settings: { dictionaryId: 'dict-x' } } as never,
+        'actor-1',
+      ),
+    ).rejects.toMatchObject({
+      code: ErrorCode.FORBIDDEN,
+      details: { permission: Permission.DICTIONARY_MANAGE },
+    });
+    expect(dictionaries.dictionaryRefs).not.toHaveBeenCalled();
+    expect(definitions.create).not.toHaveBeenCalled();
   });
 
   it('валюта не из системного справочника currency — 422 (Р10)', async () => {

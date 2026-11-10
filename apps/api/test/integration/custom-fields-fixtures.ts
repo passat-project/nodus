@@ -23,6 +23,9 @@ export interface CustomFieldsFixture {
   fx: ChatTestFixture<'alice' | 'bob'>;
   admin: ChatUser;
   plain: ChatUser;
+  /** `custom_field.manage` БЕЗ `dictionary.manage` (#604): сервер обязан
+   *  отказать в словарных операциях, даже если UI их блокирует (I8). */
+  fieldAdmin: ChatUser;
   dispatcher: EventDispatcher;
   /** id определений и задач прогона — уборка и проверки. */
   definitionIds: string[];
@@ -66,6 +69,7 @@ export async function setupCustomFieldsFixture(): Promise<CustomFieldsFixture> {
     Permission.PROJECT_SETUP_MANAGE,
   ]);
   const plain = await sign(fx.users.bob, [Permission.TASK_CREATE]);
+  const fieldAdmin = await sign(fx.users.bob, [Permission.CUSTOM_FIELD_MANAGE]);
   const dispatcher = fx.app.get(EventDispatcher);
 
   // Детерминизм против прошлых прогонов — ТОЛЬКО форма окна: правила
@@ -102,6 +106,7 @@ export async function setupCustomFieldsFixture(): Promise<CustomFieldsFixture> {
     fx,
     admin,
     plain,
+    fieldAdmin,
     dispatcher,
     definitionIds: [],
     taskIds: [],
