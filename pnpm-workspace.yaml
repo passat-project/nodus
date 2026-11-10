@@ -64,6 +64,7 @@ allowBuilds:
   unrs-resolver: true
   '@scarf/scarf': false
   msgpackr-extract: true
+  lefthook: true
 
 minimumReleaseAgeExclude:
   - globals@17.12.0

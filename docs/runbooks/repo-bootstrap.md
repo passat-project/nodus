@@ -123,7 +123,7 @@ gh api -X PUT repos/Alexandrisius/nodus/branches/main/protection \
 
 - Node 24 (≥ **24.15** — требование schematics NestJS 12 для `nest generate`/`upgrade`; пин мажорки — `.node-version`), pnpm 11 (`npm i -g pnpm@11`; corepack необязателен).
 - `cp .env.example .env` и заполнить пароли — требуется для `docker compose up`.
-- Pre-commit хук ставится сам при `pnpm install` (Husky). Скрипты и хуки — всегда LF (см. Gotchas в AGENTS.md).
+- Pre-commit хук ставится сам при `pnpm install` (`prepare` → `scripts/install-hooks.mjs` → `lefthook install`); проверка секретов — gitleaks. Скрипты и хуки — всегда LF (см. Gotchas в AGENTS.md).
 - **Windows: права на каталог проекта** (#337). Каталог на диске `D:\` по умолчанию наследует `Прошедшие проверку:(M)` и `Пользователи:(RX)`: любая локальная учётка читает `.env` с прод-секретами и может подменить JS/бинарники в `node_modules` (выполнятся при следующем `pnpm`). Сразу после клонирования, в PowerShell от своей учётки:
 
   ```powershell

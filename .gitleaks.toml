@@ -1,0 +1,63 @@
+# Конфиг gitleaks (#706).
+# Секреты живут только в .env (не коммитится). Здесь — дефолтные правила,
+# правило под наш инцидент и УЗКИЕ исключения: каждое привязано к путям, где
+# значение законно. Глобальных allowlist-ов нет намеренно — иначе реальный
+# секрет на строке с тестовым литералом проходил бы молча.
+
+[extend]
+useDefault = true
+
+# Мотивировавший инцидент (#683): URL входящего вебхука Bitrix24 содержит
+# код доступа (`/rest/<user>/<token>/`) и параметр `auth[ap]=<token>`.
+# Дефолтные правила gitleaks такой формат не знают. Токен вебхука — 20+ символов,
+# чтобы не ловить безобидные REST-пути вида `/rest/1/organizations/`.
+[[rules]]
+id = 'bitrix-webhook'
+description = 'Bitrix24 incoming webhook: auth[ap]=<token> или /rest/<user>/<token>/'
+regex = '''(?i)(?:auth(?:\[|%5B)ap(?:\]|%5D)=[A-Za-z0-9]{6,}|/rest/\d+/[A-Za-z0-9]{20,}/)'''
+keywords = ['auth[ap]', 'auth%5Bap', '/rest/']
+
+# --- Исключения: только там, где значения действительно законны ---------------
+
+[[allowlists]]
+description = 'Тестовые секреты CI-контура в workflows'
+paths = ['''^\.github/workflows/''']
+regexes = [
+  '''ci-integration-test-secret-min-32-chars''',
+  '''ci-e2e-test-secret-min-32-characters''',
+  '''ci-e2e-storage-url-secret-min-32-ch''',
+  '''ci-storage-url-secret-min-32-chars''',
+  '''nodus_ci_secret_min8''',
+]
+
+[[allowlists]]
+description = 'Учётки стендов (CI и nodus_night) — публичные по замыслу'
+paths = ['''^tests/e2e/''']
+regexes = [
+  '''ci-e2e-admin-2026''',
+  '''ci-e2e-demo-2026''',
+  '''Night-Probe-100!''',
+]
+
+[[allowlists]]
+description = 'Фикстуры юнит-тестов: заведомо нетестовые значения'
+paths = ['''\.test\.ts$''']
+regexes = [
+  '''env-test-secret-key-min-32-chars-long''',
+  '''office-jwt-secret-min-32-chars-long''',
+  '''other-secret-key-min-32-chars-xx''',
+]
+
+[[allowlists]]
+description = 'Плейсхолдеры в документации и навыках'
+paths = ['''^docs/''', '''\.md$''']
+regexes = ['''<token>''', '''<webhook>''', '''auth\[ap\]=<''']
+
+[[allowlists]]
+description = 'Не секреты: ключи localStorage в UI-модуле чата'
+paths = ['''^apps/web/src/shared/chat/''']
+regexes = ['''nodus-emoji-recent-v1''', '''nodus-sticker-recent-v1''']
+
+[[allowlists]]
+description = 'Бинарные вложения PR (скриншоты)'
+paths = ['''^docs/pr-assets/''']

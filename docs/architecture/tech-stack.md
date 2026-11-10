@@ -11,7 +11,7 @@
 | Пакетный менеджер / оркестрация | pnpm 11 workspaces + Turborepo |
 | Рантайм | Node.js 24 LTS (≥ 24.15 — требование schematics NestJS 12 для `nest generate`/`upgrade`; пин мажорки: `.node-version`) |
 | Язык | TypeScript strict ~5.9 (TS 7 отложен: typescript-eslint peer `< 6.1`; пересмотр — при релизе typescript-eslint с поддержкой TS 7) |
-| Качество | ESLint (с eslint-plugin-boundaries и лимитом размера файлов), Prettier, lint-staged + Husky |
+| Качество | ESLint (с eslint-plugin-boundaries и лимитом размера файлов), Prettier, lint-staged + lefthook (хуки) + gitleaks (секреты) |
 | Scope внутренних пакетов | `@nodus/*` (приватные, `workspace:*`, не публикуются в npm) |
 
 ## Фронтенд (`apps/web`)
