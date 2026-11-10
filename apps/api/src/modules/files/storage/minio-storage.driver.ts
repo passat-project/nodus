@@ -58,6 +58,11 @@ export class MinioStorageDriver implements OnModuleInit {
       });
       return { etag: info.etag ?? null, bytes };
     } catch (error) {
+      // Файлы > 64 МиБ идут multipart-путём, а SDK инициирует такую загрузку
+      // ДО чтения тела и НЕ отменяет её при обрыве: без явного abort в
+      // хранилище навсегда остаются залитые части (ключ — UUID, «продолжение»
+      // по нему невозможно, DeleteObject их не видит; #713, security-ревью).
+      await this.abortIncomplete(key);
       // Обрыв/подмена размера часто валит сам SDK (Content-Length не сойдётся)
       // — переводим в доменную ошибку по счётчику, объект подчищаем.
       if (bytes !== size) {
@@ -69,6 +74,20 @@ export class MinioStorageDriver implements OnModuleInit {
         );
       }
       throw error;
+    }
+  }
+
+  /**
+   * Отменить незавершённую multipart-загрузку ключа (best effort). Части,
+   * брошенные при обрыве соединения/сбое, иначе не убирает никто: ключ —
+   * свежий UUID, объект ещё не создан, а DeleteObject загрузку не отменяет.
+   * Требует ListBucketMultipartUploads (искать) + AbortMultipartUpload.
+   */
+  private async abortIncomplete(key: string): Promise<void> {
+    try {
+      await this.client.removeIncompleteUpload(this.config.bucket, key);
+    } catch {
+      // Сбой уборки не должен подменять исходную ошибку загрузки.
     }
   }
 

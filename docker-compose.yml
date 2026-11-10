@@ -249,9 +249,17 @@ services:
         # Права ТОЛЬКО на бакет вложений (валидация #57: ранее arn:aws:s3:::*):
         # объекты + HeadBucket (ensureBucket при буте api) + Location; бакет
         # создаёт root здесь — CreateBucket учётке не нужен.
-        printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject","s3:AbortMultipartUpload","s3:ListBucket","s3:GetBucketLocation"],"Resource":["arn:aws:s3:::%s","arn:aws:s3:::%s/*"]}]}' "$$STORAGE_BUCKET" "$$STORAGE_BUCKET" > /tmp/nodus-storage-rw.json
+        # ListBucketMultipartUploads/ListMultipartUploadParts (#713): minio-js
+        # режет загрузку по partSize = 64 МиБ, и на всём, что больше, идёт
+        # multipart-путём — перед стартом он ищет незавершённую загрузку
+        # (ListMultipartUploads), при продолжении читает части (ListParts).
+        # Без этих двух действий файлы > 64 МиБ падали Access Denied.
+        printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject","s3:AbortMultipartUpload","s3:ListBucket","s3:ListBucketMultipartUploads","s3:ListMultipartUploadParts","s3:GetBucketLocation"],"Resource":["arn:aws:s3:::%s","arn:aws:s3:::%s/*"]}]}' "$$STORAGE_BUCKET" "$$STORAGE_BUCKET" > /tmp/nodus-storage-rw.json
         mcli admin user add local "$$STORAGE_ACCESS_KEY" "$$STORAGE_SECRET_KEY"
-        mcli admin policy create local nodus-storage-rw /tmp/nodus-storage-rw.json 2>/dev/null || mcli admin policy update local nodus-storage-rw /tmp/nodus-storage-rw.json
+        # create — апсерт в mcli SILO (проверено #713): существующая политика
+        # перезаписывается. `policy update` в этой сборке удалён (ошибка
+        # «Deprecated command») — fallback не ставим, иначе `set -e` валит init.
+        mcli admin policy create local nodus-storage-rw /tmp/nodus-storage-rw.json
         mcli admin policy attach local nodus-storage-rw --user "$$STORAGE_ACCESS_KEY" 2>/dev/null || true
         # Тест-контур разработчика (#324): свой бакет и учётка ТОЛЬКО на него
         # (+ CreateBucket не нужен — бакет создаёт root здесь). Пусто — пропуск.
@@ -263,9 +271,9 @@ services:
             exit 1
           fi
           mcli mb --ignore-existing local/nodus-test-files
-          printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject","s3:AbortMultipartUpload","s3:ListBucket","s3:GetBucketLocation"],"Resource":["arn:aws:s3:::nodus-test-files","arn:aws:s3:::nodus-test-files/*"]}]}' > /tmp/nodus-storage-test-rw.json
+          printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject","s3:AbortMultipartUpload","s3:ListBucket","s3:ListBucketMultipartUploads","s3:ListMultipartUploadParts","s3:GetBucketLocation"],"Resource":["arn:aws:s3:::nodus-test-files","arn:aws:s3:::nodus-test-files/*"]}]}' > /tmp/nodus-storage-test-rw.json
           mcli admin user add local "$$STORAGE_TEST_ACCESS_KEY" "$$STORAGE_TEST_SECRET_KEY"
-          mcli admin policy create local nodus-storage-test-rw /tmp/nodus-storage-test-rw.json 2>/dev/null || mcli admin policy update local nodus-storage-test-rw /tmp/nodus-storage-test-rw.json
+          mcli admin policy create local nodus-storage-test-rw /tmp/nodus-storage-test-rw.json
           mcli admin policy attach local nodus-storage-test-rw --user "$$STORAGE_TEST_ACCESS_KEY" 2>/dev/null || true
           echo 'minio-init: тестовый бакет и учётка тест-контура готовы'
         fi

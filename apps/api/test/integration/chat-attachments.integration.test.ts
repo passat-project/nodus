@@ -138,6 +138,32 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.STORAGE_ACCESS_KEY)(
       fileIds.push(fileIdOf(attachment));
     });
 
+    it('файл > 64 МиБ: multipart-путь хранилища — регресс политики (#713)', async () => {
+      // Порог partSize клиента хранилища (64 МиБ): выше него загрузка идёт
+      // multipart-путём, а он перед стартом вызывает ListMultipartUploads
+      // (findUploadId) и ListParts. Политика учётки без этих действий даёт
+      // Access Denied → 400 FILE_SIZE_MISMATCH, хотя лимит приложения 100 МБ:
+      // ровно так файл 86 МиБ не загружался на проде (issue #713).
+      const size = 64 * 1024 * 1024 + 1;
+      const bytes = Buffer.alloc(size, 7);
+      const res = await upload(alice, new Blob([bytes]), { size: String(size) }, 'big.bin');
+      expect(res.status).toBe(201);
+      const attachment = (await res.json()) as ChatMessage['attachments'][number];
+      expect(attachment.size).toBe(size);
+      fileIds.push(fileIdOf(attachment));
+
+      // Байт-в-байт из хранилища: обрезанный объект не должен отдаваться.
+      const content = await fetch(`${origin}${attachment.url}`);
+      expect(content.status).toBe(200);
+      expect(Number(content.headers.get('content-length'))).toBe(size);
+      expect((await content.arrayBuffer()).byteLength).toBe(size);
+
+      // 64 МиБ в тест-бакете не оставляем: отмена неотправленного вложения
+      // удаляет и строку, и объект хранилища (файл после проверки не нужен).
+      const cancelled = await fx.api(alice, 'DELETE', `/chat/attachments/${attachment.id}`);
+      expect(cancelled.status).toBe(204);
+    });
+
     it('подпись: чужая/битая/просроченная — 401 единым конвертом', async () => {
       const blob = new Blob([IMAGE_BYTES], { type: 'image/png' });
       const res = await upload(alice, blob, { size: String(IMAGE_BYTES.length) });

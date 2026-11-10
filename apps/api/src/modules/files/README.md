@@ -46,6 +46,11 @@ fileAccessContext` (`chat`, `letter`), DiscoveryService находит его с
   `size` — расхождение = `FILE_SIZE_MISMATCH`, объект удаляется. Затем
   `file_objects` + `file_versions` (v1) в БД. Потолок хранилища — 200 МБ
   (`STORAGE_MAX_FILE_BYTES` + лимит busboy в main.ts).
+  **Порог 64 МиБ** (#713): клиент хранилища до `partSize` буферизует файл и
+  делает один PUT, больше — multipart-загрузку (её список и части требуют
+  `s3:ListBucketMultipartUploads`/`s3:ListMultipartUploadParts` в политике
+  учётки). При сбое `put` отменяет незавершённую загрузку
+  (`removeIncompleteUpload`) — иначе брошенные части не убирает никто.
 - **Отдача**: `GET /api/v1/files/:id/content?exp&sig[&v=N]` — `@Public`,
   HMAC-подпись (`SignedUrlService`, `STORAGE_URL_SECRET`, TTL 24 ч,
   константное сравнение); ресурс подписи включает версию (`{id}:v{N}`) —
@@ -76,11 +81,18 @@ fileAccessContext` (`chat`, `letter`), DiscoveryService находит его с
   история с подписанными ссылками. Правка — только при `OFFICE_EDIT_ENABLED`
   И праве И редактируемом формате (таблица `contracts/files/office-formats`).
 - **Учётка**: `minio-init` (compose) создаёт бакет и сервисного пользователя
-  `nodus-api` с политикой только на объекты (клиент форка — `mcli`,
-  mc-совместимый); root-креды api не получает.
+  `nodus-api` с политикой только на свой бакет (клиент форка — `mcli`,
+  mc-совместимый): объекты + `HeadBucket`/`Location` + `ListBucket` и
+  `ListBucketMultipartUploads`/`ListMultipartUploadParts` (последние три
+  bucket-level, но узкие — ARN одного бакета; нужны клиенту для загрузок
+  > 64 МиБ, #713); root-креды api не получает. Дрейф политики ловит страж
+  > `scripts/lib/storage-policy.test.mjs` (шаг `pnpm test:scripts`).
 - **Уборка**: брошенные загрузки (неотправленные >48 ч) снимает потребитель
-  (chat — при следующей загрузке владельца); объект-сирота при сбое БД после
-  put — редок, уборка фазы 2.
+  (chat — при следующей загрузке владельца); незавершённые multipart-загрузки
+  отменяются при сбое `put` в том же процессе (обрыв стрима, отказ SDK);
+  брошенные жёстким падением процесса (kill/OOM) — периодическая уборка
+  (#715, ILM-правила на незавершённые загрузки в SILO нет); объект-сирота при
+  сбое БД после put — редок, уборка фазы 2.
 
 ## Env (`env.schema`, fail-fast)
 
@@ -123,10 +135,12 @@ derivative/pdf` по подписи (ресурс `${id}:deriv:pdf`, выдаё�
 ## Тесты
 
 - Интеграционный `chat-attachments.integration.test.ts` (upload→download на
-  живом S3 SILO) — приёмка #57; скипается без `STORAGE_ACCESS_KEY`.
-- Unit (#138): `office-session.service.test.ts` (права/форматы/лимиты/ключи),
-  `office-callback.service.test.ts` (статусы, дедуп lastsave, устаревшие
-  ключи, сверка байт), `signed-url.service.test.ts` (подпись/TTL/чужой
-  ресурс/версии).
+  живом S3 SILO) — приёмка #57; скипается без `STORAGE_ACCESS_KEY`; включает
+  файл 64 МиБ + 1 байт — multipart-путь клиента хранилища (#713).
+- Unit: `minio-storage.driver.test.ts` (сбой put → отмена незавершённой
+  загрузки и удаление объекта, #713), `office-session.service.test.ts`
+  (права/форматы/лимиты/ключи), `office-callback.service.test.ts` (статусы,
+  дедуп lastsave, устаревшие ключи, сверка байт), `signed-url.service.test.ts`
+  (подпись/TTL/чужой ресурс/версии).
 - E2E `tests/e2e/specs/viewer-live.spec.ts`: pdf.js-канвас + офисная ветка
   (редактор при включённом движке / карточка-фолбэк при выключенном).
