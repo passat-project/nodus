@@ -6,6 +6,10 @@ import type {
 } from '@nodus/contracts';
 
 import { TaskPressBlockService } from './task-press-block.service.js';
+import {
+  TaskPressReturnedBlockHandler,
+  TaskPressSubmittedBlockHandler,
+} from './task-press-block.handler.js';
 
 const TX = { tx: true };
 const TASK = '00000000-0000-4000-8000-000000000001';
@@ -169,5 +173,14 @@ describe('блок отметки сбора в чате задачи (#434)', (
     const off = setup({ enabled: false });
     await off.service.post(submitted());
     expect(off.taskChat.sync).not.toHaveBeenCalled();
+  });
+
+  it('слушатели делегируют сдачу и возврат сервису блоков', async () => {
+    const blocks = { post: vi.fn(async () => void 0) };
+    await new TaskPressSubmittedBlockHandler(blocks as never).handle(submitted());
+    await new TaskPressReturnedBlockHandler(blocks as never).handle(returned());
+    expect(blocks.post).toHaveBeenCalledTimes(2);
+    expect(TaskPressSubmittedBlockHandler.eventType).toBe('task.press_submitted');
+    expect(TaskPressReturnedBlockHandler.eventType).toBe('task.press_returned');
   });
 });

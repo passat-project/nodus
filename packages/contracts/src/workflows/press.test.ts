@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { pressConfigDraftSchema, pressConfigSchema } from './press.js';
+import { pressConfigDraftSchema, pressConfigSchema, pressEntryResultOf } from './press.js';
 import { workflowDraftTransitionSchema } from './workflow-document.schemas.js';
 
 const source = { kind: 'coexecutors' as const };
@@ -37,5 +37,25 @@ describe('сбор отметок (#434)', () => {
       press: { sources: [source], quorum: { kind: 'all' } },
     });
     expect(transition.press?.sources).toEqual([source]);
+  });
+
+  it('проекция отметки: дубли сообщений, текст или комментарий, время', () => {
+    expect(
+      pressEntryResultOf({
+        result: { text: ' Итог ', messageIds: ['m1', 'm1', 'm2'] },
+        time: { minutes: 30, date: '2026-11-10' },
+      }),
+    ).toEqual({
+      text: 'Итог',
+      messageIds: ['m1', 'm2'],
+      fileCount: 2,
+      minutes: 30,
+      date: '2026-11-10',
+    });
+    expect(pressEntryResultOf({ comment: 'Комментарий' })).toMatchObject({
+      text: 'Комментарий',
+      fileCount: 0,
+      minutes: null,
+    });
   });
 });

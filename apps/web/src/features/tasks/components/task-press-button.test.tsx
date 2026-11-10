@@ -55,4 +55,37 @@ describe('кнопка коллективного действия (#434)', () =
     fireEvent.click(await screen.findByRole('button', { name: 'Статусы участников' }));
     expect(onOpenStatuses).toHaveBeenCalledTimes(1);
   });
+
+  it('кольцо закрывает поповер после ухода мыши', async () => {
+    setup();
+    const ring = screen.getByRole('button', { name: 'Статусы участников: 5 / 9' });
+    fireEvent.mouseEnter(ring);
+    expect(await screen.findByText('Прогресс')).toBeTruthy();
+    fireEvent.mouseLeave(ring);
+    await waitFor(() => expect(screen.queryByText('Прогресс')).toBeNull(), { timeout: 1000 });
+  });
+
+  it('клик по кольцу и чипу открывает статусы без нажатия кнопки', async () => {
+    const onOpenStatuses = vi.fn();
+    render(<TaskPressStatus pressed={2} total={4} onOpenStatuses={onOpenStatuses} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Статусы участников: 2 / 4' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Статусы участников' }));
+    expect(onOpenStatuses).toHaveBeenCalledTimes(1);
+  });
+
+  it('немаркерная кнопка тоже нажимается', () => {
+    const onPress = vi.fn();
+    render(
+      <TaskPressButton
+        name="Согласовать"
+        pressed={0}
+        total={2}
+        main={false}
+        onPress={onPress}
+        onOpenStatuses={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Согласовать' }));
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
 });
