@@ -89,6 +89,12 @@ export class PressSourcesService {
           );
           return [];
         }
+        if (task.projectId !== null) {
+          // Секретный проект не раскрываем всему штату: для проектных задач
+          // используются явные источники (сотрудники/роль/должность).
+          this.logger.warn(`Сбор «Все сотрудники» пропущен для задачи проекта ${task.id}`);
+          return [];
+        }
         return this.users.listActiveIds(tx);
       case 'letter_recipients':
         // Источник писем (#463/#464) на задаче не разворачивается: категория

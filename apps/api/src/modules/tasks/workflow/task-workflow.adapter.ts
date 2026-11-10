@@ -118,6 +118,7 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
       actor.id,
     );
     const pressTransitionIds = await this.press.submittableTransitionIds(tx, taskId, actor.id);
+    const pressRoundExists = await this.press.hasOpenRound(tx, taskId);
     return {
       workflowId: task.workflowId,
       typeId: task.typeId,
@@ -133,6 +134,7 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
           }
         : {}),
       ...(pressTransitionIds.size > 0 ? { pressTransitionIds } : {}),
+      pressRoundExists,
       facts: {
         ...gateFacts,
         activeCustomFieldIds: new Set(definitions.map((definition) => definition.id)),

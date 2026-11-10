@@ -129,9 +129,11 @@ export class WorkflowEngine implements WorkflowEnginePort {
     }
 
     const picked = this.pick(candidates, choice, opts.form);
-    // Коллективную кнопку нельзя выполнить обычным нажатием: она собирает
-    // отметки, а переход выполняет движок при кворуме (pressCompletion).
-    if (picked.press && opts.pressCompletion !== true) {
+    // Коллективную кнопку нельзя выполнить обычным нажатием, пока открыт
+    // раунд сбора: она собирает отметки, а переход выполняет движок при
+    // кворуме (pressCompletion). Нет раунда (источники пусты/старая задача) —
+    // кнопка работает как обычная.
+    if (picked.press && opts.pressCompletion !== true && subject0.pressRoundExists !== false) {
       throw new DomainException(
         ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED,
         'Collective transition requires press quorum',

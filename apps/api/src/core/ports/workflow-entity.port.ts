@@ -82,6 +82,9 @@ export interface WorkflowActorSubject {
    *  показывается независимо от условий «кто» — источник сбора сам определяет
    *  участников; выполнить её напрямую движок не даст (pressCompletion). */
   pressTransitionIds?: ReadonlySet<string>;
+  /** Есть ли у сущности открытый раунд сбора (#434): false — источники не
+   *  дали участников, коллективная кнопка работает как обычная (fallback). */
+  pressRoundExists?: boolean;
   facts: WorkflowGateFacts;
 }
 

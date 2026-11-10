@@ -109,6 +109,7 @@ function makeAdapter() {
     projects as never,
     {
       submittableTransitionIds: vi.fn(async () => new Set<string>()),
+      hasOpenRound: vi.fn(async () => false),
       ensureForStage: vi.fn(async () => void 0),
     } as never,
   );

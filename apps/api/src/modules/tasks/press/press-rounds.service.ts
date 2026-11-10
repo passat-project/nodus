@@ -81,6 +81,13 @@ export class PressRoundsService {
     });
   }
 
+  /** Есть ли открытый раунд (#434): false — источники пусты или задача
+   *  вышла из стадии; движок разрешает обычный переход как fallback. */
+  async hasOpenRound(tx: TransactionClient, taskId: string): Promise<boolean> {
+    const round = await this.repo.findOpenRoundId(tx, 'task', taskId);
+    return round !== null;
+  }
+
   /** Коллективная кнопка, которую актор вправе нажать сейчас (для движка):
    *  участвует, ждёт/возвращён и его очередь по порядку. */
   async submittableTransitionIds(

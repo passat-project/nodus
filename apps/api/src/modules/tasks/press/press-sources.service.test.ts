@@ -97,6 +97,14 @@ describe('PressSourcesService (#434)', () => {
     expect(users.listActiveIds).not.toHaveBeenCalled();
   });
 
+  it('«Все сотрудники» на задаче проекта не раскрывается', async () => {
+    const { sources, users } = service({ projectId: 'project-1' });
+    await expect(
+      sources.resolve({} as never, 't1', config([{ kind: 'all_employees' }])),
+    ).resolves.toEqual([]);
+    expect(users.listActiveIds).not.toHaveBeenCalled();
+  });
+
   it('конкретные сотрудники сохраняют порядок источника (очередь)', async () => {
     const { sources, users } = service();
     users.filterActiveUserIds.mockImplementation(async (ids: string[]) => [...ids].reverse());

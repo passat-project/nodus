@@ -153,6 +153,10 @@ export class TaskTransitionsService {
       // (задача уже под FOR UPDATE движка) и правка задачи (проект → задача)
       // дают deadlock 40P01.
       if (row.projectId) await this.projects.lockProject(tx, row.projectId);
+      // Ленивый старт раунда (#434) и защита прямого нажатия: если источники
+      // дали участников, движок увидит открытый раунд и откажет обычному
+      // переходу; пустые источники оставляют кнопку обычной (fallback).
+      await this.press.ensureForStage(tx, taskId, row.stageId);
       const execution = await this.engine.execute(tx, taskId, 'task', user, { transitionId }, body);
       assignedNumbers = execution.assignedNumbers;
       // Кнопки после действия уезжают в кэш веба — с тем же префиллом, что

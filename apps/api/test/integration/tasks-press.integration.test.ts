@@ -197,4 +197,47 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks press (integration)', () => {
       canSubmit: true,
     });
   });
+
+  it('пустые источники — коллективная кнопка работает как обычная', async () => {
+    await fx.prisma.workflowTransition.update({
+      where: { id: completeId },
+      data: {
+        press: {
+          sources: [{ kind: 'employees', userIds: [crypto.randomUUID()] }],
+          quorum: { kind: 'all' },
+          order: 'parallel',
+          excludeAuthor: true,
+        } as never,
+      },
+    });
+    const created = await fx.api(alice, 'POST', '/tasks', {
+      body: {
+        title: `Fallback ${fx.runId}`,
+        assigneeId: alice.id,
+      },
+      key: `press-fallback-create-${fx.runId}`,
+    });
+    expect(created.status).toBe(201);
+    const task = taskListItemSchema.parse(await created.json());
+    taskIds.push(task.id);
+
+    const transitions = await fx.api(alice, 'GET', `/tasks/${task.id}/transitions`);
+    const start = ((await transitions.json()) as Array<{ id: string; toStageState: string }>).find(
+      (transition) => transition.toStageState === 'active',
+    );
+    await fx.api(alice, 'POST', `/tasks/${task.id}/transitions/${start!.id}`, {
+      body: {},
+      key: `press-fallback-start-${fx.runId}`,
+    });
+    const detail = taskDetailSchema.parse(
+      await (await fx.api(alice, 'GET', `/tasks/${task.id}`)).json(),
+    );
+    expect(detail.press).toBeNull();
+
+    const executed = await fx.api(alice, 'POST', `/tasks/${task.id}/transitions/${completeId}`, {
+      body: {},
+      key: `press-fallback-complete-${fx.runId}`,
+    });
+    expect(executed.status).toBe(200);
+  });
 });

@@ -54,6 +54,7 @@ export class TaskPressController {
     })
     body: PressSubmitBody,
   ): Promise<PressExecuteResult> {
+    await this.query.visibleRow(user, id);
     await this.press.submit(user, id, body);
     return this.result(user, id);
   }
@@ -69,6 +70,7 @@ export class TaskPressController {
     @GetUser() user: AuthUser,
     @Param('id', uuid) id: string,
   ): Promise<PressExecuteResult> {
+    await this.query.visibleRow(user, id);
     await this.press.withdraw(user, id);
     return this.result(user, id);
   }
