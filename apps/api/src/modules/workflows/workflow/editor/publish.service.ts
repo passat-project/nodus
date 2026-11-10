@@ -45,11 +45,7 @@ import { liveLayout, resolveLayout } from './layout.js';
 import { applyPublishPlan } from './publish-apply.js';
 import { assertPublishable } from './publish-checks.js';
 import { publishSnapshot } from './publish-snapshot.js';
-import {
-  missingMigrations,
-  planWorkflowPublish,
-  type PlannerSnapshot,
-} from './publish-planner.js';
+import { missingMigrations, planWorkflowPublish, type PlannerSnapshot } from './publish-planner.js';
 import { WorkflowPublishRepository } from './publish.repository.js';
 import { ProcessTypesRepository } from '../../types/process-types.repository.js';
 import { WorkflowRepository, type LoadedWorkflow } from '../workflow.repository.js';
@@ -170,11 +166,9 @@ export class WorkflowEditorService {
         ...plan.transitionUpdates.map((update) => update.id),
       ].filter((transitionId) => openPress.has(transitionId));
       if (touched.length > 0) {
-        throw new DomainException(
-          ErrorCode.CONFLICT,
-          'Press rounds are open for changed buttons',
-          { transitionIds: touched },
-        );
+        throw new DomainException(ErrorCode.CONFLICT, 'Press rounds are open for changed buttons', {
+          transitionIds: touched,
+        });
       }
       const gaps = missingMigrations(plan);
       if (gaps.length > 0) {
@@ -186,14 +180,7 @@ export class WorkflowEditorService {
       }
 
       const now = new Date();
-      const created = await applyPublishPlan(
-        this.writes,
-        tx,
-        workflowId,
-        body.document,
-        plan,
-        now,
-      );
+      const created = await applyPublishPlan(this.writes, tx, workflowId, body.document, plan, now);
       const live = {
         stageIds: new Set(body.document.stages.map((s) => created.resolve(s.id)!)),
         transitionIds: new Set(

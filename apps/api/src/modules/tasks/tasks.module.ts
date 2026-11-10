@@ -106,7 +106,13 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
   // WorkflowsPortsModule — порты «Процессов»: движок и читатель каталога.
   // Реестр атрибутов (#431): значения, умолчания и проверка — порт, не таблица.
   imports: [ChatPortsModule, WorkflowsPortsModule, CustomFieldsPortsModule, ProjectsPortsModule],
-  controllers: [TasksController, TaskWorkflowController, TaskPressController, TaskPartsController, TimeController],
+  controllers: [
+    TasksController,
+    TaskWorkflowController,
+    TaskPressController,
+    TaskPartsController,
+    TimeController,
+  ],
   providers: [
     UserProfileProvider,
     { provide: USER_PROFILE_READER, useClass: UserProfileProvider },

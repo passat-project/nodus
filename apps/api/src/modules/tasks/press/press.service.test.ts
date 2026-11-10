@@ -95,7 +95,19 @@ function setup(state = 'waiting', config = { quorum: { kind: 'all' }, order: 'pa
     engine as never,
     reader as never,
   );
-  return { service, repo, rounds, tasks, time, messages, records, pressEvents, engine, reader, round };
+  return {
+    service,
+    repo,
+    rounds,
+    tasks,
+    time,
+    messages,
+    records,
+    pressEvents,
+    engine,
+    reader,
+    round,
+  };
 }
 
 describe('PressService (#434)', () => {
@@ -105,11 +117,9 @@ describe('PressService (#434)', () => {
       ...round,
       entries: [entry('waiting'), { ...entry('waiting'), id: 'e2', userId: 'u2', order: 1 }],
     });
-    const result = await service.submit(
-      { id: 'u1', permissions: [] } as never,
-      't1',
-      { time: { minutes: 30, date: '2026-11-09' } },
-    );
+    const result = await service.submit({ id: 'u1', permissions: [] } as never, 't1', {
+      time: { minutes: 30, date: '2026-11-09' },
+    });
     expect(time.addManualInTx).toHaveBeenCalledTimes(1);
     expect(repo.updateEntry).toHaveBeenCalledWith(
       expect.anything(),
@@ -121,7 +131,10 @@ describe('PressService (#434)', () => {
   });
 
   it('последняя отметка выполняет переход с pressCompletion и без повторного времени', async () => {
-    const { service, engine, repo } = setup(undefined, { quorum: { kind: 'all' }, order: 'parallel' });
+    const { service, engine, repo } = setup(undefined, {
+      quorum: { kind: 'all' },
+      order: 'parallel',
+    });
     const result = await service.submit({ id: 'u1', permissions: [] } as never, 't1', {});
     expect(repo.completeRound).toHaveBeenCalledTimes(1);
     expect(engine.execute).toHaveBeenCalledWith(

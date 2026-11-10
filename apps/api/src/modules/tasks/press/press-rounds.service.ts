@@ -1,9 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import {
-  pressConfigSchema,
-  TASK_EVENTS,
-  type PressRoundView,
-} from '@nodus/contracts';
+import { pressConfigSchema, TASK_EVENTS, type PressRoundView } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
@@ -79,9 +75,7 @@ export class PressRoundsService {
     }
     const entries = await this.sources.resolve(tx, taskId, transition.press);
     if (entries.length === 0) {
-      this.logger.warn(
-        `Источники сбора «${transition.name}» не дали участников — раунд не создан`,
-      );
+      this.logger.warn(`Источники сбора «${transition.name}» не дали участников — раунд не создан`);
       return;
     }
     await this.repo.createRound(tx, {

@@ -1,15 +1,8 @@
-import {
-  DEFAULT_TRANSITION_FORM,
-  type WorkflowDocument,
-} from '@nodus/contracts';
+import { DEFAULT_TRANSITION_FORM, type WorkflowDocument } from '@nodus/contracts';
 
 import type { Prisma } from '../../../../generated/prisma/client.js';
 import type { TransactionClient } from '../../../../core/database/transaction-runner.js';
-import {
-  resolveDocId,
-  resolveRules,
-  type WorkflowPublishPlan,
-} from './publish-planner.js';
+import { resolveDocId, resolveRules, type WorkflowPublishPlan } from './publish-planner.js';
 import type { WorkflowPublishRepository } from './publish.repository.js';
 
 const NO_RULES = { conditions: [], validators: [], postFunctions: [] };

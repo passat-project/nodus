@@ -88,11 +88,10 @@ describe('PressAdminService (#434)', () => {
       ...round,
       entries: [entry('pressed', 'e1', 'assignee')],
     });
-    await service.returnEntries(
-      { id: 'assignee', permissions: [] } as never,
-      't1',
-      { userIds: ['assignee'], reason: 'Доработать раздел' },
-    );
+    await service.returnEntries({ id: 'assignee', permissions: [] } as never, 't1', {
+      userIds: ['assignee'],
+      reason: 'Доработать раздел',
+    });
     expect(repo.updateEntry).toHaveBeenCalledWith(
       expect.anything(),
       'e1',
@@ -116,22 +115,20 @@ describe('PressAdminService (#434)', () => {
   it('возврат чужих отметок — только ответственный/право правки', async () => {
     const { service } = setup('pressed');
     await expect(
-      service.returnEntries(
-        { id: 'u1', permissions: [] } as never,
-        't1',
-        { userIds: ['assignee'], reason: 'Причина' },
-      ),
+      service.returnEntries({ id: 'u1', permissions: [] } as never, 't1', {
+        userIds: ['assignee'],
+        reason: 'Причина',
+      }),
     ).rejects.toThrow();
   });
 
   it('возврат без нажатых отметок — ошибка валидации', async () => {
     const { service, round } = setup('waiting');
     await expect(
-      service.returnEntries(
-        { id: 'assignee', permissions: [] } as never,
-        't1',
-        { userIds: ['assignee'], reason: 'Причина' },
-      ),
+      service.returnEntries({ id: 'assignee', permissions: [] } as never, 't1', {
+        userIds: ['assignee'],
+        reason: 'Причина',
+      }),
     ).rejects.toThrow();
     expect(round.entries[0]?.state).toBe('waiting');
   });
@@ -142,11 +139,10 @@ describe('PressAdminService (#434)', () => {
       ...round,
       entries: [entry('waiting', 'e1', 'u1', 0), entry('waiting', 'e2', 'u2', 1)],
     });
-    const view = await service.excludeEntries(
-      { id: 'assignee', permissions: [] } as never,
-      't1',
-      { userIds: ['u2'], reason: 'Уволен' },
-    );
+    const view = await service.excludeEntries({ id: 'assignee', permissions: [] } as never, 't1', {
+      userIds: ['u2'],
+      reason: 'Уволен',
+    });
     expect(view).not.toBeNull();
     expect(repo.updateEntry).toHaveBeenCalledWith(
       expect.anything(),
@@ -162,11 +158,10 @@ describe('PressAdminService (#434)', () => {
   it('снятие последнего активного участника запрещено', async () => {
     const { service, round } = setup('waiting');
     await expect(
-      service.excludeEntries(
-        { id: 'assignee', permissions: [] } as never,
-        't1',
-        { userIds: ['u1'], reason: 'Причина' },
-      ),
+      service.excludeEntries({ id: 'assignee', permissions: [] } as never, 't1', {
+        userIds: ['u1'],
+        reason: 'Причина',
+      }),
     ).rejects.toThrow();
     expect(round.entries[0]?.state).toBe('waiting');
   });
@@ -175,16 +170,12 @@ describe('PressAdminService (#434)', () => {
     const { service, repo, engine, round } = setup('waiting');
     repo.findOpenRound.mockResolvedValue({
       ...round,
-      entries: [
-        entry('pressed', 'e1', 'assignee', 0),
-        entry('waiting', 'e2', 'u1', 1),
-      ],
+      entries: [entry('pressed', 'e1', 'assignee', 0), entry('waiting', 'e2', 'u1', 1)],
     });
-    const view = await service.excludeEntries(
-      { id: 'assignee', permissions: [] } as never,
-      't1',
-      { userIds: ['u1'], reason: 'Уволен' },
-    );
+    const view = await service.excludeEntries({ id: 'assignee', permissions: [] } as never, 't1', {
+      userIds: ['u1'],
+      reason: 'Уволен',
+    });
     expect(view).toBeNull();
     expect(repo.completeRound).toHaveBeenCalled();
     expect(engine.execute).toHaveBeenCalledWith(

@@ -22,9 +22,7 @@ import { MessagesWriteRepository } from '../messages/messages-write.repository.j
 import { VaultWriteRepository } from '../vault/vault-write.repository.js';
 import { TaskChatService } from './task-chat.service.js';
 
-type PressEvent =
-  | DomainEvent<TaskPressSubmittedPayload>
-  | DomainEvent<TaskPressReturnedPayload>;
+type PressEvent = DomainEvent<TaskPressSubmittedPayload> | DomainEvent<TaskPressReturnedPayload>;
 
 /**
  * Блок отметки сбора в чате задачи (#434). Пишется только для адресных
@@ -57,9 +55,7 @@ export class TaskPressBlockService {
     if (payload.broadcast || !event.actorId) return;
     const conversationId = await this.taskChat.sync(payload.taskId, event.actorId);
     if (!conversationId) return;
-    await this.txRunner.run((tx) =>
-      this.write(tx, conversationId, event, event.actorId as string),
-    );
+    await this.txRunner.run((tx) => this.write(tx, conversationId, event, event.actorId as string));
   }
 
   private async write(

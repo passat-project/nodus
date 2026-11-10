@@ -24,11 +24,8 @@ describe('canShow — коллективная кнопка (#434)', () => {
   });
 
   it('участник сбора видит кнопку независимо от условий «кто»', () => {
-    expect(
-      canShow(
-        { id: 'tr1', rules },
-        subject({ pressTransitionIds: new Set(['tr1']) }),
-      ),
-    ).toBe(true);
+    expect(canShow({ id: 'tr1', rules }, subject({ pressTransitionIds: new Set(['tr1']) }))).toBe(
+      true,
+    );
   });
 });

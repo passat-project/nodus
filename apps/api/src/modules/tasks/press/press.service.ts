@@ -9,7 +9,10 @@ import {
   type TransitionFormInput,
 } from '@nodus/contracts';
 
-import { TransactionRunner, type TransactionClient } from '../../../core/database/transaction-runner.js';
+import {
+  TransactionRunner,
+  type TransactionClient,
+} from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { actorRoles, taskAccess } from '../access/task-access.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
@@ -56,7 +59,11 @@ export class PressService {
     @Inject(WORKFLOW_PRESS_READER) private readonly pressReader: WorkflowPressReader,
   ) {}
 
-  submit(user: AuthUser, taskId: string, input: TransitionFormInput): Promise<PressRoundView | null> {
+  submit(
+    user: AuthUser,
+    taskId: string,
+    input: TransitionFormInput,
+  ): Promise<PressRoundView | null> {
     return this.txRunner.run(async (tx) => this.submitInTx(tx, user, taskId, input));
   }
 
@@ -120,12 +127,7 @@ export class PressService {
     if (result.messageIds.length > 0) {
       // Чужие/удалённые/чужая беседа — одинаковый 404 (без оракула), как в
       // каноническом окне перехода: id из тела не доверяем (#434, security).
-      const snaps = await this.messages.taskMessages(
-        taskId,
-        result.messageIds,
-        user.id,
-        tx,
-      );
+      const snaps = await this.messages.taskMessages(taskId, result.messageIds, user.id, tx);
       if (snaps.length !== result.messageIds.length) {
         throw DomainException.notFound('Message not found');
       }

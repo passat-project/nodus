@@ -32,11 +32,7 @@ import {
   postBlock,
   windowLockDenial,
 } from './tasks-transitions-gates.js';
-import {
-  documentOfTask,
-  resolveTarget,
-  transitionsOf,
-} from './tasks-transitions-handlers.js';
+import { documentOfTask, resolveTarget, transitionsOf } from './tasks-transitions-handlers.js';
 
 const notFound = () =>
   HttpResponse.json(
@@ -93,11 +89,7 @@ export const tasksPressHandlers = [
   http.post('/api/v1/tasks/:id/press/submit', async ({ params, request }) => {
     const taskId = String(params.id);
     const task = findTask(taskId);
-    const current = pressOf(
-      taskId,
-      currentAuthUser.id,
-      task?.assignee?.id === currentAuthUser.id,
-    );
+    const current = pressOf(taskId, currentAuthUser.id, task?.assignee?.id === currentAuthUser.id);
     if (!current) return notFound();
     if (!current.canSubmit) return noRights();
     const doc = task ? documentOfTask(task) : null;
@@ -112,10 +104,9 @@ export const tasksPressHandlers = [
     }
     // Окно участника — разделы настройки кнопки (#496) плюс разделы гейтов;
     // сами гейты проверяются при кворуме, а не на каждом нажатии.
-    const sections = effectiveWindowSections(
-      transition.form.enabled ? transition.form : null,
-      { validators: transition.rules.validators },
-    );
+    const sections = effectiveWindowSections(transition.form.enabled ? transition.form : null, {
+      validators: transition.rules.validators,
+    });
     const check = checkWindow(sections, parsed.data);
     if (check.missing.length > 0 || check.unexpected.length > 0) {
       return HttpResponse.json(
@@ -144,11 +135,7 @@ export const tasksPressHandlers = [
   http.post('/api/v1/tasks/:id/press/withdraw', ({ params }) => {
     const taskId = String(params.id);
     const task = findTask(taskId);
-    const current = pressOf(
-      taskId,
-      currentAuthUser.id,
-      task?.assignee?.id === currentAuthUser.id,
-    );
+    const current = pressOf(taskId, currentAuthUser.id, task?.assignee?.id === currentAuthUser.id);
     if (!current) return notFound();
     if (!current.canWithdraw) return noRights();
     const press = withdrawPress(taskId, currentAuthUser.id);

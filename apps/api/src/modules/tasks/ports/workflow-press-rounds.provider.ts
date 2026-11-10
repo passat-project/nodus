@@ -10,10 +10,7 @@ import { PressRepository } from '../press/press.repository.js';
 export class WorkflowPressRoundsProvider implements WorkflowPressRoundsReader {
   constructor(private readonly press: PressRepository) {}
 
-  async openTransitionIds(
-    workflowId: string,
-    tx?: TransactionClient,
-  ): Promise<Set<string>> {
+  async openTransitionIds(workflowId: string, tx?: TransactionClient): Promise<Set<string>> {
     return new Set(await this.press.openTransitionIdsForWorkflow(workflowId, tx));
   }
 }

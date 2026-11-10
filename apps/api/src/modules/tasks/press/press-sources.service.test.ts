@@ -22,7 +22,9 @@ const FIELD2 = 'a0000000-0000-4000-8000-000000000002';
 function service(taskOverrides: Record<string, unknown> = {}) {
   const task = { ...TASK, ...taskOverrides };
   const tasks = { findWithParticipants: vi.fn(async () => task) };
-  const org = { holdersOfPosition: vi.fn(async () => [{ id: 'holder', displayName: 'Держатель' }]) };
+  const org = {
+    holdersOfPosition: vi.fn(async () => [{ id: 'holder', displayName: 'Держатель' }]),
+  };
   const users = {
     filterActiveUserIds: vi.fn(async (ids: string[]) => ids),
     listActiveIds: vi.fn(async () => ['u1', 'u2', 'creator']),

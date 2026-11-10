@@ -1,8 +1,4 @@
-import type {
-  PressEntryView,
-  PressRoundView,
-  PressSubmitBody,
-} from '@nodus/contracts';
+import type { PressEntryView, PressRoundView, PressSubmitBody } from '@nodus/contracts';
 import { pressEntryResultOf } from '@nodus/contracts';
 
 import { REQUEST_ACK_TRANSITION_ID } from './request-workflow-document.js';

@@ -23,8 +23,22 @@ const stages: {
   isInitial: boolean;
   outcome: string | null;
 }[] = [
-  { id: S1, name: 'Ожидает', color: 'neutral', systemState: 'backlog', isInitial: true, outcome: null },
-  { id: S2, name: 'В работе', color: 'success', systemState: 'active', isInitial: false, outcome: null },
+  {
+    id: S1,
+    name: 'Ожидает',
+    color: 'neutral',
+    systemState: 'backlog',
+    isInitial: true,
+    outcome: null,
+  },
+  {
+    id: S2,
+    name: 'В работе',
+    color: 'success',
+    systemState: 'active',
+    isInitial: false,
+    outcome: null,
+  },
   {
     id: S3,
     name: 'Завершена',
@@ -35,7 +49,13 @@ const stages: {
   },
 ];
 
-const transition = { id: T1, name: 'Завершить', fromStageId: S1, toStageId: S2, display: 'primary' };
+const transition = {
+  id: T1,
+  name: 'Завершить',
+  fromStageId: S1,
+  toStageId: S2,
+  display: 'primary',
+};
 
 function snapshot(press: PressConfig | null = null): PlannerSnapshot {
   return {
@@ -93,8 +113,8 @@ describe('planWorkflowPublish — настройка сбора (#434)', () => {
   });
 
   it('та же настройка — без изменений', () => {
-    expect(planWorkflowPublish(snapshot(PRESS), document(PRESS), []).transitionUpdates).toHaveLength(
-      0,
-    );
+    expect(
+      planWorkflowPublish(snapshot(PRESS), document(PRESS), []).transitionUpdates,
+    ).toHaveLength(0);
   });
 });

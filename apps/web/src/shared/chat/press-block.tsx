@@ -74,8 +74,7 @@ export function PressBlock({
               <>
                 <span aria-hidden>·</span>
                 <span>
-                  {block.returnCount}{' '}
-                  {plural(block.returnCount, ui.chat.pressBlock.returnedPeople)}
+                  {block.returnCount} {plural(block.returnCount, ui.chat.pressBlock.returnedPeople)}
                 </span>
               </>
             ) : null}

@@ -34,7 +34,10 @@ function setup(removed = 1, opts: { required?: string[]; left?: number } = {}) {
     visibleRow: vi.fn().mockResolvedValue(ROW),
     detail: vi.fn().mockResolvedValue({ id: 't1' }),
   };
-  const press = { syncAdded: vi.fn(async () => void 0), assertCanRemove: vi.fn(async () => void 0) };
+  const press = {
+    syncAdded: vi.fn(async () => void 0),
+    assertCanRemove: vi.fn(async () => void 0),
+  };
   const catalog = {
     typeById: vi.fn().mockResolvedValue({
       id: 'type-1',

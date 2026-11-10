@@ -3,10 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { TransitionRecordsRepository } from '../workflow/engine/transition-records.repository.js';
-import type {
-  WorkflowRecordInput,
-  WorkflowRecordWriter,
-} from './workflow-record-writer.port.js';
+import type { WorkflowRecordInput, WorkflowRecordWriter } from './workflow-record-writer.port.js';
 
 /** Реализация записи журнала «Процессов» для отметок сбора (#434). */
 @Injectable()

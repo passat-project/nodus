@@ -32,9 +32,9 @@ const press = (source: unknown, extra: Record<string, unknown> = {}) =>
 
 describe('checkPressRules (#434)', () => {
   it('задача с соисполнителями — без ошибок', () => {
-    expect(
-      checkPressRules([base(press({ kind: 'coexecutors' }))], { category: 'task' }),
-    ).toEqual([]);
+    expect(checkPressRules([base(press({ kind: 'coexecutors' }))], { category: 'task' })).toEqual(
+      [],
+    );
   });
 
   it('письмо и пустые источники запрещены', () => {
@@ -54,12 +54,15 @@ describe('checkPressRules (#434)', () => {
     const codes = checkPressRules(
       [
         base(
-          press({ kind: 'role', roles: ['addressee'] }, {
-            sources: [
-              { kind: 'role', roles: ['addressee'] },
-              { kind: 'field', field: `cf.${FIELD}` },
-            ],
-          }),
+          press(
+            { kind: 'role', roles: ['addressee'] },
+            {
+              sources: [
+                { kind: 'role', roles: ['addressee'] },
+                { kind: 'field', field: `cf.${FIELD}` },
+              ],
+            },
+          ),
         ),
       ],
       {
@@ -85,15 +88,14 @@ describe('checkPressRules (#434)', () => {
 
   it('одна коллективная кнопка на статус и обычная кнопка-действие', () => {
     const second = { ...base(press({ kind: 'coexecutors' })), id: 't2' };
-    const codes = checkPressRules(
-      [base(press({ kind: 'coexecutors' })), second],
-      { category: 'task' },
-    ).map((problem) => problem.code);
+    const codes = checkPressRules([base(press({ kind: 'coexecutors' })), second], {
+      category: 'task',
+    }).map((problem) => problem.code);
     expect(codes.filter((code) => code === 'press_multiple_per_stage')).toHaveLength(2);
 
     const menu = { ...base(press({ kind: 'coexecutors' })), display: 'menu' as const };
-    expect(
-      checkPressRules([menu], { category: 'task' }).map((problem) => problem.code),
-    ).toContain('press_button_invalid');
+    expect(checkPressRules([menu], { category: 'task' }).map((problem) => problem.code)).toContain(
+      'press_button_invalid',
+    );
   });
 });

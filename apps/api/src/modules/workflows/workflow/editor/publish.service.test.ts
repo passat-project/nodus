@@ -145,7 +145,13 @@ function makeService(
     openPress?: string[];
   } = {},
 ) {
-  const { version = 1, kind = 'task', taskCounts = { [S3]: 2 }, layout = null, openPress = [] } = opts;
+  const {
+    version = 1,
+    kind = 'task',
+    taskCounts = { [S3]: 2 },
+    layout = null,
+    openPress = [],
+  } = opts;
   const calls = {
     stageCreate: vi.fn(async () => ({ id: CREATED })),
     stageUpdate: vi.fn(async () => ({})),

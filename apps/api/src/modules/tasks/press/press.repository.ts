@@ -23,11 +23,7 @@ export class PressRepository {
     });
   }
 
-  async findOpenRoundId(
-    tx: TransactionClient | undefined,
-    entityKind: string,
-    entityId: string,
-  ) {
+  async findOpenRoundId(tx: TransactionClient | undefined, entityKind: string, entityId: string) {
     return (tx ?? this.prisma).pressRound.findFirst({
       where: { entityKind, entityId, completedAt: null, cancelledAt: null },
       select: { id: true },
@@ -89,12 +85,8 @@ export class PressRepository {
       where: { id: entryId },
       data: {
         ...rest,
-        ...(input === undefined
-          ? {}
-          : { input: input === null ? Prisma.DbNull : input }),
-        ...(result === undefined
-          ? {}
-          : { result: result === null ? Prisma.DbNull : result }),
+        ...(input === undefined ? {} : { input: input === null ? Prisma.DbNull : input }),
+        ...(result === undefined ? {} : { result: result === null ? Prisma.DbNull : result }),
       },
     });
   }

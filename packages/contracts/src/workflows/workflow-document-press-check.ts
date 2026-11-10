@@ -3,10 +3,7 @@ import type { CustomFieldDefinition } from '../custom-fields/custom-field.schema
 import type { ProcessCategory } from './process-type.schemas.js';
 import { WORKFLOW_ROLES_BY_CATEGORY } from './workflow-roles.js';
 import type { WorkflowPositionFact } from './workflow-document-deciders.js';
-import type {
-  WorkflowDraftTransition,
-  WorkflowProblem,
-} from './workflow-document.schemas.js';
+import type { WorkflowDraftTransition, WorkflowProblem } from './workflow-document.schemas.js';
 
 export interface PressCheckOptions {
   category?: ProcessCategory;
@@ -15,10 +12,7 @@ export interface PressCheckOptions {
   positions?: ReadonlyMap<string, WorkflowPositionFact>;
 }
 
-function error(
-  code: WorkflowProblem['code'],
-  transitionId: string,
-): WorkflowProblem {
+function error(code: WorkflowProblem['code'], transitionId: string): WorkflowProblem {
   return { code, severity: 'error', transitionId };
 }
 

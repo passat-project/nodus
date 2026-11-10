@@ -19,7 +19,12 @@ import { formatDateTimeShort } from '../../../shared/lib/format.js';
 import { TransitionWindow } from '../../../shared/workflow/transition-window/transition-window.js';
 import { windowContextOf } from './task-transition-dialog.js';
 import { transitionWindowError } from '../api/transitions-api.js';
-import { useExcludePress, useReturnPress, useSubmitPress, useWithdrawPress } from '../api/press-api.js';
+import {
+  useExcludePress,
+  useReturnPress,
+  useSubmitPress,
+  useWithdrawPress,
+} from '../api/press-api.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { downloadPressCsv, pressStateClass, pressStateLabel } from './task-press-format.js';
 
@@ -217,9 +222,7 @@ export function PressAnalyticsDialog({
                 ) : (
                   <Undo2 className="size-4" />
                 )}
-                {mode === 'exclude'
-                  ? ui.tasks.press.excludeConfirm
-                  : ui.tasks.press.returnConfirm}
+                {mode === 'exclude' ? ui.tasks.press.excludeConfirm : ui.tasks.press.returnConfirm}
                 {selected.length > 0 ? ` · ${selected.length}` : ''}
               </Button>
             </>

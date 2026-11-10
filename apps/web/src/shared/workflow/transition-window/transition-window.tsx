@@ -138,7 +138,8 @@ export function TransitionWindow({
   );
   const canSubmit = effectiveContext ? windowCanSubmit({ sections, lines, draft }) : false;
   const allOk = lines.every((line) => line.ok);
-  const canOverride = variant === 'transition' && mode === 'live' && transition.canOverride && !allOk;
+  const canOverride =
+    variant === 'transition' && mode === 'live' && transition.canOverride && !allOk;
 
   const api: WindowSectionApi | null = effectiveContext
     ? {

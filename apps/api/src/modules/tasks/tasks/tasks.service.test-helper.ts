@@ -160,5 +160,16 @@ export function setup(): TasksServiceFixture {
     { planOnCreate: async () => ({ ok: true, issue: async () => ({}) }) } as never,
     press as never,
   );
-  return { service, repo, placements, placementsRepo, txRunner, eventBus, catalog, boards, engine, press };
+  return {
+    service,
+    repo,
+    placements,
+    placementsRepo,
+    txRunner,
+    eventBus,
+    catalog,
+    boards,
+    engine,
+    press,
+  };
 }

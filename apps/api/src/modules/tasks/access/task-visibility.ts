@@ -80,13 +80,9 @@ export function visibleTasksWhere(
   // не найдёт запрос, пока идёт сбор.
   const pressIds = viewer.pressTaskIds ?? [];
   const pressBranch: Prisma.TaskWhereInput | null =
-    pressIds.length > 0
-      ? { AND: [{ id: { in: [...pressIds] } }, ...(gate ? [gate] : [])] }
-      : null;
+    pressIds.length > 0 ? { AND: [{ id: { in: [...pressIds] } }, ...(gate ? [gate] : [])] } : null;
   if (scope === 'mine') {
-    return pressBranch
-      ? { ...alive, OR: [mineGated, pressBranch] }
-      : { ...alive, ...mineGated };
+    return pressBranch ? { ...alive, OR: [mineGated, pressBranch] } : { ...alive, ...mineGated };
   }
   const or: Prisma.TaskWhereInput[] = [mineGated];
   // Решающий видит задачу, даже не участвуя (#433): только не конфиденциальную

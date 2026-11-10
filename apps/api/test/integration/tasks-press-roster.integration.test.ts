@@ -56,7 +56,9 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks press roster (integration)', (
     alice = await withCreate(fx.users.alice);
     bob = await withCreate(fx.users.bob);
 
-    const workflow = await fx.prisma.workflow.findUniqueOrThrow({ where: { code: 'task.default' } });
+    const workflow = await fx.prisma.workflow.findUniqueOrThrow({
+      where: { code: 'task.default' },
+    });
     workflowId = workflow.id;
     const transition = await fx.prisma.workflowTransition.findFirstOrThrow({
       where: { workflowId, code: 'complete', archivedAt: null },

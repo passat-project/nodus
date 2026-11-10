@@ -49,13 +49,10 @@ export function WindowSection({
       section.label?.trim() ? section.label : ui.automation.window.sections[section.kind],
     );
   const summaryParts = [
-    ...(fieldCount > 0 || lockCount > 0
-      ? [ui.forms.builder.summary(fieldCount, lockCount)]
-      : []),
+    ...(fieldCount > 0 || lockCount > 0 ? [ui.forms.builder.summary(fieldCount, lockCount)] : []),
     ...(otherSections.length > 0 ? [otherSections.join(', ')] : []),
   ];
-  const summary =
-    summaryParts.length > 0 ? summaryParts.join(' · ') : ui.forms.builder.emptyWindow;
+  const summary = summaryParts.length > 0 ? summaryParts.join(' · ') : ui.forms.builder.emptyWindow;
 
   return (
     <>

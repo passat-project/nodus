@@ -1,8 +1,4 @@
-import {
-  pressConfigSchema,
-  pressEntryResultSchema,
-  type PressRoundView,
-} from '@nodus/contracts';
+import { pressConfigSchema, pressEntryResultSchema, type PressRoundView } from '@nodus/contracts';
 
 import type { PressRoundRow } from './press.repository.js';
 
@@ -53,14 +49,9 @@ export function pressRoundViewOf(
       myEntry !== null &&
       (myEntry.state === 'waiting' || myEntry.state === 'returned'),
     canWithdraw: !completed && myEntry?.state === 'pressed',
-    canReturn:
-      canManage &&
-      !completed &&
-      entries.some((entry) => entry.state === 'pressed'),
+    canReturn: canManage && !completed && entries.some((entry) => entry.state === 'pressed'),
     canExclude:
-      canManage &&
-      !completed &&
-      entries.filter((entry) => entry.state !== 'excluded').length > 1,
+      canManage && !completed && entries.filter((entry) => entry.state !== 'excluded').length > 1,
     completed,
   };
 }

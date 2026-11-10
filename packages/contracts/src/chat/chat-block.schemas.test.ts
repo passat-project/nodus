@@ -71,9 +71,7 @@ describe('вид сообщения и блок перехода (#380)', () => 
     };
     expect(chatMessageKindSchema.parse('task_press')).toBe('task_press');
     expect(chatMessageBlockSchema.parse(pressBlock)).toEqual(pressBlock);
-    expect(() =>
-      chatMessageBlockSchema.parse({ ...pressBlock, state: 'waiting' }),
-    ).toThrow();
+    expect(() => chatMessageBlockSchema.parse({ ...pressBlock, state: 'waiting' })).toThrow();
   });
 
   it('ids lookup: 1..50 уникальных, разбор строки', () => {

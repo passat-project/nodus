@@ -66,9 +66,7 @@ export class PressSourcesService {
       for (const id of ids) if (!ordered.includes(id)) ordered.push(id);
     }
     const visible = await this.visibleOnly(tx, task, ordered);
-    const filtered = config.excludeAuthor
-      ? visible.filter((id) => id !== task.creatorId)
-      : visible;
+    const filtered = config.excludeAuthor ? visible.filter((id) => id !== task.creatorId) : visible;
     return filtered.map((userId, order) => ({ userId, order }));
   }
 
@@ -125,16 +123,14 @@ export class PressSourcesService {
       case 'employees':
         return this.activeInOrder(source.userIds, tx);
       case 'position':
-        return (
-          await this.org.holdersOfPosition(source.positionId, source.positionKind, tx)
-        ).map((holder) => holder.id);
+        return (await this.org.holdersOfPosition(source.positionId, source.positionKind, tx)).map(
+          (holder) => holder.id,
+        );
       case 'field':
         return this.fieldIds(tx, task, source.field);
       case 'all_employees':
         if (task.confidential) {
-          this.logger.warn(
-            `Сбор «Все сотрудники» пропущен для конфиденциальной задачи ${task.id}`,
-          );
+          this.logger.warn(`Сбор «Все сотрудники» пропущен для конфиденциальной задачи ${task.id}`);
           return [];
         }
         if (task.projectId) {

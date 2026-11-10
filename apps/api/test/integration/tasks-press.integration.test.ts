@@ -60,7 +60,9 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks press (integration)', () => {
     alice = await withCreate(fx.users.alice);
     bob = await withCreate(fx.users.bob);
 
-    const workflow = await fx.prisma.workflow.findUniqueOrThrow({ where: { code: 'task.default' } });
+    const workflow = await fx.prisma.workflow.findUniqueOrThrow({
+      where: { code: 'task.default' },
+    });
     workflowId = workflow.id;
     const transition = await fx.prisma.workflowTransition.findFirstOrThrow({
       where: { workflowId, code: 'complete', archivedAt: null },
@@ -111,7 +113,9 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks press (integration)', () => {
     });
     expect(started.status).toBe(200);
 
-    const detail = taskDetailSchema.parse(await (await fx.api(bob, 'GET', `/tasks/${task.id}`)).json());
+    const detail = taskDetailSchema.parse(
+      await (await fx.api(bob, 'GET', `/tasks/${task.id}`)).json(),
+    );
     expect(detail.press).toMatchObject({
       transitionId: completeId,
       total: 1,
