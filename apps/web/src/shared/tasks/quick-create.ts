@@ -84,10 +84,12 @@ export function useQuickCreate() {
           }
           return;
         }
+        const failure = createFailureOf(error);
         toast.error(
-          error instanceof ApiError && error.code === ErrorCode.PROCESS_TYPE_FORBIDDEN
-            ? ui.taskCreate.forbidden
-            : ui.taskCreate.submitFailed,
+          failure.message ??
+            (error instanceof ApiError && error.code === ErrorCode.PROCESS_TYPE_FORBIDDEN
+              ? ui.taskCreate.forbidden
+              : ui.taskCreate.submitFailed),
         );
       },
     });

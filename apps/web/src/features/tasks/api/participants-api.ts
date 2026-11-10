@@ -7,6 +7,10 @@ import { api } from '../../../shared/api-client.js';
 import { chatKeys } from '../../../shared/chat/chat-keys.js';
 import { tasksKeys } from '../../../shared/api/tasks-keys.js';
 import { fieldLockedText } from '../../../shared/forms/field-lock-ui.js';
+import { secretProjectMembersText } from '../../../shared/tasks/secret-project-members.js';
+
+/** Добавление участника + имя для понятного отказа секретного проекта (#674). */
+type AddParticipantVars = TaskParticipantAddBody & { userName?: string };
 
 /** Состав задачи поменялся: деталь — ответом сервера, доски/списки и чат
  *  задачи (состав беседы = участники, #252) — инвалидацией. */
@@ -25,10 +29,22 @@ function useSettle(taskId: string) {
 export function useAddTaskParticipant(taskId: string) {
   const settle = useSettle(taskId);
   return useMutation({
-    mutationFn: (body: TaskParticipantAddBody) =>
-      api<TaskDetail>(`/tasks/${taskId}/participants`, { method: 'POST', body }),
+    mutationFn: (vars: AddParticipantVars) =>
+      api<TaskDetail>(`/tasks/${taskId}/participants`, {
+        method: 'POST',
+        body: {
+          userId: vars.userId,
+          role: vars.role,
+          ...(vars.lockReason ? { lockReason: vars.lockReason } : {}),
+        },
+      }),
     onSuccess: (detail) => settle(detail),
-    onError: (error) => toast.error(fieldLockedText(error) ?? ui.common.saveError),
+    onError: (error, vars) =>
+      toast.error(
+        secretProjectMembersText(error, vars.userName ? [vars.userName] : []) ??
+          fieldLockedText(error) ??
+          ui.common.saveError,
+      ),
   });
 }
 
@@ -52,7 +68,7 @@ export function useRemoveTaskParticipant(taskId: string) {
 export function useSetTaskAssignee(taskId: string) {
   const settle = useSettle(taskId);
   return useMutation({
-    mutationFn: (vars: { assigneeId: string; lockReason?: string }) =>
+    mutationFn: (vars: { assigneeId: string; lockReason?: string; userName?: string }) =>
       api<TaskListItem>(`/tasks/${taskId}`, {
         method: 'PATCH',
         body: {
@@ -61,6 +77,11 @@ export function useSetTaskAssignee(taskId: string) {
         },
       }),
     onSuccess: () => settle(),
-    onError: (error) => toast.error(fieldLockedText(error) ?? ui.common.saveError),
+    onError: (error, vars) =>
+      toast.error(
+        secretProjectMembersText(error, vars.userName ? [vars.userName] : []) ??
+          fieldLockedText(error) ??
+          ui.common.saveError,
+      ),
   });
 }

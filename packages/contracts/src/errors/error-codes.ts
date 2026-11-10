@@ -217,6 +217,10 @@ export const ErrorCode = {
   /** Обязательные поля формы вида не заполнены: создание, смена вида или
    *  очистка (`details.reason`: create | kind_change | clear; 422; #556). */
   PROJECT_NODE_FIELDS_REQUIRED: 'PROJECT_NODE_FIELDS_REQUIRED',
+  /** В задаче секретного проекта указаны сотрудники, которые не могут получать
+   *  задачи: не участники проекта или только наблюдатели; details — { projectId, userIds }
+   *  (422; #674). */
+  PROJECT_TASK_MEMBERS_INVALID: 'PROJECT_TASK_MEMBERS_INVALID',
   /** Обязательные слоты формы типа проекта не заполнены/очищаются
    *  (`details.reason`: create | clear; 422; #631 Р10). */
   PROJECT_FIELDS_REQUIRED: 'PROJECT_FIELDS_REQUIRED',

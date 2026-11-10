@@ -1,9 +1,16 @@
-import type { CreationFieldKey } from '@nodus/contracts';
+import type { CreateTaskBody, CreationFieldKey } from '@nodus/contracts';
 import { ErrorCode, ui } from '@nodus/contracts';
 
 import { ApiError } from '../api-client.js';
 import { isNumberConfirmCancelled, numberingErrorText } from '../custom-fields/number-confirm.js';
 import { transitionErrorText } from './transition-error.js';
+
+/** Сотрудники, которых нельзя назначить в задачу секретного проекта (#674):
+ *  сервер вернул причину и список — окно покажет ФИО и действие. */
+export interface SecretProjectMembers {
+  projectId: string;
+  userIds: readonly string[];
+}
 
 /** Что окно создания показывает на отказ сервера (#432, Р9): текст в окне,
  *  подсветка полей и нужно ли перечитать типы (права и формы могли
@@ -12,6 +19,8 @@ export interface CreateFailure {
   message: string | null;
   invalidKeys: ReadonlySet<string>;
   refetchTypes: boolean;
+  /** Секретный проект: выбранные люди не могут получать задачи (#674). */
+  secretMembers?: SecretProjectMembers;
 }
 
 const NONE: ReadonlySet<string> = new Set();
@@ -47,6 +56,20 @@ export function createFailureOf(error: unknown): CreateFailure {
     }
     case ErrorCode.PROCESS_TYPE_PRESET_INVALID:
       return fail(ui.taskCreate.presetInvalid);
+    case ErrorCode.PROJECT_TASK_MEMBERS_INVALID: {
+      const projectId =
+        typeof error.details?.projectId === 'string' ? error.details.projectId : null;
+      const userIds = Array.isArray(error.details?.userIds)
+        ? error.details.userIds.filter((id): id is string => typeof id === 'string')
+        : [];
+      if (projectId && userIds.length > 0) {
+        return {
+          ...fail(ui.projects.secretMembersNoAccess),
+          secretMembers: { projectId, userIds },
+        };
+      }
+      return fail(ui.projects.secretMembersNoAccess);
+    }
     case ErrorCode.WORKFLOW_TRANSITION_BLOCKED:
     case ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED:
       // Создание в колонке проходит через переход (#402): окно показывает
@@ -58,4 +81,18 @@ export function createFailureOf(error: unknown): CreateFailure {
     default:
       return fail(ui.taskCreate.submitFailed);
   }
+}
+
+/** Слоты формы, где стоят сотрудники, которых сервер не пустил в задачу
+ *  секретного проекта (#674): окно подсвечивает эти поля. */
+export function secretMemberKeys(
+  body: CreateTaskBody,
+  userIds: readonly string[],
+): CreationFieldKey[] {
+  const set = new Set(userIds);
+  const keys: CreationFieldKey[] = [];
+  if (body.assigneeId && set.has(body.assigneeId)) keys.push('assignee');
+  if ((body.coexecutorIds ?? []).some((id) => set.has(id))) keys.push('coexecutors');
+  if ((body.observerIds ?? []).some((id) => set.has(id))) keys.push('observers');
+  return keys;
 }
