@@ -9,6 +9,7 @@ import { createElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DownloadAppButton } from './download-app-button.js';
+import { formatDate } from '../../shared/lib/format.js';
 
 /**
  * Кнопка «Скачать приложение» (#263): без раздачи /desktop/ кнопки нет;
@@ -182,6 +183,8 @@ describe('оболочка', () => {
     await waitFor(() => expect(screen.getByText('1.0.0 → 1.0.16')).toBeTruthy());
     // Текст чужого выпуска не показываем: лучше без заметок, чем старые.
     expect(screen.queryByText(/Старый текст про курсор/)).toBeNull();
+    // Дата тоже от чужого манифеста — не показывается (#739).
+    expect(screen.queryByText(formatDate(MANIFEST.pub_date))).toBeNull();
   });
 
   it('манифест догоняет целевую версию рефетчем — заметки новой версии (#739)', async () => {
@@ -202,5 +205,7 @@ describe('оболочка', () => {
     });
     expect(screen.queryByText(/Старый текст про курсор/)).toBeNull();
     expect(screen.getByText('1.0.0 → 1.0.16')).toBeTruthy();
+    // Манифест совпал с целевой версией — дата его выпуска снова правдива.
+    expect(screen.getByText(formatDate(MANIFEST.pub_date))).toBeTruthy();
   });
 });
