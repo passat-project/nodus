@@ -5,6 +5,8 @@ import {
   useRef,
   useState,
   type KeyboardEventHandler,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
 import { ui } from '@nodus/contracts';
@@ -40,6 +42,11 @@ export function CardTabStrip({
   actions,
   idPrefix,
   onKeyDown,
+  groupId,
+  onTabPointerDown,
+  onTabContextMenu,
+  draggingTabId,
+  stripRef,
 }: {
   /** aria-label полосы. */
   label: string;
@@ -55,6 +62,16 @@ export function CardTabStrip({
   idPrefix?: string;
   /** ←/→ по полосе — соседняя вкладка (хост решает). */
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
+  /** Область вкладок (#746): id группы для DnD/замеров. */
+  groupId?: string;
+  /** Начало pointer-перетаскивания вкладки (порог решает контроллер). */
+  onTabPointerDown?: (tabId: string, event: ReactPointerEvent<HTMLButtonElement>) => void;
+  /** Правый клик/меню — действия вкладки без drag (WCAG 2.5.7). */
+  onTabContextMenu?: (tabId: string, event: ReactMouseEvent<HTMLButtonElement>) => void;
+  /** Какую вкладку сейчас тащат — приглушаем на полосе. */
+  draggingTabId?: string | null;
+  /** Ссылка на скролл-контейнер полосы (замеры для линии вставки). */
+  stripRef?: (el: HTMLDivElement | null) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef(new Map<string, HTMLDivElement>());
@@ -119,11 +136,16 @@ export function CardTabStrip({
     <div className="flex h-10 shrink-0 items-center border-b border-border bg-card">
       <div className="relative h-10 min-w-0 flex-1">
         <div
-          ref={listRef}
+          ref={(el) => {
+            listRef.current = el;
+            stripRef?.(el);
+          }}
           role="tablist"
           aria-label={label}
           onKeyDown={onKeyDown}
           data-no-scrollbar
+          data-card-tab-strip
+          data-group-id={groupId}
           className="content-fade flex h-10 min-w-0 items-center gap-1 overflow-x-auto overflow-y-hidden px-3"
         >
           {tabs.map((tab) => {
@@ -135,11 +157,13 @@ export function CardTabStrip({
                   if (el) tabRefs.current.set(tab.id, el);
                   else tabRefs.current.delete(tab.id);
                 }}
+                data-card-tab-id={tab.id}
                 className={cn(
                   'flex h-10 shrink-0 items-center border-b-2 transition-colors',
                   isActive
                     ? 'border-port text-foreground'
                     : 'border-transparent text-muted-foreground hover:text-foreground/80',
+                  draggingTabId === tab.id && 'opacity-40',
                 )}
               >
                 <button
@@ -153,6 +177,8 @@ export function CardTabStrip({
                   tabIndex={isActive ? 0 : -1}
                   title={tab.title}
                   onClick={() => onActivate(tab.id)}
+                  onPointerDown={(event) => onTabPointerDown?.(tab.id, event)}
+                  onContextMenu={(event) => onTabContextMenu?.(tab.id, event)}
                   className={cn(
                     'flex h-full max-w-48 min-w-0 items-center gap-1.5 text-body-xs font-medium focus-visible:outline-2 focus-visible:outline-ring',
                     tab.closable ? 'pr-1 pl-2' : 'px-2.5',
@@ -171,7 +197,9 @@ export function CardTabStrip({
                 {tab.closable ? (
                   <button
                     type="button"
+                    data-no-tab-drag
                     onClick={() => onClose?.(tab.id)}
+                    onPointerDown={(event) => event.stopPropagation()}
                     aria-label={`${ui.common.closeTab}: ${tab.label}`}
                     title={ui.common.closeTab}
                     className="mr-1 rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"

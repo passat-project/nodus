@@ -36,6 +36,7 @@ import { useShellStore } from './shell-store.js';
 import { TopBar } from './top-bar.js';
 import { useCardStack, useOpenCard, useOpenCards, useReplaceTopCard } from './use-card-stack.js';
 import { useLinkInterception } from './use-link-interception.js';
+import { startPreferencesSync } from '../../shared/preferences/ui-prefs-sync.js';
 
 function ShellFallback() {
   return (
@@ -73,6 +74,9 @@ export function AppShell() {
   // логи [jitter] смещений ключевых контейнеров (см. layout-jitter-logger).
   useEffect(() => {
     startLayoutJitterLogger();
+    // Личные настройки (#745): GET после входа + debounce PUT изменений;
+    // при смене пользователя стор перечитывает свой localStorage-ключ.
+    startPreferencesSync();
   }, []);
   // (N) Nodus в заголовке вкладки (#124): сигнал фоновой вкладке.
   useUnreadTitle();

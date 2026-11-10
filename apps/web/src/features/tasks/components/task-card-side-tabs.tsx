@@ -1,5 +1,4 @@
 import { MessageSquare, PanelRight } from 'lucide-react';
-import type { ReactNode } from 'react';
 import type { ConversationListItem, TaskDetail } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
@@ -7,20 +6,22 @@ import { cn } from '@nodus/ui/lib/utils';
 import { FileViewerBody } from '../../../shared/files/file-viewer-body.js';
 import { FileTypeIcon } from '../../../shared/files/file-type-icon.js';
 import { useViewerStore } from '../../../shared/files/viewer-store.js';
-import { CardTabStrip, type CardTabDef } from '../../../shared/ui/entity-card/card-tab-strip.js';
+import { CardTabAreas } from '../../../shared/ui/entity-card/card-tab-areas.js';
+import type { CardTabDef } from '../../../shared/ui/entity-card/card-tab-strip.js';
+import type {
+  CardTabGroup,
+  CardTabsState,
+} from '../../../shared/ui/entity-card/card-tabs-model.js';
 import { TaskCardMenu } from './task-card-menu.js';
 import { TaskDiscussion } from './task-discussion.js';
 import { fileIdOf, fileTabId, type TaskTabId, type TaskTabsState } from '../lib/task-tabs.js';
 
 /**
- * Правая зона карточки задачи (редизайн 04.11.2026): общая полоса вкладок
- * карточек (`CardTabStrip`, фон карточки — как в проекте и письме). «Чат» —
- * постоянная вкладка по умолчанию; вложения — закрываемые вкладки, открытые
- * просмотрщиком ONLYOFFICE (`FileViewerBody`); «Открыть на весь экран» —
- * внутри вкладки-файла, у зума вложения. Меню карточки и «О задаче» — в
- * правом слоте полосы. Содержимое вкладки монтируется при первом показе и
- * живёт скрытым (`invisible` + `inert`): лента, страница и масштаб документа
- * не теряются.
+ * Правая зона карточки задачи (#746): общий движок областей вкладок.
+ * «Чат» — постоянная вкладка, вложения — закрываемые; меню карточки и
+ * «О задаче» — в правом слоте ПОСЛЕДНЕЙ области (там же, где раньше был
+ * тоггл), а не в каждой полосе. Содержимое вкладок монтируется один раз и
+ * переезжает между областями без ремаунта (лента/страница/зум живы).
  */
 export function TaskCardSideTabs({
   task,
@@ -28,17 +29,27 @@ export function TaskCardSideTabs({
   conversation,
   aboutOpen,
   showAbout,
+  state,
+  groupW,
+  collapsedGroupId,
+  onStateChange,
+  onGroupWidthsChange,
+  groupMin,
   onActivate,
   onClose,
   onToggleAbout,
 }: {
   task: TaskDetail;
   tabs: TaskTabsState;
-  /** Беседа задачи — счётчик непрочитанного на «Чате». */
   conversation?: ConversationListItem;
   aboutOpen: boolean;
-  /** Скрыт чат — нет тоггла панели «О задаче» (Р7). */
   showAbout: boolean;
+  state: CardTabsState;
+  groupW: number[];
+  collapsedGroupId: string | null;
+  onStateChange: (next: CardTabsState) => void;
+  onGroupWidthsChange: (widths: number[]) => void;
+  groupMin?: (group: CardTabGroup) => number;
   onActivate: (tab: TaskTabId) => void;
   onClose: (fileId: string) => void;
   onToggleAbout: () => void;
@@ -59,77 +70,65 @@ export function TaskCardSideTabs({
       closable: true,
     })),
   ];
+  const lastGroupId = collapsedGroupId
+    ? (state.groups.find((group) => group.id !== collapsedGroupId)?.id ?? null)
+    : (state.groups[state.groups.length - 1]?.id ?? null);
+
+  const panel = (tabId: string) => {
+    if (tabId === 'chat') return <TaskDiscussion taskId={task.id} />;
+    const fileId = fileIdOf(tabId as TaskTabId);
+    const file = fileId ? tabs.files.find((entry) => entry.fileId === fileId) : undefined;
+    return file ? (
+      <FileViewerBody target={file} fit="width" onFullscreen={() => openFullscreen(file)} />
+    ) : null;
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      <CardTabStrip
+      <CardTabAreas
         label={ui.tasks.tabsLabel}
         tabs={stripTabs}
-        active={tabs.active}
-        onActivate={(id) => onActivate(id as TaskTabId)}
-        onClose={(id) => {
-          const fileId = fileIdOf(id as TaskTabId);
+        state={state}
+        onStateChange={(next) => {
+          onStateChange(next);
+          // Хост-состояние файловых вкладок синхронно с движком: активная
+          // вкладка области управляет MRU/закрытием соседа.
+          const group =
+            next.groups.find((entry) => entry.id === next.focusGroupId) ?? next.groups[0];
+          if (group) onActivate(group.active as TaskTabId);
+        }}
+        renderPanel={panel}
+        groupW={groupW}
+        collapsedGroupId={collapsedGroupId}
+        onGroupWidthsChange={onGroupWidthsChange}
+        groupMin={groupMin}
+        onCloseTab={(tabId) => {
+          const fileId = fileIdOf(tabId as TaskTabId);
           if (fileId) onClose(fileId);
         }}
-        actions={
-          <>
-            <TaskCardMenu task={task} />
-            {showAbout ? (
-              <UtilityButton
-                label={ui.tasks.aboutTask}
-                active={aboutOpen}
-                onClick={onToggleAbout}
-                icon={<PanelRight className="size-4" strokeWidth={1.75} />}
-              />
-            ) : null}
-          </>
+        canHideTab={() => false}
+        actions={(group: CardTabGroup) =>
+          group.id === lastGroupId ? (
+            <>
+              <TaskCardMenu task={task} />
+              {showAbout ? (
+                <button
+                  type="button"
+                  onClick={onToggleAbout}
+                  aria-label={ui.tasks.aboutTask}
+                  title={ui.tasks.aboutTask}
+                  className={cn(
+                    'shrink-0 rounded-lg p-2 transition-colors hover:bg-accent',
+                    aboutOpen ? 'text-foreground' : 'text-muted-foreground',
+                  )}
+                >
+                  <PanelRight className="size-4" strokeWidth={1.75} />
+                </button>
+              ) : null}
+            </>
+          ) : null
         }
       />
-      <div className="relative min-h-0 flex-1">
-        <TaskTabPanel active={tabs.active === 'chat'}>
-          <TaskDiscussion taskId={task.id} />
-        </TaskTabPanel>
-        {tabs.files.map((file) => (
-          <TaskTabPanel key={file.fileId} active={tabs.active === fileTabId(file.fileId)}>
-            <FileViewerBody target={file} fit="width" onFullscreen={() => openFullscreen(file)} />
-          </TaskTabPanel>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function UtilityButton({
-  label,
-  icon,
-  active = false,
-  onClick,
-}: {
-  label: string;
-  icon: ReactNode;
-  active?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className={cn(
-        'shrink-0 rounded-lg p-2 transition-colors hover:bg-accent',
-        active ? 'text-foreground' : 'text-muted-foreground',
-      )}
-    >
-      {icon}
-    </button>
-  );
-}
-
-function TaskTabPanel({ active, children }: { active: boolean; children: ReactNode }) {
-  return (
-    <div role="tabpanel" inert={!active} className={cn('absolute inset-0', !active && 'invisible')}>
-      {children}
     </div>
   );
 }

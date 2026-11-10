@@ -1,62 +1,87 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, type ReactNode } from 'react';
 import { ui } from '@nodus/contracts';
-import { cn } from '@nodus/ui/lib/utils';
 
+import { CardHeaderActionsPortal } from '../../../app/shell/card-header-actions.js';
 import { useProjectConversation } from '../../../shared/chat/chat-queries.js';
-import { ChatSidePanel, useChatSidePanel } from '../../../shared/chat/chat-side-panel.js';
-import { useSplitWidth } from '../../../shared/ui/use-split-width.js';
-import { uiPx } from '../../../shared/ui/ui-scale.js';
+import {
+  ChatSidePanel,
+  ChatPanelToggle,
+  useChatSidePanel,
+} from '../../../shared/chat/chat-side-panel.js';
+import { CardLayoutButton } from '../../../shared/ui/entity-card/card-layout-button.js';
+import { CardTabAreas } from '../../../shared/ui/entity-card/card-tab-areas.js';
+import type { CardTabDef } from '../../../shared/ui/entity-card/card-tab-strip.js';
+import {
+  CardWidthHint,
+  PANEL_HIDDEN_HINT,
+} from '../../../shared/ui/entity-card/card-width-hint.js';
+import {
+  mergeAllGroups,
+  splitActiveTab,
+} from '../../../shared/ui/entity-card/card-tabs-actions.js';
+import { useCardTabs } from '../../../shared/ui/entity-card/use-card-tabs.js';
+import { solveCardWidths } from '../../../shared/ui/entity-card/card-tabs-width.js';
+import { useElementWidth } from '../../../shared/ui/use-element-width.js';
 import { useProjectDetail } from '../api/projects-api.js';
-import { primaryTab, type ProjectTabId } from '../lib/project-tabs.js';
+import { PROJECT_TAB_IDS, type ProjectTabId } from '../lib/project-tabs.js';
 import { ProjectAboutPanel } from './project-about-panel.js';
-import { ProjectActionBar } from './project-action-bar.js';
+import { ProjectHeaderActions } from './project-action-bar.js';
 import { ProjectCardSkeleton } from './project-card-skeleton.js';
 import { ProjectChannelTab } from './project-channel-tab.js';
 import { ProjectHistoryTab } from './project-history-tab.js';
 import { ProjectMembersTab } from './project-members-tab.js';
-import { ProjectTabStrip } from './project-tab-strip.js';
+import { PROJECT_TAB_DEFS, ProjectTabsTrailing } from './project-tab-strip.js';
 import { ProjectTasksTab } from './project-tasks-tab.js';
 import { StructureTab } from '../structure/components/structure-tab.js';
 import { isProjectParticipant } from './project-chat.js';
 
-/** Полы зон карточки: панель «О проекте» и рабочая зона вкладок. */
-const MIN_ABOUT_W = uiPx(320);
-const MIN_WORK_W = uiPx(420);
-
 /**
- * Карточка проекта (#52, ADR-0009; раскладка — вердикт владельца 07.11.2026):
- * СЛЕВА всегда панель «О проекте» (без вкладки — главная панель проекта:
- * идентичность, описание, паспорт, атрибуты) с нижним баром действий, как в
- * задачах и письмах; СПРАВА — рабочая зона с вкладками «Структура / Задачи /
- * Канал / Участники / История» и «+» (личный набор; первичная вкладка —
- * «Структура», вердикт владельца 04.11.2026; «Чат проекта» появится вместе с
- * пространством проекта, #456). Перегородка тянется с памятью — полоса
- * вкладок едет за границей левой панели. Вкладки монтируются при первом
- * показе и дальше живут скрытыми (`invisible` + `inert`): прокрутка, фильтры
- * и черновик чата не теряются при переключении.
+ * Карточка проекта (#52, ADR-0009; раскладка — вердикт владельца 10.11.2026,
+ * #735/#746): вся карточка — полотно областей вкладок. Статичной левой
+ * панели «О проекте» и нижнего бара больше нет: «О проекте» — обычная
+ * вкладка после «Задач»; кнопки правки/статусов — в шапке карточки
+ * (`ProjectHeaderActions`), кнопка раскладки — `Columns2/Combine`.
+ * Области (1–2), порядок, DnD и ширины — общий движок `CardTabAreas`;
+ * «Структура» — системный первый дефолт, личный порядок перекрывает.
+ * Вкладки монтируются при первом показе и живут скрытыми (`inert`):
+ * прокрутка, фильтры и черновик чата не теряются.
  */
 export function ProjectCard({ projectId }: { projectId: string }) {
   const { data: project, isLoading } = useProjectDetail(projectId);
   const participant = project ? isProjectParticipant(project) : false;
   const { data: conversation } = useProjectConversation(projectId, participant);
   const channelPanel = useChatSidePanel();
-  // Дефолт вкладки (вердикт владельца 04.11.2026): всегда первая
-  // «Структура»; карточка не ждёт загрузки дерева, чтобы выбрать вкладку.
-  const primary = primaryTab();
-  const [tab, setTab] = useState<ProjectTabId>('structure');
-  const [visited, setVisited] = useState<ProjectTabId[]>(['structure']);
-  const aboutRef = useRef<HTMLDivElement>(null);
-  const split = useSplitWidth(aboutRef, {
-    storeKey: 'nodus-project-card-split-v1',
-    defaultRatio: 0.42,
-    min: MIN_ABOUT_W,
-    minOther: MIN_WORK_W,
+  const rowRef = useRef<HTMLDivElement>(null);
+  const rowWidth = useElementWidth(rowRef);
+  const cardTabs = useCardTabs({
+    kind: 'project',
+    stableTabs: PROJECT_TAB_IDS,
+    defaultActive: 'structure',
   });
+  const { state } = cardTabs;
+  const visible = new Set(cardTabs.visibleTabs);
+  const tabDefs: CardTabDef[] = PROJECT_TAB_DEFS.filter((tab) => visible.has(tab.id)).map((tab) =>
+    tab.id === 'channel' && conversation?.unreadCount
+      ? { ...tab, badge: conversation.unreadCount }
+      : tab,
+  );
 
-  function activate(next: ProjectTabId) {
-    setTab(next);
-    setVisited((prev) => (prev.includes(next) ? prev : [...prev, next]));
-  }
+  const channelActive = state.groups.some((group) => group.active === 'channel');
+  const panelRequested = channelPanel.open && channelActive && Boolean(conversation);
+  const solved = useMemo(
+    () =>
+      solveCardWidths({
+        rowWidth,
+        groups: state.groups.map((group, index) => ({
+          id: group.id,
+          isChat: group.tabs.includes('channel'),
+          prefW: cardTabs.widths.groups?.[index],
+        })),
+        panelOpen: panelRequested,
+        panelW: 300,
+      }),
+    [cardTabs.widths.groups, panelRequested, rowWidth, state.groups],
+  );
 
   if (isLoading || !project) {
     return <ProjectCardSkeleton />;
@@ -64,113 +89,91 @@ export function ProjectCard({ projectId }: { projectId: string }) {
 
   const conversationId = conversation?.id ?? null;
 
-  return (
-    <div className="flex h-full min-w-0 flex-col">
-      <div className="relative flex min-h-0 flex-1">
-        {/* ЛЕВАЯ панель — «О проекте» на всю высоту; скроллится контент,
-            нижний бар h-16 замоноличен (его верхняя линия — одна горизонталь
-            с барами рабочей зоны). border-r — структурная граница; ручка —
-            оверлей поверх неё. */}
-        <div
-          ref={aboutRef}
-          role="region"
-          aria-label={ui.projects.tabAbout}
-          className={cn(
-            'relative flex min-h-0 min-w-0 flex-col border-r border-border @container',
-            !split.dragging && 'transition-[width] duration-200 ease-out',
-          )}
-          style={{ ...split.style, flexShrink: 1 }}
-        >
-          <ProjectAboutPanel project={project} />
-          <div className="flex h-16 shrink-0 items-center border-t border-border px-5">
-            <ProjectActionBar project={project} />
-          </div>
-          <div
-            onPointerDown={split.onDividerDown}
-            role="separator"
-            aria-orientation="vertical"
-            aria-label={ui.common.resizePanel}
-            title={ui.common.resizePanel}
-            className="group absolute top-0 right-0 z-10 h-full w-3 translate-x-1/2 cursor-col-resize"
-          >
-            <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-port/60 opacity-0 transition-opacity group-hover:opacity-100" />
-          </div>
-        </div>
+  const panel = (tabId: string): ReactNode => {
+    switch (tabId as ProjectTabId) {
+      case 'structure':
+        return (
+          <StructureTab
+            projectId={project.id}
+            canManage={project.access.canManage}
+            readOnly={project.status === 'archived'}
+          />
+        );
+      case 'tasks':
+        return <ProjectTasksTab projectId={project.id} />;
+      case 'about':
+        return <ProjectAboutPanel project={project} />;
+      case 'channel':
+        return <ProjectChannelTab project={project} conversationId={conversationId} />;
+      case 'members':
+        return <ProjectMembersTab project={project} />;
+      case 'history':
+        return <ProjectHistoryTab projectId={project.id} />;
+      default:
+        return null;
+    }
+  };
 
-        {/* ПРАВАЯ рабочая зона: полоса вкладок начинается от границы левой
-            панели и едет вместе с ней при перетаскивании перегородки. */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <ProjectTabStrip
-            tab={tab}
-            onTab={activate}
-            primary={primary}
-            unread={conversation?.unreadCount}
-            channelPanel={
-              tab === 'channel' && conversationId
-                ? { open: channelPanel.open, onToggle: channelPanel.toggle }
-                : null
-            }
-          />
-          <div className="relative min-h-0 flex-1">
-            {visited.includes('structure') ? (
-              <TabPanel active={tab === 'structure'}>
-                <StructureTab
-                  projectId={project.id}
-                  canManage={project.access.canManage}
-                  readOnly={project.status === 'archived'}
-                />
-              </TabPanel>
-            ) : null}
-            {visited.includes('tasks') ? (
-              <TabPanel active={tab === 'tasks'}>
-                <ProjectTasksTab projectId={project.id} />
-              </TabPanel>
-            ) : null}
-            {visited.includes('channel') ? (
-              <TabPanel active={tab === 'channel'}>
-                <ProjectChannelTab project={project} conversationId={conversationId} />
-              </TabPanel>
-            ) : null}
-            {visited.includes('members') ? (
-              <TabPanel active={tab === 'members'}>
-                <ProjectMembersTab project={project} />
-              </TabPanel>
-            ) : null}
-            {visited.includes('history') ? (
-              <TabPanel active={tab === 'history'}>
-                <ProjectHistoryTab projectId={project.id} />
-              </TabPanel>
-            ) : null}
-          </div>
-        </div>
-        {/* Панель «О канале» — ПОЛНОВЫСОТНАЯ колонка-сиблинг карточки, как в
-            задаче и письме: её шапка h-10 продолжает полосу вкладок, панель
-            занимает ширину за счёт рабочей зоны (вкладки не «уезжают» под
-            топбар — при нехватке места полоса вкладок скроллится оверлеем).
-            Открыта только на вкладке «Канал». */}
-        {conversation ? (
-          <ChatSidePanel
-            conversationId={conversation.id}
-            conversation={conversation}
-            open={channelPanel.open && tab === 'channel'}
-            onClose={channelPanel.close}
-            title={ui.chat.aboutProject}
-            headerClass="h-10"
-          />
+  return (
+    <div ref={rowRef} className="flex h-full min-w-0">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <CardTabAreas
+          label={ui.projects.tabsLabel}
+          tabs={tabDefs}
+          state={state}
+          onStateChange={cardTabs.setState}
+          renderPanel={panel}
+          groupW={solved.groupW}
+          collapsedGroupId={solved.collapsedGroupId}
+          onGroupWidthsChange={cardTabs.setGroupWidths}
+          groupMin={(group) =>
+            group.tabs.includes('channel') ? (solved.panelRendered ? 280 : 420) : 280
+          }
+          onHideTab={cardTabs.toggleHidden}
+          canHideTab={(id) => PROJECT_TAB_IDS.includes(id as ProjectTabId)}
+          trailing={(group) =>
+            group.id === state.groups[0]?.id ? (
+              <ProjectTabsTrailing
+                visible={cardTabs.visibleTabs}
+                onToggle={cardTabs.toggleHidden}
+              />
+            ) : null
+          }
+          actions={(group, active) =>
+            active?.id === 'channel' && conversationId ? (
+              <ChatPanelToggle open={channelPanel.open} onToggle={() => channelPanel.toggle()} />
+            ) : null
+          }
+          className="bg-card"
+        />
+        {panelRequested && !solved.panelRendered ? (
+          <CardWidthHint text={PANEL_HIDDEN_HINT} className="absolute top-11 right-2 z-10" />
         ) : null}
       </div>
-    </div>
-  );
-}
 
-/** Панель вкладки: смонтирована при первом показе, скрыта без размонтирования
- *  (прокрутка и локальное состояние живут), `inert` убирает её из обхода.
- *  Скрытие — `hidden` (display:none), а не `invisible`: visibility-предок
- *  оставлял старую вкладку поверх новой на кадр переключения. */
-function TabPanel({ active, children }: { active: boolean; children: ReactNode }) {
-  return (
-    <div role="tabpanel" inert={!active} className={cn('absolute inset-0', !active && 'hidden')}>
-      {children}
+      {conversation && solved.panelRendered ? (
+        <ChatSidePanel
+          conversationId={conversation.id}
+          conversation={conversation}
+          open
+          onClose={() => channelPanel.close()}
+          title={ui.chat.aboutProject}
+          headerClass="h-10"
+        />
+      ) : null}
+
+      <CardHeaderActionsPortal>
+        <ProjectHeaderActions
+          project={project}
+          layout={
+            <CardLayoutButton
+              groupCount={state.groups.length}
+              onSplit={() => cardTabs.setState(splitActiveTab(state))}
+              onMerge={() => cardTabs.setState(mergeAllGroups(state))}
+            />
+          }
+        />
+      </CardHeaderActionsPortal>
     </div>
   );
 }
