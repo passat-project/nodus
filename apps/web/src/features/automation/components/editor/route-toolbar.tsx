@@ -28,8 +28,10 @@ function formatDate(iso: string): string {
  * #497: в узком холсте (открыта правая панель) подписи скрыты, поэтому каждое
  * действие обязано отличаться ИКОНКОЙ и иметь aria-label: два одинаковых «+»
  * неразличимы. Лестница приоритетов при сужении (каждый шаг — когда места
- * реально не хватает, а не «на всякий случай»): 880 — подпись «Упорядочить»;
- * 760 — подписи всех действий и разделитель; 640 — чип проблем сжимается до
+ * реально не хватает, а не «на всякий случай»): 930 — подпись «Упорядочить» и
+ * чип даты публикации (его полный вид — в title): имя типа — главный элемент
+ * бара и не должно резаться до «Ст…» на 1920 с открытой панелью (~766px);
+ * 880 — подписи всех действий и разделитель; 640 — чип проблем сжимается до
  * иконки со счётчиком; 560 — счётчик чипа тоже уходит (имя и число — в
  * title/aria-label), отступы сжимаются, «Сбросить» уходит из бара целиком
  * (он продублирован в баннере черновика над холстом): всё это освобождает
@@ -103,7 +105,7 @@ export function RouteToolbar({
             </span>
           ) : publishedAt ? (
             <span
-              className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums @max-[640px]:hidden"
+              className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums @max-[930px]:hidden"
               title={`${ui.automation.chipPublishedAt} ${formatDate(publishedAt)}${publishedBy ? ` · ${publishedBy}` : ''}`}
             >
               {formatDate(publishedAt)}
@@ -116,40 +118,40 @@ export function RouteToolbar({
           ) : null}
           {canManage ? (
             <>
-              <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border @max-[760px]:hidden" />
+              <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border @max-[880px]:hidden" />
               <Button
                 variant="ghost"
                 size="sm"
-                className="shrink-0 @max-[760px]:px-1.5"
+                className="shrink-0 @max-[880px]:px-1.5"
                 onClick={onAddStage}
                 title={ui.automation.addStage}
                 aria-label={ui.automation.addStage}
               >
                 <Plus className="size-3.5" strokeWidth={1.75} />
-                <span className="@max-[760px]:hidden">{ui.automation.addStage}</span>
+                <span className="@max-[880px]:hidden">{ui.automation.addStage}</span>
               </Button>
               {addTransition(
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="shrink-0 @max-[760px]:px-1.5"
+                  className="shrink-0 @max-[880px]:px-1.5"
                   title={ui.automation.addTransitionLabel}
                   aria-label={ui.automation.addTransitionLabel}
                 >
                   <ArrowRightLeft className="size-3.5" strokeWidth={1.75} />
-                  <span className="@max-[760px]:hidden">{ui.automation.addTransitionLabel}</span>
+                  <span className="@max-[880px]:hidden">{ui.automation.addTransitionLabel}</span>
                 </Button>,
               )}
               <Button
                 variant="ghost"
                 size="sm"
-                className="shrink-0 @max-[760px]:px-1.5 @max-[340px]:hidden"
+                className="shrink-0 @max-[880px]:px-1.5 @max-[340px]:hidden"
                 onClick={onTidy}
                 title={ui.automation.tidyUp}
                 aria-label={ui.automation.tidyUp}
               >
                 <LayoutGrid className="size-3.5" strokeWidth={1.75} />
-                <span className="@max-[880px]:hidden">{ui.automation.tidyUp}</span>
+                <span className="@max-[930px]:hidden">{ui.automation.tidyUp}</span>
               </Button>
             </>
           ) : null}
