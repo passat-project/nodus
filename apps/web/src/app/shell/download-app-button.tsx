@@ -46,18 +46,25 @@ export function DownloadAppButton() {
   // Версия в попапе: браузер — последняя с сервера (её скачают); оболочка
   // без обновления — УСТАНОВЛЕННАЯ («Новых версий нет» рядом с чужой версией
   // с сервера читалось как «у вас 1.0.4», фидбек 09.10); при зелёной точке —
-  // переход «текущая → новая». Дата (релиза серверной версии) — только где
-  // она о чём-то: браузер и доступное обновление. Манифеста может не быть
-  // (оболочка: кнопка живёт без него) — тогда только версия моста.
-  const newVersion = manifest?.version ?? '';
+  // переход «текущая → новая».
+  //
+  // Целевую версию в оболочке берём ИЗ МОСТА (её и установит апдейтер):
+  // веб-манифест в долгоживущем окне может быть старше — фетч один на
+  // загрузку страницы, а оболочка узнаёт о выпуске своим апдейтером. Иначе
+  // попап показывал «1.0.15 → 1.0.15» и чужой «что нового» (#739).
+  const manifestVersion = manifest?.version ?? '';
+  const targetVersion = (updateReady ? updateState.version : null) ?? manifestVersion;
+  // Заметки/дата правдивы только у манифеста, совпавшего с целевой версией:
+  // текст старого выпуска хуже, чем его отсутствие (#739).
+  const manifestMatches = manifest !== null && manifest.version === targetVersion;
   const versionLine = updateReady
-    ? newVersion
-      ? `${shellVersion ?? ''} → ${newVersion}`.trim()
+    ? targetVersion
+      ? `${shellVersion ?? ''} → ${targetVersion}`.trim()
       : (shellVersion ?? '')
     : inShell
-      ? (shellVersion ?? newVersion)
-      : newVersion;
-  const showDate = (!inShell || updateReady) && Boolean(manifest?.pub_date);
+      ? (shellVersion ?? manifestVersion)
+      : manifestVersion;
+  const showDate = (!inShell || updateReady) && manifestMatches && Boolean(manifest?.pub_date);
 
   const downloading = inShell && updateState.status === 'downloading';
   const label = updateReady ? ui.topbar.updateApp : ui.topbar.downloadApp;
@@ -133,7 +140,7 @@ export function DownloadAppButton() {
 
           {updateReady ? (
             <>
-              {manifest?.notes && (
+              {manifest && manifestMatches && manifest.notes && (
                 <div
                   className="max-h-40 overflow-y-auto text-sm whitespace-pre-line text-muted-foreground"
                   data-no-scrollbar

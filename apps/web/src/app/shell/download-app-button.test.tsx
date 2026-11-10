@@ -9,6 +9,7 @@ import { createElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DownloadAppButton } from './download-app-button.js';
+import { formatDate } from '../../shared/lib/format.js';
 
 /**
  * Кнопка «Скачать приложение» (#263): без раздачи /desktop/ кнопки нет;
@@ -165,5 +166,46 @@ describe('оболочка', () => {
     await vi.advanceTimersByTimeAsync(16_000);
     const button = await screen.findByRole('button', { name: 'Обновить приложение' });
     expect(button.querySelector('.bg-success')).not.toBeNull();
+  });
+
+  it('манифест старше обновления: версия из моста, чужого «что нового» нет (#739)', async () => {
+    // Долгоживущее окно портала держит манифест, загруженный ДО публикации
+    // выпуска; мост уже знает реальную целевую версию (её и установит).
+    installShellBridge({ status: 'available', version: '1.0.16' });
+    vi.stubGlobal(
+      'fetch',
+      stubFetch(200, { ...MANIFEST, version: '1.0.15', notes: 'Старый текст про курсор' }),
+    );
+    renderButton();
+    const button = await screen.findByRole('button', { name: 'Обновить приложение' });
+    fireEvent.mouseEnter(button);
+
+    await waitFor(() => expect(screen.getByText('1.0.0 → 1.0.16')).toBeTruthy());
+    // Текст чужого выпуска не показываем: лучше без заметок, чем старые.
+    expect(screen.queryByText(/Старый текст про курсор/)).toBeNull();
+    // Дата тоже от чужого манифеста — не показывается (#739).
+    expect(screen.queryByText(formatDate(MANIFEST.pub_date))).toBeNull();
+  });
+
+  it('манифест догоняет целевую версию рефетчем — заметки новой версии (#739)', async () => {
+    installShellBridge({ status: 'available', version: '1.0.16' });
+    const stale = { ...MANIFEST, version: '1.0.15', notes: 'Старый текст про курсор' };
+    const fresh = { ...MANIFEST, version: '1.0.16', notes: 'Перетаскивание файлов' };
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify(stale), { status: 200 }))
+      .mockResolvedValue(new Response(JSON.stringify(fresh), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderButton();
+    const button = await screen.findByRole('button', { name: 'Обновить приложение' });
+    fireEvent.mouseEnter(button);
+
+    await waitFor(() => expect(screen.getByText(/Перетаскивание файлов/)).toBeTruthy(), {
+      timeout: 2000,
+    });
+    expect(screen.queryByText(/Старый текст про курсор/)).toBeNull();
+    expect(screen.getByText('1.0.0 → 1.0.16')).toBeTruthy();
+    // Манифест совпал с целевой версией — дата его выпуска снова правдива.
+    expect(screen.getByText(formatDate(MANIFEST.pub_date))).toBeTruthy();
   });
 });
