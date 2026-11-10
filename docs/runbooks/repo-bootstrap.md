@@ -136,7 +136,7 @@ gh api -X PUT repos/Alexandrisius/nodus/branches/main/protection \
 
   **Каждый новый worktree** (`git worktree add ../nodus-…`, параллельные сессии — gotchas) — те же команды с `$p` = путь worktree сразу после создания, ДО `pnpm install` и копирования `.env`: соседние каталоги наследуют слабые права от `D:\Project\AI`.
 
-  Откат — `icacls $p /reset /T`. Docker Desktop (bind-mount `infra/desktop-dist`) и git работают от вашей учётки — не задеваются (проверено 19.10). Пин `@swc/core` 1.15.x (#324) это НЕ снимает: SWC ≥ 1.16 проверяет кэш в профиле (`%LOCALAPPDATA%\swc`), а не в проекте.
+  Откат — `icacls $p /reset /T`. Docker Desktop (bind-mount `infra/desktop-dist`) и git работают от вашей учётки — не задеваются (проверено 19.10). Права профиля важны и без пина: SWC ≥ 1.16 проверяет кэш в профиле (`%LOCALAPPDATA%\swc`), а не в проекте; пин 1.15.47 снят 10.11.2026 (#362) — после изменения прав профиля проверяй `node -e "require('@swc/core')"`.
 
 ## Проверка результата
 
