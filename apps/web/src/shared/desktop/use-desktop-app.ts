@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   DESKTOP_BRIDGE_EVENTS,
@@ -46,6 +46,20 @@ export function useDesktopApp(): {
 
   const inShell = isDesktopShell();
   const [updateState, setUpdateState] = useState<ShellUpdateState>(IDLE_STATE);
+  const manifestData = manifest.data;
+  const refetchManifest = manifest.refetch;
+  // Оболочка узнаёт о новой версии раньше, чем долгоживущий SPA перечитает
+  // манифест (фетч один на загрузку страницы, фоновых рефетчей нет): попап
+  // иначе показывает «1.0.15 → 1.0.15» и чужой текст «что нового» (#739).
+  // Один рефетч на версию — без циклов; заметки догоняют целевую версию.
+  const refreshedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!inShell || updateState.status !== 'available' || !updateState.version) return;
+    if (manifestData?.version === updateState.version) return;
+    if (refreshedFor.current === updateState.version) return;
+    refreshedFor.current = updateState.version;
+    void refetchManifest();
+  }, [inShell, updateState.status, updateState.version, manifestData?.version, refetchManifest]);
   // Установленная версия оболочки (мост): в попапе без обновлений показываем
   // ЕЁ, а не версию с сервера — «1.0.4 / Новых версий нет» сбивало с толку
   // (фидбек 09.10).
@@ -78,7 +92,7 @@ export function useDesktopApp(): {
   }, [inShell]);
 
   return {
-    manifest: manifest.data ?? null,
+    manifest: manifestData ?? null,
     inShell,
     updateState,
     shellVersion,
