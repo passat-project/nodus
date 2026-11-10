@@ -153,10 +153,16 @@ export function PopupView() {
 
   function startReply() {
     setReplying(true);
-    void invoke('popup_set_expanded', { expanded: true });
-    // Фокус после кадра: поле уже смонтировано. Карточка — overflow:clip,
-    // поэтому scroll-into-view не может увести содержимое за границы.
-    requestAnimationFrame(() => requestAnimationFrame(() => inputRef.current?.focus()));
+    // Активация окна идёт через Rust (`set_focusable(true)` + `set_focus`):
+    // фокус поля ставим ПОСЛЕ ответа команды, иначе гонка с асинхронной
+    // активацией — поле остаётся без клавиатуры (#709).
+    void invoke('popup_set_expanded', { expanded: true })
+      .catch(() => {})
+      .then(() => {
+        // Фокус после кадра: поле уже смонтировано. Карточка — overflow:clip,
+        // поэтому scroll-into-view не может увести содержимое за границы.
+        requestAnimationFrame(() => requestAnimationFrame(() => inputRef.current?.focus()));
+      });
   }
 
   function send() {
