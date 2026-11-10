@@ -64,6 +64,7 @@ function make(options: { tree?: ReturnType<typeof node>[]; tasks?: string[] } = 
       error: null,
     })),
     remove: vi.fn(async () => void 0),
+    depthOf: vi.fn(async () => 0 as number | null),
     read: vi.fn(async () => ({ ast: null, origin: null })),
     preview: vi.fn<(...args: unknown[]) => Promise<unknown[]>>(async () => []),
   };
@@ -223,6 +224,24 @@ describe('ProjectFormulaService.movePreview (#632, Р10, критерий 1)', (
       code: ErrorCode.FORBIDDEN,
     });
     expect(cells.preview).not.toHaveBeenCalled();
+  });
+
+  it('снятие формулы проекта без ячейки — no-op, событие не эмитится (#658)', async () => {
+    const { service, cells, writer, eventBus } = make();
+    cells.depthOf.mockResolvedValueOnce(null);
+    await service.remove(user, PROJECT, FIELD);
+    expect(cells.remove).not.toHaveBeenCalled();
+    expect(writer.writeProject).not.toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalled();
+  });
+
+  it('снятие формулы папки без ячейки — no-op, событие не эмитится (#658)', async () => {
+    const { service, cells, writer, eventBus } = make();
+    cells.depthOf.mockResolvedValueOnce(null);
+    await service.removeNode(user, PROJECT, NODE, FIELD);
+    expect(cells.remove).not.toHaveBeenCalled();
+    expect(writer.writeNode).not.toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalled();
   });
 
   it('ничего не меняется — пустой список (диалог «изменений нет»)', async () => {

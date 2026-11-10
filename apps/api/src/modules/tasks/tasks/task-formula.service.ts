@@ -124,6 +124,9 @@ export class TaskFormulaService {
       // замком и в том же порядке захвата, что PATCH (строка → ячейки).
       await this.repo.lock(tx, taskId);
       await this.assertFormulaLock(tx, taskId, row.creatorId, user, fieldId, lockReason);
+      // #658: снятие идемпотентно — нет ячейки, нет ни очистки значения,
+      // ни второго события (адресное formula_changed шлём только по факту).
+      if ((await this.cells.depthOf('task', taskId, fieldId, tx)) === null) return;
       await this.cells.remove(tx, { hostKind: 'task', hostId: taskId, fieldId });
       await this.writer.apply(
         tx,

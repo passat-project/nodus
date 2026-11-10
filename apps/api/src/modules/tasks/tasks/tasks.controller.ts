@@ -243,7 +243,9 @@ export class TasksController {
   @Delete(':id/custom-fields/:fieldId/formula')
   @HttpCode(204)
   @Audit({ action: 'custom_field.formula_remove', entity: 'task' })
-  @ApiOperation({ summary: 'Снять формулу (значение-снимок остаётся)' })
+  @ApiOperation({
+    summary: 'Снять формулу (значение очищается; ячейка пуста или под формулой типа)',
+  })
   @ApiErrors(400, 401, 403, 404)
   @ApiIdempotencyKey()
   removeFormula(

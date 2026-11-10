@@ -65,6 +65,7 @@ function setup(options: { visible?: boolean } = {}) {
     read: vi.fn(async () => ({ ast: null, origin: null })),
     save: vi.fn(async () => ({ value: 'результат', error: null })),
     remove: vi.fn(async () => void 0),
+    depthOf: vi.fn(async () => 0 as number | null),
     dependentCellsByValues: vi.fn(async (): Promise<FormulaCellRef[]> => []),
     cellsForHost: vi.fn(async (): Promise<FormulaCellRef[]> => [
       { cellId: 'c1', hostKind: 'letter', hostId: LETTER, fieldId: FIELD },
@@ -217,5 +218,14 @@ describe('LetterFormulaService (#632, Р10)', () => {
     expect(fields.applyFormulaValues).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it('снятие формулы без ячейки — no-op: значение и событие не трогаются (#658)', async () => {
+    const { service, cells, fields, eventBus } = setup();
+    cells.depthOf.mockResolvedValueOnce(null);
+    await service.remove(REGISTRAR, LETTER, FIELD);
+    expect(cells.remove).not.toHaveBeenCalled();
+    expect(fields.applyFormulaValues).not.toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalled();
   });
 });

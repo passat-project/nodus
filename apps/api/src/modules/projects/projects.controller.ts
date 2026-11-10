@@ -166,7 +166,9 @@ export class ProjectsController {
   @HttpCode(204)
   @Audit({ action: 'custom_field.formula_remove', entity: 'project' })
   @ApiParam({ name: 'id', description: 'UUID проекта', schema: { type: 'string', format: 'uuid' } })
-  @ApiOperation({ summary: 'Снять формулу проекта (значение-снимок остаётся)' })
+  @ApiOperation({
+    summary: 'Снять формулу проекта (значение очищается; ячейка пуста или под формулой типа)',
+  })
   @ApiErrors(400, 401, 403, 404)
   @ApiIdempotencyKey()
   removeFormula(
