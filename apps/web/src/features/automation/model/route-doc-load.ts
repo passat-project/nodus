@@ -18,13 +18,22 @@ export function loadedState(detail: WorkflowDetail) {
   const baseline = canonicalDocument({
     stages: detail.document.stages.map((s) => ({ ...s })),
     transitions: detail.document.transitions.map((t) => ({ ...t })),
+    // Действия без смены статуса (#633): раздел документа, как переходы.
+    // Без него рабочая копия теряла опубликованные действия при загрузке.
+    actions: (detail.document.actions ?? []).map((a) => ({ ...a })),
     layout: detail.document.layout ?? EMPTY_LAYOUT,
     // Форма создания — раздел документа (#432): null — форма по умолчанию.
     creation: detail.document.creation ?? null,
   });
   const draft = readDraft(detail.id, detail.version);
   const document = canonicalDocument(
-    draft ? { ...draft.document, layout: layoutOf(draft.document) } : baseline,
+    draft
+      ? {
+          ...draft.document,
+          actions: draft.document.actions ?? [],
+          layout: layoutOf(draft.document),
+        }
+      : baseline,
   );
   return {
     workflowId: detail.id,

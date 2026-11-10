@@ -136,4 +136,34 @@ describe('route-doc-store: действия маршрута (#633)', () => {
     // У другого статуса главное действие не тронуто.
     expect(byId.get(other)?.display).toBe('button');
   });
+
+  it('load сохраняет опубликованные действия в рабочей копии (#633)', () => {
+    const store = createRouteDocStore('pending');
+    const base = detail();
+    const action = {
+      id: '00000000-0000-4000-8000-0000000000cc',
+      code: null,
+      name: 'Запросить уточнение',
+      stageId: S2,
+      display: 'button' as const,
+      sortOrder: 0,
+      rules: {
+        conditions: [{ kind: 'role_in' as const, roles: ['assignee' as const] }],
+        validators: [],
+        postFunctions: [],
+      },
+      form: { enabled: true, sections: [] },
+      steps: [],
+    };
+    store.getState().load({
+      ...base,
+      document: { ...base.document, actions: [action] },
+    });
+
+    const loaded = store.getState().document.actions ?? [];
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0]?.name).toBe('Запросить уточнение');
+    // Раздел документа, а не правка: загрузка не делает черновик грязным.
+    expect(store.getState().dirty).toBe(false);
+  });
 });
