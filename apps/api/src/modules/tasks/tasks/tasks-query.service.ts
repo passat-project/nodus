@@ -168,7 +168,7 @@ export class TasksQueryService {
     // Ленивый старт раунда сбора (#434) для задач, вошедших в стадию до
     // релиза: карточка сразу видит прогресс, а не «мёртвую» коллективную
     // кнопку. Повторный вызов идемпотентен (открытый раунд уже есть).
-    await this.txRunner.run(async (tx) => this.press.ensureForStage(tx, id, row.stageId));
+    await this.txRunner.run(async (tx) => this.press.ensureForStage(tx, id));
     const viewer = await this.viewer(user);
     const [full, children, result] = await Promise.all([
       this.reads.findDetail(id),

@@ -210,7 +210,7 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
     // Вход в стадию с коллективной кнопкой (#434): раунд и снимок состава
     // стартуют той же транзакцией, что и смена стадии; выход из такой стадии
     // закрывает открытый раунд.
-    await this.press.ensureForStage(tx, taskId, target.id, {
+    await this.press.ensureForStage(tx, taskId, {
       notify: true,
       actorId,
     });
@@ -265,7 +265,7 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
             transitionId: null,
             cause: 'workflow_migration',
           });
-          await this.press.ensureForStage(tx, id, toStage.id);
+          await this.press.ensureForStage(tx, id);
         });
         moved += 1;
       }

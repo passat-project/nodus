@@ -74,6 +74,25 @@ export function serverChecksOf(
   }
 }
 
+/** Должности, на которые ссылаются условия решающих (#433) и источники
+ *  коллективной кнопки (#434): публикация проверяет их активность/держателей. */
+export function collectPositionIds(document: WorkflowDocument): string[] {
+  return [
+    ...new Set(
+      document.transitions.flatMap((transition) => [
+        ...transition.rules.conditions.flatMap((condition) =>
+          condition.kind === 'decider_in' && condition.source.kind === 'position'
+            ? [condition.source.positionId]
+            : [],
+        ),
+        ...(transition.press?.sources.flatMap((source) =>
+          source.kind === 'position' ? [source.positionId] : [],
+        ) ?? []),
+      ]),
+    ),
+  ];
+}
+
 /**
  * Проверка документа на публикации (#378, #431, #432, #632): схема, атрибуты
  * области, привязка к типу маршрута, живые сотрудники в пресетах формы
@@ -120,19 +139,7 @@ export async function checkDocumentForPublish(
     ctx.document.creation,
     ctx.tx,
   );
-  // Должности источников решающих (#433): активность и число держателей —
-  // ошибка публикации/предупреждение «на должности никого нет».
-  const positionIds = [
-    ...new Set(
-      ctx.document.transitions.flatMap((transition) =>
-        transition.rules.conditions.flatMap((condition) =>
-          condition.kind === 'decider_in' && condition.source.kind === 'position'
-            ? [condition.source.positionId]
-            : [],
-        ),
-      ),
-    ),
-  ];
+  const positionIds = collectPositionIds(ctx.document);
   const positions = await deps.org.positionFacts(positionIds, ctx.tx);
   const problems = checkWorkflowDocument(ctx.document, {
     customFields,

@@ -79,6 +79,12 @@ function setup(state = 'waiting', config = { quorum: { kind: 'all' }, order: 'pa
     submitted: vi.fn(async () => void 0),
     returned: vi.fn(async () => void 0),
   };
+  const messages = {
+    taskMessages: vi.fn(async (_taskId: string, ids: string[]) =>
+      ids.map((id) => ({ messageId: id, attachmentCount: 0 })),
+    ),
+  };
+  const records = { write: vi.fn(async () => void 0) };
   const engine = { execute: vi.fn(async () => ({ stage: {}, recordId: 'rec' })) };
   const reader = { checkPressInput: vi.fn(() => ({ missing: [], unexpected: [] })) };
   const service = new PressService(
@@ -87,11 +93,13 @@ function setup(state = 'waiting', config = { quorum: { kind: 'all' }, order: 'pa
     rounds as never,
     tasks as never,
     time as never,
+    messages as never,
+    records as never,
     pressEvents as never,
     engine as never,
     reader as never,
   );
-  return { service, repo, rounds, tasks, time, pressEvents, engine, reader, round };
+  return { service, repo, rounds, tasks, time, messages, records, pressEvents, engine, reader, round };
 }
 
 describe('PressService (#434)', () => {
@@ -157,6 +165,39 @@ describe('PressService (#434)', () => {
     ).rejects.toThrow();
   });
 
+  it('сдача: вложения сообщений проверяются и считаются по факту (#434)', async () => {
+    const { service, repo, messages, records } = setup();
+    messages.taskMessages.mockResolvedValueOnce([
+      { messageId: 'm1', attachmentCount: 2 },
+      { messageId: 'm2', attachmentCount: 1 },
+    ]);
+    await service.submit({ id: 'u1', permissions: [] } as never, 't1', {
+      result: { text: 'Итог', messageIds: ['m1', 'm2'] },
+    });
+    expect(repo.updateEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      'e1',
+      expect.objectContaining({
+        result: expect.objectContaining({ fileCount: 3 }),
+      }),
+    );
+    expect(records.write).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ recordKind: 'press', participantId: 'u1' }),
+    );
+  });
+
+  it('сдача: чужое/удалённое сообщение — 404 без записи отметки', async () => {
+    const { service, repo, messages } = setup();
+    messages.taskMessages.mockResolvedValueOnce([]);
+    await expect(
+      service.submit({ id: 'u1', permissions: [] } as never, 't1', {
+        result: { text: 'Итог', messageIds: ['alien'] },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(repo.updateEntry).not.toHaveBeenCalled();
+  });
+
   it('сдача отметки пишет событие блока чата для адресного раунда', async () => {
     const { service, pressEvents } = setup();
     await service.submit({ id: 'u1', permissions: [] } as never, 't1', {});
@@ -185,7 +226,7 @@ describe('PressService (#434)', () => {
   });
 
   it('ответственный возвращает выбранную отметку на доработку', async () => {
-    const { service, repo, pressEvents, round } = setup('pressed');
+    const { service, repo, pressEvents, records, round } = setup('pressed');
     repo.findOpenRound.mockResolvedValue({
       ...round,
       entries: [{ ...entry('pressed'), userId: 'assignee' }],
@@ -199,6 +240,14 @@ describe('PressService (#434)', () => {
       expect.anything(),
       'e1',
       expect.objectContaining({ state: 'returned', returnReason: 'Доработать раздел' }),
+    );
+    expect(records.write).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        recordKind: 'return',
+        participantId: 'assignee',
+        comment: 'Доработать раздел',
+      }),
     );
     expect(pressEvents.returned).toHaveBeenCalledWith(
       expect.anything(),

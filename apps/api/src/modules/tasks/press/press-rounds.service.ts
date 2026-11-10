@@ -6,6 +6,7 @@ import {
 } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import { DomainException } from '../../../core/errors/domain-exception.js';
 import { EventBus } from '../../../core/events/event-bus.js';
 import {
   USER_PROFILE_READER,
@@ -43,15 +44,19 @@ export class PressRoundsService {
 
   /** Вызывается в транзакции создания задачи и смены стадии. `notify` — только
    *  для путей-мутаций: ленивый старт при чтении карточки уведомлений не шлёт.
+   *  Строка задачи блокируется, стадия берётся из свежего чтения: два
+   *  параллельных открытия карточки не создают раунд дважды, а смена стадии
+   *  между чтением и стартом не оставляет раунд в старом статусе.
    *  «Все сотрудники» считается broadcast-раундом: событие не эмитится, чтобы
    *  не рассылать уведомления по всему штату (анти-спам #434). */
   async ensureForStage(
     tx: TransactionClient,
     taskId: string,
-    stageId: string,
     options: { notify?: boolean; actorId?: string | null } = {},
   ): Promise<void> {
+    await this.tasks.lock(tx, taskId);
     const task = await this.tasks.findWithParticipants(taskId, tx);
+    const stageId = task.stageId;
     const transitions = (
       await this.pressReader.pressTransitionsForStage(task.workflowId, stageId, tx)
     ).sort((a, b) => a.sortOrder - b.sortOrder);
@@ -113,6 +118,48 @@ export class PressRoundsService {
    *  маршрута и не оставлять «вечный» сбор (#434). */
   async cancelForTask(tx: TransactionClient, taskId: string): Promise<void> {
     await this.repo.cancelOpenRound(tx, 'task', taskId, new Date());
+  }
+
+  /** Снятие участника при открытом раунде запрещено (#434, security): иначе
+   *  снятый сохраняет доступ через `pressTaskIds`, может закрыть задачу и
+   *  одновременно блокирует кворум «все». Состав раунда — снимок на старте;
+   *  сначала завершают сбор. */
+  async assertCanRemove(
+    tx: TransactionClient,
+    taskId: string,
+    userIds: readonly string[],
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+    const round = await this.repo.findOpenRound(tx, 'task', taskId);
+    if (!round) return;
+    const wanted = new Set(userIds);
+    const blocked = round.entries
+      .filter((entry) => wanted.has(entry.userId) && entry.state !== 'excluded')
+      .map((entry) => entry.userId);
+    if (blocked.length > 0) {
+      throw DomainException.conflict('Press round is open for these participants', {
+        userIds: blocked,
+      });
+    }
+  }
+
+  /** Добавленный участник входит в открытый раунд отметкой «ждём» (#434):
+   *  источник раунда решается заново, но только для этого человека. */
+  async syncAdded(tx: TransactionClient, taskId: string, userId: string): Promise<void> {
+    const round = await this.repo.findOpenRound(tx, 'task', taskId);
+    if (!round) return;
+    const existing = round.entries.find((entry) => entry.userId === userId);
+    if (existing) {
+      if (existing.state === 'excluded') {
+        await this.repo.updateEntry(tx, existing.id, { state: 'waiting', returnReason: null });
+      }
+      return;
+    }
+    const config = pressConfigSchema.parse(round.config);
+    const resolved = await this.sources.resolve(tx, taskId, config);
+    if (!resolved.some((entry) => entry.userId === userId)) return;
+    const order = Math.max(-1, ...round.entries.map((entry) => entry.order)) + 1;
+    await this.repo.addEntry(tx, round.id, userId, order);
   }
 
   /** Есть ли открытый раунд (#434): false — источники пусты или задача

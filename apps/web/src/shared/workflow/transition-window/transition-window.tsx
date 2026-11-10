@@ -104,8 +104,10 @@ export function TransitionWindow({
   const sections = useMemo(() => {
     const all = effectiveWindowSections(transition.form, { validators: transition.validators });
     return variant === 'press'
-      ? all.filter((section) =>
-          (PRESS_WINDOW_SECTION_KINDS as readonly string[]).includes(section.kind),
+      ? all.filter(
+          (section) =>
+            section.origin === 'form' &&
+            (PRESS_WINDOW_SECTION_KINDS as readonly string[]).includes(section.kind),
         )
       : all;
   }, [transition.form, transition.validators, variant]);

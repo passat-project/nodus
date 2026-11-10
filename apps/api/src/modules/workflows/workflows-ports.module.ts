@@ -22,6 +22,8 @@ import { WorkflowRulesReaderProvider } from './ports/workflow-rules-reader.provi
 import { WORKFLOW_RULES_READER } from './ports/workflow-rules-reader.port.js';
 import { WorkflowPressReaderProvider } from './ports/workflow-press-reader.provider.js';
 import { WORKFLOW_PRESS_READER } from './ports/workflow-press-reader.port.js';
+import { WorkflowRecordWriterProvider } from './ports/workflow-record-writer.provider.js';
+import { WORKFLOW_RECORD_WRITER } from './ports/workflow-record-writer.port.js';
 import { ProcessTypesRepository } from './types/process-types.repository.js';
 
 /**
@@ -66,6 +68,8 @@ import { ProcessTypesRepository } from './types/process-types.repository.js';
     { provide: WORKFLOW_RULES_READER, useExisting: WorkflowRulesReaderProvider },
     WorkflowPressReaderProvider,
     { provide: WORKFLOW_PRESS_READER, useExisting: WorkflowPressReaderProvider },
+    WorkflowRecordWriterProvider,
+    { provide: WORKFLOW_RECORD_WRITER, useExisting: WorkflowRecordWriterProvider },
   ],
   exports: [
     WORKFLOW_ENGINE,
@@ -73,6 +77,7 @@ import { ProcessTypesRepository } from './types/process-types.repository.js';
     WORKFLOW_FIELD_USAGE_READER,
     WORKFLOW_RULES_READER,
     WORKFLOW_PRESS_READER,
+    WORKFLOW_RECORD_WRITER,
     PROCESS_TYPE_FORM_CLEANER,
     ROLE_MEMBERSHIP_READER,
     NUMBER_SERIES_STORE,

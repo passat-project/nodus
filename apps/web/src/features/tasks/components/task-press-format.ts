@@ -34,7 +34,13 @@ export function pressStateClass(entry: PressEntryView): string {
 
 export function downloadPressCsv(press: PressRoundView): void {
   const rows = [
-    ['Сотрудник', 'Состояние', 'Когда', 'Результат', 'Причина возврата'],
+    [
+      ui.tasks.press.employee,
+      ui.tasks.press.status,
+      ui.tasks.press.when,
+      ui.tasks.press.result,
+      ui.tasks.press.returnReasonLabel,
+    ],
     ...press.entries.map((entry) => [
       entry.displayName,
       pressStateLabel(entry),
@@ -43,13 +49,19 @@ export function downloadPressCsv(press: PressRoundView): void {
       entry.returnReason ?? '',
     ]),
   ];
-  const csv = rows
-    .map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(';'))
-    .join('\n');
+  const csv = rows.map((row) => row.map(csvCell).join(';')).join('\n');
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = `Сбор-${press.cycle}.csv`;
+  link.download = `${ui.tasks.press.csvFileName}-${press.cycle}.csv`;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+/** Ячейка CSV: кавычки и защита от формул. Участник может написать
+ *  `=HYPERLINK(...)`, и Excel исполнит это при открытии — префикс `'`
+ *  оставляет текст текстом (CSV injection, security #434). */
+export function csvCell(value: string): string {
+  const guarded = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return `"${guarded.replaceAll('"', '""')}"`;
 }

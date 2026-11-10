@@ -74,12 +74,12 @@ export class TaskTransitionsService {
    *  слоты окна получают посчитанный префилл (Р12): значение видно сразу,
    *  человек может поправить, в тело уйдёт значением. */
   async listFor(user: AuthUser, taskId: string): Promise<WorkflowTransition[]> {
-    const row = await this.query.visibleRow(user, taskId);
+    await this.query.visibleRow(user, taskId);
     return this.txRunner.run(async (tx) => {
       // Ленивый старт раунда (#434): задачи, вошедшие в стадию до релиза,
       // получают раунд при первом открытии карточки, а не остаются с
       // коллективной кнопкой без права прямого нажатия.
-      await this.press.ensureForStage(tx, taskId, row.stageId);
+      await this.press.ensureForStage(tx, taskId);
       const transitions = await this.engine.available(tx, taskId, 'task', user);
       return this.withPrefill(transitions, taskId, user, tx);
     });
@@ -156,7 +156,7 @@ export class TaskTransitionsService {
       // Ленивый старт раунда (#434) и защита прямого нажатия: если источники
       // дали участников, движок увидит открытый раунд и откажет обычному
       // переходу; пустые источники оставляют кнопку обычной (fallback).
-      await this.press.ensureForStage(tx, taskId, row.stageId);
+      await this.press.ensureForStage(tx, taskId);
       const execution = await this.engine.execute(tx, taskId, 'task', user, { transitionId }, body);
       assignedNumbers = execution.assignedNumbers;
       // Кнопки после действия уезжают в кэш веба — с тем же префиллом, что

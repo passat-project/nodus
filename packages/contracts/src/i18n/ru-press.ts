@@ -18,6 +18,7 @@ export const pressStrings = {
     when: 'Когда',
     result: 'Результат',
     exportCsv: 'Выгрузить CSV',
+    csvFileName: 'Сбор',
     close: 'Закрыть',
     returnSelected: 'Вернуть выбранным',
     returnReasonLabel: 'Причина возврата',

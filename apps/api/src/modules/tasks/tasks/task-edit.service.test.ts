@@ -77,6 +77,7 @@ function setup(opts: { placementStage?: string } = {}) {
     {} as never,
     engine as never,
     catalog as never,
+    { assertCanRemove: vi.fn(), syncAdded: vi.fn() } as never,
   );
   return { service, engine, placementsRepo, boards, catalog, formulasMock };
 }

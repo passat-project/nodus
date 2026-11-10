@@ -109,9 +109,10 @@ export function resetPressDemo(): void {
 }
 
 function requiredCount(round: MutableRound): number {
+  const active = round.entries.filter((e) => e.state !== 'excluded').length;
   if (round.quorum.kind === 'any') return 1;
-  if (round.quorum.kind === 'count') return round.quorum.count;
-  return round.entries.filter((e) => e.state !== 'excluded').length;
+  if (round.quorum.kind === 'count') return Math.min(round.quorum.count, active);
+  return active;
 }
 
 function pressedCount(round: MutableRound): number {

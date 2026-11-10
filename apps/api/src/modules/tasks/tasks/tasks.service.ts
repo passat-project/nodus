@@ -276,7 +276,7 @@ export class TasksService {
             { fromStageName: initial.name },
           );
         }
-        await this.press.ensureForStage(tx, task.id, finalStage.id, {
+        await this.press.ensureForStage(tx, task.id, {
           notify: true,
           actorId: user.id,
         });

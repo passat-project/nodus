@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '../../../generated/prisma/client.js';
+import { Prisma } from '../../../generated/prisma/client.js';
 
 import { PrismaService } from '../../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
-import { parseRules } from '../workflow/transition-rules.js';
+import { parsePress, parseRules } from '../workflow/transition-rules.js';
 import { parseForm } from '../workflow/transition-form.js';
 import type { LoadedWorkflow } from '../workflow/workflow.repository.js';
 
@@ -190,8 +190,12 @@ export class ProcessTypesRepository {
           sortOrder: transition.sortOrder,
           rules: { ...rules, postFunctions } as Prisma.InputJsonValue,
           // Окно при нажатии — часть документа маршрута (#380): копия типа
-          // несёт его вместе с правилами.
+          // несёт его вместе с правилами; коллективная кнопка (#434) — тоже,
+          // иначе копия молча теряет сбор отметок.
           form: parseForm(transition.form) as Prisma.InputJsonValue,
+          press: transition.press
+            ? (parsePress(transition.press) as Prisma.InputJsonValue)
+            : Prisma.DbNull,
         },
       });
     }

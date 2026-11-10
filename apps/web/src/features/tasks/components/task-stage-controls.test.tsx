@@ -46,6 +46,6 @@ describe('TaskActionBar: итог «Отклонена» (#430)', () => {
     render(<TaskActionBar task={task} showTime={false} />);
 
     expect(screen.getByText('Отклонена')).toBeTruthy();
-    expect(screen.queryByText('Нет доступных действий')).toBeNull();
+    expect(screen.getByText('Нет доступных действий')).toBeTruthy();
   });
 });

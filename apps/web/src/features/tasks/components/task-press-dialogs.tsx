@@ -29,9 +29,9 @@ import { downloadPressCsv, pressStateClass, pressStateLabel } from './task-press
  *  условия проверяются при кворуме. */
 export function pressHasWindow(transition: WorkflowTransition | null): boolean {
   if (!transition?.form) return false;
-  return effectiveWindowSections(transition.form, {
-    validators: transition.validators,
-  }).some((section) => (PRESS_WINDOW_SECTION_KINDS as readonly string[]).includes(section.kind));
+  return effectiveWindowSections(transition.form, { validators: [] }).some((section) =>
+    (PRESS_WINDOW_SECTION_KINDS as readonly string[]).includes(section.kind),
+  );
 }
 
 export function PressSubmitDialog({

@@ -15,6 +15,7 @@ import { DomainException } from '../../../core/errors/domain-exception.js';
 import { actorRoles, taskAccess } from '../access/task-access.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
 import { TimeService } from '../time/time.service.js';
+import { CHAT_MESSAGE_ACCESS, type ChatMessageAccess } from '../../chat/message-access.port.js';
 import { PressEvents } from './press-events.service.js';
 import {
   WORKFLOW_ENGINE,
@@ -24,6 +25,10 @@ import {
   WORKFLOW_PRESS_READER,
   type WorkflowPressReader,
 } from '../../workflows/ports/workflow-press-reader.port.js';
+import {
+  WORKFLOW_RECORD_WRITER,
+  type WorkflowRecordWriter,
+} from '../../workflows/ports/workflow-record-writer.port.js';
 import { PressRepository } from './press.repository.js';
 import { PressRoundsService } from './press-rounds.service.js';
 
@@ -45,6 +50,8 @@ export class PressService {
     private readonly rounds: PressRoundsService,
     private readonly tasks: TasksRepository,
     private readonly time: TimeService,
+    @Inject(CHAT_MESSAGE_ACCESS) private readonly messages: ChatMessageAccess,
+    @Inject(WORKFLOW_RECORD_WRITER) private readonly records: WorkflowRecordWriter,
     private readonly pressEvents: PressEvents,
     @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
     @Inject(WORKFLOW_PRESS_READER) private readonly pressReader: WorkflowPressReader,
@@ -121,6 +128,20 @@ export class PressService {
           )
         : null;
     const result = pressEntryResultOf(input);
+    if (result.messageIds.length > 0) {
+      // Чужие/удалённые/чужая беседа — одинаковый 404 (без оракула), как в
+      // каноническом окне перехода: id из тела не доверяем (#434, security).
+      const snaps = await this.messages.taskMessages(
+        taskId,
+        result.messageIds,
+        user.id,
+        tx,
+      );
+      if (snaps.length !== result.messageIds.length) {
+        throw DomainException.notFound('Message not found');
+      }
+      result.fileCount = snaps.reduce((sum, snap) => sum + snap.attachmentCount, 0);
+    }
     await this.repo.updateEntry(tx, entry.id, {
       state: 'pressed',
       pressedAt: new Date(),
@@ -128,6 +149,18 @@ export class PressService {
       result,
       timeEntryId: timeEntry?.id ?? null,
       returnReason: null,
+    });
+    await this.records.write(tx, {
+      entityKind: 'task',
+      entityId: taskId,
+      transitionId: round.transitionId,
+      stageId: round.stageId,
+      actorId: user.id,
+      recordKind: 'press',
+      participantId: user.id,
+      comment: result.text || input.comment || null,
+      fields: input as unknown as Record<string, unknown>,
+      timeEntryId: timeEntry?.id ?? null,
     });
     const pressed = round.entries.filter(
       (item) => item.state === 'pressed' || item.userId === user.id,
@@ -152,7 +185,7 @@ export class PressService {
         ? total
         : config.quorum.kind === 'any'
           ? 1
-          : config.quorum.count;
+          : Math.min(config.quorum.count, total);
     if (pressed < required) {
       return this.rounds.viewForTask(taskId, round.stageId, user.id, canManage, tx);
     }
@@ -199,6 +232,15 @@ export class PressService {
       result: null,
       timeEntryId: null,
     });
+    await this.records.write(tx, {
+      entityKind: 'task',
+      entityId: taskId,
+      transitionId: round.transitionId,
+      stageId: round.stageId,
+      actorId: user.id,
+      recordKind: 'withdraw',
+      participantId: user.id,
+    });
     const config = pressConfigSchema.parse(round.config);
     await this.pressEvents.updated(tx, task, user.id, round, config);
     return this.rounds.viewForTask(taskId, round.stageId, user.id, canManage, tx);
@@ -232,6 +274,17 @@ export class PressService {
       await this.repo.updateEntry(tx, target.id, {
         state: 'returned',
         returnReason: body.reason,
+      });
+      await this.records.write(tx, {
+        entityKind: 'task',
+        entityId: taskId,
+        transitionId: round.transitionId,
+        stageId: round.stageId,
+        actorId: user.id,
+        recordKind: 'return',
+        participantId: target.userId,
+        comment: body.reason,
+        fields: { reason: body.reason },
       });
     }
     const config = pressConfigSchema.parse(round.config);

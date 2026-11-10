@@ -68,6 +68,10 @@ export class PressRepository {
     return tx.pressEntry.findUnique({ where: { roundId_userId: { roundId, userId } } });
   }
 
+  addEntry(tx: TransactionClient, roundId: string, userId: string, order: number) {
+    return tx.pressEntry.create({ data: { roundId, userId, order } });
+  }
+
   updateEntry(
     tx: TransactionClient,
     entryId: string,

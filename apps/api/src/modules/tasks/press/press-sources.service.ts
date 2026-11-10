@@ -19,6 +19,13 @@ import {
   CUSTOM_FIELD_REGISTRY,
   type CustomFieldRegistry,
 } from '../../custom-fields/ports/custom-field-registry.port.js';
+import {
+  PROJECT_CHAT_READER,
+  PROJECT_READER,
+  type ProjectChatReader,
+  type ProjectReader,
+} from '../../projects/ports/project-reader.port.js';
+import { audienceIds } from '../access/task-access.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
 
 type PressTask = Awaited<ReturnType<TasksRepository['findWithParticipants']>>;
@@ -42,6 +49,8 @@ export class PressSourcesService {
     @Inject(ORG_STRUCTURE_READER) private readonly org: OrgStructureReader,
     @Inject(USER_PROFILE_READER) private readonly users: UserProfileReader,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
+    @Inject(PROJECT_READER) private readonly projects: ProjectReader,
+    @Inject(PROJECT_CHAT_READER) private readonly projectChat: ProjectChatReader,
   ) {}
 
   /** Участники раунда в порядке источников; дубликаты — по первому вхождению. */
@@ -56,10 +65,44 @@ export class PressSourcesService {
       const ids = await this.sourceIds(tx, task, source);
       for (const id of ids) if (!ordered.includes(id)) ordered.push(id);
     }
+    const visible = await this.visibleOnly(tx, task, ordered);
     const filtered = config.excludeAuthor
-      ? ordered.filter((id) => id !== task.creatorId)
-      : ordered;
+      ? visible.filter((id) => id !== task.creatorId)
+      : visible;
     return filtered.map((userId, order) => ({ userId, order }));
+  }
+
+  /** Явные источники не должны притягивать людей, которые не видят задачу:
+   *  секретный проект — только участники проекта, конфиденциальная задача —
+   *  только её роли. Иначе push «Вам нужно сдать» раскрывает название и
+   *  создаёт вечный кворум из тех, кто карточку открыть не может. */
+  private async visibleOnly(
+    tx: TransactionClient,
+    task: PressTask,
+    ids: string[],
+  ): Promise<string[]> {
+    if (ids.length === 0) return ids;
+    const taskRoles = new Set(audienceIds(task));
+    if (task.confidential) {
+      const filtered = ids.filter((id) => taskRoles.has(id));
+      if (filtered.length !== ids.length) {
+        this.logger.warn(
+          `Сбор: ${ids.length - filtered.length} участников вне ролей конфиденциальной задачи ${task.id} пропущены`,
+        );
+      }
+      return filtered;
+    }
+    if (task.projectId === null) return ids;
+    if ((await this.projects.visibilityOf(task.projectId)) !== 'secret') return ids;
+    const roster = await this.projectChat.roster(task.projectId);
+    const allowed = new Set([...(roster?.memberIds ?? []), ...taskRoles]);
+    const filtered = ids.filter((id) => allowed.has(id));
+    if (filtered.length !== ids.length) {
+      this.logger.warn(
+        `Сбор: ${ids.length - filtered.length} участников вне секретного проекта ${task.projectId} пропущены`,
+      );
+    }
+    return filtered;
   }
 
   private async sourceIds(

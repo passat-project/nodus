@@ -34,13 +34,21 @@ function service(taskOverrides: Record<string, unknown> = {}) {
       { id: FIELD2, name: 'Текст', type: 'text' },
     ]),
   };
+  const projects = {
+    visibilityOf: vi.fn(async (): Promise<'open' | 'secret' | null> => 'open'),
+  };
+  const projectChat = {
+    roster: vi.fn(async () => ({ managerId: 'manager', memberIds: ['co1', 'co2'] })),
+  };
   const sources = new PressSourcesService(
     tasks as never,
     org as never,
     users as never,
     customFields as never,
+    projects as never,
+    projectChat as never,
   );
-  return { sources, tasks, org, users, customFields };
+  return { sources, tasks, org, users, customFields, projects, projectChat };
 }
 
 const config = (sources: unknown[], excludeAuthor = true) =>
@@ -130,5 +138,35 @@ describe('PressSourcesService (#434)', () => {
     await expect(
       sources.resolve({} as never, 't1', config([{ kind: 'field', field: `cf.${FIELD2}` }])),
     ).resolves.toEqual([]);
+  });
+
+  it('явные источники не раскрывают конфиденциальную задачу (#434, security)', async () => {
+    const { sources } = service({ confidential: true });
+    await expect(
+      sources.resolve(
+        {} as never,
+        't1',
+        config([{ kind: 'employees', userIds: ['u1', 'co1', 'assignee'] }], false),
+      ),
+    ).resolves.toEqual([
+      { userId: 'co1', order: 0 },
+      { userId: 'assignee', order: 1 },
+    ]);
+  });
+
+  it('явные источники секретного проекта — только участники проекта и роли задачи', async () => {
+    const { sources, projects, projectChat } = service({ projectId: 'secret-1' });
+    projects.visibilityOf.mockResolvedValueOnce('secret');
+    await expect(
+      sources.resolve(
+        {} as never,
+        't1',
+        config([{ kind: 'employees', userIds: ['u1', 'co1', 'obs'] }], false),
+      ),
+    ).resolves.toEqual([
+      { userId: 'co1', order: 0 },
+      { userId: 'obs', order: 1 },
+    ]);
+    expect(projectChat.roster).toHaveBeenCalledWith('secret-1');
   });
 });

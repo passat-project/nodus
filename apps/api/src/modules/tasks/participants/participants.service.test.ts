@@ -34,6 +34,7 @@ function setup(removed = 1, opts: { required?: string[]; left?: number } = {}) {
     visibleRow: vi.fn().mockResolvedValue(ROW),
     detail: vi.fn().mockResolvedValue({ id: 't1' }),
   };
+  const press = { syncAdded: vi.fn(async () => void 0), assertCanRemove: vi.fn(async () => void 0) };
   const catalog = {
     typeById: vi.fn().mockResolvedValue({
       id: 'type-1',
@@ -59,18 +60,20 @@ function setup(removed = 1, opts: { required?: string[]; left?: number } = {}) {
     repo as never,
     catalog as never,
     { assertMembersAllowed: vi.fn() } as never,
+    press as never,
   );
-  return { service, repo };
+  return { service, repo, press };
 }
 
 describe('ParticipantsService', () => {
   it('постановщик наблюдателем — конфликт (он и так видит задачу); соисполнителем — можно', async () => {
-    const { service, repo } = setup();
+    const { service, repo, press } = setup();
     await expect(
       service.add(user('alice'), 't1', { userId: 'alice', role: 'observer' }),
     ).rejects.toMatchObject({ code: ErrorCode.CONFLICT });
     await service.add(user('alice'), 't1', { userId: 'alice', role: 'coexecutor' });
     expect(repo.assignRole).toHaveBeenCalledWith(TX, 't1', 'alice', 'coexecutor');
+    expect(press.syncAdded).toHaveBeenCalledWith(TX, 't1', 'alice');
   });
 
   it('ответственный участником — конфликт', async () => {
@@ -123,8 +126,9 @@ describe('ParticipantsService: обязательные участники (#432
   });
 
   it('остались другие — снятие проходит', async () => {
-    const { service, repo } = setup(1, { required: ['coexecutors'], left: 2 });
+    const { service, repo, press } = setup(1, { required: ['coexecutors'], left: 2 });
     await service.remove(user('alice'), 't1', 'dave');
+    expect(press.assertCanRemove).toHaveBeenCalledWith(TX, 't1', ['dave']);
     expect(repo.remove).toHaveBeenCalled();
   });
 
@@ -185,6 +189,7 @@ describe('ParticipantsService: замок состава (#496, Р4)', () => {
         }),
       } as never,
       { assertMembersAllowed: vi.fn() } as never,
+      { syncAdded: vi.fn(), assertCanRemove: vi.fn() } as never,
     );
     return { service, repo, tasksRepo };
   }

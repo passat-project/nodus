@@ -237,6 +237,11 @@ export function TaskActionBar({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
+      {transitions.length === 0 && !press ? (
+        <span className="px-1 text-sm text-muted-foreground">
+          {task.access.canEdit ? ui.tasks.processNoActions : ui.tasks.processObserving}
+        </span>
+      ) : null}
       <span className="ml-auto" />
       {showTime ? <TaskTimerButton task={task} /> : null}
     </div>

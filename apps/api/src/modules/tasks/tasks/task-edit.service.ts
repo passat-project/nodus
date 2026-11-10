@@ -30,6 +30,7 @@ import { Placements } from '../personal/placements.js';
 import { PlacementsRepository } from '../personal/placements.repository.js';
 import type { TaskListRow } from './task-row.js';
 import { TaskFieldsWriter } from './task-fields.writer.js';
+import { PressRoundsService } from '../press/press-rounds.service.js';
 import { TaskFormulaService } from './task-formula.service.js';
 import { TasksQueryService } from './tasks-query.service.js';
 import { TasksRepository } from './tasks.repository.js';
@@ -74,6 +75,7 @@ export class TaskEditService {
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
+    private readonly press: PressRoundsService,
   ) {}
 
   async update(user: AuthUser, id: string, body: TaskEditBody): Promise<TaskListItem> {
@@ -162,7 +164,15 @@ export class TaskEditService {
             : [assigneeAfter],
         );
       }
+      // Смена ответственного при открытом раунде (#434, security): старый
+      // ответственный не должен сохранить право закрыть задачу отметкой.
+      if (body.assigneeId && body.assigneeId !== row.assigneeId) {
+        await this.press.assertCanRemove(tx, id, [row.assigneeId]);
+      }
       if (fields.length > 0 || hasCustomFields) await this.applyFields(tx, user, row, body, fields);
+      if (body.assigneeId && body.assigneeId !== row.assigneeId) {
+        await this.press.syncAdded(tx, id, body.assigneeId);
+      }
       if (body.stageId)
         await this.moveGlobal(tx, user, row, body.stageId, body.index, access.canEdit);
       if (body.personalStageId)
