@@ -39,6 +39,8 @@ export function ThreadStrip({
             <PersonAvatar
               key={p.id}
               name={p.displayName}
+              avatarUrl={p.avatarUrl}
+              decorative
               className={cn('size-5 ring-2', surface.ring)}
             />
           ))}

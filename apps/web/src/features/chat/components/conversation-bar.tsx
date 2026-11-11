@@ -18,6 +18,7 @@ import { buildSubtitle, findPeer, memberName } from '../../../shared/chat/conver
 import {
   canAddMembers,
   canChangeInfo,
+  conversationAvatarUrl,
   conversationTitle,
   isNotesConversation,
   isRenamableConversation,
@@ -129,7 +130,12 @@ export function ConversationBar({
               aria-label={conversation.avatarUrl ? ui.common.avatarChange : ui.common.avatarUpload}
               className="group relative size-9 shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-port"
             >
-              <PersonAvatar name={title} avatarUrl={conversation.avatarUrl} className="size-full" />
+              <PersonAvatar
+                name={title}
+                avatarUrl={conversationAvatarUrl(conversation, meId)}
+                decorative
+                className="size-full"
+              />
               <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                 <Camera className="size-4" strokeWidth={1.75} aria-hidden />
               </span>
@@ -147,7 +153,12 @@ export function ConversationBar({
           </ContextMenuContent>
         </ContextMenu>
       ) : (
-        <PersonAvatar name={title} avatarUrl={conversation.avatarUrl} className="size-9 shrink-0" />
+        <PersonAvatar
+          name={title}
+          avatarUrl={conversationAvatarUrl(conversation, meId)}
+          decorative
+          className="size-9 shrink-0"
+        />
       )}
       {canEditInfo ? (
         <input

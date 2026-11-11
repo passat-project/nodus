@@ -27,6 +27,7 @@ export function ViewersSubmenu({ viewers }: { viewers: readonly UserRef[] }) {
               <PersonAvatar
                 name={viewer.displayName}
                 avatarUrl={viewer.avatarUrl}
+                decorative
                 className="size-6 shrink-0"
               />
               <span className="min-w-0 truncate text-sm">

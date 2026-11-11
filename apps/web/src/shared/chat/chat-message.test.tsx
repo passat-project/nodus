@@ -9,6 +9,7 @@ import { ChatMessageItem, MessageReactions } from './chat-message.js';
 import { StickerMessageView } from './sticker-message.js';
 import { useChatPrefs } from './chat-prefs.js';
 import { useJumpStore } from './jump-store.js';
+import { stubLoadedImage } from '../../test/stub-loaded-image.js';
 
 // QueryClient остаётся: пузырь живёт в дереве с запросами ленты.
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -57,6 +58,33 @@ afterEach(cleanup);
 function imgByAlt(root: Element | null, emoji: string): Element | null {
   return Array.from(root?.querySelectorAll('img') ?? []).find((img) => img.alt === emoji) ?? null;
 }
+
+/** jsdom не загружает картинки (см. `stub-loaded-image`). */
+
+describe('Аватар автора сообщения — единый механизм (#726)', () => {
+  const PHOTO = 'https://files.nodus.local/avatar/author.png';
+  const author = (avatarUrl: string | null) => ({ id: 'a', displayName: 'Иван Петров', avatarUrl });
+
+  it('фото в DTO сообщения: img с url и пустым alt (автор озвучен sr-only)', () => {
+    const restore = stubLoadedImage();
+    const { container } = renderMessage(
+      <ChatMessageItem message={message({ author: author(PHOTO) })} mine={false} showName />,
+    );
+    const img = container.querySelector('[data-slot="avatar"] img');
+    expect(img?.getAttribute('src')).toBe(PHOTO);
+    expect(img?.getAttribute('alt')).toBe('');
+    expect(img?.getAttribute('aria-hidden')).toBe('true');
+    restore();
+  });
+
+  it('фото нет: инициалы вместо img', () => {
+    const { container } = renderMessage(
+      <ChatMessageItem message={message({ author: author(null) })} mine={false} showName />,
+    );
+    expect(container.querySelector('[data-slot="avatar"] img')).toBeNull();
+    expect(container.querySelector('[data-slot="avatar-fallback"]')?.textContent).toBe('ИП');
+  });
+});
 
 describe('ChatMessageItem — имя автора внутри пузыря (#96)', () => {
   it('showName: имя внутри [data-slot="bubble"] верхней строкой над содержимым', () => {
