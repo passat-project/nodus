@@ -18,12 +18,24 @@ import { PressRepository } from './press.repository.js';
 import { PressSourcesService } from './press-sources.service.js';
 import { pressRoundViewOf } from './press-view.js';
 
+/** Итог проверки стадии для гардов смены стадии (#434/#705): настроена ли
+ *  коллективная кнопка, удалось ли поднять раунд и не пусты ли источники. */
+export interface PressStageState {
+  /** Коллективная кнопка текущей стадии; null — такой кнопки нет. */
+  transitionId: string | null;
+  /** Раунд открыт (существующий или только что созданный). */
+  roundStarted: boolean;
+  /** Кнопка настроена, но источники не дали участников — кворум невозможен. */
+  emptySources: boolean;
+}
+
 /**
  * Жизненный цикл раунда сбора (#434): старт при входе задачи в стадию с
  * коллективной кнопкой, снимок источников и окна, чтение для карточки.
  * Один открытый раунд на задачу (partial unique); смена стадии/кнопки
- * закрывает прежний раунд. Пустой источник не блокирует задачу: раунда нет,
- * кнопка остаётся обычной (безопасный откат к обычному переходу).
+ * закрывает прежний раунд. «Приостановлена/Отложена» прогресс НЕ сбрасывает:
+ * раунд переживает паузу и продолжается после «Продолжить» (решение владельца
+ * 11.11.2026). Завершённый раунд остаётся читаемым (аналитика/CSV).
  */
 @Injectable()
 export class PressRoundsService {
@@ -49,17 +61,23 @@ export class PressRoundsService {
     tx: TransactionClient,
     taskId: string,
     options: { notify?: boolean; actorId?: string | null } = {},
-  ): Promise<void> {
+  ): Promise<PressStageState> {
     await this.tasks.lock(tx, taskId);
     const task = await this.tasks.findWithParticipants(taskId, tx);
     const stageId = task.stageId;
+    const open = await this.repo.findOpenRound(tx, 'task', taskId);
+    // Пауза прогресс сохраняет: раунд остаётся открытым, по «Продолжить»
+    // карточка вернётся к тем же отметкам (решение владельца 11.11.2026).
+    if (task.systemState === 'paused') {
+      return { transitionId: null, roundStarted: open !== null, emptySources: false };
+    }
     const transitions = (
       await this.pressReader.pressTransitionsForStage(task.workflowId, stageId, tx)
     ).sort((a, b) => a.sortOrder - b.sortOrder);
     const transition = transitions[0];
     if (!transition) {
       await this.repo.cancelOpenRound(tx, 'task', taskId, new Date());
-      return;
+      return { transitionId: null, roundStarted: false, emptySources: false };
     }
     if (transitions.length > 1) {
       // Один раунд на задачу (контракт карточки); публикация обязана не
@@ -68,15 +86,16 @@ export class PressRoundsService {
         `В стадии ${stageId} несколько коллективных кнопок — взят «${transition.name}»`,
       );
     }
-    const open = await this.repo.findOpenRound(tx, 'task', taskId);
     if (open) {
-      if (open.stageId === stageId && open.transitionId === transition.id) return;
+      if (open.stageId === stageId && open.transitionId === transition.id) {
+        return { transitionId: transition.id, roundStarted: true, emptySources: false };
+      }
       await this.repo.cancelOpenRound(tx, 'task', taskId, new Date());
     }
     const entries = await this.sources.resolve(tx, taskId, transition.press);
     if (entries.length === 0) {
       this.logger.warn(`Источники сбора «${transition.name}» не дали участников — раунд не создан`);
-      return;
+      return { transitionId: transition.id, roundStarted: false, emptySources: true };
     }
     await this.repo.createRound(tx, {
       entityKind: 'task',
@@ -106,6 +125,7 @@ export class PressRoundsService {
         { actorId: options.actorId ?? null, aggregateType: 'task', aggregateId: taskId },
       );
     }
+    return { transitionId: transition.id, roundStarted: true, emptySources: false };
   }
 
   /** Задача удалена: открытый раунд закрывается, чтобы не держать публикацию
@@ -184,7 +204,8 @@ export class PressRoundsService {
     return new Set([round.transitionId]);
   }
 
-  /** Раунд текущей стадии для карточки; после кворума/смены стадии — null. */
+  /** Раунд текущей стадии для карточки; после кворума — последний завершённый
+   *  (read-only: аналитика/CSV остаются доступны, решение владельца 4A). */
   async viewForTask(
     taskId: string,
     stageId: string,
@@ -192,8 +213,37 @@ export class PressRoundsService {
     canManage = false,
     tx?: TransactionClient,
   ): Promise<PressRoundView | null> {
-    const round = await this.repo.findOpenRound(tx, 'task', taskId);
-    if (!round || round.stageId !== stageId) return null;
+    const open = await this.repo.findOpenRound(tx, 'task', taskId);
+    if (open) {
+      if (open.stageId !== stageId) return null;
+      return this.viewOf(open, viewerId, canManage, tx);
+    }
+    const latest = await this.repo.findLatestCompletedRound(tx, 'task', taskId);
+    if (!latest) return null;
+    return this.viewOf(latest, viewerId, canManage, tx);
+  }
+
+  /** Последний раунд без привязки к стадии — для ответа нажавшему, который
+   *  после кворума потерял видимость задачи (#434, решение 2). */
+  async viewLatestForTask(
+    taskId: string,
+    viewerId: string,
+    canManage = false,
+    tx?: TransactionClient,
+  ): Promise<PressRoundView | null> {
+    const round =
+      (await this.repo.findOpenRound(tx, 'task', taskId)) ??
+      (await this.repo.findLatestCompletedRound(tx, 'task', taskId));
+    if (!round) return null;
+    return this.viewOf(round, viewerId, canManage, tx);
+  }
+
+  private async viewOf(
+    round: NonNullable<Awaited<ReturnType<PressRepository['findOpenRound']>>>,
+    viewerId: string,
+    canManage: boolean,
+    tx?: TransactionClient,
+  ): Promise<PressRoundView> {
     const refs = await this.users.findRefs(
       [...new Set(round.entries.map((entry) => entry.userId))],
       tx,

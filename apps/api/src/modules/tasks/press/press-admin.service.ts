@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   ErrorCode,
   pressConfigSchema,
+  pressEntryResultSchema,
   type AuthUser,
   type PressExcludeBody,
   type PressReturnBody,
@@ -178,6 +179,20 @@ export class PressAdminService {
           ? 1
           : Math.min(config.quorum.count, total);
     if (pressed >= required) {
+      // Кворум собран снятием: итогом становится последняя СДАННАЯ отметка
+      // (решение владельца 3A) — иначе задача закрывалась без результата.
+      const lastPressed = active
+        .filter((entry) => entry.state === 'pressed')
+        .sort((a, b) => (a.pressedAt?.getTime() ?? 0) - (b.pressedAt?.getTime() ?? 0))
+        .at(-1);
+      const closing: { result?: { text: string; messageIds: string[] }; comment?: string } = {};
+      if (lastPressed?.result) {
+        const result = pressEntryResultSchema.parse(lastPressed.result);
+        closing.result = { text: result.text, messageIds: result.messageIds };
+      }
+      const input = lastPressed?.input as { comment?: string } | null;
+      const comment = input?.comment?.trim();
+      if (comment) closing.comment = comment;
       await this.repo.completeRound(tx, round.id, new Date());
       await this.engine.execute(
         tx,
@@ -185,7 +200,10 @@ export class PressAdminService {
         'task',
         user,
         { transitionId: round.transitionId },
-        { pressCompletion: true },
+        {
+          pressCompletion: true,
+          ...(Object.keys(closing).length > 0 ? { form: closing } : {}),
+        },
       );
       return null;
     }

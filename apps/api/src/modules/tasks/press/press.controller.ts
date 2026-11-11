@@ -2,6 +2,7 @@ import { Body, Controller, HttpCode, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
+  ErrorCode,
   pressExecuteResultSchema,
   pressExcludeBodySchema,
   pressReturnBodySchema,
@@ -16,6 +17,7 @@ import {
 import { Audit } from '../../../core/decorators/audit.decorator.js';
 import { GetUser } from '../../../core/decorators/get-user.decorator.js';
 import { RequireFeature } from '../../../core/decorators/require-feature.decorator.js';
+import { DomainException } from '../../../core/errors/domain-exception.js';
 import { ApiErrors } from '../../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../../core/openapi/api-idempotency.decorator.js';
 import { ZodValidationPipe } from '../../../core/pipes/zod-validation.pipe.js';
@@ -60,9 +62,25 @@ export class TaskPressController {
     })
     body: PressSubmitBody,
   ): Promise<PressExecuteResult> {
-    await this.query.visibleRow(user, id);
+    const row = await this.query.visibleRow(user, id);
+    // Внешний нажавший (источник «Сотрудники», не участник задачи) после
+    // кворума теряет видимость: снимок карточки нужен, чтобы ответить 200 с
+    // итогом, а не 404 после уже выполненного перехода (#434, решение 2).
+    const mayLoseVisibility =
+      row.creatorId !== user.id &&
+      row.assigneeId !== user.id &&
+      !row.participants.some((participant) => participant.userId === user.id);
+    const before = mayLoseVisibility ? await this.query.detail(user, id) : null;
     await this.press.submit(user, id, body);
-    return this.result(user, id);
+    try {
+      return await this.result(user, id);
+    } catch (error) {
+      if (!before || !(error instanceof DomainException) || error.code !== ErrorCode.NOT_FOUND) {
+        throw error;
+      }
+      const press = await this.press.latestView(user.id, id);
+      return { press, task: { ...before, press }, transitions: [] };
+    }
   }
 
   @Post(':id/press/withdraw')

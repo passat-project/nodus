@@ -30,6 +30,20 @@ export class PressRepository {
     });
   }
 
+  /** Последний завершённый раунд (аналитика/CSV после кворума — read-only,
+   *  решение владельца 11.11.2026). */
+  findLatestCompletedRound(
+    tx: TransactionClient | undefined,
+    entityKind: string,
+    entityId: string,
+  ) {
+    return (tx ?? this.prisma).pressRound.findFirst({
+      where: { entityKind, entityId, completedAt: { not: null } },
+      orderBy: [{ completedAt: 'desc' }, { startedAt: 'desc' }],
+      include: { entries: { orderBy: [{ order: 'asc' }, { id: 'asc' }] } },
+    });
+  }
+
   createRound(
     tx: TransactionClient,
     data: {

@@ -30,7 +30,7 @@ import { Placements } from '../personal/placements.js';
 import { PlacementsRepository } from '../personal/placements.repository.js';
 import type { TaskListRow } from './task-row.js';
 import { TaskFieldsWriter } from './task-fields.writer.js';
-import { PressRoundsService } from '../press/press-rounds.service.js';
+import { PressRoundsService, type PressStageState } from '../press/press-rounds.service.js';
 import { TaskFormulaService } from './task-formula.service.js';
 import { TasksQueryService } from './tasks-query.service.js';
 import { TasksRepository } from './tasks.repository.js';
@@ -183,10 +183,23 @@ export class TaskEditService {
       if (body.assigneeId && body.assigneeId !== fresh.assigneeId) {
         await this.press.syncAdded(tx, id, body.assigneeId);
       }
+      // Смена стадии не должна обходить сбор (#434, решение 1): поднимаем
+      // раунд по настройке текущей стадии ДО движка; пустые источники —
+      // отдельный 409 для закрывающих переходов (кворум невозможен).
+      const pressState =
+        body.stageId || body.personalStageId ? await this.press.ensureForStage(tx, id) : null;
       if (body.stageId)
-        await this.moveGlobal(tx, user, fresh, body.stageId, body.index, access.canEdit);
+        await this.moveGlobal(
+          tx,
+          user,
+          fresh,
+          body.stageId,
+          body.index,
+          access.canEdit,
+          pressState,
+        );
       if (body.personalStageId)
-        await this.movePersonal(tx, user, fresh, body.personalStageId, body.index);
+        await this.movePersonal(tx, user, fresh, body.personalStageId, body.index, pressState);
     });
     return this.tasks.listItem(user, id);
   }
@@ -241,9 +254,12 @@ export class TaskEditService {
     stageId: string,
     index: number | undefined,
     canEdit: boolean,
+    pressState: PressStageState | null,
   ): Promise<void> {
     const currentStageId = await this.repo.stageIdOf(tx, row.id);
     if (currentStageId !== stageId) {
+      const target = await this.catalog.findLiveStage(stageId);
+      this.assertPressAllowsStageChange(pressState, target?.systemState ?? null);
       const execution = await this.engine.execute(tx, row.id, 'task', user, { stageId });
       if (execution.stage.id !== stageId) {
         const current = await this.catalog.findLiveStage(currentStageId);
@@ -262,6 +278,20 @@ export class TaskEditService {
     }
   }
 
+  /** Пустые источники сбора не дают поднять кворум: закрывающий переход
+   *  запрещён, пауза/служебные стадии — разрешены (#434, решение 1). */
+  private assertPressAllowsStageChange(
+    pressState: PressStageState | null,
+    targetSystemState: string | null,
+  ): void {
+    if (!pressState?.transitionId || pressState.roundStarted) return;
+    if (targetSystemState === 'done' || targetSystemState === 'closed') {
+      throw DomainException.conflict('Press round has no participants', {
+        transitionId: pressState.transitionId,
+      });
+    }
+  }
+
   /** Колонка «Моего плана»: та же колонка — перестановка; другая колонка
    *  другого состояния/итога — переход маршрута с проверкой условий (#402),
    *  отказ движка пробрасывается клиенту. Колонки одного состояния без смены
@@ -272,6 +302,7 @@ export class TaskEditService {
     row: TaskListRow,
     stageId: string,
     index: number | undefined,
+    pressState: PressStageState | null,
   ): Promise<void> {
     const column = await this.boards.findColumn(user.id, stageId, tx);
     if (!column) throw DomainException.notFound('Stage not found');
@@ -285,6 +316,7 @@ export class TaskEditService {
       (current.systemState !== column.systemState ||
         (current.outcome ?? null) !== (column.outcome ?? null))
     ) {
+      this.assertPressAllowsStageChange(pressState, column.systemState);
       const execution = await this.engine.execute(tx, row.id, 'task', user, {
         systemState: column.systemState,
         outcome: column.outcome,

@@ -71,6 +71,12 @@ export class PressService {
     return this.txRunner.run(async (tx) => this.withdrawInTx(tx, user, taskId));
   }
 
+  /** Последний раунд (открытый или завершённый) без проверки видимости задачи:
+   *  ответ нажавшему после кворума, когда задача ему уже не видна (#434). */
+  latestView(viewerId: string, taskId: string): Promise<PressRoundView | null> {
+    return this.txRunner.run((tx) => this.rounds.viewLatestForTask(taskId, viewerId, false, tx));
+  }
+
   private canManage(task: PressTask, user: AuthUser): boolean {
     return taskAccess(actorRoles(task, user.id), user.permissions).canEdit;
   }

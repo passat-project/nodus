@@ -8,10 +8,11 @@ import type {
   ExecuteTransitionResult,
   WorkflowTransition,
 } from '@nodus/contracts';
-import { customFieldIdOfKey, CUSTOM_FIELD_LIMITS } from '@nodus/contracts';
+import { customFieldIdOfKey, CUSTOM_FIELD_LIMITS, ErrorCode } from '@nodus/contracts';
 
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import { DomainException } from '../../../core/errors/domain-exception.js';
 import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import {
   WORKFLOW_ENGINE,
@@ -155,8 +156,14 @@ export class TaskTransitionsService {
       if (row.projectId) await this.projects.lockProject(tx, row.projectId);
       // Ленивый старт раунда (#434) и защита прямого нажатия: если источники
       // дали участников, движок увидит открытый раунд и откажет обычному
-      // переходу; пустые источники оставляют кнопку обычной (fallback).
-      await this.press.ensureForStage(tx, taskId);
+      // переходу; пустые источники — явный 409, а не «тихое» закрытие без
+      // единой отметки (решение владельца 1).
+      const pressState = await this.press.ensureForStage(tx, taskId);
+      if (pressState.transitionId === transitionId && !pressState.roundStarted) {
+        throw new DomainException(ErrorCode.CONFLICT, 'Press round has no participants', {
+          transitionId,
+        });
+      }
       const execution = await this.engine.execute(tx, taskId, 'task', user, { transitionId }, body);
       assignedNumbers = execution.assignedNumbers;
       // Кнопки после действия уезжают в кэш веба — с тем же префиллом, что

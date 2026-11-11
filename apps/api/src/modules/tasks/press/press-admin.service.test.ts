@@ -187,4 +187,42 @@ describe('PressAdminService (#434)', () => {
       { pressCompletion: true },
     );
   });
+
+  it('кворум снятием: итогом становится последняя сданная отметка (решение 3A)', async () => {
+    const { service, repo, engine, round } = setup('waiting');
+    const pressed = (id: string, userId: string, order: number, text: string, day: number) => ({
+      ...entry('pressed', id, userId, order),
+      pressedAt: new Date(`2026-01-0${day}T10:00:00.000Z`),
+      result: { text, messageIds: [], fileCount: 0, minutes: null, date: null },
+      input: { result: { text, messageIds: [] }, comment: `Комментарий ${text}` },
+    });
+    repo.findOpenRound.mockResolvedValue({
+      ...round,
+      entries: [
+        pressed('e1', 'assignee', 0, 'Первый', 1),
+        pressed('e2', 'u2', 1, 'Второй', 2),
+        entry('waiting', 'e3', 'u3', 2),
+      ],
+    } as never);
+
+    await service.excludeEntries({ id: 'assignee', permissions: [] } as never, 't1', {
+      userIds: ['u3'],
+      reason: 'Выбыл',
+    });
+
+    expect(engine.execute).toHaveBeenLastCalledWith(
+      expect.anything(),
+      't1',
+      'task',
+      expect.anything(),
+      { transitionId: 'tr1' },
+      {
+        pressCompletion: true,
+        form: {
+          result: { text: 'Второй', messageIds: [] },
+          comment: 'Комментарий Второй',
+        },
+      },
+    );
+  });
 });
