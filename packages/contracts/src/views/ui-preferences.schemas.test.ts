@@ -60,13 +60,16 @@ describe('cardTabsPrefSchema', () => {
   });
 
   it('не принимает файловые id как отдельные вкладки (только files)', () => {
-    // Схема не знает конкретных id — ограничение движка; здесь фиксируем,
-    // что контракт хранит строки, а решение о `files` принимает нормализатор.
-    const parsed = cardTabsPrefSchema.parse({
-      version: 1,
-      groups: [{ tabs: ['file:123'] }],
-    });
-    expect(parsed.groups[0]?.tabs).toEqual(['file:123']);
+    expect(
+      cardTabsPrefSchema.safeParse({ version: 1, groups: [{ tabs: ['file:123'] }] }).success,
+    ).toBe(false);
+    expect(
+      cardTabsPrefSchema.safeParse({
+        version: 1,
+        groups: [{ tabs: ['files'] }],
+        hidden: ['file:123'],
+      }).success,
+    ).toBe(false);
   });
 
   it('отбрасывает неизвестные поля (strip), не ломая старые клиенты', () => {

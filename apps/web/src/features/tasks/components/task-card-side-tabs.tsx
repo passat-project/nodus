@@ -33,6 +33,7 @@ export function TaskCardSideTabs({
   groupW,
   collapsedGroupId,
   onStateChange,
+  onSplitTab,
   onGroupWidthsChange,
   groupMin,
   hintText,
@@ -49,6 +50,7 @@ export function TaskCardSideTabs({
   groupW: number[];
   collapsedGroupId: string | null;
   onStateChange: (next: CardTabsState) => void;
+  onSplitTab?: (next: CardTabsState, areaWidth: number) => void;
   onGroupWidthsChange: (widths: number[]) => void;
   groupMin?: (group: CardTabGroup) => number;
   /** Подсказка derived-состояния («О задаче» скрыта шириной) — хром полосы. */
@@ -92,6 +94,7 @@ export function TaskCardSideTabs({
         label={ui.tasks.tabsLabel}
         tabs={stripTabs}
         state={state}
+        onSplitTab={onSplitTab}
         onStateChange={(next) => {
           onStateChange(next);
           // Хост-состояние файловых вкладок синхронно с движком: активная

@@ -7,8 +7,6 @@ import {
   groupsFromPref,
   hiddenFromPref,
   isFileTabId,
-  legacyPrefFor,
-  markLegacyMigrated,
   prefFromState,
   toggleHiddenTab,
 } from './card-tabs-prefs.js';
@@ -31,6 +29,11 @@ export interface UseCardTabsOptions {
   requestedActive?: string;
 }
 
+/** Системный дефолт — только без сохранённого личного порядка. */
+function initialActive(pref: CardTabsPref | undefined, options: UseCardTabsOptions) {
+  return pref ? undefined : options.defaultActive;
+}
+
 function rebuild(
   pref: CardTabsPref | undefined,
   options: UseCardTabsOptions,
@@ -42,9 +45,10 @@ function rebuild(
     fileTabs: options.fileTabs ?? [],
     hidden,
   });
-  const activeHint = previous
-    ? groups.flatMap((group) => group.tabs).find((id) => previous.visited[id])
-    : options.defaultActive;
+  // Активная: сохранённая в prefs (groupsFromPref уже её разложил) или первая
+  // видимая — `defaultActive` только когда личного порядка ещё нет. Иначе
+  // карточка всегда открывалась бы на системной вкладке вопреки порядку.
+  const activeHint = previous ? undefined : initialActive(pref, options);
   return createCardTabsState(groups, {
     activeTab: activeHint,
     visited: previous ? Object.keys(previous.visited) : [],
@@ -56,7 +60,6 @@ function rebuild(
  * Состояние областей вкладок карточки (#746) + личные настройки (#745).
  * Хост даёт стабильные вкладки и файловые (runtime); хук:
  * - восстанавливает порядок/области/активные/ширины из `personal.cardTabs`;
- * - мигрирует старые ключи (скрытые проекта, ширина чата) один раз;
  * - пишет каждое изменение в стор оптимистично (I4) — дальше debounce PUT;
  * - скрывает вкладки через «+», не давая скрыть последнюю видимую;
  * - пересобирает состав при изменении файловых вкладок (id файлов в prefs
@@ -65,12 +68,7 @@ function rebuild(
 export function useCardTabs(options: UseCardTabsOptions) {
   const storedPref = useUiPrefsStore((state) => state.personal.cardTabs?.[options.kind]);
   const setCardTabs = useUiPrefsStore((state) => state.setCardTabs);
-  // Миграция старых ключей читается один раз на монтирование вида.
-  const migratedRef = useRef<CardTabsPref | undefined>(undefined);
-  if (migratedRef.current === undefined && !storedPref) {
-    migratedRef.current = legacyPrefFor(options.kind, options.stableTabs, options.defaultActive);
-  }
-  const initialPref = storedPref ?? migratedRef.current;
+  const initialPref = storedPref;
 
   const [hidden, setHidden] = useState<string[]>(() =>
     hiddenFromPref(initialPref, options.stableTabs),
@@ -80,19 +78,6 @@ export function useCardTabs(options: UseCardTabsOptions) {
   const [state, setState] = useState<CardTabsState>(() =>
     rebuild(initialPref, options, hiddenFromPref(initialPref, options.stableTabs)),
   );
-
-  // Успешная миграция: записываем prefs и ставим флаг (старые ключи не
-  // удаляем — данные пользователя остаются до явной очистки).
-  useEffect(() => {
-    if (storedPref || !migratedRef.current) {
-      markLegacyMigrated(options.kind);
-      return;
-    }
-    const pref = prefFromState(state, { hidden, widths, panelOpen });
-    if (pref) setCardTabs(options.kind, pref);
-    markLegacyMigrated(options.kind);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- миграция один раз на монтирование
-  }, []);
 
   // Файлы открылись/закрылись: пересобрать состав, сохранив порядок
   // стабильных вкладок и посещённые панели. Id файлов в prefs не пишем.
@@ -154,7 +139,7 @@ export function useCardTabs(options: UseCardTabsOptions) {
         hidden: nextHidden,
       });
       return createCardTabsState(groups, {
-        activeTab: options.requestedActive ?? options.defaultActive,
+        activeTab: options.requestedActive,
         visited: Object.keys(previous.visited),
         focusGroupId: previous.focusGroupId,
       });

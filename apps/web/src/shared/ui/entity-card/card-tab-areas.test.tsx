@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CardTabAreas } from './card-tab-areas.js';
@@ -77,6 +77,32 @@ describe('CardTabAreas: клик, клавиатура, меню (WCAG 2.5.7)', 
     const item = await screen.findByText('Переместить вправо');
     fireEvent.click(item);
     expect(onStateChange.mock.calls[0]?.[0].groups[0].tabs).toEqual(['b', 'a']);
+    // Фокус возвращается на кнопку вкладки (а не на 1-px триггер Radix).
+    await waitFor(() => {
+      expect(document.activeElement?.getAttribute('role')).toBe('tab');
+      expect(document.activeElement?.textContent).toContain('Альфа');
+    });
+  });
+
+  it('«Открыть рядом» идёт через коммит 50/50 (onSplitTab)', async () => {
+    const onStateChange = vi.fn();
+    const onSplitTab = vi.fn();
+    render(
+      <CardTabAreas
+        label="Вкладки"
+        tabs={TABS}
+        state={oneGroup()}
+        onStateChange={onStateChange}
+        onSplitTab={onSplitTab}
+        renderPanel={(id) => <div>{id}</div>}
+        groupW={[600]}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByRole('tab', { name: /Альфа/ }));
+    fireEvent.click(await screen.findByText('Открыть рядом'));
+    expect(onSplitTab).toHaveBeenCalledTimes(1);
+    expect(onSplitTab.mock.calls[0]?.[0].groups).toHaveLength(2);
+    expect(onStateChange).not.toHaveBeenCalled();
   });
 
   it('меню: «Соединить области» собирает две группы в одну', async () => {

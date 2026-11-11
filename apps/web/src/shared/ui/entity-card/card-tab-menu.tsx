@@ -66,7 +66,13 @@ export function CardTabMenu({
           style={{ left: menu?.x ?? 0, top: menu?.y ?? 0 }}
         />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-60">
+      {/* Radix по умолчанию возвращает фокус на скрытый 1-px триггер и
+          перебивает наш возврат на вкладку — гасим автофокус. */}
+      <DropdownMenuContent
+        align="start"
+        className="w-60"
+        onCloseAutoFocus={(event) => event.preventDefault()}
+      >
         <DropdownMenuItem disabled={!actions.moveLeft} onSelect={onMoveLeft}>
           <ArrowLeft className="size-3.5" strokeWidth={1.75} />
           {ui.cardTabs.moveLeft}

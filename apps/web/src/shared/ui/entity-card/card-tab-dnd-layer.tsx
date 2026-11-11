@@ -25,11 +25,19 @@ export function CardTabDndLayer({
         <div
           aria-hidden
           data-insert-marker
+          data-insert-kind={marker.kind}
           className={cn(
-            'pointer-events-none fixed z-[60] bg-port',
-            marker.kind === 'area' ? 'w-0.5' : 'w-px',
+            'pointer-events-none fixed z-[60]',
+            marker.kind === 'tab'
+              ? 'rounded-lg border border-dashed border-primary/70 bg-primary/15 shadow-[0_2px_12px] shadow-primary/20'
+              : 'rounded-2xl border-2 border-dashed border-primary/45 bg-primary/10 ring-1 ring-primary/10',
           )}
-          style={{ left: marker.x, top: marker.y, height: marker.height }}
+          style={{
+            left: marker.x,
+            top: marker.y,
+            width: marker.width,
+            height: marker.height,
+          }}
         />
       ) : null}
 

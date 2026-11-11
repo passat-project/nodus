@@ -27,6 +27,8 @@ export interface CardTabAreasProps {
   tabs: CardTabDef[];
   state: CardTabsState;
   onStateChange: (next: CardTabsState) => void;
+  /** Сплит (кнопка/меню/DnD) с коммитом 50/50 по ширине рабочей зоны. */
+  onSplitTab?: (next: CardTabsState, areaWidth: number) => void;
   /** Содержимое вкладки; рендерится ОДИН раз на карточку и переезжает
    *  между областями без ремаунта (стабильные key/позиция). */
   renderPanel: (tabId: string) => ReactNode;
@@ -68,6 +70,7 @@ export function CardTabAreas({
   tabs,
   state,
   onStateChange,
+  onSplitTab,
   renderPanel,
   label,
   groupW = [],
@@ -135,12 +138,14 @@ export function CardTabAreas({
     const sum = raw.reduce((acc, value) => acc + value, 0);
     if (!width) return raw.map(() => 0);
     if (sum <= 0) return raw.map(() => Math.floor(width / Math.max(1, raw.length)));
-    const scaled = raw.map((value) => Math.round((value / sum) * width));
-    const last = scaled.length - 1;
-    if (last >= 0) {
-      scaled[last] = (scaled[last] ?? 0) + width - scaled.reduce((acc, value) => acc + value, 0);
-    }
-    return scaled;
+    // Solver уже отдаёт экранные px рабочей зоны: НЕ масштабируем по
+    // собственному ResizeObserver — при открытии панели его ширина
+    // обновляется на кадр позже, и пропорциональный пересчёт давал двойной
+    // ресайз («вкладки сжались и вернулись»). Добираем только недостачу.
+    const applied = raw.map((value) => Math.round(value));
+    const last = applied.length - 1;
+    if (sum < width && applied[last] !== undefined) applied[last] += width - sum;
+    return applied;
   }, [collapsed, dragWidths, groupW, groups, state.groups, width]);
 
   const geometry = useCardTabGeometry({ rootRef, groups, stripEls });
@@ -152,15 +157,24 @@ export function CardTabAreas({
   const focusTab = useCallback((tabId: string) => {
     requestAnimationFrame(() => {
       const escaped = typeof CSS !== 'undefined' ? CSS.escape(tabId) : tabId;
-      rootRef.current?.querySelector<HTMLElement>(`[data-card-tab-id="${escaped}"]`)?.focus();
+      const holder = rootRef.current?.querySelector<HTMLElement>(`[data-card-tab-id="${escaped}"]`);
+      // data-атрибут стоит на обёртке вкладки (кнопка с ролью tab — внутри):
+      // фокусируем саму кнопку, иначе фокус не возвращается.
+      (holder?.querySelector<HTMLElement>('[role="tab"]') ?? holder)?.focus();
     });
   }, []);
 
   const apply = useCallback(
     (next: CardTabsState) => {
+      // Появление второй области — всегда через 50/50 (и кнопка шапки, и
+      // меню/DnD): иначе остаток solver'а отдал бы новой области 2/3.
+      if (onSplitTab && state.groups.length === 1 && next.groups.length === 2) {
+        onSplitTab(next, width);
+        return;
+      }
       onStateChange(next);
     },
-    [onStateChange],
+    [onSplitTab, onStateChange, state.groups.length, width],
   );
 
   const applyResolution = useCardTabApply({

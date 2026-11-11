@@ -3,11 +3,7 @@ import { ui } from '@nodus/contracts';
 
 import { CardHeaderActionsPortal } from '../../../app/shell/card-header-actions.js';
 import { useProjectConversation } from '../../../shared/chat/chat-queries.js';
-import {
-  ChatSidePanel,
-  ChatPanelToggle,
-  useChatSidePanel,
-} from '../../../shared/chat/chat-side-panel.js';
+import { ChatSidePanel, ChatPanelToggle } from '../../../shared/chat/chat-side-panel.js';
 import { CardLayoutButton } from '../../../shared/ui/entity-card/card-layout-button.js';
 import { CardTabAreas } from '../../../shared/ui/entity-card/card-tab-areas.js';
 import type { CardTabDef } from '../../../shared/ui/entity-card/card-tab-strip.js';
@@ -47,7 +43,6 @@ export function ProjectCard({ projectId }: { projectId: string }) {
   const { data: project, isLoading } = useProjectDetail(projectId);
   const participant = project ? isProjectParticipant(project) : false;
   const { data: conversation } = useProjectConversation(projectId, participant);
-  const channelPanel = useChatSidePanel();
   const rowRef = useRef<HTMLDivElement>(null);
   const rowWidth = useElementWidth(rowRef);
   const cardTabs = useCardTabs({
@@ -64,7 +59,7 @@ export function ProjectCard({ projectId }: { projectId: string }) {
   );
 
   const channelActive = state.groups.some((group) => group.active === 'channel');
-  const panelRequested = channelPanel.open && channelActive && Boolean(conversation);
+  const panelRequested = cardTabs.panelOpen && channelActive && Boolean(conversation);
   const solved = useMemo(
     () =>
       solveCardWidths({
@@ -119,6 +114,7 @@ export function ProjectCard({ projectId }: { projectId: string }) {
           tabs={tabDefs}
           state={state}
           onStateChange={cardTabs.setState}
+          onSplitTab={cardTabs.splitIntoTwo}
           renderPanel={panel}
           groupW={solved.groupW}
           collapsedGroupId={solved.collapsedGroupId}
@@ -138,7 +134,10 @@ export function ProjectCard({ projectId }: { projectId: string }) {
           }
           actions={(group, active) =>
             active?.id === 'channel' && conversationId ? (
-              <ChatPanelToggle open={channelPanel.open} onToggle={() => channelPanel.toggle()} />
+              <ChatPanelToggle
+                open={cardTabs.panelOpen}
+                onToggle={() => cardTabs.setPanelOpen(!cardTabs.panelOpen)}
+              />
             ) : null
           }
           hintText={panelRequested && !solved.panelRendered ? PANEL_HIDDEN_HINT : undefined}
@@ -151,9 +150,10 @@ export function ProjectCard({ projectId }: { projectId: string }) {
           conversationId={conversation.id}
           conversation={conversation}
           open
-          onClose={() => channelPanel.close()}
+          onClose={() => cardTabs.setPanelOpen(false)}
           title={ui.chat.aboutProject}
           headerClass="h-10"
+          widthPx={solved.panelW}
         />
       ) : null}
 

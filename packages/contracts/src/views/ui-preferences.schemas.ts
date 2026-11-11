@@ -50,8 +50,17 @@ export const cardTabsPrefSchema = z
   })
   .superRefine((pref, ctx) => {
     const seen = new Set<string>();
+    // Файловые id — сессионные: в prefs только плейсхолдер `files`. Иначе
+    // чужое вложение могло бы приехать в карточку другого сотрудника.
     for (const [groupIndex, group] of pref.groups.entries()) {
       for (const tab of group.tabs) {
+        if (tab.startsWith('file:')) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['groups', groupIndex, 'tabs'],
+            message: 'Файловые вкладки хранятся только плейсхолдером files',
+          });
+        }
         if (seen.has(tab)) {
           ctx.addIssue({
             code: 'custom',
@@ -61,6 +70,13 @@ export const cardTabsPrefSchema = z
         }
         seen.add(tab);
       }
+      if (group.active?.startsWith('file:')) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['groups', groupIndex, 'active'],
+          message: 'Активная вкладка не может быть файловым id',
+        });
+      }
       if (group.active !== undefined && !group.tabs.includes(group.active)) {
         ctx.addIssue({
           code: 'custom',
@@ -68,6 +84,9 @@ export const cardTabsPrefSchema = z
           message: 'Активная вкладка должна входить в свою область',
         });
       }
+    }
+    if ((pref.hidden ?? []).some((tab) => tab.startsWith('file:'))) {
+      ctx.addIssue({ code: 'custom', path: ['hidden'], message: 'Скрыть файловую вкладку нельзя' });
     }
     if (new Set(pref.hidden ?? []).size !== (pref.hidden ?? []).length) {
       ctx.addIssue({ code: 'custom', path: ['hidden'], message: 'Скрытые вкладки повторяются' });

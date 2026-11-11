@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   FILE_TAB_PLACEHOLDER,
-  legacyPrefFor,
-  markLegacyMigrated,
   firstVisibleTab,
   groupsFromPref,
   hiddenFromPref,
@@ -130,6 +128,15 @@ describe('prefFromState', () => {
     expect(pref?.groups.map((g) => g.tabs)).toEqual([['chat'], ['files', 'history']]);
   });
 
+  it('ширины двух областей не переживают исчезновение второй (не падаем)', () => {
+    const pref = prefFromState(
+      { groups: [{ id: 'a1', tabs: ['chat'], active: 'chat' }] },
+      { widths: { data: 340, groups: [400, 400] } },
+    );
+    expect(pref?.widths?.data).toBe(340);
+    expect(pref?.widths?.groups).toBeUndefined();
+  });
+
   it('пустое состояние — null (не пишем пустую карточку)', () => {
     expect(prefFromState({ groups: [] })).toBeNull();
   });
@@ -168,33 +175,5 @@ describe('hidden / helpers', () => {
     expect(toPrefTab('file:1')).toBe('files');
     expect(toPrefTab('chat')).toBe('chat');
     expect(firstVisibleTab(STABLE, ['structure'])).toBe('tasks');
-  });
-});
-
-describe('legacyPrefFor: миграция старых ключей', () => {
-  beforeEach(() => {
-    localStorage.clear();
-  });
-
-  it('скрытые вкладки проекта переносятся в cardTabs.project.hidden', () => {
-    localStorage.setItem('nodus-project-tabs-v2', JSON.stringify(['tasks', 'members']));
-    const pref = legacyPrefFor('project', STABLE);
-    expect(pref?.hidden).toEqual(['tasks', 'members']);
-    expect(pref?.groups[0]?.tabs).not.toContain('tasks');
-    expect(pref?.groups[0]?.tabs).toContain('structure');
-  });
-
-  it('ширина чата задачи/письма становится шириной области', () => {
-    localStorage.setItem('nodus-card-chat-w-v2', '720');
-    const pref = legacyPrefFor('task', ['chat', 'files'], 'chat');
-    expect(pref?.widths?.groups).toEqual([720]);
-    expect(pref?.groups[0]?.active).toBe('chat');
-  });
-
-  it('после markLegacyMigrated повторно не мигрирует', () => {
-    localStorage.setItem('nodus-project-tabs-v2', JSON.stringify(['tasks']));
-    expect(legacyPrefFor('project', STABLE)).not.toBeUndefined();
-    markLegacyMigrated('project');
-    expect(legacyPrefFor('project', STABLE)).toBeUndefined();
   });
 });

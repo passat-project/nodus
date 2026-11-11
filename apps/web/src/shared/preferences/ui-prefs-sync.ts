@@ -27,6 +27,37 @@ let hydrating = false;
 /** Поколение запроса: смена пользователя отменяет поздние ответы. */
 let generation = 0;
 
+/** Маркер «есть неотправленные локальные изменения» НА ПОЛЬЗОВАТЕЛЯ.
+ *  Переживает reload: иначе GET после перезагрузки в пределах debounce
+ *  затирал бы локальную настройку старым серверным слоем. */
+function dirtyKey(userId: string): string {
+  return `nodus-ui-prefs-dirty:${userId}`;
+}
+
+function markDirty(userId: string): void {
+  try {
+    localStorage.setItem(dirtyKey(userId), '1');
+  } catch {
+    // localStorage недоступен — деградация к прежнему поведению.
+  }
+}
+
+function clearDirty(userId: string): void {
+  try {
+    localStorage.removeItem(dirtyKey(userId));
+  } catch {
+    // см. выше
+  }
+}
+
+function hasDirty(userId: string): boolean {
+  try {
+    return localStorage.getItem(dirtyKey(userId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
 function cancelTimers(): void {
   if (debounceTimer) clearTimeout(debounceTimer);
   if (retryTimer) clearTimeout(retryTimer);
@@ -39,6 +70,12 @@ async function hydrateFromServer(): Promise<void> {
   const userId = useAuthStore.getState().user?.id;
   if (!userId) return;
   const requestGeneration = generation;
+  // Неотправленные локальные правки главнее серверного слоя (last-write-wins):
+  // GET пропускаем, досылаем локальное.
+  if (hasDirty(userId)) {
+    schedulePush();
+    return;
+  }
   try {
     const response = await api<UserPreferencesResponse>('/me/preferences');
     if (requestGeneration !== generation || useAuthStore.getState().user?.id !== userId) return;
@@ -70,6 +107,8 @@ async function pushToServer(): Promise<void> {
     // пользователь мог продолжить настройку (оптимистичность I4).
     if (!parsed.success) return;
     retryIndex = 0;
+    // Маркер снимаем только если за время полёта не появились новые правки.
+    if (preferences === useUiPrefsStore.getState().personal) clearDirty(userId);
   } catch {
     if (requestGeneration !== generation) return;
     const delay = RETRY_MS[Math.min(retryIndex, RETRY_MS.length - 1)]!;
@@ -84,6 +123,8 @@ async function pushToServer(): Promise<void> {
 
 function schedulePush(): void {
   if (hydrating) return;
+  const userId = useAuthStore.getState().user?.id;
+  if (userId) markDirty(userId);
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
@@ -111,6 +152,8 @@ export function startPreferencesSync(): void {
   useUiPrefsStore.subscribe((state, previous) => {
     if (state.personal === previous.personal) return;
     if (!useAuthStore.getState().user) return;
+    // Гидратация с сервера — не локальная правка: dirty не ставим.
+    if (hydrating) return;
     schedulePush();
   });
 }

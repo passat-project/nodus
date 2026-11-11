@@ -38,10 +38,12 @@ export interface CardTabDragVisual {
 }
 
 export interface CardTabInsertMarker {
-  /** tab — вертикальная линия на полосе; area — линия края новой области. */
-  kind: 'tab' | 'area';
+  /** tab — слот между вкладками; area — половина рабочей зоны под новую
+   *  область; content — вся область при броске в контент. */
+  kind: 'tab' | 'area' | 'content';
   x: number;
   y: number;
+  width: number;
   height: number;
 }
 
@@ -161,19 +163,46 @@ export function useCardTabDrag({ state, labelOf, geometry, onResolve }: CardTabD
             const index = resolution.index;
             const before = area.tabs[index];
             const last = area.tabs[area.tabs.length - 1];
+            const source = area.tabs.find((entry) => entry.tabId === tabId);
+            const width = Math.max(
+              72,
+              Math.round(
+                source
+                  ? source.rect.right - source.rect.left
+                  : before
+                    ? before.rect.right - before.rect.left
+                    : 96,
+              ),
+            );
             nextMarker = {
               kind: 'tab',
-              x: before ? before.rect.left : (last?.rect.right ?? area.strip.right) - 1,
-              y: area.strip.top,
-              height: Math.max(1, area.strip.bottom - area.strip.top),
+              x: Math.round(before ? before.rect.left : (last?.rect.right ?? area.strip.right)),
+              y: Math.round(area.strip.top + 3),
+              width,
+              height: Math.max(24, Math.round(area.strip.bottom - area.strip.top - 6)),
+            };
+          }
+        } else if (resolution.type === 'move-end') {
+          const area = areas.find((entry) => entry.groupId === resolution.targetGroupId);
+          if (area) {
+            nextMarker = {
+              kind: 'content',
+              x: Math.round(area.content.left + 6),
+              y: Math.round(area.content.top + 6),
+              width: Math.max(24, Math.round(area.content.right - area.content.left - 12)),
+              height: Math.max(24, Math.round(area.content.bottom - area.content.top - 12)),
             };
           }
         } else if (resolution.type === 'split') {
+          const half = Math.round((workArea.right - workArea.left) / 2);
           nextMarker = {
             kind: 'area',
-            x: resolution.side === 'left' ? workArea.left + 1 : workArea.right - 1,
-            y: workArea.top,
-            height: Math.max(1, workArea.bottom - workArea.top),
+            x: Math.round(
+              resolution.side === 'left' ? workArea.left + 6 : workArea.left + half + 2,
+            ),
+            y: Math.round(workArea.top + 6),
+            width: Math.max(24, half - 8),
+            height: Math.max(24, Math.round(workArea.bottom - workArea.top - 12)),
           };
         }
         setMarker(nextMarker);

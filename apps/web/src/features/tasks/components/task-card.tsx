@@ -49,8 +49,6 @@ export function TaskCard({ taskId }: { taskId: string }) {
   const { data: task, isLoading, error } = useTaskDetail(taskId);
   useReadEntityNotifications('task', taskId);
   const { data: conversation } = useTaskConversation(taskId);
-  const [aboutOpen, setAboutOpen] = useState(false);
-  const [aboutMounted, setAboutMounted] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
   const [branchMounted, setBranchMounted] = useState(false);
   const { tabs, openFile, closeFile, activateTab } = useTaskTabs(taskId);
@@ -89,8 +87,6 @@ export function TaskCard({ taskId }: { taskId: string }) {
   const branch = useBranchWidth({ rowRef, branchRef, chatRef: noChatRef });
   const branchActualW = useElementWidth(branchRef);
   const closeBranch = useCallback(() => setBranchOpen(false), []);
-  const closeAbout = useCallback(() => setAboutOpen(false), []);
-
   const fileTabs = tabs.files.map((file) => fileTabId(file.fileId));
   const cardTabs = useCardTabs({
     kind: 'task',
@@ -100,6 +96,9 @@ export function TaskCard({ taskId }: { taskId: string }) {
     requestedActive: tabs.active,
   });
   const { state } = cardTabs;
+  const aboutOpen = cardTabs.panelOpen;
+  const [aboutMounted, setAboutMounted] = useState(cardTabs.panelOpen);
+  const closeAbout = useCallback(() => cardTabs.setPanelOpen(false), [cardTabs]);
 
   // Ветка — первая уступка: не влезает вместе с данными и чатом — временно
   // скрыта (prefs не меняются), при расширении вернётся.
@@ -223,6 +222,7 @@ export function TaskCard({ taskId }: { taskId: string }) {
               groupW={solved.groupW}
               collapsedGroupId={solved.collapsedGroupId}
               onStateChange={cardTabs.setState}
+              onSplitTab={cardTabs.splitIntoTwo}
               onGroupWidthsChange={cardTabs.setGroupWidths}
               groupMin={(group) =>
                 group.tabs.includes('chat') ? (solved.panelRendered ? 280 : 420) : 280
@@ -232,7 +232,7 @@ export function TaskCard({ taskId }: { taskId: string }) {
               onClose={closeFile}
               onToggleAbout={() => {
                 setAboutMounted(true);
-                setAboutOpen((v) => !v);
+                cardTabs.setPanelOpen(!cardTabs.panelOpen);
               }}
             />
           </div>

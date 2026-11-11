@@ -265,6 +265,7 @@ export function LetterCard({ letterId }: { letterId: string }) {
             groupW={solved.groupW}
             collapsedGroupId={solved.collapsedGroupId}
             onStateChange={cardTabs.setState}
+            onSplitTab={cardTabs.splitIntoTwo}
             onGroupWidthsChange={cardTabs.setGroupWidths}
             groupMin={(group) =>
               group.tabs.includes('chat') ? (solved.panelRendered ? 280 : 420) : 280
@@ -273,8 +274,6 @@ export function LetterCard({ letterId }: { letterId: string }) {
             onClose={(attachmentId) => updateTabs((current) => closeFileTab(current, attachmentId))}
             onJoin={onJoin}
             onPanelToggle={() => cardTabs.setPanelOpen(!cardTabs.panelOpen)}
-            onHideTab={cardTabs.toggleHidden}
-            canHideTab={(id) => (LETTER_STABLE_TABS as readonly string[]).includes(id)}
             hintText={panelRequested && !solved.panelRendered ? PANEL_HIDDEN_HINT : undefined}
           />
         </div>
@@ -287,6 +286,7 @@ export function LetterCard({ letterId }: { letterId: string }) {
             onClose={() => cardTabs.setPanelOpen(false)}
             title={ui.chat.aboutChat}
             headerClass="h-10"
+            widthPx={solved.panelW}
           />
         ) : null}
       </div>

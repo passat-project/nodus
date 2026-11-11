@@ -40,8 +40,10 @@ export function CardTabPanelLayer({
       },
     ]),
   );
+  // Монтируем только ПОСЕЩЁННЫЕ вкладки: активные при создании состояния и
+  // все, на которые пользователь переключался. Иначе открытие карточки
+  // поднимало бы дерево/список/беседу/PDF всех вкладок сразу.
   const visited = new Set(Object.keys(state.visited));
-  for (const group of state.groups) for (const tab of group.tabs) visited.add(tab);
 
   return (
     <div className="relative min-h-0 flex-1 overflow-hidden">

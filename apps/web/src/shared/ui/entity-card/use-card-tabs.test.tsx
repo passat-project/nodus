@@ -21,6 +21,7 @@ function Harness({ kind = 'project' as const }) {
         merge
       </button>
       <span data-testid="widths">{tabs.widths.groups?.join('+') ?? ''}</span>
+      <span data-testid="actives">{tabs.state.groups.map((g) => g.active).join('|')}</span>
     </>
   );
 }
@@ -65,6 +66,28 @@ describe('useCardTabs: внешнее обновление prefs', () => {
       }),
     );
     expect(screen.getByTestId('groups').textContent).toBe('about+structure+tasks');
+  });
+
+  it('открывает сохранённую активную вкладку, а не системный дефолт', async () => {
+    await act(async () =>
+      useUiPrefsStore.setState({
+        personal: {
+          cardTabs: {
+            project: {
+              version: 1,
+              groups: [{ tabs: ['tasks', 'about', 'structure'], active: 'about' }],
+            },
+          },
+        },
+      }),
+    );
+    render(<Harness />);
+    expect(screen.getByTestId('actives').textContent).toBe('about');
+  });
+
+  it('без личных prefs открывает системный дефолт', () => {
+    render(<Harness />);
+    expect(screen.getByTestId('actives').textContent).toBe('structure');
   });
 
   it('сплит коммитит 50/50, merge сбрасывает ширины областей', async () => {

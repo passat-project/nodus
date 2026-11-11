@@ -118,6 +118,7 @@ export function LetterSideTabs({
   groupW,
   collapsedGroupId,
   onStateChange,
+  onSplitTab,
   onGroupWidthsChange,
   groupMin,
   hintText,
@@ -136,6 +137,7 @@ export function LetterSideTabs({
   groupW: number[];
   collapsedGroupId: string | null;
   onStateChange: (next: CardTabsState) => void;
+  onSplitTab?: (next: CardTabsState, areaWidth: number) => void;
   onGroupWidthsChange: (widths: number[]) => void;
   groupMin?: (group: CardTabGroup) => number;
   /** Подсказка derived-состояния (панель беседы скрыта шириной) — хром полосы. */
@@ -172,10 +174,6 @@ export function LetterSideTabs({
         : [];
     }),
   ];
-  const lastGroupId = collapsedGroupId
-    ? (state.groups.find((group) => group.id !== collapsedGroupId)?.id ?? null)
-    : (state.groups[state.groups.length - 1]?.id ?? null);
-
   const panel = (tab: LetterTabId): ReactNode => {
     if (tab === 'body') return <LetterBodyView letter={letter} />;
     if (tab === 'chat') return <LetterChatTab letter={letter} joining={joining} onJoin={onJoin} />;
@@ -190,6 +188,7 @@ export function LetterSideTabs({
         label={ui.letters.card.tabsLabel}
         tabs={strip}
         state={state}
+        onSplitTab={onSplitTab}
         onStateChange={(next) => {
           onStateChange(next);
           const group =
@@ -209,7 +208,7 @@ export function LetterSideTabs({
         onHideTab={onHideTab}
         canHideTab={canHideTab}
         actions={(group) =>
-          group.id === lastGroupId && group.active === 'chat' && conversation ? (
+          group.active === 'chat' && conversation ? (
             <ChatPanelToggle open={panelOpen} onToggle={onPanelToggle} />
           ) : null
         }

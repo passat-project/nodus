@@ -5,11 +5,6 @@ import {
   type CardTabsPref,
 } from '@nodus/contracts';
 
-/** Старые ключи раскладки (до #746): мигрируются один раз на вид карточки. */
-export const LEGACY_PROJECT_TABS_KEY = 'nodus-project-tabs-v2';
-export const LEGACY_CHAT_WIDTH_KEY = 'nodus-card-chat-w-v2';
-const LEGACY_FLAG_PREFIX = 'nodus-card-tabs-migrated-v1';
-
 import { normalizeGroups, type CardTabGroup, type CardTabsState } from './card-tabs-model.js';
 
 /** Стабильный плейсхолдер файловых вкладок в prefs (`files`, не `file:<id>`). */
@@ -172,11 +167,25 @@ export function prefFromState(
   // (вызывающий код сохраняет прежние настройки) — никаких хардкод-id (I15).
   if (groups.length === 0) return null;
 
+  const kept = groups.slice(0, 2);
+  // Ширины не могут описывать больше областей, чем осталось: после закрытия
+  // файла/скрытия вкладки группа исчезает, а `widths.groups` из прошлого
+  // состояния остаётся — схема отвергла бы это и карточка падала бы.
+  const widths =
+    options.widths && kept.length > 1
+      ? {
+          data: options.widths.data,
+          groups: options.widths.groups?.slice(0, kept.length),
+        }
+      : options.widths
+        ? { data: options.widths.data }
+        : undefined;
+
   return cardTabsPrefSchema.parse({
     version: 1,
-    groups: groups.slice(0, 2),
+    groups: kept,
     hidden: [...(options.hidden ?? [])],
-    widths: options.widths,
+    widths,
     panelOpen: options.panelOpen,
   });
 }
@@ -198,77 +207,3 @@ export function firstVisibleTab(
 
 /** Виды карточек для prefs (порядок — как в контракте). */
 export const CARD_KINDS: readonly CardKind[] = ['project', 'task', 'letter'];
-
-function readLegacyJson(key: string): unknown {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Миграция старых ключей в `cardTabs` (#745/#746): скрытые вкладки проекта
- * (`nodus-project-tabs-v2`) и ширина чата (`nodus-card-chat-w-v2`). Читается
- * один раз на вид карточки (флаг в localStorage); неизвестные id
- * отбрасываются, последняя видимая вкладка остаётся. Возвращает undefined,
- * если мигрировать нечего — вызывающий код просто пишет системный дефолт.
- */
-export function legacyPrefFor(
-  kind: CardKind,
-  stableTabs: readonly string[],
-  defaultActive?: string,
-): CardTabsPref | undefined {
-  const flag = `${LEGACY_FLAG_PREFIX}:${kind}`;
-  if (localStorage.getItem(flag)) return undefined;
-
-  if (kind === 'project') {
-    const raw = readLegacyJson(LEGACY_PROJECT_TABS_KEY);
-    const hidden = Array.isArray(raw)
-      ? raw.filter((id): id is string => typeof id === 'string' && stableTabs.includes(id))
-      : [];
-    const visible = stableTabs.filter((id) => !hidden.includes(id));
-    // Последнюю видимую вкладку не теряем.
-    const safeHidden = visible.length > 0 ? hidden : hidden.slice(0, -1);
-    const shown =
-      visible.length > 0 ? visible : stableTabs.filter((id) => !safeHidden.includes(id));
-    if (shown.length === 0) return undefined;
-    return {
-      version: 1,
-      groups: [
-        {
-          tabs: shown,
-          active: defaultActive && shown.includes(defaultActive) ? defaultActive : shown[0]!,
-        },
-      ],
-      hidden: safeHidden,
-    };
-  }
-
-  if (kind === 'task' || kind === 'letter') {
-    const width = Number(localStorage.getItem(LEGACY_CHAT_WIDTH_KEY));
-    if (!Number.isFinite(width) || width <= 0) return undefined;
-    const tabs = stableTabs.slice();
-    if (tabs.length === 0) return undefined;
-    return {
-      version: 1,
-      groups: [
-        { tabs, active: defaultActive && tabs.includes(defaultActive) ? defaultActive : tabs[0]! },
-      ],
-      widths: { groups: [Math.round(width)] },
-    };
-  }
-
-  return undefined;
-}
-
-/** Пометить миграцию выполненной (после успешной записи prefs). */
-export function markLegacyMigrated(kind: CardKind): void {
-  localStorage.setItem(`${LEGACY_FLAG_PREFIX}:${kind}`, '1');
-}
-
-/** Миграция уже выполнена? */
-export function legacyMigrationDone(kind: CardKind): boolean {
-  return localStorage.getItem(`${LEGACY_FLAG_PREFIX}:${kind}`) === '1';
-}
