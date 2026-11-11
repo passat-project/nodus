@@ -2,7 +2,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useUiPrefsStore } from './ui-prefs-store.js';
-import { useViewStore } from '../../shared/views/view-store.js';
+import { useAuthStore } from '../auth-store.js';
+import { useViewStore } from '../views/view-store.js';
 
 /**
  * Сторы персонализации (аудит #45): скоупы applyNav/resetPersonal и
@@ -10,8 +11,22 @@ import { useViewStore } from '../../shared/views/view-store.js';
  * поля воскресали на первом drag колонки, 15.09.2026). Плюс zod-валидация
  * rehydrate: битая форма сохранённого — молчаливый дефолт, не белый экран.
  */
+const USER_A = {
+  id: '11111111-1111-1111-1111-111111111111',
+  email: 'a@nodus',
+  displayName: 'A',
+  permissions: [],
+};
+const USER_B = {
+  id: '22222222-2222-2222-2222-222222222222',
+  email: 'b@nodus',
+  displayName: 'B',
+  permissions: [],
+};
+
 beforeEach(() => {
   localStorage.clear();
+  useAuthStore.setState({ status: 'anonymous', accessToken: null, user: null });
   useUiPrefsStore.setState({ personal: {}, company: {} });
   useViewStore.setState({ views: {}, sorts: {} });
 });
@@ -43,7 +58,7 @@ describe('ui-prefs-store: скоупы навигации', () => {
 
   it('rehydrate: валидная форма восстанавливается', async () => {
     localStorage.setItem(
-      'nodus-ui-prefs-v1',
+      'nodus-ui-prefs-v1:anonymous',
       JSON.stringify({ state: { personal: { navOrder: ['chat'] }, company: {} }, version: 1 }),
     );
     await useUiPrefsStore.persist.rehydrate();
@@ -52,7 +67,7 @@ describe('ui-prefs-store: скоупы навигации', () => {
 
   it('rehydrate: БИТАЯ ФОРМА (navOrder строкой — краш аудита #45) → дефолт скоупа, соседний цел', async () => {
     localStorage.setItem(
-      'nodus-ui-prefs-v1',
+      'nodus-ui-prefs-v1:anonymous',
       JSON.stringify({
         state: { personal: { navOrder: 'строка вместо массива' }, company: { navOrder: ['home'] } },
         version: 1,
@@ -66,7 +81,10 @@ describe('ui-prefs-store: скоупы навигации', () => {
   });
 
   it('rehydrate: не-объект целиком → дефолт', async () => {
-    localStorage.setItem('nodus-ui-prefs-v1', JSON.stringify({ state: 'бито', version: 1 }));
+    localStorage.setItem(
+      'nodus-ui-prefs-v1:anonymous',
+      JSON.stringify({ state: 'бито', version: 1 }),
+    );
     await useUiPrefsStore.persist.rehydrate();
     expect(useUiPrefsStore.getState().personal).toEqual({});
   });
@@ -124,5 +142,38 @@ describe('view-store: порядок колонок и видимость', () =
     const s = useViewStore.getState();
     expect(s.views['tasks.list']).toEqual({});
     expect(s.views['letters.journal']?.['title']?.order).toBe(0);
+  });
+});
+
+describe('ui-prefs-store: личные области вкладок и ключ пользователя', () => {
+  it('setCardTabs пишет cardTabs в личный слой', () => {
+    useUiPrefsStore.getState().setCardTabs('project', {
+      version: 1,
+      groups: [{ tabs: ['structure', 'about'], active: 'about' }],
+    });
+    expect(useUiPrefsStore.getState().personal.cardTabs?.project?.groups[0]?.tabs).toEqual([
+      'structure',
+      'about',
+    ]);
+  });
+
+  it('localStorage-ключ на пользователя: A и B не смешиваются', async () => {
+    useAuthStore.setState({ status: 'authenticated', accessToken: 't', user: USER_A as never });
+    useUiPrefsStore.getState().setCardTabs('task', {
+      version: 1,
+      groups: [{ tabs: ['chat', 'files'] }],
+    });
+    expect(localStorage.getItem(`nodus-ui-prefs-v1:${USER_A.id}`)).not.toBeNull();
+
+    useAuthStore.setState({ user: USER_B as never });
+    await useUiPrefsStore.persist.rehydrate();
+    expect(useUiPrefsStore.getState().personal.cardTabs).toBeUndefined();
+
+    useAuthStore.setState({ user: USER_A as never });
+    await useUiPrefsStore.persist.rehydrate();
+    expect(useUiPrefsStore.getState().personal.cardTabs?.task?.groups[0]?.tabs).toEqual([
+      'chat',
+      'files',
+    ]);
   });
 });

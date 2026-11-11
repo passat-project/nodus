@@ -4,6 +4,7 @@ import {
   openLetterEventSchema,
   popupPayloadSchema,
   popupReplyEventSchema,
+  shellFocusEventSchema,
   shellInfoSchema,
   shellUpdateStateSchema,
   shellVisibilityEventSchema,
@@ -12,7 +13,7 @@ import {
   type PopupReplyEvent,
   type ShellUpdateState,
 } from '@nodus/contracts';
-import { flushOnShellHidden } from './shell-hidden.js';
+import { setShellFocused, setShellVisible } from '../attention/attention-store.js';
 
 /**
  * Мост «портал ↔ десктоп-оболочка» (ADR-0019): веб-приложение при наличии
@@ -57,31 +58,18 @@ export function isDesktopShell(): boolean {
 }
 
 /**
- * Видимость оболочки: окно спрятано в трей → портал должен вести себя как
- * фоновая вкладка (WebView2 может не менять document.hidden при hide).
- * Дефолт true — в браузере портал всегда «видим», гейты остаются штатными.
+ * Видимость и фокус оболочки (#770, ADR-0038) живут в единой модели внимания
+ * (`shared/attention/attention-store.ts`): скрытие в трей и свёрнутость
+ * окна WebView2 может не отражать в `document.hidden`/`hasFocus` — события
+ * оболочки корректируют модель. В браузере оба флага остаются true.
  */
-let shellVisible = true;
-const visibilityListeners = new Set<(visible: boolean) => void>();
-
-export function getShellVisible(): boolean {
-  return shellVisible;
+export function setShellVisibleFromShell(visible: boolean): void {
+  setShellVisible(visible);
 }
 
-function setShellVisible(visible: boolean): void {
-  if (shellVisible === visible) return;
-  shellVisible = visible;
-  for (const fn of visibilityListeners) fn(visible);
-}
-
-export function onShellVisibility(fn: (visible: boolean) => void): () => void {
-  visibilityListeners.add(fn);
-  return () => visibilityListeners.delete(fn);
-}
-
-/** Портал считается «фоновым» для гейтов уведомлений (браузер или трей). */
-export function isPortalBackground(): boolean {
-  return document.hidden || !shellVisible;
+/** Фокус главного окна оболочки (shell-focus; minimize → false). */
+export function setShellFocusedFromShell(focused: boolean): void {
+  setShellFocused(focused);
 }
 
 /** Показать попап уведомления в оболочке (валидация контракта — на границе). */
@@ -169,17 +157,6 @@ export async function desktopApplyUpdate(): Promise<boolean> {
   }
 }
 
-/** Установка видимости оболочки (событие bridge; тесты — напрямую). */
-export function setShellVisibleFromShell(visible: boolean): void {
-  setShellVisible(visible);
-  // Сокрытие в трей: WebView2 не меняет document.hidden — квитанции
-  // просмотров чата дозаписываем немедленно, иначе хвост непрочитанного
-  // оставался «зомби-бейджем» до следующей активности (фидбек 08.10).
-  if (!visible) {
-    flushOnShellHidden();
-  }
-}
-
 /**
  * Подписка на события оболочки с zod-фильтром по контракту: слушатель зовётся
  * только для валидного payload'а (кривой формат = шум за границей приложения).
@@ -220,6 +197,12 @@ export function bindDesktopShellEvents(handlers: {
     // оболочки переключает портал в «фон» для гейтов уведомлений.
     onDesktopEvent(DESKTOP_BRIDGE_EVENTS.shellVisibility, shellVisibilityEventSchema, (payload) =>
       setShellVisible(payload.visible),
+    ),
+    // Фокус/свёрнутость главного окна (#770): свёрнутое окно WebView2 может
+    // оставаться «видимым» и сохранять hasFocus — внимание корректирует
+    // оболочка (WindowEvent::Focused + Resized/is_minimized).
+    onDesktopEvent(DESKTOP_BRIDGE_EVENTS.shellFocus, shellFocusEventSchema, (payload) =>
+      setShellFocused(payload.focused),
     ),
   ];
   // Оболочка доставляет отложенный deep link только после этого сигнала.

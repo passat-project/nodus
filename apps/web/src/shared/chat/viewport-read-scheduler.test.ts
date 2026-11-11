@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createReadReceiptScheduler } from './viewport-read-scheduler.js';
 
-/** Квитанции просмотров (#102 раунд 2): троттл-планировщик — только вперёд,
- *  не чаще раза в THROTTLE_MS, скрытый таб не отправляет, flush на уходе. */
+/** Квитанции просмотров (#102 раунд 2; #770): троттл-планировщик — только
+ *  вперёд, не чаще раза в THROTTLE_MS, в фоне НЕ копит наблюдения, flush на
+ *  уходе отправляет уже увиденное. */
 describe('createReadReceiptScheduler', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -13,12 +14,12 @@ describe('createReadReceiptScheduler', () => {
     vi.useRealTimers();
   });
 
-  function makeSuite(hidden: () => boolean = () => false) {
+  function makeSuite(canRead: () => boolean = () => true) {
     const sends: number[] = [];
     const scheduler = createReadReceiptScheduler({
       send: (seq) => sends.push(seq),
       throttleMs: 500,
-      isHidden: hidden,
+      canRead,
     });
     return { scheduler, sends };
   }
@@ -54,23 +55,51 @@ describe('createReadReceiptScheduler', () => {
     expect(sends).toEqual([1, 3, 4]);
   });
 
-  it('скрытый таб не отправляет: pending ждёт возврата видимости', () => {
-    const hidden = { value: true };
-    const { scheduler, sends } = makeSuite(() => hidden.value);
-    scheduler.observe(6);
+  it('в фоне observe не копит: без внимания seq не запоминается', () => {
+    const attentive = { value: false };
+    const { scheduler, sends } = makeSuite(() => attentive.value);
+    scheduler.observe(6); // фон — не заметили
     vi.advanceTimersByTime(500);
-    expect(sends).toEqual([]); // скрыт — не ушло
-    hidden.value = false;
-    scheduler.observe(6); // вкладка вернулась — тот же seq достаточно
+    expect(sends).toEqual([]);
+    // Вернулся и смотрит: следующее наблюдение (даже с бо́льшим seq) — уже квитанция.
+    attentive.value = true;
+    scheduler.observe(7);
+    vi.advanceTimersByTime(500);
+    expect(sends).toEqual([7]);
+  });
+
+  it('внимание ушло между observe и таймером — квитанция ждёт возврата', () => {
+    const attentive = { value: true };
+    const { scheduler, sends } = makeSuite(() => attentive.value);
+    scheduler.observe(6);
+    attentive.value = false;
+    vi.advanceTimersByTime(500);
+    expect(sends).toEqual([]); // не отправили в фон
+    attentive.value = true;
+    scheduler.observe(6); // возврат внимания — тот же seq достаточно
     vi.advanceTimersByTime(500);
     expect(sends).toEqual([6]);
   });
 
-  it('flush на уходе из беседы: накопленное уходит немедленно (это видели)', () => {
-    const { scheduler, sends } = makeSuite(() => true);
-    scheduler.observe(8);
-    scheduler.flush(); // flush НЕ упирается в guard скрытости
+  it('flush на уходе: накопленное при внимании уходит немедленно', () => {
+    const attentive = { value: true };
+    const { scheduler, sends } = makeSuite(() => attentive.value);
+    scheduler.observe(8); // увидели при внимании
+    attentive.value = false; // ушли из окна/в трей
+    scheduler.flush(); // flush НЕ упирается в guard внимания — это видели
     expect(sends).toEqual([8]);
+  });
+
+  it('обновление «назад» при заблокированном таймере перевзводит квитанцию', () => {
+    const attentive = { value: true };
+    const { scheduler, sends } = makeSuite(() => attentive.value);
+    scheduler.observe(5);
+    attentive.value = false;
+    vi.advanceTimersByTime(500); // fire заблокирован, pending=5
+    attentive.value = true;
+    scheduler.observe(4); // назад при pending=5 — перевзвод таймера
+    vi.advanceTimersByTime(500);
+    expect(sends).toEqual([5]);
   });
 
   it('dispose: накопленное сбрасывается без отправки', () => {
@@ -86,5 +115,16 @@ describe('createReadReceiptScheduler', () => {
     scheduler.observe(null);
     vi.advanceTimersByTime(1000);
     expect(sends).toEqual([]);
+  });
+
+  it('дефолтный canRead в jsdom: документ видим — читает', () => {
+    const sends: number[] = [];
+    const scheduler = createReadReceiptScheduler({
+      send: (seq) => sends.push(seq),
+      throttleMs: 500,
+    });
+    scheduler.observe(2);
+    vi.advanceTimersByTime(500);
+    expect(sends).toEqual([2]);
   });
 });
