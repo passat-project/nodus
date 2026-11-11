@@ -4,7 +4,10 @@ import type { Notification } from '@nodus/contracts';
 import { router } from '../../../app/router.js';
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import type { SourceRect } from '../../../app/shell/slider-panel.js';
-import { stageMessengerThread } from '../../../shared/chat/messenger-nav.js';
+import {
+  stageMessengerConversation,
+  stageMessengerThread,
+} from '../../../shared/chat/messenger-nav.js';
 import { useNotificationDetailStore } from './detail-store.js';
 
 /**
@@ -39,8 +42,12 @@ export function openSourceCard(
   threadRootId: string | null,
   sourceRect?: SourceRect,
 ): void {
-  if (card.kind === 'messenger' && threadRootId) {
-    stageMessengerThread(card.id, threadRootId);
+  // Внешнее открытие беседы (уведомление): карточка обязана сразу встать на
+  // вкладку по типу беседы — чат задачи/письма в списке «Чатов» отсутствует
+  // (#719). Тип известен лишь телу мессенджера после разрешения беседы.
+  if (card.kind === 'messenger') {
+    stageMessengerConversation(card.id);
+    if (threadRootId) stageMessengerThread(card.id, threadRootId);
   }
   openCard(card, sourceRect);
 }

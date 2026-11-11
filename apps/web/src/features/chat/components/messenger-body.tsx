@@ -1,5 +1,5 @@
 import { Megaphone, Plus, Search, SquarePen, Users, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ui, type ConversationListItem, type UserListItem } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
@@ -22,6 +22,11 @@ import {
 } from '../../../shared/chat/chat-queries.js';
 import { ChatHostNavigationContext } from '../../../shared/chat/chat-host.js';
 import { ConversationOpenResponder } from '../../../shared/chat/conversation-open-responder.js';
+import {
+  messengerTabForType,
+  subscribeMessengerConversation,
+  takeMessengerConversation,
+} from '../../../shared/chat/messenger-nav.js';
 import { withoutPatronymic } from '../../../shared/lib/format.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { openTaskCreate } from '../../../shared/tasks/task-create-store.js';
@@ -57,6 +62,7 @@ export function MessengerBody({
   threadRootId,
   onOpenThread,
   onCloseThread,
+  onTabChange,
 }: {
   tab: ChatTab;
   conversationId?: string;
@@ -69,6 +75,9 @@ export function MessengerBody({
   threadRootId: string | null;
   onOpenThread: (rootId: string) => void;
   onCloseThread: () => void;
+  /** Внешнее открытие беседы (уведомление): вкладка выбирается по типу
+   *  беседы (#719). Не передан — хост владеет вкладкой сам (страница `?tab=`). */
+  onTabChange?: (tab: ChatTab) => void;
 }) {
   // Общий список (scope=all) — для поиска активной беседы, открытой ссылкой
   // из другой вкладки; строки вкладки — свой серверный фильтр (#252).
@@ -156,6 +165,20 @@ export function MessengerBody({
     data?.items,
     data !== undefined || isError,
   );
+
+  // Внешнее открытие беседы (уведомление): пристойка (messenger-nav) ставится
+  // кликом по уведомлению, вкладка выбирается по ТИПУ уже разрешённой беседы —
+  // чат задачи/письма живёт на «Чатах задач и писем» (#719). Ручной выбор
+  // вкладки не трогаем: без пристойки эффект молчит.
+  const [externalOpenTick, setExternalOpenTick] = useState(0);
+  useEffect(() => subscribeMessengerConversation(() => setExternalOpenTick((n) => n + 1)), []);
+  const activeId = active?.id;
+  const activeType = active?.type;
+  useEffect(() => {
+    if (!onTabChange || !activeId || !activeType) return;
+    if (!takeMessengerConversation(activeId)) return;
+    onTabChange(messengerTabForType(activeType));
+  }, [onTabChange, activeId, activeType, externalOpenTick]);
 
   // Внутренняя навигация мессенджера (вердикт 25.09): переход по пересланному
   // ведёт беседу ВНУТРИ хозяина — слайдер из мессенджера не вызывается.
