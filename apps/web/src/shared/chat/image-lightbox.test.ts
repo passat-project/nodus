@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { lightboxFrameStyle, resolveLightboxSources } from './image-lightbox.js';
+import { lightboxFrameStyle, resolveLightboxSources } from './lightbox-frame.js';
 
 describe('resolveLightboxSources — полный кадр это ОРИГИНАЛ, не миниатюра (#221)', () => {
   it('url оригинала в приоритете, миниатюра — только промежуточный кадр', () => {

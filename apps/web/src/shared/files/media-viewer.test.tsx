@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
-import { render } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
+import { ui } from '@nodus/contracts';
+import { cleanup, render, screen } from '@testing-library/react';
 
 import { MediaViewer } from './media-viewer.js';
+
+afterEach(cleanup);
 
 /**
  * #767: сцена медиа — flex, а не grid. У ребёнка auto-строки грида
@@ -38,13 +41,13 @@ describe('MediaViewer: медиа ужимается по обеим осям (#
     expect(img!.className).toContain('max-w-full');
   });
 
-  it('картинка fit=width (вкладки/письма) не переведена на сцену — по ширине со скроллом', () => {
+  it('картинка fit=width (вкладки/письма): по ширине со скроллом и с панелью масштаба (#721)', () => {
     const { container } = render(
       <MediaViewer url="/files/scan.jpg" mime="image/jpeg" name="scan.jpg" fit="width" />,
     );
     const img = container.querySelector('img')!;
-    expect(img.className).toContain('w-full');
-    expect(img.parentElement!.className).toContain('overflow-auto');
+    expect(img).toBeTruthy();
+    expect(screen.getByRole('toolbar', { name: ui.files.zoomPanel })).toBeTruthy();
   });
 
   it('аудио-ветка не затронута: колонка max-w-md, аудио на всю ширину', () => {

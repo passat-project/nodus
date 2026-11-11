@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
 import { ui } from '@nodus/contracts';
 
+import { ImageViewer } from './image-viewer.js';
+import { ViewerFullscreenButton } from './viewer-fullscreen-button.js';
+
 /**
  * Сцена медиа — flex, не grid (#767): у ребёнка auto-строки грида
  * процентный `max-height` циклический (строка считается по intrinsic-вкладу
@@ -16,11 +19,11 @@ function MediaStage({ children }: { children: ReactNode }) {
 }
 
 /**
- * Медиа-вьюер (#138): видео/аудио/изображение — нативные элементы браузера
- * (controls), без зависимостей. Изображение из не-галерейных хостов
- * (панель беседы, дровер) открывается тем же вьюером. Полноэкранный контент
- * — БЕЗ скруглений (#151, вердикт владельца 29.09: в углах картинки может
- * быть важная информация); скругления остаются у миниатюр в ленте.
+ * Медиа-вьюер (#138): видео/аудио — нативные элементы браузера (controls),
+ * без зависимостей. Изображение открывается `ImageViewer` (#721: зум,
+ * панорамирование, панель масштаба одной грамматики с PDF) — полноэкранный
+ * контент БЕЗ скруглений (#151, вердикт владельца 29.09: в углах картинки
+ * может быть важная информация); скругления остаются у миниатюр в ленте.
  */
 export function MediaViewer({
   url,
@@ -28,6 +31,7 @@ export function MediaViewer({
   name,
   fit,
   autoFocus = true,
+  onFullscreen,
 }: {
   url: string;
   mime: string;
@@ -36,6 +40,8 @@ export function MediaViewer({
   fit?: 'width';
   /** Фокус плеера: модалка — да, вкладка карточки — нет (не крадёт ввод). */
   autoFocus?: boolean;
+  /** «На весь экран»: у картинки — в панели масштаба, у плеера — поверх. */
+  onFullscreen?: () => void;
 }) {
   if (mime.startsWith('video/')) {
     return (
@@ -49,34 +55,24 @@ export function MediaViewer({
           className="max-h-full max-w-full object-contain"
           aria-label={name}
         />
+        {onFullscreen ? (
+          <ViewerFullscreenButton onClick={onFullscreen} className="absolute top-3 right-3 z-10" />
+        ) : null}
       </MediaStage>
     );
   }
   if (mime.startsWith('audio/')) {
     return (
-      <div className="grid size-full place-items-center p-6">
+      <div className="relative grid size-full place-items-center p-6">
         <div className="flex w-full max-w-md flex-col items-center gap-4">
           <span className="text-sm text-muted-foreground">{ui.files.mediaTitle}</span>
           <audio key={url} src={url} controls autoFocus={autoFocus} className="w-full" />
         </div>
+        {onFullscreen ? (
+          <ViewerFullscreenButton onClick={onFullscreen} className="absolute top-3 right-3 z-10" />
+        ) : null}
       </div>
     );
   }
-  if (fit === 'width') {
-    return (
-      <div className="size-full overflow-auto bg-muted/40 p-4">
-        <img
-          key={url}
-          src={url}
-          alt={name}
-          className="mx-auto block h-auto w-full max-w-[1200px]"
-        />
-      </div>
-    );
-  }
-  return (
-    <MediaStage>
-      <img key={url} src={url} alt={name} className="max-h-full max-w-full object-contain" />
-    </MediaStage>
-  );
+  return <ImageViewer url={url} name={name} fit={fit} onFullscreen={onFullscreen} />;
 }
