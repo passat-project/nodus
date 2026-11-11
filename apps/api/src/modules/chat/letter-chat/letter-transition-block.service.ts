@@ -21,6 +21,7 @@ import {
 } from '../../workflows/ports/process-catalog-reader.port.js';
 import { ConversationMembersRepository } from '../conversations/conversation-members.repository.js';
 import { ConversationsRepository } from '../conversations/conversations.repository.js';
+import { participantRoster } from '../conversations/participant-roster.js';
 import { MessageDtoMapper } from '../messages/message-dto.mapper.js';
 import { MessagesWriteRepository } from '../messages/messages-write.repository.js';
 import { VaultWriteRepository } from '../vault/vault-write.repository.js';
@@ -81,8 +82,8 @@ export class LetterTransitionBlockService {
   ): Promise<void> {
     // Тот же предохранитель, что у блока задачи (#741): не-участник беседы
     // письма не пишет в чужую переписку; запись журнала перехода остаётся.
-    const members = await this.conversations.listMembers([conversationId], tx);
-    if (!members.some((member) => member.userId === actorId)) {
+    const members = await participantRoster(this.conversations, conversationId, actorId, tx);
+    if (!members) {
       this.logger.warn(
         { letterId: payload.letterId, actorId },
         'chat: блок перехода письма не записан — актор вне беседы',

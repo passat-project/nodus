@@ -10,6 +10,7 @@ import {
 import { EventBus } from '../../../core/events/event-bus.js';
 import { FeatureFlagService } from '../../../core/feature-flags/feature-flag.service.js';
 import { ConversationsRepository } from '../conversations/conversations.repository.js';
+import { participantRoster } from '../conversations/participant-roster.js';
 import { ConversationMembersRepository } from '../conversations/conversation-members.repository.js';
 import { MessageDtoMapper } from '../messages/message-dto.mapper.js';
 import { MessagesWriteRepository } from '../messages/messages-write.repository.js';
@@ -65,8 +66,8 @@ export class TaskTransitionBlockService {
     // Нажатие может прийти от того, кто видит задачу по праву, но в беседе
     // задачи не состоит (обход условий маршрута). Такому актору писать в
     // чужую переписку нельзя — блок пропускаем, запись журнала остаётся.
-    const members = await this.conversations.listMembers([conversationId], tx);
-    if (!members.some((member) => member.userId === actorId)) {
+    const members = await participantRoster(this.conversations, conversationId, actorId, tx);
+    if (!members) {
       this.logger.warn(
         { taskId: payload.taskId, actorId },
         'chat: блок перехода не записан — актор вне беседы задачи',
