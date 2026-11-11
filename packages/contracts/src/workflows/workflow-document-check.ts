@@ -191,14 +191,21 @@ export function checkWorkflowDocument(
   }
 
   // --- Окно при нажатии (#380) --------------------------------------------
+  // Хозяева окна — кнопки-переходы и действия без смены статуса (#633):
+  // окно у них из одного конструктора, проверки тоже общие.
 
-  for (const t of transitions) {
-    const form = t.form;
+  const pressables = [
+    ...transitions.map((t) => ({ form: t.form, rules: t.rules, ref: { transitionId: t.id } })),
+    ...(doc.actions ?? []).map((a) => ({ form: a.form, rules: a.rules, ref: { actionId: a.id } })),
+  ];
+
+  for (const owner of pressables) {
+    const form = owner.form;
     if (!form?.enabled) continue;
     const kinds = new Set<string>();
     for (const section of form.sections) {
       if (kinds.has(section.kind)) {
-        problems.push(error('form_duplicate_section', { transitionId: t.id }));
+        problems.push(error('form_duplicate_section', owner.ref));
       }
       kinds.add(section.kind);
       // Пустая подпись блока — стандартное название раздела (#496): блок
@@ -206,13 +213,13 @@ export function checkWorkflowDocument(
     }
     const hasResult = kinds.has('result');
     const files = form.sections.find((s) => s.kind === 'result_files');
-    const hasFilesGate = t.rules.validators.some((v) => v.kind === 'result_files');
+    const hasFilesGate = owner.rules.validators.some((v) => v.kind === 'result_files');
     if (files && !hasFilesGate && !hasResult) {
-      problems.push(warning('form_useless_section', { transitionId: t.id }));
+      problems.push(warning('form_useless_section', owner.ref));
     }
     const messages = form.sections.find((s) => s.kind === 'result_messages');
     if (messages?.kind === 'result_messages' && !messages.required && !hasResult) {
-      problems.push(warning('form_useless_section', { transitionId: t.id }));
+      problems.push(warning('form_useless_section', owner.ref));
     }
   }
 
@@ -228,7 +235,10 @@ export function checkWorkflowDocument(
 
   const fields = opts.customFields;
   if (fields) {
-    const checkKey = (key: string, refs: Pick<WorkflowProblem, 'transitionId'>): void => {
+    const checkKey = (
+      key: string,
+      refs: Partial<Pick<WorkflowProblem, 'transitionId' | 'actionId'>>,
+    ): void => {
       const id = customFieldIdOfKey(key);
       if (id === null) return;
       if (!fields.active.has(id)) {
@@ -238,22 +248,23 @@ export function checkWorkflowDocument(
         problems.push(error('custom_field_not_in_type', refs));
       }
     };
-    for (const t of transitions) {
-      for (const section of t.form?.enabled ? t.form.sections : []) {
+    for (const owner of pressables) {
+      const form = owner.form;
+      for (const section of form?.enabled ? form.sections : []) {
         if (section.kind === 'fields') {
-          for (const key of windowFieldKeys(section)) checkKey(key, { transitionId: t.id });
+          for (const key of windowFieldKeys(section)) checkKey(key, owner.ref);
         }
       }
-      for (const validator of t.rules.validators) {
+      for (const validator of owner.rules.validators) {
         if (validator.kind === 'fields_required') {
-          for (const key of validator.fields) checkKey(key, { transitionId: t.id });
+          for (const key of validator.fields) checkKey(key, owner.ref);
         }
       }
       // Источник «поле» у решающих (#433): тот же контроль удалённых и
       // непривязанных к типу атрибутов, что у окна и гейтов.
-      for (const condition of t.rules.conditions) {
+      for (const condition of owner.rules.conditions) {
         if (condition.kind === 'decider_in' && condition.source.kind === 'field') {
-          checkKey(condition.source.field, { transitionId: t.id });
+          checkKey(condition.source.field, owner.ref);
         }
       }
     }

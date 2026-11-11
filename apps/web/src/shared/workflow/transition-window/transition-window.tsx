@@ -19,6 +19,7 @@ import { NodeLabel } from '@nodus/ui/components/node-label';
 import { Textarea } from '@nodus/ui/components/textarea';
 
 import { useMessagesLookup } from '../../chat/message-lookup-api.js';
+import { gateReasonsText } from '../../tasks/transition-error.js';
 import { buildExecuteBody } from './build-execute-body.js';
 import { ConditionsList } from './conditions-list.js';
 import type { GateDetailsHost } from './gate-details.js';
@@ -226,6 +227,9 @@ export function TransitionWindow({
               {ui.tasks.window.submitFailed}
               {error.missing && error.missing.length > 0
                 ? ` (${error.missing.map(missingLabel).join(', ')})`
+                : ''}
+              {error.reasons && error.reasons.length > 0
+                ? ` — ${ui.tasks.processBlockedMissing} ${gateReasonsText(error.reasons)}`
                 : ''}
             </p>
           ) : null}

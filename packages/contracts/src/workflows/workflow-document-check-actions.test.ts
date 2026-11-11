@@ -236,4 +236,62 @@ describe('действия маршрута (#633)', () => {
     const legacy = { ...doc, actions: undefined };
     expect(() => workflowDraftDocumentSchema.parse(legacy)).not.toThrow();
   });
+
+  it('окно действия проходит те же проверки, что окно перехода (#740)', () => {
+    const doc = baseDocument([
+      mkAction('a-dup', 'Дубль разделов', {
+        form: {
+          enabled: true,
+          sections: [
+            { kind: 'comment', label: 'Раз', required: false },
+            { kind: 'comment', label: 'Два', required: false },
+          ],
+        },
+      }),
+      mkAction('a-lock', 'Кривой замок', {
+        form: { enabled: true, sections: [], locks: [{ key: 'nope', editors: 'none' }] },
+      }),
+    ]);
+    const problems = checkWorkflowDocument(doc);
+    expect(problems).toContainEqual(
+      expect.objectContaining({ code: 'form_duplicate_section', actionId: 'a-dup' }),
+    );
+    expect(problems).toContainEqual(
+      expect.objectContaining({ code: 'form_lock_key_invalid', actionId: 'a-lock' }),
+    );
+  });
+
+  it('удалённый атрибут и кривая формула в окне действия — с actionId (#740)', () => {
+    const fieldId = '00000000-0000-4000-8000-0000000000f1';
+    const doc = baseDocument([
+      mkAction('a-field', 'Поле', {
+        form: {
+          enabled: true,
+          sections: [{ kind: 'fields', fields: [`cf.${fieldId}`] }],
+        },
+      }),
+      mkAction('a-formula', 'Формула', {
+        form: {
+          enabled: true,
+          sections: [
+            {
+              kind: 'fields',
+              fields: [],
+              formulas: { description: { kind: 'call', fn: 'abs', args: [] } },
+            },
+          ],
+        },
+      }),
+    ]);
+    const problems = checkWorkflowDocument(doc, {
+      category: 'task',
+      customFields: { active: new Set<string>() },
+    });
+    expect(problems).toContainEqual(
+      expect.objectContaining({ code: 'custom_field_unknown', actionId: 'a-field' }),
+    );
+    expect(problems).toContainEqual(
+      expect.objectContaining({ code: 'formula_invalid', actionId: 'a-formula' }),
+    );
+  });
 });

@@ -296,4 +296,41 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks: действие без см�
     const stranger = await fx.api(carol, 'GET', `/tasks/${taskId}/actions`);
     expect(stranger.status).toBe(404);
   });
+
+  it('непройденный гейт: действие в списке с blockedBy, нажатие — 409 (#740)', async () => {
+    const taskId = await createTask('gate');
+    const newStage = await stageOf('new');
+    const actionId = await addAction({
+      name: 'С гейтом',
+      stageId: newStage,
+      form: {
+        enabled: true,
+        sections: [{ kind: 'comment', label: 'Комментарий', required: false }],
+      },
+    });
+    // Валидатор — прямо в правилах действия: время не списано (гейт не пройден).
+    await fx.prisma.workflowAction.update({
+      where: { id: actionId },
+      data: {
+        rules: {
+          conditions: [{ kind: 'role_in', roles: ['assignee'] }],
+          validators: [{ kind: 'time_logged' }],
+          postFunctions: [],
+        } as never,
+      },
+    });
+
+    const list = await actionsOf(bob, taskId);
+    const gated = list.find((a) => a.id === actionId);
+    expect(gated?.blockedBy).toEqual([{ kind: 'time_logged' }]);
+
+    const res = await pressAction(bob, taskId, actionId, { form: {} }, `it-act-gate-${fx.runId}`);
+    expect(res.status).toBe(409);
+    expect(apiErrorResponseSchema.parse(await res.json()).code).toBe(
+      ErrorCode.WORKFLOW_TRANSITION_BLOCKED,
+    );
+    expect(
+      await fx.prisma.transitionRecord.count({ where: { entityId: taskId, recordKind: 'action' } }),
+    ).toBe(0);
+  });
 });
