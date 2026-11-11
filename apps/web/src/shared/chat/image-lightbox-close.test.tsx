@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MessageAttachment } from '@nodus/contracts';
 
@@ -8,7 +8,7 @@ import { ImageLightbox } from './image-lightbox.js';
 /** Закрытие по заднику (#409): клик принадлежит лайтбоксу и НЕ всплывает
  *  в React-дерево до кликабельной карточки поста (портал живёт в body, но
  *  событие идёт по дереву компонентов) — иначе вместе с закрытием
- *  открывался тред. */
+ *  открывался тред. Закрытие отложено на паузу двойного клика (#721). */
 
 const image: MessageAttachment = {
   id: 'f1',
@@ -31,6 +31,7 @@ describe('ImageLightbox — закрытие по заднику', () => {
   it('вызывает onClose ровно один раз и гасит всплытие', () => {
     const onClose = vi.fn();
     const ancestorClick = vi.fn();
+    vi.useFakeTimers();
     render(
       <div onClick={ancestorClick}>
         <ImageLightbox images={[image]} index={0} onIndex={vi.fn()} onClose={onClose} />
@@ -41,7 +42,13 @@ describe('ImageLightbox — закрытие по заднику', () => {
     expect(dialog).not.toBeNull();
     fireEvent.click(dialog);
 
-    expect(onClose).toHaveBeenCalledTimes(1);
+    // Клик не всплывает сразу и не закрывает мгновенно (пауза двойного клика).
     expect(ancestorClick).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    vi.useRealTimers();
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

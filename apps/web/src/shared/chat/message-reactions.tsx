@@ -77,6 +77,7 @@ export function MessageReactions({
                     <PersonAvatar
                       name={user.displayName}
                       avatarUrl={user.avatarUrl}
+                      decorative
                       className="size-5 shrink-0"
                     />
                     <span className="text-xs">{shortPersonName(user.displayName)}</span>

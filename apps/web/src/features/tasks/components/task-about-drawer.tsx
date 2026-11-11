@@ -65,7 +65,7 @@ export const TaskAboutDrawer = memo(function TaskAboutDrawer({
     // избранное и крестик У КРАЯ справа) — на высоте полосы, border-b
     // продолжает линию; внутренних перегородок нет, единственная вертикаль —
     // структурная левая граница колонки.
-    <aside className="relative flex h-full w-[22.5rem] flex-col border-l border-border bg-card">
+    <aside className="relative flex h-full w-full flex-col border-l border-border bg-card">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
         {membersOpen ? (
           <Button

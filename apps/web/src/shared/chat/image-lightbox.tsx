@@ -1,173 +1,42 @@
-import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useEffect, useRef, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { MessageAttachment } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
-import { cn } from '@nodus/ui/lib/utils';
 
+import { useImageZoom } from '../files/use-image-zoom.js';
+import { ViewerZoomBar } from '../files/viewer-zoom-bar.js';
+import { LightboxFrame } from './lightbox-frame.js';
 /**
  * Лайтбокс изображения галереи (plan chat-attachments-plan, добро владельца
  * 14.09.2026): портал поверх интерфейса (z-80), Esc и клик по заднику —
  * закрыть, стрелки клавиатуры и кнопки по краям — листание, счётчик «N / M»
  * слева сверху. Полноэкранное изображение — БЕЗ скруглений (#151: в углах
- * может быть важная информация; скругления — только у миниатюр в ленте). Фокус при открытии — на диалоге, при закрытии возвращается
- * плитке галереи (a11y); клики по самому фото и кнопкам не закрывают диалог.
+ * может быть важная информация; скругления — только у миниатюр в ленте).
+ * Фокус при открытии — на диалоге, при закрытии возвращается плитке галереи
+ * (a11y); клики по самому фото и кнопкам не закрывают диалог. Кадр, загрузка
+ * и ретрай — `lightbox-frame.tsx`.
  *
- * Размер кадра (#221): показываю в боксе min(natural, 85vw, 85vh·ratio) —
- * крупные вписываются в экран (Telegram-модель: downscale-only), мелкие
- * остаются в natural 1:1, апскейла нет (канон PhotoPrism viewport-mapping и
- * headless-lightbox minCoverage=0; research #221). Бокс задаётся ЯВНЫМИ
- * габаритами оригинала — контейнер не сжимается под потоковую миниатюру
- * (прошлая верстка рендерила 2400px-оригинал в 800px-бокс миниатюры).
- *
- * Прогрессивная загрузка (#150): пока грузится оригинал, кадр держит
- * миниатюра (кэш ленты) — обе absolute в одном аспект-боксе, пиксель в
- * пиксель (модель Medium). Фейд — только после подтверждённого декодирования
- * (img.decode(), MDN); сбой загрузки не молчит: авто-ретрай ×1 (ремоунт по
- * key), затем явная плашка «не удалось загрузить» с повтором.
+ * Зум (#721): та же панель масштаба, что у вложений (`ViewerZoomBar`), в той
+ * же верхней полосе; 100% — натуральные пиксели, вписывание — «по размеру
+ * экрана» с полями 15%. Стрелки делят две роли (решение #721): фокус в
+ * области просмотра И картинка больше окна — стрелки сдвигают её (панорама),
+ * иначе — листают галерею, как раньше; `+`/`−`/`0` работают только при фокусе
+ * в области. Смена кадра сбрасывает масштаб и сдвиг.
  */
 
-/** Источники кадра: полный = оригинал (url), миниатюра — только промежуточный
- *  кадр; равные источники не дублируются. Чистая — unit-тест (#221:
- *  регрессия «лайтбокс показывает url, а не thumbnailUrl»). */
-export function resolveLightboxSources(image: Pick<MessageAttachment, 'url' | 'thumbnailUrl'>): {
-  fullSrc: string;
-  thumbSrc: string | null;
-} {
-  const fullSrc = image.url ?? image.thumbnailUrl ?? '';
-  const thumbSrc = image.thumbnailUrl && image.thumbnailUrl !== fullSrc ? image.thumbnailUrl : null;
-  return { fullSrc, thumbSrc };
-}
+/** Доля экрана под вписанную картинку — те же поля, что у кадра лайтбокса. */
+const FIT_FACTOR = 0.85;
 
-/** Кадр показа из габаритов оригинала: явный aspect-бокс шириной
- *  min(85vw, 85vh·ratio, natural) — крупное вписывается в экран, мелкое
- *  остаётся 1:1. Без габаритов (старые строки) — null, потоковый фолбэк.
- *  Чистая — unit-тест. */
-export function lightboxFrameStyle(
-  width?: number | null,
-  height?: number | null,
-): CSSProperties | null {
-  if (!width || width <= 0 || !height || height <= 0) return null;
-  const ratio = width / height;
-  return {
-    width: `min(85vw, calc(85vh * ${ratio}), ${Math.round(width)}px)`,
-    aspectRatio: `${width} / ${height}`,
-  };
-}
-
-type FullPhase = 'loading' | 'ready' | 'error';
-
-function LightboxImage({ image }: { image: MessageAttachment }) {
-  const { fullSrc, thumbSrc } = resolveLightboxSources(image);
-  const frame = lightboxFrameStyle(image.width, image.height);
-  const [phase, setPhase] = useState<FullPhase>('loading');
-  const [attempt, setAttempt] = useState(0);
-  const fullRef = useRef<HTMLImageElement>(null);
-
-  const showFull = () => {
-    const settle = () => setPhase('ready');
-    const img = fullRef.current;
-    // Фейд после декодирования: без decode пустой кадр/мигание на больших PNG
-    if (img && typeof img.decode === 'function') img.decode().then(settle, settle);
-    else settle();
-  };
-  const failFull = () => {
-    if (attempt < 1)
-      setAttempt(attempt + 1); // один авто-ретрай — новый <img>
-    else setPhase('error');
-  };
-  const retry = () => {
-    setPhase('loading');
-    setAttempt(attempt + 1);
-  };
-
-  const indicator =
-    phase === 'loading' && thumbSrc ? (
-      <span
-        role="status"
-        aria-label={ui.chat.lightboxLoading}
-        className="absolute bottom-2.5 left-1/2 -translate-x-1/2 rounded-full bg-black/55 p-1.5 text-white/85"
-      >
-        <Loader2 className="size-4 animate-spin" />
-      </span>
-    ) : null;
-
-  const error =
-    phase === 'error' ? (
-      <span
-        role="alert"
-        onClick={(e) => e.stopPropagation()}
-        className="absolute inset-0 flex min-w-72 flex-col items-center justify-center gap-2 rounded-sm bg-black/65 text-white"
-      >
-        <AlertTriangle className="size-6 text-white/85" />
-        <span className="text-sm">{ui.chat.lightboxLoadError}</span>
-        <Button variant="outline" size="sm" onClick={retry}>
-          {ui.chat.lightboxRetry}
-        </Button>
-      </span>
-    ) : null;
-
-  if (frame) {
-    return (
-      <span className="relative inline-flex" style={frame}>
-        {thumbSrc ? (
-          <img
-            src={thumbSrc}
-            alt={image.name}
-            onClick={(e) => e.stopPropagation()}
-            className="absolute inset-0 size-full object-contain"
-          />
-        ) : null}
-        <img
-          key={attempt}
-          ref={fullRef}
-          src={fullSrc}
-          alt={image.name}
-          onLoad={showFull}
-          onError={failFull}
-          onClick={(e) => e.stopPropagation()}
-          className={cn(
-            'absolute inset-0 size-full object-contain transition-opacity duration-200',
-            phase === 'ready' ? 'opacity-100' : 'opacity-0',
-          )}
-        />
-        {indicator}
-        {error}
-      </span>
-    );
-  }
-
-  // Фолбэк без габаритов: прежняя потоковая схема, но с обработкой ошибок.
-  return (
-    <span className="relative inline-flex min-h-48 min-w-72 max-h-[85vh] max-w-[85vw]">
-      {thumbSrc ? (
-        <img
-          src={thumbSrc}
-          alt={image.name}
-          onClick={(e) => e.stopPropagation()}
-          className="max-h-[85vh] max-w-[85vw] object-contain"
-        />
-      ) : null}
-      <img
-        key={attempt}
-        ref={fullRef}
-        src={fullSrc}
-        alt={image.name}
-        onLoad={showFull}
-        onError={failFull}
-        onClick={(e) => e.stopPropagation()}
-        className={cn(
-          'max-h-[85vh] max-w-[85vw] object-contain transition-opacity duration-200',
-          thumbSrc && 'absolute inset-0 size-full',
-          phase === 'ready' || (!thumbSrc && phase !== 'error') ? 'opacity-100' : 'opacity-0',
-        )}
-      />
-      {indicator}
-      {error}
-    </span>
-  );
-}
+/**
+ * Пауза перед закрытием по клику на задник. Первый клик двойного приходит
+ * РАНЬШЕ события `dblclick`, поэтому мгновенное закрытие выбрасывало из
+ * просмотра вместо переключения масштаба (живая проверка 11.11). Пауза ниже
+ * системного порога двойного клика (Windows — 500 мс): одиночный клик
+ * закрывает почти сразу, а быстрый двойной успевает отменить закрытие.
+ */
+const BACKDROP_CLOSE_DELAY = 400;
 
 export function ImageLightbox({
   images,
@@ -182,6 +51,32 @@ export function ImageLightbox({
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const image = images[index];
+  // Зум живёт на весь лайтбокс, но сбрасывается сменой кадра (resetKey).
+  const zoom = useImageZoom({ fitFactor: FIT_FACTOR, resetKey: image?.id });
+
+  // Отложенное закрытие по заднику (см. BACKDROP_CLOSE_DELAY): второй клик
+  // пары или `dblclick` его отменяют — двойной клик только меняет масштаб.
+  const closeTimer = useRef<number | null>(null);
+  const cancelClose = () => {
+    if (closeTimer.current === null) return;
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  };
+  useEffect(() => cancelClose, []);
+
+  const onBackdropClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    // Клик принадлежит лайтбоксу и не всплывает до карточки поста (#409).
+    event.stopPropagation();
+    if (event.detail > 1) {
+      cancelClose();
+      return;
+    }
+    if (closeTimer.current !== null) return;
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = null;
+      onClose();
+    }, BACKDROP_CLOSE_DELAY);
+  };
 
   useEffect(() => {
     const restoreTo = document.activeElement as HTMLElement | null;
@@ -200,12 +95,17 @@ export function ImageLightbox({
         onClose();
         return;
       }
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      // Стрелки — панораме, только когда фокус в области просмотра И картинка
+      // больше окна: тогда обработчик области (следующим шагом) сдвигает её.
+      // Во всех остальных случаях стрелки листают галерею, как раньше.
+      if (zoom.canPan && zoom.areaRef.current === document.activeElement) return;
       if (event.key === 'ArrowRight') onIndex(Math.min(index + 1, images.length - 1));
-      if (event.key === 'ArrowLeft') onIndex(Math.max(index - 1, 0));
+      else onIndex(Math.max(index - 1, 0));
     }
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [index, images.length, onClose, onIndex]);
+  }, [index, images.length, onClose, onIndex, zoom.canPan, zoom.areaRef]);
 
   if (!image) return null;
 
@@ -216,13 +116,11 @@ export function ImageLightbox({
       aria-modal="true"
       aria-label={image.name}
       tabIndex={-1}
-      /* Клик по заднику закрывает лайтбокс и НЕ всплывает дальше: портал
-         живёт в body, но React-событие всплывает по дереву компонентов до
-         карточки поста, и та открывала обсуждение (#409). */
-      onClick={(event) => {
-        event.stopPropagation();
-        onClose();
-      }}
+      /* Клик по заднику закрывает лайтбокс (с паузой под двойной клик) и НЕ
+         всплывает дальше: портал живёт в body, но React-событие всплывает по
+         дереву компонентов до карточки поста, и та открывала обсуждение (#409). */
+      onClick={onBackdropClick}
+      onDoubleClick={cancelClose}
       /* Поверх Radix-модалки (окно отправки вложений, #144): модал ставит
          body pointer-events:none, портал в body наследует это — лайтбокс
          был «прозрачен» для мыши, а клики мимо уходили в html и закрывали
@@ -231,14 +129,30 @@ export function ImageLightbox({
       onPointerDown={(event) => event.stopPropagation()}
       className="pointer-events-auto fixed inset-0 z-[80] flex items-center justify-center bg-black/85 outline-none"
     >
-      <span className="absolute top-3 left-4 font-mono text-xs text-white/70 tabular-nums">
-        {index + 1} / {images.length}
-      </span>
+      {/* Хром лайтбокса — ОТДЕЛЬНЫЙ слой над кадром (z-20 против z-0 кадра).
+          Подложка СПЛОШНАЯ (`bg-black/60` + blur), не градиент: на светлом
+          скриншоте градиентный скрим не читался и полоса сливалась с фото
+          (живая проверка 11.11). Справа `pr-12` — место под крестик, чтобы
+          группа масштаба его не наезжала. */}
+      <div className="absolute inset-x-0 top-0 z-20" onClick={(event) => event.stopPropagation()}>
+        <ViewerZoomBar
+          leading={`${index + 1} / ${images.length}`}
+          leadingClassName="font-mono text-xs tabular-nums text-white"
+          percent={zoom.percent}
+          canZoomIn={zoom.canZoomIn}
+          canZoomOut={zoom.canZoomOut}
+          onZoomIn={zoom.zoomIn}
+          onZoomOut={zoom.zoomOut}
+          onReset={zoom.reset}
+          className="bg-black/60 pr-12 text-white/90 backdrop-blur-sm"
+          controlClassName="text-white hover:bg-white/15 hover:text-white"
+        />
+      </div>
       <Button
         variant="ghost"
         size="icon-sm"
         aria-label={ui.common.close}
-        className="absolute top-2.5 right-3 text-white/70 hover:bg-white/10 hover:text-white"
+        className="absolute top-1 right-3 z-20 text-white hover:bg-white/15"
         onClick={(e) => {
           e.stopPropagation();
           onClose();
@@ -251,7 +165,7 @@ export function ImageLightbox({
           variant="ghost"
           size="icon-sm"
           aria-label={ui.chat.photoPrev}
-          className="absolute left-3 text-white/70 hover:bg-white/10 hover:text-white"
+          className="absolute left-3 z-20 text-white hover:bg-white/15"
           onClick={(e) => {
             e.stopPropagation();
             onIndex(index - 1);
@@ -265,7 +179,7 @@ export function ImageLightbox({
           variant="ghost"
           size="icon-sm"
           aria-label={ui.chat.photoNext}
-          className="absolute right-3 text-white/70 hover:bg-white/10 hover:text-white"
+          className="absolute right-3 z-20 text-white hover:bg-white/15"
           onClick={(e) => {
             e.stopPropagation();
             onIndex(index + 1);
@@ -274,7 +188,7 @@ export function ImageLightbox({
           <ChevronRight />
         </Button>
       ) : null}
-      <LightboxImage key={image.id} image={image} />
+      <LightboxFrame image={image} zoom={zoom} />
     </div>,
     document.body,
   );

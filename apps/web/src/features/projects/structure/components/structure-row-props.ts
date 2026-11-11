@@ -26,8 +26,10 @@ export interface StructureNodeRowProps {
   collapsed: boolean;
   onToggle: () => void;
   selected: boolean;
+  /** Строка выбрана кликом (визуальный выбор без панели, #731). */
+  active: boolean;
   onToggleSelected: () => void;
-  /** Клик по строке — выбор папки для панели «Свойства» (#556). */
+  /** Клик по строке — визуальный выбор папки (#731); панель — из ПКМ. */
   onSelect: () => void;
   items: RowMenuItem[];
   /** Зона дропа над этой строкой (индикация). */
@@ -90,6 +92,7 @@ export const sameNodeRowProps = (
   prev.kind === next.kind &&
   prev.collapsed === next.collapsed &&
   prev.selected === next.selected &&
+  prev.active === next.active &&
   prev.zone === next.zone &&
   prev.invalid === next.invalid &&
   prev.isDragging === next.isDragging &&

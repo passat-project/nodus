@@ -91,7 +91,12 @@ export function MessageRunView({
         className="sticky bottom-2 self-end"
         style={{ gridColumn: atEnd ? 2 : 1, gridRow: `1 / ${rowCount + 1}` }}
       >
-        <PersonAvatar name={run.last.author.displayName} className="size-7" />
+        <PersonAvatar
+          name={run.last.author.displayName}
+          avatarUrl={run.last.author.avatarUrl}
+          decorative
+          className="size-7"
+        />
       </div>
       {run.items.map((message) => {
         const dividerHere = message.id === dividerBeforeId;

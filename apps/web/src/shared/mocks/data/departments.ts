@@ -1,5 +1,6 @@
 import type { Department, DepartmentNode, OrgUnitKind, UserListItem } from '@nodus/contracts';
 
+import { activeStaffCount } from '../../lib/staff-count.js';
 import { departmentIds } from './org-ids.js';
 import { userIds } from './users.js';
 
@@ -104,7 +105,12 @@ export function buildDepartmentTree(
       ...department,
       headName: nameOf(department.headId),
       deputyName: nameOf(department.deputyId),
-      memberCount: users.filter((u) => departmentOfUser(u, kind) === department.id).length,
+      // Штат подразделения (#723): как `memberCount` API
+      // (`departments.repository.ts` — `members: { where: { status: 'active' } }`),
+      // уволенные в число не входят, но остаются видимыми в панели.
+      memberCount: activeStaffCount(
+        users.filter((u) => departmentOfUser(u, kind) === department.id),
+      ),
       children,
     };
   }

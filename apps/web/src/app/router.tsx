@@ -11,7 +11,7 @@ import { AppShell } from './shell/app-shell.js';
 import { NAV_MODULES } from './shell/nav-registry.js';
 import { NotFoundScreen, RouterErrorScreen } from './shell/system-screens.js';
 import { resolveHidden, resolveOrder } from './shell/ui-prefs.js';
-import { useUiPrefsStore } from './shell/ui-prefs-store.js';
+import { useUiPrefsStore } from '../shared/preferences/ui-prefs-store.js';
 import { useAuthStore } from '../shared/auth-store.js';
 
 /**

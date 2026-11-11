@@ -49,6 +49,16 @@ export const directoryHandlers = [
       if (department)
         items = items.filter((u) => departmentOfUser(u, department.kind) === department.id);
     }
+    // Фильтры контракта honoured как на сервере (#723): иначе уволенный из
+    // демо-справочника всплывал в пикерах, которые просят `status=active`, и в
+    // поиске по ФИО отвечал кто угодно.
+    if (query.success && query.data.status) {
+      items = items.filter((u) => u.status === query.data.status);
+    }
+    if (query.success && query.data.search) {
+      const needle = query.data.search.toLowerCase();
+      items = items.filter((u) => `${u.displayName} ${u.email}`.toLowerCase().includes(needle));
+    }
     return HttpResponse.json({ items, nextCursor: null });
   }),
   http.get(`/api/v1${DEPARTMENTS_TREE_PATH}`, ({ request }) => {

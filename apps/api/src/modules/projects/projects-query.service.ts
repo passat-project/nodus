@@ -96,6 +96,9 @@ export class ProjectsQueryService {
    * История проекта (вкладка «История»): страница outbox-событий агрегата
    * (I9), новые первыми. Видимость — как у карточки: секретный проект 404
    * для неучастника, чтобы лента не была оракулом существования.
+   * Секретная эпоха (вариант Б #748): у открытого проекта не-участник видит
+   * ленту только с момента последнего раскрытия; участие и
+   * `project.view_secret` — полную.
    */
   async history(
     user: AuthUser,
@@ -103,9 +106,10 @@ export class ProjectsQueryService {
     cursor: string | null,
     limit: number,
   ): Promise<{ items: ProjectHistoryEntry[]; nextCursor: string | null }> {
-    await this.assertVisible(user, id);
+    const row = await this.assertVisible(user, id);
     const after = cursor ? BigInt(decodeCursor(cursor, historyCursorSchema).seq) : null;
-    const rows = await this.historyRepo.findPage(id, after, limit);
+    const minSeq = await this.historyFloor(user, id, row);
+    const rows = await this.historyRepo.findPage(id, after, limit, minSeq);
     const page = rows.slice(0, limit);
     const userIds = new Set<string>();
     for (const row of page) {
@@ -135,6 +139,24 @@ export class ProjectsQueryService {
       items,
       nextCursor: rows.length > limit && last ? encodeCursor({ seq: last.seq.toString() }) : null,
     };
+  }
+
+  /**
+   * Нижняя граница ленты (#748, вариант Б): открытый проект — не-участник
+   * без `project.view_secret` видит историю с последнего раскрытия; граница
+   * читается из журнала событий (append-only, I9), существующие записи не
+   * переписываются. Участие и надзор — полная лента (null).
+   */
+  private async historyFloor(
+    user: AuthUser,
+    id: string,
+    row: { visibility: string },
+  ): Promise<bigint | null> {
+    if (row.visibility !== 'open' || user.permissions.includes(Permission.PROJECT_VIEW_SECRET)) {
+      return null;
+    }
+    if (await this.participantsRepo.hasRow(id, user.id)) return null;
+    return this.historyRepo.findLastVisibilityChangeSeq(id);
   }
 
   /** Видимость карточки: секретный — участие или view_secret (404 без оракула). */

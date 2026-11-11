@@ -143,6 +143,12 @@ export class ProjectNodesRepository {
   /** Очередь структуры проекта: advisory-лок до конца транзакции — проверки
    *  лимитов/циклов и запись не перекрещиваются между собой и batch. */
   async lockStructure(tx: TransactionClient, projectId: string): Promise<void> {
+    // Строка проекта — ПЕРВОЙ: единый порядок «проект → структура → узел»
+    // сериализует архивацию/секретность с любой мутацией структуры и не даёт
+    // ABBA: обработчики формул в той же tx идут структура → строка проекта (#705).
+    await tx.$queryRaw(
+      Prisma.sql`SELECT id FROM "projects" WHERE "id" = ${projectId}::uuid FOR UPDATE`,
+    );
     await tx.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('nodus:project_nodes:' || ${projectId}::text))`,
     );

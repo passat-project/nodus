@@ -1,4 +1,4 @@
-import type { ConversationListItem } from '@nodus/contracts';
+import type { ConversationListItem, UserRef } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
 import { plural, withoutPatronymic } from '../lib/format.js';
@@ -20,6 +20,27 @@ export function isNotesConversation(
     conversation.membersPreview.length === 1 &&
     conversation.membersPreview[0]?.id === meId
   );
+}
+
+/** Собеседник личного чата: сервер кладёт в `membersPreview` всех, КРОМЕ
+ *  зрителя (у «Избранного» — сам зритель, поэтому фильтр по `meId`).
+ *  У группы/канала/чата задачи собеседника нет — null. */
+export function directPeer(
+  conversation: ConversationListItem,
+  meId?: string | null,
+): UserRef | null {
+  if (conversation.type !== 'direct') return null;
+  return conversation.membersPreview.find((member) => member.id !== meId) ?? null;
+}
+
+/** Фото для аватара БЕСЕДЫ (#726): загруженный аватар беседы приоритетен, а у
+ *  личного чата (своего аватара у него не бывает) — фото собеседника. Один
+ *  источник для списка бесед, экспресс-полосы, бара и панели профиля. */
+export function conversationAvatarUrl(
+  conversation: ConversationListItem,
+  meId?: string | null,
+): string | null {
+  return conversation.avatarUrl ?? directPeer(conversation, meId)?.avatarUrl ?? null;
 }
 
 /** Заголовок беседы: у канала/группы — название, у чата задачи — «№ · тема»,

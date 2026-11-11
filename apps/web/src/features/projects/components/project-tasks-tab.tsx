@@ -6,6 +6,7 @@ import { Button } from '@nodus/ui/components/button';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { openTaskCreate } from '../../../shared/tasks/task-create-store.js';
+import { CardTabToolbar } from '../../../shared/ui/entity-card/card-tab-toolbar.js';
 import { ListToolbar } from '../../../shared/views/list-toolbar.js';
 import type { ActiveListFilter } from '../../../shared/views/list-filters.js';
 import { useListToolbar } from '../../../shared/views/use-list-toolbar.js';
@@ -52,48 +53,51 @@ export function ProjectTasksTab({ projectId }: { projectId: string }) {
       {/* БЕЗ border-b (канон раунда 6 + вердикт владельца 12.09.2026): линия
           под тулбаром читалась «полоской под поиском»; вкладки-списки
           карточек и журналы — одинаково без неё. */}
-      <ListToolbar
-        toolbar={toolbar}
-        defs={defs}
-        builtinPresets={taskBuiltinPresets}
-        left={
-          <div className="flex items-center gap-2">
-            {/* Закон кнопки создания (вердикт 15.09.2026): первичное действие
-                вкладки-списка — первый элемент строки инструментов, проект
-                подставлен в окно создания задачи. */}
-            <Button type="button" onClick={() => openTaskCreate({ projectId })}>
-              <Plus data-icon="inline-start" />
-              {ui.common.create}
-            </Button>
-            <div className="flex items-center rounded-lg border border-border p-0.5">
-              {tasksViews.map((v) => (
-                <button
-                  key={v.id}
-                  type="button"
-                  onClick={() => setView(v.id)}
-                  aria-pressed={view === v.id}
-                  title={v.label}
-                  aria-label={v.label}
-                  className={cn(
-                    'flex size-6 items-center justify-center rounded-md transition-colors',
-                    view === v.id
-                      ? 'bg-accent text-foreground'
-                      : 'text-muted-foreground hover:text-foreground/80',
-                  )}
-                >
-                  <v.icon className="size-3.5" strokeWidth={1.75} />
-                </button>
-              ))}
+      <CardTabToolbar>
+        <ListToolbar
+          className="min-w-0 flex-1 px-0"
+          toolbar={toolbar}
+          defs={defs}
+          builtinPresets={taskBuiltinPresets}
+          left={
+            <div className="flex items-center gap-2">
+              {/* Закон кнопки создания (вердикт 15.09.2026): первичное действие
+                  вкладки-списка — первый элемент строки инструментов, проект
+                  подставлен в окно создания задачи. */}
+              <Button type="button" onClick={() => openTaskCreate({ projectId })}>
+                <Plus data-icon="inline-start" />
+                {ui.common.create}
+              </Button>
+              <div className="flex items-center rounded-lg border border-border p-0.5">
+                {tasksViews.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => setView(v.id)}
+                    aria-pressed={view === v.id}
+                    title={v.label}
+                    aria-label={v.label}
+                    className={cn(
+                      'flex size-6 items-center justify-center rounded-md transition-colors',
+                      view === v.id
+                        ? 'bg-accent text-foreground'
+                        : 'text-muted-foreground hover:text-foreground/80',
+                    )}
+                  >
+                    <v.icon className="size-3.5" strokeWidth={1.75} />
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        }
-        right={
-          <ViewSettings
-            viewKey={view === 'list' ? 'projects.tasks' : 'projects.kanban'}
-            defs={view === 'list' ? listFields : cardFields}
-          />
-        }
-      />
+          }
+          right={
+            <ViewSettings
+              viewKey={view === 'list' ? 'projects.tasks' : 'projects.kanban'}
+              defs={view === 'list' ? listFields : cardFields}
+            />
+          }
+        />
+      </CardTabToolbar>
       <div className="min-h-0 flex-1">
         {view === 'list' ? (
           <ProjectTaskList projectId={projectId} filter={filter} />

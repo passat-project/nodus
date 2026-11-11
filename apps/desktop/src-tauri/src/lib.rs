@@ -96,6 +96,21 @@ pub fn run() {
             WindowEvent::Destroyed if window.label().starts_with("popup-") => {
                 popups::on_popup_destroyed(window.app_handle(), window.label());
             }
+            // Фокус/свёрнутость главного окна (#770, ADR-0038): WebView2 может
+            // считать вкладку видимой и сохранять hasFocus при minimize —
+            // портал получает правду от оболочки. Свёрнутое окно = не фокус.
+            WindowEvent::Focused(focused) if window.label() == "main" => {
+                emit_shell_focus(
+                    window.app_handle(),
+                    *focused && !window.is_minimized().unwrap_or(false),
+                );
+            }
+            WindowEvent::Resized(_) if window.label() == "main" => {
+                emit_shell_focus(
+                    window.app_handle(),
+                    window.is_focused().unwrap_or(false) && !window.is_minimized().unwrap_or(false),
+                );
+            }
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
@@ -231,6 +246,24 @@ pub fn show_main(app: &AppHandle) {
         app,
         "shell-visibility",
         &serde_json::json!({ "visible": true }),
+    );
+}
+
+/// Отправить модели внимания портала фокус главного окна (#770, ADR-0038):
+/// только переходы (Focused/Resized приходят сериями), свёрнутое окно — не
+/// фокус (WebView2 может сохранять `document.hasFocus` в minimize).
+fn emit_shell_focus(app: &AppHandle, focused: bool) {
+    let state = app.state::<ShellState>();
+    let mut inner = state.inner.lock().expect("shell state");
+    if inner.shell_focused == Some(focused) {
+        return;
+    }
+    inner.shell_focused = Some(focused);
+    drop(inner);
+    bridge::push_to_portal(
+        app,
+        "shell-focus",
+        &serde_json::json!({ "focused": focused }),
     );
 }
 
