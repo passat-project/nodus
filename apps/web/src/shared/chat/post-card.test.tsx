@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TooltipProvider } from '@nodus/ui/components/tooltip';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -189,7 +189,13 @@ describe('PostCard — карточка поста канала с аватар�
 
     // Клик мимо картинки: лайтбокс — портал, его React-событие всплывает
     // через дерево компонентов в карточку поста — та не должна открыть тред.
+    // Закрытие отложено на паузу двойного клика (#721), поэтому ждём таймер.
+    vi.useFakeTimers();
     fireEvent.click(dialog);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    vi.useRealTimers();
 
     expect(document.querySelector('[role="dialog"][aria-modal="true"]')).toBeNull();
     expect(onOpenThread).not.toHaveBeenCalled();

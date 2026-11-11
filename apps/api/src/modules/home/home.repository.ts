@@ -13,7 +13,8 @@ import type { BirthdayUserRow } from './birthdays.js';
 export class HomeRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Число активных сотрудников (карточка метрики «Сотрудники»). */
+  /** Число активных сотрудников (карточка метрики «Сотрудники»); уволенные не
+   *  входят — тот же штат, что считает раздел «Сотрудники» (#723). */
   async countActiveEmployees(): Promise<number> {
     return this.prisma.user.count({ where: { status: 'active' } });
   }

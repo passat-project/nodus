@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { SurfaceVisibilityProvider } from '../../lib/surface-visibility.js';
 import type { CardTabGroup, CardTabsState } from './card-tabs-model.js';
 import type { CardTabDef } from './card-tab-strip.js';
 
@@ -68,7 +69,13 @@ export function CardTabPanelLayer({
                 : { left: 0, width: widths[0] ?? width }
             }
           >
-            {renderPanel(tab.id)}
+            {/* Неактивная вкладка остаётся СМОНТИРОВАННОЙ (скролл/зум живы),
+                но `visibility:hidden` не отменяет IntersectionObserver и
+                геометрию — её чат не должен читать и глушить попапы (#770,
+                ADR-0038): панель — накрытая поверхность. */}
+            <SurfaceVisibilityProvider visible={active}>
+              {renderPanel(tab.id)}
+            </SurfaceVisibilityProvider>
           </div>
         );
       })}

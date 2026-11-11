@@ -1,5 +1,4 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { SYSTEM_FIELD_IDS } from '@nodus/contracts';
 import type {
   CustomFieldRef,
   ProjectDetail,
@@ -36,6 +35,7 @@ import {
   type MembershipRow,
   type ProjectFacts,
 } from './project-access.js';
+import { clientOf, codeOf } from './project-legacy-fields.js';
 import type { ProjectRow } from './projects.repository.js';
 
 export interface ProjectViewer {
@@ -249,18 +249,4 @@ export class ProjectDtoMapper {
         : {}),
     };
   }
-}
-
-/** Шифр проекта из значений атрибутов (системный «Шифр», Р9 #631). */
-function codeOf(customFields: unknown): string | null {
-  if (customFields === null || typeof customFields !== 'object') return null;
-  const value = (customFields as Record<string, unknown>)[SYSTEM_FIELD_IDS.projectCode];
-  return typeof value === 'string' && value !== '' ? value : null;
-}
-
-/** Заказчик проекта из значений атрибутов (системный «Заказчик», Р9 #631). */
-function clientOf(customFields: unknown): string | null {
-  if (customFields === null || typeof customFields !== 'object') return null;
-  const value = (customFields as Record<string, unknown>)[SYSTEM_FIELD_IDS.projectClient];
-  return typeof value === 'string' && value !== '' ? value : null;
 }

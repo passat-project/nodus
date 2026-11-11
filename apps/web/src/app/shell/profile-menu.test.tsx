@@ -1,51 +1,124 @@
 // @vitest-environment jsdom
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ui, type AuthUser, type UserListItem } from '@nodus/contracts';
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ui } from '@nodus/contracts';
-
+import { usersListKey } from '../../shared/api/users-list.js';
 import { useAuthStore } from '../../shared/auth-store.js';
+import { stubLoadedImage } from '../../test/stub-loaded-image.js';
 import { ProfileMenu } from './profile-menu.js';
 
-/** Меню аватара: «Профиль» первым пунктом действий открывает СВОЮ карточку
- *  сотрудника тем же стеком, что из проекта/справочника (#751). */
+/**
+ * Меню профиля в топбаре: два аспекта одной поверхности —
+ * - аватар своего профиля (#726): источник — тот же кэш справочника, что у
+ *   остальных поверхностей (`usersListKey`), фото появляется сразу после смены
+ *   аватара (инвалидация `invalidateAvatarCaches`), без F5;
+ * - пункт «Профиль» (#751): открывает СВОЮ карточку сотрудника тем же стеком,
+ *   что из проекта/справочника.
+ * `useOpenCard` требует роутер-контекст — в тестах подменяется моком.
+ */
 
 const mocks = vi.hoisted(() => ({ openCard: vi.fn() }));
 vi.mock('./use-card-stack.js', () => ({ useOpenCard: () => mocks.openCard }));
 
-const ME = {
-  id: '11111111-1111-4111-8111-111111111111',
-  email: 'me@nodus.by',
-  displayName: 'Артём Маторин',
-  permissions: [] as string[],
+const ME_ID = '00000000-0000-4000-8000-0000000000b2';
+const PHOTO = 'https://files.nodus.local/avatar/me.png';
+
+const ME: AuthUser = {
+  id: ME_ID,
+  email: 'anna@nodus.local',
+  displayName: 'Анна Первая',
+  permissions: [],
 };
 
-beforeEach(() => {
-  useAuthStore.setState({ user: ME });
+const person = (overrides: Partial<UserListItem> = {}): UserListItem => ({
+  id: ME_ID,
+  displayName: 'Анна Первая',
+  status: 'active',
+  avatarUrl: PHOTO,
+  positionName: null,
+  departmentName: null,
+  email: 'anna@nodus.local',
+  managerId: null,
+  departmentId: null,
+  legalDepartmentId: null,
+  positionId: null,
+  legalPositionId: null,
+  ...overrides,
 });
 
+function renderMenu(seed?: UserListItem[]) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  if (seed) client.setQueryData(usersListKey, { items: seed, nextCursor: null });
+  useAuthStore.setState({ status: 'authenticated', accessToken: 'test-token', user: ME });
+  const utils = render(
+    <QueryClientProvider client={client}>
+      <ProfileMenu />
+    </QueryClientProvider>,
+  );
+  return { ...utils, client };
+}
+
+/** jsdom не загружает картинки (см. `stub-loaded-image`). */
+
+let restoreImage: (() => void) | null = null;
 afterEach(() => {
+  restoreImage?.();
+  restoreImage = null;
   cleanup();
   mocks.openCard.mockClear();
-  useAuthStore.setState({ user: null });
+  useAuthStore.setState({ status: 'anonymous', accessToken: null, user: null });
 });
 
-async function openMenu() {
-  const trigger = screen.getByRole('button', { name: 'Профиль' });
-  trigger.focus();
-  fireEvent.keyDown(trigger, { key: 'Enter' });
-  await waitFor(() => expect(screen.getByRole('menu')).not.toBeNull());
-}
+describe('ProfileMenu — аватар профиля в топбаре (#726)', () => {
+  it('фото из справочника: img с url, декоративный (имя несёт aria-label кнопки)', () => {
+    restoreImage = stubLoadedImage();
+    const { container } = renderMenu([person()]);
+    const img = container.querySelector('[data-slot="avatar"] img');
+    expect(img?.getAttribute('src')).toBe(PHOTO);
+    expect(img?.getAttribute('alt')).toBe('');
+    expect(img?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('фото нет: те же инициалы, что и раньше', () => {
+    const { container } = renderMenu([person({ avatarUrl: null })]);
+    expect(container.querySelector('[data-slot="avatar"] img')).toBeNull();
+    expect(container.querySelector('[data-slot="avatar-fallback"]')?.textContent).toBe('АП');
+  });
+
+  it('справочник ещё не пришёл: инициалы, топбар не падает', () => {
+    const { container } = renderMenu();
+    expect(container.querySelector('[data-slot="avatar-fallback"]')?.textContent).toBe('АП');
+  });
+
+  it('свежие данные справочника (после инвалидации) подхватываются без перемонтирования', async () => {
+    restoreImage = stubLoadedImage();
+    const { container, client } = renderMenu();
+    expect(container.querySelector('[data-slot="avatar"] img')).toBeNull();
+
+    act(() => {
+      client.setQueryData(usersListKey, { items: [person()], nextCursor: null });
+    });
+
+    await waitFor(() =>
+      expect(container.querySelector('[data-slot="avatar"] img')?.getAttribute('src')).toBe(PHOTO),
+    );
+  });
+});
 
 describe('ProfileMenu — «Профиль» в меню аватара (#751)', () => {
   it('пункт «Профиль» первый, клик открывает свою карточку сотрудника', async () => {
-    render(<ProfileMenu />);
-    await openMenu();
+    renderMenu();
+    const trigger = screen.getByRole('button', { name: ui.topbar.profile });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByRole('menu')).not.toBeNull());
 
     const items = screen.getAllByRole('menuitem');
     expect(items.map((item) => item.textContent)).toEqual([ui.topbar.profile, ui.topbar.logout]);
 
     fireEvent.click(screen.getByRole('menuitem', { name: ui.topbar.profile }));
-    expect(mocks.openCard).toHaveBeenCalledWith({ kind: 'employee', id: ME.id });
+    expect(mocks.openCard).toHaveBeenCalledWith({ kind: 'employee', id: ME_ID });
   });
 });

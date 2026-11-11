@@ -191,7 +191,12 @@ export const ChatMessageItem = memo(function ChatMessageItem({
       <Message align={atEnd ? 'end' : 'start'} className="group/msg">
         {avatarSlot === 'avatar' ? (
           <MessageAvatar>
-            <PersonAvatar name={message.author.displayName} className="size-7" />
+            <PersonAvatar
+              name={message.author.displayName}
+              avatarUrl={message.author.avatarUrl}
+              decorative
+              className="size-7"
+            />
           </MessageAvatar>
         ) : null}
         <MessageContent>
@@ -228,7 +233,12 @@ export const ChatMessageItem = memo(function ChatMessageItem({
     <Message align={atEnd ? 'end' : 'start'} className="group/msg">
       {avatarSlot === 'avatar' ? (
         <MessageAvatar>
-          <PersonAvatar name={message.author.displayName} className="size-7" />
+          <PersonAvatar
+            name={message.author.displayName}
+            avatarUrl={message.author.avatarUrl}
+            decorative
+            className="size-7"
+          />
         </MessageAvatar>
       ) : null}
       <MessageContent>

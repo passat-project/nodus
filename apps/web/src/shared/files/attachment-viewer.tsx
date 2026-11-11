@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@nodus/ui/components/to
 import { useOfficeSession } from './api.js';
 import { FileViewerBody, useViewerRoute } from './file-viewer-body.jsx';
 import { useViewerStore } from './viewer-store.js';
+import { VideoPlayerView } from './video-player-view.js';
 
 /**
  * Модалка-обёртка просмотрщика вложений (#138): шапка (имя, версия,
@@ -24,6 +25,11 @@ import { useViewerStore } from './viewer-store.js';
  * правый край у служебной полосы (stripW передаёт app-shell из состояния
  * полосы — общие константы слою shared недоступны), скругление карточки,
  * transition-[right] синхронно с раскрытием полосы.
+ *
+ * Видео исключение (#787, решение владельца 11.11.2026): открывается в
+ * «кинозале» `VideoPlayerView` — тёмный экран с плеером и тонкой строкой
+ * (имя, «Скачать», закрыть); шапка карточки с версией и правкой — хром
+ * документов, плееру она не нужна.
  */
 export function AttachmentViewer({ stripW = 0 }: { stripW?: number }) {
   const target = useViewerStore((s) => s.target);
@@ -71,6 +77,12 @@ export function AttachmentViewer({ stripW = 0 }: { stripW?: number }) {
   }, [target, closeOnEsc]);
 
   if (!target || !route) return null;
+
+  // Видео — кинозал (#787): без карточки файла; без ссылки на контент
+  // падать в тело с карточкой скачивания (как раньше).
+  if (target.mime.startsWith('video/') && target.url) {
+    return <VideoPlayerView url={target.url} name={target.name} onClose={closeWithInvalidate} />;
+  }
 
   const session = sessionQuery.data ?? null;
   const canSwitchToEdit = route.kind === 'office' && mode === 'view' && session?.canEdit === true;
