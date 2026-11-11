@@ -11,11 +11,11 @@ const store = new PgMembershipStore(config.DATABASE_URL);
 const redis = createGatewayRedis(config.REDIS_URL);
 const gateway = createGatewayServer({ jwtSecret: config.JWT_SECRET, store, redis });
 
-gateway.httpServer.listen(config.GATEWAY_PORT, '0.0.0.0', () => {
+gateway.httpServer.listen(config.GATEWAY_PORT, config.GATEWAY_HOST, () => {
   void gateway
     .startFanout()
     .then(() => {
-      console.log(`gateway: слушает порт ${config.GATEWAY_PORT}, fanout активен`);
+      console.log(`gateway: слушает ${config.GATEWAY_HOST}:${config.GATEWAY_PORT}, fanout активен`);
     })
     .catch((error: unknown) => {
       console.error('gateway: fanout не стартовал:', error);

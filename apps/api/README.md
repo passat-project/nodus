@@ -4,7 +4,7 @@ Backend портала: модульный монолит на NestJS 12 (ада
 
 ## Запуск
 
-- `pnpm dev` (в корне через turbo, или здесь) — `nest start --watch`, порт `API_PORT` (по умолчанию 3001).
+- `pnpm dev` (в корне через turbo, или здесь) — `nest start --watch`, порт `API_PORT` (по умолчанию 3001), интерфейс — `API_HOST` (по умолчанию `0.0.0.0`: прежнее поведение и Docker; песочница live-stack сужает до `127.0.0.1`).
 - `pnpm build && pnpm start` — прод-режим из `dist/`.
 
 ## Структура

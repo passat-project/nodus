@@ -12,8 +12,14 @@
  * перед up порты проверяются, чужой процесс на порту = громкая ошибка, а не
  * молчаливый EADDRINUSE свежеподнятого.
  *
- * Команды: up [--dev] [--mock <домены|all>] | up [--preview] | down | status |
- * bootstrap (pnpm live-stack <команда>).
+ * LAN (#675): web по умолчанию слушает 0.0.0.0 — коллега/телефон в той же
+ * сети открывает `http://<LAN-IP>:4173`; `--local` возвращает loopback. api и
+ * gateway остаются на loopback (API_HOST/GATEWAY_HOST=127.0.0.1): наружу
+ * виден только web. Исключение — OFFICE_ENABLED=true: api нужен
+ * host.docker.internal для контейнера ONLYOFFICE (с предупреждением).
+ *
+ * Команды: up [--dev] [--mock <домены|all>] [--local] | up [--preview] [--local] |
+ * down | status | bootstrap (pnpm live-stack <команда>).
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -22,6 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { officeEnabled, printLanHint, resolveApiHost } from './lib/live-stack-lan.mjs';
 import { dbName, loadDotEnv, sandboxMailEnv, sandboxSecrets } from './live-stack-env.mjs';
 import { mockEnvOf } from './live-stack-mock.mjs';
 import { printStatus } from './live-stack-status.mjs';
@@ -167,7 +174,7 @@ function bootstrapNight(env) {
   run('node scripts/night-users.mjs', [], { ...process.env, DATABASE_URL: env.DATABASE_URL });
 }
 
-async function up(mode, mock) {
+async function up(mode, mock, local) {
   const existing = Object.entries(readPids()).filter(([, pid]) => pidAlive(pid));
   if (existing.length > 0) {
     console.error(
@@ -239,6 +246,9 @@ async function up(mode, mock) {
     }
   }
 
+  // #675: наружу открыт только web; api/gateway — loopback (исключение — ONLYOFFICE).
+  const apiHost = resolveApiHost({ local, office: officeEnabled(base) });
+
   console.log(`Building api + gateway${mode === 'preview' ? ' + web (non-mock)' : ''}...`);
   run('pnpm --filter @nodus/api build');
   run('pnpm --filter @nodus/gateway build');
@@ -252,6 +262,7 @@ async function up(mode, mock) {
     api: startService('api', ['apps/api/dist/main.js'], {
       ...base,
       API_PORT: String(PORTS.api),
+      API_HOST: apiHost,
       NODE_ENV: 'development',
       COOKIE_SECURE: 'false',
       // e2e-прогоны подряд с двух браузеров выбивают дефолт 3000/мин с NAT-IP.
@@ -268,6 +279,7 @@ async function up(mode, mock) {
     gateway: startService('gateway', ['apps/gateway/dist/main.js'], {
       ...base,
       GATEWAY_PORT: String(PORTS.gateway),
+      GATEWAY_HOST: '127.0.0.1',
     }),
     web: startService(
       'web',
@@ -277,7 +289,7 @@ async function up(mode, mock) {
         // перетирала dist» не рецидивирует); preview: собранная копия.
         ...(mode === 'dev' ? [] : ['preview']),
         '--host',
-        '127.0.0.1',
+        local ? '127.0.0.1' : '0.0.0.0',
         '--port',
         String(PORTS.web),
         '--strictPort',
@@ -295,17 +307,21 @@ async function up(mode, mock) {
       path.join(ROOT, 'apps/web'),
     ),
   };
+  const modeLabel = [mode, local && 'local', mock && `mock:${mock}`].filter(Boolean).join('+');
   fs.writeFileSync(PID_FILE, JSON.stringify(pids, null, 2));
-  fs.writeFileSync(MODE_FILE, mock ? `${mode}+mock:${mock}` : mode);
+  fs.writeFileSync(MODE_FILE, modeLabel);
 
   console.log('Waiting for stack health...');
   await waitHealthy('api', HEALTH.api, 60_000);
   await waitHealthy('gateway', HEALTH.gateway, 30_000);
   await waitHealthy('web', HEALTH.web, 30_000);
   console.log(
-    `Ready (${mode}${mock ? `, моки: ${mock}` : ''}): web http://127.0.0.1:${PORTS.web} ` +
+    `Ready (${modeLabel}): web http://127.0.0.1:${PORTS.web} ` +
       `(api :${PORTS.api}, gateway :${PORTS.gateway}); logs in .live-stack/`,
   );
+
+  // #675: адрес для телефона/коллеги (web слушает 0.0.0.0) + предупреждение.
+  printLanHint(PORTS.web, local);
 }
 
 function killTree(pid) {
@@ -351,11 +367,12 @@ try {
   if (command === 'up') {
     const mock = mockEnvOf(process.argv);
     const dev = process.argv.includes('--dev');
+    const local = process.argv.includes('--local');
     if (mock && !dev) {
       console.error('моки работают только в vite dev (#171): используйте `up --dev --mock …`');
       process.exit(1);
     }
-    await up(dev ? 'dev' : 'preview', mock);
+    await up(dev ? 'dev' : 'preview', mock, local);
   } else if (command === 'down') down();
   else if (command === 'status') await status();
   else if (command === 'bootstrap') {
@@ -368,7 +385,7 @@ try {
     bootstrapNight(env);
   } else {
     console.error(
-      'Usage: pnpm live-stack <up [--dev] [--mock <домены|all>] | up [--preview] | down | status | bootstrap>',
+      'Usage: pnpm live-stack <up [--dev] [--mock <домены|all>] [--local] | up [--preview] [--local] | down | status | bootstrap>',
     );
     process.exit(1);
   }

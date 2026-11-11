@@ -29,6 +29,7 @@ refresh-cookie делает повторный логин ненужным. Пр
 |---|---|
 | Поднять песочницу (цикл правок) | `pnpm live-stack up --dev` |
 | Поднять песочницу (финальный показ перед вердиктом) | `pnpm live-stack up` (= `--preview`) |
+| Песочница только для этого ПК (без LAN) | `pnpm live-stack up --dev --local` |
 | UI-чекпоинт до бэкенда (исключение, ADR-0001) | `pnpm live-stack up --dev --mock <домены\|all>` |
 | Состояние песочницы и dev-сервера владельца | `pnpm live-stack status` |
 | Снять песочницу | `pnpm live-stack down` |
@@ -52,9 +53,10 @@ refresh-cookie делает повторный логин ненужным. Пр
 
 ### `pnpm live-stack <cmd>` — песочница (`scripts/live-stack.mjs`)
 
-Синтаксис: `up [--dev] [--mock <домены|all>]` · `up [--preview]` · `down` ·
-`status` · `bootstrap`. Порт `3011` (api health `/api/v1/health/ready`), `3012`
-(gateway), `4173` (web). Состояние — `.live-stack/pids.json` + `.live-stack/mode`;
+Синтаксис: `up [--dev] [--mock <домены|all>] [--local]` · `up [--preview]` ·
+`down` · `status` · `bootstrap`. Порт `3011` (api health `/api/v1/health/ready`),
+`3012` (gateway), `4173` (web). Web по умолчанию слушает `0.0.0.0` (LAN-адреса
+печатают `up` и `status`), `--local` — loopback. Состояние — `.live-stack/pids.json` + `.live-stack/mode`;
 логи `.live-stack/{api,gateway,web}.log`. `up`: проверка живых PID и портов →
 авто-изоляция `DATABASE_URL`→`nodus_night`, `REDIS_URL`→db1 → бутстрап (БД →
 миграции → сид → night-пользователи) → свои секреты подписи

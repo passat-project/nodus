@@ -15,9 +15,18 @@ describe('validateEnv', () => {
   it('принимает валидное окружение и применяет дефолты', () => {
     const env = validateEnv({ ...VALID });
     expect(env.API_PORT).toBe(3001);
+    // Прежнее поведение: без API_HOST api слушает все интерфейсы (#675).
+    expect(env.API_HOST).toBe('0.0.0.0');
     expect(env.NODE_ENV).toBe('development');
     expect(env.STORAGE_ENDPOINT).toBe('127.0.0.1');
     expect(env.STORAGE_BUCKET).toBe('nodus-files');
+  });
+
+  it('API_HOST: песочница сужает api до loopback (#675)', () => {
+    expect(validateEnv({ ...VALID, API_HOST: '127.0.0.1' }).API_HOST).toBe('127.0.0.1');
+    expect(() => validateEnv({ ...VALID, API_HOST: '' })).toThrow(
+      /Невалидное окружение.*API_HOST/s,
+    );
   });
 
   it('требует секреты файлового хранилища (#57)', () => {

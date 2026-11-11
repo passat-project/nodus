@@ -1,4 +1,8 @@
 import '@nodus/ui/globals.css';
+// Побочный импорт ДО графа приложения: LAN-песочница по http:// — не secure
+// context, и без полифилла crypto.randomUUID с телефона не проходит ни один
+// POST (Idempotency-Key), #675.
+import './shared/lan-crypto-install.js';
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';

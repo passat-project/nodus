@@ -52,6 +52,10 @@ function isValidTimeZone(value: string): boolean {
 const envSchema = z
   .object({
     API_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+    /** Интерфейс, на котором слушает api. Дефолт 0.0.0.0 — прод/Docker и прежнее
+     *  поведение; песочница live-stack сужает до 127.0.0.1 (#675), чтобы по
+     *  локальной сети был виден только web, а не API с тестовыми паролями. */
+    API_HOST: z.string().min(1).default('0.0.0.0'),
     DATABASE_URL: z.url({ protocol: /^postgresql?$/ }),
     REDIS_URL: z.url({ protocol: /^rediss?$/ }),
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
