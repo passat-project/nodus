@@ -142,26 +142,12 @@ export function FieldRow({
  * Сетка на container queries зоны (@container у родителя): узко — 1 колонка,
  * широко — 2; зазор фикс, блок max-w-4xl центрируется (растут отступы).
  */
-export function EntityFields({
-  defs,
-  storageKey,
-  className,
-}: {
-  defs: EntityFieldDef[];
-  storageKey: string;
-  /** Переопределение ширины/центрирования (вкладка проекта — на всю зону). */
-  className?: string;
-}) {
+export function EntityFields({ defs, storageKey }: { defs: EntityFieldDef[]; storageKey: string }) {
   const { hiddenKeys, toggle } = useFieldVisibility(storageKey);
   const visible = defs.filter((d) => !hiddenKeys.includes(d.key));
 
   return (
-    <div
-      className={cn(
-        'mx-auto mt-5 grid max-w-4xl grid-cols-1 gap-x-12 gap-y-0.5 @min-[55rem]:grid-cols-2',
-        className,
-      )}
-    >
+    <div className="mx-auto mt-5 grid max-w-4xl grid-cols-1 gap-x-12 gap-y-0.5 @min-[55rem]:grid-cols-2">
       {visible.map((def) => (
         <FieldRow
           key={def.key}
