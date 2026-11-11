@@ -161,6 +161,7 @@ describe('блок перехода в чате задачи (#380)', () => {
   it('актор вне беседы задачи — блок не пишется, журнал остаётся (#741)', async () => {
     const { service, writes, eventBus, logger } = setup({ member: false });
     await service.post(event());
+    expect(writes.allocateSeqs).not.toHaveBeenCalled();
     expect(writes.insertMessage).not.toHaveBeenCalled();
     expect(eventBus.emit).not.toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalled();

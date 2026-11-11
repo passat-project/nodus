@@ -109,7 +109,9 @@ describe('блок перехода письма в чате (#55, Р10)', () =>
   it('актор вне беседы письма — блок не пишется (#741)', async () => {
     const { service, writes, logger } = setup({ member: false });
     await service.post(event());
+    expect(writes.allocateSeqs).not.toHaveBeenCalled();
     expect(writes.insertMessage).not.toHaveBeenCalled();
+    expect(writes.touchLastMessageAt).not.toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalled();
   });
 });
