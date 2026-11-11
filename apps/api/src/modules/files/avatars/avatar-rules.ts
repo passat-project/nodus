@@ -18,6 +18,32 @@ export const AVATAR_DERIVATIVE_SIDE = 640;
 
 export type SniffedAvatarType = 'png' | 'webp' | 'jpeg';
 
+/** Метаданные, которые нельзя хранить «at rest» (#725, security-ревью 12.11):
+ *  EXIF (GPS/автор), XMP, IPTC (город/страна), Photoshop-теги и PNG-текст —
+ *  ImageMagick кладёт EXIF в tEXt-чанк «Raw profile type exif», тогда
+ *  `meta.exif` пуст, а GPS лежит в комментариях. ICC-профиль не PII — не
+ *  повод перекодировать файл (иначе срезались бы почти все фото с телефона). */
+export function hasSensitiveMetadata(meta: {
+  exif?: unknown;
+  xmp?: unknown;
+  orientation?: number;
+  iptc?: unknown;
+  tifftagPhotoshop?: unknown;
+  comments?: unknown[];
+  /** ICC — не PII: принимается, но сознательно не считается метаданными
+   *  «на срез» (иначе перекодировались бы почти все фото с телефона). */
+  icc?: unknown;
+}): boolean {
+  return Boolean(
+    meta.exif ||
+    meta.xmp ||
+    meta.orientation ||
+    meta.iptc ||
+    meta.tifftagPhotoshop ||
+    (meta.comments?.length ?? 0) > 0,
+  );
+}
+
 export type AvatarFileIssue = 'format' | 'size';
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

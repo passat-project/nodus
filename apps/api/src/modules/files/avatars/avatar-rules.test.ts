@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { AVATAR_MAX_BYTES, sniffAvatarType, validateAvatarBytes } from './avatar-rules.js';
+import {
+  AVATAR_MAX_BYTES,
+  hasSensitiveMetadata,
+  sniffAvatarType,
+  validateAvatarBytes,
+} from './avatar-rules.js';
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10]);
@@ -35,5 +40,28 @@ describe('validateAvatarBytes', () => {
 
   it('не-изображение — issue format', () => {
     expect(validateAvatarBytes(GIF).issue).toBe('format');
+  });
+});
+
+describe('hasSensitiveMetadata: что нельзя хранить в бакете (#725)', () => {
+  it('EXIF/XMP/ориентация — срезать', () => {
+    expect(hasSensitiveMetadata({ exif: Buffer.from('x') })).toBe(true);
+    expect(hasSensitiveMetadata({ xmp: Buffer.from('x') })).toBe(true);
+    expect(hasSensitiveMetadata({ orientation: 6 })).toBe(true);
+  });
+
+  it('IPTC и Photoshop-теги (город/страна без EXIF) — срезать', () => {
+    expect(hasSensitiveMetadata({ iptc: Buffer.from('Minsk') })).toBe(true);
+    expect(hasSensitiveMetadata({ tifftagPhotoshop: Buffer.from('x') })).toBe(true);
+  });
+
+  it('комментарии PNG-текста (ImageMagick raw profile) — срезать', () => {
+    expect(hasSensitiveMetadata({ comments: ['Raw profile type exif'] })).toBe(true);
+    expect(hasSensitiveMetadata({ comments: [] })).toBe(false);
+  });
+
+  it('ICC-профиль и пустые метаданные — НЕ повод перекодировать', () => {
+    expect(hasSensitiveMetadata({ icc: Buffer.from('profile') })).toBe(false);
+    expect(hasSensitiveMetadata({})).toBe(false);
   });
 });

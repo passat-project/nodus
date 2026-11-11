@@ -153,6 +153,19 @@ describe('prepareAvatarFile: фото с телефона сжимается п�
     expect(prepared.size).toBeLessThan(1 * MB);
   });
 
+  it('ориентация с телефона применяется при декоде: imageOrientation from-image (#725)', async () => {
+    stubAvatarPipeline({ width: 6000, height: 4000, encode: (type) => new Blob([], { type }) });
+    const file = photoFile(4 * MB);
+
+    await prepareAvatarFile(file);
+
+    // Без флага createImageBitmap отдаёт «сырой» поворот EXIF — лицо на боку,
+    // а после перекодировки EXIF уже не спасёт.
+    expect(vi.mocked(createImageBitmap)).toHaveBeenCalledWith(file, {
+      imageOrientation: 'from-image',
+    });
+  });
+
   it('WebP не поддержан (canvas отдал другой тип) — фолбэк JPEG', async () => {
     stubAvatarPipeline({
       width: 6000,

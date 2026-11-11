@@ -46,13 +46,17 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
       );
     });
 
-    it('явная visibility сильнее настройки портала', async () => {
+    it('явная visibility сильнее дефолта (#738: прежней настройки портала нет)', async () => {
       await kit.service.create(user(CREATOR), {
         name: 'x',
         typeId: TYPE,
-        visibility: 'open',
+        visibility: 'secret',
       } as never);
-      expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'open' }), {});
+      // Явный выбор сохраняется как есть; без выбора сервис ставит 'open'.
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: 'secret' }),
+        {},
+      );
     });
 
     it('скопинг реестра — target тип проекта; значения пишутся в customFields', async () => {

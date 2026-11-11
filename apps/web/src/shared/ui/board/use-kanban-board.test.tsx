@@ -115,8 +115,6 @@ describe('useKanbanBoard', () => {
     );
   });
 
-  /** #737: живая перестановка «над/под» указателем + drop ровно там, где
-   *  стоял фантом (слот). Колонка A — две карточки t1, t2 (t1 сверху). */
   it('loadMore стабилен между рендерами при инлайн-feedUrl (observer колонки не пересоздаётся)', async () => {
     stubFeeds(async () => jsonResponse(200, { items: [], nextCursor: null }));
     const { result, rerender } = renderBoard();

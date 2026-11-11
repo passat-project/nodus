@@ -18,6 +18,32 @@ async function testPng(width = 128, height = 128): Promise<Buffer> {
     .toBuffer();
 }
 
+/** JPEG с IPTC в APP13 (город) и без EXIF: sharp отдаёт его `metadata.iptc`
+ *  и НЕ считает EXIF — второй носитель геоданных, который обязан срезаться. */
+function withIptc(jpeg: Buffer): Buffer {
+  const iptc = Buffer.concat([
+    Buffer.from([0x1c, 0x02, 0x5a, 0x00, 0x05]),
+    Buffer.from('Minsk', 'latin1'),
+  ]);
+  const resourceHead = Buffer.alloc(8);
+  resourceHead.write('8BIM', 0, 'ascii');
+  resourceHead.writeUInt16BE(0x0404, 4);
+  const size = Buffer.alloc(4);
+  size.writeUInt32BE(iptc.length);
+  const data = Buffer.concat([
+    Buffer.from('Photoshop 3.0\0', 'latin1'),
+    resourceHead,
+    Buffer.from([0x00, 0x00]),
+    size,
+    iptc,
+    iptc.length % 2 ? Buffer.from([0x00]) : Buffer.alloc(0),
+  ]);
+  const header = Buffer.alloc(4);
+  header.writeUInt16BE(0xffed, 0);
+  header.writeUInt16BE(data.length + 2, 2);
+  return Buffer.concat([jpeg.subarray(0, 2), header, data, jpeg.subarray(2)]);
+}
+
 function makeService() {
   const saved: Array<{
     input: { name: string; mime: string; size: number; derivedFrom?: string };
@@ -32,12 +58,12 @@ function makeService() {
       return { fileId: `file-${saved.length}` };
     }),
     get: vi.fn(),
-    remove: vi.fn(),
+    remove: vi.fn(async () => undefined),
   } as never;
   const signedUrls = { fileContentUrl: (id: string) => `/files/${id}/content` };
   const logger = { setContext: vi.fn(), warn: vi.fn(), info: vi.fn() };
   const service = new AvatarService(storage, signedUrls as never, logger as never);
-  return { service, saved };
+  return { service, saved, storage };
 }
 
 describe('AvatarService.process', () => {
@@ -161,6 +187,44 @@ describe('AvatarService.process', () => {
     );
 
     expect(saved[0]!.bytes.equals(png)).toBe(true);
+  });
+
+  it('IPTC без EXIF (город/страна) тоже срезается — второй носитель геоданных', async () => {
+    const { service, saved } = makeService();
+    const jpeg = withIptc(
+      await sharp({ create: { width: 128, height: 128, channels: 3, background: '#363' } })
+        .jpeg()
+        .toBuffer(),
+    );
+    expect((await sharp(jpeg).metadata()).iptc).toBeDefined();
+
+    await service.process(
+      { ownerId: 'u-1', name: 'фото.jpg', size: jpeg.length },
+      Readable.from(jpeg),
+    );
+
+    expect((await sharp(saved[0]!.bytes).metadata()).iptc).toBeUndefined();
+  });
+
+  it('сбой записи деривата убирает оригинал — сирота не остаётся в бакете', async () => {
+    const { service, saved, storage } = makeService();
+    const save = vi.mocked(storage.save);
+    const realSave = save.getMockImplementation()!;
+    let calls = 0;
+    save.mockImplementation(async (input, content) => {
+      calls += 1;
+      // Первый вызов — оригинал (реальная запись), второй — дериват падает.
+      if (calls === 2) throw new Error('storage down');
+      return realSave(input, content);
+    });
+    const png = await testPng(128, 128);
+
+    await expect(
+      service.process({ ownerId: 'u-1', name: 'фото.png', size: png.length }, Readable.from(png)),
+    ).rejects.toThrow('storage down');
+
+    expect(saved).toHaveLength(1);
+    expect(storage.remove).toHaveBeenCalledWith(['file-1']);
   });
 
   it('contentUrl — подписная ссылка отдачи', () => {

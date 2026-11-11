@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as Minio from 'minio';
 
-import { getFilesConfig } from '../../src/modules/files/files.config.js';
+import { getFilesConfig, type FilesConfig } from '../../src/modules/files/files.config.js';
 import { MinioStorageDriver } from '../../src/modules/files/storage/minio-storage.driver.js';
 import { StaleMultipartSweeper } from '../../src/modules/files/storage/stale-multipart.sweeper.js';
 
@@ -12,6 +12,10 @@ import { StaleMultipartSweeper } from '../../src/modules/files/storage/stale-mul
  * по ключу пуст. Клиент хранилища в тесте — тот же SDK, что у драйвера:
  * загрузка инициируется напрямую, в обход `put` (в продукте abort при сбое
  * put уже есть, #713 — здесь проверяется именно «брошена и не отменена»).
+ *
+ * Конфиг/клиент создаются в `beforeAll`: Vitest исполняет фабрику скипнутого
+ * `describe` при сборке — без env-контура файл падал бы на коллекции вместо
+ * скипа (урок code-review ночного батча 12.11).
  */
 
 const HOUR = 3_600_000;
@@ -26,15 +30,9 @@ const logger = {
 describe.skipIf(!process.env.STORAGE_ACCESS_KEY)(
   'files: уборка брошенных multipart-загрузок (integration, #715)',
   () => {
-    const config = getFilesConfig();
-    const driver = new MinioStorageDriver(config);
-    const client = new Minio.Client({
-      endPoint: config.endpoint,
-      port: config.port,
-      useSSL: config.useSSL,
-      accessKey: config.accessKey,
-      secretKey: config.secretKey,
-    });
+    let config: FilesConfig;
+    let driver: MinioStorageDriver;
+    let client: Minio.Client;
     const runId = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const staleKey = `files/it-stale-${runId}`;
     const freshKey = `files/it-fresh-${runId}`;
@@ -65,6 +63,15 @@ describe.skipIf(!process.env.STORAGE_ACCESS_KEY)(
     }
 
     beforeAll(async () => {
+      config = getFilesConfig();
+      driver = new MinioStorageDriver(config);
+      client = new Minio.Client({
+        endPoint: config.endpoint,
+        port: config.port,
+        useSSL: config.useSSL,
+        accessKey: config.accessKey,
+        secretKey: config.secretKey,
+      });
       // Бакет тест-контура существует/создаётся (Compose делает minio-init, CI — root).
       await driver.onModuleInit();
     }, 60_000);

@@ -253,7 +253,7 @@ node_moved / node_deleted`; `node_updated` несёт `customFieldChanges` и
 ## Файлы
 
 ```
-projects.repository.ts          таблицы projects + portal_settings (единственная точка Prisma)
+projects.repository.ts          таблица projects (единственная точка Prisma)
 project-participants.repository.ts  project_participants: страницы, синк руководства,
                                 идемпотентный replaceTaskSource, roster
 project-types.repository.ts     project_types (архив, не удаление; icon/color/kindIds #556)

@@ -168,7 +168,7 @@ export const accessStrings = {
     'project.setup.manage': {
       group: 'Типы проектов',
       label: 'Настраивать проекты',
-      description: 'Типы проектов и видимость новых проектов по умолчанию',
+      description: 'Типы проектов, схемы уровней структуры и общие справочники проектов',
     },
     'crm.create': {
       group: 'Контрагенты',

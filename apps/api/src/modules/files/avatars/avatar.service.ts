@@ -12,6 +12,7 @@ import {
   AVATAR_MAX_BYTES,
   AVATAR_MIN_SIDE,
   AVATAR_PIXEL_LIMIT,
+  hasSensitiveMetadata,
   isPixelLimitError,
   validateAvatarBytes,
 } from './avatar-rules.js';
@@ -142,26 +143,34 @@ export class AvatarService {
     );
 
     const baseName = input.name.replace(/\.[^.]+$/, '') || 'avatar';
-    const saved = await this.storage.save(
-      {
-        ownerId: input.ownerId,
-        name: `${baseName}.webp`,
-        mime: 'image/webp',
-        size: derivative.length,
-        derivedFrom: original.fileId,
-      },
-      Readable.from(derivative),
-    );
+    let saved: { fileId: string };
+    try {
+      saved = await this.storage.save(
+        {
+          ownerId: input.ownerId,
+          name: `${baseName}.webp`,
+          mime: 'image/webp',
+          size: derivative.length,
+          derivedFrom: original.fileId,
+        },
+        Readable.from(derivative),
+      );
+    } catch (error) {
+      // Дериват не записался — оригинал-сирота не остаётся в бакете
+      // (best-effort: сбой уборки не подменяет исходную ошибку).
+      await this.storage.remove([original.fileId]).catch(() => undefined);
+      throw error;
+    }
     return { fileId: saved.fileId };
   }
 
-  /** Оригинал без метаданных (EXIF/GPS, XMP) — приватность «at rest»
-   *  (#725, security-ревью 12.11): GPS сотрудника не должен лежать в бакете.
-   *  Файл БЕЗ метаданных сохраняется байт-в-байт (без перекодировки и потери
-   *  качества); с метаданными — перекодируется в свой формат, EXIF-ориентация
-   *  запекается в пиксели (как её уже применяет дериват). */
+  /** Оригинал без метаданных (EXIF/GPS, XMP, IPTC, PNG-текст) — приватность
+   *  «at rest» (#725, security-ревью 12.11): GPS сотрудника не должен лежать
+   *  в бакете. Файл БЕЗ метаданных сохраняется байт-в-байт (без перекодировки
+   *  и потери качества); с метаданными — перекодируется в свой формат,
+   *  EXIF-ориентация запекается в пиксели (как её уже применяет дериват). */
   private async withoutMetadata(bytes: Buffer, meta: SharpMetadata, mime: string): Promise<Buffer> {
-    if (!meta.exif && !meta.xmp && !meta.orientation) return bytes;
+    if (!hasSensitiveMetadata(meta)) return bytes;
     const pipeline = sharp(bytes, { limitInputPixels: AVATAR_PIXEL_LIMIT }).rotate();
     if (mime === 'image/png') return pipeline.png().toBuffer();
     if (mime === 'image/webp') return pipeline.webp({ quality: 95 }).toBuffer();

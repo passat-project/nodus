@@ -48,10 +48,10 @@ const person = (overrides: Partial<UserListItem> = {}): UserListItem => ({
   ...overrides,
 });
 
-function renderMenu(seed?: UserListItem[]) {
+function renderMenu(seed?: UserListItem[], user: AuthUser = ME) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (seed) client.setQueryData(usersListKey, { items: seed, nextCursor: null });
-  useAuthStore.setState({ status: 'authenticated', accessToken: 'test-token', user: ME });
+  useAuthStore.setState({ status: 'authenticated', accessToken: 'test-token', user });
   const utils = render(
     <QueryClientProvider client={client}>
       <ProfileMenu />
@@ -120,5 +120,22 @@ describe('ProfileMenu — «Профиль» в меню аватара (#751)',
 
     fireEvent.click(screen.getByRole('menuitem', { name: ui.topbar.profile }));
     expect(mocks.openCard).toHaveBeenCalledWith({ kind: 'employee', id: ME_ID });
+  });
+
+  it('право project.setup.manage не возвращает «Настройки портала» — меню профильное (#738)', async () => {
+    // Именно это право рисовало пункт до #738: регресс-тест на ветку, которая
+    // удалена, а не только на «обычного» пользователя без прав.
+    renderMenu(undefined, {
+      ...ME,
+      permissions: ['project.setup.manage'] as AuthUser['permissions'],
+    });
+    const trigger = screen.getByRole('button', { name: ui.topbar.profile });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByRole('menu')).not.toBeNull());
+
+    const items = screen.getAllByRole('menuitem');
+    expect(items.map((item) => item.textContent)).toEqual([ui.topbar.profile, ui.topbar.logout]);
+    expect(screen.queryByRole('menuitem', { name: 'Настройки портала' })).toBeNull();
   });
 });
