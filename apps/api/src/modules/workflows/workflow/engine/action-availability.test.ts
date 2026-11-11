@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ActionDef } from '../workflow.repository.js';
+import { gateFacts } from '../gate-facts.test-helper.js';
 import { actionOptions } from './transition-availability.js';
 
 /** Минимум субъекта: роль исполнителя, без обхода. */
@@ -11,6 +12,7 @@ const subject = {
   actsWithoutConditions: false,
   canOverrideGates: false,
   stageId: 's1',
+  facts: gateFacts(),
 };
 
 function action(overrides: Partial<ActionDef>): ActionDef {
@@ -73,5 +75,20 @@ describe('actionOptions — действия в панели карточки (#
     const result = actionOptions({ actions: [off, on] }, subject);
     expect(result.find((entry) => entry.id === 'off')?.form).toBeNull();
     expect(result.find((entry) => entry.id === 'on')?.form).toMatchObject({ enabled: true });
+    // Гейтов нет — кнопка доступна.
+    expect(result.every((entry) => entry.blockedBy.length === 0)).toBe(true);
+  });
+
+  it('непройденный гейт отдаётся в blockedBy — кнопка видна с причиной (#740)', () => {
+    const gated = action({
+      id: 'gated',
+      rules: {
+        conditions: [{ kind: 'role_in', roles: ['assignee'] }],
+        validators: [{ kind: 'time_logged' }],
+        postFunctions: [],
+      },
+    });
+    const [only] = actionOptions({ actions: [gated] }, subject);
+    expect(only?.blockedBy).toEqual([{ kind: 'time_logged' }]);
   });
 });

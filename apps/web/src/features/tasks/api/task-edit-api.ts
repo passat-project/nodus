@@ -117,6 +117,7 @@ export function useSaveTaskResult(taskId: string) {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: tasksKeys.detail(taskId) });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.transitions(taskId) });
+      void queryClient.invalidateQueries({ queryKey: tasksKeys.actions(taskId) });
     },
   });
 }

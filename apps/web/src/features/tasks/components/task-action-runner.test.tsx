@@ -54,6 +54,7 @@ const action = (id: string, extra: Partial<WorkflowAction> = {}): WorkflowAction
   name: `Действие ${id}`,
   display: 'button',
   form: null,
+  blockedBy: [],
   ...extra,
 });
 

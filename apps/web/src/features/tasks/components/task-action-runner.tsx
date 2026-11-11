@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import type { TaskDetail, WorkflowAction } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
+import { toast } from 'sonner';
 
 import { useTaskConversation } from '../../../shared/chat/chat-queries.js';
 import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries.js';
+import { gateReasonsText } from '../../../shared/tasks/transition-error.js';
 import {
   TransitionWindow,
   type WindowSource,
@@ -23,7 +26,7 @@ function windowSourceOf(action: WorkflowAction): WindowSource {
     form: action.form,
     ...(action.formPrefill ? { formPrefill: action.formPrefill } : {}),
     validators: [],
-    blockedBy: [],
+    blockedBy: action.blockedBy,
     canOverride: false,
   };
 }
@@ -46,6 +49,12 @@ export function useActionRunner(task: TaskDetail) {
     if (action.form) {
       press.reset();
       setWindowAction(action);
+      return;
+    }
+    // Действие без окна нечем «дозаполнить» — причину гейта показываем сразу,
+    // а не молчаливым 409 (у окна причины нарисует диалог).
+    if (action.blockedBy.length > 0) {
+      toast.error(`${ui.tasks.processBlockedMissing} ${gateReasonsText(action.blockedBy)}`);
       return;
     }
     press.mutate({ action, body: {} });

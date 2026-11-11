@@ -67,7 +67,7 @@ export function transitionOptions(
  */
 export function actionOptions(
   workflow: { actions: readonly ActionDef[] },
-  subject: AvailabilitySubject & { stageId: string },
+  subject: AvailabilitySubject & { stageId: string; facts: WorkflowGateFacts },
 ): WorkflowAction[] {
   return workflow.actions
     .filter((action) => action.stageId === null || action.stageId === subject.stageId)
@@ -81,6 +81,8 @@ export function actionOptions(
       name: action.name,
       display: action.display,
       form: action.form?.enabled ? action.form : null,
+      // Гейты (#740): кнопка видна и объясняет причину до нажатия.
+      blockedBy: evaluateValidators(action.rules, subject.facts),
     }));
 }
 
