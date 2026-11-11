@@ -38,7 +38,10 @@ export const authHandlers = [
         { status: 400 },
       );
     rememberMockLogin(parsed.data.email);
-    return HttpResponse.json(tokens, { headers: { 'Set-Cookie': `${COOKIE}=alive; Path=/` } });
+    return HttpResponse.json(
+      { ...tokens, userId: demoActorFor(parsed.data.email).id },
+      { headers: { 'Set-Cookie': `${COOKIE}=alive; Path=/` } },
+    );
   }),
 
   http.post('/api/v1/auth/refresh', ({ request }) =>
@@ -47,7 +50,10 @@ export const authHandlers = [
           { code: 'AUTH_SESSION_INVALID', message: 'Session invalid' },
           { status: 401 },
         )
-      : HttpResponse.json(tokens, { headers: { 'Set-Cookie': `${COOKIE}=alive; Path=/` } }),
+      : HttpResponse.json(
+          { ...tokens, userId: demoActorFor(mockSessionEmail()).id },
+          { headers: { 'Set-Cookie': `${COOKIE}=alive; Path=/` } },
+        ),
   ),
 
   http.get('/api/v1/auth/me', ({ request }) =>

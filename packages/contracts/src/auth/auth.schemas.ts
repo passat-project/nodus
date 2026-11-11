@@ -45,6 +45,10 @@ export const authTokensSchema = z.object({
   accessToken: z.string().min(1),
   /** Срок жизни access-токена в секундах; клиент обновляет заранее. */
   expiresIn: z.number().int().positive(),
+  /** Кому выпущен токен (#747). Refresh-cookie — общая на браузер: другая
+   *  вкладка могла выйти из A и войти в B, и сервер вернёт токен B. Клиент
+   *  сверяет это поле с текущим актёром и не применяет чужой токен. */
+  userId: z.uuid(),
 });
 
 export type AuthTokens = z.infer<typeof authTokensSchema>;

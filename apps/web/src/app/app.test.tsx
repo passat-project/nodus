@@ -10,13 +10,14 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-const TOKENS = { accessToken: 'access-jwt', expiresIn: 900 };
 const USER = {
   id: '7b0a2c2e-9a9a-4b1c-9c9c-0a1b2c3d4e5f',
   email: 'admin@nodus.by',
   displayName: 'Администратор Системный',
   permissions: ['directory.read'],
 };
+
+const TOKENS = { accessToken: 'access-jwt', expiresIn: 900, userId: USER.id };
 
 describe('auth-store', () => {
   beforeEach(() => {
@@ -105,6 +106,71 @@ describe('auth-store', () => {
     );
     await expect(useAuthStore.getState().tryRefresh()).resolves.toBe(false);
     expect(useAuthStore.getState().status).toBe('anonymous');
+  });
+
+  it('tryRefresh: refresh отдал токен другого аккаунта — не применяем, сессия мертва (#747)', async () => {
+    useAuthStore.setState({ status: 'authenticated', accessToken: 'token-a', user: USER });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse(200, {
+          accessToken: 'token-b',
+          expiresIn: 900,
+          userId: '00000000-0000-4000-8000-000000000002',
+        }),
+      ),
+    );
+
+    await expect(useAuthStore.getState().tryRefresh()).resolves.toBe(false);
+
+    const state = useAuthStore.getState();
+    expect(state.status).toBe('anonymous');
+    expect(state.accessToken).toBeNull();
+    expect(state.user).toBeNull();
+  });
+
+  it('tryRefresh: тот же аккаунт — токен применяется', async () => {
+    useAuthStore.setState({ status: 'authenticated', accessToken: 'token-old', user: USER });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(200, { ...TOKENS, accessToken: 'token-new' })),
+    );
+
+    await expect(useAuthStore.getState().tryRefresh()).resolves.toBe(true);
+
+    expect(useAuthStore.getState().accessToken).toBe('token-new');
+    expect(useAuthStore.getState().user?.id).toBe(USER.id);
+  });
+
+  it('tryRefresh: анонимную вкладку refresh не воскрешает (#747)', async () => {
+    useAuthStore.setState({ status: 'anonymous', accessToken: null, user: null });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(200, TOKENS)),
+    );
+
+    await expect(useAuthStore.getState().tryRefresh()).resolves.toBe(false);
+
+    expect(useAuthStore.getState().accessToken).toBeNull();
+    expect(useAuthStore.getState().status).toBe('anonymous');
+  });
+
+  it('tryRefresh: поздний 401 прошлой сессии не гасит новый аккаунт (#747)', async () => {
+    useAuthStore.setState({ status: 'authenticated', accessToken: 'token-a', user: USER });
+    const other = { ...USER, id: '00000000-0000-4000-8000-000000000002' };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        // Пока шёл refresh A, в этой же вкладке вошли в B.
+        useAuthStore.setState({ status: 'authenticated', accessToken: 'token-b', user: other });
+        return jsonResponse(401, { code: 'AUTH_SESSION_INVALID', message: 'x' });
+      }),
+    );
+
+    await expect(useAuthStore.getState().tryRefresh()).resolves.toBe(false);
+
+    expect(useAuthStore.getState().status).toBe('authenticated');
+    expect(useAuthStore.getState().user?.id).toBe(other.id);
   });
 
   it('bootstrap: сервер недоступен на старте → статус остаётся unknown (повтор на следующем заходе)', async () => {
