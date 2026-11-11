@@ -5,7 +5,7 @@ import { ui } from '@nodus/contracts';
 
 import { MentionSnippet } from '../../../shared/chat/mention-chip.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
-import { formatTime } from '../../../shared/lib/format.js';
+import { formatListTimestamp } from '../../../shared/lib/format.js';
 import { formatCount, type NotificationGroup } from '../model/group-notifications.js';
 import { rowSourceRect } from '../model/open-notification.js';
 import type { SourceRect } from '../../../app/shell/slider-panel.js';
@@ -75,8 +75,8 @@ export function NotificationRow({
                   +{formatCount(group.count - 1)}
                 </span>
               )}
-              <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
-                {formatTime(item.createdAt)}
+              <span className="ml-auto shrink-0 whitespace-nowrap font-mono text-xs text-muted-foreground tabular-nums">
+                {formatListTimestamp(item.createdAt)}
               </span>
             </div>
             <div className="mt-0.5 truncate text-sm text-foreground/90">

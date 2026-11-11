@@ -1,6 +1,8 @@
 import type { ChatMessage } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
+import { localDayDiff, localDayNumber } from '../lib/local-day.js';
+
 /**
  * Группировка ленты на серии (план docs/mvp/archive/chat-messages-plan.md, вердикт
  * владельца 14.09.2026, канон Телеграма/Битрикс24): подряд идущие сообщения
@@ -24,7 +26,7 @@ export interface MessageRun {
   items: ChatMessage[];
 }
 
-const utcDay = (iso: string): string => iso.slice(0, 10);
+const dayNumber = (iso: string): number => localDayNumber(new Date(iso));
 
 export function buildMessageRuns(messages: ChatMessage[], meId?: string): MessageRun[] {
   const runs: MessageRun[] = [];
@@ -33,7 +35,7 @@ export function buildMessageRuns(messages: ChatMessage[], meId?: string): Messag
     if (
       run &&
       run.authorId === message.author.id &&
-      utcDay(run.last.createdAt) === utcDay(message.createdAt)
+      dayNumber(run.last.createdAt) === dayNumber(message.createdAt)
     ) {
       run.items.push(message);
       run.last = message;
@@ -50,33 +52,20 @@ export function buildMessageRuns(messages: ChatMessage[], meId?: string): Messag
   return runs;
 }
 
-/** Ставить ли дата-чип перед сообщением: смена дня относительно предыдущего
- *  (или начало ленты — чип первого дня ставится всегда). */
+/** Ставить ли дата-чип перед сообщением: смена локального дня относительно
+ *  предыдущего (или начало ленты — чип первого дня ставится всегда). */
 export function startsNewDay(prev: ChatMessage | undefined, cur: ChatMessage): boolean {
-  return !prev || utcDay(prev.createdAt) !== utcDay(cur.createdAt);
+  return !prev || dayNumber(prev.createdAt) !== dayNumber(cur.createdAt);
 }
 
-/** Метка дата-чипа: «Сегодня» / «Вчера» / «5 сентября» (Intl ru-RU).
- *  `now` инжектируется для тестов. */
+/** Метка дата-чипа: «Сегодня» / «Вчера» / «5 сентября» (Intl ru-RU); для
+ *  прошлых лет — с годом («4 октября 2025», витрина вложений живёт месяцами).
+ *  Границы дня — локальные (не UTC, #782); `now` инжектируется для тестов. */
 export function formatDayLabel(iso: string, now: Date = new Date()): string {
   const day = new Date(iso);
-  const startOf = (d: Date): number =>
-    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-  const diffDays = Math.round((startOf(now) - startOf(day)) / 86_400_000);
+  const diffDays = localDayDiff(iso, now);
   if (diffDays === 0) return ui.chat.today;
   if (diffDays === 1) return ui.chat.yesterday;
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  }).format(day);
-}
-
-/** Метка дня витрины (#211, ревизия 05.10): как formatDayLabel, но для
- *  прошлых лет добавляет год («4 октября 2025») — вложения живут месяцами. */
-export function formatVaultDayLabel(iso: string, now: Date = new Date()): string {
-  const label = formatDayLabel(iso, now);
-  if (label === ui.chat.today || label === ui.chat.yesterday) return label;
-  const year = new Date(iso).getUTCFullYear();
-  return year === now.getUTCFullYear() ? label : `${label} ${year}`;
+  const label = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(day);
+  return day.getFullYear() === now.getFullYear() ? label : `${label} ${day.getFullYear()}`;
 }

@@ -8,7 +8,7 @@ import { Skeleton } from '@nodus/ui/components/skeleton';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useAuthStore } from '../../../shared/auth-store.js';
-import { formatTime, withoutPatronymic } from '../../../shared/lib/format.js';
+import { formatListTimestamp, withoutPatronymic } from '../../../shared/lib/format.js';
 import { ConversationAvatar } from '../../../shared/chat/conversation-avatar.js';
 import { useTypingStore } from '../../../shared/socket/typing-store.js';
 import { useInfiniteSentinel } from '../../../shared/views/use-infinite-sentinel.js';
@@ -198,8 +198,10 @@ export function ConversationList({
                 ) : null}
               </span>
               {conversation.lastMessage ? (
-                <span className="shrink-0 font-mono text-label-sm text-muted-foreground tabular-nums">
-                  {formatTime(conversation.lastMessage.createdAt)}
+                // Метка давности по модели Битрикс24 (#782): сегодня — время,
+                // вчера — «Вчера», 2–6 дней — день недели, дальше — дата.
+                <span className="shrink-0 whitespace-nowrap font-mono text-label-sm text-muted-foreground tabular-nums">
+                  {formatListTimestamp(conversation.lastMessage.createdAt)}
                 </span>
               ) : null}
             </span>
