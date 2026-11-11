@@ -26,9 +26,11 @@ function Probe() {
 
 describe('useElementWidth', () => {
   it('подхватывает элемент, появившийся после первого маунта', async () => {
+    // FLIP-анимация: rect масштабирован (320), layout-ширина — полная (640).
     const rect = vi
       .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
-      .mockReturnValue({ width: 640 } as DOMRect);
+      .mockReturnValue({ width: 320 } as DOMRect);
+    const offset = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(640);
     render(<Probe />);
     expect(screen.getByTestId('width').textContent).toBe('0');
 
@@ -38,5 +40,6 @@ describe('useElementWidth', () => {
 
     expect(screen.getByTestId('width').textContent).toBe('640');
     rect.mockRestore();
+    offset.mockRestore();
   });
 });

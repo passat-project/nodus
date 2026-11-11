@@ -97,10 +97,16 @@ export function CardTabAreas({
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
-    const measure = () => setWidth(el.getBoundingClientRect().width);
+    // Layout-ширина, не rect: при FLIP-раскрытии карточки transform масштабирует
+    // rect, а ResizeObserver на transform не срабатывает — полоса оставалась
+    // уже карточки и справа чернел зазор до перезагрузки (фидбек 11.11).
+    const measure = (layoutWidth?: number) => setWidth(layoutWidth ?? el.offsetWidth);
     measure();
     if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(measure);
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0]?.borderBoxSize?.[0];
+      measure(box?.inlineSize);
+    });
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
