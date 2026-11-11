@@ -21,7 +21,8 @@ describe('VideoPlayerView — кинозал видео (#787)', () => {
     expect(dialog.parentElement).toBe(document.body);
     expect(dialog.className).toContain('fixed');
     expect(dialog.className).toContain('inset-0');
-    expect(dialog.className).toContain('bg-black');
+    // #790: полупрозрачное затемнение портала, не сплошной чёрный.
+    expect(dialog.className).toContain('bg-black/75');
 
     const video = document.querySelector('video');
     expect(video).not.toBeNull();
