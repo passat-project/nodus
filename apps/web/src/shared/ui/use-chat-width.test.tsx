@@ -18,7 +18,7 @@ function Probe({ ceiling }: { ceiling?: number }) {
   return (
     <div>
       <div ref={ref} data-testid="column" />
-      <button type="button" data-testid="divider" onPointerDown={onDividerDown} />
+      <div data-testid="divider" onPointerDown={onDividerDown} />
       <span data-testid="width">{chatW}</span>
     </div>
   );
