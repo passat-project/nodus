@@ -300,17 +300,24 @@ export class NotificationsRepository {
   }
 
   /** Стоп повторов важного (прочтение/ответ/реакция — «увидел где угодно»,
-   *  C2/C3; ack-механика выпилена, ревизия модели 05.10). */
+   *  C2/C3; ack-механика выпилена, ревизия модели 05.10).
+   *
+   *  #770: прочтение по беседе ограничено watermark'ом `source_seq <= upToSeq`
+   *  — квитанция о СТАРЫХ видимых сообщениях не должна гасить повторы более
+   *  нового важного, которое пользователь ещё не видел (логика та же, что у
+   *  markReadBySource). Ответ автора и стоп по реакции идут без границы. */
   async stopRepeats(
     userId: string,
-    where: { messageId?: string; conversationId?: string },
+    where: { messageId?: string; conversationId?: string; upToSeq?: number },
     tx?: TransactionClient,
   ): Promise<number> {
     const client = tx ?? this.prisma;
     const scope =
       where.messageId !== undefined
         ? Prisma.sql`message_id = ${where.messageId}::uuid`
-        : Prisma.sql`source_id = ${where.conversationId}::uuid`;
+        : where.upToSeq !== undefined
+          ? Prisma.sql`source_id = ${where.conversationId}::uuid AND source_seq <= ${BigInt(where.upToSeq)}::bigint`
+          : Prisma.sql`source_id = ${where.conversationId}::uuid`;
     return client.$executeRaw(Prisma.sql`
       UPDATE notifications SET repeats_stopped_at = now()
       WHERE user_id = ${userId}::uuid AND priority = 'urgent' AND ${scope}

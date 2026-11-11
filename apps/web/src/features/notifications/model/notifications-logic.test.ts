@@ -54,7 +54,7 @@ const NO_FLAGS = {
   muted: new Set<string>(),
   snoozed: new Set<string>(),
   dnd: { enabled: false, start: '22:00', end: '08:00' },
-  documentVisible: true,
+  userActive: true,
   now: new Date('2026-10-01T12:00:00'),
 };
 
@@ -137,8 +137,8 @@ describe('shouldToast (подавления B-кейсов)', () => {
     const ctx = { ...NO_FLAGS, openConversationId: CONV };
     expect(shouldToast(snapshot(), 0, ctx)).toBeNull();
     expect(shouldToast(snapshot({ conversationId: CONV2 }), 0, ctx)).toBe('personal');
-    // свёрнутая вкладка — тост возвращается
-    expect(shouldToast(snapshot(), 0, { ...ctx, documentVisible: false })).toBe('personal');
+    // пользователь отошёл (нет ввода/фокуса) — тост возвращается (#770)
+    expect(shouldToast(snapshot(), 0, { ...ctx, userActive: false })).toBe('personal');
   });
 
   it('B6-регресс: действие без беседы не гасится нулевым открытым чатом (null===null)', () => {
