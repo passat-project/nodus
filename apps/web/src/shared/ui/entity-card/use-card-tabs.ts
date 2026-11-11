@@ -187,10 +187,35 @@ export function useCardTabs(options: UseCardTabsOptions) {
 
   const updateState = useCallback(
     (next: CardTabsState) => {
+      // Соединили области — пиксельные ширины двух областей больше не нужны:
+      // иначе следующая область унаследует старые пропорции.
+      const nextWidths =
+        next.groups.length === 1 && widths.groups?.length
+          ? { ...widths, groups: undefined }
+          : widths;
       setState(next);
-      persist(next, hidden, widths, panelOpen);
+      if (nextWidths !== widths) setWidths(nextWidths);
+      persist(next, hidden, nextWidths, panelOpen);
     },
     [hidden, panelOpen, persist, widths],
+  );
+
+  /** Сплит активной вкладки: новая область сразу забирает половину рабочей
+   *  зоны (issue #746), исходная сохраняет остаток — без «остаток последней»
+   *  из solver'а, который отдал бы новой области 2/3 ширины. */
+  const splitIntoTwo = useCallback(
+    (next: CardTabsState, areaWidth: number) => {
+      if (next.groups.length < 2 || areaWidth <= 0) {
+        updateState(next);
+        return;
+      }
+      const left = Math.round(areaWidth / 2);
+      const nextWidths: CardTabsWidths = { ...widths, groups: [left, areaWidth - left] };
+      setState(next);
+      setWidths(nextWidths);
+      persist(next, hidden, nextWidths, panelOpen);
+    },
+    [hidden, panelOpen, persist, updateState, widths],
   );
 
   const setGroupWidths = useCallback(
@@ -282,6 +307,7 @@ export function useCardTabs(options: UseCardTabsOptions) {
   return {
     state,
     setState: updateState,
+    splitIntoTwo,
     hidden,
     toggleHidden,
     visibleTabs,

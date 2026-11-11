@@ -11,10 +11,7 @@ import {
 import { CardLayoutButton } from '../../../shared/ui/entity-card/card-layout-button.js';
 import { CardTabAreas } from '../../../shared/ui/entity-card/card-tab-areas.js';
 import type { CardTabDef } from '../../../shared/ui/entity-card/card-tab-strip.js';
-import {
-  CardWidthHint,
-  PANEL_HIDDEN_HINT,
-} from '../../../shared/ui/entity-card/card-width-hint.js';
+import { PANEL_HIDDEN_HINT } from '../../../shared/ui/entity-card/card-width-hint.js';
 import {
   mergeAllGroups,
   splitActiveTab,
@@ -144,11 +141,9 @@ export function ProjectCard({ projectId }: { projectId: string }) {
               <ChatPanelToggle open={channelPanel.open} onToggle={() => channelPanel.toggle()} />
             ) : null
           }
+          hintText={panelRequested && !solved.panelRendered ? PANEL_HIDDEN_HINT : undefined}
           className="bg-card"
         />
-        {panelRequested && !solved.panelRendered ? (
-          <CardWidthHint text={PANEL_HIDDEN_HINT} className="absolute top-11 right-2 z-10" />
-        ) : null}
       </div>
 
       {conversation && solved.panelRendered ? (
@@ -168,7 +163,12 @@ export function ProjectCard({ projectId }: { projectId: string }) {
           layout={
             <CardLayoutButton
               groupCount={state.groups.length}
-              onSplit={() => cardTabs.setState(splitActiveTab(state))}
+              onSplit={() =>
+                cardTabs.splitIntoTwo(
+                  splitActiveTab(state),
+                  solved.groupW.reduce((sum, width) => sum + width, 0),
+                )
+              }
               onMerge={() => cardTabs.setState(mergeAllGroups(state))}
             />
           }

@@ -19,6 +19,7 @@ export function CardTabStripRow({
   draggingTabId,
   actions,
   trailing,
+  hint,
   onCloseTab,
   onActivate,
   onTabPointerDown,
@@ -36,6 +37,9 @@ export function CardTabStripRow({
   draggingTabId: string | null;
   actions: (group: CardTabGroup, active: CardTabDef | undefined) => ReactNode;
   trailing: (group: CardTabGroup) => ReactNode;
+  /** Подсказка derived-состояния — в правом слоте ПОСЛЕДНЕЙ области (там же,
+   *  где тоггл панели: подсказка объясняет исчезнувшую панель). */
+  hint?: ReactNode;
   onCloseTab?: (tabId: string) => void;
   onActivate: (groupId: string, tabId: string) => void;
   onTabPointerDown: (
@@ -69,6 +73,7 @@ export function CardTabStripRow({
             onClose={onCloseTab}
             trailing={trailing(group)}
             actions={actions(group, tabById.get(group.active))}
+            hint={index === groups.length - 1 ? hint : null}
             groupId={group.id}
             draggingTabId={draggingTabId}
             onTabPointerDown={(tabId, event) => onTabPointerDown(group.id, tabId, event)}

@@ -120,6 +120,7 @@ export function LetterSideTabs({
   onStateChange,
   onGroupWidthsChange,
   groupMin,
+  hintText,
   onActivate,
   onClose,
   onJoin,
@@ -137,6 +138,8 @@ export function LetterSideTabs({
   onStateChange: (next: CardTabsState) => void;
   onGroupWidthsChange: (widths: number[]) => void;
   groupMin?: (group: CardTabGroup) => number;
+  /** Подсказка derived-состояния (панель беседы скрыта шириной) — хром полосы. */
+  hintText?: string;
   onActivate: (tab: LetterTabId) => void;
   onClose: (attachmentId: string) => void;
   onJoin: () => void;
@@ -198,6 +201,7 @@ export function LetterSideTabs({
         collapsedGroupId={collapsedGroupId}
         onGroupWidthsChange={onGroupWidthsChange}
         groupMin={groupMin}
+        hintText={hintText}
         onCloseTab={(tabId) => {
           const fileId = fileIdOf(tabId as LetterTabId);
           if (fileId) onClose(fileId);

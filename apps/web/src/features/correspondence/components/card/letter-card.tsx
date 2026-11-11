@@ -13,10 +13,7 @@ import { ChatSidePanel } from '../../../../shared/chat/chat-side-panel.js';
 import { CardDataColumn } from '../../../../shared/ui/entity-card/card-data-column.js';
 import { CardDataSplitter } from '../../../../shared/ui/entity-card/card-data-splitter.js';
 import { CardLayoutButton } from '../../../../shared/ui/entity-card/card-layout-button.js';
-import {
-  CardWidthHint,
-  PANEL_HIDDEN_HINT,
-} from '../../../../shared/ui/entity-card/card-width-hint.js';
+import { PANEL_HIDDEN_HINT } from '../../../../shared/ui/entity-card/card-width-hint.js';
 import { solveCardWidths } from '../../../../shared/ui/entity-card/card-tabs-width.js';
 import {
   mergeAllGroups,
@@ -278,10 +275,8 @@ export function LetterCard({ letterId }: { letterId: string }) {
             onPanelToggle={() => cardTabs.setPanelOpen(!cardTabs.panelOpen)}
             onHideTab={cardTabs.toggleHidden}
             canHideTab={(id) => (LETTER_STABLE_TABS as readonly string[]).includes(id)}
+            hintText={panelRequested && !solved.panelRendered ? PANEL_HIDDEN_HINT : undefined}
           />
-          {panelRequested && !solved.panelRendered ? (
-            <CardWidthHint text={PANEL_HIDDEN_HINT} className="absolute top-11 right-2 z-10" />
-          ) : null}
         </div>
 
         {conversation && solved.panelRendered ? (
@@ -299,7 +294,12 @@ export function LetterCard({ letterId }: { letterId: string }) {
       <CardHeaderActionsPortal>
         <CardLayoutButton
           groupCount={state.groups.length}
-          onSplit={() => cardTabs.setState(splitActiveTab(state))}
+          onSplit={() =>
+            cardTabs.splitIntoTwo(
+              splitActiveTab(state),
+              solved.groupW.reduce((sum, width) => sum + width, 0),
+            )
+          }
           onMerge={() => cardTabs.setState(mergeAllGroups(state))}
         />
       </CardHeaderActionsPortal>

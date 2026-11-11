@@ -85,10 +85,10 @@ export function CardDataSplitter({
       onPointerDown={onPointerDown}
       onDoubleClick={onReset}
       onKeyDown={onKeyDown}
-      className="group absolute top-0 right-0 z-20 h-full w-3 translate-x-1/2 cursor-col-resize touch-none focus-visible:outline-2 focus-visible:outline-ring"
+      className="group absolute top-0 right-0 z-20 h-full w-3 translate-x-1/2 cursor-col-resize touch-none outline-none focus-visible:bg-primary/10"
       title={ui.common.resizePanel}
     >
-      <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-port/60 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+      <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-port/60 opacity-0 transition-[opacity,width,background-color] group-hover:opacity-100 group-focus-visible:w-0.5 group-focus-visible:bg-primary group-focus-visible:opacity-100" />
     </div>
   );
 }

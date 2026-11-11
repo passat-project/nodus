@@ -10,10 +10,7 @@ import { useTaskConversation } from '../../../shared/chat/chat-queries.js';
 import { ViewerHostProvider } from '../../../shared/files/viewer-host.js';
 import { CardDataSplitter } from '../../../shared/ui/entity-card/card-data-splitter.js';
 import { CardLayoutButton } from '../../../shared/ui/entity-card/card-layout-button.js';
-import {
-  CardWidthHint,
-  PANEL_HIDDEN_HINT,
-} from '../../../shared/ui/entity-card/card-width-hint.js';
+import { PANEL_HIDDEN_HINT } from '../../../shared/ui/entity-card/card-width-hint.js';
 import {
   mergeAllGroups,
   splitActiveTab,
@@ -230,6 +227,7 @@ export function TaskCard({ taskId }: { taskId: string }) {
               groupMin={(group) =>
                 group.tabs.includes('chat') ? (solved.panelRendered ? 280 : 420) : 280
               }
+              hintText={aboutOpen && !solved.panelRendered ? PANEL_HIDDEN_HINT : undefined}
               onActivate={(tab: TaskTabId) => activateTab(tab)}
               onClose={closeFile}
               onToggleAbout={() => {
@@ -237,9 +235,6 @@ export function TaskCard({ taskId }: { taskId: string }) {
                 setAboutOpen((v) => !v);
               }}
             />
-            {aboutOpen && !solved.panelRendered ? (
-              <CardWidthHint text={PANEL_HIDDEN_HINT} className="absolute top-11 right-2 z-10" />
-            ) : null}
           </div>
 
           <div
@@ -257,7 +252,12 @@ export function TaskCard({ taskId }: { taskId: string }) {
       <CardHeaderActionsPortal>
         <CardLayoutButton
           groupCount={state.groups.length}
-          onSplit={() => cardTabs.setState(splitActiveTab(state))}
+          onSplit={() =>
+            cardTabs.splitIntoTwo(
+              splitActiveTab(state),
+              solved.groupW.reduce((sum, width) => sum + width, 0),
+            )
+          }
           onMerge={() => cardTabs.setState(mergeAllGroups(state))}
         />
       </CardHeaderActionsPortal>

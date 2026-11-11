@@ -1,6 +1,7 @@
 import { History, Info, ListTodo, ListTree, MessagesSquare, Plus, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ui } from '@nodus/contracts';
+import { Button } from '@nodus/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -43,14 +44,16 @@ export function ProjectTabsTrailing({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label={ui.projects.tabsManage}
           title={ui.projects.tabsManage}
-          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="text-muted-foreground hover:bg-accent"
         >
-          <Plus className="size-3.5" strokeWidth={1.75} />
-        </button>
+          <Plus className="size-4" strokeWidth={1.75} />
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52">
         {PROJECT_TAB_IDS.map((id) => {

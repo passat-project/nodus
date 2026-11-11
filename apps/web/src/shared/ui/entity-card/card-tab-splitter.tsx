@@ -89,6 +89,7 @@ export function CardTabSplitter({
       role="separator"
       aria-orientation="vertical"
       aria-label={ui.cardTabs.resize}
+      title={ui.cardTabs.resize}
       aria-valuenow={Math.round(leftW)}
       aria-valuemin={minLeft}
       aria-valuemax={Math.round(maxLeft)}
@@ -97,15 +98,19 @@ export function CardTabSplitter({
       onDoubleClick={onReset}
       onKeyDown={onKeyDown}
       className={cn(
-        'group absolute inset-y-0 z-20 w-3 -translate-x-1/2 cursor-col-resize touch-none focus-visible:outline-2 focus-visible:outline-ring',
+        // Фокус — не бокс-рамка на всю высоту (две вертикальные линии читались
+        // «лестницей»), а подсвеченная полоса ручки + линия в цвет действия.
+        'group absolute inset-y-0 z-20 w-3 -translate-x-1/2 cursor-col-resize touch-none outline-none focus-visible:bg-primary/10',
         className,
       )}
       style={{ left: leftW }}
     >
       <span
         className={cn(
-          'absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border transition-colors',
-          dragging ? 'bg-port' : 'group-hover:bg-port/60 group-focus-visible:bg-port',
+          'absolute inset-y-0 left-1/2 -translate-x-1/2 bg-border transition-[background-color,width]',
+          dragging
+            ? 'w-0.5 bg-port'
+            : 'w-px group-hover:bg-port/60 group-focus-visible:w-0.5 group-focus-visible:bg-primary',
         )}
       />
     </div>

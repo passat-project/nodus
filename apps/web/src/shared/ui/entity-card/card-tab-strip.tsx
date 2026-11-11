@@ -40,6 +40,7 @@ export function CardTabStrip({
   onClose,
   trailing,
   actions,
+  hint,
   idPrefix,
   onKeyDown,
   groupId,
@@ -58,6 +59,9 @@ export function CardTabStrip({
   trailing?: ReactNode;
   /** Правый слот действий карточки (фиксирован, не скроллится с вкладками). */
   actions?: ReactNode;
+  /** Подсказка derived-состояния ширины (#746) — в слоте хрома, НЕ поверх
+   *  контента: панель беседы скрыта / вторая область свёрнута. */
+  hint?: ReactNode;
   /** Префикс id вкладок/панелей (связка aria-controls). */
   idPrefix?: string;
   /** ←/→ по полосе — соседняя вкладка (хост решает). */
@@ -75,15 +79,25 @@ export function CardTabStrip({
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef(new Map<string, HTMLDivElement>());
+  // Активная вкладка для RO-колбэка: полоса ужимается панелью беседы/подсказкой
+  // и DnD-сплитом — активную нельзя оставлять обрезанной за правым слотом.
+  const activeRef = useRef(active);
+  activeRef.current = active;
   // Оверлейный индикатор прокрутки: нативный скроллбар скрыт (data-no-scrollbar),
   // поэтому его появление НЕ съедает высоту полосы — вкладки не подпрыгивают.
-  const [scroll, setScroll] = useState({ thumb: 0, left: 0, overflow: false });
+  const [scroll, setScroll] = useState({
+    thumb: 0,
+    left: 0,
+    overflow: false,
+    atStart: true,
+    atEnd: true,
+  });
   const updateScroll = useCallback(() => {
     const el = listRef.current;
     if (!el) return;
     const max = el.scrollWidth - el.clientWidth;
     if (max <= 0) {
-      setScroll({ thumb: 0, left: 0, overflow: false });
+      setScroll({ thumb: 0, left: 0, overflow: false, atStart: true, atEnd: true });
       return;
     }
     const track = Math.max(0, el.clientWidth - 24);
@@ -92,7 +106,21 @@ export function CardTabStrip({
       thumb,
       left: (el.scrollLeft / max) * (track - thumb),
       overflow: true,
+      atStart: el.scrollLeft <= 1,
+      atEnd: el.scrollLeft >= max - 1,
     });
+  }, []);
+  /** Активная вкладка вышла за видимую часть полосы (ужали панель/слот) —
+   *  подкручиваем БЕЗ анимации: это не смена вкладки, а коррекция ресайза. */
+  const revealActive = useCallback(() => {
+    const el = listRef.current;
+    const tab = tabRefs.current.get(activeRef.current);
+    if (!el || !tab) return;
+    const strip = el.getBoundingClientRect();
+    const box = tab.getBoundingClientRect();
+    if (box.left < strip.left - 1 || box.right > strip.right + 1) {
+      tab.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    }
   }, []);
   useEffect(() => {
     const el = listRef.current;
@@ -109,14 +137,19 @@ export function CardTabStrip({
     el.addEventListener('scroll', updateScroll, { passive: true });
     el.addEventListener('wheel', onWheel, { passive: false });
     const observer =
-      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateScroll);
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            updateScroll();
+            revealActive();
+          });
     observer?.observe(el);
     return () => {
       el.removeEventListener('scroll', updateScroll);
       el.removeEventListener('wheel', onWheel);
       observer?.disconnect();
     };
-  }, [updateScroll]);
+  }, [revealActive, updateScroll]);
   useEffect(() => {
     updateScroll();
   }, [tabs.length, updateScroll]);
@@ -132,6 +165,13 @@ export function CardTabStrip({
     });
   }, [active, tabs.length]);
 
+  // Края прокрутки гаснут маской: полоса не «режет» подпись пополам —
+  // обрыв читается как продолжение (иначе «тория» торчала у края).
+  const EDGE_FADE = 18;
+  const maskImage = scroll.overflow
+    ? `linear-gradient(to right, ${scroll.atStart ? 'black' : 'transparent'} 0, black ${EDGE_FADE}px, black calc(100% - ${EDGE_FADE}px), ${scroll.atEnd ? 'black' : 'transparent'} 100%)`
+    : undefined;
+
   return (
     <div className="flex h-10 shrink-0 items-center border-b border-border bg-card">
       <div className="relative h-10 min-w-0 flex-1">
@@ -146,6 +186,7 @@ export function CardTabStrip({
           data-no-scrollbar
           data-card-tab-strip
           data-group-id={groupId}
+          style={maskImage ? { maskImage, WebkitMaskImage: maskImage } : undefined}
           className="content-fade flex h-10 min-w-0 items-center gap-1 overflow-x-auto overflow-y-hidden px-3"
         >
           {tabs.map((tab) => {
@@ -180,7 +221,9 @@ export function CardTabStrip({
                   onPointerDown={(event) => onTabPointerDown?.(tab.id, event)}
                   onContextMenu={(event) => onTabContextMenu?.(tab.id, event)}
                   className={cn(
-                    'flex h-full max-w-48 min-w-0 items-center gap-1.5 text-body-xs font-medium focus-visible:outline-2 focus-visible:outline-ring',
+                    // Фокус — ИНСЕТНЫЙ outline: полоса вкладок скроллится по X
+                    // (overflow-y-hidden), наружный outline обрезался бы снизу.
+                    'flex h-full max-w-48 min-w-0 items-center gap-1.5 text-body-xs font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring/70',
                     tab.closable ? 'pr-1 pl-2' : 'px-2.5',
                   )}
                 >
@@ -188,8 +231,16 @@ export function CardTabStrip({
                     {tab.icon}
                   </span>
                   <span className="truncate">{tab.label}</span>
-                  {tab.badge && !isActive ? (
-                    <span className="font-mono text-label-sm text-port tabular-nums">
+                  {tab.badge ? (
+                    // Активная вкладка счётчик не показывает, но МЕСТО держит:
+                    // иначе при переключении подпись и соседи прыгают влево.
+                    <span
+                      aria-hidden={isActive || undefined}
+                      className={cn(
+                        'font-mono text-label-sm text-port tabular-nums',
+                        isActive && 'invisible',
+                      )}
+                    >
                       {tab.badge}
                     </span>
                   ) : null}
@@ -202,9 +253,9 @@ export function CardTabStrip({
                     onPointerDown={(event) => event.stopPropagation()}
                     aria-label={`${ui.common.closeTab}: ${tab.label}`}
                     title={ui.common.closeTab}
-                    className="mr-1 rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    className="mr-1 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring/70"
                   >
-                    <X className="size-3" strokeWidth={1.75} />
+                    <X className="size-3.5" strokeWidth={1.75} />
                   </button>
                 ) : null}
               </div>
@@ -221,7 +272,12 @@ export function CardTabStrip({
           </div>
         ) : null}
       </div>
-      {actions ? <div className="flex h-10 shrink-0 items-center gap-1 pr-2">{actions}</div> : null}
+      {hint || actions ? (
+        <div className="flex h-10 shrink-0 items-center gap-1.5 pr-2">
+          {hint}
+          {actions}
+        </div>
+      ) : null}
     </div>
   );
 }

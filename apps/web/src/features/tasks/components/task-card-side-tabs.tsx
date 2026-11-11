@@ -35,6 +35,7 @@ export function TaskCardSideTabs({
   onStateChange,
   onGroupWidthsChange,
   groupMin,
+  hintText,
   onActivate,
   onClose,
   onToggleAbout,
@@ -50,6 +51,8 @@ export function TaskCardSideTabs({
   onStateChange: (next: CardTabsState) => void;
   onGroupWidthsChange: (widths: number[]) => void;
   groupMin?: (group: CardTabGroup) => number;
+  /** Подсказка derived-состояния («О задаче» скрыта шириной) — хром полосы. */
+  hintText?: string;
   onActivate: (tab: TaskTabId) => void;
   onClose: (fileId: string) => void;
   onToggleAbout: () => void;
@@ -102,6 +105,7 @@ export function TaskCardSideTabs({
         collapsedGroupId={collapsedGroupId}
         onGroupWidthsChange={onGroupWidthsChange}
         groupMin={groupMin}
+        hintText={hintText}
         onCloseTab={(tabId) => {
           const fileId = fileIdOf(tabId as TaskTabId);
           if (fileId) onClose(fileId);

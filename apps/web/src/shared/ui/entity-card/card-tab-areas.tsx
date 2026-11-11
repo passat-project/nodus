@@ -3,6 +3,8 @@ import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { CARD_TAB_WIDTH } from './card-tabs-width.js';
+import { CardTabDndLayer } from './card-tab-dnd-layer.js';
+import { CardWidthHint } from './card-width-hint.js';
 import { CardTabPanelLayer } from './card-tab-panel-layer.js';
 import { useCardTabApply } from './use-card-tab-apply.js';
 import { useCardTabGeometry } from './use-card-tab-geometry.js';
@@ -38,6 +40,9 @@ export interface CardTabAreasProps {
   actions?: (group: CardTabGroup, active: CardTabDef | undefined) => ReactNode;
   /** «+» личного набора — за вкладками области. */
   trailing?: (group: CardTabGroup) => ReactNode;
+  /** Подсказка derived-состояния хоста (панель скрыта шириной) — текст
+   *  рендерится чипом в правом слоте последней полосы, НЕ поверх контента. */
+  hintText?: string;
   /** Скрыть вкладку из личного набора (последнюю видимую нельзя). */
   onHideTab?: (tabId: string) => void;
   /** Закрыть closable-вкладку (файл) — отдельный хост-обработчик. */
@@ -70,6 +75,7 @@ export function CardTabAreas({
   onGroupWidthsChange,
   actions,
   trailing,
+  hintText,
   onHideTab,
   onCloseTab,
   canHideTab,
@@ -97,6 +103,15 @@ export function CardTabAreas({
   }, []);
 
   const collapsed = Boolean(collapsedGroupId) && state.groups.length > 1;
+  // Свёрнутая область — самый сильный derived-сигнал: он важнее подсказки
+  // панели хоста (обе живут в правом слоте полосы, не поверх контента).
+  const stripHint = collapsed ? (
+    <span data-collapsed-hint className="flex">
+      <CardWidthHint text={ui.cardTabs.areaCollapsed} />
+    </span>
+  ) : hintText ? (
+    <CardWidthHint text={hintText} />
+  ) : null;
   const renderState = useMemo<CardTabsState>(() => {
     if (!collapsed) return state;
     const merged = mergeGroups(state.groups, state.focusGroupId);
@@ -185,6 +200,7 @@ export function CardTabAreas({
         draggingTabId={drag.visual?.tabId ?? null}
         actions={actions ?? (() => null)}
         trailing={trailing ?? (() => null)}
+        hint={stripHint}
         onCloseTab={onCloseTab}
         onActivate={(groupId, tabId) => {
           if (!drag.suppressClick()) apply(activateTab(state, groupId, tabId));
@@ -235,36 +251,7 @@ export function CardTabAreas({
         />
       ) : null}
 
-      {collapsed ? (
-        <span
-          data-collapsed-hint
-          className="pointer-events-none absolute top-11 right-2 z-10 rounded-md bg-muted/80 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-        >
-          {ui.cardTabs.areaCollapsed}
-        </span>
-      ) : null}
-
-      {drag.marker ? (
-        <div
-          aria-hidden
-          data-insert-marker
-          className={cn(
-            'pointer-events-none fixed z-[80] bg-port',
-            drag.marker.kind === 'area' ? 'w-0.5' : 'w-px',
-          )}
-          style={{ left: drag.marker.x, top: drag.marker.y, height: drag.marker.height }}
-        />
-      ) : null}
-
-      {drag.visual ? (
-        <div
-          aria-hidden
-          className="pointer-events-none fixed z-[80] flex h-8 max-w-52 -translate-y-1/2 translate-x-2 items-center rounded-md border border-border bg-popover px-2 text-body-xs text-foreground shadow-md"
-          style={{ left: drag.visual.x, top: drag.visual.y }}
-        >
-          <span className="truncate">{drag.visual.label}</span>
-        </div>
-      ) : null}
+      <CardTabDndLayer marker={drag.marker} visual={drag.visual} />
 
       <CardTabContextMenu
         menu={menu}
