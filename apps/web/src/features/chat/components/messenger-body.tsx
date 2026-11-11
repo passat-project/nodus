@@ -31,6 +31,7 @@ import { ChatCreateDialog, type CreateConversationKind } from './chat-create-dia
 import { ChatSettings } from './chat-settings.js';
 import { ChatWorkspace } from './chat-workspace.js';
 import { ConversationList } from './conversation-list.js';
+import { useExternalMessengerTab } from './use-external-messenger-tab.js';
 
 export type ChatTab = 'chats' | 'tasks' | 'settings';
 
@@ -57,6 +58,7 @@ export function MessengerBody({
   threadRootId,
   onOpenThread,
   onCloseThread,
+  onTabChange,
 }: {
   tab: ChatTab;
   conversationId?: string;
@@ -69,6 +71,9 @@ export function MessengerBody({
   threadRootId: string | null;
   onOpenThread: (rootId: string) => void;
   onCloseThread: () => void;
+  /** Внешнее открытие беседы (уведомление): вкладка выбирается по типу
+   *  беседы (#719). Не передан — хост владеет вкладкой сам (страница `?tab=`). */
+  onTabChange?: (tab: ChatTab) => void;
 }) {
   // Общий список (scope=all) — для поиска активной беседы, открытой ссылкой
   // из другой вкладки; строки вкладки — свой серверный фильтр (#252).
@@ -156,6 +161,9 @@ export function MessengerBody({
     data?.items,
     data !== undefined || isError,
   );
+
+  // Внешнее открытие беседы (уведомление): вкладка по типу беседы (#719).
+  useExternalMessengerTab(active, onTabChange);
 
   // Внутренняя навигация мессенджера (вердикт 25.09): переход по пересланному
   // ведёт беседу ВНУТРИ хозяина — слайдер из мессенджера не вызывается.
