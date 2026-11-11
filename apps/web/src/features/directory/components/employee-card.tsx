@@ -10,7 +10,7 @@ import { ApiError } from '../../../shared/api-client.js';
 import { useDirectConversation } from '../../../shared/chat/chat-queries.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { useRailShrink } from '../../../app/shell/right-rail.js';
-import { ROW_MAIN_MIN_W, chatColumnWidth } from '../../../shared/ui/branch-panel.js';
+import { chatCeiling, chatColumnWidth } from '../../../shared/ui/branch-panel.js';
 import {
   CHAT_PANEL_W,
   ChatSidePanel,
@@ -77,22 +77,29 @@ export function EmployeeCard({ userId }: { userId: string }) {
   const chatFloor = panelVisible ? MIN_FEED_WITH_PANEL : MIN_CHAT_W;
   // Порядок уступок #750: при узкой карточке правая зона отдаёт ширину
   // ПРОФИЛЮ (минимум данных 320 — как у колонки данных задачи/письма), но не
-  // ниже своего пола; на широкой — работает память перегородки. Ширину ряда
-  // меряем ResizeObserver'ом: % -max-width в auto-треке grid не работает.
-  const gridRef = useRef<HTMLDivElement>(null);
-  const [gridW, setGridW] = useState(0);
-  // Меряем ряд, когда карточка уже отрисована (скелетон grid не рендерит).
+  // ниже своего пола; на широкой — работает память перегородки. Меряем РЯД
+  // карточки (сетка + панель беседы), а не живую ширину сетки: сетка растёт
+  // и сжимается вместе с анимацией панели, и потолок от неё перецеливал бы
+  // transition ширины чата каждый кадр — профиль раздувался и возвращался
+  // (приёмка 11.11.2026). Ширина ряда — layout-размер (clientWidth), не rect:
+  // FLIP-раскрытие карточки масштабирует transform, rect отдал бы ширину
+  // источника (канон JS-геометрии карточек).
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [rowW, setRowW] = useState(0);
+  // Меряем ряд, когда карточка уже отрисована (скелетон ряд не рендерит).
   const ready = !isLoading && Boolean(card) && Boolean(usersData);
   useLayoutEffect(() => {
-    const el = gridRef.current;
+    const el = rowRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const measure = () => setGridW(el.clientWidth);
+    const measure = () => setRowW(el.clientWidth);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
   }, [ready]);
-  const ceiling = gridW > 0 ? gridW - ROW_MAIN_MIN_W : Number.POSITIVE_INFINITY;
+  // Панель беседы — СТОЯЩЕЕ сужение ряда: потолок знает о её ширине сразу,
+  // а не догоняет растущую сетку во время анимации.
+  const ceiling = chatCeiling(rowW, panelVisible ? CHAT_PANEL_W : 0);
   const { chatW, onDividerDown, dragging } = useChatWidth(chatRef, shrink, chatFloor, ceiling);
   const columnW = chatColumnWidth(chatW, shrink, chatFloor, ceiling);
 
@@ -148,19 +155,21 @@ export function EmployeeCard({ userId }: { userId: string }) {
 
   return (
     // Панель беседы — ПОЛНОВЫСОТНЫЙ сиблинг всей карточки: её шапка h-10 на
-    // линии полосы вкладок правой зоны.
-    <div className="flex h-full min-w-0">
+    // линии полосы вкладок правой зоны. Ряд карточки — база потолка ширины
+    // чата (см. chatCeiling): панель входит в его ширину.
+    <div ref={rowRef} className="flex h-full min-w-0">
       <div
-        ref={gridRef}
         className="grid min-h-0 min-w-0 flex-1"
         style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}
       >
         {/* ЛЕВАЯ ЗОНА — профиль сотрудника, всегда на экране и со своим
-            скроллом (регион для скринридеров); граница — структурная. */}
+            скроллом (регион для скринридеров); граница — структурная.
+            Container queries живут на блоке полей профиля, а не на всей зоне:
+            сетка полей адаптируется к СВОЕЙ ширине (см. employee-profile-tab). */}
         <div
           role="region"
           aria-label={ui.employees.tabProfile}
-          className="relative flex min-h-0 flex-col border-r border-border @container"
+          className="relative flex min-h-0 flex-col border-r border-border"
         >
           <div className="content-fade min-h-0 flex-1 overflow-hidden">
             <EmployeeProfileTab

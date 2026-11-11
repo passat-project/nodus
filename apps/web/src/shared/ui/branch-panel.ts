@@ -82,6 +82,19 @@ export function chatColumnWidth(
   return Math.max(floor, Math.min(chatW - shrink, ceiling));
 }
 
+/**
+ * Потолок колонки чата карточки сотрудника (#750): профиль слева не уже
+ * минимума данных, поэтому чат не забирает больше, чем ряд минус СТОЯЩИЕ
+ * сужения (панель беседы) минус минимум профиля. Меряется РЯД карточки
+ * (сетка + панель), а не живая ширина сетки: сетка анимируется вместе с
+ * панелью, и потолок от неё перецеливал бы transition ширины чата каждый
+ * кадр — профиль раздувался и резко возвращался (приёмка 11.11.2026).
+ * Ряд ещё не измерен — потолка нет.
+ */
+export function chatCeiling(rowW: number, reservedW = 0, mainMinW = ROW_MAIN_MIN_W): number {
+  return rowW > 0 ? Math.max(0, rowW - reservedW - mainMinW) : Number.POSITIVE_INFINITY;
+}
+
 /** Предел перегородки навигатора при drag: половина ряда и не дальше, чем
  *  оставит центру его минимум при чате на полу. */
 export function branchPanelMaxWidth(
