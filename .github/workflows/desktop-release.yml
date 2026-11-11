@@ -23,8 +23,14 @@ on:
 permissions:
   contents: read
 
+# Ручной выпуск: группа уникальна для каждого запуска (github.run_id) —
+# зависший на стороне GitHub прогон не блокирует следующий запуск (инцидент
+# 11.11.2026: upload-artifact упал, прогон залип in_progress навсегда и держал
+# общий замок; cancel/force-cancel отвечали 409). Сериализация не нужна: выпуск
+# запускается человеком, а desktop-publish отвергает повторную публикацию той же
+# версии — два одновременных подписанных прогона безопасны.
 concurrency:
-  group: desktop-release
+  group: desktop-release-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
