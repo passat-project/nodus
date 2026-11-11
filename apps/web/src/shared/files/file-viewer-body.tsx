@@ -127,12 +127,14 @@ export function FileViewerBody({
   }
   if (route.kind === 'media') {
     return url ? (
-      <div className="relative size-full">
-        <MediaViewer url={url} mime={target.mime} name={target.name} fit={fit} autoFocus={!fit} />
-        {onFullscreen ? (
-          <ViewerFullscreenButton onClick={onFullscreen} className="absolute top-3 right-3 z-10" />
-        ) : null}
-      </div>
+      <MediaViewer
+        url={url}
+        mime={target.mime}
+        name={target.name}
+        fit={fit}
+        autoFocus={!fit}
+        onFullscreen={onFullscreen}
+      />
     ) : (
       download('unsupported', null)
     );
