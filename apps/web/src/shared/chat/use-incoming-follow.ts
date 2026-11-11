@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import type { ChatMessage } from '@nodus/contracts';
 
+import { isWindowAttentive } from '../attention/attention-store.js';
 import { useScrollEndStore } from './scroll-end-store.js';
 
 /**
@@ -71,6 +72,10 @@ export function useIncomingFollow({
     if (!prev || prev.id === last.id) return;
     if (last.author.id === meId) return;
     if (!atBottomRef.current) return;
+    // Фон/трей/бездействие (#770): лента не дёргается под ушедшим
+    // пользователем — новые сообщения копятся внизу со стрелкой, как в
+    // Telegram. Возврат внимания ничего не «прокручивает» сам.
+    if (!isWindowAttentive()) return;
     useScrollEndStore.getState().request(scope, 'auto');
   }, [items, meId, scope, enabled]);
 
@@ -87,6 +92,8 @@ export function useIncomingFollow({
     const prev = prevScrollHeightRef.current;
     prevScrollHeightRef.current = height;
     if (!enabled || prev === null || !atBottomRef.current) return;
+    // В фоне компенсация = тот же догон: не удерживаем низ под ушедшим.
+    if (!isWindowAttentive()) return;
     const delta = height - prev;
     if (delta > 0) viewport.scrollTop += delta;
   });

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 
+import { useSurfaceVisible } from '../lib/surface-visibility.js';
 import { useConvRoom } from '../socket/use-conv-room.js';
 import { acquireOpenConversation } from './open-conversation.js';
 
@@ -10,11 +11,17 @@ import { acquireOpenConversation } from './open-conversation.js';
  * комнаты не доходят прочтения (галочки отправителя), «печатает…»,
  * реакции, закрепы. Оба реестра со счётчиком хостов: уход одного хоста не
  * гасит другой. Каждый новый хост ленты обязан вызывать этот хук.
+ *
+ * Видимость поверхности (#770): накрытая карточка (dormant в стеке) беседу
+ * «не открывает» — попапы этой беседы продолжают приходить, а квитанции
+ * прочтения молчат. Возврат карточки на вид — снова открыта (и попапы
+ * гасятся, модель Telegram unlinkHistory). WS-комната живёт всегда.
  */
 export function useConversationHost(conversationId: string | null | undefined): void {
+  const surfaceVisible = useSurfaceVisible();
   useEffect(
-    () => (conversationId ? acquireOpenConversation(conversationId) : undefined),
-    [conversationId],
+    () => (conversationId && surfaceVisible ? acquireOpenConversation(conversationId) : undefined),
+    [conversationId, surfaceVisible],
   );
   useConvRoom(conversationId);
 }
