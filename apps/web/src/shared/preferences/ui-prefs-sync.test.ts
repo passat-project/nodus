@@ -54,4 +54,25 @@ describe('ui-prefs-sync: гидратация не затирает неотпр
     expect(apiMock).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem(`nodus-ui-prefs-dirty:${USER}`)).toBeNull();
   });
+
+  it('локальная правка во время GET не затирается ответом', async () => {
+    let resolveGet: ((value: unknown) => void) | undefined;
+    apiMock.mockImplementation((path: string, init?: { method?: string }) =>
+      path === '/me/preferences' && !init
+        ? new Promise((resolve) => {
+            resolveGet = resolve;
+          })
+        : Promise.resolve({ preferences: {}, updatedAt: new Date().toISOString() }),
+    );
+    const { useUiPrefsStore } = await import('./ui-prefs-store.js');
+    const { startPreferencesSync } = await import('./ui-prefs-sync.js');
+    startPreferencesSync();
+    await Promise.resolve();
+
+    useUiPrefsStore.setState({ personal: { navOrder: ['local'] } });
+    resolveGet?.({ preferences: { navOrder: ['server'] }, updatedAt: new Date().toISOString() });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(useUiPrefsStore.getState().personal.navOrder).toEqual(['local']);
+  });
 });

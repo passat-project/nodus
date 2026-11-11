@@ -9,8 +9,16 @@ import { useCardTabs } from './use-card-tabs.js';
 
 const STABLE = ['structure', 'tasks', 'about'] as const;
 
-function Harness({ kind = 'project' as const }) {
-  const tabs = useCardTabs({ kind, stableTabs: STABLE, defaultActive: 'structure' });
+function Harness({
+  kind = 'project' as const,
+  defaultActive = 'structure',
+  requestedActive,
+}: {
+  kind?: 'project' | 'letter';
+  defaultActive?: string;
+  requestedActive?: string;
+}) {
+  const tabs = useCardTabs({ kind, stableTabs: STABLE, defaultActive, requestedActive });
   return (
     <>
       <span data-testid="groups">{tabs.state.groups.map((g) => g.tabs.join('+')).join('|')}</span>
@@ -82,6 +90,23 @@ describe('useCardTabs: внешнее обновление prefs', () => {
       }),
     );
     render(<Harness />);
+    expect(screen.getByTestId('actives').textContent).toBe('about');
+  });
+
+  it('стартовый requestedActive хоста не перебивает сохранённую активную', async () => {
+    await act(async () =>
+      useUiPrefsStore.setState({
+        personal: {
+          cardTabs: {
+            letter: {
+              version: 1,
+              groups: [{ tabs: ['about', 'structure', 'tasks'], active: 'about' }],
+            },
+          },
+        },
+      }),
+    );
+    render(<Harness kind="letter" defaultActive="structure" requestedActive="structure" />);
     expect(screen.getByTestId('actives').textContent).toBe('about');
   });
 

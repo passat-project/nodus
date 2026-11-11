@@ -81,6 +81,9 @@ async function hydrateFromServer(): Promise<void> {
     if (requestGeneration !== generation || useAuthStore.getState().user?.id !== userId) return;
     const parsed = userPreferencesResponseSchema.safeParse(response);
     if (!parsed.success) return;
+    // Пока летел GET, пользователь мог изменить настройки: их отложенный PUT
+    // главнее серверного снимка (иначе затрём только что сделанное).
+    if (hasDirty(userId)) return;
     hydrating = true;
     useUiPrefsStore.getState().replacePersonal(parsed.data.preferences);
   } catch {

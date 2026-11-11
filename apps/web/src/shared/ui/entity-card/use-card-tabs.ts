@@ -29,11 +29,6 @@ export interface UseCardTabsOptions {
   requestedActive?: string;
 }
 
-/** Системный дефолт — только без сохранённого личного порядка. */
-function initialActive(pref: CardTabsPref | undefined, options: UseCardTabsOptions) {
-  return pref ? undefined : options.defaultActive;
-}
-
 function rebuild(
   pref: CardTabsPref | undefined,
   options: UseCardTabsOptions,
@@ -48,7 +43,13 @@ function rebuild(
   // Активная: сохранённая в prefs (groupsFromPref уже её разложил) или первая
   // видимая — `defaultActive` только когда личного порядка ещё нет. Иначе
   // карточка всегда открывалась бы на системной вкладке вопреки порядку.
-  const activeHint = previous ? undefined : initialActive(pref, options);
+  const activeHint = previous
+    ? undefined
+    : pref
+      ? options.requestedActive && isFileTabId(options.requestedActive)
+        ? options.requestedActive
+        : undefined
+      : options.defaultActive;
   return createCardTabsState(groups, {
     activeTab: activeHint,
     visited: previous ? Object.keys(previous.visited) : [],
@@ -108,14 +109,17 @@ export function useCardTabs(options: UseCardTabsOptions) {
   }, [fileKey]);
 
   // Хост открыл вкладку (файл/стартовую письма) — активировать её в движке.
+  // Стартовый дефолт хоста не должен перебивать сохранённую активную из prefs.
   useEffect(() => {
-    if (!options.requestedActive) return;
+    const requested = options.requestedActive;
+    if (!requested) return;
+    if (storedPref && requested === options.defaultActive) return;
     setState((previous) =>
-      previous.groups.some((group) => group.tabs.includes(options.requestedActive!))
-        ? activateIn(previous, options.requestedActive!)
+      previous.groups.some((group) => group.tabs.includes(requested))
+        ? activateIn(previous, requested)
         : previous,
     );
-  }, [options.requestedActive]);
+  }, [options.defaultActive, options.requestedActive, storedPref]);
 
   // Внешнее обновление prefs (серверный GET после логина, другой таб) может
   // прийти ПОЗЖЕ маунта карточки — тогда локальное состояние уже собрано по
@@ -139,7 +143,10 @@ export function useCardTabs(options: UseCardTabsOptions) {
         hidden: nextHidden,
       });
       return createCardTabsState(groups, {
-        activeTab: options.requestedActive,
+        activeTab:
+          options.requestedActive && isFileTabId(options.requestedActive)
+            ? options.requestedActive
+            : undefined,
         visited: Object.keys(previous.visited),
         focusGroupId: previous.focusGroupId,
       });

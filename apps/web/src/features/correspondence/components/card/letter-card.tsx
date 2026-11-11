@@ -178,10 +178,7 @@ export function LetterCard({ letterId }: { letterId: string }) {
       <div ref={rowRef} className="relative flex min-h-0 min-w-0 flex-1">
         <div
           ref={branchRef}
-          className={cn(
-            'min-h-0 shrink-0 overflow-hidden',
-            !branchWidth.dragging && 'transition-[width] duration-200 ease-out',
-          )}
+          className="min-h-0 shrink-0 overflow-hidden"
           style={{ width: branchRendered ? branchWidth.branchW : 0 }}
         >
           {branch.mounted ? (

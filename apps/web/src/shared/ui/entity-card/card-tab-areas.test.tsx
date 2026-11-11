@@ -77,6 +77,8 @@ describe('CardTabAreas: клик, клавиатура, меню (WCAG 2.5.7)', 
     const item = await screen.findByText('Переместить вправо');
     fireEvent.click(item);
     expect(onStateChange.mock.calls[0]?.[0].groups[0].tabs).toEqual(['b', 'a']);
+    // aria-live объявляет результат (политика: не только визуальная линия).
+    expect(screen.getByText(/перемещена: позиция 2/)).not.toBeNull();
     // Фокус возвращается на кнопку вкладки (а не на 1-px триггер Radix).
     await waitFor(() => {
       expect(document.activeElement?.getAttribute('role')).toBe('tab');

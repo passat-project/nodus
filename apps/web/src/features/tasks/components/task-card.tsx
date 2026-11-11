@@ -1,6 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorCode, errorMessages, ui } from '@nodus/contracts';
-import { cn } from '@nodus/ui/lib/utils';
 
 import { CardHeaderActionsPortal } from '../../../app/shell/card-header-actions.js';
 import { useReplaceTopCard } from '../../../app/shell/use-card-stack.js';
@@ -98,6 +97,11 @@ export function TaskCard({ taskId }: { taskId: string }) {
   const { state } = cardTabs;
   const aboutOpen = cardTabs.panelOpen;
   const [aboutMounted, setAboutMounted] = useState(cardTabs.panelOpen);
+  // panelOpen может прийти с сервера/другого устройства уже после маунта:
+  // держим панель смонтированной, иначе solver резервирует пустую колонку.
+  useEffect(() => {
+    if (aboutOpen) setAboutMounted(true);
+  }, [aboutOpen]);
   const closeAbout = useCallback(() => cardTabs.setPanelOpen(false), [cardTabs]);
 
   // Ветка — первая уступка: не влезает вместе с данными и чатом — временно
@@ -153,10 +157,7 @@ export function TaskCard({ taskId }: { taskId: string }) {
         <div ref={rowRef} className="relative flex min-h-0 min-w-0 flex-1">
           <div
             ref={branchRef}
-            className={cn(
-              'min-h-0 shrink-0 overflow-hidden',
-              !branch.dragging && 'transition-[width] duration-200 ease-out',
-            )}
+            className="min-h-0 shrink-0 overflow-hidden"
             style={{ width: branchRendered ? branch.branchW : 0 }}
           >
             {branchMounted ? (
@@ -238,10 +239,7 @@ export function TaskCard({ taskId }: { taskId: string }) {
           </div>
 
           <div
-            className={cn(
-              'h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-out',
-              !solved.panelRendered && 'w-0',
-            )}
+            className="h-full shrink-0 overflow-hidden"
             style={{ width: solved.panelRendered ? ABOUT_W : 0 }}
           >
             {aboutMounted ? <TaskAboutDrawer task={task} onClose={closeAbout} /> : null}
