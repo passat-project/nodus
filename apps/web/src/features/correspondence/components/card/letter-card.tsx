@@ -38,6 +38,7 @@ import {
 import { useCloseAfterRegistration } from '../../lib/use-close-after-registration.js';
 import { useLetterBranch } from '../../lib/use-letter-branch.js';
 import { useLetterBranchWidth } from '../../lib/use-letter-branch-width.js';
+import { useLetterHostActive } from '../../lib/use-letter-host-active.js';
 import { SpamConfirmDialog } from '../spam-confirm-dialog.js';
 import { InviteParticipantDialog } from './invite-participant-dialog.js';
 import { LetterActionBar } from './letter-action-bar.js';
@@ -109,13 +110,7 @@ export function LetterCard({ letterId }: { letterId: string }) {
       prunedTabs?.active && fileIdOf(prunedTabs.active) ? prunedTabs.active : undefined,
   });
   const { state } = cardTabs;
-  useEffect(() => {
-    const group = state.groups.find((entry) => entry.id === state.focusGroupId) ?? state.groups[0];
-    const active = group?.active as LetterTabId | undefined;
-    if (active && active !== prunedTabs?.active) {
-      setTabsState((current) => (current ? activateTab(current, active) : current));
-    }
-  }, [prunedTabs?.active, state.focusGroupId, state.groups]);
+  useLetterHostActive(state.groups, state.focusGroupId, prunedTabs?.active, setTabsState);
 
   const branchRendered =
     branch.open && rowWidth >= 320 + 420 + Math.min(branchWidth.branchW, rowWidth / 2);
