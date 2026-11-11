@@ -154,4 +154,14 @@ describe('useFeedViewportRead + внимание (#770)', () => {
     });
     expect(readCalls()).toEqual([7]);
   });
+
+  it('«увидел и сразу свернул»: потеря внимания отправляет накопленное без троттла', () => {
+    renderFeed(); // наблюдение уже случилось, таймер 500 мс ещё не истёк
+    expect(readCalls()).toEqual([]);
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    // flush по потере внимания — сразу, без ожидания троттла/возврата.
+    expect(readCalls()).toEqual([7]);
+  });
 });

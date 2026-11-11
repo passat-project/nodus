@@ -147,6 +147,23 @@ describe('ввод и возврат фокуса', () => {
     expect(getAttention().focused).toBe(false);
   });
 
+  it('возврат фокуса/видимости оболочки тоже активность, уход — нет (#770)', () => {
+    // WebView2 может сохранять document.hasFocus: shell-focus — единственный
+    // достоверный сигнал возврата в оболочке.
+    resetAttentionForTests({ lastInputAt: 0 });
+    expect(isUserActive()).toBe(false);
+    setShellFocused(false);
+    expect(isUserActive()).toBe(false); // свёрнули — активности не появилось
+    setShellFocused(true);
+    expect(isUserActive()).toBe(true); // вернулись и смотрим — дочитываем
+
+    resetAttentionForTests({ lastInputAt: 0 });
+    setShellVisible(false);
+    expect(isUserActive()).toBe(false);
+    setShellVisible(true);
+    expect(isUserActive()).toBe(true); // вернулись из трея
+  });
+
   it('повторный start не плодит слушателей', () => {
     startAttentionTracking();
     startAttentionTracking();

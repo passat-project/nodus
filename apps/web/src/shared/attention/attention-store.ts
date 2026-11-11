@@ -158,16 +158,21 @@ function commit(patch: Partial<AttentionSnapshot>, activity = false): void {
   refresh();
 }
 
-/** Видимость/фокус оболочки — от моста (в браузере остаются true). */
+/** Видимость/фокус оболочки — от моста (в браузере остаются true).
+ *
+ *  Возврат из трея/возврат фокуса = пользователь вернулся и смотрит (#770,
+ *  ADR-0038): это активность. В оболочке `shell-focus` — единственный
+ *  достоверный сигнал возврата (WebView2 может сохранять `document.hasFocus`),
+ *  без него видимое не дочитывалось бы до первого движения мыши. */
 export function setShellVisible(visible: boolean): void {
   if (state.shellVisible === visible) return;
-  commit({ shellVisible: visible });
+  commit({ shellVisible: visible }, visible);
 }
 
 /** Фокус/свёрнутость главного окна оболочки (событие shell-focus). */
 export function setShellFocused(focused: boolean): void {
   if (state.shellFocused === focused) return;
-  commit({ shellFocused: focused });
+  commit({ shellFocused: focused }, focused);
 }
 
 function noteInput(): void {
