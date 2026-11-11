@@ -73,7 +73,7 @@ function EdgeHint({ side, visible, hot }: { side: EdgeSide; visible: boolean; ho
       data-edge-hint={side}
       style={{ width: EDGE_ZONE_PX }}
       className={cn(
-        'pointer-events-none absolute inset-y-0 flex items-center justify-center rounded-lg transition-[opacity,background-color] duration-150',
+        'pointer-events-none absolute inset-y-0 z-40 flex items-center justify-center rounded-lg transition-[opacity,background-color] duration-150',
         side === 'left' ? 'left-0' : 'right-0',
         visible ? 'opacity-100' : 'opacity-0',
         hot && 'bg-accent/30',
