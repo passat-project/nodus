@@ -492,8 +492,13 @@ M13, в концепте не реализуется). Канал проекта
 Bubble-примитивы как в обсуждении задачи).
 
 **Клавиатура композера (вердикт 14.09.2026, «классика»):** Enter — отправка,
-Shift+Enter / Ctrl+Enter — новая строка (`shared/chat/send-keys.ts` + тест).
-Единый композер `shared/chat/chat-composer.tsx` — чаты, каналы, треды,
+ЛЮБОЙ Enter с модификатором (Shift/Ctrl/Meta/Alt) — новая строка
+(`shared/chat/send-keys.ts` + тест). Shift+Enter нативен браузеру,
+Ctrl/Meta/Alt+Enter вставляется кодом в каретку (`insertNewlineAtCaret` —
+в Chromium/WebView2 Ctrl+Enter в textarea no-op, #777), IME-композиция
+клавиши не отбирает (`isImeComposing`). То же в подписи окна вложений;
+панель @упоминаний модифицированный Enter пропускает к композеру. Единый
+композер `shared/chat/chat-composer.tsx` — чаты, каналы, треды,
 обсуждения сущностей.
 
 **Настройки пользователя мессенджера** (вкладка «Настройка»):

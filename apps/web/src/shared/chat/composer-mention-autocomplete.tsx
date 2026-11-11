@@ -123,7 +123,9 @@ export function useComposerMentions(opts: {
 }
 
 /** Обработка клавиш панели: возвращает true, если событие съедено (композер
- *  не должен реагировать — Enter НЕ отправляет, ↑ НЕ правит последнее). */
+ *  не должен реагировать — чистый Enter НЕ отправляет, ↑ НЕ правит последнее).
+ *  Enter с модификатором не съедается (#777) — уходит в композер и переносит
+ *  строку; Esc без кандидатов гасит панель. */
 export function mentionAutocompleteKeydown(
   event: KeyboardEvent<HTMLTextAreaElement>,
   state: { open: boolean; count: number; active: number; setActive: (i: number) => void },
@@ -142,6 +144,15 @@ export function mentionAutocompleteKeydown(
       state.setActive(state.active <= 0 ? last : state.active - 1);
       return true;
     case 'Enter':
+      // Модифицированный Enter — НЕ выбор кандидата (#777): возвращаем false,
+      // событие уходит в конвейер композера, где модифицированный Enter —
+      // перенос строки. Чистый Enter выбирает кандидата (и не отправляет).
+      if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
+      if (state.count > 0) {
+        event.preventDefault();
+        onPick(state.active);
+      }
+      return true;
     case 'Tab':
       if (state.count > 0) {
         event.preventDefault();
