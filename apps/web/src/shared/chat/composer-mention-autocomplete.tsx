@@ -204,6 +204,7 @@ export function MentionAutocompletePanel({
               <PersonAvatar
                 name={candidate.displayName}
                 avatarUrl={candidate.avatarUrl}
+                decorative
                 className="size-7 shrink-0"
                 fallbackClass="text-[10px]"
               />

@@ -7,6 +7,8 @@ import { Toaster } from '@nodus/ui/components/sonner';
 import { TooltipProvider } from '@nodus/ui/components/tooltip';
 
 import { registerCardBridge, registerReplaceTopMessenger } from '../../shared/lib/card-bridge.js';
+import { SurfaceVisibilityProvider } from '../../shared/lib/surface-visibility.js';
+import { startAttentionTracking } from '../../shared/attention/attention-store.js';
 import { stageMessengerThread } from '../../shared/chat/messenger-nav.js';
 import { ChatDialogHosts } from '../../shared/chat/dialog-hosts.js';
 import { TaskCreateHost } from '../../shared/tasks/task-create-host.js';
@@ -36,6 +38,7 @@ import { useShellStore } from './shell-store.js';
 import { TopBar } from './top-bar.js';
 import { useCardStack, useOpenCard, useOpenCards, useReplaceTopCard } from './use-card-stack.js';
 import { useLinkInterception } from './use-link-interception.js';
+import { startPreferencesSync } from '../../shared/preferences/ui-prefs-sync.js';
 
 function ShellFallback() {
   return (
@@ -73,6 +76,12 @@ export function AppShell() {
   // логи [jitter] смещений ключевых контейнеров (см. layout-jitter-logger).
   useEffect(() => {
     startLayoutJitterLogger();
+    // Модель внимания (#770, ADR-0038): видимость/фокус окна и ввод —
+    // единый источник для квитанций прочтения, попапов и догона ленты.
+    startAttentionTracking();
+    // Личные настройки (#745): GET после входа + debounce PUT изменений;
+    // при смене пользователя стор перечитывает свой localStorage-ключ.
+    startPreferencesSync();
   }, []);
   // (N) Nodus в заголовке вкладки (#124): сигнал фоновой вкладке.
   useUnreadTitle();
@@ -160,9 +169,14 @@ export function AppShell() {
             >
               <TopBar />
               <div id="content" className="relative flex min-h-0 flex-1 flex-col">
-                <Suspense fallback={<ShellFallback />}>
-                  <Outlet />
-                </Suspense>
+                {/* Непустой стек карточек НАКРЫВАЕТ страницу (ADR-0009):
+                    поверхность раздела не видима — её чаты не читают и не
+                    глушат попапы (#770). Карточки живут снаружи провайдера. */}
+                <SurfaceVisibilityProvider visible={cardStack.length === 0}>
+                  <Suspense fallback={<ShellFallback />}>
+                    <Outlet />
+                  </Suspense>
+                </SurfaceVisibilityProvider>
               </div>
             </div>
             {/* Стек карточек сущностей поверх раздела (ADR-0009, ?cards=) */}

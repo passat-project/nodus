@@ -39,6 +39,16 @@ export const projectSelect = {
 
 export type ProjectRow = Prisma.ProjectGetPayload<{ select: typeof projectSelect }>;
 
+/** Строка ссылки проекта: имя/цвет + СЫРЫЕ значения атрибутов (эффективный
+ *  шифр, включая формулу типа, выводит порт ссылок — #657). */
+export interface ProjectRefRow {
+  id: string;
+  typeId: string;
+  values: Prisma.JsonValue;
+  name: string;
+  color: ProjectRef['color'];
+}
+
 /** Позиция keyset-курсора журнала: порядок (updated_at DESC, id DESC). */
 export interface ProjectListCursor {
   at: string;
@@ -251,21 +261,23 @@ export class ProjectsRepository {
     return rows.map((row) => row.id);
   }
 
-  /** Ссылки проектов по id (read-порт): без фильтра видимости — его решает
-   *  потребитель (refsFor актёру / список бесед по членству). */
-  async refsByIds(
-    ids: readonly string[],
-  ): Promise<{ id: string; code: string | null; name: string; color: ProjectRef['color'] }[]> {
+  /** Сырые строки ссылок проектов по id (read-порт): без фильтра видимости —
+   *  его решает потребитель (refsFor актёру / список бесед по членству).
+   *  Шифр здесь НЕ выводится: он атрибут (Р9 #631), а эффективное значение
+   *  может считать формула типа — порт ссылок берёт его тем же путём, что
+   *  журнал (`FORMULA_CELLS.stateFor`, #657). Тип проекта отдаётся подсказкой
+   *  места: без неё батч-расчёт формул читал бы каждый проект отдельно. */
+  async refsByIds(ids: readonly string[]): Promise<ProjectRefRow[]> {
     if (ids.length === 0) return [];
     const rows = await this.prisma.project.findMany({
-      // Шифр — атрибут (Р9 #631): производное из customFields; колонка
-      // code заморожена (палитра/пикер/чаты задач показывают шифр ссылки).
-      select: { id: true, customFields: true, name: true, color: true },
-      where: { id: { in: [...ids] } },
+      // Колонка code заморожена: шифр — значение атрибута (Р9 #631).
+      select: { id: true, typeId: true, customFields: true, name: true, color: true },
+      where: { id: { in: [...new Set(ids)] } },
     });
     return rows.map((row) => ({
       id: row.id,
-      code: codeOfAttributes(row.customFields),
+      typeId: row.typeId,
+      values: row.customFields,
       name: row.name,
       color: row.color as ProjectRef['color'],
     }));
@@ -344,11 +356,4 @@ export class ProjectsRepository {
       create: { key, value },
     });
   }
-}
-
-/** Шифр проекта из значений атрибутов (системный «Шифр», Р9 #631). */
-function codeOfAttributes(customFields: Prisma.JsonValue): string | null {
-  if (customFields === null || typeof customFields !== 'object') return null;
-  const value = (customFields as Record<string, unknown>)[SYSTEM_FIELD_IDS.projectCode];
-  return typeof value === 'string' && value !== '' ? value : null;
 }

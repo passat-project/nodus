@@ -46,6 +46,14 @@ interface RequestOptions {
 
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
+/** Актёр на старте логического запроса. Прозрачный повтор после refresh
+ *  допустим только в той же сессии: иначе тело мутации аккаунта A уйдёт с
+ *  токеном аккаунта B, если между 401 и refresh на этом же браузере успели
+ *  выйти из A и войти в B (refresh-cookie уже B) — security-аудит #747. */
+function sessionActorId(): string | null {
+  return useAuthStore.getState().user?.id ?? null;
+}
+
 async function rawRequest(path: string, options: RequestOptions): Promise<Response> {
   const accessToken = options.bearer ?? useAuthStore.getState().accessToken;
   const headers: Record<string, string> = {};
@@ -76,12 +84,14 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     MUTATION_METHODS.has(options.method ?? 'GET') && !options.idempotencyKey
       ? { ...options, idempotencyKey: crypto.randomUUID() }
       : options;
+  const actorId = sessionActorId();
   let response = await rawRequest(path, resolved);
 
   // Access протух → один прозрачный refresh и повтор (I4: без спиннеров).
+  // Сменился аккаунт — не повторяем: запрос принадлежит прежней сессии.
   if (response.status === 401 && resolved.auth !== false && resolved.bearer === undefined) {
     const refreshed = await useAuthStore.getState().tryRefresh();
-    if (refreshed) {
+    if (refreshed && sessionActorId() === actorId) {
       response = await rawRequest(path, resolved);
     }
   }
@@ -193,6 +203,7 @@ function xhrUpload<T>(path: string, form: FormData, options: UploadOptions): Pro
 async function bypassUpload<T>(path: string, form: FormData, options: UploadOptions): Promise<T> {
   const { bypass } = await import('msw');
   const idempotencyKey = options.idempotencyKey ?? crypto.randomUUID();
+  const actorId = sessionActorId();
   const build = () => {
     const { accessToken } = useAuthStore.getState();
     const headers: Record<string, string> = { 'Idempotency-Key': idempotencyKey };
@@ -202,7 +213,9 @@ async function bypassUpload<T>(path: string, form: FormData, options: UploadOpti
   let response = await fetch(bypass(build()), { signal: options.signal });
   if (response.status === 401) {
     const refreshed = await useAuthStore.getState().tryRefresh();
-    if (refreshed) response = await fetch(bypass(build()), { signal: options.signal });
+    if (refreshed && sessionActorId() === actorId) {
+      response = await fetch(bypass(build()), { signal: options.signal });
+    }
   }
   if (response.status === 204) return undefined as T;
   let body: unknown;
@@ -242,6 +255,7 @@ export async function apiUpload<T>(
     ...options,
     idempotencyKey: options.idempotencyKey ?? crypto.randomUUID(),
   };
+  const actorId = sessionActorId();
   if (
     resolved.mswBypassIfLive !== undefined &&
     getApiMockConfig().enabled &&
@@ -254,7 +268,7 @@ export async function apiUpload<T>(
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       const refreshed = await useAuthStore.getState().tryRefresh();
-      if (refreshed) return xhrUpload<T>(path, form, resolved);
+      if (refreshed && sessionActorId() === actorId) return xhrUpload<T>(path, form, resolved);
     }
     throw error;
   }

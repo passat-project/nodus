@@ -23,7 +23,9 @@
 login → access в память (`auth-store`, не localStorage) + refresh httpOnly-cookie
 `nodus_refresh` → `bootstrap` при старте SPA (живой refresh = молчаливый вход) →
 401 на любом запросе = один прозрачный refresh с дедупом параллельных вызовов
-(`refreshInFlight`) → повтор запроса. Logout → 204 + cookie `dead`, стор чистится.
+(`refreshInFlight`) → повтор запроса, только если ответ refresh выпущен тому же
+аккаунту (`userId` в контракте; иначе токен не применяется, сессия вкладки
+мертва — вход заново, #747). Logout → 204 + cookie `dead`, стор чистится.
 
 ## Лимиты
 

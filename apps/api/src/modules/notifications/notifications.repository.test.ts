@@ -42,6 +42,39 @@ describe('NotificationsRepository.upsertSettings', () => {
   });
 });
 
+describe('NotificationsRepository.stopRepeats (#770)', () => {
+  const USER = '00000000-0000-4000-8000-000000000001';
+  const CONV = '00000000-0000-4000-8000-0000000000c1';
+
+  it('прочтение по беседе ограничено watermark-ом source_seq <= upToSeq', async () => {
+    const $executeRaw = vi.fn(async () => 2);
+    const repo = makeRepo({ $executeRaw });
+
+    await repo.stopRepeats(USER, { conversationId: CONV, upToSeq: 41 });
+
+    const query = ($executeRaw.mock.calls[0] as unknown as [Prisma.Sql])[0];
+    const text = sqlText(query);
+    expect(text).toMatch(/source_id = .+::uuid AND source_seq <= .+::bigint/);
+    expect(query.values).toEqual(expect.arrayContaining([CONV, 41n]));
+    expect(text).toMatch(/priority = 'urgent'/);
+    expect(text).toMatch(/repeats_stopped_at IS NULL/);
+  });
+
+  it('реакция по сообщению и ответ автора — без границы seq (весь скоуп)', async () => {
+    const $executeRaw = vi.fn(async () => 1);
+    const repo = makeRepo({ $executeRaw });
+
+    await repo.stopRepeats(USER, { messageId: '00000000-0000-4000-8000-0000000000ff' });
+    await repo.stopRepeats(USER, { conversationId: CONV });
+
+    const byMessage = sqlText(($executeRaw.mock.calls[0] as unknown as [Prisma.Sql])[0]);
+    const byConversation = sqlText(($executeRaw.mock.calls[1] as unknown as [Prisma.Sql])[0]);
+    expect(byMessage).toMatch(/message_id = .+::uuid/);
+    expect(byConversation).toMatch(/source_id = .+::uuid/);
+    expect(byConversation).not.toMatch(/source_seq/);
+  });
+});
+
 describe('NotificationsRepository.archiveStaleLow', () => {
   it('батчами: цикл, пока батч полный; сумма архивированного', async () => {
     const $executeRaw = vi

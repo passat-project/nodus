@@ -43,6 +43,7 @@ function StructureNodeRowInner({
   collapsed,
   onToggle,
   selected,
+  active,
   onToggleSelected,
   onSelect,
   items,
@@ -73,6 +74,8 @@ function StructureNodeRowInner({
         role="row"
         tabIndex={0}
         aria-expanded={row.hasChildren ? !collapsed : undefined}
+        aria-selected={active || undefined}
+        data-active={active || undefined}
         onClick={(e) => {
           if ((e.target as HTMLElement).closest('button,a,input,[role=button]')) return;
           onSelect();
@@ -82,16 +85,21 @@ function StructureNodeRowInner({
           if (row.hasChildren) onToggle();
         }}
         onKeyDown={(e) => {
-          if ((e.key === 'Enter' || e.key === ' ') && row.hasChildren) {
-            e.preventDefault();
-            onToggle();
-          }
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          // Шеврон и другие контролы внутри строки обрабатывают клавишу сами.
+          if ((e.target as HTMLElement).closest('button,a,input,[role=button]')) return;
+          e.preventDefault();
+          // Ветка: Enter — раскрыть/свернуть, пробел — выбрать строку;
+          // лист: и Enter, и пробел — выбор (#731).
+          if (row.hasChildren && e.key === 'Enter') onToggle();
+          else onSelect();
         }}
         style={style}
         className={cn(
           rowBase,
           'bg-muted/25 hover:bg-accent/30',
           !readOnly && 'cursor-grab',
+          active && 'bg-accent/30 ring-1 ring-ring/20 ring-inset',
           selected && 'bg-accent/50',
           isDragging && 'opacity-40',
           zone === 'into' && !invalid && 'bg-accent/60 ring-1 ring-ring/40 ring-inset',

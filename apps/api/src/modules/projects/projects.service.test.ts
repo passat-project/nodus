@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ErrorCode, PROJECT_EVENTS } from '@nodus/contracts';
+import { ErrorCode, Permission, PROJECT_EVENTS } from '@nodus/contracts';
 
 import {
   CLIENT,
@@ -226,6 +226,92 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
       await expect(kit.service.defaultVisibility()).resolves.toBe('secret');
       repo.settingValue.mockResolvedValueOnce('nonsense');
       await expect(kit.service.defaultVisibility()).resolves.toBe('open');
+    });
+  });
+
+  describe('assertManageLocked (#705): гард по свежей строке под FOR UPDATE', () => {
+    it('строки проекта нет под замком — 404', async () => {
+      await expect(
+        kit.service.assertManageLocked(user(CREATOR), ID, null, {} as never),
+      ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
+    });
+
+    it('архив: поля проекта — только project.manage, структура — запрещена даже ему', async () => {
+      participantsRepo.rowsOfProject.mockResolvedValue([{ userId: CREATOR, source: 'manager' }]);
+
+      await expect(
+        kit.service.assertManageLocked(
+          user(CREATOR),
+          ID,
+          { status: 'archived', visibility: 'open' },
+          {} as never,
+        ),
+      ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN });
+
+      await expect(
+        kit.service.assertManageLocked(
+          user(HELPER, [Permission.PROJECT_MANAGE]),
+          ID,
+          { status: 'archived', visibility: 'open' },
+          {} as never,
+        ),
+      ).resolves.toBeUndefined();
+
+      await expect(
+        kit.service.assertManageLocked(
+          user(HELPER, [Permission.PROJECT_MANAGE]),
+          ID,
+          { status: 'archived', visibility: 'open' },
+          {} as never,
+          { archived: 'forbid' },
+        ),
+      ).rejects.toMatchObject({ code: ErrorCode.VALIDATION_FAILED });
+    });
+
+    it('сняли с роли под замком — 403; project.manage остаётся', async () => {
+      participantsRepo.rowsOfProject.mockResolvedValue([{ userId: HELPER, source: 'assistant' }]);
+
+      await expect(
+        kit.service.assertManageLocked(
+          user(CREATOR),
+          ID,
+          { status: 'active', visibility: 'open' },
+          {} as never,
+        ),
+      ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN });
+
+      await expect(
+        kit.service.assertManageLocked(
+          user(CREATOR, [Permission.PROJECT_MANAGE]),
+          ID,
+          { status: 'active', visibility: 'open' },
+          {} as never,
+        ),
+      ).resolves.toBeUndefined();
+
+      expect(participantsRepo.rowsOfProject).toHaveBeenCalledWith(ID, {});
+    });
+
+    it('перевод в секретность под замком: постороннему с project.manage — 404 (#705)', async () => {
+      participantsRepo.rowsOfProject.mockResolvedValue([{ userId: HELPER, source: 'manager' }]);
+
+      await expect(
+        kit.service.assertManageLocked(
+          user(CREATOR, [Permission.PROJECT_MANAGE]),
+          ID,
+          { status: 'active', visibility: 'secret' },
+          {} as never,
+        ),
+      ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
+
+      await expect(
+        kit.service.assertManageLocked(
+          user(CREATOR, [Permission.PROJECT_MANAGE, Permission.PROJECT_VIEW_SECRET]),
+          ID,
+          { status: 'active', visibility: 'secret' },
+          {} as never,
+        ),
+      ).resolves.toBeUndefined();
     });
   });
 });

@@ -19,7 +19,7 @@ function ref(id: string) {
 describe('ProjectsQueryService.history (#52)', () => {
   const repo = { findById: vi.fn(), findPage: vi.fn() };
   const participantsRepo = { hasRow: vi.fn() };
-  const historyRepo = { findPage: vi.fn() };
+  const historyRepo = { findPage: vi.fn(), findLastVisibilityChangeSeq: vi.fn() };
   const mapper = { toDetail: vi.fn(), toListItems: vi.fn() };
   const profiles = { findRefs: vi.fn() };
 
@@ -34,6 +34,8 @@ describe('ProjectsQueryService.history (#52)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     repo.findById.mockResolvedValue({ id: ID, visibility: 'open' });
+    participantsRepo.hasRow.mockResolvedValue(false);
+    historyRepo.findLastVisibilityChangeSeq.mockResolvedValue(null);
     profiles.findRefs.mockImplementation(async (ids: string[]) => ids.map(ref));
   });
 
@@ -167,5 +169,55 @@ describe('ProjectsQueryService.history (#52)', () => {
     await expect(service.history(user(ACTOR), ID, null, 10)).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
+  });
+
+  it('открытый бывший секретным: не-участник видит ленту с последнего раскрытия (#748)', async () => {
+    historyRepo.findLastVisibilityChangeSeq.mockResolvedValue(15n);
+    historyRepo.findPage.mockResolvedValue([]);
+
+    await service.history(user(ACTOR), ID, null, 10);
+
+    expect(historyRepo.findPage).toHaveBeenCalledWith(ID, null, 10, 15n);
+  });
+
+  it('участник открытого проекта видит полную историю (#748)', async () => {
+    historyRepo.findLastVisibilityChangeSeq.mockResolvedValue(15n);
+    participantsRepo.hasRow.mockResolvedValue(true);
+    historyRepo.findPage.mockResolvedValue([]);
+
+    await service.history(user(ACTOR), ID, null, 10);
+
+    expect(historyRepo.findLastVisibilityChangeSeq).not.toHaveBeenCalled();
+    expect(historyRepo.findPage).toHaveBeenCalledWith(ID, null, 10, null);
+  });
+
+  it('project.view_secret видит полную историю открытого проекта (#748)', async () => {
+    historyRepo.findLastVisibilityChangeSeq.mockResolvedValue(15n);
+    historyRepo.findPage.mockResolvedValue([]);
+
+    await service.history(user(ACTOR, ['project.view_secret']), ID, null, 10);
+
+    expect(historyRepo.findLastVisibilityChangeSeq).not.toHaveBeenCalled();
+    expect(historyRepo.findPage).toHaveBeenCalledWith(ID, null, 10, null);
+  });
+
+  it('открытый проект без смен видимости — граница не нужна (#748)', async () => {
+    historyRepo.findLastVisibilityChangeSeq.mockResolvedValue(null);
+    historyRepo.findPage.mockResolvedValue([]);
+
+    await service.history(user(ACTOR), ID, null, 10);
+
+    expect(historyRepo.findPage).toHaveBeenCalledWith(ID, null, 10, null);
+  });
+
+  it('секретный проект участнику — полная лента, граница не запрашивается (#748)', async () => {
+    repo.findById.mockResolvedValue({ id: ID, visibility: 'secret' });
+    participantsRepo.hasRow.mockResolvedValue(true);
+    historyRepo.findPage.mockResolvedValue([]);
+
+    await service.history(user(ACTOR), ID, null, 10);
+
+    expect(historyRepo.findLastVisibilityChangeSeq).not.toHaveBeenCalled();
+    expect(historyRepo.findPage).toHaveBeenCalledWith(ID, null, 10, null);
   });
 });

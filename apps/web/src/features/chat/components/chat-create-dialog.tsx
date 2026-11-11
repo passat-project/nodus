@@ -29,7 +29,7 @@ import { useAuthStore } from '../../../shared/auth-store.js';
 import { withoutPatronymic } from '../../../shared/lib/format.js';
 import { avatarIssueMessage, validateAvatarFile } from '../../../shared/chat/avatar-upload.js';
 import { useSetConversationAvatar } from '../../../shared/chat/manage-api.js';
-import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
+import { PersonAvatar, PersonAvatarById } from '../../../shared/ui/person-avatar.js';
 import { useCreateConversation } from '../api/chat-api.js';
 
 /**
@@ -331,7 +331,12 @@ export function ChatCreateDialog({
             <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border px-2 py-1.5">
               {me ? (
                 <span className="flex items-center gap-1.5 rounded-md bg-accent px-1.5 py-1 text-xs font-medium">
-                  <PersonAvatar name={me.displayName} avatarUrl={null} className="size-4" />
+                  <PersonAvatarById
+                    userId={me.id}
+                    name={me.displayName}
+                    decorative
+                    className="size-4"
+                  />
                   {withoutPatronymic(me.displayName)}
                 </span>
               ) : null}
@@ -346,6 +351,7 @@ export function ChatCreateDialog({
                     <PersonAvatar
                       name={person.displayName}
                       avatarUrl={person.avatarUrl}
+                      decorative
                       className="size-4"
                     />
                     {withoutPatronymic(person.displayName)}
@@ -389,6 +395,7 @@ export function ChatCreateDialog({
                         <PersonAvatar
                           name={person.displayName}
                           avatarUrl={person.avatarUrl}
+                          decorative
                           className="size-6"
                         />
                         <span className="truncate">{withoutPatronymic(person.displayName)}</span>

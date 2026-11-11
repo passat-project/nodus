@@ -23,6 +23,7 @@ import { Skeleton } from '@nodus/ui/components/skeleton';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useHeaderGeometry } from '../lib/use-header-geometry.js';
+import { activeStaffCount } from '../../../shared/lib/staff-count.js';
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { DataTable } from '../../../shared/views/data-table.js';
@@ -96,6 +97,9 @@ export function EmployeesPage() {
   const toolbar = useListToolbar('directory.employees');
   const filterDefs = useEmployeeFilterDefs();
   const items = useMemo(() => data?.items ?? [], [data]);
+  // Счётчик шапки — штат, а не длина выдачи (#723): уволенные остаются в
+  // журнале (их карточки открываются из упоминаний и истории), но не в числе.
+  const staffCount = useMemo(() => activeStaffCount(items), [items]);
   const filter = useMemo<ActiveListFilter<UserListItem>>(
     () => ({
       defs: filterDefs,
@@ -153,7 +157,7 @@ export function EmployeesPage() {
         <h1 className="shrink-0 text-xl font-semibold text-balance text-foreground">
           {ui.employees.title}
           <span className="ml-2 align-middle font-mono text-label-lg font-normal text-muted-foreground tabular-nums">
-            {items.length}
+            {staffCount}
           </span>
         </h1>
         {view === 'list' ? (

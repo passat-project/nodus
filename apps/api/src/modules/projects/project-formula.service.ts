@@ -72,7 +72,10 @@ export class ProjectFormulaService {
     await this.requireManage(user, projectId);
     return this.txRunner.run(async (tx) => {
       // Порядок замков как у PATCH проекта: строка → ячейки (40P01).
-      await this.writer.lockProject(tx, projectId);
+      const locked = await this.writer.lockProject(tx, projectId);
+      // Гард до транзакции мог устареть: архив/снятие руководства между
+      // проверкой и замком — мутация отклоняется по свежей строке (#705).
+      await this.projects.assertManageLocked(user, projectId, locked, tx);
       const outcome = await this.cells.save(tx, {
         hostKind: 'project',
         hostId: projectId,
@@ -101,7 +104,8 @@ export class ProjectFormulaService {
     await this.txRunner.run(async (tx) => {
       // Порядок замков как у save: строка проекта → ячейки — два конкурентных
       // DELETE с разными ключами иначе оба увидят ячейку и дважды эмитят событие.
-      await this.writer.lockProject(tx, projectId);
+      const locked = await this.writer.lockProject(tx, projectId);
+      await this.projects.assertManageLocked(user, projectId, locked, tx);
       // #658: снятие идемпотентно — нет ячейки, нет ни очистки значения,
       // ни второго события (адресное formula_changed шлём только по факту).
       if ((await this.cells.depthOf('project', projectId, fieldId, tx)) === null) return;
@@ -134,7 +138,13 @@ export class ProjectFormulaService {
     await loadForStructureManage(this.projects, user, projectId);
     if (!(await this.nodes.findInProject(projectId, nodeId))) throw nodeInvalid(nodeId);
     return this.txRunner.run(async (tx) => {
-      // Порядок замков как у PATCH папки: структура → узел → ячейки.
+      // Порядок замков как у PATCH папки: структура → узел → ячейки, а строка
+      // проекта — первой: archive/снятие руководства сериализуются с ней, и
+      // гард перепроверяется по свежему состоянию (#705).
+      const locked = await this.writer.lockProject(tx, projectId);
+      await this.projects.assertManageLocked(user, projectId, locked, tx, {
+        archived: 'forbid',
+      });
       await this.writer.lockNode(tx, projectId, nodeId);
       const outcome = await this.cells.save(tx, {
         hostKind: 'node',
@@ -168,7 +178,11 @@ export class ProjectFormulaService {
     await loadForStructureManage(this.projects, user, projectId);
     if (!(await this.nodes.findInProject(projectId, nodeId))) throw nodeInvalid(nodeId);
     await this.txRunner.run(async (tx) => {
-      // Порядок замков как у saveNode: структура → узел → ячейки (#698).
+      // Порядок замков как у saveNode: строка проекта → структура → узел.
+      const locked = await this.writer.lockProject(tx, projectId);
+      await this.projects.assertManageLocked(user, projectId, locked, tx, {
+        archived: 'forbid',
+      });
       await this.writer.lockNode(tx, projectId, nodeId);
       // #658: идемпотентность — см. remove проекта.
       if ((await this.cells.depthOf('node', nodeId, fieldId, tx)) === null) return;

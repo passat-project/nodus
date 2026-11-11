@@ -902,6 +902,18 @@ model NotificationSetting {
   @@map("notification_settings")
 }
 
+/// Личные настройки интерфейса сотрудника (#745): навигация и раскладка
+/// карточек. Одна строка на пользователя, `data` — валидированный
+/// `UiPreferences` (JSONB), формат — packages/contracts. Plain UUID без FK
+/// (I3: users — ядро auth, чужие таблицы не связываем).
+model UserPreference {
+  userId    String   @id @map("user_id") @db.Uuid
+  data      Json     @default("{}")
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@map("user_preferences")
+}
+
 // ===== Модуль tasks (issue #37, эпик M4 #49; ADR-0008, ADR-0020) =====
 // Системные константы (kind, systemState, role, method, source, priority,
 // color) — TEXT с проверкой zod-контрактами (I15: бизнес-списки — данные).

@@ -70,14 +70,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   async tryRefresh() {
     refreshInFlight ??= (async () => {
+      const actorId = get().user?.id ?? null;
       try {
         const tokens = await api<AuthTokens>('/auth/refresh', { method: 'POST', auth: false });
+        const current = get();
+        // Анонимную вкладку refresh не воскрешает: сессия погашена явно
+        // (logout или несовпадение аккаунта ниже).
+        if (current.status === 'anonymous') return false;
+        if (current.status === 'authenticated') {
+          // Пока шёл refresh, сессию сменили в этой вкладке — чужой ответ не
+          // применяем: вход/выход уже поставил актуальное состояние.
+          if (!actorId || current.user?.id !== actorId) return false;
+          // Refresh-cookie общая на браузер: в другой вкладке могли выйти из A
+          // и войти в B — сервер вернёт токен B. Токен чужого аккаунта не
+          // применяем, сессию этой вкладки считаем мёртвой (#747).
+          if (tokens.userId !== actorId) {
+            set(ANONYMOUS);
+            return false;
+          }
+        }
+        // 'unknown' — bootstrap: cookie определяет сессию, актёра подтвердит /auth/me.
         set({ accessToken: tokens.accessToken });
         return true;
       } catch (error) {
         // Анонимом делает только мёртвая сессия; при недоступном сервере
-        // статус не трогаем (обрыв сети не выкидывает на /login).
-        if (isSessionDead(error)) set(ANONYMOUS);
+        // статус не трогаем (обрыв сети не выкидывает на /login). Поздний
+        // 401 прежней сессии не должен гасить уже новую (#747).
+        if (isSessionDead(error) && (get().user?.id ?? null) === actorId) set(ANONYMOUS);
         return false;
       } finally {
         refreshInFlight = null;
