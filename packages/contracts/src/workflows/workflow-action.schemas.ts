@@ -6,6 +6,7 @@ import {
   transitionBlockReasonSchema,
   workflowPostFunctionSchema,
   workflowTransitionRulesSchema,
+  workflowValidatorSchema,
 } from './workflow.schemas.js';
 import { docIdSchema } from './workflow-primitives.schemas.js';
 import { transitionDisplaySchema } from './workflow-primitives.schemas.js';
@@ -61,5 +62,7 @@ export const workflowActionSchema = z.object({
   /** Непройденные гейты (#740): действие видно, но помечено причиной —
    *  как заблокированная кнопка перехода. */
   blockedBy: z.array(transitionBlockReasonSchema),
+  /** Гейты действия — для живого списка условий в окне (как у перехода). */
+  validators: z.array(workflowValidatorSchema),
 });
 export type WorkflowAction = z.infer<typeof workflowActionSchema>;

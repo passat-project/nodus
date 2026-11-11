@@ -42,6 +42,7 @@ function actionsOf(task: TaskListItem): WorkflowAction[] {
       display: a.display,
       form: a.form.enabled ? a.form : null,
       blockedBy: [],
+      validators: a.rules.validators,
     }));
 }
 

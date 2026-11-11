@@ -60,6 +60,7 @@ describe('действия маршрута в API задач (#633)', () => {
       display: 'button' as const,
       form: null,
       blockedBy: [],
+      validators: [],
     };
     result.current.mutate({ action, body: { form: { comment: 'уточнение' } } });
 
@@ -85,7 +86,14 @@ describe('действия маршрута в API задач (#633)', () => {
       wrapper: wrapper(client),
     });
     result.current.mutate({
-      action: { id: 'a1', name: 'Действие', display: 'button', form: null, blockedBy: [] },
+      action: {
+        id: 'a1',
+        name: 'Действие',
+        display: 'button',
+        form: null,
+        blockedBy: [],
+        validators: [],
+      },
       body: {},
     });
 

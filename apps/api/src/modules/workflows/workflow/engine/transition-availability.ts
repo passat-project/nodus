@@ -83,6 +83,7 @@ export function actionOptions(
       form: action.form?.enabled ? action.form : null,
       // Гейты (#740): кнопка видна и объясняет причину до нажатия.
       blockedBy: evaluateValidators(action.rules, subject.facts),
+      validators: action.rules.validators,
     }));
 }
 

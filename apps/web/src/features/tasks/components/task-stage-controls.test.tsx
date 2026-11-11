@@ -67,7 +67,14 @@ describe('TaskActionBar: итог «Отклонена» (#430)', () => {
 describe('TaskActionBar: действие без смены статуса (#633)', () => {
   it('кнопка действия в панели, клик уходит в раннер действий', () => {
     mocks.actions = [
-      { id: 'a1', name: 'Запросить уточнение', display: 'button', form: null, blockedBy: [] },
+      {
+        id: 'a1',
+        name: 'Запросить уточнение',
+        display: 'button',
+        form: null,
+        blockedBy: [],
+        validators: [],
+      },
     ];
     render(
       <TaskActionBar
@@ -93,6 +100,7 @@ describe('TaskActionBar: действие без смены статуса (#633
         display: 'button',
         form: null,
         blockedBy: [{ kind: 'time_logged' }],
+        validators: [{ kind: 'time_logged' }],
       },
     ];
     render(
