@@ -1,3 +1,5 @@
+/* eslint-disable nodus-internal/max-lines-warn -- вкладка структуры: единый экран
+   (дерево + диалоги + панель свойств), логика вынесена в lib/ (модель, DnD, панели) */
 import { useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
@@ -29,6 +31,7 @@ import { structureKeys, useMoveNode } from '../api/structure-api.js';
 import { useMoveTaskNode, useSetTasksNode } from '../api/structure-task-mutations.js';
 import { useProjectDetail } from '../../api/projects-api.js';
 import { useStructureModel } from '../lib/use-structure-model.js';
+import { useStructurePanels } from '../lib/use-structure-panels.js';
 import { useStructureDnd } from '../lib/use-structure-dnd.js';
 import { filterVisibleRows } from '../lib/structure-tree.js';
 import { StructureBulkIsland } from './structure-bulk-island.js';
@@ -79,7 +82,7 @@ export function StructureTab({
     model.kinds,
   );
   const [dialog, setDialog] = useState<StructureDialog | null>(null);
-  const [propertiesId, setPropertiesId] = useState<string | null>(null);
+  const { propertiesId, setPropertiesId, activeNodeId, setActiveNodeId } = useStructurePanels();
   const [hovered, setHovered] = useState(false);
   const moveNode = useMoveNode(projectId);
   const moveTask = useMoveTaskNode(projectId);
@@ -277,7 +280,8 @@ export function StructureTab({
                     actions={actions}
                     canEdit={canEdit}
                     onToggleBranch={toggleBranch}
-                    onSelectNode={setPropertiesId}
+                    onSelectNode={setActiveNodeId}
+                    activeNodeId={activeNodeId}
                     onToggleNoNode={() => model.setNoNodeCollapsed((prev) => !prev)}
                     onOpenTask={(id, anchor) =>
                       openCard({ kind: 'task', id }, anchor?.getBoundingClientRect())
