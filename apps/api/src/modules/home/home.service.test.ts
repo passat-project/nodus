@@ -68,8 +68,11 @@ describe('HomeService.getSummary', () => {
   it('собирает агрегат из репозитория: счёт активных + годовщины; заделы — честные нули', async () => {
     // Полдень UTC — та же календарная дата в любом поясе ±11 ч (детерминизм).
     vi.useFakeTimers({ now: new Date('2026-10-01T12:00:00.000Z') });
+    // Произвольный счёт репозитория, не «красивый» штат (#723): тест проверяет
+    // проброс значения, а конкретную величину считает репозиторий (status=active).
+    const activeEmployees = 7;
     const repository = {
-      countActiveEmployees: vi.fn(async () => 170),
+      countActiveEmployees: vi.fn(async () => activeEmployees),
       findActiveWithBirthDate: vi.fn(async () => [U('b', '1990-10-01'), U('far', '1990-05-05')]),
     };
     const service = new HomeService(repository as unknown as HomeRepository);
@@ -77,7 +80,11 @@ describe('HomeService.getSummary', () => {
     const summary = await service.getSummary();
     vi.useRealTimers();
 
-    expect(summary.stats).toEqual({ employeeCount: 170, projectsDone: 0, dataNodes: 0 });
+    expect(summary.stats).toEqual({
+      employeeCount: activeEmployees,
+      projectsDone: 0,
+      dataNodes: 0,
+    });
     expect(summary.birthdays.map((b) => b.user.id)).toEqual(['b']);
     expect(summary.labor).toEqual({ weeks: [], topOvertime: [] });
   });
