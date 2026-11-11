@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type PointerEvent, type RefObject } from 'react';
 
+import { chatColumnWidth } from './branch-panel.js';
 import { uiPx } from './ui-scale.js';
 
 const STORE_KEY = 'nodus-card-chat-w-v2';
@@ -42,11 +43,14 @@ function clamp(width: number) {
  * @param shrink — сколько px временно съедает открытая панель «О задаче»;
  * @param floor — нижний порог ширины колонки при drag (карточки с панелью
  *  беседы: не дать сузить колонку ниже «лента 360 + панель 300»).
+ * @param ceiling — верхний порог ширины колонки при drag (карточка сотрудника:
+ *  профиль слева не уже своего минимума); пол сильнее потолка.
  */
 export function useChatWidth(
   chatRef: RefObject<HTMLDivElement | null>,
   shrink = 0,
   floor = MIN_CHAT_WITH_PANEL,
+  ceiling = Number.POSITIVE_INFINITY,
 ) {
   const [chatW, setChatW] = useState(() => {
     const stored = Number(localStorage.getItem(STORE_KEY));
@@ -59,6 +63,8 @@ export function useChatWidth(
   shrinkRef.current = shrink;
   const floorRef = useRef(floor);
   floorRef.current = floor;
+  const ceilingRef = useRef(ceiling);
+  ceilingRef.current = ceiling;
 
   const onDividerDown = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
@@ -75,7 +81,13 @@ export function useChatWidth(
         raf = requestAnimationFrame(() => {
           raf = 0;
           const el = chatRef.current;
-          if (el) el.style.width = `${Math.max(latest - shrinkRef.current, floorRef.current)}px`;
+          if (el)
+            el.style.width = `${chatColumnWidth(
+              latest,
+              shrinkRef.current,
+              floorRef.current,
+              ceilingRef.current,
+            )}px`;
         });
       };
       const onUp = () => {
@@ -84,9 +96,11 @@ export function useChatWidth(
         if (raf) cancelAnimationFrame(raf);
         setDragging(false);
         // Коммит в React: стиль ре-рендера совпадает с последним императивным
-        // значением — визуального скачка нет.
-        setChatW(latest);
-        localStorage.setItem(STORE_KEY, String(latest));
+        // значением — визуального скачка нет. Потолок (профиль слева) съедает
+        // из памяти лишнее — перетаскивание на узком окне не копит «мертвый ход».
+        const capped = Math.min(latest, ceilingRef.current + shrinkRef.current);
+        setChatW(capped);
+        localStorage.setItem(STORE_KEY, String(capped));
       };
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);

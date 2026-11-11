@@ -70,9 +70,16 @@ export function rowMinWidthsCss(chatFloor: number, branchOpen: boolean, mainMinW
 }
 
 /** Колонка чата — буфер сужений (канон #63): стоящие сужения ряда (панели,
- *  служебная полоса) едят чат до его пола. */
-export function chatColumnWidth(chatW: number, shrink: number, floor: number): number {
-  return Math.max(chatW - shrink, floor);
+ *  служебная полоса) едят чат до его пола. Потолок (карточка сотрудника
+ *  #750: профиль слева не уже минимума данных) отдаёт излишек левой зоне,
+ *  но ниже ПОЛА чат не опускается — пол жёсткий. */
+export function chatColumnWidth(
+  chatW: number,
+  shrink: number,
+  floor: number,
+  ceiling = Number.POSITIVE_INFINITY,
+): number {
+  return Math.max(floor, Math.min(chatW - shrink, ceiling));
 }
 
 /** Предел перегородки навигатора при drag: половина ряда и не дальше, чем

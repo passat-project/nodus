@@ -17,6 +17,10 @@ describe('chatColumnWidth — чат буфер сужений', () => {
   it('ниже пола чат не опускается', () => {
     expect(chatColumnWidth(700, 360, 500)).toBe(500);
   });
+  it('потолок отдаёт излишек левой зоне, но пол сильнее (карточка сотрудника #750)', () => {
+    expect(chatColumnWidth(900, 0, 420, 700)).toBe(700);
+    expect(chatColumnWidth(900, 0, 420, 300)).toBe(420);
+  });
 });
 
 describe('branchMaxWidth — предел перегородки навигатора', () => {

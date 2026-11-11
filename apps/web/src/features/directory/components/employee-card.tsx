@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ui } from '@nodus/contracts';
 import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
 import { Skeleton } from '@nodus/ui/components/skeleton';
@@ -10,6 +10,7 @@ import { ApiError } from '../../../shared/api-client.js';
 import { useDirectConversation } from '../../../shared/chat/chat-queries.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { useRailShrink } from '../../../app/shell/right-rail.js';
+import { ROW_MAIN_MIN_W, chatColumnWidth } from '../../../shared/ui/branch-panel.js';
 import {
   CHAT_PANEL_W,
   ChatSidePanel,
@@ -74,8 +75,26 @@ export function EmployeeCard({ userId }: { userId: string }) {
   const railShrink = useRailShrink();
   const shrink = railShrink + (panelVisible ? CHAT_PANEL_W : 0);
   const chatFloor = panelVisible ? MIN_FEED_WITH_PANEL : MIN_CHAT_W;
-  const { chatW, onDividerDown, dragging } = useChatWidth(chatRef, shrink, chatFloor);
-  const columnW = Math.max(chatW - shrink, chatFloor);
+  // Порядок уступок #750: при узкой карточке правая зона отдаёт ширину
+  // ПРОФИЛЮ (минимум данных 320 — как у колонки данных задачи/письма), но не
+  // ниже своего пола; на широкой — работает память перегородки. Ширину ряда
+  // меряем ResizeObserver'ом: % -max-width в auto-треке grid не работает.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [gridW, setGridW] = useState(0);
+  // Меряем ряд, когда карточка уже отрисована (скелетон grid не рендерит).
+  const ready = !isLoading && Boolean(card) && Boolean(usersData);
+  useLayoutEffect(() => {
+    const el = gridRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setGridW(el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ready]);
+  const ceiling = gridW > 0 ? gridW - ROW_MAIN_MIN_W : Number.POSITIVE_INFINITY;
+  const { chatW, onDividerDown, dragging } = useChatWidth(chatRef, shrink, chatFloor, ceiling);
+  const columnW = chatColumnWidth(chatW, shrink, chatFloor, ceiling);
 
   const items = useMemo(() => usersData?.items ?? [], [usersData]);
   const listItem = items.find((u) => u.id === userId);
@@ -132,6 +151,7 @@ export function EmployeeCard({ userId }: { userId: string }) {
     // линии полосы вкладок правой зоны.
     <div className="flex h-full min-w-0">
       <div
+        ref={gridRef}
         className="grid min-h-0 min-w-0 flex-1"
         style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}
       >
@@ -170,7 +190,8 @@ export function EmployeeCard({ userId }: { userId: string }) {
         </div>
 
         {/* ПРАВАЯ ЗОНА — рабочая область: вкладки «Чат/Задачи/Проекты» и её
-            содержимое. Ширина — перегородка с памятью; ease-out совпадает с
+            содержимое. Ширина — перегородка с памятью и потолком «профиль не
+            уже минимума данных» (порядок уступок #750); ease-out совпадает с
             анимацией панели, иначе сумма двух колонок «плывёт». */}
         <div
           ref={chatRef}
