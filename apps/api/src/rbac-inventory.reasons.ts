@@ -89,6 +89,10 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'DELETE /projects/:id/nodes/:nodeId': PROJECT_STRUCTURE,
   'GET /auth/me': SELF,
   'GET /auth/sessions': SELF,
+  // Личные настройки (#745): субъект — сам сотрудник, userId только из
+  // access-токена; чужой профиль недоступен (IDOR).
+  'GET /me/preferences': SELF,
+  'PUT /me/preferences': SELF,
   'GET /notifications': SELF,
   'GET /notifications/summary': SELF,
   'GET /notifications/settings': SELF,

@@ -1,5 +1,14 @@
-import { Archive, CheckCircle2, MoreHorizontal, Pencil, RotateCcw, UserCog } from 'lucide-react';
-import { useState } from 'react';
+import {
+  Archive,
+  CheckCircle2,
+  LogIn,
+  LogOut,
+  MoreHorizontal,
+  Pencil,
+  RotateCcw,
+  UserCog,
+} from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import type { ProjectDetail } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
@@ -18,13 +27,21 @@ import { ProjectEditDialog } from './project-edit-dialog.js';
 import { ProjectTransferDialog } from './project-transfer-dialog.js';
 
 /**
- * Нижний бар левой панели карточки проекта (вердикт владельца 07.11.2026):
- * кнопки живут СНИЗУ карточки в левой части — как в задачах и письмах, а не
- * «в воздухе» сверху. Слева — «Редактировать проект» и меню «⋯» (статусы,
- * передача руководства), рядом — «Присоединиться/Покинуть». Права серверные
- * (I8): UI только не показывает недоступное.
+ * Действия проекта в шапке карточки (#735, вердикт владельца 10.11.2026):
+ * нижнего бара в левой панели больше нет, «О проекте» — обычная вкладка.
+ * Слева направо: тихая «Редактировать» (pencil, без primary-заливки),
+ * кнопка раскладки вкладок (её передаёт карточка) и меню «⋯» (статусы,
+ * передача руководства, присоединиться/покинуть). Права серверные (I8):
+ * UI только не показывает недоступное.
  */
-export function ProjectActionBar({ project }: { project: ProjectDetail }) {
+export function ProjectHeaderActions({
+  project,
+  layout,
+}: {
+  project: ProjectDetail;
+  /** Кнопка «Разделить/Соединить области» из карточки (#746). */
+  layout?: ReactNode;
+}) {
   const status = useProjectStatus();
   const join = useJoinProject(project.id);
   const leave = useLeaveProject(project.id);
@@ -33,27 +50,27 @@ export function ProjectActionBar({ project }: { project: ProjectDetail }) {
   const [transferOpen, setTransferOpen] = useState(false);
   const management = project.access.canManage;
   const canAct = management || project.access.canTransfer;
+  const hasMenu = canAct || project.access.canJoin || project.access.canLeave;
 
   return (
-    <div className="flex h-16 w-full items-center gap-2">
-      {/* Правка полей — НЕ главное действие проекта: тихая ghost-кнопка без
-          рамки и заливки, отклик — подложка на ховере (вердикт владельца
-          07.11.2026: «чёрных кнопок» и outline-угольков в карточках нет;
-          заливка primary — только у главного действия экрана). */}
+    <>
       {project.access.canManage ? (
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size="icon-sm"
           onClick={() => setEditOpen(true)}
+          aria-label={ui.projects.editProject}
+          title={ui.projects.editProject}
           className="text-muted-foreground hover:text-foreground"
         >
           <Pencil className="size-3.5" strokeWidth={1.75} />
-          {ui.projects.editProject}
         </Button>
       ) : null}
 
-      {canAct ? (
+      {layout}
+
+      {hasMenu ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -67,7 +84,7 @@ export function ProjectActionBar({ project }: { project: ProjectDetail }) {
               <MoreHorizontal className="size-4" strokeWidth={1.75} />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
+          <DropdownMenuContent align="end" className="w-56">
             {management && project.status === 'active' ? (
               <DropdownMenuItem
                 onClick={() => status.mutate({ id: project.id, status: 'completed' })}
@@ -97,31 +114,21 @@ export function ProjectActionBar({ project }: { project: ProjectDetail }) {
                 </DropdownMenuItem>
               </>
             ) : null}
+            {project.access.canJoin || project.access.canLeave ? <DropdownMenuSeparator /> : null}
+            {project.access.canJoin ? (
+              <DropdownMenuItem disabled={join.isPending} onClick={() => join.mutate()}>
+                <LogIn className="size-3.5" strokeWidth={1.75} />
+                {ui.projects.join}
+              </DropdownMenuItem>
+            ) : null}
+            {project.access.canLeave ? (
+              <DropdownMenuItem disabled={leave.isPending} onClick={() => leave.mutate()}>
+                <LogOut className="size-3.5" strokeWidth={1.75} />
+                {ui.projects.leave}
+              </DropdownMenuItem>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
-      ) : null}
-
-      {project.access.canJoin ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => join.mutate()}
-          disabled={join.isPending}
-        >
-          {ui.projects.join}
-        </Button>
-      ) : null}
-      {project.access.canLeave ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={() => leave.mutate()}
-          disabled={leave.isPending}
-        >
-          {ui.projects.leave}
-        </Button>
       ) : null}
 
       <ProjectArchiveDialog
@@ -137,6 +144,6 @@ export function ProjectActionBar({ project }: { project: ProjectDetail }) {
         <ProjectTransferDialog project={project} onClose={() => setTransferOpen(false)} />
       ) : null}
       {editOpen ? <ProjectEditDialog project={project} onClose={() => setEditOpen(false)} /> : null}
-    </div>
+    </>
   );
 }

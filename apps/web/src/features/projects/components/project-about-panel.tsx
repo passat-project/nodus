@@ -10,21 +10,19 @@ import { useUpdateProjectCustomField } from '../api/project-member-mutations.js'
 import { projectPassportDefs } from '../lib/project-passport.js';
 
 /**
- * ЛЕВАЯ панель карточки проекта — «О проекте» (вердикты владельца 07.11.2026:
- * главная панель без вкладки, рабочая зона — справа). Витрины-шапки НЕТ:
- * название живёт в хроме карточки и правится кликом (`ProjectTitle`), вся
- * остальная информация — полями-реестром паспорта (статус, видимость, тип,
- * портфель, руководство, крайний срок, состав, создатель, активность) и
- * блоком «Атрибуты» типа проекта (шифр и заказчик — среди них, #631).
- * Действия проекта — в нижнем баре панели (`ProjectActionBar`), как в
- * задачах и письмах.
+ * Вкладка «О проекте» карточки проекта (вердикт владельца 10.11.2026, #735):
+ * обычная вкладка после «Задач», не статичная левая панель. Контент — на
+ * общей колонке данных карточек (`CardDataColumn`): равные отступы от краёв,
+ * центрирование и аккуратное расширение при растягивании области, как в
+ * карточке задачи; на широкой области паспорт и «Атрибуты» раскрываются в
+ * две колонки по @container. Действия проекта — в шапке карточки.
  */
 export function ProjectAboutPanel({ project }: { project: ProjectDetail }) {
   const openCard = useOpenCard();
   const updateField = useUpdateProjectCustomField(project.id);
 
   return (
-    <CardDataColumn>
+    <CardDataColumn className="@container">
       <NodeLabel label={ui.projects.fieldDescription} />
       <p className="mt-1 text-sm whitespace-pre-wrap text-foreground">
         {project.description || <span className="text-muted-foreground">{ui.common.notSet}</span>}

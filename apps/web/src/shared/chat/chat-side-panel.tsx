@@ -81,6 +81,7 @@ export function ChatSidePanel({
   onClose,
   title,
   headerClass = 'h-14',
+  widthPx,
   view = 'files',
   onMembersClose,
   onSearchBack,
@@ -97,6 +98,10 @@ export function ChatSidePanel({
   /** Высота верхней строки панели = высота верхнего бара хоста (линия
    *  border-b продолжаются друг в друга). */
   headerClass?: string;
+  /** Ширина колонки в CSS px (карточки с областями вкладок): по умолчанию
+   *  rem-класс 18.75rem масштабируется ui-scale, а solver карточки считает
+   *  экранные px — без явной ширины панель вылезала бы за расчётную. */
+  widthPx?: number;
   /** Вид колонки (#186 + поиск 04.10): файлы/ссылки («О чате»), участники —
    *  панель участников стоит РОВНО ПОВЕРХ тоггл-панели (та же колонка 1:1),
    *  поиск — лупа в шапке беседы раскрывает ту же панель с поисковой
@@ -143,11 +148,22 @@ export function ChatSidePanel({
       aria-hidden={!columnOpen}
       inert={!columnOpen}
       className={cn(
-        'h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-out',
-        columnOpen && ready ? 'w-[18.75rem]' : 'w-0',
+        'h-full shrink-0 overflow-hidden',
+        // В карточках с solver'ом (widthPx) ширина уже зарезервирована
+        // расчётом: анимировать её нельзя — область успевает пересчитаться
+        // под конечную ширину, и вкладки «сжимаются и возвращаются».
+        !widthPx && 'transition-[width] duration-200 ease-out',
+        !widthPx && (columnOpen && ready ? 'w-[18.75rem]' : 'w-0'),
       )}
+      style={widthPx ? { width: columnOpen ? widthPx : 0 } : undefined}
     >
-      <aside className="relative flex h-full w-[18.75rem] flex-col border-l border-border bg-card">
+      <aside
+        className={cn(
+          'relative flex h-full flex-col border-l border-border bg-card',
+          widthPx ? 'w-full' : 'w-[18.75rem]',
+        )}
+        style={widthPx ? { width: widthPx } : undefined}
+      >
         {/* Верхняя строка панели — НА УРОВНЕ бара хоста: название слева,
             крестик у самого правого края (реф Битрикс24, вердикт владельца
             15.09.2026); border-b продолжает линию бара хоста. Вид участников
