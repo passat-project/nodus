@@ -141,13 +141,32 @@ export function FieldRow({
  * настраивается кнопкой «+ Поле» с чекбоксами (persist localStorage).
  * Сетка на container queries зоны (@container у родителя): узко — 1 колонка,
  * широко — 2; зазор фикс, блок max-w-4xl центрируется (растут отступы).
+ * `fill` (#750, вердикт владельца 11.11.2026): блок занимает ВСЮ ширину
+ * родителя — без центрирования и потолка, порог двух колонок 46rem; родитель
+ * даёт `@container` на самом блоке полей, чтобы колонки считались от его
+ * ширины, а не от всей зоны профиля.
  */
-export function EntityFields({ defs, storageKey }: { defs: EntityFieldDef[]; storageKey: string }) {
+export function EntityFields({
+  defs,
+  storageKey,
+  fill = false,
+}: {
+  defs: EntityFieldDef[];
+  storageKey: string;
+  /** Занимать всю ширину зоны: без `max-w-4xl`/центрирования, 2 колонки
+   *  от 46rem (карточка сотрудника, #750). */
+  fill?: boolean;
+}) {
   const { hiddenKeys, toggle } = useFieldVisibility(storageKey);
   const visible = defs.filter((d) => !hiddenKeys.includes(d.key));
 
   return (
-    <div className="mx-auto mt-5 grid max-w-4xl grid-cols-1 gap-x-12 gap-y-0.5 @min-[55rem]:grid-cols-2">
+    <div
+      className={cn(
+        'mt-5 grid grid-cols-1 gap-x-12 gap-y-0.5',
+        fill ? 'w-full @min-[46rem]:grid-cols-2' : 'mx-auto max-w-4xl @min-[55rem]:grid-cols-2',
+      )}
+    >
       {visible.map((def) => (
         <FieldRow
           key={def.key}
@@ -160,7 +179,12 @@ export function EntityFields({ defs, storageKey }: { defs: EntityFieldDef[]; sto
         </FieldRow>
       ))}
       <DropdownMenu>
-        <DropdownMenuTrigger className="-mx-2 flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground @min-[55rem]:col-span-2">
+        <DropdownMenuTrigger
+          className={cn(
+            '-mx-2 flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground',
+            fill ? '@min-[46rem]:col-span-2' : '@min-[55rem]:col-span-2',
+          )}
+        >
           <Plus className="size-3.5" strokeWidth={1.75} />
           {ui.common.addField}
         </DropdownMenuTrigger>

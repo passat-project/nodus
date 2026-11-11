@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -74,6 +74,14 @@ describe('общие примитивы карточек', () => {
     expect(onActivate).toHaveBeenCalledWith('file:f1');
     expect(onClose).toHaveBeenCalledWith('file:f1');
     expect(onKeyDown).toHaveBeenCalled();
+  });
+
+  it('CardTabStrip: счётчик активной вкладки скрыт, но место держится', () => {
+    render(<CardTabStrip label="Содержимое" tabs={tabs} active="chat" onActivate={vi.fn()} />);
+    const badge = screen.getByRole('tab', { name: 'Чат' }).querySelector('.tabular-nums');
+    expect(badge).not.toBeNull();
+    expect(badge?.getAttribute('aria-hidden')).toBe('true');
+    expect(badge?.className).toContain('invisible');
   });
 
   it('CardTabToolbar: шапка вкладки-списка как у окон модулей (h-14, px-6)', () => {

@@ -6,6 +6,7 @@ import { Button } from '@nodus/ui/components/button';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { projectsAvailable } from '../../../shared/api/projects-available.js';
+import { CardTabToolbar } from '../../../shared/ui/entity-card/card-tab-toolbar.js';
 import { DataTable } from '../../../shared/views/data-table.js';
 import { ListToolbar } from '../../../shared/views/list-toolbar.js';
 import type { ActiveListFilter } from '../../../shared/views/list-filters.js';
@@ -59,21 +60,26 @@ export function EmployeeTasksTab({
       {/* БЕЗ border-b (канон раунда 6 + вердикт владельца 12.09.2026): линия
           под тулбаром читалась «полоской под поиском» — сегмент справа от
           поля, сжимающегося после закрытия панели фильтра. Журналы и
-          вкладки-списки карточек выглядят ОДИНАКОВО. */}
-      <ListToolbar
-        toolbar={toolbar}
-        defs={defs}
-        builtinPresets={taskBuiltinPresets}
-        left={
-          // Закон кнопки создания (вердикт 15.09.2026): слева от поиска,
-          // label «Создать», h-8 — и во вкладках карточек тоже.
-          <Button onClick={onCreateTask}>
-            <Plus data-icon="inline-start" />
-            {ui.common.create}
-          </Button>
-        }
-        right={<ViewSettings viewKey="directory.tasks" defs={fields} />}
-      />
+          вкладки-списки карточек выглядят ОДИНАКОВО. Воздух под полосой
+          вкладок — `CardTabToolbar` (h-14, px-6), как в карточке проекта
+          (#736/#750): тулбар внутри — без собственных полей. */}
+      <CardTabToolbar>
+        <ListToolbar
+          className="min-w-0 flex-1 px-0"
+          toolbar={toolbar}
+          defs={defs}
+          builtinPresets={taskBuiltinPresets}
+          left={
+            // Закон кнопки создания (вердикт 15.09.2026): слева от поиска,
+            // label «Создать», h-8 — и во вкладках карточек тоже.
+            <Button onClick={onCreateTask}>
+              <Plus data-icon="inline-start" />
+              {ui.common.create}
+            </Button>
+          }
+          right={<ViewSettings viewKey="directory.tasks" defs={fields} />}
+        />
+      </CardTabToolbar>
       <div className="min-h-0 flex-1">
         <DataTable
           viewKey="directory.tasks"
@@ -111,13 +117,17 @@ export function EmployeeProjectsTab({
 
   return (
     <div className="flex h-full flex-col">
-      {/* БЕЗ border-b — канон единой строки инструментов (см. задачи выше). */}
-      <ListToolbar
-        toolbar={toolbar}
-        defs={defs}
-        builtinPresets={projectBuiltinPresets}
-        right={<ViewSettings viewKey="directory.projects" defs={fields} />}
-      />
+      {/* БЕЗ border-b — канон единой строки инструментов (см. задачи выше);
+          воздух под полосой вкладок — `CardTabToolbar`. */}
+      <CardTabToolbar>
+        <ListToolbar
+          className="min-w-0 flex-1 px-0"
+          toolbar={toolbar}
+          defs={defs}
+          builtinPresets={projectBuiltinPresets}
+          right={<ViewSettings viewKey="directory.projects" defs={fields} />}
+        />
+      </CardTabToolbar>
       <div className="min-h-0 flex-1">
         <DataTable
           viewKey="directory.projects"

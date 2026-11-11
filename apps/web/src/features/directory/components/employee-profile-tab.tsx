@@ -40,7 +40,9 @@ function presenceLabel(status: PresenceStatus): string {
  * 11.11.2026: профиль — не вкладка, а статичная зона): БОЛЬШАЯ фотография
  * (не аватарка в баре — общего бара с дублирующей инфой нет, полезная
  * высота — данным) с presence-чипом под ней; правее — поля-реестр полного
- * UserCard (на узкой зоне поля уходят под фото); ниже — «Подчинённые»
+ * UserCard в режиме `fill` (занимают ВСЮ ширину зоны, без центрирования и
+ * потолка; две колонки — от 46rem ширины БЛОКА, поэтому фото встаёт над
+ * полями, пока рядом не помещаются две колонки); ниже — «Подчинённые»
  * (переход в их карточки стеком, ADR-0009). Скролл зоны — свой; по
  * горизонтали контент не скроллится (очень узкая карточка клипует фото —
  * вкладки справа не ломаются).
@@ -96,7 +98,7 @@ export function EmployeeProfileTab({
 
   return (
     <div className="h-full overflow-x-hidden overflow-y-auto p-6">
-      <div className="mx-auto w-full max-w-4xl">
+      <div className="w-full">
         <div className="flex flex-wrap items-start gap-x-8 gap-y-5">
           {/* Большое фото профиля (реф — карточка фото в профиле Битрикс24):
               Ø176, инициалы крупно, когда фото нет; presence — чипом под
@@ -164,10 +166,16 @@ export function EmployeeProfileTab({
               </Button>
             ) : null}
           </div>
-          <div className="min-w-0 flex-1 basis-[30rem]">
+          {/* Поля занимают ВСЮ ширину зоны (вердикт владельца 11.11.2026):
+              никакого центрирования с потолком и пустых краёв; две колонки —
+              от 46rem ШИРИНЫ БЛОКА (container на блоке, а не на зоне).
+              Фото встаёт над полями, пока рядом не помещаются две колонки
+              (basis-[46rem]). */}
+          <div className="min-w-0 flex-1 basis-[46rem] @container">
             <EntityFields
               defs={employeeProfileDefs({ card, listItem, manager, openCard })}
               storageKey={VISIBILITY_KEY}
+              fill
             />
           </div>
         </div>

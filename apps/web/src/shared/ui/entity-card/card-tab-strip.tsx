@@ -66,6 +66,14 @@ export function CardTabStrip({
   idPrefix?: string;
   /** ←/→ по полосе — соседняя вкладка (хост решает). */
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
+  /** Область вкладок (#746): id группы для DnD/замеров. */
+  groupId?: string;
+  /** Начало pointer-перетаскивания вкладки (порог решает контроллер). */
+  onTabPointerDown?: (tabId: string, event: ReactPointerEvent<HTMLButtonElement>) => void;
+  /** Правый клик/меню — действия вкладки без drag (WCAG 2.5.7). */
+  onTabContextMenu?: (tabId: string, event: ReactMouseEvent<HTMLButtonElement>) => void;
+  /** Какую вкладку сейчас тащат — приглушаем на полосе. */
+  draggingTabId?: string | null;
   /** Ссылка на скролл-контейнер полосы (замеры для линии вставки). */
   stripRef?: (el: HTMLDivElement | null) => void;
 }) {

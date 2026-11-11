@@ -100,18 +100,21 @@ export function EmployeeCardWorkTabs({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      <CardTabStrip
-        label={ui.employees.tabsLabel}
-        tabs={strip}
-        active={active}
-        onActivate={(id) => onActivate(id as EmployeeWorkTab)}
-        idPrefix={baseId}
-        onKeyDown={onStripKeyDown}
-        badgeAlways
-        actions={
-          active === 'chat' ? <ChatPanelToggle open={panelOpen} onToggle={onPanelToggle} /> : null
-        }
-      />
+      {/* Ряд полосы — как `CardTabStripRow` движка областей (#746): фон
+          карточки и нижняя граница живут на ряду, а не на полосе. */}
+      <div className="flex h-10 shrink-0 border-b border-border bg-card">
+        <CardTabStrip
+          label={ui.employees.tabsLabel}
+          tabs={strip}
+          active={active}
+          onActivate={(id) => onActivate(id as EmployeeWorkTab)}
+          idPrefix={baseId}
+          onKeyDown={onStripKeyDown}
+          actions={
+            active === 'chat' ? <ChatPanelToggle open={panelOpen} onToggle={onPanelToggle} /> : null
+          }
+        />
+      </div>
       <div className="relative min-h-0 flex-1">
         {TAB_IDS.filter((tab) => visited.includes(tab)).map((tab) => {
           const isActive = tab === active;

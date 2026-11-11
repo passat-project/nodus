@@ -101,7 +101,7 @@ describe('EmployeeCardWorkTabs — рабочая зона карточки со
     expect(screen.getByRole('tab', { name: 'Чат' }).getAttribute('aria-selected')).toBe('true');
   });
 
-  it('счётчики журналов видны и на активной вкладке', () => {
+  it('счётчик активной вкладки скрыт, но место в подписи держится', () => {
     function CountedHarness() {
       const [active, setActive] = useState<EmployeeWorkTab>('chat');
       const [visited, setVisited] = useState<readonly EmployeeWorkTab[]>(['chat', 'tasks']);
@@ -126,9 +126,15 @@ describe('EmployeeCardWorkTabs — рабочая зона карточки со
       );
     }
     render(<CountedHarness />);
-    fireEvent.click(screen.getByRole('tab', { name: /Задачи/ }));
+    // Неактивная вкладка показывает число как данные журнала...
     const tasksTab = screen.getByRole('tab', { name: /Задачи/ });
+    expect(tasksTab.querySelector('.tabular-nums')?.getAttribute('aria-hidden')).toBeNull();
+    // ...у активной число скрывается, но место остаётся — подпись и соседи
+    // не прыгают (канон движка вкладок, badgeAlways не нужен).
+    fireEvent.click(tasksTab);
     expect(tasksTab.getAttribute('aria-selected')).toBe('true');
-    expect(tasksTab.textContent).toContain('3');
+    const badge = tasksTab.querySelector('.tabular-nums');
+    expect(badge?.getAttribute('aria-hidden')).toBe('true');
+    expect(badge?.className).toContain('invisible');
   });
 });
