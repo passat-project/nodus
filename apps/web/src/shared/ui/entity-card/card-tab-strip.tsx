@@ -173,7 +173,7 @@ export function CardTabStrip({
     : undefined;
 
   return (
-    <div className="flex h-10 shrink-0 items-center border-b border-border bg-card">
+    <div className="flex h-10 shrink-0 items-center">
       <div className="relative h-10 min-w-0 flex-1">
         <div
           ref={(el) => {

@@ -14,6 +14,8 @@ const within = (rect: RectLike, x: number, y: number): boolean =>
  * Никаких мутаций — только решение, применение отдельно (I5). Край — только
  * КОНТЕНТ, не полоса: иначе перетаскивание в конец полосы создавало бы
  * область. При двух областях край работает как перенос в соседнюю.
+ * Порог сплита — середина рабочей зоны (фидбек владельца 11.11: тянуть до
+ * самого края не нужно; аналог VS Code с половиной как посадочной зоной).
  */
 export function resolveDrop({
   groups,
@@ -21,11 +23,11 @@ export function resolveDrop({
   pointer,
   areas,
   workArea,
-  edgeRatio = 0.15,
+  edgeRatio = 0.5,
   maxGroups = MAX_CARD_TAB_GROUPS,
 }: ResolveDropInput): DropResolution {
   const overStrip = areas.some((area) => within(area.strip, pointer.x, pointer.y));
-  const edge = Math.max(0, Math.min(0.4, edgeRatio));
+  const edge = Math.max(0, Math.min(0.5, edgeRatio));
   const edgeWidth = (workArea.right - workArea.left) * edge;
   const inWorkY = pointer.y >= workArea.top && pointer.y <= workArea.bottom;
   if (!overStrip && inWorkY && groups.length < maxGroups) {

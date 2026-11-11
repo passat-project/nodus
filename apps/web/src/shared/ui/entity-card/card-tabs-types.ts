@@ -55,7 +55,7 @@ export interface ResolveDropInput {
   areas: CardTabAreaRect[];
   /** Вся рабочая зона карточки (края = 15%). */
   workArea: RectLike;
-  /** Доля края рабочей зоны, создающая новую область (VS Code-подобно). */
+  /** Доля рабочей зоны от края, создающая новую область (0.5 — за серединой). */
   edgeRatio?: number;
   /** Больше max групп не создаём (в v1 = 2). */
   maxGroups?: number;

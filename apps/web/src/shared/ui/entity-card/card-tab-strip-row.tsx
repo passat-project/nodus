@@ -53,7 +53,7 @@ export function CardTabStripRow({
   registerStrip: (groupId: string, el: HTMLDivElement | null) => void;
 }) {
   return (
-    <div className="flex h-10 shrink-0">
+    <div className="flex h-10 shrink-0 border-b border-border bg-card">
       {groups.map((group, index) => (
         <div
           key={group.id}
