@@ -1,16 +1,23 @@
 import type { BirthdayEntry, CompanyStats, HomeSummary } from '@nodus/contracts';
 
 import { isoDateIn } from './dates.js';
-import { userIds, userRef } from './users.js';
+import { demoUserListItems, userIds, userRef } from './users.js';
+import { activeStaffCount } from '../../lib/staff-count.js';
 
 /** Корпоративная витрина (моки дева): показатели компании, трудозатраты,
  *  дни рождения. Контракт — как реальный `GET /home/summary` (модуль home
  *  бэка); на живом контуре без данных блоки просто не рендерятся. */
 
 export const demoStats: CompanyStats = {
-  employeeCount: 170,
-  projectsDone: 128,
-  dataNodes: 248_919,
+  // Штат — из демо-справочника, а не литералом (#723): число меняется вместе
+  // с моковым списком. Считаются только действующие — то же определение, что у
+  // живого `/home/summary` (`status=active`): уволенные в штат не входят,
+  // иначе карточка расходится со счётчиком раздела «Сотрудники».
+  employeeCount: activeStaffCount(demoUserListItems),
+  // Источников нет ни в бэке, ни в моках — честные нули, как живой
+  // `/home/summary`; демо-числа не маскируются под реальные (вердикт 01.10, #723).
+  projectsDone: 0,
+  dataNodes: 0,
 };
 
 export const demoLabor: HomeSummary['labor'] = {

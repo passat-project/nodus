@@ -1,11 +1,11 @@
-import type { ConversationListItem, UserRef } from '@nodus/contracts';
+import type { ConversationListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
 import { plural, withoutPatronymic } from '../lib/format.js';
 import { useAuthStore } from '../auth-store.js';
 import { useIsOnline } from '../socket/presence-store.js';
 import { useTypingStore } from '../socket/typing-store.js';
-import { conversationSubtitle, isNotesConversation } from './conversations.js';
+import { conversationSubtitle, directPeer, isNotesConversation } from './conversations.js';
 
 /**
  * Живая подпись беседы — ЕДИНАЯ точка (ревизия #211 05.10): бар беседы и
@@ -14,12 +14,9 @@ import { conversationSubtitle, isNotesConversation } from './conversations.js';
  * (кнопка «N участников») и chat-profile-pane (статичный текст).
  */
 
-export function findPeer(
-  conversation: ConversationListItem,
-  meId: string | undefined,
-): UserRef | null {
-  return conversation.membersPreview.find((member) => member.id !== meId) ?? null;
-}
+/** Собеседник личного чата — логика в `conversations.ts` (её же берёт аватар
+ *  беседы, #726); имя оставлено для существующих потребителей. */
+export const findPeer = directPeer;
 
 export function memberName(conversation: ConversationListItem, userId: string): string | null {
   const raw = conversation.membersPreview.find((member) => member.id === userId)?.displayName;

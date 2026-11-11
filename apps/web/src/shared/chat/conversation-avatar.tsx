@@ -5,7 +5,7 @@ import { NotesGlyph } from '../ui/notes-glyph.js';
 import { PersonAvatar } from '../ui/person-avatar.js';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { conversationTitle, isNotesConversation } from './conversations.js';
+import { conversationAvatarUrl, conversationTitle, isNotesConversation } from './conversations.js';
 
 /** Маркер типа беседы на аватаре (список единый, без секций — тип читается
  *  глифом): канал — мегафон, группа — участники, чат задачи — список;
@@ -18,7 +18,9 @@ export const conversationTypeIcon: Partial<Record<ConversationType, typeof Megap
 
 /**
  * Аватар беседы с глифом типа — единый для списка бесед, экспресс-полосы
- * и диалога пересылки (#87: shared-слой, дубли из фич убраны).
+ * и диалога пересылки (#87: shared-слой, дубли из фич убраны). Фото: загруженный
+ * аватар беседы, у личного чата — фото собеседника из `membersPreview` (#726):
+ * иначе личка навсегда оставалась на инициалах при установленном фото.
  */
 export function ConversationAvatar({
   conversation,
@@ -37,7 +39,7 @@ export function ConversationAvatar({
       ) : (
         <PersonAvatar
           name={conversationTitle(conversation, meId)}
-          avatarUrl={conversation.avatarUrl}
+          avatarUrl={conversationAvatarUrl(conversation, meId)}
           className="size-full"
         />
       )}

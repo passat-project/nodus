@@ -293,7 +293,12 @@ export function MessengerBody({
                   onClick={() => void openDirectChat(person.id)}
                   className="mx-1 flex w-[calc(100%-0.625rem)] items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent/40"
                 >
-                  <PersonAvatar name={person.displayName} className="size-9" />
+                  <PersonAvatar
+                    name={person.displayName}
+                    avatarUrl={person.avatarUrl}
+                    decorative
+                    className="size-9"
+                  />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">
                       {withoutPatronymic(person.displayName)}
