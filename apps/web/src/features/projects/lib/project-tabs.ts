@@ -14,3 +14,10 @@ export const PROJECT_TAB_IDS: readonly ProjectTabId[] = [
   'members',
   'history',
 ];
+
+/** Раскладка по умолчанию: «О проекте» — отдельной областью слева,
+ *  остальные вкладки — справа (активная справа — «Структура»). */
+export const PROJECT_DEFAULT_GROUPS: readonly (readonly string[])[] = [
+  ['about'],
+  PROJECT_TAB_IDS.filter((id) => id !== 'about'),
+];

@@ -104,6 +104,53 @@ export function groupsFromPref(
   return normalizeGroups(groups, [...visibleStable, ...files], maxGroups, visibleStable[0]);
 }
 
+/**
+ * Системная раскладка по умолчанию (нет личных prefs): проект открывается
+ * двумя областями — «О проекте» слева, остальные вкладки справа (вердикт
+ * владельца 11.11.2026). Не указанные в раскладке новые системные вкладки и
+ * файлы дописываются в последнюю область и не теряются.
+ */
+export function groupsFromDefaultGroups(
+  defaults: readonly (readonly string[])[] | undefined,
+  { stableTabs, fileTabs = [], hidden = [], maxGroups = 2 }: GroupsFromPrefOptions,
+): CardTabGroup[] {
+  if (!defaults?.length)
+    return groupsFromPref(undefined, { stableTabs, fileTabs, hidden, maxGroups });
+  const hiddenSet = new Set(hidden.filter((id) => id !== FILE_TAB_PLACEHOLDER));
+  const visibleStable = stableTabs.filter((id) => !hiddenSet.has(id));
+  const known = new Set([...visibleStable, ...fileTabs, FILE_TAB_PLACEHOLDER]);
+  const placed = new Set<string>();
+  const groups: CardTabGroup[] = [];
+  for (const ids of defaults) {
+    const tabs: string[] = [];
+    for (const id of ids) {
+      if (id === FILE_TAB_PLACEHOLDER) {
+        for (const file of fileTabs) {
+          if (placed.has(file)) continue;
+          placed.add(file);
+          tabs.push(file);
+        }
+        continue;
+      }
+      if (!known.has(id) || hiddenSet.has(id) || placed.has(id)) continue;
+      placed.add(id);
+      tabs.push(id);
+    }
+    if (tabs.length > 0) {
+      groups.push({ id: `area-${groups.length + 1}`, tabs, active: tabs[0]! });
+    }
+  }
+  const rest = [
+    ...visibleStable.filter((id) => !placed.has(id)),
+    ...fileTabs.filter((id) => !placed.has(id)),
+  ];
+  if (rest.length > 0) {
+    if (groups.length > 0) groups[groups.length - 1]!.tabs.push(...rest);
+    else groups.push({ id: 'area-1', tabs: rest, active: rest[0]! });
+  }
+  return normalizeGroups(groups, [...visibleStable, ...fileTabs], maxGroups, visibleStable[0]);
+}
+
 /** Скрытые вкладки из prefs (files скрывать нельзя; неизвестные — мимо). */
 export function hiddenFromPref(
   pref: CardTabsPref | undefined,

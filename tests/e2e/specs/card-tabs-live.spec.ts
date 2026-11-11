@@ -86,11 +86,21 @@ test('проект: сплит, меню, DnD между областями, mer
   await loginUi(page, NIGHT_A.email, NIGHT_A.password);
   await page.goto(`/projects?cards=project:${projectId}`);
 
-  const strip = page.getByRole('tablist', { name: 'Вкладки проекта' });
-  await expect(strip.getByRole('tab', { name: 'Структура' })).toBeVisible();
-  await expect(strip.getByRole('tab', { name: 'О проекте' })).toBeVisible();
+  // Системный дефолт: две области — «О проекте» слева, остальные справа,
+  // активна «Структура» справа (вердикт владельца 11.11.2026).
+  const left = page.getByRole('tablist', { name: 'Вкладки проекта' });
+  const right = page.getByRole('tablist', { name: 'Область вкладок 2' });
+  await expect(left.getByRole('tab', { name: 'О проекте' })).toBeVisible();
+  await expect(right.getByRole('tab', { name: 'Структура' })).toBeVisible();
+  await expect(right.getByRole('tab', { name: 'Структура' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 
-  // Сплит активной вкладки кнопкой шапки: «Структура» переезжает вправо.
+  // Соединяем и снова делим кнопкой шапки: «Структура» переезжает вправо.
+  await page.getByRole('button', { name: 'Соединить области' }).click();
+  await expect(page.getByRole('tablist')).toHaveCount(1);
+  const strip = page.getByRole('tablist', { name: 'Вкладки проекта' });
   await page.getByRole('button', { name: 'Разделить область вкладок' }).click();
   const second = page.getByRole('tablist', { name: 'Область вкладок 2' });
   await expect(page.getByRole('tablist')).toHaveCount(2);

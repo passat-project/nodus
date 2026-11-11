@@ -43,20 +43,32 @@ const { ProjectCard } = await import('./project-card.js');
  *  обычная вкладка после «Задач»; кнопка раскладки — в шапке карточки. */
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   useUiPrefsStore.setState({ personal: {}, company: {} });
 });
 
-describe('ProjectCard: «О проекте» вкладкой и шапка', () => {
-  it('вкладки в системном порядке, «О проекте» после «Задач»', () => {
+describe('ProjectCard: «О проекте» и системная раскладка', () => {
+  it('по умолчанию две области: «О проекте» слева, остальные вкладки справа', () => {
+    // jsdom не считает layout: даём карточке реальную ширину, иначе solver
+    // derived-сворачивает вторую область и обе полосы сливаются.
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(1200);
     render(
       <CardHeaderActionsContext.Provider value={document.body}>
         <ProjectCard projectId="p1" />
       </CardHeaderActionsContext.Provider>,
     );
-    const tabs = screen.getAllByRole('tab').map((tab) => tab.textContent?.trim());
-    expect(tabs).toEqual(['Структура', 'Задачи', 'О проекте', 'Канал', 'Участники', 'История']);
-    // Статичной панели «О проекте» слева больше нет.
-    expect(screen.queryByText('О проекте — содержимое')).toBeNull();
+    const [left, right] = screen.getAllByRole('tablist');
+    expect(left?.getAttribute('aria-label')).toBe('Вкладки проекта');
+    expect(
+      [...(left?.querySelectorAll('[role="tab"]') ?? [])].map((tab) => tab.textContent?.trim()),
+    ).toEqual(['О проекте']);
+    expect(
+      [...(right?.querySelectorAll('[role="tab"]') ?? [])].map((tab) => tab.textContent?.trim()),
+    ).toEqual(['Структура', 'Задачи', 'Канал', 'Участники', 'История']);
+    expect(left?.querySelector('[aria-selected="true"]')?.textContent?.trim()).toBe('О проекте');
+    expect(right?.querySelector('[aria-selected="true"]')?.textContent?.trim()).toBe('Структура');
+    // Обе области показывают свою активную вкладку (это не статичная панель).
+    expect(screen.getByText('О проекте — содержимое')).not.toBeNull();
     expect(screen.getByText('Структура — содержимое')).not.toBeNull();
   });
 
@@ -68,6 +80,6 @@ describe('ProjectCard: «О проекте» вкладкой и шапка', ()
     );
     fireEvent.click(screen.getByRole('tab', { name: /О проекте/ }));
     expect(screen.getByText('О проекте — содержимое')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Разделить область вкладок' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Соединить области' })).not.toBeNull();
   });
 });

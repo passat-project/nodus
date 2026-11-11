@@ -16,7 +16,7 @@ import { useCardTabs } from '../../../shared/ui/entity-card/use-card-tabs.js';
 import { solveCardWidths } from '../../../shared/ui/entity-card/card-tabs-width.js';
 import { useElementWidth } from '../../../shared/ui/use-element-width.js';
 import { useProjectDetail } from '../api/projects-api.js';
-import { PROJECT_TAB_IDS, type ProjectTabId } from '../lib/project-tabs.js';
+import { PROJECT_DEFAULT_GROUPS, PROJECT_TAB_IDS, type ProjectTabId } from '../lib/project-tabs.js';
 import { ProjectAboutPanel } from './project-about-panel.js';
 import { ProjectHeaderActions } from './project-action-bar.js';
 import { ProjectCardSkeleton } from './project-card-skeleton.js';
@@ -49,6 +49,7 @@ export function ProjectCard({ projectId }: { projectId: string }) {
     kind: 'project',
     stableTabs: PROJECT_TAB_IDS,
     defaultActive: 'structure',
+    defaultGroups: PROJECT_DEFAULT_GROUPS,
   });
   const { state } = cardTabs;
   const visible = new Set(cardTabs.visibleTabs);

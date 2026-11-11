@@ -13,12 +13,20 @@ function Harness({
   kind = 'project' as const,
   defaultActive = 'structure',
   requestedActive,
+  defaultGroups,
 }: {
   kind?: 'project' | 'letter';
   defaultActive?: string;
   requestedActive?: string;
+  defaultGroups?: readonly (readonly string[])[];
 }) {
-  const tabs = useCardTabs({ kind, stableTabs: STABLE, defaultActive, requestedActive });
+  const tabs = useCardTabs({
+    kind,
+    stableTabs: STABLE,
+    defaultActive,
+    requestedActive,
+    defaultGroups,
+  });
   return (
     <>
       <span data-testid="groups">{tabs.state.groups.map((g) => g.tabs.join('+')).join('|')}</span>
@@ -111,6 +119,12 @@ describe('useCardTabs: внешнее обновление prefs', () => {
     );
     render(<Harness kind="letter" defaultActive="structure" requestedActive="structure" />);
     expect(screen.getByTestId('actives').textContent).toBe('about');
+  });
+
+  it('системная раскладка defaultGroups: about слева, остальные справа', () => {
+    render(<Harness defaultGroups={[['about'], ['structure', 'tasks']]} />);
+    expect(screen.getByTestId('groups').textContent).toBe('about|structure+tasks');
+    expect(screen.getByTestId('actives').textContent).toBe('about|structure');
   });
 
   it('без личных prefs открывает системный дефолт', () => {

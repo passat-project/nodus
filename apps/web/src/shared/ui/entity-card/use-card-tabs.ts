@@ -4,6 +4,7 @@ import type { CardKind, CardTabsPref } from '@nodus/contracts';
 import { useUiPrefsStore } from '../../preferences/ui-prefs-store.js';
 import { createCardTabsState, normalizeGroups, type CardTabsState } from './card-tabs-model.js';
 import {
+  groupsFromDefaultGroups,
   groupsFromPref,
   hiddenFromPref,
   isFileTabId,
@@ -25,6 +26,9 @@ export interface UseCardTabsOptions {
   /** Дефолтная активная, если личного порядка ещё нет (проект — structure,
    *  задача — chat, письмо — body/chat по наличию документа). */
   defaultActive?: string;
+  /** Системная раскладка областей до первого личного изменения (проект —
+   *  «О проекте» слева, остальные справа). */
+  defaultGroups?: readonly (readonly string[])[];
   /** Активная вкладка, которой управляет хост (файл открыт/закрыт). */
   requestedActive?: string;
 }
@@ -35,11 +39,17 @@ function rebuild(
   hidden: string[],
   previous?: CardTabsState,
 ): CardTabsState {
-  const groups = groupsFromPref(pref, {
-    stableTabs: options.stableTabs,
-    fileTabs: options.fileTabs ?? [],
-    hidden,
-  });
+  const groups = pref
+    ? groupsFromPref(pref, {
+        stableTabs: options.stableTabs,
+        fileTabs: options.fileTabs ?? [],
+        hidden,
+      })
+    : groupsFromDefaultGroups(options.defaultGroups, {
+        stableTabs: options.stableTabs,
+        fileTabs: options.fileTabs ?? [],
+        hidden,
+      });
   // Активная: сохранённая в prefs (groupsFromPref уже её разложил) или первая
   // видимая — `defaultActive` только когда личного порядка ещё нет. Иначе
   // карточка всегда открывалась бы на системной вкладке вопреки порядку.
@@ -53,7 +63,13 @@ function rebuild(
   return createCardTabsState(groups, {
     activeTab: activeHint,
     visited: previous ? Object.keys(previous.visited) : [],
-    focusGroupId: previous?.focusGroupId ?? null,
+    // Без prefs фокус — на области системного дефолта (проект: «Структура»
+    // справа), чтобы кнопки сплита/слияния работали с рабочей зоной.
+    focusGroupId:
+      previous?.focusGroupId ??
+      (!pref && activeHint
+        ? (groups.find((group) => group.tabs.includes(activeHint))?.id ?? null)
+        : null),
   });
 }
 
