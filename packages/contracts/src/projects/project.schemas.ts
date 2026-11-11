@@ -447,6 +447,35 @@ export const projectHistoryKindSchema = z.enum([
 ]);
 export type ProjectHistoryKind = z.infer<typeof projectHistoryKindSchema>;
 
+/** Действие строки состава в истории (#699): добавлен, снят, смена роли. */
+export const projectHistoryMemberActionSchema = z.enum(['added', 'removed', 'role_changed']);
+export type ProjectHistoryMemberAction = z.infer<typeof projectHistoryMemberActionSchema>;
+
+/** Кто и что: действие над участием сотрудника с его ролью до/после. */
+export const projectHistoryMemberSchema = z.object({
+  user: userRefSchema,
+  action: projectHistoryMemberActionSchema,
+  /** Роль до/после: источник участия или null (для added/removed). */
+  from: projectParticipantSourceSchema.nullable(),
+  to: projectParticipantSourceSchema.nullable(),
+});
+
+export type ProjectHistoryMember = z.infer<typeof projectHistoryMemberSchema>;
+
+/** Видимая причина изменения состава (`participants_changed`): ручное
+ *  действие руководства, вступление, уход, очистка при смене видимости.
+ *  Автоматические пересчёты идут событием `project.roster_synced` и в ленту
+ *  не попадают. null — запись старого формата (до #699). */
+export const projectHistoryParticipantsReasonSchema = z.enum([
+  'manual',
+  'join',
+  'leave',
+  'visibility',
+]);
+export type ProjectHistoryParticipantsReason = z.infer<
+  typeof projectHistoryParticipantsReasonSchema
+>;
+
 export const projectHistoryEntrySchema = z.object({
   id: z.uuid(),
   kind: projectHistoryKindSchema,
@@ -459,6 +488,17 @@ export const projectHistoryEntrySchema = z.object({
   status: projectStatusSchema.nullable(),
   /** Люди события (`participants_changed`) — состав изменился у них. */
   users: z.array(userRefSchema),
+  /** Семантика действий состава (#699): кто, что и в какой роли. Пусто —
+   *  запись старого формата, клиент рендерит прежнюю сводку по `users`. */
+  members: z.array(projectHistoryMemberSchema),
+  /** Причина изменения состава; null — ручная запись старого формата. */
+  reason: projectHistoryParticipantsReasonSchema.nullable(),
+  /** Направление смены видимости, вызвавшей очистку состава
+   *  (`reason='visibility'`); иначе null. */
+  visibility: projectVisibilitySchema.nullable(),
+  /** Значение пересчитал движок формул (#699): лента показывает
+   *  «Автоматически», а не правку человека. */
+  automatic: z.boolean(),
   /** Название на момент события (`created`). */
   name: z.string().nullable(),
 });

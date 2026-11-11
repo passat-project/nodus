@@ -6,7 +6,6 @@ import {
   ErrorCode,
   Permission,
   PROJECT_LIMITS,
-  SYSTEM_FIELD_IDS,
   formSlots,
 } from '@nodus/contracts';
 
@@ -46,15 +45,18 @@ export async function buildUpdatePatch(
 ): Promise<{ patch: ProjectFieldsPatch; fields: string[]; assistantIds: string[] | null }> {
   const patch: ProjectFieldsPatch = {};
   const fields: string[] = [];
-  if (body.name !== undefined) {
+  // В fields попадают только РЕАЛЬНЫЕ отличия от строки проекта (#699):
+  // окно правки шлёт форму целиком, и история не должна пересказывать тело
+  // запроса нетронутыми полями.
+  if (body.name !== undefined && body.name !== row.name) {
     patch.name = body.name;
     fields.push('name');
   }
-  if (body.description !== undefined) {
+  if (body.description !== undefined && (body.description ?? '') !== row.description) {
     patch.description = body.description ?? '';
     fields.push('description');
   }
-  if (body.color !== undefined) {
+  if (body.color !== undefined && body.color !== row.color) {
     patch.color = body.color;
     fields.push('color');
   }
@@ -62,8 +64,11 @@ export async function buildUpdatePatch(
     if (body.portfolioId && !(await ctx.groups.findActive(body.portfolioId))) {
       throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Unknown portfolio');
     }
-    patch.portfolioId = body.portfolioId ?? null;
-    fields.push('portfolioId');
+    const nextPortfolioId = body.portfolioId ?? null;
+    if (nextPortfolioId !== row.portfolioId) {
+      patch.portfolioId = nextPortfolioId;
+      fields.push('portfolioId');
+    }
   }
   if (body.visibility !== undefined && body.visibility !== row.visibility) {
     // Смена видимости на секретный — только действующий руководитель
@@ -80,11 +85,11 @@ export async function buildUpdatePatch(
     // ProjectsQueryService.historyFloor (последняя смена видимости = раскрытие).
     fields.push('visibility');
   }
-  if (body.startDate !== undefined) {
+  if (body.startDate !== undefined && !sameIsoDate(row.startedAt, body.startDate)) {
     patch.startedAt = body.startDate ? new Date(body.startDate) : null;
     fields.push('startDate');
   }
-  if (body.endDate !== undefined) {
+  if (body.endDate !== undefined && !sameIsoDate(row.endsAt, body.endDate)) {
     patch.endsAt = body.endDate ? new Date(body.endDate) : null;
     fields.push('endDate');
   }
@@ -99,8 +104,14 @@ export async function buildUpdatePatch(
     ) {
       throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Unknown or inactive user');
     }
-    patch.assistantIds = assistantIds as Prisma.InputJsonValue;
-    fields.push('assistantIds');
+    // Тот же набор помощников — не изменение: синк состава и строка истории
+    // не нужны (#699).
+    if (sameIds(facts.assistantIds, assistantIds)) {
+      assistantIds = null;
+    } else {
+      patch.assistantIds = assistantIds as Prisma.InputJsonValue;
+      fields.push('assistantIds');
+    }
   }
   if (
     (body.customFields && Object.keys(body.customFields).length > 0) ||
@@ -165,17 +176,22 @@ export async function buildUpdatePatch(
       );
     }
     patch.customFields = prepared.next as Prisma.InputJsonValue;
-    const changedFields = [...prepared.changes.map((change) => `cf.${change.fieldId}`)];
-    if (body.code !== undefined && !changedFields.includes(`cf.${SYSTEM_FIELD_IDS.projectCode}`)) {
-      changedFields.push(`cf.${SYSTEM_FIELD_IDS.projectCode}`);
-    }
-    if (
-      body.clientId !== undefined &&
-      !changedFields.includes(`cf.${SYSTEM_FIELD_IDS.projectClient}`)
-    ) {
-      changedFields.push(`cf.${SYSTEM_FIELD_IDS.projectClient}`);
-    }
-    fields.push(...changedFields);
+    // Только реальные изменения реестра: повтор значения не создаёт строки
+    // истории (#699). Legacy-ключи не досыпаются — реестр уже сравнил их.
+    fields.push(...prepared.changes.map((change) => `cf.${change.fieldId}`));
   }
   return { patch, fields, assistantIds };
+}
+
+/** День даты строки (UTC) совпадает с ISO-датой тела. */
+function sameIsoDate(current: Date | null, next: string | null): boolean {
+  if (current === null) return next === null;
+  return next !== null && current.toISOString().slice(0, 10) === next.slice(0, 10);
+}
+
+/** Равны ли множества идентификаторов. */
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  const a = new Set(left);
+  const b = new Set(right);
+  return a.size === b.size && [...a].every((id) => b.has(id));
 }

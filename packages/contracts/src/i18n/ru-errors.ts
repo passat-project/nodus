@@ -111,6 +111,9 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN]: 'Вид папки с таким названием уже есть',
   [ErrorCode.PROJECT_NODE_FIELDS_REQUIRED]: 'Заполните обязательные поля папки',
   [ErrorCode.PROJECT_TASK_MEMBERS_INVALID]: 'У сотрудников нет доступа к секретному проекту',
+  [ErrorCode.PROJECT_MEMBER_HAS_TASKS]:
+    'Сотрудник назначен в задачах проекта — сначала снимите его с задач',
+  [ErrorCode.PROJECT_MEMBER_ALREADY_PARTICIPANT]: 'Сотрудник уже участвует в проекте из задач',
   [ErrorCode.PROJECT_FIELDS_REQUIRED]: 'Заполните обязательные атрибуты проекта',
   [ErrorCode.PROJECT_NODE_KIND_FORM_INVALID]: 'Форма вида ссылается на негодные атрибуты',
   [ErrorCode.PROJECT_TYPE_FORM_INVALID]: 'Форма типа проекта ссылается на негодные атрибуты',

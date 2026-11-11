@@ -38,3 +38,6 @@ export class ProjectUpdatedScopeHandler extends handlerFor(PROJECT_EVENTS.UPDATE
 export class ProjectParticipantsScopeHandler extends handlerFor(
   PROJECT_EVENTS.PARTICIPANTS_CHANGED,
 ) {}
+/** Автопересчёт состава (#699): множества видимости меняются так же. */
+@Injectable()
+export class ProjectRosterSyncedScopeHandler extends handlerFor(PROJECT_EVENTS.ROSTER_SYNCED) {}

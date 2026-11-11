@@ -25,6 +25,10 @@ function entry(overrides: Partial<ProjectHistoryEntry>): ProjectHistoryEntry {
     fields: ['visibility'],
     status: null,
     users: [],
+    members: [],
+    reason: null,
+    visibility: null,
+    automatic: false,
     name: null,
     ...overrides,
   };

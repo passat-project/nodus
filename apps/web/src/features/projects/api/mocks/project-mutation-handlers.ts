@@ -8,7 +8,6 @@ import {
   Permission,
   SYSTEM_FIELD_IDS,
   createProjectBodySchema,
-  projectMemberAddBodySchema,
   projectStatusBodySchema,
   projectTransferBodySchema,
   requiredProjectFields,
@@ -16,8 +15,8 @@ import {
 } from '@nodus/contracts';
 import type { CustomFieldValues } from '@nodus/contracts';
 
-import { demoUserListItems } from '../../../../shared/mocks/data/users.js';
 import { counterpartyRefById } from '../../../../shared/mocks/data/counterparties.js';
+import { demoUserListItems } from '../../../../shared/mocks/data/users.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import { definitionsForTarget } from '../../../../shared/custom-fields/module-target.js';
 import { projectWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
@@ -29,30 +28,18 @@ import {
 import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
 import { accessOf, detailOf, myMembershipOf } from '../../../../shared/mocks/data/project-views.js';
 import {
-  addDemoProjectMember,
   createDemoProject,
-  joinDemoProject,
-  leaveDemoProject,
-  removeDemoProjectMember,
   setDemoProjectStatus,
   transferDemoProject,
-  updateDemoProject,
 } from '../../../../shared/mocks/data/project-store.js';
+import { updateDemoProject } from '../../../../shared/mocks/data/project-update-store.js';
 import {
   demoProjectGroups,
   demoProjectTypes,
   findDemoProjectRow,
 } from '../../../../shared/mocks/data/projects.js';
+import { forbidden, invalid, notFound } from './project-mutation-responses.js';
 
-const invalid = () =>
-  HttpResponse.json(
-    { code: ErrorCode.VALIDATION_FAILED, message: 'Invalid body' },
-    { status: 400 },
-  );
-const forbidden = () =>
-  HttpResponse.json({ code: ErrorCode.FORBIDDEN, message: 'Forbidden' }, { status: 403 });
-const notFound = () =>
-  HttpResponse.json({ code: ErrorCode.NOT_FOUND, message: 'Project not found' }, { status: 404 });
 const fieldsRequired = (typeId: string, fields: string[], reason: 'create' | 'clear') =>
   HttpResponse.json(
     {
@@ -241,49 +228,5 @@ export const projectMutationHandlers = [
     if (!target) return notFound();
     const updated = transferDemoProject(row.id, target.id, actor.id);
     return updated ? HttpResponse.json(detailOf(updated, actor)) : notFound();
-  }),
-
-  http.post('/api/v1/projects/:id/join', ({ params }) => {
-    const actor = getMockActor();
-    const row = findDemoProjectRow(String(params.id));
-    if (!row || row.visibility !== 'open') return notFound();
-    joinDemoProject(row.id, actor);
-    return new HttpResponse(null, { status: 200 });
-  }),
-
-  http.post('/api/v1/projects/:id/leave', ({ params }) => {
-    const actor = getMockActor();
-    const row = findDemoProjectRow(String(params.id));
-    if (!row) return notFound();
-    leaveDemoProject(row.id, actor);
-    return new HttpResponse(null, { status: 200 });
-  }),
-
-  http.post('/api/v1/projects/:id/members', async ({ params, request }) => {
-    const actor = getMockActor();
-    const row = findDemoProjectRow(String(params.id));
-    if (!row) return notFound();
-    const membership = myMembershipOf(row.id, actor.id);
-    if (!accessOf(row, membership, actor.permissions).canManageMembers) return forbidden();
-    const parsed = projectMemberAddBodySchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return invalid();
-    // Открытый проект: участники живут из задач, руками — только наблюдатель.
-    if (row.visibility !== 'secret' && parsed.data.kind === 'member') return invalid();
-    const target = demoUserListItems.find(
-      (user) => user.id === parsed.data.userId && user.status === 'active',
-    );
-    if (!target) return notFound();
-    addDemoProjectMember(row.id, target.id, parsed.data.kind, actor.id);
-    return new HttpResponse(null, { status: 201 });
-  }),
-
-  http.delete('/api/v1/projects/:id/members/:userId', ({ params }) => {
-    const actor = getMockActor();
-    const row = findDemoProjectRow(String(params.id));
-    if (!row) return notFound();
-    const membership = myMembershipOf(row.id, actor.id);
-    if (!accessOf(row, membership, actor.permissions).canManageMembers) return forbidden();
-    removeDemoProjectMember(row.id, String(params.userId), actor.id, row.visibility !== 'secret');
-    return new HttpResponse(null, { status: 200 });
   }),
 ];

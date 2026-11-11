@@ -25,6 +25,11 @@ function projectRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * Автоматическая часть участия (#52, Р2): чтение состава, вступление/уход,
+ * проекция из задач и очистка при смене видимости. Ручной состав —
+ * project-manual-members.service.test.ts.
+ */
 describe('ProjectMembersService (#52, Р2 — двухрежимное участие)', () => {
   const projects = { findById: vi.fn(), touch: vi.fn(), lockForUpdate: vi.fn() };
   const participants = {
@@ -76,7 +81,13 @@ describe('ProjectMembersService (#52, Р2 — двухрежимное учас�
       expect(eventBus.emit).toHaveBeenCalledWith(
         {},
         PROJECT_EVENTS.PARTICIPANTS_CHANGED,
-        { projectId: ID, changedUserIds: [OUTSIDER], audience: expect.any(Array) },
+        {
+          projectId: ID,
+          changedUserIds: [OUTSIDER],
+          reason: 'join',
+          changes: [{ userId: OUTSIDER, action: 'added', from: null, to: 'observer' }],
+          audience: expect.any(Array),
+        },
         expect.anything(),
       );
       expect(projects.touch).toHaveBeenCalledWith({}, ID);
@@ -102,124 +113,45 @@ describe('ProjectMembersService (#52, Р2 — двухрежимное учас�
     });
 
     it('покинуть — только свой ряд наблюдателя (руководство и динамика задач остаются)', async () => {
+      participants.rowsOfProject.mockResolvedValueOnce([
+        {
+          projectId: ID,
+          userId: OUTSIDER,
+          source: 'observer',
+          observerKind: 'joined',
+          createdAt: new Date(),
+        },
+      ]);
       await service.leave(user(OUTSIDER), ID);
       expect(participants.remove).toHaveBeenCalledWith({}, ID, [OUTSIDER], 'observer');
-    });
-  });
-
-  describe('ручной состав (секретный проект)', () => {
-    function managementRows() {
-      return [
-        {
-          projectId: ID,
-          userId: MANAGER,
-          source: 'manager',
-          observerKind: null,
-          createdAt: new Date(),
-        },
-        {
-          projectId: ID,
-          userId: HELPER,
-          source: 'assistant',
-          observerKind: null,
-          createdAt: new Date(),
-        },
-      ];
-    }
-
-    it('руководство добавляет участника; смена роли заменяет старую строку', async () => {
-      projects.findById.mockResolvedValue(projectRow({ visibility: 'secret' }));
-      participants.rowsOfProject.mockResolvedValue(managementRows());
-      await service.addManual(user(MANAGER), ID, WORKER, 'member');
-      expect(participants.remove).toHaveBeenCalledWith({}, ID, [WORKER], 'observer');
-      expect(participants.add).toHaveBeenCalledWith({}, [
-        { projectId: ID, userId: WORKER, source: 'member' },
-      ]);
-
-      await service.addManual(user(HELPER), ID, WORKER, 'observer');
-      // Роль заменяется: снимается member-ряд, прежний вид наблюдателя
-      // сбрасывается (joined → invited), затем пишется invited.
-      expect(participants.remove).toHaveBeenCalledWith({}, ID, [WORKER], 'member');
-      expect(participants.remove).toHaveBeenLastCalledWith({}, ID, [WORKER], 'observer');
-      expect(participants.add).toHaveBeenLastCalledWith({}, [
-        { projectId: ID, userId: WORKER, source: 'observer', observerKind: 'invited' },
-      ]);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        {},
+        PROJECT_EVENTS.PARTICIPANTS_CHANGED,
+        expect.objectContaining({
+          reason: 'leave',
+          changes: [{ userId: OUTSIDER, action: 'removed', from: 'observer', to: null }],
+        }),
+        expect.anything(),
+      );
     });
 
-    it('понижение участника до наблюдателя при ролях в задачах — 422 (задачи держат уведомления)', async () => {
-      projects.findById.mockResolvedValue(projectRow({ visibility: 'secret' }));
-      participants.rowsOfProject.mockResolvedValue([
-        ...managementRows(),
-        {
-          projectId: ID,
-          userId: WORKER,
-          source: 'member',
-          observerKind: null,
-          createdAt: new Date(),
-        },
-      ]);
-      tasks.roleHolderIds.mockResolvedValueOnce([WORKER]);
-      await expect(service.addManual(user(MANAGER), ID, WORKER, 'observer')).rejects.toMatchObject({
-        code: ErrorCode.VALIDATION_FAILED,
-      });
-      expect(participants.add).not.toHaveBeenCalled();
-    });
-
-    it('лимит наблюдателей (100) — 422 на ручном добавлении', async () => {
-      projects.findById.mockResolvedValue(projectRow({ visibility: 'open' }));
-      const observers = Array.from({ length: 100 }, (_, index) => ({
-        projectId: ID,
-        userId: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
-        source: 'observer',
-        observerKind: 'invited',
-        createdAt: new Date(),
-      }));
-      participants.rowsOfProject.mockResolvedValue([...managementRows(), ...observers]);
-      await expect(service.addManual(user(MANAGER), ID, WORKER, 'observer')).rejects.toMatchObject({
-        code: ErrorCode.VALIDATION_FAILED,
-      });
-    });
-
-    it('открытый проект: участников руками не добавляют (они из задач), наблюдателей — можно', async () => {
-      participants.rowsOfProject.mockResolvedValue(managementRows());
-      await expect(service.addManual(user(MANAGER), ID, WORKER, 'member')).rejects.toMatchObject({
-        code: ErrorCode.VALIDATION_FAILED,
-      });
-
-      await service.addManual(user(MANAGER), ID, WORKER, 'observer');
-      expect(participants.add).toHaveBeenCalledWith({}, [
-        { projectId: ID, userId: WORKER, source: 'observer', observerKind: 'invited' },
-      ]);
-
-      // Снятие наблюдателя в открытом проекте — только ряд observer.
-      await service.removeManual(user(MANAGER), ID, WORKER);
-      expect(participants.remove).toHaveBeenLastCalledWith({}, ID, [WORKER], 'observer');
-    });
-
-    it('не-руководство без project.manage → 403; неактивный пользователь → 404', async () => {
-      participants.rowsOfProject.mockResolvedValue([]);
-      await expect(service.addManual(user(OUTSIDER), ID, WORKER, 'member')).rejects.toMatchObject({
-        code: ErrorCode.FORBIDDEN,
-      });
-
-      participants.rowsOfProject.mockResolvedValue(managementRows());
-      projects.findById.mockResolvedValueOnce(projectRow({ visibility: 'secret' }));
-      profiles.filterActiveUserIds.mockResolvedValueOnce([]);
-      await expect(service.addManual(user(MANAGER), ID, WORKER, 'member')).rejects.toMatchObject({
-        code: ErrorCode.NOT_FOUND,
-      });
+    it('покинуть без строки наблюдателя — без события и записи', async () => {
+      participants.rowsOfProject.mockResolvedValueOnce([]);
+      await service.leave(user(OUTSIDER), ID);
+      expect(participants.remove).not.toHaveBeenCalled();
+      expect(eventBus.emit).not.toHaveBeenCalled();
     });
   });
 
   describe('recomputeTaskSource (проекция из задач, Т2)', () => {
-    it('открытый: строки task сходят к membersOf; изменения → событие', async () => {
+    it('открытый: строки task сходят к membersOf; изменения → roster_synced', async () => {
       tasks.membersOf.mockResolvedValueOnce([WORKER, HELPER]);
       participants.replaceTaskSource.mockResolvedValueOnce({ added: [WORKER], removed: [] });
       await service.recomputeTaskSource(ID);
       expect(participants.replaceTaskSource).toHaveBeenCalledWith({}, ID, [WORKER, HELPER]);
       expect(eventBus.emit).toHaveBeenCalledWith(
         {},
-        PROJECT_EVENTS.PARTICIPANTS_CHANGED,
+        PROJECT_EVENTS.ROSTER_SYNCED,
         { projectId: ID, changedUserIds: [WORKER], audience: expect.any(Array) },
         expect.anything(),
       );
@@ -235,6 +167,34 @@ describe('ProjectMembersService (#52, Р2 — двухрежимное учас�
       await service.recomputeTaskSource(ID);
       expect(tasks.membersOf).not.toHaveBeenCalled();
       expect(participants.replaceTaskSource).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('syncManagement (#699: автоматический пересчёт без истории)', () => {
+    it('изменения → roster_synced; notify=false на создании — тишина', async () => {
+      participants.syncManagement.mockResolvedValueOnce({ added: [HELPER], removed: [] });
+      await service.syncManagement({} as never, ID, { managerId: MANAGER, assistantIds: [] });
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        {},
+        PROJECT_EVENTS.ROSTER_SYNCED,
+        expect.objectContaining({ changedUserIds: [HELPER] }),
+        expect.anything(),
+      );
+      // Payload автоматического состава без имени/шифра проекта: снятый
+      // помощник получает событие, но не название секретного проекта (#646).
+      const payload = eventBus.emit.mock.calls[0]?.[2] as Record<string, unknown>;
+      expect(payload).not.toHaveProperty('name');
+      expect(payload).not.toHaveProperty('code');
+
+      eventBus.emit.mockClear();
+      participants.syncManagement.mockResolvedValueOnce({ added: [WORKER], removed: [] });
+      await service.syncManagement(
+        {} as never,
+        ID,
+        { managerId: MANAGER, assistantIds: [WORKER] },
+        { notify: false },
+      );
+      expect(eventBus.emit).not.toHaveBeenCalled();
     });
   });
 
@@ -286,6 +246,62 @@ describe('ProjectMembersService (#52, Р2 — двухрежимное учас�
         [MANAGER],
         'observer',
       );
+      // Системная строка истории с причиной «смена видимости» (#699).
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        {},
+        PROJECT_EVENTS.PARTICIPANTS_CHANGED,
+        expect.objectContaining({
+          projectId: ID,
+          reason: 'visibility',
+          visibility: 'secret',
+          changes: [
+            { userId: WORKER, action: 'removed', from: 'task', to: null },
+            { userId: OUTSIDER, action: 'removed', from: 'observer', to: null },
+          ],
+        }),
+        expect.anything(),
+      );
+    });
+  });
+
+  describe('dropManualRoster (secret→open, #714)', () => {
+    it('снимает ручных участников; наблюдатели остаются', async () => {
+      participants.rowsOfProject.mockResolvedValueOnce([
+        {
+          projectId: ID,
+          userId: WORKER,
+          source: 'member',
+          observerKind: null,
+          createdAt: new Date(),
+        },
+        {
+          projectId: ID,
+          userId: OUTSIDER,
+          source: 'observer',
+          observerKind: 'invited',
+          createdAt: new Date(),
+        },
+      ]);
+      await service.dropManualRoster({} as never, ID);
+      expect(participants.remove).toHaveBeenCalledWith({}, ID, [WORKER], 'member');
+      expect(participants.remove).not.toHaveBeenCalledWith({}, ID, [OUTSIDER], 'member');
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        {},
+        PROJECT_EVENTS.PARTICIPANTS_CHANGED,
+        expect.objectContaining({
+          reason: 'visibility',
+          visibility: 'open',
+          changes: [{ userId: WORKER, action: 'removed', from: 'member', to: null }],
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('ручных участников нет — тишина', async () => {
+      participants.rowsOfProject.mockResolvedValueOnce([]);
+      await service.dropManualRoster({} as never, ID);
+      expect(participants.remove).not.toHaveBeenCalled();
+      expect(eventBus.emit).not.toHaveBeenCalled();
     });
   });
 });

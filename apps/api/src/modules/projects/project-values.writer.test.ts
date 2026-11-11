@@ -80,13 +80,17 @@ describe('ProjectValuesWriter: проект (#632, Р4)', () => {
     expect(silent.eventBus.emit).not.toHaveBeenCalled();
   });
 
-  it('изменение — аудитория проекта без актёра-триггера, актёр — в метаданных', async () => {
+  it('изменение — аудитория проекта без актёра-триггера, актёр в метаданных, automatic (#699)', async () => {
     const d = stubs();
     expect(await d.writer.writeProject({} as never, ACTOR, PROJECT, FIELD, 1)).toBe(true);
     expect(d.eventBus.emit).toHaveBeenCalledWith(
       {},
       PROJECT_EVENTS.UPDATED,
-      expect.objectContaining({ audience: [MEMBER], fields: [`cf.${FIELD}`] }),
+      expect.objectContaining({
+        audience: [MEMBER],
+        fields: [`cf.${FIELD}`],
+        automatic: true,
+      }),
       expect.objectContaining({ actorId: ACTOR, aggregateId: PROJECT }),
     );
   });

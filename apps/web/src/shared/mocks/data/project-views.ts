@@ -219,6 +219,15 @@ export function historyEntryOf(event: DemoProjectEvent): ProjectHistoryEntry {
     fields: event.fields,
     status: event.status,
     users: event.userIds.map(safeUserRef),
+    members: event.members.map((change) => ({
+      user: safeUserRef(change.userId),
+      action: change.action,
+      from: change.from,
+      to: change.to,
+    })),
+    reason: event.reason,
+    visibility: event.visibility,
+    automatic: event.automatic ?? false,
     name: event.name,
   };
 }

@@ -16,6 +16,8 @@ import { AddProjectMemberButton } from './project-add-member-button.js';
 import {
   groupProjectMembers,
   manualMembershipKind,
+  memberRemovalLabel,
+  taskParticipantIds,
   type ProjectMemberGroup,
 } from '../lib/project-members.js';
 
@@ -54,6 +56,11 @@ export function ProjectMembersTab({ project }: { project: ProjectDetail }) {
   const managementIds = rows
     .filter((row) => row.source === 'manager' || row.source === 'assistant')
     .map((row) => row.user.id);
+  // Открытый проект: участнику из задач наблюдателя не выдают — роль не
+  // добавляет доступа (#714); сервер тоже отклонит, пикер не должен предлагать.
+  const observerExcludeIds = secret
+    ? managementIds
+    : [...managementIds, ...taskParticipantIds(rows)];
   const manualIds = (kind: 'member' | 'observer') =>
     rows.filter((row) => row.source === kind).map((row) => row.user.id);
 
@@ -78,7 +85,7 @@ export function ProjectMembersTab({ project }: { project: ProjectDetail }) {
               projectId={project.id}
               kind="observer"
               selectedIds={manualIds('observer')}
-              excludeIds={managementIds}
+              excludeIds={observerExcludeIds}
             />
           </div>
         ) : null}
@@ -96,25 +103,23 @@ export function ProjectMembersTab({ project }: { project: ProjectDetail }) {
           </Empty>
         ) : (
           <ul className="flex flex-col">
-            {groups.map((group) => (
-              <MemberRow
-                key={group.user.id}
-                group={group}
-                canRemove={
-                  canManage &&
-                  manualMembershipKind(group) !== null &&
-                  !group.sources.includes('manager') &&
-                  !group.sources.includes('assistant')
-                }
-                onOpen={() => openCard({ kind: 'employee', id: group.user.id })}
-                onRemove={() =>
-                  remove.mutate({
-                    userId: group.user.id,
-                    kind: manualMembershipKind(group) ?? 'member',
-                  })
-                }
-              />
-            ))}
+            {groups.map((group) => {
+              const removeKind =
+                group.sources.includes('manager') || group.sources.includes('assistant')
+                  ? null
+                  : manualMembershipKind(group);
+              return (
+                <MemberRow
+                  key={group.user.id}
+                  group={group}
+                  removeKind={canManage ? removeKind : null}
+                  onOpen={() => openCard({ kind: 'employee', id: group.user.id })}
+                  onRemove={() => {
+                    if (removeKind) remove.mutate({ userId: group.user.id, kind: removeKind });
+                  }}
+                />
+              );
+            })}
           </ul>
         )}
 
@@ -130,15 +135,16 @@ export function ProjectMembersTab({ project }: { project: ProjectDetail }) {
 
 function MemberRow({
   group,
-  canRemove,
+  removeKind,
   onOpen,
   onRemove,
 }: {
   group: ProjectMemberGroup;
-  canRemove: boolean;
+  removeKind: 'member' | 'observer' | null;
   onOpen: () => void;
   onRemove: () => void;
 }) {
+  const removeLabel = removeKind ? memberRemovalLabel(removeKind) : null;
   return (
     <li className="group flex h-12 items-center gap-3 border-b border-border/60 px-2 last:border-b-0 hover:bg-accent/40">
       <button
@@ -163,14 +169,14 @@ function MemberRow({
           </NodeChip>
         ))}
       </span>
-      {canRemove ? (
+      {removeLabel ? (
         <Button
           type="button"
           variant="ghost"
           size="icon-xs"
           onClick={onRemove}
-          aria-label={`${ui.projects.removeMember}: ${group.user.displayName}`}
-          title={ui.projects.removeMember}
+          aria-label={`${removeLabel}: ${group.user.displayName}`}
+          title={removeLabel}
           className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
         >
           <Trash2 className="size-3.5" strokeWidth={1.75} />

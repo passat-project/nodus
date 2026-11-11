@@ -82,12 +82,12 @@ export function makeProjectsServiceKit() {
     hasRow: vi.fn(),
   };
   const members: Mocks<
-    'syncManagement' | 'onVisibilityChanged' | 'recomputeTaskSource' | 'emitChanged'
+    'syncManagement' | 'recomputeTaskSource' | 'dropOpenRoster' | 'dropManualRoster'
   > = {
     syncManagement: vi.fn(),
-    onVisibilityChanged: vi.fn(),
     recomputeTaskSource: vi.fn(),
-    emitChanged: vi.fn(),
+    dropOpenRoster: vi.fn(),
+    dropManualRoster: vi.fn(),
   };
   const queries: Mocks<'detail'> = { detail: vi.fn() };
   const profiles: Mocks<'filterActiveUserIds'> = { filterActiveUserIds: vi.fn() };

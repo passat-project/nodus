@@ -22,6 +22,7 @@ import { FIELD_BINDING_TARGET_READER } from './ports/field-binding-targets.port.
 import {
   ProjectCreatedScopeHandler,
   ProjectParticipantsScopeHandler,
+  ProjectRosterSyncedScopeHandler,
   ProjectUpdatedScopeHandler,
   ProjectScopeInvalidateRunner,
 } from './ports/scope-invalidation.handler.js';
@@ -66,6 +67,7 @@ import {
     ProjectCreatedScopeHandler,
     ProjectUpdatedScopeHandler,
     ProjectParticipantsScopeHandler,
+    ProjectRosterSyncedScopeHandler,
   ],
   exports: [
     PROJECT_READER,

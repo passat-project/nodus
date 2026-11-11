@@ -131,6 +131,11 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   // Состав задачи секретного проекта (#674): запрос корректен, но выбранные
   // сотрудники не могут получать задачи — 422, чтобы клиент показал причину.
   [ErrorCode.PROJECT_TASK_MEMBERS_INVALID]: HttpStatus.UNPROCESSABLE_ENTITY,
+  // Состав проекта (#714): снятие/понижение держателя ролей в задачах и
+  // выдача наблюдателя участнику из задач открытого проекта — 422 с
+  // понятной причиной, а не общая валидация формы.
+  [ErrorCode.PROJECT_MEMBER_HAS_TASKS]: HttpStatus.UNPROCESSABLE_ENTITY,
+  [ErrorCode.PROJECT_MEMBER_ALREADY_PARTICIPANT]: HttpStatus.UNPROCESSABLE_ENTITY,
   [ErrorCode.DICTIONARY_SYSTEM_LOCKED]: HttpStatus.CONFLICT,
   [ErrorCode.DICTIONARY_ITEM_NAME_TAKEN]: HttpStatus.CONFLICT,
   // Права доступа модулей (#379, ADR-0034): неизменяемая роль администратора —

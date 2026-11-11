@@ -1,6 +1,5 @@
 import { Activity, FolderPlus, Pencil, Users } from 'lucide-react';
 import { useMemo, useRef } from 'react';
-import type { ProjectHistoryEntry } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
 import { Skeleton } from '@nodus/ui/components/skeleton';
@@ -10,6 +9,7 @@ import { formatDateTimeShort } from '../../../shared/lib/format.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { useInfiniteSentinel } from '../../../shared/views/use-infinite-sentinel.js';
 import { useProjectHistory } from '../api/projects-api.js';
+import { projectHistoryTitle } from '../lib/project-history.js';
 
 const fieldLabels: Record<string, string> = {
   name: ui.projects.history.field.name,
@@ -66,29 +66,6 @@ export function ProjectHistoryTab({ projectId }: { projectId: string }) {
     return fieldLabels[field] ?? field;
   }
 
-  function title(entry: ProjectHistoryEntry): string {
-    switch (entry.kind) {
-      case 'created':
-        return entry.name
-          ? `${ui.projects.history.created}: ${entry.name}`
-          : ui.projects.history.created;
-      case 'status_changed':
-        return entry.status
-          ? `${ui.projects.history.statusChanged}: ${ui.projects.status[entry.status]}`
-          : ui.projects.history.statusChanged;
-      case 'participants_changed':
-        return entry.users.length > 0
-          ? `${ui.projects.history.participantsChanged}: ${entry.users
-              .map((user) => user.displayName)
-              .join(', ')}`
-          : ui.projects.history.participantsChanged;
-      case 'updated':
-        return entry.fields.length > 0
-          ? `${ui.projects.history.updated}: ${entry.fields.map(fieldLabel).join(', ')}`
-          : ui.projects.history.updated;
-    }
-  }
-
   return (
     <div ref={containerRef} className="h-full overflow-y-auto p-6">
       <div className="mx-auto w-full max-w-3xl">
@@ -122,9 +99,16 @@ export function ProjectHistoryTab({ projectId }: { projectId: string }) {
                     <Icon className="size-3.5" strokeWidth={1.75} />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-foreground">{title(entry)}</p>
+                    <p className="text-sm text-foreground">
+                      {projectHistoryTitle(entry, fieldLabel)}
+                    </p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                      {entry.actor ? (
+                      {entry.automatic ? (
+                        <>
+                          <span>{ui.projects.history.automatic}</span>
+                          <span aria-hidden>·</span>
+                        </>
+                      ) : entry.actor ? (
                         <>
                           <PersonAvatar
                             name={entry.actor.displayName}

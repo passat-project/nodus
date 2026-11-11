@@ -89,6 +89,7 @@ export const projectsStrings = {
   memberKind: { member: 'Участник', observer: 'Наблюдатель' },
   memberKindHint: 'Участник может получать задачи, наблюдатель — только просмотр',
   removeMember: 'Убрать из состава',
+  removeObserver: 'Убрать наблюдателя',
   // Действия
   actionsTitle: 'Действия с проектом',
   editProject: 'Редактировать проект',
@@ -129,6 +130,19 @@ export const projectsStrings = {
     statusChanged: 'Статус изменён',
     participantsChanged: 'Изменён состав',
     system: 'Система',
+    // #699: строки состава с действием и ролью (без «было → стало»)
+    memberAdded: 'Добавлен участник',
+    memberRemoved: 'Снят участник',
+    observerAdded: 'Добавлен наблюдатель',
+    observerRemoved: 'Снят наблюдатель',
+    roleToMember: 'Наблюдатель → участник',
+    roleToObserver: 'Участник → наблюдатель',
+    joined: 'Вступил в проект',
+    left: 'Покинул проект',
+    rosterClearedSecret: 'Состав очищен: проект стал секретным — снято {count}',
+    rosterClearedOpen: 'Состав очищен: проект стал открытым — снято {count}',
+    /** Автор строки — движок формул, а не человек (#699). */
+    automatic: 'Автоматически',
     field: {
       name: 'Название',
       code: 'Шифр',

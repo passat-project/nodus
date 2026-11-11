@@ -56,6 +56,7 @@ import { ProjectChatController } from './project-chat/project-chat.controller.js
 import {
   ProjectCreatedChatHandler,
   ProjectParticipantsChatHandler,
+  ProjectRosterSyncedChatHandler,
   ProjectUpdatedChatHandler,
   ProjectChatHandlerRunner,
 } from './project-chat/project-chat.handlers.js';
@@ -216,6 +217,7 @@ import {
     ProjectChatHandlerRunner,
     ProjectCreatedChatHandler,
     ProjectParticipantsChatHandler,
+    ProjectRosterSyncedChatHandler,
     ProjectUpdatedChatHandler,
     // Чат письма (#55, Р10): беседа type=letter, состав = адресат + участники.
     LetterChatRepository,

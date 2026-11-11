@@ -2,12 +2,17 @@ import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import {
   Permission,
+  projectParticipantChangeSchema,
+  projectParticipantsReasonSchema,
   type AuthUser,
   type ListProjectsQuery,
   type ProjectDetail,
   type ProjectHistoryEntry,
+  type ProjectHistoryMember,
   type ProjectListItem,
+  type ProjectParticipantChange,
   type ProjectStatus,
+  type ProjectVisibility,
 } from '@nodus/contracts';
 
 import { decodeCursor, encodeCursor } from '../../core/pagination/cursor.util.js';
@@ -115,6 +120,7 @@ export class ProjectsQueryService {
     for (const row of page) {
       if (row.actorId) userIds.add(row.actorId);
       for (const userId of changedUsersOf(row.payload)) userIds.add(userId);
+      for (const change of membershipChangesOf(row.payload)) userIds.add(change.userId);
     }
     const refs = new Map((await this.profiles.findRefs([...userIds])).map((ref) => [ref.id, ref]));
     const items: ProjectHistoryEntry[] = page.map((row) => {
@@ -131,6 +137,13 @@ export class ProjectsQueryService {
           : [],
         status,
         users: changedUsersOf(row.payload).flatMap((userId) => refs.get(userId) ?? []),
+        members: membershipChangesOf(row.payload).flatMap((change): ProjectHistoryMember[] => {
+          const user = refs.get(change.userId);
+          return user ? [{ user, action: change.action, from: change.from, to: change.to }] : [];
+        }),
+        reason: reasonOf(row.payload),
+        visibility: visibilityOf(row.payload),
+        automatic: payload.automatic === true,
         name: typeof payload.name === 'string' ? payload.name : null,
       };
     });
@@ -178,4 +191,29 @@ function changedUsersOf(payload: unknown): string[] {
   if (!payload || typeof payload !== 'object') return [];
   const value = (payload as { changedUserIds?: unknown }).changedUserIds;
   return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+}
+
+/** Семантика действий состава (#699); пусто — запись старого формата. */
+function membershipChangesOf(payload: unknown): ProjectParticipantChange[] {
+  if (!payload || typeof payload !== 'object') return [];
+  const parsed = projectParticipantChangeSchema
+    .array()
+    .safeParse((payload as { changes?: unknown }).changes);
+  return parsed.success ? parsed.data : [];
+}
+
+/** Видимая причина изменения состава; null — старая запись. */
+function reasonOf(payload: unknown): ProjectHistoryEntry['reason'] {
+  if (!payload || typeof payload !== 'object') return null;
+  const parsed = projectParticipantsReasonSchema.safeParse(
+    (payload as { reason?: unknown }).reason,
+  );
+  return parsed.success ? parsed.data : null;
+}
+
+/** Направление смены видимости у системной строки очистки состава. */
+function visibilityOf(payload: unknown): ProjectVisibility | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const value = (payload as { visibility?: unknown }).visibility;
+  return value === 'open' || value === 'secret' ? value : null;
 }

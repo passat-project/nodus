@@ -235,13 +235,14 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: трассы Т1/Т2/Т2b 
       const carolRow = membersBody.items.find((m) => m.user.id === carol.id);
       expect(carolRow?.source).toBe('task');
 
-      // Событие пересчёта состава (I9)
+      // Событие пересчёта состава (I9, #699: автоматический пересчёт —
+      // roster_synced, в ленту «История» не пишется)
       const event = await fx.prisma.event.findFirst({
-        where: { type: 'project.participants_changed', aggregateId: open.id },
+        where: { type: 'project.roster_synced', aggregateId: open.id },
       });
       expect(event).toBeTruthy();
 
-      // Канал: carol — в roster'е беседы (по project.created + participants_changed)
+      // Канал: carol — в roster'е беседы (по project.created + roster_synced)
       await waitFor(async () => {
         const channel = await fx.prisma.conversation.findFirst({
           where: { projectId: open.id, type: 'project_channel' },
