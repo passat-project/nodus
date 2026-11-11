@@ -11,6 +11,7 @@ import {
   EmptyTitle,
 } from '@nodus/ui/components/empty';
 
+import { CardTabToolbar } from '../../../../shared/ui/entity-card/card-tab-toolbar.js';
 import { ListToolbar } from '../../../../shared/views/list-toolbar.js';
 import type { FilterFieldDef } from '../../../../shared/views/list-filters.js';
 import type { ListToolbarState } from '../../../../shared/views/use-list-toolbar.js';
@@ -43,43 +44,46 @@ export function StructureToolbar({
   onCollapseAll: () => void;
 }) {
   return (
-    <ListToolbar
-      toolbar={toolbar}
-      defs={defs}
-      left={
-        canEdit ? (
-          <Button type="button" onClick={onCreateNode}>
-            <FolderPlus data-icon="inline-start" />
-            {ui.structure.createNode}
-          </Button>
-        ) : null
-      }
-      right={
-        <>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            title={ui.structure.expandAll}
-            aria-label={ui.structure.expandAll}
-            onClick={onExpandAll}
-          >
-            <ChevronsUpDown className="size-3.5" strokeWidth={1.75} />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            title={ui.structure.collapseAll}
-            aria-label={ui.structure.collapseAll}
-            onClick={onCollapseAll}
-          >
-            <ChevronsDownUp className="size-3.5" strokeWidth={1.75} />
-          </Button>
-          <ViewSettings viewKey={STRUCTURE_VIEW_KEY} defs={fields} />
-        </>
-      }
-    />
+    <CardTabToolbar>
+      <ListToolbar
+        className="min-w-0 flex-1 px-0"
+        toolbar={toolbar}
+        defs={defs}
+        left={
+          canEdit ? (
+            <Button type="button" onClick={onCreateNode}>
+              <FolderPlus data-icon="inline-start" />
+              {ui.structure.createNode}
+            </Button>
+          ) : null
+        }
+        right={
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              title={ui.structure.expandAll}
+              aria-label={ui.structure.expandAll}
+              onClick={onExpandAll}
+            >
+              <ChevronsUpDown className="size-3.5" strokeWidth={1.75} />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              title={ui.structure.collapseAll}
+              aria-label={ui.structure.collapseAll}
+              onClick={onCollapseAll}
+            >
+              <ChevronsDownUp className="size-3.5" strokeWidth={1.75} />
+            </Button>
+            <ViewSettings viewKey={STRUCTURE_VIEW_KEY} defs={fields} />
+          </>
+        }
+      />
+    </CardTabToolbar>
   );
 }
 

@@ -34,7 +34,7 @@ function make() {
   const writer = {
     writeProject: vi.fn(async () => true),
     writeNode: vi.fn(async () => true),
-    lockProject: vi.fn(async () => true),
+    lockProject: vi.fn(async () => ({ id: PROJECT, visibility: 'open', status: 'active' })),
     lockNode: vi.fn(async () => void 0),
   };
   const repo = {
