@@ -6,7 +6,11 @@ import { ErrorCode } from '@nodus/contracts';
 
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import type { FileStorage } from '../../../core/ports/file-storage.port.js';
-import { AVATAR_MAX_BYTES, AVATAR_PIXEL_LIMIT } from './avatar-rules.js';
+import {
+  AVATAR_MAX_BYTES,
+  AVATAR_PIXEL_LIMIT,
+  hasSensitiveContainerMetadata,
+} from './avatar-rules.js';
 import { AvatarService } from './avatar.service.js';
 
 /** Пиксельная PNG 128×128 (через sharp — валидный декодируемый файл). */
@@ -42,6 +46,15 @@ function withIptc(jpeg: Buffer): Buffer {
   header.writeUInt16BE(0xffed, 0);
   header.writeUInt16BE(data.length + 2, 2);
   return Buffer.concat([jpeg.subarray(0, 2), header, data, jpeg.subarray(2)]);
+}
+
+/** JPEG с COM-сегментом (маркер 0xFFFE): sharp НЕ отдаёт его в metadata —
+ *  носитель PII виден только сырым сканом контейнера (#725). */
+function withCom(jpeg: Buffer, text: string): Buffer {
+  const payload = Buffer.from(text, 'latin1');
+  const header = Buffer.from([0xff, 0xfe, 0, 0]);
+  header.writeUInt16BE(payload.length + 2, 2);
+  return Buffer.concat([jpeg.subarray(0, 2), header, payload, jpeg.subarray(2)]);
 }
 
 function makeService() {
@@ -204,6 +217,28 @@ describe('AvatarService.process', () => {
     );
 
     expect((await sharp(saved[0]!.bytes).metadata()).iptc).toBeUndefined();
+  });
+
+  it('JPEG COM с GPS (sharp metadata его не видит) — срезается сырым сканом', async () => {
+    const { service, saved } = makeService();
+    const jpeg = withCom(
+      await sharp({ create: { width: 128, height: 128, channels: 3, background: '#363' } })
+        .jpeg()
+        .toBuffer(),
+      'GPS 55.75N 37.61E; photographer Ivanov I.I.',
+    );
+    // Подтверждение пропуска sharp: метаданных с точки зрения metadata() нет.
+    const meta = await sharp(jpeg).metadata();
+    expect(meta.exif).toBeUndefined();
+    expect(meta.comments).toBeUndefined();
+
+    await service.process(
+      { ownerId: 'u-1', name: 'фото.jpg', size: jpeg.length },
+      Readable.from(jpeg),
+    );
+
+    expect(hasSensitiveContainerMetadata(saved[0]!.bytes)).toBe(false);
+    expect(saved[0]!.bytes.equals(jpeg)).toBe(false);
   });
 
   it('сбой записи деривата убирает оригинал — сирота не остаётся в бакете', async () => {

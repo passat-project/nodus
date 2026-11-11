@@ -62,6 +62,11 @@ services:
       STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:?задайте в .env}
       # Подпись ссылок отдачи файлов (HMAC, ADR-0013) — отдельный секрет.
       STORAGE_URL_SECRET: ${STORAGE_URL_SECRET:?задайте в .env}
+      # Уборка брошенных multipart-загрузок (#715): порог возраста и период
+      # прохода в часах. Без этих строк значение из .env в контейнер не
+      # попадает (env_file у api нет) — работали бы дефолты 24/24.
+      STORAGE_STALE_UPLOAD_AGE_HOURS: ${STORAGE_STALE_UPLOAD_AGE_HOURS:-24}
+      STORAGE_STALE_UPLOAD_INTERVAL_HOURS: ${STORAGE_STALE_UPLOAD_INTERVAL_HOURS:-24}
       # ONLYOFFICE (#138): движок просмотра. api↔documentserver ходят по
       # внутренней сети compose (не по браузерному origin); JWT — общий секрет.
       OFFICE_ENABLED: ${OFFICE_ENABLED:-false}

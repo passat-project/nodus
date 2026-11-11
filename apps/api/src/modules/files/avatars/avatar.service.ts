@@ -12,6 +12,7 @@ import {
   AVATAR_MAX_BYTES,
   AVATAR_MIN_SIDE,
   AVATAR_PIXEL_LIMIT,
+  hasSensitiveContainerMetadata,
   hasSensitiveMetadata,
   isPixelLimitError,
   validateAvatarBytes,
@@ -170,7 +171,7 @@ export class AvatarService {
    *  и потери качества); с метаданными — перекодируется в свой формат,
    *  EXIF-ориентация запекается в пиксели (как её уже применяет дериват). */
   private async withoutMetadata(bytes: Buffer, meta: SharpMetadata, mime: string): Promise<Buffer> {
-    if (!hasSensitiveMetadata(meta)) return bytes;
+    if (!hasSensitiveMetadata(meta) && !hasSensitiveContainerMetadata(bytes)) return bytes;
     const pipeline = sharp(bytes, { limitInputPixels: AVATAR_PIXEL_LIMIT }).rotate();
     if (mime === 'image/png') return pipeline.png().toBuffer();
     if (mime === 'image/webp') return pipeline.webp({ quality: 95 }).toBuffer();

@@ -94,7 +94,7 @@ describe.skipIf(!process.env.STORAGE_ACCESS_KEY)(
       expect(mine[0]?.bytes).toBeGreaterThanOrEqual(1024);
     }, 60_000);
 
-    it('свежая загрузка не тронута, брошенная (старше порога) отменена — листинг по ключу пуст', async () => {
+    it('обе загрузки старше порога («сейчас» +26 ч) отменены — листинг по ключу пуст', async () => {
       await initiate(freshKey);
       const sweeper = new StaleMultipartSweeper(config, driver, logger as never);
 

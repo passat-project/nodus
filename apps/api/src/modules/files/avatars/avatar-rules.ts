@@ -46,6 +46,61 @@ export function hasSensitiveMetadata(meta: {
 
 export type AvatarFileIssue = 'format' | 'size';
 
+/** PNG-чанки с произвольным текстом/метаданными: EXIF можно спрятать и после
+ *  IDAT, а sharp такие (и JPEG COM/APPn) в `metadata()` не отдаёт — сырой
+ *  скан контейнера закрывает этот носитель (#725, security-ревью 12.11). */
+const SENSITIVE_PNG_CHUNKS = new Set(['tEXt', 'zTXt', 'iTXt', 'eXIf']);
+
+function pngHasSensitiveChunks(bytes: Buffer): boolean {
+  let offset = 8;
+  while (offset + 8 <= bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.toString('latin1', offset + 4, offset + 8);
+    if (SENSITIVE_PNG_CHUNKS.has(type)) return true;
+    if (type === 'IEND') return false;
+    if (length > bytes.length) return true; // порченый контейнер — fail-safe
+    offset += 12 + length;
+  }
+  return true;
+}
+
+function jpegHasSensitiveSegments(bytes: Buffer): boolean {
+  let offset = 2; // после SOI
+  while (offset + 4 <= bytes.length) {
+    if (bytes[offset] !== 0xff) return true; // не маркер — контейнер не понять
+    let marker = bytes[offset + 1] ?? 0;
+    while (marker === 0xff && offset + 2 < bytes.length) {
+      offset += 1;
+      marker = bytes[offset + 1] ?? 0;
+    }
+    if (marker === 0xd9) return false; // EOI — метаданных больше нет
+    if (marker === 0xda) return false; // SOS: данные кадра, сегменты кончились
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) {
+      offset += 2; // маркеры без длины
+      continue;
+    }
+    const length = bytes.readUInt16BE(offset + 2);
+    if (length < 2) return true;
+    // APP1 (EXIF/XMP), APP13 (IPTC/Photoshop), COM и прочие APPn; ICC (APP2)
+    // и Adobe (APP14) — не PII, их не считаем.
+    const sensitive =
+      marker === 0xfe || (marker >= 0xe1 && marker <= 0xef && marker !== 0xe2 && marker !== 0xee);
+    if (sensitive) return true;
+    offset += 2 + length;
+  }
+  return true; // дошли до конца без SOS/EOI — перекодируем на всякий случай
+}
+
+/** Сырой скан контейнера на носители PII, которые sharp.metadata() не отдаёт:
+ *  JPEG COM/APPn и PNG-текст/EXIF после IDAT. true → перекодировать оригинал.
+ *  WebP — false: EXIF/XMP отдаёт `metadata()`, текстовых чанков нет. */
+export function hasSensitiveContainerMetadata(bytes: Buffer): boolean {
+  const type = sniffAvatarType(bytes);
+  if (type === 'png') return pngHasSensitiveChunks(bytes);
+  if (type === 'jpeg') return jpegHasSensitiveSegments(bytes);
+  return false;
+}
+
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
 
