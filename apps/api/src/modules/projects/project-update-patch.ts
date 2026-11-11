@@ -76,6 +76,8 @@ export async function buildUpdatePatch(
       throw DomainException.forbidden('Only the manager can make the project secret');
     }
     patch.visibility = body.visibility;
+    // Security #748: маркер 'visibility' — граница видимой истории: её читает
+    // ProjectsQueryService.historyFloor (последняя смена видимости = раскрытие).
     fields.push('visibility');
   }
   if (body.startDate !== undefined) {
