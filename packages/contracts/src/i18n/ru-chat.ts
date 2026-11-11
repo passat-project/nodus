@@ -240,6 +240,10 @@ export const chatStrings = {
   roleChipAdmin: 'Модератор',
   membersAdded: 'Участники добавлены',
   quoteFragment: 'Цитировать фрагмент',
+  /** #729: ярлык «Ответить» сбоку от пузыря — доступное имя кнопки
+   *  (aria-label). Видимая подпись — ui.chat.menu.reply (одно действие —
+   *  одна строка), тултипа нет: слово и так на экране. */
+  replyToMessage: 'Ответить на сообщение',
   editBanner: 'Редактирование сообщения',
   messageOne: 'сообщение',
   messageFew: 'сообщения',

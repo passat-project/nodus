@@ -14,6 +14,7 @@ import { useChatHostNavigation } from './chat-host.js';
 import { useJumpStore } from './jump-store.js';
 import { ForwardedHeader, ReplyHeader } from './message-headers.js';
 import { MessageReactions } from './message-reactions.js';
+import { MessageReplyButton } from './message-reply.js';
 import { MessageMeta } from './message-meta.js';
 import { MessageText } from './message-text.js';
 import { linkCardVisible, MessageLinkPreview } from './link-preview-card.js';
@@ -52,7 +53,9 @@ export { MessageReactions } from './message-reactions.js';
  * Выравнивание — НАСТРОЙКА пользователя (`chat-prefs.ts`): 'one' (дефолт) —
  * все с одной стороны; 'both' — классика: свои справа. Реакции и вложения —
  * ВНУТРИ пузыря; действия — контекстное меню по правому клику (MessageMenu,
- * без кнопок на сообщении — вердикт владельца).
+ * без панели кнопок на сообщении — вердикт владельца); ховер даёт две точки
+ * входа того же меню: пилюлю базовой реакции у нижнего угла и слово
+ * «Ответить» над верхней кромкой (#729, канон Telegram).
  * Стикер-сообщение (#143) — отдельная ветка без пузыря (StickerMessageView).
  */
 export const ChatMessageItem = memo(function ChatMessageItem({
@@ -141,6 +144,15 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   ) : (
     <ReactionPicker message={message} atEnd={atEnd} />
   );
+  // #729: ховер-слой пузыря — пилюля реакций (нижний угол) + слово
+  // «Ответить» над верхней кромкой. Обе — точки входа, а не замена ПКМ-меню;
+  // действие «Ответить» приходит из меню контекстом (message-reply.tsx).
+  const hoverNodes = (
+    <>
+      {pickerNode}
+      <MessageReplyButton mine={mine} />
+    </>
+  );
   if (stickerAttachment) {
     return (
       <StickerMessageView
@@ -152,7 +164,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
         reactionsRow={reactionsRow}
         receiptsHidden={receiptsHidden}
       >
-        {pickerNode}
+        {hoverNodes}
       </StickerMessageView>
     );
   }
@@ -213,7 +225,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
             reactionsRow={reactionsRow}
             receiptsHidden={receiptsHidden}
           >
-            {pickerNode}
+            {hoverNodes}
           </MediaMessage>
         </MessageContent>
       </Message>
@@ -381,7 +393,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
           {/* Ховер-попап реакций (#124): кнопка у нижнего угла пузыря
               (Bubble — relative), видна по hover/focus/открытом попапе. */}
           {/* В режиме выделения реакции недоступны (модель Битрикс24, #132 р.4). */}
-          {pickerNode}
+          {hoverNodes}
         </Bubble>
       </MessageContent>
     </Message>
