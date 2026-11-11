@@ -7,7 +7,6 @@ import {
   isSamePlacement,
   moveTaskToStage,
   personalAxis,
-  reorderWithinStage,
   stageOfDragId,
 } from './kanban-board.js';
 
@@ -85,12 +84,6 @@ describe('kanban-board: перестановки борда', () => {
     const next = moveTaskToStage(items, 'a1', STAGE_B, 0, globalAxis);
     expect(next.map((t) => t.id)).toEqual(['a2', 'a1']);
     expect(next.find((t) => t.id === 'a1')?.stage.id).toBe('b');
-  });
-
-  it('reorderWithinStage: перестановка внутри колонки, чужая колонка не трогается', () => {
-    const next = reorderWithinStage(board(), 'a2', 'a1', globalAxis);
-    expect(next.filter((t) => t.stage.id === 'a').map((t) => t.id)).toEqual(['a2', 'a1']);
-    expect(reorderWithinStage(board(), 'a1', 'b1', globalAxis)).toEqual(board());
   });
 
   it('indexOfInStage: позиция внутри колонки, а не массива', () => {

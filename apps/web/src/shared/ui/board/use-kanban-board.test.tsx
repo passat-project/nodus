@@ -84,7 +84,7 @@ describe('useKanbanBoard', () => {
     vi.clearAllMocks();
   });
 
-  it('дроп на ПУСТУЮ колонку глобальной оси: без TypeError, перенос в колонку (регрессия)', async () => {
+  it('drop на ПУСТУЮ колонку глобальной оси: без TypeError, перенос в колонку (регрессия)', async () => {
     stubFeeds(async () => jsonResponse(200, { items: [], nextCursor: null }));
     const onMove = vi.fn();
     const { result } = renderBoard(onMove);
@@ -115,6 +115,8 @@ describe('useKanbanBoard', () => {
     );
   });
 
+  /** #737: живая перестановка «над/под» указателем + drop ровно там, где
+   *  стоял фантом (слот). Колонка A — две карточки t1, t2 (t1 сверху). */
   it('loadMore стабилен между рендерами при инлайн-feedUrl (observer колонки не пересоздаётся)', async () => {
     stubFeeds(async () => jsonResponse(200, { items: [], nextCursor: null }));
     const { result, rerender } = renderBoard();

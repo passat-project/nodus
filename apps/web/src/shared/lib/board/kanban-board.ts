@@ -95,23 +95,3 @@ export function isSamePlacement(a: TaskListItem[], b: TaskListItem[], axis: Boar
     a.every((t, i) => t.id === b[i]?.id && axis.keyOf(t) === axis.keyOf(b[i]))
   );
 }
-
-/** Перестановка внутри колонки (финиш drag над другой карточкой той же колонки). */
-export function reorderWithinStage(
-  items: TaskListItem[],
-  activeId: string,
-  overId: string,
-  axis: BoardAxis,
-): TaskListItem[] {
-  const a = items.findIndex((t) => t.id === activeId);
-  const o = items.findIndex((t) => t.id === overId);
-  if (a < 0 || o < 0 || a === o) return items;
-  const aTask = items[a];
-  const oTask = items[o];
-  if (!aTask || !oTask || axis.keyOf(aTask) !== axis.keyOf(oTask)) return items;
-  const next = [...items];
-  const [moved] = next.splice(a, 1);
-  if (!moved) return items;
-  next.splice(o, 0, moved);
-  return next;
-}
