@@ -108,10 +108,13 @@ export function AccessMatrix({
       >
         <div
           role="row"
-          className="sticky top-0 z-30 grid min-h-12 w-max min-w-full items-center gap-3 border-b border-border/60 bg-card px-4 py-2"
+          className="sticky top-0 z-30 grid min-h-12 w-max min-w-full items-center gap-3 border-b border-border/60 bg-card"
           style={{ gridTemplateColumns }}
         >
-          <span role="columnheader" className="sticky left-4 z-20 bg-card px-1">
+          <span
+            role="columnheader"
+            className="sticky left-0 z-20 flex h-full items-center self-stretch border-r border-border/60 bg-card pr-2 pl-4"
+          >
             <NodeLabel label={rowHeader} />
           </span>
           {columns.map((column) => {
@@ -149,22 +152,25 @@ export function AccessMatrix({
             {row.group && row.group !== rows[index - 1]?.group ? (
               <div
                 role="row"
-                className="grid h-10 w-max min-w-full items-center border-b border-border/60 bg-muted/40 px-4"
-                style={{ gridTemplateColumns: '1fr' }}
+                className="grid h-10 w-max min-w-full items-center gap-3 border-b border-border/60 bg-muted/40"
+                style={{ gridTemplateColumns }}
               >
-                <span role="columnheader" className="sticky left-4 w-fit px-1">
+                <span
+                  role="columnheader"
+                  className="sticky left-0 z-10 flex h-full items-center border-r border-border/60 bg-muted/40 pr-3 pl-4"
+                >
                   <NodeLabel label={row.group} />
                 </span>
               </div>
             ) : null}
             <div
               role="row"
-              className="group grid min-h-16 w-max min-w-full items-stretch gap-3 border-b border-border/60 px-4 transition-colors last:border-b-0 hover:bg-accent/40"
+              className="group grid min-h-16 w-max min-w-full items-stretch gap-3 border-b border-border/60 transition-colors last:border-b-0 hover:bg-accent/40"
               style={{ gridTemplateColumns }}
             >
               <span
                 role="rowheader"
-                className="relative sticky left-4 z-10 flex flex-col justify-center gap-0.5 bg-card px-1 py-2 after:pointer-events-none after:absolute after:inset-0 after:-z-10 after:bg-accent/40 after:opacity-0 after:transition-opacity after:content-[''] group-hover:after:opacity-100"
+                className="relative sticky left-0 z-10 flex flex-col justify-center gap-0.5 border-r border-border/60 bg-card py-2 pr-2 pl-4 after:pointer-events-none after:absolute after:inset-0 after:-z-10 after:bg-accent/40 after:opacity-0 after:transition-opacity after:content-[''] group-hover:after:opacity-100"
               >
                 <span className="text-body-xs font-medium">{row.label}</span>
                 <span className="text-xs text-muted-foreground">{row.description}</span>
@@ -244,10 +250,10 @@ export function AccessMatrixSkeleton({
     <div className="h-full overflow-hidden">
       <div
         role="row"
-        className="grid h-12 w-max min-w-full items-center gap-3 border-b border-border/60 px-4"
+        className="grid h-12 w-max min-w-full items-center gap-3 border-b border-border/60"
         style={{ gridTemplateColumns }}
       >
-        <span className="px-1">
+        <span className="pl-4">
           <NodeLabel label={rowHeader} />
         </span>
         {Array.from({ length: columns }, (_, index) => (
@@ -259,10 +265,10 @@ export function AccessMatrixSkeleton({
       {rows.map((row) => (
         <div
           key={row.id}
-          className="grid min-h-16 w-max min-w-full items-center gap-3 border-b border-border/60 px-4 last:border-b-0"
+          className="grid min-h-16 w-max min-w-full items-center gap-3 border-b border-border/60 last:border-b-0"
           style={{ gridTemplateColumns }}
         >
-          <span className="flex flex-col justify-center gap-1 px-1 py-2">
+          <span className="flex flex-col justify-center gap-1 py-2 pr-2 pl-4">
             <span className="text-body-xs font-medium">{row.label}</span>
             <span className="text-xs text-muted-foreground">{row.description}</span>
           </span>
