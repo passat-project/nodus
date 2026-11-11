@@ -44,6 +44,12 @@ export function ProjectHistoryTab({ projectId }: { projectId: string }) {
     useProjectHistory(projectId);
   const { data: definitions } = useCustomFieldDefinitions('project');
   const entries = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
+  // Секретная эпоха (#748, вариант Б): у не-участника видимая лента начинается
+  // с события раскрытия. Показываем подсказку, только когда догружена вся
+  // лента и её старейшая запись — смена видимости (у участия внизу создание).
+  const oldest = entries[entries.length - 1];
+  const secretEraHidden =
+    !hasNextPage && oldest?.kind === 'updated' && oldest.fields.includes('visibility');
   const containerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   useInfiniteSentinel(containerRef, sentinelRef, {
@@ -142,6 +148,12 @@ export function ProjectHistoryTab({ projectId }: { projectId: string }) {
             })}
           </ul>
         )}
+
+        {secretEraHidden && oldest ? (
+          <p className="px-2 py-3 text-xs text-muted-foreground">
+            {ui.projects.history.openedAt.replace('{date}', formatDateTimeShort(oldest.createdAt))}
+          </p>
+        ) : null}
 
         {hasNextPage ? (
           <div ref={sentinelRef} className="flex justify-center py-2">
