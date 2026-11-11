@@ -1,6 +1,8 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@nodus/ui/components/avatar';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { usePersonAvatarUrl } from './use-person-avatar-url.js';
+
 function initialsOf(name: string): string {
   // Инициалы берём только от слов, начинающихся с БУКВЫ: названия вида
   // «Витрина (проба…)» не должны давать глиф «В(» (визуальный гейт #211).
@@ -29,29 +31,70 @@ export function toneOf(name: string): { bg: string; fg: string } {
   return PALETTE[hash % PALETTE.length] ?? PALETTE[0]!;
 }
 
-export function PersonAvatar({
-  name,
-  avatarUrl,
-  className,
-  fallbackClass,
-}: {
+interface PersonAvatarProps {
   name: string;
+  /** Готовый url фото (DTO сущности: сообщение, участник, карточка). */
   avatarUrl?: string | null;
   className?: string;
   /** Кегль инициалов-заглушки (по умолчанию text-xs): для большого фото
    *  профиля — крупнее (например, text-4xl). */
   fallbackClass?: string;
-}) {
+  /** Декоративный аватар: рядом уже есть имя автора (видимое или sr-only) или
+   *  подпись кнопки — фото и инициалы скрываются от скринридера (alt="" +
+   *  aria-hidden), чтобы имя не читалось дважды. */
+  decorative?: boolean;
+}
+
+/**
+ * Аватар сотрудника — ОДИН компонент на портал (#726): фото, а без фото —
+ * графитовые инициалы (`toneOf`). Визуал не зависит от наличия фото (тот же
+ * размер и скругление), поэтому подстановка фото не двигает пузыри/строки.
+ *
+ * Данные приходят снаружи — из DTO, где поле уже есть (`author.avatarUrl`,
+ * `member.user.avatarUrl`, `card.avatarUrl`). Экранам без поля (топбар,
+ * чипы создания чата) — `PersonAvatarById`: единственный источник id → кэш
+ * справочника (`use-person-avatar-url.ts`).
+ */
+export function PersonAvatar({
+  name,
+  avatarUrl,
+  className,
+  fallbackClass,
+  decorative = false,
+}: PersonAvatarProps) {
   const tone = toneOf(name);
+  const hidden = decorative ? true : undefined;
   return (
     <Avatar className={cn('size-8 ring-1 ring-border', className)}>
-      {avatarUrl ? <AvatarImage src={avatarUrl} alt={name} /> : null}
+      {avatarUrl ? (
+        <AvatarImage
+          src={avatarUrl}
+          // Декоративный — пустой alt: имя уже озвучено рядом (без дубля).
+          alt={decorative ? '' : name}
+          aria-hidden={hidden}
+        />
+      ) : null}
       <AvatarFallback
         className={cn('text-xs font-semibold', fallbackClass)}
         style={{ backgroundColor: tone.bg, color: tone.fg }}
+        aria-hidden={hidden}
       >
         {initialsOf(name)}
       </AvatarFallback>
     </Avatar>
   );
+}
+
+/**
+ * Аватар по одному id, без готового `avatarUrl` в руках (#726): фото берётся
+ * из единого кэша справочника (`usePersonAvatarUrl`) — запрос не создаётся,
+ * справочник уже загружен оболочкой (палитра Ctrl+K). Нет фото — инициалы.
+ */
+export function PersonAvatarById({
+  userId,
+  name,
+  ...rest
+}: Omit<PersonAvatarProps, 'avatarUrl'> & { userId: string | null | undefined }) {
+  const avatarUrl = usePersonAvatarUrl(userId);
+  return <PersonAvatar name={name} avatarUrl={avatarUrl} {...rest} />;
 }
