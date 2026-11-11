@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, describe, expect, it } from 'vitest';
-import type { AuthUser, UserListItem } from '@nodus/contracts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ui, type AuthUser, type UserListItem } from '@nodus/contracts';
 
 import { usersListKey } from '../../shared/api/users-list.js';
 import { useAuthStore } from '../../shared/auth-store.js';
@@ -10,10 +10,17 @@ import { stubLoadedImage } from '../../test/stub-loaded-image.js';
 import { ProfileMenu } from './profile-menu.js';
 
 /**
- * Аватар своего профиля в топбаре (#726): источник — тот же кэш справочника,
- * что у остальных поверхностей (`usersListKey`), поэтому фото появляется сразу
- * после смены аватара (инвалидация `invalidateAvatarCaches`), без F5.
+ * Меню профиля в топбаре: два аспекта одной поверхности —
+ * - аватар своего профиля (#726): источник — тот же кэш справочника, что у
+ *   остальных поверхностей (`usersListKey`), фото появляется сразу после смены
+ *   аватара (инвалидация `invalidateAvatarCaches`), без F5;
+ * - пункт «Профиль» (#751): открывает СВОЮ карточку сотрудника тем же стеком,
+ *   что из проекта/справочника.
+ * `useOpenCard` требует роутер-контекст — в тестах подменяется моком.
  */
+
+const mocks = vi.hoisted(() => ({ openCard: vi.fn() }));
+vi.mock('./use-card-stack.js', () => ({ useOpenCard: () => mocks.openCard }));
 
 const ME_ID = '00000000-0000-4000-8000-0000000000b2';
 const PHOTO = 'https://files.nodus.local/avatar/me.png';
@@ -60,6 +67,7 @@ afterEach(() => {
   restoreImage?.();
   restoreImage = null;
   cleanup();
+  mocks.openCard.mockClear();
   useAuthStore.setState({ status: 'anonymous', accessToken: null, user: null });
 });
 
@@ -96,5 +104,21 @@ describe('ProfileMenu — аватар профиля в топбаре (#726)',
     await waitFor(() =>
       expect(container.querySelector('[data-slot="avatar"] img')?.getAttribute('src')).toBe(PHOTO),
     );
+  });
+});
+
+describe('ProfileMenu — «Профиль» в меню аватара (#751)', () => {
+  it('пункт «Профиль» первый, клик открывает свою карточку сотрудника', async () => {
+    renderMenu();
+    const trigger = screen.getByRole('button', { name: ui.topbar.profile });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByRole('menu')).not.toBeNull());
+
+    const items = screen.getAllByRole('menuitem');
+    expect(items.map((item) => item.textContent)).toEqual([ui.topbar.profile, ui.topbar.logout]);
+
+    fireEvent.click(screen.getByRole('menuitem', { name: ui.topbar.profile }));
+    expect(mocks.openCard).toHaveBeenCalledWith({ kind: 'employee', id: ME_ID });
   });
 });
