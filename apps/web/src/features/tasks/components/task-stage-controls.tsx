@@ -98,6 +98,7 @@ export function TaskActionBar({
   const noButtons = transitions.length + actionRunner.actions.length === 0;
 
   const renderAction = (action: WorkflowAction, main: boolean) => {
+    const blocked = action.blockedBy.length > 0;
     const running = actionRunner.runningId === action.id;
     const Icon = running ? Loader2 : Zap;
     return (
@@ -105,14 +106,22 @@ export function TaskActionBar({
         key={action.id}
         type="button"
         aria-busy={running || undefined}
+        // Как у кнопки перехода: заблокированная видна и объясняет причину,
+        // нажатие открывает окно причин/ведёт к 409 с причинами.
+        data-blocked={blocked || undefined}
         aria-label={action.name}
-        title={action.name}
+        title={
+          blocked
+            ? `${ui.tasks.processBlockedMissing} ${gateReasonsText(action.blockedBy)}`
+            : action.name
+        }
         onClick={() => actionRunner.run(action)}
         className={cn(
           btn,
           main
             ? 'bg-primary text-primary-foreground hover:bg-primary-hover'
             : 'min-w-0 shrink text-muted-foreground hover:bg-accent hover:text-foreground',
+          blocked && 'opacity-50',
         )}
       >
         <Icon className={cn('size-4 shrink-0', running && 'animate-spin')} strokeWidth={1.75} />
@@ -211,7 +220,12 @@ export function TaskActionBar({
             {actionGroups.menu.map((action) => (
               <DropdownMenuItem
                 key={action.id}
-                title={action.name}
+                className={cn(action.blockedBy.length > 0 && 'opacity-50')}
+                title={
+                  action.blockedBy.length > 0
+                    ? `${ui.tasks.processBlockedMissing} ${gateReasonsText(action.blockedBy)}`
+                    : action.name
+                }
                 onSelect={() => actionRunner.run(action)}
               >
                 <Zap className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />

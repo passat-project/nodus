@@ -40,7 +40,7 @@ export function checkFormulaSlots(
   const report = (
     ast: unknown,
     typeDefault: boolean,
-    refs: Pick<WorkflowProblem, 'transitionId' | 'creationField'>,
+    refs: Partial<Pick<WorkflowProblem, 'transitionId' | 'actionId' | 'creationField'>>,
   ): void => {
     // Одна плашка на слот: первая (самая внешняя) проблема уже объясняет
     // отказ, остальные — её следствия.
@@ -53,12 +53,16 @@ export function checkFormulaSlots(
       detail: ui.formulas.shapeIssues[issue.code],
     });
   };
-  for (const t of doc.transitions) {
-    if (!t.form?.enabled) continue;
-    for (const section of t.form.sections) {
+  const windowOwners = [
+    ...doc.transitions.map((t) => ({ form: t.form, ref: { transitionId: t.id } })),
+    ...(doc.actions ?? []).map((a) => ({ form: a.form, ref: { actionId: a.id } })),
+  ];
+  for (const owner of windowOwners) {
+    if (!owner.form?.enabled) continue;
+    for (const section of owner.form.sections) {
       if (section.kind !== 'fields') continue;
       for (const ast of Object.values(section.formulas ?? {})) {
-        report(ast, false, { transitionId: t.id });
+        report(ast, false, owner.ref);
       }
     }
   }
