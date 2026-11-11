@@ -12,6 +12,7 @@ import {
   AVATAR_MAX_BYTES,
   AVATAR_MIN_SIDE,
   AVATAR_PIXEL_LIMIT,
+  isPixelLimitError,
   validateAvatarBytes,
 } from './avatar-rules.js';
 
@@ -109,6 +110,20 @@ export class AvatarService {
         .toBuffer();
     } catch (error) {
       if (error instanceof DomainException) throw error;
+      // Пиксельный потолок (#231) — отдельный код (#725): файл не битый и не
+      // тяжёлый по байтам, у фото слишком большое разрешение. Интерфейс по
+      // коду показывает причину, а не вводящее в заблуждение «битое фото».
+      if (isPixelLimitError(error)) {
+        this.logger.warn(
+          { err: error, pixelLimit: AVATAR_PIXEL_LIMIT },
+          'Аватар превысил пиксельный потолок декодирования',
+        );
+        throw new DomainException(
+          ErrorCode.FILE_AVATAR_TOO_LARGE_RESOLUTION,
+          'Avatar image resolution exceeds limit',
+          { pixelLimit: AVATAR_PIXEL_LIMIT },
+        );
+      }
       // sharp бросает на недекодируемом буфере (failOn по умолчанию) —
       // magic bytes прошли, но картинка битая; отказ доменный, не 500.
       this.logger.warn({ err: error }, 'Аватар не декодируется sharp');

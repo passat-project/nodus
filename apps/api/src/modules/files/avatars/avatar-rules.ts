@@ -68,3 +68,11 @@ export function validateAvatarBytes(bytes: Uint8Array): {
     issue: bytes.length > AVATAR_MAX_BYTES ? 'size' : null,
   };
 }
+
+/** sharp падает на декодировании сверх `limitInputPixels` сообщением
+ *  «Input image exceeds pixel limit» (нативная проверка libvips, src/common.cc)
+ *  — по нему отличаем «слишком большое разрешение» от «битого файла» (#725):
+ *  фото с телефона 6000×4000 — 24 Мп при лимите 16,7 Мп. */
+export function isPixelLimitError(error: unknown): boolean {
+  return error instanceof Error && /pixel limit/i.test(error.message);
+}

@@ -7,9 +7,13 @@ import {
 } from '@tanstack/react-query';
 import { createElement, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ErrorCode, errorMessages } from '@nodus/contracts';
 import type { UserCard } from '@nodus/contracts';
+import { toast } from 'sonner';
 
+import { ApiError } from '../../../shared/api-client.js';
 import { chatKeys } from '../../../shared/chat/chat-keys.js';
+import { uploadAvatar } from '../../../shared/chat/avatar-upload.js';
 import { useRemoveMyAvatar, useSetMyAvatar } from './directory-api.js';
 
 /**
@@ -47,6 +51,8 @@ const card = (overrides: Partial<UserCard> = {}): UserCard => ({
   updatedAt: '2026-09-24T09:00:00Z',
   ...overrides,
 });
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 /** Загрузка — XHR (apiUpload), для теста кэша подменяем сам uploadAvatar. */
 vi.mock('../../../shared/chat/avatar-upload.js', async (importOriginal) => {
@@ -114,5 +120,49 @@ describe('Мутации своего аватара сбрасывают кэш
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(avatarCalls(spy)).toContainEqual(chatKeys.all);
+  });
+
+  it('useSetMyAvatar: отказ сервера виден пользователю — тост по коду ошибки (#725)', async () => {
+    vi.mocked(uploadAvatar).mockRejectedValueOnce(
+      new ApiError(ErrorCode.FILE_AVATAR_TOO_LARGE_RESOLUTION, 'too big', 400),
+    );
+    const client = makeClient();
+    const { result } = renderHook(() => useSetMyAvatar(), { wrapper: wrapperFor(client) });
+
+    await act(async () => {
+      result.current.mutate(new File([new Uint8Array([1])], 'photo.png', { type: 'image/png' }));
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    // Пиксельный лимит — свой текст, а не общее «фото не подошло».
+    expect(toast.error).toHaveBeenCalledWith(
+      errorMessages[ErrorCode.FILE_AVATAR_TOO_LARGE_RESOLUTION],
+    );
+  });
+
+  it('useRemoveMyAvatar: отказ сервера тоже показывается тостом (не тишина)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              code: ErrorCode.INTERNAL_ERROR,
+              message: 'boom',
+              traceId: 't-1',
+            }),
+            { status: 500, headers: { 'content-type': 'application/json' } },
+          ),
+      ),
+    );
+    const client = makeClient();
+    const { result } = renderHook(() => useRemoveMyAvatar(), { wrapper: wrapperFor(client) });
+
+    await act(async () => {
+      result.current.mutate();
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(toast.error).toHaveBeenCalledWith(errorMessages[ErrorCode.INTERNAL_ERROR]);
   });
 });

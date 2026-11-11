@@ -16,7 +16,11 @@
   `save(meta, stream) → {fileId}` и `remove(fileIds)`) и **`AVATAR_PROCESSOR`**
   (`core/ports/avatar-processor.port.ts`, #186: валидация PNG/JPEG/WebP ≤10 МБ
   по magic bytes с пиксельным потолком декодирования 4096² (#231, канон #221 —
-  декомпрессионные бомбы) → квадратный WebP-дериват ≤640, реализация `avatars/`),
+  декомпрессионные бомбы) → квадратный WebP-дериват ≤640, реализация `avatars/`).
+  Потолок разрешения отдаётся отдельным кодом `FILE_AVATAR_TOO_LARGE_RESOLUTION`
+  (details `pixelLimit`, #725): файл не битый, у фото слишком много пикселей —
+  интерфейс показывает причину, а клиент (`shared/chat/avatar-compress.ts`)
+  даунскейлит фото с телефона до 2048 px до отправки,
   и **`DOCUMENT_CONVERTER`** (`core/ports/document-converter.port.ts`,
   «Основной документ письма» #56: HTML+ассеты → PDF; реализация
   `derivatives/gotenberg-converter.provider.ts` — Chromium-роут того же

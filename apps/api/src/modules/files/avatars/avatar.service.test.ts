@@ -6,7 +6,7 @@ import { ErrorCode } from '@nodus/contracts';
 
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import type { FileStorage } from '../../../core/ports/file-storage.port.js';
-import { AVATAR_MAX_BYTES } from './avatar-rules.js';
+import { AVATAR_MAX_BYTES, AVATAR_PIXEL_LIMIT } from './avatar-rules.js';
 import { AvatarService } from './avatar.service.js';
 
 /** Пиксельная PNG 128×128 (через sharp — валидный декодируемый файл). */
@@ -109,13 +109,17 @@ describe('AvatarService.process', () => {
     ).rejects.toMatchObject({ code: ErrorCode.FILE_AVATAR_INVALID });
   });
 
-  it('пиксельный потолок (security #231): 4097² под лимитом 4096² → FILE_AVATAR_INVALID, деривата нет', async () => {
+  it('пиксельный потолок (security #231): 4097² под лимитом 4096² → FILE_AVATAR_TOO_LARGE_RESOLUTION, деривата нет', async () => {
     const { service, saved } = makeService();
     // Монотонный цвет — PNG лёгкий, но декод был бы ~67 МБ; бомба 16383² — ~1 ГБ.
     const png = await testPng(4097, 4097);
-    await expect(
-      service.process({ ownerId: 'u-1', name: 'giant.png', size: png.length }, Readable.from(png)),
-    ).rejects.toMatchObject({ code: ErrorCode.FILE_AVATAR_INVALID });
+    const error = await service
+      .process({ ownerId: 'u-1', name: 'giant.png', size: png.length }, Readable.from(png))
+      .catch((e: unknown) => e);
+    // Отдельный код (#725): файл не битый — у фото слишком большое разрешение
+    // (интерфейс показывает причину, а не «битое фото»).
+    expect((error as DomainException).code).toBe(ErrorCode.FILE_AVATAR_TOO_LARGE_RESOLUTION);
+    expect((error as DomainException).details).toMatchObject({ pixelLimit: AVATAR_PIXEL_LIMIT });
     // Оригинал сохранён до декода, WebP-деривата нет — аватар на сущность не вешается.
     expect(saved).toHaveLength(1);
     expect(saved[0]!.input.mime).toBe('image/png');

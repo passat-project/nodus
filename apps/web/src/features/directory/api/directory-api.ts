@@ -226,6 +226,10 @@ export function useSetMyAvatar() {
     onSuccess: () => {
       toast.success(ui.common.avatarSaved);
     },
+    // Отказ сервера обязан быть виден (#725): фото 24 Мп молча отклонялось
+    // пиксельным потолком — «просто ничего не происходит». Тост — по коду
+    // ошибки (для потолка — свой текст «слишком большое разрешение»).
+    onError: (error) => toastApiError(error),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: directoryKeys.all });
       invalidateChatAvatarCaches(queryClient);
@@ -238,6 +242,7 @@ export function useRemoveMyAvatar() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api<UserCard>('/directory/users/me/avatar', { method: 'DELETE' }),
+    onError: (error) => toastApiError(error),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: directoryKeys.all });
       invalidateChatAvatarCaches(queryClient);
