@@ -16,6 +16,10 @@ import {
   validateAvatarBytes,
 } from './avatar-rules.js';
 
+/** Метаданные sharp — вывод типа из вызова (namespace `sharp.Metadata` при
+ *  default-импорте недоступен как тип). */
+type SharpMetadata = Awaited<ReturnType<ReturnType<typeof sharp>['metadata']>>;
+
 /** EXIF-ориентации 5–8 — поворот на 90°: физические стороны меняются
  *  местами (как видит браузер после авторазворота). */
 function orientedSize(
@@ -76,7 +80,7 @@ export class AvatarService {
       );
     }
 
-    let meta: sharp.Metadata;
+    let meta: SharpMetadata;
     let derivative: Buffer;
     try {
       meta = await sharp(bytes, { limitInputPixels: AVATAR_PIXEL_LIMIT }).metadata();
@@ -156,11 +160,7 @@ export class AvatarService {
    *  Файл БЕЗ метаданных сохраняется байт-в-байт (без перекодировки и потери
    *  качества); с метаданными — перекодируется в свой формат, EXIF-ориентация
    *  запекается в пиксели (как её уже применяет дериват). */
-  private async withoutMetadata(
-    bytes: Buffer,
-    meta: sharp.Metadata,
-    mime: string,
-  ): Promise<Buffer> {
+  private async withoutMetadata(bytes: Buffer, meta: SharpMetadata, mime: string): Promise<Buffer> {
     if (!meta.exif && !meta.xmp && !meta.orientation) return bytes;
     const pipeline = sharp(bytes, { limitInputPixels: AVATAR_PIXEL_LIMIT }).rotate();
     if (mime === 'image/png') return pipeline.png().toBuffer();
