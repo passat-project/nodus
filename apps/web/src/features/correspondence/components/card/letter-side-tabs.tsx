@@ -1,5 +1,5 @@
 import { FileText, History, Loader2, MessageSquare, MessagesSquare } from 'lucide-react';
-import { useId, type KeyboardEvent, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { LetterDetail } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
@@ -12,13 +12,17 @@ import {
   EmptyTitle,
 } from '@nodus/ui/components/empty';
 import { Spinner } from '@nodus/ui/components/spinner';
-import { cn } from '@nodus/ui/lib/utils';
 
 import { useLetterConversation } from '../../../../shared/chat/chat-queries.js';
 import { ChatPanelToggle } from '../../../../shared/chat/chat-side-panel.js';
 import { ConversationPane } from '../../../../shared/chat/conversation-pane.js';
 import { FileTypeIcon } from '../../../../shared/files/file-type-icon.js';
-import { CardTabStrip, type CardTabDef } from '../../../../shared/ui/entity-card/card-tab-strip.js';
+import { CardTabAreas } from '../../../../shared/ui/entity-card/card-tab-areas.js';
+import type { CardTabDef } from '../../../../shared/ui/entity-card/card-tab-strip.js';
+import type {
+  CardTabGroup,
+  CardTabsState,
+} from '../../../../shared/ui/entity-card/card-tabs-model.js';
 import {
   fileIdOf,
   fileTabId,
@@ -28,11 +32,8 @@ import {
 import { LetterBodyView } from '../letter-body-view.js';
 import { LetterHistory } from './letter-history.js';
 
-/** Чат письма (Р10; редизайн #56 — обсуждение живёт и у незарегистриро-
- *  ванного): участнику — обычная беседа мессенджера (композер в покое h-16
- *  = бару действий — одна горизонталь), остальным — объяснение и
- *  «Присоединиться к обсуждению» / «Начать обсуждение» (канцелярия до
- *  регистрации), если письмо ещё в работе. */
+/** Чат письма (Р10; редизайн #56): участнику — обычная беседа мессенджера,
+ *  остальным — объяснение и «Присоединиться/Начать обсуждение». */
 function LetterChatTab({
   letter,
   joining,
@@ -81,9 +82,6 @@ function LetterChatTab({
         </EmptyHeader>
         {letter.access.canJoin ? (
           <EmptyContent>
-            {/* Outline, а не заливка: primary на экране один («Зарегистрировать»
-                в баре действий), а то же действие в баре — outline-кнопка:
-                одно действие — один вес в обоих входах. */}
             <Button
               variant="outline"
               onClick={onJoin}
@@ -105,40 +103,53 @@ function LetterChatTab({
 }
 
 /**
- * Правая панель карточки письма (#55, U7): «Письмо», «Чат» и «Текст
- * письма» (когда текстовая часть есть — редизайн #56) — неснимаемые
- * вкладки, вложения — закрываемые (≤ 6, `letter-tabs.ts`). Содержимое
- * вкладки монтируется при первом показе и дальше живёт скрытым
- * (`invisible` + `inert`, не `display: none`): прокрутка, страница и
- * масштаб документа при возврате на вкладку на месте. ←/→ на полосе —
- * соседняя вкладка.
+ * Правая панель карточки письма (#55, #56; области вкладок — #746):
+ * «Письмо», «Чат» и «История» + закрываемые вложения. Движок общий с
+ * проектом/задачей: 1–2 области, перестановка/перенос, ширины. Содержимое
+ * монтируется один раз и живёт скрытым — при переносе между областями не
+ * ремаунтится (позиция/масштаб документа сохраняются).
  */
 export function LetterSideTabs({
   letter,
   tabs,
   joining,
   panelOpen,
+  state,
+  groupW,
+  collapsedGroupId,
+  onStateChange,
+  onSplitTab,
+  onGroupWidthsChange,
+  groupMin,
+  hintText,
   onActivate,
   onClose,
   onJoin,
   onPanelToggle,
+  onHideTab,
+  canHideTab,
 }: {
   letter: LetterDetail;
   tabs: LetterTabsState;
   joining: boolean;
-  /** Панель вложений беседы (как в мессенджере) открыта — тоггл подсвечен. */
   panelOpen: boolean;
-  /** Текстовая часть письма (role body при документе) — вкладка «Текст
-   *  письма»; null — вкладки нет. */
+  state: CardTabsState;
+  groupW: number[];
+  collapsedGroupId: string | null;
+  onStateChange: (next: CardTabsState) => void;
+  onSplitTab?: (next: CardTabsState, areaWidth: number) => void;
+  onGroupWidthsChange: (widths: number[]) => void;
+  groupMin?: (group: CardTabGroup) => number;
+  /** Подсказка derived-состояния (панель беседы скрыта шириной) — хром полосы. */
+  hintText?: string;
   onActivate: (tab: LetterTabId) => void;
   onClose: (attachmentId: string) => void;
   onJoin: () => void;
   onPanelToggle: () => void;
+  onHideTab?: (tabId: string) => void;
+  canHideTab?: (tabId: string) => boolean;
 }) {
-  const baseId = useId();
   const { data: conversation } = useLetterConversation(letter.id, letter.access.isParticipant);
-  const domId = (tab: LetterTabId) => `${baseId}-${tab.replace(':', '-')}`;
-
   const strip: CardTabDef[] = [
     { id: 'body', label: ui.letters.card.tabBody, icon: <FileText className="size-3.5" /> },
     {
@@ -147,11 +158,7 @@ export function LetterSideTabs({
       icon: <MessageSquare className="size-3.5" />,
       badge: conversation?.unreadCount,
     },
-    {
-      id: 'history',
-      label: ui.letters.card.history,
-      icon: <History className="size-3.5" />,
-    },
+    { id: 'history', label: ui.letters.card.history, icon: <History className="size-3.5" /> },
     ...tabs.files.flatMap((fileId) => {
       const file = letter.attachments.find((a) => a.id === fileId);
       return file
@@ -167,18 +174,6 @@ export function LetterSideTabs({
         : [];
     }),
   ];
-
-  function onStripKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-    const index = strip.findIndex((tab) => tab.id === tabs.active);
-    const next =
-      strip[(index + (event.key === 'ArrowRight' ? 1 : -1) + strip.length) % strip.length];
-    if (!next) return;
-    event.preventDefault();
-    onActivate(next.id as LetterTabId);
-    document.getElementById(`${domId(next.id as LetterTabId)}-tab`)?.focus();
-  }
-
   const panel = (tab: LetterTabId): ReactNode => {
     if (tab === 'body') return <LetterBodyView letter={letter} />;
     if (tab === 'chat') return <LetterChatTab letter={letter} joining={joining} onJoin={onJoin} />;
@@ -189,43 +184,35 @@ export function LetterSideTabs({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      <CardTabStrip
+      <CardTabAreas
         label={ui.letters.card.tabsLabel}
         tabs={strip}
-        active={tabs.active}
-        onActivate={(id) => onActivate(id as LetterTabId)}
-        onClose={(id) => {
-          const fileId = fileIdOf(id as LetterTabId);
+        state={state}
+        onSplitTab={onSplitTab}
+        onStateChange={(next) => {
+          onStateChange(next);
+          const group =
+            next.groups.find((entry) => entry.id === next.focusGroupId) ?? next.groups[0];
+          if (group) onActivate(group.active as LetterTabId);
+        }}
+        renderPanel={(tabId) => panel(tabId as LetterTabId)}
+        groupW={groupW}
+        collapsedGroupId={collapsedGroupId}
+        onGroupWidthsChange={onGroupWidthsChange}
+        groupMin={groupMin}
+        hintText={hintText}
+        onCloseTab={(tabId) => {
+          const fileId = fileIdOf(tabId as LetterTabId);
           if (fileId) onClose(fileId);
         }}
-        idPrefix={baseId}
-        onKeyDown={onStripKeyDown}
-        actions={
-          tabs.active === 'chat' && conversation ? (
+        onHideTab={onHideTab}
+        canHideTab={canHideTab}
+        actions={(group) =>
+          group.active === 'chat' && conversation ? (
             <ChatPanelToggle open={panelOpen} onToggle={onPanelToggle} />
           ) : null
         }
       />
-      <div className="relative min-h-0 flex-1">
-        {strip
-          .filter((tab) => tabs.visited.includes(tab.id as LetterTabId))
-          .map((tab) => {
-            const tabId = tab.id as LetterTabId;
-            const active = tabId === tabs.active;
-            return (
-              <div
-                key={tab.id}
-                role="tabpanel"
-                id={`${domId(tabId)}-panel`}
-                aria-labelledby={`${domId(tabId)}-tab`}
-                inert={!active}
-                className={cn('absolute inset-0', !active && 'invisible')}
-              >
-                {panel(tabId)}
-              </div>
-            );
-          })}
-      </div>
     </div>
   );
 }

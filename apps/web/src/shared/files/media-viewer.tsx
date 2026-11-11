@@ -1,4 +1,19 @@
+import type { ReactNode } from 'react';
 import { ui } from '@nodus/contracts';
+
+/**
+ * Сцена медиа — flex, не grid (#767): у ребёнка auto-строки грида
+ * процентный `max-height` циклический (строка считается по intrinsic-вкладу
+ * элемента, CSS Sizing 3) и высоту не ограничивает — видео рисовалось
+ * «по ширине» и вылезало за панель вместе с полосой управления. Flex-
+ * контейнер с определённой высотой даёт проценту базу, и медиа ужимается
+ * по обеим осям с сохранением пропорций (max-w/max-h у replaced-элемента).
+ */
+function MediaStage({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex size-full min-h-0 min-w-0 items-center justify-center p-6">{children}</div>
+  );
+}
 
 /**
  * Медиа-вьюер (#138): видео/аудио/изображение — нативные элементы браузера
@@ -24,17 +39,17 @@ export function MediaViewer({
 }) {
   if (mime.startsWith('video/')) {
     return (
-      <div className="grid size-full place-items-center p-6">
+      <MediaStage>
         <video
           key={url}
           src={url}
           controls
           autoFocus={autoFocus}
           playsInline
-          className="max-h-full max-w-full"
+          className="max-h-full max-w-full object-contain"
           aria-label={name}
         />
-      </div>
+      </MediaStage>
     );
   }
   if (mime.startsWith('audio/')) {
@@ -60,8 +75,8 @@ export function MediaViewer({
     );
   }
   return (
-    <div className="grid size-full place-items-center p-6">
+    <MediaStage>
       <img key={url} src={url} alt={name} className="max-h-full max-w-full object-contain" />
-    </div>
+    </MediaStage>
   );
 }

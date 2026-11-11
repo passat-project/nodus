@@ -32,7 +32,7 @@ import {
   ShowHiddenToggle,
 } from './node-rail-rows.js';
 import { resolveHidden, resolveOrder } from './ui-prefs.js';
-import { useUiPrefsStore } from './ui-prefs-store.js';
+import { useUiPrefsStore } from '../../shared/preferences/ui-prefs-store.js';
 import { uiPx } from '../../shared/ui/ui-scale.js';
 import { useShellStore } from './shell-store.js';
 import { LogoIcon } from './logo-icon.js';
