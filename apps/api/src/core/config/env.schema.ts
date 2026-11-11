@@ -102,6 +102,12 @@ const envSchema = z
     STORAGE_URL_SECRET: z.string().min(32),
     /** TTL подписи ссылок отдачи, секунды (24 ч: кэш браузера + рефечи ленты). */
     STORAGE_URL_TTL_SECONDS: z.coerce.number().int().min(60).default(86_400),
+    /** Периодическая уборка брошенных multipart-загрузок (#715): порог возраста
+     *  (часы) — незавершённая загрузка старше отменяется; запас больше
+     *  максимального времени жизни честной загрузки на медленном канале. */
+    STORAGE_STALE_UPLOAD_AGE_HOURS: z.coerce.number().int().min(1).default(24),
+    /** Период прохода уборки брошенных загрузок, часы (раз в сутки). */
+    STORAGE_STALE_UPLOAD_INTERVAL_HOURS: z.coerce.number().int().min(1).default(24),
     /** Движок офисного просмотра ONLYOFFICE (#138): выключен, пока не поднят
      *  контейнер документ-сервера (compose profile `office`). */
     OFFICE_ENABLED: z.stringbool().optional(),

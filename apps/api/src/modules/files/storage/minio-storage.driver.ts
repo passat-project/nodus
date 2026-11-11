@@ -12,6 +12,17 @@ export interface PutResult {
   bytes: number;
 }
 
+/** Незавершённая multipart-загрузка бакета (#715). */
+export interface IncompleteUploadInfo {
+  key: string;
+  uploadId: string;
+  /** Момент инициации (S3 `Initiated`); null — хранилище дату не сообщило:
+   *  возраст неизвестен, такую загрузку уборка не трогает (fail-safe). */
+  initiatedAt: Date | null;
+  /** Уже залитые части — для метрики уборки (байт). */
+  bytes: number;
+}
+
 /**
  * Драйвер MinIO (S3 API) — реализация транспортной части хранилища ADR-0013.
  * Живёт внутри модуля files: бакеты/ключи наружу не выходят (наружу — порт
@@ -89,6 +100,38 @@ export class MinioStorageDriver implements OnModuleInit {
     } catch {
       // Сбой уборки не должен подменять исходную ошибку загрузки.
     }
+  }
+
+  /**
+   * Перечислить незавершённые multipart-загрузки бакета (#715): брошенные
+   * жёстким падением процесса (kill/OOM/перезапуск api) не убирает никто —
+   * ключ свежий UUID, «продолжение» по нему невозможно, DeleteObject загрузку
+   * не отменяет, ILM-правила на незавершённые загрузки в SILO нет.
+   * SDK отдаёт байты частей (listParts на каждую загрузку), дату инициации —
+   * в поле `initiated` ответа ListMultipartUploads (в типе пакета не объявлена).
+   */
+  async listIncompleteUploads(): Promise<IncompleteUploadInfo[]> {
+    const uploads: IncompleteUploadInfo[] = [];
+    const stream = this.client.listIncompleteUploads(this.config.bucket, '', true);
+    for await (const item of stream) {
+      const raw = item as { key?: string; uploadId?: string; size?: number; initiated?: Date };
+      // Нерекурсивный листинг отдаёт ещё и префиксы — нам нужны только загрузки.
+      if (!raw.key || !raw.uploadId) continue;
+      const initiated = raw.initiated instanceof Date ? raw.initiated : null;
+      uploads.push({
+        key: raw.key,
+        uploadId: raw.uploadId,
+        initiatedAt: initiated && !Number.isNaN(initiated.getTime()) ? initiated : null,
+        bytes: raw.size ?? 0,
+      });
+    }
+    return uploads;
+  }
+
+  /** Отменить конкретную незавершённую загрузку по uploadId (#715): точнее
+   *  поиска по ключу (не задевает новую загрузку того же ключа). */
+  async abortIncompleteUpload(key: string, uploadId: string): Promise<void> {
+    await this.client.abortMultipartUpload(this.config.bucket, key, uploadId);
   }
 
   async get(key: string): Promise<Readable> {
