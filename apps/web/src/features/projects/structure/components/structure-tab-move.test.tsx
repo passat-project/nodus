@@ -62,7 +62,6 @@ vi.mock('../../../../shared/api/projects-list.js', () => ({
   useProjectTypes: () => ({ data: TYPES, isLoading: false }),
   useProjectsList: () => ({ data: { items: [], nextCursor: null } }),
   useProjectGroups: () => ({ data: [] }),
-  usePortalSettings: () => ({ data: { projects: { defaultVisibility: 'open' } } }),
 }));
 
 vi.mock('../../../../shared/api/users-list.js', () => ({

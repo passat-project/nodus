@@ -576,22 +576,8 @@ export const projectGroupUpdateBodySchema = z
 
 export type ProjectGroupUpdateBody = z.infer<typeof projectGroupUpdateBodySchema>;
 
-// ===== Настройки портала (Р7: окно «Настройки портала») =====
-
-/** Живые настройки портала; ключи добавляются с новыми жильцами окна. */
-export const portalSettingsSchema = z.object({
-  projects: z.object({
-    /** Видимость новых проектов по умолчанию (дефолт кода — 'open'). */
-    defaultVisibility: projectVisibilitySchema,
-  }),
-});
-
-export type PortalSettings = z.infer<typeof portalSettingsSchema>;
-
-export const portalSettingsUpdateBodySchema = z.object({
-  projects: z.object({
-    defaultVisibility: projectVisibilitySchema,
-  }),
-});
-
-export type PortalSettingsUpdateBody = z.infer<typeof portalSettingsUpdateBodySchema>;
+// ===== Настройки портала =====
+// Живых настроек портала нет (#738: «видимость новых проектов» удалена —
+// новый проект всегда открытый, если пользователь явно не выбрал иное).
+// Схемы вернутся с первыми реальными разделами окна «Настройки портала»
+// (#276); до тех пор окно не рендерится вовсе.

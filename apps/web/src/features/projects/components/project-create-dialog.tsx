@@ -33,7 +33,7 @@ import { Skeleton } from '@nodus/ui/components/skeleton';
 import { Textarea } from '@nodus/ui/components/textarea';
 
 import { ApiError } from '../../../shared/api-client.js';
-import { usePortalSettings, useProjectTypes } from '../../../shared/api/projects-list.js';
+import { useProjectTypes } from '../../../shared/api/projects-list.js';
 import { definitionsForTarget } from '../../../shared/custom-fields/module-target.js';
 import {
   isNumberConfirmCancelled,
@@ -72,7 +72,6 @@ export function ProjectCreateDialog({
 }) {
   const me = useAuthStore((s) => s.user);
   const types = useProjectTypes();
-  const settings = usePortalSettings();
   const create = useCreateProject();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -91,8 +90,9 @@ export function ProjectCreateDialog({
   // а не молчаливую блокировку кнопки (#646).
   const [attempted, setAttempted] = useState(false);
 
-  const defaultVisibility = settings.data?.projects.defaultVisibility ?? 'open';
-  const effectiveVisibility = visibility ?? defaultVisibility;
+  // Новый проект всегда открытый, если пользователь явно не выбрал секретный
+  // (#738: настройки «видимость новых проектов» больше нет).
+  const effectiveVisibility = visibility ?? 'open';
   const liveTypes = types.data ?? [];
   const selectedType: ProjectType | null = liveTypes.find((type) => type.id === typeId) ?? null;
   const definitions = useCustomFieldDefinitions('project');

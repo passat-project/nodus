@@ -4,7 +4,6 @@ import { appendDemoProjectEvent } from './project-events.js';
 import {
   addDemoParticipant,
   demoParticipantRowsOf,
-  demoPortalSettings,
   demoProjectRows,
   findDemoProjectRow,
   removeDemoParticipant,
@@ -14,10 +13,6 @@ import type { DemoActor } from './project-views.js';
 
 /** Мутации мок-мира проектов (#52): зеркало серверных правил для приёмки
  *  демо-сборки. Данные — `projects.ts`, чтение/DTO — `project-views.ts`. */
-
-export function defaultVisibility(): 'open' | 'secret' {
-  return demoPortalSettings.projects.defaultVisibility;
-}
 
 /** Подъём активности строки проекта (updated_at) — общий для мутаций мока. */
 export function touch(row: DemoProjectRow): void {
@@ -73,7 +68,8 @@ export function createDemoProject(body: CreateProjectBody, actor: DemoActor): De
     clientId: body.clientId ?? null,
     managerId,
     assistantIds: [...new Set(body.assistantIds ?? [])].filter((id) => id !== managerId),
-    visibility: body.visibility ?? defaultVisibility(),
+    // Новый проект всегда открытый, если не выбрано иное (#738).
+    visibility: body.visibility ?? 'open',
     status: 'active',
     startDate: body.startDate ?? null,
     endDate: body.endDate ?? null,

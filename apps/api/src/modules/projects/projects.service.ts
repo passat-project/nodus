@@ -44,7 +44,6 @@ import {
 } from '../custom-fields/ports/number-issue.port.js';
 
 const DEFAULT_VISIBILITY = 'open' as const;
-const SETTING_VISIBILITY = 'projects.defaultVisibility';
 
 /**
  * Ядро модуля (#52): журнал, карточка, создание, правка полей, статусы и
@@ -91,7 +90,10 @@ export class ProjectsService {
     if (body.portfolioId && !(await this.groups.findActive(body.portfolioId))) {
       throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Unknown portfolio');
     }
-    const visibility = body.visibility ?? (await this.defaultVisibility());
+    // Видимость по умолчанию — всегда открытая (#738, вердикт владельца 10.11):
+    // настройки «видимость новых проектов» больше нет, секретный проект —
+    // только явный выбор в форме.
+    const visibility = body.visibility ?? DEFAULT_VISIBILITY;
     const id = await this.txRunner.run(async (tx) => {
       // Шифр/заказчик — атрибуты (Р9 #631): legacy-поля тела переводятся в
       // значения системных атрибутов (десктоп), явное customFields важнее.
@@ -305,18 +307,6 @@ export class ProjectsService {
       await this.members.recomputeTaskSource(id);
     }
     return this.queries.detail(user, id);
-  }
-
-  // ===== Настройки портала (Р7) =====
-
-  /** Дефолт видимости новых проектов: настройка портала, дефолт кода 'open'. */
-  async defaultVisibility(): Promise<'open' | 'secret'> {
-    const value = await this.repo.settingValue(SETTING_VISIBILITY);
-    return value === 'secret' ? 'secret' : DEFAULT_VISIBILITY;
-  }
-
-  async putDefaultVisibility(value: 'open' | 'secret'): Promise<void> {
-    await this.repo.putSetting(SETTING_VISIBILITY, value as Prisma.InputJsonValue);
   }
 
   factsOf(row: ProjectRow): ProjectFacts {

@@ -98,9 +98,9 @@ export interface ProjectManagement {
 }
 
 /**
- * Единственная точка доступа модуля к таблицам `projects` и
- * `portal_settings` (patterns.md); участники — participants.repository,
- * типы/портфели — своими репозиториями.
+ * Единственная точка доступа модуля к таблице `projects` (patterns.md);
+ * участники — participants.repository, типы/портфели — своими репозиториями.
+ * `portal_settings` больше не читается (#738, настройка удалена).
  */
 @Injectable()
 export class ProjectsRepository {
@@ -342,18 +342,8 @@ export class ProjectsRepository {
     });
   }
 
-  // ===== Настройки портала (Р7) =====
-
-  async settingValue(key: string): Promise<unknown | null> {
-    const row = await this.prisma.portalSetting.findUnique({ where: { key } });
-    return row?.value ?? null;
-  }
-
-  async putSetting(key: string, value: Prisma.InputJsonValue): Promise<void> {
-    await this.prisma.portalSetting.upsert({
-      where: { key },
-      update: { value },
-      create: { key, value },
-    });
-  }
+  // ===== Портальные настройки =====
+  // Настройка «видимость новых проектов» удалена (#738): таблица
+  // `portal_settings` осталась в БД как исторические данные и ждёт contract
+  // (drop) по правилам prisma-migrations — живых читателей у неё нет.
 }

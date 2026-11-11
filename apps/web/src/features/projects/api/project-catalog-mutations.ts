@@ -1,6 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
-  PortalSettings,
   ProjectGroup,
   ProjectType,
   ProjectTypeCreateBody,
@@ -230,28 +229,6 @@ export function useArchiveProjectGroup() {
     onSuccess: () => toast.success(ui.projects.savedDone),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: projectsKeys.groups() });
-    },
-  });
-}
-
-/** Настройки портала: дефолт видимости новых проектов (Р7). */
-export function useUpdatePortalSettings() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (settings: PortalSettings) =>
-      api<PortalSettings>('/settings/portal', { method: 'PUT', body: settings }),
-    onMutate: async (settings) => {
-      const previous = queryClient.getQueryData<PortalSettings>(projectsKeys.settings());
-      queryClient.setQueryData(projectsKeys.settings(), settings);
-      return { previous };
-    },
-    onError: (error, _settings, context) => {
-      if (context?.previous) queryClient.setQueryData(projectsKeys.settings(), context.previous);
-      toastApiError(error);
-    },
-    onSuccess: (settings) => {
-      queryClient.setQueryData(projectsKeys.settings(), settings);
-      toast.success(ui.projects.settingsSaved);
     },
   });
 }

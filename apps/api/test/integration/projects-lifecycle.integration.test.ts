@@ -88,9 +88,6 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: трассы Т3–Т6 (in
         await fx.prisma.counterparty.deleteMany({ where: { id: counterpartyId } });
       }
       await fx.prisma.task.deleteMany({ where: { creatorId: { in: userIds } } });
-      await fx.prisma.portalSetting.deleteMany({
-        where: { key: 'projects.defaultVisibility' },
-      });
     }
     await fx?.cleanup();
   });
@@ -161,35 +158,31 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: трассы Т3–Т6 (in
     });
   });
 
-  describe('Т4: дефолт видимости из настроек портала', () => {
-    it('PUT настройки → create без visibility → сервер применил настройку', async () => {
-      const put = await fx.api(alice, 'PUT', '/settings/portal', {
-        body: { projects: { defaultVisibility: 'secret' } },
-      });
-      expect(put.status).toBe(200);
-      const created = await createProject(alice, { name: `Дефолт секрет ${fx.runId}` });
+  describe('Т4: видимость новых проектов (#738)', () => {
+    it('create без visibility → всегда открытый; секретный — только явный выбор', async () => {
+      const created = await createProject(alice, { name: `Открытый по умолчанию ${fx.runId}` });
       const detail = projectDetailSchema.parse(
         await (await fx.api(alice, 'GET', `/projects/${created.id}`)).json(),
       );
-      expect(detail.visibility).toBe('secret');
-      // вернуть открытый дефолт
-      await fx.api(alice, 'PUT', '/settings/portal', {
-        body: { projects: { defaultVisibility: 'open' } },
+      expect(detail.visibility).toBe('open');
+
+      const secret = await createProject(alice, {
+        name: `Секретный явно ${fx.runId}`,
+        visibility: 'secret',
       });
-      const openDefault = await createProject(alice, { name: `Дефолт открытый ${fx.runId}` });
-      const detail2 = projectDetailSchema.parse(
-        await (await fx.api(alice, 'GET', `/projects/${openDefault.id}`)).json(),
+      const secretDetail = projectDetailSchema.parse(
+        await (await fx.api(alice, 'GET', `/projects/${secret.id}`)).json(),
       );
-      expect(detail2.visibility).toBe('open');
+      expect(secretDetail.visibility).toBe('secret');
     });
 
-    it('настройки читают все вошедшие, пишет только project.setup.manage', async () => {
-      const read = await fx.api(carol, 'GET', '/settings/portal');
-      expect(read.status).toBe(200);
-      const forbidden = await fx.api(carol, 'PUT', '/settings/portal', {
-        body: { projects: { defaultVisibility: 'open' } },
+    it('маршрутов настроек портала больше нет (настройка удалена, #738)', async () => {
+      const read = await fx.api(alice, 'GET', '/settings/portal');
+      expect(read.status).toBe(404);
+      const write = await fx.api(alice, 'PUT', '/settings/portal', {
+        body: { projects: { defaultVisibility: 'secret' } },
       });
-      expect(forbidden.status).toBe(403);
+      expect(write.status).toBe(404);
     });
   });
 

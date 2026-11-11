@@ -196,13 +196,9 @@ export const projectsStrings = {
   typesEmpty: 'Типов пока нет',
   typesArchive: 'Архивировать тип',
   typesRestore: 'Вернуть тип',
-  // Настройки портала
+  // Окно «Настройки портала» (#738: живых разделов нет — окно не рендерится;
+  // имя остаётся каноном места #276, разделы вернутся со своими строками).
   settingsTitle: 'Настройки портала',
-  settingsProjects: 'Проекты',
-  settingsDefaultVisibility: 'Видимость новых проектов',
-  settingsDefaultVisibilityHint:
-    'Применяется к проектам, у которых видимость не выбрана при создании',
-  settingsSaved: 'Настройки сохранены',
   // Портфели
   portfoliosTitle: 'Портфели',
   portfolioCreate: 'Новый портфель',

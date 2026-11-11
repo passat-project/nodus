@@ -48,8 +48,6 @@ const PROJECT_MEMBERSHIP =
   'участие в проекте в сервисе: состав виден участникам, «Присоединиться» — не-участнику открытого, ручной состав — руководству секретного (#52)';
 const PROJECT_STRUCTURE =
   'дерево проекта (#467): чтение — видимость проекта (как карточка), мутации узлов — руководство проекта или project.manage в сервисе (архив — заморозка 400)';
-const PORTAL_SETTINGS =
-  'настройки портала: чтение — любому вошедшему (окну создания нужен дефолт видимости), запись — project.setup.manage (#52, Р7)';
 const HOME =
   'витрина Главной: число сотрудников и ближайшие дни рождения (день и месяц, без года — решение владельца #342) — любому вошедшему';
 
@@ -61,7 +59,6 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'GET /projects/types': PROJECTS_CATALOG,
   'GET /projects/groups': PROJECTS_CATALOG,
   'GET /projects/node-kinds': PROJECTS_CATALOG,
-  'GET /settings/portal': PORTAL_SETTINGS,
   'GET /projects/:id/members': PROJECT_MEMBERSHIP,
   // Действия с проверкой в сервисе (#52)
   'PATCH /projects/:id': PROJECT_MANAGE,

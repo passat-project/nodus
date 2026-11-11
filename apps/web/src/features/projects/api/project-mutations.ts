@@ -71,10 +71,6 @@ export function useCreateProject() {
       const users = cachedUsers(queryClient);
       const types = queryClient.getQueryData<ProjectType[]>(projectsKeys.types()) ?? [];
       const groups = queryClient.getQueryData<ProjectGroup[]>(projectsKeys.groups()) ?? [];
-      const defaultVisibility =
-        queryClient.getQueryData<{ projects: { defaultVisibility: 'open' | 'secret' } }>(
-          projectsKeys.settings(),
-        )?.projects.defaultVisibility ?? 'open';
       const managerId = body.managerId ?? me?.id ?? '';
       const assistantIds = [...new Set(body.assistantIds ?? [])].filter((id) => id !== managerId);
       const creatorObserver = managerId !== (me?.id ?? '');
@@ -96,7 +92,9 @@ export function useCreateProject() {
           participant: false,
           observer: creatorObserver,
         },
-        visibility: body.visibility ?? defaultVisibility,
+        // Настройки «видимость новых проектов» нет (#738): всегда открытый,
+        // если пользователь не выбрал секретный в форме.
+        visibility: body.visibility ?? 'open',
         status: 'active',
         type: type ? { id: type.id, name: type.name } : null,
         portfolio: portfolio ? { id: portfolio.id, name: portfolio.name } : null,
