@@ -74,7 +74,11 @@ export class AuthController {
       userAgent(request),
     );
     this.setRefreshCookie(reply, issued);
-    return { accessToken: issued.accessToken, expiresIn: issued.expiresIn };
+    return {
+      accessToken: issued.accessToken,
+      expiresIn: issued.expiresIn,
+      userId: issued.user.id,
+    };
   }
 
   @Public()
@@ -97,7 +101,11 @@ export class AuthController {
       userAgent(request),
     );
     this.setRefreshCookie(reply, issued);
-    return { accessToken: issued.accessToken, expiresIn: issued.expiresIn };
+    return {
+      accessToken: issued.accessToken,
+      expiresIn: issued.expiresIn,
+      userId: issued.user.id,
+    };
   }
 
   @Public()

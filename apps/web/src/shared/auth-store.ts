@@ -70,8 +70,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   async tryRefresh() {
     refreshInFlight ??= (async () => {
+      const actorId = get().user?.id ?? null;
       try {
         const tokens = await api<AuthTokens>('/auth/refresh', { method: 'POST', auth: false });
+        // Пока шёл refresh, сессию сменили в этой вкладке — чужой ответ не
+        // применяем: вход/выход уже поставил актуальное состояние.
+        if ((get().user?.id ?? null) !== actorId) return false;
+        // Refresh-cookie общая на браузер: в другой вкладке могли выйти из A
+        // и войти в B — сервер вернёт токен B. Токен чужого аккаунта не
+        // применяем, сессию этой вкладки считаем мёртвой (#747).
+        if (actorId !== null && tokens.userId !== actorId) {
+          set(ANONYMOUS);
+          return false;
+        }
         set({ accessToken: tokens.accessToken });
         return true;
       } catch (error) {
