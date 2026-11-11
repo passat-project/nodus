@@ -12,7 +12,7 @@ import {
 
 import { useAuthStore } from '../../shared/auth-store.js';
 import { openPortalSettings } from '../../shared/projects/portal-settings-store.js';
-import { PersonAvatar } from '../../shared/ui/person-avatar.js';
+import { PersonAvatarById } from '../../shared/ui/person-avatar.js';
 
 /**
  * Аватарка профиля с меню — ПРАВЫЙ ВЕРХ мягкой рамы, в топбаре СПРАВА от
@@ -35,8 +35,10 @@ export function ProfileMenu() {
           aria-label={ui.topbar.profile}
           className="shrink-0 rounded-md p-0.5 hover:bg-accent"
         >
-          <PersonAvatar
+          <PersonAvatarById
+            userId={user?.id}
             name={user?.displayName ?? ''}
+            decorative
             className="size-7 shrink-0 ring-1 ring-primary/60"
           />
         </button>

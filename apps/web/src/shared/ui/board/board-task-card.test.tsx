@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CustomFieldDefinition, CustomFieldRef, TaskListItem } from '@nodus/contracts';
 
 import type { FieldDef } from '../../views/use-view-fields.js';
+import { stubLoadedImage } from '../../../test/stub-loaded-image.js';
 import { BoardTaskCard } from './board-task-card.js';
 
 /** Карточка канбана: значок типа (#403) и атрибутные блоки (#632) — по
@@ -170,6 +171,28 @@ describe('BoardTaskCard: атрибутные блоки (#632)', () => {
     renderCard({ task: taskOf({ customFields: { [FIELD]: 'АР-1' } }) });
     expect(screen.getByText('Согласовать АР')).toBeTruthy();
     expect(screen.queryByText('АР-1')).toBeNull();
+  });
+});
+
+describe('BoardTaskCard: аватар исполнителя (#726)', () => {
+  const PHOTO = 'https://files.nodus.local/avatar/assignee.png';
+
+  it('фото исполнителя из DTO — img с url, декоративный (имя в карточке видно)', () => {
+    const restore = stubLoadedImage();
+    const { container } = renderCard({
+      task: taskOf({ assignee: { ...USER, avatarUrl: PHOTO } }),
+    });
+    const img = container.querySelector('[data-slot="avatar"] img');
+    expect(img?.getAttribute('src')).toBe(PHOTO);
+    expect(img?.getAttribute('alt')).toBe('');
+    expect(img?.getAttribute('aria-hidden')).toBe('true');
+    restore();
+  });
+
+  it('без фото — прежние инициалы', () => {
+    const { container } = renderCard();
+    expect(container.querySelector('[data-slot="avatar"] img')).toBeNull();
+    expect(container.querySelector('[data-slot="avatar-fallback"]')?.textContent).toBe('КА');
   });
 });
 

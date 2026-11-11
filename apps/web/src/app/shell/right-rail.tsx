@@ -10,6 +10,7 @@ import {
   sortByActivity,
 } from '../../features/chat/lib/conversations.js';
 import { useAuthStore } from '../../shared/auth-store.js';
+import { conversationAvatarUrl } from '../../shared/chat/conversations.js';
 import { NotesGlyph } from '../../shared/ui/notes-glyph.js';
 import { PersonAvatar } from '../../shared/ui/person-avatar.js';
 import { uiPx } from '../../shared/ui/ui-scale.js';
@@ -76,7 +77,7 @@ function ChatRailRow({
         ) : (
           <PersonAvatar
             name={conversationTitle(conversation, meId)}
-            avatarUrl={conversation.avatarUrl}
+            avatarUrl={conversationAvatarUrl(conversation, meId)}
             className="size-7"
           />
         )}

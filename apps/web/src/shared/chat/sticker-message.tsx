@@ -75,7 +75,12 @@ export const StickerMessageView = memo(function StickerMessageView({
           анонимно»): стикер = обычное сообщение, авторство видно всегда. */}
       {avatarSlot === 'avatar' ? (
         <MessageAvatar>
-          <PersonAvatar name={message.author.displayName} className="size-7" />
+          <PersonAvatar
+            name={message.author.displayName}
+            avatarUrl={message.author.avatarUrl}
+            decorative
+            className="size-7"
+          />
         </MessageAvatar>
       ) : null}
       <MessageContent>

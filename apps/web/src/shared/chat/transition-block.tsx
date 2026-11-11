@@ -45,6 +45,7 @@ export function TransitionBlock({
         <PersonAvatar
           name={message.author.displayName}
           avatarUrl={message.author.avatarUrl}
+          decorative
           className="mt-auto size-8 shrink-0"
         />
       ) : null}
