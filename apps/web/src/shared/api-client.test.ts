@@ -39,7 +39,11 @@ class FakeXhr {
 
 describe('api-client', () => {
   beforeEach(() => {
-    useAuthStore.setState({ status: 'authenticated', accessToken: 'old', user: null });
+    useAuthStore.setState({
+      status: 'authenticated',
+      accessToken: 'old',
+      user: { id: 'A' } as never,
+    });
   });
   afterEach(() => {
     vi.unstubAllGlobals();

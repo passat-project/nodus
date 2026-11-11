@@ -142,6 +142,37 @@ describe('auth-store', () => {
     expect(useAuthStore.getState().user?.id).toBe(USER.id);
   });
 
+  it('tryRefresh: анонимную вкладку refresh не воскрешает (#747)', async () => {
+    useAuthStore.setState({ status: 'anonymous', accessToken: null, user: null });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(200, TOKENS)),
+    );
+
+    await expect(useAuthStore.getState().tryRefresh()).resolves.toBe(false);
+
+    expect(useAuthStore.getState().accessToken).toBeNull();
+    expect(useAuthStore.getState().status).toBe('anonymous');
+  });
+
+  it('tryRefresh: поздний 401 прошлой сессии не гасит новый аккаунт (#747)', async () => {
+    useAuthStore.setState({ status: 'authenticated', accessToken: 'token-a', user: USER });
+    const other = { ...USER, id: '00000000-0000-4000-8000-000000000002' };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        // Пока шёл refresh A, в этой же вкладке вошли в B.
+        useAuthStore.setState({ status: 'authenticated', accessToken: 'token-b', user: other });
+        return jsonResponse(401, { code: 'AUTH_SESSION_INVALID', message: 'x' });
+      }),
+    );
+
+    await expect(useAuthStore.getState().tryRefresh()).resolves.toBe(false);
+
+    expect(useAuthStore.getState().status).toBe('authenticated');
+    expect(useAuthStore.getState().user?.id).toBe(other.id);
+  });
+
   it('bootstrap: сервер недоступен на старте → статус остаётся unknown (повтор на следующем заходе)', async () => {
     vi.stubGlobal(
       'fetch',
