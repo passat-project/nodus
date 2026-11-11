@@ -69,10 +69,39 @@ describe('ui-prefs-sync: гидратация не затирает неотпр
     startPreferencesSync();
     await Promise.resolve();
 
-    useUiPrefsStore.setState({ personal: { navOrder: ['local'] } });
+    useUiPrefsStore.getState().applyNav(['local'], [], false);
     resolveGet?.({ preferences: { navOrder: ['server'] }, updatedAt: new Date().toISOString() });
     await vi.advanceTimersByTimeAsync(0);
 
     expect(useUiPrefsStore.getState().personal.navOrder).toEqual(['local']);
+  });
+
+  it('смена пользователя: кэш нового аккаунта не уходит PUT и не стирает сервер', async () => {
+    apiMock.mockImplementation((_path: string, init?: { method?: string }) =>
+      init?.method === 'PUT'
+        ? Promise.resolve({ preferences: {}, updatedAt: new Date().toISOString() })
+        : Promise.resolve({
+            preferences: { navOrder: ['server'] },
+            updatedAt: new Date().toISOString(),
+          }),
+    );
+    const { useAuthStore } = await import('../auth-store.js');
+    const { useUiPrefsStore } = await import('./ui-prefs-store.js');
+    const { startPreferencesSync } = await import('./ui-prefs-sync.js');
+    startPreferencesSync();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+    expect(useUiPrefsStore.getState().personal.navOrder).toEqual(['server']);
+
+    useAuthStore.setState({ user: { id: 'prefs-user-2' } } as never);
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+
+    expect(useUiPrefsStore.getState().personal.navOrder).toEqual(['server']);
+    const puts = apiMock.mock.calls.filter(([, init]) => init?.method === 'PUT');
+    expect(puts).toHaveLength(0);
+    expect(
+      apiMock.mock.calls.filter(([path, init]) => path === '/me/preferences' && !init),
+    ).toHaveLength(2);
   });
 });

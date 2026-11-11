@@ -20,6 +20,9 @@ import { useAuthStore } from '../auth-store.js';
 interface UiPrefsState {
   personal: UiPreferences;
   company: UiPreferences;
+  /** Счётчик ЛОКАЛЬНЫХ действий (не гидратация): по нему sync отличает
+   *  правку пользователя от загрузки кэша при смене аккаунта. */
+  localRevision: number;
   /** Порядок и скрытые модули рейки: forAll — пишем в общий скоуп (админ). */
   applyNav: (order: string[], hidden: string[], forAll: boolean) => void;
   /** Личная раскладка карточки вида (#746): оптимистично, сразу. */
@@ -66,11 +69,15 @@ export const useUiPrefsStore = create<UiPrefsState>()(
     (set) => ({
       personal: {},
       company: {},
+      localRevision: 0,
       applyNav: (order, hidden, forAll) =>
         set((s) =>
           forAll
             ? { company: { ...s.company, navOrder: order, navHidden: hidden } }
-            : { personal: { ...s.personal, navOrder: order, navHidden: hidden } },
+            : {
+                personal: { ...s.personal, navOrder: order, navHidden: hidden },
+                localRevision: s.localRevision + 1,
+              },
         ),
       setCardTabs: (kind, pref) =>
         set((s) => ({
@@ -78,9 +85,10 @@ export const useUiPrefsStore = create<UiPrefsState>()(
             ...s.personal,
             cardTabs: { ...s.personal.cardTabs, [kind]: pref },
           },
+          localRevision: s.localRevision + 1,
         })),
       replacePersonal: (preferences) => set({ personal: preferences }),
-      resetPersonal: () => set({ personal: {} }),
+      resetPersonal: () => set((s) => ({ personal: {}, localRevision: s.localRevision + 1 })),
     }),
     {
       name: STORE_NAME,

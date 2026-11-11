@@ -153,9 +153,11 @@ export function startPreferencesSync(): void {
   });
 
   useUiPrefsStore.subscribe((state, previous) => {
-    if (state.personal === previous.personal) return;
+    // Только действия пользователя: загрузка кэша при смене аккаунта и
+    // серверная гидратация personal НЕ меняют localRevision — иначе пустой
+    // кэш нового сотрудника ушёл бы PUT'ом и стёр его серверные настройки.
+    if (state.localRevision === previous.localRevision) return;
     if (!useAuthStore.getState().user) return;
-    // Гидратация с сервера — не локальная правка: dirty не ставим.
     if (hydrating) return;
     schedulePush();
   });

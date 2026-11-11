@@ -97,19 +97,25 @@ export function LetterCard({ letterId }: { letterId: string }) {
   });
   const branchActualW = useElementWidth(branchRef);
 
-  const baseTabs = tabsState ?? (letter ? initialTabs(defaultTabOf(letter)) : null);
-  const tabs = baseTabs ?? null;
+  const tabs = tabsState ?? (letter ? initialTabs(defaultTabOf(letter)) : null);
   const attachmentIds = letter?.attachments.map((file) => file.id) ?? [];
   const prunedTabs = tabs ? pruneFileTabs(tabs, attachmentIds) : null;
-  const fileTabs = (prunedTabs?.files ?? []).map(fileTabId);
   const cardTabs = useCardTabs({
     kind: 'letter',
     stableTabs: LETTER_STABLE_TABS,
-    fileTabs,
+    fileTabs: (prunedTabs?.files ?? []).map(fileTabId),
     defaultActive: letter ? defaultTabOf(letter) : 'body',
-    requestedActive: prunedTabs?.active,
+    requestedActive:
+      prunedTabs?.active && fileIdOf(prunedTabs.active) ? prunedTabs.active : undefined,
   });
   const { state } = cardTabs;
+  useEffect(() => {
+    const group = state.groups.find((entry) => entry.id === state.focusGroupId) ?? state.groups[0];
+    const active = group?.active as LetterTabId | undefined;
+    if (active && active !== prunedTabs?.active) {
+      setTabsState((current) => (current ? activateTab(current, active) : current));
+    }
+  }, [prunedTabs?.active, state.focusGroupId, state.groups]);
 
   const branchRendered =
     branch.open && rowWidth >= 320 + 420 + Math.min(branchWidth.branchW, rowWidth / 2);
@@ -162,15 +168,21 @@ export function LetterCard({ letterId }: { letterId: string }) {
   const activeFileId =
     fileIdOf(prunedTabs.active) ?? (prunedTabs.active === 'body' ? bodyAttachmentId : null);
 
-  const openAttachment = (attachmentId: string) =>
+  const openAttachment = (attachmentId: string) => {
     updateTabs((current) =>
       attachmentId === bodyAttachmentId
         ? activateTab(current, 'body')
         : openFileTab(current, attachmentId),
     );
+    // Стабильная «Письмо» — сразу и в движке (файл активируется по requested).
+    if (attachmentId === bodyAttachmentId) cardTabs.activate('body');
+  };
   const onJoin = () =>
     join.mutate(undefined, {
-      onSuccess: () => updateTabs((current) => activateTab(current, 'chat')),
+      onSuccess: () => {
+        updateTabs((current) => activateTab(current, 'chat'));
+        cardTabs.activate('chat');
+      },
     });
 
   return (

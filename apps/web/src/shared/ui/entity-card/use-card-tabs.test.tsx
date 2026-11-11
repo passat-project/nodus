@@ -28,6 +28,9 @@ function Harness({
       <button type="button" onClick={() => tabs.setState(mergeAllGroups(tabs.state))}>
         merge
       </button>
+      <button type="button" onClick={() => tabs.activate('structure')}>
+        host-activate
+      </button>
       <span data-testid="widths">{tabs.widths.groups?.join('+') ?? ''}</span>
       <span data-testid="actives">{tabs.state.groups.map((g) => g.active).join('|')}</span>
     </>
@@ -112,6 +115,27 @@ describe('useCardTabs: внешнее обновление prefs', () => {
 
   it('без личных prefs открывает системный дефолт', () => {
     render(<Harness />);
+    expect(screen.getByTestId('actives').textContent).toBe('structure');
+  });
+
+  it('активация стабильной вкладки хостом работает поверх восстановленной из prefs', async () => {
+    await act(async () =>
+      useUiPrefsStore.setState({
+        personal: {
+          cardTabs: {
+            project: {
+              version: 1,
+              groups: [{ tabs: ['about', 'structure', 'tasks'], active: 'about' }],
+            },
+          },
+        },
+      }),
+    );
+    render(<Harness />);
+    expect(screen.getByTestId('actives').textContent).toBe('about');
+    await act(async () => {
+      screen.getByRole('button', { name: 'host-activate' }).click();
+    });
     expect(screen.getByTestId('actives').textContent).toBe('structure');
   });
 

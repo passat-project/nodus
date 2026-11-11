@@ -108,18 +108,18 @@ export function useCardTabs(options: UseCardTabsOptions) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- файловый состав
   }, [fileKey]);
 
-  // Хост открыл вкладку (файл/стартовую письма) — активировать её в движке.
-  // Стартовый дефолт хоста не должен перебивать сохранённую активную из prefs.
+  // Хост открыл ФАЙЛОВУЮ вкладку — активировать её в движке. Стабильные
+  // вкладки хост активирует через `activate` (плитка документа, «Войти в чат»):
+  // иначе его стартовый дефолт перебивал сохранённую активную из prefs.
   useEffect(() => {
     const requested = options.requestedActive;
-    if (!requested) return;
-    if (storedPref && requested === options.defaultActive) return;
+    if (!requested || !isFileTabId(requested)) return;
     setState((previous) =>
       previous.groups.some((group) => group.tabs.includes(requested))
         ? activateIn(previous, requested)
         : previous,
     );
-  }, [options.defaultActive, options.requestedActive, storedPref]);
+  }, [options.requestedActive]);
 
   // Внешнее обновление prefs (серверный GET после логина, другой таб) может
   // прийти ПОЗЖЕ маунта карточки — тогда локальное состояние уже собрано по
@@ -190,6 +190,15 @@ export function useCardTabs(options: UseCardTabsOptions) {
       persist(next, hidden, nextWidths, panelOpen);
     },
     [hidden, panelOpen, persist, widths],
+  );
+
+  /** Активировать вкладку по инициативе хоста (стабильная вкладка). */
+  const activate = useCallback(
+    (tabId: string) => {
+      const next = activateIn(state, tabId);
+      if (next !== state) updateState(next);
+    },
+    [state, updateState],
   );
 
   /** Сплит активной вкладки: новая область сразу забирает половину рабочей
@@ -299,6 +308,7 @@ export function useCardTabs(options: UseCardTabsOptions) {
   return {
     state,
     setState: updateState,
+    activate,
     splitIntoTwo,
     hidden,
     toggleHidden,
