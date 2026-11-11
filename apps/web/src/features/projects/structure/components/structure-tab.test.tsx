@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+/* eslint-disable nodus-internal/max-lines-warn -- один сценарный набор вкладки
+   «Структура»: дерево, панель свойств, меню, перенос задач на общей фикстуре */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -325,13 +327,33 @@ describe('StructureTab: дерево папок с задачами и филь�
     // Атрибутные колонки (#632) скрыты по умолчанию — значения в таблице нет.
     expect(screen.queryByText('Фасад — навесной')).toBeNull();
 
-    // Клик по строке папки открывает панель «Свойства папки» (#556):
-    // название папки — полем правки в шапке панели.
+    // Клик по папке — только визуальный выбор строки, панель не открывается
+    // (#731): свойства — командой ПКМ-меню.
     fireEvent.click(screen.getByText('Здание 1'));
+    const nodeRow = screen.getByText('Здание 1').closest('[role="row"]')!;
+    expect(nodeRow.getAttribute('data-active')).toBe('true');
+    expect(screen.queryByLabelText(ui.structure.nodeName)).toBeNull();
+    fireEvent.contextMenu(nodeRow);
+    fireEvent.click(await screen.findByText(ui.structure.properties));
     await waitFor(() =>
       expect((screen.getByLabelText(ui.structure.nodeName) as HTMLInputElement).value).toBe(
         'Здание 1',
       ),
+    );
+
+    // Выбор другой папки не подменяет открытую панель (#731).
+    fireEvent.click(screen.getByText('Раздел АР'));
+    expect((screen.getByLabelText(ui.structure.nodeName) as HTMLInputElement).value).toBe(
+      'Здание 1',
+    );
+    const otherRow = screen.getByText('Раздел АР').closest('[role="row"]')!;
+    expect(otherRow.getAttribute('data-active')).toBe('true');
+
+    // Клавиатура: пробел на строке — тот же выбор строки, панель не трогает.
+    fireEvent.keyDown(nodeRow, { key: ' ' });
+    expect(nodeRow.getAttribute('aria-selected')).toBe('true');
+    expect((screen.getByLabelText(ui.structure.nodeName) as HTMLInputElement).value).toBe(
+      'Здание 1',
     );
 
     // Клик по строке задачи открывает её карточку (якорь — прямоугольник
