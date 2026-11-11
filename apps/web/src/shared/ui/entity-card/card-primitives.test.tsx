@@ -8,6 +8,7 @@ import { ViewerHostProvider, useViewerHost } from '../../files/viewer-host.js';
 import { ViewerFullscreenButton } from '../../files/viewer-fullscreen-button.js';
 import { CardDataColumn } from './card-data-column.js';
 import { CardTabStrip, type CardTabDef } from './card-tab-strip.js';
+import { CardTabToolbar } from './card-tab-toolbar.js';
 
 const file: ViewerTarget = {
   fileId: 'f1',
@@ -73,6 +74,18 @@ describe('общие примитивы карточек', () => {
     expect(onActivate).toHaveBeenCalledWith('file:f1');
     expect(onClose).toHaveBeenCalledWith('file:f1');
     expect(onKeyDown).toHaveBeenCalled();
+  });
+
+  it('CardTabToolbar: шапка вкладки-списка как у окон модулей (h-14, px-6)', () => {
+    render(
+      <CardTabToolbar>
+        <span>инструменты</span>
+      </CardTabToolbar>,
+    );
+    const header = screen.getByText('инструменты').parentElement;
+    expect(header?.className).toContain('h-14');
+    expect(header?.className).toContain('px-6');
+    expect(header?.className).toContain('gap-3');
   });
 
   it('CardDataColumn: центрированная колонка и фиксированный gutter', () => {
