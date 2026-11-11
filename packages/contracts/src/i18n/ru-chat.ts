@@ -120,6 +120,7 @@ export const chatStrings = {
   readOnlyChat: 'Чат доступен только для чтения — вы решающий по шагу',
   letterChat: 'Чат письма',
   openTask: 'Открыть задачу',
+  openProject: 'Открыть проект',
   openLetter: 'Открыть письмо',
   taskChatsEmpty: 'Нет активных обсуждений задач',
   filesMedia: 'Файлы и медиа',
