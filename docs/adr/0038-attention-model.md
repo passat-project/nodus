@@ -49,7 +49,9 @@ TalkJS/Odoo/Atrium, Nextcloud Talk; подробности — тело #770):
 issue #63) или страница под непустым стеком карточек (ADR-0009). Контекст
 `shared/lib/surface-visibility.tsx`: `SurfaceVisibilityProvider` (вложенный:
 `parent && visible`) — `SliderPanel` ставит `!dormant`, `AppShell` —
-`stack.length === 0` вокруг раздела. `useFeedViewportRead` читает
+`stack.length === 0` вокруг раздела, `CardTabPanelLayer` — `active` (посещённые
+неактивные вкладки карточки остаются смонтированными, но `visibility:hidden`
+не отменяет ни IntersectionObserver, ни геометрию). `useFeedViewportRead` читает
 `userActive && surfaceVisible`; накрытый чат не читает и не «открыт» для
 гейта попапов (`useConversationHost` снимает регистрацию, `getOpenConversation`
 возвращает только видимый хост).
