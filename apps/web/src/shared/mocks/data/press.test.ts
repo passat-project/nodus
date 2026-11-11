@@ -50,17 +50,18 @@ describe('мок-сбор отметок (#434)', () => {
     });
   });
 
-  it('8 из 9: последнее нажатие закрывает заявку', () => {
+  it('все, кроме климовича, сдали: последнее нажатие закрывает заявку', () => {
+    const total = Object.values(userIds).filter((id) => id !== userIds.matorin).length;
     expect(pressOf(TASK_THREE, userIds.klimovich)).toMatchObject({
-      pressed: 8,
-      total: 9,
+      pressed: total - 1,
+      total,
       canSubmit: true,
     });
     submitPress(TASK_THREE, userIds.klimovich, {
       result: { text: 'Ознакомлен', messageIds: [] },
     });
     expect(pressOf(TASK_THREE, userIds.klimovich)).toMatchObject({
-      pressed: 9,
+      pressed: total,
       completed: true,
     });
   });
