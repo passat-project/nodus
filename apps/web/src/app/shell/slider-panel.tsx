@@ -12,6 +12,7 @@ import { Button } from '@nodus/ui/components/button';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { inputModality } from '../../shared/lib/input-modality.js';
+import { CardHeaderActionsContext } from './card-header-actions.js';
 import { useRailHidden } from './rail-visibility.js';
 import { EDGE_W_COLLAPSED, EDGE_W_EXPANDED } from './right-rail.js';
 import { uiPx } from '../../shared/ui/ui-scale.js';
@@ -72,6 +73,7 @@ const CONTENT_FADE_MS = 100;
 export function SliderPanel({
   title,
   headerContent,
+  headerActions,
   cardTopbar = false,
   fullscreen = false,
   dormant = false,
@@ -87,6 +89,9 @@ export function SliderPanel({
   /** Замена заголовка в хроме (полноэкранная карточка мессенджера: вкладки
    *  Чаты/Чаты задач/Настройка с портами `data-tab-port` вместо названия). */
   headerContent?: ReactNode;
+  /** Действия шапки справа (правка/меню/раскладка) — ReactNode для прямых
+   *  потребителей; карточки используют `CardHeaderActionsPortal`. */
+  headerActions?: ReactNode;
   /** true — хедер помечается `data-card-topbar`: контур измеряет его вместо
    *  топбара шелла (режим карточки, план messenger-fullscreen). */
   cardTopbar?: boolean;
@@ -119,6 +124,9 @@ export function SliderPanel({
   const panelRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [closing, setClosing] = useState(false);
+  // Слот действий шапки: карточка переносит сюда свои кнопки порталом
+  // (#735/#746) — хост стека не знает их состояния.
+  const [headerActionsHost, setHeaderActionsHost] = useState<HTMLDivElement | null>(null);
   const closingRef = useRef(false);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -271,71 +279,79 @@ export function SliderPanel({
       {/* Прозрачный click-catcher вместо затемняющего задника: страница за
           панелью цвета не меняет; клик мимо панели закрывает её. */}
       <div className="absolute inset-0" onClick={requestClose} aria-hidden="true" />
-      <section
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={title && !headerContent ? `${id}-title` : undefined}
-        style={flipStyle}
-        className={cn(
-          'slider-shadow absolute inset-2 z-20 flex flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground',
-          sourceRect ? 'slider-expand' : 'slider-pop',
-        )}
-      >
-        <header
-          data-card-topbar={cardTopbar ? 'true' : undefined}
+      <CardHeaderActionsContext.Provider value={headerActionsHost}>
+        <section
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={title && !headerContent ? `${id}-title` : undefined}
+          style={flipStyle}
           className={cn(
-            // cardTopbar: бордюра НЕТ — нижнюю линию хедера рисует контур
-            // (ось шины на headerRect.bottom, 0.32 opacity) ровно как в
-            // топбаре шелла: карточка-мессенджер выглядит как страница.
-            'flex h-12 shrink-0 items-center gap-2 px-3',
-            '*:transition-opacity *:duration-100',
-            !cardTopbar && 'border-b border-border',
-            sourceRect && !closing && 'content-fade',
-            // Фаза 1 закрытия: контент ГАСНЕТ за 100 мс (не мгновенно — одним
-            // кадром это читалось «вспышкой на весь экран»), затем оболочка
-            // схлопывается в источник (баг-вердикты владельца 15.09.2026:
-            // «текст отпечатывается на главной» → «теперь вспышка»).
-            closing && '*:opacity-0',
+            'slider-shadow absolute inset-2 z-20 flex flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground',
+            sourceRect ? 'slider-expand' : 'slider-pop',
           )}
         >
-          <Button
-            ref={closeButtonRef}
-            variant="ghost"
-            size="icon"
-            className="shrink-0 hover:bg-accent"
-            onClick={requestClose}
-            aria-label={ui.common.close}
+          <header
+            data-card-topbar={cardTopbar ? 'true' : undefined}
+            className={cn(
+              // cardTopbar: бордюра НЕТ — нижнюю линию хедера рисует контур
+              // (ось шины на headerRect.bottom, 0.32 opacity) ровно как в
+              // топбаре шелла: карточка-мессенджер выглядит как страница.
+              'flex h-12 shrink-0 items-center gap-2 px-3',
+              '*:transition-opacity *:duration-100',
+              !cardTopbar && 'border-b border-border',
+              sourceRect && !closing && 'content-fade',
+              // Фаза 1 закрытия: контент ГАСНЕТ за 100 мс (не мгновенно — одним
+              // кадром это читалось «вспышкой на весь экран»), затем оболочка
+              // схлопывается в источник (баг-вердикты владельца 15.09.2026:
+              // «текст отпечатывается на главной» → «теперь вспышка»).
+              closing && '*:opacity-0',
+            )}
           >
-            <X />
-          </Button>
-          {/* Хлебные крошки убраны (вердикт владельца); вместо них — главное
+            <Button
+              ref={closeButtonRef}
+              variant="ghost"
+              size="icon"
+              className="shrink-0 hover:bg-accent"
+              onClick={requestClose}
+              aria-label={ui.common.close}
+            >
+              <X />
+            </Button>
+            {/* Хлебные крошки убраны (вердикт владельца); вместо них — главное
               название сущности: на видном месте, один раз, в теле карточки
               не дублируется. Фулскрин-карточка мессенджера — вместо названия
               вкладки-порты (headerContent). Кегль титула 18px/600 — по замеру
               Битрикс24 (ambient-проба владельца 21.09.2026: титул задачи
               21px/600; наш хедер плотнее (h-12) — та же роль в нашем масштабе). */}
-          {headerContent ??
-            (title ? (
-              <span
-                id={`${id}-title`}
-                className="min-w-0 truncate text-lg font-semibold text-foreground"
-              >
-                {title}
-              </span>
-            ) : null)}
-        </header>
-        <div
-          className={cn(
-            'min-h-0 flex-1 overflow-hidden transition-opacity duration-100',
-            fadeContent && sourceRect && !closing && 'content-fade',
-            // Фаза 1 закрытия: тело гаснет за 100 мс (см. хром выше).
-            closing && 'opacity-0',
-          )}
-        >
-          {contentMounted ? children : null}
-        </div>
-      </section>
+            {headerContent ??
+              (title ? (
+                <span
+                  id={`${id}-title`}
+                  className="min-w-0 truncate text-lg font-semibold text-foreground"
+                >
+                  {title}
+                </span>
+              ) : null)}
+            <div
+              ref={setHeaderActionsHost}
+              className="ml-auto flex min-w-0 shrink-0 items-center gap-1"
+            >
+              {headerActions}
+            </div>
+          </header>
+          <div
+            className={cn(
+              'min-h-0 flex-1 overflow-hidden transition-opacity duration-100',
+              fadeContent && sourceRect && !closing && 'content-fade',
+              // Фаза 1 закрытия: тело гаснет за 100 мс (см. хром выше).
+              closing && 'opacity-0',
+            )}
+          >
+            {contentMounted ? children : null}
+          </div>
+        </section>
+      </CardHeaderActionsContext.Provider>
     </div>
   );
 }
