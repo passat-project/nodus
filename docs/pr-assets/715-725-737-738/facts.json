@@ -1,0 +1,19 @@
+{
+  "base": "http://127.0.0.1:4173",
+  "contour": "песочница live-stack, vite dev (:4173), non-mock, БД nodus_night",
+  "user": "night-a@nodus.local (tests/e2e/e2e-users.json → nightA)",
+  "viewport": "1600×950, темы через nodus-shell-v1 (light/dark)",
+  "profileMenuItems": ["Профиль", "Выйти"],
+  "avatarUpload": {
+    "source": "6000×4000 JPEG (24 Мп), синтетический шум",
+    "sourceBytes": { "light": 2372244, "dark": 2386827 },
+    "multipartBodyBytes": { "light": 214126, "dark": 216242 },
+    "httpStatus": 200,
+    "evidence": ".live-stack/api.log: POST /api/v1/directory/users/me/avatar content-length 214126/216242, 200"
+  },
+  "kanbanDrag": {
+    "column": "В РАБОТЕ (личная стадия night-a)",
+    "cardsInColumn": 14,
+    "gesture": "первая карточка удержана и проведена до низа второй карточки; кадр до отпускания, затем Escape (отмена без записи)"
+  }
+}
