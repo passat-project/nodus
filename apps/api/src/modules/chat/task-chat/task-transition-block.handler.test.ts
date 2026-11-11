@@ -38,7 +38,7 @@ function event(
   };
 }
 
-function setup(options: { enabled?: boolean; insert?: unknown } = {}) {
+function setup(options: { enabled?: boolean; insert?: unknown; member?: boolean } = {}) {
   const row = {
     id: 'm1',
     conversationId: 'c1',
@@ -74,7 +74,9 @@ function setup(options: { enabled?: boolean; insert?: unknown } = {}) {
     taskChat: { sync: vi.fn(async (): Promise<string | null> => 'c1') },
     writes,
     mapper: { toFreshDto: vi.fn(async () => ({ id: 'm1' })) },
-    conversations: { listMembers: vi.fn(async () => []) },
+    conversations: {
+      listMembers: vi.fn(async () => (options.member === false ? [] : [{ userId: 'bob' }])),
+    },
     memberships: { revealHidden: vi.fn(async () => void 0) },
     vault: { applyMessageSent: vi.fn(async () => void 0) },
     eventBus: { emit: vi.fn(async () => void 0) },
@@ -154,5 +156,13 @@ describe('блок перехода в чате задачи (#380)', () => {
     taskChat.sync.mockResolvedValueOnce(null);
     await service.post(event());
     expect(writes.insertMessage).not.toHaveBeenCalled();
+  });
+
+  it('актор вне беседы задачи — блок не пишется, журнал остаётся (#741)', async () => {
+    const { service, writes, eventBus, logger } = setup({ member: false });
+    await service.post(event());
+    expect(writes.insertMessage).not.toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalled();
   });
 });

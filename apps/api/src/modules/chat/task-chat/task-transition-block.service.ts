@@ -62,6 +62,17 @@ export class TaskTransitionBlockService {
     payload: TaskStageChangedPayload,
     actorId: string,
   ): Promise<void> {
+    // Нажатие может прийти от того, кто видит задачу по праву, но в беседе
+    // задачи не состоит (обход условий маршрута). Такому актору писать в
+    // чужую переписку нельзя — блок пропускаем, запись журнала остаётся.
+    const members = await this.conversations.listMembers([conversationId], tx);
+    if (!members.some((member) => member.userId === actorId)) {
+      this.logger.warn(
+        { taskId: payload.taskId, actorId },
+        'chat: блок перехода не записан — актор вне беседы задачи',
+      );
+      return;
+    }
     const seq = await this.writes.allocateSeqs(conversationId, 1, tx);
     const inserted = await this.writes.insertMessage(
       {
@@ -106,7 +117,6 @@ export class TaskTransitionBlockService {
     await this.writes.touchLastMessageAt(conversationId, tx);
     await this.memberships.revealHidden(conversationId, tx);
 
-    const members = await this.conversations.listMembers([conversationId], tx);
     const message = await this.mapper.toFreshDto(inserted, {
       viewerId: actorId,
       members,
