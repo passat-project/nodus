@@ -108,8 +108,7 @@ pub fn run() {
             WindowEvent::Resized(_) if window.label() == "main" => {
                 emit_shell_focus(
                     window.app_handle(),
-                    window.is_focused().unwrap_or(false)
-                        && !window.is_minimized().unwrap_or(false),
+                    window.is_focused().unwrap_or(false) && !window.is_minimized().unwrap_or(false),
                 );
             }
             _ => {}
