@@ -89,7 +89,9 @@ test.describe('действие без смены статуса (#633)', () => 
     const detail = await api<RouteDetail>(admin, 'GET', `/workflows/${standard.workflowId}`);
     const inProgress = detail.document.stages.find((s) => s.name === 'В работе')!;
     const actionName = `E2E уточнение ${Date.now() % 100_000}`;
-    const actionId = crypto.randomUUID();
+    // Сервер принимает новые элементы документа только с префиксом `new:`
+    // (граница публикации отвергает чужие uuid) — как в редакторе.
+    const actionId = `new:${crypto.randomUUID()}`;
 
     const withAction = {
       ...detail.document,
@@ -150,13 +152,14 @@ test.describe('действие без смены статуса (#633)', () => 
       const after = await api<{ stage: { name: string } }>(admin, 'GET', `/tasks/${created.id}`);
       expect(after.stage.name).toBe('В работе');
     } finally {
-      // 5. Возврат маршрута к документу без тестового действия.
+      // 5. Возврат маршрута к документу без тестового действия. Сервер выдал
+      //    действию свой uuid — ищем по имени, а не по id черновика.
       const fresh = await api<RouteDetail>(admin, 'GET', `/workflows/${standard.workflowId}`);
       await api(admin, 'POST', `/workflows/${standard.workflowId}/publish`, {
         baseVersion: fresh.version,
         document: {
           ...fresh.document,
-          actions: (fresh.document.actions ?? []).filter((a) => a.id !== actionId),
+          actions: (fresh.document.actions ?? []).filter((a) => a.name !== actionName),
         },
         migrations: [],
       });
