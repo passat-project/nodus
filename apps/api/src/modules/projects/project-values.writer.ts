@@ -37,9 +37,14 @@ export class ProjectValuesWriter {
   ) {}
 
   /** Замок проекта в порядке «хост → ячейки»: его берут и save формулы, и
-   *  пересчёт ДО записи `formula_cells`, иначе конкурентный PATCH ловит 40P01. */
-  async lockProject(tx: TransactionClient, projectId: string): Promise<boolean> {
-    return (await this.projects.lockForUpdate(tx, projectId)) !== null;
+   *  пересчёт ДО записи `formula_cells`, иначе конкурентный PATCH ловит 40P01.
+   *  Возвращает свежую строку под `FOR UPDATE` — гарды мутаций перепроверяют
+   *  по ней архив и руководство (#705). */
+  async lockProject(
+    tx: TransactionClient,
+    projectId: string,
+  ): Promise<{ id: string; visibility: string; status: string } | null> {
+    return this.projects.lockForUpdate(tx, projectId);
   }
 
   /** Замок папки (структура проекта → строка узла) — тот же порядок, что у

@@ -18,6 +18,7 @@ import { buildSubtitle, findPeer, memberName } from '../../../shared/chat/conver
 import {
   canAddMembers,
   canChangeInfo,
+  conversationAvatarUrl,
   conversationTitle,
   isNotesConversation,
   isRenamableConversation,
@@ -112,6 +113,24 @@ export function ConversationBar({
 
   const typingName = typingVisible ? memberName(conversation, typing.userId) : null;
   const isFavorites = isNotesConversation(conversation, meId);
+  // Кнопка сущности беседы — ВЗАИМОИСКЛЮЧАЮЩЕ: чат задачи → «Открыть задачу»,
+  // канал проекта → «Открыть проект» (#753), чат письма → «Открыть письмо»
+  // (#754). Беседа без привязки (старые данные/моки) — без кнопки: мёртвых
+  // кнопок нет.
+  const linkedCard =
+    conversation.type === 'task' && conversation.task
+      ? { label: ui.chat.openTask, ref: { kind: 'task' as const, id: conversation.task.id } }
+      : conversation.type === 'project_channel' && conversation.project
+        ? {
+            label: ui.chat.openProject,
+            ref: { kind: 'project' as const, id: conversation.project.id },
+          }
+        : conversation.type === 'letter' && conversation.letter
+          ? {
+              label: ui.chat.openLetter,
+              ref: { kind: 'letter' as const, id: conversation.letter.id },
+            }
+          : null;
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
@@ -129,7 +148,12 @@ export function ConversationBar({
               aria-label={conversation.avatarUrl ? ui.common.avatarChange : ui.common.avatarUpload}
               className="group relative size-9 shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-port"
             >
-              <PersonAvatar name={title} avatarUrl={conversation.avatarUrl} className="size-full" />
+              <PersonAvatar
+                name={title}
+                avatarUrl={conversationAvatarUrl(conversation, meId)}
+                decorative
+                className="size-full"
+              />
               <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                 <Camera className="size-4" strokeWidth={1.75} aria-hidden />
               </span>
@@ -147,7 +171,12 @@ export function ConversationBar({
           </ContextMenuContent>
         </ContextMenu>
       ) : (
-        <PersonAvatar name={title} avatarUrl={conversation.avatarUrl} className="size-9 shrink-0" />
+        <PersonAvatar
+          name={title}
+          avatarUrl={conversationAvatarUrl(conversation, meId)}
+          decorative
+          className="size-9 shrink-0"
+        />
       )}
       {canEditInfo ? (
         <input
@@ -204,15 +233,8 @@ export function ConversationBar({
         </div>
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        {conversation.type === 'task' && conversation.task ? (
-          <button
-            type="button"
-            onClick={() => openCard({ kind: 'task', id: conversation.task?.id ?? '' })}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-input hover:text-foreground"
-          >
-            {ui.chat.openTask}
-            <SquareArrowOutUpRight className="size-3.5" strokeWidth={1.75} />
-          </button>
+        {linkedCard ? (
+          <OpenCardButton label={linkedCard.label} onClick={() => openCard(linkedCard.ref)} />
         ) : null}
         {showMembersControls && canAddMembers(conversation) ? (
           <button
@@ -241,5 +263,22 @@ export function ConversationBar({
         <ChatPanelToggle open={panelOpen} onToggle={onPanelToggle} />
       </div>
     </header>
+  );
+}
+
+/** Кнопка сущности беседы в баре (#753/#754): «Открыть задачу/проект/письмо» —
+ *  один вид на все типы (текст + иконка, рамка, до «Добавить участников»/
+ *  поиска/тоггла), открывает карточку сущности поверх мессенджера (стек
+ *  ADR-0009). */
+function OpenCardButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-input hover:text-foreground"
+    >
+      {label}
+      <SquareArrowOutUpRight className="size-3.5" strokeWidth={1.75} />
+    </button>
   );
 }

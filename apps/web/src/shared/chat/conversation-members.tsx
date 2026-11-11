@@ -98,6 +98,7 @@ function MemberRow({
       <PersonAvatar
         name={member.user.displayName}
         avatarUrl={member.user.avatarUrl}
+        decorative
         className="size-8 shrink-0"
       />
       <div className="min-w-0 flex-1">
@@ -318,6 +319,7 @@ export function AddMembersDialog({
                   <PersonAvatar
                     name={person.displayName}
                     avatarUrl={person.avatarUrl}
+                    decorative
                     className="size-4"
                   />
                   {withoutPatronymic(person.displayName)}
@@ -345,6 +347,7 @@ export function AddMembersDialog({
                 <PersonAvatar
                   name={person.displayName}
                   avatarUrl={person.avatarUrl}
+                  decorative
                   className="size-6"
                 />
                 <span className="truncate">{withoutPatronymic(person.displayName)}</span>

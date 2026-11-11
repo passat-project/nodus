@@ -33,6 +33,7 @@ export function StructureRowList({
   canEdit,
   onToggleBranch,
   onSelectNode,
+  activeNodeId = null,
   onToggleNoNode,
   onOpenTask,
   onMoveTasks,
@@ -54,8 +55,10 @@ export function StructureRowList({
   actions: StructureMenuActions;
   canEdit: boolean;
   onToggleBranch: (id: string) => void;
-  /** Выбор папки для панели «Свойства» (клик по строке). */
+  /** Выбор папки кликом (визуальный, без панели, #731). */
   onSelectNode: (id: string) => void;
+  /** Активная (выбранная кликом) папка. */
+  activeNodeId?: string | null;
   onToggleNoNode: () => void;
   onOpenTask: (id: string, anchor?: HTMLElement) => void;
   onMoveTasks: (ids: string[]) => void;
@@ -113,6 +116,7 @@ export function StructureRowList({
                 collapsed={collapsed.has(row.node.id)}
                 onToggle={() => onToggleBranch(row.node.id)}
                 selected={selection.selected.has(`n:${row.node.id}`)}
+                active={row.node.id === activeNodeId}
                 onToggleSelected={() => selection.toggle(`n:${row.node.id}`)}
                 onSelect={() => onSelectNode(row.node.id)}
                 items={nodeMenuItems(row.node, actions, canEdit)}

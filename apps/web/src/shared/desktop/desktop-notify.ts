@@ -2,16 +2,12 @@ import type { QueryClient } from '@tanstack/react-query';
 import { chatMessageSentPayloadSchema, stripMentionTokens, ui } from '@nodus/contracts';
 
 import { useAuthStore } from '../auth-store.js';
+import { isUserActive } from '../attention/attention-store.js';
 import { withoutPatronymic } from '../lib/format.js';
 import { chatKeys } from '../chat/chat-keys.js';
 import { getOpenConversation } from '../chat/open-conversation.js';
 import { threadNotifyAllowed } from '../chat/thread-notify-gate.js';
-import {
-  desktopFlashTaskbar,
-  desktopShowPopup,
-  isDesktopShell,
-  isPortalBackground,
-} from './desktop-bridge.js';
+import { desktopFlashTaskbar, desktopShowPopup, isDesktopShell } from './desktop-bridge.js';
 
 /**
  * Попапы десктоп-оболочки по WS-событию chat.message_sent (ADR-0019): правила
@@ -32,12 +28,13 @@ export function notifyDesktopMessage(payload: unknown, queryClient: QueryClient)
   const meId = useAuthStore.getState().user?.id ?? null;
   if (message.author.id === meId) return;
 
-  // Модель Telegram (фидбек 08.10) + вердикт 15.10: тишина, когда пользователь
-  // СМОТРИТ в эту беседу — окно на виду, в фокусе, беседа открыта. Фокус на
-  // другой странице портала — попап нужен: сообщение всё равно не видно.
-  // Попапы копятся до реакции (очередь в оболочке), бейдж считает непрочитанное.
-  const looking =
-    !isPortalBackground() && document.hasFocus() && getOpenConversation() === conversationId;
+  // Модель Telegram (фидбек 08.10) + вердикт 15.10 + модель внимания (#770):
+  // тишина, только когда пользователь ДЕЙСТВИТЕЛЬНО смотрит в эту беседу —
+  // окно на виду, в фокусе, был ввод за 30 с и беседа открыта на видимой
+  // поверхности (карточка не под другой). Отошёл/свернул — сообщение не
+  // видно, попап нужен. Попапы копятся до реакции (очередь в оболочке),
+  // бейдж считает непрочитанное.
+  const looking = isUserActive() && getOpenConversation() === conversationId;
   if (looking) return;
 
   if (!urgent) {

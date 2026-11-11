@@ -6,6 +6,7 @@ import type { ChatMessage } from '@nodus/contracts';
 import { buildMessageRuns, type MessageRun } from './message-groups.js';
 import { MessageRunView, type MessageRunItemAttrs } from './message-run.js';
 import { useChatPrefs } from './chat-prefs.js';
+import { stubLoadedImage } from '../../test/stub-loaded-image.js';
 
 /**
  * Серия-лента с липким аватаром (#164): grid «колонка аватара + пузыри»,
@@ -41,6 +42,14 @@ const message = (overrides: Partial<ChatMessage> = {}): ChatMessage => ({
 });
 
 afterEach(cleanup);
+
+/** jsdom не загружает картинки (см. `stub-loaded-image`). */
+
+let restoreImage: (() => void) | null = null;
+afterEach(() => {
+  restoreImage?.();
+  restoreImage = null;
+});
 
 function renderRun(run: MessageRun, dividerBeforeId: string | null = null) {
   const rows: { id: string; attrs: MessageRunItemAttrs }[] = [];
@@ -81,6 +90,26 @@ describe('MessageRunView — grid серии с липким аватаром (#
       { gridColumn: 2, gridRow: 2 },
       { gridColumn: 2, gridRow: 3 },
     ]);
+  });
+
+  it('фото автора из DTO серии рисуется в аватаре серии (#726)', () => {
+    restoreImage = stubLoadedImage();
+    const photo = 'https://files.nodus.local/avatar/author.png';
+    const run = buildMessageRuns(
+      [message({ author: { id: 'b', displayName: 'Иван Петров', avatarUrl: photo } })],
+      'a',
+    )[0]!;
+    const { container } = renderRun(run);
+    const img = container.querySelector('[data-slot="message-run-avatar"] img');
+    expect(img?.getAttribute('src')).toBe(photo);
+    expect(img?.getAttribute('alt')).toBe('');
+    // без фото — те же инициалы (механизм один)
+    const fallbackRun = buildMessageRuns([message()], 'a')[0]!;
+    const plain = renderRun(fallbackRun);
+    expect(plain.container.querySelector('[data-slot="message-run-avatar"] img')).toBeNull();
+    expect(plain.container.querySelector('[data-slot="message-run-avatar"]')?.textContent).toBe(
+      'ИП',
+    );
   });
 
   it('дистрибуция канона: имя — только первому, хвостик — только последнему', () => {

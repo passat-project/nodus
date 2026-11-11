@@ -205,7 +205,12 @@ export function CommandPalette() {
                             openCard({ kind: 'employee', id: person.id });
                           }}
                         >
-                          <PersonAvatar name={person.displayName} className="size-6" />
+                          <PersonAvatar
+                            name={person.displayName}
+                            avatarUrl={person.avatarUrl}
+                            decorative
+                            className="size-6"
+                          />
                           {person.displayName}
                           <span className="ml-auto text-xs text-muted-foreground">
                             {person.positionName}

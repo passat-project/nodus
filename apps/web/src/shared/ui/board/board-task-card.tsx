@@ -161,7 +161,12 @@ function BoardTaskCardInner({
       {showFooter ? (
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
           {isVisible('assignee') && task.assignee ? (
-            <PersonAvatar name={task.assignee.displayName} className="size-6" />
+            <PersonAvatar
+              name={task.assignee.displayName}
+              avatarUrl={task.assignee.avatarUrl}
+              decorative
+              className="size-6"
+            />
           ) : null}
           {isVisible('comments') ? (
             <span className="ml-auto inline-flex items-center gap-1 font-mono text-label-sm tabular-nums">

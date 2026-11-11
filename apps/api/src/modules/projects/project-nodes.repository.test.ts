@@ -13,7 +13,7 @@ const PROJECT = '00000000-0000-4000-8000-0000000000a1';
 const NODE = '00000000-0000-4000-8000-0000000000a2';
 
 function make() {
-  const tx = { $executeRaw: vi.fn(async () => 1) };
+  const tx = { $executeRaw: vi.fn(async () => 1), $queryRaw: vi.fn(async () => [{ id: PROJECT }]) };
   const repo = new ProjectNodesRepository({} as never);
   return { repo, tx };
 }
@@ -35,9 +35,19 @@ describe('ProjectNodesRepository: локи узла (#646)', () => {
     expect(text).toMatch(/project_id/);
   });
 
-  it('lockStructure берёт advisory-лок очереди структуры проекта', async () => {
+  it('lockStructure: строка проекта — первой, затем advisory структуры (#705)', async () => {
     const { repo, tx } = make();
     await repo.lockStructure(tx as never, PROJECT);
+
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    const projectLock = sqlText(tx.$queryRaw.mock.calls[0] as unknown[]);
+    expect(projectLock).toMatch(/projects/);
+    expect(projectLock).toMatch(/FOR UPDATE/);
+    // Строка проекта — строго ДО advisory: обратный порядок открывал ABBA (#705).
+    expect(tx.$queryRaw.mock.invocationCallOrder[0]!).toBeLessThan(
+      tx.$executeRaw.mock.invocationCallOrder[0]!,
+    );
+
     const text = sqlText(tx.$executeRaw.mock.calls[0] as unknown[]);
     expect(text).toMatch(/pg_advisory_xact_lock/);
     expect(text).toMatch(/nodus:project_nodes:/);
