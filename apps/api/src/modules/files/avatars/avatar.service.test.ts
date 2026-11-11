@@ -120,9 +120,47 @@ describe('AvatarService.process', () => {
     // (интерфейс показывает причину, а не «битое фото»).
     expect((error as DomainException).code).toBe(ErrorCode.FILE_AVATAR_TOO_LARGE_RESOLUTION);
     expect((error as DomainException).details).toMatchObject({ pixelLimit: AVATAR_PIXEL_LIMIT });
-    // Оригинал сохранён до декода, WebP-деривата нет — аватар на сущность не вешается.
-    expect(saved).toHaveLength(1);
-    expect(saved[0]!.input.mime).toBe('image/png');
+    // Оригинал теперь сохраняется ПОСЛЕ декода (#725, security-ревью): отказ
+    // не оставляет сироту в хранилище и на сущность аватар не вешается.
+    expect(saved).toHaveLength(0);
+  });
+
+  it('оригинал с EXIF (GPS/автор) сохраняется БЕЗ метаданных, ориентация запечена (#725)', async () => {
+    const { service, saved } = makeService();
+    // Клиент не пережимает файлы ≤512 КБ — EXIF доезжает до сервера; GPS
+    // сотрудника не должен остаться в бакете.
+    const jpeg = await sharp({
+      create: { width: 128, height: 64, channels: 3, background: '#224466' },
+    })
+      .withExif({ IFD0: { Copyright: 'GPS 55.75N 37.61E' } })
+      .withMetadata({ orientation: 6 })
+      .jpeg()
+      .toBuffer();
+
+    await service.process(
+      { ownerId: 'u-1', name: 'фото.jpg', size: jpeg.length },
+      Readable.from(jpeg),
+    );
+
+    expect(saved[0]!.input.mime).toBe('image/jpeg');
+    const meta = await sharp(saved[0]!.bytes).metadata();
+    expect(meta.exif).toBeUndefined();
+    expect(meta.orientation).toBeUndefined();
+    // EXIF-ориентация 6 запечена в пиксели: 128×64 → 64×128.
+    expect(meta.width).toBe(64);
+    expect(meta.height).toBe(128);
+  });
+
+  it('файл без метаданных сохраняется байт-в-байт (без перекодировки)', async () => {
+    const { service, saved } = makeService();
+    const png = await testPng(128, 128);
+
+    await service.process(
+      { ownerId: 'u-1', name: 'фото.png', size: png.length },
+      Readable.from(png),
+    );
+
+    expect(saved[0]!.bytes.equals(png)).toBe(true);
   });
 
   it('contentUrl — подписная ссылка отдачи', () => {

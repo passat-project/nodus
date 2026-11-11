@@ -76,19 +76,10 @@ export class AvatarService {
       );
     }
 
-    const original = await this.storage.save(
-      {
-        ownerId: input.ownerId,
-        name: input.name || 'avatar',
-        mime: valid.mime,
-        size: bytes.length,
-      },
-      Readable.from(bytes),
-    );
-
+    let meta: sharp.Metadata;
     let derivative: Buffer;
     try {
-      const meta = await sharp(bytes, { limitInputPixels: AVATAR_PIXEL_LIMIT }).metadata();
+      meta = await sharp(bytes, { limitInputPixels: AVATAR_PIXEL_LIMIT }).metadata();
       // Квадратная сторона: минимум из ориентированных сторон и потолка —
       // cover-кроп этой величиной никогда не апскейлит (без enlargement)
       // и всегда даёт точный квадрат (sharp безEnlargement на cover не
@@ -130,6 +121,22 @@ export class AvatarService {
       throw new DomainException(ErrorCode.FILE_AVATAR_INVALID, 'Avatar image is corrupted');
     }
 
+    // Оригинал — после успешного декодирования (#725, security-ревью): отказ
+    // «битый/маленький/пиксельный потолок» больше не оставляет сироту в
+    // хранилище. Метаданные срезаем до записи: клиент не пережимает файлы
+    // ≤512 КБ по правилу владельца — они приходят с EXIF (GPS/автор), а
+    // оригинал лежит в бакете «на память» (задел перекадровки).
+    const originalBytes = await this.withoutMetadata(bytes, meta, valid.mime);
+    const original = await this.storage.save(
+      {
+        ownerId: input.ownerId,
+        name: input.name || 'avatar',
+        mime: valid.mime,
+        size: originalBytes.length,
+      },
+      Readable.from(originalBytes),
+    );
+
     const baseName = input.name.replace(/\.[^.]+$/, '') || 'avatar';
     const saved = await this.storage.save(
       {
@@ -142,6 +149,23 @@ export class AvatarService {
       Readable.from(derivative),
     );
     return { fileId: saved.fileId };
+  }
+
+  /** Оригинал без метаданных (EXIF/GPS, XMP) — приватность «at rest»
+   *  (#725, security-ревью 12.11): GPS сотрудника не должен лежать в бакете.
+   *  Файл БЕЗ метаданных сохраняется байт-в-байт (без перекодировки и потери
+   *  качества); с метаданными — перекодируется в свой формат, EXIF-ориентация
+   *  запекается в пиксели (как её уже применяет дериват). */
+  private async withoutMetadata(
+    bytes: Buffer,
+    meta: sharp.Metadata,
+    mime: string,
+  ): Promise<Buffer> {
+    if (!meta.exif && !meta.xmp && !meta.orientation) return bytes;
+    const pipeline = sharp(bytes, { limitInputPixels: AVATAR_PIXEL_LIMIT }).rotate();
+    if (mime === 'image/png') return pipeline.png().toBuffer();
+    if (mime === 'image/webp') return pipeline.webp({ quality: 95 }).toBuffer();
+    return pipeline.jpeg({ quality: 95 }).toBuffer();
   }
 
   /** Подписанный URL отдачи аватара для DTO (сущность хранит fileId). */
