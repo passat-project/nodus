@@ -4,7 +4,8 @@ import type { AuthUser, PresenceEntry, UserCard, UserListItem, UserRef } from '@
 import { departmentIds } from './org-ids.js';
 import { demoPositions } from './positions.js';
 
-/** Демо-справочник сотрудников (ПассатПроект, 10 человек для концепта). */
+/** Демо-справочник сотрудников (ПассатПроект): 10 действующих и один
+ *  уволенный — чтобы счётчики штата (#723) и архив были проверяемы на моках. */
 
 const uid = (n: number): string => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -19,6 +20,7 @@ export const userIds = {
   kuralenya: uid(8),
   vinnichek: uid(9),
   akulich: uid(10),
+  dubovik: uid(11),
 };
 
 function mk(
@@ -29,12 +31,13 @@ function mk(
   manager: number | null,
   department: keyof typeof departmentIds,
   legalDepartment: keyof typeof departmentIds,
+  status: UserListItem['status'] = 'active',
 ): UserListItem {
   const email = `user${n}@passatproekt.by`;
   return {
     id: uid(n),
     displayName,
-    status: 'active',
+    status,
     avatarUrl: null,
     positionName,
     departmentName,
@@ -62,6 +65,19 @@ export const demoUserListItems: UserListItem[] = [
   mk(8, 'Андрей Кураленя', 'Инженер-проектировщик', 'Проектное', 9, 'project', 'legalGip'),
   mk(9, 'Полина Винничек', 'Главный архитектор', 'Проектное', 7, 'project', 'legalGip'),
   mk(10, 'Михаил Акулич', 'Инженер-проектировщик', 'Проектное', 9, 'project', 'legalGip'),
+  // Уволенный демо-сотрудник (#723): на живом контуре такие учётки остаются в
+  // справочнике (night-аккаунты), но в счётчики штата не входят. Его карточка
+  // и история доступны — список сотрудников не фильтруется, считаются только.
+  mk(
+    11,
+    'Сергей Дубовик',
+    'Инженер-проектировщик',
+    'BIM-отдел',
+    1,
+    'bim',
+    'legalGip',
+    'deactivated',
+  ),
 ];
 
 // Должности демо-справочника (#433): id по имени — редактор маршрутов
@@ -197,6 +213,17 @@ const demoProfiles: Record<number, ProfilePart> = {
     birthDate: '1998-03-21',
     hiredAt: '2024-01-15',
     workdayStart: '10:00',
+  },
+  11: {
+    mobilePhone: '+375293112047',
+    city: 'Минск',
+    officeLocation: '7.4',
+    isRemote: false,
+    workRate: 1,
+    gender: 'male',
+    birthDate: '1987-06-12',
+    hiredAt: '2019-09-02',
+    workdayStart: '09:00',
   },
 };
 

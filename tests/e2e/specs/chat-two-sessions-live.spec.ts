@@ -320,4 +320,57 @@ test.describe('живой чат: две сессии (#104)', () => {
     await contextA.close();
     await contextB.close();
   });
+
+  test('неактивное окно не читает; возврат внимания дочитывает (#770)', async ({ browser }) => {
+    const contextA = await browser.newContext();
+    const contextB = await browser.newContext();
+    const pageA = await contextA.newPage();
+    const pageB = await contextB.newPage();
+
+    await loginUi(pageA, ADMIN.email, ADMIN.password);
+    await loginUi(pageB, PEER.email, PEER.password);
+    await pageA.goto(`/chat/${conversationId}`);
+    await pageB.goto(`/chat/${conversationId}`);
+    await expect(pageA.getByText(TITLE).first()).toBeVisible();
+    await expect(pageB.getByText(TITLE).first()).toBeVisible();
+
+    // B активно читает: у низа ленты (реальная прокрутка = ввод).
+    const viewportA = pageA.locator('[data-slot="message-scroller-viewport"]');
+    const viewportB = pageB.locator('[data-slot="message-scroller-viewport"]');
+    await expect(viewportB.locator('[data-message-id]').first()).toBeVisible({
+      timeout: 10_000,
+    });
+    const boxB = await viewportB.boundingBox();
+    await pageB.mouse.move(boxB!.x + boxB!.width / 2, boxB!.y + boxB!.height / 2);
+    await pageB.mouse.wheel(0, 10_000);
+    await pageB.waitForTimeout(300);
+
+    // B «уходит»: окно теряет фокус (в оболочке WebView2 может сохранять и
+    // visibilityState, и hasFocus — сигналом служит blur/минимизация).
+    await pageB.evaluate(() => window.dispatchEvent(new Event('blur')));
+
+    const msg = `e2e-ws-${RUN}-focus`;
+    const composer = pageA.getByPlaceholder(/Написать сообщение/i);
+    await composer.click();
+    await composer.fill(msg);
+    await composer.press('Enter');
+    await expect(pageA.getByText(msg).first()).toBeVisible({ timeout: 5_000 });
+    // Строка доехала до B (WS), но окно не активно — она не «просмотрена».
+    await expect(viewportB.locator('[data-message-id]', { hasText: msg }).first()).toBeAttached({
+      timeout: 5_000,
+    });
+
+    const rowA = viewportA.locator('[data-message-id]', { hasText: msg }).first();
+    await pageA.waitForTimeout(1_500);
+    await expect(rowA.getByLabel('отправлено')).toBeVisible();
+    await expect(rowA.getByLabel('просмотрено')).toBeHidden();
+
+    // B возвращается (фокус = активность) и смотрит: видимое дочитывается.
+    await pageB.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await pageB.mouse.wheel(0, 10_000);
+    await expect(rowA.getByLabel('просмотрено')).toBeVisible({ timeout: 10_000 });
+
+    await contextA.close();
+    await contextB.close();
+  });
 });

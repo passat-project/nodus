@@ -137,6 +137,7 @@ const NODE_PROPS: StructureNodeRowProps = {
   collapsed: false,
   onToggle: noop,
   selected: false,
+  active: false,
   onToggleSelected: noop,
   onSelect: noop,
   items: [],

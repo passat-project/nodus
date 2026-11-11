@@ -156,6 +156,8 @@ node_moved / node_deleted`; `node_updated` несёт `customFieldChanges` и
 
 Снятие формулы (DELETE) берёт те же замки, что и сохранение, — строку проекта / структуру и узел папки — до проверки ячейки: два конкурентных DELETE с разными ключами идемпотентности не эмитят `formula_changed` дважды (#698).
 
+Права, архив и секретность мутаций формул перепроверяются **под замком** по свежей строке (`ProjectsService.assertManageLocked`, #705): гард до транзакции мог устареть — проект успевали архивировать, перевести в секретный или снять актёра с роли руководства между проверкой и `FOR UPDATE`. Формулы папки запирают строку проекта первой (как PATCH проекта), затем структуру и узел; `lockStructure` берёт строку проекта до advisory-лока, поэтому все мутации структуры идут одним порядком «проект → структура → узел» без ABBA с пересчётом формул.
+
 Права: `project.create` — всем ролям (CROSS JOIN миграцией);
 `project.manage`/`project.setup.manage` — админ; `project.view_secret` —
 роль «Системный надзор»; `project.channel.post` — **никому** по умолчанию,
@@ -165,7 +167,8 @@ node_moved / node_deleted`; `node_updated` несёт `customFieldChanges` и
 ## Порты (ADR-0012)
 
 - `PROJECT_READER` (потребители: tasks, correspondence, custom-fields):
-  `refsFor` (невидимые → пропущены), `viewScopeFor` (множества Р3, кэш 5 с),
+  `refsFor` (невидимые → пропущены; шифр — по эффективному значению формулы
+  типа, #657), `viewScopeFor` (множества Р3, кэш 5 с),
   `assertTaskProjectVisible` (422 #432), `assertMembersAllowed` (422),
   `projectTaskRights` (supervisor), `assertNodeAllowed(projectId, nodeId)`
   (узел этого проекта, иначе 422; архивный проект — 400, дерево заморожено #467), `lockNodeStructure(tx, projectId)`
@@ -208,6 +211,14 @@ node_moved / node_deleted`; `node_updated` несёт `customFieldChanges` и
 - DTO: `customFieldFormulas` в карточке проекта и у папок структуры
   (`stateFor`, Р9); значения формулы типа/вида считаны на чтении и наложены
   поверх хранимых (Р6).
+- Шифр в ссылках (`ProjectRef.code` — чипы задачи/письма/канала и палитра,
+  `refsFor`/`refs`) — тоже по эффективному значению (#657): порт ссылок
+  зовёт тот же `FORMULA_CELLS.stateFor` одним батчем на список id и получает
+  хост без актора — рекурсии `refsFor → record('project') → refsFor` нет
+  (видимость в `RecordValuesProvider` включается только при `opts.actor`).
+  Порт формул разрешается лениво через `ModuleRef` (прямой импорт
+  `CustomFieldsPortsModule` дал бы цикл инстанцирования). Видимость чипа
+  отсекается ДО расчёта: формулы невидимых проектов не читаются.
 
 `projects-ports.module.ts` — тонкий модуль экспорта портов (без HTTP);
 `projects.module.ts` — контроллеры и сервисы. Канал проекта — модуль chat

@@ -109,11 +109,13 @@ export class NotificationsService {
     return this.repo.upsertSettings(userId, patch);
   }
 
-  /** Гашение по источнику (обработчик chat.message_read): журнал + будило. */
+  /** Гашение по источнику (обработчик chat.message_read): журнал + будило.
+   *  Повторы гасятся только до watermark'а (#770): прочтение старого не
+   *  останавливает срочные повторы более нового непрочитанного. */
   async markReadBySource(userId: string, sourceId: string, upToSeq: number): Promise<number> {
     return this.txRunner.run(async (tx) => {
       const read = await this.repo.markReadBySource(userId, sourceId, upToSeq, tx);
-      await this.repo.stopRepeats(userId, { conversationId: sourceId }, tx);
+      await this.repo.stopRepeats(userId, { conversationId: sourceId, upToSeq }, tx);
       if (read > 0) {
         await this.emitRead(tx, userId, sourceId, null);
       }

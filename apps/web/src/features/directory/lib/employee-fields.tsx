@@ -100,7 +100,10 @@ export function employeeListFields(
     {
       id: 'status',
       label: ui.employees.fieldStatus,
-      defaultVisible: false,
+      // Статус виден по умолчанию (#723): шапка считает штат (действующих), а
+      // журнал показывает и уволенных — колонка объясняет разницу, не требуя
+      // лезть в настройки вида.
+      defaultVisible: true,
       defaultWidth: 124,
       minWidth: 104,
       render: (user) => <UserStatusChip status={user.status} />,

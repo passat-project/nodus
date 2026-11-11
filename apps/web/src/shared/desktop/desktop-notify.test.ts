@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueryClient } from '@tanstack/react-query';
 
 import { useAuthStore } from '../auth-store.js';
+import { resetAttentionForTests } from '../attention/attention-store.js';
 import {
   acquireOpenConversation,
   resetOpenConversationRegistry,
@@ -110,7 +111,8 @@ const flush = () => new Promise((r) => setTimeout(r, 0));
 beforeEach(() => {
   installBridge();
   resetOpenConversationRegistry();
-  setShellVisibleFromShell(true);
+  // Модель внимания (#770): окно на виду, свежий ввод — «пользователь смотрит».
+  resetAttentionForTests();
   useAuthStore.setState({ user: { id: ME, displayName: 'Я', avatarUrl: null } } as never);
 });
 
@@ -157,63 +159,46 @@ describe('notifyDesktopMessage', () => {
     expect(window.nodusDesktop?.showPopup).not.toHaveBeenCalled();
   });
 
-  it('обычное молчит, когда смотрят В ОТКРЫТУЮ беседу (фокус + видимость)', () => {
-    // jsdom: hasFocus() по умолчанию false — мокаем «смотрит» явно.
-    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
-    try {
-      acquireOpenConversation(CONV);
-      notifyDesktopMessage(messagePayload(), queryClientWith({}));
-      expect(window.nodusDesktop?.showPopup).not.toHaveBeenCalled();
-    } finally {
-      vi.restoreAllMocks();
-    }
+  it('обычное молчит, когда смотрят В ОТКРЫТУЮ беседу (окно на виду + ввод)', () => {
+    acquireOpenConversation(CONV);
+    notifyDesktopMessage(messagePayload(), queryClientWith({}));
+    expect(window.nodusDesktop?.showPopup).not.toHaveBeenCalled();
   });
 
   it('смотрю в беседу (лента жива, окно трэда закрыто) — тишина (#300 реестр)', () => {
-    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
-    try {
-      const feed = acquireOpenConversation(CONV);
-      const thread = acquireOpenConversation(CONV);
-      thread(); // закрыли окно трэда — лента держит беседу открытой
-      notifyDesktopMessage(messagePayload(), queryClientWith({}));
-      expect(window.nodusDesktop?.showPopup).not.toHaveBeenCalled();
-      feed();
-    } finally {
-      vi.restoreAllMocks();
-    }
+    const feed = acquireOpenConversation(CONV);
+    const thread = acquireOpenConversation(CONV);
+    thread(); // закрыли окно трэда — лента держит беседу открытой
+    notifyDesktopMessage(messagePayload(), queryClientWith({}));
+    expect(window.nodusDesktop?.showPopup).not.toHaveBeenCalled();
+    feed();
   });
 
   it('фокус на портале, но беседа НЕ открыта (другая страница) — попап', () => {
     // Фидбек владельца 08.10: «мессенджер не открыт» — сообщение не видно,
     // попап нужен; раньше гейт молчал при любом фокусе окна.
-    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
-    try {
-      notifyDesktopMessage(messagePayload(), queryClientWith({}));
-      expect(window.nodusDesktop?.showPopup).toHaveBeenCalled();
-    } finally {
-      vi.restoreAllMocks();
-    }
+    notifyDesktopMessage(messagePayload(), queryClientWith({}));
+    expect(window.nodusDesktop?.showPopup).toHaveBeenCalled();
   });
 
   it('открытая беседа без фокуса окна — попап (окно перекрыто другим)', () => {
     acquireOpenConversation(CONV);
-    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-    try {
-      notifyDesktopMessage(messagePayload(), queryClientWith({}));
-      expect(window.nodusDesktop?.showPopup).toHaveBeenCalled();
-    } finally {
-      vi.restoreAllMocks();
-    }
+    resetAttentionForTests({ focused: false });
+    notifyDesktopMessage(messagePayload(), queryClientWith({}));
+    expect(window.nodusDesktop?.showPopup).toHaveBeenCalled();
   });
 
   it('обычное звонит, когда окно видимо, но без фокуса (другое приложение)', () => {
-    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-    try {
-      notifyDesktopMessage(messagePayload(), queryClientWith({}));
-      expect(window.nodusDesktop?.showPopup).toHaveBeenCalled();
-    } finally {
-      vi.restoreAllMocks();
-    }
+    resetAttentionForTests({ focused: false });
+    notifyDesktopMessage(messagePayload(), queryClientWith({}));
+    expect(window.nodusDesktop?.showPopup).toHaveBeenCalled();
+  });
+
+  it('бездействие 30+ с (отошёл от ПК) — попап, даже с открытой беседой (#770)', () => {
+    acquireOpenConversation(CONV);
+    resetAttentionForTests({ lastInputAt: Date.now() - 31_000 });
+    notifyDesktopMessage(messagePayload(), queryClientWith({}));
+    expect(window.nodusDesktop?.showPopup).toHaveBeenCalled();
   });
 
   it('важное пробивает mute и snooze, когда беседы не смотрят; мигание критичное', () => {
@@ -230,18 +215,13 @@ describe('notifyDesktopMessage', () => {
   });
 
   it('#300: важное тоже молчит, когда смотрю в открытую беседу', () => {
-    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
-    try {
-      acquireOpenConversation(CONV);
-      const urgent = messagePayload({
-        urgent: true,
-        message: { ...messagePayload().message, urgent: true },
-      });
-      notifyDesktopMessage(urgent, queryClientWith({ muted: true, snoozed: true }));
-      expect(window.nodusDesktop?.showPopup).not.toHaveBeenCalled();
-    } finally {
-      vi.restoreAllMocks();
-    }
+    acquireOpenConversation(CONV);
+    const urgent = messagePayload({
+      urgent: true,
+      message: { ...messagePayload().message, urgent: true },
+    });
+    notifyDesktopMessage(urgent, queryClientWith({ muted: true, snoozed: true }));
+    expect(window.nodusDesktop?.showPopup).not.toHaveBeenCalled();
   });
 
   it('#300: ответ в трэде наблюдателю — попап несёт threadRootId', async () => {

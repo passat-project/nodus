@@ -20,6 +20,7 @@ import { api } from '../../../shared/api-client.js';
 import { toastApiError } from '../../../shared/api/error-toast.js';
 import { isDomainMocked } from '../../../shared/api/api-mock-config.js';
 import { DEPARTMENTS_TREE_PATH } from '../../../shared/api/departments-list.js';
+import { invalidateChatAvatarCaches } from '../../../shared/chat/avatar-cache.js';
 import { uploadAvatar } from '../../../shared/chat/avatar-upload.js';
 import { useIsOnline } from '../../../shared/socket/presence-store.js';
 import { insertDepartment, patchDepartment } from '../lib/department-tree.js';
@@ -214,7 +215,9 @@ export function useArchiveDepartment(kind: OrgUnitKind) {
 
 /** Аватар СВОЕГО профиля (#186): multipart (квадратизация на сервере),
  *  чужие карточки — только просмотр. Инвалидация — вся ветка directory
- *  (карточка + списки/пикеры, где аватар тоже виден). */
+ *  (карточка + списки/пикеры, где аватар тоже виден) И кэш чата (#726:
+ *  в DTO сообщения — копия `author.avatarUrl`, без инвалидации старые
+ *  пузыри/беседы жили со старым фото до F5). */
 export function useSetMyAvatar() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -225,6 +228,7 @@ export function useSetMyAvatar() {
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: directoryKeys.all });
+      invalidateChatAvatarCaches(queryClient);
     },
   });
 }
@@ -236,6 +240,7 @@ export function useRemoveMyAvatar() {
     mutationFn: () => api<UserCard>('/directory/users/me/avatar', { method: 'DELETE' }),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: directoryKeys.all });
+      invalidateChatAvatarCaches(queryClient);
     },
   });
 }

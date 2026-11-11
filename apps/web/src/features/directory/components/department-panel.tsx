@@ -15,6 +15,7 @@ import { NodeLabel } from '@nodus/ui/components/node-label';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
+import { activeStaffCount } from '../../../shared/lib/staff-count.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { useArchiveDepartment } from '../api/directory-api.js';
 
@@ -233,7 +234,10 @@ export function DepartmentPanel({
               )}
             </div>
             <section className="flex min-h-0 flex-1 flex-col gap-2">
-              <NodeLabel label={ui.employees.panelMembers} count={members.length} />
+              {/* Счётчик — штат (#723): строки уволенных остаются в списке
+                  (их карточки открываются), но в число не входят — как
+                  memberCount подразделения на API. */}
+              <NodeLabel label={ui.employees.panelMembers} count={activeStaffCount(members)} />
               <div className="relative">
                 <Search className="absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -255,7 +259,7 @@ export function DepartmentPanel({
             </section>
             {reports.length > 0 && (
               <section className="flex shrink-0 flex-col gap-1.5">
-                <NodeLabel label={ui.employees.panelReports} count={reports.length} />
+                <NodeLabel label={ui.employees.panelReports} count={activeStaffCount(reports)} />
                 <div className="flex flex-col gap-0.5">{reports.map(personRow)}</div>
               </section>
             )}
