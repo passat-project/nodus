@@ -7,6 +7,7 @@ import type { ChatMessage } from '@nodus/contracts';
 
 import { ChatMessageItem } from './chat-message.js';
 import { uiPx } from '../ui/ui-scale.js';
+import { stubLoadedImage } from '../../test/stub-loaded-image.js';
 
 // Вынесено из chat-message.test.tsx (I5: >500 строк недопустимо).
 
@@ -47,6 +48,8 @@ const message = (overrides: Partial<ChatMessage> = {}): ChatMessage => ({
 
 afterEach(cleanup);
 
+/** jsdom не загружает картинки (см. `stub-loaded-image`). */
+
 describe('Медиа-пузырь Telegram (#187): изображение = часть пузыря', () => {
   const img = (n: number, w: number, h: number) => ({
     id: `img-${n}`,
@@ -61,6 +64,23 @@ describe('Медиа-пузырь Telegram (#187): изображение = ча
     pdfUrl: null,
     width: w,
     height: h,
+  });
+
+  it('аватар автора медиа-сообщения берёт фото из DTO (#726)', () => {
+    const restore = stubLoadedImage();
+    const photo = 'https://files.nodus.local/avatar/author.png';
+    const { container } = renderMessage(
+      <ChatMessageItem
+        message={message({
+          attachments: [img(1, 1200, 800)],
+          text: '',
+          author: { id: 'a', displayName: 'Иван Петров', avatarUrl: photo },
+        })}
+        mine={false}
+      />,
+    );
+    expect(container.querySelector('[data-slot="avatar"] img')?.getAttribute('src')).toBe(photo);
+    restore();
   });
 
   it('чистое изображение без текста — BARE: пузыря нет, чип времени на картинке (#187 п.6)', () => {

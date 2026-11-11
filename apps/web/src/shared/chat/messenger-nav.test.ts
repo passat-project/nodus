@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  messengerTabForType,
+  stageMessengerConversation,
   stageMessengerThread,
+  subscribeMessengerConversation,
   subscribeMessengerThread,
+  takeMessengerConversation,
   takeMessengerThread,
 } from './messenger-nav.js';
 
@@ -41,5 +45,32 @@ describe('messenger-nav', () => {
     stageMessengerThread(CONV, THREAD);
     expect(fn).not.toHaveBeenCalled();
     takeMessengerThread(CONV);
+  });
+
+  it('пристойка беседы: одноразовая, только своя и с подпиской (#719)', () => {
+    expect(takeMessengerConversation(OTHER)).toBe(false);
+    stageMessengerConversation(CONV);
+    expect(takeMessengerConversation(OTHER)).toBe(false);
+    expect(takeMessengerConversation(CONV)).toBe(true);
+    expect(takeMessengerConversation(CONV)).toBe(false);
+
+    const fn = vi.fn();
+    const unsub = subscribeMessengerConversation(fn);
+    stageMessengerConversation(OTHER); // чужая — колбэк всё равно будит карточку
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(takeMessengerConversation(CONV)).toBe(false);
+    expect(takeMessengerConversation(OTHER)).toBe(true);
+    unsub();
+    stageMessengerConversation(CONV);
+    expect(fn).toHaveBeenCalledTimes(1);
+    takeMessengerConversation(CONV);
+  });
+
+  it('вкладка внешнего открытия: задачи/письма → «Чаты задач», остальные → «Чаты» (#719)', () => {
+    expect(messengerTabForType('task')).toBe('tasks');
+    expect(messengerTabForType('letter')).toBe('tasks');
+    expect(messengerTabForType('direct')).toBe('chats');
+    expect(messengerTabForType('group')).toBe('chats');
+    expect(messengerTabForType('project_channel')).toBe('chats');
   });
 });

@@ -161,6 +161,7 @@ function renderNodeRow(row: StructureNodeRow, attributeIds: string[]) {
         collapsed={false}
         onToggle={vi.fn()}
         selected={false}
+        active={false}
         onToggleSelected={vi.fn()}
         onSelect={vi.fn()}
         items={[]}

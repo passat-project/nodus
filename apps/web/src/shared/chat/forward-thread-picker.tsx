@@ -87,7 +87,12 @@ export function ThreadLevel({
               onClick={() => onPick(root.id)}
               className="flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent/40"
             >
-              <PersonAvatar name={root.author.displayName} className="mt-0.5 size-8 shrink-0" />
+              <PersonAvatar
+                name={root.author.displayName}
+                avatarUrl={root.author.avatarUrl}
+                decorative
+                className="mt-0.5 size-8 shrink-0"
+              />
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline gap-2">
                   <span className="truncate text-sm font-medium">

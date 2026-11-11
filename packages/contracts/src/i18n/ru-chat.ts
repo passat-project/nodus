@@ -35,6 +35,8 @@ export const chatStrings = {
   typing: 'печатает…',
   /** Статус собеседника в direct-беседе (WS presence). */
   offline: 'не в сети',
+  /** «Отошёл» — присутствие без ввода 5 мин (#772; модель внимания ADR-0038). */
+  away: 'отошёл',
   download: 'Скачать',
   attachFile: 'Прикрепить файл',
   emoji: 'Эмодзи',
@@ -120,6 +122,7 @@ export const chatStrings = {
   readOnlyChat: 'Чат доступен только для чтения — вы решающий по шагу',
   letterChat: 'Чат письма',
   openTask: 'Открыть задачу',
+  openProject: 'Открыть проект',
   openLetter: 'Открыть письмо',
   taskChatsEmpty: 'Нет активных обсуждений задач',
   filesMedia: 'Файлы и медиа',

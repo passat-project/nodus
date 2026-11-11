@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { NotificationSnapshot } from '@nodus/contracts';
 
 import { useAuthStore } from '../../../shared/auth-store.js';
+import { isUserActive } from '../../../shared/attention/attention-store.js';
 import { getOpenConversation } from '../../../shared/chat/open-conversation.js';
 
 /**
@@ -78,7 +79,8 @@ export function shouldToast(
     muted: ReadonlySet<string>;
     snoozed: ReadonlySet<string>;
     dnd: { enabled: boolean; start: string; end: string };
-    documentVisible: boolean;
+    /** Пользователь реально смотрит (#770): окно на виду + ввод за 30 с. */
+    userActive: boolean;
     now: Date;
   },
 ): 'personal' | 'actions' | null {
@@ -103,7 +105,7 @@ export function shouldToast(
   if (
     snapshot.priority !== 'urgent' &&
     snapshot.conversationId !== null &&
-    ctx.documentVisible &&
+    ctx.userActive &&
     ctx.openConversationId === snapshot.conversationId
   ) {
     return null;
@@ -126,7 +128,7 @@ export const useNotificationsToastStore = create<NotificationsToastState>((set, 
       muted: state.mutedConversations,
       snoozed: state.snoozedConversations,
       dnd: state.dnd,
-      documentVisible: typeof document === 'undefined' || document.visibilityState === 'visible',
+      userActive: isUserActive(),
       now: new Date(),
     });
     if (lane === null) return;

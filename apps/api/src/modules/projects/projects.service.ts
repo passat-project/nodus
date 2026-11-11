@@ -17,6 +17,7 @@ import {
 
 import type { Prisma } from '../../generated/prisma/client.js';
 import { TransactionRunner } from '../../core/database/transaction-runner.js';
+import type { TransactionClient } from '../../core/database/transaction-runner.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
 import { EventBus } from '../../core/events/event-bus.js';
 import { USER_PROFILE_READER, type UserProfileReader } from '../../core/ports/user-profile.port.js';
@@ -336,12 +337,61 @@ export class ProjectsService {
   async loadForManage(user: AuthUser, id: string) {
     const row = await this.assertVisible(user, id);
     const rows = await this.participantsRepo.rowsOfProject(id);
+    this.requireManagement(user, rows);
+    return { row };
+  }
+
+  /**
+   * Гард управления по СВЕЖЕЙ строке проекта под `FOR UPDATE` (#705): между
+   * проверкой до транзакции и захватом строки проект могли архивировать или
+   * снять актёра с роли руководства — мутация обязана опираться на состояние
+   * под замком, а не на прочитанное раньше.
+   *
+   * `archived: 'forbid'` — структура (узлы/формулы папок): архив запирает её
+   * безусловно, как `loadForStructureManage`; по умолчанию — поля проекта
+   * (архив правит только `project.manage`).
+   */
+  async assertManageLocked(
+    user: AuthUser,
+    id: string,
+    locked: { status: string; visibility: string } | null,
+    tx: TransactionClient,
+    opts: { archived?: 'allow-manage' | 'forbid' } = {},
+  ): Promise<void> {
+    if (!locked) throw DomainException.notFound('Project not found');
+    if (locked.status === 'archived') {
+      if (opts.archived === 'forbid') {
+        throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Project is archived', {
+          projectId: id,
+        });
+      }
+      if (!user.permissions.includes(Permission.PROJECT_MANAGE)) {
+        throw DomainException.forbidden('Archived project fields are managed by project.manage');
+      }
+    }
+    const rows = await this.participantsRepo.rowsOfProject(id, tx);
+    // Секретность тоже читаем под замком: перевод open→secret между гардом и
+    // транзакцией не должен пропустить постороннего к записи (#705).
+    if (
+      locked.visibility === 'secret' &&
+      !rows.some((p) => p.userId === user.id) &&
+      !user.permissions.includes(Permission.PROJECT_VIEW_SECRET)
+    ) {
+      throw DomainException.notFound('Project not found');
+    }
+    this.requireManagement(user, rows);
+  }
+
+  /** Руководство проекта (manager/assistant) или глобальное project.manage. */
+  private requireManagement(
+    user: AuthUser,
+    rows: readonly { userId: string; source: string }[],
+  ): void {
     const isManagement = rows.some(
       (p) => p.userId === user.id && (p.source === 'manager' || p.source === 'assistant'),
     );
     if (!isManagement && !user.permissions.includes(Permission.PROJECT_MANAGE)) {
       throw DomainException.forbidden('Only project management can edit the project');
     }
-    return { row };
   }
 }

@@ -3,7 +3,8 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { ChatMessage, ChatUnreadSummary } from '@nodus/contracts';
 
 import { api } from '../api-client.js';
-import { registerShellHiddenFlush } from '../desktop/shell-hidden.js';
+import { isUserActive, subscribeAttention } from '../attention/attention-store.js';
+import { useSurfaceVisible } from '../lib/surface-visibility.js';
 import { isDomainMocked } from '../api/api-mock-config.js';
 import { wsDebugLog } from '../socket/ws-debug.js';
 import { chatKeys } from './chat-keys.js';
@@ -86,12 +87,18 @@ export function applyReadToCache(queryClient: QueryClient, conversationId: strin
 function useReadReceiptScheduler(
   conversationId: string,
   threadRootIdRef: RefObject<string | null>,
+  surfaceVisible: boolean,
 ): RefObject<ReadReceiptScheduler | null> {
   const queryClient = useQueryClient();
   const schedulerRef = useRef<ReadReceiptScheduler | null>(null);
+  const surfaceVisibleRef = useRef(surfaceVisible);
+  surfaceVisibleRef.current = surfaceVisible;
 
   useEffect(() => {
     const scheduler = createReadReceiptScheduler({
+      // Право ставить «прочитано» (#770): окно на виду + ввод за 30 с +
+      // поверхность не накрыта. Ввод читается в момент наблюдения/таймера.
+      canRead: () => isUserActive() && surfaceVisibleRef.current,
       send: (upToSeq) => {
         const threadRootId = threadRootIdRef.current;
         void api(`/chat/conversations/${conversationId}/read`, {
@@ -125,24 +132,26 @@ function useReadReceiptScheduler(
     });
     schedulerRef.current = scheduler;
 
-    const onVisibility = (): void => {
-      if (document.visibilityState === 'hidden') {
-        scheduler.flush(); // уход из таба — зафиксировать увиденное
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('pagehide', onVisibility);
-    const unregisterShellFlush = registerShellHiddenFlush(() => scheduler.flush());
+    // Модель внимания (#770): потеря внимания (blur, трей, бездействие 30 с,
+    // сворачивание оболочки) — зафиксировать увиденное ДО ухода; возврат —
+    // пересчитает наблюдатель (подписка в useFeedViewportRead).
+    const unsubAttention = subscribeAttention(() => {
+      if (!isUserActive() || !surfaceVisibleRef.current) scheduler.flush();
+    });
 
     return () => {
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('pagehide', onVisibility);
-      unregisterShellFlush();
+      unsubAttention();
       scheduler.flush(); // смена беседы: хвост ниже вьюпорта не прочитан
       scheduler.dispose();
       schedulerRef.current = null;
     };
   }, [conversationId, queryClient, threadRootIdRef]);
+
+  // Поверхность накрыли (карточка сверху, dormant) — увиденное фиксируем
+  // сразу, дальше не читаем (модель внимания #770).
+  useEffect(() => {
+    if (!surfaceVisible) schedulerRef.current?.flush();
+  }, [surfaceVisible]);
 
   return schedulerRef;
 }
@@ -153,6 +162,10 @@ function useReadReceiptScheduler(
  * (getBoundingClientRect) в колбэке IO и на скролле. Перерисовок НЕТ —
  * чистый императив в эффекте; при смене данных (рефетч) наблюдение
  * перевешивается (IO заново даёт начальные пересечения).
+ *
+ * Модель внимания (#770): наблюдение работает только на видимой поверхности;
+ * возврат внимания (фокус/ввод) — пересчёт, потеря — фиксация увиденного
+ * (flush в useReadReceiptScheduler). В фоне observe ничего не копит.
  */
 export function useFeedViewportRead(
   conversationId: string,
@@ -160,14 +173,16 @@ export function useFeedViewportRead(
   rows: readonly SeqSource[],
   threadRootId?: string | null,
 ): void {
+  const surfaceVisible = useSurfaceVisible();
   const threadRootIdRef = useRef<string | null>(threadRootId ?? null);
   threadRootIdRef.current = threadRootId ?? null;
-  const schedulerRef = useReadReceiptScheduler(conversationId, threadRootIdRef);
+  const schedulerRef = useReadReceiptScheduler(conversationId, threadRootIdRef, surfaceVisible);
 
   useEffect(() => {
     const container = containerRef.current;
     const scheduler = schedulerRef.current;
-    if (!container || !scheduler || typeof IntersectionObserver === 'undefined') return;
+    if (!container || !scheduler || !surfaceVisible) return;
+    if (typeof IntersectionObserver === 'undefined') return;
     const elSeq = new Map<Element, number>();
     const visibleEls = new Set<Element>();
 
@@ -218,11 +233,17 @@ export function useFeedViewportRead(
     // старте ленты может не дать entries (монтаж при неактивном рендере
     // оболочки) — считаем геометрию видимости напрямую, не дожидаясь.
     const initial = setTimeout(recompute, 350);
+    // Возврат внимания (фокус/первый ввод после простоя) — «вернулся и
+    // смотрю»: дочитываем видимое сразу, не дожидаясь следующего IO.
+    const unsubAttention = subscribeAttention(() => {
+      if (isUserActive()) recompute();
+    });
     return () => {
       clearTimeout(initial);
+      unsubAttention();
       container.removeEventListener('scroll', onScroll);
       if (scrollFrame !== 0) cancelAnimationFrame(scrollFrame);
       observer.disconnect();
     };
-  }, [conversationId, rows, containerRef, schedulerRef]);
+  }, [conversationId, rows, containerRef, schedulerRef, surfaceVisible]);
 }

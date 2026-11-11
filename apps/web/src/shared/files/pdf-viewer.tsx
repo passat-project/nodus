@@ -3,14 +3,12 @@ import * as pdfjs from 'pdfjs-dist';
 // Воркер как ассет vite: бандлер отдаёт файл и отдаёт URL (Context7 pdfjs-dist
 // integration guide — workerSrc обязателен до первого getDocument).
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { Minus, Plus } from 'lucide-react';
 import { ui } from '@nodus/contracts';
 
-import { Button } from '@nodus/ui/components/button';
 import { Spinner } from '@nodus/ui/components/spinner';
 
 import { PDFJS_WASM_BASE } from './pdfjs-wasm-url.js';
-import { ViewerFullscreenButton } from './viewer-fullscreen-button.js';
+import { ViewerZoomBar } from './viewer-zoom-bar.js';
 
 /** Тёмный показ PDF (тема портала = тёмный документ, вердикт владельца
  *  28.10): канвас страницы инвертируется CSS-правилом темы в globals.css —
@@ -113,21 +111,16 @@ export function PdfViewer({
 
   return (
     <div className="flex size-full flex-col">
-      <div className="flex h-9 shrink-0 items-center justify-between gap-2 px-4 text-[13px] text-muted-foreground">
-        <span className="truncate" title={fileName}>
-          {status}
-        </span>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon-sm" onClick={zoomOut} aria-label={ui.files.zoomOut}>
-            <Minus />
-          </Button>
-          <span className="w-12 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
-          <Button variant="ghost" size="icon-sm" onClick={zoomIn} aria-label={ui.files.zoomIn}>
-            <Plus />
-          </Button>
-          {onFullscreen ? <ViewerFullscreenButton onClick={onFullscreen} className="ml-1" /> : null}
-        </div>
-      </div>
+      <ViewerZoomBar
+        leading={status}
+        leadingTitle={fileName}
+        percent={Math.round(zoom * 100)}
+        canZoomIn={zoom < Math.max(...ZOOM_STEPS)}
+        canZoomOut={zoom > Math.min(...ZOOM_STEPS)}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onFullscreen={onFullscreen}
+      />
       <div ref={containerRef} className="min-h-0 flex-1 overflow-auto bg-muted/40 px-4 py-4">
         {failed ? (
           <p className="py-16 text-center text-sm text-muted-foreground">{ui.files.pdfOpenError}</p>

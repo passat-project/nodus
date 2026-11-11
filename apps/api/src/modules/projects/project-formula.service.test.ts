@@ -41,6 +41,7 @@ function make(options: { tree?: ReturnType<typeof node>[]; tasks?: string[] } = 
   const projects = {
     assertVisible: vi.fn(async () => ({ id: PROJECT })),
     loadForManage: vi.fn(async () => ({ row: { id: PROJECT, status: 'active' } })),
+    assertManageLocked: vi.fn(async () => void 0),
   };
   const repo = {
     findById: vi.fn(async () => ({ id: PROJECT, managerId: MANAGER, assistantIds: [ASSISTANT] })),
@@ -53,7 +54,7 @@ function make(options: { tree?: ReturnType<typeof node>[]; tasks?: string[] } = 
   const writer = {
     writeProject: vi.fn(async () => true),
     writeNode: vi.fn(async () => true),
-    lockProject: vi.fn(async () => true),
+    lockProject: vi.fn(async () => ({ id: PROJECT, visibility: 'open', status: 'active' })),
     lockNode: vi.fn(async () => void 0),
   };
   const participants = { rowsOfProject: vi.fn(async () => [{ userId: 'u-participant' }]) };

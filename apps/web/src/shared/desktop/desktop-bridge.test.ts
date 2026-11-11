@@ -9,10 +9,15 @@ import {
   desktopShowPopup,
   getDesktopBridge,
   getShellUpdateState,
-  getShellVisible,
   isDesktopShell,
-  isPortalBackground,
 } from './desktop-bridge.js';
+import {
+  getAttention,
+  isUserActive,
+  isWindowAttentive,
+  resetAttentionForTests,
+  startAttentionTracking,
+} from '../attention/attention-store.js';
 
 /**
  * Протокол моста «портал ↔ оболочка» (ADR-0019): обнаружение, zod-фильтр
@@ -61,17 +66,14 @@ function installBridge() {
   return { bridge, emit };
 }
 
-function setHidden(hidden: boolean) {
-  Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
-}
-
 beforeEach(() => {
   delete window.nodusDesktop;
-  setHidden(false);
+  resetAttentionForTests();
 });
 
 afterEach(() => {
   delete window.nodusDesktop;
+  resetAttentionForTests();
 });
 
 describe('обнаружение моста', () => {
@@ -142,11 +144,11 @@ describe('команды на границе', () => {
   });
 });
 
-describe('видимость оболочки', () => {
+describe('видимость и фокус оболочки (#770)', () => {
   it('до bind события видимости не меняют состояние (подписка — через bind)', () => {
     const { emit } = installBridge();
     emit('shell-visibility', { visible: false });
-    expect(getShellVisible()).toBe(true);
+    expect(getAttention().shellVisible).toBe(true);
   });
 
   it('bind слушает события и фильтрует кривые payload', () => {
@@ -173,10 +175,18 @@ describe('видимость оболочки', () => {
     expect(onOpen).toHaveBeenCalledWith({ conversationId: CONV });
     expect(onLetter).toHaveBeenCalledTimes(1);
     expect(onLetter).toHaveBeenCalledWith({ letterId: LETTER });
-    expect(isPortalBackground()).toBe(true);
+    expect(isWindowAttentive()).toBe(false); // трей — не внимание
 
     emit('shell-visibility', { visible: true });
-    expect(isPortalBackground()).toBe(false);
+    expect(isWindowAttentive()).toBe(true);
+
+    // Фокус/свёрнутость (#770): событие оболочки переключает модель.
+    emit('shell-focus', { focused: false });
+    expect(isWindowAttentive()).toBe(false);
+    expect(isUserActive()).toBe(false);
+    emit('shell-focus', { focused: true });
+    expect(isWindowAttentive()).toBe(true);
+    emit('shell-focus', 'не объект');
 
     un();
     emit('popup-reply', { id: 'm3', conversationId: CONV, text: 'после отписки' });
@@ -195,9 +205,16 @@ describe('видимость оболочки', () => {
 });
 
 describe('фон документа', () => {
-  it('document.hidden тоже считает портал фоновым', () => {
+  it('скрытая вкладка — не внимание (visibilitychange → модель)', () => {
     installBridge();
-    setHidden(true);
-    expect(isPortalBackground()).toBe(true);
+    startAttentionTracking();
+    const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(isWindowAttentive()).toBe(false);
+    hidden.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(isWindowAttentive()).toBe(true);
+    vi.restoreAllMocks();
+    resetAttentionForTests();
   });
 });

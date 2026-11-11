@@ -1,16 +1,23 @@
 /* eslint-disable nodus-internal/max-lines-warn -- чтения места счёта (#630) держат видимость и дерево в одной точке порта */
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { ErrorCode, Permission, type ProjectRef, type ProjectRole } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { FeatureFlagService } from '../../../core/feature-flags/feature-flag.service.js';
 import {
+  FORMULA_CELLS,
+  type FormulaCells,
+  type FormulaHostState,
+} from '../../custom-fields/ports/formula-cells.port.js';
+import {
   ProjectParticipantsRepository,
   type ParticipantSource,
 } from '../project-participants.repository.js';
 import { ProjectNodesRepository } from '../project-nodes.repository.js';
-import { ProjectsRepository } from '../projects.repository.js';
+import { codeOf } from '../project-legacy-fields.js';
+import { ProjectsRepository, type ProjectRefRow } from '../projects.repository.js';
 import type {
   NumberNodeContext,
   NumberProjectContext,
@@ -55,7 +62,17 @@ export class ProjectReaderProvider implements ProjectReader, ProjectChatReader {
     private readonly participants: ProjectParticipantsRepository,
     private readonly nodes: ProjectNodesRepository,
     private readonly featureFlags: FeatureFlagService,
+    // Формулы типа проекта (#657) — лениво, см. геттер `formulas`.
+    @Inject(ModuleRef) private readonly moduleRef: ModuleRef,
   ) {}
+
+  /** Формульное состояние проектов — лениво (ModuleRef): прямой импорт
+   *  CustomFieldsPortsModule дал бы цикл инстанцирования с этим модулем
+   *  (реестр формул читает проекты и папки через PROJECT_FORMULA_VALUES).
+   *  Паттерн — TaskDeciders (#433, «реестр лениво»). */
+  private get formulas(): FormulaCells {
+    return this.moduleRef.get(FORMULA_CELLS, { strict: false });
+  }
 
   private async enabled(): Promise<boolean> {
     return this.featureFlags.isEnabled('projects');
@@ -69,7 +86,41 @@ export class ProjectReaderProvider implements ProjectReader, ProjectChatReader {
     const scope = await this.buildScope(actor);
     const visible = new Set(scope.visibleProjectIds);
     const found = await this.projects.refsByIds([...ids]);
-    return found.filter((ref) => visible.has(ref.id));
+    // Формулы считаются только для видимых строк: невидимый проект не
+    // оплачивается чтением своего места (и не раскрывается ничем).
+    return this.toRefs(found.filter((ref) => visible.has(ref.id)));
+  }
+
+  /**
+   * Ссылки с шифром по ЭФФЕКТИВНОМУ значению (#657): шифр — атрибут (Р9 #631),
+   * и формула типа проекта считается на чтении, в `customFields` не лежит.
+   * Чип обязан показывать то же, что журнал (`ProjectDtoMapper` зовёт тот же
+   * `FORMULA_CELLS.stateFor`), иначе в карточке задачи/письма/палитре пусто.
+   *
+   * Один батч на список id: `places` (тип проекта) отсекает хосты без формул
+   * места до чтения записи — N+1 нет. Кэш на батч — внутри stateFor (один
+   * снапшот реестра и одна пачка ячеек на вызов).
+   *
+   * Рекурсии `refsFor → stateFor → record('project') → refsFor` нет: stateFor
+   * читает хосты БЕЗ актора, а проверка видимости в RecordValuesProvider
+   * включается только при `opts.actor` (формула шифра от актора не зависит).
+   */
+  private async toRefs(rows: readonly ProjectRefRow[]): Promise<ProjectRef[]> {
+    if (rows.length === 0) return [];
+    const states = await this.formulas.stateFor(
+      'project',
+      rows.map((row) => row.id),
+      undefined,
+      new Map(rows.map((row) => [row.id, row.typeId])),
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      // Own-формула материализована писателем в customFields, типовая — только
+      // в состоянии чтения; наложение даёт ровно журнальное значение.
+      code: codeOf(effectiveValues(row, states.get(row.id))),
+      name: row.name,
+      color: row.color,
+    }));
   }
 
   /** Сброс кэша множеств (события project.* меняют состав видимости). */
@@ -315,8 +366,20 @@ export class ProjectReaderProvider implements ProjectReader, ProjectChatReader {
 
   async refs(ids: readonly string[]): Promise<ProjectRef[]> {
     if (ids.length === 0 || !(await this.enabled())) return [];
-    return this.projects.refsByIds([...ids]);
+    return this.toRefs(await this.projects.refsByIds([...ids]));
   }
+}
+
+/** Значения строки ссылки с наложением формульного состояния (#657). */
+function effectiveValues(
+  row: ProjectRefRow,
+  state: FormulaHostState | undefined,
+): Record<string, unknown> {
+  const raw =
+    row.values !== null && typeof row.values === 'object'
+      ? (row.values as Record<string, unknown>)
+      : {};
+  return { ...raw, ...((state?.values ?? {}) as Record<string, unknown>) };
 }
 
 function toProjectContext(row: {
