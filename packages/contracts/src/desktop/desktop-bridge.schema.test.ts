@@ -4,6 +4,7 @@ import {
   DESKTOP_BRIDGE_EVENTS,
   openLetterEventSchema,
   popupPayloadSchema,
+  shellFocusEventSchema,
 } from './desktop-bridge.schema.js';
 
 /** Протокол моста оболочки (#618, #647): цель попапа — ровно одна (беседа,
@@ -100,5 +101,15 @@ describe('openLetterEventSchema (#618)', () => {
     expect(openLetterEventSchema.safeParse({ letterId: LETTER_ID }).success).toBe(true);
     expect(openLetterEventSchema.safeParse({ letterId: 'not-a-uuid' }).success).toBe(false);
     expect(DESKTOP_BRIDGE_EVENTS.openLetter).toBe('open-letter');
+  });
+});
+
+describe('shellFocusEventSchema (#770)', () => {
+  it('фокус/свёрнутость — строгий boolean, событие в каталоге', () => {
+    expect(shellFocusEventSchema.safeParse({ focused: true }).success).toBe(true);
+    expect(shellFocusEventSchema.safeParse({ focused: false }).success).toBe(true);
+    expect(shellFocusEventSchema.safeParse({ focused: 'да' }).success).toBe(false);
+    expect(shellFocusEventSchema.safeParse({}).success).toBe(false);
+    expect(DESKTOP_BRIDGE_EVENTS.shellFocus).toBe('shell-focus');
   });
 });

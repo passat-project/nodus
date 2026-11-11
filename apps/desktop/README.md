@@ -36,6 +36,12 @@ apps/desktop/
   команды «веб→оболочка» (`window.nodusDesktop.*`), события «оболочка→веб»
   (`__nodusDesktopInvoke`). Rust-зеркала: `bridge.rs`/`popups.rs` —
   **рассинхрон = баг** (тесты протокола: `apps/web/src/shared/desktop/`).
+  Внимание пользователя (#770, ADR-0038): событие `shell-visibility`
+  (`{ visible }`) — скрытие в трей, `shell-focus` (`{ focused }`) — фокус
+  главного окна; шлётся на `WindowEvent::Focused`/`Resized` как
+  `focused && !is_minimized()` (повторы дедуплицируются в `ShellState`),
+  потому что WebView2 при минимизации может сохранять и видимость вкладки,
+  и `document.hasFocus()`.
   Попап об ответе в трэде несёт `threadRootId` (#300): клик «Открыть»
   (событие `open-conversation`) раскрывает окно треда в портале.
   Цель попапа — ровно одна: беседа (`conversationId`), письмо

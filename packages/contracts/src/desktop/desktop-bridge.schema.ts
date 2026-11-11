@@ -98,6 +98,18 @@ export const shellVisibilityEventSchema = z.object({
 export type ShellVisibilityEvent = z.infer<typeof shellVisibilityEventSchema>;
 
 /**
+ * Событие «оболочка → веб»: фокус главного окна (#770, ADR-0038). Свёрнутое
+ * или перекрытое другим приложением окно — не «смотрит»: WebView2 может
+ * оставлять вкладку видимой и сохранять `document.hasFocus()`, поэтому
+ * модель внимания получает фокус от самой оболочки. `focused=false` при
+ * сворачивании (`is_minimized`), `true` — при возврате фокуса/разворачивании.
+ */
+export const shellFocusEventSchema = z.object({
+  focused: z.boolean(),
+});
+export type ShellFocusEvent = z.infer<typeof shellFocusEventSchema>;
+
+/**
  * Состояние автообновления оболочки (пассивный поток #263): idle — обновления
  * нет/проверка не находила; downloading — скачивает; available — скачано и
  * ждёт решения пользователя (зелёная точка на кнопке «Скачать приложение»).
@@ -117,6 +129,7 @@ export const DESKTOP_BRIDGE_EVENTS = {
   openConversation: 'open-conversation',
   openLetter: 'open-letter',
   shellVisibility: 'shell-visibility',
+  shellFocus: 'shell-focus',
   updateState: 'update-state',
 } as const;
 export type DesktopBridgeEventType =

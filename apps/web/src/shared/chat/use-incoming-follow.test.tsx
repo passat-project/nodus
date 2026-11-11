@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, render } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '@nodus/contracts';
 
+import { resetAttentionForTests } from '../attention/attention-store.js';
 import { useScrollEndStore } from './scroll-end-store.js';
 import { isAtBottom, useIncomingFollow } from './use-incoming-follow.js';
 
@@ -63,6 +64,11 @@ function Probe({
   return null;
 }
 
+beforeEach(() => {
+  // JSdom не в фокусе: для догона модель внимания должна быть «окно на виду».
+  resetAttentionForTests();
+});
+
 afterEach(() => {
   cleanup();
   useScrollEndStore.setState({ requests: {} });
@@ -116,6 +122,24 @@ describe('useIncomingFollow', () => {
           viewport={viewport}
           meId="me"
         />,
+      );
+    });
+    expect(spy).not.toHaveBeenCalled();
+    unsub();
+  });
+
+  it('в фоне (трей/свёрнуто/не в фокусе) — догона нет (#770)', async () => {
+    resetAttentionForTests({ focused: false });
+    const viewport = makeViewport(1000, 500);
+    viewport.scrollTop = 480; // у низа
+    const spy = vi.fn();
+    const unsub = useScrollEndStore.subscribe((s) => {
+      if (s.requests['conversation:c1']) spy();
+    });
+    const { rerender } = render(<Probe items={[msg('m1', 'them')]} enabled viewport={viewport} />);
+    act(() => {
+      rerender(
+        <Probe items={[msg('m1', 'them'), msg('m2', 'them')]} enabled viewport={viewport} />,
       );
     });
     expect(spy).not.toHaveBeenCalled();

@@ -77,3 +77,48 @@ describe('NotificationsService.readOne', () => {
     });
   });
 });
+
+describe('NotificationsService.markReadBySource (#770)', () => {
+  const repo = {
+    markReadBySource: vi.fn(),
+    stopRepeats: vi.fn(),
+  };
+  const txRunner = { run: vi.fn((cb: (tx: string) => unknown) => cb(TX)) };
+  const eventBus = { emit: vi.fn() };
+  const service = new NotificationsService(
+    repo as never,
+    txRunner as never,
+    eventBus as never,
+    {} as never,
+    {} as never,
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    repo.markReadBySource.mockResolvedValue(3);
+  });
+
+  it('повторы гасятся до watermark-а: stopRepeats получает upToSeq', async () => {
+    // Тест падает, если из сервиса убрать upToSeq: прочтение старого
+    // сообщения снова стало бы останавливать повторы нового важного.
+    await service.markReadBySource(USER, CONV, 41);
+    expect(repo.markReadBySource).toHaveBeenCalledWith(USER, CONV, 41, TX);
+    expect(repo.stopRepeats).toHaveBeenCalledWith(USER, { conversationId: CONV, upToSeq: 41 }, TX);
+  });
+
+  it('read > 0 — notification.read по источнику (бейдж другой вкладки)', async () => {
+    await service.markReadBySource(USER, CONV, 41);
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      TX,
+      NOTIFICATION_EVENTS.READ,
+      expect.objectContaining({ userId: USER, sourceId: CONV, notificationIds: null }),
+      expect.objectContaining({ aggregateType: 'notification' }),
+    );
+  });
+
+  it('нечего гасить (0) — без эмита', async () => {
+    repo.markReadBySource.mockResolvedValue(0);
+    await service.markReadBySource(USER, CONV, 5);
+    expect(eventBus.emit).not.toHaveBeenCalled();
+  });
+});
