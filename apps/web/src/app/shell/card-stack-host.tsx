@@ -183,7 +183,7 @@ function MessengerEntry({ id, source, onClose, dormant }: EntryProps) {
         threadRootId={threadRootId}
         onOpenThread={setThreadRootId}
         onCloseThread={() => setThreadRootId(null)}
-        onTabChange={setTab}
+        onTabChange={dormant ? undefined : setTab}
       />
     </SliderPanel>
   );

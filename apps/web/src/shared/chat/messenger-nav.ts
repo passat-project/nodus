@@ -47,19 +47,19 @@ export function subscribeMessengerThread(fn: () => void): () => void {
  * Тип беседы уведомление не несёт — он известен только после разрешения самой
  * беседы в теле мессенджера, поэтому пристойка хранит лишь id.
  */
-let stagedConversation: string | null = null;
+const stagedConversations = new Set<string>();
 const conversationListeners = new Set<() => void>();
 
 export function stageMessengerConversation(conversationId: string): void {
-  stagedConversation = conversationId;
+  // Множество, а не слот: несколько уведомлений подряд не должны затирать
+  // пристойку друг друга (каждая карточка забирает свою беседу).
+  stagedConversations.add(conversationId);
   for (const fn of conversationListeners) fn();
 }
 
 /** Забрать пристойку беседы (одноразово): true — открытие внешнее. */
 export function takeMessengerConversation(conversationId: string): boolean {
-  if (stagedConversation !== conversationId) return false;
-  stagedConversation = null;
-  return true;
+  return stagedConversations.delete(conversationId);
 }
 
 /** Подписка живой карточки: уведомление той же беседы при открытой карточке
