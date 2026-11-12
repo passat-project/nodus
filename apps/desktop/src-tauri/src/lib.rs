@@ -9,6 +9,7 @@ mod focus;
 mod layout;
 mod popups;
 mod portal;
+mod reanchor;
 mod state;
 mod tray_menu;
 mod updates;

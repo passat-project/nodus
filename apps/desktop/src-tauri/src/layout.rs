@@ -16,11 +16,12 @@
 
 use tauri::{AppHandle, Manager};
 
-use crate::anchor::{remember_anchor, resolve_anchor, Anchor};
+use crate::anchor::{resolve_anchor, Anchor};
 use crate::popups::{
     build_popup_window, show_without_activation, spawn_ready_fallback, stack, ActivePopup, GAP,
     HIDE_ALL_H, HIDE_ALL_LABEL, MAX_STACK, POPUP_MAX_H, POPUP_MIN_H, POPUP_W,
 };
+use crate::reanchor::note_layout;
 
 /// Готовая раскладка одного окна: координаты и размер — физические px.
 struct Placement {
@@ -69,7 +70,7 @@ pub(crate) fn reposition_all(app: &AppHandle) {
     let Some(anchor) = resolve_anchor(app) else {
         return;
     };
-    remember_anchor(app, &anchor);
+    note_layout(app, &anchor);
     let plan: Vec<Placement> = {
         let x = anchor.right();
         // Низ стека — над панелью задач; идём снизу вверх: новейший первым.

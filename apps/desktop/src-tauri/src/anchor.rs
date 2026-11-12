@@ -5,33 +5,24 @@
 //! «The input desktop must be the current desktop»). Раньше это был
 //! молчаливый `return` раскладчика, и окна оставались на системном каскаде
 //! `CW_USEDEFAULT` в левом верхнем углу; теперь резерв — монитор главного
-//! окна → первичный монитор (эти API input desktop не требуют), а после
-//! возврата сессии тикер переставляет стек на монитор курсора без клика.
-
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Once;
-use std::time::Duration;
+//! окна → первичный монитор (эти API input desktop не требуют).
+//!
+//! Переякоривание (возврат input desktop, смена конфигурации дисплеев) живёт
+//! в `reanchor.rs`: там же подпись топологии и тикер.
 
 use tauri::{AppHandle, Manager, Monitor};
 
-use crate::popups::{stack, MARGIN, POPUP_H, POPUP_W};
-
-/// Курсор сейчас недоступен (не input desktop): попапы стоят по резервному
-/// якорю и должны переехать на монитор пользователя, как только сессия
-/// разблокируется. Флаг снимает первый успешный якорь по курсору.
-static CURSOR_ANCHOR_PENDING: AtomicBool = AtomicBool::new(false);
-/// Период перепривязки: разблокировка замечается в пределах полусекунды.
-const REANCHOR_TICK_MS: u64 = 500;
+use crate::popups::{MARGIN, POPUP_H, POPUP_W};
 
 /// Опорная площадка раскладки: рабочая область монитора (физические px).
 pub(crate) struct Anchor {
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+    pub(crate) width: i32,
+    pub(crate) height: i32,
     pub(crate) scale: f64,
     /// Якорь найден по курсору — пользователь работает на этом мониторе.
-    from_cursor: bool,
+    pub(crate) from_cursor: bool,
 }
 
 impl Anchor {
@@ -83,46 +74,14 @@ pub(crate) fn resolve_anchor(app: &AppHandle) -> Option<Anchor> {
         .map(|monitor| Anchor::from_monitor(&monitor, false))
 }
 
-/// Запомнить, опирается ли раскладка на курсор: резервный якорь включает
-/// перепривязку после разблокировки сессии.
-pub(crate) fn remember_anchor(app: &AppHandle, anchor: &Anchor) {
-    CURSOR_ANCHOR_PENDING.store(!anchor.from_cursor, Ordering::Relaxed);
-    if !anchor.from_cursor {
-        ensure_reanchor_ticker(app);
-    }
-}
-
-/// Тикер перепривязки (один на процесс): пока стек жив и якорь резервный,
-/// проверяет, вернулся ли input desktop, и переставляет попапы на монитор
-/// курсора. `reposition_all` сам снимет флаг, когда якорь снова по курсору.
-fn ensure_reanchor_ticker(app: &AppHandle) {
-    static STARTED: Once = Once::new();
-    STARTED.call_once(|| {
-        let app = app.clone();
-        std::thread::spawn(move || loop {
-            std::thread::sleep(Duration::from_millis(REANCHOR_TICK_MS));
-            if !CURSOR_ANCHOR_PENDING.load(Ordering::Relaxed) {
-                continue;
-            }
-            if stack(&app).active.is_empty() {
-                CURSOR_ANCHOR_PENDING.store(false, Ordering::Relaxed);
-                continue;
-            }
-            if resolve_anchor(&app).is_some_and(|anchor| anchor.from_cursor) {
-                crate::layout::reposition_all(&app);
-            }
-        });
-    });
-}
-
 /// Позиция НОВОГО попапа (логические px) для билдера окна: он всегда самый
 /// нижний в столбике (новейший у пола), высота — стартовая POPUP_H. Окно
 /// рождается сразу в правом нижнем углу — системный каскад `CW_USEDEFAULT`
 /// (лесенка от левого верхнего угла) не показывается даже при неудачной
-/// раскладке (#588).
+/// раскладке (#588). Фактический якорь фиксирует раскладчик
+/// (`reanchor::note_layout`).
 pub(crate) fn initial_position(app: &AppHandle) -> Option<(f64, f64)> {
     let anchor = resolve_anchor(app)?;
-    remember_anchor(app, &anchor);
     let x = anchor.right();
     let y = anchor.bottom() - anchor.px(POPUP_H);
     Some((f64::from(x) / anchor.scale, f64::from(y) / anchor.scale))
