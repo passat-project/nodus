@@ -7,9 +7,9 @@ import { Bubble, BubbleContent } from '@nodus/ui/components/bubble';
 
 import { withoutPatronymic, shortPersonName } from '../lib/format.js';
 import { personTone } from '../ui/person-tone.js';
-import { PersonAvatar } from '../ui/person-avatar.js';
 import { BubbleOutline } from './bubble-outline.js';
 import { useChatPrefs } from './chat-prefs.js';
+import { MessageAuthorAvatar } from './message-avatar.js';
 import { MetaGhost, MetaPin } from './message-media-bubble.js';
 
 /**
@@ -63,13 +63,8 @@ export function TombstoneBubble({
   return (
     <Message align={atEnd ? 'end' : 'start'} className="group/msg">
       {avatarSlot === 'avatar' ? (
-        <MessageAvatar>
-          <PersonAvatar
-            name={message.author.displayName}
-            avatarUrl={message.author.avatarUrl}
-            decorative
-            className="size-7"
-          />
+        <MessageAvatar className="overflow-visible">
+          <MessageAuthorAvatar author={message.author} mine={mine} />
         </MessageAvatar>
       ) : null}
       <MessageContent>

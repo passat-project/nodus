@@ -4,6 +4,16 @@ export interface CardBridgeRef {
   id: string;
 }
 
+/** Rect источника в координатах вьюпорта — откуда «растёт» карточка
+ *  (shared-element, ADR-0009). Структурно совместим с `SourceRect` слайдера:
+ *  отдаём DOMRect прямо из `getBoundingClientRect` на клике (#728). */
+export interface CardBridgeSourceRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 /**
  * Мост к стеку карточек из shared-слоя (порт-адаптер, I13; аудит #45:
  * shared/chat/message-menu импортировал app/shell/use-card-stack — обратная
@@ -12,17 +22,19 @@ export interface CardBridgeRef {
  * (registerCardBridge в AppShell). До регистрации — no-op (юнит-тесты
  * shared без каркаса).
  */
-let opener: ((ref: CardBridgeRef) => void) | null = null;
+let opener: ((ref: CardBridgeRef, sourceRect?: CardBridgeSourceRect) => void) | null = null;
 
-export function registerCardBridge(fn: (ref: CardBridgeRef) => void): () => void {
+export function registerCardBridge(
+  fn: (ref: CardBridgeRef, sourceRect?: CardBridgeSourceRect) => void,
+): () => void {
   opener = fn;
   return () => {
     if (opener === fn) opener = null;
   };
 }
 
-export function openCardViaBridge(ref: CardBridgeRef): void {
-  opener?.(ref);
+export function openCardViaBridge(ref: CardBridgeRef, sourceRect?: CardBridgeSourceRect): void {
+  opener?.(ref, sourceRect);
 }
 
 /** Цель подмены верхней мессенджер-карточки (вердикт 25.09, п.4): беседа
