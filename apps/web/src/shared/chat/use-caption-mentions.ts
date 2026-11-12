@@ -17,6 +17,7 @@ import {
   type DraftMention,
 } from './composer-mention-registry.js';
 import { useAttachSendDialog } from './dialog-stores.js';
+import { insertNewlineAtCaret } from './composer-input-utils.js';
 import { scopeConversationOf } from './scope-conversations.js';
 
 /**
@@ -114,6 +115,22 @@ export function useCaptionMentions({
     );
   }
 
+  /** Перенос строки (#777): Ctrl/Meta/Alt+Enter — `\n` в позицию каретки
+   *  подписи, каретка за переносом; реестр чипов пересчитывается диффом
+   *  (как при обычной правке textarea). */
+  function insertNewline() {
+    const el = captionRef.current;
+    const next = insertNewlineAtCaret(el, caption);
+    setMentionList((prev) => applyEditToMentions(prev, caption, next.text));
+    setCaption(next.text);
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(next.caret, next.caret);
+      mentions.syncCaret(el);
+    });
+  }
+
   function renameMention(index: number, label: string) {
     const res = replaceMentionLabelDraft(caption, mentionList, index, label);
     if (!res) return;
@@ -143,6 +160,7 @@ export function useCaptionMentions({
     setEditToken,
     handleCaptionChange,
     handleMentionKeyDown,
+    insertNewline,
     handleCaptionClick,
     renameMention,
     removeMention,

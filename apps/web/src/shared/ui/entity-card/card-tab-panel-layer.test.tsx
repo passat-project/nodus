@@ -39,6 +39,36 @@ function renderLayer(state: CardTabsState) {
 
 afterEach(cleanup);
 
+describe('CardTabPanelLayer: панель вкладки — flex-колонка области (#798)', () => {
+  const state = createCardTabsState([{ id: 'area-1', tabs: ['chat', 'files'], active: 'chat' }]);
+
+  it('панель несёт высоту области и flex-колонку — контракт для flex-1-контента', () => {
+    render(
+      <CardTabPanelLayer
+        state={state}
+        groups={state.groups}
+        tabs={TABS}
+        widths={[600]}
+        width={600}
+        baseId="card"
+        renderPanel={(id) => <div data-testid={`scroll-${id}`} className="min-h-0 flex-1" />}
+      />,
+    );
+
+    const panel = document.getElementById('card-tab-chat-panel');
+    expect(panel).not.toBeNull();
+    // Контракт классов (jsdom layout не считает): высота области — inset-y-0,
+    // flex-контекст — flex flex-col; без них `flex-1`-корень вкладки не
+    // получает высоту и его overflow-y-auto не включается («О проекте»).
+    expect(panel!.className).toContain('inset-y-0');
+    expect(panel!.className).toContain('flex');
+    expect(panel!.className).toContain('flex-col');
+    // flex-1-корень контента — ПРЯМОЙ ребёнок панели: обёртка-блок между
+    // ними забрала бы flex-контекст обратно.
+    expect(screen.getByTestId('scroll-chat').parentElement).toBe(panel);
+  });
+});
+
 describe('CardTabPanelLayer: видимость поверхности вкладки', () => {
   const base = createCardTabsState([{ id: 'area-1', tabs: ['chat', 'files'], active: 'chat' }]);
 

@@ -2,7 +2,7 @@
 import { cleanup, render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ConversationListItem } from '@nodus/contracts';
+import type { ChatMessage, ConversationListItem } from '@nodus/contracts';
 import { createElement, type ReactNode } from 'react';
 
 import { ConversationList } from './conversation-list.js';
@@ -111,6 +111,61 @@ describe('ConversationList — сепараторы строк (#96, реф Би
     // остальные строки — с тем же боковым зазором, что и рамка (mx-1)
     const outside = [...container.querySelectorAll('button')].filter((b) => !area.contains(b));
     expect(outside[0]!.className).toContain('mx-1');
+  });
+});
+
+describe('метка последнего сообщения (#782, модель Битрикс24)', () => {
+  const now = new Date();
+
+  function lastMessage(createdAt: string): ChatMessage {
+    return {
+      id: 'm1',
+      conversationId: 'conv',
+      seq: 1,
+      clientMessageId: 'm1',
+      author: { id: 'u1', displayName: 'Иван Петров', avatarUrl: null },
+      text: 'текст',
+      replyToId: null,
+      reply: null,
+      deletedAt: null,
+      pinned: false,
+      forwardedFrom: null,
+      threadRootId: null,
+      threadRepliesCount: 0,
+      reactions: [],
+      attachments: [],
+      editedAt: null,
+      readAt: null,
+      readBy: [],
+      urgent: false,
+      mentionedUserIds: [],
+      linkPreview: null,
+      createdAt,
+    };
+  }
+
+  const withLast = (id: string, createdAt: string): ConversationListItem => ({
+    ...conv(id),
+    lastMessage: lastMessage(createdAt),
+  });
+
+  it('прошлый год — ДД.ММ.ГГГГ, вчера — «Вчера», сегодня — время', () => {
+    const prevYear = now.getFullYear() - 1;
+    const old = renderList([withLast('old', new Date(prevYear, 2, 3, 10, 0).toISOString())]);
+    expect(old.getByText(`03.03.${prevYear}`)).toBeTruthy();
+
+    const y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 10, 0);
+    expect(renderList([withLast('y', y.toISOString())]).getByText('Вчера')).toBeTruthy();
+
+    const t = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 5);
+    expect(renderList([withLast('t', t.toISOString())]).getByText('09:05')).toBeTruthy();
+  });
+
+  it('метка не переносится и не сжимается (узкая колонка)', () => {
+    const t = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 5);
+    const label = renderList([withLast('t', t.toISOString())]).getByText('09:05');
+    expect(label.className).toContain('whitespace-nowrap');
+    expect(label.className).toContain('shrink-0');
   });
 });
 

@@ -4,9 +4,13 @@ import {
   CalendarCheck2,
   CalendarClock,
   Cake,
+  DoorOpen,
+  Laptop,
   Mail,
+  MapPin,
   Phone,
   User,
+  UserCheck,
   UserCog,
   Wallet,
   VenusAndMars,
@@ -76,13 +80,13 @@ export function employeeProfileDefs(args: {
     },
     {
       key: 'city',
-      icon: <Building2 className="size-3.5" />,
+      icon: <MapPin className="size-3.5" />,
       label: ui.employees.fieldCity,
       render: () => card.city ?? ui.common.notSet,
     },
     {
       key: 'office',
-      icon: <Building2 className="size-3.5" />,
+      icon: <DoorOpen className="size-3.5" />,
       label: ui.employees.fieldOffice,
       render: () =>
         card.officeLocation ? (
@@ -93,7 +97,7 @@ export function employeeProfileDefs(args: {
     },
     {
       key: 'remote',
-      icon: <Building2 className="size-3.5" />,
+      icon: <Laptop className="size-3.5" />,
       label: ui.employees.fieldRemote,
       render: () => (card.isRemote ? ui.employees.remoteYes : ui.employees.remoteNo),
     },
@@ -170,7 +174,7 @@ export function employeeProfileDefs(args: {
     },
     {
       key: 'status',
-      icon: <User className="size-3.5" />,
+      icon: <UserCheck className="size-3.5" />,
       label: ui.employees.fieldStatus,
       render: () => <UserStatusChip status={card.status} />,
     },
