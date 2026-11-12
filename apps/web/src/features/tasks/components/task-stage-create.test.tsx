@@ -28,7 +28,7 @@ describe('TaskStageCreate — плитка в ряду колонок (#730)', (
     expect(tile.className).toContain(BOARD_COLUMN_CLASS);
     expect(tile.className).toContain('h-full');
     expect(tile.className).toContain('outline-dashed');
-    // Ширина — из общего класса метрик (полоса 240–300, #824), своей нет.
+    // Ширина — из общего класса метрик (полоса 240–360, #824), своей нет.
     expect(tile.className).toContain(BOARD_COLUMN_MIN_CLASS);
     expect(tile.className).toContain(BOARD_COLUMN_MAX_CLASS);
     expect(tile.className).not.toMatch(/(?:^|\s)w-\[/);
