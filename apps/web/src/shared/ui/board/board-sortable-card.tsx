@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 
 import { cn } from '@nodus/ui/lib/utils';
 
-import { contentPosition, flipDelta } from '../../lib/board/board-flip.js';
+import { layoutPosition, flipDelta } from '../../lib/board/board-flip.js';
 
 /** Тайминги совпадают с прежней анимацией dnd-kit (200 мс, ease-out):
  *  владелец к движению привык — менять ощущение незачем. */
@@ -59,7 +59,7 @@ export function BoardSortableCard({
     disabled,
   });
   const nodeRef = useRef<HTMLDivElement | null>(null);
-  const prevPosition = useRef<ReturnType<typeof contentPosition>>(null);
+  const prevPosition = useRef<ReturnType<typeof layoutPosition>>(null);
   const animation = useRef<Animation | null>(null);
 
   // Стабильный колбэк: setNodeRef dnd-kit не должен пере-монтировать ref
@@ -73,13 +73,14 @@ export function BoardSortableCard({
     [setNodeRef],
   );
 
-  // FLIP: сравнение фактической позиции с прошлым коммитом. Позиция считается
-  // в контентных координатах прокрутки — автоскролл при переносе не выглядит
-  // движением карточки (см. `contentPosition`).
+  // FLIP: сравнение layout-позиции с прошлым коммитом. Позиция НЕ включает
+  // CSS-трансформы (offsetTop/offsetLeft), поэтому бегущая анимация не попадает
+  // в «позицию до» и не перезапускает сама себя: карточки перерисовываются на
+  // каждое движение указателя, а новый порядок — только когда он реально новый.
   useLayoutEffect(() => {
     const node = nodeRef.current;
     if (!node || typeof node.animate !== 'function') return;
-    const next = contentPosition(node);
+    const next = layoutPosition(node);
     const prev = prevPosition.current;
     prevPosition.current = next;
     const delta = prev && next ? flipDelta(prev, next) : null;

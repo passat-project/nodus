@@ -1,34 +1,26 @@
-import { BOARD_SCROLLER_SELECTOR } from './edge-scroll.js';
-
 /**
- * FLIP-анимация живой перестановки канбан-борда (#737, фидбек владельца
- * 13.11.2026: «пропала красивая анимация»).
+ * FLIP-анимация живой перестановки канбан-борда (#737).
  *
  * Анимацию движения карточек раньше давала `verticalListSortingStrategy` —
  * та самая, что разворачивала сторону вставки (механизм — `board-sorting.ts`).
  * Возвращать стратегию нельзя. FLIP решает только визуальную задачу и НЕ
  * участвует в выборе места: он читает фактическую позицию карточки до и после
  * того, как борд уже переставился, и показывает временный сдвиг «старое место →
- * новое» (200 мс). Конечная позиция всегда — живой порядок борда, поэтому
- * инверсии стороны здесь взяться неоткуда.
+ * новое» (200 мс). Конечная позиция всегда — живой порядок борда.
  */
 
-/** Позиция элемента в КОНТЕНТНЫХ координатах прокрутки: вертикаль — колонки
- *  (`[data-column-scroll]`), горизонталь — доски (`[data-board-scroller]`).
- *  Прокрутка, в том числе автоскролл при переносе, не меняет такую позицию —
- *  иначе каждый кадр автоскролла выглядел бы «движением» карточки. null —
- *  элемент вне контейнеров борда: анимировать нечего. */
-export function contentPosition(el: HTMLElement): { top: number; left: number } | null {
-  const column = el.closest<HTMLElement>('[data-column-scroll]');
-  const board = el.closest<HTMLElement>(BOARD_SCROLLER_SELECTOR);
-  if (!column && !board) return null;
-  const rect = el.getBoundingClientRect();
-  const columnRect = column?.getBoundingClientRect();
-  const boardRect = board?.getBoundingClientRect();
-  return {
-    top: rect.top - (columnRect?.top ?? 0) + (column?.scrollTop ?? 0),
-    left: rect.left - (boardRect?.left ?? 0) + (board?.scrollLeft ?? 0),
-  };
+/** Позиция элемента в РАСКЛАДКЕ — без CSS-трансформов. `offsetTop`/`offsetLeft`
+ *  считаются от offsetParent по layout-боксам и не включают FLIP-анимацию
+ *  (CSSOM: offset* — геометрия раскладки, transforms её не меняют).
+ *
+ *  Это принципиально: dnd-kit перерисовывает карточки на КАЖДОЕ движение
+ *  указателя, а замер по `getBoundingClientRect` попадает внутрь бегущей
+ *  анимации — «позиция до» каждый кадр съезжает, FLIP перезапускает сам себя,
+ *  и призрак дико вибрирует (репро владельца 13.11.2026). Layout-позиция
+ *  стабильна, пока реально не изменился порядок/раскладка: анимация не может
+ *  раскачать собственный замер. */
+export function layoutPosition(el: HTMLElement): { top: number; left: number } {
+  return { top: el.offsetTop, left: el.offsetLeft };
 }
 
 /** Сдвиг меньше пикселя — не движение (субпиксельные пересчёты раскладки). */
