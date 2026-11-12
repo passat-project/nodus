@@ -212,6 +212,12 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: трассы Т1/Т2/Т2b 
         key: `t1-flip-observer-${fx.runId}`,
       });
       expect(observer.status).toBe(201);
+      // Ответственный сам вступил в открытый проект (строка joined): переход
+      // в секретный обязан сохранить ему работу, а не снять обе строки.
+      const joined = await fx.api(carol, 'POST', `/projects/${open.id}/join`, {
+        key: `t1-flip-join-${fx.runId}`,
+      });
+      expect([200, 201]).toContain(joined.status);
 
       // Предпросмотр: кто останется участником, кто потеряет доступ.
       const previewRes = await fx.api(alice, 'GET', `/projects/${open.id}/secret-preview`);

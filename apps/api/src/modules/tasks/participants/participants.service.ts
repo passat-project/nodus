@@ -118,6 +118,10 @@ export class ParticipantsService {
       // замков читается и пишется только под ним (security #496).
       await this.tasksRepo.lock(tx, taskId);
       const fresh = await this.tasksRepo.findWithParticipants(taskId, tx);
+      // Снятие участника — под локом строки проекта (#541): иначе снятый
+      // успевает попасть в снимок переключения open→secret и остаётся
+      // участником секретного проекта.
+      if (fresh.projectId) await this.projects.lockProject(tx, fresh.projectId);
       const role = selfObserver
         ? 'observer'
         : (fresh.participants.find((p) => p.userId === userId)?.role as

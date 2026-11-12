@@ -265,7 +265,7 @@ export class ProjectsService {
       // не отбирал уже выданную работу (#541). Штат считаем ДО записи
       // visibility: под секретным гейтом решающие отфильтровались бы.
       if (built.patch.visibility === 'secret') {
-        const staffing = await this.members.staffingOf(id);
+        const staffing = await this.members.staffingOf(id, tx);
         await this.members.convertForSecret(tx, id, staffing);
       }
       // Раскрытие: ручной состав секретного снимается в той же транзакции —

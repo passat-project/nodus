@@ -164,7 +164,7 @@ export class ProjectParticipantsRepository {
     if (userIds.length === 0) return;
     const others = await tx.projectParticipant.findMany({
       select: { userId: true },
-      where: { projectId, userId: { in: [...userIds] }, source: { not: from } },
+      where: { projectId, userId: { in: [...userIds] }, source: 'member' },
     });
     const blocked = new Set(others.map((row) => row.userId));
     if (blocked.size > 0) {

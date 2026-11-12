@@ -259,8 +259,8 @@ export class ProjectMembersService {
   }
 
   /** Снимок ролей задач для транзакции перевода в секретный (#541). */
-  staffingOf(projectId: string): Promise<ProjectTaskStaffing> {
-    return this.tasks.staffingOf(projectId);
+  staffingOf(projectId: string, tx?: TransactionClient): Promise<ProjectTaskStaffing> {
+    return this.tasks.staffingOf(projectId, { tx });
   }
 
   /** Превью перевода в секретный (#541, решение владельца п.4): кто останется
@@ -272,7 +272,7 @@ export class ProjectMembersService {
     if (!isManagement(rows, user)) {
       throw DomainException.forbidden('Only project management can manage members');
     }
-    const staffing = await this.tasks.staffingOf(projectId);
+    const staffing = await this.tasks.staffingOf(projectId, { viewerId: user.id });
     const byUser = new Map<string, { roles: Set<ProjectSecretPreviewRole>; taskCount: number }>();
     for (const holder of staffing.holders) {
       byUser.set(holder.userId, { roles: new Set(holder.roles), taskCount: holder.taskCount });

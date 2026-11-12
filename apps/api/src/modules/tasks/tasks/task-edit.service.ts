@@ -148,7 +148,9 @@ export class TaskEditService {
         await this.projects.assertMembersAllowed(effectiveProjectId, [
           row.creatorId,
           body.assigneeId ?? row.assigneeId,
-          ...row.participants.map((p) => p.userId),
+          // Наблюдатель прав на задачу не получает — состав секретного
+          // проекта его не ограничивает (#541, security-аудит).
+          ...row.participants.filter((p) => p.role === 'coexecutor').map((p) => p.userId),
         ]);
       }
       if (fields.length > 0 || hasCustomFields) await this.applyFields(tx, user, row, body, fields);
