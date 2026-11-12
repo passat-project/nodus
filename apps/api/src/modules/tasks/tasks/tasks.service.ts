@@ -312,6 +312,9 @@ export class TasksService {
       // advisory-блокировка, что у смены родителя: удаление и перепривязка
       // не перекрещиваются.
       await this.repo.lockTree(tx);
+      // Удаление — под локом строки проекта (#541): снимок переключения
+      // open→secret не увидит роль в уже удалённой задаче.
+      if (row.projectId) await this.projects.lockProject(tx, row.projectId);
       const heir = await this.repo.liveAncestorId(tx, id);
       await this.repo.softDelete(tx, id, new Date());
       await this.repo.reparentChildren(tx, id, heir);
