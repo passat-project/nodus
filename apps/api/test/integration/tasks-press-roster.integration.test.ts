@@ -131,6 +131,8 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks press roster (integration)', (
       key: `press-roster-close-${fx.runId}`,
     });
     expect(closed.status).toBe(200);
-    expect(pressExecuteResultSchema.parse(await closed.json()).press).toBeNull();
+    expect(pressExecuteResultSchema.parse(await closed.json()).press).toMatchObject({
+      completed: true,
+    });
   });
 });

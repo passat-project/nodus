@@ -146,14 +146,16 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks press (integration)', () => {
     });
     expect(submitted.status).toBe(200);
     const result = pressExecuteResultSchema.parse(await submitted.json());
-    expect(result.press).toBeNull();
+    // Решение 4A: завершённый раунд остаётся читаемым (аналитика/CSV).
+    expect(result.press).toMatchObject({ completed: true });
+    expect(result.press?.pressed).toBe(result.press?.total);
     expect(result.task.stage.systemState).not.toBe('active');
     expect(result.task.result?.text).toBe('Отчёт Бориса');
 
     const after = taskDetailSchema.parse(
       await (await fx.api(bob, 'GET', `/tasks/${task.id}`)).json(),
     );
-    expect(after.press).toBeNull();
+    expect(after.press).toMatchObject({ completed: true });
     expect(after.result?.text).toBe('Отчёт Бориса');
     expect(after.stage.systemState).not.toBe('active');
   });
@@ -269,10 +271,12 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks press (integration)', () => {
       key: `press-return-carol-${fx.runId}`,
     });
     expect(completed.status).toBe(200);
-    expect(pressExecuteResultSchema.parse(await completed.json()).press).toBeNull();
+    expect(pressExecuteResultSchema.parse(await completed.json()).press).toMatchObject({
+      completed: true,
+    });
   });
 
-  it('пустые источники — коллективная кнопка работает как обычная', async () => {
+  it('пустые источники — закрывающий переход запрещён (409)', async () => {
     await fx.prisma.workflowTransition.update({
       where: { id: completeId },
       data: {
@@ -312,6 +316,8 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks press (integration)', () => {
       body: {},
       key: `press-fallback-complete-${fx.runId}`,
     });
-    expect(executed.status).toBe(200);
+    // Решение 1: без участников кворум невозможен — обход не выполняется.
+    expect(executed.status).toBe(409);
+    expect(((await executed.json()) as { code: string }).code).toBe(ErrorCode.CONFLICT);
   });
 });
