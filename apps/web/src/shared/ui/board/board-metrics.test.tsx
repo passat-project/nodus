@@ -21,10 +21,11 @@ import { KanbanSkeleton } from './kanban-skeleton.js';
 
 /**
  * Геометрия канбан-доски (#730, исправление #824): ширина плитки — ПОЛОСА
- * 240–300px (minmax-паттерн, как у Битрикса/Trello). Плитка делит ряд
- * поровну, пока доля внутри полосы: на Full HD (1920×1080, развёрнутое меню,
- * корень 20px) 6 плиток заполняют ряд (по ~244px), на 2560 — 8 плиток
- * (~261px); 6 плиток на 2560 держат потолок 300px и не раздуваются; ниже пола
+ * 240–360px, динамическая, как в Битриксе (замер владельца 12.11.2026: колонка
+ * 259px в окне 2248 и 369px в развёрнутом на 3439). Плитка делит ряд поровну,
+ * пока доля внутри полосы: на Full HD 6 плиток заполняют ряд (≈244px), на
+ * 2560 шесть плиток тянутся до ≈351px, восемь делят ряд (≈261px); на ultrawide
+ * 3440 шесть упираются в потолок 360 (не «ужасно широкие»); ниже пола
  * включается горизонтальная прокрутка. Тест держит формулу и следит, чтобы
  * доска, «Добавить стадию» и скелетон брали геометрию из ОДНОГО места.
  */
@@ -91,15 +92,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('board-metrics: полоса ширины 240–300px (#824)', () => {
+describe('board-metrics: полоса ширины 240–360px (#824)', () => {
   it('плитка тянется по ряду, но в полосе min/max — не резина без потолка', () => {
     expect(BOARD_COLUMN_GROW_CLASS).toContain('flex-1');
     expect(BOARD_COLUMN_GROW_CLASS).toContain('basis-0');
     expect(BOARD_COLUMN_MIN_CLASS).toBe('min-w-[12rem]');
-    expect(BOARD_COLUMN_MAX_CLASS).toBe('max-w-[15rem]');
-    // Полоса в экранных px при корне 20px: 240–300 — ширина колонки Битрикса.
+    expect(BOARD_COLUMN_MAX_CLASS).toBe('max-w-[18rem]');
+    // Полоса в экранных px при корне 20px: 240–360 — битриксовый диапазон
+    // (min 259 / max 369 по замерам владельца 12.11.2026).
     expect(boundRem(BOARD_COLUMN_CLASS, 'min-w') * 20).toBe(240);
-    expect(boundRem(BOARD_COLUMN_CLASS, 'max-w') * 20).toBe(300);
+    expect(boundRem(BOARD_COLUMN_CLASS, 'max-w') * 20).toBe(360);
     // Жёсткой ширины (w-[…], shrink-0 + фикс) больше нет: это был баг #824 —
     // на 2560 колонки застывали узкими, когда места хватало на 8.
     expect(BOARD_COLUMN_CLASS).not.toMatch(/(?:^|\s)w-\[/);
@@ -129,14 +131,27 @@ describe('board-metrics: полоса ширины 240–300px (#824)', () => {
     expect(rowUsageRem(9, content)).toBeGreaterThan(rowRem(2560));
   });
 
-  it('2560 с шестью плитками: потолок 300px, колонки не раздуваются', () => {
+  it('2560 с шестью плитками: тянутся (≈351px) и заполняют ряд — ширина динамическая', () => {
     const content = contentRem(2560);
-    // Честная доля 6 плиток на 2560 — ~351px (прежнее «ужасно широко»),
-    // поэтому ширина упирается в потолок.
+    // Битрикс на широком окне тянет колонки (min 259 → max 369): у нас доля
+    // 6 плиток ≈351px внутри полосы, поэтому ряд заполняется, а не застывает.
+    expect(fairShareRem(6, content)).toBeGreaterThan(boundRem(BOARD_COLUMN_CLASS, 'min-w'));
+    expect(fairShareRem(6, content)).toBeLessThan(boundRem(BOARD_COLUMN_CLASS, 'max-w'));
+    expect(rowUsageRem(6, content)).toBeCloseTo(rowRem(2560), 5);
+  });
+
+  it('3440: шесть плиток упираются в потолок 360 — не «ужасно широкие»', () => {
+    const content = contentRem(3440);
+    // Честная доля 6 плиток на ultrawide — ~500px (прежний баг); потолок
+    // держит ширину на битриксовом max, ряд не раздут.
     expect(fairShareRem(6, content)).toBeGreaterThan(boundRem(BOARD_COLUMN_CLASS, 'max-w'));
     expect(widthRem(6, content)).toBe(boundRem(BOARD_COLUMN_CLASS, 'max-w'));
-    // Свободное место остаётся (уйдёт под 7-й/8-й столбцы), но ряд не растянут.
-    expect(rowUsageRem(6, content)).toBeLessThan(rowRem(2560));
+    expect(rowUsageRem(6, content)).toBeLessThan(rowRem(3440));
+    // Восемь плиток на 3440 — тоже потолок, но ряд почти полон; двенадцать
+    // влезают и делят ряд, тринадцатая — прокрутка.
+    expect(rowUsageRem(8, content)).toBeGreaterThan(rowRem(3440) * 0.95);
+    expect(rowUsageRem(12, content)).toBeCloseTo(rowRem(3440), 5);
+    expect(rowUsageRem(13, content)).toBeGreaterThan(rowRem(3440));
   });
 
   it('промежуток 8–12 px, внешние отступы 16 px', () => {

@@ -3,9 +3,10 @@ import { mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 
 /**
- * Кадры и замеры #824: ширина плитки канбана — полоса 240–300px.
- * На Full HD 6 плиток заполняют ряд, на 2560 влезают 8 (261px),
- * 6 плиток на 2560 упираются в потолок 300px и не растягиваются.
+ * Кадры и замеры #824: ширина плитки канбана — динамическая полоса 240–360px,
+ * как в Битриксе (min 259 / max 369 по замерам владельца). 1920 — 6 плиток
+ * заполняют ряд (≈244), 2560 — шесть тянутся (≈351), 3440 — упираются в 360;
+ * на 2560 восемь плиток делят ряд (≈261).
  *   NODUS_BASE_URL=http://127.0.0.1:4173 node kanban-824-shots.mjs
  */
 const base = (process.env.NODUS_BASE_URL ?? 'http://127.0.0.1:4173').replace(/\/$/, '');
@@ -73,6 +74,7 @@ for (const theme of ['light', 'dark']) {
 
   await measure(1920, 1080, `01-1920-${theme}`);
   await measure(2560, 1440, `02-2560-${theme}`);
+  await measure(3440, 1440, `03-3440-${theme}`);
 
   // Восемь плиток на 2560: добавляем две личные стадии через живой API
   // (идемпотентность как у клиента), после замеров удаляем.
@@ -98,7 +100,8 @@ for (const theme of ['light', 'dark']) {
   }
   await page.reload();
   await page.waitForTimeout(2000);
-  await measure(2560, 1440, `03-2560-8cols-${theme}`);
+  await measure(2560, 1440, `04-2560-8cols-${theme}`);
+  await measure(3440, 1440, `05-3440-8cols-${theme}`);
 
   for (const id of created) {
     await page.evaluate(
