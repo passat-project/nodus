@@ -1,4 +1,4 @@
-import type { QueryClient } from '@tanstack/react-query';
+import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 import type {
   ChatAttachmentPreviewReadyPayload,
   ChatLinkPreviewReadyPayload,
@@ -249,6 +249,11 @@ export function applyReadEvent(
 ): boolean {
   const meId = useAuthStore.getState().user?.id ?? null;
   if (payload.userId === meId) return true; // своё прочтение — патчить нечего
+  // Список бесед (#799): галка «прочитано» у СВОЕГО последнего сообщения
+  // обновляется локально, без рефетча (полная инвалидация списка на каждую
+  // квитанцию — «шторм квитанций» #123). Патч живёт в обоих формах кэша
+  // списка: обычный Paginated и infinite-вкладки scoped.
+  patchConversationReadAt(queryClient, payload, meId);
   const reader = readerRefFromCache(queryClient, payload.conversationId, payload.userId);
   if (!reader) return false;
   let touched = false;
@@ -270,6 +275,49 @@ export function applyReadEvent(
     },
   );
   return touched;
+}
+
+/** Патч списка бесед после чужой квитанции (#799): у СВОЕГО последнего
+ *  сообщения, покрытого upToSeq и ещё не прочитанного, выставляем readAt —
+ *  галка в строке списка становится «прочитано» без рефетча. readAt — момент
+ *  ПЕРВОГО прочитавшего (канон #102): уже заполненную метку не трогаем. */
+function patchConversationReadAt(
+  queryClient: QueryClient,
+  payload: Pick<ChatMessageReadPayload, 'conversationId' | 'upToSeq' | 'readAt'>,
+  meId: string | null,
+): void {
+  const { conversationId, upToSeq, readAt } = payload;
+  const patchItems = (items: ConversationListItem[]): ConversationListItem[] =>
+    items.map((conversation) => {
+      if (conversation.id !== conversationId) return conversation;
+      const last = conversation.lastMessage;
+      if (
+        last === null ||
+        last.author.id !== meId ||
+        last.deletedAt !== null ||
+        last.seq > upToSeq ||
+        last.readAt !== null
+      ) {
+        return conversation;
+      }
+      return { ...conversation, lastMessage: { ...last, readAt } };
+    });
+  queryClient.setQueryData<Paginated<ConversationListItem>>(chatKeys.conversations(), (old) =>
+    old ? { ...old, items: patchItems(old.items) } : old,
+  );
+  // Вкладки мессенджера (#252) живут под своими infinite-ключами.
+  for (const scope of ['chats', 'entities'] as const) {
+    queryClient.setQueryData<InfiniteData<Paginated<ConversationListItem>>>(
+      chatKeys.scoped(scope),
+      (old) =>
+        old
+          ? {
+              ...old,
+              pages: old.pages.map((page) => ({ ...page, items: patchItems(page.items) })),
+            }
+          : old,
+    );
+  }
 }
 
 function readerRefFromCache(
