@@ -1,30 +1,37 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
 import { cn } from '@nodus/ui/lib/utils';
 
-/** Карточка смонтирована хотя бы один кадр (официальный useMountStatus):
- * перемонтированная в чужую колонку ВО ВРЕМЯ drag карточка не должна стартовать
- * транзишен с неверных координат — первый кадр без transition. */
-function useMountStatus(): boolean {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => setMounted(true));
-    return () => cancelAnimationFrame(raf);
-  }, []);
-  return mounted;
+import { contentPosition, flipDelta } from '../../lib/board/board-flip.js';
+
+/** Тайминги совпадают с прежней анимацией dnd-kit (200 мс, ease-out):
+ *  владелец к движению привык — менять ощущение незачем. */
+const FLIP_TIMING: KeyframeAnimationOptions = {
+  duration: 200,
+  easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+};
+
+/** Текущий визуальный сдвиг карточки (mid-flight анимации). Нужен, чтобы
+ *  пере-целивание FLIP не «щёлкало» в момент, когда предыдущая анимация ещё
+ *  не доехала: стартовый кадр = текущий сдвиг + сдвиг новой раскладки. */
+function currentTranslate(node: HTMLElement): { x: number; y: number } {
+  if (typeof DOMMatrixReadOnly === 'undefined') return { x: 0, y: 0 };
+  const value = getComputedStyle(node).transform;
+  if (!value || value === 'none') return { x: 0, y: 0 };
+  const matrix = new DOMMatrixReadOnly(value);
+  return { x: matrix.m41, y: matrix.m42 };
 }
 
 /**
  * Sortable-обёртка карточки борда (ADR-0007, общая оболочка канбана):
- * useSortable даёт dnd-состояние карточки и клавиатурные атрибуты, призрак
- * рисует DragOverlay потребителя. Трансформы sortable НЕ применяются
- * (`liveBoardSortingStrategy` — null): порядок борда переставляется ЖИВОЙ на
- * каждом движении, поэтому слот переносимой карточки — её DOM-узел на новом
- * месте, а соседи разъезжаются сменой DOM-порядка. Штатная
- * verticalListSortingStrategy в этом режиме разворачивает сторону вставки
- * (механизм — `shared/lib/board/board-sorting.ts`, gotcha #737).
+ * `useSortable` даёт dnd-состояние карточки и клавиатурные атрибуты, призрак
+ * рисует DragOverlay потребителя. Трансформы sortable НЕ применяются (стратегия
+ * борда нейтральная — `liveBoardSortingStrategy`, механизм в
+ * `lib/board/board-sorting.ts`): порядок переставляется ЖИВОЙ, а движение
+ * карточек даёт FLIP — фактический сдвиг «старое место → новое» (200 мс,
+ * `lib/board/board-flip.ts`). FLIP только показывает уже принятую перестановку
+ * и не участвует в выборе стороны вставки — инверсия слота невозможна.
  * Контент карточки — render-проп (placeholder — слот переносимой карточки,
  * пунктир).
  * Сенсоры на активаторе: клик без движения — открытие слайдера
@@ -47,26 +54,51 @@ export function BoardSortableCard({
   disabled?: boolean;
   children: (state: { placeholder: boolean }) => ReactNode;
 }) {
-  const {
-    setNodeRef,
-    setActivatorNodeRef,
-    listeners,
-    attributes,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id, disabled });
-  const mounted = useMountStatus();
-  const mountedWhileDragging = isDragging && !mounted;
+  const { setNodeRef, setActivatorNodeRef, listeners, attributes, isDragging } = useSortable({
+    id,
+    disabled,
+  });
+  const nodeRef = useRef<HTMLDivElement | null>(null);
+  const prevPosition = useRef<ReturnType<typeof contentPosition>>(null);
+  const animation = useRef<Animation | null>(null);
+
+  // Стабильный колбэк: setNodeRef dnd-kit не должен пере-монтировать ref
+  // на каждый рендер — иначе потеряется «позиция до» и анимация не сыграет.
+  const setMergedRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      setNodeRef(node);
+      nodeRef.current = node;
+      if (node === null) animation.current?.cancel();
+    },
+    [setNodeRef],
+  );
+
+  // FLIP: сравнение фактической позиции с прошлым коммитом. Позиция считается
+  // в контентных координатах прокрутки — автоскролл при переносе не выглядит
+  // движением карточки (см. `contentPosition`).
+  useLayoutEffect(() => {
+    const node = nodeRef.current;
+    if (!node || typeof node.animate !== 'function') return;
+    const next = contentPosition(node);
+    const prev = prevPosition.current;
+    prevPosition.current = next;
+    const delta = prev && next ? flipDelta(prev, next) : null;
+    if (!delta) return;
+    // Стартовый кадр — от текущего визуального положения, а не от прошлой
+    // раскладки: иначе быстрое пере-целивание «щёлкает» в середине анимации.
+    const running = currentTranslate(node);
+    animation.current?.cancel();
+    animation.current = node.animate(
+      [
+        { transform: `translate(${running.x + delta.dx}px, ${running.y + delta.dy}px)` },
+        { transform: 'translate(0px, 0px)' },
+      ],
+      FLIP_TIMING,
+    );
+  });
 
   return (
-    <div
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition: mountedWhileDragging ? undefined : transition,
-      }}
-    >
+    <div ref={setMergedRef}>
       <div
         ref={setActivatorNodeRef}
         className={cn(disabled ? 'cursor-default' : 'cursor-grab', isDragging && 'opacity-40')}
