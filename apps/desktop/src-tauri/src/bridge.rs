@@ -497,10 +497,7 @@ mod tests {
     fn reasons_are_stable_codes() {
         let mut empty_title = payload();
         empty_title.title.clear();
-        assert_eq!(
-            payload_invalid_reason(&empty_title),
-            Some("title_empty")
-        );
+        assert_eq!(payload_invalid_reason(&empty_title), Some("title_empty"));
 
         let mut long_preview = payload();
         long_preview.preview = "x".repeat(501);
@@ -523,9 +520,6 @@ mod tests {
 
         let mut bad_thread = payload();
         bad_thread.thread_root_id = Some("not-a-uuid".into());
-        assert_eq!(
-            payload_invalid_reason(&bad_thread),
-            Some("thread_root")
-        );
+        assert_eq!(payload_invalid_reason(&bad_thread), Some("thread_root"));
     }
 }

@@ -100,9 +100,18 @@ export async function desktopShowPopup(payload: unknown): Promise<DesktopPopupDe
 export function desktopLogPopupDecision(payload: unknown): void {
   const bridge = getDesktopBridge();
   if (!bridge) return;
+  // Установленная оболочка до 1.0.19 команду не знает: веб обновляется
+  // раньше оболочки — вызов undefined уронил бы показ попапа. Диагностика
+  // best-effort, старый мост молча пропускаем.
+  const log = bridge.logPopupDecision;
+  if (typeof log !== 'function') return;
   const parsed = popupDiagnosticSchema.safeParse(payload);
   if (!parsed.success) return;
-  void bridge.logPopupDecision(parsed.data).catch(() => undefined);
+  try {
+    void log.call(bridge, parsed.data).catch(() => undefined);
+  } catch {
+    // закрытый/старый мост — диагностика не критична
+  }
 }
 
 /** Счётчик непрочитанных: бейдж трея и панели задач (0/null — снять). */ export async function desktopSetUnreadBadge(

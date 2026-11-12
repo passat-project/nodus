@@ -124,6 +124,15 @@ describe('команды на границе', () => {
     expect(bridge.logPopupDecision).toHaveBeenCalledTimes(1);
   });
 
+  it('старая оболочка без команды диагностики: молча пропускает, не бросает (#811)', () => {
+    installBridge();
+    const bridge = window.nodusDesktop as unknown as Record<string, unknown>;
+    delete bridge.logPopupDecision;
+    expect(() =>
+      desktopLogPopupDecision({ messageId: null, conversationId: null, reason: 'sent' }),
+    ).not.toThrow();
+  });
+
   it('бейдж передаёт счётчик и null-сброс', async () => {
     const { bridge } = installBridge();
     await desktopSetUnreadBadge(7);
