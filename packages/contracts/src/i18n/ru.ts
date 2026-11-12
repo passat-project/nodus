@@ -19,6 +19,10 @@ import { whatsNewStrings } from './ru-whats-new.js';
 /** Русские строки кодов ошибок — в ru-errors.ts (I5: словарь вырос). */
 export { errorMessages } from './ru-errors.js';
 
+/** Галерея дизайн-системы `/dev/ui` (#257) — отдельный экспорт: см. шапку
+ *  ru-dev-ui.ts (строки не должны уезжать в прод-бандл вместе с `ui`). */
+export { devUiStrings } from './ru-dev-ui.js';
+
 /**
  * Русские UI-строки портала (I15: компоненты не содержат хард-строк).
  * Терминология — русская деловая (ux-principles.md): без англицизмов.
