@@ -20,6 +20,7 @@ function installBridge() {
     shellVersion: '1.0.0',
     platform: 'windows',
     showPopup: vi.fn(async () => undefined),
+    logPopupDecision: vi.fn(async () => undefined),
     setUnreadBadge: vi.fn(async () => undefined),
     flashTaskbar: vi.fn(async () => undefined),
     openExternal: vi.fn(async () => undefined),

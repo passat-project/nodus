@@ -37,6 +37,7 @@ pub fn initialization_script(shell_version: &str) -> String {
     shellVersion: VERSION,
     platform: 'windows',
     showPopup: function (p) {{ return invoke('notify_popup', {{ payload: p }}); }},
+    logPopupDecision: function (p) {{ return invoke('log_popup_diagnostic', {{ payload: p }}); }},
     setUnreadBadge: function (count) {{ return invoke('set_unread_badge', {{ count: count }}); }},
     flashTaskbar: function (critical) {{ return invoke('flash_taskbar', {{ critical: !!critical }}); }},
     openExternal: function (url) {{ return invoke('open_external', {{ url: url }}); }},
@@ -69,6 +70,7 @@ pub fn grant_portal_capability(app: &AppHandle, root: &str) -> tauri::Result<()>
         .window("main")
         .remote(format!("{root}/*"))
         .permission("allow-notify-popup")
+        .permission("allow-log-popup-diagnostic")
         .permission("allow-set-unread-badge")
         .permission("allow-flash-taskbar")
         .permission("allow-open-external")
@@ -254,6 +256,64 @@ fn payload_invalid_reason(payload: &PopupPayload) -> Option<&'static str> {
     None
 }
 
+/// Диагностика решения гейта попапа (#811, веб → оболочка): зеркало
+/// contracts `popupDiagnosticSchema`. Только id и стабильные коды причин —
+/// текста сообщений/имён здесь нет и быть не может (приватность, публичный репозиторий).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PopupDiagnostic {
+    pub message_id: Option<String>,
+    pub conversation_id: Option<String>,
+    pub reason: String,
+    pub detail: Option<String>,
+}
+
+/// Закрытый список причин: неизвестная строка не попадает в лог (инъекция).
+const POPUP_DIAGNOSTIC_REASONS: [&str; 10] = [
+    "not_shell",
+    "invalid_payload",
+    "own",
+    "not_active",
+    "looking",
+    "muted",
+    "snoozed",
+    "thread_wait",
+    "sent",
+    "rejected",
+];
+
+/// Поле лога: управляющие символы (переводы строк, ANSI) — в пробел, длина ≤ 120.
+fn log_field(value: Option<&str>) -> String {
+    let mut out: String = value
+        .unwrap_or("-")
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .take(120)
+        .collect();
+    if out.is_empty() {
+        out.push('-');
+    }
+    out
+}
+
+/// Записать решение гейта попапа в лог оболочки (#811). Best-effort: команда
+/// не возвращает ошибок и не влияет на попапы — только строка `popup_decision:`
+/// в `nodus-desktop.log` (включать ничего не нужно, лог всегда пишется).
+#[tauri::command]
+pub fn log_popup_diagnostic(payload: PopupDiagnostic) {
+    if !POPUP_DIAGNOSTIC_REASONS.contains(&payload.reason.as_str()) {
+        log::warn!("popup_decision: reason=unknown (отклонено)");
+        return;
+    }
+    log::info!(
+        "popup_decision: reason={} message={} conversation={} detail={}",
+        payload.reason,
+        log_field(payload.message_id.as_deref()),
+        log_field(payload.conversation_id.as_deref()),
+        log_field(payload.detail.as_deref())
+    );
+}
+
 #[tauri::command]
 pub fn set_unread_badge(app: AppHandle, count: Option<u32>) {
     badge::apply(&app, count);
@@ -418,6 +478,14 @@ mod tests {
             can_reply: true,
             download: None,
         }
+    }
+
+    #[test]
+    fn log_field_sanitizes_and_truncates() {
+        assert_eq!(log_field(None), "-");
+        assert_eq!(log_field(Some("")), "-");
+        assert_eq!(log_field(Some("a\nb\tc")), "a b c");
+        assert_eq!(log_field(Some(&"x".repeat(200))).chars().count(), 120);
     }
 
     #[test]

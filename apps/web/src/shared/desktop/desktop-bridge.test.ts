@@ -5,6 +5,7 @@ import {
   bindDesktopShellEvents,
   desktopApplyUpdate,
   desktopDismissPopups,
+  desktopLogPopupDecision,
   desktopSetUnreadBadge,
   desktopShowPopup,
   getDesktopBridge,
@@ -35,6 +36,7 @@ function installBridge() {
     shellVersion: '1.0.0',
     platform: 'windows',
     showPopup: vi.fn(async () => undefined),
+    logPopupDecision: vi.fn(async () => undefined),
     setUnreadBadge: vi.fn(async () => undefined),
     flashTaskbar: vi.fn(async () => undefined),
     openExternal: vi.fn(async () => undefined),
@@ -106,6 +108,20 @@ describe('команды на границе', () => {
     // Мусор — молча отбрасывается, но вызывающий видит причину (#811).
     await expect(desktopShowPopup({ id: '', title: 42 })).resolves.toBe('invalid');
     expect(bridge.showPopup).toHaveBeenCalledTimes(1);
+  });
+
+  it('лог диагностики: только id/коды из закрытого списка причин (#811)', () => {
+    const { bridge } = installBridge();
+    desktopLogPopupDecision({ messageId: 'm1', conversationId: CONV, reason: 'looking' });
+    expect(bridge.logPopupDecision).toHaveBeenCalledWith({
+      messageId: 'm1',
+      conversationId: CONV,
+      reason: 'looking',
+    });
+    // Неизвестная причина/чужой тип — в лог оболочки не уходят.
+    desktopLogPopupDecision({ messageId: null, conversationId: null, reason: 'hack\n' });
+    desktopLogPopupDecision({ messageId: 42, conversationId: null, reason: 'sent' });
+    expect(bridge.logPopupDecision).toHaveBeenCalledTimes(1);
   });
 
   it('бейдж передаёт счётчик и null-сброс', async () => {

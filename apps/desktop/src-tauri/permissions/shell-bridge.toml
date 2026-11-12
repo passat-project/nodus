@@ -9,6 +9,11 @@ description = "Показать попап уведомления (стек пр
 commands.allow = ["notify_popup"]
 
 [[permission]]
+identifier = "allow-log-popup-diagnostic"
+description = "Записать решение гейта попапа в лог оболочки (#811): только id и коды причин."
+commands.allow = ["log_popup_diagnostic"]
+
+[[permission]]
 identifier = "allow-set-unread-badge"
 description = "Задать счётчик непрочитанных (бейдж трея и панели задач)."
 commands.allow = ["set_unread_badge"]

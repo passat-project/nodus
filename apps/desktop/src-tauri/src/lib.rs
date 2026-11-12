@@ -123,6 +123,7 @@ pub fn run() {
             updates::get_update_state,
             updates::apply_update,
             bridge::notify_popup,
+            bridge::log_popup_diagnostic,
             bridge::set_unread_badge,
             bridge::flash_taskbar,
             bridge::open_external,

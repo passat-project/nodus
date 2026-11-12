@@ -8,7 +8,12 @@ import { withoutPatronymic } from '../lib/format.js';
 import { chatKeys } from '../chat/chat-keys.js';
 import { getOpenConversation } from '../chat/open-conversation.js';
 import { threadNotifyAllowed } from '../chat/thread-notify-gate.js';
-import { desktopFlashTaskbar, desktopShowPopup, isDesktopShell } from './desktop-bridge.js';
+import {
+  desktopFlashTaskbar,
+  desktopLogPopupDecision,
+  desktopShowPopup,
+  isDesktopShell,
+} from './desktop-bridge.js';
 import { recordPopupDecision, type PopupGateReason } from './popup-diagnostics.js';
 
 /**
@@ -151,12 +156,16 @@ function record(
   reason: PopupGateReason,
   detail?: string,
 ): void {
-  recordPopupDecision({
+  const decision = {
     messageId: ids.messageId,
     conversationId: ids.conversationId,
     reason,
     ...(detail === undefined ? {} : { detail }),
-  });
+  };
+  // Журнал в вебе (панель ?wsdebug=1) + строка в логе оболочки (#811):
+  // в оболочке URL не принимает query, поэтому лог — основной путь владельца.
+  recordPopupDecision(decision);
+  desktopLogPopupDecision(decision);
 }
 
 /** id из сырого payload (только для журнала; никаких имён/текста). */

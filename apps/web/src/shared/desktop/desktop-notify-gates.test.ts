@@ -40,8 +40,12 @@ describe('notifyDesktopMessage: модальный слой и диагност�
     const releaseLayer = registerModalLayer(document.createElement('div'));
     notifyDesktopMessage(messagePayload(), queryClientWith({}));
     expect(window.nodusDesktop?.showPopup).toHaveBeenCalled();
-    // Диагностика фиксирует причину пропуска гейта: overlay.
+    // Диагностика фиксирует причину пропуска гейта: overlay — и в вебе, и в
+    // логе оболочки (#811: в оболочке URL не принимает ?wsdebug=1).
     expect(getPopupDecisions()).toContainEqual(
+      expect.objectContaining({ reason: 'not_active', detail: 'overlay' }),
+    );
+    expect(window.nodusDesktop?.logPopupDecision).toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'not_active', detail: 'overlay' }),
     );
     releaseLayer();
@@ -52,6 +56,9 @@ describe('notifyDesktopMessage: модальный слой и диагност�
     notifyDesktopMessage(messagePayload(), queryClientWith({}));
     expect(window.nodusDesktop?.showPopup).not.toHaveBeenCalled();
     expect(getPopupDecisions()).toContainEqual(expect.objectContaining({ reason: 'looking' }));
+    expect(window.nodusDesktop?.logPopupDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'looking' }),
+    );
   });
 
   it('успешный попап — sent; Tauri реджектит строкой — код причины в rejected (#811)', async () => {
