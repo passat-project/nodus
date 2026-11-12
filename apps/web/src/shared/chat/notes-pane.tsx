@@ -15,6 +15,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../auth-store.js';
 import { useConversationMessages, useConversations } from './chat-queries.js';
 import { ChatComposer } from './chat-composer.js';
+import { addFiles } from './composer-files.js';
+import { FeedDropzone } from './feed-dropzone.js';
 import type { ComposerSelection } from './selection-island.js';
 import { DayChip } from './day-chip.js';
 import { toFavoriteMessage } from './favorite-message.js';
@@ -204,92 +206,103 @@ export function NotesPane({ conversationId }: { conversationId: string }) {
 
   return (
     <div className="relative flex h-full min-w-0 flex-1 flex-col">
-      <MessageScrollerProvider autoScroll>
-        {/* Своя отправка дотягивает ленту до конца с любой позиции (#215):
+      {/* Drop-зона файлов (#797): витрина — такая же лента, как беседы
+          (#716), но родилась до общего приёма драга и осталась без него.
+          Композер — СНАРУЖИ зоны: оверлей накрывает ленту, а не поле ввода
+          (как в conversation-pane). Вложения встают чипами в композер
+          «Избранного» — черновик тот же scope витрины. */}
+      <FeedDropzone
+        className="relative flex min-h-0 flex-1 flex-col"
+        onFiles={(files) => addFiles(scope, files)}
+      >
+        <MessageScrollerProvider autoScroll>
+          {/* Своя отправка дотягивает ленту до конца с любой позиции (#215):
             композер витрины пишет scroll-end-запрос по тому же scope —
             резидент, как у ленты беседы (conversation-pane). */}
-        <ScrollEndResponder scope={scope} />
-        <JumpResponder
-          conversationId={conversationId}
-          threadRootId={null}
-          itemCount={items.length}
-          containerRef={viewportRef}
-        />
-        <MessageScroller className="min-h-0 flex-1 bg-chat-zone">
-          <MessageScrollerViewport ref={viewportRef}>
-            <MessageScrollerContent
-              className={cn(
-                'feed-reveal flex flex-col gap-3 px-4 pt-4 pb-3',
-                (selection.selectionActive || box.active) && 'select-none',
-              )}
-            >
-              {messagesQuery.isLoading && favoritesQuery.isLoading ? null : items.length === 0 ? (
-                <div className="flex h-full items-center justify-center">
-                  <Empty>
-                    <EmptyTitle>{ui.chat.notesEmpty}</EmptyTitle>
-                  </Empty>
-                </div>
-              ) : (
-                <MessageGroup className="gap-3">
-                  {/* Sentinel истории — первый элемент витрины (#307). */}
-                  {topSentinel}
-                  {runs.map((run, runIndex) => {
-                    const prevRun = runIndex === 0 ? undefined : runs[runIndex - 1];
-                    return (
-                      <Fragment key={run.first.id}>
-                        {startsNewDay(prevRun?.last, run.first) ? (
-                          <MessageScrollerItem>
-                            <DayChip label={formatDayLabel(run.first.createdAt)} />
-                          </MessageScrollerItem>
-                        ) : null}
-                        <MessageRunView
-                          run={run}
-                          showName={!run.mine}
-                          renderItem={(message, attrs) => (
-                            <FavoriteRunMessage
-                              message={message}
-                              card={
-                                (feedCardIds.has(message.id) ? cardsById.get(message.id) : null) ??
-                                null
-                              }
-                              labelTarget={
-                                // Тэг-цель строки: ЛОКАЛЬНАЯ оптимистичная
-                                // метка первична (новейшая локальная истина
-                                // мутации — иначе WS-рефетч с ещё не
-                                // применённым PATCH мигал чипом, #215),
-                                // затем карточка, затем пустышка (апсерт).
-                                optimisticLabels.has(message.id)
-                                  ? {
-                                      messageId: message.id,
-                                      labels: optimisticLabels.get(message.id)!,
-                                    }
-                                  : (cardsById.get(message.id) ?? {
-                                      messageId: message.id,
-                                      labels: [],
-                                    })
-                              }
-                              mine={run.mine}
-                              showName={attrs.showName}
-                              tail={attrs.tail}
-                              style={attrs.style}
-                              conversationId={conversationId}
-                              scope={scope}
-                              selectionActive={selection.selectionActive}
-                              selectedSet={selection.selectedSet}
-                              onToggle={selection.toggle}
-                              messagesOfSelection={selection.getSelectedMessages}
-                            />
-                          )}
-                        />
-                      </Fragment>
-                    );
-                  })}
-                </MessageGroup>
-              )}
-            </MessageScrollerContent>
-          </MessageScrollerViewport>
-        </MessageScroller>
-      </MessageScrollerProvider>
+          <ScrollEndResponder scope={scope} />
+          <JumpResponder
+            conversationId={conversationId}
+            threadRootId={null}
+            itemCount={items.length}
+            containerRef={viewportRef}
+          />
+          <MessageScroller className="min-h-0 flex-1 bg-chat-zone">
+            <MessageScrollerViewport ref={viewportRef}>
+              <MessageScrollerContent
+                className={cn(
+                  'feed-reveal flex flex-col gap-3 px-4 pt-4 pb-3',
+                  (selection.selectionActive || box.active) && 'select-none',
+                )}
+              >
+                {messagesQuery.isLoading && favoritesQuery.isLoading ? null : items.length === 0 ? (
+                  <div className="flex h-full items-center justify-center">
+                    <Empty>
+                      <EmptyTitle>{ui.chat.notesEmpty}</EmptyTitle>
+                    </Empty>
+                  </div>
+                ) : (
+                  <MessageGroup className="gap-3">
+                    {/* Sentinel истории — первый элемент витрины (#307). */}
+                    {topSentinel}
+                    {runs.map((run, runIndex) => {
+                      const prevRun = runIndex === 0 ? undefined : runs[runIndex - 1];
+                      return (
+                        <Fragment key={run.first.id}>
+                          {startsNewDay(prevRun?.last, run.first) ? (
+                            <MessageScrollerItem>
+                              <DayChip label={formatDayLabel(run.first.createdAt)} />
+                            </MessageScrollerItem>
+                          ) : null}
+                          <MessageRunView
+                            run={run}
+                            showName={!run.mine}
+                            renderItem={(message, attrs) => (
+                              <FavoriteRunMessage
+                                message={message}
+                                card={
+                                  (feedCardIds.has(message.id)
+                                    ? cardsById.get(message.id)
+                                    : null) ?? null
+                                }
+                                labelTarget={
+                                  // Тэг-цель строки: ЛОКАЛЬНАЯ оптимистичная
+                                  // метка первична (новейшая локальная истина
+                                  // мутации — иначе WS-рефетч с ещё не
+                                  // применённым PATCH мигал чипом, #215),
+                                  // затем карточка, затем пустышка (апсерт).
+                                  optimisticLabels.has(message.id)
+                                    ? {
+                                        messageId: message.id,
+                                        labels: optimisticLabels.get(message.id)!,
+                                      }
+                                    : (cardsById.get(message.id) ?? {
+                                        messageId: message.id,
+                                        labels: [],
+                                      })
+                                }
+                                mine={run.mine}
+                                showName={attrs.showName}
+                                tail={attrs.tail}
+                                style={attrs.style}
+                                conversationId={conversationId}
+                                scope={scope}
+                                selectionActive={selection.selectionActive}
+                                selectedSet={selection.selectedSet}
+                                onToggle={selection.toggle}
+                                messagesOfSelection={selection.getSelectedMessages}
+                              />
+                            )}
+                          />
+                        </Fragment>
+                      );
+                    })}
+                  </MessageGroup>
+                )}
+              </MessageScrollerContent>
+            </MessageScrollerViewport>
+          </MessageScroller>
+        </MessageScrollerProvider>
+      </FeedDropzone>
 
       <ChatComposer
         key={conversationId}
