@@ -11,6 +11,7 @@ import { NIGHT_A, NIGHT_B } from '../e2e-users.js';
  */
 
 const LIVE = Boolean(process.env.E2E_LIVE_API);
+const BASE_URL = process.env.NODUS_BASE_URL ?? 'http://127.0.0.1:4173';
 const EMAIL = process.env.E2E_USER_EMAIL ?? NIGHT_B.email;
 const PASSWORD = process.env.E2E_USER_PASSWORD ?? NIGHT_B.password;
 
@@ -130,19 +131,22 @@ test.describe('уведомления: живой контур (#100)', () => {
     const convId = ((await direct.json()) as { id: string }).id;
 
     // Картинка → сообщение с вложением (реальный конвейер, non-mock песочница).
-    const upload = await request.post('/api/v1/chat/attachments', {
+    // multipart — сырым FormData: поля загрузки (size/width/height) читает
+    // @fastify/multipart, а не JSON-тело.
+    const form = new FormData();
+    form.append('size', String(png.length));
+    form.append('width', '1');
+    form.append('height', '1');
+    form.append('file', new Blob([png], { type: 'image/png' }), `${stamp}.png`);
+    const upload = await fetch(`${BASE_URL}/api/v1/chat/attachments`, {
+      method: 'POST',
       headers: {
         Authorization: `Bearer ${tokenA}`,
         'Idempotency-Key': `e2e-809-${stamp}-upload`,
       },
-      multipart: {
-        file: { name: `${stamp}.png`, mimeType: 'image/png', buffer: png },
-        size: String(png.length),
-        width: '1',
-        height: '1',
-      },
+      body: form,
     });
-    expect(upload.status(), 'загрузка вложения').toBe(201);
+    expect(upload.status, 'загрузка вложения').toBe(201);
     const attachment = (await upload.json()) as { id: string };
     const sendImage = await request.post(`/api/v1/chat/conversations/${convId}/messages`, {
       headers: {
