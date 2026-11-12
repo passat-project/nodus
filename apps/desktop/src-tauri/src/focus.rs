@@ -1,34 +1,39 @@
 //! Клавиатурный фокус попапов — второй слой (#709).
 //!
-//! Первый слой закрыт неактивируемостью: `.focusable(false)` даёт
-//! `WS_EX_NOACTIVATE`, и tao держит бит сам. Но `WS_EX_NOACTIVATE` запрещает
-//! только ПОЛЬЗОВАТЕЛЬСКУЮ активацию (клик, `ShowWindow`): программно окно
-//! активируется (`SetActiveWindow`/`SetForegroundWindow`, Raymond Chen
-//! «My window has WS_EX_NOACTIVATE, but it got activated anyway», 19.09.2024),
-//! а `SetFocus` по документации MS «activates either the window that receives
-//! the focus or the parent of the window that receives the focus».
+//! Первый слой — неактивируемость: `.focusable(false)` даёт
+//! `WS_EX_NOACTIVATE`, и tao держит бит сам. Но стиль запрещает только
+//! ПОЛЬЗОВАТЕЛЬСКУЮ активацию (клик, `ShowWindow`): программно окно
+//! активируется (Raymond Chen, «My window has WS_EX_NOACTIVATE, but it got
+//! activated anyway», 19.09.2024), а `SetFocus` по документации MS «activates
+//! either the window that receives the focus or the parent of the window that
+//! receives the focus».
 //!
 //! WebView2 живёт в отдельном процессе (`msedgewebview2.exe`): его
 //! `Chrome_WidgetWin_1` — кросс-процессный ребёнок контейнера попапа, и фокус
-//! он забирает сам — при создании контроллера и первом кадре (WebView2Feedback
-//! #2487 «parent window can no longer get keyboard input after WebView2 is
-//! created»; winit #4345 «webview child pulls focus … parent remains
-//! foreground»; unoplatform/uno #23481 «spurious Deactivated raised when the
-//! WebView2 renderer HWND gains focus»). Итог: попап становится активным окном
-//! ПОТОКА, главное окно получает `WM_ACTIVATE(WA_INACTIVE)`, главный webview
-//! слепнет по фокусу — каретка мёртвая, клавиши уходят в попап.
+//! он забирает сам (WebView2Feedback #2487; winit #4345 «webview child pulls
+//! focus … parent remains foreground»; unoplatform/uno #23481 «spurious
+//! Deactivated raised when the WebView2 renderer HWND gains focus»).
 //!
-//! Почему это не видел #709: `GetForegroundWindow()` при этом может остаться
-//! ГЛАВНЫМ окном (`SetActiveWindow` меняет активное окно потока, не глобальный
-//! foreground), а проверка была одна и в момент `show()`. Правда о клавиатуре
-//! живёт в `GetGUIThreadInfo().hwndFocus`.
+//! Измерено на живой оболочке (#709, проба снаружи по кадрам 250 мс):
 //!
-//! Ремонт — `SetFocus(главное окно)`: `tao::set_focus()` бесполезен, он no-op,
+//! ```text
+//! до показа : fg=main  active=main  focus=Chrome_WidgetWin_1  root=main
+//! показ     : fg=попап active=попап focus=Chrome_WidgetWin_1  root=попап (360x93)
+//! после     : fg=…     active=0     focus=0                  root=0
+//! ```
+//!
+//! То есть показ попапа **может сделать его foreground** (поэтому одного
+//! `GetForegroundWindow()` недостаточно и он врёт в обе стороны), а
+//! уничтожение окна с webview-ребёнком часто оставляет очередь ввода вообще
+//! без фокуса (winit #4345) — каретка не возвращается сама, только кликом.
+//! Правда о клавиатуре живёт в `GetGUIThreadInfo().hwndFocus`.
+//!
+//! Ремонт — `SetFocus` в нужное окно: `tao::set_focus()` бесполезен, он no-op,
 //! когда окно уже foreground (tao-0.37.1 `window.rs:139-150`), а wry на
-//! `WM_SETFOCUS` родителя сам зовёт `MoveFocus(PROGRAMMATIC)` в главный webview
+//! `WM_SETFOCUS` родителя сам зовёт `MoveFocus(PROGRAMMATIC)` в его webview
 //! (`wry-0.57.0/src/webview2/mod.rs:1325-1328`; сабкласс ставится при
 //! `!is_child`, т.е. в дефолтной сборке Tauri без фичи `unstable`) — Chromium
-//! возвращает каретку в поле, которое не теряло DOM-фокус.
+//! возвращает каретку в поле, не терявшее DOM-фокус.
 //!
 //! `SetFocus` вызывается ТОЛЬКО с главного потока: «the window must be attached
 //! to the calling thread's message queue» — с фонового потока вернётся ошибка
@@ -48,10 +53,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use crate::activity;
 use crate::popups;
 
-/// Возвратов фокуса на попап в пределах окна: защита от гонки. Наивный
-/// app-side ремонт фокуса в tauri#15624 давал петли 140–200 Гц — при
-/// превышении лимита возврат прекращается с `error` в лог (сигнал: нужен
-/// другой механизм, а не «ещё раз SetFocus»).
+/// Возвратов фокуса за окно: защита от гонки. Наивный app-side ремонт фокуса
+/// в tauri#15624 давал петли 140–200 Гц — при превышении лимита возврат
+/// прекращается с `error` в лог (сигнал: нужен другой механизм).
 const MAX_RECLAIMS: u32 = 8;
 const RECLAIM_WINDOW_MS: u64 = 3_000;
 /// Сторож после создания/показа: 40 мс × 50 = 2 с. Кража фокуса приходит
@@ -85,6 +89,16 @@ impl FocusSnapshot {
             self.foreground, self.active, self.focus, self.focus_class, self.focus_root
         )
     }
+}
+
+/// Куда вернуть клавиатуру.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FocusTarget {
+    /// Главный webview — обычный случай.
+    Main,
+    /// Открытое поле ответа (HWND попапа): пользователь печатает там, и
+    /// новый попап не имеет права уводить клавиатуру в портал.
+    Reply(isize),
 }
 
 fn hwnd(value: isize) -> HWND {
@@ -132,36 +146,45 @@ pub(crate) fn snapshot(main: isize) -> Option<FocusSnapshot> {
     })
 }
 
-/// Нужно ли вернуть клавиатуру в портал. Чистая функция — вся политика
-/// здесь, ОС трогает только вызывающий код (юнит-тесты без окон).
+/// Куда возвращать клавиатуру (None — не трогать). Вся политика здесь, ОС
+/// трогает только вызывающий код (юнит-тесты без окон).
 ///
 /// - пользователь ушёл в другое приложение (foreground не наш) — не трогаем;
-/// - foreground наш, но фокус в портале — всё в порядке;
-/// - фокус в попапе — возвращаем, если это не поле ответа (там печатают);
-/// - фокус «потерялся» (0) при нашем foreground — возвращаем: уничтожение
-///   окна с webview-ребёнком часто оставляет очередь вообще без фокуса
-///   (winit #4345 — иначе каретка умирает уже после закрытия попапа).
-///
-/// «Нашим» считаем и foreground-попап: кража фокуса может как оставить
-/// главное окно foreground (меняется активное окно ПОТОКА), так и увести
-/// foreground в попап — чинить надо оба исхода, иначе фикс снова окажется
-/// пустым при другом порядке активации.
-pub(crate) fn should_reclaim(
+/// - foreground наш: портал ИЛИ любой наш попап — показ попапа может увести
+///   foreground, это не повод ничего не делать;
+/// - фокус в портале — всё в порядке;
+/// - фокус в ПОЛЕ ОТВЕТА — там печатают, не трогаем;
+/// - фокус увели в другой попап, а поле ответа открыто — возвращаем в поле
+///   ответа, а не в портал (иначе набор улетает из-под курсора);
+/// - фокус «потерялся» (0) — возвращаем: уничтожение окна с webview-ребёнком
+///   оставляет очередь без фокуса (winit #4345);
+/// - фокус в чужом окне — не наше дело.
+pub(crate) fn focus_target(
     foreground: isize,
     focus_root: isize,
     main: isize,
     popups: &[(isize, bool)],
-) -> bool {
+) -> Option<FocusTarget> {
     if foreground == 0 || focus_root == main {
-        return false;
+        return None;
     }
     let ours = foreground == main || popups.iter().any(|(popup, _)| *popup == foreground);
     if !ours {
-        return false;
+        return None;
     }
+    let reply = popups
+        .iter()
+        .find(|(_, replying)| *replying)
+        .map(|(popup, _)| *popup);
+    let fallback = reply.map(FocusTarget::Reply).or(Some(FocusTarget::Main));
     match popups.iter().find(|(popup, _)| *popup == focus_root) {
-        Some((_, replying)) => !*replying,
-        None => focus_root == 0,
+        // Фокус в поле ответа — норма (пользователь печатает).
+        Some((_, true)) => None,
+        // Фокус в обычном попапе: если где-то открыто поле ответа — туда.
+        Some((_, false)) => fallback,
+        // Фокус потерян / в чужом окне.
+        None if focus_root == 0 => fallback,
+        None => None,
     }
 }
 
@@ -186,6 +209,32 @@ fn allow_reclaim() -> bool {
     false
 }
 
+/// Поставить клавиатуру в окно и ПРОВЕРИТЬ результат по состоянию.
+/// ТОЛЬКО с главного потока.
+///
+/// `SetFocus` возвращает NULL и при успехе, если прежний фокус был вне очереди
+/// потока (кросс-процессный `Chrome_WidgetWin_1` — ровно наш случай), а
+/// windows-rs заворачивает NULL в `Err` — судить по возврату нельзя, поэтому
+/// смотрим `GetGUIThreadInfo` после вызова.
+fn set_keyboard_focus(main: isize, target: isize) -> Result<(), String> {
+    // Foreground мог уйти в попап: поднимаем и окно (наш процесс и так
+    // foreground-процесс — ограничение SetForegroundWindow не мешает); когда
+    // окно уже foreground, вызов no-op.
+    unsafe {
+        let _ = SetForegroundWindow(hwnd(target));
+    }
+    let _ = unsafe { SetFocus(Some(hwnd(target))) };
+    match snapshot(main) {
+        Some(snap) if snap.focus_root == target => Ok(()),
+        Some(snap) => Err(format!(
+            "фокус не встал: focus_root=0x{:x} ({})",
+            snap.focus_root,
+            class_name(snap.focus_root)
+        )),
+        None => Err("снимок фокуса недоступен".into()),
+    }
+}
+
 /// Вернуть клавиатуру в главный webview. ТОЛЬКО с главного потока.
 pub(crate) fn focus_main_now(app: &AppHandle) -> bool {
     let Some(main) = app.get_webview_window("main") else {
@@ -197,16 +246,11 @@ pub(crate) fn focus_main_now(app: &AppHandle) -> bool {
     let Ok(handle) = main.hwnd() else {
         return false;
     };
-    // Foreground мог уйти в попап: возвращаем и окно (наш процесс и так
-    // foreground-процесс, ограничение SetForegroundWindow не мешает); когда
-    // главное окно уже foreground — вызов no-op.
-    unsafe {
-        let _ = SetForegroundWindow(HWND(handle.0));
-    }
-    match unsafe { SetFocus(Some(HWND(handle.0))) } {
-        Ok(_) => true,
+    let main_hwnd = handle.0 as isize;
+    match set_keyboard_focus(main_hwnd, main_hwnd) {
+        Ok(()) => true,
         Err(e) => {
-            log::error!("фокус не вернулся в портал: SetFocus ошибка {e}");
+            log::error!("фокус не вернулся в портал: {e}");
             false
         }
     }
@@ -235,22 +279,29 @@ pub(crate) fn reclaim_now(app: &AppHandle, reason: &'static str) {
         return;
     };
     let targets = popups::focus_targets(app);
-    if !should_reclaim(snap.foreground, snap.focus_root, main_hwnd, &targets) {
+    let Some(target) = focus_target(snap.foreground, snap.focus_root, main_hwnd, &targets) else {
         return;
-    }
+    };
     if !allow_reclaim() {
         return;
     }
-    let Ok(target) = main.hwnd() else {
-        return;
+    let target_hwnd = match target {
+        FocusTarget::Main => main_hwnd,
+        FocusTarget::Reply(popup) => popup,
     };
-    match unsafe { SetFocus(Some(HWND(target.0))) } {
-        Ok(_) => log::warn!(
-            "фокус ушёл из портала: {} → возвращён в портал ({reason})",
-            snap.log_line()
-        ),
+    match set_keyboard_focus(main_hwnd, target_hwnd) {
+        Ok(()) => {
+            let where_to = match target {
+                FocusTarget::Main => "портал",
+                FocusTarget::Reply(_) => "поле ответа",
+            };
+            log::warn!(
+                "фокус ушёл из портала: {} → возвращён в {where_to} ({reason})",
+                snap.log_line()
+            );
+        }
         Err(e) => log::error!(
-            "фокус ушёл из портала: {} — SetFocus не удался: {e} ({reason})",
+            "фокус ушёл из портала: {} — возврат не удался: {e} ({reason})",
             snap.log_line()
         ),
     }
@@ -266,7 +317,7 @@ pub(crate) fn reclaim(app: &AppHandle, reason: &'static str) {
     }
 }
 
-/// Сторож на 2 с после создания/показа попапа: кража фокуса асинхронная
+/// Сторож на 2 с после создания/показа попапа: кража фокуса асинхронна
 /// (контроллер WebView2, первый кадр, навигация мини-UI) — одной проверки
 /// в момент `show()` не хватает (#709).
 pub(crate) fn arm_guard(app: &AppHandle, reason: &'static str) {
@@ -316,38 +367,66 @@ mod tests {
         vec![(POPUP, false), (REPLYING, true)]
     }
 
+    fn idle() -> Vec<(isize, bool)> {
+        vec![(POPUP, false)]
+    }
+
     /// Политика возврата фокуса (#709): трогаем только СВОИ окна (портал или
-    /// попап), только попап без режима ответа; чужое приложение не задеваем.
+    /// попап), чужое приложение не задеваем, фокус в поле ответа не уводим.
     #[test]
     fn возврат_только_из_своего_попапа_без_ответа() {
-        // Фокус в попапе, foreground — портал: возвращаем.
-        assert!(should_reclaim(MAIN, POPUP, MAIN, &popups()));
-        // Фокус в попапе и foreground увели в попап: тоже возвращаем.
-        assert!(should_reclaim(POPUP, POPUP, MAIN, &popups()));
+        // Фокус в попапе, foreground — портал: возвращаем в портал.
+        assert_eq!(
+            focus_target(MAIN, POPUP, MAIN, &idle()),
+            Some(FocusTarget::Main)
+        );
+        // Показ попапа увёл foreground в него же — тоже возвращаем.
+        assert_eq!(
+            focus_target(POPUP, POPUP, MAIN, &idle()),
+            Some(FocusTarget::Main)
+        );
         // Фокус в поле ответа — там печатают, не мешаем.
-        assert!(!should_reclaim(MAIN, REPLYING, MAIN, &popups()));
-        assert!(!should_reclaim(REPLYING, REPLYING, MAIN, &popups()));
-        // Фокус в портале — всё в порядке.
-        assert!(!should_reclaim(MAIN, MAIN, MAIN, &popups()));
+        assert_eq!(focus_target(REPLYING, REPLYING, MAIN, &popups()), None);
+        // Новый попап увёл фокус, а поле ответа открыто — возвращаем В ПОЛЕ,
+        // а не в портал: иначе набор улетает из-под курсора.
+        assert_eq!(
+            focus_target(MAIN, POPUP, MAIN, &popups()),
+            Some(FocusTarget::Reply(REPLYING))
+        );
+        assert_eq!(
+            focus_target(POPUP, POPUP, MAIN, &popups()),
+            Some(FocusTarget::Reply(REPLYING))
+        );
+        // Фокус в портале — всё в порядке (даже при открытом поле ответа).
+        assert_eq!(focus_target(MAIN, MAIN, MAIN, &popups()), None);
         // Пользователь в другом приложении — не трогаем.
-        assert!(!should_reclaim(FOREIGN, FOREIGN, MAIN, &popups()));
+        assert_eq!(focus_target(FOREIGN, FOREIGN, MAIN, &popups()), None);
         // Нет foreground (локскрин/смена сессии) — не трогаем.
-        assert!(!should_reclaim(0, 0, MAIN, &popups()));
-        // Фокус «потерялся» при нашем foreground — возвращаем (winit #4345).
-        assert!(should_reclaim(MAIN, 0, MAIN, &popups()));
-        assert!(should_reclaim(POPUP, 0, MAIN, &popups()));
-        // Фокус в чужом окне при нашем foreground — окно не наше, не трогаем.
-        assert!(!should_reclaim(MAIN, FOREIGN, MAIN, &popups()));
-        // Нет живых попапов — возврат только для потерянного фокуса.
-        assert!(!should_reclaim(MAIN, POPUP, MAIN, &[]));
-        assert!(should_reclaim(MAIN, 0, MAIN, &[]));
+        assert_eq!(focus_target(0, 0, MAIN, &popups()), None);
+        // Фокус потерян при нашем foreground — возвращаем (winit #4345).
+        assert_eq!(
+            focus_target(MAIN, 0, MAIN, &idle()),
+            Some(FocusTarget::Main)
+        );
+        assert_eq!(
+            focus_target(POPUP, 0, MAIN, &idle()),
+            Some(FocusTarget::Main)
+        );
+        assert_eq!(
+            focus_target(MAIN, 0, MAIN, &popups()),
+            Some(FocusTarget::Reply(REPLYING))
+        );
+        // Фокус в чужом окне — не наше дело.
+        assert_eq!(focus_target(MAIN, FOREIGN, MAIN, &popups()), None);
+        // Живых попапов нет: возврат только для потерянного фокуса.
+        assert_eq!(focus_target(MAIN, POPUP, MAIN, &[]), None);
+        assert_eq!(focus_target(MAIN, 0, MAIN, &[]), Some(FocusTarget::Main));
     }
 
     /// Лимит возвратов: защита от петли фокуса (tauri#15624 — наивный ремонт
     /// давал 140–200 Гц). После MAX_RECLAIMS в окне — отказ до истечения окна.
     #[test]
     fn лимит_возвратов_защищает_от_петли() {
-        // Окно начинается с первым вызовом: сбрасываем состояние теста.
         RECLAIM_START_MS.store(0, Ordering::Relaxed);
         RECLAIM_COUNT.store(0, Ordering::Relaxed);
         LIMIT_LOGGED.store(false, Ordering::Relaxed);

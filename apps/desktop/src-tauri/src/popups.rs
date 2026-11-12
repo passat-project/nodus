@@ -218,7 +218,8 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
     // раскладке; дальше позицию уточнит reposition_all (кумулятив по стеку).
     // Показ — ТОЛЬКО по готовности (#305): мини-UI применит тему из payload
     // и отрисует карточку, позовёт popup_ready; не успел за таймаут —
-    // fallback показывает как есть. Кражу фокуса подавляет WS_EX_NOACTIVATE.
+    // fallback показывает как есть. Клавиатуру у портала отбирает webview-
+    // ребёнок попапа — возвращает гвард `focus.rs` (#709, второй слой).
     let position = crate::anchor::initial_position(app);
     let win = build_popup_window(app, &label, POPUP_H, position);
     crate::layout::reposition_all(app);
@@ -262,9 +263,11 @@ pub fn popup_ready(app: AppHandle, window: WebviewWindow) {
 /// НЕАКТИВИРУЕМОЕ: неактивируемость держит tao — `.focusable(false)` кладёт
 /// `WS_EX_NOACTIVATE` в ex-style и сохраняет его при каждой перезаписи стиля
 /// (#709). Ручной бит после билда НЕ работает: `win.show()` → `apply_diff`
-/// стирает его (tao-0.37.1 `window_state.rs:412-431`). Показ и клики фокус у
-/// портала не крадут — супер-курсор композера живёт. Для печати в поле ответа
-/// окно временно делается фокусируемым (`popup_set_expanded` → `set_focusable`).
+/// стирает его (tao-0.37.1 `window_state.rs:412-431`). Стиль закрывает только
+/// ПОЛЬЗОВАТЕЛЬСКУЮ активацию: webview-ребёнок попапа всё равно забирает
+/// клавиатуру программно, поэтому каждый показ проверяет и чинит `focus.rs`.
+/// Для печати в поле ответа окно временно делается фокусируемым
+/// (`popup_set_expanded` → `set_focusable`).
 /// `position` — логические px правого нижнего угла рабочей области (#588):
 /// окно создаётся уже на своём месте, не на системном каскаде.
 pub(crate) fn build_popup_window(
