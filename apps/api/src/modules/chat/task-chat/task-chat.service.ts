@@ -93,6 +93,20 @@ export class TaskChatService {
     });
   }
 
+  /** Состоял ли сотрудник в беседе задачи ДО синхронизации состава (#741):
+   *  переход со сменой ответственного сам снимает нажавшего с беседы, и блок
+   *  не должен из-за этого теряться — в момент нажатия он участником был.
+   *
+   *  Только для отсрочки записи блока: это НЕ проверка доступа на чтение —
+   *  читать переписку по этому флагу нельзя. */
+  async isMemberOfTask(taskId: string, userId: string): Promise<boolean> {
+    return this.txRunner.run(async (tx) => {
+      const id = await this.repo.find(tx, taskId);
+      if (!id) return false;
+      return (await this.repo.members(tx, id)).includes(userId);
+    });
+  }
+
   private async removeMembers(
     tx: TransactionClient,
     conversationId: string,
