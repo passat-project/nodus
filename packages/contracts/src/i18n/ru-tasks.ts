@@ -84,6 +84,7 @@ export const tasksStrings = {
   transitionNotAllowedTail: 'так перейти нельзя — в маршруте нет такой кнопки',
   quickTaskPlaceholder: 'Новая задача — Enter, чтобы создать',
   addStage: 'Добавить стадию',
+  createStage: 'Создать стадию',
   stageNamePlaceholder: 'Название колонки…',
   renameStage: 'Переименовать',
   stageActions: 'Действия стадии',

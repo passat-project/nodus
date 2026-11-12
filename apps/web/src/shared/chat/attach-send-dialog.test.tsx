@@ -210,6 +210,25 @@ describe('attach-send-dialog (#144)', () => {
     unregister();
   });
 
+  it('Ctrl+Enter в подписи — перенос строки, не отправка (#777)', async () => {
+    const submitted = vi.fn<(payload: ComposerSubmit) => Promise<unknown>>(() =>
+      Promise.resolve({}),
+    );
+    const unregister = registerScopeSubmit(KEY, (payload) => submitted(payload));
+    useChatDrafts.getState().addAttachments(KEY, [pending('a')]);
+    useAttachSendDialog.getState().open(KEY, 'строка');
+    renderDialog();
+
+    const caption = screen.getByPlaceholderText('Добавить подпись') as HTMLTextAreaElement;
+    caption.setSelectionRange(6, 6);
+    fireEvent.keyDown(caption, { key: 'Enter', ctrlKey: true });
+
+    expect(submitted).not.toHaveBeenCalled();
+    expect(useAttachSendDialog.getState().caption).toBe('строка\n');
+    await waitFor(() => expect(caption.selectionStart).toBe(7));
+    unregister();
+  });
+
   it('снятие последней строки крестиком: окно закрывается, подпись возвращается черновиком', async () => {
     useChatDrafts.getState().addAttachments(KEY, [pending('a')]);
     useAttachSendDialog.getState().open(KEY, 'набранный текст');

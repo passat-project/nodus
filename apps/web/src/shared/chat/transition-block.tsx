@@ -4,9 +4,9 @@ import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { formatDateTime, shortPersonName } from '../lib/format.js';
-import { PersonAvatar } from '../ui/person-avatar.js';
 import { personTone } from '../ui/person-tone.js';
 import { StageChip } from '../ui/stage-chip.js';
+import { MessageAuthorAvatar } from './message-avatar.js';
 import { LinkifiedText } from './message-text.js';
 
 /** Склонение по числу (файл/файла/файлов, сообщение/…). */
@@ -42,11 +42,11 @@ export function TransitionBlock({
   return (
     <div className={cn('flex w-full min-w-0 gap-2 py-0.5', mine && 'flex-row-reverse')}>
       {avatarSlot === 'avatar' ? (
-        <PersonAvatar
-          name={message.author.displayName}
-          avatarUrl={message.author.avatarUrl}
-          decorative
-          className="mt-auto size-8 shrink-0"
+        <MessageAuthorAvatar
+          author={message.author}
+          mine={mine}
+          className="mt-auto shrink-0"
+          avatarClassName="size-8"
         />
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col gap-1">

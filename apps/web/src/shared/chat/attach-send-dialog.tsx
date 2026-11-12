@@ -22,7 +22,7 @@ import { useAttachSendDialog } from './dialog-stores.js';
 import { ImageLightbox } from './image-lightbox.js';
 import { ComposerBanner } from './composer-banner.js';
 import { FileDropOverlay, useFileDrop } from './feed-dropzone.js';
-import { isSendShortcut } from './send-keys.js';
+import { isImeComposing, isNewlineShortcut, isSendShortcut } from './send-keys.js';
 import { useAttachSend } from './use-attach-send.js';
 import { useCaptionMentions } from './use-caption-mentions.js';
 
@@ -106,10 +106,17 @@ export function AttachSendDialogHost() {
   if (!scope) return null;
 
   /** Клавиатура подписи (#239): упоминания (чипы/автокомплит) — хук
-   *  подписи; отправка — как было. */
+   *  подписи; модифицированный Enter — перенос строки (#777), чистый —
+   *  отправка (канон композера). IME-композиция клавиши не отбирает. */
   function handleCaptionKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (isImeComposing(event)) return;
+    if (isNewlineShortcut(event)) {
+      event.preventDefault();
+      captionMentions.insertNewline();
+      return;
+    }
     if (captionMentions.handleMentionKeyDown(event)) return;
-    if (isSendShortcut(event.key, event.shiftKey, event.ctrlKey)) {
+    if (isSendShortcut(event)) {
       event.preventDefault();
       void send();
     }

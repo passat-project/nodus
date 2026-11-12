@@ -173,7 +173,7 @@ export function TaskKanban({
         })}
         <TaskStageCreate
           creating={createStage.isPending}
-          onCreate={(body) => createStage.mutate(body)}
+          onCreate={(body) => createStage.mutateAsync(body)}
         />
       </BoardScroller>
       <DragOverlay>

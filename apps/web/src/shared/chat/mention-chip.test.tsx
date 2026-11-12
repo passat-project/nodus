@@ -31,7 +31,8 @@ describe('MessageText — токен упоминания (#176)', () => {
     const close = registerCardBridge(opener);
     const { container } = render(<MessageText text={TOKEN_A} />);
     fireEvent.click(container.querySelector('button')!);
-    expect(opener).toHaveBeenCalledWith({ kind: 'employee', id: UUID_A });
+    // Реф + rect источника (#728): чип упоминания rect не передаёт.
+    expect(opener).toHaveBeenCalledWith({ kind: 'employee', id: UUID_A }, undefined);
     close();
   });
 

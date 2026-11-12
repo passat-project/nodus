@@ -30,6 +30,9 @@ export function makeTaskCardFields({
     { id: 'type', label: ui.tasks.fieldType, defaultVisible: true },
     { id: 'source', label: ui.tasks.fieldSource, defaultVisible: true },
     { id: 'deadline', label: ui.tasks.deadline, defaultVisible: true },
+    // Приоритет (#730): в мета-строке карточки — флажком у высокого и
+    // срочного; «обычный»/«низкий» не печатаются (место в узкой колонке).
+    { id: 'priority', label: ui.tasks.fieldPriority, defaultVisible: true },
     { id: 'project', label: ui.tasks.project, defaultVisible: projectVisible },
     { id: 'assignee', label: ui.tasks.assignee, defaultVisible: true },
     { id: 'comments', label: ui.tasks.comments, defaultVisible: true },

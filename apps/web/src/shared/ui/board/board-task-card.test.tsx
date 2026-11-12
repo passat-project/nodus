@@ -197,6 +197,52 @@ describe('BoardTaskCard: аватар исполнителя (#726)', () => {
 });
 
 /**
+ * Плотная карточка (#730): узкая колонка (~208px) — мета-строка одна
+ * (исполнитель · срок · приоритет), название не выше двух строк, паддинги
+ * сжаты, «второстепенное» (слово «Без срока», обычный приоритет) не печатается.
+ */
+describe('BoardTaskCard: плотная карточка (#730)', () => {
+  const DEADLINE = '2026-11-12T14:00:00.000Z';
+
+  it('исполнитель, срок и приоритет — в ОДНОЙ мета-строке', () => {
+    const { container } = renderCard({
+      task: taskOf({ deadline: DEADLINE, priority: 'high' }),
+    });
+    const meta = container.querySelector<HTMLElement>('[data-card-meta]')!;
+    expect(meta).not.toBeNull();
+    expect(container.querySelectorAll('[data-card-meta]')).toHaveLength(1);
+    // Внутри мета-строки: аватар, компактный срок и флажок приоритета.
+    expect(meta.querySelector('[data-slot="avatar"]')).not.toBeNull();
+    expect(meta.textContent).toContain('12.11');
+    expect(meta.querySelector('[aria-label="Высокий"]')).not.toBeNull();
+  });
+
+  it('приоритет «обычный» и отсутствие срока строку не удлиняют', () => {
+    const { container } = renderCard({ task: taskOf({ priority: 'normal' }) });
+    expect(container.querySelector('[aria-label="Обычный"]')).toBeNull();
+    expect(screen.queryByText('Без срока')).toBeNull();
+    // Мета-строка осталась одна (аватар + обсуждение) и без служебного слова.
+    expect(container.querySelectorAll('[data-card-meta]')).toHaveLength(1);
+  });
+
+  it('срочный приоритет — красный флажок', () => {
+    const { container } = renderCard({ task: taskOf({ priority: 'urgent' }) });
+    const flag = container.querySelector<HTMLElement>('[aria-label="Срочный"]')!;
+    expect(flag.className).toContain('text-danger');
+  });
+
+  it('название — не выше двух строк, карточка компактная', () => {
+    const { container } = renderCard({ task: taskOf({ title: 'Согласовать АР' }) });
+    const title = screen.getByText('Согласовать АР');
+    expect(title.className).toContain('line-clamp-2');
+    const card = container.querySelector('button')!;
+    expect(card.className).toContain('p-2');
+    expect(card.className).not.toContain('p-3');
+    expect(card.className).toContain('gap-1.5');
+  });
+});
+
+/**
  * A6-4 (#632): рендер борда перерисовывал все карточки. Счётчик — вызовы
  * предиката видимости: карточка зовёт `isVisible` на каждом своём рендере.
  */

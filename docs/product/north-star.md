@@ -131,5 +131,5 @@
 | Ядро прав доступа | `docs/product/incubator/i-022-access-scope.md`; issue #379 |
 | Маршруты задач: модель | `docs/adr/0008-workflow-schemes-two-scopes.md`, `docs/adr/0020-workflow-engine-types-transitions.md` |
 | Автоматизация процессов задач | эпик #377 и дочерние issues |
-| Голос заказчиков | `docs/product/interviews/` |
+| Голос заказчиков | `docs/product/interviews/` (локально у владельца, вне репо) |
 | Интерфейс | `docs/product/ux-principles.md`, навык `nodus-ui-style` |

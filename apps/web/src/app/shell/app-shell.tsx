@@ -101,7 +101,10 @@ export function AppShell() {
   // Мост shared→стек карточек (порт-адаптер, card-bridge.ts): shared-слой
   // открывает карточки, не импортируя каркас (направление слоёв, аудит #45).
   useEffect(
-    () => registerCardBridge((ref) => openCard(ref as Parameters<typeof openCard>[0])),
+    () =>
+      registerCardBridge((ref, sourceRect) =>
+        openCard(ref as Parameters<typeof openCard>[0], sourceRect),
+      ),
     [openCard],
   );
 

@@ -27,7 +27,7 @@ function flushFrames(count: number) {
 function mount() {
   const view = render(
     <BoardScroller>
-      <section style={{ width: 288 }}>
+      <section style={{ width: 240 }}>
         <header>
           <button type="button">⋯</button>
         </header>
@@ -61,7 +61,7 @@ function mount() {
       },
     },
   });
-  Object.defineProperty(el.firstElementChild!, 'offsetWidth', { configurable: true, value: 288 });
+  Object.defineProperty(el.firstElementChild!, 'offsetWidth', { configurable: true, value: 240 });
   // Флаги зон пересчитываются по scroll — после подмены геометрии.
   fireEvent.scroll(el);
   const hint = (side: string) => view.container.querySelector(`[data-edge-hint="${side}"]`)!;
@@ -153,21 +153,21 @@ describe('BoardScroller — prefers-reduced-motion', () => {
     act(() => {
       vi.advanceTimersByTime(EDGE_DELAY_MS);
     });
-    expect(el.scrollLeft).toBe(288);
+    expect(el.scrollLeft).toBe(240);
     expect(frames).toHaveLength(0);
     act(() => {
       vi.advanceTimersByTime(EDGE_STEP_MS - 1);
     });
-    expect(el.scrollLeft).toBe(288);
+    expect(el.scrollLeft).toBe(240);
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(el.scrollLeft).toBe(576);
+    expect(el.scrollLeft).toBe(480);
     move(el, 500);
     act(() => {
       vi.advanceTimersByTime(EDGE_STEP_MS * 3);
     });
-    expect(el.scrollLeft).toBe(576);
+    expect(el.scrollLeft).toBe(480);
   });
 });
 

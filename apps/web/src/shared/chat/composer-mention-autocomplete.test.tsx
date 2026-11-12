@@ -44,7 +44,7 @@ function userPage() {
   };
 }
 
-function mountComposer() {
+function mountComposer(onSubmit: (submit: { text: string }) => void = () => {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   apiMock.mockImplementation((url: string) => {
     if (String(url).includes('/members')) {
@@ -69,7 +69,7 @@ function mountComposer() {
         placeholder: 'Поле',
         focusId: `conversation:${CONV}`,
         conversationId: CONV,
-        onSubmit: () => {},
+        onSubmit,
       }),
     ),
   );
@@ -140,5 +140,26 @@ describe('автокомплит @упоминаний (#176)', () => {
     const field2 = view.container.querySelector('textarea')!;
     fireEvent.keyDown(field2, { key: 'Enter' });
     expect(submitted).toEqual(['привет @ан']);
+  });
+
+  it('модифицированный Enter при открытой панели — перенос строки, кандидат не выбирается (#777)', async () => {
+    const onSubmit = vi.fn();
+    const view = mountComposer(onSubmit);
+    const field = view.container.querySelector('textarea')!;
+    fireEvent.change(field, { target: { value: 'привет @ан' } });
+    field.setSelectionRange(11, 11);
+    fireEvent.keyUp(field, { key: 'н' });
+
+    await waitFor(() => {
+      expect(view.container.querySelector('[role="option"]')).toBeTruthy();
+    });
+    field.setSelectionRange(11, 11);
+
+    fireEvent.keyDown(field, { key: 'Enter', ctrlKey: true });
+
+    const draft = useChatDrafts.getState().drafts[`conversation:${CONV}`];
+    expect(draft?.text).toBe('привет @ан\n');
+    expect(draft?.mentions).toEqual([]);
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });
