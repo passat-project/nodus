@@ -3,11 +3,13 @@ import { chatMessageSentPayloadSchema, stripMentionTokens, ui } from '@nodus/con
 
 import { useAuthStore } from '../auth-store.js';
 import { isUserActive } from '../attention/attention-store.js';
+import { isModalLayerOpen } from '../attention/modal-layers.js';
 import { withoutPatronymic } from '../lib/format.js';
 import { chatKeys } from '../chat/chat-keys.js';
 import { getOpenConversation } from '../chat/open-conversation.js';
 import { threadNotifyAllowed } from '../chat/thread-notify-gate.js';
 import { desktopFlashTaskbar, desktopShowPopup, isDesktopShell } from './desktop-bridge.js';
+import { recordPopupDecision, type PopupGateReason } from './popup-diagnostics.js';
 
 /**
  * Попапы десктоп-оболочки по WS-событию chat.message_sent (ADR-0019): правила
@@ -19,14 +21,36 @@ import { desktopFlashTaskbar, desktopShowPopup, isDesktopShell } from './desktop
  * только наблюдателям/@упомянутым (канон раунда 3, #300). С #650 попапы —
  * единственный канал уведомлений (браузерный opt-in удалён): в оболочке они
  * показываются всегда по этим правилам тишины.
+ *
+ * Модальный слой (#809): беседа под просмотрщиком/окном не «открыта» даже при
+ * активном вводе — попап приходит (гейт `getOpenConversation`, ADR-0038).
+ * Каждое решение гейта и исход доставки пишутся в диагностику (#811).
  */
 export function notifyDesktopMessage(payload: unknown, queryClient: QueryClient): void {
-  if (!isDesktopShell()) return;
   const parsed = chatMessageSentPayloadSchema.safeParse(payload);
-  if (!parsed.success || !parsed.data.message) return;
-  const { conversationId, urgent, message, mentionedUserIds } = parsed.data;
+  const message = parsed.success ? parsed.data.message : undefined;
+  // id для журнала — из сырого payload, даже если схема не сошлась.
+  const ids = {
+    messageId: message?.id ?? rawId(payload, 'messageId'),
+    conversationId: parsed.success ? parsed.data.conversationId : rawId(payload, 'conversationId'),
+  };
+  if (!isDesktopShell()) {
+    record(ids, 'not_shell');
+    return;
+  }
+  if (!parsed.success || !message) {
+    record(ids, 'invalid_payload', 'schema');
+    return;
+  }
+  const { conversationId, urgent, mentionedUserIds } = parsed.data;
+  // Сужаем один раз: вложенная showPopup не сохраняет narrowing `message`
+  // (сообщение схемы опционально).
+  const incoming = message;
   const meId = useAuthStore.getState().user?.id ?? null;
-  if (message.author.id === meId) return;
+  if (incoming.author.id === meId) {
+    record(ids, 'own');
+    return;
+  }
 
   // Модель Telegram (фидбек 08.10) + вердикт 15.10 + модель внимания (#770):
   // тишина, только когда пользователь ДЕЙСТВИТЕЛЬНО смотрит в эту беседу —
@@ -34,12 +58,23 @@ export function notifyDesktopMessage(payload: unknown, queryClient: QueryClient)
   // поверхности (карточка не под другой). Отошёл/свернул — сообщение не
   // видно, попап нужен. Попапы копятся до реакции (очередь в оболочке),
   // бейдж считает непрочитанное.
-  const looking = isUserActive() && getOpenConversation() === conversationId;
-  if (looking) return;
+  const active = isUserActive();
+  if (active && !isModalLayerOpen() && getOpenConversation() === conversationId) {
+    record(ids, 'looking');
+    return;
+  }
+  const passDetail = !active ? 'inactive' : isModalLayerOpen() ? 'overlay' : 'other_conversation';
 
   if (!urgent) {
     const flags = conversationFlags(queryClient, conversationId);
-    if (flags?.muted || flags?.snoozed) return;
+    if (flags?.muted) {
+      record(ids, 'muted');
+      return;
+    }
+    if (flags?.snoozed) {
+      record(ids, 'snoozed');
+      return;
+    }
   }
 
   // Ответ в трэде — гейт наблюдателя (асинхронный: холодный кэш состояний
@@ -53,16 +88,20 @@ export function notifyDesktopMessage(payload: unknown, queryClient: QueryClient)
       mentionedUserIds,
     ).then((allowed) => {
       if (allowed) showPopup();
+      else record(ids, 'thread_wait');
     });
     return;
   }
   showPopup();
 
   function showPopup(): void {
+    // Гейт пропустил: пользователь не «смотрит в беседу» — фиксируем почему
+    // (иначе успешный попап не отличить от «тишины без следа»).
+    record(ids, 'not_active', passDetail);
     // Превью: текст сообщения; без текста — метка вложения («Фотография»),
     // попап красит её акцентом (модель Telegram, фидбек 08.10).
-    const attachments = message.attachments ?? [];
-    const text = stripMentionTokens(message.text).trim();
+    const attachments = incoming.attachments ?? [];
+    const text = stripMentionTokens(incoming.text).trim();
     let preview: string;
     let previewAttachment = false;
     if (text) {
@@ -75,19 +114,46 @@ export function notifyDesktopMessage(payload: unknown, queryClient: QueryClient)
     }
 
     void desktopShowPopup({
-      id: message.id,
+      id: incoming.id,
       conversationId,
       // Клик по попапу раскрывает окно треда, если попап об ответе в нём (#300).
-      threadRootId: message.threadRootId ?? undefined,
-      title: withoutPatronymic(message.author.displayName),
-      avatarUrl: message.author.avatarUrl ?? undefined,
+      threadRootId: incoming.threadRootId ?? undefined,
+      title: withoutPatronymic(incoming.author.displayName),
+      avatarUrl: incoming.author.avatarUrl ?? undefined,
       preview,
       previewAttachment,
       urgent,
       canReply: true,
-    });
+    })
+      .then((delivery) => {
+        record(ids, delivery === 'sent' ? 'sent' : 'rejected', delivery);
+      })
+      .catch((error: unknown) => {
+        // Мост отклонил (Rust Err, например invalid_payload) — след обязателен.
+        record(ids, 'rejected', error instanceof Error ? error.message : 'bridge_error');
+      });
     void desktopFlashTaskbar(urgent);
   }
+}
+
+function record(
+  ids: { messageId: string | null; conversationId: string | null },
+  reason: PopupGateReason,
+  detail?: string,
+): void {
+  recordPopupDecision({
+    messageId: ids.messageId,
+    conversationId: ids.conversationId,
+    reason,
+    ...(detail === undefined ? {} : { detail }),
+  });
+}
+
+/** id из сырого payload (только для журнала; никаких имён/текста). */
+function rawId(payload: unknown, key: string): string | null {
+  if (typeof payload !== 'object' || payload === null) return null;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : null;
 }
 
 /** Метка вложения для превью попапа: вид носителя + число (как Telegram). */

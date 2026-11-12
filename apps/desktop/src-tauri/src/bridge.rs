@@ -172,11 +172,42 @@ pub struct PopupReply {
 /// (known issue, docs.rs WebviewWindowBuilder; баги tauri #13963/#13092).
 #[tauri::command]
 pub async fn notify_popup(app: AppHandle, payload: PopupPayload) -> Result<(), String> {
+    // Диагностика (#811): событие дошло до оболочки. В лог — только id/цель/
+    // срочность; текст сообщения и имя автора в лог не попадают (приватность,
+    // публичный репозиторий).
+    log::info!(
+        "notify_popup: id={} conversation={:?} letter={:?} threadRoot={:?} urgent={}",
+        payload.id,
+        payload.conversation_id,
+        payload.letter_id,
+        payload.thread_root_id,
+        payload.urgent
+    );
     // Граница контракта на Rust-стороне (security-аудит #254, подозрение 5).
     // Цель — ровно одна (#618): беседа ИЛИ письмо, обе/ни одной — отказ.
     // Скачивание (#647) портал не создаёт вовсе: такую карточку показывает
     // только оболочка по своему событию загрузки — путь файла приходит не из
     // веб-контента.
+    if let Some(reason) = payload_invalid_reason(&payload) {
+        // Причина отказа — кодом: веб пишет её в диагностику (#811), владелец
+        // видит, что попап отклонила оболочка, а не «потерялся».
+        log::warn!(
+            "notify_popup отклонён: reason={} id={} conversation={:?} letter={:?}",
+            reason,
+            payload.id,
+            payload.conversation_id,
+            payload.letter_id
+        );
+        return Err("invalid_payload".into());
+    }
+    popups::show(&app, payload);
+    log::info!("notify_popup принят оболочкой (окно создано или в очереди)");
+    Ok(())
+}
+
+/// Причина отказа контракта попапа — стабильный код (для лога и диагностики
+/// веба). `None` — payload валиден. Текст сообщения не читается.
+fn payload_invalid_reason(payload: &PopupPayload) -> Option<&'static str> {
     let target_ok = match (
         payload.conversation_id.as_deref(),
         payload.letter_id.as_deref(),
@@ -185,26 +216,42 @@ pub async fn notify_popup(app: AppHandle, payload: PopupPayload) -> Result<(), S
         (None, Some(l)) => is_valid_conversation(l),
         _ => false,
     };
-    if payload.id.is_empty()
-        || payload.id.len() > 200
-        || !target_ok
-        || payload.download.is_some()
-        || payload
-            .thread_root_id
-            .as_deref()
-            .is_some_and(|t| !is_valid_conversation(t))
-        || payload.title.is_empty()
-        || payload.title.chars().count() > 200
-        || payload.preview.chars().count() > 500
-        || payload
-            .avatar_url
-            .as_deref()
-            .is_some_and(|u| u.len() > 2000)
-    {
-        return Err("invalid_payload".into());
+    if payload.id.is_empty() {
+        return Some("id_empty");
     }
-    popups::show(&app, payload);
-    Ok(())
+    if payload.id.len() > 200 {
+        return Some("id_too_long");
+    }
+    if !target_ok {
+        return Some("target");
+    }
+    if payload.download.is_some() {
+        return Some("download_forbidden");
+    }
+    if payload
+        .thread_root_id
+        .as_deref()
+        .is_some_and(|t| !is_valid_conversation(t))
+    {
+        return Some("thread_root");
+    }
+    if payload.title.is_empty() {
+        return Some("title_empty");
+    }
+    if payload.title.chars().count() > 200 {
+        return Some("title_too_long");
+    }
+    if payload.preview.chars().count() > 500 {
+        return Some("preview_too_long");
+    }
+    if payload
+        .avatar_url
+        .as_deref()
+        .is_some_and(|u| u.len() > 2000)
+    {
+        return Some("avatar_url_too_long");
+    }
+    None
 }
 
 #[tauri::command]
@@ -349,4 +396,68 @@ pub fn route_deep_link(app: &AppHandle, raw: &str) {
         "open-conversation",
         &serde_json::json!({ "conversationId": conversation_id }),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CONV: &str = "00000000-0000-4000-8000-0000000000c1";
+
+    fn payload() -> PopupPayload {
+        PopupPayload {
+            id: "m1".into(),
+            conversation_id: Some(CONV.into()),
+            letter_id: None,
+            thread_root_id: None,
+            title: "Иван Петров".into(),
+            avatar_url: None,
+            preview: "Привет".into(),
+            preview_attachment: None,
+            urgent: false,
+            can_reply: true,
+            download: None,
+        }
+    }
+
+    #[test]
+    fn valid_payload_has_no_reason() {
+        assert_eq!(payload_invalid_reason(&payload()), None);
+    }
+
+    #[test]
+    fn reasons_are_stable_codes() {
+        let mut empty_title = payload();
+        empty_title.title.clear();
+        assert_eq!(
+            payload_invalid_reason(&empty_title),
+            Some("title_empty")
+        );
+
+        let mut long_preview = payload();
+        long_preview.preview = "x".repeat(501);
+        assert_eq!(
+            payload_invalid_reason(&long_preview),
+            Some("preview_too_long")
+        );
+
+        let mut two_targets = payload();
+        two_targets.letter_id = Some(CONV.into());
+        assert_eq!(payload_invalid_reason(&two_targets), Some("target"));
+
+        let mut no_target = payload();
+        no_target.conversation_id = None;
+        assert_eq!(payload_invalid_reason(&no_target), Some("target"));
+
+        let mut empty_id = payload();
+        empty_id.id.clear();
+        assert_eq!(payload_invalid_reason(&empty_id), Some("id_empty"));
+
+        let mut bad_thread = payload();
+        bad_thread.thread_root_id = Some("not-a-uuid".into());
+        assert_eq!(
+            payload_invalid_reason(&bad_thread),
+            Some("thread_root")
+        );
+    }
 }

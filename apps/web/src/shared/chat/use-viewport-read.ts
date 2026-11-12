@@ -4,6 +4,7 @@ import type { ChatMessage, ChatUnreadSummary } from '@nodus/contracts';
 
 import { api } from '../api-client.js';
 import { isUserActive, subscribeAttention } from '../attention/attention-store.js';
+import { useModalLayerCovered } from '../attention/modal-layers.js';
 import { useSurfaceVisible } from '../lib/surface-visibility.js';
 import { isDomainMocked } from '../api/api-mock-config.js';
 import { wsDebugLog } from '../socket/ws-debug.js';
@@ -88,17 +89,20 @@ function useReadReceiptScheduler(
   conversationId: string,
   threadRootIdRef: RefObject<string | null>,
   surfaceVisible: boolean,
+  covered: boolean,
 ): RefObject<ReadReceiptScheduler | null> {
   const queryClient = useQueryClient();
   const schedulerRef = useRef<ReadReceiptScheduler | null>(null);
   const surfaceVisibleRef = useRef(surfaceVisible);
   surfaceVisibleRef.current = surfaceVisible;
+  const coveredRef = useRef(covered);
+  coveredRef.current = covered;
 
   useEffect(() => {
     const scheduler = createReadReceiptScheduler({
       // Право ставить «прочитано» (#770): окно на виду + ввод за 30 с +
-      // поверхность не накрыта. Ввод читается в момент наблюдения/таймера.
-      canRead: () => isUserActive() && surfaceVisibleRef.current,
+      // поверхность не накрыта и не перекрыта модальным слоем (#809).
+      canRead: () => isUserActive() && surfaceVisibleRef.current && !coveredRef.current,
       send: (upToSeq) => {
         const threadRootId = threadRootIdRef.current;
         void api(`/chat/conversations/${conversationId}/read`, {
@@ -136,7 +140,7 @@ function useReadReceiptScheduler(
     // сворачивание оболочки) — зафиксировать увиденное ДО ухода; возврат —
     // пересчитает наблюдатель (подписка в useFeedViewportRead).
     const unsubAttention = subscribeAttention(() => {
-      if (!isUserActive() || !surfaceVisibleRef.current) scheduler.flush();
+      if (!isUserActive() || !surfaceVisibleRef.current || coveredRef.current) scheduler.flush();
     });
 
     return () => {
@@ -147,11 +151,11 @@ function useReadReceiptScheduler(
     };
   }, [conversationId, queryClient, threadRootIdRef]);
 
-  // Поверхность накрыли (карточка сверху, dormant) — увиденное фиксируем
-  // сразу, дальше не читаем (модель внимания #770).
+  // Поверхность накрыли (карточка сверху, dormant) или открылся модальный
+  // слой (#809) — увиденное фиксируем сразу, дальше не читаем.
   useEffect(() => {
-    if (!surfaceVisible) schedulerRef.current?.flush();
-  }, [surfaceVisible]);
+    if (!surfaceVisible || covered) schedulerRef.current?.flush();
+  }, [surfaceVisible, covered]);
 
   return schedulerRef;
 }
@@ -166,6 +170,8 @@ function useReadReceiptScheduler(
  * Модель внимания (#770): наблюдение работает только на видимой поверхности;
  * возврат внимания (фокус/ввод) — пересчёт, потеря — фиксация увиденного
  * (flush в useReadReceiptScheduler). В фоне observe ничего не копит.
+ * Модальный слой (#809) для ленты — то же, что накрытая поверхность:
+ * закрытие слоя перевешивает наблюдение и дочитывает видимое.
  */
 export function useFeedViewportRead(
   conversationId: string,
@@ -174,14 +180,20 @@ export function useFeedViewportRead(
   threadRootId?: string | null,
 ): void {
   const surfaceVisible = useSurfaceVisible();
+  const covered = useModalLayerCovered();
   const threadRootIdRef = useRef<string | null>(threadRootId ?? null);
   threadRootIdRef.current = threadRootId ?? null;
-  const schedulerRef = useReadReceiptScheduler(conversationId, threadRootIdRef, surfaceVisible);
+  const schedulerRef = useReadReceiptScheduler(
+    conversationId,
+    threadRootIdRef,
+    surfaceVisible,
+    covered,
+  );
 
   useEffect(() => {
     const container = containerRef.current;
     const scheduler = schedulerRef.current;
-    if (!container || !scheduler || !surfaceVisible) return;
+    if (!container || !scheduler || !surfaceVisible || covered) return;
     if (typeof IntersectionObserver === 'undefined') return;
     const elSeq = new Map<Element, number>();
     const visibleEls = new Set<Element>();
@@ -245,5 +257,5 @@ export function useFeedViewportRead(
       if (scrollFrame !== 0) cancelAnimationFrame(scrollFrame);
       observer.disconnect();
     };
-  }, [conversationId, rows, containerRef, schedulerRef, surfaceVisible]);
+  }, [conversationId, rows, containerRef, schedulerRef, surfaceVisible, covered]);
 }

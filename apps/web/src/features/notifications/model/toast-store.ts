@@ -3,6 +3,7 @@ import type { NotificationSnapshot } from '@nodus/contracts';
 
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { isUserActive } from '../../../shared/attention/attention-store.js';
+import { isModalLayerOpen } from '../../../shared/attention/modal-layers.js';
 import { getOpenConversation } from '../../../shared/chat/open-conversation.js';
 
 /**
@@ -128,7 +129,9 @@ export const useNotificationsToastStore = create<NotificationsToastState>((set, 
       muted: state.mutedConversations,
       snoozed: state.snoozedConversations,
       dnd: state.dnd,
-      userActive: isUserActive(),
+      // Модальный слой (#809): пользователь в окне/просмотрщике — чат под ним
+      // не «активно просматриваемый», тост обязан прийти.
+      userActive: isUserActive() && !isModalLayerOpen(),
       now: new Date(),
     });
     if (lane === null) return;

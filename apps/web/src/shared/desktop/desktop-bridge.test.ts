@@ -80,7 +80,7 @@ describe('обнаружение моста', () => {
   it('в браузере моста нет и все вызовы — тихие no-op', async () => {
     expect(isDesktopShell()).toBe(false);
     expect(getDesktopBridge()).toBeNull();
-    await expect(desktopShowPopup({})).resolves.toBeUndefined();
+    await expect(desktopShowPopup({})).resolves.toBe('unavailable');
     await expect(desktopSetUnreadBadge(5)).resolves.toBeUndefined();
   });
 
@@ -93,15 +93,18 @@ describe('обнаружение моста', () => {
 describe('команды на границе', () => {
   it('showPopup пропускает только контрактный payload', async () => {
     const { bridge } = installBridge();
-    await desktopShowPopup({
-      id: 'm1',
-      conversationId: CONV,
-      title: 'Иван Петров',
-      preview: 'Привет',
-      urgent: false,
-      canReply: true,
-    });
-    await desktopShowPopup({ id: '', title: 42 }); // мусор — молча отбрасывается
+    await expect(
+      desktopShowPopup({
+        id: 'm1',
+        conversationId: CONV,
+        title: 'Иван Петров',
+        preview: 'Привет',
+        urgent: false,
+        canReply: true,
+      }),
+    ).resolves.toBe('sent');
+    // Мусор — молча отбрасывается, но вызывающий видит причину (#811).
+    await expect(desktopShowPopup({ id: '', title: 42 })).resolves.toBe('invalid');
     expect(bridge.showPopup).toHaveBeenCalledTimes(1);
   });
 

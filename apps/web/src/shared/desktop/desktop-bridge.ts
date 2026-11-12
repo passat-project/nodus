@@ -72,13 +72,22 @@ export function setShellFocusedFromShell(focused: boolean): void {
   setShellFocused(focused);
 }
 
+/**
+ * Доставка попапа: `sent` — оболочка приняла (окно создано или в очереди),
+ * `invalid` — payload не прошёл контракт (наша ошибка, не показываем),
+ * `unavailable` — моста нет (браузер). Rejection моста (Rust Err) летит
+ * вызывающему — это отдельный случай `rejected` в диагностике (#811).
+ */
+export type DesktopPopupDelivery = 'sent' | 'invalid' | 'unavailable';
+
 /** Показать попап уведомления в оболочке (валидация контракта — на границе). */
-export async function desktopShowPopup(payload: unknown): Promise<void> {
+export async function desktopShowPopup(payload: unknown): Promise<DesktopPopupDelivery> {
   const bridge = getDesktopBridge();
-  if (!bridge) return;
+  if (!bridge) return 'unavailable';
   const parsed = popupPayloadSchema.safeParse(payload);
-  if (!parsed.success) return;
+  if (!parsed.success) return 'invalid';
   await bridge.showPopup(parsed.data);
+  return 'sent';
 }
 
 /** Счётчик непрочитанных: бейдж трея и панели задач (0/null — снять). */

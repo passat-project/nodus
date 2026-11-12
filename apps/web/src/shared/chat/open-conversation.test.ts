@@ -6,20 +6,25 @@ import {
   getOpenConversation,
   resetOpenConversationRegistry,
 } from './open-conversation.js';
+import { registerModalLayer, resetModalLayersForTests } from '../attention/modal-layers.js';
 
 /**
  * Реестр открытой беседы (#300): «текущая» — последний заявленный хост,
  * закрытие одного хоста не гасит беседу другого. Браузерных уведомлений в
  * вебе больше нет (#650) — этот реестр остаётся гейтом попапов оболочки.
+ * Модальный слой (#809) снимает признак «беседа открыта», пока он поверх.
  */
 
 const CONV = '00000000-0000-4000-8000-0000000000c1';
 
 beforeEach(() => {
   resetOpenConversationRegistry();
+  resetModalLayersForTests();
 });
 
 afterEach(() => {
+  resetOpenConversationRegistry();
+  resetModalLayersForTests();
   delete (window as { nodusDesktop?: unknown }).nodusDesktop;
 });
 
@@ -64,5 +69,17 @@ describe('реестр открытой беседы (#300)', () => {
     dismissPopups.mockClear();
     release();
     expect(dismissPopups).not.toHaveBeenCalled();
+  });
+
+  it('модальный слой поверх чата — беседа «не открыта», закрыли — снова открыта (#809)', () => {
+    const releaseConv = acquireOpenConversation(CONV);
+    expect(getOpenConversation()).toBe(CONV);
+
+    const releaseLayer = registerModalLayer(document.createElement('div'));
+    expect(getOpenConversation()).toBeNull();
+
+    releaseLayer();
+    expect(getOpenConversation()).toBe(CONV);
+    releaseConv();
   });
 });
