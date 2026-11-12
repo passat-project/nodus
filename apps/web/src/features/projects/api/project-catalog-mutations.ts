@@ -21,13 +21,27 @@ function patchTypes(
   );
 }
 
+/** Ключи списков портфелей (живые / с архивом). Счётчики папок (#559) живут
+ *  под тем же префиксом `groups`, но другой формы — патчим только списки. */
+function groupListKeys() {
+  return [projectsKeys.groups(false), projectsKeys.groups(true)] as const;
+}
+
 function patchGroups(
   queryClient: ReturnType<typeof useQueryClient>,
   update: (items: ProjectGroup[]) => ProjectGroup[],
 ): void {
-  queryClient.setQueriesData<ProjectGroup[]>(
-    { queryKey: [...projectsKeys.all, 'groups'] },
-    (data) => (data ? update(data) : data),
+  for (const key of groupListKeys()) {
+    queryClient.setQueryData<ProjectGroup[]>(key, (data) => (data ? update(data) : data));
+  }
+}
+
+/** Снапшот списков портфелей — откат оптимистичной мутации. */
+function snapshotGroups(
+  queryClient: ReturnType<typeof useQueryClient>,
+): (readonly [readonly unknown[], ProjectGroup[] | undefined])[] {
+  return groupListKeys().map(
+    (key) => [key, queryClient.getQueryData<ProjectGroup[]>(key)] as const,
   );
 }
 
@@ -154,9 +168,7 @@ export function useCreateProjectGroup() {
     mutationFn: (name: string) =>
       api<ProjectGroup>('/projects/groups', { method: 'POST', body: { name } }),
     onMutate: async (name) => {
-      const snapshot = queryClient.getQueriesData<ProjectGroup[]>({
-        queryKey: [...projectsKeys.all, 'groups'],
-      });
+      const snapshot = snapshotGroups(queryClient);
       const temp: ProjectGroup = { id: `temp-${crypto.randomUUID()}`, name, archivedAt: null };
       patchGroups(queryClient, (items) => [...items, temp]);
       return { snapshot, tempId: temp.id };
@@ -172,7 +184,7 @@ export function useCreateProjectGroup() {
       toast.success(ui.projects.savedDone);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: projectsKeys.groups() });
+      void queryClient.invalidateQueries({ queryKey: projectsKeys.groupsPrefix() });
     },
   });
 }
@@ -187,9 +199,7 @@ export function useRenameProjectGroup() {
         body: { name: vars.name },
       }),
     onMutate: async ({ id, name }) => {
-      const snapshot = queryClient.getQueriesData<ProjectGroup[]>({
-        queryKey: [...projectsKeys.all, 'groups'],
-      });
+      const snapshot = snapshotGroups(queryClient);
       patchGroups(queryClient, (items) =>
         items.map((row) => (row.id === id ? { ...row, name } : row)),
       );
@@ -201,7 +211,7 @@ export function useRenameProjectGroup() {
     },
     onSuccess: () => toast.success(ui.projects.savedDone),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: projectsKeys.groups() });
+      void queryClient.invalidateQueries({ queryKey: projectsKeys.groupsPrefix() });
     },
   });
 }
@@ -212,9 +222,7 @@ export function useArchiveProjectGroup() {
   return useMutation({
     mutationFn: (id: string) => api<ProjectGroup>(`/projects/groups/${id}`, { method: 'DELETE' }),
     onMutate: async (id) => {
-      const snapshot = queryClient.getQueriesData<ProjectGroup[]>({
-        queryKey: [...projectsKeys.all, 'groups'],
-      });
+      const snapshot = snapshotGroups(queryClient);
       patchGroups(queryClient, (items) =>
         items.map((row) =>
           row.id === id ? { ...row, archivedAt: new Date().toISOString() } : row,
@@ -228,7 +236,31 @@ export function useArchiveProjectGroup() {
     },
     onSuccess: () => toast.success(ui.projects.savedDone),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: projectsKeys.groups() });
+      void queryClient.invalidateQueries({ queryKey: projectsKeys.groupsPrefix() });
+    },
+  });
+}
+
+/** Возврат портфеля из архива (#559): папка возвращается в журнал. */
+export function useRestoreProjectGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<ProjectGroup>(`/projects/groups/${id}/restore`, { method: 'POST' }),
+    onMutate: async (id) => {
+      const snapshot = snapshotGroups(queryClient);
+      patchGroups(queryClient, (items) =>
+        items.map((row) => (row.id === id ? { ...row, archivedAt: null } : row)),
+      );
+      return { snapshot };
+    },
+    onError: (error, _vars, context) => {
+      for (const [key, data] of context?.snapshot ?? []) queryClient.setQueryData(key, data);
+      toastApiError(error);
+    },
+    onSuccess: () => toast.success(ui.projects.savedDone),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: projectsKeys.groupsPrefix() });
     },
   });
 }

@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw';
-import { ErrorCode, listProjectsQuerySchema } from '@nodus/contracts';
+import { ErrorCode, NO_PORTFOLIO_FILTER, listProjectsQuerySchema } from '@nodus/contracts';
 
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import {
@@ -52,7 +52,13 @@ export const projectReadHandlers = [
     }
     if (query.visibility) rows = rows.filter((row) => row.visibility === query.visibility);
     if (query.status) rows = rows.filter((row) => row.status === query.status);
-    if (query.portfolioId) rows = rows.filter((row) => row.portfolioId === query.portfolioId);
+    if (query.portfolioId) {
+      rows = rows.filter((row) =>
+        query.portfolioId === NO_PORTFOLIO_FILTER
+          ? row.portfolioId === null
+          : row.portfolioId === query.portfolioId,
+      );
+    }
     if (query.clientId) rows = rows.filter((row) => row.clientId === query.clientId);
     if (query.memberId) {
       rows = rows.filter((row) =>

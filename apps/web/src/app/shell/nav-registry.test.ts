@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ui } from '@nodus/contracts';
 
 import { NAV_MODULES } from './nav-registry.js';
 
@@ -37,5 +38,22 @@ describe('реестр навигации: вкладка «Права дост�
     // Права «Задач» в каталоге есть — вкладку модуль получит отдельной
     // строкой `...accessTab('tasks')`, пока её нет (скоуп #379: «Автоматизация»).
     expect(tasks.tabs.map((tab) => tab.id)).not.toContain('access');
+  });
+});
+
+describe('портфели — папки журнала «Проекты» (#559)', () => {
+  it('в «Автоматизации» нет раздела-портфелей: только процессы, атрибуты, схемы, реестры, права', () => {
+    const automation = NAV_MODULES.find((module) => module.id === 'automation')!;
+    const ids = automation.tabs.map((tab) => tab.id);
+    expect(ids).not.toContain('portfolios');
+    expect(ids).not.toContain('project-portfolios');
+    // Подпись «Портфели» не встречается ни в одной вкладке раздела.
+    expect(automation.tabs.map((tab) => tab.label)).not.toContain(ui.projects.portfoliosTitle);
+  });
+
+  it('«Схемы проектов» — единственная вкладка проектов в «Автоматизации»', () => {
+    const automation = NAV_MODULES.find((module) => module.id === 'automation')!;
+    const projectTabs = automation.tabs.filter((tab) => tab.label.startsWith('Схем'));
+    expect(projectTabs.map((tab) => tab.id)).toEqual(['project-schemas']);
   });
 });
