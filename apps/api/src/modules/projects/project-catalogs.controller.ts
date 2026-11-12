@@ -1,15 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Inject,
-  Param,
-  Patch,
-  Post,
-  Put,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -27,11 +16,7 @@ import {
   projectTypeCreateBodySchema,
   projectTypeSchema,
   projectTypeUpdateBodySchema,
-  portalSettingsSchema,
-  portalSettingsUpdateBodySchema,
   type AuthUser,
-  type PortalSettings,
-  type PortalSettingsUpdateBody,
   type ProjectGroup,
   type ProjectGroupCreateBody,
   type ProjectGroupUpdateBody,
@@ -59,7 +44,6 @@ import { ProjectGroupsRepository } from './project-groups.repository.js';
 import { ProjectTypesRepository } from './project-types.repository.js';
 import { emitProjectTypeChanged } from './project-type-events.js';
 import { createProjectType, updateProjectType } from './project-type-form.js';
-import { ProjectsService } from './projects.service.js';
 
 const idParamSchema = z.uuid();
 const listQuerySchema = z.object({ includeArchived: z.enum(['true', 'false']).default('false') });
@@ -67,9 +51,10 @@ const listQuerySchema = z.object({ includeArchived: z.enum(['true', 'false']).de
 /**
  * Справочники модуля (#52): типы проектов (вкладка «Типы проектов»
  * «Автоматизации», право `project.setup.manage`), виды уровней структуры
- * (#467 — то же право), портфели (создание — `project.create`, архивация —
- * `project.manage`) и настройки портала (дефолт видимости новых проектов —
- * `project.setup.manage`, Р7). Статические маршруты (`projects/types`,
+ * (#467 — то же право) и портфели (создание — `project.create`, архивация —
+ * `project.manage`). Настройки портала (`settings/portal`) удалены (#738) и
+ * вернутся вместе с первыми реальными разделами окна (#276). Статические
+ * маршруты (`projects/types`,
  * `projects/node-kinds`) фармуруются раньше параметрических `projects/:id`
  * — роутер Fastify отдаёт статике приоритет.
  */
@@ -82,7 +67,6 @@ export class ProjectCatalogsController {
     private readonly types: ProjectTypesRepository,
     private readonly groups: ProjectGroupsRepository,
     private readonly nodeKinds: NodeKindsRepository,
-    private readonly settings: ProjectsService,
     private readonly txRunner: TransactionRunner,
     private readonly eventBus: EventBus,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
@@ -283,34 +267,9 @@ export class ProjectCatalogsController {
     });
   }
 
-  // ===== Настройки портала (Р7) =====
-
-  @Get('settings/portal')
-  @ApiOperation({ summary: 'Настройки портала (окну создания нужен дефолт видимости проектов)' })
-  @ApiOkResponse({ standardSchema: portalSettingsSchema })
-  @ApiErrors(400, 401)
-  portalSettings(): Promise<PortalSettings> {
-    return this.settings.defaultVisibility().then((defaultVisibility) => ({
-      projects: { defaultVisibility },
-    }));
-  }
-
-  @Put('settings/portal')
-  @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
-  @Audit({ action: 'settings.portal_update', entity: 'portal_settings' })
-  @ApiOperation({ summary: 'Изменить настройки портала (право project.setup.manage)' })
-  @ApiOkResponse({ standardSchema: portalSettingsSchema })
-  @ApiErrors(400, 401, 403)
-  @ApiIdempotencyKey()
-  portalSettingsUpdate(
-    @Body({
-      schema: portalSettingsUpdateBodySchema,
-      pipes: [new ZodValidationPipe(portalSettingsUpdateBodySchema)],
-    })
-    dto: PortalSettingsUpdateBody,
-  ): Promise<PortalSettings> {
-    return this.settings
-      .putDefaultVisibility(dto.projects.defaultVisibility)
-      .then(() => ({ projects: { defaultVisibility: dto.projects.defaultVisibility } }));
-  }
+  // ===== Настройки портала =====
+  // Окно «Настройки портала» показывается только из левого меню «Настройки»
+  // и пустым не рендерится: единственная жилица — «видимость новых проектов
+  // по умолчанию» — удалена (#738, вердикт владельца 10.11: новые проекты
+  // всегда открыты). Маршруты вернутся с первыми реальными разделами (#276).
 }

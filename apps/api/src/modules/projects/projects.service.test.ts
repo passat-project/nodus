@@ -17,8 +17,8 @@ import {
 
 /**
  * Сервис проектов (#52, #631 Р9/Р10): создание (наблюдатели, руководство,
- * legacy code/clientId → атрибуты, обязательные слоты), видимость и
- * настройки портала. Моки — projects-service.test-kit.ts; правка полей —
+ * legacy code/clientId → атрибуты, обязательные слоты) и видимость
+ * (#738: дефолт всегда открытый). Моки — projects-service.test-kit.ts; правка полей —
  * projects-update.service.test.ts.
  */
 
@@ -29,7 +29,7 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
   beforeEach(() => kit.reset());
 
   describe('create', () => {
-    it('дефолт видимости — настройка портала (нет строки → open); событие created', async () => {
+    it('дефолт видимости — всегда открытый (#738); событие created', async () => {
       await kit.service.create(user(CREATOR), {
         name: 'Тендер УП',
         typeId: TYPE,
@@ -44,22 +44,19 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
         expect.objectContaining({ projectId: ID, visibility: 'open' }),
         expect.objectContaining({ aggregateType: 'project' }),
       );
-
-      repo.settingValue.mockResolvedValue('secret');
-      await kit.service.create(user(CREATOR), { name: 'x', typeId: TYPE } as never);
-      expect(repo.create).toHaveBeenLastCalledWith(
-        expect.objectContaining({ visibility: 'secret' }),
-        {},
-      );
     });
 
-    it('явная visibility сильнее настройки портала', async () => {
+    it('явная visibility сильнее дефолта (#738: прежней настройки портала нет)', async () => {
       await kit.service.create(user(CREATOR), {
         name: 'x',
         typeId: TYPE,
-        visibility: 'open',
+        visibility: 'secret',
       } as never);
-      expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'open' }), {});
+      // Явный выбор сохраняется как есть; без выбора сервис ставит 'open'.
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: 'secret' }),
+        {},
+      );
     });
 
     it('скопинг реестра — target тип проекта; значения пишутся в customFields', async () => {
@@ -217,15 +214,6 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
       await expect(
         kit.service.assertVisible(user(HELPER, ['project.view_secret']), ID),
       ).resolves.toBeTruthy();
-    });
-  });
-
-  describe('настройки портала (Р7)', () => {
-    it('чтение дефолта: секретная настройка читается, мусор → open', async () => {
-      repo.settingValue.mockResolvedValueOnce('secret');
-      await expect(kit.service.defaultVisibility()).resolves.toBe('secret');
-      repo.settingValue.mockResolvedValueOnce('nonsense');
-      await expect(kit.service.defaultVisibility()).resolves.toBe('open');
     });
   });
 

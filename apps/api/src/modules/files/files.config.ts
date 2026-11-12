@@ -12,6 +12,12 @@ export interface FilesConfig {
   bucket: string;
   accessKey: string;
   secretKey: string;
+  /** Периодическая уборка брошенных multipart-загрузок (#715): возраст, после
+   *  которого незавершённая загрузка считается брошенной (часы). Запас больше
+   *  максимального времени жизни честной загрузки на медленном канале. */
+  staleUploadAgeHours: number;
+  /** Период прохода уборки (часы): раз в сутки по умолчанию. */
+  staleUploadIntervalHours: number;
 }
 
 /** DI-токен конфигурации модуля (интерфейс — не значение, токен отдельный). */
@@ -34,5 +40,7 @@ export function getFilesConfig(env: NodeJS.ProcessEnv = process.env): FilesConfi
     bucket: env.STORAGE_BUCKET ?? 'nodus-files',
     accessKey,
     secretKey,
+    staleUploadAgeHours: Number(env.STORAGE_STALE_UPLOAD_AGE_HOURS ?? 24),
+    staleUploadIntervalHours: Number(env.STORAGE_STALE_UPLOAD_INTERVAL_HOURS ?? 24),
   };
 }

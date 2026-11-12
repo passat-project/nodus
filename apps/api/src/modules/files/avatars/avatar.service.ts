@@ -12,8 +12,15 @@ import {
   AVATAR_MAX_BYTES,
   AVATAR_MIN_SIDE,
   AVATAR_PIXEL_LIMIT,
+  hasSensitiveContainerMetadata,
+  hasSensitiveMetadata,
+  isPixelLimitError,
   validateAvatarBytes,
 } from './avatar-rules.js';
+
+/** Метаданные sharp — вывод типа из вызова (namespace `sharp.Metadata` при
+ *  default-импорте недоступен как тип). */
+type SharpMetadata = Awaited<ReturnType<ReturnType<typeof sharp>['metadata']>>;
 
 /** EXIF-ориентации 5–8 — поворот на 90°: физические стороны меняются
  *  местами (как видит браузер после авторазворота). */
@@ -75,19 +82,10 @@ export class AvatarService {
       );
     }
 
-    const original = await this.storage.save(
-      {
-        ownerId: input.ownerId,
-        name: input.name || 'avatar',
-        mime: valid.mime,
-        size: bytes.length,
-      },
-      Readable.from(bytes),
-    );
-
+    let meta: SharpMetadata;
     let derivative: Buffer;
     try {
-      const meta = await sharp(bytes, { limitInputPixels: AVATAR_PIXEL_LIMIT }).metadata();
+      meta = await sharp(bytes, { limitInputPixels: AVATAR_PIXEL_LIMIT }).metadata();
       // Квадратная сторона: минимум из ориентированных сторон и потолка —
       // cover-кроп этой величиной никогда не апскейлит (без enlargement)
       // и всегда даёт точный квадрат (sharp безEnlargement на cover не
@@ -109,24 +107,75 @@ export class AvatarService {
         .toBuffer();
     } catch (error) {
       if (error instanceof DomainException) throw error;
+      // Пиксельный потолок (#231) — отдельный код (#725): файл не битый и не
+      // тяжёлый по байтам, у фото слишком большое разрешение. Интерфейс по
+      // коду показывает причину, а не вводящее в заблуждение «битое фото».
+      if (isPixelLimitError(error)) {
+        this.logger.warn(
+          { err: error, pixelLimit: AVATAR_PIXEL_LIMIT },
+          'Аватар превысил пиксельный потолок декодирования',
+        );
+        throw new DomainException(
+          ErrorCode.FILE_AVATAR_TOO_LARGE_RESOLUTION,
+          'Avatar image resolution exceeds limit',
+          { pixelLimit: AVATAR_PIXEL_LIMIT },
+        );
+      }
       // sharp бросает на недекодируемом буфере (failOn по умолчанию) —
       // magic bytes прошли, но картинка битая; отказ доменный, не 500.
       this.logger.warn({ err: error }, 'Аватар не декодируется sharp');
       throw new DomainException(ErrorCode.FILE_AVATAR_INVALID, 'Avatar image is corrupted');
     }
 
-    const baseName = input.name.replace(/\.[^.]+$/, '') || 'avatar';
-    const saved = await this.storage.save(
+    // Оригинал — после успешного декодирования (#725, security-ревью): отказ
+    // «битый/маленький/пиксельный потолок» больше не оставляет сироту в
+    // хранилище. Метаданные срезаем до записи: клиент не пережимает файлы
+    // ≤512 КБ по правилу владельца — они приходят с EXIF (GPS/автор), а
+    // оригинал лежит в бакете «на память» (задел перекадровки).
+    const originalBytes = await this.withoutMetadata(bytes, meta, valid.mime);
+    const original = await this.storage.save(
       {
         ownerId: input.ownerId,
-        name: `${baseName}.webp`,
-        mime: 'image/webp',
-        size: derivative.length,
-        derivedFrom: original.fileId,
+        name: input.name || 'avatar',
+        mime: valid.mime,
+        size: originalBytes.length,
       },
-      Readable.from(derivative),
+      Readable.from(originalBytes),
     );
+
+    const baseName = input.name.replace(/\.[^.]+$/, '') || 'avatar';
+    let saved: { fileId: string };
+    try {
+      saved = await this.storage.save(
+        {
+          ownerId: input.ownerId,
+          name: `${baseName}.webp`,
+          mime: 'image/webp',
+          size: derivative.length,
+          derivedFrom: original.fileId,
+        },
+        Readable.from(derivative),
+      );
+    } catch (error) {
+      // Дериват не записался — оригинал-сирота не остаётся в бакете
+      // (best-effort: сбой уборки не подменяет исходную ошибку).
+      await this.storage.remove([original.fileId]).catch(() => undefined);
+      throw error;
+    }
     return { fileId: saved.fileId };
+  }
+
+  /** Оригинал без метаданных (EXIF/GPS, XMP, IPTC, PNG-текст) — приватность
+   *  «at rest» (#725, security-ревью 12.11): GPS сотрудника не должен лежать
+   *  в бакете. Файл БЕЗ метаданных сохраняется байт-в-байт (без перекодировки
+   *  и потери качества); с метаданными — перекодируется в свой формат,
+   *  EXIF-ориентация запекается в пиксели (как её уже применяет дериват). */
+  private async withoutMetadata(bytes: Buffer, meta: SharpMetadata, mime: string): Promise<Buffer> {
+    if (!hasSensitiveMetadata(meta) && !hasSensitiveContainerMetadata(bytes)) return bytes;
+    const pipeline = sharp(bytes, { limitInputPixels: AVATAR_PIXEL_LIMIT }).rotate();
+    if (mime === 'image/png') return pipeline.png().toBuffer();
+    if (mime === 'image/webp') return pipeline.webp({ quality: 95 }).toBuffer();
+    return pipeline.jpeg({ quality: 95 }).toBuffer();
   }
 
   /** Подписанный URL отдачи аватара для DTO (сущность хранит fileId). */

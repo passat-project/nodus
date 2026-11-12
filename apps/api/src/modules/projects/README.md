@@ -30,8 +30,10 @@
   список/карточка только участию + `project.view_secret` (роль «Системный
   надзор» для системной учётки; админы по умолчанию НЕ видят — модель
   Битрикс-суперадмина, ADR-0030). Смена на секретный — только руководитель,
-  раскрыть может и помощник. Дефолт новых — настройка портала
-  (`projects.defaultVisibility`, дефолт 'open').
+  раскрыть может и помощник. Новый проект **всегда открытый** (#738, вердикт
+  владельца 10.11: настройки «видимость новых проектов» больше нет) —
+  секретный только явным выбором в форме. Таблица `portal_settings` живёт как
+  исторические данные и ждёт contract (drop) по правилам prisma-migrations.
 
 ## Участие — двухрежимное (Р2)
 
@@ -167,7 +169,6 @@ node_moved / node_deleted`; `node_updated` несёт `customFieldChanges` и
 | `GET /:id/members?cursor=&limit=`                                     | —                                                                      | вкладка «Участники»: строки-источники                                                                                                                                    |
 | `POST /:id/join` · `POST /:id/leave`                                  | —                                                                      | вступление/выход (открытый; leave — только свой ряд вступившего)                                                                                                         |
 | `POST /:id/members` · `DELETE /:id/members/:userId`                   | руководство проекта                                                    | ручной состав: секретный — member/observer, открытый — только observer; замена второй роли; причины отказа — 422 доменными кодами (#714)                                 |
-| `GET/PUT /settings/portal`                                            | PUT: `project.setup.manage`                                            | дефолт видимости новых проектов (окно «Настройки портала»)                                                                                                               |
 | `GET/POST /types`, `PATCH /types/:id` (+archive/restore)              | `project.setup.manage`                                                 | типы проектов: имя, значок, цвет, форма слотов `form` (слот = привязка атрибута, Р10), допустимые виды папок `kindIds` (null — все; негодный id — 422)                   |
 | `GET/POST /groups`, `PATCH /groups/:id` (+archive/restore)            | `project.manage`                                                       | портфели (плоский список)                                                                                                                                                |
 | `GET /projects/node-kinds`; POST/PATCH/архивация/restore              | мутации: `project.setup.manage`                                        | виды папок: форма, возможности (#556); имя lower(btrim) — 409; форма с неизвестным атрибутом — 422; запись формы синхронизирует привязки вида (слот = привязка, Р3 #631) |
@@ -252,7 +253,7 @@ node_moved / node_deleted`; `node_updated` несёт `customFieldChanges` и
 ## Файлы
 
 ```
-projects.repository.ts          таблицы projects + portal_settings (единственная точка Prisma)
+projects.repository.ts          таблица projects (единственная точка Prisma)
 project-participants.repository.ts  project_participants: страницы, синк руководства,
                                 идемпотентный replaceTaskSource, roster
 project-types.repository.ts     project_types (архив, не удаление; icon/color/kindIds #556)

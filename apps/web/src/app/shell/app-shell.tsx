@@ -13,7 +13,6 @@ import { stageMessengerThread } from '../../shared/chat/messenger-nav.js';
 import { ChatDialogHosts } from '../../shared/chat/dialog-hosts.js';
 import { TaskCreateHost } from '../../shared/tasks/task-create-host.js';
 import { ProjectCreateHost } from '../../features/projects/components/project-create-host.js';
-import { PortalSettingsHost } from '../../features/projects/components/portal-settings-host.js';
 import { NumberConfirmHost } from '../../shared/custom-fields/number-confirm.js';
 import { AttachmentViewer } from '../../shared/files/attachment-viewer.js';
 import { NotificationToasts } from '../../features/notifications/components/notification-toasts.js';
@@ -196,8 +195,6 @@ export function AppShell() {
       <TaskCreateHost />
       {/* Единое окно создания проекта (#52): журнал и пикер проекта. */}
       <ProjectCreateHost />
-      {/* Окно «Настройки портала» (#52): раздел «Проекты» (дом — #276). */}
-      <PortalSettingsHost />
       {/* Окно «В номере есть незаполненное поле» (#630): одно на все
           действия, выдающие номер (кнопка процесса, создание, смена типа). */}
       <NumberConfirmHost />

@@ -79,11 +79,6 @@ vi.mock('../../../shared/auth-store.js', () => ({
 
 vi.mock('../../../shared/api/projects-list.js', () => ({
   useProjectTypes: () => ({ data: typesData, isLoading: false }),
-  usePortalSettings: () => ({
-    // Дефолт видимости новых проектов — «секретный» (Р7): окно берёт его
-    // до явного выбора пользователем.
-    data: { projects: { defaultVisibility: 'secret' } },
-  }),
   useProjectGroups: () => ({ data: [] }),
 }));
 
@@ -179,7 +174,7 @@ describe('ProjectCreateDialog: атрибуты слотами формы тип
     await waitFor(() => expect(createMutate).toHaveBeenCalled());
   });
 
-  it('значения слотов едут в customFields, видимость — из настроек портала', async () => {
+  it('значения слотов едут в customFields, видимость по умолчанию — открытая (#738)', async () => {
     render(
       <ProjectCreateDialog prefill={{ typeId: CONTRACT_TYPE_ID }} onClose={() => undefined} />,
     );
@@ -201,7 +196,8 @@ describe('ProjectCreateDialog: атрибуты слотами формы тип
     expect(vars.body).toMatchObject({
       name: 'Главный корпус',
       typeId: CONTRACT_TYPE_ID,
-      visibility: 'secret',
+      // Настройки «видимость новых проектов» нет (#738): всегда открытый.
+      visibility: 'open',
       customFields: { [fieldIds.projectCode]: '22-01' },
     });
     // «Заказчик» не выбирали — витринной ссылки нет.

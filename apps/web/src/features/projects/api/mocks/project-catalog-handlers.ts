@@ -3,7 +3,6 @@ import {
   DEFAULT_PROJECT_TYPE_FORM,
   ErrorCode,
   Permission,
-  portalSettingsUpdateBodySchema,
   projectGroupCreateBodySchema,
   projectGroupUpdateBodySchema,
   projectTypeCreateBodySchema,
@@ -16,11 +15,7 @@ import {
 import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
 import { demoNodeKinds } from '../../../../shared/mocks/data/project-nodes.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
-import {
-  demoPortalSettings,
-  demoProjectGroups,
-  demoProjectTypes,
-} from '../../../../shared/mocks/data/projects.js';
+import { demoProjectGroups, demoProjectTypes } from '../../../../shared/mocks/data/projects.js';
 
 const invalid = () =>
   HttpResponse.json(
@@ -234,13 +229,6 @@ export const projectCatalogHandlers = [
     return HttpResponse.json(group);
   }),
 
-  http.get('/api/v1/settings/portal', () => HttpResponse.json(demoPortalSettings)),
-
-  http.put('/api/v1/settings/portal', async ({ request }) => {
-    if (!getMockActor().permissions.includes(Permission.PROJECT_SETUP_MANAGE)) return forbidden();
-    const parsed = portalSettingsUpdateBodySchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return invalid();
-    demoPortalSettings.projects.defaultVisibility = parsed.data.projects.defaultVisibility;
-    return HttpResponse.json(demoPortalSettings);
-  }),
+  // Настройки портала (#738): маршруты удалены вместе с настройкой видимости
+  // новых проектов — моков GET/PUT /settings/portal больше нет.
 ];

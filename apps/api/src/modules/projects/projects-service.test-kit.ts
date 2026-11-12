@@ -63,16 +63,12 @@ export function row(overrides: Record<string, unknown> = {}): ProjectRow {
 type Mocks<K extends string> = Record<K, Mock>;
 
 export function makeProjectsServiceKit() {
-  const repo: Mocks<
-    'findById' | 'lockForUpdate' | 'create' | 'update' | 'touch' | 'settingValue' | 'putSetting'
-  > = {
+  const repo: Mocks<'findById' | 'lockForUpdate' | 'create' | 'update' | 'touch'> = {
     findById: vi.fn(),
     lockForUpdate: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     touch: vi.fn(),
-    settingValue: vi.fn(),
-    putSetting: vi.fn(),
   };
   const types: Mocks<'findActive' | 'findById'> = { findActive: vi.fn(), findById: vi.fn() };
   const groups: Mocks<'findActive'> = { findActive: vi.fn() };
@@ -120,7 +116,6 @@ export function makeProjectsServiceKit() {
     /** Аналог beforeEach исходного файла: чистка моков, дефолты, сервис. */
     reset() {
       vi.clearAllMocks();
-      repo.settingValue.mockResolvedValue(null);
       repo.create.mockImplementation(async (data: Record<string, unknown>) => row(data));
       // `update` возвращает строку (как Prisma): аудитория `project.updated`
       // считается по состоянию ПОСЛЕ правки (#646).

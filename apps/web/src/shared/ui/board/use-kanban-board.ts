@@ -7,7 +7,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-  type DragOverEvent,
+  type DragMoveEvent,
   type DragStartEvent,
   type AutoScrollOptions,
   type UniqueIdentifier,
@@ -19,10 +19,10 @@ import {
   indexOfInStage,
   isSamePlacement,
   moveTaskToStage,
-  reorderWithinStage,
   stageOfDragId,
   type BoardAxis,
 } from '../../lib/board/kanban-board.js';
+import { computeInsertIndex, dropAnchorY } from '../../lib/board/kanban-drop-index.js';
 import { makeKanbanCollision } from '../../lib/board/kanban-collision.js';
 import { BOARD_SCROLLER_SELECTOR } from '../../lib/board/edge-scroll.js';
 import { useKanbanFeeds } from './use-kanban-feeds.js';
@@ -71,8 +71,8 @@ interface UseKanbanBoardParams<S extends TaskStage> {
  * Канбан-движок (аудит #45: вынос ~180 строк дубля task/project-карманов):
  * борд-состояние, фиды колонок через React Query и sentinel-подгрузка
  * (`use-kanban-feeds.ts`),
- * dnd-жизнь (живая сортировка onDragOver, анти-осциллятор recentlyMoved,
- * гейт isSamePlacement), Esc-откат к снапшоту. Фича оставляет за собой
+ * dnd-жизнь (живая сортировка по указателю на onDragMove/onDragOver, #737;
+ * анти-осциллятор recentlyMoved, гейт isSamePlacement), Esc-откат к снапшоту. Фича оставляет за собой
  * колонку, карточку, конфиг оси/фида/мутации и экстра-механики (CRUD
  * колонок, quick-add, счётчики) — доска 6-го модуля = конфиг, не копия.
  * Официальный паттерн dnd-kit + React Query: борд — локальное состояние,
@@ -156,28 +156,50 @@ export function useKanbanBoard<S extends TaskStage>({
     setActiveParent(task?.parentId ? numberById.get(task.parentId) : undefined);
   };
 
-  /** Живой переезд между колонками: карточка встаёт в целевую колонку ещё
-   *  до дропа (индекс — от карточки под указателем, ниже/выше её центра).
-   *  Предохранители цикла update depth: (1) кадр после межколоночного переноса
-   *  игнорируем (анти-осциллятор на границе колонок), (2) идентичное РАЗМЕЩЕНИЕ
-   *  не создаёт нового состояния (isSamePlacement — холостые витки
-   *  измерение→setState). */
-  const onDragOver = (event: DragOverEvent) => {
+  /** Живой перенос/перестановка (#737): индекс вставки считается по позиции
+   *  УКАЗАТЕЛЯ относительно середины целевой карточки на КАЖДОМ движении —
+   *  и между колонками, и внутри колонки. Борд переставляется сразу, поэтому
+   *  пунктирный слот («фантом») стоит там, куда карточка упадёт, и следует за
+   *  указателем при движении над/под карточкой; drop ничего не пересчитывает.
+   *  Предохранители цикла update depth: (1) кадр после МЕЖколоночного переноса
+   *  игнорируем (анти-осциллятор на границе колонок — раскладка «прыгает»),
+   *  внутри колонки расчёт сходится сам (сдвиг меняет места карточек, но
+   *  индекс от этого не переворачивается), (2) идентичное РАЗМЕЩЕНИЕ не
+   *  создаёт нового состояния (isSamePlacement). */
+  const updateDrop = (event: DragMoveEvent) => {
+    // Анти-осциллятор (gotchas dnd-kit multi-container): кадр сразу после
+    // переноса раскладка «прыгнула», rect устарели — пересчёт дал бы перенос
+    // обратно. Внутри колонки пересчитываем каждый кадр — цель #737.
+    if (recentlyMoved.current) return;
     const { active, over } = event;
-    if (!over || recentlyMoved.current) return;
-    const activeStage = stageOf(active.id);
+    if (!over) return;
     const overStage = stageOf(over.id);
-    if (!activeStage || !overStage || activeStage.id === overStage.id) return;
-    const overColumn = childrenOf(overStage.id);
-    const overIndex = overColumn.indexOf(String(over.id));
-    const below =
-      active.rect.current.translated &&
-      over.rect.top + over.rect.height / 2 < active.rect.current.translated.top;
-    const index = overIndex >= 0 ? overIndex + (below ? 1 : 0) : overColumn.length;
-    recentlyMoved.current = true;
-    requestAnimationFrame(() => {
-      recentlyMoved.current = false;
+    if (!overStage) return;
+    const activeStage = stageOf(active.id);
+    const crossColumn = activeStage?.id !== overStage.id;
+    const column = childrenOf(overStage.id);
+    const overIndex = column.indexOf(String(over.id));
+    const activeIndex = crossColumn ? -1 : column.indexOf(String(active.id));
+    const translated = active.rect.current.translated;
+    const index = computeInsertIndex({
+      anchorY: dropAnchorY({
+        activatorEvent: event.activatorEvent,
+        deltaY: event.delta?.y ?? 0,
+        activeProjected: translated ? { top: translated.top, height: translated.height } : null,
+      }),
+      overIndex,
+      activeIndex,
+      restCount: Math.max(0, column.length - (activeIndex >= 0 ? 1 : 0)),
+      overTop: over.rect.top,
+      overHeight: over.rect.height,
     });
+    if (index < 0) return;
+    if (crossColumn) {
+      recentlyMoved.current = true;
+      requestAnimationFrame(() => {
+        recentlyMoved.current = false;
+      });
+    }
     setBoard((prev) => {
       const next = moveTaskToStage(prev ?? [], String(active.id), overStage, index, axis);
       return isSamePlacement(prev ?? [], next, axis) ? (prev ?? []) : next;
@@ -188,27 +210,23 @@ export function useKanbanBoard<S extends TaskStage>({
     const task = activeTask;
     setActiveTask(null);
     draggingRef.current = false;
-    if (!task || !event.over) {
-      snapshotRef.current = null;
-      return;
-    }
-    const overId = String(event.over.id);
-    // Финиш внутри колонки — перестановка; между колонками борд уже живой.
-    const settled =
-      stageOf(overId)?.id === axis.keyOf(task)
-        ? reorderWithinStage(items, task.id, overId, axis)
-        : items;
-    setBoard(settled);
-    const finalStage = stageById.get(
-      axis.keyOf(settled.find((t) => t.id === task.id) ?? task) ?? '',
-    );
+    const snapshot = snapshotRef.current;
+    snapshotRef.current = null;
+    if (!task || !event.over) return;
+    // Финал — ровно то, что показал фантом: живой перенос уже поставил
+    // карточку в борд на каждом движении. Прежний пересчёт по over-карточке
+    // (reorderWithinStage) игнорировал сторону указателя и расходился с
+    // фантомом — drop вставал не туда, куда показывал слот (#737).
+    const settled = boardRef.current ?? items;
+    const placed = settled.find((t) => t.id === task.id) ?? task;
+    const finalStage = stageById.get(axis.keyOf(placed) ?? '');
     if (!finalStage) return;
     const index = indexOfInStage(settled, task.id, axis);
-    const snapshot = snapshotRef.current ?? [];
-    const before = snapshot.find((t) => t.id === task.id);
+    const before = snapshot?.find((t) => t.id === task.id);
     if (
-      axis.keyOf(before ?? task) === finalStage.id &&
-      indexOfInStage(snapshot, task.id, axis) === index
+      before &&
+      axis.keyOf(before) === finalStage.id &&
+      indexOfInStage(snapshot ?? [], task.id, axis) === index
     ) {
       return;
     }
@@ -218,12 +236,11 @@ export function useKanbanBoard<S extends TaskStage>({
       { taskId: task.id, stageId: finalStage.id, index },
       {
         onError: () => {
-          setBoard(snapshot);
+          setBoard(snapshot ?? []);
           onMoveRolledBack?.(fromId, finalStage.id);
         },
       },
     );
-    snapshotRef.current = null;
   };
 
   const onDragCancel = () => {
@@ -261,7 +278,15 @@ export function useKanbanBoard<S extends TaskStage>({
      *  устаревших rect (фризы на границах). Always — перемер каждый цикл. */
     measuring: { droppable: { strategy: MeasuringStrategy.Always } },
     autoScroll: BOARD_AUTO_SCROLL,
-    dndHandlers: { onDragStart, onDragOver, onDragEnd, onDragCancel },
+    // onDragMove — на каждое движение (там же индекс «над/под», #737);
+    // onDragOver — смена цели (межколоночный переезд), общий расчёт.
+    dndHandlers: {
+      onDragStart,
+      onDragMove: updateDrop,
+      onDragOver: updateDrop,
+      onDragEnd,
+      onDragCancel,
+    },
     activeTask,
     activeParent,
     cursors,

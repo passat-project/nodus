@@ -84,7 +84,7 @@ describe('useKanbanBoard', () => {
     vi.clearAllMocks();
   });
 
-  it('дроп на ПУСТУЮ колонку глобальной оси: без TypeError, перенос в колонку (регрессия)', async () => {
+  it('drop на ПУСТУЮ колонку глобальной оси: без TypeError, перенос в колонку (регрессия)', async () => {
     stubFeeds(async () => jsonResponse(200, { items: [], nextCursor: null }));
     const onMove = vi.fn();
     const { result } = renderBoard(onMove);

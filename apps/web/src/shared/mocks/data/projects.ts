@@ -1,6 +1,5 @@
 import type {
   CustomFieldValues,
-  PortalSettings,
   ProjectColor,
   ProjectGroup,
   ProjectObserverKind,
@@ -60,10 +59,6 @@ export const demoProjectGroups: ProjectGroup[] = [
   { id: groupId(3), name: 'Тендеры', archivedAt: null },
   { id: groupId(4), name: 'Архивные портфели', archivedAt: isoAgo(120) },
 ];
-
-export const demoPortalSettings: PortalSettings = {
-  projects: { defaultVisibility: 'open' },
-};
 
 /** Демо-проекты: договоры с шифром, «темы» без шифра, секретные, архив. */
 export const demoProjectRows: DemoProjectRow[] = [

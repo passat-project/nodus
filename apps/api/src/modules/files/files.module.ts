@@ -24,6 +24,8 @@ import { DerivativesRepository } from './derivatives/derivatives.repository.js';
 import { DerivativesService } from './derivatives/derivatives.service.js';
 import { DerivativesWorker } from './derivatives/derivatives.worker.js';
 import { AvatarService } from './avatars/avatar.service.js';
+import { StaleMultipartSweeper } from './storage/stale-multipart.sweeper.js';
+import { StaleMultipartUploadsJob } from './storage/stale-multipart.job.js';
 import { AttachmentSentHandler } from './events/attachment-sent.handler.js';
 import { LetterReceivedHandler } from './events/letter-received.handler.js';
 
@@ -61,6 +63,10 @@ import { LetterReceivedHandler } from './events/letter-received.handler.js';
     DerivativesQueue,
     DerivativesService,
     DerivativesWorker,
+    // Периодическая уборка брошенных multipart-загрузок (#715): страховка к
+    // abort'у при сбое put — жёсткое падение процесса не отменить ничем.
+    StaleMultipartSweeper,
+    StaleMultipartUploadsJob,
     // Порт конвертации HTML→PDF («Основной документ письма» #56): потребитель
     // — correspondence (PDF-копия тела письма), реализация — рядом с
     // конвейером производных (тот же Gotenberg).

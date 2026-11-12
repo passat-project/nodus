@@ -30,7 +30,6 @@ export {
   useProjectGroups,
   useProjectTypes,
   useProjectsList,
-  usePortalSettings,
 } from '../../../shared/api/projects-list.js';
 
 /** Журнал проектов: серверные фильтры + keyset-курсор (Р14 #52). Кэш —

@@ -59,6 +59,9 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   // Аватар не прошёл проверку (#186): формат — 400; превышение 10 МБ —
   // отдельно переводится в 413 в сервисе.
   [ErrorCode.FILE_AVATAR_INVALID]: HttpStatus.BAD_REQUEST,
+  // Пиксельный потолок аватара (#725): файл корректен, действовать нельзя —
+  // 400, интерфейс показывает причину по отдельному коду.
+  [ErrorCode.FILE_AVATAR_TOO_LARGE_RESOLUTION]: HttpStatus.BAD_REQUEST,
   // «Важные сообщения» (#100): лимит и потолок группы — конфликт политики
   // (не валидация поля: значение корректно, действовать нельзя).
   [ErrorCode.CHAT_URGENT_LIMIT_EXCEEDED]: HttpStatus.CONFLICT,

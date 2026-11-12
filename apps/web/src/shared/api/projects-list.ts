@@ -1,11 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type {
-  Paginated,
-  PortalSettings,
-  ProjectGroup,
-  ProjectListItem,
-  ProjectType,
-} from '@nodus/contracts';
+import type { Paginated, ProjectGroup, ProjectListItem, ProjectType } from '@nodus/contracts';
 import { PAGINATION_MAX_LIMIT } from '@nodus/contracts';
 
 import { api } from '../api-client.js';
@@ -21,7 +15,6 @@ export const projectsKeys = {
   options: () => [...projectsKeys.all, 'options'] as const,
   types: (includeArchived = false) => [...projectsKeys.all, 'types', includeArchived] as const,
   groups: (includeArchived = false) => [...projectsKeys.all, 'groups', includeArchived] as const,
-  settings: () => [...projectsKeys.all, 'settings'] as const,
   journal: (params: Record<string, string | undefined>) =>
     [...projectsKeys.all, 'journal', params] as const,
   /** Префикс всех журналов: событие проекта перечитывает любой фильтр. */
@@ -80,13 +73,5 @@ export function useProjectGroups(includeArchived = false) {
     queryKey: projectsKeys.groups(includeArchived),
     queryFn: () =>
       api<ProjectGroup[]>(`/projects/groups?includeArchived=${includeArchived ? 'true' : 'false'}`),
-  });
-}
-
-/** Настройки портала: дефолт видимости новых проектов (окно создания). */
-export function usePortalSettings() {
-  return useQuery({
-    queryKey: projectsKeys.settings(),
-    queryFn: () => api<PortalSettings>('/settings/portal'),
   });
 }

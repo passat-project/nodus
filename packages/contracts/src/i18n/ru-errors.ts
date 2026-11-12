@@ -57,6 +57,8 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.FILE_OFFICE_UNSUPPORTED]: 'Этот формат не открывается в браузере — скачайте файл',
   [ErrorCode.FILE_OFFICE_TOO_LARGE]: 'Файл слишком большой для просмотра — скачайте его',
   [ErrorCode.FILE_AVATAR_INVALID]: 'Фото не подошло: нужно PNG, JPEG или WebP до 10 МБ',
+  [ErrorCode.FILE_AVATAR_TOO_LARGE_RESOLUTION]:
+    'Слишком большое разрешение фото — выберите другое или уменьшите его',
   [ErrorCode.CRM_UNP_TAKEN]: 'Контрагент с таким УНП уже есть в справочнике',
   [ErrorCode.CRM_COUNTERPARTY_ARCHIVED]: 'Контрагент в архиве — сначала верните его',
   [ErrorCode.CRM_COUNTERPARTY_IN_USE]:
