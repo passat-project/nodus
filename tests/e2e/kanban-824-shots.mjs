@@ -1,9 +1,11 @@
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 
 /**
- * Кадры и замеры #824: ширина плитки канбана фиксирована под 6 на Full HD
- * и НЕ растягивается на широком мониторе.
+ * Кадры и замеры #824: ширина плитки канбана — полоса 240–300px.
+ * На Full HD 6 плиток заполняют ряд, на 2560 влезают 8 (261px),
+ * 6 плиток на 2560 упираются в потолок 300px и не растягиваются.
  *   NODUS_BASE_URL=http://127.0.0.1:4173 node kanban-824-shots.mjs
  */
 const base = (process.env.NODUS_BASE_URL ?? 'http://127.0.0.1:4173').replace(/\/$/, '');
@@ -21,18 +23,21 @@ for (const theme of ['light', 'dark']) {
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(`console: ${m.text().slice(0, 200)}`);
-  });
 
   await page.goto(`${base}/login`);
   await page.waitForTimeout(700);
   await page.getByLabel('Рабочая почта').fill('night-a@nodus.local');
   await page.getByLabel('Пароль').fill('Night-Probe-100!');
-  await page.getByRole('button', { name: 'Войти' }).click();
+  const [login] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().endsWith('/api/v1/auth/login') && r.request().method() === 'POST',
+    ),
+    page.getByRole('button', { name: 'Войти' }).click(),
+  ]);
+  const token = (await login.json()).accessToken;
   await page.waitForURL(/\/home/, { timeout: 15000 });
   await page.goto(`${base}/tasks`);
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(2000);
 
   async function measure(width, height, shotName) {
     await page.setViewportSize({ width, height });
@@ -62,12 +67,51 @@ for (const theme of ['light', 'dark']) {
       };
     })()`);
     await page.screenshot({ path: `${out}/${shotName}.png` });
-    results.push({ theme, ...m, errors });
+    results.push({ theme, shotName, ...m, errors });
     console.log(theme, shotName, JSON.stringify(m));
   }
 
   await measure(1920, 1080, `01-1920-${theme}`);
   await measure(2560, 1440, `02-2560-${theme}`);
+
+  // Восемь плиток на 2560: добавляем две личные стадии через живой API
+  // (идемпотентность как у клиента), после замеров удаляем.
+  const created = [];
+  for (const name of ['Демо 824 A', 'Демо 824 B']) {
+    const id = await page.evaluate(
+      async ([bearer, stageName, key]) => {
+        const res = await fetch('/api/v1/tasks/personal-stages', {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${bearer}`,
+            'content-type': 'application/json',
+            'Idempotency-Key': key,
+          },
+          body: JSON.stringify({ name: stageName, color: 'info', systemState: 'active' }),
+        });
+        if (!res.ok) throw new Error(`create ${res.status}: ${await res.text()}`);
+        return (await res.json()).id;
+      },
+      [token, name, randomUUID()],
+    );
+    created.push(id);
+  }
+  await page.reload();
+  await page.waitForTimeout(2000);
+  await measure(2560, 1440, `03-2560-8cols-${theme}`);
+
+  for (const id of created) {
+    await page.evaluate(
+      async ([bearer, stageId, key]) => {
+        const res = await fetch(`/api/v1/tasks/personal-stages/${stageId}`, {
+          method: 'DELETE',
+          headers: { authorization: `Bearer ${bearer}`, 'Idempotency-Key': key },
+        });
+        if (!res.ok) throw new Error(`delete ${res.status}: ${await res.text()}`);
+      },
+      [token, id, randomUUID()],
+    );
+  }
   await ctx.close();
 }
 

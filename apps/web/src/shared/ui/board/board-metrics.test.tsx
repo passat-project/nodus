@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BoardColumn } from './board-column.js';
 import {
   BOARD_COLUMN_CLASS,
-  BOARD_COLUMN_WIDTH_CLASS,
+  BOARD_COLUMN_GROW_CLASS,
+  BOARD_COLUMN_MAX_CLASS,
+  BOARD_COLUMN_MIN_CLASS,
   BOARD_COLUMNS_PER_VIEW,
   BOARD_EDGE_CLASS,
   BOARD_EDGE_PX,
@@ -18,23 +20,18 @@ import { BoardScroller } from './board-scroller.js';
 import { KanbanSkeleton } from './kanban-skeleton.js';
 
 /**
- * Геометрия канбан-доски (#730, исправление #824): ширина плитки
- * ФИКСИРОВАННАЯ и выведена из бюджета ряда на опорном Full HD (1920×1080,
- * развёрнутое левое меню, `--ui-scale: 1.25`, корень 20px) — ровно 6 плиток,
- * включая «Добавить стадию», без прокрутки. Плитка НЕ тянется по ряду: на
- * широкоформатном мониторе она держит ту же ширину (влезают 7+), иначе
- * получались «шесть ужасно широких» колонок (баг приёмки #824). Тест держит
- * формулу и следит, чтобы доска, «Добавить стадию» и скелетон брали геометрию
- * из ОДНОГО места.
+ * Геометрия канбан-доски (#730, исправление #824): ширина плитки — ПОЛОСА
+ * 240–300px (minmax-паттерн, как у Битрикса/Trello). Плитка делит ряд
+ * поровну, пока доля внутри полосы: на Full HD (1920×1080, развёрнутое меню,
+ * корень 20px) 6 плиток заполняют ряд (по ~244px), на 2560 — 8 плиток
+ * (~261px); 6 плиток на 2560 держат потолок 300px и не раздуваются; ниже пола
+ * включается горизонтальная прокрутка. Тест держит формулу и следит, чтобы
+ * доска, «Добавить стадию» и скелетон брали геометрию из ОДНОГО места.
  */
 
-/** Опорный экран теста — Full HD: 1920px / 20px корня = 96rem. */
-const VIEWPORT_REM = 1920 / 20;
 /** Обвязка шелла в rem (app-shell): рейка w-60 15rem + зазор ml-2 0.5rem +
  *  правая полоса EDGE_W_COLLAPSED 2.5rem + её зазор mr-2 0.5rem. */
 const SHELL_CHROME_REM = 15 + 0.5 + 2.5 + 0.5;
-/** Ряд доски внутри рамы: 96 − 18.5 = 77.5rem (1550 экранных px). */
-const ROW_REM = VIEWPORT_REM - SHELL_CHROME_REM;
 
 /** `gap-2` → 0.5rem; `px-[0.8rem]` → 0.8rem (шаг spacing Tailwind — 0.25rem). */
 function gapRem(className: string): number {
@@ -43,15 +40,37 @@ function gapRem(className: string): number {
 function edgeRem(className: string): number {
   return Number(className.match(/\[([\d.]+)rem\]/)?.[1]);
 }
-/** Ширина плитки из класса `w-[12.2rem]` в rem. */
-function widthRem(className: string): number {
-  return Number(className.match(/w-\[([\d.]+)rem\]/)?.[1]);
+/** Значение из `min-w-[12rem]` / `max-w-[15rem]` в rem. */
+function boundRem(className: string, kind: 'min-w' | 'max-w'): number {
+  return Number(className.match(new RegExp(`${kind}-\\[([\\d.]+)rem\\]`))?.[1]);
+}
+
+/** Ряд доски на экране заданной ширины (вместе с внешними отступами), rem. */
+function rowRem(viewportPx: number): number {
+  return viewportPx / 20 - SHELL_CHROME_REM;
+}
+
+/** Контент ряда (без внешних отступов) на экране заданной ширины, rem. */
+function contentRem(viewportPx: number): number {
+  return rowRem(viewportPx) - 2 * edgeRem(BOARD_EDGE_CLASS);
+}
+
+/** Честная доля плитки при n плитках (до ограничения полосой), rem. */
+function fairShareRem(count: number, content: number): number {
+  return (content - (count - 1) * gapRem(BOARD_GAP_CLASS)) / count;
+}
+
+/** Ширина плитки с учётом пола и потолка, rem. */
+function widthRem(count: number, content: number): number {
+  const min = boundRem(BOARD_COLUMN_CLASS, 'min-w');
+  const max = boundRem(BOARD_COLUMN_CLASS, 'max-w');
+  return Math.min(Math.max(fairShareRem(count, content), min), max);
 }
 
 /** Ширина ряда, которую занимают n плиток: плитки + промежутки + отступы. */
-function rowUsageRem(count: number): number {
+function rowUsageRem(count: number, content: number): number {
   return (
-    count * widthRem(BOARD_COLUMN_CLASS) +
+    count * widthRem(count, content) +
     (count - 1) * gapRem(BOARD_GAP_CLASS) +
     2 * edgeRem(BOARD_EDGE_CLASS)
   );
@@ -72,44 +91,52 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('board-metrics: плитка фиксированной ширины под 6 на Full HD (#824)', () => {
-  it('у плитки фиксированная ширина и запрет сжатия — роста по ряду нет', () => {
-    expect(BOARD_COLUMN_WIDTH_CLASS).toContain('w-[12.2rem]');
-    expect(BOARD_COLUMN_WIDTH_CLASS).toContain('shrink-0');
-    // Растяжение (flex-1 basis-0) — это баг #824: на широком мониторе шесть
-    // колонок занимали весь ряд и становились «ужасно широкими».
-    expect(BOARD_COLUMN_CLASS).not.toContain('flex-1');
-    expect(BOARD_COLUMN_CLASS).not.toContain('basis-0');
-    expect(BOARD_COLUMN_CLASS).not.toContain('min-w-[calc');
+describe('board-metrics: полоса ширины 240–300px (#824)', () => {
+  it('плитка тянется по ряду, но в полосе min/max — не резина без потолка', () => {
+    expect(BOARD_COLUMN_GROW_CLASS).toContain('flex-1');
+    expect(BOARD_COLUMN_GROW_CLASS).toContain('basis-0');
+    expect(BOARD_COLUMN_MIN_CLASS).toBe('min-w-[12rem]');
+    expect(BOARD_COLUMN_MAX_CLASS).toBe('max-w-[15rem]');
+    // Полоса в экранных px при корне 20px: 240–300 — ширина колонки Битрикса.
+    expect(boundRem(BOARD_COLUMN_CLASS, 'min-w') * 20).toBe(240);
+    expect(boundRem(BOARD_COLUMN_CLASS, 'max-w') * 20).toBe(300);
+    // Жёсткой ширины (w-[…], shrink-0 + фикс) больше нет: это был баг #824 —
+    // на 2560 колонки застывали узкими, когда места хватало на 8.
+    expect(BOARD_COLUMN_CLASS).not.toMatch(/(?:^|\s)w-\[/);
+    expect(BOARD_COLUMN_CLASS).not.toContain('shrink-0');
   });
 
-  it('ширина — максимальная доля 1/6 бюджета ряда, без переполнения', () => {
-    const width = widthRem(BOARD_COLUMN_CLASS);
-    const fairShare =
-      (ROW_REM -
-        2 * edgeRem(BOARD_EDGE_CLASS) -
-        (BOARD_COLUMNS_PER_VIEW - 1) * gapRem(BOARD_GAP_CLASS)) /
-      BOARD_COLUMNS_PER_VIEW;
-    // Не шире честной доли (иначе 6 плиток не влезут), но и не уже неё более
-    // чем на шаг округления 0.1rem — ширина плитки не «на глаз».
-    expect(width).toBeLessThanOrEqual(fairShare + 1e-9);
-    expect(width).toBeGreaterThan(fairShare - 0.05);
+  it('Full HD: 6 плиток делят ряд поровну (≈244px) и заполняют его, 7-я — прокрутка', () => {
+    const content = contentRem(1920);
+    expect(fairShareRem(BOARD_COLUMNS_PER_VIEW, content)).toBeGreaterThan(
+      boundRem(BOARD_COLUMN_CLASS, 'min-w'),
+    );
+    expect(fairShareRem(BOARD_COLUMNS_PER_VIEW, content)).toBeLessThan(
+      boundRem(BOARD_COLUMN_CLASS, 'max-w'),
+    );
+    // Ряд заполнен в ноль: 6 плиток + промежутки + отступы = весь ряд.
+    expect(rowUsageRem(BOARD_COLUMNS_PER_VIEW, content)).toBeCloseTo(rowRem(1920), 5);
+    // Седьмая плитка ниже пола → ряд переполняется, включается edge-scroll.
+    expect(rowUsageRem(BOARD_COLUMNS_PER_VIEW + 1, content)).toBeGreaterThan(rowRem(1920));
   });
 
-  it('шесть плиток влезают в ряд Full HD без прокрутки, седьмая — уже нет', () => {
-    expect(rowUsageRem(BOARD_COLUMNS_PER_VIEW)).toBeLessThanOrEqual(ROW_REM);
-    expect(rowUsageRem(BOARD_COLUMNS_PER_VIEW + 1)).toBeGreaterThan(ROW_REM);
+  it('2560: 8 плиток делят ряд (~261px), 9-я — прокрутка', () => {
+    const content = contentRem(2560);
+    const share8 = fairShareRem(8, content);
+    expect(share8).toBeGreaterThan(boundRem(BOARD_COLUMN_CLASS, 'min-w'));
+    expect(share8).toBeLessThan(boundRem(BOARD_COLUMN_CLASS, 'max-w'));
+    expect(rowUsageRem(8, content)).toBeCloseTo(rowRem(2560), 5);
+    expect(rowUsageRem(9, content)).toBeGreaterThan(rowRem(2560));
   });
 
-  it('на широком мониторе (2560) плитка не растягивается — влезают 8 плиток', () => {
-    // Опорный Full HD: 6 плиток занимают почти весь ряд.
-    expect(rowUsageRem(BOARD_COLUMNS_PER_VIEW)).toBeGreaterThan(ROW_REM * 0.98);
-    // Широкий 2560×1440: ряд 128 − 18.5 = 109.5rem; та же плитка 12.2rem —
-    // шесть колонок не «раздуваются» под окно, в ряд влезают восемь.
-    const wideRow = 2560 / 20 - SHELL_CHROME_REM;
-    expect(widthRem(BOARD_COLUMN_CLASS)).toBeLessThan(wideRow / BOARD_COLUMNS_PER_VIEW);
-    expect(rowUsageRem(8)).toBeLessThanOrEqual(wideRow);
-    expect(rowUsageRem(9)).toBeGreaterThan(wideRow);
+  it('2560 с шестью плитками: потолок 300px, колонки не раздуваются', () => {
+    const content = contentRem(2560);
+    // Честная доля 6 плиток на 2560 — ~351px (прежнее «ужасно широко»),
+    // поэтому ширина упирается в потолок.
+    expect(fairShareRem(6, content)).toBeGreaterThan(boundRem(BOARD_COLUMN_CLASS, 'max-w'));
+    expect(widthRem(6, content)).toBe(boundRem(BOARD_COLUMN_CLASS, 'max-w'));
+    // Свободное место остаётся (уйдёт под 7-й/8-й столбцы), но ряд не растянут.
+    expect(rowUsageRem(6, content)).toBeLessThan(rowRem(2560));
   });
 
   it('промежуток 8–12 px, внешние отступы 16 px', () => {
@@ -126,7 +153,7 @@ describe('board-metrics: плитка фиксированной ширины п
 });
 
 describe('board-metrics: доски и скелетон используют общую геометрию', () => {
-  it('колонка стадии — плитка фиксированной ширины', () => {
+  it('колонка стадии — плитка полосы ширины', () => {
     const { container } = render(
       <DndContext>
         <BoardColumn
@@ -144,8 +171,9 @@ describe('board-metrics: доски и скелетон используют о�
       </DndContext>,
     );
     const section = container.querySelector('section')!;
-    expect(section.className).toContain(BOARD_COLUMN_WIDTH_CLASS);
-    expect(section.className).not.toContain('flex-1');
+    expect(section.className).toContain(BOARD_COLUMN_GROW_CLASS);
+    expect(section.className).toContain(BOARD_COLUMN_MIN_CLASS);
+    expect(section.className).toContain(BOARD_COLUMN_MAX_CLASS);
   });
 
   it('скроллер и скелетон делят один ряд колонок (колонки не прыгают на загрузке)', () => {

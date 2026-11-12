@@ -6,7 +6,8 @@ import { ui } from '@nodus/contracts';
 
 import {
   BOARD_COLUMN_CLASS,
-  BOARD_COLUMN_WIDTH_CLASS,
+  BOARD_COLUMN_MAX_CLASS,
+  BOARD_COLUMN_MIN_CLASS,
 } from '../../../shared/ui/board/board-metrics.js';
 import { BoardColumn } from '../../../shared/ui/board/board-column.js';
 import { TaskStageCreate } from './task-stage-create.js';
@@ -20,16 +21,17 @@ import { TaskStageCreate } from './task-stage-create.js';
 afterEach(cleanup);
 
 describe('TaskStageCreate — плитка в ряду колонок (#730)', () => {
-  it('закрытая плитка: общий класс колонки, полная высота, фиксированная ширина', () => {
+  it('закрытая плитка: общий класс колонки, полная высота, ширина из полосы', () => {
     const { container } = render(<TaskStageCreate creating={false} onCreate={vi.fn()} />);
     const tile = container.firstElementChild as HTMLElement;
     expect(tile.tagName).toBe('BUTTON');
     expect(tile.className).toContain(BOARD_COLUMN_CLASS);
     expect(tile.className).toContain('h-full');
     expect(tile.className).toContain('outline-dashed');
-    // Ширина — из общего класса метрик (фиксированная, #824), своей нет.
-    expect(tile.className).toContain(BOARD_COLUMN_WIDTH_CLASS);
-    expect(tile.className).not.toContain('flex-1');
+    // Ширина — из общего класса метрик (полоса 240–300, #824), своей нет.
+    expect(tile.className).toContain(BOARD_COLUMN_MIN_CLASS);
+    expect(tile.className).toContain(BOARD_COLUMN_MAX_CLASS);
+    expect(tile.className).not.toMatch(/(?:^|\s)w-\[/);
     expect(screen.getByRole('button', { name: ui.tasks.addStage })).toBe(tile);
   });
 
@@ -40,7 +42,6 @@ describe('TaskStageCreate — плитка в ряду колонок (#730)', (
     // ширину у содержимого (контур — outline, не в раскладке).
     expect(tile.className).not.toMatch(/(?:^|\s)(?:px|py|p|pt|pb|pl|pr)-/);
     expect(tile.className).not.toMatch(/(?:^|\s)border(?:-|$)/);
-    expect(tile.className).not.toMatch(/(?:^|\s)max-w-/);
   });
 
   it('подпись не задаёт минимальную ширину плитки', () => {
@@ -73,13 +74,11 @@ describe('TaskStageCreate — плитка в ряду колонок (#730)', (
 
     const tile = render(<TaskStageCreate creating={false} onCreate={vi.fn()} />).container
       .firstElementChild as HTMLElement;
-    // Обе плитки одной фиксированной ширины (#824): 6 плиток на Full HD.
-    for (const cls of ['w-[12.2rem]', 'shrink-0']) {
+    // Обе плитки одной полосы ширины (#824): 6 плиток на Full HD, 8 на 2560.
+    for (const cls of [BOARD_COLUMN_MIN_CLASS, BOARD_COLUMN_MAX_CLASS, 'flex-1']) {
       expect(section.className).toContain(cls);
       expect(tile.className).toContain(cls);
     }
-    expect(section.className).not.toContain('flex-1');
-    expect(tile.className).not.toContain('flex-1');
   });
 
   it('раскрытая форма живёт в той же плитке и создаёт колонку по Enter', () => {
