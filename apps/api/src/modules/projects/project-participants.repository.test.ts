@@ -36,4 +36,26 @@ describe('ProjectParticipantsRepository — роли и держатели (#433
     });
     await expect(repository.userIdsBySources(undefined, 'p-1', [])).resolves.toEqual([]);
   });
+
+  it('convertSource: task→member; столкновение только с существующим member (#541)', async () => {
+    const findMany = vi.fn(async () => [{ userId: 'u-2' }]);
+    const deleteMany = vi.fn(async () => ({ count: 1 }));
+    const updateMany = vi.fn(async () => ({ count: 1 }));
+    const repository = new ProjectParticipantsRepository({} as never);
+    const tx = { projectParticipant: { findMany, deleteMany, updateMany } };
+
+    await repository.convertSource(tx as never, 'p-1', ['u-1', 'u-2'], 'task', 'member');
+
+    expect(findMany).toHaveBeenCalledWith({
+      select: { userId: true },
+      where: { projectId: 'p-1', userId: { in: ['u-1', 'u-2'] }, source: 'member' },
+    });
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { projectId: 'p-1', userId: { in: ['u-2'] }, source: 'task' },
+    });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { projectId: 'p-1', userId: { in: ['u-1'] }, source: 'task' },
+      data: { source: 'member', observerKind: null },
+    });
+  });
 });
