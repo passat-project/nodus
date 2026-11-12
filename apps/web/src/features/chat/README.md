@@ -1345,9 +1345,11 @@ im.dialog — принята модель Bitrix24 как ближайшая к 
   русские имена-тултипы `t` из CLDR tts — генератор scripts/emoji-tts.mjs, #165);
   выбор — вставка юникода в позицию КАРЕТКИ, панель живёт между выборами
   (канон Telegram). Эмодзи везде рендерятся шрифтом Noto Color Emoji
-  (Google, OFL, self-host `/app-fonts/`, 25МБ COLRv1/SVG, font-display
-  swap; unicode-range включает служебные кодпоинты ZWJ/кейкап/теги — иначе
-  составные разваливаются, гейт e2e zwj-emoji-font, #165; субсет — к VPS).
+  (Google, OFL, self-host woff2 COLRv1/SVG, ~5.8МБ, font-display
+  swap; файл — `packages/ui/src/assets/`, относительный url в общем CSS:
+  Vite эмитит его и в портал, и в мини-UI оболочки — попапы тоже получают
+  канонный шрифт, #822; unicode-range включает служебные кодпоинты ZWJ/кейкап/теги — иначе
+  составные разваливаются, гейты e2e zwj-emoji-font + scripts/lib/emoji-font.test.mjs, #165; субсет — к VPS).
   Одиночный эмодзи в сообщении — крупный ЖИВОЙ глиф: анимированный
   WebP из набора реакций, иначе крупный глиф шрифтом (`message-text.tsx`,
   `isSingleEmoji`). Гейт-островок канала («Публикация по правам»)
