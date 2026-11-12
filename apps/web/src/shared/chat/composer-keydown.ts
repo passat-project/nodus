@@ -5,7 +5,7 @@ import { mentionAutocompleteKeydown } from './composer-mention-autocomplete.js';
 import { mentionIndexAtKey, type DraftMention } from './composer-mention-registry.js';
 import { stickerSuggestKeydown } from './composer-sticker-suggest-panel.js';
 import { useForwardPending } from './forward-pending.js';
-import { isSendShortcut } from './send-keys.js';
+import { isImeComposing, isNewlineShortcut, isSendShortcut } from './send-keys.js';
 
 /**
  * Клавиатура композера чата (I5-сплит из chat-composer.tsx, #224): единый
@@ -40,6 +40,8 @@ export interface ComposerKeyboardCtx {
     dismiss: () => void;
   };
   submit: () => void;
+  /** Вставка переноса строки в каретку (#777): Ctrl/Meta/Alt+Enter. */
+  insertNewline: () => void;
   /** Режимы Esc-каскада: пересылка / ответ / правка. */
   pendingForward: boolean;
   hasReply: boolean;
@@ -52,6 +54,9 @@ export function composerKeyDown(
   event: KeyboardEvent<HTMLTextAreaElement>,
   ctx: ComposerKeyboardCtx,
 ): void {
+  // IME-композиция (#777): Enter подтверждает кандидата ввода — отправка,
+  // перенос и атомарные клавиши чипов в этот момент не наши.
+  if (isImeComposing(event)) return;
   // Атомарное удаление чипа (#224/#228): Backspace/Delete у диапазона
   // сносят чип ЦЕЛИКОМ — label не разбирается посимвольно.
   if (
@@ -75,6 +80,14 @@ export function composerKeyDown(
       }
     }
   }
+  // Перенос строки (#777): Ctrl/Meta/Alt+Enter — `\n` в каретку, сообщение
+  // не уходит. ДО панели @упоминаний: модифицированный Enter не должен
+  // выбирать кандидата (панель его пропускает, см. mentionAutocompleteKeydown).
+  if (isNewlineShortcut(event)) {
+    event.preventDefault();
+    ctx.insertNewline();
+    return;
+  }
   // Автокомплит @упоминаний (#176): Enter выбирает (НЕ отправляет), ↑↓ по
   // списку, Esc гасит панель; Slack.
   const eaten = mentionAutocompleteKeydown(
@@ -92,7 +105,7 @@ export function composerKeyDown(
     const eatenSticker = stickerSuggestKeydown(event, ctx.stickerSuggest);
     if (eatenSticker) return;
   }
-  if (isSendShortcut(event.key, event.shiftKey, event.ctrlKey)) {
+  if (isSendShortcut(event)) {
     event.preventDefault();
     ctx.submit();
     return;

@@ -9,7 +9,7 @@ import { cn } from '@nodus/ui/lib/utils';
 import { useInfiniteSentinel } from '../views/use-infinite-sentinel.js';
 import { useFrameReady } from '../ui/use-frame-ready.js';
 import { DayChip } from './day-chip.js';
-import { formatVaultDayLabel } from './message-groups.js';
+import { formatDayLabel } from './message-groups.js';
 import {
   MediaTile,
   VaultLinkCard,
@@ -178,7 +178,7 @@ function VaultWindowBody({
         <div className="flex flex-col gap-3">
           {groups.map((group) => (
             <section key={group.key} className="flex flex-col gap-2">
-              <DayChip label={formatVaultDayLabel(group.items[0]!.createdAt)} />
+              <DayChip label={formatDayLabel(group.items[0]!.createdAt)} />
               {type === 'image' ? (
                 <div className="grid grid-cols-3 gap-1.5">
                   {group.items.map((item) =>
