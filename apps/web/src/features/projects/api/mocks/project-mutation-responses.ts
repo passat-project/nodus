@@ -18,12 +18,16 @@ export const forbidden = () =>
 export const notFound = () =>
   HttpResponse.json({ code: ErrorCode.NOT_FOUND, message: 'Project not found' }, { status: 404 });
 
-/** Состав (#714): снятие/понижение держателя ролей в задачах. */
+/** Состав (#714, #541): снятие/понижение держателя ролей в задачах — в
+ *  details перечислены задачи, которые его держат. */
 export const memberHasTasks = () =>
   HttpResponse.json(
     {
       code: ErrorCode.PROJECT_MEMBER_HAS_TASKS,
       message: 'Remove the employee from the project tasks first',
+      details: {
+        tasks: [{ id: 'mock-task-1', number: 12, title: 'Демо-задача проекта' }],
+      },
     },
     { status: 422 },
   );

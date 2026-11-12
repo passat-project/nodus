@@ -157,6 +157,7 @@ export function makeProjectsServiceKit() {
         formulaCells as never,
         kit.formulaRecalc as never,
         { planOnCreate: async () => ({ ok: true, issue: async () => ({}) }) } as never,
+        { secretPreview: vi.fn() } as never,
       );
     },
   };

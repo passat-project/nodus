@@ -12,7 +12,10 @@ function logger() {
 
 function makeService(
   deps: Partial<
-    Record<'txRunner' | 'query' | 'placements' | 'taskService' | 'engine' | 'cells', unknown>
+    Record<
+      'txRunner' | 'query' | 'placements' | 'taskService' | 'engine' | 'cells' | 'projects',
+      unknown
+    >
   >,
   log = logger(),
 ) {
@@ -23,6 +26,7 @@ function makeService(
     (deps.taskService ?? {}) as never,
     (deps.engine ?? {}) as never,
     (deps.cells ?? {}) as never,
+    (deps.projects ?? { lockProject: vi.fn() }) as never,
     log as never,
   );
 }

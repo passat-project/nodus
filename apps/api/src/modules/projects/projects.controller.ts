@@ -139,7 +139,7 @@ export class ProjectsController {
     summary: 'Превью перевода в секретный: кто останется участником, кто потеряет доступ',
   })
   @ApiOkResponse({ standardSchema: projectSecretPreviewSchema })
-  @ApiErrors(400, 401, 404)
+  @ApiErrors(400, 401, 403, 404)
   secretPreview(
     @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
     @GetUser() user: AuthUser,

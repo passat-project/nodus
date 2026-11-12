@@ -17,6 +17,7 @@ import {
   WORKFLOW_ENGINE,
   type WorkflowEnginePort,
 } from '../../workflows/ports/workflow-engine.port.js';
+import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
 import { actorRoles, planHolderIds, taskAccess } from '../access/task-access.js';
 import { Placements } from '../personal/placements.js';
 import { TasksQueryService } from '../tasks/tasks-query.service.js';
@@ -61,6 +62,7 @@ export class TaskTransitionsService {
     private readonly taskService: TasksService,
     @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
     @Inject(FORMULA_CELLS) private readonly cells: FormulaCells,
+    @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(TaskTransitionsService.name);
@@ -141,6 +143,10 @@ export class TaskTransitionsService {
     );
     let assignedNumbers: { fieldId: string; display: string }[] | undefined;
     const transitions = await this.txRunner.run(async (tx) => {
+      // Единый порядок блокировок (#541): проект → задача. Иначе переход
+      // (задача уже под FOR UPDATE движка) и правка задачи (проект → задача)
+      // дают deadlock 40P01.
+      if (row.projectId) await this.projects.lockProject(tx, row.projectId);
       const execution = await this.engine.execute(tx, taskId, 'task', user, { transitionId }, body);
       assignedNumbers = execution.assignedNumbers;
       // Кнопки после действия уезжают в кэш веба — с тем же префиллом, что

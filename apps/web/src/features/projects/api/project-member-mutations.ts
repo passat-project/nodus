@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { CustomFieldRef, CustomFieldValue, ProjectDetail, UserRef } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { ErrorCode, ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
-import { api } from '../../../shared/api-client.js';
+import { ApiError, api } from '../../../shared/api-client.js';
 import { toastApiError } from '../../../shared/api/error-toast.js';
 import { projectsKeys } from '../../../shared/api/projects-list.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
@@ -164,6 +164,18 @@ export function useRemoveProjectMember(id: string) {
     onError: (error) => {
       void queryClient.invalidateQueries({ queryKey: projectsKeys.members(id) });
       void queryClient.invalidateQueries({ queryKey: projectsKeys.detail(id) });
+      // Снятие держателя ролей задач (#541): руководитель видит, какие задачи
+      // держат сотрудника — «снимите с задач» с номерами, а не общий код.
+      if (error instanceof ApiError && error.code === ErrorCode.PROJECT_MEMBER_HAS_TASKS) {
+        const tasks =
+          (error.details?.tasks as { number?: number; title?: string }[] | undefined) ?? [];
+        const list = tasks
+          .slice(0, 5)
+          .map((task) => `№ ${task.number} «${task.title ?? ''}»`)
+          .join(', ');
+        toast.error(ui.projects.memberHasTasks.replace('{tasks}', list || '…'));
+        return;
+      }
       toastApiError(error);
     },
     onSuccess: (_data, vars) =>

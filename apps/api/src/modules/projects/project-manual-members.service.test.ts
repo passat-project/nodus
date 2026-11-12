@@ -53,7 +53,12 @@ describe('ProjectManualMembersService (#52/Р2, #714)', () => {
     add: vi.fn(),
     remove: vi.fn(),
   };
-  const tasks = { membersOf: vi.fn(), roleHolderIds: vi.fn(), projectIdOf: vi.fn() };
+  const tasks = {
+    membersOf: vi.fn(),
+    roleHolderIds: vi.fn(),
+    roleTasksOf: vi.fn(),
+    projectIdOf: vi.fn(),
+  };
   const profiles = { filterActiveUserIds: vi.fn(), findRefs: vi.fn() };
   const txRunner = { run: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})) };
   const eventBus = { emit: vi.fn() };
@@ -69,6 +74,7 @@ describe('ProjectManualMembersService (#52/Р2, #714)', () => {
     participants.hasRow.mockResolvedValue(true);
     participants.rowsOfProject.mockResolvedValue([]);
     tasks.roleHolderIds.mockResolvedValue([]);
+    tasks.roleTasksOf.mockResolvedValue([]);
     profiles.filterActiveUserIds.mockImplementation(async (ids: string[]) => ids);
     service = new ProjectManualMembersService(
       txRunner as never,
@@ -120,10 +126,10 @@ describe('ProjectManualMembersService (#52/Р2, #714)', () => {
         createdAt: new Date(),
       },
     ]);
-    tasks.roleHolderIds.mockResolvedValueOnce([WORKER]);
+    tasks.roleTasksOf.mockResolvedValueOnce([{ id: 't1', number: 12, title: 'Задача' }]);
     await expect(service.addManual(user(MANAGER), ID, WORKER, 'observer')).rejects.toMatchObject({
       code: ErrorCode.PROJECT_MEMBER_HAS_TASKS,
-      details: { userId: WORKER },
+      details: { userId: WORKER, tasks: [{ id: 't1', number: 12, title: 'Задача' }] },
     });
     expect(participants.add).not.toHaveBeenCalled();
   });
@@ -279,10 +285,10 @@ describe('ProjectManualMembersService (#52/Р2, #714)', () => {
         createdAt: new Date(),
       },
     ]);
-    tasks.roleHolderIds.mockResolvedValue([WORKER]);
+    tasks.roleTasksOf.mockResolvedValueOnce([{ id: 't1', number: 12, title: 'Задача' }]);
     await expect(service.removeManual(user(MANAGER), ID, WORKER)).rejects.toMatchObject({
       code: ErrorCode.PROJECT_MEMBER_HAS_TASKS,
-      details: { userId: WORKER },
+      details: { userId: WORKER, tasks: [{ id: 't1', number: 12, title: 'Задача' }] },
     });
     expect(participants.remove).not.toHaveBeenCalled();
   });

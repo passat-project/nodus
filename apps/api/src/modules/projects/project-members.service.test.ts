@@ -208,36 +208,19 @@ describe('ProjectMembersService (#52, Р2 — двухрежимное учас�
   });
 
   describe('convertForSecret (open→secret, #541)', () => {
+    const row = (userId: string, source: string, observerKind: string | null = null) => ({
+      projectId: ID,
+      userId,
+      source,
+      observerKind,
+      createdAt: new Date(),
+    });
     it('носители ролей задач и решающие становятся участниками; joined и наблюдатели вне состава теряют доступ', async () => {
       participants.rowsOfProject.mockResolvedValueOnce([
-        {
-          projectId: ID,
-          userId: WORKER,
-          source: 'task',
-          observerKind: null,
-          createdAt: new Date(),
-        },
-        {
-          projectId: ID,
-          userId: OUTSIDER,
-          source: 'observer',
-          observerKind: 'joined',
-          createdAt: new Date(),
-        },
-        {
-          projectId: ID,
-          userId: HELPER,
-          source: 'observer',
-          observerKind: 'invited',
-          createdAt: new Date(),
-        },
-        {
-          projectId: ID,
-          userId: MANAGER,
-          source: 'observer',
-          observerKind: 'creator',
-          createdAt: new Date(),
-        },
+        row(WORKER, 'task'),
+        row(OUTSIDER, 'observer', 'joined'),
+        row(HELPER, 'observer', 'invited'),
+        row(MANAGER, 'observer', 'creator'),
       ]);
       await service.convertForSecret({} as never, ID, {
         holders: [{ userId: WORKER, roles: ['assignee'], taskCount: 2 }],
@@ -279,6 +262,20 @@ describe('ProjectMembersService (#52, Р2 — двухрежимное учас�
         }),
         expect.anything(),
       );
+    });
+
+    it('носитель роли с joined-строкой становится участником, а не теряет доступ', async () => {
+      participants.rowsOfProject.mockResolvedValueOnce([row(WORKER, 'observer', 'joined')]);
+      await service.convertForSecret({} as never, ID, {
+        holders: [{ userId: WORKER, roles: ['assignee'], taskCount: 1 }],
+        deciderIds: [],
+        observers: [],
+      });
+
+      expect(participants.add).toHaveBeenCalledWith({}, [
+        { projectId: ID, userId: WORKER, source: 'member' },
+      ]);
+      expect(participants.remove).toHaveBeenCalledWith({}, ID, [WORKER], 'observer');
     });
   });
 

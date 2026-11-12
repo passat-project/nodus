@@ -139,19 +139,28 @@ export class TaskEditService {
     await this.placements.prepare(holdersAfter);
 
     await this.txRunner.run(async (tx) => {
-      // Состав целевого проекта перепроверяется под локом (#541): смена
-      // видимости и правка задачи не проскакивают друг мимо друга.
+      // Состав перепроверяется под локом проекта (#541) — только когда правка
+      // реально меняет ответственного/проект: заголовок/срок в «наследном»
+      // секретном проекте не должны упираться в чужую роль 422.
+      const assigneeAfter = body.assigneeId ?? row.assigneeId;
+      const changingProject = body.projectId !== undefined && body.projectId !== row.projectId;
+      const changingAssignee = body.assigneeId !== undefined && body.assigneeId !== row.assigneeId;
       const effectiveProjectId = body.projectId ?? row.projectId;
-      if (effectiveProjectId) {
+      if (effectiveProjectId && (changingProject || changingAssignee)) {
         await this.projects.lockProject(tx, effectiveProjectId);
-        if (body.projectId) await this.projects.assertTaskProjectVisible(user, body.projectId);
-        await this.projects.assertMembersAllowed(effectiveProjectId, [
-          row.creatorId,
-          body.assigneeId ?? row.assigneeId,
-          // Наблюдатель прав на задачу не получает — состав секретного
-          // проекта его не ограничивает (#541, security-аудит).
-          ...row.participants.filter((p) => p.role === 'coexecutor').map((p) => p.userId),
-        ]);
+        if (changingProject) await this.projects.assertTaskProjectVisible(user, body.projectId!);
+        await this.projects.assertMembersAllowed(
+          effectiveProjectId,
+          changingProject
+            ? [
+                row.creatorId,
+                assigneeAfter,
+                // Наблюдатель прав на задачу не получает — состав секретного
+                // проекта его не ограничивает (#541, security-аудит).
+                ...row.participants.filter((p) => p.role === 'coexecutor').map((p) => p.userId),
+              ]
+            : [assigneeAfter],
+        );
       }
       if (fields.length > 0 || hasCustomFields) await this.applyFields(tx, user, row, body, fields);
       if (body.stageId)

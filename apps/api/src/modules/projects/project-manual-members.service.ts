@@ -104,15 +104,9 @@ export class ProjectManualMembersService {
       if (
         locked.visibility === 'secret' &&
         kind === 'observer' &&
-        targetRows.some((row) => row.source === 'member') &&
-        (await this.tasks.roleHolderIds(projectId)).includes(targetId)
+        targetRows.some((row) => row.source === 'member')
       ) {
-        throw new DomainException(
-          ErrorCode.PROJECT_MEMBER_HAS_TASKS,
-          'Remove the employee from the project tasks first',
-          { userId: targetId },
-          422,
-        );
+        await this.assertNoTaskRoles(projectId, targetId);
       }
       const previousManual = targetRows.some((row) => row.source === 'member')
         ? ('member' as const)
@@ -170,16 +164,8 @@ export class ProjectManualMembersService {
       // уведомлений и push даже после снятия участия — сначала снимите его с
       // задач (иначе заголовки секретных задач продолжают утекать). Причина —
       // доменный код, а не общая валидация формы (#714).
-      if (
-        locked.visibility === 'secret' &&
-        (await this.tasks.roleHolderIds(projectId)).includes(targetId)
-      ) {
-        throw new DomainException(
-          ErrorCode.PROJECT_MEMBER_HAS_TASKS,
-          'Remove the employee from the project tasks first',
-          { userId: targetId },
-          422,
-        );
+      if (locked.visibility === 'secret') {
+        await this.assertNoTaskRoles(projectId, targetId);
       }
       const targetRows = rows.filter((row) => row.userId === targetId);
       const hasMember = targetRows.some((row) => row.source === 'member');
@@ -214,6 +200,19 @@ export class ProjectManualMembersService {
         user.id,
       );
     });
+  }
+
+  /** Решение владельца п.5 (#541): снятие держателя ролей задач невозможно —
+   *  в ошибке перечисляем задачи, которые его держат (номер и заголовок). */
+  private async assertNoTaskRoles(projectId: string, targetId: string): Promise<void> {
+    const tasks = await this.tasks.roleTasksOf(projectId, targetId);
+    if (tasks.length === 0) return;
+    throw new DomainException(
+      ErrorCode.PROJECT_MEMBER_HAS_TASKS,
+      'Remove the employee from the project tasks first',
+      { userId: targetId, tasks },
+      422,
+    );
   }
 
   private get deps(): ParticipationEventDeps {

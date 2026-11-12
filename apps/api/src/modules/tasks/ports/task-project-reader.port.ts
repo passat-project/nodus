@@ -71,6 +71,13 @@ export interface TaskProjectReader {
     userIds: readonly string[],
   ): Promise<void>;
 
+  /** Задачи проекта, где сотрудник держит роль (включая наблюдателя) — для
+   *  списка в ошибке снятия из состава (решение владельца п.5, #541). */
+  roleTasksOf(
+    projectId: string,
+    userId: string,
+  ): Promise<{ id: string; number: number; title: string }[]>;
+
   /** projectId живой задачи; null — задачи нет (или удалена). */
   projectIdOf(taskId: string): Promise<string | null>;
 

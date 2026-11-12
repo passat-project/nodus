@@ -225,6 +225,8 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: трассы Т1/Т2/Т2b 
       const preview = projectSecretPreviewSchema.parse(await previewRes.json());
       expect(preview.willBecomeMembers.map((item) => item.user.id)).toContain(carol.id);
       expect(preview.willLoseAccess.map((item) => item.user.id)).toContain(dave.id);
+      // Носитель роли не попадает в «потеряют доступ», даже если сам вступил.
+      expect(preview.willLoseAccess.map((item) => item.user.id)).not.toContain(carol.id);
 
       const flipped = await fx.api(alice, 'PATCH', `/projects/${open.id}`, {
         body: { visibility: 'secret' },
@@ -273,14 +275,6 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: трассы Т1/Т2/Т2b 
         },
         key: `t2-task-${fx.runId}`,
       });
-      if (res.status !== 201) {
-        const rows = await fx.prisma.project.findMany({
-          where: { visibility: 'open' },
-          select: { id: true },
-        });
-        console.log('OPEN IDS', JSON.stringify(rows.map((r) => r.id)));
-        console.log('EXPECTED', open.id);
-      }
       expect(res.status).toBe(201);
       const task = (await res.json()) as { id: string };
 
