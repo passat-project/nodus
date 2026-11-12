@@ -144,12 +144,16 @@ export function ConversationList({
     // Галки «отправлено/прочитано» (#799, модель Telegram): только у СВОЕГО
     // последнего сообщения. Чужое последнее, удалённое, «Заметки» (собеседник
     // я сам) и черновик — без галок; «печатает…» галки не гасит (они про
-    // последнее сообщение, а не про превью).
+    // последнее сообщение, а не про превью). membersCount > 1 — в одиночной
+    // беседе/канале сервер ставит readAt=createdAt автору (он единственный
+    // участник), а вторая галка без второго участника — ложное «просмотрено»
+    // (канон пузыря — readBy.length > 0, #102).
     const showTicks =
       last !== null &&
       meId !== undefined &&
       last.author.id === meId &&
       last.deletedAt === null &&
+      conversation.membersCount > 1 &&
       !conversation.draft?.text &&
       !isNotesConversation(conversation, meId);
     return (

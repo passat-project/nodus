@@ -1,4 +1,4 @@
-import type { InfiniteData, QueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import type {
   ChatAttachmentPreviewReadyPayload,
   ChatLinkPreviewReadyPayload,
@@ -14,6 +14,7 @@ import type {
 
 import { useAuthStore } from '../auth-store.js';
 import { chatKeys } from './chat-keys.js';
+import { patchConversationReadAt } from './ws-apply-conversations.js';
 
 /**
  * Локальное применение chat.message_sent в кэш (раунд 3 «буря рефечей» +
@@ -275,49 +276,6 @@ export function applyReadEvent(
     },
   );
   return touched;
-}
-
-/** Патч списка бесед после чужой квитанции (#799): у СВОЕГО последнего
- *  сообщения, покрытого upToSeq и ещё не прочитанного, выставляем readAt —
- *  галка в строке списка становится «прочитано» без рефетча. readAt — момент
- *  ПЕРВОГО прочитавшего (канон #102): уже заполненную метку не трогаем. */
-function patchConversationReadAt(
-  queryClient: QueryClient,
-  payload: Pick<ChatMessageReadPayload, 'conversationId' | 'upToSeq' | 'readAt'>,
-  meId: string | null,
-): void {
-  const { conversationId, upToSeq, readAt } = payload;
-  const patchItems = (items: ConversationListItem[]): ConversationListItem[] =>
-    items.map((conversation) => {
-      if (conversation.id !== conversationId) return conversation;
-      const last = conversation.lastMessage;
-      if (
-        last === null ||
-        last.author.id !== meId ||
-        last.deletedAt !== null ||
-        last.seq > upToSeq ||
-        last.readAt !== null
-      ) {
-        return conversation;
-      }
-      return { ...conversation, lastMessage: { ...last, readAt } };
-    });
-  queryClient.setQueryData<Paginated<ConversationListItem>>(chatKeys.conversations(), (old) =>
-    old ? { ...old, items: patchItems(old.items) } : old,
-  );
-  // Вкладки мессенджера (#252) живут под своими infinite-ключами.
-  for (const scope of ['chats', 'entities'] as const) {
-    queryClient.setQueryData<InfiniteData<Paginated<ConversationListItem>>>(
-      chatKeys.scoped(scope),
-      (old) =>
-        old
-          ? {
-              ...old,
-              pages: old.pages.map((page) => ({ ...page, items: patchItems(page.items) })),
-            }
-          : old,
-    );
-  }
 }
 
 function readerRefFromCache(

@@ -37,7 +37,7 @@ function conv(id: string, pinned = false): ConversationListItem {
     task: null,
     letter: null,
     membersPreview: [],
-    membersCount: 1,
+    membersCount: 2,
     lastMessage: null,
     lastActivityAt: null,
     unreadCount: 0,
@@ -279,11 +279,25 @@ describe('галки отправлено/прочитано в строке с�
     expect(ticks(view).read).toBeNull();
   });
 
+  it('одиночная беседа/канал (я единственный участник) — без галок', () => {
+    const view = renderList([
+      row('solo-channel', {
+        type: 'project_channel',
+        title: 'Новости',
+        membersCount: 1,
+        lastMessage: lastMessage({ readAt: '2026-11-12T10:05:00Z' }),
+      }),
+    ]);
+    expect(ticks(view).sent).toBeNull();
+    expect(ticks(view).read).toBeNull();
+  });
+
   it('«Заметки» (беседа с собой) — без галок', () => {
     const view = renderList([
       row('notes', {
         type: 'direct',
         membersPreview: [ME_REF],
+        membersCount: 1,
         lastMessage: lastMessage({ readAt: '2026-11-12T10:05:00Z' }),
       }),
     ]);
