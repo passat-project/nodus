@@ -13,11 +13,17 @@ import { readFile } from 'node:fs/promises';
  * - контекст «баг» — старый диапазон БЕЗ U+200D/U+20E3/U+E0020-E007F:
  *   репродукция бага #165, доказывает чувствительность гейта к откату.
  *
+ * Шрифт — woff2 из пакета дизайн-системы (тот же файл, что Vite эмитит в
+ * бандлы портала И мини-UI оболочки: попапы получают канонный Noto, а не
+ * системный шрифт — #822).
+ *
  * Самодостаточен: страница/шрифт/данные отдаются через page.route —
- * живой стек и порты не нужны, идёт в CI вместе с остальными e2e.
+ * живой стек и порты не нужны. В CI-список e2e-шага спека не входит;
+ * постоянный страж канона (относительный url + woff2 + диапазон) живёт в
+ * scripts/lib/emoji-font.test.mjs, он выполняется в `pnpm test:scripts`.
  */
 
-const FONT_URL = new URL('../../../apps/web/public/app-fonts/NotoColorEmoji.ttf', import.meta.url);
+const FONT_URL = new URL('../../../packages/ui/src/assets/NotoColorEmoji.woff2', import.meta.url);
 const DATA_URL = new URL('../../../apps/web/public/emoji/emoji-data.json', import.meta.url);
 const CSS_URL = new URL('../../../packages/ui/src/styles/globals.css', import.meta.url);
 
@@ -33,10 +39,10 @@ async function productionUnicodeRange(): Promise<string> {
 
 const PAGE_HTML = (prodRange: string, oldRange: string) => `
 <!doctype html><html><head><style>
-  @font-face { font-family: 'NCE-PROD'; src: url('/font.ttf') format('truetype');
+  @font-face { font-family: 'NCE-PROD'; src: url('/font.woff2') format('woff2');
     unicode-range: ${prodRange}; }
-  @font-face { font-family: 'NCE-ALONE'; src: url('/font.ttf') format('truetype'); }
-  @font-face { font-family: 'NCE-OLD'; src: url('/font.ttf') format('truetype');
+  @font-face { font-family: 'NCE-ALONE'; src: url('/font.woff2') format('woff2'); }
+  @font-face { font-family: 'NCE-OLD'; src: url('/font.woff2') format('woff2');
     unicode-range: ${oldRange}; }
 </style></head><body><canvas id="c"></canvas></body></html>`;
 
@@ -60,7 +66,7 @@ test.describe('ZWJ-эмодзи шрифтом Noto Color Emoji (#165)', () => {
 
     await page.route('**/*', (route) => {
       const path = new URL(route.request().url()).pathname;
-      if (path === '/font.ttf') return route.fulfill({ contentType: 'font/ttf', body: font });
+      if (path === '/font.woff2') return route.fulfill({ contentType: 'font/woff2', body: font });
       if (path === '/data.json')
         return route.fulfill({ contentType: 'application/json', body: dataRaw });
       return route.fulfill({ contentType: 'text/html', body: PAGE_HTML(prodRange, oldRange) });
