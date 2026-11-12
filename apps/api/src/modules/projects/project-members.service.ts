@@ -1,5 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ErrorCode, type AuthUser, type ProjectMember } from '@nodus/contracts';
+import {
+  ErrorCode,
+  type AuthUser,
+  type ProjectMember,
+  type ProjectParticipantChange,
+} from '@nodus/contracts';
 
 import {
   TransactionRunner,
@@ -11,6 +16,7 @@ import { encodeCursor } from '../../core/pagination/cursor.util.js';
 import { USER_PROFILE_READER, type UserProfileReader } from '../../core/ports/user-profile.port.js';
 import {
   TASK_PROJECT_READER,
+  type ProjectTaskStaffing,
   type TaskProjectReader,
 } from '../tasks/ports/task-project-reader.port.js';
 import { assertProjectVisible } from './project-members.access.js';
@@ -157,25 +163,50 @@ export class ProjectMembersService {
     }
   }
 
-  /** open→secret: состав секретного полностью ручной. В ТОЙ ЖЕ транзакции,
-   *  что и смена видимости (иначе окно, где проект уже секретный, а бывшие
-   *  участники задач ещё видят карточку/задачи/канал), снимаем динамику
-   *  задач и САМОВСТУПИВШИХ наблюдателей (`joined`); приглашённые (`invited`)
-   *  и создатель (`creator`) остаются — они назначены/производные. Это
-   *  системное следствие смены видимости — отдельная строка истории (#699). */
-  async dropOpenRoster(tx: TransactionClient, projectId: string): Promise<void> {
-    const rows = await this.participants.rowsOfProject(projectId);
+  /** open→secret: правило «переход в секретный не отбирает уже выданную
+   *  работу» (#541). В ТОЙ ЖЕ транзакции, что и смена видимости:
+   *  - носители ролей задач (постановщик/ответственный/соисполнители) и
+   *    решающие с ожидающим действием становятся участниками (`member`);
+   *  - снятые task-строки и самовступившие (`joined`) — уходят;
+   *  - наблюдатели задач вне нового состава теряют роль в задаче (иначе
+   *    события task.* продолжают уходить им с заголовком).
+   *  `staffing` посчитан ДО записи visibility (проект ещё открытый): иначе
+   *  гейт секретного проекта отфильтровал бы самих решающих. */
+  async convertForSecret(
+    tx: TransactionClient,
+    projectId: string,
+    staffing: ProjectTaskStaffing,
+  ): Promise<void> {
+    const rows = await this.participants.rowsOfProject(projectId, tx);
+    const roleHolders = new Set([
+      ...staffing.holders.map((holder) => holder.userId),
+      ...staffing.deciderIds,
+    ]);
     const taskRows = rows.filter((row) => row.source === 'task');
+    const keepTaskIds = [...new Set(taskRows.map((row) => row.userId))].filter((id) =>
+      roleHolders.has(id),
+    );
+    const dropTaskIds = [...new Set(taskRows.map((row) => row.userId))].filter(
+      (id) => !roleHolders.has(id),
+    );
     const joinedRows = rows.filter(
       (row) => row.source === 'observer' && row.observerKind === 'joined',
     );
-    if (taskRows.length === 0 && joinedRows.length === 0) return;
-    if (taskRows.length > 0) {
-      await this.participants.remove(
+    const existing = new Set(
+      rows
+        .filter((row) => !(row.source === 'observer' && row.observerKind === 'joined'))
+        .map((row) => row.userId),
+    );
+    const addIds = [...roleHolders].filter((id) => !existing.has(id));
+
+    if (dropTaskIds.length > 0) {
+      await this.participants.remove(tx, projectId, dropTaskIds, 'task');
+    }
+    await this.participants.convertSource(tx, projectId, keepTaskIds, 'task', 'member');
+    if (addIds.length > 0) {
+      await this.participants.add(
         tx,
-        projectId,
-        [...new Set(taskRows.map((row) => row.userId))],
-        'task',
+        addIds.map((userId) => ({ projectId, userId, source: 'member' })),
       );
     }
     if (joinedRows.length > 0) {
@@ -186,15 +217,52 @@ export class ProjectMembersService {
         'observer',
       );
     }
-    await emitParticipantsChanged(
-      this.deps,
+
+    // Наблюдатели задач вне нового состава: доступ теряют — снимаем роль в
+    // задаче в этой же транзакции (иначе WS task.* несёт им заголовок).
+    const finalRoster = new Set(
+      rows
+        .filter(
+          (row) =>
+            !(row.source === 'observer' && row.observerKind === 'joined') &&
+            !dropTaskIds.includes(row.userId),
+        )
+        .map((row) => row.userId),
+    );
+    for (const id of addIds) finalRoster.add(id);
+    await this.tasks.detachObservers(
       tx,
       projectId,
-      removalChanges([...taskRows, ...joinedRows], ['task', 'observer']),
-      'visibility',
-      null,
-      'secret',
+      staffing.observers.map((observer) => observer.userId).filter((id) => !finalRoster.has(id)),
     );
+
+    const changes: ProjectParticipantChange[] = [
+      ...keepTaskIds.map((userId) => ({
+        userId,
+        action: 'role_changed' as const,
+        from: 'task' as const,
+        to: 'member' as const,
+      })),
+      ...dropTaskIds.map((userId) => ({
+        userId,
+        action: 'removed' as const,
+        from: 'task' as const,
+        to: null,
+      })),
+      ...addIds.map((userId) => ({
+        userId,
+        action: 'added' as const,
+        from: null,
+        to: 'member' as const,
+      })),
+      ...joinedRows.map((row) => ({
+        userId: row.userId,
+        action: 'removed' as const,
+        from: 'observer' as const,
+        to: null,
+      })),
+    ];
+    await emitParticipantsChanged(this.deps, tx, projectId, changes, 'visibility', null, 'secret');
   }
 
   /** secret→open: ручные участники снимаются — состав открытого проекта
@@ -221,6 +289,11 @@ export class ProjectMembersService {
       null,
       'open',
     );
+  }
+
+  /** Снимок ролей задач для транзакции перевода в секретный (#541). */
+  staffingOf(projectId: string, tx?: TransactionClient): Promise<ProjectTaskStaffing> {
+    return this.tasks.staffingOf(projectId, { tx });
   }
 
   /** Зависимости событий состава — общие для этого сервиса и ручного. */

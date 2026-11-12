@@ -90,8 +90,10 @@ export class TaskFormApplier {
         fields.plannedMinutes = { from: task.plannedMinutes, to: input.fields.plannedMinutes };
       }
       if (input.fields.assigneeId !== undefined && input.fields.assigneeId !== task.assigneeId) {
-        // Секретный проект: новый ответственный — только участник проекта.
+        // Секретный проект: новый ответственный — только участник проекта;
+        // лок строки проекта исключает гонку с open→secret (#541).
         if (task.projectId) {
+          await this.projects.lockProject(tx, task.projectId);
           await this.projects.assertMembersAllowed(task.projectId, [input.fields.assigneeId]);
         }
         patch.assigneeId = input.fields.assigneeId;

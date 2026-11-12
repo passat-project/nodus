@@ -53,7 +53,7 @@ export class TaskDeciderRecipients {
 
   /** Кого ждёт новый статус: только живые и только видящие задачу. */
   async idsForStage(
-    tx: TransactionClient,
+    tx: TransactionClient | undefined,
     task: DeciderTaskRow,
     stage: { id: string; systemState: string },
   ): Promise<string[]> {
@@ -141,7 +141,7 @@ export class TaskDeciderRecipients {
 
   /** Адресаты уведомлений — те же гейты, что у видимости (без утечек). */
   private async filterVisibleRecipients(
-    tx: TransactionClient,
+    tx: TransactionClient | undefined,
     task: DeciderTaskRow,
     ids: readonly string[],
   ): Promise<string[]> {

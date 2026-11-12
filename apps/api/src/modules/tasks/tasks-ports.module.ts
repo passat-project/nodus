@@ -16,6 +16,7 @@ import { TaskCustomFieldValuesProvider } from './ports/custom-field-values.provi
 import { TASK_CHAT_READER } from './ports/task-chat-reader.port.js';
 import { TaskChatReaderProvider } from './ports/task-chat-reader.provider.js';
 import { TASK_PROJECT_READER } from './ports/task-project-reader.port.js';
+import { ProjectStaffingProvider } from './ports/project-staffing.provider.js';
 import { TaskProjectReaderProvider } from './ports/task-project-reader.provider.js';
 import { TASK_REF_READER } from './ports/task-ref-reader.port.js';
 import { TaskRefReaderProvider } from './ports/task-ref-reader.provider.js';
@@ -52,6 +53,7 @@ import { TaskNumberHostProvider } from './ports/number-host.provider.js';
     { provide: CUSTOM_FIELD_VALUES_READER, useClass: TaskCustomFieldValuesProvider },
     TaskProjectReaderProvider,
     { provide: TASK_PROJECT_READER, useClass: TaskProjectReaderProvider },
+    ProjectStaffingProvider,
     TaskRefReaderProvider,
     { provide: TASK_REF_READER, useExisting: TaskRefReaderProvider },
     // Задачи как источники формул (#632, Р7): значения, системные поля,

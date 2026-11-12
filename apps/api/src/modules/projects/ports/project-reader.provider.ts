@@ -279,6 +279,16 @@ export class ProjectReaderProvider implements ProjectReader, ProjectChatReader {
     return { supervisor: await this.participants.isManagement(projectId, actorId) };
   }
 
+  async lockProject(
+    tx: TransactionClient,
+    projectId: string,
+  ): Promise<{ visibility: 'open' | 'secret'; status: string } | null> {
+    if (!(await this.enabled())) return null;
+    const row = await this.projects.lockForUpdate(tx, projectId);
+    if (!row) return null;
+    return { visibility: row.visibility as 'open' | 'secret', status: row.status };
+  }
+
   async lockNodeStructure(tx: TransactionClient, projectId: string): Promise<void> {
     if (!(await this.enabled())) return;
     await this.nodes.lockStructure(tx, projectId);

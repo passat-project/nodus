@@ -1,9 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { statesOfPhase } from '@nodus/contracts';
 
+import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { PrismaService } from '../../../core/database/prisma.service.js';
 import { Prisma } from '../../../generated/prisma/client.js';
-import type { TaskNodeRollup, TaskProjectReader } from './task-project-reader.port.js';
+import { ProjectStaffingProvider } from './project-staffing.provider.js';
+import type {
+  ProjectTaskStaffing,
+  TaskNodeRollup,
+  TaskProjectReader,
+} from './task-project-reader.port.js';
 
 /** Строка сырого агрегата узла (даты — timestamptz). */
 interface RollupRow {
@@ -23,7 +29,10 @@ interface RollupRow {
  */
 @Injectable()
 export class TaskProjectReaderProvider implements TaskProjectReader {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly staffing: ProjectStaffingProvider,
+  ) {}
 
   async membersOf(projectId: string): Promise<string[]> {
     const rows = await this.prisma.$queryRaw<{ user_id: string }[]>`
@@ -58,6 +67,36 @@ export class TaskProjectReaderProvider implements TaskProjectReader {
       ) u
     `;
     return rows.map((row) => row.user_id);
+  }
+
+  async staffingOf(
+    projectId: string,
+    opts: { viewerId?: string; tx?: TransactionClient } = {},
+  ): Promise<ProjectTaskStaffing> {
+    return this.staffing.staffingOf(projectId, opts);
+  }
+
+  async detachObservers(
+    tx: TransactionClient,
+    projectId: string,
+    userIds: readonly string[],
+  ): Promise<void> {
+    return this.staffing.detachObservers(tx, projectId, userIds);
+  }
+
+  async roleTasksOf(
+    projectId: string,
+    userId: string,
+  ): Promise<{ id: string; number: number; title: string }[]> {
+    return this.prisma.task.findMany({
+      where: {
+        projectId,
+        deletedAt: null,
+        OR: [{ creatorId: userId }, { assigneeId: userId }, { participants: { some: { userId } } }],
+      },
+      select: { id: true, number: true, title: true },
+      orderBy: { number: 'asc' },
+    });
   }
 
   async projectIdOf(taskId: string): Promise<string | null> {

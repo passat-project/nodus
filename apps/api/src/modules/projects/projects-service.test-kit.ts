@@ -78,11 +78,16 @@ export function makeProjectsServiceKit() {
     hasRow: vi.fn(),
   };
   const members: Mocks<
-    'syncManagement' | 'recomputeTaskSource' | 'dropOpenRoster' | 'dropManualRoster'
+    | 'syncManagement'
+    | 'recomputeTaskSource'
+    | 'staffingOf'
+    | 'convertForSecret'
+    | 'dropManualRoster'
   > = {
     syncManagement: vi.fn(),
     recomputeTaskSource: vi.fn(),
-    dropOpenRoster: vi.fn(),
+    staffingOf: vi.fn(),
+    convertForSecret: vi.fn(),
     dropManualRoster: vi.fn(),
   };
   const queries: Mocks<'detail'> = { detail: vi.fn() };
@@ -152,6 +157,7 @@ export function makeProjectsServiceKit() {
         formulaCells as never,
         kit.formulaRecalc as never,
         { planOnCreate: async () => ({ ok: true, issue: async () => ({}) }) } as never,
+        { secretPreview: vi.fn() } as never,
       );
     },
   };

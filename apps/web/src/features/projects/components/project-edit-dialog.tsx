@@ -28,6 +28,7 @@ import { useProjectTypes } from '../../../shared/api/projects-list.js';
 import { definitionsForTarget } from '../../../shared/custom-fields/module-target.js';
 import { useCustomFieldDefinitions } from '../../../shared/custom-fields/queries.js';
 import { useUpdateProject } from '../api/project-mutations.js';
+import { useProjectSecretPreview } from '../api/projects-api.js';
 import {
   counterpartyRefOf,
   mergeFieldRefs,
@@ -36,7 +37,8 @@ import {
   ProjectDeadlineField,
   VisibilityField,
 } from './project-form-fields.js';
-import { PROJECT_SYSTEM_LABELS, ProjectFormGrid } from './project-form-grid.js';
+import { ProjectFormGrid, PROJECT_SYSTEM_LABELS } from './project-form-grid.js';
+import { ProjectSecretPreviewBlock } from './project-secret-preview.js';
 
 /**
  * «Поля проекта»: правка системных полей руководством (руководитель,
@@ -74,6 +76,10 @@ export function ProjectEditDialog({
     project.assistants.map((assistant) => assistant.id),
   );
   const [visibility, setVisibility] = useState<ProjectVisibility>(project.visibility);
+  // Перевод в секретный (#541): предпросмотр состава и явное подтверждение.
+  const [secretConfirmed, setSecretConfirmed] = useState(false);
+  const needsSecretPreview = project.visibility === 'open' && visibility === 'secret';
+  const secretPreview = useProjectSecretPreview(project.id, needsSecretPreview);
   const [endDate, setEndDate] = useState<string | null>(project.endDate);
   const [error, setError] = useState<string | null>(null);
   // Попытка отправки: обязательные слоты показывают ошибку у поля (§4c).
@@ -81,7 +87,8 @@ export function ProjectEditDialog({
 
   const canMakeSecret = project.access.canTransfer || project.visibility === 'secret';
   const missing = missingProjectFields(form, { customFields: values });
-  const canSubmit = name.trim().length > 0 && !update.isPending;
+  const secretReady = !needsSecretPreview || (secretPreview.data !== undefined && secretConfirmed);
+  const canSubmit = name.trim().length > 0 && !update.isPending && secretReady;
 
   function onField(fieldId: string, value: CustomFieldValue | null, picked?: CustomFieldRef[]) {
     setValues((prev) => {
@@ -199,7 +206,12 @@ export function ProjectEditDialog({
                         value={visibility}
                         label={ui.projects.fieldVisibility}
                         canMakeSecret={canMakeSecret}
-                        onChange={setVisibility}
+                        onChange={(next) => {
+                          setVisibility(next);
+                          // Подтверждение относится к конкретному переводу:
+                          // уход с «секретного» сбрасывает отметку.
+                          if (next !== 'secret') setSecretConfirmed(false);
+                        }}
                       />
                     );
                   case 'endDate':
@@ -220,6 +232,16 @@ export function ProjectEditDialog({
                 }
               }}
             />
+
+            {needsSecretPreview ? (
+              <ProjectSecretPreviewBlock
+                preview={secretPreview.data}
+                loading={secretPreview.isPending}
+                error={secretPreview.isError}
+                confirmed={secretConfirmed}
+                onConfirmChange={setSecretConfirmed}
+              />
+            ) : null}
 
             {error ? (
               <p role="alert" className="text-sm text-danger">

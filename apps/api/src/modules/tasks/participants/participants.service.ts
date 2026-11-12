@@ -73,10 +73,21 @@ export class ParticipantsService {
     }
     await this.placements.prepare([body.userId]);
     await this.txRunner.run(async (tx) => {
+      // Единый порядок блокировок (#541, security): проект → задача.
+      // Обратный порядок с правкой задачи давал deadlock 40P01.
+      if (row.projectId) await this.projects.lockProject(tx, row.projectId);
       // Замок строки — до чтения карты замков: параллельный переход с
       // «Закрепить после нажатия» не должен потеряться (security #496).
       await this.tasksRepo.lock(tx, taskId);
       const fresh = await this.tasksRepo.findWithParticipants(taskId, tx);
+      if (fresh.projectId !== row.projectId) {
+        throw DomainException.conflict('Task project changed, retry');
+      }
+      // Состав проекта — под локом его строки (#541): участник не окажется
+      // вне секретного проекта, пока тот переключается.
+      if (fresh.projectId) {
+        await this.projects.assertMembersAllowed(fresh.projectId, [body.userId]);
+      }
       // Замок записи (#496, Р4): закреплённые «Соисполнители»/«Наблюдатели»
       // меняет только постановщик (или task.edit_locked) с причиной.
       await this.assertParticipantLocked(tx, fresh, body.role, user, body.lockReason);
@@ -108,10 +119,15 @@ export class ParticipantsService {
       throw DomainException.forbidden('Participants change not allowed');
     }
     await this.txRunner.run(async (tx) => {
+      // Единый порядок блокировок (#541): проект → задача.
+      if (row.projectId) await this.projects.lockProject(tx, row.projectId);
       // Замок строки — как у писателя полей и движка переходов: карта
       // замков читается и пишется только под ним (security #496).
       await this.tasksRepo.lock(tx, taskId);
       const fresh = await this.tasksRepo.findWithParticipants(taskId, tx);
+      if (fresh.projectId !== row.projectId) {
+        throw DomainException.conflict('Task project changed, retry');
+      }
       const role = selfObserver
         ? 'observer'
         : (fresh.participants.find((p) => p.userId === userId)?.role as

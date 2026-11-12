@@ -11,6 +11,7 @@ import type {
   ProjectHistoryEntry,
   ProjectListItem,
   ProjectMember,
+  ProjectSecretPreview,
   TaskListItem,
 } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -117,6 +118,17 @@ export function useMoveProjectTask() {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: tasksKeys.all });
     },
+  });
+}
+
+/** Превью перевода в секретный (#541): кто останется участником, кто
+ *  потеряет доступ. Считается по задачам проекта на сервере. */
+export function useProjectSecretPreview(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['projects', 'secret-preview', id] as const,
+    queryFn: () => api<ProjectSecretPreview>(`/projects/${id}/secret-preview`),
+    enabled: enabled && id.length > 0,
+    staleTime: 0,
   });
 }
 

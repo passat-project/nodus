@@ -12,6 +12,7 @@ import {
   type AuthUser,
   type CreateProjectBody,
   type ProjectDetail,
+  type ProjectSecretPreview,
   type UpdateProjectBody,
 } from '@nodus/contracts';
 
@@ -37,6 +38,7 @@ import { ProjectMembersService } from './project-members.service.js';
 import { ProjectParticipantsRepository } from './project-participants.repository.js';
 import { ProjectTypesRepository } from './project-types.repository.js';
 import { ProjectsRepository, type ProjectRow } from './projects.repository.js';
+import { ProjectSecretPreviewService } from './project-secret-preview.service.js';
 import {
   NUMBER_ISSUE,
   numberingFailureException,
@@ -68,6 +70,7 @@ export class ProjectsService {
     @Inject(FORMULA_CELLS) private readonly formulaCells: FormulaCells,
     private readonly formulaRecalc: ProjectFormulaRecalcService,
     @Inject(NUMBER_ISSUE) private readonly numberIssue: NumberIssue,
+    private readonly secretPreviewService: ProjectSecretPreviewService,
   ) {}
 
   async create(user: AuthUser, body: CreateProjectBody): Promise<ProjectDetail> {
@@ -214,6 +217,12 @@ export class ProjectsService {
     return this.queries.detail(user, id);
   }
 
+  /** Превью перевода в секретный (#541): руководство проекта или
+   *  project.manage; проверка — в ProjectSecretPreviewService. */
+  secretPreview(user: AuthUser, id: string): Promise<ProjectSecretPreview> {
+    return this.secretPreviewService.secretPreview(user, id);
+  }
+
   async update(user: AuthUser, id: string, body: UpdateProjectBody): Promise<ProjectDetail> {
     const { row } = await this.loadForManage(user, id);
     // Архив — заморозка: поля правит только project.manage (Р1/Т6); вернуть
@@ -246,6 +255,12 @@ export class ProjectsService {
         body,
         tx,
       );
+      // Уход в секретность: штат считаем ДО записи visibility (#541): под
+      // секретным гейтом решающие отфильтровались бы. Затем в этой же
+      // транзакции носители ролей и решающие становятся участниками —
+      // переход не отбирает уже выданную работу.
+      const secretStaffing =
+        built.patch.visibility === 'secret' ? await this.members.staffingOf(id, tx) : null;
       const next = await this.repo.update(tx, id, built.patch);
       if (built.assistantIds !== null) {
         await this.members.syncManagement(tx, id, {
@@ -253,11 +268,8 @@ export class ProjectsService {
           assistantIds: built.assistantIds,
         });
       }
-      // Уход в секретность: состав становится полностью ручным В ТОЙ ЖЕ
-      // транзакции — без окна, где проект уже скрыт, а бывшие участники
-      // задач/самовступившие наблюдатели ещё держат доступ.
-      if (built.patch.visibility === 'secret') {
-        await this.members.dropOpenRoster(tx, id);
+      if (secretStaffing) {
+        await this.members.convertForSecret(tx, id, secretStaffing);
       }
       // Раскрытие: ручной состав секретного снимается в той же транзакции —
       // состав открытого проекта живёт из задач (#714); строка истории о

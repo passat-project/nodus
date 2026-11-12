@@ -221,6 +221,18 @@ export class TasksService {
           await this.projects.lockNodeStructure(tx, body.projectId);
           await this.projects.assertNodeAllowed(body.projectId, body.nodeId);
         }
+        // Состав проекта перепроверяется под локом строки проекта (#541):
+        // флип в секретный и создание задачи сериализуются, исполнитель не
+        // родится вне состава секретного проекта.
+        if (body.projectId) {
+          await this.projects.lockProject(tx, body.projectId);
+          await this.projects.assertTaskProjectVisible(user, body.projectId);
+          await this.projects.assertMembersAllowed(body.projectId, [
+            user.id,
+            assigneeId,
+            ...participants.map((p) => p.userId),
+          ]);
+        }
         const stageOrder = await this.repo.stageKeyAt(tx, initial.id, 0);
         const task = await this.repo.create(
           taskCreateData(body, {
@@ -295,6 +307,8 @@ export class TasksService {
       throw DomainException.forbidden('Only creator can delete task');
     }
     await this.txRunner.run(async (tx) => {
+      // Единый порядок блокировок (#541): проект → дерево → задача.
+      if (row.projectId) await this.projects.lockProject(tx, row.projectId);
       // Дети поднимаются к ближайшему ЖИВОМУ предку (родитель мог быть мягко
       // удалён параллельно — снимок row устаревает). Очередь дерева — та же
       // advisory-блокировка, что у смены родителя: удаление и перепривязка

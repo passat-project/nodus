@@ -94,6 +94,14 @@ export interface ProjectReader {
    *  `tasks.node_id` — задача исчезает из дерева. */
   lockNodeStructure(tx: TransactionClient, projectId: string): Promise<void>;
 
+  /** Лок строки проекта на время транзакции задачи (#541): смена видимости
+   *  open→secret ждёт коммита, а задача не рождается/не меняет исполнителя
+   *  вне состава секретного проекта. Возвращает актуальную видимость. */
+  lockProject(
+    tx: TransactionClient,
+    projectId: string,
+  ): Promise<{ visibility: 'open' | 'secret'; status: string } | null>;
+
   /** Видимость проекта (для гейта выноса задачи из секретного). */
   visibilityOf(projectId: string): Promise<'open' | 'secret' | null>;
 
