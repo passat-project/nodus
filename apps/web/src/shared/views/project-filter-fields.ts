@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { ProjectListItem } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { NO_PORTFOLIO_FILTER, ui } from '@nodus/contracts';
 
 import { useProjectGroups } from '../api/projects-list.js';
 import type { FilterFieldDef, FilterValue } from './list-filters.js';
@@ -20,18 +20,30 @@ export const projectBuiltinPresets: FilterPreset[] = [
 /** Реестр фильтруемых полей журнала проектов (стандарт списков): портфель,
  *  моя роль, видимость, статус — серверные фильтры (Р14 #52). */
 export function useProjectFilterDefs(): FilterFieldDef<ProjectListItem>[] {
-  const { data: groups } = useProjectGroups();
+  // С архивом: выбранная архивная папка обязана читаться названием, а не
+  // uuid-ом в чипе фильтра (#559).
+  const { data: groups } = useProjectGroups(true);
 
-  return useMemo(
-    () => [
+  return useMemo(() => {
+    const alive = (groups ?? []).filter((group) => group.archivedAt === null);
+    const archived = (groups ?? []).filter((group) => group.archivedAt !== null);
+    return [
       {
         id: 'portfolio',
         label: ui.projects.filterPortfolio,
         type: 'select' as const,
-        options: (groups ?? [])
-          .filter((group) => group.archivedAt === null)
-          .map((group) => ({ value: group.id, label: group.name })),
-        match: (p: ProjectListItem, v: FilterValue) => p.portfolio?.id === v,
+        options: [
+          ...alive.map((group) => ({ value: group.id, label: group.name })),
+          ...archived.map((group) => ({
+            value: group.id,
+            label: ui.projects.portfolioArchivedOption.replace('{name}', group.name),
+          })),
+          // Папка журнала «Без портфеля» (#559): тот же сентинел, что у
+          // левой колонки — фильтр и папка показывают один срез.
+          { value: NO_PORTFOLIO_FILTER, label: ui.projects.portfolioNone },
+        ],
+        match: (p: ProjectListItem, v: FilterValue) =>
+          v === NO_PORTFOLIO_FILTER ? p.portfolio === null : p.portfolio?.id === v,
       },
       {
         id: 'role',
@@ -61,7 +73,6 @@ export function useProjectFilterDefs(): FilterFieldDef<ProjectListItem>[] {
         options: Object.entries(ui.projects.status).map(([value, label]) => ({ value, label })),
         match: (p: ProjectListItem, v: FilterValue) => p.status === v,
       },
-    ],
-    [groups],
-  );
+    ];
+  }, [groups]);
 }

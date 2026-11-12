@@ -13,6 +13,8 @@ import {
   projectGroupCreateBodySchema,
   projectGroupSchema,
   projectGroupUpdateBodySchema,
+  projectPortfolioCountSchema,
+  projectPortfolioCountsQuerySchema,
   projectTypeCreateBodySchema,
   projectTypeSchema,
   projectTypeUpdateBodySchema,
@@ -20,6 +22,8 @@ import {
   type ProjectGroup,
   type ProjectGroupCreateBody,
   type ProjectGroupUpdateBody,
+  type ProjectPortfolioCount,
+  type ProjectPortfolioCountsQuery,
   type ProjectType,
   type ProjectTypeCreateBody,
   type ProjectTypeUpdateBody,
@@ -42,6 +46,7 @@ import {
 import { NodeKindsRepository } from './project-node-kinds.repository.js';
 import { ProjectGroupsRepository } from './project-groups.repository.js';
 import { ProjectTypesRepository } from './project-types.repository.js';
+import { ProjectsQueryService } from './projects-query.service.js';
 import { emitProjectTypeChanged } from './project-type-events.js';
 import { createProjectType, updateProjectType } from './project-type-form.js';
 
@@ -67,6 +72,7 @@ export class ProjectCatalogsController {
     private readonly types: ProjectTypesRepository,
     private readonly groups: ProjectGroupsRepository,
     private readonly nodeKinds: NodeKindsRepository,
+    private readonly queries: ProjectsQueryService,
     private readonly txRunner: TransactionRunner,
     private readonly eventBus: EventBus,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
@@ -201,6 +207,23 @@ export class ProjectCatalogsController {
     return this.groups.list(query.includeArchived === 'true');
   }
 
+  @Get('projects/groups/counts')
+  @ApiOperation({
+    summary: 'Счётчики папок журнала: видимые проекты портфеля по статусам (scope=all|mine)',
+  })
+  @ApiOkResponse({ standardSchema: z.array(projectPortfolioCountSchema) })
+  @ApiErrors(400, 401)
+  groupCounts(
+    @Query({
+      schema: projectPortfolioCountsQuerySchema,
+      pipes: [new ZodValidationPipe(projectPortfolioCountsQuerySchema)],
+    })
+    query: ProjectPortfolioCountsQuery,
+    @GetUser() user: AuthUser,
+  ): Promise<ProjectPortfolioCount[]> {
+    return this.queries.portfolioCounts(user, query.scope);
+  }
+
   @Post('projects/groups')
   @RequirePermissions(Permission.PROJECT_CREATE)
   @Audit({ action: 'project.group_create', entity: 'project_group' })
@@ -264,6 +287,28 @@ export class ProjectCatalogsController {
       const archived = await this.groups.setArchived(tx, id, true);
       if (!archived) throw DomainException.notFound('Portfolio not found');
       return archived;
+    });
+  }
+
+  @Post('projects/groups/:id/restore')
+  @RequirePermissions(Permission.PROJECT_MANAGE)
+  @Audit({ action: 'project.group_restore', entity: 'project_group' })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID портфеля',
+    schema: { type: 'string', format: 'uuid' },
+  })
+  @ApiOperation({ summary: 'Вернуть портфель из архива' })
+  @ApiOkResponse({ standardSchema: projectGroupSchema })
+  @ApiErrors(400, 401, 403, 404)
+  @ApiIdempotencyKey()
+  groupRestore(
+    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+  ): Promise<ProjectGroup> {
+    return this.txRunner.run(async (tx) => {
+      const restored = await this.groups.setArchived(tx, id, false);
+      if (!restored) throw DomainException.notFound('Portfolio not found');
+      return restored;
     });
   }
 

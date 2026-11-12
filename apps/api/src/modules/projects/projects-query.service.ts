@@ -11,6 +11,7 @@ import {
   type ProjectHistoryMember,
   type ProjectListItem,
   type ProjectParticipantChange,
+  type ProjectPortfolioCount,
   type ProjectStatus,
   type ProjectVisibility,
 } from '@nodus/contracts';
@@ -87,6 +88,43 @@ export class ProjectsQueryService {
   async detail(user: AuthUser, id: string): Promise<ProjectDetail> {
     const row = await this.assertVisible(user, id);
     return this.detailOf(user, row);
+  }
+
+  /**
+   * Счётчики папок журнала (#559): активные/завершённые/архивные проекты
+   * видимого среза по портфелям. Права — те же, что у журнала: секретные
+   * проекты не-участника не считаются (иначе папка выдала бы их число).
+   * `scope` повторяет переключатель «Все / Мои» журнала — цифры колонки не
+   * врут, когда список сужен до моего участия.
+   * Строка «Без портфеля» (`portfolioId: null`) есть всегда.
+   */
+  async portfolioCounts(
+    user: AuthUser,
+    scope: 'all' | 'mine' = 'all',
+  ): Promise<ProjectPortfolioCount[]> {
+    const myProjectIds = await this.repo.participantProjectIds(user.id);
+    const rows = await this.repo.portfolioCounts({
+      participantOf: scope === 'mine' ? user.id : null,
+      roleSource: null,
+      myProjectIds,
+      seeAll: user.permissions.includes(Permission.PROJECT_VIEW_SECRET),
+    });
+    const empty = (portfolioId: string | null): ProjectPortfolioCount => ({
+      portfolioId,
+      active: 0,
+      completed: 0,
+      archived: 0,
+    });
+    const byPortfolio = new Map<string | null, ProjectPortfolioCount>();
+    for (const row of rows) {
+      const entry = byPortfolio.get(row.portfolioId) ?? empty(row.portfolioId);
+      if (row.status === 'active' || row.status === 'completed' || row.status === 'archived') {
+        entry[row.status] = row.count;
+      }
+      byPortfolio.set(row.portfolioId, entry);
+    }
+    if (!byPortfolio.has(null)) byPortfolio.set(null, empty(null));
+    return [...byPortfolio.values()];
   }
 
   /** Карточка по уже проверенной строке (create/update возвращают detail). */
