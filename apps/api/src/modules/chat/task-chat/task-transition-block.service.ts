@@ -51,9 +51,15 @@ export class TaskTransitionBlockService {
     if (!payload.comment && !payload.result) return;
     if (!payload.transitionName || !payload.fromStageName) return;
     // Удалённой задаче беседу не создаём (sync вернёт null).
+    // «Был участником до перехода» читаем ДО sync: переход со сменой
+    // ответственного снимает нажавшего с беседы, а его причина должна
+    // остаться в ленте (#741).
+    const wasMember = await this.taskChat.isMemberOfTask(payload.taskId, event.actorId);
     const conversationId = await this.taskChat.sync(payload.taskId, event.actorId);
     if (!conversationId) return;
-    await this.txRunner.run((tx) => this.write(tx, conversationId, event, payload, event.actorId!));
+    await this.txRunner.run((tx) =>
+      this.write(tx, conversationId, event, payload, event.actorId!, wasMember),
+    );
   }
 
   private async write(
@@ -62,18 +68,22 @@ export class TaskTransitionBlockService {
     event: DomainEvent<TaskStageChangedPayload>,
     payload: TaskStageChangedPayload,
     actorId: string,
+    wasMember: boolean,
   ): Promise<void> {
     // Нажатие может прийти от того, кто видит задачу по праву, но в беседе
     // задачи не состоит (обход условий маршрута). Такому актору писать в
     // чужую переписку нельзя — блок пропускаем, запись журнала остаётся.
-    const members = await participantRoster(this.conversations, conversationId, actorId, tx);
-    if (!members) {
+    // Исключение: сам переход снял его с беседы (смена ответственного) —
+    // в момент нажатия он участником был, поэтому блок пишем.
+    let members = await participantRoster(this.conversations, conversationId, actorId, tx);
+    if (!members && !wasMember) {
       this.logger.warn(
         { taskId: payload.taskId, actorId },
         'chat: блок перехода не записан — актор вне беседы задачи',
       );
       return;
     }
+    members ??= await this.conversations.listMembers([conversationId], tx);
     const seq = await this.writes.allocateSeqs(conversationId, 1, tx);
     const inserted = await this.writes.insertMessage(
       {
