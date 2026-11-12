@@ -58,7 +58,7 @@
 
 Порядок поиска отвеченного: `docs/mvp/process-model-plan*.md` → `docs/product/incubator.md`
 (индекс) и `docs/product/incubator/` (карточки; закрытые — `incubator-archive.md`)
-→ `docs/product/interviews/` (включая `full/`) → комментарии эпика и соседних issues →
+→ `docs/product/interviews/` (локально у владельца, в репо нет; включая `full/`) → комментарии эпика и соседних issues →
 `docs/mvp/plans/` → продуктивные указания владельца вне репо (память агента) → глоссарий
 и `north-star.md`.
 

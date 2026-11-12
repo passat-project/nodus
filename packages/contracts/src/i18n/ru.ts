@@ -67,6 +67,7 @@ export const ui = {
     bulkLimit: 'За один раз можно изменить не больше записей:',
     rowMenu: 'Действия строки',
     dateToday: 'Сегодня',
+    dateYesterday: 'Вчера',
     dateTomorrow: 'Завтра',
     dateEndOfWeek: 'В конце недели',
     dateInAWeek: 'Через неделю',

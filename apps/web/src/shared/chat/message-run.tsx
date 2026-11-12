@@ -1,8 +1,8 @@
 import { Fragment, type CSSProperties, type ReactNode } from 'react';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { PersonAvatar } from '../ui/person-avatar.js';
 import { useChatPrefs } from './chat-prefs.js';
+import { MessageAuthorAvatar } from './message-avatar.js';
 import type { MessageRun } from './message-groups.js';
 
 /**
@@ -91,12 +91,8 @@ export function MessageRunView({
         className="sticky bottom-2 self-end"
         style={{ gridColumn: atEnd ? 2 : 1, gridRow: `1 / ${rowCount + 1}` }}
       >
-        <PersonAvatar
-          name={run.last.author.displayName}
-          avatarUrl={run.last.author.avatarUrl}
-          decorative
-          className="size-7"
-        />
+        {/* Аватар серии (#728): у чужой — кнопка карточки сотрудника. */}
+        <MessageAuthorAvatar author={run.last.author} mine={run.mine} />
       </div>
       {run.items.map((message) => {
         const dividerHere = message.id === dividerBeforeId;
