@@ -79,8 +79,13 @@ export function visibleTasksWhere(
   // той же щелью. В «Мои задачи» ветка тоже нужна — иначе внешний сотрудник
   // не найдёт запрос, пока идёт сбор.
   const pressIds = viewer.pressTaskIds ?? [];
+  // Внешний участник сбора видит карточку для нажатия, но конфиденциальная
+  // задача (#461) остаётся только участникам — свою видимость они получают
+  // веткой mineGated, а не этой щелью.
   const pressBranch: Prisma.TaskWhereInput | null =
-    pressIds.length > 0 ? { AND: [{ id: { in: [...pressIds] } }, ...(gate ? [gate] : [])] } : null;
+    pressIds.length > 0
+      ? { AND: [{ id: { in: [...pressIds] } }, openOnly, ...(gate ? [gate] : [])] }
+      : null;
   if (scope === 'mine') {
     return pressBranch ? { ...alive, OR: [mineGated, pressBranch] } : { ...alive, ...mineGated };
   }

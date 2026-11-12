@@ -231,9 +231,9 @@ export class PressRoundsService {
     canManage = false,
     tx?: TransactionClient,
   ): Promise<PressRoundView | null> {
-    const round =
-      (await this.repo.findOpenRound(tx, 'task', taskId)) ??
-      (await this.repo.findLatestCompletedRound(tx, 'task', taskId));
+    // Только раунд СВОЕЙ отметки: иначе внешний нажавший получает чужой
+    // раунд следующей стадии (состав/результаты) — security-аудит #434.
+    const round = await this.repo.findLatestRoundForUser(tx, 'task', taskId, viewerId);
     if (!round) return null;
     return this.viewOf(round, viewerId, canManage, tx);
   }

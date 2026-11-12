@@ -156,7 +156,21 @@ describe('PressSourcesService (#434)', () => {
     ]);
   });
 
-  it('явные источники секретного проекта — только участники проекта', async () => {
+  it('явные источники на конфиденциальной задаче проекта — только роли задачи', async () => {
+    const { sources } = service({ confidential: true, projectId: 'open-1' });
+    await expect(
+      sources.resolve(
+        {} as never,
+        't1',
+        config([{ kind: 'employees', userIds: ['u1', 'co1', 'assignee'] }], false),
+      ),
+    ).resolves.toEqual([
+      { userId: 'co1', order: 0 },
+      { userId: 'assignee', order: 1 },
+    ]);
+  });
+
+  it('явные источники секретного проекта - только участники проекта', async () => {
     const { sources, projects, projectChat } = service({ projectId: 'secret-1' });
     projects.visibilityOf.mockResolvedValueOnce('secret');
     await expect(

@@ -44,6 +44,21 @@ export class PressRepository {
     });
   }
 
+  /** Последний раунд, где у пользователя есть отметка: ответ нажавшему не
+   *  должен отдавать чужой раунд следующей стадии (#434, security). */
+  findLatestRoundForUser(
+    tx: TransactionClient | undefined,
+    entityKind: string,
+    entityId: string,
+    userId: string,
+  ) {
+    return (tx ?? this.prisma).pressRound.findFirst({
+      where: { entityKind, entityId, entries: { some: { userId } } },
+      orderBy: [{ startedAt: 'desc' }],
+      include: { entries: { orderBy: [{ order: 'asc' }, { id: 'asc' }] } },
+    });
+  }
+
   createRound(
     tx: TransactionClient,
     data: {

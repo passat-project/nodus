@@ -63,6 +63,7 @@ function setup() {
   const repo = {
     findOpenRound: vi.fn(async () => ROUND),
     findLatestCompletedRound: vi.fn(async () => ({ ...ROUND, completedAt: new Date() })),
+    findLatestRoundForUser: vi.fn(async () => ({ ...ROUND, completedAt: new Date() })),
     cancelOpenRound: vi.fn(async () => void 0),
     createRound: vi.fn(async () => ROUND),
     nextCycle: vi.fn(async () => 1),
@@ -132,9 +133,26 @@ describe('PressRoundsService (#434)', () => {
     expect(view?.entries[0]?.result?.text).toBe('Готово');
   });
 
-  it('ответ внешнему нажавшему: последний раунд без видимости задачи', async () => {
-    const { service } = setup();
+  it('ответ внешнему нажавшему: последний раунд его собственной отметки', async () => {
+    const { service, repo } = setup();
     const view = await service.viewLatestForTask('t1', 'external');
     expect(view?.id).toBe('r1');
+    expect(repo.findLatestRoundForUser).toHaveBeenCalledWith(undefined, 'task', 't1', 'external');
+  });
+
+  it('чужой открытый раунд следующей стадии не отдаётся (#434, security)', async () => {
+    const { service, repo } = setup();
+    const foreign = {
+      ...ROUND,
+      id: 'r2',
+      entries: [{ ...ROUND.entries[0], userId: 'other' }],
+    };
+    repo.findOpenRound.mockResolvedValueOnce(foreign as never);
+    repo.findLatestRoundForUser.mockResolvedValueOnce({ ...ROUND, completedAt: new Date() });
+
+    const view = await service.viewLatestForTask('t1', 'u1');
+
+    expect(view?.id).toBe('r1');
+    expect(view?.entries.map((entry) => entry.userId)).toEqual(['u1']);
   });
 });

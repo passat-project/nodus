@@ -49,6 +49,7 @@ export class HistoryService {
         const payload = { ...(r.payload as Record<string, unknown>) };
         delete payload.audience;
         delete payload.deciderIds;
+        delete payload.participantIds;
         return {
           id: r.id,
           type: r.type,

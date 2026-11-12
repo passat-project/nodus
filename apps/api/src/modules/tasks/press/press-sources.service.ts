@@ -81,31 +81,25 @@ export class PressSourcesService {
   ): Promise<string[]> {
     if (ids.length === 0) return ids;
     const taskRoles = new Set(audienceIds(task));
-    if (task.projectId) {
-      if ((await this.projects.visibilityOf(task.projectId)) !== 'secret') return ids;
+    let allowed = ids;
+    // Конфиденциальная задача (#461): только её роли — и на проекте, и без.
+    if (task.confidential) {
+      allowed = allowed.filter((id) => taskRoles.has(id));
+    }
+    if (task.projectId && (await this.projects.visibilityOf(task.projectId)) === 'secret') {
       // Секретный проект: только реальные участники проекта. Роли задачи
       // сами по себе не дают видимости после open→secret — бывшие участники
       // не должны получить push и вечный кворум (#434, security).
       const roster = await this.projectChat.roster(task.projectId);
-      const allowed = new Set(roster?.memberIds ?? []);
-      const filtered = ids.filter((id) => allowed.has(id));
-      if (filtered.length !== ids.length) {
-        this.logger.warn(
-          `Сбор: ${ids.length - filtered.length} участников вне секретного проекта ${task.projectId} пропущены`,
-        );
-      }
-      return filtered;
+      const members = new Set(roster?.memberIds ?? []);
+      allowed = allowed.filter((id) => members.has(id));
     }
-    if (task.confidential) {
-      const filtered = ids.filter((id) => taskRoles.has(id));
-      if (filtered.length !== ids.length) {
-        this.logger.warn(
-          `Сбор: ${ids.length - filtered.length} участников вне ролей конфиденциальной задачи ${task.id} пропущены`,
-        );
-      }
-      return filtered;
+    if (allowed.length !== ids.length) {
+      this.logger.warn(
+        `Сбор: ${ids.length - allowed.length} участников вне видимости задачи ${task.id} пропущены`,
+      );
     }
-    return ids;
+    return allowed;
   }
 
   private async sourceIds(
