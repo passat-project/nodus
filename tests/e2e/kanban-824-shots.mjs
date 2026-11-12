@@ -38,7 +38,7 @@ for (const theme of ['light', 'dark']) {
     await page.setViewportSize({ width, height });
     await page.waitForTimeout(700);
     // Окружение страницы — строковой формой: eslint парсит Node-файл и
-    // браузерных галобов (document/window) в нём нет (канон shot-скриптов).
+    // браузерных глобалов (document/window) в нём нет (канон shot-скриптов).
     const m = await page.evaluate(`(() => {
       const scroller = document.querySelector('[data-board-scroller]');
       const tiles = [...scroller.children].map((el) => ({

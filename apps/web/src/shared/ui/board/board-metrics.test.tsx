@@ -91,7 +91,7 @@ describe('board-metrics: плитка фиксированной ширины п
         (BOARD_COLUMNS_PER_VIEW - 1) * gapRem(BOARD_GAP_CLASS)) /
       BOARD_COLUMNS_PER_VIEW;
     // Не шире честной доли (иначе 6 плиток не влезут), но и не уже неё более
-    // чем на шаг округления 0.1rem — ширина спицы не «на глаз».
+    // чем на шаг округления 0.1rem — ширина плитки не «на глаз».
     expect(width).toBeLessThanOrEqual(fairShare + 1e-9);
     expect(width).toBeGreaterThan(fairShare - 0.05);
   });
