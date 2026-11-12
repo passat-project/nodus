@@ -54,9 +54,9 @@ describe('formatListTimestamp — метка списков бесед и уве
     expect(formatListTimestamp(at(2026, 9, 13, 22), now)).toBe('Вчера');
   });
 
-  it('2–6 дней назад — день недели словом с заглавной буквы (скользящее окно)', () => {
-    expect(formatListTimestamp(at(2026, 9, 12), now)).toBe('Суббота');
-    expect(formatListTimestamp(at(2026, 9, 8), now)).toBe('Вторник');
+  it('2–6 дней назад — сокращённый день недели (скользящее окно)', () => {
+    expect(formatListTimestamp(at(2026, 9, 12), now)).toBe('Сб');
+    expect(formatListTimestamp(at(2026, 9, 8), now)).toBe('Вт');
   });
 
   it('7+ дней этого года — ДД.ММ, прошлый год — ДД.ММ.ГГГГ', () => {
