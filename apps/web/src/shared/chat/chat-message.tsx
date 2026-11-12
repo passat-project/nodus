@@ -21,7 +21,7 @@ import { ReactionPicker } from './reaction-picker.js';
 import { stickerAttachmentOf, StickerMessageView } from './sticker-message.js';
 import { TombstoneBubble } from './tombstone.js';
 import { TransitionBlock } from './transition-block.js';
-import { PersonAvatar } from '../ui/person-avatar.js';
+import { MessageAuthorAvatar } from './message-avatar.js';
 import { MediaMessage, MetaGhost, MetaPin } from './message-media-bubble.js';
 import { hasEntityPreviews } from './message-text.js';
 import { UrgentChips } from './urgent-chips.js';
@@ -190,13 +190,8 @@ export const ChatMessageItem = memo(function ChatMessageItem({
     return (
       <Message align={atEnd ? 'end' : 'start'} className="group/msg">
         {avatarSlot === 'avatar' ? (
-          <MessageAvatar>
-            <PersonAvatar
-              name={message.author.displayName}
-              avatarUrl={message.author.avatarUrl}
-              decorative
-              className="size-7"
-            />
+          <MessageAvatar className="overflow-visible">
+            <MessageAuthorAvatar author={message.author} mine={mine} />
           </MessageAvatar>
         ) : null}
         <MessageContent>
@@ -232,13 +227,8 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   return (
     <Message align={atEnd ? 'end' : 'start'} className="group/msg">
       {avatarSlot === 'avatar' ? (
-        <MessageAvatar>
-          <PersonAvatar
-            name={message.author.displayName}
-            avatarUrl={message.author.avatarUrl}
-            decorative
-            className="size-7"
-          />
+        <MessageAvatar className="overflow-visible">
+          <MessageAuthorAvatar author={message.author} mine={mine} />
         </MessageAvatar>
       ) : null}
       <MessageContent>
