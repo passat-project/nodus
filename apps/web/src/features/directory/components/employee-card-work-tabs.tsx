@@ -101,19 +101,25 @@ export function EmployeeCardWorkTabs({
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
       {/* Ряд полосы — как `CardTabStripRow` движка областей (#746): фон
-          карточки и нижняя граница живут на ряду, а не на полосе. */}
+          карточки и нижняя граница живут на ряду, а не на полосе. Полоса
+          растянута на всю ширину, чтобы слот действий (тоггл панели беседы)
+          стоял в ПРАВОМ УГЛУ, как в мессенджере, а не сразу за вкладками. */}
       <div className="flex h-10 shrink-0 border-b border-border bg-card">
-        <CardTabStrip
-          label={ui.employees.tabsLabel}
-          tabs={strip}
-          active={active}
-          onActivate={(id) => onActivate(id as EmployeeWorkTab)}
-          idPrefix={baseId}
-          onKeyDown={onStripKeyDown}
-          actions={
-            active === 'chat' ? <ChatPanelToggle open={panelOpen} onToggle={onPanelToggle} /> : null
-          }
-        />
+        <div className="min-w-0 flex-1">
+          <CardTabStrip
+            label={ui.employees.tabsLabel}
+            tabs={strip}
+            active={active}
+            onActivate={(id) => onActivate(id as EmployeeWorkTab)}
+            idPrefix={baseId}
+            onKeyDown={onStripKeyDown}
+            actions={
+              active === 'chat' ? (
+                <ChatPanelToggle open={panelOpen} onToggle={onPanelToggle} />
+              ) : null
+            }
+          />
+        </div>
       </div>
       <div className="relative min-h-0 flex-1">
         {TAB_IDS.filter((tab) => visited.includes(tab)).map((tab) => {
