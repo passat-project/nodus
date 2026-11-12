@@ -13,6 +13,14 @@ export const domKey = (id: string) => id.replace(/[^a-zA-Z0-9_-]/g, '-');
  * стабильном порядке, активная панель каждой области позиционируется над
  * своей колонкой. Перенос вкладки меняет только left/width/visibility —
  * React не ремаунтит панель, скролл чата и зум PDF сохраняются.
+ *
+ * КОНТРАКТ панели вкладки: это полноразмерная flex-КОЛОНКА карточки
+ * (absolute inset-y-0 = высота области + flex flex-col), поэтому контент
+ * вкладки вправе быть `flex-1` или `h-full` и скроллиться внутри себя.
+ * Блочная панель молча теряла flex-контекст: `flex-1` игнорировался, высота
+ * колонки становилась высотой контента, `overflow-y-auto` не включался и
+ * `overflow-hidden` панели срезал низ без возможности прокрутки (#798,
+ * «О проекте» и вкладка «Чат» письма).
  */
 export function CardTabPanelLayer({
   state,
@@ -60,7 +68,10 @@ export function CardTabPanelLayer({
             aria-labelledby={`${baseId}-tab-${domKey(tab.id)}-tab`}
             inert={!active}
             className={cn(
-              'absolute inset-y-0 overflow-hidden',
+              // Контракт панели вкладки (см. шапку файла): полноразмерная
+              // flex-колонка — иначе `flex-1`-контент вкладки не получает
+              // высоту области и его скролл не включается (#798).
+              'absolute inset-y-0 flex flex-col overflow-hidden',
               !active && 'pointer-events-none invisible',
             )}
             style={
