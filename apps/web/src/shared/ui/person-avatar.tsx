@@ -43,6 +43,11 @@ interface PersonAvatarProps {
    *  подпись кнопки — фото и инициалы скрываются от скринридера (alt="" +
    *  aria-hidden), чтобы имя не читалось дважды. */
   decorative?: boolean;
+  /** Всплывающая подсказка (native title). По умолчанию — имя сотрудника:
+   *  владелец попросил, чтобы у ЛЮБОГО аватара при наведении читались имя и
+   *  фамилия (#728) — рейка, карточки канбана, списки, участники, уведомления.
+   *  Пустая строка подсказку выключает (аватар рядом с видимым именем). */
+  title?: string;
 }
 
 /**
@@ -61,11 +66,14 @@ export function PersonAvatar({
   className,
   fallbackClass,
   decorative = false,
+  title,
 }: PersonAvatarProps) {
   const tone = toneOf(name);
   const hidden = decorative ? true : undefined;
+  // Подсказка по умолчанию — имя: hover по любому аватару называет человека.
+  const tooltip = title ?? name;
   return (
-    <Avatar className={cn('size-8 ring-1 ring-border', className)}>
+    <Avatar title={tooltip || undefined} className={cn('size-8 ring-1 ring-border', className)}>
       {avatarUrl ? (
         <AvatarImage
           src={avatarUrl}

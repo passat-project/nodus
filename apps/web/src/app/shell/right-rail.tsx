@@ -69,6 +69,9 @@ function ChatRailRow({
     <button
       type="button"
       onClick={(event) => onOpen(conversation.id, event.currentTarget.getBoundingClientRect())}
+      // Подсказка на всей строке (#728): в свёрнутой полосе названия не видно,
+      // и владелец просил, чтобы при наведении читались имя и фамилия.
+      title={conversationTitle(conversation, meId)}
       className="flex w-full shrink-0 items-center gap-2.5 rounded-md px-1.5 py-1 text-left hover:bg-accent"
     >
       <span className="relative shrink-0">
@@ -79,6 +82,8 @@ function ChatRailRow({
             name={conversationTitle(conversation, meId)}
             avatarUrl={conversationAvatarUrl(conversation, meId)}
             className="size-7"
+            // Подсказку уже несёт строка — второй title на аватарке не нужен.
+            title=""
           />
         )}
         {/* Непрочитанные — МАЛЕНЬКАЯ ЦИФРА в правом нижнем углу аватарки в
