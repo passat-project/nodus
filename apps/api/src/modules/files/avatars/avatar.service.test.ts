@@ -202,6 +202,22 @@ describe('AvatarService.process', () => {
     expect(saved[0]!.bytes.equals(png)).toBe(true);
   });
 
+  it('реальный JPEG без метаданных тоже байт-в-байт (скан контейнера не ложнит)', async () => {
+    const { service, saved } = makeService();
+    const jpeg = await sharp({
+      create: { width: 128, height: 128, channels: 3, background: '#445566' },
+    })
+      .jpeg()
+      .toBuffer();
+
+    await service.process(
+      { ownerId: 'u-1', name: 'фото.jpg', size: jpeg.length },
+      Readable.from(jpeg),
+    );
+
+    expect(saved[0]!.bytes.equals(jpeg)).toBe(true);
+  });
+
   it('IPTC без EXIF (город/страна) тоже срезается — второй носитель геоданных', async () => {
     const { service, saved } = makeService();
     const jpeg = withIptc(

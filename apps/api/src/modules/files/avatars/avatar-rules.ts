@@ -50,6 +50,9 @@ export type AvatarFileIssue = 'format' | 'size';
  *  IDAT, а sharp такие (и JPEG COM/APPn) в `metadata()` не отдаёт — сырой
  *  скан контейнера закрывает этот носитель (#725, security-ревью 12.11). */
 const SENSITIVE_PNG_CHUNKS = new Set(['tEXt', 'zTXt', 'iTXt', 'eXIf']);
+/** APP2 законен только как ICC-профиль (не PII); любой другой APP2 (MPF и
+ *  прочие) — произвольная нагрузка, перекодируем. */
+const ICC_SIGNATURE = Buffer.from('ICC_PROFILE\0', 'latin1');
 
 function pngHasSensitiveChunks(bytes: Buffer): boolean {
   let offset = 8;
@@ -57,38 +60,57 @@ function pngHasSensitiveChunks(bytes: Buffer): boolean {
     const length = bytes.readUInt32BE(offset);
     const type = bytes.toString('latin1', offset + 4, offset + 8);
     if (SENSITIVE_PNG_CHUNKS.has(type)) return true;
-    if (type === 'IEND') return false;
     if (length > bytes.length) return true; // порченый контейнер — fail-safe
-    offset += 12 + length;
+    const next = offset + 12 + length;
+    // Хвост после IEND (склеенные контейнеры, спрятанные данные) — fail-safe.
+    if (type === 'IEND') return next !== bytes.length;
+    offset = next;
   }
   return true;
 }
 
 function jpegHasSensitiveSegments(bytes: Buffer): boolean {
   let offset = 2; // после SOI
-  while (offset + 4 <= bytes.length) {
+  while (offset + 2 <= bytes.length) {
     if (bytes[offset] !== 0xff) return true; // не маркер — контейнер не понять
-    let marker = bytes[offset + 1] ?? 0;
-    while (marker === 0xff && offset + 2 < bytes.length) {
-      offset += 1;
-      marker = bytes[offset + 1] ?? 0;
+    const marker = bytes[offset + 1] ?? 0;
+    if (marker === 0xff) {
+      offset += 1; // fill-байты перед маркером
+      continue;
     }
-    if (marker === 0xd9) return false; // EOI — метаданных больше нет
-    if (marker === 0xda) return false; // SOS: данные кадра, сегменты кончились
+    // Хвост после EOI — MPF/Motion Photo: второе изображение со своим EXIF
+    // лежит после конца первичного (sharp видит только первичное).
+    if (marker === 0xd9) return offset + 2 !== bytes.length;
     if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) {
       offset += 2; // маркеры без длины
       continue;
     }
+    if (offset + 4 > bytes.length) return true;
     const length = bytes.readUInt16BE(offset + 2);
-    if (length < 2) return true;
-    // APP1 (EXIF/XMP), APP13 (IPTC/Photoshop), COM и прочие APPn; ICC (APP2)
-    // и Adobe (APP14) — не PII, их не считаем.
-    const sensitive =
-      marker === 0xfe || (marker >= 0xe1 && marker <= 0xef && marker !== 0xe2 && marker !== 0xee);
-    if (sensitive) return true;
+    if (length < 2 || offset + 2 + length > bytes.length) return true;
+    // APP1 (EXIF/XMP), APP13 (IPTC/Photoshop), COM и прочие APPn — метаданные;
+    // APP14 (Adobe) не PII, APP2 — только ICC. Сегменты бывают и МЕЖДУ
+    // сканами progressive JPEG, поэтому SOS не завершает обход.
+    if (marker === 0xfe) return true;
+    if (marker >= 0xe1 && marker <= 0xef && marker !== 0xee) {
+      if (marker !== 0xe2) return true;
+      const payload = bytes.subarray(offset + 4, offset + 2 + length);
+      if (payload.subarray(0, ICC_SIGNATURE.length).compare(ICC_SIGNATURE) !== 0) return true;
+    }
     offset += 2 + length;
+    if (marker === 0xda) {
+      // Энтропийно-кодированные данные скана: до следующего настоящего
+      // маркера (FF 00 — stuffing, FF D0–D7 — рестарт-маркеры).
+      while (offset + 1 < bytes.length) {
+        if (bytes[offset] === 0xff) {
+          const next = bytes[offset + 1] ?? 0;
+          if (next !== 0x00 && !(next >= 0xd0 && next <= 0xd7)) break;
+        }
+        offset += 1;
+      }
+    }
   }
-  return true; // дошли до конца без SOS/EOI — перекодируем на всякий случай
+  return true; // дошли до конца без EOI — перекодируем на всякий случай
 }
 
 /** Сырой скан контейнера на носители PII, которые sharp.metadata() не отдаёт:
