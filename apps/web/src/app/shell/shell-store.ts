@@ -35,7 +35,10 @@ interface ShellState {
 }
 
 /** Локальное UI-состояние каркаса (персонализация на сервере — позже, §10.5).
- * Тема персистит в localStorage (nodus-shell-v1), остальное — сессионное. */
+ * В localStorage (nodus-shell-v1) персистятся тема, служебная полоса и
+ * свёрнутость левого меню (#722) — настройка переживает F5 и перезапуск
+ * оболочки; остальное — сессионное. Дефолт первого запуска не меняется:
+ * меню развёрнуто. */
 export const useShellStore = create<ShellState>()(
   persist(
     (set) => ({
@@ -55,7 +58,11 @@ export const useShellStore = create<ShellState>()(
     {
       name: 'nodus-shell-v1',
       version: 1,
-      partialize: (state) => ({ theme: state.theme, edgeOpen: state.edgeOpen }),
+      partialize: (state) => ({
+        theme: state.theme,
+        edgeOpen: state.edgeOpen,
+        menuCollapsed: state.menuCollapsed,
+      }),
       merge: zodPersistMerge<ShellState>(shellEnvelopeSchema),
     },
   ),
