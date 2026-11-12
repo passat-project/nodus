@@ -407,7 +407,10 @@ pub(crate) fn show_without_activation(win: &WebviewWindow, label: &str) {
             }
         }
         crate::focus::log_snapshot(win.app_handle(), &label, "показ");
-        crate::focus::reclaim_now(win.app_handle(), "показ попапа");
+        // `previous` — foreground ДО показа: единственный достоверный ответ на
+        // «откуда украли клавиатуру» (поле ответа или портал), иначе возврат
+        // выдернул бы каретку не оттуда.
+        crate::focus::reclaim_now(win.app_handle(), "показ попапа", Some(previous.0 as isize));
     });
     crate::focus::arm_guard(&app, "сторож после показа");
 }

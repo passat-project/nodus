@@ -99,6 +99,10 @@ pub(crate) enum FocusTarget {
     /// Открытое поле ответа (HWND попапа): пользователь печатает там, и
     /// новый попап не имеет права уводить клавиатуру в портал.
     Reply(isize),
+    /// Foreground украли у ЧУЖОЙ программы — вернуть его ей (клавиатуру в
+    /// другое приложение без AttachThreadInput не поставить, а человека,
+    /// работавшего в Word/Блокноте, тащить в портал нельзя).
+    RestoreForeground(isize),
 }
 
 fn hwnd(value: isize) -> HWND {
@@ -149,21 +153,29 @@ pub(crate) fn snapshot(main: isize) -> Option<FocusSnapshot> {
 /// Куда возвращать клавиатуру (None — не трогать). Вся политика здесь, ОС
 /// трогает только вызывающий код (юнит-тесты без окон).
 ///
+/// `pre_theft` — foreground НЕПОСРЕДСТВЕННО перед кражей (`show()` снимает его
+/// до показа). Это единственный достоверный признак «откуда украли»: флаг
+/// `replying` означает лишь «поле ответа открыто», а человек мог уже уйти
+/// кликом в портал — возврат в такое поле выдернул бы каретку из композера.
+///
 /// - пользователь ушёл в другое приложение (foreground не наш) — не трогаем;
 /// - foreground наш: портал ИЛИ любой наш попап — показ попапа может увести
 ///   foreground, это не повод ничего не делать;
 /// - фокус в портале — всё в порядке;
 /// - фокус в ПОЛЕ ОТВЕТА — там печатают, не трогаем;
-/// - фокус увели в другой попап, а поле ответа открыто — возвращаем в поле
-///   ответа, а не в портал (иначе набор улетает из-под курсора);
+/// - фокус увели в другой попап: возвращаем туда, откуда украли — в поле
+///   ответа, если украли из него, иначе в портал;
 /// - фокус «потерялся» (0) — возвращаем: уничтожение окна с webview-ребёнком
 ///   оставляет очередь без фокуса (winit #4345);
-/// - фокус в чужом окне — не наше дело.
+/// - фокус в чужом окне / кража произошла у чужого приложения — не наше дело
+///   (возврат к чужому окну требует AttachThreadInput, а тащить человека в
+///   портал вместо его программы нельзя).
 pub(crate) fn focus_target(
     foreground: isize,
     focus_root: isize,
     main: isize,
     popups: &[(isize, bool)],
+    pre_theft: Option<isize>,
 ) -> Option<FocusTarget> {
     if foreground == 0 || focus_root == main {
         return None;
@@ -172,17 +184,30 @@ pub(crate) fn focus_target(
     if !ours {
         return None;
     }
-    let reply = popups
-        .iter()
-        .find(|(_, replying)| *replying)
-        .map(|(popup, _)| *popup);
-    let fallback = reply.map(FocusTarget::Reply).or(Some(FocusTarget::Main));
+    let fallback = match pre_theft {
+        // Украли из этого же приложения: из поля ответа — вернуть в него,
+        // из обычного попапа — в портал.
+        Some(previous) if previous == main => Some(FocusTarget::Main),
+        Some(previous)
+            if popups
+                .iter()
+                .any(|(popup, replying)| *popup == previous && *replying) =>
+        {
+            Some(FocusTarget::Reply(previous))
+        }
+        Some(previous) if popups.iter().any(|(popup, _)| *popup == previous) => {
+            Some(FocusTarget::Main)
+        }
+        // Украли у чужой программы — возвращаем foreground ей.
+        Some(previous) if previous != 0 => Some(FocusTarget::RestoreForeground(previous)),
+        // Источник неизвестен (сторож) — только портал: гадать не о чем.
+        _ => Some(FocusTarget::Main),
+    };
     match popups.iter().find(|(popup, _)| *popup == focus_root) {
         // Фокус в поле ответа — норма (пользователь печатает).
         Some((_, true)) => None,
-        // Фокус в обычном попапе: если где-то открыто поле ответа — туда.
         Some((_, false)) => fallback,
-        // Фокус потерян / в чужом окне.
+        // Фокус потерян.
         None if focus_root == 0 => fallback,
         None => None,
     }
@@ -235,6 +260,24 @@ fn set_keyboard_focus(main: isize, target: isize) -> Result<(), String> {
     }
 }
 
+/// Вернуть foreground чужой программе, у которой его украли. ТОЛЬКО с главного
+/// потока. Своего фокуса туда не поставить (другая очередь ввода), поэтому
+/// проверяем только сам foreground.
+fn restore_foreground(main: isize, target: isize) -> Result<(), String> {
+    unsafe {
+        let _ = SetForegroundWindow(hwnd(target));
+    }
+    match snapshot(main) {
+        Some(snap) if snap.foreground == target => Ok(()),
+        Some(snap) => Err(format!(
+            "foreground остался 0x{:x} ({})",
+            snap.foreground,
+            class_name(snap.foreground)
+        )),
+        None => Err("снимок фокуса недоступен".into()),
+    }
+}
+
 /// Вернуть клавиатуру в главный webview. ТОЛЬКО с главного потока.
 pub(crate) fn focus_main_now(app: &AppHandle) -> bool {
     let Some(main) = app.get_webview_window("main") else {
@@ -267,7 +310,9 @@ pub(crate) fn focus_main(app: &AppHandle) {
 }
 
 /// Проверка и, если надо, возврат фокуса. ТОЛЬКО с главного потока.
-pub(crate) fn reclaim_now(app: &AppHandle, reason: &'static str) {
+/// `pre_theft` — foreground до кражи (см. `focus_target`); `None` — источник
+/// неизвестен (сторож), возврат только в портал.
+pub(crate) fn reclaim_now(app: &AppHandle, reason: &'static str, pre_theft: Option<isize>) {
     let Some(main) = app.get_webview_window("main") else {
         return;
     };
@@ -279,27 +324,42 @@ pub(crate) fn reclaim_now(app: &AppHandle, reason: &'static str) {
         return;
     };
     let targets = popups::focus_targets(app);
-    let Some(target) = focus_target(snap.foreground, snap.focus_root, main_hwnd, &targets) else {
+    let Some(target) = focus_target(
+        snap.foreground,
+        snap.focus_root,
+        main_hwnd,
+        &targets,
+        pre_theft,
+    ) else {
         return;
     };
     if !allow_reclaim() {
         return;
     }
-    let target_hwnd = match target {
-        FocusTarget::Main => main_hwnd,
-        FocusTarget::Reply(popup) => popup,
+    let (target_hwnd, where_to) = match target {
+        FocusTarget::Main => (main_hwnd, "портал"),
+        FocusTarget::Reply(popup) => (popup, "поле ответа"),
+        FocusTarget::RestoreForeground(previous) => {
+            // Клавиатуру в чужую программу без AttachThreadInput не поставить,
+            // поэтому возвращаем только foreground. Отказ Windows — не ошибка
+            // приложения (он может быть запрещён политикой) → warn, не error.
+            return match restore_foreground(main_hwnd, previous) {
+                Ok(()) => log::warn!(
+                    "foreground увели у чужой программы: {} → возвращён ей ({reason})",
+                    snap.log_line()
+                ),
+                Err(e) => log::warn!(
+                    "foreground увели у чужой программы: {} — вернуть не удалось: {e} ({reason})",
+                    snap.log_line()
+                ),
+            };
+        }
     };
     match set_keyboard_focus(main_hwnd, target_hwnd) {
-        Ok(()) => {
-            let where_to = match target {
-                FocusTarget::Main => "портал",
-                FocusTarget::Reply(_) => "поле ответа",
-            };
-            log::warn!(
-                "фокус ушёл из портала: {} → возвращён в {where_to} ({reason})",
-                snap.log_line()
-            );
-        }
+        Ok(()) => log::warn!(
+            "фокус ушёл из портала: {} → возвращён в {where_to} ({reason})",
+            snap.log_line()
+        ),
         Err(e) => log::error!(
             "фокус ушёл из портала: {} — возврат не удался: {e} ({reason})",
             snap.log_line()
@@ -311,7 +371,7 @@ pub(crate) fn reclaim_now(app: &AppHandle, reason: &'static str) {
 pub(crate) fn reclaim(app: &AppHandle, reason: &'static str) {
     let app = app.clone();
     if let Err(e) = app.clone().run_on_main_thread(move || {
-        reclaim_now(&app, reason);
+        reclaim_now(&app, reason, None);
     }) {
         log::warn!("проверка фокуса не поставлена в очередь: {e}");
     }
@@ -372,55 +432,98 @@ mod tests {
     }
 
     /// Политика возврата фокуса (#709): трогаем только СВОИ окна (портал или
-    /// попап), чужое приложение не задеваем, фокус в поле ответа не уводим.
+    /// попап), чужое приложение не задеваем, фокус в поле ответа не уводим, а
+    /// цель выбираем по состоянию ДО кражи — `replying` значит лишь «поле
+    /// открыто» и не говорит, где человек печатает сейчас.
     #[test]
     fn возврат_только_из_своего_попапа_без_ответа() {
-        // Фокус в попапе, foreground — портал: возвращаем в портал.
+        // Фокус в попапе, foreground — портал, до кражи были в портале.
         assert_eq!(
-            focus_target(MAIN, POPUP, MAIN, &idle()),
+            focus_target(MAIN, POPUP, MAIN, &idle(), Some(MAIN)),
             Some(FocusTarget::Main)
         );
-        // Показ попапа увёл foreground в него же — тоже возвращаем.
+        // Показ попапа увёл foreground в него же — тоже возвращаем в портал.
         assert_eq!(
-            focus_target(POPUP, POPUP, MAIN, &idle()),
+            focus_target(POPUP, POPUP, MAIN, &idle(), Some(MAIN)),
             Some(FocusTarget::Main)
         );
         // Фокус в поле ответа — там печатают, не мешаем.
-        assert_eq!(focus_target(REPLYING, REPLYING, MAIN, &popups()), None);
-        // Новый попап увёл фокус, а поле ответа открыто — возвращаем В ПОЛЕ,
-        // а не в портал: иначе набор улетает из-под курсора.
         assert_eq!(
-            focus_target(MAIN, POPUP, MAIN, &popups()),
+            focus_target(REPLYING, REPLYING, MAIN, &popups(), Some(REPLYING)),
+            None
+        );
+        // Украли из поля ответа A — возвращаем В ПОЛЕ, а не в портал.
+        assert_eq!(
+            focus_target(MAIN, POPUP, MAIN, &popups(), Some(REPLYING)),
             Some(FocusTarget::Reply(REPLYING))
         );
         assert_eq!(
-            focus_target(POPUP, POPUP, MAIN, &popups()),
+            focus_target(POPUP, POPUP, MAIN, &popups(), Some(REPLYING)),
             Some(FocusTarget::Reply(REPLYING))
+        );
+        // РЕГРЕСС (валидация): поле ответа открыто, но человек уже кликнул в
+        // портал и печатает там — новый попап не имеет права тащить его в
+        // поле ответа. До кражи foreground был портал.
+        assert_eq!(
+            focus_target(POPUP, POPUP, MAIN, &popups(), Some(MAIN)),
+            Some(FocusTarget::Main)
+        );
+        assert_eq!(
+            focus_target(MAIN, POPUP, MAIN, &popups(), Some(MAIN)),
+            Some(FocusTarget::Main)
+        );
+        // Источник неизвестен (сторож) — только в портал, без догадок.
+        assert_eq!(
+            focus_target(POPUP, POPUP, MAIN, &popups(), None),
+            Some(FocusTarget::Main)
         );
         // Фокус в портале — всё в порядке (даже при открытом поле ответа).
-        assert_eq!(focus_target(MAIN, MAIN, MAIN, &popups()), None);
+        assert_eq!(focus_target(MAIN, MAIN, MAIN, &popups(), Some(MAIN)), None);
         // Пользователь в другом приложении — не трогаем.
-        assert_eq!(focus_target(FOREIGN, FOREIGN, MAIN, &popups()), None);
+        assert_eq!(
+            focus_target(FOREIGN, FOREIGN, MAIN, &popups(), Some(FOREIGN)),
+            None
+        );
+        // Фокус украли у чужой программы — возвращаем foreground ЕЙ, а не
+        // тащим человека в портал (клавиатуру в чужое окно не поставить).
+        assert_eq!(
+            focus_target(POPUP, POPUP, MAIN, &popups(), Some(FOREIGN)),
+            Some(FocusTarget::RestoreForeground(FOREIGN))
+        );
+        assert_eq!(
+            focus_target(MAIN, POPUP, MAIN, &idle(), Some(FOREIGN)),
+            Some(FocusTarget::RestoreForeground(FOREIGN))
+        );
         // Нет foreground (локскрин/смена сессии) — не трогаем.
-        assert_eq!(focus_target(0, 0, MAIN, &popups()), None);
+        assert_eq!(focus_target(0, 0, MAIN, &popups(), None), None);
         // Фокус потерян при нашем foreground — возвращаем (winit #4345).
         assert_eq!(
-            focus_target(MAIN, 0, MAIN, &idle()),
+            focus_target(MAIN, 0, MAIN, &idle(), Some(MAIN)),
             Some(FocusTarget::Main)
         );
         assert_eq!(
-            focus_target(POPUP, 0, MAIN, &idle()),
+            focus_target(POPUP, 0, MAIN, &idle(), Some(MAIN)),
             Some(FocusTarget::Main)
         );
         assert_eq!(
-            focus_target(MAIN, 0, MAIN, &popups()),
+            focus_target(MAIN, 0, MAIN, &popups(), Some(REPLYING)),
             Some(FocusTarget::Reply(REPLYING))
         );
+        assert_eq!(
+            focus_target(MAIN, 0, MAIN, &popups(), Some(MAIN)),
+            Some(FocusTarget::Main)
+        );
         // Фокус в чужом окне — не наше дело.
-        assert_eq!(focus_target(MAIN, FOREIGN, MAIN, &popups()), None);
+        assert_eq!(
+            focus_target(MAIN, FOREIGN, MAIN, &popups(), Some(MAIN)),
+            None
+        );
         // Живых попапов нет: возврат только для потерянного фокуса.
-        assert_eq!(focus_target(MAIN, POPUP, MAIN, &[]), None);
-        assert_eq!(focus_target(MAIN, 0, MAIN, &[]), Some(FocusTarget::Main));
+        assert_eq!(focus_target(MAIN, POPUP, MAIN, &[], Some(MAIN)), None);
+        assert_eq!(
+            focus_target(MAIN, 0, MAIN, &[], Some(MAIN)),
+            Some(FocusTarget::Main)
+        );
     }
 
     /// Лимит возвратов: защита от петли фокуса (tauri#15624 — наивный ремонт
