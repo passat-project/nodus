@@ -1,5 +1,7 @@
+import { useId } from 'react';
 import type { ProjectSecretPreview } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
+import { Checkbox } from '@nodus/ui/components/checkbox';
 
 /**
  * Предпросмотр перевода проекта в секретный (#541, решение владельца п.4):
@@ -22,6 +24,7 @@ export function ProjectSecretPreviewBlock({
   onConfirmChange: (confirmed: boolean) => void;
 }) {
   const strings = ui.projects.secretPreview;
+  const confirmId = useId();
   if (loading) return <p className="text-sm text-muted-foreground">{strings.loading}</p>;
   if (error) {
     return (
@@ -33,20 +36,20 @@ export function ProjectSecretPreviewBlock({
   if (!preview) return null;
   const empty = preview.willBecomeMembers.length === 0 && preview.willLoseAccess.length === 0;
   return (
-    <section className="rounded-lg border border-border bg-accent/30 px-3 py-2.5 text-sm">
+    <section className="rounded-lg border border-border bg-accent/30 px-3.5 py-3 text-sm">
       <p className="font-medium">{strings.title}</p>
       <p className="mt-1 text-muted-foreground">{strings.hint}</p>
       {empty ? (
         <p className="mt-2 text-muted-foreground">{strings.empty}</p>
       ) : (
-        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+        <div className="mt-3 grid items-start gap-x-6 gap-y-3 sm:grid-cols-2">
           <div>
             <p className="text-label-sm tracking-[0.08em] text-muted-foreground uppercase">
               {strings.willBecome}
             </p>
-            <ul className="mt-1 space-y-0.5">
+            <ul className="mt-1.5 space-y-1">
               {preview.willBecomeMembers.map((item) => (
-                <li key={item.user.id}>
+                <li key={item.user.id} className="leading-snug">
                   <span className="font-medium">{item.user.displayName}</span>
                   {' — '}
                   {item.roles.map((role) => strings.roles[role]).join(', ')}
@@ -60,9 +63,9 @@ export function ProjectSecretPreviewBlock({
             <p className="text-label-sm tracking-[0.08em] text-muted-foreground uppercase">
               {strings.willLose}
             </p>
-            <ul className="mt-1 space-y-0.5">
+            <ul className="mt-1.5 space-y-1">
               {preview.willLoseAccess.map((item) => (
-                <li key={`${item.user.id}:${item.kind}`}>
+                <li key={`${item.user.id}:${item.kind}`} className="leading-snug">
                   <span className="font-medium">{item.user.displayName}</span>
                   {' — '}
                   {strings.loseKind[item.kind]}
@@ -75,15 +78,16 @@ export function ProjectSecretPreviewBlock({
           </div>
         </div>
       )}
-      <label className="mt-3 flex items-start gap-2">
-        <input
-          type="checkbox"
+      <div className="mt-3 flex items-center gap-2">
+        <Checkbox
+          id={confirmId}
           checked={confirmed}
-          onChange={(event) => onConfirmChange(event.target.checked)}
-          className="mt-0.5 size-4 accent-port"
+          onCheckedChange={(value) => onConfirmChange(value === true)}
         />
-        <span>{strings.confirm}</span>
-      </label>
+        <label htmlFor={confirmId} className="cursor-pointer select-none leading-snug">
+          {strings.confirm}
+        </label>
+      </div>
     </section>
   );
 }

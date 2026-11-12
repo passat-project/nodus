@@ -218,15 +218,30 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: трассы Т1/Т2/Т2b 
         key: `t1-flip-join-${fx.runId}`,
       });
       expect([200, 201]).toContain(joined.status);
+      // Приглашённый наблюдатель проекта + роль соисполнителя в задаче (#714):
+      // после переключения он обязан стать участником, а не попасть в «потеряют».
+      const invited = await fx.api(alice, 'POST', `/projects/${open.id}/members`, {
+        body: { userId: bob.id, kind: 'observer' },
+        key: `t1-flip-invited-${fx.runId}`,
+      });
+      expect([200, 201]).toContain(invited.status);
+      const coexecutor = await fx.api(alice, 'POST', `/tasks/${task.id}/participants`, {
+        body: { userId: bob.id, role: 'coexecutor' },
+        key: `t1-flip-coexec-${fx.runId}`,
+      });
+      expect(coexecutor.status).toBe(201);
 
       // Предпросмотр: кто останется участником, кто потеряет доступ.
       const previewRes = await fx.api(alice, 'GET', `/projects/${open.id}/secret-preview`);
       expect(previewRes.status).toBe(200);
       const preview = projectSecretPreviewSchema.parse(await previewRes.json());
       expect(preview.willBecomeMembers.map((item) => item.user.id)).toContain(carol.id);
+      expect(preview.willBecomeMembers.map((item) => item.user.id)).toContain(bob.id);
       expect(preview.willLoseAccess.map((item) => item.user.id)).toContain(dave.id);
-      // Носитель роли не попадает в «потеряют доступ», даже если сам вступил.
+      // Носитель роли не попадает в «потеряют доступ», даже если сам вступил
+      // или приглашён наблюдателем проекта (#714).
       expect(preview.willLoseAccess.map((item) => item.user.id)).not.toContain(carol.id);
+      expect(preview.willLoseAccess.map((item) => item.user.id)).not.toContain(bob.id);
 
       const flipped = await fx.api(alice, 'PATCH', `/projects/${open.id}`, {
         body: { visibility: 'secret' },
@@ -237,6 +252,9 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: трассы Т1/Т2/Т2b 
       // Ответственный видит задачу и проект: работа не отобрана.
       expect((await fx.api(carol, 'GET', `/tasks/${task.id}`)).status).toBe(200);
       expect((await fx.api(carol, 'GET', `/projects/${open.id}`)).status).toBe(200);
+      // Приглашённый наблюдатель с ролью соисполнителя тоже сохранил доступ.
+      expect((await fx.api(bob, 'GET', `/tasks/${task.id}`)).status).toBe(200);
+      expect((await fx.api(bob, 'GET', `/projects/${open.id}`)).status).toBe(200);
       // Наблюдатель вне состава доступ потерял (кэш видимости сбрасывается
       // событием outbox — ждём доставку, как проекцию участия).
       await waitFor(async () => {
