@@ -74,8 +74,12 @@ pub(crate) struct ActivePopup {
     /// (HWND, #709): после Esc/закрытия фокус возвращается туда — «забрали у
     /// Word, вернули Word», а не оставили клавиатуру в неактивируемом окне.
     pub(crate) activated_from: Option<isize>,
+    /// HWND окна попапа (0 — ещё не создано). Нужен гварду клавиатурного
+    /// фокуса: `GetGUIThreadInfo().hwndFocus` сравнивается с top-level предком
+    /// окна, держащего клавиатуру (`focus.rs`, #709).
+    pub(crate) hwnd: isize,
     /// Payload для pull-модели: окно забирает данные само после загрузки
-    /// (push-событие проигрывал бы гонку со скоростью монтирования React).
+    /// (push-событие проигрывало бы гонку со скоростью монтирования React).
     payload: serde_json::Value,
 }
 
@@ -97,6 +101,8 @@ pub(crate) struct PopupStack {
     pub(crate) hide_all_live: bool,
     /// Плашка «Скрыть все» показана (ready/fallback) — как shown у попапов.
     pub(crate) hide_all_shown: bool,
+    /// HWND плашки (0 — окна нет): гвард фокуса (#709) учитывает и её.
+    pub(crate) hide_all_hwnd: isize,
 }
 
 impl PopupStack {
@@ -202,6 +208,7 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
             shown: false,
             download_path,
             activated_from: None,
+            hwnd: 0,
             payload: payload_json,
         });
         (label, slot)
@@ -211,7 +218,8 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
     // раскладке; дальше позицию уточнит reposition_all (кумулятив по стеку).
     // Показ — ТОЛЬКО по готовности (#305): мини-UI применит тему из payload
     // и отрисует карточку, позовёт popup_ready; не успел за таймаут —
-    // fallback показывает как есть. Кражу фокуса подавляет WS_EX_NOACTIVATE.
+    // fallback показывает как есть. Клавиатуру у портала отбирает webview-
+    // ребёнок попапа — возвращает гвард `focus.rs` (#709, второй слой).
     let position = crate::anchor::initial_position(app);
     let win = build_popup_window(app, &label, POPUP_H, position);
     crate::layout::reposition_all(app);
@@ -229,7 +237,7 @@ pub(crate) fn show_if_ready(app: &AppHandle, label: &str) {
         return;
     }
     if let Some(win) = app.get_webview_window(label) {
-        show_without_activation(&win);
+        show_without_activation(&win, label);
     }
 }
 
@@ -255,9 +263,11 @@ pub fn popup_ready(app: AppHandle, window: WebviewWindow) {
 /// НЕАКТИВИРУЕМОЕ: неактивируемость держит tao — `.focusable(false)` кладёт
 /// `WS_EX_NOACTIVATE` в ex-style и сохраняет его при каждой перезаписи стиля
 /// (#709). Ручной бит после билда НЕ работает: `win.show()` → `apply_diff`
-/// стирает его (tao-0.37.1 `window_state.rs:412-431`). Показ и клики фокус у
-/// портала не крадут — супер-курсор композера живёт. Для печати в поле ответа
-/// окно временно делается фокусируемым (`popup_set_expanded` → `set_focusable`).
+/// стирает его (tao-0.37.1 `window_state.rs:412-431`). Стиль закрывает только
+/// ПОЛЬЗОВАТЕЛЬСКУЮ активацию: webview-ребёнок попапа всё равно забирает
+/// клавиатуру программно, поэтому каждый показ проверяет и чинит `focus.rs`.
+/// Для печати в поле ответа окно временно делается фокусируемым
+/// (`popup_set_expanded` → `set_focusable`).
 /// `position` — логические px правого нижнего угла рабочей области (#588):
 /// окно создаётся уже на своём месте, не на системном каскаде.
 pub(crate) fn build_popup_window(
@@ -297,6 +307,20 @@ pub(crate) fn build_popup_window(
     };
     // Тема попапа = тема ПРИЛОЖЕНИЯ (портал сообщил через set_ui_theme).
     crate::bridge::apply_ui_theme(&win);
+    // HWND — гварду фокуса (#709): создание контроллера WebView2 и первый кадр
+    // мини-UI — известные моменты, когда кросс-процессный `Chrome_WidgetWin_1`
+    // забирает клавиатуру у главного окна. Регистрируем окно в стеке ДО
+    // проверки, иначе гвард не узнает «свой» попап.
+    if let Ok(handle) = win.hwnd() {
+        let mut s = stack(app);
+        if label == HIDE_ALL_LABEL {
+            s.hide_all_hwnd = handle.0 as isize;
+        } else if let Some(p) = s.active.iter_mut().find(|p| p.label == label) {
+            p.hwnd = handle.0 as isize;
+        }
+    }
+    crate::focus::reclaim(app, "создание попапа");
+    crate::focus::arm_guard(app, "сторож после создания");
     Some(win)
 }
 
@@ -341,38 +365,54 @@ fn is_window(hwnd: isize) -> bool {
     unsafe { IsWindow(Some(HWND(hwnd as *mut std::ffi::c_void))).as_bool() }
 }
 
-/// Показать попап, НЕ забирая системный фокус.
+/// Показать попап, НЕ забирая системный фокус — и не отдавая клавиатуру его
+/// webview-ребёнку.
 ///
-/// Неактивируемость задаёт `.focusable(false)` в билдере: tao держит
+/// Слой 1 — неактивируемость: `.focusable(false)` в билдере, tao держит
 /// `WS_EX_NOACTIVATE` в ex-style сам (tao-0.37.1 `window_state.rs:293-295`).
 /// Проверка ниже — страховка от регрессии tao: без бита `ShowWindow(SW_SHOW)`
 /// (`window_state.rs:459-466`) снова активирует topmost-окно поверх чужой
 /// программы и «убивает» каретку пользователя (#709).
 ///
-/// Показ и проверка — ТОЛЬКО на главном потоке (`run_on_main_thread`): с
+/// Слой 2 — клавиатурный фокус: `WS_EX_NOACTIVATE` запрещает только
+/// пользовательскую активацию, а кросс-процессный `Chrome_WidgetWin_1` от
+/// WebView2 забирает фокус программно и делает попап активным окном ПОТОКА
+/// (`GetForegroundWindow()` при этом остаётся главным). Проверка и ремонт —
+/// `focus::reclaim_now`; сторож добирает позднюю кражу (`focus::arm_guard`).
+///
+/// Показ и проверки — ТОЛЬКО на главном потоке (`run_on_main_thread`): с
 /// фонового потока `win.show()` лишь постит сообщение в event loop и
-/// возвращается — `apply_diff` ещё не применён, и проверка ex-style читала бы
-/// старый стиль (валидация #709).
-pub(crate) fn show_without_activation(win: &WebviewWindow) {
+/// возвращается (проверка ex-style читала бы старый стиль), а `SetFocus`
+/// с чужого потока вообще не работает («the window must be attached to the
+/// calling thread's message queue»).
+pub(crate) fn show_without_activation(win: &WebviewWindow, label: &str) {
     let win = win.clone();
     let app = win.app_handle().clone();
+    let label = label.to_string();
     let _ = app.run_on_main_thread(move || {
         let Ok(hwnd) = win.hwnd() else { return };
         let popup = HWND(hwnd.0);
         let previous = unsafe { GetForegroundWindow() };
         let _ = win.show();
-        if has_noactivate(&win) != Some(false) {
-            return;
-        }
-        log::error!("попап: WS_EX_NOACTIVATE потерян после show() — аварийный ремонт");
-        set_noactivate(&win, true);
-        // Окно всё же стало foreground — вернуть фокус прежнему владельцу.
-        if unsafe { GetForegroundWindow() } == popup && !previous.0.is_null() {
-            unsafe {
-                let _ = SetForegroundWindow(previous);
+        // Потеря ex-style — аварийный ремонт; клавиатурный слой проверяем
+        // ВСЕГДА, а не только по этой ветке (прошлый #709 выходил здесь).
+        if has_noactivate(&win) == Some(false) {
+            log::error!("попап: WS_EX_NOACTIVATE потерян после show() — аварийный ремонт");
+            set_noactivate(&win, true);
+            // Окно всё же стало foreground — вернуть фокус прежнему владельцу.
+            if unsafe { GetForegroundWindow() } == popup && !previous.0.is_null() {
+                unsafe {
+                    let _ = SetForegroundWindow(previous);
+                }
             }
         }
+        crate::focus::log_snapshot(win.app_handle(), &label, "показ");
+        // `previous` — foreground ДО показа: единственный достоверный ответ на
+        // «откуда украли клавиатуру» (поле ответа или портал), иначе возврат
+        // выдернул бы каретку не оттуда.
+        crate::focus::reclaim_now(win.app_handle(), "показ попапа", Some(previous.0 as isize));
     });
+    crate::focus::arm_guard(&app, "сторож после показа");
 }
 
 /// Куда вернуть фокус после сворачивания/закрытия попапа. Возврат — ТОЛЬКО
@@ -412,11 +452,40 @@ fn restore_focus(app: &AppHandle, win: &WebviewWindow, previous: Option<isize>) 
         None => (0, false),
     };
     let previous = previous.filter(|hwnd| is_window(*hwnd));
-    if let Some(target) = restore_target(foreground_hwnd(), popup, previous, main, main_visible) {
+    let Some(target) = restore_target(foreground_hwnd(), popup, previous, main, main_visible)
+    else {
+        return;
+    };
+    if target == main {
+        // Главное окно уже foreground: `SetForegroundWindow` для него — no-op
+        // (как и tao `set_focus()`, window.rs:139-150), поэтому клавиатура
+        // оставалась бы нигде. SetFocus возвращает её в главный webview
+        // (wry сам зовёт MoveFocus на WM_SETFOCUS) — #709, второй слой.
+        unsafe {
+            let _ = SetForegroundWindow(HWND(target as *mut std::ffi::c_void));
+        }
+        crate::focus::focus_main(app);
+    } else {
         unsafe {
             let _ = SetForegroundWindow(HWND(target as *mut std::ffi::c_void));
         }
     }
+}
+
+/// Живые попапы для гварда клавиатурного фокуса (#709): (HWND, режим ответа).
+/// Только чтение стека — вызывается и с фонового потока сторожа.
+pub(crate) fn focus_targets(app: &AppHandle) -> Vec<(isize, bool)> {
+    let s = stack(app);
+    let mut targets: Vec<(isize, bool)> = s
+        .active
+        .iter()
+        .filter(|p| p.hwnd != 0)
+        .map(|p| (p.hwnd, p.replying))
+        .collect();
+    if s.hide_all_live && s.hide_all_hwnd != 0 {
+        targets.push((s.hide_all_hwnd, false));
+    }
+    targets
 }
 
 pub fn on_popup_destroyed(app: &AppHandle, label: &str) {
@@ -435,6 +504,10 @@ pub fn on_popup_destroyed(app: &AppHandle, label: &str) {
     // дедлокит WebView2 (gotcha «Десктоп», docs/gotchas/desktop.md).
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
+        // Уничтожение окна с webview-ребёнком часто оставляет очередь ввода
+        // вообще без фокуса (`focus = 0`), хотя foreground остался порталом —
+        // каретка умирает уже после закрытия попапа (winit #4345, #709).
+        crate::focus::reclaim(&app, "закрытие попапа");
         if let Some(payload) = next {
             show(&app, payload); // show завершает reposition_all
         } else {
@@ -736,6 +809,7 @@ mod tests {
                 shown: false,
                 download_path: None,
                 activated_from: None,
+                hwnd: 0,
                 payload: serde_json::Value::Null,
             });
         }

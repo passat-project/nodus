@@ -5,6 +5,7 @@ mod bridge;
 mod deep_link;
 mod downloads;
 mod fade;
+mod focus;
 mod layout;
 mod popups;
 mod portal;
@@ -153,7 +154,7 @@ fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
     let download_app = app.clone();
     let win =
         tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
-            .title("Nodus")
+            .title(display_name(app))
             .inner_size(1280.0, 800.0)
             .min_inner_size(1024.0, 660.0)
             .center()
@@ -235,12 +236,28 @@ fn navigation_allowed(app: &AppHandle, url: &Url) -> bool {
     false
 }
 
+/// Имя приложения для видимых мест (заголовок окна, трей) — из `productName`
+/// конфига Tauri, один источник правды. Бета-сборка (`tauri.beta.conf.json`)
+/// называет себя «Nodus Beta» и живёт отдельной личностью приложения: свой
+/// identifier → свой WebView2-профиль, свой конфиг портала, свой single-instance
+/// (продуктовая оболочка продолжает работать рядом).
+pub(crate) fn display_name(app: &AppHandle) -> String {
+    app.config()
+        .product_name
+        .clone()
+        .unwrap_or_else(|| "Nodus".into())
+}
+
 /// Показать главное окно (из трея/deep link'а) и уведомить портал о видимости.
 pub fn show_main(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
         let _ = win.unminimize();
+        // `set_focus()` поднимает ОКНО, но tao делает его no-op, когда окно уже
+        // foreground (tao-0.37.1 `window.rs:139-150`) — клавиатуру в этом
+        // случае возвращает только SetFocus в главный webview (#709, focus.rs).
         let _ = win.set_focus();
+        focus::focus_main(app);
     }
     bridge::push_to_portal(
         app,
