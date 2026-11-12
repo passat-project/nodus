@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ui } from '@nodus/contracts';
 import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
 import { Skeleton } from '@nodus/ui/components/skeleton';
@@ -10,9 +10,9 @@ import { ApiError } from '../../../shared/api-client.js';
 import { useDirectConversation } from '../../../shared/chat/chat-queries.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { useRailShrink } from '../../../app/shell/right-rail.js';
+import { chatCeiling, chatColumnWidth } from '../../../shared/ui/branch-panel.js';
 import {
   CHAT_PANEL_W,
-  ChatPanelToggle,
   ChatSidePanel,
   MIN_FEED_WITH_PANEL,
   useChatSidePanel,
@@ -23,28 +23,22 @@ import { MIN_CHAT_W, useChatWidth } from '../../../shared/ui/use-chat-width.js';
 import { useEmployeePresence, useUserCard, useUsersList } from '../api/directory-api.js';
 import { useCanManageDirectory } from '../lib/use-can-manage-directory.js';
 import { EmployeeCardSkeleton } from './employee-card-skeleton.js';
-import { EmployeeProjectsTab, EmployeeTasksTab } from './employee-journal-tabs.js';
+import { EmployeeCardWorkTabs, type EmployeeWorkTab } from './employee-card-work-tabs.js';
 import { EmployeeProfileTab } from './employee-profile-tab.js';
 
-type EmployeeTab = 'profile' | 'tasks' | 'projects';
-
 /**
- * Карточка сотрудника (стек карточек, ADR-0009) — анатомия карточки проекта
- * (вердикт владельца 15.09.2026): ЕДИНЫЙ бар h-10 на всю карточку — вкладки
- * (**Профиль**, **Задачи**, **Проекты**) слева + тоггл панели беседы справа;
- * общего бара h-16 с аватаром НЕТ (его инфа дублировала поля карточки, имя —
- * в хроме слайдера, полезная высота — данным; фотография — БОЛЬШАЯ, во
- * вкладке «Профиль», модель Битрикс24). ЛЕВАЯ зона — контент вкладок на всю
- * высоту: «Профиль» (большое фото + поля-реестр полного UserCard +
- * «Подчинённые»), «Задачи» и «Проекты» — ПОЛНОЦЕННЫЕ журналы на
- * shared-реестрах (все поля + шестерёнка + ресайз колонок, как в модулях —
- * «модули не отличаются»); «Задачи» — с кнопкой «Создать» слева от поиска
- * (закон кнопки создания; экспресс-форма shared/tasks, исполнитель = сам
- * сотрудник). ПРАВАЯ колонка — личный диалог, виден ВСЕГДА (find-or-create,
- * контекстное меню и панель беседы — из shared/chat); панель беседы занимает
- * ширину ЗА СЧЁТ ЧАТА (чат сужается на её ширину, левая зона не двигается —
- * закон панели «О задаче»); перегородка тянется с памятью (общая для всех
- * карточек). Кнопки «Написать сообщение» нет — чат уже здесь.
+ * Карточка сотрудника (стек карточек, ADR-0009) — анатомия карточки профиля
+ * (вердикт владельца 11.11.2026): главный объект — ЧЕЛОВЕК, поэтому профиль
+ * живёт постоянной ЛЕВОЙ зоной (большое фото, presence, поля-реестр полного
+ * UserCard, «Подчинённые», свой скролл) и вкладкой не бывает. СПРАВА —
+ * рабочая зона: полоса вкладок карточек «Чат» (своя карточка — «Избранное»),
+ * «Задачи», «Проекты» со счётчиками и контентом, который монтируется при
+ * первом показе и живёт скрытым (`EmployeeCardWorkTabs`, канон карточки
+ * задачи). Личный диалог (find-or-create) — вкладка «Чат»; панель беседы —
+ * полновысотный сиблинг, её тоггл — в полосе вкладок и только у чата; ширина
+ * правой зоны — перегородка с памятью, профиль забирает остаток (чат —
+ * буфер сужений: рельса и панель сужают его до пола, дальше — левую зону).
+ * Кнопки «Написать сообщение» нет — чат уже здесь.
  */
 export function EmployeeCard({ userId }: { userId: string }) {
   const { data: card, isLoading } = useUserCard(userId);
@@ -53,24 +47,61 @@ export function EmployeeCard({ userId }: { userId: string }) {
   const projectsQuery = useMemberProjects(userId, { enabled: projectsAvailable() });
   const directQuery = useDirectConversation(userId);
   const meId = useAuthStore((s) => s.user?.id);
-  const [tab, setTab] = useState<EmployeeTab>('profile');
-  // Панель беседы (закон чата): тоггл — в ЕДИНОМ баре карточки справа (канон
-  // кнопки «О задаче» — шапки у чата с именем/аватаром НЕТ, вердикт);
-  // панель — полновысотный сиблинг, ширина — ЗА СЧЁТ ЧАТА (левая зона не
-  // дёргается); лента не уже 360 при открытой панели.
+  // Активная вкладка правой зоны (память не вводим — личные настройки/engine,
+  // #744/#746; дефолт всегда чат). Профиль слева — вне вкладок.
+  const [tab, setTab] = useState<EmployeeWorkTab>('chat');
+  // Вкладка после первого показа не размонтируется: скролл/фильтры журналов
+  // и черновик чата живут.
+  const [visited, setVisited] = useState<readonly EmployeeWorkTab[]>(['chat']);
+  // Подмена сотрудника в той же карточке стека (replaceTop) — вкладки
+  // принадлежали прежнему человеку: сброс в рендер-тайме (канон React, как у
+  // мессенджер-карточки).
+  const [prevUserId, setPrevUserId] = useState(userId);
+  if (prevUserId !== userId) {
+    setPrevUserId(userId);
+    setTab('chat');
+    setVisited(['chat']);
+  }
   const panel = useChatSidePanel();
-  // Экспресс-форма задачи ИЗ КАРТОЧКИ сотрудника (вердикт владельца
-  // 15.09.2026, модель Битрикс24): исполнитель подставляется сам сотрудник.
+  // Панель беседы видна ТОЛЬКО на вкладке чата: уход на журнал её прячет,
+  // panel.open не сбрасывается — возврат восстанавливает открытое состояние.
+  const panelVisible = panel.open && tab === 'chat';
   const chatRef = useRef<HTMLDivElement>(null);
   // КАНОН «чат — буфер сужений» (issue #63): панель беседы и раскрытие
-  // служебной полосы сужают КОЛОНКУ ДИАЛОГА до её минимума (лента 360 при
-  // панели, иначе drag-пол MIN_CHAT_W); после упора сужение двигает ЛЕВУЮ
-  // зону (без пола — жёсткий пол обрезал чат за краем карточки).
+  // служебной полосы сужают ПРАВУЮ зону до её минимума (лента 360 при панели,
+  // иначе drag-пол MIN_CHAT_W); профиль слева не двигается, пока хватает
+  // места, дальше сужение выталкивает его (без пола — жёсткий пол обрезал чат
+  // за краем карточки).
   const railShrink = useRailShrink();
-  const shrink = railShrink + (panel.open ? CHAT_PANEL_W : 0);
-  const chatFloor = panel.open ? MIN_FEED_WITH_PANEL : MIN_CHAT_W;
-  const { chatW, onDividerDown, dragging } = useChatWidth(chatRef, shrink, chatFloor);
-  const columnW = Math.max(chatW - shrink, chatFloor);
+  const shrink = railShrink + (panelVisible ? CHAT_PANEL_W : 0);
+  const chatFloor = panelVisible ? MIN_FEED_WITH_PANEL : MIN_CHAT_W;
+  // Порядок уступок #750: при узкой карточке правая зона отдаёт ширину
+  // ПРОФИЛЮ (минимум данных 320 — как у колонки данных задачи/письма), но не
+  // ниже своего пола; на широкой — работает память перегородки. Меряем РЯД
+  // карточки (сетка + панель беседы), а не живую ширину сетки: сетка растёт
+  // и сжимается вместе с анимацией панели, и потолок от неё перецеливал бы
+  // transition ширины чата каждый кадр — профиль раздувался и возвращался
+  // (приёмка 11.11.2026). Ширина ряда — layout-размер (clientWidth), не rect:
+  // FLIP-раскрытие карточки масштабирует transform, rect отдал бы ширину
+  // источника (канон JS-геометрии карточек).
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [rowW, setRowW] = useState(0);
+  // Меряем ряд, когда карточка уже отрисована (скелетон ряд не рендерит).
+  const ready = !isLoading && Boolean(card) && Boolean(usersData);
+  useLayoutEffect(() => {
+    const el = rowRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setRowW(el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ready]);
+  // Панель беседы — СТОЯЩЕЕ сужение ряда: потолок знает о её ширине сразу,
+  // а не догоняет растущую сетку во время анимации.
+  const ceiling = chatCeiling(rowW, panelVisible ? CHAT_PANEL_W : 0);
+  const { chatW, onDividerDown, dragging } = useChatWidth(chatRef, shrink, chatFloor, ceiling);
+  const columnW = chatColumnWidth(chatW, shrink, chatFloor, ceiling);
 
   const items = useMemo(() => usersData?.items ?? [], [usersData]);
   const listItem = items.find((u) => u.id === userId);
@@ -85,152 +116,120 @@ export function EmployeeCard({ userId }: { userId: string }) {
     return <EmployeeCardSkeleton chatW={columnW} />;
   }
 
-  const tabs: { id: EmployeeTab; label: string; count?: number }[] = [
-    { id: 'profile', label: ui.employees.tabProfile },
-    {
-      id: 'tasks',
-      label: ui.employees.tabTasks,
-      count: tasksQuery.data ? tasks.length : undefined,
-    },
-    {
-      id: 'projects',
-      label: ui.employees.tabProjects,
-      count: projectsQuery.data ? projects.length : undefined,
-    },
-  ];
+  function activateTab(next: EmployeeWorkTab) {
+    setTab(next);
+    setVisited((prev) => (prev.includes(next) ? prev : [...prev, next]));
+  }
+
+  // Лента личного диалога: фон зоны — структура с первого кадра, шапки у
+  // чата НЕТ (собеседник в хроме карточки) — канон панели беседы.
+  const chat = (
+    <div className="flex h-full w-full bg-background">
+      <div className="content-fade min-h-0 min-w-0 flex-1">
+        {directQuery.data ? (
+          <ConversationPane
+            conversationId={directQuery.data.id}
+            showAuthor={false}
+            emptyLabel={ui.chat.directEmpty}
+          />
+        ) : directQuery.isError ? (
+          <div className="flex h-full items-center justify-center bg-chat-zone">
+            <Empty>
+              <EmptyTitle>
+                {directQuery.error instanceof ApiError && directQuery.error.status === 404
+                  ? ui.chat.directUnavailable
+                  : ui.common.loadError}
+              </EmptyTitle>
+            </Empty>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 p-4">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-14 w-2/3" />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
-    // Панель беседы — ПОЛНОВЫСОТНЫЙ сиблинг всей карточки (вердикт владельца
-    // 15.09.2026, рефы Битрикс24): занимает единый бар карточки тоже.
-    <div className="flex h-full min-w-0">
-      <div className="flex h-full min-w-0 flex-1 flex-col">
-        {/* ЕДИНЫЙ бар карточки (h-10, как у карточки проекта): вкладки слева,
-          тоггл панели беседы — крайний справа (вердикт владельца 15.09.2026:
-          общий бар с аватаром удалён — дублирующая инфа, полезная высота —
-          данным левой зоны). */}
-        <div className="content-fade flex h-10 shrink-0 items-center gap-1 overflow-x-auto overflow-y-hidden border-b border-border px-4">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              aria-current={tab === t.id}
-              className={cn(
-                'flex h-10 shrink-0 items-center gap-2 rounded-none border-b-2 px-3 text-body-xs font-medium transition-colors',
-                tab === t.id
-                  ? 'border-port text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground/80',
-              )}
-            >
-              {t.label}
-              {t.count !== undefined ? (
-                <span className="font-mono text-label-sm text-muted-foreground tabular-nums">
-                  {t.count}
-                </span>
-              ) : null}
-            </button>
-          ))}
-          <div className="ml-auto flex shrink-0 items-center">
-            {directQuery.data ? (
-              <ChatPanelToggle open={panel.open} onToggle={panel.toggle} />
-            ) : null}
+    // Панель беседы — ПОЛНОВЫСОТНЫЙ сиблинг всей карточки: её шапка h-10 на
+    // линии полосы вкладок правой зоны. Ряд карточки — база потолка ширины
+    // чата (см. chatCeiling): панель входит в его ширину.
+    <div ref={rowRef} className="flex h-full min-w-0">
+      <div
+        className="grid min-h-0 min-w-0 flex-1"
+        style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}
+      >
+        {/* ЛЕВАЯ ЗОНА — профиль сотрудника, всегда на экране и со своим
+            скроллом (регион для скринридеров); граница — структурная.
+            `@container` зоны — порог 1↔2 колонок полей профиля (исходная
+            динамика #750: поля встают справа от фото, когда зона широкая). */}
+        <div
+          role="region"
+          aria-label={ui.employees.tabProfile}
+          className="relative flex min-h-0 flex-col border-r border-border @container"
+        >
+          <div className="content-fade min-h-0 flex-1 overflow-hidden">
+            <EmployeeProfileTab
+              card={card}
+              listItem={listItem}
+              manager={manager}
+              subordinates={subordinates}
+              presenceStatus={presenceStatus}
+              users={items}
+              canEditAvatar={card.id === meId}
+              canManage={canManage}
+            />
+          </div>
+
+          {/* Ручка ресайза правой зоны: невидимый оверлей ПОВЕРХ структурной
+              границы (память общая на все карточки — useChatWidth). */}
+          <div
+            onPointerDown={onDividerDown}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={ui.common.resizePanel}
+            title={ui.common.resizePanel}
+            className="group absolute top-0 right-0 z-10 h-full w-3 translate-x-1/2 cursor-col-resize"
+          >
+            <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-port/60 opacity-0 transition-opacity group-hover:opacity-100" />
           </div>
         </div>
 
-        {/* Левая зона (контент вкладки) и колонка личного диалога:
-          вертикальная граница структурная, зона чата — фон с первого кадра. */}
-        <div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
-          <div className="relative flex min-h-0 flex-col border-r border-border @container">
-            <div className="content-fade min-h-0 flex-1 overflow-hidden">
-              {tab === 'profile' ? (
-                <EmployeeProfileTab
-                  card={card}
-                  listItem={listItem}
-                  manager={manager}
-                  subordinates={subordinates}
-                  presenceStatus={presenceStatus}
-                  users={items}
-                  canEditAvatar={card.id === meId}
-                  canManage={canManage}
-                />
-              ) : null}
-
-              {tab === 'tasks' ? (
-                <EmployeeTasksTab
-                  tasks={tasks}
-                  isLoading={tasksQuery.isLoading}
-                  onCreateTask={() => openTaskCreate({ assigneeId: userId })}
-                />
-              ) : null}
-
-              {tab === 'projects' ? (
-                <EmployeeProjectsTab projects={projects} isLoading={projectsQuery.isLoading} />
-              ) : null}
-            </div>
-
-            {/* Ручка ресайза чата: невидимый оверлей ПОВЕРХ структурной границы
-              (канон карточки задачи, память общая на все карточки) */}
-            <div
-              onPointerDown={onDividerDown}
-              role="separator"
-              aria-orientation="vertical"
-              aria-label={ui.common.resizePanel}
-              title={ui.common.resizePanel}
-              className="group absolute top-0 right-0 z-10 h-full w-3 translate-x-1/2 cursor-col-resize"
-            >
-              <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-port/60 opacity-0 transition-opacity group-hover:opacity-100" />
-            </div>
-          </div>
-
-          {/* Колонка личного диалога: фон — структура с первого кадра; шапки
-            у чата НЕТ. Панель беседы — полновысотный сиблинг СПРАВА от всей
-            карточки, её ширина — ЗА СЧЁТ ЧАТА (чат сужается, левая зона не
-            двигается — см. columnW). */}
-          <div
-            ref={chatRef}
-            className={cn(
-              'min-h-0 overflow-hidden',
-              // ease-out — КАК У ПАНЕЛИ беседы: кривые width-анимаций двух
-              // колонок обязаны совпадать покадрово, иначе их сумма «плывёт»
-              // в середине, и левая зона дёргается (баг-вердикт 15.09.2026).
-              !dragging && 'transition-[width] duration-200 ease-out',
-            )}
-            style={{ width: columnW }}
-          >
-            <div className="flex h-full w-full bg-background">
-              <div className="content-fade min-h-0 min-w-0 flex-1">
-                {directQuery.data ? (
-                  <ConversationPane
-                    conversationId={directQuery.data.id}
-                    showAuthor={false}
-                    emptyLabel={ui.chat.directEmpty}
-                  />
-                ) : directQuery.isError ? (
-                  <div className="flex h-full items-center justify-center bg-chat-zone">
-                    <Empty>
-                      <EmptyTitle>
-                        {directQuery.error instanceof ApiError && directQuery.error.status === 404
-                          ? ui.chat.directUnavailable
-                          : ui.common.loadError}
-                      </EmptyTitle>
-                    </Empty>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3 p-4">
-                    {[0, 1, 2].map((i) => (
-                      <Skeleton key={i} className="h-14 w-2/3" />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+        {/* ПРАВАЯ ЗОНА — рабочая область: вкладки «Чат/Задачи/Проекты» и её
+            содержимое. Ширина — перегородка с памятью и потолком «профиль не
+            уже минимума данных» (порядок уступок #750); ease-out совпадает с
+            анимацией панели, иначе сумма двух колонок «плывёт». */}
+        <div
+          ref={chatRef}
+          className={cn(
+            'min-h-0 overflow-hidden',
+            !dragging && 'transition-[width] duration-200 ease-out',
+          )}
+          style={{ width: columnW }}
+        >
+          <EmployeeCardWorkTabs
+            active={tab}
+            visited={visited}
+            onActivate={activateTab}
+            isOwnCard={card.id === meId}
+            chat={chat}
+            tasks={tasks}
+            tasksLoading={tasksQuery.isLoading}
+            onCreateTask={() => openTaskCreate({ assigneeId: userId })}
+            projects={projects}
+            projectsLoading={projectsQuery.isLoading}
+            panelOpen={panelVisible}
+            onPanelToggle={panel.toggle}
+          />
         </div>
       </div>
       {directQuery.data ? (
         <ChatSidePanel
           conversationId={directQuery.data.id}
-          open={panel.open}
+          open={panelVisible}
           onClose={panel.close}
           title={ui.chat.aboutChat}
           headerClass="h-10"
