@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Plus } from 'lucide-react';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext } from '@dnd-kit/sortable';
 import type { StageColor } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { BOARD_COLUMN_CLASS } from './board-metrics.js';
+import { liveBoardSortingStrategy } from '../../lib/board/board-sorting.js';
 import { stageTone } from './stage-tone.js';
 
 /** Стадия-колонка борда: минимум данных для шапки (имя + цвет тона). */
@@ -134,7 +135,7 @@ export function BoardColumn({
         ) : null}
         {headerActions}
       </header>
-      <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
+      <SortableContext items={cardIds} strategy={liveBoardSortingStrategy}>
         <div
           ref={scrollRef}
           className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-0.5 pt-0.5 pb-1"
