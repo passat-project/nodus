@@ -4,39 +4,44 @@ import { DndContext } from '@dnd-kit/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ui } from '@nodus/contracts';
 
-import { BOARD_COLUMN_CLASS } from '../../../shared/ui/board/board-metrics.js';
+import {
+  BOARD_COLUMN_CLASS,
+  BOARD_COLUMN_MAX_CLASS,
+  BOARD_COLUMN_MIN_CLASS,
+} from '../../../shared/ui/board/board-metrics.js';
 import { BoardColumn } from '../../../shared/ui/board/board-column.js';
 import { TaskStageCreate } from './task-stage-create.js';
 
 /**
  * «Добавить стадию» — ПОЛНОЦЕННАЯ плитка доски (уточнение владельца
  * 10.11.2026): та же ширина и высота, что у колонок стадий, содержимое по
- * центру. Она делит ряд с колонками (1/6, `BOARD_COLUMN_CLASS`), поэтому при
- * 5 стадиях доска заполнена по ширине без пустого места справа.
+ * центру. Она делит ряд с колонками: шестая плитка — «Добавить стадию»,
+ * поэтому на опорном Full HD при 5 стадиях ряд заполнен ровно (#824).
  */
 afterEach(cleanup);
 
 describe('TaskStageCreate — плитка в ряду колонок (#730)', () => {
-  it('закрытая плитка: общий класс колонки, полная высота, без фиксированной ширины', () => {
+  it('закрытая плитка: общий класс колонки, полная высота, ширина из полосы', () => {
     const { container } = render(<TaskStageCreate creating={false} onCreate={vi.fn()} />);
     const tile = container.firstElementChild as HTMLElement;
     expect(tile.tagName).toBe('BUTTON');
     expect(tile.className).toContain(BOARD_COLUMN_CLASS);
     expect(tile.className).toContain('h-full');
     expect(tile.className).toContain('outline-dashed');
-    expect(tile.className).not.toMatch(/(?:^|\s)w-(?:\d|\[)/);
+    // Ширина — из общего класса метрик (полоса 240–360, #824), своей нет.
+    expect(tile.className).toContain(BOARD_COLUMN_MIN_CLASS);
+    expect(tile.className).toContain(BOARD_COLUMN_MAX_CLASS);
+    expect(tile.className).not.toMatch(/(?:^|\s)w-\[/);
     expect(screen.getByRole('button', { name: ui.tasks.addStage })).toBe(tile);
   });
 
-  it('плитка не несёт своих padding/border — иначе шире колонки (замер :4173 — 263 vs 241)', () => {
+  it('плитка не несёт своих padding/border — отступы и контур живут внутри', () => {
     const { container } = render(<TaskStageCreate creating={false} onCreate={vi.fn()} />);
     const tile = container.firstElementChild as HTMLElement;
-    // Flex-элемент с basis-0 прибавляет собственные padding/border к своей доле
-    // (Chromium считает flex-basis по content-box) — «Добавить стадию» выходила
-    // на 22px шире и съедала правый отступ ряда. Контур — outline: не в раскладке.
+    // Плитка — только общий класс метрик: отступы и пунктир не отнимают
+    // ширину у содержимого (контур — outline, не в раскладке).
     expect(tile.className).not.toMatch(/(?:^|\s)(?:px|py|p|pt|pb|pl|pr)-/);
     expect(tile.className).not.toMatch(/(?:^|\s)border(?:-|$)/);
-    expect(tile.className).not.toMatch(/(?:^|\s)max-w-/);
   });
 
   it('подпись не задаёт минимальную ширину плитки', () => {
@@ -69,8 +74,8 @@ describe('TaskStageCreate — плитка в ряду колонок (#730)', (
 
     const tile = render(<TaskStageCreate creating={false} onCreate={vi.fn()} />).container
       .firstElementChild as HTMLElement;
-    // Обе плитки тянутся одинаково: flex-1 basis-0 + тот же минимум 1/6.
-    for (const cls of ['flex-1', 'basis-0', 'min-w-[calc(']) {
+    // Обе плитки одной полосы ширины (#824): 6 плиток на Full HD, 8 на 2560.
+    for (const cls of [BOARD_COLUMN_MIN_CLASS, BOARD_COLUMN_MAX_CLASS, 'flex-1']) {
       expect(section.className).toContain(cls);
       expect(tile.className).toContain(cls);
     }
