@@ -51,8 +51,12 @@ export type AvatarFileIssue = 'format' | 'size';
  *  скан контейнера закрывает этот носитель (#725, security-ревью 12.11). */
 const SENSITIVE_PNG_CHUNKS = new Set(['tEXt', 'zTXt', 'iTXt', 'eXIf']);
 /** APP2 законен только как ICC-профиль (не PII); любой другой APP2 (MPF и
- *  прочие) — произвольная нагрузка, перекодируем. */
+ *  прочие) — произвольная нагрузка, перекодируем. APP0/APP14 — только свои
+ *  сигнатуры (JFIF/JFXX/Adobe): не-JFIF payload APP0 ревью 12.11 показало
+ *  как рабочую «упаковку» произвольных данных. */
 const ICC_SIGNATURE = Buffer.from('ICC_PROFILE\0', 'latin1');
+const APP0_SIGNATURES = [Buffer.from('JFIF\0', 'latin1'), Buffer.from('JFXX\0', 'latin1')];
+const APP14_SIGNATURE = Buffer.from('Adobe', 'latin1');
 
 function pngHasSensitiveChunks(bytes: Buffer): boolean {
   let offset = 8;
@@ -62,8 +66,9 @@ function pngHasSensitiveChunks(bytes: Buffer): boolean {
     if (SENSITIVE_PNG_CHUNKS.has(type)) return true;
     if (length > bytes.length) return true; // порченый контейнер — fail-safe
     const next = offset + 12 + length;
-    // Хвост после IEND (склеенные контейнеры, спрятанные данные) — fail-safe.
-    if (type === 'IEND') return next !== bytes.length;
+    // Хвост после IEND (склеенные контейнеры, спрятанные данные) и IEND с
+    // ненулевой длиной (payload ровно до EOF) — fail-safe.
+    if (type === 'IEND') return length !== 0 || next !== bytes.length;
     offset = next;
   }
   return true;
@@ -88,14 +93,23 @@ function jpegHasSensitiveSegments(bytes: Buffer): boolean {
     if (offset + 4 > bytes.length) return true;
     const length = bytes.readUInt16BE(offset + 2);
     if (length < 2 || offset + 2 + length > bytes.length) return true;
-    // APP1 (EXIF/XMP), APP13 (IPTC/Photoshop), COM и прочие APPn — метаданные;
-    // APP14 (Adobe) не PII, APP2 — только ICC. Сегменты бывают и МЕЖДУ
-    // сканами progressive JPEG, поэтому SOS не завершает обход.
+    // APP1 (EXIF/XMP), APP13 (IPTC/Photoshop), COM и прочие APPn — метаданные.
+    // APP2 — только ICC, APP0/APP14 — только свои сигнатуры. Сегменты бывают
+    // и МЕЖДУ сканами progressive JPEG, поэтому SOS не завершает обход.
     if (marker === 0xfe) return true;
-    if (marker >= 0xe1 && marker <= 0xef && marker !== 0xee) {
-      if (marker !== 0xe2) return true;
+    if (marker >= 0xe0 && marker <= 0xef) {
       const payload = bytes.subarray(offset + 4, offset + 2 + length);
-      if (payload.subarray(0, ICC_SIGNATURE.length).compare(ICC_SIGNATURE) !== 0) return true;
+      if (marker === 0xe2) {
+        if (payload.subarray(0, ICC_SIGNATURE.length).compare(ICC_SIGNATURE) !== 0) return true;
+      } else if (marker === 0xe0) {
+        if (!APP0_SIGNATURES.some((sig) => payload.subarray(0, sig.length).compare(sig) === 0)) {
+          return true;
+        }
+      } else if (marker === 0xee) {
+        if (payload.subarray(0, APP14_SIGNATURE.length).compare(APP14_SIGNATURE) !== 0) return true;
+      } else {
+        return true;
+      }
     }
     offset += 2 + length;
     if (marker === 0xda) {
