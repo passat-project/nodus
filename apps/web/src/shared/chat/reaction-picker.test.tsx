@@ -191,10 +191,10 @@ describe('ReactionPicker (#132: пилюля = базовая реакция, п
         expect(document.body.querySelector('.grid-rows-\\[1fr\\]')).not.toBeNull();
       });
 
-      // Курсор ушёл с пилюли и панели → grace 180мс → панель закрыта.
+      // Курсор ушёл с пилюли и панели → grace 500мс → закрыта.
       fireEvent.mouseLeave(trigger);
       act(() => {
-        vi.advanceTimersByTime(200);
+        vi.advanceTimersByTime(600);
       });
       expect(emojiButton('👍')).toBeNull();
 
@@ -206,6 +206,67 @@ describe('ReactionPicker (#132: пилюля = базовая реакция, п
       });
       expect(document.body.querySelector('.grid-rows-\\[1fr\\]')).toBeNull();
       expect(document.body.querySelector('button[aria-expanded="true"]')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('уход сразу после появления: панель живёт grace 500 мс — промах не «съедает» её (#821)', async () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = setup();
+      const trigger = container.querySelector('[data-slot="reaction-picker-trigger"]') as Element;
+      fireEvent.mouseEnter(trigger);
+      await vi.waitFor(() => {
+        expect(emojiButton('👍')).not.toBeNull();
+      });
+
+      // Курсор ушёл сразу после появления: 500 мс — время вернуться и попасть
+      // в панель (NN/g: намерение свернуть — только после >0.5 с без курсора).
+      fireEvent.mouseLeave(trigger);
+      act(() => {
+        vi.advanceTimersByTime(400);
+      });
+      expect(emojiButton('👍')).not.toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(emojiButton('👍')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('возврат курсора на панель отменяет закрытие (#821)', async () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = setup();
+      const trigger = container.querySelector('[data-slot="reaction-picker-trigger"]') as Element;
+      fireEvent.mouseEnter(trigger);
+      await vi.waitFor(() => {
+        expect(emojiButton('👍')).not.toBeNull();
+      });
+      const panel = document.body.querySelector('[data-slot="reaction-pop"]') as Element;
+
+      // Ушли с пилюли — grace тикает...
+      fireEvent.mouseLeave(trigger);
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      // ...но курсор вернулся на панель — закрытие отменено.
+      fireEvent.mouseEnter(panel);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(emojiButton('👍')).not.toBeNull();
+
+      // Уход уже с самой панели закрывает по grace.
+      fireEvent.mouseLeave(panel);
+      act(() => {
+        vi.advanceTimersByTime(600);
+      });
+      expect(emojiButton('👍')).toBeNull();
     } finally {
       vi.useRealTimers();
     }
