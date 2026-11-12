@@ -1,9 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { statesOfPhase } from '@nodus/contracts';
 
+import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { PrismaService } from '../../../core/database/prisma.service.js';
 import { Prisma } from '../../../generated/prisma/client.js';
-import type { TaskNodeRollup, TaskProjectReader } from './task-project-reader.port.js';
+import type { DeciderTaskRow } from '../access/task-decider-facts.js';
+import { TaskDeciderRecipients } from '../access/task-decider-recipients.service.js';
+import type {
+  ProjectTaskHolder,
+  ProjectTaskHolderRole,
+  ProjectTaskStaffing,
+  TaskNodeRollup,
+  TaskProjectReader,
+} from './task-project-reader.port.js';
 
 /** Строка сырого агрегата узла (даты — timestamptz). */
 interface RollupRow {
@@ -23,7 +32,10 @@ interface RollupRow {
  */
 @Injectable()
 export class TaskProjectReaderProvider implements TaskProjectReader {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly deciders: TaskDeciderRecipients,
+  ) {}
 
   async membersOf(projectId: string): Promise<string[]> {
     const rows = await this.prisma.$queryRaw<{ user_id: string }[]>`
@@ -58,6 +70,113 @@ export class TaskProjectReaderProvider implements TaskProjectReader {
       ) u
     `;
     return rows.map((row) => row.user_id);
+  }
+
+  async staffingOf(projectId: string): Promise<ProjectTaskStaffing> {
+    const [holders, observers, tasks] = await Promise.all([
+      this.holdersOf(projectId),
+      this.observersOf(projectId),
+      this.deciderCandidatesOf(projectId),
+    ]);
+    const holderIds = new Set(holders.map((holder) => holder.userId));
+    const deciderIds = new Set<string>();
+    for (const task of tasks) {
+      const ids = await this.deciders.idsForStage(undefined, task, {
+        id: task.stageId,
+        systemState: task.systemState,
+      });
+      for (const id of ids) if (!holderIds.has(id)) deciderIds.add(id);
+    }
+    return { holders, deciderIds: [...deciderIds], observers };
+  }
+
+  async detachObservers(
+    tx: TransactionClient,
+    projectId: string,
+    userIds: readonly string[],
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+    await tx.taskParticipant.deleteMany({
+      where: {
+        role: 'observer',
+        userId: { in: [...userIds] },
+        task: { projectId, deletedAt: null },
+      },
+    });
+  }
+
+  /** Носители ролей задач проекта: роли и число задач на человека (#541). */
+  private async holdersOf(projectId: string): Promise<ProjectTaskHolder[]> {
+    const rows = await this.prisma.$queryRaw<
+      {
+        user_id: string;
+        is_creator: boolean;
+        is_assignee: boolean;
+        is_coexecutor: boolean;
+        task_count: number;
+      }[]
+    >`
+      SELECT user_id,
+             BOOL_OR(is_creator) AS is_creator,
+             BOOL_OR(is_assignee) AS is_assignee,
+             BOOL_OR(is_coexecutor) AS is_coexecutor,
+             COUNT(DISTINCT task_id)::int AS task_count
+      FROM (
+        SELECT id AS task_id, creator_id AS user_id, TRUE AS is_creator,
+               FALSE AS is_assignee, FALSE AS is_coexecutor
+        FROM tasks WHERE project_id = ${projectId}::uuid AND deleted_at IS NULL
+        UNION ALL
+        SELECT id, assignee_id, FALSE, TRUE, FALSE
+        FROM tasks WHERE project_id = ${projectId}::uuid AND deleted_at IS NULL
+        UNION ALL
+        SELECT t.id, tp.user_id, FALSE, FALSE, TRUE
+        FROM task_participants tp
+        JOIN tasks t ON t.id = tp.task_id
+        WHERE t.project_id = ${projectId}::uuid AND t.deleted_at IS NULL
+          AND tp.role = 'coexecutor'
+      ) u
+      GROUP BY user_id
+    `;
+    return rows.map((row) => {
+      const roles: ProjectTaskHolderRole[] = [];
+      if (row.is_creator) roles.push('creator');
+      if (row.is_assignee) roles.push('assignee');
+      if (row.is_coexecutor) roles.push('coexecutor');
+      return { userId: row.user_id, roles, taskCount: row.task_count };
+    });
+  }
+
+  /** Наблюдатели задач проекта с числом задач (#541). */
+  private async observersOf(projectId: string): Promise<{ userId: string; taskCount: number }[]> {
+    const rows = await this.prisma.$queryRaw<{ user_id: string; task_count: number }[]>`
+      SELECT tp.user_id, COUNT(DISTINCT t.id)::int AS task_count
+      FROM task_participants tp
+      JOIN tasks t ON t.id = tp.task_id
+      WHERE t.project_id = ${projectId}::uuid AND t.deleted_at IS NULL
+        AND tp.role = 'observer'
+      GROUP BY tp.user_id
+    `;
+    return rows.map((row) => ({ userId: row.user_id, taskCount: row.task_count }));
+  }
+
+  /** Живые задачи проекта для расчёта решающих с ожидающим действием. */
+  private deciderCandidatesOf(projectId: string): Promise<DeciderTaskRow[]> {
+    return this.prisma.task.findMany({
+      where: { projectId, deletedAt: null },
+      select: {
+        id: true,
+        workflowId: true,
+        stageId: true,
+        systemState: true,
+        creatorId: true,
+        assigneeId: true,
+        projectId: true,
+        confidential: true,
+        customFields: true,
+      },
+      orderBy: { number: 'desc' },
+      take: 2000,
+    }) as Promise<DeciderTaskRow[]>;
   }
 
   async projectIdOf(taskId: string): Promise<string | null> {

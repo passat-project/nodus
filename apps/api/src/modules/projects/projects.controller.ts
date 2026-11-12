@@ -30,6 +30,7 @@ import {
   projectDetailSchema,
   projectHistoryEntrySchema,
   projectListItemSchema,
+  projectSecretPreviewSchema,
   projectStatusBodySchema,
   projectTransferBodySchema,
   updateProjectBodySchema,
@@ -43,6 +44,7 @@ import {
   type ProjectDetail,
   type ProjectHistoryEntry,
   type ProjectListItem,
+  type ProjectSecretPreview,
   type ProjectStatusBody,
   type ProjectTransferBody,
   type UpdateProjectBody,
@@ -129,6 +131,20 @@ export class ProjectsController {
     @GetUser() user: AuthUser,
   ): Promise<ProjectDetail> {
     return this.queries.detail(user, id);
+  }
+
+  @Get(':id/secret-preview')
+  @ApiParam({ name: 'id', description: 'UUID проекта', schema: { type: 'string', format: 'uuid' } })
+  @ApiOperation({
+    summary: 'Превью перевода в секретный: кто останется участником, кто потеряет доступ',
+  })
+  @ApiOkResponse({ standardSchema: projectSecretPreviewSchema })
+  @ApiErrors(400, 401, 404)
+  secretPreview(
+    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @GetUser() user: AuthUser,
+  ): Promise<ProjectSecretPreview> {
+    return this.projects.secretPreview(user, id);
   }
 
   @Get(':id/custom-fields/:fieldId/formula')

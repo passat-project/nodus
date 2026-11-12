@@ -8,6 +8,8 @@ const MANAGER = '00000000-0000-4000-8000-0000000000a1';
 const HELPER = '00000000-0000-4000-8000-0000000000a2';
 const WORKER = '00000000-0000-4000-8000-0000000000a3';
 const OUTSIDER = '00000000-0000-4000-8000-0000000000a4';
+const OBSERVER = '00000000-0000-4000-8000-0000000000a5';
+const DECIDER = '00000000-0000-4000-8000-0000000000a6';
 
 function user(id: string, permissions: string[] = []): AuthUser {
   return { id, email: 'u@nodus.by', displayName: 'u', permissions };
@@ -40,8 +42,15 @@ describe('ProjectMembersService (#52, Р2 — двухрежимное учас�
     remove: vi.fn(),
     replaceTaskSource: vi.fn(),
     syncManagement: vi.fn(),
+    convertSource: vi.fn(),
   };
-  const tasks = { membersOf: vi.fn(), roleHolderIds: vi.fn(), projectIdOf: vi.fn() };
+  const tasks = {
+    membersOf: vi.fn(),
+    roleHolderIds: vi.fn(),
+    projectIdOf: vi.fn(),
+    staffingOf: vi.fn(),
+    detachObservers: vi.fn(),
+  };
   const profiles = { filterActiveUserIds: vi.fn(), findRefs: vi.fn() };
   const txRunner = { run: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})) };
   const eventBus = { emit: vi.fn() };
@@ -198,8 +207,8 @@ describe('ProjectMembersService (#52, Р2 — двухрежимное учас�
     });
   });
 
-  describe('dropOpenRoster (open→secret)', () => {
-    it('снимает динамику задач и самовступивших; приглашённый и создатель остаются', async () => {
+  describe('convertForSecret (open→secret, #541)', () => {
+    it('носители ролей задач и решающие становятся участниками; joined и наблюдатели вне состава теряют доступ', async () => {
       participants.rowsOfProject.mockResolvedValueOnce([
         {
           projectId: ID,
@@ -230,21 +239,29 @@ describe('ProjectMembersService (#52, Р2 — двухрежимное учас�
           createdAt: new Date(),
         },
       ]);
-      await service.dropOpenRoster({} as never, ID);
-      expect(participants.remove).toHaveBeenCalledWith({}, ID, [WORKER], 'task');
-      // самовступивший в секретный проект не переносится — состав ручной
+      await service.convertForSecret({} as never, ID, {
+        holders: [{ userId: WORKER, roles: ['assignee'], taskCount: 2 }],
+        deciderIds: [DECIDER],
+        observers: [
+          { userId: OBSERVER, taskCount: 1 },
+          { userId: HELPER, taskCount: 3 },
+        ],
+      });
+
+      // Выданная работа сохраняется: task-строка становится member.
+      expect(participants.convertSource).toHaveBeenCalledWith({}, ID, [WORKER], 'task', 'member');
+      // Решающий без строки участия добавляется участником.
+      expect(participants.add).toHaveBeenCalledWith({}, [
+        { projectId: ID, userId: DECIDER, source: 'member' },
+      ]);
+      // Самовступивший в секретный проект не переносится.
       expect(participants.remove).toHaveBeenCalledWith({}, ID, [OUTSIDER], 'observer');
-      expect(participants.remove).not.toHaveBeenCalledWith(
+      // Наблюдатель задачи вне состава теряет роль — события task.* без утечки.
+      expect(tasks.detachObservers).toHaveBeenCalledWith({}, ID, [OBSERVER]);
+      expect(tasks.detachObservers).not.toHaveBeenCalledWith(
         expect.anything(),
         ID,
-        [HELPER],
-        'observer',
-      );
-      expect(participants.remove).not.toHaveBeenCalledWith(
-        expect.anything(),
-        ID,
-        [MANAGER],
-        'observer',
+        expect.arrayContaining([HELPER]),
       );
       // Системная строка истории с причиной «смена видимости» (#699).
       expect(eventBus.emit).toHaveBeenCalledWith(
@@ -254,10 +271,11 @@ describe('ProjectMembersService (#52, Р2 — двухрежимное учас�
           projectId: ID,
           reason: 'visibility',
           visibility: 'secret',
-          changes: [
-            { userId: WORKER, action: 'removed', from: 'task', to: null },
+          changes: expect.arrayContaining([
+            { userId: WORKER, action: 'role_changed', from: 'task', to: 'member' },
+            { userId: DECIDER, action: 'added', from: null, to: 'member' },
             { userId: OUTSIDER, action: 'removed', from: 'observer', to: null },
-          ],
+          ]),
         }),
         expect.anything(),
       );

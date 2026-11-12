@@ -434,6 +434,29 @@ export const projectMemberAddBodySchema = z.object({
 
 export type ProjectMemberAddBody = z.infer<typeof projectMemberAddBodySchema>;
 
+/** Превью перевода проекта в секретный (#541): правило «переход не отбирает
+ *  уже выданную работу». `willBecomeMembers` — носители ролей задач и
+ *  решающие с ожидающим действием (станут участниками в той же транзакции);
+ *  `willLoseAccess` — наблюдатели задач вне состава и самовступившие. */
+export const projectSecretPreviewSchema = z.object({
+  willBecomeMembers: z.array(
+    z.object({
+      user: userRefSchema,
+      roles: z.array(z.enum(['creator', 'assignee', 'coexecutor', 'decider'])),
+      taskCount: z.number().int().min(0),
+    }),
+  ),
+  willLoseAccess: z.array(
+    z.object({
+      user: userRefSchema,
+      kind: z.enum(['observer', 'joined']),
+      taskCount: z.number().int().min(0),
+    }),
+  ),
+});
+
+export type ProjectSecretPreview = z.infer<typeof projectSecretPreviewSchema>;
+
 // ===== История проекта (вкладка «История») =====
 
 /** Вид события ленты: создание, правка полей, смена состава, смена статуса.

@@ -77,6 +77,12 @@ export class ParticipantsService {
       // «Закрепить после нажатия» не должен потеряться (security #496).
       await this.tasksRepo.lock(tx, taskId);
       const fresh = await this.tasksRepo.findWithParticipants(taskId, tx);
+      // Состав проекта — под локом его строки (#541): участник не окажется
+      // вне секретного проекта, пока тот переключается.
+      if (fresh.projectId) {
+        await this.projects.lockProject(tx, fresh.projectId);
+        await this.projects.assertMembersAllowed(fresh.projectId, [body.userId]);
+      }
       // Замок записи (#496, Р4): закреплённые «Соисполнители»/«Наблюдатели»
       // меняет только постановщик (или task.edit_locked) с причиной.
       await this.assertParticipantLocked(tx, fresh, body.role, user, body.lockReason);

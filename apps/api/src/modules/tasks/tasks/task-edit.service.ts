@@ -139,6 +139,18 @@ export class TaskEditService {
     await this.placements.prepare(holdersAfter);
 
     await this.txRunner.run(async (tx) => {
+      // Состав целевого проекта перепроверяется под локом (#541): смена
+      // видимости и правка задачи не проскакивают друг мимо друга.
+      const effectiveProjectId = body.projectId ?? row.projectId;
+      if (effectiveProjectId) {
+        await this.projects.lockProject(tx, effectiveProjectId);
+        if (body.projectId) await this.projects.assertTaskProjectVisible(user, body.projectId);
+        await this.projects.assertMembersAllowed(effectiveProjectId, [
+          row.creatorId,
+          body.assigneeId ?? row.assigneeId,
+          ...row.participants.map((p) => p.userId),
+        ]);
+      }
       if (fields.length > 0 || hasCustomFields) await this.applyFields(tx, user, row, body, fields);
       if (body.stageId)
         await this.moveGlobal(tx, user, row, body.stageId, body.index, access.canEdit);

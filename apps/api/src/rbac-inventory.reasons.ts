@@ -60,6 +60,8 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'GET /projects/groups': PROJECTS_CATALOG,
   'GET /projects/node-kinds': PROJECTS_CATALOG,
   'GET /projects/:id/members': PROJECT_MEMBERSHIP,
+  // Превью перевода в секретный (#541): руководство проекта в сервисе.
+  'GET /projects/:id/secret-preview': PROJECT_MEMBERSHIP,
   // Действия с проверкой в сервисе (#52)
   'PATCH /projects/:id': PROJECT_MANAGE,
   'POST /projects/:id/status': PROJECT_MANAGE,

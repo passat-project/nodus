@@ -150,6 +150,37 @@ export class ProjectParticipantsRepository {
     };
   }
 
+  /** Смена источника участия open→secret (#541): строка `task` становится
+   *  `member` в той же транзакции. Если у сотрудника уже есть строка другого
+   *  источника (руководство/приглашённый), task-строка снимается — уникальность
+   *  (проект, сотрудник) сохраняется, роль не дублируется. */
+  async convertSource(
+    tx: TransactionClient,
+    projectId: string,
+    userIds: readonly string[],
+    from: ParticipantSource,
+    to: ParticipantSource,
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+    const others = await tx.projectParticipant.findMany({
+      select: { userId: true },
+      where: { projectId, userId: { in: [...userIds] }, source: { not: from } },
+    });
+    const blocked = new Set(others.map((row) => row.userId));
+    if (blocked.size > 0) {
+      await tx.projectParticipant.deleteMany({
+        where: { projectId, userId: { in: [...blocked] }, source: from },
+      });
+    }
+    const convert = userIds.filter((id) => !blocked.has(id));
+    if (convert.length > 0) {
+      await tx.projectParticipant.updateMany({
+        where: { projectId, userId: { in: [...convert] }, source: from },
+        data: { source: to, observerKind: null },
+      });
+    }
+  }
+
   /** Синк строк руководства из полей проекта (create/update/transfer). */
   async syncManagement(
     tx: TransactionClient,

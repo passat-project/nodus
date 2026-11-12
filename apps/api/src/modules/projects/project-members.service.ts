@@ -1,5 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ErrorCode, type AuthUser, type ProjectMember } from '@nodus/contracts';
+import {
+  ErrorCode,
+  type AuthUser,
+  type ProjectMember,
+  type ProjectParticipantChange,
+  type ProjectSecretPreview,
+} from '@nodus/contracts';
 
 import {
   TransactionRunner,
@@ -11,9 +17,10 @@ import { encodeCursor } from '../../core/pagination/cursor.util.js';
 import { USER_PROFILE_READER, type UserProfileReader } from '../../core/ports/user-profile.port.js';
 import {
   TASK_PROJECT_READER,
+  type ProjectTaskStaffing,
   type TaskProjectReader,
 } from '../tasks/ports/task-project-reader.port.js';
-import { assertProjectVisible } from './project-members.access.js';
+import { assertProjectVisible, isManagement } from './project-members.access.js';
 import {
   emitParticipantsChanged,
   emitRosterSynced,
@@ -25,6 +32,8 @@ import {
   type MembersCursor,
 } from './project-participants.repository.js';
 import { ProjectsRepository } from './projects.repository.js';
+
+type ProjectSecretPreviewRole = ProjectSecretPreview['willBecomeMembers'][number]['roles'][number];
 
 /**
  * Двухрежимное участие (Р2): открытый проект — состав живёт из задач
@@ -157,25 +166,46 @@ export class ProjectMembersService {
     }
   }
 
-  /** open→secret: состав секретного полностью ручной. В ТОЙ ЖЕ транзакции,
-   *  что и смена видимости (иначе окно, где проект уже секретный, а бывшие
-   *  участники задач ещё видят карточку/задачи/канал), снимаем динамику
-   *  задач и САМОВСТУПИВШИХ наблюдателей (`joined`); приглашённые (`invited`)
-   *  и создатель (`creator`) остаются — они назначены/производные. Это
-   *  системное следствие смены видимости — отдельная строка истории (#699). */
-  async dropOpenRoster(tx: TransactionClient, projectId: string): Promise<void> {
-    const rows = await this.participants.rowsOfProject(projectId);
+  /** open→secret: правило «переход в секретный не отбирает уже выданную
+   *  работу» (#541). В ТОЙ ЖЕ транзакции, что и смена видимости:
+   *  - носители ролей задач (постановщик/ответственный/соисполнители) и
+   *    решающие с ожидающим действием становятся участниками (`member`);
+   *  - снятые task-строки и самовступившие (`joined`) — уходят;
+   *  - наблюдатели задач вне нового состава теряют роль в задаче (иначе
+   *    события task.* продолжают уходить им с заголовком).
+   *  `staffing` посчитан ДО записи visibility (проект ещё открытый): иначе
+   *  гейт секретного проекта отфильтровал бы самих решающих. */
+  async convertForSecret(
+    tx: TransactionClient,
+    projectId: string,
+    staffing: ProjectTaskStaffing,
+  ): Promise<void> {
+    const rows = await this.participants.rowsOfProject(projectId, tx);
+    const roleHolders = new Set([
+      ...staffing.holders.map((holder) => holder.userId),
+      ...staffing.deciderIds,
+    ]);
     const taskRows = rows.filter((row) => row.source === 'task');
+    const keepTaskIds = [...new Set(taskRows.map((row) => row.userId))].filter((id) =>
+      roleHolders.has(id),
+    );
+    const dropTaskIds = [...new Set(taskRows.map((row) => row.userId))].filter(
+      (id) => !roleHolders.has(id),
+    );
     const joinedRows = rows.filter(
       (row) => row.source === 'observer' && row.observerKind === 'joined',
     );
-    if (taskRows.length === 0 && joinedRows.length === 0) return;
-    if (taskRows.length > 0) {
-      await this.participants.remove(
+    const existing = new Set(rows.map((row) => row.userId));
+    const addIds = [...roleHolders].filter((id) => !existing.has(id));
+
+    if (dropTaskIds.length > 0) {
+      await this.participants.remove(tx, projectId, dropTaskIds, 'task');
+    }
+    await this.participants.convertSource(tx, projectId, keepTaskIds, 'task', 'member');
+    if (addIds.length > 0) {
+      await this.participants.add(
         tx,
-        projectId,
-        [...new Set(taskRows.map((row) => row.userId))],
-        'task',
+        addIds.map((userId) => ({ projectId, userId, source: 'member' })),
       );
     }
     if (joinedRows.length > 0) {
@@ -186,15 +216,105 @@ export class ProjectMembersService {
         'observer',
       );
     }
-    await emitParticipantsChanged(
-      this.deps,
+
+    // Наблюдатели задач вне нового состава: доступ теряют — снимаем роль в
+    // задаче в этой же транзакции (иначе WS task.* несёт им заголовок).
+    const finalRoster = new Set(rows.map((row) => row.userId));
+    for (const id of addIds) finalRoster.add(id);
+    for (const id of dropTaskIds) finalRoster.delete(id);
+    for (const row of joinedRows) finalRoster.delete(row.userId);
+    await this.tasks.detachObservers(
       tx,
       projectId,
-      removalChanges([...taskRows, ...joinedRows], ['task', 'observer']),
-      'visibility',
-      null,
-      'secret',
+      staffing.observers.map((observer) => observer.userId).filter((id) => !finalRoster.has(id)),
     );
+
+    const changes: ProjectParticipantChange[] = [
+      ...keepTaskIds.map((userId) => ({
+        userId,
+        action: 'role_changed' as const,
+        from: 'task' as const,
+        to: 'member' as const,
+      })),
+      ...dropTaskIds.map((userId) => ({
+        userId,
+        action: 'removed' as const,
+        from: 'task' as const,
+        to: null,
+      })),
+      ...addIds.map((userId) => ({
+        userId,
+        action: 'added' as const,
+        from: null,
+        to: 'member' as const,
+      })),
+      ...joinedRows.map((row) => ({
+        userId: row.userId,
+        action: 'removed' as const,
+        from: 'observer' as const,
+        to: null,
+      })),
+    ];
+    await emitParticipantsChanged(this.deps, tx, projectId, changes, 'visibility', null, 'secret');
+  }
+
+  /** Снимок ролей задач для транзакции перевода в секретный (#541). */
+  staffingOf(projectId: string): Promise<ProjectTaskStaffing> {
+    return this.tasks.staffingOf(projectId);
+  }
+
+  /** Превью перевода в секретный (#541, решение владельца п.4): кто останется
+   *  участником (роли задач + решающие) и кто потеряет доступ. Только
+   *  руководство проекта / project.manage. */
+  async secretPreview(user: AuthUser, projectId: string): Promise<ProjectSecretPreview> {
+    await assertProjectVisible(user, projectId, this.projects, this.participants);
+    const rows = await this.participants.rowsOfProject(projectId);
+    if (!isManagement(rows, user)) {
+      throw DomainException.forbidden('Only project management can manage members');
+    }
+    const staffing = await this.tasks.staffingOf(projectId);
+    const byUser = new Map<string, { roles: Set<ProjectSecretPreviewRole>; taskCount: number }>();
+    for (const holder of staffing.holders) {
+      byUser.set(holder.userId, { roles: new Set(holder.roles), taskCount: holder.taskCount });
+    }
+    for (const id of staffing.deciderIds) {
+      const existing = byUser.get(id);
+      if (existing) existing.roles.add('decider');
+      else byUser.set(id, { roles: new Set(['decider']), taskCount: 0 });
+    }
+    const participants = new Map(rows.map((row) => [row.userId, row]));
+    const lose: { userId: string; kind: 'observer' | 'joined'; taskCount: number }[] = [];
+    for (const observer of staffing.observers) {
+      if (!participants.has(observer.userId)) {
+        lose.push({ userId: observer.userId, kind: 'observer', taskCount: observer.taskCount });
+      }
+    }
+    for (const row of rows) {
+      if (row.source === 'observer' && row.observerKind === 'joined') {
+        lose.push({ userId: row.userId, kind: 'joined', taskCount: 0 });
+      }
+    }
+    const ids = [...new Set([...byUser.keys(), ...lose.map((item) => item.userId)])];
+    const refs = new Map((await this.profiles.findRefs(ids)).map((ref) => [ref.id, ref]));
+    const userRef = (id: string) => refs.get(id) ?? { id, displayName: '', avatarUrl: null };
+    const byName = (a: { user: { displayName: string } }, b: { user: { displayName: string } }) =>
+      a.user.displayName.localeCompare(b.user.displayName, 'ru');
+    return {
+      willBecomeMembers: [...byUser]
+        .map(([userId, value]) => ({
+          user: userRef(userId),
+          roles: [...value.roles],
+          taskCount: value.taskCount,
+        }))
+        .sort(byName),
+      willLoseAccess: lose
+        .map((item) => ({
+          user: userRef(item.userId),
+          kind: item.kind,
+          taskCount: item.taskCount,
+        }))
+        .sort(byName),
+    };
   }
 
   /** secret→open: ручные участники снимаются — состав открытого проекта

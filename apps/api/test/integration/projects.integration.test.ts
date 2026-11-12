@@ -5,6 +5,7 @@ import {
   Permission,
   projectDetailSchema,
   projectListItemSchema,
+  projectSecretPreviewSchema,
   paginatedSchema,
   type Paginated,
   type ProjectDetail,
@@ -189,6 +190,64 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: трассы Т1/Т2/Т2b 
       expect(seen.status).toBe(200);
       const seenBody = (await seen.json()) as { project: { id: string } | null };
       expect(seenBody.project?.id).toBe(secret.id);
+    });
+
+    it('open→secret не отбирает выданную работу: ответственный — участник, наблюдатель теряет доступ (#541)', async () => {
+      const open = await createProject(alice, {
+        name: `Порог секретности ${fx.runId}`,
+        managerId: alice.id,
+      });
+      const created = await fx.api(alice, 'POST', '/tasks', {
+        body: {
+          title: `Работа до секретности ${fx.runId}`,
+          assigneeId: carol.id,
+          projectId: open.id,
+        },
+        key: `t1-flip-task-${fx.runId}`,
+      });
+      expect(created.status).toBe(201);
+      const task = (await created.json()) as { id: string };
+      const observer = await fx.api(alice, 'POST', `/tasks/${task.id}/participants`, {
+        body: { userId: dave.id, role: 'observer' },
+        key: `t1-flip-observer-${fx.runId}`,
+      });
+      expect(observer.status).toBe(201);
+
+      // Предпросмотр: кто останется участником, кто потеряет доступ.
+      const previewRes = await fx.api(alice, 'GET', `/projects/${open.id}/secret-preview`);
+      expect(previewRes.status).toBe(200);
+      const preview = projectSecretPreviewSchema.parse(await previewRes.json());
+      expect(preview.willBecomeMembers.map((item) => item.user.id)).toContain(carol.id);
+      expect(preview.willLoseAccess.map((item) => item.user.id)).toContain(dave.id);
+
+      const flipped = await fx.api(alice, 'PATCH', `/projects/${open.id}`, {
+        body: { visibility: 'secret' },
+        key: `t1-flip-${fx.runId}`,
+      });
+      expect(flipped.status).toBe(200);
+
+      // Ответственный видит задачу и проект: работа не отобрана.
+      expect((await fx.api(carol, 'GET', `/tasks/${task.id}`)).status).toBe(200);
+      expect((await fx.api(carol, 'GET', `/projects/${open.id}`)).status).toBe(200);
+      // Наблюдатель вне состава доступ потерял (кэш видимости сбрасывается
+      // событием outbox — ждём доставку, как проекцию участия).
+      await waitFor(async () => {
+        const res = await fx.api(dave, 'GET', `/tasks/${task.id}`);
+        return res.status === 404;
+      }, 'наблюдатель потерял задачу');
+      expect((await fx.api(dave, 'GET', `/projects/${open.id}`)).status).toBe(404);
+
+      // Обратное переключение не плодит строки участия.
+      const reopened = await fx.api(alice, 'PATCH', `/projects/${open.id}`, {
+        body: { visibility: 'open' },
+        key: `t1-flip-back-${fx.runId}`,
+      });
+      expect(reopened.status).toBe(200);
+      const members = (await (
+        await fx.api(alice, 'GET', `/projects/${open.id}/members`)
+      ).json()) as { items: { user: { id: string }; source: string }[] };
+      const pairs = members.items.map((item) => `${item.user.id}:${item.source}`);
+      expect(new Set(pairs).size).toBe(pairs.length);
     });
   });
 

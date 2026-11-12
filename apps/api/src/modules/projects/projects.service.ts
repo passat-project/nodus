@@ -12,6 +12,7 @@ import {
   type AuthUser,
   type CreateProjectBody,
   type ProjectDetail,
+  type ProjectSecretPreview,
   type UpdateProjectBody,
 } from '@nodus/contracts';
 
@@ -214,6 +215,12 @@ export class ProjectsService {
     return this.queries.detail(user, id);
   }
 
+  /** Превью перевода в секретный (#541): руководство проекта или
+   *  project.manage; проверка — в ProjectMembersService. */
+  secretPreview(user: AuthUser, id: string): Promise<ProjectSecretPreview> {
+    return this.members.secretPreview(user, id);
+  }
+
   async update(user: AuthUser, id: string, body: UpdateProjectBody): Promise<ProjectDetail> {
     const { row } = await this.loadForManage(user, id);
     // Архив — заморозка: поля правит только project.manage (Р1/Т6); вернуть
@@ -253,11 +260,13 @@ export class ProjectsService {
           assistantIds: built.assistantIds,
         });
       }
-      // Уход в секретность: состав становится полностью ручным В ТОЙ ЖЕ
-      // транзакции — без окна, где проект уже скрыт, а бывшие участники
-      // задач/самовступившие наблюдатели ещё держат доступ.
+      // Уход в секретность: состав становится ручным В ТОЙ ЖЕ транзакции —
+      // носители ролей задач и решающие становятся участниками, чтобы переход
+      // не отбирал уже выданную работу (#541). Штат считаем ДО записи
+      // visibility: под секретным гейтом решающие отфильтровались бы.
       if (built.patch.visibility === 'secret') {
-        await this.members.dropOpenRoster(tx, id);
+        const staffing = await this.members.staffingOf(id);
+        await this.members.convertForSecret(tx, id, staffing);
       }
       // Раскрытие: ручной состав секретного снимается в той же транзакции —
       // состав открытого проекта живёт из задач (#714); строка истории о
