@@ -7,6 +7,7 @@ import { ui } from '@nodus/contracts';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { BOARD_COLUMN_CLASS } from './board-metrics.js';
 import { stageTone } from './stage-tone.js';
 
 /** Стадия-колонка борда: минимум данных для шапки (имя + цвет тона). */
@@ -99,16 +100,17 @@ export function BoardColumn({
       ref={setNodeRef}
       aria-label={stage.name}
       className={cn(
-        'flex h-full w-72 shrink-0 flex-col rounded-lg transition-colors',
+        'flex h-full flex-col rounded-lg transition-colors',
+        BOARD_COLUMN_CLASS,
         tone.tint,
         overInColumn && 'bg-accent/25',
       )}
     >
-      <header className="group flex items-center gap-2 px-1 pb-2">
+      <header className="group flex items-center gap-1.5 px-0.5 pb-1.5">
         {chipOverride ?? (
           <span
             className={cn(
-              'inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-label-sm font-semibold tracking-wide uppercase select-none',
+              'inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-0.5 text-label-sm font-semibold tracking-wide uppercase select-none',
               tone.chip,
             )}
           >
@@ -127,7 +129,7 @@ export function BoardColumn({
             onClick={() => setAddingCard(true)}
             className="ml-auto shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100"
           >
-            <Plus className="size-4" strokeWidth={1.75} />
+            <Plus className="size-3.5" strokeWidth={1.75} />
           </button>
         ) : null}
         {headerActions}
@@ -135,7 +137,7 @@ export function BoardColumn({
       <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
         <div
           ref={scrollRef}
-          className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-0.5 pt-1 pb-2"
+          className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-0.5 pt-0.5 pb-1"
         >
           {addingCard && quickAdd ? (
             <input
@@ -151,7 +153,7 @@ export function BoardColumn({
               }}
               onBlur={commitDraft}
               placeholder={quickAdd.placeholder}
-              className="h-8 shrink-0 rounded-lg border border-input bg-card px-2.5 text-sm outline-none focus:border-ring"
+              className="h-7 shrink-0 rounded-lg border border-input bg-card px-2 text-xs outline-none focus:border-ring"
             />
           ) : null}
           {children}
@@ -159,13 +161,13 @@ export function BoardColumn({
               счётчик стадий догоняет перенос позже ленты, и заглушка
               висела под только что брошенной карточкой (приёмка #322). */}
           {count === 0 && cardIds.length === 0 && !loadingMore ? (
-            <span className="rounded-md border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground/70">
+            <span className="rounded-md border border-dashed border-border px-2 py-4 text-center text-label-sm text-muted-foreground/70">
               {overInColumn ? dropLabel : emptyLabel}
             </span>
           ) : null}
           {hasNext ? (
-            <div ref={sentinelRef} className="flex justify-center py-2">
-              {loadingMore ? <Skeleton className="h-10 w-full" /> : <span className="h-1" />}
+            <div ref={sentinelRef} className="flex justify-center py-1">
+              {loadingMore ? <Skeleton className="h-8 w-full" /> : <span className="h-1" />}
             </div>
           ) : null}
         </div>

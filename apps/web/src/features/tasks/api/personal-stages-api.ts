@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { transitionErrorText } from './transitions-api.js';
 
 import { api } from '../../../shared/api-client.js';
+import { toastApiError } from '../../../shared/api/error-toast.js';
 import { mapTaskInPages, tasksKeys } from './tasks-api.js';
 
 // usePersonalStages/useCreateTask — canonical в shared/api/task-create
@@ -76,12 +77,14 @@ export function useUpdateTaskPersonalStage() {
   });
 }
 
-/** Создание личной колонки (личная схема пользователя, ADR-0008). */
+/** Создание личной колонки (личная схема пользователя, ADR-0008). Ошибка —
+ *  тостом по коду (#730): плитка создания стадии остаётся открытой с вводом. */
 export function useCreatePersonalStage() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: PersonalStageCreateBody) =>
       api<TaskStage>('/tasks/personal-stages', { method: 'POST', body }),
+    onError: (error) => toastApiError(error),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: tasksKeys.personalStages() });
     },

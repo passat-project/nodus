@@ -101,10 +101,11 @@ import { identityTone, chartRowTone } from '../ui/identity-tone.js';
 ### DeadlineChip — чип срока
 
 ```tsx
-<DeadlineChip deadline={task.deadline} />
+<DeadlineChip deadline={task.deadline} state={task.stage.systemState} />
+<DeadlineChip deadline={task.deadline} state={task.stage.systemState} compact /> // узкая карточка канбана (#730)
 ```
 
-Просрочен → `bg-danger-soft text-danger` (+ `· Просрочена`); сегодня → warning; далее — нейтральный; `null` → «Без срока».
+Просрочен → `bg-danger-soft text-danger` (+ `· Просрочена`); сегодня → warning; далее — нейтральный; `null` → «Без срока». `compact` (#730): дата короткая («12.11, 14:00»), без плашки у нейтрального срока, `null` — чип не рисуется (в мета-строке узкой карточки «Без срока» — лишний шум).
 
 ### SendHexIcon — фирменный глиф отправки (гексагон)
 
