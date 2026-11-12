@@ -185,15 +185,19 @@ test.describe('уведомления: живой контур (#100)', () => {
       return items.find((m) => m.text === text)?.readAt ?? null;
     };
 
+    // Сообщение обязано быть ГЕОМЕТРИЧЕСКИ видимым под слоем — иначе тест
+    // доказывал бы «строка ниже сгиба», а не гейт модального слоя. Скроллим
+    // ленту под лайтбоксом (ввод уже был — клик по картинке) и ждём квитанцию.
+    await expect(page.getByText(text, { exact: true })).toBeAttached({ timeout: 15_000 });
+    const viewport = page.locator('[data-slot="message-scroller-viewport"]');
+    await viewport.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
     await page.waitForTimeout(2_500);
     expect(await readAt(), 'под лайтбоксом сообщение остаётся непрочитанным').toBeNull();
 
     // Закрыли слой — возврат внимания дочитывает видимое (модель #770/#809).
     await page.keyboard.press('Escape');
     await expect(lightbox).toBeHidden();
-    await page
-      .locator('[data-slot="message-scroller-viewport"]')
-      .evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+    await viewport.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
     await expect.poll(readAt, { timeout: 15_000, intervals: [1_000] }).not.toBeNull();
   });
 });
