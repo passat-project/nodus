@@ -13,6 +13,7 @@ import type { CustomFieldRegistry } from '../../../custom-fields/ports/custom-fi
 import { creationFactsOf } from './creation-facts.js';
 import { customFieldFactsOf } from './custom-field-facts.js';
 import { checkWorkflowFormulas, hasSlotFormulas } from './workflow-formula-checks.js';
+import { publishRejectionMessage } from './publish-rejection.js';
 import type { LoadedWorkflow } from '../workflow.repository.js';
 
 /**
@@ -154,9 +155,14 @@ export async function checkDocumentForPublish(
     problems.push(...checkWorkflowFormulas(ctx.document, { category: ctx.category, definitions }));
   }
   if (problems.some((problem) => problem.severity === 'error')) {
-    throw new DomainException(ErrorCode.WORKFLOW_INVALID, 'Workflow document is invalid', {
-      problems,
-    });
+    throw new DomainException(
+      ErrorCode.WORKFLOW_INVALID,
+      // Текст отказа — по первому блокирующему дефекту с именем хозяина
+      // (ответ владельца 12.11): «В действии «X» включено окно, но не
+      // выбрано ни одного раздела…».
+      publishRejectionMessage(ctx.document, problems),
+      { problems },
+    );
   }
 }
 

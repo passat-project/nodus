@@ -58,6 +58,10 @@ export function ActionPanel({
       ? ui.automation.panel.actionAtAny
       : (doc.stages.find((s) => s.id === id)?.name ?? '');
   const needsWindowOrSteps = !action.form.enabled && action.steps.length === 0;
+  // Окно включено, а разделов нет: окно откроется пустым и каждое нажатие
+  // штампует запись в журнал — публикация будет отклонена сервером. Подсказка
+  // видна в панели, кнопка «Опубликовать» уже заблокирована ошибкой чипа.
+  const windowWithoutSections = action.form.enabled && action.form.sections.length === 0;
 
   return (
     <>
@@ -128,6 +132,11 @@ export function ActionPanel({
           }
           onClick={() => onOpenSection('window')}
         />
+        {windowWithoutSections ? (
+          <p role="alert" className="mt-1 text-xs text-danger">
+            {ui.automation.problems.action_window_empty}
+          </p>
+        ) : null}
       </div>
 
       {/* Шаги: показываем только когда есть что показать (шаги) или когда

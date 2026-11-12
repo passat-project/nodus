@@ -63,7 +63,10 @@ const mkAction = (id: string, name: string, extra: Partial<WorkflowDraftAction> 
   display: 'button' as const,
   sortOrder: 0,
   rules: roles('assignee'),
-  form: { enabled: true, sections: [] },
+  form: {
+    enabled: true,
+    sections: [{ kind: 'comment' as const, label: 'Что уточнить', required: false }],
+  },
   steps: [],
   ...extra,
 });
@@ -102,7 +105,32 @@ describe('действия маршрута (#633)', () => {
 
   it('действие с окном проходит', () => {
     const doc = baseDocument([mkAction('a-form', 'Добавить замечание')]);
-    expect(codes(doc)).not.toContain('action_without_form_and_steps');
+    const codesOf = codes(doc);
+    expect(codesOf).not.toContain('action_without_form_and_steps');
+    expect(codesOf).not.toContain('action_window_empty');
+  });
+
+  it('окно включено, но разделов нет — ошибка публикации (#633)', () => {
+    const doc = baseDocument([
+      mkAction('a-blank', 'Запросить уточнение', { form: { enabled: true, sections: [] } }),
+    ]);
+    const problems = checkWorkflowDocument(doc);
+    expect(problems).toContainEqual(
+      expect.objectContaining({
+        code: 'action_window_empty',
+        severity: 'error',
+        actionId: 'a-blank',
+      }),
+    );
+    // Пустое окно — не «нет окна и шагов»: одна ошибка, не две.
+    expect(problems.map((p) => p.code)).not.toContain('action_without_form_and_steps');
+  });
+
+  it('выключенное окно без шагов — прежняя ошибка action_without_form_and_steps', () => {
+    const doc = baseDocument([
+      mkAction('a-off', 'Запросить уточнение', { form: { enabled: false, sections: [] } }),
+    ]);
+    expect(codes(doc)).toContain('action_without_form_and_steps');
   });
 
   it('действие только с шагами проходит', () => {

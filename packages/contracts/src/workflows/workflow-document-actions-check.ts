@@ -55,8 +55,13 @@ export function checkActionProblems(
     }
 
     // Ответ владельца 10.11: пустое действие публиковать нельзя — либо окно,
-    // либо хотя бы один шаг.
-    if (!a.form.enabled && a.steps.length === 0) {
+    // либо хотя бы один шаг. Ответ 12.11: окно включено, но в нём ноль
+    // разделов — публикация отклоняется: такое окно открывается пустым и
+    // каждое нажатие штампует бессмысленную запись в журнал. Действие БЕЗ
+    // окна остаётся валидным (ему нужны шаги).
+    if (a.form.enabled && a.form.sections.length === 0) {
+      problems.push(error('action_window_empty', { actionId: a.id }));
+    } else if (!a.form.enabled && a.steps.length === 0) {
       problems.push(error('action_without_form_and_steps', { actionId: a.id }));
     }
 

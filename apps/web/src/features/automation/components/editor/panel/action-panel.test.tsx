@@ -33,7 +33,11 @@ const action = (extra: Partial<WorkflowDraftAction> = {}): WorkflowDraftAction =
     validators: [],
     postFunctions: [],
   },
-  form: { enabled: true, title: 'Уточнение по задаче', sections: [] },
+  form: {
+    enabled: true,
+    title: 'Уточнение по задаче',
+    sections: [{ kind: 'comment', label: 'Что уточнить', required: true }],
+  },
   steps: [],
   ...extra,
 });
@@ -129,6 +133,32 @@ describe('ActionPanel (#633)', () => {
     expect(screen.getByText(ui.automation.panel.actionAtAny)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: ui.automation.panel.deleteAction }));
     expect(store.removeAction).toHaveBeenCalledWith('a1');
+  });
+
+  it('окно включено без разделов — видимая подсказка о блокировке публикации', () => {
+    render(
+      <ActionPanel
+        action={action({ form: { enabled: true, sections: [] } })}
+        document={doc}
+        readOnly={false}
+        autoFocusName={false}
+        onOpenSection={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('alert').textContent).toBe(ui.automation.problems.action_window_empty);
+  });
+
+  it('окно с полем — подсказки нет', () => {
+    render(
+      <ActionPanel
+        action={action()}
+        document={doc}
+        readOnly={false}
+        autoFocusName={false}
+        onOpenSection={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('просмотр: поля только читаются, удаления нет', () => {
