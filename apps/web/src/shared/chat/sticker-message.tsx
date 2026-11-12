@@ -3,8 +3,8 @@ import type { ChatMessage, MessageAttachment } from '@nodus/contracts';
 import { Message, MessageAvatar, MessageContent } from '@nodus/ui/components/message';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { PersonAvatar } from '../ui/person-avatar.js';
 import { useChatPrefs } from './chat-prefs.js';
+import { MessageAuthorAvatar } from './message-avatar.js';
 import { MessageMeta } from './message-meta.js';
 import { MessageReactions } from './chat-message.js';
 import { useJumpStore } from './jump-store.js';
@@ -74,13 +74,8 @@ export const StickerMessageView = memo(function StickerMessageView({
       {/* Аватар автора — ВИДИМЫЙ (вердикт владельца 30.09: «скидываются
           анонимно»): стикер = обычное сообщение, авторство видно всегда. */}
       {avatarSlot === 'avatar' ? (
-        <MessageAvatar>
-          <PersonAvatar
-            name={message.author.displayName}
-            avatarUrl={message.author.avatarUrl}
-            decorative
-            className="size-7"
-          />
+        <MessageAvatar className="overflow-visible">
+          <MessageAuthorAvatar author={message.author} mine={mine} />
         </MessageAvatar>
       ) : null}
       <MessageContent>

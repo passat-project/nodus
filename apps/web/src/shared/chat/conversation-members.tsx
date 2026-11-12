@@ -1,10 +1,9 @@
-// I5-обоснование (>300 строк): панель участников и окно добавления — две
-// поверхности ОДНОГО процесса «участники беседы» (#186): общий стор-хук,
-// пикер людей и права матрицы; разносить по файлам до стабилизации —
-// плодить связи ради строки лимита.
-import { MoreHorizontal, Plus, Search } from 'lucide-react';
+// Панель участников и окно добавления — две поверхности ОДНОГО процесса
+// «участники беседы» (#186): общий стор-хук, пикер людей и права матрицы.
+// Строка участника — отдельный файл (`conversation-member-row.tsx`, #728).
+import { Plus, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import type { ConversationListItem, ConversationMember, UserListItem } from '@nodus/contracts';
+import type { ConversationListItem, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@nodus/ui/components/button';
@@ -15,14 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@nodus/ui/components/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@nodus/ui/components/dropdown-menu';
 import { Input } from '@nodus/ui/components/input';
-import { NodeChip } from '@nodus/ui/components/node-chip';
 
 import { api } from '../api-client.js';
 import { usersKeys } from '../api/users-list.js';
@@ -30,127 +22,21 @@ import { useAuthStore } from '../auth-store.js';
 import { withoutPatronymic } from '../lib/format.js';
 import type { Paginated } from '@nodus/contracts';
 import { PersonAvatar } from '../ui/person-avatar.js';
-import { canAddMembers, canManageSettings, canRemoveMembers } from './conversations.js';
-import {
-  useAddMembers,
-  useConversationMembers,
-  useRemoveMember,
-  useUpdateMemberRole,
-} from './manage-api.js';
+import { MemberRow } from './conversation-member-row.js';
+import { canAddMembers } from './conversations.js';
+import { useAddMembers, useConversationMembers } from './manage-api.js';
+
+/** Пункты меню строки участника — в файле строки; реэкспорт для потребителей
+ *  и unit-теста прав матрицы (#186). */
+export { memberRowActions } from './conversation-member-row.js';
 
 /**
  * Панель участников беседы (#186): список с ролями (владелец/модератор),
  * поиск, «Добавить», меню строки «⋯» (назначить/снять модератора, удалить —
  * по правам матрицы). Рендерится в колонке панели беседы (та же геометрия
- * 1:1, view-переключение в chat-side-panel).
+ * 1:1, view-переключение в chat-side-panel). Строка участника — переход в
+ * карточку сотрудника с личным диалогом (#728).
  */
-
-/** Чип роли строки участника: владелец/модератор; участник — без чипа. */
-function RoleChip({ role }: { role: ConversationMember['role'] }) {
-  if (role === 'owner') return <NodeChip tone="info">{ui.chat.roleChipOwner}</NodeChip>;
-  if (role === 'admin') return <NodeChip tone="muted">{ui.chat.roleChipAdmin}</NodeChip>;
-  return null;
-}
-
-/** Пункты меню строки участника — чистая функция (unit-тест): права матрицы
- *  + иерархия (актёр строго старше цели), своя строка — без действий. */
-export function memberRowActions(params: {
-  conversation: ConversationListItem;
-  member: ConversationMember;
-  meId: string | null | undefined;
-}): { makeAdmin: boolean; demoteAdmin: boolean; remove: boolean } {
-  const { conversation, member, meId } = params;
-  // Чат задачи/письма: состав и роли ведёт сущность (#252) — без команд.
-  if (
-    member.user.id === meId ||
-    member.role === 'owner' ||
-    conversation.type === 'task' ||
-    conversation.type === 'letter'
-  ) {
-    return { makeAdmin: false, demoteAdmin: false, remove: false };
-  }
-  const rank: Record<ConversationMember['role'], number> = { owner: 2, admin: 1, member: 0 };
-  const myRank = rank[conversation.myRole];
-  const targetRank = rank[member.role];
-  return {
-    makeAdmin: canManageSettings(conversation) && member.role === 'member',
-    demoteAdmin: canManageSettings(conversation) && member.role === 'admin',
-    remove: canRemoveMembers(conversation) && myRank > targetRank,
-  };
-}
-
-function MemberRow({
-  conversation,
-  member,
-  meId,
-}: {
-  conversation: ConversationListItem;
-  member: ConversationMember;
-  meId: string | null | undefined;
-}) {
-  const updateRole = useUpdateMemberRole(conversation.id);
-  const removeMember = useRemoveMember(conversation.id);
-  const actions = memberRowActions({ conversation, member, meId });
-  const hasMenu = actions.makeAdmin || actions.demoteAdmin || actions.remove;
-
-  return (
-    <div className="flex items-center gap-2.5 px-4 py-2">
-      <PersonAvatar
-        name={member.user.displayName}
-        avatarUrl={member.user.avatarUrl}
-        decorative
-        className="size-8 shrink-0"
-      />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">
-          {withoutPatronymic(member.user.displayName)}
-          {member.user.id === meId ? (
-            <span className="font-normal text-muted-foreground"> ({ui.common.you})</span>
-          ) : null}
-        </div>
-      </div>
-      <RoleChip role={member.role} />
-      {hasMenu ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7 shrink-0 text-muted-foreground"
-              aria-label={ui.chat.memberMenu}
-            >
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            {actions.makeAdmin ? (
-              <DropdownMenuItem
-                onClick={() => updateRole.mutate({ userId: member.user.id, role: 'admin' })}
-              >
-                {ui.chat.memberMakeAdmin}
-              </DropdownMenuItem>
-            ) : null}
-            {actions.demoteAdmin ? (
-              <DropdownMenuItem
-                onClick={() => updateRole.mutate({ userId: member.user.id, role: 'member' })}
-              >
-                {ui.chat.memberDemoteAdmin}
-              </DropdownMenuItem>
-            ) : null}
-            {actions.remove ? (
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={() => removeMember.mutate(member.user.id)}
-              >
-                {ui.chat.memberRemove}
-              </DropdownMenuItem>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : null}
-    </div>
-  );
-}
 
 /** Контент панели участников (заголовок/закрытие — у колонки chat-side-panel). */
 export function ConversationMembersPanel({

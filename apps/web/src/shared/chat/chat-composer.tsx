@@ -153,7 +153,7 @@ export function ChatComposer({
 
   // Ввод-действия (эмодзи/стикер/paste) — хук composer-input-utils.ts
   // (раньше плашки подсказок: её выбор уходит через pickSticker).
-  const { insertEmoji, pickSticker, onPaste } = useComposerInputActions({
+  const { insertEmoji, insertNewline, pickSticker, onPaste } = useComposerInputActions({
     focusId,
     conversationId,
     typingThreadRootId,
@@ -248,6 +248,7 @@ export function ChatComposer({
         dismiss: suggest.dismiss,
       },
       submit,
+      insertNewline,
       pendingForward: pending !== null,
       hasReply: draft.reply !== null,
       hasEdit: draft.edit !== null,

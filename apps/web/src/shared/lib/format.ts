@@ -1,5 +1,7 @@
 import { ui } from '@nodus/contracts';
 
+import { localDayDiff } from './local-day.js';
+
 /** Размер файла человеком (чип вложения): «367 КБ», «2,4 МБ».
  *  Единицы — из i18n (I15); ЕДИНЫЙ порог КБ/МБ на весь продукт (аудит #45:
  *  локальный formatSize письма делил по 1000 — один файл показывал разный
@@ -43,6 +45,29 @@ export function formatDateTimeCompact(iso: string): string {
     month: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
+  });
+}
+
+/** Метка времени в СПИСКАХ (беседы, уведомления; модель Битрикс24, вердикт
+ *  владельца 11.11.2026): сегодня — «14:25», вчера — «Вчера», 2–6 дней
+ *  назад — сокращённый день недели («Ср»), 7+ дней этого года — «03.09»,
+ *  прошлые годы — «03.09.2025». «Последние 7 дней» — скользящее окно,
+ *  границы дня — локальные (не UTC, #782); `now` инжектируется для
+ *  детерминированных тестов. */
+export function formatListTimestamp(iso: string, now: Date = new Date()): string {
+  const diffDays = localDayDiff(iso, now);
+  // Сегодня и «будущее» (расхождение часов пользователя и сервера) — время.
+  if (diffDays <= 0) return formatTime(iso);
+  if (diffDays === 1) return ui.common.dateYesterday;
+  const day = new Date(iso);
+  if (diffDays < 7) {
+    // Сокращённые дни недели — из i18n (I15): «Пн», «Вт», … (getDay: 0 — Вс).
+    return ui.common.weekdaysShort[(day.getDay() + 6) % 7] ?? '';
+  }
+  return day.toLocaleDateString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    ...(day.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
   });
 }
 

@@ -33,6 +33,19 @@ export function ctrlOrAlt(event: { ctrlKey: boolean; altKey: boolean }): boolean
   return event.ctrlKey || event.altKey;
 }
 
+/** Перенос строки в каретку (#777): контролируемое поле само `\n` по
+ *  Ctrl+Enter не вставит (в Chromium/WebView2 клавиша — no-op), поэтому
+ *  splice по выделению + позиция каретки за переносом. Чистая функция —
+ *  детерминированный unit-тест без DOM. */
+export function insertNewlineAtCaret(
+  el: HTMLTextAreaElement | null,
+  text: string,
+): { text: string; caret: number } {
+  const start = el?.selectionStart ?? text.length;
+  const end = el?.selectionEnd ?? start;
+  return { text: `${text.slice(0, start)}\n${text.slice(end)}`, caret: start + 1 };
+}
+
 /** Ввод-действия композера (вынесено из chat-composer.tsx — I5, #177):
  *  эмодзи в каретку (#130), стикер-отправка мимо гейтов (#143), paste
  *  файлов (#87) с вежливой подсказкой при запрете вложений хостом. */
@@ -91,6 +104,22 @@ export function useComposerInputActions(deps: {
     });
   }
 
+  /** Перенос строки (#777): Ctrl/Meta/Alt+Enter — `\n` в позицию каретки,
+   *  каретка за переносом (rAF — поле контролируемое), сообщение НЕ уходит.
+   *  Выделение заменяется переносом (нативное поведение textarea). */
+  function insertNewline() {
+    const el = inputRef.current;
+    const next = insertNewlineAtCaret(el, text);
+    setText(focusId, next.text);
+    if (conversationId && next.text.length > 0) emitTyping(conversationId, typingThreadRootId);
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(next.caret, next.caret);
+      deps.syncCaret?.(el);
+    });
+  }
+
   /** Выбор стикера (#143): мгновенная отправка отдельным сообщением — мимо
    *  textarea и гейтов canSubmit (стикер самодостаточен, модель Telegram);
    *  панель пикера не закрывается (можно поставить серию), набранный текст
@@ -117,5 +146,5 @@ export function useComposerInputActions(deps: {
     addFiles(focusId, files);
   }
 
-  return { insertEmoji, pickSticker, onPaste };
+  return { insertEmoji, insertNewline, pickSticker, onPaste };
 }

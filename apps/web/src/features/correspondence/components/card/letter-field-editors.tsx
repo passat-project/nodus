@@ -12,6 +12,7 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { fromIsoDate } from '../../../../shared/custom-fields/value-format.js';
 import { DateTimePicker } from '../../../../shared/ui/date-time-picker.js';
+import { useMenuFocusGuard } from '../../../../shared/ui/menu-focus-guard.js';
 import { useReceiptMethods } from '../../api/letters-queries.js';
 import { todayIso } from '../../lib/letter-format.js';
 import { editLabel, notSet, valueButton } from './letter-value-bits.js';
@@ -152,11 +153,14 @@ export function ReceiptMethodValue({
   onCommit: (method: { id: string; name: string }) => void;
 }) {
   const { data: methods = [] } = useReceiptMethods();
+  // Быстрый клик в соседнее поле (тема письма) не должен терять правку из-за
+  // возврата фокуса на триггер после закрытия меню (#599).
+  const focusGuard = useMenuFocusGuard();
   const current = letter.receiptMethod;
   const text = current ? <span className="truncate">{current.name}</span> : empty;
   if (!editable) return text;
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={focusGuard.onOpenChange}>
       <DropdownMenuTrigger
         className={cn(valueButton, !current && 'shrink-0')}
         aria-label={editLabel(ui.letters.fields.receiptMethod)}
@@ -164,7 +168,7 @@ export function ReceiptMethodValue({
         {text}
         <ChevronDown className="size-3 shrink-0 text-muted-foreground" strokeWidth={1.75} />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-max min-w-44">
+      <DropdownMenuContent {...focusGuard.contentProps} align="start" className="w-max min-w-44">
         {methods
           .filter((method) => method.isActive || method.id === current?.id)
           .map((method) => (

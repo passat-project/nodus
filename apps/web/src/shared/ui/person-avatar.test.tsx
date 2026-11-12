@@ -91,6 +91,29 @@ describe('PersonAvatar — фото или инициалы (#726)', () => {
   });
 });
 
+describe('PersonAvatar — подсказка при наведении (#728)', () => {
+  it('по умолчанию в подсказке имя и фамилия сотрудника', () => {
+    const { container } = render(<PersonAvatar name="Иван Петров" avatarUrl={null} />);
+    expect(container.querySelector('[data-slot="avatar"]')?.getAttribute('title')).toBe(
+      'Иван Петров',
+    );
+  });
+
+  it('своя подпись перекрывает имя (беседа, группа)', () => {
+    const { container } = render(
+      <PersonAvatar name="Иван Петров" avatarUrl={null} title="Проект: Главный корпус" />,
+    );
+    expect(container.querySelector('[data-slot="avatar"]')?.getAttribute('title')).toBe(
+      'Проект: Главный корпус',
+    );
+  });
+
+  it('пустая строка выключает подсказку (аватар рядом с видимым именем)', () => {
+    const { container } = render(<PersonAvatar name="Иван Петров" avatarUrl={null} title="" />);
+    expect(container.querySelector('[data-slot="avatar"]')?.getAttribute('title')).toBeNull();
+  });
+});
+
 describe('PersonAvatarById — фото из единого кэша справочника (#726)', () => {
   it('id из кэша людей → img с тем же url (топбар, чипы создания чата)', () => {
     restoreImage = stubLoadedImage();

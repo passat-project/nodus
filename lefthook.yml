@@ -14,3 +14,7 @@ pre-commit:
       run: pnpm lint-staged
     secrets:
       run: node scripts/secret-scan.mjs --staged
+    # Локальные интервью вне публичного репо (#807): `.gitignore` не отдаёт их
+    # обычному add, но `git add -f` обходит правило — коммит с ними отменяется.
+    local-only:
+      run: node scripts/guard-local-only.mjs
