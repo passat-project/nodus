@@ -141,36 +141,13 @@ export function FieldRow({
  * настраивается кнопкой «+ Поле» с чекбоксами (persist localStorage).
  * Сетка на container queries зоны (@container у родителя): узко — 1 колонка,
  * широко — 2; зазор фикс, блок max-w-4xl центрируется (растут отступы).
- * `fill` (#750, вердикт владельца 11.11.2026): блок занимает ВСЮ ширину
- * родителя — без своего `max-w`/центрирования (их даёт центрированная
- * колонка контента профиля, как панель данных задачи), без верхнего отступа
- * (воздух даёт gap родителя), порог двух колонок 46rem; родитель даёт
- * `@container` на самом блоке полей, чтобы колонки считались от его ширины,
- * а не от всей зоны профиля.
  */
-export function EntityFields({
-  defs,
-  storageKey,
-  fill = false,
-}: {
-  defs: EntityFieldDef[];
-  storageKey: string;
-  /** Занимать всю ширину родителя: без своего `max-w-4xl`/центрирования,
-   *  2 колонки от 46rem (центрированная колонка профиля #750). */
-  fill?: boolean;
-}) {
+export function EntityFields({ defs, storageKey }: { defs: EntityFieldDef[]; storageKey: string }) {
   const { hiddenKeys, toggle } = useFieldVisibility(storageKey);
   const visible = defs.filter((d) => !hiddenKeys.includes(d.key));
 
   return (
-    <div
-      className={cn(
-        'mt-5 grid grid-cols-1 gap-x-12 gap-y-0.5',
-        fill
-          ? 'mt-0 w-full @min-[46rem]:grid-cols-2'
-          : 'mx-auto max-w-4xl @min-[55rem]:grid-cols-2',
-      )}
-    >
+    <div className="mx-auto mt-5 grid max-w-4xl grid-cols-1 gap-x-12 gap-y-0.5 @min-[55rem]:grid-cols-2">
       {visible.map((def) => (
         <FieldRow
           key={def.key}
@@ -183,12 +160,7 @@ export function EntityFields({
         </FieldRow>
       ))}
       <DropdownMenu>
-        <DropdownMenuTrigger
-          className={cn(
-            '-mx-2 flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground',
-            fill ? '@min-[46rem]:col-span-2' : '@min-[55rem]:col-span-2',
-          )}
-        >
+        <DropdownMenuTrigger className="-mx-2 flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground @min-[55rem]:col-span-2">
           <Plus className="size-3.5" strokeWidth={1.75} />
           {ui.common.addField}
         </DropdownMenuTrigger>
