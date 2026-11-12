@@ -138,7 +138,6 @@ export function BoardColumn({
       <SortableContext items={cardIds} strategy={liveBoardSortingStrategy}>
         <div
           ref={scrollRef}
-          data-column-scroll=""
           className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-0.5 pt-0.5 pb-1"
         >
           {addingCard && quickAdd ? (
