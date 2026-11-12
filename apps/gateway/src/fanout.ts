@@ -196,7 +196,7 @@ type StreamEntry =
   | { kind: 'envelope'; envelope: RealtimeEnvelope }
   | {
       kind: 'poison';
-      reason: 'missing' | 'json' | 'schema';
+      reason: 'missing' | 'json' | 'schema' | 'payload';
       eventType: string | null;
       conversationId: string | null;
     };
@@ -227,6 +227,17 @@ function parseStreamEntry(fields: string[]): StreamEntry {
       reason: 'schema',
       eventType: typeof record.type === 'string' ? record.type : null,
       conversationId: typeof payload.conversationId === 'string' ? payload.conversationId : null,
+    };
+  }
+  // `payload: z.unknown()` пропускает скаляры/null, но маршрутизация читает
+  // поля объекта (`'audience' in payload` → TypeError) — детерминированный
+  // сбой, ретрай не поможет: poison, а не «инфраструктура» (#810-ревью).
+  if (typeof parsed.data.payload !== 'object' || parsed.data.payload === null) {
+    return {
+      kind: 'poison',
+      reason: 'payload',
+      eventType: parsed.data.type,
+      conversationId: null,
     };
   }
   return { kind: 'envelope', envelope: parsed.data };

@@ -54,17 +54,27 @@ describe('notifyDesktopMessage: модальный слой и диагност�
     expect(getPopupDecisions()).toContainEqual(expect.objectContaining({ reason: 'looking' }));
   });
 
-  it('успешный попап оставляет строку sent, отказ оболочки — rejected (#811)', async () => {
+  it('успешный попап — sent; Tauri реджектит строкой — код причины в rejected (#811)', async () => {
     notifyDesktopMessage(messagePayload(), queryClientWith({}));
     await flush();
     expect(getPopupDecisions()).toContainEqual(expect.objectContaining({ reason: 'sent' }));
 
     resetPopupDecisionsForTests();
-    vi.mocked(window.nodusDesktop!.showPopup).mockRejectedValueOnce(new Error('invalid_payload'));
+    // Реальная форма отказа моста: `Err("invalid_payload")` приходит строкой
+    // (tauri invoke → сериализованное Err), а не Error.
+    vi.mocked(window.nodusDesktop!.showPopup).mockRejectedValueOnce('title_empty');
     notifyDesktopMessage(messagePayload(), queryClientWith({}));
     await flush();
     expect(getPopupDecisions()).toContainEqual(
-      expect.objectContaining({ reason: 'rejected', detail: 'invalid_payload' }),
+      expect.objectContaining({ reason: 'rejected', detail: 'title_empty' }),
+    );
+
+    resetPopupDecisionsForTests();
+    vi.mocked(window.nodusDesktop!.showPopup).mockRejectedValueOnce(new Error('ipc_failed'));
+    notifyDesktopMessage(messagePayload(), queryClientWith({}));
+    await flush();
+    expect(getPopupDecisions()).toContainEqual(
+      expect.objectContaining({ reason: 'rejected', detail: 'ipc_failed' }),
     );
   });
 

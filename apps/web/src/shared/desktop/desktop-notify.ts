@@ -129,8 +129,18 @@ export function notifyDesktopMessage(payload: unknown, queryClient: QueryClient)
         record(ids, delivery === 'sent' ? 'sent' : 'rejected', delivery);
       })
       .catch((error: unknown) => {
-        // Мост отклонил (Rust Err, например invalid_payload) — след обязателен.
-        record(ids, 'rejected', error instanceof Error ? error.message : 'bridge_error');
+        // Tauri `invoke` реджектит СЕРИАЛИЗОВАННЫМ значением `Err`: для
+        // `Err("invalid_payload")` это строка, не Error (tauri core.js /
+        // ipc/protocol.rs). Код причины обязан доехать до журнала.
+        record(
+          ids,
+          'rejected',
+          typeof error === 'string'
+            ? error
+            : error instanceof Error
+              ? error.message
+              : 'bridge_error',
+        );
       });
     void desktopFlashTaskbar(urgent);
   }

@@ -5,19 +5,25 @@ import { ui } from '@nodus/contracts';
 
 import { PopupDebugPanel } from './popup-diagnostics-badge.js';
 import { recordPopupDecision, resetPopupDecisionsForTests } from './popup-diagnostics.js';
+import { useAuthStore } from '../auth-store.js';
 
 /**
  * Панель диагностики (#811): под `?wsdebug=1` показывает цепочку решений по
  * попапам — владелец читает причину тишины без консоли разработчика.
+ * Журнал читается в области текущего пользователя (#746).
  */
 
 beforeEach(() => {
-  resetPopupDecisionsForTests();
   localStorage.clear();
+  useAuthStore.setState({
+    user: { id: 'panel-user', displayName: 'U', avatarUrl: null } as never,
+  });
+  resetPopupDecisionsForTests();
 });
 
 afterEach(() => {
   cleanup();
+  useAuthStore.setState({ user: null });
 });
 
 describe('PopupDebugPanel', () => {

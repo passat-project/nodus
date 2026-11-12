@@ -117,7 +117,7 @@ describe('ChatEventsConsumer.runMaintenance', () => {
     warn.mockRestore();
   });
 
-  it('poison-запись: битый JSON/schema — warn и XACK, группу не блокирует (#810)', async () => {
+  it('poison-запись: битый JSON/schema/скалярный payload — warn и XACK, группу не блокирует (#810)', async () => {
     const { io } = fakeIo();
     const memberIds = vi.fn();
     const store: MembershipStore = { isMember: vi.fn(), memberIds, userRef: vi.fn() };
@@ -127,6 +127,15 @@ describe('ChatEventsConsumer.runMaintenance', () => {
         [
           ['2-0', ['envelope', '{oops']],
           ['3-0', ['envelope', '{"type":"","payload":{},"seq":1,"ts":"x"}']],
+          // Схема пропускает `payload: unknown`, но маршрутизация читает поля
+          // объекта — детерминированный TypeError, ретрай не поможет.
+          [
+            '4-0',
+            [
+              'envelope',
+              '{"type":"chat.message_sent","payload":"x","seq":1,"ts":"2026-11-13T00:00:00.000Z"}',
+            ],
+          ],
         ],
         [],
       ]),
@@ -136,13 +145,15 @@ describe('ChatEventsConsumer.runMaintenance', () => {
 
     await consumer.runMaintenance();
 
-    expect(redis.xack).toHaveBeenCalledTimes(2);
+    expect(redis.xack).toHaveBeenCalledTimes(3);
     expect(redis.xack).toHaveBeenNthCalledWith(1, DOMAIN_EVENTS_STREAM, 'g', '2-0');
     expect(redis.xack).toHaveBeenNthCalledWith(2, DOMAIN_EVENTS_STREAM, 'g', '3-0');
+    expect(redis.xack).toHaveBeenNthCalledWith(3, DOMAIN_EVENTS_STREAM, 'g', '4-0');
     expect(memberIds).not.toHaveBeenCalled();
     expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toContain(
       'poison stream entry skipped',
     );
+    expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toContain('reason=payload');
     warn.mockRestore();
   });
 });

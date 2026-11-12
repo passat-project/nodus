@@ -1,3 +1,5 @@
+import { useAuthStore } from '../auth-store.js';
+
 /**
  * Диагностика десктоп-попапов (#811): кольцевой журнал решений гейта.
  * Редкий «попап не пришёл» нельзя воспроизвести по требованию — после факта
@@ -36,7 +38,9 @@ export interface PopupDecision {
 
 /** Потолок журнала: последние решения важнее старых, хранилище не пухнет. */
 export const POPUP_DIAGNOSTICS_LIMIT = 100;
-const STORAGE_KEY = 'nodus:popup-diagnostics';
+const STORAGE_NAME = 'nodus:popup-diagnostics';
+/** Общий браузерный профиль: журнал строго на пользователя (канон #746). */
+const ANONYMOUS = 'anonymous';
 const REASONS: ReadonlySet<string> = new Set<PopupGateReason>([
   'not_shell',
   'invalid_payload',
@@ -51,7 +55,27 @@ const REASONS: ReadonlySet<string> = new Set<PopupGateReason>([
 ]);
 
 const listeners = new Set<() => void>();
-let buffer: PopupDecision[] = load();
+let scope: string | null = null;
+let scoped = false;
+let buffer: PopupDecision[] = [];
+
+function scopedKey(userId: string | null): string {
+  return `${STORAGE_NAME}:${userId ?? ANONYMOUS}`;
+}
+
+function currentUserId(): string | null {
+  return useAuthStore.getState().user?.id ?? null;
+}
+
+/** Переключить журнал на текущего пользователя (вход/выход/смена учётки). */
+function syncScope(): boolean {
+  const userId = currentUserId();
+  if (scoped && userId === scope) return false;
+  scope = userId;
+  scoped = true;
+  buffer = load();
+  return true;
+}
 
 function isDecision(value: unknown): value is PopupDecision {
   if (typeof value !== 'object' || value === null) return false;
@@ -69,7 +93,7 @@ function isDecision(value: unknown): value is PopupDecision {
 function load(): PopupDecision[] {
   if (typeof localStorage === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(scopedKey(scope));
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.filter(isDecision).slice(-POPUP_DIAGNOSTICS_LIMIT) : [];
@@ -81,16 +105,39 @@ function load(): PopupDecision[] {
 function persist(): void {
   if (typeof localStorage === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(buffer));
+    localStorage.setItem(scopedKey(scope), JSON.stringify(buffer));
   } catch {
     // Приватный режим/квота — журнал живёт в памяти до перезагрузки.
   }
 }
 
+function removeScoped(): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.removeItem(scopedKey(scope));
+  } catch {
+    // хранилище недоступно — чистим только память
+  }
+}
+
+// Старый device-global ключ (до #809-ревью) не читаем и не оставляем: в нём
+// могли быть метаданные предыдущего пользователя общего профиля.
+if (typeof localStorage !== 'undefined') {
+  try {
+    localStorage.removeItem(STORAGE_NAME);
+  } catch {
+    // недоступное хранилище — нечего чистить
+  }
+}
+
+// Область журнала определяется лениво при первом обращении (get/record/clear):
+// модуль не трогает auth-стор на импорте — его мокают в изолированных тестах.
+
 /** Записать решение гейта (единственная точка изменения журнала). */
 export function recordPopupDecision(
   decision: Omit<PopupDecision, 'ts'> & { ts?: string },
 ): PopupDecision {
+  syncScope();
   const entry: PopupDecision = {
     ts: decision.ts ?? new Date().toISOString(),
     messageId: decision.messageId,
@@ -104,8 +151,9 @@ export function recordPopupDecision(
   return entry;
 }
 
-/** Последние решения (старые → новые) — для панели диагностики. */
+/** Последние решения текущего пользователя (старые → новые). */
 export function getPopupDecisions(): readonly PopupDecision[] {
+  syncScope();
   return buffer;
 }
 
@@ -117,14 +165,9 @@ export function subscribePopupDecisions(fn: () => void): () => void {
 
 /** Очистить журнал (кнопка панели диагностики). */
 export function clearPopupDecisions(): void {
+  syncScope();
   buffer = [];
-  if (typeof localStorage !== 'undefined') {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // хранилище недоступно — чистим только память
-    }
-  }
+  removeScoped();
   for (const fn of [...listeners]) fn();
 }
 

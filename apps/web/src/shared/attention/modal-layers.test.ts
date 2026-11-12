@@ -30,17 +30,19 @@ describe('modal-layers', () => {
   it('регистрация/освобождение слоя переключает признак и уведомляет подписчиков', () => {
     const listener = vi.fn();
     const unsubscribe = subscribeModalLayers(listener);
-    const release = registerModalLayer(document.createElement('div'));
+    const element = document.createElement('div');
+    const release = registerModalLayer(element);
     expect(isModalLayerOpen()).toBe(true);
     expect(listener).toHaveBeenCalledTimes(1);
-    // Повторная регистрация того же элемента — не второй слой.
-    const releaseAgain = registerModalLayer(document.createElement('div'));
-    expect(listener).toHaveBeenCalledTimes(2);
+    // Повторная регистрация ТОГО ЖЕ элемента — не второй слой (Set, а не
+    // счётчик): StrictMode-двойной эффект не даёт ложного «закрыто».
+    const releaseAgain = registerModalLayer(element);
+    expect(listener).toHaveBeenCalledTimes(1);
     release();
-    expect(isModalLayerOpen()).toBe(true);
+    expect(isModalLayerOpen()).toBe(false);
     releaseAgain();
     expect(isModalLayerOpen()).toBe(false);
-    expect(listener).toHaveBeenCalledTimes(4);
+    expect(listener).toHaveBeenCalledTimes(2);
     unsubscribe();
   });
 

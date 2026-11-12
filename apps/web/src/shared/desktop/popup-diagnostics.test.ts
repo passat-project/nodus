@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useAuthStore } from '../auth-store.js';
 import {
   POPUP_DIAGNOSTICS_LIMIT,
   clearPopupDecisions,
@@ -13,15 +14,28 @@ import {
 /**
  * Журнал решений попапов (#811): кольцо ≤ 100, переживает перезагрузку
  * (localStorage), хранит только id/причину/код — без текста сообщений.
+ * Ключ строго на пользователя (канон #746): общий браузерный профиль не
+ * показывает следующему сотруднику активность предыдущего.
  */
 
+const U1 = '11111111-1111-4111-8111-111111111111';
+const U2 = '22222222-2222-4222-8222-222222222222';
+
+function asUser(id: string | null): void {
+  useAuthStore.setState({
+    user: id === null ? null : ({ id, displayName: id, avatarUrl: null } as never),
+  });
+}
+
 beforeEach(() => {
-  resetPopupDecisionsForTests();
   localStorage.clear();
+  asUser(U1);
+  resetPopupDecisionsForTests();
 });
 
 afterEach(() => {
   resetPopupDecisionsForTests();
+  asUser(null);
 });
 
 describe('popup-diagnostics', () => {
@@ -59,27 +73,38 @@ describe('popup-diagnostics', () => {
     expect(getPopupDecisions()[0]?.detail).toHaveLength(120);
   });
 
-  it('журнал переживает перезагрузку: читается из localStorage', async () => {
+  it('журнал пишется в ключ пользователя и переживает перезагрузку', () => {
     recordPopupDecision({ messageId: 'm1', conversationId: 'c1', reason: 'sent' });
-    // Перезагрузка модуля — новый буфер из того же хранилища.
-    vi.resetModules();
-    const reloaded = await import('./popup-diagnostics.js');
-    expect(reloaded.getPopupDecisions()).toContainEqual(
+    const raw = localStorage.getItem(`nodus:popup-diagnostics:${U1}`);
+    expect(raw).toBeTruthy();
+    expect(JSON.parse(raw ?? '[]')).toContainEqual(
       expect.objectContaining({ messageId: 'm1', conversationId: 'c1', reason: 'sent' }),
     );
   });
 
-  it('битое хранилище не ломает журнал', async () => {
-    localStorage.setItem('nodus:popup-diagnostics', '{oops');
-    vi.resetModules();
-    const reloaded = await import('./popup-diagnostics.js');
-    expect(reloaded.getPopupDecisions()).toEqual([]);
+  it('смена пользователя: чужие решения не видны, возврат — свои на месте', () => {
+    recordPopupDecision({ messageId: 'm1', conversationId: 'c1', reason: 'sent' });
+    asUser(U2);
+    expect(getPopupDecisions()).toEqual([]);
+    recordPopupDecision({ messageId: 'm2', conversationId: 'c2', reason: 'looking' });
+    expect(getPopupDecisions()).toContainEqual(expect.objectContaining({ messageId: 'm2' }));
+
+    asUser(U1);
+    expect(getPopupDecisions()).toContainEqual(expect.objectContaining({ messageId: 'm1' }));
+    expect(getPopupDecisions()).not.toContainEqual(expect.objectContaining({ messageId: 'm2' }));
   });
 
-  it('очистка убирает записи из памяти и хранилища', () => {
+  it('битое хранилище не ломает журнал', () => {
+    localStorage.setItem(`nodus:popup-diagnostics:${U1}`, '{oops');
+    asUser(U2); // смена области — буфер перечитывается из хранилища
+    asUser(U1);
+    expect(getPopupDecisions()).toEqual([]);
+  });
+
+  it('очистка убирает записи из памяти и хранилища пользователя', () => {
     recordPopupDecision({ messageId: null, conversationId: null, reason: 'not_shell' });
     clearPopupDecisions();
     expect(getPopupDecisions()).toEqual([]);
-    expect(localStorage.getItem('nodus:popup-diagnostics')).toBeNull();
+    expect(localStorage.getItem(`nodus:popup-diagnostics:${U1}`)).toBeNull();
   });
 });
