@@ -157,6 +157,10 @@ vi.mock('../api/project-catalog-mutations.js', () => ({
   useUpdateProjectType: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
+vi.mock('../api/projects-api.js', () => ({
+  useProjectSecretPreview: () => ({ data: undefined, isPending: false, isError: false }),
+}));
+
 import { ProjectEditDialog } from './project-edit-dialog.js';
 
 describe('ProjectEditDialog: атрибуты слотами формы типа (#631)', () => {

@@ -114,6 +114,27 @@ export const projectReadHandlers = [
     return HttpResponse.json({ items: demoProjectMembersFor(row.id), nextCursor: null });
   }),
 
+  http.get('/api/v1/projects/:id/secret-preview', ({ params }) => {
+    const row = findDemoProjectRow(String(params.id));
+    const actor = getMockActor();
+    if (!row || !canSeeProject(row, actor)) return notFound();
+    // Демо-мир: участники из задач — «останутся участниками», наблюдатели —
+    // «потеряют доступ». Зеркало правила #541, роли задач не детализируем.
+    const members = demoProjectMembersFor(row.id);
+    return HttpResponse.json({
+      willBecomeMembers: members
+        .filter((member) => member.source === 'task' || member.source === 'member')
+        .map((member) => ({ user: member.user, roles: ['assignee'], taskCount: 1 })),
+      willLoseAccess: members
+        .filter((member) => member.source === 'observer')
+        .map((member) => ({
+          user: member.user,
+          kind: member.observerKind === 'joined' ? 'joined' : 'observer',
+          taskCount: 0,
+        })),
+    });
+  }),
+
   http.get('/api/v1/projects/:id/history', ({ params, request }) => {
     const row = findDemoProjectRow(String(params.id));
     const actor = getMockActor();
