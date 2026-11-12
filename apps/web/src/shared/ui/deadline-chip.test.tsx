@@ -31,4 +31,18 @@ describe('DeadlineChip (#734)', () => {
     expect(container.textContent).not.toContain(ui.tasks.overdue);
     expect(container.firstElementChild?.className).toContain('bg-muted');
   });
+
+  /** Плотный режим (#730): карточка канбана узкая — дата короткая, у
+   *  нейтрального/просроченного срока нет плашки у нейтрального, а без срока
+   *  чип не рисуется вовсе (мета-строку не удлиняет). */
+  it('compact: короткая дата и ничего без срока', () => {
+    const { container, rerender } = render(
+      <DeadlineChip compact deadline="2026-11-12T14:00:00.000Z" state="active" />,
+    );
+    expect(container.textContent).toContain('12.11');
+    expect(container.textContent).not.toContain('ноября');
+
+    rerender(<DeadlineChip compact deadline={null} state="active" />);
+    expect(container.textContent).toBe('');
+  });
 });

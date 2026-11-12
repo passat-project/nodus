@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { EDGE_ZONE_PX, type EdgeSide } from '../../lib/board/edge-scroll.js';
+import { BOARD_ROW_CLASS } from './board-metrics.js';
 import { useBoardEdgeScroll } from './use-board-edge-scroll.js';
 
 /**
@@ -12,7 +13,9 @@ import { useBoardEdgeScroll } from './use-board-edge-scroll.js';
  * drag-to-pan фона — `use-board-edge-scroll`). Зоны края — индикаторы
  * поверх доски БЕЗ перехвата указателя: клики и меню крайних колонок
  * проходят насквозь, видны только когда в эту сторону есть куда листать.
- * className — отступы конкретной доски (их же зеркалит KanbanSkeleton).
+ * className — отступы конкретной доски (их же зеркалит KanbanSkeleton). Геометрия
+ * ряда (зазор, внешние отступы) — из `board-metrics.ts` (#730): узкие колонки и
+ * 6+ колонок на Full HD.
  */
 export function BoardScroller({
   className,
@@ -29,11 +32,7 @@ export function BoardScroller({
       <div
         ref={ref}
         data-board-scroller=""
-        className={cn(
-          'flex h-full gap-5 overflow-x-auto px-6 pb-4',
-          panning && 'cursor-grabbing select-none',
-          className,
-        )}
+        className={cn(BOARD_ROW_CLASS, panning && 'cursor-grabbing select-none', className)}
         {...handlers}
       >
         {children}
