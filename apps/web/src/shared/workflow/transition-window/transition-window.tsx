@@ -19,6 +19,7 @@ import { NodeLabel } from '@nodus/ui/components/node-label';
 import { Textarea } from '@nodus/ui/components/textarea';
 
 import { useMessagesLookup } from '../../chat/message-lookup-api.js';
+import { gateReasonsText } from '../../tasks/transition-error.js';
 import { buildExecuteBody } from './build-execute-body.js';
 import { ConditionsList } from './conditions-list.js';
 import type { GateDetailsHost } from './gate-details.js';
@@ -43,6 +44,14 @@ export interface TransitionWindowError {
   reasons?: TransitionBlockReason[];
 }
 
+/** Всё, что окну нужно от кнопки: переход и действие без смены статуса
+ *  (#633) кормят его одним типом. `toStageName` — только у перехода: у
+ *  действия статус не меняется, стрелки в шапке нет. */
+export type WindowSource = Pick<
+  WorkflowTransition,
+  'id' | 'name' | 'form' | 'formPrefill' | 'validators' | 'blockedBy' | 'canOverride'
+> & { toStageName?: string };
+
 /**
  * Окно перехода (#380): диалог по центру (≈640, радиус 14, канон диалогов),
  * разделы по настройке кнопки ∪ гейтам, живой список условий, пессимистичная
@@ -65,7 +74,7 @@ export function TransitionWindow({
 }: {
   open: boolean;
   mode: 'live' | 'preview';
-  transition: WorkflowTransition;
+  transition: WindowSource;
   context: TransitionWindowContext | null;
   submitting?: boolean;
   error?: TransitionWindowError | null;
@@ -183,10 +192,12 @@ export function TransitionWindow({
       >
         <DialogHeader className="shrink-0">
           <DialogTitle>{transition.form?.title || transition.name}</DialogTitle>
-          <DialogDescription>
-            {effectiveContext?.currentStageName} {ui.tasks.window.stageArrow}{' '}
-            {transition.toStageName}
-          </DialogDescription>
+          {transition.toStageName ? (
+            <DialogDescription>
+              {effectiveContext?.currentStageName} {ui.tasks.window.stageArrow}{' '}
+              {transition.toStageName}
+            </DialogDescription>
+          ) : null}
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
@@ -216,6 +227,9 @@ export function TransitionWindow({
               {ui.tasks.window.submitFailed}
               {error.missing && error.missing.length > 0
                 ? ` (${error.missing.map(missingLabel).join(', ')})`
+                : ''}
+              {error.reasons && error.reasons.length > 0
+                ? ` — ${ui.tasks.processBlockedMissing} ${gateReasonsText(error.reasons)}`
                 : ''}
             </p>
           ) : null}

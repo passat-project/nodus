@@ -9,6 +9,7 @@ import {
   windowWritableKeys,
   type ProcessCategory,
   type TransitionFormInput,
+  type WorkflowAction,
   type WorkflowTransition,
 } from '@nodus/contracts';
 
@@ -43,7 +44,12 @@ import {
   type TransitionDef,
 } from '../transition-rules.js';
 import { approverContext } from './approver-context.js';
-import { canShow, transitionOptions, vacancyReasons } from './transition-availability.js';
+import {
+  canShow,
+  actionOptions,
+  transitionOptions,
+  vacancyReasons,
+} from './transition-availability.js';
 import * as exec from './transition-execution-helpers.js';
 import { checkFormInput, windowOf } from '../transition-form.js';
 import { WorkflowEntityRegistry } from './entity-adapter.registry.js';
@@ -80,6 +86,18 @@ export class WorkflowEngine implements WorkflowEnginePort {
   ): Promise<WorkflowTransition[]> {
     const { workflow, subject } = await this.context(tx, entityId, category, actor);
     return this.options(workflow, subject, approverContext(workflow, subject));
+  }
+
+  /** Действия текущего статуса для панели карточки (#633): видимые актору,
+   *  свои раньше «из любого»; окно — если включено. */
+  async availableActions(
+    tx: TransactionClient,
+    entityId: string,
+    category: ProcessCategory,
+    actor: WorkflowActor,
+  ): Promise<WorkflowAction[]> {
+    const { workflow, subject } = await this.context(tx, entityId, category, actor);
+    return actionOptions(workflow, subject);
   }
 
   async execute(
@@ -236,6 +254,100 @@ export class WorkflowEngine implements WorkflowEnginePort {
             })),
           }
         : {}),
+    };
+  }
+
+  /**
+   * Нажатие действия (#633): окно и запись в журнал, статус НЕ меняется.
+   * Шаги (каталог ядра) в этой версии ещё не исполняются — действие с шагами
+   * отклоняется явно, чтобы не было «нажал — и ничего» (STOP-условие плана).
+   */
+  async pressAction(
+    tx: TransactionClient,
+    entityId: string,
+    category: ProcessCategory,
+    actor: WorkflowActor,
+    actionId: string,
+    opts: { form?: TransitionFormInput } = {},
+  ): Promise<{
+    actionName: string;
+    stageName: string;
+    recordId: string;
+    fields: Record<string, unknown>;
+    commentLabel?: string;
+    result?: { resultId: string; fileCount: number; messageCount: number };
+  }> {
+    const adapter = this.adapters.get(category);
+    await adapter.lock(tx, entityId);
+    const subject = await this.subjectWithPermissions(tx, entityId, category, actor);
+    const workflow = await this.workflows.load(subject.workflowId, tx);
+    const action = workflow.actions.find(
+      (a) => a.id === actionId && (a.stageId === null || a.stageId === subject.stageId),
+    );
+    if (!action || !canShow(action, subject)) {
+      throw new DomainException(ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED, 'Action not allowed');
+    }
+    if ((action.steps as unknown[]).length > 0) {
+      throw new DomainException(ErrorCode.WORKFLOW_INVALID, 'Action steps are not supported yet');
+    }
+    // Окно действия — та же граница, что у перехода: состав ввода сверяется
+    // с настройкой окна (иначе обязательные разделы обходились бы пустым
+    // телом, а лишние поля писались мимо окна).
+    const asTransition = action as unknown as TransitionDef;
+    this.assertFormAllowed(asTransition, opts.form);
+    const applied = await this.applyForm(
+      adapter,
+      category,
+      tx,
+      entityId,
+      actor,
+      asTransition,
+      opts.form,
+      subject.facts,
+    );
+    // Гейты — ПОСЛЕ окна (как у перехода): данные, которые закрывают условие
+    // (итог, время, поля), пишет само окно. Перечитываем субъект в той же
+    // транзакции; отказ откатит окно вместе с записью.
+    const subjectAfter = await this.subjectWithPermissions(tx, entityId, category, actor);
+    const gateReasons = evaluateValidators(action.rules, subjectAfter.facts);
+    if (gateReasons.length > 0) {
+      throw new DomainException(ErrorCode.WORKFLOW_TRANSITION_BLOCKED, 'Action gates not passed', {
+        reasons: gateReasons,
+      });
+    }
+    if (action.form.enabled && action.form.locks?.length) {
+      await adapter.applyLocks?.(tx, entityId, actor.id, action.form.locks, {
+        transitionId: action.id,
+        transitionName: action.name,
+      });
+    }
+    const recordId = randomUUID();
+    await this.records.insert(tx, {
+      id: recordId,
+      entityKind: category,
+      entityId,
+      transitionId: null,
+      actionId: action.id,
+      fromStageId: subject.stageId,
+      toStageId: subject.stageId,
+      actorId: actor.id,
+      rule: null,
+      recordKind: 'action',
+      participantId: null,
+      comment: opts.form?.comment ?? null,
+      resultId: applied.result?.resultId ?? null,
+      fields: applied.fields,
+      timeEntryId: applied.timeEntryId,
+    });
+    return {
+      actionName: action.name,
+      stageName: this.stage(workflow, subject.stageId).name,
+      recordId,
+      fields: applied.fields,
+      ...(exec.commentLabelOf(asTransition)
+        ? { commentLabel: exec.commentLabelOf(asTransition) }
+        : {}),
+      ...(applied.result ? { result: applied.result } : {}),
     };
   }
 

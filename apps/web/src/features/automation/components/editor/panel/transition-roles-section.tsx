@@ -1,11 +1,15 @@
-import type { ProcessCategory, WorkflowDraftTransition } from '@nodus/contracts';
+import type { ProcessCategory } from '@nodus/contracts';
 import { WORKFLOW_ROLES_BY_CATEGORY, ui } from '@nodus/contracts';
 import { Checkbox } from '@nodus/ui/components/checkbox';
 
-import { deciderSourcesOf, rolesOf, toggleRole } from '../../../model/transition-rules.js';
+import {
+  deciderSourcesOf,
+  rolesOf,
+  toggleRole,
+  type RuleFormOwner,
+  type Rules,
+} from '../../../model/transition-rules.js';
 import { useRouteDocStore } from '../../../model/route-doc-store.js';
-
-type Rules = WorkflowDraftTransition['rules'];
 
 /** Строка с чекбоксом — общая для разделов панели кнопки. */
 export function CheckRow({
@@ -42,11 +46,12 @@ export function CheckRow({
   );
 }
 
-function usePatchRules(transition: WorkflowDraftTransition) {
+function usePatchRules(owner: RuleFormOwner, kind: 'transition' | 'action' = 'transition') {
   return (next: Rules) => {
-    if (next !== transition.rules) {
-      useRouteDocStore.getState().patchTransition(transition.id, { rules: next });
-    }
+    if (next === owner.rules) return;
+    const store = useRouteDocStore.getState();
+    if (kind === 'action') store.patchAction(owner.id, { rules: next });
+    else store.patchTransition(owner.id, { rules: next });
   };
 }
 
@@ -56,12 +61,15 @@ export function RolesSection({
   transition,
   readOnly,
   category = 'task',
+  kind = 'transition',
 }: {
-  transition: WorkflowDraftTransition;
+  transition: RuleFormOwner;
   readOnly: boolean;
   category?: ProcessCategory;
+  /** Действие (#633) правится методом стора `patchAction`. */
+  kind?: 'transition' | 'action';
 }) {
-  const patch = usePatchRules(transition);
+  const patch = usePatchRules(transition, kind);
   const roles = rolesOf(transition.rules);
   const hasDeciders = deciderSourcesOf(transition.rules).length > 0;
   const allowed = WORKFLOW_ROLES_BY_CATEGORY[category];

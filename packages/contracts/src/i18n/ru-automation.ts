@@ -71,6 +71,8 @@ export const automationStrings = {
   },
   addStage: 'Добавить статус',
   newStageName: 'Новый статус',
+  /** Действие — кнопка без смены статуса (#633). */
+  newActionName: 'Новое действие',
   startNode: 'Создание',
   initialMark: 'Начальный',
   stageAria: 'Статус',
@@ -215,6 +217,7 @@ export const automationStrings = {
     /** Шапка панели — вид элемента (название — первое поле, не дублируется). */
     kindStage: 'Статус',
     kindTransition: 'Кнопка перехода',
+    kindAction: 'Действие',
     stageGroup: 'Группа статуса',
     stageGroupWhy: 'От группы зависят просрочка, колонки «Канбана» и отчёты',
     canAnyFrom: 'Можно перейти из любого статуса',
@@ -239,6 +242,20 @@ export const automationStrings = {
     nobody: 'Никто',
     noConditions: 'Без условий',
     noRules: 'Нет',
+    /** Действие — кнопка без смены статуса (#633). */
+    sectionActions: 'Действия',
+    actionsLead: 'Кнопки, которые не меняют статус задачи',
+    noActions: 'Нет действий',
+    addActionLabel: 'Добавить действие',
+    moreActions: 'ещё',
+    actionName: 'Название действия',
+    actionStage: 'Статус',
+    actionAtAny: 'В любом статусе',
+    actionWindow: 'Окно действия',
+    deleteAction: 'Удалить действие',
+    actionSteps: 'Шаги действия',
+    actionStepsEmpty: 'Шаги не настроены',
+    actionNeedsFormOrSteps: 'Действию нужно окно или шаги — иначе публикация остановится с ошибкой',
     /** Подгруппа атрибутов гейта «Заполнены поля» (#431): подпись
      *  группы — общая с окном, здесь только лимит условия. */
     gateFieldsLimit: 'В условии можно выбрать не больше 20 полей',

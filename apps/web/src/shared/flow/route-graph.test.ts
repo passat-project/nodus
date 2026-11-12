@@ -151,4 +151,54 @@ describe('route-graph: холст из документа (#378 ред. 2)', () 
     expect(view.nodes.every((n) => n.draggable === false)).toBe(true);
     expect(view.edges.every((e) => e.reconnectable === false)).toBe(true);
   });
+
+  it('действия статуса — бейдж на узле, выделенное действие подсвечивает свой статус (#633)', () => {
+    const base = doc();
+    const withActions: WorkflowDraftDocument = {
+      ...base,
+      actions: [
+        {
+          id: 'a1',
+          code: null,
+          name: 'Добавить замечание',
+          stageId: B,
+          display: 'button',
+          sortOrder: 0,
+          rules,
+          form: { enabled: true, sections: [] },
+          steps: [],
+        },
+        {
+          id: 'a2',
+          code: null,
+          name: 'Запросить уточнение',
+          stageId: null,
+          display: 'button',
+          sortOrder: 1,
+          rules,
+          form: { enabled: true, sections: [] },
+          steps: [],
+        },
+      ],
+    };
+    const plain = buildRouteGraph(withActions, { readOnly: false });
+    expect(plain.nodes.find((n) => n.id === B)!.data).toMatchObject({
+      actions: [
+        { id: 'a1', name: 'Добавить замечание' },
+        { id: 'a2', name: 'Запросить уточнение' },
+      ],
+    });
+    // Действие «в любом статусе» доступно и здесь — бейдж считает и его.
+    expect(plain.nodes.find((n) => n.id === A)!.data).toMatchObject({
+      actions: [{ id: 'a2', name: 'Запросить уточнение' }],
+    });
+
+    const selected = buildRouteGraph(withActions, {
+      readOnly: false,
+      selection: { kind: 'action', id: 'a1' },
+    });
+    expect(selected.nodes.find((n) => n.id === B)).toMatchObject({ selected: true });
+    expect(selected.nodes.find((n) => n.id === B)!.data).toMatchObject({ selectedActionId: 'a1' });
+    expect(selected.nodes.find((n) => n.id === A)).toMatchObject({ selected: false });
+  });
 });

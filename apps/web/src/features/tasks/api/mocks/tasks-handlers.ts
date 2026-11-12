@@ -32,6 +32,7 @@ import { tasksListHandlers } from './tasks-list-handlers.js';
 import { tasksParticipantsHandlers } from './tasks-participants-handlers.js';
 import { tasksPersonalStagesHandlers } from './tasks-personal-stages-handlers.js';
 import { tasksTransitionsHandlers } from './tasks-transitions-handlers.js';
+import { tasksActionsHandlers } from './tasks-actions-handlers.js';
 import { tasksWorkHandlers } from './tasks-work-handlers.js';
 import { counterWriteResponse } from '../../../../shared/custom-fields/mocks/numbering-responses.js';
 
@@ -76,6 +77,7 @@ export const tasksHandlers = [
   ...tasksChecklistHandlers,
   // Кнопки маршрута карточки (ADR-0020).
   ...tasksTransitionsHandlers,
+  ...tasksActionsHandlers,
   // Типы, время/таймер, результат, bulk (#311) — ДО '/api/v1/tasks/:id'.
   ...tasksWorkHandlers,
 

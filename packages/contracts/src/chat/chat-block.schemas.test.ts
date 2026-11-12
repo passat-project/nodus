@@ -60,6 +60,24 @@ describe('вид сообщения и блок перехода (#380)', () => 
     expect(() => chatMessageBlockSchema.parse({ ...letterBlock, letterId: undefined })).toThrow();
   });
 
+  it('блок действия без смены статуса (#633): имя действия и статус, стадии-цели нет', () => {
+    const actionBlock = {
+      kind: 'task_action',
+      taskId: crypto.randomUUID(),
+      recordId: crypto.randomUUID(),
+      actionName: 'Добавить замечание',
+      stageName: 'В работе',
+      commentLabel: null,
+      result: null,
+    };
+    expect(chatMessageKindSchema.parse('task_action')).toBe('task_action');
+    expect(chatMessageBlockSchema.parse(actionBlock)).toEqual(actionBlock);
+    expect(() =>
+      chatMessageBlockSchema.parse({ ...actionBlock, actionName: 'я'.repeat(41) }),
+    ).toThrow();
+    expect(() => chatMessageBlockSchema.parse({ ...actionBlock, recordId: undefined })).toThrow();
+  });
+
   it('ids lookup: 1..50 уникальных, разбор строки', () => {
     const ids = [crypto.randomUUID(), crypto.randomUUID()];
     expect(lookupMessagesQuerySchema.parse({ ids: ids.join(',') }).ids).toEqual(ids);

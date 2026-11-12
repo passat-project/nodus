@@ -80,6 +80,7 @@ export function useChangeProcessType(taskId: string) {
       void queryClient.invalidateQueries({ queryKey: tasksKeys.detail(taskId) });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.listPages() });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.transitions(taskId) });
+      void queryClient.invalidateQueries({ queryKey: tasksKeys.actions(taskId) });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.kanbanAll() });
     },
     onError: (error) => {

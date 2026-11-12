@@ -12,7 +12,10 @@ function logger() {
 
 function makeService(
   deps: Partial<
-    Record<'txRunner' | 'query' | 'placements' | 'taskService' | 'engine' | 'cells', unknown>
+    Record<
+      'txRunner' | 'query' | 'placements' | 'taskService' | 'engine' | 'cells' | 'events',
+      unknown
+    >
   >,
   log = logger(),
 ) {
@@ -23,6 +26,7 @@ function makeService(
     (deps.taskService ?? {}) as never,
     (deps.engine ?? {}) as never,
     (deps.cells ?? {}) as never,
+    (deps.events ?? {}) as never,
     log as never,
   );
 }
@@ -102,6 +106,98 @@ describe('TaskTransitionsService — сценарии API кнопок марш�
     });
     await expect(service.listFor(USER, 't1')).rejects.toThrow('404');
     expect(txRunner.run).not.toHaveBeenCalled();
+  });
+});
+
+describe('TaskTransitionsService — действия без смены статуса (#633)', () => {
+  it('listActionsFor: видимость → действия из движка в транзакции', async () => {
+    const order: string[] = [];
+    const query = { visibleRow: vi.fn(async () => (order.push('visible'), { id: 't1' })) };
+    const txRunner = {
+      run: vi.fn(async (fn: (tx: unknown) => unknown) => (order.push('tx'), fn(TX))),
+    };
+    const engine = {
+      availableActions: vi.fn(
+        async () => (order.push('actions'), [{ id: 'a1', name: 'Замечание' }]),
+      ),
+    };
+    const service = makeService({ txRunner, query, engine });
+    const result = await service.listActionsFor(USER, 't1');
+    expect(result).toEqual([{ id: 'a1', name: 'Замечание' }]);
+    expect(order).toEqual(['visible', 'tx', 'actions']);
+    expect(engine.availableActions).toHaveBeenCalledWith(TX, 't1', 'task', USER);
+  });
+
+  it('listActionsFor: чужая задача — 404 до транзакции', async () => {
+    const txRunner = { run: vi.fn() };
+    const service = makeService({
+      txRunner,
+      query: { visibleRow: vi.fn().mockRejectedValue(new Error('404')) },
+    });
+    await expect(service.listActionsFor(USER, 't1')).rejects.toThrow('404');
+    expect(txRunner.run).not.toHaveBeenCalled();
+  });
+
+  it('listActionsFor: формульный слот окна действия получает префилл (#632)', async () => {
+    const actions = [
+      {
+        id: 'a1',
+        name: 'Замечание',
+        display: 'button',
+        form: {
+          enabled: true,
+          sections: [
+            { kind: 'fields', fields: ['plannedMinutes'], formulas: { plannedMinutes: 'a' } },
+          ],
+        },
+      },
+    ];
+    const cells = { evaluate: vi.fn(async () => ({ value: 5000, error: null })) };
+    const service = makeService({
+      query: { visibleRow: vi.fn(async () => ({ id: 't1' })) },
+      txRunner: { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn(TX)) },
+      engine: { availableActions: vi.fn(async () => actions) },
+      cells,
+    });
+    const [only] = await service.listActionsFor(USER, 't1');
+    expect(only?.formPrefill).toEqual({ plannedMinutes: 5000 });
+  });
+
+  it('pressActionFor: нажатие с окном → событие журнала, новые кнопки и карточка', async () => {
+    const row = { id: 't1', number: 12, creatorId: 'alice', assigneeId: 'bob', participants: [] };
+    const query = { visibleRow: vi.fn(async () => row) };
+    const txRunner = { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn(TX)) };
+    const engine = {
+      pressAction: vi.fn(async () => ({
+        actionName: 'Замечание',
+        stageName: 'В работе',
+        recordId: 'rec1',
+        fields: {},
+      })),
+      available: vi.fn(async () => []),
+    };
+    const events = { emit: vi.fn(async () => void 0) };
+    const taskService = { listItem: vi.fn(async () => ({ id: 't1' })) };
+    const service = makeService({ txRunner, query, engine, events, taskService });
+    const result = await service.pressActionFor(USER, 't1', 'a1', {
+      form: { comment: 'проверено' },
+    });
+    expect(engine.pressAction).toHaveBeenCalledWith(TX, 't1', 'task', USER, 'a1', {
+      form: { comment: 'проверено' },
+    });
+    expect(events.emit).toHaveBeenCalledWith(
+      TX,
+      'task.action_pressed',
+      expect.objectContaining({
+        taskId: 't1',
+        actionId: 'a1',
+        actionName: 'Замечание',
+        stageName: 'В работе',
+        recordId: 'rec1',
+      }),
+      { actorId: USER.id, aggregateType: 'task', aggregateId: 't1' },
+    );
+    expect(result).toEqual({ task: { id: 't1' }, transitions: [] });
   });
 });
 

@@ -41,6 +41,24 @@ export const standardDocument: WorkflowDocument = {
     { ...stageDone, code: 'done', outcome: 'success', isInitial: false, sortOrder: 0 },
     { ...stageCancelled, code: 'cancelled', outcome: 'cancelled', isInitial: false, sortOrder: 1 },
   ],
+  /** Действие без смены статуса (#633): демо на мок-контуре и в веб-тестах. */
+  actions: [
+    {
+      id: trid('action'),
+      code: 'request_clarification',
+      name: 'Запросить уточнение',
+      stageId: stageInProgress.id,
+      display: 'button',
+      sortOrder: 0,
+      rules: { conditions: [doers], validators: [], postFunctions: [] },
+      form: {
+        enabled: true,
+        title: 'Уточнение по задаче',
+        sections: [{ kind: 'comment', label: 'Что уточнить', required: true }],
+      },
+      steps: [],
+    },
+  ],
   transitions: [
     {
       id: trid('start'),

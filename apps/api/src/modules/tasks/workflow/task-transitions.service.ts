@@ -6,18 +6,20 @@ import type {
   CustomFieldValue,
   ExecuteTransitionBody,
   ExecuteTransitionResult,
+  WorkflowAction,
   WorkflowTransition,
 } from '@nodus/contracts';
-import { customFieldIdOfKey, CUSTOM_FIELD_LIMITS } from '@nodus/contracts';
+import { TASK_EVENTS, customFieldIdOfKey, CUSTOM_FIELD_LIMITS } from '@nodus/contracts';
 
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import { EventBus } from '../../../core/events/event-bus.js';
 import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import {
   WORKFLOW_ENGINE,
   type WorkflowEnginePort,
 } from '../../workflows/ports/workflow-engine.port.js';
-import { actorRoles, planHolderIds, taskAccess } from '../access/task-access.js';
+import { actorRoles, audienceIds, planHolderIds, taskAccess } from '../access/task-access.js';
 import { Placements } from '../personal/placements.js';
 import { TasksQueryService } from '../tasks/tasks-query.service.js';
 import { TasksService } from '../tasks/tasks.service.js';
@@ -61,6 +63,7 @@ export class TaskTransitionsService {
     private readonly taskService: TasksService,
     @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
     @Inject(FORMULA_CELLS) private readonly cells: FormulaCells,
+    private readonly events: EventBus,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(TaskTransitionsService.name);
@@ -77,6 +80,17 @@ export class TaskTransitionsService {
     });
   }
 
+  /** GET /tasks/:id/actions — действия без смены статуса (#633), видимые
+   *  актору. Шагов у них нет: действие с шагами пока не исполняется.
+   *  Формульные слоты окна получают префилл — как у кнопки-перехода. */
+  async listActionsFor(user: AuthUser, taskId: string): Promise<WorkflowAction[]> {
+    await this.query.visibleRow(user, taskId);
+    return this.txRunner.run(async (tx) => {
+      const actions = await this.engine.availableActions(tx, taskId, 'task', user);
+      return this.withActionPrefill(actions, taskId, user, tx);
+    });
+  }
+
   /** Префилл формульных слотов: ошибка/пусто — слот остаётся пустым (Р13).
    *  Ошибка расчёта пишется в лог (A8-6), но переход не блокируется. */
   private async withPrefill(
@@ -87,35 +101,62 @@ export class TaskTransitionsService {
   ): Promise<WorkflowTransition[]> {
     return Promise.all(
       transitions.map(async (transition) => {
-        const section = transition.form?.sections.find((entry) => entry.kind === 'fields');
-        if (section?.kind !== 'fields' || !section.formulas) return transition;
-        const prefill: Record<string, CustomFieldValue> = {};
-        for (const [key, ast] of Object.entries(section.formulas)) {
-          const fieldId = customFieldIdOfKey(key);
-          const result = await this.cells.evaluate('task', taskId, ast, {
-            actor: user,
-            ...(fieldId ? { fieldId } : { fieldType: SLOT_TYPES[key] }),
-            tx,
-          });
-          if (result.error) {
-            this.logger.warn(
-              { taskId, key, code: result.error.code },
-              'Формула-префилл окна не посчитана',
-            );
-            continue;
-          }
-          if (result.value === null) continue;
-          if (!slotValueFits(key, result.value)) {
-            this.logger.warn({ taskId, key }, 'Формула-префилл окна не подходит грамматике поля');
-            continue;
-          }
-          prefill[key] = result.value;
-        }
+        const prefill = await this.prefillFor(transition.form, taskId, user, tx);
         return Object.keys(prefill).length > 0
           ? { ...transition, formPrefill: prefill }
           : transition;
       }),
     );
+  }
+
+  /** То же для действий (#633): окно действия — тот же конструктор полей. */
+  private async withActionPrefill(
+    actions: readonly WorkflowAction[],
+    taskId: string,
+    user: AuthUser,
+    tx: TransactionClient,
+  ): Promise<WorkflowAction[]> {
+    return Promise.all(
+      actions.map(async (action) => {
+        const prefill = await this.prefillFor(action.form, taskId, user, tx);
+        return Object.keys(prefill).length > 0 ? { ...action, formPrefill: prefill } : action;
+      }),
+    );
+  }
+
+  /** Посчитанные значения формульных слотов окна (общие для перехода и
+   *  действия): пустой объект — формул нет или все слоты пусты. */
+  private async prefillFor(
+    form: WorkflowTransition['form'],
+    taskId: string,
+    user: AuthUser,
+    tx: TransactionClient,
+  ): Promise<Record<string, CustomFieldValue>> {
+    const section = form?.sections.find((entry) => entry.kind === 'fields');
+    if (section?.kind !== 'fields' || !section.formulas) return {};
+    const prefill: Record<string, CustomFieldValue> = {};
+    for (const [key, ast] of Object.entries(section.formulas)) {
+      const fieldId = customFieldIdOfKey(key);
+      const result = await this.cells.evaluate('task', taskId, ast, {
+        actor: user,
+        ...(fieldId ? { fieldId } : { fieldType: SLOT_TYPES[key] }),
+        tx,
+      });
+      if (result.error) {
+        this.logger.warn(
+          { taskId, key, code: result.error.code },
+          'Формула-префилл окна не посчитана',
+        );
+        continue;
+      }
+      if (result.value === null) continue;
+      if (!slotValueFits(key, result.value)) {
+        this.logger.warn({ taskId, key }, 'Формула-префилл окна не подходит грамматике поля');
+        continue;
+      }
+      prefill[key] = result.value;
+    }
+    return prefill;
   }
 
   /** POST /tasks/:id/transitions/:transitionId — выполнить кнопку. Личные
@@ -157,5 +198,47 @@ export class TaskTransitionsService {
       transitions,
       ...(assignedNumbers ? { assignedNumbers } : {}),
     };
+  }
+
+  /** POST /tasks/:id/actions/:actionId/press — нажать «Действие» (#633):
+   *  данные окна пишутся, запись уходит в журнал, статус не меняется. */
+  async pressActionFor(
+    user: AuthUser,
+    taskId: string,
+    actionId: string,
+    body: ExecuteTransitionBody,
+  ): Promise<ExecuteTransitionResult> {
+    const row = await this.query.visibleRow(user, taskId);
+    const transitions = await this.txRunner.run(async (tx) => {
+      const pressed = await this.engine.pressAction(tx, taskId, 'task', user, actionId, {
+        form: body.form,
+      });
+      // Журнал и лента задачи видят нажатие как событие (I3): статус тот же,
+      // поэтому отдельное событие, а не stage_changed.
+      await this.events.emit(
+        tx,
+        TASK_EVENTS.ACTION_PRESSED,
+        {
+          taskId,
+          number: row.number,
+          audience: audienceIds(row),
+          actionId,
+          actionName: pressed.actionName,
+          stageName: pressed.stageName,
+          recordId: pressed.recordId,
+          ...(body.form?.comment ? { comment: body.form.comment.slice(0, 2000) } : {}),
+          ...(pressed.commentLabel ? { commentLabel: pressed.commentLabel.slice(0, 60) } : {}),
+          ...(pressed.result ? { result: pressed.result } : {}),
+        },
+        { actorId: user.id, aggregateType: 'task', aggregateId: taskId },
+      );
+      return this.withPrefill(
+        await this.engine.available(tx, taskId, 'task', user),
+        taskId,
+        user,
+        tx,
+      );
+    });
+    return { task: await this.taskService.listItem(user, taskId), transitions };
   }
 }

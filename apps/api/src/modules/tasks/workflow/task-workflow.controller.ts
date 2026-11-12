@@ -14,6 +14,7 @@ import {
   personalStageUpdateBodySchema,
   taskStageSchema,
   taskStageWithCountSchema,
+  workflowActionSchema,
   workflowTransitionSchema,
   type AuthUser,
   type ExecuteTransitionBody,
@@ -22,6 +23,7 @@ import {
   type PersonalStageUpdateBody,
   type TaskStage,
   type TaskStageWithCount,
+  type WorkflowAction,
   type WorkflowTransition,
 } from '@nodus/contracts';
 
@@ -119,6 +121,37 @@ export class TaskWorkflowController {
     @Param('id', uuid) id: string,
   ): Promise<WorkflowTransition[]> {
     return this.transitions.listFor(user, id);
+  }
+
+  @Get(':id/actions')
+  @ApiOperation({ summary: 'Доступные действия маршрута (без смены статуса)' })
+  @ApiOkResponse({ standardSchema: z.array(workflowActionSchema) })
+  @ApiErrors(400, 401, 404)
+  availableActions(
+    @GetUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+  ): Promise<WorkflowAction[]> {
+    return this.transitions.listActionsFor(user, id);
+  }
+
+  @Post(':id/actions/:actionId/press')
+  @HttpCode(200)
+  @Audit({ action: 'task.action', entity: 'task' })
+  @ApiOperation({ summary: 'Нажать действие маршрута: данные окна, статус не меняется' })
+  @ApiOkResponse({ standardSchema: executeTransitionResultSchema })
+  @ApiErrors(400, 401, 403, 404, 409, 422)
+  @ApiIdempotencyKey()
+  press(
+    @GetUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Param('actionId', uuid) actionId: string,
+    @Body({
+      schema: executeTransitionBodySchema,
+      pipes: [new ZodValidationPipe(executeTransitionBodySchema)],
+    })
+    body: ExecuteTransitionBody,
+  ): Promise<ExecuteTransitionResult> {
+    return this.transitions.pressActionFor(user, id, actionId, body);
   }
 
   @Post(':id/transitions/:transitionId')

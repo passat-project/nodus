@@ -39,6 +39,7 @@ import {
 } from '../../../custom-fields/ports/custom-field-registry.port.js';
 import { assertLetterCatalogEditable } from '../../catalog/letter-lock.js';
 import { documentOf } from './document-of.js';
+import { applyActionPlan } from './publish-actions.js';
 import { liveLayout, resolveLayout } from './layout.js';
 import { assertPublishable } from './publish-checks.js';
 import { publishSnapshot } from './publish-snapshot.js';
@@ -320,6 +321,9 @@ export class WorkflowEditorService {
       await this.writes.archiveTransition(tx, transitionId, now);
     }
     for (const { stageId } of plan.stageArchives) await this.writes.archiveStage(tx, stageId, now);
+
+    // Действия (#633) — вынесено в publish-actions.ts (лимит размера файла).
+    await applyActionPlan({ writes: this.writes, tx, workflowId, document, plan, stages, now });
     return { stages, transitions, resolve };
   }
 

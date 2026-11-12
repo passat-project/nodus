@@ -34,7 +34,7 @@ export interface RouteGraphOptions {
   stageEntityCounts?: Readonly<Record<string, number>>;
   /** Выделение редактора (кольцо узла, подсветка стрелки и её подписи);
    *  `creation` — выделен узел «Создание» (#432). */
-  selection?: { kind: 'stage' | 'transition' | 'creation'; id: string } | null;
+  selection?: { kind: 'stage' | 'transition' | 'action' | 'creation'; id: string } | null;
   onSelectTransition?: (id: string) => void;
   /** Подпись перетащили вдоль стрелки (только редактор). */
   onLabelT?: (transitionId: string, t: number) => void;
@@ -51,6 +51,25 @@ export function buildRouteGraph(
   const isSelected = (kind: 'stage' | 'transition', id: string) =>
     options.selection?.kind === kind && options.selection.id === id;
   const initial = doc.stages.find((s) => s.isInitial);
+
+  // Действия (#633) — у статуса на холсте только бейдж со счётчиком:
+  // статус они не меняют, стрелки у них нет. Действия «в любом статусе»
+  // доступны и здесь — считаем их вместе со своими (свои первыми).
+  const actions = [...(doc.actions ?? [])].sort(
+    (a, b) => Number(a.stageId === null) - Number(b.stageId === null) || a.sortOrder - b.sortOrder,
+  );
+  const stageActionList = (stageId: string) =>
+    actions
+      .filter((a) => a.stageId === null || a.stageId === stageId)
+      .map((a) => ({ id: a.id, name: a.name }));
+  const selectedAction =
+    options.selection?.kind === 'action'
+      ? (actions.find((a) => a.id === options.selection!.id) ?? null)
+      : null;
+  const selectedActionStageId = selectedAction?.stageId ?? null;
+  // Действие «в любом статусе» видно на каждом узле — его бейдж подсвечиваем
+  // везде, но кольцо узла не ставим (статуса у действия нет).
+  const selectedAnyAction = selectedAction !== null && selectedAction.stageId === null;
 
   // Занятые точки подключения статусов — кружки, к которым приходят стрелки.
   const ports = new Map<string, Set<string>>();
@@ -85,7 +104,7 @@ export function buildRouteGraph(
         id: stage.id,
         type: 'status',
         position: route.positions.get(stage.id)!,
-        selected: isSelected('stage', stage.id),
+        selected: isSelected('stage', stage.id) || selectedActionStageId === stage.id,
         draggable: !readOnly,
         connectable: !readOnly,
         deletable: !readOnly,
@@ -99,6 +118,11 @@ export function buildRouteGraph(
           current: options.currentStageId === stage.id,
           readOnly,
           taskCount: options.stageEntityCounts?.[stage.id] ?? 0,
+          actions: stageActionList(stage.id),
+          selectedActionId:
+            selectedActionStageId === stage.id || selectedAnyAction
+              ? (selectedAction?.id ?? null)
+              : null,
           ports: [...(ports.get(stage.id) ?? [])],
           selectedPorts: selectedPorts.get(stage.id) ?? [],
         },

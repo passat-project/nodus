@@ -48,3 +48,58 @@ describe('ProcessTypesRepository.copyTypeBindings (#432, #631)', () => {
     expect(fieldBinding.createMany).not.toHaveBeenCalled();
   });
 });
+
+describe('ProcessTypesRepository.copyWorkflow — действия (#633)', () => {
+  it('копия типа переносит действия с перемапленным статусом', async () => {
+    const workflow = { create: vi.fn(async () => ({ id: 'wf-copy' })) };
+    const workflowStage = { create: vi.fn(async () => ({ id: 'stage-copy' })) };
+    const workflowTransition = { create: vi.fn(async () => ({})) };
+    const workflowAction = { create: vi.fn(async () => ({})) };
+    const tx = { workflow, workflowStage, workflowTransition, workflowAction };
+    const repo = new ProcessTypesRepository({} as never);
+
+    await repo.copyWorkflow(
+      tx as never,
+      {
+        id: 'wf',
+        stages: [
+          {
+            id: 's1',
+            code: null,
+            name: 'В работе',
+            color: 'success',
+            sortOrder: 0,
+            systemState: 'active',
+            outcome: null,
+            isInitial: true,
+            workflowId: 'wf',
+          },
+        ],
+        transitions: [],
+        actions: [
+          {
+            id: 'a1',
+            name: 'Запросить уточнение',
+            stageId: 's1',
+            display: 'button',
+            sortOrder: 0,
+            rules: { conditions: [], validators: [], postFunctions: [] },
+            form: { enabled: false, sections: [] },
+            steps: [{ kind: 'assign_number' }],
+          },
+        ],
+      } as never,
+      { name: 'Копия', publishedById: 'user', kind: 'task' },
+    );
+
+    expect(workflowAction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        workflowId: 'wf-copy',
+        name: 'Запросить уточнение',
+        stageId: 'stage-copy',
+        display: 'button',
+        steps: [{ kind: 'assign_number' }],
+      }),
+    });
+  });
+});

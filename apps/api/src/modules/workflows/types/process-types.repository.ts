@@ -195,6 +195,22 @@ export class ProcessTypesRepository {
         },
       });
     }
+    // Действия без смены статуса (#633): копия типа работает как оригинал.
+    for (const action of source.actions ?? []) {
+      await tx.workflowAction.create({
+        data: {
+          workflowId: created.id,
+          code: null,
+          name: action.name,
+          stageId: action.stageId ? (idMap.get(action.stageId) ?? null) : null,
+          display: action.display,
+          sortOrder: action.sortOrder,
+          rules: action.rules as Prisma.InputJsonValue,
+          form: action.form as Prisma.InputJsonValue,
+          steps: (action.steps ?? []) as Prisma.InputJsonValue,
+        },
+      });
+    }
     return created.id;
   }
 
@@ -243,6 +259,7 @@ export class ProcessTypesRepository {
 /** Минимальный маршрут «в памяти» для основы simple. */
 const SIMPLE_WORKFLOW: LoadedWorkflow = {
   id: 'simple',
+  actions: [],
   stages: [
     {
       id: 's-new',

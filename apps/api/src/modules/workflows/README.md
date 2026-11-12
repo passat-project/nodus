@@ -7,7 +7,7 @@
 ## Что здесь живёт
 
 - `process_types` — типы процессов: категория `task | letter` (неизменяема), направление письма, значок/цвет/описание, `creatable`, системность, порядок, архивация, `customized_at` + `catalog_revision` («засев один раз»).
-- `workflows` (`kind: task | letter`), `workflow_stages`, `workflow_transitions`, `workflow_schemes`, `workflow_scheme_entries` — маршрут типа: стадии-колонки, кнопки-переходы с закрытым реестром правил (`conditions` / `validators` / `postFunctions`), версия публикации, раскладка холста.
+- `workflows` (`kind: task | letter`), `workflow_stages`, `workflow_transitions`, `workflow_actions`, `workflow_schemes`, `workflow_scheme_entries` — маршрут типа: стадии-колонки, кнопки-переходы и действия без смены статуса (#633) с закрытым реестром правил (`conditions` / `validators` / `postFunctions`), версия публикации, раскладка холста.
 - `transition_records` — общий журнал переходов (схема ADR-0024 п.4, создан пустым в #428; пишет движок в #380).
 - **Временное исключение ADR-0024:** личные маршруты «Моего плана» (`workflows.kind = personal`) и их стадии — данные модуля `tasks` до #438/#439. Здесь они не читаются и не пишутся; редактор отдаёт на них 404. Засев шаблона — `PersonalTemplateBootstrap` модуля задач.
 
@@ -74,7 +74,7 @@
 
 - Движок не пишет таблицы сущностей и не знает их прав/ролей — только через адаптер.
 - Личные маршруты «Моего плана» — не здесь (временное исключение ADR-0024).
-- Журнал `transition_records` пишет **движок** в транзакции перехода (адаптеры его не трогают): одна строка на каждый `execute` — кнопка, DnD, «Мой план». Колонки: `entity_kind/entity_id`, `transition_id`, `from_stage_id/to_stage_id` (фактическая цель после `route_if`), актор или правило, `record_kind`, `comment`, `result_id` (ревизия итога, uuid), `fields` (только изменённое окном), `time_entry_id`, `answers` (задел #381). Индекс `(entity_kind, entity_id, created_at DESC)` покрывает историю карточки и «кто сдал работу» (#430).
+- Журнал `transition_records` пишет **движок** в транзакции перехода (адаптеры его не трогают): одна строка на каждый `execute` — кнопка, DnD, «Мой план». Действие без смены статуса (#633) пишет строку `record_kind = action` с `action_id`, `from_stage_id = to_stage_id` (время в статусах не разрывается). Колонки: `entity_kind/entity_id`, `transition_id`, `action_id`, `from_stage_id/to_stage_id` (фактическая цель после `route_if`), актор или правило, `record_kind`, `comment`, `result_id` (ревизия итога, uuid), `fields` (только изменённое окном), `time_entry_id`, `answers` (задел #381). Индекс `(entity_kind, entity_id, created_at DESC)` покрывает историю карточки и «кто сдал работу» (#430).
 
 ## Окно перехода (#380)
 
@@ -94,7 +94,7 @@
 - **Смысл кнопки `intent: action | service`** — колонка `workflow_transitions.intent`; умный дефолт `smartIntent` (пауза/итог «Отменена» → service); публикация, копия типа и сид каталога переносят поле; DTO `WorkflowTransition` отдаёт его редактору и будущим «Моим действиям».
 - **Пропуск по актору** — `route_if: approver_is_actor`: контекст `engine/approver-context.ts` считает актора утверждающим, если он проходит условия единственной основной action-кнопки целевого статуса без обхода, её гейты выполнены, условие «кто видит» непустое и нет обязательных разделов окна. `creator_is_assignee` остаётся для старых документов.
 - **Подсказки имён** — `GET /workflows/stage-names` (`workflow.manage`): имена неархивных стадий системного каталога (по `code`) и опубликованных маршрутов категории с числом маршрутов; подсказки показывают все, warning-и имён включены для пользовательских маршрутов (системные не шумят). В редакторе — комбоподсказки; публикация даёт warning-и `stage_name_shared`/`stage_name_similar`.
-- **Проверки публикации** — `workflow-document-extra-checks.ts`: имена, дубли целей (`duplicate_transition_target`), разрешимость `approver_is_actor` (`approver_rule_unresolvable`); `action_without_visibility` — для задач, не для писем. Warnings не блокируют публикацию; сервер отдаёт только 422 при ошибках, live-список показывает веб.
+- **Проверки публикации** — `workflow-document-extra-checks.ts`: имена, дубли целей (`duplicate_transition_target`), разрешимость `approver_is_actor` (`approver_rule_unresolvable`); `action_without_visibility` — для задач, не для писем. Warnings не блокируют публикацию; сервер отдаёт только 422 при ошибках, live-список показывает веб. Окна кнопок-переходов и действий проверяются одним набором правил (#740): дубли/бесполезные разделы, оформление, замки, удалённые и непривязанные атрибуты, формулы слотов — проблемы несут `transitionId` или `actionId`.
 
 ## Серии номеров (#630)
 

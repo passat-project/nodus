@@ -33,6 +33,8 @@ export const tasksKeys = {
   relations: (id: string) => [...tasksKeys.all, 'relations', id] as const,
   /** Доступные переходы маршрута задачи (кнопки бара, ADR-0020). */
   transitions: (id: string) => [...tasksKeys.all, 'transitions', id] as const,
+  /** Доступные действия без смены статуса (#633). */
+  actions: (id: string) => [...tasksKeys.all, 'actions', id] as const,
   /** Каталог типов задач (ступень 1 — один системный «Задача»). */
   /** Записи времени задачи (I14). */
   timeEntries: (id: string) => [...tasksKeys.all, 'time-entries', id] as const,
@@ -47,6 +49,7 @@ export function taskDependentKeys(taskId: string) {
   return [
     tasksKeys.detail(taskId),
     tasksKeys.transitions(taskId),
+    tasksKeys.actions(taskId),
     tasksKeys.listPages(),
     tasksKeys.kanbanAll(),
     tasksKeys.personalStages(),

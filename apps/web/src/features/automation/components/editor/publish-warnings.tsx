@@ -17,11 +17,13 @@ export function PublishWarnings({
 }) {
   const groups: { code: WorkflowProblem['code']; names: string[] }[] = [];
   for (const problem of problems) {
-    const name = problem.stageId
-      ? doc.stages.find((stage) => stage.id === problem.stageId)?.name
-      : problem.transitionId
-        ? doc.transitions.find((transition) => transition.id === problem.transitionId)?.name
-        : undefined;
+    const name = problem.actionId
+      ? (doc.actions ?? []).find((action) => action.id === problem.actionId)?.name
+      : problem.stageId
+        ? doc.stages.find((stage) => stage.id === problem.stageId)?.name
+        : problem.transitionId
+          ? doc.transitions.find((transition) => transition.id === problem.transitionId)?.name
+          : undefined;
     let group = groups.find((item) => item.code === problem.code);
     if (!group) {
       group = { code: problem.code, names: [] };

@@ -77,6 +77,8 @@ import { TaskDeciderFileAccess } from './access/task-decider-file-access.js';
 import { TaskDeciderFileAccessRepository } from './file-access/task-decider-file-access.repository.js';
 import { TaskTransitionBlockHandler } from './task-chat/task-transition-block.handler.js';
 import { TaskTransitionBlockService } from './task-chat/task-transition-block.service.js';
+import { TaskActionBlockHandler } from './task-chat/task-action-block.handler.js';
+import { TaskActionBlockService } from './task-chat/task-action-block.service.js';
 import { FavoritesController } from './favorites/favorites.controller.js';
 import { FavoriteCardMapper } from './favorites/favorite-card.mapper.js';
 import { FavoritesRepository } from './favorites/favorites.repository.js';
@@ -204,6 +206,9 @@ import {
     // Блок перехода задачи в ленте (#380): kind='task_transition'.
     TaskTransitionBlockService,
     TaskTransitionBlockHandler,
+    // Блок действия без смены статуса (#633): kind='task_action'.
+    TaskActionBlockService,
+    TaskActionBlockHandler,
     TaskCreatedChatHandler,
     TaskAssignedChatHandler,
     TaskParticipantsChatHandler,

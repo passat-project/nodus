@@ -19,6 +19,8 @@ export const TASK_EVENTS = {
   CREATED: 'task.created',
   UPDATED: 'task.updated',
   STAGE_CHANGED: 'task.stage_changed',
+  /** Действие без смены статуса (#633): запись в журнал и блок в чате. */
+  ACTION_PRESSED: 'task.action_pressed',
   STATUS_CHANGED: 'task.status_changed',
   PERSONAL_STAGE_CHANGED: 'task.personal_stage_changed',
   ASSIGNED: 'task.assigned',
@@ -149,6 +151,29 @@ export const taskStageChangedPayloadSchema = taskEventBaseSchema.extend({
     .optional(),
 });
 export type TaskStageChangedPayload = z.infer<typeof taskStageChangedPayloadSchema>;
+
+/** Нажатие действия (#633): статус не меняется, запись журнала есть.
+ *  Блок в чате задачи — всегда (иначе нажатие не видно в ленте); текст —
+ *  комментарий/причина окна, если они есть. */
+export const taskActionPressedPayloadSchema = taskEventBaseSchema.extend({
+  actionId: z.uuid(),
+  actionName: z.string().min(1).max(40),
+  /** Статус, в котором нажали (остаётся прежним). */
+  stageName: z.string().min(1).max(40),
+  /** Строка `transition_records` — идемпотентность блока в чате. */
+  recordId: z.uuid(),
+  comment: z.string().max(2000).optional(),
+  commentLabel: z.string().max(60).optional(),
+  /** Итог, созданный окном действия: файлы/сообщения считаются по живым. */
+  result: z
+    .object({
+      resultId: z.uuid(),
+      fileCount: z.number().int().min(0),
+      messageCount: z.number().int().min(0).max(50),
+    })
+    .optional(),
+});
+export type TaskActionPressedPayload = z.infer<typeof taskActionPressedPayloadSchema>;
 
 export const taskAssignedPayloadSchema = taskEventBaseSchema.extend({
   title: z.string(),

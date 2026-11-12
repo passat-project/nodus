@@ -22,6 +22,21 @@ export interface LoadedWorkflow {
   id: string;
   stages: StageRow[];
   transitions: TransitionDef[];
+  /** Действия без смены статуса (#633), архивные отфильтрованы. */
+  actions: ActionDef[];
+}
+
+/** Действие маршрута: кнопка без смены статуса (#633). */
+export interface ActionDef {
+  id: string;
+  name: string;
+  /** null — «в любом статусе». */
+  stageId: string | null;
+  display: TransitionDisplay;
+  sortOrder: number;
+  rules: ReturnType<typeof parseRules>;
+  form: ReturnType<typeof parseForm>;
+  steps: unknown;
 }
 
 /**
@@ -37,7 +52,7 @@ export class WorkflowRepository {
 
   async load(workflowId: string, tx?: TransactionClient): Promise<LoadedWorkflow> {
     const db = tx ?? this.prisma;
-    const [stages, transitions] = await Promise.all([
+    const [stages, transitions, actions] = await Promise.all([
       // Архивные стадии — только для истории (сущности/события ссылаются);
       // движку, редактору и копиям основ нужны ЖИВЫЕ (блокер ревью: призрак
       // архивной стадии возвращался на холст и воскресал копией типа).
@@ -46,6 +61,11 @@ export class WorkflowRepository {
         orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
       }),
       db.workflowTransition.findMany({ where: { workflowId, archivedAt: null } }),
+      // Действия (#633): живое — без архивных.
+      db.workflowAction.findMany({
+        where: { workflowId, archivedAt: null },
+        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+      }),
     ]);
     return {
       id: workflowId,
@@ -60,6 +80,16 @@ export class WorkflowRepository {
         sortOrder: t.sortOrder,
         rules: parseRules(t.rules),
         form: parseForm(t.form),
+      })),
+      actions: actions.map((a) => ({
+        id: a.id,
+        name: a.name,
+        stageId: a.stageId,
+        display: a.display as TransitionDisplay,
+        sortOrder: a.sortOrder,
+        rules: parseRules(a.rules),
+        form: parseForm(a.form),
+        steps: a.steps,
       })),
     };
   }
