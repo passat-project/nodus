@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Nodus Beta",
+  "identifier": "by.nodus.desktop.beta",
+  "version": "1.0.18",
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["nodus-beta"]
+      }
+    }
+  }
+}

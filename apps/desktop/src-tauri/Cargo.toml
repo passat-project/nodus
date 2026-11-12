@@ -37,9 +37,12 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 # Детектор активности пользователя (#254, модель Telegram): WH_KEYBOARD_LL +
 # WH_MOUSE_LL — клики и клавиши БЕЗ движения мыши (GetLastInputInfo движение
 # не различает). Только флаг «был ввод», ничего не логируется.
+# `Win32_UI_Input_KeyboardAndMouse` нужен ради `SetFocus` — возврат клавиатуры
+# в главный webview после попапа (#709, focus.rs).
 windows = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Input_KeyboardAndMouse",
 ] }
 
 [profile.release]

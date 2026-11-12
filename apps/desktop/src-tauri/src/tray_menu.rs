@@ -15,7 +15,10 @@ static UPDATE_ITEM: std::sync::Mutex<Option<tauri::menu::MenuItem<tauri::Wry>>> 
 /// «Проверить обновления», «Сменить сервер…», «Выход». ЛКМ по значку —
 /// показать окно; закрытие окна всегда прячет в трей (lib.rs).
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Открыть Nodus", true, None::<&str>)?;
+    // Имя — из productName конфига: бета-сборка показывает свой трей и не
+    // путается с продуктовой оболочкой (см. crate::display_name).
+    let name = crate::display_name(app);
+    let open = MenuItem::with_id(app, "open", format!("Открыть {name}"), true, None::<&str>)?;
     let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
     let autostart = CheckMenuItem::with_id(
         app,
@@ -35,7 +38,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     let icon = crate::badge::base_icon();
     TrayIconBuilder::with_id("nodus-tray")
         .icon(icon)
-        .tooltip("Nodus")
+        .tooltip(&name)
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {

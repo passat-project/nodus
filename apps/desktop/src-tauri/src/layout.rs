@@ -196,7 +196,7 @@ fn place_hide_all(app: &AppHandle, anchor: &Anchor) {
                 // стек снова полон — контент давно отрисован, показываем
                 // через тот же одноразовый гейт (повтор — no-op).
                 if stack(app).mark_shown(HIDE_ALL_LABEL) {
-                    show_without_activation(&win);
+                    show_without_activation(&win, HIDE_ALL_LABEL);
                 }
             }
         }
