@@ -1,5 +1,10 @@
 import { useRef } from 'react';
 
+/** Подмножество Radix-события «pointerdown снаружи»: кнопка и ctrl. */
+type OutsidePointerDown = {
+  detail?: { originalEvent?: { button?: number; ctrlKey?: boolean } };
+};
+
 /**
  * Гард возврата фокуса в Radix-меню (#599).
  *
@@ -20,7 +25,14 @@ export function useMenuFocusGuard() {
       if (open) leftMenu.current = false;
     },
     contentProps: {
-      onPointerDownOutside: () => {
+      onPointerDownOutside: (event: OutsidePointerDown) => {
+        const original = event.detail?.originalEvent;
+        // Правый и ctrl-клик снаружи Radix и сам не возвращает фокус на
+        // триггер, а его внутренний onCloseAutoFocus сбрасывает отметку
+        // «взаимодействовали снаружи». Перехватывать их нельзя: пропуск
+        // внутреннего обработчика оставит отметку висеть до следующего
+        // закрытия и отнимет фокус там, где он должен вернуться.
+        if (original?.button === 2 || (original?.button === 0 && original.ctrlKey)) return;
         leftMenu.current = true;
       },
       onCloseAutoFocus: (event: Event) => {
