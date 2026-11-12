@@ -169,16 +169,26 @@ pub(crate) fn stack(app: &AppHandle) -> std::sync::MutexGuard<'_, PopupStack> {
 /// Показать попап. Вызывать ТОЛЬКО из async-команд: на Windows билдер окна
 /// в синхронном контексте дедлокит WebView2 (см. bridge::notify_popup).
 pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
+    // Диагностика (#811): каждый шаг жизни попапа — в лог оболочки
+    // (%LOCALAPPDATA%\by.nodus.desktop\logs\nodus-desktop.log). Только метки
+    // окон/слоты/очередь — без текста сообщения и имени автора.
     let payload_json = payload_to_json(&payload, bridge::ui_theme());
     let dismiss_key = payload.dismiss_key().to_string();
     let download_path = payload.download.as_ref().and_then(|d| d.path.clone());
-    let (label, _slot) = {
+    log::info!(
+        "popups::show: id={} dismissKey={} urgent={}",
+        payload.id,
+        dismiss_key,
+        payload.urgent
+    );
+    let (label, slot) = {
         let mut s = stack(app);
         // Полный стек: новое вытесняет старейший спокойный (очередь-сдвиг);
         // сплошь hover/печать — уходим в очередь, докат при закрытии.
         if s.free_slot().is_none() {
             match s.eviction_victim() {
                 Some(victim) => {
+                    log::info!("popups::show: вытеснение {} (стек полон)", victim);
                     if let Some(w) = app.get_webview_window(&victim) {
                         let _ = w.close();
                     }
@@ -186,7 +196,10 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
                 }
                 None => {
                     s.pending.push_back(payload);
-                    log::info!("стек занят активным пользователем — попап в очереди");
+                    log::info!(
+                        "popups::show: стек занят активным пользователем — попап в очереди (pending={})",
+                        s.pending.len()
+                    );
                     return;
                 }
             }
@@ -223,6 +236,18 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
     let position = crate::anchor::initial_position(app);
     let win = build_popup_window(app, &label, POPUP_H, position);
     crate::layout::reposition_all(app);
+    match &win {
+        Some(_) => log::info!(
+            "popups::show: окно создано label={} slot={} (показ после popup_ready)",
+            label,
+            slot
+        ),
+        None => log::error!(
+            "popups::show: окно НЕ создано label={} slot={} — попап не показан",
+            label,
+            slot
+        ),
+    }
     if win.is_some() {
         spawn_ready_fallback(app, &label);
     }
@@ -238,6 +263,9 @@ pub(crate) fn show_if_ready(app: &AppHandle, label: &str) {
     }
     if let Some(win) = app.get_webview_window(label) {
         show_without_activation(&win, label);
+        log::info!("popups::show_if_ready: окно показано label={label}");
+    } else {
+        log::warn!("popups::show_if_ready: окна нет label={label} (закрыто до показа)");
     }
 }
 

@@ -288,6 +288,10 @@ export function SliderPanel({
             ref={panelRef}
             role="dialog"
             aria-modal="true"
+            /* Карточка — ПОВЕРХНОСТЬ, а не модальный слой (#809): её видимость
+               несёт SurfaceVisibilityProvider; реестр modal-layers по этому
+               маркеру исключает её из «поверхность перекрыта». */
+            data-card-surface=""
             aria-labelledby={title && !headerContent ? `${id}-title` : undefined}
             style={flipStyle}
             className={cn(

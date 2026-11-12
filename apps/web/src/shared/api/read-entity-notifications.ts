@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../api-client.js';
 import { isUserActive, subscribeAttention } from '../attention/attention-store.js';
+import { isModalLayerOpen, subscribeModalLayers } from '../attention/modal-layers.js';
 import { desktopDismissPopups, isDesktopShell } from '../desktop/desktop-bridge.js';
 import { useSurfaceVisible } from '../lib/surface-visibility.js';
 import { notificationsKeys } from '../notifications-keys.js';
@@ -17,7 +18,10 @@ import { isDomainMocked } from './api-mock-config.js';
  *  #618, модель Telegram unlinkHistory) происходит только когда карточка на
  *  видимой поверхности, а пользователь активен (окно на виду + ввод за 30 с).
  *  Карточка, открытая в фоне/под другой карточкой, уведомлений не съедает;
- *  вернулся и посмотрел — гасим (подписка на внимание). */
+ *  вернулся и посмотрел — гасим (подписка на внимание).
+ *
+ *  Модальный слой (#809): карточка под просмотрщиком/окном тоже не «на виду» —
+ *  открытие слоя отменяет гашение, закрытие возвращает право дочитать. */
 export function useReadEntityNotifications(sourceType: 'task' | 'letter', sourceId: string) {
   const queryClient = useQueryClient();
   const surfaceVisible = useSurfaceVisible();
@@ -29,7 +33,7 @@ export function useReadEntityNotifications(sourceType: 'task' | 'letter', source
     if (!sourceId || sourceId.startsWith('temp-')) return;
 
     const maybeRead = (): void => {
-      if (!surfaceVisible || !isUserActive()) return;
+      if (!surfaceVisible || !isUserActive() || isModalLayerOpen()) return;
       if (readSourceRef.current === sourceId) return;
       readSourceRef.current = sourceId;
       if (isDesktopShell()) void desktopDismissPopups(sourceId);
@@ -45,6 +49,11 @@ export function useReadEntityNotifications(sourceType: 'task' | 'letter', source
     };
 
     maybeRead();
-    return subscribeAttention(maybeRead);
+    const unsubAttention = subscribeAttention(maybeRead);
+    const unsubLayers = subscribeModalLayers(maybeRead);
+    return () => {
+      unsubAttention();
+      unsubLayers();
+    };
   }, [queryClient, sourceType, sourceId, surfaceVisible]);
 }

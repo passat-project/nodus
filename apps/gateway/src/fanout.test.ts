@@ -82,4 +82,78 @@ describe('ChatEventsConsumer.runMaintenance', () => {
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
   });
+
+  it('сбой memberIds: запись НЕ ACK; после восстановления доставлена в user-комнаты (#810)', async () => {
+    const { io, calls } = fakeIo();
+    const memberIds = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('connection pool exhausted'))
+      .mockResolvedValue([USER_A]);
+    const store: MembershipStore = { isMember: vi.fn(), memberIds, userRef: vi.fn() };
+    const raw = JSON.stringify(envelope('chat.message_sent', { conversationId: CONV }));
+    const redis = fakeRedis({
+      xautoclaim: vi
+        .fn()
+        .mockResolvedValueOnce(['0-0', [['1-0', ['envelope', raw]]], []])
+        .mockResolvedValueOnce(['0-0', [['1-0', ['envelope', raw]]], []]),
+    });
+    const consumer = new ChatEventsConsumer(redis as unknown as Redis, io, store, { group: 'g' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    // Первый проход: смотревшие в беседу (conv-комната) получили, участники
+    // вне неё — нет; запись осталась в PEL и ждёт восстановления БД.
+    await consumer.runMaintenance();
+    expect(redis.xack).not.toHaveBeenCalled();
+    expect(calls.map((c) => c.room)).toEqual([`conv:${CONV}`]);
+    expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toContain(
+      'delivery deferred (infrastructure)',
+    );
+
+    // Второй проход (XAUTOCLAIM после восстановления): попап/инвалидация
+    // доезжают в user-комнаты, запись ACK-нута — потерь нет.
+    await consumer.runMaintenance();
+    expect(calls.map((c) => c.room)).toEqual([`conv:${CONV}`, `conv:${CONV}`, `user:${USER_A}`]);
+    expect(redis.xack).toHaveBeenCalledWith(DOMAIN_EVENTS_STREAM, 'g', '1-0');
+    warn.mockRestore();
+  });
+
+  it('poison-запись: битый JSON/schema/скалярный payload — warn и XACK, группу не блокирует (#810)', async () => {
+    const { io } = fakeIo();
+    const memberIds = vi.fn();
+    const store: MembershipStore = { isMember: vi.fn(), memberIds, userRef: vi.fn() };
+    const redis = fakeRedis({
+      xautoclaim: vi.fn(async () => [
+        '0-0',
+        [
+          ['2-0', ['envelope', '{oops']],
+          ['3-0', ['envelope', '{"type":"","payload":{},"seq":1,"ts":"x"}']],
+          // Схема пропускает `payload: unknown`, но маршрутизация читает поля
+          // объекта — детерминированный TypeError, ретрай не поможет.
+          [
+            '4-0',
+            [
+              'envelope',
+              '{"type":"chat.message_sent","payload":"x","seq":1,"ts":"2026-11-13T00:00:00.000Z"}',
+            ],
+          ],
+        ],
+        [],
+      ]),
+    });
+    const consumer = new ChatEventsConsumer(redis as unknown as Redis, io, store, { group: 'g' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await consumer.runMaintenance();
+
+    expect(redis.xack).toHaveBeenCalledTimes(3);
+    expect(redis.xack).toHaveBeenNthCalledWith(1, DOMAIN_EVENTS_STREAM, 'g', '2-0');
+    expect(redis.xack).toHaveBeenNthCalledWith(2, DOMAIN_EVENTS_STREAM, 'g', '3-0');
+    expect(redis.xack).toHaveBeenNthCalledWith(3, DOMAIN_EVENTS_STREAM, 'g', '4-0');
+    expect(memberIds).not.toHaveBeenCalled();
+    expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toContain(
+      'poison stream entry skipped',
+    );
+    expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toContain('reason=payload');
+    warn.mockRestore();
+  });
 });

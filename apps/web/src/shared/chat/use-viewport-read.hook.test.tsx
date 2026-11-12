@@ -7,6 +7,7 @@ import type { ChatMessage } from '@nodus/contracts';
 
 import { api } from '../api-client.js';
 import { resetAttentionForTests, startAttentionTracking } from '../attention/attention-store.js';
+import { registerModalLayer, resetModalLayersForTests } from '../attention/modal-layers.js';
 import { SurfaceVisibilityProvider } from '../lib/surface-visibility.js';
 import { useFeedViewportRead } from './use-viewport-read.js';
 
@@ -107,11 +108,13 @@ beforeEach(() => {
     MockIntersectionObserver as unknown as typeof IntersectionObserver;
   resetAttentionForTests();
   startAttentionTracking();
+  resetModalLayersForTests();
 });
 
 afterEach(() => {
   vi.useRealTimers();
   resetAttentionForTests();
+  resetModalLayersForTests();
 });
 
 describe('useFeedViewportRead + внимание (#770)', () => {
@@ -162,6 +165,23 @@ describe('useFeedViewportRead + внимание (#770)', () => {
       window.dispatchEvent(new Event('blur'));
     });
     // flush по потере внимания — сразу, без ожидания троттла/возврата.
+    expect(readCalls()).toEqual([7]);
+  });
+
+  it('модальный слой над лентой — не читает; закрыли — дочитывает видимое (#809)', () => {
+    const releaseLayer = registerModalLayer(document.createElement('div'));
+    renderFeed();
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(readCalls()).toEqual([]);
+
+    act(() => {
+      releaseLayer();
+    });
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
     expect(readCalls()).toEqual([7]);
   });
 });

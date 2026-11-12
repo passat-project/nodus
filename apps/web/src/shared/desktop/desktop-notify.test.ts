@@ -1,116 +1,42 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { QueryClient } from '@tanstack/react-query';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useAuthStore } from '../auth-store.js';
 import { resetAttentionForTests } from '../attention/attention-store.js';
+import { resetModalLayersForTests } from '../attention/modal-layers.js';
 import {
   acquireOpenConversation,
   resetOpenConversationRegistry,
 } from '../chat/open-conversation.js';
 import { setShellVisibleFromShell } from './desktop-bridge.js';
 import { notifyDesktopMessage } from './desktop-notify.js';
+import {
+  CONV,
+  flush,
+  installBridge,
+  ME,
+  messagePayload,
+  queryClientWith,
+} from './desktop-notify.test-helpers.js';
+import { resetPopupDecisionsForTests } from './popup-diagnostics.js';
 
 /**
  * Гейты попапов оболочки (#254/#300, ADR-0019): свои молчат; смотрю в
  * открытую беседу — ПОЛНАЯ тишина, включая «Важное» (вердикт 15.10);
  * «Важное» пробивает muted/snoozed, когда беседы не смотрят; ответ в трэде —
  * только наблюдателям/@упомянутым (канон раунда 3). Опти-ин браузерных
- * уведомлений не участвует.
+ * уведомлений не участвует. Модальный слой и журнал решений — в
+ * desktop-notify-gates.test.ts (#809/#811).
  */
 
-const ME = '00000000-0000-4000-8000-000000000001';
-const OTHER = '00000000-0000-4000-8000-000000000002';
-const CONV = '00000000-0000-4000-8000-0000000000c1';
 const THREAD_ROOT = '00000000-0000-4000-8000-000000000071';
 const OTHER_THREAD = '00000000-0000-4000-8000-000000000072';
-
-function installBridge() {
-  const bridge = {
-    shellVersion: '1.0.0',
-    platform: 'windows',
-    showPopup: vi.fn(async () => undefined),
-    setUnreadBadge: vi.fn(async () => undefined),
-    flashTaskbar: vi.fn(async () => undefined),
-    openExternal: vi.fn(async () => undefined),
-    dismissPopups: vi.fn(async () => undefined),
-    setUiTheme: vi.fn(async () => undefined),
-    getShellInfo: vi.fn(async () => ({ version: '1.0.0', platform: 'windows' })),
-    getUpdateState: vi.fn(async () => ({ status: 'idle', version: null })),
-    applyUpdate: vi.fn(async () => undefined),
-    shellReady: vi.fn(async () => undefined),
-    onEvent: vi.fn(() => () => undefined),
-  };
-  window.nodusDesktop = bridge;
-  return bridge;
-}
-
-function messagePayload(overrides: Record<string, unknown> = {}) {
-  return {
-    conversationId: CONV,
-    messageId: '00000000-0000-4000-8000-0000000000ff',
-    seq: 1,
-    authorId: OTHER,
-    threadRootId: null,
-    forwarded: false,
-    urgent: false,
-    mentionedUserIds: [],
-    message: {
-      id: '00000000-0000-4000-8000-0000000000ff',
-      conversationId: CONV,
-      seq: 1,
-      clientMessageId: 'cli-1',
-      author: { id: OTHER, displayName: 'Иван Петрович Смирнов', avatarUrl: null },
-      text: 'Доброе утро',
-      replyToId: null,
-      reply: null,
-      deletedAt: null,
-      pinned: false,
-      forwardedFrom: null,
-      threadRootId: null,
-      threadRepliesCount: 0,
-      reactions: [],
-      attachments: [],
-      editedAt: null,
-      readAt: null,
-      readBy: [],
-      urgent: false,
-      mentionedUserIds: [],
-      linkPreview: null,
-      createdAt: new Date().toISOString(),
-    },
-    ...overrides,
-  };
-}
-
-/** Кэш/догон запроса состояний трэдов беседы («мои наблюдаемые трэды»). */
-function queryClientWith(
-  flags: { muted?: boolean; snoozed?: boolean } | null,
-  threads: { states?: string[]; fetchStates?: string[] } = {},
-): QueryClient {
-  const states = (roots: string[]) => ({
-    items: roots.map((r) => ({ threadRootId: r, watched: true, unreadCount: 1 })),
-  });
-  return {
-    getQueryData: (key: unknown) => {
-      const k = JSON.stringify(key);
-      if (k.includes('threadStates')) {
-        return threads.states === undefined ? undefined : states(threads.states);
-      }
-      return flags === null
-        ? undefined
-        : { items: [{ id: CONV, muted: flags.muted ?? false, snoozed: flags.snoozed ?? false }] };
-    },
-    fetchQuery: vi.fn(async () => states(threads.fetchStates ?? [])),
-  } as unknown as QueryClient;
-}
-
-/** Выждать микро/макро-задачи (гейт трэда асинхронный). */
-const flush = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
   installBridge();
   resetOpenConversationRegistry();
+  resetModalLayersForTests();
+  resetPopupDecisionsForTests();
   // Модель внимания (#770): окно на виду, свежий ввод — «пользователь смотрит».
   resetAttentionForTests();
   useAuthStore.setState({ user: { id: ME, displayName: 'Я', avatarUrl: null } } as never);

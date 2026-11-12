@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { desktopDismissPopups, isDesktopShell } from '../desktop/desktop-bridge.js';
 import { api } from '../api-client.js';
 import { resetAttentionForTests, startAttentionTracking } from '../attention/attention-store.js';
+import { registerModalLayer, resetModalLayersForTests } from '../attention/modal-layers.js';
 import { SurfaceVisibilityProvider } from '../lib/surface-visibility.js';
 import { isDomainMocked } from './api-mock-config.js';
 import { useReadEntityNotifications } from './read-entity-notifications.js';
@@ -57,6 +58,7 @@ describe('useReadEntityNotifications', () => {
     // Модель внимания (#770): активный пользователь у видимой поверхности.
     resetAttentionForTests();
     startAttentionTracking();
+    resetModalLayersForTests();
   });
 
   it('открытие письма: гасит попапы оболочки и шлёт read-by-source', async () => {
@@ -115,5 +117,21 @@ describe('useReadEntityNotifications', () => {
     await waitFor(() => {
       expect(api).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('модальный слой над карточкой — не гасит; слой закрылся — гасит (#809)', async () => {
+    vi.mocked(isDesktopShell).mockReturnValue(true);
+    const releaseLayer = registerModalLayer(document.createElement('div'));
+    mount(LETTER);
+    expect(api).not.toHaveBeenCalled();
+    expect(desktopDismissPopups).not.toHaveBeenCalled();
+
+    act(() => {
+      releaseLayer();
+    });
+    await waitFor(() => {
+      expect(api).toHaveBeenCalledTimes(1);
+    });
+    expect(desktopDismissPopups).toHaveBeenCalledWith(LETTER);
   });
 });

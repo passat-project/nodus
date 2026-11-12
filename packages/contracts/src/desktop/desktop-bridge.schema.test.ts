@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DESKTOP_BRIDGE_EVENTS,
   openLetterEventSchema,
+  popupDiagnosticSchema,
   popupPayloadSchema,
   shellFocusEventSchema,
 } from './desktop-bridge.schema.js';
@@ -111,5 +112,36 @@ describe('shellFocusEventSchema (#770)', () => {
     expect(shellFocusEventSchema.safeParse({ focused: 'да' }).success).toBe(false);
     expect(shellFocusEventSchema.safeParse({}).success).toBe(false);
     expect(DESKTOP_BRIDGE_EVENTS.shellFocus).toBe('shell-focus');
+  });
+});
+
+describe('popupDiagnosticSchema (#811)', () => {
+  it('id/код причины — валидно; неизвестная причина и чужие типы — нет', () => {
+    expect(
+      popupDiagnosticSchema.safeParse({
+        messageId: 'm1',
+        conversationId: CONVERSATION_ID,
+        reason: 'looking',
+      }).success,
+    ).toBe(true);
+    expect(
+      popupDiagnosticSchema.safeParse({
+        messageId: null,
+        conversationId: null,
+        reason: 'rejected',
+        detail: 'title_empty',
+      }).success,
+    ).toBe(true);
+    expect(
+      popupDiagnosticSchema.safeParse({
+        messageId: null,
+        conversationId: null,
+        reason: 'unknown\n',
+      }).success,
+    ).toBe(false);
+    expect(
+      popupDiagnosticSchema.safeParse({ messageId: 42, conversationId: null, reason: 'sent' })
+        .success,
+    ).toBe(false);
   });
 });

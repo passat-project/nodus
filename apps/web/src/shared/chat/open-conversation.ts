@@ -1,3 +1,4 @@
+import { isModalLayerOpen } from '../attention/modal-layers.js';
 import { desktopDismissPopups, isDesktopShell } from '../desktop/desktop-bridge.js';
 
 /**
@@ -34,6 +35,11 @@ export function acquireOpenConversation(conversationId: string): () => void {
 
 /** Открытая беседа (глушит её тосты и попапы; B6 — читает toast-стор). */
 export function getOpenConversation(): string | null {
+  // Накрытая модальным слоем беседа «не открыта» (#809): пользователь смотрит
+  // в окно/просмотрщик, а не в ленту — попап по беседе обязан прийти. Реестр
+  // хостов снимает сам `useConversationHost`; проверка здесь закрывает окно
+  // между мутацией DOM и эффектом React.
+  if (isModalLayerOpen()) return null;
   return openConversationHosts.length > 0
     ? openConversationHosts[openConversationHosts.length - 1]!.conversationId
     : null;

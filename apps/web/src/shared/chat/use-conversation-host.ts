@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 
+import { useModalLayerCovered } from '../attention/modal-layers.js';
 import { useSurfaceVisible } from '../lib/surface-visibility.js';
 import { useConvRoom } from '../socket/use-conv-room.js';
 import { acquireOpenConversation } from './open-conversation.js';
@@ -16,12 +17,20 @@ import { acquireOpenConversation } from './open-conversation.js';
  * «не открывает» — попапы этой беседы продолжают приходить, а квитанции
  * прочтения молчат. Возврат карточки на вид — снова открыта (и попапы
  * гасятся, модель Telegram unlinkHistory). WS-комната живёт всегда.
+ *
+ * Модальный слой (#809) — вторая ось накрытия: пока поверх чата открыт
+ * просмотрщик/кинозал/окно Radix, беседа не «открыта» (попап приходит), а
+ * закрытие слоя возвращает её на вид и штатно гасит попапы.
  */
 export function useConversationHost(conversationId: string | null | undefined): void {
   const surfaceVisible = useSurfaceVisible();
+  const covered = useModalLayerCovered();
   useEffect(
-    () => (conversationId && surfaceVisible ? acquireOpenConversation(conversationId) : undefined),
-    [conversationId, surfaceVisible],
+    () =>
+      conversationId && surfaceVisible && !covered
+        ? acquireOpenConversation(conversationId)
+        : undefined,
+    [conversationId, surfaceVisible, covered],
   );
   useConvRoom(conversationId);
 }

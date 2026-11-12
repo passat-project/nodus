@@ -11,6 +11,7 @@ import { NIGHT_A, NIGHT_B } from '../e2e-users.js';
  */
 
 const LIVE = Boolean(process.env.E2E_LIVE_API);
+const BASE_URL = process.env.NODUS_BASE_URL ?? 'http://127.0.0.1:4173';
 const EMAIL = process.env.E2E_USER_EMAIL ?? NIGHT_B.email;
 const PASSWORD = process.env.E2E_USER_PASSWORD ?? NIGHT_B.password;
 
@@ -92,5 +93,111 @@ test.describe('уведомления: живой контур (#100)', () => {
     test.skip(true, 'Рестарт gateway процесса — проверяется отдельным скриптом ночи (kill+up)');
     void page;
     void request;
+  });
+
+  test('E3: чат под модальным слоем не читается; закрыли слой — дочитывается (#809)', async ({
+    page,
+    request,
+  }) => {
+    // Минимальная валидная PNG 1×1: превью в ленте → клик открывает лайтбокс.
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const stamp = `overlay-${Date.now().toString(36)}`;
+
+    // B — UI-сессия (смотрит в чат), A — API-отправитель.
+    await page.goto('/');
+    await page.getByLabel('Рабочая почта').fill(EMAIL);
+    await page.getByLabel('Пароль').fill(PASSWORD);
+    await page.getByRole('button', { name: 'Войти' }).click();
+    await expect(page).toHaveURL(/\/home$/);
+
+    const loginA = await request.post('/api/v1/auth/login', {
+      data: { email: NIGHT_A.email, password: NIGHT_A.password },
+    });
+    const tokenA = ((await loginA.json()) as { accessToken: string }).accessToken;
+    const loginB = await request.post('/api/v1/auth/login', {
+      data: { email: EMAIL, password: PASSWORD },
+    });
+    const tokenB = ((await loginB.json()) as { accessToken: string }).accessToken;
+    const meB = await request.get('/api/v1/auth/me', {
+      headers: { Authorization: `Bearer ${tokenB}` },
+    });
+    const bId = ((await meB.json()) as { id: string }).id;
+    const direct = await request.post(`/api/v1/chat/conversations/direct/${bId}`, {
+      headers: { Authorization: `Bearer ${tokenA}` },
+    });
+    const convId = ((await direct.json()) as { id: string }).id;
+
+    // Картинка → сообщение с вложением (реальный конвейер, non-mock песочница).
+    // multipart — сырым FormData: поля загрузки (size/width/height) читает
+    // @fastify/multipart, а не JSON-тело.
+    const form = new FormData();
+    form.append('size', String(png.length));
+    form.append('width', '1');
+    form.append('height', '1');
+    form.append('file', new Blob([png], { type: 'image/png' }), `${stamp}.png`);
+    const upload = await fetch(`${BASE_URL}/api/v1/chat/attachments`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${tokenA}`,
+        'Idempotency-Key': `e2e-809-${stamp}-upload`,
+      },
+      body: form,
+    });
+    expect(upload.status, 'загрузка вложения').toBe(201);
+    const attachment = (await upload.json()) as { id: string };
+    const sendImage = await request.post(`/api/v1/chat/conversations/${convId}/messages`, {
+      headers: {
+        Authorization: `Bearer ${tokenA}`,
+        'Idempotency-Key': `e2e-809-${stamp}-image`,
+      },
+      data: { text: '', attachmentIds: [attachment.id] },
+    });
+    expect(sendImage.status()).toBe(201);
+
+    // B открывает беседу и лайтбокс — модальный слой поверх ленты.
+    await page.goto(`/chat/${convId}`);
+    const tile = page.locator(`img[alt="${stamp}.png"]`).first();
+    await expect(tile).toBeVisible({ timeout: 15_000 });
+    await tile.click();
+    const lightbox = page.locator('[role="dialog"][aria-modal="true"]').first();
+    await expect(lightbox).toBeVisible();
+
+    // A пишет под слоем: B не «смотрит» в ленту — сообщение не читается.
+    const text = `под слоем ${stamp}`;
+    const sendText = await request.post(`/api/v1/chat/conversations/${convId}/messages`, {
+      headers: {
+        Authorization: `Bearer ${tokenA}`,
+        'Idempotency-Key': `e2e-809-${stamp}-text`,
+      },
+      data: { text },
+    });
+    expect(sendText.status()).toBe(201);
+
+    const readAt = async (): Promise<string | null> => {
+      const res = await request.get(`/api/v1/chat/conversations/${convId}/messages?limit=50`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+      });
+      expect(res.status()).toBe(200);
+      const { items } = (await res.json()) as { items: { text: string; readAt: string | null }[] };
+      return items.find((m) => m.text === text)?.readAt ?? null;
+    };
+
+    // Сообщение обязано быть ГЕОМЕТРИЧЕСКИ видимым под слоем — иначе тест
+    // доказывал бы «строка ниже сгиба», а не гейт модального слоя. Скроллим
+    // ленту под лайтбоксом (ввод уже был — клик по картинке) и ждём квитанцию.
+    await expect(page.getByText(text, { exact: true })).toBeAttached({ timeout: 15_000 });
+    const viewport = page.locator('[data-slot="message-scroller-viewport"]');
+    await viewport.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+    await page.waitForTimeout(2_500);
+    expect(await readAt(), 'под лайтбоксом сообщение остаётся непрочитанным').toBeNull();
+
+    // Закрыли слой — возврат внимания дочитывает видимое (модель #770/#809).
+    await page.keyboard.press('Escape');
+    await expect(lightbox).toBeHidden();
+    await viewport.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+    await expect.poll(readAt, { timeout: 15_000, intervals: [1_000] }).not.toBeNull();
   });
 });

@@ -58,6 +58,33 @@ export const popupPayloadSchema = z
   });
 export type PopupPayload = z.infer<typeof popupPayloadSchema>;
 
+/** Причины решения гейта попапов (#811) — закрытый список: оболочка пишет их
+ *  в свой лог, неизвестная причина = отказ (защита лога от инъекции). */
+export const POPUP_DIAGNOSTIC_REASONS = [
+  'not_shell',
+  'invalid_payload',
+  'own',
+  'not_active',
+  'looking',
+  'muted',
+  'snoozed',
+  'thread_wait',
+  'sent',
+  'rejected',
+] as const;
+
+/** Диагностика попапа (#811, веб → оболочка): решение гейта уходит в лог
+ *  оболочки, чтобы пропущенный попап можно было разобрать без консоли.
+ *  Только id/коды — текста сообщений и имён здесь нет и быть не может. */
+export const popupDiagnosticSchema = z.object({
+  messageId: z.string().max(100).nullable(),
+  conversationId: z.string().max(100).nullable(),
+  reason: z.enum(POPUP_DIAGNOSTIC_REASONS),
+  /** Код уточнения (overlay/inactive/invalid_payload/title_empty/…). */
+  detail: z.string().max(120).optional(),
+});
+export type PopupDiagnostic = z.infer<typeof popupDiagnosticSchema>;
+
 /** Информация об оболочке для веб-приложения (диагностика, поддержка). */
 export const shellInfoSchema = z.object({
   version: z.string().regex(/^\d+\.\d+\.\d+/),

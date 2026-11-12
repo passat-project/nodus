@@ -2,6 +2,7 @@ import {
   DESKTOP_BRIDGE_EVENTS,
   openConversationEventSchema,
   openLetterEventSchema,
+  popupDiagnosticSchema,
   popupPayloadSchema,
   popupReplyEventSchema,
   shellFocusEventSchema,
@@ -29,6 +30,7 @@ interface NodusDesktopGlobal {
   readonly shellVersion: string;
   readonly platform: string;
   showPopup(payload: unknown): Promise<void>;
+  logPopupDecision(payload: unknown): Promise<void>;
   setUnreadBadge(count: number | null): Promise<void>;
   flashTaskbar(critical: boolean): Promise<void>;
   openExternal(url: string): Promise<void>;
@@ -72,17 +74,40 @@ export function setShellFocusedFromShell(focused: boolean): void {
   setShellFocused(focused);
 }
 
+/**
+ * Доставка попапа: `sent` — оболочка приняла (окно создано или в очереди),
+ * `invalid` — payload не прошёл контракт (наша ошибка, не показываем),
+ * `unavailable` — моста нет (браузер). Rejection моста (Rust Err) летит
+ * вызывающему — это отдельный случай `rejected` в диагностике (#811).
+ */
+export type DesktopPopupDelivery = 'sent' | 'invalid' | 'unavailable';
+
 /** Показать попап уведомления в оболочке (валидация контракта — на границе). */
-export async function desktopShowPopup(payload: unknown): Promise<void> {
+export async function desktopShowPopup(payload: unknown): Promise<DesktopPopupDelivery> {
   const bridge = getDesktopBridge();
-  if (!bridge) return;
+  if (!bridge) return 'unavailable';
   const parsed = popupPayloadSchema.safeParse(payload);
-  if (!parsed.success) return;
+  if (!parsed.success) return 'invalid';
   await bridge.showPopup(parsed.data);
+  return 'sent';
 }
 
-/** Счётчик непрочитанных: бейдж трея и панели задач (0/null — снять). */
-export async function desktopSetUnreadBadge(count: number | null): Promise<void> {
+/**
+ * Записать решение гейта попапа в лог оболочки (#811): панель `?wsdebug=1`
+ * живёт в браузере, а попапы — в оболочке, где URL не принимает query.
+ * Best-effort: только id/коды, без текста; ошибка моста не влияет на попапы.
+ */
+export function desktopLogPopupDecision(payload: unknown): void {
+  const bridge = getDesktopBridge();
+  if (!bridge) return;
+  const parsed = popupDiagnosticSchema.safeParse(payload);
+  if (!parsed.success) return;
+  void bridge.logPopupDecision(parsed.data).catch(() => undefined);
+}
+
+/** Счётчик непрочитанных: бейдж трея и панели задач (0/null — снять). */ export async function desktopSetUnreadBadge(
+  count: number | null,
+): Promise<void> {
   const bridge = getDesktopBridge();
   if (!bridge) return;
   await bridge.setUnreadBadge(count);

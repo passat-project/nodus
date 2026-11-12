@@ -9,6 +9,7 @@ import { TooltipProvider } from '@nodus/ui/components/tooltip';
 import { registerCardBridge, registerReplaceTopMessenger } from '../../shared/lib/card-bridge.js';
 import { SurfaceVisibilityProvider } from '../../shared/lib/surface-visibility.js';
 import { startAttentionTracking } from '../../shared/attention/attention-store.js';
+import { startModalLayerTracking } from '../../shared/attention/modal-layers.js';
 import { stageMessengerThread } from '../../shared/chat/messenger-nav.js';
 import { ChatDialogHosts } from '../../shared/chat/dialog-hosts.js';
 import { TaskCreateHost } from '../../shared/tasks/task-create-host.js';
@@ -24,6 +25,7 @@ import { useDesktopBridge } from '../../shared/desktop/use-desktop-bridge.js';
 import { desktopSetUiTheme } from '../../shared/desktop/desktop-bridge.js';
 import { useChatSocket } from '../../shared/socket/use-chat-socket.js';
 import { WsDebugBadge } from '../../shared/socket/ws-debug-badge.js';
+import { PopupDebugBadge } from '../../shared/desktop/popup-diagnostics-badge.js';
 import { CircuitFrame } from './circuit-frame.js';
 import { CardStackHost } from './card-stack-host.js';
 import { CommandPalette } from './command-palette.js';
@@ -78,9 +80,13 @@ export function AppShell() {
     // Модель внимания (#770, ADR-0038): видимость/фокус окна и ввод —
     // единый источник для квитанций прочтения, попапов и догона ленты.
     startAttentionTracking();
+    // Модальные слои (#809): просмотрщик/окна Radix перекрывают поверхность —
+    // реестр даёт гейтам прочтения и попапов признак «накрыто».
+    const stopModalLayers = startModalLayerTracking();
     // Личные настройки (#745): GET после входа + debounce PUT изменений;
     // при смене пользователя стор перечитывает свой localStorage-ключ.
     startPreferencesSync();
+    return stopModalLayers;
   }, []);
   // (N) Nodus в заголовке вкладки (#124): сигнал фоновой вкладке.
   useUnreadTitle();
@@ -190,6 +196,8 @@ export function AppShell() {
       <CircuitFrame />
       <EdgeScrollbar />
       <WsDebugBadge />
+      {/* Диагностика попапов (#811): только ?wsdebug=1, журнал решений гейта. */}
+      <PopupDebugBadge />
       <NotificationToasts />
       <CommandPalette />
       <WhatsNewPanel />

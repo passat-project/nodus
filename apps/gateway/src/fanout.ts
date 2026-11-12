@@ -1,6 +1,10 @@
 import type { Server } from 'socket.io';
 import type { Redis } from 'ioredis';
-import { DOMAIN_EVENTS_STREAM, realtimeEnvelopeSchema } from '@nodus/contracts';
+import {
+  DOMAIN_EVENTS_STREAM,
+  realtimeEnvelopeSchema,
+  type RealtimeEnvelope,
+} from '@nodus/contracts';
 
 import type { MembershipStore } from './membership.ts';
 import { routeEnvelope } from './route-envelope.ts';
@@ -152,23 +156,91 @@ export class ChatEventsConsumer {
   }
 
   private async processEntry(id: string, fields: string[]): Promise<void> {
-    try {
-      const index = fields.indexOf('envelope');
-      const raw = index >= 0 ? fields[index + 1] : undefined;
-      if (raw) {
-        const parsed = realtimeEnvelopeSchema.safeParse(JSON.parse(raw));
-        if (parsed.success) {
-          await routeEnvelope(this.io, this.store, parsed.data);
-        } else {
-          console.warn('[gateway] malformed envelope skipped, stream entry', id);
-        }
-      }
-    } catch (error) {
-      logError(`envelope ${id}`, error); // poison-запись: логируем и ack-аем, группу не блокируем
-    } finally {
+    const entry = parseStreamEntry(fields);
+    if (entry.kind === 'poison') {
+      // Битый/неконтрактный envelope: ретрай не поможет, группу не блокируем.
+      console.warn(
+        `[gateway] poison stream entry skipped: entry=${id} reason=${entry.reason}` +
+          ` type=${entry.eventType ?? '-'} conversation=${entry.conversationId ?? '-'}`,
+      );
       await this.redis.xack(DOMAIN_EVENTS_STREAM, this.group, id);
+      return;
     }
+    try {
+      await routeEnvelope(this.io, this.store, entry.envelope);
+    } catch (error) {
+      // Инфраструктурный сбой (membership/Postgres, Redis, исключение
+      // маршрутизации) — НЕ ACK (#810): запись остаётся в PEL, maintenance
+      // (XAUTOCLAIM, idle > 60 с) перехватит её и доставит после
+      // восстановления. Эффекты идемпотентны: клиент дедуплицирует
+      // message_sent по message.id, инвалидации кэшей идемпотентны.
+      console.warn(
+        `[gateway] delivery deferred (infrastructure), entry=${id}` +
+          ` type=${entry.envelope.type} payload=${envelopeConversationId(entry.envelope.payload)}` +
+          ` reason=${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    await this.redis.xack(DOMAIN_EVENTS_STREAM, this.group, id);
   }
+}
+
+/** conversationId из payload (только для лога; payload — unknown). */
+function envelopeConversationId(payload: unknown): string {
+  if (typeof payload !== 'object' || payload === null) return '-';
+  const value = (payload as Record<string, unknown>).conversationId;
+  return typeof value === 'string' ? value : '-';
+}
+
+type StreamEntry =
+  | { kind: 'envelope'; envelope: RealtimeEnvelope }
+  | {
+      kind: 'poison';
+      reason: 'missing' | 'json' | 'schema' | 'payload';
+      eventType: string | null;
+      conversationId: string | null;
+    };
+
+/** Разбор записи стрима: контрактный envelope или poison (без ретраев). */
+function parseStreamEntry(fields: string[]): StreamEntry {
+  const index = fields.indexOf('envelope');
+  const raw = index >= 0 ? fields[index + 1] : undefined;
+  if (typeof raw !== 'string' || raw.length === 0) {
+    return { kind: 'poison', reason: 'missing', eventType: null, conversationId: null };
+  }
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    return { kind: 'poison', reason: 'json', eventType: null, conversationId: null };
+  }
+  const parsed = realtimeEnvelopeSchema.safeParse(json);
+  if (!parsed.success) {
+    const record =
+      typeof json === 'object' && json !== null ? (json as Record<string, unknown>) : {};
+    const payload =
+      typeof record.payload === 'object' && record.payload !== null
+        ? (record.payload as Record<string, unknown>)
+        : {};
+    return {
+      kind: 'poison',
+      reason: 'schema',
+      eventType: typeof record.type === 'string' ? record.type : null,
+      conversationId: typeof payload.conversationId === 'string' ? payload.conversationId : null,
+    };
+  }
+  // `payload: z.unknown()` пропускает скаляры/null, но маршрутизация читает
+  // поля объекта (`'audience' in payload` → TypeError) — детерминированный
+  // сбой, ретрай не поможет: poison, а не «инфраструктура» (#810-ревью).
+  if (typeof parsed.data.payload !== 'object' || parsed.data.payload === null) {
+    return {
+      kind: 'poison',
+      reason: 'payload',
+      eventType: parsed.data.type,
+      conversationId: null,
+    };
+  }
+  return { kind: 'envelope', envelope: parsed.data };
 }
 
 function sleep(ms: number): Promise<void> {
