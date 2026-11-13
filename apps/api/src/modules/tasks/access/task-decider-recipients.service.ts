@@ -93,14 +93,6 @@ export class TaskDeciderRecipients {
     userFieldIds: ReadonlySet<string>,
   ): Promise<string[]> {
     switch (source.kind) {
-      case 'position': {
-        const holders = await this.org.holdersOfPosition(
-          source.positionId,
-          source.positionKind,
-          tx,
-        );
-        return holders.map((holder) => holder.id);
-      }
       case 'manager_of': {
         const managerId = managers.get(source.of === 'creator' ? task.creatorId : task.assigneeId);
         return managerId ? [managerId] : [];

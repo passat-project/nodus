@@ -68,8 +68,7 @@ export class TaskDeciders {
     if (transitions.length === 0) return undefined;
 
     const sources = transitions.flatMap((transition) => transition.sources);
-    const [positions, managers, definitions, roles] = await Promise.all([
-      this.org.positionsOf(actorId, tx),
+    const [managers, definitions, roles] = await Promise.all([
       this.org.managersOf([task.creatorId, task.assigneeId], tx),
       this.customFields.definitions({}, tx),
       task.projectId
@@ -83,7 +82,6 @@ export class TaskDeciders {
       assigneeId: task.assigneeId,
       creatorManagerId: managers.get(task.creatorId) ?? null,
       assigneeManagerId: managers.get(task.assigneeId) ?? null,
-      positionKeys: new Set(positions.map((position) => `${position.kind}:${position.positionId}`)),
       projectRoles: new Set(task.projectId ? (roles[task.projectId] ?? []) : []),
       fieldUserIds: fieldUserIdsOf(task, sources, userFieldIds),
       userFieldIds,
@@ -129,8 +127,7 @@ export class TaskDeciders {
     const tasks = await this.repository.findCandidates([...byWorkflow.keys()], stageIds, catchAll);
     if (tasks.length === 0) return this.remember(actorId, []);
 
-    const [positions, managers, definitions, roles] = await Promise.all([
-      this.org.positionsOf(actorId),
+    const [managers, definitions, roles] = await Promise.all([
       this.org.managersOf([...new Set(tasks.flatMap((task) => [task.creatorId, task.assigneeId]))]),
       this.customFields.definitions({}),
       this.projects.rolesIn(actorId, [
@@ -138,9 +135,6 @@ export class TaskDeciders {
       ]),
     ]);
     const userFieldIds = userFieldIdsOf(definitions);
-    const positionKeys = new Set(
-      positions.map((position) => `${position.kind}:${position.positionId}`),
-    );
 
     const result: string[] = [];
     for (const task of tasks) {
@@ -154,7 +148,6 @@ export class TaskDeciders {
         assigneeId: task.assigneeId,
         creatorManagerId: managers.get(task.creatorId) ?? null,
         assigneeManagerId: managers.get(task.assigneeId) ?? null,
-        positionKeys,
         projectRoles: new Set(task.projectId ? (roles[task.projectId] ?? []) : []),
         fieldUserIds: fieldUserIdsOf(
           task,

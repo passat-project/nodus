@@ -3,8 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupChatFixture, type ChatTestFixture, type ChatUser } from './chat-fixtures.js';
 
 /**
- * Решающие вне задачи (#433) на живом HTTP: держатель должности видит задачу
- * и в журнале, и в карточке, и в пресете «Ждут моего решения», хотя не
+ * Решающие вне задачи (#433/#806) на живом HTTP: назначенный сотрудник видит
+ * задачу и в журнале, и в карточке, и в пресете «Ждут моего решения», хотя не
  * участник; посторонний получает 404. Конфиденциальные и секретные проекты —
  * отдельными тестами видимости (unit), здесь базовый сценарий приёмки.
  */
@@ -18,15 +18,6 @@ describe.skipIf(!process.env.DATABASE_URL)('решающие #433 (integration)'
     fx = await setupChatFixture(['a', 'b', 'c', 'd']);
     holder = fx.users.d;
     stranger = fx.users.c;
-
-    const position = await fx.prisma.position.create({
-      data: { name: `Зам директора ${fx.runId}`, kind: 'management' },
-      select: { id: true },
-    });
-    await fx.prisma.user.update({
-      where: { id: holder.id },
-      data: { positionId: position.id },
-    });
 
     const workflow = await fx.prisma.workflow.create({
       data: {
@@ -68,7 +59,7 @@ describe.skipIf(!process.env.DATABASE_URL)('решающие #433 (integration)'
           conditions: [
             {
               kind: 'decider_in',
-              source: { kind: 'position', positionId: position.id, positionKind: 'management' },
+              source: { kind: 'employees', userIds: [holder.id] },
             },
           ],
           validators: [],
@@ -97,7 +88,7 @@ describe.skipIf(!process.env.DATABASE_URL)('решающие #433 (integration)'
     await fx.cleanup();
   });
 
-  it('держатель должности видит задачу в журнале и карточке', async () => {
+  it('назначенный сотрудник видит задачу в журнале и карточке', async () => {
     const list = await fx.api(holder, 'GET', '/tasks?scope=all&limit=100');
     expect(list.status).toBe(200);
     const body = (await list.json()) as { items: { id: string }[] };
