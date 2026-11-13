@@ -84,9 +84,9 @@ export const workflowConditionSchema = z.discriminatedUnion('kind', [
   // Только право из каталога (`auth/permission.ts`): опечатка или выдуманное
   // право сделало бы кнопку невидимой всем (security-ревью #378).
   z.object({ kind: z.literal('permission'), permission: z.enum(PERMISSION_VALUES) }),
-  // Решающий вне задачи (#433): должность, руководитель автора/исполнителя,
-  // сотрудники, поле «Сотрудник(и)», роль в проекте. Одно условие — один
-  // источник; несколько источников = «любой из» (условия уже ИЛИ).
+  // Решающий вне задачи (#433): руководитель автора/исполнителя, сотрудники,
+  // поле «Сотрудник(и)», роль в проекте. Одно условие — один источник;
+  // несколько источников = «любой из» (условия уже ИЛИ).
   z.object({ kind: z.literal('decider_in'), source: deciderSourceSchema }),
 ]);
 export type WorkflowCondition = z.infer<typeof workflowConditionSchema>;
