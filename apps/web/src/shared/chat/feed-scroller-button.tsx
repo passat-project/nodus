@@ -33,10 +33,15 @@ export function FeedScrollerButton({
   firstUnreadId,
   viewportRef,
   unreadCount = 0,
+  onBeforeNavigate,
 }: {
   firstUnreadId: string | null;
   viewportRef: RefObject<HTMLElement | null>;
   unreadCount?: number;
+  /** Перед навигацией (к первому непрочитанному или в конец): плашка
+   *  непрочитанных переставляется на живую границу — её движение скрывает
+   *  начинающаяся анимация прокрутки (#845). Вызывается до расчёта цели. */
+  onBeforeNavigate?: () => void;
 }) {
   const content = (
     <>
@@ -55,11 +60,16 @@ export function FeedScrollerButton({
     </>
   );
   if (firstUnreadId === null) {
-    return <MessageScrollerButton>{content}</MessageScrollerButton>;
+    // Непрочитанных нет — штатный плавный скролл в конец; плашка при этом
+    // синхронизируется с живой границей (обычно исчезает) во время анимации.
+    return (
+      <MessageScrollerButton onClick={() => onBeforeNavigate?.()}>{content}</MessageScrollerButton>
+    );
   }
   return (
     <MessageScrollerButton
       onClick={(event) => {
+        onBeforeNavigate?.();
         const viewport = viewportRef.current;
         const el = viewport?.querySelector<HTMLElement>(
           `[data-message-id="${CSS.escape(firstUnreadId)}"]`,

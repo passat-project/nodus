@@ -6,6 +6,26 @@ type DividerMessage = Pick<ChatMessage, 'id' | 'seq' | 'deletedAt'> & {
 };
 
 /**
+ * Прочитано ДО какого seq. Источников два:
+ *  - серверный `myLastReadSeq` списка бесед — канонический водяной знак, но
+ *    приходит с задержкой (квитанция уходит троттлом 500 мс, список
+ *    инвалидируется медленным ярусом);
+ *  - локальный, который ведёт сама лента (`useLocalReadSeq`): видимое и
+ *    добавленное у низа она уже прочла, не дожидаясь сети.
+ *
+ * Берётся максимум: локальный знак только дополняет серверный и никогда не
+ * откатывает его. По нему считается ЖИВАЯ граница плашки непрочитанных.
+ */
+export function effectiveReadSeq(
+  serverReadSeq: number | null,
+  localReadSeq: number | null,
+): number | null {
+  if (serverReadSeq === null) return localReadSeq;
+  if (localReadSeq === null) return serverReadSeq;
+  return Math.max(serverReadSeq, localReadSeq);
+}
+
+/**
  * Первое сообщение после прочитанного водяного знака — граница, НАД которой
  * встаёт плашка «Непрочитанные сообщения» (модель Telegram, раунд 3–4).
  * null — непрочитанного после знака в загруженном окне нет.

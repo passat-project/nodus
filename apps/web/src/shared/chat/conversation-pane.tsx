@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { ui } from '@nodus/contracts';
 import {
   MessageScroller,
@@ -30,8 +31,9 @@ import { ScrollEndResponder } from './scroll-end-responder.js';
 import { useHistoryLoader } from './use-history-loader.js';
 import { useFeedViewportRead } from './use-viewport-read.js';
 import { useIncomingFollow } from './use-incoming-follow.js';
-import { useFrozenUnreadDivider } from './use-frozen-unread-divider.js';
-import { findScrollTargetUnreadId } from './unread-divider.js';
+import { useLocalReadSeq } from './use-local-read-seq.js';
+import { useUnreadDivider } from './use-unread-divider.js';
+import { effectiveReadSeq, findScrollTargetUnreadId } from './unread-divider.js';
 import { ConversationViewsLine } from './views-line.js';
 import { UnreadAnchor } from './use-unread-anchor.js';
 import { selectionComposerProps, useFeedSelection } from './use-feed-selection.js';
@@ -235,9 +237,17 @@ function ConversationFeed({
   const releaseAnchor = useCallback(() => {
     requestAnimationFrame(() => requestAnimationFrame(() => setAnchoring(false)));
   }, []);
+  // Локальный знак прочтения ленты (#845): видимое/добавленное у низа лента
+  // прочла, не дожидаясь троттла квитанций и медленного рефеча списка.
+  const { localReadSeq, markSeen } = useLocalReadSeq({
+    items,
+    viewportRef,
+    enabled: !anchoring,
+  });
   // Квитанции просмотров (#102 р.2): seq самой новой видимой строки ленты —
-  // IO по строкам, root=скроллер (механика — use-viewport-read.ts).
-  useFeedViewportRead(conversationId, viewportRef, items);
+  // IO по строкам, root=скроллер (механика — use-viewport-read.ts); тот же
+  // «видел до» двигает локальный знак для границы непрочитанных (#845).
+  useFeedViewportRead(conversationId, viewportRef, items, { onSeen: markSeen });
   // Догон входящих (#132): только после якоря и только «у низа» (Telegram).
   useIncomingFollow({
     scope,
@@ -247,28 +257,37 @@ function ConversationFeed({
     enabled: !anchoring,
   });
 
-  // Разделитель непрочитанных (#845, модель Telegram `UnreadBar::freezed`):
-  // граница снимается ОДИН раз на открытии и живёт в ленте, пока открыт
-  // диалог; прочтение её не двигает и не снимает, новые сообщения открытого
-  // чата новую не создают. Раньше плашка считалась по живому watermark:
-  // отставший снимок списка «воскрешал» её над уже прочитанным, и вставка/
-  // удаление строки дёргали ленту (жалоба владельца). Механика заморозки —
-  // use-frozen-unread-divider.ts; открытие без непрочитанных — плашки нет.
-  const { dividerId: firstUnreadId, openReadSeq } = useFrozenUnreadDivider({
+  // Плашка непрочитанных (#845): в ПОКОЕ статична — прочтение, входящие и
+  // своя отправка её не двигают, поэтому лента не дёргается. На живую
+  // границу она переставляется только по `syncToLive` — в момент анимации
+  // прокрутки кнопкой «вниз» (движение маскируется движением ленты), и к
+  // концу анимации уже стоит на новом месте. Механика — use-unread-divider.ts.
+  const liveReadSeq = effectiveReadSeq(conversation?.myLastReadSeq ?? null, localReadSeq);
+  const {
+    dividerId: firstUnreadId,
+    openReadSeq,
+    syncToLive,
+  } = useUnreadDivider({
     items,
     unreadCount: conversation?.unreadCount ?? 0,
-    readSeq: conversation?.myLastReadSeq ?? null,
+    serverReadSeq: conversation?.myLastReadSeq ?? null,
+    localReadSeq,
     meId: me?.id,
   });
-  // Стрелке «вниз» — ЖИВОЙ таргет, не замороженная граница плашки: после
-  // прочтения и прокрутки вверх она ведёт в конец, а при новых непрочитанных —
-  // к первому новому (контракт feed-scroller-button.tsx).
+  // Стрелке «вниз» — ЖИВОЙ таргет: первый текущий непрочитанный или конец
+  // ленты (контракт feed-scroller-button.tsx).
   const scrollUnreadTargetId = findScrollTargetUnreadId(
     items,
-    conversation?.myLastReadSeq ?? null,
+    liveReadSeq,
     conversation?.unreadCount ?? 0,
     me?.id,
   );
+  // Перед навигацией стрелкой: переставить плашку на живую границу ДО расчёта
+  // цели скролла и до старта анимации (flushSync — чтобы DOM уже был в новом
+  // состоянии, а к концу плавной прокрутки раскладка не менялась).
+  const handleBeforeNavigate = useCallback(() => {
+    flushSync(() => syncToLive());
+  }, [syncToLive]);
 
   // Протокол хоста ленты: отправка/правка, submit окна вложений, ↑-правка
   // последнего своего — use-feed-submit.ts.
@@ -414,6 +433,7 @@ function ConversationFeed({
                 непрочитанных — #132. */}
             <FeedScrollerButton
               firstUnreadId={scrollUnreadTargetId}
+              onBeforeNavigate={handleBeforeNavigate}
               viewportRef={viewportRef}
               unreadCount={conversation?.unreadCount ?? 0}
             />

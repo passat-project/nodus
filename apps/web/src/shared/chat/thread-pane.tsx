@@ -113,7 +113,7 @@ export const ThreadPane = memo(function ThreadPane({
   });
   // Квитанции просмотров (#102 р.2): watermark беседы («увидел где угодно»)
   // И трэда (threadRootId — гасит точку «есть новые», раунд 3).
-  useFeedViewportRead(conversationId, viewportRef, items, threadRootId);
+  useFeedViewportRead(conversationId, viewportRef, items, { threadRootId });
   // Догрузка истории ответов при прокрутке вверх (#307): тот же sentinel,
   // кэш треда — тот же плоский (chatKeys.thread).
   const { topSentinel } = useHistoryLoader({

@@ -198,8 +198,17 @@ export function useFeedViewportRead(
   conversationId: string,
   containerRef: RefObject<HTMLElement | null>,
   rows: readonly SeqSource[],
-  threadRootId?: string | null,
+  options?: {
+    /** Квитанция ИЗ ТРЕДА: дополнительно гасит точку «есть новые» на посте. */
+    threadRootId?: string | null;
+    /** Низ строки виден — сообщить водяной знак ленты для границы плашки
+     *  непрочитанных (#845). Зовётся только при реальном внимании. */
+    onSeen?: (maxSeq: number) => void;
+  },
 ): void {
+  const threadRootId = options?.threadRootId ?? null;
+  const onSeenRef = useRef(options?.onSeen);
+  onSeenRef.current = options?.onSeen;
   const surfaceVisible = useSurfaceVisible();
   const covered = useModalLayerCovered();
   const threadRootIdRef = useRef<string | null>(threadRootId ?? null);
@@ -231,6 +240,9 @@ export function useFeedViewportRead(
       const max = maxSeenSeq(candidates, foldBottom);
       wsDebugLog('viewport-read observe:', conversationId, 'maxSeq:', max);
       scheduler.observe(max);
+      // Локальный знак для границы непрочитанных (#845): тот же «видел до»,
+      // что уходит квитанцией, — только по вниманию (в фоне не копим).
+      if (max !== null && isUserActive()) onSeenRef.current?.(max);
     };
 
     // Скролл внутри порога не перефирашивает entries частично видимых строк —
