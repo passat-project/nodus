@@ -13,7 +13,14 @@ function logger() {
 function makeService(
   deps: Partial<
     Record<
-      'txRunner' | 'query' | 'placements' | 'taskService' | 'engine' | 'cells' | 'press' | 'projects',
+      | 'txRunner'
+      | 'query'
+      | 'placements'
+      | 'taskService'
+      | 'engine'
+      | 'cells'
+      | 'press'
+      | 'projects',
       unknown
     >
   >,

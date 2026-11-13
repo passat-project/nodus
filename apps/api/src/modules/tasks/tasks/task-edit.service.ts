@@ -167,9 +167,7 @@ export class TaskEditService {
                 assigneeAfter,
                 // Наблюдатель прав на задачу не получает — состав секретного
                 // проекта его не ограничивает (#541, security-аудит).
-                ...fresh.participants
-                  .filter((p) => p.role === 'coexecutor')
-                  .map((p) => p.userId),
+                ...fresh.participants.filter((p) => p.role === 'coexecutor').map((p) => p.userId),
               ]
             : [assigneeAfter],
         );
