@@ -7,6 +7,7 @@ import {
   scrollMessageIntoView,
   scrollToEndSmooth,
   scrollTopFor,
+  smoothDurationFor,
 } from './scroll-jump.js';
 
 /** Инфраструктура jsdom: габариты через getBoundingClientRect-стабы,
@@ -47,6 +48,21 @@ function makeContainer(opts: {
 }
 
 const CONTAINER_RECT = rect(0, 600); // область ленты 600px
+
+describe('smoothDurationFor — длительность без «вечности»', () => {
+  it('близкий прыжок — базовые 320 мс', () => {
+    expect(smoothDurationFor(1200)).toBe(320);
+    expect(smoothDurationFor(-800)).toBe(320);
+  });
+
+  it('длинный — быстрее (≈10 px/мс), но это ещё анимация', () => {
+    expect(smoothDurationFor(4000)).toBe(400);
+  });
+
+  it('гигантский чат — потолок 640 мс, пользователь не ждёт', () => {
+    expect(smoothDurationFor(50_000)).toBe(640);
+  });
+});
 
 /** Прыжок к цитате/закрепу (вердикт 25.09, п.1): видимая цель — ноль
  *  скролла; невидимая — центрирующий скролл с клампом, низ не отрывается. */
@@ -275,18 +291,26 @@ describe('scrollMessageIntoView — плавный режим', () => {
     h.restore();
   });
 
-  it('прыжок длиннее трёх экранов — мгновенный (гигантский чат не ждёт)', () => {
+  it('длинный прыжок АНИМИРУЕТСЯ (не телепорт), но не дольше 640 мс', () => {
     const container = makeContainer({
       rect: CONTAINER_RECT,
       scrollTop: 0,
-      scrollHeight: 6000,
+      scrollHeight: 20000,
       clientHeight: 600,
     });
     const message = makeElement();
-    liveStub(message, container, 2000, 80);
+    liveStub(message, container, 12000, 80);
+    const h = harness(container, 12000);
     scrollMessageIntoView(message, container, { align: 'start', margin: 48, behavior: 'smooth' });
-    // До кадров: телепорт сразу на цель (1952 > 3×600), без 320-мс пролёта.
-    expect(container.scrollTop).toBe(1952);
+    h.flush(50);
+    // Первый кадр — часть пути: перелёт видимый, а не мгновенный.
+    expect(container.scrollTop).toBeGreaterThan(0);
+    expect(container.scrollTop).toBeLessThan(11952);
+    h.finish(); // 500 мс: потолок 640 ещё не достигнут
+    expect(container.scrollTop).toBeLessThan(11952);
+    h.flush(200); // 700 мс — кривая закрылась, снап на цели
+    expect(container.scrollTop).toBe(11952);
+    h.restore();
   });
 
   it('системное «меньше движения» — мгновенно даже на коротком прыжке', () => {

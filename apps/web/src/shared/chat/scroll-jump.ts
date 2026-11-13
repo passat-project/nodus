@@ -20,15 +20,26 @@ export type RevealOutcome = 'visible' | 'scrolled';
 const EPSILON = 1;
 /** Длительность собственной плавной прокрутки (нативная не корректируется). */
 const SMOOTH_SCROLL_MS = 320;
-/** Дальше трёх экранов анимация не «красивее» — это уже телепорт с размазнёй;
- *  best practice jump-баров: длинный прыжок — мгновенный (и при reduced motion). */
-export const LONG_JUMP_SCREENS = 3;
+/** Дольше этого анимация не длится даже на гигантской истории: пользователь
+ *  не ждёт; скорость растёт, но перелёт остаётся видимым движением. */
+const MAX_SMOOTH_SCROLL_MS = 640;
+/** Комфортная скорость длинного перелёта: мс = расстояние / 10 px за мс. */
+const SMOOTH_PX_PER_MS = 10;
 
 /** Системная настройка «меньше движения» — прокрутка без анимации. */
 function prefersReducedMotion(): boolean {
   return (
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+/** Длительность: база 320 мс на близких прыжках, на длинных — растёт, но
+ *  упирается в потолок 640 мс (гигантский чат не «едет вечность»). */
+export function smoothDurationFor(distance: number): number {
+  return Math.min(
+    MAX_SMOOTH_SCROLL_MS,
+    Math.max(SMOOTH_SCROLL_MS, Math.abs(distance) / SMOOTH_PX_PER_MS),
   );
 }
 
@@ -81,20 +92,16 @@ export function scrollTopFor(
  * Одна механика и для плашки, и для конца ленты: нативная `behavior:'smooth'`
  * целится один раз по оценочной геометрии и промахивается.
  *
- * Длительность ФИКСИРОВАННАЯ, не зависит от расстояния: гигантский чат не
- * растягивает прокрутку (иначе пользователь ждёт). Но прыжок длиннее трёх
- * экранов в 320 мс — это размазанный телепорт, а rows вне вьюпорта ещё и
- * оценочные (content-visibility) → такие прыжки мгновенные, как в jump-барах.
- * «Меньше движения» в системе — тоже мгновенно.
+ * Длительность зависит от расстояния, но с потолком (320 → 640 мс): близкий
+ * прыжок — привычные 0,3 с, гигантская история — быстрее, но всё же видимым
+ * движением, без мгновенного телепорта. «Меньше движения» в системе —
+ * единственный случай без анимации.
  */
 function smoothScrollTop(container: HTMLElement, target: () => number | null): void {
   const startTop = container.scrollTop;
   const first = target();
   if (first === null) return;
-  if (
-    prefersReducedMotion() ||
-    Math.abs(first - startTop) > LONG_JUMP_SCREENS * container.clientHeight
-  ) {
+  if (prefersReducedMotion()) {
     container.scrollTop = first;
     // Один доснап следующим кадром: строки у новой позиции домеряются уже
     // после установки scrollTop (оценочные высоты content-visibility).
@@ -104,6 +111,7 @@ function smoothScrollTop(container: HTMLElement, target: () => number | null): v
     });
     return;
   }
+  const duration = smoothDurationFor(first - startTop);
   const startedAt = performance.now();
   let stopped = false;
   const stop = (): void => {
@@ -120,7 +128,7 @@ function smoothScrollTop(container: HTMLElement, target: () => number | null): v
       stop();
       return;
     }
-    const t = Math.min(1, (performance.now() - startedAt) / SMOOTH_SCROLL_MS);
+    const t = Math.min(1, (performance.now() - startedAt) / duration);
     const ease = 1 - (1 - t) ** 3;
     container.scrollTop = startTop + (want - startTop) * ease;
     if (t < 1) {
