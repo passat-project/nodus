@@ -54,20 +54,3 @@ export function findFirstUnreadId(
   );
   return first?.id ?? null;
 }
-
-/**
- * Цель стрелки «вниз» — ЖИВОЙ первый непрочитанный, не замороженная граница
- * плашки (#845): пользователь мог прочитать всё и прокрутить вверх — стрелка
- * обязана вести в конец, а при новых непрочитанных — к первому НОВОМУ
- * сообщению, а не к границе открытия. `unreadCount = 0` → null (штатный
- * плавный скролл в конец, контракт `feed-scroller-button.tsx`).
- */
-export function findScrollTargetUnreadId(
-  items: readonly DividerMessage[],
-  readSeq: number | null,
-  unreadCount: number,
-  meId?: string,
-): string | null {
-  if (unreadCount <= 0) return null;
-  return findFirstUnreadId(items, readSeq, meId);
-}

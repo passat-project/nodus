@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage } from '@nodus/contracts';
 
-import { findFirstUnreadId, findScrollTargetUnreadId } from './unread-divider.js';
+import { findFirstUnreadId } from './unread-divider.js';
 
 /**
  * Граница «Непрочитанные сообщения» (#845): плашка встаёт ОДИН раз на
@@ -77,22 +77,5 @@ describe('findFirstUnreadId', () => {
 
   it('в ленте нет ничего после знака — границы нет', () => {
     expect(findFirstUnreadId(items, 13)).toBeNull();
-  });
-});
-
-describe('findScrollTargetUnreadId (стрелка «вниз»)', () => {
-  const items = [message(9), message(10), message(11), message(12), message(13)];
-
-  it('непрочитанные есть — живой первый непрочитанный', () => {
-    expect(findScrollTargetUnreadId(items, 10, 2)).toBe('m-11');
-  });
-
-  it('всё прочитано (unreadCount = 0) — null: стрелка ведёт в конец', () => {
-    expect(findScrollTargetUnreadId(items, 13, 0)).toBeNull();
-  });
-
-  it('живой знак сдвинулся — цель двигается вслед за ним (не заморожена)', () => {
-    expect(findScrollTargetUnreadId(items, 10, 3)).toBe('m-11');
-    expect(findScrollTargetUnreadId(items, 12, 1)).toBe('m-13');
   });
 });

@@ -3,7 +3,7 @@ import type { RefObject } from 'react';
 import { ui } from '@nodus/contracts';
 import { MessageScrollerButton } from '@nodus/ui/components/message-scroller';
 
-import { scrollMessageIntoView } from './scroll-jump.js';
+import { isMessageFullyVisible, scrollMessageIntoView } from './scroll-jump.js';
 
 /**
  * Стрелка «вниз» ленты беседы (раунд 4, вердикты владельца): пока первое
@@ -30,12 +30,14 @@ import { scrollMessageIntoView } from './scroll-jump.js';
  * в ветке «к первому непрочитанному».
  */
 export function FeedScrollerButton({
-  firstUnreadId,
+  firstUnreadId = null,
   viewportRef,
   unreadCount = 0,
   onBeforeNavigate,
 }: {
-  firstUnreadId: string | null;
+  /** Таргет стрелки без плашки (ленты каналов/тредов): id первого
+   *  непрочитанного корня. В беседе цель берётся из DOM-якоря плашки. */
+  firstUnreadId?: string | null;
   viewportRef: RefObject<HTMLElement | null>;
   unreadCount?: number;
   /** Перед навигацией (к первому непрочитанному или в конец): плашка
@@ -64,27 +66,26 @@ export function FeedScrollerButton({
     <MessageScrollerButton
       onClick={(event) => {
         onBeforeNavigate?.();
-        // Цель — ровно та, над которой стоит плашка (DOM-якорь после синка);
-        // нет плашки — непрочитанных нет, штатный скролл в конец.
         const viewport = viewportRef.current;
-        const anchor =
-          viewport?.querySelector<HTMLElement>('[data-divider-for]')?.dataset.dividerFor ?? null;
-        const targetId = anchor ?? firstUnreadId;
-        if (targetId === null) return;
-        const el = viewport?.querySelector<HTMLElement>(
-          `[data-message-id="${CSS.escape(targetId)}"]`,
-        );
-        const vr = viewport?.getBoundingClientRect();
-        const er = el?.getBoundingClientRect();
-        // Первое непрочитанное уже ПОЛНОСТЬЮ видно — граница достигнута:
-        // штатный плавный скролл в конец ленты.
-        const alreadyAtUnread =
-          el && vr && er && er.top >= vr.top - 1 && er.bottom <= vr.bottom + 1;
-        if (alreadyAtUnread || !el || !viewport) return; // без preventDefault
+        // Цель — КЛЕТКА плашки (DOM-якорь после синка): плашка по построению
+        // оказывается у верхней кромки, без рассинхрона с id сообщения.
+        if (!viewport) return;
+        const anchor = viewport.querySelector<HTMLElement>('[data-divider-for]');
+        // Беседа: цель — клетка плашки (по построению у верхней кромки).
+        // Канал/тред: плашки нет, цель — первый непрочитанный корень.
+        const target =
+          anchor ??
+          (firstUnreadId
+            ? viewport.querySelector<HTMLElement>(
+                `[data-message-id="${CSS.escape(firstUnreadId)}"]`,
+              )
+            : null);
+        if (!target) return; // штатный скролл в конец
+        if (isMessageFullyVisible(target, viewport)) return; // граница видна → в конец
         event.preventDefault();
-        scrollMessageIntoView(el, viewport, {
+        scrollMessageIntoView(target, viewport, {
           align: 'start',
-          margin: 48,
+          margin: anchor ? 8 : 48,
           behavior: 'smooth',
         });
       }}

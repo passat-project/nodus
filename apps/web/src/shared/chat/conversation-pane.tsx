@@ -33,7 +33,6 @@ import { useFeedViewportRead } from './use-viewport-read.js';
 import { useIncomingFollow } from './use-incoming-follow.js';
 import { useLocalReadSeq } from './use-local-read-seq.js';
 import { useUnreadDivider } from './use-unread-divider.js';
-import { effectiveReadSeq, findScrollTargetUnreadId } from './unread-divider.js';
 import { ConversationViewsLine } from './views-line.js';
 import { UnreadAnchor } from './use-unread-anchor.js';
 import { selectionComposerProps, useFeedSelection } from './use-feed-selection.js';
@@ -262,7 +261,6 @@ function ConversationFeed({
   // границу она переставляется только по `syncToLive` — в момент анимации
   // прокрутки кнопкой «вниз» (движение маскируется движением ленты), и к
   // концу анимации уже стоит на новом месте. Механика — use-unread-divider.ts.
-  const liveReadSeq = effectiveReadSeq(conversation?.myLastReadSeq ?? null, localReadSeq);
   const {
     dividerId: firstUnreadId,
     openReadSeq,
@@ -274,14 +272,6 @@ function ConversationFeed({
     localReadSeq,
     meId: me?.id,
   });
-  // Стрелке «вниз» — ЖИВОЙ таргет: первый текущий непрочитанный или конец
-  // ленты (контракт feed-scroller-button.tsx).
-  const scrollUnreadTargetId = findScrollTargetUnreadId(
-    items,
-    liveReadSeq,
-    conversation?.unreadCount ?? 0,
-    me?.id,
-  );
   // Перед навигацией стрелкой: переставить плашку на живую границу ДО старта
   // анимации (flushSync — DOM уже в новом состоянии). Плавный скролл
   // (`scroll-jump`) пересчитывает цель каждый кадр по живой геометрии, поэтому
@@ -433,7 +423,6 @@ function ConversationFeed({
                 (модель Telegram, раунд 4), без — в конец; чип-счётчик
                 непрочитанных — #132. */}
             <FeedScrollerButton
-              firstUnreadId={scrollUnreadTargetId}
               onBeforeNavigate={handleBeforeNavigate}
               viewportRef={viewportRef}
               unreadCount={conversation?.unreadCount ?? 0}

@@ -4,7 +4,6 @@ import { act, renderHook } from '@testing-library/react';
 import type { ChatMessage } from '@nodus/contracts';
 
 import { useUnreadDivider } from './use-unread-divider.js';
-import { findScrollTargetUnreadId } from './unread-divider.js';
 
 /**
  * Плашка «Непрочитанные сообщения» (#845): в покое статична (прочтение,
@@ -97,7 +96,9 @@ describe('useUnreadDivider', () => {
       serverReadSeq: 2,
       localReadSeq: 3,
     });
-    act(() => result.current.syncToLive());
+    act(() => {
+      result.current.syncToLive();
+    });
     expect(result.current.dividerId).toBe('m-4'); // max(2, 3) = 3 → первое после
   });
 
@@ -109,7 +110,9 @@ describe('useUnreadDivider', () => {
       localReadSeq: null,
     });
     rerender({ items: [msg(2), msg(3)], unreadCount: 0, serverReadSeq: 3, localReadSeq: 3 });
-    act(() => result.current.syncToLive());
+    act(() => {
+      result.current.syncToLive();
+    });
     expect(result.current.dividerId).toBeNull();
   });
 
@@ -126,11 +129,13 @@ describe('useUnreadDivider', () => {
       serverReadSeq: 1,
       localReadSeq: null,
     });
-    act(() => result.current.syncToLive());
+    act(() => {
+      result.current.syncToLive();
+    });
     expect(result.current.dividerId).toBe('m-2');
   });
 
-  it('openReadSeq — снимок маунта; стрелка использует живую границу', () => {
+  it('openReadSeq — снимок маунта для якоря ленты', () => {
     const { result, rerender } = renderDivider({
       items: [msg(2), msg(3), msg(4)],
       unreadCount: 3,
@@ -144,7 +149,6 @@ describe('useUnreadDivider', () => {
       localReadSeq: 2,
     });
     expect(result.current.openReadSeq).toBe(1);
-    expect(findScrollTargetUnreadId([msg(2), msg(3), msg(4)], 2, 2, ME)).toBe('m-3');
     expect(result.current.dividerId).toBe('m-2'); // плашка ещё не двигалась
   });
 });
