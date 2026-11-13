@@ -263,8 +263,6 @@ export const workflowProblemCodeSchema = z.enum([
   /** Решающие (#433). */
   'decider_not_in_category',
   'decider_field_not_user',
-  'decider_position_missing',
-  'decider_position_empty',
   'decider_window_needs_rights',
   'decider_source_empty',
   /** Формула-подстановка слота (#632, Р12): AST не проходит грамматику языка
