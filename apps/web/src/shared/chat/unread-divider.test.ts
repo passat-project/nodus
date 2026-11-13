@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage } from '@nodus/contracts';
 
-import { effectiveReadSeq, resolveFirstUnreadId } from './unread-divider.js';
+import { findFirstUnreadId } from './unread-divider.js';
 
 /**
- * Граница «Непрочитанные сообщения» (#845): плашка считается по максимуму
- * серверного и ЛОКАЛЬНОГО водяных знаков прочтения. Главный регресс — список
- * бесед приходит с отставшим `myLastReadSeq`, и раньше плашка на мгновение
- * воскресала над уже прочитанными сообщениями, дёргая ленту.
+ * Граница «Непрочитанные сообщения» (#845): плашка встаёт ОДИН раз на
+ * открытии над первым непрочитанным и живёт в ленте, пока открыт диалог
+ * (модель Telegram `UnreadBar::freezed`). Живые watermark/`unreadCount` её
+ * не двигают — иначе вставка/удаление строки дёргали бы ленту.
  */
 
 const ME = 'me';
@@ -44,83 +44,38 @@ function message(
   } as ChatMessage;
 }
 
-const options = (overrides: Partial<Parameters<typeof resolveFirstUnreadId>[1]> = {}) => ({
-  serverReadSeq: 10,
-  localReadSeq: null,
-  unreadCount: 3,
-  meId: ME,
-  ...overrides,
-});
-
-describe('effectiveReadSeq', () => {
-  it('максимум двух знаков; null-ы нейтральны', () => {
-    expect(effectiveReadSeq(10, null)).toBe(10);
-    expect(effectiveReadSeq(null, 12)).toBe(12);
-    expect(effectiveReadSeq(10, 12)).toBe(12);
-    expect(effectiveReadSeq(12, 10)).toBe(12);
-    expect(effectiveReadSeq(null, null)).toBeNull();
-  });
-});
-
-describe('resolveFirstUnreadId', () => {
+describe('findFirstUnreadId', () => {
   const items = [message(9), message(10), message(11), message(12), message(13)];
 
-  it('первое сообщение после серверного знака', () => {
-    expect(resolveFirstUnreadId(items, options())).toBe('m-11');
+  it('первое сообщение после прочитанного знака', () => {
+    expect(findFirstUnreadId(items, 10)).toBe('m-11');
   });
 
-  it('локальный знак впереди серверного — граница считается по нему', () => {
-    expect(resolveFirstUnreadId(items, options({ localReadSeq: 12 }))).toBe('m-13');
-  });
-
-  it('локальный знак покрыл всё — плашки нет, даже если сервер отстал (#845)', () => {
-    expect(resolveFirstUnreadId(items, options({ localReadSeq: 13 }))).toBeNull();
-  });
-
-  it('серверный знак впереди локального (другое устройство) — тоже максимум', () => {
-    expect(resolveFirstUnreadId(items, options({ serverReadSeq: 11, localReadSeq: 5 }))).toBe(
-      'm-12',
-    );
-  });
-
-  it('unreadCount = 0 — плашки нет даже при отставших знаках', () => {
-    expect(resolveFirstUnreadId(items, options({ unreadCount: 0, localReadSeq: null }))).toBeNull();
-  });
-
-  it('оба знака неизвестны — плашки нет', () => {
-    expect(
-      resolveFirstUnreadId(items, options({ serverReadSeq: null, localReadSeq: null })),
-    ).toBeNull();
+  it('знак неизвестен (список не дал данные) — границы нет', () => {
+    expect(findFirstUnreadId(items, null)).toBeNull();
   });
 
   it('своё сообщение границей не бывает', () => {
     const own = [message(9), message(10), message(11, { authorId: ME }), message(12)];
-    expect(resolveFirstUnreadId(own, options({ localReadSeq: 10 }))).toBe('m-12');
+    expect(findFirstUnreadId(own, 10, ME)).toBe('m-12');
   });
 
-  it('только своё после знака — плашки нет', () => {
+  it('только своё после знака — границы нет', () => {
     const onlyOwn = [message(9), message(10, { authorId: ME })];
-    expect(
-      resolveFirstUnreadId(onlyOwn, options({ localReadSeq: 9, serverReadSeq: 9 })),
-    ).toBeNull();
+    expect(findFirstUnreadId(onlyOwn, 9, ME)).toBeNull();
   });
 
-  it('удалённые и неотправленные (seq = 0) пропускаются', () => {
-    // Удалённое — ВЫШЕ watermark (11 > 10): без фильтра `deletedAt` оно стало
-    // бы границей и тест упал бы. Темп (seq = 0) ниже watermark — отсечён уже
-    // сравнением с прочитанным.
-    const mixed = [
-      message(9),
-      message(11, { deletedAt: '2026-11-13T10:00:01.000Z' }),
-      message(0),
-      message(12),
-    ];
-    expect(resolveFirstUnreadId(mixed, options())).toBe('m-12');
+  it('удалённое выше знака пропускается (без фильтра стало бы границей)', () => {
+    const mixed = [message(9), message(11, { deletedAt: '2026-11-13T10:00:01.000Z' }), message(12)];
+    expect(findFirstUnreadId(mixed, 10)).toBe('m-12');
   });
 
-  it('в ленте нет ничего после знака — плашки нет', () => {
-    expect(
-      resolveFirstUnreadId(items, options({ serverReadSeq: 20, localReadSeq: 20 })),
-    ).toBeNull();
+  it('темп отправки (seq = 0) границей не бывает', () => {
+    const withTemp = [message(9), message(0), message(10)];
+    expect(findFirstUnreadId(withTemp, 9)).toBe('m-10');
+  });
+
+  it('в ленте нет ничего после знака — границы нет', () => {
+    expect(findFirstUnreadId(items, 13)).toBeNull();
   });
 });

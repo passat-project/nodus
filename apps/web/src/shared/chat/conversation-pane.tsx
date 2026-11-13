@@ -1,4 +1,12 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { ui } from '@nodus/contracts';
 import {
   MessageScroller,
@@ -30,8 +38,7 @@ import { ScrollEndResponder } from './scroll-end-responder.js';
 import { useHistoryLoader } from './use-history-loader.js';
 import { useFeedViewportRead } from './use-viewport-read.js';
 import { useIncomingFollow } from './use-incoming-follow.js';
-import { useLocalReadSeq } from './use-local-read-seq.js';
-import { resolveFirstUnreadId } from './unread-divider.js';
+import { findFirstUnreadId } from './unread-divider.js';
 import { ConversationViewsLine } from './views-line.js';
 import { UnreadAnchor } from './use-unread-anchor.js';
 import { selectionComposerProps, useFeedSelection } from './use-feed-selection.js';
@@ -235,17 +242,9 @@ function ConversationFeed({
   const releaseAnchor = useCallback(() => {
     requestAnimationFrame(() => requestAnimationFrame(() => setAnchoring(false)));
   }, []);
-  // Локальный знак прочтения (#845): открытый чат читает новое синхронно с
-  // появлением у низа и по факту видимости — не ждёт квитанций и рефечей.
-  const { localReadSeq, markSeen } = useLocalReadSeq({
-    items,
-    viewportRef,
-    enabled: !anchoring,
-  });
   // Квитанции просмотров (#102 р.2): seq самой новой видимой строки ленты —
-  // IO по строкам, root=скроллер (механика — use-viewport-read.ts); тот же
-  // «видел до» двигает и локальный знак плашки непрочитанных (#845).
-  useFeedViewportRead(conversationId, viewportRef, items, { onSeen: markSeen });
+  // IO по строкам, root=скроллер (механика — use-viewport-read.ts).
+  useFeedViewportRead(conversationId, viewportRef, items);
   // Догон входящих (#132): только после якоря и только «у низа» (Telegram).
   useIncomingFollow({
     scope,
@@ -255,23 +254,27 @@ function ConversationFeed({
     enabled: !anchoring,
   });
 
-  // Разделитель непрочитанных: НАД первым непрочитанным (даже внутри серии);
-  // ЖИВОЙ по watermark: прочитал всё — исчезает сразу (вердикт раунда 4),
-  // по мере чтения спускается к оставшемуся хвосту (модель Telegram).
-  // Знак — максимум серверного и локального (#845): отставший серверный
-  // снимок не воскрешает плашку над прочитанным и не дёргает ленту; свои
-  // сообщения границей не бывают.
-  const myLastReadSeq = conversation?.myLastReadSeq ?? null;
-  const firstUnreadId = useMemo(
-    () =>
-      resolveFirstUnreadId(items, {
-        serverReadSeq: myLastReadSeq,
-        localReadSeq,
-        unreadCount: conversation?.unreadCount ?? 0,
-        meId: me?.id,
-      }),
-    [items, myLastReadSeq, localReadSeq, conversation?.unreadCount, me?.id],
+  // Разделитель непрочитанных (#845, модель Telegram `UnreadBar::freezed`):
+  // граница снимается ОДИН раз на открытии — над первым непрочитанным по
+  // серверному знаку на момент маунта — и ЖИВЁТ В ЛЕНТЕ, пока открыт диалог.
+  // Прочтение её не двигает и не снимает (уходит вверх вместе с историей),
+  // новые сообщения открытого чата новую не создают. Раньше плашка считалась
+  // по живому watermark: отставший снимок списка «воскрешал» её над уже
+  // прочитанным, а вставка/удаление строки дёргали ленту. При следующем
+  // входе граница снимается заново — если читать уже нечего, плашки нет.
+  const [openMeta] = useState(() => ({
+    hadUnread: (conversation?.unreadCount ?? 0) > 0,
+    readSeq: conversation?.myLastReadSeq ?? null,
+  }));
+  const liveDividerId = useMemo(
+    () => (openMeta.hadUnread ? findFirstUnreadId(items, openMeta.readSeq, me?.id) : null),
+    [items, openMeta, me?.id],
   );
+  const [frozenDividerId, setFrozenDividerId] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    if (frozenDividerId === null && liveDividerId !== null) setFrozenDividerId(liveDividerId);
+  }, [frozenDividerId, liveDividerId]);
+  const firstUnreadId = frozenDividerId;
 
   // Протокол хоста ленты: отправка/правка, submit окна вложений, ↑-правка
   // последнего своего — use-feed-submit.ts.
@@ -289,10 +292,11 @@ function ConversationFeed({
         onFiles={(files) => addFiles(scope, files)}
       >
         <MessageScrollerProvider autoScroll={!anchoring}>
+          {/* Якорь — по знаку, снятому на маунте (та же точка, что у плашки). */}
           <UnreadAnchor
             items={items}
             isLoading={isLoading}
-            anchorSeq={anchoring && open.jump === null ? myLastReadSeq : null}
+            anchorSeq={anchoring && open.jump === null ? openMeta.readSeq : null}
             jump={anchoring ? open.jump : null}
             viewportRef={viewportRef}
             onAnchored={releaseAnchor}
