@@ -279,7 +279,7 @@ describe('галки отправлено/прочитано в строке с�
     expect(ticks(view).read).toBeNull();
   });
 
-  it('одиночная беседа/канал (я единственный участник) — без галок', () => {
+  it('одиночная беседа/канал (я единственный участник) — одна галка отправки, без «просмотрено»', () => {
     const view = renderList([
       row('solo-channel', {
         type: 'project_channel',
@@ -288,7 +288,7 @@ describe('галки отправлено/прочитано в строке с�
         lastMessage: lastMessage({ readAt: '2026-11-12T10:05:00Z' }),
       }),
     ]);
-    expect(ticks(view).sent).toBeNull();
+    expect(ticks(view).sent).not.toBeNull();
     expect(ticks(view).read).toBeNull();
   });
 

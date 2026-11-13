@@ -144,18 +144,21 @@ export function ConversationList({
     // Галки «отправлено/прочитано» (#799, модель Telegram): только у СВОЕГО
     // последнего сообщения. Чужое последнее, удалённое, «Заметки» (собеседник
     // я сам) и черновик — без галок; «печатает…» галки не гасит (они про
-    // последнее сообщение, а не про превью). membersCount > 1 — в одиночной
-    // беседе/канале сервер ставит readAt=createdAt автору (он единственный
-    // участник), а вторая галка без второго участника — ложное «просмотрено»
-    // (канон пузыря — readBy.length > 0, #102).
+    // последнее сообщение, а не про превью).
+    //
+    // Одна галка = отправлено, она есть всегда. Две = прочитано: только при
+    // другом участнике (membersCount > 1). В одиночной беседе/канале сервер
+    // ставит автору readAt=createdAt (он единственный участник), и readAt сам
+    // по себе там — не доказательство прочтения (канон пузыря — readBy, #102):
+    // иначе выходило бы ложное «просмотрено» вместо честного «отправлено».
     const showTicks =
       last !== null &&
       meId !== undefined &&
       last.author.id === meId &&
       last.deletedAt === null &&
-      conversation.membersCount > 1 &&
       !conversation.draft?.text &&
       !isNotesConversation(conversation, meId);
+    const read = last !== null && last.readAt !== null && conversation.membersCount > 1;
     return (
       <ConversationMenu key={conversation.id} conversation={conversation}>
         <button
@@ -227,7 +230,7 @@ export function ConversationList({
                 // поэтому WS-квитанция не дёргает строку. Не переставлять
                 // галки ПОСЛЕ времени и не менять ширину ReadTicks.
                 <span className="flex shrink-0 flex-row-reverse items-center gap-1 text-muted-foreground">
-                  <span className="whitespace-nowrap font-mono text-label-sm tabular-nums">
+                  <span className="shrink-0 whitespace-nowrap font-mono text-label-sm tabular-nums">
                     {formatListTimestamp(last.createdAt)}
                   </span>
                   {showTicks ? <ReadTicks read={read} /> : null}
