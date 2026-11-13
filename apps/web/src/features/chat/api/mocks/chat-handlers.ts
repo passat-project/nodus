@@ -320,6 +320,12 @@ const conversationHandlers = [
       : (parsed.data.attachmentIds ?? [])
           .map((attachmentId) => uploadedAttachments.get(attachmentId))
           .filter((a): a is MessageAttachment => a !== undefined);
+    // Переименования окна отправки (#146): паритет с сервером — имя
+    // применяется до сборки DTO сообщения (в живой БД — в транзакции claim).
+    for (const rename of parsed.data.attachmentRenames ?? []) {
+      const target = attachments.find((a) => a.id === rename.id);
+      if (target) target.name = rename.name;
+    }
     for (const attachment of attachments) uploadedAttachments.delete(attachment.id);
     revealHiddenConversation(String(params.id)); // активность раскрывает беседу (#103)
     const seq = nextMessageSeq(String(params.id));

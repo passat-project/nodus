@@ -153,12 +153,17 @@ export class MessagesWriteRepository {
 
   /** Одноразовая привязка загруженных вложений (неизвестные молча пропускаются).
    *  Возвращает привязанные строки (порядок по sort_order) — они нужны для
-   *  DTO сообщения в payload события message_sent (раунд 3). */
+   *  DTO сообщения в payload события message_sent (раунд 3).
+   *  renames (#146): файл переименован в окне отправки уже после загрузки —
+   *  имя применяется здесь же, ДО чтения строк, чтобы DTO и событие несли
+   *  актуальное имя. UPDATE скоупится message_id: чужие/непривязанные id
+   *  клиента не задеваются (схема уже требует ids из attachmentIds). */
   async claimAttachments(
     messageId: string,
     attachmentIds: string[],
     ownerId: string,
     tx: TransactionClient,
+    renames: ReadonlyArray<{ id: string; name: string }> = [],
   ): Promise<ClaimedAttachmentRow[]> {
     if (attachmentIds.length === 0) return [];
     await tx.$executeRaw(Prisma.sql`
@@ -167,6 +172,18 @@ export class MessagesWriteRepository {
       FROM unnest(${attachmentIds}::uuid[]) WITH ORDINALITY AS ord(id, ordinal)
       WHERE ma.id = ord.id AND ma.owner_id = ${ownerId}::uuid AND ma.message_id IS NULL
     `);
+    if (renames.length > 0) {
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE message_attachments ma
+        SET name = r.name
+        FROM unnest(
+          ${renames.map((r) => r.id)}::uuid[],
+          ${renames.map((r) => r.name)}::text[]
+        ) AS r(id, name)
+        WHERE ma.id = r.id AND ma.message_id = ${messageId}::uuid
+          AND ma.owner_id = ${ownerId}::uuid
+      `);
+    }
     return tx.$queryRaw<ClaimedAttachmentRow[]>(Prisma.sql`
       SELECT id, file_id AS "fileId", name, size, mime, kind, width, height,
              thumb_file_id AS "thumbFileId"

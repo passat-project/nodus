@@ -29,9 +29,9 @@ import { cancelUpload, removePending, retryUpload } from './composer-files.js';
  * окна по elementsFromPoint; строка сама не двигается transform'ом — нет ни
  * фантомного скролла, ни рамок. Клавиатурная сортировка — задел #146.
  *
- * Меню «⋯» (#188, окно правки): «Заменить вложение» (новый файл на место
- * старого) и «Переименовать файл» (инлайн-поле; применяется при сохранении
- * правки вместе с составом — серверу уйдёт attachmentRenames).
+ * Меню «⋯» (#146, оба режима окна): «Заменить вложение» (новый файл на
+ * место старого) и «Переименовать файл» (инлайн-поле). Имя применяется при
+ * отправке/сохранении вместе с составом — серверу уйдёт attachmentRenames.
  */
 
 function ProgressRing({ progress }: { progress: number }) {
@@ -94,7 +94,7 @@ export function AttachSendRow({
   scope: string;
   item: PendingAttachment;
   dragging: boolean;
-  /** Режим правки (#188): меню «⋯» (замена/переименование) у строки. */
+  /** Меню «⋯» (замена/переименование) у строки — оба режима окна (#146). */
   actions?: boolean;
   onDragStart: () => void;
   /** Живой реордер: координаты указателя — хозяин окна меняет порядок. */
@@ -137,6 +137,23 @@ export function AttachSendRow({
     return () => window.clearTimeout(timer);
   }, [renaming]);
 
+  // Применение по ЯВНОМУ действию, не по blur (приёмка 13.11, рецидив):
+  // фокус из поля может выдернуть супер-курсор/фокус-ловушка Radix — blur
+  // применял имя и «закрывал» поле вне воли пользователя. Клик мимо строки —
+  // единственный автоматический путь, и это настоящий pointerdown.
+  const applyRef = useRef(applyRename);
+  applyRef.current = applyRename;
+  useEffect(() => {
+    if (!renaming) return undefined;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(`[data-attach-row="${item.localId}"]`)) return;
+      applyRef.current();
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [renaming, item.localId]);
+
   /** Вход в правку имени: база — в поле, расширение — суффиксом. */
   function startRename() {
     renameRequestedRef.current = true;
@@ -154,7 +171,7 @@ export function AttachSendRow({
     onRenameMode?.(false);
   }
 
-  /** Применить имя (Enter/blur): пустая база после обрезки — откат к прежнему. */
+  /** Применить имя (Enter/Tab/клик мимо строки): пустая база — откат. */
   function applyRename() {
     if (!renaming) return;
     const base = draftName.trim();
@@ -246,7 +263,9 @@ export function AttachSendRow({
               value={draftName}
               onChange={(event) => setDraftName(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') {
+                if (event.key === 'Enter' || event.key === 'Tab') {
+                  // Tab = «закончил правку»: применяем и возвращаем каретку
+                  // в подпись (супер-курсор), фокус дальше не уходит.
                   event.preventDefault();
                   applyRename();
                 } else if (event.key === 'Escape') {
@@ -262,7 +281,6 @@ export function AttachSendRow({
                   stopRename();
                 }
               }}
-              onBlur={applyRename}
               aria-label={ui.chat.attachRenameField}
               className="h-7 min-w-0 flex-1 rounded-md px-2 text-sm font-medium"
             />

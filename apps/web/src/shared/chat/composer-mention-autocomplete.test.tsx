@@ -82,6 +82,15 @@ afterEach(() => {
 });
 
 describe('автокомплит @упоминаний (#176)', () => {
+  it('состав участников префетчится при открытии беседы, не в момент «@» (#844)', async () => {
+    apiMock.mockClear();
+    mountComposer();
+    // К первому «@» участники уже в кэше — нет кадра с одиноким «Все».
+    await waitFor(() =>
+      expect(apiMock.mock.calls.some(([url]) => String(url).includes('/members'))).toBe(true),
+    );
+  });
+
   it('«@» открывает панель, Enter вставляет токен с полным ФИО и пробелом', async () => {
     const view = mountComposer();
     const field = view.container.querySelector('textarea')!;
@@ -91,7 +100,8 @@ describe('автокомплит @упоминаний (#176)', () => {
     fireEvent.keyUp(field, { key: 'н' });
 
     const option = await waitFor(() => {
-      const el = view.container.querySelector<HTMLElement>('[role="option"]');
+      // Панель — портал в body (#844), не в контейнере рендера.
+      const el = document.querySelector<HTMLElement>('[role="option"]');
       if (!el) throw new Error('option not rendered');
       expect(el.textContent).toContain('Анна Первая');
       return el;
@@ -116,11 +126,11 @@ describe('автокомплит @упоминаний (#176)', () => {
     fireEvent.keyUp(field, { key: 'н' });
 
     await waitFor(() => {
-      expect(view.container.querySelector('[role="option"]')).toBeTruthy();
+      expect(document.querySelector('[role="option"]')).toBeTruthy();
     });
     fireEvent.keyDown(field, { key: 'Escape' });
     await waitFor(() => {
-      expect(view.container.querySelector('[role="option"]')).toBeNull();
+      expect(document.querySelector('[role="option"]')).toBeNull();
     });
 
     // Enter больше не выбирает кандидата — отправка (canSubmit: текст есть).
@@ -151,7 +161,7 @@ describe('автокомплит @упоминаний (#176)', () => {
     fireEvent.keyUp(field, { key: 'н' });
 
     await waitFor(() => {
-      expect(view.container.querySelector('[role="option"]')).toBeTruthy();
+      expect(document.querySelector('[role="option"]')).toBeTruthy();
     });
     field.setSelectionRange(11, 11);
 

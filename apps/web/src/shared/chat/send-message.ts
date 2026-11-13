@@ -21,13 +21,22 @@ export interface SendChatVars {
   replyToId?: string | null;
   quoteText?: string | null;
   attachmentIds?: string[];
+  /** Переименования файлов в окне отправки (#146): имя окна ≠ имя серверной
+   *  записи (загрузка стартовала раньше правки). Уходят в тело отправки —
+   *  сервер применяет их в транзакции claim, до DTO/события. */
+  attachmentRenames?: Array<{ id: string; name: string }>;
   /** Стикер-отправка (#143): id стикера из пака; превью-вложение — в
    *  attachments (kind='sticker' с метаданными пака). */
   stickerId?: string;
   /** Стикер не съедает черновик композера (набранный текст остаётся). */
   keepDraft?: boolean;
-  /** Превью для оптимистичного temp-сообщения (готовые загрузки/цитата). */
+  /** Серверные DTO готовых загрузок — для возврата упавшей отправки в
+   *  черновик (#248): имя здесь СЕРВЕРНОЕ, переименование окна восстанавливается
+   *  отдельно по attachmentRenames (иначе повтор не увидел бы diff имён). */
   attachments?: MessageAttachment[];
+  /** Превью для оптимистичного temp-сообщения: те же DTO с ИМЕНЕМ ОКНА
+   *  (#146) — пузырь сразу показывает выбранное пользователем имя. */
+  optimisticAttachments?: MessageAttachment[];
   reply?: ReplyPreview | null;
   /** «Важное» (#177): флаг летит в тело отправки и в оптимистичный
    *  temp-пузырь (бордер/чип видны сразу, I4). */
@@ -62,6 +71,7 @@ export function useSendChatMessage(conversationId: string, draftScope?: string) 
           body: {
             text: vars.text,
             attachmentIds: vars.attachmentIds,
+            attachmentRenames: vars.attachmentRenames,
             stickerId: vars.stickerId,
             replyToId: vars.replyToId ?? null,
             quoteText: vars.quoteText ?? null,
@@ -95,7 +105,7 @@ export function useSendChatMessage(conversationId: string, draftScope?: string) 
         threadRootId: vars.threadRootId ?? null,
         threadRepliesCount: 0,
         reactions: [],
-        attachments: vars.attachments ?? [],
+        attachments: vars.optimisticAttachments ?? vars.attachments ?? [],
         editedAt: null,
         readAt: null,
         readBy: [],
@@ -155,6 +165,7 @@ export function useSendChatMessage(conversationId: string, draftScope?: string) 
           reply: vars.reply ?? null,
           urgent: vars.urgent ?? false,
           attachments: vars.attachments ?? [],
+          attachmentRenames: vars.attachmentRenames,
         });
       } else if (draftScope && vars.reply) {
         useChatDrafts.getState().restoreReply(draftScope, vars.reply);

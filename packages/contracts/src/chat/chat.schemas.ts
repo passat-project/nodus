@@ -7,6 +7,7 @@ import { taskRefSchema } from '../tasks/task.schemas.js';
 import { cursorQuerySchema } from '../pagination/paginated.schema.js';
 import { stickerMetaSchema } from './sticker.schemas.js';
 import { chatMessageBlockSchema, chatMessageKindSchema } from './chat-block.schemas.js';
+import { attachmentRenameSchema } from './chat-attachment.schemas.js';
 
 /** Контракты модуля чата (chat.Conversation/Message). */
 
@@ -435,11 +436,15 @@ export type ListMessagesQuery = z.infer<typeof listMessagesQuerySchema>;
  *  ответ-цитата — replyToId; вложения — ids загруженных через
  *  POST /chat/attachments; стикер — stickerId (#143, отдельное
  *  стикер-сообщение без текста). Текст, вложения ИЛИ стикер обязательны
- *  (сообщение только с файлом/стикером — валидно, канон Telegram). */
+ *  (сообщение только с файлом/стикером — валидно, канон Telegram).
+ *  attachmentRenames (#146): файл переименован в окне отправки уже ПОСЛЕ
+ *  загрузки — имя применяется в транзакции отправки; ссылаться можно только
+ *  на ids из attachmentIds. */
 export const sendMessageBodySchema = z
   .object({
     text: z.string().trim().max(4000),
     attachmentIds: z.array(z.uuid()).max(20).optional(),
+    attachmentRenames: z.array(attachmentRenameSchema).max(20).optional(),
     /** Стикер из пака (доступного отправителю): сервер клеймит вложение
      *  kind='sticker' с метаданными пака (снапшот). */
     stickerId: z.uuid().optional(),
@@ -459,6 +464,23 @@ export const sendMessageBodySchema = z
     {
       message: 'text or attachmentIds or stickerId required',
     },
+  )
+  // Переименование целится только в отправляемые вложения: иначе имя
+  // «повисало» бы на чужой/непривязанной строке (граница прав #146).
+  .refine(
+    (v) => {
+      const renames = v.attachmentRenames ?? [];
+      if (renames.length === 0) return true;
+      return (
+        v.attachmentIds !== undefined &&
+        new Set(renames.map((r) => r.id)).size === renames.length &&
+        renames.every((r) => v.attachmentIds!.includes(r.id))
+      );
+    },
+    {
+      message: 'attachmentRenames must reference unique attachmentIds',
+      path: ['attachmentRenames'],
+    },
   );
 
 export type SendMessageBody = z.infer<typeof sendMessageBodySchema>;
@@ -473,10 +495,7 @@ export const editMessageBodySchema = z
   .object({
     text: z.string().trim().max(4000),
     attachmentIds: z.array(z.uuid()).max(20).optional(),
-    attachmentRenames: z
-      .array(z.object({ id: z.uuid(), name: z.string().trim().min(1).max(255) }))
-      .max(20)
-      .optional(),
+    attachmentRenames: z.array(attachmentRenameSchema).max(20).optional(),
   })
   .refine((v) => v.text.length > 0 || (v.attachmentIds?.length ?? 0) > 0, {
     message: 'text or attachmentIds required',

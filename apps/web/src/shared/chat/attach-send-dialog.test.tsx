@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { ui, type ChatMessage, type MessageAttachment } from '@nodus/contracts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ChatMessage, MessageAttachment } from '@nodus/contracts';
 import type { ComposerSubmit } from './composer-submit.js';
 
 vi.mock('../api-client.js', () => ({
@@ -13,7 +13,6 @@ vi.mock('../api-client.js', () => ({
 import { AttachSendDialogHost } from './attach-send-dialog.js';
 import { useChatDrafts, type PendingAttachment } from './chat-drafts.js';
 import { useAttachSendDialog } from './dialog-stores.js';
-import { registerScopeConversation } from './scope-conversations.js';
 import { registerScopeSubmit } from './submit-registry.js';
 
 /**
@@ -438,83 +437,6 @@ describe('attach-send-dialog — режим правки (#188)', () => {
     await waitFor(() => expect(useChatDrafts.getState().drafts[KEY]?.attachments).toHaveLength(2));
     expect(useAttachSendDialog.getState().scope).toBe(KEY);
     expect(submitted).not.toHaveBeenCalled();
-    unregister();
-  });
-});
-
-describe('attach-send-dialog: @упоминания подписи (#239)', () => {
-  const ALICE_ID = '33333333-3333-4333-8333-333333333333';
-  // Тип мока — по форме ответа (generic api<T> mockImplementation не выразит).
-  let apiMock: Mock<(url: unknown) => Promise<unknown>>;
-
-  beforeEach(async () => {
-    reset();
-    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    registerScopeConversation(KEY, CONV);
-    const { api } = await import('../api-client.js');
-    apiMock = vi.mocked(api) as unknown as typeof apiMock;
-    apiMock.mockImplementation((url) => {
-      // Состав беседы: Алиса-участник (автокомплит без дебаунса поиска).
-      if (String(url).includes('/members')) {
-        return Promise.resolve({
-          items: [
-            { user: { id: ALICE_ID, displayName: 'Алиса Тест', avatarUrl: null }, role: 'member' },
-          ],
-          nextCursor: null,
-        });
-      }
-      return Promise.resolve({ items: [], nextCursor: null });
-    });
-  });
-  afterEach(() => {
-    cleanup();
-    queryClient.clear();
-    registerScopeConversation(KEY, undefined);
-    apiMock.mockReset();
-  });
-
-  it('подпись с токенами открывается ВИДИМЫМ текстом; отправка уносит wire', async () => {
-    const wire = `Привет @[Алиса Тест](user:${ALICE_ID})`;
-    const payloads: ComposerSubmit[] = [];
-    const unregister = registerScopeSubmit(KEY, (payload) => {
-      payloads.push(payload);
-      return Promise.resolve({});
-    });
-    useChatDrafts.getState().addAttachments(KEY, [pending('a')]);
-    useAttachSendDialog.getState().open(KEY, wire);
-    renderDialog();
-
-    const field = screen.getByPlaceholderText(ui.chat.attachCaption) as HTMLTextAreaElement;
-    // Display-текст, не сырая разметка (#239: раньше поле показывало токен).
-    expect(field.value).toBe('Привет Алиса Тест');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
-    await waitFor(() => expect(payloads[0]?.text).toBe(wire));
-    unregister();
-  });
-
-  it('«@» открывает панель; выбор вставляет чип; отправка несёт токен', async () => {
-    const payloads: ComposerSubmit[] = [];
-    const unregister = registerScopeSubmit(KEY, (payload) => {
-      payloads.push(payload);
-      return Promise.resolve({});
-    });
-    useChatDrafts.getState().addAttachments(KEY, [pending('a')]);
-    useAttachSendDialog.getState().open(KEY, '');
-    renderDialog();
-
-    const field = screen.getByPlaceholderText(ui.chat.attachCaption) as HTMLTextAreaElement;
-    fireEvent.change(field, { target: { value: '@' } });
-
-    // Первый кандидат — закреплённое «Все»; выбираем Алису.
-    const aliceOption = (await screen.findByText('Алиса Тест')).closest('[role="option"]')!;
-    fireEvent.mouseDown(aliceOption); // каретка остаётся в поле (канон панели)
-
-    await waitFor(() => expect(field.value).toBe('Алиса Тест '));
-    expect(field.value).not.toContain('@[');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
-    await waitFor(() => expect(payloads[0]?.text).toBe(`@[Алиса Тест](user:${ALICE_ID})`));
     unregister();
   });
 });

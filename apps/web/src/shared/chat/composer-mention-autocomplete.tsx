@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+  type RefObject,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { Paginated, UserListItem, UserRef } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -16,6 +25,7 @@ import {
   type MentionCandidate,
 } from './composer-mentions.js';
 import { useConversationMembers } from './manage-api.js';
+import { scrollActiveMentionIntoView, useMentionPanelFit } from './use-mention-panel-fit.js';
 
 /**
  * Автокомплит @упоминаний композера (#176): «@» на границе слова открывает
@@ -43,10 +53,13 @@ export function useMentionAutocomplete(
     return () => window.clearTimeout(timer);
   }, [queryText]);
 
-  // Состав беседы — лениво: только когда панель реально открыта (не каждым
-  // монтированием композера; «@» — первый триггер).
+  // Состав беседы — ПРЕФЕТЧ при открытии композера/окна, не в момент «@»:
+  // иначе первые кадры панели показывают одинокое «Все», а сотрудники
+  // «догружаются» — владелец справедливо назвал это непрофессиональным
+  // (приёмка 13.11). К моменту «@» участники уже в кэше запроса; при
+  // повторном монтировании окна данные берутся мгновенно.
   const members = useConversationMembers(conversationId ?? '', '', {
-    enabled: query !== null,
+    enabled: Boolean(conversationId),
   });
   const memberRefs = useMemo<UserRef[]>(
     () => (members.data?.pages[0]?.items ?? []).map((m) => m.user),
@@ -88,6 +101,8 @@ export function useComposerMentions(opts: {
   // обязан закрыть панель немедленно (рендер), а не ждать чужого обновления.
   const [dismissedStart, setDismissedStart] = useState<number | null>(null);
   const autocomplete = useMentionAutocomplete(opts.conversationId, opts.text, caret);
+  // setActive — стабилен (useState-сеттер): reset не пересоздаётся зря.
+  const setActiveCandidate = autocomplete.setActive;
   const open = autocomplete.query !== null && autocomplete.query.start !== dismissedStart;
 
   const syncCaret = (el: HTMLTextAreaElement) => setCaret(el.selectionStart ?? 0);
@@ -113,13 +128,22 @@ export function useComposerMentions(opts: {
     setDismissedStart(autocomplete.query?.start ?? null);
   }
 
+  /** Новая сессия поля (окно вложений живёт одним хуком на все открытия,
+   *  приёмка 13.11): Esc-«закрыто до этого @» и старая каретка не должны
+   *  переноситься в следующий чат — иначе «@» в той же позиции молчит. */
+  const reset = useCallback(() => {
+    setDismissedStart(null);
+    setCaret(0);
+    setActiveCandidate(0);
+  }, [setActiveCandidate]);
+
   /** KeyUp поля: синк каретки (источник запроса автокомплита). Стрелки
    *  нативны — в поле видимый текст, скрытой разметки нет (#228). */
   function handleKeyUp(el: HTMLTextAreaElement) {
     setCaret(el.selectionStart ?? 0);
   }
 
-  return { autocomplete, open, caret, syncCaret, pick, dismiss, handleKeyUp };
+  return { autocomplete, open, caret, syncCaret, pick, dismiss, handleKeyUp, reset };
 }
 
 /** Обработка клавиш панели: возвращает true, если событие съедено (композер
@@ -168,23 +192,43 @@ export function mentionAutocompleteKeydown(
   }
 }
 
-/** Панель-список кандидатов: absolute над строкой ввода, НЕ перехватывает
- *  фокус (клики по строкам — mousedown с preventDefault, каретка в поле). */
+/** Панель-список кандидатов: ПОРТАЛ в body поверх окна, НЕ перехватывает
+ *  фокус (клики по строкам — mousedown с preventDefault, каретка в поле).
+ *  Высота — 9 рядов (360px), внутри скролл; место — flip/size/shift по
+ *  вьюпорту (use-mention-panel-fit, #844). Портал — чтобы в окне вложений
+ *  панель не обрезалась overflow DialogContent и не сжималась до 2–3 рядов:
+ *  логика ОДНА с композером, разницы контейнеров не видно. Активный ряд
+ *  подскролливается (↑/↓ с заворотом). */
 export function MentionAutocompletePanel({
   candidates,
   active,
   onHover,
   onPick,
+  anchorRef,
 }: {
   candidates: MentionCandidate[];
   active: number;
   onHover: (index: number) => void;
   onPick: (index: number) => void;
+  /** Поле, над которым панель: от его rect считается доступная высота. */
+  anchorRef?: RefObject<HTMLElement | null>;
 }) {
-  return (
+  const { listRef, style } = useMentionPanelFit(anchorRef);
+  useLayoutEffect(() => {
+    scrollActiveMentionIntoView(listRef.current, active);
+  }, [active, candidates.length, listRef]);
+  return createPortal(
     <div
+      ref={listRef}
       role="listbox"
-      className="absolute bottom-full left-0 z-20 mb-1.5 w-full max-w-105 overflow-hidden rounded-2xl border border-border bg-popover p-1 text-popover-foreground shadow-sm"
+      style={style}
+      /* Колесо: модальный Radix Dialog вешает на document wheel-лок
+         (react-remove-scroll) и гасит прокрутку всего, что вне DialogContent —
+         портал панели туда не входит. Гасим всплытие ДО document-локи: нативная
+         прокрутка списка (overscroll-contain) при этом работает. Один приём на
+         оба хоста — поведение колеса одинаково. */
+      onWheel={(event) => event.stopPropagation()}
+      className="z-[80] overflow-x-hidden overflow-y-auto overscroll-contain rounded-2xl border border-border bg-popover p-1 text-popover-foreground shadow-sm"
     >
       {candidates.length === 0 ? (
         <span className="block px-3 py-2 text-sm text-muted-foreground">
@@ -236,6 +280,7 @@ export function MentionAutocompletePanel({
           </span>
         ))
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
