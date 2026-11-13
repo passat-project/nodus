@@ -40,8 +40,9 @@ export function useUnreadDivider({
   /** Снимок `myLastReadSeq` на маунте — порог якоря открытия. */
   openReadSeq: number | null;
   /** Переставить плашку на ЖИВУЮ границу — только в момент анимации
-   *  прокрутки (кнопка «вниз»); движение маскируется движением ленты. */
-  syncToLive: () => void;
+   *  прокрутки (кнопка «вниз»); движение маскируется движением ленты.
+   *  Возвращает id, на который встала плашка, — стрелка летит ровно туда же. */
+  syncToLive: () => string | null;
 } {
   // Снимок открытия: по нему ставится стартовая плашка (и якорь ленты).
   const [openMeta] = useState(() => ({ hadUnread: unreadCount > 0, readSeq: serverReadSeq }));
@@ -69,8 +70,10 @@ export function useUnreadDivider({
   }, [items, unreadCount, serverReadSeq, localReadSeq, meId]);
   const liveRef = useRef(liveId);
   liveRef.current = liveId;
-  const syncToLive = useCallback(() => {
-    setDividerId(liveRef.current);
+  const syncToLive = useCallback((): string | null => {
+    const target = liveRef.current;
+    setDividerId(target);
+    return target;
   }, []);
 
   return { dividerId, openReadSeq: openMeta.readSeq, syncToLive };

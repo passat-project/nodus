@@ -40,8 +40,9 @@ export function FeedScrollerButton({
   unreadCount?: number;
   /** Перед навигацией (к первому непрочитанному или в конец): плашка
    *  непрочитанных переставляется на живую границу — её движение скрывает
-   *  начинающаяся анимация прокрутки (#845). Вызывается до расчёта цели. */
-  onBeforeNavigate?: () => void;
+   *  начинающаяся анимация прокрутки (#845). Возвращает id, на который встала
+   *  плашка: стрелка летит ровно к нему (один срез данных, без рассинхрона). */
+  onBeforeNavigate?: () => string | null;
 }) {
   const content = (
     <>
@@ -59,20 +60,16 @@ export function FeedScrollerButton({
       ) : null}
     </>
   );
-  if (firstUnreadId === null) {
-    // Непрочитанных нет — штатный плавный скролл в конец; плашка при этом
-    // синхронизируется с живой границей (обычно исчезает) во время анимации.
-    return (
-      <MessageScrollerButton onClick={() => onBeforeNavigate?.()}>{content}</MessageScrollerButton>
-    );
-  }
   return (
     <MessageScrollerButton
       onClick={(event) => {
-        onBeforeNavigate?.();
+        // Цель — ровно та, на которую встала плашка (или живой таргет без
+        // обработчика); null — непрочитанных нет, штатный скролл в конец.
+        const targetId = onBeforeNavigate?.() ?? firstUnreadId;
+        if (targetId === null) return;
         const viewport = viewportRef.current;
         const el = viewport?.querySelector<HTMLElement>(
-          `[data-message-id="${CSS.escape(firstUnreadId)}"]`,
+          `[data-message-id="${CSS.escape(targetId)}"]`,
         );
         const vr = viewport?.getBoundingClientRect();
         const er = el?.getBoundingClientRect();
