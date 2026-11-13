@@ -205,7 +205,7 @@ export function NotesPane({ conversationId }: { conversationId: string }) {
   const { handleSubmit } = useFeedSubmit({ conversationId, scope });
 
   return (
-    <div className="relative flex h-full min-w-0 flex-1 flex-col">
+    <div className="relative flex h-full min-w-0 flex-1 flex-col chat-wallpaper bg-chat-zone">
       {/* Drop-зона файлов (#797): витрина — такая же лента, как беседы
           (#716), но родилась до общего приёма драга и осталась без него.
           Композер — СНАРУЖИ зоны: оверлей накрывает ленту, а не поле ввода
@@ -226,7 +226,7 @@ export function NotesPane({ conversationId }: { conversationId: string }) {
             itemCount={items.length}
             containerRef={viewportRef}
           />
-          <MessageScroller className="min-h-0 flex-1 bg-chat-zone">
+          <MessageScroller className="min-h-0 flex-1">
             <MessageScrollerViewport ref={viewportRef}>
               <MessageScrollerContent
                 className={cn(

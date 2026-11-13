@@ -33,7 +33,7 @@ export const TaskDiscussion = memo(function TaskDiscussion({ taskId }: { taskId:
     );
   }
   return (
-    <div className="flex h-full min-w-0 flex-1 items-center justify-center bg-chat-zone">
+    <div className="flex h-full min-w-0 flex-1 items-center justify-center chat-wallpaper bg-chat-zone">
       {error ? (
         <Empty>
           <EmptyTitle>

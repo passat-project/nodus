@@ -86,7 +86,7 @@ export function ConversationPane({
   conversation?: ConversationListItem;
 }) {
   return (
-    <div className="flex h-full min-w-0 flex-1 flex-col">
+    <div className="flex h-full min-w-0 flex-1 flex-col chat-wallpaper bg-chat-zone">
       {/* Пин-бар остаётся НА МЕСТЕ и в селекте: батч-команды живёт в узком
           островке композера (вердикт 24.09 — верх ленты не двигается). */}
       <PinBar conversationId={conversationId} />
@@ -157,7 +157,7 @@ function ConversationBody({
 function FeedSkeleton() {
   // Р.12: гейт списка — ПУСТАЯ зона чата без полос (три серые полосы
   // читались артефактом «ховеров» на холодном входе после перезагрузки).
-  return <div className="flex min-h-0 flex-1 bg-chat-zone" aria-hidden />;
+  return <div className="flex min-h-0 flex-1" aria-hidden />;
 }
 
 /** Тело ленты: монтируется ТОЛЬКО по готовому списку бесед — решение об
@@ -312,7 +312,7 @@ function ConversationFeed({
             itemCount={items.length}
             containerRef={viewportRef}
           />
-          <MessageScroller className="min-h-0 flex-1 bg-chat-zone">
+          <MessageScroller className="min-h-0 flex-1">
             <MessageScrollerViewport ref={viewportRef}>
               <MessageScrollerContent
                 className={cn(

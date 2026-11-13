@@ -172,7 +172,7 @@ export const ThreadPane = memo(function ThreadPane({
   }
 
   return (
-    <div className="flex h-full min-w-0 flex-1 flex-col">
+    <div className="flex h-full min-w-0 flex-1 flex-col chat-wallpaper bg-chat-zone">
       <header
         className={cn('flex shrink-0 items-center gap-2 border-b border-border px-3', barClass)}
       >
@@ -229,7 +229,7 @@ export const ThreadPane = memo(function ThreadPane({
             itemCount={items.length}
             containerRef={viewportRef}
           />
-          <MessageScroller className="min-h-0 flex-1 bg-chat-zone">
+          <MessageScroller className="min-h-0 flex-1">
             <MessageScrollerViewport ref={viewportRef}>
               <MessageScrollerContent
                 className={cn(
