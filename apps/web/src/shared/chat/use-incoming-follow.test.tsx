@@ -5,7 +5,7 @@ import type { ChatMessage } from '@nodus/contracts';
 
 import { resetAttentionForTests } from '../attention/attention-store.js';
 import { useScrollEndStore } from './scroll-end-store.js';
-import { isAtBottom, useIncomingFollow } from './use-incoming-follow.js';
+import { isAtBottom, pinScrollDelta, useIncomingFollow } from './use-incoming-follow.js';
 
 /** Догон входящих (#132): «у низа» — просит скролл в конец, в истории — нет;
  *  свои сообщения догон просит сам композер (хук их пропускает). */
@@ -81,6 +81,22 @@ describe('isAtBottom', () => {
     expect(isAtBottom(vp)).toBe(true);
     vp.scrollTop = 460; // остаток 40px — в истории
     expect(isAtBottom(vp)).toBe(false);
+  });
+});
+
+describe('pinScrollDelta (#847: рост поля ввода)', () => {
+  it('поле выросло (вьюпорт сжался) у низа — поднимаем содержимое на дельту', () => {
+    expect(pinScrollDelta(768, 680, true)).toBe(88);
+    // scrollTop += 88 — низ сообщений остаётся над композером.
+    expect(pinScrollDelta(680, 760, true)).toBe(-80);
+  });
+
+  it('не у низа — рост поля ленту не двигает (читаем историю)', () => {
+    expect(pinScrollDelta(768, 680, false)).toBe(0);
+  });
+
+  it('высота не изменилась — сдвига нет', () => {
+    expect(pinScrollDelta(700, 700, true)).toBe(0);
   });
 });
 

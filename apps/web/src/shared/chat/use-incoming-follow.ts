@@ -34,6 +34,22 @@ export function isAtBottom(viewport: HTMLElement, tolerance = NEAR_BOTTOM_PX): b
   return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= tolerance;
 }
 
+/**
+ * Сдвиг scrollTop при изменении высоты вьюпорта ленты (#847): поле ввода
+ * растёт — вьюпорт ленты сжимается, и чтобы низ остался видимым, содержимое
+ * поднимается на ту же дельту (`scrollTop += delta`, дельта > 0 при сжатии).
+ * Поле уменьшилось — возвращаем на столько же. Не у низа — не трогаем:
+ * чтение истории рост поля сдвигать не должен. Чистая функция — юнит-тест.
+ */
+export function pinScrollDelta(
+  prevClientHeight: number,
+  clientHeight: number,
+  atBottom: boolean,
+): number {
+  if (!atBottom || prevClientHeight === clientHeight) return 0;
+  return prevClientHeight - clientHeight;
+}
+
 export function useIncomingFollow({
   scope,
   items,
@@ -54,12 +70,30 @@ export function useIncomingFollow({
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const onScroll = () => {
+    const onScroll = (): void => {
       atBottomRef.current = isAtBottom(viewport);
     };
     onScroll();
     viewport.addEventListener('scroll', onScroll, { passive: true });
-    return () => viewport.removeEventListener('scroll', onScroll);
+    // Поле ввода выросло/уменьшилось → высота вьюпорта изменилась. Пока
+    // пользователь у низа, лента остаётся на дне: низ сообщений не уезжает
+    // под композер, стрелка «вниз» не появляется (#847). RO-колбэк приходит
+    // после раскладки и до отрисовки — сдвиг не виден кадром.
+    let prevClientHeight = viewport.clientHeight;
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            const height = viewport.clientHeight;
+            const delta = pinScrollDelta(prevClientHeight, height, atBottomRef.current);
+            prevClientHeight = height;
+            if (delta !== 0) viewport.scrollTop += delta;
+          });
+    observer?.observe(viewport);
+    return () => {
+      viewport.removeEventListener('scroll', onScroll);
+      observer?.disconnect();
+    };
   }, [viewportRef]);
 
   const prevRef = useRef<{ id: string; authorId: string } | null>(null);
