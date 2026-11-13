@@ -69,10 +69,21 @@ describe('placeMentionPanel (#844)', () => {
     expect(above.list.scrollTop).toBe(40);
   });
 
-  it('стиль фиксирует панель до первого замера (без прыжка из потока)', () => {
-    expect(mentionPanelStyle(null)).toMatchObject({ position: 'fixed', visibility: 'hidden' });
+  it('стиль фиксирует панель до первого замера и возвращает pointer-events (модал Radix)', () => {
+    expect(mentionPanelStyle(null)).toMatchObject({
+      position: 'fixed',
+      pointerEvents: 'auto',
+      visibility: 'hidden',
+    });
     expect(
       mentionPanelStyle({ side: 'above', left: 10, width: 300, maxHeight: 360, bottom: 250 }),
-    ).toMatchObject({ position: 'fixed', left: 10, width: 300, maxHeight: 360, bottom: 250 });
+    ).toMatchObject({
+      position: 'fixed',
+      pointerEvents: 'auto',
+      left: 10,
+      width: 300,
+      maxHeight: 360,
+      bottom: 250,
+    });
   });
 });

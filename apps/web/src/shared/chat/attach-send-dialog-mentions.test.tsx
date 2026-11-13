@@ -120,6 +120,9 @@ describe('attach-send-dialog: @упоминания подписи (#239)', () =
     expect(list.parentElement).toBe(document.body);
     expect(list.style.position).toBe('fixed');
     expect(list.style.maxHeight).toBe('360px');
+    // Модальный Radix ставит body pointer-events:none — панель обязана
+    // вернуть auto, иначе в окне не работают мышь, колесо и наведение.
+    expect(list.style.pointerEvents).toBe('auto');
     expect(list.className).toContain('overflow-y-auto');
   });
 

@@ -181,6 +181,7 @@ export class MessagesWriteRepository {
           ${renames.map((r) => r.name)}::text[]
         ) AS r(id, name)
         WHERE ma.id = r.id AND ma.message_id = ${messageId}::uuid
+          AND ma.owner_id = ${ownerId}::uuid
       `);
     }
     return tx.$queryRaw<ClaimedAttachmentRow[]>(Prisma.sql`

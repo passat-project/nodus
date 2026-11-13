@@ -12,16 +12,23 @@ export interface FailedSendRestore {
   reply: ReplyPreview | null;
   urgent: boolean;
   attachments: MessageAttachment[];
+  /** Переименования окна отправки (#146): имя строки восстанавливается
+   *  в fileName, а attachment остаётся СЕРВЕРНЫМ — иначе повторная отправка
+   *  не увидела бы diff имён и сервер сохранил бы старое имя. */
+  attachmentRenames?: Array<{ id: string; name: string }>;
 }
 
 /** Строка окна вложений из серверного DTO (#248, тот же маппинг, что у строк
  *  правимого сообщения): файл уже загружен — id строки = id вложения, превью
  *  серверное (objectURL исходной загрузки не восстановить, DTO несёт
  *  thumbnailUrl). */
-export function pendingRowFromAttachment(a: MessageAttachment): PendingAttachment {
+export function pendingRowFromAttachment(
+  a: MessageAttachment,
+  fileName = a.name,
+): PendingAttachment {
   return {
     localId: a.id,
-    fileName: a.name,
+    fileName,
     mime: a.mime,
     size: a.size,
     progress: 1,
@@ -42,7 +49,10 @@ export function pendingRowFromAttachment(a: MessageAttachment): PendingAttachmen
  *  затирается — дополняется отсутствующим. */
 export function restoreFailedIntoDraft(d: ChatDraft, failed: FailedSendRestore): ChatDraft {
   const parsed = fromWireText(failed.wireText);
-  const rows = failed.attachments.map(pendingRowFromAttachment);
+  const renamed = new Map((failed.attachmentRenames ?? []).map((r) => [r.id, r.name]));
+  const rows = failed.attachments.map((a) =>
+    pendingRowFromAttachment(a, renamed.get(a.id) ?? a.name),
+  );
   const attachments = [...rows, ...d.attachments];
   const typing = d.text !== '' || (d.mentions ?? []).length > 0;
   if (!typing) {

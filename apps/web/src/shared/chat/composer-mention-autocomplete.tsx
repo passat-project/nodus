@@ -207,6 +207,12 @@ export function MentionAutocompletePanel({
       ref={listRef}
       role="listbox"
       style={style}
+      /* Колесо: модальный Radix Dialog вешает на document wheel-лок
+         (react-remove-scroll) и гасит прокрутку всего, что вне DialogContent —
+         портал панели туда не входит. Гасим всплытие ДО document-локи: нативная
+         прокрутка списка (overscroll-contain) при этом работает. Один приём на
+         оба хоста — поведение колеса одинаково. */
+      onWheel={(event) => event.stopPropagation()}
       className="z-[80] overflow-x-hidden overflow-y-auto overscroll-contain rounded-2xl border border-border bg-popover p-1 text-popover-foreground shadow-sm"
     >
       {candidates.length === 0 ? (

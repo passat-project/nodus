@@ -123,7 +123,10 @@ describe('toSendVars: переименования окна отправки (#1
     expect(vars.attachmentRenames).toEqual([
       { id: attachment.id, name: 'Смета на согласование.pdf' },
     ]);
-    expect(vars.attachments?.[0]?.name).toBe('Смета на согласование.pdf');
+    // Пузырь показывает имя окна, а восстановление упавшей отправки получает
+    // СЕРВЕРНОЕ имя + renames отдельно (кейс code-review #146).
+    expect(vars.optimisticAttachments?.[0]?.name).toBe('Смета на согласование.pdf');
+    expect(vars.attachments?.[0]?.name).toBe('scan.pdf');
   });
 
   it('имя не менялось — renames не уходят (лишний UPDATE на сервере не нужен)', () => {

@@ -30,8 +30,13 @@ export interface SendChatVars {
   stickerId?: string;
   /** Стикер не съедает черновик композера (набранный текст остаётся). */
   keepDraft?: boolean;
-  /** Превью для оптимистичного temp-сообщения (готовые загрузки/цитата). */
+  /** Серверные DTO готовых загрузок — для возврата упавшей отправки в
+   *  черновик (#248): имя здесь СЕРВЕРНОЕ, переименование окна восстанавливается
+   *  отдельно по attachmentRenames (иначе повтор не увидел бы diff имён). */
   attachments?: MessageAttachment[];
+  /** Превью для оптимистичного temp-сообщения: те же DTO с ИМЕНЕМ ОКНА
+   *  (#146) — пузырь сразу показывает выбранное пользователем имя. */
+  optimisticAttachments?: MessageAttachment[];
   reply?: ReplyPreview | null;
   /** «Важное» (#177): флаг летит в тело отправки и в оптимистичный
    *  temp-пузырь (бордер/чип видны сразу, I4). */
@@ -100,7 +105,7 @@ export function useSendChatMessage(conversationId: string, draftScope?: string) 
         threadRootId: vars.threadRootId ?? null,
         threadRepliesCount: 0,
         reactions: [],
-        attachments: vars.attachments ?? [],
+        attachments: vars.optimisticAttachments ?? vars.attachments ?? [],
         editedAt: null,
         readAt: null,
         readBy: [],
@@ -160,6 +165,7 @@ export function useSendChatMessage(conversationId: string, draftScope?: string) 
           reply: vars.reply ?? null,
           urgent: vars.urgent ?? false,
           attachments: vars.attachments ?? [],
+          attachmentRenames: vars.attachmentRenames,
         });
       } else if (draftScope && vars.reply) {
         useChatDrafts.getState().restoreReply(draftScope, vars.reply);

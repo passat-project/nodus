@@ -71,7 +71,10 @@ export function toSendVars(submit: ComposerSubmit): SendChatVars {
     text: submit.text,
     attachmentIds: ready.map(({ attachment }) => attachment.id),
     attachmentRenames: renames.length > 0 ? renames : undefined,
-    attachments: ready.map(({ item, attachment }) =>
+    // attachments — СЕРВЕРНЫЕ имена (возврат упавшей отправки не теряет
+    // diff переименования); имя окна — только в превью темп-пузыря.
+    attachments: ready.map(({ attachment }) => attachment),
+    optimisticAttachments: ready.map(({ item, attachment }) =>
       item.fileName.trim() && item.fileName.trim() !== attachment.name
         ? { ...attachment, name: item.fileName.trim() }
         : attachment,

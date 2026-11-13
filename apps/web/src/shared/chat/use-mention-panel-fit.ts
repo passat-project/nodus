@@ -58,11 +58,15 @@ export function placeMentionPanel(
     : { side, left, width, maxHeight, top: anchor.bottom + PANEL_GAP };
 }
 
-/** Верхняя граница панели (для якоря scroll-подстройки активного ряда). */
+/** Верхняя граница панели (для якоря scroll-подстройки активного ряда).
+ *  pointer-events: auto — ОБЯЗАТЕЛЕН в окне вложений: модальный Radix Dialog
+ *  ставит body.style.pointerEvents = 'none' (DismissableLayer), и портал в body
+ *  без явного auto не получал бы ни клики, ни наведение, ни колесо. */
 export function mentionPanelStyle(placement: MentionPanelPlacement | null): CSSProperties {
-  if (!placement) return { position: 'fixed', visibility: 'hidden' };
+  const base: CSSProperties = { position: 'fixed', pointerEvents: 'auto' };
+  if (!placement) return { ...base, visibility: 'hidden' };
   return {
-    position: 'fixed',
+    ...base,
     left: placement.left,
     width: placement.width,
     maxHeight: placement.maxHeight,
