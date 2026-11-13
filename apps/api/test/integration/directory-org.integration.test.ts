@@ -79,14 +79,14 @@ describe('оргструктура: частичная правка (#492)', () 
     await f.cleanup();
   });
 
-  it('переименование дочернего подразделения сохраняет родителя, руководителя, зама, вид и порядок', async () => {
+  it('переименование дочернего подразделения сохраняет родителя, руководителя, замов, вид и порядок', async () => {
     const parent = await createDepartment({ name: `Орг-родитель ${f.runId}`, kind: 'legal' });
     const child = await createDepartment({
       name: `Орг-ребёнок ${f.runId}`,
       parentId: parent.id,
       kind: 'legal',
       headId: f.users.employee.id,
-      deputyId: f.users.limited.id,
+      deputyIds: [f.users.limited.id, f.users.directory.id],
       sortOrder: 3,
     });
 
@@ -100,12 +100,22 @@ describe('оргструктура: частичная правка (#492)', () 
       parentId: parent.id,
       kind: 'legal',
       headId: f.users.employee.id,
-      deputyId: f.users.limited.id,
+      deputyIds: [f.users.limited.id, f.users.directory.id],
       sortOrder: 3,
     };
     expect(updated).toMatchObject(expected);
-    const stored = await f.prisma.department.findUniqueOrThrow({ where: { id: child.id } });
-    expect(stored).toMatchObject(expected);
+    expect(updated.deputies.map((deputy) => deputy.id)).toEqual(expected.deputyIds);
+
+    const stored = await f.prisma.department.findUniqueOrThrow({
+      where: { id: child.id },
+      include: { deputies: { orderBy: { sortOrder: 'asc' } } },
+    });
+    expect(stored).toMatchObject({
+      parentId: parent.id,
+      headId: f.users.employee.id,
+      kind: 'legal',
+    });
+    expect(stored.deputies.map((deputy) => deputy.userId)).toEqual(expected.deputyIds);
 
     expect(await lastEventPayload('department', child.id, 'directory.department.updated')).toEqual(
       expect.objectContaining({ changedFields: ['name'] }),
@@ -161,6 +171,71 @@ describe('оргструктура: частичная правка (#492)', () 
     expect(response.status).toBe(400);
     const error = apiErrorResponseSchema.parse(await response.json());
     expect(error.code).toBe(ErrorCode.VALIDATION_FAILED);
+  });
+
+  it('заместители: дубли отсечены, уволенный скрыт из выдачи и назначить его нельзя (#817)', async () => {
+    const department = await createDepartment({
+      name: `Орг-замы ${f.runId}`,
+      deputyIds: [f.users.limited.id, f.users.limited.id],
+    });
+    // Два одинаковых id в теле — одна связь (порядок первого вхождения).
+    expect(department.deputyIds).toEqual([f.users.limited.id]);
+
+    await f.prisma.user.update({
+      where: { id: f.users.limited.id },
+      data: { status: 'deactivated' },
+    });
+    try {
+      // Уволенный заместитель не отдаётся: ни в карточке, ни в дереве.
+      const hidden = await f.api(
+        f.users.directory,
+        'GET',
+        `/directory/departments/${department.id}`,
+      );
+      expect(hidden.status).toBe(200);
+      expect(departmentNodeSchema.parse(await hidden.json()).deputyIds).toEqual([]);
+      const tree = await f.api(
+        f.users.directory,
+        'GET',
+        '/directory/departments/tree?kind=management',
+      );
+      expect(tree.status).toBe(200);
+      const inTree = (await tree.json()) as { id: string; deputyIds: string[] }[];
+      expect(inTree.find((node) => node.id === department.id)?.deputyIds).toEqual([]);
+
+      // Связь-история в БД остаётся (чтение фильтрует, не удаляет).
+      const stored = await f.prisma.departmentDeputy.findMany({
+        where: { departmentId: department.id },
+      });
+      expect(stored.map((link) => link.userId)).toEqual([f.users.limited.id]);
+
+      // Сохранение состава без уволенного дополняет набор активным.
+      const kept = await patch(`/directory/departments/${department.id}`, {
+        deputyIds: [f.users.employee.id],
+      });
+      expect(kept.status).toBe(200);
+      expect(departmentNodeSchema.parse(await kept.json()).deputyIds).toEqual([
+        f.users.employee.id,
+      ]);
+      const pruned = await f.prisma.departmentDeputy.findMany({
+        where: { departmentId: department.id },
+      });
+      expect(pruned.map((link) => link.userId)).toEqual([f.users.employee.id]);
+
+      // Назначить уволенного ЗАНОВО — отказ валидации ссылок (#441).
+      const rejected = await patch(`/directory/departments/${department.id}`, {
+        deputyIds: [f.users.employee.id, f.users.limited.id],
+      });
+      expect(rejected.status).toBe(400);
+      const error = apiErrorResponseSchema.parse(await rejected.json());
+      expect(error.code).toBe(ErrorCode.DIRECTORY_REFERENCE_INVALID);
+      expect(error.details).toMatchObject({ field: 'deputyIds', reason: 'inactive' });
+    } finally {
+      await f.prisma.user.update({
+        where: { id: f.users.limited.id },
+        data: { status: 'active' },
+      });
+    }
   });
 
   it('правка без права directory.manage → 403', async () => {

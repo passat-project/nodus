@@ -16,8 +16,9 @@ const MAX_DEPTH = 32;
 
 /**
  * Реализация OrgStructureReader (ADR-0012): рекурсивные CTE по users
- * (manager_id) и departments (parent_id, head/deputy). Объём — штат
- * компании (~170), один запрос на чтение списка задач.
+ * (manager_id) и departments (parent_id, head, заместители из
+ * department_deputies). Объём — штат компании (~170), один запрос на чтение
+ * списка задач.
  */
 @Injectable()
 export class OrgStructureProvider implements OrgStructureReader {
@@ -28,7 +29,13 @@ export class OrgStructureProvider implements OrgStructureReader {
       WITH RECURSIVE
         led AS (
           SELECT id FROM departments
-          WHERE is_active AND (head_id = ${userId}::uuid OR deputy_id = ${userId}::uuid)
+          WHERE is_active AND (
+            head_id = ${userId}::uuid
+            OR EXISTS (
+              SELECT 1 FROM department_deputies dd
+              WHERE dd.department_id = departments.id AND dd.user_id = ${userId}::uuid
+            )
+          )
           UNION
           SELECT d.id FROM departments d JOIN led ON d.parent_id = led.id WHERE d.is_active
         ),

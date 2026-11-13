@@ -67,9 +67,9 @@ describe('схемы частичной правки не дописывают �
     expect(updatePositionSchema.safeParse({}).success).toBe(false);
   });
 
-  it('подразделение: явно присланные null очищают поле, отсутствующие — не трогают', () => {
+  it('подразделение: явно присланные null/[] очищают поле, отсутствующие — не трогают', () => {
     expect(updateDepartmentSchema.parse({ headId: null })).toEqual({ headId: null });
-    expect(updateDepartmentSchema.parse({ deputyId: null })).toEqual({ deputyId: null });
+    expect(updateDepartmentSchema.parse({ deputyIds: [] })).toEqual({ deputyIds: [] });
     expect(updateDepartmentSchema.parse({ parentId: null })).toEqual({ parentId: null });
   });
 });

@@ -20,26 +20,48 @@ import { ReferenceGuard } from './reference-guard.service.js';
 import { DepartmentsRepository, type DepartmentRow } from './departments.repository.js';
 import { UsersRepository } from './users.repository.js';
 
+/**
+ * Заместители-ДЕЙСТВУЮЩИЕ сотрудники (#817): уволенный в связи остаётся
+ * историей в БД, но наружу не отдаётся и «уже назначенным» не считается.
+ * Фильтр — здесь, в единственном месте маппинга узла: через `toNode` идут
+ * дерево, карточка и ответы create/update, поэтому правило нельзя забыть в
+ * одном из чтений. В репозитории фильтра нет намеренно: там нужен полный
+ * набор строк для замены связи при сохранении.
+ */
+function activeDeputies(row: DepartmentRow) {
+  return row.deputies.filter((deputy) => deputy.user.status === 'active');
+}
+
 function toNode(row: DepartmentRow, children: DepartmentNode[]): DepartmentNode {
+  const deputies = activeDeputies(row).map((deputy) => ({
+    id: deputy.userId,
+    displayName: deputy.user.displayName,
+  }));
   return {
     id: row.id,
     name: row.name,
     kind: row.kind,
     parentId: row.parentId,
     headId: row.headId,
-    deputyId: row.deputyId,
+    deputyIds: deputies.map((deputy) => deputy.id),
     sortOrder: row.sortOrder,
     isActive: row.isActive,
     headName: row.head?.displayName ?? null,
-    deputyName: row.deputy?.displayName ?? null,
+    deputies,
     memberCount: row._count.members,
     children,
   };
 }
 
+/** Набор заместителей без дублей: порядок первого вхождения = порядок связи.
+ *  Дубли в PATCH отсекаются здесь (UI их не создаёт, API зовут скриптом). */
+function uniqueIds(ids: readonly string[]): string[] {
+  return [...new Set(ids)];
+}
+
 /**
  * Оргструктура: дерево подразделений (управленческое и юридическое).
- * Узел — руководитель (head) и постоянный заместитель (deputy) — эпик M2.
+ * Узел — руководитель (head) и НЕСКОЛЬКО заместителей (deputy, #817) — эпик M2.
  * Перенос подразделения меняет роли сотрудников поддерева — под bind-правилом
  * #490 (появившиеся роли — только из прав актора).
  */
@@ -80,25 +102,31 @@ export class DepartmentsService {
     if (dto.parentId) {
       await this.ensureExists(dto.parentId);
     }
+    const { deputyIds, ...fields } = dto;
+    const deputies = uniqueIds(deputyIds);
     return this.tx.run(async (tx) => {
-      // Ссылки оргструктуры (#441): руководитель/зам — только активные
+      // Ссылки оргструктуры (#441): руководитель/замы — только активные
       // сотрудники, родитель — подразделение того же вида структуры. Внутри
       // транзакции — без окна TOCTOU между проверкой и записью. Замок
       // родителя сериализует с архивацией (непустой узел не архивируется).
       if (dto.parentId) {
         await this.departments.lockForUpdate(dto.parentId, tx);
       }
-      await this.references.ensureActiveUser(dto.headId, 'headId', tx);
-      await this.references.ensureActiveUser(dto.deputyId, 'deputyId', tx);
+      await this.references.ensureActiveUser(fields.headId, 'headId', tx);
+      await this.references.ensureActiveUsers(deputies, 'deputyIds', tx);
       await this.references.ensureDepartment(dto.parentId, dto.kind, 'parentId', tx);
-      const created = await this.departments.create(dto, tx);
+      const created = await this.departments.create(fields, tx);
+      if (deputies.length > 0) {
+        await this.departments.setDeputies(created.id, deputies, tx);
+      }
       await this.eventBus.emit(
         tx,
         DIRECTORY_EVENTS.DEPARTMENT_CREATED,
-        { departmentId: created.id, kind: created.kind },
+        { departmentId: created.id, kind: created.kind, deputyIds: deputies },
         { actorId, aggregateType: 'department', aggregateId: created.id },
       );
-      return toNode(created, []);
+      const row = deputies.length > 0 ? await this.departments.findById(created.id, tx) : created;
+      return toNode(row ?? created, []);
     });
   }
 
@@ -124,7 +152,6 @@ export class DepartmentsService {
         }
       }
       await this.references.ensureActiveUser(dto.headId, 'headId', tx);
-      await this.references.ensureActiveUser(dto.deputyId, 'deputyId', tx);
       await this.references.ensureDepartment(dto.parentId, current.kind, 'parentId', tx);
       // #544: цикл — под локом дерева и в той же транзакции (чтение через tx).
       if (dto.parentId !== undefined && dto.parentId !== null) {
@@ -145,8 +172,27 @@ export class DepartmentsService {
         throw DomainException.notFound('Department not found');
       }
       const locked = (await this.departments.findById(id, tx)) ?? current;
+      // Заместители (#817): набор — ПОЛНЫЙ (пустой массив снимает всех),
+      // отсутствие ключа его не трогает. «Уже назначенным» считается только
+      // ДЕЙСТВУЮЩИЙ зам: уволенный скрыт из выдачи, поэтому попытка вернуть его
+      // в набор — это НОВОЕ назначение и отказ `inactive` (нельзя обойти
+      // валидацию присланным id из старой строки связи).
+      const { deputyIds, ...fields } = dto;
+      const nextDeputies = deputyIds === undefined ? null : uniqueIds(deputyIds);
+      if (nextDeputies !== null) {
+        const currentIds = new Set(activeDeputies(locked).map((deputy) => deputy.userId));
+        await this.references.ensureActiveUsers(
+          nextDeputies.filter((deputyId) => !currentIds.has(deputyId)),
+          'deputyIds',
+          tx,
+        );
+      }
       const beforeByIds = await this.escalationSnapshot(id, locked, dto, tx);
-      const updated = await this.departments.update(id, dto, tx);
+      let updated = await this.departments.update(id, fields, tx);
+      if (nextDeputies !== null) {
+        await this.departments.setDeputies(id, nextDeputies, tx);
+        updated = (await this.departments.findById(id, tx)) ?? updated;
+      }
       if (beforeByIds !== null) {
         await this.guard.assertNoEscalationForUsers(
           actor,

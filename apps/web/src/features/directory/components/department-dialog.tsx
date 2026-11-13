@@ -19,6 +19,7 @@ import {
 
 import type { DepartmentOption } from '../../../shared/api/departments-list.js';
 import { useCreateDepartment, useUpdateDepartment } from '../api/directory-api.js';
+import { DepartmentDeputiesField } from './department-deputies-field.js';
 import { EmployeeCombobox } from './employee-combobox.js';
 
 /** Sentinel Radix Select для «без родителя» (пустая строка запрещена). */
@@ -34,6 +35,11 @@ function collectSubtreeIds(node: DepartmentNode): Set<string> {
   return ids;
 }
 
+/** Набор заместителей не изменился (порядок важен: он и есть sortOrder связи). */
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex min-w-0 flex-col gap-1.5">
@@ -44,11 +50,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /**
- * Создание/правка подразделения (#84): название + руководитель + зам
- * (автокомплит сотрудников). Тела — zod-схемы contracts (create/update
- * DepartmentDto), мутации оптимистичны (I4): карточка дерева появляется/
- * меняется до ответа, откат при ошибке. Kind = текущая структура вида:
- * подразделение рождается в ТОЙ структуре, из которой его создали.
+ * Создание/правка подразделения (#84): название + руководитель + ЗАМЕСТИТЕЛИ
+ * (автокомплит сотрудника и множественный выбор с чипами, #817). Тела —
+ * zod-схемы contracts (create/update DepartmentDto), мутации оптимистичны (I4):
+ * карточка дерева появляется/меняется до ответа, откат при ошибке.
+ * Kind = текущая структура вида: подразделение рождается в ТОЙ структуре,
+ * из которой его создали.
  */
 export function DepartmentDialog({
   open,
@@ -71,10 +78,12 @@ export function DepartmentDialog({
 }) {
   const create = useCreateDepartment(kind);
   const update = useUpdateDepartment(kind);
-  const [name, setName] = useState('');
-  const [headId, setHeadId] = useState<string | null>(null);
-  const [deputyId, setDeputyId] = useState<string | null>(null);
-  const [parentDraft, setParentDraft] = useState<string | null>(null);
+  const [name, setName] = useState(() => editing?.name ?? '');
+  const [headId, setHeadId] = useState<string | null>(() => editing?.headId ?? null);
+  const [deputyIds, setDeputyIds] = useState<string[]>(() => editing?.deputyIds ?? []);
+  const [parentDraft, setParentDraft] = useState<string | null>(() =>
+    editing ? editing.parentId : parentId,
+  );
 
   // Черновик сбрасывается/наполняется на каждом открытии (рендер-тайм, #45).
   const [prevOpen, setPrevOpen] = useState(open);
@@ -83,7 +92,7 @@ export function DepartmentDialog({
     if (open) {
       setName(editing?.name ?? '');
       setHeadId(editing?.headId ?? null);
-      setDeputyId(editing?.deputyId ?? null);
+      setDeputyIds(editing?.deputyIds ?? []);
       setParentDraft(editing ? editing.parentId : parentId);
     }
   }
@@ -91,15 +100,20 @@ export function DepartmentDialog({
   const valid = name.trim().length > 0;
   const pending = create.isPending || update.isPending;
   // Кандидаты — только активные: уволенного сервер не примет (валидация
-  // ссылок #441). Текущие значения правки не сбрасываются — их видно в полях.
-  // Текущий руководитель/зам может быть уволен — показываем его в кандидатах,
-  // чтобы имя не «пропадало» из поля (отправка идёт только при изменении).
+  // ссылок #441). Текущий руководитель может быть уволен — показываем его в
+  // кандидатах, чтобы имя не «пропадало» из поля (отправка идёт только при
+  // изменении). Заместителей пикер сам берёт из серверного поиска активных.
   const headCandidates = users.filter((user) => user.status === 'active' || user.id === headId);
-  const deputyCandidates = users.filter((user) => user.status === 'active' || user.id === deputyId);
   // Перенос: узел не может стать потомком сам себя — исключаем своё поддерево
   // (сервер дополнительно защищает от циклов).
   const excluded = editing ? collectSubtreeIds(editing) : new Set<string>();
   const parentOptions = departmentOptions.filter((option) => !excluded.has(option.id));
+
+  function toggleDeputy(userId: string) {
+    setDeputyIds((current) =>
+      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId],
+    );
+  }
 
   function submit() {
     if (!valid || pending) return;
@@ -109,7 +123,7 @@ export function DepartmentDialog({
       const patch: UpdateDepartmentDto = {};
       if (name.trim() !== editing.name) patch.name = name.trim();
       if (headId !== editing.headId) patch.headId = headId;
-      if (deputyId !== editing.deputyId) patch.deputyId = deputyId;
+      if (!sameIds(deputyIds, editing.deputyIds)) patch.deputyIds = deputyIds;
       if (parentDraft !== editing.parentId) patch.parentId = parentDraft;
       if (Object.keys(patch).length === 0) {
         onOpenChange(false);
@@ -119,7 +133,7 @@ export function DepartmentDialog({
       return;
     }
     create.mutate(
-      { name: name.trim(), kind, parentId: parentDraft, headId, deputyId, sortOrder: 0 },
+      { name: name.trim(), kind, parentId: parentDraft, headId, deputyIds, sortOrder: 0 },
       { onSuccess: () => onOpenChange(false) },
     );
   }
@@ -172,13 +186,13 @@ export function DepartmentDialog({
               users={headCandidates}
             />
           </Field>
-          <Field label={ui.employees.fieldDeputy}>
-            <EmployeeCombobox
-              value={deputyId}
-              onChange={setDeputyId}
-              ariaLabel={ui.employees.fieldDeputy}
-              placeholder={ui.employees.managerPlaceholder}
-              users={deputyCandidates}
+          <Field label={ui.employees.fieldDeputies}>
+            <DepartmentDeputiesField
+              selectedIds={deputyIds}
+              users={users}
+              assigned={editing?.deputies ?? []}
+              onToggle={toggleDeputy}
+              ariaLabel={ui.employees.fieldDeputies}
             />
           </Field>
         </div>

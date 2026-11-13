@@ -22,11 +22,11 @@ const node: DepartmentNode = {
   kind: 'management',
   parentId: null,
   headId: null,
-  deputyId: null,
+  deputyIds: [],
   sortOrder: 0,
   isActive: true,
   headName: null,
-  deputyName: null,
+  deputies: [],
   memberCount: 1,
   children: [],
 };

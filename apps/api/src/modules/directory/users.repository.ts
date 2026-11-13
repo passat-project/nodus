@@ -152,6 +152,19 @@ export class UsersRepository {
     });
   }
 
+  /** Ссылки-сотрудники пачкой (#817): проверка набора заместителей — один
+   *  запрос вместо N (набор приходит массивом и бывает длинным). */
+  async findRefs(
+    ids: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<{ id: string; status: 'active' | 'deactivated' }[]> {
+    if (ids.length === 0) return [];
+    return (tx ?? this.prisma).user.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      select: { id: true, status: true },
+    });
+  }
+
   /** Цепочка `managerId` вверх от сотрудника (валидация циклов руководителей
    *  #441): только прямые ссылки (без fallback на подразделения), защита от
    *  зацикливания visited-множеством. Глубина — системный предел 32 (тот же в

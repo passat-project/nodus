@@ -14,17 +14,17 @@ import { Input } from '@nodus/ui/components/input';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { activeStaffCount } from '../../../shared/lib/staff-count.js';
-import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { useArchiveDepartment } from '../api/directory-api.js';
+import { DepartmentLeaders } from './department-leaders.js';
+import { PersonRow } from './person-row.js';
 
 /**
  * Правая панель выбранного подразделения (#84, референс — правая колонка окна
- * структуры Битрикса): руководитель и зам (кликабельны — карточка сотрудника
- * в стеке, ADR-0009), сотрудники подразделения ТЕКУЩЕЙ структуры (поиск по
- * имени/должности), подчинённые руководителя по managerId — ВОЗМОЖНЫ из других
- * подразделений и это нормально (кейс «группы ГИПов», требование 1 #18).
+ * структуры Битрикса): руководитель и ВСЕ заместители (кликабельны — карточка
+ * сотрудника в стеке, ADR-0009), сотрудники подразделения ТЕКУЩЕЙ структуры
+ * (поиск по имени/должности), подчинённые руководителя по managerId — ВОЗМОЖНЫ
+ * из других подразделений и это нормально (кейс «группы ГИПов», требование 1 #18).
  * Вталкивающая колонка: обёртка монтирована постоянно (w-0), раскрытие —
  * transition-[width] 200ms (закон выдвижных поверхностей, навык nodus-ui-style);
  * вертикальная граница — структурная линия зоны (канон сепараторов 24.09).
@@ -56,7 +56,6 @@ export function DepartmentPanel({
   /** Право `directory.manage`: админ-действия панели (без права — просмотр). */
   canManage: boolean;
 }) {
-  const openCard = useOpenCard();
   const archive = useArchiveDepartment(kind);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -86,31 +85,6 @@ export function DepartmentPanel({
     () => (shown?.headId ? users.filter((u) => u.managerId === shown.headId) : []),
     [shown, users],
   );
-
-  function personRow(person: UserListItem) {
-    return (
-      <button
-        key={person.id}
-        type="button"
-        onClick={(e) =>
-          openCard({ kind: 'employee', id: person.id }, e.currentTarget.getBoundingClientRect())
-        }
-        className="flex items-center gap-2.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-accent"
-      >
-        <PersonAvatar
-          name={person.displayName}
-          avatarUrl={person.avatarUrl}
-          className="size-6 shrink-0"
-        />
-        <span className="min-w-0">
-          <span className="block truncate text-sm">{person.displayName}</span>
-          <span className="block truncate text-xs text-muted-foreground">
-            {person.positionName ?? ''}
-          </span>
-        </span>
-      </button>
-    );
-  }
 
   return (
     <div
@@ -183,56 +157,12 @@ export function DepartmentPanel({
                 <X className="size-4" />
               </Button>
             </div>
-            <div className="flex flex-col gap-3">
-              <section className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-muted-foreground">
-                  {ui.employees.panelHead}
-                </span>
-                {shown.headId && shown.headName ? (
-                  personRow(
-                    users.find((u) => u.id === shown.headId) ?? {
-                      id: shown.headId,
-                      displayName: shown.headName,
-                      status: 'active',
-                      avatarUrl: null,
-                      positionName: null,
-                      departmentName: null,
-                      email: '',
-                      managerId: null,
-                      departmentId: null,
-                      legalDepartmentId: null,
-                      positionId: null,
-                      legalPositionId: null,
-                    },
-                  )
-                ) : (
-                  <span className="px-2 text-xs text-muted-foreground">{ui.common.notSet}</span>
-                )}
-              </section>
-              {shown.deputyName && (
-                <section className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {ui.employees.panelDeputy}
-                  </span>
-                  {personRow(
-                    users.find((u) => u.id === shown.deputyId) ?? {
-                      id: shown.deputyId ?? '',
-                      displayName: shown.deputyName,
-                      status: 'active',
-                      avatarUrl: null,
-                      positionName: null,
-                      departmentName: null,
-                      email: '',
-                      managerId: null,
-                      departmentId: null,
-                      legalDepartmentId: null,
-                      positionId: null,
-                      legalPositionId: null,
-                    },
-                  )}
-                </section>
-              )}
-            </div>
+            <DepartmentLeaders
+              headId={shown.headId}
+              headName={shown.headName}
+              deputies={shown.deputies}
+              users={users}
+            />
             <section className="flex min-h-0 flex-1 flex-col gap-2">
               {/* Счётчик — штат (#723): строки уволенных остаются в списке
                   (их карточки открываются), но в число не входят — как
@@ -249,7 +179,11 @@ export function DepartmentPanel({
               </div>
               <div className="min-h-0 flex-1 overflow-auto">
                 {members.length > 0 ? (
-                  <div className="flex flex-col gap-0.5">{members.map(personRow)}</div>
+                  <div className="flex flex-col gap-0.5">
+                    {members.map((person) => (
+                      <PersonRow key={person.id} person={person} />
+                    ))}
+                  </div>
                 ) : (
                   <span className="px-2 text-sm text-muted-foreground">
                     {ui.employees.emptyDepartment}
@@ -260,7 +194,11 @@ export function DepartmentPanel({
             {reports.length > 0 && (
               <section className="flex shrink-0 flex-col gap-1.5">
                 <NodeLabel label={ui.employees.panelReports} count={activeStaffCount(reports)} />
-                <div className="flex flex-col gap-0.5">{reports.map(personRow)}</div>
+                <div className="flex flex-col gap-0.5">
+                  {reports.map((person) => (
+                    <PersonRow key={person.id} person={person} />
+                  ))}
+                </div>
               </section>
             )}
           </>

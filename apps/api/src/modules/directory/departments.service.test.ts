@@ -24,11 +24,10 @@ function row(
     kind: 'management',
     parentId,
     headId: null,
-    deputyId: null,
     sortOrder: 0,
     isActive: true,
     head: null,
-    deputy: null,
+    deputies: [],
     _count: { members: 0 },
     ...overrides,
   };
@@ -42,12 +41,13 @@ describe('DepartmentsService', () => {
     lockTree: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    setDeputies: vi.fn(),
     findParentChain: vi.fn(),
     findSubtreeIds: vi.fn(),
     findRef: vi.fn(),
     countActiveChildren: vi.fn(),
   };
-  const users = { findActiveIdsByDepartmentIds: vi.fn(), findRef: vi.fn() };
+  const users = { findActiveIdsByDepartmentIds: vi.fn(), findRef: vi.fn(), findRefs: vi.fn() };
   const positions = { findRef: vi.fn() };
   const roles = { permissionsByIds: vi.fn(), lockForUpdate: vi.fn(), lockByCodeForUpdate: vi.fn() };
   const membership = { effectiveRoleIds: vi.fn() };
@@ -103,7 +103,7 @@ describe('DepartmentsService', () => {
             kind: 'management',
             parentId: null,
             headId: 'ghost',
-            deputyId: null,
+            deputyIds: [],
             sortOrder: 0,
           },
           'admin-1',
@@ -142,12 +142,19 @@ describe('DepartmentsService', () => {
       expect(departments.update).not.toHaveBeenCalled();
     });
 
-    it('переименование пишет только присланное поле: родитель, руководитель, зам, вид и порядок не трогаются (#492)', async () => {
+    it('переименование пишет только присланное поле: родитель, руководитель, замы, вид и порядок не трогаются (#492)', async () => {
+      const deputies = [
+        {
+          userId: 'deputy-1',
+          sortOrder: 0,
+          user: { displayName: 'Зам Один', status: 'active' as const },
+        },
+      ];
       departments.findById.mockResolvedValue(
         row('dep', 'parent', 'Старое имя', {
           kind: 'legal',
           headId: 'head-1',
-          deputyId: 'deputy-1',
+          deputies,
           sortOrder: 5,
         }),
       );
@@ -155,7 +162,7 @@ describe('DepartmentsService', () => {
         row('dep', 'parent', 'Новое имя', {
           kind: 'legal',
           headId: 'head-1',
-          deputyId: 'deputy-1',
+          deputies,
           sortOrder: 5,
         }),
       );
@@ -167,6 +174,8 @@ describe('DepartmentsService', () => {
       // Переименование не меняет структуру — дерево не лочится и цепь не читается.
       expect(departments.lockTree).not.toHaveBeenCalled();
       expect(departments.findParentChain).not.toHaveBeenCalled();
+      // Набор заместителей не прислан — связь не переписывается вовсе.
+      expect(departments.setDeputies).not.toHaveBeenCalled();
       expect(eventBus.emit).toHaveBeenCalledWith(
         'tx-handle',
         'directory.department.updated',
@@ -177,7 +186,7 @@ describe('DepartmentsService', () => {
         parentId: 'parent',
         kind: 'legal',
         headId: 'head-1',
-        deputyId: 'deputy-1',
+        deputyIds: ['deputy-1'],
         sortOrder: 5,
         name: 'Новое имя',
       });
@@ -283,17 +292,6 @@ describe('DepartmentsService', () => {
       expect(departments.findParentChain).not.toHaveBeenCalled();
       expect(eventBus.emit).toHaveBeenCalled();
       expect(roles.permissionsByIds).not.toHaveBeenCalled();
-    });
-
-    it('зам подразделения неактивен → 400 inactive (#441)', async () => {
-      departments.findById.mockResolvedValue(row('dep', null));
-      users.findRef.mockResolvedValue({ id: 'u-1', status: 'deactivated' });
-
-      await expect(service.update('dep', { deputyId: 'u-1' }, actor())).rejects.toMatchObject({
-        code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
-        details: { field: 'deputyId', reason: 'inactive' },
-      });
-      expect(departments.update).not.toHaveBeenCalled();
     });
 
     it('очистка руководителя (null) проходит без проверки ссылки (#441)', async () => {
