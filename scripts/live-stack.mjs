@@ -245,7 +245,14 @@ async function up(mode, mock) {
   if (mode === 'preview') {
     // Прямой vite build: non-mock явно (turbo-кэш тоже видит env — turbo.json —
     // но здесь не хотим пересобирать остальной граф).
-    run('pnpm --filter @nodus/web exec vite build', [], { ...process.env, VITE_API_MOCK: 'false' });
+    // VITE_SANDBOX_DEV_UI (#257): страница дизайн-системы `/dev/ui` нужна
+    // владельцу на песочнице (preview `:4173`) — в прод-сборку она не попадает:
+    // флаг выставляется только здесь, прод-CI/docker его не получает.
+    run('pnpm --filter @nodus/web exec vite build', [], {
+      ...process.env,
+      VITE_API_MOCK: 'false',
+      VITE_SANDBOX_DEV_UI: '1',
+    });
   }
 
   const pids = {

@@ -210,6 +210,41 @@ const automationRoute = createRoute({
   component: AutomationPage,
 });
 
+/**
+ * Dev-галерея дизайн-системы (#257) — единственный экран `/dev/ui`.
+ *
+ * Флаг сборки — в ОДНОМ месте: `devUiEnabled`. Экран нужен владельцу живым на
+ * песочнице (preview-сборка `:4173`), поэтому кроме dev-режима Vite он
+ * включается флагом `VITE_SANDBOX_DEV_UI=1`, который выставляет ТОЛЬКО
+ * `scripts/live-stack.mjs`. Прод (CI/docker) флага не получает: `vite.config`
+ * превращает его в статичный `'0'`, выражение сворачивается в `false`, и
+ * rollup выкидывает и фабрику маршрута, и её lazy-импорт (проверка — grep по
+ * `apps/web/dist`: `/dev/ui`, `DevUiPage`, `dev-ui`; строки экрана — отдельный
+ * экспорт i18n, отсекается тем же деревом). При выключенном флаге
+ * `devUiRoute` = null → спред в дереве ниже ничего не добавляет.
+ */
+function createDevUiRoute() {
+  const DevUiPage = pageLoader(() =>
+    import('./dev-ui/dev-ui-page.js').then((m) => ({ default: m.DevUiPage })),
+  );
+  return createRoute({
+    getParentRoute: () => shellRoute,
+    path: '/dev/ui',
+    component: DevUiPage,
+  });
+}
+
+/**
+ * Условие включения экрана — ОДНО инлайн-выражение (без вызова функции):
+ * только так Vite/rollup сворачивают его до литерала и вырезают маршрут с
+ * чанком из прод-бандла. Значения приходят статично: `DEV` и
+ * `VITE_SANDBOX_DEV_UI` (последний задаёт `vite.config.ts` из process.env —
+ * `'1'` только у сборки песочницы). Проверка обеих веток — route-тесты в
+ * `router-dev.test.ts` (подмена env) и grep по `apps/web/dist` в гейтах.
+ */
+const devUiEnabled = import.meta.env.DEV || import.meta.env.VITE_SANDBOX_DEV_UI === '1';
+const devUiRoute = devUiEnabled ? createDevUiRoute() : null;
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   shellRoute.addChildren([
@@ -223,6 +258,8 @@ const routeTree = rootRoute.addChildren([
     chatConversationRoute,
     employeesRoute,
     automationRoute,
+    // Dev-галерея (#257): в прод-сборке `devUiRoute` = null → пустой спред.
+    ...(devUiRoute ? [devUiRoute] : []),
   ]),
 ]);
 

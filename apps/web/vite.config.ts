@@ -55,7 +55,18 @@ export default defineConfig(({ command, mode }) => {
     // 04.10; gotchas «Изоляция песочницы»).
     define:
       command === 'build'
-        ? { 'import.meta.env.VITE_API_MOCK': JSON.stringify('false') }
+        ? {
+            'import.meta.env.VITE_API_MOCK': JSON.stringify('false'),
+            // Dev-галерея дизайн-системы (#257): флаг статичный ('1'/'0'),
+            // чтобы выражение в router.tsx свернулось и маршрут с чанком
+            // вырезались из прод-бандла. Включает его ТОЛЬКО сборка песочницы
+            // (`scripts/live-stack.mjs`, preview `:4173`): владелец смотрит
+            // страницу там; прод-CI/docker флаг не выставляет. Читаем
+            // process.env, а не .env: значение из файла не должно утечь в прод.
+            'import.meta.env.VITE_SANDBOX_DEV_UI': JSON.stringify(
+              process.env.VITE_SANDBOX_DEV_UI?.trim() === '1' ? '1' : '0',
+            ),
+          }
         : undefined,
     plugins: [tailwindcss(), react(), pdfjsWasmAssets()],
     // #533: компонентные jsdom-тесты под параллельным `turbo test` (api+web+
