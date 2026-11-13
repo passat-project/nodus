@@ -34,6 +34,34 @@ export function isAtBottom(viewport: HTMLElement, tolerance = NEAR_BOTTOM_PX): b
   return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= tolerance;
 }
 
+/**
+ * Целевой scrollTop при изменении высоты вьюпорта ленты (#847): поле ввода
+ * растёт — вьюпорт сжимается, низ ленты должен остаться видимым; поле
+ * уменьшилось — низ следует за полем. Возвращаем АБСОЛЮТНЫЙ «самый низ»
+ * (`scrollHeight - clientHeight`), а не приращение: при дробных высотах
+ * (масштаб ОС 125 %) накопление дельт по кадрам оставляло щель в пару
+ * пикселей — стрелка «вниз» появлялась после удаления текста.
+ *
+ * «У низа» решается по ГЕОМЕТРИИ ДО изменения (`prevClientHeight`): рост/
+ * сжатие вьюпорта само по себе рождает scroll-событие, которое иначе успевает
+ * пометить «не у низа» и отменяет пин (баг при очистке поля). Не у низа —
+ * не трогаем: чтение истории рост поля сдвигать не должен. Чистая функция.
+ */
+export function pinnedScrollTop(
+  {
+    prevClientHeight,
+    clientHeight,
+    scrollHeight,
+    scrollTop,
+  }: { prevClientHeight: number; clientHeight: number; scrollHeight: number; scrollTop: number },
+  tolerance = NEAR_BOTTOM_PX,
+): number | null {
+  if (prevClientHeight === clientHeight) return null;
+  const atBottomBefore = scrollHeight - scrollTop - prevClientHeight <= tolerance;
+  if (!atBottomBefore) return null;
+  return Math.max(0, scrollHeight - clientHeight);
+}
+
 export function useIncomingFollow({
   scope,
   items,
@@ -54,12 +82,35 @@ export function useIncomingFollow({
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const onScroll = () => {
+    const onScroll = (): void => {
       atBottomRef.current = isAtBottom(viewport);
     };
     onScroll();
     viewport.addEventListener('scroll', onScroll, { passive: true });
-    return () => viewport.removeEventListener('scroll', onScroll);
+    // Поле ввода выросло/уменьшилось → высота вьюпорта изменилась. Пока
+    // пользователь у низа, лента остаётся на дне: низ сообщений не уезжает
+    // под композер, стрелка «вниз» не появляется (#847). RO-колбэк приходит
+    // после раскладки и до отрисовки — сдвиг не виден кадром.
+    let prevClientHeight = viewport.clientHeight;
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            const height = viewport.clientHeight;
+            const top = pinnedScrollTop({
+              prevClientHeight,
+              clientHeight: height,
+              scrollHeight: viewport.scrollHeight,
+              scrollTop: viewport.scrollTop,
+            });
+            prevClientHeight = height;
+            if (top !== null) viewport.scrollTop = top;
+          });
+    observer?.observe(viewport);
+    return () => {
+      viewport.removeEventListener('scroll', onScroll);
+      observer?.disconnect();
+    };
   }, [viewportRef]);
 
   const prevRef = useRef<{ id: string; authorId: string } | null>(null);

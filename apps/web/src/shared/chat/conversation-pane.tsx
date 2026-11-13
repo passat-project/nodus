@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { ui } from '@nodus/contracts';
 import {
   MessageScroller,
@@ -30,6 +31,8 @@ import { ScrollEndResponder } from './scroll-end-responder.js';
 import { useHistoryLoader } from './use-history-loader.js';
 import { useFeedViewportRead } from './use-viewport-read.js';
 import { useIncomingFollow } from './use-incoming-follow.js';
+import { useLocalReadSeq } from './use-local-read-seq.js';
+import { useUnreadDivider } from './use-unread-divider.js';
 import { ConversationViewsLine } from './views-line.js';
 import { UnreadAnchor } from './use-unread-anchor.js';
 import { selectionComposerProps, useFeedSelection } from './use-feed-selection.js';
@@ -217,9 +220,6 @@ function ConversationFeed({
     selectableIds: selection.orderedIds,
     selectionActive: selection.selectionActive,
   });
-  // Квитанции просмотров (#102 р.2): seq самой новой видимой строки ленты —
-  // IO по строкам, root=скроллер (механика — use-viewport-read.ts).
-  useFeedViewportRead(conversationId, viewportRef, items);
 
   // Якорь открытия (раунд 4): jump-запрос побеждает непрочитанных, иначе
   // unreadCount > 0 → якорь на первом непрочитанном; решение — на маунте.
@@ -236,6 +236,17 @@ function ConversationFeed({
   const releaseAnchor = useCallback(() => {
     requestAnimationFrame(() => requestAnimationFrame(() => setAnchoring(false)));
   }, []);
+  // Локальный знак прочтения ленты (#845): видимое/добавленное у низа лента
+  // прочла, не дожидаясь троттла квитанций и медленного рефеча списка.
+  const { localReadSeq, markSeen } = useLocalReadSeq({
+    items,
+    viewportRef,
+    enabled: !anchoring,
+  });
+  // Квитанции просмотров (#102 р.2): seq самой новой видимой строки ленты —
+  // IO по строкам, root=скроллер (механика — use-viewport-read.ts); тот же
+  // «видел до» двигает локальный знак для границы непрочитанных (#845).
+  useFeedViewportRead(conversationId, viewportRef, items, { onSeen: markSeen });
   // Догон входящих (#132): только после якоря и только «у низа» (Telegram).
   useIncomingFollow({
     scope,
@@ -245,14 +256,29 @@ function ConversationFeed({
     enabled: !anchoring,
   });
 
-  // Разделитель непрочитанных: НАД первым непрочитанным (даже внутри серии);
-  // ЖИВОЙ по watermark: прочитал всё — исчезает сразу (вердикт раунда 4),
-  // по мере чтения спускается к оставшемуся хвосту (модель Telegram).
-  const myLastReadSeq = conversation?.myLastReadSeq ?? null;
-  const firstUnreadId = useMemo(() => {
-    if (myLastReadSeq === null || (conversation?.unreadCount ?? 0) === 0) return null;
-    return items.find((m) => m.seq > myLastReadSeq && !m.deletedAt)?.id ?? null;
-  }, [items, myLastReadSeq, conversation?.unreadCount]);
+  // Плашка непрочитанных (#845): в ПОКОЕ статична — прочтение, входящие и
+  // своя отправка её не двигают, поэтому лента не дёргается. На живую
+  // границу она переставляется только по `syncToLive` — в момент анимации
+  // прокрутки кнопкой «вниз» (движение маскируется движением ленты), и к
+  // концу анимации уже стоит на новом месте. Механика — use-unread-divider.ts.
+  const {
+    dividerId: firstUnreadId,
+    openReadSeq,
+    syncToLive,
+  } = useUnreadDivider({
+    items,
+    unreadCount: conversation?.unreadCount ?? 0,
+    serverReadSeq: conversation?.myLastReadSeq ?? null,
+    localReadSeq,
+    meId: me?.id,
+  });
+  // Перед навигацией стрелкой: переставить плашку на живую границу ДО старта
+  // анимации (flushSync — DOM уже в новом состоянии). Плавный скролл
+  // (`scroll-jump`) пересчитывает цель каждый кадр по живой геометрии, поэтому
+  // к концу анимации плашка на месте, лента отрисована, раскладка не меняется.
+  const handleBeforeNavigate = useCallback(() => {
+    flushSync(() => syncToLive());
+  }, [syncToLive]);
 
   // Протокол хоста ленты: отправка/правка, submit окна вложений, ↑-правка
   // последнего своего — use-feed-submit.ts.
@@ -270,10 +296,11 @@ function ConversationFeed({
         onFiles={(files) => addFiles(scope, files)}
       >
         <MessageScrollerProvider autoScroll={!anchoring}>
+          {/* Якорь — по знаку, снятому на маунте (та же точка, что у плашки). */}
           <UnreadAnchor
             items={items}
             isLoading={isLoading}
-            anchorSeq={anchoring && open.jump === null ? myLastReadSeq : null}
+            anchorSeq={anchoring && open.jump === null ? openReadSeq : null}
             jump={anchoring ? open.jump : null}
             viewportRef={viewportRef}
             onAnchored={releaseAnchor}
@@ -396,7 +423,7 @@ function ConversationFeed({
                 (модель Telegram, раунд 4), без — в конец; чип-счётчик
                 непрочитанных — #132. */}
             <FeedScrollerButton
-              firstUnreadId={firstUnreadId}
+              onBeforeNavigate={handleBeforeNavigate}
               viewportRef={viewportRef}
               unreadCount={conversation?.unreadCount ?? 0}
             />
