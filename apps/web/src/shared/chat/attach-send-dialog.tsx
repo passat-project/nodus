@@ -258,7 +258,10 @@ export function AttachSendDialogHost() {
               scope={scope}
               item={item}
               dragging={draggingId === item.localId}
-              actions={editMode}
+              /* Меню строки — в ОБОИХ режимах (#146): «Переименовать файл»
+                 нужен и в окне отправки (имя уходит в attachmentRenames
+                 отправки), «Заменить вложение» работает на любом составе. */
+              actions
               onRenameMode={handleRenameMode}
               onReplace={() => {
                 // «Заменить вложение» (#188): выбор файла подменяет цель
@@ -296,6 +299,7 @@ export function AttachSendDialogHost() {
               active={mentions.autocomplete.active}
               onHover={mentions.autocomplete.setActive}
               onPick={mentions.pick}
+              anchorRef={captionRef}
             />
           ) : null}
           <MentionFieldOverlay

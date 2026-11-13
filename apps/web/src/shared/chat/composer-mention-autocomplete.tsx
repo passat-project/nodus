@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+  type RefObject,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { Paginated, UserListItem, UserRef } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -16,6 +24,7 @@ import {
   type MentionCandidate,
 } from './composer-mentions.js';
 import { useConversationMembers } from './manage-api.js';
+import { scrollActiveMentionIntoView, useMentionPanelFit } from './use-mention-panel-fit.js';
 
 /**
  * Автокомплит @упоминаний композера (#176): «@» на границе слова открывает
@@ -168,23 +177,37 @@ export function mentionAutocompleteKeydown(
   }
 }
 
-/** Панель-список кандидатов: absolute над строкой ввода, НЕ перехватывает
- *  фокус (клики по строкам — mousedown с preventDefault, каретка в поле). */
+/** Панель-список кандидатов: ПОРТАЛ в body поверх окна, НЕ перехватывает
+ *  фокус (клики по строкам — mousedown с preventDefault, каретка в поле).
+ *  Высота — 9 рядов (360px), внутри скролл; место — flip/size/shift по
+ *  вьюпорту (use-mention-panel-fit, #844). Портал — чтобы в окне вложений
+ *  панель не обрезалась overflow DialogContent и не сжималась до 2–3 рядов:
+ *  логика ОДНА с композером, разницы контейнеров не видно. Активный ряд
+ *  подскролливается (↑/↓ с заворотом). */
 export function MentionAutocompletePanel({
   candidates,
   active,
   onHover,
   onPick,
+  anchorRef,
 }: {
   candidates: MentionCandidate[];
   active: number;
   onHover: (index: number) => void;
   onPick: (index: number) => void;
+  /** Поле, над которым панель: от его rect считается доступная высота. */
+  anchorRef?: RefObject<HTMLElement | null>;
 }) {
-  return (
+  const { listRef, style } = useMentionPanelFit(anchorRef);
+  useLayoutEffect(() => {
+    scrollActiveMentionIntoView(listRef.current, active);
+  }, [active, candidates.length, listRef]);
+  return createPortal(
     <div
+      ref={listRef}
       role="listbox"
-      className="absolute bottom-full left-0 z-20 mb-1.5 w-full max-w-105 overflow-hidden rounded-2xl border border-border bg-popover p-1 text-popover-foreground shadow-sm"
+      style={style}
+      className="z-[80] overflow-x-hidden overflow-y-auto overscroll-contain rounded-2xl border border-border bg-popover p-1 text-popover-foreground shadow-sm"
     >
       {candidates.length === 0 ? (
         <span className="block px-3 py-2 text-sm text-muted-foreground">
@@ -236,6 +259,7 @@ export function MentionAutocompletePanel({
           </span>
         ))
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

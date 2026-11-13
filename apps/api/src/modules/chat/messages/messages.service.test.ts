@@ -391,7 +391,7 @@ describe('MessagesService', () => {
         }),
         TX,
       );
-      expect(repo.claimAttachments).toHaveBeenCalledWith('msg-new', ['att-1'], ME, TX);
+      expect(repo.claimAttachments).toHaveBeenCalledWith('msg-new', ['att-1'], ME, TX, []);
       expect(conversations.clearDraft).toHaveBeenCalledWith(CONV, ME, TX);
       expect(conversations.unsnooze).toHaveBeenCalledWith(CONV, ME, TX);
       // Активность раскрывает беседу скрывшим участникам — той же tx (#103).
@@ -415,6 +415,20 @@ describe('MessagesService', () => {
         },
         expect.objectContaining({ actorId: ME, aggregateType: 'conversation', aggregateId: CONV }),
       );
+    });
+
+    it('переименования окна отправки уходят в claim (#146): имя применяется до DTO/события', async () => {
+      const body: SendMessageBody = {
+        text: 'Файл',
+        attachmentIds: ['att-1'],
+        attachmentRenames: [{ id: 'att-1', name: 'Смета на согласование.pdf' }],
+      };
+
+      await service.send(ACTOR, CONV, body, 'key-6');
+
+      expect(repo.claimAttachments).toHaveBeenCalledWith('msg-new', ['att-1'], ME, TX, [
+        { id: 'att-1', name: 'Смета на согласование.pdf' },
+      ]);
     });
   });
 

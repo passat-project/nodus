@@ -21,6 +21,10 @@ export interface SendChatVars {
   replyToId?: string | null;
   quoteText?: string | null;
   attachmentIds?: string[];
+  /** Переименования файлов в окне отправки (#146): имя окна ≠ имя серверной
+   *  записи (загрузка стартовала раньше правки). Уходят в тело отправки —
+   *  сервер применяет их в транзакции claim, до DTO/события. */
+  attachmentRenames?: Array<{ id: string; name: string }>;
   /** Стикер-отправка (#143): id стикера из пака; превью-вложение — в
    *  attachments (kind='sticker' с метаданными пака). */
   stickerId?: string;
@@ -62,6 +66,7 @@ export function useSendChatMessage(conversationId: string, draftScope?: string) 
           body: {
             text: vars.text,
             attachmentIds: vars.attachmentIds,
+            attachmentRenames: vars.attachmentRenames,
             stickerId: vars.stickerId,
             replyToId: vars.replyToId ?? null,
             quoteText: vars.quoteText ?? null,

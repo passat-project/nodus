@@ -51,6 +51,7 @@ export function ComposerTextField({
           active={mentions.autocomplete.active}
           onHover={mentions.autocomplete.setActive}
           onPick={mentions.pick}
+          anchorRef={inputRef}
         />
       ) : null}
       <MentionFieldOverlay

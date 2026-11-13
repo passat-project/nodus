@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { PendingAttachment } from './chat-drafts.js';
 import type { StickerSubmitPayload } from './sticker-api.js';
 import { toSendVars } from './composer-submit.js';
 
@@ -82,6 +83,57 @@ describe('toSendVars: стикер-ветка (#143)', () => {
     expect(vars.quoteText).toBe('фрагмент');
     expect(vars.reply).toMatchObject({ id: reply.messageId, quoteText: 'фрагмент' });
     expect(vars.keepDraft).toBe(true);
+  });
+});
+
+describe('toSendVars: переименования окна отправки (#146)', () => {
+  const attachment = {
+    id: '55555555-5555-4555-8555-555555555555',
+    fileId: '66666666-6666-4666-8666-666666666666',
+    name: 'scan.pdf',
+    size: 10,
+    mime: 'application/pdf',
+    kind: 'file' as const,
+    url: null,
+    thumbnailUrl: null,
+    previewKind: 'file' as const,
+    pdfUrl: null,
+    width: null,
+    height: null,
+  };
+  const ready = (fileName: string): PendingAttachment => ({
+    localId: 'local-1',
+    fileName,
+    mime: 'application/pdf',
+    size: 10,
+    progress: 1,
+    status: 'ready',
+    attachment,
+    objectUrl: null,
+  });
+
+  it('имя окна ≠ серверного → attachmentRenames + имя в превью темп-сообщения', () => {
+    const vars = toSendVars({
+      text: '',
+      attachments: [ready('  Смета на согласование.pdf  ')],
+      reply: null,
+      edit: null,
+    });
+    expect(vars.attachmentIds).toEqual([attachment.id]);
+    expect(vars.attachmentRenames).toEqual([
+      { id: attachment.id, name: 'Смета на согласование.pdf' },
+    ]);
+    expect(vars.attachments?.[0]?.name).toBe('Смета на согласование.pdf');
+  });
+
+  it('имя не менялось — renames не уходят (лишний UPDATE на сервере не нужен)', () => {
+    const vars = toSendVars({
+      text: '',
+      attachments: [ready('scan.pdf')],
+      reply: null,
+      edit: null,
+    });
+    expect(vars.attachmentRenames).toBeUndefined();
   });
 });
 

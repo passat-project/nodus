@@ -57,11 +57,25 @@ export function toSendVars(submit: ComposerSubmit): SendChatVars {
       keepDraft: true,
     };
   }
-  const ready = submit.attachments.flatMap((a) => (a.attachment ? [a.attachment] : []));
+  const ready = submit.attachments.flatMap((item) =>
+    item.attachment ? [{ item, attachment: item.attachment }] : [],
+  );
+  // Переименование в окне отправки (#146): файл уже загружен с исходным
+  // именем — новое имя уходит отдельным списком (сервер применит в
+  // транзакции claim); превью темп-сообщения тоже несёт имя окна.
+  const renames = ready.flatMap(({ item, attachment }) => {
+    const name = item.fileName.trim();
+    return name.length > 0 && name !== attachment.name ? [{ id: attachment.id, name }] : [];
+  });
   return {
     text: submit.text,
-    attachmentIds: ready.map((a) => a.id),
-    attachments: ready,
+    attachmentIds: ready.map(({ attachment }) => attachment.id),
+    attachmentRenames: renames.length > 0 ? renames : undefined,
+    attachments: ready.map(({ item, attachment }) =>
+      item.fileName.trim() && item.fileName.trim() !== attachment.name
+        ? { ...attachment, name: item.fileName.trim() }
+        : attachment,
+    ),
     replyToId: submit.reply?.messageId ?? null,
     quoteText: submit.reply?.quoteText ?? null,
     reply: submit.reply ? toReplyPreview(submit.reply) : null,
