@@ -200,6 +200,13 @@
      14.09.2026: «фон каналов один, чатов другой — зоопарк»); значение =
      ступень muted, но семантически отдельный токен зоны. */
   --chat-zone: #edebe8;
+  /* Обои зоны чата (#849, ADR-0040): палитра статичного слоя — токены, не
+     литералы в правиле. Плитка-ассет крашена в SVG (background-image не умеет
+     currentColor) — это задокументированное исключение статичного файла. */
+  --chat-wallpaper-wash: rgb(75 87 200 / 0.08);
+  --chat-wallpaper-paper-from: #f2ede6;
+  --chat-wallpaper-paper-mid: #eae4dc;
+  --chat-wallpaper-paper-to: #e1dad1;
   /* Мягкая рама в светлой теме почти сливалась с периметром — контур панели
      даёт мягкая тень, как в рефе «реф_белая тема_1.png» (вердикт 14.09.2026). */
   --frame-shadow: 0 24px 70px -30px rgb(22 35 58 / 0.3), 0 6px 22px -10px rgb(22 35 58 / 0.12);
@@ -359,6 +366,13 @@
      не цветом: периметр #0a0a0b < зона < карточка #121214 — композер-островок
      и список бесед читаются, граница рамы не исчезает. */
   --chat-zone: #0e0e10;
+  --chat-wallpaper-scrim: rgb(10 10 11 / 0.5);
+  --chat-wallpaper-violet: rgb(91 75 158 / 0.22);
+  --chat-wallpaper-rose: rgb(194 74 120 / 0.16);
+  --chat-wallpaper-orange: rgb(240 122 58 / 0.2);
+  --chat-wallpaper-base-from: #121016;
+  --chat-wallpaper-base-mid: #0d0c10;
+  --chat-wallpaper-base-to: #0a0a0b;
   --frame-shadow: none;
   --foreground: #e8e8e6;
   --card: #121214;
@@ -1067,19 +1081,24 @@
   filter: invert(0.92) hue-rotate(180deg);
 }
 
-/* Фон зоны чата (#849, направление владельца 13.11.2026: «как в Telegram»):
+/* Фон зоны чата (#849, ADR-0040 — исключение из канона плоскости):
    мягкий градиент + плотная хаотичная россыпь отдельных иконок. Слой живёт
    под лентой и полосой композера: background-image на корне панели чата
-  статичен относительно элемента и НЕ скроллится с содержимым ленты — та же
-  модель, что обои Telegram; композер — остров без своей заливки. Плитка монохромная, выпечена в двух цветах под темы
-   (background-image не умеет currentColor), 960 px: мелкая плитка даёт муар.
-   Это осознанное исключение из канона «Инструмент» — только зона чата,
-   не список бесед и не панели; ADR — до выхода из draft-issue. */
+   статичен относительно элемента и НЕ скроллится с содержимым ленты — та же
+   модель, что обои Telegram; композер — остров без своей заливки. Плитка
+   монохромная, выпечена в двух цветах под темы (background-image не умеет
+   currentColor), 960 px: мелкая плитка даёт муар. Только корни лент чата;
+   список бесед, панели и настройки — вне исключения. */
 .chat-wallpaper {
   background-image:
     url('../assets/chat-wallpaper-light.svg'),
-    radial-gradient(900px 620px at 12% -8%, rgb(75 87 200 / 0.08), rgb(75 87 200 / 0) 62%),
-    linear-gradient(158deg, #f2ede6 0%, #eae4dc 52%, #e1dad1 100%);
+    radial-gradient(900px 620px at 12% -8%, var(--chat-wallpaper-wash), transparent 62%),
+    linear-gradient(
+      158deg,
+      var(--chat-wallpaper-paper-from) 0%,
+      var(--chat-wallpaper-paper-mid) 52%,
+      var(--chat-wallpaper-paper-to) 100%
+    );
   background-size:
     960px 960px,
     cover,
@@ -1089,15 +1108,20 @@
 
 /* Тёмная тема — чёрная основа + закатный градиент (оранжевый → розовый →
    фиолетовый) и нижний scrim к композеру, чтобы строка композера и низ ленты
-   не «горели». Сила иконок ниже (12% против 16%), фон цветной. */
+   не «горели». Сила иконок ниже (6% против 8%), фон цветной. */
 [data-theme='dark'] .chat-wallpaper {
   background-image:
     url('../assets/chat-wallpaper-dark.svg'),
-    linear-gradient(180deg, rgb(10 10 11 / 0) 55%, rgb(10 10 11 / 0.5) 100%),
-    radial-gradient(900px 640px at 10% -12%, rgb(91 75 158 / 0.22), rgb(91 75 158 / 0) 65%),
-    radial-gradient(820px 620px at 96% 18%, rgb(194 74 120 / 0.16), rgb(194 74 120 / 0) 62%),
-    radial-gradient(880px 700px at 42% 112%, rgb(240 122 58 / 0.2), rgb(240 122 58 / 0) 66%),
-    linear-gradient(158deg, #121016 0%, #0d0c10 52%, #0a0a0b 100%);
+    linear-gradient(180deg, transparent 55%, var(--chat-wallpaper-scrim) 100%),
+    radial-gradient(900px 640px at 10% -12%, var(--chat-wallpaper-violet), transparent 65%),
+    radial-gradient(820px 620px at 96% 18%, var(--chat-wallpaper-rose), transparent 62%),
+    radial-gradient(880px 700px at 42% 112%, var(--chat-wallpaper-orange), transparent 66%),
+    linear-gradient(
+      158deg,
+      var(--chat-wallpaper-base-from) 0%,
+      var(--chat-wallpaper-base-mid) 52%,
+      var(--chat-wallpaper-base-to) 100%
+    );
   background-size:
     960px 960px,
     cover,
