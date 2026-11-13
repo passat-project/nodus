@@ -92,8 +92,11 @@ export function makeProjectsServiceKit() {
   };
   const queries: Mocks<'detail'> = { detail: vi.fn() };
   const profiles: Mocks<'filterActiveUserIds'> = { filterActiveUserIds: vi.fn() };
-  const customFields: Mocks<'definitions' | 'prepareCreate' | 'prepareUpdate'> = {
+  const customFields: Mocks<'definitions' | 'prepareCreate' | 'prepareUpdate'> & {
+    lockRegistry: ReturnType<typeof vi.fn>;
+  } = {
     definitions: vi.fn(),
+    lockRegistry: vi.fn(async () => undefined),
     prepareCreate: vi.fn(),
     prepareUpdate: vi.fn(),
   };

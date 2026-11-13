@@ -80,8 +80,11 @@ check "B2 union привязок process_type" \
 check "имена уникальны (lower/btrim)" \
   "$(scalar "SELECT count(*) FROM (SELECT lower(btrim(name)) FROM field_definitions GROUP BY 1 HAVING count(*) > 1) d")" \
   "0"
-check "номера уникальны и непрерывны" \
+check "номера уникальны и непрерывны (unique + max(number)=count)" \
   "$(scalar "SELECT count(DISTINCT number) = count(*) FROM field_definitions")" \
+  "t"
+check "номера непрерывны: max(number) = count(*)" \
+  "$(scalar "SELECT max(number) = count(*) FROM field_definitions")" \
   "t"
 check "старая таблица удалена" \
   "$(scalar "SELECT count(*) FROM information_schema.tables WHERE table_name = 'field_definition_types'")" \

@@ -252,6 +252,15 @@ export class CounterpartiesRepository {
     });
   }
 
+  /** Действующие контрагенты пачкой (#646): одна выборка на список ссылок. */
+  findActiveRefs(ids: readonly string[]): Promise<{ id: string; shortName: string }[]> {
+    return this.prisma.counterparty.findMany({
+      where: { id: { in: [...new Set(ids)] }, archivedAt: null },
+      select: { id: true, shortName: true },
+      orderBy: { id: 'asc' },
+    });
+  }
+
   /**
    * Подсказка похожих (pg_trgm): точный УНП + нечёткое сходство названия
    * (`word_similarity` — опечатки, кавычки, порядок слов). Только параметры

@@ -56,6 +56,10 @@ export class CustomFieldRegistryProvider implements CustomFieldRegistry {
     return opts.target === undefined ? all : all.filter(boundTo(opts.target));
   }
 
+  lockRegistry(tx: TransactionClient): Promise<void> {
+    return this.repository.lockRegistry(tx);
+  }
+
   async prepareCreate(args: PrepareCreateArgs, tx?: TransactionClient): Promise<CustomFieldValues> {
     // Весь реестр — чтобы отличить «нет такого атрибута» от «есть, но не
     // привязан к месту» (Р8/Р3): второе — отдельная причина.

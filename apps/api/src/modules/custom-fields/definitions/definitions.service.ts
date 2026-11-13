@@ -220,6 +220,18 @@ export class DefinitionsService {
       // Снимок привязок для дельты слотов — под локом и в транзакции:
       // внешний `current` мог устареть между чтением и мутацией (#646).
       const fresh = (await this.definitions.findById(id, tx)) ?? current;
+      // Повторная проверка целей привязок ПОД локом реестра (#646): между
+      // пре-проверкой и заменой цель могли удалить/архивировать — иначе
+      // привязка-сирота или FK-ошибка (P2003 → 400) вместо 404/422.
+      if (dto.bindings !== undefined) {
+        await assertBindingsUsable(this.catalog, this.targets, dto.bindings, {
+          allowArchivedProcessTypeIds: new Set(
+            fresh.bindings
+              .filter((binding) => binding.targetKind === 'process_type')
+              .map((binding) => binding.targetId),
+          ),
+        });
+      }
       // Счётчик (#630): условия после выдач заморожены, привязки достижимы,
       // «при создании» — у привязанных типов. Проверки ДО мутации.
       const nextBindings = dto.bindings ?? bindingsOf(fresh);

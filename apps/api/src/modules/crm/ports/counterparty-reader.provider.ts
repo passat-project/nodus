@@ -28,6 +28,12 @@ export class CounterpartyReaderProvider implements CounterpartyReader {
     return row ? { id: row.id, name: row.shortName } : null;
   }
 
+  async activeRefs(ids: readonly string[]): Promise<CounterpartyRef[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.counterparties.findActiveRefs(ids);
+    return rows.map((row) => ({ id: row.id, name: row.shortName }));
+  }
+
   async contactRefs(ids: readonly string[]): Promise<ContactRef[]> {
     if (ids.length === 0) return [];
     const rows = await this.contacts.findRefs(ids);

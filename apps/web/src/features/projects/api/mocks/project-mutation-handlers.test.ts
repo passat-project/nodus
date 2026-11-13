@@ -7,6 +7,7 @@ import { useAuthStore } from '../../../../shared/auth-store.js';
 // Порядок как в app/mocks-handlers: реестр атрибутов инициализируется
 // раньше данных проектов — иначе циклический граф мок-данных падает.
 import '../../../../shared/custom-fields/mocks/custom-fields-handlers.js';
+import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
 import { projectMutationHandlers } from './project-mutation-handlers.js';
 
 /** Демо-типы «Договор» (required «Шифр») и «Тема» (без шифра), посев #631:
@@ -65,5 +66,45 @@ describe('мок POST /projects (#631)', () => {
     const error = (await res.json()) as { code: string; details: { fields: string[] } };
     expect(error.code).toBe(ErrorCode.PROJECT_FIELDS_REQUIRED);
     expect(error.details.fields).toContain(`cf.${SYSTEM_FIELD_IDS.projectCode}`);
+  });
+
+  it('неизвестный ключ — unknown, известный непривязанный — not_in_type (#655)', async () => {
+    const unknown = await post({
+      name: `Проект мока ${crypto.randomUUID()}`,
+      typeId: TOPIC_TYPE,
+      customFields: { '00000000-0000-4000-8000-00000000dead': 'x' },
+    });
+    expect(unknown.status).toBe(422);
+    const unknownError = (await unknown.json()) as {
+      details: { issues: { fieldId: string; reason: string }[] };
+    };
+    expect(unknownError.details.issues[0]).toMatchObject({
+      fieldId: '00000000-0000-4000-8000-00000000dead',
+      reason: 'unknown',
+    });
+
+    // Существующий атрибут без привязки к типу проекта — отдельная причина.
+    const unbound = demoCustomFieldDefinitions.find(
+      (entry) => entry.type === 'text' && entry.bindings.projectTypeIds.length === 0,
+    )!;
+    const foreign = await post({
+      name: `Проект мока ${crypto.randomUUID()}`,
+      typeId: TOPIC_TYPE,
+      customFields: { [unbound.id]: 'значение' },
+    });
+    expect(foreign.status).toBe(422);
+    const foreignError = (await foreign.json()) as {
+      details: { issues: { fieldId: string; reason: string }[] };
+    };
+    expect(foreignError.details.issues[0]).toMatchObject({
+      fieldId: unbound.id,
+      reason: 'not_in_type',
+    });
+  });
+
+  it('zod-провал тела — 400 VALIDATION_FAILED, не 422 (#655)', async () => {
+    const res = await post({ name: 42, typeId: 'не-uuid' });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { code: string }).code).toBe(ErrorCode.VALIDATION_FAILED);
   });
 });

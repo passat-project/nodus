@@ -26,7 +26,10 @@ import {
   standardDocument,
 } from '../../../../shared/mocks/data/workflows.js';
 import { quickProcessType, requestProcessType } from '../../../../shared/mocks/data/task-stages.js';
-import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
+import {
+  applyDemoPatch,
+  boundFieldIds,
+} from '../../../../shared/mocks/data/custom-fields-rules.js';
 import { placeOfTask, segmentReaderOfTask } from '../../../../shared/mocks/data/numbering-store.js';
 import { planNumbers } from '../../../../shared/mocks/data/numbering-create.js';
 import { numberingFailureResponse } from '../../../../shared/custom-fields/mocks/numbering-responses.js';
@@ -180,10 +183,16 @@ export const tasksTransitionsHandlers = [
         { status: 422 },
       );
     }
-    // Поля процесса (#431): проверка значений до применения окна.
+    // Поля процесса (#431): проверка значений до применения окна. Привязка
+    // к типу — критерий записи (#631): значение непривязанного атрибута
+    // сервер отвергает `not_in_type`, мок обязан ответить так же.
     const customPatch = parsed.data.form?.fields?.customFields;
     if (customPatch) {
-      const { issues } = applyDemoPatch(task.customFields, customPatch);
+      const { issues } = applyDemoPatch(
+        task.customFields,
+        customPatch,
+        boundFieldIds(task.type.id),
+      );
       if (issues.length > 0) {
         return HttpResponse.json(
           {

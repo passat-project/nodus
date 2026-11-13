@@ -64,6 +64,10 @@ export async function createProjectType(
   dto: ProjectTypeCreateBody,
   actorId: string,
 ): Promise<ProjectType> {
+  // Порядок локов: реестр атрибутов → справочник типов (#646). Иначе
+  // определение, удалённое между проверкой формы и записью привязок, даёт
+  // FK-ошибку (P2003 → 400) вместо 422/404.
+  await deps.registry.lockRegistry(tx);
   await deps.types.lockForms(tx);
   if (await deps.types.nameTaken(dto.name, undefined, tx)) {
     throw DomainException.conflict('Project type name is already taken');
@@ -91,8 +95,10 @@ export async function updateProjectType(
   dto: ProjectTypeUpdateBody,
   actorId: string,
 ): Promise<ProjectType> {
-  // Лок справочника — на любой PATCH: имя, форма и привязки сериализуются
-  // между собой (как у видов папок; #646).
+  // Лок реестра атрибутов и справочника — на любой PATCH: имя, форма и
+  // привязки сериализуются между собой и с удалением определения (#646) —
+  // иначе гонка даёт FK-ошибку (P2003 → 400) вместо 404/422.
+  await deps.registry.lockRegistry(tx);
   await deps.types.lockForms(tx);
   // 404 — до валидации формы (#646): PATCH несуществующего типа с битой
   // формой обязан отвечать 404, а не 422. Чтение — в транзакции под локом:

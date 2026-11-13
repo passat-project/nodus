@@ -25,7 +25,10 @@ import {
   invalidMockValues,
   withStaticDefaults,
 } from '../../../../shared/custom-fields/mocks/custom-fields-mock-utils.js';
-import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
+import {
+  demoCustomFieldDefinitions,
+  demoFieldById,
+} from '../../../../shared/mocks/data/custom-fields.js';
 import { accessOf, detailOf, myMembershipOf } from '../../../../shared/mocks/data/project-views.js';
 import {
   createDemoProject,
@@ -49,21 +52,44 @@ const fieldsRequired = (typeId: string, fields: string[], reason: 'create' | 'cl
     },
     { status: 422 },
   );
-const valuesInvalid = (fieldIds: string[]) =>
+const valuesInvalid = (
+  issues: { fieldId: string; reason: 'unknown' | 'not_in_type' | 'invalid' }[],
+) =>
   HttpResponse.json(
     {
       code: ErrorCode.CUSTOM_FIELD_VALUE_INVALID,
       message: 'Custom field values are invalid',
       details: {
-        issues: fieldIds.map((fieldId) => ({
+        issues: issues.map(({ fieldId, reason }) => ({
           fieldId,
-          reason: 'not_in_type',
-          message: 'Field is not bound to this place',
+          reason,
+          message:
+            reason === 'unknown'
+              ? 'Unknown custom field'
+              : reason === 'not_in_type'
+                ? 'Field is not bound to this place'
+                : 'Value does not match field type',
         })),
       },
     },
     { status: 422 },
   );
+
+/** Значения вне места (#646): неизвестный ключ — `unknown` (опечатка в id),
+ *  известный но непривязанный (в т.ч. глобальная переменная) — `not_in_type`.
+ *  Сервер различает их тем же способом. */
+function valueIssues(
+  values: Record<string, unknown>,
+  bound: ReadonlySet<string>,
+): { fieldId: string; reason: 'unknown' | 'not_in_type' }[] {
+  const issues: { fieldId: string; reason: 'unknown' | 'not_in_type' }[] = [];
+  for (const [fieldId, value] of Object.entries(values)) {
+    if (value === null || value === undefined) continue;
+    if (!demoFieldById(fieldId)) issues.push({ fieldId, reason: 'unknown' });
+    else if (!bound.has(fieldId)) issues.push({ fieldId, reason: 'not_in_type' });
+  }
+  return issues;
+}
 
 /** Значения тела проекта: legacy code/clientId — системные атрибуты (Р9),
  *  как `legacyToAttributes` сервера. */
@@ -115,12 +141,11 @@ export const projectMutationHandlers = [
     const form = effectiveProjectTypeForm(type, boundDefinitions);
     const bound = new Set(boundDefinitions.map((definition) => definition.id));
     const values = withStaticDefaults(boundDefinitions, valuesOfBody(body) as CustomFieldValues);
-    const unknown = Object.keys(values).filter(
-      (fieldId) => values[fieldId] !== null && !bound.has(fieldId),
-    );
-    if (unknown.length > 0) return valuesInvalid(unknown);
+    const foreign = valueIssues(values, bound);
+    if (foreign.length > 0) return valuesInvalid(foreign);
     const malformed = invalidMockValues(boundDefinitions, values);
-    if (malformed.length > 0) return valuesInvalid(malformed);
+    if (malformed.length > 0)
+      return valuesInvalid(malformed.map((fieldId) => ({ fieldId, reason: 'invalid' as const })));
     const missing = missingProjectFields(form, { customFields: values });
     if (missing.length > 0) return fieldsRequired(type.id, missing, 'create');
     // Счётчики «при создании» (#630, модель v3): номер из тела отбрасывается;
@@ -176,12 +201,11 @@ export const projectMutationHandlers = [
     // `null` — очистка: разрешена всегда, даже для снятого с типа атрибута.
     if (body.code === null) values[SYSTEM_FIELD_IDS.projectCode] = null;
     if (body.clientId === null) values[SYSTEM_FIELD_IDS.projectClient] = null;
-    const unknown = Object.keys(values).filter(
-      (fieldId) => values[fieldId] !== null && !bound.has(fieldId),
-    );
-    if (unknown.length > 0) return valuesInvalid(unknown);
+    const foreign = valueIssues(values, bound);
+    if (foreign.length > 0) return valuesInvalid(foreign);
     const malformed = invalidMockValues(boundDefinitions, values as CustomFieldValues);
-    if (malformed.length > 0) return valuesInvalid(malformed);
+    if (malformed.length > 0)
+      return valuesInvalid(malformed.map((fieldId) => ({ fieldId, reason: 'invalid' as const })));
     const cleared = clearedProjectFields(requiredProjectFields(form), values);
     if (cleared.length > 0) return fieldsRequired(type.id, cleared, 'clear');
     // Формульная ячейка руками не пишется (#660): 422, как на сервере.

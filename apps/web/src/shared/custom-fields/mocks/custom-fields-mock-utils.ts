@@ -1,12 +1,16 @@
 import { HttpResponse } from 'msw';
-import type { CustomFieldDefinition, CustomFieldValues } from '@nodus/contracts';
-import { ErrorCode, Permission, creationSlots, formSlots, isFieldFormSlot } from '@nodus/contracts';
+import type { CustomFieldDefinition, CustomFieldValue, CustomFieldValues } from '@nodus/contracts';
+import { ErrorCode, Permission, creationSlots, formSlots } from '@nodus/contracts';
 import { customFieldKey, customFieldValueSchemaOf } from '@nodus/contracts';
 
 import { getMockActor } from '../../mocks/mock-actor.js';
 
-import { dictionaryById } from '../../mocks/data/dictionaries.js';
-import { demoCustomFieldDefinitions } from '../../mocks/data/custom-fields.js';
+import { dictionaryById, dictionaryIds, itemById } from '../../mocks/data/dictionaries.js';
+import {
+  demoCustomFieldDefinitions,
+  demoAuthorDepartment,
+} from '../../mocks/data/custom-fields.js';
+import { checkValueIssue } from '../../mocks/data/custom-fields-rules.js';
 import { counterPreview, mockIssuedCount, mockIssuers } from '../../mocks/data/numbering-store.js';
 import { mockWithoutNumber } from './numbering-hosts.js';
 import { demoRefsForValues } from '../../mocks/data/custom-fields-refs.js';
@@ -120,20 +124,63 @@ function typeCategorySets() {
   return { taskTypeIds, letterTypeIds };
 }
 
-/** Статические умолчания привязанных атрибутов — как `prepareCreate`
- *  сервера (author_department в мок-мире не поддержан: нужен отдел актёра). */
+/** Умолчания привязанных атрибутов — как `prepareCreate` сервера:
+ *  статическое значение И «подразделение автора» (#646); явное значение
+ *  важнее, невалидное умолчание пропускается (сервер его тоже роняет). */
 export function withStaticDefaults(
   definitions: readonly CustomFieldDefinition[],
   values: CustomFieldValues,
 ): CustomFieldValues {
   const next = { ...values };
   for (const definition of definitions) {
-    if (next[definition.id] !== undefined) continue;
-    if (definition.defaultValue?.kind === 'static') {
-      next[definition.id] = definition.defaultValue.value;
+    if (definition.isCompany || next[definition.id] !== undefined) continue;
+    const fallback = definition.defaultValue;
+    if (!fallback) continue;
+    if (fallback.kind === 'author_department') {
+      if (definition.type === 'department') next[definition.id] = demoAuthorDepartment();
+      continue;
     }
+    // Ссылочная проверка — как у сервера: битое умолчание не подставляется.
+    if (!checkValueIssue(definition, fallback.value)) next[definition.id] = fallback.value;
   }
   return next;
+}
+
+/** Отказ настроек определения — справочник/валюта (#646): те же проверки на
+ *  создании и PATCH, что у сервера `assertSettingsUsable`. */
+export function settingsIssue(
+  type: string,
+  settings: { dictionaryId?: string | null; currencyId?: string | null },
+): ReturnType<typeof error> | null {
+  if ((type === 'enum' || type === 'multienum') && settings.dictionaryId) {
+    if (!dictionaryById(settings.dictionaryId)) {
+      // Сервер: VALIDATION_FAILED → 400 (не 422) — форма запроса, не правила.
+      return error(ErrorCode.VALIDATION_FAILED, 'Dictionary not found', 400, {
+        dictionaryId: settings.dictionaryId,
+      });
+    }
+  }
+  if (type === 'money' && settings.currencyId) {
+    const currency = itemById(settings.currencyId);
+    if (!currency || !currency.isActive || currency.dictionaryId !== dictionaryIds.currency) {
+      return error(ErrorCode.VALIDATION_FAILED, 'Currency not found', 400, {
+        currencyId: settings.currencyId,
+      });
+    }
+  }
+  return null;
+}
+
+/** Отказ статического умолчания / глобального значения (#646): грамматика и
+ *  ссылки; ссылки-записи без актёра не принимаются (как сервер). */
+export function definitionValueIssue(
+  definition: Pick<CustomFieldDefinition, 'id' | 'type' | 'settings'>,
+  value: unknown,
+): ReturnType<typeof error> | null {
+  const issue = checkValueIssue(definition, value as CustomFieldValue);
+  return issue
+    ? error(ErrorCode.CUSTOM_FIELD_VALUE_INVALID, 'Value is invalid', 422, { issues: [issue] })
+    : null;
 }
 
 /** Грамматика значений без ссылочных проверок (мок-мир): сервер проверяет
@@ -219,34 +266,6 @@ export {
   nameTaken,
   typeCategorySets,
 };
-
-/** Снять слот атрибута из формы места в мок-мире (#646): unbind чистит
- *  форму так же, как сервер — инвариант «слот = привязка» в обе стороны. */
-export function removeFormSlot(kind: string, targetId: string, fieldId: string): void {
-  if (kind === 'project-type') {
-    const type = demoProjectTypes.find((entry) => entry.id === targetId);
-    if (type) {
-      type.form = {
-        ...type.form,
-        fields: type.form.fields.filter(
-          (slot) => !isFieldFormSlot(slot) || slot.fieldId !== fieldId,
-        ),
-      };
-    }
-    return;
-  }
-  if (kind === 'node-kind') {
-    const nodeKind = demoNodeKinds.find((entry) => entry.id === targetId);
-    if (nodeKind) {
-      nodeKind.form = {
-        ...nodeKind.form,
-        fields: nodeKind.form.fields.filter(
-          (slot) => !isFieldFormSlot(slot) || slot.fieldId !== fieldId,
-        ),
-      };
-    }
-  }
-}
 
 /** Полный набор привязок PATCH: неизвестная цель — 404, архивный тип
  *  процесса допустим только если уже привязан (#646). */

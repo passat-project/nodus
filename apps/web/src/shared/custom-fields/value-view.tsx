@@ -27,7 +27,8 @@ export function refsById(refs: readonly CustomFieldRef[]): ReadonlyMap<string, C
 }
 
 /** Ссылка открывает карточку записи (стек карточек, ADR-0009): задача,
- *  письмо, проект, контрагент. Папки карточки не имеют — имя без перехода. */
+ *  письмо, проект, контрагент. Папки карточки не имеют — имя без перехода
+ *  (осознанно; поведение закреплено тестом «папка — имя без перехода», #655). */
 const OPENABLE_KINDS = new Set<CustomFieldRefKind>(['task', 'letter', 'project', 'counterparty']);
 
 function RefName({

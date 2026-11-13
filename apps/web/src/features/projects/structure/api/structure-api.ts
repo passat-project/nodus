@@ -234,7 +234,16 @@ export function useUpdateNode(projectId: string) {
       rollback(queryClient, projectId, context?.snapshot ?? null);
       toastApiError(error);
     },
-    onSuccess: () => toast.success(ui.projects.savedDone),
+    // Ответ сервера кладём в кэш сразу (#646): значения с формулами типа и
+    // выданные счётчики приходят только с сервером — без этого дерево живёт
+    // на оптимистичной догме до invalidate.
+    onSuccess: (response) => {
+      patchStructure(queryClient, projectId, (data) => ({
+        ...data,
+        nodes: data.nodes.map((node) => (node.id === response.id ? response : node)),
+      }));
+      toast.success(ui.projects.savedDone);
+    },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: structureKeys.of(projectId) });
     },
