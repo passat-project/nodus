@@ -88,4 +88,32 @@ describe('цепочка бейджа непрочитанных', () => {
 
     expect(qc.getQueryData(chatKeys.unreadSummary())).toEqual({ chats: 0, entities: 0, total: 0 });
   });
+
+  it('applyReadToCache двигает myLastReadSeq на upToSeq и только вперёд (#845)', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const list = () => ({
+      items: [
+        { id: CONV, type: 'direct', unreadCount: 2, snoozed: false, myLastReadSeq: 10 },
+        { id: OTHER, type: 'task', unreadCount: 1, snoozed: false, myLastReadSeq: 4 },
+      ],
+    });
+    qc.setQueryData(chatKeys.conversations(), list());
+
+    applyReadToCache(qc, CONV, 12);
+    expect(
+      qc.getQueryData<{ items: { id: string; unreadCount: number; myLastReadSeq: number }[] }>(
+        chatKeys.conversations(),
+      )?.items,
+    ).toEqual([
+      { id: CONV, type: 'direct', unreadCount: 0, snoozed: false, myLastReadSeq: 12 },
+      { id: OTHER, type: 'task', unreadCount: 1, snoozed: false, myLastReadSeq: 4 },
+    ]);
+
+    // Квитанция «назад» (видимое окно выше прежнего знака) не откатывает.
+    applyReadToCache(qc, CONV, 9);
+    expect(
+      qc.getQueryData<{ items: { id: string; myLastReadSeq: number }[] }>(chatKeys.conversations())
+        ?.items[0]?.myLastReadSeq,
+    ).toBe(12);
+  });
 });

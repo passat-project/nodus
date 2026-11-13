@@ -30,6 +30,8 @@ import { ScrollEndResponder } from './scroll-end-responder.js';
 import { useHistoryLoader } from './use-history-loader.js';
 import { useFeedViewportRead } from './use-viewport-read.js';
 import { useIncomingFollow } from './use-incoming-follow.js';
+import { useLocalReadSeq } from './use-local-read-seq.js';
+import { resolveFirstUnreadId } from './unread-divider.js';
 import { ConversationViewsLine } from './views-line.js';
 import { UnreadAnchor } from './use-unread-anchor.js';
 import { selectionComposerProps, useFeedSelection } from './use-feed-selection.js';
@@ -217,9 +219,6 @@ function ConversationFeed({
     selectableIds: selection.orderedIds,
     selectionActive: selection.selectionActive,
   });
-  // Квитанции просмотров (#102 р.2): seq самой новой видимой строки ленты —
-  // IO по строкам, root=скроллер (механика — use-viewport-read.ts).
-  useFeedViewportRead(conversationId, viewportRef, items);
 
   // Якорь открытия (раунд 4): jump-запрос побеждает непрочитанных, иначе
   // unreadCount > 0 → якорь на первом непрочитанном; решение — на маунте.
@@ -236,6 +235,17 @@ function ConversationFeed({
   const releaseAnchor = useCallback(() => {
     requestAnimationFrame(() => requestAnimationFrame(() => setAnchoring(false)));
   }, []);
+  // Локальный знак прочтения (#845): открытый чат читает новое синхронно с
+  // появлением у низа и по факту видимости — не ждёт квитанций и рефечей.
+  const { localReadSeq, markSeen } = useLocalReadSeq({
+    items,
+    viewportRef,
+    enabled: !anchoring,
+  });
+  // Квитанции просмотров (#102 р.2): seq самой новой видимой строки ленты —
+  // IO по строкам, root=скроллер (механика — use-viewport-read.ts); тот же
+  // «видел до» двигает и локальный знак плашки непрочитанных (#845).
+  useFeedViewportRead(conversationId, viewportRef, items, { onSeen: markSeen });
   // Догон входящих (#132): только после якоря и только «у низа» (Telegram).
   useIncomingFollow({
     scope,
@@ -248,11 +258,20 @@ function ConversationFeed({
   // Разделитель непрочитанных: НАД первым непрочитанным (даже внутри серии);
   // ЖИВОЙ по watermark: прочитал всё — исчезает сразу (вердикт раунда 4),
   // по мере чтения спускается к оставшемуся хвосту (модель Telegram).
+  // Знак — максимум серверного и локального (#845): отставший серверный
+  // снимок не воскрешает плашку над прочитанным и не дёргает ленту; свои
+  // сообщения границей не бывают.
   const myLastReadSeq = conversation?.myLastReadSeq ?? null;
-  const firstUnreadId = useMemo(() => {
-    if (myLastReadSeq === null || (conversation?.unreadCount ?? 0) === 0) return null;
-    return items.find((m) => m.seq > myLastReadSeq && !m.deletedAt)?.id ?? null;
-  }, [items, myLastReadSeq, conversation?.unreadCount]);
+  const firstUnreadId = useMemo(
+    () =>
+      resolveFirstUnreadId(items, {
+        serverReadSeq: myLastReadSeq,
+        localReadSeq,
+        unreadCount: conversation?.unreadCount ?? 0,
+        meId: me?.id,
+      }),
+    [items, myLastReadSeq, localReadSeq, conversation?.unreadCount, me?.id],
+  );
 
   // Протокол хоста ленты: отправка/правка, submit окна вложений, ↑-правка
   // последнего своего — use-feed-submit.ts.
