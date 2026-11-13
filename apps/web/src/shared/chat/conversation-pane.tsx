@@ -1,12 +1,4 @@
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ui } from '@nodus/contracts';
 import {
   MessageScroller,
@@ -38,7 +30,7 @@ import { ScrollEndResponder } from './scroll-end-responder.js';
 import { useHistoryLoader } from './use-history-loader.js';
 import { useFeedViewportRead } from './use-viewport-read.js';
 import { useIncomingFollow } from './use-incoming-follow.js';
-import { findFirstUnreadId } from './unread-divider.js';
+import { useFrozenUnreadDivider } from './use-frozen-unread-divider.js';
 import { ConversationViewsLine } from './views-line.js';
 import { UnreadAnchor } from './use-unread-anchor.js';
 import { selectionComposerProps, useFeedSelection } from './use-feed-selection.js';
@@ -255,26 +247,18 @@ function ConversationFeed({
   });
 
   // Разделитель непрочитанных (#845, модель Telegram `UnreadBar::freezed`):
-  // граница снимается ОДИН раз на открытии — над первым непрочитанным по
-  // серверному знаку на момент маунта — и ЖИВЁТ В ЛЕНТЕ, пока открыт диалог.
-  // Прочтение её не двигает и не снимает (уходит вверх вместе с историей),
-  // новые сообщения открытого чата новую не создают. Раньше плашка считалась
-  // по живому watermark: отставший снимок списка «воскрешал» её над уже
-  // прочитанным, а вставка/удаление строки дёргали ленту. При следующем
-  // входе граница снимается заново — если читать уже нечего, плашки нет.
-  const [openMeta] = useState(() => ({
-    hadUnread: (conversation?.unreadCount ?? 0) > 0,
+  // граница снимается ОДИН раз на открытии и живёт в ленте, пока открыт
+  // диалог; прочтение её не двигает и не снимает, новые сообщения открытого
+  // чата новую не создают. Раньше плашка считалась по живому watermark:
+  // отставший снимок списка «воскрешал» её над уже прочитанным, и вставка/
+  // удаление строки дёргали ленту (жалоба владельца). Механика заморозки —
+  // use-frozen-unread-divider.ts; открытие без непрочитанных — плашки нет.
+  const { dividerId: firstUnreadId, openReadSeq } = useFrozenUnreadDivider({
+    items,
+    unreadCount: conversation?.unreadCount ?? 0,
     readSeq: conversation?.myLastReadSeq ?? null,
-  }));
-  const liveDividerId = useMemo(
-    () => (openMeta.hadUnread ? findFirstUnreadId(items, openMeta.readSeq, me?.id) : null),
-    [items, openMeta, me?.id],
-  );
-  const [frozenDividerId, setFrozenDividerId] = useState<string | null>(null);
-  useLayoutEffect(() => {
-    if (frozenDividerId === null && liveDividerId !== null) setFrozenDividerId(liveDividerId);
-  }, [frozenDividerId, liveDividerId]);
-  const firstUnreadId = frozenDividerId;
+    meId: me?.id,
+  });
 
   // Протокол хоста ленты: отправка/правка, submit окна вложений, ↑-правка
   // последнего своего — use-feed-submit.ts.
@@ -296,7 +280,7 @@ function ConversationFeed({
           <UnreadAnchor
             items={items}
             isLoading={isLoading}
-            anchorSeq={anchoring && open.jump === null ? openMeta.readSeq : null}
+            anchorSeq={anchoring && open.jump === null ? openReadSeq : null}
             jump={anchoring ? open.jump : null}
             viewportRef={viewportRef}
             onAnchored={releaseAnchor}
