@@ -83,12 +83,16 @@ export const CUSTOM_FIELD_LIMITS = {
   formulaCascadeDepth: 8,
 } as const;
 
-/** Сколько знаков после запятой у числа (у чисел с плавающей точкой —
- *  с допуском на двоичное представление). */
-function hasPrecision(value: number, precision: number): boolean {
-  const factor = 10 ** precision;
-  const scaled = value * factor;
-  return Math.abs(scaled - Math.round(scaled)) < 1e-6 * Math.max(1, Math.abs(scaled));
+/** Сколько знаков после запятой у числа. Сравниваем с десятичным
+ *  округлением через `toFixed` и допуском на двоичный шум ОТ ВЕЛИЧИНЫ
+ *  (не от масштабированного значения): прежний допуск `1e-6 * |value*factor|`
+ *  рос вместе с суммой и полностью отключал проверку на крупных числах
+ *  (денежное поле принимало 999999999.999). Единый предикат для сервера,
+ *  моков и редактора: клиент не должен пропускать то, что API отвергнет. */
+export function hasDecimalPrecision(value: number, precision: number): boolean {
+  const rounded = Number(value.toFixed(precision));
+  const tolerance = Number.EPSILON * Math.max(1, Math.abs(value)) * 2;
+  return Math.abs(rounded - value) <= tolerance;
 }
 
 const amountSchema = (precision: number) =>
@@ -97,7 +101,7 @@ const amountSchema = (precision: number) =>
     .finite()
     .min(-CUSTOM_FIELD_LIMITS.amount)
     .max(CUSTOM_FIELD_LIMITS.amount)
-    .refine((v) => hasPrecision(v, precision), { message: 'too many decimal places' });
+    .refine((v) => hasDecimalPrecision(v, precision), { message: 'too many decimal places' });
 
 const linkSchema = z
   .string()
@@ -135,7 +139,7 @@ export function customFieldValueSchemaOf(
     case 'number':
       return amountSchema(definition.settings.precision ?? 0);
     case 'money':
-      return moneyValueSchema.refine((v) => hasPrecision(v.amount, 2), {
+      return moneyValueSchema.refine((v) => hasDecimalPrecision(v.amount, 2), {
         message: 'too many decimal places',
       });
     case 'date':

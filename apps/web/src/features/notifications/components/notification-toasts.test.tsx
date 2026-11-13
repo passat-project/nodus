@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
 import { useNotificationsToastStore } from '../model/toast-store.js';
@@ -17,7 +17,8 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>();
   return { ...actual, useNavigate: () => vi.fn() };
 });
-vi.mock('../../../app/shell/use-card-stack.js', () => ({ useOpenCard: () => vi.fn() }));
+const openCard = vi.hoisted(() => vi.fn());
+vi.mock('../../../app/shell/use-card-stack.js', () => ({ useOpenCard: () => openCard }));
 vi.mock('../../../shared/chat/chat-queries.js', () => ({
   useConversations: () => ({ data: { items: [] } }),
 }));
@@ -67,5 +68,48 @@ describe('NotificationToasts: сводная следует журналу (#616
       expect(syncSpy).toHaveBeenCalledWith(2);
     });
     expect(useNotificationsToastStore.getState().actions.count).toBe(1);
+  });
+});
+
+describe('NotificationToasts: клик ведёт к источнику', () => {
+  const LETTER = '44444444-4444-4444-8444-444444444444';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useNotificationsToastStore.setState({
+      personal: [
+        {
+          key: 'k1',
+          count: 1,
+          attempt: 0,
+          addedAt: Date.now(),
+          snapshot: {
+            notificationId: '55555555-5555-4555-8555-555555555555',
+            userId: '22222222-2222-4222-8222-222222222222',
+            priority: 'high',
+            kind: 'letter.arrived',
+            sourceType: 'letter',
+            sourceId: LETTER,
+            conversationId: null,
+            conversationTitle: null,
+            messageId: null,
+            threadRootId: null,
+            preview: 'Письмо пришло',
+            actorName: null,
+          },
+        },
+      ],
+      actions: { count: 0, latest: null },
+      mutedConversations: new Set<string>(),
+      snoozedConversations: new Set<string>(),
+      dnd: { enabled: false, start: '22:00', end: '08:00' },
+    });
+  });
+
+  it('уведомление письма открывает карточку письма, а не читалку на Главной', () => {
+    mountToasts();
+    const preview = screen.getAllByText('Письмо пришло').at(-1)!;
+    fireEvent.click(preview);
+    expect(openCard).toHaveBeenCalledWith({ kind: 'letter', id: LETTER }, undefined);
   });
 });

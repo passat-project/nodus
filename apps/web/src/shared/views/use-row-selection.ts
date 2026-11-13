@@ -41,9 +41,20 @@ export function useRowSelection(rowKeys: readonly string[]): RowSelection {
   }, []);
 
   const toggleAll = useCallback(() => {
-    setSelected((prev) =>
-      prev.size === rowKeys.length && rowKeys.length > 0 ? new Set() : new Set(rowKeys),
-    );
+    setSelected((prev) => {
+      // «Все видимые уже выбраны» считается по видимым ключам, а не по
+      // размеру набора: выбор переживает фильтры/схлопывание веток, поэтому
+      // prev.size может быть больше rowKeys.length — тогда первый клик
+      // «выбрать все» обязан снять выбор, а не молча оставить его.
+      const allVisible = rowKeys.length > 0 && rowKeys.every((key) => prev.has(key));
+      const next = new Set(prev);
+      if (allVisible) {
+        for (const key of rowKeys) next.delete(key);
+      } else {
+        for (const key of rowKeys) next.add(key);
+      }
+      return next;
+    });
   }, [rowKeys]);
 
   /** Состояние чекбокса хедера: все / часть / ничего. */

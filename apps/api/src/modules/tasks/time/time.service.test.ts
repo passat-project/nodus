@@ -12,6 +12,9 @@ function setup(entry: Record<string, unknown>) {
     findById: vi.fn().mockResolvedValue(entry),
     delete: vi.fn(),
     recalcSpentMinutes: vi.fn().mockResolvedValue({ ...ROW, spentMinutes: 30 }),
+    findRunningTimer: vi.fn().mockResolvedValue(null),
+    findRunningTimerWithTask: vi.fn().mockResolvedValue(null),
+    createTimer: vi.fn().mockResolvedValue({ id: 'e3' }),
   };
   const eventBus = { emit: vi.fn() };
   const service = new TimeService(
@@ -65,5 +68,24 @@ describe('isRunningTimer', () => {
     expect(isRunningTimer({ method: 'timer', endedAt: null })).toBe(true);
     expect(isRunningTimer({ method: 'timer', endedAt: new Date() })).toBe(false);
     expect(isRunningTimer({ method: 'manual', endedAt: null })).toBe(false);
+  });
+});
+
+describe('TimeService.start: дата записи по поясу компании', () => {
+  it('в 01:30 по Минску пишет сегодняшний день, а не вчерашний UTC', async () => {
+    vi.useFakeTimers();
+    vi.stubEnv('COMPANY_TIMEZONE', 'Europe/Minsk');
+    vi.setSystemTime(new Date('2026-11-12T22:30:00Z')); // 13.11, 01:30 Europe/Minsk
+    try {
+      const { service, repo } = setup({});
+      await service.start(USER, 't1');
+      expect(repo.createTimer).toHaveBeenCalledWith(
+        TX,
+        expect.objectContaining({ date: new Date('2026-11-13T00:00:00Z') }),
+      );
+    } finally {
+      vi.unstubAllEnvs();
+      vi.useRealTimers();
+    }
   });
 });

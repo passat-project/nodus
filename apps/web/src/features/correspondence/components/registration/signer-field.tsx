@@ -153,6 +153,7 @@ export function SignerField({
                   else if (entry) choose(entry);
                 },
                 onOpen: () => setOpen(true),
+                enabled: open,
               });
             }}
             className={cn('h-8 text-sm', value && !open && 'pr-7')}

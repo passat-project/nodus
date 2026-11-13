@@ -8,7 +8,11 @@ import { MentionSnippet } from '../../../shared/chat/mention-chip.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { useNotificationsToastStore } from '../model/toast-store.js';
 import { PERSONAL_TOAST_TTL_MS } from '../model/toast-store.js';
-import { openNotificationReader, openSourceCard } from '../model/open-notification.js';
+import {
+  openNotificationReader,
+  openSourceCard,
+  sourceCardOf,
+} from '../model/open-notification.js';
 import { useNotificationSummary } from '../api/notifications-api.js';
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { usePauseEscalation } from '../model/use-pause-escalation.js';
@@ -84,15 +88,10 @@ function PersonalToastCard({
   // Клик — к источнику (F1, #300): у тоста только снимок события, источник
   // чата восстанавливается по conversationId (срочное — лист ознакомления).
   function open() {
-    // Уведомление задачи (#252) — сразу карточка задачи, не лист просмотра.
-    const card =
-      snapshot.priority === 'urgent'
-        ? null
-        : snapshot.conversationId !== null
-          ? ({ kind: 'messenger', id: snapshot.conversationId } as const)
-          : snapshot.sourceType === 'task'
-            ? ({ kind: 'task', id: snapshot.sourceId } as const)
-            : null;
+    // Уведомление задачи (#252) — сразу карточка задачи, не лист просмотра;
+    // письмо — карточка письма. Маппинг — общий с лентой (sourceCardOf),
+    // чтобы копии не расходились (баг: тост письма уводил в ридер).
+    const card = snapshot.priority === 'urgent' ? null : sourceCardOf(snapshot);
     if (card) {
       openSourceCard(openCard, card, snapshot.threadRootId);
     } else {
