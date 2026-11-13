@@ -59,6 +59,11 @@ export function revealMessage(el: HTMLElement, container: HTMLElement): RevealOu
  * целится один раз по оценочной геометрии и промахивается — к концу
  * навигации лента должна быть уже отрисована и стоять точно на цели.
  */
+/** Узел цели по резолверу (null — цель исчезла из ленты). */
+function resolveTarget(el: HTMLElement | (() => HTMLElement | null)): HTMLElement | null {
+  return typeof el === 'function' ? el() : el;
+}
+
 /** Целевой scrollTop для выравнивания цели с клампом [0, maxScroll]
  *  (чистая функция — юнит-тест; и плавная анимация, и авто-режим считают ей). */
 export function scrollTopFor(
@@ -66,7 +71,7 @@ export function scrollTopFor(
   container: HTMLElement,
   options: { align: 'start' | 'center'; margin?: number },
 ): number {
-  const node = typeof el === 'function' ? el() : el;
+  const node = resolveTarget(el);
   if (!node) return container.scrollTop;
   const c = container.getBoundingClientRect();
   const r = node.getBoundingClientRect();
@@ -87,7 +92,8 @@ export function scrollMessageIntoView(
   // Резолвер, а не узел: во время анимации React может пересоздать строку
   // (рефеч/прочтения), захваченный DOM-узел «отсыхает» (rect → 0) и цель
   // уезжает в начало. Перезапрос каждый кадр держит цель живой (#845).
-  const desiredTop = () => scrollTopFor(el, container, options);
+  // Цель исчезла совсем (плашку сняло прочтение) — ЗАМИРАЕМ там, где едем:
+  // продолжать кривую нельзя, «нулевая» цель вернула бы ленту к startTop.
   if (options.behavior === 'smooth') {
     const startTop = container.scrollTop;
     const startedAt = performance.now();
@@ -101,20 +107,25 @@ export function scrollMessageIntoView(
     container.addEventListener('touchstart', stop, { passive: true });
     const step = (): void => {
       if (stopped) return;
+      const node = resolveTarget(el);
+      if (!node) {
+        stop();
+        return;
+      }
       const t = Math.min(1, (performance.now() - startedAt) / SMOOTH_SCROLL_MS);
       const ease = 1 - (1 - t) ** 3;
-      container.scrollTop = startTop + (desiredTop() - startTop) * ease;
+      container.scrollTop = startTop + (scrollTopFor(node, container, options) - startTop) * ease;
       if (t < 1) {
         requestAnimationFrame(step);
         return;
       }
-      container.scrollTop = desiredTop(); // финальный снап по живой геометрии
+      container.scrollTop = scrollTopFor(node, container, options); // снап по живой геометрии
       stop();
     };
     requestAnimationFrame(step);
     return;
   }
-  container.scrollTo({ top: desiredTop(), behavior: 'auto' });
+  container.scrollTo({ top: scrollTopFor(el, container, options), behavior: 'auto' });
 
   let frames = 0;
   let stopped = false;

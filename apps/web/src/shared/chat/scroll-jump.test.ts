@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 
-import { isMessageFullyVisible, revealMessage, scrollTopFor } from './scroll-jump.js';
+import {
+  isMessageFullyVisible,
+  revealMessage,
+  scrollMessageIntoView,
+  scrollTopFor,
+} from './scroll-jump.js';
 
 /** Инфраструктура jsdom: габариты через getBoundingClientRect-стабы,
  *  геометрия контейнера — defineProperty (jsdom не считает layout). */
@@ -126,5 +131,107 @@ describe('scroll-jump — видно/не видно и кламп низа', ()
     stubRects(message, rect(700, 780)); // ниже области, но контент не прокручивается
     expect(revealMessage(message, container)).toBe('scrolled');
     expect(scrollTopFor(message, container, { align: 'center' })).toBe(0);
+  });
+});
+
+/** Собственная плавная анимация (#845): цель пересчитывается каждый кадр,
+ *  узел — по резолверу (React может пересоздать строку во время прокрутки). */
+describe('scrollMessageIntoView — плавный режим', () => {
+  function harness(container: HTMLElement, contentTop: number, height = 80) {
+    let now = 0;
+    let frames: FrameRequestCallback[] = [];
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const flush = (ms: number) => {
+      now += ms;
+      const batch = frames;
+      frames = [];
+      for (const cb of batch) cb(now);
+    };
+    const finish = () => {
+      for (let i = 0; i < 10; i += 1) flush(50);
+    };
+    const restore = () => {
+      raf.mockRestore();
+      clock.mockRestore();
+    };
+    // Геометрия цели «в контенте»: экранная позиция зависит от scrollTop.
+    return { flush, finish, restore, contentTop, container, height };
+  }
+
+  function liveStub(el: HTMLElement, container: HTMLElement, contentTop: number, height: number) {
+    vi.spyOn(el, 'getBoundingClientRect').mockImplementation(() => {
+      const top = contentTop - container.scrollTop;
+      return rect(top, top + height) as unknown as DOMRect;
+    });
+  }
+
+  it('доезжает до цели за ~320мс и снапится по живой геометрии', () => {
+    const container = makeContainer({
+      rect: CONTAINER_RECT,
+      scrollTop: 0,
+      scrollHeight: 3000,
+      clientHeight: 600,
+    });
+    const message = makeElement();
+    liveStub(message, container, 2000, 80);
+    const h = harness(container, 2000);
+    scrollMessageIntoView(message, container, { align: 'start', margin: 48, behavior: 'smooth' });
+    h.finish();
+    expect(container.scrollTop).toBe(1952);
+    h.restore();
+  });
+
+  it('резолвер: узел пересоздан — прокрутка идёт к новому узлу', () => {
+    const container = makeContainer({
+      rect: CONTAINER_RECT,
+      scrollTop: 0,
+      scrollHeight: 3000,
+      clientHeight: 600,
+    });
+    const first = makeElement();
+    const second = makeElement();
+    liveStub(first, container, 1200, 80);
+    liveStub(second, container, 2000, 80);
+    let node: HTMLElement = first;
+    const h = harness(container, 2000);
+    scrollMessageIntoView(() => node, container, {
+      align: 'start',
+      margin: 48,
+      behavior: 'smooth',
+    });
+    h.flush(50);
+    node = second; // React пересоздал строку
+    h.finish();
+    expect(container.scrollTop).toBe(1952);
+    h.restore();
+  });
+
+  it('резолвер вернул null — анимация встаёт, а не прыгает в начало', () => {
+    const container = makeContainer({
+      rect: CONTAINER_RECT,
+      scrollTop: 300,
+      scrollHeight: 3000,
+      clientHeight: 600,
+    });
+    const message = makeElement();
+    liveStub(message, container, 2000, 80);
+    const h = harness(container, 2000);
+    let node: HTMLElement | null = message;
+    scrollMessageIntoView(() => node, container, {
+      align: 'start',
+      margin: 48,
+      behavior: 'smooth',
+    });
+    h.flush(50);
+    const before = container.scrollTop;
+    node = null;
+    h.finish();
+    expect(container.scrollTop).toBe(before);
+    expect(before).not.toBe(0);
+    h.restore();
   });
 });
