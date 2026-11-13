@@ -126,6 +126,41 @@ describe('attach-send-dialog: @упоминания подписи (#239)', () =
     expect(list.className).toContain('overflow-y-auto');
   });
 
+  it('состав участников грузится при ОТКРЫТИИ окна, а не в момент «@» (#844, приёмка 13.11)', async () => {
+    useChatDrafts.getState().addAttachments(KEY, [ready]);
+    useAttachSendDialog.getState().open(KEY, '');
+    renderDialog();
+
+    // Префетч: к первому «@» список уже готов — нет кадра с одиноким «Все».
+    await waitFor(() =>
+      expect(apiMock.mock.calls.some(([url]) => String(url).includes('/members'))).toBe(true),
+    );
+  });
+
+  it('после Esc/отмены и нового открытия «@» снова открывает панель (#844, приёмка 13.11)', async () => {
+    useChatDrafts.getState().addAttachments(KEY, [ready]);
+    useAttachSendDialog.getState().open(KEY, '');
+    renderDialog();
+
+    const field = screen.getByPlaceholderText(ui.chat.attachCaption) as HTMLTextAreaElement;
+    fireEvent.change(field, { target: { value: '@' } });
+    await screen.findByRole('listbox');
+    // Esc гасит панель — «закрыто до этой позиции @» помнится хуком.
+    fireEvent.keyDown(field, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+
+    // Новое открытие (как после смены чата): «@» в позиции 0 обязан снова
+    // открыть панель — состояние прошлой сессии не переносится.
+    useChatDrafts.getState().addAttachments(KEY, [ready]);
+    useAttachSendDialog.getState().open(KEY, '');
+    const field2 = (await screen.findByPlaceholderText(
+      ui.chat.attachCaption,
+    )) as HTMLTextAreaElement;
+    fireEvent.change(field2, { target: { value: '@' } });
+    expect(await screen.findByRole('listbox')).toBeTruthy();
+  });
+
   it('«@» открывает панель; выбор вставляет чип; отправка несёт токен', async () => {
     const payloads: ComposerSubmit[] = [];
     const unregister = registerScopeSubmit(KEY, (payload) => {

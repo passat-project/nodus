@@ -73,6 +73,9 @@ export function AttachSendDialogHost() {
   const [renameActive, setRenameActive] = useState(false);
   const renameActiveRef = useRef(false);
   renameActiveRef.current = renameActive;
+  // Синхронный флаг старта правки имени (приёмка 13.11): setState коммитится
+  // не мгновенно, а rAF-возврат каретки успевал кадром раньше и выдёргивал
+  // фокус из поля имени — blur применял старое имя. ref ставим ДО setState.
   const draggingRef = useRef<string | null>(null);
   const captionRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -94,6 +97,9 @@ export function AttachSendDialogHost() {
   });
 
   function handleRenameMode(active: boolean) {
+    // ref СНАЧАЛА: все rAF/blur-страховки супер-курсора читают его, а не
+    // ещё не закоммиченный state (гонка «правка имени применяется сама»).
+    renameActiveRef.current = active;
     setRenameActive(active);
     if (!active) refocusCaption();
   }
@@ -157,6 +163,10 @@ export function AttachSendDialogHost() {
     requestAnimationFrame(() => {
       if (!useAttachSendDialog.getState().scope) return;
       if (renameActiveRef.current) return;
+      // Фокус уже в ЛЮБОМ поле ввода (поле имени, подпись) — не отбираем:
+      // второй рубеж против гонки, когда флаг ещё не был выставлен.
+      const active = document.activeElement as HTMLElement | null;
+      if (active?.closest('textarea, input, [contenteditable="true"]')) return;
       focusCaption();
     });
   }

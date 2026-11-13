@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -52,10 +53,13 @@ export function useMentionAutocomplete(
     return () => window.clearTimeout(timer);
   }, [queryText]);
 
-  // Состав беседы — лениво: только когда панель реально открыта (не каждым
-  // монтированием композера; «@» — первый триггер).
+  // Состав беседы — ПРЕФЕТЧ при открытии композера/окна, не в момент «@»:
+  // иначе первые кадры панели показывают одинокое «Все», а сотрудники
+  // «догружаются» — владелец справедливо назвал это непрофессиональным
+  // (приёмка 13.11). К моменту «@» участники уже в кэше запроса; при
+  // повторном монтировании окна данные берутся мгновенно.
   const members = useConversationMembers(conversationId ?? '', '', {
-    enabled: query !== null,
+    enabled: Boolean(conversationId),
   });
   const memberRefs = useMemo<UserRef[]>(
     () => (members.data?.pages[0]?.items ?? []).map((m) => m.user),
@@ -97,6 +101,8 @@ export function useComposerMentions(opts: {
   // обязан закрыть панель немедленно (рендер), а не ждать чужого обновления.
   const [dismissedStart, setDismissedStart] = useState<number | null>(null);
   const autocomplete = useMentionAutocomplete(opts.conversationId, opts.text, caret);
+  // setActive — стабилен (useState-сеттер): reset не пересоздаётся зря.
+  const setActiveCandidate = autocomplete.setActive;
   const open = autocomplete.query !== null && autocomplete.query.start !== dismissedStart;
 
   const syncCaret = (el: HTMLTextAreaElement) => setCaret(el.selectionStart ?? 0);
@@ -122,13 +128,22 @@ export function useComposerMentions(opts: {
     setDismissedStart(autocomplete.query?.start ?? null);
   }
 
+  /** Новая сессия поля (окно вложений живёт одним хуком на все открытия,
+   *  приёмка 13.11): Esc-«закрыто до этого @» и старая каретка не должны
+   *  переноситься в следующий чат — иначе «@» в той же позиции молчит. */
+  const reset = useCallback(() => {
+    setDismissedStart(null);
+    setCaret(0);
+    setActiveCandidate(0);
+  }, [setActiveCandidate]);
+
   /** KeyUp поля: синк каретки (источник запроса автокомплита). Стрелки
    *  нативны — в поле видимый текст, скрытой разметки нет (#228). */
   function handleKeyUp(el: HTMLTextAreaElement) {
     setCaret(el.selectionStart ?? 0);
   }
 
-  return { autocomplete, open, caret, syncCaret, pick, dismiss, handleKeyUp };
+  return { autocomplete, open, caret, syncCaret, pick, dismiss, handleKeyUp, reset };
 }
 
 /** Обработка клавиш панели: возвращает true, если событие съедено (композер

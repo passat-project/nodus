@@ -82,6 +82,15 @@ afterEach(() => {
 });
 
 describe('автокомплит @упоминаний (#176)', () => {
+  it('состав участников префетчится при открытии беседы, не в момент «@» (#844)', async () => {
+    apiMock.mockClear();
+    mountComposer();
+    // К первому «@» участники уже в кэше — нет кадра с одиноким «Все».
+    await waitFor(() =>
+      expect(apiMock.mock.calls.some(([url]) => String(url).includes('/members'))).toBe(true),
+    );
+  });
+
   it('«@» открывает панель, Enter вставляет токен с полным ФИО и пробелом', async () => {
     const view = mountComposer();
     const field = view.container.querySelector('textarea')!;
