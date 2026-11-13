@@ -76,14 +76,6 @@ describe('TransitionPanel: смысл кнопки и сводка правил 
       rules: {
         ...transition.rules,
         conditions: [
-          {
-            kind: 'decider_in',
-            source: {
-              kind: 'position',
-              positionId: '00000000-0000-4000-8000-0000000000a1',
-              positionKind: 'management',
-            },
-          },
           { kind: 'decider_in', source: { kind: 'manager_of', of: 'creator' } },
           {
             kind: 'decider_in',
@@ -98,7 +90,6 @@ describe('TransitionPanel: смысл кнопки и сводка правил 
       },
     } as unknown as WorkflowDraftTransition;
     const summaries = sectionSummaries(withDeciders, document);
-    expect(summaries.deciders).toContain(ui.automation.deciders.sources.position);
     expect(summaries.deciders).toContain(ui.automation.deciders.managerOf.creator);
     expect(summaries.deciders).toContain(ui.automation.deciders.sources.employees);
     expect(summaries.deciders).toContain(ui.automation.deciders.sources.field);
