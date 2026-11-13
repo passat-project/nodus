@@ -106,13 +106,16 @@ describe('resolveFirstUnreadId', () => {
   });
 
   it('удалённые и неотправленные (seq = 0) пропускаются', () => {
+    // Удалённое — ВЫШЕ watermark (11 > 10): без фильтра `deletedAt` оно стало
+    // бы границей и тест упал бы. Темп (seq = 0) ниже watermark — отсечён уже
+    // сравнением с прочитанным.
     const mixed = [
       message(9),
-      message(10, { deletedAt: '2026-11-13T10:00:01.000Z' }),
+      message(11, { deletedAt: '2026-11-13T10:00:01.000Z' }),
       message(0),
-      message(11),
+      message(12),
     ];
-    expect(resolveFirstUnreadId(mixed, options())).toBe('m-11');
+    expect(resolveFirstUnreadId(mixed, options())).toBe('m-12');
   });
 
   it('в ленте нет ничего после знака — плашки нет', () => {

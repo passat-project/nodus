@@ -56,7 +56,6 @@ export function resolveFirstUnreadId(
   if (readSeq === null) return null;
   const first = items.find(
     (message) =>
-      message.seq > 0 &&
       message.seq > readSeq &&
       !message.deletedAt &&
       (options.meId === undefined || message.author.id !== options.meId),
