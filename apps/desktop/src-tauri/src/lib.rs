@@ -85,9 +85,14 @@ pub fn run() {
         // восстановление идёт на on_window_ready — до `show()` в
         // create_main_window (окно создаётся скрытым), поэтому мигания нет;
         // сохранение — на выходе приложения и по move/resize.
+        //
+        // Только `main`: лейблы попапов (`popup-N`, `hide-all`) переиспользуются
+        // между запусками, а их геометрию считает раскладчик — восстановление
+        // чужого окна ляжет поверх `reposition_all` (валидатор #722).
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(WINDOW_STATE_FLAGS)
+                .with_filter(|label| label == "main")
                 .build(),
         )
         .manage(ShellState::default())

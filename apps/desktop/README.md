@@ -79,7 +79,10 @@ build`, потом `tauri build`.
    node scripts/desktop-test-push.mjs setup        # создать оба диалога и напечатать, где печатать
    node scripts/desktop-test-push.mjs send "текст" # night-b пишет «владельцу» — ждите попап
    ```
-   Другой api — `PUSH_API=http://127.0.0.1:3001 node scripts/desktop-test-push.mjs …`.
+   Другой api — `PUSH_API=http://127.0.0.1:<порт> node scripts/desktop-test-push.mjs …`.
+   Скрипт принимает только loopback-адрес (песочница на этом ПК); незнакомый
+   хост останавливает запуск, пока не задан `PUSH_ALLOW_REMOTE=1` — тестовые
+   учётки из публичной фикстуры не должны попадать в боевой контур.
 5. **Проба фокуса** (клавиатура не должна уходить в попап — #709): из другого
    окна терминала
    ```
@@ -92,8 +95,8 @@ build`, потом `tauri build`.
    мерить нечего. Скрипт — ASCII-only: PowerShell 5.1 читает `.ps1` без BOM как
    ANSI и русский текст роняет парсером (gotcha).
 6. **Лог оболочки**: `%LOCALAPPDATA%\by.nodus.desktop.beta\logs\nodus-desktop.log`.
-   Маркеры показа попапа — `попап popup-N (показ): …`; возврат украденного
-   фокуса — `фокус ушёл из портала … → возвращён`.
+   Маркеры показа попапа — `popup-N (показ): main=… fg=… focus=…`; возврат
+   украденного фокуса — `фокус ушёл из портала … → возвращён`.
 7. **Уборка**: удалить exe (бета не устанавливается), каталоги
    `%LOCALAPPDATA%\by.nodus.desktop.beta` (профиль WebView2 + логи) и
    `%APPDATA%\by.nodus.desktop.beta` (конфиг адреса портала).

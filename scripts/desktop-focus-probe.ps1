@@ -109,13 +109,18 @@ public class FocusProbe {
     }
 
     IntPtr fg = GetForegroundWindow();
+    uint fgPid = 0;
+    if (fg != IntPtr.Zero) GetWindowThreadProcessId(fg, out fgPid);
     IntPtr focus = info.hwndFocus;
     IntPtr root = focus == IntPtr.Zero ? IntPtr.Zero : GetAncestor(focus, 2 /* GA_ROOT */);
     uint rootPid = 0;
     if (root != IntPtr.Zero) GetWindowThreadProcessId(root, out rootPid);
 
     string verdict;
-    if (fg == IntPtr.Zero) verdict = "foreground_foreign";
+    // Foreign foreground is checked FIRST: when the user works in another app,
+    // our input queue legitimately has no focus (hwndFocus == 0) and reporting
+    // focus_none ("defect") would be wrong — there is simply nothing to measure.
+    if (fg == IntPtr.Zero || fgPid != pid) verdict = "foreground_foreign";
     else if (focus == IntPtr.Zero) verdict = "focus_none";
     else if (root == main) verdict = "focus_in_main";
     else if (rootPid == pid) verdict = "focus_in_app_popup";
@@ -125,6 +130,16 @@ public class FocusProbe {
       "fg=0x{0:X} active=0x{1:X} focus=0x{2:X}({3}) root=0x{4:X}({5}) rootPid={6} rect={7} | VERDICT={8}",
       fg.ToInt64(), info.hwndActive.ToInt64(), focus.ToInt64(), ClassOf(focus),
       root.ToInt64(), ClassOf(root), rootPid, RectOf(root), verdict);
+  }
+
+  // Main window = the largest visible window of a sane size. Popups are 360x~90
+  // and the single-instance helper is 16x16, so a width/height threshold keeps
+  // them out. If the shell is hidden to tray, there is no main window (honest
+  // "no visible main window" instead of a bogus pick).
+  public static bool IsPlausibleMain(IntPtr hwnd) {
+    RECT r;
+    if (!GetWindowRect(hwnd, out r)) return false;
+    return (r.Right - r.Left) >= 600 && (r.Bottom - r.Top) >= 300;
   }
 }
 '@
@@ -140,11 +155,13 @@ if (-not $targets) {
 foreach ($proc in $targets) {
   $procId = [uint32]$proc.Id
   $windows = [FocusProbe]::WindowsOf($procId)
-  # Main window = the largest visible one: popups are 360x~90, main is ~1280x800.
+  # Main window = the largest visible one of a sane size (popups are 360x~90,
+  # the single-instance helper is 16x16 — IsPlausibleMain filters them out).
   $main = [IntPtr]::Zero
   $best = 0
   foreach ($hwnd in $windows) {
     if (-not [FocusProbe]::IsWindowVisible($hwnd)) { continue }
+    if (-not [FocusProbe]::IsPlausibleMain($hwnd)) { continue }
     $area = [FocusProbe]::AreaOf($hwnd)
     if ($area -gt $best) { $best = $area; $main = $hwnd }
   }
@@ -155,7 +172,7 @@ foreach ($proc in $targets) {
   }
   Write-Output ("windows: " + ($classes -join " "))
   if ($main -eq [IntPtr]::Zero) {
-    Write-Output "probe: process has no visible windows"
+    Write-Output "probe: no visible main window (hidden to tray or still starting)"
     continue
   }
   Write-Output ("main: 0x{0:X} class={1} title={2} rect={3}" -f $main.ToInt64(), [FocusProbe]::ClassOf($main), [FocusProbe]::TitleOf($main), [FocusProbe]::RectOf($main))

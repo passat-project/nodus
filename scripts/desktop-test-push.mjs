@@ -88,6 +88,21 @@ async function send(token, conversationId, text) {
 }
 
 async function main() {
+  // Скрипт пишет сообщения от тестовых учёток из ПУБЛИЧНОЙ фикстуры
+  // (tests/e2e/e2e-users.json): по умолчанию — только песочница на этом же ПК.
+  // Чужой хост — осознанный запуск (PUSH_ALLOW_REMOTE=1), чтобы тестовые
+  // сообщения не улетали в боевой контур по ошибке.
+  const host = new URL(API).hostname;
+  if (
+    !['127.0.0.1', 'localhost', '[::1]', '::1'].includes(host) &&
+    process.env.PUSH_ALLOW_REMOTE !== '1'
+  ) {
+    throw new Error(
+      `PUSH_API ${API}: разрешён только loopback (песочница); ` +
+        'для осознанного запуска задайте PUSH_ALLOW_REMOTE=1',
+    );
+  }
+
   const command = process.argv[2] ?? 'setup';
   if (command === '--help' || command === 'help') {
     console.log('node scripts/desktop-test-push.mjs setup | send [текст]');

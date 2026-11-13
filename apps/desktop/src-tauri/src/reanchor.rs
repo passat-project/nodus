@@ -140,11 +140,19 @@ fn state() -> std::sync::MutexGuard<'static, TickerState> {
 
 /// Запомнить фактически применённую раскладку: якорь и топологию дисплеев.
 /// Вызывается раскладчиком (`layout::reposition_all`) после применения позиций.
+///
+/// `topology` опрашивает мониторы (`AppHandle::available_monitors`): с НЕ
+/// главного потока это блокирующее сообщение event loop'у, а главный поток в
+/// этот момент может ждать тот же `STATE` (синхронные команды попапов зовут
+/// раскладчик) — держать блокировку во время опроса нельзя (дедлок, валидатор
+/// #722/#763). Поэтому оба значения считаются ДО взятия мьютекса.
 pub(crate) fn note_layout(app: &AppHandle, anchor: &Anchor) {
+    let applied = AnchorSignature::of(anchor);
+    let topology = topology(app);
     {
         let mut st = state();
-        st.applied = Some(AnchorSignature::of(anchor));
-        st.topology = Some(topology(app));
+        st.applied = Some(applied);
+        st.topology = Some(topology);
     }
     ensure_ticker(app);
 }
