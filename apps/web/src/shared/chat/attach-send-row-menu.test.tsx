@@ -87,6 +87,49 @@ describe('меню строки окна отправки (#146)', () => {
     expect(useAttachSendDialog.getState().scope).toBe(KEY);
   });
 
+  it('потеря фокуса НЕ применяет и НЕ закрывает поле имени (приёмка 13.11)', async () => {
+    useChatDrafts.getState().addAttachments(KEY, [ready]);
+    useAttachSendDialog.getState().open(KEY, '');
+    renderDialog();
+
+    openRowMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Переименовать файл' }));
+    const nameInput = await screen.findByLabelText('Имя файла');
+    fireEvent.change(nameInput, { target: { value: 'Черновик имени' } });
+
+    // Супер-курсор/фокус-ловушка Radix могут дёрнуть фокус: blur больше не
+    // применяет имя — поле обязано остаться открытым с введённым текстом.
+    (nameInput as HTMLInputElement).blur();
+    await waitFor(() => expect(screen.queryByLabelText('Имя файла')).not.toBeNull());
+    expect((nameInput as HTMLInputElement).value).toBe('Черновик имени');
+    expect(useChatDrafts.getState().drafts[KEY]?.attachments[0]?.fileName).toBe('a.csv');
+
+    // Явное действие — Enter — применяет имя.
+    fireEvent.keyDown(nameInput, { key: 'Enter' });
+    await waitFor(() =>
+      expect(useChatDrafts.getState().drafts[KEY]?.attachments[0]?.fileName).toBe(
+        'Черновик имени.csv',
+      ),
+    );
+  });
+
+  it('клик мимо строки применяет имя и возвращает супер-курсор в подпись', async () => {
+    useChatDrafts.getState().addAttachments(KEY, [ready]);
+    useAttachSendDialog.getState().open(KEY, '');
+    renderDialog();
+
+    openRowMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Переименовать файл' }));
+    const nameInput = await screen.findByLabelText('Имя файла');
+    fireEvent.change(nameInput, { target: { value: 'Смета' } });
+
+    fireEvent.pointerDown(document.body);
+    await waitFor(() =>
+      expect(useChatDrafts.getState().drafts[KEY]?.attachments[0]?.fileName).toBe('Смета.csv'),
+    );
+    await waitFor(() => expect(screen.queryByLabelText('Имя файла')).toBeNull());
+  });
+
   it('«Заменить вложение» доступно и в окне отправки', async () => {
     useChatDrafts.getState().addAttachments(KEY, [ready]);
     useAttachSendDialog.getState().open(KEY, '');

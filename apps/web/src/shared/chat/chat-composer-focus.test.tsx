@@ -73,6 +73,10 @@ describe('ChatComposer — «вечный курсор» переживает с
       if (path === '/chat/conversations') {
         return Promise.resolve({ items: [], nextCursor: null });
       }
+      // Префетч состава участников для @упоминаний (#844) на монтировании.
+      if (String(path).includes('/members')) {
+        return Promise.resolve({ items: [], nextCursor: null });
+      }
       return Promise.resolve(undefined);
     });
     client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
