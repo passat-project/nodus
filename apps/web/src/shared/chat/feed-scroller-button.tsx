@@ -40,9 +40,9 @@ export function FeedScrollerButton({
   unreadCount?: number;
   /** Перед навигацией (к первому непрочитанному или в конец): плашка
    *  непрочитанных переставляется на живую границу — её движение скрывает
-   *  начинающаяся анимация прокрутки (#845). Возвращает id, на который встала
-   *  плашка: стрелка летит ровно к нему (один срез данных, без рассинхрона). */
-  onBeforeNavigate?: () => string | null;
+   *  начинающаяся анимация прокрутки (#845). Цель скролла берётся из DOM-якоря
+   *  самой плашки (`data-divider-for`), поэтому рассинхрона быть не может. */
+  onBeforeNavigate?: () => void;
 }) {
   const content = (
     <>
@@ -63,11 +63,14 @@ export function FeedScrollerButton({
   return (
     <MessageScrollerButton
       onClick={(event) => {
-        // Цель — ровно та, на которую встала плашка (или живой таргет без
-        // обработчика); null — непрочитанных нет, штатный скролл в конец.
-        const targetId = onBeforeNavigate?.() ?? firstUnreadId;
-        if (targetId === null) return;
+        onBeforeNavigate?.();
+        // Цель — ровно та, над которой стоит плашка (DOM-якорь после синка);
+        // нет плашки — непрочитанных нет, штатный скролл в конец.
         const viewport = viewportRef.current;
+        const anchor =
+          viewport?.querySelector<HTMLElement>('[data-divider-for]')?.dataset.dividerFor ?? null;
+        const targetId = anchor ?? firstUnreadId;
+        if (targetId === null) return;
         const el = viewport?.querySelector<HTMLElement>(
           `[data-message-id="${CSS.escape(targetId)}"]`,
         );

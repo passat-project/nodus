@@ -286,12 +286,8 @@ function ConversationFeed({
   // анимации (flushSync — DOM уже в новом состоянии). Плавный скролл
   // (`scroll-jump`) пересчитывает цель каждый кадр по живой геометрии, поэтому
   // к концу анимации плашка на месте, лента отрисована, раскладка не меняется.
-  const handleBeforeNavigate = useCallback((): string | null => {
-    let target: string | null = null;
-    flushSync(() => {
-      target = syncToLive();
-    });
-    return target;
+  const handleBeforeNavigate = useCallback(() => {
+    flushSync(() => syncToLive());
   }, [syncToLive]);
 
   // Протокол хоста ленты: отправка/правка, submit окна вложений, ↑-правка
