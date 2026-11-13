@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, render } from '@testing-library/react';
+import { snapPx } from '@nodus/ui/components/node-edge';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CircuitFrame } from './circuit-frame.js';
@@ -168,6 +169,27 @@ afterEach(() => {
   cleanup();
   document.body.innerHTML = '';
   vi.unstubAllGlobals();
+});
+
+describe('узел бокового шва схлопнутой рейки (#851)', () => {
+  it('сидит РОВНО на оси контура, а не на вертикали rem-якоря', () => {
+    mountShellDom();
+    // Якорь как в живом шелле при UI-масштабе ×1.25: ось шапки = 80
+    // (mt-2 10 + h-14 70), а рем-якорь — 79.75. До фикса кружок шёл за
+    // якорем и висел на физический пиксель выше линии связи.
+    const anchor = document.createElement('span');
+    anchor.setAttribute('data-left-node', '');
+    anchor.getBoundingClientRect = () => rect(72, 79, 1, 1);
+    document.body.append(anchor);
+    setNav('/chat', ['Чаты']);
+    render(<CircuitFrame />);
+    ensureMeasured();
+
+    const seam = document.querySelector('svg circle');
+    expect(seam).not.toBeNull();
+    // Ось линии — snapPx(axisY = 64); кружок обязан стоять на той же координате.
+    expect(Number(seam!.getAttribute('cy'))).toBe(snapPx(64));
+  });
 });
 
 describe('вспышка контура на смене модуля с width-транзицией контейнера', () => {

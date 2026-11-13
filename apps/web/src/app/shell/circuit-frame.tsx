@@ -295,7 +295,9 @@ export function CircuitFrame() {
         {geo.leftNode && geo.tabs.length > 0 ? (
           <circle
             cx={snapPx(geo.leftNode.x + 0.5)}
-            cy={snapPx(geo.leftNode.y + 0.5)}
+            // cy — ТА ЖЕ снапленная ось, что у линии: `leftNode.y` и есть
+            // axisY (фудж +0.5, подобранный под рем-якорь, снят — #851).
+            cy={snapPx(geo.leftNode.y)}
             r="2"
             // Режим карточки: узел сидит на границе карточки — тон карточки
             // (тон периметра/рейки читался бы чужой заплатой).
@@ -309,7 +311,8 @@ export function CircuitFrame() {
         {geo.terminus ? (
           <circle
             cx={snapPx(geo.terminus.x + 0.5)}
-            cy={snapPx(geo.terminus.y + 0.5)}
+            // Терминал стоит НА оси — та же снапленная координата, что у линии (#851).
+            cy={snapPx(geo.terminus.y)}
             r="2"
             fill="var(--sidebar)"
             stroke="var(--edge)"

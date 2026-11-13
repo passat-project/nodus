@@ -166,12 +166,15 @@ export function NodeRail() {
         </span>
       </div>
 
-      {/* Якорь узла бокового шва схлопнутой рейки (канон — в git-истории). */}
+      {/* Якорь узла бокового шва схлопнутой рейки (канон — в git-истории).
+          Задаёт ТОЛЬКО X: вертикаль узла = ось шапки (mt-2 + h-14 = 4rem) —
+          контур читает её из топбара, а не из этого якоря (#851). Нижняя
+          кромка якоря ложится на ось при любом UI-масштабе. */}
       {collapsed && !customizing && (
         <span
           data-left-node
           aria-hidden
-          className="absolute top-[3.9375rem] -right-[0.53125rem] size-px"
+          className="absolute top-[calc(4rem_-_1px)] -right-[0.53125rem] size-px"
         />
       )}
 
