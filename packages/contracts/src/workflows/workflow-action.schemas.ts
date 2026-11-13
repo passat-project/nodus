@@ -28,8 +28,9 @@ export const workflowDraftActionSchema = z.object({
   rules: workflowTransitionRulesSchema,
   /** Окно при нажатии (конструктор форм #496), публикуется вместе с действием. */
   form: transitionFormDraftSchema.default({ enabled: false, sections: [] }),
-  /** Шаги действия — пост-функции ядра; каталог шагов — отдельный issue. */
-  steps: z.array(workflowPostFunctionSchema).default([]),
+  /** Шаги действия — пост-функции ядра; каталог шагов — отдельный issue.
+   *  Потолок — предохранитель от раздувания документа (действия ≤ 40). */
+  steps: z.array(workflowPostFunctionSchema).max(20).default([]),
 });
 export type WorkflowDraftAction = z.infer<typeof workflowDraftActionSchema>;
 

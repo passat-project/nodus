@@ -58,6 +58,8 @@ export const problemStrings = {
     'Действие без окна и без шагов: нажимать нечего — добавьте окно или хотя бы один шаг',
   action_duplicate_name:
     'Действие с таким названием уже есть у этого статуса (или в «любом статусе»)',
+  action_stage_unknown: 'Действие привязано к статусу, которого нет в маршруте',
+  too_many_actions: 'Больше 40 действий',
   // Решающие (#433): тексты — ru-automation-deciders.ts.
   ...deciderProblemStrings,
 } as const;

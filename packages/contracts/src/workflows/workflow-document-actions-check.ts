@@ -26,13 +26,26 @@ function warning(
 export function checkActionProblems(
   actions: readonly WorkflowDraftAction[],
   category?: ProcessCategory,
+  /** Стадии документа: действие со ссылкой на чужой/неизвестный статус —
+   *  ошибка (кросс-маршрутная ссылка не должна дойти до БД). */
+  stageIds?: ReadonlySet<string>,
 ): WorkflowProblem[] {
   const problems: WorkflowProblem[] = [];
-  if (actions.length > MAX_ACTIONS) problems.push(error('too_many_transitions'));
+  if (actions.length > MAX_ACTIONS) problems.push(error('too_many_actions'));
 
   const seen = new Set<string>();
+  const primaries = new Map<string, number>();
   for (const a of actions) {
     if (a.name.trim().length === 0) problems.push(error('empty_name', { actionId: a.id }));
+    if (a.stageId !== null && stageIds !== undefined && !stageIds.has(a.stageId)) {
+      problems.push(error('action_stage_unknown', { actionId: a.id }));
+    }
+    if (a.display === 'primary') {
+      const key = a.stageId ?? '*';
+      const count = (primaries.get(key) ?? 0) + 1;
+      primaries.set(key, count);
+      if (count > 1) problems.push(error('multiple_primary', { actionId: a.id }));
+    }
 
     const name = a.name.trim().toLowerCase();
     if (name.length > 0) {

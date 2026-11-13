@@ -67,6 +67,9 @@ export function buildRouteGraph(
       ? (actions.find((a) => a.id === options.selection!.id) ?? null)
       : null;
   const selectedActionStageId = selectedAction?.stageId ?? null;
+  // Действие «в любом статусе» видно на каждом узле — его бейдж подсвечиваем
+  // везде, но кольцо узла не ставим (статуса у действия нет).
+  const selectedAnyAction = selectedAction !== null && selectedAction.stageId === null;
 
   // Занятые точки подключения статусов — кружки, к которым приходят стрелки.
   const ports = new Map<string, Set<string>>();
@@ -117,7 +120,9 @@ export function buildRouteGraph(
           taskCount: options.stageEntityCounts?.[stage.id] ?? 0,
           actions: stageActionList(stage.id),
           selectedActionId:
-            selectedActionStageId === stage.id ? (selectedAction?.id ?? null) : null,
+            selectedActionStageId === stage.id || selectedAnyAction
+              ? (selectedAction?.id ?? null)
+              : null,
           ports: [...(ports.get(stage.id) ?? [])],
           selectedPorts: selectedPorts.get(stage.id) ?? [],
         },
