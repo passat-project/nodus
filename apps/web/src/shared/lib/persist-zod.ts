@@ -34,10 +34,13 @@ export const viewsEnvelopeSchema = z.object({
   sorts: z.record(z.string(), viewSortSchema).catch({}),
 });
 
-/** Каркас (тема + служебная полоса): сломанное поле → дефолт поля. */
+/** Каркас (тема + служебная полоса + свёрнутость меню): сломанное поле →
+ *  дефолт поля. Старый envelope без `menuCollapsed` валиден и даёт развёрнутое
+ *  меню — продуктовый дефолт первого запуска (#722). */
 export const shellEnvelopeSchema = z.object({
   theme: z.enum(['dark', 'light']).catch('light'),
   edgeOpen: z.boolean().catch(false),
+  menuCollapsed: z.boolean().catch(false),
 });
 
 /** «Что нового» (#386): последний просмотренный выпуск по пользователю

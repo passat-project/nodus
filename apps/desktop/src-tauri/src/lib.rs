@@ -9,6 +9,7 @@ mod focus;
 mod layout;
 mod popups;
 mod portal;
+mod reanchor;
 mod state;
 mod tray_menu;
 mod updates;
@@ -29,6 +30,18 @@ use state::ShellState;
 /// (Chromium 152+, «скрывать указатель при вводе») в HWND-хостинге WebView2
 /// гасит каретку при наборе (#309; WebView2Feedback #5687/#5708).
 pub(crate) const WEBVIEW2_BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,HideCursorWhileTyping --autoplay-policy=no-user-gesture-required";
+
+/// Что оболочка помнит между запусками (#722, ADR-0039): размер и позицию
+/// обычного окна, maximized и fullscreen. Видимость НЕ восстанавливаем —
+/// окно всегда показывается при старте (скрытость в трей не должна
+/// переживать выход), декорации не трогаем. Дефолт первого запуска задаёт
+/// билдер окна (1280×800 по центру, меню развёрнуто): без сохранённого
+/// состояния плагин ничего не двигает.
+const WINDOW_STATE_FLAGS: tauri_plugin_window_state::StateFlags =
+    tauri_plugin_window_state::StateFlags::SIZE
+        .union(tauri_plugin_window_state::StateFlags::POSITION)
+        .union(tauri_plugin_window_state::StateFlags::MAXIMIZED)
+        .union(tauri_plugin_window_state::StateFlags::FULLSCREEN);
 
 /// Точка сборки оболочки (ADR-0019): тонкий клиент портала. Порядок плагинов:
 /// single-instance первым (канон плагина); лог перехватывает паники в файл.
@@ -68,6 +81,20 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // Состояние главного окна между запусками (#722, ADR-0039):
+        // восстановление идёт на on_window_ready — до `show()` в
+        // create_main_window (окно создаётся скрытым), поэтому мигания нет;
+        // сохранение — на выходе приложения и по move/resize.
+        //
+        // Только `main`: лейблы попапов (`popup-N`, `hide-all`) переиспользуются
+        // между запусками, а их геометрию считает раскладчик — восстановление
+        // чужого окна ляжет поверх `reposition_all` (валидатор #722).
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(WINDOW_STATE_FLAGS)
+                .with_filter(|label| label == "main")
+                .build(),
+        )
         .manage(ShellState::default())
         .manage(Mutex::new(popups::PopupStack::default()))
         .setup(|app| {
