@@ -83,11 +83,20 @@ export function FeedScrollerButton({
         if (!target) return; // штатный скролл в конец
         if (isMessageFullyVisible(target, viewport)) return; // граница видна → в конец
         event.preventDefault();
-        scrollMessageIntoView(target, viewport, {
-          align: 'start',
-          margin: anchor ? 8 : 48,
-          behavior: 'smooth',
-        });
+        scrollMessageIntoView(
+          () =>
+            viewport.querySelector<HTMLElement>(
+              anchor
+                ? '[data-divider-for]'
+                : `[data-message-id="${CSS.escape(firstUnreadId ?? '')}"]`,
+            ),
+          viewport,
+          {
+            align: 'start',
+            margin: anchor ? 8 : 48,
+            behavior: 'smooth',
+          },
+        );
       }}
     >
       {content}

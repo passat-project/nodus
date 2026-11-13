@@ -62,12 +62,14 @@ export function revealMessage(el: HTMLElement, container: HTMLElement): RevealOu
 /** Целевой scrollTop для выравнивания цели с клампом [0, maxScroll]
  *  (чистая функция — юнит-тест; и плавная анимация, и авто-режим считают ей). */
 export function scrollTopFor(
-  el: HTMLElement,
+  el: HTMLElement | (() => HTMLElement | null),
   container: HTMLElement,
   options: { align: 'start' | 'center'; margin?: number },
 ): number {
+  const node = typeof el === 'function' ? el() : el;
+  if (!node) return container.scrollTop;
   const c = container.getBoundingClientRect();
-  const r = el.getBoundingClientRect();
+  const r = node.getBoundingClientRect();
   const targetTop = r.top - c.top + container.scrollTop;
   const desired =
     options.align === 'start'
@@ -78,10 +80,13 @@ export function scrollTopFor(
 }
 
 export function scrollMessageIntoView(
-  el: HTMLElement,
+  el: HTMLElement | (() => HTMLElement | null),
   container: HTMLElement,
   options: { align: 'start' | 'center'; margin?: number; behavior?: ScrollBehavior },
 ): void {
+  // Резолвер, а не узел: во время анимации React может пересоздать строку
+  // (рефеч/прочтения), захваченный DOM-узел «отсыхает» (rect → 0) и цель
+  // уезжает в начало. Перезапрос каждый кадр держит цель живой (#845).
   const desiredTop = () => scrollTopFor(el, container, options);
   if (options.behavior === 'smooth') {
     const startTop = container.scrollTop;
@@ -121,13 +126,14 @@ export function scrollMessageIntoView(
   container.addEventListener('wheel', stop, { passive: true });
   container.addEventListener('touchstart', stop, { passive: true });
   const tick = () => {
-    if (stopped || frames > 30) {
+    const node = typeof el === 'function' ? el() : el;
+    if (stopped || frames > 30 || !node) {
       stop();
       return;
     }
     frames += 1;
     const c = container.getBoundingClientRect();
-    const r = el.getBoundingClientRect();
+    const r = node.getBoundingClientRect();
     const want =
       options.align === 'start'
         ? c.top + (options.margin ?? 0)
