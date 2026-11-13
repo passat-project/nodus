@@ -6,14 +6,16 @@ import type { ReactNode, RefObject } from 'react';
 /** Стрелка «вниз» ленты (#845): цель — DOM-якорь плашки непрочитанных,
  *  пересчитывается резолвером каждый кадр; синк плашки — ДО чтения якоря. */
 
-const { isVisible, jump } = vi.hoisted(() => ({
+const { isVisible, jump, endSmooth } = vi.hoisted(() => ({
   isVisible: vi.fn(),
   jump: vi.fn(),
+  endSmooth: vi.fn(),
 }));
 
 vi.mock('./scroll-jump.js', () => ({
   isMessageFullyVisible: isVisible,
   scrollMessageIntoView: jump,
+  scrollToEndSmooth: endSmooth,
 }));
 
 vi.mock('@nodus/ui/components/message-scroller', () => ({
@@ -51,6 +53,7 @@ beforeEach(() => {
   isVisible.mockReset();
   isVisible.mockReturnValue(false);
   jump.mockReset();
+  endSmooth.mockReset();
   prevented = 0;
 });
 
@@ -91,13 +94,14 @@ describe('FeedScrollerButton', () => {
     expect(resolver()).toBe(viewport.firstElementChild);
   });
 
-  it('граница уже видна — скролла нет, работает штатная «в конец»', () => {
+  it('граница уже видна — плавная «в конец» (не мгновенный скролл примитива)', () => {
     isVisible.mockReturnValue(true);
     const viewport = makeViewport('<div data-divider-for="m4"></div>');
     render(<FeedScrollerButton viewportRef={ref(viewport)} unreadCount={1} />);
     fireEvent.click(screen.getByRole('button'));
     expect(jump).not.toHaveBeenCalled();
-    expect(prevented).toBe(0);
+    expect(endSmooth).toHaveBeenCalledWith(viewport);
+    expect(prevented).toBe(1);
   });
 
   it('без плашки (канал/тред): цель — сообщение firstUnreadId с отступом 48', () => {
@@ -114,12 +118,13 @@ describe('FeedScrollerButton', () => {
     expect(options).toEqual({ align: 'start', margin: 48, behavior: 'smooth' });
   });
 
-  it('цели нет (нет плашки и непрочитанных) — штатный скролл в конец', () => {
+  it('цели нет (всё прочитано) — плавная «в конец», не мгновенный телепорт', () => {
     const viewport = makeViewport('');
     render(<FeedScrollerButton viewportRef={ref(viewport)} />);
     fireEvent.click(screen.getByRole('button'));
     expect(jump).not.toHaveBeenCalled();
-    expect(prevented).toBe(0);
+    expect(endSmooth).toHaveBeenCalledWith(viewport);
+    expect(prevented).toBe(1);
   });
 
   it('вьюпорта ещё нет (панель не смонтирована) — клик безопасен', () => {

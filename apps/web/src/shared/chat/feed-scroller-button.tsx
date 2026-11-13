@@ -3,16 +3,17 @@ import type { RefObject } from 'react';
 import { ui } from '@nodus/contracts';
 import { MessageScrollerButton } from '@nodus/ui/components/message-scroller';
 
-import { isMessageFullyVisible, scrollMessageIntoView } from './scroll-jump.js';
+import { isMessageFullyVisible, scrollMessageIntoView, scrollToEndSmooth } from './scroll-jump.js';
 
 /**
  * Стрелка «вниз» ленты беседы (раунд 4, вердикты владельца): пока первое
- * непрочитанное НИЖЕ сгиба — ПЛАВНАЯ (smooth, «красивая прокрутка», не
- * телепорт) прокрутка к нему; первое непрочитанное уже видно (дочитали до
- * него или непрочитанных нет) — штатное поведение примитива: плавный скролл
- * в самый низ. «Навигации по одному сообщению вниз» НЕТ (вердикт
- * раунда 4): один клик — одно плавное движение к первой непрочитанной
- * границе, следующий — в конец ленты.
+ * непрочитанное НИЖЕ сгиба — ПЛАВНАЯ прокрутка к нему; первое непрочитанное
+ * уже видно (дочитали до него или непрочитанных нет) — плавная прокрутка
+ * в самый низ. Обе ветки — собственная анимация `scroll-jump` (#845): у
+ * примитива встроенный скролл в конец мгновенный, из-за чего повторное
+ * нажатие (плашка уже снята прочтением) телепортировало ленту. «Навигации
+ * по одному сообщению вниз» НЕТ (вердикт раунда 4): один клик — одно
+ * плавное движение к первой непрочитанной границе, следующий — в конец ленты.
  *
  * #132: чип-счётчик НЕпрочитанных на кнопке (модель Telegram): новые
  * сообщения копятся, пока читатель в истории; цифра гаснет с прочтением.
@@ -26,8 +27,8 @@ import { isMessageFullyVisible, scrollMessageIntoView } from './scroll-jump.js';
  * каркас шрифта центрируется браузером, не «чернила» — у JetBrains Mono
  * резерв над базовой линией больше).
  *
- * preventDefault выключает встроенный scrollToEnd кнопки примитива только
- * в ветке «к первому непрочитанному».
+ * preventDefault выключает встроенный мгновенный scrollToEnd примитива во
+ * всех ветках — прокрутку в конец ведёт наша анимация.
  */
 export function FeedScrollerButton({
   firstUnreadId = null,
@@ -80,8 +81,14 @@ export function FeedScrollerButton({
                 `[data-message-id="${CSS.escape(firstUnreadId)}"]`,
               )
             : null);
-        if (!target) return; // штатный скролл в конец
-        if (isMessageFullyVisible(target, viewport)) return; // граница видна → в конец
+        // Границы нет или она уже видна — «в конец». ВСЕГДА своей плавной
+        // анимацией: штатный скролл примитива мгновенный, и повторное
+        // нажатие (плашка снята прочтением) телепортировало ленту (#845).
+        if (!target || isMessageFullyVisible(target, viewport)) {
+          event.preventDefault();
+          scrollToEndSmooth(viewport);
+          return;
+        }
         event.preventDefault();
         scrollMessageIntoView(
           () =>

@@ -39,26 +39,6 @@ export function revealMessage(el: HTMLElement, container: HTMLElement): RevealOu
   return 'scrolled';
 }
 
-/**
- * Программный скролл к сообщению ВНУТРИ контейнера с клампом [0, maxScroll]
- * (раунд 4). Канон для ВСЕХ якорных скроллов чата (якорь непрочитанных,
- * jump-цель открытия, стрелка «вниз»): примитивный scrollToMessage при
- * align:start/center ДОРАЩИВАЕТ спейсер ПОД контентом, когда цель в последнем
- * экране, — между последним пузырём и композером вырастает пустота, которая
- * не смывается обычной прокруткой (вердикт владельца раунда 4: «огромный
- * зазор под Просмотрено»). Кламп держит низ ленты прижатым к низу области.
- *
- * Settle-коррекция: строки ленты несут content-visibility:auto — размеры
- * строк ВНЕ вьюпорта оценочные (contain-intrinsic-size), поэтому первый
- * scrollTo садится по оценочной геометрии и может промахнуться; короткая
- * rAF-петля (~0.5 c) доводит scrollTop по живой геометрии цели и гаснет.
- * Пользовательский скролл (колесо/тач) прерывает коррекцию немедленно.
- *
- * Плавный режим (#845) — та же логика, но сразу: собственная анимация с
- * пересчётом цели КАЖДЫЙ кадр (easeOutCubic). Нативная `behavior:'smooth'`
- * целится один раз по оценочной геометрии и промахивается — к концу
- * навигации лента должна быть уже отрисована и стоять точно на цели.
- */
 /** Узел цели по резолверу (null — цель исчезла из ленты). */
 function resolveTarget(el: HTMLElement | (() => HTMLElement | null)): HTMLElement | null {
   return typeof el === 'function' ? el() : el;
@@ -84,6 +64,70 @@ export function scrollTopFor(
   return Math.min(Math.max(desired, 0), max);
 }
 
+/**
+ * Собственная плавная анимация scrollTop (#845): цель — функция, считается
+ * КАЖДЫЙ кадр (easeOutCubic, ~320 мс), null — цель исчезла, замираем.
+ * Одна механика и для плашки, и для конца ленты: нативная `behavior:'smooth'`
+ * целится один раз по оценочной геометрии и промахивается.
+ */
+function smoothScrollTop(container: HTMLElement, target: () => number | null): void {
+  const startTop = container.scrollTop;
+  const startedAt = performance.now();
+  let stopped = false;
+  const stop = (): void => {
+    stopped = true;
+    container.removeEventListener('wheel', stop);
+    container.removeEventListener('touchstart', stop);
+  };
+  container.addEventListener('wheel', stop, { passive: true });
+  container.addEventListener('touchstart', stop, { passive: true });
+  const step = (): void => {
+    if (stopped) return;
+    const want = target();
+    if (want === null) {
+      stop();
+      return;
+    }
+    const t = Math.min(1, (performance.now() - startedAt) / SMOOTH_SCROLL_MS);
+    const ease = 1 - (1 - t) ** 3;
+    container.scrollTop = startTop + (want - startTop) * ease;
+    if (t < 1) {
+      requestAnimationFrame(step);
+      return;
+    }
+    container.scrollTop = target() ?? container.scrollTop; // снап по живой геометрии
+    stop();
+  };
+  requestAnimationFrame(step);
+}
+
+/** Плавный скролл в конец ленты (стрелка без плашки: всё прочитано или
+ *  лента без границы). Та же анимация, что у переезда плашки, — иначе
+ *  повторное нажатие стрелки телепортировало ленту (#845, фидбек владельца). */
+export function scrollToEndSmooth(container: HTMLElement): void {
+  smoothScrollTop(container, () => Math.max(0, container.scrollHeight - container.clientHeight));
+}
+
+/**
+ * Программный скролл к сообщению ВНУТРИ контейнера с клампом [0, maxScroll]
+ * (раунд 4). Канон для ВСЕХ якорных скроллов чата (якорь непрочитанных,
+ * jump-цель открытия, стрелка «вниз»): примитивный scrollToMessage при
+ * align:start/center ДОРАЩИВАЕТ спейсер ПОД контентом, когда цель в последнем
+ * экране, — между последним пузырём и композером вырастает пустота, которая
+ * не смывается обычной прокруткой (вердикт владельца раунда 4: «огромный
+ * зазор под Просмотрено»). Кламп держит низ ленты прижатым к низу области.
+ *
+ * Settle-коррекция: строки ленты несут content-visibility:auto — размеры
+ * строк ВНЕ вьюпорта оценочные (contain-intrinsic-size), поэтому первый
+ * scrollTo садится по оценочной геометрии и может промахнуться; короткая
+ * rAF-петля (~0.5 c) доводит scrollTop по живой геометрии цели и гаснет.
+ * Пользовательский скролл (колесо/тач) прерывает коррекцию немедленно.
+ *
+ * Плавный режим (#845) — та же логика, но сразу: собственная анимация с
+ * пересчётом цели КАЖДЫЙ кадр (easeOutCubic). Нативная `behavior:'smooth'`
+ * целится один раз по оценочной геометрии и промахивается — к концу
+ * навигации лента должна быть уже отрисована и стоять точно на цели.
+ */
 export function scrollMessageIntoView(
   el: HTMLElement | (() => HTMLElement | null),
   container: HTMLElement,
@@ -95,34 +139,10 @@ export function scrollMessageIntoView(
   // Цель исчезла совсем (плашку сняло прочтение) — ЗАМИРАЕМ там, где едем:
   // продолжать кривую нельзя, «нулевая» цель вернула бы ленту к startTop.
   if (options.behavior === 'smooth') {
-    const startTop = container.scrollTop;
-    const startedAt = performance.now();
-    let stopped = false;
-    const stop = (): void => {
-      stopped = true;
-      container.removeEventListener('wheel', stop);
-      container.removeEventListener('touchstart', stop);
-    };
-    container.addEventListener('wheel', stop, { passive: true });
-    container.addEventListener('touchstart', stop, { passive: true });
-    const step = (): void => {
-      if (stopped) return;
+    smoothScrollTop(container, () => {
       const node = resolveTarget(el);
-      if (!node) {
-        stop();
-        return;
-      }
-      const t = Math.min(1, (performance.now() - startedAt) / SMOOTH_SCROLL_MS);
-      const ease = 1 - (1 - t) ** 3;
-      container.scrollTop = startTop + (scrollTopFor(node, container, options) - startTop) * ease;
-      if (t < 1) {
-        requestAnimationFrame(step);
-        return;
-      }
-      container.scrollTop = scrollTopFor(node, container, options); // снап по живой геометрии
-      stop();
-    };
-    requestAnimationFrame(step);
+      return node ? scrollTopFor(node, container, options) : null;
+    });
     return;
   }
   container.scrollTo({ top: scrollTopFor(el, container, options), behavior: 'auto' });

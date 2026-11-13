@@ -5,6 +5,7 @@ import {
   isMessageFullyVisible,
   revealMessage,
   scrollMessageIntoView,
+  scrollToEndSmooth,
   scrollTopFor,
 } from './scroll-jump.js';
 
@@ -39,8 +40,8 @@ function makeContainer(opts: {
   const el = makeElement();
   stubRects(el, opts.rect);
   Object.defineProperty(el, 'scrollTop', { value: opts.scrollTop, writable: true });
-  Object.defineProperty(el, 'scrollHeight', { value: opts.scrollHeight });
-  Object.defineProperty(el, 'clientHeight', { value: opts.clientHeight });
+  Object.defineProperty(el, 'scrollHeight', { value: opts.scrollHeight, configurable: true });
+  Object.defineProperty(el, 'clientHeight', { value: opts.clientHeight, configurable: true });
   el.scrollTo = vi.fn();
   return el;
 }
@@ -232,6 +233,45 @@ describe('scrollMessageIntoView — плавный режим', () => {
     h.finish();
     expect(container.scrollTop).toBe(before);
     expect(before).not.toBe(0);
+    h.restore();
+  });
+
+  it('в конец: своя плавная анимация (повторная стрелка не телепортирует)', () => {
+    const container = makeContainer({
+      rect: CONTAINER_RECT,
+      scrollTop: 0,
+      scrollHeight: 3000,
+      clientHeight: 600,
+    });
+    const h = harness(container, 0);
+    scrollToEndSmooth(container);
+    h.flush(50);
+    // Первый кадр — только часть пути: это анимация, а не мгновенный скролл.
+    expect(container.scrollTop).toBeGreaterThan(0);
+    expect(container.scrollTop).toBeLessThan(2400);
+    h.finish();
+    expect(container.scrollTop).toBe(2400); // maxScroll
+    h.restore();
+  });
+
+  it('в конец: высота выросла на ходу — снап по новому maxScroll', () => {
+    const container = makeContainer({
+      rect: CONTAINER_RECT,
+      scrollTop: 0,
+      scrollHeight: 3000,
+      clientHeight: 600,
+    });
+    let scrollHeight = 3000;
+    Object.defineProperty(container, 'scrollHeight', {
+      get: () => scrollHeight,
+      configurable: true,
+    });
+    const h = harness(container, 0);
+    scrollToEndSmooth(container);
+    h.flush(50);
+    scrollHeight = 3400; // строка дорендерилась по ходу навигации
+    h.finish();
+    expect(container.scrollTop).toBe(2800);
     h.restore();
   });
 });
