@@ -38,15 +38,25 @@ export function isAtBottom(viewport: HTMLElement, tolerance = NEAR_BOTTOM_PX): b
  * Сдвиг scrollTop при изменении высоты вьюпорта ленты (#847): поле ввода
  * растёт — вьюпорт ленты сжимается, и чтобы низ остался видимым, содержимое
  * поднимается на ту же дельту (`scrollTop += delta`, дельта > 0 при сжатии).
- * Поле уменьшилось — возвращаем на столько же. Не у низа — не трогаем:
- * чтение истории рост поля сдвигать не должен. Чистая функция — юнит-тест.
+ * Поле уменьшилось — возвращаем на столько же.
+ *
+ * «У низа» решается по ГЕОМЕТРИИ ДО изменения (`prevClientHeight`): рост/
+ * сжатие вьюпорта само по себе рождает scroll-событие, которое иначе успевает
+ * пометить «не у низа» и отменяет пин (баг при очистке поля). Не у низа —
+ * не трогаем: чтение истории рост поля сдвигать не должен. Чистая функция.
  */
 export function pinScrollDelta(
-  prevClientHeight: number,
-  clientHeight: number,
-  atBottom: boolean,
+  {
+    prevClientHeight,
+    clientHeight,
+    scrollHeight,
+    scrollTop,
+  }: { prevClientHeight: number; clientHeight: number; scrollHeight: number; scrollTop: number },
+  tolerance = NEAR_BOTTOM_PX,
 ): number {
-  if (!atBottom || prevClientHeight === clientHeight) return 0;
+  if (prevClientHeight === clientHeight) return 0;
+  const atBottomBefore = scrollHeight - scrollTop - prevClientHeight <= tolerance;
+  if (!atBottomBefore) return 0;
   return prevClientHeight - clientHeight;
 }
 
@@ -85,7 +95,12 @@ export function useIncomingFollow({
         ? null
         : new ResizeObserver(() => {
             const height = viewport.clientHeight;
-            const delta = pinScrollDelta(prevClientHeight, height, atBottomRef.current);
+            const delta = pinScrollDelta({
+              prevClientHeight,
+              clientHeight: height,
+              scrollHeight: viewport.scrollHeight,
+              scrollTop: viewport.scrollTop,
+            });
             prevClientHeight = height;
             if (delta !== 0) viewport.scrollTop += delta;
           });

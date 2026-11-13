@@ -85,18 +85,32 @@ describe('isAtBottom', () => {
 });
 
 describe('pinScrollDelta (#847: рост поля ввода)', () => {
+  const base = { scrollHeight: 2603, scrollTop: 1964, prevClientHeight: 639, clientHeight: 639 };
   it('поле выросло (вьюпорт сжался) у низа — поднимаем содержимое на дельту', () => {
-    expect(pinScrollDelta(768, 680, true)).toBe(88);
-    // scrollTop += 88 — низ сообщений остаётся над композером.
-    expect(pinScrollDelta(680, 760, true)).toBe(-80);
+    expect(
+      pinScrollDelta({ ...base, scrollTop: 1835, prevClientHeight: 768, clientHeight: 639 }),
+    ).toBe(129);
+    expect(
+      pinScrollDelta({ ...base, scrollTop: 1964, prevClientHeight: 639, clientHeight: 768 }),
+    ).toBe(-129);
   });
 
   it('не у низа — рост поля ленту не двигает (читаем историю)', () => {
-    expect(pinScrollDelta(768, 680, false)).toBe(0);
+    expect(
+      pinScrollDelta({ ...base, scrollTop: 900, prevClientHeight: 768, clientHeight: 639 }),
+    ).toBe(0);
+  });
+
+  it('scroll-событие от самого ресайза уже пометило «не у низа» — пин по геометрии ДО', () => {
+    // scrollTop 1964 при прежней высоте 639 — ровно низ; после сжатия
+    // вьюпорта (аттрибут «не у низа») пин всё равно обязан сработать.
+    expect(
+      pinScrollDelta({ ...base, scrollTop: 1835, prevClientHeight: 768, clientHeight: 639 }),
+    ).not.toBe(0);
   });
 
   it('высота не изменилась — сдвига нет', () => {
-    expect(pinScrollDelta(700, 700, true)).toBe(0);
+    expect(pinScrollDelta({ ...base, prevClientHeight: 700, clientHeight: 700 })).toBe(0);
   });
 });
 

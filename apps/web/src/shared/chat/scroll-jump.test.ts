@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 
-import { isMessageFullyVisible, revealMessage } from './scroll-jump.js';
+import { isMessageFullyVisible, revealMessage, scrollTopFor } from './scroll-jump.js';
 
 /** Инфраструктура jsdom: габариты через getBoundingClientRect-стабы,
  *  геометрия контейнера — defineProperty (jsdom не считает layout). */
@@ -70,7 +70,7 @@ describe('scroll-jump — видно/не видно и кламп низа', ()
     stubRects(message, rect(520, 700)); // низ за пределами области
     expect(isMessageFullyVisible(message, container)).toBe(false);
     expect(revealMessage(message, container)).toBe('scrolled');
-    expect(container.scrollTo).toHaveBeenCalled();
+    expect(scrollTopFor(message, container, { align: 'center' })).toBeGreaterThan(0);
   });
 
   it('далёкая цель ниже: центрируется точным скроллом (desired внутри диапазона)', () => {
@@ -84,10 +84,7 @@ describe('scroll-jump — видно/не видно и кламп низа', ()
     // верх цели на 2000px от верха контента (учёт scrollTop=0)
     stubRects(message, rect(2000, 2080));
     expect(revealMessage(message, container)).toBe('scrolled');
-    expect(container.scrollTo).toHaveBeenCalledWith({
-      top: 2000 - (600 - 80) / 2,
-      behavior: 'smooth',
-    });
+    expect(scrollTopFor(message, container, { align: 'center' })).toBe(2000 - (600 - 80) / 2);
   });
 
   it('КЛЮЧЕВОЕ: центрирование у низа ленты КЛАМПИТСЯ на maxScroll — низ прижат, «дыры» нет', () => {
@@ -102,7 +99,7 @@ describe('scroll-jump — видно/не видно и кламп низа', ()
     stubRects(message, rect(1800, 1880)); // центр требует scrollTop 1200 > max 940
     expect(revealMessage(message, container)).toBe('scrolled');
     // Спейсер НЕ растёт: запрос ровно maxScroll — нижнее сообщение остаётся у низа.
-    expect(container.scrollTo).toHaveBeenCalledWith({ top: 940, behavior: 'smooth' });
+    expect(scrollTopFor(message, container, { align: 'center' })).toBe(940);
   });
 
   it('цель выше начала: кламп на 0', () => {
@@ -115,7 +112,7 @@ describe('scroll-jump — видно/не видно и кламп низа', ()
     const message = makeElement();
     stubRects(message, rect(-1500, -1440)); // далеко выше
     expect(revealMessage(message, container)).toBe('scrolled');
-    expect(container.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+    expect(scrollTopFor(message, container, { align: 'center' })).toBe(0);
   });
 
   it('maxScroll = 0 (контент меньше области) — скролл в 0, не за пределы', () => {
@@ -128,6 +125,6 @@ describe('scroll-jump — видно/не видно и кламп низа', ()
     const message = makeElement();
     stubRects(message, rect(700, 780)); // ниже области, но контент не прокручивается
     expect(revealMessage(message, container)).toBe('scrolled');
-    expect(container.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+    expect(scrollTopFor(message, container, { align: 'center' })).toBe(0);
   });
 });

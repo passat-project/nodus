@@ -18,6 +18,8 @@ export type RevealOutcome = 'visible' | 'scrolled';
 
 /** Допуск на субпиксельные расхождения getBoundingClientRect. */
 const EPSILON = 1;
+/** Длительность собственной плавной прокрутки (нативная не корректируется). */
+const SMOOTH_SCROLL_MS = 320;
 
 /** Цель полностью в области прокрутки (без обрезки сверху/снизу). */
 export function isMessageFullyVisible(el: HTMLElement, container: HTMLElement): boolean {
@@ -51,25 +53,63 @@ export function revealMessage(el: HTMLElement, container: HTMLElement): RevealOu
  * scrollTo садится по оценочной геометрии и может промахнуться; короткая
  * rAF-петля (~0.5 c) доводит scrollTop по живой геометрии цели и гаснет.
  * Пользовательский скролл (колесо/тач) прерывает коррекцию немедленно.
+ *
+ * Плавный режим (#845) — та же логика, но сразу: собственная анимация с
+ * пересчётом цели КАЖДЫЙ кадр (easeOutCubic). Нативная `behavior:'smooth'`
+ * целится один раз по оценочной геометрии и промахивается — к концу
+ * навигации лента должна быть уже отрисована и стоять точно на цели.
  */
+/** Целевой scrollTop для выравнивания цели с клампом [0, maxScroll]
+ *  (чистая функция — юнит-тест; и плавная анимация, и авто-режим считают ей). */
+export function scrollTopFor(
+  el: HTMLElement,
+  container: HTMLElement,
+  options: { align: 'start' | 'center'; margin?: number },
+): number {
+  const c = container.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  const targetTop = r.top - c.top + container.scrollTop;
+  const desired =
+    options.align === 'start'
+      ? targetTop - (options.margin ?? 0)
+      : targetTop - (container.clientHeight - r.height) / 2;
+  const max = Math.max(0, container.scrollHeight - container.clientHeight);
+  return Math.min(Math.max(desired, 0), max);
+}
+
 export function scrollMessageIntoView(
   el: HTMLElement,
   container: HTMLElement,
   options: { align: 'start' | 'center'; margin?: number; behavior?: ScrollBehavior },
 ): void {
-  const desiredTop = () => {
-    const c = container.getBoundingClientRect();
-    const r = el.getBoundingClientRect();
-    const targetTop = r.top - c.top + container.scrollTop;
-    const desired =
-      options.align === 'start'
-        ? targetTop - (options.margin ?? 0)
-        : targetTop - (container.clientHeight - r.height) / 2;
-    const max = Math.max(0, container.scrollHeight - container.clientHeight);
-    return Math.min(Math.max(desired, 0), max);
-  };
-  container.scrollTo({ top: desiredTop(), behavior: options.behavior ?? 'auto' });
-  if (options.behavior === 'smooth') return; // плавный сам доедет; коррекция не нужна
+  const desiredTop = () => scrollTopFor(el, container, options);
+  if (options.behavior === 'smooth') {
+    const startTop = container.scrollTop;
+    const startedAt = performance.now();
+    let stopped = false;
+    const stop = (): void => {
+      stopped = true;
+      container.removeEventListener('wheel', stop);
+      container.removeEventListener('touchstart', stop);
+    };
+    container.addEventListener('wheel', stop, { passive: true });
+    container.addEventListener('touchstart', stop, { passive: true });
+    const step = (): void => {
+      if (stopped) return;
+      const t = Math.min(1, (performance.now() - startedAt) / SMOOTH_SCROLL_MS);
+      const ease = 1 - (1 - t) ** 3;
+      container.scrollTop = startTop + (desiredTop() - startTop) * ease;
+      if (t < 1) {
+        requestAnimationFrame(step);
+        return;
+      }
+      container.scrollTop = desiredTop(); // финальный снап по живой геометрии
+      stop();
+    };
+    requestAnimationFrame(step);
+    return;
+  }
+  container.scrollTo({ top: desiredTop(), behavior: 'auto' });
 
   let frames = 0;
   let stopped = false;
