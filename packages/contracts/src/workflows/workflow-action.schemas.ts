@@ -39,3 +39,15 @@ export const workflowDocActionSchema = workflowDraftActionSchema.extend({
   form: transitionFormSchema.default({ enabled: false, sections: [] }),
 });
 export type WorkflowDocAction = z.infer<typeof workflowDocActionSchema>;
+
+/** Действие в панели процесса карточки (#633): что показать нажавшему.
+ *  Условия «кто видит» и шаги на клиент не уходят — сервер уже отфильтровал
+ *  по видимости и исполняемости. */
+export const workflowActionSchema = z.object({
+  id: z.uuid(),
+  name: z.string().min(1),
+  display: transitionDisplaySchema,
+  /** Окно при нажатии: null — окно выключено (действие — просто запись). */
+  form: transitionFormSchema.nullable(),
+});
+export type WorkflowAction = z.infer<typeof workflowActionSchema>;

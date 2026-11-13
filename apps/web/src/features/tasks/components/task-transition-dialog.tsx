@@ -29,7 +29,7 @@ import {
 
 /** Контекст окна из карточки (#380): поля, итог, права, сдача утверждающему;
  *  определения полей области — из реестра (#431), ссылки — из детали. */
-function windowContextOf(
+export function windowContextOf(
   task: TaskDetail,
   conversationId: string | null,
   customFieldDefinitions: TransitionWindowContext['customFieldDefinitions'],

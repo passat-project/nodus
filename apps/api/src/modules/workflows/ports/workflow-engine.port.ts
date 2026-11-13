@@ -2,6 +2,7 @@ import type {
   ProcessCategory,
   ProcessType,
   TransitionFormInput,
+  WorkflowAction,
   WorkflowTransition,
 } from '@nodus/contracts';
 
@@ -45,6 +46,14 @@ export interface WorkflowEnginePort {
     actor: WorkflowActor,
   ): Promise<WorkflowTransition[]>;
 
+  /** Действия статуса без смены статуса (#633) — панель процесса карточки. */
+  availableActions(
+    tx: TransactionClient,
+    entityId: string,
+    category: ProcessCategory,
+    actor: WorkflowActor,
+  ): Promise<WorkflowAction[]>;
+
   /** Выполнить переход: замок, условия, форма окна, гейты (обход — флаг +
    *  причина), смена стадии адаптером, запись журнала. Возвращает целевую
    *  стадию и id строки журнала. */
@@ -71,7 +80,14 @@ export interface WorkflowEnginePort {
     actor: WorkflowActor,
     actionId: string,
     opts?: { form?: TransitionFormInput },
-  ): Promise<{ actionName: string; fields: Record<string, unknown> }>;
+  ): Promise<{
+    actionName: string;
+    stageName: string;
+    recordId: string;
+    fields: Record<string, unknown>;
+    commentLabel?: string;
+    result?: { resultId: string; fileCount: number; messageCount: number };
+  }>;
 }
 
 /** Тип процесса с маршрутом — то, что нужно модулю-владельцу для создания

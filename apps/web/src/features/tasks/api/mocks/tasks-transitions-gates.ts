@@ -236,6 +236,60 @@ export function postBlock(
   conversation.lastMessage = demoMessages[demoMessages.length - 1] ?? null;
 }
 
+/** Блок действия без смены статуса в мок-ленте задачи (#633): автор —
+ *  нажавший, статус не меняется, причина — текст окна. */
+export function postActionBlock(
+  task: TaskListItem,
+  action: { name: string; form: WorkflowTransition['form'] },
+  input: TransitionFormInput,
+): void {
+  const conversation = demoConversations.find((c) => c.task?.id === task.id);
+  if (!conversation) return;
+  const recordId = crypto.randomUUID();
+  const actor = getMockActor();
+  const seq = Math.max(0, ...demoMessages.map((m) => m.seq)) + 1;
+  demoMessages.push({
+    id: crypto.randomUUID(),
+    conversationId: conversation.id,
+    seq,
+    clientMessageId: `task-action:${recordId}`,
+    author: userRef(actor.id),
+    text: input.comment ?? '',
+    kind: 'task_action',
+    block: {
+      kind: 'task_action',
+      taskId: task.id,
+      recordId,
+      actionName: action.name.slice(0, 40),
+      stageName: task.stage.name.slice(0, 40),
+      commentLabel: action.form?.sections.find((s) => s.kind === 'comment')?.label ?? null,
+      result: input.result
+        ? {
+            fileCount: fileCount(input.result.messageIds),
+            messageCount: input.result.messageIds.length,
+          }
+        : null,
+    },
+    replyToId: null,
+    reply: null,
+    threadRootId: null,
+    threadRepliesCount: 0,
+    reactions: [],
+    attachments: [],
+    editedAt: null,
+    deletedAt: null,
+    pinned: false,
+    forwardedFrom: null,
+    readAt: null,
+    readBy: [],
+    urgent: false,
+    mentionedUserIds: [],
+    linkPreview: null,
+    createdAt: new Date().toISOString(),
+  });
+  conversation.lastMessage = demoMessages[demoMessages.length - 1] ?? null;
+}
+
 /** Запись окна в закреплённое (#496, Р4, В10): ключи настроенного раздела
  *  окно пишет мимо замка; ключ, который добавило только условие «Заполнены
  *  поля», — пока он пуст. Грамматика — общая с сервером (`windowWritableKeys`

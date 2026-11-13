@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Check, X } from 'lucide-react';
 import type { TaskDetail, WorkflowTransition } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
+
+const mocks = vi.hoisted(() => ({
+  actionRun: vi.fn(),
+  actions: [] as unknown[],
+}));
 
 vi.mock('../api/transitions-api.js', () => ({
   useWorkflowTransitions: () => ({ data: [] }),
@@ -12,11 +17,23 @@ vi.mock('../api/transitions-api.js', () => ({
 vi.mock('./task-transition-dialog.js', () => ({
   useTransitionRunner: () => ({ runningId: null, run: vi.fn(), dialog: null }),
 }));
+vi.mock('./task-action-runner.js', () => ({
+  useActionRunner: () => ({
+    actions: mocks.actions,
+    runningId: null,
+    run: mocks.actionRun,
+    dialog: null,
+  }),
+}));
 vi.mock('./task-time.js', () => ({ TaskTimerButton: () => null }));
 
 import { TaskActionBar, transitionIcon } from './task-stage-controls.js';
 
 afterEach(cleanup);
+afterEach(() => {
+  mocks.actions = [];
+  mocks.actionRun.mockClear();
+});
 
 const transition = (outcome: 'success' | 'cancelled' | 'rejected' | null): WorkflowTransition =>
   ({ toStageState: 'closed', toStageOutcome: outcome }) as WorkflowTransition;
@@ -44,5 +61,25 @@ describe('TaskActionBar: итог «Отклонена» (#430)', () => {
 
     expect(screen.getByText('Отклонена')).toBeTruthy();
     expect(screen.getByText(ui.tasks.processNoActions)).toBeTruthy();
+  });
+});
+
+describe('TaskActionBar: действие без смены статуса (#633)', () => {
+  it('кнопка действия в панели, клик уходит в раннер действий', () => {
+    mocks.actions = [{ id: 'a1', name: 'Запросить уточнение', display: 'button', form: null }];
+    render(
+      <TaskActionBar
+        task={{ ...task, stage: { ...task.stage, systemState: 'active' } }}
+        showTime={false}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Запросить уточнение' });
+    fireEvent.click(button);
+    expect(mocks.actionRun).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'a1', name: 'Запросить уточнение' }),
+    );
+    // «Нет доступных действий» не показывается, хотя переходов нет.
+    expect(screen.queryByText(ui.tasks.processNoActions)).toBeNull();
   });
 });

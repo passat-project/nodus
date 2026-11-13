@@ -1,11 +1,12 @@
 import type {
+  WorkflowAction,
   WorkflowDeciderFacts,
   WorkflowTransition,
   WorkflowTransitionRules,
 } from '@nodus/contracts';
 
 import type { WorkflowGateFacts } from '../../../../core/ports/workflow-entity.port.js';
-import type { StageRow } from '../workflow.repository.js';
+import type { ActionDef, StageRow } from '../workflow.repository.js';
 import {
   effectiveTargetId,
   evaluateValidators,
@@ -56,6 +57,31 @@ export function transitionOptions(
         validators: t.rules.validators,
       };
     });
+}
+
+/**
+ * Действия статуса для панели процесса (#633): видимые актору, свои — раньше
+ * «из любого», по sortOrder. Действия с шагами пока не исполняются (каталог
+ * шагов ядра — отдельная задача) и в карточку не попадают: кнопка, которая
+ * всегда падает, хуже отсутствующей.
+ */
+export function actionOptions(
+  workflow: { actions: readonly ActionDef[] },
+  subject: AvailabilitySubject & { stageId: string },
+): WorkflowAction[] {
+  return workflow.actions
+    .filter((action) => action.stageId === null || action.stageId === subject.stageId)
+    .filter((action) => (action.steps as unknown[]).length === 0 && canShow(action, subject))
+    .sort(
+      (a, b) =>
+        Number(a.stageId === null) - Number(b.stageId === null) || a.sortOrder - b.sortOrder,
+    )
+    .map((action) => ({
+      id: action.id,
+      name: action.name,
+      display: action.display,
+      form: action.form?.enabled ? action.form : null,
+    }));
 }
 
 /**
