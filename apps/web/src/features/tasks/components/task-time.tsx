@@ -79,7 +79,7 @@ export function TaskTimerButton({ task }: { task: TaskDetail }) {
       title={runningHere ? ui.tasks.timer.stop : ui.tasks.timer.start}
       aria-label={runningHere ? ui.tasks.timer.stop : ui.tasks.timer.start}
       className={cn(
-        'inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-transparent text-sm font-medium outline-none transition-[color,background-color,border-color,box-shadow,padding,opacity,filter] duration-200 ease-out focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30',
+        'inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-transparent text-sm font-medium outline-none transition-[color,background-color,border-color,box-shadow,padding,opacity,filter] duration-200 ease-out focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30',
         runningHere
           ? 'bg-success-soft pr-3 pl-2 text-success hover:brightness-110'
           : 'px-2 text-muted-foreground hover:bg-accent hover:text-foreground',

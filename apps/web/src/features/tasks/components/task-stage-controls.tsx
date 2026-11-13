@@ -26,18 +26,25 @@ import type { LucideIcon } from 'lucide-react';
 import { gateReasonsText, useWorkflowTransitions } from '../api/transitions-api.js';
 import { PauseGlyph } from '../../../shared/ui/pause-glyph.js';
 import { stageTone } from '../../../shared/ui/board/stage-tone.js';
-import { groupByDisplay, groupProcessButtons } from '../../../shared/workflow/process-buttons.js';
+import { groupProcessButtons } from '../../../shared/workflow/process-buttons.js';
 import { RouteViewDialog } from '../../../shared/workflow/route-view-dialog.js';
+import { ACTIONS_INLINE_MAX, TaskActionsMenu } from './task-actions-menu.js';
 import { useActionRunner } from './task-action-runner.js';
 import { TaskTimerButton } from './task-time.js';
 import { useTransitionRunner } from './task-transition-dialog.js';
 
-/* Кнопки панели — ОДНОЙ высоты: h-8 = 40px при --ui-scale 1.25 (замер
+/* Кнопки панели — ОДНОЙ высоты: h-9 = 45px при --ui-scale 1.25 (замер
  * Битрикс24); важность — заливкой, не размером. Главная — одна (залитая),
  * видимые — по порядку, «Ещё ⋯» — меню; порядок и показ задаёт сервер
- * (`display`, sortOrder) — эвристик клиента нет (#378). */
-const btn =
-  'inline-flex h-8 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors disabled:opacity-40';
+ * (`display`, sortOrder) — эвристик клиента нет (#378). Фокус — общий канон:
+ * невидимая рамка + ring (как у кнопки таймера рядом). */
+const btnBase =
+  'inline-flex h-9 items-center gap-2 rounded-md border border-transparent px-3 text-sm font-medium transition-colors outline-none disabled:opacity-40 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30';
+/** Кнопка перехода и «⋯»: ширину не отдаёт — при нехватке места уступает
+ *  блок действий, а не названия переходов. */
+const btn = `${btnBase} shrink-0`;
+/** Кнопка действия: сжимается первой (`flex-shrink: 3` против 0 у переходов). */
+const actionBtn = `${btnBase} min-w-0 [flex-shrink:3]`;
 const valueChip =
   'inline-flex h-6 max-w-full cursor-pointer items-center gap-1.5 rounded border px-1.5 font-mono text-label font-medium tracking-[0.08em] transition-colors hover:brightness-125 data-[state=open]:brightness-125';
 
@@ -60,6 +67,18 @@ export function transitionIcon(t: WorkflowTransition): LucideIcon | typeof Pause
  * гейтом кнопка видна приглушённой, клик — диалог причин и выходов; в
  * правом конце — таймер учёта времени. Личная колонка «Моего плана» здесь
  * не показывается (только DnD на доске).
+ *
+ * ПОРЯДОК ПАНЕЛИ — ЗАКОН (#633, стык с #707):
+ *   закрытая стадия → переходы (включая коллективную кнопку с кольцом) →
+ *   действия → «⋯» меню процесса → таймер.
+ * Коллективное нажатие (#707) — ЭТО ПЕРЕХОД: отдельного слота нет, кнопку
+ * рисует наш же `renderButton` (шире обычной, с кольцом прогресса), поэтому
+ * панель её не различает и ничего не дублирует. Действий в ряд — не больше
+ * одного: от двух уходим в «Действия» ▾ со счётчиком (`ACTIONS_INLINE_MAX`),
+ * а действие с `display: 'menu'` уходит туда ВСЕГДА — даже единственное
+ * (настройку «в меню» из конструктора маршрута не теряем).
+ * При нехватке ширины первым сжимается блок действий, названия переходов
+ * остаются целиком (обрезаем только экстремально длинные, с `title`).
  */
 export function TaskActionBar({
   task,
@@ -76,7 +95,7 @@ export function TaskActionBar({
 
   if (!transitions) {
     return (
-      <div className="flex w-full min-w-0 items-center gap-1.5">
+      <div className="flex w-full min-w-0 flex-nowrap items-center gap-1.5">
         <span className="ml-auto" />
         {showTime ? <TaskTimerButton task={task} /> : null}
       </div>
@@ -84,18 +103,24 @@ export function TaskActionBar({
   }
 
   const { primary, visible, menu } = groupProcessButtons(transitions);
-  // Действия (#633) — первыми в панели; залитая кнопка в баре одна: главная
-  // кнопка перехода сильнее, иначе главным становится действие.
-  const actionGroups = groupByDisplay(actionRunner.actions);
-  const primaryAction = primary ? null : actionGroups.primary;
-  const actionVisible: WorkflowAction[] = (
-    primary ? [actionGroups.primary, ...actionGroups.visible] : actionGroups.visible
-  ).filter((action): action is WorkflowAction => action !== null);
+  // Действия (#633): вид задаёт количество ИЛИ серверный `display`.
+  //   `menu` у действия — всегда список (даже единственное: пункт один,
+  //   счётчик «1» честно говорит, сколько там);
+  //   иначе 1 действие — своя кнопка с полным названием, 2+ — список.
+  // Настройку конструктора маршрута не теряем: «в меню» остаётся «в меню».
+  const actionCount = actionRunner.actions.length;
+  const onlyAction = actionRunner.actions[0] ?? null;
+  const singleAction =
+    actionCount === ACTIONS_INLINE_MAX && onlyAction?.display !== 'menu' ? onlyAction : null;
+  const actionsMany = actionCount > 0 && !singleAction;
+  // Залитая кнопка в баре одна: главный переход сильнее, иначе главным
+  // становится единственное действие (переходов нет).
+  const actionMain = !primary && visible.length === 0;
   const closed = isFinalState(task.stage.systemState);
   const cancelled = closed && task.stage.outcome === 'cancelled';
   const rejected = closed && task.stage.outcome === 'rejected';
   const negative = cancelled || rejected;
-  const noButtons = transitions.length + actionRunner.actions.length === 0;
+  const noButtons = actionCount === 0 && transitions.length === 0;
 
   const renderAction = (action: WorkflowAction, main: boolean) => {
     const blocked = action.blockedBy.length > 0;
@@ -117,20 +142,18 @@ export function TaskActionBar({
         }
         onClick={() => actionRunner.run(action)}
         className={cn(
-          btn,
+          actionBtn,
           main
             ? 'bg-primary text-primary-foreground hover:bg-primary-hover'
-            : 'min-w-0 shrink text-muted-foreground hover:bg-accent hover:text-foreground',
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
           blocked && 'opacity-50',
         )}
       >
         <Icon className={cn('size-4 shrink-0', running && 'animate-spin')} strokeWidth={1.75} />
-        <span
-          className={cn(
-            'max-w-36 min-w-0 truncate @max-[420px]:max-w-24',
-            !main && '@max-[420px]:hidden',
-          )}
-        >
+        {/* Название действия целиком; при нехватке ширины уступает именно
+            блок действий — первым делом подпись (в узком контейнере остаётся
+            значок с подсказкой), а не название перехода. */}
+        <span className={cn('min-w-0 whitespace-nowrap', !main && '@max-[420px]:hidden')}>
           {action.name}
         </span>
       </button>
@@ -161,34 +184,31 @@ export function TaskActionBar({
           btn,
           main
             ? 'bg-primary text-primary-foreground hover:bg-primary-hover'
-            : 'min-w-0 shrink text-muted-foreground hover:bg-accent hover:text-foreground',
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
           blocked && 'opacity-50',
         )}
       >
         <Icon className={cn('size-4 shrink-0', running && 'animate-spin')} strokeWidth={1.75} />
-        {/* Узкая левая зона: вторичная кнопка — только значок с подсказкой. */}
-        <span
-          className={cn(
-            'max-w-36 min-w-0 truncate @max-[420px]:max-w-24',
-            !main && '@max-[420px]:hidden',
-          )}
-        >
-          {t.name}
-        </span>
+        {/* Переход не режем ради действий: подпись до 16rem (прежний потолок
+            9rem читался «Приоста…»), `truncate` — предохранитель для
+            экстремально длинного имени (полное — в `title`). В контейнере уже
+            420px подписи вторичных кнопок уходят в значок — иначе бар не
+            влезает в дефолтную колонку карточки (340px). */}
+        <span className={cn('max-w-64 truncate', !main && '@max-[420px]:hidden')}>{t.name}</span>
       </button>
     );
   };
 
-  const menuCount = menu.length + actionGroups.menu.length;
+  const menuCount = menu.length;
 
   return (
-    <div className="flex w-full min-w-0 items-center gap-1.5">
+    <div className="flex w-full min-w-0 flex-nowrap items-center gap-1.5">
       {runner.dialog}
       {actionRunner.dialog}
       {closed ? (
         <span
           className={cn(
-            'inline-flex h-8 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium',
+            'inline-flex h-9 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium',
             negative ? stageTone.danger.chip : stageTone.success.chip,
           )}
         >
@@ -200,13 +220,31 @@ export function TaskActionBar({
           {task.stage.name}
         </span>
       ) : null}
-      {primaryAction ? renderAction(primaryAction, true) : null}
-      {actionVisible.map((action) => renderAction(action, false))}
-      {actionRunner.actions.length > 0 && transitions.length > 0 ? (
-        <span className="h-5 w-px shrink-0 bg-border" aria-hidden />
-      ) : null}
+      {/* 2. Переходы — целиком: при нехватке ширины уступает блок действий.
+          Коллективная кнопка (#707) — тоже переход, рисуется здесь же. */}
       {primary ? renderButton(primary, true) : null}
       {visible.map((t) => renderButton(t, false))}
+      {/* 3. Действия: одно — кнопкой, два и больше — «Действия» ▾. */}
+      {transitions.length > 0 && actionCount > 0 ? (
+        <span className="h-5 w-px shrink-0 bg-border/60" aria-hidden />
+      ) : null}
+      {actionsMany ? (
+        <TaskActionsMenu
+          actions={actionRunner.actions}
+          runningId={actionRunner.runningId}
+          onRun={actionRunner.run}
+        />
+      ) : singleAction ? (
+        renderAction(singleAction, actionMain)
+      ) : null}
+      {noButtons ? (
+        <span className="px-1 text-sm text-muted-foreground">
+          {task.access.canEdit ? ui.tasks.processNoActions : ui.tasks.processObserving}
+        </span>
+      ) : null}
+      {/* 4. «⋯» — меню процесса (переходы с показом `menu`) у правого края,
+          5. таймер — последним. */}
+      <span className="ml-auto" />
       {menuCount > 0 ? (
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -216,23 +254,7 @@ export function TaskActionBar({
           >
             <MoreHorizontal className="size-4" strokeWidth={1.75} />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="top" className="w-52">
-            {actionGroups.menu.map((action) => (
-              <DropdownMenuItem
-                key={action.id}
-                className={cn(action.blockedBy.length > 0 && 'opacity-50')}
-                title={
-                  action.blockedBy.length > 0
-                    ? `${ui.tasks.processBlockedMissing} ${gateReasonsText(action.blockedBy)}`
-                    : action.name
-                }
-                onSelect={() => actionRunner.run(action)}
-              >
-                <Zap className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-                {action.name}
-              </DropdownMenuItem>
-            ))}
-            {actionGroups.menu.length > 0 && menu.length > 0 ? <DropdownMenuSeparator /> : null}
+          <DropdownMenuContent align="end" side="top" className="w-52">
             {menu.map((t) => (
               <DropdownMenuItem
                 key={t.id}
@@ -250,12 +272,6 @@ export function TaskActionBar({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-      {noButtons ? (
-        <span className="px-1 text-sm text-muted-foreground">
-          {task.access.canEdit ? ui.tasks.processNoActions : ui.tasks.processObserving}
-        </span>
-      ) : null}
-      <span className="ml-auto" />
       {showTime ? <TaskTimerButton task={task} /> : null}
     </div>
   );
