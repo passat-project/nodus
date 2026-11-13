@@ -178,7 +178,7 @@ export function NotesSourceWindow({
               <span className="min-w-0 flex-1 truncate text-sm font-medium">{title}</span>
             </div>
             <MessageScrollerProvider autoScroll>
-              <MessageScroller className="min-h-0 flex-1 bg-chat-zone">
+              <MessageScroller className="min-h-0 flex-1 chat-wallpaper bg-chat-zone">
                 <MessageScrollerViewport ref={viewportRef}>
                   <MessageScrollerContent
                     className={cn(

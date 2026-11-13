@@ -1066,3 +1066,44 @@
 [data-theme='dark'] [data-pdf-page] canvas {
   filter: invert(0.92) hue-rotate(180deg);
 }
+
+/* Фон зоны чата (#849, направление владельца 13.11.2026: «как в Telegram»):
+   мягкий градиент + плотная хаотичная россыпь отдельных иконок. Слой живёт
+   под лентой и полосой композера: background-image на корне панели чата
+  статичен относительно элемента и НЕ скроллится с содержимым ленты — та же
+  модель, что обои Telegram; композер — остров без своей заливки. Плитка монохромная, выпечена в двух цветах под темы
+   (background-image не умеет currentColor), 960 px: мелкая плитка даёт муар.
+   Это осознанное исключение из канона «Инструмент» — только зона чата,
+   не список бесед и не панели; ADR — до выхода из draft-issue. */
+.chat-wallpaper {
+  background-image:
+    url('../assets/chat-wallpaper-light.svg'),
+    radial-gradient(900px 620px at 12% -8%, rgb(75 87 200 / 0.08), rgb(75 87 200 / 0) 62%),
+    linear-gradient(158deg, #f2ede6 0%, #eae4dc 52%, #e1dad1 100%);
+  background-size:
+    960px 960px,
+    cover,
+    cover;
+  background-repeat: repeat, no-repeat, no-repeat;
+}
+
+/* Тёмная тема — чёрная основа + закатный градиент (оранжевый → розовый →
+   фиолетовый) и нижний scrim к композеру, чтобы строка композера и низ ленты
+   не «горели». Сила иконок ниже (12% против 16%), фон цветной. */
+[data-theme='dark'] .chat-wallpaper {
+  background-image:
+    url('../assets/chat-wallpaper-dark.svg'),
+    linear-gradient(180deg, rgb(10 10 11 / 0) 55%, rgb(10 10 11 / 0.5) 100%),
+    radial-gradient(900px 640px at 10% -12%, rgb(91 75 158 / 0.22), rgb(91 75 158 / 0) 65%),
+    radial-gradient(820px 620px at 96% 18%, rgb(194 74 120 / 0.16), rgb(194 74 120 / 0) 62%),
+    radial-gradient(880px 700px at 42% 112%, rgb(240 122 58 / 0.2), rgb(240 122 58 / 0) 66%),
+    linear-gradient(158deg, #121016 0%, #0d0c10 52%, #0a0a0b 100%);
+  background-size:
+    960px 960px,
+    cover,
+    cover,
+    cover,
+    cover,
+    cover;
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+}
