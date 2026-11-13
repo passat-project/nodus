@@ -76,6 +76,17 @@ export function taskNotices(type: string, p: Payload, actorId: string | null): T
       add(str(p.assigneeId), 'action.deadline');
       add(str(p.creatorId), 'action.deadline');
       break;
+    case 'task.press_requested':
+      // «Все сотрудники» — анти-спам: запрос виден в «Моих задачах», без
+      // персональных уведомлений на весь штат. «Уже сдал» на старте нет.
+      if (p.broadcast === true) break;
+      for (const id of ids(p.participantIds)) add(id, 'action.press');
+      break;
+    case 'task.press_returned':
+      // Возврат — адресное действие даже в broadcast-раунде. Нажавший
+      // (ответственный) себе не уведомляется общим правилом add.
+      for (const id of ids(p.userIds)) add(id, 'task.press_returned');
+      break;
   }
   return [...out.values()];
 }

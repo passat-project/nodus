@@ -48,6 +48,11 @@ export function WindowSection({
     .map((section) =>
       section.label?.trim() ? section.label : ui.automation.window.sections[section.kind],
     );
+  const summaryParts = [
+    ...(fieldCount > 0 || lockCount > 0 ? [ui.forms.builder.summary(fieldCount, lockCount)] : []),
+    ...(otherSections.length > 0 ? [otherSections.join(', ')] : []),
+  ];
+  const summary = summaryParts.length > 0 ? summaryParts.join(' · ') : ui.forms.builder.emptyWindow;
 
   return (
     <>
@@ -76,10 +81,7 @@ export function WindowSection({
               название, сводка состава (поля · разделы · замки), шеврон. */}
           <SectionLink
             title={readOnly ? ui.forms.builder.view : ui.forms.builder.edit}
-            summary={[
-              ui.forms.builder.summary(fieldCount, lockCount),
-              ...(otherSections.length > 0 ? [otherSections.join(', ')] : []),
-            ].join(' · ')}
+            summary={summary}
             onClick={() => setBuilderOpen(true)}
           />
           <TransitionWindowBuilder

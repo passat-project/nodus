@@ -58,6 +58,8 @@ export const notificationsStrings = {
     'action.approval': 'Согласование',
     'action.deadline': 'Срок',
     'action.decision': 'Ждёт вашего решения',
+    'action.press': 'Нужно сдать результат',
+    'task.press_returned': 'Результат возвращён',
     'task.completed': 'Задача выполнена',
     'task.returned': 'Возврат в работу',
     'task.awaiting_approval': 'Ждёт утверждения',

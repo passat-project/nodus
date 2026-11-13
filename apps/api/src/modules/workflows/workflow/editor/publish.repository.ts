@@ -15,6 +15,8 @@ export interface TransitionRow {
   rules: Prisma.InputJsonValue;
   /** Окно при нажатии (#380) — часть документа маршрута. */
   form: Prisma.InputJsonValue;
+  /** Коллективное нажатие (#434) — часть документа; null — обычная кнопка. */
+  press: Prisma.InputJsonValue | null;
 }
 
 /**
@@ -63,15 +65,25 @@ export class WorkflowPublishRepository {
     workflowId: string,
     row: TransitionRow,
   ): Promise<string> {
+    const { press, ...rest } = row;
     const created = await tx.workflowTransition.create({
-      data: { workflowId, code: null, ...row },
+      data: {
+        workflowId,
+        code: null,
+        ...rest,
+        press: press === null ? Prisma.DbNull : press,
+      },
       select: { id: true },
     });
     return created.id;
   }
 
   async updateTransition(tx: TransactionClient, id: string, row: TransitionRow): Promise<void> {
-    await tx.workflowTransition.update({ where: { id }, data: { ...row, archivedAt: null } });
+    const { press, ...rest } = row;
+    await tx.workflowTransition.update({
+      where: { id },
+      data: { ...rest, press: press === null ? Prisma.DbNull : press, archivedAt: null },
+    });
   }
 
   async archiveTransition(tx: TransactionClient, id: string, at: Date): Promise<void> {

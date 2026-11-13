@@ -93,6 +93,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
       reason?: string;
       form?: TransitionFormInput;
       confirmEmptyNumberParts?: boolean;
+      pressCompletion?: boolean;
     } = {},
   ): Promise<TransitionExecution> {
     const adapter = this.adapters.get(category);
@@ -106,7 +107,13 @@ export class WorkflowEngine implements WorkflowEnginePort {
       workflow.stages,
       targetCtx,
     )
-      .filter((t) => canShow(t, subject0))
+      .filter(
+        (t) =>
+          canShow(t, subject0) ||
+          // Кворум сбора (#434): коллективная кнопка исполняется движком
+          // ровно один раз, даже если обычные условия «кто» не про актора.
+          (opts.pressCompletion === true && t.press !== null && t.press !== undefined),
+      )
       .filter((t) => this.matches(t, choice, subject0, workflow, targetCtx));
     if (candidates.length === 0) {
       // Имя текущего статуса — клиент собирает понятную строку (I15):
@@ -122,6 +129,16 @@ export class WorkflowEngine implements WorkflowEnginePort {
     }
 
     const picked = this.pick(candidates, choice, opts.form);
+    // Коллективную кнопку нельзя выполнить обычным нажатием, пока открыт
+    // раунд сбора: она собирает отметки, а переход выполняет движок при
+    // кворуме (pressCompletion). Нет раунда (источники пусты/старая задача) —
+    // кнопка работает как обычная.
+    if (picked.press && opts.pressCompletion !== true && subject0.pressRoundExists !== false) {
+      throw new DomainException(
+        ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED,
+        'Collective transition requires press quorum',
+      );
+    }
     const applied = await this.applyForm(
       adapter,
       category,
@@ -131,6 +148,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
       picked,
       opts.form,
       subject0.facts,
+      opts.pressCompletion === true,
     );
     // Замки нажатой кнопки (#496, Р4): «Закрепить после нажатия» — в той же
     // транзакции, что и переход; откат перехода откатывает и замок. Замки
@@ -323,9 +341,10 @@ export class WorkflowEngine implements WorkflowEnginePort {
     t: TransitionDef,
     form: TransitionFormInput | undefined,
     facts: WorkflowGateFacts,
+    pressCompletion = false,
   ): Promise<WorkflowFormApplied> {
     if (!form || Object.keys(form).length === 0) return exec.EMPTY_APPLIED;
-    const meta = this.formMeta(t, facts);
+    const meta = this.formMeta(t, facts, pressCompletion);
     // Раздел «Трудозатраты» режима «если ещё не списаны»: сервер решает по
     // факту, а не по вере клиента (запись времени не задваивается).
     if (form.time && t.form?.enabled) {
@@ -346,10 +365,15 @@ export class WorkflowEngine implements WorkflowEnginePort {
   /** Ключи окна, которые оно пишет мимо замка записи (#496, Р4, В10):
    *  настроенный раздел «Поля» и пустые поля из условия «Заполнены поля».
    *  Факты — состояние ДО окна (окно не даёт права писать закреплённое). */
-  private formMeta(t: TransitionDef, facts: WorkflowGateFacts): WorkflowFormMeta {
+  private formMeta(
+    t: TransitionDef,
+    facts: WorkflowGateFacts,
+    pressCompletion = false,
+  ): WorkflowFormMeta {
     const { sections } = windowOf(t.form, t.rules);
     return {
       writableKeys: windowWritableKeys(sections, (key) => lockFieldFilled(key, facts)),
+      ...(pressCompletion ? { pressCompletion: true } : {}),
     };
   }
 

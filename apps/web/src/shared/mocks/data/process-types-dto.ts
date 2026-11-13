@@ -4,6 +4,7 @@ import { bindingsOf, typeAccessFor } from '@nodus/contracts';
 import { demoCustomFieldDefinitions } from './custom-fields.js';
 import { mockEffectiveRoleIds, mockIsAdmin } from './roles.js';
 import { demoUserListItems } from './users.js';
+import { demoPositions } from './positions.js';
 import { getMockActor } from '../mock-actor.js';
 import { creationFormOf, type DemoProcessType } from './process-types-store.js';
 
@@ -45,6 +46,18 @@ export function documentFacts(type: DemoProcessType | undefined, category: strin
       settings: entry.settings,
     })),
     projectsAvailable: true,
+    positions: new Map(
+      demoPositions.map((position) => [
+        position.id,
+        {
+          kind: position.kind,
+          isActive: position.isActive,
+          holders: demoUserListItems.filter(
+            (user) => user.status === 'active' && user.positionName === position.name,
+          ).length,
+        },
+      ]),
+    ),
     activeUserIds: new Set(
       demoUserListItems.filter((user) => user.status === 'active').map((user) => user.id),
     ),

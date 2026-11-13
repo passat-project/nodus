@@ -80,6 +80,13 @@ import { StageMover } from './workflow/stage-mover.js';
 import { TaskFormApplier } from './workflow/task-form.applier.js';
 import { TaskTransitionsService } from './workflow/task-transitions.service.js';
 import { TaskWorkflowAdapter } from './workflow/task-workflow.adapter.js';
+import { PressRepository } from './press/press.repository.js';
+import { PressEvents } from './press/press-events.service.js';
+import { PressAdminService } from './press/press-admin.service.js';
+import { PressRoundsService } from './press/press-rounds.service.js';
+import { PressService } from './press/press.service.js';
+import { PressSourcesService } from './press/press-sources.service.js';
+import { TaskPressController } from './press/press.controller.js';
 import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
 
 /**
@@ -99,7 +106,13 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
   // WorkflowsPortsModule — порты «Процессов»: движок и читатель каталога.
   // Реестр атрибутов (#431): значения, умолчания и проверка — порт, не таблица.
   imports: [ChatPortsModule, WorkflowsPortsModule, CustomFieldsPortsModule, ProjectsPortsModule],
-  controllers: [TasksController, TaskWorkflowController, TaskPartsController, TimeController],
+  controllers: [
+    TasksController,
+    TaskWorkflowController,
+    TaskPressController,
+    TaskPartsController,
+    TimeController,
+  ],
   providers: [
     UserProfileProvider,
     { provide: USER_PROFILE_READER, useClass: UserProfileProvider },
@@ -119,6 +132,14 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
     HistoryRepository,
     ViewerResolver,
     TaskProjectRights,
+    // Раунд сбора отметок (#434): таблицы press_rounds/press_entries,
+    // источники «кто жмёт» и чтение карточки.
+    PressRepository,
+    PressSourcesService,
+    PressRoundsService,
+    PressEvents,
+    PressService,
+    PressAdminService,
     // Решающие (#433): факты актора, вакансии, видимость и адресаты.
     TaskDecidersRepository,
     TaskDeciderRecipients,

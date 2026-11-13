@@ -49,6 +49,10 @@ export const KIND_PRIORITY: Record<NotificationKind, NotificationPriority> = {
   'action.deadline': 'medium',
   // Шаг ждёт решения: блокирует движение задачи, но не срочнее чата (В3 #433).
   'action.decision': 'medium',
+  // Нужно сдать отметку сбора (#434): блокирует кворум, обычный приоритет.
+  'action.press': 'medium',
+  // Возврат результата отметки — участнику, обычный приоритет.
+  'task.press_returned': 'medium',
   'task.completed': 'medium',
   'task.returned': 'medium',
   // #378: утверждение — наравне с выполнением; отмена — фоновая, но не

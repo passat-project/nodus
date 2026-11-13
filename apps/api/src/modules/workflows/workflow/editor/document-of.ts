@@ -39,6 +39,7 @@ export function documentOf(
       sortOrder: t.sortOrder,
       rules: t.rules,
       form: t.form ?? { enabled: false, sections: [] },
+      press: t.press ?? null,
     })),
     layout: liveLayout(layout, {
       stageIds: new Set(row.stages.map((s) => s.id)),

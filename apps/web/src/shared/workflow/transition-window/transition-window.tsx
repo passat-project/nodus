@@ -5,7 +5,7 @@ import type {
   TransitionBlockReason,
   WorkflowTransition,
 } from '@nodus/contracts';
-import { effectiveWindowSections, ui } from '@nodus/contracts';
+import { effectiveWindowSections, PRESS_WINDOW_SECTION_KINDS, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
   Dialog,
@@ -48,6 +48,9 @@ export interface TransitionWindowError {
  * разделы по настройке кнопки ∪ гейтам, живой список условий, пессимистичная
  * отправка. Закрытие — «Отмена» или Esc; клик мимо окна не закрывает.
  * `mode="preview"` — настоящее окно без данных (редактор маршрутов).
+ * `variant="press"` — окно своей отметки коллективной кнопки (#434): те же
+ * разделы настройки кнопки, но без гейтов (кворум проверяется при последнем
+ * нажатии) и со своими заголовком/кнопкой.
  */
 export function TransitionWindow({
   open,
@@ -62,6 +65,9 @@ export function TransitionWindow({
   onOpenSubtasks,
   gate,
   renderSection,
+  variant = 'transition',
+  title,
+  submitLabel,
 }: {
   open: boolean;
   mode: 'live' | 'preview';
@@ -76,6 +82,9 @@ export function TransitionWindow({
   gate?: GateDetailsHost;
   /** Разделы сущности, которые рисует хост (регистрация письма, #55). */
   renderSection?: RenderWindowSection;
+  variant?: 'transition' | 'press';
+  title?: string;
+  submitLabel?: string;
 }) {
   const effectiveContext = mode === 'preview' ? (context ?? PREVIEW_CONTEXT) : context;
   const {
@@ -92,10 +101,16 @@ export function TransitionWindow({
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
 
-  const sections = useMemo(
-    () => effectiveWindowSections(transition.form, { validators: transition.validators }),
-    [transition.form, transition.validators],
-  );
+  const sections = useMemo(() => {
+    const all = effectiveWindowSections(transition.form, { validators: transition.validators });
+    return variant === 'press'
+      ? all.filter(
+          (section) =>
+            section.origin === 'form' &&
+            (PRESS_WINDOW_SECTION_KINDS as readonly string[]).includes(section.kind),
+        )
+      : all;
+  }, [transition.form, transition.validators, variant]);
   const conversationId = effectiveContext?.conversationId ?? null;
   const resultIds = draftMessageIds(draft);
   const { data: resultMessages } = useMessagesLookup(
@@ -111,7 +126,7 @@ export function TransitionWindow({
 
   const lines = useMemo<WindowConditionLine[]>(
     () =>
-      effectiveContext
+      variant === 'transition' && effectiveContext
         ? windowConditionLines({
             transition,
             context: effectiveContext,
@@ -119,11 +134,12 @@ export function TransitionWindow({
             attachmentCount,
           })
         : [],
-    [transition, effectiveContext, draft, attachmentCount],
+    [variant, transition, effectiveContext, draft, attachmentCount],
   );
   const canSubmit = effectiveContext ? windowCanSubmit({ sections, lines, draft }) : false;
   const allOk = lines.every((line) => line.ok);
-  const canOverride = mode === 'live' && transition.canOverride && !allOk;
+  const canOverride =
+    variant === 'transition' && mode === 'live' && transition.canOverride && !allOk;
 
   const api: WindowSectionApi | null = effectiveContext
     ? {
@@ -182,7 +198,7 @@ export function TransitionWindow({
         className="flex max-h-[90vh] max-w-[640px] flex-col gap-4 overflow-hidden rounded-[14px] p-5 sm:max-w-[640px]"
       >
         <DialogHeader className="shrink-0">
-          <DialogTitle>{transition.form?.title || transition.name}</DialogTitle>
+          <DialogTitle>{title ?? (transition.form?.title || transition.name)}</DialogTitle>
           <DialogDescription>
             {effectiveContext?.currentStageName} {ui.tasks.window.stageArrow}{' '}
             {transition.toStageName}
@@ -264,7 +280,7 @@ export function TransitionWindow({
               aria-busy={submitting || undefined}
             >
               {submitting ? <Loader2 className="size-4 animate-spin" strokeWidth={1.75} /> : null}
-              {transition.name}
+              {submitLabel ?? transition.name}
             </Button>
           </DialogFooter>
           {mode === 'preview' ? (

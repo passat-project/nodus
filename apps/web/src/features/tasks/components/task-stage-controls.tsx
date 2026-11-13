@@ -23,10 +23,13 @@ import { cn } from '@nodus/ui/lib/utils';
 import type { LucideIcon } from 'lucide-react';
 
 import { gateReasonsText, useWorkflowTransitions } from '../api/transitions-api.js';
+import { useSubmitPress } from '../api/press-api.js';
 import { PauseGlyph } from '../../../shared/ui/pause-glyph.js';
 import { stageTone } from '../../../shared/ui/board/stage-tone.js';
 import { groupProcessButtons } from '../../../shared/workflow/process-buttons.js';
 import { RouteViewDialog } from '../../../shared/workflow/route-view-dialog.js';
+import { PressAnalyticsDialog, PressSubmitDialog, pressHasWindow } from './task-press-dialogs.js';
+import { TaskPressButton, TaskPressStatus } from './task-press-button.js';
 import { TaskTimerButton } from './task-time.js';
 import { useTransitionRunner } from './task-transition-dialog.js';
 
@@ -70,6 +73,13 @@ export function TaskActionBar({
 }) {
   const { data: transitions } = useWorkflowTransitions(task.id);
   const runner = useTransitionRunner(task, onOpenSubtask);
+  const submitPress = useSubmitPress(task.id);
+  const [pressOpen, setPressOpen] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const press = task.press;
+  const pressTransition = press
+    ? (transitions?.find((t) => t.id === press.transitionId) ?? null)
+    : null;
 
   if (!transitions) {
     return (
@@ -80,6 +90,13 @@ export function TaskActionBar({
     );
   }
 
+  // Окно сбора — окно самой кнопки (#496): есть разделы — показываем его,
+  // нет — нажатие сразу записывает отметку без пустого диалога.
+  const openPress = () => {
+    if (pressTransition && pressHasWindow(pressTransition)) setPressOpen(true);
+    else submitPress.mutate({});
+  };
+
   const { primary, visible, menu } = groupProcessButtons(transitions);
   const closed = isFinalState(task.stage.systemState);
   const cancelled = closed && task.stage.outcome === 'cancelled';
@@ -87,6 +104,24 @@ export function TaskActionBar({
   const negative = cancelled || rejected;
 
   const renderButton = (t: WorkflowTransition, main: boolean) => {
+    const isPress = press?.transitionId === t.id;
+    // Коллективная кнопка: уже нажавшему/не-участнику не показываем.
+    if (isPress && !press.canSubmit) return null;
+    if (isPress) {
+      return (
+        <TaskPressButton
+          key={t.id}
+          name={t.name}
+          pressed={press.pressed}
+          total={press.total}
+          main={main}
+          onPress={openPress}
+          onOpenStatuses={() => setAnalyticsOpen(true)}
+        />
+      );
+    }
+    // Гейты проверяются при кворуме, а не на каждом нажатии: коллективная
+    // кнопка всегда полноценная, не «заблокированная».
     const blocked = t.blockedBy.length > 0;
     const running = runner.runningId === t.id;
     const Icon = running ? Loader2 : transitionIcon(t);
@@ -94,10 +129,7 @@ export function TaskActionBar({
       <button
         key={t.id}
         type="button"
-        // Панель не гаснет во время хода (чип уже сменился оптимистично):
-        // повторный клик гасит сам runner; у нажатой — спиннер.
         aria-busy={running || undefined}
-        // НЕ aria-disabled: кнопка работает — открывает диалог причин.
         data-blocked={blocked || undefined}
         aria-label={t.name}
         title={
@@ -115,7 +147,6 @@ export function TaskActionBar({
         )}
       >
         <Icon className={cn('size-4 shrink-0', running && 'animate-spin')} strokeWidth={1.75} />
-        {/* Узкая левая зона: вторичная кнопка — только значок с подсказкой. */}
         <span
           className={cn(
             'max-w-36 min-w-0 truncate @max-[420px]:max-w-24',
@@ -131,6 +162,24 @@ export function TaskActionBar({
   return (
     <div className="flex w-full min-w-0 items-center gap-1.5">
       {runner.dialog}
+      {press ? (
+        <>
+          {pressTransition ? (
+            <PressSubmitDialog
+              task={task}
+              transition={pressTransition}
+              open={pressOpen}
+              onClose={() => setPressOpen(false)}
+            />
+          ) : null}
+          <PressAnalyticsDialog
+            taskId={task.id}
+            press={press}
+            open={analyticsOpen}
+            onClose={() => setAnalyticsOpen(false)}
+          />
+        </>
+      ) : null}
       {closed ? (
         <span
           className={cn(
@@ -148,6 +197,13 @@ export function TaskActionBar({
       ) : null}
       {primary ? renderButton(primary, true) : null}
       {visible.map((t) => renderButton(t, false))}
+      {press && !press.canSubmit ? (
+        <TaskPressStatus
+          pressed={press.pressed}
+          total={press.total}
+          onOpenStatuses={() => setAnalyticsOpen(true)}
+        />
+      ) : null}
       {menu.length > 0 ? (
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -158,24 +214,30 @@ export function TaskActionBar({
             <MoreHorizontal className="size-4" strokeWidth={1.75} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="top" className="w-52">
-            {menu.map((t) => (
-              <DropdownMenuItem
-                key={t.id}
-                className={cn(t.blockedBy.length > 0 && 'opacity-50')}
-                title={
-                  t.blockedBy.length > 0
-                    ? `${ui.tasks.processBlockedMissing} ${gateReasonsText(t.blockedBy)}`
-                    : t.toStageName
-                }
-                onSelect={() => runner.run(t)}
-              >
-                {t.name}
-              </DropdownMenuItem>
-            ))}
+            {menu.map((t) => {
+              const isPress = press?.transitionId === t.id;
+              if (isPress && !press.canSubmit) return null;
+              return (
+                <DropdownMenuItem
+                  key={t.id}
+                  className={cn(t.blockedBy.length > 0 && 'opacity-50')}
+                  title={
+                    isPress
+                      ? t.name
+                      : t.blockedBy.length > 0
+                        ? `${ui.tasks.processBlockedMissing} ${gateReasonsText(t.blockedBy)}`
+                        : t.toStageName
+                  }
+                  onSelect={() => (isPress ? openPress() : runner.run(t))}
+                >
+                  {t.name}
+                </DropdownMenuItem>
+              );
+            })}
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-      {transitions.length === 0 ? (
+      {transitions.length === 0 && !press ? (
         <span className="px-1 text-sm text-muted-foreground">
           {task.access.canEdit ? ui.tasks.processNoActions : ui.tasks.processObserving}
         </span>
@@ -200,6 +262,7 @@ export function TaskStageField({
   const runner = useTransitionRunner(task, onOpenSubtask);
   const [routeOpen, setRouteOpen] = useState(false);
   const tone = stageTone[task.stage.color];
+  const shown = transitions?.filter((t) => t.id !== task.press?.transitionId);
 
   return (
     <>
@@ -222,7 +285,7 @@ export function TaskStageField({
             <span className="truncate">{task.stage.name}</span>
             <Check className="ml-auto size-3.5 shrink-0 text-port" strokeWidth={2} />
           </DropdownMenuItem>
-          {transitions?.map((t) => {
+          {shown?.map((t) => {
             const color = t.toStageColor;
             return (
               <DropdownMenuItem

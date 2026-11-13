@@ -1,3 +1,5 @@
+import { pressStrings } from './ru-press.js';
+
 /** UI-строки модуля «Задачи» (I15). Секция вынесена из ru.ts (лимит
  *  строк, #311): карточка, доска, журнал, время, результат, массовые действия. */
 export const tasksStrings = {
@@ -21,6 +23,7 @@ export const tasksStrings = {
   expandBranch: 'Развернуть подзадачи',
   branchHiddenNode: 'Нет доступа к задаче',
   linkPreviewUnavailable: 'Задача недоступна',
+  press: pressStrings.task,
   roleLabel: 'Роль',
   roles: {
     assignee: 'Я — ответственный',
@@ -170,7 +173,7 @@ export const tasksStrings = {
   /** Учёт времени (#311, I14). */
   timeTitle: 'Учёт времени',
   timeMinutesPlaceholder: '1ч 30м',
-  timeComment: 'Комментарий (необязательно)',
+  timeComment: 'Комментарий к трудозатратам',
   timeEmpty: 'Время по задаче ещё не вносили',
   timeToday: 'Сегодня',
   timeYesterday: 'Вчера',
@@ -260,7 +263,7 @@ export const tasksStrings = {
     filesMembersOnly: 'Файлы и сообщения доступны участникам обсуждения задачи',
     noConversation: 'Чат задачи ещё не создан — файлы и сообщения недоступны',
     commentLabel: 'Причина / комментарий',
-    fieldsLabel: 'Дозаполнить поля',
+    fieldsLabel: 'Поля задачи',
     timeLabel: 'Трудозатраты',
     timeModeIfEmpty: 'Если ещё не списаны',
     timeModeAlways: 'Всегда',

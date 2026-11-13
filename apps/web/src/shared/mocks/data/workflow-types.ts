@@ -1,7 +1,7 @@
 import type { CreationForm, ProcessType, ProcessTypeRef } from '@nodus/contracts';
 import { customFieldKey } from '@nodus/contracts';
 
-import { quickProcessType, systemProcessType } from './task-stages.js';
+import { quickProcessType, requestProcessType, systemProcessType } from './task-stages.js';
 import { fieldIds } from './field-ids.js';
 import { processTypeIds } from './process-type-ids.js';
 import { demoRoleIds } from './roles.js';
@@ -24,6 +24,8 @@ export const HR_WORKFLOW_ID = wid(54);
 export const KOMPLEKT_WORKFLOW_ID = wid(55);
 /** Маршрут типа «Изменение» (#630): быстрый + «Выдать в печать». */
 export const CHANGE_WORKFLOW_ID = wid(56);
+/** Маршрут типа «Заявка» (#434): кнопка «Ознакомлен» на всех сотрудников. */
+export const REQUEST_WORKFLOW_ID = wid(57);
 
 /** Тип мок-библиотеки: `viewer` и `creationForm` считает хендлер — они
  *  зависят от актёра и опубликованного документа (Р6, Р2). */
@@ -157,6 +159,26 @@ export const changeType: DemoProcessType = {
   config: { card: { hiddenBlocks: [], roleLabels: {} }, access: allAccess },
 };
 
+/** Тип «Заявка» (#434): обычный тип с коллективной кнопкой «Ознакомлен» —
+ *  кворум всех сотрудников, после последнего нажатия задача закрывается. */
+export const requestType: DemoProcessType = {
+  id: requestProcessType.id,
+  code: requestProcessType.code,
+  name: requestProcessType.name,
+  icon: requestProcessType.icon,
+  color: requestProcessType.color,
+  description: 'Ознакомление сотрудников с заявкой',
+  creatable: true,
+  category: 'task',
+  direction: null,
+  isSystem: false,
+  sortOrder: 6,
+  archivedAt: null,
+  workflowId: REQUEST_WORKFLOW_ID,
+  numbering: null,
+  config: { card: { hiddenBlocks: [], roleLabels: {} }, access: allAccess },
+};
+
 export const changeTypeRef: ProcessTypeRef = {
   id: changeType.id,
   code: changeType.code,
@@ -223,6 +245,7 @@ export const demoProcessTypes: DemoProcessType[] = [
   hrType,
   komplektType,
   changeType,
+  requestType,
   archivedDemoType,
   ...letterProcessTypes,
 ];

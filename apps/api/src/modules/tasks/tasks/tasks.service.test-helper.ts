@@ -55,6 +55,7 @@ export interface TasksServiceFixture {
   catalog: { resolveType: Mock; liveStages: Mock };
   boards: { findColumn: Mock };
   engine: { execute: Mock };
+  press: { ensureForStage: Mock; cancelForTask: Mock };
 }
 
 export function setup(): TasksServiceFixture {
@@ -129,6 +130,10 @@ export function setup(): TasksServiceFixture {
     refsMany: vi.fn(async () => []),
   };
   const txRunner = { run: vi.fn((fn: (tx: unknown) => unknown) => fn(TX)) };
+  const press = {
+    ensureForStage: vi.fn(async () => void 0),
+    cancelForTask: vi.fn(async () => void 0),
+  };
   const service = new TasksService(
     txRunner as never,
     eventBus as never,
@@ -153,6 +158,18 @@ export function setup(): TasksServiceFixture {
     { stateFor: vi.fn(async () => new Map()) } as never,
     new TaskCreatePolicy(profiles as never),
     { planOnCreate: async () => ({ ok: true, issue: async () => ({}) }) } as never,
+    press as never,
   );
-  return { service, repo, placements, placementsRepo, txRunner, eventBus, catalog, boards, engine };
+  return {
+    service,
+    repo,
+    placements,
+    placementsRepo,
+    txRunner,
+    eventBus,
+    catalog,
+    boards,
+    engine,
+    press,
+  };
 }

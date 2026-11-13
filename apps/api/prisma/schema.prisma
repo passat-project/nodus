@@ -1055,6 +1055,8 @@ model WorkflowTransition {
   rules       Json      @default("{}")
   /// Окно при нажатии (#380): часть документа маршрута, публикуется с ним.
   form        Json      @default("{}")
+  /// Коллективное нажатие (#434): настройка «кнопку жмут несколько» или null.
+  press       Json?
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
 
@@ -1340,6 +1342,61 @@ model TransitionRecord {
 
   @@index([entityKind, entityId, createdAt(sort: Desc)])
   @@map("transition_records")
+}
+
+/// Раунд сбора отметок (#434): настройка «кнопку жмут несколько» на кнопке
+/// маршрута. Один открытый раунд на сущность (partial unique в миграции).
+/// Снимок config/form на старте: публикация не меняет правила идущего сбора.
+model PressRound {
+  id             String       @id @default(uuid()) @db.Uuid
+  /// task | letter — категория сущности (словарь ProcessType.category).
+  entityKind     String       @map("entity_kind")
+  entityId       String       @map("entity_id") @db.Uuid
+  stageId        String       @map("stage_id") @db.Uuid
+  transitionId   String       @map("transition_id") @db.Uuid
+  /// Название кнопки на момент старта (аналитика не зависит от переименования).
+  transitionName String       @map("transition_name")
+  cycle          Int          @default(1)
+  /// Снимок pressConfigSchema: источники, кворум, порядок, excludeAuthor.
+  config         Json
+  /// Снимок окна кнопки (TransitionForm) на момент старта.
+  form           Json         @default("{}")
+  startedAt      DateTime     @default(now()) @map("started_at") @db.Timestamptz()
+  completedAt    DateTime?    @map("completed_at") @db.Timestamptz()
+  cancelledAt    DateTime?    @map("cancelled_at") @db.Timestamptz()
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz()
+  entries        PressEntry[]
+
+  @@unique([entityKind, entityId, transitionId, cycle])
+  @@index([entityKind, entityId, stageId])
+  @@index([entityKind, entityId, startedAt(sort: Desc)])
+  @@map("press_rounds")
+}
+
+/// Отметка участника раунда (#434). input — сырой TransitionFormInput,
+/// result — проекция для таблицы «Статусы участников»; timeEntryId связывает
+/// запись времени, чтобы отзыв отметки снял её.
+model PressEntry {
+  id           String    @id @default(uuid()) @db.Uuid
+  roundId      String    @map("round_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  order        Int
+  /// waiting | pressed | returned | excluded | withdrawn.
+  state        String    @default("waiting")
+  pressedAt    DateTime? @map("pressed_at") @db.Timestamptz()
+  input        Json?
+  result       Json?
+  timeEntryId  String?   @map("time_entry_id") @db.Uuid
+  returnReason String?   @map("return_reason")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  round        PressRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, userId])
+  @@index([roundId, state, order])
+  @@index([userId, state])
+  @@map("press_entries")
 }
 
 /// Размещение задачи на личной доске «Мой план» (ADR-0008).

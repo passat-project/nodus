@@ -47,4 +47,56 @@ describe('ProcessTypesRepository.copyTypeBindings (#432, #631)', () => {
     await repo.copyTypeBindings({ fieldBinding } as never, FROM, TO);
     expect(fieldBinding.createMany).not.toHaveBeenCalled();
   });
+
+  it('копия маршрута переносит настройку сбора press (#434)', async () => {
+    const created = { id: 'wf-copy' };
+    const transitionCreate = vi.fn(async () => ({}));
+    const tx = {
+      workflow: { create: vi.fn(async () => created) },
+      workflowStage: { create: vi.fn(async () => ({ id: 'stage-copy' })) },
+      workflowTransition: { create: transitionCreate },
+    };
+    const press = {
+      sources: [{ kind: 'coexecutors' }],
+      quorum: { kind: 'all' },
+      order: 'parallel',
+      excludeAuthor: true,
+    };
+    const source = {
+      stages: [
+        {
+          id: 'stage-src',
+          name: 'В работе',
+          color: 'success',
+          sortOrder: 0,
+          systemState: 'active',
+          outcome: null,
+          isInitial: true,
+        },
+      ],
+      transitions: [
+        {
+          id: 'tr-src',
+          name: 'Завершить',
+          fromStageId: 'stage-src',
+          toStageId: 'stage-src',
+          display: 'primary',
+          intent: 'action',
+          sortOrder: 0,
+          rules: { conditions: [], validators: [], postFunctions: [] },
+          form: { enabled: false, sections: [] },
+          press,
+        },
+      ],
+    };
+    const repo = new ProcessTypesRepository({} as never);
+    await repo.copyWorkflow(tx as never, source as never, {
+      name: 'Копия',
+      publishedById: FROM,
+      kind: 'task',
+    });
+    expect(transitionCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ press }),
+    });
+  });
 });

@@ -53,8 +53,12 @@ export class TimeEntriesRepository {
     return tx.timeEntry.create({ data: { ...data, method: 'timer' } });
   }
 
-  async delete(tx: TransactionClient, id: string): Promise<void> {
-    await tx.timeEntry.delete({ where: { id } });
+  async delete(tx: TransactionClient, id: string) {
+    return tx.timeEntry.delete({ where: { id } });
+  }
+
+  findByIdInTx(tx: TransactionClient, id: string) {
+    return tx.timeEntry.findUnique({ where: { id } });
   }
 
   /** Идущий таймер сотрудника (внутри tx старта/остановки). */

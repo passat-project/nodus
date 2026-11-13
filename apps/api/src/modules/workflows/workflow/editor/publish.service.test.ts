@@ -142,9 +142,16 @@ function makeService(
     kind?: string;
     taskCounts?: Record<string, number>;
     layout?: unknown;
+    openPress?: string[];
   } = {},
 ) {
-  const { version = 1, kind = 'task', taskCounts = { [S3]: 2 }, layout = null } = opts;
+  const {
+    version = 1,
+    kind = 'task',
+    taskCounts = { [S3]: 2 },
+    layout = null,
+    openPress = [],
+  } = opts;
   const calls = {
     stageCreate: vi.fn(async () => ({ id: CREATED })),
     stageUpdate: vi.fn(async () => ({})),
@@ -174,6 +181,7 @@ function makeService(
     typeIdsOf: vi.fn(async () => ['type-1']),
   };
   const adapters = { get: vi.fn(() => ({ countByStages: vi.fn(async () => taskCounts) })) };
+  const pressRounds = { openTransitionIds: vi.fn(async () => new Set(openPress)) };
   const service = new WorkflowEditorService(
     { run: vi.fn(async (fn: (t: unknown) => unknown) => fn(tx)) } as never,
     workflows as never,
@@ -185,8 +193,9 @@ function makeService(
     { effectiveRoles: vi.fn(async () => []) } as never,
     { positionFacts: vi.fn(async () => new Map()) } as never,
     { findByIds: vi.fn(async () => []) } as never,
+    pressRounds as never,
   );
-  return { service, calls };
+  return { service, calls, pressRounds };
 }
 
 describe('WorkflowEditorService.publish (#378)', () => {
@@ -211,6 +220,15 @@ describe('WorkflowEditorService.publish (#378)', () => {
     await expect(service.publish(USER, WID, body({ document: doc }))).rejects.toMatchObject({
       code: ErrorCode.WORKFLOW_INVALID,
     });
+  });
+
+  it('открытый раунд сбора запрещает менять/архивировать коллективную кнопку (#434)', async () => {
+    const { service, calls } = makeService({ openPress: [T1] });
+    await expect(service.publish(USER, WID, body({}))).rejects.toMatchObject({
+      code: ErrorCode.CONFLICT,
+    });
+    expect(calls.transitionUpdate).not.toHaveBeenCalled();
+    expect(calls.workflowUpdate).not.toHaveBeenCalled();
   });
 
   it('архив стадии с задачами без переноса — WORKFLOW_MIGRATION_REQUIRED', async () => {

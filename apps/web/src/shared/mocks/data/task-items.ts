@@ -19,6 +19,7 @@ import {
 } from './task-stages.js';
 import { formulaDemoTasks } from './formula-demo-tasks.js';
 import { counterDemoTasks } from './counter-demo-tasks.js';
+import { pressDemoTasks } from './press-demo-tasks.js';
 import { userIds, userRef } from './users.js';
 
 export { projectRefs, tid };
@@ -306,5 +307,7 @@ export const demoTasks: TaskListItem[] = [
   }),
 ];
 
+// Сбор отметок (#434) — отдельный файл, чтобы не раздувать ручной набор.
+demoTasks.push(...pressDemoTasks);
 // Объёмный набор (производительность канбана/списка) — task-items-bulk.ts.
 demoTasks.push(...makeBulkDemoTasks());

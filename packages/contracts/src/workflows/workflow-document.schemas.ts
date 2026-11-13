@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { userRefSchema } from '../directory/user-ref.schema.js';
 import { creationFormSchema } from './creation-form.js';
+import { pressConfigDraftSchema, pressConfigSchema } from './press.js';
 import { transitionFormDraftSchema, transitionFormSchema } from './transition-form.schemas.js';
 import {
   stageColorSchema,
@@ -55,6 +56,10 @@ export const workflowDraftTransitionSchema = z.object({
   rules: workflowTransitionRulesSchema,
   /** Окно при нажатии (#380): публикуется вместе с кнопкой (ADR-0021). */
   form: transitionFormDraftSchema.default({ enabled: false, sections: [] }),
+  /** «Кнопку жмут несколько» (#434): кнопка обычного маршрута, которую
+   *  участники жмут по очереди/одновременно; после кворума переход
+   *  выполняется один раз. null — обычная кнопка. */
+  press: pressConfigDraftSchema.nullable().optional(),
 });
 export type WorkflowDraftTransition = z.infer<typeof workflowDraftTransitionSchema>;
 
@@ -131,6 +136,8 @@ export const workflowDocTransitionSchema = workflowDraftTransitionSchema.extend(
   name: z.string().trim().min(1).max(32),
   /** Строгая форма границы публикации: пустые подписи отвергаются. */
   form: transitionFormSchema.default({ enabled: false, sections: [] }),
+  /** На границе публикации источник сбора обязателен. */
+  press: pressConfigSchema.nullable().optional(),
 });
 
 export const workflowDocumentSchema = z.object({
@@ -267,6 +274,17 @@ export const workflowProblemCodeSchema = z.enum([
   'decider_position_empty',
   'decider_window_needs_rights',
   'decider_source_empty',
+  /** Сбор отметок (#434): кнопка «жмут несколько» — только задача; источники,
+   *  роли/поля/должности и одна коллективная кнопка на статус. */
+  'press_not_in_category',
+  'press_source_empty',
+  'press_source_invalid',
+  'press_role_not_in_category',
+  'press_field_not_user',
+  'press_position_missing',
+  'press_position_empty',
+  'press_multiple_per_stage',
+  'press_button_invalid',
   /** Формула-подстановка слота (#632, Р12): AST не проходит грамматику языка
    *  (глубина, арность, матрица источников, запрет related в форме создания)
    *  или результат не подходит к типу поля. Публикация с такой формулой дала

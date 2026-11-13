@@ -62,6 +62,17 @@ export class UserProfileProvider implements UserProfileReader {
     return rows.map((row) => row.id);
   }
 
+  /** Снимок всех активных сотрудников (#434): источник «Все сотрудники».
+   *  Порядок ФИО → id — стабильные номера отметок в раунде. */
+  async listActiveIds(tx?: TransactionClient): Promise<string[]> {
+    const rows = await (tx ?? this.prisma).user.findMany({
+      where: { status: 'active' },
+      select: { id: true },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => row.id);
+  }
+
   private toRef(row: UserRefRow): UserRef {
     return {
       id: row.id,

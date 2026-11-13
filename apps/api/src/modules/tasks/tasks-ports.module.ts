@@ -25,6 +25,9 @@ import { TaskFormulaValuesProvider } from './ports/task-formula-values.provider.
 import { TasksQueryRepository } from './tasks/tasks-query.repository.js';
 import { TasksRepository } from './tasks/tasks.repository.js';
 import { TaskNumberHostProvider } from './ports/number-host.provider.js';
+import { PressRepository } from './press/press.repository.js';
+import { WORKFLOW_PRESS_ROUNDS_READER } from '../workflows/ports/workflow-press-rounds.port.js';
+import { WorkflowPressRoundsProvider } from './ports/workflow-press-rounds.provider.js';
 
 /**
  * Порты чтения задач (ADR-0012): тонкий модуль экспорта read-портов чужим
@@ -40,6 +43,13 @@ import { TaskNumberHostProvider } from './ports/number-host.provider.js';
     UserProfileProvider,
     { provide: USER_PROFILE_READER, useClass: UserProfileProvider },
     ViewerResolver,
+    // Ветка видимости «Статусы участников» (#434): порт-модуль читает отметки
+    // открытого раунда; доменный PressService остаётся в TasksModule.
+    PressRepository,
+    // Публикация маршрута (#434): открытые раунды сбора блокируют правку
+    // коллективной кнопки; порт читает отметки через репозиторий задач.
+    WorkflowPressRoundsProvider,
+    { provide: WORKFLOW_PRESS_ROUNDS_READER, useExisting: WorkflowPressRoundsProvider },
     TaskDecidersRepository,
     TaskDeciderRecipients,
     TaskDeciders,
@@ -67,6 +77,7 @@ import { TaskNumberHostProvider } from './ports/number-host.provider.js';
     TASK_PROJECT_READER,
     TASK_REF_READER,
     TASK_FORMULA_VALUES,
+    WORKFLOW_PRESS_ROUNDS_READER,
   ],
 })
 export class TasksPortsModule {}

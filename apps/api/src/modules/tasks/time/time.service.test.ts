@@ -10,6 +10,7 @@ const ROW = { id: 't1', number: 7, creatorId: 'alice', assigneeId: 'bob', partic
 function setup(entry: Record<string, unknown>) {
   const repo = {
     findById: vi.fn().mockResolvedValue(entry),
+    findByIdInTx: vi.fn().mockResolvedValue(entry),
     delete: vi.fn(),
     recalcSpentMinutes: vi.fn().mockResolvedValue({ ...ROW, spentMinutes: 30 }),
   };
@@ -26,6 +27,25 @@ function setup(entry: Record<string, unknown>) {
 }
 
 describe('TimeService.remove', () => {
+  it('removeInTx удаляет запись и пишет отрицательную дельту в журнал (#434)', async () => {
+    const { service, repo, eventBus } = setup({
+      id: 'e3',
+      taskId: 't1',
+      userId: 'bob',
+      method: 'manual',
+      minutes: 20,
+      endedAt: new Date(),
+    });
+    await service.removeInTx(TX as never, 'bob', 'e3');
+    expect(repo.delete).toHaveBeenCalledWith(TX, 'e3');
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      TX,
+      TASK_EVENTS.TIME_LOGGED,
+      expect.objectContaining({ entryId: 'e3', minutes: -20 }),
+      expect.anything(),
+    );
+  });
+
   it('идущий таймер удалить нельзя (409) — сначала «Стоп»', async () => {
     const { service, repo } = setup({
       id: 'e1',
