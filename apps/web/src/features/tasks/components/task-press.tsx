@@ -1,3 +1,5 @@
+import { cn } from '@nodus/ui/lib/utils';
+
 /** Кольцо прогресса коллективной кнопки (#434): тонкая дорожка + индиго. */
 export function PressRing({
   pressed,
@@ -12,7 +14,11 @@ export function PressRing({
   const length = 2 * Math.PI * radius;
   const ratio = total > 0 ? Math.min(1, pressed / total) : 0;
   return (
-    <svg viewBox="0 0 16 16" className={className ?? 'size-4 shrink-0'} aria-hidden>
+    <svg
+      viewBox="0 0 16 16"
+      className={cn('block size-4 shrink-0 self-center', className)}
+      aria-hidden
+    >
       <circle
         cx="8"
         cy="8"

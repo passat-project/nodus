@@ -103,7 +103,7 @@ export function TaskPressStatus({
           onClick={() => setByHover(false)}
         >
           <PressRing pressed={pressed} total={total} />
-          <span className="font-mono text-label tabular-nums">
+          <span className="self-center font-mono text-label leading-none tabular-nums">
             {pressed}/{total}
           </span>
         </button>
@@ -192,7 +192,7 @@ export function TaskPressButton({
             type="button"
             aria-label={`${ui.tasks.press.analyticsTitle}: ${pressed} / ${total}`}
             title={ui.tasks.press.analyticsTitle}
-            className="flex shrink-0 items-center rounded-l-md pr-1 pl-2.5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+            className="flex shrink-0 items-center justify-center self-stretch rounded-l-md pr-1 pl-2.5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
             onMouseEnter={() => {
               setByHover(true);
               show();
@@ -237,7 +237,7 @@ export function TaskPressButton({
         >
           {name}
         </span>
-        <span className="font-mono text-label tabular-nums">
+        <span className="self-center font-mono text-label leading-none tabular-nums">
           {pressed}/{total}
         </span>
       </button>
