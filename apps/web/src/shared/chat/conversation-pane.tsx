@@ -31,6 +31,7 @@ import { useHistoryLoader } from './use-history-loader.js';
 import { useFeedViewportRead } from './use-viewport-read.js';
 import { useIncomingFollow } from './use-incoming-follow.js';
 import { useFrozenUnreadDivider } from './use-frozen-unread-divider.js';
+import { findScrollTargetUnreadId } from './unread-divider.js';
 import { ConversationViewsLine } from './views-line.js';
 import { UnreadAnchor } from './use-unread-anchor.js';
 import { selectionComposerProps, useFeedSelection } from './use-feed-selection.js';
@@ -259,6 +260,15 @@ function ConversationFeed({
     readSeq: conversation?.myLastReadSeq ?? null,
     meId: me?.id,
   });
+  // Стрелке «вниз» — ЖИВОЙ таргет, не замороженная граница плашки: после
+  // прочтения и прокрутки вверх она ведёт в конец, а при новых непрочитанных —
+  // к первому новому (контракт feed-scroller-button.tsx).
+  const scrollUnreadTargetId = findScrollTargetUnreadId(
+    items,
+    conversation?.myLastReadSeq ?? null,
+    conversation?.unreadCount ?? 0,
+    me?.id,
+  );
 
   // Протокол хоста ленты: отправка/правка, submit окна вложений, ↑-правка
   // последнего своего — use-feed-submit.ts.
@@ -403,7 +413,7 @@ function ConversationFeed({
                 (модель Telegram, раунд 4), без — в конец; чип-счётчик
                 непрочитанных — #132. */}
             <FeedScrollerButton
-              firstUnreadId={firstUnreadId}
+              firstUnreadId={scrollUnreadTargetId}
               viewportRef={viewportRef}
               unreadCount={conversation?.unreadCount ?? 0}
             />

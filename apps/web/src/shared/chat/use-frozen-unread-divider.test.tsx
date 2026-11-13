@@ -4,6 +4,7 @@ import { renderHook } from '@testing-library/react';
 import type { ChatMessage } from '@nodus/contracts';
 
 import { useFrozenUnreadDivider } from './use-frozen-unread-divider.js';
+import { findScrollTargetUnreadId } from './unread-divider.js';
 
 /**
  * Замороженная граница «Непрочитанные сообщения» (#845): снимается один раз
@@ -88,5 +89,20 @@ describe('useFrozenUnreadDivider', () => {
     });
     rerender({ items: [msg(2), msg(3)], unreadCount: 2, readSeq: 2 });
     expect(result.current.openReadSeq).toBe(1);
+  });
+
+  it('плашка заморожена, таргет стрелки — живой (расхождение легально)', () => {
+    const { result } = renderDivider({
+      items: [msg(2), msg(3), msg(4)],
+      unreadCount: 3,
+      readSeq: 1,
+    });
+    expect(result.current.dividerId).toBe('m-2');
+    // Прочитал и прокрутил вверх: живой таргет стрелки — первый оставшийся
+    // непрочитанный, а плашка осталась на месте открытия.
+    expect(findScrollTargetUnreadId([msg(2), msg(3), msg(4)], 2, 2, ME)).toBe('m-3');
+    // Дочитал всё — живой таргет null (стрелка ведёт в конец), плашка на месте.
+    expect(findScrollTargetUnreadId([msg(2), msg(3), msg(4)], 4, 0, ME)).toBeNull();
+    expect(result.current.dividerId).toBe('m-2');
   });
 });
