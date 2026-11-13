@@ -178,11 +178,11 @@ describe('scrollMessageIntoView — плавный режим', () => {
       clientHeight: 600,
     });
     const message = makeElement();
-    liveStub(message, container, 2000, 80);
-    const h = harness(container, 2000);
+    liveStub(message, container, 1500, 80);
+    const h = harness(container, 1500);
     scrollMessageIntoView(message, container, { align: 'start', margin: 48, behavior: 'smooth' });
     h.finish();
-    expect(container.scrollTop).toBe(1952);
+    expect(container.scrollTop).toBe(1452);
     h.restore();
   });
 
@@ -219,8 +219,8 @@ describe('scrollMessageIntoView — плавный режим', () => {
       clientHeight: 600,
     });
     const message = makeElement();
-    liveStub(message, container, 2000, 80);
-    const h = harness(container, 2000);
+    liveStub(message, container, 1200, 80);
+    const h = harness(container, 1200);
     let node: HTMLElement | null = message;
     scrollMessageIntoView(() => node, container, {
       align: 'start',
@@ -240,7 +240,7 @@ describe('scrollMessageIntoView — плавный режим', () => {
     const container = makeContainer({
       rect: CONTAINER_RECT,
       scrollTop: 0,
-      scrollHeight: 3000,
+      scrollHeight: 2000,
       clientHeight: 600,
     });
     const h = harness(container, 0);
@@ -248,9 +248,9 @@ describe('scrollMessageIntoView — плавный режим', () => {
     h.flush(50);
     // Первый кадр — только часть пути: это анимация, а не мгновенный скролл.
     expect(container.scrollTop).toBeGreaterThan(0);
-    expect(container.scrollTop).toBeLessThan(2400);
+    expect(container.scrollTop).toBeLessThan(1400);
     h.finish();
-    expect(container.scrollTop).toBe(2400); // maxScroll
+    expect(container.scrollTop).toBe(1400); // maxScroll
     h.restore();
   });
 
@@ -258,10 +258,10 @@ describe('scrollMessageIntoView — плавный режим', () => {
     const container = makeContainer({
       rect: CONTAINER_RECT,
       scrollTop: 0,
-      scrollHeight: 3000,
+      scrollHeight: 2000,
       clientHeight: 600,
     });
-    let scrollHeight = 3000;
+    let scrollHeight = 2000;
     Object.defineProperty(container, 'scrollHeight', {
       get: () => scrollHeight,
       configurable: true,
@@ -269,9 +269,40 @@ describe('scrollMessageIntoView — плавный режим', () => {
     const h = harness(container, 0);
     scrollToEndSmooth(container);
     h.flush(50);
-    scrollHeight = 3400; // строка дорендерилась по ходу навигации
+    scrollHeight = 2400; // строка дорендерилась по ходу навигации
     h.finish();
-    expect(container.scrollTop).toBe(2800);
+    expect(container.scrollTop).toBe(1800);
     h.restore();
+  });
+
+  it('прыжок длиннее трёх экранов — мгновенный (гигантский чат не ждёт)', () => {
+    const container = makeContainer({
+      rect: CONTAINER_RECT,
+      scrollTop: 0,
+      scrollHeight: 6000,
+      clientHeight: 600,
+    });
+    const message = makeElement();
+    liveStub(message, container, 2000, 80);
+    scrollMessageIntoView(message, container, { align: 'start', margin: 48, behavior: 'smooth' });
+    // До кадров: телепорт сразу на цель (1952 > 3×600), без 320-мс пролёта.
+    expect(container.scrollTop).toBe(1952);
+  });
+
+  it('системное «меньше движения» — мгновенно даже на коротком прыжке', () => {
+    const mq = vi.fn().mockReturnValue({ matches: true });
+    vi.stubGlobal('matchMedia', mq);
+    const container = makeContainer({
+      rect: CONTAINER_RECT,
+      scrollTop: 0,
+      scrollHeight: 3000,
+      clientHeight: 600,
+    });
+    const message = makeElement();
+    liveStub(message, container, 1200, 80);
+    scrollMessageIntoView(message, container, { align: 'start', margin: 48, behavior: 'smooth' });
+    expect(container.scrollTop).toBe(1152);
+    expect(mq).toHaveBeenCalledWith('(prefers-reduced-motion: reduce)');
+    vi.unstubAllGlobals();
   });
 });

@@ -20,6 +20,17 @@ export type RevealOutcome = 'visible' | 'scrolled';
 const EPSILON = 1;
 /** Длительность собственной плавной прокрутки (нативная не корректируется). */
 const SMOOTH_SCROLL_MS = 320;
+/** Дальше трёх экранов анимация не «красивее» — это уже телепорт с размазнёй;
+ *  best practice jump-баров: длинный прыжок — мгновенный (и при reduced motion). */
+export const LONG_JUMP_SCREENS = 3;
+
+/** Системная настройка «меньше движения» — прокрутка без анимации. */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
 
 /** Цель полностью в области прокрутки (без обрезки сверху/снизу). */
 export function isMessageFullyVisible(el: HTMLElement, container: HTMLElement): boolean {
@@ -69,9 +80,30 @@ export function scrollTopFor(
  * КАЖДЫЙ кадр (easeOutCubic, ~320 мс), null — цель исчезла, замираем.
  * Одна механика и для плашки, и для конца ленты: нативная `behavior:'smooth'`
  * целится один раз по оценочной геометрии и промахивается.
+ *
+ * Длительность ФИКСИРОВАННАЯ, не зависит от расстояния: гигантский чат не
+ * растягивает прокрутку (иначе пользователь ждёт). Но прыжок длиннее трёх
+ * экранов в 320 мс — это размазанный телепорт, а rows вне вьюпорта ещё и
+ * оценочные (content-visibility) → такие прыжки мгновенные, как в jump-барах.
+ * «Меньше движения» в системе — тоже мгновенно.
  */
 function smoothScrollTop(container: HTMLElement, target: () => number | null): void {
   const startTop = container.scrollTop;
+  const first = target();
+  if (first === null) return;
+  if (
+    prefersReducedMotion() ||
+    Math.abs(first - startTop) > LONG_JUMP_SCREENS * container.clientHeight
+  ) {
+    container.scrollTop = first;
+    // Один доснап следующим кадром: строки у новой позиции домеряются уже
+    // после установки scrollTop (оценочные высоты content-visibility).
+    requestAnimationFrame(() => {
+      const want = target();
+      if (want !== null) container.scrollTop = want;
+    });
+    return;
+  }
   const startedAt = performance.now();
   let stopped = false;
   const stop = (): void => {
