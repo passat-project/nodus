@@ -285,9 +285,21 @@ function ConversationFeed({
   // Перед навигацией стрелкой: переставить плашку на живую границу ДО расчёта
   // цели скролла и до старта анимации (flushSync — чтобы DOM уже был в новом
   // состоянии, а к концу плавной прокрутки раскладка не менялась).
+  const [navPreparing, setNavPreparing] = useState(false);
   const handleBeforeNavigate = useCallback(() => {
-    flushSync(() => syncToLive());
+    flushSync(() => {
+      setNavPreparing(true);
+      syncToLive();
+    });
   }, [syncToLive]);
+  // Форс-рендер строк держим до конца плавной прокрутки (~0.9 с), затем
+  // возвращаем content-visibility:auto — размеры строк уже измерены, раскладка
+  // не меняется.
+  useEffect(() => {
+    if (!navPreparing) return;
+    const timer = window.setTimeout(() => setNavPreparing(false), 900);
+    return () => window.clearTimeout(timer);
+  }, [navPreparing]);
 
   // Протокол хоста ленты: отправка/правка, submit окна вложений, ↑-правка
   // последнего своего — use-feed-submit.ts.
@@ -327,6 +339,10 @@ function ConversationFeed({
                 className={cn(
                   'feed-reveal px-4 pt-4 pb-0',
                   (selection.selectionActive || box.active) && 'select-none',
+                  // В момент навигации стрелкой — все строки в реальной
+                  // геометрии (content-visibility:auto иначе меряет оценочно).
+                  navPreparing &&
+                    '[&_[data-slot=message-scroller-item]]:[content-visibility:visible]',
                 )}
               >
                 {/* Р.12: скелетоны-полоски УБРАТЫ (первое открытие после
