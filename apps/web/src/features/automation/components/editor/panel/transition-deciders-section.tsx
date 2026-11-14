@@ -10,7 +10,6 @@ import {
   SelectValue,
 } from '@nodus/ui/components/select';
 
-import { useAllPositions } from '../../../../../shared/api/positions.js';
 import { useUsersList } from '../../../../../shared/api/users-list.js';
 import { useCustomFieldDefinitions } from '../../../../../shared/custom-fields/queries.js';
 import { PanelField } from '../../../../../shared/ui/panel/panel-kit.js';
@@ -39,12 +38,10 @@ export function DecidersSection({
   readOnly: boolean;
 }) {
   const patchTransition = useRouteDocStore((s) => s.patchTransition);
-  const positionsQuery = useAllPositions();
   const definitionsQuery = useCustomFieldDefinitions('task');
   const usersQuery = useUsersList();
 
   const sources = deciderSourcesOf(transition.rules);
-  const positions = (positionsQuery.data ?? []).filter((position) => position.isActive);
   const userFields = (definitionsQuery.data ?? []).filter(
     (definition) => definition.type === 'user' || definition.type === 'users',
   );
@@ -55,7 +52,6 @@ export function DecidersSection({
   const add = (kind: DeciderSource['kind']) => {
     const source = defaultDeciderSource(
       kind,
-      positions,
       userFields.map((definition) => definition.id),
     );
     if (source) patch(addDeciderSource(transition.rules, source));
@@ -90,61 +86,6 @@ export function DecidersSection({
               <X />
             </Button>
           </div>
-
-          {source.kind === 'position' ? (
-            <>
-              <PanelField label={ui.automation.deciders.positionKind.management}>
-                <Select
-                  value={source.positionKind}
-                  disabled={readOnly}
-                  onValueChange={(value) =>
-                    update(index, {
-                      ...source,
-                      positionKind: value === 'legal' ? 'legal' : 'management',
-                      positionId:
-                        positions.find((p) => p.kind === value && p.id === source.positionId)?.id ??
-                        positions.find((p) => p.kind === value)?.id ??
-                        // Нет должностей нужного вида — оставляем id: проверка
-                        // публикации поймает несовпадение вида (диплом-факт).
-                        source.positionId,
-                    })
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="management">
-                      {ui.automation.deciders.positionKind.management}
-                    </SelectItem>
-                    <SelectItem value="legal">
-                      {ui.automation.deciders.positionKind.legal}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </PanelField>
-              <PanelField label={ui.automation.deciders.sources.position}>
-                <Select
-                  value={source.positionId}
-                  disabled={readOnly}
-                  onValueChange={(value) => update(index, { ...source, positionId: value })}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={ui.automation.deciders.positionEmpty} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {positions
-                      .filter((position) => position.kind === source.positionKind)
-                      .map((position) => (
-                        <SelectItem key={position.id} value={position.id}>
-                          {position.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </PanelField>
-            </>
-          ) : null}
 
           {source.kind === 'manager_of' ? (
             <PanelField label={ui.automation.deciders.sources.manager_of}>
@@ -274,13 +215,11 @@ export function DecidersSection({
             <SelectValue placeholder={ui.automation.deciders.addSource} />
           </SelectTrigger>
           <SelectContent>
-            {(['position', 'manager_of', 'employees', 'field', 'project_role'] as const).map(
-              (kind) => (
-                <SelectItem key={kind} value={kind}>
-                  {ui.automation.deciders.sources[kind]}
-                </SelectItem>
-              ),
-            )}
+            {(['manager_of', 'employees', 'field', 'project_role'] as const).map((kind) => (
+              <SelectItem key={kind} value={kind}>
+                {ui.automation.deciders.sources[kind]}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

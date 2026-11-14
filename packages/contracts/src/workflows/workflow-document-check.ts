@@ -3,7 +3,7 @@ import type { CustomFieldDefinition } from '../custom-fields/custom-field.schema
 import { checkCreationForm } from './creation-form.js';
 import type { ProcessCategory } from './process-type.schemas.js';
 import { checkCategoryDictionary } from './workflow-document-category-check.js';
-import { checkDeciderRules, type WorkflowPositionFact } from './workflow-document-deciders.js';
+import { checkDeciderRules } from './workflow-document-deciders.js';
 import { checkExtraRules } from './workflow-document-extra-checks.js';
 import { checkFormulaSlots } from './workflow-document-formula-check.js';
 import { windowFieldKeys } from './transition-form.schemas.js';
@@ -65,9 +65,6 @@ export interface WorkflowCheckOptions {
   }[];
   /** Ограничить проверку имён новыми/переименованными стадиями (#430). */
   stageNameStageIds?: ReadonlySet<string>;
-  /** Факты должностей для источников решающих (#433): активность и число
-   *  живых держателей. Без факта проверки должности пропускаются. */
-  positions?: ReadonlyMap<string, WorkflowPositionFact>;
 }
 
 function error(
@@ -253,16 +250,9 @@ export function checkWorkflowDocument(
     }
   }
 
-  // --- Решающие (#433): источники, должности, окно без прав участника -------
+  // --- Решающие (#433): источники, окно без прав участника -----------------
 
-  checkDeciderRules(
-    doc,
-    {
-      definitions: opts.definitions,
-      positions: opts.positions,
-    },
-    problems,
-  );
+  checkDeciderRules(doc, { definitions: opts.definitions }, problems);
 
   // --- Словарь категории (#55, Р6) и форма создания (#432) ---------------
 

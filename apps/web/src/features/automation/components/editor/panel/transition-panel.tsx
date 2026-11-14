@@ -75,8 +75,6 @@ export function sectionSummaries(
         : deciderSources
             .map((source) => {
               switch (source.kind) {
-                case 'position':
-                  return ui.automation.deciders.sources.position;
                 case 'manager_of':
                   return source.of === 'creator'
                     ? ui.automation.deciders.managerOf.creator

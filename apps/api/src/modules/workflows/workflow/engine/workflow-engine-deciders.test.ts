@@ -84,7 +84,6 @@ const deciderFacts = (userId: string) => ({
   assigneeId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   creatorManagerId: null,
   assigneeManagerId: null,
-  positionKeys: new Set<string>(),
   projectRoles: new Set<never>(),
   fieldUserIds: {},
   userFieldIds: new Set<string>(),

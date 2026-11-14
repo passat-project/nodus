@@ -8,7 +8,6 @@ import {
 
 import type { TransactionClient } from '../../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../../core/errors/domain-exception.js';
-import type { OrgStructureReader } from '../../../../core/ports/org-structure.port.js';
 import type { UserProfileReader } from '../../../../core/ports/user-profile.port.js';
 import type { CustomFieldRegistry } from '../../../custom-fields/ports/custom-field-registry.port.js';
 import { creationFactsOf } from './creation-facts.js';
@@ -86,7 +85,6 @@ export async function checkDocumentForPublish(
   deps: {
     registry: CustomFieldRegistry;
     profiles: UserProfileReader;
-    org: OrgStructureReader;
   },
   ctx: {
     document: WorkflowDocument;
@@ -120,26 +118,11 @@ export async function checkDocumentForPublish(
     ctx.document.creation,
     ctx.tx,
   );
-  // Должности источников решающих (#433): активность и число держателей —
-  // ошибка публикации/предупреждение «на должности никого нет».
-  const positionIds = [
-    ...new Set(
-      ctx.document.transitions.flatMap((transition) =>
-        transition.rules.conditions.flatMap((condition) =>
-          condition.kind === 'decider_in' && condition.source.kind === 'position'
-            ? [condition.source.positionId]
-            : [],
-        ),
-      ),
-    ),
-  ];
-  const positions = await deps.org.positionFacts(positionIds, ctx.tx);
   const problems = checkWorkflowDocument(ctx.document, {
     customFields,
     category: ctx.category,
     definitions: creation.definitions,
     activeUserIds: creation.activeUserIds,
-    positions,
     // Проект — plain UUID без FK: значение сохраняется и до модуля #52,
     // окно показывает подсказку «недоступно» (веб, projectsAvailable).
     projectsAvailable: true,
@@ -162,8 +145,8 @@ export async function checkDocumentForPublish(
 }
 
 /** Полная серверная приёмка документа публикации (#433): проверки документа
- *  (включая должности решающих) + сверка ссылок с живым маршрутом. Возвращает
- *  загруженный маршрут — он нужен плану публикации. */
+ *  + сверка ссылок с живым маршрутом. Возвращает загруженный маршрут — он
+ *  нужен плану публикации. */
 export async function assertPublishable(
   deps: Parameters<typeof checkDocumentForPublish>[0],
   ctx: Parameters<typeof checkDocumentForPublish>[1] & {

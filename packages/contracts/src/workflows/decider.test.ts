@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  deciderPositionKey,
-  deciderSourceSchema,
-  matchesDecider,
-  type WorkflowDeciderFacts,
-} from './decider.js';
+import { deciderSourceSchema, matchesDecider, type WorkflowDeciderFacts } from './decider.js';
 import { workflowConditionSchema } from './workflow.schemas.js';
 
 /** Полный набор фактов: без него тест проверяет не то, что кажется. */
@@ -16,7 +11,6 @@ function facts(patch: Partial<WorkflowDeciderFacts> = {}): WorkflowDeciderFacts 
     assigneeId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     creatorManagerId: null,
     assigneeManagerId: null,
-    positionKeys: new Set(),
     projectRoles: new Set(),
     fieldUserIds: {},
     userFieldIds: new Set(),
@@ -29,19 +23,6 @@ const FIELD_ID = '33333333-3333-4333-8333-333333333333';
 const OTHER_ID = '44444444-4444-4444-8444-444444444444';
 
 describe('matchesDecider (#433)', () => {
-  it('должность: совпадает только свой вид и id', () => {
-    const f = facts({ positionKeys: new Set([deciderPositionKey('management', POSITION_ID)]) });
-    expect(
-      matchesDecider({ kind: 'position', positionId: POSITION_ID, positionKind: 'management' }, f),
-    ).toBe(true);
-    expect(
-      matchesDecider({ kind: 'position', positionId: POSITION_ID, positionKind: 'legal' }, f),
-    ).toBe(false);
-    expect(
-      matchesDecider({ kind: 'position', positionId: OTHER_ID, positionKind: 'management' }, f),
-    ).toBe(false);
-  });
-
   it('руководитель: только ближайший, выше по цепочке — нет', () => {
     const f = facts({ creatorManagerId: POSITION_ID });
     expect(matchesDecider({ kind: 'manager_of', of: 'creator' }, f)).toBe(false);
@@ -137,7 +118,6 @@ describe('deciderSourceSchema / workflowConditionSchema (#433)', () => {
 
   it('каждый источник проходит схему', () => {
     const sources = [
-      { kind: 'position', positionId: POSITION_ID, positionKind: 'legal' },
       { kind: 'manager_of', of: 'assignee' },
       { kind: 'employees', userIds: [OTHER_ID] },
       { kind: 'field', field: `cf.${FIELD_ID}` },
@@ -149,15 +129,33 @@ describe('deciderSourceSchema / workflowConditionSchema (#433)', () => {
     }
   });
 
-  it('невалидные источники отсекаются', () => {
-    expect(deciderSourceSchema.safeParse({ kind: 'employees', userIds: [] }).success).toBe(false);
+  it('пустой список сотрудников — валидная «вакансия» (#806)', () => {
+    expect(deciderSourceSchema.parse({ kind: 'employees', userIds: [] })).toEqual({
+      kind: 'employees',
+      userIds: [],
+    });
+    expect(matchesDecider({ kind: 'employees', userIds: [] }, facts({ userId: OTHER_ID }))).toBe(
+      false,
+    );
+  });
+
+  it('должность больше не источник решающего (#806)', () => {
     expect(
       deciderSourceSchema.safeParse({
         kind: 'position',
-        positionId: 'not-uuid',
+        positionId: POSITION_ID,
         positionKind: 'management',
       }).success,
     ).toBe(false);
+    expect(
+      workflowConditionSchema.safeParse({
+        kind: 'decider_in',
+        source: { kind: 'position', positionId: POSITION_ID, positionKind: 'management' },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('невалидные источники отсекаются', () => {
     expect(deciderSourceSchema.safeParse({ kind: 'field', field: 'description' }).success).toBe(
       false,
     );
