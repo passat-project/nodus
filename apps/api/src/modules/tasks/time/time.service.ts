@@ -18,6 +18,7 @@ import {
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { EventBus } from '../../../core/events/event-bus.js';
 import { decodeCursor, encodeCursor } from '../../../core/pagination/cursor.util.js';
+import { companyDate } from '../../../core/time/company-time.js';
 import {
   USER_PROFILE_READER,
   type UserProfileReader,
@@ -159,7 +160,7 @@ export class TimeService {
         taskId,
         projectId: row.projectId,
         userId: user.id,
-        date: new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`),
+        date: new Date(`${companyDate(now)}T00:00:00Z`),
         startedAt: now,
       });
       await this.eventBus.emit(

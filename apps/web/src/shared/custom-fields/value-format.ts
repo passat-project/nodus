@@ -1,5 +1,5 @@
 import type { MoneyValue } from '@nodus/contracts';
-import { CUSTOM_FIELD_LIMITS } from '@nodus/contracts';
+import { CUSTOM_FIELD_LIMITS, hasDecimalPrecision } from '@nodus/contracts';
 
 /**
  * Формат и разбор значений кастомных полей (#431): числа — русская деловая
@@ -24,9 +24,10 @@ export function parseNumber(text: string, precision: number): number | null {
   if (normalized === '' || !/^-?\d+(\.\d+)?$/.test(normalized)) return null;
   const value = Number(normalized);
   if (!Number.isFinite(value) || Math.abs(value) > CUSTOM_FIELD_LIMITS.amount) return null;
-  const factor = 10 ** precision;
-  const scaled = value * factor;
-  if (Math.abs(scaled - Math.round(scaled)) > 1e-6 * Math.max(1, Math.abs(scaled))) return null;
+  // Тот же предикат, что у сервера/схемы: редактор не пропускает значение,
+  // которое API отвергнет 422 (иначе оптимистичная правка откатывается тостом
+  // вместо подсказки под полем).
+  if (!hasDecimalPrecision(value, precision)) return null;
   return value;
 }
 

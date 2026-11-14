@@ -20,6 +20,7 @@ import {
   useUpdatePersonalStage,
   useUpdateTaskPersonalStage,
 } from '../api/personal-stages-api.js';
+import { bumpCountDelta } from '../lib/kanban-count.js';
 import { TaskKanbanCard } from './task-kanban-card.js';
 import { TaskKanbanColumn } from './task-kanban-column.js';
 import { TaskStageCreate } from './task-stage-create.js';
@@ -55,11 +56,7 @@ export function TaskKanban({
   // серверный, локальный перенос корректирует до инвалидации; откат — минус.
   const [countDelta, setCountDelta] = useState<Record<string, number>>({});
   const bump = (fromId: string, toId: string, d: 1 | -1) =>
-    setCountDelta((prev) => ({
-      ...prev,
-      [toId]: (prev[toId] ?? 0) + d,
-      [fromId]: (prev[fromId] ?? 0) - d,
-    }));
+    setCountDelta((prev) => bumpCountDelta(prev, fromId, toId, d));
 
   const board = useKanbanBoard({
     axis: personalAxis,

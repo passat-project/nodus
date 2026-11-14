@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { NotificationSummary } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
+import { useAuthStore } from '../../../shared/auth-store.js';
 import { notificationsKeys } from '../../../shared/notifications-keys.js';
 import { useNotificationsToastStore } from './toast-store.js';
 
@@ -38,13 +39,15 @@ export function usePauseEscalation(): void {
     const summary = queryClient.getQueryData<NotificationSummary>(notificationsKeys.summary());
     const attention = summary?.attention ?? 0;
     if (attention <= lastWaveAttention.current) return;
+    const viewerId = useAuthStore.getState().user?.id;
+    if (!viewerId) return;
     lastWaveAt.current = now;
     lastWaveAttention.current = attention;
     if (attention > 0) {
       push(
         {
           notificationId: `wave-${now}`,
-          userId: 'me',
+          userId: viewerId,
           priority: 'medium',
           kind: 'action.assignment',
           sourceId: 'wave',
