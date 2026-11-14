@@ -15,6 +15,12 @@ export const projectsKeys = {
   options: () => [...projectsKeys.all, 'options'] as const,
   types: (includeArchived = false) => [...projectsKeys.all, 'types', includeArchived] as const,
   groups: (includeArchived = false) => [...projectsKeys.all, 'groups', includeArchived] as const,
+  /** Счётчики папок-портфелей журнала (#559): видимый срез по статусам,
+   *  `scope` — переключатель «Все / Мои» (цифры колонки = срез журнала). */
+  groupCounts: (scope: 'all' | 'mine' = 'all') =>
+    [...projectsKeys.all, 'groups', 'counts', scope] as const,
+  /** Префикс портфелей: списки (живые/архивные) и счётчики папок. */
+  groupsPrefix: () => [...projectsKeys.all, 'groups'] as const,
   journal: (params: Record<string, string | undefined>) =>
     [...projectsKeys.all, 'journal', params] as const,
   /** Префикс всех журналов: событие проекта перечитывает любой фильтр. */

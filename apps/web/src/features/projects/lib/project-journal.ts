@@ -1,6 +1,7 @@
 import type { ProjectListItem, ProjectStatus, ProjectVisibility } from '@nodus/contracts';
 
 import { primaryProjectRole, type ProjectRole } from '../../../shared/lib/project-role.js';
+import { inPortfolioFolder } from './portfolio-folders.js';
 
 /** Роль в проекте для фильтра «Моя роль» (контракт query). */
 export type ProjectRoleFilter = ProjectRole;
@@ -14,6 +15,7 @@ export interface ProjectJournalFilters {
   role?: ProjectRoleFilter;
   visibility?: ProjectVisibility;
   status?: ProjectStatus;
+  /** Папка-портфель: uuid портфеля или `none` — без портфеля (#559). */
   portfolioId?: string;
   /** Проекты сотрудника (вкладка «Проекты» карточки сотрудника). */
   memberId?: string;
@@ -63,7 +65,7 @@ export function matchesProjectFilters(
   }
   if (filters.visibility && project.visibility !== filters.visibility) return false;
   if (filters.status && project.status !== filters.status) return false;
-  if (filters.portfolioId && project.portfolio?.id !== filters.portfolioId) return false;
+  if (filters.portfolioId && !inPortfolioFolder(project, filters.portfolioId)) return false;
   if (filters.clientId && project.client?.id !== filters.clientId) return false;
   // Превью обрезано (≤5): для оптимистичной вставки этого достаточно —
   // создатель/руководитель/помощники в него попадают всегда.

@@ -9,10 +9,15 @@ import { useAuthStore } from '../auth-store.js';
 import { useCustomFieldFilterDefs } from '../custom-fields/filter-defs.js';
 import { customFieldValuesOf } from '../custom-fields/queries.js';
 import type { FilterFieldDef, FilterValue } from './list-filters.js';
+import { usePortfolioFilterDef } from './portfolio-filter-fields.js';
 import type { FilterPreset } from './use-list-toolbar.js';
 
 /** Поисковая строка задачи: номер + название (подстрока, без регистра). */
 export const taskSearchText = (t: TaskListItem) => `${t.number} ${t.title}`;
+
+/** Проект строки — для фильтра «Портфель» (#559): связь стабильна, чтобы
+ *  реестр фильтров не пересобирался на каждый рендер. */
+const taskProjectIdOf = (t: TaskListItem) => t.project?.id ?? null;
 
 /** Просрочена: срок в прошлом, а работа не сдана (фаза open). Сданная на
  *  утверждение и закрытая — не просрочены (ADR-0020, дополнение 2). */
@@ -85,6 +90,11 @@ export function useTaskFilterDefs({
   const meId = useAuthStore((s) => s.user?.id);
   // Кастомные поля области «Задачи» — группой «Атрибуты» в конце панели (#431, Р8).
   const customDefs = useCustomFieldFilterDefs('task', customFieldValuesOf);
+  // Портфель — папка журнала «Проекты» (#559): срез всей папки в списке задач.
+  const portfolioDef = usePortfolioFilterDef({
+    projectIdOf: taskProjectIdOf,
+    visible: projectVisible,
+  });
 
   return useMemo(() => {
     const people = (users?.items ?? []).map((u) => ({
@@ -184,6 +194,18 @@ export function useTaskFilterDefs({
         match: (t, v) => t.project?.id === v,
       });
     }
+    // Портфель — сразу за проектом: папка шире проекта, связь та же.
+    if (projectVisible && portfolioDef) defs.splice(assigneeVisible ? 5 : 4, 0, portfolioDef);
     return [...defs, ...customDefs];
-  }, [stages, users, projects, meId, projectVisible, assigneeVisible, deciderVisible, customDefs]);
+  }, [
+    stages,
+    users,
+    projects,
+    meId,
+    projectVisible,
+    assigneeVisible,
+    deciderVisible,
+    customDefs,
+    portfolioDef,
+  ]);
 }

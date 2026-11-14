@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { ProjectRef } from '@nodus/contracts';
-import { SYSTEM_FIELD_IDS } from '@nodus/contracts';
+import { NO_PORTFOLIO_FILTER, SYSTEM_FIELD_IDS } from '@nodus/contracts';
 import { Prisma } from '../../generated/prisma/client.js';
 
 import { PrismaService } from '../../core/database/prisma.service.js';
@@ -123,7 +123,13 @@ export class ProjectsRepository {
     if (filter.memberId) and.push({ participants: { some: { userId: filter.memberId } } });
     if (filter.visibility) and.push({ visibility: filter.visibility });
     if (filter.status) and.push({ status: filter.status });
-    if (filter.portfolioId) and.push({ portfolioId: filter.portfolioId });
+    if (filter.portfolioId) {
+      // Сентинел `none` — папка «Без портфеля» журнала (#559): группа ещё
+      // не назначена ни одному портфелю.
+      and.push({
+        portfolioId: filter.portfolioId === NO_PORTFOLIO_FILTER ? null : filter.portfolioId,
+      });
+    }
     // Заказчик — атрибут (Р9 #631): вкладка «Проекты» карточки контрагента.
     if (filter.clientId) {
       and.push({
@@ -174,11 +180,30 @@ export class ProjectsRepository {
     });
   }
 
+  /**
+   * Счётчики журнала по папкам-портфелям (#559): видимый срез, разложенный по
+   * статусам. `portfolioId: null` — проекты без портфеля. Один `groupBy` без
+   * выгрузки строк: счётчик журнала полный, даже когда страница не долистана.
+   */
+  async portfolioCounts(
+    filter: ProjectListFilter,
+  ): Promise<{ portfolioId: string | null; status: string; count: number }[]> {
+    const rows = await this.prisma.project.groupBy({
+      by: ['portfolioId', 'status'],
+      where: this.visibleWhere(filter),
+      _count: { _all: true },
+    });
+    return rows.map((row) => ({
+      portfolioId: row.portfolioId,
+      status: row.status,
+      count: row._count._all,
+    }));
+  }
+
   findById(id: string, tx?: TransactionClient): Promise<ProjectRow | null> {
     const client = tx ?? this.prisma;
     return client.project.findUnique({ select: projectSelect, where: { id } });
   }
-
   findByIdForUpdate(tx: TransactionClient, id: string): Promise<ProjectRow | null> {
     return tx.project.findUnique({ select: projectSelect, where: { id } });
   }

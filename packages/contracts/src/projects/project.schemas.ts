@@ -335,6 +335,12 @@ export const PROJECT_LIMITS = {
 export const projectRoleSchema = z.enum(['manager', 'assistant', 'participant', 'observer']);
 export type ProjectRole = z.infer<typeof projectRoleSchema>;
 
+/**
+ * Сентинел фильтра `portfolioId` журнала: папка «Без портфеля» (#559). Один
+ * литерал на фронт и API — иначе папка и фильтр разъедутся.
+ */
+export const NO_PORTFOLIO_FILTER = 'none';
+
 export const listProjectsQuerySchema = cursorQuerySchema.extend({
   scope: z.enum(['mine', 'all']).default('mine'),
   search: z.string().trim().min(1).max(128).optional(),
@@ -342,7 +348,9 @@ export const listProjectsQuerySchema = cursorQuerySchema.extend({
   role: projectRoleSchema.optional(),
   visibility: projectVisibilitySchema.optional(),
   status: projectStatusSchema.optional(),
-  portfolioId: z.uuid().optional(),
+  /** Портфель-папка журнала (#559): uuid портфеля либо `none` — проекты без
+   *  портфеля (сентинел в URL, отдельного параметра нет). */
+  portfolioId: z.uuid().or(z.literal(NO_PORTFOLIO_FILTER)).optional(),
   /** Проекты сотрудника (вкладка «Проекты» карточки сотрудника). */
   memberId: z.uuid().optional(),
   /** Проекты заказчика (вкладка «Проекты» карточки контрагента, #460). */
@@ -598,6 +606,29 @@ export const projectGroupUpdateBodySchema = z
   .refine((v) => Object.keys(v).length > 0, { message: 'empty update' });
 
 export type ProjectGroupUpdateBody = z.infer<typeof projectGroupUpdateBodySchema>;
+
+/**
+ * Счётчики папки-портфеля в журнале (#559): видимый срез проекта по статусам.
+ * `portfolioId: null` — строка «Без портфеля». Считает сервер (видимость
+ * секретных — I8), клиент не выводит числа из загруженной страницы: журнал
+ * листается курсором, счётчик должен быть полным.
+ */
+export const projectPortfolioCountSchema = z.object({
+  portfolioId: z.uuid().nullable(),
+  active: z.number().int().min(0),
+  completed: z.number().int().min(0),
+  archived: z.number().int().min(0),
+});
+
+export type ProjectPortfolioCount = z.infer<typeof projectPortfolioCountSchema>;
+
+/** Режим счётчиков папок (#559): «все» или «мои» — тот же срез, что у
+ *  журнала, иначе колонка врёт при переключателе «Все / Мои». */
+export const projectPortfolioCountsQuerySchema = z.object({
+  scope: z.enum(['all', 'mine']).default('all'),
+});
+
+export type ProjectPortfolioCountsQuery = z.infer<typeof projectPortfolioCountsQuerySchema>;
 
 // ===== Настройки портала =====
 // Живых настроек портала нет (#738: «видимость новых проектов» удалена —

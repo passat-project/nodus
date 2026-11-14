@@ -15,7 +15,12 @@ import {
 import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
 import { demoNodeKinds } from '../../../../shared/mocks/data/project-nodes.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
-import { demoProjectGroups, demoProjectTypes } from '../../../../shared/mocks/data/projects.js';
+import {
+  demoParticipantRowsOf,
+  demoProjectGroups,
+  demoProjectTypes,
+} from '../../../../shared/mocks/data/projects.js';
+import { visibleProjectRows } from '../../../../shared/mocks/data/project-views.js';
 
 const invalid = () =>
   HttpResponse.json(
@@ -198,6 +203,39 @@ export const projectCatalogHandlers = [
     );
   }),
 
+  // Счётчики папок журнала (#559): видимый срез по статусам — зеркало API.
+  // `scope=mine` сужает до моего участия тем же правилом, что журнал.
+  http.get('/api/v1/projects/groups/counts', ({ request }) => {
+    const actor = getMockActor();
+    const scope = new URL(request.url).searchParams.get('scope');
+    let rows = visibleProjectRows(actor);
+    if (scope === 'mine') {
+      rows = rows.filter((row) =>
+        demoParticipantRowsOf(row.id).some((entry) => entry.userId === actor.id),
+      );
+    }
+    const byPortfolio = new Map<
+      string | null,
+      { portfolioId: string | null; active: number; completed: number; archived: number }
+    >();
+    const entryOf = (portfolioId: string | null) => {
+      const key = portfolioId;
+      const current = byPortfolio.get(key);
+      if (current) return current;
+      const created = { portfolioId, active: 0, completed: 0, archived: 0 };
+      byPortfolio.set(key, created);
+      return created;
+    };
+    for (const row of rows) {
+      const entry = entryOf(row.portfolioId);
+      if (row.status === 'active' || row.status === 'completed' || row.status === 'archived') {
+        entry[row.status] += 1;
+      }
+    }
+    entryOf(null);
+    return HttpResponse.json([...byPortfolio.values()]);
+  }),
+
   http.post('/api/v1/projects/groups', async ({ request }) => {
     if (!getMockActor().permissions.includes(Permission.PROJECT_CREATE)) return forbidden();
     const parsed = projectGroupCreateBodySchema.safeParse(await request.json().catch(() => null));
@@ -226,6 +264,14 @@ export const projectCatalogHandlers = [
     const group = demoProjectGroups.find((entry) => entry.id === String(params.id));
     if (!group) return notFound();
     group.archivedAt = new Date().toISOString();
+    return HttpResponse.json(group);
+  }),
+
+  http.post('/api/v1/projects/groups/:id/restore', ({ params }) => {
+    if (!getMockActor().permissions.includes(Permission.PROJECT_MANAGE)) return forbidden();
+    const group = demoProjectGroups.find((entry) => entry.id === String(params.id));
+    if (!group) return notFound();
+    group.archivedAt = null;
     return HttpResponse.json(group);
   }),
 
