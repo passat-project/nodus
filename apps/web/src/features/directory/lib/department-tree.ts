@@ -42,21 +42,30 @@ export function insertDepartment(roots: DepartmentNode[], node: DepartmentNode):
 }
 
 /** Оптимистичный патч узла (кэш дерева, I4); денормализованные имена и счётчики
- *  доносит инвалидация после ответа сервера. */
+ *  доносит инвалидация после ответа сервера. Набор заместителей (#817)
+ *  переводится из `deputyIds` в `deputies`: имена известных сохраняются, новые
+ *  подхватит инвалидация (до неё панель резолвит имена из справочника сотрудников). */
 export function patchDepartment(
   roots: DepartmentNode[],
   id: string,
   patch: UpdateDepartmentDto,
 ): DepartmentNode[] {
   const walk = (current: DepartmentNode): DepartmentNode => {
-    const next =
-      current.id === id
-        ? {
-            ...current,
-            ...patch,
-            parentId: patch.parentId === undefined ? current.parentId : patch.parentId,
-          }
-        : current;
+    let next: DepartmentNode = current;
+    if (current.id === id) {
+      next = {
+        ...current,
+        ...patch,
+        parentId: patch.parentId === undefined ? current.parentId : patch.parentId,
+      };
+      if (patch.deputyIds !== undefined) {
+        const known = new Map(current.deputies.map((deputy) => [deputy.id, deputy] as const));
+        const deputies = patch.deputyIds.map(
+          (deputyId) => known.get(deputyId) ?? { id: deputyId, displayName: '' },
+        );
+        next = { ...next, deputyIds: deputies.map((deputy) => deputy.id), deputies };
+      }
+    }
     return { ...next, children: next.children.map(walk) };
   };
   return roots.map(walk);

@@ -30,7 +30,7 @@ const department: Department = {
   kind: 'management',
   parentId: null,
   headId: null,
-  deputyId: null,
+  deputyIds: [],
   sortOrder: 0,
   isActive: true,
 };
@@ -54,5 +54,17 @@ describe('buildDepartmentTree: memberCount (#723)', () => {
     const [root] = buildDepartmentTree('management', users, [department]);
 
     expect(root?.memberCount).toBe(0);
+  });
+});
+
+describe('buildDepartmentTree: заместители (#817)', () => {
+  it('уволенный заместитель не попадает в узел — как API, скрывающий его', () => {
+    const source: Department = { ...department, deputyIds: ['a', 'c'] };
+    const users = [user('a', department.id, 'active'), user('c', department.id, 'deactivated')];
+
+    const [root] = buildDepartmentTree('management', users, [source]);
+
+    expect(root?.deputyIds).toEqual(['a']);
+    expect(root?.deputies).toEqual([{ id: 'a', displayName: 'a' }]);
   });
 });

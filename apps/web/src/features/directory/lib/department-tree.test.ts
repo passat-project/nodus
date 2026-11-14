@@ -17,11 +17,11 @@ function node(id: string, memberCount: number, children: DepartmentNode[] = []):
     kind: 'management',
     parentId: null,
     headId: null,
-    deputyId: null,
+    deputyIds: [],
     sortOrder: 0,
     isActive: true,
     headName: null,
-    deputyName: null,
+    deputies: [],
     memberCount,
     children,
   };
@@ -75,6 +75,35 @@ describe('insertDepartment / patchDepartment', () => {
     const patched = patchDepartment(tree(), 'c', { name: 'Группа ГИПов' });
     expect(patched[0]?.children[0]?.children[0]?.name).toBe('Группа ГИПов');
     expect(patched[0]?.children[1]?.name).toBe('dept-d');
+  });
+
+  it('патч набора заместителей (#817): id и чипы идут вместе, известные имена сохраняются', () => {
+    const withDeputy: DepartmentNode = {
+      ...node('a', 2),
+      deputyIds: ['dep-1'],
+      deputies: [{ id: 'dep-1', displayName: 'Первый Зам' }],
+    };
+
+    const patched = patchDepartment([withDeputy], 'a', { deputyIds: ['dep-1', 'dep-2'] });
+
+    expect(patched[0]?.deputyIds).toEqual(['dep-1', 'dep-2']);
+    expect(patched[0]?.deputies).toEqual([
+      { id: 'dep-1', displayName: 'Первый Зам' },
+      { id: 'dep-2', displayName: '' },
+    ]);
+  });
+
+  it('патч без deputyIds не трогает набор заместителей', () => {
+    const withDeputy: DepartmentNode = {
+      ...node('a', 2),
+      deputyIds: ['dep-1'],
+      deputies: [{ id: 'dep-1', displayName: 'Первый Зам' }],
+    };
+
+    const patched = patchDepartment([withDeputy], 'a', { name: 'Новое имя' });
+
+    expect(patched[0]?.deputyIds).toEqual(['dep-1']);
+    expect(patched[0]?.deputies).toEqual([{ id: 'dep-1', displayName: 'Первый Зам' }]);
   });
 });
 

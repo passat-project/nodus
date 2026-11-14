@@ -40,6 +40,24 @@ export class ReferenceGuard {
     if (user.status !== 'active') this.fail(field, 'inactive');
   }
 
+  /** Активные сотрудники пачкой (набор заместителей подразделения, #817):
+   *  один запрос на весь список; отказ — первым нарушителем в порядке набора.
+   *  Пустой массив/undefined — «не задано», проверки нет. */
+  async ensureActiveUsers(
+    ids: readonly string[] | null | undefined,
+    field: string,
+    tx?: TransactionClient,
+  ): Promise<void> {
+    if (!ids || ids.length === 0) return;
+    const rows = await this.users.findRefs(ids, tx);
+    const byId = new Map(rows.map((row) => [row.id, row] as const));
+    for (const id of ids) {
+      const user = byId.get(id);
+      if (!user) this.fail(field, 'not_found');
+      if (user.status !== 'active') this.fail(field, 'inactive');
+    }
+  }
+
   /** Активное подразделение нужного вида структуры (departmentId/legalDepartmentId). */
   async ensureDepartment(
     id: string | null | undefined,

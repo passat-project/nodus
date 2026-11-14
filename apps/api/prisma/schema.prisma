@@ -161,8 +161,9 @@ model User {
   roles               UserRole[]
   sessions            Session[]
   letterViews         LetterView[]
-  headedDepartments   Department[] @relation("DepartmentHead")
-  deputiedDepartments Department[] @relation("DepartmentDeputy")
+  headedDepartments   Department[]       @relation("DepartmentHead")
+  /// Заместительства подразделений (#817): связь many-to-many с порядком.
+  deputyships         DepartmentDeputy[]
 
   /// Список сотрудников: фильтр по статусу + детерминированная сортировка курсора.
   @@index([status, lastName, firstName, id])
@@ -176,14 +177,14 @@ model User {
 }
 
 /// Подразделение (data-model.md: Department). Дерево по parent_id;
-/// руководитель (head) и постоянный заместитель (deputy) — эпик M2.
+/// руководитель (head) и НЕСКОЛЬКО заместителей (DepartmentDeputy) — эпик M2,
+/// заместители множественные с #817.
 model Department {
   id        String      @id @default(uuid()) @db.Uuid
   name      String
   kind      OrgUnitKind @default(management)
   parentId  String?     @map("parent_id") @db.Uuid
   headId    String?     @map("head_id") @db.Uuid
-  deputyId  String?     @map("deputy_id") @db.Uuid
   sortOrder Int         @default(0) @map("sort_order")
   /// Архивация вместо удаления (связи сотрудников и история сохраняются).
   isActive  Boolean     @default(true) @map("is_active")
@@ -194,7 +195,9 @@ model Department {
   parent   Department?  @relation("DepartmentTree", fields: [parentId], references: [id], onDelete: SetNull)
   children Department[] @relation("DepartmentTree")
   head     User?        @relation("DepartmentHead", fields: [headId], references: [id], onDelete: SetNull)
-  deputy   User?        @relation("DepartmentDeputy", fields: [deputyId], references: [id], onDelete: SetNull)
+
+  /// Заместители — отдельная связь (#817): их несколько, порядок — sortOrder.
+  deputies DepartmentDeputy[]
 
   members      User[] @relation("DepartmentMembers")
   legalMembers User[] @relation("LegalDepartmentMembers")
@@ -206,8 +209,25 @@ model Department {
   /// FK SetNull-проверки (удаление подразделения/сотрудника) и подъём по дереву.
   @@index([parentId])
   @@index([headId])
-  @@index([deputyId])
   @@map("departments")
+}
+
+/// Заместитель подразделения (#817). Их несколько на узел; sortOrder — порядок
+/// назначения (первый — «старший»). Снимок прошлого `departments.deputy_id`
+/// перенесён сюда миграцией, поэтому архивный сотрудник остаётся в связи.
+model DepartmentDeputy {
+  departmentId String   @map("department_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([departmentId, userId])
+  /// FK-проверка при удалении сотрудника.
+  @@index([userId])
+  @@map("department_deputies")
 }
 
 /// Должность — плоский справочник; kind: management | legal (эпик M2).

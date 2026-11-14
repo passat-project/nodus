@@ -6,7 +6,16 @@ import type { TransactionClient } from '../../core/database/transaction-runner.j
 
 const departmentInclude = {
   head: { select: { displayName: true } },
-  deputy: { select: { displayName: true } },
+  deputies: {
+    select: {
+      userId: true,
+      sortOrder: true,
+      // Статус нужен сервису: уволенный зам остаётся строкой истории, но
+      // наружу не отдаётся (#817, фильтр — в `toNode`).
+      user: { select: { displayName: true, status: true } },
+    },
+    orderBy: [{ sortOrder: 'asc' as const }, { userId: 'asc' as const }],
+  },
   _count: { select: { members: { where: { status: 'active' as const } } } },
 } satisfies Prisma.DepartmentInclude;
 
@@ -70,6 +79,22 @@ export class DepartmentsRepository {
   ): Promise<DepartmentRow> {
     const client = tx ?? this.prisma;
     return client.department.update({ where: { id }, data, include: departmentInclude });
+  }
+
+  /** Полная замена набора заместителей (#817): порядок — порядок массива.
+   *  Старые связи удаляются, поэтому архивный (уволенный) заместитель исчезает
+   *  из набора только явным решением администратора, а не деактивацией. */
+  async setDeputies(
+    departmentId: string,
+    userIds: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<void> {
+    const client = tx ?? this.prisma;
+    await client.departmentDeputy.deleteMany({ where: { departmentId } });
+    if (userIds.length === 0) return;
+    await client.departmentDeputy.createMany({
+      data: userIds.map((userId, sortOrder) => ({ departmentId, userId, sortOrder })),
+    });
   }
 
   /** Цепочка родителей (для проверки циклов при смене parentId). Внутри
