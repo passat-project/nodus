@@ -172,6 +172,7 @@ describe('DOMAIN_EVENTS: ловушка «событие роутера без �
       invalidateQueries: (arg: { queryKey: unknown[] }) => keys.push(arg.queryKey),
       getQueryData: () => undefined,
       setQueriesData: () => undefined,
+      setQueryData: () => undefined,
       getQueriesData: () => [],
       getQueryCache: () => ({ findAll: () => [] }),
     };

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
-import type { ChatMessage, UserRef } from '@nodus/contracts';
+import type { ChatMessage, ConversationListItem, UserRef } from '@nodus/contracts';
 
 import { chatKeys } from './chat-keys.js';
 import { useAuthStore } from '../auth-store.js';
@@ -388,37 +388,48 @@ describe('applyReadEvent (#124)', () => {
   const ME = '00000000-0000-4000-8000-000000000001';
   const READER = '00000000-0000-4000-8000-000000000002';
 
-  function seedConversations(client: QueryClient, members: UserRef[]) {
+  function conversation(
+    members: UserRef[],
+    lastMessage: ChatMessage | null = null,
+  ): ConversationListItem {
+    return {
+      id: CONV,
+      type: 'group',
+      title: 'беседа',
+      avatarUrl: null,
+      myRole: 'member',
+      permissions: {
+        changeInfo: 'owner',
+        addMembers: 'owner',
+        removeMembers: 'owner',
+        post: 'member',
+        manageSettings: 'owner',
+      },
+      draft: null,
+      visibility: null,
+      description: null,
+      project: null,
+      task: null,
+      letter: null,
+      membersPreview: members,
+      membersCount: members.length,
+      lastMessage,
+      lastActivityAt: lastMessage?.createdAt ?? null,
+      unreadCount: 0,
+      myLastReadSeq: 0,
+      pinned: false,
+      muted: false,
+      snoozed: false,
+    };
+  }
+
+  function seedConversations(
+    client: QueryClient,
+    members: UserRef[],
+    lastMessage: ChatMessage | null = null,
+  ) {
     client.setQueryData(chatKeys.conversations(), {
-      items: [
-        {
-          id: CONV,
-          type: 'group',
-          title: 'беседа',
-          avatarUrl: null,
-          myRole: 'member',
-          permissions: {
-            changeInfo: 'owner',
-            addMembers: 'owner',
-            removeMembers: 'owner',
-            post: 'member',
-            manageSettings: 'owner',
-          },
-          draft: null,
-          visibility: null,
-          description: null,
-          project: null,
-          task: null,
-          letter: null,
-          membersPreview: members,
-          lastMessage: null,
-          unreadCount: 0,
-          myLastReadSeq: 0,
-          pinned: false,
-          muted: false,
-          snoozed: false,
-        },
-      ],
+      items: [conversation(members, lastMessage)],
       nextCursor: null,
     });
   }

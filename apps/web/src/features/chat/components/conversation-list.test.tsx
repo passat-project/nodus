@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ChatMessage, ConversationListItem } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 import { createElement, type ReactNode } from 'react';
 
+import { useAuthStore } from '../../../shared/auth-store.js';
+import { useTypingStore } from '../../../shared/socket/typing-store.js';
 import { ConversationList } from './conversation-list.js';
 
 /**
@@ -34,7 +37,7 @@ function conv(id: string, pinned = false): ConversationListItem {
     task: null,
     letter: null,
     membersPreview: [],
-    membersCount: 1,
+    membersCount: 2,
     lastMessage: null,
     lastActivityAt: null,
     unreadCount: 0,
@@ -43,6 +46,43 @@ function conv(id: string, pinned = false): ConversationListItem {
     muted: false,
     snoozed: false,
   };
+}
+
+const ME = '00000000-0000-4000-8000-000000000001';
+const OTHER = '00000000-0000-4000-8000-000000000002';
+const ME_REF = { id: ME, displayName: 'Я', avatarUrl: null };
+const OTHER_REF = { id: OTHER, displayName: 'Коллега', avatarUrl: null };
+
+function lastMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
+  return {
+    id: 'm1',
+    conversationId: 'c1',
+    seq: 1,
+    clientMessageId: 'client-1',
+    author: ME_REF,
+    text: 'привет',
+    replyToId: null,
+    reply: null,
+    threadRootId: null,
+    threadRepliesCount: 0,
+    reactions: [],
+    attachments: [],
+    editedAt: null,
+    deletedAt: null,
+    pinned: false,
+    forwardedFrom: null,
+    readAt: null,
+    readBy: [],
+    urgent: false,
+    mentionedUserIds: [],
+    linkPreview: null,
+    createdAt: '2026-11-12T10:00:00Z',
+    ...overrides,
+  };
+}
+
+function row(id: string, overrides: Partial<ConversationListItem> = {}): ConversationListItem {
+  return { ...conv(id), ...overrides };
 }
 
 function renderList(conversations: ConversationListItem[]) {
@@ -57,7 +97,17 @@ function renderList(conversations: ConversationListItem[]) {
   );
 }
 
-afterEach(cleanup);
+beforeEach(() => {
+  useAuthStore.setState({
+    user: { id: ME, displayName: 'Я', email: 'me@nodus.by', permissions: [] },
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  useAuthStore.setState({ user: null });
+  useTypingStore.setState({ entries: {} });
+});
 
 describe('ConversationList — рамка закреплённых чатов (#96)', () => {
   it('закреплённые строки внутри [data-slot="pinned-chats"], остальные — вне', () => {
@@ -181,5 +231,102 @@ describe('метка черновика в списке (вердикт 25.09, �
     const text = view.getByText('неотправленное сообщение');
     // Сам текст метки — НЕ красный (красным только слово).
     expect(text.closest('span')?.className).not.toContain('text-destructive');
+  });
+});
+
+describe('галки отправлено/прочитано в строке списка (#799, модель Telegram)', () => {
+  function ticks(view: ReturnType<typeof renderList>) {
+    const button = view.getByRole('button');
+    return {
+      sent: within(button).queryByLabelText(ui.chat.sent),
+      read: within(button).queryByLabelText(ui.chat.read),
+    };
+  }
+
+  it('своё отправленное — одна галка, прочитанное — две', () => {
+    const sent = renderList([row('sent', { lastMessage: lastMessage({ readAt: null }) })]);
+    expect(ticks(sent).sent).not.toBeNull();
+    expect(ticks(sent).read).toBeNull();
+    sent.unmount();
+
+    const read = renderList([
+      row('read', { lastMessage: lastMessage({ readAt: '2026-11-12T10:05:00Z' }) }),
+    ]);
+    expect(ticks(read).read).not.toBeNull();
+    expect(ticks(read).sent).toBeNull();
+  });
+
+  it('чужое последнее сообщение — без галок', () => {
+    const view = renderList([
+      row('foreign', {
+        lastMessage: lastMessage({ author: OTHER_REF, readAt: '2026-11-12T10:05:00Z' }),
+      }),
+    ]);
+    expect(ticks(view).sent).toBeNull();
+    expect(ticks(view).read).toBeNull();
+  });
+
+  it('удалённое последнее сообщение — без галок', () => {
+    const view = renderList([
+      row('deleted', {
+        lastMessage: lastMessage({
+          deletedAt: '2026-11-12T10:06:00Z',
+          readAt: '2026-11-12T10:05:00Z',
+        }),
+      }),
+    ]);
+    expect(ticks(view).sent).toBeNull();
+    expect(ticks(view).read).toBeNull();
+  });
+
+  it('одиночная беседа/канал (я единственный участник) — одна галка отправки, без «просмотрено»', () => {
+    const view = renderList([
+      row('solo-channel', {
+        type: 'project_channel',
+        title: 'Новости',
+        membersCount: 1,
+        lastMessage: lastMessage({ readAt: '2026-11-12T10:05:00Z' }),
+      }),
+    ]);
+    expect(ticks(view).sent).not.toBeNull();
+    expect(ticks(view).read).toBeNull();
+  });
+
+  it('«Заметки» (беседа с собой) — без галок', () => {
+    const view = renderList([
+      row('notes', {
+        type: 'direct',
+        membersPreview: [ME_REF],
+        membersCount: 1,
+        lastMessage: lastMessage({ readAt: '2026-11-12T10:05:00Z' }),
+      }),
+    ]);
+    expect(ticks(view).sent).toBeNull();
+    expect(ticks(view).read).toBeNull();
+  });
+
+  it('черновик — без галок', () => {
+    const view = renderList([
+      row('draft', {
+        draft: { text: 'неотправленное', revision: 1, updatedAt: '2026-11-12T10:06:00Z' },
+        lastMessage: lastMessage({ readAt: '2026-11-12T10:05:00Z' }),
+      }),
+    ]);
+    expect(ticks(view).sent).toBeNull();
+    expect(ticks(view).read).toBeNull();
+  });
+
+  it('«печатает…» не гасит галки последнего сообщения', () => {
+    useTypingStore.setState({
+      entries: { typing: { userId: OTHER, expiresAt: Date.now() + 60_000 } },
+    });
+    const view = renderList([
+      row('typing', {
+        membersPreview: [OTHER_REF],
+        lastMessage: lastMessage({ readAt: '2026-11-12T10:05:00Z' }),
+      }),
+    ]);
+    expect(view.getByText(ui.chat.typing)).toBeTruthy();
+    expect(ticks(view).read).not.toBeNull();
   });
 });
