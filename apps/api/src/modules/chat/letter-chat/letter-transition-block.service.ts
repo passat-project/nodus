@@ -21,6 +21,7 @@ import {
 } from '../../workflows/ports/process-catalog-reader.port.js';
 import { ConversationMembersRepository } from '../conversations/conversation-members.repository.js';
 import { ConversationsRepository } from '../conversations/conversations.repository.js';
+import { participantRoster } from '../conversations/participant-roster.js';
 import { MessageDtoMapper } from '../messages/message-dto.mapper.js';
 import { MessagesWriteRepository } from '../messages/messages-write.repository.js';
 import { VaultWriteRepository } from '../vault/vault-write.repository.js';
@@ -79,6 +80,16 @@ export class LetterTransitionBlockService {
     actorId: string,
     color: StageColor,
   ): Promise<void> {
+    // Тот же предохранитель, что у блока задачи (#741): не-участник беседы
+    // письма не пишет в чужую переписку; запись журнала перехода остаётся.
+    const members = await participantRoster(this.conversations, conversationId, actorId, tx);
+    if (!members) {
+      this.logger.warn(
+        { letterId: payload.letterId, actorId },
+        'chat: блок перехода письма не записан — актор вне беседы',
+      );
+      return;
+    }
     const seq = await this.writes.allocateSeqs(conversationId, 1, tx);
     const inserted = await this.writes.insertMessage(
       {
@@ -114,7 +125,6 @@ export class LetterTransitionBlockService {
     await this.vault.applyMessageSent(tx, inserted, [], inserted.text);
     await this.writes.touchLastMessageAt(conversationId, tx);
     await this.memberships.revealHidden(conversationId, tx);
-    const members = await this.conversations.listMembers([conversationId], tx);
     const message = await this.mapper.toFreshDto(inserted, {
       viewerId: actorId,
       members,

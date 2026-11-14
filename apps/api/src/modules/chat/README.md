@@ -329,7 +329,10 @@ participants_changed|deleted` и `GET /chat/conversations/by-letter/:letterId`
 `chat.conversation_updated`. Блок `letter_transition` пишется по
 `letter_stage_changed` с `recordId` и причиной (закрытие без регистрации,
 отмена регистрации), текст сообщения — причина, цвет чипа — из каталога
-стадий; ключ идемпотентности — `letter-transition:<event.id>`.
+стадий; ключ идемпотентности — `letter-transition:<event.id>`. Пишет только
+участник беседы: актор вне состава (например, регистратор канцелярии, В2) —
+warning в лог и пропуск блока; переход и журнал письма при этом в силе,
+история письма показывает событие.
 Счётчик `commentsCount` задачи пересчитывает модуль tasks по
 `chat.message_sent|message_deleted` через `CHAT_MESSAGE_ACCESS.taskDiscussion`.
 Realtime-доставка/typing/presence — WS-gateway (#104, `apps/gateway`).
@@ -426,6 +429,6 @@ SILO (без хотлинков); кэш `link_previews` (нормализова
 
 ## Вид сообщения и блок перехода (#380)
 
-`messages.kind` (`text | task_transition`; #313 добавит `system`) + `payload JSONB`. Обработчик `task.stage_changed` с `recordId` и непустой причиной/итогом пишет в беседу задачи сообщение `kind='task_transition'`: автор — нажавший, `text` — причина (поиск/цитаты/превью уведомлений работают по тексту), `payload` — `TaskTransitionBlock` (кнопка, статусы, подпись, счётчики файлов/сообщений). Идемпотентность — `client_message_id = task-transition:<event.id>` в существующем unique `(author_id, client_message_id)`; повтор доставки outbox блок не дублирует. Правка блока — 403 (журнал и чат не расходятся), удаление — по общим правилам.
+`messages.kind` (`text | task_transition`; #313 добавит `system`) + `payload JSONB`. Обработчик `task.stage_changed` с `recordId` и непустой причиной/итогом пишет в беседу задачи сообщение `kind='task_transition'`: автор — нажавший, `text` — причина (поиск/цитаты/превью уведомлений работают по тексту), `payload` — `TaskTransitionBlock` (кнопка, статусы, подпись, счётчики файлов/сообщений). Идемпотентность — `client_message_id = task-transition:<event.id>` в существующем unique `(author_id, client_message_id)`; повтор доставки outbox блок не дублирует. Правка блока — 403 (журнал и чат не расходятся), удаление — по общим правилам. Пишет только участник беседы задачи: актор вне состава (держатель права обхода условий, #741) — warning и пропуск блока. Исключение: если сам переход снял нажавшего с беседы (окно перехода сменило ответственного), блок пишется — в момент нажатия он участником был; флаг «был участником» читается ДО синхронизации состава. Журнал перехода остаётся в обоих случаях.
 
 `GET /chat/conversations/:id/messages/lookup?ids=` — живые сообщения беседы по id (≤50, только участник, иначе 404): окну перехода нужны файлы/сообщения итога вне загруженной ленты. Read-порт `CHAT_MESSAGE_ACCESS` получил `attachmentCount`, батч `taskMessages` (один SQL с членством и `task_id`) и `countAttachments` (факт задачи, без проверки зрителя); методы принимают `tx`, чтобы чтение шло клиентом транзакции (gotcha realtime).

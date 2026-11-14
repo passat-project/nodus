@@ -38,7 +38,9 @@ function event(
   };
 }
 
-function setup(options: { enabled?: boolean; insert?: unknown } = {}) {
+function setup(
+  options: { enabled?: boolean; insert?: unknown; member?: boolean; wasMember?: boolean } = {},
+) {
   const row = {
     id: 'm1',
     conversationId: 'c1',
@@ -71,10 +73,15 @@ function setup(options: { enabled?: boolean; insert?: unknown } = {}) {
   };
   const deps = {
     txRunner: { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn(TX)) },
-    taskChat: { sync: vi.fn(async (): Promise<string | null> => 'c1') },
+    taskChat: {
+      sync: vi.fn(async (): Promise<string | null> => 'c1'),
+      isMemberOfTask: vi.fn(async () => options.wasMember ?? false),
+    },
     writes,
     mapper: { toFreshDto: vi.fn(async () => ({ id: 'm1' })) },
-    conversations: { listMembers: vi.fn(async () => []) },
+    conversations: {
+      listMembers: vi.fn(async () => (options.member === false ? [] : [{ userId: 'bob' }])),
+    },
     memberships: { revealHidden: vi.fn(async () => void 0) },
     vault: { applyMessageSent: vi.fn(async () => void 0) },
     eventBus: { emit: vi.fn(async () => void 0) },
@@ -154,5 +161,32 @@ describe('блок перехода в чате задачи (#380)', () => {
     taskChat.sync.mockResolvedValueOnce(null);
     await service.post(event());
     expect(writes.insertMessage).not.toHaveBeenCalled();
+  });
+
+  it('актор вне беседы задачи — блок не пишется, журнал остаётся (#741)', async () => {
+    const { service, writes, eventBus, logger } = setup({ member: false });
+    await service.post(event());
+    expect(writes.allocateSeqs).not.toHaveBeenCalled();
+    expect(writes.insertMessage).not.toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('переход снял актора с беседы (смена ответственного) — блок пишется (#741)', async () => {
+    // Бывший ответственный нажимает «Передать»: sync исключает его из состава,
+    // но в момент нажатия он участником был — причина не должна пропасть.
+    const { service, taskChat, writes, eventBus, logger } = setup({
+      member: false,
+      wasMember: true,
+    });
+    await service.post(event());
+    expect(writes.insertMessage).toHaveBeenCalled();
+    expect(eventBus.emit).toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
+    // Порядок несущий: «был участником» обязан читаться ДО sync, иначе
+    // состав уже пересобран и фикс тихо откатывается в исходный баг.
+    expect(taskChat.isMemberOfTask.mock.invocationCallOrder[0]).toBeLessThan(
+      taskChat.sync.mock.invocationCallOrder[0]!,
+    );
   });
 });
