@@ -80,8 +80,19 @@ export class MailInboxService implements OnModuleInit, OnModuleDestroy {
     });
     // Флаг перепроверяется циклом; таймер — только поднять соединение, когда
     // рубильник включили (suspend гасит его сам).
-    this.flagTimer = setInterval(() => void this.ensureConnection(), 30_000);
-    void this.ensureConnection();
+    this.flagTimer = setInterval(
+      () => this.launchInBackground('flag-check', () => this.ensureConnection()),
+      30_000,
+    );
+    this.launchInBackground('startup', () => this.ensureConnection());
+  }
+
+  /** Фоновый запуск: отказ логируется и не становится необработанным (AUD-018):
+   *  падение фоновой задачи не завершает процесс api. */
+  private launchInBackground(task: string, run: () => Promise<unknown>): void {
+    void run().catch((error: unknown) => {
+      this.logger.error({ err: error, task }, 'Фоновый запуск приёма почты не удался');
+    });
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -146,7 +157,10 @@ export class MailInboxService implements OnModuleInit, OnModuleDestroy {
   private scheduleIdleSync(): void {
     if (this.stopped) return;
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
-    this.debounceTimer = setTimeout(() => void this.sync('idle'), IDLE_DEBOUNCE_MS);
+    this.debounceTimer = setTimeout(
+      () => this.launchInBackground('idle-sync', () => this.sync('idle')),
+      IDLE_DEBOUNCE_MS,
+    );
   }
 
   /** Отказ авторизации: одна проба через 15 минут, без серии повторов. */
@@ -154,7 +168,10 @@ export class MailInboxService implements OnModuleInit, OnModuleDestroy {
     if (this.stopped) return;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectAttempt = 0;
-    this.reconnectTimer = setTimeout(() => void this.ensureConnection(), AUTH_RETRY_MS);
+    this.reconnectTimer = setTimeout(
+      () => this.launchInBackground('auth-retry', () => this.ensureConnection()),
+      AUTH_RETRY_MS,
+    );
   }
 
   private scheduleReconnect(): void {
@@ -168,7 +185,10 @@ export class MailInboxService implements OnModuleInit, OnModuleDestroy {
       'Реконнект IMAP',
     );
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = setTimeout(() => void this.ensureConnection(), jitter);
+    this.reconnectTimer = setTimeout(
+      () => this.launchInBackground('reconnect', () => this.ensureConnection()),
+      jitter,
+    );
   }
 
   /** Один цикл приёма. Идемпотентен курсором; конкурентные вызовы (IDLE и

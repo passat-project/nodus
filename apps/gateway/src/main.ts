@@ -5,6 +5,13 @@ import { loadGatewayConfig } from './config.ts';
 import { createGatewayServer } from './gateway-server.ts';
 import { PgMembershipStore } from './membership.ts';
 import { createGatewayRedis } from './redis-connection.ts';
+import { registerUnhandledRejectionHandler } from './unhandled-rejection.ts';
+
+// Фоновая ошибка не должна завершать процесс gateway (AUD-018): пишем error
+// и продолжаем; uncaughtException не перехватываем.
+registerUnhandledRejectionHandler((message, error) => {
+  console.error(`gateway: ${message}`, error);
+});
 
 const config = loadGatewayConfig();
 const store = new PgMembershipStore(config.DATABASE_URL);
