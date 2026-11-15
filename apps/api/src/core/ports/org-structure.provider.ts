@@ -3,13 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { TransactionClient } from '../database/transaction-runner.js';
-import type {
-  DepartmentRef,
-  OrgPositionFact,
-  OrgPositionRef,
-  OrgStructureReader,
-  OrgUserRef,
-} from './org-structure.port.js';
+import type { DepartmentRef, OrgStructureReader } from './org-structure.port.js';
 
 /** Предохранитель глубины: дерево подразделений на порядок мельче. */
 const MAX_DEPTH = 32;
@@ -64,22 +58,6 @@ export class OrgStructureProvider implements OrgStructureReader {
     });
   }
 
-  /** Держатели должности (#441): активные сотрудники на должности своего вида. */
-  async holdersOfPosition(
-    positionId: string,
-    kind: 'management' | 'legal' = 'management',
-    tx?: TransactionClient,
-  ): Promise<OrgUserRef[]> {
-    return this.db(tx).user.findMany({
-      where:
-        kind === 'legal'
-          ? { legalPositionId: positionId, status: 'active' }
-          : { positionId, status: 'active' },
-      select: { id: true, displayName: true },
-      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
-    });
-  }
-
   /**
    * Цепочка руководителей вверх (#441, ADR-0025 §3) — один рекурсивный CTE:
    * `dept_heads` для каждого подразделения даёт ближайшего руководителя вверх
@@ -127,20 +105,6 @@ export class OrgStructureProvider implements OrgStructureReader {
       ORDER BY w.depth
     `);
     return rows.map((row) => row.id);
-  }
-
-  /** Должности сотрудника (#433, Р5): включая архивные — архивная должность
-   *  не должна мгновенно лишать человека права решать. */
-  async positionsOf(userId: string, tx?: TransactionClient): Promise<OrgPositionRef[]> {
-    const user = await this.db(tx).user.findUnique({
-      where: { id: userId },
-      select: { positionId: true, legalPositionId: true },
-    });
-    if (!user) return [];
-    const result: OrgPositionRef[] = [];
-    if (user.positionId) result.push({ positionId: user.positionId, kind: 'management' });
-    if (user.legalPositionId) result.push({ positionId: user.legalPositionId, kind: 'legal' });
-    return result;
   }
 
   /**
@@ -193,39 +157,6 @@ export class OrgStructureProvider implements OrgStructureReader {
       ORDER BY w.origin, w.depth
     `);
     return new Map(rows.map((row) => [row.origin, row.managerId]));
-  }
-
-  /** Факты должностей пачкой (#433, Р18): активность и число живых
-   *  держателей своего вида (management — `position_id`, legal — `legal_position_id`). */
-  async positionFacts(
-    ids: readonly string[],
-    tx?: TransactionClient,
-  ): Promise<Map<string, OrgPositionFact>> {
-    if (ids.length === 0) return new Map();
-    const rows = await this.db(tx).position.findMany({
-      where: { id: { in: [...new Set(ids)] } },
-      select: {
-        id: true,
-        kind: true,
-        isActive: true,
-        _count: {
-          select: {
-            users: { where: { status: 'active' } },
-            legalUsers: { where: { status: 'active' } },
-          },
-        },
-      },
-    });
-    return new Map(
-      rows.map((row) => [
-        row.id,
-        {
-          kind: row.kind as 'management' | 'legal',
-          isActive: row.isActive,
-          holders: row._count.users + row._count.legalUsers,
-        },
-      ]),
-    );
   }
 
   private db(tx?: TransactionClient) {

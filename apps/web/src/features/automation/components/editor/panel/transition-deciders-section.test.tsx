@@ -11,20 +11,6 @@ vi.mock('../../../model/route-doc-store.js', () => ({
     selector({ patchTransition }),
 }));
 
-vi.mock('../../../../../shared/api/positions.js', () => ({
-  useAllPositions: () => ({
-    data: [
-      {
-        id: '00000000-0000-4000-8000-0000000000a1',
-        name: 'Зам директора по персоналу',
-        kind: 'management',
-        sortOrder: 0,
-        isActive: true,
-      },
-    ],
-  }),
-}));
-
 vi.mock('../../../../../shared/api/users-list.js', () => ({
   useUsersList: () => ({
     data: { items: [{ id: '00000000-0000-4000-8000-0000000000b1', displayName: 'Пётр' }] },
@@ -60,14 +46,6 @@ const transition = (conditions: WorkflowDraftTransition['rules']['conditions']) 
   }) as unknown as WorkflowDraftTransition;
 
 const ALL_SOURCES: WorkflowDraftTransition['rules']['conditions'] = [
-  {
-    kind: 'decider_in',
-    source: {
-      kind: 'position',
-      positionId: '00000000-0000-4000-8000-0000000000a1',
-      positionKind: 'management',
-    },
-  },
   { kind: 'decider_in', source: { kind: 'manager_of', of: 'creator' } },
   {
     kind: 'decider_in',
@@ -87,14 +65,14 @@ describe('DecidersSection (#433)', () => {
     expect(screen.getAllByText(ui.automation.deciders.addSource).length).toBeGreaterThan(0);
   });
 
-  it('все пять источников отрисованы с подписями и значениями', () => {
+  it('все четыре источника отрисованы с подписями и значениями', () => {
     render(<DecidersSection transition={transition(ALL_SOURCES)} readOnly={false} />);
     for (const label of Object.values(ui.automation.deciders.sources)) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
     expect(screen.getByText(ui.automation.deciders.managerOf.creator)).toBeTruthy();
     expect(screen.getByText(ui.automation.deciders.fieldSelfExcluded)).toBeTruthy();
-    expect(screen.getAllByLabelText(ui.automation.deciders.removeSource)).toHaveLength(5);
+    expect(screen.getAllByLabelText(ui.automation.deciders.removeSource)).toHaveLength(4);
   });
 
   it('удаление источника патчит правила без него', () => {
@@ -103,13 +81,16 @@ describe('DecidersSection (#433)', () => {
     expect(patchTransition).toHaveBeenCalledWith('t1', {
       rules: expect.objectContaining({
         conditions: expect.not.arrayContaining([
-          { kind: 'decider_in', source: { kind: 'manager_of', of: 'creator' } },
+          {
+            kind: 'decider_in',
+            source: { kind: 'employees', userIds: ['00000000-0000-4000-8000-0000000000b1'] },
+          },
         ]),
       }),
     });
     const conditions = (patchTransition.mock.calls[0]![1] as { rules: { conditions: unknown[] } })
       .rules.conditions;
-    expect(conditions).toHaveLength(4);
+    expect(conditions).toHaveLength(3);
   });
 
   it('readOnly прячет удаление', () => {

@@ -10,26 +10,6 @@ export interface DepartmentRef {
   isActive: boolean;
 }
 
-/** Сотрудник — минимальная ссылка для портов (решающие, выбор в поле). */
-export interface OrgUserRef {
-  id: string;
-  displayName: string;
-}
-
-/** Должность сотрудника (#433): вид важен для источника `decider_in`. */
-export interface OrgPositionRef {
-  positionId: string;
-  kind: 'management' | 'legal';
-}
-
-/** Факт должности для проверок публикации (#433): вид, активность и число
- *  живых держателей (0 — вакансия, кнопку сможет нажать только обход). */
-export interface OrgPositionFact {
-  kind?: 'management' | 'legal';
-  isActive: boolean;
-  holders: number;
-}
-
 /**
  * Порт чтения оргструктуры (ADR-0012): модулю задач нужно «кто мои
  * подчинённые» для видимости задач (канон Битрикса: руководитель видит
@@ -51,36 +31,16 @@ export interface OrgStructureReader {
   /** Подразделения по id — пачкой для DTO (Р6); отсутствующие пропущены. */
   departmentRefs(ids: readonly string[], tx?: TransactionClient): Promise<DepartmentRef[]>;
 
-  /** Держатели должности (#441, ADR-0025 §3): активные сотрудники на
-   *  должности нужного вида структуры (management — `positionId`,
-   *  legal — `legalPositionId`); порядок — по ФИО. */
-  holdersOfPosition(
-    positionId: string,
-    kind?: 'management' | 'legal',
-    tx?: TransactionClient,
-  ): Promise<OrgUserRef[]>;
-
   /** Цепочка руководителей вверх (#441, ADR-0025 §3): `managerId`, иначе
    *  руководитель подразделения (management), иначе руководитель родительского
    *  — без циклов и самоссылки, глубина ≤ 32; ближайший руководитель первым,
    *  сам сотрудник в цепочку не входит; уволенные пропускаются (шаг идёт выше). */
   managerChainOf(userId: string, tx?: TransactionClient): Promise<string[]>;
 
-  /** Должности сотрудника (#433): управленческая и юридическая, включая
-   *  архивные — право решающего не исчезает при архивации должности. */
-  positionsOf(userId: string, tx?: TransactionClient): Promise<OrgPositionRef[]>;
-
   /** Ближайшие активные руководители пачки сотрудников (#433, В4): один
    *  рекурсивный CTE, `Map<сотрудник, руководитель>`; нет пары — руководителя
    *  нет (источник `manager_of` вакантен). */
   managersOf(userIds: readonly string[], tx?: TransactionClient): Promise<Map<string, string>>;
-
-  /** Факты должностей пачкой (#433): для проверок публикации и предупреждения
-   *  «на должности нет сотрудников». */
-  positionFacts(
-    ids: readonly string[],
-    tx?: TransactionClient,
-  ): Promise<Map<string, OrgPositionFact>>;
 }
 
 export const ORG_STRUCTURE_READER: InjectionToken = 'ORG_STRUCTURE_READER';

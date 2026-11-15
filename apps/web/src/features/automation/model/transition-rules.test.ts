@@ -31,22 +31,22 @@ describe('transition-rules: правки правил кнопки (#378)', () =
   });
 
   it('решающие (#433): источник добавляется, обновляется и снимается', () => {
-    const withPosition = addDeciderSource(base, {
-      kind: 'position',
-      positionId: '00000000-0000-4000-8000-000000000001',
-      positionKind: 'management',
+    const withEmployees = addDeciderSource(base, {
+      kind: 'employees',
+      userIds: ['00000000-0000-4000-8000-000000000001'],
     });
-    expect(deciderSourcesOf(withPosition)).toHaveLength(1);
-    const withManager = addDeciderSource(withPosition, { kind: 'manager_of', of: 'creator' });
-    expect(deciderSourcesOf(withManager).map((s) => s.kind)).toEqual(['position', 'manager_of']);
+    expect(deciderSourcesOf(withEmployees)).toHaveLength(1);
+    const withManager = addDeciderSource(withEmployees, { kind: 'manager_of', of: 'creator' });
+    expect(deciderSourcesOf(withManager).map((s) => s.kind)).toEqual(['employees', 'manager_of']);
     const updated = updateDeciderSource(withManager, 0, {
-      kind: 'position',
-      positionId: '00000000-0000-4000-8000-000000000002',
-      positionKind: 'legal',
+      kind: 'employees',
+      userIds: ['00000000-0000-4000-8000-000000000002'],
     });
-    expect(deciderSourcesOf(updated)[0]).toMatchObject({ positionKind: 'legal' });
+    expect(deciderSourcesOf(updated)[0]).toMatchObject({
+      userIds: ['00000000-0000-4000-8000-000000000002'],
+    });
     const removed = removeDeciderSource(updated, 1);
-    expect(deciderSourcesOf(removed).map((s) => s.kind)).toEqual(['position']);
+    expect(deciderSourcesOf(removed).map((s) => s.kind)).toEqual(['employees']);
     // Роли сохраняются при правке источников.
     expect(rolesOf(removed).has('assignee')).toBe(true);
   });

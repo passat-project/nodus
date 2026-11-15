@@ -11,17 +11,11 @@ export const deciderStrings = {
     addSource: 'Добавить источник',
     removeSource: 'Убрать источник',
     sources: {
-      position: 'Должность',
       manager_of: 'Руководитель',
       employees: 'Сотрудники',
       field: 'Поле «Сотрудник(и)»',
       project_role: 'Роль в проекте',
     },
-    positionKind: {
-      management: 'Управленческая',
-      legal: 'Юридическая',
-    },
-    positionEmpty: 'Выберите должность',
     managerOf: {
       creator: 'Руководитель автора',
       assignee: 'Руководитель исполнителя',
@@ -43,9 +37,6 @@ export const deciderStrings = {
 export const deciderProblemStrings = {
   decider_not_in_category: 'Решающие настраиваются только для задач',
   decider_field_not_user: 'Источник «поле» должен быть полем «Сотрудник» или «Сотрудники»',
-  decider_position_missing: 'Должность решающего удалена, заархивирована или другого вида',
-  decider_position_empty:
-    'На должности нет сотрудников — кнопку сможет нажать только администратор с причиной',
   decider_window_needs_rights:
     'Кнопка только для решающих требует прав участника (поля, время или итог) — решающий получит отказ',
   decider_source_empty: 'Источник «Сотрудники» пуст — выберите хотя бы одного',

@@ -7,7 +7,6 @@ import type {
 } from './workflow-document.schemas.js';
 import type { DeciderSource } from './decider.js';
 
-const POSITION = '22222222-2222-4222-8222-222222222222';
 const FIELD = '33333333-3333-4333-8333-333333333333';
 const EMPTY_FORM = { enabled: false, sections: [] };
 
@@ -90,41 +89,6 @@ const codes = (doc: WorkflowDraftDocument, opts = {}) =>
   checkWorkflowDocument(doc, { category: 'task', ...opts }).map((p) => p.code);
 
 describe('checkDeciderRules (#433)', () => {
-  it('валидный источник должности не даёт ошибок', () => {
-    const result = codes(
-      taskDoc({ kind: 'position', positionId: POSITION, positionKind: 'management' }),
-    );
-    expect(result).not.toContain('decider_position_missing');
-    expect(result).not.toContain('decider_position_empty');
-  });
-
-  it('должность отсутствует или архивна — ошибка', () => {
-    const doc = taskDoc({ kind: 'position', positionId: POSITION, positionKind: 'management' });
-    expect(
-      codes(doc, { positions: new Map([[POSITION, { isActive: false, holders: 2 }]]) }),
-    ).toContain('decider_position_missing');
-    expect(codes(doc, { positions: new Map() })).toContain('decider_position_missing');
-  });
-
-  it('на должности никого нет — предупреждение, не ошибка', () => {
-    const doc = taskDoc({ kind: 'position', positionId: POSITION, positionKind: 'management' });
-    const problems = checkWorkflowDocument(doc, {
-      category: 'task',
-      positions: new Map([[POSITION, { isActive: true, holders: 0 }]]),
-    });
-    const empty = problems.find((p) => p.code === 'decider_position_empty');
-    expect(empty?.severity).toBe('warning');
-  });
-
-  it('должность другого вида — ошибка (иначе кнопку никто не увидит)', () => {
-    const doc = taskDoc({ kind: 'position', positionId: POSITION, positionKind: 'management' });
-    const problems = checkWorkflowDocument(doc, {
-      category: 'task',
-      positions: new Map([[POSITION, { kind: 'legal' as const, isActive: true, holders: 3 }]]),
-    });
-    expect(problems.map((p) => p.code)).toContain('decider_position_missing');
-  });
-
   it('пустой список сотрудников — ошибка публикации', () => {
     const doc = taskDoc({ kind: 'employees', userIds: [] });
     expect(codes(doc)).toContain('decider_source_empty');

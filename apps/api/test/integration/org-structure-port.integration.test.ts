@@ -9,15 +9,15 @@ import {
 import { setupChatFixture } from './chat-fixtures.js';
 
 /**
- * Порт решающих (#441, ADR-0025 §3) на живом стеке: держатели должности и
- * цепочка руководителей вверх (managerId → руководитель подразделения →
- * руководитель родительского), без циклов и самоссылки, глубина ограничена.
+ * Порт оргструктуры (#441, ADR-0025 §3) на живом стеке: цепочка руководителей
+ * вверх (managerId → руководитель подразделения → руководитель родительского),
+ * без циклов и самоссылки, глубина ограничена. Должности как источник
+ * решающего удалены (#806), их методы порта здесь больше не проверяются.
  */
 describe('Порт оргструктуры: решающие (#441)', () => {
   let chat: Awaited<ReturnType<typeof setupChatFixture<'a' | 'b' | 'c' | 'd'>>>;
   let port: OrgStructureReader;
   const departmentIds: string[] = [];
-  const positionIds: string[] = [];
 
   beforeAll(async () => {
     chat = await setupChatFixture(['a', 'b', 'c', 'd']);
@@ -29,7 +29,6 @@ describe('Порт оргструктуры: решающие (#441)', () => {
       for (const id of [...departmentIds].reverse()) {
         await chat.prisma.department.delete({ where: { id } }).catch(() => undefined);
       }
-      await chat.prisma.position.deleteMany({ where: { id: { in: positionIds } } });
     } finally {
       await chat.cleanup();
     }
@@ -48,36 +47,6 @@ describe('Порт оргструктуры: решающие (#441)', () => {
     departmentIds.push(created.id);
     return created.id;
   };
-
-  it('holdersOfPosition: только активные держатели должности своего вида', async () => {
-    const management = await chat.prisma.position.create({
-      data: { name: `Позиция ${chat.runId}`, kind: 'management' },
-      select: { id: true },
-    });
-    const legal = await chat.prisma.position.create({
-      data: { name: `Юр. позиция ${chat.runId}`, kind: 'legal' },
-      select: { id: true },
-    });
-    positionIds.push(management.id, legal.id);
-    await chat.prisma.user.update({
-      where: { id: chat.users.a.id },
-      data: { positionId: management.id },
-    });
-    await chat.prisma.user.update({
-      where: { id: chat.users.b.id },
-      data: { legalPositionId: legal.id },
-    });
-    await chat.prisma.user.update({
-      where: { id: chat.users.c.id },
-      data: { positionId: management.id, status: 'deactivated' },
-    });
-
-    const holders = await port.holdersOfPosition(management.id);
-    expect(holders.map((user) => user.id)).toEqual([chat.users.a.id]);
-
-    const legalHolders = await port.holdersOfPosition(legal.id, 'legal');
-    expect(legalHolders.map((user) => user.id)).toEqual([chat.users.b.id]);
-  });
 
   it('managerChainOf: managerId → managerId (ближайший первым)', async () => {
     await chat.prisma.user.update({
@@ -168,57 +137,11 @@ describe('Порт оргструктуры: решающие (#441)', () => {
     expect(await port.managerChainOf(chat.users.a.id)).toEqual([chat.users.c.id]);
   });
 
-  it('positionsOf: обе должности сотрудника, включая архивную (#433)', async () => {
-    const management = await chat.prisma.position.create({
-      data: { name: `Упр. ${chat.runId}`, kind: 'management', isActive: false },
-      select: { id: true },
-    });
-    const legal = await chat.prisma.position.create({
-      data: { name: `Юр. ${chat.runId}`, kind: 'legal' },
-      select: { id: true },
-    });
-    positionIds.push(management.id, legal.id);
-    await chat.prisma.user.update({
-      where: { id: chat.users.d.id },
-      data: { positionId: management.id, legalPositionId: legal.id },
-    });
-
-    expect(await port.positionsOf(chat.users.d.id)).toEqual([
-      { positionId: management.id, kind: 'management' },
-      { positionId: legal.id, kind: 'legal' },
-    ]);
-    expect(await port.positionsOf(chat.users.d.id)).toHaveLength(2);
-  });
-
   it('managersOf: ближайший активный на каждого, уволенный пропускается (#433)', async () => {
     // a → b (уволен) → c: ближайший активный для a — c.
     const managers = await port.managersOf([chat.users.a.id, chat.users.c.id]);
     expect(managers.get(chat.users.a.id)).toBe(chat.users.c.id);
     expect(managers.has(chat.users.c.id)).toBe(false);
     expect(await port.managersOf([])).toEqual(new Map());
-  });
-
-  it('positionFacts: активность и число живых держателей (#433)', async () => {
-    const management = await chat.prisma.position.create({
-      data: { name: `Факты ${chat.runId}`, kind: 'management' },
-      select: { id: true },
-    });
-    positionIds.push(management.id);
-    await chat.prisma.user.update({
-      where: { id: chat.users.a.id },
-      data: { positionId: management.id, status: 'active' },
-    });
-    await chat.prisma.user.update({
-      where: { id: chat.users.b.id },
-      data: { positionId: management.id, status: 'active' },
-    });
-    await chat.prisma.user.update({
-      where: { id: chat.users.c.id },
-      data: { positionId: management.id, status: 'deactivated' },
-    });
-
-    const facts = await port.positionFacts([management.id]);
-    expect(facts.get(management.id)).toMatchObject({ isActive: true, holders: 2 });
-    expect((await port.positionFacts([])).size).toBe(0);
   });
 });

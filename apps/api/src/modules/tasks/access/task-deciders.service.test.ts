@@ -16,7 +16,6 @@ const TASK: DeciderTaskRow = {
   customFields: {},
 };
 
-const POSITION_ID = '00000000-0000-4000-8000-0000000000a1';
 const FIELD_ID = '00000000-0000-4000-8000-0000000000f1';
 
 function make(transition: Partial<WorkflowDeciderTransition>, task: Partial<DeciderTaskRow> = {}) {
@@ -33,11 +32,7 @@ function make(transition: Partial<WorkflowDeciderTransition>, task: Partial<Deci
     },
   ];
   const org = {
-    positionsOf: vi.fn(async (id: string) =>
-      id === 'holder' ? [{ positionId: POSITION_ID, kind: 'management' as const }] : [],
-    ),
     managersOf: vi.fn(async () => new Map([['creator', 'boss']])),
-    holdersOfPosition: vi.fn(async () => [{ id: 'holder', displayName: 'Держатель' }]),
   };
   const projects = {
     rolesIn: vi.fn(async () => ({}) as Record<string, never>),
@@ -91,21 +86,13 @@ describe('TaskDeciders (#433)', () => {
     expect(await service.isDeciderNow(undefined, task, 'creator')).toBe(false);
   });
 
-  it('должность: держатель — решающий, другой — нет', async () => {
+  it('вакансия: пустой список сотрудников — переход помечен вакантным', async () => {
     const { service, task } = make({
-      sources: [{ kind: 'position', positionId: POSITION_ID, positionKind: 'management' }],
+      sources: [{ kind: 'employees', userIds: [] }],
     });
-    expect(await service.isDeciderNow(undefined, task, 'holder')).toBe(true);
-    expect(await service.isDeciderNow(undefined, task, 'stranger')).toBe(false);
-  });
-
-  it('вакансия: должность без держателей — переход помечен вакантным', async () => {
-    const { service, org, task } = make({
-      sources: [{ kind: 'position', positionId: POSITION_ID, positionKind: 'management' }],
-    });
-    org.holdersOfPosition.mockResolvedValue([]);
-    const context = await service.contextFor(undefined, task, 'holder');
+    const context = await service.contextFor(undefined, task, 'stranger');
     expect([...(context?.vacantTransitionIds ?? [])]).toEqual(['tr-1']);
+    expect(await service.isDeciderNow(undefined, task, 'stranger')).toBe(false);
   });
 
   it('не-user поле источником не считается (вакансия, не совпадение)', async () => {

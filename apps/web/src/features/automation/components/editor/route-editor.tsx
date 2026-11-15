@@ -6,8 +6,6 @@ import type { ProcessType, WorkflowDetail, WorkflowProblem } from '@nodus/contra
 import { ui } from '@nodus/contracts';
 import { workflowKeys } from '../../../../shared/workflow/workflow-api.js';
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
-import { useAllPositions } from '../../../../shared/api/positions.js';
-import { useUsersList } from '../../../../shared/api/users-list.js';
 import { projectsAvailable } from '../../../../shared/api/projects-available.js';
 import { ROUTE_GEOMETRY } from '../../../../shared/flow/route-layout.js';
 import { usePublishWorkflow, useStageNames } from '../../api/automation-api.js';
@@ -123,49 +121,17 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
     const before = new Map(baseline.stages.map((s) => [s.id, s.name.trim()]));
     return new Set(doc.stages.filter((s) => before.get(s.id) !== s.name.trim()).map((s) => s.id));
   }, [baseline, doc.stages, type.isSystem]);
-  // Факты должностей для проверок решающих (#433): активность и число
-  // живых держателей — считаем по тому же справочнику, что показывает UI.
-  const positionsQuery = useAllPositions();
-  const usersQuery = useUsersList();
-  const positions = useMemo(() => {
-    const holders = new Map<string, number>();
-    for (const user of usersQuery.data?.items ?? []) {
-      if (user.status === 'deactivated') continue;
-      for (const id of [user.positionId, user.legalPositionId]) {
-        if (id) holders.set(id, (holders.get(id) ?? 0) + 1);
-      }
-    }
-    return new Map(
-      (positionsQuery.data ?? []).map((position) => [
-        position.id,
-        {
-          kind: position.kind,
-          isActive: position.isActive,
-          holders: holders.get(position.id) ?? 0,
-        },
-      ]),
-    );
-  }, [positionsQuery.data, usersQuery.data]);
   const problems = useMemo(
     () =>
       checkWorkflowDocument(doc, {
         customFields: customFieldFacts,
         category: type.category,
         definitions,
-        positions,
         projectsAvailable: projectsAvailable(),
         stageNameFacts,
         stageNameStageIds,
       }),
-    [
-      doc,
-      customFieldFacts,
-      definitions,
-      type.category,
-      positions,
-      stageNameFacts,
-      stageNameStageIds,
-    ],
+    [doc, customFieldFacts, definitions, type.category, stageNameFacts, stageNameStageIds],
   );
   const problemStageIds = useMemo(
     () => new Set(problems.filter((p) => p.stageId).map((p) => p.stageId as string)),

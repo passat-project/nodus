@@ -9,7 +9,6 @@ import type {
   WorkflowProblem,
 } from '@nodus/contracts';
 
-import type { OrgStructureReader } from '../../../../core/ports/org-structure.port.js';
 import type { UserProfileReader } from '../../../../core/ports/user-profile.port.js';
 import type { TransactionClient } from '../../../../core/database/transaction-runner.js';
 import type { CustomFieldRegistry } from '../../../custom-fields/ports/custom-field-registry.port.js';
@@ -241,7 +240,6 @@ function depsOf(definitions: readonly CustomFieldDefinition[] = DEFINITIONS) {
     deps: {
       registry: { definitions: definitionsMock } as unknown as CustomFieldRegistry,
       profiles: { filterActiveUserIds: vi.fn(async () => []) } as unknown as UserProfileReader,
-      org: { positionFacts: vi.fn(async () => new Map()) } as unknown as OrgStructureReader,
     },
   };
 }
