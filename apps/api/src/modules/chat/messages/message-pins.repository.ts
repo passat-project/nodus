@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client.js';
 import { PrismaService } from '../../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
-import type { MessageRow } from './message-row.js';
+import { MESSAGE_COLS, type MessageRow } from './message-row.js';
 
 export interface PinRecord {
   conversationId: string;
@@ -33,15 +33,7 @@ export class MessagePinsRepository {
     if (pins.length === 0) return [];
     const ids = pins.map((p) => p.messageId);
     const messages = await this.prisma.$queryRaw<MessageRow[]>(Prisma.sql`
-      SELECT id, conversation_id AS "conversationId", seq, author_id AS "authorId",
-             client_message_id AS "clientMessageId", text, reply_to_id AS "replyToId",
-             reply_snapshot AS "replySnapshot", thread_root_id AS "threadRootId",
-             fwd_conversation_id AS "fwdConversationId", fwd_message_id AS "fwdMessageId",
-             fwd_author_id AS "fwdAuthorId", fwd_thread_root_id AS "fwdThreadRootId",
-             edited_at AS "editedAt", deleted_at AS "deletedAt", obliterated,
-             urgent, mentioned_user_ids AS "mentionedUserIds",
-             created_at AS "createdAt", updated_at AS "updatedAt"
-      FROM messages WHERE id = ANY(${ids}::uuid[])
+      SELECT ${MESSAGE_COLS} FROM messages WHERE id = ANY(${ids}::uuid[])
     `);
     const byId = new Map(messages.map((m) => [m.id, m]));
     return pins.flatMap((pin) => {

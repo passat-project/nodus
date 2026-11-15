@@ -44,14 +44,18 @@ export function PeoplePicker({
   const excluded = new Set(excludeIds);
   const people = (data?.items ?? []).filter((u) => !excluded.has(u.id));
 
+  // Сброс поиска при закрытии — во время рендера (канон React, аудит #45):
+  // в одиночном режиме выбор закрывает поповер программно (`setOpen(false)`),
+  // и onOpenChange Radix при этом не вызывается — иначе при повторном
+  // открытии в поле оставался старый запрос.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
+    if (!open) setText('');
+  }
+
   return (
-    <Popover
-      open={open}
-      onOpenChange={(o) => {
-        setOpen(o);
-        if (!o) setText('');
-      }}
-    >
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild aria-label={ariaLabel}>
         {children}
       </PopoverTrigger>

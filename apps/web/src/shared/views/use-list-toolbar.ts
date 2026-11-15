@@ -77,7 +77,7 @@ export function useListToolbar(viewKey: string, builtinPresets: FilterPreset[] =
       if (
         value === undefined ||
         value === '' ||
-        (typeof value === 'object' && !value.from && !value.to)
+        (typeof value === 'object' && value.from === undefined && value.to === undefined)
       ) {
         delete filters[id];
       } else {

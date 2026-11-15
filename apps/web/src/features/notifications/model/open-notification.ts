@@ -60,9 +60,13 @@ export function openNotificationReader(id: string): void {
   useNotificationDetailStore.getState().open(id);
 }
 
-/** Карточка-источник уведомления; null — источника нет (карточка просмотра). */
+/** Карточка-источник уведомления; null — источника нет (карточка просмотра).
+ *  Принимает и полное уведомление, и снимок тоста: клиентские копии маппинга
+ *  sourceType → карточка обязаны совпадать (иначе тост письма уводил в ридер). */
 export function sourceCardOf(
-  item: Notification,
+  item: Pick<Notification, 'conversationId' | 'sourceId'> & {
+    sourceType?: Notification['sourceType'];
+  },
 ): { kind: 'messenger' | 'task' | 'letter'; id: string } | null {
   if (item.conversationId) return { kind: 'messenger', id: item.conversationId };
   if (item.sourceType === 'task') return { kind: 'task', id: item.sourceId };

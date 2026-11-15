@@ -442,7 +442,10 @@ export type ListMessagesQuery = z.infer<typeof listMessagesQuerySchema>;
  *  на ids из attachmentIds. */
 export const sendMessageBodySchema = z
   .object({
-    text: z.string().trim().max(4000),
+    /** Текст необязателен на входе (сообщение только с файлом/стикером —
+     *  валидно, канон Telegram): отсутствие нормализуется в пустую строку,
+     *  иначе refine ниже недостижим для этого сценария. */
+    text: z.string().trim().max(4000).default(''),
     attachmentIds: z.array(z.uuid()).max(20).optional(),
     attachmentRenames: z.array(attachmentRenameSchema).max(20).optional(),
     /** Стикер из пака (доступного отправителю): сервер клеймит вложение

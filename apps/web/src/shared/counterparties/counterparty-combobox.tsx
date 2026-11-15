@@ -172,7 +172,7 @@ export function CounterpartyCombobox({
                 onDismiss?.();
                 return;
               }
-              nav.onKeyDown(e, { onPick: pick, onOpen: () => setOpen(true) });
+              nav.onKeyDown(e, { onPick: pick, onOpen: () => setOpen(true), enabled: open });
             }}
             placeholder={placeholder}
             aria-label={ariaLabel}
