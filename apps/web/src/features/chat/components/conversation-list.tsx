@@ -10,9 +10,10 @@ import { cn } from '@nodus/ui/lib/utils';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { formatListTimestamp, withoutPatronymic } from '../../../shared/lib/format.js';
 import { ConversationAvatar } from '../../../shared/chat/conversation-avatar.js';
+import { ReadTicks } from '../../../shared/chat/read-ticks.js';
 import { useTypingStore } from '../../../shared/socket/typing-store.js';
 import { useInfiniteSentinel } from '../../../shared/views/use-infinite-sentinel.js';
-import { conversationTitle, sortByActivity } from '../lib/conversations.js';
+import { conversationTitle, isNotesConversation, sortByActivity } from '../lib/conversations.js';
 import { ConversationMenu } from './conversation-menu.js';
 
 /**
@@ -139,6 +140,25 @@ export function ConversationList({
 
   function renderRow(conversation: ConversationListItem, inPinnedArea = false) {
     const active = conversation.id === activeId;
+    const last = conversation.lastMessage;
+    // Галки «отправлено/прочитано» (#799, модель Telegram): только у СВОЕГО
+    // последнего сообщения. Чужое последнее, удалённое, «Заметки» (собеседник
+    // я сам) и черновик — без галок; «печатает…» галки не гасит (они про
+    // последнее сообщение, а не про превью).
+    //
+    // Одна галка = отправлено, она есть всегда. Две = прочитано: только при
+    // другом участнике (membersCount > 1). В одиночной беседе/канале сервер
+    // ставит автору readAt=createdAt (он единственный участник), и readAt сам
+    // по себе там — не доказательство прочтения (канон пузыря — readBy, #102):
+    // иначе выходило бы ложное «просмотрено» вместо честного «отправлено».
+    const showTicks =
+      last !== null &&
+      meId !== undefined &&
+      last.author.id === meId &&
+      last.deletedAt === null &&
+      !conversation.draft?.text &&
+      !isNotesConversation(conversation, meId);
+    const read = last !== null && last.readAt !== null && conversation.membersCount > 1;
     return (
       <ConversationMenu key={conversation.id} conversation={conversation}>
         <button
@@ -197,11 +217,23 @@ export function ConversationList({
                   />
                 ) : null}
               </span>
-              {conversation.lastMessage ? (
+              {last ? (
                 // Метка давности по модели Битрикс24 (#782): сегодня — время,
                 // вчера — «Вчера», 2–6 дней — день недели, дальше — дата.
-                <span className="shrink-0 whitespace-nowrap font-mono text-label-sm text-muted-foreground tabular-nums">
-                  {formatListTimestamp(conversation.lastMessage.createdAt)}
+                // Время — первый flex-элемент: базовая линия группы совпадает
+                // с временем (родительская строка — items-baseline), а галки
+                // визуально стоят СЛЕВА от времени (flex-row-reverse) в его тон.
+                // ИНВАРИАНТ ГЕОМЕТРИИ (#799, замерено на :4173): время прижато
+                // к правому краю группы, галки наращивают её ЛЕВУЮ границу —
+                // правый край времени стоит на одной вертикали у всех строк и
+                // НЕ двигается при появлении второй галки (ширина svg постоянна),
+                // поэтому WS-квитанция не дёргает строку. Не переставлять
+                // галки ПОСЛЕ времени и не менять ширину ReadTicks.
+                <span className="flex shrink-0 flex-row-reverse items-center gap-1 text-muted-foreground">
+                  <span className="shrink-0 whitespace-nowrap font-mono text-label-sm tabular-nums">
+                    {formatListTimestamp(last.createdAt)}
+                  </span>
+                  {showTicks ? <ReadTicks read={read} /> : null}
                 </span>
               ) : null}
             </span>

@@ -11,14 +11,22 @@ import { createRealtimeInvalidator } from './socket-invalidation.js';
 function fakeQueryClient() {
   const invalidateQueries = vi.fn();
   const getQueryData = vi.fn(() => undefined);
-  // ws-apply патчеры зовут setQueriesData — кэшей нет, патч не применяется.
+  // ws-apply патчеры зовут setQueriesData/setQueryData — кэшей нет, патч не применяется.
   const setQueriesData = vi.fn();
+  const setQueryData = vi.fn();
   // Поиск беседы задачи по кэшам списка (#252) — кэшей нет.
   const getQueriesData = vi.fn(() => []);
   // Колонки досок в кэше (#322) — досок нет.
   const getQueryCache = vi.fn(() => ({ findAll: () => [] }));
   return {
-    client: { invalidateQueries, getQueryData, setQueriesData, getQueriesData, getQueryCache },
+    client: {
+      invalidateQueries,
+      getQueryData,
+      setQueriesData,
+      setQueryData,
+      getQueriesData,
+      getQueryCache,
+    },
     invalidateQueries,
   };
 }

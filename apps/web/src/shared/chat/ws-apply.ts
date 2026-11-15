@@ -14,6 +14,7 @@ import type {
 
 import { useAuthStore } from '../auth-store.js';
 import { chatKeys } from './chat-keys.js';
+import { patchConversationReadAt } from './ws-apply-conversations.js';
 
 /**
  * Локальное применение chat.message_sent в кэш (раунд 3 «буря рефечей» +
@@ -249,6 +250,11 @@ export function applyReadEvent(
 ): boolean {
   const meId = useAuthStore.getState().user?.id ?? null;
   if (payload.userId === meId) return true; // своё прочтение — патчить нечего
+  // Список бесед (#799): галка «прочитано» у СВОЕГО последнего сообщения
+  // обновляется локально, без рефетча (полная инвалидация списка на каждую
+  // квитанцию — «шторм квитанций» #123). Патч живёт в обоих формах кэша
+  // списка: обычный Paginated и infinite-вкладки scoped.
+  patchConversationReadAt(queryClient, payload, meId);
   const reader = readerRefFromCache(queryClient, payload.conversationId, payload.userId);
   if (!reader) return false;
   let touched = false;
