@@ -70,7 +70,7 @@ project.type_changed       # каталог типов проектов (#631, �
 project.archived / roles_changed / schema_published  # ADR-0030, имена зарезервированы (не эмитятся)
 crm.counterparty_created / counterparty_updated / counterparty_archived / counterparty_restored / counterparty_deleted / contact_changed  # ADR-0033, реализованы #460
 correspondence.letter_received / letter_registered / letter_closed_unregistered / letter_stage_changed / letter_updated / letter_sent  # ADR-0027
-correspondence.assignments_requested        # «Расписать сразу»: черновики поручений с id → модуль задач создаёт задачи (source=letter), идемпотентно
+correspondence.assignments_requested        # не вводится (ADR-0027 «Дополнение (16.11)»): поручения создаёт шаг «создать задачи по шаблону» (#436); имя не использовать
 correspondence.relation_changed / confidentiality_changed
 custom_field.definition_changed  # #431/#631: {definitionId, change: created|updated|deleted|reordered, fields?} — каталожное, без scope (одно определение на портал); значение атрибута — в событии изменения сущности (task.updated.customFieldChanges[{fieldId, from, to}], ≤ 50, long_text обрезан до 500)
 ```
