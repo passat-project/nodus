@@ -347,7 +347,13 @@ export class MessagesService {
               tx,
             ),
           ]
-        : await this.writes.claimAttachments(inserted.id, body.attachmentIds ?? [], userId, tx);
+        : await this.writes.claimAttachments(
+            inserted.id,
+            body.attachmentIds ?? [],
+            userId,
+            tx,
+            body.attachmentRenames ?? [],
+          );
       // Витрина #211: проекция ссылок + Δ денормализованных счётчиков (та же
       // tx; стикеры видом 'sticker' в счётчиках не участвуют).
       await this.vault.applyMessageSent(tx, inserted, claimedAttachments, body.text);

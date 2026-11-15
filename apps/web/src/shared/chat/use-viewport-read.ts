@@ -57,21 +57,41 @@ export function maxSeenSeq(
  * оболочки зависали до F5 (зомби-бейдж #254). Чистая функция — юнит-тест.
  * Сводка вкладок (#409) уменьшается на прочитанное сразу же; скрытая из
  * счётчиков snoozed-беседа не вычитается, рефеч после инвалидации уточнит.
+ *
+ * upToSeq квитанции двигает и `myLastReadSeq` (только вперёд, как GREATEST на
+ * сервере): иначе отставший знак в следующем снимке списка «воскрешал» плашку
+ * «Непрочитанные сообщения» над уже прочитанным (#845). Параметр необязателен
+ * для вызовов, которым нужен только счётчик.
  */
-export function applyReadToCache(queryClient: QueryClient, conversationId: string): void {
+export function applyReadToCache(
+  queryClient: QueryClient,
+  conversationId: string,
+  upToSeq?: number,
+): void {
   const list = queryClient.getQueryData<{
-    items?: { id: string; type: string; unreadCount: number; snoozed: boolean }[];
+    items?: {
+      id: string;
+      type: string;
+      unreadCount: number;
+      myLastReadSeq?: number;
+      snoozed: boolean;
+    }[];
   }>(chatKeys.conversations());
   const target = list?.items?.find((c) => c.id === conversationId);
-  queryClient.setQueryData<{ items?: { id: string; unreadCount: number }[] }>(
-    chatKeys.conversations(),
-    (old) =>
-      old
-        ? {
-            ...old,
-            items: old.items?.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c)),
-          }
-        : old,
+  queryClient.setQueryData<{
+    items?: { id: string; unreadCount: number; myLastReadSeq?: number }[];
+  }>(chatKeys.conversations(), (old) =>
+    old
+      ? {
+          ...old,
+          items: old.items?.map((c) => {
+            if (c.id !== conversationId) return c;
+            const next = { ...c, unreadCount: 0 };
+            if (upToSeq === undefined) return next;
+            return { ...next, myLastReadSeq: Math.max(c.myLastReadSeq ?? 0, upToSeq) };
+          }),
+        }
+      : old,
   );
   const cleared = target?.snoozed ? 0 : (target?.unreadCount ?? 0);
   if (cleared > 0) {
@@ -111,8 +131,9 @@ function useReadReceiptScheduler(
         })
           .then(() => {
             // Бейдж непрочитанных гаснет сразу и без WS (событие придёт —
-            // инвалидация идемпотентна).
-            applyReadToCache(queryClient, conversationId);
+            // инвалидация идемпотентна); myLastReadSeq двигается на тот же
+            // upToSeq — граница плашки не откатывается отставшим снимком.
+            applyReadToCache(queryClient, conversationId, upToSeq);
             void queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
             if (threadRootId) {
               // Точка «есть новые» на посте гасится квитанцией трэда.
@@ -177,8 +198,17 @@ export function useFeedViewportRead(
   conversationId: string,
   containerRef: RefObject<HTMLElement | null>,
   rows: readonly SeqSource[],
-  threadRootId?: string | null,
+  options?: {
+    /** Квитанция ИЗ ТРЕДА: дополнительно гасит точку «есть новые» на посте. */
+    threadRootId?: string | null;
+    /** Низ строки виден — сообщить водяной знак ленты для границы плашки
+     *  непрочитанных (#845). Зовётся только при реальном внимании. */
+    onSeen?: (maxSeq: number) => void;
+  },
 ): void {
+  const threadRootId = options?.threadRootId ?? null;
+  const onSeenRef = useRef(options?.onSeen);
+  onSeenRef.current = options?.onSeen;
   const surfaceVisible = useSurfaceVisible();
   const covered = useModalLayerCovered();
   const threadRootIdRef = useRef<string | null>(threadRootId ?? null);
@@ -210,6 +240,9 @@ export function useFeedViewportRead(
       const max = maxSeenSeq(candidates, foldBottom);
       wsDebugLog('viewport-read observe:', conversationId, 'maxSeq:', max);
       scheduler.observe(max);
+      // Локальный знак для границы непрочитанных (#845): тот же «видел до»,
+      // что уходит квитанцией, — только по вниманию (в фоне не копим).
+      if (max !== null && isUserActive()) onSeenRef.current?.(max);
     };
 
     // Скролл внутри порога не перефирашивает entries частично видимых строк —

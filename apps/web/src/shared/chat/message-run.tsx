@@ -102,6 +102,7 @@ export function MessageRunView({
           cells.push(
             <div
               key={`unread-divider-${message.id}`}
+              data-divider-for={message.id}
               style={{ gridColumn: '1 / -1', gridRow: row }}
             >
               {divider}

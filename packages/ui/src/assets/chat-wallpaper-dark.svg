@@ -1,0 +1,474 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="960" viewBox="0 0 960 960" fill="none" opacity="0.06">
+  <!-- Фоновая плитка зоны чата Nodus (#849), тёмная тема: светлый граф 6%.
+       Иконки: Lucide 1.66 (ISC, https://lucide.dev) + Tabler Icons (crane, MIT)
+       + собственные (экскаватор, конвейер, труба, жилет, уровень) + знак Nodus.
+       Плотная хаотичная россыпь без сетки, случайный угол, зазоры 0,5–2,5 px,
+       без наложений; бесшовная — всё, что пересекает край, повторено напротив.
+       Сгенерировано gen-wallpaper.cjs; не править руками. -->
+  <g stroke="#e8e8e6" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round">
+  <defs>
+    <g id="ic-folder"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></g>
+    <g id="ic-doc"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></g>
+    <g id="ic-envelope"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></g>
+    <g id="ic-task"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m16 9-5.5 5.5L8 12"/></g>
+    <g id="ic-chat"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/></g>
+    <g id="ic-calendar"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M8 13h.01"/><path d="M12 13h.01"/><path d="M16 13h.01"/><path d="M8 17h.01"/><path d="M12 17h.01"/><path d="M16 17h.01"/></g>
+    <g id="ic-paperclip"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"/></g>
+    <g id="ic-person"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></g>
+    <g id="ic-clock"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></g>
+    <g id="ic-bell"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></g>
+    <g id="ic-pin"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></g>
+    <g id="ic-search"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></g>
+    <g id="ic-kanban"><path d="M5 3v14"/><path d="M12 3v8"/><path d="M19 3v18"/></g>
+    <g id="ic-list"><path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/></g>
+    <g id="ic-sliders"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></g>
+    <g id="ic-book"><path d="M12 5v16"/><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z"/></g>
+    <g id="ic-key"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></g>
+    <g id="ic-bulb"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></g>
+    <g id="ic-coffee"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></g>
+    <g id="ic-helmet"><path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5"/><path d="M14 6a6 6 0 0 1 6 6v3"/><path d="M4 15v-3a6 6 0 0 1 6-6"/><rect x="2" y="15" width="20" height="4" rx="1"/></g>
+    <g id="ic-building"><path d="M10 12h4"/><path d="M10 8h4"/><path d="M14 21v-3a2 2 0 0 0-4 0v3"/><path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2"/><path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/></g>
+    <g id="ic-ruler"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></g>
+    <g id="ic-blueprint"><path d="m12.99 6.74 1.93 3.44"/><path d="M19.136 12a10 10 0 0 1-14.271 0"/><path d="m21 21-2.16-3.84"/><path d="m3 21 8.02-14.26"/><circle cx="12" cy="5" r="2"/></g>
+    <g id="ic-bricks"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 9v6"/><path d="M16 15v6"/><path d="M16 3v6"/><path d="M3 15h18"/><path d="M3 9h18"/><path d="M8 15v6"/><path d="M8 3v6"/></g>
+    <g id="ic-cone"><path d="M16.05 10.966a5 2.5 0 0 1-8.1 0"/><path d="m16.923 14.049 4.48 2.04a1 1 0 0 1 .001 1.831l-8.574 3.9a2 2 0 0 1-1.66 0l-8.574-3.91a1 1 0 0 1 0-1.83l4.484-2.04"/><path d="M16.949 14.14a5 2.5 0 1 1-9.9 0L10.063 3.5a2 2 0 0 1 3.874 0z"/><path d="M9.194 6.57a5 2.5 0 0 0 5.61 0"/></g>
+    <g id="ic-graph"><path d="m13.11 7.664 1.78 2.672"/><path d="m14.162 12.788-3.324 1.424"/><path d="m20 4-6.06 1.515"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/><circle cx="12" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="9" cy="15" r="2"/></g>
+    <g id="ic-org"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></g>
+    <g id="ic-bars"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></g>
+    <g id="ic-pie"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z"/><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/></g>
+    <g id="ic-flow"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></g>
+    <g id="ic-star"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></g>
+    <g id="ic-shield"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></g>
+    <g id="ic-globe"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></g>
+    <g id="ic-plane"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></g>
+    <g id="ic-plant"><path d="M14 9.536V7a4 4 0 0 1 4-4h1.5a.5.5 0 0 1 .5.5V5a4 4 0 0 1-4 4 4 4 0 0 0-4 4c0 2 1 3 1 5a5 5 0 0 1-1 3"/><path d="M4 9a5 5 0 0 1 8 4 5 5 0 0 1-8-4"/><path d="M5 21h14"/></g>
+    <g id="ic-briefcase"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/></g>
+    <g id="ic-target"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></g>
+    <g id="ic-linechart"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></g>
+    <g id="ic-truck"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></g>
+    <g id="ic-toolbox"><path d="M16 12v4"/><path d="M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><path d="M17 6a2 2 0 011.414.586l3 3A2 2 0 0122 11v8a2 2 0 01-2 2H4a2 2 0 01-2-2v-8a2 2 0 01.586-1.414l3-3A2 2 0 017 6z"/><path d="M2 14h20"/><path d="M8 12v4"/></g>
+    <g id="ic-barrier"><path d="M4 3 2 5v15c0 .6.4 1 1 1h2c.6 0 1-.4 1-1V5Z"/><path d="M6 8h4"/><path d="M6 18h4"/><path d="m12 3-2 2v15c0 .6.4 1 1 1h2c.6 0 1-.4 1-1V5Z"/><path d="M14 8h4"/><path d="M14 18h4"/><path d="m20 3-2 2v15c0 .6.4 1 1 1h2c.6 0 1-.4 1-1V5Z"/></g>
+    <g id="ic-archive"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></g>
+    <g id="ic-inbox"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></g>
+    <g id="ic-stamp"><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-6 0c0 2 1 2 1 3.5V13"/><path d="M20 15.5a2.5 2.5 0 0 0-2.5-2.5h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1z"/><path d="M5 22h14"/></g>
+    <g id="ic-pen"><path d="M13 21h8"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></g>
+    <g id="ic-calculator"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></g>
+    <g id="ic-laptop"><path d="M18 5a2 2 0 0 1 2 2v8.526a2 2 0 0 0 .212.897l1.068 2.127a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45l1.068-2.127A2 2 0 0 0 4 15.526V7a2 2 0 0 1 2-2z"/><path d="M20.054 15.987H3.946"/></g>
+    <g id="ic-phone"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/></g>
+    <g id="ic-headset"><path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"/><path d="M21 16v2a4 4 0 0 1-4 4h-5"/></g>
+    <g id="ic-wifi"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></g>
+    <g id="ic-database"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></g>
+    <g id="ic-server"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></g>
+    <g id="ic-cloud"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></g>
+    <g id="ic-lock"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></g>
+    <g id="ic-flag"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></g>
+    <g id="ic-bookmark"><path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/></g>
+    <g id="ic-filter"><path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"/></g>
+    <g id="ic-share"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></g>
+    <g id="ic-grid"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></g>
+    <g id="ic-gantt"><path d="M10 6h8"/><path d="M12 16h6"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M8 11h7"/></g>
+    <g id="ic-milestone"><path d="M12 13v8"/><path d="M12 3v3"/><path d="M18.172 6a2 2 0 0 1 1.414.586l2.06 2.06a1.207 1.207 0 0 1 0 1.708l-2.06 2.06a2 2 0 0 1-1.414.586H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"/></g>
+    <g id="ic-team"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></g>
+    <g id="ic-badge"><path d="M13 19a4 4 0 00-8 0"/><path d="M16 10h2"/><path d="M16 14h2"/><circle cx="9" cy="12" r="3"/><rect x="2" y="5" width="20" height="14" rx="2"/></g>
+    <g id="ic-bird"><path d="M16 7h.01"/><path d="M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20"/><path d="m20 7 2 .5-2 .5"/><path d="M10 18v3"/><path d="M14 17.75V21"/><path d="M7 18a6 6 0 0 0 3.84-10.61"/></g>
+    <g id="ic-cat"><path d="M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 7-.42 7 .57 1.07 1 2.24 1 3.44C21 17.9 16.97 21 12 21s-9-3-9-7.56c0-1.25.5-2.4 1-3.44 0 0-1.89-6.42-.5-7 1.39-.58 4.72.23 6.5 2.23A9.04 9.04 0 0 1 12 5Z"/><path d="M8 14v.5"/><path d="M16 14v.5"/><path d="M11.25 16.25h1.5L12 17l-.75-.75Z"/></g>
+    <g id="ic-neural"><path d="M12 13h4"/><path d="M12 18h6a2 2 0 012 2v1"/><path d="M12 8h8"/><path d="M12 9a4.17 4.17 0 01-3 4"/><path d="M16 8V5a2 2 0 012-2"/><path d="M6 18a4 4 0 01-2-7.465"/><path d="M6.004 5.125a4 4 0 00-2.526 5.77"/><path d="M6.294 6.294A3 3 0 1112 5v13a4 4 0 11-7.967-.518"/><circle cx="16" cy="13" r="0.5" fill="currentColor"/><circle cx="18" cy="3" r="0.5" fill="currentColor"/><circle cx="20" cy="21" r="0.5" fill="currentColor"/><circle cx="20" cy="8" r="0.5" fill="currentColor"/></g>
+    <g id="ic-chip"><path d="M12 20v2"/><path d="M12 2v2"/><path d="M16 9v6"/><path d="M17 20v2"/><path d="M17 2v2"/><path d="M2 12h2"/><path d="M2 17h2"/><path d="M2 7h2"/><path d="M20 12h2"/><path d="M20 17h2"/><path d="M20 7h2"/><path d="M7 20v2"/><path d="M7 2v2"/><path d="M8 13h4"/><path d="M8 15v-4a2 2 0 014 0v4"/><rect x="4" y="4" width="16" height="16" rx="2"/></g>
+    <g id="ic-sparkles"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></g>
+    <g id="ic-robot"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></g>
+    <g id="ic-workflow"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></g>
+    <g id="ic-bolt"><path d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z"/></g>
+    <g id="ic-pipeline"><path d="m10.586 5.414-5.172 5.172"/><path d="m18.586 13.414-5.172 5.172"/><path d="M6 12h12"/><circle cx="12" cy="20" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="20" cy="12" r="2"/><circle cx="4" cy="12" r="2"/></g>
+    <g id="ic-layers"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></g>
+    <g id="ic-tree"><path d="M8 5h13"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="M3 10a2 2 0 0 0 2 2h3"/><path d="M3 5v12a2 2 0 0 0 2 2h3"/></g>
+    <g id="ic-robotArm"><path d="M12 21 7.5 8.322"/><path d="m14 7 1.75-3.767a.5.5 0 0 1 .662-.172L20 5.005"/><path d="m20 8.998-3.588 1.944a.5.5 0 0 1-.662-.172L14 7H8"/><path d="M3.486 21h10"/><path d="M5 21V8.732"/><circle cx="6" cy="7" r="2"/></g>
+    <g id="ic-plug"><path d="M12 22v-5"/><path d="M15 8V2"/><path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"/><path d="M9 8V2"/></g>
+    <g id="ic-hammer"><path d="m15 12-9.373 9.373a1 1 0 0 1-3.001-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172v-.344a2 2 0 0 0-.586-1.414l-1.657-1.657A6 6 0 0 0 12.516 3H9l1.243 1.243A6 6 0 0 1 12 8.485V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5"/></g>
+    <g id="ic-wrench"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/></g>
+    <g id="ic-drill"><path d="M10 18a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H5a3 3 0 0 1-3-3 1 1 0 0 1 1-1z"/><path d="M13 10H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1l-.81 3.242a1 1 0 0 1-.97.758H8"/><path d="M14 4h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3"/><path d="M18 6h4"/><path d="m5 10-2 8"/><path d="m7 18 2-8"/></g>
+    <g id="ic-pickaxe"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3L11 9.999"/><path d="M15.973 4.027A13 13 0 0 0 5.902 2.373c-1.398.342-1.092 2.158.277 2.601a19.9 19.9 0 0 1 5.822 3.024"/><path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069"/><path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"/></g>
+    <g id="ic-shovel"><path d="M21.56 4.56a1.5 1.5 0 0 1 0 2.122l-.47.47a3 3 0 0 1-4.212-.03 3 3 0 0 1 0-4.243l.44-.44a1.5 1.5 0 0 1 2.121 0z"/><path d="M3 22a1 1 0 0 1-1-1v-3.586a1 1 0 0 1 .293-.707l3.355-3.355a1.205 1.205 0 0 1 1.704 0l3.296 3.296a1.205 1.205 0 0 1 0 1.704l-3.355 3.355a1 1 0 0 1-.707.293z"/><path d="m9 15 7.879-7.878"/></g>
+    <g id="ic-forklift"><path d="M12 12H5a2 2 0 0 0-2 2v5"/><path d="M15 19h7"/><path d="M16 19V2"/><path d="M6 12V7a2 2 0 0 1 2-2h2.172a2 2 0 0 1 1.414.586l3.828 3.828A2 2 0 0 1 16 10.828"/><path d="M7 19h4"/><circle cx="13" cy="19" r="2"/><circle cx="5" cy="19" r="2"/></g>
+    <g id="ic-construction"><rect x="2" y="6" width="20" height="8" rx="1"/><path d="M17 14v7"/><path d="M7 14v7"/><path d="M17 3v3"/><path d="M7 3v3"/><path d="M10 14 2.3 6.3"/><path d="m14 6 7.7 7.7"/><path d="m8 6 8 8"/></g>
+    <g id="ic-container"><path d="M22 7.7c0-.6-.4-1.2-.8-1.5l-6.3-3.9a1.72 1.72 0 0 0-1.7 0l-10.3 6c-.5.2-.9.8-.9 1.4v6.6c0 .5.4 1.2.8 1.5l6.3 3.9a1.72 1.72 0 0 0 1.7 0l10.3-6c.5-.3.9-1 .9-1.5Z"/><path d="M10 21.9V14L2.1 9.1"/><path d="m10 14 11.9-6.9"/><path d="M14 19.8v-8.1"/><path d="M18 17.5V9.4"/></g>
+    <g id="ic-package"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><polyline points="3.29 7 12 12 20.71 7"/><path d="m7.5 4.27 9 5.15"/></g>
+    <g id="ic-boxes"><path d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z"/><path d="m7 16.5-4.74-2.85"/><path d="m7 16.5 5-3"/><path d="M7 16.5v5.17"/><path d="M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z"/><path d="m17 16.5-5-3"/><path d="m17 16.5 4.74-2.85"/><path d="M17 16.5v5.17"/><path d="M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0l-3 1.8Z"/><path d="M12 8 7.26 5.15"/><path d="m12 8 4.74-2.85"/><path d="M12 13.5V8"/></g>
+    <g id="ic-drone"><path d="M10 10 7 7"/><path d="m10 14-3 3"/><path d="m14 10 3-3"/><path d="m14 14 3 3"/><path d="M14.205 4.139a4 4 0 1 1 5.439 5.863"/><path d="M19.637 14a4 4 0 1 1-5.432 5.868"/><path d="M4.367 10a4 4 0 1 1 5.438-5.862"/><path d="M9.795 19.862a4 4 0 1 1-5.429-5.873"/><rect x="10" y="8" width="4" height="8" rx="1"/></g>
+    <g id="ic-radioTower"><path d="M4.9 16.1C1 12.2 1 5.8 4.9 1.9"/><path d="M7.8 4.7a6.14 6.14 0 0 0-.8 7.5"/><circle cx="12" cy="9" r="2"/><path d="M16.2 4.8c2 2 2.26 5.11.8 7.47"/><path d="M19.1 1.9a9.96 9.96 0 0 1 0 14.1"/><path d="M9.5 18h5"/><path d="m8 22 4-11 4 11"/></g>
+    <g id="ic-antenna"><path d="M2 12 7 2"/><path d="m7 12 5-10"/><path d="m12 12 5-10"/><path d="m17 12 5-10"/><path d="M4.5 7h15"/><path d="M12 16v6"/></g>
+    <g id="ic-satelliteDish"><path d="M18 12a6 6 0 00-6-6"/><path d="M2.824 10.459a8 8 0 0010.717 10.717c.558-.276.623-1.012.183-1.452l-9.448-9.448c-.44-.44-1.176-.375-1.452.183"/><path d="M22 12A10 10 0 0012 2"/><path d="m9 15 4-4"/></g>
+    <g id="ic-circuitBoard"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M11 9h4a2 2 0 0 0 2-2V3"/><circle cx="9" cy="9" r="2"/><path d="M7 21v-4a2 2 0 0 1 2-2h4"/><circle cx="15" cy="15" r="2"/></g>
+    <g id="ic-binary"><rect x="14" y="14" width="4" height="6" rx="2"/><rect x="6" y="4" width="4" height="6" rx="2"/><path d="M6 20h4"/><path d="M14 10h4"/><path d="M6 14h2v6"/><path d="M14 4h2v6"/></g>
+    <g id="ic-gitBranch"><path d="M15 6a9 9 0 0 0-9 9V3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/></g>
+    <g id="ic-gitFork"><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9"/><path d="M12 12v3"/></g>
+    <g id="ic-gitMerge"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></g>
+    <g id="ic-userCheck"><path d="m16 11 2 2 4-4"/><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></g>
+    <g id="ic-userCog"><path d="M10 15H6a4 4 0 0 0-4 4v2"/><path d="m14.305 16.53.923-.382"/><path d="m15.228 13.852-.923-.383"/><path d="m16.852 12.228-.383-.923"/><path d="m16.852 17.772-.383.924"/><path d="m19.148 12.228.383-.923"/><path d="m19.53 18.696-.382-.924"/><path d="m20.772 13.852.924-.383"/><path d="m20.772 16.148.924.383"/><circle cx="18" cy="15" r="3"/><circle cx="9" cy="7" r="4"/></g>
+    <g id="ic-files"><path d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"/><path d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z"/><path d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1"/></g>
+    <g id="ic-folderOpen"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></g>
+    <g id="ic-fileSpreadsheet"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M8 13h2"/><path d="M14 13h2"/><path d="M8 17h2"/><path d="M14 17h2"/></g>
+    <g id="ic-printer"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></g>
+    <g id="ic-router"><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6.01 18H6"/><path d="M10.01 18H10"/><path d="M15 10v4"/><path d="M17.84 7.17a4 4 0 0 0-5.66 0"/><path d="M20.66 4.34a8 8 0 0 0-11.31 0"/></g>
+    <g id="ic-serverCog"><path d="m10.852 14.772-.383.923"/><path d="M13.148 14.772a3 3 0 1 0-2.296-5.544l-.383-.923"/><path d="m13.148 9.228.383-.923"/><path d="m13.53 15.696-.382-.924a3 3 0 1 1-2.296-5.544"/><path d="m14.772 10.852.923-.383"/><path d="m14.772 13.148.923.383"/><path d="M4.5 10H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-.5"/><path d="M4.5 14H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-.5"/><path d="M6 18h.01"/><path d="M6 6h.01"/><path d="m9.228 10.852-.923-.383"/><path d="m9.228 13.148-.923.383"/></g>
+    <g id="ic-mic"><path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/></g>
+    <g id="ic-camera"><path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"/><circle cx="12" cy="13" r="3"/></g>
+    <g id="ic-video"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></g>
+    <g id="ic-timer"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></g>
+    <g id="ic-history"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></g>
+    <g id="ic-calendarClock"><path d="M16 14v2.2l1.6 1"/><path d="M16 2v3"/><path d="M21 7.338V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h2.338"/><path d="M3 9h5.859"/><path d="M8 2v3"/><circle cx="16" cy="16" r="6"/></g>
+    <g id="ic-map"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></g>
+    <g id="ic-sigma"><path d="M18 7V5a1 1 0 0 0-1-1H6.5a.5.5 0 0 0-.4.8l4.5 6a2 2 0 0 1 0 2.4l-4.5 6a.5.5 0 0 0 .4.8H17a1 1 0 0 0 1-1v-2"/></g>
+    <g id="ic-functionSquare"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><path d="M9 17c2 0 2.8-1 2.8-2.8V10c0-2 1-3.3 3.2-3"/><path d="M9 11.2h5.7"/></g>
+    <g id="ic-scanLine"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></g>
+    <g id="ic-crane"><path d="M6 21h6"/><path d="M9 21v-18l-6 6h18"/><path d="M9 3l10 6"/><path d="M17 9v4a2 2 0 1 1-2 2"/></g>
+    <g id="ic-excavator"><path d="M4.5 17h9a2 2 0 0 1 0 4h-9a2 2 0 0 1 0-4Z"/><path d="M5 17v-5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v5"/><path d="M10.5 13.5 15.5 7l3 5.5"/><path d="M17 14l4-.8-.7 3.4-3.3-.8"/></g>
+    <g id="ic-conveyor"><circle cx="5" cy="15" r="2"/><circle cx="19" cy="15" r="2"/><path d="M5 13h14M5 17h14"/><path d="M6.5 17.5 5 21M17.5 17.5 19 21"/><path d="M9 13V8h5v5"/></g>
+    <g id="ic-pipe"><path d="M5 21V12a7 7 0 0 1 7-7h9"/><path d="M9 21V12a3 3 0 0 1 3-3h9"/><path d="M3.5 21h7M21 3.5v7"/></g>
+    <g id="ic-vest"><path d="M9 3 4.5 5.5 6 10l2.5-1.2V21h7V8.8L18 10l1.5-4.5L15 3l-3 2-3-2Z"/><path d="M8.5 12.5h7M8.5 16h7"/></g>
+    <g id="ic-level"><rect x="2" y="9" width="20" height="6" rx="1.5"/><rect x="8" y="10.5" width="8" height="3" rx="1.5"/><circle cx="12" cy="12" r="1" fill="#e8e8e6" stroke="none"/></g>
+    <g id="ic-nodus" transform="scale(1.2)"><path d="M0 -3.56 V-7.13 M-3.41 2.34 L-6.5 4.13 M3.41 2.34 L6.5 4.13" stroke-width="1.1" vector-effect="non-scaling-stroke"/><polygon points="0,-2.25 2.27,-0.94 2.27,1.69 0,3 -2.27,1.69 -2.27,-0.94" stroke-width="1.1" vector-effect="non-scaling-stroke"/><circle cx="0" cy="-8.44" r="1.7" fill="#e8e8e6" stroke="none"/><circle cx="-7.63" cy="4.78" r="1.7" fill="#e8e8e6" stroke="none"/><circle cx="7.63" cy="4.78" r="1.7" fill="#e8e8e6" stroke="none"/></g>
+  </defs>
+    <use href="#ic-archive" transform="translate(97.6 549.6) rotate(12) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-files" transform="translate(616.2 65.5) rotate(-16) scale(1.61) translate(-12 -12)"/>
+    <use href="#ic-binary" transform="translate(857.6 695.9) rotate(-16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-paperclip" transform="translate(817.7 641.6) rotate(14) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-hammer" transform="translate(460.4 599.5) rotate(16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-chat" transform="translate(889.8 416.9) rotate(17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-linechart" transform="translate(78.1 695.9) rotate(-6) scale(1.64) translate(-12 -12)"/>
+    <use href="#ic-gantt" transform="translate(401.4 375.5) rotate(-13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-wifi" transform="translate(102 240.9) rotate(-10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-sparkles" transform="translate(514.5 609.4) rotate(14) scale(1.69) translate(-12 -12)"/>
+    <use href="#ic-nodus" transform="translate(24.7 466.7) rotate(0) scale(2.25) translate(0 0)"/>
+    <use href="#ic-nodus" transform="translate(984.7 466.7) rotate(0) scale(2.25) translate(0 0)"/>
+    <use href="#ic-bricks" transform="translate(174 813) rotate(13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-envelope" transform="translate(235 672.5) rotate(8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-functionSquare" transform="translate(564.9 586.7) rotate(-7) scale(1.68) translate(-12 -12)"/>
+    <use href="#ic-blueprint" transform="translate(316.8 527.5) rotate(3) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-milestone" transform="translate(503.7 377.8) rotate(7) scale(1.7) translate(-12 -12)"/>
+    <use href="#ic-serverCog" transform="translate(819.7 476.6) rotate(14) scale(1.3) translate(-12 -12)"/>
+    <use href="#ic-layers" transform="translate(11.5 196.6) rotate(13) scale(1.71) translate(-12 -12)"/>
+    <use href="#ic-layers" transform="translate(971.5 196.6) rotate(13) scale(1.71) translate(-12 -12)"/>
+    <use href="#ic-scanLine" transform="translate(545.9 748.1) rotate(5) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-plug" transform="translate(564 86.1) rotate(-7) scale(1.5) translate(-12 -12)"/>
+    <use href="#ic-search" transform="translate(429.8 761.8) rotate(-17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-building" transform="translate(748.4 551.1) rotate(-16) scale(1.64) translate(-12 -12)"/>
+    <use href="#ic-workflow" transform="translate(453.4 37.6) rotate(10) scale(1.56) translate(-12 -12)"/>
+    <use href="#ic-construction" transform="translate(463.3 231.6) rotate(4) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-boxes" transform="translate(873 642.7) rotate(4) scale(1.69) translate(-12 -12)"/>
+    <use href="#ic-tree" transform="translate(918.1 893) rotate(-16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-functionSquare" transform="translate(225.4 786.1) rotate(15) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-book" transform="translate(207.9 121.4) rotate(-14) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-map" transform="translate(448.6 902.3) rotate(-5) scale(1.69) translate(-12 -12)"/>
+    <use href="#ic-org" transform="translate(826.6 173.9) rotate(-4) scale(1.62) translate(-12 -12)"/>
+    <use href="#ic-level" transform="translate(914.9 607.2) rotate(10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-crane" transform="translate(663.1 711.8) rotate(15) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bars" transform="translate(215.2 904.2) rotate(-17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-robotArm" transform="translate(73.9 806.4) rotate(-14) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-pin" transform="translate(390 903.9) rotate(-15) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-clock" transform="translate(515.9 209.9) rotate(-13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-history" transform="translate(216.6 335) rotate(-14) scale(1.71) translate(-12 -12)"/>
+    <use href="#ic-timer" transform="translate(703.5 755.8) rotate(9) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-serverCog" transform="translate(710 911.3) rotate(-4) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-package" transform="translate(613.2 560.6) rotate(1) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-cat" transform="translate(807.2 559.1) rotate(1) scale(1.7) translate(-12 -12)"/>
+    <use href="#ic-barrier" transform="translate(580.9 135.4) rotate(14) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-userCog" transform="translate(802.6 794.4) rotate(-6) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-flag" transform="translate(755 132) rotate(13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-layers" transform="translate(294.1 417.5) rotate(-13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-phone" transform="translate(302.1 583.6) rotate(2) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-sigma" transform="translate(175.6 468.4) rotate(9) scale(1.63) translate(-12 -12)"/>
+    <use href="#ic-globe" transform="translate(255.2 93.9) rotate(3) scale(1.53) translate(-12 -12)"/>
+    <use href="#ic-list" transform="translate(575.8 29.1) rotate(14) scale(1.71) translate(-12 -12)"/>
+    <use href="#ic-cone" transform="translate(53.3 14.4) rotate(7) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-cone" transform="translate(53.3 974.4) rotate(7) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-pie" transform="translate(362.3 278.3) rotate(-7) scale(1.63) translate(-12 -12)"/>
+    <use href="#ic-gitFork" transform="translate(800.7 381.3) rotate(-5) scale(1.7) translate(-12 -12)"/>
+    <use href="#ic-kanban" transform="translate(732.2 495) rotate(-11) scale(1.54) translate(-12 -12)"/>
+    <use href="#ic-wrench" transform="translate(365 558.7) rotate(17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-binary" transform="translate(159.8 237.6) rotate(7) scale(1.67) translate(-12 -12)"/>
+    <use href="#ic-inbox" transform="translate(808.8 227.2) rotate(-11) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-cloud" transform="translate(329.5 123.4) rotate(0) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-gitMerge" transform="translate(743.1 798.6) rotate(-12) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-conveyor" transform="translate(526.3 152.3) rotate(-10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-pipeline" transform="translate(834.2 425.1) rotate(6) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-gitMerge" transform="translate(395.8 713.1) rotate(1) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-tree" transform="translate(303 72.1) rotate(5) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-sigma" transform="translate(606.8 731.9) rotate(8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-radioTower" transform="translate(115.6 895.9) rotate(-13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-robot" transform="translate(125 190.4) rotate(-6) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-pipe" transform="translate(107 609.2) rotate(0) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-gitBranch" transform="translate(603.8 452) rotate(-5) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-video" transform="translate(195.3 282.7) rotate(15) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-excavator" transform="translate(820.7 877.6) rotate(-10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-folder" transform="translate(479.4 655) rotate(13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-robot" transform="translate(101 48.2) rotate(-8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-laptop" transform="translate(557.6 893.6) rotate(9) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-router" transform="translate(118.3 100.3) rotate(3) scale(1.4) translate(-12 -12)"/>
+    <use href="#ic-plug" transform="translate(843.7 271.6) rotate(2) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bulb" transform="translate(770.3 334.7) rotate(-3) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-sparkles" transform="translate(596.2 935.8) rotate(-13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-sparkles" transform="translate(596.2 -24.2) rotate(-13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-shield" transform="translate(367.2 219.2) rotate(17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-forklift" transform="translate(277.5 487.6) rotate(-18) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bookmark" transform="translate(487.9 757.8) rotate(5) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-scanLine" transform="translate(916.9 205.2) rotate(5) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-gitFork" transform="translate(20.8 685.2) rotate(-17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-gitFork" transform="translate(980.8 685.2) rotate(-17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-pen" transform="translate(222.1 844.8) rotate(8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-graph" transform="translate(538.2 948.6) rotate(-1) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-graph" transform="translate(538.2 -11.4) rotate(-1) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-badge" transform="translate(823.3 326.2) rotate(-12) scale(1.61) translate(-12 -12)"/>
+    <use href="#ic-share" transform="translate(8.9 627.2) rotate(14) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-share" transform="translate(968.9 627.2) rotate(14) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-mic" transform="translate(513.3 851.1) rotate(3) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-server" transform="translate(880 160.6) rotate(-17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-nodus" transform="translate(395.6 442.8) rotate(0) scale(2.25) translate(0 0)"/>
+    <use href="#ic-calendar" transform="translate(423.3 662.6) rotate(-7) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-chip" transform="translate(373.9 160.3) rotate(-16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-filter" transform="translate(637.2 512.2) rotate(-3) scale(1.63) translate(-12 -12)"/>
+    <use href="#ic-robotArm" transform="translate(864.1 913.6) rotate(18) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-graph" transform="translate(796.8 29.2) rotate(12) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-folderOpen" transform="translate(179.4 694.6) rotate(15) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-linechart" transform="translate(68.2 862.2) rotate(7) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-sliders" transform="translate(503.8 432.4) rotate(-14) scale(1.69) translate(-12 -12)"/>
+    <use href="#ic-bars" transform="translate(333.6 804.2) rotate(10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-flow" transform="translate(261.1 544.7) rotate(-6) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-grid" transform="translate(348.1 398.1) rotate(-18) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-circuitBoard" transform="translate(271.8 208.6) rotate(-16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-stamp" transform="translate(108.8 952.7) rotate(13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-stamp" transform="translate(108.8 -7.3) rotate(13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-workflow" transform="translate(226 729.1) rotate(-9) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-shovel" transform="translate(313.2 856.6) rotate(16) scale(1.58) translate(-12 -12)"/>
+    <use href="#ic-toolbox" transform="translate(252.9 378.3) rotate(-16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-ruler" transform="translate(90.3 146.7) rotate(15) scale(1.66) translate(-12 -12)"/>
+    <use href="#ic-target" transform="translate(763.3 658.1) rotate(-8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-person" transform="translate(67.1 194.8) rotate(-11) scale(1.65) translate(-12 -12)"/>
+    <use href="#ic-printer" transform="translate(157.1 27.1) rotate(5) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-calculator" transform="translate(951.1 252) rotate(-8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-calculator" transform="translate(-8.9 252) rotate(-8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-chip" transform="translate(680.7 301.2) rotate(17) scale(1.51) translate(-12 -12)"/>
+    <use href="#ic-circuitBoard" transform="translate(910.9 363.3) rotate(10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-fileSpreadsheet" transform="translate(782.9 509.2) rotate(-12) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-database" transform="translate(149.6 574.7) rotate(0) scale(1.64) translate(-12 -12)"/>
+    <use href="#ic-drill" transform="translate(925.4 835.9) rotate(-3) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-antenna" transform="translate(264.4 936.8) rotate(10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-antenna" transform="translate(264.4 -23.2) rotate(10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-drone" transform="translate(111.5 338.5) rotate(-8) scale(1.7) translate(-12 -12)"/>
+    <use href="#ic-neural" transform="translate(898.5 48.1) rotate(16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-plant" transform="translate(31.9 142) rotate(12) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-conveyor" transform="translate(935.4 149.3) rotate(-9) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-conveyor" transform="translate(-24.6 149.3) rotate(-9) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-gantt" transform="translate(615 394.1) rotate(-4) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bird" transform="translate(53 587.4) rotate(1) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-target" transform="translate(367.5 853.2) rotate(17) scale(1.71) translate(-12 -12)"/>
+    <use href="#ic-vest" transform="translate(611.9 675.9) rotate(4) scale(1.58) translate(-12 -12)"/>
+    <use href="#ic-pickaxe" transform="translate(669.8 867.7) rotate(7) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bolt" transform="translate(958.5 570.1) rotate(-11) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bolt" transform="translate(-1.5 570.1) rotate(-11) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-database" transform="translate(412.1 255.3) rotate(-16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-gitBranch" transform="translate(327 912.9) rotate(-12) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-team" transform="translate(863.1 216.7) rotate(1) scale(1.69) translate(-12 -12)"/>
+    <use href="#ic-container" transform="translate(24.5 299.8) rotate(-7) scale(1.7) translate(-12 -12)"/>
+    <use href="#ic-container" transform="translate(984.5 299.8) rotate(-7) scale(1.7) translate(-12 -12)"/>
+    <use href="#ic-truck" transform="translate(265.1 321.7) rotate(-16) scale(1.38) translate(-12 -12)"/>
+    <use href="#ic-bell" transform="translate(951.7 24.8) rotate(-10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bell" transform="translate(-8.3 24.8) rotate(-10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bell" transform="translate(951.7 984.8) rotate(-10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bell" transform="translate(-8.3 984.8) rotate(-10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-pie" transform="translate(945.4 410.5) rotate(11) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-pie" transform="translate(-14.6 410.5) rotate(11) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-server" transform="translate(22.3 754.1) rotate(14) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-server" transform="translate(982.3 754.1) rotate(14) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-briefcase" transform="translate(4.6 355.3) rotate(-6) scale(1.64) translate(-12 -12)"/>
+    <use href="#ic-briefcase" transform="translate(964.6 355.3) rotate(-6) scale(1.64) translate(-12 -12)"/>
+    <use href="#ic-org" transform="translate(789.4 280.3) rotate(-1) scale(1.62) translate(-12 -12)"/>
+    <use href="#ic-plane" transform="translate(78.1 750.9) rotate(-11) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-milestone" transform="translate(710.6 651.1) rotate(2) scale(1.47) translate(-12 -12)"/>
+    <use href="#ic-headset" transform="translate(165.7 333.2) rotate(-15) scale(1.42) translate(-12 -12)"/>
+    <use href="#ic-star" transform="translate(939.3 91.3) rotate(18) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-star" transform="translate(-20.7 91.3) rotate(18) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-helmet" transform="translate(808.9 933.9) rotate(13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-doc" transform="translate(507 266.6) rotate(-15) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-pipeline" transform="translate(768.5 746.8) rotate(-2) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-cloud" transform="translate(485.7 114.8) rotate(-15) scale(1.71) translate(-12 -12)"/>
+    <use href="#ic-filter" transform="translate(696 7.5) rotate(10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-filter" transform="translate(696 967.5) rotate(10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-lock" transform="translate(872.5 855.5) rotate(16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-neural" transform="translate(738.5 49) rotate(9) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-userCheck" transform="translate(349 611.5) rotate(7) scale(1.66) translate(-12 -12)"/>
+    <use href="#ic-flow" transform="translate(80.1 446.2) rotate(-14) scale(1.43) translate(-12 -12)"/>
+    <use href="#ic-bolt" transform="translate(852.2 525.2) rotate(12) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-coffee" transform="translate(66.1 96.3) rotate(10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-key" transform="translate(773.9 182.1) rotate(6) scale(1.59) translate(-12 -12)"/>
+    <use href="#ic-task" transform="translate(930.1 779.5) rotate(13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-calendarClock" transform="translate(551 458.5) rotate(16) scale(1.57) translate(-12 -12)"/>
+    <use href="#ic-camera" transform="translate(176.2 754.3) rotate(1) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-satelliteDish" transform="translate(263.1 266.1) rotate(-4) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-history" transform="translate(275.7 812.3) rotate(13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-gitMerge" transform="translate(62.8 643.8) rotate(13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-globe" transform="translate(127.9 663.9) rotate(6) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-list" transform="translate(45.3 245.9) rotate(-1) scale(1.65) translate(-12 -12)"/>
+    <use href="#ic-circuitBoard" transform="translate(602.3 288.6) rotate(17) scale(1.66) translate(-12 -12)"/>
+    <use href="#ic-laptop" transform="translate(637.9 15) rotate(-2) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-laptop" transform="translate(637.9 975) rotate(-2) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bars" transform="translate(829.3 120.3) rotate(-14) scale(1.7) translate(-12 -12)"/>
+    <use href="#ic-flow" transform="translate(560.3 643.5) rotate(8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-radioTower" transform="translate(39.7 402.2) rotate(-9) scale(1.64) translate(-12 -12)"/>
+    <use href="#ic-linechart" transform="translate(611.8 618.6) rotate(-13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-gantt" transform="translate(841.8 65.5) rotate(8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-calculator" transform="translate(728.5 704.9) rotate(-10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-cat" transform="translate(197.4 388.1) rotate(3) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-pin" transform="translate(356.5 339) rotate(9) scale(1.69) translate(-12 -12)"/>
+    <use href="#ic-satelliteDish" transform="translate(419 197) rotate(8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bolt" transform="translate(647.3 770.1) rotate(-10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-cloud" transform="translate(664.4 204.1) rotate(-11) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-flow" transform="translate(480.8 952) rotate(-9) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-flow" transform="translate(480.8 -8) rotate(-9) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-calendar" transform="translate(884.7 746) rotate(8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-database" transform="translate(211.1 1.6) rotate(9) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-database" transform="translate(211.1 961.6) rotate(9) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-share" transform="translate(219.7 506) rotate(5) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-userCog" transform="translate(679.2 148.2) rotate(-15) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-package" transform="translate(799.9 698.1) rotate(-12) scale(1.64) translate(-12 -12)"/>
+    <use href="#ic-fileSpreadsheet" transform="translate(169 871.1) rotate(5) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-helmet" transform="translate(367.9 502.5) rotate(-3) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-coffee" transform="translate(935.5 721.2) rotate(0) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-coffee" transform="translate(-24.5 721.2) rotate(0) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-scanLine" transform="translate(779.2 842.5) rotate(-11) scale(1.59) translate(-12 -12)"/>
+    <use href="#ic-binary" transform="translate(330.1 460.4) rotate(3) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-robotArm" transform="translate(311.4 9.8) rotate(1) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-robotArm" transform="translate(311.4 969.8) rotate(1) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-conveyor" transform="translate(718.9 187.9) rotate(8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-serverCog" transform="translate(828.4 746.4) rotate(1) scale(1.66) translate(-12 -12)"/>
+    <use href="#ic-pen" transform="translate(623.4 169.2) rotate(9) scale(1.61) translate(-12 -12)"/>
+    <use href="#ic-layers" transform="translate(472.4 173.2) rotate(7) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-conveyor" transform="translate(877.5 316.9) rotate(-13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-scanLine" transform="translate(132.5 437.2) rotate(-11) scale(1.66) translate(-12 -12)"/>
+    <use href="#ic-chip" transform="translate(506.1 492) rotate(-13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bookmark" transform="translate(322.3 183.2) rotate(0) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-functionSquare" transform="translate(426 852.1) rotate(-9) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-lock" transform="translate(765.4 897) rotate(-14) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-timer" transform="translate(248.5 604.6) rotate(-13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-shield" transform="translate(931.2 307.9) rotate(-17) scale(1.65) translate(-12 -12)"/>
+    <use href="#ic-chip" transform="translate(313 300.7) rotate(17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-search" transform="translate(18.1 813.1) rotate(8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-search" transform="translate(978.1 813.1) rotate(8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-org" transform="translate(335 710.2) rotate(6) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-plant" transform="translate(350.1 52.6) rotate(-3) scale(1.42) translate(-12 -12)"/>
+    <use href="#ic-person" transform="translate(145.5 384.3) rotate(-3) scale(1.5) translate(-12 -12)"/>
+    <use href="#ic-key" transform="translate(27.2 64.5) rotate(14) scale(1.38) translate(-12 -12)"/>
+    <use href="#ic-inbox" transform="translate(218.3 230.4) rotate(3) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-flag" transform="translate(717 595.8) rotate(-3) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bars" transform="translate(126.1 781.2) rotate(18) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-workflow" transform="translate(394.8 805) rotate(-17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-nodus" transform="translate(233.2 441.1) rotate(0) scale(2.25) translate(0 0)"/>
+    <use href="#ic-badge" transform="translate(580.1 348.5) rotate(2) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-hammer" transform="translate(166.1 83.5) rotate(-16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-team" transform="translate(79.2 292.5) rotate(8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-graph" transform="translate(562.1 697.1) rotate(2) scale(1.59) translate(-12 -12)"/>
+    <use href="#ic-level" transform="translate(211.3 58.1) rotate(-2) scale(1.48) translate(-12 -12)"/>
+    <use href="#ic-cone" transform="translate(610.3 224.7) rotate(-8) scale(1.49) translate(-12 -12)"/>
+    <use href="#ic-drone" transform="translate(230.8 172.5) rotate(-9) scale(1.67) translate(-12 -12)"/>
+    <use href="#ic-construction" transform="translate(154.4 140.7) rotate(4) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-chat" transform="translate(571.7 839.3) rotate(-8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-nodus" transform="translate(298.1 652.2) rotate(0) scale(2.25) translate(0 0)"/>
+    <use href="#ic-star" transform="translate(503.3 903.3) rotate(13) scale(1.56) translate(-12 -12)"/>
+    <use href="#ic-gitBranch" transform="translate(278.5 146.2) rotate(-6) scale(1.71) translate(-12 -12)"/>
+    <use href="#ic-calendarClock" transform="translate(724.8 854.9) rotate(-14) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-pipe" transform="translate(556.9 401.1) rotate(6) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-gitMerge" transform="translate(316.3 242.8) rotate(-3) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-grid" transform="translate(925.2 665.3) rotate(-12) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-gitBranch" transform="translate(658.9 650.5) rotate(-12) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-briefcase" transform="translate(451.7 406) rotate(2) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-gantt" transform="translate(453.6 710) rotate(8) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-book" transform="translate(279.8 717.4) rotate(-5) scale(1.69) translate(-12 -12)"/>
+    <use href="#ic-robot" transform="translate(655 438) rotate(-4) scale(1.5) translate(-12 -12)"/>
+    <use href="#ic-plug" transform="translate(468.6 812.7) rotate(4) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bricks" transform="translate(681.2 484.1) rotate(-6) scale(1.6) translate(-12 -12)"/>
+    <use href="#ic-filter" transform="translate(456.1 290.3) rotate(-17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-building" transform="translate(382.1 101.6) rotate(11) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-nodus" transform="translate(185.6 628.3) rotate(0) scale(2.25) translate(0 0)"/>
+    <use href="#ic-headset" transform="translate(613.4 880.6) rotate(-2) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-tree" transform="translate(716.7 438.9) rotate(16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-sparkles" transform="translate(661.6 591.8) rotate(15) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-serverCog" transform="translate(735.8 287.6) rotate(-7) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bell" transform="translate(686.5 811.9) rotate(15) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-files" transform="translate(112.8 493.3) rotate(18) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bulb" transform="translate(404 611.1) rotate(1) scale(1.69) translate(-12 -12)"/>
+    <use href="#ic-mic" transform="translate(260.5 34.2) rotate(6) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-archive" transform="translate(871.9 471.6) rotate(17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-share" transform="translate(635.3 335.4) rotate(-14) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-userCheck" transform="translate(458.1 463) rotate(-16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-shovel" transform="translate(884.7 104.4) rotate(-7) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-robotArm" transform="translate(180.7 187.8) rotate(2) scale(1.57) translate(-12 -12)"/>
+    <use href="#ic-doc" transform="translate(162.7 929.4) rotate(-1) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-boxes" transform="translate(629.7 825.7) rotate(15) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-layers" transform="translate(4.2 929.2) rotate(17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-layers" transform="translate(964.2 929.2) rotate(17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-kanban" transform="translate(42.2 530.3) rotate(-6) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-stamp" transform="translate(754.3 234.1) rotate(15) scale(1.68) translate(-12 -12)"/>
+    <use href="#ic-pickaxe" transform="translate(635.7 114.2) rotate(5) scale(1.63) translate(-12 -12)"/>
+    <use href="#ic-paperclip" transform="translate(897.6 261.5) rotate(-13) scale(1.64) translate(-12 -12)"/>
+    <use href="#ic-plane" transform="translate(653.9 922.3) rotate(14) scale(1.69) translate(-12 -12)"/>
+    <use href="#ic-task" transform="translate(365.9 663.5) rotate(15) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-antenna" transform="translate(424.2 504.6) rotate(13) scale(1.6) translate(-12 -12)"/>
+    <use href="#ic-server" transform="translate(136 286.9) rotate(-16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-nodus" transform="translate(679.5 383) rotate(0) scale(2.25) translate(0 0)"/>
+    <use href="#ic-camera" transform="translate(710.6 100.2) rotate(-9) scale(1.67) translate(-12 -12)"/>
+    <use href="#ic-vest" transform="translate(206.2 563.3) rotate(-10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-linechart" transform="translate(400.5 44.6) rotate(1) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-org" transform="translate(775.8 439.3) rotate(10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-router" transform="translate(364 758.3) rotate(0) scale(1.7) translate(-12 -12)"/>
+    <use href="#ic-graph" transform="translate(128.7 722.4) rotate(11) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-workflow" transform="translate(528.8 799.5) rotate(-14) scale(1.61) translate(-12 -12)"/>
+    <use href="#ic-server" transform="translate(163.3 522.1) rotate(-12) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-milestone" transform="translate(61.2 918.3) rotate(16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-milestone" transform="translate(57.9 346.7) rotate(1) scale(1.66) translate(-12 -12)"/>
+    <use href="#ic-plug" transform="translate(944.2 516) rotate(17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-plug" transform="translate(-15.8 516) rotate(17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-neural" transform="translate(690.5 541.3) rotate(-16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-envelope" transform="translate(673 60.5) rotate(-6) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-robot" transform="translate(774.2 603.3) rotate(-3) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-sigma" transform="translate(452 349.3) rotate(-15) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-ruler" transform="translate(853.5 10.3) rotate(13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-ruler" transform="translate(853.5 970.3) rotate(13) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-barrier" transform="translate(901.9 552) rotate(-15) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-gitFork" transform="translate(581.1 506.9) rotate(-18) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bird" transform="translate(266 880.6) rotate(-8) scale(1.69) translate(-12 -12)"/>
+    <use href="#ic-wrench" transform="translate(422.3 951.3) rotate(-12) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-wrench" transform="translate(422.3 -8.7) rotate(-12) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-container" transform="translate(421.6 558.4) rotate(-6) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-clock" transform="translate(508.5 703.5) rotate(-12) scale(1.71) translate(-12 -12)"/>
+    <use href="#ic-pie" transform="translate(856.3 587.9) rotate(6) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-forklift" transform="translate(406.3 315.2) rotate(-1) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-map" transform="translate(745.7 389.3) rotate(0) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-sliders" transform="translate(923.2 463.3) rotate(14) scale(1.49) translate(-12 -12)"/>
+    <use href="#ic-pie" transform="translate(701.1 244.7) rotate(7) scale(1.66) translate(-12 -12)"/>
+    <use href="#ic-neural" transform="translate(568.4 190.1) rotate(-5) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-database" transform="translate(718.7 339.2) rotate(4) scale(1.41) translate(-12 -12)"/>
+    <use href="#ic-phone" transform="translate(305.8 360.1) rotate(0) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-tree" transform="translate(476.7 542.2) rotate(-2) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-target" transform="translate(589 785.5) rotate(17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-pipeline" transform="translate(560.1 247.5) rotate(-4) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-wifi" transform="translate(93 392.4) rotate(2) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-nodus" transform="translate(512.8 51.9) rotate(0) scale(2.25) translate(0 0)"/>
+    <use href="#ic-drill" transform="translate(549.9 303.1) rotate(16) scale(1.62) translate(-12 -12)"/>
+    <use href="#ic-sparkles" transform="translate(856 371.4) rotate(16) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-crane" transform="translate(752.3 952.5) rotate(6) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-crane" transform="translate(752.3 -7.5) rotate(6) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-toolbox" transform="translate(501.2 323.7) rotate(-1) scale(1.65) translate(-12 -12)"/>
+    <use href="#ic-binary" transform="translate(121.6 838.7) rotate(3) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-bolt" transform="translate(426.7 140.7) rotate(-15) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-functionSquare" transform="translate(861.1 798.7) rotate(11) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-pipeline" transform="translate(785.1 84.3) rotate(-10) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-filter" transform="translate(908.2 949.9) rotate(12) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-filter" transform="translate(908.2 -10.1) rotate(12) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-blueprint" transform="translate(366.2 956.6) rotate(-17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-blueprint" transform="translate(366.2 -3.4) rotate(-17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-folderOpen" transform="translate(12 871.6) rotate(0) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-folderOpen" transform="translate(972 871.6) rotate(0) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-excavator" transform="translate(534.6 540.8) rotate(17) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-video" transform="translate(648.7 259.8) rotate(9) scale(1.72) translate(-12 -12)"/>
+    <use href="#ic-printer" transform="translate(437.3 88.1) rotate(9) scale(1.61) translate(-12 -12)"/>
+  </g>
+</svg>

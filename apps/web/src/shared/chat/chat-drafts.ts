@@ -250,7 +250,7 @@ export const useChatDrafts = create<DraftsState>()(
             mentions: fromWireText(message.text).mentions,
             // Вложения правимого сообщения — строки окна правки (#188):
             // ready-карточки с серверным DTO (id строки = localId).
-            attachments: message.attachments.map(pendingRowFromAttachment),
+            attachments: message.attachments.map((a) => pendingRowFromAttachment(a)),
           })),
         })),
       cancelEdit: (key) =>

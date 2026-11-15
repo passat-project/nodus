@@ -5,7 +5,7 @@ import type { ChatMessage } from '@nodus/contracts';
 
 import { resetAttentionForTests } from '../attention/attention-store.js';
 import { useScrollEndStore } from './scroll-end-store.js';
-import { isAtBottom, useIncomingFollow } from './use-incoming-follow.js';
+import { isAtBottom, pinnedScrollTop, useIncomingFollow } from './use-incoming-follow.js';
 
 /** Догон входящих (#132): «у низа» — просит скролл в конец, в истории — нет;
  *  свои сообщения догон просит сам композер (хук их пропускает). */
@@ -81,6 +81,59 @@ describe('isAtBottom', () => {
     expect(isAtBottom(vp)).toBe(true);
     vp.scrollTop = 460; // остаток 40px — в истории
     expect(isAtBottom(vp)).toBe(false);
+  });
+});
+
+describe('pinnedScrollTop (#847: рост и сброс поля ввода)', () => {
+  const base = { scrollHeight: 2603, scrollTop: 1964, prevClientHeight: 639, clientHeight: 639 };
+  it('поле выросло (вьюпорт сжался) — точный низ под новую высоту', () => {
+    expect(
+      pinnedScrollTop({ ...base, scrollTop: 1835, prevClientHeight: 768, clientHeight: 639 }),
+    ).toBe(1964); // 2603 - 639
+  });
+
+  it('поле уменьшилось (вьюпорт вырос) — точный низ, а не «минус дельта»', () => {
+    expect(
+      pinnedScrollTop({ ...base, scrollTop: 1964, prevClientHeight: 639, clientHeight: 768 }),
+    ).toBe(1835); // 2603 - 768
+  });
+
+  it('не у низа — рост поля ленту не двигает (читаем историю)', () => {
+    expect(
+      pinnedScrollTop({ ...base, scrollTop: 900, prevClientHeight: 768, clientHeight: 639 }),
+    ).toBeNull();
+  });
+
+  it('scroll-событие от самого ресайза уже пометило «не у низа» — пин по геометрии ДО', () => {
+    // scrollTop 1964 при прежней высоте 639 — ровно низ; после сжатия
+    // вьюпорта (аттрибут «не у низа») пин всё равно обязан сработать.
+    expect(
+      pinnedScrollTop({ ...base, scrollTop: 1835, prevClientHeight: 768, clientHeight: 639 }),
+    ).not.toBeNull();
+  });
+
+  it('высота не изменилась — сдвига нет', () => {
+    expect(pinnedScrollTop({ ...base, prevClientHeight: 700, clientHeight: 700 })).toBeNull();
+  });
+
+  it('дробные высоты (масштаб ОС 125%): накопленной щели не остаётся', () => {
+    // Удаление текста по одной клавише = серия дробных ресайзов; при
+    // инкрементальном сдвиге щель копилась в пиксели и появлялась стрелка.
+    let clientHeight = 768.4;
+    let scrollTop = 2603.2 - clientHeight;
+    for (let i = 1; i <= 12; i += 1) {
+      const next = i % 2 === 0 ? 768.4 : 639.7;
+      const top = pinnedScrollTop({
+        prevClientHeight: clientHeight,
+        clientHeight: next,
+        scrollHeight: 2603.2,
+        scrollTop,
+      });
+      expect(top).not.toBeNull();
+      scrollTop = top!;
+      clientHeight = next;
+    }
+    expect(2603.2 - scrollTop - clientHeight).toBeCloseTo(0, 9);
   });
 });
 

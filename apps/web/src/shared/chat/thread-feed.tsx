@@ -163,7 +163,7 @@ export const ThreadFeed = memo(function ThreadFeed({
   });
 
   return (
-    <div className="flex h-full min-w-0 flex-1 flex-col">
+    <div className="flex h-full min-w-0 flex-1 flex-col chat-wallpaper bg-chat-zone">
       {/* Пин-бар НА МЕСТЕ и в селекте: батч-команды — узкий островок
           композера (вердикт 24.09 — верх ленты не двигается). */}
       <PinBar conversationId={conversationId} onOpenThread={onOpenThread} />
@@ -173,7 +173,7 @@ export const ThreadFeed = memo(function ThreadFeed({
       >
         <MessageScrollerProvider autoScroll>
           <ScrollEndResponder scope={scope} />
-          <MessageScroller className="min-h-0 flex-1 bg-chat-zone">
+          <MessageScroller className="min-h-0 flex-1">
             <MessageScrollerViewport ref={viewportRef}>
               {/* Р.12: скелетоны-полоски убраны (три широкие полосы на первое
                   открытие после перезагрузки читались артефактом); лента

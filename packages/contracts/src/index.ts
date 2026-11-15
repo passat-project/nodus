@@ -74,6 +74,7 @@ export * from './correspondence/letter-registration.schemas.js';
 export * from './correspondence/letter-transitions.schemas.js';
 export * from './dictionaries/dictionary.schemas.js';
 export * from './chat/chat.schemas.js';
+export * from './chat/chat-attachment.schemas.js';
 export * from './chat/chat-block.schemas.js';
 export * from './chat/mention-tokens.js';
 export * from './chat/favorite.schemas.js';

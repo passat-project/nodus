@@ -63,6 +63,14 @@ describe('грамматика значений полей', () => {
     expect(zero.safeParse(12.5).success).toBe(false);
   });
 
+  it('точность проверяется и на крупных значениях (допуск не растёт с числом)', () => {
+    const zero = customFieldValueSchemaOf(def({ type: 'number' }));
+    expect(zero.safeParse(1234567.5).success).toBe(false);
+    const money = customFieldValueSchemaOf(def({ type: 'money', settings: { currencyId: OTHER } }));
+    expect(money.safeParse({ amount: 999_999_999.999, currencyId: OTHER }).success).toBe(false);
+    expect(money.safeParse({ amount: 999_999_999.99, currencyId: OTHER }).success).toBe(true);
+  });
+
   it('деньги: сумма и валюта, два знака', () => {
     const schema = customFieldValueSchemaOf(
       def({ type: 'money', settings: { currencyId: OTHER } }),

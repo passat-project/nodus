@@ -78,6 +78,7 @@ export function StageNameField({
                   if (option) choose(option.name);
                 },
                 onOpen: () => setOpen(true),
+                enabled: open && !readOnly,
               });
             }}
             role="combobox"

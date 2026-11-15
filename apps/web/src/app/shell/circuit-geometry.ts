@@ -114,7 +114,10 @@ export function measureCircuit(pathname = '/', cardMode = false): CircuitGeometr
     label: tabLabelOf(el),
   }));
   const leftEl = document.querySelector<HTMLElement>('[data-left-node]');
-  const leftNode = leftEl ? centerOf(leftEl) : null;
+  // Узел шва ЛЕЖИТ на оси шапки по определению — DOM-якорь рейки даёт только X.
+  // Его рем-вертикаль плывёт на дробном UI-масштабе (×1.25: 63×1.25+1 = 79.75
+  // против оси 80) и точка сходила с линии на физический пиксель (#851).
+  const leftNode = leftEl ? { x: centerOf(leftEl).x, y: axisY } : null;
   // Правый край оси = правый край мягкой рамы: служебная полоса (профиль +
   // коллеги) живёт ЗА пределами рамы в правом периметре (план R4/R5) — связь
   // не пересекает зону аватарок; раскрытие полосы (кнопка-шевроны) сужает

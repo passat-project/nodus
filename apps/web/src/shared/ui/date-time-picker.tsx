@@ -36,6 +36,12 @@ function sameDay(a: Date, b: Date): boolean {
   );
 }
 
+/** Время значения для подписи триггера: НЕ локальный ввод поповера (timeStr),
+ *  иначе внешний префилл/повторный монтаж показывали бы дефолтные 17:00. */
+function valueTime(value: Date): string {
+  return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
+}
+
 /**
  * Выбор даты-времени крайнего срока в стиле Nodus (вердикт владельца
  * 15.09.2026: нативный `datetime-local` — «ужас из 2000-х», не в нашем
@@ -124,7 +130,7 @@ export function DateTimePicker({
             >
               {value
                 ? withTime
-                  ? `${dayMonthFmt.format(value)} ${timeStr}`
+                  ? `${dayMonthFmt.format(value)} ${valueTime(value)}`
                   : dayMonthFmt.format(value)
                 : placeholder}
             </span>

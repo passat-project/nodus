@@ -3,16 +3,17 @@ import type { RefObject } from 'react';
 import { ui } from '@nodus/contracts';
 import { MessageScrollerButton } from '@nodus/ui/components/message-scroller';
 
-import { scrollMessageIntoView } from './scroll-jump.js';
+import { isMessageFullyVisible, scrollMessageIntoView, scrollToEndSmooth } from './scroll-jump.js';
 
 /**
  * Стрелка «вниз» ленты беседы (раунд 4, вердикты владельца): пока первое
- * непрочитанное НИЖЕ сгиба — ПЛАВНАЯ (smooth, «красивая прокрутка», не
- * телепорт) прокрутка к нему; первое непрочитанное уже видно (дочитали до
- * него или непрочитанных нет) — штатное поведение примитива: плавный скролл
- * в самый низ. «Навигации по одному сообщению вниз» НЕТ (вердикт
- * раунда 4): один клик — одно плавное движение к первой непрочитанной
- * границе, следующий — в конец ленты.
+ * непрочитанное НИЖЕ сгиба — ПЛАВНАЯ прокрутка к нему; первое непрочитанное
+ * уже видно (дочитали до него или непрочитанных нет) — плавная прокрутка
+ * в самый низ. Обе ветки — собственная анимация `scroll-jump` (#845): у
+ * примитива встроенный скролл в конец мгновенный, из-за чего повторное
+ * нажатие (плашка уже снята прочтением) телепортировало ленту. «Навигации
+ * по одному сообщению вниз» НЕТ (вердикт раунда 4): один клик — одно
+ * плавное движение к первой непрочитанной границе, следующий — в конец ленты.
  *
  * #132: чип-счётчик НЕпрочитанных на кнопке (модель Telegram): новые
  * сообщения копятся, пока читатель в истории; цифра гаснет с прочтением.
@@ -26,17 +27,25 @@ import { scrollMessageIntoView } from './scroll-jump.js';
  * каркас шрифта центрируется браузером, не «чернила» — у JetBrains Mono
  * резерв над базовой линией больше).
  *
- * preventDefault выключает встроенный scrollToEnd кнопки примитива только
- * в ветке «к первому непрочитанному».
+ * preventDefault выключает встроенный мгновенный scrollToEnd примитива во
+ * всех ветках — прокрутку в конец ведёт наша анимация.
  */
 export function FeedScrollerButton({
-  firstUnreadId,
+  firstUnreadId = null,
   viewportRef,
   unreadCount = 0,
+  onBeforeNavigate,
 }: {
-  firstUnreadId: string | null;
+  /** Таргет стрелки без плашки (ленты каналов/тредов): id первого
+   *  непрочитанного корня. В беседе цель берётся из DOM-якоря плашки. */
+  firstUnreadId?: string | null;
   viewportRef: RefObject<HTMLElement | null>;
   unreadCount?: number;
+  /** Перед навигацией (к первому непрочитанному или в конец): плашка
+   *  непрочитанных переставляется на живую границу — её движение скрывает
+   *  начинающаяся анимация прокрутки (#845). Цель скролла берётся из DOM-якоря
+   *  самой плашки (`data-divider-for`), поэтому рассинхрона быть не может. */
+  onBeforeNavigate?: () => void;
 }) {
   const content = (
     <>
@@ -54,29 +63,47 @@ export function FeedScrollerButton({
       ) : null}
     </>
   );
-  if (firstUnreadId === null) {
-    return <MessageScrollerButton>{content}</MessageScrollerButton>;
-  }
   return (
     <MessageScrollerButton
       onClick={(event) => {
+        onBeforeNavigate?.();
         const viewport = viewportRef.current;
-        const el = viewport?.querySelector<HTMLElement>(
-          `[data-message-id="${CSS.escape(firstUnreadId)}"]`,
-        );
-        const vr = viewport?.getBoundingClientRect();
-        const er = el?.getBoundingClientRect();
-        // Первое непрочитанное уже ПОЛНОСТЬЮ видно — граница достигнута:
-        // штатный плавный скролл в конец ленты.
-        const alreadyAtUnread =
-          el && vr && er && er.top >= vr.top - 1 && er.bottom <= vr.bottom + 1;
-        if (alreadyAtUnread || !el || !viewport) return; // без preventDefault
+        // Цель — КЛЕТКА плашки (DOM-якорь после синка): плашка по построению
+        // оказывается у верхней кромки, без рассинхрона с id сообщения.
+        if (!viewport) return;
+        const anchor = viewport.querySelector<HTMLElement>('[data-divider-for]');
+        // Беседа: цель — клетка плашки (по построению у верхней кромки).
+        // Канал/тред: плашки нет, цель — первый непрочитанный корень.
+        const target =
+          anchor ??
+          (firstUnreadId
+            ? viewport.querySelector<HTMLElement>(
+                `[data-message-id="${CSS.escape(firstUnreadId)}"]`,
+              )
+            : null);
+        // Границы нет или она уже видна — «в конец». ВСЕГДА своей плавной
+        // анимацией: штатный скролл примитива мгновенный, и повторное
+        // нажатие (плашка снята прочтением) телепортировало ленту (#845).
+        if (!target || isMessageFullyVisible(target, viewport)) {
+          event.preventDefault();
+          scrollToEndSmooth(viewport);
+          return;
+        }
         event.preventDefault();
-        scrollMessageIntoView(el, viewport, {
-          align: 'start',
-          margin: 48,
-          behavior: 'smooth',
-        });
+        scrollMessageIntoView(
+          () =>
+            viewport.querySelector<HTMLElement>(
+              anchor
+                ? '[data-divider-for]'
+                : `[data-message-id="${CSS.escape(firstUnreadId ?? '')}"]`,
+            ),
+          viewport,
+          {
+            align: 'start',
+            margin: anchor ? 8 : 48,
+            behavior: 'smooth',
+          },
+        );
       }}
     >
       {content}

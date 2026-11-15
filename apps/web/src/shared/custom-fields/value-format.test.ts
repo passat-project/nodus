@@ -29,6 +29,12 @@ describe('формат значений полей (#431)', () => {
     expect(parseNumber('10000000000001', 0)).toBeNull();
   });
 
+  it('разбор числа: точность не ослабляется на крупных значениях', () => {
+    expect(parseNumber('12 345,678', 2)).toBeNull();
+    expect(parseNumber('500 000,5', 0)).toBeNull();
+    expect(parseNumber('999 999 999,99', 2)).toBe(999_999_999.99);
+  });
+
   it('деньги: сумма и код валюты', () => {
     expect(formatMoney({ amount: 1000, currencyId: 'x' }, 'BYN').replace(NBSP, ' ')).toBe(
       '1 000,00 BYN',

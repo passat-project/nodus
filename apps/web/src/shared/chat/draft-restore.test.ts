@@ -45,6 +45,22 @@ describe('restoreFailedIntoDraft (#248)', () => {
     });
   });
 
+  it('переименование окна (#146): fileName восстанавливается, attachment — серверное имя', () => {
+    // Иначе повтор отправки не увидел бы diff имён и сервер остался бы
+    // со старым именем (кейс code-review #146).
+    const out = restoreFailedIntoDraft(draft(), {
+      wireText: '',
+      reply: null,
+      urgent: false,
+      attachments: [attDto],
+      attachmentRenames: [{ id: 'att-1', name: 'Смета на согласование.csv' }],
+    });
+    expect(out.attachments[0]).toMatchObject({
+      fileName: 'Смета на согласование.csv',
+      attachment: { id: 'att-1', name: 'отчёт.csv' },
+    });
+  });
+
   it('занятое поле, упавшая без текста: только конкат вложений, текст не тронут', () => {
     const out = restoreFailedIntoDraft(
       draft({ text: 'набираю', mentions: [{ start: 0, end: 6, id: 'u1', label: 'набирa' }] }),

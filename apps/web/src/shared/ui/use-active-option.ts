@@ -16,7 +16,7 @@ export function useActiveOption(count: number, resetKey: unknown) {
 
   function onKeyDown(
     event: KeyboardEvent,
-    handlers: { onPick: (index: number) => void; onOpen?: () => void },
+    handlers: { onPick: (index: number) => void; onOpen?: () => void; enabled: boolean },
   ): boolean {
     if (event.ctrlKey || event.metaKey || event.altKey) return false;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -27,7 +27,12 @@ export function useActiveOption(count: number, resetKey: unknown) {
       setState({ key: resetKey, index: (Math.max(active, 0) + step + count) % count });
       return true;
     }
-    if (event.key === 'Enter' && active >= 0) {
+    // Enter выбирает только из ОТКРЫТОГО списка: у закрытого комбобокса
+    // активного варианта нет, иначе Enter «продолжить» молча подменял бы
+    // выбранного человека первым из справочника (адресат/подписант письма).
+    // Флаг обязателен — предохранитель не должен быть fail-open для новых
+    // комбобоксов.
+    if (event.key === 'Enter' && handlers.enabled && active >= 0) {
       event.preventDefault();
       handlers.onPick(active);
       return true;
