@@ -70,3 +70,6 @@ infra/desktop-dist/*
 # репозиторий публичный — в git хранится только README-указатель папки.
 docs/product/interviews/*
 !docs/product/interviews/README.md
+
+# Временная папка аудита: сырые отчёты субагентов в git не кладутся (docs/audit/README.md)
+.tmp-audit/
