@@ -8,29 +8,25 @@ import { MailReceptionConfig } from './mail-reception.config.js';
 interface SourceRow {
   id: string;
   code: string;
-  uidValidity: bigint | null;
-  lastUid: bigint | null;
+  uidValidity: bigint;
+  lastUid: bigint;
   consecutiveFailures: number;
-  lastNotifiedAt: Date | null;
-  lastError: string | null;
 }
 
+type BackgroundHook = (() => void) | null;
+type Hooks = { exists: BackgroundHook; close: BackgroundHook };
+
 /** Фейк порта и репозиториев для фоновых запусков: таймеры, счётчики, UID. */
-function fakes(uids: bigint[] = []) {
+function fakes(uids: bigint[] = [], opts: { failUids?: (uid: bigint) => boolean } = {}) {
   const source: SourceRow = {
     id: 'src-1',
     code: 'chancery',
     uidValidity: 111n,
     lastUid: 0n,
     consecutiveFailures: 0,
-    lastNotifiedAt: null,
-    lastError: null,
   };
   const state = { connected: false };
-  const hooks: { exists: (() => void) | null; close: (() => void) | null } = {
-    exists: null,
-    close: null,
-  };
+  const hooks: Hooks = { exists: null, close: null };
   const client: MailClient = {
     get connected() {
       return state.connected;
@@ -73,6 +69,7 @@ function fakes(uids: bigint[] = []) {
       onLastUid: (tx: unknown, uid: bigint) => Promise<void>,
     ): Promise<LetterWriteOutcome> {
       writes.push(uid);
+      if (opts.failUids?.(uid)) throw new Error('запись письма не удалась');
       await onLastUid(prisma, uid);
       return { advance: true, created: true };
     },
@@ -116,11 +113,9 @@ function fakes(uids: bigint[] = []) {
     },
     recordSuccess: async () => {
       source.consecutiveFailures = 0;
-      source.lastError = null;
     },
-    recordFailure: async (_code: string, message: string) => {
+    recordFailure: async () => {
       source.consecutiveFailures += 1;
-      source.lastError = message;
       return source;
     },
   };
@@ -276,5 +271,53 @@ describe('MailInboxService: фоновые запуски не роняют пр
       collector.stop();
       vi.useRealTimers();
     }
+  });
+});
+
+describe('MailInboxService: проблемное письмо не останавливает приём (AUD-019)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('поток из трёх писем: второе стабильно падает — после трёх попыток пропущено, третье принято', async () => {
+    const f = fakes([10n, 20n, 30n], { failUids: (uid) => uid === 20n });
+    await expect(f.service.sync('poll')).rejects.toThrow('запись письма не удалась');
+    expect(f.source.lastUid).toBe(10n);
+    await expect(f.service.sync('poll')).rejects.toThrow('запись письма не удалась');
+    expect(f.source.lastUid).toBe(10n);
+    // Третья неудача подряд: UID 20 пропускается, UID 30 принимается в этом же цикле.
+    const third = await f.service.sync('poll');
+    expect(third.created).toBe(1);
+    expect(f.source.lastUid).toBe(30n);
+    expect(f.writes).toEqual([10n, 20n, 20n, 20n, 30n]);
+    const skipped = f.logs.find(
+      (log) =>
+        log.level === 'error' &&
+        log.args.some((arg) => typeof arg === 'string' && arg.includes('Письмо пропущено')),
+    );
+    expect(skipped).toBeDefined();
+    const meta = skipped!.args.find((arg) => typeof arg === 'object' && arg !== null) as
+      { uid?: string; attempts?: number } | undefined;
+    expect(meta?.uid).toBe('20');
+    expect(meta?.attempts).toBe(3);
+  });
+
+  it('временный сбой одного цикла: письмо не пропускается, принимается следующим циклом', async () => {
+    let failures = 1;
+    const f = fakes([10n, 20n, 30n], {
+      failUids: (uid) => uid === 20n && failures-- > 0,
+    });
+    await expect(f.service.sync('poll')).rejects.toThrow('запись письма не удалась');
+    expect(f.source.lastUid).toBe(10n);
+    const second = await f.service.sync('poll');
+    expect(second.created).toBe(2);
+    expect(f.source.lastUid).toBe(30n);
+    expect(
+      f.logs.some(
+        (log) =>
+          log.level === 'error' &&
+          log.args.some((arg) => typeof arg === 'string' && arg.includes('Письмо пропущено')),
+      ),
+    ).toBe(false);
   });
 });

@@ -17,6 +17,8 @@ export const CHANCERY_SOURCE_CODE = 'chancery';
 
 /** Порог молчания ящика (В4): N неудачных циклов → уведомление. */
 const FAILURE_THRESHOLD = 3;
+/** Проблемное письмо (AUD-019): N неудач подряд на одном UID → пропуск. */
+const POISON_UID_ATTEMPTS = 3;
 /** Троттлинг уведомления о молчании. */
 const NOTIFY_EVERY_MS = 24 * 60 * 60 * 1000;
 /** Дебаунс IDLE-exists (Р4): пара секунд между письмами одного захода. */
@@ -55,6 +57,8 @@ export class MailInboxService implements OnModuleInit, OnModuleDestroy {
   private flagTimer: NodeJS.Timeout | null = null;
   /** Состояние «вооружено» для лога переходов: таймер 30 с не должен спамить. */
   private armedState: boolean | null = null;
+  /** Неудачи подряд по UID (AUD-019): после N письмо пропускается. */
+  private readonly uidFailures = new Map<bigint, number>();
 
   constructor(
     @Inject(MAIL_CLIENT) private readonly client: MailClient,
@@ -243,11 +247,31 @@ export class MailInboxService implements OnModuleInit, OnModuleDestroy {
       const searchedAt = Date.now();
       let created = 0;
       for (const uid of uids) {
-        const outcome = await this.writer.write(this.client, uid, async (tx, done) => {
-          await this.sources.advanceCursor(tx, source.id, done);
-        });
-        if (outcome.advance) lastUid = uid;
-        if (outcome.created) created += 1;
+        try {
+          const outcome = await this.writer.write(this.client, uid, async (tx, done) => {
+            await this.sources.advanceCursor(tx, source.id, done);
+          });
+          this.uidFailures.delete(uid);
+          if (outcome.advance) lastUid = uid;
+          if (outcome.created) created += 1;
+        } catch (error) {
+          // Ошибка записи ИМЕННО этого письма (соединение/база падают раньше,
+          // на ensure/status/search, — их сюда не относим): копим неудачи по
+          // UID и после порога сдвигаем курсор за письмо, чтобы не блокировать
+          // очередь. На почтовом сервере письмо остаётся — не удаляем.
+          const attempts = (this.uidFailures.get(uid) ?? 0) + 1;
+          this.uidFailures.set(uid, attempts);
+          if (attempts < POISON_UID_ATTEMPTS) throw error;
+          this.logger.error(
+            { err: error, uid: uid.toString(), attempts },
+            'Письмо пропущено после повторных неудач записи',
+          );
+          await this.txRunner.run(async (tx) => {
+            await this.sources.advanceCursor(tx, source.id, uid);
+          });
+          this.uidFailures.delete(uid);
+          lastUid = uid;
+        }
       }
       await this.sources.recordSuccess(source.id);
       if (created > 0)
