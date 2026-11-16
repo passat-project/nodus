@@ -221,8 +221,10 @@ node_moved / node_deleted`; `node_updated` несёт `customFieldChanges` и
   (advisory-лок структуры на привязку задачи — не гоняется с удалением узла).
   Выключенный флаг — нейтрален.
 - `PROJECT_CHAT_READER` (потребитель: chat): `roster`/`canView`/`canPost`/
-  `refs` — канал проекта. Выключенный флаг — `roster` → null, `canView` →
-  false.
+  `refs` — канал проекта. `roster(projectId, tx?)` принимает соединение
+  транзакции: перечитывание состава под `FOR UPDATE` беседы идёт тем же
+  соединением, второе соединение пула не занимается (AUD-022, #866).
+  Выключенный флаг — `roster` → null, `canView` → false.
 - `TASK_PROJECT_READER` (живёт в tasks, потребители — проекция Р2 и
   структура #467): `membersOf(projectId)` (без наблюдателей задач),
   `projectIdOf(taskId)`, `nodeRollups(projectId)` (агрегаты прямых задач

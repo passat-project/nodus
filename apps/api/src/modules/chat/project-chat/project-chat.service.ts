@@ -34,11 +34,12 @@ export class ProjectChatService {
   ) {}
 
   /** Привести канал к составу участников проекта; null — проекта нет.
-   *  Первое чтение состава — ДО транзакции (findOrCreate: руководитель);
-   *  под `FOR UPDATE` беседы состав перечитывается — конкурентный sync со
-   *  старым составом не вернёт исключённого (гейт #252). Порт не принимает
-   *  tx: повторное чтение идёт своим соединением внутри tx — известное
-   *  исключение AUD-022, как в task/letter-чате. */
+   *  Первое чтение состава — ДО транзакции (findOrCreate: руководитель).
+   *  Под `FOR UPDATE` беседы состав перечитывается — конкурентный sync со
+   *  старым составом не вернёт исключённого (гейт #252). Порт принимает `tx`:
+   *  повторное чтение идёт соединением транзакции, второго соединения пула
+   *  не занимает (AUD-022). Task/letter-чат — отдельное исключение AUD-022
+   *  (их порты `tx` не принимают), вне этого фикса. */
   async sync(projectId: string, actorId: string | null): Promise<string | null> {
     const preRoster = await this.projects.roster(projectId);
     if (!preRoster) return null;
@@ -51,7 +52,7 @@ export class ProjectChatService {
       }
       await this.repo.lock(tx, id);
       const current = await this.repo.members(tx, id);
-      const roster = await this.projects.roster(projectId);
+      const roster = await this.projects.roster(projectId, tx);
       if (!roster) {
         await this.removeMembers(tx, id, current, actorId);
         return null;

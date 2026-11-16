@@ -15,9 +15,9 @@ type Roster = { managerId: string; memberIds: string[] } | null;
 
 /**
  * AUD-022: первое чтение состава — до открытия транзакции (findOrCreate:
- * managerId), чтобы read-порт проектов не занимал второе соединение пула
- * без нужды; под `FOR UPDATE` беседы состав перечитывается — иначе
- * конкурентный sync со старым составом вернул бы исключённого (#252).
+ * managerId); под `FOR UPDATE` беседы состав перечитывается соединением
+ * транзакции — иначе конкурентный sync со старым составом вернул бы
+ * исключённого (#252), а пул получал бы второе соединение внутри tx.
  */
 function setup(opts: {
   roster?: Roster;
@@ -76,11 +76,16 @@ function setup(opts: {
 
 describe('ProjectChatService.sync (#52 Р8, AUD-022)', () => {
   it('roster читается ДО транзакции и повторно — под блокировкой беседы', async () => {
-    const { service, order } = setup({ current: [ROSTER.managerId, ...ROSTER.memberIds] });
+    const { service, projects, order } = setup({
+      current: [ROSTER.managerId, ...ROSTER.memberIds],
+    });
     await service.sync(PROJECT, 'actor-1');
     // Первое чтение — до tx (findOrCreate), название — тоже; свежий состав —
-    // уже внутри транзакции, после FOR UPDATE беседы (гейт #252).
+    // уже внутри транзакции, после FOR UPDATE беседы (гейт #252), соединением
+    // самой транзакции (AUD-022: второй коннект пула не занимается).
     expect(order).toEqual(['roster', 'refs', 'tx', 'roster']);
+    expect(projects.roster).toHaveBeenNthCalledWith(1, PROJECT);
+    expect(projects.roster).toHaveBeenNthCalledWith(2, PROJECT, TX);
   });
 
   it('конкурентный sync со старым составом не возвращает исключённого', async () => {

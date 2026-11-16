@@ -145,8 +145,13 @@ export const PROJECT_CHAT_READER = Symbol('PROJECT_CHAT_READER');
 
 export interface ProjectChatReader {
   /** Состав roster'а канала: уникальные участники всех источников +
-   *  руководитель; null — проекта нет. */
-  roster(projectId: string): Promise<{ managerId: string; memberIds: string[] } | null>;
+   *  руководитель; null — проекта нет. `tx` — чтение под блокировкой в
+   *  транзакции синхронизации канала: тем же соединением, второе соединение
+   *  пула не занимается (AUD-022); без `tx` — своё соединение (чтение до tx). */
+  roster(
+    projectId: string,
+    tx?: TransactionClient,
+  ): Promise<{ managerId: string; memberIds: string[] } | null>;
 
   /** Проект виден акту (участие или view_secret) — открытие канала. */
   canView(projectId: string, actor: ProjectActor): Promise<boolean>;
