@@ -52,6 +52,8 @@ export const formulaErrorCodeSchema = z.enum([
   'division_by_zero',
   /** Выборка агрегата больше лимита записей. */
   'selection_limit',
+  /** Превышен бюджет вычисления (вычисленных узлов на один `evaluate`, AUD-020). */
+  'evaluation_limit',
   /** Неожиданное исключение вычисления («ядовитая ячейка»). */
   'eval_failed',
 ]);
