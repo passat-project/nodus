@@ -11,12 +11,15 @@ const POLL_INTERVAL_MS = 1_000;
 
 /** Бэкофф упорно падающего события: первые попытки — каждый опрос (сбой
  *  обычно транзиентный: блокировка, рестарт Redis), затем экспонента до
- *  потолка. Событие НЕ выбрасывается — повтор вечен, но не забивает голову
- *  батча и не спамит лог каждую секунду (ядовитое FK-событие #267). */
+ *  потолка. Событие НЕ выбрасывается — повтор идёт, пока не отработают все
+ *  обработчики, но не забивает голову батча и не спамит лог каждую секунду
+ *  (ядовитое FK-событие #267). */
 const FREE_RETRIES = 2;
 const BACKOFF_BASE_MS = 2_000;
 const BACKOFF_MAX_MS = 5 * 60_000;
-/** С этой попытки событие помечается в логе как «ядовитое» — сигнал оператору. */
+/** С этой попытки упавший обработчик снимается с повторов этого события:
+ *  error-запись с id события и именем обработчика — сигнал оператору, а
+ *  доставка фиксируется в `event_deliveries`, чтобы событие завершилось. */
 const POISON_ATTEMPTS = 8;
 
 type HandlerInstance = DomainEventHandler & { constructor: { eventType?: string; name: string } };
@@ -34,16 +37,21 @@ interface RetryState {
  * Доставка at-least-once, прогресс — ПО ОБРАБОТЧИКУ: успешный обработчик
  * сразу фиксирует доставку в `event_deliveries` (event_id, handler), и при
  * падении соседа не перевызывается; событие помечается published, когда все
- * обработчики отметились. Обработчик исполняется ВНЕ транзакции диспетчера:
+ * обработчики отметились. Ошибка одного обработчика не прерывает цикл —
+ * остальные получают событие в том же проходе (AUD-012), а упавший
+ * повторяется бэкоффом один; после `POISON_ATTEMPTS` он снимается с
+ * повторов (error-запись с id события и именем обработчика), и событие
+ * завершается. Обработчик исполняется ВНЕ транзакции диспетчера:
  * у него свои транзакции (TransactionRunner), а обёртка лишь держала бы
  * второе соединение пула и убивала медленный обработчик tx-таймаутом.
  * Обработчик обязан быть идемпотентным (крэш между его коммитом и записью
  * доставки → повторный вызов).
  *
  * Порядок выборки — `seq` (глобальная последовательность БД, парциальный
- * индекс `events_dispatch_pending_idx`). Падающее событие уходит в бэкофф
- * (in-memory, сбрасывается рестартом) и исключается из выборки, чтобы пачка
- * ядовитых событий не заблокировала голову очереди для остальных.
+ * индекс `events_dispatch_pending_idx`). Событие с неотработанным
+ * обработчиком уходит в бэкофф (in-memory, сбрасывается рестартом) и
+ * исключается из выборки, чтобы пачка ядовитых событий не заблокировала
+ * голову очереди для остальных.
  *
  * Монолит single-process (I1): конкуренции поллеров нет, SKIP LOCKED не нужен.
  * При выносе диспетчера в отдельный воркер — добавить claim через
@@ -136,30 +144,51 @@ export class EventDispatcher implements OnModuleInit, OnModuleDestroy {
 
   private async dispatchOne(event: DomainEvent): Promise<void> {
     const handlers = this.handlers.get(event.type) ?? [];
-    try {
-      for (const handler of handlers) {
+    const attempts = (this.retries.get(event.id)?.attempts ?? 0) + 1;
+    let retryNeeded = false;
+
+    for (const handler of handlers) {
+      const handlerId = handler.constructor.name;
+      try {
         await this.deliver(event, handler);
+      } catch (error) {
+        if ((error as { code?: string }).code === 'P2003') {
+          // Строка события удалена конкурентно — FK доставки не на что
+          // ссылаться: повторять нечего, пропускаем тихо.
+          this.logger.debug(
+            { eventId: event.id, type: event.type, handler: handlerId },
+            'Event row deleted concurrently, skip dispatch',
+          );
+          this.retries.delete(event.id);
+          return;
+        }
+        if (attempts < POISON_ATTEMPTS) {
+          retryNeeded = true;
+          this.logger.error(
+            { eventId: event.id, type: event.type, handler: handlerId, attempts, err: error },
+            'Event handler failed, will retry',
+          );
+          continue;
+        }
+        // Потолок попыток (AUD-012): упавший обработчик снимается с повторов
+        // этого события, остальные уже отработали или повторятся сами.
+        if (!(await this.settlePoisoned(event, handlerId, attempts, error))) {
+          retryNeeded = true;
+        }
       }
-      // updateMany: строку события могли удалить конкурентно (очистка
-      // тестов/retention) — тогда помечать нечего, это не ошибка.
-      await this.prisma.event.updateMany({
-        where: { id: event.id, publishedAt: null },
-        data: { publishedAt: new Date() },
-      });
-      this.retries.delete(event.id);
-    } catch (error) {
-      if ((error as { code?: string }).code === 'P2003') {
-        // Строка события удалена конкурентно — FK доставки не на что
-        // ссылаться: повторять нечего, пропускаем тихо.
-        this.logger.debug(
-          { eventId: event.id, type: event.type },
-          'Event row deleted concurrently, skip dispatch',
-        );
-        this.retries.delete(event.id);
-        return;
-      }
-      this.scheduleRetry(event, error);
     }
+
+    if (retryNeeded) {
+      this.scheduleRetry(event, attempts);
+      return;
+    }
+    // updateMany: строку события могли удалить конкурентно (очистка
+    // тестов/retention) — тогда помечать нечего, это не ошибка.
+    await this.prisma.event.updateMany({
+      where: { id: event.id, publishedAt: null },
+      data: { publishedAt: new Date() },
+    });
+    this.retries.delete(event.id);
   }
 
   /** Доставка одному обработчику с дедупом по (event_id, handler). */
@@ -178,19 +207,44 @@ export class EventDispatcher implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  /** Потолок попыток обработчика (AUD-012): error-запись для разбора и
+   *  фиксация доставки в `event_deliveries` — дедуп больше не позовёт этот
+   *  обработчик, а событие сможет стать published (отдельной dead-letter-
+   *  таблицы нет — разбор по логу и паре event_id–handler в доставках).
+   *  false — фиксацию не удалось записать, событие повторим. */
+  private async settlePoisoned(
+    event: DomainEvent,
+    handlerId: string,
+    attempts: number,
+    error: unknown,
+  ): Promise<boolean> {
+    this.logger.error(
+      { eventId: event.id, type: event.type, handler: handlerId, attempts, err: error },
+      'Event handler keeps failing (poison), giving up for this handler',
+    );
+    try {
+      await this.prisma.eventDelivery.createMany({
+        data: [{ eventId: event.id, handler: handlerId }],
+        skipDuplicates: true,
+      });
+      return true;
+    } catch (settleError) {
+      // Строку события удалили конкурентно — фиксировать нечего.
+      if ((settleError as { code?: string }).code === 'P2003') return true;
+      this.logger.error(
+        { eventId: event.id, type: event.type, handler: handlerId, err: settleError },
+        'Failed to settle poisoned handler, will retry',
+      );
+      return false;
+    }
+  }
+
   /** Событие остаётся неопубликованным — повтор позже (с бэкоффом). */
-  private scheduleRetry(event: DomainEvent, error: unknown): void {
-    const attempts = (this.retries.get(event.id)?.attempts ?? 0) + 1;
+  private scheduleRetry(event: DomainEvent, attempts: number): void {
     const delay =
       attempts <= FREE_RETRIES
         ? 0
         : Math.min(BACKOFF_BASE_MS * 2 ** (attempts - FREE_RETRIES - 1), BACKOFF_MAX_MS);
     this.retries.set(event.id, { attempts, retryAt: Date.now() + delay });
-    this.logger.error(
-      { eventId: event.id, type: event.type, attempts, retryInMs: delay, err: error },
-      attempts >= POISON_ATTEMPTS
-        ? 'Event dispatch keeps failing (poison event), will retry with backoff'
-        : 'Event dispatch failed, will retry',
-    );
   }
 }
