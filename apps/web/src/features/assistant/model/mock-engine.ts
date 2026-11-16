@@ -6,6 +6,8 @@ import { conversationTitle } from '../../../shared/chat/conversations.js';
  *  и беседы. В боевой версии это серверный контекст сессии; в концепте —
  *  те же query-хуки, что питают списки портала. */
 export interface AssistantContext {
+  /** Id модуля из nav-registry — ключ логики (метка i18n может меняться). */
+  moduleId: string | null;
   moduleLabel: string | null;
   cardKind: string | null;
   cardTask: TaskListItem | null;
@@ -91,7 +93,7 @@ export function buildReply(text: string, ctx: AssistantContext): string {
     return `Карточка перед вами: №${t.number} «${t.title}».\n\nСтадия «${t.stage.name}», ${t.deadline ? `срок ${fmtDate(t.deadline)}` : 'без срока'}. Исполнитель: ${t.assignee?.displayName ?? 'не назначен'}. ${t.project ? `Проект: «${t.project.name}».` : 'Без проекта.'} Трудозатраты: ${spent}${plan}.\n\nМогу собрать сводку для руководителя или предложить разбить задачу на подзадачи — в концепте это текст, не действия.`;
   }
 
-  if (ctx.moduleLabel === 'Мессенджер' || ctx.cardKind === 'messenger') {
+  if (ctx.moduleId === 'chat' || ctx.cardKind === 'messenger') {
     const unread = ctx.conversations.filter((c) => c.unreadCount > 0 && !c.snoozed);
     const total = unread.reduce((sum, c) => sum + c.unreadCount, 0);
     const names = unread

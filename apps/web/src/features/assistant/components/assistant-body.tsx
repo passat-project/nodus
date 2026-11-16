@@ -10,14 +10,15 @@ import { AssistantFeed, AssistantGlyph } from './assistant-feed.js';
 import { AssistantSessionPicker } from './assistant-session-picker.js';
 import { AssistantWelcome } from './assistant-welcome.js';
 
-/** Тело окна ассистента: шапка h-12 с названием сессии, пикером диалогов,
- *  «Новый диалог» и закрытием; строка контекста; лента и композер — канон
- *  мессенджера. При открытии панели — сразу ПОСЛЕДНЯЯ сессия (прошлый чат). */
+/** Тело окна ассистента: шапка h-14 (калибр топбара) с глифом, заголовком
+ *  «ИИ-ассистент», названием сессии мелким текстом, пикером диалогов,
+ *  «Новый диалог» и закрытием; лента и композер — канон мессенджера.
+ *  При открытии панели — сразу ПОСЛЕДНЯЯ сессия (прошлый чат). */
 export function AssistantBody() {
   const open = useAssistantStore((s) => s.open);
   const sessions = useAssistantStore((s) => s.sessions);
   const activeId = useAssistantStore((s) => s.activeId);
-  const thinking = useAssistantStore((s) => s.thinking);
+  const thinking = useAssistantStore((s) => s.thinkingId !== null && s.thinkingId === s.activeId);
   const send = useAssistantStore((s) => s.send);
   const newSession = useAssistantStore((s) => s.newSession);
   const setOpen = useAssistantStore((s) => s.setOpen);

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { ui } from '@nodus/contracts';
 
 import { uiPx } from '../../../shared/ui/ui-scale.js';
 
@@ -38,7 +39,9 @@ interface AssistantState {
   sessions: AssistantSession[];
   /** Открытая сессия; null — ещё не открывали (при открытии — последняя). */
   activeId: string | null;
-  thinking: boolean;
+  /** Сессия, в которой идёт think/стриминг (не глобальный флаг: точки набора
+   *  не должны показываться в чужой сессии при переключении). */
+  thinkingId: string | null;
   setOpen: (open: boolean) => void;
   setDragging: (dragging: boolean) => void;
   setWidth: (width: number) => void;
@@ -57,11 +60,23 @@ function clearTimers() {
   window.clearInterval(streamTimer);
 }
 
-function readWidth(): number {
-  const stored = Number(localStorage.getItem(ASSISTANT_W_KEY));
+/** Кламп персистентной ширины: мусор/легаси → дефолт (чистая, тестируется). */
+export function clampStoredWidth(raw: string | null): number {
+  const stored = Number(raw);
   return Number.isFinite(stored) && stored >= ASSISTANT_W_MIN
     ? Math.min(stored, ASSISTANT_W_MAX)
     : ASSISTANT_W_DEFAULT;
+}
+
+/** Живые пределы ширины: не больше 45% рамы (узкое окно) и не уже читаемого
+ *  минимума; потолок ASSISTANT_W_MAX (чистая, тестируется). */
+export function assistantLiveBounds(frameW: number): { min: number; max: number } {
+  const max = Math.min(ASSISTANT_W_MAX, Math.max(uiPx(240), Math.floor(frameW * 0.45)));
+  return { min: Math.min(ASSISTANT_W_MIN, max), max };
+}
+
+function readWidth(): number {
+  return clampStoredWidth(localStorage.getItem(ASSISTANT_W_KEY));
 }
 
 /** Брошенный стриминг (новый диалог/новый вопрос посреди допечатки) не
@@ -124,7 +139,7 @@ export const useAssistantStore = create<AssistantState>()((set, get) => ({
   width: readWidth(),
   sessions: seedSessions(),
   activeId: null,
-  thinking: false,
+  thinkingId: null,
   // Открытие — сразу ПОСЛЕДНЯЯ сессия (прошлый чат), не список.
   setOpen: (open) =>
     set((s) => ({
@@ -138,10 +153,10 @@ export const useAssistantStore = create<AssistantState>()((set, get) => ({
     clearTimers();
     const id = `s-${sessionSeq++}`;
     set((s) => ({
-      thinking: false,
+      thinkingId: null,
       activeId: id,
       sessions: [
-        { id, title: 'Новый диалог', createdAt: new Date().toISOString(), messages: [] },
+        { id, title: ui.assistant.newChat, createdAt: new Date().toISOString(), messages: [] },
         ...finishStreaming(s.sessions),
       ],
     }));
@@ -149,7 +164,7 @@ export const useAssistantStore = create<AssistantState>()((set, get) => ({
   // Мок-диалог: вопрос → пауза «думает» → ответ печатается кусочками.
   send: (text, reply) => {
     clearTimers();
-    set((s) => ({ sessions: finishStreaming(s.sessions), thinking: false }));
+    set((s) => ({ sessions: finishStreaming(s.sessions), thinkingId: null }));
     let sessionId = get().activeId;
     if (!sessionId) {
       get().newSession();
@@ -174,7 +189,7 @@ export const useAssistantStore = create<AssistantState>()((set, get) => ({
         ),
       }));
     patch((m) => [...m, { id: userId, mine: true, text, createdAt: new Date().toISOString() }], {
-      thinking: true,
+      thinkingId: sid,
     });
     thinkTimer = window.setTimeout(() => {
       const replyId = nextId++;
@@ -189,7 +204,7 @@ export const useAssistantStore = create<AssistantState>()((set, get) => ({
             streaming: true,
           },
         ],
-        { thinking: false },
+        { thinkingId: null },
       );
       let pos = 0;
       streamTimer = window.setInterval(() => {

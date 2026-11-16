@@ -24,7 +24,6 @@ vi.mock('../../../shared/chat/chat-queries.js', () => ({
 vi.mock('../../../shared/api/read-entity-notifications.js', () => ({
   useReadEntityNotifications: () => undefined,
 }));
-vi.mock('../../../app/shell/right-rail.js', () => ({ useRailShrink: () => 0 }));
 vi.mock('../../../app/shell/use-card-stack.js', () => ({
   useReplaceTopCard: () => vi.fn(),
 }));

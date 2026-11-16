@@ -7,8 +7,9 @@ import { useConversations } from '../../../shared/chat/chat-queries.js';
 import { useAssistantTasks } from './assistant-queries.js';
 import type { AssistantContext } from './mock-engine.js';
 
-/** Контекст ассистента из живых query-хуков портала (монтируется только в
- *  теле панели после первого открытия — закрытая панель не шлёт запросов). */
+/** Контекст ассистента из живых query-хуков портала. Тело монтируется на
+ *  первом открытии и остаётся: подписки живут и при закрытом окне (данные
+ *  контекста свежие к моменту открытия); до первого открытия запросов нет. */
 export function useAssistantContext(): AssistantContext {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const stack = useCardStack();
@@ -20,8 +21,10 @@ export function useAssistantContext(): AssistantContext {
   const tasks = tasksData?.items ?? [];
   const cardTask = top?.kind === 'task' ? (tasks.find((t) => t.id === top.id) ?? null) : null;
 
+  const module = navModuleForPath(pathname);
   return {
-    moduleLabel: navModuleForPath(pathname)?.label ?? null,
+    moduleId: module?.id ?? null,
+    moduleLabel: module?.label ?? null,
     cardKind: top?.kind ?? null,
     cardTask,
     tasks,

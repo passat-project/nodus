@@ -22,7 +22,7 @@ await page.waitForTimeout(1200);
 const shot = (name) => page.screenshot({ path: `${out}/${name}.png` });
 
 // 1. Светлая: кнопка агента внизу полосы → сразу прошлый чат поверх рамы.
-await page.getByRole('button', { name: 'Ассистент (Ctrl+J)' }).click();
+await page.getByRole('button', { name: 'ИИ-ассистент (Ctrl+J)' }).click();
 await page.waitForTimeout(500);
 await shot('b-light-dialog');
 
@@ -33,13 +33,10 @@ await shot('b-light-picker');
 await page.keyboard.press('Escape');
 await page.waitForTimeout(300);
 
-// 3. Тёмная тема, тот же диалог (окно во всю высоту накрывает правую группу
-//    топбара — тему переключаем при закрытом окне).
-await page.getByRole('button', { name: 'Закрыть ассистента' }).last().click();
-await page.waitForTimeout(400);
+// 3. Тёмная тема, тот же диалог: окно ниже топбара — тема доступна при
+//    открытом окне (вердикт владельца 16.11.2026).
 await page.getByRole('button', { name: 'Тёмная тема' }).click();
-await page.getByRole('button', { name: 'Ассистент (Ctrl+J)' }).click();
-await page.waitForTimeout(500);
+await page.waitForTimeout(400);
 await shot('b-dark-dialog');
 
 // 4. Новый диалог: приветствие и подсказки, тёмная.
@@ -52,7 +49,8 @@ await page.getByRole('button', { name: 'Что у меня просрочено?
 await page.waitForTimeout(7000);
 await shot('b-dark-live');
 
-// 6. Светлая, окно закрыто — кнопка агента на полосе.
+// 6. Светлая, окно закрыто — кнопка агента на полосе (.last() = кнопка
+//    полосы: крестик окна несёт то же доступное имя).
 await page.getByRole('button', { name: 'Закрыть ассистента' }).last().click();
 await page.waitForTimeout(400);
 await page.getByRole('button', { name: 'Светлая тема' }).click();

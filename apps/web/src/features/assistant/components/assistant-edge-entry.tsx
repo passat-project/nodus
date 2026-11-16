@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { useRailHidden } from '../../../app/shell/rail-visibility.js';
+import { uiPx } from '../../../shared/ui/ui-scale.js';
 import { useAssistantStore } from '../model/assistant-store.js';
 
 /** Вход в ассистента там, где полоса аватарок скрыта (мессенджер): у правого
@@ -18,9 +18,12 @@ import { useAssistantStore } from '../model/assistant-store.js';
  *  кликабелен и на ходу. Появление/гашение — ТОЛЬКО opacity: enter-keyframes
  *  animate-in бьют по transform и сбрасывали императивную позицию в ноль.
  *  Клик открывает окно; Ctrl+J работает всегда. Слежение — pointermove окна,
- *  НЕ перехватчик кликов: скроллбар периметра и контент живут своей жизнью. */
-export function AssistantEdgeEntry() {
-  const railHidden = useRailHidden();
+ *  НЕ перехватчик кликов. мгновенное открытие по pointerdown — ТОЛЬКО в щели
+ *  периметра (uiPx(8)) и только ЛКМ по не-интерактивной цели: собственный
+ *  скроллбар ленты и правая кромка композера живут левее и не перехватываются
+ *  (замечание валидации 16.11.2026). railHidden — пропом из шелла (канон
+ *  features→app: rail-visibility не в whitelist). */
+export function AssistantEdgeEntry({ railHidden }: { railHidden: boolean }) {
   const open = useAssistantStore((s) => s.open);
   const setOpen = useAssistantStore((s) => s.setOpen);
   const [visible, setVisible] = useState(false);
@@ -38,7 +41,7 @@ export function AssistantEdgeEntry() {
       return;
     }
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const clampY = (y: number) => Math.min(Math.max(y, 8), window.innerHeight - 44);
+    const clampY = (y: number) => Math.min(Math.max(y, uiPx(8)), window.innerHeight - uiPx(44));
     const paint = () => {
       const el = btnRef.current;
       if (el) el.style.transform = `translate3d(0, ${currentY.current}px, 0)`;
@@ -46,24 +49,33 @@ export function AssistantEdgeEntry() {
     let raf = 0;
     let last = performance.now();
     const tick = (now: number) => {
-      raf = requestAnimationFrame(tick);
+      raf = 0;
       const dt = Math.min(now - last, 100);
       last = now;
       const delta = targetY.current - currentY.current;
+      // Осел — спим (канон императивных циклов: rAF только на время
+      // взаимодействия), просыпаемся от pointermove у кромки.
       if (Math.abs(delta) < 0.1) return;
       // Демпфирование ПО ВРЕМЕНИ (τ≈90 мс): одинаковая плавность на 60/144 fps
       // и без слоу-мо при просадке кадров — покадровый коэффициент давал лаг.
       currentY.current += reduce ? delta : delta * (1 - Math.exp(-dt / 90));
       paint();
+      raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
+    const wake = () => {
+      if (!raf) {
+        last = performance.now();
+        raf = requestAnimationFrame(tick);
+      }
+    };
     const clearIn = () => window.clearTimeout(inTimer.current);
     const clearOut = () => window.clearTimeout(outTimer.current);
     const onMove = (event: PointerEvent) => {
-      const nearEdge = event.clientX >= window.innerWidth - 24;
+      const nearEdge = event.clientX >= window.innerWidth - uiPx(24);
       if (nearEdge) {
         clearOut();
-        targetY.current = clampY(event.clientY - 18);
+        targetY.current = clampY(event.clientY - uiPx(18));
+        wake();
         if (!visibleRef.current) {
           // Первый подвод: кнопка рождается у курсора, дальше — плавная погоня.
           currentY.current = targetY.current;
@@ -75,12 +87,21 @@ export function AssistantEdgeEntry() {
         outTimer.current = window.setTimeout(() => setVisible(false), 150);
       }
     };
-    // Кромка экрана — сама аффорданс: pointerdown у правого края открывает
+    // Кромка экрана — сама аффорданс: pointerdown в ЩЕЛИ периметра открывает
     // окно СРАЗУ, не дожидаясь hover-намеренности кнопки (иначе первые
     // 1-2 клика после закрытия панели уходили в невидимую кнопку, вердикт
-    // владельца 16.11.2026). На /chat ползунка периметра нет — перехвата нет.
+    // владельца 16.11.2026). Только ЛКМ и не по интерактивной цели: скроллбар
+    // ленты/композер/кнопки левее щели и не перехватываются.
     const onDown = (event: PointerEvent) => {
-      if (event.clientX >= window.innerWidth - 24) setOpen(true);
+      if (event.button !== 0) return;
+      if (event.clientX < window.innerWidth - uiPx(8)) return;
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest('button, a, input, textarea, [role="scrollbar"]')
+      )
+        return;
+      setOpen(true);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerdown', onDown);

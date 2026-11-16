@@ -53,7 +53,12 @@ export function AssistantSessionPicker() {
           <Plus className="size-4" />
           {ui.assistant.newChat}
         </button>
-        <div className="flex flex-col gap-0.5 pt-1" data-no-scrollbar>
+        {/* Зона списка фикс-предела по доступной высоте поповера (канон
+            пикеров: габарит не растёт с историей), скролл внутри. */}
+        <div
+          className="flex max-h-[var(--radix-popover-content-available-height)] flex-col gap-0.5 overflow-y-auto pt-1"
+          data-no-scrollbar
+        >
           {ordered.map((s) => (
             <button
               key={s.id}
