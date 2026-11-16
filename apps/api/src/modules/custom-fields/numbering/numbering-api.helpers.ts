@@ -8,7 +8,8 @@ import {
 
 import { companyDay, companyMonth, companyYear } from '../../../core/time/company-time.js';
 import type { FieldDefinitionRow } from '../definitions/definition.mapper.js';
-import type { NumberHostRecord } from '../ports/number-host.port.js';
+import type { NumberHostRecord, NumberTarget } from '../ports/number-host.port.js';
+import { numberInsertionValue } from './number-insertion.js';
 
 /** Чистые помощники API счетов (#630): место записи, читатель полей-вставок,
  *  рендер и примеры — без состояния и БД. */
@@ -38,35 +39,60 @@ export function placeOf(host: NumberHostRecord, definitions: readonly FieldDefin
   };
 }
 
-export function readerOf(
-  host: NumberHostRecord,
+/**
+ * Читатель полей-вставок по месту записи — ОДИН у выдачи и у превью (AUD-010).
+ * Печатное значение выбирает общая функция: список — код варианта, число —
+ * строка, текст — как есть; UUID и `[object Object]` в номер не попадают.
+ * `companyByNumber` — СЫРЫЕ значения компании, `codes` — варианты шаблона.
+ */
+export function targetReaderOf(
+  target: NumberTarget,
   definitions: readonly FieldDefinitionRow[],
-  companyByNumber: ReadonlyMap<number, string> = new Map(),
+  companyByNumber: ReadonlyMap<number, unknown> = new Map(),
+  codes: ReadonlyMap<string, string> = new Map(),
 ): (segment: NumberFieldSegment) => string {
   const byNumber = new Map(definitions.map((row) => [row.number, row]));
-  const valueOf = (values: Record<string, unknown> | null | undefined, number: number) => {
-    const fieldId = byNumber.get(number)?.id;
-    const value = fieldId ? values?.[fieldId] : undefined;
-    return typeof value === 'string' ? value : '';
+  const valueOf = (
+    values: Readonly<Record<string, unknown>> | null | undefined,
+    number: number,
+  ) => {
+    const definition = byNumber.get(number);
+    return numberInsertionValue(
+      definition,
+      definition ? values?.[definition.id] : undefined,
+      codes,
+    );
   };
   return (segment) => {
     switch (segment.source) {
       case 'self':
-        return valueOf(host.target.sources.self, segment.fieldNumber);
+        return valueOf(target.sources.self, segment.fieldNumber);
       case 'project':
-        return valueOf(host.target.sources.project, segment.fieldNumber);
+        return valueOf(target.sources.project, segment.fieldNumber);
       case 'parent_task':
-        return valueOf(host.target.sources.parentTask, segment.fieldNumber);
+        return valueOf(target.sources.parentTask, segment.fieldNumber);
       case 'folder': {
-        const folder = host.target.sources.folders?.find(
-          (entry) => entry.kindId === segment.nodeKindId,
-        );
+        const folder = target.sources.folders?.find((entry) => entry.kindId === segment.nodeKindId);
         return valueOf(folder?.values, segment.fieldNumber);
       }
       case 'company':
-        return companyByNumber.get(segment.fieldNumber) ?? '';
+        return numberInsertionValue(
+          byNumber.get(segment.fieldNumber),
+          companyByNumber.get(segment.fieldNumber),
+          codes,
+        );
     }
   };
+}
+
+/** Читатель поля-вставки записи — та же общая функция печатного значения. */
+export function readerOf(
+  host: NumberHostRecord,
+  definitions: readonly FieldDefinitionRow[],
+  companyByNumber: ReadonlyMap<number, unknown> = new Map(),
+  codes: ReadonlyMap<string, string> = new Map(),
+): (segment: NumberFieldSegment) => string {
+  return targetReaderOf(host.target, definitions, companyByNumber, codes);
 }
 
 export function nameOfSegment(

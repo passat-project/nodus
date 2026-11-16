@@ -23,6 +23,10 @@ import {
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import {
+  DICTIONARY_READER,
+  type DictionaryReader,
+} from '../../dictionaries/ports/dictionary-reader.port.js';
+import {
   NUMBER_SERIES_STORE,
   type NumberSeriesData,
   type NumberSeriesStore,
@@ -38,6 +42,7 @@ import {
   render,
   sampleOf,
 } from './numbering-api.helpers.js';
+import { insertionCodeCache, loadInsertionCodes } from './number-insertion.js';
 import type { NumberActor, NumberHostRecord } from '../ports/number-host.port.js';
 import { NUMBER_HOST_REGISTRY, type NumberHostRegistry } from '../ports/number-host.port.js';
 import { NUMBER_ISSUE, type NumberIssue } from '../ports/number-issue.port.js';
@@ -64,6 +69,7 @@ export class NumberingApiService {
     @Inject(NUMBER_ISSUE) private readonly issue: NumberIssue,
     @Inject(NUMBER_HOST_REGISTRY) private readonly hosts: NumberHostRegistry,
     private readonly refs: NumberRefService,
+    @Inject(DICTIONARY_READER) private readonly dictionaries: DictionaryReader,
   ) {}
 
   async coverage(
@@ -110,7 +116,9 @@ export class NumberingApiService {
     if (!resolved.ok) return { ok: false, hostName: record.name, reason: resolved.reason };
     const definitions = await this.definitions.list(tx);
     const company = companyValuesOf(definitions);
-    const reader = readerOf(record, definitions, company);
+    const codes = insertionCodeCache();
+    await loadInsertionCodes(this.dictionaries, definitions, body.rule.template, tx, codes);
+    const reader = readerOf(record, definitions, company, codes.codes);
     const counter =
       body.definitionId && (await this.counterOf(tx, body.definitionId))
         ? await this.peek(tx, body.definitionId, resolved.hits)
@@ -190,9 +198,11 @@ export class NumberingApiService {
     actor: NumberActor,
   ): Promise<NumberBackfillPreview> {
     const counter = await this.counterOrThrow(tx, definitionId);
-    const { items, blocked } = await this.backfillPlan(tx, actor, counter);
     const definitions = await this.definitions.list(tx);
     const company = companyValuesOf(definitions);
+    const codes = insertionCodeCache();
+    await loadInsertionCodes(this.dictionaries, definitions, counter.rule.template, tx, codes);
+    const { items, blocked } = await this.backfillPlan(tx, actor, counter, codes.codes);
     const groups = new Map<
       string,
       {
@@ -233,12 +243,12 @@ export class NumberingApiService {
         firstDisplay: render(
           counter.rule,
           group.first,
-          readerOf(group.readerRecord ?? group.record, definitions, company),
+          readerOf(group.readerRecord ?? group.record, definitions, company, codes.codes),
         ),
         lastDisplay: render(
           counter.rule,
           group.last,
-          readerOf(group.readerRecord ?? group.record, definitions, company),
+          readerOf(group.readerRecord ?? group.record, definitions, company, codes.codes),
         ),
       });
     }
@@ -261,13 +271,18 @@ export class NumberingApiService {
     body: { expectedTotal: number; confirmEmptyNumberParts?: true },
   ): Promise<{ issued: number }> {
     const counter = await txRunner.run((tx) => this.counterOrThrow(tx, definitionId));
-    const plan = await txRunner.run((tx) => this.backfillPlan(tx, actor, counter));
+    // Печатные значения вставок — те же, что у выдачи и превью (AUD-010).
+    const definitions = await txRunner.run((tx) => this.definitions.list(tx));
+    const codes = insertionCodeCache();
+    await txRunner.run((tx) =>
+      loadInsertionCodes(this.dictionaries, definitions, counter.rule.template, tx, codes),
+    );
+    const plan = await txRunner.run((tx) => this.backfillPlan(tx, actor, counter, codes.codes));
     if (plan.items.length !== body.expectedTotal) {
       throw new DomainException(ErrorCode.NUMBER_BACKFILL_STALE, 'Records changed since preview', {
         total: plan.items.length,
       });
     }
-    const definitions = await txRunner.run((tx) => this.definitions.list(tx));
     const groups = new Map<string, typeof plan.items>();
     for (const item of plan.items) {
       const key = numberCountKey(
@@ -284,7 +299,7 @@ export class NumberingApiService {
           if (item.empty && !body.confirmEmptyNumberParts) continue;
           const assigned = await this.series.next(tx, counter.series.id, {
             hits: item.hits,
-            field: readerOf(item.host, definitions, companyValuesOf(definitions)),
+            field: readerOf(item.host, definitions, companyValuesOf(definitions), codes.codes),
             host: {
               kind: item.host.kind,
               id: item.host.id,
@@ -357,6 +372,7 @@ export class NumberingApiService {
     tx: TransactionClient,
     actor: NumberActor,
     counter: Counter,
+    codes: ReadonlyMap<string, string>,
   ): Promise<{
     items: { host: NumberHostRecord; hits: NumberContainerHit[]; seq: number; empty: boolean }[];
     blocked: { host: NumberHostRecord; reason: NumberContainerMissingReason }[];
@@ -408,7 +424,7 @@ export class NumberingApiService {
         empty:
           numberEmptySegments(
             counter.rule.template,
-            readerOf(host, definitions, companyValuesOf(definitions)),
+            readerOf(host, definitions, companyValuesOf(definitions), codes),
           ).length > 0,
       });
     }
@@ -483,11 +499,12 @@ export class NumberingApiService {
   }
 }
 
-/** Значения глобальных переменных по внутреннему номеру (#630). */
-function companyValuesOf(definitions: readonly FieldDefinitionRow[]): Map<number, string> {
+/** Сырые значения глобальных переменных по внутреннему номеру (#630):
+ *  печатный вид выбирает общая функция по типу поля (AUD-010). */
+function companyValuesOf(definitions: readonly FieldDefinitionRow[]): Map<number, unknown> {
   return new Map(
     definitions
       .filter((row) => row.isCompany && row.companyValue !== null)
-      .map((row) => [row.number, String(row.companyValue!.value)] as const),
+      .map((row) => [row.number, row.companyValue!.value] as const),
   );
 }
