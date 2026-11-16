@@ -36,6 +36,36 @@ function make(visible: boolean, decider: boolean) {
   return { provider, reads, deciders };
 }
 
+describe('TaskChatReaderProvider.roster — ответственный всегда в составе (#741)', () => {
+  it('собирает постановщика, ответственного и участников без дублей', async () => {
+    const reads = {
+      findLiveRoster: vi.fn(async () => ({
+        creatorId: 'creator',
+        assigneeId: 'assignee',
+        participants: [
+          { userId: 'creator', role: 'coexecutor' },
+          { userId: 'observer', role: 'observer' },
+        ],
+      })),
+    };
+    const provider = new TaskChatReaderProvider(
+      reads as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const roster = await provider.roster('task-1');
+    // Исключение блока перехода (#741, `previousAssigneeId`) опирается на этот
+    // инвариант: ответственный в составе есть всегда, поэтому нажавший
+    // «Передать» был участником беседы в момент нажатия.
+    expect(roster?.members.map((member) => member.userId)).toEqual([
+      'creator',
+      'assignee',
+      'observer',
+    ]);
+  });
+});
+
 describe('TaskChatReaderProvider.isDecider (#433)', () => {
   it('решающий видимой задачи — true', async () => {
     const { provider, reads } = make(true, true);

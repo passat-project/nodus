@@ -38,7 +38,7 @@ function event(
   };
 }
 
-function setup(options: { enabled?: boolean; insert?: unknown } = {}) {
+function setup(options: { enabled?: boolean; insert?: unknown; member?: boolean } = {}) {
   const row = {
     id: 'm1',
     conversationId: 'c1',
@@ -71,10 +71,14 @@ function setup(options: { enabled?: boolean; insert?: unknown } = {}) {
   };
   const deps = {
     txRunner: { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn(TX)) },
-    taskChat: { sync: vi.fn(async (): Promise<string | null> => 'c1') },
+    taskChat: {
+      sync: vi.fn(async (): Promise<string | null> => 'c1'),
+    },
     writes,
     mapper: { toFreshDto: vi.fn(async () => ({ id: 'm1' })) },
-    conversations: { listMembers: vi.fn(async () => []) },
+    conversations: {
+      listMembers: vi.fn(async () => (options.member === false ? [] : [{ userId: 'bob' }])),
+    },
     memberships: { revealHidden: vi.fn(async () => void 0) },
     vault: { applyMessageSent: vi.fn(async () => void 0) },
     eventBus: { emit: vi.fn(async () => void 0) },
@@ -154,5 +158,27 @@ describe('блок перехода в чате задачи (#380)', () => {
     taskChat.sync.mockResolvedValueOnce(null);
     await service.post(event());
     expect(writes.insertMessage).not.toHaveBeenCalled();
+  });
+
+  it('переход сменил ответственного — блок пишется, хотя актора уже нет в беседе (#741)', async () => {
+    // Реальная последовательность: событие `task.assigned` (ответственный
+    // сменился) приходит РАНЬШЕ `task.stage_changed` и его обработчик чата уже
+    // выкинул нажавшего из беседы. Поэтому «был участником» нельзя читать из
+    // текущего состава — признак несёт само событие перехода: нажавший был
+    // прежним ответственным, а ответственный в составе задачи всегда есть.
+    const { service, writes, eventBus, logger } = setup({ member: false });
+    await service.post(event({ previousAssigneeId: 'bob' }));
+    expect(writes.insertMessage).toHaveBeenCalled();
+    expect(eventBus.emit).toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('актор вне беседы и не прежний ответственный — блок не пишется (обход условий)', async () => {
+    const { service, writes, eventBus, logger } = setup({ member: false });
+    await service.post(event({ previousAssigneeId: 'alice' }));
+    expect(writes.allocateSeqs).not.toHaveBeenCalled();
+    expect(writes.insertMessage).not.toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalled();
   });
 });

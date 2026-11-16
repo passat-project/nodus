@@ -234,6 +234,61 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks: окно перехода (in
     ).toBe(1);
   });
 
+  it('передача задачи с причиной: карточка остаётся в чате, хотя нажавший выбыл из беседы (#741)', async () => {
+    const task = await createTask('handover', 'Передача');
+    await start(bob, task.id);
+    // Окно: смена ответственного + причина. Боб — текущий ответственный и
+    // участник беседы; переход передаёт задачу Карине и снимает Боба с состава.
+    await configure(task.workflowId, 'Приостановить', {
+      enabled: true,
+      sections: [
+        { kind: 'fields', fields: ['assignee'] },
+        { kind: 'comment', label: 'Причина', required: true },
+      ],
+    });
+    const pause = (await transitionsOf(bob, task.id)).find((t) => t.name === 'Приостановить')!;
+    const res = await press(
+      bob,
+      task.id,
+      pause.id,
+      { form: { fields: { assigneeId: carol.id }, comment: 'Передаю Карине' } },
+      `it-handover-${fx.runId}`,
+    );
+    expect(res.status).toBe(200);
+    const moved = await fx.prisma.task.findUniqueOrThrow({
+      where: { id: task.id },
+      select: { assigneeId: true },
+    });
+    expect(moved.assigneeId).toBe(carol.id);
+    const record = await fx.prisma.transitionRecord.findFirstOrThrow({
+      where: { entityKind: 'task', entityId: task.id, recordKind: 'transition' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(record.actorId).toBe(bob.id);
+
+    // Событие «ответственный сменён» идёт раньше `stage_changed` и успевает
+    // синхронизировать состав беседы: к моменту блока Боба в ней уже нет.
+    const stageEventId = await eventIdOf(fx.prisma, {
+      type: TASK_EVENTS.STAGE_CHANGED,
+      aggregateId: task.id,
+    });
+    await dispatchOwnEvent(dispatcher, fx.prisma, stageEventId);
+    const chat = await fx.prisma.conversation.findFirstOrThrow({
+      where: { type: 'task', taskId: task.id },
+    });
+    expect(
+      await fx.prisma.conversationMember.count({
+        where: { conversationId: chat.id, userId: bob.id },
+      }),
+    ).toBe(0);
+    // А причина передачи — в ленте: в момент нажатия Боб участником был.
+    const block = await fx.prisma.message.findFirstOrThrow({
+      where: { conversationId: chat.id, kind: 'task_transition', authorId: bob.id },
+    });
+    expect(block.text).toBe('Передаю Карине');
+    expect(block.payload).toMatchObject({ recordId: record.id, transitionName: 'Приостановить' });
+  });
+
   it('«Завершить»: акт из чата, поля и время — одной транзакцией; журнал и 422 на лишнее', async () => {
     const task = await createTask('complete', 'Завершение');
     await start(bob, task.id);

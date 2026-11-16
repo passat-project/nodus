@@ -128,6 +128,10 @@ export interface WorkflowStageChangeMeta {
   };
   /** Итог, созданный переходом (файлы — по живым вложениям). */
   result?: { resultId: string; fileCount: number; messageCount: number };
+  /** Что изменило окно перехода (дифф `applied.fields`): адаптеру нужно для
+   *  полей события, зависящих от «было/стало». Задача берёт отсюда прежнего
+   *  ответственного (`previousAssigneeId`, #741), письма не используют. */
+  fieldChanges?: Readonly<Record<string, { from: unknown; to: unknown }>>;
 }
 
 /** Что применило окно перехода (#380): дифф полей, запись времени, ревизия

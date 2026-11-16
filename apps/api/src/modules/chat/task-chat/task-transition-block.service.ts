@@ -10,6 +10,7 @@ import {
 import { EventBus } from '../../../core/events/event-bus.js';
 import { FeatureFlagService } from '../../../core/feature-flags/feature-flag.service.js';
 import { ConversationsRepository } from '../conversations/conversations.repository.js';
+import { participantRoster } from '../conversations/participant-roster.js';
 import { ConversationMembersRepository } from '../conversations/conversation-members.repository.js';
 import { MessageDtoMapper } from '../messages/message-dto.mapper.js';
 import { MessagesWriteRepository } from '../messages/messages-write.repository.js';
@@ -62,6 +63,24 @@ export class TaskTransitionBlockService {
     payload: TaskStageChangedPayload,
     actorId: string,
   ): Promise<void> {
+    // Нажатие может прийти от того, кто видит задачу по праву, но в беседе
+    // задачи не состоит (обход условий маршрута). Такому актору писать в
+    // чужую переписку нельзя — блок пропускаем, запись журнала остаётся.
+    // Исключение: сам переход сменил ответственного, и нажавший — прежний
+    // ответственный: в момент нажатия он участником беседы был (состав задачи
+    // всегда включает ответственного), а `sync` снял его уже после. Признак
+    // точный — из события, а не из текущего состава: событие «ответственный
+    // сменён» приходит раньше и успевает синхронизировать состав (#741).
+    const roster = await participantRoster(this.conversations, conversationId, actorId, tx);
+    const wasAssignee = payload.previousAssigneeId === actorId;
+    if (!roster.isMember && !wasAssignee) {
+      this.logger.warn(
+        { taskId: payload.taskId, actorId },
+        'chat: блок перехода не записан — актор вне беседы задачи',
+      );
+      return;
+    }
+    const members = roster.members;
     const seq = await this.writes.allocateSeqs(conversationId, 1, tx);
     const inserted = await this.writes.insertMessage(
       {
@@ -106,7 +125,6 @@ export class TaskTransitionBlockService {
     await this.writes.touchLastMessageAt(conversationId, tx);
     await this.memberships.revealHidden(conversationId, tx);
 
-    const members = await this.conversations.listMembers([conversationId], tx);
     const message = await this.mapper.toFreshDto(inserted, {
       viewerId: actorId,
       members,

@@ -33,7 +33,7 @@ function event(overrides: Record<string, unknown> = {}, actorId: string | null =
   } as never;
 }
 
-function setup() {
+function setup(options: { member?: boolean } = {}) {
   const writes = {
     allocateSeqs: vi.fn(async () => 5n),
     insertMessage: vi.fn(async () => ({
@@ -44,20 +44,24 @@ function setup() {
     })),
     touchLastMessageAt: vi.fn(async () => void 0),
   };
+  const logger = { setContext: vi.fn(), info: vi.fn(), warn: vi.fn() };
+  const conversations = {
+    listMembers: vi.fn(async () => (options.member === false ? [] : [{ userId: ACTOR }])),
+  };
   const service = new LetterTransitionBlockService(
     { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
     { sync: vi.fn(async () => CONVERSATION) } as never,
     writes as never,
     { toFreshDto: vi.fn(async () => ({ id: 'msg-1' })) } as never,
-    { listMembers: vi.fn(async () => []) } as never,
+    conversations as never,
     { revealHidden: vi.fn(async () => void 0) } as never,
     { applyMessageSent: vi.fn(async () => void 0) } as never,
     { emit: vi.fn(async () => void 0) } as never,
     { isEnabled: vi.fn(async () => true) } as never,
     { stagesByIds: vi.fn(async () => [{ id: 'to', color: 'danger' }]) } as never,
-    { setContext: vi.fn(), info: vi.fn() } as never,
+    logger as never,
   );
-  return { service, writes };
+  return { service, writes, conversations, logger };
 }
 
 describe('блок перехода письма в чате (#55, Р10)', () => {
@@ -100,5 +104,14 @@ describe('блок перехода письма в чате (#55, Р10)', () =>
     writes.insertMessage.mockResolvedValueOnce(null as never);
     await service.post(event());
     expect(writes.touchLastMessageAt).not.toHaveBeenCalled();
+  });
+
+  it('актор вне беседы письма — блок не пишется (#741)', async () => {
+    const { service, writes, logger } = setup({ member: false });
+    await service.post(event());
+    expect(writes.allocateSeqs).not.toHaveBeenCalled();
+    expect(writes.insertMessage).not.toHaveBeenCalled();
+    expect(writes.touchLastMessageAt).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalled();
   });
 });
