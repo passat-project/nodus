@@ -107,15 +107,17 @@ describe('PortfolioMenu — кнопка «Портфели» (#559)', () => {
     expect(trigger().className).toContain('border-input');
   });
 
-  it('показывает «Все проекты», портфели «действует / всего» и «Без портфеля»', () => {
+  it('показывает «Все проекты», портфели и «Без портфеля» — без счётчиков', () => {
     renderMenu();
     openMenu();
 
     expect(screen.getByText('Все проекты')).toBeTruthy();
-    expect(screen.getByText('109')).toBeTruthy();
-    expect(screen.getByText('98 / 100')).toBeTruthy();
+    expect(screen.getByText('Нежин-Недра')).toBeTruthy();
     expect(screen.getByText('Без портфеля')).toBeTruthy();
-    expect(screen.getByText('4 / 7')).toBeTruthy();
+    // Счётчики «2 / 2» из поповера убраны (решение 16.11.2026).
+    expect(screen.queryByText('98 / 100')).toBeNull();
+    expect(screen.queryByText('4 / 7')).toBeNull();
+    expect(screen.queryByText('109')).toBeNull();
   });
 
   it('группы «Архив» больше нет: все папки в одном списке', () => {

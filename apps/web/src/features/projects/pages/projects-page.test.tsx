@@ -120,14 +120,14 @@ afterEach(() => {
 });
 
 describe('журнал «Проекты»: кнопка «Портфели» (#559)', () => {
-  it('раскрывает список папок: «Все проекты», портфели со счётчиками и «Без портфеля»', () => {
+  it('раскрывает список папок: «Все проекты», портфели и «Без портфеля» — без счётчиков', () => {
     render(<ProjectsPage />);
     openFolders();
 
     expect(screen.getByText(ui.projects.portfolioAllProjects)).toBeTruthy();
     expect(screen.getByText(PORTFOLIO.name)).toBeTruthy();
-    expect(screen.getByText('98 / 100')).toBeTruthy();
     expect(screen.getByText(ui.projects.portfolioNone)).toBeTruthy();
+    expect(screen.queryByText('98 / 100')).toBeNull();
     // Строки журнала на месте: таблица показывает договоры.
     expect(screen.getByText(ACTIVE_PROJECT.name)).toBeTruthy();
     // Справочник папок без режима «с архивом», счётчики — по режиму «Все».

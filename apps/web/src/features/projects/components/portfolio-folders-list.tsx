@@ -4,20 +4,13 @@ import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { RowMenu, type RowMenuItem } from '../../../shared/views/row-menu.js';
-import {
-  totalOf,
-  type PortfolioFolder,
-  type PortfolioFolderTree,
-} from '../lib/portfolio-folders.js';
-
-/** Как показывать число справа: «действует / всего» или только всего. */
-type CounterMode = 'ratio' | 'total';
+import type { PortfolioFolder, PortfolioFolderTree } from '../lib/portfolio-folders.js';
 
 /** Общий класс внутренней кнопки строки списка папок. */
 const ROW =
   'flex h-full min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-ring';
 
-/** Слот галочки — постоянный: счётчики во всех строках стоят на одной линии. */
+/** Слот галочки — постоянный: галочки всех строк стоят на одной линии. */
 function CheckSlot({ active }: { active: boolean }) {
   return (
     <span className="flex size-3.5 shrink-0 items-center justify-center">
@@ -46,9 +39,10 @@ export interface PortfolioFoldersListProps {
 }
 
 /**
- * Тело списка «Портфели» (#559): «Все проекты» счётчиком видимого среза,
- * портфели (`действует / всего`) и «Без портфеля». Архива у папки нет
- * (13.11.2026) — удаление сразу навсегда.
+ * Тело списка «Портфели» (#559): «Все проекты», портфели и «Без портфеля».
+ * Счётчиков у папок нет (вердикт владельца 16.11.2026: цифры «2 / 2» в
+ * поповере — лишний шум; счётчики живут в журнале/дашбордах).
+ * Архива у папки нет (13.11.2026) — удаление сразу навсегда.
  * Строка — настоящая кнопка: Enter/Space и фокус-ринг — от браузера.
  * У каждой папки на месте — «⋯» с настройкой (переименовать/удалить), как в
  * Битрикс24: настройка живёт в самом списке, отдельного экрана не нужно.
@@ -86,7 +80,7 @@ export function PortfolioFoldersList({
     },
   });
 
-  const folderRow = (folder: PortfolioFolder, name: string, mode: CounterMode) => {
+  const folderRow = (folder: PortfolioFolder, name: string) => {
     const active = selection === folder.id;
     const icon =
       folder.id === 'all' ? (
@@ -138,19 +132,9 @@ export function PortfolioFoldersList({
             {icon}
           </span>
           <span className="min-w-0 flex-1 truncate">{name}</span>
-          <span
-            className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums"
-            title={ui.projects.portfolioCountsHint
-              .replace('{active}', String(folder.counters.active))
-              .replace('{total}', String(totalOf(folder.counters)))}
-          >
-            {mode === 'total'
-              ? totalOf(folder.counters)
-              : `${folder.counters.active} / ${totalOf(folder.counters)}`}
-          </span>
           <CheckSlot active={active} />
         </button>
-        {/* Слот меню постоянный: счётчики и галочки всех строк на одной линии. */}
+        {/* Слот меню постоянный: галочки всех строк на одной линии. */}
         <span className="mr-0.5 flex size-6 shrink-0 items-center justify-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
           {items.length > 0 ? <RowMenu items={items} align="end" /> : null}
         </span>
@@ -162,13 +146,13 @@ export function PortfolioFoldersList({
 
   return (
     <div className="max-h-80 overflow-y-auto p-1">
-      {folderRow(tree.all, allLabel, 'total')}
+      {folderRow(tree.all, allLabel)}
       {tree.folders.map((folder) => (
-        <Fragment key={folder.id}>{folderRow(folder, folder.name, 'ratio')}</Fragment>
+        <Fragment key={folder.id}>{folderRow(folder, folder.name)}</Fragment>
       ))}
       {hasFolders ? (
         <Fragment key="unassigned">
-          {folderRow(tree.unassigned, ui.projects.portfolioNone, 'ratio')}
+          {folderRow(tree.unassigned, ui.projects.portfolioNone)}
         </Fragment>
       ) : (
         <p className="px-2 py-1 text-xs text-muted-foreground">{ui.projects.portfolioEmpty}</p>
