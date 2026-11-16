@@ -136,12 +136,13 @@ export function AssistantPanel() {
       )}
       style={{ width: open ? effWidth : 0 }}
     >
-      {/* Контент фиксированной ширины: текст не плющится в кадрах анимации. */}
+      {/* Контент фиксированной ширины: текст не плющится в кадрах анимации.
+          Проявление — content-fade (ТОЛЬКО opacity): animate-in/duration-150
+          включали transition: all и ширина контента догоняла обёртку с
+          задержкой — «амортизация» у правого края при drag (вердикт
+          владельца 16.11.2026). */}
       {ready ? (
-        <div
-          className="animate-in fade-in flex h-full flex-col duration-150"
-          style={{ width: effWidth }}
-        >
+        <div className="content-fade flex h-full flex-col" style={{ width: effWidth }}>
           <AssistantBody />
         </div>
       ) : null}
