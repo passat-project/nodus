@@ -63,6 +63,10 @@ export class StageMover {
     // Регресс #428: движок передаёт `overriddenGates`/`overrideReason`, а
     // помощник читал чужие имена — обход гейта терялся в событии.
     const overridden = meta.overriddenGates?.length ? meta.overriddenGates : undefined;
+    // Прежний ответственный (#741): блок перехода в чате пишется, даже если
+    // этот самый переход снял нажавшего с состава беседы — в момент нажатия
+    // он участником был. `from` — `unknown`: берём только строку (uuid).
+    const previousAssignee = meta.fieldChanges?.assignee?.from;
     await this.eventBus.emit(
       tx,
       TASK_EVENTS.STAGE_CHANGED,
@@ -77,6 +81,7 @@ export class StageMover {
         transitionId: meta.transitionId,
         creatorId: task.creatorId,
         assigneeId: task.assigneeId,
+        ...(typeof previousAssignee === 'string' ? { previousAssigneeId: previousAssignee } : {}),
         coexecutorIds: task.participants
           .filter((p) => p.role === 'coexecutor')
           .map((p) => p.userId),

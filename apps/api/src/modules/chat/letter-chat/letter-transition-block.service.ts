@@ -82,14 +82,15 @@ export class LetterTransitionBlockService {
   ): Promise<void> {
     // Тот же предохранитель, что у блока задачи (#741): не-участник беседы
     // письма не пишет в чужую переписку; запись журнала перехода остаётся.
-    const members = await participantRoster(this.conversations, conversationId, actorId, tx);
-    if (!members) {
+    const roster = await participantRoster(this.conversations, conversationId, actorId, tx);
+    if (!roster.isMember) {
       this.logger.warn(
         { letterId: payload.letterId, actorId },
         'chat: блок перехода письма не записан — актор вне беседы',
       );
       return;
     }
+    const members = roster.members;
     const seq = await this.writes.allocateSeqs(conversationId, 1, tx);
     const inserted = await this.writes.insertMessage(
       {

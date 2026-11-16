@@ -124,6 +124,11 @@ export const taskStageChangedPayloadSchema = taskEventBaseSchema.extend({
   reason: z.string().max(500).optional(),
   creatorId: z.uuid(),
   assigneeId: z.uuid(),
+  /** Ответственный ДО перехода, если окно его сменило (#741). Блоку перехода
+   *  в чате нужен точный признак «нажавший был участником беседы в момент
+   *  нажатия»: смена ответственного сама снимает его с состава `sync`-ом,
+   *  а причина не должна из-за этого пропадать. */
+  previousAssigneeId: z.uuid().optional(),
   /** Соисполнители — адресаты «задача отменена» (наблюдатели — без звука). */
   coexecutorIds: z.array(z.uuid()).optional(),
   /** Решающие нового статуса (#433) — адресаты «Ждёт вашего решения» и

@@ -209,6 +209,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
       comment: opts.form?.comment,
       commentLabel: exec.commentLabelOf(pick.t),
       result: applied.result ?? undefined,
+      ...(Object.keys(applied.fields).length > 0 ? { fieldChanges: applied.fields } : {}),
       ...(numbering ? { numbering } : {}),
     } satisfies WorkflowStageChangeMeta);
     await this.records.insert(tx, {

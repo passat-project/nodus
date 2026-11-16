@@ -158,4 +158,26 @@ describe('StageMover — payload stage_changed (#380)', () => {
     expect((payload.comment as string).length).toBe(2000);
     expect((payload.commentLabel as string).length).toBe(60);
   });
+
+  it('окно сменило ответственного — в событии прежний ответственный (#741)', async () => {
+    const { mover, eventBus } = setup();
+    await mover.apply(TX, task('active'), REVIEW, 'bob', {
+      transitionId: 'tr',
+      cause: 'transition',
+      fieldChanges: { assignee: { from: 'alice', to: 'bob' } },
+    });
+    const payload = (eventBus.emit.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
+    expect(payload).toMatchObject({ assigneeId: 'bob', previousAssigneeId: 'alice' });
+  });
+
+  it('без смены ответственного поля previousAssigneeId в событии нет', async () => {
+    const { mover, eventBus } = setup();
+    await mover.apply(TX, task('active'), REVIEW, 'bob', {
+      transitionId: 'tr',
+      cause: 'transition',
+      fieldChanges: { deadline: { from: null, to: '2026-12-01T00:00:00.000Z' } },
+    });
+    const payload = (eventBus.emit.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('previousAssigneeId');
+  });
 });
