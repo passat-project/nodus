@@ -75,6 +75,25 @@ describe('OfficeCallbackService: гонка сохранений (AUD-015)', () 
     expect(h.mocks.remove).toHaveBeenCalledWith([h.mocks.put.mock.calls[0]?.[0]]);
   });
 
+  it('устаревший ключ по свежей строке под замком — подтверждение, объект убран', async () => {
+    vi.stubGlobal('fetch', mockFetchOk(2));
+    // До транзакции файл v1 (ключ совпадает); пока скачивали, сохранение ушло
+    // на v2 под ключом следующей сессии DS: колбэк подтверждаем без версии.
+    const h = makeHarness(makeFile(1), []);
+    h.mocks.lockForSave.mockResolvedValue({
+      file: makeFile(2),
+      latest: makeVersionRow(2, `${FILE_ID}.v2`, '2026-09-28T20:05:00.000Z'),
+    });
+    await h.service.handle(FILE_ID, {
+      status: 2,
+      key: `${FILE_ID}.v1`,
+      url: SAVE_URL,
+      lastsave: '2026-09-28T20:00:00.000Z',
+    });
+    expect(h.mocks.saveVersion).not.toHaveBeenCalled();
+    expect(h.mocks.remove).toHaveBeenCalledWith([h.mocks.put.mock.calls[0]?.[0]]);
+  });
+
   it('откат транзакции удаляет загруженный объект (компенсация)', async () => {
     vi.stubGlobal('fetch', mockFetchOk(2));
     const h = makeHarness(makeFile(1));
