@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import type { NotificationSnapshot } from '@nodus/contracts';
 
 import { isDesktopShell } from '../../../shared/desktop/desktop-bridge.js';
-import { notifyDesktopLetter } from '../../../shared/desktop/letter-popup.js';
+import { notifyDesktopJournal } from '../../../shared/desktop/journal-popup.js';
 import { notificationsKeys } from '../../../shared/notifications-keys.js';
 import {
   registerNotificationSink,
@@ -18,8 +18,8 @@ import { useNotificationSink } from './use-notification-sink.js';
 vi.mock('../../../shared/desktop/desktop-bridge.js', () => ({
   isDesktopShell: vi.fn(),
 }));
-vi.mock('../../../shared/desktop/letter-popup.js', () => ({
-  notifyDesktopLetter: vi.fn(),
+vi.mock('../../../shared/desktop/journal-popup.js', () => ({
+  notifyDesktopJournal: vi.fn(),
 }));
 vi.mock('../../../shared/socket/notification-bridge.js', () => ({
   registerNotificationSink: vi.fn(),
@@ -88,16 +88,16 @@ describe('useNotificationSink: канал по контуру', () => {
     await waitFor(() => {
       expect(useNotificationsToastStore.getState().personal).toHaveLength(1);
     });
-    expect(notifyDesktopLetter).not.toHaveBeenCalled();
+    expect(notifyDesktopJournal).not.toHaveBeenCalled();
     expect(invalidate).toHaveBeenCalledWith({ queryKey: notificationsKeys.summary() });
   });
 
-  it('оболочка: событие — попап оболочки, внутренний тост не всплывает (#618)', () => {
+  it('оболочка: событие — попап оболочки, внутренний тост не всплывает (#618, #880)', () => {
     vi.mocked(isDesktopShell).mockReturnValue(true);
-    mount();
+    const { queryClient } = mount();
     const event = snap(2);
     sink?.dispatched(event, 0);
-    expect(notifyDesktopLetter).toHaveBeenCalledWith(event);
+    expect(notifyDesktopJournal).toHaveBeenCalledWith(event, 0, queryClient);
     expect(useNotificationsToastStore.getState().personal).toHaveLength(0);
   });
 
