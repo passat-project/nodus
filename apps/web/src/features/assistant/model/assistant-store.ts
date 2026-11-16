@@ -64,6 +64,16 @@ function readWidth(): number {
     : ASSISTANT_W_DEFAULT;
 }
 
+/** Брошенный стриминг (новый диалог/новый вопрос посреди допечатки) не
+ *  оставляет вечный курсор в ленте: недопечатанные сообщения завершаются. */
+function finishStreaming(sessions: AssistantSession[]): AssistantSession[] {
+  return sessions.map((se) =>
+    se.messages.some((m) => m.streaming)
+      ? { ...se, messages: se.messages.map((m) => (m.streaming ? { ...m, streaming: false } : m)) }
+      : se,
+  );
+}
+
 function msg(mine: boolean, text: string, minutesAgo: number): AssistantMessage {
   return {
     id: nextId++,
@@ -132,13 +142,14 @@ export const useAssistantStore = create<AssistantState>()((set, get) => ({
       activeId: id,
       sessions: [
         { id, title: 'Новый диалог', createdAt: new Date().toISOString(), messages: [] },
-        ...s.sessions,
+        ...finishStreaming(s.sessions),
       ],
     }));
   },
   // Мок-диалог: вопрос → пауза «думает» → ответ печатается кусочками.
   send: (text, reply) => {
     clearTimers();
+    set((s) => ({ sessions: finishStreaming(s.sessions), thinking: false }));
     let sessionId = get().activeId;
     if (!sessionId) {
       get().newSession();

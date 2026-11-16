@@ -120,7 +120,9 @@ export function AssistantEdgeEntry() {
         // владельца 16.11.2026); скруглены только левые углы.
         'fixed top-0 right-0 z-[60] size-9 rounded-l-xl border-y border-l border-border bg-card text-primary will-change-transform hover:text-primary-hover',
         'transition-opacity duration-200',
-        visible ? 'opacity-100' : 'pointer-events-none opacity-0',
+        // invisible в покое: скрытая кнопка вне tab-order (a11y), opacity
+        // остаётся анимируемой; visibility переключается дискретно.
+        visible ? 'opacity-100' : 'invisible pointer-events-none opacity-0',
       )}
     >
       <Bot className="size-4" />
