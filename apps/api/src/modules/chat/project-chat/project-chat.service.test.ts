@@ -14,18 +14,20 @@ const ROSTER = {
 type Roster = { managerId: string; memberIds: string[] } | null;
 
 /**
- * AUD-022: состав и название канала читаются ДО открытия транзакции, чтобы
- * read-порты проектов (без tx) не занимали второе соединение пула внутри
- * транзакции. Синхронизация при этом остаётся идемпотентной и ведёт состав
- * по roster'у проекта.
+ * AUD-022: первое чтение состава — до открытия транзакции (findOrCreate:
+ * managerId), чтобы read-порт проектов не занимал второе соединение пула
+ * без нужды; под `FOR UPDATE` беседы состав перечитывается — иначе
+ * конкурентный sync со старым составом вернул бы исключённого (#252).
  */
 function setup(opts: {
   roster?: Roster;
+  rosterAfterLock?: Roster;
   existing?: boolean;
   current?: string[];
   roles?: string[];
 }) {
   const order: string[] = [];
+  let rosterReads = 0;
   const repo = {
     find: vi.fn(async () => (opts.existing === false ? null : CONV)),
     findOrCreate: vi.fn(async () => ({ id: CONV, created: true })),
@@ -46,6 +48,10 @@ function setup(opts: {
   const projects = {
     roster: vi.fn(async () => {
       order.push('roster');
+      rosterReads += 1;
+      if (rosterReads > 1 && opts.rosterAfterLock !== undefined) {
+        return opts.rosterAfterLock;
+      }
       return opts.roster === undefined ? ROSTER : opts.roster;
     }),
     refs: vi.fn(async () => {
@@ -69,12 +75,43 @@ function setup(opts: {
 }
 
 describe('ProjectChatService.sync (#52 Р8, AUD-022)', () => {
-  it('roster и название читаются ДО транзакции; внутри tx портов проектов нет', async () => {
+  it('roster читается ДО транзакции и повторно — под блокировкой беседы', async () => {
     const { service, order } = setup({ current: [ROSTER.managerId, ...ROSTER.memberIds] });
     await service.sync(PROJECT, 'actor-1');
-    const txIndex = order.indexOf('tx');
-    expect(order.slice(0, txIndex)).toEqual(['roster', 'refs']);
-    expect(order.slice(txIndex)).toEqual(['tx']);
+    // Первое чтение — до tx (findOrCreate), название — тоже; свежий состав —
+    // уже внутри транзакции, после FOR UPDATE беседы (гейт #252).
+    expect(order).toEqual(['roster', 'refs', 'tx', 'roster']);
+  });
+
+  it('конкурентный sync со старым составом не возвращает исключённого', async () => {
+    const excluded = ROSTER.memberIds[0]!;
+    const { service, repo } = setup({
+      // До транзакции проект ещё включал участника; под замком его уже убрали.
+      roster: { managerId: ROSTER.managerId, memberIds: [excluded] },
+      rosterAfterLock: { managerId: ROSTER.managerId, memberIds: [] },
+    });
+
+    await expect(service.sync(PROJECT, 'actor-1')).resolves.toBe(CONV);
+
+    const added = repo.addMembers.mock.calls.flatMap(
+      (_args: unknown[]) => (_args[2] as { userId: string }[] | undefined) ?? [],
+    );
+    expect(added.map((row) => row.userId)).not.toContain(excluded);
+  });
+
+  it('проект исчез под блокировкой — состав распущен, sync возвращает null', async () => {
+    const { service, repo } = setup({
+      roster: ROSTER,
+      rosterAfterLock: null,
+      current: [ROSTER.managerId, ...ROSTER.memberIds],
+    });
+
+    await expect(service.sync(PROJECT, 'actor-1')).resolves.toBeNull();
+
+    expect(repo.removeMembers).toHaveBeenCalledWith(TX, CONV, [
+      ROSTER.managerId,
+      ...ROSTER.memberIds,
+    ]);
   });
 
   it('состав = roster проекта: руководитель owner, новые — member, выбывший уходит', async () => {
