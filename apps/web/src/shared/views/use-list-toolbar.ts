@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 
+import { getCurrentUserId } from '../lib/current-user-id.js';
+import { listFiltersStorageKey } from './list-filters-storage.js';
 import { applyListFilters, type ActiveListFilter, type FilterState } from './list-filters.js';
 
 /** Пресет фильтра (модель Битрикс24): имя + состояние полей. Встроенные
@@ -17,11 +19,9 @@ interface StoredView {
   pinnedId?: string;
 }
 
-const STORAGE_PREFIX = 'nodus-list-filters-v1:';
-
-function load(viewKey: string): StoredView {
+function load(storageKey: string): StoredView {
   try {
-    const raw = localStorage.getItem(STORAGE_PREFIX + viewKey);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return { filters: {}, presets: [] };
     const parsed = JSON.parse(raw) as {
       filters?: FilterState;
@@ -41,9 +41,9 @@ function load(viewKey: string): StoredView {
   }
 }
 
-function save(viewKey: string, value: StoredView) {
+function save(storageKey: string, value: StoredView) {
   try {
-    localStorage.setItem(STORAGE_PREFIX + viewKey, JSON.stringify(value));
+    localStorage.setItem(storageKey, JSON.stringify(value));
   } catch {
     // приватный режим / квота — фильтры просто не запомнятся
   }
@@ -54,8 +54,11 @@ function save(viewKey: string, value: StoredView) {
  *  эфемерен по смыслу. При открытии списка закреплённый пресет (встроенный
  *  или сохранённый) применяется по умолчанию, иначе — последние фильтры. */
 export function useListToolbar(viewKey: string, builtinPresets: FilterPreset[] = []) {
+  // Ключ — на пользователя (AUD-005): сохранённые фильтры одного сотрудника
+  // не применяются следующему вошедшему на общем компьютере.
+  const storageKey = listFiltersStorageKey(getCurrentUserId(), viewKey);
   const [stored, setStored] = useState<StoredView>(() => {
-    const initial = load(viewKey);
+    const initial = load(storageKey);
     const pinned =
       builtinPresets.find((p) => p.id === initial.pinnedId) ??
       initial.presets.find((p) => p.id === initial.pinnedId);
@@ -66,9 +69,9 @@ export function useListToolbar(viewKey: string, builtinPresets: FilterPreset[] =
   const update = useCallback(
     (next: StoredView) => {
       setStored(next);
-      save(viewKey, next);
+      save(storageKey, next);
     },
-    [viewKey],
+    [storageKey],
   );
 
   const setFilter = useCallback(

@@ -1140,7 +1140,8 @@ nextCursor = граница «самое старое загруженное»),
   кнопка с глифом SendHexIcon цвета info ВНУТРИ строки ввода, видна только
   при тексте/вложениях/баре пересылки (пусто — микрофон-заглушка, модель
   Telegram), в правке — галка.
-- **Черновики** (`chat-drafts.ts`, zustand persist `nodus-chat-drafts-v1`):
+- **Черновики** (`chat-drafts.ts`, zustand persist
+  `nodus-chat-drafts-v1:<userId>` — ключ НА пользователя, AUD-005):
   текст+контекст per scope (`conversation:<id>`/`feed:<id>`/`thread:<rootId>`),
   переживают смену беседы и reload; вложения — только память сессии (канон
   research). **Синхронизация с сервером — ТОЛЬКО НА УХОДЕ из беседы** (#91 +

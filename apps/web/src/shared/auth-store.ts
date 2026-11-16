@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import type { AuthTokens, AuthUser } from '@nodus/contracts';
 
 import { api, ApiError } from './api-client.js';
+import { setCurrentUserId } from './lib/current-user-id.js';
+import { resetSessionState } from './session-reset.js';
 
 type AuthStatus = 'unknown' | 'authenticated' | 'anonymous';
 
@@ -61,10 +63,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   async logout() {
+    // Сброс — ПОСЛЕ set(ANONYMOUS), но ключи чистим по прежнему пользователю:
+    // иначе личные данные завершившейся сессии остались бы в браузере.
+    const userId = get().user?.id ?? null;
     try {
       await api('/auth/logout', { method: 'POST', auth: false });
     } finally {
       set(ANONYMOUS);
+      resetSessionState(userId);
     }
   },
 
@@ -86,6 +92,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           // применяем, сессию этой вкладки считаем мёртвой (#747).
           if (tokens.userId !== actorId) {
             set(ANONYMOUS);
+            resetSessionState(actorId);
             return false;
           }
         }
@@ -96,7 +103,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // Анонимом делает только мёртвая сессия; при недоступном сервере
         // статус не трогаем (обрыв сети не выкидывает на /login). Поздний
         // 401 прежней сессии не должен гасить уже новую (#747).
-        if (isSessionDead(error) && (get().user?.id ?? null) === actorId) set(ANONYMOUS);
+        if (isSessionDead(error) && (get().user?.id ?? null) === actorId) {
+          set(ANONYMOUS);
+          resetSessionState(actorId);
+        }
         return false;
       } finally {
         refreshInFlight = null;
@@ -118,9 +128,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           const user = await api<AuthUser>('/auth/me');
           set({ status: 'authenticated', user });
         } catch (error) {
-          set(
-            isSessionDead(error) ? ANONYMOUS : { status: 'unknown', accessToken: null, user: null },
-          );
+          if (isSessionDead(error)) {
+            set(ANONYMOUS);
+            resetSessionState(null);
+          } else {
+            set({ status: 'unknown', accessToken: null, user: null });
+          }
         }
       } finally {
         bootstrapInFlight = null;
@@ -129,3 +142,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return bootstrapInFlight;
   },
 }));
+
+// Потребители вне auth-store (persist-хранилища, хуки) читают «кто сейчас
+// вошёл» через мост, не импортируя этот стор (AUD-005).
+setCurrentUserId(useAuthStore.getState().user?.id ?? null);
+useAuthStore.subscribe((state) => setCurrentUserId(state.user?.id ?? null));
