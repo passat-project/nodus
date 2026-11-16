@@ -101,6 +101,10 @@ export function AssistantFeed({
               <MessageRunView
                 run={run}
                 showName={false}
+                // Узкая колонка диалога с ИИ: пользователь справа, агент слева
+                // (конвенция харнесов, вердикт владельца 17.11.2026); настройка
+                // мессенджера «все с одной стороны» хост не наследует.
+                align="both"
                 renderAvatar={(r) =>
                   r.mine ? (
                     <PersonAvatar
@@ -121,6 +125,7 @@ export function AssistantFeed({
                       tail={attrs.tail}
                       reactionsHidden
                       receiptsHidden
+                      align="both"
                     />
                   </div>
                 )}
