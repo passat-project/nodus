@@ -122,9 +122,20 @@ describe('ConversationBar — кнопка сущности беседы (#753, 
     expect(screen.queryByRole('button', { name: 'Открыть письмо' })).toBeNull();
   });
 
-  it('канал проекта: кнопки «Добавить участников» нет — состав ведёт проект (AUD-003)', () => {
-    renderBar(conversation({ type: 'project_channel', myRole: 'owner' }));
+  it('канал С проектом: кнопки «Добавить участников» нет — состав ведёт проект (AUD-003)', () => {
+    renderBar(
+      conversation({
+        type: 'project_channel',
+        myRole: 'owner',
+        project: { id: ID, code: 'PRJ', name: 'Проект', color: 'blue' },
+      }),
+    );
     expect(screen.queryByRole('button', { name: 'Добавить участников' })).toBeNull();
+  });
+
+  it('канал БЕЗ проекта («Новости компании»): кнопка «Добавить участников» на месте (AUD-003)', () => {
+    renderBar(conversation({ type: 'project_channel', myRole: 'owner', project: null }));
+    expect(screen.getByRole('button', { name: 'Добавить участников' })).toBeTruthy();
   });
 
   it('группа: кнопка «Добавить участников» на месте (право addMembers)', () => {

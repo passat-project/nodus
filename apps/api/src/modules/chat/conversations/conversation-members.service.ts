@@ -101,18 +101,22 @@ export class ConversationMembersService {
 
   /**
    * Добавление участников: право addMembers (дефолт — любой участник);
-   * только группы — состав direct/task/letter фиксирован сущностью (#195),
-   * канала проекта — проектом (AUD-003: вручную состав ведёт только
-   * ProjectChatService). Неизвестных справочнику и уже состоящих пропускаем
-   * молча; превышение лимита 200 — ошибка валидации. Событие member_added
-   * (существует) — gateway доставляет и добавленным (их список бесед).
+   * только группы/каналы — состав direct/task/letter фиксирован сущностью
+   * (#195). Канал, привязанный к проекту, составом ведёт проект (гвард
+   * отсекает по projectId, AUD-003); канал БЕЗ проекта («Новости компании»)
+   * добавляет по матрице прав «Добавление участников». Неизвестных справочнику
+   * и уже состоящих пропускаем молча; превышение лимита 200 — ошибка валидации.
+   * Событие member_added (существует) — gateway доставляет и добавленным.
    */
   async add(
     userId: string,
     conversationId: string,
     body: { userIds: string[] },
   ): Promise<ConversationListItem> {
-    await requireConversationAction(this.repo, conversationId, userId, 'addMembers', ['group']);
+    await requireConversationAction(this.repo, conversationId, userId, 'addMembers', [
+      'group',
+      'project_channel',
+    ]);
     // Только действующие сотрудники (#343): уволенного в беседу не добавить.
     const known = new Set(await this.userProfiles.filterActiveUserIds([...new Set(body.userIds)]));
     const existing = new Set((await this.repo.listMembers([conversationId])).map((m) => m.userId));
@@ -186,12 +190,16 @@ export class ConversationMembersService {
   /**
    * Исключение участника: право removeMembers (дефолт — владелец и модераторы)
    * + иерархия — актёр строго старше цели (модератора снимает только
-   * владелец); только группы (#195; канал проекта ведёт проект — AUD-003);
-   * владельца исключить нельзя. Вместе со строкой участия уходит черновик
-   * исключённого (user-FK нет — чистим явно).
+   * владелец); только группы/каналы (#195). Канал с проектом составом ведёт
+   * проект (гвард отсекает по projectId, AUD-003); канал без проекта исключает
+   * по матрице прав. Владельца исключить нельзя. Вместе со строкой участия
+   * уходит черновик исключённого (user-FK нет — чистим явно).
    */
   async remove(userId: string, conversationId: string, memberUserId: string): Promise<void> {
-    await requireConversationAction(this.repo, conversationId, userId, 'removeMembers', ['group']);
+    await requireConversationAction(this.repo, conversationId, userId, 'removeMembers', [
+      'group',
+      'project_channel',
+    ]);
     const target = await this.repo.findMembership(conversationId, memberUserId);
     if (!target) throw DomainException.notFound('Member not found');
     if (target.role === 'owner') {

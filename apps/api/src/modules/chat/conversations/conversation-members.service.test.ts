@@ -330,7 +330,7 @@ describe('мутации состава direct-беседы запрещены (
   });
 });
 
-describe('канал проекта: состав ведёт только проект (AUD-003)', () => {
+describe('канал: с проектом состав ведёт проект, без проекта — матрица прав (AUD-003)', () => {
   let s: ReturnType<typeof makeServices>;
   beforeEach(() => {
     s = makeServices();
@@ -348,7 +348,7 @@ describe('канал проекта: состав ведёт только про
     });
   }
 
-  it('add в канал проекта → VALIDATION_FAILED для любой роли, вставки нет', async () => {
+  it('add в канал С проектом → VALIDATION_FAILED для любой роли, вставки нет', async () => {
     asProjectChannel('project-1');
     await expect(s.members.add(MEMBER, CONV, { userIds: [PEER] })).rejects.toMatchObject({
       code: ErrorCode.VALIDATION_FAILED,
@@ -357,15 +357,14 @@ describe('канал проекта: состав ведёт только про
     expect(s.eventBus.emit).not.toHaveBeenCalled();
   });
 
-  it('add в канал без привязки — тоже запрещён: project_channel вне ручного состава', async () => {
+  it('add в канал БЕЗ проекта — по матрице прав: участник добавляет (addMembers=member)', async () => {
     asProjectChannel(null);
-    await expect(s.members.add(MEMBER, CONV, { userIds: [PEER] })).rejects.toMatchObject({
-      code: ErrorCode.VALIDATION_FAILED,
-    });
-    expect(s.repo.addMembers).not.toHaveBeenCalled();
+    await s.members.add(MEMBER, CONV, { userIds: [PEER] });
+    expect(s.repo.addMembers).toHaveBeenCalledWith(CONV, [PEER], TX);
+    expect(s.eventBus.emit).toHaveBeenCalled();
   });
 
-  it('ручное исключение из канала проекта → VALIDATION_FAILED, удаления нет', async () => {
+  it('ручное исключение из канала С проектом → VALIDATION_FAILED, удаления нет', async () => {
     asProjectChannel('project-1');
     s.repo.findMembership.mockImplementation(async (_cid: string, userId: string) =>
       userId === MEMBER ? membershipOf(MEMBER, 'admin') : membershipOf(PEER, 'member'),
@@ -375,6 +374,16 @@ describe('канал проекта: состав ведёт только про
     });
     expect(s.repo.removeMember).not.toHaveBeenCalled();
     expect(s.eventBus.emit).not.toHaveBeenCalled();
+  });
+
+  it('исключение из канала БЕЗ проекта — по матрице прав: admin снимает member', async () => {
+    asProjectChannel(null);
+    s.repo.findMembership.mockImplementation(async (_cid: string, userId: string) =>
+      userId === MEMBER ? membershipOf(MEMBER, 'admin') : membershipOf(PEER, 'member'),
+    );
+    await s.members.remove(MEMBER, CONV, PEER);
+    expect(s.repo.removeMember).toHaveBeenCalledWith(CONV, PEER, TX);
+    expect(s.eventBus.emit).toHaveBeenCalled();
   });
 });
 
