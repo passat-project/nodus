@@ -1,4 +1,5 @@
 import { accessStrings } from './ru-access.js';
+import { assistantStrings } from './ru-assistant.js';
 import { automationStrings } from './ru-automation.js';
 import { chatStrings } from './ru-chat.js';
 import { lettersStrings } from './ru-correspondence.js';
@@ -183,10 +184,7 @@ export const ui = {
     updateDownloading: 'Загружается обновление',
     updateNone: 'Новых версий нет',
   },
-  edge: {
-    expand: 'Развернуть список бесед',
-    collapse: 'Свернуть список бесед',
-  },
+  assistant: assistantStrings,
   auth: {
     title: 'Nodus',
     subtitle: 'Вход в корпоративный портал',

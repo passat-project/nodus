@@ -9,7 +9,6 @@ import { useAssigneeTasks, useMemberProjects } from '../../../shared/api/user-re
 import { ApiError } from '../../../shared/api-client.js';
 import { useDirectConversation } from '../../../shared/chat/chat-queries.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
-import { useRailShrink } from '../../../app/shell/right-rail.js';
 import { chatCeiling, chatColumnWidth } from '../../../shared/ui/branch-panel.js';
 import {
   CHAT_PANEL_W,
@@ -67,13 +66,12 @@ export function EmployeeCard({ userId }: { userId: string }) {
   // panel.open не сбрасывается — возврат восстанавливает открытое состояние.
   const panelVisible = panel.open && tab === 'chat';
   const chatRef = useRef<HTMLDivElement>(null);
-  // КАНОН «чат — буфер сужений» (issue #63): панель беседы и раскрытие
-  // служебной полосы сужают ПРАВУЮ зону до её минимума (лента 360 при панели,
-  // иначе drag-пол MIN_CHAT_W); профиль слева не двигается, пока хватает
-  // места, дальше сужение выталкивает его (без пола — жёсткий пол обрезал чат
-  // за краем карточки).
-  const railShrink = useRailShrink();
-  const shrink = railShrink + (panelVisible ? CHAT_PANEL_W : 0);
+  // КАНОН «чат — буфер сужений» (issue #63): панель беседы сужает ПРАВУЮ зону
+  // до её минимума (лента 360 при панели, иначе drag-пол MIN_CHAT_W); профиль
+  // слева не двигается, пока хватает места, дальше сужение выталкивает его
+  // (без пола — жёсткий пол обрезал чат за краем карточки). Окно ассистента —
+  // оверлей поверх рамы, геометрию карточек не двигает.
+  const shrink = panelVisible ? CHAT_PANEL_W : 0;
   const chatFloor = panelVisible ? MIN_FEED_WITH_PANEL : MIN_CHAT_W;
   // Порядок уступок #750: при узкой карточке правая зона отдаёт ширину
   // ПРОФИЛЮ (минимум данных 320 — как у колонки данных задачи/письма), но не
