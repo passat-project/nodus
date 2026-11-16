@@ -32,6 +32,19 @@ export function timeEntryBody(
 }
 
 /**
+ * Почему непустой ввод не станет записью времени (#866, AUD-009):
+ * `format` — не распознан, `limit` — больше 24 часов за одну запись,
+ * null — поле пустое или ввод валиден.
+ */
+export function timeEntryError(draft: TimeEntryDraft): 'format' | 'limit' | null {
+  if (!draft.amount.trim()) return null;
+  const minutes = parseDuration(draft.amount);
+  if (minutes === null) return 'format';
+  if (minutes > 1440) return 'limit';
+  return null;
+}
+
+/**
  * Поля ручной записи времени (#380): сумма «1ч 30м», сегодня/вчера,
  * комментарий. Вынесены из учёта времени карточки — окно перехода и
  * поповер «Затрачено» показывают одну форму. Отправку делает вызывающий
@@ -43,42 +56,53 @@ export function TimeEntryFields({
   disabled,
   autoFocus,
   amountAriaLabel = ui.tasks.timeAdd,
+  error,
 }: {
   value: TimeEntryDraft;
   onChange: (next: TimeEntryDraft) => void;
   disabled?: boolean;
   autoFocus?: boolean;
   amountAriaLabel?: string;
+  /** Причина, по которой непустой ввод не станет записью (i18n-строка). */
+  error?: string | null;
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <Input
-          autoFocus={autoFocus}
-          value={value.amount}
-          disabled={disabled}
-          onChange={(e) => onChange({ ...value, amount: e.target.value })}
-          placeholder={ui.tasks.timeMinutesPlaceholder}
-          aria-label={amountAriaLabel}
-          className="h-8 w-28 font-mono text-sm"
-        />
-        {[ui.tasks.timeToday, ui.tasks.timeYesterday].map((label, i) => (
-          <button
-            key={label}
-            type="button"
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <Input
+            autoFocus={autoFocus}
+            value={value.amount}
             disabled={disabled}
-            onClick={() => onChange({ ...value, daysAgo: i })}
-            aria-pressed={value.daysAgo === i}
-            className={cn(
-              'h-8 rounded-md px-2.5 text-sm transition-colors',
-              value.daysAgo === i
-                ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:bg-accent/50',
-            )}
-          >
-            {label}
-          </button>
-        ))}
+            onChange={(e) => onChange({ ...value, amount: e.target.value })}
+            placeholder={ui.tasks.timeMinutesPlaceholder}
+            aria-label={amountAriaLabel}
+            aria-invalid={error ? true : undefined}
+            className="h-8 w-28 font-mono text-sm"
+          />
+          {[ui.tasks.timeToday, ui.tasks.timeYesterday].map((label, i) => (
+            <button
+              key={label}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange({ ...value, daysAgo: i })}
+              aria-pressed={value.daysAgo === i}
+              className={cn(
+                'h-8 rounded-md px-2.5 text-sm transition-colors',
+                value.daysAgo === i
+                  ? 'bg-accent text-foreground'
+                  : 'text-muted-foreground hover:bg-accent/50',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {error ? (
+          <p className="text-xs text-danger" role="alert">
+            {error}
+          </p>
+        ) : null}
       </div>
       <Input
         value={value.comment}

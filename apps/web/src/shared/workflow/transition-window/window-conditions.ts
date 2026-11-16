@@ -6,7 +6,7 @@ import type {
 } from '@nodus/contracts';
 import { customFieldIdOfKey, gateFixableBy, isCustomFieldValueFilled } from '@nodus/contracts';
 
-import { timeEntryBody } from '../../tasks/time-entry-fields.js';
+import { timeEntryBody, timeEntryError } from '../../tasks/time-entry-fields.js';
 import { draftMessageIds, type WindowDraft } from './use-window-draft.js';
 import type { TransitionWindowContext } from './window-context.js';
 
@@ -111,18 +111,38 @@ export function windowConditionLines({
   });
 }
 
+/**
+ * Причина, по которой ввод раздела «Трудозатраты» не станет записью
+ * (#866, AUD-009): формат или предел 24 часа. Режим `if_empty` при уже
+ * списанном времени раздел не учитывает — как и тело запроса.
+ */
+export function timeSectionIssue(
+  section: Extract<EffectiveSection, { kind: 'time' }>,
+  draft: WindowDraft,
+  spentMinutes: number,
+): 'format' | 'limit' | null {
+  if (section.mode === 'if_empty' && spentMinutes > 0) return null;
+  return timeEntryError(draft.time);
+}
+
 /** Главная кнопка окна активна: все условия ✓ и обязательные разделы заполнены. */
 export function windowCanSubmit({
   sections,
   lines,
   draft,
+  spentMinutes = 0,
 }: {
   sections: readonly EffectiveSection[];
   lines: readonly WindowConditionLine[];
   draft: WindowDraft;
+  /** Уже списанные минуты: для `if_empty` раздел «Трудозатраты» не обязателен. */
+  spentMinutes?: number;
 }): boolean {
   if (!lines.every((line) => line.ok)) return false;
   for (const section of sections) {
+    if (section.kind === 'time' && timeSectionIssue(section, draft, spentMinutes) !== null) {
+      return false;
+    }
     if (section.kind === 'comment' && section.required && !draft.comment.trim()) return false;
     // Регистрация письма кнопку НЕ блокирует (вердикт владельца 28.10):
     // попытка с пропусками уходит на сервер, 422 возвращается в окно и
