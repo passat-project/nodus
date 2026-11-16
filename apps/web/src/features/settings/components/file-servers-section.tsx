@@ -9,6 +9,7 @@ import {
 } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Input } from '@nodus/ui/components/input';
+import { NodeLabel } from '@nodus/ui/components/node-label';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 import { toast } from 'sonner';
 
@@ -19,6 +20,11 @@ import { useFileServersQuery, useUpdateFileServers } from '../api/file-servers.j
  * десктоп-приложение открывает файлы значений «Ссылка или путь». Добавление
  * и удаление сохраняются сразу (оптимистично, откат при ошибке): список —
  * короткий перечень, отдельная кнопка «Сохранить» была бы лишним шагом.
+ *
+ * Композиция: метка раздела на одной оси с пунктом навигатора (h-9), описание,
+ * форма добавления и список одной мерой (max-w-xl) — правые края не «пляшут».
+ * Список — панель с тоном-ступенью: пустое и ошибочное состояния живут в той
+ * же рамке, что и строки, поэтому добавление не прыгает габаритом.
  */
 export function FileServersSection() {
   const query = useFileServersQuery();
@@ -69,30 +75,28 @@ export function FileServersSection() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-14 shrink-0 items-center gap-3 px-6">
-        <h2 className="text-lg font-semibold text-foreground">
-          {ui.portalSettings.sections.fileServers}
-        </h2>
-        <span className="font-mono text-xs text-muted-foreground tabular-nums">
-          {servers.length}
-        </span>
-      </div>
-
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          {ui.portalSettings.fileServers.description}
-        </p>
+        <div className="flex max-w-xl flex-col">
+          <h2 className="flex h-9 items-center">
+            <NodeLabel
+              label={ui.portalSettings.sections.fileServers}
+              count={ready ? servers.length : undefined}
+            />
+          </h2>
 
-        {query.isError ? null : (
-          <>
-            <form
-              className="mt-4 flex max-w-xl items-start gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                add();
-              }}
-            >
-              <div className="min-w-0 flex-1">
+          <p className="text-sm text-muted-foreground">
+            {ui.portalSettings.fileServers.description}
+          </p>
+
+          {query.isError ? null : (
+            <>
+              <form
+                className="mt-4 flex items-start gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  add();
+                }}
+              >
                 <Input
                   value={draft}
                   onChange={(event) => {
@@ -106,79 +110,81 @@ export function FileServersSection() {
                   autoComplete="off"
                   className="font-mono text-[13px]"
                 />
-              </div>
-              <Button
-                type="submit"
-                disabled={!ready || update.isPending || atLimit || draft.trim() === ''}
-              >
-                <Plus data-icon="inline-start" />
-                {ui.portalSettings.fileServers.add}
-              </Button>
-            </form>
-            {error ? (
-              <p className="mt-2 text-xs text-destructive" role="alert">
-                {error}
-              </p>
-            ) : atLimit ? (
-              <p className="mt-2 text-xs text-muted-foreground">
-                {ui.portalSettings.fileServers.limit}
-              </p>
-            ) : null}
-          </>
-        )}
-
-        {query.isPending ? (
-          <div className="mt-6 flex max-w-xl flex-col gap-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : query.isError ? (
-          <div className="mt-6 flex max-w-xl items-center gap-3">
-            <p className="text-sm text-destructive">{ui.common.loadError}</p>
-            <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
-              {ui.common.retry}
-            </Button>
-          </div>
-        ) : servers.length === 0 ? (
-          <p className="mt-6 max-w-xl text-sm text-muted-foreground">
-            {ui.portalSettings.fileServers.empty}
-          </p>
-        ) : (
-          <ul
-            className="mt-4 flex max-w-xl flex-col gap-1"
-            aria-label={ui.portalSettings.sections.fileServers}
-          >
-            {servers.map((server) => (
-              <li
-                key={server}
-                className="group/row flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm transition-colors hover:bg-accent/40"
-              >
-                <Server
-                  className="size-4 shrink-0 text-muted-foreground"
-                  strokeWidth={1.75}
-                  aria-hidden
-                />
-                <span className="min-w-0 flex-1 truncate font-mono text-[13px]" title={server}>
-                  {server}
-                </span>
-                <button
-                  type="button"
-                  aria-label={`${ui.portalSettings.fileServers.remove}: ${server}`}
-                  title={ui.portalSettings.fileServers.remove}
-                  disabled={update.isPending}
-                  onClick={() => remove(server)}
-                  className="rounded p-1 text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 hover:text-destructive disabled:opacity-50"
+                <Button
+                  type="submit"
+                  disabled={!ready || update.isPending || atLimit || draft.trim() === ''}
                 >
-                  <Trash2 className="size-3.5" strokeWidth={1.75} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+                  <Plus data-icon="inline-start" />
+                  {ui.portalSettings.fileServers.add}
+                </Button>
+              </form>
+              {error ? (
+                <p className="mt-2 text-xs text-destructive" role="alert">
+                  {error}
+                </p>
+              ) : atLimit ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {ui.portalSettings.fileServers.limit}
+                </p>
+              ) : null}
+            </>
+          )}
 
-        <p className="mt-6 max-w-xl text-xs text-muted-foreground">
-          {ui.portalSettings.fileServers.note}
-        </p>
+          <div className="mt-4">
+            {query.isPending ? (
+              <div className="node-panel flex flex-col gap-0.5 p-1">
+                <Skeleton className="h-10 w-full rounded-lg" />
+                <Skeleton className="h-10 w-full rounded-lg" />
+              </div>
+            ) : query.isError ? (
+              <div className="node-panel flex items-center justify-between gap-3 px-3.5 py-2.5">
+                <p className="min-w-0 text-sm text-destructive">{ui.common.loadError}</p>
+                <Button variant="ghost" size="sm" onClick={() => void query.refetch()}>
+                  {ui.common.retry}
+                </Button>
+              </div>
+            ) : servers.length === 0 ? (
+              <p className="node-panel px-3.5 py-3 text-sm text-muted-foreground">
+                {ui.portalSettings.fileServers.empty}
+              </p>
+            ) : (
+              <ul
+                className="node-panel flex flex-col gap-0.5 p-1"
+                aria-label={ui.portalSettings.sections.fileServers}
+              >
+                {servers.map((server) => (
+                  <li
+                    key={server}
+                    className="flex min-h-9 items-center gap-2 rounded-lg pr-1 pl-2.5 text-sm transition-colors hover:bg-accent/40"
+                  >
+                    <Server
+                      className="size-4 shrink-0 text-muted-foreground"
+                      strokeWidth={1.75}
+                      aria-hidden
+                    />
+                    <span className="min-w-0 flex-1 truncate font-mono text-[13px]" title={server}>
+                      {server}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={`${ui.portalSettings.fileServers.remove}: ${server}`}
+                      title={ui.portalSettings.fileServers.remove}
+                      disabled={update.isPending}
+                      onClick={() => remove(server)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="size-3.5" strokeWidth={1.75} />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <p className="mt-3 text-xs text-muted-foreground">{ui.portalSettings.fileServers.note}</p>
+        </div>
       </div>
     </div>
   );

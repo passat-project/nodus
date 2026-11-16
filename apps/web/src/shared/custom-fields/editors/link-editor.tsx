@@ -4,7 +4,7 @@ import { Input } from '@nodus/ui/components/input';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { CustomFieldValueView, refsById } from '../value-view.js';
-import { PathValueActions } from '../path-value.js';
+import { PathText, PathValueActions } from '../path-value.js';
 import { EditorError, EditorTrigger, editorInputClass, type EditorProps } from './editor-kit.js';
 
 /**
@@ -55,22 +55,24 @@ export function LinkEditor(props: EditorProps) {
   if (!editing) {
     // Путь — текст-триггер правки плюс действия РЯДОМ: кнопки внутри кнопки
     // запрещены, а «Открыть»/«Показать в папке» должны работать и без входа
-    // в режим правки (#558).
+    // в режим правки (#558). В карточке путь читается двумя строками
+    // («файл» + «папка»): одна строка в узкой колонке обрезала и имя, и
+    // сервер; подсказка «почему нельзя открыть» — видимой строкой под
+    // значением, а не иконкой ⓘ без наведения.
     if (linkKindOf(current) === 'path' && !props.disabled) {
+      const inline = props.variant === 'inline';
       return (
-        <div className="group/field flex min-w-0 items-center gap-1">
+        <span className="group/field grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
           <EditorTrigger
             variant={props.variant}
             disabled={props.disabled}
             ariaLabel={props.definition.name}
             onClick={() => setEditing(true)}
           >
-            <span className="truncate font-mono text-[13px]">
-              {current || ui.customFields.value.empty}
-            </span>
+            <PathText path={current || ui.customFields.value.empty} stacked={inline} />
           </EditorTrigger>
-          {current ? <PathValueActions path={current} /> : null}
-        </div>
+          {current ? <PathValueActions path={current} hint={inline ? 'text' : 'icon'} /> : null}
+        </span>
       );
     }
     return (

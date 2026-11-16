@@ -78,6 +78,16 @@ async function login(page) {
   return token;
 }
 
+/** Убрать транзиентный тост уведомлений из кадра (не часть экрана настроек). */
+async function clearToasts(page) {
+  await page.evaluate(
+    `(() => {
+      document.querySelectorAll('[data-sonner-toast]').forEach((node) => node.remove());
+      document.querySelectorAll('[aria-live="polite"][aria-label]').forEach((node) => node.remove());
+    })()`,
+  );
+}
+
 /** Идемпотентная подготовка демо-данных через живой API. */
 async function prepareDemo(page, token) {
   return page.evaluate(
@@ -149,13 +159,16 @@ for (const theme of ['light', 'dark']) {
 
   await page.getByRole('button', { name: 'Настройки' }).click();
   await page.waitForTimeout(400);
+  await clearToasts(page);
   await page.screenshot({ path: `${out}/00-settings-menu-${theme}.png` });
   await page.getByRole('menuitem', { name: uiSettingsTitle }).click();
   await page.waitForURL(/\/settings/, { timeout: 10000 });
   await page.waitForTimeout(1200);
+  await clearToasts(page);
   await page.screenshot({ path: `${out}/01-file-servers-${theme}.png` });
   await page.getByRole('button', { name: uiAccessTab }).click();
   await page.waitForTimeout(1200);
+  await clearToasts(page);
   await page.screenshot({ path: `${out}/03-access-${theme}.png` });
   await page.getByRole('button', { name: uiFileServersTab }).click();
   await page.waitForTimeout(500);
@@ -170,6 +183,7 @@ for (const theme of ['light', 'dark']) {
     await field.hover();
   }
   await page.waitForTimeout(500);
+  await clearToasts(page);
   await page.screenshot({ path: `${out}/02-path-value-shell-${theme}.png` });
 
   results.push({ theme, taskId, errors });
@@ -188,6 +202,7 @@ for (const theme of ['light', 'dark']) {
     await field.hover();
   }
   await page.waitForTimeout(500);
+  await clearToasts(page);
   await page.screenshot({ path: `${out}/04-path-browser-${theme}.png` });
   await ctx.close();
 }

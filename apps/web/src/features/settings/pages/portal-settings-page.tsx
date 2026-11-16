@@ -21,6 +21,11 @@ type SettingsSection = (typeof SECTIONS)[number]['id'];
  * #276 добавит остальные разделы и общую навигацию, #871 — «Компанию».
  * Вход — из меню «Настройки» левой рейки, доступ — право
  * `portal.settings.manage` (сервер проверяет сам, I8).
+ *
+ * Каркас — как у журналов: одна шапка страницы (h-14, без линии) и рабочая
+ * зона; разделы — вертикальный навигатор в мягкой раме. Два заголовка одного
+ * кегля (страница/раздел) конкурировали за точку входа — раздел помечается
+ * меткой `NodeLabel` на одной оси с его пунктом навигатора.
  */
 export function PortalSettingsPage() {
   const navigate = useNavigate();
@@ -40,41 +45,49 @@ export function PortalSettingsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0">
-      <aside className="flex w-64 shrink-0 flex-col gap-1 px-4 py-4">
-        <h1 className="px-2 pb-3 text-lg font-semibold text-foreground">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-14 shrink-0 items-center gap-3 px-6">
+        <h1 className="text-xl font-semibold text-balance text-foreground">
           {ui.portalSettings.title}
         </h1>
-        {SECTIONS.map((item) => {
-          const Icon = item.icon;
-          const active = item.id === section;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              aria-current={active ? 'page' : undefined}
-              onClick={() =>
-                void navigate({
-                  to: '/settings',
-                  search: (prev) => ({ ...prev, section: item.id }),
-                })
-              }
-              className={cn(
-                'flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-left text-sm font-medium transition-colors',
-                active
-                  ? 'bg-sidebar-accent text-foreground'
-                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-              )}
-            >
-              <Icon className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
-              <span className="truncate">{item.label}</span>
-            </button>
-          );
-        })}
-      </aside>
+      </div>
 
-      <div className="min-h-0 min-w-0 flex-1">
-        {section === 'access' ? <ModuleAccessMatrix module="settings" /> : <FileServersSection />}
+      <div className="flex min-h-0 flex-1">
+        <nav
+          aria-label={ui.portalSettings.title}
+          className="flex w-52 shrink-0 flex-col gap-0.5 px-3 pb-4"
+        >
+          {SECTIONS.map((item) => {
+            const Icon = item.icon;
+            const active = item.id === section;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-current={active ? 'page' : undefined}
+                onClick={() =>
+                  void navigate({
+                    to: '/settings',
+                    search: (prev) => ({ ...prev, section: item.id }),
+                  })
+                }
+                className={cn(
+                  'flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-left text-sm font-medium transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring/30',
+                  active
+                    ? 'bg-accent/80 text-foreground'
+                    : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
+                )}
+              >
+                <Icon className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+                <span className="truncate">{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="min-h-0 min-w-0 flex-1">
+          {section === 'access' ? <ModuleAccessMatrix module="settings" /> : <FileServersSection />}
+        </div>
       </div>
     </div>
   );

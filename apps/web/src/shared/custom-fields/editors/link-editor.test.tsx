@@ -76,7 +76,9 @@ describe('ссылка-путь в карточке (#558)', () => {
   it('в браузере — копирование и подсказка, действий открытия нет', () => {
     editor();
     expect(screen.getByRole('button', { name: ui.customFields.value.copyPath })).toBeTruthy();
-    expect(screen.getByRole('img', { name: ui.customFields.value.openInAppHint })).toBeTruthy();
+    // Подсказка в карточке — ВИДИМОЙ строкой под значением (не иконкой ⓘ):
+    // иконка без наведения не объясняла, почему файл не открывается.
+    expect(screen.getByText(ui.customFields.value.openInAppHint)).toBeTruthy();
     expect(screen.queryByRole('button', { name: ui.customFields.value.openPath })).toBeNull();
   });
 });
