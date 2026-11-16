@@ -9,7 +9,9 @@ WebSocket-gateway портала (I1: отдельный процесс): Socket
 
 - `pnpm dev` — `node --watch src/main.ts` (Node 24 исполняет TS напрямую, type stripping; поэтому относительные импорты — с `.ts`-расширением, tsc переписывает их на `.js` при сборке через `rewriteRelativeImportExtensions`).
 - `pnpm build && pnpm start` — прод-режим из `dist/`.
-- Порт: `GATEWAY_PORT` (по умолчанию 3002); проверка живости — `GET /health`.
+- Порт: `GATEWAY_PORT` (по умолчанию 3002); проверка живости — `GET /health`
+  (200/`ok`; 503/`unavailable` — нет соединения с Redis или чтение стрима не
+  удаётся дольше 30 с, AUD-021; порог согласован с healthcheck compose).
 - Env (zod на старте): `JWT_SECRET` (тот же, что у apps/api), `REDIS_URL`, `DATABASE_URL`. В docker-compose переменные пробрасываются сервису.
 
 ## Архитектура
@@ -23,6 +25,12 @@ WebSocket-gateway портала (I1: отдельный процесс): Socket
   api-conventions.md; seq = events.seq, глобальный порядок) по комнатам из
   payload (`route-envelope.ts`). Группа создаётся на `$` — историю не ретранслируем: клиент,
   пропустивший события, ресинхронизируется рефечем (сервер — истина).
+  **Потеря группы чтения лечится сама** (AUD-021): `NOGROUP` в цикле чтения
+  или обслуживания → группа пересоздаётся с позиции «новые» и доставка
+  продолжается без перезапуска контейнера. События за время простоя в
+  realtime не доставляются — клиент догонит рефечем при переподключении.
+  Health при этом честный: `/health` отдаёт 503, если чтение не удаётся
+  дольше 30 с (или нет соединения с Redis), и 200 после восстановления.
 - **ACK: poison — да, инфраструктурный сбой — нет (#810)**: битый JSON или
   неконтрактный envelope (`realtimeEnvelopeSchema`) логируется `warn`-ом и
   ACK-ается — ретрай не поможет, группа не блокируется. Ошибка доставки
@@ -120,12 +128,16 @@ emit для ВСЕХ событий (#328); доменные составы со
 
 - Unit (`pnpm test`): auth-верификатор, троттл typing, роутинг fanout
   (включая отключение сокетов деактивированного), обслуживание группы
-  (XAUTOCLAIM-перехват + GC сирот), presence-переходы, conv:join/leave
+  (XAUTOCLAIM-перехват + GC сирот), восстановление после `NOGROUP`
+  (пересоздание группы, доставка продолжается), `/health` по состоянию
+  потребителя (200/503), presence-переходы, conv:join/leave
   (членство, потолок, идемпотентность).
 - Integration (`pnpm test:integration`, живые PG/Redis): собственный контур —
   БД `nodus_gateway_test` с минимальным срезом читаемых таблиц, Redis — db 15
   (`@nodus/config/test-env`, громкий отказ при чужом db, #332); socket.io-client
-  против живого сервера; публикация в стрим XADD-ом contract-ного envelope.
+  против живого сервера; публикация в стрим XADD-ом contract-ного envelope;
+  удаление группы чтения `XGROUP DESTROY` → доставка возобновляется без
+  перезапуска (AUD-021).
   api-сторона публикации покрыта apps/api/test/integration/chat-realtime-fanout.
 - Нагрузка (k6 0.58, `docker run --rm grafana/k6:0.58.0`, из репо
   `MSYS_NO_PATHCONV=1`, api/gateway доступны как `host.docker.internal`):

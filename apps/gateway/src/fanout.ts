@@ -25,6 +25,11 @@ const MAINTENANCE_INTERVAL_MS = 30_000;
 const RECLAIM_MIN_IDLE_MS = 60_000;
 /** Consumer без pending и без попыток чтения 10 минут — сирота (живой BLOCK-reader — секунды). */
 const ORPHAN_IDLE_MS = 10 * 60_000;
+/** Порог деградации для `/health` (AUD-021): чтение потока не удаётся дольше
+ *  него — 503. Согласован с healthcheck gateway в docker-compose.yml
+ *  (interval 10s × retries 5 + start_period 10s): 503 успевает перевести
+ *  контейнер в unhealthy, а краткий сбой Redis короче порога рестарта не даёт. */
+const UNHEALTHY_READ_MS = 30_000;
 
 export interface ChatEventsConsumerOptions {
   /** Имя consumer group (по умолчанию nodus:gateway); тесты подставляют своё. */
@@ -34,6 +39,11 @@ export interface ChatEventsConsumerOptions {
 function logError(scope: string, error: unknown): void {
   // TODO(core): структурное логирование (pino) — issue #2/#3.
   console.error(`[gateway] ${scope}:`, error);
+}
+
+/** NOGROUP — группа/стрим чтения исчезли (Redis-ошибка XREADGROUP). */
+function isNoGroupError(error: unknown): boolean {
+  return /NOGROUP/i.test(error instanceof Error ? error.message : String(error));
 }
 
 /**
@@ -57,6 +67,8 @@ export class ChatEventsConsumer {
   private readonly consumerName: string;
   private running = false;
   private lastMaintenanceAt = 0;
+  /** Момент первого неудачного чтения подряд (AUD-021): null — чтение живо. */
+  private failingSince: number | null = null;
 
   constructor(
     redis: Redis,
@@ -75,6 +87,28 @@ export class ChatEventsConsumer {
     if (this.running) {
       return;
     }
+    await this.ensureGroup();
+    this.running = true;
+    void this.loop();
+  }
+
+  async stop(): Promise<void> {
+    this.running = false;
+  }
+
+  /**
+   * Здоровье доставки для `/health` (AUD-021, #866): 503, когда нет соединения
+   * с Redis или чтение потока не удаётся дольше порога. Успешное чтение
+   * (включая пустой BLOCK-таймаут) сбрасывает счётчик — после восстановления
+   * health снова 200 без перезапуска.
+   */
+  isHealthy(now = Date.now()): boolean {
+    if (this.redis.status !== 'ready') return false;
+    return this.failingSince === null || now - this.failingSince < UNHEALTHY_READ_MS;
+  }
+
+  /** Создание группы идемпотентно: BUSYGROUP — другой consumer уже создал. */
+  private async ensureGroup(): Promise<void> {
     try {
       await this.redis.xgroup('CREATE', DOMAIN_EVENTS_STREAM, this.group, '$', 'MKSTREAM');
     } catch (error) {
@@ -82,12 +116,22 @@ export class ChatEventsConsumer {
         throw error;
       }
     }
-    this.running = true;
-    void this.loop();
   }
 
-  async stop(): Promise<void> {
-    this.running = false;
+  /**
+   * Пересоздание потерянной группы чтения (NOGROUP: потеря тома Redis, ручной
+   * сброс, восстановление из копии) — без него gateway навсегда молчал бы при
+   * зелёном health. Позиция «новые»: события за время простоя в realtime не
+   * доставляются, клиент догонит рефечем при переподключении (осознанно,
+   * AUD-021). Сбой пересоздания логируется — health уйдёт в 503 по порогу.
+   */
+  private async recreateGroup(): Promise<void> {
+    console.warn(`[gateway] consumer group ${this.group} lost (NOGROUP) — recreating`);
+    try {
+      await this.ensureGroup();
+    } catch (error) {
+      logError('group recreate', error);
+    }
   }
 
   /**
@@ -116,40 +160,67 @@ export class ChatEventsConsumer {
         console.warn(`[gateway] orphan consumers removed: ${removed.join(', ')}`);
       }
     } catch (error) {
-      logError('stream maintenance', error);
+      if (isNoGroupError(error)) {
+        // Группа исчезла — обслуживание без неё бессмысленно, пересоздаём.
+        await this.recreateGroup();
+      } else {
+        logError('stream maintenance', error);
+      }
+    }
+  }
+
+  /**
+   * Один цикл чтения: обслуживание группы по таймеру + пачка XREADGROUP.
+   * true — чтение состоялось (включая пустой BLOCK), false — сбой (цикл
+   * повторит после паузы). Публичен ради unit-теста восстановления группы
+   * (AUD-021); в проде вызывается только из loop.
+   */
+  async pollOnce(): Promise<boolean> {
+    if (Date.now() - this.lastMaintenanceAt >= MAINTENANCE_INTERVAL_MS) {
+      await this.runMaintenance();
+    }
+    try {
+      const result = (await this.redis.xreadgroup(
+        'GROUP',
+        this.group,
+        this.consumerName,
+        'COUNT',
+        CONSUMER_BATCH,
+        'BLOCK',
+        CONSUMER_BLOCK_MS,
+        'STREAMS',
+        DOMAIN_EVENTS_STREAM,
+        '>',
+      )) as [string, [string, string[]][]][] | null;
+      this.failingSince = null;
+      if (!result) {
+        return true; // BLOCK истёк без записей
+      }
+      const entries = result[0]?.[1] ?? [];
+      for (const [id, fields] of entries) {
+        await this.processEntry(id, fields);
+      }
+      return true;
+    } catch (error) {
+      if (isNoGroupError(error)) {
+        // Потеря группы лечится сама: пересоздаём и продолжаем доставку.
+        await this.recreateGroup();
+      } else {
+        logError('stream consumer', error);
+      }
+      // Дата первого сбоя подряд — для порога /health; успешное чтение сбросит.
+      this.failingSince ??= Date.now();
+      return false;
     }
   }
 
   private async loop(): Promise<void> {
     while (this.running) {
-      if (Date.now() - this.lastMaintenanceAt >= MAINTENANCE_INTERVAL_MS) {
-        await this.runMaintenance();
-      }
-      try {
-        const result = (await this.redis.xreadgroup(
-          'GROUP',
-          this.group,
-          this.consumerName,
-          'COUNT',
-          CONSUMER_BATCH,
-          'BLOCK',
-          CONSUMER_BLOCK_MS,
-          'STREAMS',
-          DOMAIN_EVENTS_STREAM,
-          '>',
-        )) as [string, [string, string[]][]][] | null;
-        if (!result) {
-          continue; // BLOCK истёк без записей
-        }
-        const entries = result[0]?.[1] ?? [];
-        for (const [id, fields] of entries) {
-          await this.processEntry(id, fields);
-        }
-      } catch (error) {
+      const ok = await this.pollOnce();
+      if (!ok) {
         if (!this.running) {
           return;
         }
-        logError('stream consumer', error);
         await sleep(RETRY_DELAY_MS);
       }
     }
