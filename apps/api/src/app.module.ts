@@ -15,6 +15,7 @@ import { RedisModule } from './core/redis/redis.module.js';
 import { HealthModule } from './health/health.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard.js';
+import { AssistantModule } from './modules/assistant/assistant.module.js';
 import { ChatFileAccessModule } from './modules/chat/file-access/chat-file-access.module.js';
 import { ChatModule } from './modules/chat/chat.module.js';
 import { CorrespondenceModule } from './modules/correspondence/correspondence.module.js';
@@ -43,6 +44,9 @@ import { WorkflowsModule } from './modules/workflows/workflows.module.js';
     AuditModule,
     HealthModule,
     AuthModule,
+    // ИИ-агент (#889, ADR-0043/0044): за флагом `assistant` и правом
+    // `assistant.use`; инструменты — вызовы API портала от имени сотрудника.
+    AssistantModule,
     FilesModule,
     ChatModule,
     // Права chat на файлы для движка просмотра (#138, I13): @Global-мост

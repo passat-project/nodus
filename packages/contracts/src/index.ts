@@ -90,3 +90,6 @@ export * from './notifications/notification-events.js';
 export * from './desktop/desktop-config.schema.js';
 export * from './desktop/desktop-bridge.schema.js';
 export * from './settings/file-servers.schema.js';
+export * from './assistant/assistant-limits.js';
+export * from './assistant/assistant.schemas.js';
+export * from './assistant/ai-settings.schemas.js';
