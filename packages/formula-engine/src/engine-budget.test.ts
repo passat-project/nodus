@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FormulaNode } from '@nodus/contracts';
+import { FORMULA_LIMITS, type FormulaNode } from '@nodus/contracts';
 
 import { evaluate } from './index.js';
 import { lit, op, resolver, self } from './test-kit.js';
@@ -65,12 +65,24 @@ describe('evaluate: бюджет вычисления', () => {
     expect(beyond.error?.code).toBe('evaluation_limit');
   });
 
-  it('4 вложенных СКОЛЬКО на выборке 500 — ошибка бюджета быстрее 200 мс', () => {
+  it('4 вложенных СКОЛЬКО на выборке 500 — ошибка бюджета, работа ограничена бюджетом', () => {
     const data = resolver({ selections: { subtasks: records(500) } });
-    const started = performance.now();
-    const result = evaluate(nestedCount(4), data);
-    const elapsed = performance.now() - started;
+    // Детерминированная мера работы — число вычисленных агрегатов (вызовов
+    // select): без бюджета оно росло бы как 500^вложенность (минуты), с
+    // бюджетом не превышает лимит узлов. Wall-clock «быстрее 200 мс» на
+    // CI-раннере под v8-coverage непостоянен (542 мс против 3 мс локально) —
+    // миллисекундные замеры по канону живут в perf-прогоне вне блокирующего
+    // CI (AGENTS.md, «Тесты»); здесь проверяется само ограничение работы.
+    let aggregates = 0;
+    const counted: typeof data = {
+      single: (source) => data.single(source),
+      select: (from) => {
+        aggregates += 1;
+        return data.select(from);
+      },
+    };
+    const result = evaluate(nestedCount(4), counted);
     expect(result.error?.code).toBe('evaluation_limit');
-    expect(elapsed).toBeLessThan(200);
+    expect(aggregates).toBeLessThanOrEqual(FORMULA_LIMITS.evaluationNodes);
   });
 });
