@@ -32,24 +32,26 @@ beforeEach(() => {
 });
 
 describe('ui-prefs-store: скоупы навигации', () => {
-  it('applyNav без forAll пишет ЛИЧНЫЙ скоуп, общий не трогает', () => {
-    useUiPrefsStore.getState().applyNav(['tasks', 'home'], ['chat'], false);
+  it('applyNav пишет ЛИЧНЫЙ скоуп, общий не трогает', () => {
+    useUiPrefsStore.getState().applyNav(['tasks', 'home'], ['chat']);
     const s = useUiPrefsStore.getState();
     expect(s.personal.navOrder).toEqual(['tasks', 'home']);
     expect(s.personal.navHidden).toEqual(['chat']);
     expect(s.company.navOrder).toBeUndefined();
   });
 
-  it('applyNav с forAll («Применить для всех», админ) пишет ОБЩИЙ скоуп', () => {
-    useUiPrefsStore.getState().applyNav(['chat', 'home'], [], true);
+  it('applyNav не пишет в company и не перезаписывает ранее сохранённое «общее»', () => {
+    // Legacy-значение «для всех» из прежней версии: не применяется и не меняется.
+    useUiPrefsStore.setState({ company: { navOrder: ['chat'] } });
+    useUiPrefsStore.getState().applyNav(['tasks', 'home'], []);
     const s = useUiPrefsStore.getState();
-    expect(s.company.navOrder).toEqual(['chat', 'home']);
-    expect(s.personal.navOrder).toBeUndefined();
+    expect(s.personal.navOrder).toEqual(['tasks', 'home']);
+    expect(s.company.navOrder).toEqual(['chat']);
   });
 
-  it('resetPersonal сбрасывает только личный слой (общий остаётся)', () => {
-    useUiPrefsStore.getState().applyNav(['tasks'], [], true);
-    useUiPrefsStore.getState().applyNav(['home'], ['letters'], false);
+  it('resetPersonal сбрасывает только личный слой (legacy-общий остаётся как есть)', () => {
+    useUiPrefsStore.setState({ company: { navOrder: ['tasks'] } });
+    useUiPrefsStore.getState().applyNav(['home'], ['letters']);
     useUiPrefsStore.getState().resetPersonal();
     const s = useUiPrefsStore.getState();
     expect(s.personal).toEqual({});

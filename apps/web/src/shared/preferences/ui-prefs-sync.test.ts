@@ -69,7 +69,7 @@ describe('ui-prefs-sync: гидратация не затирает неотпр
     startPreferencesSync();
     await Promise.resolve();
 
-    useUiPrefsStore.getState().applyNav(['local'], [], false);
+    useUiPrefsStore.getState().applyNav(['local'], []);
     resolveGet?.({ preferences: { navOrder: ['server'] }, updatedAt: new Date().toISOString() });
     await vi.advanceTimersByTimeAsync(0);
 
