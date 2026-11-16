@@ -12,7 +12,7 @@ import { tasksKeys } from '../../../shared/api/tasks-keys.js';
  *  открытая из списка, обязана находиться в контексте. */
 export function useAssistantTasks() {
   return useQuery({
-    queryKey: [...tasksKeys.all, 'assistant-context'],
+    queryKey: tasksKeys.assistantContext(),
     queryFn: () => api<Paginated<TaskListItem>>('/tasks?view=list&scope=all&limit=100'),
   });
 }

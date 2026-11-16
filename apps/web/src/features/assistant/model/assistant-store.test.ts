@@ -95,13 +95,20 @@ describe('стор диалога ассистента', () => {
   it('thinking не показывается в чужой сессии при переключении', () => {
     useAssistantStore.getState().newSession();
     const a = useAssistantStore.getState().activeId!;
-    useAssistantStore.getState().send('вопрос', 'ответ');
     useAssistantStore.getState().newSession();
     const b = useAssistantStore.getState().activeId!;
+    // Живой think в сессии A (без newSession-сброса): переключение на B не
+    // должно показывать точки набора в B — производный thinking тела
+    // (thinkingId === activeId) обязан быть false для B и true для A.
     useAssistantStore.getState().setActive(a);
-    // think шёл в сессии a до нового диалога; после newSession think сброшен.
-    expect(useAssistantStore.getState().thinkingId).toBeNull();
+    useAssistantStore.getState().send('вопрос', 'ответ');
+    expect(useAssistantStore.getState().thinkingId).toBe(a);
     useAssistantStore.getState().setActive(b);
-    expect(useAssistantStore.getState().thinkingId).toBeNull();
+    const s = useAssistantStore.getState();
+    expect(s.thinkingId).toBe(a);
+    expect(s.thinkingId !== null && s.thinkingId === s.activeId).toBe(false);
+    useAssistantStore.getState().setActive(a);
+    const s2 = useAssistantStore.getState();
+    expect(s2.thinkingId !== null && s2.thinkingId === s2.activeId).toBe(true);
   });
 });
