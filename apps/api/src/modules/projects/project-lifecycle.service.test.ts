@@ -28,7 +28,13 @@ function row(overrides: Record<string, unknown> = {}) {
 }
 
 describe('ProjectLifecycleService (#52: статусы и передача, Т5/Т6)', () => {
-  const repo = { update: vi.fn(), touch: vi.fn() };
+  const repo = {
+    update: vi.fn(),
+    touch: vi.fn(),
+    // Гард по свежей строке под FOR UPDATE (#866, AUD-013).
+    lockForUpdate: vi.fn(),
+    findById: vi.fn(),
+  };
   const participantsRepo = { rowsOfProject: vi.fn(), add: vi.fn() };
   const members = { syncManagement: vi.fn() };
   const queries = { detail: vi.fn() };
@@ -42,6 +48,9 @@ describe('ProjectLifecycleService (#52: статусы и передача, Т5/
     vi.clearAllMocks();
     projects.loadForManage.mockResolvedValue({ row: row() });
     repo.update.mockResolvedValue(row());
+    // Свежая строка под замком по умолчанию совпадает со снимком.
+    repo.lockForUpdate.mockResolvedValue({ id: ID, visibility: 'open', status: 'active' });
+    repo.findById.mockResolvedValue(row());
     participantsRepo.rowsOfProject.mockResolvedValue([]);
     profiles.filterActiveUserIds.mockImplementation(async (ids: string[]) => ids);
     queries.detail.mockResolvedValue({ id: ID });
@@ -86,6 +95,8 @@ describe('ProjectLifecycleService (#52: статусы и передача, Т5/
 
     it('возврат из архива — только руководитель или project.manage (помощник → 403)', async () => {
       projects.loadForManage.mockResolvedValue({ row: row({ status: 'archived' }) });
+      // Гард — по свежей строке под FOR UPDATE: там тоже архив (#866, AUD-013).
+      repo.findById.mockResolvedValue(row({ status: 'archived' }));
       await expect(service.setStatus(user(HELPER), ID, 'active')).rejects.toMatchObject({
         code: ErrorCode.FORBIDDEN,
       });
@@ -172,6 +183,51 @@ describe('ProjectLifecycleService (#52: статусы и передача, Т5/
       await expect(service.transfer(user(MANAGER), ID, HIP)).rejects.toMatchObject({
         code: ErrorCode.NOT_FOUND,
       });
+    });
+  });
+
+  describe('гард по свежей строке под FOR UPDATE (#866, AUD-013)', () => {
+    it('setStatus: снимок «активный», а под замком проект уже архивирован — помощник получает 403', async () => {
+      // Снимок до транзакции: активный проект. Параллельный запрос успел
+      // архивировать его до нашего замка — возвращать в работу помощнику нельзя.
+      repo.findById.mockResolvedValue(row({ status: 'archived' }));
+      await expect(service.setStatus(user(HELPER), ID, 'completed')).rejects.toMatchObject({
+        code: ErrorCode.FORBIDDEN,
+      });
+      expect(repo.lockForUpdate).toHaveBeenCalledWith({}, ID);
+      expect(repo.update).not.toHaveBeenCalled();
+      expect(eventBus.emit).not.toHaveBeenCalled();
+    });
+
+    it('setStatus: повтор статуса уже применён параллельным запросом — без записи и события', async () => {
+      repo.findById.mockResolvedValue(row({ status: 'archived' }));
+      await service.setStatus(user(MANAGER), ID, 'archived');
+      expect(repo.update).not.toHaveBeenCalled();
+      expect(eventBus.emit).not.toHaveBeenCalled();
+    });
+
+    it('setStatus: актёра сняли с руководства параллельной передачей — 403', async () => {
+      // Снимок: MANAGER — руководитель; под замком руководство уже у HIP.
+      repo.findById.mockResolvedValue(row({ managerId: HIP, assistantIds: [] }));
+      await expect(service.setStatus(user(MANAGER), ID, 'completed')).rejects.toMatchObject({
+        code: ErrorCode.FORBIDDEN,
+      });
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('transfer: руководство уже передано параллельным запросом — прежний РП получает 403', async () => {
+      repo.findById.mockResolvedValue(row({ managerId: HIP }));
+      await expect(service.transfer(user(MANAGER), ID, HELPER)).rejects.toMatchObject({
+        code: ErrorCode.FORBIDDEN,
+      });
+      expect(repo.update).not.toHaveBeenCalled();
+      expect(members.syncManagement).not.toHaveBeenCalled();
+    });
+
+    it('transfer: помощники вырезаются из свежей строки, а не из снимка', async () => {
+      repo.findById.mockResolvedValue(row({ assistantIds: [HELPER, HIP] }));
+      await service.transfer(user(MANAGER), ID, HIP);
+      expect(repo.update).toHaveBeenCalledWith({}, ID, { managerId: HIP, assistantIds: [HELPER] });
     });
   });
 });
