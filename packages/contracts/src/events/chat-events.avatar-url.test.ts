@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ChatMessage } from '../chat/chat.schemas.js';
 
 import { messageSchema } from '../chat/chat.schemas.js';
 import { conversationListItemSchema } from '../chat/chat.schemas.js';
@@ -19,7 +20,7 @@ const MSG = '44444444-4444-4444-8444-444444444444';
 
 const ref = (avatarUrl: string | null) => ({ id: USER, displayName: 'Иван Петров', avatarUrl });
 
-function message(avatarUrl: string | null) {
+function message(avatarUrl: string | null): ChatMessage {
   return {
     id: MSG,
     conversationId: CONV,
