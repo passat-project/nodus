@@ -79,6 +79,9 @@ export const assistantMessageSchema = z.object({
   id: z.uuid(),
   role: assistantRoleSchema,
   text: z.string(),
+  /** Размышления модели (reasoning): скрыты под шевроном, по умолчанию
+   *  свёрнуты — читаются по желанию («полутоны» решения). */
+  reasoning: z.string().nullable(),
   createdAt: z.iso.datetime(),
   /** Прогон, породивший сообщение ассистента (для «Повторить»/SSE). */
   runId: z.uuid().nullable(),
@@ -106,11 +109,13 @@ export const assistantSessionListSchema = z.object({
   items: z.array(assistantSessionSchema),
   nextCursor: z.string().min(1).nullable(),
 });
+export type AssistantSessionList = z.infer<typeof assistantSessionListSchema>;
 
 export const assistantMessageListSchema = z.object({
   items: z.array(assistantMessageSchema),
   nextCursor: z.string().min(1).nullable(),
 });
+export type AssistantMessageList = z.infer<typeof assistantMessageListSchema>;
 
 export const createAssistantSessionBodySchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -164,6 +169,7 @@ export type AssistantRun = z.infer<typeof assistantRunSchema>;
 export const assistantRunEventTypeSchema = z.enum([
   'run.started',
   'message.delta',
+  'reasoning.delta',
   'tool.started',
   'tool.finished',
   'message.completed',
@@ -181,6 +187,7 @@ export const assistantRunEventDataSchema = z.discriminatedUnion('type', [
     model: z.string().nullable(),
   }),
   z.object({ type: z.literal('message.delta'), text: z.string() }),
+  z.object({ type: z.literal('reasoning.delta'), text: z.string() }),
   z.object({
     type: z.literal('tool.started'),
     toolCallId: z.uuid(),
@@ -199,7 +206,12 @@ export const assistantRunEventDataSchema = z.discriminatedUnion('type', [
     href: z.string().nullable(),
     hrefLabel: z.string().nullable(),
   }),
-  z.object({ type: z.literal('message.completed'), messageId: z.uuid(), text: z.string() }),
+  z.object({
+    type: z.literal('message.completed'),
+    messageId: z.uuid(),
+    text: z.string(),
+    reasoning: z.string().nullable(),
+  }),
   z.object({
     type: z.literal('run.completed'),
     inputTokens: z.number().int().nonnegative().nullable(),

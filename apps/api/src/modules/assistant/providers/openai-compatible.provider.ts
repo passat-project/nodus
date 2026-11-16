@@ -50,6 +50,10 @@ interface ChatChunk {
     index?: number;
     delta?: {
       content?: string | null;
+      /** Размышления модели: OpenRouter/DeepSeek шлют `reasoning`,
+       *  vLLM и часть локальных — `reasoning_content`. */
+      reasoning?: string | null;
+      reasoning_content?: string | null;
       tool_calls?: {
         index?: number;
         id?: string;
@@ -110,6 +114,8 @@ export class OpenAiCompatibleProvider implements LlmProvider {
       }
       for (const choice of chunk.choices ?? []) {
         const delta = choice.delta;
+        const reasoning = delta?.reasoning ?? delta?.reasoning_content;
+        if (reasoning) events.push({ type: 'reasoning.delta', text: reasoning });
         if (delta?.content) events.push({ type: 'text.delta', text: delta.content });
         for (const part of delta?.tool_calls ?? []) {
           const index = part.index ?? 0;

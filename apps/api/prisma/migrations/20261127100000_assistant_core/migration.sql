@@ -29,6 +29,7 @@ CREATE TABLE "assistant_messages" (
     "run_id" UUID,
     "role" TEXT NOT NULL,
     "text" TEXT NOT NULL DEFAULT '',
+    "reasoning" TEXT,
     "error_code" TEXT,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 

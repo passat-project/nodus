@@ -2220,6 +2220,8 @@ model AssistantMessage {
   runId String? @map("run_id") @db.Uuid
   role String
   text String @default("")
+  /// Размышления модели (reasoning): показываются под шевроном, свёрнуты.
+  reasoning String?
   /// Ответ оборван ошибкой прогона: лента рисует пометку и «Повторить».
   errorCode String? @map("error_code")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()

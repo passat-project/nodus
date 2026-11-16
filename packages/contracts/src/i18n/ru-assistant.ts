@@ -34,6 +34,11 @@ export const assistantStrings = {
   toolError: 'Ошибка',
   /** Свёрнутая строка вызова в ленте. */
   toolsSummary: 'Действия',
+  /** Размышления модели — под шевроном, свёрнуты по умолчанию. */
+  reasoningTitle: 'Размышления',
+  reasoningShow: 'Показать размышления',
+  reasoningHide: 'Скрыть размышления',
+  reasoningEmpty: 'Модель не прислала размышлений',
   /** Состояния и ошибки. */
   streamInterrupted: 'Ответ прерван',
   cancelled: 'Остановлено',
