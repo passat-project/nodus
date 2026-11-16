@@ -46,6 +46,8 @@ export interface LlmChatRequest {
 /** Нормализованные события потока: движок не знает формат провайдера. */
 export type LlmStreamEvent =
   | { type: 'text.delta'; text: string }
+  /** Размышления модели (reasoning/thinking) — отдельный канал, не ответ. */
+  | { type: 'reasoning.delta'; text: string }
   | { type: 'tool_call'; call: LlmToolCall }
   | { type: 'usage'; inputTokens: number | null; outputTokens: number | null }
   | { type: 'done'; finishReason: string | null };
