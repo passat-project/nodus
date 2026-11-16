@@ -364,11 +364,21 @@ mod tests {
     }
 
     #[test]
-    fn rejects_foreign_share_and_bad_grammar() {
+    fn rejects_foreign_share() {
+        // Грамматика верна, но пара «сервер\папка» не разрешена администратором.
+        for path in ["\\\\FS02\\Projects\\план.pdf", "\\\\FS01\\Secret\\план.pdf"] {
+            assert_eq!(
+                validate_unc_path(path, &servers()),
+                Err("server_not_allowed"),
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_bad_grammar() {
         for path in [
             "https://example.com/план.pdf",
-            "\\\\FS02\\Projects\\план.pdf",
-            "\\\\FS01\\Secret\\план.pdf",
             "\\\\FS01\\Projects\\..\\Secret\\план.pdf",
             "\\\\FS01\\Projects\\.\\.hidden.pdf",
             "\\\\FS01\\Projects\\план\u{0}.pdf",
