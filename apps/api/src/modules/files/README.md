@@ -102,8 +102,11 @@ fileAccessContext` (`chat`, `letter`), DiscoveryService находит его с
   сохранено» и подтверждается.
   `GET /files/office-config` —
   публичные параметры движка (фолбэки реестра); `GET /files/:id/versions` —
-  история с подписанными ссылками. Правка — только при `OFFICE_EDIT_ENABLED`
-  И праве И редактируемом формате (таблица `contracts/files/office-formats`).
+  история с подписанными ссылками. Правка — при `OFFICE_EDIT_ENABLED`
+  (умолчание включено, `${OFFICE_EDIT_ENABLED:-true}` в `docker-compose.yml`)
+  И праве И редактируемом формате (таблица `contracts/files/office-formats`);
+  правит **любой участник беседы** — правило продукта, решение владельца
+  2026-11-16 (AUD-035).
 - **Учётка**: `minio-init` (compose) создаёт бакет и сервисного пользователя
   `nodus-api` с политикой только на свой бакет (клиент форка — `mcli`,
   mc-совместимый): объекты + `HeadBucket`/`Location` + `ListBucket` и
@@ -134,7 +137,8 @@ skippedFresh/skippedUnknownAge/failed` (`storage/stale-multipart.sweeper.ts`).
 `STORAGE_URL_SECRET` (≥32, ≠ JWT_SECRET), `STORAGE_URL_TTL_SECONDS` (86400),
 `STORAGE_STALE_UPLOAD_AGE_HOURS` (24 — порог возраста брошенной загрузки),
 `STORAGE_STALE_UPLOAD_INTERVAL_HOURS` (24 — период прохода уборки).
-Офис (#138): `OFFICE_ENABLED` (default false), `OFFICE_EDIT_ENABLED`,
+Офис (#138): `OFFICE_ENABLED` (default false), `OFFICE_EDIT_ENABLED`
+(default true — правит любой участник беседы),
 `OFFICE_JWT_SECRET` (обязателен при enabled), `OFFICE_INTERNAL_URL`
 (api→DS, в docker `http://documentserver`), `OFFICE_API_INTERNAL_URL`
 (DS→api, в docker `http://nodus-api:3001`), `OFFICE_MAX_VIEW_BYTES` (50 МБ).
