@@ -34,12 +34,12 @@ export const viewsEnvelopeSchema = z.object({
   sorts: z.record(z.string(), viewSortSchema).catch({}),
 });
 
-/** Каркас (тема + служебная полоса + свёрнутость меню): сломанное поле →
- *  дефолт поля. Старый envelope без `menuCollapsed` валиден и даёт развёрнутое
- *  меню — продуктовый дефолт первого запуска (#722). */
+/** Каркас (тема + свёрнутость меню): сломанное поле → дефолт поля. Старый
+ *  envelope без `menuCollapsed` валиден и даёт развёрнутое меню — продуктовый
+ *  дефолт первого запуска (#722); легаси-поле `edgeOpen` (раскрытие полосы
+ *  имён, заменено панелью ассистента) молча отбрасывается. */
 export const shellEnvelopeSchema = z.object({
   theme: z.enum(['dark', 'light']).catch('light'),
-  edgeOpen: z.boolean().catch(false),
   menuCollapsed: z.boolean().catch(false),
 });
 

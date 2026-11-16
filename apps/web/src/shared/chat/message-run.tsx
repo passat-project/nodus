@@ -49,9 +49,10 @@ export function MessageRunView({
   dividerBeforeId = null,
   divider,
   renderItem,
+  renderAvatar,
 }: {
   run: MessageRun;
-  /** Показывать имя автора в первом пузыре (чужие серии в групповых чатах). */
+  /** Показывать имя автора в первом пузыре (чужие серии в групповых). */
   showName: boolean;
   /** Вертикальный ритм серии: 'chat' — пузыри слипаются в блок (2px, канон
    *  чатов); 'feed' — посты канала 6px (вердикт 01.10 #175: 2px между
@@ -65,6 +66,9 @@ export function MessageRunView({
   /** Строка сообщения: обёртки хоста (скроллер/меню/выбор) + ChatMessageItem
    *  с attrs; аватар и колонку серии рисует эта компонента (avatarSlot="none"). */
   renderItem: (message: MessageRun['items'][number], attrs: MessageRunItemAttrs) => ReactNode;
+  /** Замена аватара серии для не-человеческих авторов (ИИ-ассистент): хост
+   *  рисует свой глиф вместо карточки сотрудника; дефолт — MessageAuthorAvatar. */
+  renderAvatar?: (run: MessageRun) => ReactNode;
 }) {
   // Разделитель считается строкой только когда он ДЕЙСТВИТЕЛЬНО внутри этой
   // серии (firstUnreadId — глобальный по ленте): лишняя строка сдвинула бы
@@ -92,7 +96,11 @@ export function MessageRunView({
         style={{ gridColumn: atEnd ? 2 : 1, gridRow: `1 / ${rowCount + 1}` }}
       >
         {/* Аватар серии (#728): у чужой — кнопка карточки сотрудника. */}
-        <MessageAuthorAvatar author={run.last.author} mine={run.mine} />
+        {renderAvatar ? (
+          renderAvatar(run)
+        ) : (
+          <MessageAuthorAvatar author={run.last.author} mine={run.mine} />
+        )}
       </div>
       {run.items.map((message) => {
         const dividerHere = message.id === dividerBeforeId;

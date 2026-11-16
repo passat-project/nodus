@@ -87,7 +87,9 @@ export function TopBar() {
                   : 'text-muted-foreground hover:text-foreground/80',
               )}
             >
-              <span data-tab-label>{tab.label}</span>
+              <span data-tab-label className="whitespace-nowrap">
+                {tab.label}
+              </span>
               <TabUnreadBadge count={tabCount(module?.id, tab.id)} />
             </Link>
           ))
