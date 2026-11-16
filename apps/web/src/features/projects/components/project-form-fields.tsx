@@ -1,4 +1,4 @@
-﻿import { Plus, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import type { CounterpartyRef, CustomFieldRef, ProjectVisibility } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';

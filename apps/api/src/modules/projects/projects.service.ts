@@ -1,4 +1,4 @@
-﻿/* eslint-disable nodus-internal/max-lines-warn -- создание проекта (#630): место счёта и запись — одна транзакция */
+/* eslint-disable nodus-internal/max-lines-warn -- создание проекта (#630): место счёта и запись — одна транзакция */
 import { Inject, Injectable } from '@nestjs/common';
 import {
   customFieldKey,

@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { ProjectDetail, ProjectGroup, ProjectListItem, UserRef } from '@nodus/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

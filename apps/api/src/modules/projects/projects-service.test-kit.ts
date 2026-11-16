@@ -1,4 +1,4 @@
-﻿import { vi, type Mock } from 'vitest';
+import { vi, type Mock } from 'vitest';
 import { SYSTEM_FIELD_IDS, type AuthUser } from '@nodus/contracts';
 
 import type { ProjectRow } from './projects.repository.js';

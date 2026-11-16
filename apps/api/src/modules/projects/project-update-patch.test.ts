@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ErrorCode, SYSTEM_FIELD_IDS, type AuthUser } from '@nodus/contracts';
 
 import { buildUpdatePatch } from './project-update-patch.js';

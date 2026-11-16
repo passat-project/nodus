@@ -1608,7 +1608,6 @@ model ProjectGroup {
   name       String
   /// Создатель портфеля — plain UUID без FK (справочник directory, I3).
   creatorId  String    @map("creator_id") @db.Uuid
-  archivedAt DateTime? @map("archived_at") @db.Timestamptz()
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
 

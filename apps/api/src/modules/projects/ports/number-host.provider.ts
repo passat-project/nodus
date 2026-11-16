@@ -1,4 +1,4 @@
-﻿/* eslint-disable nodus-internal/max-lines-warn -- носители «проект/папка» (#630): место, имена и запись номера — один адаптер */
+/* eslint-disable nodus-internal/max-lines-warn -- носители «проект/папка» (#630): место, имена и запись номера — один адаптер */
 import { Inject, Injectable } from '@nestjs/common';
 import {
   PROJECT_EVENTS,

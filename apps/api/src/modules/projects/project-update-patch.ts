@@ -1,4 +1,4 @@
-﻿import type { AuthUser, CustomFieldValues, UpdateProjectBody } from '@nodus/contracts';
+import type { AuthUser, CustomFieldValues, UpdateProjectBody } from '@nodus/contracts';
 import {
   clearedProjectFields,
   customFieldKey,
