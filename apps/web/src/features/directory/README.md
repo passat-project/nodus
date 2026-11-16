@@ -72,7 +72,8 @@
   проекты активация не возвращает, сессии не восстанавливаются (вход заново).
   **Правая зона**
   (`components/employee-card-work-tabs.tsx`) — журналы Задачи
-  (`GET /tasks?assigneeId=`) и Проекты (`GET /projects?memberId=`) со
+  (`GET /tasks?assigneeId=&scope=all`) и Проекты
+  (`GET /projects?memberId=&scope=all`) со
   счётчиками: ПОЛНОЦЕННЫЕ журналы на shared-реестрах
   (`useTaskTableFields()` / `useProjectTableFields()`, ключи видов
   `directory.tasks` / `directory.projects`) — шапка вкладки-списка
@@ -105,7 +106,9 @@
   оптимистичные вставка/патч узла кэша) с unit-тестами.
 - Связи сотрудника — `shared/api/user-relations.ts` (`useAssigneeTasks`,
   `useMemberProjects`): I6 запрещает фичам импортировать друг друга, поэтому
-  хуки на публичные list-ресурсы — в shared-слое.
+  хуки на публичные list-ресурсы — в shared-слое. Обе вкладки передают
+  `scope=all`: показываются все задачи/проекты сотрудника, видимые смотрящему
+  по правилам видимости, а не пересечение с его личным участием (#866, AUD-028).
 - Контракты: `UserListItem` (+`departmentId`/`legalDepartmentId` — принадлежность
   обеим структурам, `positionId`/`legalPositionId` — для отчёта проверки данных),
   `UserCard` (полный профиль), `PresenceEntry`, `DepartmentNode`/

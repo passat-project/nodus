@@ -70,7 +70,8 @@ master-данных внешних организаций — рейка без 
     (моки dev-контура) или счётчик не пуст: до #55/#52 в живом контуре
     запроса к несуществующему API нет. Хуки — `shared/api/letters-list.ts`
     (`?counterpartyId=`) и `shared/api/counterparty-relations.ts`
-    (`?clientId=`).
+    (`?clientId=&scope=all` — все проекты заказчика, видимые смотрящему,
+    #866, AUD-028).
   - `counterparty-requisites.tsx` — реквизиты реестром полей (`EntityFields`,
     настройка видимости), почта — `mailto:`, телефон — `tel:`.
 - `api/counterparty-edit.ts` — оптимистичные правка/архив/возврат контрагента

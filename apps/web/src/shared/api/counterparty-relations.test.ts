@@ -1,0 +1,12 @@
+import { describe, expect, it } from 'vitest';
+
+import { clientProjectsUrl } from './counterparty-relations.js';
+
+/** AUD-028 (#866): вкладка «Проекты» контрагента — тот же срез видимости. */
+describe('адрес вкладки «Проекты» карточки контрагента (#866, AUD-028)', () => {
+  it('scope=all вместе с clientId', () => {
+    const url = clientProjectsUrl('00000000-0000-4000-8000-000000000002');
+    expect(url).toContain('clientId=00000000-0000-4000-8000-000000000002');
+    expect(url).toContain('scope=all');
+  });
+});
