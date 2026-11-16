@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-router';
 
 import { AppShell } from './shell/app-shell.js';
-import { NAV_MODULES } from './shell/nav-registry.js';
+import { RAIL_MODULES } from './shell/nav-registry.js';
 import { NotFoundScreen, RouterErrorScreen } from './shell/system-screens.js';
 import { resolveHidden, resolveOrder } from './shell/ui-prefs.js';
 import { useUiPrefsStore } from '../shared/preferences/ui-prefs-store.js';
@@ -74,6 +74,11 @@ const EmployeesPage = pageLoader(() =>
 );
 const AutomationPage = pageLoader(() =>
   import('./automation-route.js').then((m) => ({ default: m.AutomationRoute })),
+);
+const PortalSettingsPage = pageLoader(() =>
+  import('../features/settings/pages/portal-settings-page.js').then((m) => ({
+    default: m.PortalSettingsPage,
+  })),
 );
 
 /**
@@ -152,12 +157,12 @@ const indexRoute = createRoute({
   path: '/',
   beforeLoad: () => {
     const { personal } = useUiPrefsStore.getState();
-    const ids = NAV_MODULES.map((m) => m.id);
+    const ids = RAIL_MODULES.map((m) => m.id);
     const order = resolveOrder(ids, personal.navOrder);
     const hidden = resolveHidden(ids, personal.navHidden);
     // Стартовый экран — первый ВИДИМЫЙ модуль (скрытый «с верху» не считается).
     const firstId = order.find((id) => !hidden.includes(id));
-    const first = NAV_MODULES.find((m) => m.id === firstId);
+    const first = RAIL_MODULES.find((m) => m.id === firstId);
     throw redirect({ to: first?.to ?? '/home', replace: true });
   },
   component: () => null,
@@ -210,6 +215,12 @@ const automationRoute = createRoute({
   component: AutomationPage,
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/settings',
+  component: PortalSettingsPage,
+});
+
 /**
  * Dev-галерея дизайн-системы (#257) — единственный экран `/dev/ui`.
  *
@@ -258,6 +269,7 @@ const routeTree = rootRoute.addChildren([
     chatConversationRoute,
     employeesRoute,
     automationRoute,
+    settingsRoute,
     // Dev-галерея (#257): в прод-сборке `devUiRoute` = null → пустой спред.
     ...(devUiRoute ? [devUiRoute] : []),
   ]),

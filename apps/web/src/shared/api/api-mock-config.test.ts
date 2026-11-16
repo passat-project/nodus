@@ -43,12 +43,20 @@ describe('parseApiMockEnv (#48)', () => {
     }
   });
 
-  it('домены полей, справочников, CRM и ролей доступны для моков (#431, #379)', () => {
-    const config = parseApiMockEnv('custom-fields,dictionaries,crm,roles');
+  it('домены полей, справочников, CRM, ролей и настроек доступны для моков (#431, #379, #558)', () => {
+    const config = parseApiMockEnv('custom-fields,dictionaries,crm,roles,settings');
     expect(config.enabled).toBe(true);
-    expect(config.domains).toEqual(new Set(['custom-fields', 'dictionaries', 'crm', 'roles']));
+    expect(config.domains).toEqual(
+      new Set(['custom-fields', 'dictionaries', 'crm', 'roles', 'settings']),
+    );
     // Новые домены — в конце списка: буквальные маршруты писем остаются первыми.
-    expect(API_MOCK_DOMAINS.slice(-4)).toEqual(['custom-fields', 'dictionaries', 'crm', 'roles']);
+    expect(API_MOCK_DOMAINS.slice(-5)).toEqual([
+      'custom-fields',
+      'dictionaries',
+      'crm',
+      'roles',
+      'settings',
+    ]);
   });
 
   it('список только из мусора — воркер не нужен (enabled: false)', () => {

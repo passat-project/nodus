@@ -1,7 +1,8 @@
 # Права моста «веб-приложение портала → оболочка» (ADR-0019). Раздаются ТОЛЬКО
 # runtime-capability с remote = origin сохранённого портала (см. bridge.rs);
-# локальному UI не положены. Команды дисплея и навигации — без файлов, без
-# кредов, без выполнения чего-либо произвольного.
+# локальному UI не положены. Команды дисплея и навигации — без кредов и без
+# произвольного выполнения; файловые команды (#558) ограничены UNC-путями из
+# списка разрешённых серверов и проверяются в Rust.
 
 [[permission]]
 identifier = "allow-notify-popup"
@@ -27,6 +28,16 @@ commands.allow = ["flash_taskbar"]
 identifier = "allow-open-external"
 description = "Открыть ссылку системным приложением: http(s)/mailto/tel (ссылки портала)."
 commands.allow = ["open_external"]
+
+[[permission]]
+identifier = "allow-open-unc-path"
+description = "Открыть файл с разрешённого файлового сервера (только UNC из списка настроек)."
+commands.allow = ["open_unc_path"]
+
+[[permission]]
+identifier = "allow-reveal-unc-path"
+description = "Показать файл с разрешённого файлового сервера в проводнике (выделением)."
+commands.allow = ["reveal_unc_path"]
 
 [[permission]]
 identifier = "allow-dismiss-popups"

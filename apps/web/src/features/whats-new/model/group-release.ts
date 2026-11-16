@@ -1,7 +1,7 @@
 import { LayoutGrid, type LucideIcon } from 'lucide-react';
 import { ui } from '@nodus/contracts';
 
-import { NAV_MODULES } from '../../../app/shell/nav-registry.js';
+import { RAIL_MODULES } from '../../../app/shell/nav-registry.js';
 import {
   CHANGE_TYPE_ORDER,
   GENERAL_MODULE,
@@ -29,7 +29,7 @@ const GENERAL: ReleaseModule = {
 /** Модули заметок — ЕДИНЫЙ реестр навигации (иконка и название как в
  *  левой рейке) + «Общее» последним. Порядок — системный порядок рейки. */
 export const RELEASE_MODULES: readonly ReleaseModule[] = [
-  ...NAV_MODULES.map(({ id, label, icon }) => ({ id, label, icon })),
+  ...RAIL_MODULES.map(({ id, label, icon }) => ({ id, label, icon })),
   GENERAL,
 ];
 

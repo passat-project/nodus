@@ -56,6 +56,9 @@ export const Permission = {
   CORRESPONDENCE_VIEW_CONFIDENTIAL: 'correspondence.view_confidential',
   /** Общие настройки UI компании (порядок модулей/вкладок «Для всех») — admin. */
   SETTINGS_UI_DEFAULTS: 'settings.uiDefaults',
+  /** Настройки портала (эпик #869): файловые серверы (#558) и будущие
+   *  разделы «Компании» (#871). Выдаётся матрицей «Права доступа». */
+  PORTAL_SETTINGS_MANAGE: 'portal.settings.manage',
   /** Создать контрагента (в т.ч. «на лету» при регистрации письма) и
    *  добавить контактное лицо; чтение справочника открыто всем (ADR-0033). */
   CRM_CREATE: 'crm.create',

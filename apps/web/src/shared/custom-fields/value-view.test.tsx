@@ -5,6 +5,7 @@ import { ui } from '@nodus/contracts';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { registerCardBridge } from '../lib/card-bridge.js';
+import { useFileServersStore } from '../desktop/file-servers-store.js';
 import { CustomFieldValueView, refsById } from './value-view.js';
 
 /** Значение атрибута в карточке/списке (#431, Р6 #631): форматирование по
@@ -65,6 +66,8 @@ function view(
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  delete window.nodusDesktop;
+  useFileServersStore.setState({ servers: [], loaded: false });
 });
 
 describe('refsById', () => {
@@ -256,5 +259,72 @@ describe('ссылка или путь (Р11)', () => {
     view('link', 'пример без схемы');
     expect(screen.getByText('пример без схемы')).toBeTruthy();
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('в браузере — копирование и подсказка «Открыть в приложении»', () => {
+    view('link', '\\\\FS01\\Projects\\план.pdf');
+    expect(screen.getByRole('button', { name: ui.customFields.value.copyPath })).toBeTruthy();
+    expect(screen.getByRole('img', { name: ui.customFields.value.openInAppHint })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: ui.customFields.value.openPath })).toBeNull();
+  });
+
+  it('старая оболочка без команд — копирование и подсказка об обновлении', () => {
+    window.nodusDesktop = { shellVersion: '1.0.19', platform: 'windows' } as never;
+    view('link', '\\\\FS01\\Projects\\план.pdf');
+    expect(screen.getByRole('button', { name: ui.customFields.value.copyPath })).toBeTruthy();
+    expect(screen.getByRole('img', { name: ui.customFields.value.updateAppHint })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: ui.customFields.value.openPath })).toBeNull();
+  });
+
+  it('оболочка + разрешённый сервер: «Открыть» и «Показать в папке»', async () => {
+    const openUncPath = vi.fn(async () => undefined);
+    const revealUncPath = vi.fn(async () => undefined);
+    window.nodusDesktop = {
+      shellVersion: '1.0.21',
+      platform: 'windows',
+      openUncPath,
+      revealUncPath,
+    } as never;
+    useFileServersStore.setState({ servers: ['\\\\FS01\\Projects'], loaded: true });
+    const path = '\\\\FS01\\Projects\\план.pdf';
+
+    view('link', path);
+    fireEvent.click(screen.getByRole('button', { name: ui.customFields.value.openPath }));
+    await vi.waitFor(() => expect(openUncPath).toHaveBeenCalledWith(path, ['\\\\FS01\\Projects']));
+    fireEvent.click(screen.getByRole('button', { name: ui.customFields.value.revealPath }));
+    await vi.waitFor(() =>
+      expect(revealUncPath).toHaveBeenCalledWith(path, ['\\\\FS01\\Projects']),
+    );
+  });
+
+  it('исполняемый файл — только «Показать в папке»', () => {
+    window.nodusDesktop = {
+      shellVersion: '1.0.21',
+      platform: 'windows',
+      openUncPath: vi.fn(async () => undefined),
+      revealUncPath: vi.fn(async () => undefined),
+    } as never;
+    useFileServersStore.setState({ servers: ['\\\\FS01\\Projects'], loaded: true });
+
+    view('link', '\\\\FS01\\Projects\\setup.exe');
+    expect(screen.queryByRole('button', { name: ui.customFields.value.openPath })).toBeNull();
+    expect(screen.getByRole('button', { name: ui.customFields.value.revealPath })).toBeTruthy();
+  });
+
+  it('чужой сервер — копирование и подсказка «Сервер не разрешён»', () => {
+    window.nodusDesktop = {
+      shellVersion: '1.0.21',
+      platform: 'windows',
+      openUncPath: vi.fn(async () => undefined),
+      revealUncPath: vi.fn(async () => undefined),
+    } as never;
+    useFileServersStore.setState({ servers: ['\\\\FS01\\Projects'], loaded: true });
+
+    view('link', '\\\\FS02\\Secret\\план.pdf');
+    expect(screen.getByRole('button', { name: ui.customFields.value.copyPath })).toBeTruthy();
+    expect(
+      screen.getByRole('img', { name: ui.customFields.value.serverNotAllowedHint }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: ui.customFields.value.openPath })).toBeNull();
   });
 });

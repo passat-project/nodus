@@ -121,8 +121,12 @@ describe('грамматика значений полей', () => {
     const schema = customFieldValueSchemaOf(def({ type: 'link' }));
     expect(schema.safeParse('https://nodus.by/doc').success).toBe(true);
     expect(schema.safeParse('\\\\srv\\proekt\\КЖ').success).toBe(true);
+    // Имя общей папки может содержать пробелы (типовое русское имя шары).
+    expect(schema.safeParse('\\\\srv\\Общая папка\\КЖ.pdf').success).toBe(true);
     expect(schema.safeParse('ftp://nodus.by').success).toBe(false);
     expect(schema.safeParse('\\\\srv').success).toBe(false);
+    expect(schema.safeParse('\\\\srv\\proekt\\..\\Secret\\КЖ').success).toBe(false);
+    expect(schema.safeParse('\\\\srv\\proekt\\CON.txt').success).toBe(false);
     expect(schema.safeParse('https://nodus.by/\u0001').success).toBe(false);
   });
 });

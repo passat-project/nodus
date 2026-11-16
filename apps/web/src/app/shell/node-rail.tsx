@@ -1,7 +1,14 @@
 import { useState } from 'react';
-import { ArrowUpDown, ChevronsLeft, ChevronsRight, RotateCcw, Settings2 } from 'lucide-react';
-import { useRouterState } from '@tanstack/react-router';
-import { ui } from '@nodus/contracts';
+import {
+  ArrowUpDown,
+  ChevronsLeft,
+  ChevronsRight,
+  RotateCcw,
+  Settings2,
+  SlidersHorizontal,
+} from 'lucide-react';
+import { useNavigate, useRouterState } from '@tanstack/react-router';
+import { Permission, ui } from '@nodus/contracts';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,8 +19,9 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { useChatUnreadSummary } from '../../shared/chat/chat-queries.js';
 import { useNotificationSummary } from '../../features/notifications/api/notifications-api.js';
+import { useAuthStore } from '../../shared/auth-store.js';
 import { CIRCUIT_REMEASURE } from './circuit-geometry.js';
-import { NAV_MODULES, type NavModuleDef } from './nav-registry.js';
+import { RAIL_MODULES, type NavModuleDef } from './nav-registry.js';
 import { RailCustomizeMode } from './node-rail-customize.js';
 import {
   HIDDEN_SENTINEL,
@@ -44,7 +52,8 @@ export const MODULE_PORT_R = PORT / 2;
  * Модуль «НАСТРОЙКИ» прибит ВНИЗУ рейки (модель Битрикс24) — контекстное
  * меню: «Изменить порядок» (режим dnd с НЕПОДВИЖНЫМ сепаратором «— Скрытое
  * —»: перетащил модуль за сепаратор = скрыл; минимум один видимый),
- * «Вернуть по умолчанию». Скрытые модули в
+ * «Вернуть по умолчанию»; у держателя права `portal.settings.manage` первым
+ * пунктом — «Настройки портала» (#558, страница `/settings`). Скрытые модули в
  * обычном режиме — под «Показать всё ▾» внизу списка; раскрытие живёт до
  * любого действия (навигация сворачивает). Первый ВИДИМЫЙ модуль —
  * стартовый экран приложения (переадресация «/», router.tsx).
@@ -52,6 +61,7 @@ export const MODULE_PORT_R = PORT / 2;
 export function NodeRail() {
   const collapsed = useShellStore((s) => s.menuCollapsed);
   const toggle = useShellStore((s) => s.toggleMenu);
+  const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: notificationSummary } = useNotificationSummary();
   const { data: unreadSummary } = useChatUnreadSummary();
@@ -60,10 +70,15 @@ export function NodeRail() {
   const applyNav = useUiPrefsStore((s) => s.applyNav);
   const resetPersonal = useUiPrefsStore((s) => s.resetPersonal);
 
-  const ids = NAV_MODULES.map((m) => m.id);
+  const canOpenSettings = useAuthStore(
+    (s) => s.user?.permissions.includes(Permission.PORTAL_SETTINGS_MANAGE) ?? false,
+  );
+  const settingsActive = pathname === '/settings' || pathname.startsWith('/settings/');
+
+  const ids = RAIL_MODULES.map((m) => m.id);
   const order = resolveOrder(ids, personal.navOrder);
   const hidden = resolveHidden(ids, personal.navHidden);
-  const byId = (id: string) => NAV_MODULES.find((m) => m.id === id);
+  const byId = (id: string) => RAIL_MODULES.find((m) => m.id === id);
   const defined = (m: NavModuleDef | undefined): m is NavModuleDef => m !== undefined;
   const visibleModules = order
     .filter((id) => !hidden.includes(id))
@@ -231,7 +246,9 @@ export function NodeRail() {
                   aria-label={ui.nav.settings}
                   className={cn(
                     'relative mt-2 flex h-8 shrink-0 items-center overflow-hidden rounded-md text-sm font-medium',
-                    'text-sidebar-foreground/65 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground',
+                    settingsActive
+                      ? 'bg-sidebar-accent text-sidebar-foreground'
+                      : 'text-sidebar-foreground/65 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground',
                     collapsed ? 'mx-3 justify-center' : 'mr-3 ml-[3.25rem] gap-3 pl-2',
                   )}
                 >
@@ -243,6 +260,12 @@ export function NodeRail() {
                   ml-[3.25rem] ≈ до края w-60) — раньше w-64 нависал над
                   рамой; длинные подписи не рвём. */}
               <DropdownMenuContent side="bottom" align="start" className="w-48">
+                {canOpenSettings ? (
+                  <DropdownMenuItem onSelect={() => void navigate({ to: '/settings' })}>
+                    <SlidersHorizontal className="size-4" />
+                    {ui.portalSettings.title}
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuItem onSelect={startCustomize}>
                   <ArrowUpDown className="size-4" />
                   {ui.nav.editOrder}

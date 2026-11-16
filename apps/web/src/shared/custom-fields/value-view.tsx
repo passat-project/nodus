@@ -1,4 +1,4 @@
-import { Copy, ExternalLink } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import type {
   CustomFieldDefinition,
   CustomFieldRef,
@@ -7,10 +7,10 @@ import type {
 } from '@nodus/contracts';
 import { linkKindOf, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
-import { toast } from 'sonner';
 
 import { isDashOnly } from './formula/formula-preview.js';
 import { openCardViaBridge } from '../lib/card-bridge.js';
+import { PathValue } from './path-value.js';
 import { stageTone } from '../ui/board/stage-tone.js';
 import { PersonAvatar } from '../ui/person-avatar.js';
 import {
@@ -129,30 +129,12 @@ function EnumChip({ ref: item, wrap }: { ref: CustomFieldRef; wrap: boolean }) {
   );
 }
 
-function CopyPathButton({ path }: { path: string }) {
-  return (
-    <button
-      type="button"
-      aria-label={ui.customFields.value.copyPath}
-      title={ui.customFields.value.copyPath}
-      onClick={() => {
-        void navigator.clipboard.writeText(path).then(
-          () => toast.success(ui.customFields.value.pathCopied),
-          () => toast.error(ui.common.copyError),
-        );
-      }}
-      className="rounded p-1 text-muted-foreground opacity-0 transition-opacity group-hover/field:opacity-100 focus-visible:opacity-100 hover:text-foreground"
-    >
-      <Copy className="size-3.5" strokeWidth={1.75} />
-    </button>
-  );
-}
-
 /**
  * Значение кастомного поля в карточке, превью и (compact) строке списка.
  * Ссылки (сотрудник, подразделение, вариант, проект, контрагент) показываются
  * именем из `refs`; недоступная запись — «Запись недоступна» (Р6).
- * URL открывается текстом в новой вкладке (noopener), путь копируется (Р11).
+ * URL открывается текстом в новой вкладке (noopener), путь — действиями
+ * десктопа или копированием (#558, Р11).
  */
 export function CustomFieldValueView({
   definition,
@@ -308,10 +290,12 @@ export function CustomFieldValueView({
           </a>
         );
       }
+      if (kind === 'path' && interactive) {
+        return <PathValue path={text} />;
+      }
       return (
         <span className="inline-flex min-w-0 items-center gap-1">
           <span className="truncate font-mono text-[13px]">{text}</span>
-          {interactive && kind === 'path' ? <CopyPathButton path={text} /> : null}
         </span>
       );
     }

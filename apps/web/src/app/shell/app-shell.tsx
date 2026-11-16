@@ -26,6 +26,7 @@ import { desktopSetUiTheme } from '../../shared/desktop/desktop-bridge.js';
 import { useChatSocket } from '../../shared/socket/use-chat-socket.js';
 import { WsDebugBadge } from '../../shared/socket/ws-debug-badge.js';
 import { PopupDebugBadge } from '../../shared/desktop/popup-diagnostics-badge.js';
+import { FileServersSync } from '../../features/settings/components/file-servers-sync.js';
 import { CircuitFrame } from './circuit-frame.js';
 import { CardStackHost } from './card-stack-host.js';
 import { CommandPalette } from './command-palette.js';
@@ -157,6 +158,8 @@ export function AppShell() {
 
   return (
     <TooltipProvider>
+      {/* Снимок разрешённых файловых серверов (#558) для действий у пути. */}
+      <FileServersSync />
       <a
         href="#content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:border focus:border-border focus:bg-card focus:px-3 focus:py-2 focus:text-sm"

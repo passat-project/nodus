@@ -7,6 +7,7 @@ import { lettersHandlers } from '../features/correspondence/api/mocks/letters-ha
 import { directoryHandlers } from '../features/directory/api/mocks/directory-handlers.js';
 import { homeHandlers } from '../features/home/api/mocks/home-handlers.js';
 import { notificationsHandlers } from '../features/notifications/api/mocks/notifications-handlers.js';
+import { fileServersHandlers } from '../features/settings/api/mocks/file-servers-handlers.js';
 import { filesHandlers } from '../shared/files/mocks/files-handlers.js';
 import { crmReadHandlers } from '../shared/counterparties/mocks/crm-read-handlers.js';
 import { crmWriteHandlers } from '../shared/counterparties/mocks/crm-write-handlers.js';
@@ -40,6 +41,7 @@ const domainHandlers: Record<ApiMockDomain, HttpHandler[]> = {
   dictionaries: dictionariesHandlers,
   crm: [...crmReadHandlers, ...crmWriteHandlers],
   roles: rolesHandlers,
+  settings: fileServersHandlers,
 };
 
 /** Хендлеры мокаемых доменов (#48): 'all' — все (демо-сборка nodus.by),

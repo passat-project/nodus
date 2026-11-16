@@ -4,11 +4,13 @@ import { Input } from '@nodus/ui/components/input';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { CustomFieldValueView, refsById } from '../value-view.js';
+import { PathText, PathValueActions } from '../path-value.js';
 import { EditorError, EditorTrigger, editorInputClass, type EditorProps } from './editor-kit.js';
 
 /**
  * Ссылка или путь (Р11): `http(s)://…` открывается в новой вкладке, путь
- * `\\сервер\ресурс` показывается моно-текстом с копированием. Грамматика —
+ * `\\сервер\ресурс` показывается моно-текстом с действиями (#558: «Открыть»
+ * и «Показать в папке» в оболочке, «Скопировать путь» в браузере). Грамматика —
  * общая схема контрактов: неверный ввод остаётся в поле с подсказкой.
  */
 export function LinkEditor(props: EditorProps) {
@@ -51,6 +53,28 @@ export function LinkEditor(props: EditorProps) {
   }
 
   if (!editing) {
+    // Путь — текст-триггер правки плюс действия РЯДОМ: кнопки внутри кнопки
+    // запрещены, а «Открыть»/«Показать в папке» должны работать и без входа
+    // в режим правки (#558). В карточке путь читается двумя строками
+    // («файл» + «папка»): одна строка в узкой колонке обрезала и имя, и
+    // сервер; подсказка «почему нельзя открыть» — видимой строкой под
+    // значением, а не иконкой ⓘ без наведения.
+    if (linkKindOf(current) === 'path' && !props.disabled) {
+      const inline = props.variant === 'inline';
+      return (
+        <span className="group/field grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
+          <EditorTrigger
+            variant={props.variant}
+            disabled={props.disabled}
+            ariaLabel={props.definition.name}
+            onClick={() => setEditing(true)}
+          >
+            <PathText path={current || ui.customFields.value.empty} stacked={inline} />
+          </EditorTrigger>
+          {current ? <PathValueActions path={current} hint={inline ? 'text' : 'icon'} /> : null}
+        </span>
+      );
+    }
     return (
       <EditorTrigger
         variant={props.variant}

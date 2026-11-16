@@ -284,6 +284,7 @@ export const currentAuthUser: AuthUser = {
     Permission.CORRESPONDENCE_REGISTER,
     Permission.CORRESPONDENCE_RESOLVE,
     Permission.SETTINGS_UI_DEFAULTS,
+    Permission.PORTAL_SETTINGS_MANAGE,
     Permission.STICKER_MANAGE,
     Permission.WORKFLOW_MANAGE,
     Permission.CUSTOM_FIELD_MANAGE,

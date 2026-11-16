@@ -34,6 +34,9 @@ export const ALL_PERMISSIONS = [
   'sticker.manage',
   'chat.moderate',
   'settings.uiDefaults',
+  // #558: настройки портала (файловые серверы); админу — миграцией
+  // 20261126100000_portal_settings_file_servers.
+  'portal.settings.manage',
   'crm.create',
   'crm.manage',
   // #431: управление атрибутами; роли admin выдаётся миграцией 20261028120000_custom_fields.
