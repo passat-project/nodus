@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AiSettingsController } from './providers/ai-settings.controller.js';
 import { AiSettingsRepository } from './providers/ai-settings.repository.js';
 import { AiSettingsService } from './providers/ai-settings.service.js';
+import { ToolExecutorService } from './tools/tool-executor.service.js';
 
 /**
  * ИИ-агент портала (#889, ADR-0043/0044): Ф1 — только чтение.
@@ -16,6 +17,6 @@ import { AiSettingsService } from './providers/ai-settings.service.js';
  */
 @Module({
   controllers: [AiSettingsController],
-  providers: [AiSettingsRepository, AiSettingsService],
+  providers: [AiSettingsRepository, AiSettingsService, ToolExecutorService],
 })
 export class AssistantModule {}
