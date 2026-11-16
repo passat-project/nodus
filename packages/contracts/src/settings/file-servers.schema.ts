@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-import { parseUncPath as parsePath } from '../custom-fields/unc-path.js';
+import {
+  parseUncPath as parsePath,
+  validUncServer,
+  validUncShare,
+} from '../custom-fields/unc-path.js';
 
 /**
  * Файловые серверы «Настроек портала» (#558, ADR-0029 Р11).
@@ -21,30 +25,9 @@ export const FILE_SERVER_LIMITS = {
   length: 260,
 } as const;
 
-/** Имя сервера: DNS-метка/IP-фрагмент, без пробелов и обратных слэшей. */
-const SERVER_NAME = /^[a-z0-9](?:[a-z0-9._-]{0,251}[a-z0-9])?$/i;
-/** Имя общей папки: пробелы допустимы, служебные символы — нет. */
-const SHARE_NAME = /^[^\\/:*?"<>|\p{Cc}]+$/u;
-
 export interface FileServer {
   server: string;
   share: string;
-}
-
-function validServer(value: string): boolean {
-  return value.length > 0 && value.length <= 253 && SERVER_NAME.test(value);
-}
-
-function validShare(value: string): boolean {
-  return (
-    value.length > 0 &&
-    value.length <= 80 &&
-    value !== '.' &&
-    value !== '..' &&
-    !value.endsWith('.') &&
-    !value.endsWith(' ') &&
-    SHARE_NAME.test(value)
-  );
 }
 
 /**
@@ -58,7 +41,7 @@ export function parseFileServer(raw: unknown): FileServer | null {
   const parts = value.slice(2).split('\\');
   if (parts.length !== 2) return null;
   const [server, share] = parts as [string, string];
-  if (!validServer(server) || !validShare(share)) return null;
+  if (!validUncServer(server) || !validUncShare(share)) return null;
   return { server, share };
 }
 

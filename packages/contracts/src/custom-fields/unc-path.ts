@@ -33,6 +33,16 @@ function validShare(value: string): boolean {
   );
 }
 
+/** Валидация имени сервера — одна на путь и allowlist. */
+export function validUncServer(value: string): boolean {
+  return validServer(value);
+}
+
+/** Валидация имени общей папки — одна на путь и allowlist. */
+export function validUncShare(value: string): boolean {
+  return validShare(value);
+}
+
 /** Разобранный UNC-путь значения «Ссылка или путь». */
 export interface UncPathParts {
   server: string;
@@ -127,10 +137,21 @@ export const REVEAL_ONLY_EXTENSIONS = [
   'mshxml',
   'xbap',
   'dotm',
+  'docm',
   'xlsm',
+  'xltm',
   'pptm',
+  'potm',
+  'ppsm',
+  'sldm',
+  'xlsb',
   'xlam',
+  'xla',
+  'ppam',
+  'wll',
   'wbk',
+  'accdb',
+  'accde',
   'iso',
   'img',
   'vhd',
@@ -149,7 +170,7 @@ export function isRevealOnlyUncPath(raw: unknown): boolean {
   const segments = path.path.split('\\');
   const name = segments[segments.length - 1] ?? '';
   const dot = name.lastIndexOf('.');
-  if (dot <= 0 || dot === name.length - 1) return false;
+  if (dot < 0 || dot === name.length - 1) return false;
   const extension = name.slice(dot + 1).toLowerCase();
   return (REVEAL_ONLY_EXTENSIONS as readonly string[]).includes(extension);
 }

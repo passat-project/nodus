@@ -118,6 +118,8 @@ describe('UNC-путь значения', () => {
       'help.chm',
       'book.xlsm',
       'script.py',
+      'letter.docm',
+      '.exe',
     ]) {
       expect(isRevealOnlyUncPath(`\\\\FS01\\Projects\\${name}`), name).toBe(true);
     }
