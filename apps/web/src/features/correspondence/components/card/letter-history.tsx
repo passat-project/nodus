@@ -49,6 +49,8 @@ function entryTitle(entry: LetterHistoryEntry): string {
       return `${entry.transitionName}: ${entry.fromStageName} → ${entry.toStageName}`;
     case 'participant_joined':
       return events.participantJoined;
+    case 'action_pressed':
+      return `${entry.actionName} · ${ui.tasks.historyInStage} ${entry.stageName}`;
     case 'relation_changed': {
       const action =
         entry.action === 'linked'
