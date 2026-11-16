@@ -51,6 +51,7 @@ describe('DepartmentsService', () => {
   const positions = { findRef: vi.fn() };
   const roles = { permissionsByIds: vi.fn(), lockForUpdate: vi.fn(), lockByCodeForUpdate: vi.fn() };
   const membership = { effectiveRoleIds: vi.fn() };
+  const audience = { roleIdsOfDepartments: vi.fn(), departmentUserIds: vi.fn() };
   const tx = { run: vi.fn((cb: (t: string) => unknown) => cb('tx-handle')) };
   const eventBus = { emit: vi.fn() };
 
@@ -59,6 +60,8 @@ describe('DepartmentsService', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     membership.effectiveRoleIds.mockResolvedValue([]);
+    audience.roleIdsOfDepartments.mockResolvedValue([]);
+    audience.departmentUserIds.mockResolvedValue([]);
     departments.lockForUpdate.mockResolvedValue(true);
     departments.countActiveChildren.mockResolvedValue(0);
     const guard = new RoleAssignmentGuard(roles as never, membership as never);
@@ -70,6 +73,7 @@ describe('DepartmentsService', () => {
       references,
       tx as never,
       eventBus as never,
+      audience as never,
     );
   });
 
@@ -272,6 +276,7 @@ describe('DepartmentsService', () => {
 
     it('перенос в корень снимает роли — правами не ограничен', async () => {
       departments.findById.mockResolvedValue(row('dep', 'root'));
+      departments.findParentChain.mockResolvedValue(['root']);
       departments.findSubtreeIds.mockResolvedValue(['dep']);
       users.findActiveIdsByDepartmentIds.mockResolvedValue(['u-1']);
       membership.effectiveRoleIds.mockResolvedValueOnce(['role-dept']).mockResolvedValueOnce([]);
@@ -280,7 +285,10 @@ describe('DepartmentsService', () => {
       await service.update('dep', { parentId: null }, actor());
 
       expect(departments.lockTree).toHaveBeenCalledWith('tx-handle');
-      expect(departments.findParentChain).not.toHaveBeenCalled();
+      // Перенос в корень: цепь нового родителя не читается (родителя нет),
+      // старый предок — только для аудитории отзыва ролей (#866).
+      expect(departments.findParentChain).toHaveBeenCalledTimes(1);
+      expect(departments.findParentChain).toHaveBeenCalledWith('root', 'tx-handle');
       expect(eventBus.emit).toHaveBeenCalled();
       expect(roles.permissionsByIds).not.toHaveBeenCalled();
     });

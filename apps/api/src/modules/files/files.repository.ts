@@ -102,6 +102,32 @@ export class FilesRepository {
   }
 
   /**
+   * Замок строки файла + свежее состояние для сохранения версии (AUD-015,
+   * #866): `FOR UPDATE` сериализует параллельные колбэки ONLYOFFICE —
+   * номер версии и дедуп считаются по заблокированной строке, а не по
+   * чтению вне транзакции. Все, кто создаёт версии, обязаны брать этот замок
+   * первым шагом транзакции. null — файл удалён/не найден.
+   */
+  async lockForSave(
+    tx: TransactionClient,
+    fileObjectId: string,
+  ): Promise<{ file: FileObjectRow; latest: FileVersionRow | null } | null> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM file_objects
+      WHERE id = ${fileObjectId}::uuid AND deleted_at IS NULL
+      FOR UPDATE
+    `;
+    if (rows.length === 0) return null;
+    const file = await tx.fileObject.findUnique({ where: { id: fileObjectId } });
+    if (!file) return null;
+    const latest = await tx.fileVersion.findFirst({
+      where: { fileObjectId },
+      orderBy: { version: 'desc' },
+    });
+    return { file, latest };
+  }
+
+  /**
    * Сохранение новой версии из колбэка ONLYOFFICE (#138): строка версии +
    * перевод указателя file_objects (key/size/version) одной транзакцией —
    * вызывающий сервис добавляет в неё событие outbox (I9).

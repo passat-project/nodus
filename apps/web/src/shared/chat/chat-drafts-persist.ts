@@ -1,5 +1,6 @@
 import { createJSONStorage, type PersistOptions } from 'zustand/middleware';
 
+import { getCurrentUserId } from '../lib/current-user-id.js';
 import { chatDraftsEnvelopeSchema, zodPersistMerge } from '../lib/persist-zod.js';
 import type { ChatDraft, DraftsState } from './chat-drafts.js';
 import { fromWireText, toWireText, type DraftMention } from './composer-mention-registry.js';
@@ -12,9 +13,68 @@ type PersistedDraft = Pick<
 >;
 type PersistedDrafts = { drafts: Record<string, PersistedDraft> };
 
+export const CHAT_DRAFTS_STORE_NAME = 'nodus-chat-drafts-v1';
+
+/** Ключ хранилища НА ПОЛЬЗОВАТЕЛЯ (AUD-005): общий ключ браузера отдавал
+ *  черновик одного сотрудника следующему вошедшему. */
+export function chatDraftsStorageKey(userId: string | null): string {
+  return `${CHAT_DRAFTS_STORE_NAME}:${userId ?? 'anonymous'}`;
+}
+
+/** localStorage есть не всегда: node-окружение юнит-тестов, приватный режим. */
+function localStorageSafe(): Storage | null {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** Ключ вычисляется в момент чтения/записи: стор создаётся на уровне модуля
+ *  до bootstrap, поэтому имя из auth-стора нельзя зашить в `name`. */
+const userScopedDraftStorage = createJSONStorage<PersistedDrafts>(() => {
+  const storage = localStorageSafe();
+  if (!storage) {
+    return { getItem: () => null, setItem: () => undefined, removeItem: () => undefined };
+  }
+  const key = () => chatDraftsStorageKey(getCurrentUserId());
+  return {
+    getItem: () => storage.getItem(key()),
+    setItem: (_name, value) => storage.setItem(key(), value),
+    removeItem: () => storage.removeItem(key()),
+  };
+});
+
+/** Дозагрузка черновиков пользователя без rehydrate: очистка стора перед
+ *  rehydrate записывала пустой envelope в ключ НОВОГО пользователя и стирала
+ *  его черновики (та же гонка, что у ui-prefs-store). Читаем ключ напрямую
+ *  тем же migrate/merge, что и persist. */
+export function readDraftsForUser(userId: string | null): Record<string, ChatDraft> {
+  const storage = localStorageSafe();
+  if (!storage) return {};
+  let raw: string | null;
+  try {
+    raw = storage.getItem(chatDraftsStorageKey(userId));
+  } catch {
+    return {};
+  }
+  if (!raw) return {};
+  try {
+    const envelope = JSON.parse(raw) as { state?: unknown; version?: number };
+    const migrate = chatDraftsPersistOptions.migrate;
+    const migrated = migrate
+      ? migrate(envelope.state as never, envelope.version ?? 0)
+      : (envelope.state as PersistedDrafts);
+    const merged = chatDraftsPersistOptions.merge?.(migrated, { drafts: {} } as DraftsState);
+    return merged?.drafts ?? {};
+  } catch {
+    return {};
+  }
+}
+
 export const chatDraftsPersistOptions: PersistOptions<DraftsState, PersistedDrafts> = {
-  name: 'nodus-chat-drafts-v1',
-  storage: createJSONStorage(() => localStorage),
+  name: CHAT_DRAFTS_STORE_NAME,
+  storage: userScopedDraftStorage,
   // Вложения (File/objectURL) не сериализуются — только текст и контекст.
   partialize: (s) => ({
     drafts: Object.fromEntries(

@@ -40,6 +40,7 @@ import { useShellStore } from './shell-store.js';
 import { TopBar } from './top-bar.js';
 import { useCardStack, useOpenCard, useOpenCards, useReplaceTopCard } from './use-card-stack.js';
 import { useLinkInterception } from './use-link-interception.js';
+import { startChatDraftsSession } from '../../shared/chat/chat-drafts-session.js';
 import { startPreferencesSync } from '../../shared/preferences/ui-prefs-sync.js';
 
 function ShellFallback() {
@@ -87,6 +88,9 @@ export function AppShell() {
     // Личные настройки (#745): GET после входа + debounce PUT изменений;
     // при смене пользователя стор перечитывает свой localStorage-ключ.
     startPreferencesSync();
+    // Черновики чата — на пользователя (AUD-005): вход читает ключ вошедшего,
+    // выход не оставляет текст предыдущего сотрудника в памяти вкладки.
+    startChatDraftsSession();
     return stopModalLayers;
   }, []);
   // (N) Nodus в заголовке вкладки (#124): сигнал фоновой вкладке.

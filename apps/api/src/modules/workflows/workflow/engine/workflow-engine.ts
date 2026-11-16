@@ -132,15 +132,6 @@ export class WorkflowEngine implements WorkflowEnginePort {
       opts.form,
       subject0.facts,
     );
-    // Замки нажатой кнопки (#496, Р4): «Закрепить после нажатия» — в той же
-    // транзакции, что и переход; откат перехода откатывает и замок. Замки
-    // выключенного окна не действуют (В13) — как и в проверке документа.
-    if (picked.form?.enabled && picked.form.locks?.length) {
-      await adapter.applyLocks?.(tx, entityId, actor.id, picked.form.locks, {
-        transitionId: picked.id,
-        transitionName: picked.name,
-      });
-    }
     // Гейты видят факты после окна; условия «кто» — по состоянию до окна.
     const subject1 = exec.hasApplied(applied)
       ? await this.subjectWithPermissions(tx, entityId, category, actor)
@@ -164,6 +155,19 @@ export class WorkflowEngine implements WorkflowEnginePort {
     }));
     const pick = scored.find((s) => s.reasons.length === 0) ?? scored[0]!;
     if (pick.reasons.length > 0) this.assertOverride(pick.reasons, subject1, opts);
+    // Заменная кнопка DnD (#866, AUD-008): окно и замки — той кнопки, чьи
+    // гейты прошли. Окно уже применено для picked; запасная кнопка с
+    // обязательным окном не исполняется без формы (жест её не открывает).
+    if (pick.t.id !== picked.id) exec.assertFallbackWindow(pick.t);
+    // Замки исполняемой кнопки (#496, Р4): «Закрепить после нажатия» — в той
+    // же транзакции, что и переход; откат перехода откатывает и замок. Замки
+    // выключенного окна не действуют (В13) — как и в проверке документа.
+    if (pick.t.form?.enabled && pick.t.form.locks?.length) {
+      await adapter.applyLocks?.(tx, entityId, actor.id, pick.t.form.locks, {
+        transitionId: pick.t.id,
+        transitionName: pick.t.name,
+      });
+    }
     const targetFacts = {
       ...subject1.facts,
       creatorIsAssignee: subject0.facts.creatorIsAssignee,

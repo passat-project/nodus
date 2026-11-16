@@ -1,5 +1,6 @@
 import { createReadStream } from 'node:fs';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 
 import { describe, expect, it } from 'vitest';
 
@@ -10,6 +11,9 @@ const parse = (name: string) => {
   const service = new MailParserService();
   return service.parse(createReadStream(join(FIXTURES, name)), async () => true);
 };
+
+/** Заголовок части сверх потолка mailsplit (1 МБ): парсер отдаёт error без end. */
+const OVERSIZED_HEADER = 'a'.repeat(1_300_000);
 
 describe('MailParserService: фикстуры приёма (#56, Р3)', () => {
   it('windows-1251: тема и тело в UTF-8, адрес и имя отправителя разобраны', async () => {
@@ -73,5 +77,36 @@ describe('MailParserService: фикстуры приёма (#56, Р3)', () => {
     );
     expect(outcome.skipped).toBe(true);
     expect(outcome.mail).toBeNull();
+  });
+});
+
+describe('MailParserService: битый вход не держит разбор (AUD-019)', () => {
+  it('ошибка парсера до заголовков завершает разбор с parseIssue', async () => {
+    const raw = Buffer.from(`From: a@b.c\r\nSubject: ${OVERSIZED_HEADER}\r\n\r\nтело`);
+    const service = new MailParserService();
+    const outcome = await service.parse(Readable.from([raw]), async () => true);
+    expect(outcome.skipped).toBe(false);
+    expect(outcome.mail!.parseIssue).toBe(true);
+  });
+
+  it('ошибка парсера после заголовков отдаёт разобранное, не дожидаясь end', async () => {
+    const raw = Buffer.from(
+      'From: a@b.c\r\nSubject: ok\r\nContent-Type: multipart/mixed; boundary="B"\r\n\r\n' +
+        `--B\r\nContent-Type: text/plain\r\nX-Big: ${OVERSIZED_HEADER}\r\n\r\nhi\r\n--B--`,
+    );
+    const service = new MailParserService();
+    const outcome = await service.parse(Readable.from([raw]), async () => true);
+    expect(outcome.skipped).toBe(false);
+    expect(outcome.mail!.subject).toBe('ok');
+    expect(outcome.mail!.parseIssue).toBe(true);
+  });
+
+  it('обрезанный вход: общий таймаут разбора завершает поток с parseIssue', async () => {
+    const stalled = new Readable({ read() {} });
+    stalled.push('From: a@b.c\r\nSubject: обрезано');
+    const service = new MailParserService();
+    const outcome = await service.parse(stalled, async () => true, 50);
+    expect(outcome.skipped).toBe(false);
+    expect(outcome.mail!.parseIssue).toBe(true);
   });
 });

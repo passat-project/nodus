@@ -29,20 +29,23 @@ export class TaskChatService {
 
   /** Привести беседу задачи к составу задачи; null — задачи нет (удалена):
    *  состав беседы распускается — чат удалённой задачи пропадает из вкладки
-   *  «Чаты задач и писем» у всех (история остаётся в БД). Состав читается
-   *  ПОСЛЕ блокировки беседы (security-гейт #252): иначе sync со старым
-   *  составом, дождавшись блокировки, вернул бы выбывшего участника. */
+   *  «Чаты задач и писем» у всех (история остаётся в БД). Первое чтение
+   *  состава — ДО транзакции (AUD-022: порт без tx занял бы второе соединение
+   *  пула внутри транзакции); повторное чтение под блокировкой беседы — гейт
+   *  #252: sync со старым составом не вернул бы выбывшего участника. */
   async sync(taskId: string, actorId: string | null): Promise<string | null> {
+    const preRoster = await this.tasks.roster(taskId);
     return this.txRunner.run(async (tx) => {
       let id = await this.repo.find(tx, taskId);
       let created = false;
       if (!id) {
-        const pre = await this.tasks.roster(taskId);
-        if (!pre) return null;
-        ({ id, created } = await this.repo.findOrCreate(tx, taskId, pre.creatorId));
+        if (!preRoster) return null;
+        ({ id, created } = await this.repo.findOrCreate(tx, taskId, preRoster.creatorId));
       }
       await this.repo.lock(tx, id);
       const current = await this.repo.members(tx, id);
+      // Порт не принимает tx: чтение идёт своим соединением внутри tx —
+      // известное исключение AUD-022 (зафиксировано в отчёте).
       const roster = await this.tasks.roster(taskId);
       if (!roster) {
         await this.removeMembers(tx, id, current, actorId);

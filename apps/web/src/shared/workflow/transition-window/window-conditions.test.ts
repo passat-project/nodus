@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { EffectiveSection, WorkflowTransition } from '@nodus/contracts';
 
+import { buildExecuteBody } from './build-execute-body.js';
 import { emptyDraft } from './use-window-draft.js';
-import { windowCanSubmit, windowConditionLines } from './window-conditions.js';
+import { timeSectionIssue, windowCanSubmit, windowConditionLines } from './window-conditions.js';
 import type { TransitionWindowContext } from './window-context.js';
 
 const context: TransitionWindowContext = {
@@ -129,6 +130,60 @@ describe('живые условия окна (#380)', () => {
       attachmentCount: 0,
     });
     expect(windowCanSubmit({ sections, lines: filledLines, draft: filled })).toBe(true);
+  });
+});
+
+describe('раздел «Трудозатраты» держит отправку окна (#866, AUD-009)', () => {
+  const time = (mode: 'always' | 'if_empty' = 'always'): EffectiveSection => ({
+    kind: 'time',
+    mode,
+    origin: 'form',
+  });
+
+  const submit = (amount: string, spentMinutes = 0, mode: 'always' | 'if_empty' = 'always') =>
+    windowCanSubmit({
+      sections: [time(mode)],
+      lines: [],
+      draft: { ...emptyDraft(context), time: { amount, comment: '', daysAgo: 0 } },
+      spentMinutes,
+    });
+
+  it('пустое поле необязательного раздела — отправить можно', () => {
+    expect(submit('')).toBe(true);
+  });
+
+  it('валидный ввод — отправить можно, минуты не теряются', () => {
+    expect(submit('2ч 30м')).toBe(true);
+    const draft = { ...emptyDraft(context), time: { amount: '2ч 30м', comment: '', daysAgo: 0 } };
+    const body = buildExecuteBody({ sections: [time()], context, draft });
+    expect(body.form?.time?.minutes).toBe(150);
+  });
+
+  it('нераспознанный ввод блокирует отправку; причина — формат', () => {
+    expect(submit('abc')).toBe(false);
+    expect(
+      timeSectionIssue(
+        time() as Extract<EffectiveSection, { kind: 'time' }>,
+        { ...emptyDraft(context), time: { amount: 'abc', comment: '', daysAgo: 0 } },
+        0,
+      ),
+    ).toBe('format');
+  });
+
+  it('больше 24 часов за запись блокирует отправку; причина — предел', () => {
+    expect(submit('30ч')).toBe(false);
+    expect(
+      timeSectionIssue(
+        time() as Extract<EffectiveSection, { kind: 'time' }>,
+        { ...emptyDraft(context), time: { amount: '30ч', comment: '', daysAgo: 0 } },
+        0,
+      ),
+    ).toBe('limit');
+  });
+
+  it('режим if_empty при уже учтённом времени не блокирует даже невалидный ввод', () => {
+    expect(submit('abc', 30, 'if_empty')).toBe(true);
+    expect(submit('30ч', 30, 'if_empty')).toBe(true);
   });
 });
 

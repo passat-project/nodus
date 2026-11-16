@@ -349,11 +349,19 @@ export class ProjectReaderProvider implements ProjectReader, ProjectChatReader {
 
   // ===== ProjectChatReader (Р8) =====
 
-  async roster(projectId: string): Promise<{ managerId: string; memberIds: string[] } | null> {
+  async roster(
+    projectId: string,
+    tx?: TransactionClient,
+  ): Promise<{ managerId: string; memberIds: string[] } | null> {
+    // Флаг `projects` — кэшированный FeatureFlagService (TTL 5 с): при тёплом
+    // кэше соединения не занимает; roster под замком читается соединением tx
+    // (AUD-022). Остаток: при промахе кэша isEnabled делает быстрый PK-запрос
+    // без tx — не чаще раза в 5 с на ключ, принятое ограниченное исключение
+    // AUD-022 (не обход прав: флаг off → null → fail-closed распуск состава).
     if (!(await this.enabled())) return null;
-    const project = await this.projects.findById(projectId);
+    const project = await this.projects.findById(projectId, tx);
     if (!project) return null;
-    const memberIds = await this.participants.rosterUserIds(projectId);
+    const memberIds = await this.participants.rosterUserIds(projectId, tx);
     return { managerId: project.managerId, memberIds };
   }
 

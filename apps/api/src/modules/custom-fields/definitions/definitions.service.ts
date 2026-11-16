@@ -125,6 +125,9 @@ export class DefinitionsService {
 
     return this.txRunner.run(async (tx) => {
       await this.definitions.lockRegistry(tx);
+      // Вставки правила печатаются по типу поля (AUD-010): неподдержанный тип
+      // отвергается до записи, а не печатает UUID в неизменяемый номер.
+      if (dto.numbering) await this.counterRules.assertInsertions(tx, dto.numbering);
       const taken = await this.definitions.findByName(dto.name, null, tx);
       if (taken) throw nameTaken(taken.id, taken.name);
       if ((await this.definitions.countAll(tx)) >= CUSTOM_FIELD_LIMITS.portal) {
@@ -236,6 +239,7 @@ export class DefinitionsService {
           : null;
       const nextRule = dto.numbering ?? currentRule;
       if (dto.numbering) {
+        await this.counterRules.assertInsertions(tx, dto.numbering);
         await this.counterRules.assertReachable(dto.numbering, nextBindings);
         await this.counterRules.assertNotLocked(tx, fresh.numberSeriesId ?? null, dto.numbering);
       }

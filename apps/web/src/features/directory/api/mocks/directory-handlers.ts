@@ -110,6 +110,22 @@ export const directoryHandlers = [
       return HttpResponse.json({ code: 'NOT_FOUND', message: 'User not found' }, { status: 404 });
     return HttpResponse.json(card);
   }),
+  /** Возврат деактивированного сотрудника в работу (AUD-016): зеркало
+   *  деактивации. Тела нет — ответ по контракту `UserCard`; повтор на уже
+   *  активном сотруднике идемпотентен (та же карточка без изменений).
+   *  Демо-стор мутируется на время сессии, как у подразделений. */
+  http.post('/api/v1/directory/users/:id/activate', ({ params }) => {
+    const id = String(params.id);
+    const card = demoUserCards.find((u) => u.id === id);
+    if (!card)
+      return HttpResponse.json({ code: 'NOT_FOUND', message: 'User not found' }, { status: 404 });
+    if (card.status !== 'active') {
+      card.status = 'active';
+      const item = demoUserListItems.find((u) => u.id === id);
+      if (item) item.status = 'active';
+    }
+    return HttpResponse.json(card);
+  }),
   /** Приглашение сотрудника (кнопка «Пригласить») — заготовка: принимает
    *  email, полный поток (роль, подразделение, письмо-инвайт) — с бэкендом. */
   http.post('/api/v1/directory/invitations', async ({ request }) => {

@@ -134,6 +134,24 @@ describe('OfficeSessionService (#138)', () => {
     });
   });
 
+  it('явное вето одного контекста не отменяет положительное решение другого (решающий задачи, #433)', async () => {
+    // AUD-004: ChatFileAccess даёт deny не-участнику беседы, но решающий
+    // задачи (#433) получает просмотр от второго контекста того же файла —
+    // владение и вето одного контекста не должны гасить законный доступ.
+    const chatDeny: FileAccessContributor = {
+      fileAccessContext: 'chat',
+      check: vi.fn(async () => ({ canView: false, canEdit: false, deny: true })),
+    };
+    const taskDecider: FileAccessContributor = {
+      fileAccessContext: 'chat',
+      check: vi.fn(async () => ({ canView: true, canEdit: false })),
+    };
+    const { service } = makeService(makeFile(), {}, [chatDeny, taskDecider]);
+    const session = await service.createSession(FILE_ID, makeUser(OTHER_ID), 'edit');
+    expect(session.mode).toBe('view');
+    expect(session.canEdit).toBe(false);
+  });
+
   it('edit без права контекста деградирует в view (не 403)', async () => {
     const contributor: FileAccessContributor = {
       fileAccessContext: 'chat',

@@ -1,6 +1,7 @@
 import type { FormulaNode } from '@nodus/contracts';
 
 import { evaluateAggregate } from './evaluate-aggregate.js';
+import { EvaluationBudget } from './evaluate-budget.js';
 import { evaluateCall } from './evaluate-call.js';
 import { arithmetic, asText, compareValues, fail, RuntimeFailure } from './runtime.js';
 import type {
@@ -17,6 +18,7 @@ import type {
 function evaluateOperation(
   node: Extract<FormulaNode, { kind: 'op' }>,
   resolver: FormulaResolver,
+  budget: EvaluationBudget,
 ): FormulaValue {
   if (node.op === 'concat') {
     // «&» — склейка N операндов (редактор строит один узел из плашек подряд);
@@ -24,7 +26,7 @@ function evaluateOperation(
     // при пустом соседе тоже пропускается: пустое значение не оставляет
     // висячих дефисов (`Шифр-№` при пустом № = `Шифр`, а не `Шифр--`).
     const texts = node.args.map((arg) => {
-      const value = evaluateNode(arg, resolver);
+      const value = evaluateNode(arg, resolver, budget);
       if (value === null) return '';
       // Литерал — это написанный руками текст: типографский разделитель `"—"`
       // не «пустой маркер», его нельзя прогонять через `textOf` — иначе
@@ -67,8 +69,8 @@ function evaluateOperation(
   // теряться (`add(1,2,3)` — ошибка формы, а не `3`).
   if (node.args.length !== 2) fail('type_mismatch', 'operator expects two arguments');
   const [leftNode, rightNode] = node.args as [FormulaNode, FormulaNode];
-  const left = evaluateNode(leftNode, resolver);
-  const right = evaluateNode(rightNode, resolver);
+  const left = evaluateNode(leftNode, resolver, budget);
+  const right = evaluateNode(rightNode, resolver, budget);
   switch (node.op) {
     case 'add':
     case 'sub':
@@ -86,7 +88,12 @@ function evaluateOperation(
   }
 }
 
-function evaluateNode(node: FormulaNode, resolver: FormulaResolver): FormulaValue {
+function evaluateNode(
+  node: FormulaNode,
+  resolver: FormulaResolver,
+  budget: EvaluationBudget,
+): FormulaValue {
+  budget.consume();
   switch (node.kind) {
     case 'literal':
       return node.value;
@@ -109,11 +116,15 @@ function evaluateNode(node: FormulaNode, resolver: FormulaResolver): FormulaValu
       return value === undefined ? null : value;
     }
     case 'op':
-      return evaluateOperation(node, resolver);
+      return evaluateOperation(node, resolver, budget);
     case 'call':
-      return evaluateCall(node, resolver, evaluateNode);
+      return evaluateCall(node, resolver, (child, childResolver) =>
+        evaluateNode(child, childResolver, budget),
+      );
     case 'aggregate':
-      return evaluateAggregate(node, resolver, evaluateNode);
+      return evaluateAggregate(node, resolver, (child, childResolver) =>
+        evaluateNode(child, childResolver, budget),
+      );
   }
 }
 
@@ -135,8 +146,9 @@ function toCellError(error: unknown): FormulaCellError {
  * сравнение с null → false; агрегаты игнорируют null (кроме СКОЛЬКО).
  */
 export function evaluate(ast: FormulaNode, resolver: FormulaResolver): FormulaEvaluation {
+  const budget = new EvaluationBudget();
   try {
-    return { value: evaluateNode(ast, resolver), error: null };
+    return { value: evaluateNode(ast, resolver, budget), error: null };
   } catch (error) {
     return { value: null, error: toCellError(error) };
   }

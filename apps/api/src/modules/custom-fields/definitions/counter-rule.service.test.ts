@@ -19,7 +19,9 @@ const rule = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-function setup(opts: { category?: 'task' | 'letter'; issued?: number; current?: unknown } = {}) {
+function setup(
+  opts: { category?: 'task' | 'letter'; issued?: number; current?: unknown; rows?: unknown[] } = {},
+) {
   const series = {
     byId: vi.fn(async () => opts.current ?? null),
     issuedCounts: vi.fn(async () => new Map([[SERIES, opts.issued ?? 0]])),
@@ -28,6 +30,7 @@ function setup(opts: { category?: 'task' | 'letter'; issued?: number; current?: 
     setNext: vi.fn(async () => undefined),
   };
   const definitions = {
+    list: vi.fn(async () => opts.rows ?? []),
     setNumberSeries: vi.fn(async () => undefined),
     setNumberOnCreate: vi.fn(async () => undefined),
   };
@@ -127,6 +130,51 @@ describe('CounterRuleService (#630)', () => {
     await expect(
       fresh.service.assertNotLocked(TX, SERIES, rule({ period: 'year' }) as never),
     ).resolves.toBeUndefined();
+  });
+
+  it('вставка без печатного значения — отказ при сохранении правила (AUD-010)', async () => {
+    const FIELD_TEXT = 7;
+    const FIELD_ENUM = 8;
+    const FIELD_USER = 9;
+    const rows = [
+      { id: 'text', number: FIELD_TEXT, type: 'text', name: 'Инв. №' },
+      { id: 'enum', number: FIELD_ENUM, type: 'enum', name: 'Марка' },
+      { id: 'user', number: FIELD_USER, type: 'user', name: 'Автор' },
+    ];
+    const withFields = rule({
+      template: [
+        { kind: 'field', fieldNumber: FIELD_TEXT, source: 'self' },
+        { kind: 'field', fieldNumber: FIELD_ENUM, source: 'self' },
+        { kind: 'counter' },
+      ],
+    });
+    const ok = setup({ rows });
+    await expect(ok.service.assertInsertions(TX, withFields as never)).resolves.toBeUndefined();
+    const link = setup({ rows });
+    await expect(
+      link.service.assertInsertions(
+        TX,
+        rule({
+          template: [
+            { kind: 'field', fieldNumber: FIELD_USER, source: 'self' },
+            { kind: 'counter' },
+          ],
+        }) as never,
+      ),
+    ).rejects.toMatchObject({
+      code: ErrorCode.NUMBER_SEGMENT_UNSUPPORTED,
+      details: { segments: [{ fieldNumber: FIELD_USER, name: 'Автор', type: 'user' }] },
+    });
+    // Неизвестное поле шаблона тоже не имеет печатного вида — отказ.
+    const missing = setup({ rows });
+    await expect(
+      missing.service.assertInsertions(
+        TX,
+        rule({
+          template: [{ kind: 'field', fieldNumber: 99, source: 'self' }, { kind: 'counter' }],
+        }) as never,
+      ),
+    ).rejects.toMatchObject({ code: ErrorCode.NUMBER_SEGMENT_UNSUPPORTED });
   });
 
   it('applyRule: существующая серия — update, новая — create + привязка', async () => {

@@ -9,7 +9,9 @@ import { getAuthConfig } from './auth.config.js';
 import { AuthController } from './auth.controller.js';
 import { AuthRepository } from './auth.repository.js';
 import { AuthService } from './auth.service.js';
+import { RoleAccessChangedHandler } from './events/role-access-changed.handler.js';
 import { UserDeactivatedHandler } from './events/user-deactivated.handler.js';
+import { UserRolesChangedHandler } from './events/user-roles-changed.handler.js';
 import { IdentityLoader } from './identity.loader.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
 import { LocalAuthProvider } from './local-auth.provider.js';
@@ -42,6 +44,8 @@ import { TokenService } from './token.service.js';
     TokenService,
     JwtAuthGuard,
     UserDeactivatedHandler,
+    UserRolesChangedHandler,
+    RoleAccessChangedHandler,
     LoginThrottleService,
     RevokedUsersStore,
     { provide: AUTH_PROVIDER, useClass: LocalAuthProvider },

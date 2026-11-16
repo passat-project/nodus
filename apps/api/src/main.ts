@@ -8,6 +8,7 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
 import { validateEnv } from './core/config/env.schema.js';
 import { registerCoreFastifyPlugins } from './core/http/register-fastify-plugins.js';
+import { registerUnhandledRejectionHandler } from './core/logging/unhandled-rejection.js';
 import { setupOpenApi } from './core/openapi/openapi.setup.js';
 import { TokenService } from './modules/auth/token.service.js';
 
@@ -25,6 +26,12 @@ async function bootstrap(): Promise<void> {
     }),
   );
   app.useLogger(app.get(Logger));
+  // Фоновая ошибка не должна завершать процесс api (AUD-018): пишем error
+  // и продолжаем; uncaughtException не перехватываем.
+  const logger = app.get(Logger);
+  registerUnhandledRejectionHandler((message, error) =>
+    logger.error(message, error instanceof Error ? error.stack : String(error)),
+  );
   app.enableShutdownHooks();
   app.setGlobalPrefix('api/v1');
 

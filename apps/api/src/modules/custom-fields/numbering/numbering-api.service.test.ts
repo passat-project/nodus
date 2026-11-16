@@ -56,10 +56,18 @@ const host = (overrides: Record<string, unknown> = {}): NumberHostRecord =>
     ...overrides,
   }) as unknown as NumberHostRecord;
 
-function setup(opts: { host?: unknown; rows?: unknown[]; counter?: unknown } = {}) {
+function setup(
+  opts: {
+    host?: unknown;
+    rows?: unknown[];
+    counter?: unknown;
+    definitions?: unknown[];
+    items?: unknown[];
+  } = {},
+) {
   const definitions = {
     findById: vi.fn(async () => definition()),
-    list: vi.fn(async () => [definition()]),
+    list: vi.fn(async () => opts.definitions ?? [definition()]),
   };
   const series = {
     byId: vi.fn(async () => ({
@@ -112,14 +120,16 @@ function setup(opts: { host?: unknown; rows?: unknown[]; counter?: unknown } = {
       { entity: 'node', id: FOLDER, name: 'КЖ-01', path: [], hidden: false, deleted: false },
     ]),
   };
+  const dictionaries = { itemsOf: vi.fn(async () => opts.items ?? []) };
   const service = new NumberingApiService(
     definitions as never,
     series as never,
     issue as never,
     hosts as never,
     refs as never,
+    dictionaries as never,
   );
-  return { service, definitions, series, issue, hosts, refs };
+  return { service, definitions, series, issue, hosts, refs, dictionaries };
 }
 
 describe('NumberingApiService (#630)', () => {
@@ -164,6 +174,51 @@ describe('NumberingApiService (#630)', () => {
         host: { kind: 'task', id: TASK },
       }),
     ).resolves.toMatchObject({ ok: true, nextDisplay: '3' });
+  });
+
+  it('preview: вставки печатаются кодом варианта и числом, как у выдачи (AUD-010)', async () => {
+    const ENUM = '66666666-6666-4666-8666-666666666666';
+    const NUMBER = '77777777-7777-4777-8777-777777777777';
+    const ITEM = '88888888-8888-4888-8888-888888888888';
+    const inserted: NumberSeriesRule = {
+      ...rule,
+      template: [
+        { kind: 'field', fieldNumber: 7, source: 'self' },
+        { kind: 'literal', text: '-' },
+        { kind: 'field', fieldNumber: 8, source: 'self' },
+        { kind: 'literal', text: '-' },
+        { kind: 'counter' },
+      ],
+    };
+    const withValues = host({
+      target: {
+        ...host().target,
+        sources: { self: { [ENUM]: ITEM, [NUMBER]: 42 } },
+      },
+    });
+    const { service } = setup({
+      host: withValues,
+      definitions: [
+        definition(),
+        definition({
+          id: ENUM,
+          number: 7,
+          type: 'enum',
+          name: 'Марка',
+          settings: { dictionaryId: 'dictionary-1' },
+          bindings: [],
+        }),
+        definition({ id: NUMBER, number: 8, type: 'number', name: 'Этаж', bindings: [] }),
+      ],
+      items: [{ id: ITEM, dictionaryId: 'dictionary-1', code: 'КЖ', name: 'Конструкция' }],
+    });
+    const preview = await service.preview(TX, ACTOR, {
+      definitionId: FIELD,
+      rule: inserted,
+      participantTypeIds: [TYPE],
+      host: { kind: 'task', id: TASK },
+    });
+    expect(preview).toMatchObject({ ok: true, nextDisplay: 'КЖ-42-3', emptySegments: [] });
   });
 
   it('counts: последний/следующий, фильтр по имени, issued', async () => {

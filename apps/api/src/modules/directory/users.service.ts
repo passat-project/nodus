@@ -256,6 +256,26 @@ export class UsersService {
     });
   }
 
+  /** Возврат в работу (AUD-016): снятие деактивации + парное событие. Сессии
+   *  не восстанавливаются — вход заново (стоп-лист допускает новые токены);
+   *  роли и история сохраняются. Повторная активация — без записи и события. */
+  async activateUser(id: string, actor: AuthUser): Promise<UserCard> {
+    const before = await this.users.findCardById(id);
+    if (!before) throw DomainException.notFound('User not found');
+    if (before.status === 'active') return toUserCard(before, this.avatarUrlOf); // идемпотентно
+
+    return this.tx.run(async (tx) => {
+      await this.users.update(id, { status: 'active' }, tx);
+      await this.eventBus.emit(
+        tx,
+        DIRECTORY_EVENTS.USER_ACTIVATED,
+        { userId: id },
+        { actorId: actor.id, aggregateType: 'user', aggregateId: id },
+      );
+      return toUserCard((await this.users.findCardById(id, tx))!, this.avatarUrlOf);
+    });
+  }
+
   /** Саморедактирование: только контактный блок (updateMyProfileSchema). */
   async updateMyProfile(userId: string, dto: UpdateMyProfileDto): Promise<UserCard> {
     const before = await this.users.findCardById(userId);

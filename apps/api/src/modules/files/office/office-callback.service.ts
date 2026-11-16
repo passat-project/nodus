@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { ErrorCode, FILE_EVENTS, type FileVersionCreatedPayload } from '@nodus/contracts';
 
@@ -134,8 +134,8 @@ export class OfficeCallbackService {
 
     const nextVersion = file.version + 1;
     // Идемпотентность приёмника (I7): lastsave-дедуп выше не покрывает ретраи
-    // DS без lastsave и гонку параллельных доставок — повтор той же версии
-    // (уникальный fileObjectId+version, тот же sourceKey) подтверждается.
+    // DS без lastsave. Быстрая проверка до скачивания; авторитетный дедуп и
+    // номер версии считаются в транзакции под замком строки файла (AUD-015).
     const existing = await this.repository.findVersion(file.id, nextVersion);
     if (existing?.sourceKey === body.key) {
       this.logger.info(
@@ -144,41 +144,134 @@ export class OfficeCallbackService {
       );
       return;
     }
-    const key = `files/${file.id}/v${nextVersion}`;
+    // Ключ уникален для ПОПЫТКИ (AUD-015, #866): два параллельных колбэка
+    // больше не пишут один объект — у каждой версии свой объект, содержимое
+    // всегда соответствует строке. Номер в ключе — снимок до замка;
+    // авторитетный номер версии вычисляется в транзакции (хранение в
+    // file_versions.key — читатели берут ключ строки, не шаблон).
+    const key = `files/${file.id}/v${nextVersion}-${randomUUID()}`;
     const { bytes } = await this.downloadTo(body.url, key, file.mime, file.name);
 
-    await this.txRunner.run(async (tx) => {
-      await this.repository.saveVersion(tx, {
-        fileObjectId: file.id,
-        version: nextVersion,
-        key,
-        size: bytes,
-        mime: file.mime,
-        sourceKey: body.key,
-        sourceLastsave: incomingLastsave,
-      });
-      const payload: FileVersionCreatedPayload = {
-        fileId: file.id,
-        version: nextVersion,
-        size: bytes,
-        mime: file.mime,
-      };
-      await this.eventBus.emit(tx, FILE_EVENTS.VERSION_CREATED, payload, {
-        aggregateType: 'file',
-        aggregateId: file.id,
-      });
-    });
+    // Загрузка объекта остаётся ВНЕ транзакции (замок строки не держим на
+    // время скачивания). Непривязанный объект снимается компенсацией.
+    let savedVersion: number | null;
+    try {
+      savedVersion = await this.saveUnderLock(file.id, body, key, bytes, incomingLastsave);
+    } catch (error) {
+      await this.removeAttemptObject(key);
+      throw error;
+    }
+    if (savedVersion === null) {
+      await this.removeAttemptObject(key);
+      return;
+    }
     await this.audit.append({
       actorId: null,
       action: 'files.office_save',
       entityType: 'file',
       entityId: file.id,
-      details: { version: nextVersion, status: body.status, users: body.users ?? [] },
+      details: { version: savedVersion, status: body.status, users: body.users ?? [] },
     });
     // Конвейер производных (#139): новая версия → перегенерация PDF-копии
     // (очередь; best-effort — не блокирует подтверждение колбэка).
-    await this.derivativesQueue.enqueuePdf(file.id, nextVersion);
-    this.logger.info({ fileId, version: nextVersion, status: body.status }, 'Office version saved');
+    await this.derivativesQueue.enqueuePdf(file.id, savedVersion);
+    this.logger.info(
+      { fileId, version: savedVersion, status: body.status },
+      'Office version saved',
+    );
+  }
+
+  /**
+   * Запись версии под замком строки файла (AUD-015, #866): первым шагом
+   * транзакции — `FOR UPDATE`, по свежей строке — проверка ключа, дедуп
+   * lastsave и номер версии. null — сохранение уже сделано/неактуально:
+   * колбэк подтверждается, объект попытки удаляет вызывающий. Нарушение
+   * unique(fileObjectId, version) (P2002) — та же семантика «уже сохранено»:
+   * гонка проиграна другому сохранению.
+   */
+  private async saveUnderLock(
+    fileId: string,
+    body: OfficeCallbackBody,
+    key: string,
+    bytes: number,
+    incomingLastsave: bigint | null,
+  ): Promise<number | null> {
+    try {
+      return await this.txRunner.run(async (tx) => {
+        const locked = await this.repository.lockForSave(tx, fileId);
+        if (!locked) {
+          this.logger.warn(
+            { fileId, key: body.key },
+            'Office callback file disappeared during save',
+          );
+          return null;
+        }
+        const { file, latest } = locked;
+        // Устаревший ключ сверяем по СВЕЖЕЙ строке: пока шло скачивание,
+        // другое сохранение могло уйти вперёд и закрыть сессию DS.
+        const currentKey = `${file.id}.v${file.version}`;
+        const continuesLatest = latest?.sourceKey === body.key;
+        if (body.key !== currentKey && !continuesLatest) {
+          this.logger.info(
+            { fileId, key: body.key, current: file.version },
+            'Office callback for outdated document key (fresh state)',
+          );
+          return null;
+        }
+        if (
+          latest?.sourceKey === body.key &&
+          incomingLastsave !== null &&
+          latest.sourceLastsave === incomingLastsave
+        ) {
+          this.logger.info(
+            { fileId, key: body.key },
+            'Office callback deduplicated (same lastsave)',
+          );
+          return null;
+        }
+        const version = file.version + 1;
+        await this.repository.saveVersion(tx, {
+          fileObjectId: file.id,
+          version,
+          key,
+          size: bytes,
+          mime: file.mime,
+          sourceKey: body.key,
+          sourceLastsave: incomingLastsave,
+        });
+        const payload: FileVersionCreatedPayload = {
+          fileId: file.id,
+          version,
+          size: bytes,
+          mime: file.mime,
+        };
+        await this.eventBus.emit(tx, FILE_EVENTS.VERSION_CREATED, payload, {
+          aggregateType: 'file',
+          aggregateId: file.id,
+        });
+        return version;
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code === 'P2002') {
+        this.logger.info(
+          { fileId, key: body.key },
+          'Office save already stored (unique-version conflict)',
+        );
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /** Компенсация попытки сохранения (AUD-015): объект, не привязанный к
+   *  строке версии, удаляется — сирот в хранилище не остаётся. Сбой уборки
+   *  не подменяет исходную ошибку/подтверждение (best-effort). */
+  private async removeAttemptObject(key: string): Promise<void> {
+    try {
+      await this.driver.remove([key]);
+    } catch (error) {
+      this.logger.warn({ key, err: error }, 'Failed to remove unclaimed office save object');
+    }
   }
 
   /**

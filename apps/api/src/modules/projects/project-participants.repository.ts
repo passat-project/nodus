@@ -242,9 +242,10 @@ export class ProjectParticipantsRepository {
     return row !== null;
   }
 
-  /** Состав roster'а канала: уникальные пользователи всех источников. */
-  async rosterUserIds(projectId: string): Promise<string[]> {
-    const rows = await this.prisma.$queryRaw<{ user_id: string }[]>`
+  /** Состав roster'а канала: уникальные пользователи всех источников. `tx` —
+   *  чтение тем же соединением транзакции (состав под замком беседы, AUD-022). */
+  async rosterUserIds(projectId: string, tx?: TransactionClient): Promise<string[]> {
+    const rows = await (tx ?? this.prisma).$queryRaw<{ user_id: string }[]>`
       SELECT DISTINCT user_id FROM project_participants WHERE project_id = ${projectId}::uuid
     `;
     return rows.map((row) => row.user_id);

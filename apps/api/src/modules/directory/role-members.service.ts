@@ -13,6 +13,7 @@ import { DomainException } from '../../core/errors/domain-exception.js';
 import { EventBus } from '../../core/events/event-bus.js';
 import { avatarUrlOf } from './avatar-url.js';
 import { toRoleDto } from './role-dto.js';
+import { RoleAudienceRepository } from './role-audience.repository.js';
 import { catalogPermissions, isLockedRole, notHeld } from './role-permission-rules.js';
 import { RolesRepository, type RoleRecord } from './roles.repository.js';
 
@@ -34,6 +35,7 @@ export class RoleMembersService {
     private readonly tx: TransactionRunner,
     private readonly eventBus: EventBus,
     private readonly signedUrls: SignedUrlService,
+    private readonly audience: RoleAudienceRepository,
   ) {}
 
   async listMembers(roleId: string): Promise<RoleMembers> {
@@ -127,6 +129,7 @@ export class RoleMembersService {
           { roleId, kind, targetId, added: add },
           { actorId: actor.id, aggregateType: 'role', aggregateId: roleId },
         );
+        await this.emitAccessChanged(tx, roleId, kind, targetId, actor.id);
       }
       return toRoleDto((await this.roles.findById(roleId, tx))!, (fileId) =>
         avatarUrlOf(this.signedUrls, fileId),
@@ -158,5 +161,26 @@ export class RoleMembersService {
 
   private permissions(record: RoleRecord): string[] {
     return record.row.permissions.map((row) => row.permission);
+  }
+
+  /** `directory.role.access_changed` (#866, AUD-002): у кого поменялись
+   *  действующие права — для сотрудника это он сам, для подразделения —
+   *  сотрудники его поддерева. Auth отзовёт их access-токены. */
+  private async emitAccessChanged(
+    tx: Parameters<EventBus['emit']>[0],
+    roleId: string,
+    kind: MemberKind,
+    targetId: string,
+    actorId: string,
+  ): Promise<void> {
+    const userIds =
+      kind === 'user' ? [targetId] : await this.audience.departmentUserIds(targetId, tx);
+    if (userIds.length === 0) return;
+    await this.eventBus.emit(
+      tx,
+      DIRECTORY_EVENTS.ROLE_ACCESS_CHANGED,
+      { roleId, reason: 'membership', userIds },
+      { actorId, aggregateType: 'role', aggregateId: roleId },
+    );
   }
 }

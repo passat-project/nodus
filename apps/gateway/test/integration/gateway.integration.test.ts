@@ -212,6 +212,55 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.REDIS_URL || !process.
       expect(Date.now() - sentAt).toBeLessThan(1_000); // критерий #104 (цель p95 <200 мс)
     });
 
+    it('потеря группы чтения (NOGROUP) лечится сама: доставка возобновляется (AUD-021)', async () => {
+      const receiver = await connect(testDb.users[1]!.id);
+      await joinAck(receiver, testDb.conversationId);
+
+      // Группа исчезает (потеря тома/ручной сброс): цикл gateway получает
+      // NOGROUP и пересоздаёт её — без перезапуска контейнера.
+      await publisherRedis.xgroup('DESTROY', DOMAIN_EVENTS_STREAM, consumerGroup);
+      await vi.waitFor(
+        async () => {
+          const groups = (await publisherRedis.xinfo(
+            'GROUPS',
+            DOMAIN_EVENTS_STREAM,
+          )) as unknown[][];
+          expect(groups.some((group) => group[1] === consumerGroup)).toBe(true);
+        },
+        { timeout: 15_000, interval: 100 },
+      );
+
+      const received = new Promise<RealtimeEnvelope>((resolve) => {
+        receiver.once('chat.message_sent', resolve);
+      });
+      const envelope: RealtimeEnvelope = {
+        type: 'chat.message_sent',
+        payload: {
+          conversationId: testDb.conversationId,
+          messageId: crypto.randomUUID(),
+          seq: 2,
+          authorId: testDb.users[0]!.id,
+          threadRootId: null,
+          forwarded: false,
+        },
+        seq: Date.now(),
+        ts: new Date().toISOString(),
+      };
+      const entryId = (await publisherRedis.xadd(
+        DOMAIN_EVENTS_STREAM,
+        'MAXLEN',
+        '~',
+        100_000,
+        '*',
+        'envelope',
+        JSON.stringify(envelope),
+      )) as string;
+      streamEntryIds.push(entryId);
+
+      const got = await received;
+      expect(got.payload).toEqual(envelope.payload);
+    });
+
     it('typing: событие одного члена видно другому, но не самому автору', async () => {
       const alice = await connect(testDb.users[0]!.id);
       const bob = await connect(testDb.users[1]!.id);

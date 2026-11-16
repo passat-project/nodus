@@ -6,7 +6,6 @@ import {
   RotateCcw,
   Settings2,
   SlidersHorizontal,
-  Users,
 } from 'lucide-react';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { Permission, ui } from '@nodus/contracts';
@@ -49,14 +48,12 @@ export const MODULE_PORT_R = PORT / 2;
  * со скруглёнными отводами к портам; активные отвод и порт светятся.
  *
  * ПЕРСОНАЛЬНЫЙ ПОРЯДОК (концепт #4, вердикты владельца 15.09.2026): секций
- * «Работа»/«Общение» нет — плоский список личный ?? общий ?? системный.
+ * «Работа»/«Общение» нет — плоский список личный ?? системный.
  * Модуль «НАСТРОЙКИ» прибит ВНИЗУ рейки (модель Битрикс24) — контекстное
  * меню: «Изменить порядок» (режим dnd с НЕПОДВИЖНЫМ сепаратором «— Скрытое
  * —»: перетащил модуль за сепаратор = скрыл; минимум один видимый),
- * «Применить порядок для всех» (Permission.SETTINGS_UI_DEFAULTS — текущий
- * порядок становится общим), «Вернуть по умолчанию»; у держателя права
- * `portal.settings.manage` первым пунктом — «Настройки портала» (#558,
- * страница `/settings`). Скрытые модули в
+ * «Вернуть по умолчанию»; у держателя права `portal.settings.manage` первым
+ * пунктом — «Настройки портала» (#558, страница `/settings`). Скрытые модули в
  * обычном режиме — под «Показать всё ▾» внизу списка; раскрытие живёт до
  * любого действия (навигация сворачивает). Первый ВИДИМЫЙ модуль —
  * стартовый экран приложения (переадресация «/», router.tsx).
@@ -70,20 +67,17 @@ export function NodeRail() {
   const { data: unreadSummary } = useChatUnreadSummary();
 
   const personal = useUiPrefsStore((s) => s.personal);
-  const company = useUiPrefsStore((s) => s.company);
   const applyNav = useUiPrefsStore((s) => s.applyNav);
   const resetPersonal = useUiPrefsStore((s) => s.resetPersonal);
-  const canForAll = useAuthStore(
-    (s) => s.user?.permissions.includes(Permission.SETTINGS_UI_DEFAULTS) ?? false,
-  );
+
   const canOpenSettings = useAuthStore(
     (s) => s.user?.permissions.includes(Permission.PORTAL_SETTINGS_MANAGE) ?? false,
   );
   const settingsActive = pathname === '/settings' || pathname.startsWith('/settings/');
 
   const ids = RAIL_MODULES.map((m) => m.id);
-  const order = resolveOrder(ids, personal.navOrder, company.navOrder);
-  const hidden = resolveHidden(ids, personal.navHidden, company.navHidden);
+  const order = resolveOrder(ids, personal.navOrder);
+  const hidden = resolveHidden(ids, personal.navHidden);
   const byId = (id: string) => RAIL_MODULES.find((m) => m.id === id);
   const defined = (m: NavModuleDef | undefined): m is NavModuleDef => m !== undefined;
   const visibleModules = order
@@ -194,12 +188,11 @@ export function NodeRail() {
               HIDDEN_SENTINEL,
               ...hiddenModules.map((m) => m.id),
             ]}
-            canForAll={canForAll}
             badges={badges}
             isActive={isActive}
             byId={byId}
-            onApply={(order, hidden, forAll) => {
-              applyNav(order, hidden, forAll);
+            onApply={(order, hidden) => {
+              applyNav(order, hidden);
               setCustomizing(false);
               remeasure();
             }}
@@ -265,8 +258,7 @@ export function NodeRail() {
               </DropdownMenuTrigger>
               {/* #132: ширина ПО ВНУТРЕННОСТЬ рейки (w-48 при отступе кнопки
                   ml-[3.25rem] ≈ до края w-60) — раньше w-64 нависал над
-                  рамой; длинные подписи не рвём (метка applyForAll
-                  сокращена). */}
+                  рамой; длинные подписи не рвём. */}
               <DropdownMenuContent side="bottom" align="start" className="w-48">
                 {canOpenSettings ? (
                   <DropdownMenuItem onSelect={() => void navigate({ to: '/settings' })}>
@@ -278,17 +270,6 @@ export function NodeRail() {
                   <ArrowUpDown className="size-4" />
                   {ui.nav.editOrder}
                 </DropdownMenuItem>
-                {canForAll ? (
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      applyNav(order, hidden, true);
-                      remeasure();
-                    }}
-                  >
-                    <Users className="size-4" />
-                    {ui.nav.applyForAll}
-                  </DropdownMenuItem>
-                ) : null}
                 {personal.navOrder !== undefined || personal.navHidden !== undefined ? (
                   <DropdownMenuItem
                     onSelect={() => {

@@ -12,6 +12,8 @@ import type {
 } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
+import { setCurrentUserId } from '../../../../shared/lib/current-user-id.js';
+
 const {
   PROJECT_ID,
   TYPE_ID,
@@ -281,6 +283,9 @@ function renderTab(props: { canManage?: boolean; readOnly?: boolean } = {}) {
 describe('StructureTab: дерево папок с задачами и фильтр по атрибутам (#467, #631)', () => {
   beforeEach(() => {
     localStorage.clear();
+    // auth-store в этом файле замокан — мост «текущий пользователь» заполняем
+    // так же, как это делает настоящий стор (ключи личных настроек — AUD-005).
+    setCurrentUserId(ME_ID);
     world.loading = true;
     world.structure = null;
   });
@@ -290,6 +295,7 @@ describe('StructureTab: дерево папок с задачами и филь�
     vi.clearAllMocks();
     vi.unstubAllGlobals();
     localStorage.clear();
+    setCurrentUserId(null);
   });
 
   it('фильтр по атрибуту: совпадение с путём до корня, задачи и «Без папки» скрыты', () => {
@@ -298,7 +304,7 @@ describe('StructureTab: дерево папок с задачами и филь�
     // Фильтры тулбара живут под ключом списка «projects.structure» (ширины
     // колонок — отдельный ключ v2): сеем активный текстовый фильтр по атрибуту.
     localStorage.setItem(
-      'nodus-list-filters-v1:projects.structure',
+      `nodus-list-filters-v1:${ME_ID}:projects.structure`,
       JSON.stringify({ filters: { [`cf.${NOTE_ID}`]: 'фасад' }, presets: [] }),
     );
     renderTab();

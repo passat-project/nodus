@@ -35,6 +35,7 @@ const UNREAD_SCROLL_MARGIN = 48;
 export function UnreadAnchor({
   items,
   isLoading,
+  isFetching = false,
   anchorSeq,
   jump,
   viewportRef,
@@ -42,6 +43,10 @@ export function UnreadAnchor({
 }: {
   items: readonly ChatMessage[];
   isLoading: boolean;
+  /** Идёт рефеч (в т.ч. фоновый на устаревшем кэше): якорь ждёт ГОТОВЫЕ
+   * данные, иначе фиксируется на старом окне и не находит непрочитанное,
+   * приехавшее рефечем позже (#880 — клик по попапу не докручивал ленту). */
+  isFetching?: boolean;
   /** Порог непрочитанности (myLastReadSeq); null — непрочитанных нет. */
   anchorSeq: number | null;
   /** Jump-цель открытия (победа над якорем непрочитанных, open-anchor.ts). */
@@ -53,7 +58,9 @@ export function UnreadAnchor({
   const settled = useRef(false);
 
   useEffect(() => {
-    if (settled.current || isLoading) return;
+    // Ждём готовые данные: устаревший кэш (isLoading=false, isFetching=true)
+    // не содержит нового сообщения — фиксация на нём теряла якорь (#880).
+    if (settled.current || isLoading || isFetching) return;
     settled.current = true;
     const viewport = viewportRef.current;
     const scrollTo = (messageId: string, align: 'start' | 'center', margin?: number) => {
@@ -90,7 +97,7 @@ export function UnreadAnchor({
     }
     // Нет цели в окне — дефолт (низ) уже применён примитивом; якорь завершён.
     onAnchored();
-  }, [items, isLoading, anchorSeq, jump, viewportRef, onAnchored]);
+  }, [items, isLoading, isFetching, anchorSeq, jump, viewportRef, onAnchored]);
 
   return null;
 }

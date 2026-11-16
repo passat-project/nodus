@@ -35,25 +35,28 @@ export class OfficeSessionService {
   ): Promise<{ file: FileObjectRow; canEdit: boolean }> {
     const file = await this.repository.findById(fileId);
     if (!file) throw DomainException.notFound('File not found');
-    let canView = file.ownerId === userId;
-    let canEdit = file.ownerId === userId;
+    const isOwner = file.ownerId === userId;
+    let contextCanView = false;
+    let contextCanEdit = false;
     let immutable = false;
     let denied = false;
     for (const contributor of this.fileAccess.contributors()) {
       const decision = await contributor.check(fileId, userId);
       if (decision) {
-        canView ||= decision.canView;
-        canEdit ||= decision.canEdit;
+        contextCanView ||= decision.canView;
+        contextCanEdit ||= decision.canEdit;
         // Неизменяемость контекста — вето поверх владения (#55): файл письма
         // не правит даже тот, кто его загрузил.
         immutable ||= decision.immutable === true;
-        // Явный отказ контекста — вето и на просмотр (#461): владение файлом
-        // не обходит круг участников конфиденциального письма.
+        // Явный отказ контекста — вето на просмотр поверх ВЛАДЕНИЯ (#461,
+        // AUD-004): владение файлом не обходит круг участников. Положительное
+        // решение другого контекста остаётся в силе — решающий задачи (#433)
+        // читает вложение из беседы задачи, не состоя в ней.
         denied ||= decision.deny === true;
       }
     }
-    if (denied) canView = false;
-    if (immutable || denied) canEdit = false;
+    const canView = contextCanView || (isOwner && !denied);
+    const canEdit = (contextCanEdit || (isOwner && !denied)) && !immutable;
     if (!canView) throw DomainException.notFound('File not found');
     return { file, canEdit };
   }

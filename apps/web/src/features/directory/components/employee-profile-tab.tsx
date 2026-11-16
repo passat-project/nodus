@@ -17,7 +17,7 @@ import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { avatarIssueMessage, validateAvatarFile } from '../../../shared/chat/avatar-upload.js';
 import { EntityFields } from '../../../shared/ui/entity-fields.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
-import { useRemoveMyAvatar, useSetMyAvatar } from '../api/directory-api.js';
+import { useRemoveMyAvatar, useActivateUser, useSetMyAvatar } from '../api/directory-api.js';
 import { employeeProfileDefs } from '../lib/employee-profile-fields.js';
 import { EmployeeEditDialog } from './employee-edit-dialog.js';
 
@@ -72,6 +72,8 @@ export function EmployeeProfileTab({
   const openCard = useOpenCard();
   const setAvatar = useSetMyAvatar();
   const removeAvatar = useRemoveMyAvatar();
+  // Возврат уволенного в работу (AUD-016) — рядом с действиями управления.
+  const activateEmployee = useActivateUser(card.id);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [editOpen, setEditOpen] = useState(false);
 
@@ -166,6 +168,20 @@ export function EmployeeProfileTab({
             {canManage ? (
               <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                 {ui.employees.editEmployee}
+              </Button>
+            ) : null}
+            {/* Возврат в работу (AUD-016): только уволенному и при праве
+                управления справочником; подсказка честно говорит, что состав
+                бесед и проектов активация не возвращает. */}
+            {canManage && card.status === 'deactivated' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                title={ui.employees.activateHint}
+                onClick={() => activateEmployee.mutate()}
+                disabled={activateEmployee.isPending}
+              >
+                {ui.employees.activateEmployee}
               </Button>
             ) : null}
           </div>

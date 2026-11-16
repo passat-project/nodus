@@ -137,13 +137,20 @@ export function canChangeInfo(conversation: ConversationListItem): boolean {
 /** Состав чатов задач и писем ведёт сущность (#252): вручную — никому. */
 const ENTITY_MANAGED = new Set(['task', 'letter']);
 
+/** Канал, привязанный к проекту: составом ведёт проект (AUD-003), ручное
+ *  добавление/исключение скрыто. Канал БЕЗ проекта («Новости компании») —
+ *  по матрице прав «Добавление участников», как при создании канала. */
+function isProjectManaged(conversation: ConversationListItem): boolean {
+  return conversation.type === 'project_channel' && conversation.project != null;
+}
+
 export function canAddMembers(conversation: ConversationListItem): boolean {
-  if (ENTITY_MANAGED.has(conversation.type)) return false;
+  if (ENTITY_MANAGED.has(conversation.type) || isProjectManaged(conversation)) return false;
   return ROLE_RANK[conversation.myRole] >= ROLE_RANK[conversation.permissions.addMembers];
 }
 
 export function canRemoveMembers(conversation: ConversationListItem): boolean {
-  if (ENTITY_MANAGED.has(conversation.type)) return false;
+  if (ENTITY_MANAGED.has(conversation.type) || isProjectManaged(conversation)) return false;
   return ROLE_RANK[conversation.myRole] >= ROLE_RANK[conversation.permissions.removeMembers];
 }
 

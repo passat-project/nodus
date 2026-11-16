@@ -1,11 +1,14 @@
+import { ErrorCode } from '@nodus/contracts';
+
 import type { TransactionClient } from '../../../../core/database/transaction-runner.js';
+import { DomainException } from '../../../../core/errors/domain-exception.js';
 import type {
   WorkflowFormApplied,
   WorkflowStageChangeMeta,
 } from '../../../../core/ports/workflow-entity.port.js';
 import type { NumberSeriesService } from '../../numbering/number-series.service.js';
 import type { TransitionDef } from '../transition-rules.js';
-import { windowOf } from '../transition-form.js';
+import { checkFormInput, windowOf } from '../transition-form.js';
 
 export const EMPTY_APPLIED: WorkflowFormApplied = {
   fields: {},
@@ -25,6 +28,20 @@ export function commentLabelOf(t: TransitionDef): string | undefined {
 /** Кнопка без обязательного окна не блокирует жест DnD/«Мой план». */
 export function requiresWindow(t: TransitionDef): boolean {
   return windowOf(t.form, t.rules).required.length > 0;
+}
+
+/** Заменная кнопка DnD (#866, AUD-008): жест окно не открывает, поэтому
+ *  исполнение кнопки с обязательным окном без формы — отказ 422, а не
+ *  молчаливый переход в её стадию. */
+export function assertFallbackWindow(t: TransitionDef): void {
+  if (!requiresWindow(t)) return;
+  const { sections } = windowOf(t.form, t.rules);
+  const { missing } = checkFormInput(sections, {});
+  throw new DomainException(
+    ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID,
+    'Transition window is required',
+    { transitionId: t.id, missing, unexpected: [] },
+  );
 }
 
 /** Пост-функция «Присвоить номер» письма: номер из серии типа сущности.

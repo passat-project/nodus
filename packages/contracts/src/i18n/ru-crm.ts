@@ -82,6 +82,12 @@ export const counterpartiesStrings = {
   bulkArchive: 'В архив',
   bulkRestore: 'Из архива',
   bulkDelete: 'Удалить',
+  bulkDeleteConfirmTitle: 'Удалить выбранные записи?',
+  bulkDeleteConfirmText:
+    'Записи исчезнут из справочника навсегда — вместе с контактными лицами. Вернуть их будет нельзя. Выбрано записей: {n}.',
+  bulkContactDeleteConfirmTitle: 'Удалить выбранные контактные лица?',
+  bulkContactDeleteConfirmText:
+    'Записи исчезнут из карточки навсегда. Вернуть их будет нельзя. Выбрано записей: {n}.',
   bulkDone: 'Изменено записей: {n}',
   bulkPartial: 'Изменено {done} из {total} — часть записей не удалось изменить',
   bulkLimit: 'За один раз можно изменить не больше записей:',

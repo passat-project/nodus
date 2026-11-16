@@ -16,7 +16,6 @@ import {
 } from '@dnd-kit/sortable';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
-import { Checkbox } from '@nodus/ui/components/checkbox';
 
 import { CIRCUIT_REMEASURE } from './circuit-geometry.js';
 import type { NavModuleDef } from './nav-registry.js';
@@ -33,7 +32,6 @@ import { HIDDEN_SENTINEL, HiddenSentinelRow, RailPort, SortableRailRow } from '.
  */
 export function RailCustomizeMode({
   initialDraft,
-  canForAll,
   badges,
   isActive,
   byId,
@@ -41,15 +39,13 @@ export function RailCustomizeMode({
   onCancel,
 }: {
   initialDraft: string[];
-  canForAll: boolean;
   badges: (m: NavModuleDef) => number | undefined;
   isActive: (m: NavModuleDef) => boolean;
   byId: (id: string) => NavModuleDef | undefined;
-  onApply: (order: string[], hidden: string[], forAll: boolean) => void;
+  onApply: (order: string[], hidden: string[]) => void;
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState(initialDraft);
-  const [forAll, setForAll] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -76,7 +72,6 @@ export function RailCustomizeMode({
     onApply(
       draft.filter((id) => id !== HIDDEN_SENTINEL),
       draft.slice(sentIdx + 1),
-      forAll,
     );
   };
 
@@ -112,12 +107,6 @@ export function RailCustomizeMode({
         </SortableContext>
       </DndContext>
       <div className="mx-3 mt-2 flex flex-col gap-2">
-        {canForAll ? (
-          <label className="flex cursor-pointer items-center gap-2 text-xs text-sidebar-foreground/70">
-            <Checkbox checked={forAll} onCheckedChange={(v) => setForAll(v === true)} />
-            {ui.nav.customizeForAll}
-          </label>
-        ) : null}
         <div className="flex gap-2">
           <Button size="sm" className="flex-1" onClick={apply}>
             {ui.nav.customizeDone}

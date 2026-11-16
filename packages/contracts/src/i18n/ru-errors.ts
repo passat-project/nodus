@@ -94,6 +94,8 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.NUMBER_CELL_IMMUTABLE]: 'Номер счётчика выдаёт процесс — вписать вручную нельзя',
   [ErrorCode.NUMBER_SEGMENT_EMPTY]:
     'В номере есть незаполненное поле — подтвердите выдачу или сначала заполните поле',
+  [ErrorCode.NUMBER_SEGMENT_UNSUPPORTED]:
+    'Это поле нельзя вставить в номер — у него нет печатного значения. Уберите вставку',
   [ErrorCode.NUMBER_TRIGGER_INVALID]:
     'Этому типу нельзя выдавать номер при создании — выберите кнопку процесса',
   [ErrorCode.NUMBER_BACKFILL_STALE]:

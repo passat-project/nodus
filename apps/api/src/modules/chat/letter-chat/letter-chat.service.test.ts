@@ -20,17 +20,26 @@ function setup(roster: unknown) {
     removeMembers: vi.fn(async () => void 0),
   };
   const eventBus = { emit: vi.fn(async () => void 0) };
+  const order: string[] = [];
   const letters = {
-    roster: vi.fn(async () => roster),
+    roster: vi.fn(async () => {
+      order.push('roster');
+      return roster;
+    }),
     canView: vi.fn(async () => true),
   };
   const service = new LetterChatService(
     repo as never,
-    { run: (fn: (tx: unknown) => unknown) => fn({}) } as never,
+    {
+      run: (fn: (tx: unknown) => unknown) => {
+        order.push('tx');
+        return fn({});
+      },
+    } as never,
     eventBus as never,
     letters as never,
   );
-  return { service, repo, eventBus, letters };
+  return { service, repo, eventBus, letters, order };
 }
 
 const ROSTER = { ownerId: OWNER, members: [{ userId: MEMBER, muted: false }] };
@@ -70,5 +79,13 @@ describe('чат письма (#55, Р10)', () => {
     await expect(
       service.openForUser(LETTER, { id: STRANGER, permissions: [] }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('состав читается ДО открытия транзакции (AUD-022), под локом — гейт #252', async () => {
+    const { service, order } = setup(ROSTER);
+    await service.sync(LETTER, OWNER);
+    const txIndex = order.indexOf('tx');
+    expect(order.slice(0, txIndex)).toEqual(['roster']);
+    expect(order.slice(txIndex)).toEqual(['tx', 'roster']);
   });
 });

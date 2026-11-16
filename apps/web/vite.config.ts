@@ -24,6 +24,32 @@ export default defineConfig(({ command, mode }) => {
   // (NODUS_OFFICE_PORT, 3013) или явный NODUS_OFFICE_DEV_TARGET.
   const officeTarget =
     env.NODUS_OFFICE_DEV_TARGET ?? `http://localhost:${env.NODUS_OFFICE_PORT ?? 3013}`;
+  // МОКИ — ТОЛЬКО dev-сервер (command === 'serve' вне тестов): любой
+  // `vite build` (турбо-гейт, CI, live-stack, ручной) и ЛЮБОЙ тестовый
+  // прогон (mode === 'test') вшивают VITE_API_MOCK='false'.
+  // Иначе гейт-сборка затирала non-mock dist песочницы, MSW стартовал на
+  // preview и его service worker съедал мутации до сети (инцидент #171,
+  // 04.10; gotchas «Изоляция песочницы»), а локальные тесты зависели от
+  // значения моков в корневом .env (AUD-033, #866).
+  const forceNoMocks = command === 'build' || mode === 'test';
+  const define = forceNoMocks
+    ? {
+        'import.meta.env.VITE_API_MOCK': JSON.stringify('false'),
+        ...(command === 'build'
+          ? {
+              // Dev-галерея дизайн-системы (#257): флаг статичный ('1'/'0'),
+              // чтобы выражение в router.tsx свернулось и маршрут с чанком
+              // вырезались из прод-бандла. Включает его ТОЛЬКО сборка песочницы
+              // (`scripts/live-stack.mjs`, preview `:4173`): владелец смотрит
+              // страницу там; прод-CI/docker флаг не выставляет. Читаем
+              // process.env, а не .env: значение из файла не должно утечь в прод.
+              'import.meta.env.VITE_SANDBOX_DEV_UI': JSON.stringify(
+                process.env.VITE_SANDBOX_DEV_UI?.trim() === '1' ? '1' : '0',
+              ),
+            }
+          : {}),
+      }
+    : undefined;
   const proxy: Record<string, { target: string; changeOrigin?: boolean; ws?: boolean }> = {
     '/api': {
       target: apiTarget,
@@ -48,26 +74,7 @@ export default defineConfig(({ command, mode }) => {
   return {
     // VITE_*-флаги (VITE_API_MOCK) лежат в корневом .env рядом с docker-переменными.
     envDir: '../../',
-    // МОКИ — ТОЛЬКО dev-сервер (command === 'serve'): любой `vite build`
-    // (турбо-гейт, CI, live-stack, ручной) вшивает VITE_API_MOCK='false'.
-    // Иначе гейт-сборка затирала non-mock dist песочницы, MSW стартовал на
-    // preview и его service worker съедал мутации до сети (инцидент #171,
-    // 04.10; gotchas «Изоляция песочницы»).
-    define:
-      command === 'build'
-        ? {
-            'import.meta.env.VITE_API_MOCK': JSON.stringify('false'),
-            // Dev-галерея дизайн-системы (#257): флаг статичный ('1'/'0'),
-            // чтобы выражение в router.tsx свернулось и маршрут с чанком
-            // вырезались из прод-бандла. Включает его ТОЛЬКО сборка песочницы
-            // (`scripts/live-stack.mjs`, preview `:4173`): владелец смотрит
-            // страницу там; прод-CI/docker флаг не выставляет. Читаем
-            // process.env, а не .env: значение из файла не должно утечь в прод.
-            'import.meta.env.VITE_SANDBOX_DEV_UI': JSON.stringify(
-              process.env.VITE_SANDBOX_DEV_UI?.trim() === '1' ? '1' : '0',
-            ),
-          }
-        : undefined,
+    define,
     plugins: [tailwindcss(), react(), pdfjsWasmAssets()],
     // #533: компонентные jsdom-тесты под параллельным `turbo test` (api+web+
     // contracts одновременно) упирались в дефолтные 5 с — notification-reader

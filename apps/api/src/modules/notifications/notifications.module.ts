@@ -7,6 +7,8 @@ import { UserProfileProvider } from '../../core/ports/user-profile.provider.js';
 import { ChatPortsModule } from '../chat/chat-ports.module.js';
 import { TasksPortsModule } from '../tasks/tasks-ports.module.js';
 import { DispatchHandler } from './events/dispatch.handler.js';
+import { ChatMemberRemovedNotifyHandler } from './events/chat-member-removed.handler.js';
+import { LetterDeletedNotifyHandler } from './events/letter-deleted.handler.js';
 import { MessageDeletedHandler } from './events/message-deleted.handler.js';
 import { TaskDeletedNotifyHandler } from './events/task-deleted.handler.js';
 import {
@@ -66,6 +68,10 @@ import { UrgentRepeatWorker } from './urgent-repeat.worker.js';
     MessageSentHandler,
     MessageEditedHandler,
     MessageDeletedHandler,
+    // Исключён из беседы (AUD-011): её уведомления у выбывшего удаляются.
+    ChatMemberRemovedNotifyHandler,
+    // Письмо удалено (AUD-011): уведомления письма удаляются у всех получателей.
+    LetterDeletedNotifyHandler,
     MailNotificationWriter,
     LetterArrivedNotifyHandler,
     MailSyncFailedNotifyHandler,

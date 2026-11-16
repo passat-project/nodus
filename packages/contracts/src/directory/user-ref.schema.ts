@@ -7,7 +7,12 @@ import { z } from 'zod';
 export const userRefSchema = z.object({
   id: z.uuid(),
   displayName: z.string().min(1),
-  avatarUrl: z.url().nullable(),
+  /** Аватар — файл-дериват (#192): ОТНОСИТЕЛЬНЫЙ подписанный путь
+   * `/api/v1/files/<id>/content?exp=&sig=` (SignedUrlService.fileContentUrl),
+   * null — инициалы. Не `z.url()`: тот требует абсолютный URL и отбрасывал
+   * живые payload с аватаром (ломал попапы чата, #880). Канон подписных
+   * ссылок — строка, как у вложений (messageAttachmentSchema.url). */
+  avatarUrl: z.string().nullable(),
 });
 
 export type UserRef = z.infer<typeof userRefSchema>;

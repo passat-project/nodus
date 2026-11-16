@@ -124,7 +124,7 @@ export function notifyDesktopMessage(payload: unknown, queryClient: QueryClient)
       // Клик по попапу раскрывает окно треда, если попап об ответе в нём (#300).
       threadRootId: incoming.threadRootId ?? undefined,
       title: withoutPatronymic(incoming.author.displayName),
-      avatarUrl: incoming.author.avatarUrl ?? undefined,
+      avatarUrl: resolveAvatarUrl(incoming.author.avatarUrl),
       preview,
       previewAttachment,
       urgent,
@@ -211,4 +211,18 @@ function conversationFlags(
     items?: { id: string; muted: boolean; snoozed: boolean }[];
   }>(chatKeys.conversations());
   return cache?.items?.find((c) => c.id === conversationId) ?? null;
+}
+
+/** Аватар для мини-UI попапа: окно живёт в tauri-origine (index.html), поэтому
+ * ОТНОСИТЕЛЬНЫЙ подписанный путь `/api/v1/files/…` там не резолвится (img →
+ * onError → инициалы). Абсолютизируем против origin портала — exp/sig
+ * сохраняются, CSP мини-UI `img-src https: http:` пускает (#880, замечание
+ * валидатора). Уже абсолютный URL не меняется; null/undefined — инициалы. */
+export function resolveAvatarUrl(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    return new URL(url, window.location.origin).href;
+  } catch {
+    return undefined;
+  }
 }
