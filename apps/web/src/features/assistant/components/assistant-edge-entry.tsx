@@ -5,6 +5,7 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { uiPx } from '../../../shared/ui/ui-scale.js';
 import { useAssistantStore } from '../model/assistant-store.js';
+import { useAssistantEnabled } from '../model/use-assistant-enabled.js';
 
 /** Вход в ассистента там, где полоса аватарок скрыта (мессенджер): у правого
  *  края экрана при ПОДВОДЕ КУРСОРА всплывает кнопка-робот и ПЛАВНО ведёт за
@@ -24,6 +25,7 @@ import { useAssistantStore } from '../model/assistant-store.js';
  *  (замечание валидации 16.11.2026). railHidden — пропом из шелла (канон
  *  features→app: rail-visibility не в whitelist). */
 export function AssistantEdgeEntry({ railHidden }: { railHidden: boolean }) {
+  const enabled = useAssistantEnabled();
   const open = useAssistantStore((s) => s.open);
   const setOpen = useAssistantStore((s) => s.setOpen);
   const [visible, setVisible] = useState(false);
@@ -36,7 +38,7 @@ export function AssistantEdgeEntry({ railHidden }: { railHidden: boolean }) {
   const currentY = useRef(0);
 
   useEffect(() => {
-    if (!railHidden || open) {
+    if (!enabled || !railHidden || open) {
       setVisible(false);
       return;
     }
@@ -112,9 +114,9 @@ export function AssistantEdgeEntry({ railHidden }: { railHidden: boolean }) {
       clearIn();
       clearOut();
     };
-  }, [railHidden, open, setOpen]);
+  }, [enabled, railHidden, open, setOpen]);
 
-  if (!railHidden || open) return null;
+  if (!enabled || !railHidden || open) return null;
 
   return (
     // Нативный button, НЕ shadcn Button: база примитива несёт свои
