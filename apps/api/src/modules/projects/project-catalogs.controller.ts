@@ -1,7 +1,19 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
@@ -13,6 +25,8 @@ import {
   projectGroupCreateBodySchema,
   projectGroupSchema,
   projectGroupUpdateBodySchema,
+  projectPortfolioCountSchema,
+  projectPortfolioCountsQuerySchema,
   projectTypeCreateBodySchema,
   projectTypeSchema,
   projectTypeUpdateBodySchema,
@@ -20,6 +34,8 @@ import {
   type ProjectGroup,
   type ProjectGroupCreateBody,
   type ProjectGroupUpdateBody,
+  type ProjectPortfolioCount,
+  type ProjectPortfolioCountsQuery,
   type ProjectType,
   type ProjectTypeCreateBody,
   type ProjectTypeUpdateBody,
@@ -42,6 +58,7 @@ import {
 import { NodeKindsRepository } from './project-node-kinds.repository.js';
 import { ProjectGroupsRepository } from './project-groups.repository.js';
 import { ProjectTypesRepository } from './project-types.repository.js';
+import { ProjectsQueryService } from './projects-query.service.js';
 import { emitProjectTypeChanged } from './project-type-events.js';
 import { createProjectType, updateProjectType } from './project-type-form.js';
 
@@ -67,6 +84,7 @@ export class ProjectCatalogsController {
     private readonly types: ProjectTypesRepository,
     private readonly groups: ProjectGroupsRepository,
     private readonly nodeKinds: NodeKindsRepository,
+    private readonly queries: ProjectsQueryService,
     private readonly txRunner: TransactionRunner,
     private readonly eventBus: EventBus,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
@@ -189,16 +207,28 @@ export class ProjectCatalogsController {
   // ===== Портфели (плоский список) =====
 
   @Get('projects/groups')
-  @ApiOperation({ summary: 'Портфели (живые; ?includeArchived=true — с архивом)' })
+  @ApiOperation({ summary: 'Портфели (плоский список папок журнала)' })
   @ApiOkResponse({ standardSchema: z.array(projectGroupSchema) })
   @ApiErrors(400, 401)
-  groupsList(
-    @Query({ schema: listQuerySchema, pipes: [new ZodValidationPipe(listQuerySchema)] })
-    query: {
-      includeArchived: string;
-    },
-  ): Promise<ProjectGroup[]> {
-    return this.groups.list(query.includeArchived === 'true');
+  groupsList(): Promise<ProjectGroup[]> {
+    return this.groups.list();
+  }
+
+  @Get('projects/groups/counts')
+  @ApiOperation({
+    summary: 'Счётчики папок журнала: видимые проекты портфеля по статусам (scope=all|mine)',
+  })
+  @ApiOkResponse({ standardSchema: z.array(projectPortfolioCountSchema) })
+  @ApiErrors(400, 401)
+  groupCounts(
+    @Query({
+      schema: projectPortfolioCountsQuerySchema,
+      pipes: [new ZodValidationPipe(projectPortfolioCountsQuerySchema)],
+    })
+    query: ProjectPortfolioCountsQuery,
+    @GetUser() user: AuthUser,
+  ): Promise<ProjectPortfolioCount[]> {
+    return this.queries.portfolioCounts(user, query.scope);
   }
 
   @Post('projects/groups')
@@ -246,25 +276,24 @@ export class ProjectCatalogsController {
     });
   }
 
-  @Delete('projects/groups/:id')
+  @Delete('projects/groups/:id/permanent')
+  @HttpCode(204)
   @RequirePermissions(Permission.PROJECT_MANAGE)
-  @Audit({ action: 'project.group_archive', entity: 'project_group' })
+  @Audit({ action: 'project.group_delete', entity: 'project_group' })
   @ApiParam({
     name: 'id',
     description: 'UUID портфеля',
     schema: { type: 'string', format: 'uuid' },
   })
-  @ApiOperation({ summary: 'Архивировать портфель (проекты сохраняются без него)' })
-  @ApiOkResponse({ standardSchema: projectGroupSchema })
+  @ApiOperation({
+    summary: 'Удалить портфель навсегда (проекты остаются в журнале — «Без портфеля»)',
+  })
+  @ApiNoContentResponse({ description: 'Портфель удалён, проекты перешли в «Без портфеля»' })
   @ApiErrors(400, 401, 403, 404)
-  groupArchive(
-    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
-  ): Promise<ProjectGroup> {
-    return this.txRunner.run(async (tx) => {
-      const archived = await this.groups.setArchived(tx, id, true);
-      if (!archived) throw DomainException.notFound('Portfolio not found');
-      return archived;
-    });
+  @ApiIdempotencyKey()
+  async groupDelete(@Param('id', new ZodValidationPipe(idParamSchema)) id: string): Promise<void> {
+    const deleted = await this.txRunner.run((tx) => this.groups.delete(tx, id));
+    if (!deleted) throw DomainException.notFound('Portfolio not found');
   }
 
   // ===== Настройки портала =====

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { ProjectListItem } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { NO_PORTFOLIO_FILTER, ui } from '@nodus/contracts';
 
 import { useProjectGroups } from '../api/projects-list.js';
 import type { FilterFieldDef, FilterValue } from './list-filters.js';
@@ -18,7 +18,12 @@ export const projectBuiltinPresets: FilterPreset[] = [
 ];
 
 /** Реестр фильтруемых полей журнала проектов (стандарт списков): портфель,
- *  моя роль, видимость, статус — серверные фильтры (Р14 #52). */
+ *  моя роль, видимость, статус — серверные фильтры (Р14 #52).
+ *
+ *  Портфель остаётся полем фильтра (панель, пресеты — сохранённый фильтр несёт
+ *  папку), но ЧИПОМ в строке поиска не показывается: имя выбранной папки носит
+ *  кнопка «Портфели» (вердикт владельца 13.11.2026) — журнал передаёт
+ *  `hiddenChips={['portfolio']}`. */
 export function useProjectFilterDefs(): FilterFieldDef<ProjectListItem>[] {
   const { data: groups } = useProjectGroups();
 
@@ -28,10 +33,14 @@ export function useProjectFilterDefs(): FilterFieldDef<ProjectListItem>[] {
         id: 'portfolio',
         label: ui.projects.filterPortfolio,
         type: 'select' as const,
-        options: (groups ?? [])
-          .filter((group) => group.archivedAt === null)
-          .map((group) => ({ value: group.id, label: group.name })),
-        match: (p: ProjectListItem, v: FilterValue) => p.portfolio?.id === v,
+        options: [
+          ...(groups ?? []).map((group) => ({ value: group.id, label: group.name })),
+          // Папка журнала «Без портфеля» (#559): тот же сентинел, что у кнопки —
+          // фильтр и папка показывают один срез.
+          { value: NO_PORTFOLIO_FILTER, label: ui.projects.portfolioNone },
+        ],
+        match: (p: ProjectListItem, v: FilterValue) =>
+          v === NO_PORTFOLIO_FILTER ? p.portfolio === null : p.portfolio?.id === v,
       },
       {
         id: 'role',

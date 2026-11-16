@@ -14,7 +14,13 @@ export const projectsKeys = {
   /** Полный видимый справочник для пикеров/фильтров (не журнал). */
   options: () => [...projectsKeys.all, 'options'] as const,
   types: (includeArchived = false) => [...projectsKeys.all, 'types', includeArchived] as const,
-  groups: (includeArchived = false) => [...projectsKeys.all, 'groups', includeArchived] as const,
+  groups: () => [...projectsKeys.all, 'groups'] as const,
+  /** Счётчики папок-портфелей журнала (#559): видимый срез по статусам,
+   *  `scope` — переключатель «Все / Мои» (цифры колонки = срез журнала). */
+  groupCounts: (scope: 'all' | 'mine' = 'all') =>
+    [...projectsKeys.all, 'groups', 'counts', scope] as const,
+  /** Префикс портфелей: список папок и счётчики журнала. */
+  groupsPrefix: () => [...projectsKeys.all, 'groups'] as const,
   journal: (params: Record<string, string | undefined>) =>
     [...projectsKeys.all, 'journal', params] as const,
   /** Префикс всех журналов: событие проекта перечитывает любой фильтр. */
@@ -67,11 +73,11 @@ export function useProjectTypes(includeArchived = false) {
   });
 }
 
-/** Портфели (плоский список; фильтр журнала, поле формы). */
-export function useProjectGroups(includeArchived = false) {
+/** Портфели — плоский список папок журнала (фильтр журнала, поле формы).
+ *  Архива у папки нет (13.11.2026): список всегда полный. */
+export function useProjectGroups() {
   return useQuery({
-    queryKey: projectsKeys.groups(includeArchived),
-    queryFn: () =>
-      api<ProjectGroup[]>(`/projects/groups?includeArchived=${includeArchived ? 'true' : 'false'}`),
+    queryKey: projectsKeys.groups(),
+    queryFn: () => api<ProjectGroup[]>('/projects/groups'),
   });
 }

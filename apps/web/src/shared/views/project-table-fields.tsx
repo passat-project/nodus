@@ -70,13 +70,19 @@ function MemberPreview({ project }: { project: ProjectListItem }) {
  * (`projects.list`) и проекты сотрудника/контрагента в их карточках — реестр
  * один, память колонок раздельная. Новое поле модуля = +1 запись здесь
  * (шестерёнка + ручка ресайза).
+ *
+ * Дефолт — четыре колонки, которые целиком читаются на ноутбуке (1620 px при
+ * масштабе 1.25): название, моя роль, руководитель, статус. «Портфель» скрыт
+ * (папки живут вкладкой «Портфели»), «Видимость» — замком у названия
+ * секретного проекта; «Шифр», «Участники», «Активность» — в шестерёнке
+ * (ширина окна у всех разная, а обрезанная колонка хуже скрытой).
  */
 const projectSystemFields: DataTableField<ProjectListItem>[] = [
   {
     id: 'code',
     label: ui.projects.fieldCode,
-    defaultVisible: true,
-    defaultWidth: 96,
+    defaultVisible: false,
+    defaultWidth: 88,
     minWidth: 64,
     maxWidth: 160,
     render: (project) =>
@@ -91,7 +97,7 @@ const projectSystemFields: DataTableField<ProjectListItem>[] = [
     id: 'name',
     label: ui.projects.fieldName,
     defaultVisible: true,
-    defaultWidth: 380,
+    defaultWidth: 270,
     minWidth: 160,
     maxWidth: 640,
     locked: true,
@@ -99,6 +105,15 @@ const projectSystemFields: DataTableField<ProjectListItem>[] = [
       <>
         <ProjectIdentityIcon color={project.color} />
         <span className="truncate text-sm font-medium">{project.name}</span>
+        {project.visibility === 'secret' ? (
+          <span
+            className="flex shrink-0 items-center text-muted-foreground"
+            title={ui.projects.visibility.secret}
+          >
+            <Lock className="size-3.5" aria-hidden />
+            <span className="sr-only">{ui.projects.visibility.secret}</span>
+          </span>
+        ) : null}
       </>
     ),
     sortValue: (project) => project.name,
@@ -107,7 +122,7 @@ const projectSystemFields: DataTableField<ProjectListItem>[] = [
     id: 'myRole',
     label: ui.projects.filterRole,
     defaultVisible: true,
-    defaultWidth: 132,
+    defaultWidth: 88,
     minWidth: 104,
     render: (project) => <ProjectRoleChip project={project} />,
     sortValue: (project) => primaryProjectRole(project.myMembership),
@@ -116,7 +131,7 @@ const projectSystemFields: DataTableField<ProjectListItem>[] = [
     id: 'manager',
     label: ui.projects.manager,
     defaultVisible: true,
-    defaultWidth: 180,
+    defaultWidth: 152,
     minWidth: 110,
     render: (project) => <PersonCell user={project.manager} />,
     sortValue: (project) => project.manager?.displayName ?? null,
@@ -147,7 +162,7 @@ const projectSystemFields: DataTableField<ProjectListItem>[] = [
   {
     id: 'portfolio',
     label: ui.projects.filterPortfolio,
-    defaultVisible: true,
+    defaultVisible: false,
     defaultWidth: 168,
     minWidth: 120,
     render: (project) =>
@@ -175,7 +190,7 @@ const projectSystemFields: DataTableField<ProjectListItem>[] = [
   {
     id: 'visibility',
     label: ui.projects.fieldVisibility,
-    defaultVisible: true,
+    defaultVisible: false,
     defaultWidth: 124,
     minWidth: 104,
     render: (project) => <ProjectVisibilityChip project={project} />,
@@ -185,7 +200,7 @@ const projectSystemFields: DataTableField<ProjectListItem>[] = [
     id: 'status',
     label: ui.projects.fieldStatus,
     defaultVisible: true,
-    defaultWidth: 128,
+    defaultWidth: 96,
     minWidth: 104,
     render: (project) => <ProjectStatusChip project={project} />,
     sortValue: (project) => project.status,
@@ -193,7 +208,7 @@ const projectSystemFields: DataTableField<ProjectListItem>[] = [
   {
     id: 'members',
     label: ui.projects.members,
-    defaultVisible: true,
+    defaultVisible: false,
     defaultWidth: 168,
     minWidth: 120,
     render: (project) => <MemberPreview project={project} />,
@@ -230,7 +245,7 @@ const projectSystemFields: DataTableField<ProjectListItem>[] = [
   {
     id: 'activityAt',
     label: ui.projects.activity,
-    defaultVisible: true,
+    defaultVisible: false,
     defaultWidth: 152,
     minWidth: 128,
     render: (project) => (

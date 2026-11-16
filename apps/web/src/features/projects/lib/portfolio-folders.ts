@@ -1,0 +1,140 @@
+import { NO_PORTFOLIO_FILTER } from '@nodus/contracts';
+import type {
+  ProjectGroup,
+  ProjectListItem,
+  ProjectPortfolioCount,
+  ProjectStatus,
+} from '@nodus/contracts';
+
+/**
+ * Папки-портфели журнала «Проекты» (#559, ADR-0030 доп. 02.11): портфель —
+ * ПАПКА журнала, не раздел «Автоматизации». Чистая модель списка папок:
+ * «Все проекты», портфели со счётчиками (действует / всего) и «Без портфеля».
+ * Счётчики считает сервер (`GET /projects/groups/counts`) — журнал листается
+ * курсором, из загруженной страницы полного числа не вывести.
+ *
+ * Архива у папки нет (вердикт владельца 13.11.2026): папка либо есть, либо
+ * удалена навсегда (проекты уходят в «Без портфеля») — отдельного блока
+ * «Архив» и статуса папки не существует.
+ */
+
+/** Выбор папки = значение фильтра журнала: uuid портфеля, `none` — без
+ *  портфеля, `undefined` — «Все проекты». Сентинел — контракт API (#559). */
+export { NO_PORTFOLIO_FILTER };
+
+export type PortfolioCounters = Pick<ProjectPortfolioCount, 'active' | 'completed' | 'archived'>;
+
+export interface PortfolioFolder {
+  /** Ключ папки: `all`, `none` или uuid портфеля. */
+  id: string;
+  name: string;
+  /** null — «Все проекты» и «Без портфеля» (не портфель). */
+  portfolioId: string | null;
+  counters: PortfolioCounters;
+}
+
+export interface PortfolioFolderTree {
+  all: PortfolioFolder;
+  unassigned: PortfolioFolder;
+  /** Портфели в серверном порядке (по имени). */
+  folders: PortfolioFolder[];
+}
+
+const ZERO: PortfolioCounters = { active: 0, completed: 0, archived: 0 };
+
+export function totalOf(counters: PortfolioCounters): number {
+  return counters.active + counters.completed + counters.archived;
+}
+
+function sumOf(items: readonly PortfolioCounters[]): PortfolioCounters {
+  return items.reduce<PortfolioCounters>(
+    (acc, item) => ({
+      active: acc.active + item.active,
+      completed: acc.completed + item.completed,
+      archived: acc.archived + item.archived,
+    }),
+    { ...ZERO },
+  );
+}
+
+/** Счётчики папки из ответа сервера (нет строки — нули, папка не исчезает). */
+function countersOf(
+  counts: readonly ProjectPortfolioCount[],
+  portfolioId: string | null,
+): PortfolioCounters {
+  const hit = counts.find((entry) => entry.portfolioId === portfolioId);
+  return hit
+    ? { active: hit.active, completed: hit.completed, archived: hit.archived }
+    : { ...ZERO };
+}
+
+/**
+ * Список папок журнала: «Все проекты» (весь видимый срез), портфели в
+ * серверном порядке и «Без портфеля».
+ */
+export function buildPortfolioFolders(
+  groups: readonly ProjectGroup[],
+  counts: readonly ProjectPortfolioCount[],
+): PortfolioFolderTree {
+  const folders = groups.map((group): PortfolioFolder => ({
+    id: group.id,
+    name: group.name,
+    portfolioId: group.id,
+    counters: countersOf(counts, group.id),
+  }));
+  return {
+    all: {
+      id: 'all',
+      name: '',
+      portfolioId: null,
+      counters: sumOf(counts.map((entry) => entry)),
+    },
+    unassigned: {
+      id: NO_PORTFOLIO_FILTER,
+      name: '',
+      portfolioId: null,
+      counters: countersOf(counts, null),
+    },
+    folders,
+  };
+}
+
+/** Значение фильтра «Портфель» по выбранной папке (`undefined` — все). */
+export function portfolioFilterOf(folderId: string): string | undefined {
+  return folderId === 'all' ? undefined : folderId;
+}
+
+/** Подпись выбранной папки для кнопки «Портфели» (#559): имя портфеля,
+ *  «Все проекты»/«Без портфеля» — из словаря. Неизвестный id (папку удалили
+ *  в другой сессии) — тоже «Все проекты»: кнопка не показывает uuid. */
+export function folderLabel(
+  tree: PortfolioFolderTree,
+  folderId: string,
+  labels: { all: string; none: string },
+): string {
+  if (folderId === tree.all.id) return labels.all;
+  if (folderId === tree.unassigned.id) return labels.none;
+  return tree.folders.find((folder) => folder.id === folderId)?.name ?? labels.all;
+}
+
+/** Строки статусов внутри выбранной папки: «действует / завершён / в архиве». */
+export function folderStatusRows(
+  folder: PortfolioFolder | null,
+): { status: ProjectStatus; count: number }[] {
+  if (!folder) return [];
+  return [
+    { status: 'active', count: folder.counters.active },
+    { status: 'completed', count: folder.counters.completed },
+    { status: 'archived', count: folder.counters.archived },
+  ];
+}
+
+/** Попадает ли строка журнала в выбранную папку (оптимистичные мутации, I4). */
+export function inPortfolioFolder(
+  project: Pick<ProjectListItem, 'portfolio'>,
+  portfolioFilter: string | undefined,
+): boolean {
+  if (portfolioFilter === undefined) return true;
+  if (portfolioFilter === NO_PORTFOLIO_FILTER) return project.portfolio === null;
+  return project.portfolio?.id === portfolioFilter;
+}

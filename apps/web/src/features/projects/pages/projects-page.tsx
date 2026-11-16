@@ -6,7 +6,6 @@ import { Button } from '@nodus/ui/components/button';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
-import { primaryProjectRole } from '../../../shared/lib/project-role.js';
 import { openProjectCreate } from '../../../shared/projects/project-create-store.js';
 import { SEGMENTED_ACTIVE_TONAL, SegmentedControl } from '../../../shared/ui/segmented-control.js';
 import { DataTable } from '../../../shared/views/data-table.js';
@@ -21,10 +20,25 @@ import {
 } from '../../../shared/views/project-filter-fields.js';
 import { useProjectTableFields } from '../../../shared/views/project-table-fields.js';
 import { ViewSettings } from '../../../shared/views/view-settings.js';
+import { useProjectPortfolioCounts } from '../api/portfolio-counts.js';
+import {
+  useCreateProjectGroup,
+  useDeleteProjectGroup,
+  useRenameProjectGroup,
+} from '../api/project-catalog-mutations.js';
 import { useProjectStatus } from '../api/project-mutations.js';
-import { useProjectsJournal } from '../api/projects-api.js';
+import { useMoveProjectPortfolio } from '../api/project-portfolio-mutation.js';
+import { useProjectGroups, useProjectsJournal } from '../api/projects-api.js';
 import { ProjectArchiveDialog } from '../components/project-archive-dialog.js';
+import { PortfolioDeleteDialog, PortfolioRenameDialog } from '../components/portfolio-dialogs.js';
+import { PortfolioMenu } from '../components/portfolio-menu.js';
 import type { ProjectJournalFilters, ProjectRoleFilter } from '../lib/project-journal.js';
+import { canDragProject, canEditProject } from '../lib/project-edit-rights.js';
+import {
+  buildPortfolioFolders,
+  portfolioFilterOf,
+  type PortfolioFolder,
+} from '../lib/portfolio-folders.js';
 
 const SCOPE_KEY = 'nodus-projects-scope-v1';
 
@@ -43,13 +57,30 @@ function useJournalScope(): ['all' | 'mine', (scope: 'all' | 'mine') => void] {
   ];
 }
 
+/** Выбранная папка из фильтра журнала: `all` — «Все проекты» (#559). */
+function folderOfFilter(value: unknown): string {
+  return typeof value === 'string' && value !== '' ? value : 'all';
+}
+
+/** Статус внутри папки: пустой фильтр — «все статусы». */
+function statusOfFilter(value: unknown): NonNullable<ProjectJournalFilters['status']> | 'all' {
+  return value === 'active' || value === 'completed' || value === 'archived' ? value : 'all';
+}
+
 /**
- * Проекты: журнал канонической таблицей (shared/views, ключ `projects.list`).
- * Шапка — одна строка: заголовок, счётчик, «Создать» слева от поиска,
- * переключатель «Все/Мои», шестерёнка колонок. Фильтры — СЕРВЕРНЫЕ
- * (портфель/моя роль/видимость/статус, Р14 #52) с курсорной пагинацией;
- * чипы активных фильтров и пресеты — общая строка инструментов. Открытие —
- * карточка проекта в стеке (shared-element из rect строки).
+ * Проекты: журнал канонической таблицей (shared/views, ключ `projects.list`)
+ * и КНОПКА «Портфели» в строке инструментов (#559, решение 16.11.2026) —
+ * сразу после «Создать», как в Битрикс24: папки-портфели не занимают места
+ * у журнала (колонка/полоса отбирала ширину), а список раскрывается
+ * поповером. В нём: «Все проекты», портфели со счётчиками, «Без портфеля»,
+ * создание и переименование/удаление выбранной папки; имя выбранной папки
+ * носит сама кнопка (13.11.2026). Перетаскивание проекта на папку меняет
+ * портфель (права правки проекта — сервер; на время drag поповер открывается
+ * сам как цель броска). Шапка — одна строка: заголовок, счётчик, «Создать» и
+ * «Портфели» слева от поиска, переключатель «Все/Мои», шестерёнка колонок.
+ * Фильтры — СЕРВЕРНЫЕ (портфель/роль/видимость/статус, Р14 #52) с курсорной
+ * пагинацией; чипы активных фильтров и пресеты — общая строка инструментов.
+ * Открытие — карточка проекта в стеке.
  */
 export function ProjectsPage() {
   const [scope, setScope] = useJournalScope();
@@ -58,6 +89,8 @@ export function ProjectsPage() {
   const fields = useProjectTableFields();
   const filterDefs = useProjectFilterDefs();
   const search = useDeferredValue(toolbar.query);
+  const selection = folderOfFilter(toolbar.filters.portfolio);
+  const status = statusOfFilter(toolbar.filters.status);
   const filters = useMemo<ProjectJournalFilters>(() => {
     const state = toolbar.filters;
     return {
@@ -66,30 +99,69 @@ export function ProjectsPage() {
       role: typeof state.role === 'string' ? (state.role as ProjectRoleFilter) : undefined,
       visibility:
         state.visibility === 'open' || state.visibility === 'secret' ? state.visibility : undefined,
-      status:
-        state.status === 'active' || state.status === 'completed' || state.status === 'archived'
-          ? state.status
-          : undefined,
-      portfolioId: typeof state.portfolio === 'string' ? state.portfolio : undefined,
+      status: status === 'all' ? undefined : status,
+      portfolioId:
+        typeof state.portfolio === 'string' && state.portfolio !== '' ? state.portfolio : undefined,
     };
-  }, [scope, search, toolbar.filters]);
+  }, [scope, search, toolbar.filters, status]);
   const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } =
     useProjectsJournal(filters);
   const items = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
   const openCard = useOpenCard();
-  const status = useProjectStatus();
+  const statusMutation = useProjectStatus();
+  const moveToPortfolio = useMoveProjectPortfolio();
   const permissions = useAuthStore((s) => s.user?.permissions);
   const canManageAny = (permissions ?? []).includes(Permission.PROJECT_MANAGE);
+  const canCreate = (permissions ?? []).includes(Permission.PROJECT_CREATE);
+
+  const groupsQuery = useProjectGroups();
+  const countsQuery = useProjectPortfolioCounts(scope);
+  const folders = useMemo(
+    () => buildPortfolioFolders(groupsQuery.data ?? [], countsQuery.data ?? []),
+    [groupsQuery.data, countsQuery.data],
+  );
+  const createFolder = useCreateProjectGroup();
+  const renameFolder = useRenameProjectGroup();
+  const deleteFolder = useDeleteProjectGroup();
+
   const [archiveTarget, setArchiveTarget] = useState<ProjectListItem | null>(null);
+  const [renameFolderTarget, setRenameFolderTarget] = useState<PortfolioFolder | null>(null);
+  const [deleteFolderTarget, setDeleteFolderTarget] = useState<PortfolioFolder | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
 
+  // Портфель-фильтр больше не живёт в реестре полей (имя показывает кнопка),
+  // поэтому «фильтруем» его учитываем отдельно — иначе пустой журнал папки
+  // показывал бы текст «проектов нет» вместо «ничего не найдено».
   const filtering =
-    toolbar.query.trim() !== '' || activeFiltersCount(filterDefs, toolbar.filters) > 0;
+    toolbar.query.trim() !== '' ||
+    selection !== 'all' ||
+    activeFiltersCount(filterDefs, toolbar.filters) > 0;
 
+  /** Клик по папке: серверный фильтр журнала. */
+  function selectFolder(folderId: string) {
+    const next = { ...toolbar.filters };
+    const portfolio = portfolioFilterOf(folderId);
+    if (portfolio) next.portfolio = portfolio;
+    else delete next.portfolio;
+    toolbar.setFilters(next);
+  }
+
+  /** Смена портфеля перетаскиванием: права правки проекта (руководство или
+   *  project.manage) — сервер; строка, которая уже в папке, не дёргает сеть. */
+  function dropOnFolder(folderId: string) {
+    const project = items.find((row) => row.id === draggingId);
+    setDraggingId(null);
+    if (!project) return;
+    const nextPortfolioId = folderId === 'none' ? null : folderId;
+    if ((project.portfolio?.id ?? null) === nextPortfolioId) return;
+    moveToPortfolio.mutate({ id: project.id, portfolioId: nextPortfolioId });
+  }
+
+  /** Тащить строку может тот, кто правит проект (та же проверка, что у меню);
+   *  архивный проект — только `project.manage` (сервер: поля заморожены). */
   function rowMenu(project: ProjectListItem): RowMenuItem[] {
     const base = makeCardRowMenuItems({ kind: 'project', id: project.id }, openCard);
-    const role = primaryProjectRole(project.myMembership);
-    const management = role === 'manager' || role === 'assistant' || canManageAny;
-    if (!management) return base;
+    if (!canEditProject(project, canManageAny)) return base;
     const actions: RowMenuItem[] = [];
     if (project.status === 'active') {
       actions.push({
@@ -97,7 +169,7 @@ export function ProjectsPage() {
         icon: <CheckCircle2 className="size-3.5" />,
         label: ui.projects.statusComplete,
         separatorBefore: true,
-        onSelect: () => status.mutate({ id: project.id, status: 'completed' }),
+        onSelect: () => statusMutation.mutate({ id: project.id, status: 'completed' }),
       });
     }
     if (project.status !== 'archived') {
@@ -113,14 +185,14 @@ export function ProjectsPage() {
         icon: <RotateCcw className="size-3.5" />,
         label: ui.projects.statusReactivate,
         separatorBefore: true,
-        onSelect: () => status.mutate({ id: project.id, status: 'active' }),
+        onSelect: () => statusMutation.mutate({ id: project.id, status: 'active' }),
       });
     }
     return [...base, ...actions];
   }
 
   return (
-    <div className="relative flex h-full flex-col">
+    <div className="relative flex h-full min-h-0 min-w-0 flex-col">
       <div className="flex h-14 shrink-0 items-center gap-3 px-6">
         <h1 className="shrink-0 text-xl font-semibold text-balance text-foreground">
           {ui.projects.title}
@@ -133,11 +205,38 @@ export function ProjectsPage() {
           toolbar={toolbar}
           defs={filterDefs}
           builtinPresets={projectBuiltinPresets}
+          // Имя выбранной папки носит кнопка «Портфели» — чип в строке фильтров
+          // не дублирует её (вердикт владельца 13.11.2026).
+          hiddenChips={['portfolio']}
           left={
-            <Button type="button" onClick={() => openProjectCreate()}>
-              <Plus data-icon="inline-start" />
-              {ui.common.create}
-            </Button>
+            <>
+              <Button
+                type="button"
+                onClick={() =>
+                  openProjectCreate(
+                    selection !== 'all' && selection !== 'none' ? { portfolioId: selection } : {},
+                  )
+                }
+              >
+                <Plus data-icon="inline-start" />
+                {ui.common.create}
+              </Button>
+              {/* Как в Битрикс24: папки-портфели — сразу после «Создать»,
+                  перед фильтрами и строкой поиска. */}
+              <PortfolioMenu
+                tree={folders}
+                selection={selection}
+                canCreate={canCreate}
+                canManage={canManageAny}
+                allLabel={scope === 'mine' ? ui.projects.portfolioMyProjects : undefined}
+                draggingProjectId={draggingId}
+                onCreate={(name) => createFolder.mutate(name)}
+                onSelect={selectFolder}
+                onRename={setRenameFolderTarget}
+                onDelete={setDeleteFolderTarget}
+                onDropProject={dropOnFolder}
+              />
+            </>
           }
           right={
             <>
@@ -158,6 +257,7 @@ export function ProjectsPage() {
           }
         />
       </div>
+
       <div className="min-h-0 flex-1">
         <DataTable
           viewKey="projects.list"
@@ -172,19 +272,51 @@ export function ProjectsPage() {
             openCard({ kind: 'project', id: project.id }, rowEl.getBoundingClientRect())
           }
           rowMenu={rowMenu}
+          rowDrag={(project) =>
+            canDragProject(project, canManageAny)
+              ? {
+                  draggable: true,
+                  onDragStart: (event) => {
+                    event.dataTransfer?.setData('text/plain', project.id);
+                    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+                    setDraggingId(project.id);
+                  },
+                  onDragEnd: () => setDraggingId(null),
+                }
+              : undefined
+          }
           label={ui.projects.title}
           emptyTitle={filtering ? ui.projects.journalEmptyFiltered : ui.projects.journalEmpty}
         />
       </div>
+
       <ProjectArchiveDialog
         name={archiveTarget?.name ?? null}
         open={archiveTarget !== null}
         onCancel={() => setArchiveTarget(null)}
         onConfirm={() => {
           if (archiveTarget) {
-            status.mutate({ id: archiveTarget.id, status: 'archived' });
+            statusMutation.mutate({ id: archiveTarget.id, status: 'archived' });
           }
           setArchiveTarget(null);
+        }}
+      />
+      <PortfolioRenameDialog
+        folder={renameFolderTarget}
+        onCancel={() => setRenameFolderTarget(null)}
+        onConfirm={(name) => {
+          if (renameFolderTarget) renameFolder.mutate({ id: renameFolderTarget.id, name });
+          setRenameFolderTarget(null);
+        }}
+      />
+      <PortfolioDeleteDialog
+        folder={deleteFolderTarget}
+        onCancel={() => setDeleteFolderTarget(null)}
+        onConfirm={() => {
+          // Проекты папки не удаляются: сервер переносит их в «Без портфеля»
+          // одной транзакцией, кэш журнала уже снял с них портфель.
+          if (deleteFolderTarget) deleteFolder.mutate(deleteFolderTarget.id);
+          setDeleteFolderTarget(null);
         }}
       />
     </div>

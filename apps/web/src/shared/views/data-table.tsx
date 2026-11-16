@@ -37,6 +37,15 @@ interface DataTableRowProps<T> {
   onToggle: (key: string) => void;
   actions?: (row: T) => ReactNode;
   rowMenu?: (row: T) => RowMenuItem[];
+  drag?: DataTableRowDrag;
+}
+
+/** Атрибуты перетаскивания строки: журнал проектов тащит строку на
+ *  папку-портфель (#559). Возврат `undefined` — строку тащить нельзя. */
+export interface DataTableRowDrag {
+  draggable: boolean;
+  onDragStart: (event: React.DragEvent) => void;
+  onDragEnd?: (event: React.DragEvent) => void;
 }
 
 /**
@@ -58,6 +67,7 @@ function DataTableRowInner<T>({
   onToggle,
   actions,
   rowMenu,
+  drag,
 }: DataTableRowProps<T>) {
   return (
     <div
@@ -71,9 +81,13 @@ function DataTableRowInner<T>({
           onOpenRow(row, e.currentTarget);
         }
       }}
+      draggable={drag?.draggable}
+      onDragStart={drag?.onDragStart}
+      onDragEnd={drag?.onDragEnd}
       className={cn(
         'grid h-12 w-max min-w-full cursor-pointer items-stretch gap-3 border-b border-border/60 px-4 transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_3rem] last:border-b-0 hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-ring',
         isSelected && 'bg-accent/50',
+        drag?.draggable && 'cursor-grab',
       )}
       style={{ gridTemplateColumns }}
     >
@@ -159,6 +173,7 @@ export function DataTable<T>({
   onLoadMore,
   actions,
   rowMenu,
+  rowDrag,
   emptyTitle = ui.common.empty,
   label,
   selection: externalSelection,
@@ -182,6 +197,9 @@ export function DataTable<T>({
   actions?: (row: T) => ReactNode;
   /** Пункты контекстного меню строки («шашка» в ведущей ячейке). */
   rowMenu?: (row: T) => RowMenuItem[];
+  /** Перетаскивание строки (журнал проектов → папка-портфель, #559):
+   *  `undefined` — строку нельзя тащить. */
+  rowDrag?: (row: T) => DataTableRowDrag | undefined;
   emptyTitle?: string;
   /** Доступное имя таблицы — название списка. Без него имя — `emptyTitle`
    *  (у отфильтрованного списка «Ничего не найдено» звучало бы названием). */
@@ -303,6 +321,7 @@ export function DataTable<T>({
               onToggle={toggle}
               actions={actions}
               rowMenu={rowMenu}
+              drag={rowDrag?.(row)}
             />
           );
         })}

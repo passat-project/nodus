@@ -71,7 +71,7 @@ export function makeProjectsServiceKit() {
     touch: vi.fn(),
   };
   const types: Mocks<'findActive' | 'findById'> = { findActive: vi.fn(), findById: vi.fn() };
-  const groups: Mocks<'findActive'> = { findActive: vi.fn() };
+  const groups: Mocks<'find'> = { find: vi.fn() };
   const participantsRepo: Mocks<'rowsOfProject' | 'add' | 'hasRow'> = {
     rowsOfProject: vi.fn(),
     add: vi.fn(),
@@ -131,7 +131,7 @@ export function makeProjectsServiceKit() {
       repo.lockForUpdate.mockResolvedValue({ id: ID, visibility: 'open', status: 'active' });
       types.findActive.mockResolvedValue(typeRow());
       types.findById.mockResolvedValue(typeRow());
-      groups.findActive.mockResolvedValue({ id: 'g-1' });
+      groups.find.mockResolvedValue({ id: 'g-1' });
       participantsRepo.rowsOfProject.mockResolvedValue([]);
       profiles.filterActiveUserIds.mockImplementation(async (ids: string[]) => ids);
       // Слоты формы типа по умолчанию — системные «Шифр»/«Заказчик»:

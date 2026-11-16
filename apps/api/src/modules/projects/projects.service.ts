@@ -90,7 +90,7 @@ export class ProjectsService {
     }
     const type = await this.types.findActive(body.typeId);
     if (!type) throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Unknown project type');
-    if (body.portfolioId && !(await this.groups.findActive(body.portfolioId))) {
+    if (body.portfolioId && !(await this.groups.find(body.portfolioId))) {
       throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Unknown portfolio');
     }
     // Видимость по умолчанию — всегда открытая (#738, вердикт владельца 10.11):

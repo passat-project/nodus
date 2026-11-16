@@ -154,7 +154,7 @@ export function PortfolioField({
   const create = useCreateProjectGroup();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
-  const live = (groups ?? []).filter((group) => group.archivedAt === null);
+  const live = groups ?? [];
 
   function submit() {
     const trimmed = name.trim();

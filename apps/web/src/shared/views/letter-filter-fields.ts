@@ -7,6 +7,7 @@ import { useUsersList } from '../api/users-list.js';
 import { useAuthStore } from '../auth-store.js';
 import { isResponseOverdue } from './letter-table-fields.js';
 import type { FilterFieldDef, FilterOption, FilterValue } from './list-filters.js';
+import { usePortfolioFilterDef } from './portfolio-filter-fields.js';
 import type { FilterPreset } from './use-list-toolbar.js';
 
 /** Локальный поиск письма (вкладка «Письма» контрагента; журналы ищут на
@@ -15,6 +16,10 @@ export const letterSearchText = (letter: LetterListItem) =>
   [letter.regNumber, letter.subject, letter.theirNumber, letter.counterparty?.name]
     .filter(Boolean)
     .join(' ');
+
+/** Проект письма — для фильтра «Портфель» (#559); ссылка стабильна, чтобы
+ *  реестр фильтров не пересобирался каждый рендер. */
+const letterProjectIdOf = (letter: LetterListItem) => letter.project?.id ?? null;
 
 /** Встроенные пресеты журналов писем (левая колонка панели фильтра). */
 export const letterBuiltinPresets: FilterPreset[] = [
@@ -84,6 +89,12 @@ export function useLetterFilterDefs(
 ): FilterFieldDef<LetterListItem>[] {
   const { data: users } = useUsersList();
   const meId = useAuthStore((s) => s.user?.id);
+  // Портфель — папка журнала «Проекты» (#559): появляется там же, где проект.
+  const projectsShown = projectsAvailable('letters');
+  const portfolioDef = usePortfolioFilterDef({
+    projectIdOf: letterProjectIdOf,
+    visible: projectsShown,
+  });
   // Очередь «Новые» (редизайн #56): письма без регистрации — статус один
   // («Новое»), дат регистрации и сроков ответа нет вовсе: фильтр по ним
   // дал бы только пустой список (ловушка), поэтому поля очереди — кто
@@ -137,7 +148,7 @@ export function useLetterFilterDefs(
         options: namesOf(rows, (letter) => letter.receiptMethod?.name),
         match: (letter, v) => letter.receiptMethod?.name === v,
       },
-      ...(projectsAvailable('letters')
+      ...(projectsShown
         ? [
             {
               id: 'project',
@@ -146,6 +157,7 @@ export function useLetterFilterDefs(
               options: projectOptions(rows),
               match: (letter, v) => letter.project?.id === v,
             } as FilterFieldDef<LetterListItem>,
+            ...(portfolioDef ? [portfolioDef] : []),
           ]
         : []),
       ...(fresh
@@ -180,5 +192,5 @@ export function useLetterFilterDefs(
       });
     }
     return defs;
-  }, [rows, users, meId, counterpartyVisible, fresh]);
+  }, [rows, users, meId, counterpartyVisible, fresh, projectsShown, portfolioDef]);
 }

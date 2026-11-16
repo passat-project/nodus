@@ -106,7 +106,7 @@ export const projectMutationHandlers = [
     if (!type || type.archivedAt !== null) return invalid();
     if (body.portfolioId) {
       const portfolio = demoProjectGroups.find((entry) => entry.id === body.portfolioId);
-      if (!portfolio || portfolio.archivedAt !== null) return invalid();
+      if (!portfolio) return invalid();
     }
     if (body.clientId && !counterpartyRefById(body.clientId)) return invalid();
     // Значение разрешает ПРИВЯЗКА (binding), а не слот формы: слот — только
@@ -164,7 +164,7 @@ export const projectMutationHandlers = [
     }
     if (body.portfolioId) {
       const portfolio = demoProjectGroups.find((entry) => entry.id === body.portfolioId);
-      if (!portfolio || portfolio.archivedAt !== null) return invalid();
+      if (!portfolio) return invalid();
     }
     if (body.clientId && !counterpartyRefById(body.clientId)) return invalid();
     const type = demoProjectTypes.find((entry) => entry.id === row.typeId);

@@ -263,8 +263,12 @@ export function DataTableHeader({
             tabIndex={sortable ? 0 : undefined}
             aria-sort={sorted ? (sorted === 'asc' ? 'ascending' : 'descending') : undefined}
             // Атрибутная колонка (#632) сортировкой не обладает — подсказка
-            // объясняет, почему клик по заголовку ничего не меняет.
-            title={!sortable && field.group === 'attributes' ? ui.formulas.views.noSort : undefined}
+            // объясняет, почему клик по заголовку ничего не меняет. В остальных
+            // случаях подсказка — полное имя колонки: на узких окнах оно
+            // обрезается многоточием, и без title его не прочитать.
+            title={
+              !sortable && field.group === 'attributes' ? ui.formulas.views.noSort : field.label
+            }
             onPointerDown={(e) => onHeaderPointerDown(e, field, index)}
             onKeyDown={
               sortable

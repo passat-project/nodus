@@ -212,7 +212,7 @@ export class ProjectNumberHostProvider implements NumberHostProvider {
       };
     }
     if (hit.entity === 'portfolio') {
-      const group = (await this.groups.list(true)).find((entry) => entry.id === hit.id);
+      const group = (await this.groups.list()).find((entry) => entry.id === hit.id);
       return group
         ? {
             entity: 'portfolio',
