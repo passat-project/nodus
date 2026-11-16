@@ -35,7 +35,11 @@ export function AssistantGlyph({ className }: { className?: string }) {
 
 function TypingDots() {
   return (
-    <span className="flex items-center gap-1 px-1 py-1.5" aria-label={ui.assistant.thinking}>
+    <span
+      role="status"
+      aria-label={ui.assistant.thinking}
+      className="flex items-center gap-1 px-1 py-1.5"
+    >
       {[0, 1, 2].map((i) => (
         <span
           key={i}
@@ -59,6 +63,9 @@ export function AssistantFeed({
   thinking: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Автодогон ТОЛЬКО у низа (канон чатов): читающего выше не выдёргивать
+  // вниз каждым тиком стриминга (замечание валидации 16.11.2026).
+  const atBottomRef = useRef(true);
   const me = useAuthStore((s) => s.user);
   const myAvatarUrl = usePersonAvatarUrl(me?.id);
   const meRef = me ? { id: me.id, displayName: me.displayName, avatarUrl: myAvatarUrl } : null;
@@ -70,13 +77,20 @@ export function AssistantFeed({
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [messages, thinking]);
 
   return (
     // Зону с обоями (chat-zone + chat-wallpaper) несёт обёртка тела — она
     // продолжается под композером; здесь только скролл ленты.
-    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+    <div
+      ref={scrollRef}
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+      }}
+      className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
+    >
       <div className="flex flex-col gap-3">
         {runs.map((run, i) => {
           const prev = runs[i - 1];

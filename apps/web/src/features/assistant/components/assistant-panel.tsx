@@ -4,33 +4,25 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { useElementWidth } from '../../../shared/ui/use-element-width.js';
 import { uiPx } from '../../../shared/ui/ui-scale.js';
+import { inputModality } from '../../../shared/lib/input-modality.js';
 import {
   ASSISTANT_W_KEY,
-  ASSISTANT_W_MAX,
-  ASSISTANT_W_MIN,
+  assistantLiveBounds,
   useAssistantStore,
 } from '../model/assistant-store.js';
 import { AssistantBody } from './assistant-body.js';
 
-/** Живой потолок ширины: не больше 45% рамы (на узком окне панель не съедает
- *  больше половины working-зоны) и не уже читаемого минимума. */
-function liveBounds(frameW: number): { min: number; max: number } {
-  const max = Math.min(ASSISTANT_W_MAX, Math.max(uiPx(240), Math.floor(frameW * 0.45)));
-  return { min: Math.min(ASSISTANT_W_MIN, max), max };
-}
-
 /** Окно ассистента — ПЛАВАЮЩИЙ ЛИСТ поверх правой части нашего окна,
- *  ВНУТРИ мягкой рамы во ВСЮ её высоту, до самого верха (вердикт владельца
- *  16.11.2026: ровный обрез на оси отвергнут): слева скругления 18px сверху
- *  и снизу + hairline-бордюр; правый край в край рамы без зазоров — её
- *  скругления обрезают правые углы окна (плавный силуэт у кнопки агента);
- *  направленная тень slider-shadow (только светлая тема), тон bg-card —
- *  язык слайдеров. Структуру окна НЕ двигает: накрывает контент справа
- *  (включая правую группу топбара); ширина тянется левой границей с памятью
- *  и клампится живыми пределами рамы. Выезд справа налево — шириной
- *  СУЩЕСТВУЮЩЕЙ обёртки
+ *  ВНУТРИ мягкой рамы НИЖЕ топбара (верх на оси контура, вердикт владельца
+ *  16.11.2026): слева скругления 18px, вертикального hairline нет; низ и
+ *  правый край в край рамы без зазоров — её скругления обрезают правые углы
+ *  окна (плавный силуэт у кнопки агента); направленная тень slider-shadow
+ *  (только светлая тема), тон bg-card — язык слайдеров. Шапка остаётся
+ *  доступной (тема переключается во время диалога). Структуру окна НЕ
+ *  двигает; ширина тянется левой границей с памятью и клампится живыми
+ *  пределами рамы. Выезд справа налево — шириной СУЩЕСТВУЮЩЕЙ обёртки
  *  (закон выдвижных поверхностей: первое открытие после Ctrl+R плавное);
- *  контент лениво на первом открытии и остаётся (скролл/черновик целы). */
+ *  контент монтируется после оседания выезда и остаётся (скролл/черновик целы). */
 export function AssistantPanel() {
   const open = useAssistantStore((s) => s.open);
   const width = useAssistantStore((s) => s.width);
@@ -47,8 +39,22 @@ export function AssistantPanel() {
     frameRef.current = paneRef.current?.parentElement ?? null;
   });
   const frameW = useElementWidth(frameRef);
-  const { min: minW, max: maxW } = liveBounds(frameW);
+  const { min: minW, max: maxW } = assistantLiveBounds(frameW);
   const effWidth = Math.min(Math.max(width, minW), maxW);
+
+  // Возврат фокуса на триггер при закрытии — только клавиатурному пользователю
+  // (канон SliderPanel/input-modality): иначе focus-visible рамка на кнопке.
+  const triggerRef = useRef<HTMLElement | null>(null);
+  const openedViaRef = useRef<'mouse' | 'keyboard'>('mouse');
+  useEffect(() => {
+    if (open) {
+      openedViaRef.current = inputModality();
+      triggerRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    } else if (openedViaRef.current === 'keyboard') {
+      triggerRef.current?.focus();
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -86,7 +92,7 @@ export function AssistantPanel() {
     let raf = 0;
     store.setDragging(true);
     const onMove = (ev: globalThis.PointerEvent) => {
-      const bounds = liveBounds(frameRef.current?.offsetWidth ?? 0);
+      const bounds = assistantLiveBounds(frameRef.current?.offsetWidth ?? 0);
       latest = Math.min(Math.max(startW + (startX - ev.clientX), bounds.min), bounds.max);
       if (raf) return;
       raf = requestAnimationFrame(() => {
@@ -130,7 +136,13 @@ export function AssistantPanel() {
         // контур (z-60, позже в DOM) и оверлей-порталы/тосты (z-70) выше.
         // Ниже топбара (верх на оси контура): шапка целиком доступна, в т.ч.
         // переключатель темы во время диалога (вердикт владельца 16.11.2026).
-        'slider-shadow absolute right-0 bottom-0 z-[60] overflow-hidden rounded-l-2xl bg-card',
+        // Элевация по темам (канон): светлая — направленная тень slider-shadow
+        // БЕЗ бордюра; тёмная — теней нет, край читается hairline-бордюром по
+        // периметру (ступень тона card/perimeter сливалась в шапке, вердикт
+        // владельца 16.11.2026) — как у карточек-слайдеров. Цвет кромки —
+        // токен --assistant-edge (transparent/бордер): dark:-утилиты в проекте
+        // мертвы (вариант .dark vs data-theme), токены — канон.
+        'slider-shadow absolute right-0 bottom-0 z-[60] overflow-hidden rounded-l-2xl border border-(--assistant-edge) bg-card',
         // В покое w-0 + visibility hidden: ни полосы, ни переполнения;
         // выезд — шириной существующей обёртки, без transform-скролла шелла.
         !dragging && 'transition-[width,visibility] duration-200 ease-out',
@@ -149,13 +161,13 @@ export function AssistantPanel() {
         </div>
       ) : null}
       {open ? (
-        // Ручка ресайза — НЕВИДИМЫЙ оверлей w-3 поверх границы (канон
-        // перегородок карточек): никакой толстой цветной полосы; курсор
-        // col-resize — единственная подсказка.
+        // Ручка ресайза — НЕВИДИМЫЙ оверлей w-3 целиком внутри панели
+        // (канон перегородок карточек): никакой толстой цветной полосы;
+        // курсор col-resize — единственная подсказка.
         <div
           onPointerDown={onDividerDown}
           title={ui.assistant.resizeHint}
-          className="absolute inset-y-0 -left-1.5 z-10 w-3 cursor-col-resize"
+          className="absolute inset-y-0 left-0 z-10 w-3 cursor-col-resize"
         />
       ) : null}
     </div>

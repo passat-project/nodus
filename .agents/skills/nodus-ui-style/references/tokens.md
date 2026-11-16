@@ -71,7 +71,7 @@
 
 ## Механика тем
 
-- `shell-store` (`ThemeId = 'dark' | 'light'`, `toggleTheme`), persist `nodus-shell-v1` (partialize — theme + edgeOpen). ДЕФОЛТ — `'light'` (вердикт владельца 15.09.2026).
+- `shell-store` (`ThemeId = 'dark' | 'light'`, `toggleTheme`), persist `nodus-shell-v1` (partialize — theme + menuCollapsed; легаси `edgeOpen` отбрасывается схемой). ДЕФОЛТ — `'light'` (вердикт владельца 15.09.2026).
 - Светлая живёт в `:root` без атрибута — первый визит отрисовывается сразу светлой, без вспышки тёмной; `app-shell` для светлой УДАЛЯЕТ `dataset.theme`, для тёмной ставит `'dark'`; `<Toaster theme={theme}>`.
 - Inline-скрипт `index.html` (до первой отрисовки) читает persisted `nodus-shell-v1` и ставит `data-theme='dark'` вернувшемуся «тёмному» пользователю — без вспышки светлой; `theme-color` meta = `#F4F2F0` (фон дефолтной темы).
 - Скроллбар — через `var(--scrollbar)` (не хардкод!).
