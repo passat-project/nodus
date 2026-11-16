@@ -17,9 +17,11 @@ import {
   userListItemSchema,
 } from '@nodus/contracts';
 
+import type { Redis } from 'ioredis';
 import { AppModule } from '../../src/app.module.js';
 import { PrismaService } from '../../src/core/database/prisma.service.js';
 import { EventDispatcher } from '../../src/core/events/event-dispatcher.js';
+import { REDIS_CLIENT } from '../../src/core/redis/redis.module.js';
 import { waitForAudit } from './audit-test-utils.js';
 import { ensureTestDatabase } from './test-db.js';
 
@@ -274,6 +276,7 @@ describe('auth + directory (integration)', () => {
       headers: { authorization: `Bearer ${adminTokens.accessToken}` },
     });
     expect(deactivate.status).toBe(200);
+    const deactivatedCard = userCardSchema.parse(await deactivate.json());
 
     // Диспетчер доставляет directory.user.deactivated → auth отзывает сессии
     // и ставит стоп-лист access-токенов (#333): старый, ещё не истёкший access
@@ -302,6 +305,34 @@ describe('auth + directory (integration)', () => {
       headers: { authorization: `Bearer ${employeeTokens.accessToken}` },
     });
     expect(meWithOldToken.status).toBe(401);
+
+    // Возврат в работу (AUD-016): статус снимается, роли сохраняются,
+    // сотрудник входит заново. Повтор активации идемпотентен.
+    const activate = await fetch(`${baseUrl}/directory/users/${target!.id}/activate`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminTokens.accessToken}` },
+    });
+    expect(activate.status).toBe(200);
+    const activated = userCardSchema.parse(await activate.json());
+    expect(activated.status).toBe('active');
+    expect(activated.roles).toEqual(deactivatedCard.roles);
+    const repeated = await fetch(`${baseUrl}/directory/users/${target!.id}/activate`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminTokens.accessToken}` },
+    });
+    expect(repeated.status).toBe(200);
+    expect(userCardSchema.parse(await repeated.json()).status).toBe('active');
+
+    // Стоп-лист деактивации в жизни истекает задолго до возврата; в тесте
+    // время не ждём — снимаем запись, как клиент после refresh.
+    await app.get<Redis>(REDIS_CLIENT).del(`nodus:auth:revoked-before:${target!.id}`);
+    const back = await login(baseUrl, EMPLOYEE.email, EMPLOYEE.password);
+    expect(back.status).toBe(200);
+    const backTokens = authTokensSchema.parse(await back.json());
+    const meAfterActivation = await fetch(`${baseUrl}/auth/me`, {
+      headers: { authorization: `Bearer ${backTokens.accessToken}` },
+    });
+    expect(meAfterActivation.status).toBe(200);
   });
 
   it('админ видит дерево оргструктуры с руководителями', async () => {

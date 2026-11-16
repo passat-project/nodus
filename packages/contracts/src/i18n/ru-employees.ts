@@ -71,6 +71,10 @@ export const employeesStrings = {
   editEmployee: 'Редактировать',
   editEmployeeTitle: 'Редактирование сотрудника',
   editSaved: 'Карточка сотрудника обновлена',
+  activateEmployee: 'Вернуть в работу',
+  activateHint:
+    'Сотрудник снова сможет войти, роли сохранятся. В беседы и проекты его нужно добавить заново — при увольнении он из них выбыл.',
+  activateDone: 'Сотрудник возвращён в работу',
   dataCheck: 'Проверка данных',
   dataCheckTitle: 'Проверка данных оргструктуры',
   dataCheckPositions: 'Должности без сотрудников',

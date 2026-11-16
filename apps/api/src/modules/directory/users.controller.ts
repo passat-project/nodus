@@ -188,6 +188,23 @@ export class UsersController {
     return this.usersService.deactivateUser(id, actor);
   }
 
+  @Post(':id/activate')
+  @HttpCode(200)
+  @RequirePermissions(Permission.DIRECTORY_MANAGE)
+  @Audit({ action: 'directory.user.activate', entity: 'user' })
+  @ApiOperation({ summary: 'Возврат деактивированного сотрудника в работу (AUD-016)' })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID сотрудника',
+    schema: { type: 'string', format: 'uuid' },
+  })
+  @ApiOkResponse({ standardSchema: userCardSchema })
+  @ApiErrors(401, 403, 404, 409)
+  @ApiIdempotencyKey()
+  activate(@Param('id') id: string, @GetUser() actor: AuthUser): Promise<UserCard> {
+    return this.usersService.activateUser(id, actor);
+  }
+
   /** Первая file-часть + текстовые поля ДО неё (канон @fastify/multipart,
    *  репро #57: поля после файловой части недетерминированы на больших телах). */
   private async readMultipart(
