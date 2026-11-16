@@ -9,7 +9,6 @@ import {
 } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Input } from '@nodus/ui/components/input';
-import { NodeLabel } from '@nodus/ui/components/node-label';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 import { toast } from 'sonner';
 
@@ -21,8 +20,9 @@ import { useFileServersQuery, useUpdateFileServers } from '../api/file-servers.j
  * и удаление сохраняются сразу (оптимистично, откат при ошибке): список —
  * короткий перечень, отдельная кнопка «Сохранить» была бы лишним шагом.
  *
- * Композиция: метка раздела на одной оси с пунктом навигатора (h-9), описание,
- * форма добавления и список одной мерой (max-w-xl) — правые края не «пляшут».
+ * Композиция: раздел открывается вкладкой топбара (левого перечисления нет —
+ * вердикт владельца 16.11.2026), внутри — описание, форма добавления и
+ * список одной мерой (max-w-xl) — правые края не «пляшут».
  * Список — панель с тоном-ступенью: пустое и ошибочное состояния живут в той
  * же рамке, что и строки, поэтому добавление не прыгает габаритом.
  */
@@ -75,14 +75,9 @@ export function FileServersSection() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-2 pb-6">
         <div className="flex max-w-xl flex-col">
-          <h2 className="flex h-9 items-center">
-            <NodeLabel
-              label={ui.portalSettings.sections.fileServers}
-              count={ready ? servers.length : undefined}
-            />
-          </h2>
+          <h1 className="sr-only">{ui.portalSettings.sections.fileServers}</h1>
 
           <p className="text-sm text-muted-foreground">
             {ui.portalSettings.fileServers.description}

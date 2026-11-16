@@ -166,11 +166,11 @@ for (const theme of ['light', 'dark']) {
   await page.waitForTimeout(1200);
   await clearToasts(page);
   await page.screenshot({ path: `${out}/01-file-servers-${theme}.png` });
-  await page.getByRole('button', { name: uiAccessTab }).click();
+  await page.getByRole('link', { name: uiAccessTab }).click();
   await page.waitForTimeout(1200);
   await clearToasts(page);
   await page.screenshot({ path: `${out}/03-access-${theme}.png` });
-  await page.getByRole('button', { name: uiFileServersTab }).click();
+  await page.getByRole('link', { name: uiFileServersTab }).click();
   await page.waitForTimeout(500);
 
   await page.goto(`${base}/tasks?cards=task:${taskId}`);

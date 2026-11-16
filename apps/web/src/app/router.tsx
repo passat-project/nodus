@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-router';
 
 import { AppShell } from './shell/app-shell.js';
-import { NAV_MODULES } from './shell/nav-registry.js';
+import { RAIL_MODULES } from './shell/nav-registry.js';
 import { NotFoundScreen, RouterErrorScreen } from './shell/system-screens.js';
 import { resolveHidden, resolveOrder } from './shell/ui-prefs.js';
 import { useUiPrefsStore } from '../shared/preferences/ui-prefs-store.js';
@@ -157,12 +157,12 @@ const indexRoute = createRoute({
   path: '/',
   beforeLoad: () => {
     const { personal, company } = useUiPrefsStore.getState();
-    const ids = NAV_MODULES.map((m) => m.id);
+    const ids = RAIL_MODULES.map((m) => m.id);
     const order = resolveOrder(ids, personal.navOrder, company.navOrder);
     const hidden = resolveHidden(ids, personal.navHidden, company.navHidden);
     // Стартовый экран — первый ВИДИМЫЙ модуль (скрытый «с верху» не считается).
     const firstId = order.find((id) => !hidden.includes(id));
-    const first = NAV_MODULES.find((m) => m.id === firstId);
+    const first = RAIL_MODULES.find((m) => m.id === firstId);
     throw redirect({ to: first?.to ?? '/home', replace: true });
   },
   component: () => null,

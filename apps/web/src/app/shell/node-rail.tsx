@@ -22,7 +22,7 @@ import { useChatUnreadSummary } from '../../shared/chat/chat-queries.js';
 import { useNotificationSummary } from '../../features/notifications/api/notifications-api.js';
 import { useAuthStore } from '../../shared/auth-store.js';
 import { CIRCUIT_REMEASURE } from './circuit-geometry.js';
-import { NAV_MODULES, type NavModuleDef } from './nav-registry.js';
+import { RAIL_MODULES, type NavModuleDef } from './nav-registry.js';
 import { RailCustomizeMode } from './node-rail-customize.js';
 import {
   HIDDEN_SENTINEL,
@@ -81,10 +81,10 @@ export function NodeRail() {
   );
   const settingsActive = pathname === '/settings' || pathname.startsWith('/settings/');
 
-  const ids = NAV_MODULES.map((m) => m.id);
+  const ids = RAIL_MODULES.map((m) => m.id);
   const order = resolveOrder(ids, personal.navOrder, company.navOrder);
   const hidden = resolveHidden(ids, personal.navHidden, company.navHidden);
-  const byId = (id: string) => NAV_MODULES.find((m) => m.id === id);
+  const byId = (id: string) => RAIL_MODULES.find((m) => m.id === id);
   const defined = (m: NavModuleDef | undefined): m is NavModuleDef => m !== undefined;
   const visibleModules = order
     .filter((id) => !hidden.includes(id))

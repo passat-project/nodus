@@ -5,6 +5,7 @@ import {
   ListTodo,
   Mail,
   MessageSquare,
+  SlidersHorizontal,
   Users,
   Workflow,
   type LucideIcon,
@@ -50,6 +51,9 @@ export interface NavModuleDef {
   /** Окно-сплит (мессенджер, Автоматизация): ось контура идёт до правого
    *  края рамы — она же верхняя граница окна (канон `references/circuit.md`). */
   splitWindow?: boolean;
+  /** `false` — техническая страница вне левой рейки: вкладки живут в топбаре
+   *  (Настройки портала, #558), в персональном порядке и «Скрытом» не участвует. */
+  rail?: boolean;
   tabs: NavTabDef[];
 }
 
@@ -253,20 +257,48 @@ export const NAV_MODULES: NavModuleDef[] = [
       ...accessTab('automation'),
     ],
   },
+  {
+    id: 'settings',
+    to: '/settings',
+    label: ui.nav.settings,
+    icon: SlidersHorizontal,
+    exact: true,
+    // Техническая страница «Настройки портала» (#558, эпик #869): входа в
+    // рейке нет (её открывает меню «Настройки»), но разделы — такие же
+    // вкладки топбара, как у модулей: «Файловые серверы» и «Права доступа».
+    rail: false,
+    tabs: [
+      {
+        id: 'file-servers',
+        label: ui.portalSettings.sections.fileServers,
+        search: { tab: 'file-servers' },
+        permission: Permission.PORTAL_SETTINGS_MANAGE,
+        isActive: (s) => (s.get('tab') ?? 'file-servers') === 'file-servers',
+      },
+      ...accessTab('settings', Permission.PORTAL_SETTINGS_MANAGE),
+    ],
+  },
 ];
+
+/** Модули левой рейки: технические страницы (`rail: false`) в порядке и
+ *  «Скрытом» не участвуют — их вкладки живут только в топбаре. */
+export const RAIL_MODULES: NavModuleDef[] = NAV_MODULES.filter((m) => m.rail !== false);
 
 /**
  * Вкладка «Права доступа» раздела (#379, ADR-0034): срез каталога прав по
  * модулю. У раздела без прав вкладки НЕТ по построению — модуль получает её
  * одной строкой `...accessTab('<раздел>')` в своём `tabs` (всегда последней).
+ * `permission` — для страниц, целиком закрытых правом (Настройки портала,
+ * #558): вкладка не показывается тем, кто не пройдёт гейт страницы.
  */
-function accessTab(module: AccessModule): NavTabDef[] {
+function accessTab(module: AccessModule, permission?: Permission): NavTabDef[] {
   if (permissionsOfModule(module).length === 0) return [];
   return [
     {
       id: 'access',
       label: ui.access.tab,
       search: { tab: 'access' },
+      permission,
       isActive: (s) => s.get('tab') === 'access',
     },
   ];

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { ui } from '@nodus/contracts';
 
 import { useAuthStore } from '../../../shared/auth-store.js';
@@ -8,14 +8,15 @@ import { PortalSettingsPage } from './portal-settings-page.js';
 
 /**
  * Страница «Настройки портала» (#558): без права — заглушка; с правом —
- * разделы и переход в «Права доступа» через search-параметр.
+ * раздел по вкладке топбара (`?tab=access` — «Права доступа», иначе
+ * «Файловые серверы»). Левое перечисление разделов убрано (вердикт
+ * владельца 16.11.2026) — разделы живут вкладками в топбаре.
  */
 
-const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
+const { search } = vi.hoisted(() => ({ search: { current: {} as { tab?: string } } }));
 
 vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => navigate,
-  useSearch: () => ({}),
+  useSearch: () => search.current,
 }));
 
 vi.mock('../../../shared/access/module-access-matrix.js', () => ({
@@ -28,7 +29,7 @@ vi.mock('../components/file-servers-section.js', () => ({
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  search.current = {};
   useAuthStore.setState({ user: null });
 });
 
@@ -50,19 +51,18 @@ describe('страница настроек портала', () => {
     expect(screen.getByText(ui.portalSettings.noAccess)).toBeTruthy();
   });
 
-  it('с правом — разделы; «Права доступа» ведут search-параметром', () => {
+  it('по умолчанию — «Файловые серверы», без левого перечисления', () => {
     asUser(['portal.settings.manage']);
     render(<PortalSettingsPage />);
-    expect(screen.getByText(ui.portalSettings.title)).toBeTruthy();
     expect(screen.getByText('файловые серверы')).toBeTruthy();
+    expect(screen.queryByRole('navigation', { name: ui.portalSettings.title })).toBeNull();
+    expect(screen.queryByRole('button', { name: ui.portalSettings.sections.access })).toBeNull();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: ui.portalSettings.sections.access }));
-    expect(navigate).toHaveBeenCalledTimes(1);
-    const call = navigate.mock.calls[0]?.[0] as {
-      to: string;
-      search: (prev: Record<string, unknown>) => Record<string, unknown>;
-    };
-    expect(call.to).toBe('/settings');
-    expect(call.search({ foo: 1 })).toEqual({ foo: 1, section: 'access' });
+  it('?tab=access — матрица прав раздела «Настройки»', () => {
+    asUser(['portal.settings.manage']);
+    search.current = { tab: 'access' };
+    render(<PortalSettingsPage />);
+    expect(screen.getByText('матрица прав')).toBeTruthy();
   });
 });

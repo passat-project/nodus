@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ui } from '@nodus/contracts';
+import { Permission, ui } from '@nodus/contracts';
 
-import { NAV_MODULES } from './nav-registry.js';
+import { NAV_MODULES, RAIL_MODULES, visibleNavTabs } from './nav-registry.js';
 
 /**
  * Вкладка «Права доступа» (#379, ADR-0034): у раздела с правами в каталоге
@@ -55,5 +55,35 @@ describe('портфели — папки журнала «Проекты» (#55
     const automation = NAV_MODULES.find((module) => module.id === 'automation')!;
     const projectTabs = automation.tabs.filter((tab) => tab.label.startsWith('Схем'));
     expect(projectTabs.map((tab) => tab.id)).toEqual(['project-schemas']);
+  });
+});
+
+/**
+ * «Настройки портала» (#558, вердикт владельца 16.11.2026): разделы — вкладки
+ * ТОПБАРА, а не список слева; сама страница — вне левой рейки (`rail: false`),
+ * в персональном порядке и «Скрытом» не участвует.
+ */
+describe('реестр навигации: «Настройки портала»', () => {
+  const settings = NAV_MODULES.find((module) => module.id === 'settings')!;
+  const manager = [Permission.PORTAL_SETTINGS_MANAGE];
+
+  it('страница — вне рейки, вкладки — «Файловые серверы» и «Права доступа»', () => {
+    expect(settings.rail).toBe(false);
+    expect(settings.to).toBe('/settings');
+    expect(settings.tabs.map((tab) => tab.id)).toEqual(['file-servers', 'access']);
+    expect(RAIL_MODULES.map((module) => module.id)).not.toContain('settings');
+  });
+
+  it('«Файловые серверы» — вкладка по умолчанию; access — последняя', () => {
+    const [fileServers, access] = settings.tabs;
+    expect(fileServers!.isActive(new URLSearchParams(''), manager)).toBe(true);
+    expect(fileServers!.isActive(new URLSearchParams('tab=access'), manager)).toBe(false);
+    expect(access!.search).toEqual({ tab: 'access' });
+    expect(access!.isActive(new URLSearchParams('tab=access'), manager)).toBe(true);
+  });
+
+  it('без права страницы вкладки не видны', () => {
+    expect(visibleNavTabs(settings, [])).toEqual([]);
+    expect(visibleNavTabs(settings, manager)).toHaveLength(2);
   });
 });
