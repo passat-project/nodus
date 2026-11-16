@@ -137,12 +137,17 @@ export function AssistantPanel() {
         // Ниже топбара (верх на оси контура): шапка целиком доступна, в т.ч.
         // переключатель темы во время диалога (вердикт владельца 16.11.2026).
         // Элевация по темам (канон): светлая — направленная тень slider-shadow
-        // БЕЗ бордюра; тёмная — теней нет, край читается hairline-бордюром по
-        // периметру (ступень тона card/perimeter сливалась в шапке, вердикт
-        // владельца 16.11.2026) — как у карточек-слайдеров. Цвет кромки —
-        // токен --assistant-edge (transparent/бордер): dark:-утилиты в проекте
+        // БЕЗ бордюра; тёмная — теней нет, край читается hairline-бордюром
+        // (ступень тона card/perimeter сливалась в шапке, вердикт владельца
+        // 16.11.2026) — как у карточек-слайдеров. Цвет кромки — токен
+        // --assistant-edge (transparent/бордер): dark:-утилиты в проекте
         // мертвы (вариант .dark vs data-theme), токены — канон.
-        'slider-shadow absolute right-0 bottom-0 z-[60] overflow-hidden rounded-l-2xl border border-(--assistant-edge) bg-card',
+        // Верхнего бордюра НЕТ: он сдвигал контент на 1px и линия шапки не
+        // совпадала с разделителем чата (вердикт 17.11.2026); верх окна
+        // отделяет ось графа (контур z-60 рисуется поверх окна). Правый
+        // нижний угол скруглён ПО РАДИУСУ РАМЫ — иначе hairline обрезался
+        // квадратным углом и дуга не прорисовывалась (вердикт 17.11.2026).
+        'slider-shadow absolute right-0 bottom-0 z-[60] overflow-hidden rounded-tl-2xl rounded-bl-2xl rounded-br-2xl border-b border-l border-r border-(--assistant-edge) bg-card',
         // В покое w-0 + visibility hidden: ни полосы, ни переполнения;
         // выезд — шириной существующей обёртки, без transform-скролла шелла.
         !dragging && 'transition-[width,visibility] duration-200 ease-out',
