@@ -18,6 +18,7 @@ import { EventBus } from '../../core/events/event-bus.js';
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
 import { ReferenceGuard } from './reference-guard.service.js';
 import { DepartmentsRepository, type DepartmentRow } from './departments.repository.js';
+import { RoleAudienceRepository } from './role-audience.repository.js';
 import { UsersRepository } from './users.repository.js';
 
 function toNode(row: DepartmentRow, children: DepartmentNode[]): DepartmentNode {
@@ -52,6 +53,7 @@ export class DepartmentsService {
     private readonly references: ReferenceGuard,
     private readonly tx: TransactionRunner,
     private readonly eventBus: EventBus,
+    private readonly audience: RoleAudienceRepository,
   ) {}
 
   /** Дерево: корни — parentId null; сортировка sortOrder+name на каждом уровне. */
@@ -127,9 +129,10 @@ export class DepartmentsService {
       await this.references.ensureActiveUser(dto.deputyId, 'deputyId', tx);
       await this.references.ensureDepartment(dto.parentId, current.kind, 'parentId', tx);
       // #544: цикл — под локом дерева и в той же транзакции (чтение через tx).
+      let newParentChain: string[] = [];
       if (dto.parentId !== undefined && dto.parentId !== null) {
-        const chain = await this.departments.findParentChain(dto.parentId, tx);
-        if (chain.includes(id)) {
+        newParentChain = await this.departments.findParentChain(dto.parentId, tx);
+        if (newParentChain.includes(id)) {
           throw new DomainException(ErrorCode.CONFLICT, 'Department tree cycle', {
             id,
             parentId: dto.parentId,
@@ -146,6 +149,7 @@ export class DepartmentsService {
       }
       const locked = (await this.departments.findById(id, tx)) ?? current;
       const beforeByIds = await this.escalationSnapshot(id, locked, dto, tx);
+      const oldParentId = locked.parentId;
       const updated = await this.departments.update(id, dto, tx);
       if (beforeByIds !== null) {
         await this.guard.assertNoEscalationForUsers(
@@ -161,6 +165,19 @@ export class DepartmentsService {
         { departmentId: id, changedFields: Object.keys(dto) },
         { actorId: actor.id, aggregateType: 'department', aggregateId: id },
       );
+      if (beforeByIds !== null) {
+        // Перенос меняет действующие роли сотрудников поддерева: привязки к
+        // старым management-предкам перестают действовать, к новым — начинают.
+        // Аудитория уже посчитана снимком «до»; отзыв — в той же транзакции
+        // (#866): выданные токены не должны жить до истечения TTL.
+        const oldChain = oldParentId ? await this.departments.findParentChain(oldParentId, tx) : [];
+        const movedParents = [...new Set([...oldChain, ...newParentChain])].filter(
+          (departmentId) =>
+            !(oldChain.includes(departmentId) && newParentChain.includes(departmentId)),
+        );
+        const roleIds = await this.audience.roleIdsOfDepartments(movedParents, tx);
+        await this.emitAccessChanged(tx, roleIds, [...beforeByIds.keys()], actor.id);
+      }
       return toNode(updated, []);
     });
   }
@@ -182,6 +199,11 @@ export class DepartmentsService {
           reason: 'has_children',
         });
       }
+      // Архивация убирает узел из management-дерева: привязанные к нему роли
+      // перестают действовать на сотрудников поддерева. Аудитория считается
+      // ДО мутации — после неё узел неактивен и в роль уже не входит (#866).
+      const roleIds = await this.audience.roleIdsOfDepartments([id], tx);
+      const userIds = await this.audience.departmentUserIds(id, tx);
       await this.departments.update(id, { isActive: false }, tx);
       await this.eventBus.emit(
         tx,
@@ -189,7 +211,27 @@ export class DepartmentsService {
         { departmentId: id },
         { actorId, aggregateType: 'department', aggregateId: id },
       );
+      await this.emitAccessChanged(tx, roleIds, userIds, actorId);
     });
+  }
+
+  /** `directory.role.access_changed` (#866): привязки ролей к подразделению
+   *  изменили аудиторию — auth обесценивает access-токены сотрудников. */
+  private async emitAccessChanged(
+    tx: TransactionClient,
+    roleIds: readonly string[],
+    userIds: readonly string[],
+    actorId: string,
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+    for (const roleId of roleIds) {
+      await this.eventBus.emit(
+        tx,
+        DIRECTORY_EVENTS.ROLE_ACCESS_CHANGED,
+        { roleId, reason: 'membership', userIds: [...userIds] },
+        { actorId, aggregateType: 'role', aggregateId: roleId },
+      );
+    }
   }
 
   /** Снимок «до» для bind-проверки (#490): сотрудники поддерева, если перенос

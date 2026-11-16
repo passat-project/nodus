@@ -67,6 +67,24 @@ export class RoleAudienceRepository {
     return rows.map((row) => row.id);
   }
 
+  /** Роли, привязанные к активным управленческим подразделениям набора:
+   *  архивация узла или его перенос меняют их аудиторию (#866). */
+  async roleIdsOfDepartments(
+    departmentIds: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<string[]> {
+    if (departmentIds.length === 0) return [];
+    const rows = await this.db(tx).$queryRaw<{ role_id: string }[]>(Prisma.sql`
+      SELECT DISTINCT dr.role_id
+      FROM department_roles dr
+      JOIN departments d ON d.id = dr.department_id
+      WHERE dr.department_id = ANY(${departmentIds}::uuid[])
+        AND d.is_active AND d.kind = 'management'
+      ORDER BY dr.role_id
+    `);
+    return rows.map((row) => row.role_id);
+  }
+
   private db(tx?: TransactionClient) {
     return tx ?? this.prisma;
   }

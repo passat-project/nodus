@@ -51,6 +51,7 @@ describe('DepartmentsService', () => {
   const positions = { findRef: vi.fn() };
   const roles = { permissionsByIds: vi.fn(), lockForUpdate: vi.fn(), lockByCodeForUpdate: vi.fn() };
   const membership = { effectiveRoleIds: vi.fn() };
+  const audience = { roleIdsOfDepartments: vi.fn(), departmentUserIds: vi.fn() };
   const tx = { run: vi.fn((cb: (t: string) => unknown) => cb('tx-handle')) };
   const eventBus = { emit: vi.fn() };
 
@@ -59,6 +60,8 @@ describe('DepartmentsService', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     membership.effectiveRoleIds.mockResolvedValue([]);
+    audience.roleIdsOfDepartments.mockResolvedValue([]);
+    audience.departmentUserIds.mockResolvedValue([]);
     departments.lockForUpdate.mockResolvedValue(true);
     departments.countActiveChildren.mockResolvedValue(0);
     const guard = new RoleAssignmentGuard(roles as never, membership as never);
@@ -70,6 +73,7 @@ describe('DepartmentsService', () => {
       references,
       tx as never,
       eventBus as never,
+      audience as never,
     );
   });
 
@@ -272,6 +276,7 @@ describe('DepartmentsService', () => {
 
     it('перенос в корень снимает роли — правами не ограничен', async () => {
       departments.findById.mockResolvedValue(row('dep', 'root'));
+      departments.findParentChain.mockResolvedValue(['root']);
       departments.findSubtreeIds.mockResolvedValue(['dep']);
       users.findActiveIdsByDepartmentIds.mockResolvedValue(['u-1']);
       membership.effectiveRoleIds.mockResolvedValueOnce(['role-dept']).mockResolvedValueOnce([]);
@@ -280,9 +285,43 @@ describe('DepartmentsService', () => {
       await service.update('dep', { parentId: null }, actor());
 
       expect(departments.lockTree).toHaveBeenCalledWith('tx-handle');
-      expect(departments.findParentChain).not.toHaveBeenCalled();
+      // Перенос в корень: цепь нового родителя не читается (родителя нет),
+      // старый предок — только для аудитории отзыва ролей (#866).
+      expect(departments.findParentChain).toHaveBeenCalledTimes(1);
+      expect(departments.findParentChain).toHaveBeenCalledWith('root', 'tx-handle');
       expect(eventBus.emit).toHaveBeenCalled();
       expect(roles.permissionsByIds).not.toHaveBeenCalled();
+    });
+
+    it('перенос меняет действующие роли — сотрудники поддерева отзываются (#866)', async () => {
+      departments.findById.mockImplementation(async (foundId: string) =>
+        foundId === 'dep' ? row('dep', 'old-parent') : row('new-parent', null),
+      );
+      departments.findParentChain.mockImplementation(async (startId: string) =>
+        startId === 'old-parent' ? ['old-parent'] : ['new-parent'],
+      );
+      departments.findRef.mockResolvedValue({
+        id: 'new-parent',
+        kind: 'management',
+        isActive: true,
+      });
+      departments.findSubtreeIds.mockResolvedValue(['dep']);
+      users.findActiveIdsByDepartmentIds.mockResolvedValue(['u-1']);
+      audience.roleIdsOfDepartments.mockResolvedValue(['role-old']);
+      departments.update.mockResolvedValue(row('dep', 'new-parent'));
+
+      await service.update('dep', { parentId: 'new-parent' }, actor());
+
+      expect(audience.roleIdsOfDepartments).toHaveBeenCalledWith(
+        ['old-parent', 'new-parent'],
+        'tx-handle',
+      );
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'tx-handle',
+        'directory.role.access_changed',
+        { roleId: 'role-old', reason: 'membership', userIds: ['u-1'] },
+        expect.objectContaining({ actorId: 'admin-1', aggregateType: 'role' }),
+      );
     });
 
     it('зам подразделения неактивен → 400 inactive (#441)', async () => {
@@ -332,6 +371,37 @@ describe('DepartmentsService', () => {
       });
       expect(departments.update).not.toHaveBeenCalled();
       expect(eventBus.emit).not.toHaveBeenCalled();
+    });
+
+    it('архивация снимает действующие роли сотрудников — токены отзываются (#866)', async () => {
+      departments.findById.mockResolvedValue(row('dep', null));
+      audience.roleIdsOfDepartments.mockResolvedValue(['role-dept']);
+      audience.departmentUserIds.mockResolvedValue(['u-1', 'u-2']);
+
+      await service.archive('dep', 'admin-1');
+
+      expect(audience.roleIdsOfDepartments).toHaveBeenCalledWith(['dep'], 'tx-handle');
+      expect(audience.departmentUserIds).toHaveBeenCalledWith('dep', 'tx-handle');
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'tx-handle',
+        'directory.role.access_changed',
+        { roleId: 'role-dept', reason: 'membership', userIds: ['u-1', 'u-2'] },
+        expect.objectContaining({ actorId: 'admin-1', aggregateType: 'role' }),
+      );
+    });
+
+    it('архивация узла без привязанных ролей — только department.archived', async () => {
+      departments.findById.mockResolvedValue(row('dep', null));
+      audience.departmentUserIds.mockResolvedValue(['u-1']);
+
+      await service.archive('dep', 'admin-1');
+
+      expect(eventBus.emit).not.toHaveBeenCalledWith(
+        'tx-handle',
+        'directory.role.access_changed',
+        expect.anything(),
+        expect.anything(),
+      );
     });
   });
 });
