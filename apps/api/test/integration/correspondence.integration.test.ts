@@ -259,6 +259,55 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(forbidden.status).toBe(404);
     });
 
+    it('отмена регистрации канцелярией: блока в чате нет, журнал и история — с причиной (#741)', async () => {
+      const letterId = await newLetter();
+      const registered = await c.register(c.registrar, letterId);
+      expect(registered.status, await registered.clone().text()).toBe(200);
+      await c.flushLetterEvents(letterId);
+      const chat = await c.fx.prisma.conversation.findFirstOrThrow({
+        where: { type: 'letter', letterId },
+      });
+      // Регистратор вне беседы письма (В2): её собственная причина не должна
+      // попасть в чужую переписку. Журнал перехода и история письма остаются.
+      const transitions = (await (
+        await c.api(c.registrar, 'GET', `/letters/${letterId}/transitions`)
+      ).json()) as { id: string; name: string }[];
+      const cancel = transitions.find((transition) => transition.name === 'Отменить регистрацию');
+      expect(cancel).toBeDefined();
+      const res = await c.api(
+        c.registrar,
+        'POST',
+        `/letters/${letterId}/transitions/${cancel!.id}`,
+        {
+          body: { form: { comment: 'Ошибочно зарегистрировано' } },
+          key: `it-cancel-${crypto.randomUUID()}`,
+        },
+      );
+      expect(res.status, await res.clone().text()).toBe(200);
+      await c.flushLetterEvents(letterId);
+
+      expect(
+        await c.fx.prisma.message.count({
+          where: { conversationId: chat.id, kind: 'letter_transition' },
+        }),
+      ).toBe(0);
+      const record = await c.fx.prisma.transitionRecord.findFirstOrThrow({
+        where: { entityKind: 'letter', entityId: letterId, recordKind: 'transition' },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(record.comment).toBe('Ошибочно зарегистрировано');
+      const history = historyPage.parse(
+        await (await c.api(c.resolver, 'GET', `/letters/${letterId}/history`)).json(),
+      ).items;
+      const stageEntry = history.find(
+        (entry) =>
+          entry.kind === 'stage_changed' && entry.transitionName === 'Отменить регистрацию',
+      );
+      expect(stageEntry?.kind === 'stage_changed' ? stageEntry.comment : undefined).toBe(
+        'Ошибочно зарегистрировано',
+      );
+    });
+
     it('подписант письма: удаление контакта — 409 CRM_CONTACT_IN_USE', async () => {
       const counterpartyId = (
         await c.fx.prisma.counterparty.findFirstOrThrow({
