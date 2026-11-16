@@ -121,4 +121,14 @@ describe('ConversationBar — кнопка сущности беседы (#753, 
     expect(screen.queryByRole('button', { name: 'Открыть проект' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Открыть письмо' })).toBeNull();
   });
+
+  it('канал проекта: кнопки «Добавить участников» нет — состав ведёт проект (AUD-003)', () => {
+    renderBar(conversation({ type: 'project_channel', myRole: 'owner' }));
+    expect(screen.queryByRole('button', { name: 'Добавить участников' })).toBeNull();
+  });
+
+  it('группа: кнопка «Добавить участников» на месте (право addMembers)', () => {
+    renderBar(conversation({ type: 'group', myRole: 'owner' }));
+    expect(screen.getByRole('button', { name: 'Добавить участников' })).toBeTruthy();
+  });
 });

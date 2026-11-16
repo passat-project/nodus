@@ -101,8 +101,9 @@ export class ConversationMembersService {
 
   /**
    * Добавление участников: право addMembers (дефолт — любой участник);
-   * только группы и каналы — состав direct/task/letter фиксирован
-   * сущностью (#195). Неизвестных справочнику и уже состоящих пропускаем
+   * только группы — состав direct/task/letter фиксирован сущностью (#195),
+   * канала проекта — проектом (AUD-003: вручную состав ведёт только
+   * ProjectChatService). Неизвестных справочнику и уже состоящих пропускаем
    * молча; превышение лимита 200 — ошибка валидации. Событие member_added
    * (существует) — gateway доставляет и добавленным (их список бесед).
    */
@@ -111,10 +112,7 @@ export class ConversationMembersService {
     conversationId: string,
     body: { userIds: string[] },
   ): Promise<ConversationListItem> {
-    await requireConversationAction(this.repo, conversationId, userId, 'addMembers', [
-      'group',
-      'project_channel',
-    ]);
+    await requireConversationAction(this.repo, conversationId, userId, 'addMembers', ['group']);
     // Только действующие сотрудники (#343): уволенного в беседу не добавить.
     const known = new Set(await this.userProfiles.filterActiveUserIds([...new Set(body.userIds)]));
     const existing = new Set((await this.repo.listMembers([conversationId])).map((m) => m.userId));
@@ -188,15 +186,12 @@ export class ConversationMembersService {
   /**
    * Исключение участника: право removeMembers (дефолт — владелец и модераторы)
    * + иерархия — актёр строго старше цели (модератора снимает только
-   * владелец); только группы и каналы (#195); владельца исключить нельзя.
-   * Вместе со строкой участия уходит черновик исключённого (user-FK нет —
-   * чистим явно).
+   * владелец); только группы (#195; канал проекта ведёт проект — AUD-003);
+   * владельца исключить нельзя. Вместе со строкой участия уходит черновик
+   * исключённого (user-FK нет — чистим явно).
    */
   async remove(userId: string, conversationId: string, memberUserId: string): Promise<void> {
-    await requireConversationAction(this.repo, conversationId, userId, 'removeMembers', [
-      'group',
-      'project_channel',
-    ]);
+    await requireConversationAction(this.repo, conversationId, userId, 'removeMembers', ['group']);
     const target = await this.repo.findMembership(conversationId, memberUserId);
     if (!target) throw DomainException.notFound('Member not found');
     if (target.role === 'owner') {

@@ -134,8 +134,9 @@ export function canChangeInfo(conversation: ConversationListItem): boolean {
   return ROLE_RANK[conversation.myRole] >= ROLE_RANK[conversation.permissions.changeInfo];
 }
 
-/** Состав чатов задач и писем ведёт сущность (#252): вручную — никому. */
-const ENTITY_MANAGED = new Set(['task', 'letter']);
+/** Состав чатов задач, писем и каналов проекта ведёт сущность (#252,
+ *  AUD-003): вручную — никому. */
+const ENTITY_MANAGED = new Set(['task', 'letter', 'project_channel']);
 
 export function canAddMembers(conversation: ConversationListItem): boolean {
   if (ENTITY_MANAGED.has(conversation.type)) return false;

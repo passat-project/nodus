@@ -69,4 +69,11 @@ describe('memberRowActions (#186): меню строки участника по
       memberRowActions({ conversation, member: member('u-owner', 'owner'), meId: 'me' }),
     ).toEqual({ makeAdmin: false, demoteAdmin: false, remove: false });
   });
+
+  it('канал проекта: ручного исключения нет — состав ведёт проект (AUD-003)', () => {
+    const asChannel = { ...conversation, type: 'project_channel' } as ConversationListItem;
+    expect(
+      memberRowActions({ conversation: asChannel, member: member('u-1', 'member'), meId: 'me' }),
+    ).toEqual({ makeAdmin: true, demoteAdmin: false, remove: false });
+  });
 });

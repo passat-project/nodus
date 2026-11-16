@@ -17,6 +17,11 @@ import {
   type MemberRow,
 } from '../conversations/conversations.repository.js';
 import { ConversationMembersRepository } from '../conversations/conversation-members.repository.js';
+import {
+  PROJECT_CHAT_READER,
+  type ProjectActor,
+  type ProjectChatReader,
+} from '../../projects/ports/project-reader.port.js';
 import { can, parsePermissions } from '../permissions.js';
 import { MessageDtoMapper } from './message-dto.mapper.js';
 import { addMentionWatchers, mentionTokenIds, resolveMentionTargets } from './mentions.js';
@@ -46,6 +51,7 @@ export class MessageActionsService {
     @Inject(USER_PROFILE_READER) private readonly userProfiles: UserProfileReader,
     private readonly threadParticipants: ThreadParticipantsRepository,
     private readonly vault: VaultWriteRepository,
+    @Inject(PROJECT_CHAT_READER) private readonly projectChat: ProjectChatReader,
   ) {}
 
   // ===== Пересылка =====
@@ -58,11 +64,12 @@ export class MessageActionsService {
    * текст копируется, вложения — по ссылке (file_id), реакции/цитата — нет.
    */
   async forward(
-    userId: string,
+    actor: ProjectActor,
     targetConversationId: string,
     body: ForwardMessagesBody,
     idempotencyKey: string | undefined,
   ): Promise<{ rows: MessageRow[]; members: MemberRow[] }> {
+    const userId = actor.id;
     const baseKey = idempotencyKey ?? randomUUID();
     // Упоминания сопроводительного текста (#239): резолв ДО tx (как send) —
     // копии пересланных сообщений уведомлений не порождают (канон Telegram:
@@ -106,7 +113,14 @@ export class MessageActionsService {
       const threadRootId = body.threadRootId ?? null;
 
       if (threadRootId === null) {
-        if (!can(membership.role as 'owner' | 'admin' | 'member', permissions, 'post')) {
+        // Канал проекта (AUD-003, как send): корневые посты — руководство
+        // проекта и держатели project.channel.post; матрица беседы этих ролей
+        // не знает. Треды канала открыты всем участникам — без проверки.
+        const allowed =
+          conversation.type === 'project_channel' && conversation.projectId
+            ? await this.projectChat.canPost(conversation.projectId, actor)
+            : can(membership.role as 'owner' | 'admin' | 'member', permissions, 'post');
+        if (!allowed) {
           throw DomainException.forbidden('Posting in this conversation requires permission');
         }
       } else {
