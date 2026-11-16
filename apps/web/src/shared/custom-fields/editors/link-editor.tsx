@@ -4,11 +4,13 @@ import { Input } from '@nodus/ui/components/input';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { CustomFieldValueView, refsById } from '../value-view.js';
+import { PathValueActions } from '../path-value.js';
 import { EditorError, EditorTrigger, editorInputClass, type EditorProps } from './editor-kit.js';
 
 /**
  * Ссылка или путь (Р11): `http(s)://…` открывается в новой вкладке, путь
- * `\\сервер\ресурс` показывается моно-текстом с копированием. Грамматика —
+ * `\\сервер\ресурс` показывается моно-текстом с действиями (#558: «Открыть»
+ * и «Показать в папке» в оболочке, «Скопировать путь» в браузере). Грамматика —
  * общая схема контрактов: неверный ввод остаётся в поле с подсказкой.
  */
 export function LinkEditor(props: EditorProps) {
@@ -51,6 +53,26 @@ export function LinkEditor(props: EditorProps) {
   }
 
   if (!editing) {
+    // Путь — текст-триггер правки плюс действия РЯДОМ: кнопки внутри кнопки
+    // запрещены, а «Открыть»/«Показать в папке» должны работать и без входа
+    // в режим правки (#558).
+    if (linkKindOf(current) === 'path' && !props.disabled) {
+      return (
+        <div className="group/field flex min-w-0 items-center gap-1">
+          <EditorTrigger
+            variant={props.variant}
+            disabled={props.disabled}
+            ariaLabel={props.definition.name}
+            onClick={() => setEditing(true)}
+          >
+            <span className="truncate font-mono text-[13px]">
+              {current || ui.customFields.value.empty}
+            </span>
+          </EditorTrigger>
+          {current ? <PathValueActions path={current} /> : null}
+        </div>
+      );
+    }
     return (
       <EditorTrigger
         variant={props.variant}

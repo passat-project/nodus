@@ -6,6 +6,9 @@ import {
   desktopApplyUpdate,
   desktopDismissPopups,
   desktopLogPopupDecision,
+  desktopOpenUncPath,
+  desktopPathCommandsAvailable,
+  desktopRevealUncPath,
   desktopSetUnreadBadge,
   desktopShowPopup,
   getDesktopBridge,
@@ -40,6 +43,8 @@ function installBridge() {
     setUnreadBadge: vi.fn(async () => undefined),
     flashTaskbar: vi.fn(async () => undefined),
     openExternal: vi.fn(async () => undefined),
+    openUncPath: vi.fn(async () => undefined),
+    revealUncPath: vi.fn(async () => undefined),
     dismissPopups: vi.fn(async () => undefined),
     setUiTheme: vi.fn(async () => undefined),
     getShellInfo: vi.fn(async () => ({ version: '1.0.0', platform: 'windows' })),
@@ -169,6 +174,47 @@ describe('команды на границе', () => {
 
     delete window.nodusDesktop;
     expect(await desktopApplyUpdate()).toBe(false);
+  });
+});
+
+describe('путь на файловом сервере (#558)', () => {
+  const PATH = '\\\\FS01\\Projects\\план.pdf';
+  const SERVERS = ['\\\\FS01\\Projects'];
+
+  it('в браузере и старой оболочке команд нет — веб оставляет копирование', async () => {
+    expect(desktopPathCommandsAvailable()).toBe(false);
+    expect(await desktopOpenUncPath(PATH, SERVERS)).toEqual({ status: 'unavailable' });
+    expect(await desktopRevealUncPath(PATH, SERVERS)).toEqual({ status: 'unavailable' });
+
+    installBridge();
+    const bridge = window.nodusDesktop as unknown as Record<string, unknown>;
+    delete bridge.openUncPath;
+    delete bridge.revealUncPath;
+    expect(desktopPathCommandsAvailable()).toBe(false);
+    expect(await desktopOpenUncPath(PATH, SERVERS)).toEqual({ status: 'unavailable' });
+  });
+
+  it('передаёт путь и список разрешённых папок в оболочку', async () => {
+    const { bridge } = installBridge();
+    expect(desktopPathCommandsAvailable()).toBe(true);
+    expect(await desktopOpenUncPath(PATH, SERVERS)).toEqual({ status: 'done' });
+    expect(bridge.openUncPath).toHaveBeenCalledWith(PATH, SERVERS);
+    expect(await desktopRevealUncPath(PATH, SERVERS)).toEqual({ status: 'done' });
+    expect(bridge.revealUncPath).toHaveBeenCalledWith(PATH, SERVERS);
+  });
+
+  it('код отказа Rust доходит до вызывающего (файл не найден, чужой сервер)', async () => {
+    const { bridge } = installBridge();
+    bridge.openUncPath.mockRejectedValue('not_found');
+    expect(await desktopOpenUncPath(PATH, SERVERS)).toEqual({
+      status: 'error',
+      code: 'not_found',
+    });
+    bridge.revealUncPath.mockRejectedValue(new Error('server_not_allowed'));
+    expect(await desktopRevealUncPath(PATH, SERVERS)).toEqual({
+      status: 'error',
+      code: 'server_not_allowed',
+    });
   });
 });
 

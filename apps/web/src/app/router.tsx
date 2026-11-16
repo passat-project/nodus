@@ -75,6 +75,11 @@ const EmployeesPage = pageLoader(() =>
 const AutomationPage = pageLoader(() =>
   import('./automation-route.js').then((m) => ({ default: m.AutomationRoute })),
 );
+const PortalSettingsPage = pageLoader(() =>
+  import('../features/settings/pages/portal-settings-page.js').then((m) => ({
+    default: m.PortalSettingsPage,
+  })),
+);
 
 /**
  * Роутер SPA (TanStack Router, code-splitting по разделам).
@@ -210,6 +215,12 @@ const automationRoute = createRoute({
   component: AutomationPage,
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/settings',
+  component: PortalSettingsPage,
+});
+
 /**
  * Dev-галерея дизайн-системы (#257) — единственный экран `/dev/ui`.
  *
@@ -258,6 +269,7 @@ const routeTree = rootRoute.addChildren([
     chatConversationRoute,
     employeesRoute,
     automationRoute,
+    settingsRoute,
     // Dev-галерея (#257): в прод-сборке `devUiRoute` = null → пустой спред.
     ...(devUiRoute ? [devUiRoute] : []),
   ]),

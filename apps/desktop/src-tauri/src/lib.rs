@@ -12,6 +12,7 @@ mod portal;
 mod reanchor;
 mod state;
 mod tray_menu;
+mod unc_paths;
 mod updates;
 
 use std::sync::Mutex;
@@ -154,6 +155,8 @@ pub fn run() {
             bridge::set_unread_badge,
             bridge::flash_taskbar,
             bridge::open_external,
+            unc_paths::open_unc_path,
+            unc_paths::reveal_unc_path,
             bridge::dismiss_popups,
             bridge::set_ui_theme,
             bridge::get_shell_info,

@@ -14,6 +14,7 @@ import { tasksStrings } from './ru-tasks.js';
 import { nodeKindsStrings } from './ru-node-kinds.js';
 import { structureStrings } from './ru-structure.js';
 import { projectsStrings } from './ru-projects.js';
+import { portalSettingsStrings } from './ru-settings.js';
 import { whatsNewStrings } from './ru-whats-new.js';
 
 /** Русские строки кодов ошибок — в ru-errors.ts (I5: словарь вырос). */
@@ -53,6 +54,7 @@ export const ui = {
     sendError: 'Не удалось отправить, попробуйте ещё раз',
     saveError: 'Не удалось сохранить изменение',
     loadError: 'Не удалось загрузить — обновите страницу',
+    retry: 'Повторить',
     skipToContent: 'Перейти к содержимому',
     viewSettings: 'Настроить вид',
     viewFields: 'Отображаемые поля',
@@ -222,6 +224,8 @@ export const ui = {
   automation: automationStrings,
   access: accessStrings,
   customFields: customFieldsStrings,
+  /** Настройки портала (#558, эпик #869): файловые серверы и будущие разделы. */
+  portalSettings: portalSettingsStrings,
   /** Формулы в ячейках атрибутов (#632): редактор, ячейка, колонки, перенос. */
   formulas: formulasStrings,
   /** Конструктор окон ввода и замок записи (#496). */

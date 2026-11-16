@@ -89,3 +89,4 @@ export * from './notifications/notifications.schemas.js';
 export * from './notifications/notification-events.js';
 export * from './desktop/desktop-config.schema.js';
 export * from './desktop/desktop-bridge.schema.js';
+export * from './settings/file-servers.schema.js';

@@ -1,0 +1,32 @@
+# features/settings — «Настройки портала»
+
+Вход — меню «Настройки» левой рейки (`app/shell/node-rail.tsx`), маршрут
+`/settings`, доступ — право `portal.settings.manage`. Каркас минимальный:
+#276 добавит остальные разделы и общую навигацию, #871 — «Компанию».
+
+## Что есть
+
+- **`pages/portal-settings-page.tsx`** — страница: слева разделы («Файловые
+  серверы», «Права доступа»), справа содержимое. Без права — «Нет доступа».
+- **`components/file-servers-section.tsx`** — список `\\server\share`
+  (#558): добавление и удаление сохраняются сразу (оптимистично, откат при
+  ошибке); пустой список — ничего не открывается.
+- **`components/file-servers-sync.tsx`** — один запрос списка на сессию
+  оболочки: кладёт снимок в `shared/desktop/file-servers-store.ts`, который
+  читает значение-путь. В браузере не грузится (там путь копируется).
+- **`api/file-servers.ts`** — `GET/PUT /api/v1/settings/file-servers`,
+  ключ кэша `['settings','file-servers']`.
+- **`api/mocks/file-servers-handlers.ts`** — MSW-домен `settings`: запись
+  только с правом, стартовый список пустой.
+
+## Правила
+
+- Чтение списка — всем аутентифицированным (веб решает, показывать ли
+  действия у пути); запись — только `portal.settings.manage` (сервер
+  проверяет сам, I8).
+- Строки UI — из `ui.portalSettings` (`ru-settings.ts`), формат и грамматика
+  `\\server\share` — `packages/contracts/src/settings/file-servers.schema.ts`
+  (общая для веба, моков и сервера).
+- Путь открывает только десктоп-оболочка: команды моста `open_unc_path` /
+  `reveal_unc_path` (`shared/desktop/desktop-bridge.ts`); в браузере —
+  «Скопировать путь».

@@ -34,6 +34,10 @@ interface NodusDesktopGlobal {
   setUnreadBadge(count: number | null): Promise<void>;
   flashTaskbar(critical: boolean): Promise<void>;
   openExternal(url: string): Promise<void>;
+  /** Путь на файловом сервере (#558): только новые оболочки — старая не
+   *  знает команд, веб показывает «Скопировать путь». */
+  openUncPath?(path: string, servers: readonly string[]): Promise<void>;
+  revealUncPath?(path: string, servers: readonly string[]): Promise<void>;
   dismissPopups(conversationId: string): Promise<void>;
   setUiTheme(theme: 'light' | 'dark'): Promise<void>;
   getShellInfo(): Promise<unknown>;
@@ -134,6 +138,65 @@ export async function desktopOpenExternal(url: string): Promise<void> {
   const bridge = getDesktopBridge();
   if (!bridge) return;
   await bridge.openExternal(url);
+}
+
+/**
+ * Итог команды пути (#558): `done` — оболочка открыла/показала; `unavailable`
+ * — браузер или старая оболочка без команды (веб оставляет «Скопировать
+ * путь»); `error` — стабильный код отказа Rust (`not_found`,
+ * `server_not_allowed`, `reveal_only`, …) для понятного сообщения.
+ */
+export type DesktopUncPathResult =
+  { status: 'done' } | { status: 'unavailable' } | { status: 'error'; code: string };
+
+/** Есть ли в установленной оболочке команды пути (старая — нет). */
+export function desktopPathCommandsAvailable(): boolean {
+  const bridge = getDesktopBridge();
+  return (
+    bridge !== null &&
+    typeof bridge.openUncPath === 'function' &&
+    typeof bridge.revealUncPath === 'function'
+  );
+}
+
+function uncPathErrorCode(error: unknown): string {
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) return error.message;
+  return 'unknown';
+}
+
+/**
+ * Открыть файл с сетевого сервера системным приложением (#558). Список
+ * разрешённых папок приходит из «Настроек портала»; Rust независимо
+ * проверяет путь и принадлежность списку — мост не доверяет веб-контенту.
+ */
+export async function desktopOpenUncPath(
+  path: string,
+  servers: readonly string[],
+): Promise<DesktopUncPathResult> {
+  const bridge = getDesktopBridge();
+  if (!bridge || typeof bridge.openUncPath !== 'function') return { status: 'unavailable' };
+  try {
+    await bridge.openUncPath(path, [...servers]);
+    return { status: 'done' };
+  } catch (error) {
+    return { status: 'error', code: uncPathErrorCode(error) };
+  }
+}
+
+/** Показать файл в проводнике с выделением (#558). */
+export async function desktopRevealUncPath(
+  path: string,
+  servers: readonly string[],
+): Promise<DesktopUncPathResult> {
+  const bridge = getDesktopBridge();
+  if (!bridge || typeof bridge.revealUncPath !== 'function') return { status: 'unavailable' };
+  try {
+    await bridge.revealUncPath(path, [...servers]);
+    return { status: 'done' };
+  } catch (error) {
+    return { status: 'error', code: uncPathErrorCode(error) };
+  }
 }
 
 /**

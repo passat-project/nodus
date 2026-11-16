@@ -25,6 +25,7 @@ import { DirectoryModule } from './modules/directory/directory.module.js';
 import { FilesModule } from './modules/files/files.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { PreferencesModule } from './modules/preferences/preferences.module.js';
+import { PortalSettingsModule } from './modules/portal-settings/portal-settings.module.js';
 import { ProjectsModule } from './modules/projects/projects.module.js';
 import { DesktopModule } from './modules/desktop/desktop.module.js';
 import { HomeModule } from './modules/home/home.module.js';
@@ -64,6 +65,8 @@ import { WorkflowsModule } from './modules/workflows/workflows.module.js';
     // Личные настройки интерфейса (#745): навигация и раскладка карточек
     // сотрудника; ядро без флага — нужны каждой карточке.
     PreferencesModule,
+    // Настройки портала (#558, эпик #869): файловые серверы; ядро без флага.
+    PortalSettingsModule,
     HomeModule,
     // Проекты (#52, ADR-0030): проект-договор и «темы», двухрежимное
     // участие, типы, портфели, настройки портала; за флагом `projects`.

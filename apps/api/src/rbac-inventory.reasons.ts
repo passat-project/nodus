@@ -50,9 +50,12 @@ const PROJECT_STRUCTURE =
   'дерево проекта (#467): чтение — видимость проекта (как карточка), мутации узлов — руководство проекта или project.manage в сервисе (архив — заморозка 400)';
 const HOME =
   'витрина Главной: число сотрудников и ближайшие дни рождения (день и месяц, без года — решение владельца #342) — любому вошедшему';
+const FILE_SERVERS =
+  'разрешённые файловые серверы (#558): список нужен каждому сотруднику, чтобы показать «Открыть» у пути; меняет portal.settings.manage';
 
 export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   // Чтение (#334)
+  'GET /settings/file-servers': FILE_SERVERS,
   'GET /projects': PROJECT_VISIBILITY,
   'GET /projects/:id': PROJECT_VISIBILITY,
   'GET /projects/:id/history': PROJECT_VISIBILITY,

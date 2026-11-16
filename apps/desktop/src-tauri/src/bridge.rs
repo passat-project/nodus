@@ -41,6 +41,8 @@ pub fn initialization_script(shell_version: &str) -> String {
     setUnreadBadge: function (count) {{ return invoke('set_unread_badge', {{ count: count }}); }},
     flashTaskbar: function (critical) {{ return invoke('flash_taskbar', {{ critical: !!critical }}); }},
     openExternal: function (url) {{ return invoke('open_external', {{ url: url }}); }},
+    openUncPath: function (path, servers) {{ return invoke('open_unc_path', {{ path: path, servers: servers }}); }},
+    revealUncPath: function (path, servers) {{ return invoke('reveal_unc_path', {{ path: path, servers: servers }}); }},
     dismissPopups: function (conversationId) {{ return invoke('dismiss_popups', {{ conversationId: conversationId }}); }},
     setUiTheme: function (theme) {{ return invoke('set_ui_theme', {{ theme: theme }}); }},
     getShellInfo: function () {{ return invoke('get_shell_info'); }},
@@ -74,6 +76,8 @@ pub fn grant_portal_capability(app: &AppHandle, root: &str) -> tauri::Result<()>
         .permission("allow-set-unread-badge")
         .permission("allow-flash-taskbar")
         .permission("allow-open-external")
+        .permission("allow-open-unc-path")
+        .permission("allow-reveal-unc-path")
         .permission("allow-dismiss-popups")
         .permission("allow-set-ui-theme")
         .permission("allow-get-shell-info")
@@ -392,12 +396,18 @@ pub fn flash_taskbar(app: AppHandle, critical: bool) {
 #[tauri::command]
 pub fn open_external(app: AppHandle, url: String) -> Result<(), String> {
     let parsed = tauri::Url::parse(&url).map_err(|_| "invalid_url")?;
-    if !matches!(parsed.scheme(), "http" | "https" | "mailto" | "tel") {
+    if !external_scheme_allowed(parsed.scheme()) {
         return Err("invalid_url".into());
     }
     app.opener()
         .open_url(parsed.to_string(), None::<&str>)
         .map_err(|e| e.to_string())
+}
+
+/// Схемы системных ссылок: FILE и произвольные протоколы не открываются
+/// (путь к файлу — отдельной командой `open_unc_path`, #558).
+fn external_scheme_allowed(scheme: &str) -> bool {
+    matches!(scheme, "http" | "https" | "mailto" | "tel")
 }
 
 #[derive(Serialize)]
@@ -491,6 +501,16 @@ mod tests {
     #[test]
     fn valid_payload_has_no_reason() {
         assert_eq!(payload_invalid_reason(&payload()), None);
+    }
+
+    #[test]
+    fn external_links_are_http_or_mail_only() {
+        for scheme in ["http", "https", "mailto", "tel"] {
+            assert!(external_scheme_allowed(scheme), "{scheme}");
+        }
+        for scheme in ["file", "javascript", "data", "nodus", "ftp"] {
+            assert!(!external_scheme_allowed(scheme), "{scheme}");
+        }
     }
 
     #[test]

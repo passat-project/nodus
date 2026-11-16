@@ -27,6 +27,8 @@ export const API_MOCK_DOMAINS = [
   'crm',
   // Матрица «Права доступа» (#379): UI-чекпоинт до бэкенда на живом входе.
   'roles',
+  // Настройки портала (#558): файловые серверы; страница админа на моках.
+  'settings',
 ] as const;
 
 export type ApiMockDomain = (typeof API_MOCK_DOMAINS)[number];
