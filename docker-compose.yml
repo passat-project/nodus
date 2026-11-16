@@ -59,6 +59,10 @@ services:
       DATABASE_STATEMENT_TIMEOUT_MS: ${DATABASE_STATEMENT_TIMEOUT_MS:-30000}
       REDIS_URL: redis://:${REDIS_PASSWORD:?задайте в .env}@nodus_redis:6379
       JWT_SECRET: ${JWT_SECRET:?задайте в .env}
+      # Шифрование ключей LLM-провайдеров (#889, ADR-0044). Пусто — ключ
+      # выводится из JWT_SECRET (см. .env.example): без новой обязательной
+      # переменной, на проде можно задать отдельный секрет.
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
       # Файловое хранилище (#57, ADR-0013): api пишет/читает S3 (SILO)
       # сервисной учёткой minio-init (права только на бакет вложений).
       # Дефис-алиас: СЕРВЕР SILO отвергает '_' в Host (400 InvalidRequest на
