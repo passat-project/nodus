@@ -69,6 +69,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   nameSuffix,
   reactionsRow,
   reactionPicker,
+  align: alignProp,
 }: {
   message: ChatMessage;
   mine: boolean;
@@ -93,8 +94,12 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   /** Замена ховер-пикера реакций (карточки: пилюля личных меток); получает
    *  atEnd (сторона пилюли — как у ReactionPicker). */
   reactionPicker?: (atEnd: boolean) => ReactNode;
+  /** Форс выравнивания хостом (ИИ-ассистент: 'both'); дефолт — настройка
+   *  пользователя chat-prefs. */
+  align?: 'one' | 'both';
 }) {
-  const align = useChatPrefs((s) => s.align);
+  const prefAlign = useChatPrefs((s) => s.align);
+  const align = alignProp ?? prefAlign;
   const atEnd = mine && align === 'both';
   // Хозяин чата (вердикт 25.09): мессенджер навигирует внутренне, у чатов
   // карточек сущностей контекста нет — их переход к чужой беседе идёт

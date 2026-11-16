@@ -50,10 +50,14 @@ export function MessageRunView({
   divider,
   renderItem,
   renderAvatar,
+  align: alignProp,
 }: {
   run: MessageRun;
   /** Показывать имя автора в первом пузыре (чужие серии в групповых). */
   showName: boolean;
+  /** Форс выравнивания хостом (ИИ-ассистент: 'both' — пользователь справа,
+   *  конвенция харнесов в узкой колонке); дефолт — настройка пользователя. */
+  align?: 'one' | 'both';
   /** Вертикальный ритм серии: 'chat' — пузыри слипаются в блок (2px, канон
    *  чатов); 'feed' — посты канала 6px (вердикт 01.10 #175: 2px между
    *  карточками «слипшиеся», межавторские 12px сохраняются — разница есть,
@@ -78,7 +82,8 @@ export function MessageRunView({
   // «По обе стороны»: своя серия зеркалится — аватар справа (баг-урок 30.09:
   // свои серии несут аватар так же, как чужие). Хук — ДО условия (Rules of
   // Hooks: закорачивание && пропускал вызов у mine-серий — P1 валидатора).
-  const align = useChatPrefs((s) => s.align);
+  const prefAlign = useChatPrefs((s) => s.align);
+  const align = alignProp ?? prefAlign;
   const atEnd = run.mine && align === 'both';
   let row = 0;
   return (
