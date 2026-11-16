@@ -50,6 +50,13 @@ fn tick_fade(app: &AppHandle) {
         let mut s = stack(app);
         let last_input = activity::last_input_ms();
         for p in s.active.iter_mut() {
+            // Срочный не угасает по таймеру (#867, ADR-0019 «urgent — до
+            // реакции»): висит статично, пока не откроют/не ответят/не закроют.
+            // Повторы (#880) не дублируют окно (дедуп в popups::show), а лишь
+            // мигают таскбаром — закрытый без реакции попап повтор вернёт.
+            if p.urgent {
+                continue;
+            }
             if p.hover || p.replying {
                 if p.fading.take().is_some() {
                     eval_popup_js(
