@@ -194,7 +194,9 @@ export class RolesService {
    * Удаление роли. Системная роль защищена; пользовательскую можно удалить
    * вместе с составом: назначения снимаются каскадом (FK `ON DELETE CASCADE`),
    * люди просто теряют эту роль — это и есть смысл удаления (решение
-   * владельца 26.10: запрет «сначала уберите всех» — лишний шаг).
+   * владельца 26.10: запрет «сначала уберите всех» — лишний шаг). Состав
+   * фиксируется ДО удаления: после каскада аудитория пуста, а выданные ранее
+   * access-токены ещё несут права роли до истечения TTL (#866).
    */
   async deleteRole(id: string, actorId: string): Promise<void> {
     await this.tx.run(async (tx) => {
@@ -207,6 +209,7 @@ export class RolesService {
           code: current.row.code,
         });
       }
+      const userIds = await this.audience.roleUserIds(id, tx);
       await this.roles.delete(id, tx);
       // Состав уходит каскадом: в событии фиксируем, у скольких людей и
       // подразделений роль снялась — иначе удаление = массовый отзыв прав
@@ -222,6 +225,14 @@ export class RolesService {
         },
         { actorId, aggregateType: 'role', aggregateId: id },
       );
+      if (userIds.length > 0) {
+        await this.eventBus.emit(
+          tx,
+          DIRECTORY_EVENTS.ROLE_ACCESS_CHANGED,
+          { roleId: id, reason: 'membership', userIds },
+          { actorId, aggregateType: 'role', aggregateId: id },
+        );
+      }
     });
   }
 

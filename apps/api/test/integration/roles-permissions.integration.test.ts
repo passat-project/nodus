@@ -5,6 +5,7 @@ import type { Redis } from 'ioredis';
 import {
   ErrorCode,
   Permission,
+  roleAccessChangedPayloadSchema,
   rolePermissionsChangedPayloadSchema,
   roleSchema,
 } from '@nodus/contracts';
@@ -281,7 +282,7 @@ describe('Роли: точечные права (#379)', () => {
     expect(await changes(roleId)).toHaveLength(0);
   });
 
-  it('17. удаление роли с участником → 204, роль снимается каскадом', async () => {
+  it('17. удаление роли с участником → 204, роль снимается каскадом и токен отозван', async () => {
     const roleId = await f.createRole('Проба 17', [Permission.CUSTOM_FIELD_MANAGE]);
     await f.prisma.userRole.create({ data: { roleId, userId: f.users.employee.id } });
     expect(await permissionsOf(f.users.employee)).toContain(Permission.CUSTOM_FIELD_MANAGE);
@@ -295,6 +296,22 @@ describe('Роли: точечные права (#379)', () => {
     // След в журнале: сколько людей потеряли роль при удалении.
     const deleted = await f.eventsFor(roleId, 'directory.role.deleted');
     expect(deleted[0]?.payload).toMatchObject({ roleId, memberCount: 1, departmentCount: 0 });
+    // Состав снят каскадом, но выданный ранее токен ещё нёс права роли:
+    // событие отзыва гасит его до истечения TTL (#866, удаление роли).
+    const revoked = await f.eventsFor(roleId, 'directory.role.access_changed');
+    expect(revoked).toHaveLength(1);
+    expect(roleAccessChangedPayloadSchema.parse(revoked[0]!.payload)).toEqual({
+      roleId,
+      reason: 'membership',
+      userIds: [f.users.employee.id],
+    });
+    await dispatchOwnEvent(
+      f.app.get(EventDispatcher),
+      f.prisma,
+      await eventIdOf(f.prisma, { type: 'directory.role.access_changed', aggregateId: roleId }),
+    );
+    expect((await f.api(f.users.employee, 'GET', '/auth/me')).status).toBe(401);
+    await f.app.get<Redis>(REDIS_CLIENT).del(`nodus:auth:revoked-before:${f.users.employee.id}`);
     // Сотрудник остался, роль у него снята.
     expect(await permissionsOf(f.users.employee)).not.toContain(Permission.CUSTOM_FIELD_MANAGE);
   });

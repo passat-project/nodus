@@ -337,6 +337,42 @@ describe('RolesService (#379)', () => {
         expect.objectContaining({ actorId: 'admin-1' }),
       );
     });
+
+    it('состав вычисляется ДО удаления и отзывается после role.deleted (#866)', async () => {
+      roles.findById.mockResolvedValue(record({ _count: { users: 2, departments: 0 } }));
+      audience.roleUserIds.mockResolvedValue(['u-1', 'u-2']);
+
+      await service.deleteRole('role-1', 'admin-1');
+
+      // Аудитория считается до каскада: после удаления роли состав пуст.
+      expect(audience.roleUserIds).toHaveBeenCalledWith('role-1', 'tx-handle');
+      expect(audience.roleUserIds.mock.invocationCallOrder[0]).toBeLessThan(
+        roles.delete.mock.invocationCallOrder[0]!,
+      );
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'tx-handle',
+        'directory.role.access_changed',
+        { roleId: 'role-1', reason: 'membership', userIds: ['u-1', 'u-2'] },
+        expect.objectContaining({
+          actorId: 'admin-1',
+          aggregateType: 'role',
+          aggregateId: 'role-1',
+        }),
+      );
+    });
+
+    it('роль без действующих участников — только role.deleted', async () => {
+      roles.findById.mockResolvedValue(record());
+
+      await service.deleteRole('role-1', 'admin-1');
+
+      expect(eventBus.emit).not.toHaveBeenCalledWith(
+        'tx-handle',
+        'directory.role.access_changed',
+        expect.anything(),
+        expect.anything(),
+      );
+    });
   });
 
   it('права вне каталога отфильтровываются из ответа', async () => {
