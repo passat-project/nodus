@@ -13,6 +13,7 @@ import {
 import { Permission, permissionsOfModule, ui, type AccessModule } from '@nodus/contracts';
 
 import { resolveLettersTab } from '../../features/correspondence/lib/letters-tab.js';
+import { assistantAvailable } from '../../shared/api/assistant-available.js';
 import { registriesAvailable } from '../../shared/api/registries-available.js';
 
 /** Вкладка модуля топбара (подмодуль): search-параметр + предикат активности.
@@ -274,6 +275,16 @@ export const NAV_MODULES: NavModuleDef[] = [
         search: { tab: 'file-servers' },
         permission: Permission.PORTAL_SETTINGS_MANAGE,
         isActive: (s) => (s.get('tab') ?? 'file-servers') === 'file-servers',
+      },
+      {
+        // ИИ-агент (#894): провайдеры моделей, ключи, дефолт и правила.
+        // Флаг модуля (I10) скрывает вкладку, когда ассистент выключен.
+        id: 'ai',
+        label: ui.portalSettings.sections.ai,
+        search: { tab: 'ai' },
+        permission: Permission.PORTAL_SETTINGS_MANAGE,
+        enabled: assistantAvailable,
+        isActive: (s) => s.get('tab') === 'ai',
       },
       ...accessTab('settings', Permission.PORTAL_SETTINGS_MANAGE),
     ],
