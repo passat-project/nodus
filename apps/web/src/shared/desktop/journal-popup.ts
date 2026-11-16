@@ -50,7 +50,14 @@ export function notifyDesktopJournal(
   // колокольчик (попапы задач — отдельный задел, вне скоупа #880).
 }
 
-/** Попап о правке: заголовок — вид события, превью — кто и новый текст. */
+/** Попап о правке: заголовок — вид события, превью — кто и новый текст.
+ * Трэд-гейт наблюдателей (threadNotifyAllowed) здесь НЕ применяется — это
+ * осознанно: правки сервер шлёт всем участникам беседы с thread_root_id=null
+ * (notification-builders.buildInsertsFromEditedEvent, канон #189, уровень
+ * беседы), снапшот не несёт трэд-источник. Попап согласован с журналом/
+ * колокольчиком (там правка тоже видна всем); гейт наблюдателей — только для
+ * НОВЫХ сообщений треда (живой путь notifyDesktopMessage). Правила тишины
+ * «смотрю в беседу»/mute/snooze — применяются. */
 function showEditPopup(snapshot: NotificationSnapshot, queryClient: QueryClient): void {
   const conversationId = snapshot.conversationId;
   if (!conversationId) return;
