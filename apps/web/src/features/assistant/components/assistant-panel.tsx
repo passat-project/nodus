@@ -10,6 +10,7 @@ import {
   assistantLiveBounds,
   useAssistantStore,
 } from '../model/assistant-store.js';
+import { useAssistantEnabled } from '../model/use-assistant-enabled.js';
 import { AssistantBody } from './assistant-body.js';
 
 /** Окно ассистента — ПЛАВАЮЩИЙ ЛИСТ поверх правой части нашего окна,
@@ -24,6 +25,7 @@ import { AssistantBody } from './assistant-body.js';
  *  (закон выдвижных поверхностей: первое открытие после Ctrl+R плавное);
  *  контент монтируется после оседания выезда и остаётся (скролл/черновик целы). */
 export function AssistantPanel() {
+  const enabled = useAssistantEnabled();
   const open = useAssistantStore((s) => s.open);
   const width = useAssistantStore((s) => s.width);
   const dragging = useAssistantStore((s) => s.dragging);
@@ -114,6 +116,8 @@ export function AssistantPanel() {
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
   }
+
+  if (!enabled) return null;
 
   return (
     <div

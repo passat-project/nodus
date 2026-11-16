@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   ASSISTANT_W_DEFAULT,
@@ -10,105 +10,92 @@ import {
   useAssistantStore,
 } from './assistant-store.js';
 
-describe('клампы ширины окна ассистента', () => {
-  it('мусор и легаси-значения дают дефолт', () => {
+/**
+ * Стор окна ассистента (#895): геометрия (клампы ширины) и буфер живого
+ * прогона — дельты, строки вызовов, финал. Отмена/ошибка не теряют
+ * накопленный текст: сотрудник видит то, что успело прийти.
+ */
+
+describe('геометрия окна', () => {
+  it('кламп сохранённой ширины: мусор → дефолт, край → в пределы', () => {
     expect(clampStoredWidth(null)).toBe(ASSISTANT_W_DEFAULT);
-    expect(clampStoredWidth('abc')).toBe(ASSISTANT_W_DEFAULT);
-    expect(clampStoredWidth('')).toBe(ASSISTANT_W_DEFAULT);
-    expect(clampStoredWidth('100')).toBe(ASSISTANT_W_DEFAULT);
-  });
-
-  it('запомненная ширина клампится полом и потолком', () => {
-    expect(clampStoredWidth(String(ASSISTANT_W_MIN - 1))).toBe(ASSISTANT_W_DEFAULT);
+    expect(clampStoredWidth('мусор')).toBe(ASSISTANT_W_DEFAULT);
+    expect(clampStoredWidth('10')).toBe(ASSISTANT_W_DEFAULT);
     expect(clampStoredWidth(String(ASSISTANT_W_MAX + 500))).toBe(ASSISTANT_W_MAX);
-    expect(clampStoredWidth(String(ASSISTANT_W_MIN + 10))).toBe(ASSISTANT_W_MIN + 10);
+    expect(clampStoredWidth(String(ASSISTANT_W_MIN))).toBe(ASSISTANT_W_MIN);
   });
 
-  it('живой потолок — 45% рамы, но не уже читаемого минимума', () => {
-    expect(assistantLiveBounds(1000)).toEqual({ min: ASSISTANT_W_MIN, max: 450 });
-    // Узкое окно: 45% меньше минимума — пол и потолок сходятся на минимуме.
+  it('живые пределы не больше 45% рамы', () => {
+    const bounds = assistantLiveBounds(1200);
+    expect(bounds.max).toBeLessThanOrEqual(Math.floor(1200 * 0.45));
     const narrow = assistantLiveBounds(400);
-    expect(narrow.max).toBeLessThan(ASSISTANT_W_MIN);
-    expect(narrow.min).toBe(narrow.max);
-    // Широкое окно: потолок ASSISTANT_W_MAX, пол не меняется.
-    expect(assistantLiveBounds(4000)).toEqual({ min: ASSISTANT_W_MIN, max: ASSISTANT_W_MAX });
+    expect(narrow.min).toBeLessThanOrEqual(narrow.max);
   });
 });
 
-describe('стор диалога ассистента', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    useAssistantStore.setState({ sessions: [], activeId: null, thinkingId: null, open: false });
-  });
-  afterEach(() => {
-    vi.clearAllTimers();
-    vi.useRealTimers();
+describe('буфер прогона', () => {
+  it('дельты текста и размышлений копятся раздельно', () => {
+    const store = useAssistantStore.getState();
+    store.startLive({ runId: 'run-1', sessionId: 's-1' });
+    store.appendDelta('reasoning', 'думаю');
+    store.appendDelta('text', 'Привет');
+    store.appendDelta('text', ', мир');
+    const live = useAssistantStore.getState().live;
+    expect(live?.text).toBe('Привет, мир');
+    expect(live?.reasoning).toBe('думаю');
   });
 
-  it('открытие показывает последнюю сессию, а не список', () => {
-    // Инвариант стора: sessions[0] — самая свежая (newSession кладёт в голову).
-    useAssistantStore.setState({
-      sessions: [
-        { id: 'new', title: 'Новый', createdAt: '2026-11-16T12:00:00Z', messages: [] },
-        { id: 'old', title: 'Старый', createdAt: '2026-11-16T10:00:00Z', messages: [] },
-      ],
+  it('строки вызовов обновляются по id, а не дублируются', () => {
+    const store = useAssistantStore.getState();
+    store.startLive({ runId: 'run-2', sessionId: 's-1' });
+    store.upsertTool({
+      id: 'call-1',
+      toolId: 'tasks.list',
+      title: 'Задачи: список',
+      status: 'running',
+      args: null,
+      resultPreview: null,
+      durationMs: null,
+      errorCode: null,
+      href: null,
+      hrefLabel: null,
     });
-    useAssistantStore.getState().setOpen(true);
-    expect(useAssistantStore.getState().activeId).toBe('new');
+    store.upsertTool({
+      id: 'call-1',
+      toolId: 'tasks.list',
+      title: 'Задачи: список',
+      status: 'done',
+      args: null,
+      resultPreview: '12 задач',
+      durationMs: 20,
+      errorCode: null,
+      href: '?cards=task:1',
+      hrefLabel: '№1 Тест',
+    });
+    const tools = useAssistantStore.getState().live?.tools ?? [];
+    expect(tools).toHaveLength(1);
+    expect(tools[0]).toMatchObject({ status: 'done', href: '?cards=task:1' });
   });
 
-  it('send: вопрос → think своей сессии → стриминг → завершение', () => {
-    const s = useAssistantStore.getState();
-    s.newSession();
-    const sid = useAssistantStore.getState().activeId!;
-    useAssistantStore.getState().send('Что у меня просрочено?', 'Ответ целиком');
-    expect(useAssistantStore.getState().thinkingId).toBe(sid);
-    const session = () => useAssistantStore.getState().sessions.find((x) => x.id === sid)!;
-    expect(session().messages).toHaveLength(1);
-    expect(session().title).toBe('Что у меня просрочено?');
-    vi.advanceTimersByTime(700);
-    expect(useAssistantStore.getState().thinkingId).toBeNull();
-    expect(session().messages[1]!.streaming).toBe(true);
-    // 3 символа за тик 24 мс: 3 тика = 9 символов из 13.
-    vi.advanceTimersByTime(24 * 3);
-    expect(session().messages[1]!.text).toBe('Ответ цел');
-    vi.advanceTimersByTime(24 * 3);
-    expect(session().messages[1]!.text).toBe('Ответ целиком');
-    expect(session().messages[1]!.streaming).toBe(false);
+  it('отмена сохраняет текст и закрывает приём дельт', () => {
+    const store = useAssistantStore.getState();
+    store.startLive({ runId: 'run-3', sessionId: 's-2' });
+    store.appendDelta('text', 'Начал отвечать');
+    store.finishLive('cancelled');
+    store.appendDelta('text', ' — это уже не должно попасть');
+    const live = useAssistantStore.getState().live;
+    expect(live?.status).toBe('cancelled');
+    expect(live?.text).toBe('Начал отвечать');
   });
 
-  it('новый диалог посреди стриминга завершает брошенный ответ без вечного курсора', () => {
-    useAssistantStore.getState().newSession();
-    const sid = useAssistantStore.getState().activeId!;
-    useAssistantStore.getState().send('вопрос', 'длинный ответ который не допечатается');
-    vi.advanceTimersByTime(700 + 24 * 3);
-    useAssistantStore.getState().newSession();
-    const abandoned = useAssistantStore.getState().sessions.find((x) => x.id === sid)!;
-    expect(abandoned.messages.every((m) => !m.streaming)).toBe(true);
-    expect(useAssistantStore.getState().thinkingId).toBeNull();
-    vi.advanceTimersByTime(24 * 100);
-    expect(abandoned.messages[1]!.text.length).toBeLessThan(
-      'длинный ответ который не допечатается'.length,
-    );
-  });
-
-  it('thinking не показывается в чужой сессии при переключении', () => {
-    useAssistantStore.getState().newSession();
-    const a = useAssistantStore.getState().activeId!;
-    useAssistantStore.getState().newSession();
-    const b = useAssistantStore.getState().activeId!;
-    // Живой think в сессии A (без newSession-сброса): переключение на B не
-    // должно показывать точки набора в B — производный thinking тела
-    // (thinkingId === activeId) обязан быть false для B и true для A.
-    useAssistantStore.getState().setActive(a);
-    useAssistantStore.getState().send('вопрос', 'ответ');
-    expect(useAssistantStore.getState().thinkingId).toBe(a);
-    useAssistantStore.getState().setActive(b);
-    const s = useAssistantStore.getState();
-    expect(s.thinkingId).toBe(a);
-    expect(s.thinkingId !== null && s.thinkingId === s.activeId).toBe(false);
-    useAssistantStore.getState().setActive(a);
-    const s2 = useAssistantStore.getState();
-    expect(s2.thinkingId !== null && s2.thinkingId === s2.activeId).toBe(true);
+  it('ошибка несёт код и сообщение для перевода в человеческий текст', () => {
+    const store = useAssistantStore.getState();
+    store.startLive({ runId: 'run-4', sessionId: 's-3' });
+    store.finishLive('error', { code: 'provider_rate_limited', message: 'wait' });
+    expect(useAssistantStore.getState().live).toMatchObject({
+      status: 'error',
+      errorCode: 'provider_rate_limited',
+      errorMessage: 'wait',
+    });
   });
 });

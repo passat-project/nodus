@@ -1,56 +1,135 @@
-import { Plus, X } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { Plus, Square, X } from 'lucide-react';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 
 import { ChatComposer } from '../../../shared/chat/chat-composer.js';
+import {
+  mergeLiveMessage,
+  stopRunStream,
+  useAssistantMessages,
+  useAssistantSessions,
+  useCancelAssistantRun,
+  useCreateAssistantSession,
+  useIsRunActive,
+  useSendAssistantMessage,
+} from '../api/assistant-api.js';
 import { useAssistantStore } from '../model/assistant-store.js';
-import { buildReply } from '../model/mock-engine.js';
 import { useAssistantContext } from '../model/use-assistant-context.js';
 import { AssistantFeed, AssistantGlyph } from './assistant-feed.js';
 import { AssistantSessionPicker } from './assistant-session-picker.js';
 import { AssistantWelcome } from './assistant-welcome.js';
 
-/** Тело окна ассистента: шапка h-14 (калибр топбара) с глифом, заголовком
- *  «ИИ-ассистент», названием сессии мелким текстом, пикером диалогов,
- *  «Новый диалог» и закрытием; лента и композер — канон мессенджера.
- *  При открытии панели — сразу ПОСЛЕДНЯЯ сессия (прошлый чат). */
+const strings = ui.assistant;
+
+/**
+ * Тело окна ассистента (#895): шапка h-14 (калибр топбара) с глифом,
+ * заголовком, названием сессии, пикером, «Новый диалог», «Стоп» и закрытием;
+ * лента и композер — канон мессенджера.
+ *
+ * Данные — серверные (TanStack Query): сессии и история сохраняются после
+ * перезагрузки. Живой ответ печатается из потока прогона; при первом
+ * открытии панели показывается ПОСЛЕДНЯЯ сессия.
+ */
 export function AssistantBody() {
-  const open = useAssistantStore((s) => s.open);
-  const sessions = useAssistantStore((s) => s.sessions);
-  const activeId = useAssistantStore((s) => s.activeId);
-  const thinking = useAssistantStore((s) => s.thinkingId !== null && s.thinkingId === s.activeId);
-  const send = useAssistantStore((s) => s.send);
-  const newSession = useAssistantStore((s) => s.newSession);
-  const setOpen = useAssistantStore((s) => s.setOpen);
+  const open = useAssistantStore((state) => state.open);
+  const activeId = useAssistantStore((state) => state.activeId);
+  const live = useAssistantStore((state) => state.live);
+  const setActive = useAssistantStore((state) => state.setActive);
+  const setOpen = useAssistantStore((state) => state.setOpen);
+
+  const sessionsQuery = useAssistantSessions();
+  const messagesQuery = useAssistantMessages(activeId);
+  const createSession = useCreateAssistantSession();
+  const sendMessage = useSendAssistantMessage();
+  const cancelRun = useCancelAssistantRun();
+  const running = useIsRunActive(activeId);
   const ctx = useAssistantContext();
 
-  const active = sessions.find((s) => s.id === activeId) ?? null;
+  const sessions = sessionsQuery.data?.items;
+  const active = sessions?.find((session) => session.id === activeId) ?? null;
+  const messages = mergeLiveMessage(messagesQuery.data?.items ?? [], live, activeId);
+  const empty = messages.length === 0;
 
-  function ask(text: string) {
-    send(text, buildReply(text, ctx));
+  // Первое открытие панели — прошлый чат (вердикт владельца 16.11.2026):
+  // ровно один раз, дальше выбор сотрудника не перебиваем.
+  const initialized = useRef(false);
+  useEffect(() => {
+    if (!open || initialized.current || sessionsQuery.isPending) return;
+    initialized.current = true;
+    if (!activeId) setActive(sessions?.[0]?.id ?? null);
+  }, [open, sessionsQuery.isPending, sessions, activeId, setActive]);
+
+  // Закрытие окна не бросает прогон в фоне: поток закрывается, сервер
+  // доведёт ответ и сохранит его (повторное открытие покажет результат).
+  useEffect(() => {
+    if (!open) stopRunStream();
+  }, [open]);
+
+  const lastUserText =
+    [...messages].reverse().find((message) => message.role === 'user')?.text ?? '';
+
+  async function ask(text: string) {
+    const prompt = text.trim();
+    if (!prompt) return;
+    let sessionId = activeId;
+    if (!sessionId) {
+      const session = await createSession.mutateAsync();
+      setActive(session.id);
+      sessionId = session.id;
+    }
+    sendMessage.mutate({
+      sessionId,
+      text: prompt,
+      context: {
+        moduleId: ctx.moduleId,
+        cardKind: ctx.cardKind,
+        cardId: ctx.cardId,
+      },
+    });
+  }
+
+  function newChat() {
+    stopRunStream();
+    useAssistantStore.getState().clearLive();
+    setActive(null);
+  }
+
+  function stop() {
+    if (live) void cancelRun.mutateAsync(live.runId).catch(() => undefined);
+    useAssistantStore.getState().finishLive('cancelled');
   }
 
   return (
     <>
       {/* Шапка h-14 — КАЛИБР ТОПБАРА: её нижняя линия совпадает с осью
-          контура и верхней границей бара беседы мессенджера (вердикт
-          владельца 16.11.2026: все горизонтали совпадают). */}
+          контура и верхней границей бара беседы мессенджера. */}
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
         <AssistantGlyph className="size-7" />
-        <span className="shrink-0 text-sm font-semibold text-foreground">{ui.assistant.title}</span>
-        {/* Название сессии — мелким текстом возле заголовка панели, без
-            отдельного бара (вердикт владельца 16.11.2026). */}
+        <span className="shrink-0 text-sm font-semibold text-foreground">{strings.title}</span>
         <span className="min-w-0 flex-1 truncate text-label text-muted-foreground">
-          {active?.title ?? ui.assistant.newChat}
+          {active?.title ?? strings.newChat}
         </span>
-        <AssistantSessionPicker />
+        {running ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 text-destructive hover:bg-destructive/10"
+            onClick={stop}
+            aria-label={strings.stop}
+            title={strings.stop}
+          >
+            <Square className="size-4" />
+          </Button>
+        ) : null}
+        <AssistantSessionPicker onNewChat={newChat} />
         <Button
           variant="ghost"
           size="icon"
           className="size-8 text-muted-foreground hover:bg-accent hover:text-foreground"
-          onClick={newSession}
-          aria-label={ui.assistant.newChat}
-          title={ui.assistant.newChat}
+          onClick={newChat}
+          aria-label={strings.newChat}
+          title={strings.newChat}
         >
           <Plus className="size-4" />
         </Button>
@@ -59,36 +138,33 @@ export function AssistantBody() {
           size="icon"
           className="size-8 text-muted-foreground hover:bg-accent hover:text-foreground"
           onClick={() => setOpen(false)}
-          aria-label={ui.assistant.close}
-          title={ui.assistant.close}
+          aria-label={strings.close}
+          title={strings.close}
         >
           <X className="size-4" />
         </Button>
       </header>
-      {/* Зона ленты с обоями продолжается ПОД композером до низа окна —
-          островок ввода парит на ней, как в мессенджере (не на белом хроме).
-          Бар сессии h-14 — калибр бара беседы мессенджера: обои начинаются
-          на той же горизонтали, что лента мессенджера под баром беседы. */}
-      {/* Без вертикального hairline слева (вердикт владельца 16.11.2026):
-          край окна читается скруглением и тенью в светлой теме и ступенью
-          тона зоны в тёмной; линия в шапке/баре сессии не нужна. */}
       <div className="chat-wallpaper flex min-h-0 flex-1 flex-col bg-chat-zone">
-        {active && active.messages.length === 0 && !thinking ? (
-          <AssistantWelcome hasCard={!!ctx.cardTask} onPick={ask} />
+        {empty && !running ? (
+          <AssistantWelcome hasCard={Boolean(ctx.cardKind)} onPick={(text) => void ask(text)} />
         ) : (
-          <AssistantFeed messages={active?.messages ?? []} thinking={thinking} />
+          <AssistantFeed
+            messages={messages}
+            live={live}
+            activeSessionId={activeId}
+            onRetry={() => void ask(lastUserText)}
+          />
         )}
-        {/* Канонический композер мессенджера: монтируется только при открытой
-            панели — «вечный курсор» не ворует фокус у скрытой панели. */}
         {open ? (
           <ChatComposer
-            placeholder={ui.assistant.composerPlaceholder}
+            placeholder={strings.composerPlaceholder}
             focusId="assistant"
             attachmentsEnabled={false}
             stickersEnabled={false}
             urgentEnabled={false}
             onSubmit={(submit) => {
-              if (submit.text.trim()) ask(submit.text.trim());
+              const text = submit.text.trim();
+              if (text) void ask(text);
             }}
           />
         ) : null}

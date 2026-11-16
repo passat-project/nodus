@@ -4,6 +4,7 @@ import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useAssistantStore } from '../../features/assistant/model/assistant-store.js';
+import { useAssistantEnabled } from '../../features/assistant/model/use-assistant-enabled.js';
 import { useConversations } from '../../features/chat/api/chat-api.js';
 import {
   conversationTitle,
@@ -98,6 +99,7 @@ export function RightRail() {
   const me = useAuthStore((s) => s.user);
   const assistantOpen = useAssistantStore((s) => s.open);
   const setOpen = useAssistantStore((s) => s.setOpen);
+  const assistantEnabled = useAssistantEnabled();
   const stack = useCardStack();
   const openCard = useOpenCard();
   const replaceTop = useReplaceTopCard();
@@ -147,8 +149,9 @@ export function RightRail() {
       </div>
       {/* Кнопка агента внизу полосы (вместо шеврона раскрытия имён, вердикт
           владельца 16.11.2026): открывает окно ассистента поверх правой части
-          рабочей зоны; аватарки остаются на месте. */}
-      <div className="shrink-0 p-1">
+          рабочей зоны; аватарки остаются на месте. Без флага `assistant` (I10)
+          и права `assistant.use` (I8) входа нет вовсе. */}
+      <div className={cn('shrink-0 p-1', !assistantEnabled && 'hidden')}>
         <button
           type="button"
           onClick={() => setOpen(!assistantOpen)}

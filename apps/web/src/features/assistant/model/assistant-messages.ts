@@ -1,6 +1,8 @@
-import type { ChatMessage, UserRef } from '@nodus/contracts';
-
-import type { AssistantMessage } from './assistant-store.js';
+import type {
+  AssistantMessage as AssistantMessageDto,
+  ChatMessage,
+  UserRef,
+} from '@nodus/contracts';
 
 /** Ассистент — не сотрудник: постоянный синтетический автор диалога.
  *  Карточку сотрудника по его аватару не открываем (глиф рисует хост). */
@@ -10,23 +12,21 @@ export const ASSISTANT_AUTHOR: UserRef = {
   avatarUrl: null,
 };
 
-/** Синтетическая беседа диалога (мок-конвейер, не серверная запись). */
+/** Синтетическая беседа диалога: лента рендерится каноном чатов, но это не
+ *  серверная беседа мессенджера. */
 export const ASSISTANT_CONVERSATION_ID = '00000000-0000-4000-8000-0000000000c0';
 
-function messageId(id: number): string {
-  return `00000000-0000-4000-8000-${id.toString(16).padStart(12, '0')}`;
-}
-
-/** Сообщения концепта → канонический ChatMessage: лента рендерится ТЕМИ ЖЕ
+/** Сообщения ассистента → канонический ChatMessage: лента рисуется ТЕМИ ЖЕ
  *  компонентами, что мессенджер (серии, пузыри, хвосты, мета) — сообщение
  *  остаётся единой сущностью во всех хостах рендера. */
-export function toChatMessage(m: AssistantMessage, me: UserRef | null): ChatMessage {
+export function toChatMessage(m: AssistantMessageDto, me: UserRef | null): ChatMessage {
+  const mine = m.role === 'user';
   return {
-    id: messageId(m.id),
+    id: m.id,
     conversationId: ASSISTANT_CONVERSATION_ID,
-    seq: m.id,
+    seq: 1,
     clientMessageId: `assistant-${m.id}`,
-    author: m.mine && me ? me : ASSISTANT_AUTHOR,
+    author: mine && me ? me : ASSISTANT_AUTHOR,
     text: m.text,
     replyToId: null,
     reply: null,
