@@ -58,6 +58,11 @@ export class AuditInterceptor implements NestInterceptor {
           const params = (request as FastifyRequest & { params?: Record<string, unknown> }).params;
           const paramId = typeof params?.id === 'string' ? params.id : undefined;
           const entityId = bodyId ?? paramId;
+          // Детали, которые обработчик положил в `request.auditDetails`
+          // (напр. имя и число проектов при необратимом удалении папки):
+          // дополняют стандартные поля, не заменяя их.
+          const extra = (request as FastifyRequest & { auditDetails?: Record<string, unknown> })
+            .auditDetails;
           this.audit
             .append({
               actorId: user?.id ?? null,
@@ -65,6 +70,7 @@ export class AuditInterceptor implements NestInterceptor {
               entityType: metadata.entity,
               entityId,
               details: {
+                ...(extra ?? {}),
                 method: request.method,
                 path: request.url.split('?')[0],
                 statusCode: reply.statusCode,

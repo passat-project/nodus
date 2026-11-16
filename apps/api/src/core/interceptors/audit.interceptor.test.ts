@@ -31,18 +31,19 @@ function createInterceptor(metadata: unknown) {
 }
 
 function createContext() {
+  const request = {
+    method: 'POST',
+    url: '/api/v1/tasks',
+    headers: { 'user-agent': 'Mozilla/5.0' },
+    ip: '10.0.0.1',
+    id: 'req-1',
+    user: USER,
+  } as Record<string, unknown>;
   return {
     getHandler: () => () => undefined,
     getClass: () => class {},
     switchToHttp: () => ({
-      getRequest: () => ({
-        method: 'POST',
-        url: '/api/v1/tasks',
-        headers: { 'user-agent': 'Mozilla/5.0' },
-        ip: '10.0.0.1',
-        id: 'req-1',
-        user: USER,
-      }),
+      getRequest: () => request,
       getResponse: () => ({ statusCode: 201 }),
     }),
   } as unknown as ExecutionContext;
@@ -78,6 +79,27 @@ describe('AuditInterceptor', () => {
       ip: '10.0.0.1',
       userAgent: 'Mozilla/5.0',
     });
+  });
+
+  it('детали из request.auditDetails дополняют стандартные поля', async () => {
+    const { interceptor, audit } = createInterceptor(METADATA);
+    const context = createContext();
+    const request = context.switchToHttp().getRequest() as Record<string, unknown>;
+    request.auditDetails = { portfolio: 'Нежин-Недра', projects: 3 };
+
+    await lastValueFrom(interceptor.intercept(context, createNext(undefined)));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          portfolio: 'Нежин-Недра',
+          projects: 3,
+          method: 'POST',
+          traceId: 'req-1',
+        }),
+      }),
+    );
   });
 
   it('сбой записи аудита не роняет ответ', async () => {

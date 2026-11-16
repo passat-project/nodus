@@ -8,8 +8,8 @@ import { toastApiError } from '../../../shared/api/error-toast.js';
 import { projectsKeys } from '../../../shared/api/projects-list.js';
 import { JOURNAL_PREFIX, replaceInJournal, type JournalPages } from './project-mutation-helpers.js';
 
-/** Ссылка портфеля по имени из любого закэшированного списка папок (живой
- *  или с архивом): форма журнала показывает имя, а не id. */
+/** Ссылка портфеля по имени из закэшированного списка папок: форма журнала
+ *  показывает имя, а не id. */
 function portfolioRefOf(
   queryClient: ReturnType<typeof useQueryClient>,
   portfolioId: string | null,

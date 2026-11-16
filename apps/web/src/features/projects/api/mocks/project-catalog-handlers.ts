@@ -18,6 +18,7 @@ import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import {
   demoParticipantRowsOf,
   demoProjectGroups,
+  demoProjectRows,
   demoProjectTypes,
 } from '../../../../shared/mocks/data/projects.js';
 import { visibleProjectRows } from '../../../../shared/mocks/data/project-views.js';
@@ -255,8 +256,14 @@ export const projectCatalogHandlers = [
 
   http.delete('/api/v1/projects/groups/:id/permanent', ({ params }) => {
     if (!getMockActor().permissions.includes(Permission.PROJECT_MANAGE)) return forbidden();
-    const index = demoProjectGroups.findIndex((entry) => entry.id === String(params.id));
+    const id = String(params.id);
+    const index = demoProjectGroups.findIndex((entry) => entry.id === id);
     if (index < 0) return notFound();
+    // Как на сервере: проекты папки переходят в «Без портфеля», а не остаются
+    // в фантомной папке (иначе мок расходится с API, #559).
+    for (const project of demoProjectRows) {
+      if (project.portfolioId === id) project.portfolioId = null;
+    }
     demoProjectGroups.splice(index, 1);
     return new HttpResponse(null, { status: 204 });
   }),

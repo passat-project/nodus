@@ -627,7 +627,8 @@ export type ProjectPortfolioCount = z.infer<typeof projectPortfolioCountSchema>;
 /** Режим счётчиков папок (#559): «все» или «мои» — тот же срез, что у
  *  журнала, иначе колонка врёт при переключателе «Все / Мои». */
 export const projectPortfolioCountsQuerySchema = z.object({
-  scope: z.enum(['all', 'mine']).default('all'),
+  /** Срез как у журнала по умолчанию: «Мои», если клиент не уточнил. */
+  scope: z.enum(['all', 'mine']).default('mine'),
 });
 
 export type ProjectPortfolioCountsQuery = z.infer<typeof projectPortfolioCountsQuerySchema>;

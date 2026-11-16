@@ -49,19 +49,25 @@ export class ProjectGroupsRepository {
     return row ? this.toDto(row) : null;
   }
 
-  async activeProjectCount(id: string): Promise<number> {
-    return this.prisma.project.count({ where: { portfolioId: id, status: { not: 'archived' } } });
-  }
-
   /**
    * Удалить портфель НАВСЕГДА: проекты не теряются — переходят в «Без
    * портфеля». Ссылки обнуляем явно (детерминированно, до удаления папки),
    * хотя FK `projects.portfolio_id` и так `onDelete: SetNull`; удаление папки
    * и перенос проектов — одна транзакция (частичного состояния не бывает).
+   * Возвращает имя папки и число перенесённых проектов — для аудита
+   * необратимого действия (имя после удаления нигде не остаётся).
    */
-  async delete(tx: TransactionClient, id: string): Promise<boolean> {
-    await tx.project.updateMany({ where: { portfolioId: id }, data: { portfolioId: null } });
-    const result = await tx.projectGroup.deleteMany({ where: { id } });
-    return result.count > 0;
+  async delete(
+    tx: TransactionClient,
+    id: string,
+  ): Promise<{ name: string; projects: number } | null> {
+    const group = await tx.projectGroup.findUnique({ select: { name: true }, where: { id } });
+    if (!group) return null;
+    const moved = await tx.project.updateMany({
+      where: { portfolioId: id },
+      data: { portfolioId: null },
+    });
+    await tx.projectGroup.deleteMany({ where: { id } });
+    return { name: group.name, projects: moved.count };
   }
 }

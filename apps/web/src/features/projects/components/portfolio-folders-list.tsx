@@ -71,7 +71,13 @@ export function PortfolioFoldersList({
       if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
       setDragOver(folder.id);
     },
-    onDragLeave: () => setDragOver((current) => (current === folder.id ? null : current)),
+    onDragLeave: (event: React.DragEvent) => {
+      // Выход на дочерний элемент (кнопка/текст папки) — не «уход» со строки:
+      // иначе подсветка гаснет ровно там, куда целятся.
+      const next = event.relatedTarget as Node | null;
+      if (next && event.currentTarget.contains(next)) return;
+      setDragOver((current) => (current === folder.id ? null : current));
+    },
     onDrop: (event: React.DragEvent) => {
       if (!droppable(folder)) return;
       event.preventDefault();

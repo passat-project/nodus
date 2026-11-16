@@ -53,17 +53,22 @@ describe('DELETE /projects/groups/:id/permanent (#559)', () => {
 
   it('удаляет портфель в транзакции (проекты — в «Без портфеля»)', async () => {
     const { controller, groups, tx } = makeController();
-    groups.delete.mockResolvedValue(true);
+    groups.delete.mockResolvedValue({ name: 'Нежин-Недра', projects: 3 });
+    const request: { auditDetails?: Record<string, unknown> } = {};
 
-    await expect(controller.groupDelete(GROUP.id)).resolves.toBeUndefined();
+    await expect(controller.groupDelete(GROUP.id, request as never)).resolves.toBeUndefined();
     expect(groups.delete).toHaveBeenCalledWith(tx, GROUP.id);
+    // Необратимое действие: имя папки и число перенесённых проектов — в аудит.
+    expect(request.auditDetails).toEqual({ portfolio: 'Нежин-Недра', projects: 3 });
   });
 
   it('неизвестный портфель — 404, а не молчаливое «удалено»', async () => {
     const { controller, groups } = makeController();
-    groups.delete.mockResolvedValue(false);
+    groups.delete.mockResolvedValue(null);
 
-    await expect(controller.groupDelete(GROUP.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(controller.groupDelete(GROUP.id, {} as never)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
   });
 });
 

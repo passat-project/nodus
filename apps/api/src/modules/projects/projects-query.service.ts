@@ -100,7 +100,7 @@ export class ProjectsQueryService {
    */
   async portfolioCounts(
     user: AuthUser,
-    scope: 'all' | 'mine' = 'all',
+    scope: 'all' | 'mine' = 'mine',
   ): Promise<ProjectPortfolioCount[]> {
     const myProjectIds = await this.repo.participantProjectIds(user.id);
     const rows = await this.repo.portfolioCounts({

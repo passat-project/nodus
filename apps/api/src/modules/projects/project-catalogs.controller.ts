@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -20,6 +21,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { z } from 'zod';
+import type { FastifyRequest } from 'fastify';
 import {
   Permission,
   projectGroupCreateBodySchema,
@@ -68,10 +70,11 @@ const listQuerySchema = z.object({ includeArchived: z.enum(['true', 'false']).de
 /**
  * Справочники модуля (#52): типы проектов (вкладка «Типы проектов»
  * «Автоматизации», право `project.setup.manage`), виды уровней структуры
- * (#467 — то же право) и портфели (создание — `project.create`, архивация —
- * `project.manage`). Настройки портала (`settings/portal`) удалены (#738) и
- * вернутся вместе с первыми реальными разделами окна (#276). Статические
- * маршруты (`projects/types`,
+ * (#467 — то же право) и портфели (создание — `project.create`,
+ * переименование/удаление — `project.manage`; архива у папки нет — удаление
+ * сразу навсегда, проекты переходят в «Без портфеля»). Настройки портала
+ * (`settings/portal`) удалены (#738) и вернутся вместе с первыми реальными
+ * разделами окна (#276). Статические маршруты (`projects/types`,
  * `projects/node-kinds`) фармуруются раньше параметрических `projects/:id`
  * — роутер Fastify отдаёт статике приоритет.
  */
@@ -291,9 +294,18 @@ export class ProjectCatalogsController {
   @ApiNoContentResponse({ description: 'Портфель удалён, проекты перешли в «Без портфеля»' })
   @ApiErrors(400, 401, 403, 404)
   @ApiIdempotencyKey()
-  async groupDelete(@Param('id', new ZodValidationPipe(idParamSchema)) id: string): Promise<void> {
+  async groupDelete(
+    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
+    @Req() request: FastifyRequest,
+  ): Promise<void> {
     const deleted = await this.txRunner.run((tx) => this.groups.delete(tx, id));
     if (!deleted) throw DomainException.notFound('Portfolio not found');
+    // Необратимое удаление: в аудит уходят имя папки и число проектов —
+    // иначе от папки в базе не остаётся следа, и «что удалили» не восстановить.
+    (request as FastifyRequest & { auditDetails?: Record<string, unknown> }).auditDetails = {
+      portfolio: deleted.name,
+      projects: deleted.projects,
+    };
   }
 
   // ===== Настройки портала =====

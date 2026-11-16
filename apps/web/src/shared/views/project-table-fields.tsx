@@ -73,7 +73,7 @@ function MemberPreview({ project }: { project: ProjectListItem }) {
  *
  * Дефолт — четыре колонки, которые целиком читаются на ноутбуке (1620 px при
  * масштабе 1.25): название, моя роль, руководитель, статус. «Портфель» скрыт
- * (папки живут вкладкой «Портфели»), «Видимость» — замком у названия
+ * (папки живут кнопкой «Портфели» с поповером), «Видимость» — замком у названия
  * секретного проекта; «Шифр», «Участники», «Активность» — в шестерёнке
  * (ширина окна у всех разная, а обрезанная колонка хуже скрытой).
  */
@@ -122,7 +122,7 @@ const projectSystemFields: DataTableField<ProjectListItem>[] = [
     id: 'myRole',
     label: ui.projects.filterRole,
     defaultVisible: true,
-    defaultWidth: 88,
+    defaultWidth: 104,
     minWidth: 104,
     render: (project) => <ProjectRoleChip project={project} />,
     sortValue: (project) => primaryProjectRole(project.myMembership),
@@ -200,7 +200,7 @@ const projectSystemFields: DataTableField<ProjectListItem>[] = [
     id: 'status',
     label: ui.projects.fieldStatus,
     defaultVisible: true,
-    defaultWidth: 96,
+    defaultWidth: 104,
     minWidth: 104,
     render: (project) => <ProjectStatusChip project={project} />,
     sortValue: (project) => project.status,

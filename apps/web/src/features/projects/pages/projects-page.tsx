@@ -36,6 +36,7 @@ import type { ProjectJournalFilters, ProjectRoleFilter } from '../lib/project-jo
 import { canDragProject, canEditProject } from '../lib/project-edit-rights.js';
 import {
   buildPortfolioFolders,
+  NO_PORTFOLIO_FILTER,
   portfolioFilterOf,
   type PortfolioFolder,
 } from '../lib/portfolio-folders.js';
@@ -152,7 +153,7 @@ export function ProjectsPage() {
     const project = items.find((row) => row.id === draggingId);
     setDraggingId(null);
     if (!project) return;
-    const nextPortfolioId = folderId === 'none' ? null : folderId;
+    const nextPortfolioId = folderId === NO_PORTFOLIO_FILTER ? null : folderId;
     if ((project.portfolio?.id ?? null) === nextPortfolioId) return;
     moveToPortfolio.mutate({ id: project.id, portfolioId: nextPortfolioId });
   }
@@ -315,7 +316,16 @@ export function ProjectsPage() {
         onConfirm={() => {
           // Проекты папки не удаляются: сервер переносит их в «Без портфеля»
           // одной транзакцией, кэш журнала уже снял с них портфель.
-          if (deleteFolderTarget) deleteFolder.mutate(deleteFolderTarget.id);
+          if (deleteFolderTarget) {
+            deleteFolder.mutate(deleteFolderTarget.id);
+            // Удалённая папка не должна оставаться фильтром журнала: иначе
+            // список пуст под подписью «Все проекты» (папки больше нет).
+            if (selection === deleteFolderTarget.id) {
+              const next = { ...toolbar.filters };
+              delete next.portfolio;
+              toolbar.setFilters(next);
+            }
+          }
           setDeleteFolderTarget(null);
         }}
       />

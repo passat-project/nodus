@@ -137,12 +137,12 @@ export function PortfolioMenu({
         onFocusOutside={(event) => {
           if (draggingProjectId !== null) event.preventDefault();
           const target = event.target as HTMLElement | null;
-          if (target?.closest('[data-radix-popper-content-wrapper]')) event.preventDefault();
+          if (target?.closest('[role="menu"]')) event.preventDefault();
         }}
         onInteractOutside={(event) => {
           if (draggingProjectId !== null) event.preventDefault();
           const target = event.target as HTMLElement | null;
-          if (target?.closest('[data-radix-popper-content-wrapper]')) event.preventDefault();
+          if (target?.closest('[role="menu"]')) event.preventDefault();
         }}
       >
         <div className="flex h-9 items-center justify-between gap-2 border-b border-border/60 pr-1 pl-2">

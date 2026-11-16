@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Permission, ui } from '@nodus/contracts';
 
 import {
@@ -86,9 +86,15 @@ function openFolders() {
   fireEvent.click(screen.getByRole('button', { name: /^Портфели/ }));
 }
 
-/** Строка папки в открытом списке «Портфели» (контейнер с кнопкой и «⋯»). */
+/** Строка папки в открытом списке «Портфели» (контейнер с кнопкой и «⋯»).
+ *  Ищем именно внутри списка: имя выбранной папки дублируется на кнопке. */
 function folderRow(name: string): HTMLElement {
-  return screen.getByText(name).closest('[data-folder-row]') as HTMLElement;
+  const row = screen
+    .getAllByText(name)
+    .map((el) => el.closest('[data-folder-row]'))
+    .find((el) => el !== null);
+  if (!row) throw new Error(`нет строки папки: ${name}`);
+  return row as HTMLElement;
 }
 
 /** Меню настройки папки прямо в строке списка. */
@@ -97,6 +103,11 @@ function openFolderMenu(name: string) {
   const button = within(folderRow(name)).getByRole('button', { name: ui.common.rowMenu });
   fireEvent.pointerDown(button, { button: 0, pointerType: 'mouse' });
   fireEvent.click(button);
+}
+
+/** Фильтры последнего запроса журнала. */
+function lastFilters(): Record<string, unknown> {
+  return mocks.journal.mock.calls.at(-1)![0] as Record<string, unknown>;
 }
 
 function tableRow(name: string): HTMLElement {
@@ -276,6 +287,22 @@ describe('настройка портфеля в попапе (#559)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: ui.projects.portfolioDelete }));
 
     expect(mocks.deleteGroup).toHaveBeenCalledWith(PORTFOLIO.id);
+  });
+
+  it('удаление выбранной папки снимает её фильтр — журнал возвращается к «Все проекты»', async () => {
+    render(<ProjectsPage />);
+
+    openFolders();
+    fireEvent.click(screen.getByText(PORTFOLIO.name));
+    await waitFor(() => expect(lastFilters().portfolioId).toBe(PORTFOLIO.id));
+
+    openFolderMenu(PORTFOLIO.name);
+    fireEvent.click(await screen.findByRole('menuitem', { name: ui.projects.portfolioDelete }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: ui.projects.portfolioDelete }));
+
+    expect(mocks.deleteGroup).toHaveBeenCalledWith(PORTFOLIO.id);
+    await waitFor(() => expect(lastFilters().portfolioId).toBeUndefined());
   });
 });
 

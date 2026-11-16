@@ -55,12 +55,12 @@ describe('ProjectsQueryService.portfolioCounts (#559)', () => {
     ]);
   });
 
-  it('счётчик — тот же видимый срез, что у журнала (секретные не утекают)', async () => {
+  it('по умолчанию — «Мои», как у журнала (тот же видимый срез)', async () => {
     await service.portfolioCounts(user());
 
     expect(repo.participantProjectIds).toHaveBeenCalledWith(ACTOR);
     expect(repo.portfolioCounts).toHaveBeenCalledWith({
-      participantOf: null,
+      participantOf: ACTOR,
       roleSource: null,
       myProjectIds: [MINE],
       seeAll: false,

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@nodus/ui/components/dialog';
 import { Input } from '@nodus/ui/components/input';
 import type { PortfolioFolder } from '../lib/portfolio-folders.js';
 
@@ -89,9 +89,11 @@ export function PortfolioDeleteDialog({
 }) {
   return (
     <Dialog open={folder !== null} onOpenChange={(next) => !next && onCancel()}>
-      <DialogContent className="max-w-md sm:max-w-md" aria-describedby={undefined}>
+      <DialogContent className="max-w-md sm:max-w-md">
         <DialogTitle>{ui.projects.portfolioDeleteConfirmTitle}</DialogTitle>
-        <p className="text-sm text-muted-foreground">{ui.projects.portfolioDeleteConfirmBody}</p>
+        <DialogDescription className="text-sm text-muted-foreground">
+          {ui.projects.portfolioDeleteConfirmBody}
+        </DialogDescription>
         <p className="truncate text-sm font-medium">{folder?.name ?? ''}</p>
         <div className="flex items-center gap-2">
           <Button type="button" variant="destructive" onClick={onConfirm}>
