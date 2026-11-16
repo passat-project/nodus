@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DomainEvent } from '@nodus/contracts';
+import { DIRECTORY_EVENTS, type DomainEvent } from '@nodus/contracts';
 
 import type { PrismaService } from '../database/prisma.service.js';
 import { EventDispatcher } from './event-dispatcher.js';
@@ -24,6 +24,21 @@ class SecondHandler {
 
 class ThirdHandler {
   static readonly eventType = 'task.created';
+  handle = vi.fn().mockResolvedValue(undefined);
+}
+
+class DeactivatedHandler {
+  static readonly eventType = DIRECTORY_EVENTS.USER_DEACTIVATED;
+  handle = vi.fn().mockResolvedValue(undefined);
+}
+
+class RoleAccessHandler {
+  static readonly eventType = DIRECTORY_EVENTS.ROLE_ACCESS_CHANGED;
+  handle = vi.fn().mockResolvedValue(undefined);
+}
+
+class UserUpdatedHandler {
+  static readonly eventType = DIRECTORY_EVENTS.USER_UPDATED;
   handle = vi.fn().mockResolvedValue(undefined);
 }
 
@@ -239,5 +254,32 @@ describe('EventDispatcher', () => {
 
     await dispatcher.dispatchPending(); // дедуп: снятый обработчик не зовётся
     expect(handler.handle).toHaveBeenCalledTimes(8);
+  });
+
+  it.each<[string, () => { handle: ReturnType<typeof vi.fn> }]>([
+    ['directory.user.deactivated', () => new DeactivatedHandler()],
+    ['directory.role.access_changed', () => new RoleAccessHandler()],
+    ['directory.user.updated', () => new UserUpdatedHandler()],
+  ])('AUD-002: отзыв доступа %s не снимается с повторов после потолка', async (type, make) => {
+    const handler = make();
+    handler.handle.mockRejectedValue(new Error('redis down'));
+    const events = [{ ...EVENT, id: 'e2', type }];
+    const { dispatcher, prisma } = createDispatcher(
+      [handler],
+      createPrisma({ events: () => events }),
+    );
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await dispatcher.dispatchPending();
+    }
+
+    // Отзыв прав не теряется молча: доставка НЕ фиксируется, событие остаётся
+    // в повторах (бэкофф до 5 минут изолирует его от головы батча).
+    expect(handler.handle).toHaveBeenCalledTimes(8);
+    expect(prisma.eventDelivery.createMany).not.toHaveBeenCalled();
+    expect(prisma.event.updateMany).not.toHaveBeenCalled();
+
+    await dispatcher.dispatchPending();
+    expect(handler.handle).toHaveBeenCalledTimes(9);
   });
 });

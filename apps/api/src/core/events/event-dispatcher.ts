@@ -1,7 +1,7 @@
 import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import { PinoLogger } from 'nestjs-pino';
-import type { DomainEvent, DomainEventHandler } from '@nodus/contracts';
+import { DIRECTORY_EVENTS, type DomainEvent, type DomainEventHandler } from '@nodus/contracts';
 
 import { PrismaService } from '../database/prisma.service.js';
 
@@ -22,6 +22,16 @@ const BACKOFF_MAX_MS = 5 * 60_000;
  *  доставка фиксируется в `event_deliveries`, чтобы событие завершилось. */
 const POISON_ATTEMPTS = 8;
 
+/** События отзыва доступа: упавший обработчик НЕ снимается с повторов после
+ *  `POISON_ATTEMPTS` — отзыв прав не должен теряться молча. Бэкофф (до
+ *  5 минут) уже изолирует событие от головы батча (AUD-012); повтор идёт,
+ *  пока Redis не восстановится (#866, замечание валидатора). */
+const ACCESS_REVOCATION_EVENTS: ReadonlySet<string> = new Set([
+  DIRECTORY_EVENTS.USER_DEACTIVATED,
+  DIRECTORY_EVENTS.ROLE_ACCESS_CHANGED,
+  DIRECTORY_EVENTS.USER_UPDATED,
+]);
+
 type HandlerInstance = DomainEventHandler & { constructor: { eventType?: string; name: string } };
 
 interface RetryState {
@@ -41,7 +51,10 @@ interface RetryState {
  * остальные получают событие в том же проходе (AUD-012), а упавший
  * повторяется бэкоффом один; после `POISON_ATTEMPTS` он снимается с
  * повторов (error-запись с id события и именем обработчика), и событие
- * завершается. Обработчик исполняется ВНЕ транзакции диспетчера:
+ * завершается. Исключение — события отзыва доступа (`USER_DEACTIVATED`,
+ * `USER_UPDATED`, `ROLE_ACCESS_CHANGED`): их упавший обработчик не снимается
+ * с повторов никогда — отзыв прав не теряется молча, повтор идёт до
+ * восстановления Redis. Обработчик исполняется ВНЕ транзакции диспетчера:
  * у него свои транзакции (TransactionRunner), а обёртка лишь держала бы
  * второе соединение пула и убивала медленный обработчик tx-таймаутом.
  * Обработчик обязан быть идемпотентным (крэш между его коммитом и записью
@@ -162,7 +175,7 @@ export class EventDispatcher implements OnModuleInit, OnModuleDestroy {
           this.retries.delete(event.id);
           return;
         }
-        if (attempts < POISON_ATTEMPTS) {
+        if (attempts < POISON_ATTEMPTS || ACCESS_REVOCATION_EVENTS.has(event.type)) {
           retryNeeded = true;
           this.logger.error(
             { eventId: event.id, type: event.type, handler: handlerId, attempts, err: error },
