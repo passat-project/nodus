@@ -67,7 +67,10 @@ function showEditPopup(snapshot: NotificationSnapshot, queryClient: QueryClient)
   const text = (snapshot.preview ?? '').slice(0, 200);
   const preview = snapshot.actorName ? `${snapshot.actorName}: ${text}` : text;
   void desktopShowPopup({
-    id: snapshot.messageId ?? snapshot.notificationId,
+    // Неймспейс edit: — иначе id=messageId совпал бы с живым попапом того же
+    // сообщения и дедуп стека swallowed бы правку, пока оригинал висит (#880,
+    // замечание валидатора): «отошёл, собеседник правит» — правка обязана прийти.
+    id: `edit:${snapshot.messageId ?? snapshot.notificationId}`,
     conversationId,
     threadRootId: snapshot.threadRootId ?? undefined,
     title: ui.notifications.kindTitles['chat.message_edited'],
@@ -81,9 +84,21 @@ function showEditPopup(snapshot: NotificationSnapshot, queryClient: QueryClient)
 /** Повтор срочного: статичный попап (urgent), критичное мигание таскбара.
  * Дедуп по messageId — в стеке оболочки: висящий не дублируется. */
 function showUrgentRepeat(snapshot: NotificationSnapshot): void {
+  const conversationId = snapshot.conversationId;
+  // Полная тишина при активном просмотре беседы (#300, включая «Важное») —
+  // как у живого пути: повтор не всплывает поверх читаемой беседы (#880,
+  // замечание валидатора). Mute/snooze срочное пробивает (канон живого пути).
+  if (
+    conversationId &&
+    isUserActive() &&
+    !isModalLayerOpen() &&
+    getOpenConversation() === conversationId
+  ) {
+    return;
+  }
   void desktopShowPopup({
     id: snapshot.messageId ?? snapshot.notificationId,
-    conversationId: snapshot.conversationId ?? undefined,
+    conversationId: conversationId ?? undefined,
     threadRootId: snapshot.threadRootId ?? undefined,
     title: snapshot.conversationTitle ?? ui.notifications.kindTitles['urgent.message'],
     preview: (snapshot.preview ?? '').slice(0, 200),

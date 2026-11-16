@@ -56,7 +56,8 @@ describe('notifyDesktopJournal: kinds без живого попапа (#880)', 
     notifyDesktopJournal(snap('chat.message_edited'), 0, qc);
     expect(desktopShowPopup).toHaveBeenCalledTimes(1);
     const payload = vi.mocked(desktopShowPopup).mock.calls[0]![0] as Record<string, unknown>;
-    expect(payload.id).toBe(MSG);
+    // Неймспейс edit: — не collides с живым попапом сообщения (дедуп стека).
+    expect(payload.id).toBe(`edit:${MSG}`);
     expect(payload.conversationId).toBe(CONV);
     expect(payload.urgent).toBe(false);
     expect(payload.title).toBe(ui.notifications.kindTitles['chat.message_edited']);
@@ -77,6 +78,14 @@ describe('notifyDesktopJournal: kinds без живого попапа (#880)', 
     expect(payload.id).toBe(MSG);
     expect(payload.urgent).toBe(true);
     expect(desktopFlashTaskbar).toHaveBeenCalledWith(true);
+  });
+
+  it('повтор срочного в открытой активной беседе — тишина (#300, включая Важное)', () => {
+    vi.mocked(isUserActive).mockReturnValue(true);
+    vi.mocked(getOpenConversation).mockReturnValue(CONV);
+    notifyDesktopJournal(snap('urgent.message'), 2, qc);
+    expect(desktopShowPopup).not.toHaveBeenCalled();
+    expect(desktopFlashTaskbar).not.toHaveBeenCalled();
   });
 
   it('первичное срочное (attempt=0) не дублирует живой путь', () => {
