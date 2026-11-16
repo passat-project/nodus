@@ -67,7 +67,7 @@ export const userResponseSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
   displayName: z.string(),
-  avatarUrl: z.string().url().nullable(),
+  avatarUrl: z.string().nullable(), // подписной относительный путь файла-деривата, НЕ z.url() (#880)
   createdAt: isoDateTimeSchema, // UTC ISO 8601 on the wire (I7)
 });
 
@@ -212,7 +212,7 @@ Keep derivations pure and cheap. Anything expensive (aggregations over many rows
 export const userPublicResponseSchema = z.object({
   id: z.string().uuid(),
   displayName: z.string(),
-  avatarUrl: z.string().url().nullable(),
+  avatarUrl: z.string().nullable(), // подписной относительный путь файла-деривата, НЕ z.url() (#880)
 });
 
 export const userSelfResponseSchema = userPublicResponseSchema.extend({
@@ -352,7 +352,7 @@ export const userResponseSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
   displayName: z.string(),
-  avatarUrl: z.string().url().nullable(),
+  avatarUrl: z.string().nullable(), // подписной относительный путь файла-деривата, НЕ z.url() (#880)
   createdAt: isoDateTimeSchema,
 });
 
