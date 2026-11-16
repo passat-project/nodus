@@ -47,6 +47,9 @@ services:
       # Доверенные прокси для X-Forwarded-For (#317): пусто = дефолт приложения
       # 'loopback,linklocal,uniquelocal' (nginx в docker-сети — приватный адрес).
       TRUST_PROXY: ${TRUST_PROXY:-}
+      # Часовой пояс компании (#55): границы года нумерации и дата регистрации
+      # писем. Дефолт — как в схеме (env.schema.ts).
+      COMPANY_TIMEZONE: ${COMPANY_TIMEZONE:-Europe/Minsk}
       DATABASE_URL: postgresql://${POSTGRES_USER:?задайте в .env}:${POSTGRES_PASSWORD:?задайте в .env}@nodus_postgres:5432/${POSTGRES_DB:?задайте в .env}
       # Пул соединений api с PG (AUD-022): размер/таймауты через .env; дефолты
       # те же, что в коде (core/config/database-pool.config.ts). Точный подбор — #473.
@@ -83,6 +86,12 @@ services:
       OFFICE_API_INTERNAL_URL: http://nodus-api:3001
       # Конвейер производных #139 (PDF-копии офисных): Gotenberg в сети.
       GOTENBERG_URL: ${GOTENBERG_URL:-http://gotenberg:3000}
+      # Десктоп-оболочка (#254, AUD-025): контроллер GET /desktop/config читает
+      # эти ключи из process.env. env_file у api нет — без явной проводки
+      # значение из .env не доезжает и на проде действует умолчание. Дефолты
+      # те же, что в схеме (env.schema.ts) и контроллере.
+      NODUS_SERVER_NAME: ${NODUS_SERVER_NAME:-Nodus}
+      NODUS_MIN_SHELL_VERSION: ${NODUS_MIN_SHELL_VERSION:-0.0.0}
       # Почта (#56, ADR-0035, #577): ключи .env НЕ попадают в контейнер сами —
       # compose подставляет их только в этот файл. Без явной проводки api в
       # проде не видит креды, и приём молча спит (письма «не приходят»).
