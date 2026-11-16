@@ -11,11 +11,15 @@ import { permissionSchema } from '../auth/permission.js';
  * Подписчики: auth (отзыв сессий деактивированного), gateway (разрыв
  * WS-сокетов деактивированного, #317). `role.permissions_changed` gateway
  * пока не маршрутизирует: подписчиков у клиентов нет — их добавит #382.
+ * `user.activated` парен деактивации (AUD-016): подписчиков у него пока нет —
+ * сессии не восстанавливаются (сотрудник входит заново), а беседы и проекты
+ * при деактивации уже потеряны.
  */
 export const DIRECTORY_EVENTS = {
   USER_CREATED: 'directory.user.created',
   USER_UPDATED: 'directory.user.updated',
   USER_DEACTIVATED: 'directory.user.deactivated',
+  USER_ACTIVATED: 'directory.user.activated',
   DEPARTMENT_CREATED: 'directory.department.created',
   DEPARTMENT_UPDATED: 'directory.department.updated',
   DEPARTMENT_ARCHIVED: 'directory.department.archived',
@@ -30,12 +34,22 @@ export const DIRECTORY_EVENTS = {
   ROLE_PERMISSIONS_CHANGED: 'directory.role.permissions_changed',
   /** Сотрудника или подразделение добавили в роль / убрали из неё (#379). */
   ROLE_MEMBERS_CHANGED: 'directory.role.members_changed',
+  /** У этих пользователей изменился набор действующих прав роли (#866,
+   *  AUD-002): auth обесценивает их access-токены — права из JWT не живут
+   *  до истечения TTL. */
+  ROLE_ACCESS_CHANGED: 'directory.role.access_changed',
 } as const;
 
 export const userDeactivatedPayloadSchema = z.object({
   userId: z.uuid(),
 });
 export type UserDeactivatedPayload = z.infer<typeof userDeactivatedPayloadSchema>;
+
+/** Payload `directory.user.activated` — парен деактивации (AUD-016). */
+export const userActivatedPayloadSchema = z.object({
+  userId: z.uuid(),
+});
+export type UserActivatedPayload = z.infer<typeof userActivatedPayloadSchema>;
 
 /** Payload `directory.role.permissions_changed`: выдали (`granted: true`) или отозвали. */
 export const rolePermissionsChangedPayloadSchema = z.object({
@@ -53,3 +67,16 @@ export const roleMembersChangedPayloadSchema = z.object({
   added: z.boolean(),
 });
 export type RoleMembersChangedPayload = z.infer<typeof roleMembersChangedPayloadSchema>;
+
+/**
+ * Payload `directory.role.access_changed`: `userIds` — активные сотрудники,
+ * чьи действующие права определяются ролью на момент изменения (прямые
+ * участники и сотрудники подразделений роли; #866, AUD-002). `reason`:
+ * `membership` — состав роли, `permissions` — набор прав роли.
+ */
+export const roleAccessChangedPayloadSchema = z.object({
+  roleId: z.uuid(),
+  reason: z.enum(['membership', 'permissions']),
+  userIds: z.array(z.uuid()).min(1),
+});
+export type RoleAccessChangedPayload = z.infer<typeof roleAccessChangedPayloadSchema>;

@@ -20,6 +20,7 @@ import {
   type NumberSeriesStore,
 } from '../../workflows/ports/number-series.port.js';
 import { DefinitionsRepository } from './definitions.repository.js';
+import { isNumberInsertionType } from '../numbering/number-insertion.js';
 
 /** Хост привязки: тип процесса — по категории, тип проекта и вид папки — свои. */
 function hostOfBinding(
@@ -104,8 +105,34 @@ export class CounterRuleService {
     }
   }
 
-  /**
-   * «При создании» только у привязанных типов; письму — только сквозная
+  /** Вставки шаблона печатаются по типу поля (AUD-010): у ссылок, денег,
+   *  даты, флагов и составных типов печатного вида нет. Правило с такой
+   *  вставкой не сохраняется (422): номер неизменяем после выдачи, и
+   *  внутренний id в нём недопустим. */
+  async assertInsertions(tx: TransactionClient, rule: NumberSeriesRule): Promise<void> {
+    const definitions = await this.definitions.list(tx);
+    const byNumber = new Map(definitions.map((row) => [row.number, row]));
+    const segments: { fieldNumber: number; name: string; type: string }[] = [];
+    for (const segment of rule.template) {
+      if (segment.kind !== 'field') continue;
+      const definition = byNumber.get(segment.fieldNumber);
+      if (definition && isNumberInsertionType(definition.type)) continue;
+      segments.push({
+        fieldNumber: segment.fieldNumber,
+        name: definition?.name ?? '—',
+        type: definition?.type ?? 'missing',
+      });
+    }
+    if (segments.length > 0) {
+      throw new DomainException(
+        ErrorCode.NUMBER_SEGMENT_UNSUPPORTED,
+        'Number insertion type has no printable value',
+        { segments },
+      );
+    }
+  }
+
+  /** «При создании» только у привязанных типов; письму — только сквозная
    * нумерация/по типу письма и без полей письма в номере (иначе импорт почты
    * падал бы без человека, который подтвердит пустую вставку); папке и
    * проекту без «при создании» номер не выдаст никто — кнопок у них нет.

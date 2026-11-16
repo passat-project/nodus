@@ -13,6 +13,8 @@ const ME = 'me-1';
 const TARGET = 'conv-target';
 const SOURCE = 'conv-source';
 const TX = 'TX';
+/** Актёр пересылки: userId + права токена (для канала проекта — canPost). */
+const ACTOR = { id: ME, permissions: [] as string[] };
 
 function makeService() {
   const messages = {
@@ -33,10 +35,17 @@ function makeService() {
   const threadParticipants = { upsert: vi.fn() };
   const conversations = {
     findMembership: vi.fn(async () => ({ role: 'owner' })),
-    findTypeAndPermissions: vi.fn(async () => ({
-      type: 'group',
-      permissions: { post: 'member' },
-    })),
+    findTypeAndPermissions: vi.fn(
+      async (): Promise<{
+        type: string;
+        projectId: string | null;
+        permissions: { post: string };
+      }> => ({
+        type: 'group',
+        projectId: null,
+        permissions: { post: 'member' },
+      }),
+    ),
     listMembers: vi.fn(async () => []),
     listMembersPage: vi.fn(async (_c: string, opts: { searchUserIds?: string[] }) =>
       (opts.searchUserIds ?? []).map((userId) => ({ userId, role: 'member' })),
@@ -51,6 +60,7 @@ function makeService() {
     findRefs: vi.fn(async () => []),
     filterActiveUserIds: vi.fn(async (ids: string[]) => ids),
   };
+  const projectChat = { canPost: vi.fn(async () => true) };
   const service = new MessageActionsService(
     messages as never,
     messages as never, // запись (MessagesWriteRepository)
@@ -67,8 +77,9 @@ function makeService() {
       applyMessageDeleted: vi.fn(async () => {}),
       applyForwardCopies: vi.fn(async () => {}),
     } as never,
+    projectChat as never,
   );
-  return { service, conversations, messages, mapper, eventBus, userProfiles };
+  return { service, conversations, messages, mapper, eventBus, userProfiles, projectChat };
 }
 
 describe('MessageActionsService.forward — раскрытие скрытой беседы (#103)', () => {
@@ -86,7 +97,7 @@ describe('MessageActionsService.forward — раскрытие скрытой б
       messageIds: ['src-1'],
       comment: 'вот это',
     };
-    await service.forward(ME, TARGET, body, 'fwd-key');
+    await service.forward(ACTOR, TARGET, body, 'fwd-key');
     expect(conversations.unsnooze).toHaveBeenCalledWith(TARGET, ME, TX);
     expect(conversations.revealHidden).toHaveBeenCalledWith(TARGET, TX);
   });
@@ -117,7 +128,7 @@ describe('MessageActionsService.forward — payload DTO (раунд 3)', () => {
     })) as never);
     mapper.toFreshDto.mockResolvedValue({} as never);
     await service.forward(
-      ME,
+      ACTOR,
       TARGET,
       { sourceConversationId: SOURCE, messageIds: ['src-1'] },
       'key-tx',
@@ -139,7 +150,7 @@ describe('MessageActionsService.forward — упоминания коммент�
       comment: `Привет @[Алиса](user:${ALICE})`,
     };
 
-    await service.forward(ME, TARGET, body, 'fwd-key');
+    await service.forward(ACTOR, TARGET, body, 'fwd-key');
 
     // Строка комментария (fwd=null) — снимок упомянутых; копия пересылки — [].
     const commentInsert = messages.insertMessage.mock.calls.find(([draft]) => draft.fwd === null)!;
@@ -151,6 +162,65 @@ describe('MessageActionsService.forward — упоминания коммент�
     const sent = eventBus.emit.mock.calls.filter(([, type]) => type === 'chat.message_sent');
     const commentEvent = sent.find(([, , payload]) => payload.forwarded === false)!;
     expect(commentEvent[2]!.mentionedUserIds).toEqual([ALICE]);
+  });
+});
+
+describe('MessageActionsService.forward — канал проекта подчиняется проекту (AUD-003)', () => {
+  const PROJECT = 'project-1';
+  const body: ForwardMessagesBody = {
+    sourceConversationId: SOURCE,
+    messageIds: ['src-1'],
+  };
+
+  /** Беседы-приёмники: канал проекта (projectId) или тред канала. */
+  function asProjectChannel(conversations: ReturnType<typeof makeService>['conversations']) {
+    conversations.findTypeAndPermissions.mockResolvedValue({
+      type: 'project_channel',
+      projectId: PROJECT,
+      // Матрица беседы разрешала бы пост любому участнику — проверка проекта
+      // обязана перевесить это решение.
+      permissions: { post: 'member' },
+    });
+  }
+
+  it('корневая пересылка без права публикации проекта → 403, вставок и событий нет', async () => {
+    const { service, conversations, projectChat, messages, eventBus } = makeService();
+    asProjectChannel(conversations);
+    projectChat.canPost.mockResolvedValue(false);
+
+    await expect(service.forward(ACTOR, TARGET, body, 'fwd-key')).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(projectChat.canPost).toHaveBeenCalledWith(PROJECT, ACTOR);
+    expect(messages.insertMessage).not.toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalled();
+  });
+
+  it('корневая пересылка с правом публикации проекта → копии созданы', async () => {
+    const { service, conversations, projectChat, messages } = makeService();
+    asProjectChannel(conversations);
+    projectChat.canPost.mockResolvedValue(true);
+
+    const result = await service.forward(ACTOR, TARGET, body, 'fwd-key');
+    expect(projectChat.canPost).toHaveBeenCalledWith(PROJECT, ACTOR);
+    expect(messages.insertMessage).toHaveBeenCalled();
+    expect(result.rows).toHaveLength(1);
+  });
+
+  it('пересылка в тред канала — canPost не применяется (треды открыты участникам)', async () => {
+    const { service, conversations, projectChat, messages } = makeService();
+    asProjectChannel(conversations);
+    messages.findByIdInConversation.mockResolvedValue({ id: 'root-1', threadRootId: null });
+
+    await service.forward(ACTOR, TARGET, { ...body, threadRootId: 'root-1' }, 'fwd-key');
+    expect(projectChat.canPost).not.toHaveBeenCalled();
+    expect(messages.insertMessage).toHaveBeenCalled();
+  });
+
+  it('группа: по-прежнему матрица беседы, canPost не вызывается', async () => {
+    const { service, projectChat } = makeService();
+    await service.forward(ACTOR, TARGET, body, 'fwd-key');
+    expect(projectChat.canPost).not.toHaveBeenCalled();
   });
 });
 
@@ -171,7 +241,7 @@ describe('MessageActionsService.forward — replay по идемпотентно
     messages.findExistingByKeys.mockResolvedValue(committed);
 
     // Act
-    const result = await service.forward(ME, TARGET, body, 'fwd-key');
+    const result = await service.forward(ACTOR, TARGET, body, 'fwd-key');
 
     // Assert: ключи блока (комментарий + позиции копий), ответ — те же строки.
     expect(messages.findExistingByKeys).toHaveBeenCalledWith(
@@ -191,7 +261,7 @@ describe('MessageActionsService.forward — replay по идемпотентно
       { id: 'm-c', conversationId: 'conv-other', seq: 3n, clientMessageId: 'fwd-key:c' },
     ]);
 
-    await expect(service.forward(ME, TARGET, body, 'fwd-key')).rejects.toMatchObject({
+    await expect(service.forward(ACTOR, TARGET, body, 'fwd-key')).rejects.toMatchObject({
       code: 'CONFLICT',
     });
     expect(messages.insertMessage).not.toHaveBeenCalled();
@@ -203,7 +273,7 @@ describe('MessageActionsService.forward — replay по идемпотентно
     messages.findExistingByKeys.mockResolvedValueOnce([]).mockResolvedValueOnce(raced);
     messages.insertMessage.mockResolvedValueOnce(null as never);
 
-    const result = await service.forward(ME, TARGET, body, 'fwd-key');
+    const result = await service.forward(ACTOR, TARGET, body, 'fwd-key');
 
     expect(result.rows).toEqual(raced);
     expect(eventBus.emit).not.toHaveBeenCalled();

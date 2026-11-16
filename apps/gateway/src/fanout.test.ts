@@ -28,17 +28,23 @@ function envelope(type: string, payload: Record<string, unknown>): RealtimeEnvel
   return { type, payload, seq: 1, ts: '2026-09-25T00:00:00.000Z' };
 }
 
-describe('ChatEventsConsumer.runMaintenance', () => {
-  function fakeRedis(overrides: Partial<Record<'xautoclaim' | 'xinfo' | 'xgroup', unknown>>) {
-    return {
-      xautoclaim: vi.fn(async () => ['0-0', [], []]),
-      xinfo: vi.fn(async () => []),
-      xgroup: vi.fn(async () => 0),
-      xack: vi.fn(async () => 1),
-      ...overrides,
-    };
-  }
+function fakeRedis(
+  overrides: Partial<
+    Record<'xautoclaim' | 'xinfo' | 'xgroup' | 'xreadgroup' | 'xack' | 'status', unknown>
+  > = {},
+) {
+  return {
+    status: 'ready',
+    xautoclaim: vi.fn(async () => ['0-0', [], []]),
+    xinfo: vi.fn(async () => []),
+    xgroup: vi.fn(async () => 0),
+    xack: vi.fn(async () => 1),
+    xreadgroup: vi.fn(async () => null),
+    ...overrides,
+  };
+}
 
+describe('ChatEventsConsumer.runMaintenance', () => {
   it('брошенная pending-запись перехватывается, маршрутизируется и ACK-ается', async () => {
     const { io, calls } = fakeIo();
     const store: MembershipStore = {
@@ -72,7 +78,7 @@ describe('ChatEventsConsumer.runMaintenance', () => {
     const store: MembershipStore = { isMember: vi.fn(), memberIds: vi.fn(), userRef: vi.fn() };
     const redis = fakeRedis({
       xautoclaim: vi.fn(async () => {
-        throw new Error('NOGROUP');
+        throw new Error('connection lost');
       }),
     });
     const consumer = new ChatEventsConsumer(redis as unknown as Redis, io, store, { group: 'g' });
@@ -80,7 +86,28 @@ describe('ChatEventsConsumer.runMaintenance', () => {
 
     await expect(consumer.runMaintenance()).resolves.toBeUndefined();
     expect(errorSpy).toHaveBeenCalled();
+    // Обычный сбой — не повод пересоздавать группу.
+    expect(redis.xgroup).not.toHaveBeenCalled();
     errorSpy.mockRestore();
+  });
+
+  it('NOGROUP при обслуживании: группа пересоздаётся, сбой не пробрасывается (AUD-021)', async () => {
+    const { io } = fakeIo();
+    const store: MembershipStore = { isMember: vi.fn(), memberIds: vi.fn(), userRef: vi.fn() };
+    const redis = fakeRedis({
+      xautoclaim: vi.fn(async () => {
+        throw new Error(
+          "NOGROUP No such key 'nodus:domain:events' or consumer group 'g' in XAUTOCLAIM",
+        );
+      }),
+    });
+    const consumer = new ChatEventsConsumer(redis as unknown as Redis, io, store, { group: 'g' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await expect(consumer.runMaintenance()).resolves.toBeUndefined();
+    expect(redis.xgroup).toHaveBeenCalledWith('CREATE', DOMAIN_EVENTS_STREAM, 'g', '$', 'MKSTREAM');
+    expect(warn.mock.calls.map((call) => String(call[0])).join('\n')).toContain('lost (NOGROUP)');
+    warn.mockRestore();
   });
 
   it('сбой memberIds: запись НЕ ACK; после восстановления доставлена в user-комнаты (#810)', async () => {
@@ -155,5 +182,68 @@ describe('ChatEventsConsumer.runMaintenance', () => {
     );
     expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toContain('reason=payload');
     warn.mockRestore();
+  });
+});
+
+describe('ChatEventsConsumer: восстановление после NOGROUP (AUD-021)', () => {
+  const raw = JSON.stringify(envelope('chat.message_sent', { conversationId: CONV }));
+
+  it('цикл чтения: NOGROUP → группа пересоздаётся, доставка продолжается', async () => {
+    const { io, calls } = fakeIo();
+    const store: MembershipStore = {
+      isMember: vi.fn(),
+      memberIds: vi.fn(async () => [USER_A]),
+      userRef: vi.fn(),
+    };
+    const redis = fakeRedis({
+      xreadgroup: vi
+        .fn()
+        .mockRejectedValueOnce(
+          new Error("NOGROUP No such key 'nodus:domain:events' or consumer group 'g'"),
+        )
+        .mockResolvedValueOnce([[DOMAIN_EVENTS_STREAM, [['1-0', ['envelope', raw]]]]]),
+    });
+    const consumer = new ChatEventsConsumer(redis as unknown as Redis, io, store, { group: 'g' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await expect(consumer.pollOnce()).resolves.toBe(false);
+    expect(redis.xgroup).toHaveBeenCalledWith('CREATE', DOMAIN_EVENTS_STREAM, 'g', '$', 'MKSTREAM');
+
+    // Следующий цикл — без перезапуска: запись доставлена и ACK-нута.
+    await expect(consumer.pollOnce()).resolves.toBe(true);
+    expect(calls.map((call) => call.room)).toEqual([`conv:${CONV}`, `user:${USER_A}`]);
+    expect(redis.xack).toHaveBeenCalledWith(DOMAIN_EVENTS_STREAM, 'g', '1-0');
+    warn.mockRestore();
+  });
+
+  it('/health: сбой чтения дольше порога — нездоров, успешное чтение восстанавливает', async () => {
+    const { io } = fakeIo();
+    const store: MembershipStore = { isMember: vi.fn(), memberIds: vi.fn(), userRef: vi.fn() };
+    const redis = fakeRedis({
+      xreadgroup: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('connection reset'))
+        .mockResolvedValueOnce(null),
+    });
+    const consumer = new ChatEventsConsumer(redis as unknown as Redis, io, store, { group: 'g' });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const t0 = Date.now();
+
+    await consumer.pollOnce();
+    expect(consumer.isHealthy(t0)).toBe(true); // деградация не мгновенная
+    expect(consumer.isHealthy(t0 + 31_000)).toBe(false); // дольше порога 30 с
+
+    await consumer.pollOnce(); // чтение восстановилось
+    expect(consumer.isHealthy(t0 + 31_000)).toBe(true);
+    errorSpy.mockRestore();
+  });
+
+  it('/health: нет соединения с Redis — нездоров сразу', () => {
+    const { io } = fakeIo();
+    const store: MembershipStore = { isMember: vi.fn(), memberIds: vi.fn(), userRef: vi.fn() };
+    const redis = fakeRedis({ status: 'reconnecting' });
+    const consumer = new ChatEventsConsumer(redis as unknown as Redis, io, store, { group: 'g' });
+
+    expect(consumer.isHealthy()).toBe(false);
   });
 });

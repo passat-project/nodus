@@ -13,6 +13,11 @@ import { ChatFileAccessRepository } from './chat-file-access.repository.js';
  * Битрикс24; вложение принадлежит беседе, а не автору сообщения).
  * Незаклеймленная загрузка (message_id IS NULL) контекстом не считается —
  * её видит только владелец файла (фолбэк files по owner_id).
+ *
+ * AUD-004: если файл приложен к живым сообщениям, а пользователь не состоит
+ * ни в одной из этих бесед — явный `deny` поверх владения файлом. Иначе
+ * исключённый из беседы автор продолжал открывать и править своё вложение
+ * (владение перебивало ответ чата «не участник»).
  */
 @Injectable()
 export class ChatFileAccess implements FileAccessContributor {
@@ -29,6 +34,6 @@ export class ChatFileAccess implements FileAccessContributor {
       const role = await this.repository.membershipRole(conversationId, userId);
       if (role) return { canView: true, canEdit: true };
     }
-    return { canView: false, canEdit: false };
+    return { canView: false, canEdit: false, deny: true };
   }
 }

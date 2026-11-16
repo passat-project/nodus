@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type {
   CustomFieldDefinition,
   CustomFieldRef,
@@ -33,6 +33,17 @@ const rowKey = (row: StructureNodeRow | StructureTaskRow): string =>
 export function useStructureModel(projectId: string) {
   const { data: structure, isLoading } = useProjectStructure(projectId);
   const tasksQuery = useProjectTaskPages(projectId);
+  const { hasNextPage, isFetchingNextPage, isError: tasksError, fetchNextPage } = tasksQuery;
+  // Дерево и агрегаты — по ПОЛНОМУ набору задач проекта (AUD-014, #866):
+  // бесконечный запрос сам страниц не догружает — тянем следующую, пока она
+  // есть; ошибка догрузки останавливает цикл (повтор — обновлением вкладки).
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage && !tasksError) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, tasksError, fetchNextPage]);
+  // Пока набор неполон — существующий индикатор вкладки: неполные итоги не
+  // выдаются за окончательные.
+  const isLoadingAllTasks =
+    tasksQuery.isLoading || isFetchingNextPage || (!!hasNextPage && !tasksError);
   const toolbar = useListToolbar('projects.structure');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [noNodeCollapsed, setNoNodeCollapsed] = useState(false);
@@ -123,7 +134,7 @@ export function useStructureModel(projectId: string) {
   const gridTemplateColumns = structureGrid(visibleFields);
 
   return {
-    isLoading,
+    isLoading: isLoading || isLoadingAllTasks,
     toolbar,
     collapsed,
     setCollapsed,

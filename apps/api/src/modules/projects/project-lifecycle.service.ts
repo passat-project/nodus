@@ -9,13 +9,18 @@ import {
 
 import type { Prisma } from '../../generated/prisma/client.js';
 import { TransactionRunner } from '../../core/database/transaction-runner.js';
+import type { TransactionClient } from '../../core/database/transaction-runner.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
 import { EventBus } from '../../core/events/event-bus.js';
 import { USER_PROFILE_READER, type UserProfileReader } from '../../core/ports/user-profile.port.js';
 import { projectAudience } from './project-audience.js';
 import { ProjectMembersService } from './project-members.service.js';
 import { ProjectParticipantsRepository } from './project-participants.repository.js';
-import { ProjectsRepository, type ProjectFieldsPatch } from './projects.repository.js';
+import {
+  ProjectsRepository,
+  type ProjectFieldsPatch,
+  type ProjectRow,
+} from './projects.repository.js';
 import { ProjectsQueryService } from './projects-query.service.js';
 import { ProjectsService } from './projects.service.js';
 
@@ -59,6 +64,10 @@ export class ProjectLifecycleService {
       archivedAt: status === 'archived' ? new Date() : null,
     };
     await this.txRunner.run(async (tx) => {
+      const fresh = await this.lockFresh(tx, id);
+      // Параллельный запрос уже применил тот же статус — повтора нет.
+      if (fresh.status === status) return;
+      this.assertCanSetStatus(user, fresh);
       await this.repo.update(tx, id, patch);
       await this.eventBus.emit(
         tx,
@@ -67,7 +76,7 @@ export class ProjectLifecycleService {
           projectId: id,
           fields: ['status'],
           status,
-          audience: await projectAudience(this.participantsRepo, row),
+          audience: await projectAudience(this.participantsRepo, fresh),
         },
         { actorId: user.id, aggregateType: 'project', aggregateId: id },
       );
@@ -89,8 +98,18 @@ export class ProjectLifecycleService {
     if ((await this.profiles.filterActiveUserIds([managerId])).length === 0) {
       throw DomainException.notFound('User not found');
     }
-    const assistantIds = (row.assistantIds as string[]).filter((aid) => aid !== managerId);
     await this.txRunner.run(async (tx) => {
+      // Права — по свежей строке под FOR UPDATE (#866, AUD-013): между
+      // снимком и транзакцией руководство могли передать параллельно.
+      const fresh = await this.lockFresh(tx, id);
+      this.assertManagement(user, fresh);
+      if (fresh.managerId !== user.id) {
+        throw DomainException.forbidden('Only the manager can transfer management');
+      }
+      if (fresh.status === 'archived' && !user.permissions.includes(Permission.PROJECT_MANAGE)) {
+        throw DomainException.forbidden('Archived project fields are managed by project.manage');
+      }
+      const assistantIds = (fresh.assistantIds as string[]).filter((aid) => aid !== managerId);
       await this.repo.update(tx, id, {
         managerId,
         assistantIds: assistantIds as Prisma.InputJsonValue,
@@ -98,11 +117,7 @@ export class ProjectLifecycleService {
       // Прежний руководитель без иных источников — наблюдатель-создатель;
       // создатель (если это другое лицо) уже держит свою строку.
       const rows = await this.participantsRepo.rowsOfProject(id);
-      const previousManagerKeepsRole = rows.some(
-        (p) =>
-          p.userId === user.id && ['assistant', 'task', 'member', 'observer'].includes(p.source),
-      );
-      if (!previousManagerKeepsRole) {
+      if (!previousManagerKeepsRole(rows, user.id)) {
         await this.participantsRepo.add(tx, [
           { projectId: id, userId: user.id, source: 'observer', observerKind: 'creator' },
         ]);
@@ -121,7 +136,7 @@ export class ProjectLifecycleService {
           fields: ['managerId', 'assistantIds'],
           audience: [
             ...new Set([
-              ...(await projectAudience(this.participantsRepo, row)),
+              ...(await projectAudience(this.participantsRepo, fresh)),
               managerId,
               user.id,
             ]),
@@ -132,4 +147,48 @@ export class ProjectLifecycleService {
     });
     return this.queries.detail(user, id);
   }
+
+  /** Свежая строка проекта под `FOR UPDATE` — первым шагом транзакции, как в
+   *  PATCH проекта (`ProjectsService.update`), чтобы порядок блокировок был
+   *  единым: проект → участники/структура. */
+  private async lockFresh(tx: TransactionClient, id: string): Promise<ProjectRow> {
+    const locked = await this.repo.lockForUpdate(tx, id);
+    if (!locked) throw DomainException.notFound('Project not found');
+    const fresh = await this.repo.findById(id, tx);
+    if (!fresh) throw DomainException.notFound('Project not found');
+    return fresh;
+  }
+
+  /** Права руководства по свежей строке: руководитель, помощник или
+   *  project.manage — как `ProjectsService.loadForManage` до транзакции. */
+  private assertManagement(user: AuthUser, fresh: ProjectRow): void {
+    const assistantIds = Array.isArray(fresh.assistantIds) ? (fresh.assistantIds as string[]) : [];
+    const isManagement = fresh.managerId === user.id || assistantIds.includes(user.id);
+    if (!isManagement && !user.permissions.includes(Permission.PROJECT_MANAGE)) {
+      throw DomainException.forbidden('Only project management can edit the project');
+    }
+  }
+
+  /** Статусное действие по свежей строке: управление + заморозка архива
+   *  (возврат в работу — только руководитель или project.manage, Т6). */
+  private assertCanSetStatus(user: AuthUser, fresh: ProjectRow): void {
+    this.assertManagement(user, fresh);
+    if (
+      fresh.status === 'archived' &&
+      fresh.managerId !== user.id &&
+      !user.permissions.includes(Permission.PROJECT_MANAGE)
+    ) {
+      throw DomainException.forbidden('Only the manager can restore an archived project');
+    }
+  }
+}
+
+/** Прежний руководитель держит иной источник участия (помощник/задачи/...). */
+function previousManagerKeepsRole(
+  rows: readonly { userId: string; source: string }[],
+  userId: string,
+): boolean {
+  return rows.some(
+    (p) => p.userId === userId && ['assistant', 'task', 'member', 'observer'].includes(p.source),
+  );
 }

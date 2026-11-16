@@ -15,19 +15,30 @@ export const userRelationsKeys = {
   projects: (userId: string) => ['projects', 'member', userId] as const,
 };
 
-/** Задачи, где сотрудник — ответственный исполнитель (GET /tasks?assigneeId=). */
+/** Задачи, где сотрудник — ответственный исполнитель (GET /tasks?assigneeId=).
+ *  `scope=all` — все задачи сотрудника, видимые смотрящему по правилам
+ *  видимости, а не только пересечение с его личным участием (#866, AUD-028). */
+export function assigneeTasksUrl(userId: string): string {
+  return `/tasks?assigneeId=${userId}&scope=all&limit=100`;
+}
+
 export function useAssigneeTasks(userId: string) {
   return useQuery({
     queryKey: userRelationsKeys.tasks(userId),
-    queryFn: () => api<Paginated<TaskListItem>>(`/tasks?assigneeId=${userId}&limit=100`),
+    queryFn: () => api<Paginated<TaskListItem>>(assigneeTasksUrl(userId)),
   });
 }
 
-/** Проекты сотрудника — руководит или участник (GET /projects?memberId=). */
+/** Проекты сотрудника — руководит или участник (GET /projects?memberId=).
+ *  `scope=all` — тот же срез смотрящего, что у вкладки «Задачи» (#866, AUD-028). */
+export function memberProjectsUrl(userId: string): string {
+  return `/projects?memberId=${userId}&scope=all&limit=100`;
+}
+
 export function useMemberProjects(userId: string, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: userRelationsKeys.projects(userId),
-    queryFn: () => api<Paginated<ProjectListItem>>(`/projects?memberId=${userId}&limit=100`),
+    queryFn: () => api<Paginated<ProjectListItem>>(memberProjectsUrl(userId)),
     enabled: options.enabled ?? true,
   });
 }

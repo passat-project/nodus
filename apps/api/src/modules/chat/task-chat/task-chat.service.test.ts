@@ -26,10 +26,15 @@ function setup(opts: {
     removeMembers: vi.fn(),
   };
   const eventBus = { emit: vi.fn() };
-  const roster = vi.fn().mockResolvedValue(opts.roster);
+  const order: string[] = [];
+  const roster = vi.fn(async () => {
+    order.push('roster');
+    return opts.roster;
+  });
   if (opts.rosterAfterLock !== undefined) {
+    const afterLock = opts.rosterAfterLock;
     repo.lock.mockImplementation(async () => {
-      roster.mockResolvedValue(opts.rosterAfterLock);
+      roster.mockResolvedValue(afterLock);
     });
   }
   const reader: TaskChatReader = {
@@ -38,14 +43,19 @@ function setup(opts: {
     canView: vi.fn().mockResolvedValue(opts.canView ?? true),
     isDecider: vi.fn().mockResolvedValue(false),
   };
-  const txRunner = { run: (fn: (tx: unknown) => unknown) => fn(TX) };
+  const txRunner = {
+    run: (fn: (tx: unknown) => unknown) => {
+      order.push('tx');
+      return fn(TX);
+    },
+  };
   const service = new TaskChatService(
     repo as unknown as TaskChatRepository,
     txRunner as never,
     eventBus as never,
     reader,
   );
-  return { service, repo, eventBus };
+  return { service, repo, eventBus, order };
 }
 
 const roster: TaskChatRoster = {
@@ -127,6 +137,17 @@ describe('TaskChatService.sync (#252)', () => {
     const none = setup({ roster: null, existing: false });
     await expect(none.service.sync(TASK, null)).resolves.toBeNull();
     expect(none.repo.findOrCreate).not.toHaveBeenCalled();
+  });
+
+  it('состав читается ДО открытия транзакции (AUD-022), под локом — только гейт #252', async () => {
+    const { service, order } = setup({ roster, current: ['alice', 'bob', 'carol'] });
+    await service.sync(TASK, 'alice');
+    const txIndex = order.indexOf('tx');
+    // Первое чтение — вне транзакции: порт без tx не занимает второе соединение.
+    expect(order.slice(0, txIndex)).toEqual(['roster']);
+    // Повторное чтение под блокировкой осталось (порт не принимает tx) —
+    // известное исключение AUD-022.
+    expect(order.slice(txIndex)).toEqual(['tx', 'roster']);
   });
 });
 

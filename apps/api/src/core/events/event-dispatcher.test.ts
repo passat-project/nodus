@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DomainEvent } from '@nodus/contracts';
+import { DIRECTORY_EVENTS, type DomainEvent } from '@nodus/contracts';
 
 import type { PrismaService } from '../database/prisma.service.js';
 import { EventDispatcher } from './event-dispatcher.js';
@@ -19,6 +19,26 @@ class TestHandler {
 
 class SecondHandler {
   static readonly eventType = 'task.created';
+  handle = vi.fn().mockResolvedValue(undefined);
+}
+
+class ThirdHandler {
+  static readonly eventType = 'task.created';
+  handle = vi.fn().mockResolvedValue(undefined);
+}
+
+class DeactivatedHandler {
+  static readonly eventType = DIRECTORY_EVENTS.USER_DEACTIVATED;
+  handle = vi.fn().mockResolvedValue(undefined);
+}
+
+class RoleAccessHandler {
+  static readonly eventType = DIRECTORY_EVENTS.ROLE_ACCESS_CHANGED;
+  handle = vi.fn().mockResolvedValue(undefined);
+}
+
+class UserUpdatedHandler {
+  static readonly eventType = DIRECTORY_EVENTS.USER_UPDATED;
   handle = vi.fn().mockResolvedValue(undefined);
 }
 
@@ -188,5 +208,78 @@ describe('EventDispatcher', () => {
       where: { id: 'e1', publishedAt: null },
       data: { publishedAt: expect.any(Date) },
     });
+  });
+
+  it.each<[string, number]>([
+    ['первым', 0],
+    ['в середине', 1],
+    ['последним', 2],
+  ])('AUD-012: падающий обработчик %s не блокирует остальных', async (_position, failIndex) => {
+    const handlers = [new TestHandler(), new SecondHandler(), new ThirdHandler()];
+    const failing = handlers[failIndex]!;
+    failing.handle.mockRejectedValueOnce(new Error('boom'));
+    const { dispatcher, prisma } = createDispatcher(handlers);
+
+    await dispatcher.dispatchPending(); // сбой упавшего + доставка всем остальным
+    expect(handlers.map((h) => h.handle.mock.calls.length)).toEqual([1, 1, 1]);
+    expect(prisma.event.updateMany).not.toHaveBeenCalled();
+
+    await dispatcher.dispatchPending(); // повтор только упавшего — событие published
+    expect(failing.handle).toHaveBeenCalledTimes(2);
+    expect(handlers.map((h) => h.handle.mock.calls.length)).toEqual(
+      handlers.map((_, index) => (index === failIndex ? 2 : 1)),
+    );
+    expect(prisma.event.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('AUD-012: после потолка попыток обработчик снимается с повторов, событие публикуется', async () => {
+    const handler = new TestHandler();
+    handler.handle.mockRejectedValue(new Error('poison'));
+    const { dispatcher, prisma, logger } = createDispatcher([handler]);
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await dispatcher.dispatchPending();
+    }
+
+    expect(handler.handle).toHaveBeenCalledTimes(8);
+    expect(prisma.eventDelivery.createMany).toHaveBeenCalledWith({
+      data: [{ eventId: 'e1', handler: 'TestHandler' }],
+      skipDuplicates: true,
+    });
+    expect(prisma.event.updateMany).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: 'e1', handler: 'TestHandler' }),
+      expect.stringContaining('poison'),
+    );
+
+    await dispatcher.dispatchPending(); // дедуп: снятый обработчик не зовётся
+    expect(handler.handle).toHaveBeenCalledTimes(8);
+  });
+
+  it.each<[string, () => { handle: ReturnType<typeof vi.fn> }]>([
+    ['directory.user.deactivated', () => new DeactivatedHandler()],
+    ['directory.role.access_changed', () => new RoleAccessHandler()],
+    ['directory.user.updated', () => new UserUpdatedHandler()],
+  ])('AUD-002: отзыв доступа %s не снимается с повторов после потолка', async (type, make) => {
+    const handler = make();
+    handler.handle.mockRejectedValue(new Error('redis down'));
+    const events = [{ ...EVENT, id: 'e2', type }];
+    const { dispatcher, prisma } = createDispatcher(
+      [handler],
+      createPrisma({ events: () => events }),
+    );
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await dispatcher.dispatchPending();
+    }
+
+    // Отзыв прав не теряется молча: доставка НЕ фиксируется, событие остаётся
+    // в повторах (бэкофф до 5 минут изолирует его от головы батча).
+    expect(handler.handle).toHaveBeenCalledTimes(8);
+    expect(prisma.eventDelivery.createMany).not.toHaveBeenCalled();
+    expect(prisma.event.updateMany).not.toHaveBeenCalled();
+
+    await dispatcher.dispatchPending();
+    expect(handler.handle).toHaveBeenCalledTimes(9);
   });
 });

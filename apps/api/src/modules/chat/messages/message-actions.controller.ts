@@ -198,7 +198,7 @@ export class MessageActionsController {
   @ApiErrors(400, 401, 403, 404)
   @ApiIdempotencyKey()
   async forward(
-    @GetUser() user: { id: string },
+    @GetUser() user: { id: string; permissions: readonly string[] },
     @Param('id', new ZodValidationPipe(uuidSchema)) conversationId: string,
     @Body({
       schema: forwardMessagesBodySchema,
@@ -208,7 +208,7 @@ export class MessageActionsController {
     @Req() request: FastifyRequest,
   ): Promise<ChatMessage[]> {
     const result = await this.actions.forward(
-      user.id,
+      user,
       conversationId,
       dto,
       readIdempotencyKey(request),

@@ -37,8 +37,14 @@
 fileAccessContext` (`chat`, `letter`), DiscoveryService находит его среди
   провайдеров (multi-токен `FILE_ACCESS_CONTRIBUTORS` упразднён в #55 — второй
   потребитель не требовал правки каждого модуля). files OR-ит решения с
-  владением файла (`owner_id`); чужим — 404. Файлы писем: `LetterFileAccess`
-  (видимость письма, `canEdit:false` — входящий документ неизменяем).
+  владением файла (`owner_id`); чужим — 404. Явный `deny` контекста — вето
+  поверх владения (AUD-004, #866: исключённый из беседы автор теряет доступ
+  к приложенным файлам; незаклеймленная загрузка остаётся у владельца);
+  deny снимает только владение, положительное решение другого контекста
+  сохраняется (решающий задачи читает вложение беседы задачи, не состоя
+  в ней, #433). Файлы писем:
+  `LetterFileAccess` (видимость письма, `canEdit:false` — входящий документ
+  неизменяем).
 - Метаданные файлов для чужих DTO — порт **`FILE_OBJECT_READER`**
   (`core/ports/file-object-reader.port.ts`, #55): имя/mime/размер пачкой;
   содержимое — по подписи `SignedUrlService` после проверки видимости.
@@ -84,10 +90,23 @@ fileAccessContext` (`chat`, `letter`), DiscoveryService находит его с
   Дедуп: `source_key` +
   `source_lastsave` (повторная доставка и forcesave→закрытие не плодят
   версии) + unique(fileObjectId,version) как страховка ретраев без lastsave.
+  Параллельные сохранения (AUD-015) сериализуются замком строки файла:
+  `FOR UPDATE` — ПЕРВЫЙ шаг транзакции версии, по свежей строке считаются
+  номер версии, устаревший ключ и дедуп (загрузка объекта остаётся вне
+  транзакции). Объект каждой попытки — по уникальному ключу
+  `files/{id}/v{N}-{uuid}`: два колбэка не пишут один объект, содержимое
+  версии всегда соответствует её строке; `N` в ключе — снимок до замка,
+  авторитетный номер — `file_versions.version` (читатели берут `key` строки,
+  не шаблон). Откат транзакции/дедуп удаляют объект попытки (компенсация);
+  нарушение unique(fileObjectId,version) (P2002) трактуется как «уже
+  сохранено» и подтверждается.
   `GET /files/office-config` —
   публичные параметры движка (фолбэки реестра); `GET /files/:id/versions` —
-  история с подписанными ссылками. Правка — только при `OFFICE_EDIT_ENABLED`
-  И праве И редактируемом формате (таблица `contracts/files/office-formats`).
+  история с подписанными ссылками. Правка — при `OFFICE_EDIT_ENABLED`
+  (умолчание включено, `${OFFICE_EDIT_ENABLED:-true}` в `docker-compose.yml`)
+  И праве И редактируемом формате (таблица `contracts/files/office-formats`);
+  правит **любой участник беседы** — правило продукта, решение владельца
+  2026-11-16 (AUD-035).
 - **Учётка**: `minio-init` (compose) создаёт бакет и сервисного пользователя
   `nodus-api` с политикой только на свой бакет (клиент форка — `mcli`,
   mc-совместимый): объекты + `HeadBucket`/`Location` + `ListBucket` и
@@ -118,7 +137,8 @@ skippedFresh/skippedUnknownAge/failed` (`storage/stale-multipart.sweeper.ts`).
 `STORAGE_URL_SECRET` (≥32, ≠ JWT_SECRET), `STORAGE_URL_TTL_SECONDS` (86400),
 `STORAGE_STALE_UPLOAD_AGE_HOURS` (24 — порог возраста брошенной загрузки),
 `STORAGE_STALE_UPLOAD_INTERVAL_HOURS` (24 — период прохода уборки).
-Офис (#138): `OFFICE_ENABLED` (default false), `OFFICE_EDIT_ENABLED`,
+Офис (#138): `OFFICE_ENABLED` (default false), `OFFICE_EDIT_ENABLED`
+(default true — правит любой участник беседы),
 `OFFICE_JWT_SECRET` (обязателен при enabled), `OFFICE_INTERNAL_URL`
 (api→DS, в docker `http://documentserver`), `OFFICE_API_INTERNAL_URL`
 (DS→api, в docker `http://nodus-api:3001`), `OFFICE_MAX_VIEW_BYTES` (50 МБ).
@@ -155,6 +175,10 @@ derivative/pdf` по подписи (ресурс `${id}:deriv:pdf`, выдаё�
 - Интеграционный `chat-attachments.integration.test.ts` (upload→download на
   живом S3 SILO) — приёмка #57; скипается без `STORAGE_ACCESS_KEY`; включает
   файл 64 МиБ + 1 байт — multipart-путь клиента хранилища (#713).
+- Интеграционный `files-office-callback.integration.test.ts` (AUD-015):
+  два параллельных колбэка с разным содержимым на живых PostgreSQL и S3 —
+  обе версии сохранены, объекты уникальны, размер объекта равен размеру в
+  строке версии; повтор колбэка версию не плодит.
 - Интеграционный `files-stale-uploads.integration.test.ts` (#715): загрузка
   инициируется напрямую клиентом хранилища (брошена, без abort), уборка на
   живом S3 отменяет её по порогу возраста, свежую не трогает.
@@ -163,7 +187,8 @@ derivative/pdf` по подписи (ресурс `${id}:deriv:pdf`, выдаё�
   (порог возраста из конфига, свежие/бездатные не трогаются, сбой отмены не
   валит проход, метрика в логе, #715), `office-session.service.test.ts`
   (права/форматы/лимиты/ключи), `office-callback.service.test.ts` (статусы,
-  дедуп lastsave, устаревшие ключи, сверка байт), `signed-url.service.test.ts`
-  (подпись/TTL/чужой ресурс/версии).
+  дедуп lastsave, устаревшие ключи, сверка байт; гонка — уникальные ключи
+  попыток, дедуп под замком, компенсация объекта, P2002),
+  `signed-url.service.test.ts` (подпись/TTL/чужой ресурс/версии).
 - E2E `tests/e2e/specs/viewer-live.spec.ts`: pdf.js-канвас + офисная ветка
   (редактор при включённом движке / карточка-фолбэк при выключенном).

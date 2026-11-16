@@ -31,6 +31,7 @@ directory.position.created / updated / archived
 directory.role.created / updated / deleted  # updated — ТОЛЬКО name/description (состав прав несёт permissions_changed)
 directory.role.permissions_changed  # {roleId, permission, granted} — любое реальное изменение состава прав роли, по событию на право; аудит пишется на каждый вызов, событие — только при изменении (#379, ADR-0034)
 directory.role.members_changed  # {roleId, kind: 'user'|'department', targetId, added} — реальное изменение состава роли (#379); без audience, gateway пока не маршрутизирует (подписчики — #382)
+directory.role.access_changed  # {roleId, reason: 'membership'|'permissions', userIds} — у этих сотрудников изменился набор действующих прав роли (#866, AUD-002): auth отзывает их access-токены; gateway пока не маршрутизирует
 workflow.type_created / type_updated / type_archived / published / layout_changed  # «Процессы» (ADR-0024, реализованы #428): каталог типов и маршрутов, без audience — всем; заменяют task.type_* / task.workflow_*
 task.created / updated / status_changed / stage_changed / personal_stage_changed / assigned / completed / overdue
 task.time_logged

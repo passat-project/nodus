@@ -155,6 +155,7 @@ export const tasksStrings = {
   removeDeadline: 'Убрать срок',
   plannedPlaceholder: 'Например, 2ч 30м',
   minutesInvalid: 'Введите время, например 45м, 1ч 30м или 1.5',
+  minutesOverLimit: 'За одну запись — не больше 24 часов',
   hoursShort: 'ч',
   minutesShort: 'м',
   /** Каскад сроков подзадач (#311). */

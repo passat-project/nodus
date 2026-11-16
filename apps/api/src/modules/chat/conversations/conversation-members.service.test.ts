@@ -30,11 +30,19 @@ const JOINED = new Date('2026-09-01T09:00:00Z');
 function makeRepo() {
   return {
     findMembership: vi.fn(),
-    findTypeAndPermissions: vi.fn(async () => ({
-      id: CONV,
-      type: 'group',
-      permissions: DEFAULT_CONVERSATION_PERMISSIONS,
-    })),
+    findTypeAndPermissions: vi.fn(
+      async (): Promise<{
+        id: string;
+        type: string;
+        projectId: string | null;
+        permissions: typeof DEFAULT_CONVERSATION_PERMISSIONS;
+      }> => ({
+        id: CONV,
+        type: 'group',
+        projectId: null,
+        permissions: DEFAULT_CONVERSATION_PERMISSIONS,
+      }),
+    ),
     findListItem: vi.fn(),
     listMembers: vi.fn(async () => [
       membershipOf(OWNER, 'owner'),
@@ -168,6 +176,7 @@ describe('права матрицы: переименование и авата�
     s.repo.findTypeAndPermissions.mockResolvedValue({
       id: CONV,
       type: 'direct',
+      projectId: null,
       permissions: DEFAULT_CONVERSATION_PERMISSIONS,
     });
     await expect(s.conversations.updateInfo(OWNER, CONV, { title: 'Новое' })).rejects.toMatchObject(
@@ -291,6 +300,7 @@ describe('мутации состава direct-беседы запрещены (
     s.repo.findTypeAndPermissions.mockResolvedValue({
       id: CONV,
       type: 'direct',
+      projectId: null,
       permissions: DEFAULT_CONVERSATION_PERMISSIONS,
     });
   });
@@ -317,6 +327,63 @@ describe('мутации состава direct-беседы запрещены (
     await expect(s.members.remove(MEMBER, CONV, PEER)).rejects.toMatchObject({
       code: ErrorCode.VALIDATION_FAILED,
     });
+  });
+});
+
+describe('канал: с проектом состав ведёт проект, без проекта — матрица прав (AUD-003)', () => {
+  let s: ReturnType<typeof makeServices>;
+  beforeEach(() => {
+    s = makeServices();
+    vi.clearAllMocks();
+    s.repo.findMembership.mockResolvedValue(membershipOf(MEMBER, 'member'));
+    s.userProfiles.filterActiveUserIds.mockResolvedValue([PEER]);
+  });
+
+  function asProjectChannel(projectId: string | null) {
+    s.repo.findTypeAndPermissions.mockResolvedValue({
+      id: CONV,
+      type: 'project_channel',
+      projectId,
+      permissions: DEFAULT_CONVERSATION_PERMISSIONS,
+    });
+  }
+
+  it('add в канал С проектом → VALIDATION_FAILED для любой роли, вставки нет', async () => {
+    asProjectChannel('project-1');
+    await expect(s.members.add(MEMBER, CONV, { userIds: [PEER] })).rejects.toMatchObject({
+      code: ErrorCode.VALIDATION_FAILED,
+    });
+    expect(s.repo.addMembers).not.toHaveBeenCalled();
+    expect(s.eventBus.emit).not.toHaveBeenCalled();
+  });
+
+  it('add в канал БЕЗ проекта — по матрице прав: участник добавляет (addMembers=member)', async () => {
+    asProjectChannel(null);
+    await s.members.add(MEMBER, CONV, { userIds: [PEER] });
+    expect(s.repo.addMembers).toHaveBeenCalledWith(CONV, [PEER], TX);
+    expect(s.eventBus.emit).toHaveBeenCalled();
+  });
+
+  it('ручное исключение из канала С проектом → VALIDATION_FAILED, удаления нет', async () => {
+    asProjectChannel('project-1');
+    s.repo.findMembership.mockImplementation(async (_cid: string, userId: string) =>
+      userId === MEMBER ? membershipOf(MEMBER, 'admin') : membershipOf(PEER, 'member'),
+    );
+    await expect(s.members.remove(MEMBER, CONV, PEER)).rejects.toMatchObject({
+      code: ErrorCode.VALIDATION_FAILED,
+    });
+    expect(s.repo.removeMember).not.toHaveBeenCalled();
+    expect(s.eventBus.emit).not.toHaveBeenCalled();
+  });
+
+  it('исключение из канала БЕЗ проекта — по матрице прав: admin снимает member', async () => {
+    asProjectChannel(null);
+    s.repo.findMembership.mockImplementation(async (_cid: string, userId: string) =>
+      userId === MEMBER ? membershipOf(MEMBER, 'admin') : membershipOf(PEER, 'member'),
+    );
+    await s.members.remove(MEMBER, CONV, PEER);
+    expect(s.repo.removeMember).toHaveBeenCalledWith(CONV, PEER, TX);
+    expect(s.eventBus.emit).toHaveBeenCalled();
   });
 });
 

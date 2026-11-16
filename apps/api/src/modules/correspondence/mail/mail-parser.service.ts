@@ -37,6 +37,10 @@ export interface ParseOutcome {
   mail: ParsedMail | null;
 }
 
+/** Потолок разбора одного письма (AUD-019): битый вход не держит цикл приёма
+ *  вечно — по таймауту отдаём разобранное с флагом parseIssue. */
+const PARSE_TIMEOUT_MS = 30_000;
+
 const messageIdOf = (value: unknown): string | null => {
   // mailparser отдаёт msg-id списки массивом (References), одиночные — строкой;
   // угловые скобки снимаем: единый «голый» ID для колонки, дедупа и цепочек.
@@ -76,6 +80,7 @@ export class MailParserService {
   parse(
     raw: Readable,
     onHeaders: (messageId: string | null) => Promise<boolean>,
+    timeoutMs: number = PARSE_TIMEOUT_MS,
   ): Promise<ParseOutcome> {
     return new Promise((resolve) => {
       const parser = new MailParser();
@@ -94,6 +99,7 @@ export class MailParserService {
       let html = '';
       let text = '';
       let settled = false;
+      let headersSeen = false;
       // Гейт дедупа: 'end' короткого письма обгоняет async-проверку по базе
       // (всё сообщение уже в буфере парсера, пауза источника не помогает) —
       // поэтому завершение разбора ЖДЁТ решения по заголовкам.
@@ -102,13 +108,23 @@ export class MailParserService {
         resolveDecision = resolve;
       });
 
+      // Общий таймаут одного письма: битый вход не держит разбор вечно.
+      const timer = setTimeout(() => {
+        mail.parseIssue = true;
+        raw.destroy();
+        parser.destroy();
+        finish({ skipped: false, mail });
+      }, timeoutMs);
+
       const finish = (outcome: ParseOutcome): void => {
         if (settled) return;
         settled = true;
+        clearTimeout(timer);
         resolve(outcome);
       };
 
       parser.on('headers', (headers) => {
+        headersSeen = true;
         mail.messageId = messageIdOf(headers.get('message-id'));
         mail.inReplyTo = messageIdOf(headers.get('in-reply-to'));
         mail.references = referencesOf(headers.get('references'));
@@ -156,8 +172,17 @@ export class MailParserService {
       });
 
       parser.on('error', () => {
-        // Битое письмо не блокирует очередь: отдаём то, что разобралось.
+        // Битое письмо не блокирует очередь: отдаём то, что успело разобраться.
         mail.parseIssue = true;
+        if (!headersSeen) {
+          // Заголовки не пришли — ждать решение дедупа не на чем.
+          finish({ skipped: false, mail });
+          return;
+        }
+        // Заголовки уже есть: не обходим проверку Message-ID дубля-письма.
+        void decided.then((continueParsing) => {
+          if (continueParsing) finish({ skipped: false, mail });
+        });
       });
 
       parser.on('end', () => {
@@ -173,6 +198,7 @@ export class MailParserService {
         mail.parseIssue = true;
         finish({ skipped: false, mail });
       });
+
       raw.pipe(parser);
     });
   }

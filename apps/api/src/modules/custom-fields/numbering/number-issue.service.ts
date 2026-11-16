@@ -22,6 +22,10 @@ import {
   USER_PROFILE_READER,
   type UserProfileReader,
 } from '../../../core/ports/user-profile.port.js';
+import {
+  DICTIONARY_READER,
+  type DictionaryReader,
+} from '../../dictionaries/ports/dictionary-reader.port.js';
 import { DefinitionsRepository } from '../definitions/definitions.repository.js';
 import type { FieldDefinitionRow } from '../definitions/definition.mapper.js';
 import {
@@ -37,6 +41,8 @@ import {
   type NumberPlan,
   type NumberingFailure,
 } from '../ports/number-issue.port.js';
+import { insertionCodeCache, loadInsertionCodes } from './number-insertion.js';
+import { targetReaderOf } from './numbering-api.helpers.js';
 import { NumberRefService } from './number-ref.service.js';
 
 /** Источник поля-вставки → значения записи, откуда берётся текст. */
@@ -69,6 +75,7 @@ export class NumberIssueService implements NumberIssue {
     @Inject(NUMBER_SERIES_STORE) private readonly series: NumberSeriesStore,
     @Inject(USER_PROFILE_READER) private readonly profiles: UserProfileReader,
     private readonly refs: NumberRefService,
+    @Inject(DICTIONARY_READER) private readonly dictionaries: DictionaryReader,
   ) {}
 
   async plan(
@@ -78,13 +85,22 @@ export class NumberIssueService implements NumberIssue {
     opts: NumberIssueOptions,
   ): Promise<NumberPlan> {
     if (fieldIds.length === 0) return { ok: true, issue: async () => ({}) };
-    const context = await this.context(tx, target);
+    const codes = insertionCodeCache();
+    const context = await this.context(tx, target, codes.codes);
     const pending: PendingNumber[] = [];
     for (const fieldId of [...fieldIds].sort()) {
       const definition = context.byId.get(fieldId);
       if (definition?.type !== 'counter' || !definition.numberSeriesId) continue;
       const series = await this.series.byId(tx, definition.numberSeriesId);
       if (!series) continue;
+      // Списки в шаблоне печатают код варианта, а не UUID (AUD-010).
+      await loadInsertionCodes(
+        this.dictionaries,
+        [...context.byId.values()],
+        series.template,
+        tx,
+        codes,
+      );
       // Кнопка/создание не выдают номер атрибуту, не привязанному к этому
       // типу записи (#630, security-ревью): иначе серия тратится в чужом счёте.
       const targetKind = targetKindOf(target.host);
@@ -232,14 +248,19 @@ export class NumberIssueService implements NumberIssue {
   }
 
   /** Определения, значения компании и место записи — один раз на план. */
-  private async context(tx: TransactionClient, target: NumberTarget): Promise<PlanContext> {
+  private async context(
+    tx: TransactionClient,
+    target: NumberTarget,
+    codes: ReadonlyMap<string, string>,
+  ): Promise<PlanContext> {
     const definitions = await this.definitions.list(tx);
     const byId = new Map(definitions.map((row) => [row.id, row]));
     const byNumber = new Map(definitions.map((row) => [row.number, row]));
+    // Сырые значения компании: печатный вид выбирает общая функция (AUD-010).
     const companyByNumber = new Map(
       definitions
         .filter((row) => row.isCompany && row.companyValue !== null)
-        .map((row) => [row.number, String(row.companyValue!.value)] as const),
+        .map((row) => [row.number, row.companyValue!.value] as const),
     );
     const place: NumberPlace = {
       host: target.host,
@@ -249,13 +270,14 @@ export class NumberIssueService implements NumberIssue {
       portfolioId: target.portfolioId,
       projectTypeId: target.projectTypeId,
       parentTaskId: target.parentTaskId,
-      fieldValue: (fieldNumber) => valueOf(target.sources.self, byNumber.get(fieldNumber)?.id),
+      fieldValue: (fieldNumber) => textValueOf(target.sources.self, byNumber.get(fieldNumber)?.id),
     };
-    const reader: NumberTemplateFieldReader = (segment) => {
-      if (segment.source === 'company') return companyByNumber.get(segment.fieldNumber) ?? '';
-      const source = sourceValues(target, segment);
-      return valueOf(source, byNumber.get(segment.fieldNumber)?.id) ?? '';
-    };
+    const reader: NumberTemplateFieldReader = targetReaderOf(
+      target,
+      definitions,
+      companyByNumber,
+      codes,
+    );
     return { byId, byNumber, place, reader };
   }
 }
@@ -266,27 +288,8 @@ function targetKindOf(host: NumberHostKind): 'process_type' | 'project_type' | '
   return 'process_type';
 }
 
-function sourceValues(
-  target: NumberTarget,
-  segment: NumberFieldSegment,
-): Readonly<Record<string, unknown>> | null {
-  switch (segment.source) {
-    case 'self':
-      return target.sources.self;
-    case 'project':
-      return target.sources.project ?? null;
-    case 'parent_task':
-      return target.sources.parentTask ?? null;
-    case 'folder': {
-      const folder = target.sources.folders?.find((entry) => entry.kindId === segment.nodeKindId);
-      return folder?.values ?? null;
-    }
-    case 'company':
-      return null;
-  }
-}
-
-function valueOf(
+/** Текстовое значение условия счёта: ключ контейнера — строка, не печатный вид. */
+function textValueOf(
   values: Readonly<Record<string, unknown>> | null | undefined,
   fieldId: string | undefined,
 ): string | null {

@@ -33,21 +33,30 @@ export class ProjectChatService {
     @Inject(PROJECT_CHAT_READER) private readonly projects: ProjectChatReader,
   ) {}
 
-  /** Привести канал к составу участников проекта; null — проекта нет. */
+  /** Привести канал к составу участников проекта; null — проекта нет.
+   *  Первое чтение состава — ДО транзакции (findOrCreate: руководитель).
+   *  Под `FOR UPDATE` беседы состав перечитывается — конкурентный sync со
+   *  старым составом не вернёт исключённого (гейт #252). Порт принимает `tx`:
+   *  повторное чтение идёт соединением транзакции, второго соединения пула
+   *  не занимает (AUD-022). Task/letter-чат — отдельное исключение AUD-022
+   *  (их порты `tx` не принимают), вне этого фикса. */
   async sync(projectId: string, actorId: string | null): Promise<string | null> {
+    const preRoster = await this.projects.roster(projectId);
+    if (!preRoster) return null;
+    const title = await this.titleOf(projectId);
     return this.txRunner.run(async (tx) => {
-      const roster = await this.projects.roster(projectId);
-      if (!roster) return null;
-      const title = await this.titleOf(projectId);
       let id = await this.repo.find(tx, projectId);
       let created = false;
       if (!id) {
-        ({ id, created } = await this.repo.findOrCreate(tx, projectId, title, roster.managerId));
+        ({ id, created } = await this.repo.findOrCreate(tx, projectId, title, preRoster.managerId));
       }
-      // Состав читается ПОСЛЕ блокировки беседы (security-гейт #252):
-      // иначе sync со старым составом вернул бы выбывшего участника.
       await this.repo.lock(tx, id);
       const current = await this.repo.members(tx, id);
+      const roster = await this.projects.roster(projectId, tx);
+      if (!roster) {
+        await this.removeMembers(tx, id, current, actorId);
+        return null;
+      }
       const currentSet = new Set(current);
       const desired = new Set([roster.managerId, ...roster.memberIds]);
       // Роль owner — ТОЛЬКО действующий руководитель: после передачи

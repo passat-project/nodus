@@ -14,8 +14,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Отмена — только для pull_request (AUD-026, #866): новый пуш в PR отменяет
+  # прошлый прогон, а каждый коммит main получает завершённый. Группа push/
+  # schedule — по sha: прогоны разных коммитов не мешают друг другу.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Детектор «есть ли код в дифе» (issue #23): docs-only PR пропускает тяжёлые

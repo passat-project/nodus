@@ -42,6 +42,7 @@ describe('RoleMembersService (#379)', () => {
   const tx = { run: vi.fn((cb: (t: string) => unknown) => cb('tx-handle')) };
   const eventBus = { emit: vi.fn() };
   const signedUrls = { fileContentUrl: (id: string) => `/api/v1/files/${id}/content` };
+  const audience = { departmentUserIds: vi.fn() };
 
   let service: RoleMembersService;
 
@@ -51,11 +52,13 @@ describe('RoleMembersService (#379)', () => {
     roles.findById.mockResolvedValue(record());
     roles.findActiveUser.mockResolvedValue(true);
     roles.findAssignableDepartment.mockResolvedValue(true);
+    audience.departmentUserIds.mockResolvedValue([]);
     service = new RoleMembersService(
       roles as never,
       tx as never,
       eventBus as never,
       signedUrls as never,
+      audience as never,
     );
   });
 
@@ -71,6 +74,47 @@ describe('RoleMembersService (#379)', () => {
       'directory.role.members_changed',
       { roleId: 'role-1', kind: 'user', targetId: 'user-1', added: true },
       expect.objectContaining({ actorId: 'admin-1' }),
+    );
+  });
+
+  it('снятие сотрудника из роли: событие доступа для отзыва его токена', async () => {
+    roles.removeUser.mockResolvedValue(true);
+
+    await service.setUserMember('role-1', 'user-1', false, actor());
+
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      'tx-handle',
+      'directory.role.access_changed',
+      { roleId: 'role-1', reason: 'membership', userIds: ['user-1'] },
+      expect.objectContaining({ actorId: 'admin-1', aggregateId: 'role-1' }),
+    );
+  });
+
+  it('добавление в роль: токен со старыми правами тоже отзывается', async () => {
+    roles.addUser.mockResolvedValue(true);
+
+    await service.setUserMember('role-1', 'user-1', true, actor([Permission.TASK_CREATE]));
+
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      'tx-handle',
+      'directory.role.access_changed',
+      { roleId: 'role-1', reason: 'membership', userIds: ['user-1'] },
+      expect.anything(),
+    );
+  });
+
+  it('подразделение в роли: отзыв токенов сотрудников поддерева', async () => {
+    roles.addDepartment.mockResolvedValue(true);
+    audience.departmentUserIds.mockResolvedValue(['u2', 'u3']);
+
+    await service.setDepartmentMember('role-1', 'dep-1', true, actor(Object.values(Permission)));
+
+    expect(audience.departmentUserIds).toHaveBeenCalledWith('dep-1', 'tx-handle');
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      'tx-handle',
+      'directory.role.access_changed',
+      { roleId: 'role-1', reason: 'membership', userIds: ['u2', 'u3'] },
+      expect.anything(),
     );
   });
 

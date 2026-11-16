@@ -7,10 +7,15 @@ import { useAuthStore } from '../auth-store.js';
 
 /**
  * Персонализация (концепт «Персональный порядок», #4; раскладка карточек —
- * #744/#745): ЛИЧНЫЙ и ОБЩИЙ (компания, «Применить порядок для всех» админа)
- * скоупы одним DTO contracts (`uiPreferencesSchema`) — формат зеркалит API
- * `GET/PUT /api/v1/me/preferences`. Пустой скоуп = слой не задан (личный ??
- * общий ?? системный). Верхние вкладки кастомизации не подлежат (вердикт #4).
+ * #744/#745): ЛИЧНЫЙ скоуп одним DTO contracts (`uiPreferencesSchema`) —
+ * формат зеркалит API `GET/PUT /api/v1/me/preferences`. Пустой скоуп =
+ * слой не задан (личный ?? системный). Верхние вкладки кастомизации не
+ * подлежат (вердикт #4).
+ *
+ * ОБЩИЙ скоуп (`company`) локально не пишется и не применяется (AUD-032):
+ * серверного хранения общих настроек нет, и «Применить порядок для всех»
+ * менял только браузер админа. Поле сохранено в форме ради совместимости
+ * персиста; действует только личный слой.
  *
  * localStorage — мгновенный кэш, ключ НА ПОЛЬЗОВАТЕЛЯ
  * (`nodus-ui-prefs-v1:<userId>`): на общем компьютере настройки одного
@@ -19,12 +24,13 @@ import { useAuthStore } from '../auth-store.js';
  */
 interface UiPrefsState {
   personal: UiPreferences;
+  /** Общий скоуп — только чтение legacy-персиста, НЕ применяется (AUD-032). */
   company: UiPreferences;
   /** Счётчик ЛОКАЛЬНЫХ действий (не гидратация): по нему sync отличает
    *  правку пользователя от загрузки кэша при смене аккаунта. */
   localRevision: number;
-  /** Порядок и скрытые модули рейки: forAll — пишем в общий скоуп (админ). */
-  applyNav: (order: string[], hidden: string[], forAll: boolean) => void;
+  /** Порядок и скрытые модули рейки — всегда ЛИЧНЫЕ. */
+  applyNav: (order: string[], hidden: string[]) => void;
   /** Личная раскладка карточки вида (#746): оптимистично, сразу. */
   setCardTabs: (kind: CardKind, pref: CardTabsPref) => void;
   /** Полная замена личного слоя (гидратация с сервера). */
@@ -70,15 +76,11 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       personal: {},
       company: {},
       localRevision: 0,
-      applyNav: (order, hidden, forAll) =>
-        set((s) =>
-          forAll
-            ? { company: { ...s.company, navOrder: order, navHidden: hidden } }
-            : {
-                personal: { ...s.personal, navOrder: order, navHidden: hidden },
-                localRevision: s.localRevision + 1,
-              },
-        ),
+      applyNav: (order, hidden) =>
+        set((s) => ({
+          personal: { ...s.personal, navOrder: order, navHidden: hidden },
+          localRevision: s.localRevision + 1,
+        })),
       setCardTabs: (kind, pref) =>
         set((s) => ({
           personal: {

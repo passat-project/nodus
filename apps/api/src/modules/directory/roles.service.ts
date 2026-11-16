@@ -16,6 +16,7 @@ import { DomainException } from '../../core/errors/domain-exception.js';
 import { EventBus } from '../../core/events/event-bus.js';
 import { avatarUrlOf } from './avatar-url.js';
 import { toRoleDto } from './role-dto.js';
+import { RoleAudienceRepository } from './role-audience.repository.js';
 import {
   catalogPermissions,
   isLockedRole,
@@ -39,6 +40,7 @@ export class RolesService {
     private readonly tx: TransactionRunner,
     private readonly eventBus: EventBus,
     private readonly signedUrls: SignedUrlService,
+    private readonly audience: RoleAudienceRepository,
   ) {}
 
   async listRoles(): Promise<Role[]> {
@@ -137,6 +139,12 @@ export class RolesService {
         );
       }
       await this.emitPermissionChanges(tx, id, diff, actor.id);
+      await this.emitAccessChanged(
+        tx,
+        id,
+        diff.added.length > 0 || diff.removed.length > 0,
+        actor.id,
+      );
       return this.toRole((await this.roles.findById(id, tx))!);
     });
   }
@@ -176,6 +184,7 @@ export class RolesService {
           { roleId, permission, granted },
           { actorId: actor.id, aggregateType: 'role', aggregateId: roleId },
         );
+        await this.emitAccessChanged(tx, roleId, true, actor.id);
       }
       return this.toRole((await this.roles.findById(roleId, tx))!);
     });
@@ -185,7 +194,9 @@ export class RolesService {
    * Удаление роли. Системная роль защищена; пользовательскую можно удалить
    * вместе с составом: назначения снимаются каскадом (FK `ON DELETE CASCADE`),
    * люди просто теряют эту роль — это и есть смысл удаления (решение
-   * владельца 26.10: запрет «сначала уберите всех» — лишний шаг).
+   * владельца 26.10: запрет «сначала уберите всех» — лишний шаг). Состав
+   * фиксируется ДО удаления: после каскада аудитория пуста, а выданные ранее
+   * access-токены ещё несут права роли до истечения TTL (#866).
    */
   async deleteRole(id: string, actorId: string): Promise<void> {
     await this.tx.run(async (tx) => {
@@ -198,6 +209,7 @@ export class RolesService {
           code: current.row.code,
         });
       }
+      const userIds = await this.audience.roleUserIds(id, tx);
       await this.roles.delete(id, tx);
       // Состав уходит каскадом: в событии фиксируем, у скольких людей и
       // подразделений роль снялась — иначе удаление = массовый отзыв прав
@@ -213,6 +225,14 @@ export class RolesService {
         },
         { actorId, aggregateType: 'role', aggregateId: id },
       );
+      if (userIds.length > 0) {
+        await this.eventBus.emit(
+          tx,
+          DIRECTORY_EVENTS.ROLE_ACCESS_CHANGED,
+          { roleId: id, reason: 'membership', userIds },
+          { actorId, aggregateType: 'role', aggregateId: id },
+        );
+      }
     });
   }
 
@@ -245,6 +265,25 @@ export class RolesService {
       roleId,
       code,
     });
+  }
+
+  /** `directory.role.access_changed` (#866, AUD-002): набор прав роли изменился
+   *  — auth обесценивает access-токены всех её действующих участников. */
+  private async emitAccessChanged(
+    tx: Parameters<EventBus['emit']>[0],
+    roleId: string,
+    changed: boolean,
+    actorId: string,
+  ): Promise<void> {
+    if (!changed) return;
+    const userIds = await this.audience.roleUserIds(roleId, tx);
+    if (userIds.length === 0) return;
+    await this.eventBus.emit(
+      tx,
+      DIRECTORY_EVENTS.ROLE_ACCESS_CHANGED,
+      { roleId, reason: 'permissions', userIds },
+      { actorId, aggregateType: 'role', aggregateId: roleId },
+    );
   }
 
   private toRole(record: RoleRecord): Role {

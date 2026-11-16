@@ -1,6 +1,7 @@
 import type { LetterAttachment } from '@nodus/contracts';
 import {
   LETTER_LIMITS,
+  addLetterParticipantBodySchema,
   createLetterFieldsSchema,
   isFinalState,
   updateLetterBodySchema,
@@ -284,16 +285,27 @@ export const lettersMutationHandlers = [
   }),
 
   /** Пригласить коллегу в обсуждение (редизайн #56): право регистрации,
-   *  любое состояние письма, идемпотентно. */
+   *  любое состояние письма, идемпотентно. Тело — контракт
+   *  `{ userIds: uuid[] }` (1–20); повторные приглашения не плодят участников
+   *  и записи истории. */
   http.post('/api/v1/letters/:id/participants', async ({ params, request }) => {
     const actor = getMockActor();
     const letter = findLetter(String(params.id));
     if (!letter || !canSeeLetter(letter, actor)) return notFound();
     if (!canRegisterLetters(actor)) return apiError(403, 'FORBIDDEN');
-    const body = (await request.json().catch(() => null)) as { userId?: string } | null;
-    const user = demoUserListItems.find((entry) => entry.id === body?.userId);
-    if (!user || user.status !== 'active') return apiError(422, 'VALIDATION_FAILED');
-    if (!letter.participantIds.includes(user.id)) {
+    const parsed = addLetterParticipantBodySchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return apiError(422, 'VALIDATION_FAILED');
+    // Все приглашённые обязаны существовать и быть активными — иначе 422,
+    // как на сервере (не частичное приглашение).
+    const invited = [...new Set(parsed.data.userIds)].map((id) =>
+      demoUserListItems.find((entry) => entry.id === id),
+    );
+    if (invited.some((user) => !user || user.status !== 'active')) {
+      return apiError(422, 'VALIDATION_FAILED');
+    }
+    const conversation = demoConversations.find((c) => c.letter?.id === letter.id);
+    for (const user of invited) {
+      if (!user || letter.participantIds.includes(user.id)) continue;
       letter.participantIds.push(user.id);
       pushLetterHistory(letter.id, {
         id: crypto.randomUUID(),
@@ -301,7 +313,6 @@ export const lettersMutationHandlers = [
         at: new Date().toISOString(),
         actor: { id: user.id, displayName: user.displayName, avatarUrl: user.avatarUrl },
       });
-      const conversation = demoConversations.find((c) => c.letter?.id === letter.id);
       if (conversation && !conversation.membersPreview.some((m) => m.id === user.id)) {
         conversation.membersPreview.push({
           id: user.id,

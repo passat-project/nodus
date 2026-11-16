@@ -151,10 +151,10 @@ const indexRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: '/',
   beforeLoad: () => {
-    const { personal, company } = useUiPrefsStore.getState();
+    const { personal } = useUiPrefsStore.getState();
     const ids = NAV_MODULES.map((m) => m.id);
-    const order = resolveOrder(ids, personal.navOrder, company.navOrder);
-    const hidden = resolveHidden(ids, personal.navHidden, company.navHidden);
+    const order = resolveOrder(ids, personal.navOrder);
+    const hidden = resolveHidden(ids, personal.navHidden);
     // Стартовый экран — первый ВИДИМЫЙ модуль (скрытый «с верху» не считается).
     const firstId = order.find((id) => !hidden.includes(id));
     const first = NAV_MODULES.find((m) => m.id === firstId);

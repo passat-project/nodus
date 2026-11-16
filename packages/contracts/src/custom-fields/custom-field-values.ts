@@ -81,6 +81,8 @@ export const CUSTOM_FIELD_LIMITS = {
   formulaSelection: 500,
   /** Формулы (#632): глубина волны пересчёта (защита от живого цикла). */
   formulaCascadeDepth: 8,
+  /** Формулы (AUD-020): вычисленных узлов на один `evaluate` — бюджет. */
+  formulaEvaluationNodes: 50_000,
 } as const;
 
 /** Сколько знаков после запятой у числа. Сравниваем с десятичным

@@ -155,6 +155,35 @@ export function useUpdateUser(id: string) {
   });
 }
 
+/** Возврат деактивированного сотрудника в работу (AUD-016): оптимистично
+ *  меняет статус карточки (I4), после ответа — серверная карточка и свежие
+ *  списки. Сессии не восстанавливаются (вход заново), беседы и проекты —
+ *  только вручную. */
+export function useActivateUser(id: string) {
+  const queryClient = useQueryClient();
+  const cardKey = directoryKeys.userCard(id);
+  return useMutation({
+    mutationFn: () => api<UserCard>(`/directory/users/${id}/activate`, { method: 'POST' }),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: cardKey });
+      const previous = queryClient.getQueryData<UserCard>(cardKey);
+      if (previous) queryClient.setQueryData(cardKey, { ...previous, status: 'active' });
+      return { previous };
+    },
+    onError: (_error, _body, context) => {
+      if (context?.previous) queryClient.setQueryData(cardKey, context.previous);
+      toastApiError(_error);
+    },
+    onSuccess: (card) => {
+      queryClient.setQueryData(cardKey, card);
+      toast.success(ui.employees.activateDone);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: directoryKeys.all });
+    },
+  });
+}
+
 /** Должности вида — мутации администратора (#441): создание, переименование,
  *  архивация (I15: удаления нет). Инвалидация справочника и отчёта данных. */
 export function useCreatePosition(kind: OrgUnitKind) {

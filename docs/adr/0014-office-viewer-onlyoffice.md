@@ -53,8 +53,10 @@ Word — постранично, PowerPoint — слайдами; правка �
 - **Внутренние вызовы api↔DS** — по адресам compose-сети (env
   `OFFICE_API_INTERNAL_URL` / `OFFICE_INTERNAL_URL`; в песочнице —
   `host.docker.internal`). `ALLOW_PRIVATE_IP_ADDRESS=true` — SSRF-фильтр DS
-  по умолчанию режет приватные адреса. Правка включается отдельным флагом
-  `OFFICE_EDIT_ENABLED` (пилот: сначала просмотр).
+  по умолчанию режет приватные адреса. Правка включается флагом
+  `OFFICE_EDIT_ENABLED`, умолчание — включена (`${OFFICE_EDIT_ENABLED:-true}`
+  в `docker-compose.yml`), и править может **любой участник беседы**: это
+  правило продукта, решение владельца от 2026-11-16 (аудит #866).
 
 ## Альтернативы
 

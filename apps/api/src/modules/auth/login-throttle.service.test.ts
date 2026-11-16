@@ -11,7 +11,7 @@ describe('LoginThrottleService', () => {
     eval: vi.fn(),
     del: vi.fn(),
   };
-  const logger = { setContext: vi.fn(), warn: vi.fn() };
+  const logger = { setContext: vi.fn(), error: vi.fn() };
 
   let service: LoginThrottleService;
 
@@ -58,10 +58,10 @@ describe('LoginThrottleService', () => {
 
     expect(await service.isLocked('a@b.by')).toBe(false);
     expect(redis.get).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledTimes(1);
   });
 
-  it('Redis завис — fail-open по таймауту, warn один раз', async () => {
+  it('Redis завис — fail-open по таймауту, error один раз', async () => {
     vi.useFakeTimers();
     redis.get.mockReturnValue(new Promise(() => undefined));
 
@@ -71,7 +71,7 @@ describe('LoginThrottleService', () => {
 
     await expect(first).resolves.toBe(false);
     await expect(second).resolves.toBe(false);
-    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledTimes(1);
   });
 
   it('ошибка записи и сброса не мешает входу', async () => {
@@ -80,7 +80,59 @@ describe('LoginThrottleService', () => {
 
     await expect(service.recordFailure('a@b.by')).resolves.toBeUndefined();
     await expect(service.reset('a@b.by')).resolves.toBeUndefined();
-    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('Redis недоступен: десятая неудача блокирует вход запасным счётчиком', async () => {
+    redis.status = 'reconnecting';
+
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      await service.recordFailure('a@b.by');
+    }
+    expect(await service.isLocked('a@b.by')).toBe(false);
+
+    await service.recordFailure('a@b.by');
+    expect(await service.isLocked('a@b.by')).toBe(true);
+  });
+
+  it('успешный вход сбрасывает запасной счётчик', async () => {
+    redis.status = 'reconnecting';
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await service.recordFailure('A@B.by');
+    }
+    expect(await service.isLocked('a@b.by')).toBe(true);
+
+    await service.reset('A@B.by');
+
+    expect(await service.isLocked('a@b.by')).toBe(false);
+  });
+
+  it('запасной счётчик живёт окно 10 минут', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-16T10:00:00.000Z'));
+    redis.status = 'reconnecting';
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await service.recordFailure('a@b.by');
+    }
+    expect(await service.isLocked('a@b.by')).toBe(true);
+
+    vi.setSystemTime(new Date('2026-11-16T10:10:01.000Z'));
+
+    expect(await service.isLocked('a@b.by')).toBe(false);
+  });
+
+  it('лог уровня error — не чаще раза в минуту', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-16T10:00:00.000Z'));
+    redis.status = 'reconnecting';
+
+    await service.recordFailure('a@b.by');
+    await service.recordFailure('a@b.by');
+    expect(logger.error).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(new Date('2026-11-16T10:01:01.000Z'));
+    await service.recordFailure('a@b.by');
+    expect(logger.error).toHaveBeenCalledTimes(2);
   });
 
   it('настоящий ioredis к закрытому порту — вход не висит', async () => {

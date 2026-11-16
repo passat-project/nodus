@@ -34,10 +34,16 @@ export interface GatewayServer {
  * user-комната + presence → обработчики комнат/typing → fanout стрима).
  */
 export function createGatewayServer(deps: GatewayDeps): GatewayServer {
+  // Заполняется ниже (консьюмеру нужен io): /health отвечает только после
+  // того, как сервер начал слушать, — к этому моменту ссылка установлена.
+  let consumer: ChatEventsConsumer | null = null;
   const httpServer = createServer((req, res) => {
     if (req.method === 'GET' && req.url === '/health') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(buildHealthPayload()));
+      // Здоровье = способность доставлять события (AUD-021): нет соединения
+      // с Redis или чтение потока не удаётся дольше порога → 503.
+      const healthy = consumer ? consumer.isHealthy() : true;
+      res.writeHead(healthy ? 200 : 503, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(buildHealthPayload(healthy)));
       return;
     }
     res.writeHead(404, { 'content-type': 'application/json' });
@@ -98,16 +104,17 @@ export function createGatewayServer(deps: GatewayDeps): GatewayServer {
     });
   });
 
-  const consumer = new ChatEventsConsumer(deps.redis, io, deps.store, {
+  const consumerInstance = new ChatEventsConsumer(deps.redis, io, deps.store, {
     group: deps.consumerGroup,
   });
+  consumer = consumerInstance;
 
   return {
     httpServer,
     io,
-    consumer,
+    consumer: consumerInstance,
     startFanout() {
-      return consumer.start();
+      return consumerInstance.start();
     },
     async close() {
       await consumer.stop();

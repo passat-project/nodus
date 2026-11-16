@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '../shared/auth-store.js';
+import { queryClient } from '../shared/lib/query-client.js';
 
 /** Ответ fetch-заглушки. */
 function jsonResponse(status: number, body: unknown): Response {
@@ -22,6 +23,7 @@ const TOKENS = { accessToken: 'access-jwt', expiresIn: 900, userId: USER.id };
 describe('auth-store', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    queryClient.clear();
     useAuthStore.setState({ status: 'unknown', accessToken: null, user: null });
   });
 
@@ -215,8 +217,9 @@ describe('auth-store', () => {
     expect(state.status).toBe('unknown');
   });
 
-  it('logout: сбрасывает состояние даже при ошибке сети', async () => {
+  it('logout: сбрасывает состояние даже при ошибке сети и очищает кэш запросов', async () => {
     useAuthStore.setState({ status: 'authenticated', accessToken: 't', user: USER });
+    queryClient.setQueryData(['letters', 'list'], { items: [{ id: 'letter-of-user' }] });
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => Promise.reject(new Error('network down'))),
@@ -224,5 +227,7 @@ describe('auth-store', () => {
 
     await expect(useAuthStore.getState().logout()).rejects.toThrow('network down');
     expect(useAuthStore.getState().status).toBe('anonymous');
+    // AUD-005: следующий вошедший не должен увидеть чужой кэш.
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
   });
 });

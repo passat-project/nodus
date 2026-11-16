@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { NumberSeriesRule } from '@nodus/contracts';
+import { renderNumberTemplate, type NumberSeriesRule } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import type { FieldDefinitionRow } from '../definitions/definition.mapper.js';
@@ -60,17 +60,36 @@ const rule = (overrides: Partial<NumberSeriesRule> = {}): NumberSeriesRule => ({
   ...overrides,
 });
 
-function setup(rows: FieldDefinitionRow[], data = series(rule())) {
-  const next = vi.fn(async () => ({
-    seriesId: 'series-1',
-    scopeKey: 'folder',
-    hits: [],
-    periodKey: '',
-    year: 2026,
-    seq: 3,
-    display: 'Изм. 3',
-    assignedAt: new Date('2026-11-08T10:00:00Z'),
-  }));
+function setup(
+  rows: FieldDefinitionRow[],
+  data = series(rule()),
+  items: {
+    id: string;
+    dictionaryId: string;
+    code: string | null;
+    name: string;
+    isActive: boolean;
+  }[] = [],
+) {
+  const next = vi.fn(
+    async (_tx: unknown, _id: string, input: { field?: (segment: unknown) => string }) => ({
+      seriesId: 'series-1',
+      scopeKey: 'folder',
+      hits: [],
+      periodKey: '',
+      year: 2026,
+      seq: 3,
+      display: renderNumberTemplate(data.template, {
+        seq: 3,
+        year: 2026,
+        month: 11,
+        day: 16,
+        field: input.field as never,
+      }),
+      assignedAt: new Date('2026-11-08T10:00:00Z'),
+    }),
+  );
+  const dictionaries = { itemsOf: vi.fn(async () => items) };
   const service = new NumberIssueService(
     { list: vi.fn(async () => rows) } as never,
     {
@@ -79,8 +98,9 @@ function setup(rows: FieldDefinitionRow[], data = series(rule())) {
     } as never,
     { findRefs: vi.fn(async () => []) } as never,
     { conditionName: vi.fn(async () => 'Комплект') } as never,
+    dictionaries as never,
   );
-  return { service, next };
+  return { service, next, dictionaries };
 }
 
 describe('NumberIssueService (#630)', () => {
@@ -172,5 +192,107 @@ describe('NumberIssueService (#630)', () => {
     });
     expect(filled.ok).toBe(true);
     if (filled.ok) await expect(filled.issue(TX, 'task-1')).resolves.toEqual({});
+  });
+
+  it('вставка списка печатает код варианта, числа — строку числа (AUD-010)', async () => {
+    const ENUM_ID = '44444444-4444-4444-8444-444444444444';
+    const NUMBER_ID = '55555555-5555-4555-8555-555555555555';
+    const ITEM_ID = '66666666-6666-4666-8666-666666666666';
+    const rows = [
+      definition(),
+      definition({
+        id: ENUM_ID,
+        number: 7,
+        type: 'enum',
+        name: 'Марка',
+        settings: { dictionaryId: 'dictionary-1' },
+        bindings: [],
+      }),
+      definition({ id: NUMBER_ID, number: 8, type: 'number', name: 'Этаж', bindings: [] }),
+    ];
+    const inserted = rule({
+      containers: [],
+      template: [
+        { kind: 'field', fieldNumber: 7, source: 'self' },
+        { kind: 'literal', text: '-' },
+        { kind: 'field', fieldNumber: 8, source: 'self' },
+        { kind: 'literal', text: '-' },
+        { kind: 'counter' },
+      ],
+    });
+    const { service, dictionaries } = setup(rows, series(inserted), [
+      {
+        id: ITEM_ID,
+        dictionaryId: 'dictionary-1',
+        code: 'КЖ',
+        name: 'Конструкция',
+        isActive: true,
+      },
+    ]);
+    const plan = await service.plan(
+      TX,
+      [FIELD_ID],
+      target({ sources: { self: { [ENUM_ID]: ITEM_ID, [NUMBER_ID]: 42 } } }),
+      { hostKind: 'task', source: 'create' },
+    );
+    // Числовая вставка не считается пустой: без подтверждения план проходит.
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    // В номере — код варианта и число, а не UUID и не пустое место.
+    await expect(plan.issue(TX, 'task-1')).resolves.toEqual({ [FIELD_ID]: 'КЖ-42-3' });
+    expect(dictionaries.itemsOf).toHaveBeenCalledWith('dictionary-1', TX);
+  });
+
+  it('источник «Компания» печатает значение по типу, без [object Object] (AUD-010)', async () => {
+    const TEXT_ID = '77777777-7777-4777-8777-777777777777';
+    const MONEY_ID = '88888888-8888-4888-8888-888888888888';
+    const ENUM_ID = '99999999-9999-4999-8999-999999999999';
+    const ITEM_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const company = (id: string, number: number, type: string, value: unknown) =>
+      definition({
+        id,
+        number,
+        type,
+        name: `Компания ${number}`,
+        settings: type === 'enum' ? { dictionaryId: 'dictionary-1' } : {},
+        isCompany: true,
+        companyValue: { value },
+        bindings: [],
+      });
+    const rows = [
+      definition(),
+      company(TEXT_ID, 9, 'text', 'МИНСК'),
+      company(MONEY_ID, 10, 'money', { amount: 5, currencyId: 'currency-1' }),
+      company(ENUM_ID, 11, 'enum', ITEM_ID),
+    ];
+    const inserted = rule({
+      containers: [],
+      template: [
+        { kind: 'field', fieldNumber: 9, source: 'company' },
+        { kind: 'field', fieldNumber: 10, source: 'company' },
+        { kind: 'field', fieldNumber: 11, source: 'company' },
+        { kind: 'counter' },
+      ],
+    });
+    const { service } = setup(rows, series(inserted), [
+      {
+        id: ITEM_ID,
+        dictionaryId: 'dictionary-1',
+        code: 'КЖ',
+        name: 'Конструкция',
+        isActive: true,
+      },
+    ]);
+    const plan = await service.plan(TX, [FIELD_ID], target(), {
+      hostKind: 'task',
+      source: 'create',
+      // Денежное поле печатного вида не имеет — вставка пуста, как сейчас.
+      confirmEmpty: true,
+    });
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const issued = await plan.issue(TX, 'task-1');
+    expect(issued[FIELD_ID]).toBe('МИНСККЖ3');
+    expect(issued[FIELD_ID]).not.toContain('[object Object]');
   });
 });
