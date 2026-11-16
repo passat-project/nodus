@@ -128,13 +128,15 @@ export function AssistantPanel() {
         // z-[60]: ПОВЕРХ всех карточек-слайдеров (z-50) — окно ассистента не
         // перекрывается задачей/проектом (вердикт владельца 16.11.2026);
         // контур (z-60, позже в DOM) и оверлей-порталы/тосты (z-70) выше.
-        'slider-shadow absolute inset-y-0 right-0 z-[60] overflow-hidden rounded-l-2xl bg-card',
+        // Ниже топбара (верх на оси контура): шапка целиком доступна, в т.ч.
+        // переключатель темы во время диалога (вердикт владельца 16.11.2026).
+        'slider-shadow absolute right-0 bottom-0 z-[60] overflow-hidden rounded-l-2xl bg-card',
         // В покое w-0 + visibility hidden: ни полосы, ни переполнения;
         // выезд — шириной существующей обёртки, без transform-скролла шелла.
         !dragging && 'transition-[width,visibility] duration-200 ease-out',
         open ? 'visible' : 'pointer-events-none invisible w-0',
       )}
-      style={{ width: open ? effWidth : 0 }}
+      style={{ width: open ? effWidth : 0, top: uiPx(56) }}
     >
       {/* Контент фиксированной ширины: текст не плющится в кадрах анимации.
           Проявление — content-fade (ТОЛЬКО opacity): animate-in/duration-150

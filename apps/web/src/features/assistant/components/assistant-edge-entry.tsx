@@ -1,7 +1,6 @@
 import { Bot } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ui } from '@nodus/contracts';
-import { Button } from '@nodus/ui/components/button';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useRailHidden } from '../../../app/shell/rail-visibility.js';
@@ -97,10 +96,12 @@ export function AssistantEdgeEntry() {
   if (!railHidden || open) return null;
 
   return (
-    <Button
+    // Нативный button, НЕ shadcn Button: база примитива несёт свои
+    // rounded-*/border, и правые углы/бордюр «выезжающей из кромки» кнопки
+    // переживали twMerge (вердикт владельца 16.11.2026: правые края ровные).
+    <button
       ref={btnRef}
-      variant="ghost"
-      size="icon"
+      type="button"
       // Заморозка ТОЛЬКО на pointerdown: кнопка встаёт под клик (down+up по
       // одному элементу), иначе движущаяся цель теряла 2-3 клика (вердикт
       // владельца 16.11.2026). На hover не замораживаем — была осцилляция.
@@ -112,13 +113,12 @@ export function AssistantEdgeEntry() {
       title={ui.assistant.openHint}
       className={cn(
         // ВПЛОТНУЮ к правому краю (right-0): курсор у самой кромки экрана
-        // должен попадать В кнопку, а не правее неё (терялись 2-3 клика,
-        // вердикт владельца 16.11.2026). На /chat ползунка периметра нет
-        // (канон edge-scrollbar) — перехвата скролла не возникает.
-        // Правые углы ПРЯМЫЕ и без правого бордюра/тени: кнопка читается
-        // выезжающей из кромки экрана, прямого края не видно (вердикт
-        // владельца 16.11.2026); скруглены только левые углы.
-        'fixed top-0 right-0 z-[60] size-9 rounded-l-xl border-y border-l border-border bg-card text-primary will-change-transform hover:text-primary-hover',
+        // должен попадать В кнопку, а не правее неё (терялись 2-3 клика).
+        // На /chat ползунка периметра нет (канон edge-scrollbar).
+        // Правые углы ПРЯМЫЕ, правого бордюра/тени НЕТ: кнопка читается
+        // выезжающей из кромки экрана; скруглены только левые углы.
+        'fixed top-0 right-0 z-[60] flex size-9 items-center justify-center rounded-l-xl border-y border-l border-border bg-card text-primary will-change-transform hover:text-primary-hover',
+        'outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/40',
         'transition-opacity duration-200',
         // invisible в покое: скрытая кнопка вне tab-order (a11y), opacity
         // остаётся анимируемой; visibility переключается дискретно.
@@ -126,6 +126,6 @@ export function AssistantEdgeEntry() {
       )}
     >
       <Bot className="size-4" />
-    </Button>
+    </button>
   );
 }
