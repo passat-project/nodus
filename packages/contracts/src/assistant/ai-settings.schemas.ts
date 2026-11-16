@@ -149,6 +149,7 @@ export type AssistantModelCatalogItem = z.infer<typeof assistantModelCatalogItem
 export const assistantModelCatalogResponseSchema = z.object({
   models: z.array(assistantModelCatalogItemSchema),
 });
+export type AssistantModelCatalogResponse = z.infer<typeof assistantModelCatalogResponseSchema>;
 
 /** Проверка соединения: успех/провал — данными, а не HTTP-ошибкой. */
 export const assistantProviderTestResponseSchema = z.object({
