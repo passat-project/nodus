@@ -27,6 +27,8 @@ export const lettersKeys = {
   byCounterparty: (counterpartyId: string) => lettersKeys.list(null, { counterpartyId }),
   detail: (id: string) => [...lettersKeys.all, 'detail', id] as const,
   transitions: (id: string) => [...lettersKeys.all, 'transitions', id] as const,
+  /** Действия письма без смены статуса (#633, аудит В1). */
+  actions: (id: string) => [...lettersKeys.all, 'actions', id] as const,
   history: (id: string) => [...lettersKeys.all, 'history', id] as const,
   /** Дерево «ёлочки» (#461): корень — верх цепочки от письма. */
   tree: (id: string) => [...lettersKeys.all, 'tree', id] as const,

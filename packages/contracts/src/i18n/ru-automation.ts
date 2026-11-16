@@ -251,6 +251,8 @@ export const automationStrings = {
     actionName: 'Название действия',
     actionStage: 'Статус',
     actionAtAny: 'В любом статусе',
+    actionAtAnyHint:
+      'Кроме завершённых и отменённых: в закрытой записи действие работает, только если поставлено на этот статус явно',
     actionWindow: 'Окно действия',
     deleteAction: 'Удалить действие',
     actionSteps: 'Шаги действия',

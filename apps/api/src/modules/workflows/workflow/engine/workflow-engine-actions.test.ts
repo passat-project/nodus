@@ -126,6 +126,41 @@ describe('WorkflowEngine — действие без смены статуса (
     expect(records.insert).not.toHaveBeenCalled();
   });
 
+  it('«в любом статусе» в завершённой записи не нажимается (решение 16.11)', async () => {
+    const anyAction = setup([], undefined, [action({ stageId: null })], { stageId: DONE });
+    await expect(anyAction.engine.pressAction(TX, 't1', 'task', USER, 'act')).rejects.toMatchObject(
+      { code: ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED },
+    );
+    expect(anyAction.records.insert).not.toHaveBeenCalled();
+  });
+
+  it('обход гейта: без права — 403, с правом и причиной — запись журнала', async () => {
+    const gated = () =>
+      action({
+        rules: parseRules({
+          conditions: [{ kind: 'role_in', roles: ['assignee'] }],
+          validators: [{ kind: 'time_logged' }],
+        }),
+      });
+
+    const noRight = setup([], undefined, [gated()]);
+    await expect(
+      noRight.engine.pressAction(TX, 't1', 'task', USER, 'act', {
+        override: true,
+        reason: 'согласовано устно',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    const withRight = setup([], undefined, [gated()], { canOverrideGates: true });
+    await expect(
+      withRight.engine.pressAction(TX, 't1', 'task', USER, 'act', {
+        override: true,
+        reason: 'согласовано устно',
+      }),
+    ).resolves.toMatchObject({ actionName: 'Запросить уточнение' });
+    expect(withRight.records.insert).toHaveBeenCalled();
+  });
+
   it('гейт считается ПОСЛЕ окна: результат из окна закрывает result_present', async () => {
     const { engine, records, wasApplied } = setup(
       [],

@@ -61,6 +61,8 @@ export const problemStrings = {
   action_duplicate_name:
     'Действие с таким названием уже есть у этого статуса (или в «любом статусе»)',
   action_stage_unknown: 'Действие привязано к статусу, которого нет в маршруте',
+  action_section_unsupported:
+    'В окне действия раздел, который работает только при смене статуса: оставьте «Поля», «Трудозатраты» и «Комментарий»',
   too_many_actions: 'Больше 40 действий',
   // Решающие (#433): тексты — ru-automation-deciders.ts.
   ...deciderProblemStrings,

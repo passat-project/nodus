@@ -1,16 +1,5 @@
-import { useState } from 'react';
-import {
-  Check,
-  ChevronDown,
-  Loader2,
-  MoreHorizontal,
-  Play,
-  Send,
-  Undo2,
-  Workflow,
-  X,
-  Zap,
-} from 'lucide-react';
+﻿import { useState } from 'react';
+import { Check, ChevronDown, Play, Send, Undo2, Workflow, X, Zap } from 'lucide-react';
 import type { TaskDetail, WorkflowAction, WorkflowTransition } from '@nodus/contracts';
 import { isFinalState, isReviewState, ui } from '@nodus/contracts';
 import {
@@ -28,7 +17,11 @@ import { PauseGlyph } from '../../../shared/ui/pause-glyph.js';
 import { stageTone } from '../../../shared/ui/board/stage-tone.js';
 import { groupProcessButtons } from '../../../shared/workflow/process-buttons.js';
 import { RouteViewDialog } from '../../../shared/workflow/route-view-dialog.js';
-import { ACTIONS_INLINE_MAX, TaskActionsMenu } from './task-actions-menu.js';
+import {
+  processSlotLabels,
+  ProcessButtonSlot,
+  type ProcessSlotItem,
+} from '../../../shared/workflow/process-button-slot.js';
 import { useActionRunner } from './task-action-runner.js';
 import { TaskTimerButton } from './task-time.js';
 import { useTransitionRunner } from './task-transition-dialog.js';
@@ -38,13 +31,6 @@ import { useTransitionRunner } from './task-transition-dialog.js';
  * видимые — по порядку, «Ещё ⋯» — меню; порядок и показ задаёт сервер
  * (`display`, sortOrder) — эвристик клиента нет (#378). Фокус — общий канон:
  * невидимая рамка + ring (как у кнопки таймера рядом). */
-const btnBase =
-  'inline-flex h-9 items-center gap-2 rounded-md border border-transparent px-3 text-sm font-medium transition-colors outline-none disabled:opacity-40 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30';
-/** Кнопка перехода и «⋯»: ширину не отдаёт — при нехватке места уступает
- *  блок действий, а не названия переходов. */
-const btn = `${btnBase} shrink-0`;
-/** Кнопка действия: сжимается первой (`flex-shrink: 3` против 0 у переходов). */
-const actionBtn = `${btnBase} min-w-0 [flex-shrink:3]`;
 const valueChip =
   'inline-flex h-6 max-w-full cursor-pointer items-center gap-1.5 rounded border px-1.5 font-mono text-label font-medium tracking-[0.08em] transition-colors hover:brightness-125 data-[state=open]:brightness-125';
 
@@ -62,23 +48,24 @@ export function transitionIcon(t: WorkflowTransition): LucideIcon | typeof Pause
 
 /**
  * Панель процесса — замоноличенный нижний бар карточки (модель Битрикса):
- * кнопки = переходы маршрута типа (ADR-0020) с показом `display`. Главная
- * слева залитой, далее видимые по порядку, «Ещё ⋯» — меню. Заблокированная
- * гейтом кнопка видна приглушённой, клик — диалог причин и выходов; в
- * правом конце — таймер учёта времени. Личная колонка «Моего плана» здесь
- * не показывается (только DnD на доске).
+ * кнопки = переходы маршрута типа (ADR-0020) с показом `display` и действия
+ * без смены статуса (#633). Заблокированная гейтом кнопка видна приглушённой,
+ * клик — диалог причин и выходов; в правом конце — таймер учёта времени.
+ * Личная колонка «Моего плана» здесь не показывается (только DnD на доске).
  *
- * ПОРЯДОК ПАНЕЛИ — ЗАКОН (#633, стык с #707):
- *   закрытая стадия → переходы (включая коллективную кнопку с кольцом) →
- *   действия → «⋯» меню процесса → таймер.
- * Коллективное нажатие (#707) — ЭТО ПЕРЕХОД: отдельного слота нет, кнопку
- * рисует наш же `renderButton` (шире обычной, с кольцом прогресса), поэтому
- * панель её не различает и ничего не дублирует. Действий в ряд — не больше
- * одного: от двух уходим в «Действия» ▾ со счётчиком (`ACTIONS_INLINE_MAX`),
- * а действие с `display: 'menu'` уходит туда ВСЕГДА — даже единственное
- * (настройку «в меню» из конструктора маршрута не теряем).
- * При нехватке ширины первым сжимается блок действий, названия переходов
- * остаются целиком (обрезаем только экстремально длинные, с `title`).
+ * ТРИ СЛОТА — закон (решение владельца 16.11.2026): главная →
+ * второстепенные → действия, меню «⋯» в панели нет вообще.
+ * - один элемент в слоте — обычная кнопка без стрелки; несколько — первая
+ *   нажимается сразу, рядом стрелка вверх открывает список остальных;
+ * - показ `menu` у перехода и у действия = «в конце списка»: пункт уходит под
+ *   разделитель, значение `display` в данных не меняется (маршруты не
+ *   мигрируются), панель это рисует в `ProcessButtonSlot`;
+ * - главная одна: переход сильнее; если переходов нет — главным становится
+ *   первое действие (как было в #742);
+ * - причина блокировки — текстом в строке списка, а не только в подсказке.
+ * Коллективное нажатие (#707) — ЭТО ПЕРЕХОД: отдельного слота нет, кнопка
+ * живёт в слоте второстепенных и не прячется в список (кольцо прогресса
+ * обязано быть видно без клика).
  */
 export function TaskActionBar({
   task,
@@ -103,103 +90,63 @@ export function TaskActionBar({
   }
 
   const { primary, visible, menu } = groupProcessButtons(transitions);
-  // Действия (#633): вид задаёт количество ИЛИ серверный `display`.
-  //   `menu` у действия — всегда список (даже единственное: пункт один,
-  //   счётчик «1» честно говорит, сколько там);
-  //   иначе 1 действие — своя кнопка с полным названием, 2+ — список.
-  // Настройку конструктора маршрута не теряем: «в меню» остаётся «в меню».
-  const actionCount = actionRunner.actions.length;
-  const onlyAction = actionRunner.actions[0] ?? null;
-  const singleAction =
-    actionCount === ACTIONS_INLINE_MAX && onlyAction?.display !== 'menu' ? onlyAction : null;
-  const actionsMany = actionCount > 0 && !singleAction;
-  // Залитая кнопка в баре одна: главный переход сильнее, иначе главным
-  // становится единственное действие (переходов нет).
-  const actionMain = !primary && visible.length === 0;
+  // Три слота (решение 16.11.2026): главная → второстепенные → действия.
+  // «В меню» у перехода и у действия = «в конце списка»: значение `display`
+  // в данных не меняется, опубликованные маршруты не мигрируются.
+  const secondary = [...visible, ...menu];
+  // Внутри слота действий обычные кнопки идут первыми, «в конце списка» —
+  // последними (серверный порядок внутри групп сохраняется).
+  const orderedActions = [
+    ...actionRunner.actions.filter((action) => action.display !== 'menu'),
+    ...actionRunner.actions.filter((action) => action.display === 'menu'),
+  ];
+  // Главная кнопка одна: переход сильнее; если переходов в панели нет —
+  // главным становится первое действие (как было в #742).
+  const mainAction = !primary && secondary.length === 0 ? (orderedActions[0] ?? null) : null;
+  const slotActions = mainAction
+    ? orderedActions.filter((action) => action.id !== mainAction.id)
+    : orderedActions;
+
+  const actionItem = (action: WorkflowAction): ProcessSlotItem => {
+    const blocked = action.blockedBy.length > 0;
+    return {
+      id: action.id,
+      name: action.name,
+      icon: <Zap className="size-4 shrink-0" strokeWidth={1.75} />,
+      blocked,
+      ...(blocked
+        ? { blockedText: `${ui.tasks.processBlockedMissing} ${gateReasonsText(action.blockedBy)}` }
+        : {}),
+      running: actionRunner.runningId === action.id,
+      title: action.form ? `${action.name} — ${ui.tasks.actionOpensWindow}` : action.name,
+      rare: action.display === 'menu',
+      onSelect: () => actionRunner.run(action),
+    };
+  };
+
+  const transitionItem = (t: WorkflowTransition): ProcessSlotItem => {
+    const blocked = t.blockedBy.length > 0;
+    const Icon = transitionIcon(t);
+    return {
+      id: t.id,
+      name: t.name,
+      icon: <Icon className="size-4 shrink-0" strokeWidth={1.75} />,
+      blocked,
+      ...(blocked
+        ? { blockedText: `${ui.tasks.processBlockedMissing} ${gateReasonsText(t.blockedBy)}` }
+        : {}),
+      running: runner.runningId === t.id,
+      title: `${t.name}: ${t.toStageName}`,
+      rare: t.display === 'menu',
+      onSelect: () => runner.run(t),
+    };
+  };
+
   const closed = isFinalState(task.stage.systemState);
   const cancelled = closed && task.stage.outcome === 'cancelled';
   const rejected = closed && task.stage.outcome === 'rejected';
   const negative = cancelled || rejected;
-  const noButtons = actionCount === 0 && transitions.length === 0;
-
-  const renderAction = (action: WorkflowAction, main: boolean) => {
-    const blocked = action.blockedBy.length > 0;
-    const running = actionRunner.runningId === action.id;
-    const Icon = running ? Loader2 : Zap;
-    return (
-      <button
-        key={action.id}
-        type="button"
-        aria-busy={running || undefined}
-        // Как у кнопки перехода: заблокированная видна и объясняет причину,
-        // нажатие открывает окно причин/ведёт к 409 с причинами.
-        data-blocked={blocked || undefined}
-        aria-label={action.name}
-        title={
-          blocked
-            ? `${ui.tasks.processBlockedMissing} ${gateReasonsText(action.blockedBy)}`
-            : action.name
-        }
-        onClick={() => actionRunner.run(action)}
-        className={cn(
-          actionBtn,
-          main
-            ? 'bg-primary text-primary-foreground hover:bg-primary-hover'
-            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-          blocked && 'opacity-50',
-        )}
-      >
-        <Icon className={cn('size-4 shrink-0', running && 'animate-spin')} strokeWidth={1.75} />
-        {/* Название действия целиком; при нехватке ширины уступает именно
-            блок действий — первым делом подпись (в узком контейнере остаётся
-            значок с подсказкой), а не название перехода. */}
-        <span className={cn('min-w-0 whitespace-nowrap', !main && '@max-[420px]:hidden')}>
-          {action.name}
-        </span>
-      </button>
-    );
-  };
-
-  const renderButton = (t: WorkflowTransition, main: boolean) => {
-    const blocked = t.blockedBy.length > 0;
-    const running = runner.runningId === t.id;
-    const Icon = running ? Loader2 : transitionIcon(t);
-    return (
-      <button
-        key={t.id}
-        type="button"
-        // Панель не гаснет во время хода (чип уже сменился оптимистично):
-        // повторный клик гасит сам runner; у нажатой — спиннер.
-        aria-busy={running || undefined}
-        // НЕ aria-disabled: кнопка работает — открывает диалог причин.
-        data-blocked={blocked || undefined}
-        aria-label={t.name}
-        title={
-          blocked
-            ? `${ui.tasks.processBlockedMissing} ${gateReasonsText(t.blockedBy)}`
-            : `${t.name}: ${t.toStageName}`
-        }
-        onClick={() => runner.run(t)}
-        className={cn(
-          btn,
-          main
-            ? 'bg-primary text-primary-foreground hover:bg-primary-hover'
-            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-          blocked && 'opacity-50',
-        )}
-      >
-        <Icon className={cn('size-4 shrink-0', running && 'animate-spin')} strokeWidth={1.75} />
-        {/* Переход не режем ради действий: подпись до 16rem (прежний потолок
-            9rem читался «Приоста…»), `truncate` — предохранитель для
-            экстремально длинного имени (полное — в `title`). В контейнере уже
-            420px подписи вторичных кнопок уходят в значок — иначе бар не
-            влезает в дефолтную колонку карточки (340px). */}
-        <span className={cn('max-w-64 truncate', !main && '@max-[420px]:hidden')}>{t.name}</span>
-      </button>
-    );
-  };
-
-  const menuCount = menu.length;
+  const noButtons = orderedActions.length === 0 && primary === null && secondary.length === 0;
 
   return (
     <div className="flex w-full min-w-0 flex-nowrap items-center gap-1.5">
@@ -220,58 +167,33 @@ export function TaskActionBar({
           {task.stage.name}
         </span>
       ) : null}
-      {/* 2. Переходы — целиком: при нехватке ширины уступает блок действий.
-          Коллективная кнопка (#707) — тоже переход, рисуется здесь же. */}
-      {primary ? renderButton(primary, true) : null}
-      {visible.map((t) => renderButton(t, false))}
-      {/* 3. Действия: одно — кнопкой, два и больше — «Действия» ▾. */}
-      {transitions.length > 0 && actionCount > 0 ? (
-        <span className="h-5 w-px shrink-0 bg-border/60" aria-hidden />
+      {/* 1. Главная: один переход либо (если переходов нет) первое действие. */}
+      {primary ? (
+        <ProcessButtonSlot items={[transitionItem(primary)]} main slotLabel={primary.name} />
       ) : null}
-      {actionsMany ? (
-        <TaskActionsMenu
-          actions={actionRunner.actions}
-          runningId={actionRunner.runningId}
-          onRun={actionRunner.run}
+      {mainAction ? (
+        <ProcessButtonSlot items={[actionItem(mainAction)]} main slotLabel={mainAction.name} />
+      ) : null}
+      {/* 2. Второстепенные: первая нажимается сразу, остальные — по стрелке. */}
+      {secondary.length > 0 ? (
+        <ProcessButtonSlot
+          items={secondary.map(transitionItem)}
+          slotLabel={processSlotLabels.secondary}
         />
-      ) : singleAction ? (
-        renderAction(singleAction, actionMain)
+      ) : null}
+      {/* 3. Действия без смены статуса: одно — кнопкой, два и больше — со списком. */}
+      {slotActions.length > 0 ? (
+        <ProcessButtonSlot
+          items={slotActions.map(actionItem)}
+          slotLabel={processSlotLabels.actions}
+        />
       ) : null}
       {noButtons ? (
         <span className="px-1 text-sm text-muted-foreground">
           {task.access.canEdit ? ui.tasks.processNoActions : ui.tasks.processObserving}
         </span>
       ) : null}
-      {/* 4. «⋯» — меню процесса (переходы с показом `menu`) у правого края,
-          5. таймер — последним. */}
       <span className="ml-auto" />
-      {menuCount > 0 ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            aria-label={ui.tasks.moreActions}
-            title={ui.tasks.moreActions}
-            className={cn(btn, 'px-2 text-muted-foreground hover:bg-accent hover:text-foreground')}
-          >
-            <MoreHorizontal className="size-4" strokeWidth={1.75} />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="top" className="w-52">
-            {menu.map((t) => (
-              <DropdownMenuItem
-                key={t.id}
-                className={cn(t.blockedBy.length > 0 && 'opacity-50')}
-                title={
-                  t.blockedBy.length > 0
-                    ? `${ui.tasks.processBlockedMissing} ${gateReasonsText(t.blockedBy)}`
-                    : t.toStageName
-                }
-                onSelect={() => runner.run(t)}
-              >
-                {t.name}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : null}
       {showTime ? <TaskTimerButton task={task} /> : null}
     </div>
   );

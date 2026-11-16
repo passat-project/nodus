@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -19,7 +19,8 @@ vi.mock('sonner', () => ({
 }));
 
 import { ApiError } from '../../../shared/api-client.js';
-import { usePressAction, useWorkflowActions } from './transitions-api.js';
+import { tasksKeys } from '../../../shared/api/tasks-keys.js';
+import { useExecuteTransition, usePressAction, useWorkflowActions } from './transitions-api.js';
 
 function wrapper(client: QueryClient) {
   return ({ children }: { children: ReactNode }) => (
@@ -76,6 +77,27 @@ describe('действия маршрута в API задач (#633)', () => {
     expect(setData).toHaveBeenCalled();
     expect(invalidate).toHaveBeenCalled();
     expect(mocks.toastSuccess).toHaveBeenCalled();
+  });
+
+  it('после перехода кэш действий сбрасывается — панель покажет кнопки нового статуса (аудит Б1)', async () => {
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    mocks.api.mockResolvedValueOnce({
+      task: { id: 't1', stage: { id: 's2', name: 'В работе', systemState: 'active' } },
+      transitions: [],
+    });
+
+    const { result } = renderHook(() => useExecuteTransition('t1'), {
+      wrapper: wrapper(client),
+    });
+    result.current.mutate({
+      transition: { id: 'tr1', toStageId: 's2' } as never,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidate).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: tasksKeys.actions('t1') }),
+    );
   });
 
   it('ошибка нажатия — тост с причиной, окно остаётся', async () => {

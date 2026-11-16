@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   ErrorCode,
+  isFinalState,
   lockFieldFilled,
   matchesDecider,
   windowWritableKeys,
@@ -273,7 +274,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
     category: ProcessCategory,
     actor: WorkflowActor,
     actionId: string,
-    opts: { form?: TransitionFormInput } = {},
+    opts: { form?: TransitionFormInput; override?: boolean; reason?: string } = {},
   ): Promise<{
     actionName: string;
     stageName: string;
@@ -286,8 +287,15 @@ export class WorkflowEngine implements WorkflowEnginePort {
     await adapter.lock(tx, entityId);
     const subject = await this.subjectWithPermissions(tx, entityId, category, actor);
     const workflow = await this.workflows.load(subject.workflowId, tx);
+    // «В любом статусе» не работает в закрытой записи (решение 16.11):
+    // действие, привязанное к её статусу явно, — работает.
+    const currentStage = this.stage(workflow, subject.stageId);
     const action = workflow.actions.find(
-      (a) => a.id === actionId && (a.stageId === null || a.stageId === subject.stageId),
+      (a) =>
+        a.id === actionId &&
+        (a.stageId === null
+          ? !isFinalState(currentStage.systemState)
+          : a.stageId === subject.stageId),
     );
     if (!action || !canShow(action, subject)) {
       throw new DomainException(ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED, 'Action not allowed');
@@ -315,11 +323,9 @@ export class WorkflowEngine implements WorkflowEnginePort {
     // транзакции; отказ откатит окно вместе с записью.
     const subjectAfter = await this.subjectWithPermissions(tx, entityId, category, actor);
     const gateReasons = evaluateValidators(action.rules, subjectAfter.facts);
-    if (gateReasons.length > 0) {
-      throw new DomainException(ErrorCode.WORKFLOW_TRANSITION_BLOCKED, 'Action gates not passed', {
-        reasons: gateReasons,
-      });
-    }
+    // Обход гейта с причиной — как у перехода (#635, единая модель): право
+    // task.override_gate + непустая причина. Без обхода — 409 с причинами.
+    if (gateReasons.length > 0) this.assertOverride(gateReasons, subjectAfter, opts);
     if (action.form.enabled && action.form.locks?.length) {
       await adapter.applyLocks?.(tx, entityId, actor.id, action.form.locks, {
         transitionId: action.id,

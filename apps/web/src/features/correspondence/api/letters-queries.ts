@@ -6,6 +6,7 @@ import type {
   LetterResolvers,
   Paginated,
   ProcessType,
+  WorkflowAction,
   WorkflowTransition,
 } from '@nodus/contracts';
 import { SystemDictionary } from '@nodus/contracts';
@@ -50,6 +51,17 @@ export function useLetterTransitions(id: string, enabled = true) {
   return useQuery({
     queryKey: lettersKeys.transitions(id),
     queryFn: () => api<WorkflowTransition[]>(`/letters/${id}/transitions`),
+    enabled: enabled && id.length > 0,
+    staleTime: 30_000,
+  });
+}
+
+/** Действия письма без смены статуса (#633, аудит В1): та же панель кнопок,
+ *  что у задачи — опубликованное действие письма нажимается. */
+export function useLetterActions(id: string, enabled = true) {
+  return useQuery({
+    queryKey: lettersKeys.actions(id),
+    queryFn: () => api<WorkflowAction[]>(`/letters/${id}/actions`),
     enabled: enabled && id.length > 0,
     staleTime: 30_000,
   });

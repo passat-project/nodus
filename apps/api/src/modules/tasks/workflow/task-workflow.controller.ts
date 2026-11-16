@@ -8,6 +8,7 @@ import {
 } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
+  executeActionBodySchema,
   executeTransitionBodySchema,
   executeTransitionResultSchema,
   personalStageCreateBodySchema,
@@ -17,6 +18,7 @@ import {
   workflowActionSchema,
   workflowTransitionSchema,
   type AuthUser,
+  type ExecuteActionBody,
   type ExecuteTransitionBody,
   type ExecuteTransitionResult,
   type PersonalStageCreateBody,
@@ -146,10 +148,10 @@ export class TaskWorkflowController {
     @Param('id', uuid) id: string,
     @Param('actionId', uuid) actionId: string,
     @Body({
-      schema: executeTransitionBodySchema,
-      pipes: [new ZodValidationPipe(executeTransitionBodySchema)],
+      schema: executeActionBodySchema,
+      pipes: [new ZodValidationPipe(executeActionBodySchema)],
     })
-    body: ExecuteTransitionBody,
+    body: ExecuteActionBody,
   ): Promise<ExecuteTransitionResult> {
     return this.transitions.pressActionFor(user, id, actionId, body);
   }

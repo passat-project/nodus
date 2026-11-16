@@ -4,6 +4,7 @@ import type {
   WorkflowTransition,
   WorkflowTransitionRules,
 } from '@nodus/contracts';
+import { isFinalState } from '@nodus/contracts';
 
 import type { WorkflowGateFacts } from '../../../../core/ports/workflow-entity.port.js';
 import type { ActionDef, StageRow } from '../workflow.repository.js';
@@ -64,13 +65,21 @@ export function transitionOptions(
  * «из любого», по sortOrder. Действия с шагами пока не исполняются (каталог
  * шагов ядра — отдельная задача) и в карточку не попадают: кнопка, которая
  * всегда падает, хуже отсутствующей.
+ *
+ * «В любом статусе» — во всех, КРОМЕ завершённых и отменённых (решение
+ * владельца 16.11): закрытую запись действие не двигает, а поля и время в неё
+ * писать нельзя. Действие, поставленное на закрытый статус явно, работает.
  */
 export function actionOptions(
-  workflow: { actions: readonly ActionDef[] },
+  workflow: { actions: readonly ActionDef[]; stages: readonly StageRow[] },
   subject: AvailabilitySubject & { stageId: string; facts: WorkflowGateFacts },
 ): WorkflowAction[] {
+  const current = workflow.stages.find((stage) => stage.id === subject.stageId);
+  const currentFinal = current ? isFinalState(current.systemState) : false;
   return workflow.actions
-    .filter((action) => action.stageId === null || action.stageId === subject.stageId)
+    .filter((action) =>
+      action.stageId === null ? !currentFinal : action.stageId === subject.stageId,
+    )
     .filter((action) => (action.steps as unknown[]).length === 0 && canShow(action, subject))
     .sort(
       (a, b) =>

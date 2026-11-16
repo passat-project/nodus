@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ActionDef } from '../workflow.repository.js';
+import type { ActionDef, StageRow } from '../workflow.repository.js';
 import { gateFacts } from '../gate-facts.test-helper.js';
 import { actionOptions } from './transition-availability.js';
 
@@ -14,6 +14,12 @@ const subject = {
   stageId: 's1',
   facts: gateFacts(),
 };
+
+/** Стадии документа: s1 — рабочая, s9 — завершённая (финальный статус). */
+const stages = [
+  { id: 's1', systemState: 'active' },
+  { id: 's9', systemState: 'closed' },
+] as unknown as StageRow[];
 
 function action(overrides: Partial<ActionDef>): ActionDef {
   return {
@@ -37,6 +43,7 @@ describe('actionOptions — действия в панели карточки (#
   it('свои действия статуса раньше «из любого», порядок — sortOrder', () => {
     const result = actionOptions(
       {
+        stages,
         actions: [
           action({ id: 'any', stageId: null, sortOrder: 0 }),
           action({ id: 'b', stageId: 's1', sortOrder: 1 }),
@@ -51,6 +58,7 @@ describe('actionOptions — действия в панели карточки (#
   it('чужой статус, недоступная роль и действие с шагами в карточку не попадают', () => {
     const result = actionOptions(
       {
+        stages,
         actions: [
           action({ id: 'other', stageId: 's2' }),
           action({
@@ -72,7 +80,7 @@ describe('actionOptions — действия в панели карточки (#
   it('окно уходит только если включено', () => {
     const off = action({ id: 'off', form: { enabled: false, sections: [] } });
     const on = action({ id: 'on' });
-    const result = actionOptions({ actions: [off, on] }, subject);
+    const result = actionOptions({ stages, actions: [off, on] }, subject);
     expect(result.find((entry) => entry.id === 'off')?.form).toBeNull();
     expect(result.find((entry) => entry.id === 'on')?.form).toMatchObject({ enabled: true });
     // Гейтов нет — кнопка доступна.
@@ -88,7 +96,19 @@ describe('actionOptions — действия в панели карточки (#
         postFunctions: [],
       },
     });
-    const [only] = actionOptions({ actions: [gated] }, subject);
+    const [only] = actionOptions({ stages, actions: [gated] }, subject);
     expect(only?.blockedBy).toEqual([{ kind: 'time_logged' }]);
+  });
+
+  it('«в любом статусе» не показывается в завершённой записи (решение 16.11)', () => {
+    const result = actionOptions(
+      {
+        stages,
+        actions: [action({ id: 'any', stageId: null }), action({ id: 'explicit', stageId: 's9' })],
+      },
+      { ...subject, stageId: 's9' },
+    );
+    // Явно поставленное на закрытый статус — работает, «любое» — нет.
+    expect(result.map((entry) => entry.id)).toEqual(['explicit']);
   });
 });

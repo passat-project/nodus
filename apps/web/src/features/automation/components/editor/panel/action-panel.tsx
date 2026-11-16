@@ -87,6 +87,14 @@ export function ActionPanel({
             ))}
           </SelectContent>
         </Select>
+        {action.stageId === null ? (
+          // Решение владельца 16.11: «в любом статусе» — во всех, кроме
+          // завершённых и отменённых. В закрытой записи действие работает,
+          // только если поставлено на этот статус явно.
+          <p className="pt-1 text-xs text-muted-foreground">
+            {ui.automation.panel.actionAtAnyHint}
+          </p>
+        ) : null}
       </PanelField>
 
       <PanelField label={ui.automation.panel.actionName}>

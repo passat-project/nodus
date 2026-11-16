@@ -6,6 +6,7 @@ import type {
   CustomFieldValue,
   ExecuteTransitionBody,
   ExecuteTransitionResult,
+  ExecuteActionBody,
   WorkflowAction,
   WorkflowTransition,
 } from '@nodus/contracts';
@@ -212,12 +213,14 @@ export class TaskTransitionsService {
     user: AuthUser,
     taskId: string,
     actionId: string,
-    body: ExecuteTransitionBody,
+    body: ExecuteActionBody,
   ): Promise<ExecuteTransitionResult> {
     const row = await this.query.visibleRow(user, taskId);
     const transitions = await this.txRunner.run(async (tx) => {
       const pressed = await this.engine.pressAction(tx, taskId, 'task', user, actionId, {
         form: body.form,
+        ...(body.override !== undefined ? { override: body.override } : {}),
+        ...(body.reason !== undefined ? { reason: body.reason } : {}),
       });
       // Журнал и лента задачи видят нажатие как событие (I3): статус тот же,
       // поэтому отдельное событие, а не stage_changed.

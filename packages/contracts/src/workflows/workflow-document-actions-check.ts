@@ -1,3 +1,4 @@
+import { isActionFormSectionKind } from './workflow-action.schemas.js';
 import type { ProcessCategory } from './process-type.schemas.js';
 import type { WorkflowDraftAction, WorkflowProblem } from './workflow-document.schemas.js';
 
@@ -63,6 +64,12 @@ export function checkActionProblems(
       problems.push(error('action_window_empty', { actionId: a.id }));
     } else if (!a.form.enabled && a.steps.length === 0) {
       problems.push(error('action_without_form_and_steps', { actionId: a.id }));
+    }
+    // Аудит В5: разделы, определённые только для смены статуса, действию
+    // недоступны — иначе номер выдаётся «в никуда», а ревизия итога обходит
+    // гейт следующего перехода.
+    if (a.form.sections.some((section) => !isActionFormSectionKind(section.kind))) {
+      problems.push(error('action_section_unsupported', { actionId: a.id }));
     }
 
     if (a.rules.conditions.length === 0) {

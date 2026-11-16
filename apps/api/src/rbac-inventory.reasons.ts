@@ -131,6 +131,10 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'POST /letters/:id/join': LETTER_VISIBLE_ONE,
   'GET /letters/:id/transitions': LETTER_VISIBLE_ONE,
   'POST /letters/:id/transitions/:transitionId': LETTER_VISIBLE_ONE,
+  // Действия письма без смены статуса (#633, аудит В1): та же граница, что у
+  // кнопок перехода — видимость письма проверяет сервис (404 чужому).
+  'GET /letters/:id/actions': LETTER_VISIBLE_ONE,
+  'POST /letters/:id/actions/:actionId/press': LETTER_VISIBLE_ONE,
   'GET /letters/:id/history': LETTER_VISIBLE_ONE,
   // Дерево «ёлочки» (#461, Р2): видимость письма в сервисе, невидимый корень —
   // 404 без оракула; дочерние узлы фильтруются той же функцией.

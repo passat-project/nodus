@@ -22,6 +22,7 @@ import { z } from 'zod';
 import {
   addLetterParticipantBodySchema,
   createLetterFieldsSchema,
+  executeActionBodySchema,
   executeLetterTransitionResultSchema,
   executeTransitionBodySchema,
   letterDetailSchema,
@@ -33,12 +34,15 @@ import {
   Permission,
   setLetterMainDocumentBodySchema,
   updateLetterBodySchema,
+  workflowActionSchema,
   workflowTransitionSchema,
   type AddLetterParticipantBody,
   type AuthUser,
   type CreateLetterFields,
+  type ExecuteActionBody,
   type ExecuteLetterTransitionResult,
   type ExecuteTransitionBody,
+  type WorkflowAction,
   type SetLetterMainDocumentBody,
   type UpdateLetterBody,
   type LetterDetail,
@@ -272,6 +276,37 @@ export class LettersController {
     body: ExecuteTransitionBody,
   ): Promise<ExecuteLetterTransitionResult> {
     return this.transitions.execute(user, id, transitionId, body);
+  }
+
+  @Get(':id/actions')
+  @ApiOperation({ summary: 'Доступные действия письма (без смены статуса)' })
+  @ApiOkResponse({ standardSchema: z.array(workflowActionSchema) })
+  @ApiErrors(400, 401, 404)
+  availableActions(
+    @GetUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+  ): Promise<WorkflowAction[]> {
+    return this.transitions.availableActions(user, id);
+  }
+
+  @Post(':id/actions/:actionId/press')
+  @HttpCode(200)
+  @Audit({ action: 'correspondence.letter_action', entity: 'letter' })
+  @ApiOperation({ summary: 'Нажать действие письма: данные окна, статус не меняется' })
+  @ApiOkResponse({ standardSchema: executeLetterTransitionResultSchema })
+  @ApiErrors(400, 401, 403, 404, 409, 422)
+  @ApiIdempotencyKey()
+  pressAction(
+    @GetUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Param('actionId', uuid) actionId: string,
+    @Body({
+      schema: executeActionBodySchema,
+      pipes: [new ZodValidationPipe(executeActionBodySchema)],
+    })
+    body: ExecuteActionBody,
+  ): Promise<ExecuteLetterTransitionResult> {
+    return this.transitions.pressAction(user, id, actionId, body);
   }
 
   @Get(':id/history')

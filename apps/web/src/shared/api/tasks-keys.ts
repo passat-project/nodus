@@ -35,6 +35,8 @@ export const tasksKeys = {
   transitions: (id: string) => [...tasksKeys.all, 'transitions', id] as const,
   /** Доступные действия без смены статуса (#633). */
   actions: (id: string) => [...tasksKeys.all, 'actions', id] as const,
+  /** Журнал задачи (вкладка «История», I9): события task.* курсором. */
+  history: (id: string) => [...tasksKeys.all, 'history', id] as const,
   /** Каталог типов задач (ступень 1 — один системный «Задача»). */
   /** Записи времени задачи (I14). */
   timeEntries: (id: string) => [...tasksKeys.all, 'time-entries', id] as const,

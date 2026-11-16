@@ -1,4 +1,4 @@
-import { expect, vi } from 'vitest';
+﻿import { expect, vi } from 'vitest';
 
 import type {
   WorkflowActorSubject,
@@ -52,6 +52,7 @@ export function setup(
   transitions: TransitionDef[],
   subjectFacts: () => typeof facts = () => facts,
   actions: readonly ActionDef[] = [],
+  subjectOverrides: Partial<{ stageId: string; canOverrideGates: boolean }> = {},
 ) {
   const order: string[] = [];
   let applied = false;
@@ -72,10 +73,10 @@ export function setup(
       return {
         workflowId: 'wf',
         typeId: 'type',
-        stageId: ACTIVE,
+        stageId: subjectOverrides.stageId ?? ACTIVE,
         roles: new Set(['assignee']),
         bypassConditions: false,
-        canOverrideGates: false,
+        canOverrideGates: subjectOverrides.canOverrideGates ?? false,
         actsWithoutConditions: true,
         facts: subjectFacts(),
       };

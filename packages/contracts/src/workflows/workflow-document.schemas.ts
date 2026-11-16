@@ -277,6 +277,10 @@ export const workflowProblemCodeSchema = z.enum([
   'action_window_empty',
   'action_duplicate_name',
   'action_stage_unknown',
+  /** В окне действия раздел, определённый только для смены статуса:
+   *  `registration` (нужен переход, чтобы выдать номер) и `result*`
+   *  (ревизия итога в том же статусе обошла бы гейт `result_present`). */
+  'action_section_unsupported',
   'too_many_actions',
   /** Правило `approver_is_actor` не сможет определить утверждающего:
    *  у целевого статуса нет единственной основной action-кнопки с условиями. */

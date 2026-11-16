@@ -11,6 +11,8 @@ import { ChatProfilePane } from '../../../shared/chat/chat-profile-pane.js';
 import { ConversationMembersPanel } from '../../../shared/chat/conversation-members.js';
 import { VaultWindow } from '../../../shared/chat/vault-window.js';
 import { formatDateTime } from '../../../shared/lib/format.js';
+import { useTaskHistory } from '../api/task-history-query.js';
+import { actionHistoryRows } from '../lib/task-history-rows.js';
 
 function Section({
   icon: Icon,
@@ -56,6 +58,12 @@ export const TaskAboutDrawer = memo(function TaskAboutDrawer({
   const conversationId = conversation?.id;
   const [vaultType, setVaultType] = useState<VaultItemType | null>(null);
   const [membersOpen, setMembersOpen] = useState(false);
+  const historyQuery = useTaskHistory(task.id);
+  // Нажатия действий — строки журнала (#633, аудит Б3). Порядок серверный:
+  // свежие первыми, курсор «Показать ещё» — старые.
+  const actionRows = actionHistoryRows(
+    (historyQuery.data?.pages ?? []).flatMap((page) => page.items),
+  );
   const [favorite, setFavorite] = useState(false);
 
   return (
@@ -132,6 +140,32 @@ export const TaskAboutDrawer = memo(function TaskAboutDrawer({
                 {formatDateTime(task.updatedAt)}
               </span>
             </span>
+            {/* Нажатия действий (#633, аудит Б3): строка журнала из event log,
+                а не только блок в чате — видна и при выключенном чате, и
+                участникам, когда нажимал администратор вне беседы. */}
+            {actionRows.map((row) => (
+              <div key={row.id} className="flex flex-col gap-0.5 border-t border-border/60 pt-2">
+                <span className="flex items-baseline justify-between gap-2 text-sm">
+                  <span className="min-w-0 text-muted-foreground">{row.text}</span>
+                  <span className="shrink-0 font-mono text-label-sm text-muted-foreground">
+                    {formatDateTime(row.at)}
+                  </span>
+                </span>
+                <span className="text-xs text-muted-foreground">{row.actor}</span>
+              </div>
+            ))}
+            {historyQuery.hasNextPage ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="self-start"
+                disabled={historyQuery.isFetchingNextPage}
+                onClick={() => void historyQuery.fetchNextPage()}
+              >
+                {ui.tasks.historyMore}
+              </Button>
+            ) : null}
           </Section>
         </div>
       )}

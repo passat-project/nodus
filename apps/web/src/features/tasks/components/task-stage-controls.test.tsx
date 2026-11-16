@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Check, X } from 'lucide-react';
 import type { TaskDetail, WorkflowTransition } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -44,81 +44,9 @@ const transition = (outcome: 'success' | 'cancelled' | 'rejected' | null): Workf
 
 const task = {
   id: '00000000-0000-4000-8000-000000000001',
-  stage: {
-    name: 'Отклонена',
-    color: 'danger',
-    systemState: 'closed',
-    outcome: 'rejected',
-  },
+  stage: { name: 'Отклонена', color: 'danger', systemState: 'closed', outcome: 'rejected' },
   access: { canEdit: true },
 } as unknown as TaskDetail;
-
-describe('TaskActionBar: итог «Отклонена» (#430)', () => {
-  it('иконка итога различает успех и отказ/отмену', () => {
-    expect(transitionIcon(transition('success'))).toBe(Check);
-    expect(transitionIcon(transition('rejected'))).toBe(X);
-    expect(transitionIcon(transition('cancelled'))).toBe(X);
-  });
-
-  it('закрытая задача с итогом rejected показывает отказ, а не успех', () => {
-    render(<TaskActionBar task={task} showTime={false} />);
-
-    expect(screen.getByText('Отклонена')).toBeTruthy();
-    expect(screen.getByText(ui.tasks.processNoActions)).toBeTruthy();
-  });
-});
-
-describe('TaskActionBar: действие без смены статуса (#633)', () => {
-  it('кнопка действия в панели, клик уходит в раннер действий', () => {
-    mocks.actions = [
-      {
-        id: 'a1',
-        name: 'Запросить уточнение',
-        display: 'button',
-        form: null,
-        blockedBy: [],
-        validators: [],
-      },
-    ];
-    render(
-      <TaskActionBar
-        task={{ ...task, stage: { ...task.stage, systemState: 'active' } }}
-        showTime={false}
-      />,
-    );
-
-    const button = screen.getByRole('button', { name: 'Запросить уточнение' });
-    fireEvent.click(button);
-    expect(mocks.actionRun).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'a1', name: 'Запросить уточнение' }),
-    );
-    // «Нет доступных действий» не показывается, хотя переходов нет.
-    expect(screen.queryByText(ui.tasks.processNoActions)).toBeNull();
-  });
-
-  it('заблокированное действие видно, помечено и объясняет причину (#740)', () => {
-    mocks.actions = [
-      {
-        id: 'a2',
-        name: 'С гейтом',
-        display: 'button',
-        form: null,
-        blockedBy: [{ kind: 'time_logged' }],
-        validators: [{ kind: 'time_logged' }],
-      },
-    ];
-    render(
-      <TaskActionBar
-        task={{ ...task, stage: { ...task.stage, systemState: 'active' } }}
-        showTime={false}
-      />,
-    );
-
-    const button = screen.getByRole('button', { name: 'С гейтом' });
-    expect(button.getAttribute('data-blocked')).toBe('true');
-    expect(button.getAttribute('title')).toContain(ui.tasks.processBlockedMissing);
-  });
-});
 
 /** Действие в панели: только поля, которые читает бар (#633). */
 const action = (id: string, name: string, overrides: Record<string, unknown> = {}) => ({
@@ -135,12 +63,13 @@ const transitionOf = (
   id: string,
   name: string,
   display: 'primary' | 'button' | 'menu',
+  blockedBy: unknown[] = [],
 ): WorkflowTransition =>
   ({
     id,
     name,
     display,
-    blockedBy: [],
+    blockedBy,
     toStageState: 'active',
     toStageOutcome: null,
     toStageName: name,
@@ -149,167 +78,141 @@ const transitionOf = (
 
 const activeTask = { ...task, stage: { ...task.stage, systemState: 'active' } } as TaskDetail;
 
-const actionsTrigger = (count: number) =>
-  screen.getByRole('button', { name: `${ui.tasks.allActionsLabel} ${count}` });
+/** Слот-кнопка и её стрелка — по подписи слота. */
+const slotTrigger = (label: string) => screen.getByRole('button', { name: label });
 
-/** Левая часть сдвоенной кнопки — выполнить дефолтное действие. */
-const defaultActionButton = (name: string) =>
-  screen.getByRole('button', { name: `${ui.tasks.actionRunLabel} ${name}` });
-
-/** Открытие меню с клавиатуры — как у пунктов профиля (#751): фокус + Enter. */
-async function openActionsMenu(count: number) {
-  const trigger = actionsTrigger(count);
+async function openSlot(label: string) {
+  const trigger = slotTrigger(label);
   trigger.focus();
   fireEvent.keyDown(trigger, { key: 'Enter' });
   return screen.findByRole('menu');
 }
 
-describe('TaskActionBar: порог действий — меню «Действия» (#633, #707)', () => {
-  it('одно действие — отдельная кнопка с полным названием, меню нет', () => {
-    mocks.actions = [action('a1', 'Запросить уточнение по смете')];
-    render(<TaskActionBar task={activeTask} showTime={false} />);
-
-    const button = screen.getByRole('button', { name: 'Запросить уточнение по смете' });
-    // Полное имя: подпись не обрезается и не ограничена шириной.
-    const label = button.lastElementChild as HTMLElement;
-    expect(label.textContent).toBe('Запросить уточнение по смете');
-    expect(label.className).toContain('whitespace-nowrap');
-    expect(label.className).not.toContain('truncate');
-    expect(label.className).not.toContain('max-w-');
-    expect(screen.queryByRole('button', { name: `${ui.tasks.allActionsLabel} 1` })).toBeNull();
+describe('TaskActionBar: итог «Отклонена» (#430)', () => {
+  it('иконка итога различает успех и отказ/отмену', () => {
+    expect(transitionIcon(transition('success'))).toBe(Check);
+    expect(transitionIcon(transition('rejected'))).toBe(X);
+    expect(transitionIcon(transition('cancelled'))).toBe(X);
   });
 
-  it('одно действие с display:menu — всё равно список «Действия» (настройку не теряем)', async () => {
-    mocks.actions = [action('a1', 'В меню', { display: 'menu' })];
+  it('закрытая задача с итогом rejected показывает отказ, а не успех', () => {
+    render(<TaskActionBar task={task} showTime={false} />);
+    expect(screen.getByText('Отклонена')).toBeTruthy();
+    expect(screen.getByText(ui.tasks.processNoActions)).toBeTruthy();
+  });
+});
+
+describe('TaskActionBar: слоты панели (решение 16.11.2026)', () => {
+  it('одно действие — обычная кнопка без стрелки, клик уходит в раннер', () => {
+    mocks.actions = [action('a1', 'Запросить уточнение')];
     render(<TaskActionBar task={activeTask} showTime={false} />);
 
-    // Дефолтной кнопки нет — только триггер меню (в шапке — «Действия · 1»).
-    expect(screen.queryByRole('button', { name: 'В меню' })).toBeNull();
-    await openActionsMenu(1);
-    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['В меню']);
+    const button = screen.getByRole('button', { name: 'Запросить уточнение' });
+    fireEvent.click(button);
+    expect(mocks.actionRun).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'a1', name: 'Запросить уточнение' }),
+    );
+    // Стрелки слота нет: одна кнопка — без списка.
+    expect(screen.queryByRole('button', { name: ui.tasks.actionsMenu })).toBeNull();
+    expect(screen.queryByText(ui.tasks.processNoActions)).toBeNull();
   });
 
-  it('одно действие с display:primary — отдельная (залитая) кнопка, не список', () => {
-    mocks.actions = [action('a1', 'Главное действие', { display: 'primary' })];
+  it('два действия — первая нажимается сразу, у стрелки — список остальных', async () => {
+    mocks.transitions = [transitionOf('t1', 'В работу', 'primary')];
+    mocks.actions = [action('a1', 'Первое'), action('a2', 'Второе')];
     render(<TaskActionBar task={activeTask} showTime={false} />);
 
-    expect(screen.getByRole('button', { name: 'Главное действие' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: `${ui.tasks.allActionsLabel} 1` })).toBeNull();
-  });
-
-  it('два действия — сдвоенная кнопка: дефолт слева, меню справа', async () => {
-    mocks.actions = [
-      action('a1', 'Первое', { display: 'menu' }),
-      action('a2', 'Второе', { form: { enabled: true, sections: [] } }),
-    ];
-    render(<TaskActionBar task={activeTask} showTime={false} />);
-
-    // Первое помечено «в меню» — дефолтной кнопки нет, только шеврон.
-    expect(screen.queryByRole('button', { name: `${ui.tasks.actionRunLabel} Первое` })).toBeNull();
-    await openActionsMenu(2);
-    expect(screen.getAllByRole('menuitem')).toHaveLength(2);
-  });
-
-  it('заблокированное дефолтное действие — клик открывает причины, не молчит', () => {
-    mocks.actions = [
-      action('a1', 'С гейтом', { blockedBy: [{ kind: 'time_logged' }] }),
-      action('a2', 'Второе'),
-    ];
-    render(<TaskActionBar task={activeTask} showTime={false} />);
-
-    const left = defaultActionButton('С гейтом');
-    expect(left.getAttribute('data-blocked')).toBe('true');
-    expect(left.getAttribute('title')).toContain(ui.tasks.processBlockedMissing);
-    // Тот же обработчик: раннер сам покажет окно причин / тост.
-    fireEvent.click(left);
+    fireEvent.click(screen.getByRole('button', { name: 'Первое' }));
     expect(mocks.actionRun).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }));
-  });
-
-  it('три действия — сдвоенная кнопка с дефолтным действием и шевроном', async () => {
-    mocks.actions = [
-      action('a1', 'Первое'),
-      action('a2', 'Второе', { form: { enabled: true, sections: [] } }),
-      action('a3', 'Третье'),
-    ];
-    render(<TaskActionBar task={activeTask} showTime={false} />);
-
-    // Левая часть — имя первого действия, клик идёт в тот же раннер.
-    fireEvent.click(defaultActionButton('Первое'));
-    expect(mocks.actionRun).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }));
-    // Отдельных кнопок остальных действий в строке нет.
+    // Второй кнопки в строке нет — она в списке.
     expect(screen.queryByRole('button', { name: 'Второе' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Третье' })).toBeNull();
 
-    await openActionsMenu(3);
-    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      'Первое',
-      'Второе',
-      'Третье',
-    ]);
+    const menu = await openSlot(ui.tasks.actionsMenu);
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Второе']);
   });
 
-  it('заблокированное действие — маркер причины справа, клик идёт в раннер', async () => {
-    // Подробности маркера — в task-actions-menu.test.tsx; здесь важен путь
-    // нажатия из меню: тот же раннер, что у кнопки.
+  it('показ `menu` — действие в конце списка, дефолтной кнопкой становится обычное', async () => {
+    mocks.transitions = [transitionOf('t1', 'В работу', 'primary')];
+    mocks.actions = [action('rare', 'В конец', { display: 'menu' }), action('a2', 'Обычное')];
+    render(<TaskActionBar task={activeTask} showTime={false} />);
+
+    // Обычное действие — кнопка слота, «в конец» — только в списке.
+    expect(screen.getByRole('button', { name: 'Обычное' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'В конец' })).toBeNull();
+
+    const menu = await openSlot(ui.tasks.actionsMenu);
+    expect(within(menu).getByRole('menuitem', { name: /В конец/ })).toBeTruthy();
+  });
+
+  it('заблокированное действие в списке показывает причину текстом в строке', async () => {
+    mocks.transitions = [transitionOf('t1', 'В работу', 'primary')];
     mocks.actions = [
       action('a1', 'Свободное'),
       action('a2', 'С гейтом', { blockedBy: [{ kind: 'time_logged' }] }),
     ];
     render(<TaskActionBar task={activeTask} showTime={false} />);
-    await openActionsMenu(2);
 
-    const blocked = screen
-      .getAllByRole('menuitem')
-      .find((item) => item.textContent?.includes('С гейтом')) as HTMLElement;
-    expect(blocked.getAttribute('data-blocked')).toBe('true');
+    const menu = await openSlot(ui.tasks.actionsMenu);
+    const row = within(menu).getByRole('menuitem', { name: /С гейтом/ });
+    expect(row.getAttribute('data-blocked')).toBe('true');
+    // Причина — текстом, а не только подсказкой наведения.
+    expect(row.textContent).toContain(ui.tasks.processBlockedMissing);
 
-    fireEvent.click(blocked);
+    fireEvent.click(row);
     expect(mocks.actionRun).toHaveBeenCalledWith(expect.objectContaining({ id: 'a2' }));
-    // Меню закрылось после выполнения.
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
   });
-});
 
-describe('TaskActionBar: коллективная кнопка — это переход (#707)', () => {
-  it('широкий переход рисуется своим рядом, действия не дублируются', async () => {
-    // Коллективное нажатие в #707 — обычный переход с кольцом прогресса:
-    // наш бар её не различает. Моделируем «широкой» кнопкой и проверяем,
-    // что панель не падает, не дублирует действия и уводит их в меню.
-    mocks.transitions = [transitionOf('press', 'Коллективное согласование', 'primary')];
-    mocks.actions = [action('a1', 'Первое'), action('a2', 'Второе')];
-    render(<TaskActionBar task={activeTask} showTime={false} />);
-
-    const press = screen.getByRole('button', { name: 'Коллективное согласование' });
-    // Переход-коллективка — одна кнопка, спаренных копий нет.
-    expect(screen.getAllByRole('button', { name: 'Коллективное согласование' })).toHaveLength(1);
-    expect(press.getAttribute('data-blocked')).toBeNull();
-
-    await openActionsMenu(2);
-    expect(screen.getAllByRole('menuitem')).toHaveLength(2);
-  });
-
-  it('порядок панели: переходы → действия → «⋯» процесса', async () => {
+  it('в панели нет меню «⋯»: редкий переход живёт в слоте второстепенных', async () => {
     mocks.transitions = [
       transitionOf('t1', 'В работу', 'primary'),
       transitionOf('t2', 'На проверку', 'button'),
       transitionOf('t3', 'Отложить', 'menu'),
     ];
-    mocks.actions = [action('a1', 'Первое'), action('a2', 'Второе')];
     render(<TaskActionBar task={activeTask} showTime={false} />);
 
-    const transitionBtn = screen.getByRole('button', { name: 'В работу' });
-    const trigger = actionsTrigger(2);
-    const more = screen.getByRole('button', { name: ui.tasks.moreActions });
-
-    const order = (a: HTMLElement, b: HTMLElement) =>
-      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING;
-    expect(order(transitionBtn, trigger)).toBeTruthy();
-    expect(order(trigger, more)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'В работу' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'На проверку' })).toBeTruthy();
+    // Кнопки «⋯» больше нет — её место занимает стрелка слота.
+    const menu = await openSlot(ui.tasks.moreActions);
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Отложить']);
   });
-});
 
-describe('TaskActionBar: одна строка и приоритет действий (#633)', () => {
-  it('2 перехода (один коллективный) + 2 действия — одна строка, действия в дропдаун', () => {
+  it('заблокированный переход в слоте: причина видна в строке списка', async () => {
+    mocks.transitions = [
+      transitionOf('t1', 'В работу', 'primary'),
+      transitionOf('t2', 'На проверку', 'button'),
+      transitionOf('t3', 'Отложить', 'menu', [{ kind: 'time_logged' }]),
+    ];
+    render(<TaskActionBar task={activeTask} showTime={false} />);
+
+    // Кнопка слота — первая второстепенная; список открывается стрелкой.
+    fireEvent.click(screen.getByRole('button', { name: 'На проверку' }));
+    expect(mocks.transitionRun).toHaveBeenCalledWith(expect.objectContaining({ id: 't2' }));
+
+    const menu = await openSlot(ui.tasks.moreActions);
+    const row = within(menu).getByRole('menuitem', { name: /Отложить/ });
+    expect(row.getAttribute('data-blocked')).toBe('true');
+    expect(row.textContent).toContain(ui.tasks.processBlockedMissing);
+  });
+
+  it('без переходов главным становится первое действие (залитая кнопка)', () => {
+    mocks.actions = [action('a1', 'Добавить замечание')];
+    render(<TaskActionBar task={activeTask} showTime={false} />);
+
+    const main = screen.getByRole('button', { name: 'Добавить замечание' });
+    expect(main.className).toContain('bg-primary');
+  });
+
+  it('панель держит одну строку: главная не сжимается', () => {
     mocks.transitions = [
       transitionOf('t1', 'Коллективное согласование', 'primary'),
       transitionOf('t2', 'Приостановить', 'button'),
@@ -320,30 +223,11 @@ describe('TaskActionBar: одна строка и приоритет дейст�
     const panel = container.firstElementChild as HTMLElement;
     expect(panel.className).toContain('flex-nowrap');
     expect(panel.className).not.toContain('flex-wrap');
-    expect(panel.className).toContain('min-w-0');
 
-    // Переходы — полные имена, не ужимаются под действия.
-    const press = screen.getByRole('button', { name: 'Коллективное согласование' });
-    const pause = screen.getByRole('button', { name: 'Приостановить' });
-    expect(press.className).toContain('shrink-0');
-    expect(pause.className).toContain('shrink-0');
-    expect(press.getAttribute('title')).toContain('Коллективное согласование');
-
-    // Действия — один блок (сдвоенная кнопка) в строке панели.
-    const split = screen.getByRole('group', { name: ui.tasks.actionsMenu });
-    expect(split.parentElement).toBe(panel);
-    expect(actionsTrigger(2).parentElement).toBe(split);
-    expect(screen.queryByRole('button', { name: 'Запросить уточнение' })).toBeNull();
-  });
-
-  it('одно действие — кнопка ужимается первой (значок + подсказка)', () => {
-    mocks.transitions = [transitionOf('t1', 'В работу', 'primary')];
-    mocks.actions = [action('a1', 'Запросить уточнение')];
-    render(<TaskActionBar task={activeTask} showTime={false} />);
-
-    const actionBtn = screen.getByRole('button', { name: 'Запросить уточнение' });
-    // Подпись действия прячется в узком контейнере, полное имя — в title.
-    expect(actionBtn.className).toContain('[flex-shrink:3]');
-    expect(actionBtn.getAttribute('title')).toBe('Запросить уточнение');
+    const main = screen.getByRole('button', { name: 'Коллективное согласование' });
+    expect(main.className).toContain('shrink-0');
+    // Главная подпись не прячется в узком контейнере.
+    expect(main.textContent).toContain('Коллективное согласование');
+    expect(screen.getByRole('group', { name: ui.tasks.actionsMenu })).toBeTruthy();
   });
 });

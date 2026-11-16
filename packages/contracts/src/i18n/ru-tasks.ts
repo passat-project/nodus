@@ -73,6 +73,10 @@ export const tasksStrings = {
   tabChat: 'Чат',
   aboutTask: 'О задаче',
   history: 'История',
+  /** Строка журнала нажатия действия (#633): «Действие: X · в статусе Y». */
+  historyAction: 'Действие',
+  historyInStage: 'в статусе',
+  historyMore: 'Показать ещё',
   favorite: 'В избранное',
   created: 'Задача создана',
   updated: 'Обновлена',

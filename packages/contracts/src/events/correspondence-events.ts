@@ -29,6 +29,9 @@ export const CORRESPONDENCE_EVENTS = {
   LETTER_CLOSED_UNREGISTERED: 'correspondence.letter_closed_unregistered',
   /** Правка регистрационных данных (В3, Р11): история карточки. */
   LETTER_UPDATED: 'correspondence.letter_updated',
+  /** Нажатие действия без смены статуса (#633): окно записано, статус прежний.
+   *  История письма и журнал читают этот тип (аудит Б3 — второй канал). */
+  LETTER_ACTION_PRESSED: 'correspondence.letter_action_pressed',
   /** Состав участников письма (присоединение, адресат) — мост чата. */
   LETTER_PARTICIPANTS_CHANGED: 'correspondence.letter_participants_changed',
   /** Связь писем поставлена/заменена/снята (#461, Р6): история карточки

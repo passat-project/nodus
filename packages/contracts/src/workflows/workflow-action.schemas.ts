@@ -40,6 +40,20 @@ export const workflowDraftActionSchema = z.object({
 });
 export type WorkflowDraftAction = z.infer<typeof workflowDraftActionSchema>;
 
+/**
+ * Разделы окна, смысл которых определён без смены статуса (#633, аудит В5).
+ * `registration` выдаёт номер при переходе — без перехода это номер «в никуда»;
+ * `result`/`result_files`/`result_messages` создают ревизию итога прямо в
+ * статусе, после чего гейт `result_present` следующего перехода проходит сам,
+ * без работы по задаче. Поэтому действию доступны только эти три раздела.
+ */
+export const ACTION_FORM_SECTION_KINDS = ['fields', 'time', 'comment'] as const;
+export type ActionFormSectionKind = (typeof ACTION_FORM_SECTION_KINDS)[number];
+
+export function isActionFormSectionKind(kind: string): kind is ActionFormSectionKind {
+  return (ACTION_FORM_SECTION_KINDS as readonly string[]).includes(kind);
+}
+
 /** Граница публикации: имя обязательно, окно — строгая форма. */
 export const workflowDocActionSchema = workflowDraftActionSchema.extend({
   name: z.string().trim().min(1).max(40),

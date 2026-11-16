@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
 import type {
+  ExecuteActionBody,
   ExecuteTransitionBody,
   ExecuteTransitionResult,
   TaskDetail,
@@ -53,7 +54,7 @@ export function usePressAction(taskId: string) {
   const queryClient = useQueryClient();
   const idempotencyKey = useRef<string | null>(null);
   return useMutation({
-    mutationFn: (vars: { action: WorkflowAction; body: ExecuteTransitionBody }) => {
+    mutationFn: (vars: { action: WorkflowAction; body: ExecuteActionBody }) => {
       idempotencyKey.current ??= crypto.randomUUID();
       return api<ExecuteTransitionResult>(`/tasks/${taskId}/actions/${vars.action.id}/press`, {
         method: 'POST',
@@ -67,6 +68,7 @@ export function usePressAction(taskId: string) {
       patchTask(queryClient, taskId, result.task);
       queryClient.setQueryData(tasksKeys.transitions(taskId), result.transitions);
       void queryClient.invalidateQueries({ queryKey: tasksKeys.actions(taskId) });
+      void queryClient.invalidateQueries({ queryKey: tasksKeys.history(taskId) });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.detail(taskId) });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.timeEntries(taskId) });
       for (const key of [
@@ -157,6 +159,9 @@ export function useSubmitTransitionWindow(taskId: string) {
       markFreshFromMutation(taskId);
       patchTask(queryClient, taskId, result.task);
       queryClient.setQueryData(tasksKeys.transitions(taskId), result.transitions);
+      // Действия зависят от статуса (аудит Б1): после перехода панель обязана
+      // показать кнопки нового статуса, а не старого до истечения staleTime.
+      void queryClient.invalidateQueries({ queryKey: tasksKeys.actions(taskId) });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.detail(taskId) });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.timeEntries(taskId) });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.transitions(taskId) });
@@ -213,6 +218,9 @@ export function useExecuteTransition(taskId: string) {
       markFreshFromMutation(taskId);
       patchTask(queryClient, taskId, result.task);
       queryClient.setQueryData(tasksKeys.transitions(taskId), result.transitions);
+      // Действия нового статуса (аудит Б1): кэш старого статуса сбрасывается
+      // сразу — иначе в панели остаются кнопки, которых уже нет.
+      void queryClient.invalidateQueries({ queryKey: tasksKeys.actions(taskId) });
       // Тост с номером — письменный паттерн (#630, Р6): «Присвоен номер …».
       const numbers = result.assignedNumbers ?? [];
       if (numbers.length > 0) {

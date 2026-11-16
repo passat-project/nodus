@@ -1,5 +1,5 @@
-import type { Edge, Node } from '@xyflow/react';
-import type { WorkflowDraftDocument } from '@nodus/contracts';
+﻿import type { Edge, Node } from '@xyflow/react';
+import { isFinalState, type WorkflowDraftDocument } from '@nodus/contracts';
 
 import type { AnyFlowNode } from './any-node.js';
 import { ARROW_MARKER, ARROW_MARKER_SELECTED } from './flow-markers.js';
@@ -58,9 +58,15 @@ export function buildRouteGraph(
   const actions = [...(doc.actions ?? [])].sort(
     (a, b) => Number(a.stageId === null) - Number(b.stageId === null) || a.sortOrder - b.sortOrder,
   );
-  const stageActionList = (stageId: string) =>
+  const stageActionList = (stage: { id: string; systemState: string }) =>
     actions
-      .filter((a) => a.stageId === null || a.stageId === stageId)
+      .filter((a) =>
+        a.stageId === null
+          ? // «В любом статусе» не работает в завершённых и отменённых
+            // (решение 16.11) — бейдж на закрытом узле их не считает.
+            !isFinalState(stage.systemState)
+          : a.stageId === stage.id,
+      )
       .map((a) => ({ id: a.id, name: a.name }));
   const selectedAction =
     options.selection?.kind === 'action'
@@ -118,7 +124,7 @@ export function buildRouteGraph(
           current: options.currentStageId === stage.id,
           readOnly,
           taskCount: options.stageEntityCounts?.[stage.id] ?? 0,
-          actions: stageActionList(stage.id),
+          actions: stageActionList(stage),
           selectedActionId:
             selectedActionStageId === stage.id || selectedAnyAction
               ? (selectedAction?.id ?? null)

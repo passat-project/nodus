@@ -3,8 +3,10 @@ import {
   CORRESPONDENCE_EVENTS,
   ErrorCode,
   type AuthUser,
+  type ExecuteActionBody,
   type ExecuteLetterTransitionResult,
   type ExecuteTransitionBody,
+  type WorkflowAction,
   type WorkflowTransition,
 } from '@nodus/contracts';
 
@@ -41,6 +43,62 @@ export class LetterTransitionsService {
         permissions: user.permissions,
       }),
     );
+  }
+
+  /** Действия без смены статуса (#633, аудит В1): та же панель, что у задачи —
+   *  иначе опубликованное действие письма негде нажать. */
+  async availableActions(user: AuthUser, letterId: string): Promise<WorkflowAction[]> {
+    await this.query.visibleRow(user, letterId);
+    return this.txRunner.run((tx) =>
+      this.engine.availableActions(tx, letterId, 'letter', {
+        id: user.id,
+        permissions: user.permissions,
+      }),
+    );
+  }
+
+  /** Нажатие действия письма: окно, журнал `record_kind='action'`, статус тот же.
+   *  Событие уходит в event log — история письма и чат-блок читают его. */
+  async pressAction(
+    user: AuthUser,
+    letterId: string,
+    actionId: string,
+    body: ExecuteActionBody,
+  ): Promise<ExecuteLetterTransitionResult> {
+    const row = await this.query.visibleRow(user, letterId);
+    await this.txRunner.run(async (tx) => {
+      const pressed = await this.engine.pressAction(
+        tx,
+        letterId,
+        'letter',
+        { id: user.id, permissions: user.permissions },
+        actionId,
+        {
+          form: body.form,
+          ...(body.override !== undefined ? { override: body.override } : {}),
+          ...(body.reason !== undefined ? { reason: body.reason } : {}),
+        },
+      );
+      await this.eventBus.emit(
+        tx,
+        CORRESPONDENCE_EVENTS.LETTER_ACTION_PRESSED,
+        {
+          letterId,
+          regNumber: row.regNumber,
+          actionId,
+          actionName: pressed.actionName,
+          stageName: pressed.stageName,
+          recordId: pressed.recordId,
+          ...(pressed.commentLabel ? { commentLabel: pressed.commentLabel } : {}),
+        },
+        { actorId: user.id, aggregateType: 'letter', aggregateId: letterId },
+      );
+    });
+    const [letter, transitions] = await Promise.all([
+      this.query.detail(user, letterId),
+      this.available(user, letterId),
+    ]);
+    return { letter, transitions };
   }
 
   async execute(
