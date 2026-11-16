@@ -1,4 +1,4 @@
-/* eslint-disable nodus-internal/max-lines-warn -- носители «проект/папка» (#630): место, имена и запись номера — один адаптер */
+﻿/* eslint-disable nodus-internal/max-lines-warn -- носители «проект/папка» (#630): место, имена и запись номера — один адаптер */
 import { Inject, Injectable } from '@nestjs/common';
 import {
   PROJECT_EVENTS,
@@ -212,7 +212,7 @@ export class ProjectNumberHostProvider implements NumberHostProvider {
       };
     }
     if (hit.entity === 'portfolio') {
-      const group = (await this.groups.list(true)).find((entry) => entry.id === hit.id);
+      const group = (await this.groups.list()).find((entry) => entry.id === hit.id);
       return group
         ? {
             entity: 'portfolio',

@@ -196,12 +196,7 @@ export const projectCatalogHandlers = [
     return HttpResponse.json(type);
   }),
 
-  http.get('/api/v1/projects/groups', ({ request }) => {
-    const includeArchived = includeArchivedOf(request);
-    return HttpResponse.json(
-      demoProjectGroups.filter((entry) => includeArchived || entry.archivedAt === null),
-    );
-  }),
+  http.get('/api/v1/projects/groups', () => HttpResponse.json(demoProjectGroups)),
 
   // Счётчики папок журнала (#559): видимый срез по статусам — зеркало API.
   // `scope=mine` сужает до моего участия тем же правилом, что журнал.
@@ -243,7 +238,6 @@ export const projectCatalogHandlers = [
     const group: ProjectGroup = {
       id: crypto.randomUUID(),
       name: parsed.data.name,
-      archivedAt: null,
     };
     demoProjectGroups.push(group);
     return HttpResponse.json(group, { status: 201 });
@@ -259,20 +253,12 @@ export const projectCatalogHandlers = [
     return HttpResponse.json(group);
   }),
 
-  http.delete('/api/v1/projects/groups/:id', ({ params }) => {
+  http.delete('/api/v1/projects/groups/:id/permanent', ({ params }) => {
     if (!getMockActor().permissions.includes(Permission.PROJECT_MANAGE)) return forbidden();
-    const group = demoProjectGroups.find((entry) => entry.id === String(params.id));
-    if (!group) return notFound();
-    group.archivedAt = new Date().toISOString();
-    return HttpResponse.json(group);
-  }),
-
-  http.post('/api/v1/projects/groups/:id/restore', ({ params }) => {
-    if (!getMockActor().permissions.includes(Permission.PROJECT_MANAGE)) return forbidden();
-    const group = demoProjectGroups.find((entry) => entry.id === String(params.id));
-    if (!group) return notFound();
-    group.archivedAt = null;
-    return HttpResponse.json(group);
+    const index = demoProjectGroups.findIndex((entry) => entry.id === String(params.id));
+    if (index < 0) return notFound();
+    demoProjectGroups.splice(index, 1);
+    return new HttpResponse(null, { status: 204 });
   }),
 
   // Настройки портала (#738): маршруты удалены вместе с настройкой видимости

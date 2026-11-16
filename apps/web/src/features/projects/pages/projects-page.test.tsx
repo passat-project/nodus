@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Permission, ui } from '@nodus/contracts';
@@ -26,8 +26,6 @@ const mocks = vi.hoisted(() => ({
   counts: vi.fn(),
   createGroup: vi.fn(),
   renameGroup: vi.fn(),
-  archiveGroup: vi.fn(),
-  restoreGroup: vi.fn(),
   deleteGroup: vi.fn(),
   statusMutate: vi.fn(),
   moveMutate: vi.fn(),
@@ -45,8 +43,6 @@ vi.mock('../api/portfolio-counts.js', () => ({
 vi.mock('../api/project-catalog-mutations.js', () => ({
   useCreateProjectGroup: () => ({ mutate: mocks.createGroup }),
   useRenameProjectGroup: () => ({ mutate: mocks.renameGroup }),
-  useArchiveProjectGroup: () => ({ mutate: mocks.archiveGroup }),
-  useRestoreProjectGroup: () => ({ mutate: mocks.restoreGroup }),
   useDeleteProjectGroup: () => ({ mutate: mocks.deleteGroup }),
 }));
 vi.mock('../api/project-mutations.js', () => ({
@@ -76,9 +72,9 @@ vi.mock('../../../shared/projects/project-create-store.js', () => ({
   openProjectCreate: mocks.openCreate,
 }));
 
-/** Открыть вкладку «Портфели» (список папок в поповере). */
+/** Открыть список папок кнопкой «Портфели». */
 function openFolders() {
-  fireEvent.click(screen.getByRole('button', { name: ui.projects.portfoliosTitle }));
+  fireEvent.click(screen.getByRole('button', { name: /^Портфели/ }));
 }
 
 /** Строка папки в открытом списке «Портфели». */
@@ -123,8 +119,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('журнал «Проекты»: вкладка «Портфели» (#559)', () => {
-  it('раскрывает список папок: «Все проекты», портфели со счётчиками, «Без портфеля» и архив', () => {
+describe('журнал «Проекты»: кнопка «Портфели» (#559)', () => {
+  it('раскрывает список папок: «Все проекты», портфели со счётчиками и «Без портфеля»', () => {
     render(<ProjectsPage />);
     openFolders();
 
@@ -132,12 +128,26 @@ describe('журнал «Проекты»: вкладка «Портфели» (
     expect(screen.getByText(PORTFOLIO.name)).toBeTruthy();
     expect(screen.getByText('98 / 100')).toBeTruthy();
     expect(screen.getByText(ui.projects.portfolioNone)).toBeTruthy();
-    expect(screen.getByText(ui.projects.portfolioArchivedSection)).toBeTruthy();
     // Строки журнала на месте: таблица показывает договоры.
     expect(screen.getByText(ACTIVE_PROJECT.name)).toBeTruthy();
-    // Справочник папок запрошен вместе с архивом, счётчики — по режиму «Все».
-    expect(mocks.groups).toHaveBeenCalledWith(true);
+    // Справочник папок без режима «с архивом», счётчики — по режиму «Все».
+    expect(mocks.groups).toHaveBeenCalledWith();
     expect(mocks.counts).toHaveBeenLastCalledWith('all');
+  });
+
+  it('выбранная папка называет кнопку — и не дублируется чипом в строке фильтров', async () => {
+    render(<ProjectsPage />);
+
+    openFolders();
+    fireEvent.click(screen.getByText(PORTFOLIO.name));
+    await waitFor(() => expect(lastFilters().portfolioId).toBe(PORTFOLIO.id));
+
+    // Кнопка носит имя папки и остаётся нейтральной (без подсветки выбора).
+    const trigger = screen.getByRole('button', { name: /^Портфели/ });
+    expect(trigger.textContent).toContain(PORTFOLIO.name);
+    expect(trigger.className.split(/\s+/)).not.toContain('bg-accent');
+    // Чипа «Портфели: …» в поле поиска нет — имя показывает кнопка.
+    expect(screen.queryByText(/^Портфели:/)).toBeNull();
   });
 
   it('клик по папке ставит фильтр журнала, «Все проекты» — снимает', async () => {
@@ -181,7 +191,6 @@ describe('журнал «Проекты»: вкладка «Портфели» (
     openFolders();
     expect(screen.getByText(ui.projects.portfolioMyProjects)).toBeTruthy();
     expect(lastFilters().scope).toBe('mine');
-    expect(localStorage.getItem('nodus-projects-scope-v1')).toBe('mine');
   });
 
   it('«Создать» из папки предзаполняет портфель, из «Все проекты» — нет', async () => {

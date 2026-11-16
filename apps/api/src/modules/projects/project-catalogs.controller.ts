@@ -207,16 +207,11 @@ export class ProjectCatalogsController {
   // ===== Портфели (плоский список) =====
 
   @Get('projects/groups')
-  @ApiOperation({ summary: 'Портфели (живые; ?includeArchived=true — с архивом)' })
+  @ApiOperation({ summary: 'Портфели (плоский список папок журнала)' })
   @ApiOkResponse({ standardSchema: z.array(projectGroupSchema) })
   @ApiErrors(400, 401)
-  groupsList(
-    @Query({ schema: listQuerySchema, pipes: [new ZodValidationPipe(listQuerySchema)] })
-    query: {
-      includeArchived: string;
-    },
-  ): Promise<ProjectGroup[]> {
-    return this.groups.list(query.includeArchived === 'true');
+  groupsList(): Promise<ProjectGroup[]> {
+    return this.groups.list();
   }
 
   @Get('projects/groups/counts')
@@ -281,27 +276,6 @@ export class ProjectCatalogsController {
     });
   }
 
-  @Delete('projects/groups/:id')
-  @RequirePermissions(Permission.PROJECT_MANAGE)
-  @Audit({ action: 'project.group_archive', entity: 'project_group' })
-  @ApiParam({
-    name: 'id',
-    description: 'UUID портфеля',
-    schema: { type: 'string', format: 'uuid' },
-  })
-  @ApiOperation({ summary: 'Архивировать портфель (проекты сохраняются без него)' })
-  @ApiOkResponse({ standardSchema: projectGroupSchema })
-  @ApiErrors(400, 401, 403, 404)
-  groupArchive(
-    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
-  ): Promise<ProjectGroup> {
-    return this.txRunner.run(async (tx) => {
-      const archived = await this.groups.setArchived(tx, id, true);
-      if (!archived) throw DomainException.notFound('Portfolio not found');
-      return archived;
-    });
-  }
-
   @Delete('projects/groups/:id/permanent')
   @HttpCode(204)
   @RequirePermissions(Permission.PROJECT_MANAGE)
@@ -320,28 +294,6 @@ export class ProjectCatalogsController {
   async groupDelete(@Param('id', new ZodValidationPipe(idParamSchema)) id: string): Promise<void> {
     const deleted = await this.txRunner.run((tx) => this.groups.delete(tx, id));
     if (!deleted) throw DomainException.notFound('Portfolio not found');
-  }
-
-  @Post('projects/groups/:id/restore')
-  @RequirePermissions(Permission.PROJECT_MANAGE)
-  @Audit({ action: 'project.group_restore', entity: 'project_group' })
-  @ApiParam({
-    name: 'id',
-    description: 'UUID портфеля',
-    schema: { type: 'string', format: 'uuid' },
-  })
-  @ApiOperation({ summary: 'Вернуть портфель из архива' })
-  @ApiOkResponse({ standardSchema: projectGroupSchema })
-  @ApiErrors(400, 401, 403, 404)
-  @ApiIdempotencyKey()
-  groupRestore(
-    @Param('id', new ZodValidationPipe(idParamSchema)) id: string,
-  ): Promise<ProjectGroup> {
-    return this.txRunner.run(async (tx) => {
-      const restored = await this.groups.setArchived(tx, id, false);
-      if (!restored) throw DomainException.notFound('Portfolio not found');
-      return restored;
-    });
   }
 
   // ===== Настройки портала =====

@@ -1,7 +1,6 @@
 import { Fragment, useState } from 'react';
-import { Archive, Check, Folder, FolderOpen, Inbox } from 'lucide-react';
+import { Check, Folder, FolderOpen, Inbox } from 'lucide-react';
 import { ui } from '@nodus/contracts';
-import { NodeLabel } from '@nodus/ui/components/node-label';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { RowMenu, type RowMenuItem } from '../../../shared/views/row-menu.js';
@@ -33,15 +32,13 @@ export interface PortfolioFoldersListProps {
   selection: string;
   /** Подпись «Все проекты»: в режиме «Мои» — «Мои проекты» (#559). */
   allLabel: string;
-  /** Права на переименование/архив/возврат/удаление портфеля (`project.manage`). */
+  /** Права на переименование/удаление портфеля (`project.manage`). */
   canManage: boolean;
   /** Проект, который сейчас тащат (null — перетаскивания нет). */
   draggingProjectId: string | null;
   onSelect: (folder: string) => void;
   /** Настройка портфеля прямо в строке списка («⋯» у папки). */
   onRename: (folder: PortfolioFolder) => void;
-  onArchive: (folder: PortfolioFolder) => void;
-  onRestore: (folder: PortfolioFolder) => void;
   /** Удаление портфеля навсегда: проекты перейдут в «Без портфеля». */
   onDelete: (folder: PortfolioFolder) => void;
   /** Бросок проекта на папку: `none` — убрать из портфеля. */
@@ -50,12 +47,12 @@ export interface PortfolioFoldersListProps {
 
 /**
  * Тело списка «Портфели» (#559): «Все проекты» счётчиком видимого среза,
- * живые портфели (`действует / всего`), «Без портфеля» и группа «Архив».
+ * портфели (`действует / всего`) и «Без портфеля». Архива у папки нет
+ * (13.11.2026) — удаление сразу навсегда.
  * Строка — настоящая кнопка: Enter/Space и фокус-ринг — от браузера.
- * У каждой папки на месте — «⋯» с настройкой (переименовать/архивировать/
- * вернуть/удалить), как в Битрикс24: настройка живёт в самом списке,
- * отдельного экрана не нужно. Папки принимают бросок проекта, пока строку
- * тащат (бросок обрабатывает журнал).
+ * У каждой папки на месте — «⋯» с настройкой (переименовать/удалить), как в
+ * Битрикс24: настройка живёт в самом списке, отдельного экрана не нужно.
+ * Папки принимают бросок проекта, пока строку тащат (бросок обрабатывает журнал).
  */
 export function PortfolioFoldersList({
   tree,
@@ -65,16 +62,13 @@ export function PortfolioFoldersList({
   draggingProjectId,
   onSelect,
   onRename,
-  onArchive,
-  onRestore,
   onDelete,
   onDropProject,
 }: PortfolioFoldersListProps) {
   const [dragOver, setDragOver] = useState<string | null>(null);
 
-  /** Папка принимает бросок: живая (или «Без портфеля»), но не «Все». */
-  const droppable = (folder: PortfolioFolder) =>
-    draggingProjectId !== null && !folder.archived && folder.id !== 'all';
+  /** Папка принимает бросок: любая, кроме «Все проекты» (это не папка). */
+  const droppable = (folder: PortfolioFolder) => draggingProjectId !== null && folder.id !== 'all';
 
   const dropProps = (folder: PortfolioFolder) => ({
     onDragOver: (event: React.DragEvent) => {
@@ -99,13 +93,11 @@ export function PortfolioFoldersList({
         <FolderOpen className="size-3.5" strokeWidth={1.75} />
       ) : folder.portfolioId === null ? (
         <Inbox className="size-3.5" strokeWidth={1.75} />
-      ) : folder.archived ? (
-        <Archive className="size-3.5" strokeWidth={1.75} />
       ) : (
         <Folder className="size-3.5" strokeWidth={1.75} />
       );
     // Настройка портфеля — прямо в строке списка (как в Битрикс24): меню
-    // «⋯» открывает переименование/архив/возврат без выбора папки.
+    // «⋯» открывает переименование/удаление без выбора папки.
     const items: RowMenuItem[] =
       canManage && folder.portfolioId !== null
         ? [
@@ -114,17 +106,6 @@ export function PortfolioFoldersList({
               label: ui.projects.portfolioRename,
               onSelect: () => onRename(folder),
             },
-            folder.archived
-              ? {
-                  id: 'restore',
-                  label: ui.projects.portfolioRestore,
-                  onSelect: () => onRestore(folder),
-                }
-              : {
-                  id: 'archive',
-                  label: ui.projects.portfolioArchive,
-                  onSelect: () => onArchive(folder),
-                },
             {
               id: 'delete',
               label: ui.projects.portfolioDelete,
@@ -151,10 +132,7 @@ export function PortfolioFoldersList({
           aria-current={active ? 'true' : undefined}
           title={name}
           onClick={() => onSelect(folder.id)}
-          className={cn(
-            ROW,
-            folder.archived && !active ? 'text-muted-foreground' : 'text-foreground/90',
-          )}
+          className={ROW}
         >
           <span aria-hidden className="shrink-0 text-muted-foreground">
             {icon}
@@ -180,12 +158,12 @@ export function PortfolioFoldersList({
     );
   };
 
-  const hasFolders = tree.active.length > 0 || tree.archived.length > 0;
+  const hasFolders = tree.folders.length > 0;
 
   return (
     <div className="max-h-80 overflow-y-auto p-1">
       {folderRow(tree.all, allLabel, 'total')}
-      {tree.active.map((folder) => (
+      {tree.folders.map((folder) => (
         <Fragment key={folder.id}>{folderRow(folder, folder.name, 'ratio')}</Fragment>
       ))}
       {hasFolders ? (
@@ -195,17 +173,6 @@ export function PortfolioFoldersList({
       ) : (
         <p className="px-2 py-1 text-xs text-muted-foreground">{ui.projects.portfolioEmpty}</p>
       )}
-
-      {tree.archived.length > 0 ? (
-        <div className="mt-1 flex flex-col gap-0.5 border-t border-border/60 pt-1.5">
-          <span className="px-2 pb-0.5">
-            <NodeLabel label={ui.projects.portfolioArchivedSection} />
-          </span>
-          {tree.archived.map((folder) => (
-            <Fragment key={folder.id}>{folderRow(folder, folder.name, 'ratio')}</Fragment>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }

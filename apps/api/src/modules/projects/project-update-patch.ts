@@ -1,4 +1,4 @@
-import type { AuthUser, CustomFieldValues, UpdateProjectBody } from '@nodus/contracts';
+﻿import type { AuthUser, CustomFieldValues, UpdateProjectBody } from '@nodus/contracts';
 import {
   clearedProjectFields,
   customFieldKey,
@@ -61,7 +61,7 @@ export async function buildUpdatePatch(
     fields.push('color');
   }
   if (body.portfolioId !== undefined) {
-    if (body.portfolioId && !(await ctx.groups.findActive(body.portfolioId))) {
+    if (body.portfolioId && !(await ctx.groups.find(body.portfolioId))) {
       throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Unknown portfolio');
     }
     const nextPortfolioId = body.portfolioId ?? null;

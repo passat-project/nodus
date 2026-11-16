@@ -8,10 +8,14 @@ import type {
 
 /**
  * Папки-портфели журнала «Проекты» (#559, ADR-0030 доп. 02.11): портфель —
- * ПАПКА журнала, не раздел «Автоматизации». Чистая модель полосы папок:
- * «Все проекты», портфели со счётчиками (действует / всего), «Без портфеля»
- * и блок «Архив». Счётчики считает сервер (`GET /projects/groups/counts`) —
- * журнал листается курсором, из загруженной страницы полного числа не вывести.
+ * ПАПКА журнала, не раздел «Автоматизации». Чистая модель списка папок:
+ * «Все проекты», портфели со счётчиками (действует / всего) и «Без портфеля».
+ * Счётчики считает сервер (`GET /projects/groups/counts`) — журнал листается
+ * курсором, из загруженной страницы полного числа не вывести.
+ *
+ * Архива у папки нет (вердикт владельца 13.11.2026): папка либо есть, либо
+ * удалена навсегда (проекты уходят в «Без портфеля») — отдельного блока
+ * «Архив» и статуса папки не существует.
  */
 
 /** Выбор папки = значение фильтра журнала: uuid портфеля, `none` — без
@@ -21,21 +25,19 @@ export { NO_PORTFOLIO_FILTER };
 export type PortfolioCounters = Pick<ProjectPortfolioCount, 'active' | 'completed' | 'archived'>;
 
 export interface PortfolioFolder {
-  /** Ключ чипа папки: `all`, `none` или uuid портфеля. */
+  /** Ключ папки: `all`, `none` или uuid портфеля. */
   id: string;
   name: string;
   /** null — «Все проекты» и «Без портфеля» (не портфель). */
   portfolioId: string | null;
   counters: PortfolioCounters;
-  /** Папка в архиве: видна всегда — пустую папку тоже нужно вернуть. */
-  archived: boolean;
 }
 
 export interface PortfolioFolderTree {
   all: PortfolioFolder;
   unassigned: PortfolioFolder;
-  active: PortfolioFolder[];
-  archived: PortfolioFolder[];
+  /** Портфели в серверном порядке (по имени). */
+  folders: PortfolioFolder[];
 }
 
 const ZERO: PortfolioCounters = { active: 0, completed: 0, archived: 0 };
@@ -67,47 +69,52 @@ function countersOf(
 }
 
 /**
- * Полоса папок журнала: «Все проекты» (весь видимый срез), живые портфели
- * в серверном порядке (по имени), «Без портфеля» и ВСЕ архивные папки —
- * пустая архивная папка не исчезает: иначе её нечем вернуть из архива.
+ * Список папок журнала: «Все проекты» (весь видимый срез), портфели в
+ * серверном порядке и «Без портфеля».
  */
 export function buildPortfolioFolders(
   groups: readonly ProjectGroup[],
   counts: readonly ProjectPortfolioCount[],
 ): PortfolioFolderTree {
-  const folderOf = (group: ProjectGroup): PortfolioFolder => ({
+  const folders = groups.map((group): PortfolioFolder => ({
     id: group.id,
     name: group.name,
     portfolioId: group.id,
     counters: countersOf(counts, group.id),
-    archived: group.archivedAt !== null,
-  });
-  const folders = groups.map(folderOf);
-  const active = folders.filter((folder) => !folder.archived);
-  const archived = folders.filter((folder) => folder.archived);
+  }));
   return {
     all: {
       id: 'all',
       name: '',
       portfolioId: null,
       counters: sumOf(counts.map((entry) => entry)),
-      archived: false,
     },
     unassigned: {
       id: NO_PORTFOLIO_FILTER,
       name: '',
       portfolioId: null,
       counters: countersOf(counts, null),
-      archived: false,
     },
-    active,
-    archived,
+    folders,
   };
 }
 
 /** Значение фильтра «Портфель» по выбранной папке (`undefined` — все). */
 export function portfolioFilterOf(folderId: string): string | undefined {
   return folderId === 'all' ? undefined : folderId;
+}
+
+/** Подпись выбранной папки для кнопки «Портфели» (#559): имя портфеля,
+ *  «Все проекты»/«Без портфеля» — из словаря. Неизвестный id (папку удалили
+ *  в другой сессии) — тоже «Все проекты»: кнопка не показывает uuid. */
+export function folderLabel(
+  tree: PortfolioFolderTree,
+  folderId: string,
+  labels: { all: string; none: string },
+): string {
+  if (folderId === tree.all.id) return labels.all;
+  if (folderId === tree.unassigned.id) return labels.none;
+  return tree.folders.find((folder) => folder.id === folderId)?.name ?? labels.all;
 }
 
 /** Строки статусов внутри выбранной папки: «действует / завершён / в архиве». */

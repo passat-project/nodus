@@ -25,8 +25,6 @@ const mocks = vi.hoisted(() => ({
   counts: vi.fn(),
   createGroup: vi.fn(),
   renameGroup: vi.fn(),
-  archiveGroup: vi.fn(),
-  restoreGroup: vi.fn(),
   deleteGroup: vi.fn(),
   statusMutate: vi.fn(),
   moveMutate: vi.fn(),
@@ -44,8 +42,6 @@ vi.mock('../api/portfolio-counts.js', () => ({
 vi.mock('../api/project-catalog-mutations.js', () => ({
   useCreateProjectGroup: () => ({ mutate: mocks.createGroup }),
   useRenameProjectGroup: () => ({ mutate: mocks.renameGroup }),
-  useArchiveProjectGroup: () => ({ mutate: mocks.archiveGroup }),
-  useRestoreProjectGroup: () => ({ mutate: mocks.restoreGroup }),
   useDeleteProjectGroup: () => ({ mutate: mocks.deleteGroup }),
 }));
 vi.mock('../api/project-mutations.js', () => ({
@@ -85,9 +81,9 @@ function authWith(permissions: string[]) {
   } as never);
 }
 
-/** Открыть вкладку «Портфели» (список папок в поповере). */
+/** Открыть список папок кнопкой «Портфели». */
 function openFolders() {
-  fireEvent.click(screen.getByRole('button', { name: ui.projects.portfoliosTitle }));
+  fireEvent.click(screen.getByRole('button', { name: /^Портфели/ }));
 }
 
 /** Строка папки в открытом списке «Портфели» (контейнер с кнопкой и «⋯»). */
@@ -258,30 +254,6 @@ describe('настройка портфеля в попапе (#559)', () => {
 
     expect(mocks.renameGroup).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).toBeNull();
-  });
-
-  it('архив папки: «Отмена» окна ничего не архивирует, подтверждение — зовёт мутацию', async () => {
-    render(<ProjectsPage />);
-    openFolderMenu(PORTFOLIO.name);
-    fireEvent.click(await screen.findByRole('menuitem', { name: ui.projects.portfolioArchive }));
-
-    const dialog = await screen.findByRole('dialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: ui.common.cancel }));
-    expect(mocks.archiveGroup).not.toHaveBeenCalled();
-
-    openFolderMenu(PORTFOLIO.name);
-    fireEvent.click(await screen.findByRole('menuitem', { name: ui.projects.portfolioArchive }));
-    const confirm = await screen.findByRole('dialog');
-    fireEvent.click(within(confirm).getByRole('button', { name: ui.projects.portfolioArchive }));
-    expect(mocks.archiveGroup).toHaveBeenCalledWith(PORTFOLIO.id);
-  });
-
-  it('возврат архивной папки из группы «Архив»', async () => {
-    render(<ProjectsPage />);
-    openFolderMenu('Старый объект');
-    fireEvent.click(await screen.findByRole('menuitem', { name: ui.projects.portfolioRestore }));
-
-    expect(mocks.restoreGroup).toHaveBeenCalledWith('42000000-0000-4000-8000-000000000002');
   });
 
   it('удаление портфеля: окно предупреждает о переносе проектов, «Отмена» — без мутации', async () => {

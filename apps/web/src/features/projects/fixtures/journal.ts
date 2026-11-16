@@ -7,18 +7,16 @@ export const ME = '20000000-0000-4000-8000-000000000001';
 export const PORTFOLIO: ProjectGroup = {
   id: '42000000-0000-4000-8000-000000000001',
   name: 'Нежин-Недра',
-  archivedAt: null,
 };
-export const ARCHIVED_PORTFOLIO: ProjectGroup = {
+export const SECOND_PORTFOLIO: ProjectGroup = {
   id: '42000000-0000-4000-8000-000000000002',
   name: 'Старый объект',
-  archivedAt: '2026-11-01T10:00:00.000Z',
 };
-export const GROUPS: ProjectGroup[] = [PORTFOLIO, ARCHIVED_PORTFOLIO];
+export const GROUPS: ProjectGroup[] = [PORTFOLIO, SECOND_PORTFOLIO];
 
 export const COUNTS: ProjectPortfolioCount[] = [
   { portfolioId: PORTFOLIO.id, active: 98, completed: 2, archived: 0 },
-  { portfolioId: ARCHIVED_PORTFOLIO.id, active: 0, completed: 1, archived: 0 },
+  { portfolioId: SECOND_PORTFOLIO.id, active: 0, completed: 1, archived: 0 },
   { portfolioId: null, active: 4, completed: 1, archived: 2 },
 ];
 
@@ -51,7 +49,7 @@ export const ARCHIVED_PROJECT = project({
   id: '10000000-0000-4000-8000-000000000002',
   name: 'Архивный договор',
   status: 'archived',
-  portfolio: { id: ARCHIVED_PORTFOLIO.id, name: ARCHIVED_PORTFOLIO.name },
+  portfolio: { id: SECOND_PORTFOLIO.id, name: SECOND_PORTFOLIO.name },
 });
 
 /** Ответ `useProjectsJournal` в форме TanStack InfiniteData. */

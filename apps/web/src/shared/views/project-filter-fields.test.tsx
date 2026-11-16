@@ -6,32 +6,38 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
-import { filterValueLabel } from './list-filters.js';
 import { useProjectFilterDefs } from './project-filter-fields.js';
 
-/** Фильтр журнала проектов (#559): архивная папка в опциях читается
- *  названием с пометкой, а не uuid-ом в чипе. */
+/** Портфель в реестре фильтров журнала (#559): поле живёт в панели и в
+ *  пресетах (сохранённый фильтр несёт папку), но чипом в строке поиска не
+ *  показывается — имя выбранной папки носит кнопка «Портфели» (13.11.2026).
+ *  Архива у папки нет: опции — справочник и «Без портфеля». */
 const PORTFOLIO: ProjectGroup = {
   id: '42000000-0000-4000-8000-000000000001',
   name: 'Нежин-Недра',
-  archivedAt: null,
 };
-const ARCHIVED: ProjectGroup = {
+const SECOND: ProjectGroup = {
   id: '42000000-0000-4000-8000-000000000002',
   name: 'Старый объект',
-  archivedAt: '2026-11-01T10:00:00.000Z',
 };
 
 const urls: string[] = [];
 const server = setupServer(
   http.get('/api/v1/projects/groups', ({ request }) => {
     urls.push(request.url);
-    return HttpResponse.json([PORTFOLIO, ARCHIVED]);
+    return HttpResponse.json([PORTFOLIO, SECOND]);
   }),
 );
 
 function makeClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+}
+
+function hookDefs() {
+  const qc = makeClient();
+  return renderHook(() => useProjectFilterDefs(), {
+    wrapper: ({ children }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>,
+  });
 }
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
@@ -41,32 +47,27 @@ afterEach(() => {
 });
 afterAll(() => server.close());
 
-describe('useProjectFilterDefs: портфель-папка (#559)', () => {
-  it('живые папки, архивные с пометкой и «Без портфеля»; справочник с архивом', async () => {
-    const qc = makeClient();
-    const { result } = renderHook(() => useProjectFilterDefs(), {
-      wrapper: ({ children }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>,
-    });
+describe('useProjectFilterDefs: поле «Портфель» (#559)', () => {
+  it('поле есть: портфели справочника и «Без портфеля», без режима «с архивом»', async () => {
+    const { result } = hookDefs();
 
     await waitFor(() => {
       const def = result.current.find((item) => item.id === 'portfolio');
       expect(def?.options).toHaveLength(3);
     });
     const def = result.current.find((item) => item.id === 'portfolio')!;
-    expect(def.options?.map((option) => option.value)).toEqual([PORTFOLIO.id, ARCHIVED.id, 'none']);
-    // Архив запрошен: выбранная архивная папка иначе дала бы uuid в чипе.
-    expect(urls.some((url) => url.includes('includeArchived=true'))).toBe(true);
-
-    // Чип фильтра: название (архив), а не идентификатор.
-    expect(filterValueLabel(def, ARCHIVED.id)).toBe('Старый объект (архив)');
-    expect(filterValueLabel(def, 'none')).toBe('Без портфеля');
+    expect(def.options?.map((option) => option.value)).toEqual([PORTFOLIO.id, SECOND.id, 'none']);
+    expect(def.options?.map((option) => option.label)).toEqual([
+      'Нежин-Недра',
+      'Старый объект',
+      'Без портфеля',
+    ]);
+    // Архивных папок больше нет — параметр includeArchived не запрашивается.
+    expect(urls.every((url) => !url.includes('includeArchived'))).toBe(true);
   });
 
   it('match: `none` — проекты без портфеля, папка — свои', async () => {
-    const qc = makeClient();
-    const { result } = renderHook(() => useProjectFilterDefs(), {
-      wrapper: ({ children }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>,
-    });
+    const { result } = hookDefs();
     await waitFor(() => expect(result.current.length).toBeGreaterThan(0));
     const def = result.current.find((item) => item.id === 'portfolio')!;
 
@@ -75,5 +76,17 @@ describe('useProjectFilterDefs: портфель-папка (#559)', () => {
     expect(def.match(withoutPortfolio, 'none')).toBe(true);
     expect(def.match(withoutPortfolio, PORTFOLIO.id)).toBe(false);
     expect(def.match(inPortfolio, PORTFOLIO.id)).toBe(true);
+  });
+
+  it('остальные журнальные фильтры на месте: роль, видимость, статус', async () => {
+    const { result } = hookDefs();
+    await waitFor(() => expect(result.current.length).toBeGreaterThan(0));
+
+    expect(result.current.map((def) => def.id)).toEqual([
+      'portfolio',
+      'role',
+      'visibility',
+      'status',
+    ]);
   });
 });

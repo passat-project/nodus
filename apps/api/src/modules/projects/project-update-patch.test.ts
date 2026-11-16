@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import { ErrorCode, SYSTEM_FIELD_IDS, type AuthUser } from '@nodus/contracts';
 
 import { buildUpdatePatch } from './project-update-patch.js';
@@ -46,7 +46,7 @@ const row = {
 } as unknown as ProjectRow;
 
 interface Ctx {
-  groups: { findActive: ReturnType<typeof vi.fn> };
+  groups: { find: ReturnType<typeof vi.fn> };
   profiles: { filterActiveUserIds: ReturnType<typeof vi.fn> };
   types: { findById: ReturnType<typeof vi.fn> };
   customFields: {
@@ -58,7 +58,7 @@ interface Ctx {
 
 function makeCtx(): Ctx {
   return {
-    groups: { findActive: vi.fn(async () => ({ id: 'g-1' })) },
+    groups: { find: vi.fn(async () => ({ id: 'g-1' })) },
     profiles: { filterActiveUserIds: vi.fn(async (ids: string[]) => ids) },
     types: { findById: vi.fn(async () => ({ id: TYPE, name: 'Договор', form: { fields: [] } })) },
     customFields: {
@@ -89,7 +89,7 @@ describe('buildUpdatePatch (#52/#631)', () => {
 
   it('портфель: неизвестный → 422; null очищает; известный — пишется', async () => {
     const ctx = makeCtx();
-    ctx.groups.findActive.mockResolvedValue(null);
+    ctx.groups.find.mockResolvedValue(null);
     await expect(
       buildUpdatePatch(ctx as never, user(MANAGER), row, facts, { portfolioId: 'g-x' } as never),
     ).rejects.toMatchObject({ code: ErrorCode.VALIDATION_FAILED });
@@ -105,7 +105,7 @@ describe('buildUpdatePatch (#52/#631)', () => {
     );
     expect(cleared.patch.portfolioId).toBeNull();
 
-    ctx.groups.findActive.mockResolvedValue({ id: 'g-1' });
+    ctx.groups.find.mockResolvedValue({ id: 'g-1' });
     const set = await buildUpdatePatch(ctx as never, user(MANAGER), row, facts, {
       portfolioId: 'g-1',
     } as never);

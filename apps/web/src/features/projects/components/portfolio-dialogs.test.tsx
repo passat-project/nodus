@@ -1,20 +1,19 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ui } from '@nodus/contracts';
 
 import type { PortfolioFolder } from '../lib/portfolio-folders.js';
-import { PortfolioArchiveDialog, PortfolioRenameDialog } from './portfolio-dialogs.js';
+import { PortfolioDeleteDialog, PortfolioRenameDialog } from './portfolio-dialogs.js';
 
-/** Окна портфеля-папки журнала (#559): переименование и архив. Окна —
- *  лёгкие действия колонки, поэтому проверяем черновик имени, блокировку
+/** Окна портфеля-папки журнала (#559): переименование и удаление. Окна —
+ *  лёгкие действия списка, поэтому проверяем черновик имени, блокировку
  *  пустого/того же имени и намеренную отмену. */
 const FOLDER: PortfolioFolder = {
   id: '42000000-0000-4000-8000-000000000001',
   name: 'Нежин-Недра',
   portfolioId: '42000000-0000-4000-8000-000000000001',
   counters: { active: 98, completed: 2, archived: 0 },
-  archived: false,
 };
 
 afterEach(cleanup);
@@ -66,39 +65,31 @@ describe('PortfolioRenameDialog (#559)', () => {
   });
 });
 
-describe('PortfolioArchiveDialog (#559)', () => {
+describe('PortfolioDeleteDialog (#559)', () => {
   it('закрыт без папки — окна нет', () => {
-    render(<PortfolioArchiveDialog folder={null} onCancel={vi.fn()} onConfirm={vi.fn()} />);
+    render(<PortfolioDeleteDialog folder={null} onCancel={vi.fn()} onConfirm={vi.fn()} />);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('показывает последствия и имя папки; подтверждение архивирует', () => {
+  it('показывает последствия и имя папки; подтверждение удаляет', () => {
     const onConfirm = vi.fn();
-    render(<PortfolioArchiveDialog folder={FOLDER} onCancel={vi.fn()} onConfirm={onConfirm} />);
+    render(<PortfolioDeleteDialog folder={FOLDER} onCancel={vi.fn()} onConfirm={onConfirm} />);
 
-    expect(screen.getByText(ui.projects.portfolioArchiveConfirmTitle)).toBeTruthy();
-    expect(screen.getByText(ui.projects.portfolioArchiveConfirmBody)).toBeTruthy();
+    expect(screen.getByText(ui.projects.portfolioDeleteConfirmTitle)).toBeTruthy();
+    expect(screen.getByText(ui.projects.portfolioDeleteConfirmBody)).toBeTruthy();
     expect(screen.getByText(FOLDER.name)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: ui.projects.portfolioArchive }));
+    fireEvent.click(screen.getByRole('button', { name: ui.projects.portfolioDelete }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it('«Отмена» — архива нет', () => {
+  it('«Отмена» — удаления нет', () => {
     const onConfirm = vi.fn();
     const onCancel = vi.fn();
-    render(<PortfolioArchiveDialog folder={FOLDER} onCancel={onCancel} onConfirm={onConfirm} />);
+    render(<PortfolioDeleteDialog folder={FOLDER} onCancel={onCancel} onConfirm={onConfirm} />);
 
     fireEvent.click(screen.getByRole('button', { name: ui.common.cancel }));
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onConfirm).not.toHaveBeenCalled();
-  });
-
-  it('Esc закрывает окно архива', () => {
-    const onCancel = vi.fn();
-    render(<PortfolioArchiveDialog folder={FOLDER} onCancel={onCancel} onConfirm={vi.fn()} />);
-
-    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
-    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

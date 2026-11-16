@@ -584,11 +584,13 @@ export const projectTypeUpdateBodySchema = z
 export type ProjectTypeUpdateBody = z.infer<typeof projectTypeUpdateBodySchema>;
 
 // ===== Портфели (плоский список) =====
+// Архива у портфеля нет (вердикт владельца 13.11.2026): папка либо есть, либо
+// удалена навсегда (проекты переходят в «Без портфеля»). Поэтому в DTO только
+// идентичность и имя — статусов папки не существует.
 
 export const projectGroupSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1),
-  archivedAt: z.iso.datetime().nullable(),
 });
 
 export type ProjectGroup = z.infer<typeof projectGroupSchema>;

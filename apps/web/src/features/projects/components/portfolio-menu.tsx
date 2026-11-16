@@ -7,7 +7,11 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { PortfolioCreateField } from './portfolio-create-field.js';
 import { PortfolioFoldersList } from './portfolio-folders-list.js';
-import type { PortfolioFolder, PortfolioFolderTree } from '../lib/portfolio-folders.js';
+import {
+  folderLabel,
+  type PortfolioFolder,
+  type PortfolioFolderTree,
+} from '../lib/portfolio-folders.js';
 
 export type FolderSelection = string;
 
@@ -16,7 +20,7 @@ export interface PortfolioMenuProps {
   /** Выбранная папка: `all`, `none` или uuid портфеля. */
   selection: FolderSelection;
   canCreate: boolean;
-  /** Переименование/архив/возврат/удаление — `project.manage` (сервер — истина). */
+  /** Переименование/удаление — `project.manage` (сервер — истина). */
   canManage: boolean;
   /** Подпись «Все проекты»: в режиме «Мои» — «Мои проекты» (#559). */
   allLabel?: string;
@@ -25,8 +29,6 @@ export interface PortfolioMenuProps {
   onCreate: (name: string) => void;
   onSelect: (folder: FolderSelection) => void;
   onRename: (folder: PortfolioFolder) => void;
-  onArchive: (folder: PortfolioFolder) => void;
-  onRestore: (folder: PortfolioFolder) => void;
   /** Удаление портфеля навсегда: проекты перейдут в «Без портфеля». */
   onDelete: (folder: PortfolioFolder) => void;
   /** Бросок проекта на папку: `none` — убрать из портфеля. */
@@ -38,10 +40,15 @@ export interface PortfolioMenuProps {
  * «Создать» (как в Битрикс24; решения 02.11 и 16.11.2026: портфель — ПАПКА
  * журнала, но отдельная колонка отбирала у таблицы место). Список папок живёт
  * в поповере той же композиции, что прежняя панель: шапка «ПОРТФЕЛИ» с «+»,
- * строки с иконками и счётчиками (действует / всего), «Без портфеля», группа
- * «Архив»; у каждой папки — «⋯» с настройкой (переименовать/архивировать/
- * вернуть/удалить) прямо в списке. Клик по строке — серверный фильтр
- * `portfolioId` журнала.
+ * строки с иконками и счётчиками (действует / всего), «Без портфеля»; у каждой
+ * папки — «⋯» с настройкой (переименовать/удалить) прямо в списке. Клик по
+ * строке — серверный фильтр `portfolioId` журнала.
+ *
+ * Подпись кнопки (вердикт владельца 13.11.2026): выбранная папка называет саму
+ * кнопку — «Портфели» по умолчанию, имя портфеля после выбора; в строке
+ * фильтров выбранная папка НЕ дублируется чипом. Вид кнопки не меняется:
+ * постоянный нейтральный стиль, без подсветки выбора (её видно галочкой в
+ * списке).
  *
  * Перетаскивание проекта на папку сохранено: пока строку тащат, список
  * открывается сам и служит целью броска (закрывается на dragend).
@@ -56,8 +63,6 @@ export function PortfolioMenu({
   onCreate,
   onSelect,
   onRename,
-  onArchive,
-  onRestore,
   onDelete,
   onDropProject,
 }: PortfolioMenuProps) {
@@ -93,24 +98,29 @@ export function PortfolioMenu({
     run(folder);
   };
 
+  // Подпись кнопки: имя выбранной папки; «Портфели» — когда фильтра нет.
+  const triggerLabel =
+    selection === tree.all.id
+      ? ui.projects.portfoliosTitle
+      : folderLabel(tree, selection, { all: allLabel, none: ui.projects.portfolioNone });
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={ui.projects.portfoliosTitle}
+          aria-label={`${ui.projects.portfoliosTitle}: ${triggerLabel}`}
           aria-expanded={open}
-          className={cn(
-            'flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-sm transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30',
-            selection !== tree.all.id
-              ? 'border-transparent bg-accent text-foreground'
-              : 'border-input text-muted-foreground hover:bg-accent/40 hover:text-foreground',
-          )}
+          title={triggerLabel}
+          className="flex h-8 min-w-0 shrink-0 items-center gap-1.5 rounded-lg border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30"
         >
-          <FolderTree className="size-3.5" aria-hidden />
-          {ui.projects.portfoliosTitle}
+          <FolderTree className="size-3.5 shrink-0" aria-hidden />
+          <span className="max-w-52 truncate">{triggerLabel}</span>
           <ChevronDown
-            className={cn('size-3.5 transition-transform duration-150', open && 'rotate-180')}
+            className={cn(
+              'size-3.5 shrink-0 transition-transform duration-150',
+              open && 'rotate-180',
+            )}
             aria-hidden
           />
         </button>
@@ -171,8 +181,6 @@ export function PortfolioMenu({
           draggingProjectId={draggingProjectId}
           onSelect={selectFolder}
           onRename={setupFolder(onRename)}
-          onArchive={setupFolder(onArchive)}
-          onRestore={setupFolder(onRestore)}
           onDelete={setupFolder(onDelete)}
           onDropProject={onDropProject}
         />

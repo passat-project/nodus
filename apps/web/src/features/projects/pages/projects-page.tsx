@@ -22,21 +22,15 @@ import { useProjectTableFields } from '../../../shared/views/project-table-field
 import { ViewSettings } from '../../../shared/views/view-settings.js';
 import { useProjectPortfolioCounts } from '../api/portfolio-counts.js';
 import {
-  useArchiveProjectGroup,
   useCreateProjectGroup,
   useDeleteProjectGroup,
   useRenameProjectGroup,
-  useRestoreProjectGroup,
 } from '../api/project-catalog-mutations.js';
 import { useProjectStatus } from '../api/project-mutations.js';
 import { useMoveProjectPortfolio } from '../api/project-portfolio-mutation.js';
 import { useProjectGroups, useProjectsJournal } from '../api/projects-api.js';
 import { ProjectArchiveDialog } from '../components/project-archive-dialog.js';
-import {
-  PortfolioArchiveDialog,
-  PortfolioDeleteDialog,
-  PortfolioRenameDialog,
-} from '../components/portfolio-dialogs.js';
+import { PortfolioDeleteDialog, PortfolioRenameDialog } from '../components/portfolio-dialogs.js';
 import { PortfolioMenu } from '../components/portfolio-menu.js';
 import type { ProjectJournalFilters, ProjectRoleFilter } from '../lib/project-journal.js';
 import { canDragProject, canEditProject } from '../lib/project-edit-rights.js';
@@ -79,10 +73,10 @@ function statusOfFilter(value: unknown): NonNullable<ProjectJournalFilters['stat
  * сразу после «Создать», как в Битрикс24: папки-портфели не занимают места
  * у журнала (колонка/полоса отбирала ширину), а список раскрывается
  * поповером. В нём: «Все проекты», портфели со счётчиками, «Без портфеля»,
- * статусы выбранной папки, архивные папки, создание и переименование/архив/
- * возврат выбранной папки. Перетаскивание проекта на папку меняет портфель
- * (права правки проекта — сервер; на время drag поповер открывается сам как
- * цель броска). Шапка — одна строка: заголовок, счётчик, «Создать» и
+ * создание и переименование/удаление выбранной папки; имя выбранной папки
+ * носит сама кнопка (13.11.2026). Перетаскивание проекта на папку меняет
+ * портфель (права правки проекта — сервер; на время drag поповер открывается
+ * сам как цель броска). Шапка — одна строка: заголовок, счётчик, «Создать» и
  * «Портфели» слева от поиска, переключатель «Все/Мои», шестерёнка колонок.
  * Фильтры — СЕРВЕРНЫЕ (портфель/роль/видимость/статус, Р14 #52) с курсорной
  * пагинацией; чипы активных фильтров и пресеты — общая строка инструментов.
@@ -120,7 +114,7 @@ export function ProjectsPage() {
   const canManageAny = (permissions ?? []).includes(Permission.PROJECT_MANAGE);
   const canCreate = (permissions ?? []).includes(Permission.PROJECT_CREATE);
 
-  const groupsQuery = useProjectGroups(true);
+  const groupsQuery = useProjectGroups();
   const countsQuery = useProjectPortfolioCounts(scope);
   const folders = useMemo(
     () => buildPortfolioFolders(groupsQuery.data ?? [], countsQuery.data ?? []),
@@ -128,18 +122,20 @@ export function ProjectsPage() {
   );
   const createFolder = useCreateProjectGroup();
   const renameFolder = useRenameProjectGroup();
-  const archiveFolder = useArchiveProjectGroup();
-  const restoreFolder = useRestoreProjectGroup();
   const deleteFolder = useDeleteProjectGroup();
 
   const [archiveTarget, setArchiveTarget] = useState<ProjectListItem | null>(null);
   const [renameFolderTarget, setRenameFolderTarget] = useState<PortfolioFolder | null>(null);
-  const [archiveFolderTarget, setArchiveFolderTarget] = useState<PortfolioFolder | null>(null);
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<PortfolioFolder | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
+  // Портфель-фильтр больше не живёт в реестре полей (имя показывает кнопка),
+  // поэтому «фильтруем» его учитываем отдельно — иначе пустой журнал папки
+  // показывал бы текст «проектов нет» вместо «ничего не найдено».
   const filtering =
-    toolbar.query.trim() !== '' || activeFiltersCount(filterDefs, toolbar.filters) > 0;
+    toolbar.query.trim() !== '' ||
+    selection !== 'all' ||
+    activeFiltersCount(filterDefs, toolbar.filters) > 0;
 
   /** Клик по папке: серверный фильтр журнала. */
   function selectFolder(folderId: string) {
@@ -209,6 +205,9 @@ export function ProjectsPage() {
           toolbar={toolbar}
           defs={filterDefs}
           builtinPresets={projectBuiltinPresets}
+          // Имя выбранной папки носит кнопка «Портфели» — чип в строке фильтров
+          // не дублирует её (вердикт владельца 13.11.2026).
+          hiddenChips={['portfolio']}
           left={
             <>
               <Button
@@ -234,8 +233,6 @@ export function ProjectsPage() {
                 onCreate={(name) => createFolder.mutate(name)}
                 onSelect={selectFolder}
                 onRename={setRenameFolderTarget}
-                onArchive={setArchiveFolderTarget}
-                onRestore={(folder) => restoreFolder.mutate(folder.id)}
                 onDelete={setDeleteFolderTarget}
                 onDropProject={dropOnFolder}
               />
@@ -310,14 +307,6 @@ export function ProjectsPage() {
         onConfirm={(name) => {
           if (renameFolderTarget) renameFolder.mutate({ id: renameFolderTarget.id, name });
           setRenameFolderTarget(null);
-        }}
-      />
-      <PortfolioArchiveDialog
-        folder={archiveFolderTarget}
-        onCancel={() => setArchiveFolderTarget(null)}
-        onConfirm={() => {
-          if (archiveFolderTarget) archiveFolder.mutate(archiveFolderTarget.id);
-          setArchiveFolderTarget(null);
         }}
       />
       <PortfolioDeleteDialog

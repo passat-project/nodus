@@ -54,10 +54,10 @@ export interface DemoParticipantRow {
 const groupId = (n: number): string => `42000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 export const demoProjectGroups: ProjectGroup[] = [
-  { id: groupId(1), name: 'Метро, линия 4', archivedAt: null },
-  { id: groupId(2), name: 'ИТ-проекты', archivedAt: null },
-  { id: groupId(3), name: 'Тендеры', archivedAt: null },
-  { id: groupId(4), name: 'Архивные портфели', archivedAt: isoAgo(120) },
+  { id: groupId(1), name: 'Метро, линия 4' },
+  { id: groupId(2), name: 'ИТ-проекты' },
+  { id: groupId(3), name: 'Тендеры' },
+  { id: groupId(4), name: 'Архивные объекты' },
 ];
 
 /** Демо-проекты: договоры с шифром, «темы» без шифра, секретные, архив. */

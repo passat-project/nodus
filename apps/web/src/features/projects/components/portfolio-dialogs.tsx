@@ -6,10 +6,10 @@ import { Input } from '@nodus/ui/components/input';
 import type { PortfolioFolder } from '../lib/portfolio-folders.js';
 
 /**
- * Окна портфеля-папки журнала (#559): переименование и архивация. Оба —
- * лёгкие действия полосы папок, поэтому живут на странице журнала, а не в
- * «Автоматизации» (портфель — папка «Проектов»). Архив — не удаление: проекты
- * остаются, папку можно вернуть из блока «Архив».
+ * Окна портфеля-папки журнала (#559): переименование и удаление. Оба —
+ * лёгкие действия списка папок, поэтому живут на странице журнала, а не в
+ * «Автоматизации» (портфель — папка «Проектов»). Архива у папки нет
+ * (13.11.2026): удаление сразу навсегда, проекты переходят в «Без портфеля».
  */
 export function PortfolioRenameDialog({
   folder,
@@ -70,36 +70,6 @@ function RenameForm({
         </Button>
       </div>
     </form>
-  );
-}
-
-/** Подтверждение архивации портфеля: обычное окно без ввода (клик мимо =
- *  «нет»), как у архивации проекта. */
-export function PortfolioArchiveDialog({
-  folder,
-  onCancel,
-  onConfirm,
-}: {
-  folder: PortfolioFolder | null;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <Dialog open={folder !== null} onOpenChange={(next) => !next && onCancel()}>
-      <DialogContent className="max-w-md sm:max-w-md" aria-describedby={undefined}>
-        <DialogTitle>{ui.projects.portfolioArchiveConfirmTitle}</DialogTitle>
-        <p className="text-sm text-muted-foreground">{ui.projects.portfolioArchiveConfirmBody}</p>
-        <p className="truncate text-sm font-medium">{folder?.name ?? ''}</p>
-        <div className="flex items-center gap-2">
-          <Button type="button" variant="destructive" onClick={onConfirm}>
-            {ui.projects.portfolioArchive}
-          </Button>
-          <Button type="button" variant="ghost" onClick={onCancel}>
-            {ui.common.cancel}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
 

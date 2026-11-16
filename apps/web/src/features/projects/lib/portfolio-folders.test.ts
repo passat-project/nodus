@@ -4,6 +4,7 @@ import type { ProjectGroup, ProjectPortfolioCount } from '@nodus/contracts';
 import {
   NO_PORTFOLIO_FILTER,
   buildPortfolioFolders,
+  folderLabel,
   folderStatusRows,
   inPortfolioFolder,
   portfolioFilterOf,
@@ -11,26 +12,19 @@ import {
 } from './portfolio-folders.js';
 
 /** Папки-портфели журнала «Проекты» (#559): счётчики, «Без портфеля»,
- *  архивные папки с остатком и попадание строки в выбранную папку. */
+ *  подпись кнопки и попадание строки в выбранную папку. Архива нет
+ *  (13.11.2026) — все папки в одном списке. */
 const METRO: ProjectGroup = {
   id: '42000000-0000-4000-8000-000000000001',
   name: 'Нежин-Недра',
-  archivedAt: null,
 };
 const IT: ProjectGroup = {
   id: '42000000-0000-4000-8000-000000000002',
   name: 'ИТ-проекты',
-  archivedAt: null,
 };
 const OLD: ProjectGroup = {
   id: '42000000-0000-4000-8000-000000000003',
   name: 'Старый объект',
-  archivedAt: '2026-11-01T10:00:00.000Z',
-};
-const EMPTY_ARCHIVED: ProjectGroup = {
-  id: '42000000-0000-4000-8000-000000000004',
-  name: 'Пустой архив',
-  archivedAt: '2026-11-02T10:00:00.000Z',
 };
 
 function counts(
@@ -43,9 +37,9 @@ function counts(
 }
 
 describe('buildPortfolioFolders (#559)', () => {
-  it('живые портфели — по порядку справочника, архивные — все, включая пустые', () => {
+  it('все портфели — одним списком, в серверном порядке', () => {
     const tree = buildPortfolioFolders(
-      [METRO, IT, OLD, EMPTY_ARCHIVED],
+      [METRO, IT, OLD],
       [
         counts(METRO.id, 98, 2, 0),
         counts(IT.id, 5),
@@ -54,11 +48,12 @@ describe('buildPortfolioFolders (#559)', () => {
       ],
     );
 
-    expect(tree.active.map((folder) => folder.name)).toEqual(['Нежин-Недра', 'ИТ-проекты']);
-    // Пустая архивная папка видна: иначе её нечем вернуть из архива (#559).
-    expect(tree.archived.map((folder) => folder.name)).toEqual(['Старый объект', 'Пустой архив']);
-    expect(tree.archived.every((folder) => folder.archived)).toBe(true);
-    expect(totalOf(tree.archived[1]!.counters)).toBe(0);
+    expect(tree.folders.map((folder) => folder.name)).toEqual([
+      'Нежин-Недра',
+      'ИТ-проекты',
+      'Старый объект',
+    ]);
+    expect(tree.folders.map((folder) => folder.portfolioId)).toEqual([METRO.id, IT.id, OLD.id]);
   });
 
   it('«Все проекты» — сумма по всем папкам, включая «Без портфеля»', () => {
@@ -79,7 +74,7 @@ describe('buildPortfolioFolders (#559)', () => {
 
   it('портфель без счётчика — строка с нулями, а не пропавшая папка', () => {
     const tree = buildPortfolioFolders([METRO], []);
-    expect(tree.active[0]?.counters).toEqual({ active: 0, completed: 0, archived: 0 });
+    expect(tree.folders[0]?.counters).toEqual({ active: 0, completed: 0, archived: 0 });
   });
 });
 
@@ -93,12 +88,30 @@ describe('выбор папки и строки статусов', () => {
   });
 
   it('внутри папки — «действует / завершён / в архиве» со счётчиками', () => {
-    expect(folderStatusRows(tree.active[0] ?? null)).toEqual([
+    expect(folderStatusRows(tree.folders[0] ?? null)).toEqual([
       { status: 'active', count: 3 },
       { status: 'completed', count: 1 },
       { status: 'archived', count: 2 },
     ]);
     expect(folderStatusRows(null)).toEqual([]);
+  });
+});
+
+describe('folderLabel — подпись кнопки «Портфели» (#559)', () => {
+  const tree = buildPortfolioFolders([METRO], []);
+
+  it('портфель называется своим именем, «Все» и «Без портфеля» — из словаря', () => {
+    const labels = { all: 'Все проекты', none: 'Без портфеля' };
+
+    expect(folderLabel(tree, METRO.id, labels)).toBe('Нежин-Недра');
+    expect(folderLabel(tree, 'all', labels)).toBe('Все проекты');
+    expect(folderLabel(tree, NO_PORTFOLIO_FILTER, labels)).toBe('Без портфеля');
+  });
+
+  it('удалённая в другой сессии папка не показывает uuid', () => {
+    expect(folderLabel(tree, 'нет-такой', { all: 'Все проекты', none: 'Без портфеля' })).toBe(
+      'Все проекты',
+    );
   });
 });
 

@@ -5,32 +5,32 @@ import type { ProjectGroup } from '@nodus/contracts';
 import { PrismaService } from '../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../core/database/transaction-runner.js';
 
-const groupSelect = { id: true, name: true, archivedAt: true } as const;
-type Row = { id: string; name: string; archivedAt: Date | null };
+const groupSelect = { id: true, name: true } as const;
+type Row = { id: string; name: string };
 
-/** Портфели — плоский список группировки (ADR-0030 п.2). */
+/**
+ * Портфели — плоский список группировки проектов (ADR-0030 п.2). Папка не
+ * архивируется (вердикт владельца 13.11.2026): удаление — сразу навсегда, с
+ * переносом проектов в «Без портфеля».
+ */
 @Injectable()
 export class ProjectGroupsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   private toDto(row: Row): ProjectGroup {
-    return { id: row.id, name: row.name, archivedAt: row.archivedAt?.toISOString() ?? null };
+    return { id: row.id, name: row.name };
   }
 
-  async list(includeArchived: boolean): Promise<ProjectGroup[]> {
+  async list(): Promise<ProjectGroup[]> {
     const rows = await this.prisma.projectGroup.findMany({
       select: groupSelect,
-      where: includeArchived ? {} : { archivedAt: null },
       orderBy: [{ name: 'asc' }],
     });
     return rows.map((row) => this.toDto(row));
   }
 
-  async findActive(id: string): Promise<ProjectGroup | null> {
-    const row = await this.prisma.projectGroup.findFirst({
-      select: groupSelect,
-      where: { id, archivedAt: null },
-    });
+  async find(id: string): Promise<ProjectGroup | null> {
+    const row = await this.prisma.projectGroup.findUnique({ select: groupSelect, where: { id } });
     return row ? this.toDto(row) : null;
   }
 
@@ -44,20 +44,6 @@ export class ProjectGroupsRepository {
 
   async rename(tx: TransactionClient, id: string, name: string): Promise<ProjectGroup | null> {
     const result = await tx.projectGroup.updateMany({ where: { id }, data: { name } });
-    if (result.count === 0) return null;
-    const row = await tx.projectGroup.findUnique({ select: groupSelect, where: { id } });
-    return row ? this.toDto(row) : null;
-  }
-
-  async setArchived(
-    tx: TransactionClient,
-    id: string,
-    archived: boolean,
-  ): Promise<ProjectGroup | null> {
-    const result = await tx.projectGroup.updateMany({
-      where: { id },
-      data: { archivedAt: archived ? new Date() : null },
-    });
     if (result.count === 0) return null;
     const row = await tx.projectGroup.findUnique({ select: groupSelect, where: { id } });
     return row ? this.toDto(row) : null;

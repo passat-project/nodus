@@ -18,28 +18,25 @@ export const projectBuiltinPresets: FilterPreset[] = [
 ];
 
 /** Реестр фильтруемых полей журнала проектов (стандарт списков): портфель,
- *  моя роль, видимость, статус — серверные фильтры (Р14 #52). */
+ *  моя роль, видимость, статус — серверные фильтры (Р14 #52).
+ *
+ *  Портфель остаётся полем фильтра (панель, пресеты — сохранённый фильтр несёт
+ *  папку), но ЧИПОМ в строке поиска не показывается: имя выбранной папки носит
+ *  кнопка «Портфели» (вердикт владельца 13.11.2026) — журнал передаёт
+ *  `hiddenChips={['portfolio']}`. */
 export function useProjectFilterDefs(): FilterFieldDef<ProjectListItem>[] {
-  // С архивом: выбранная архивная папка обязана читаться названием, а не
-  // uuid-ом в чипе фильтра (#559).
-  const { data: groups } = useProjectGroups(true);
+  const { data: groups } = useProjectGroups();
 
-  return useMemo(() => {
-    const alive = (groups ?? []).filter((group) => group.archivedAt === null);
-    const archived = (groups ?? []).filter((group) => group.archivedAt !== null);
-    return [
+  return useMemo(
+    () => [
       {
         id: 'portfolio',
         label: ui.projects.filterPortfolio,
         type: 'select' as const,
         options: [
-          ...alive.map((group) => ({ value: group.id, label: group.name })),
-          ...archived.map((group) => ({
-            value: group.id,
-            label: ui.projects.portfolioArchivedOption.replace('{name}', group.name),
-          })),
-          // Папка журнала «Без портфеля» (#559): тот же сентинел, что у
-          // левой колонки — фильтр и папка показывают один срез.
+          ...(groups ?? []).map((group) => ({ value: group.id, label: group.name })),
+          // Папка журнала «Без портфеля» (#559): тот же сентинел, что у кнопки —
+          // фильтр и папка показывают один срез.
           { value: NO_PORTFOLIO_FILTER, label: ui.projects.portfolioNone },
         ],
         match: (p: ProjectListItem, v: FilterValue) =>
@@ -73,6 +70,7 @@ export function useProjectFilterDefs(): FilterFieldDef<ProjectListItem>[] {
         options: Object.entries(ui.projects.status).map(([value, label]) => ({ value, label })),
         match: (p: ProjectListItem, v: FilterValue) => p.status === v,
       },
-    ];
-  }, [groups]);
+    ],
+    [groups],
+  );
 }

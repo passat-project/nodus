@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
@@ -7,22 +7,16 @@ import type { ProjectGroup, ProjectPortfolioCount } from '@nodus/contracts';
 import { buildPortfolioFolders } from '../lib/portfolio-folders.js';
 import { PortfolioMenu } from './portfolio-menu.js';
 
-/** Вкладка «Портфели» журнала «Проекты» (#559): список папок в поповере
- *  сразу после поиска — счётчики, статусы папки, архив, управление, DnD. */
+/** Кнопка «Портфели» журнала «Проекты» (#559): список папок в поповере сразу
+ *  после «Создать» — счётчики, управление, DnD. Архива у папки нет
+ *  (13.11.2026), имя выбранной папки носит сама кнопка. */
 const METRO: ProjectGroup = {
   id: '42000000-0000-4000-8000-000000000001',
   name: 'Нежин-Недра',
-  archivedAt: null,
 };
 const OLD: ProjectGroup = {
   id: '42000000-0000-4000-8000-000000000003',
   name: 'Старый объект',
-  archivedAt: '2026-11-01T10:00:00.000Z',
-};
-const EMPTY_ARCHIVED: ProjectGroup = {
-  id: '42000000-0000-4000-8000-000000000004',
-  name: 'Пустой архив',
-  archivedAt: '2026-11-02T10:00:00.000Z',
 };
 const COUNTS: ProjectPortfolioCount[] = [
   { portfolioId: METRO.id, active: 98, completed: 2, archived: 0 },
@@ -46,8 +40,6 @@ function renderMenu(overrides: Partial<ComponentProps<typeof PortfolioMenu>> = {
     onCreate: noop(),
     onSelect: noop(),
     onRename: noop(),
-    onArchive: noop(),
-    onRestore: noop(),
     onDelete: noop(),
     onDropProject: noop(),
     ...overrides,
@@ -56,9 +48,14 @@ function renderMenu(overrides: Partial<ComponentProps<typeof PortfolioMenu>> = {
   return props;
 }
 
-/** Открыть поповер вкладки «Портфели». */
+/** Кнопка-триггер «Портфели» (её подпись зависит от выбранной папки). */
+function trigger(): HTMLElement {
+  return screen.getByRole('button', { name: /^Портфели/ });
+}
+
+/** Открыть поповер списка папок. */
 function openMenu() {
-  fireEvent.click(screen.getByRole('button', { name: 'Портфели' }));
+  fireEvent.click(trigger());
 }
 
 /** Строка папки в поповере по её подписи (контейнер с кнопкой и «⋯»). */
@@ -75,13 +72,39 @@ function openFolderMenu(name: string) {
 
 afterEach(cleanup);
 
-describe('PortfolioMenu — вкладка «Портфели» (#559)', () => {
-  it('список скрыт, пока вкладку не открыли', () => {
+describe('PortfolioMenu — кнопка «Портфели» (#559)', () => {
+  it('список скрыт, пока кнопку не нажали', () => {
     renderMenu();
 
     expect(screen.queryByText('Нежин-Недра')).toBeNull();
     openMenu();
     expect(screen.getByText('Нежин-Недра')).toBeTruthy();
+  });
+
+  it('без выбора кнопка называется «Портфели»', () => {
+    renderMenu();
+
+    expect(trigger().textContent).toContain('Портфели');
+  });
+
+  it('выбранная папка называет кнопку — имя портфеля, а не «Портфели»', () => {
+    renderMenu({ selection: METRO.id });
+
+    expect(trigger().textContent).toContain(METRO.name);
+    expect(trigger().getAttribute('title')).toBe(METRO.name);
+  });
+
+  it('«Без портфеля» тоже называет кнопку', () => {
+    renderMenu({ selection: 'none' });
+
+    expect(trigger().textContent).toContain('Без портфеля');
+  });
+
+  it('вид кнопки не зависит от выбора: нейтральный, без подсветки', () => {
+    renderMenu({ selection: METRO.id });
+
+    expect(trigger().className.split(/\s+/)).not.toContain('bg-accent');
+    expect(trigger().className).toContain('border-input');
   });
 
   it('показывает «Все проекты», портфели «действует / всего» и «Без портфеля»', () => {
@@ -95,11 +118,11 @@ describe('PortfolioMenu — вкладка «Портфели» (#559)', () => {
     expect(screen.getByText('4 / 7')).toBeTruthy();
   });
 
-  it('архивные папки — отдельной группой «Архив»', () => {
+  it('группы «Архив» больше нет: все папки в одном списке', () => {
     renderMenu();
     openMenu();
 
-    expect(screen.getByText('Архив')).toBeTruthy();
+    expect(screen.queryByText('Архив')).toBeNull();
     expect(screen.getByText('Старый объект')).toBeTruthy();
   });
 
@@ -110,7 +133,6 @@ describe('PortfolioMenu — вкладка «Портфели» (#559)', () => {
     expect(screen.getByText('Все проекты')).toBeTruthy();
     expect(screen.getByText('Портфелей пока нет')).toBeTruthy();
     expect(screen.queryByText('Без портфеля')).toBeNull();
-    expect(screen.queryByText('Архив')).toBeNull();
     expect(screen.getByRole('button', { name: 'Новый портфель' })).toBeTruthy();
   });
 
@@ -143,14 +165,13 @@ describe('PortfolioMenu — вкладка «Портфели» (#559)', () => {
     expect(props.onDropProject).toHaveBeenCalledWith(METRO.id);
   });
 
-  it('«Без портфеля» принимает бросок, «Все проекты» и архив — нет', () => {
+  it('«Без портфеля» принимает бросок, «Все проекты» — нет', () => {
     const props = renderMenu({ draggingProjectId: 'project-1' });
 
     fireEvent.drop(folder('Без портфеля'));
     expect(props.onDropProject).toHaveBeenCalledWith('none');
 
     fireEvent.drop(folder('Все проекты'));
-    fireEvent.drop(folder('Старый объект'));
     expect(props.onDropProject).toHaveBeenCalledOnce();
   });
 
@@ -201,7 +222,7 @@ describe('PortfolioMenu — вкладка «Портфели» (#559)', () => {
     ).toBeTruthy();
   });
 
-  it('настройка прямо в строке папки: переименование и архив', async () => {
+  it('настройка в строке папки: переименование и удаление, архива нет', async () => {
     const props = renderMenu();
     openMenu();
 
@@ -211,27 +232,9 @@ describe('PortfolioMenu — вкладка «Портфели» (#559)', () => {
 
     openMenu();
     openFolderMenu(METRO.name);
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Архивировать портфель' }));
-    expect(props.onArchive).toHaveBeenCalledWith(expect.objectContaining({ id: METRO.id }));
-    expect(props.onRestore).not.toHaveBeenCalled();
-  });
-
-  it('у архивной папки в строке — «Вернуть портфель»', async () => {
-    const props = renderMenu();
-    openMenu();
-
-    openFolderMenu(OLD.name);
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Вернуть портфель' }));
-    expect(props.onRestore).toHaveBeenCalledWith(expect.objectContaining({ id: OLD.id }));
-    expect(props.onArchive).not.toHaveBeenCalled();
-  });
-
-  it('архивная папка без проектов видна в «Архиве» и возвращается из него', () => {
-    renderMenu({ tree: buildPortfolioFolders([METRO, EMPTY_ARCHIVED], COUNTS) });
-    openMenu();
-
-    const row = folder('Пустой архив');
-    expect(within(row).getByText('0 / 0')).toBeTruthy();
+    await screen.findByRole('menuitem', { name: 'Удалить портфель' });
+    expect(screen.queryByRole('menuitem', { name: 'Архивировать портфель' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Вернуть портфель' })).toBeNull();
   });
 
   it('в режиме «Мои» пункт называется «Мои проекты»', () => {
@@ -246,7 +249,6 @@ describe('PortfolioMenu — вкладка «Портфели» (#559)', () => {
     const long: ProjectGroup = {
       id: '42000000-0000-4000-8000-000000000009',
       name: 'Очень длинный портфель большого объекта с десятками договоров',
-      archivedAt: null,
     };
     renderMenu({ tree: buildPortfolioFolders([long], []) });
     openMenu();

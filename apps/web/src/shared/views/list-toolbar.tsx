@@ -32,6 +32,7 @@ export function ListToolbar<T>({
   left,
   right,
   className,
+  hiddenChips = [],
   searchPlaceholder = ui.common.searchPlaceholder,
 }: {
   toolbar: ListToolbarState;
@@ -40,6 +41,9 @@ export function ListToolbar<T>({
   left?: ReactNode;
   right?: ReactNode;
   className?: string;
+  /** Id фильтров, чьё значение показывает другой контрол (напр. «Портфели»
+   *  на своей кнопке) — чип в поиске такому фильтру не нужен. */
+  hiddenChips?: readonly string[];
   /** Подсказка поиска — по полям серверного поиска сущности (I15: строка из i18n). */
   searchPlaceholder?: string;
 }) {
@@ -57,7 +61,9 @@ export function ListToolbar<T>({
   // onInteractOutside + preventDefault для целей внутри якоря (как Radix
   // сам делает для триггера).
   const anchorRef = useRef<HTMLDivElement>(null);
-  const activeDefs = defs.filter((d) => isActiveFilter(toolbar.filters[d.id]));
+  const activeDefs = defs.filter(
+    (d) => !hiddenChips.includes(d.id) && isActiveFilter(toolbar.filters[d.id]),
+  );
   // Панель фильтра открывается, только когда фильтровать есть чем: у списка
   // без полей и пресетов (справочник контрагентов — поиск и архивные
   // серверные, #460) пустая панель была бы мусором под строкой поиска.

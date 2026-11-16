@@ -27,10 +27,10 @@ function patchTypes(
   );
 }
 
-/** Ключи списков портфелей (живые / с архивом). Счётчики папок (#559) живут
- *  под тем же префиксом `groups`, но другой формы — патчим только списки. */
+/** Ключ списка портфелей. Счётчики папок (#559) живут под тем же префиксом
+ *  `groups`, но другой формы — патчим только список. */
 function groupListKeys() {
-  return [projectsKeys.groups(false), projectsKeys.groups(true)] as const;
+  return [projectsKeys.groups()] as const;
 }
 
 function patchGroups(
@@ -175,7 +175,7 @@ export function useCreateProjectGroup() {
       api<ProjectGroup>('/projects/groups', { method: 'POST', body: { name } }),
     onMutate: async (name) => {
       const snapshot = snapshotGroups(queryClient);
-      const temp: ProjectGroup = { id: `temp-${crypto.randomUUID()}`, name, archivedAt: null };
+      const temp: ProjectGroup = { id: `temp-${crypto.randomUUID()}`, name };
       patchGroups(queryClient, (items) => [...items, temp]);
       return { snapshot, tempId: temp.id };
     },
@@ -222,31 +222,6 @@ export function useRenameProjectGroup() {
   });
 }
 
-/** Архив портфеля (проекты сохраняются без него). */
-export function useArchiveProjectGroup() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => api<ProjectGroup>(`/projects/groups/${id}`, { method: 'DELETE' }),
-    onMutate: async (id) => {
-      const snapshot = snapshotGroups(queryClient);
-      patchGroups(queryClient, (items) =>
-        items.map((row) =>
-          row.id === id ? { ...row, archivedAt: new Date().toISOString() } : row,
-        ),
-      );
-      return { snapshot };
-    },
-    onError: (error, _vars, context) => {
-      for (const [key, data] of context?.snapshot ?? []) queryClient.setQueryData(key, data);
-      toastApiError(error);
-    },
-    onSuccess: () => toast.success(ui.projects.savedDone),
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: projectsKeys.groupsPrefix() });
-    },
-  });
-}
-
 /**
  * Удаление портфеля НАВСЕГДА (#559): проекты не теряются — переходят в
  * «Без портфеля». Оптимистично убираем папку из кэша и снимаем её с проектов
@@ -277,30 +252,6 @@ export function useDeleteProjectGroup() {
     onSuccess: () => toast.success(ui.projects.portfolioDeletedDone),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: projectsKeys.all });
-    },
-  });
-}
-
-/** Возврат портфеля из архива (#559): папка возвращается в журнал. */
-export function useRestoreProjectGroup() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      api<ProjectGroup>(`/projects/groups/${id}/restore`, { method: 'POST' }),
-    onMutate: async (id) => {
-      const snapshot = snapshotGroups(queryClient);
-      patchGroups(queryClient, (items) =>
-        items.map((row) => (row.id === id ? { ...row, archivedAt: null } : row)),
-      );
-      return { snapshot };
-    },
-    onError: (error, _vars, context) => {
-      for (const [key, data] of context?.snapshot ?? []) queryClient.setQueryData(key, data);
-      toastApiError(error);
-    },
-    onSuccess: () => toast.success(ui.projects.savedDone),
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: projectsKeys.groupsPrefix() });
     },
   });
 }

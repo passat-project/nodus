@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { ProjectDetail, ProjectGroup, ProjectListItem, UserRef } from '@nodus/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -20,12 +20,10 @@ const PROJECT = '10000000-0000-4000-8000-000000000001';
 const METRO: ProjectGroup = {
   id: '42000000-0000-4000-8000-000000000001',
   name: 'Нежин-Недра',
-  archivedAt: null,
 };
 const IT: ProjectGroup = {
   id: '42000000-0000-4000-8000-000000000002',
   name: 'ИТ-проекты',
-  archivedAt: null,
 };
 
 const ME_REF: UserRef = { id: ME, displayName: 'Я Первый', avatarUrl: null };
@@ -87,7 +85,7 @@ function makeClient() {
     pageParams: [null],
   };
   qc.setQueryData(projectsKeys.journal(FILTERS as never), pages);
-  qc.setQueryData(projectsKeys.groups(true), [METRO, IT]);
+  qc.setQueryData(projectsKeys.groups(), [METRO, IT]);
   qc.setQueryData(projectsKeys.detail(PROJECT), detail());
   return qc;
 }
@@ -182,7 +180,7 @@ describe('useMoveProjectPortfolio (#559)', () => {
       ),
     );
     const qc = makeClient();
-    qc.setQueryData(projectsKeys.groups(true), [METRO]);
+    qc.setQueryData(projectsKeys.groups(), [METRO]);
     const { result } = hook(qc);
 
     result.current.mutate({ id: PROJECT, portfolioId: IT.id });

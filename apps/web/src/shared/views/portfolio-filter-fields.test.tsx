@@ -21,16 +21,15 @@ import { useTaskFilterDefs } from './task-filter-fields.js';
 /** Фильтр «Портфель» в списках задач и писем (#559): портфель — папка
  *  журнала «Проекты», фильтр появляется там же, где фильтр по проекту. */
 const PORTFOLIO = '42000000-0000-4000-8000-000000000001';
-const ARCHIVED_PORTFOLIO = '42000000-0000-4000-8000-000000000002';
+const SECOND_PORTFOLIO = '42000000-0000-4000-8000-000000000002';
 const PROJECT = '10000000-0000-4000-8000-000000000001';
 const NO_PORTFOLIO_PROJECT = '10000000-0000-4000-8000-000000000002';
 
 const server = setupServer(
   http.get('/api/v1/projects/groups', () =>
     HttpResponse.json([
-      { id: PORTFOLIO, name: 'Нежин-Недра', archivedAt: null },
-      // Архивная папка тоже в опциях — иначе чип фильтра покажет uuid.
-      { id: ARCHIVED_PORTFOLIO, name: 'Тендеры', archivedAt: '2026-11-01T10:00:00.000Z' },
+      { id: PORTFOLIO, name: 'Нежин-Недра' },
+      { id: SECOND_PORTFOLIO, name: 'Тендеры' },
     ]),
   ),
   http.get('/api/v1/projects', () =>
@@ -78,7 +77,7 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 describe('usePortfolioFilterDef (#559)', () => {
-  it('варианты — живые портфели, архивные с пометкой и «Без портфеля»', async () => {
+  it('варианты — портфели справочника и «Без портфеля»', async () => {
     const qc = makeClient();
     const { result } = hook(qc, () =>
       usePortfolioFilterDef<TaskListItem>({ projectIdOf: (task) => task.project?.id ?? null }),
@@ -89,13 +88,10 @@ describe('usePortfolioFilterDef (#559)', () => {
     expect(def.id).toBe('portfolio');
     expect(def.options?.map((option) => option.value)).toEqual([
       PORTFOLIO,
-      ARCHIVED_PORTFOLIO,
+      SECOND_PORTFOLIO,
       'none',
     ]);
-    // Архивная папка в чипе читается названием, а не uuid-ом.
-    expect(def.options?.find((option) => option.value === ARCHIVED_PORTFOLIO)?.label).toBe(
-      'Тендеры (архив)',
-    );
+    expect(def.options?.find((option) => option.value === SECOND_PORTFOLIO)?.label).toBe('Тендеры');
 
     const inPortfolio = { project: { id: PROJECT, code: 'НН-1', name: 'Договор' } } as TaskListItem;
     const withoutPortfolio = {
