@@ -10,7 +10,7 @@
   },
   "devDependencies": {
     "@nodus/config": "workspace:*",
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.0",
     "@types/node": "^24.19.2",
     "typescript": "~5.9.3"
   }
