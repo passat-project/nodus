@@ -48,7 +48,9 @@ export const userProfileSchema = z.object({
   /** Дата приёма на работу. */
   hiredAt: z.iso.date().nullable(),
   workdayStart: workdayStartSchema.nullable(),
-  avatarUrl: z.url().nullable(),
+  /** Аватар — файл-дериват: относительный подписанный путь (канон подписных
+   * ссылок; не z.url() — тот отбрасывал живые DTO, #880). null — инициалы. */
+  avatarUrl: z.string().nullable(),
 });
 
 const userNamesSchema = z.object({
@@ -79,7 +81,8 @@ export const userListItemSchema = z.object({
   id: z.uuid(),
   displayName: z.string().min(1),
   status: userStatusSchema,
-  avatarUrl: z.url().nullable(),
+  /** Аватар — относительный подписанный путь файла-деривата (не z.url(), #880). */
+  avatarUrl: z.string().nullable(),
   positionName: z.string().nullable(),
   departmentName: z.string().nullable(),
   email: z.email(),

@@ -190,7 +190,7 @@ function ConversationFeed({
   // Открытая беседа для гейта уведомлений (#124/#300): реестр хостов —
   // анмаунт одного хоста не гасит признак, пока жив другой (лента+тред).
   useConversationHost(conversationId);
-  const { data, isLoading } = useConversationMessages(conversationId);
+  const { data, isLoading, isFetching } = useConversationMessages(conversationId);
   const me = useAuthStore((s) => s.user);
 
   // Поиск беседы — правая панель (лупа в шапке, модель Битрикс24): лента
@@ -236,6 +236,15 @@ function ConversationFeed({
   const releaseAnchor = useCallback(() => {
     requestAnimationFrame(() => requestAnimationFrame(() => setAnchoring(false)));
   }, []);
+  // Страховка (#880): якорь ждёт ГОТОВЫЕ данные (isFetching), но зависший
+  // рефеч не должен навсегда блокировать autoScroll — предельный срок (как у
+  // гейта списка) снимает блокировку; якорь доскроллит к непрочитанному, когда
+  // данные всё же придут (UnreadAnchor остаётся взведённым до готовых данных).
+  useEffect(() => {
+    if (!anchoring) return;
+    const t = window.setTimeout(() => setAnchoring(false), LIST_GATE_TIMEOUT_MS);
+    return () => window.clearTimeout(t);
+  }, [anchoring]);
   // Локальный знак прочтения ленты (#845): видимое/добавленное у низа лента
   // прочла, не дожидаясь троттла квитанций и медленного рефеча списка.
   const { localReadSeq, markSeen } = useLocalReadSeq({
@@ -296,12 +305,17 @@ function ConversationFeed({
         onFiles={(files) => addFiles(scope, files)}
       >
         <MessageScrollerProvider autoScroll={!anchoring}>
-          {/* Якорь — по знаку, снятому на маунте (та же точка, что у плашки). */}
+          {/* Якорь — по знаку, снятому на маунте (та же точка, что у плашки).
+              Цель передаётся по РЕШЕНИЮ открытия (open.anchoring), а не по
+              живому anchoring: страховочный сброс autoScroll по таймауту не
+              должен отбирать у якоря цель — он доскроллит, когда данные готовы
+              (#880). Сам якорь одноразовый (settled) и ждёт !isFetching. */}
           <UnreadAnchor
             items={items}
             isLoading={isLoading}
-            anchorSeq={anchoring && open.jump === null ? openReadSeq : null}
-            jump={anchoring ? open.jump : null}
+            isFetching={isFetching}
+            anchorSeq={open.anchoring && open.jump === null ? openReadSeq : null}
+            jump={open.anchoring ? open.jump : null}
             viewportRef={viewportRef}
             onAnchored={releaseAnchor}
           />

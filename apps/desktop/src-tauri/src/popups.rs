@@ -54,6 +54,12 @@ pub(crate) struct ActivePopup {
     /// Ключ гашения источника: conversationId беседы ИЛИ letterId письма
     /// (#618) — портал гасит попапы по открытии источника (Telegram).
     dismiss_key: String,
+    /// Срочное (#867, ADR-0019 «urgent — до реакции»): не угасает по таймеру
+    /// активности и не вытесняется обычными попапами — висит до реакции.
+    pub(crate) urgent: bool,
+    /// id попапа (messageId беседы / notificationId письма): дедуп повторов
+    /// (#880) — повтор срочного с тем же id не создаёт второе окно.
+    pub(crate) popup_id: String,
     pub(crate) created_ms: u64,
     /// Фактическая высота окна (логические px): мини-UI измерил контент и
     /// прислал `popup_set_height`. Стек раскладывается по ЭТИМ высотам —
@@ -110,12 +116,18 @@ impl PopupStack {
         (0..MAX_STACK).find(|k| !self.active.iter().any(|p| p.slot == *k))
     }
     /// Старейший попап без hover/поля ответа — кандидат на вытеснение.
+    /// Срочные не вытесняются (#880): висят до реакции, обычные их не сдвигают.
     fn eviction_victim(&self) -> Option<String> {
         self.active
             .iter()
-            .filter(|p| !p.hover && !p.replying)
+            .filter(|p| !p.hover && !p.replying && !p.urgent)
             .min_by_key(|p| p.counter)
             .map(|p| p.label.clone())
+    }
+    /// Дедуп повторов (#880): попап с этим id уже висит или в очереди —
+    /// второе окно не создаём (повтор срочного лишь мигает таскбаром).
+    fn contains_id(&self, id: &str) -> bool {
+        self.active.iter().any(|p| p.popup_id == id) || self.pending.iter().any(|p| p.id == id)
     }
     /// Первый показ этого label? Помечает показ, true — окно надо показать
     /// (#305): show дергают ровно один раз — popup_ready ИЛИ fallback-таймер,
@@ -175,6 +187,8 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
     let payload_json = payload_to_json(&payload, bridge::ui_theme());
     let dismiss_key = payload.dismiss_key().to_string();
     let download_path = payload.download.as_ref().and_then(|d| d.path.clone());
+    let urgent = payload.urgent;
+    let popup_id = payload.id.clone();
     log::info!(
         "popups::show: id={} dismissKey={} urgent={}",
         payload.id,
@@ -183,6 +197,13 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
     );
     let (label, slot) = {
         let mut s = stack(app);
+        // Дедуп повторов (#880): попап с тем же id уже висит или в очереди —
+        // второе окно не создаём. Повтор срочного лишь мигает таскбаром (веб
+        // зовёт flash отдельно); закрытый без реакции попап повтор вернёт.
+        if s.contains_id(&popup_id) {
+            log::info!("popups::show: id={popup_id} уже в стеке/очереди — дедуп, без дубля");
+            return;
+        }
         // Полный стек: новое вытесняет старейший спокойный (очередь-сдвиг);
         // сплошь hover/печать — уходим в очередь, докат при закрытии.
         if s.free_slot().is_none() {
@@ -213,6 +234,8 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
             slot,
             counter,
             dismiss_key,
+            urgent,
+            popup_id,
             created_ms: activity::monotonic_ms(),
             height: POPUP_H,
             fading: None,
@@ -829,6 +852,8 @@ mod tests {
                 slot,
                 counter: k as u64,
                 dismiss_key: format!("conv-{k}"),
+                urgent: false,
+                popup_id: format!("m-{k}"),
                 created_ms: 0,
                 height: POPUP_H,
                 fading: None,
@@ -863,6 +888,31 @@ mod tests {
         // Все заняты пользователем — жертв нет.
         s.active[2].hover = true;
         assert!(s.eviction_victim().is_none());
+    }
+
+    /** Срочный не вытесняется обычными (#880): висит до реакции. */
+    #[test]
+    fn срочный_не_вытесняется() {
+        let mut s = PopupStack::default();
+        occupy(&mut s, 3);
+        // Старейший — срочный: жертва следующий спокойный, не он.
+        s.active[0].urgent = true;
+        assert_eq!(s.eviction_victim().as_deref(), Some("popup-1"));
+        // Все срочные — жертв нет (стек не сдвигается обычным сообщением).
+        s.active[1].urgent = true;
+        s.active[2].urgent = true;
+        assert!(s.eviction_victim().is_none());
+    }
+
+    /** Дедуп повторов (#880): тот же id в стеке или очереди — без дубля. */
+    #[test]
+    fn дедуп_по_id_в_стеке_и_очереди() {
+        let mut s = PopupStack::default();
+        occupy(&mut s, 1); // popup_id = "m-0"
+        assert!(s.contains_id("m-0"), "висящий попап дедуплицируется");
+        assert!(!s.contains_id("m-9"), "чужой id не дедуплицируется");
+        s.pending.push_back(payload("m-7", "conv-7"));
+        assert!(s.contains_id("m-7"), "очередь тоже дедуплицируется");
     }
 
     #[test]

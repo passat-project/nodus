@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { registerNotificationSink } from '../../../shared/socket/notification-bridge.js';
 import { notificationsKeys } from '../../../shared/notifications-keys.js';
 import { isDesktopShell } from '../../../shared/desktop/desktop-bridge.js';
-import { notifyDesktopLetter } from '../../../shared/desktop/letter-popup.js';
+import { notifyDesktopJournal } from '../../../shared/desktop/journal-popup.js';
 import { useNotificationsToastStore } from './toast-store.js';
 
 /**
@@ -14,8 +14,10 @@ import { useNotificationsToastStore } from './toast-store.js';
  *
  * В десктоп-оболочке внутренний тост НЕ всплывает (фидбек владельца 08.10):
  * всплывающий канал там один — попапы оболочки (ADR-0019), иначе каждое
- * сообщение звенело дважды. Почта — исключение в ту же сторону (#618):
- * попапов чата у письма нет, журнал живёт в колокольчике, счётчики — в бейдже.
+ * сообщение звенело дважды. Новые сообщения показывает живой путь
+ * (notifyDesktopMessage из chat.message_sent); журнал в оболочке закрывает
+ * kinds без живого пути — письма, правки и повторы срочных (#880,
+ * journal-popup.ts), без двойных попапов. Счётчики — в бейдже/колокольчике.
  */
 export function useNotificationSink(): void {
   const queryClient = useQueryClient();
@@ -25,7 +27,7 @@ export function useNotificationSink(): void {
     registerNotificationSink({
       dispatched: (snapshot, attempt) => {
         if (isDesktopShell()) {
-          notifyDesktopLetter(snapshot);
+          notifyDesktopJournal(snapshot, attempt, queryClient);
         } else {
           push(snapshot, attempt);
         }

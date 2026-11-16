@@ -82,10 +82,15 @@ urgent/high/medium/low — ось важности, независимая от 
 - `model/group-notifications.ts` — группировка по источнику (Telegram-канон),
   сортировка приоритетов (PRIORITY_ORDER), cap «999+» — чистые функции (unit).
 - `model/use-notification-sink.ts` — приём WS-будил через shared-мост
-  `shared/socket/notification-bridge.ts` (паттерн card-bridge). В
-  десктоп-оболочке тост не всплывает — почтовое будило `letter.arrived`
-  уходит в попап оболочки (`shared/desktop/letter-popup.ts`, #618), клик
-  по попапу открывает карточку письма.
+  `shared/socket/notification-bridge.ts` (паттерн card-bridge). В браузере —
+  тосты по ярусу. В десктоп-оболочке тост не всплывает: kinds журнала БЕЗ
+  живого попапа показывает `shared/desktop/journal-popup.ts` (#880) —
+  письма (`letter.arrived` → `letter-popup.ts`, #618, клик открывает
+  карточку), правки (`chat.message_edited`, уровень беседы, #189) и повторы
+  срочного (`urgent.message` attempt>0, дедуп по messageId в стеке оболочки).
+  Новые сообщения и urgent attempt=0 показывает живой путь
+  (`shared/desktop/desktop-notify.ts` из `chat.message_sent`) — журнал их не
+  дублирует.
 
 ## Интеграционные точки (вне фичи)
 

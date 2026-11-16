@@ -277,7 +277,9 @@ export const conversationListItemSchema = z.object({
   type: conversationTypeSchema,
   /** Для direct — вычисляется из имён участников на клиенте/сервере. */
   title: z.string().nullable(),
-  avatarUrl: z.url().nullable(),
+  /** Аватар беседы — файл-дериват: относительный подписанный путь (канон
+   * подписных ссылок, как у вложений; не z.url() — #880). null — инициалы. */
+  avatarUrl: z.string().nullable(),
   /** Роль текущего пользователя в беседе (бэкенд #58): UI прячет недоступное,
    *  сравнивая myRole с матрицей permissions (модель Bitrix24 restrictions). */
   myRole: conversationMemberRoleSchema,
