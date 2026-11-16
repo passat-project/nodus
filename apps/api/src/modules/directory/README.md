@@ -32,7 +32,7 @@
 
 ## События (outbox, I9)
 
-Все имена — из `DIRECTORY_EVENTS` контрактов (литералов в коде нет): `directory.user.created` / `directory.user.updated` (payload: userId, changedFields) / `directory.user.deactivated` (payload: userId — auth отзывает сессии); `directory.department.created` / `updated` / `archived`; `directory.position.created` / `updated` / `archived`; `directory.role.created` / `updated` (только `name`/`description`) / `deleted`; `directory.role.permissions_changed` `{roleId, permission, granted}` — по событию на реально изменённое право; `directory.role.members_changed` `{roleId, kind, targetId, added}` — при реальном изменении состава. Gateway эти события пока не маршрутизирует (подписчиков у клиентов нет — #382).
+Все имена — из `DIRECTORY_EVENTS` контрактов (литералов в коде нет): `directory.user.created` / `directory.user.updated` (payload: userId, changedFields) / `directory.user.deactivated` (payload: userId — auth отзывает сессии); `directory.department.created` / `updated` / `archived`; `directory.position.created` / `updated` / `archived`; `directory.role.created` / `updated` (только `name`/`description`) / `deleted`; `directory.role.permissions_changed` `{roleId, permission, granted}` — по событию на реально изменённое право; `directory.role.members_changed` `{roleId, kind, targetId, added}` — при реальном изменении состава; `directory.role.access_changed` `{roleId, reason: 'membership'|'permissions', userIds}` — у этих сотрудников изменился набор действующих прав (аудитория — прямые участники и сотрудники подразделений роли), auth отзывает их access-токены (#866, AUD-002). Gateway эти события пока не маршрутизирует (подписчиков у клиентов нет — #382).
 
 ## Правила
 

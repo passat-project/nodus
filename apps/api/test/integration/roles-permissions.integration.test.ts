@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { Redis } from 'ioredis';
 import {
   ErrorCode,
   Permission,
@@ -8,6 +9,9 @@ import {
   roleSchema,
 } from '@nodus/contracts';
 
+import { EventDispatcher } from '../../src/core/events/event-dispatcher.js';
+import { REDIS_CLIENT } from '../../src/core/redis/redis.module.js';
+import { dispatchOwnEvent, eventIdOf } from './outbox-test-utils.js';
 import { setupRolesFixture } from './roles-fixtures.js';
 
 /**
@@ -97,7 +101,7 @@ describe('Роли: точечные права (#379)', () => {
     expect(await changes(roleId)).toHaveLength(1);
   });
 
-  it('5. /auth/me: право роли доезжает до участника и уходит после отзыва', async () => {
+  it('5. /auth/me: право роли доезжает до участника; старый токен отозван (AUD-002)', async () => {
     const roleId = await f.createRole('Проба 5', []);
     await f.prisma.userRole.create({ data: { roleId, userId: f.users.limited.id } });
     const me = async () =>
@@ -106,16 +110,34 @@ describe('Роли: точечные права (#379)', () => {
           permissions: string[];
         }
       ).permissions;
+    // Доставка события смены доступа (AUD-002) — детерминированно, без тика поллера.
+    const accessDelivered = async () => {
+      const eventId = await eventIdOf(f.prisma, {
+        type: 'directory.role.access_changed',
+        aggregateId: roleId,
+      });
+      await dispatchOwnEvent(f.app.get(EventDispatcher), f.prisma, eventId);
+    };
+    // Стоп-лист проверяется отдельной ассерцией ниже; дальше тест — о чтении
+    // свежих прав из БД, поэтому отзыв снимаем, как клиент после refresh.
+    const clearRevoke = () =>
+      f.app.get<Redis>(REDIS_CLIENT).del(`nodus:auth:revoked-before:${f.users.limited.id}`);
 
     expect(await me()).not.toContain(Permission.CUSTOM_FIELD_MANAGE);
     await f.api(f.users.manager, 'PUT', permissionUrl(roleId, Permission.CUSTOM_FIELD_MANAGE), {
       key: randomUUID(),
     });
+    await accessDelivered();
+    expect((await f.api(f.users.limited, 'GET', '/auth/me')).status).toBe(401);
+    await clearRevoke();
     expect(await me()).toContain(Permission.CUSTOM_FIELD_MANAGE);
 
     await f.api(f.users.manager, 'DELETE', permissionUrl(roleId, Permission.CUSTOM_FIELD_MANAGE), {
       key: randomUUID(),
     });
+    await accessDelivered();
+    expect((await f.api(f.users.limited, 'GET', '/auth/me')).status).toBe(401);
+    await clearRevoke();
     expect(await me()).not.toContain(Permission.CUSTOM_FIELD_MANAGE);
   });
 

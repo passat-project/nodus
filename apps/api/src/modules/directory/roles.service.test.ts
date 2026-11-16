@@ -38,13 +38,21 @@ describe('RolesService (#379)', () => {
   const tx = { run: vi.fn((cb: (t: string) => unknown) => cb('tx-handle')) };
   const eventBus = { emit: vi.fn() };
   const signedUrls = { fileContentUrl: (id: string) => `/api/v1/files/${id}/content` };
+  const audience = { roleUserIds: vi.fn() };
 
   let service: RolesService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     roles.lockForUpdate.mockResolvedValue(true);
-    service = new RolesService(roles as never, tx as never, eventBus as never, signedUrls as never);
+    audience.roleUserIds.mockResolvedValue([]);
+    service = new RolesService(
+      roles as never,
+      tx as never,
+      eventBus as never,
+      signedUrls as never,
+      audience as never,
+    );
   });
 
   describe('setPermission', () => {
@@ -79,6 +87,20 @@ describe('RolesService (#379)', () => {
         expect.objectContaining({ actorId: 'admin-1', aggregateId: 'role-1' }),
       );
       expect(role.permissions).toContain(Permission.WORKFLOW_MANAGE);
+    });
+
+    it('выдача права без реального изменения — токены не трогаем', async () => {
+      roles.findById.mockResolvedValue(record());
+      roles.addPermission.mockResolvedValue(false);
+
+      await service.setPermission(
+        'role-1',
+        Permission.DIRECTORY_READ,
+        true,
+        actorWith(Permission.DIRECTORY_READ),
+      );
+
+      expect(audience.roleUserIds).not.toHaveBeenCalled();
     });
 
     it('повторная выдача идемпотентна: события нет', async () => {
@@ -198,6 +220,27 @@ describe('RolesService (#379)', () => {
       });
       expect(eventBus.emit.mock.calls.some((call) => call[1] === 'directory.role.updated')).toBe(
         false,
+      );
+    });
+
+    it('смена набора прав отзывает токены всех участников роли', async () => {
+      roles.findById.mockResolvedValue(
+        record({ permissions: [{ permission: Permission.DIRECTORY_READ }] }),
+      );
+      audience.roleUserIds.mockResolvedValue(['u1', 'u2']);
+
+      await service.updateRole(
+        'role-1',
+        { permissions: [Permission.DIRECTORY_READ, Permission.WORKFLOW_MANAGE] },
+        actorWith(Permission.WORKFLOW_MANAGE),
+      );
+
+      expect(audience.roleUserIds).toHaveBeenCalledWith('role-1', 'tx-handle');
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'tx-handle',
+        'directory.role.access_changed',
+        { roleId: 'role-1', reason: 'permissions', userIds: ['u1', 'u2'] },
+        expect.objectContaining({ actorId: 'admin-1', aggregateId: 'role-1' }),
       );
     });
 

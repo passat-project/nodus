@@ -10,6 +10,7 @@ import { PositionsRepository } from './positions.repository.js';
 import { PositionsService } from './positions.service.js';
 import { ReferenceGuard } from './reference-guard.service.js';
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
+import { RoleAudienceRepository } from './role-audience.repository.js';
 import { RoleMembersService } from './role-members.service.js';
 import { RolesController } from './roles.controller.js';
 import { RolesRepository } from './roles.repository.js';
@@ -37,6 +38,7 @@ import { UsersService } from './users.service.js';
     RoleAssignmentGuard,
     ReferenceGuard,
     RolesRepository,
+    RoleAudienceRepository,
     // bind-правило #490 считает добавленные роли портом; биндинг токена —
     // в модуле-потребителе (ADR-0012, как в workflows-ports.module).
     { provide: ROLE_MEMBERSHIP_READER, useClass: RoleMembershipProvider },

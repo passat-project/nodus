@@ -30,6 +30,10 @@ export const DIRECTORY_EVENTS = {
   ROLE_PERMISSIONS_CHANGED: 'directory.role.permissions_changed',
   /** Сотрудника или подразделение добавили в роль / убрали из неё (#379). */
   ROLE_MEMBERS_CHANGED: 'directory.role.members_changed',
+  /** У этих пользователей изменился набор действующих прав роли (#866,
+   *  AUD-002): auth обесценивает их access-токены — права из JWT не живут
+   *  до истечения TTL. */
+  ROLE_ACCESS_CHANGED: 'directory.role.access_changed',
 } as const;
 
 export const userDeactivatedPayloadSchema = z.object({
@@ -53,3 +57,16 @@ export const roleMembersChangedPayloadSchema = z.object({
   added: z.boolean(),
 });
 export type RoleMembersChangedPayload = z.infer<typeof roleMembersChangedPayloadSchema>;
+
+/**
+ * Payload `directory.role.access_changed`: `userIds` — активные сотрудники,
+ * чьи действующие права определяются ролью на момент изменения (прямые
+ * участники и сотрудники подразделений роли; #866, AUD-002). `reason`:
+ * `membership` — состав роли, `permissions` — набор прав роли.
+ */
+export const roleAccessChangedPayloadSchema = z.object({
+  roleId: z.uuid(),
+  reason: z.enum(['membership', 'permissions']),
+  userIds: z.array(z.uuid()).min(1),
+});
+export type RoleAccessChangedPayload = z.infer<typeof roleAccessChangedPayloadSchema>;
