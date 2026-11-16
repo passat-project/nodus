@@ -36,8 +36,11 @@ export function AssistantBody() {
           владельца 16.11.2026: все горизонтали совпадают). */}
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
         <AssistantGlyph className="size-7" />
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
-          {ui.assistant.title}
+        <span className="shrink-0 text-sm font-semibold text-foreground">{ui.assistant.title}</span>
+        {/* Название сессии — мелким текстом возле заголовка панели, без
+            отдельного бара (вердикт владельца 16.11.2026). */}
+        <span className="min-w-0 flex-1 truncate text-label text-muted-foreground">
+          {active?.title ?? ui.assistant.newChat}
         </span>
         <AssistantSessionPicker />
         <Button
@@ -69,14 +72,6 @@ export function AssistantBody() {
           край окна читается скруглением и тенью в светлой теме и ступенью
           тона зоны в тёмной; линия в шапке/баре сессии не нужна. */}
       <div className="chat-wallpaper flex min-h-0 flex-1 flex-col bg-chat-zone">
-        {/* Бар сессии h-14 — КАЛИБР БАРА БЕСЕДЫ МЕССЕНДЖЕРА: несёт имя
-            сессии, как бар беседы несёт имя собеседника; обои под ним
-            начинаются на той же горизонтали, что лента мессенджера. */}
-        <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-card px-3">
-          <span className="truncate text-sm font-semibold text-foreground">
-            {active?.title ?? ui.assistant.newChat}
-          </span>
-        </div>
         {active && active.messages.length === 0 && !thinking ? (
           <AssistantWelcome hasCard={!!ctx.cardTask} onPick={ask} />
         ) : (
