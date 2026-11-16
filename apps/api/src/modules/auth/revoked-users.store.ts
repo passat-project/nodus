@@ -4,13 +4,14 @@ import { PinoLogger } from 'nestjs-pino';
 
 import { runRedisCommand } from '../../core/redis/redis-command.js';
 import { REDIS_CLIENT } from '../../core/redis/redis.module.js';
+import { AuthRepository } from './auth.repository.js';
 import { getAuthConfig } from './auth.config.js';
 
 /** Запас к моменту деактивации: `createdAt` события — начало транзакции в
  *  часах PG, а refresh/login, прочитавший статус до её коммита, подпишет
  *  токен на миллисекунды позже (`iat` — часы Node, точность — секунда). */
 const REVOKE_MARGIN_SECONDS = 5;
-const WARN_EVERY_MS = 60_000;
+const ERROR_EVERY_MS = 60_000;
 
 /** SET только вперёд: повтор старого события (бэкофф диспетчера) не
  *  откатывает момент более позднего увольнения. */
@@ -32,19 +33,21 @@ return 1`;
  * новые токены выпущены позже (кроме первых секунд запаса — один 401 и
  * refresh).
  *
- * Недоступный Redis: проверка — fail-open с warn (не чаще раза в минуту):
- * окно возвращается к TTL токена, API не встаёт (Redis не готов → сразу
- * пропуск, завис → таймаут). Запись — ошибка: диспетчер повторит событие с
- * бэкоффом, а не повиснет.
+ * Недоступный Redis: проверка — запасная по статусу пользователя в БД
+ * (деактивирован → токен отозван), лог `error` не чаще раза в минуту
+ * (AUD-006). БД тоже недоступна — пропуск (fail-open): отказ Redis не должен
+ * превращаться в отказ портала. Запись — ошибка: диспетчер повторит событие
+ * с бэкоффом, а не повиснет.
  */
 @Injectable()
 export class RevokedUsersStore {
   private readonly ttlSeconds = getAuthConfig().accessTtlSeconds + 60;
-  private lastWarnAt = 0;
+  private lastErrorAt = 0;
 
   constructor(
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly logger: PinoLogger,
+    private readonly authRepository: AuthRepository,
   ) {
     this.logger.setContext(RevokedUsersStore.name);
   }
@@ -73,20 +76,32 @@ export class RevokedUsersStore {
     try {
       raw = await runRedisCommand(this.redis, () => this.redis.get(this.key(userId)));
     } catch (error) {
-      this.warnThrottled(error);
-      return false;
+      this.errorThrottled(error);
+      return this.isDeactivatedInDb(userId);
     }
     if (raw === null) return false;
     return issuedAtSeconds === undefined || issuedAtSeconds <= Number(raw);
   }
 
-  private warnThrottled(error: unknown): void {
+  /** Запасной источник при недоступном Redis (AUD-006): статус в БД —
+   *  источник истины о деактивации. Нет строки — пользователя больше нет,
+   *  токен тоже недействителен. Ошибка БД — fail-open (портал не встаёт). */
+  private async isDeactivatedInDb(userId: string): Promise<boolean> {
+    try {
+      const profile = await this.authRepository.findProfileById(userId);
+      return !profile || profile.status !== 'active';
+    } catch {
+      return false;
+    }
+  }
+
+  private errorThrottled(error: unknown): void {
     const now = Date.now();
-    if (now - this.lastWarnAt < WARN_EVERY_MS) return;
-    this.lastWarnAt = now;
-    this.logger.warn(
+    if (now - this.lastErrorAt < ERROR_EVERY_MS) return;
+    this.lastErrorAt = now;
+    this.logger.error(
       { err: error },
-      'revoked-users: Redis недоступен, проверка стоп-листа пропущена',
+      'revoked-users: Redis недоступен, проверка стоп-листа по статусу в БД',
     );
   }
 }

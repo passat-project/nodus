@@ -1,20 +1,34 @@
 import { Redis } from 'ioredis';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 process.env.JWT_SECRET ??= 'test-secret-test-secret-test-secret-123';
 
 const { RevokedUsersStore } = await import('./revoked-users.store.js');
 
-function makeStore(redis: Record<string, unknown>) {
-  const logger = { setContext: vi.fn(), warn: vi.fn() };
+/** Запасная проверка статуса при недоступном Redis (AUD-006). */
+function repositoryWith(status: 'active' | 'deactivated') {
+  return { findProfileById: vi.fn(async () => ({ status })) };
+}
+
+function makeStore(redis: Record<string, unknown>, repository = repositoryWith('active')) {
+  const logger = { setContext: vi.fn(), error: vi.fn() };
   return {
-    store: new RevokedUsersStore({ status: 'ready', ...redis } as never, logger as never),
+    store: new RevokedUsersStore(
+      { status: 'ready', ...redis } as never,
+      logger as never,
+      repository as never,
+    ),
     logger,
+    repository,
   };
 }
 
 /** Стоп-лист уволенных (#333): токен, выданный до деактивации, отвергается. */
 describe('RevokedUsersStore', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('revoke: момент + запас 5 с, только вперёд (скрипт max), TTL access + 60 с', async () => {
     const evalFn = vi.fn(async () => 1);
     const { store } = makeStore({ eval: evalFn });
@@ -51,13 +65,52 @@ describe('RevokedUsersStore', () => {
     expect(await store.isRevoked('u1', 1)).toBe(false);
   });
 
-  it('Redis завис (команда в очереди без ответа) — fail-open по таймауту, warn один раз', async () => {
-    const { store, logger } = makeStore({ get: vi.fn(() => new Promise(() => undefined)) });
+  it('Redis не готов — запасная проверка: деактивированный отозван', async () => {
+    const repository = repositoryWith('deactivated');
+    const { store } = makeStore({ status: 'reconnecting', get: vi.fn() }, repository);
+
+    expect(await store.isRevoked('u1', 1)).toBe(true);
+    expect(repository.findProfileById).toHaveBeenCalledWith('u1');
+  });
+
+  it('Redis не готов — активный сотрудник проходит', async () => {
+    const repository = repositoryWith('active');
+    const { store } = makeStore({ status: 'reconnecting', get: vi.fn() }, repository);
+
+    expect(await store.isRevoked('u1', 1)).toBe(false);
+    expect(repository.findProfileById).toHaveBeenCalledWith('u1');
+  });
+
+  it('Redis и БД недоступны — fail-open: портал не встаёт', async () => {
+    const repository = { findProfileById: vi.fn(async () => Promise.reject(new Error('pg down'))) };
+    const { store } = makeStore({ status: 'reconnecting', get: vi.fn() }, repository);
+
+    expect(await store.isRevoked('u1', 1)).toBe(false);
+  });
+
+  it('Redis завис (команда в очереди без ответа) — запасная проверка по таймауту, error один раз', async () => {
+    const { store, logger } = makeStore({
+      get: vi.fn(() => new Promise(() => undefined)),
+    });
     const started = Date.now();
     expect(await store.isRevoked('u1', 1)).toBe(false);
     expect(await store.isRevoked('u1', 1)).toBe(false);
     expect(Date.now() - started).toBeLessThan(2_000);
-    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('лог уровня error — не чаще раза в минуту', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-16T10:00:00.000Z'));
+    const { store, logger } = makeStore({ status: 'reconnecting', get: vi.fn() });
+
+    await store.isRevoked('u1', 1);
+    await store.isRevoked('u1', 1);
+    expect(logger.error).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(new Date('2026-11-16T10:01:01.000Z'));
+    await store.isRevoked('u1', 1);
+    expect(logger.error).toHaveBeenCalledTimes(2);
   });
 
   it('настоящий ioredis к закрытому порту (настройки общего клиента) — guard не висит', async () => {
@@ -67,8 +120,12 @@ describe('RevokedUsersStore', () => {
       retryStrategy: () => 1_000,
     });
     try {
-      const logger = { setContext: vi.fn(), warn: vi.fn() };
-      const store = new RevokedUsersStore(redis as never, logger as never);
+      const logger = { setContext: vi.fn(), error: vi.fn() };
+      const store = new RevokedUsersStore(
+        redis as never,
+        logger as never,
+        repositoryWith('active') as never,
+      );
       const started = Date.now();
       expect(await store.isRevoked('u1', 1)).toBe(false);
       expect(Date.now() - started).toBeLessThan(1_000);
