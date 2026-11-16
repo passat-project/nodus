@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { CUSTOM_FIELD_LIMITS } from '../custom-fields/custom-field-values.js';
+import { parseUncPath as parsePath } from '../custom-fields/unc-path.js';
 
 /**
  * Файловые серверы «Настроек портала» (#558, ADR-0029 Р11).
@@ -21,12 +21,6 @@ export const FILE_SERVER_LIMITS = {
   length: 260,
 } as const;
 
-/** Запрещённые в имени сегмента пути символы Windows. */
-const INVALID_SEGMENT = /[<>:"|?*\\/]/;
-/** Управляющие символы и NUL — в путях недопустимы. */
-const CONTROL = /\p{Cc}/u;
-/** Имена устройств DOS: `CON`, `NUL`, `COM1`… даже с расширением (`CON.txt`). */
-const DEVICE_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 /** Имя сервера: DNS-метка/IP-фрагмент, без пробелов и обратных слэшей. */
 const SERVER_NAME = /^[a-z0-9](?:[a-z0-9._-]{0,251}[a-z0-9])?$/i;
 /** Имя общей папки: пробелы допустимы, служебные символы — нет. */
@@ -122,116 +116,20 @@ export const fileServersResponseSchema = z.object({
 
 export type FileServersResponse = z.infer<typeof fileServersResponseSchema>;
 
-/** Разобранный UNC-путь значения «Ссылка или путь». */
-export interface UncPathParts {
-  server: string;
-  share: string;
-  /** Исходная строка без изменений (открывается ровно она). */
-  path: string;
-}
-
-/**
- * Строгая проверка UNC-пути файла: `\\server\share[\…]` без `..`, NUL,
- * управляющих символов, имён устройств и хвостовых точек/пробелов.
- * Пространство имён устройства (`\\?\`, `\\.\`) запрещено.
- */
-export function parseUncPath(raw: unknown): UncPathParts | null {
-  if (typeof raw !== 'string') return null;
-  if (raw.length === 0 || raw.length > CUSTOM_FIELD_LIMITS.link) return null;
-  if (raw.trim() !== raw) return null;
-  if (!raw.startsWith('\\\\') || raw.startsWith('\\\\?\\') || raw.startsWith('\\\\.\\')) {
-    return null;
-  }
-  if (CONTROL.test(raw)) return null;
-  // Хвостовой разделитель — законная запись папки; открываем без него.
-  const path = raw.replace(/\\+$/, '');
-  if (!path.startsWith('\\\\') || path.length <= 2) return null;
-  const segments = path.slice(2).split('\\');
-  if (segments.length < 2) return null;
-  for (const segment of segments) {
-    if (segment.length === 0 || segment === '.' || segment === '..') return null;
-    if (INVALID_SEGMENT.test(segment)) return null;
-    if (segment.endsWith('.') || segment.endsWith(' ')) return null;
-    const base = segment.split('.')[0] ?? '';
-    if (DEVICE_NAME.test(base)) return null;
-  }
-  const [server, share] = segments as [string, string];
-  if (!validServer(server) || !validShare(share)) return null;
-  return { server, share, path };
-}
+export {
+  REVEAL_ONLY_EXTENSIONS,
+  isRevealOnlyUncPath,
+  parseUncPath,
+  type UncPathParts,
+} from '../custom-fields/unc-path.js';
 
 /** Путь принадлежит одной из разрешённых серверных папок. */
 export function isPathOnFileServer(raw: unknown, servers: readonly string[]): boolean {
-  const path = parseUncPath(raw);
+  const path = parsePath(raw);
   if (!path) return false;
   const key = fileServerKey(path.server, path.share);
   return servers.some((value) => {
     const parsed = parseFileServer(value);
     return parsed !== null && fileServerKey(parsed.server, parsed.share) === key;
   });
-}
-
-/**
- * Расширения, которые нельзя ЗАПУСКАТЬ из значения-пути: исполняемые файлы,
- * скрипты, установщики и ярлыки. Для них доступно только «Показать в папке».
- * Список — политика оболочки; Rust-сторона проверяет его независимо.
- */
-export const REVEAL_ONLY_EXTENSIONS = [
-  'exe',
-  'com',
-  'bat',
-  'cmd',
-  'pif',
-  'scr',
-  'msi',
-  'msp',
-  'ps1',
-  'psm1',
-  'vbs',
-  'vbe',
-  'js',
-  'jse',
-  'wsf',
-  'wsh',
-  'hta',
-  'cpl',
-  'lnk',
-  'url',
-  'reg',
-  'inf',
-  'scf',
-  'msc',
-  'jar',
-  'application',
-  'appref-ms',
-  'appx',
-  'appxbundle',
-  'msix',
-  'msixbundle',
-  'gadget',
-  'dll',
-  'ocx',
-  'sys',
-  'drv',
-  'iso',
-  'img',
-  'vhd',
-  'vhdx',
-  'diagcab',
-  'settingcontent-ms',
-  'search-ms',
-  'website',
-  'library-ms',
-] as const;
-
-/** Файл такого типа разрешено только показать в папке (не запускать). */
-export function isRevealOnlyUncPath(raw: unknown): boolean {
-  const path = parseUncPath(raw);
-  if (!path) return true;
-  const segments = path.path.split('\\');
-  const name = segments[segments.length - 1] ?? '';
-  const dot = name.lastIndexOf('.');
-  if (dot <= 0 || dot === name.length - 1) return false;
-  const extension = name.slice(dot + 1).toLowerCase();
-  return (REVEAL_ONLY_EXTENSIONS as readonly string[]).includes(extension);
 }

@@ -21,6 +21,7 @@ vi.mock('../api/file-servers.js', () => ({
     data: { servers: ['\\\\FS01\\Projects'], updatedAt: '2026-11-16T10:00:00.000Z' },
     isPending: false,
     isError: false,
+    isSuccess: true,
     refetch: vi.fn(),
   }),
   useUpdateFileServers: () => ({ mutate, isPending: false }),

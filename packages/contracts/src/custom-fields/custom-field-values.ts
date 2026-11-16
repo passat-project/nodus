@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { CustomFieldDefinition, CustomFieldType } from './custom-field.schemas.js';
+import { parseUncPath } from './unc-path.js';
 
 /**
  * Грамматика значений кастомных полей (#431, ADR-0029) — ОДНА для веба,
@@ -109,7 +110,7 @@ const linkSchema = z
   .min(1)
   .max(CUSTOM_FIELD_LIMITS.link)
   .refine((v) => !/\p{Cc}/u.test(v), { message: 'control characters' })
-  .refine((v) => /^https?:\/\/\S+$/i.test(v) || /^\\\\[^\\/\s]+\\[^\\/\s]+(\\[^\\]*)*$/.test(v), {
+  .refine((v) => /^https?:\/\/\S+$/i.test(v) || parseUncPath(v) !== null, {
     message: 'link must be http(s) url or unc path',
   });
 
@@ -248,7 +249,7 @@ export function isCompatibleTypeChange(from: CustomFieldType, to: CustomFieldTyp
   return from === to || TYPE_WIDENING[from] === to;
 }
 
-/** Вид ссылки-значения: URL открывается, путь копируется (Р11). */
+/** Вид ссылки-значения: URL открывается в браузере, путь — в десктопе (#558). */
 export function linkKindOf(value: unknown): 'url' | 'path' | null {
   if (typeof value !== 'string') return null;
   if (/^https?:\/\//i.test(value)) return 'url';

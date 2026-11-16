@@ -25,6 +25,10 @@ describe('файловый сервер (allowlist)', () => {
       server: 'files.company.local',
       share: 'Общая папка',
     });
+    // Длина шары — в символах, не в байтах (45 символов / 85 байт UTF-8).
+    expect(
+      parseFileServer('\\\\FS01\\Общая папка отдела проектирования и изысканий'),
+    ).not.toBeNull();
   });
 
   it('отвергает URL, локальные пути, сервер без папки и путь глубже папки', () => {
@@ -111,6 +115,9 @@ describe('UNC-путь значения', () => {
       'installer.msi',
       'shortcut.scr',
       'macro.vbs',
+      'help.chm',
+      'book.xlsm',
+      'script.py',
     ]) {
       expect(isRevealOnlyUncPath(`\\\\FS01\\Projects\\${name}`), name).toBe(true);
     }

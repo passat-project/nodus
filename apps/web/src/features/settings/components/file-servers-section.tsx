@@ -28,9 +28,10 @@ export function FileServersSection() {
 
   const servers = query.data?.servers ?? [];
   const atLimit = servers.length >= FILE_SERVER_LIMITS.count;
+  const ready = query.isSuccess;
 
   const add = () => {
-    if (atLimit) return;
+    if (!ready || atLimit) return;
     const normalized = normalizeFileServer(draft);
     if (!normalized || normalized.length > FILE_SERVER_LIMITS.length) {
       setError(ui.portalSettings.fileServers.invalid);
@@ -82,42 +83,49 @@ export function FileServersSection() {
           {ui.portalSettings.fileServers.description}
         </p>
 
-        <form
-          className="mt-4 flex max-w-xl items-start gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            add();
-          }}
-        >
-          <div className="min-w-0 flex-1">
-            <Input
-              value={draft}
-              onChange={(event) => {
-                setDraft(event.target.value);
-                if (error) setError(null);
+        {query.isError ? null : (
+          <>
+            <form
+              className="mt-4 flex max-w-xl items-start gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                add();
               }}
-              placeholder={ui.portalSettings.fileServers.placeholder}
-              aria-label={ui.portalSettings.fileServers.placeholder}
-              aria-invalid={error !== null}
-              spellCheck={false}
-              autoComplete="off"
-              className="font-mono text-[13px]"
-            />
-          </div>
-          <Button type="submit" disabled={update.isPending || atLimit || draft.trim() === ''}>
-            <Plus data-icon="inline-start" />
-            {ui.portalSettings.fileServers.add}
-          </Button>
-        </form>
-        {error ? (
-          <p className="mt-2 text-xs text-destructive" role="alert">
-            {error}
-          </p>
-        ) : atLimit ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            {ui.portalSettings.fileServers.limit}
-          </p>
-        ) : null}
+            >
+              <div className="min-w-0 flex-1">
+                <Input
+                  value={draft}
+                  onChange={(event) => {
+                    setDraft(event.target.value);
+                    if (error) setError(null);
+                  }}
+                  placeholder={ui.portalSettings.fileServers.placeholder}
+                  aria-label={ui.portalSettings.fileServers.placeholder}
+                  aria-invalid={error !== null}
+                  spellCheck={false}
+                  autoComplete="off"
+                  className="font-mono text-[13px]"
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={!ready || update.isPending || atLimit || draft.trim() === ''}
+              >
+                <Plus data-icon="inline-start" />
+                {ui.portalSettings.fileServers.add}
+              </Button>
+            </form>
+            {error ? (
+              <p className="mt-2 text-xs text-destructive" role="alert">
+                {error}
+              </p>
+            ) : atLimit ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {ui.portalSettings.fileServers.limit}
+              </p>
+            ) : null}
+          </>
+        )}
 
         {query.isPending ? (
           <div className="mt-6 flex max-w-xl flex-col gap-2">

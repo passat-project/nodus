@@ -47,6 +47,13 @@ const REVEAL_ONLY_EXTENSIONS: &[&str] = &[
     "scf",
     "msc",
     "jar",
+    "py",
+    "pyw",
+    "ps1xml",
+    "psc1",
+    "pssc",
+    "sct",
+    "shs",
     "application",
     "appref-ms",
     "appx",
@@ -58,6 +65,17 @@ const REVEAL_ONLY_EXTENSIONS: &[&str] = &[
     "ocx",
     "sys",
     "drv",
+    "xll",
+    "vsto",
+    "chm",
+    "msh",
+    "mshxml",
+    "xbap",
+    "dotm",
+    "xlsm",
+    "pptm",
+    "xlam",
+    "wbk",
     "iso",
     "img",
     "vhd",
@@ -85,7 +103,7 @@ fn valid_server(value: &str) -> bool {
 }
 
 fn valid_share(value: &str) -> bool {
-    if value.is_empty() || value.len() > 80 || value == "." || value == ".." {
+    if value.is_empty() || value.chars().count() > 80 || value == "." || value == ".." {
         return false;
     }
     if value.ends_with('.') || value.ends_with(' ') {
@@ -146,9 +164,49 @@ fn path_key(server: &str, share: &str) -> String {
     format!("{}\\{}", server.to_lowercase(), share.to_lowercase())
 }
 
+/// Ключ `сервер\папка` из UNC-строки (`\\server\share[\…]`).
+fn canonical_key(value: &str) -> Option<String> {
+    let rest = value.strip_prefix("\\\\")?;
+    let mut parts = rest.split('\\');
+    let server = parts.next()?;
+    let share = parts.next()?;
+    if !valid_server(server) || !valid_share(share) {
+        return None;
+    }
+    Some(path_key(server, share))
+}
+
+/// Каноническая цель команды: `std::fs::canonicalize` снимает reparse-точки
+/// (симлинк/junction) и пространство `\\?\UNC\`; цель обязана остаться в той
+/// же разрешённой папке. DFS-реферал на другой сервер отвергается осознанно:
+/// граница «только внутри папки» важнее прозрачности DFS.
+fn canonical_unc_path(path: &Path, expected_key: &str) -> Result<PathBuf, &'static str> {
+    let canonical = std::fs::canonicalize(path).map_err(|error| match error.kind() {
+        std::io::ErrorKind::NotFound => "not_found",
+        _ => "path_unavailable",
+    })?;
+    let raw = canonical.to_string_lossy();
+    let normalized = if let Some(rest) = raw.strip_prefix("\\\\?\\UNC\\") {
+        format!("\\\\{rest}")
+    } else if raw.starts_with("\\\\?\\") || raw.starts_with("\\\\.\\") {
+        return Err("path_not_allowed");
+    } else if raw.starts_with("\\\\") {
+        raw.into_owned()
+    } else {
+        return Err("path_not_allowed");
+    };
+    if canonical_key(&normalized).as_deref() != Some(expected_key) {
+        return Err("path_not_allowed");
+    }
+    Ok(PathBuf::from(normalized))
+}
+
 /// Строгая проверка пути: грамматика + принадлежность разрешённой папке.
 /// `Err` — стабильный код для веба (файл не найден проверяется отдельно).
 fn validate_unc_path(raw: &str, servers: &[String]) -> Result<PathBuf, &'static str> {
+    if servers.len() > 50 || servers.iter().any(|server| server.chars().count() > 400) {
+        return Err("invalid_path");
+    }
     if raw.is_empty() || raw.chars().count() > MAX_PATH_LEN || raw.trim() != raw {
         return Err("invalid_path");
     }
@@ -223,6 +281,9 @@ async fn run_command(
     // Сеть/проводник — блокирующие вызовы: не держим async-поток Tauri.
     tauri::async_runtime::spawn_blocking(move || {
         let path = validate_unc_path(&raw, &servers).map_err(|code| code.to_string())?;
+        let key =
+            canonical_key(path.to_string_lossy().as_ref()).ok_or("invalid_path".to_string())?;
+        let path = canonical_unc_path(&path, &key).map_err(|code| code.to_string())?;
         match std::fs::metadata(&path) {
             Ok(meta) => {
                 if open && meta.is_file() && is_reveal_only(&path) {
@@ -327,6 +388,31 @@ mod tests {
     }
 
     #[test]
+    fn allowlist_is_bounded() {
+        let too_many = vec!["\\\\FS01\\Projects".to_string(); 51];
+        assert_eq!(
+            validate_unc_path("\\\\FS01\\Projects\\план.pdf", &too_many),
+            Err("invalid_path")
+        );
+    }
+
+    #[test]
+    fn canonical_key_is_unc_only() {
+        assert_eq!(
+            canonical_key("\\\\FS01\\Projects\\Дом 12\\план.pdf").as_deref(),
+            Some("fs01\\projects")
+        );
+        assert_eq!(canonical_key("\\\\?\\UNC\\FS01\\Projects\\план.pdf"), None);
+        assert_eq!(canonical_key("C:\\Projects\\план.pdf"), None);
+    }
+
+    #[test]
+    fn share_length_is_counted_in_chars() {
+        // 45 символов / 85 байт: контракт считает длину, не байты.
+        assert!(valid_share("Общая папка отдела проектирования и изысканий"));
+    }
+
+    #[test]
     fn reveal_only_covers_executables_and_shortcuts() {
         for name in [
             "setup.exe",
@@ -337,6 +423,9 @@ mod tests {
             "installer.msi",
             "shortcut.scr",
             "macro.vbs",
+            "help.chm",
+            "book.xlsm",
+            "script.py",
         ] {
             assert!(is_reveal_only(Path::new(name)), "{name}");
         }
