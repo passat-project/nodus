@@ -1,6 +1,8 @@
 import { isIP } from 'node:net';
 import { z } from 'zod';
 
+import { DATABASE_POOL_DEFAULTS } from './database-pool.config.js';
+
 /** Доверенные хопы по умолчанию: loopback + link-local + приватные сети (RFC 1918, fc00::/7). */
 export const DEFAULT_TRUST_PROXY = 'loopback,linklocal,uniquelocal';
 
@@ -53,6 +55,25 @@ const envSchema = z
   .object({
     API_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
     DATABASE_URL: z.url({ protocol: /^postgresql?$/ }),
+    /** Пул соединений api с PG (AUD-022): размер, ожидание соединения,
+     *  простой и таймаут запроса (мс). Умолчания — database-pool.config.ts;
+     *  точный подбор под нагрузку — #473. */
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(DATABASE_POOL_DEFAULTS.max),
+    DATABASE_POOL_CONNECTION_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .default(DATABASE_POOL_DEFAULTS.connectionTimeoutMillis),
+    DATABASE_POOL_IDLE_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .default(DATABASE_POOL_DEFAULTS.idleTimeoutMillis),
+    DATABASE_STATEMENT_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .default(DATABASE_POOL_DEFAULTS.statementTimeoutMs),
     REDIS_URL: z.url({ protocol: /^rediss?$/ }),
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     /** Секрет подписи access-JWT (auth); ≥ 32 символов, только из env. */

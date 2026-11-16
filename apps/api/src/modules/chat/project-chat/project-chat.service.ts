@@ -33,19 +33,21 @@ export class ProjectChatService {
     @Inject(PROJECT_CHAT_READER) private readonly projects: ProjectChatReader,
   ) {}
 
-  /** Привести канал к составу участников проекта; null — проекта нет. */
+  /** Привести канал к составу участников проекта; null — проекта нет. Состав
+   *  и название читаются ДО транзакции (AUD-022: порты без tx заняли бы
+   *  второе соединение пула внутри транзакции). Порт состава не принимает
+   *  tx, поэтому повторного чтения под блокировкой нет — известное исключение
+   *  AUD-022 (зафиксировано в отчёте). */
   async sync(projectId: string, actorId: string | null): Promise<string | null> {
+    const roster = await this.projects.roster(projectId);
+    if (!roster) return null;
+    const title = await this.titleOf(projectId);
     return this.txRunner.run(async (tx) => {
-      const roster = await this.projects.roster(projectId);
-      if (!roster) return null;
-      const title = await this.titleOf(projectId);
       let id = await this.repo.find(tx, projectId);
       let created = false;
       if (!id) {
         ({ id, created } = await this.repo.findOrCreate(tx, projectId, title, roster.managerId));
       }
-      // Состав читается ПОСЛЕ блокировки беседы (security-гейт #252):
-      // иначе sync со старым составом вернул бы выбывшего участника.
       await this.repo.lock(tx, id);
       const current = await this.repo.members(tx, id);
       const currentSet = new Set(current);

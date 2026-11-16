@@ -48,6 +48,12 @@ services:
       # 'loopback,linklocal,uniquelocal' (nginx в docker-сети — приватный адрес).
       TRUST_PROXY: ${TRUST_PROXY:-}
       DATABASE_URL: postgresql://${POSTGRES_USER:?задайте в .env}:${POSTGRES_PASSWORD:?задайте в .env}@nodus_postgres:5432/${POSTGRES_DB:?задайте в .env}
+      # Пул соединений api с PG (AUD-022): размер/таймауты через .env; дефолты
+      # те же, что в коде (core/config/database-pool.config.ts). Точный подбор — #473.
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-20}
+      DATABASE_POOL_CONNECTION_TIMEOUT_MS: ${DATABASE_POOL_CONNECTION_TIMEOUT_MS:-5000}
+      DATABASE_POOL_IDLE_TIMEOUT_MS: ${DATABASE_POOL_IDLE_TIMEOUT_MS:-10000}
+      DATABASE_STATEMENT_TIMEOUT_MS: ${DATABASE_STATEMENT_TIMEOUT_MS:-30000}
       REDIS_URL: redis://:${REDIS_PASSWORD:?задайте в .env}@nodus_redis:6379
       JWT_SECRET: ${JWT_SECRET:?задайте в .env}
       # Файловое хранилище (#57, ADR-0013): api пишет/читает S3 (SILO)

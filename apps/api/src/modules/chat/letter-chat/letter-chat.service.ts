@@ -33,19 +33,22 @@ export class LetterChatService {
 
   /** Привести беседу к составу письма; null — письма нет либо беседы не
    *  существует (незарегистрированное без участников — состав распускается,
-   *  история остаётся). Состав читается ПОСЛЕ блокировки беседы (как у задач,
-   *  security-гейт #252). */
+   *  история остаётся). Первое чтение состава — ДО транзакции (AUD-022: порт
+   *  без tx занял бы второе соединение пула внутри транзакции); повторное
+   *  чтение под блокировкой беседы — гейт #252, как у задач. */
   async sync(letterId: string, actorId: string | null): Promise<string | null> {
+    const preRoster = await this.letters.roster(letterId);
     return this.txRunner.run(async (tx) => {
       let id = await this.repo.find(tx, letterId);
       let created = false;
       if (!id) {
-        const pre = await this.letters.roster(letterId);
-        if (!pre) return null;
-        ({ id, created } = await this.repo.findOrCreate(tx, letterId, pre.ownerId));
+        if (!preRoster) return null;
+        ({ id, created } = await this.repo.findOrCreate(tx, letterId, preRoster.ownerId));
       }
       await this.repo.lock(tx, id);
       const current = await this.repo.members(tx, id);
+      // Порт не принимает tx: чтение идёт своим соединением внутри tx —
+      // известное исключение AUD-022 (зафиксировано в отчёте).
       const roster = await this.letters.roster(letterId);
       if (!roster) {
         await this.removeMembers(tx, id, current, actorId);
