@@ -138,12 +138,29 @@ export function PopupView() {
   }, [data, measured]);
 
   // Rust-арбитр угасания сигналит напрямую (мост портала сюда не инъектируется).
+  // Отложенный сброс в idle ОБЯЗАН очищаться при приходе новой фазы (#880):
+  // иначе 'reset' → быстрый 'start' (курсор ушёл, угасание заново) оставлял
+  // таймер живым, и он посреди угасания переключал карточку в idle
+  // (opacity-100 БЕЗ transition) — резкая вспышка яркости = мерцание.
+  const fadeResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     (window as { __popupFade?: (phase: string) => void }).__popupFade = (phase: string) => {
-      setFade(phase === 'start' ? 'fading' : 'reset');
-      if (phase !== 'start') {
-        setTimeout(() => setFade('idle'), 350);
+      if (fadeResetTimer.current !== null) {
+        clearTimeout(fadeResetTimer.current);
+        fadeResetTimer.current = null;
       }
+      if (phase === 'start') {
+        setFade('fading');
+        return;
+      }
+      setFade('reset');
+      fadeResetTimer.current = setTimeout(() => {
+        fadeResetTimer.current = null;
+        setFade('idle');
+      }, 350);
+    };
+    return () => {
+      if (fadeResetTimer.current !== null) clearTimeout(fadeResetTimer.current);
     };
   }, []);
 
