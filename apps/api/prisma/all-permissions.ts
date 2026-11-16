@@ -48,6 +48,9 @@ export const ALL_PERMISSIONS = [
   'project.setup.manage',
   'project.channel.post',
   'project.view_secret',
+  // #889: ИИ-агент; миграция 20261127100000_assistant_core выдаёт это право
+  // ВСЕМ существующим ролям (решение владельца: все сотрудники сразу).
+  'assistant.use',
 ] as const;
 
 /** Не входит в дефолт «Администратора»: системный надзор — отдельная роль,

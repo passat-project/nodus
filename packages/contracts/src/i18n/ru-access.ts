@@ -225,5 +225,11 @@ export const accessStrings = {
       label: 'Администрирование портала',
       description: 'Флаги модулей и журнал аудита',
     },
+    'assistant.use': {
+      group: 'ИИ-агент',
+      label: 'Пользоваться ИИ-агентом',
+      description:
+        'Окно ассистента: вопросы по данным портала в пределах своих прав. Без права окно не открывается',
+    },
   } satisfies Record<Permission, { label: string; description: string; group: string }>,
 };
