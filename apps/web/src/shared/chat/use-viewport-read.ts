@@ -123,6 +123,14 @@ function useReadReceiptScheduler(
       // Право ставить «прочитано» (#770): окно на виду + ввод за 30 с +
       // поверхность не накрыта и не перекрыта модальным слоем (#809).
       canRead: () => isUserActive() && surfaceVisibleRef.current && !coveredRef.current,
+      // Догон правок (#880): есть непрочитанное — квитанция на том же seq
+      // гасит правку (edited_at > last_read_at). Кэш списка — источник счётчика.
+      hasUnread: () => {
+        const list = queryClient.getQueryData<{
+          items?: { id: string; unreadCount: number }[];
+        }>(chatKeys.conversations());
+        return (list?.items?.find((c) => c.id === conversationId)?.unreadCount ?? 0) > 0;
+      },
       send: (upToSeq) => {
         const threadRootId = threadRootIdRef.current;
         void api(`/chat/conversations/${conversationId}/read`, {

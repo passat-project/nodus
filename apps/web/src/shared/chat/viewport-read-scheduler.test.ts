@@ -127,4 +127,38 @@ describe('createReadReceiptScheduler', () => {
     vi.advanceTimersByTime(500);
     expect(sends).toEqual([2]);
   });
+
+  /** Догон правок (#880): правка старого сообщения не двигает seq, но держит
+   *  непрочитанное по edited_at. Квитанция на том же seq гасит правку. */
+  it('догон правок: тот же seq при hasUnread шлёт квитанцию (last_read_at обновится)', () => {
+    const sends: number[] = [];
+    let unread = false;
+    const scheduler = createReadReceiptScheduler({
+      send: (seq) => {
+        sends.push(seq);
+        unread = false; // applyReadToCache обнуляет счётчик после квитанции
+      },
+      throttleMs: 500,
+      hasUnread: () => unread,
+    });
+    scheduler.observe(10);
+    vi.advanceTimersByTime(500);
+    expect(sends).toEqual([10]); // прочитали до 10
+    unread = true; // прилетела правка сообщения seq<=10 — счётчик снова >0
+    scheduler.observe(10); // seq не продвинулся, но есть непрочитанное
+    vi.advanceTimersByTime(500);
+    expect(sends).toEqual([10, 10]); // догон правок тем же seq
+    scheduler.observe(10); // счётчик обнулён — больше не спамим
+    vi.advanceTimersByTime(500);
+    expect(sends).toEqual([10, 10]);
+  });
+
+  it('без hasUnread тот же seq — тишина (прежнее поведение, без спама)', () => {
+    const { scheduler, sends } = makeSuite();
+    scheduler.observe(10);
+    vi.advanceTimersByTime(500);
+    scheduler.observe(10);
+    vi.advanceTimersByTime(500);
+    expect(sends).toEqual([10]);
+  });
 });
