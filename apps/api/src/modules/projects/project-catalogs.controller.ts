@@ -1,7 +1,19 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
@@ -288,6 +300,26 @@ export class ProjectCatalogsController {
       if (!archived) throw DomainException.notFound('Portfolio not found');
       return archived;
     });
+  }
+
+  @Delete('projects/groups/:id/permanent')
+  @HttpCode(204)
+  @RequirePermissions(Permission.PROJECT_MANAGE)
+  @Audit({ action: 'project.group_delete', entity: 'project_group' })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID портфеля',
+    schema: { type: 'string', format: 'uuid' },
+  })
+  @ApiOperation({
+    summary: 'Удалить портфель навсегда (проекты остаются в журнале — «Без портфеля»)',
+  })
+  @ApiNoContentResponse({ description: 'Портфель удалён, проекты перешли в «Без портфеля»' })
+  @ApiErrors(400, 401, 403, 404)
+  @ApiIdempotencyKey()
+  async groupDelete(@Param('id', new ZodValidationPipe(idParamSchema)) id: string): Promise<void> {
+    const deleted = await this.txRunner.run((tx) => this.groups.delete(tx, id));
+    if (!deleted) throw DomainException.notFound('Portfolio not found');
   }
 
   @Post('projects/groups/:id/restore')

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
   ProjectGroup,
+  ProjectListItem,
   ProjectType,
   ProjectTypeCreateBody,
   ProjectTypeUpdateBody,
@@ -11,6 +12,11 @@ import { toast } from 'sonner';
 import { api } from '../../../shared/api-client.js';
 import { toastApiError } from '../../../shared/api/error-toast.js';
 import { projectsKeys } from '../../../shared/api/projects-list.js';
+import {
+  JOURNAL_PREFIX,
+  stripPortfolioFromJournal,
+  type JournalPages,
+} from './project-mutation-helpers.js';
 
 function patchTypes(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -237,6 +243,40 @@ export function useArchiveProjectGroup() {
     onSuccess: () => toast.success(ui.projects.savedDone),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: projectsKeys.groupsPrefix() });
+    },
+  });
+}
+
+/**
+ * Удаление портфеля НАВСЕГДА (#559): проекты не теряются — переходят в
+ * «Без портфеля». Оптимистично убираем папку из кэша и снимаем её с проектов
+ * журнала; при ошибке — откат снапшотом, затем перечитываем счётчики и
+ * журналы (сервер — истина).
+ */
+export function useDeleteProjectGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<void>(`/projects/groups/${id}/permanent`, { method: 'DELETE' }),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: JOURNAL_PREFIX });
+      const snapshot = snapshotGroups(queryClient);
+      const journals = queryClient.getQueriesData<JournalPages>({ queryKey: JOURNAL_PREFIX });
+      const options = queryClient.getQueriesData<{ items: ProjectListItem[] }>({
+        queryKey: projectsKeys.options(),
+      });
+      patchGroups(queryClient, (items) => items.filter((row) => row.id !== id));
+      stripPortfolioFromJournal(queryClient, id);
+      return { snapshot, journals, options };
+    },
+    onError: (error, _id, context) => {
+      for (const [key, data] of context?.snapshot ?? []) queryClient.setQueryData(key, data);
+      for (const [key, data] of context?.journals ?? []) queryClient.setQueryData(key, data);
+      for (const [key, data] of context?.options ?? []) queryClient.setQueryData(key, data);
+      toastApiError(error);
+    },
+    onSuccess: () => toast.success(ui.projects.portfolioDeletedDone),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: projectsKeys.all });
     },
   });
 }

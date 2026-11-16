@@ -15,10 +15,10 @@ import { ProjectsPage } from './projects-page.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 
 /**
- * Журнал «Проекты» (#559): левая колонка папок-портфелей и её связь с
- * серверными фильтрами журнала — клик по папке, строки статусов, режим
- * «Все/Мои», создание проекта с предзаполненным портфелем. Хуки замоканы:
- * проверяем поведение страницы, а не сеть.
+ * Журнал «Проекты» (#559): полоса папок-портфелей над журналом и её связь с
+ * серверными фильтрами журнала — клик по папке, статусы, режим «Все/Мои»,
+ * создание проекта с предзаполненным портфелем. Хуки замоканы: проверяем
+ * поведение страницы, а не сеть.
  */
 const mocks = vi.hoisted(() => ({
   journal: vi.fn(),
@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   renameGroup: vi.fn(),
   archiveGroup: vi.fn(),
   restoreGroup: vi.fn(),
+  deleteGroup: vi.fn(),
   statusMutate: vi.fn(),
   moveMutate: vi.fn(),
   openCreate: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock('../api/project-catalog-mutations.js', () => ({
   useRenameProjectGroup: () => ({ mutate: mocks.renameGroup }),
   useArchiveProjectGroup: () => ({ mutate: mocks.archiveGroup }),
   useRestoreProjectGroup: () => ({ mutate: mocks.restoreGroup }),
+  useDeleteProjectGroup: () => ({ mutate: mocks.deleteGroup }),
 }));
 vi.mock('../api/project-mutations.js', () => ({
   useProjectStatus: () => ({ mutate: mocks.statusMutate }),
@@ -74,9 +76,14 @@ vi.mock('../../../shared/projects/project-create-store.js', () => ({
   openProjectCreate: mocks.openCreate,
 }));
 
-/** Строка папки левой колонки по её названию. */
+/** Открыть вкладку «Портфели» (список папок в поповере). */
+function openFolders() {
+  fireEvent.click(screen.getByRole('button', { name: ui.projects.portfoliosTitle }));
+}
+
+/** Строка папки в открытом списке «Портфели». */
 function folderRow(name: string): HTMLElement {
-  return screen.getByText(name).closest('[role="button"]') as HTMLElement;
+  return screen.getByText(name).closest('button') as HTMLElement;
 }
 
 /** Фильтры последнего запроса журнала. */
@@ -116,9 +123,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('журнал «Проекты»: колонка папок (#559)', () => {
-  it('рисует «Все проекты», портфели со счётчиками, «Без портфеля» и архив', () => {
+describe('журнал «Проекты»: вкладка «Портфели» (#559)', () => {
+  it('раскрывает список папок: «Все проекты», портфели со счётчиками, «Без портфеля» и архив', () => {
     render(<ProjectsPage />);
+    openFolders();
 
     expect(screen.getByText(ui.projects.portfolioAllProjects)).toBeTruthy();
     expect(screen.getByText(PORTFOLIO.name)).toBeTruthy();
@@ -135,9 +143,11 @@ describe('журнал «Проекты»: колонка папок (#559)', ()
   it('клик по папке ставит фильтр журнала, «Все проекты» — снимает', async () => {
     render(<ProjectsPage />);
 
+    openFolders();
     fireEvent.click(screen.getByText(PORTFOLIO.name));
     await waitFor(() => expect(lastFilters().portfolioId).toBe(PORTFOLIO.id));
 
+    openFolders();
     fireEvent.click(screen.getByText(ui.projects.portfolioAllProjects));
     await waitFor(() => expect(lastFilters().portfolioId).toBeUndefined());
   });
@@ -145,31 +155,21 @@ describe('журнал «Проекты»: колонка папок (#559)', ()
   it('«Без портфеля» — фильтр-сентинел none', async () => {
     render(<ProjectsPage />);
 
+    openFolders();
     fireEvent.click(screen.getByText(ui.projects.portfolioNone));
     await waitFor(() => expect(lastFilters().portfolioId).toBe('none'));
   });
 
-  it('внутри папки строки статусов сужают журнал, повторный клик снимает', async () => {
+  it('смена папки переключает серверный фильтр журнала', async () => {
     render(<ProjectsPage />);
 
+    openFolders();
     fireEvent.click(screen.getByText(PORTFOLIO.name));
-    fireEvent.click(await screen.findByRole('button', { name: /Действует/ }));
-    await waitFor(() => expect(lastFilters().status).toBe('active'));
+    await waitFor(() => expect(lastFilters().portfolioId).toBe(PORTFOLIO.id));
 
-    fireEvent.click(await screen.findByRole('button', { name: /Действует/ }));
-    await waitFor(() => expect(lastFilters().status).toBeUndefined());
-  });
-
-  it('смена папки сбрасывает статус: папка открывается «всеми» статусами', async () => {
-    render(<ProjectsPage />);
-
-    fireEvent.click(screen.getByText(PORTFOLIO.name));
-    fireEvent.click(await screen.findByRole('button', { name: /Завершён/ }));
-    await waitFor(() => expect(lastFilters().status).toBe('completed'));
-
+    openFolders();
     fireEvent.click(screen.getByText(ui.projects.portfolioNone));
-    await waitFor(() => expect(lastFilters().status).toBeUndefined());
-    expect(lastFilters().portfolioId).toBe('none');
+    await waitFor(() => expect(lastFilters().portfolioId).toBe('none'));
   });
 
   it('режим «Мои»: счётчики по моему участию и подпись «Мои проекты»', async () => {
@@ -178,6 +178,7 @@ describe('журнал «Проекты»: колонка папок (#559)', ()
     fireEvent.click(screen.getByRole('radio', { name: ui.projects.scopeMine }));
 
     await waitFor(() => expect(mocks.counts).toHaveBeenLastCalledWith('mine'));
+    openFolders();
     expect(screen.getByText(ui.projects.portfolioMyProjects)).toBeTruthy();
     expect(lastFilters().scope).toBe('mine');
     expect(localStorage.getItem('nodus-projects-scope-v1')).toBe('mine');
@@ -186,11 +187,13 @@ describe('журнал «Проекты»: колонка папок (#559)', ()
   it('«Создать» из папки предзаполняет портфель, из «Все проекты» — нет', async () => {
     render(<ProjectsPage />);
 
+    openFolders();
     fireEvent.click(screen.getByText(PORTFOLIO.name));
     await waitFor(() => expect(lastFilters().portfolioId).toBe(PORTFOLIO.id));
     fireEvent.click(screen.getByRole('button', { name: ui.common.create }));
     expect(mocks.openCreate).toHaveBeenLastCalledWith({ portfolioId: PORTFOLIO.id });
 
+    openFolders();
     fireEvent.click(screen.getByText(ui.projects.portfolioAllProjects));
     fireEvent.click(screen.getByRole('button', { name: ui.common.create }));
     expect(mocks.openCreate).toHaveBeenLastCalledWith({});
@@ -207,14 +210,13 @@ describe('журнал «Проекты»: колонка папок (#559)', ()
     expect(await screen.findByText(ui.projects.journalEmptyFiltered)).toBeTruthy();
   });
 
-  it('папка выбирается с клавиатуры (Enter и Space)', async () => {
+  it('папка — настоящая кнопка (Enter/Space обрабатывает браузер)', async () => {
     render(<ProjectsPage />);
+    openFolders();
 
-    fireEvent.keyDown(folderRow(PORTFOLIO.name), { key: 'Enter' });
+    expect(folderRow(PORTFOLIO.name).tagName).toBe('BUTTON');
+    fireEvent.click(folderRow(PORTFOLIO.name));
     await waitFor(() => expect(lastFilters().portfolioId).toBe(PORTFOLIO.id));
-
-    fireEvent.keyDown(folderRow(ui.projects.portfolioNone), { key: ' ' });
-    await waitFor(() => expect(lastFilters().portfolioId).toBe('none'));
   });
 
   it('sentinel у дна журнала подгружает следующую страницу', async () => {

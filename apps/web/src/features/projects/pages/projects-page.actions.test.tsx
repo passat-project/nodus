@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   renameGroup: vi.fn(),
   archiveGroup: vi.fn(),
   restoreGroup: vi.fn(),
+  deleteGroup: vi.fn(),
   statusMutate: vi.fn(),
   moveMutate: vi.fn(),
   openCreate: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock('../api/project-catalog-mutations.js', () => ({
   useRenameProjectGroup: () => ({ mutate: mocks.renameGroup }),
   useArchiveProjectGroup: () => ({ mutate: mocks.archiveGroup }),
   useRestoreProjectGroup: () => ({ mutate: mocks.restoreGroup }),
+  useDeleteProjectGroup: () => ({ mutate: mocks.deleteGroup }),
 }));
 vi.mock('../api/project-mutations.js', () => ({
   useProjectStatus: () => ({ mutate: mocks.statusMutate }),
@@ -83,8 +85,22 @@ function authWith(permissions: string[]) {
   } as never);
 }
 
+/** Открыть вкладку «Портфели» (список папок в поповере). */
+function openFolders() {
+  fireEvent.click(screen.getByRole('button', { name: ui.projects.portfoliosTitle }));
+}
+
+/** Строка папки в открытом списке «Портфели» (контейнер с кнопкой и «⋯»). */
 function folderRow(name: string): HTMLElement {
-  return screen.getByText(name).closest('[role="button"]') as HTMLElement;
+  return screen.getByText(name).closest('[data-folder-row]') as HTMLElement;
+}
+
+/** Меню настройки папки прямо в строке списка. */
+function openFolderMenu(name: string) {
+  openFolders();
+  const button = within(folderRow(name)).getByRole('button', { name: ui.common.rowMenu });
+  fireEvent.pointerDown(button, { button: 0, pointerType: 'mouse' });
+  fireEvent.click(button);
 }
 
 function tableRow(name: string): HTMLElement {
@@ -189,20 +205,12 @@ describe('перетаскивание проекта на папку (#559)', (
     expect(tableRow(ARCHIVED_PROJECT.name).hasAttribute('draggable')).toBe(false);
     expect(tableRow(ACTIVE_PROJECT.name).getAttribute('draggable')).toBe('true');
   });
-
-  it('клик по «⋯» папки не выбирает папку (меню не всплывает до строки)', () => {
-    render(<ProjectsPage />);
-    openMenu(folderRow(PORTFOLIO.name));
-
-    // Журнал запрошен только начальным состоянием — фильтра папки нет.
-    const filters = mocks.journal.mock.calls.at(-1)![0] as Record<string, unknown>;
-    expect(filters.portfolioId).toBeUndefined();
-  });
 });
 
-describe('создание портфеля из колонки (#559)', () => {
+describe('создание портфеля из вкладки «Портфели» (#559)', () => {
   it('Enter создаёт папку, Esc отменяет без запроса', () => {
     render(<ProjectsPage />);
+    openFolders();
 
     fireEvent.click(screen.getByRole('button', { name: ui.projects.portfolioCreate }));
     const input = screen.getByRole('textbox', { name: ui.projects.portfolioCreate });
@@ -210,6 +218,7 @@ describe('создание портфеля из колонки (#559)', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(mocks.createGroup).toHaveBeenCalledWith('Новый портфель');
 
+    openFolders();
     fireEvent.click(screen.getByRole('button', { name: ui.projects.portfolioCreate }));
     fireEvent.keyDown(screen.getByRole('textbox', { name: ui.projects.portfolioCreate }), {
       key: 'Escape',
@@ -219,10 +228,10 @@ describe('создание портфеля из колонки (#559)', () => {
   });
 });
 
-describe('окна и меню портфеля (#559)', () => {
+describe('настройка портфеля в попапе (#559)', () => {
   it('переименование: окно с текущим именем, сохранение зовёт мутацию', async () => {
     render(<ProjectsPage />);
-    openMenu(folderRow(PORTFOLIO.name));
+    openFolderMenu(PORTFOLIO.name);
     fireEvent.click(await screen.findByRole('menuitem', { name: ui.projects.portfolioRename }));
 
     const input = (await screen.findByRole('textbox', {
@@ -241,7 +250,7 @@ describe('окна и меню портфеля (#559)', () => {
 
   it('переименование: «Отмена» закрывает окно без мутации', async () => {
     render(<ProjectsPage />);
-    openMenu(folderRow(PORTFOLIO.name));
+    openFolderMenu(PORTFOLIO.name);
     fireEvent.click(await screen.findByRole('menuitem', { name: ui.projects.portfolioRename }));
 
     const dialog = await screen.findByRole('dialog');
@@ -253,26 +262,48 @@ describe('окна и меню портфеля (#559)', () => {
 
   it('архив папки: «Отмена» окна ничего не архивирует, подтверждение — зовёт мутацию', async () => {
     render(<ProjectsPage />);
-    openMenu(folderRow(PORTFOLIO.name));
+    openFolderMenu(PORTFOLIO.name);
     fireEvent.click(await screen.findByRole('menuitem', { name: ui.projects.portfolioArchive }));
 
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: ui.common.cancel }));
     expect(mocks.archiveGroup).not.toHaveBeenCalled();
 
-    openMenu(folderRow(PORTFOLIO.name));
+    openFolderMenu(PORTFOLIO.name);
     fireEvent.click(await screen.findByRole('menuitem', { name: ui.projects.portfolioArchive }));
     const confirm = await screen.findByRole('dialog');
     fireEvent.click(within(confirm).getByRole('button', { name: ui.projects.portfolioArchive }));
     expect(mocks.archiveGroup).toHaveBeenCalledWith(PORTFOLIO.id);
   });
 
-  it('возврат архивной папки из меню «Архив»', async () => {
+  it('возврат архивной папки из группы «Архив»', async () => {
     render(<ProjectsPage />);
-    openMenu(folderRow('Старый объект'));
+    openFolderMenu('Старый объект');
     fireEvent.click(await screen.findByRole('menuitem', { name: ui.projects.portfolioRestore }));
 
     expect(mocks.restoreGroup).toHaveBeenCalledWith('42000000-0000-4000-8000-000000000002');
+  });
+
+  it('удаление портфеля: окно предупреждает о переносе проектов, «Отмена» — без мутации', async () => {
+    render(<ProjectsPage />);
+    openFolderMenu(PORTFOLIO.name);
+    fireEvent.click(await screen.findByRole('menuitem', { name: ui.projects.portfolioDelete }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(ui.projects.portfolioDeleteConfirmBody)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: ui.common.cancel }));
+    expect(mocks.deleteGroup).not.toHaveBeenCalled();
+  });
+
+  it('удаление портфеля: подтверждение зовёт мутацию удаления', async () => {
+    render(<ProjectsPage />);
+    openFolderMenu(PORTFOLIO.name);
+    fireEvent.click(await screen.findByRole('menuitem', { name: ui.projects.portfolioDelete }));
+
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: ui.projects.portfolioDelete }));
+
+    expect(mocks.deleteGroup).toHaveBeenCalledWith(PORTFOLIO.id);
   });
 });
 

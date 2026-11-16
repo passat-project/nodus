@@ -39,7 +39,14 @@ export interface RowMenuItem {
  * до строки (открытие карточки) — остановка на обёртке и триггере.
  * Потребители: DataTable и TaskList — одна механика во всех списках.
  */
-export function RowMenu({ items }: { items: RowMenuItem[] }) {
+export function RowMenu({
+  items,
+  align = 'start',
+}: {
+  items: RowMenuItem[];
+  /** Сторона выравнивания поповера: у правого края списка — `end`. */
+  align?: 'start' | 'end';
+}) {
   if (items.length === 0) return null;
   return (
     <DropdownMenu>
@@ -55,7 +62,7 @@ export function RowMenu({ items }: { items: RowMenuItem[] }) {
           <Menu className="size-3.5" strokeWidth={1.75} />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-44" onClick={(e) => e.stopPropagation()}>
+      <DropdownMenuContent align={align} className="min-w-44" onClick={(e) => e.stopPropagation()}>
         {items.map((item) => (
           <Fragment key={item.id}>
             {item.separatorBefore ? <DropdownMenuSeparator /> : null}

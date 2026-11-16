@@ -53,6 +53,26 @@ export function replaceInJournal(
   );
 }
 
+/**
+ * Удаление портфеля: у всех проектов папки в кэшах журнала/справочника
+ * портфель становится «Без портфеля» — строки не исчезают (оптимистично, I4).
+ */
+export function stripPortfolioFromJournal(queryClient: QueryClient, portfolioId: string): void {
+  const strip = (item: ProjectListItem): ProjectListItem =>
+    item.portfolio?.id === portfolioId ? { ...item, portfolio: null } : item;
+  queryClient.setQueriesData<JournalPages>({ queryKey: JOURNAL_PREFIX }, (data) =>
+    data
+      ? {
+          ...data,
+          pages: data.pages.map((page) => ({ ...page, items: page.items.map(strip) })),
+        }
+      : data,
+  );
+  queryClient.setQueryData<Paginated<ProjectListItem>>(projectsKeys.options(), (data) =>
+    data ? { ...data, items: data.items.map(strip) } : data,
+  );
+}
+
 /** Патч первой страницы состава (оптимистичные join/leave/добавления). */
 export function patchMemberPages(
   queryClient: QueryClient,

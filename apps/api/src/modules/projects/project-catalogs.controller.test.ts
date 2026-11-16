@@ -21,6 +21,7 @@ function makeController() {
     create: vi.fn(),
     rename: vi.fn(),
     setArchived: vi.fn(),
+    delete: vi.fn(),
   };
   const tx = {};
   const txRunner = { run: (fn: (tx: unknown) => unknown) => fn(tx) };
@@ -63,6 +64,36 @@ describe('POST /projects/groups/:id/restore (#559)', () => {
     groups.setArchived.mockResolvedValue(null);
 
     await expect(controller.groupRestore(GROUP.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('DELETE /projects/groups/:id/permanent (#559)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('маршрут под project.manage, в аудите и 204 (удаление навсегда)', () => {
+    const handler = ProjectCatalogsController.prototype.groupDelete;
+
+    expect(Reflect.getMetadata(PERMISSIONS_KEY, handler)).toEqual([Permission.PROJECT_MANAGE]);
+    expect(Reflect.getMetadata(AUDIT_KEY, handler)).toEqual({
+      action: 'project.group_delete',
+      entity: 'project_group',
+    });
+    expect(Reflect.getMetadata('__httpCode__', handler)).toBe(204);
+  });
+
+  it('удаляет портфель в транзакции (проекты — в «Без портфеля»)', async () => {
+    const { controller, groups, tx } = makeController();
+    groups.delete.mockResolvedValue(true);
+
+    await expect(controller.groupDelete(GROUP.id)).resolves.toBeUndefined();
+    expect(groups.delete).toHaveBeenCalledWith(tx, GROUP.id);
+  });
+
+  it('неизвестный портфель — 404, а не молчаливое «удалено»', async () => {
+    const { controller, groups } = makeController();
+    groups.delete.mockResolvedValue(false);
+
+    await expect(controller.groupDelete(GROUP.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });
 

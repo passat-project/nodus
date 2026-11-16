@@ -7,7 +7,7 @@ import type { PortfolioFolder } from '../lib/portfolio-folders.js';
 
 /**
  * Окна портфеля-папки журнала (#559): переименование и архивация. Оба —
- * лёгкие действия левой колонки, поэтому живут на странице журнала, а не в
+ * лёгкие действия полосы папок, поэтому живут на странице журнала, а не в
  * «Автоматизации» (портфель — папка «Проектов»). Архив — не удаление: проекты
  * остаются, папку можно вернуть из блока «Архив».
  */
@@ -93,6 +93,39 @@ export function PortfolioArchiveDialog({
         <div className="flex items-center gap-2">
           <Button type="button" variant="destructive" onClick={onConfirm}>
             {ui.projects.portfolioArchive}
+          </Button>
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            {ui.common.cancel}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Подтверждение УДАЛЕНИЯ портфеля навсегда: проекты не удаляются — переходят
+ * в «Без портфеля» (связи задач, участников и истории остаются). Необратимо,
+ * поэтому окно с явным «Удалить» цвета опасности.
+ */
+export function PortfolioDeleteDialog({
+  folder,
+  onCancel,
+  onConfirm,
+}: {
+  folder: PortfolioFolder | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={folder !== null} onOpenChange={(next) => !next && onCancel()}>
+      <DialogContent className="max-w-md sm:max-w-md" aria-describedby={undefined}>
+        <DialogTitle>{ui.projects.portfolioDeleteConfirmTitle}</DialogTitle>
+        <p className="text-sm text-muted-foreground">{ui.projects.portfolioDeleteConfirmBody}</p>
+        <p className="truncate text-sm font-medium">{folder?.name ?? ''}</p>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="destructive" onClick={onConfirm}>
+            {ui.projects.portfolioDelete}
           </Button>
           <Button type="button" variant="ghost" onClick={onCancel}>
             {ui.common.cancel}

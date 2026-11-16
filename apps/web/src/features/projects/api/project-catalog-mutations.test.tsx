@@ -9,9 +9,12 @@ import { setupServer } from 'msw/node';
 import {
   useArchiveProjectGroup,
   useCreateProjectGroup,
+  useDeleteProjectGroup,
   useRenameProjectGroup,
   useRestoreProjectGroup,
 } from './project-catalog-mutations.js';
+import { JOURNAL_PREFIX, type JournalPages } from './project-mutation-helpers.js';
+import { ACTIVE_PROJECT } from '../fixtures/journal.js';
 import { projectsKeys } from '../../../shared/api/projects-list.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 
@@ -202,5 +205,59 @@ describe('архив и возврат портфеля (#559)', () => {
     expect(qc.getQueryData<ProjectGroup[]>(projectsKeys.groups(true))?.[0]?.archivedAt).toBe(
       archived.archivedAt,
     );
+  });
+});
+
+describe('useDeleteProjectGroup (#559)', () => {
+  /** Журнал с проектом, который лежит в удаляемой папке. */
+  function seedJournal(qc: QueryClient) {
+    qc.setQueryData<JournalPages>(JOURNAL_PREFIX, {
+      pages: [{ items: [ACTIVE_PROJECT], nextCursor: null }],
+      pageParams: [null],
+    });
+  }
+  const journalItem = (qc: QueryClient) =>
+    qc.getQueryData<JournalPages>(JOURNAL_PREFIX)?.pages[0]?.items[0];
+
+  it('удаление: папка исчезает, проекты — в «Без портфеля» (оптимистично, до ответа)', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      http.delete('/api/v1/projects/groups/:id/permanent', async () => {
+        await gate;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const qc = makeClient();
+    seedJournal(qc);
+    const { result } = hook(qc, () => useDeleteProjectGroup());
+
+    result.current.mutate(METRO.id);
+
+    await waitFor(() => expect(names(qc, true)).toEqual([]));
+    expect(journalItem(qc)?.portfolio).toBeNull();
+
+    release();
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(journalItem(qc)?.id).toBe(ACTIVE_PROJECT.id);
+  });
+
+  it('отказ удаления — папка и портфель проекта возвращаются (откат снапшота)', async () => {
+    server.use(
+      http.delete('/api/v1/projects/groups/:id/permanent', () =>
+        HttpResponse.json({ code: 'FORBIDDEN', message: 'no' }, { status: 403 }),
+      ),
+    );
+    const qc = makeClient();
+    seedJournal(qc);
+    const { result } = hook(qc, () => useDeleteProjectGroup());
+
+    result.current.mutate(METRO.id);
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(names(qc, true)).toEqual([METRO.name]);
+    expect(journalItem(qc)?.portfolio?.id).toBe(METRO.id);
   });
 });
