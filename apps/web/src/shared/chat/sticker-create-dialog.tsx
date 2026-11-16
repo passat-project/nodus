@@ -74,6 +74,11 @@ export function StickerCreateDialog({
   const [title, setTitle] = useState('');
   const [corporate, setCorporate] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** Созданный при первом submit набор (#866, AUD-030): повтор после сбоя
+   *  продолжает его, а не создаёт второй пак. */
+  const [createdPackId, setCreatedPackId] = useState<string | null>(null);
+  /** Ключи уже загруженных стикеров: повтор догружает только незагруженные. */
+  const [uploadedKeys, setUploadedKeys] = useState<ReadonlySet<string>>(new Set());
   /** Ключ черновика с открытой палитрой эмодзи (инлайн-палитра одна). */
   const [pickingKey, setPickingKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -90,6 +95,8 @@ export function StickerCreateDialog({
     setTitle('');
     setCorporate(false);
     setBusy(false);
+    setCreatedPackId(null);
+    setUploadedKeys(new Set());
     setPickingKey(null);
   }, [open]);
 
@@ -145,16 +152,21 @@ export function StickerCreateDialog({
     if (!canSubmit) return;
     setBusy(true);
     try {
-      let packId = appendTo?.id;
+      let packId = appendTo?.id ?? createdPackId;
       if (!packId) {
         const pack = await create.mutateAsync({
           title: title.trim(),
           scope: corporate ? 'corporate' : 'personal',
         });
         packId = pack.id;
+        setCreatedPackId(pack.id);
         toast.success(ui.chat.stickerPackCreated);
       }
+      // Повтор после сбоя продолжает набор: уже загруженные стикеры пропускаем,
+      // новый набор не создаём (#866, AUD-030).
+      const uploaded = new Set(uploadedKeys);
       for (const d of drafts) {
+        if (uploaded.has(d.key)) continue;
         await uploadStickerFile(packId, {
           file: d.file,
           emojis: d.emojis,
@@ -162,6 +174,8 @@ export function StickerCreateDialog({
           width: d.width,
           height: d.height,
         });
+        uploaded.add(d.key);
+        setUploadedKeys(new Set(uploaded));
       }
       await queryClient.invalidateQueries({ queryKey: stickerKeys.packs() });
       onOpenChange(false);
