@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search } from 'lucide-react';
 import type {
   LetterListItem,
   LetterRef,
@@ -23,10 +23,12 @@ import { cn } from '@nodus/ui/lib/utils';
 import { ApiError } from '../../../../shared/api-client.js';
 import { letterRows, useLettersInfinite } from '../../../../shared/api/letters-list.js';
 import { useDebouncedValue } from '../../../../shared/lib/use-debounced-value.js';
-import { ModeChoices } from '../../../../shared/ui/panel/panel-kit.js';
 import { relationErrorText, useLinkLetterRelation } from '../../api/letters-relations.js';
+import { treeNodeOf } from '../../lib/letter-tree.js';
+import { RelationModeChoices } from './letter-relation-mode-choices.js';
 import { nodeNumber } from './letter-relation-node.js';
-import { LetterPickRow, RelationPreview } from './letter-relation-pick.js';
+import { LetterPickRow } from './letter-relation-pick.js';
+import { RelationPickedCard } from './letter-relation-picked-card.js';
 
 /** Показываем первые совпадения: окно — выбор, не реестр. */
 const RESULTS_LIMIT = 8;
@@ -64,6 +66,9 @@ export function LetterRelationDialog({
   existing: Partial<Record<LetterRelationKind, LetterRef>>;
 }) {
   const [kind, setKind] = useState<LetterRelationKind>(initialKind);
+  /** Направление (#611): по умолчанию — как раньше, выбранное становится
+   *  родителем; обратное — добавляем выбранное письмо ребёнком к открытому. */
+  const [direction, setDirection] = useState<'fromCurrent' | 'toCurrent'>('fromCurrent');
   const [query, setQuery] = useState('');
   const search = useDebouncedValue(query.trim(), 250);
   const [picked, setPicked] = useState<LetterListItem | null>(null);
@@ -80,6 +85,7 @@ export function LetterRelationDialog({
   useEffect(() => {
     if (open) {
       setKind(initialKind);
+      setDirection('fromCurrent');
       setQuery('');
       setPicked(null);
       setError(null);
@@ -88,20 +94,11 @@ export function LetterRelationDialog({
   }, [open, initialKind]);
   useEffect(() => setActive(0), [search]);
 
-  const replacedWith = existing[kind] ?? null;
-  const replace = replacedWith !== null || unknownLink === kind;
-  const kinds = [
-    {
-      value: 'reply_to' as const,
-      label: ui.letters.relations.kindReplyTo,
-      hint: ui.letters.relations.kindReplyToHint,
-    },
-    {
-      value: 'nested_in' as const,
-      label: ui.letters.relations.kindNestedIn,
-      hint: ui.letters.relations.kindNestedInHint,
-    },
-  ];
+  // Замена относится к связям ОТКРЫТОГО письма: в обратном направлении
+  // связи выбранного окну неизвестны — замену предлагаем в его карточке.
+  const fromCurrent = direction === 'fromCurrent';
+  const replacedWith = fromCurrent ? (existing[kind] ?? null) : null;
+  const replace = replacedWith !== null || (fromCurrent && unknownLink === kind);
 
   const pick = (letter: LetterListItem) => {
     setPicked(letter);
@@ -111,13 +108,32 @@ export function LetterRelationDialog({
   const submit = () => {
     if (!picked || link.isPending) return;
     setError(null);
+    // Направление задаёт, кто получает связь: открытое письмо (как раньше)
+    // или выбранное (добавляем ребёнка к открытому) — сервер тот же.
     link.mutate(
-      { sourceId: source.id, target: picked, kind, replace },
+      fromCurrent
+        ? {
+            sourceId: source.id,
+            targetId: picked.id,
+            parentNode: treeNodeOf(picked),
+            kind,
+            replace,
+          }
+        : {
+            sourceId: picked.id,
+            targetId: source.id,
+            parentNode: source,
+            kind,
+            replace: false,
+          },
       {
         onSuccess: () => onOpenChange(false),
         onError: (mutationError) => {
-          if (isAlreadyLinked(mutationError) && !replace) setUnknownLink(kind);
-          else setError(relationErrorText(mutationError));
+          if (isAlreadyLinked(mutationError)) {
+            // В обратном направлении замену предлагает карточка выбранного.
+            if (fromCurrent && !replace) setUnknownLink(kind);
+            else setError(ui.letters.relations.alreadyLinkedTarget);
+          } else setError(relationErrorText(mutationError));
         },
       },
     );
@@ -138,7 +154,7 @@ export function LetterRelationDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {existing[initialKind] && initialKind === kind
+            {existing[initialKind] && initialKind === kind && fromCurrent
               ? ui.letters.relations.replaceTitle
               : ui.letters.relations.addTitle}
           </DialogTitle>
@@ -153,13 +169,16 @@ export function LetterRelationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ModeChoices
-          value={kind}
-          options={kinds}
+        <RelationModeChoices
+          kind={kind}
+          direction={direction}
           disabled={link.isPending}
-          ariaLabel={ui.letters.relations.kindLabel}
-          onChange={(next) => {
+          onKind={(next) => {
             setKind(next);
+            setError(null);
+          }}
+          onDirection={(next) => {
+            setDirection(next);
             setError(null);
           }}
         />
@@ -172,42 +191,16 @@ export function LetterRelationDialog({
               выбранное): окно не прыгает ни при поиске, ни при выборе. */}
           <div className={cn('flex h-64 min-w-0 flex-col gap-2', picked && 'justify-center')}>
             {picked ? (
-              <>
-                <div className="flex min-w-0 items-center gap-3 rounded-lg border border-primary/50 bg-primary/5 py-2 pr-1.5 pl-3">
-                  <LetterPickRow letter={picked} />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7 shrink-0 text-muted-foreground"
-                    aria-label={ui.common.remove}
-                    title={ui.common.remove}
-                    onClick={() => setPicked(null)}
-                    disabled={link.isPending}
-                  >
-                    <X className="size-3.5" strokeWidth={1.75} />
-                  </Button>
-                </div>
-                {replace ? (
-                  <p className="text-xs text-warning">
-                    {replacedWith
-                      ? ui.letters.relations.replaceWarning(
-                          replacedWith.regNumber ?? replacedWith.subject ?? ui.letters.noNumber,
-                        )
-                      : ui.letters.relations.replaceUnknown}
-                  </p>
-                ) : null}
-                <span className="text-xs font-medium text-muted-foreground">
-                  {ui.letters.relations.previewCaption}
-                </span>
-                <RelationPreview
-                  parent={{
-                    number: picked.regNumber ?? ui.letters.noNumber,
-                    subject: picked.subject,
-                  }}
-                  child={{ number: nodeNumber(source), subject: source.subject }}
-                  kind={kind}
-                />
-              </>
+              <RelationPickedCard
+                picked={picked}
+                source={source}
+                kind={kind}
+                direction={direction}
+                replace={replace}
+                replacedWith={replacedWith}
+                disabled={link.isPending}
+                onClear={() => setPicked(null)}
+              />
             ) : (
               <>
                 <div className="relative">
