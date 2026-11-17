@@ -36,6 +36,13 @@ describe('chat.direct_message: личный чат и сообщение (#921)'
       body: { text: 'Привет' },
     });
     expect(chatDirectMessageTool.followUp!({}, { userId: USER_ID, text: 'Привет' })).toBeNull();
+    // Ответ отправки несёт conversationId — второго сообщения не будет.
+    expect(
+      chatDirectMessageTool.followUp!(
+        { id: MESSAGE_ID, conversationId: CONVERSATION_ID },
+        { userId: USER_ID, text: 'Привет' },
+      ),
+    ).toBeNull();
   });
 
   it('project: ссылка на беседу и id сообщения', () => {

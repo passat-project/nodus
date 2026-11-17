@@ -135,7 +135,11 @@ export const chatDirectMessageTool = defineTool({
   // Второй шаг: отправка в найденный/созданный чат. Id карточки —
   // идемпотентность первого шага; отправка — её суффикс `:2`.
   followUp: (data, input) => {
-    const conversationId = str(asRecord(data)?.id);
+    const record = asRecord(data);
+    // Ответ отправки несёт conversationId — цепочка закончена. Иначе id
+    // сообщения был бы принят за id беседы и агент отправил бы второе.
+    if (str(record?.conversationId)) return null;
+    const conversationId = str(record?.id);
     return conversationId
       ? {
           method: 'POST',
