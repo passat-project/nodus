@@ -66,7 +66,23 @@ export class ToolExecutorService {
     const input = parsed.data as Record<string, unknown>;
 
     if (tool.handler) {
-      const result = await tool.handler(input, ctx);
+      // Сбой внешнего инструмента (MCP-сервер, сеть, отказ сервера) — это
+      // ОШИБКА ВЫЗОВА, а не падение прогона: модель должна увидеть причину и
+      // пересказать её сотруднику (находка #901).
+      let result: Awaited<ReturnType<NonNullable<typeof tool.handler>>>;
+      try {
+        result = await tool.handler(input, ctx);
+      } catch (error) {
+        if (ctx.signal.aborted) {
+          return { ok: false, errorCode: 'ASSISTANT_TOOL_ABORTED', message: 'Прогон остановлен' };
+        }
+        return {
+          ok: false,
+          errorCode: 'ASSISTANT_TOOL_FAILED',
+          message:
+            error instanceof Error && error.message ? error.message : 'Действие не выполнено',
+        };
+      }
       if (ctx.signal.aborted) {
         return { ok: false, errorCode: 'ASSISTANT_TOOL_ABORTED', message: 'Прогон остановлен' };
       }
