@@ -13,4 +13,8 @@ export class WorkflowPressRoundsProvider implements WorkflowPressRoundsReader {
   async openTransitionIds(workflowId: string, tx?: TransactionClient): Promise<Set<string>> {
     return new Set(await this.press.openTransitionIdsForWorkflow(workflowId, tx));
   }
+
+  openTasks(workflowId: string, tx?: TransactionClient) {
+    return this.press.openTasksForWorkflow(workflowId, tx);
+  }
 }

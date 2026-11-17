@@ -40,6 +40,7 @@ import {
 import { assertLetterCatalogEditable } from '../../catalog/letter-lock.js';
 import { documentOf } from './document-of.js';
 import { applyActionPlan } from './publish-actions.js';
+import { assertPressPublishAllowed } from './press-publish-guard.js';
 import { liveLayout, resolveLayout } from './layout.js';
 import { assertPublishable } from './publish-checks.js';
 import { publishSnapshot } from './publish-snapshot.js';
@@ -164,18 +165,14 @@ export class WorkflowEditorService {
 
       const snapshot = await this.snapshotOf(tx, loaded, category);
       const plan = planWorkflowPublish(snapshot, body.document, body.migrations);
-      // Коллективная кнопка (#434): пока раунд открыт, менять/архивировать её
-      // нельзя — движок при кворуме выполнил бы уже другой переход.
-      const openPress = await this.pressRounds.openTransitionIds(workflowId, tx);
-      const touched = [
-        ...plan.transitionArchives.map((archive) => archive.transitionId),
-        ...plan.transitionUpdates.map((update) => update.id),
-      ].filter((transitionId) => openPress.has(transitionId));
-      if (touched.length > 0) {
-        throw new DomainException(ErrorCode.CONFLICT, 'Press rounds are open for changed buttons', {
-          transitionIds: touched,
-        });
-      }
+      await assertPressPublishAllowed(
+        this.pressRounds,
+        workflowId,
+        loaded,
+        body.document,
+        plan,
+        tx,
+      );
       const gaps = missingMigrations(plan);
       if (gaps.length > 0) {
         throw new DomainException(

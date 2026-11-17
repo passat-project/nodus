@@ -14,4 +14,9 @@ export const WORKFLOW_PRESS_ROUNDS_READER: InjectionToken = 'WORKFLOW_PRESS_ROUN
 export interface WorkflowPressRoundsReader {
   /** id кнопок с открытыми раундами в маршруте (entityKind='task'). */
   openTransitionIds(workflowId: string, tx?: TransactionClient): Promise<Set<string>>;
+  /** Задачи, которые держат кнопку открытым раундом (номер и название). */
+  openTasks(
+    workflowId: string,
+    tx?: TransactionClient,
+  ): Promise<{ transitionId: string; number: number; title: string }[]>;
 }

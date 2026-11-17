@@ -181,7 +181,10 @@ function makeService(
     typeIdsOf: vi.fn(async () => ['type-1']),
   };
   const adapters = { get: vi.fn(() => ({ countByStages: vi.fn(async () => taskCounts) })) };
-  const pressRounds = { openTransitionIds: vi.fn(async () => new Set(openPress)) };
+  const pressRounds = {
+    openTransitionIds: vi.fn(async () => new Set(openPress)),
+    openTasks: vi.fn(async () => []),
+  };
   const service = new WorkflowEditorService(
     { run: vi.fn(async (fn: (t: unknown) => unknown) => fn(tx)) } as never,
     workflows as never,

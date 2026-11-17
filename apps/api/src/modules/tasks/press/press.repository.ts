@@ -196,6 +196,31 @@ export class PressRepository {
     `;
     return rows.map((row) => row.transition_id);
   }
+
+  /** Задачи с открытыми раундами — публикация называет их в отказе (#434, В4). */
+  async openTasksForWorkflow(
+    workflowId: string,
+    tx?: TransactionClient,
+  ): Promise<{ transitionId: string; number: number; title: string }[]> {
+    const rows = await (tx ?? this.prisma).$queryRaw<
+      { transition_id: string; number: number; title: string }[]
+    >`
+      SELECT DISTINCT r.transition_id, t.number, t.title
+      FROM press_rounds r
+      JOIN tasks t ON t.id = r.entity_id
+      WHERE r.entity_kind = 'task'
+        AND r.completed_at IS NULL
+        AND r.cancelled_at IS NULL
+        AND t.deleted_at IS NULL
+        AND t.workflow_id = ${workflowId}::uuid
+      ORDER BY t.number
+    `;
+    return rows.map((row) => ({
+      transitionId: row.transition_id,
+      number: row.number,
+      title: row.title,
+    }));
+  }
 }
 
 export type PressRoundRow = NonNullable<Round>;
