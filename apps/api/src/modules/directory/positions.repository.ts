@@ -41,15 +41,14 @@ export class PositionsRepository {
     `;
   }
 
-  /** Держатели должности своего вида — ВСЕ, включая уволенных (вердикт
-   *  владельца 13.11.2026: отдельного архива должностей у уволенных нет). */
-  async countHolders(
-    id: string,
-    kind: 'management' | 'legal',
-    tx: TransactionClient,
-  ): Promise<number> {
+  /** Держатели должности — ВСЕ, включая уволенных (вердикт владельца
+   *  13.11.2026: отдельного архива должностей у уволенных нет). Считаются ОБЕ
+   *  колонки: штатно они разделены по виду структуры (#441), но если в базе
+   *  осталась ссылка не той колонки, удаление обязано упереться в 409 — иначе
+   *  FK `SetNull` молча обнулил бы поле сотрудника. */
+  async countHolders(id: string, tx: TransactionClient): Promise<number> {
     return tx.user.count({
-      where: kind === 'management' ? { positionId: id } : { legalPositionId: id },
+      where: { OR: [{ positionId: id }, { legalPositionId: id }] },
     });
   }
 
@@ -60,12 +59,30 @@ export class PositionsRepository {
     targetId: string,
     kind: 'management' | 'legal',
     tx: TransactionClient,
-  ): Promise<number> {
-    const result = await tx.user.updateMany({
-      where: kind === 'management' ? { positionId: id } : { legalPositionId: id },
+  ): Promise<string[]> {
+    const holders = await this.holderIds(id, kind, tx);
+    if (holders.length === 0) return [];
+    await tx.user.updateMany({
+      where: { id: { in: holders } },
       data: kind === 'management' ? { positionId: targetId } : { legalPositionId: targetId },
     });
-    return result.count;
+    // Список id уходит в событие: по счётчику нельзя восстановить, у кого
+    // именно переписали кадровое поле (I7/I9).
+    return holders;
+  }
+
+  /** Кто держит должность в своей колонке вида — до переназначения. */
+  async holderIds(
+    id: string,
+    kind: 'management' | 'legal',
+    tx: TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.user.findMany({
+      where: kind === 'management' ? { positionId: id } : { legalPositionId: id },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((row) => row.id);
   }
 
   /** Должность по названию без учёта регистра (#768): unique(name, kind) в базе

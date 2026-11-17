@@ -59,6 +59,8 @@ export function PositionsPanel({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [reassignFor, setReassignFor] = useState<Position | null>(null);
+  // Число держателей из ответа сервера (409): локальный список мог устареть.
+  const [reassignHolders, setReassignHolders] = useState<number | null>(null);
 
   // Сотрудники на должности — все статусы: уволенные тоже переназначаются.
   const holdersOf = (id: string) => users.filter((user) => user.positionId === id).length;
@@ -92,6 +94,7 @@ export function PositionsPanel({
   function requestDelete(position: Position) {
     if (pending) return;
     if (holdersOf(position.id) > 0) {
+      setReassignHolders(null);
       setReassignFor(position);
       return;
     }
@@ -100,6 +103,8 @@ export function PositionsPanel({
         if (error instanceof ApiError && error.code === ErrorCode.DIRECTORY_POSITION_IN_USE) {
           // Сотрудник появился после отрисовки — открываем переназначение
           // со свежим числом от сервера.
+          const details = error.details as { holders?: number } | undefined;
+          setReassignHolders(typeof details?.holders === 'number' ? details.holders : null);
           setReassignFor(position);
           return;
         }
@@ -110,7 +115,15 @@ export function PositionsPanel({
 
   function submitReassign(targetId: string) {
     if (!reassignFor || pending) return;
-    reassign.mutate({ id: reassignFor.id, targetId }, { onSuccess: () => setReassignFor(null) });
+    reassign.mutate(
+      { id: reassignFor.id, targetId },
+      {
+        onSuccess: () => {
+          setReassignFor(null);
+          setReassignHolders(null);
+        },
+      },
+    );
   }
 
   function rowMenu(position: Position): RowMenuItem[] {
@@ -260,10 +273,13 @@ export function PositionsPanel({
       />
       <ReassignPositionDialog
         position={reassignFor}
-        holders={reassignFor ? holdersOf(reassignFor.id) : 0}
+        holders={reassignHolders ?? (reassignFor ? holdersOf(reassignFor.id) : 0)}
         targets={targets}
         pending={reassign.isPending}
-        onClose={() => setReassignFor(null)}
+        onClose={() => {
+          setReassignFor(null);
+          setReassignHolders(null);
+        }}
         onSubmit={submitReassign}
       />
     </StructureSidePanel>

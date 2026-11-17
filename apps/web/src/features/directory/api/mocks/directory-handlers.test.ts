@@ -50,4 +50,34 @@ describe('моки должностей (#768)', () => {
     const positions = (await list.json()) as { id: string }[];
     expect(positions.some((position) => position.id === sourceId)).toBe(false);
   });
+
+  it('дубль имени (без учёта регистра) — 409 как на сервере; после удаления имя свободно', async () => {
+    const duplicate = await fetch(URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'дИРЕКТОР', kind: 'management', sortOrder: 0 }),
+    });
+    expect(duplicate.status).toBe(409);
+    expect(((await duplicate.json()) as { code: string }).code).toBe('DIRECTORY_POSITION_EXISTS');
+
+    // Жёсткое удаление освобождает имя: та же строка создаётся заново.
+    const create = await fetch(URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Проба мока 768', kind: 'management', sortOrder: 0 }),
+    });
+    expect(create.status).toBe(201);
+    const createdId = ((await create.json()) as { id: string }).id;
+
+    const removed = await fetch(`${URL}/${createdId}`, { method: 'DELETE' });
+    expect(removed.status).toBe(204);
+
+    const recreated = await fetch(URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Проба мока 768', kind: 'management', sortOrder: 0 }),
+    });
+    expect(recreated.status).toBe(201);
+    expect(((await recreated.json()) as { id: string }).id).not.toBe(createdId);
+  });
 });

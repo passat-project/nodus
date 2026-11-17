@@ -205,18 +205,19 @@ describe('PositionsService', () => {
       expect(eventBus.emit).not.toHaveBeenCalled();
     });
 
-    it('нет сотрудников → строка удаляется, событие position.deleted', async () => {
+    it('нет сотрудников → строка удаляется, событие position.deleted с названием', async () => {
       positions.countHolders.mockResolvedValue(0);
 
       await service.delete('pos-1', 'admin-1');
 
       expect(positions.lockForUpdate).toHaveBeenCalledWith('pos-1', 'tx-handle');
+      expect(positions.countHolders).toHaveBeenCalledWith('pos-1', 'tx-handle');
       expect(positions.remove).toHaveBeenCalledWith('pos-1', 'tx-handle');
       expect(positions.update).not.toHaveBeenCalled();
       expect(eventBus.emit).toHaveBeenCalledWith(
         'tx-handle',
         'directory.position.deleted',
-        { positionId: 'pos-1', kind: 'management' },
+        { positionId: 'pos-1', kind: 'management', name: 'Инженер-проектировщик' },
         expect.objectContaining({ actorId: 'admin-1' }),
       );
     });
@@ -251,7 +252,7 @@ describe('PositionsService', () => {
             : position({ id: 'pos-2', kind: 'management', name: 'ГИП' }),
         ),
       );
-      positions.reassignHolders.mockResolvedValue(4);
+      positions.reassignHolders.mockResolvedValue(['user-1', 'user-2']);
 
       await service.reassign('pos-1', { targetId: 'pos-2' }, 'admin-1');
 
@@ -269,7 +270,8 @@ describe('PositionsService', () => {
           positionId: 'pos-1',
           changedFields: ['holders'],
           targetId: 'pos-2',
-          reassigned: 4,
+          reassigned: 2,
+          userIds: ['user-1', 'user-2'],
         },
         expect.objectContaining({ actorId: 'admin-1' }),
       );

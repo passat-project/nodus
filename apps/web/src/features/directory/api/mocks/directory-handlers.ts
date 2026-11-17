@@ -53,6 +53,22 @@ export const directoryHandlers = [
         { status: 400 },
       );
     }
+    // Дубли — как на сервере: без учёта регистра, 409 с id существующей строки.
+    const name = parsed.data.name.toLocaleLowerCase('ru');
+    const same = positionState.find(
+      (position) =>
+        position.kind === parsed.data.kind && position.name.toLocaleLowerCase('ru') === name,
+    );
+    if (same) {
+      return HttpResponse.json(
+        {
+          code: 'DIRECTORY_POSITION_EXISTS',
+          message: 'Position already exists',
+          details: { positionId: same.id },
+        },
+        { status: 409 },
+      );
+    }
     const position = { id: crypto.randomUUID(), ...parsed.data };
     positionState = [...positionState, position];
     return HttpResponse.json(position, { status: 201 });
@@ -71,6 +87,25 @@ export const directoryHandlers = [
         { code: 'NOT_FOUND', message: 'Position not found' },
         { status: 404 },
       );
+    }
+    if (parsed.data.name !== undefined) {
+      const name = parsed.data.name.toLocaleLowerCase('ru');
+      const same = positionState.find(
+        (position) =>
+          position.id !== current.id &&
+          position.kind === current.kind &&
+          position.name.toLocaleLowerCase('ru') === name,
+      );
+      if (same) {
+        return HttpResponse.json(
+          {
+            code: 'DIRECTORY_POSITION_EXISTS',
+            message: 'Position already exists',
+            details: { positionId: same.id },
+          },
+          { status: 409 },
+        );
+      }
     }
     const next = { ...current, ...parsed.data };
     positionState = positionState.map((position) => (position.id === next.id ? next : position));

@@ -21,7 +21,7 @@ describe('PositionsRepository', () => {
   const tx = {
     $queryRaw: vi.fn(),
     position: { findFirst: vi.fn(), delete: vi.fn() },
-    user: { count: vi.fn(), updateMany: vi.fn() },
+    user: { count: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
   };
   const repo = new PositionsRepository(prisma as never);
 
@@ -81,29 +81,42 @@ describe('PositionsRepository', () => {
     expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
   });
 
-  it('countHolders считает всех сотрудников, включая уволенных', async () => {
+  it('countHolders считает всех сотрудников в ОБЕИХ колонках (страховка вида)', async () => {
     tx.user.count.mockResolvedValue(2);
-    await expect(repo.countHolders('p-1', 'management', tx as never)).resolves.toBe(2);
-    expect(tx.user.count).toHaveBeenLastCalledWith({
-      where: { positionId: 'p-1' },
-    });
-    await repo.countHolders('p-1', 'legal', tx as never);
-    expect(tx.user.count).toHaveBeenLastCalledWith({
-      where: { legalPositionId: 'p-1' },
+    await expect(repo.countHolders('p-1', tx as never)).resolves.toBe(2);
+    expect(tx.user.count).toHaveBeenCalledWith({
+      where: { OR: [{ positionId: 'p-1' }, { legalPositionId: 'p-1' }] },
     });
   });
 
-  it('reassignHolders двигает всех сотрудников, включая уволенных', async () => {
-    tx.user.updateMany.mockResolvedValue({ count: 3 });
-    await expect(repo.reassignHolders('p-1', 'p-2', 'management', tx as never)).resolves.toBe(3);
-    expect(tx.user.updateMany).toHaveBeenLastCalledWith({
+  it('reassignHolders переводит всех держателей своей колонки и отдаёт их id', async () => {
+    tx.user.findMany.mockResolvedValue([{ id: 'u-1' }, { id: 'u-2' }]);
+    tx.user.updateMany.mockResolvedValue({ count: 2 });
+    await expect(repo.reassignHolders('p-1', 'p-2', 'management', tx as never)).resolves.toEqual([
+      'u-1',
+      'u-2',
+    ]);
+    expect(tx.user.findMany).toHaveBeenLastCalledWith({
       where: { positionId: 'p-1' },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+    expect(tx.user.updateMany).toHaveBeenLastCalledWith({
+      where: { id: { in: ['u-1', 'u-2'] } },
       data: { positionId: 'p-2' },
     });
     await repo.reassignHolders('p-1', 'p-2', 'legal', tx as never);
     expect(tx.user.updateMany).toHaveBeenLastCalledWith({
-      where: { legalPositionId: 'p-1' },
+      where: { id: { in: ['u-1', 'u-2'] } },
       data: { legalPositionId: 'p-2' },
     });
+  });
+
+  it('reassignHolders без держателей не пишет в базу', async () => {
+    tx.user.findMany.mockResolvedValue([]);
+    await expect(repo.reassignHolders('p-1', 'p-2', 'management', tx as never)).resolves.toEqual(
+      [],
+    );
+    expect(tx.user.updateMany).not.toHaveBeenCalled();
   });
 });

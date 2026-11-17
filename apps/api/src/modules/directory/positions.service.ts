@@ -99,7 +99,13 @@ export class PositionsService {
       await this.eventBus.emit(
         tx,
         DIRECTORY_EVENTS.POSITION_UPDATED,
-        { positionId: id, changedFields: ['holders'], targetId: target.id, reassigned },
+        {
+          positionId: id,
+          changedFields: ['holders'],
+          targetId: target.id,
+          reassigned: reassigned.length,
+          userIds: reassigned,
+        },
         { actorId, aggregateType: 'position', aggregateId: id },
       );
     });
@@ -116,7 +122,7 @@ export class PositionsService {
       }
       const locked = await this.positions.findById(id, tx);
       if (!locked) throw DomainException.notFound('Position not found');
-      const holders = await this.positions.countHolders(id, locked.kind, tx);
+      const holders = await this.positions.countHolders(id, tx);
       if (holders > 0) {
         throw new DomainException(ErrorCode.DIRECTORY_POSITION_IN_USE, 'Position has holders', {
           positionId: id,
@@ -128,7 +134,9 @@ export class PositionsService {
       await this.eventBus.emit(
         tx,
         DIRECTORY_EVENTS.POSITION_DELETED,
-        { positionId: id, kind: locked.kind },
+        // name — чтобы журнал событий/аудит отвечал «какую должность удалили»:
+        // строка исчезла безвозвратно, UUID без названия ничего не говорит.
+        { positionId: id, kind: locked.kind, name: locked.name },
         { actorId, aggregateType: 'position', aggregateId: id },
       );
     });
