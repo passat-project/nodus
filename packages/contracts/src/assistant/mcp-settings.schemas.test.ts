@@ -18,6 +18,12 @@ describe('assistantMcpUrlSchema: только https без секретов в U
       false,
     );
   });
+
+  it('пароль без логина и фрагмент тоже не проходят (секрет не уходит в URL)', () => {
+    // `https://:secret@host` имеет username === '' и проходил прежнюю проверку.
+    expect(assistantMcpUrlSchema.safeParse('https://:secret@mcp.exa.ai/mcp').success).toBe(false);
+    expect(assistantMcpUrlSchema.safeParse('https://mcp.exa.ai/mcp#token').success).toBe(false);
+  });
 });
 
 describe('assistantMcpServerInputSchema / body', () => {

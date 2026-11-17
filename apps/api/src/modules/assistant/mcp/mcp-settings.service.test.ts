@@ -107,6 +107,22 @@ describe('McpSettingsService.put', () => {
     expect(repo.replaceAll).not.toHaveBeenCalled();
   });
 
+  it('смена хоста со сохранённым ключом требует ввести ключ заново', async () => {
+    const { service, repo } = makeService();
+    await expect(service.put(body({ url: 'https://evil.example/mcp' }))).rejects.toMatchObject({
+      code: expect.stringContaining('VALIDATION'),
+    });
+    expect(repo.replaceAll).not.toHaveBeenCalled();
+
+    // Новый ключ или явное удаление — допустимы (как у провайдеров моделей).
+    const withKey = makeService();
+    await withKey.service.put(body({ url: 'https://evil.example/mcp', apiKey: 'sk-new' }));
+    expect(withKey.repo.replaceAll).toHaveBeenCalledOnce();
+    const cleared = makeService();
+    await cleared.service.put(body({ url: 'https://evil.example/mcp', clearKey: true }));
+    expect(cleared.repo.replaceAll).toHaveBeenCalledOnce();
+  });
+
   it('нельзя одновременно задать и удалить ключ', async () => {
     const { service } = makeService();
     await expect(

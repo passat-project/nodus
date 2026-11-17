@@ -17,6 +17,7 @@ export const assistantMcpTransportSchema = z.enum(['streamable-http']);
 export type AssistantMcpTransport = z.infer<typeof assistantMcpTransportSchema>;
 
 /** Адрес MCP-сервера: https, без userinfo и query (ключ — заголовком). */
+/** Адрес MCP-сервера: https, без userinfo, query и фрагмента (ключ — заголовком). */
 export const assistantMcpUrlSchema = z
   .string()
   .trim()
@@ -25,7 +26,16 @@ export const assistantMcpUrlSchema = z
   .refine((value) => {
     try {
       const url = new URL(value);
-      return url.protocol === 'https:' && url.username === '' && url.search === '';
+      // Пароль и фрагмент проверяются отдельно: `https://:secret@host`
+      // проходит проверку `username === ''` и сохранил бы секрет в URL
+      // открытым текстом (находка security-ревью 17.11.2026).
+      return (
+        url.protocol === 'https:' &&
+        url.username === '' &&
+        url.password === '' &&
+        url.search === '' &&
+        url.hash === ''
+      );
     } catch {
       return false;
     }

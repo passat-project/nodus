@@ -25,7 +25,9 @@ const mocks = vi.hoisted(() => ({
       defaultForSearch: true,
     },
   ],
-  mcpSave: vi.fn(async () => ({ servers: [] })),
+  mcpSave: vi.fn(async (body: { servers: Array<Record<string, unknown>> }) => ({
+    servers: body.servers.map((server) => ({ ...server })),
+  })),
   mcpTest: vi.fn(async () => ({
     ok: true,
     latencyMs: 1,
@@ -49,7 +51,7 @@ const mocks = vi.hoisted(() => ({
       models: [],
     },
   ],
-  providerSave: vi.fn(async () => ({})),
+  providerSave: vi.fn(async (body: Record<string, unknown>) => body),
 }));
 
 vi.mock('@tanstack/react-router', () => ({
@@ -117,7 +119,7 @@ describe('AiMcpSection: реестр MCP-серверов', () => {
     fireEvent.click(screen.getByRole('button', { name: ui.common.create }));
 
     await waitFor(() => expect(mocks.mcpSave).toHaveBeenCalledTimes(1));
-    const body = mocks.mcpSave.mock.calls[0]?.[0] as {
+    const body = mocks.mcpSave.mock.calls[0]![0] as unknown as {
       servers: { name: string; url: string; transport: string; defaultForSearch: boolean }[];
     };
     const created = body.servers.find((server) => server.name === 'Exa поиск');
@@ -199,6 +201,49 @@ describe('AiMcpSection: действия строки и отказы', () => {
     }
   });
 
+  it('введённый ключ сильнее ранее нажатого «Удалить ключ»', async () => {
+    const original = mocks.mcpServers[0]!;
+    mocks.mcpServers[0] = {
+      ...original,
+      hasKey: true,
+      keyHint: 'abcd',
+    } as unknown as (typeof mocks.mcpServers)[number];
+    try {
+      render(<AiMcpSection section="mcp" onSection={() => undefined} />);
+      fireEvent.click(screen.getAllByRole('row').at(-1)!);
+      await screen.findByText(ui.assistant.settings.mcpEditTitle);
+      fireEvent.click(screen.getByRole('button', { name: ui.assistant.settings.mcpKeyClear }));
+      const key = (await screen.findByPlaceholderText(
+        ui.assistant.settings.mcpKeyPlaceholder,
+      )) as HTMLInputElement;
+      fireEvent.change(key, { target: { value: 'sk-new-key' } });
+      fireEvent.click(screen.getByRole('button', { name: ui.common.save }));
+
+      await waitFor(() => expect(mocks.mcpSave).toHaveBeenCalledTimes(1));
+      const body = mocks.mcpSave.mock.calls[0]![0] as unknown as {
+        servers: Array<{ apiKey?: string; clearKey?: boolean }>;
+      };
+      // Ввод не теряется и не удаляет сохранённый ключ «вместе с собой».
+      expect(body.servers[0]?.apiKey).toBe('sk-new-key');
+      expect(body.servers[0]?.clearKey).toBe(false);
+    } finally {
+      mocks.mcpServers[0] = original;
+    }
+  });
+
+  it('«Удалить выбранные» уходит одним PUT без выбранных серверов', async () => {
+    render(<AiMcpSection section="mcp" onSection={() => undefined} />);
+    fireEvent.click(screen.getAllByLabelText(ui.common.selectRow).at(-1)!);
+    fireEvent.click(screen.getByRole('button', { name: ui.assistant.settings.deleteSelected }));
+    fireEvent.click(screen.getByRole('button', { name: ui.assistant.settings.deleteAction }));
+
+    await waitFor(() => expect(mocks.mcpSave).toHaveBeenCalledTimes(1));
+    const body = mocks.mcpSave.mock.calls[0]![0] as unknown as {
+      servers: Array<{ name: string }>;
+    };
+    expect(body.servers).toEqual([]);
+  });
+
   it('правка сервера сохраняет поля тем же PUT', async () => {
     render(<AiMcpSection section="mcp" onSection={() => undefined} />);
     fireEvent.click(screen.getAllByRole('row').at(-1)!);
@@ -206,7 +251,7 @@ describe('AiMcpSection: действия строки и отказы', () => {
     fireEvent.change(name, { target: { value: 'Exa (правка)' } });
     fireEvent.click(screen.getByRole('button', { name: ui.common.save }));
     await waitFor(() => expect(mocks.mcpSave).toHaveBeenCalledTimes(1));
-    const body = mocks.mcpSave.mock.calls[0]?.[0] as { servers: { name: string }[] };
+    const body = mocks.mcpSave.mock.calls[0]![0] as unknown as { servers: { name: string }[] };
     expect(body.servers[0]?.name).toBe('Exa (правка)');
   });
 });

@@ -1,4 +1,13 @@
+import { ASSISTANT_LIMITS } from '@nodus/contracts';
+
 import { asRecord, str } from '../tools/projections.js';
+import { assertAllowedEndpoint } from './mcp-endpoint-guard.js';
+
+export { assertAllowedEndpoint, isPrivateAddress } from './mcp-endpoint-guard.js';
+import { McpError } from './mcp-error.js';
+import { frameBoundary, parseFrame, parseRpcMessage, type RpcMessage } from './mcp-rpc.js';
+
+export { McpError };
 
 /**
  * Минимальный клиент MCP (Streamable HTTP) для внешних серверов ассистента
@@ -19,18 +28,6 @@ import { asRecord, str } from '../tools/projections.js';
  * GET-поток серверных уведомлений не открываем: ассистенту нужен только
  * запрос-ответ (Exa на GET отвечает 405 — это штатно).
  */
-
-/** Класс сбоя: транспорт/протокол (повтор осмыслен) или ошибка инструмента. */
-export class McpError extends Error {
-  constructor(
-    message: string,
-    readonly kind: 'transport' | 'protocol' | 'tool',
-    readonly code: string | null = null,
-  ) {
-    super(message);
-    this.name = 'McpError';
-  }
-}
 
 /** Сведения о сервере из handshake (показываются в настройках). */
 export interface McpServerInfo {
@@ -67,18 +64,20 @@ export interface McpClientOptions {
 /** Разбираемая версия протокола, которую умеет этот клиент. */
 const PROTOCOL_VERSION = '2025-06-18';
 const DEFAULT_TIMEOUT_MS = 20_000;
-
-interface RpcMessage {
-  id?: number | string | null;
-  result?: unknown;
-  error?: { code?: number; message?: string };
-}
+/** Потолок тела одного ответа/кадра SSE: сервер не «раздувает» память API. */
+const MAX_RESPONSE_BYTES = 1_000_000;
+/** Потолок страниц `tools/list`: защита от бесконечного `nextCursor`. */
+const MAX_TOOL_PAGES = 20;
+/** Потолок инструментов одного сервера: каталог, а не дамп. */
+const MAX_TOOLS = 200;
 
 export class McpClient {
   private sessionId: string | null = null;
   private protocolVersion = PROTOCOL_VERSION;
   private nextId = 1;
   private readonly timeoutMs: number;
+  /** Идёт повторный handshake: второй 404 внутри него — обрыв, а не рекурсия. */
+  private reinitializing = false;
 
   constructor(private readonly options: McpClientOptions) {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -119,7 +118,16 @@ export class McpClient {
   async listTools(): Promise<McpToolDescriptor[]> {
     const tools: McpToolDescriptor[] = [];
     let cursor: string | null = null;
+    let pages = 0;
     do {
+      // Бесконечный `nextCursor` — сбой сервера, а не повод крутиться вечно.
+      if (++pages > MAX_TOOL_PAGES) {
+        throw new McpError(
+          'Сервер MCP отдал слишком много страниц инструментов',
+          'protocol',
+          'too_many_pages',
+        );
+      }
       const response = await this.request('tools/list', cursor ? { cursor } : {});
       const result = asRecord(response);
       const list = Array.isArray(result?.tools) ? result.tools : [];
@@ -132,6 +140,7 @@ export class McpClient {
           description: str(tool?.description),
           inputSchema: asRecord(tool?.inputSchema),
         });
+        if (tools.length >= MAX_TOOLS) return tools;
       }
       cursor = str(result?.nextCursor);
     } while (cursor);
@@ -150,7 +159,12 @@ export class McpClient {
       })
       .filter(Boolean)
       .join('\n');
-    return { text, isError: result?.isError === true };
+    // Потолок до промпта: результат MCP-инструмента — тоже данные модели, а
+    // не «сколько прислали» (ADR-0043: компактные проекции и лимит знаков).
+    return {
+      text: text.slice(0, ASSISTANT_LIMITS.maxToolResultChars),
+      isError: result?.isError === true,
+    };
   }
 
   /** JSON-RPC уведомление: ответ 202 с пустым телом, результата нет. */
@@ -191,9 +205,21 @@ export class McpClient {
     const sessionId = response.headers.get('mcp-session-id');
 
     if (response.status === 404 && this.sessionId && !retried) {
-      // Сессия истекла на сервере: начинаем заново ровно один раз.
-      this.sessionId = null;
-      await this.initialize();
+      // Сессия истекла на сервере: начинаем заново ровно один раз. Повторный
+      // 404 внутри самого handshake — тупик: рвём, а не рекурсируем (иначе
+      // сервер, отвергающий нотификацию, вешает обработчик навсегда).
+      if (this.reinitializing) {
+        await response.body?.cancel().catch(() => undefined);
+        throw new McpError('Сервер MCP не подтверждает сессию', 'transport', 'session');
+      }
+      await response.body?.cancel().catch(() => undefined);
+      this.reinitializing = true;
+      try {
+        this.sessionId = null;
+        await this.initialize();
+      } finally {
+        this.reinitializing = false;
+      }
       return this.post(body, true);
     }
     if (response.status === 202 || response.status === 204) {
@@ -201,9 +227,11 @@ export class McpClient {
       return { message: {}, sessionId };
     }
     if (!response.ok) {
-      const detail = await response.text().catch(() => '');
+      // Тело внешнего ответа в текст ошибки не попадает (security #8): сервер
+      // мог бы эхом вернуть ключ, а строка уходит в UI и кэш идемпотентности.
+      await response.body?.cancel().catch(() => undefined);
       throw new McpError(
-        `Сервер MCP ответил ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`,
+        `Сервер MCP ответил ${response.status}`,
         'transport',
         String(response.status),
       );
@@ -214,14 +242,18 @@ export class McpClient {
       const expectedId = isNotification ? null : (body.id as number);
       return { message: await this.readSse(response, expectedId), sessionId };
     }
-    const parsed = (await response.json().catch(() => null)) as RpcMessage | null;
-    if (!parsed || typeof parsed !== 'object') {
+    const raw = await this.readCapped(response);
+    const parsed = parseRpcMessage(raw);
+    if (!parsed) {
       throw new McpError('Сервер MCP вернул некорректный ответ', 'transport');
     }
     return { message: parsed, sessionId };
   }
 
   private async fetchWithTimeout(body: Record<string, unknown>): Promise<Response> {
+    // Адрес настройки проверяется на каждом вызове: гвард дешёвый, а ключ
+    // уходит именно на него (защита в глубину к схеме настроек).
+    assertAllowedEndpoint(this.options.url);
     const headers: Record<string, string> = {
       'content-type': 'application/json',
       // Обязательная пара: без text/event-stream многие серверы отвечают 406.
@@ -236,15 +268,43 @@ export class McpClient {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
+        // Редирект запрещён: Node пересылает кастомные заголовки (x-api-key)
+        // на новый адрес, а https→http понижение не блокирует — ключ утёк бы
+        // чужому хосту (находка security-ревью 17.11.2026).
+        redirect: 'error',
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
-      const timedOut = error instanceof Error && error.name === 'TimeoutError';
+      const name = error instanceof Error ? error.name : '';
+      const timedOut = name === 'TimeoutError' || name === 'AbortError';
       throw new McpError(
         timedOut ? 'Сервер MCP не ответил вовремя' : 'Не удалось соединиться с сервером MCP',
         'transport',
         timedOut ? 'timeout' : 'network',
       );
+    }
+  }
+
+  /** Тело ответа с потолком байт: гигантский ответ — сбой сервера, не память. */
+  private async readCapped(response: Response): Promise<string> {
+    if (!response.body) return '';
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    let bytes = 0;
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > MAX_RESPONSE_BYTES) {
+          throw new McpError('Ответ MCP-сервера слишком большой', 'transport', 'too_large');
+        }
+        text += decoder.decode(value, { stream: true });
+      }
+      return text + decoder.decode();
+    } finally {
+      await reader.cancel().catch(() => undefined);
     }
   }
 
@@ -263,6 +323,9 @@ export class McpClient {
         if (done) break;
         // stream: true — иначе рвутся многобайтные символы (кириллица).
         buffer += decoder.decode(value, { stream: true });
+        if (buffer.length > MAX_RESPONSE_BYTES) {
+          throw new McpError('Ответ MCP-сервера слишком большой', 'transport', 'too_large');
+        }
         let boundary = frameBoundary(buffer);
         while (boundary) {
           const frame = buffer.slice(0, boundary.index);
@@ -280,7 +343,10 @@ export class McpClient {
       throw new McpError('Поток SSE закрылся без ответа', 'transport');
     } catch (error) {
       if (error instanceof McpError) throw error;
-      const timedOut = error instanceof Error && error.name === 'TimeoutError';
+      // Таймаут, сработавший во время чтения тела, приходит сюда как
+      // AbortError/TimeoutError — это «не ответил», а не «оборвался поток».
+      const name = error instanceof Error ? error.name : '';
+      const timedOut = name === 'TimeoutError' || name === 'AbortError';
       throw new McpError(
         timedOut ? 'Сервер MCP не ответил вовремя' : 'Обрыв потока MCP',
         'transport',
@@ -289,27 +355,5 @@ export class McpClient {
     } finally {
       await reader.cancel().catch(() => undefined);
     }
-  }
-}
-
-/** Конец SSE-кадра: пустая строка (LF или CRLF). */
-function frameBoundary(buffer: string): { index: number; length: number } | null {
-  const match = /\r?\n\r?\n/.exec(buffer);
-  return match ? { index: match.index, length: match[0].length } : null;
-}
-
-/** Кадр SSE → JSON-RPC сообщение; комментарии/битые кадры пропускаются. */
-function parseFrame(frame: string): RpcMessage | null {
-  let data = '';
-  for (const line of frame.split(/\r?\n/)) {
-    if (line.startsWith(':') || !line.startsWith('data:')) continue;
-    data += (data ? '\n' : '') + line.slice(5).replace(/^ /, '');
-  }
-  if (!data) return null;
-  try {
-    const parsed = JSON.parse(data) as unknown;
-    return asRecord(parsed) ? (parsed as RpcMessage) : null;
-  } catch {
-    return null;
   }
 }
