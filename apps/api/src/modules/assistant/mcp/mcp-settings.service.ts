@@ -149,13 +149,15 @@ export class McpSettingsService {
   }
 
   /**
-   * Сервер для поиска в интернете (Ф3, #901): явный «по умолчанию», иначе
-   * первый включённый. Нет ни одного — `null` (инструменты Exa просто не
-   * попадут в каталог, портал не падает).
+   * Сервер для поиска в интернете (Ф3, #901): ТОЛЬКО явный «по умолчанию» и
+   * включённый. Раньше был fallback «первый включённый» — он молча отправлял
+   * поисковые запросы сотрудников на произвольный сервер реестра (находка
+   * security-ревью #901). Нет такого — `null`: инструменты Exa не попадают в
+   * каталог, портал не падает.
    */
   async resolveForSearch(): Promise<{ row: McpServerRow; client: McpClient } | null> {
-    const enabled = (await this.repo.findServers()).filter((row) => row.enabled);
-    const row = enabled.find((item) => item.defaultForSearch) ?? enabled[0] ?? null;
+    const row =
+      (await this.repo.findServers()).find((item) => item.enabled && item.defaultForSearch) ?? null;
     return row ? { row, client: this.clientForRow(row) } : null;
   }
 

@@ -10,6 +10,7 @@ import {
   EXA_FETCH_TOOL_ID,
   EXA_SEARCH_MCP_TOOL,
   EXA_SEARCH_TOOL_ID,
+  EXA_TOOL_IDS,
   exaTools,
 } from './exa.tools.js';
 
@@ -19,8 +20,12 @@ import {
  * Сеть здесь не нужна: MCP-клиент — мок ровно той формы, что у McpClient.
  */
 
-function makeClient(callTool: ReturnType<typeof vi.fn>): McpClient {
-  return { callTool } as unknown as McpClient;
+function makeClient(
+  callTool: ReturnType<typeof vi.fn>,
+  redact: (text: string, max?: number) => string = (text, max = 300) =>
+    text.length > max ? `${text.slice(0, max)}…` : text,
+): McpClient {
+  return { callTool, redact } as unknown as McpClient;
 }
 
 function byId(tools: AssistantToolDefinition[], id: string): AssistantToolDefinition {
@@ -43,7 +48,7 @@ function context(overrides: Partial<ToolContext> = {}): ToolContext {
 describe('exaTools: карта инструментов (#901)', () => {
   it('два инструмента каталога, оба чтение и на горячей полке', () => {
     const tools = exaTools(makeClient(vi.fn()));
-    expect(tools.map((tool) => tool.id)).toEqual([EXA_SEARCH_TOOL_ID, EXA_FETCH_TOOL_ID]);
+    expect(tools.map((tool) => tool.id)).toEqual([...EXA_TOOL_IDS]);
     for (const tool of tools) {
       expect(tool.module).toBe('ext');
       expect(tool.kind).toBe('read');
@@ -59,17 +64,25 @@ describe('exaTools: карта инструментов (#901)', () => {
 });
 
 describe('exaTools: поиск (#901)', () => {
-  it('передаёт запрос и число результатов, возвращает текст сервера как есть', async () => {
+  it('передаёт запрос, число результатов и сигнал прогона в MCP', async () => {
     const callTool = vi.fn(async () => ({
       text: '1. Норма — https://example.org',
       isError: false,
     }));
     const tool = byId(exaTools(makeClient(callTool)), EXA_SEARCH_TOOL_ID);
-    const result = await tool.handler!({ query: 'СП 20.13330 нагрузки', numResults: 3 }, context());
-    expect(callTool).toHaveBeenCalledWith(EXA_SEARCH_MCP_TOOL, {
-      query: 'СП 20.13330 нагрузки',
-      numResults: 3,
-    });
+    const controller = new AbortController();
+    const result = await tool.handler!(
+      { query: 'СП 20.13330 нагрузки', numResults: 3 },
+      context({ signal: controller.signal }),
+    );
+    expect(callTool).toHaveBeenCalledWith(
+      EXA_SEARCH_MCP_TOOL,
+      {
+        query: 'СП 20.13330 нагрузки',
+        numResults: 3,
+      },
+      controller.signal,
+    );
     expect(result).toEqual({ text: '1. Норма — https://example.org' });
   });
 
@@ -104,6 +117,16 @@ describe('exaTools: поиск (#901)', () => {
       'Поиск в интернете не выполнен: сервер вернул ошибку',
     );
   });
+
+  it('текст ошибки сервера проходит через redact (ключ и потолок)', async () => {
+    const callTool = vi.fn(async () => ({ text: 'echo sk-live-secret', isError: true }));
+    const redact = vi.fn((text: string) => text.replace('sk-live-secret', '[ключ]'));
+    const tool = byId(exaTools(makeClient(callTool, redact)), EXA_SEARCH_TOOL_ID);
+    await expect(tool.handler!({ query: 'цены' }, context())).rejects.toThrow(
+      'Поиск в интернете не выполнен: echo [ключ]',
+    );
+    expect(redact).toHaveBeenCalledWith('echo sk-live-secret');
+  });
 });
 
 describe('exaTools: чтение страницы (#901)', () => {
@@ -111,10 +134,14 @@ describe('exaTools: чтение страницы (#901)', () => {
     const callTool = vi.fn(async () => ({ text: '# Цены\nБетон — 120 BYN', isError: false }));
     const tool = byId(exaTools(makeClient(callTool)), EXA_FETCH_TOOL_ID);
     const result = await tool.handler!({ url: 'https://example.org/prices' }, context());
-    expect(callTool).toHaveBeenCalledWith(EXA_FETCH_MCP_TOOL, {
-      urls: ['https://example.org/prices'],
-      maxCharacters: 8_000,
-    });
+    expect(callTool).toHaveBeenCalledWith(
+      EXA_FETCH_MCP_TOOL,
+      {
+        urls: ['https://example.org/prices'],
+        maxCharacters: 8_000,
+      },
+      expect.any(AbortSignal),
+    );
     expect(result.text).toContain('120 BYN');
   });
 
@@ -125,6 +152,8 @@ describe('exaTools: чтение страницы (#901)', () => {
     expect(tool.input.safeParse({ url: 'file:///etc/passwd' }).success).toBe(false);
     expect(tool.input.safeParse({ url: 'javascript:alert(1)' }).success).toBe(false);
     expect(tool.input.safeParse({ url: 'не адрес' }).success).toBe(false);
+    // Логин/пароль уехали бы во внешний сервис и в его логи.
+    expect(tool.input.safeParse({ url: 'https://user:secret@example.org' }).success).toBe(false);
   });
 
   it('сбой сервера оборачивается в ошибку инструмента', async () => {

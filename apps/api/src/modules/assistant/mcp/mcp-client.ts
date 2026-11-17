@@ -149,9 +149,24 @@ export class McpClient {
     return tools;
   }
 
+  /**
+   * Внешний текст для модели, БД и интерфейса (ревью #901): из него
+   * вырезается ключ сервера и ставится потолок. `isError`-текст MCP иначе
+   * уходил бы в промпт облачного провайдера и `assistant_tool_calls` как есть.
+   */
+  redact(text: string, max = 300): string {
+    const key = this.options.apiKey;
+    const withoutKey = key ? text.split(key).join('[ключ]') : text;
+    return withoutKey.length > max ? `${withoutKey.slice(0, max)}…` : withoutKey;
+  }
+
   /** Вызов инструмента: текст в ответ и признак ошибки инструмента. */
-  async callTool(name: string, args: Record<string, unknown>): Promise<McpToolResult> {
-    const response = await this.request('tools/call', { name, arguments: args });
+  async callTool(
+    name: string,
+    args: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<McpToolResult> {
+    const response = await this.request('tools/call', { name, arguments: args }, signal);
     const result = asRecord(response);
     const content = Array.isArray(result?.content) ? result.content : [];
     const text = content
@@ -175,20 +190,27 @@ export class McpClient {
   }
 
   /** Запрос с результатом; сбой протокола — `McpError('protocol')`. */
-  private async request(method: string, params: unknown): Promise<unknown> {
-    const response = await this.post({
-      jsonrpc: '2.0',
-      id: this.nextId++,
-      method,
-      params,
-    });
+  private async request(method: string, params: unknown, signal?: AbortSignal): Promise<unknown> {
+    const response = await this.post(
+      {
+        jsonrpc: '2.0',
+        id: this.nextId++,
+        method,
+        params,
+      },
+      false,
+      signal,
+    );
     this.sessionId = response.sessionId ?? this.sessionId;
     const error = response.message.error;
     if (error) {
       // Текст внешней ошибки не переносим: сервер может вернуть эхо наших же
       // заголовков (включая ключ), а ответ проверки кэшируется идемпотентностью
       // на 24 ч — секрет осел бы в Redis открытым текстом (ревью 17.11.2026).
-      const code = error.code !== undefined ? String(error.code) : null;
+      const rawCode = error.code !== undefined ? String(error.code) : null;
+      // Код — тоже внешний текст: только безопасный короткий вид, иначе в
+      // сообщение (и в БД/SSE) уехал бы кусок тела ответа (ревью #901).
+      const code = rawCode && /^[A-Za-z0-9_.:-]{1,40}$/.test(rawCode) ? rawCode : null;
       throw new McpError(`Ошибка протокола MCP${code ? ` (код ${code})` : ''}`, 'protocol', code);
     }
     return response.message.result;
@@ -198,12 +220,13 @@ export class McpClient {
   private async post(
     body: Record<string, unknown>,
     retried = false,
+    signal?: AbortSignal,
   ): Promise<{
     message: RpcMessage;
     sessionId: string | null;
   }> {
     const isNotification = body.id === undefined;
-    const response = await this.fetchWithTimeout(body);
+    const response = await this.fetchWithTimeout(body, signal);
     const sessionId = response.headers.get('mcp-session-id');
 
     if (response.status === 404 && this.sessionId && !retried) {
@@ -222,7 +245,7 @@ export class McpClient {
       } finally {
         this.reinitializing = false;
       }
-      return this.post(body, true);
+      return this.post(body, true, signal);
     }
     if (response.status === 202 || response.status === 204) {
       await response.body?.cancel().catch(() => undefined);
@@ -252,7 +275,10 @@ export class McpClient {
     return { message: parsed, sessionId };
   }
 
-  private async fetchWithTimeout(body: Record<string, unknown>): Promise<Response> {
+  private async fetchWithTimeout(
+    body: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     // Адрес настройки проверяется на каждом вызове: гвард дешёвый, а ключ
     // уходит именно на него (защита в глубину к схеме настроек).
     assertAllowedEndpoint(this.options.url);
@@ -274,9 +300,17 @@ export class McpClient {
         // на новый адрес, а https→http понижение не блокирует — ключ утёк бы
         // чужому хосту (находка security-ревью 17.11.2026).
         redirect: 'error',
-        signal: AbortSignal.timeout(this.timeoutMs),
+        // «Стоп» сотрудника рвёт и сетевой вызов: сигнал прогона объединяется
+        // с таймаутом (раньше летящий запрос дожидался 20 с — находка
+        // code-reviewer #901).
+        signal: signal
+          ? AbortSignal.any([AbortSignal.timeout(this.timeoutMs), signal])
+          : AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
+      if (signal?.aborted) {
+        throw new McpError('Запрос MCP отменён', 'transport', 'aborted');
+      }
       const name = error instanceof Error ? error.name : '';
       const timedOut = name === 'TimeoutError' || name === 'AbortError';
       throw new McpError(

@@ -43,13 +43,36 @@ const fetchInput = z.object({
     .url()
     .max(2_000)
     .refine((value) => /^https?:\/\//i.test(value), 'Нужен адрес http(s)')
+    // Логин/пароль в URL уехали бы во внешний сервис и в логи — их не пускаем
+    // (ревью #901).
+    .refine((value) => {
+      // refine-ы выполняются и после провала `z.url()`: мусор не должен
+      // бросать исключение из схемы (иначе валидация падает 500).
+      try {
+        const url = new URL(value);
+        return url.username === '' && url.password === '';
+      } catch {
+        return false;
+      }
+    }, 'Адрес без логина и пароля')
     .describe('Полный адрес страницы из результатов поиска'),
 });
 
-/** Ответ сервера мог прийти «ошибкой инструмента» — превращаем в сбой вызова. */
-function assertToolOk(result: { text: string; isError: boolean }, action: string): string {
+/**
+ * Ответ сервера мог прийти «ошибкой инструмента» — превращаем в сбой вызова.
+ * Текст ошибки — внешний: вырезаем ключ и ставим потолок (`McpClient.redact`),
+ * иначе он уехал бы в промпт провайдера и в БД прогона (ревью #901).
+ */
+function assertToolOk(
+  client: McpClient,
+  result: { text: string; isError: boolean },
+  action: string,
+): string {
   if (result.isError) {
-    throw new McpError(`${action}: ${result.text || 'сервер вернул ошибку'}`, 'tool');
+    throw new McpError(
+      `${action}: ${client.redact(result.text) || 'сервер вернул ошибку'}`,
+      'tool',
+    );
   }
   return result.text;
 }
@@ -79,12 +102,16 @@ export function exaTools(client: McpClient): AssistantToolDefinition[] {
     kind: 'read',
     hot: true,
     input: searchInput,
-    handler: async (input) => {
-      const result = await client.callTool(EXA_SEARCH_MCP_TOOL, {
-        query: input.query,
-        numResults: input.numResults,
-      });
-      const text = assertToolOk(result, 'Поиск в интернете не выполнен');
+    handler: async (input, ctx) => {
+      const result = await client.callTool(
+        EXA_SEARCH_MCP_TOOL,
+        {
+          query: input.query,
+          numResults: input.numResults,
+        },
+        ctx.signal,
+      );
+      const text = assertToolOk(client, result, 'Поиск в интернете не выполнен');
       // Обёртку блока данных добавляет цикл прогона (asToolData): здесь —
       // чистый текст сервера, без двойных маркеров.
       return { text };
@@ -101,12 +128,16 @@ export function exaTools(client: McpClient): AssistantToolDefinition[] {
     kind: 'read',
     hot: true,
     input: fetchInput,
-    handler: async (input) => {
-      const result = await client.callTool(EXA_FETCH_MCP_TOOL, {
-        urls: [input.url],
-        maxCharacters: MAX_FETCH_CHARS,
-      });
-      return { text: assertToolOk(result, 'Страница не прочитана') };
+    handler: async (input, ctx) => {
+      const result = await client.callTool(
+        EXA_FETCH_MCP_TOOL,
+        {
+          urls: [input.url],
+          maxCharacters: MAX_FETCH_CHARS,
+        },
+        ctx.signal,
+      );
+      return { text: assertToolOk(client, result, 'Страница не прочитана') };
     },
   });
 

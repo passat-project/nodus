@@ -94,6 +94,11 @@ describe('assertAllowedEndpoint: адрес с ключом — только н�
     expect(() => assertAllowedEndpoint('https://mcp.exa.ai./mcp')).not.toThrow();
   });
 
+  it('односоставное имя (docker/corporate DNS) — не публичный хост', () => {
+    // `https://api/mcp` резолвится docker embedded DNS во внутренний сервис.
+    expect(() => assertAllowedEndpoint('https://api/mcp')).toThrow(/полным доменным именем/);
+  });
+
   it('isPrivateAddress: диапазоны и публичные адреса', () => {
     expect(isPrivateAddress('192.168.0.1')).toBe(true);
     expect(isPrivateAddress('198.18.0.1')).toBe(true);
