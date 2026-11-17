@@ -51,7 +51,6 @@ export function documentFacts(type: DemoProcessType | undefined, category: strin
         position.id,
         {
           kind: position.kind,
-          isActive: position.isActive,
           holders: demoUserListItems.filter(
             (user) => user.status === 'active' && user.positionName === position.name,
           ).length,
