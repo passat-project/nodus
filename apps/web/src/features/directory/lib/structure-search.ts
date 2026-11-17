@@ -25,7 +25,7 @@ export function flattenDepartmentNodes(roots: DepartmentNode[]): DepartmentNode[
   return list;
 }
 
-/** Id всех активных отделов дерева (для «без отдела»). */
+/** Id всех активных отделов дерева (для «без подразделения»). */
 export function activeDepartmentIds(roots: DepartmentNode[]): Set<string> {
   return new Set(flattenDepartmentNodes(roots).map((node) => node.id));
 }

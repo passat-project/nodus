@@ -4,7 +4,7 @@ import type { DepartmentNode } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { uiPx } from '../../../shared/ui/ui-scale.js';
+import { snapDevicePx, uiPx } from '../../../shared/ui/ui-scale.js';
 import { centerAtPoint, zoomAtPoint } from '../lib/canvas-view.js';
 import type { DepartmentCardStats } from '../lib/department-card-stats.js';
 import { departmentTrail } from '../lib/department-tree.js';
@@ -67,7 +67,7 @@ export function DivisionsView({
   selectedId: string | null;
   /** Главная карточка компании (первый корень дерева). */
   mainId: string | null;
-  /** Мой активный отдел — бейдж «Ваш отдел» на карточке. */
+  /** Мой активный отдел — бейдж «Ваше подразделение» на карточке. */
   myDepartmentId: string | null;
   focus: StructureFocus | null;
   canManage: boolean;
@@ -165,6 +165,12 @@ export function DivisionsView({
     setView((current) => zoomAtPoint(current, 1, { x: free.width / 2, y: free.height / 2 }));
   }
 
+  // Панорама — на сетку устройства: снап рёбер считается от экранной
+  // координаты (`snapBoard`), и дробный сдвиг уводил бы фазу сетки при драге
+  // (линии «плавают» на дробных зумах). Точки фона едут тем же сдвигом.
+  const panX = snapDevicePx(view.x);
+  const panY = snapDevicePx(view.y);
+
   return (
     <div
       ref={viewportRef}
@@ -179,11 +185,11 @@ export function DivisionsView({
       onDragStart={(event) => event.preventDefault()}
       {...handlers}
     >
-      <StructureDots x={view.x} y={view.y} zoom={view.zoom} />
+      <StructureDots x={panX} y={panY} zoom={view.zoom} />
       <div
         data-structure-canvas-content
         className="absolute top-0 left-0 w-full origin-top-left"
-        style={{ transform: `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.zoom})` }}
+        style={{ transform: `translate3d(${panX}px, ${panY}px, 0) scale(${view.zoom})` }}
       >
         {/* Ширина = вьюпорт, а не контент: раскрытие ветки не перецентрирует
             всё дерево (иначе карточки «прыгают» на месте). */}

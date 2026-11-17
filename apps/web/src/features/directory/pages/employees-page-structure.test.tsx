@@ -216,7 +216,7 @@ describe('EmployeesPage: вкладки и структура (#768)', () => {
     expect(state.divisions?.selectedId).toBe('bim');
   });
 
-  it('без отдела бейдж «Ваш отдел» — на главной карточке компании (видят все)', async () => {
+  it('без подразделения бейдж «Ваше подразделение» — на главной карточке компании (видят все)', async () => {
     state.view = 'structure';
     state.users = [person('me', 'Маторин Артём')];
     render(<EmployeesPage />);

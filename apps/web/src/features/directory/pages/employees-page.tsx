@@ -140,8 +140,8 @@ export function EmployeesPage() {
   const selectedNode = selectedDeptId ? findDepartment(roots, selectedDeptId) : null;
   const positionsOpen = tab === 'structure' && rightPanel === 'positions';
   const deptOpen = tab === 'structure' && !positionsOpen && selectedNode !== null;
-  // Бейдж «Ваш отдел»: свой активный отдел, иначе главная карточка —
-  // сотрудник без отдела (или с архивным) показан там, и бейдж видят все
+  // Бейдж «Ваше подразделение»: свой активный отдел, иначе главная карточка —
+  // сотрудник без подразделения (или с архивным) показан там, и бейдж видят все
   // (вердикт 17.11.2026). Нет дерева/меня — бейджа нет.
   const myDepartmentId = useMemo(
     () => (meItem ? structureDepartmentOf(meItem, activeIds, mainId) : null),

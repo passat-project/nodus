@@ -36,7 +36,9 @@ function PositionCombobox({
     onChange(id);
     setText('');
     setOpen(false);
-    anchorRef.current?.focus();
+    // Фокус — самому полю: ref висит на обёртке-`div`, и `.focus()` на ней
+    // no-op (неинтерактивный элемент) — клавиатурный сценарий рвался.
+    anchorRef.current?.querySelector('input')?.focus();
   }
 
   return (

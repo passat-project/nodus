@@ -58,10 +58,10 @@ function defs() {
 }
 
 describe('useEmployeeFilterDefs (#768)', () => {
-  it('поля: отдел, должность, руководитель, статус', () => {
+  it('поля: подразделение, должность, руководитель, статус', () => {
     expect(defs().map((def) => def.id)).toEqual(['department', 'position', 'manager', 'status']);
     expect(defs().find((def) => def.id === 'department')?.label).toBe(ui.employees.department);
-    expect(defs().find((def) => def.id === 'department')?.label).toBe('Отдел');
+    expect(defs().find((def) => def.id === 'department')?.label).toBe('Подразделение');
   });
 
   it('руководитель — person-опции из уникальных managerId, без «без руководителя»', () => {

@@ -121,7 +121,7 @@ describe('DepartmentPanel: группы и активные сотрудники
     expect(screen.getAllByText('archived-member').length).toBeGreaterThan(0);
   });
 
-  it('в меню панели нет «Добавить подотдел»: создание — плюсом на карточке', async () => {
+  it('в меню панели нет «Добавить подразделение»: создание — плюсом на карточке', async () => {
     render(
       <DepartmentPanel
         mainCard={false}

@@ -13,7 +13,7 @@ import { STRUCTURE_CARD_HEIGHT, StructureNode } from './structure-node.js';
 
 /** Карточка подразделения (#768, пакет 16.11.2026): композиция, данные
  *  руководителя/замов/подчинённых, чип команды, футер и шеврон, плюсик,
- *  контуры маршрута и выбранной, «⋯» правки и бейдж «Ваш отдел». */
+ *  контуры маршрута и выбранной, «⋯» правки и бейдж «Ваше подразделение». */
 
 const node = (
   id: string,
@@ -174,17 +174,17 @@ describe('StructureNode: композиция карточки (#768)', () => {
     expect(screen.getByText('2 сотрудника')).toBeTruthy();
   });
 
-  it('футер: формы «отдел», у листа подписи и шеврона нет', () => {
+  it('футер: формы «подразделение», у листа подписи и шеврона нет', () => {
     mount({ subject: node('one', [node('a')]) });
-    expect(screen.getByText('1 отдел')).toBeTruthy();
+    expect(screen.getByText('1 подразделение')).toBeTruthy();
     cleanup();
     mount({ subject: node('two', [node('a'), node('b')]) });
-    expect(screen.getByText('2 отдела')).toBeTruthy();
+    expect(screen.getByText('2 подразделения')).toBeTruthy();
     cleanup();
     mount({
       subject: node('five', [node('a'), node('b'), node('c'), node('d'), node('e')]),
     });
-    expect(screen.getByText('5 отделов')).toBeTruthy();
+    expect(screen.getByText('5 подразделений')).toBeTruthy();
     cleanup();
     mount({ subject: node('leaf') });
     expect(screen.getByText(ui.employees.noSubdepartments)).toBeTruthy();
@@ -261,7 +261,7 @@ describe('StructureNode: композиция карточки (#768)', () => {
     expect(screen.queryByRole('button', { name: ui.employees.departmentActions })).toBeNull();
   });
 
-  it('бейдж «Ваш отдел» — только на моей карточке, верхним краем, нейтральным тоном', () => {
+  it('бейдж «Ваше подразделение» — только на моей карточке, верхним краем, нейтральным тоном', () => {
     mount({ subject: bim, myDepartmentId: 'bim' });
     expect(screen.getByText(ui.employees.myDepartment)).toBeTruthy();
     const badge = card().querySelector('[data-my-department]');
@@ -294,15 +294,15 @@ describe('плюральные формы карточки (#768)', () => {
     ]);
   });
 
-  it('«отдел»: 0/1/2/5/11/21', () => {
+  it('«подразделение»: 0/1/2/5/11/21', () => {
     const forms = ui.employees.departmentForms;
     expect([0, 1, 2, 5, 11, 21].map((n) => plural(n, forms))).toEqual([
-      'отделов',
-      'отдел',
-      'отдела',
-      'отделов',
-      'отделов',
-      'отдел',
+      'подразделений',
+      'подразделение',
+      'подразделения',
+      'подразделений',
+      'подразделений',
+      'подразделение',
     ]);
   });
 });

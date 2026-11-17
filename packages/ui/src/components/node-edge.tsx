@@ -88,21 +88,25 @@ function useReducedMotion(): boolean {
 
 /**
  * Ортогональное ребро «инструмента» (реф node-based UI): сегменты под прямыми
- * углами, порты-точки на концах, опциональная отрисовка при появлении (drawOn,
- * CSS @keyframes — без SMIL). Координаты — пиксели позиционируемого
+ * углами, порты-точки на концах, опциональные отрисовка при появлении (drawOn)
+ * и пульс (SMIL, без JS-цикла). Координаты — пиксели позиционируемого
  * контейнера; svg растянут на него (absolute inset-0, overflow visible).
- * Перемонтирование (key) перезапускает одноразовую отрисовку.
+ * Перемонтирование (key) перезапускает одноразовые анимации.
  */
 function NodeEdge({
   points,
+  pulse = false,
   active = false,
   drawOn = false,
   ports = 'both',
   elbow = 8,
   drawCapS,
+  pulseCapS,
   className,
 }: {
   points: NodeEdgePoint[];
+  /** true — пульс бегает бесконечно; 'once' — один пробег при монтировании. */
+  pulse?: boolean | 'once';
   active?: boolean;
   /** Отрисовка линии от начала к концу при монтировании. */
   drawOn?: boolean;
@@ -112,6 +116,8 @@ function NodeEdge({
   /** Верхняя граница длительности рисовки (сек): на длинных маршрутах
    *  скорость растёт — вспышка остаётся читаемой (thread-flash, circuit.md). */
   drawCapS?: number;
+  /** Верхняя граница длительности пробега пульса (сек), см. drawCapS. */
+  pulseCapS?: number;
   className?: string;
 }) {
   const d = useMemo(() => orthPath(points, elbow), [points, elbow]);
@@ -122,10 +128,13 @@ function NodeEdge({
   const end = points[points.length - 1];
   if (!start || !end) return null;
   const animate = drawOn && !reduced;
-  // Длительность — из edgeDurations: скорость вспышки одинакова на всех путях;
-  // cap — исключение для сверхдлинных маршрутов (широкоформатный монитор:
-  // вспышка быстрее, но не «теряется»).
-  const { draw: drawDur } = edgeDurations(len, { draw: drawCapS });
+  // Длительности — из edgeDurations: скорость вспышки одинакова на всех
+  // путях; caps — исключение для сверхдлинных маршрутов (широкоформатный
+  // монитор: импульс быстрее, но не «теряется»).
+  const { draw: drawDur, pulse: pulseDur } = edgeDurations(len, {
+    draw: drawCapS,
+    pulse: pulseCapS,
+  });
   return (
     <svg
       aria-hidden="true"
@@ -150,6 +159,28 @@ function NodeEdge({
         (ports === 'both' ? [start, end] : [end]).map((p, i) => (
           <circle key={i} cx={p.x} cy={p.y} r={3} fill="var(--port)" />
         ))}
+      {pulse && !reduced && (
+        <circle r={2.5} fill="var(--port)" opacity={0}>
+          {/* fill=freeze — после пробега кружок остаётся в конце пути, иначе
+              SMIL возвращает его в (0,0): «светящийся пиксель» в левом верхнем
+              углу. opacity-гейт — до старта движения кружок невидим. */}
+          <animateMotion
+            dur={`${pulseDur}s`}
+            begin={drawOn ? `${drawDur}s` : '0s'}
+            repeatCount={pulse === 'once' ? '1' : 'indefinite'}
+            path={d}
+            fill="freeze"
+          />
+          <animate
+            attributeName="opacity"
+            from="0"
+            to="1"
+            begin={drawOn ? `${drawDur}s` : '0s'}
+            dur="0.01s"
+            fill="freeze"
+          />
+        </circle>
+      )}
     </svg>
   );
 }
