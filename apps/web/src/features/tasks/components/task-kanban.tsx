@@ -93,8 +93,8 @@ export function TaskKanban({
   const filtering = isFilteringActive(filter);
 
   if (!board.ready) {
-    // Скелетон зеркалит классы контейнера доски ниже (pt-1).
-    return <KanbanSkeleton className="pt-1" columns={stages?.length} />;
+    // Скелетон зеркалит классы контейнера доски ниже (pt-0 поверх pt-3 базы).
+    return <KanbanSkeleton className="pt-0" columns={stages?.length} />;
   }
 
   const empty =
@@ -115,7 +115,10 @@ export function TaskKanban({
           <TasksEmpty onCreate={onCreate} className="pointer-events-auto" />
         </div>
       ) : null}
-      <BoardScroller className="pt-1">
+      {/* pt-0 ПОВЕРХ базового pt-3 (tailwind-merge: без явного pt-0 база
+          опускала колонки): верх колонок совпадает с линией зоны окна
+          ассистента (topbar h-14 + бар h-14), вердикт владельца 16.11.2026. */}
+      <BoardScroller className="pt-0">
         {board.stageList.map((stage) => {
           const cards = visibleItems.filter((t) => t.personalStageId === stage.id);
           const totalCount = stage.count + (countDelta[stage.id] ?? 0);

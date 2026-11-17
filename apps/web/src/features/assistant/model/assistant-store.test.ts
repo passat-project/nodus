@@ -1,0 +1,148 @@
+// @vitest-environment jsdom
+import { describe, expect, it } from 'vitest';
+
+import {
+  ASSISTANT_W_DEFAULT,
+  ASSISTANT_W_MAX,
+  ASSISTANT_W_MIN,
+  assistantLiveBounds,
+  clampStoredWidth,
+  useAssistantStore,
+} from './assistant-store.js';
+
+/**
+ * Стор окна ассистента (#895): геометрия (клампы ширины) и буфер живого
+ * прогона — дельты, строки вызовов, финал. Отмена/ошибка не теряют
+ * накопленный текст: сотрудник видит то, что успело прийти.
+ */
+
+describe('геометрия окна', () => {
+  it('кламп сохранённой ширины: мусор → дефолт, край → в пределы', () => {
+    expect(clampStoredWidth(null)).toBe(ASSISTANT_W_DEFAULT);
+    expect(clampStoredWidth('мусор')).toBe(ASSISTANT_W_DEFAULT);
+    expect(clampStoredWidth('10')).toBe(ASSISTANT_W_DEFAULT);
+    expect(clampStoredWidth(String(ASSISTANT_W_MAX + 500))).toBe(ASSISTANT_W_MAX);
+    expect(clampStoredWidth(String(ASSISTANT_W_MIN))).toBe(ASSISTANT_W_MIN);
+  });
+
+  it('живые пределы не больше 45% рамы', () => {
+    const bounds = assistantLiveBounds(1200);
+    expect(bounds.max).toBeLessThanOrEqual(Math.floor(1200 * 0.45));
+    const narrow = assistantLiveBounds(400);
+    expect(narrow.min).toBeLessThanOrEqual(narrow.max);
+  });
+});
+
+describe('буфер прогона', () => {
+  it('дельты текста и размышлений копятся раздельно', () => {
+    const store = useAssistantStore.getState();
+    store.startLive({ runId: 'run-1', sessionId: 's-1', userText: 'вопрос', userMessageId: null });
+    store.appendDelta('reasoning', 'думаю');
+    store.appendDelta('text', 'Привет');
+    store.appendDelta('text', ', мир');
+    const live = useAssistantStore.getState().live;
+    expect(live?.text).toBe('Привет, мир');
+    expect(live?.reasoning).toBe('думаю');
+  });
+
+  it('строки вызовов обновляются по id, а не дублируются', () => {
+    const store = useAssistantStore.getState();
+    store.startLive({ runId: 'run-2', sessionId: 's-1', userText: 'вопрос', userMessageId: null });
+    store.upsertTool({
+      id: 'call-1',
+      toolId: 'tasks.list',
+      title: 'Задачи: список',
+      status: 'running',
+      args: null,
+      resultPreview: null,
+      durationMs: null,
+      errorCode: null,
+      href: null,
+      hrefLabel: null,
+    });
+    store.upsertTool({
+      id: 'call-1',
+      toolId: 'tasks.list',
+      title: 'Задачи: список',
+      status: 'done',
+      args: null,
+      resultPreview: '12 задач',
+      durationMs: 20,
+      errorCode: null,
+      href: '?cards=task:1',
+      hrefLabel: '№1 Тест',
+    });
+    const tools = useAssistantStore.getState().live?.tools ?? [];
+    expect(tools).toHaveLength(1);
+    expect(tools[0]).toMatchObject({ status: 'done', href: '?cards=task:1' });
+  });
+
+  it('отмена сохраняет текст и закрывает приём дельт', () => {
+    const store = useAssistantStore.getState();
+    store.startLive({ runId: 'run-3', sessionId: 's-2', userText: 'вопрос', userMessageId: null });
+    store.appendDelta('text', 'Начал отвечать');
+    store.finishLive('cancelled');
+    store.appendDelta('text', ' — это уже не должно попасть');
+    const live = useAssistantStore.getState().live;
+    expect(live?.status).toBe('cancelled');
+    expect(live?.text).toBe('Начал отвечать');
+  });
+
+  it('ошибка несёт код и сообщение для перевода в человеческий текст', () => {
+    const store = useAssistantStore.getState();
+    store.startLive({ runId: 'run-4', sessionId: 's-3', userText: 'вопрос', userMessageId: null });
+    store.finishLive('error', { code: 'provider_rate_limited', message: 'wait' });
+    expect(useAssistantStore.getState().live).toMatchObject({
+      status: 'error',
+      errorCode: 'provider_rate_limited',
+      errorMessage: 'wait',
+    });
+  });
+
+  it('карточки действий живого прогона: добавление и обновление по id (Ф2)', () => {
+    const store = useAssistantStore.getState();
+    store.startLive({ runId: 'run-5', sessionId: 's-4', userText: 'создай', userMessageId: null });
+    const base = {
+      id: 'a-1',
+      toolId: 'tasks.create',
+      title: 'Создать задачу',
+      summary: 'Задача «Смета»',
+      fields: [],
+      consequences: 'Появится в портале',
+      undoable: true,
+      automatic: false,
+      state: 'proposed' as const,
+      resultPreview: null,
+      href: null,
+      hrefLabel: null,
+      errorCode: null,
+      createdAt: '2026-11-27T10:00:00.000Z',
+      executedAt: null,
+      undoneAt: null,
+    };
+    store.upsertAction(base);
+    store.upsertAction({ ...base, state: 'executed', resultPreview: 'Готово' });
+    const actions = useAssistantStore.getState().live?.actions ?? [];
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ state: 'executed', resultPreview: 'Готово' });
+  });
+});
+
+describe('байпас подтверждений (ADR-0048)', () => {
+  it('включается явно и сбрасывается закрытием окна', () => {
+    const store = useAssistantStore.getState();
+    store.setOpen(true);
+    store.setBypass(true);
+    expect(useAssistantStore.getState().bypass).toBe(true);
+
+    store.setOpen(false);
+    expect(useAssistantStore.getState().bypass).toBe(false);
+  });
+
+  it('resetBypass гасит режим (смена диалога делает хост)', () => {
+    const store = useAssistantStore.getState();
+    store.setBypass(true);
+    store.resetBypass();
+    expect(useAssistantStore.getState().bypass).toBe(false);
+  });
+});

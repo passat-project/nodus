@@ -1,0 +1,113 @@
+import { z } from 'zod';
+
+/**
+ * Внешние MCP-серверы в «Настройках портала → ИИ-агент → MCP» (#902, ADR-0043
+ * п. 10): реестр серверов, которыми пользуется ассистент. Первый и пока
+ * и правила приватности. Реестр — РАВНОЗНАЧНЫЙ список (решение владельца
+ * 18.11.2026): «по умолчанию для поиска» не существует — агент видит
+ * инструменты ВСЕХ включённых серверов, будь то поиск Exa, Blender или
+ * что угодно ещё. Адрес, ключ и транспорт живут в настройках, а не в коде.
+ *
+ * Безопасность: ключ пишется только на запись (наружу — `hasKey`/`keyHint`),
+ * шифруется на сервере (`core/crypto`); адрес — только https без логина,
+ * пароля, параметров и фрагмента (ключ не должен оказаться в URL и логах
+ * прокси).
+ */
+
+/** Транспорт MCP: пока один — Streamable HTTP (ADR-0043 п. 10). */
+export const assistantMcpTransportSchema = z.enum(['streamable-http']);
+export type AssistantMcpTransport = z.infer<typeof assistantMcpTransportSchema>;
+
+/** Адрес MCP-сервера: https, без userinfo и query (ключ — заголовком). */
+/** Адрес MCP-сервера: https, без userinfo, query и фрагмента (ключ — заголовком). */
+export const assistantMcpUrlSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(500)
+  .refine((value) => {
+    try {
+      const url = new URL(value);
+      // Пароль и фрагмент проверяются отдельно: `https://:secret@host`
+      // проходит проверку `username === ''` и сохранил бы секрет в URL
+      // открытым текстом (находка security-ревью 17.11.2026).
+      return (
+        url.protocol === 'https:' &&
+        url.username === '' &&
+        url.password === '' &&
+        url.search === '' &&
+        url.hash === ''
+      );
+    } catch {
+      return false;
+    }
+  }, 'Нужен адрес https без логина, пароля, параметров и фрагмента');
+
+/** Сервер в ответе GET — без ключа: только признак и хвост. */
+export const assistantMcpServerSchema = z.object({
+  id: z.uuid(),
+  name: z.string().min(1).max(100),
+  url: z.string().min(1),
+  transport: assistantMcpTransportSchema,
+  hasKey: z.boolean(),
+  keyHint: z.string().nullable(),
+  enabled: z.boolean(),
+});
+export type AssistantMcpServer = z.infer<typeof assistantMcpServerSchema>;
+
+/** Сервер в PUT: `apiKey` пишется только если передан, `clearKey` — удаляет. */
+export const assistantMcpServerInputSchema = z.object({
+  id: z.uuid().optional(),
+  name: z.string().trim().min(1).max(100),
+  url: assistantMcpUrlSchema,
+  transport: assistantMcpTransportSchema.default('streamable-http'),
+  apiKey: z.string().trim().min(1).max(500).optional(),
+  clearKey: z.boolean().optional(),
+  enabled: z.boolean().default(true),
+});
+export type AssistantMcpServerInput = z.infer<typeof assistantMcpServerInputSchema>;
+
+/** Тело PUT: полная замена списка серверов (как у провайдеров). */
+export const assistantMcpBodySchema = z.object({
+  servers: z.array(assistantMcpServerInputSchema).max(10),
+});
+export type AssistantMcpBody = z.infer<typeof assistantMcpBodySchema>;
+
+export const assistantMcpResponseSchema = z.object({
+  servers: z.array(assistantMcpServerSchema),
+});
+export type AssistantMcpResponse = z.infer<typeof assistantMcpResponseSchema>;
+
+/** Инструмент сервера в ответе проверки соединения (имя + описание). */
+export const assistantMcpToolInfoSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().nullable(),
+});
+export type AssistantMcpToolInfo = z.infer<typeof assistantMcpToolInfoSchema>;
+
+/**
+ * Проверка соединения: успех/провал — данными, а не HTTP-ошибкой (как у
+ * провайдеров): экран настроек показывает причину без «красного» сбоя формы.
+ */
+export const assistantMcpTestResponseSchema = z.object({
+  ok: z.boolean(),
+  latencyMs: z.number().int().nonnegative(),
+  /** Имя сервера из `serverInfo` (Exa: `exa-mcp-server`) и версия протокола. */
+  serverName: z.string().nullable(),
+  protocolVersion: z.string().nullable(),
+  /** До 50 инструментов: список нужен как доказательство «живой». */
+  tools: z.array(assistantMcpToolInfoSchema),
+  errorCode: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+});
+export type AssistantMcpTestResponse = z.infer<typeof assistantMcpTestResponseSchema>;
+
+/** Преднастроенный сервер для кнопки создания (не хардкод инструментов). */
+export const ASSISTANT_MCP_PRESETS = [
+  {
+    key: 'exa',
+    name: 'Exa',
+    url: 'https://mcp.exa.ai/mcp',
+    transport: 'streamable-http',
+  },
+] as const;

@@ -248,6 +248,17 @@ export const ErrorCode = {
   /** Форма типа проекта ссылается на негодные атрибуты (`details.reason`:
    *  unknown_field; 422; #631 Р10). */
   PROJECT_TYPE_FORM_INVALID: 'PROJECT_TYPE_FORM_INVALID',
+  /** ИИ-агент (#889): не настроен провайдер/модель — ассистент отвечать не
+   *  может (409: запрос корректен, состояние портала не позволяет). */
+  ASSISTANT_PROVIDER_NOT_CONFIGURED: 'ASSISTANT_PROVIDER_NOT_CONFIGURED',
+  /** Провайдер из настроек не найден (удалён параллельно) — 404. */
+  ASSISTANT_PROVIDER_NOT_FOUND: 'ASSISTANT_PROVIDER_NOT_FOUND',
+  /** Прогон уже завершён/отменён — отменять нечего (409). */
+  ASSISTANT_RUN_ALREADY_FINISHED: 'ASSISTANT_RUN_ALREADY_FINISHED',
+  /** Провайдер не ответил/вернул ошибку на проверке соединения (502). */
+  ASSISTANT_PROVIDER_UNAVAILABLE: 'ASSISTANT_PROVIDER_UNAVAILABLE',
+  /** MCP-сервер из настроек не найден (удалён параллельно) — 404. */
+  ASSISTANT_MCP_NOT_FOUND: 'ASSISTANT_MCP_NOT_FOUND',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

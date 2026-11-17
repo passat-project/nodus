@@ -6,6 +6,9 @@ import { Skeleton } from '@nodus/ui/components/skeleton';
 import { Toaster } from '@nodus/ui/components/sonner';
 import { TooltipProvider } from '@nodus/ui/components/tooltip';
 
+import { AssistantEdgeEntry } from '../../features/assistant/components/assistant-edge-entry.js';
+import { useAssistantHotkey } from '../../features/assistant/components/assistant-entry.js';
+import { AssistantPanel } from '../../features/assistant/components/assistant-panel.js';
 import { registerCardBridge, registerReplaceTopMessenger } from '../../shared/lib/card-bridge.js';
 import { SurfaceVisibilityProvider } from '../../shared/lib/surface-visibility.js';
 import { startAttentionTracking } from '../../shared/attention/attention-store.js';
@@ -34,7 +37,7 @@ import { EdgeScrollbar } from './edge-scrollbar.js';
 import { LiveGraph } from './live-graph.js';
 import { startLayoutJitterLogger } from './layout-jitter-logger.js';
 import { NodeRail } from './node-rail.js';
-import { EDGE_W_COLLAPSED, EDGE_W_EXPANDED, RightRail } from './right-rail.js';
+import { EDGE_W_COLLAPSED, RightRail } from './right-rail.js';
 import { useRailHidden } from './rail-visibility.js';
 import { useShellStore } from './shell-store.js';
 import { TopBar } from './top-bar.js';
@@ -67,9 +70,9 @@ export function AppShell() {
   useLinkInterception(openCards);
   // Геометрия вьюера вложений = канон карточек (ADR-0009): правый край у
   // служебной полосы; на модуле мессенджера полоса скрыта — stripW=0.
-  const edgeOpen = useShellStore((s) => s.edgeOpen);
   const railHidden = useRailHidden();
-  const viewerStripW = railHidden ? 0 : edgeOpen ? EDGE_W_EXPANDED : EDGE_W_COLLAPSED;
+  const viewerStripW = railHidden ? 0 : EDGE_W_COLLAPSED;
+  useAssistantHotkey();
   // WS чата (#104): живёт с сессией, тихий статус; поллинг — fallback.
   useChatSocket();
   useNotificationSink();
@@ -174,12 +177,17 @@ export function AppShell() {
               фон «лист»). Служебная полоса (профиль + коллеги) — ЗА пределами
               рамы, в правом периметре (план владельца 14.09.2026, R4): у рамы
               нет правого отступа, её правый край = левый край полосы; щель
-              периметра 8px — справа от полосы (mr-2 полосы). Раскрытие полосы
-              РЕФЛОУ: рама (flex-1) сужается влево синхронно с ростом ширины
-              полосы; скроллбар страниц — у правого шва рамы. */}
+              периметра 8px — справа от полосы (mr-2 полосы). Полоса всегда
+              свёрнута (40px): раскрытие имён убрано (вердикт 16.11.2026),
+              кнопка-робот внизу открывает окно ассистента — оверлей внутри
+              рамы, геометрию рамы/карточек не двигает; скроллбар страниц —
+              у правого шва рамы. */}
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             <div
-              className="frame-shadow mt-2 mb-2 ml-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-card"
+              // relative — якорь и обрезка окна ассистента: absolute-потомок
+              // без позиционированного предка якорится к колонке и НЕ
+              // обрезается overflow-hidden рамы (торчал над шапкой и за края).
+              className="frame-shadow relative mt-2 mb-2 ml-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-card"
               data-soft-frame
             >
               <TopBar />
@@ -193,6 +201,9 @@ export function AppShell() {
                   </Suspense>
                 </SurfaceVisibilityProvider>
               </div>
+              {/* Окно ассистента: плавающий лист поверх правой части рамы
+                  (внутри рамы — обрезка её скруглением, структура не едет). */}
+              <AssistantPanel />
             </div>
             {/* Стек карточек сущностей поверх раздела (ADR-0009, ?cards=) */}
             <CardStackHost />
@@ -217,6 +228,8 @@ export function AppShell() {
           действия, выдающие номер (кнопка процесса, создание, смена типа). */}
       <NumberConfirmHost />
       <AttachmentViewer stripW={viewerStripW} />
+      {/* Мессенджер: полоса скрыта — вход роботом у правого края по hover. */}
+      <AssistantEdgeEntry railHidden={railHidden} />
       <Toaster richColors theme={theme} />
     </TooltipProvider>
   );

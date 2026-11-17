@@ -8,6 +8,7 @@ export const portalSettingsStrings = {
   noAccess: 'Нет доступа к настройкам портала',
   sections: {
     fileServers: 'Файловые серверы',
+    ai: 'ИИ-агент',
     access: 'Права доступа',
   },
   fileServers: {

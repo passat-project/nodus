@@ -11,6 +11,7 @@ import { useRouterState } from '@tanstack/react-router';
 import { NodeEdge, pathLength, snapPx, type NodeEdgePoint } from '@nodus/ui/components/node-edge';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { useAssistantStore } from '../../features/assistant/model/assistant-store.js';
 import { parseCardStack } from './card-stack.js';
 import {
   CIRCUIT_REMEASURE,
@@ -63,6 +64,7 @@ export function CircuitFrame() {
   // Верхняя карточка стека начала закрываться (SliderPanel.requestClose):
   // сигнал пробуждения контура и нижних карточек ДО схлопывания (issue #63).
   const cardClosing = useShellStore((s) => s.cardClosing);
+  const assistantOpen = useAssistantStore((s) => s.open);
   // Вершина стека (?cards=): ЛЮБАЯ карточка накрывает мягкую раму целиком
   // (inset-2 = прямоугольник рамы); фулскрин-мессенджер — до края периметра.
   const topKind = useMemo(() => {
@@ -268,8 +270,14 @@ export function CircuitFrame() {
   return (
     // Режим карточки: контур ПОверх фулскрин-карточки (z-50 слайдера), но под
     // оверлей-порталами (z-70+: меню, поповеры, лайтбокс) — лестница z канона.
+    // Открытое окно ассистента (z-60) тоже под контуром: ось графа — верхняя
+    // граница окна и должна рисоваться сквозь него на всю ширину рамы
+    // (вердикт владельца 17.11.2026); при закрытом окне лестница не меняется.
     <div
-      className={cn('pointer-events-none fixed inset-0', geo.cardMode ? 'z-[60]' : 'z-30')}
+      className={cn(
+        'pointer-events-none fixed inset-0',
+        geo.cardMode || assistantOpen ? 'z-[60]' : 'z-30',
+      )}
       aria-hidden
     >
       <svg

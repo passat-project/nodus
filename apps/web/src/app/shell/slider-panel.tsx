@@ -15,7 +15,7 @@ import { inputModality } from '../../shared/lib/input-modality.js';
 import { SurfaceVisibilityProvider } from '../../shared/lib/surface-visibility.js';
 import { CardHeaderActionsContext } from './card-header-actions.js';
 import { useRailHidden } from './rail-visibility.js';
-import { EDGE_W_COLLAPSED, EDGE_W_EXPANDED } from './right-rail.js';
+import { EDGE_W_COLLAPSED } from './right-rail.js';
 import { uiPx } from '../../shared/ui/ui-scale.js';
 import { useShellStore } from './shell-store.js';
 
@@ -138,9 +138,9 @@ export function SliderPanel({
   // полоса скрыта (useRailHidden) — stripW=0; фулскрин-карточка мессенджера
   // (fullscreen) доходит до края периметра всегда: inset-2 даёт те же 8px,
   // что у рамы, и накрывает полосу собой (план messenger-fullscreen).
-  const edgeOpen = useShellStore((s) => s.edgeOpen);
   const railHidden = useRailHidden();
-  const stripW = fullscreen || railHidden ? 0 : edgeOpen ? EDGE_W_EXPANDED : EDGE_W_COLLAPSED;
+  // Окно ассистента — оверлей внутри рамы: геометрию карточек не двигает.
+  const stripW = fullscreen || railHidden ? 0 : EDGE_W_COLLAPSED;
 
   function requestClose() {
     if (closingRef.current) return;

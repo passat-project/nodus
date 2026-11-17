@@ -49,10 +49,15 @@ export function MessageRunView({
   dividerBeforeId = null,
   divider,
   renderItem,
+  renderAvatar,
+  align: alignProp,
 }: {
   run: MessageRun;
-  /** Показывать имя автора в первом пузыре (чужие серии в групповых чатах). */
+  /** Показывать имя автора в первом пузыре (чужие серии в групповых). */
   showName: boolean;
+  /** Форс выравнивания хостом (ИИ-ассистент: 'both' — пользователь справа,
+   *  конвенция харнесов в узкой колонке); дефолт — настройка пользователя. */
+  align?: 'one' | 'both';
   /** Вертикальный ритм серии: 'chat' — пузыри слипаются в блок (2px, канон
    *  чатов); 'feed' — посты канала 6px (вердикт 01.10 #175: 2px между
    *  карточками «слипшиеся», межавторские 12px сохраняются — разница есть,
@@ -65,6 +70,9 @@ export function MessageRunView({
   /** Строка сообщения: обёртки хоста (скроллер/меню/выбор) + ChatMessageItem
    *  с attrs; аватар и колонку серии рисует эта компонента (avatarSlot="none"). */
   renderItem: (message: MessageRun['items'][number], attrs: MessageRunItemAttrs) => ReactNode;
+  /** Замена аватара серии для не-человеческих авторов (ИИ-ассистент): хост
+   *  рисует свой глиф вместо карточки сотрудника; дефолт — MessageAuthorAvatar. */
+  renderAvatar?: (run: MessageRun) => ReactNode;
 }) {
   // Разделитель считается строкой только когда он ДЕЙСТВИТЕЛЬНО внутри этой
   // серии (firstUnreadId — глобальный по ленте): лишняя строка сдвинула бы
@@ -74,7 +82,8 @@ export function MessageRunView({
   // «По обе стороны»: своя серия зеркалится — аватар справа (баг-урок 30.09:
   // свои серии несут аватар так же, как чужие). Хук — ДО условия (Rules of
   // Hooks: закорачивание && пропускал вызов у mine-серий — P1 валидатора).
-  const align = useChatPrefs((s) => s.align);
+  const prefAlign = useChatPrefs((s) => s.align);
+  const align = alignProp ?? prefAlign;
   const atEnd = run.mine && align === 'both';
   let row = 0;
   return (
@@ -92,7 +101,11 @@ export function MessageRunView({
         style={{ gridColumn: atEnd ? 2 : 1, gridRow: `1 / ${rowCount + 1}` }}
       >
         {/* Аватар серии (#728): у чужой — кнопка карточки сотрудника. */}
-        <MessageAuthorAvatar author={run.last.author} mine={run.mine} />
+        {renderAvatar ? (
+          renderAvatar(run)
+        ) : (
+          <MessageAuthorAvatar author={run.last.author} mine={run.mine} />
+        )}
       </div>
       {run.items.map((message) => {
         const dividerHere = message.id === dividerBeforeId;

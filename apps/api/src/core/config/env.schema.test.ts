@@ -83,6 +83,27 @@ describe('validateEnv', () => {
     });
   });
 
+  describe('SECRETS_ENCRYPTION_KEY (#889, ловушка #580)', () => {
+    it('пустая строка из compose = ключ не задан (api не падает на старте)', () => {
+      expect(validateEnv({ ...VALID, SECRETS_ENCRYPTION_KEY: '' }).SECRETS_ENCRYPTION_KEY).toBe(
+        undefined,
+      );
+      expect(
+        validateEnv({ ...VALID, SECRETS_ENCRYPTION_KEY: '   ' }).SECRETS_ENCRYPTION_KEY,
+      ).toBeUndefined();
+    });
+
+    it('короткий ключ — понятная ошибка, валидный проходит', () => {
+      expect(() => validateEnv({ ...VALID, SECRETS_ENCRYPTION_KEY: 'short' })).toThrow(
+        /SECRETS_ENCRYPTION_KEY/,
+      );
+      const key = 'secrets-encryption-key-min-32-chars!!';
+      expect(validateEnv({ ...VALID, SECRETS_ENCRYPTION_KEY: key }).SECRETS_ENCRYPTION_KEY).toBe(
+        key,
+      );
+    });
+  });
+
   describe('OFFICE_JWT_SECRET (#580)', () => {
     it('пустая строка при выключенном офисе = секрет не задан', () => {
       const env = validateEnv({ ...VALID, OFFICE_ENABLED: 'false', OFFICE_JWT_SECRET: '' });

@@ -43,15 +43,18 @@ const conversationHandlers = [
     HttpResponse.json({ remaining: 3, limit: 3, resetAt: null, groupMax: 20 }),
   ),
   /** Вкладки мессенджера (#252): scope=chats — люди и каналы, entities —
-   *  чаты задач и писем, без параметра — всё (пикеры, гейт ленты). */
+   *  чаты задач и писем, direct — только личные, без параметра — всё
+   *  (пикеры, гейт ленты). */
   http.get('/api/v1/chat/conversations', ({ request }) => {
     const scope = new URL(request.url).searchParams.get('scope') ?? 'all';
     const entity = (c: ConversationListItem) => c.type === 'task' || c.type === 'letter';
+    const direct = (c: ConversationListItem) => c.type === 'direct';
     return HttpResponse.json({
       items: demoConversations.filter(
         (c) =>
           !hiddenConversations.has(c.id) &&
-          (scope === 'all' || (scope === 'entities' ? entity(c) : !entity(c))),
+          (scope === 'all' ||
+            (scope === 'entities' ? entity(c) : scope === 'direct' ? direct(c) : !entity(c))),
       ),
       nextCursor: null,
     });

@@ -167,6 +167,17 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   // Вид не входит в допустимые виды типа проекта — 422 (как not_in_type
   // атрибутов): запрос корректен, но вид этому типу не назначен (#556).
   [ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED]: HttpStatus.UNPROCESSABLE_ENTITY,
+  // ИИ-агент (#889): не настроен провайдер/модель и «нечего отменять» —
+  // конфликт состояния портала (409), а не ошибка клиента; провайдер не
+  // найден — 404; провайдер не ответил на проверке соединения — 502
+  // (деградация внешнего сервиса, портал продолжает работать).
+  [ErrorCode.ASSISTANT_PROVIDER_NOT_CONFIGURED]: HttpStatus.CONFLICT,
+  [ErrorCode.ASSISTANT_PROVIDER_NOT_FOUND]: HttpStatus.NOT_FOUND,
+  [ErrorCode.ASSISTANT_RUN_ALREADY_FINISHED]: HttpStatus.CONFLICT,
+  [ErrorCode.ASSISTANT_PROVIDER_UNAVAILABLE]: HttpStatus.BAD_GATEWAY,
+  // MCP-сервер (#902): не найден — 404. Сбой проверки соединения — не ошибка
+  // HTTP-конвейера: ответ проверки приходит данными `ok: false`.
+  [ErrorCode.ASSISTANT_MCP_NOT_FOUND]: HttpStatus.NOT_FOUND,
 };
 
 /** Код для HTTP-исключений Nest/Fastify (400 у нас — всегда валидация входа). */

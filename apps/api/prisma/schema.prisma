@@ -163,6 +163,11 @@ model User {
   letterViews         LetterView[]
   headedDepartments   Department[] @relation("DepartmentHead")
   deputiedDepartments Department[] @relation("DepartmentDeputy")
+  /// ИИ-агент (#889): сессии и прогоны принадлежат сотруднику.
+  assistantSessions AssistantSession[]
+  assistantRuns     AssistantRun[]   @relation("AssistantRuns")
+  /// Личный блокнот агента (#900): только владелец.
+  assistantMemories AssistantMemory[]
 
   /// Список сотрудников: фильтр по статусу + детерминированная сортировка курсора.
   @@index([status, lastName, firstName, id])
@@ -2178,3 +2183,275 @@ model MailSource {
 
   @@map("mail_sources")
 }
+
+// ===== Модуль assistant (#889, ADR-0043/0044): ИИ-агент портала =====
+// Владелец данных — модуль assistant (I3): другие модули эти таблицы не
+// читают. Инструменты агента — вызовы API портала от имени сотрудника,
+// поэтому доменных копий (задача, письмо) здесь НЕТ: только сессии,
+// прогоны, события, вызовы инструментов и настройки провайдеров.
+
+/// Сессия диалога с ассистентом. Принадлежит сотруднику; открытие панели
+/// показывает последнюю, переключение — пикером (как беседы мессенджера).
+model AssistantSession {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  /// Заголовок — первый вопрос сотрудника (переименовывается вручную).
+  title String @default("")
+  /// Архивная сессия скрыта из пикера, история сохраняется.
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz()
+  /// Время последнего сообщения — сортировка пикера без join по сообщениям.
+  lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AssistantMessage[]
+  runs     AssistantRun[]
+
+  /// Список «мои сессии» (архив отдельно) и выбор последней при открытии.
+  @@index([userId, archivedAt, lastMessageAt])
+  @@map("assistant_sessions")
+}
+
+/// Сообщение ленты диалога. `role` — только user|assistant: результаты
+/// инструментов живут в прогоне (`assistant_tool_calls`), а не в ленте.
+model AssistantMessage {
+  id String @id @default(uuid()) @db.Uuid
+  sessionId String @map("session_id") @db.Uuid
+  /// Прогон, породивший сообщение (у вопроса — тот же прогон).
+  runId String? @map("run_id") @db.Uuid
+  role String
+  text String @default("")
+  /// Размышления модели (reasoning): показываются под шевроном, свёрнуты.
+  reasoning String?
+  /// Ответ оборван ошибкой прогона: лента рисует пометку и «Повторить».
+  errorCode String? @map("error_code")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  session   AssistantSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  run       AssistantRun?       @relation(fields: [runId], references: [id], onDelete: SetNull)
+  toolCalls AssistantToolCall[]
+  actions   AssistantAction[]
+
+  @@index([sessionId, createdAt])
+  @@index([runId])
+  @@map("assistant_messages")
+}
+
+/// Прогон — одна отправка сообщения: агентный цикл с инструментами до
+/// финального текста. Учёт токенов — для видимости; квот нет (ADR-0044).
+model AssistantRun {
+  id String @id @default(uuid()) @db.Uuid
+  sessionId String @map("session_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  /// queued | running | completed | failed | cancelled (контракт contracts).
+  status String @default("queued")
+  /// Байпас подтверждений (ADR-0048): прогон запущен с включённым режимом
+  /// «без вопросов». Снимок на прогон: следующий вопрос спрашивает снова.
+  autoExecute Boolean @default(false) @map("auto_execute")
+  /// Выбранный провайдер и модель на момент прогона (снимок — для аудита).
+  providerId String? @map("provider_id") @db.Uuid
+  modelId String? @map("model_id")
+  inputTokens Int? @map("input_tokens")
+  outputTokens Int? @map("output_tokens")
+  errorCode String? @map("error_code")
+  errorMessage String? @map("error_message")
+  startedAt DateTime? @map("started_at") @db.Timestamptz()
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  session   AssistantSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user      User                @relation("AssistantRuns", fields: [userId], references: [id], onDelete: Cascade)
+  events    AssistantRunEvent[]
+  toolCalls AssistantToolCall[]
+  actions   AssistantAction[]
+  memories  AssistantMemory[]
+  messages  AssistantMessage[]
+
+  @@index([sessionId, createdAt])
+  @@index([userId, createdAt])
+  @@map("assistant_runs")
+}
+
+/// Событие прогона: журнал SSE-потока. Восстановление после обрыва —
+/// выборка `seq > Last-Event-ID`; `@@unique([run_id, seq])` держит порядок.
+model AssistantRunEvent {
+  id String @id @default(uuid()) @db.Uuid
+  runId String @map("run_id") @db.Uuid
+  /// Монотонный номер события в прогоне (SSE `id`).
+  seq Int
+  /// run.started | message.delta | tool.started | tool.finished | …
+  type String
+  payload Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  run AssistantRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, seq])
+  @@map("assistant_run_events")
+}
+
+/// Вызов инструмента (действия API портала) — аудит и карточки в ленте.
+/// Полного содержимого результата здесь НЕТ: только краткая проекция.
+model AssistantToolCall {
+  id String @id @default(uuid()) @db.Uuid
+  runId String @map("run_id") @db.Uuid
+  /// Сообщение ассистента, в чей ход попал вызов.
+  messageId String? @map("message_id") @db.Uuid
+  /// Порядок вызова внутри прогона.
+  seq Int @default(0)
+  toolId String @map("tool_id")
+  title String @default("")
+  /// running | done | error
+  status String @default("running")
+  args Json?
+  resultPreview String? @map("result_preview")
+  durationMs Int? @map("duration_ms")
+  errorCode String? @map("error_code")
+  /// Ссылка «Открыть» (ui.open_entity) — только внутренние пути портала.
+  href String?
+  hrefLabel String? @map("href_label")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  run     AssistantRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  message AssistantMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([runId, seq])
+  @@index([messageId])
+  @@map("assistant_tool_calls")
+}
+
+/// Карточка действия (Ф2, ADR-0048): предложение модели изменить данные
+/// портала. Запись исполняется ТОЛЬКО подтверждением сотрудника или
+/// байпасом прогона; идемпотентность — `Idempotency-Key` = id карточки.
+model AssistantAction {
+  id String @id @default(uuid()) @db.Uuid
+  runId String @map("run_id") @db.Uuid
+  /// Сообщение ассистента, в чей ход попала карточка.
+  messageId String? @map("message_id") @db.Uuid
+  /// Владелец действия — только он видит и исполняет карточку.
+  userId String @map("user_id") @db.Uuid
+  toolId String @map("tool_id")
+  title String
+  /// Что будет сделано одной фразой (человеческий текст).
+  summary String
+  /// Ключевые поля карточки: [{ label, value }] — столбиком в ленте.
+  fields Json @default("[]")
+  /// Последствия (необратимость, куда попадёт запись).
+  consequences String @default("")
+  /// API позволяет отменить выполненное (DELETE созданного).
+  undoable Boolean @default(false)
+  /// Выполнено автоматически (байпас без вопросов).
+  automatic Boolean @default(false)
+  /// proposed | executing | executed | cancelled | failed | undone
+  state String @default("proposed")
+  /// Аргументы инструмента (валидированы схемой до создания карточки).
+  args Json @default("{}")
+  /// Ответ API портала после выполнения — источник id для отмены.
+  resultData Json? @map("result_data")
+  resultPreview String? @map("result_preview")
+  href String?
+  hrefLabel String? @map("href_label")
+  errorCode String? @map("error_code")
+  executedAt DateTime? @map("executed_at") @db.Timestamptz()
+  undoneAt DateTime? @map("undone_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  run     AssistantRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  message AssistantMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([runId, createdAt])
+  @@index([messageId])
+  @@index([userId, state])
+  @@map("assistant_actions")
+}
+
+/// Личная память сотрудника (#900): блокнот агента. Видит только владелец;
+/// архив вместо удаления, лимит активных записей — `ASSISTANT_LIMITS`.
+model AssistantMemory {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  /// Одна запись: обобщённый факт или предпочтение (не содержимое писем).
+  text String
+  /// Прогон, в котором агент записал факт (для аудита).
+  sourceRunId String? @map("source_run_id") @db.Uuid
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceRun AssistantRun? @relation(fields: [sourceRunId], references: [id], onDelete: SetNull)
+
+  @@index([userId, archivedAt, createdAt])
+  @@map("assistant_memories")
+}
+
+/// Провайдер модели (OpenCode Go, OpenRouter, OpenAI, локальные Ollama/vLLM):
+/// один OpenAI-совместимый формат — один адаптер (ADR-0044).
+model AssistantProvider {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  baseUrl String @map("base_url")
+  /// Формат API: `openai-chat` (пока единственный).
+  apiFormat String @default("openai-chat") @map("api_format")
+  /// Как передаётся ключ: bearer | x-api-key.
+  authType String @default("bearer") @map("auth_type")
+  /// Шифртекст ключа (AES-256-GCM, core/crypto SecretBoxService).
+  /// NULL — ключ не задан (локальные модели без авторизации).
+  apiKeyCiphertext String? @map("api_key_ciphertext")
+  /// Хвост ключа для узнавания в интерфейсе (последние 4 символа).
+  apiKeyHint String? @map("api_key_hint")
+  /// Дополнительные заголовки [{ name, value }] (HTTP-Referer и подобное).
+  headers Json @default("[]")
+  enabled Boolean @default(true)
+  /// Модели провайдера: id, подпись, контекст, tools/vision, цены, extra.
+  models Json @default("[]")
+  sortOrder Int @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  /// Дефолтный провайдер в настройках (SetNull при удалении провайдера).
+  settings AssistantSettings[]
+
+  @@map("assistant_providers")
+}
+
+/// Настройки ИИ-агента портала — одна строка (id = 'global'): дефолтный
+/// провайдер/модель и дополнительные правила в системный промпт.
+model AssistantSettings {
+  id String @id @default("global")
+  defaultProviderId String? @map("default_provider_id") @db.Uuid
+  defaultModelId String? @map("default_model_id")
+  instructions String @default("")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  defaultProvider AssistantProvider? @relation(fields: [defaultProviderId], references: [id], onDelete: SetNull)
+
+  @@map("assistant_settings")
+}
+
+/// Внешний MCP-сервер ИИ-агента (#902, ADR-0043 п. 10): адрес, ключ и
+/// транспорт. Первый — Exa (hosted, Streamable HTTP); реестр — список,
+/// чтобы второй источник подключался настройкой, а не правкой кода.
+model AssistantMcpServer {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  /// Endpoint вида https://mcp.exa.ai/mcp — только https, без query.
+  url String
+  /// Транспорт: `streamable-http` (пока единственный).
+  transport String @default("streamable-http")
+  /// Шифртекст ключа (AES-256-GCM, core/crypto SecretBoxService).
+  /// NULL — сервер без ключа (keyless-режим Exa с ограничениями).
+  apiKeyCiphertext String? @map("api_key_ciphertext")
+  /// Хвост ключа для узнавания в интерфейсе (последние 4 символа).
+  apiKeyHint String? @map("api_key_hint")
+  enabled Boolean @default(true)
+  sortOrder Int @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@map("assistant_mcp_servers")
+}
+

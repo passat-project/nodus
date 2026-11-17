@@ -24,6 +24,9 @@ export const tasksKeys = {
   personalStages: () => [...tasksKeys.all, 'personal-stages'] as const,
   /** Серверный поиск задач (палитра Ctrl+K). */
   search: (q: string) => [...tasksKeys.all, 'search', q] as const,
+  /** Контекст ИИ-ассистента (первая страница журнала): ВЫДЕЛЕННЫЙ ключ —
+   *  форма Paginated не должна пересекаться с InfiniteData журнала. */
+  assistantContext: () => [...tasksKeys.all, 'assistant-context'] as const,
   detail: (id: string) => [...tasksKeys.all, 'detail', id] as const,
   /** Префикс всех деталей — каталожные события полей (#431). */
   detailsAll: () => [...tasksKeys.all, 'detail'] as const,
@@ -53,6 +56,7 @@ export function taskDependentKeys(taskId: string) {
     tasksKeys.transitions(taskId),
     tasksKeys.actions(taskId),
     tasksKeys.listPages(),
+    tasksKeys.assistantContext(),
     tasksKeys.kanbanAll(),
     tasksKeys.personalStages(),
     tasksKeys.stages(),

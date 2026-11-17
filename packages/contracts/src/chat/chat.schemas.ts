@@ -408,8 +408,10 @@ export type CreateConversationBody = z.infer<typeof createConversationBodySchema
 export const listConversationsQuerySchema = cursorQuerySchema.extend({
   search: z.string().trim().min(1).max(128).optional(),
   /** Вкладка мессенджера (#252): chats — люди и каналы, entities — «Чаты
-   *  задач и писем» (своя серверная пагинация); all — всё (пикеры). */
-  scope: z.enum(['all', 'chats', 'entities']).default('all'),
+   *  задач и писем» (своя серверная пагинация); all — всё (пикеры).
+   *  direct — только личные беседы: точечный поиск собеседника (ИИ-ассистент),
+   *  иначе личный чат тонет в общем списке, отсортированном по активности. */
+  scope: z.enum(['all', 'chats', 'entities', 'direct']).default('all'),
 });
 
 export type ListConversationsQuery = z.infer<typeof listConversationsQuerySchema>;

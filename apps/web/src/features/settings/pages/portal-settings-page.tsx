@@ -4,6 +4,7 @@ import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
 
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { ModuleAccessMatrix } from '../../../shared/access/module-access-matrix.js';
+import { AiSettingsSection } from '../components/ai-settings-section.js';
 import { FileServersSection } from '../components/file-servers-section.js';
 
 /**
@@ -34,9 +35,8 @@ export function PortalSettingsPage() {
     );
   }
 
-  return search.tab === 'access' ? (
-    <ModuleAccessMatrix module="settings" />
-  ) : (
-    <FileServersSection />
-  );
+  if (search.tab === 'access') return <ModuleAccessMatrix module="settings" />;
+  // ИИ-агент (#894): провайдеры моделей и правила ассистента.
+  if (search.tab === 'ai') return <AiSettingsSection />;
+  return <FileServersSection />;
 }

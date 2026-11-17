@@ -47,7 +47,6 @@ vi.mock('../api/directory-api.js', () => ({
   useUsersList: () => ({ data: { items: USERS } }),
   useEmployeePresence: () => 'online',
 }));
-vi.mock('../../../app/shell/right-rail.js', () => ({ useRailShrink: () => 0 }));
 vi.mock('../lib/use-can-manage-directory.js', () => ({ useCanManageDirectory: () => false }));
 vi.mock('../../../shared/api/user-relations.js', () => ({
   useAssigneeTasks: () => ({ data: { items: [] }, isLoading: false }),

@@ -76,6 +76,7 @@ const PERMISSION_MODULE = {
   'role.manage': 'directory',
   'settings.uiDefaults': 'settings',
   'portal.settings.manage': 'settings',
+  'assistant.use': 'settings',
   'core.admin': 'core',
 } as const satisfies Record<Permission, AccessModule>;
 

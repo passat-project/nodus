@@ -122,4 +122,10 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.PROJECT_NODE_KIND_FORM_INVALID]: 'Форма вида ссылается на негодные атрибуты',
   [ErrorCode.PROJECT_TYPE_FORM_INVALID]: 'Форма типа проекта ссылается на негодные атрибуты',
   [ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED]: 'Этот вид папки не назначен типу проекта',
+  [ErrorCode.ASSISTANT_PROVIDER_NOT_CONFIGURED]:
+    'ИИ-агент не настроен: добавьте провайдера и модель в настройках',
+  [ErrorCode.ASSISTANT_PROVIDER_NOT_FOUND]: 'Провайдер не найден',
+  [ErrorCode.ASSISTANT_RUN_ALREADY_FINISHED]: 'Ответ уже завершён',
+  [ErrorCode.ASSISTANT_PROVIDER_UNAVAILABLE]: 'Провайдер моделей не отвечает',
+  [ErrorCode.ASSISTANT_MCP_NOT_FOUND]: 'MCP-сервер не найден',
 };

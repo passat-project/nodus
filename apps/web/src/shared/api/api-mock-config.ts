@@ -29,6 +29,9 @@ export const API_MOCK_DOMAINS = [
   'roles',
   // Настройки портала (#558): файловые серверы; страница админа на моках.
   'settings',
+  // ИИ-ассистент (#889): окно диалога и настройки провайдеров на моках —
+  // демо работает без ключей и без бэкенда.
+  'assistant',
 ] as const;
 
 export type ApiMockDomain = (typeof API_MOCK_DOMAINS)[number];
