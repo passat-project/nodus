@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  AssistantMessage,
   AssistantMessageList,
   AssistantSession,
   AssistantSessionList,
@@ -99,39 +98,24 @@ export function useSendAssistantMessage() {
         method: 'POST',
         body: { text: input.text, ...(input.context ? { context: input.context } : {}) },
       }),
-    // КАНОН МЕССЕНДЖЕРА (#48, I4): вопрос встаёт в ленту ДО запроса —
-    // временная строка живёт в кэше истории и откатывается ошибкой. Без
-    // этого ответ модели начинал печататься раньше самого вопроса.
+    // Канон оптимистичности (I4) с поправкой на НАБЛЮДАЕМОЕ мигание (18.11):
+    // временная строка с клиентским id жила 50–150 мс, потом дважды меняла id
+    // (pending → live → серверный) и React ПЕРЕМОНТИРОВАЛ пузырь — окно
+    // мерцало. Теперь вопрос встаёт в ленту из живого буфера с СЕРВЕРНЫМ id
+    // сразу (POST отвечает за десятки миллисекунд), а id больше не меняется
+    // ни при рефетче, ни при завершении прогона. Кэш не трогаем: при ошибке
+    // POST текст возвращает композер (канон #124/#248), фантомных строк нет.
     onMutate: async (input) => {
       const key = assistantKeys.messages(input.sessionId);
-      // In-flight запрос истории (idle-загрузка сразу после выбора сессии)
-      // мог бы вернуться ПОСЛЕ вставки и затереть оптимистичный пузырь —
-      // отменяем его до снимка (канон optimistic update, patterns.md).
+      // In-flight запрос истории мог бы вернуться ПОСЛЕ старта прогона и
+      // затереть свежие строки — отменяем до старта (канон optimistic update).
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<AssistantMessageList>(key);
-      const optimistic: AssistantMessage = {
-        id: `pending-${crypto.randomUUID()}`,
-        role: 'user',
-        text: input.text,
-        reasoning: null,
-        createdAt: new Date().toISOString(),
-        runId: null,
-        streaming: false,
-        errorCode: null,
-        toolCalls: [],
-      };
-      queryClient.setQueryData<AssistantMessageList>(key, (current) => ({
-        items: [...(current?.items ?? []), optimistic],
-        nextCursor: current?.nextCursor ?? null,
-      }));
-      return { key, previous, optimisticId: optimistic.id };
+      return { key, previous };
     },
     onError: (_error, _input, context) => {
-      if (!context) return;
-      // Откат: снимок истории до вставки; его не было (новая сессия) —
-      // временная строка удаляется вместе с пустым кэшем.
-      if (context.previous) queryClient.setQueryData(context.key, context.previous);
-      else queryClient.removeQueries({ queryKey: context.key });
+      if (!context || !context.previous) return;
+      queryClient.setQueryData(context.key, context.previous);
     },
     onSuccess: (response, input) => {
       useAssistantStore.getState().startLive({
@@ -141,8 +125,8 @@ export function useSendAssistantMessage() {
         userMessageId: response.messageId,
       });
       // Вопрос и строка прогона уже в БД (POST их создал) — история
-      // подтягивается сразу, а не после ответа модели: временная строка
-      // сменяется серверной без мигания.
+      // подтягивается сразу, а не после ответа модели: живой пузырь вопроса и
+      // серверная строка совпадают по id и не перемонтируются.
       void queryClient.invalidateQueries({ queryKey: assistantKeys.messages(input.sessionId) });
       startRunStream(response.runId, input.sessionId, () => {
         void queryClient.invalidateQueries({ queryKey: assistantKeys.messages(input.sessionId) });

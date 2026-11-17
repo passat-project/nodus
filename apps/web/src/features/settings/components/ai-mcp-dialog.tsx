@@ -27,7 +27,6 @@ interface McpFormState {
   name: string;
   url: string;
   enabled: boolean;
-  defaultForSearch: boolean;
 }
 
 const presetOptions = [
@@ -46,25 +45,14 @@ const presetOptions = [
  */
 export function AiMcpDialog({
   mode,
-  defaultServerId,
   onClose,
   onCreate,
   onApply,
 }: {
   mode: McpDialogMode;
-  defaultServerId: string | null;
   onClose: () => void;
-  onCreate: (fields: {
-    name: string;
-    url: string;
-    apiKey?: string;
-    defaultForSearch: boolean;
-  }) => void;
-  onApply: (
-    id: string,
-    patch: Partial<McpServerDraft>,
-    defaults: { defaultId: string | null },
-  ) => void;
+  onCreate: (fields: { name: string; url: string; apiKey?: string }) => void;
+  onApply: (id: string, patch: Partial<McpServerDraft>) => void;
 }) {
   const editing = mode.kind === 'edit' ? mode.server : null;
   const contentRef = useRef<HTMLDivElement>(null);
@@ -76,13 +64,11 @@ export function AiMcpDialog({
           name: editing.name,
           url: editing.url,
           enabled: editing.enabled,
-          defaultForSearch: editing.defaultForSearch,
         }
       : {
           name: first.name,
           url: first.url,
           enabled: true,
-          defaultForSearch: defaultServerId === null,
         },
   );
   const [keyDraft, setKeyDraft] = useState('');
@@ -104,8 +90,6 @@ export function AiMcpDialog({
     event.preventDefault();
     if (!canSubmit) return;
     if (editing) {
-      // «По умолчанию» — единственный сервер: тумблер снимает признак у других
-      // через тот же PUT (defaults передаёт экран).
       const nextKey = keyDraft.trim();
       // «Заменить» и «Удалить ключ» взаимоисключающие: введённый ключ сильнее
       // нажатого ранее «Удалить» — иначе ввод молча терялся, а сохранённый
@@ -115,22 +99,16 @@ export function AiMcpDialog({
         : clearKey
           ? { clearKey: true, apiKey: undefined, hasKey: false, keyHint: null }
           : {};
-      onApply(
-        editing.id,
-        {
-          name: form.name.trim(),
-          url: form.url.trim(),
-          enabled: form.enabled,
-          defaultForSearch: form.defaultForSearch,
-          ...keyPatch,
-        },
-        { defaultId: form.defaultForSearch ? editing.id : null },
-      );
+      onApply(editing.id, {
+        name: form.name.trim(),
+        url: form.url.trim(),
+        enabled: form.enabled,
+        ...keyPatch,
+      });
     } else {
       onCreate({
         name: form.name.trim(),
         url: form.url.trim(),
-        defaultForSearch: form.defaultForSearch,
         ...(keyDraft.trim() ? { apiKey: keyDraft.trim() } : {}),
       });
     }
@@ -232,13 +210,6 @@ export function AiMcpDialog({
                 />
               )}
             </PanelField>
-
-            <SwitchRow
-              title={strings.mcpDefaultForSearch}
-              hint={strings.mcpDefaultHint}
-              checked={form.defaultForSearch}
-              onChange={(defaultForSearch) => patch({ defaultForSearch })}
-            />
             {editing ? (
               <SwitchRow
                 title={strings.enabled}
@@ -264,7 +235,7 @@ export function AiMcpDialog({
 /** Хелпер для экрана: поля нового сервера → входная схема PUT. */
 export function toMcpInput(
   id: string,
-  fields: { name: string; url: string; apiKey?: string; defaultForSearch: boolean },
+  fields: { name: string; url: string; apiKey?: string },
 ): AssistantMcpServerInput {
   return {
     id,
@@ -272,7 +243,6 @@ export function toMcpInput(
     url: fields.url,
     transport: 'streamable-http',
     enabled: true,
-    defaultForSearch: fields.defaultForSearch,
     ...(fields.apiKey ? { apiKey: fields.apiKey } : {}),
   };
 }

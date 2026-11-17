@@ -159,6 +159,7 @@ export function AssistantFeed({
   onRetry: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   // Автодогон ТОЛЬКО у низа (канон чатов): читающего выше не выдёргивать
   // вниз каждым тиком стриминга.
   const atBottomRef = useRef(true);
@@ -173,6 +174,22 @@ export function AssistantFeed({
     if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [messages, live?.text, live?.tools.length, liveThinking]);
 
+  // Во время стриминга высота растёт ПОЗЖЕ эффекта: `useDeferredValue` в
+  // Markdown дорисовывает блок на следующем кадре, а таблицы/код добавляют
+  // высоту уже после скролла. Наблюдаем фактический размер содержимого —
+  // лента остаётся приклеенной к низу, пока сотрудник не отлистал вверх
+  // (наблюдение владельца 18.11.2026: «прокручивается только когда готово»).
+  useEffect(() => {
+    const el = scrollRef.current;
+    const content = contentRef.current;
+    if (!el || !content || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (atBottomRef.current) el.scrollTop = el.scrollHeight;
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div
       ref={scrollRef}
@@ -182,7 +199,7 @@ export function AssistantFeed({
       }}
       className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
     >
-      <div className="flex flex-col gap-3">
+      <div ref={contentRef} className="flex flex-col gap-3">
         {segments.map((segment) => (
           <div key={segment.run.first.id} className="flex flex-col gap-1.5">
             {segment.showDay ? (

@@ -4,8 +4,8 @@ import { PrismaService } from '../../../core/database/prisma.service.js';
 /**
  * Доступ модуля assistant к реестру внешних MCP-серверов (#902, ADR-0043
  * п. 10): отдельная таблица, потому что это самостоятельная сущность
- * настроек (адрес, транспорт, ключ, признак «по умолчанию для поиска»),
- * а не поле провайдера моделей.
+ * настроек (адрес, транспорт, ключ, включённость), а не поле провайдера
+ * моделей. Все включённые серверы равнозначны (решение 18.11.2026).
  *
  * Секреты: `apiKeyCiphertext` — шифртекст (`core/crypto`); репозиторий его
  * не расшифровывает — это делает сервис на время вызова сервера.
@@ -20,7 +20,6 @@ export interface McpServerRow {
   apiKeyCiphertext: string | null;
   apiKeyHint: string | null;
   enabled: boolean;
-  defaultForSearch: boolean;
   sortOrder: number;
 }
 
@@ -33,7 +32,6 @@ export interface McpServerWrite {
   apiKeyCiphertext: string | null;
   apiKeyHint: string | null;
   enabled: boolean;
-  defaultForSearch: boolean;
   sortOrder: number;
 }
 
@@ -68,7 +66,6 @@ export class McpSettingsRepository {
           apiKeyCiphertext: server.apiKeyCiphertext,
           apiKeyHint: server.apiKeyHint,
           enabled: server.enabled,
-          defaultForSearch: server.defaultForSearch,
           sortOrder: server.sortOrder,
         };
         await tx.assistantMcpServer.upsert({

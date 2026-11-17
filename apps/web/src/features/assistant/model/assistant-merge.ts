@@ -42,7 +42,10 @@ export function mergeLiveMessage(
   const optimisticUser: AssistantMessage | null =
     !hasServerUser && live.userText.trim()
       ? {
-          id: `live-user-${live.runId}`,
+          // id — серверный, как только POST его вернул: иначе пузырь вопроса
+          // перемонтируется при рефетче истории (наблюдаемое мигание окна,
+          // 18.11.2026). До ответа POST — стабильный клиентский хвост.
+          id: live.userMessageId ?? `live-user-${live.runId}`,
           role: 'user',
           text: live.userText,
           reasoning: null,

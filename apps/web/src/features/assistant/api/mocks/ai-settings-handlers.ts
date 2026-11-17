@@ -149,7 +149,6 @@ export const aiSettingsHandlers = [
           hasKey: Boolean(server.apiKey) || Boolean(saved?.hasKey),
           keyHint: server.apiKey ? server.apiKey.slice(-4) : (saved?.keyHint ?? null),
           enabled: server.enabled,
-          defaultForSearch: server.defaultForSearch,
         };
       }),
     };

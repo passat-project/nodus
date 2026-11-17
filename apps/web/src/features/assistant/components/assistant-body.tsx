@@ -90,6 +90,11 @@ export function AssistantBody() {
     // поток оборван, буфер остался, и подписка нужна заново (#896).
     const last = messagesQuery.data?.items.at(-1);
     if (!last || last.role !== 'assistant' || !last.streaming || !last.runId) return;
+    // Живой буфер уже ведёт ЭТОТ прогон (в т.ч. завершившийся, пока история
+    // ещё не обновилась): перезапуск сбросил бы текст и id пузыря — именно это
+    // давало «мерцание» на финальном ответе (наблюдение владельца 18.11.2026).
+    // Подхват нужен только когда буфера нет (перезагрузка/закрытое окно).
+    if (live?.runId === last.runId) return;
     if (isRunStreamActive()) return;
     if (recoveredRef.current === last.runId) return;
     recoveredRef.current = last.runId;

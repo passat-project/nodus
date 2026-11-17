@@ -21,7 +21,6 @@ const stored: McpServerRow = {
   apiKeyCiphertext: 'cipher',
   apiKeyHint: 'abcd',
   enabled: true,
-  defaultForSearch: true,
   sortOrder: 0,
 };
 
@@ -34,7 +33,6 @@ function body(patch: Partial<AssistantMcpBody['servers'][number]> = {}): Assista
         url: stored.url,
         transport: 'streamable-http',
         enabled: true,
-        defaultForSearch: false,
         ...patch,
       },
     ],
@@ -82,29 +80,22 @@ describe('McpSettingsService.put', () => {
     expect(cleared[0]?.apiKeyCiphertext).toBeNull();
   });
 
-  it('два сервера «по умолчанию для поиска» — ошибка валидации, запись не идёт', async () => {
+  it('несколько серверов допустимы и равнозначны (без «по умолчанию»)', async () => {
     const { service, repo } = makeService();
-    await expect(
-      service.put({
-        servers: [
-          {
-            name: 'A',
-            url: 'https://a.example/mcp',
-            transport: 'streamable-http',
-            enabled: true,
-            defaultForSearch: true,
-          },
-          {
-            name: 'B',
-            url: 'https://b.example/mcp',
-            transport: 'streamable-http',
-            enabled: true,
-            defaultForSearch: true,
-          },
-        ],
-      }),
-    ).rejects.toBeInstanceOf(DomainException);
-    expect(repo.replaceAll).not.toHaveBeenCalled();
+    await service.put({
+      servers: [
+        { name: 'A', url: 'https://a.example/mcp', transport: 'streamable-http', enabled: true },
+        { name: 'B', url: 'https://b.example/mcp', transport: 'streamable-http', enabled: true },
+      ],
+    });
+    const replaceAll = repo.replaceAll as unknown as {
+      mock: { calls: [Array<Record<string, unknown>>][] };
+    };
+    expect(replaceAll.mock.calls).toHaveLength(1);
+    const saved = replaceAll.mock.calls[0]?.[0] ?? [];
+    expect(saved).toHaveLength(2);
+    // Признака «по умолчанию» больше нет ни у одного сервера.
+    for (const row of saved) expect(row).not.toHaveProperty('defaultForSearch');
   });
 
   it('смена хоста со сохранённым ключом требует ввести ключ заново', async () => {
@@ -161,27 +152,17 @@ describe('McpSettingsService.test', () => {
   });
 });
 
-describe('McpSettingsService.resolveForSearch', () => {
-  it('берёт только включённый сервер «по умолчанию»; без флага поиска нет', async () => {
-    const disabled = {
-      ...stored,
-      id: '44444444-4444-4444-8444-444444444444',
-      enabled: false,
-      defaultForSearch: true,
-    };
-    const notDefault = { ...stored, defaultForSearch: false };
-    // Fallback «первый включённый» убран: иначе поиск уходил бы на сервер,
-    // который администратор не выбирал (находка security-ревью #901).
-    const noDefault = await makeService([disabled, notDefault]).service.resolveForSearch();
-    expect(noDefault).toBeNull();
+describe('McpSettingsService.resolveEnabled', () => {
+  it('возвращает ВСЕ включённые серверы, выключенные пропускает', async () => {
+    const disabled = { ...stored, id: '44444444-4444-4444-8444-444444444444', enabled: false };
+    const second = { ...stored, id: '55555555-5555-4555-8555-555555555555', enabled: true };
+    // Решение владельца 18.11.2026: MCP-серверы равнозначны — «поиска по
+    // умолчанию» нет, все включённые отдают агенту свои инструменты.
+    const resolved = await makeService([disabled, stored, second]).service.resolveEnabled();
+    expect(resolved.map((item) => item.row.id)).toEqual([stored.id, second.id]);
+    expect(resolved[0]?.client).toBeTruthy();
 
-    const chosen = await makeService([
-      notDefault,
-      { ...stored, enabled: true, defaultForSearch: true },
-    ]).service.resolveForSearch();
-    expect(chosen?.row.id).toBe(stored.id);
-
-    const empty = await makeService([]).service.resolveForSearch();
-    expect(empty).toBeNull();
+    const empty = await makeService([]).service.resolveEnabled();
+    expect(empty).toEqual([]);
   });
 });

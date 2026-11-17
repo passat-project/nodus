@@ -27,14 +27,13 @@ describe('assistantMcpUrlSchema: только https без секретов в U
 });
 
 describe('assistantMcpServerInputSchema / body', () => {
-  it('минимальный сервер: транспорт по умолчанию, выключенные признаки по умолчанию', () => {
+  it('минимальный сервер: транспорт по умолчанию, сервер включён', () => {
     const parsed = assistantMcpServerInputSchema.parse({
       name: 'Exa',
       url: 'https://mcp.exa.ai/mcp',
     });
     expect(parsed.transport).toBe('streamable-http');
     expect(parsed.enabled).toBe(true);
-    expect(parsed.defaultForSearch).toBe(false);
   });
 
   it('ключ на запись необязателен: сервер без ключа допустим (keyless-режим)', () => {

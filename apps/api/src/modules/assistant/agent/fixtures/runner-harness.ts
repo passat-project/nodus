@@ -94,17 +94,17 @@ export function scriptedProvider(steps: LlmStreamEvent[][]) {
   };
 }
 
-/** Заглушка реестра MCP: по умолчанию сервера поиска нет. */
-export function mcpStub(resolveForSearch: () => Promise<unknown> = async () => null): {
-  resolveForSearch: ReturnType<typeof vi.fn>;
+/** Заглушка реестра MCP: по умолчанию включённых серверов нет. */
+export function mcpStub(resolveEnabled: () => Promise<unknown> = async () => []): {
+  resolveEnabled: ReturnType<typeof vi.fn>;
 } {
-  return { resolveForSearch: vi.fn(resolveForSearch) };
+  return { resolveEnabled: vi.fn(resolveEnabled) };
 }
 
 /** Прогон на стенде: те же фейки, что в agent-runner.test.ts. */
 export function build(
   steps: LlmStreamEvent[][],
-  options: { mcp?: { resolveForSearch: ReturnType<typeof vi.fn> } } = {},
+  options: { mcp?: { resolveEnabled: ReturnType<typeof vi.fn> } } = {},
 ) {
   const fake = fakeRepository();
   const bus = new RunBusService(fake.repo as unknown as AssistantRepository, logger as never);

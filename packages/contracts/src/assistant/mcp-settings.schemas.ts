@@ -3,9 +3,10 @@ import { z } from 'zod';
 /**
  * Внешние MCP-серверы в «Настройках портала → ИИ-агент → MCP» (#902, ADR-0043
  * п. 10): реестр серверов, которыми пользуется ассистент. Первый и пока
- * единственный — Exa (hosted, Streamable HTTP), но реестр — список: адрес,
- * ключ, транспорт и признак «по умолчанию для поиска» живут в настройках,
- * а не в коде.
+ * и правила приватности. Реестр — РАВНОЗНАЧНЫЙ список (решение владельца
+ * 18.11.2026): «по умолчанию для поиска» не существует — агент видит
+ * инструменты ВСЕХ включённых серверов, будь то поиск Exa, Blender или
+ * что угодно ещё. Адрес, ключ и транспорт живут в настройках, а не в коде.
  *
  * Безопасность: ключ пишется только на запись (наружу — `hasKey`/`keyHint`),
  * шифруется на сервере (`core/crypto`); адрес — только https без логина,
@@ -51,8 +52,6 @@ export const assistantMcpServerSchema = z.object({
   hasKey: z.boolean(),
   keyHint: z.string().nullable(),
   enabled: z.boolean(),
-  /** Сервер, к которому уходят поисковые запросы, если их несколько. */
-  defaultForSearch: z.boolean(),
 });
 export type AssistantMcpServer = z.infer<typeof assistantMcpServerSchema>;
 
@@ -65,7 +64,6 @@ export const assistantMcpServerInputSchema = z.object({
   apiKey: z.string().trim().min(1).max(500).optional(),
   clearKey: z.boolean().optional(),
   enabled: z.boolean().default(true),
-  defaultForSearch: z.boolean().default(false),
 });
 export type AssistantMcpServerInput = z.infer<typeof assistantMcpServerInputSchema>;
 

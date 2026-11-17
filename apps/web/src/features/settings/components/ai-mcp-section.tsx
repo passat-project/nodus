@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { PlugZap, Plus, Star, Trash2 } from 'lucide-react';
+import { PlugZap, Plus, Trash2 } from 'lucide-react';
 import { ui, type AssistantMcpBody, type AssistantMcpResponse } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@nodus/ui/components/dialog';
@@ -64,7 +64,6 @@ export function AiMcpSection({
     [servers, q],
   );
   const selection = useRowSelection(useMemo(() => rows.map((server) => server.id), [rows]));
-  const defaultId = servers.find((server) => server.defaultForSearch)?.id ?? null;
 
   /** Один PUT на действие: черновик сразу, при ошибке — серверная правда. */
   const persist = useCallback(
@@ -81,48 +80,23 @@ export function AiMcpSection({
     [save],
   );
 
-  function createServer(fields: {
-    name: string;
-    url: string;
-    apiKey?: string;
-    defaultForSearch: boolean;
-  }) {
+  function createServer(fields: { name: string; url: string; apiKey?: string }) {
     if (!draft) return;
     const input = toMcpInput(crypto.randomUUID(), fields) as McpServerDraft;
-    const next = servers.map((server) =>
-      fields.defaultForSearch ? { ...server, defaultForSearch: false } : server,
-    );
     void persist({
       servers: [
-        ...next,
+        ...servers,
         { ...input, persisted: false, hasKey: Boolean(fields.apiKey), keyHint: null },
       ],
     });
   }
 
-  function applyServer(
-    id: string,
-    patch: Partial<McpServerDraft>,
-    defaults: { defaultId: string | null },
-  ) {
+  function applyServer(id: string, patch: Partial<McpServerDraft>) {
     if (!draft) return;
     void persist({
-      servers: servers.map((server) => {
-        if (server.id === id) return { ...server, ...patch };
-        // «По умолчанию для поиска» — ровно один сервер.
-        return defaults.defaultId === id ? { ...server, defaultForSearch: false } : server;
-      }),
+      servers: servers.map((server) => (server.id === id ? { ...server, ...patch } : server)),
     });
   }
-
-  const makeDefault = useCallback(
-    (id: string) => {
-      void persist({
-        servers: servers.map((server) => ({ ...server, defaultForSearch: server.id === id })),
-      });
-    },
-    [servers, persist],
-  );
 
   function removeServer(id: string) {
     void persist({ servers: servers.filter((server) => server.id !== id) });
@@ -153,10 +127,7 @@ export function AiMcpSection({
     }
   }
 
-  const columns = useMemo(
-    () => mcpColumns(defaultId, makeDefault, toolCounts),
-    [defaultId, makeDefault, toolCounts],
-  );
+  const columns = useMemo(() => mcpColumns(toolCounts), [toolCounts]);
   const selectedCount = selection.selected.size;
   const deleteTitle =
     deleteIds && deleteIds.length > 1
@@ -207,16 +178,6 @@ export function AiMcpSection({
                   },
                 ]
               : []),
-            ...(server.id === defaultId
-              ? []
-              : [
-                  {
-                    id: 'default',
-                    icon: <Star className="size-3.5" strokeWidth={1.75} />,
-                    label: strings.mcpDefaultForSearch,
-                    onSelect: () => makeDefault(server.id),
-                  },
-                ]),
             {
               id: 'remove',
               icon: <Trash2 className="size-3.5" strokeWidth={1.75} />,
@@ -249,7 +210,6 @@ export function AiMcpSection({
         <AiMcpDialog
           key={dialog.kind === 'edit' ? dialog.server.id : 'create'}
           mode={dialog}
-          defaultServerId={defaultId}
           onClose={() => setDialog(null)}
           onCreate={createServer}
           onApply={applyServer}
@@ -323,7 +283,6 @@ function toDraft(response: AssistantMcpResponse): AssistantMcpBody {
       url: server.url,
       transport: server.transport,
       enabled: server.enabled,
-      defaultForSearch: server.defaultForSearch,
       persisted: true,
       hasKey: server.hasKey,
       keyHint: server.keyHint,

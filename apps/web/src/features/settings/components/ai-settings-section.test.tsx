@@ -51,7 +51,6 @@ const mocks = vi.hoisted(() => ({
           hasKey: true,
           keyHint: 'abcd',
           enabled: true,
-          defaultForSearch: true,
         },
       ],
     },
@@ -118,7 +117,12 @@ describe('AiSettingsSection: разделы экрана', () => {
     render(<AiSettingsSection />);
     expect(screen.getByText(ui.assistant.settings.title)).toBeTruthy();
     expect(screen.getByText('OpenRouter')).toBeTruthy();
-    expect(screen.getByLabelText(ui.assistant.settings.sectionsLabel)).toBeTruthy();
+    // Триггер поповера (канон «Портфелей»): подпись включает текущий раздел.
+    expect(
+      screen.getByRole('button', {
+        name: `${ui.assistant.settings.sectionsLabel}: ${ui.assistant.settings.sectionProviders}`,
+      }),
+    ).toBeTruthy();
   });
 
   it('?section=skills — честное пустое состояние, «Создать» недоступно', () => {
@@ -132,11 +136,13 @@ describe('AiSettingsSection: разделы экрана', () => {
 
   it('выбор раздела в переключателе уходит в URL (?section=mcp)', async () => {
     render(<AiSettingsSection />);
-    const trigger = screen.getByLabelText(ui.assistant.settings.sectionsLabel);
-    trigger.focus();
-    fireEvent.keyDown(trigger, { key: 'Enter' });
-    const option = await screen.findByRole('option', { name: ui.assistant.settings.sectionMcp });
-    fireEvent.click(option);
+    // Триггер — кнопка канона «Портфелей» (не системный Select): имя включает
+    // текущий раздел, список — строки-кнопки.
+    const trigger = screen.getByRole('button', {
+      name: `${ui.assistant.settings.sectionsLabel}: ${ui.assistant.settings.sectionProviders}`,
+    });
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole('button', { name: ui.assistant.settings.sectionMcp }));
 
     expect(mocks.navigate).toHaveBeenCalledWith({
       to: '/settings',
@@ -161,14 +167,14 @@ describe('AiSettingsSection: разделы экрана', () => {
     expect(screen.queryByText('Exa')).toBeNull();
   });
 
-  it('?section=mcp — реестр MCP-серверов с адресом и «по умолчанию для поиска»', () => {
+  it('?section=mcp — реестр MCP-серверов без понятия «по умолчанию»', () => {
     mocks.search = { tab: 'ai', section: 'mcp' };
     render(<AiSettingsSection />);
     expect(screen.getByText('Exa')).toBeTruthy();
     expect(screen.getByText('https://mcp.exa.ai/mcp')).toBeTruthy();
-    expect(screen.getAllByText(ui.assistant.settings.mcpDefaultForSearch).length).toBeGreaterThan(
-      0,
-    );
+    // MCP-серверы равнозначны (решение владельца 18.11.2026): столбца и
+    // действия «по умолчанию для поиска» на экране нет.
+    expect(screen.queryByText('По умолчанию для поиска')).toBeNull();
     expect(screen.getByRole('button', { name: ui.common.create })).toBeTruthy();
   });
 });

@@ -2374,8 +2374,6 @@ model AssistantMcpServer {
   /// Хвост ключа для узнавания в интерфейсе (последние 4 символа).
   apiKeyHint String? @map("api_key_hint")
   enabled Boolean @default(true)
-  /// Сервер, которому адресуются поисковые запросы, когда их несколько.
-  defaultForSearch Boolean @default(false) @map("default_for_search")
   sortOrder Int @default(0) @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()

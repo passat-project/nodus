@@ -6,9 +6,10 @@ import type { AssistantToolDefinition } from '../tools/tool-definition.js';
 import { build, drain, mcpStub, params } from './fixtures/runner-harness.js';
 
 /**
- * Внешние инструменты в цикле (#901): реестр MCP решает, есть ли поиск в
- * интернете. Сервер настроен и включён — ext.exa.* попадают в каталог и в
- * промпт; сервер отсутствует или сломан — прогон идёт как обычно, без них.
+ * Внешние MCP-инструменты в цикле (ADR-0047, решение владельца 18.11.2026):
+ * все включённые серверы равнозначны. Exa получает точные инструменты поиска/
+ * чтения, остальные серверы отдают свой каталог как `ext.<slug>.<tool>`;
+ * «поиска по умолчанию» нет, сломанный сервер не валит прогон.
  */
 
 const SEARCH_CALL_STEP: LlmStreamEvent[] = [
@@ -27,20 +28,39 @@ function toolNames(tools: LlmToolDefinition[] | undefined): string[] {
   return (tools ?? []).map((tool) => tool.function.name);
 }
 
-/** Настроенный сервер: клиент нужен только при реальном вызове (здесь — фейк). */
-const configured = mcpStub(async () => ({
+/** Exa-сервер: инструменты поиска и чтения — по ADR-0046. */
+const exaServer = {
   row: {
-    id: 'mcp-1',
+    id: 'mcp-exa',
     name: 'Exa',
     url: 'https://mcp.exa.ai/mcp',
     enabled: true,
-    apiKeyCiphertext: 'cipher',
   },
   client: { callTool: async () => ({ text: '', isError: false }) },
-}));
+};
 
-describe('AgentRunnerService: интернет через MCP (#901)', () => {
-  it('без сервера поиска внешних инструментов нет и промпт без правил интернета', async () => {
+/** Обычный MCP-сервер: свой каталог инструментов из `tools/list`. */
+const gitServer = {
+  row: {
+    id: 'mcp-git',
+    name: 'Git MCP',
+    url: 'https://mcp.git.example/mcp',
+    enabled: true,
+  },
+  client: {
+    callTool: async () => ({ text: 'ok', isError: false }),
+    listTools: async () => [
+      {
+        name: 'echo',
+        description: 'Возвращает аргумент',
+        inputSchema: { type: 'object' },
+      },
+    ],
+  },
+};
+
+describe('AgentRunnerService: внешние MCP-серверы (ADR-0047)', () => {
+  it('без серверов внешних инструментов нет и промпт без правил', async () => {
     const { runner, bus, requests } = build([
       [
         { type: 'text.delta', text: 'Ответ без интернета.' },
@@ -54,10 +74,10 @@ describe('AgentRunnerService: интернет через MCP (#901)', () => {
     const first = requests[0];
     expect(toolNames(first?.tools)).not.toContain(EXA_SEARCH_TOOL_ID);
     const system = first?.messages[0]?.role === 'system' ? first.messages[0].content : '';
-    expect(system).not.toContain('Интернет (внешние данные)');
+    expect(system).not.toContain('Внешние MCP-инструменты');
   });
 
-  it('настроенный сервер добавляет поиск и чтение страниц в каталог и промпт', async () => {
+  it('включённый Exa добавляет поиск и чтение страниц в каталог и промпт', async () => {
     const { runner, bus, requests } = build(
       [
         [
@@ -65,20 +85,20 @@ describe('AgentRunnerService: интернет через MCP (#901)', () => {
           { type: 'done', finishReason: 'stop' },
         ],
       ],
-      { mcp: configured },
+      { mcp: mcpStub(async () => [exaServer]) },
     );
     const streamDone = drain(bus);
     runner.start(params);
     await streamDone;
 
-    const first = requests[0];
-    const names = toolNames(first?.tools);
+    const names = toolNames(requests[0]?.tools);
     expect(names).toContain(EXA_SEARCH_TOOL_ID);
     expect(names).toContain(EXA_FETCH_TOOL_ID);
-    const system = first?.messages[0]?.role === 'system' ? first.messages[0].content : '';
-    expect(system).toContain('Интернет (внешние данные)');
+    const system =
+      requests[0]?.messages[0]?.role === 'system' ? requests[0].messages[0].content : '';
+    expect(system).toContain('Внешние MCP-инструменты');
     expect(system).toContain('ВНЕШНИЕ данные');
-    expect(system).toContain('Никогда не вставляй в запрос тексты писем');
+    expect(system).toContain('Никогда не вставляй');
   });
 
   it('вызов ext.exa.web_search_exa идёт в исполнитель как обычный инструмент', async () => {
@@ -90,7 +110,7 @@ describe('AgentRunnerService: интернет через MCP (#901)', () => {
           { type: 'done', finishReason: 'stop' },
         ],
       ],
-      { mcp: configured },
+      { mcp: mcpStub(async () => [exaServer]) },
     );
     const streamDone = drain(bus);
     runner.start(params);
@@ -106,37 +126,77 @@ describe('AgentRunnerService: интернет через MCP (#901)', () => {
     expect(input).toMatchObject({ query: 'СП 20.13330', numResults: 3 });
   });
 
-  it('сервер без ключа: инструментов нет, но промпт объясняет, чего не хватает', async () => {
-    const noKey = mcpStub(async () => ({
-      row: {
-        id: 'mcp-1',
-        name: 'Exa',
-        url: 'https://mcp.exa.ai/mcp',
-        enabled: true,
-        apiKeyCiphertext: null,
-      },
-      client: { callTool: async () => ({ text: '', isError: false }) },
-    }));
-    const { runner, bus, requests } = build(
+  it('обычный MCP-сервер отдаёт свой инструмент как ext.<slug>.<tool>', async () => {
+    const { runner, bus, requests, executor } = build(
       [
         [
-          { type: 'text.delta', text: 'Поиск не подключён.' },
+          {
+            type: 'tool_call',
+            call: {
+              id: 'call_git',
+              type: 'function',
+              function: { name: 'ext.git-mcp.echo', arguments: '{"text":"привет"}' },
+            },
+          },
+          { type: 'done', finishReason: 'tool_calls' },
+        ],
+        [
+          { type: 'text.delta', text: 'Готово.' },
           { type: 'done', finishReason: 'stop' },
         ],
       ],
-      { mcp: noKey },
+      { mcp: mcpStub(async () => [gitServer]) },
     );
     const streamDone = drain(bus);
     runner.start(params);
     await streamDone;
 
-    expect(toolNames(requests[0]?.tools)).not.toContain(EXA_SEARCH_TOOL_ID);
+    // Как у Exa: первые инструменты сервера сразу в наборе `tools` (модель
+    // вызывает по имени без лишнего шага); остальные — через tools.search.
+    expect(toolNames(requests[0]?.tools)).toContain('ext.git-mcp.echo');
+    expect(toolNames(requests[0]?.tools)).toContain('tools.search');
     const system =
       requests[0]?.messages[0]?.role === 'system' ? requests[0].messages[0].content : '';
-    expect(system).toContain('поиск не настроен');
+    // Сводка в промпте — человеческими названиями, без сырых id.
+    expect(system).toContain('Git MCP: echo');
+    expect(system).not.toContain('web_search_exa, web_fetch_exa');
+    const [tool, input] = executor.execute.mock.calls[0] as unknown as [
+      AssistantToolDefinition,
+      Record<string, unknown>,
+    ];
+    expect(tool.id).toBe('ext.git-mcp.echo');
+    expect(tool.title).toBe('Git MCP: echo');
+    expect(input).toEqual({ text: 'привет' });
   });
 
-  it('сломанные настройки MCP не валят прогон: работаем только по порталу', async () => {
+  it('сломанный сервер (tools/list упал) пропускается, прогон завершается', async () => {
+    const broken = {
+      row: { id: 'mcp-broken', name: 'Broken', url: 'https://broken.example/mcp', enabled: true },
+      client: {
+        callTool: async () => ({ text: '', isError: false }),
+        listTools: async () => {
+          throw new Error('нет соединения');
+        },
+      },
+    };
+    const { runner, bus, requests, fake } = build(
+      [
+        [
+          { type: 'text.delta', text: 'Портал работает.' },
+          { type: 'done', finishReason: 'stop' },
+        ],
+      ],
+      { mcp: mcpStub(async () => [broken]) },
+    );
+    const streamDone = drain(bus);
+    runner.start(params);
+    await streamDone;
+
+    expect(fake.runs.get('run-1')?.status).toBe('completed');
+    expect(toolNames(requests[0]?.tools)).not.toContain('ext.broken.echo');
+  });
+
+  it('сломанный реестр MCP не валит прогон: работаем только по порталу', async () => {
     const broken = mcpStub(async () => {
       throw new Error('Ключ сервера не расшифровывается');
     });

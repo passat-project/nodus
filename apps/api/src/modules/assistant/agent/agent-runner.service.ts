@@ -15,7 +15,7 @@ import {
 } from '../providers/llm-provider.port.js';
 import { RunBusService } from '../run-bus.service.js';
 import { buildCatalog, hotTools } from '../tools/catalog.js';
-import { exaTools } from '../tools/definitions/exa.tools.js';
+import { externalMcpTools, externalToolTitle } from '../tools/definitions/mcp.tools.js';
 import { asToolData } from '../tools/tool-data.js';
 import type {
   AssistantToolDefinition,
@@ -25,7 +25,7 @@ import type {
 import { toLlmTools } from '../tools/tool-schema.js';
 import { ToolExecutorService } from '../tools/tool-executor.service.js';
 import { toLlmHistory } from './history.js';
-import { buildSystemPrompt, companyToday, type SystemPromptOptions } from './system-prompt.js';
+import { buildSystemPrompt, companyToday } from './system-prompt.js';
 
 /** Параметры прогона: всё, что нужно циклу, передаётся явно. */
 export interface RunParams {
@@ -140,25 +140,26 @@ export class AgentRunnerService {
       );
       const priorMessages = toLlmHistory(history.filter((row) => row.id !== message.id));
       const catalog = buildCatalog({ permissions: params.permissions, features: params.features });
-      // Внешние инструменты (Ф3, #901): есть настроенный MCP-сервер с ключом —
-      // добавляем поиск/чтение интернета. Ошибка настроек не валит прогон:
-      // без интернета ассистент просто работает по порталу. Сервер без ключа
-      // инструментов не получает (Exa без ключа отвечает отказом), но модель
-      // узнаёт причину и объясняет её сотруднику, а не выдумывает поиск.
-      const search = await this.mcp.resolveForSearch().catch((error: unknown) => {
-        this.logger.warn({ err: error }, 'MCP search server unavailable');
-        return null;
+      // Внешние MCP-инструменты (ADR-0047): ВСЕ включённые серверы равнозначны
+      // (поиск, Blender, GitHub — что угодно). Список инструментов сервера
+      // читается на старте прогона; недоступный сервер пропускается и не валит
+      // прогон. Ошибка реестра — работаем только по порталу.
+      const mcpServers = await this.mcp.resolveEnabled().catch((error: unknown) => {
+        this.logger.warn({ err: error }, 'MCP servers unavailable');
+        return [];
       });
-      const internet: SystemPromptOptions['internet'] =
-        search === null ? undefined : search.row.apiKeyCiphertext ? 'on' : 'no-key';
-      const externalTools = internet === 'on' && search ? exaTools(search.client) : [];
-      const toolsAll = [...catalog, ...externalTools];
+      const externalCatalog = await externalMcpTools(mcpServers).catch((error: unknown) => {
+        this.logger.warn({ err: error }, 'MCP tools listing failed');
+        return { tools: [], digest: [] };
+      });
+      const toolsAll = [...catalog, ...externalCatalog.tools];
       const prompt = buildSystemPrompt({
         today: companyToday(new Date(), 'Europe/Minsk'),
         hotTools: hotTools(toolsAll),
         hasHiddenTools: toolsAll.length > hotTools(toolsAll).length,
         instructions: resolved.instructions,
-        internet,
+        external: externalCatalog.tools.length > 0,
+        externalCatalog: externalCatalog.digest,
       });
       const messages: LlmMessage[] = [{ role: 'system', content: prompt }, ...priorMessages];
 
@@ -352,13 +353,13 @@ export class AgentRunnerService {
         messageId,
         seq: index,
         toolId: call.function.name,
-        title: tool?.title ?? call.function.name,
+        title: tool?.title ?? externalToolTitle(call.function.name) ?? call.function.name,
         args,
       });
       await this.bus.publish(runId, 'tool.started', {
         toolCallId,
         toolId: call.function.name,
-        title: tool?.title ?? call.function.name,
+        title: tool?.title ?? externalToolTitle(call.function.name) ?? call.function.name,
         args,
       });
       prepared.push({ call, tool, toolCallId, input: args });

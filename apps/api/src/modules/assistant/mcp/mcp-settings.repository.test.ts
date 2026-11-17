@@ -32,7 +32,6 @@ const server = {
   apiKeyCiphertext: 'cipher',
   apiKeyHint: 'abcd',
   enabled: true,
-  defaultForSearch: true,
   sortOrder: 0,
 };
 
@@ -48,7 +47,7 @@ describe('McpSettingsRepository.replaceAll', () => {
     expect(tx.assistantMcpServer.upsert).toHaveBeenCalledWith({
       where: { id: server.id },
       create: expect.objectContaining({ id: server.id, name: 'Exa' }),
-      update: expect.objectContaining({ name: 'Exa', defaultForSearch: true }),
+      update: expect.objectContaining({ name: 'Exa', enabled: true }),
     });
   });
 

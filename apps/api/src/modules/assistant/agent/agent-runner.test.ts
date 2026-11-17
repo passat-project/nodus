@@ -141,7 +141,7 @@ describe('AgentRunnerService: цикл (#893)', () => {
       }),
     };
     const bus2 = new RunBusService(fake.repo as unknown as AssistantRepository, logger as never);
-    const mcp2 = { resolveForSearch: async () => null };
+    const mcp2 = { resolveEnabled: async () => [] };
     const runner2 = new AgentRunnerService(
       fake.repo as unknown as AssistantRepository,
       settings as unknown as AiSettingsService,

@@ -22,7 +22,6 @@ const mocks = vi.hoisted(() => ({
       hasKey: false,
       keyHint: null,
       enabled: true,
-      defaultForSearch: true,
     },
   ],
   mcpSave: vi.fn(async (body: { servers: Array<Record<string, unknown>> }) => ({
@@ -120,14 +119,15 @@ describe('AiMcpSection: реестр MCP-серверов', () => {
 
     await waitFor(() => expect(mocks.mcpSave).toHaveBeenCalledTimes(1));
     const body = mocks.mcpSave.mock.calls[0]![0] as unknown as {
-      servers: { name: string; url: string; transport: string; defaultForSearch: boolean }[];
+      servers: Array<Record<string, unknown>>;
     };
     const created = body.servers.find((server) => server.name === 'Exa поиск');
     expect(created).toMatchObject({
       url: 'https://mcp.exa.ai/mcp',
       transport: 'streamable-http',
-      defaultForSearch: false,
     });
+    // «Поиска по умолчанию» больше нет: серверы равнозначны (18.11.2026).
+    expect(created).not.toHaveProperty('defaultForSearch');
   });
 
   it('некорректный адрес блокирует создание и показывает подсказку', async () => {
@@ -170,35 +170,15 @@ describe('AiProvidersSection: реестр провайдеров (регрес�
 });
 
 describe('AiMcpSection: действия строки и отказы', () => {
-  it('«Назначить» делает сервер основным для поиска (ровно один)', async () => {
-    const original = mocks.mcpServers[0]!;
-    mocks.mcpServers[0] = { ...original, defaultForSearch: false };
-    try {
-      render(<AiMcpSection section="mcp" onSection={() => undefined} />);
-      fireEvent.click(screen.getByRole('button', { name: ui.assistant.settings.mcpDefaultAssign }));
-      await waitFor(() => expect(mocks.mcpSave).toHaveBeenCalledTimes(1));
-      const body = mocks.mcpSave.mock.calls[0]?.[0] as {
-        servers: { id: string; defaultForSearch: boolean }[];
-      };
-      expect(body.servers.filter((server) => server.defaultForSearch)).toHaveLength(1);
-    } finally {
-      mocks.mcpServers[0] = original;
-    }
-  });
-
   it('сбой сохранения показывает ошибку и не теряет список', async () => {
-    const original = mocks.mcpServers[0]!;
-    mocks.mcpServers[0] = { ...original, defaultForSearch: false };
     mocks.mcpSave.mockRejectedValueOnce(new Error('boom'));
-    try {
-      render(<AiMcpSection section="mcp" onSection={() => undefined} />);
-      fireEvent.click(screen.getByRole('button', { name: ui.assistant.settings.mcpDefaultAssign }));
-      await waitFor(() => expect(mocks.mcpSave).toHaveBeenCalledTimes(1));
-      // Реестр остался на экране (черновик сброшен к серверной правде).
-      await waitFor(() => expect(screen.getByText('Exa')).toBeTruthy());
-    } finally {
-      mocks.mcpServers[0] = original;
-    }
+    render(<AiMcpSection section="mcp" onSection={() => undefined} />);
+    fireEvent.click(screen.getByRole('button', { name: ui.common.create }));
+    // Окно создания уже с предзаполненным сервером — отправляем как есть.
+    fireEvent.click(screen.getAllByRole('button', { name: ui.common.create }).at(-1)!);
+    await waitFor(() => expect(mocks.mcpSave).toHaveBeenCalledTimes(1));
+    // Реестр остался на экране (черновик сброшен к серверной правде).
+    await waitFor(() => expect(screen.getByText('Exa')).toBeTruthy());
   });
 
   it('введённый ключ сильнее ранее нажатого «Удалить ключ»', async () => {

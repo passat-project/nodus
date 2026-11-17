@@ -82,31 +82,18 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('ui.open_entity');
   });
 
-  it('правила интернета появляются только при настроенном поиске', () => {
-    expect(prompt).not.toContain('Интернет (внешние данные)');
+  it('правила внешних MCP-инструментов появляются только при их наличии', () => {
+    expect(prompt).not.toContain('Внешние MCP-инструменты');
     const withInternet = buildSystemPrompt({
       today: '17 ноября 2026',
       hotTools: hotTools(ALL_TOOLS),
       hasHiddenTools: false,
       instructions: '',
-      internet: 'on',
+      external: true,
     });
-    expect(withInternet).toContain('Интернет (внешние данные)');
-    expect(withInternet).toContain('только сформулированный запрос и адрес страницы');
-    expect(withInternet).toContain('Источники указывай ссылками');
-  });
-
-  it('сервер без ключа: промпт объясняет настройку, а не изображает поиск', () => {
-    const noKey = buildSystemPrompt({
-      today: '17 ноября 2026',
-      hotTools: hotTools(ALL_TOOLS),
-      hasHiddenTools: false,
-      instructions: '',
-      internet: 'no-key',
-    });
-    expect(noKey).toContain('поиск не настроен');
-    expect(noKey).toContain('Настройки → ИИ-агент → MCP');
-    expect(noKey).not.toContain('Интернет (внешние данные)');
+    expect(withInternet).toContain('Внешние MCP-инструменты');
+    expect(withInternet).toContain('источники ссылками');
+    expect(withInternet).toContain('Приватность');
   });
 
   it('не дублирует описания инструментов — только имена горячей полки', () => {

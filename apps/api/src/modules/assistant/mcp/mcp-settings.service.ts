@@ -50,15 +50,6 @@ export class McpSettingsService {
    */
   async put(body: AssistantMcpBody): Promise<AssistantMcpResponse> {
     const existing = new Map((await this.repo.findServers()).map((row) => [row.id, row]));
-    const defaults = body.servers.filter((server) => server.defaultForSearch);
-    if (defaults.length > 1) {
-      throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
-        'Сервер по умолчанию для поиска может быть только один',
-        { field: 'servers' },
-      );
-    }
-
     const servers = body.servers.map((input, index) => {
       const current = input.id ? existing.get(input.id) : undefined;
       if (input.apiKey && input.clearKey) {
@@ -101,7 +92,6 @@ export class McpSettingsService {
         apiKeyCiphertext: ciphertext,
         apiKeyHint: hint,
         enabled: input.enabled,
-        defaultForSearch: input.defaultForSearch,
         sortOrder: index,
       };
     });
@@ -149,16 +139,14 @@ export class McpSettingsService {
   }
 
   /**
-   * Сервер для поиска в интернете (Ф3, #901): ТОЛЬКО явный «по умолчанию» и
-   * включённый. Раньше был fallback «первый включённый» — он молча отправлял
-   * поисковые запросы сотрудников на произвольный сервер реестра (находка
-   * security-ревью #901). Нет такого — `null`: инструменты Exa не попадают в
-   * каталог, портал не падает.
+   * ВСЕ включённые серверы (решение владельца 18.11.2026): MCP — не «поиск
+   * по умолчанию», а равнозначный набор внешних инструментов. Агент получает
+   * инструменты каждого сервера; недоступный сервер пропускается на этапе
+   * `tools/list` и не валит прогон.
    */
-  async resolveForSearch(): Promise<{ row: McpServerRow; client: McpClient } | null> {
-    const row =
-      (await this.repo.findServers()).find((item) => item.enabled && item.defaultForSearch) ?? null;
-    return row ? { row, client: this.clientForRow(row) } : null;
+  async resolveEnabled(): Promise<{ row: McpServerRow; client: McpClient }[]> {
+    const rows = (await this.repo.findServers()).filter((row) => row.enabled);
+    return rows.map((row) => ({ row, client: this.clientForRow(row) }));
   }
 
   private toDto(row: McpServerRow): AssistantMcpServer {
@@ -170,7 +158,6 @@ export class McpSettingsService {
       hasKey: Boolean(row.apiKeyCiphertext),
       keyHint: row.apiKeyHint,
       enabled: row.enabled,
-      defaultForSearch: row.defaultForSearch,
     };
   }
 

@@ -27,7 +27,7 @@ await shot('s-light-providers');
 await page.getByLabel('Раздел').click();
 await page.waitForTimeout(400);
 await shot('s-light-sections-open');
-await page.getByRole('option', { name: 'MCP' }).click();
+await page.getByRole('button', { name: 'MCP' }).click();
 await page.waitForTimeout(1200);
 await shot('s-light-mcp');
 

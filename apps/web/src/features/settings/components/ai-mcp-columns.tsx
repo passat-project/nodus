@@ -22,11 +22,7 @@ export interface McpServerDraft extends AssistantMcpServerInput {
  * проверки соединения за эту сессию экрана («—» до проверки): экран не
  * ходит во внешнюю сеть сам по себе при открытии.
  */
-export function mcpColumns(
-  defaultServerId: string | null,
-  onMakeDefault: (id: string) => void,
-  toolCounts: Record<string, number>,
-): DataTableField<McpServerDraft>[] {
+export function mcpColumns(toolCounts: Record<string, number>): DataTableField<McpServerDraft>[] {
   return [
     {
       id: 'name',
@@ -79,32 +75,6 @@ export function mcpColumns(
           {toolCounts[server.id] ?? '—'}
         </span>
       ),
-    },
-    {
-      id: 'default',
-      label: strings.mcpDefaultForSearch,
-      defaultVisible: true,
-      defaultWidth: 150,
-      minWidth: 130,
-      render: (server) =>
-        server.id === defaultServerId ? (
-          <span className="truncate text-sm text-primary">{strings.mcpDefaultForSearch}</span>
-        ) : (
-          <button
-            type="button"
-            className="truncate text-sm text-muted-foreground transition-colors hover:text-foreground"
-            // Клик не всплывает до строки (канон инлайн-контролов ячейки):
-            // иначе вместе с назначением открылось бы окно правки.
-            onClick={(event) => {
-              event.stopPropagation();
-              onMakeDefault(server.id);
-            }}
-            onKeyDown={(event) => event.stopPropagation()}
-            title={strings.mcpDefaultHint}
-          >
-            {strings.mcpDefaultAssign}
-          </button>
-        ),
     },
     {
       id: 'state',

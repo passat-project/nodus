@@ -7,6 +7,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { useAssistantStore } from '../model/assistant-store.js';
 import {
   assistantKeys,
+  mergeLiveMessage,
   stopRunStream,
   useAssistantMessages,
   useAssistantSessions,
@@ -170,8 +171,8 @@ describe('мутации сессий (#893)', () => {
   });
 });
 
-describe('useSendAssistantMessage: оптимистичный вопрос (I4, #893)', () => {
-  it('вопрос встаёт в ленту ДО ответа сервера, затем появляется live-буфер', async () => {
+describe('useSendAssistantMessage: вопрос без фантомных пузырей (I4, #893)', () => {
+  it('кэш не мигает временной строкой: вопрос встаёт из живого буфера с серверным id', async () => {
     let resolvePost!: (response: Response) => void;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -194,15 +195,14 @@ describe('useSendAssistantMessage: оптимистичный вопрос (I4, 
 
     act(() => result.current.mutate({ sessionId: SESSION_ID, text: 'Какие задачи?' }));
 
-    // Сервер ещё не ответил — пузырь сотрудника уже в кэше.
-    await waitFor(() => {
-      const cached = queryClient.getQueryData<AssistantMessageList>(
-        assistantKeys.messages(SESSION_ID),
-      );
-      expect(cached?.items).toHaveLength(1);
-      expect(cached?.items[0]).toMatchObject({ role: 'user', text: 'Какие задачи?' });
-      expect(cached?.items[0]!.id.startsWith('pending-')).toBe(true);
-    });
+    // Пока POST в полёте, кэш истории НЕ трогаем: временная строка с
+    // клиентским id давала наблюдаемое мерцание окна (18.11.2026).
+    const before = queryClient.getQueryData<AssistantMessageList>(
+      assistantKeys.messages(SESSION_ID),
+    );
+    expect(before?.items).toHaveLength(0);
+    // onMutate сначала отменяет in-flight запросы истории — ждём старта POST.
+    await waitFor(() => expect(typeof resolvePost).toBe('function'));
 
     resolvePost(json({ runId: RUN_ID, messageId: MESSAGE_ID }));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -212,6 +212,10 @@ describe('useSendAssistantMessage: оптимистичный вопрос (I4, 
       userText: 'Какие задачи?',
       userMessageId: MESSAGE_ID,
     });
+    // Пузырь вопроса рисуется живым буфером сразу с СЕРВЕРНЫМ id: при
+    // рефетче истории id не меняется и React не перемонтирует пузырь.
+    const merged = mergeLiveMessage([], useAssistantStore.getState().live, SESSION_ID);
+    expect(merged.find((message) => message.role === 'user')?.id).toBe(MESSAGE_ID);
     await waitFor(() => expect(useAssistantStore.getState().live?.status).toBe('done'));
   });
 
