@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ui } from '@nodus/contracts';
 
 import { AiSettingsSection } from './ai-settings-section.js';
@@ -89,6 +89,12 @@ beforeEach(() => {
       disconnect() {}
     },
   );
+  // Radix Select (переключатель разделов) требует pointer capture и
+  // scrollIntoView — в jsdom их нет, без заглушек меню не открывается.
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.setPointerCapture ??= () => undefined;
+  Element.prototype.releasePointerCapture ??= () => undefined;
+  Element.prototype.scrollIntoView ??= () => undefined;
 });
 
 afterEach(() => {
@@ -122,6 +128,37 @@ describe('AiSettingsSection: разделы экрана', () => {
     expect(screen.getByText(ui.assistant.settings.skillsEmptyBody)).toBeTruthy();
     const create = screen.getByRole('button', { name: ui.common.create }) as HTMLButtonElement;
     expect(create.disabled).toBe(true);
+  });
+
+  it('выбор раздела в переключателе уходит в URL (?section=mcp)', async () => {
+    render(<AiSettingsSection />);
+    const trigger = screen.getByLabelText(ui.assistant.settings.sectionsLabel);
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    const option = await screen.findByRole('option', { name: ui.assistant.settings.sectionMcp });
+    fireEvent.click(option);
+
+    expect(mocks.navigate).toHaveBeenCalledWith({
+      to: '/settings',
+      search: expect.any(Function),
+    });
+    const call = mocks.navigate.mock.calls[0]![0] as {
+      search: (prev: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(call.search({ tab: 'ai', section: 'providers' })).toEqual({
+      tab: 'ai',
+      section: 'mcp',
+    });
+  });
+
+  it('поиск в разделе MCP фильтрует серверы по имени и адресу', () => {
+    mocks.search = { tab: 'ai', section: 'mcp' };
+    render(<AiSettingsSection />);
+    const search = screen.getByPlaceholderText(ui.assistant.settings.mcpSearchPlaceholder);
+    fireEvent.change(search, { target: { value: 'exa.ai' } });
+    expect(screen.getByText('Exa')).toBeTruthy();
+    fireEvent.change(search, { target: { value: 'нет-такого' } });
+    expect(screen.queryByText('Exa')).toBeNull();
   });
 
   it('?section=mcp — реестр MCP-серверов с адресом и «по умолчанию для поиска»', () => {

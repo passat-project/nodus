@@ -106,6 +106,15 @@ export function AiMcpDialog({
     if (editing) {
       // «По умолчанию» — единственный сервер: тумблер снимает признак у других
       // через тот же PUT (defaults передаёт экран).
+      const nextKey = keyDraft.trim();
+      // «Заменить» и «Удалить ключ» взаимоисключающие: введённый ключ сильнее
+      // нажатого ранее «Удалить» — иначе ввод молча терялся, а сохранённый
+      // ключ удалялся (находка code-review 17.11.2026).
+      const keyPatch = nextKey
+        ? { apiKey: nextKey, clearKey: false }
+        : clearKey
+          ? { clearKey: true, apiKey: undefined, hasKey: false, keyHint: null }
+          : {};
       onApply(
         editing.id,
         {
@@ -113,8 +122,7 @@ export function AiMcpDialog({
           url: form.url.trim(),
           enabled: form.enabled,
           defaultForSearch: form.defaultForSearch,
-          ...(keyDraft.trim() ? { apiKey: keyDraft.trim(), clearKey: false } : {}),
-          ...(clearKey ? { clearKey: true, apiKey: undefined, hasKey: false, keyHint: null } : {}),
+          ...keyPatch,
         },
         { defaultId: form.defaultForSearch ? editing.id : null },
       );

@@ -5,6 +5,7 @@ import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@nodus/ui/components/dialog';
 import { toast } from 'sonner';
 
+import { BulkIsland, bulkActionClass } from '../../../shared/views/bulk-island.js';
 import { DataTable } from '../../../shared/views/data-table.js';
 import { useListToolbar } from '../../../shared/views/use-list-toolbar.js';
 import { useRowSelection } from '../../../shared/views/use-row-selection.js';
@@ -42,6 +43,7 @@ export function AiMcpSection({
   const [draft, setDraft] = useState<AssistantMcpBody | null>(null);
   const [dialog, setDialog] = useState<McpDialogMode | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteIds, setDeleteIds] = useState<string[] | null>(null);
   const [toolCounts, setToolCounts] = useState<Record<string, number>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
 
@@ -155,6 +157,11 @@ export function AiMcpSection({
     () => mcpColumns(defaultId, makeDefault, toolCounts),
     [defaultId, makeDefault, toolCounts],
   );
+  const selectedCount = selection.selected.size;
+  const deleteTitle =
+    deleteIds && deleteIds.length > 1
+      ? strings.mcpDeleteConfirmBulk
+      : strings.mcpDeleteConfirmTitle;
 
   return (
     <div className="relative flex h-full min-h-0 min-w-0 flex-col">
@@ -216,6 +223,22 @@ export function AiMcpSection({
         />
       </div>
 
+      <BulkIsland
+        visible={selectedCount > 0}
+        count={selectedCount}
+        ariaLabel={strings.mcpTitle}
+        onClear={selection.clear}
+      >
+        <button
+          type="button"
+          className={bulkActionClass}
+          onClick={() => setDeleteIds([...selection.selected])}
+        >
+          <Trash2 className="size-3.5" strokeWidth={1.75} />
+          {strings.deleteSelected}
+        </button>
+      </BulkIsland>
+
       {dialog && draft ? (
         <AiMcpDialog
           key={dialog.kind === 'edit' ? dialog.server.id : 'create'}
@@ -244,6 +267,35 @@ export function AiMcpSection({
                 onClick={() => {
                   removeServer(deleteId);
                   setDeleteId(null);
+                }}
+              >
+                {strings.deleteAction}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+
+      {deleteIds ? (
+        <Dialog open onOpenChange={(open) => !open && setDeleteIds(null)}>
+          <DialogContent className="max-w-md" aria-describedby={undefined}>
+            <DialogTitle>{deleteTitle}</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              {strings.mcpDeleteConfirmHint}
+            </DialogDescription>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button variant="ghost" size="sm" onClick={() => setDeleteIds(null)}>
+                {ui.common.cancel}
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  // Один PUT на пачку — как «Удалить выбранные» у провайдеров.
+                  const ids = new Set(deleteIds);
+                  void persist({ servers: servers.filter((server) => !ids.has(server.id)) });
+                  ids.forEach((id) => selection.deselect(id));
+                  setDeleteIds(null);
                 }}
               >
                 {strings.deleteAction}

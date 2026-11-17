@@ -68,6 +68,22 @@ export class McpSettingsService {
           { field: 'apiKey' },
         );
       }
+      // Сохранённый ключ не уходит на другой хост: смена origin адреса
+      // (опечатка, подменённый URL) требует ввести ключ заново — иначе
+      // секрет отправился бы новому владельцу адреса (ADR-0044 п. 4 —
+      // та же защита, что у провайдеров моделей).
+      if (
+        current?.apiKeyCiphertext &&
+        !input.apiKey &&
+        !input.clearKey &&
+        originOf(input.url) !== originOf(current.url)
+      ) {
+        throw new DomainException(
+          ErrorCode.VALIDATION_FAILED,
+          'Адрес сервера изменился — введите ключ заново (или удалите его)',
+          { field: 'apiKey' },
+        );
+      }
       let ciphertext = current?.apiKeyCiphertext ?? null;
       let hint = current?.apiKeyHint ?? null;
       if (input.apiKey) {
@@ -161,7 +177,8 @@ export class McpSettingsService {
     const apiKey = row.apiKeyCiphertext ? this.secretBox.open(row.apiKeyCiphertext) : null;
     if (row.apiKeyCiphertext && apiKey === null) {
       // Ключ сохранён, но не расшифровывается (сменился материал шифрования):
-      // честная ошибка вместо тихого 401 от сервера.
+      // предупреждаем в лог и идём без ключа — сервер ответит отказом, и
+      // администратор увидит причину в «Проверить соединение», а не пустой 401.
       this.logger.warn({ serverId: row.id }, 'MCP api key cannot be decrypted');
     }
     return new McpClient({ url: row.url, apiKey, timeoutMs: TEST_TIMEOUT_MS });
@@ -188,5 +205,14 @@ export class McpSettingsService {
     }
     this.logger.warn({ err: error }, 'MCP request failed');
     return { code: 'mcp_unavailable', message: 'Сервер MCP не отвечает' };
+  }
+}
+
+/** Origin адреса (`https://host:port`); невалидный URL — пустая строка. */
+function originOf(value: string): string {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return '';
   }
 }
