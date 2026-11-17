@@ -276,7 +276,11 @@ describe('AssistantBody: пустое состояние и композер', (
 
     await waitFor(() => expect(h.sendMutate).toHaveBeenCalled());
     expect(useAssistantStore.getState().activeId).toBe('s-new');
-    expect(useAssistantStore.getState().pending).toBeNull();
+    // Пузырь НЕ исчезает между созданием сессии и стартом живого буфера:
+    // pending держится, пока `live` не подхватит вопрос (замечание 18.11).
+    expect(useAssistantStore.getState().pending).not.toBeNull();
+    const afterCreate = h.feedProps.current!.messages as AssistantMessage[];
+    expect(afterCreate.some((m) => m.role === 'user' && m.text === 'Что по задачам?')).toBe(true);
     expect(h.sendMutate).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 's-new', text: 'Что по задачам?' }),
       expect.anything(),
