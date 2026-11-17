@@ -6,10 +6,18 @@ import {
   type AssistantMessage,
   type AssistantToolCall,
 } from '@nodus/contracts';
+import {
+  MessageScroller,
+  MessageScrollerContent,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from '@nodus/ui/components/message-scroller';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { ChatMessageItem } from '../../../shared/chat/chat-message.js';
+import { ScrollEndResponder } from '../../../shared/chat/scroll-end-responder.js';
+import { useIncomingFollow } from '../../../shared/chat/use-incoming-follow.js';
 import { AssistantActionCard } from './assistant-action-card.js';
 import { AssistantMarkdown } from './assistant-markdown.js';
 import { AssistantMessageMenu } from './assistant-message-menu.js';
@@ -24,6 +32,8 @@ import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { usePersonAvatarUrl } from '../../../shared/ui/use-person-avatar-url.js';
 import type { AssistantLiveRun } from '../model/assistant-store.js';
 import { toChatMessage } from '../model/assistant-messages.js';
+import { ASSISTANT_SCROLL_SCOPE } from '../model/assistant-scroll.js';
+import { useStickyBottom } from '../model/use-sticky-bottom.js';
 import { AssistantEntityLinks, AssistantToolRows } from './assistant-tool-rows.js';
 
 const strings = ui.assistant;
@@ -168,145 +178,140 @@ export function AssistantFeed({
   activeSessionId: string | null;
   onRetry: () => void;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  // Автодогон ТОЛЬКО у низа (канон чатов): читающего выше не выдёргивать
-  // вниз каждым тиком стриминга.
-  const atBottomRef = useRef(true);
+  // Скролл — ТОТ ЖЕ примитив, что у мессенджера (канон лент): догон
+  // входящих/стрима, pre-paint компенсация роста и «у низа» решаются его
+  // машиной состояний, а не самодельными эффектами. Своя отправка просит
+  // догон через scroll-end-store (как композер чата).
+  const viewportRef = useRef<HTMLDivElement>(null);
+  useStickyBottom(viewportRef);
   const me = useAuthStore((state) => state.user);
   const myAvatarUrl = usePersonAvatarUrl(me?.id);
   const showLive = Boolean(live && live.sessionId === activeSessionId);
   const segments = buildSegments(messages, me?.id);
-  const liveThinking = showLive && live?.status === 'running' && !live.text;
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
-  }, [messages, live?.text, live?.tools.length, liveThinking]);
-
-  // Во время стриминга высота растёт ПОЗЖЕ эффекта: `useDeferredValue` в
-  // Markdown дорисовывает блок на следующем кадре, а таблицы/код добавляют
-  // высоту уже после скролла. Наблюдаем фактический размер содержимого —
-  // лента остаётся приклеенной к низу, пока сотрудник не отлистал вверх
-  // (наблюдение владельца 18.11.2026: «прокручивается только когда готово»).
-  useEffect(() => {
-    const el = scrollRef.current;
-    const content = contentRef.current;
-    if (!el || !content || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => {
-      if (atBottomRef.current) el.scrollTop = el.scrollHeight;
-    });
-    observer.observe(content);
-    return () => observer.disconnect();
-  }, []);
+  // Догон смотрит только на «последняя строка — не моя»: полная форма
+  // ChatMessage здесь не нужна (id + автор).
+  const followItems = messages.map((message) => ({
+    id: message.id,
+    author: { id: message.role === 'user' ? (me?.id ?? 'me') : 'assistant' },
+  }));
+  useIncomingFollow({
+    scope: ASSISTANT_SCROLL_SCOPE,
+    items: followItems,
+    meId: me?.id,
+    viewportRef,
+    enabled: true,
+  });
 
   return (
-    <div
-      ref={scrollRef}
-      onScroll={(event) => {
-        const el = event.currentTarget;
-        atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
-      }}
-      className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
-    >
-      <div ref={contentRef} className="flex flex-col gap-3">
-        {segments.map((segment) => (
-          <div key={segment.run.first.id} className="flex flex-col gap-1.5">
-            {segment.showDay ? (
-              <DayChip label={formatDayLabel(segment.run.first.createdAt)} />
-            ) : null}
-            {segment.tools.length > 0 ? (
-              <div className="pl-9">
-                <AssistantToolRows tools={segment.tools} />
-              </div>
-            ) : null}
-            {segment.reasoning ? (
-              <div className="pl-9">
-                <AssistantReasoning reasoning={segment.reasoning} streaming={segment.streaming} />
-              </div>
-            ) : null}
-            {segment.actions.length > 0 ? (
-              <div className="mb-1.5 flex flex-col gap-1.5 pl-9">
-                {segment.actions.map((action) => (
-                  <AssistantActionCard
-                    key={action.id}
-                    action={action}
-                    sessionId={activeSessionId}
-                  />
-                ))}
-              </div>
-            ) : null}
-            {segment.visible ? (
-              <MessageRunView
-                run={segment.run}
-                showName={false}
-                // Узкая колонка диалога с ИИ: сотрудник справа, агент слева
-                // (конвенция харнесов, вердикт владельца 17.11.2026).
-                align="both"
-                renderAvatar={(run) =>
-                  run.mine ? (
-                    <PersonAvatar
-                      name={me?.displayName ?? strings.meFallback}
-                      avatarUrl={myAvatarUrl}
-                      className="size-7"
+    <MessageScrollerProvider autoScroll>
+      <ScrollEndResponder scope={ASSISTANT_SCROLL_SCOPE} />
+      <MessageScroller className="min-h-0 flex-1">
+        <MessageScrollerViewport ref={viewportRef}>
+          <MessageScrollerContent className="gap-3 px-3 py-3">
+            {segments.map((segment) => (
+              <div key={segment.run.first.id} className="flex flex-col gap-1.5">
+                {segment.showDay ? (
+                  <DayChip label={formatDayLabel(segment.run.first.createdAt)} />
+                ) : null}
+                {segment.tools.length > 0 ? (
+                  <div className="pl-9">
+                    <AssistantToolRows tools={segment.tools} />
+                  </div>
+                ) : null}
+                {segment.reasoning ? (
+                  <div className="pl-9">
+                    <AssistantReasoning
+                      reasoning={segment.reasoning}
+                      streaming={segment.streaming}
                     />
-                  ) : (
-                    <AssistantGlyph className="size-7 rounded-full" />
-                  )
-                }
-                renderItem={(message, attrs) => (
-                  <AssistantMessageMenu message={message}>
-                    <div style={attrs.style} className="min-w-0">
-                      <ChatMessageItem
-                        message={message}
-                        mine={segment.run.mine}
-                        avatarSlot="none"
-                        tail={attrs.tail}
-                        reactionsHidden
-                        receiptsHidden
-                        align="both"
-                        // Ответ агента — Markdown (ADR-0045, #897); вопрос
-                        // сотрудника остаётся простым текстом, как в мессенджере.
-                        textSlot={
-                          segment.run.mine ? undefined : <AssistantMarkdown text={message.text} />
-                        }
+                  </div>
+                ) : null}
+                {segment.actions.length > 0 ? (
+                  <div className="mb-1.5 flex flex-col gap-1.5 pl-9">
+                    {segment.actions.map((action) => (
+                      <AssistantActionCard
+                        key={action.id}
+                        action={action}
+                        sessionId={activeSessionId}
                       />
-                    </div>
-                  </AssistantMessageMenu>
-                )}
-              />
-            ) : null}
-            {/* Навигация — ДЕЙСТВИЕ под ответом, не строка вызова (вердикт
+                    ))}
+                  </div>
+                ) : null}
+                {segment.visible ? (
+                  <MessageRunView
+                    run={segment.run}
+                    showName={false}
+                    // Узкая колонка диалога с ИИ: сотрудник справа, агент слева
+                    // (конвенция харнесов, вердикт владельца 17.11.2026).
+                    align="both"
+                    renderAvatar={(run) =>
+                      run.mine ? (
+                        <PersonAvatar
+                          name={me?.displayName ?? strings.meFallback}
+                          avatarUrl={myAvatarUrl}
+                          className="size-7"
+                        />
+                      ) : (
+                        <AssistantGlyph className="size-7 rounded-full" />
+                      )
+                    }
+                    renderItem={(message, attrs) => (
+                      <AssistantMessageMenu message={message}>
+                        <div style={attrs.style} className="min-w-0">
+                          <ChatMessageItem
+                            message={message}
+                            mine={segment.run.mine}
+                            avatarSlot="none"
+                            tail={attrs.tail}
+                            reactionsHidden
+                            receiptsHidden
+                            align="both"
+                            // Ответ агента — Markdown (ADR-0045, #897); вопрос
+                            // сотрудника остаётся простым текстом, как в мессенджере.
+                            textSlot={
+                              segment.run.mine ? undefined : (
+                                <AssistantMarkdown text={message.text} />
+                              )
+                            }
+                          />
+                        </div>
+                      </AssistantMessageMenu>
+                    )}
+                  />
+                ) : null}
+                {/* Навигация — ДЕЙСТВИЕ под ответом, не строка вызова (вердикт
                 владельца 17.11.2026: в туле карточку не открывают). */}
-            <AssistantEntityLinks tools={segment.tools} />
-            {segment.errorCode ? (
-              <div className="flex items-center gap-2 pl-9 text-label text-destructive">
-                <span>{errorText(segment.errorCode)}</span>
-                <button
-                  type="button"
-                  onClick={onRetry}
-                  className="inline-flex items-center gap-1 text-primary hover:underline"
-                >
-                  <RotateCcw className="size-3" />
-                  {strings.retry}
-                </button>
+                <AssistantEntityLinks tools={segment.tools} />
+                {segment.errorCode ? (
+                  <div className="flex items-center gap-2 pl-9 text-label text-destructive">
+                    <span>{errorText(segment.errorCode)}</span>
+                    <button
+                      type="button"
+                      onClick={onRetry}
+                      className="inline-flex items-center gap-1 text-primary hover:underline"
+                    >
+                      <RotateCcw className="size-3" />
+                      {strings.retry}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+            {showLive && live && live.status === 'running' ? (
+              <div className="flex items-end gap-2">
+                <AssistantGlyph className="size-7 rounded-full" />
+                <div className="rounded-2xl bg-bubble-in px-2.5">
+                  <TypingDots />
+                </div>
               </div>
             ) : null}
-          </div>
-        ))}
-        {showLive && live && live.status === 'running' ? (
-          <div className="flex items-end gap-2">
-            <AssistantGlyph className="size-7 rounded-full" />
-            <div className="rounded-2xl bg-bubble-in px-2.5">
-              <TypingDots />
-            </div>
-          </div>
-        ) : null}
-        {showLive && live && live.status === 'cancelled' ? (
-          <div className="pl-9 text-label text-muted-foreground">{strings.cancelled}</div>
-        ) : null}
-      </div>
-    </div>
+            {showLive && live && live.status === 'cancelled' ? (
+              <div className="pl-9 text-label text-muted-foreground">{strings.cancelled}</div>
+            ) : null}
+          </MessageScrollerContent>
+        </MessageScrollerViewport>
+      </MessageScroller>
+    </MessageScrollerProvider>
   );
 }
 

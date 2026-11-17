@@ -314,10 +314,12 @@ describe('AssistantFeed: чип дня', () => {
 });
 
 describe('AssistantFeed: прокрутка', () => {
-  it('скролл вверх отключает автодогон (событие читается без падения)', () => {
+  it('лента живёт в том же скроллере, что и мессенджер (канон лент)', () => {
     const { container } = renderFeed([message('user', { text: 'вопрос' })]);
-    const scroller = container.firstElementChild as HTMLElement;
-    fireEvent.scroll(scroller);
-    expect(scroller).toBeTruthy();
+    // Автодогон/удержание низа/компенсация роста — машина состояний
+    // примитива message-scroller, а не самодельные эффекты ленты.
+    const viewport = container.querySelector('[data-slot="message-scroller-viewport"]');
+    expect(viewport).toBeTruthy();
+    expect(container.querySelector('[data-slot="message-scroller-content"]')).toBeTruthy();
   });
 });

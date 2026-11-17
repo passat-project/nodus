@@ -1,8 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
-import type { ChatMessage } from '@nodus/contracts';
 
 import { isWindowAttentive } from '../attention/attention-store.js';
 import { useScrollEndStore } from './scroll-end-store.js';
+
+/** Минимум, который нужен догону: идентификатор строки и её автор. Шире
+ *  `ChatMessage` — тот же канон работает и в ленте ИИ-ассистента (#899). */
+export interface FollowItem {
+  id: string;
+  author: { id: string };
+}
 
 /**
  * Догон входящих сообщений (#132, фидбек пилотов; модель Telegram): пока
@@ -70,7 +76,7 @@ export function useIncomingFollow({
   enabled,
 }: {
   scope: string;
-  items: readonly ChatMessage[];
+  items: readonly FollowItem[];
   meId: string | undefined;
   viewportRef: RefObject<HTMLElement | null>;
   /** Выключено, пока ленту ведёт якорь открытия (autoScroll примитива тоже

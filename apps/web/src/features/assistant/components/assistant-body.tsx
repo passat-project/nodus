@@ -5,6 +5,7 @@ import { Button } from '@nodus/ui/components/button';
 
 import { ChatComposer } from '../../../shared/chat/chat-composer.js';
 import { useChatDrafts } from '../../../shared/chat/chat-drafts.js';
+import { useScrollEndStore } from '../../../shared/chat/scroll-end-store.js';
 import {
   isRunStreamActive,
   mergeLiveMessage,
@@ -20,6 +21,7 @@ import {
 import { useAssistantStore } from '../model/assistant-store.js';
 import { useAssistantContext } from '../model/use-assistant-context.js';
 import { AssistantBypassButton } from './assistant-bypass-button.js';
+import { ASSISTANT_SCROLL_SCOPE } from '../model/assistant-scroll.js';
 import { AssistantFeed, AssistantGlyph } from './assistant-feed.js';
 import { AssistantMemoryPicker } from './assistant-memory-picker.js';
 import { AssistantSessionPicker } from './assistant-session-picker.js';
@@ -144,6 +146,10 @@ export function AssistantBody() {
     if (current?.status === 'running' && current.sessionId === sessionId) {
       void cancelRun.mutateAsync(current.runId).catch(() => undefined);
     }
+    // Канон мессенджера (вердикт 24.09): своя отправка видна ВСЕГДА — лента
+    // докручивается к низу тем же каналом, что и в чате, даже если сотрудник
+    // читал историю выше.
+    useScrollEndStore.getState().request(ASSISTANT_SCROLL_SCOPE, 'smooth');
     sendMessage.mutate(
       {
         sessionId,
@@ -224,6 +230,7 @@ export function AssistantBody() {
           <AssistantWelcome hasCard={Boolean(ctx.cardKind)} onPick={(text) => void ask(text)} />
         ) : (
           <AssistantFeed
+            key={activeId ?? 'new'}
             messages={messages}
             live={live}
             activeSessionId={activeId}
