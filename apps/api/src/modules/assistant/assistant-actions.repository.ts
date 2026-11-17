@@ -153,22 +153,22 @@ export abstract class AssistantActionsRepository {
     return result.count === 1;
   }
 
-  /** Новое сообщение сотрудника закрывает открытые пачки сессии (#916, п. 4). */
-  async closeOpenBatches(sessionId: string, userId?: string): Promise<void> {
+  /** Новое сообщение сотрудника закрывает открытые пачки ЕГО сессии (#916, п. 4). */
+  async closeOpenBatches(sessionId: string, userId: string): Promise<void> {
     await this.prisma.assistantActionBatch.updateMany({
-      where: { sessionId, ...(userId ? { userId } : {}), state: 'open' },
+      where: { sessionId, userId, state: 'open' },
       data: { state: 'closed' },
     });
   }
 
-  /** Счётчики карточек пачки: `pending` — ждут решения (proposed/executing). */
+  /** Счётчики карточек пачки владельца: `pending` — ждут решения. */
   async countActionsByMessage(
     messageId: string,
-    userId?: string,
+    userId: string,
   ): Promise<{ total: number; pending: number }> {
     const rows = await this.prisma.assistantAction.groupBy({
       by: ['state'],
-      where: { messageId, ...(userId ? { userId } : {}) },
+      where: { messageId, userId },
       _count: { _all: true },
     });
     let total = 0;

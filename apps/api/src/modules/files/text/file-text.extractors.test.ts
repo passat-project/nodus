@@ -22,13 +22,23 @@ const pdfDocument = vi.hoisted(() => ({
 
 vi.mock('unpdf', () => ({
   getDocumentProxy: vi.fn(async () => {
-    pdfDocument.getPage = vi.fn(async (number: number) => ({
-      getTextContent: async () => ({
-        items: pdfDocument.pages[number - 1]!.split('\n').flatMap((line) => [
-          { str: line, hasEOL: true },
-        ]),
-      }),
-    }));
+    pdfDocument.getPage = vi.fn(async (number: number) => {
+      const lines = pdfDocument.pages[number - 1]!.split('\n');
+      let index = 0;
+      // Поток текста (PDF.js 6): страница отдаёт чанки, caps применяются на
+      // лету. `getTextContent` намеренно не реализован — его быть не должно.
+      const stream = {
+        getReader: () => ({
+          read: async () =>
+            index < lines.length
+              ? { done: false, value: { items: [{ str: lines[index++]!, hasEOL: true }] } }
+              : { done: true },
+          cancel: async () => undefined,
+          releaseLock: () => undefined,
+        }),
+      };
+      return { streamTextContent: () => stream };
+    });
     return pdfDocument;
   }),
 }));
@@ -153,13 +163,6 @@ describe('extractAttachmentText: DOCX', () => {
     expect(result.pages).toEqual([{ page: 1, text: 'Текст акта' }]);
   });
 
-  it('архив без word/document.xml — FILE_TEXT_INVALID', async () => {
-    const broken = zipBuffer([{ name: 'word/styles.xml', data: Buffer.from('<styles/>') }]);
-    await expect(extractAttachmentText(broken, 'docx')).rejects.toMatchObject({
-      code: 'FILE_TEXT_INVALID',
-    });
-  });
-
   it('ZIP-бомба по заявленному размеру — FILE_TEXT_TOO_LARGE', async () => {
     const bomb = zipBuffer([
       {
@@ -187,6 +190,34 @@ describe('extractAttachmentText: DOCX', () => {
     ]);
     await expect(extractAttachmentText(bomb, 'docx')).rejects.toMatchObject({
       code: 'FILE_TEXT_TOO_LARGE',
+    });
+  });
+
+  it('бомба в ДРУГОЙ части DOCX (styles.xml) — бюджет по всем записям', async () => {
+    const { deflateRawSync } = await import('node:zlib');
+    // mammoth читает не только document.xml: styles/numbering/footnotes тоже.
+    // Ложный размер в заголовке styles.xml не должен проходить бюджет.
+    const packed = deflateRawSync(Buffer.alloc(70 * 1024 * 1024));
+    const bomb = zipBuffer([
+      { name: 'word/document.xml', data: Buffer.from('<document>Текст</document>') },
+      { name: 'word/styles.xml', method: 8, data: packed, declaredUncompressed: 100 },
+    ]);
+    await expect(extractAttachmentText(bomb, 'docx')).rejects.toMatchObject({
+      code: 'FILE_TEXT_TOO_LARGE',
+    });
+  });
+
+  it('скрытая запись за пределами EOCD — FILE_TEXT_INVALID, а не обход бюджета', async () => {
+    const buffer = zipBuffer([
+      { name: 'word/document.xml', data: Buffer.from('<document>Текст</document>') },
+      { name: 'word/styles.xml', data: Buffer.from('<styles/>') },
+    ]);
+    // EOCD — последние 22 байта; занижаем число записей до одной.
+    const eocd = buffer.length - 22;
+    buffer.writeUInt16LE(1, eocd + 8);
+    buffer.writeUInt16LE(1, eocd + 10);
+    await expect(extractAttachmentText(buffer, 'docx')).rejects.toMatchObject({
+      code: 'FILE_TEXT_INVALID',
     });
   });
 });
