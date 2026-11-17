@@ -181,6 +181,41 @@ describe('tasks.transition: выполнение перехода (#920)', () =>
     expect(tasksTransitionTool.card!.undo).toBeUndefined();
   });
 
+  it('«Требует заполнить» называет атрибут, а не uuid', async () => {
+    const customCtx = {
+      ...ctx,
+      read: async (path: string) => {
+        if (path.endsWith('/transitions')) {
+          return [
+            {
+              ...transition,
+              form: {
+                enabled: true,
+                sections: [
+                  { kind: 'fields', fields: [{ key: 'cf.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }] },
+                ],
+              },
+            },
+          ];
+        }
+        if (path === '/custom-fields/definitions') {
+          return [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'Сметная стоимость' }];
+        }
+        if (path.includes('/directory/users/')) {
+          return { id: '99999999-9999-4999-8999-999999999999', displayName: 'Петров Пётр' };
+        }
+        return { id: TASK_ID, number: 165, title: 'Смонтировать узел' };
+      },
+    } as ToolContext;
+    const fields = await tasksTransitionTool.card!.fields(
+      { id: TASK_ID, transitionId: TRANSITION_ID },
+      customCtx,
+    );
+    expect(fields).toEqual(
+      expect.arrayContaining([{ label: 'Требует заполнить', value: 'Поля: Сметная стоимость' }]),
+    );
+  });
+
   it('карточка показывает поля формы: описание, срок, исполнитель, план, атрибуты', async () => {
     const fields = await tasksTransitionTool.card!.fields(
       {

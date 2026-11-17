@@ -94,7 +94,7 @@ export class FileTextService {
     this.assertAllowed(userId);
     const controller = new AbortController();
     const entry: InflightExtraction = { controller, waiters: 0, promise: undefined as never };
-    entry.promise = this.track(userId, () => this.extractFresh(file, controller.signal))
+    entry.promise = this.track(userId, () => this.extractFresh(file, userId, controller.signal))
       .catch((error: unknown) => {
         throw mapExtractError(error);
       })
@@ -179,7 +179,11 @@ export class FileTextService {
     }
   }
 
-  private async extractFresh(file: FileObjectRow, signal: AbortSignal): Promise<FileTextResponse> {
+  private async extractFresh(
+    file: FileObjectRow,
+    userId: string,
+    signal: AbortSignal,
+  ): Promise<FileTextResponse> {
     const kind = detectAttachmentKind(file.name, file.mime);
     if (!kind) {
       throw new FileTextError('FILE_TEXT_UNSUPPORTED');
@@ -187,6 +191,17 @@ export class FileTextService {
     const startedAt = Date.now();
     const buffer = await readLimited(await this.driver.get(file.key), FILE_TEXT_LIMITS.maxBytes);
     const extracted = await extractAttachmentText(buffer, kind, signal);
+    // Пока разбирали, письмо могли пометить конфиденциальным: событие снимет
+    // кэш, но запись после него вернула бы текст at rest. Перепроверяем.
+    const after = await this.office.resolveAccess(file.id, userId);
+    if (after.textDenied) {
+      throw new DomainException(
+        ErrorCode.FILE_TEXT_FORBIDDEN,
+        'Text of confidential attachment is not available to AI',
+        undefined,
+        403,
+      );
+    }
     await this.repo.saveTextExtract({
       fileId: file.id,
       version: file.version,

@@ -123,8 +123,12 @@ export const letterUpdatedPayloadSchema = z.object({
    *  снимают производные данные, которые больше нельзя отдавать ИИ. */
   confidential: z.boolean().optional(),
   /** Файлы письма — только при `confidential: true`: адресат-подписчик удаляет
-   *  кэш текста вложений (ADR-0050, приватность at rest). */
-  fileIds: z.array(z.uuid()).max(LETTER_LIMITS.files).optional(),
+   *  кэш текста вложений (ADR-0050, приватность at rest). Лимит — как у
+   *  почтового письма (вложения + тело + исходник). */
+  fileIds: z
+    .array(z.uuid())
+    .max(Math.max(LETTER_LIMITS.files, LETTER_LIMITS.mailFiles) + 2)
+    .optional(),
 });
 export type LetterUpdatedPayload = z.infer<typeof letterUpdatedPayloadSchema>;
 
@@ -151,7 +155,10 @@ export const letterDeletedPayloadSchema = z.object({
   letterId: z.uuid(),
   /** Файлы удалённого письма: подписчики чистят производные данные
    *  (кэш текста вложений, ADR-0050). */
-  fileIds: z.array(z.uuid()).max(LETTER_LIMITS.files).optional(),
+  fileIds: z
+    .array(z.uuid())
+    .max(Math.max(LETTER_LIMITS.files, LETTER_LIMITS.mailFiles) + 2)
+    .optional(),
 });
 export type LetterDeletedPayload = z.infer<typeof letterDeletedPayloadSchema>;
 

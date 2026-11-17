@@ -83,6 +83,24 @@ export class LetterStageMover {
       aggregateId: letter.id,
     });
 
+    // Окно регистрации могло включить «Конфиденциально» (#461): PATCH-путь
+    // эмитит letter_updated сам, а регистрация — нет. Без этого события files
+    // не снимет кэш текста вложений (ADR-0050, приватность at rest).
+    const confidential = meta.fieldChanges?.confidential;
+    if (confidential?.to === true && confidential.from !== true) {
+      await this.eventBus.emit(
+        tx,
+        CORRESPONDENCE_EVENTS.LETTER_UPDATED,
+        {
+          letterId: letter.id,
+          changes: [{ field: 'confidential', from: confidential.from ?? false, to: true }],
+          confidential: true,
+          fileIds: await this.letters.fileIds(letter.id),
+        },
+        { actorId, aggregateType: 'letter', aggregateId: letter.id },
+      );
+    }
+
     // Событие регистрации несёт состав для моста чата: без корреспондента,
     // адресата и регистратора оно неполно (нумерация без формы — #464).
     if (numbering && letter.counterpartyId && letter.addresseeId && actorId) {

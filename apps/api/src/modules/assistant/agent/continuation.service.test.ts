@@ -54,6 +54,7 @@ function build(
     claimBatchContinueNow: vi.fn(async () => options.claimContinueNow ?? true),
     findRunById: vi.fn(async () => ({ status: 'queued' })),
     recoverQueuedRuns: vi.fn(async () => 0),
+    cancelQueuedRun: vi.fn(async () => true),
   };
   const runner = {
     isActive: vi.fn(() => false),
@@ -83,6 +84,7 @@ function build(
     runner,
     completion,
     logger,
+    flags,
     finishRun: (sessionId = SESSION_ID) => onFinished?.(sessionId),
   };
 }
@@ -184,6 +186,28 @@ describe('AssistantContinuationService: автопродолжение (#916)', 
     await service.onModuleInit();
     expect(repo.recoverQueuedRuns).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('сбой чтения модулей — прогон не создаётся и пачка не захватывается', async () => {
+    const { service, repo, flags } = build();
+    flags.enabledModules.mockRejectedValueOnce(new Error('db down'));
+    await expect(service.afterDecision(USER, 'Bearer token', MESSAGE_ID)).rejects.toThrow(
+      'db down',
+    );
+    expect(repo.createRun).not.toHaveBeenCalled();
+    expect(repo.claimBatchContinuation).not.toHaveBeenCalled();
+  });
+
+  it('сбой отложенного старта — резерв снят, пачка возвращена в работу', async () => {
+    const { service, repo, runner, flags, finishRun } = build({ sessionActive: true });
+    const runId = await service.afterDecision(USER, 'Bearer token', MESSAGE_ID);
+    repo.findActionBatch.mockResolvedValue(batch({ state: 'continued', continuationRunId: runId }));
+    runner.isSessionActive.mockReturnValue(false);
+    flags.enabledModules.mockRejectedValueOnce(new Error('db down'));
+    finishRun();
+    await vi.waitFor(() => expect(repo.cancelQueuedRun).toHaveBeenCalledWith(runId));
+    expect(service.hasPendingResume(SESSION_ID)).toBe(false);
+    expect(runner.start).not.toHaveBeenCalled();
   });
 });
 

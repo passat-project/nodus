@@ -184,6 +184,19 @@ describe('FileTextService.extract (#922)', () => {
     });
   });
 
+  it('пока разбирали, письмо стало конфиденциальным — 403 и кэш не пишется', async () => {
+    extract.mockResolvedValueOnce(EXTRACTED);
+    const { service, office, repo } = build();
+    office.resolveAccess
+      .mockResolvedValueOnce({ file: { ...FILE }, canEdit: false, textDenied: false })
+      .mockResolvedValueOnce({ file: { ...FILE }, canEdit: false, textDenied: true });
+    await expect(service.extract(FILE.id, 'u-1')).rejects.toMatchObject({
+      code: ErrorCode.FILE_TEXT_FORBIDDEN,
+      httpStatus: 403,
+    });
+    expect(repo.saveTextExtract).not.toHaveBeenCalled();
+  });
+
   it('один сотрудник не занимает оба слота: второй параллельный разбор — 429', async () => {
     let release!: (value: typeof EXTRACTED) => void;
     // История вызовов старше этого теста: waitFor должен ждать ИМЕННО наш разбор.
