@@ -16,6 +16,7 @@ import {
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { actorRoles, taskAccess } from '../access/task-access.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
+import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
 import {
   WORKFLOW_ENGINE,
   type WorkflowEnginePort,
@@ -42,6 +43,7 @@ export class PressAdminService {
     private readonly repo: PressRepository,
     private readonly rounds: PressRoundsService,
     private readonly tasks: TasksRepository,
+    @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     @Inject(WORKFLOW_RECORD_WRITER) private readonly records: WorkflowRecordWriter,
     private readonly pressEvents: PressEvents,
     @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
@@ -64,6 +66,9 @@ export class PressAdminService {
   }
 
   private async load(tx: TransactionClient, user: AuthUser, taskId: string) {
+    // Порядок блокировок (#434, В6): проект → задача.
+    const preliminary = await this.tasks.findWithParticipants(taskId, tx);
+    if (preliminary.projectId) await this.projects.lockProject(tx, preliminary.projectId);
     await this.tasks.lock(tx, taskId);
     const task = await this.tasks.findWithParticipants(taskId, tx);
     if (!taskAccess(actorRoles(task, user.id), user.permissions).canEdit) {

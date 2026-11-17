@@ -84,6 +84,7 @@ function setup() {
     repo as never,
     sources as never,
     tasks as never,
+    { lockProject: vi.fn() } as never,
     events as never,
     pressReader as never,
     users as never,
@@ -94,7 +95,7 @@ function setup() {
 describe('PressRoundsService (#434)', () => {
   it('пауза сохраняет открытый раунд: не отменяет и не создаёт новый', async () => {
     const { service, repo, tasks } = setup();
-    tasks.findWithParticipants.mockResolvedValueOnce({ ...TASK, systemState: 'paused' });
+    tasks.findWithParticipants.mockResolvedValue({ ...TASK, systemState: 'paused' });
 
     const state = await service.ensureForStage({} as never, 't1');
 

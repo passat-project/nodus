@@ -93,6 +93,7 @@ function setup(state = 'waiting', config = { quorum: { kind: 'all' }, order: 'pa
     repo as never,
     rounds as never,
     tasks as never,
+    { lockProject: vi.fn() } as never,
     time as never,
     messages as never,
     records as never,

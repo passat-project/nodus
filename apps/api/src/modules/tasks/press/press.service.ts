@@ -17,6 +17,7 @@ import {
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { actorRoles, taskAccess } from '../access/task-access.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
+import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
 import { TimeService } from '../time/time.service.js';
 import { CHAT_MESSAGE_ACCESS, type ChatMessageAccess } from '../../chat/message-access.port.js';
 import { PressEvents } from './press-events.service.js';
@@ -52,6 +53,7 @@ export class PressService {
     private readonly repo: PressRepository,
     private readonly rounds: PressRoundsService,
     private readonly tasks: TasksRepository,
+    @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     private readonly time: TimeService,
     @Inject(CHAT_MESSAGE_ACCESS) private readonly messages: ChatMessageAccess,
     @Inject(WORKFLOW_RECORD_WRITER) private readonly records: WorkflowRecordWriter,
@@ -88,6 +90,10 @@ export class PressService {
     taskId: string,
     input: TransitionFormInput,
   ): Promise<PressRoundView | null> {
+    // Единый порядок блокировок (#434, В6): проект → задача. Иначе правка
+    // задачи (проект → задача) и сдача отметки (задача) дают deadlock 40P01.
+    const preliminary = await this.tasks.findWithParticipants(taskId, tx);
+    if (preliminary.projectId) await this.projects.lockProject(tx, preliminary.projectId);
     await this.tasks.lock(tx, taskId);
     const task = await this.tasks.findWithParticipants(taskId, tx);
     const canManage = this.canManage(task, user);
@@ -246,6 +252,8 @@ export class PressService {
     user: AuthUser,
     taskId: string,
   ): Promise<PressRoundView | null> {
+    const preliminary = await this.tasks.findWithParticipants(taskId, tx);
+    if (preliminary.projectId) await this.projects.lockProject(tx, preliminary.projectId);
     await this.tasks.lock(tx, taskId);
     const task = await this.tasks.findWithParticipants(taskId, tx);
     const canManage = this.canManage(task, user);

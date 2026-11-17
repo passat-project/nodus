@@ -74,6 +74,7 @@ function setup(state = 'pressed') {
     repo as never,
     rounds as never,
     tasks as never,
+    { lockProject: vi.fn() } as never,
     records as never,
     pressEvents as never,
     engine as never,

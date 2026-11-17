@@ -14,6 +14,7 @@ import {
 } from '../../workflows/ports/workflow-press-reader.port.js';
 import { audienceIds } from '../access/task-access.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
+import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
 import { PressRepository } from './press.repository.js';
 import { PressSourcesService } from './press-sources.service.js';
 import { pressRoundViewOf } from './press-view.js';
@@ -45,6 +46,7 @@ export class PressRoundsService {
     private readonly repo: PressRepository,
     private readonly sources: PressSourcesService,
     private readonly tasks: TasksRepository,
+    @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     private readonly events: EventBus,
     @Inject(WORKFLOW_PRESS_READER) private readonly pressReader: WorkflowPressReader,
     @Inject(USER_PROFILE_READER) private readonly users: UserProfileReader,
@@ -62,6 +64,9 @@ export class PressRoundsService {
     taskId: string,
     options: { notify?: boolean; actorId?: string | null } = {},
   ): Promise<PressStageState> {
+    // Порядок блокировок (#434, В6): проект → задача.
+    const preliminary = await this.tasks.findWithParticipants(taskId, tx);
+    if (preliminary.projectId) await this.projects.lockProject(tx, preliminary.projectId);
     await this.tasks.lock(tx, taskId);
     const task = await this.tasks.findWithParticipants(taskId, tx);
     const stageId = task.stageId;
