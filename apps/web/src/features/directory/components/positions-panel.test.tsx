@@ -21,21 +21,18 @@ const mocks = vi.hoisted(() => ({
       name: 'BIM-мастер',
       kind: 'management' as const,
       sortOrder: 0,
-      isActive: true,
     },
     {
       id: 'p-2',
       name: 'BIM-менеджер',
       kind: 'management' as const,
       sortOrder: 1,
-      isActive: true,
     },
     {
       id: 'p-3',
       name: 'Инженер',
       kind: 'management' as const,
       sortOrder: 2,
-      isActive: true,
     },
   ] as import('@nodus/contracts').Position[],
   createMutate: vi.fn(),
@@ -109,9 +106,9 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   mocks.positions = [
-    { id: 'p-1', name: 'BIM-мастер', kind: 'management', sortOrder: 0, isActive: true },
-    { id: 'p-2', name: 'BIM-менеджер', kind: 'management', sortOrder: 1, isActive: true },
-    { id: 'p-3', name: 'Инженер', kind: 'management', sortOrder: 2, isActive: true },
+    { id: 'p-1', name: 'BIM-мастер', kind: 'management', sortOrder: 0 },
+    { id: 'p-2', name: 'BIM-менеджер', kind: 'management', sortOrder: 1 },
+    { id: 'p-3', name: 'Инженер', kind: 'management', sortOrder: 2 },
   ];
 });
 
@@ -228,6 +225,19 @@ describe('PositionsPanel (#768)', () => {
       { id: 'p-2', targetId: 'p-3' },
       expect.any(Object),
     );
+  });
+
+  it('список цели не открывается фокусом — только клик/ввод/ArrowDown', async () => {
+    render(mount());
+    await openRowMenu('BIM-менеджер');
+    fireEvent.click(screen.getByRole('menuitem', { name: ui.employees.positionDelete }));
+
+    const field = screen.getByPlaceholderText(ui.employees.positionReassignSearch);
+    fireEvent.focus(field);
+    expect(screen.queryByRole('button', { name: /Инженер/ })).toBeNull();
+
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+    expect(screen.getByRole('button', { name: /Инженер/ })).toBeTruthy();
   });
 
   it('пустой справочник — подпись «Должностей пока нет»', () => {

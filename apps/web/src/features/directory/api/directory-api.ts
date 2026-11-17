@@ -40,7 +40,7 @@ export const directoryKeys = {
 /**
  * Дерево оргструктуры вида (#84, #540): лес корней DepartmentNode по
  * контрактному пути `/directory/departments/tree` (единая константа
- * `DEPARTMENTS_TREE_PATH`, страж-тест). Вид «Подразделения» и панель рисуются
+ * `DEPARTMENTS_TREE_PATH`, страж-тест). Дерево и панель отдела рисуются
  * из него.
  */
 export function useDepartmentTree(kind: OrgUnitKind) {
@@ -50,7 +50,7 @@ export function useDepartmentTree(kind: OrgUnitKind) {
   });
 }
 
-/** Создание подразделения: оптимистичная вставка узла в дерево вида (I4) —
+/** Создание отдела: оптимистичная вставка узла в дерево вида (I4) —
  *  карточка появляется до ответа, откат при ошибке; имена руководителя/зама
  *  и счётчики доносит инвалидация после ответа. */
 export function useCreateDepartment(kind: OrgUnitKind) {
@@ -89,7 +89,7 @@ export function useCreateDepartment(kind: OrgUnitKind) {
   });
 }
 
-/** Правка подразделения (название/руководитель/зам): оптимистичный патч узла (I4). */
+/** Правка отдела (название/руководитель/зам): оптимистичный патч узла (I4). */
 export function useUpdateDepartment(kind: OrgUnitKind) {
   const queryClient = useQueryClient();
   const key = directoryKeys.departments(kind);
@@ -126,7 +126,7 @@ export function useUserCard(id: string) {
 export { usePositions } from '../../../shared/api/positions.js';
 
 /** Правка оргструктурных полей сотрудника (#441, право directory.manage):
- *  подразделение, должность, руководитель (свободная ссылка — кейс ГИПов).
+ *  отдел, должность, руководитель (свободная ссылка — кейс ГИПов).
  *  Оптимистичный патч карточки (I4), откат при ошибке, инвалидация дерева и
  *  списков после ответа (имена/счётчики считает сервер). */
 export function useUpdateUser(id: string) {
@@ -245,7 +245,7 @@ export function useReassignPosition(kind: OrgUnitKind) {
   });
 }
 
-/** Архивация подразделения (#441, I15: не удаление): дерево вида рефечится —
+/** Архивация отдела (#441, I15: не удаление): дерево вида рефечится —
  *  поддерево уходит из структуры, история и привязки ролей сохраняются. */
 export function useArchiveDepartment(kind: OrgUnitKind) {
   const queryClient = useQueryClient();

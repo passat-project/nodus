@@ -34,7 +34,6 @@ import { PositionsService } from './positions.service.js';
 
 const listQuerySchema = z.object({
   kind: orgUnitKindSchema.default('management'),
-  includeArchived: z.stringbool().default(false),
 });
 
 /** Должности (`/api/v1/directory/positions`): справочник, CRUD, удаление. */
@@ -46,17 +45,16 @@ export class PositionsController {
 
   @Get()
   @RequirePermissions(Permission.DIRECTORY_READ)
-  @ApiOperation({ summary: 'Список должностей (фильтр по виду и архиву)' })
+  @ApiOperation({ summary: 'Список должностей вида структуры' })
   @ApiOkResponse({ standardSchema: positionSchema, isArray: true })
   @ApiErrors(400, 401, 403)
   list(
     @Query({ schema: listQuerySchema, pipes: [new ZodValidationPipe(listQuerySchema)] })
     query: {
       kind: OrgUnitKind;
-      includeArchived: boolean;
     },
   ): Promise<Position[]> {
-    return this.positionsService.list(query.kind, query.includeArchived);
+    return this.positionsService.list(query.kind);
   }
 
   @Post()
@@ -123,7 +121,7 @@ export class PositionsController {
   @HttpCode(204)
   @RequirePermissions(Permission.DIRECTORY_MANAGE)
   @Audit({ action: 'directory.position.delete', entity: 'position' })
-  @ApiOperation({ summary: 'Удаление должности (строка деактивируется, I15)' })
+  @ApiOperation({ summary: 'Удаление должности (держателей сначала переназначают)' })
   @ApiParam({
     name: 'id',
     description: 'UUID должности',

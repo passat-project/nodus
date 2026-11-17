@@ -5,7 +5,8 @@ import { orgUnitKindSchema } from './department.schemas.js';
 /**
  * Должности (directory.Position) — плоский справочник с kind:
  * management (управленческая, видна в интерфейсе) и legal (юридическая,
- * по трудовой книжке). Удаления нет — только архивация (isActive, I15).
+ * по трудовой книжке). Удаление жёсткое (вердикт 17.11.2026): имени нет —
+ * строки нет; держатели предварительно переназначаются.
  */
 
 export const positionSchema = z.object({
@@ -13,7 +14,6 @@ export const positionSchema = z.object({
   name: z.string().min(1),
   kind: orgUnitKindSchema,
   sortOrder: z.number().int(),
-  isActive: z.boolean(),
 });
 
 export type Position = z.infer<typeof positionSchema>;

@@ -54,7 +54,9 @@ export class ReferenceGuard {
     if (department.kind !== kind) this.fail(field, 'kind_mismatch');
   }
 
-  /** Активная должность нужного вида структуры (positionId/legalPositionId). */
+  /** Должность нужного вида структуры (positionId/legalPositionId). Удаление
+   *  строки жёсткое (#768): «неактивных» должностей не бывает — только
+   *  существующие или отсутствующие. */
   async ensurePosition(
     id: string | null | undefined,
     kind: OrgUnitKind,
@@ -64,7 +66,6 @@ export class ReferenceGuard {
     if (id === null || id === undefined) return;
     const position = await this.positions.findRef(id, tx);
     if (!position) this.fail(field, 'not_found');
-    if (!position.isActive) this.fail(field, 'inactive');
     if (position.kind !== kind) this.fail(field, 'kind_mismatch');
   }
 

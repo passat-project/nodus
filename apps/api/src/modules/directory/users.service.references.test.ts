@@ -138,25 +138,12 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
     expect(users.update).not.toHaveBeenCalled();
   });
 
-  it('updateUser: неактивная должность → 400 inactive', async () => {
-    users.findCardById.mockResolvedValue(cardRow());
-    positions.findRef.mockResolvedValue({ id: 'pos-1', kind: 'management', isActive: false });
-
-    await expect(
-      service.updateUser('user-1', { positionId: 'pos-1' }, actor()),
-    ).rejects.toMatchObject({
-      code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
-      details: { field: 'positionId', reason: 'inactive' },
-    });
-  });
-
   it('updateUser: назначение лочит строки должностей до проверки (гонка с удалением)', async () => {
     users.findCardById.mockResolvedValue(cardRow());
     positions.findRef.mockImplementation((id: string) =>
       Promise.resolve({
         id,
         kind: id === 'pos-1' ? 'management' : 'legal',
-        isActive: true,
       }),
     );
 

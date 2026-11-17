@@ -25,11 +25,11 @@ import { demoPositions } from '../../../../shared/mocks/data/positions.js';
 
 /**
  * MSW-слой справочника (ADR-0001): контракты — источник формы ответов.
- * Дерево подразделений (GET /directory/departments/tree?kind=) и фильтр людей по
- * подразделению (принадлежность в ТОЙ структуре, к которой относится отдел —
+ * Дерево отделов (GET /directory/departments/tree?kind=) и фильтр людей по
+ * отделу (принадлежность в ТОЙ структуре, к которой относится отдел —
  * семантика контракта listUsersQuerySchema.departmentId, #84) — образец для
  * бэкенд-агента: UI сверстан по этим контрактам и есть ТЗ на эндпоинты.
- * Создание/правка подразделения (POST/PATCH — канон методов api-conventions)
+ * Создание/правка отдела (POST/PATCH — канон методов api-conventions)
  * живут в локальном сторе на время сессии (concept-state), zod-валидация тел —
  * схемами contracts.
  */
@@ -39,13 +39,11 @@ let userState = demoUserListItems;
 
 export const directoryHandlers = [
   // Должности (#441/#433/#768): справочник управленческих и юридических;
-  // удаление/переназначение — как на сервере (держатели, деактивация строки).
+  // удаление/переназначение — как на сервере (держатели, жёсткое удаление).
   http.get('/api/v1/directory/positions', ({ request }) => {
     const url = new URL(request.url);
     const kind = url.searchParams.get('kind') === 'legal' ? 'legal' : 'management';
-    return HttpResponse.json(
-      positionState.filter((position) => position.kind === kind && position.isActive),
-    );
+    return HttpResponse.json(positionState.filter((position) => position.kind === kind));
   }),
   http.post('/api/v1/directory/positions', async ({ request }) => {
     const parsed = createPositionSchema.safeParse(await request.json());
@@ -55,7 +53,7 @@ export const directoryHandlers = [
         { status: 400 },
       );
     }
-    const position = { id: crypto.randomUUID(), isActive: true, ...parsed.data };
+    const position = { id: crypto.randomUUID(), ...parsed.data };
     positionState = [...positionState, position];
     return HttpResponse.json(position, { status: 201 });
   }),
@@ -113,9 +111,7 @@ export const directoryHandlers = [
         { status: 409 },
       );
     }
-    positionState = positionState.map((position) =>
-      position.id === params.id ? { ...position, isActive: false } : position,
-    );
+    positionState = positionState.filter((position) => position.id !== params.id);
     return new HttpResponse(null, { status: 204 });
   }),
   http.get('/api/v1/directory/users', ({ request }) => {
@@ -191,7 +187,7 @@ export const directoryHandlers = [
   /** Возврат деактивированного сотрудника в работу (AUD-016): зеркало
    *  деактивации. Тела нет — ответ по контракту `UserCard`; повтор на уже
    *  активном сотруднике идемпотентен (та же карточка без изменений).
-   *  Демо-стор мутируется на время сессии, как у подразделений. */
+   *  Демо-стор мутируется на время сессии, как у отделов. */
   http.post('/api/v1/directory/users/:id/activate', ({ params }) => {
     const id = String(params.id);
     const card = demoUserCards.find((u) => u.id === id);
@@ -205,7 +201,7 @@ export const directoryHandlers = [
     return HttpResponse.json(card);
   }),
   /** Приглашение сотрудника (кнопка «Пригласить») — заготовка: принимает
-   *  email, полный поток (роль, подразделение, письмо-инвайт) — с бэкендом. */
+   *  email, полный поток (роль, отдел, письмо-инвайт) — с бэкендом. */
   http.post('/api/v1/directory/invitations', async ({ request }) => {
     const parsed = createInvitationSchema.safeParse(await request.json());
     if (!parsed.success)

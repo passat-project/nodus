@@ -24,8 +24,8 @@ import { StructureSidePanel } from './structure-side-panel.js';
  * Правая панель «Должности» (#768, вердикты владельца 12–13.11.2026): только
  * управленческие должности; читают все, создание/переименование/
  * переназначение/удаление — администраторы (`directory.manage`). Панель
- * подменяет содержимое панели подразделения (иконка «Список должностей» в
- * шапке) и закрывается крестиком — возвращает сотрудников подразделения.
+ * подменяет содержимое панели отдела (иконка «Список должностей» в
+ * шапке) и закрывается крестиком — возвращает сотрудников отдела.
  * Шапка панели — общая строка h-14 (`StructurePanelHeader`), на одной
  * горизонтали с шапкой страницы. Сверху поиск
  * по названию; ввод новой должности — в диалоге кнопки «Добавить» с проверкой
@@ -45,7 +45,7 @@ export function PositionsPanel({
   users: readonly UserListItem[];
   topShift: number;
   canManage: boolean;
-  /** Крестик — вернуться к панели сотрудников подразделения. */
+  /** Крестик — вернуться к панели сотрудников отдела. */
   onClose: () => void;
 }) {
   const positionsData = usePositions('management').data;
@@ -63,9 +63,7 @@ export function PositionsPanel({
   // Сотрудники на должности — все статусы: уволенные тоже переназначаются.
   const holdersOf = (id: string) => users.filter((user) => user.positionId === id).length;
   const pending = create.isPending || update.isPending || remove.isPending || reassign.isPending;
-  const targets = reassignFor
-    ? positions.filter((position) => position.id !== reassignFor.id && position.isActive)
-    : [];
+  const targets = reassignFor ? positions.filter((position) => position.id !== reassignFor.id) : [];
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('ru');
     return needle

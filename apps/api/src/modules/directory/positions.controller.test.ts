@@ -14,6 +14,14 @@ describe('PositionsController', () => {
   const controller = new PositionsController(service as never);
   const actor = { id: 'admin-1' } as never;
 
+  it('список запрашивается только по виду — параметра архива больше нет', async () => {
+    service.list.mockResolvedValue([]);
+
+    await controller.list({ kind: 'management' });
+
+    expect(service.list).toHaveBeenCalledWith('management');
+  });
+
   it('переназначение и удаление делегируют сервису с актором', async () => {
     service.reassign.mockResolvedValue(undefined);
     service.delete.mockResolvedValue(undefined);

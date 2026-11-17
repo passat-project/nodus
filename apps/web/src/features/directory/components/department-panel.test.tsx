@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { DepartmentNode, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
@@ -87,7 +87,6 @@ function mount(overrides: { mainCard?: boolean; highlightUserId?: string | null 
       topShift={0}
       onArchived={vi.fn()}
       onInvite={vi.fn()}
-      onCreateChild={vi.fn()}
       onEdit={vi.fn()}
       canManage={false}
     />,
@@ -107,12 +106,45 @@ describe('DepartmentPanel: группы и активные сотрудники
     expect(screen.getAllByText(DEPUTY_ID)).toHaveLength(1);
   });
 
+  it('в «Руководителях» подписаны роли: руководитель и заместитель', () => {
+    mount();
+
+    expect(screen.getByText(ui.employees.fieldHead)).toBeTruthy();
+    expect(screen.getByText(ui.employees.fieldDeputy)).toBeTruthy();
+  });
+
   it('в главной карточке компании в «Подчинённых» — сотрудники без подразделения и с архивным', () => {
     mount({ mainCard: true });
 
     expect(labelText(ui.employees.subordinates)).toBe(`${ui.employees.subordinates}4`);
     expect(screen.getAllByText(ORPHAN_ID).length).toBeGreaterThan(0);
     expect(screen.getAllByText('archived-member').length).toBeGreaterThan(0);
+  });
+
+  it('в меню панели нет «Добавить подотдел»: создание — плюсом на карточке', async () => {
+    render(
+      <DepartmentPanel
+        mainCard={false}
+        node={node}
+        users={users}
+        activeDepartmentIds={activeIds}
+        highlightUserId={null}
+        topShift={0}
+        onArchived={vi.fn()}
+        onInvite={vi.fn()}
+        onEdit={vi.fn()}
+        canManage
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: ui.employees.departmentActions });
+    fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(trigger);
+
+    expect(
+      await screen.findByRole('menuitem', { name: ui.employees.inviteToDepartment }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: ui.employees.addSubdepartment })).toBeNull();
   });
 
   it('секции «Подчинённые руководителя» по managerId больше нет', () => {

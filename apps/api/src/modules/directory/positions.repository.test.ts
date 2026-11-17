@@ -20,7 +20,7 @@ describe('PositionsRepository', () => {
   };
   const tx = {
     $queryRaw: vi.fn(),
-    position: { findFirst: vi.fn() },
+    position: { findFirst: vi.fn(), delete: vi.fn() },
     user: { count: vi.fn(), updateMany: vi.fn() },
   };
   const repo = new PositionsRepository(prisma as never);
@@ -40,8 +40,30 @@ describe('PositionsRepository', () => {
     await repo.findByName('Инженер', 'management', tx as never);
     expect(tx.position.findFirst).toHaveBeenCalledWith({
       where: { name: { equals: 'Инженер', mode: 'insensitive' }, kind: 'management' },
-      orderBy: { isActive: 'desc' },
     });
+  });
+
+  it('findAllByKind — все строки вида: архива у должностей больше нет (#768)', async () => {
+    prisma.position.findMany.mockResolvedValue([{ id: 'p-1' }]);
+    await repo.findAllByKind('management');
+    expect(prisma.position.findMany).toHaveBeenCalledWith({
+      where: { kind: 'management' },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+    });
+  });
+
+  it('findRef отдаёт только id и вид: активность у должности не проверяется', async () => {
+    prisma.position.findUnique.mockResolvedValue({ id: 'p-1', kind: 'management' });
+    await expect(repo.findRef('p-1')).resolves.toEqual({ id: 'p-1', kind: 'management' });
+    expect(prisma.position.findUnique).toHaveBeenCalledWith({
+      where: { id: 'p-1' },
+      select: { id: true, kind: true },
+    });
+  });
+
+  it('remove удаляет строку жёстко в транзакции', async () => {
+    await repo.remove('p-1', tx as never);
+    expect(tx.position.delete).toHaveBeenCalledWith({ where: { id: 'p-1' } });
   });
 
   it('lockForUpdate берёт строку FOR UPDATE и сообщает, нашлась ли она', async () => {

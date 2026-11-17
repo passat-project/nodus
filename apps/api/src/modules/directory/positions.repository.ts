@@ -9,9 +9,9 @@ import type { TransactionClient } from '../../core/database/transaction-runner.j
 export class PositionsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAllByKind(kind: 'management' | 'legal', includeArchived = false) {
+  async findAllByKind(kind: 'management' | 'legal') {
     return this.prisma.position.findMany({
-      where: { kind, ...(includeArchived ? {} : { isActive: true }) },
+      where: { kind },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
     });
   }
@@ -68,25 +68,23 @@ export class PositionsRepository {
     return result.count;
   }
 
-  /** Должность по названию без учёта регистра (дубли и восстановление имени):
-   *  unique(name, kind) в базе регистрозависим, а для пользователя «Инженер»
-   *  и «инженер» — один и тот же справочник. Активная строка приоритетнее
-   *  неактивной: дубль активной — конфликт, а не восстановление. */
+  /** Должность по названию без учёта регистра (#768): unique(name, kind) в базе
+   *  регистрозависим, а для пользователя «Инженер» и «инженер» — одно название. */
   async findByName(name: string, kind: 'management' | 'legal', tx?: TransactionClient) {
     return (tx ?? this.prisma).position.findFirst({
       where: { name: { equals: name, mode: 'insensitive' }, kind },
-      orderBy: { isActive: 'desc' },
     });
   }
 
-  /** Ссылка-должность (валидация оргструктуры #441): вид и активность. */
+  /** Ссылка-должность (валидация оргструктуры #441): вид. Существование —
+   *  единственная проверка: удаление строки жёсткое (#768). */
   async findRef(
     id: string,
     tx?: TransactionClient,
-  ): Promise<{ id: string; kind: 'management' | 'legal'; isActive: boolean } | null> {
+  ): Promise<{ id: string; kind: 'management' | 'legal' } | null> {
     return (tx ?? this.prisma).position.findUnique({
       where: { id },
-      select: { id: true, kind: true, isActive: true },
+      select: { id: true, kind: true },
     });
   }
 
@@ -98,5 +96,10 @@ export class PositionsRepository {
   async update(id: string, data: Prisma.PositionUncheckedUpdateInput, tx?: TransactionClient) {
     const client = tx ?? this.prisma;
     return client.position.update({ where: { id }, data });
+  }
+
+  /** Жёсткое удаление (#768): вызывается только после перевода держателей. */
+  async remove(id: string, tx: TransactionClient): Promise<void> {
+    await tx.position.delete({ where: { id } });
   }
 }

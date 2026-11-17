@@ -25,7 +25,11 @@ export const DIRECTORY_EVENTS = {
   DEPARTMENT_ARCHIVED: 'directory.department.archived',
   POSITION_CREATED: 'directory.position.created',
   POSITION_UPDATED: 'directory.position.updated',
+  /** Устаревшее: должности больше не архивируются (#768, жёсткое удаление).
+   *  Имя остаётся в каталоге — события прошлых периодов живут в `events`. */
   POSITION_ARCHIVED: 'directory.position.archived',
+  /** Должность удалена жёстко: держателей (включая уволенных) уже перевели. */
+  POSITION_DELETED: 'directory.position.deleted',
   ROLE_CREATED: 'directory.role.created',
   /** Только смена `name/description`: состав прав несёт `ROLE_PERMISSIONS_CHANGED`. */
   ROLE_UPDATED: 'directory.role.updated',
