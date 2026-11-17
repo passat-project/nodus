@@ -79,6 +79,7 @@ export function useSplitWidth(
       const onUp = () => {
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onUp);
         if (raf) cancelAnimationFrame(raf);
         setDragging(false);
         setWidth(latest);
@@ -86,6 +87,9 @@ export function useSplitWidth(
       };
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
+      // pointercancel (touch/pen, перехват жеста) завершает drag как pointerup:
+      // без него состояние «тянется» навсегда — перегородка липнет к курсору.
+      window.addEventListener('pointercancel', onUp);
     },
     [panelRef, clamp, defaultRatio, containerW, storeKey],
   );

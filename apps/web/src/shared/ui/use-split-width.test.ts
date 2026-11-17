@@ -74,4 +74,24 @@ describe('useSplitWidth — перегородка карточки с памя�
     });
     expect(result.current.width).toBe(780);
   });
+
+  it('pointercancel завершает drag и снимает слушатели (#843)', () => {
+    const panel = fakePanel();
+    const { result } = renderHook(() =>
+      useSplitWidth(panel, { storeKey: KEY, min: 360, minOther: 420 }),
+    );
+    act(() => {
+      result.current.onDividerDown({ preventDefault: () => undefined, clientX: 600 } as never);
+      window.dispatchEvent(pointer('pointermove', 500));
+      window.dispatchEvent(pointer('pointercancel', 500));
+    });
+    expect(result.current.width).toBe(500);
+    expect(result.current.dragging).toBe(false);
+
+    // Слушатели сняты: курсор больше не тянет перегородку.
+    act(() => {
+      window.dispatchEvent(pointer('pointermove', 300));
+    });
+    expect(result.current.width).toBe(500);
+  });
 });

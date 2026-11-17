@@ -198,6 +198,7 @@ export function ProjectsPage() {
           {ui.projects.title}
           <span className="ml-2 align-middle font-mono text-label-lg font-normal text-muted-foreground tabular-nums">
             {items.length}
+            {hasNextPage ? '+' : ''}
           </span>
         </h1>
         <ListToolbar

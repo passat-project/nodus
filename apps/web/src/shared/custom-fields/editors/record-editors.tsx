@@ -89,6 +89,7 @@ function RefPopover({
   onTextChange,
   header,
   onPick,
+  onClosed,
 }: {
   props: EditorProps;
   kind: CustomFieldRefKind;
@@ -99,17 +100,30 @@ function RefPopover({
   /** Перехват выбора (двухшаговый пикер папки): без него опция коммитится
    *  как значение ссылки. */
   onPick?: (option: RefOption) => void;
+  /** Закрытие поповера (в т.ч. программное после выбора) — сброс шага пикера. */
+  onClosed?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const q = text.trim().toLowerCase();
   const visible = q ? options.filter((option) => option.label.toLowerCase().includes(q)) : options;
+
+  // Выбор закрывает поповер программно — onOpenChange при этом не срабатывает;
+  // поиск и шаг пикера чистим здесь, иначе следующий показ открывается старым.
+  const close = () => {
+    setOpen(false);
+    onTextChange('');
+    onClosed?.();
+  };
 
   return (
     <Popover
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) onTextChange('');
+        if (!next) {
+          onTextChange('');
+          onClosed?.();
+        }
       }}
     >
       <PopoverTrigger asChild>
@@ -153,7 +167,7 @@ function RefPopover({
                 onClick={() =>
                   onPick
                     ? onPick(option)
-                    : commitRef(props.onCommit, kind, option, () => setOpen(false), props.value)
+                    : commitRef(props.onCommit, kind, option, close, props.value)
                 }
               />
             ))
@@ -241,6 +255,7 @@ export function NodeEditor(props: EditorProps) {
             }
           : undefined
       }
+      onClosed={() => setProjectId(null)}
       header={
         projectId !== null ? (
           <div className="mb-1 flex items-center gap-1 border-b pb-1">

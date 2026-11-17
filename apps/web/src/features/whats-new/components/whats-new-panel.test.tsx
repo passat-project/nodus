@@ -70,4 +70,16 @@ describe('панель «Что нового»', () => {
     const chatItems = LATEST_RELEASE!.items.filter((i) => i.module === 'chat').length;
     expect(dialog.querySelectorAll('li').length).toBe(chatItems);
   });
+
+  it('фильтр по модулю без изменений в свежем выпуске: первый показанный выпуск развёрнут', () => {
+    useWhatsNewStore.setState({ seen: { [USER.id]: LATEST_RELEASE!.version } });
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: ui.whatsNew.open }));
+    const dialog = screen.getByRole('dialog', { name: ui.whatsNew.title });
+
+    // «Корреспонденция» есть в 0.11.0, но не в свежем 0.12.0: первый
+    // показанный выпуск — старый, раньше он стартовал свёрнутым (пустая панель).
+    fireEvent.click(screen.getByRole('button', { name: ui.nav.letters }));
+    expect(dialog.querySelectorAll('li').length).toBeGreaterThan(0);
+  });
 });

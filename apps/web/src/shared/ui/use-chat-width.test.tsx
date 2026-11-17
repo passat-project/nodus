@@ -54,4 +54,26 @@ describe('useChatWidth — потолок ширины колонки (#750)', (
     expect(screen.getByTestId('width').textContent).toBe('700');
     expect(localStorage.getItem(STORE_KEY)).toBe('700');
   });
+
+  it('pointercancel завершает drag: ширина коммитится, дальше курсор её не тянет (#843)', () => {
+    render(<Probe />);
+    const divider = screen.getByTestId('divider');
+    act(() => {
+      fireEvent.pointerDown(divider, { clientX: 500 });
+    });
+    act(() => {
+      fireEvent.pointerMove(window, { clientX: 100 });
+    });
+    act(() => {
+      fireEvent.pointerCancel(window);
+    });
+    const width = screen.getByTestId('width').textContent;
+    expect(width).toBe('870');
+    expect(localStorage.getItem(STORE_KEY)).toBe('870');
+
+    act(() => {
+      fireEvent.pointerMove(window, { clientX: 500 });
+    });
+    expect(screen.getByTestId('width').textContent).toBe(width);
+  });
 });

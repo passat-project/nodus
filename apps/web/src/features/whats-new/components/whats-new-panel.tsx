@@ -67,7 +67,6 @@ export function WhatsNewPanel() {
     groups: groupByModule(release.items, moduleId),
   })).filter((s) => s.groups.length > 0);
   const [latest, ...earlier] = sections;
-  const latestIsNewest = latest?.release === RELEASES[0];
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && close()}>
@@ -134,7 +133,10 @@ export function WhatsNewPanel() {
                 key={`${latest.release.version}:${moduleId ?? ''}`}
                 release={latest.release}
                 groups={latest.groups}
-                collapsible={!latestIsNewest}
+                // Первый ПОКАЗАННЫЙ выпуск всегда развёрнут: при фильтре по
+                // модулю самый свежий выпуск может не иметь его изменений —
+                // свёрнутая секция выглядела пустой панелью.
+                collapsible={false}
               />
               {earlier.length > 0 && (
                 <div className="flex flex-col gap-5">

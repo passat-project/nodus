@@ -196,7 +196,13 @@ export function ConversationBar({
             onChange={(e) => setTitleDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') commitTitle();
-              if (e.key === 'Escape') setEditingTitle(false);
+              if (e.key === 'Escape') {
+                // Переименование гасит Esc само — карточка/слайдер под ним
+                // не закрывается (канон инлайн-редакторов).
+                e.preventDefault();
+                e.stopPropagation();
+                setEditingTitle(false);
+              }
             }}
             onBlur={() => setEditingTitle(false)}
             autoFocus

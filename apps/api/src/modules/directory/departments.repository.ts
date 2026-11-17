@@ -7,7 +7,14 @@ import type { TransactionClient } from '../../core/database/transaction-runner.j
 const departmentInclude = {
   head: { select: { displayName: true } },
   deputy: { select: { displayName: true } },
-  _count: { select: { members: { where: { status: 'active' as const } } } },
+  // Юридические подразделения связаны через legalDepartmentId, а не
+  // departmentId: счётчик берём из своего отношения, иначе у legal всегда 0.
+  _count: {
+    select: {
+      members: { where: { status: 'active' as const } },
+      legalMembers: { where: { status: 'active' as const } },
+    },
+  },
 } satisfies Prisma.DepartmentInclude;
 
 export type DepartmentRow = Prisma.DepartmentGetPayload<{ include: typeof departmentInclude }>;

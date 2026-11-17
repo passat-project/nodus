@@ -93,6 +93,7 @@ export function useChatWidth(
       const onUp = () => {
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onUp);
         if (raf) cancelAnimationFrame(raf);
         setDragging(false);
         // Коммит в React: стиль ре-рендера совпадает с последним императивным
@@ -104,6 +105,8 @@ export function useChatWidth(
       };
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
+      // pointercancel завершает drag как pointerup (touch/pen/перехват жеста).
+      window.addEventListener('pointercancel', onUp);
     },
     [chatRef],
   );

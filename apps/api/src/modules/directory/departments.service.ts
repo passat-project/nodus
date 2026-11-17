@@ -33,7 +33,7 @@ function toNode(row: DepartmentRow, children: DepartmentNode[]): DepartmentNode 
     isActive: row.isActive,
     headName: row.head?.displayName ?? null,
     deputyName: row.deputy?.displayName ?? null,
-    memberCount: row._count.members,
+    memberCount: row.kind === 'legal' ? row._count.legalMembers : row._count.members,
     children,
   };
 }

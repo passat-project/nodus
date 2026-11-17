@@ -24,4 +24,10 @@ describe('office-formats (#182 матрица)', () => {
     expect(officeFormat('безрасширения')).toBeNull();
     expect(fileExtension('a.BIG.PNG')).toBe('png');
   });
+
+  it('прототип не считается форматом (#843): «constructor» и «toString» — не офисные', () => {
+    expect(officeFormat('constructor')).toBeNull();
+    expect(officeFormat('файл.toString')).toBeNull();
+    expect(officeFormat('файл.__proto__')).toBeNull();
+  });
 });

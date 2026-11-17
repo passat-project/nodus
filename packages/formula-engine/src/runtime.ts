@@ -53,7 +53,9 @@ export function textOf(value: FormulaValue): string {
     return isDashOnlyMarker(value) ? '' : value;
   }
   if (typeof value === 'number')
-    return Number.isFinite(value) ? String(value).replace('.', ',') : '';
+    // as scaledBy: toPrecision(15) убирает двоичный хвост (0.30000000000000004),
+    // не съедая значащие цифры бизнес-значений.
+    return Number.isFinite(value) ? String(Number(value.toPrecision(15))).replace('.', ',') : '';
   if (typeof value === 'boolean') return value ? 'ИСТИНА' : 'ЛОЖЬ';
   if (Array.isArray(value)) {
     // Пустые маркеры в списке не должны превращаться в дефисы в склейке.

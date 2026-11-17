@@ -29,7 +29,7 @@ function row(
     isActive: true,
     head: null,
     deputy: null,
-    _count: { members: 0 },
+    _count: { members: 0, legalMembers: 0 },
     ...overrides,
   };
 }
@@ -80,7 +80,7 @@ describe('DepartmentsService', () => {
   describe('getTree', () => {
     it('собирает иерархию из плоского списка с memberCount', async () => {
       departments.findAllByKind.mockResolvedValue([
-        row('root', null, 'ПассатПроект', { _count: { members: 5 } }),
+        row('root', null, 'ПассатПроект', { _count: { members: 5, legalMembers: 0 } }),
         row('child-1', 'root', 'Проектное'),
         row('child-2', 'root', 'Бухгалтерия'),
         row('grand', 'child-1', 'BIM-группа'),

@@ -67,7 +67,10 @@ export const TaskListRow = memo(function TaskListRow({
         role="cell"
         className="flex items-center gap-1"
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          // Esc должен всплывать до карточки: гасим только активацию строки.
+          if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
+        }}
       >
         <Checkbox
           checked={isSelected}

@@ -137,3 +137,28 @@ describe('TaskList: мемоизация строк (A6-4)', () => {
     expect(screen.getAllByRole('checkbox')[2]!.getAttribute('aria-checked')).toBe('true');
   });
 });
+
+describe('TaskList: клавиши ведущей ячейки (#843)', () => {
+  it('Esc из ведущей ячейки всплывает до карточки, Enter/Space — нет', async () => {
+    const onKeyDown = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <div onKeyDown={onKeyDown}>
+        <TaskList />
+      </div>,
+      {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        ),
+      },
+    );
+    await waitFor(() => expect(screen.getByText('Вторая')).toBeTruthy());
+
+    const checkbox = screen.getAllByRole('checkbox')[1]!;
+    fireEvent.keyDown(checkbox, { key: 'Escape' });
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(checkbox, { key: 'Enter' });
+    fireEvent.keyDown(checkbox, { key: ' ' });
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+  });
+});

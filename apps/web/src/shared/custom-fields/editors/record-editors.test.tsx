@@ -90,4 +90,15 @@ describe('NodeEditor (#631, Р5)', () => {
     fireEvent.click(trigger);
     expect(onCommit).not.toHaveBeenCalled();
   });
+
+  it('после выбора узла следующий показ начинается с шага «проект» (#843)', async () => {
+    renderEditor();
+    fireEvent.click(screen.getByRole('button', { name: 'Папка' }));
+    fireEvent.click(await screen.findByText('Тендер УП'));
+    fireEvent.click(await screen.findByText('Папка 1'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Папка' }));
+    expect(await screen.findByText('Тендер УП')).toBeTruthy();
+    expect(screen.queryByText('Папка 1')).toBeNull();
+  });
 });

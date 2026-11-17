@@ -99,6 +99,9 @@ export function ProjectEditor(props: EditorProps) {
                       },
                     ]);
                     setOpen(false);
+                    // Программное закрытие минует onOpenChange — поиск чистим
+                    // здесь, чтобы следующий показ начинался с полного списка.
+                    setQuery('');
                   }}
                   className={cn(
                     'flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-sm hover:bg-accent/60',

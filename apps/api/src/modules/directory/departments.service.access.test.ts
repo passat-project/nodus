@@ -24,7 +24,7 @@ function row(id: string, parentId: string | null) {
     isActive: true,
     head: null,
     deputy: null,
-    _count: { members: 0 },
+    _count: { members: 0, legalMembers: 0 },
   };
 }
 
