@@ -78,7 +78,7 @@ var(--border)`) в ОБЕИХ темах (вердикт 17.11.2026: не бел
 Лента рендерится КАНОНОМ чатов: `buildMessageRuns` + `MessageRunView` (серии,
 sticky-аватар) + `ChatMessageItem` (пузыри bubble-*, хвосты, мета времени) +
 `DayChip`; композер — канонический `ChatComposer` (островок, гексагон отправки).
-Сообщения концепта маппятся в `ChatMessage` (`model/assistant-messages.ts`).
+Сообщения диалога маппятся в `ChatMessage` (`model/assistant-messages.ts`).
 Аватар ассистента — глиф через опциональный `renderAvatar` у `MessageRunView`
 (дефолт не changed: мессенджер рисует `MessageAuthorAvatar`).
 Реакции/квитанции выключены (`reactionsHidden`/`receiptsHidden`).

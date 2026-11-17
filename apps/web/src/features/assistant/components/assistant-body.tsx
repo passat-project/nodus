@@ -6,6 +6,7 @@ import { Button } from '@nodus/ui/components/button';
 import { ChatComposer } from '../../../shared/chat/chat-composer.js';
 import { useChatDrafts } from '../../../shared/chat/chat-drafts.js';
 import {
+  isRunStreamActive,
   mergeLiveMessage,
   recoverAssistantRun,
   stopRunStream,
@@ -70,21 +71,27 @@ export function AssistantBody() {
 
   // Закрытие окна не бросает прогон в фоне: поток закрывается, сервер
   // доведёт ответ и сохранит его (повторное открытие покажет результат).
+  // Заодно сбрасывается отметка подхвата: панель, закрытая во время ответа,
+  // обязана подписаться заново, иначе «печатается» замёрзнет навсегда.
+  const recoveredRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!open) stopRunStream();
+    if (open) return;
+    stopRunStream();
+    recoveredRef.current = null;
   }, [open]);
 
   // Незавершённый прогон (закрыли окно/перезагрузили во время ответа):
   // последнее сообщение ещё `streaming` — подцепляемся к его потоку, иначе
   // лента навсегда осталась бы с пустым «печатается» без стопа и без текста.
-  const recoveredRef = useRef<string | null>(null);
   useEffect(() => {
     if (!open || !activeId || messagesQuery.isPending) return;
     // Смотрим СЕРВЕРНУЮ историю: `streaming` ставит сервер, а живой буфер —
-    // следствие подхвата (по нему второй подхват не нужен).
+    // следствие подхвата. Решает не буфер, а живой поток: окно закрывали —
+    // поток оборван, буфер остался, и подписка нужна заново (#896).
     const last = messagesQuery.data?.items.at(-1);
     if (!last || last.role !== 'assistant' || !last.streaming || !last.runId) return;
-    if (recoveredRef.current === last.runId || live?.runId === last.runId) return;
+    if (isRunStreamActive()) return;
+    if (recoveredRef.current === last.runId) return;
     recoveredRef.current = last.runId;
     recoverAssistantRun(last.runId, activeId, last.id);
   }, [open, activeId, messagesQuery.isPending, messagesQuery.data, live]);
