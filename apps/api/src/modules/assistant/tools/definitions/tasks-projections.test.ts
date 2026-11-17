@@ -189,17 +189,23 @@ describe('tasks.get: карточка (#892)', () => {
 });
 
 describe('tasks.stages / tasks.history (#892)', () => {
-  it('стадии считают задачи и просроченные, пропуская мусор', () => {
+  it('стадии считают задачи и просроченные, отдают id и тип, пропускают мусор', () => {
     const { text } = tasksStagesTool.project!(
       [
-        { name: 'В работе', count: 12, overdueCount: 3 },
-        { name: 'Готово', count: 5, overdueCount: 0 },
+        {
+          name: 'В работе',
+          id: 'stage-1',
+          typeName: 'Поручение',
+          count: 12,
+          overdueCount: 3,
+        },
+        { name: 'Готово', id: 'stage-2', count: 5, overdueCount: 0 },
         null,
       ],
       { scope: 'mine' },
     );
-    expect(text).toContain('«В работе»: 12 задач, просрочено 3');
-    expect(text).toContain('«Готово»: 5 задач');
+    expect(text).toContain('«В работе» (тип «Поручение», id stage-1): 12 задач, просрочено 3');
+    expect(text).toContain('«Готово» (id stage-2): 5 задач');
     expect(tasksStagesTool.build!({ scope: 'all', typeId: TASK_ID })).toEqual({
       path: '/tasks/stages',
       query: { scope: 'all', typeId: TASK_ID },

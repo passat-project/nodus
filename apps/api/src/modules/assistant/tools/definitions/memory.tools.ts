@@ -48,7 +48,9 @@ export const memoryListTool = defineTool({
   keywords: ['что помнишь', 'блокнот', 'записи памяти', 'memory list'],
   module: 'system',
   kind: 'read',
-  hot: false,
+  // На горячей полке: модель должна уметь проверить блокнот без поиска —
+  // иначе заявляет «memory.list нет» (живой отзыв 18.11.2026).
+  hot: true,
   input: z.object({}),
   handler: async (_input, ctx) => {
     if (!ctx.memory) return { text: 'Блокнот недоступен в этом режиме' };
