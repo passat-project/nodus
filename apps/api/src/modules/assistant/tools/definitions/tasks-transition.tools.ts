@@ -8,12 +8,14 @@ import {
   asRecord,
   asTyped,
   clip,
+  date,
   entityLink,
   finalize,
   listBlock,
   num,
   str,
 } from '../projections.js';
+import { formBody, transitionInput } from './tasks-transition.input.js';
 import {
   OUTCOME_LABELS,
   blockedSummary,
@@ -90,50 +92,6 @@ export const tasksTransitionsTool = defineTool({
   },
 });
 
-const transitionFormInput = z.object({
-  /** Комментарий перехода (раздел «Комментарий»). */
-  comment: z.string().trim().min(1).max(2_000).optional(),
-  /** Итог задачи (раздел «Итог»): текст и id сообщений-вложений. */
-  result: z
-    .object({
-      text: z.string().trim().max(5_000),
-      messageIds: z.array(z.uuid()).max(50).default([]),
-    })
-    .optional(),
-  /** Трудозатраты (раздел «Время»). */
-  time: z
-    .object({
-      minutes: z.number().int().min(1).max(1_440),
-      date: z.iso.date(),
-      comment: z.string().trim().max(500).optional(),
-    })
-    .optional(),
-  /** Поля карточки (раздел «Поля»): системные и атрибуты `cf.<id>`. */
-  fields: z
-    .object({
-      description: z.string().trim().min(1).max(5_000).optional(),
-      deadline: z.iso.datetime().optional(),
-      assigneeId: z.uuid().optional(),
-      plannedMinutes: z.number().int().min(1).max(100_000).optional(),
-      customFields: z
-        .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]))
-        .optional(),
-    })
-    .optional(),
-});
-
-const transitionInput = z.object({
-  id: z.uuid(),
-  transitionId: z.uuid(),
-  /** Поля окна перехода: сервер валидирует состав (422 при расхождении). */
-  form: transitionFormInput.optional(),
-  /** Короткая форма комментария (совместимость): уходит в `form.comment`. */
-  comment: z.string().trim().max(2_000).optional(),
-  /** Обход гейта: только если `tasks.transitions` сказал «можно обойти». */
-  override: z.boolean().optional(),
-  reason: z.string().trim().min(1).max(500).optional(),
-});
-
 export const tasksTransitionTool = defineTool({
   id: 'tasks.transition',
   title: 'Задачи: выполнить переход',
@@ -197,6 +155,10 @@ export const tasksTransitionTool = defineTool({
       const form = input.form;
       const comment = form?.comment ?? input.comment;
       const time = form?.time;
+      const values = form?.fields;
+      const assignee = values?.assigneeId
+        ? ((await readDisplayName(ctx, values.assigneeId)) ?? `id ${values.assigneeId}`)
+        : null;
       return fieldsOf([
         field(
           'Задача',
@@ -205,6 +167,14 @@ export const tasksTransitionTool = defineTool({
         field('Переход', transition?.name),
         field('Новая стадия', transition?.toStageName),
         field('Требует заполнить', transition?.requirements),
+        field('Описание', values?.description ? clip(values.description, 400) : null),
+        field('Срок', values?.deadline ? date(values.deadline) : null),
+        field('Исполнитель', assignee),
+        field(
+          'План, мин',
+          values?.plannedMinutes !== undefined ? String(values.plannedMinutes) : null,
+        ),
+        field('Атрибуты', customFieldsLine(values?.customFields)),
         field('Итог', form?.result?.text ? clip(form.result.text, 400) : null),
         field(
           'Трудозатраты',
@@ -221,16 +191,6 @@ export const tasksTransitionTool = defineTool({
       'Стадия задачи изменится сразу и станет видна участникам; обратной отмены нет — вернуть задачу можно только отдельным переходом маршрута.',
   },
 });
-
-/** Тело `form` без пустых ключей; короткий `comment` уходит в него же. */
-function formBody(
-  form: z.infer<typeof transitionFormInput> | undefined,
-  comment: string | undefined,
-): Record<string, unknown> | null {
-  const body: Record<string, unknown> = { ...(form ?? {}) };
-  if (!body.comment && comment) body.comment = comment;
-  return Object.keys(body).length > 0 ? body : null;
-}
 
 interface TransitionInfo {
   name: string;
@@ -282,6 +242,31 @@ async function readTask(
   } catch {
     return null;
   }
+}
+
+/** ФИО исполнителя для карточки: id из аргументов модели не показываем. */
+async function readDisplayName(ctx: ToolContext, id: string): Promise<string | null> {
+  try {
+    const raw = asRecord(await ctx.read?.(`/directory/users/${id}`));
+    return str(raw?.displayName);
+  } catch {
+    return null;
+  }
+}
+
+/** Значения атрибутов окна человеческими строками (ключ — id определения). */
+function customFieldsLine(value: unknown): string | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  const rows = Object.entries(record).map(([key, raw]) => `${key}: ${valueText(raw)}`);
+  return rows.length > 0 ? clip(rows.join('; '), 600) : null;
+}
+
+function valueText(raw: unknown): string {
+  if (Array.isArray(raw)) return raw.map(String).join(', ');
+  const record = asRecord(raw);
+  if (record) return String(record.amount ?? record.value ?? JSON.stringify(record));
+  return String(raw);
 }
 
 export const tasksTransitionTools = [tasksTransitionsTool, tasksTransitionTool];

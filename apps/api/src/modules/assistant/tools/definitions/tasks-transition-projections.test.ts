@@ -28,10 +28,15 @@ const ctx = {
   signal: new AbortController().signal,
   available: [],
   activate: () => undefined,
-  read: async (path: string) =>
-    path.endsWith('/transitions')
-      ? [{ ...transition, blockedBy: [{ kind: 'checklist_complete', count: 2 }] }]
-      : { id: TASK_ID, number: 165, title: 'Смонтировать узел' },
+  read: async (path: string) => {
+    if (path.endsWith('/transitions')) {
+      return [{ ...transition, blockedBy: [{ kind: 'checklist_complete', count: 2 }] }];
+    }
+    if (path.includes('/directory/users/')) {
+      return { id: '99999999-9999-4999-8999-999999999999', displayName: 'Петров Пётр' };
+    }
+    return { id: TASK_ID, number: 165, title: 'Смонтировать узел' };
+  },
 } as ToolContext;
 
 describe('tasks.transitions: доступные переходы (#920)', () => {
@@ -171,5 +176,35 @@ describe('tasks.transition: выполнение перехода (#920)', () =>
       ]),
     );
     expect(tasksTransitionTool.card!.undo).toBeUndefined();
+  });
+
+  it('карточка показывает поля формы: описание, срок, исполнитель, план, атрибуты', async () => {
+    const fields = await tasksTransitionTool.card!.fields(
+      {
+        id: TASK_ID,
+        transitionId: TRANSITION_ID,
+        form: {
+          fields: {
+            description: 'Уточнить объём работ',
+            deadline: '2026-11-20T10:00:00.000Z',
+            assigneeId: '99999999-9999-4999-8999-999999999999',
+            plannedMinutes: 120,
+            customFields: {
+              'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': 'Значение атрибута',
+            },
+          },
+        },
+      },
+      ctx,
+    );
+    expect(fields).toEqual(
+      expect.arrayContaining([
+        { label: 'Описание', value: 'Уточнить объём работ' },
+        { label: 'Срок', value: '20 ноя 2026' },
+        { label: 'Исполнитель', value: 'Петров Пётр' },
+        { label: 'План, мин', value: '120' },
+        { label: 'Атрибуты', value: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa: Значение атрибута' },
+      ]),
+    );
   });
 });

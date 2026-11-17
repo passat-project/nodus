@@ -220,4 +220,20 @@ describe('extractAttachmentText: DOCX', () => {
       code: 'FILE_TEXT_INVALID',
     });
   });
+
+  it('промежуток между каталогом и EOCD (reader.zero JSZip) — FILE_TEXT_INVALID', async () => {
+    const buffer = zipBuffer([
+      { name: 'word/document.xml', data: Buffer.from('<document>Текст</document>') },
+      { name: 'word/styles.xml', data: Buffer.from('<styles/>') },
+    ]);
+    // Приманка: каталог «заканчивается» на первой записи, за ней до EOCD
+    // лежит вторая — JSZip сдвинул бы чтения на этот промежуток.
+    const eocd = buffer.length - 22;
+    buffer.writeUInt16LE(1, eocd + 8);
+    buffer.writeUInt16LE(1, eocd + 10);
+    buffer.writeUInt32LE(46 + Buffer.byteLength('word/document.xml'), eocd + 12);
+    await expect(extractAttachmentText(buffer, 'docx')).rejects.toMatchObject({
+      code: 'FILE_TEXT_INVALID',
+    });
+  });
 });

@@ -126,30 +126,41 @@ describe('AssistantContinuationService: автопродолжение (#916)', 
     expect(runner.start).not.toHaveBeenCalled();
   });
 
-  it('исходный прогон ещё печатает — продолжение откладывается до завершения', async () => {
-    const { service, runner, finishRun } = build({ sessionActive: true });
-    expect(await service.afterDecision(USER, 'Bearer token', MESSAGE_ID)).toBeNull();
+  it('исходный прогон печатает — прогон резервируется, runId сразу клиенту', async () => {
+    const { service, repo, runner, finishRun } = build({ sessionActive: true });
+    const runId = await service.afterDecision(USER, 'Bearer token', MESSAGE_ID);
+    expect(runId).toBeTruthy();
+    expect(repo.createRun).toHaveBeenCalledWith(
+      expect.objectContaining({ id: runId, continuationOfMessageId: MESSAGE_ID }),
+    );
+    expect(repo.claimBatchContinuation).toHaveBeenCalledWith(MESSAGE_ID, USER.id, runId);
+    expect(service.hasPendingResume(SESSION_ID)).toBe(true);
     expect(runner.start).not.toHaveBeenCalled();
 
-    // Прогон завершился: сессия свободна — отложенное продолжение стартует.
+    // Прогон завершился: сессия свободна — стартует ТОТ ЖЕ прогон, без дубля.
+    repo.findActionBatch.mockResolvedValue(batch({ state: 'continued', continuationRunId: runId }));
     runner.isSessionActive.mockReturnValue(false);
     finishRun();
     await vi.waitFor(() => expect(runner.start).toHaveBeenCalledTimes(1));
     expect(runner.start).toHaveBeenCalledWith(
       expect.objectContaining({
+        runId,
         authorization: 'Bearer token',
         continuation: { ofMessageId: MESSAGE_ID, pendingCards: 0 },
       }),
     );
+    expect(service.hasPendingResume(SESSION_ID)).toBe(false);
+    expect(repo.createRun).toHaveBeenCalledTimes(1);
   });
 
-  it('за время печати пачку закрыли новым сообщением — отложенное не стартует', async () => {
+  it('за время печати пачку закрыли — зарезервированный прогон удаляется', async () => {
     const { service, repo, runner, finishRun } = build({ sessionActive: true });
-    expect(await service.afterDecision(USER, 'Bearer token', MESSAGE_ID)).toBeNull();
+    const runId = await service.afterDecision(USER, 'Bearer token', MESSAGE_ID);
     repo.findActionBatch.mockResolvedValue(batch({ state: 'closed' }));
     runner.isSessionActive.mockReturnValue(false);
     finishRun();
     await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(repo.deleteRun).toHaveBeenCalledWith(runId);
     expect(runner.start).not.toHaveBeenCalled();
   });
 });

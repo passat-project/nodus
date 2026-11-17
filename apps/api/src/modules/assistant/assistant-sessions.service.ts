@@ -18,6 +18,7 @@ import {
 import { FeatureFlagService } from '../../core/feature-flags/feature-flag.service.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
 import { AgentRunnerService } from './agent/agent-runner.service.js';
+import { AssistantContinuationService } from './agent/continuation.service.js';
 import { AssistantRepository } from './assistant.repository.js';
 import { toMessageDto, toSessionDto } from './assistant.serializers.js';
 import type { ScreenContext } from './tools/tool-definition.js';
@@ -37,6 +38,7 @@ export class AssistantSessionsService {
   constructor(
     private readonly repo: AssistantRepository,
     private readonly runner: AgentRunnerService,
+    private readonly continuation: AssistantContinuationService,
     private readonly featureFlags: FeatureFlagService,
   ) {}
 
@@ -87,6 +89,13 @@ export class AssistantSessionsService {
     if (!session) throw DomainException.notFound('Диалог не найден');
     if (session.archivedAt) {
       throw new DomainException(ErrorCode.CONFLICT, 'Диалог в архиве: отправка недоступна');
+    }
+    // Один прогон на сессию (ADR-0043 п. 6): пока агент печатает или ждёт
+    // отложенное продолжение пачки, второй прогон писал бы параллельно.
+    // Текст возвращается в композер (ошибка мутации), «Продолжить сейчас»
+    // остаётся путём повтора.
+    if (this.runner.isSessionActive(id) || this.continuation.hasPendingResume(id)) {
+      throw new DomainException(ErrorCode.CONFLICT, 'Ответ ещё печатается — дождитесь завершения');
     }
 
     const text = body.text.trim();

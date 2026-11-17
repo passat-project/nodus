@@ -19,6 +19,8 @@ interface PendingResume {
   user: AuthUser;
   authorization: string;
   messageId: string;
+  /** Зарезервированный прогон: клиент получает его id сразу и подписывается. */
+  runId: string;
 }
 
 /**
@@ -74,11 +76,27 @@ export class AssistantContinuationService {
     if (pending > 0) return null;
 
     // Исходный прогон ещё печатает ответ: два прогона в одной сессии писали
-    // бы параллельно. Откладываем до завершения (без таймера) — свежий
-    // Authorization запроса решения живёт в памяти до этого момента.
+    // бы параллельно. Прогон-продолжение РЕЗЕРВИРУЕТСЯ и захватывает пачку
+    // сразу (клиент получает runId и подписывается на поток), а старт
+    // откладывается до завершения печати без таймера. Свежий Authorization
+    // запроса решения живёт в памяти до старта.
     if (this.runner.isSessionActive(batch.sessionId)) {
-      this.pendingResumes.set(batch.sessionId, { user, authorization, messageId });
-      return null;
+      const runId = randomUUID();
+      await this.repo.createRun({
+        id: runId,
+        sessionId: batch.sessionId,
+        userId: batch.userId,
+        providerId: null,
+        modelId: null,
+        autoExecute: false,
+        continuationOfMessageId: messageId,
+      });
+      if (!(await this.repo.claimBatchContinuation(messageId, user.id, runId))) {
+        await this.repo.deleteRun(runId);
+        return null;
+      }
+      this.pendingResumes.set(batch.sessionId, { user, authorization, messageId, runId });
+      return runId;
     }
 
     const runId = randomUUID();
@@ -153,10 +171,15 @@ export class AssistantContinuationService {
     return runId;
   }
 
+  /** Есть ли отложенное (зарезервированное) продолжение этой сессии. */
+  hasPendingResume(sessionId: string): boolean {
+    return this.pendingResumes.has(sessionId);
+  }
+
   /**
    * Завершение прогона сессии: если решение по последней карточке ждало
-   * окончания печати — стартуем продолжение. Пачку перечитываем: за время
-   * ожидания её могли закрыть новым сообщением или «Продолжить сейчас».
+   * окончания печати — стартуем ЗАРЕЗЕРВИРОВАННЫЙ прогон. Пачку перечитываем:
+   * её могли закрыть/продолжить иначе за время ожидания.
    */
   private async resumeAfterRun(sessionId: string): Promise<void> {
     const pending = this.pendingResumes.get(sessionId);
@@ -169,30 +192,15 @@ export class AssistantContinuationService {
         return;
       }
       const batch = await this.repo.findActionBatch(pending.user.id, pending.messageId);
-      if (!batch || batch.state !== 'open') return;
-      const { pending: waiting } = await this.repo.countActionsByMessage(
-        pending.messageId,
-        pending.user.id,
-      );
-      if (waiting > 0) return;
-      const runId = randomUUID();
-      await this.repo.createRun({
-        id: runId,
-        sessionId: batch.sessionId,
-        userId: batch.userId,
-        providerId: null,
-        modelId: null,
-        autoExecute: false,
-        continuationOfMessageId: pending.messageId,
-      });
-      if (!(await this.repo.claimBatchContinuation(pending.messageId, pending.user.id, runId))) {
-        await this.repo.deleteRun(runId);
+      if (!batch || batch.state !== 'continued' || batch.continuationRunId !== pending.runId) {
+        await this.repo.deleteRun(pending.runId);
         return;
       }
-      await this.start(pending.user, pending.authorization, batch, runId, 0);
+      await this.start(pending.user, pending.authorization, batch, pending.runId, 0);
     } catch (error) {
       // Отложенное продолжение не должно ронять завершённый прогон; лента
-      // остаётся с открытой пачкой и строкой «Продолжить сейчас».
+      // остаётся с пачкой «Продолжение запущено» — ответ придёт после
+      // повторного запроса/перезагрузки.
       this.logger.warn(
         { err: error, sessionId, messageId: pending.messageId },
         'Deferred continuation failed',

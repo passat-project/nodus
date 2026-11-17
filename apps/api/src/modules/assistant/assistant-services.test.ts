@@ -77,6 +77,11 @@ function runRow(overrides: Partial<RunRow> = {}): RunRow {
   };
 }
 
+/** Доменный 404: сущности нет или она чужая. */
+async function expectNotFound(promise: Promise<unknown>): Promise<void> {
+  await expect(promise).rejects.toMatchObject({ code: expect.stringContaining('NOT_FOUND') });
+}
+
 describe('normalizeScreenContext: не доверяем форме клиента (#893)', () => {
   it('контекст без карточки и корректный раздел', () => {
     expect(normalizeScreenContext()).toEqual({ moduleId: null, cardKind: null, cardId: null });
@@ -111,10 +116,16 @@ describe('AssistantSessionsService (#893)', () => {
       touchSession: vi.fn(async () => undefined),
       closeOpenBatches: vi.fn(async () => undefined),
     };
-    const runner = { start: vi.fn() };
+    const runner = { start: vi.fn(), isSessionActive: vi.fn(() => false) };
+    const continuation = { hasPendingResume: vi.fn(() => false) };
     const flags = { enabledModules: vi.fn(async () => ['tasks', 'chat']) };
-    const service = new AssistantSessionsService(repo as never, runner as never, flags as never);
-    return { service, repo, runner, flags };
+    const service = new AssistantSessionsService(
+      repo as never,
+      runner as never,
+      continuation as never,
+      flags as never,
+    );
+    return { service, repo, runner, continuation, flags };
   }
 
   it('list отдаёт диалоги без курсора (лимит сессий — серверный)', async () => {
@@ -135,9 +146,7 @@ describe('AssistantSessionsService (#893)', () => {
 
   it('update: чужая/несуществующая сессия — доменный 404', async () => {
     const { service } = makeService(null);
-    await expect(service.update(user, SESSION_ID, { title: 'x' })).rejects.toMatchObject({
-      code: expect.stringContaining('NOT_FOUND'),
-    });
+    await expectNotFound(service.update(user, SESSION_ID, { title: 'x' }));
   });
 
   it('remove: своя сессия удаляется, чужая — доменный 404', async () => {
@@ -146,9 +155,7 @@ describe('AssistantSessionsService (#893)', () => {
     expect(own.repo.deleteSession).toHaveBeenCalledWith(USER_ID, SESSION_ID);
 
     const foreign = makeService(null);
-    await expect(foreign.service.remove(user, SESSION_ID)).rejects.toMatchObject({
-      code: expect.stringContaining('NOT_FOUND'),
-    });
+    await expectNotFound(foreign.service.remove(user, SESSION_ID));
   });
 
   it('messages: чужая сессия — 404, своя — история с вызовами', async () => {
@@ -226,10 +233,21 @@ describe('AssistantSessionsService (#893)', () => {
 
   it('sendMessage: чужой диалог — 404 до создания прогона', async () => {
     const { service, repo } = makeService(null);
-    await expect(
-      service.sendMessage(user, SESSION_ID, { text: 'x' }, 'Bearer token'),
-    ).rejects.toMatchObject({ code: expect.stringContaining('NOT_FOUND') });
+    await expectNotFound(service.sendMessage(user, SESSION_ID, { text: 'x' }, 'Bearer token'));
     expect(repo.createRun).not.toHaveBeenCalled();
+  });
+
+  it('sendMessage: идущий или отложенный прогон — 409, второй не создаётся', async () => {
+    for (const mode of ['active', 'pending'] as const) {
+      const { service, repo, runner, continuation } = makeService();
+      if (mode === 'active') runner.isSessionActive.mockReturnValue(true);
+      else continuation.hasPendingResume.mockReturnValue(true);
+      await expect(
+        service.sendMessage(user, SESSION_ID, { text: 'Ещё вопрос' }, 'Bearer token'),
+      ).rejects.toMatchObject({ code: expect.stringContaining('CONFLICT') });
+      expect(repo.createRun).not.toHaveBeenCalled();
+      expect(repo.closeOpenBatches).not.toHaveBeenCalled();
+    }
   });
 });
 
@@ -249,9 +267,7 @@ describe('AssistantRunsService (#893)', () => {
     const { service } = makeService();
     expect((await service.get(user, RUN_ID)).id).toBe(RUN_ID);
     const missing = makeService(null);
-    await expect(missing.service.get(user, RUN_ID)).rejects.toMatchObject({
-      code: expect.stringContaining('NOT_FOUND'),
-    });
+    await expectNotFound(missing.service.get(user, RUN_ID));
   });
 
   it('stream: нормализует Last-Event-ID (NaN и отрицательный → 0)', async () => {
@@ -272,9 +288,7 @@ describe('AssistantRunsService (#893)', () => {
 
   it('stream: чужой прогон — 404 до открытия потока', async () => {
     const { service, bus } = makeService(null);
-    await expect(service.stream(user, RUN_ID, 0)).rejects.toMatchObject({
-      code: expect.stringContaining('NOT_FOUND'),
-    });
+    await expectNotFound(service.stream(user, RUN_ID, 0));
     expect(bus.stream).not.toHaveBeenCalled();
   });
 

@@ -34,6 +34,10 @@ export function assertZipBudget(buffer: Buffer): void {
   }
   const centralEnd = centralOffset + centralSize;
   if (centralEnd > buffer.length) throw new FileTextError('FILE_TEXT_INVALID');
+  // EOCD обязан начинаться ровно за каталогом: «промежуток» JSZip трактует
+  // как reader.zero и читает СКРЫТЫЙ каталог — тот же OOM в обход бюджета
+  // (обход подтверждён security-ревью 18.11.2026).
+  if (eocd !== centralEnd) throw new FileTextError('FILE_TEXT_INVALID');
 
   let offset = centralOffset;
   let count = 0;

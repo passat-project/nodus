@@ -111,6 +111,7 @@ function fieldLabel(raw: unknown): string | null {
 
 function keyLabel(key: string): string {
   if (FIELD_LABELS[key]) return FIELD_LABELS[key];
-  if (key.startsWith('cf.')) return `атрибут ${key.slice(3, 11)}`;
+  // Полный id определения: по обрезанному нельзя собрать customFields.
+  if (key.startsWith('cf.')) return `атрибут ${key.slice(3)}`;
   return key;
 }
