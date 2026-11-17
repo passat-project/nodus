@@ -4,6 +4,8 @@ import {
   Permission,
   type AiSettingsBody,
   type AiSettingsResponse,
+  type AssistantMcpBody,
+  type AssistantMcpResponse,
 } from '@nodus/contracts';
 
 import { useAuthStore } from '../../../../shared/auth-store.js';
@@ -22,6 +24,9 @@ let settings: AiSettingsResponse = {
   instructions: '',
   limits: { maxSteps: 12, maxRunSeconds: 120, maxToolResultChars: 16_000 },
 };
+
+/** Реестр MCP-серверов (#902): в памяти воркера, ключ — только хвостом. */
+let mcp: AssistantMcpResponse = { servers: [] };
 
 function canManage(): boolean {
   return Boolean(
@@ -113,6 +118,57 @@ export const aiSettingsHandlers = [
       latencyMs: 412,
       model: provider.models.find((model) => model.enabled)?.id ?? 'demo/model-flash',
       sample: 'работает',
+      errorCode: null,
+      errorMessage: null,
+    });
+  }),
+
+  http.get('/api/v1/settings/ai/mcp', () => {
+    if (!canManage()) return forbidden();
+    return HttpResponse.json(mcp);
+  }),
+
+  http.put('/api/v1/settings/ai/mcp', async ({ request }) => {
+    if (!canManage()) return forbidden();
+    const body = (await request.json().catch(() => null)) as AssistantMcpBody | null;
+    if (!body) {
+      return HttpResponse.json(
+        { code: ErrorCode.VALIDATION_FAILED, message: 'Invalid body' },
+        { status: 400 },
+      );
+    }
+    const previous = new Map(mcp.servers.map((server) => [server.id, server]));
+    mcp = {
+      servers: body.servers.map((server) => {
+        const saved = server.id ? previous.get(server.id) : undefined;
+        return {
+          id: server.id ?? crypto.randomUUID(),
+          name: server.name,
+          url: server.url,
+          transport: server.transport,
+          hasKey: Boolean(server.apiKey) || Boolean(saved?.hasKey),
+          keyHint: server.apiKey ? server.apiKey.slice(-4) : (saved?.keyHint ?? null),
+          enabled: server.enabled,
+          defaultForSearch: server.defaultForSearch,
+        };
+      }),
+    };
+    return HttpResponse.json(mcp);
+  }),
+
+  http.post('/api/v1/settings/ai/mcp/:id/test', ({ params }) => {
+    if (!canManage()) return forbidden();
+    const server = mcp.servers.find((item) => item.id === params.id);
+    if (!server) return notFound();
+    return HttpResponse.json({
+      ok: true,
+      latencyMs: 386,
+      serverName: 'exa-mcp-server',
+      protocolVersion: '2025-06-18',
+      tools: [
+        { name: 'web_search_exa', description: 'Поиск в интернете' },
+        { name: 'web_fetch_exa', description: 'Чтение страницы по URL' },
+      ],
       errorCode: null,
       errorMessage: null,
     });

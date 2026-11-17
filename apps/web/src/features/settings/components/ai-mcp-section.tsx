@@ -1,0 +1,274 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PlugZap, Plus, Star, Trash2 } from 'lucide-react';
+import { ui, type AssistantMcpBody, type AssistantMcpResponse } from '@nodus/contracts';
+import { Button } from '@nodus/ui/components/button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@nodus/ui/components/dialog';
+import { toast } from 'sonner';
+
+import { DataTable } from '../../../shared/views/data-table.js';
+import { useListToolbar } from '../../../shared/views/use-list-toolbar.js';
+import { useRowSelection } from '../../../shared/views/use-row-selection.js';
+import {
+  useMcpSettingsQuery,
+  useTestMcpServer,
+  useUpdateMcpSettings,
+} from '../api/mcp-settings.js';
+import { mcpColumns, type McpServerDraft } from './ai-mcp-columns.js';
+import { AiMcpDialog, toMcpInput, type McpDialogMode } from './ai-mcp-dialog.js';
+import { AiRegistryHeader } from './ai-registry-header.js';
+import type { AiSettingsSectionId } from './ai-section-switcher.js';
+
+const strings = ui.assistant.settings;
+const VIEW_KEY = 'ai-mcp.list';
+
+/**
+ * Раздел «MCP» экрана «Настройки портала → ИИ-агент» (#902): реестр внешних
+ * серверов. Первый — Exa (hosted, Streamable HTTP): агент ищет в интернете и
+ * читает страницы от имени сотрудника. Ключ шифруется и наружу не уходит;
+ * «Проверить соединение» делает handshake и показывает число инструментов —
+ * при открытии экрана внешняя сеть не дёргается.
+ */
+export function AiMcpSection({
+  section,
+  onSection,
+}: {
+  section: AiSettingsSectionId;
+  onSection: (next: AiSettingsSectionId) => void;
+}) {
+  const query = useMcpSettingsQuery();
+  const save = useUpdateMcpSettings();
+  const test = useTestMcpServer();
+  const toolbar = useListToolbar(VIEW_KEY);
+  const [draft, setDraft] = useState<AssistantMcpBody | null>(null);
+  const [dialog, setDialog] = useState<McpDialogMode | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [toolCounts, setToolCounts] = useState<Record<string, number>>({});
+  const [testingId, setTestingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (query.data && !draft) setDraft(toDraft(query.data));
+  }, [query.data, draft]);
+
+  const servers = useMemo(() => (draft?.servers ?? []) as McpServerDraft[], [draft?.servers]);
+  const q = toolbar.query.trim().toLowerCase();
+  const rows = useMemo(
+    () =>
+      q
+        ? servers.filter(
+            (server) =>
+              server.name.toLowerCase().includes(q) || server.url.toLowerCase().includes(q),
+          )
+        : servers,
+    [servers, q],
+  );
+  const selection = useRowSelection(useMemo(() => rows.map((server) => server.id), [rows]));
+  const defaultId = servers.find((server) => server.defaultForSearch)?.id ?? null;
+
+  /** Один PUT на действие: черновик сразу, при ошибке — серверная правда. */
+  const persist = useCallback(
+    async (next: AssistantMcpBody) => {
+      setDraft(next);
+      try {
+        await save.mutateAsync(next);
+        toast.success(strings.saved);
+      } catch {
+        toast.error(strings.saveError);
+      }
+      setDraft(null);
+    },
+    [save],
+  );
+
+  function createServer(fields: {
+    name: string;
+    url: string;
+    apiKey?: string;
+    defaultForSearch: boolean;
+  }) {
+    if (!draft) return;
+    const input = toMcpInput(crypto.randomUUID(), fields) as McpServerDraft;
+    const next = servers.map((server) =>
+      fields.defaultForSearch ? { ...server, defaultForSearch: false } : server,
+    );
+    void persist({
+      servers: [
+        ...next,
+        { ...input, persisted: false, hasKey: Boolean(fields.apiKey), keyHint: null },
+      ],
+    });
+  }
+
+  function applyServer(
+    id: string,
+    patch: Partial<McpServerDraft>,
+    defaults: { defaultId: string | null },
+  ) {
+    if (!draft) return;
+    void persist({
+      servers: servers.map((server) => {
+        if (server.id === id) return { ...server, ...patch };
+        // «По умолчанию для поиска» — ровно один сервер.
+        return defaults.defaultId === id ? { ...server, defaultForSearch: false } : server;
+      }),
+    });
+  }
+
+  const makeDefault = useCallback(
+    (id: string) => {
+      void persist({
+        servers: servers.map((server) => ({ ...server, defaultForSearch: server.id === id })),
+      });
+    },
+    [servers, persist],
+  );
+
+  function removeServer(id: string) {
+    void persist({ servers: servers.filter((server) => server.id !== id) });
+    selection.deselect(id);
+    setToolCounts((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  }
+
+  async function testServer(id: string) {
+    setTestingId(id);
+    try {
+      const result = await test.mutateAsync(id);
+      if (result.ok) {
+        setToolCounts((current) => ({ ...current, [id]: result.tools.length }));
+        toast.success(
+          `${strings.mcpTestOk}: ${strings.mcpTestTools.toLowerCase()} — ${result.tools.length}`,
+        );
+      } else {
+        toast.error(result.errorMessage ?? strings.mcpTestFailed);
+      }
+    } catch {
+      toast.error(strings.mcpTestFailed);
+    } finally {
+      setTestingId(null);
+    }
+  }
+
+  const columns = useMemo(
+    () => mcpColumns(defaultId, makeDefault, toolCounts),
+    [defaultId, makeDefault, toolCounts],
+  );
+
+  return (
+    <div className="relative flex h-full min-h-0 min-w-0 flex-col">
+      <AiRegistryHeader
+        count={servers.length}
+        section={section}
+        onSection={onSection}
+        toolbar={toolbar}
+        defs={columns}
+        searchPlaceholder={strings.mcpSearchPlaceholder}
+        viewKey={VIEW_KEY}
+        create={
+          <Button onClick={() => setDialog({ kind: 'create' })} disabled={!draft}>
+            <Plus data-icon="inline-start" />
+            {ui.common.create}
+          </Button>
+        }
+      />
+
+      <div className="min-h-0 flex-1">
+        <DataTable
+          viewKey={VIEW_KEY}
+          defs={columns}
+          rows={rows}
+          rowKey={(server) => server.id}
+          selection={selection}
+          isLoading={query.isPending}
+          isError={query.isError}
+          onRetry={() => void query.refetch()}
+          label={strings.mcpTitle}
+          emptyTitle={q ? ui.customFields.page.emptySearch : strings.mcpEmpty}
+          onOpenRow={(server) => setDialog({ kind: 'edit', server })}
+          rowMenu={(server) => [
+            {
+              id: 'test',
+              icon: <PlugZap className="size-3.5" strokeWidth={1.75} />,
+              label: testingId === server.id ? strings.mcpTesting : strings.mcpTest,
+              onSelect: () => void testServer(server.id),
+            },
+            ...(server.id === defaultId
+              ? []
+              : [
+                  {
+                    id: 'default',
+                    icon: <Star className="size-3.5" strokeWidth={1.75} />,
+                    label: strings.mcpDefaultForSearch,
+                    onSelect: () => makeDefault(server.id),
+                  },
+                ]),
+            {
+              id: 'remove',
+              icon: <Trash2 className="size-3.5" strokeWidth={1.75} />,
+              label: strings.mcpRemove,
+              danger: true,
+              separatorBefore: true,
+              onSelect: () => setDeleteId(server.id),
+            },
+          ]}
+        />
+      </div>
+
+      {dialog && draft ? (
+        <AiMcpDialog
+          key={dialog.kind === 'edit' ? dialog.server.id : 'create'}
+          mode={dialog}
+          defaultServerId={defaultId}
+          onClose={() => setDialog(null)}
+          onCreate={createServer}
+          onApply={applyServer}
+        />
+      ) : null}
+
+      {deleteId ? (
+        <Dialog open onOpenChange={(open) => !open && setDeleteId(null)}>
+          <DialogContent className="max-w-md" aria-describedby={undefined}>
+            <DialogTitle>{strings.mcpDeleteConfirmTitle}</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              {strings.mcpDeleteConfirmHint}
+            </DialogDescription>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button variant="ghost" size="sm" onClick={() => setDeleteId(null)}>
+                {ui.common.cancel}
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  removeServer(deleteId);
+                  setDeleteId(null);
+                }}
+              >
+                {strings.deleteAction}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+    </div>
+  );
+}
+
+/** Ответ сервера → черновик: сохранённые серверы помечаются `persisted`. */
+function toDraft(response: AssistantMcpResponse): AssistantMcpBody {
+  return {
+    servers: response.servers.map((server) => ({
+      id: server.id,
+      name: server.name,
+      url: server.url,
+      transport: server.transport,
+      enabled: server.enabled,
+      defaultForSearch: server.defaultForSearch,
+      persisted: true,
+      hasKey: server.hasKey,
+      keyHint: server.keyHint,
+    })) as unknown as AssistantMcpBody['servers'],
+  };
+}

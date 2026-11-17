@@ -9,6 +9,9 @@ import { AssistantSessionsService } from './assistant-sessions.service.js';
 import { AiSettingsController } from './providers/ai-settings.controller.js';
 import { AiSettingsRepository } from './providers/ai-settings.repository.js';
 import { AiSettingsService } from './providers/ai-settings.service.js';
+import { McpSettingsController } from './mcp/mcp-settings.controller.js';
+import { McpSettingsRepository } from './mcp/mcp-settings.repository.js';
+import { McpSettingsService } from './mcp/mcp-settings.service.js';
 import { RunBusService } from './run-bus.service.js';
 import { ToolExecutorService } from './tools/tool-executor.service.js';
 
@@ -23,7 +26,12 @@ import { ToolExecutorService } from './tools/tool-executor.service.js';
  * контроллеры диалога; настройки провайдеров — право `portal.settings.manage`.
  */
 @Module({
-  controllers: [AssistantSessionsController, AssistantRunsController, AiSettingsController],
+  controllers: [
+    AssistantSessionsController,
+    AssistantRunsController,
+    AiSettingsController,
+    McpSettingsController,
+  ],
   providers: [
     AssistantRepository,
     RunBusService,
@@ -33,6 +41,8 @@ import { ToolExecutorService } from './tools/tool-executor.service.js';
     ToolExecutorService,
     AiSettingsRepository,
     AiSettingsService,
+    McpSettingsRepository,
+    McpSettingsService,
   ],
 })
 export class AssistantModule {}

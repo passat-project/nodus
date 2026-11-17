@@ -257,6 +257,10 @@ export const ErrorCode = {
   ASSISTANT_RUN_ALREADY_FINISHED: 'ASSISTANT_RUN_ALREADY_FINISHED',
   /** Провайдер не ответил/вернул ошибку на проверке соединения (502). */
   ASSISTANT_PROVIDER_UNAVAILABLE: 'ASSISTANT_PROVIDER_UNAVAILABLE',
+  /** MCP-сервер из настроек не найден (удалён параллельно) — 404. */
+  ASSISTANT_MCP_NOT_FOUND: 'ASSISTANT_MCP_NOT_FOUND',
+  /** MCP-сервер не ответил/ответил ошибкой на проверке соединения (502). */
+  ASSISTANT_MCP_UNAVAILABLE: 'ASSISTANT_MCP_UNAVAILABLE',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

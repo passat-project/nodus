@@ -127,4 +127,6 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.ASSISTANT_PROVIDER_NOT_FOUND]: 'Провайдер не найден',
   [ErrorCode.ASSISTANT_RUN_ALREADY_FINISHED]: 'Ответ уже завершён',
   [ErrorCode.ASSISTANT_PROVIDER_UNAVAILABLE]: 'Провайдер моделей не отвечает',
+  [ErrorCode.ASSISTANT_MCP_NOT_FOUND]: 'MCP-сервер не найден',
+  [ErrorCode.ASSISTANT_MCP_UNAVAILABLE]: 'Сервер MCP не отвечает',
 };

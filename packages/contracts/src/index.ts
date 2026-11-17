@@ -93,3 +93,4 @@ export * from './settings/file-servers.schema.js';
 export * from './assistant/assistant-limits.js';
 export * from './assistant/assistant.schemas.js';
 export * from './assistant/ai-settings.schemas.js';
+export * from './assistant/mcp-settings.schemas.js';
