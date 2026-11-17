@@ -53,9 +53,6 @@ export function checkPressRules(
           problems.push(error('press_role_not_in_category', ref));
         }
       }
-      if (source.kind === 'letter_recipients' && opts.category === 'task') {
-        problems.push(error('press_source_invalid', ref));
-      }
       if (source.kind === 'field') {
         const id = customFieldIdOfKey(source.field);
         if (id === null) {

@@ -24,9 +24,9 @@ export function pressSummary(transition: WorkflowDraftTransition): string {
   return `${source} · ${ui.automation.press.quorum[press.quorum.kind]} · ${ui.automation.press.order[press.order]}`;
 }
 
-function defaultPress(category: ProcessCategory): PressConfigDraft {
+function defaultPress(): PressConfigDraft {
   return {
-    sources: [{ kind: category === 'letter' ? 'letter_recipients' : 'coexecutors' }],
+    sources: [{ kind: 'coexecutors' }],
     quorum: { kind: 'all' },
     order: 'parallel',
     excludeAuthor: true,
@@ -53,7 +53,7 @@ export function TransitionPressSection({
         title={ui.automation.press.sectionTitle}
         checked={false}
         disabled={readOnly}
-        onChange={() => set(defaultPress(category))}
+        onChange={() => set(defaultPress())}
       />
     );
   }

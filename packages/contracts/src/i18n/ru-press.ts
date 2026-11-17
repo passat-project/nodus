@@ -47,7 +47,6 @@ export const pressStrings = {
       role: 'Роль в задаче',
       employees: 'Сотрудники',
       field: 'Поле «Сотрудники»',
-      letter_recipients: 'Получатели письма',
     },
     quorumLabel: 'Сколько нужно',
     quorum: {

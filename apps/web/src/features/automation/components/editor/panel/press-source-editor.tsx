@@ -28,13 +28,7 @@ const TASK_KINDS: readonly SourceKind[] = [
   'employees',
   'field',
 ];
-const LETTER_KINDS: readonly SourceKind[] = [
-  'letter_recipients',
-  'all_employees',
-  'role',
-  'employees',
-  'field',
-];
+const LETTER_KINDS: readonly SourceKind[] = ['all_employees', 'role', 'employees', 'field'];
 
 function labelOf(kind: SourceKind): string {
   return ui.automation.press.sources[kind];

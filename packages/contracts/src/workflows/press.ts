@@ -24,8 +24,6 @@ export const pressSourceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('field'), field: customFieldKeySchema }),
   /** Все активные сотрудники компании — снимок на старте сбора. */
   z.object({ kind: z.literal('all_employees') }),
-  /** Получатели письма — источник категории `letter` (ADR-0025 п.5). */
-  z.object({ kind: z.literal('letter_recipients') }),
 ]);
 export type PressSource = z.infer<typeof pressSourceSchema>;
 

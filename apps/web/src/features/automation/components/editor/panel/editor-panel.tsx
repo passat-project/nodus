@@ -165,7 +165,7 @@ export function EditorPanel({
           category={type.category}
         />
       ) : null}
-      {transition && section === 'press' ? (
+      {transition && section === 'press' && type.category === 'task' ? (
         <TransitionPressSection
           transition={transition}
           readOnly={readOnly}
