@@ -184,7 +184,9 @@ export function TransitionWindow({
     : null;
 
   const bodyWithReturn = (body: ExecuteTransitionBody): ExecuteTransitionBody =>
-    pressReturnUserIds.length > 0 ? { ...body, pressReturnUserIds } : body;
+    pressReturnUserIds.length > 0
+      ? { ...body, form: { ...(body.form ?? {}), pressReturnUserIds } }
+      : body;
 
   function submit() {
     if (!api || !canSubmit || submitting || mode === 'preview') return;
