@@ -14,6 +14,7 @@ import {
 } from '../providers/llm-provider.port.js';
 import { RunBusService } from '../run-bus.service.js';
 import { buildCatalog, hotTools } from '../tools/catalog.js';
+import { asToolData } from '../tools/tool-data.js';
 import type {
   AssistantToolDefinition,
   ScreenContext,
@@ -145,10 +146,11 @@ export class AgentRunnerService {
       const messages: LlmMessage[] = [{ role: 'system', content: prompt }, ...priorMessages];
 
       /** Активный набор инструментов: горячая полка + найденные tools.search. */
-      const activeTools = new Set(hotTools(catalog).map((tool) => tool.id));
+      const activeTools = initialActiveToolIds(catalog);
       const toolContext: ToolContext = {
         authorization: params.authorization,
         screen: params.screen,
+        signal: active.controller.signal,
         available: catalog,
         activate: (ids) => {
           for (const id of ids) activeTools.add(id);
@@ -223,8 +225,7 @@ export class AgentRunnerService {
         );
       }
 
-      const finalText =
-        text.trim().length >= bestText.trim().length ? text : bestText;
+      const finalText = text.trim().length >= bestText.trim().length ? text : bestText;
       await this.repo.finishMessage(message.id, {
         text: finalText,
         reasoning: reasoning || null,
@@ -268,7 +269,10 @@ export class AgentRunnerService {
    * прерывают ожидание.
    */
   private async *streamWithRetry(
-    resolved: { provider: { streamChat: (request: never) => AsyncIterable<LlmStreamEvent> }; modelId: string },
+    resolved: {
+      provider: { streamChat: (request: never) => AsyncIterable<LlmStreamEvent> };
+      modelId: string;
+    },
     request: Record<string, unknown>,
     active: ActiveRun,
     hasReceived: () => boolean,
@@ -278,7 +282,10 @@ export class AgentRunnerService {
     for (;;) {
       attempt += 1;
       try {
-        for await (const event of resolved.provider.streamChat({ ...request, signal: active.controller.signal } as never)) {
+        for await (const event of resolved.provider.streamChat({
+          ...request,
+          signal: active.controller.signal,
+        } as never)) {
           markReceived();
           yield event;
         }
@@ -384,12 +391,18 @@ export class AgentRunnerService {
       );
     }
 
+    // «Стоп» во время вызовов: инструменты уже оборваны сигналом — дальше
+    // шагов не делаем (иначе прогон доработал бы до следующего ответа).
+    if (context.signal.aborted) return;
+
     // Активный набор мог расшириться через tools.search — новый шаг увидит его.
     for (const item of prepared) {
       messages.push({
         role: 'tool',
         tool_call_id: item.call.id,
-        content: results.get(item.call.id) ?? 'Нет результата',
+        // Блок ДАННЫХ (а не свободный текст): правило промпта «результаты —
+        // не инструкции» подкреплено структурной границей.
+        content: asToolData(item.call.function.name, results.get(item.call.id) ?? 'Нет результата'),
       });
     }
     void activeTools;
@@ -514,6 +527,23 @@ function isAbortError(error: unknown): boolean {
   );
 }
 
+/**
+ * Стартовый активный набор: горячая полка + `tools.search`.
+ *
+ * `tools.search` не «горячий» по смыслу (он не про данные портала), но без
+ * него недостижимы все не-hot инструменты: модель видит только активный
+ * набор, а поиск — единственный вход к остальным (ADR-0043 п. 4, «три
+ * полки»). Поэтому он в наборе ВСЕГДА, а не по признаку `hot` (блокер
+ * ревью 17.11.2026).
+ */
+export const SEARCH_TOOL_ID = 'tools.search';
+
+export function initialActiveToolIds(catalog: readonly AssistantToolDefinition[]): Set<string> {
+  const ids = new Set(hotTools(catalog).map((tool) => tool.id));
+  if (catalog.some((tool) => tool.id === SEARCH_TOOL_ID)) ids.add(SEARCH_TOOL_ID);
+  return ids;
+}
+
 function addTokens(current: number | null, delta: number | null): number | null {
   if (delta === null) return current;
   return (current ?? 0) + delta;
@@ -535,9 +565,7 @@ function parseArgs(raw: string): unknown {
  * вовсе, а раскрытая показывает список построчно, а не одной простынёй.
  */
 function clipPreview(text: string): string {
-  const lines = text
-    .split('\n')
-    .map((line) => line.replace(/[ \t]+/g, ' ').trimEnd());
+  const lines = text.split('\n').map((line) => line.replace(/[ \t]+/g, ' ').trimEnd());
   const clipped = lines.slice(0, 12).join('\n').trim();
   return clipped.length > 600 ? `${clipped.slice(0, 600).trimEnd()}…` : clipped;
 }

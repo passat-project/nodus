@@ -82,7 +82,10 @@ export class OpenAiCompatibleProvider implements LlmProvider {
       stream: true,
       ...(request.tools?.length ? { tools: request.tools, tool_choice: 'auto' } : {}),
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
-      ...request.extra,
+      // `extra` модели (reasoning, max_completion_tokens…) не может переопределить
+      // сам запрос: иначе настройка модели подменила бы диалог или сняла
+      // стриминг/инструменты (#891).
+      ...safeExtra(request.extra),
     };
 
     const response = await this.chatRequest(body, request.signal);
@@ -249,4 +252,15 @@ async function safeText(response: Response): Promise<string> {
   } catch {
     return '';
   }
+}
+
+/** Поля запроса, которыми модель НЕ управляет: их задаёт движок. */
+const RESERVED_REQUEST_KEYS = new Set(['model', 'messages', 'tools', 'tool_choice', 'stream']);
+
+/** `extra` без зарезервированных полей: настройка модели — только параметры. */
+function safeExtra(extra: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!extra) return {};
+  return Object.fromEntries(
+    Object.entries(extra).filter(([key]) => !RESERVED_REQUEST_KEYS.has(key)),
+  );
 }

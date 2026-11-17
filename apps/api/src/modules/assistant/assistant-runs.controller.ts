@@ -13,6 +13,7 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swa
 import { assistantRunSchema, Permission, type AssistantRun } from '@nodus/contracts';
 import type { AuthUser } from '@nodus/contracts';
 import { map, type Observable } from 'rxjs';
+import { z } from 'zod';
 
 import { Audit } from '../../core/decorators/audit.decorator.js';
 import { GetUser } from '../../core/decorators/get-user.decorator.js';
@@ -20,8 +21,12 @@ import { RequireFeature } from '../../core/decorators/require-feature.decorator.
 import { RequirePermissions } from '../../core/decorators/require-permissions.decorator.js';
 import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../core/openapi/api-idempotency.decorator.js';
+import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { AssistantRunsService } from './assistant-runs.service.js';
 import type { RunEvent } from './run-bus.service.js';
+
+/** Path-параметр: не-UUID — 400 `VALIDATION_FAILED`, не 500 из Prisma. */
+const uuidPipe = new ZodValidationPipe(z.uuid());
 
 /**
  * Прогоны ассистента (`/api/v1/assistant/runs`, эпик #889): поток SSE,
@@ -46,7 +51,7 @@ export class AssistantRunsController {
   @ApiErrors(401, 403, 404)
   async stream(
     @GetUser() user: AuthUser,
-    @Param('runId') runId: string,
+    @Param('runId', uuidPipe) runId: string,
     @Headers('last-event-id') lastEventId: string | undefined,
   ): Promise<Observable<MessageEvent>> {
     const stream = await this.runs.stream(user, runId, Number(lastEventId ?? 0));
@@ -63,7 +68,7 @@ export class AssistantRunsController {
   @ApiOperation({ summary: 'Статус прогона (fallback без потока)' })
   @ApiOkResponse({ standardSchema: assistantRunSchema })
   @ApiErrors(401, 403, 404)
-  get(@GetUser() user: AuthUser, @Param('runId') runId: string): Promise<AssistantRun> {
+  get(@GetUser() user: AuthUser, @Param('runId', uuidPipe) runId: string): Promise<AssistantRun> {
     return this.runs.get(user, runId);
   }
 
@@ -74,7 +79,10 @@ export class AssistantRunsController {
   @ApiOkResponse({ standardSchema: assistantRunSchema })
   @ApiErrors(401, 403, 404, 409)
   @ApiIdempotencyKey()
-  cancel(@GetUser() user: AuthUser, @Param('runId') runId: string): Promise<AssistantRun> {
+  cancel(
+    @GetUser() user: AuthUser,
+    @Param('runId', uuidPipe) runId: string,
+  ): Promise<AssistantRun> {
     return this.runs.cancel(user, runId);
   }
 }

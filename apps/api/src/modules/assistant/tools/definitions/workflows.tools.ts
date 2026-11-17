@@ -37,7 +37,10 @@ export const workflowsProcessTypesTool = defineTool({
       const type = asRecord(raw);
       if (!type) return null;
       const category = type.category === 'letter' ? 'письмо' : 'задача';
-      return `${str(type.name) ?? '—'} — категория ${category}${type.isSystem ? ', системный' : ''}${type.archived ? ' — архивный' : ''}`;
+      // Архивирование в контракте — `archivedAt` (processTypeSchema), не
+      // булев `archived`: иначе модель считает архивный тип действующим.
+      const archivedLabel = str(type.archivedAt) ? ' — архивный' : '';
+      return `${str(type.name) ?? '—'} — категория ${category}${type.isSystem ? ', системный' : ''}${archivedLabel}`;
     });
     return {
       text: finalize(

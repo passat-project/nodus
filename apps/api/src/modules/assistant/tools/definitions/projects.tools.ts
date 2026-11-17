@@ -149,6 +149,27 @@ function walkNodes(nodes: unknown[], depth: number, out: string[], limit: number
   }
 }
 
+/**
+ * Плоский список узлов → дерево по `parentId` (контракт
+ * `projectStructureResponseSchema`: `{ nodes: […], kinds: […] }`, клиент
+ * собирает дерево сам — вложенных `children` сервер не отдаёт).
+ */
+function buildNodeTree(
+  nodes: Record<string, unknown>[],
+  kindNames: Map<string, string>,
+): unknown[] {
+  const byParent = new Map<string | null, Record<string, unknown>[]>();
+  for (const node of nodes) {
+    const parentId = str(node.parentId);
+    const bucket = byParent.get(parentId) ?? [];
+    bucket.push({ ...node, kind: { name: kindNames.get(str(node.kindId) ?? '') ?? 'раздел' } });
+    byParent.set(parentId, bucket);
+  }
+  const attach = (list: Record<string, unknown>[]): unknown[] =>
+    list.map((node) => ({ ...node, children: attach(byParent.get(str(node.id) ?? '') ?? []) }));
+  return attach(byParent.get(null) ?? []);
+}
+
 export const projectsStructureTool = defineTool({
   id: 'projects.structure',
   title: 'Проекты: структура',
@@ -164,9 +185,17 @@ export const projectsStructureTool = defineTool({
   build: (input) => ({ path: `/projects/${input.id}/structure` }),
   project: (data, input) => {
     const root = asRecord(data);
-    const nodes = asArray(root?.nodes ?? root?.tree ?? root?.children);
+    const flat = asArray(root?.nodes)
+      .map((raw) => asRecord(raw))
+      .filter((node): node is Record<string, unknown> => node !== null);
+    const kindNames = new Map<string, string>();
+    for (const raw of asArray(root?.kinds)) {
+      const kind = asRecord(raw);
+      const id = str(kind?.id);
+      if (id) kindNames.set(id, str(kind?.name) ?? 'раздел');
+    }
     const out: string[] = [];
-    walkNodes(nodes, 0, out, input.limit);
+    walkNodes(buildNodeTree(flat, kindNames), 0, out, input.limit);
     if (out.length === 0) return { text: 'Структура проекта пуста или недоступна' };
     return {
       text: finalize(
@@ -201,11 +230,26 @@ export const projectsMembersTool = defineTool({
     query: { limit: String(input.limit) },
   }),
   project: (data) => {
+    // Форма `GET /projects/:id/members` — `{ user, source, observerKind }`
+    // (projectMemberSchema): роли выводятся из источника участия, а не из
+    // несуществующего поля `role`.
     const rows = itemsOf(data).map((raw) => {
       const member = asRecord(raw);
       if (!member) return null;
       const user = asRecord(member.user) ?? member;
-      return `${nameOf(user) ?? '—'} — ${str(member.role) ?? 'участник'}`;
+      const source = str(member.source);
+      const observerKind = str(member.observerKind);
+      const role =
+        source === 'manager'
+          ? 'руководитель'
+          : source === 'assistant'
+            ? 'помощник руководителя'
+            : source === 'observer'
+              ? `наблюдатель${observerKind === 'creator' ? ' (создатель)' : observerKind === 'joined' ? ' (вступил сам)' : ''}`
+              : source === 'task'
+                ? 'участник из задач'
+                : 'участник';
+      return `${nameOf(user) ?? '—'} — ${role}`;
     });
     return {
       text: finalize(

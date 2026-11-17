@@ -53,6 +53,8 @@ export interface ToolContext {
   /** `Bearer …` текущего сотрудника — тот же конвейер, что у интерфейса. */
   authorization: string;
   screen: ScreenContext;
+  /** Отмена прогона: «Стоп» обязан оборвать и уже запущенные инструменты. */
+  signal: AbortSignal;
   /** Разрешённые инструменты (для `tools.search`: искать только доступные). */
   available: readonly AssistantToolDefinition[];
   /** `tools.search` добавляет инструменты в активный набор следующего шага. */

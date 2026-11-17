@@ -62,6 +62,21 @@ export const assistantModelSchema = z.object({
 });
 export type AssistantModel = z.infer<typeof assistantModelSchema>;
 
+/**
+ * Заголовки, которые несут учётные данные: в «Дополнительных заголовках» им
+ * не место — значение легло бы в БД открытым текстом и вернулось бы в ответе
+ * API в обход шифрования (ADR-0044 п. 4). Ключ задаётся полем «Ключ».
+ */
+const SECRET_HEADER_NAMES = new Set([
+  'authorization',
+  'proxy-authorization',
+  'x-api-key',
+  'api-key',
+  'x-auth-token',
+  'cookie',
+  'set-cookie',
+]);
+
 /** Дополнительный заголовок провайдера (например, HTTP-Referer для OpenRouter). */
 export const assistantHeaderSchema = z.object({
   name: z
@@ -69,7 +84,10 @@ export const assistantHeaderSchema = z.object({
     .trim()
     .min(1)
     .max(100)
-    .regex(/^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/, 'Недопустимое имя заголовка'),
+    .regex(/^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/, 'Недопустимое имя заголовка')
+    .refine((name) => !SECRET_HEADER_NAMES.has(name.toLowerCase()), {
+      message: 'Ключи и токены задаются полем «Ключ», а не заголовком',
+    }),
   value: z.string().trim().max(500),
 });
 export type AssistantHeader = z.infer<typeof assistantHeaderSchema>;

@@ -5,7 +5,6 @@ import {
   asArray,
   asRecord,
   date,
-  dateTime,
   entityLink,
   finalize,
   hasMore,
@@ -192,24 +191,27 @@ export const lettersRelationsTool = defineTool({
   api: { method: 'GET', path: '/letters/:id/tree' },
   build: (input) => ({ path: `/letters/${input.id}/tree` }),
   project: (data) => {
-    const root = asRecord(data);
-    const nodes = asArray(root?.items ?? root?.tree ?? data);
-    const rows = nodes.map((raw) => {
-      const node = asRecord(raw);
-      if (!node) return null;
-      const letter = asRecord(node.letter) ?? node;
-      return `${str(letter.regNumber) ? `№${str(letter.regNumber)}` : 'без номера'} «${str(letter.subject) ?? '(без темы)'}» — ${str(node.relation) ?? str(node.kind) ?? 'связь'}`;
-    });
+    // Форма `GET /letters/:id/tree` — `{ root: { children: […] }, truncated }`
+    // (контракт letterTreeResponseSchema): обходим дерево в глубину, а не
+    // читаем плоский список (иначе «связей нет» на любой переписке).
+    const root = asRecord(asRecord(data)?.root);
+    const truncated = asRecord(data)?.truncated === true;
+    const rows: string[] = [];
+    const walk = (node: Record<string, unknown> | null, depth: number): void => {
+      for (const raw of asArray(node?.children)) {
+        const child = asRecord(raw);
+        if (!child) continue;
+        const reg = str(child.regNumber) ? `№${str(child.regNumber)}` : 'без номера';
+        const subject = str(child.subject) ?? '(без темы)';
+        const kind = str(child.relationKind) === 'reply_to' ? 'ответ' : 'вложено в цепочку';
+        rows.push(`${'  '.repeat(depth)}${reg} «${subject}» — ${kind}`);
+        walk(child, depth + 1);
+      }
+    };
+    walk(root, 0);
+    if (truncated) rows.push('… дерево обрезано: показаны не все связи');
     return {
-      text: finalize(
-        listBlock(
-          'Связанные письма',
-          rows.filter((row): row is string => row !== null),
-          {
-            maxRows: 20,
-          },
-        ),
-      ),
+      text: finalize(listBlock('Связанные письма', rows, { maxRows: 20 })),
     };
   },
 });
@@ -238,15 +240,23 @@ export const lettersAttachmentsTool = defineTool({
       const file = asRecord(raw);
       if (!file) return null;
       const size = num(file.size);
+      // Форма `letterAttachmentSchema`: name/mime/size/role/inline. Полей
+      // `createdAt`/`confidential` у вложения нет (конфиденциальность — у
+      // письма), поэтому выводим РОЛЬ и inline-признак.
+      const role =
+        str(file.role) === 'main'
+          ? 'основной документ'
+          : str(file.role) === 'body_pdf'
+            ? 'PDF-копия тела'
+            : file.inline === true
+              ? 'встроено в тело'
+              : 'вложение';
       return [
         str(file.name) ?? 'файл',
         str(file.mime) ?? 'формат неизвестен',
         size !== null ? `${Math.round(size / 1024)} КБ` : 'размер неизвестен',
-        str(file.createdAt) ? dateTime(file.createdAt) : null,
-        file.confidential ? 'конфиденциально' : null,
-      ]
-        .filter(Boolean)
-        .join(', ');
+        role,
+      ].join(', ');
     });
     return {
       text: finalize(

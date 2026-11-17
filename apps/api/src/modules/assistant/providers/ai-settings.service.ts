@@ -91,6 +91,7 @@ export class AiSettingsService {
     const providers = body.providers.map((input, index) => {
       const current = input.id ? existing.get(input.id) : undefined;
       this.assertProviderKeyConsistency(input);
+      this.assertKeyBelongsToOrigin(input, current);
       let ciphertext = current?.apiKeyCiphertext ?? null;
       let hint = current?.apiKeyHint ?? null;
       if (input.apiKey) {
@@ -145,7 +146,10 @@ export class AiSettingsService {
     try {
       return { models: await provider.listModels() };
     } catch (error) {
-      throw this.providerFailure(error, 'Не удалось получить список моделей');
+      // Доменная ошибка, а не «сырой» сбой провайдера: фильтр отдаёт 502
+      // `ASSISTANT_PROVIDER_UNAVAILABLE`, а не 500 без причины.
+      const failure = this.providerFailure(error, 'Не удалось получить список моделей');
+      throw new DomainException(ErrorCode.ASSISTANT_PROVIDER_UNAVAILABLE, failure.message);
     }
   }
 
@@ -311,5 +315,32 @@ export class AiSettingsService {
         { field: 'apiKey' },
       );
     }
+  }
+
+  /**
+   * Сохранённый ключ не уходит на другой хост: при смене origin адреса
+   * (опечатка, подменённый URL) ключ нужно ввести заново — иначе секрет
+   * отправился бы новому владельцу адреса (защита в глубину, ADR-0044 п. 4).
+   */
+  private assertKeyBelongsToOrigin(
+    input: { id?: string; baseUrl: string; apiKey?: string; clearKey?: boolean },
+    current: ProviderRow | undefined,
+  ): void {
+    if (!current?.apiKeyCiphertext || input.apiKey || input.clearKey) return;
+    if (originOf(input.baseUrl) === originOf(current.baseUrl)) return;
+    throw new DomainException(
+      ErrorCode.VALIDATION_FAILED,
+      'Адрес провайдера изменился — введите ключ заново (или удалите его)',
+      { field: 'apiKey' },
+    );
+  }
+}
+
+/** Origin адреса (`https://host:port`); невалидный URL — пустая строка. */
+function originOf(value: string): string {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return '';
   }
 }

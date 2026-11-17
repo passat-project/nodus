@@ -59,6 +59,7 @@ describe('ToolExecutorService: предохранители', () => {
   const ctx: ToolContext = {
     authorization: 'Bearer test',
     screen: { moduleId: null, cardKind: null, cardId: null },
+    signal: new AbortController().signal,
     available: ALL_TOOLS,
     activate: () => undefined,
   };
