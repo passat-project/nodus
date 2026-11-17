@@ -1,8 +1,12 @@
 import { Module } from '@nestjs/common';
 
 import { AgentRunnerService } from './agent/agent-runner.service.js';
+import { AssistantContinuationService } from './agent/continuation.service.js';
+import { RunCompletionNotifier } from './agent/run-completion.js';
 import { AssistantActionsController } from './assistant-actions.controller.js';
 import { AssistantActionsService } from './assistant-actions.service.js';
+import { AssistantBatchesController } from './assistant-batches.controller.js';
+import { AssistantBatchesService } from './assistant-batches.service.js';
 import { AssistantMemoryController } from './assistant-memory.controller.js';
 import { AssistantMemoryService } from './assistant-memory.service.js';
 import { AssistantRepository } from './assistant.repository.js';
@@ -34,6 +38,7 @@ import { ToolExecutorService } from './tools/tool-executor.service.js';
     AssistantSessionsController,
     AssistantRunsController,
     AssistantActionsController,
+    AssistantBatchesController,
     AssistantMemoryController,
     AiSettingsController,
     McpSettingsController,
@@ -44,6 +49,9 @@ import { ToolExecutorService } from './tools/tool-executor.service.js';
     AssistantSessionsService,
     AssistantRunsService,
     AssistantActionsService,
+    AssistantBatchesService,
+    AssistantContinuationService,
+    RunCompletionNotifier,
     AssistantMemoryService,
     AgentRunnerService,
     ToolExecutorService,

@@ -1,9 +1,8 @@
 /* eslint-disable nodus-internal/max-lines-warn -- агентный цикл (#893): провайдер → вызовы инструментов → терминальное событие — одна связная машина состояний; разрез по фазам потерял бы порядок и отмену */
 import { Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
-import { ASSISTANT_LIMITS, ErrorCode } from '@nodus/contracts';
+import { ASSISTANT_LIMITS } from '@nodus/contracts';
 
-import { DomainException } from '../../../core/errors/domain-exception.js';
 import { AssistantActionsService } from '../assistant-actions.service.js';
 import { AssistantMemoryService } from '../assistant-memory.service.js';
 import { AssistantRepository } from '../assistant.repository.js';
@@ -31,11 +30,26 @@ import {
   PROVIDER_RETRY_DELAYS_MS,
   addTokens,
   clipPreview,
+  clipSafePreview,
   describeCause,
-  isAbortError,
   parseArgs,
 } from './agent-runner.utils.js';
+import { RunCompletionNotifier } from './run-completion.js';
+import {
+  SEARCH_TOOL_ID,
+  continuationPrompt,
+  initialActiveToolIds,
+  routeTools,
+  routedToolsOf,
+} from './run-routing.js';
+import { abortReason, AssistantRunError, failRun, type ActiveRun } from './run-failure.js';
 import { buildSystemPrompt, companyToday } from './system-prompt.js';
+
+export { SEARCH_TOOL_ID, continuationPrompt, initialActiveToolIds } from './run-routing.js';
+
+/** Результаты этих инструментов содержат персональные данные документа:
+ *  в журнал прогона идёт только шапка, не текст (#922, ADR-0050). */
+const PRIVATE_PREVIEW_TOOLS: ReadonlySet<string> = new Set(['files.extract_text']);
 
 /** Параметры прогона: всё, что нужно циклу, передаётся явно. */
 export interface RunParams {
@@ -49,12 +63,13 @@ export interface RunParams {
   screen: ScreenContext;
   /** Байпас подтверждений (ADR-0048): действия исполняются сразу. */
   autoExecute: boolean;
-}
-
-/** Активный прогон: отмена и таймаут различаются причиной. */
-interface ActiveRun {
-  controller: AbortController;
-  reason: 'user' | 'timeout' | null;
+  /** Прогон-продолжение после решений по карточкам (#916). */
+  continuation?: {
+    /** Сообщение ассистента, чья пачка карточек решилась. */
+    ofMessageId: string;
+    /** Сколько карточек пачки ещё ждёт решения («Продолжить сейчас»). */
+    pendingCards: number;
+  };
 }
 
 /**
@@ -80,6 +95,7 @@ export class AgentRunnerService {
     private readonly actions: AssistantActionsService,
     private readonly memory: AssistantMemoryService,
     private readonly bus: RunBusService,
+    private readonly completion: RunCompletionNotifier,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(AgentRunnerService.name);
@@ -96,6 +112,14 @@ export class AgentRunnerService {
     return this.active.has(runId);
   }
 
+  /** Есть ли в сессии идущий прогон (два прогона одной сессии — конфликт). */
+  isSessionActive(sessionId: string): boolean {
+    for (const run of this.active.values()) {
+      if (run.sessionId === sessionId) return true;
+    }
+    return false;
+  }
+
   /** Отмена сотрудником: откладываем причину, чтобы отличить от таймаута. */
   cancel(runId: string): boolean {
     const run = this.active.get(runId);
@@ -106,7 +130,11 @@ export class AgentRunnerService {
   }
 
   private async execute(params: RunParams): Promise<void> {
-    const active: ActiveRun = { controller: new AbortController(), reason: null };
+    const active: ActiveRun = {
+      controller: new AbortController(),
+      reason: null,
+      sessionId: params.sessionId,
+    };
     this.active.set(params.runId, active);
     const timer = setTimeout(() => {
       active.reason = 'timeout';
@@ -142,6 +170,7 @@ export class AgentRunnerService {
         startedAt: new Date(),
         providerId: resolved.providerId,
         modelId: resolved.modelId,
+        continuationOfMessageId: params.continuation?.ofMessageId ?? null,
       });
       await this.bus.publish(params.runId, 'run.started', {
         messageId: message.id,
@@ -167,22 +196,49 @@ export class AgentRunnerService {
         return { tools: [], digest: [] };
       });
       const toolsAll = [...catalog, ...externalCatalog.tools];
+      // Диспетчер (#917): дешёвая модель выбирает инструменты под запрос ДО
+      // основного цикла. Ошибка/таймаут — горячая полка, прогон продолжается.
+      const routed = await routeTools({
+        runId: params.runId,
+        screen: params.screen,
+        continuation: Boolean(params.continuation),
+        catalog: toolsAll,
+        priorMessages,
+        signal: active.controller.signal,
+        settings: this.settings,
+        bus: this.bus,
+        logger: this.logger,
+      });
       // Личный блокнот сотрудника (#900): подставляется в промпт как факты
       // о нём (не приказ) и доступен инструментам через порт прогона.
       const memoryLines = await this.memory.promptLines(params.userId).catch(() => []);
+      // Диспетчер выбрал инструменты — в контекст уходят ТОЛЬКО они (плюс
+      // tools.search): 28 горячих схем + 7 выбранных превышали порог
+      // деградации выбора (~30). Без диспетчера — горячая полка.
+      const selected = routedToolsOf(toolsAll, routed);
+      const immediate = selected.length > 0 ? selected : hotTools(toolsAll);
       const prompt = buildSystemPrompt({
         today: companyToday(new Date(), 'Europe/Minsk'),
-        hotTools: hotTools(toolsAll),
-        hasHiddenTools: toolsAll.length > hotTools(toolsAll).length,
+        hotTools: immediate,
+        hasHiddenTools: toolsAll.length > immediate.length,
         instructions: resolved.instructions,
         external: externalCatalog.tools.length > 0,
         externalCatalog: externalCatalog.digest,
         memories: memoryLines,
+        continuation: Boolean(params.continuation),
       });
       const messages: LlmMessage[] = [{ role: 'system', content: prompt }, ...priorMessages];
+      if (params.continuation) {
+        // Продолжение — не новый вопрос сотрудника: служебное уведомление
+        // даёт модели повод ответить, а сводка решений уже в истории.
+        messages.push({ role: 'user', content: continuationPrompt(params.continuation) });
+      }
 
-      /** Активный набор инструментов: горячая полка + найденные tools.search. */
-      const activeTools = initialActiveToolIds(toolsAll);
+      /** Активный набор: выбранные диспетчером либо горячая полка + search. */
+      const activeTools =
+        routed.length > 0
+          ? new Set([...routed.map((tool) => tool.id), SEARCH_TOOL_ID])
+          : initialActiveToolIds(toolsAll);
       const toolContext: ToolContext = {
         authorization: params.authorization,
         screen: params.screen,
@@ -285,8 +341,11 @@ export class AgentRunnerService {
       });
       await this.bus.publish(params.runId, 'run.completed', { inputTokens, outputTokens });
     } catch (error) {
-      await this.failRun({
-        params,
+      await failRun({
+        repo: this.repo,
+        bus: this.bus,
+        logger: this.logger,
+        runId: params.runId,
         active,
         error,
         messageId,
@@ -299,6 +358,8 @@ export class AgentRunnerService {
       clearTimeout(timer);
       this.active.delete(params.runId);
       this.bus.close(params.runId);
+      // Сессия свободна: отложенное продолжение пачки (#916) может стартовать.
+      this.completion.notify(params.sessionId);
     }
   }
 
@@ -419,6 +480,7 @@ export class AgentRunnerService {
           if (item.kind === 'write') {
             const proposal = await this.actions.propose({
               runId: params.runId,
+              sessionId: params.sessionId,
               messageId,
               userId: params.userId,
               tool: item.tool,
@@ -442,9 +504,13 @@ export class AgentRunnerService {
           const resultText = execution.ok
             ? execution.text
             : `Ошибка (${execution.errorCode}): ${execution.message}`;
+          // Текст вложения не пишется в журнал/аудит: только шапка файла.
+          const resultPreview = PRIVATE_PREVIEW_TOOLS.has(item.call.function.name)
+            ? clipSafePreview(resultText)
+            : clipPreview(resultText);
           await this.repo.finishToolCall(item.toolCallId, {
             status: execution.ok ? 'done' : 'error',
-            resultPreview: clipPreview(resultText),
+            resultPreview,
             durationMs,
             errorCode: execution.ok ? null : execution.errorCode,
             href: execution.ok ? (execution.entity?.href ?? null) : null,
@@ -455,7 +521,7 @@ export class AgentRunnerService {
             toolId: item.call.function.name,
             title: item.humanTitle,
             status: execution.ok ? 'done' : 'error',
-            resultPreview: clipPreview(resultText),
+            resultPreview,
             durationMs,
             errorCode: execution.ok ? null : execution.errorCode,
             href: execution.ok ? (execution.entity?.href ?? null) : null,
@@ -482,121 +548,4 @@ export class AgentRunnerService {
     }
     void activeTools;
   }
-
-  /** Единая точка фиксации сбоя: статус прогона, частичный текст, событие. */
-  private async failRun(input: {
-    params: RunParams;
-    active: ActiveRun;
-    error: unknown;
-    messageId: string | null;
-    text: string;
-    reasoning: string;
-    inputTokens: number | null;
-    outputTokens: number | null;
-  }): Promise<void> {
-    const { params, active, error } = input;
-    const aborted = active.controller.signal.aborted;
-    const cancelled = (aborted && active.reason === 'user') || isAbortError(error);
-    const timedOut = aborted && active.reason === 'timeout';
-
-    let code: string;
-    let message: string;
-    let retryable = true;
-    if (cancelled && !timedOut) {
-      code = 'cancelled';
-      message = 'Прогон остановлен сотрудником';
-      retryable = false;
-    } else if (timedOut) {
-      code = 'timeout';
-      message = 'Прогон превысил допустимое время и остановлен';
-    } else if (error instanceof AssistantRunError) {
-      code = error.code;
-      message = error.message;
-      retryable = error.retryable;
-    } else if (error instanceof LlmProviderError) {
-      code = error.code;
-      message = error.message;
-      // Диагностика: код уходит в UI, причина — в лог (наружу тело не отдаём).
-      this.logger.warn({ err: error, runId: params.runId, code }, 'Provider call failed');
-    } else if (error instanceof DomainException) {
-      code =
-        error.code === ErrorCode.ASSISTANT_PROVIDER_NOT_CONFIGURED ? 'no_provider' : 'internal';
-      message = error.message;
-    } else {
-      code = 'internal';
-      message = 'Внутренняя ошибка ассистента';
-      this.logger.error({ err: error, runId: params.runId }, 'Agent run failed');
-    }
-
-    if (cancelled && !timedOut) {
-      if (input.messageId) {
-        await this.repo.finishMessage(input.messageId, {
-          text: input.text,
-          reasoning: input.reasoning || null,
-          errorCode: null,
-        });
-      }
-      await this.repo.updateRun(params.runId, {
-        status: 'cancelled',
-        finishedAt: new Date(),
-        inputTokens: input.inputTokens,
-        outputTokens: input.outputTokens,
-      });
-      await this.bus.publish(params.runId, 'run.cancelled', {});
-      return;
-    }
-
-    if (input.messageId) {
-      await this.repo.finishMessage(input.messageId, {
-        text: input.text,
-        reasoning: input.reasoning || null,
-        errorCode: code,
-      });
-    }
-    await this.repo.updateRun(params.runId, {
-      status: 'failed',
-      finishedAt: new Date(),
-      inputTokens: input.inputTokens,
-      outputTokens: input.outputTokens,
-      errorCode: code,
-      errorMessage: message,
-    });
-    await this.bus.publish(params.runId, 'run.error', { code, message, retryable });
-  }
-}
-
-/** Ошибка прогона с кодом для интерфейса (лимит шагов и подобные). */
-class AssistantRunError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly retryable = true,
-  ) {
-    super(message);
-    this.name = 'AssistantRunError';
-  }
-}
-
-function abortReason(active: ActiveRun): Error {
-  return new AssistantRunError(
-    active.reason === 'timeout' ? 'timeout' : 'cancelled',
-    active.reason === 'timeout' ? 'Прогон превысил время' : 'Прогон остановлен',
-  );
-}
-
-/**
- * Стартовый активный набор: горячая полка + `tools.search`.
- *
- * `tools.search` не «горячий» по смыслу (он не про данные портала), но без
- * него недостижимы все не-hot инструменты: модель видит только активный
- * набор, а поиск — единственный вход к остальным (ADR-0043 п. 4, «три
- * полки»). Поэтому он в наборе ВСЕГДА, а не по признаку `hot` (блокер
- * ревью 17.11.2026).
- */
-export const SEARCH_TOOL_ID = 'tools.search';
-
-export function initialActiveToolIds(catalog: readonly AssistantToolDefinition[]): Set<string> {
-  const ids = new Set(hotTools(catalog).map((tool) => tool.id));
-  if (catalog.some((tool) => tool.id === SEARCH_TOOL_ID)) ids.add(SEARCH_TOOL_ID);
-  return ids;
 }

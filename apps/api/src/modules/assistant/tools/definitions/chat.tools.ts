@@ -1,15 +1,22 @@
 import { z } from 'zod';
 
+import type {
+  ChatMessage,
+  ConversationListItem,
+  MessageAttachment,
+  Paginated,
+} from '@nodus/contracts';
+
 import { defineTool } from '../tool-definition.js';
 import {
   asArray,
-  asRecord,
+  asTyped,
+  pageItems,
   clip,
   dateTime,
   entityLink,
   finalize,
   hasMore,
-  itemsOf,
   listBlock,
   nameOf,
   num,
@@ -54,13 +61,13 @@ export const chatConversationsTool = defineTool({
       ...(input.cursor ? { cursor: input.cursor } : {}),
     },
   }),
-  project: (data) => {
+  project: (data: Paginated<ConversationListItem>) => {
     // Форма `GET /chat/conversations` — conversationListItemSchema:
     // `membersPreview` (превью участников) и `lastActivityAt` (момент
     // активности; `lastMessage` — только превью). Полей `members`/
     // `lastMessageAt` в контракте нет.
-    const rows = itemsOf(data).map((raw) => {
-      const conversation = asRecord(raw);
+    const rows = pageItems<ConversationListItem>(data).map((raw) => {
+      const conversation = asTyped<ConversationListItem>(raw);
       if (!conversation) return null;
       const id = str(conversation.id);
       if (!id) return null;
@@ -110,16 +117,22 @@ export const chatMessagesTool = defineTool({
     path: `/chat/conversations/${input.conversationId}/messages`,
     query: { limit: String(input.limit) },
   }),
-  project: (data, input) => {
-    const messages = itemsOf(data);
-    const rows = messages.map((raw) => {
-      const message = asRecord(raw);
+  project: (data: Paginated<ChatMessage>, input) => {
+    const rows = pageItems<ChatMessage>(data).map((raw) => {
+      const message = asTyped<ChatMessage>(raw);
       if (!message) return null;
       const author = nameOf(message.author) ?? '—';
       const when = dateTime(message.createdAt) ?? '—';
+      // Вложения — имя + fileId: по нему files.extract_text читает PDF/DOCX.
       const attachments = asArray(message.attachments)
-        .map((file) => str(asRecord(file)?.name))
-        .filter(Boolean);
+        .map((file) => {
+          const record = asTyped<MessageAttachment>(file);
+          const name = str(record?.name);
+          if (!name) return null;
+          const fileId = str(record?.fileId);
+          return fileId ? `${name} (fileId ${fileId})` : name;
+        })
+        .filter((file): file is string => file !== null);
       const text = clip(str(message.text) ?? '(без текста)', 300);
       const files = attachments.length > 0 ? ` [вложения: ${attachments.join(', ')}]` : '';
       return `${when} ${author}: ${text}${files}`;

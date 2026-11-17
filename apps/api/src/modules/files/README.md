@@ -72,6 +72,31 @@ fileAccessContext` (`chat`, `letter`), DiscoveryService находит его с
   (`fileContentUrl` / `fileVersionUrl`). ETag `{id}-v{N}` → 304;
   Content-Disposition inline (image/*) / attachment; `scan_status=infected`
   → 410 `FILE_QUARANTINED` (сканер — фаза 2/M14, до него pending отдаётся).
+- **Текст для ассистента (#922, ADR-0050)**: `GET /api/v1/files/:id/text` —
+  обычная авторизация (не `@Public`, не HMAC), фичефлаг `assistant` (I10) и право
+  `assistant.use` (I8): права через `OfficeSessionService.resolveAccess`
+  (владение / участник беседы / видимое письмо), чужим — 404. **Конфиденциальное
+  письмо — 403 `FILE_TEXT_FORBIDDEN` до кэша и парсинга** (граница эпика #889;
+  `FileAccessDecision.textDenied`). PDF с текстовым слоем — `unpdf`, DOCX —
+  `mammoth`; magic-байты сверяются с расширением (`FILE_TEXT_INVALID`). Разбор
+  идёт в **`worker_threads`** (`file-text.worker.ts` + `file-text.runner.ts`), а
+  не в event loop API: поток с `resourceLimits` (OOM документа не роняет процесс),
+  таймаут 25 с и обрыв запроса клиентом (`AbortSignal` из `reply.raw close`)
+  уничтожают поток (`terminate`) — крафтовый файл не останавливает портал.
+  Потолки: 20 МБ (413), 100 страниц, 60 000 знаков; ZIP-бюджет DOCX (все шесть
+  полей EOCD, ZIP64 и локатор в комментарии отвергаются, каждая запись
+  фактически распаковывается — mammoth читает не только `word/document.xml`) и
+  потоковое чтение текста PDF с постраничными потолками — защита от архивных
+  бомб и всплесков памяти; 10 извлечений/мин и одно параллельное извлечение на
+  сотрудника, 2 одновременных на процесс (429 `RATE_LIMITED`). Сканы не
+  распознаются и помечаются (`scannedPages` — только страницы без текста). Кэш —
+  `file_text_extracts` по версии файла (новая версия пересчитывает), параллельные
+  запросы дедуплицируются; последний ушедший клиент убивает общий разбор; при
+  включении конфиденциальности или удалении письма строки кэша снимаются
+  (события `correspondence.letter_updated`/`letter_deleted`). Ответ —
+  `Cache-Control: no-store`; чтение пишется в `audit_logs` (`files.text_read`,
+  без текста). Текст в логи/аудит/журнал прогона не пишется — только шапка
+  файла в превью.
 - **ONLYOFFICE (#138)**: контейнер `documentserver` (CE 9.4, compose-профиль
   `office`, ADR-0014). Сессия `GET /files/:id/office-session?mode=view|edit`:
   право → конфиг `DocsAPI.DocEditor` целиком на сервере + JWT HS256

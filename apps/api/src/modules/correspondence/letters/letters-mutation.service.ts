@@ -181,6 +181,13 @@ export class LettersMutationService {
           changes,
           ...(body.counterpartyId !== undefined ? { counterpartyId: body.counterpartyId } : {}),
           ...(signerChange ? { signerId: signerChange.to as string | null } : {}),
+          // Включение конфиденциальности: подписчики (files) удаляют кэш
+          // текста вложений — ИИ больше не должен получать его даже из БД.
+          ...(body.confidential === true
+            ? { confidential: true, fileIds: await this.repo.fileIds(id) }
+            : body.confidential === false
+              ? { confidential: false }
+              : {}),
         },
         { actorId: user.id, aggregateType: 'letter', aggregateId: id },
       );
@@ -204,7 +211,7 @@ export class LettersMutationService {
       await this.eventBus.emit(
         tx,
         CORRESPONDENCE_EVENTS.LETTER_DELETED,
-        { letterId: id },
+        { letterId: id, fileIds },
         { actorId: user.id, aggregateType: 'letter', aggregateId: id },
       );
     });

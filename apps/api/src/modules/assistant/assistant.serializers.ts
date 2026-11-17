@@ -52,6 +52,10 @@ export function toToolCallDto(row: ToolCallRow): AssistantToolCall {
 }
 
 export function toMessageDto(row: MessageRow): AssistantMessage {
+  const actions = row.actions.map(toActionDto);
+  const pending = actions.filter(
+    (action) => action.state === 'proposed' || action.state === 'executing',
+  ).length;
   return {
     id: row.id,
     role: row.role === 'user' ? 'user' : 'assistant',
@@ -63,7 +67,20 @@ export function toMessageDto(row: MessageRow): AssistantMessage {
     streaming: row.runStatus === 'running' || row.runStatus === 'queued',
     errorCode: row.errorCode,
     toolCalls: row.toolCalls.map(toToolCallDto),
-    actions: row.actions.map(toActionDto),
+    actions,
+    actionBatch: row.actionBatch
+      ? {
+          state:
+            row.actionBatch.state === 'continued'
+              ? 'continued'
+              : row.actionBatch.state === 'closed'
+                ? 'closed'
+                : 'open',
+          total: actions.length,
+          decided: actions.length - pending,
+          pending,
+        }
+      : null,
   };
 }
 
@@ -80,6 +97,7 @@ const ACTION_STATES: readonly AssistantActionState[] = [
 export function toActionDto(row: ActionRow): AssistantAction {
   return {
     id: row.id,
+    messageId: row.messageId,
     toolId: row.toolId,
     title: row.title,
     summary: row.summary,

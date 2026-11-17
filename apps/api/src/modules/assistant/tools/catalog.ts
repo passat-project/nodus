@@ -2,13 +2,16 @@ import { chatTools } from './definitions/chat.tools.js';
 import { chatWriteTools } from './definitions/chat-write.tools.js';
 import { dictionariesTools } from './definitions/dictionaries.tools.js';
 import { directoryTools } from './definitions/directory.tools.js';
+import { filesTools } from './definitions/files.tools.js';
 import { lettersTools } from './definitions/letters.tools.js';
 import { lettersWriteTools } from './definitions/letters-write.tools.js';
+import { meTools } from './definitions/me.tools.js';
 import { memoryTools } from './definitions/memory.tools.js';
 import { projectsTools } from './definitions/projects.tools.js';
 import { projectsWriteTools } from './definitions/projects-write.tools.js';
 import { systemTools } from './definitions/system.tools.js';
 import { tasksTools } from './definitions/tasks.tools.js';
+import { tasksTransitionTools } from './definitions/tasks-transition.tools.js';
 import { tasksWriteTools } from './definitions/tasks-write.tools.js';
 import { workflowsTools } from './definitions/workflows.tools.js';
 import type { AssistantToolDefinition } from './tool-definition.js';
@@ -27,6 +30,7 @@ import type { AssistantToolDefinition } from './tool-definition.js';
  */
 export const ALL_TOOLS: readonly AssistantToolDefinition[] = [
   ...tasksTools,
+  ...tasksTransitionTools,
   ...tasksWriteTools,
   ...projectsTools,
   ...projectsWriteTools,
@@ -35,7 +39,9 @@ export const ALL_TOOLS: readonly AssistantToolDefinition[] = [
   ...chatTools,
   ...chatWriteTools,
   ...directoryTools,
+  ...meTools,
   ...dictionariesTools,
+  ...filesTools,
   ...workflowsTools,
   ...systemTools,
   ...memoryTools,

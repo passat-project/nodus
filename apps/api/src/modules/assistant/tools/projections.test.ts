@@ -11,6 +11,7 @@ import {
   listBlock,
   nameOf,
   num,
+  pageItems,
   str,
 } from './projections.js';
 
@@ -35,6 +36,13 @@ describe('примитивы проекций', () => {
     expect(itemsOf({ items: [1, 2], nextCursor: null })).toEqual([1, 2]);
     expect(itemsOf({ rows: [1] })).toEqual([]);
     expect(itemsOf(null)).toEqual([]);
+  });
+
+  it('pageItems: пустое тело 200 не роняет прогон, мусор отбрасывается', () => {
+    // parseBody отдаёт null на пустое/не-JSON тело: проекция обязана вернуть [].
+    expect(pageItems(null)).toEqual([]);
+    expect(pageItems(undefined)).toEqual([]);
+    expect(pageItems({ items: [{ id: 'a' }, null, 'x'], nextCursor: null })).toEqual([{ id: 'a' }]);
   });
 
   it('даты: компактный вид без времени и с временем', () => {

@@ -6,6 +6,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { resetSessionState } from '../../../shared/session-reset.js';
 import { useAssistantStore } from '../model/assistant-store.js';
 import {
+  clearPendingAttach,
   recoverAssistantRun,
   startRunStream,
   stopRunStream,
@@ -48,6 +49,7 @@ beforeEach(() => {
 
 afterEach(() => {
   stopRunStream();
+  clearPendingAttach();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });

@@ -101,10 +101,13 @@ describe('состав каталога (#892, Ф2 #899)', () => {
     }
   });
 
-  it('горячая полка — 18–26 инструментов (ADR-0043 п. 4, Ф2 добавила запись)', () => {
+  it('горячая полка — 18–30 инструментов (ADR-0043 п. 4; #917: диспетчер сужает набор)', () => {
     const hot = ALL_TOOLS.filter((tool) => tool.hot);
     expect(hot.length).toBeGreaterThanOrEqual(18);
-    expect(hot.length).toBeLessThanOrEqual(26);
+    // 30 — порог деградации выбора модели (Anthropic tool search): горячая
+    // полка без диспетчера не должна его переходить; с диспетчером в контекст
+    // уходят только выбранные инструменты (#917).
+    expect(hot.length).toBeLessThanOrEqual(30);
   });
 
   it('действия Ф2 на месте: задачи, сообщение, резолюция, проекты, блокнот', () => {
@@ -142,12 +145,13 @@ describe('фильтры каталога (#892)', () => {
     'task.create',
     'project.view_secret',
   ];
-  const allFeatures = ['tasks', 'projects', 'correspondence', 'chat'];
+  const allFeatures = ['tasks', 'projects', 'correspondence', 'chat', 'assistant'];
 
   it('без права directory.read справочник сотрудников недоступен', () => {
     const catalog = buildCatalog({ permissions: ['task.create'], features: allFeatures });
     expect(catalog.some((tool) => tool.module === 'directory')).toBe(false);
-    expect(catalog.length).toBe(ALL_TOOLS.length - 3);
+    const directoryTools = ALL_TOOLS.filter((tool) => tool.module === 'directory').length;
+    expect(catalog.length).toBe(ALL_TOOLS.length - directoryTools);
   });
 
   it('без права task.create действия по задачам недоступны', () => {

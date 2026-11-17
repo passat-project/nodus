@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { lettersAttachmentsTool } from './letters.tools.js';
 
 /**
- * Границы данных вложений (#892, ADR-0043 п. 8, ADR-0044 п. 5): инструмент
- * отдаёт ТОЛЬКО метаданные. Даже если API письма вернул подписанные ссылки
- * (`url`, `pdfUrl`), наружу они не проходят — содержимое файлов не читается
- * и не показывается ни модели, ни интерфейсу.
+ * Границы данных вложений (#892, ADR-0043 п. 8, ADR-0044 п. 5, ADR-0050):
+ * инструмент отдаёт метаданные и `fileId` — по нему `files.extract_text`
+ * читает текст. Подписанные ссылки (`url`, `pdfUrl`) наружу не проходят:
+ * содержимое доступно только через API портала с проверкой прав.
  */
 
 const letterDetail = {
@@ -53,13 +53,14 @@ describe('letters.attachments: только метаданные (#892)', () => 
     expect(result.text).toContain('Смета.xlsx');
   });
 
-  it('не отдаёт подписанные ссылки, fileId и содержимое', () => {
+  it('отдаёт fileId для files.extract_text, но не подписанные ссылки', () => {
     const { text } = lettersAttachmentsTool.project!(letterDetail, { id: letterDetail.id });
-    for (const forbidden of ['sig=', 'SECRET', '/api/v1/files', 'http', letterDetail.id]) {
+    for (const forbidden of ['sig=', 'SECRET', '/api/v1/files', 'http']) {
       expect(text, `в проекции не должно быть «${forbidden}»`).not.toContain(forbidden);
     }
+    // fileId — внутренний UUID: без него агент не может прочитать PDF/DOCX.
     for (const attachment of letterDetail.attachments) {
-      expect(text).not.toContain(attachment.fileId);
+      expect(text).toContain(attachment.fileId);
     }
   });
 

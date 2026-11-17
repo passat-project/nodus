@@ -63,6 +63,24 @@ function applierWith(attachments: { id: string; role: string; inline: boolean }[
   return { applier, repo, validator, fields };
 }
 
+describe('окно регистрации: флаг «Конфиденциально» в диффе перехода', () => {
+  it('включение флага попадает в fields — движок эмитит letter_updated', async () => {
+    const { applier, validator } = applierWith([]);
+    validator.registration.mockResolvedValueOnce({
+      values: registration,
+      extra: { confidential: true, attachedRefs: null },
+      customFields: {},
+    } as never);
+    const applied = await applier.apply(
+      {} as never,
+      row,
+      { id: 'u', permissions: [] },
+      { registration: {} },
+    );
+    expect(applied.fields.confidential).toEqual({ from: undefined, to: true });
+  });
+});
+
 describe('регистрация требует основной документ («Основной документ письма» #56)', () => {
   it('файлы-кандидаты без выбора — 422 с пропуском mainDocument', async () => {
     const { applier } = applierWith([{ id: 'a1', role: 'attachment', inline: false }]);

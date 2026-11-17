@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
+import type { ProcessType } from '@nodus/contracts';
+
 import { defineTool } from '../tool-definition.js';
-import { asArray, asRecord, finalize, listBlock, str } from '../projections.js';
+import { asArray, asTyped, finalize, listBlock, str } from '../projections.js';
 
 /**
  * Инструмент «Процессов» (#892): типы процессов (задач и писем) с их
@@ -32,9 +34,9 @@ export const workflowsProcessTypesTool = defineTool({
       ...(query.category ? { category: query.category } : {}),
     },
   }),
-  project: (data) => {
+  project: (data: ProcessType[]) => {
     const rows = asArray(data).map((raw) => {
-      const type = asRecord(raw);
+      const type = asTyped<ProcessType>(raw);
       if (!type) return null;
       const category = type.category === 'letter' ? 'письмо' : 'задача';
       // Архивирование в контракте — `archivedAt` (processTypeSchema), не

@@ -43,13 +43,42 @@ const numbering = {
 };
 
 function setup() {
-  const letters = { update: vi.fn(async () => void 0) };
+  const letters = { update: vi.fn(async () => void 0), fileIds: vi.fn(async () => ['file-1']) };
   const eventBus = { emit: vi.fn(async () => void 0) };
   const mover = new LetterStageMover(letters as never, eventBus as never);
   return { mover, letters, eventBus };
 }
 
 describe('смена стадии письма (#55, Р1/Р3/Р5)', () => {
+  it('регистрация включила «Конфиденциально» — letter_updated с fileIds', async () => {
+    const { mover, eventBus } = setup();
+    await mover.apply({} as never, letter(), target, ACTOR, {
+      transitionId: 'tr',
+      cause: 'transition',
+      fieldChanges: { confidential: { from: false, to: true } },
+    });
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      expect.anything(),
+      CORRESPONDENCE_EVENTS.LETTER_UPDATED,
+      expect.objectContaining({ confidential: true, fileIds: ['file-1'] }),
+      expect.objectContaining({ aggregateType: 'letter', aggregateId: LETTER }),
+    );
+  });
+
+  it('флаг не менялся — letter_updated не эмитится', async () => {
+    const { mover, eventBus } = setup();
+    await mover.apply({} as never, letter({ confidential: true }), target, ACTOR, {
+      transitionId: 'tr',
+      cause: 'transition',
+      fieldChanges: { confidential: { from: true, to: true } },
+    });
+    expect(
+      (eventBus.emit.mock.calls as unknown[][]).some(
+        (call) => call[1] === CORRESPONDENCE_EVENTS.LETTER_UPDATED,
+      ),
+    ).toBe(false);
+  });
+
   it('регистрация: reg_* в той же транзакции, событие stage_changed и letter_registered', async () => {
     const { mover, letters, eventBus } = setup();
     await mover.apply({} as never, letter(), target, ACTOR, {

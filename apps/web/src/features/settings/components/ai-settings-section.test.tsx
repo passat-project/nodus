@@ -116,7 +116,8 @@ describe('AiSettingsSection: разделы экрана', () => {
   it('по умолчанию — реестр провайдеров и переключатель разделов', () => {
     render(<AiSettingsSection />);
     expect(screen.getByText(ui.assistant.settings.title)).toBeTruthy();
-    expect(screen.getByText('OpenRouter')).toBeTruthy();
+    // Имя провайдера встречается дважды: строка реестра + полоса моделей (#917).
+    expect(screen.getAllByText('OpenRouter').length).toBeGreaterThan(0);
     // Триггер поповера (канон «Портфелей»): подпись включает текущий раздел.
     expect(
       screen.getByRole('button', {

@@ -1,17 +1,22 @@
 import { z } from 'zod';
 
-import { Permission } from '@nodus/contracts';
+import {
+  Permission,
+  type DepartmentNode,
+  type Paginated,
+  type UserCard,
+  type UserListItem,
+} from '@nodus/contracts';
 
 import { defineTool } from '../tool-definition.js';
 import {
   asArray,
-  asRecord,
+  asTyped,
+  pageItems,
   entityLink,
   finalize,
   hasMore,
-  itemsOf,
   listBlock,
-  nameOf,
   num,
   str,
 } from '../projections.js';
@@ -56,14 +61,14 @@ export const directoryFindUsersTool = defineTool({
       ...(input.departmentId ? { departmentId: input.departmentId } : {}),
     },
   }),
-  project: (data) => {
-    const rows = itemsOf(data).map((raw) => {
-      const user = asRecord(raw);
+  project: (data: Paginated<UserListItem>) => {
+    const rows = pageItems<UserListItem>(data).map((raw) => {
+      const user = asTyped<UserListItem>(raw);
       if (!user) return null;
       const id = str(user.id);
       if (!id) return null;
       return [
-        nameOf(user) ?? '—',
+        str(user.displayName) ?? '—',
         str(user.positionName) ? `должность: ${str(user.positionName)}` : null,
         str(user.departmentName) ? `подразделение: ${str(user.departmentName)}` : null,
         str(user.email) ? `почта: ${str(user.email)}` : null,
@@ -101,8 +106,8 @@ export const directoryGetUserTool = defineTool({
   input: getUserInput,
   api: { method: 'GET', path: '/directory/users/:id' },
   build: (input) => ({ path: `/directory/users/${input.id}` }),
-  project: (data) => {
-    const user = asRecord(data);
+  project: (data: UserCard) => {
+    const user = asTyped<UserCard>(data);
     const id = str(user?.id);
     if (!user || !id) return { text: 'Сотрудник не найден или недоступен' };
     // Карточка (userCardSchema) отдаёт контакты и id оргструктуры, но НЕ
@@ -114,8 +119,9 @@ export const directoryGetUserTool = defineTool({
       `должность ${str(user.positionId) ?? '—'}`,
       `руководитель ${str(user.managerId) ?? '—'}`,
     ].join(', ');
+    const displayName = str(user.displayName) ?? '—';
     const lines = [
-      `${nameOf(user) ?? '—'} (id ${id})`,
+      `${displayName} (id ${id})`,
       `Почта: ${str(user.email) ?? '—'}`,
       `Телефон: ${str(user.mobilePhone) ?? '—'}`,
       `Город / кабинет: ${str(user.city) ?? '—'}${str(user.officeLocation) ? `, ${str(user.officeLocation)}` : ''}`,
@@ -124,7 +130,7 @@ export const directoryGetUserTool = defineTool({
     ];
     return {
       text: finalize(lines.join('\n')),
-      entity: entityLink('employee', id, nameOf(user) ?? 'Сотрудник'),
+      entity: entityLink('employee', id, str(user.displayName) ?? 'Сотрудник'),
     };
   },
 });
@@ -138,11 +144,13 @@ const departmentsInput = z.object({
 function walkDepartments(nodes: unknown[], depth: number, out: string[], limit: number): void {
   for (const raw of nodes) {
     if (out.length >= limit) return;
-    const node = asRecord(raw);
+    const node = asTyped<DepartmentNode>(raw);
     if (!node) continue;
     const name = str(node.name) ?? '—';
-    const head = nameOf(node.head);
-    const employees = num(node.employeesCount ?? node.memberCount);
+    // Контракт DepartmentNode: `headName`/`memberCount`. Алиасов `head`/
+    // `employeesCount` API не отдаёт — прежние ветки молча давали пусто.
+    const head = node.headName ? node.headName : null;
+    const employees = num(node.memberCount);
     out.push(
       `${'  '.repeat(Math.min(depth, 6))}${name}${head ? ` (руководитель: ${head})` : ''}${employees !== null ? ` — сотрудников ${employees}` : ''}`,
     );
@@ -173,7 +181,7 @@ export const directoryDepartmentsTool = defineTool({
     path: '/directory/departments/tree',
     query: { kind: input.kind },
   }),
-  project: (data, input) => {
+  project: (data: DepartmentNode[], input) => {
     const out: string[] = [];
     walkDepartments(asArray(data), 0, out, input.limit);
     if (out.length === 0) return { text: 'Оргструктура пуста или недоступна' };

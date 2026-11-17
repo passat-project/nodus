@@ -84,6 +84,22 @@ export class UsersRepository {
     return { items, nextCursor: hasMore ? items[items.length - 1]!.id : null };
   }
 
+  /** Строка списка по id — профиль «кто я» и руководитель (#919). */
+  async findListById(id: string): Promise<UserListRow | null> {
+    return this.prisma.user.findUnique({ where: { id }, select: userListSelect });
+  }
+
+  /** Строки списка пачкой (подчинённые): детерминированный порядок ФИО + id. */
+  async findListByIds(ids: readonly string[], limit = 200): Promise<UserListRow[]> {
+    if (ids.length === 0) return [];
+    return this.prisma.user.findMany({
+      where: { id: { in: [...ids] } },
+      select: userListSelect,
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
+  }
+
   async findCardById(id: string, tx?: TransactionClient): Promise<UserCardRow | null> {
     const client = tx ?? this.prisma;
     return client.user.findUnique({ where: { id }, include: userCardInclude });

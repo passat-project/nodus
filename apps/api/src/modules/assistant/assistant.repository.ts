@@ -11,6 +11,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
  */
 
 import {
+  type ActionBatchRow,
   type ActionRow,
   type EventRow,
   type MemoryRow,
@@ -19,18 +20,35 @@ import {
   type SessionRow,
   type ToolCallRow,
 } from './assistant.repository.types.js';
+import {
+  AssistantActionsRepository,
+  mapAction,
+  type ActionDbRow,
+} from './assistant-actions.repository.js';
 
-export type { ActionRow, EventRow, MemoryRow, MessageRow, RunRow, SessionRow, ToolCallRow };
+export type {
+  ActionBatchRow,
+  ActionRow,
+  EventRow,
+  MemoryRow,
+  MessageRow,
+  RunRow,
+  SessionRow,
+  ToolCallRow,
+};
 
 const MESSAGE_INCLUDE = {
   toolCalls: { orderBy: { seq: 'asc' } },
   actions: { orderBy: { createdAt: 'asc' } },
   run: { select: { status: true } },
+  actionBatch: { select: { state: true } },
 } as const;
 
 @Injectable()
-export class AssistantRepository {
-  constructor(private readonly prisma: PrismaService) {}
+export class AssistantRepository extends AssistantActionsRepository {
+  constructor(prisma: PrismaService) {
+    super(prisma);
+  }
 
   // ----- Сессии -----
 
@@ -180,8 +198,82 @@ export class AssistantRepository {
     providerId: string | null;
     modelId: string | null;
     autoExecute?: boolean;
+    continuationOfMessageId?: string | null;
   }): Promise<void> {
     await this.prisma.assistantRun.create({ data: input });
+  }
+
+  /** Убрать созданный прогон гонки (пачку уже продолжил другой запрос). */
+  async deleteRun(id: string): Promise<void> {
+    await this.prisma.assistantRun.deleteMany({ where: { id, status: 'queued' } });
+  }
+
+  /**
+   * «Стоп» останавливает и зарезервированное продолжение пачки: прогон
+   * закрывается, пачка возвращается в `open` — решение остаётся за
+   * сотрудником («Продолжить сейчас» после остановки ответа).
+   */
+  async cancelQueuedRuns(sessionId: string): Promise<number> {
+    const ids = await this.queuedRunIds({ sessionId });
+    return this.releaseQueuedRuns(ids, 'cancelled', 'cancelled', 'Прогон остановлен сотрудником');
+  }
+
+  /** Отмена одного зарезервированного прогона (кнопкой «Стоп» по нему). */
+  async cancelQueuedRun(runId: string): Promise<boolean> {
+    const ids = await this.queuedRunIds({ id: runId });
+    return (
+      (await this.releaseQueuedRuns(
+        ids,
+        'cancelled',
+        'cancelled',
+        'Прогон остановлен сотрудником',
+      )) > 0
+    );
+  }
+
+  /**
+   * Перезапуск API: отложенное продолжение жило в памяти процесса и не
+   * переживает рестарт (окно — до конца печати исходного ответа). Прогон
+   * закрывается `failed` (`interrupted`), пачка возвращается в `open`,
+   * чтобы «Продолжить сейчас» работал, а не вёл в мёртвый прогон.
+   */
+  async recoverQueuedRuns(): Promise<number> {
+    const ids = await this.queuedRunIds({});
+    return this.releaseQueuedRuns(
+      ids,
+      'failed',
+      'interrupted',
+      'Прогон прерван перезапуском сервера',
+    );
+  }
+
+  /** `queued` — только зарезервированные продолжения (#916): других нет. */
+  private async queuedRunIds(where: { id?: string; sessionId?: string }): Promise<string[]> {
+    const rows = await this.prisma.assistantRun.findMany({
+      where: { ...where, status: 'queued' },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
+
+  private async releaseQueuedRuns(
+    ids: readonly string[],
+    status: string,
+    errorCode: string,
+    errorMessage: string,
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const [runs] = await this.prisma.$transaction([
+      this.prisma.assistantRun.updateMany({
+        where: { id: { in: [...ids] }, status: 'queued' },
+        data: { status, finishedAt: new Date(), errorCode, errorMessage },
+      }),
+      this.prisma.assistantActionBatch.updateMany({
+        where: { continuationRunId: { in: [...ids] }, state: { in: ['continued', 'closed'] } },
+        data: { state: 'open', continuationRunId: null },
+      }),
+    ]);
+    return runs.count;
   }
 
   async findRun(userId: string, id: string): Promise<RunRow | null> {
@@ -206,6 +298,7 @@ export class AssistantRepository {
       errorMessage?: string | null;
       providerId?: string | null;
       modelId?: string | null;
+      continuationOfMessageId?: string | null;
     },
   ): Promise<void> {
     await this.prisma.assistantRun.update({ where: { id }, data: patch });
@@ -285,77 +378,6 @@ export class AssistantRepository {
     await this.prisma.assistantToolCall.update({ where: { id }, data: patch });
   }
 
-  // ----- Карточки действий (Ф2, ADR-0048) -----
-
-  async createAction(input: {
-    runId: string;
-    messageId: string | null;
-    userId: string;
-    toolId: string;
-    title: string;
-    summary: string;
-    fields: unknown;
-    consequences: string;
-    undoable: boolean;
-    automatic: boolean;
-    args: unknown;
-  }): Promise<ActionRow> {
-    const row = await this.prisma.assistantAction.create({
-      data: {
-        ...input,
-        fields: (input.fields ?? []) as Prisma.InputJsonValue,
-        args: (input.args ?? {}) as Prisma.InputJsonValue,
-      },
-    });
-    return mapAction(row);
-  }
-
-  async findAction(userId: string, id: string): Promise<ActionRow | null> {
-    const row = await this.prisma.assistantAction.findFirst({ where: { id, userId } });
-    return row ? mapAction(row) : null;
-  }
-
-  async countRunActions(runId: string): Promise<number> {
-    return this.prisma.assistantAction.count({ where: { runId } });
-  }
-
-  /**
-   * Атомарный захват карточки под исполнение: `updateMany` с фильтром
-   * состояния — второй параллельный клик получает 0 и не создаёт дубль.
-   */
-  async claimAction(id: string, from: readonly string[], to: string): Promise<boolean> {
-    const result = await this.prisma.assistantAction.updateMany({
-      where: { id, state: { in: [...from] } },
-      data: { state: to },
-    });
-    return result.count === 1;
-  }
-
-  async finishAction(
-    id: string,
-    patch: {
-      state: string;
-      resultData?: unknown;
-      resultPreview?: string | null;
-      href?: string | null;
-      hrefLabel?: string | null;
-      errorCode?: string | null;
-      executedAt?: Date | null;
-      undoneAt?: Date | null;
-    },
-  ): Promise<ActionRow | null> {
-    const { resultData, ...rest } = patch;
-    await this.prisma.assistantAction.update({
-      where: { id },
-      data: {
-        ...rest,
-        ...(resultData !== undefined ? { resultData: resultData as Prisma.InputJsonValue } : {}),
-      },
-    });
-    const row = await this.prisma.assistantAction.findUnique({ where: { id } });
-    return row ? mapAction(row) : null;
-  }
-
   // ----- Личная память (#900) -----
 
   async listMemories(userId: string, limit: number): Promise<MemoryRow[]> {
@@ -416,7 +438,9 @@ function mapMessage(row: {
     hrefLabel: string | null;
   }[];
   actions: ActionDbRow[];
+  actionBatch: { state: string } | null;
 }): MessageRow {
+  const actions = row.actions.map(mapAction);
   return {
     id: row.id,
     sessionId: row.sessionId,
@@ -442,60 +466,8 @@ function mapMessage(row: {
       href: call.href,
       hrefLabel: call.hrefLabel,
     })),
-    actions: row.actions.map(mapAction),
-  };
-}
-
-/** Строка карточки действия из Prisma (форма общая с `ActionRow`). */
-interface ActionDbRow {
-  id: string;
-  runId: string;
-  messageId: string | null;
-  userId: string;
-  toolId: string;
-  title: string;
-  summary: string;
-  fields: unknown;
-  consequences: string;
-  undoable: boolean;
-  automatic: boolean;
-  state: string;
-  args: unknown;
-  resultData: unknown;
-  resultPreview: string | null;
-  href: string | null;
-  hrefLabel: string | null;
-  errorCode: string | null;
-  executedAt: Date | null;
-  undoneAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-function mapAction(row: ActionDbRow): ActionRow {
-  return {
-    id: row.id,
-    runId: row.runId,
-    messageId: row.messageId,
-    userId: row.userId,
-    toolId: row.toolId,
-    title: row.title,
-    summary: row.summary,
-    fields: row.fields,
-    consequences: row.consequences,
-    undoable: row.undoable,
-    automatic: row.automatic,
-    state: row.state,
-    args: row.args,
-    resultData: row.resultData,
-    resultPreview: row.resultPreview,
-    href: row.href,
-    hrefLabel: row.hrefLabel,
-    errorCode: row.errorCode,
-    executedAt: row.executedAt,
-    undoneAt: row.undoneAt,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    actions,
+    actionBatch: row.actionBatch,
   };
 }
 
@@ -524,6 +496,7 @@ function mapRun(row: {
   sessionId: string;
   userId: string;
   status: string;
+  continuationOfMessageId: string | null;
   providerId: string | null;
   modelId: string | null;
   inputTokens: number | null;
@@ -539,6 +512,7 @@ function mapRun(row: {
     sessionId: row.sessionId,
     userId: row.userId,
     status: row.status,
+    continuationOfMessageId: row.continuationOfMessageId,
     providerId: row.providerId,
     modelId: row.modelId,
     inputTokens: row.inputTokens,

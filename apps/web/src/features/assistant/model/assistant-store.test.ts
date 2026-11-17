@@ -104,6 +104,7 @@ describe('буфер прогона', () => {
     store.startLive({ runId: 'run-5', sessionId: 's-4', userText: 'создай', userMessageId: null });
     const base = {
       id: 'a-1',
+      messageId: null,
       toolId: 'tasks.create',
       title: 'Создать задачу',
       summary: 'Задача «Смета»',

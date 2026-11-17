@@ -120,6 +120,11 @@ export class LetterFormApplier {
     diff('receiptMethodId', letter.receiptMethodId, values.receiptMethodId);
     diff('projectId', letter.projectId, values.projectId);
     diff('addresseeId', letter.addresseeId, values.addresseeId);
+    // Флаг «Конфиденциально» из окна регистрации (#461): дифф нужен движку —
+    // по нему адаптер эмитит letter_updated, и files снимает кэш текста.
+    if (extra.confidential !== null) {
+      diff('confidential', letter.confidential, extra.confidential);
+    }
     diff('responseDeadline', isoOf(letter.responseDeadline), values.responseDeadline);
 
     // «Приложенные письма» и флаг (#461): строки валидируются и пишутся

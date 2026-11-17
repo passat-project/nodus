@@ -43,6 +43,7 @@ function messageRow(overrides: Partial<MessageRow> = {}): MessageRow {
     runStatus: 'running',
     toolCalls: [],
     actions: [],
+    actionBatch: null,
     ...overrides,
   };
 }
@@ -72,6 +73,7 @@ function runRow(overrides: Partial<RunRow> = {}): RunRow {
     sessionId: SESSION_ID,
     userId: USER_ID,
     status: 'running',
+    continuationOfMessageId: null,
     providerId: null,
     modelId: 'm1',
     inputTokens: null,

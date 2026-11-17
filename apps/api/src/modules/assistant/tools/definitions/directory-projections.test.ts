@@ -96,8 +96,8 @@ describe('directory.find_users / get_user: сотрудники (#892)', () => {
       [
         {
           name: 'Управление',
-          head: { displayName: 'Директор' },
-          employeesCount: 10,
+          headName: 'Директор',
+          memberCount: 10,
           children: [{ name: 'Отдел', memberCount: 4 }, { name: 'Пустой', children: [] }, null],
         },
         null,

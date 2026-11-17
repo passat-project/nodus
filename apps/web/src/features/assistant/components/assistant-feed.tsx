@@ -18,6 +18,7 @@ import { useAuthStore } from '../../../shared/auth-store.js';
 import { ChatMessageItem } from '../../../shared/chat/chat-message.js';
 import { ScrollEndResponder } from '../../../shared/chat/scroll-end-responder.js';
 import { useIncomingFollow } from '../../../shared/chat/use-incoming-follow.js';
+import { AssistantActionBatchBar } from './assistant-action-batch.js';
 import { AssistantActionCard } from './assistant-action-card.js';
 import { AssistantMarkdown } from './assistant-markdown.js';
 import { AssistantMessageMenu } from './assistant-message-menu.js';
@@ -31,6 +32,7 @@ import { MessageRunView } from '../../../shared/chat/message-run.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { usePersonAvatarUrl } from '../../../shared/ui/use-person-avatar-url.js';
 import type { AssistantLiveRun } from '../model/assistant-store.js';
+import { batchFor, groupActionsByMessage } from '../model/assistant-batch-state.js';
 import { toChatMessage } from '../model/assistant-messages.js';
 import { ASSISTANT_SCROLL_SCOPE } from '../model/assistant-scroll.js';
 import { useStickyBottom } from '../model/use-sticky-bottom.js';
@@ -227,13 +229,28 @@ export function AssistantFeed({
                   </div>
                 ) : null}
                 {segment.actions.length > 0 ? (
-                  <div className="mb-1.5 flex flex-col gap-1.5 pl-9">
-                    {segment.actions.map((action) => (
-                      <AssistantActionCard
-                        key={action.id}
-                        action={action}
-                        sessionId={activeSessionId}
-                      />
+                  <div className="mb-1.5 flex flex-col gap-2 pl-9">
+                    {groupActionsByMessage(segment.actions).map(([messageId, actions]) => (
+                      // Якорь «К карточкам» липкой строки: существует и для
+                      // одиночной карточки, у которой полосы пачки нет.
+                      <div
+                        key={messageId}
+                        data-assistant-batch={messageId}
+                        className="flex flex-col gap-1.5"
+                      >
+                        <AssistantActionBatchBar
+                          messageId={messageId}
+                          sessionId={activeSessionId}
+                          batch={batchFor(messageId, actions, messages)}
+                        />
+                        {actions.map((action) => (
+                          <AssistantActionCard
+                            key={action.id}
+                            action={action}
+                            sessionId={activeSessionId}
+                          />
+                        ))}
+                      </div>
                     ))}
                   </div>
                 ) : null}

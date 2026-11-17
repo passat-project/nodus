@@ -25,6 +25,7 @@ afterEach(() => {
 function action(overrides: Partial<AssistantAction> = {}): AssistantAction {
   return {
     id: 'a-1',
+    messageId: null,
     toolId: 'tasks.create',
     title: 'Создать задачу',
     summary: 'Задача «Проверить смету» в проекте «Смета-2026»',

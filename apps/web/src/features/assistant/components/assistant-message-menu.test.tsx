@@ -29,6 +29,7 @@ function bubble(text: string) {
       errorCode: null,
       toolCalls: [],
       actions: [],
+      actionBatch: null,
     },
     null,
   );

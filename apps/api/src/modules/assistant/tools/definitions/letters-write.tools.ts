@@ -1,8 +1,10 @@
 import { z } from 'zod';
 
+import type { ExecuteLetterTransitionResult } from '@nodus/contracts';
+
 import { defineTool } from '../tool-definition.js';
 import type { ToolContext } from '../tool-definition.js';
-import { asArray, asRecord, clip, str } from '../projections.js';
+import { asArray, asRecord, asTyped, clip, str } from '../projections.js';
 import { field, fieldsOf, humanDate, shortId, userName } from './write-cards.js';
 
 /**
@@ -60,12 +62,14 @@ export const lettersTransitionTool = defineTool({
       ...(input.reason ? { reason: input.reason } : {}),
     },
   }),
-  project: (data) => {
-    const letter = asRecord(asRecord(data)?.letter);
+  project: (data: ExecuteLetterTransitionResult) => {
+    const letter = asTyped<ExecuteLetterTransitionResult>(data)?.letter;
     const id = str(letter?.id);
-    if (!id) return { text: 'Переход выполнен' };
-    const subject = str(letter?.subject);
-    const number = str(letter?.number) ?? str(letter?.registeredNumber);
+    if (!letter || !id) return { text: 'Переход выполнен' };
+    const subject = str(letter.subject);
+    // Номер письма в контракте — `regNumber` (алиасов `number`/
+    // `registeredNumber` API не отдаёт — прежняя ветка молча давала пусто).
+    const number = str(letter.regNumber);
     return {
       text: `Письмо обновлено: ${number ? `№${number} ` : ''}«${subject ?? '—'}», id ${id}`,
       entity: {

@@ -14,23 +14,24 @@
 
 ## Эндпоинты (`/api/v1/directory`)
 
-| Маршрут                                                         | Права              | Назначение                                              |
-| --------------------------------------------------------------- | ------------------ | ------------------------------------------------------- |
-| `GET /users`                                                    | directory.read     | Список: `?cursor=&limit=&search=&departmentId=&status=` |
-| `GET /users/:id`                                                | directory.read     | Карточка сотрудника                                     |
-| `PATCH /users/me`                                               | auth               | Саморедактирование контактного блока                    |
-| `POST/DELETE /users/me/avatar`                                  | auth               | Аватар СВОЕГО профиля: multipart → WebP-дериват (#186)  |
-| `POST /users`, `PATCH /users/:id`, `POST /users/:id/deactivate` | directory.manage   | Управление сотрудниками                                 |
-| `POST /users/:id/activate`                                      | directory.manage   | Возврат уволенного в работу (AUD-016)                   |
-| `GET /departments/tree?kind=`                                   | directory.read     | Дерево оргструктуры (head/deputy/memberCount)           |
-| `POST/PATCH /departments/:id`, `POST /:id/archive`              | directory.manage   | Управление деревом (защита от циклов)                   |
-| `GET /positions?kind=`, `POST`, `PATCH /:id`, `DELETE /:id`     | read / manage      | Справочник должностей                                   |
-| `POST /positions/:id/reassign`                                  | directory.manage   | Перевести всех сотрудников (перед удалением)            |
-| `GET /roles`, `POST`, `PATCH /:id`, `DELETE /:id`               | read / role.manage | Роли и состав прав                                      |
-| `PUT/DELETE /roles/:id/permissions/:permission`                 | role.manage        | Точечная выдача/отзыв права (#379, идемпотентно)        |
-| `GET /roles/:id/members`                                        | directory.read     | Состав роли: сотрудники и подразделения                 |
-| `PUT/DELETE /roles/:id/members/users/:userId`                   | role.manage        | Добавить/убрать сотрудника (#379)                       |
-| `PUT/DELETE /roles/:id/members/departments/:departmentId`       | role.manage        | Привязать/отвязать подразделение (#379)                 |
+| Маршрут                                                         | Права              | Назначение                                                        |
+| --------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------- |
+| `GET /users`                                                    | directory.read     | Список: `?cursor=&limit=&search=&departmentId=&status=`           |
+| `GET /users/:id`                                                | directory.read     | Карточка сотрудника                                               |
+| `GET /users/me/organization`                                    | directory.read     | «Кто я»: профиль, руководитель, отдел с путём, подчинённые (#919) |
+| `PATCH /users/me`                                               | auth               | Саморедактирование контактного блока                              |
+| `POST/DELETE /users/me/avatar`                                  | auth               | Аватар СВОЕГО профиля: multipart → WebP-дериват (#186)            |
+| `POST /users`, `PATCH /users/:id`, `POST /users/:id/deactivate` | directory.manage   | Управление сотрудниками                                           |
+| `POST /users/:id/activate`                                      | directory.manage   | Возврат уволенного в работу (AUD-016)                             |
+| `GET /departments/tree?kind=`                                   | directory.read     | Дерево оргструктуры (head/deputy/memberCount)                     |
+| `POST/PATCH /departments/:id`, `POST /:id/archive`              | directory.manage   | Управление деревом (защита от циклов)                             |
+| `GET /positions?kind=`, `POST`, `PATCH /:id`, `DELETE /:id`     | read / manage      | Справочник должностей                                             |
+| `POST /positions/:id/reassign`                                  | directory.manage   | Перевести всех сотрудников (перед удалением)                      |
+| `GET /roles`, `POST`, `PATCH /:id`, `DELETE /:id`               | read / role.manage | Роли и состав прав                                                |
+| `PUT/DELETE /roles/:id/permissions/:permission`                 | role.manage        | Точечная выдача/отзыв права (#379, идемпотентно)                  |
+| `GET /roles/:id/members`                                        | directory.read     | Состав роли: сотрудники и подразделения                           |
+| `PUT/DELETE /roles/:id/members/users/:userId`                   | role.manage        | Добавить/убрать сотрудника (#379)                                 |
+| `PUT/DELETE /roles/:id/members/departments/:departmentId`       | role.manage        | Привязать/отвязать подразделение (#379)                           |
 
 ## События (outbox, I9)
 

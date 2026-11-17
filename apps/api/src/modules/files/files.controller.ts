@@ -1,17 +1,29 @@
-import { Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Header, Param, Query, Req, Res } from '@nestjs/common';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import {
+  ErrorCode,
+  Permission,
+  fileTextResponseSchema,
+  type AuthUser,
+  type FileTextResponse,
+} from '@nodus/contracts';
 
 import { SignedUrlService } from '../../core/crypto/signed-url.service.js';
+import { Audit } from '../../core/decorators/audit.decorator.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
-import { ErrorCode } from '@nodus/contracts';
+import { GetUser } from '../../core/decorators/get-user.decorator.js';
 import { Public } from '../../core/decorators/public.decorator.js';
+import { RequireFeature } from '../../core/decorators/require-feature.decorator.js';
+import { RequirePermissions } from '../../core/decorators/require-permissions.decorator.js';
+import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { FilesRepository } from './files.repository.js';
 import { DerivativesRepository } from './derivatives/derivatives.repository.js';
 import { MinioStorageDriver } from './storage/minio-storage.driver.js';
 import { needsTextNormalization, normalizeTextForOffice } from './office/text-normalizer.js';
+import { FileTextService } from './text/file-text.service.js';
 
 const contentQuerySchema = z.object({
   exp: z.coerce.number().int().positive(),
@@ -44,7 +56,42 @@ export class FilesController {
     private readonly derivatives: DerivativesRepository,
     private readonly driver: MinioStorageDriver,
     private readonly signedUrls: SignedUrlService,
+    private readonly fileText: FileTextService,
   ) {}
+
+  /**
+   * Текст вложения для ИИ-агента (#922): PDF с текстовым слоем и DOCX.
+   * НЕ по подписи: обычная авторизация сотрудника + резолвер прав контекста
+   * (владение, участник беседы, видимое письмо). Текст в лог не пишется.
+   * Маршрут живёт под фичефлагом `assistant` (I10): без ассистента это лишняя
+   * поверхность чтения документов; конфиденциальные письма — 403.
+   */
+  @Get(':id/text')
+  @RequireFeature('assistant')
+  @RequirePermissions(Permission.ASSISTANT_USE)
+  // Текст документа — чувствительные данные: не кэшируется прокси и общими
+  // профилями браузера; чтение фиксируется в audit_logs (I7, ADR-0050 п. 8).
+  @Header('Cache-Control', 'no-store')
+  @Audit({ action: 'files.text_read', entity: 'file' })
+  @ApiOperation({ summary: 'Текст вложения (PDF/DOCX) для ответов ассистента' })
+  @ApiOkResponse({ standardSchema: fileTextResponseSchema })
+  @ApiErrors(401, 403, 404, 410, 413, 415, 422, 429, 504)
+  text(
+    @Param('id', new ZodValidationPipe(z.uuid())) id: string,
+    @GetUser() user: AuthUser,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<FileTextResponse> {
+    // Обрыв клиента останавливает разбор: worker уничтожается, если результат
+    // больше никто не ждёт (security-ревью 18.11.2026).
+    const controller = new AbortController();
+    const onClose = (): void => {
+      if (!reply.raw.writableEnded) controller.abort();
+    };
+    reply.raw.on('close', onClose);
+    return this.fileText.extract(id, user.id, controller.signal).finally(() => {
+      reply.raw.off('close', onClose);
+    });
+  }
 
   @Public()
   @Get(':id/content')

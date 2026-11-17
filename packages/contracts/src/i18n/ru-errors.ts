@@ -59,6 +59,15 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.FILE_OFFICE_DISABLED]: 'Просмотр документов недоступен — скачайте файл',
   [ErrorCode.FILE_OFFICE_UNSUPPORTED]: 'Этот формат не открывается в браузере — скачайте файл',
   [ErrorCode.FILE_OFFICE_TOO_LARGE]: 'Файл слишком большой для просмотра — скачайте его',
+  [ErrorCode.FILE_TEXT_TOO_LARGE]:
+    'Вложение слишком большое для чтения ассистентом — скачайте и откройте его',
+  [ErrorCode.FILE_TEXT_UNSUPPORTED]:
+    'Ассистент читает PDF и DOCX; этот формат — скачайте и откройте вручную',
+  [ErrorCode.FILE_TEXT_INVALID]:
+    'Не удалось прочитать документ: возможно, он повреждён или защищён паролем',
+  [ErrorCode.FILE_TEXT_TIMEOUT]: 'Документ слишком долго читается — попробуйте позже',
+  [ErrorCode.FILE_TEXT_FORBIDDEN]:
+    'Вложение конфиденциального письма не читается ассистентом — откройте его вручную',
   [ErrorCode.FILE_AVATAR_INVALID]: 'Фото не подошло: нужно PNG, JPEG или WebP до 10 МБ',
   [ErrorCode.FILE_AVATAR_TOO_LARGE_RESOLUTION]:
     'Слишком большое разрешение фото — выберите другое или уменьшите его',

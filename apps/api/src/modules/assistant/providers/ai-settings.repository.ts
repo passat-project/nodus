@@ -30,6 +30,9 @@ export interface ProviderRow {
 export interface SettingsRow {
   defaultProviderId: string | null;
   defaultModelId: string | null;
+  /** Модель-диспетчер (#917); null — диспетчер выключен. */
+  routerProviderId: string | null;
+  routerModelId: string | null;
   instructions: string;
 }
 
@@ -69,6 +72,8 @@ export class AiSettingsRepository {
     return {
       defaultProviderId: row?.defaultProviderId ?? null,
       defaultModelId: row?.defaultModelId ?? null,
+      routerProviderId: row?.routerProviderId ?? null,
+      routerModelId: row?.routerModelId ?? null,
       instructions: row?.instructions ?? '',
     };
   }
@@ -108,11 +113,15 @@ export class AiSettingsRepository {
           id: 'global',
           defaultProviderId: settings.defaultProviderId,
           defaultModelId: settings.defaultModelId,
+          routerProviderId: settings.routerProviderId,
+          routerModelId: settings.routerModelId,
           instructions: settings.instructions,
         },
         update: {
           defaultProviderId: settings.defaultProviderId,
           defaultModelId: settings.defaultModelId,
+          routerProviderId: settings.routerProviderId,
+          routerModelId: settings.routerModelId,
           instructions: settings.instructions,
         },
       });

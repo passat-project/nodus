@@ -10,6 +10,7 @@ import { DataTable } from '../../../shared/views/data-table.js';
 import { useListToolbar } from '../../../shared/views/use-list-toolbar.js';
 import { useRowSelection } from '../../../shared/views/use-row-selection.js';
 import { useAiSettingsQuery, useUpdateAiSettings } from '../api/ai-settings.js';
+import { AiDefaultModelsBar, type DefaultModelsPatch } from './ai-default-models-bar.js';
 import { providerColumns, type ProviderDraft } from './ai-provider-columns.js';
 import { AiProviderDialog, type ProviderDialogMode } from './ai-provider-dialog.js';
 import { AiRegistryHeader } from './ai-registry-header.js';
@@ -123,13 +124,23 @@ export function AiProvidersSection({
     if (!draft) return;
     const removed = new Set(ids);
     const defaultRemoved = Boolean(draft.defaultProviderId && removed.has(draft.defaultProviderId));
+    const routerRemoved = Boolean(draft.routerProviderId && removed.has(draft.routerProviderId));
     void persist({
       ...draft,
       providers: providers.filter((provider) => !removed.has(provider.id)),
       defaultProviderId: defaultRemoved ? null : draft.defaultProviderId,
       defaultModelId: defaultRemoved ? null : draft.defaultModelId,
+      // Модель-диспетчер (#917) того же провайдера: пара очищается вместе.
+      routerProviderId: routerRemoved ? null : draft.routerProviderId,
+      routerModelId: routerRemoved ? null : draft.routerModelId,
     });
     for (const id of ids) selection.deselect(id);
+  }
+
+  /** Модели по умолчанию (#917): основная и диспетчер — тем же общим PUT. */
+  function applyModels(patch: DefaultModelsPatch) {
+    if (!draft) return;
+    void persist({ ...draft, ...patch });
   }
 
   /** Звезда в строке: дефолтный провайдер + его первая включённая модель. */
@@ -167,6 +178,10 @@ export function AiProvidersSection({
           </Button>
         }
       />
+
+      {draft && providers.length > 0 ? (
+        <AiDefaultModelsBar draft={draft} providers={providers} onChange={applyModels} />
+      ) : null}
 
       <div className="min-h-0 flex-1">
         <DataTable
@@ -282,6 +297,8 @@ function toDraft(response: AiSettingsResponse): AiSettingsBody {
     })) as unknown as AiSettingsBody['providers'],
     defaultProviderId: response.defaultProviderId,
     defaultModelId: response.defaultModelId,
+    routerProviderId: response.routerProviderId,
+    routerModelId: response.routerModelId,
     instructions: response.instructions,
   };
 }

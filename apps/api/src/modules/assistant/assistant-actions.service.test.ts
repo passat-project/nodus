@@ -70,10 +70,13 @@ function build(row: ActionRow = actionRow()) {
   let current = { ...row };
   const repo = {
     countRunActions: vi.fn(async () => 0),
-    createAction: vi.fn(async (input: Record<string, unknown>) => {
-      void input;
-      return row;
-    }),
+    ensureActionBatch: vi.fn(async () => undefined),
+    createActionWithinLimit: vi.fn(
+      async (input: Record<string, unknown>): Promise<ActionRow | null> => {
+        void input;
+        return row;
+      },
+    ),
     findAction: vi.fn(async (): Promise<ActionRow | null> => current),
     claimAction: vi.fn(async (_id: string, from: readonly string[], to: string) => {
       if (!from.includes(current.state)) return false;
@@ -115,6 +118,7 @@ describe('AssistantActionsService: предложение (ADR-0048)', () => {
     const { service, repo, executor, bus } = build();
     const result = await service.propose({
       runId: RUN_ID,
+      sessionId: 'session-1',
       messageId: 'message-1',
       userId: USER_ID,
       tool: tools.create,
@@ -125,16 +129,17 @@ describe('AssistantActionsService: предложение (ADR-0048)', () => {
     });
 
     expect(executor.executeWrite).not.toHaveBeenCalled();
-    expect(repo.createAction).toHaveBeenCalledWith(
+    expect(repo.createActionWithinLimit).toHaveBeenCalledWith(
       expect.objectContaining({
         toolId: 'tasks.create',
         title: 'Создать задачу',
         automatic: false,
         undoable: true,
       }),
+      5,
     );
     // Поля показывают имена, а не id (ctx.read дочитал сотрудника).
-    const created = repo.createAction.mock.calls[0]![0] as unknown as {
+    const created = repo.createActionWithinLimit.mock.calls[0]![0] as unknown as {
       fields: { value: string }[];
     };
     expect(created.fields.map((field) => field.value)).toEqual(
@@ -144,10 +149,29 @@ describe('AssistantActionsService: предложение (ADR-0048)', () => {
     expect(bus.publish).toHaveBeenCalledWith(RUN_ID, 'action.proposed', expect.anything());
   });
 
+  it('атомарный лимит: гонка write-вызовов не создаёт лишнюю карточку', async () => {
+    const { service, repo } = build();
+    repo.createActionWithinLimit.mockResolvedValueOnce(null);
+    const result = await service.propose({
+      runId: RUN_ID,
+      sessionId: 'session-1',
+      messageId: 'message-1',
+      userId: USER_ID,
+      tool: tools.create,
+      rawInput: { title: 'Смета' },
+      automatic: false,
+      authorization: 'Bearer user-token',
+      ctx,
+    });
+    expect(result.action).toBeNull();
+    expect(result.text).toContain('ASSISTANT_TOO_MANY_ACTIONS');
+  });
+
   it('байпас: карточка исполняется сразу, id карточки — ключ идемпотентности', async () => {
     const { service, executor, bus } = build(actionRow({ automatic: true }));
     const result = await service.propose({
       runId: RUN_ID,
+      sessionId: 'session-1',
       messageId: 'message-1',
       userId: USER_ID,
       tool: tools.create,
@@ -172,6 +196,7 @@ describe('AssistantActionsService: предложение (ADR-0048)', () => {
     repo.countRunActions.mockResolvedValueOnce(5);
     const overLimit = await service.propose({
       runId: RUN_ID,
+      sessionId: 'session-1',
       messageId: null,
       userId: USER_ID,
       tool: tools.create,
@@ -181,10 +206,11 @@ describe('AssistantActionsService: предложение (ADR-0048)', () => {
       ctx,
     });
     expect(overLimit.text).toContain('ASSISTANT_TOO_MANY_ACTIONS');
-    expect(repo.createAction).not.toHaveBeenCalled();
+    expect(repo.createActionWithinLimit).not.toHaveBeenCalled();
 
     const invalid = await service.propose({
       runId: RUN_ID,
+      sessionId: 'session-1',
       messageId: null,
       userId: USER_ID,
       tool: tools.create,

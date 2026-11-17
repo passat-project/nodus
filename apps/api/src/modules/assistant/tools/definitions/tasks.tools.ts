@@ -1,9 +1,18 @@
 import { z } from 'zod';
+import type {
+  Paginated,
+  TaskDetail,
+  TaskHistoryItem,
+  TaskListItem,
+  TaskStageWithCount,
+} from '@nodus/contracts';
 
 import { defineTool } from '../tool-definition.js';
 import {
   asArray,
   asRecord,
+  asTyped,
+  pageItems,
   clip,
   date,
   dateTime,
@@ -11,10 +20,8 @@ import {
   finalize,
   hasMore,
   isOverdue,
-  itemsOf,
   listBlock,
   nameOf,
-  num,
   str,
 } from '../projections.js';
 
@@ -37,28 +44,36 @@ const listInput = z.object({
   limit: z.number().int().min(1).max(20).default(20),
 });
 
-/** Строка списка задач: всё, чтобы модель могла ответить и позвать tasks.get. */
-function taskRow(raw: unknown): string | null {
-  const task = asRecord(raw);
-  if (!task) return null;
-  const id = str(task.id);
-  const title = str(task.title);
-  if (!id || !title) return null;
-  const stage = asRecord(task.stage);
+/**
+ * Строка списка задач: всё, чтобы модель могла ответить и позвать tasks.get.
+ * Тип — контракт `TaskListItem` (#918): переименование поля в DTO ломает
+ * компиляцию, а не тихо отдаёт «—» (ADR-0049).
+ */
+function taskRow(task: TaskListItem): string | null {
+  if (!task.id || !task.title) return null;
+  const stage = task.stage;
   const parts = [
-    `№${num(task.number) ?? '—'} «${title}»`,
-    `стадия «${str(stage?.name) ?? '—'}»${stage?.outcome ? ' (завершена)' : ''}`,
+    `№${task.number ?? '—'} «${task.title}»`,
+    `стадия «${stage?.name ?? '—'}»${stage?.outcome ? ' (завершена)' : ''}`,
     task.deadline
       ? `срок ${date(task.deadline)}${isOverdue(task.deadline) && !stage?.outcome ? ' — ПРОСРОЧЕНО' : ''}`
       : 'без срока',
-    `исполнитель ${nameOf(task.assignee) ?? 'не назначен'}`,
+    `исполнитель ${task.assignee?.displayName ?? 'не назначен'}`,
   ];
-  const project = asRecord(task.project);
-  if (project) parts.push(`проект «${nameOf(project) ?? '—'}»`);
-  const type = asRecord(task.type);
-  if (type) parts.push(`тип «${nameOf(type) ?? '—'}»`);
-  parts.push(`id ${id}`);
+  if (task.project) parts.push(`проект «${task.project.name ?? '—'}»`);
+  if (task.type) parts.push(`тип «${task.type.name ?? '—'}»`);
+  parts.push(`id ${task.id}`);
   return parts.join(', ');
+}
+
+/** Строки пагинированного ответа: мусор отбрасывается, типы — контракта. */
+function taskRows(data: Paginated<TaskListItem>): string[] {
+  return pageItems<TaskListItem>(data)
+    .map((raw) => asTyped<TaskListItem>(raw))
+    .flatMap((task) => {
+      const row = task ? taskRow(task) : null;
+      return row ? [row] : [];
+    });
 }
 
 export const tasksListTool = defineTool({
@@ -96,13 +111,10 @@ export const tasksListTool = defineTool({
       ...(input.assigneeId ? { assigneeId: input.assigneeId } : {}),
     },
   }),
-  project: (data) => {
-    const rows = itemsOf(data)
-      .map(taskRow)
-      .filter((row): row is string => row !== null);
+  project: (data: Paginated<TaskListItem>) => {
     // Список — не одна сущность: ссылку «Открыть» даёт только карточка
     // (tasks.get), иначе из 20 строк открывалась бы произвольная первая.
-    return { text: finalize(listBlock('Задачи', rows, { more: hasMore(data) })) };
+    return { text: finalize(listBlock('Задачи', taskRows(data), { more: hasMore(data) })) };
   },
 });
 
@@ -121,29 +133,34 @@ export const tasksGetTool = defineTool({
   input: getInput,
   api: { method: 'GET', path: '/tasks/:id' },
   build: (input) => ({ path: `/tasks/${input.id}` }),
-  project: (data) => {
-    const task = asRecord(data);
-    const id = str(task?.id);
-    const title = str(task?.title);
-    if (!task || !id || !title) return { text: 'Задача не найдена или недоступна' };
-    const stage = asRecord(task.stage);
-    const checklist = asArray(task.checklist);
+  project: (data: TaskDetail) => {
+    const task = asTyped<TaskDetail>(data);
+    if (!task || !task.id || !task.title) return { text: 'Задача не найдена или недоступна' };
+    const stage = task.stage;
+    const checklist = asArray(task.checklist).filter(
+      (item) => typeof item === 'object' && item !== null,
+    );
     const done = checklist.filter((item) => Boolean(asRecord(item)?.done)).length;
     const lines = [
-      `№${num(task.number) ?? '—'} «${title}» (id ${id})`,
-      `Стадия: «${str(stage?.name) ?? '—'}»${stage?.outcome ? ' — завершена' : ''}`,
+      `№${task.number ?? '—'} «${task.title}» (id ${task.id})`,
+      `Стадия: «${stage?.name ?? '—'}»${stage?.outcome ? ' — завершена' : ''}`,
       `Срок: ${task.deadline ? `${date(task.deadline)}${isOverdue(task.deadline) && !stage?.outcome ? ' (просрочено)' : ''}` : 'не задан'}`,
-      `Исполнитель: ${nameOf(task.assignee) ?? 'не назначен'}`,
-      `Постановщик: ${nameOf(task.creator) ?? '—'}`,
-      `Участники: ${asArray(task.participants).map(nameOf).filter(Boolean).join(', ') || 'нет'}`,
-      `Трудозатраты: ${num(task.spentMinutes) ?? 0} мин${task.plannedMinutes ? ` из ${num(task.plannedMinutes)} план` : ''}`,
+      `Исполнитель: ${task.assignee?.displayName ?? 'не назначен'}`,
+      `Постановщик: ${task.creator?.displayName ?? '—'}`,
+      `Участники: ${
+        asArray(task.participants)
+          .map((raw) => nameOf(asRecord(raw)))
+          .filter(Boolean)
+          .join(', ') || 'нет'
+      }`,
+      `Трудозатраты: ${task.spentMinutes ?? 0} мин${task.plannedMinutes ? ` из ${task.plannedMinutes} план` : ''}`,
       checklist.length > 0 ? `Чек-лист: ${done} из ${checklist.length}` : 'Чек-лист: нет',
       `Создана: ${dateTime(task.createdAt) ?? '—'}`,
-      str(task.description) ? `Описание: ${clip(str(task.description)!, 600)}` : 'Описание: пусто',
+      task.description ? `Описание: ${clip(task.description, 600)}` : 'Описание: пусто',
     ];
     return {
       text: finalize(lines.join('\n')),
-      entity: entityLink('task', id, `№${num(task.number) ?? ''} ${title}`.trim()),
+      entity: entityLink('task', task.id, `№${task.number ?? ''} ${task.title}`.trim()),
     };
   },
 });
@@ -170,11 +187,10 @@ export const tasksSearchTool = defineTool({
     path: '/tasks',
     query: { view: 'list', scope: input.scope, search: input.query, limit: String(input.limit) },
   }),
-  project: (data) => {
-    const rows = itemsOf(data)
-      .map(taskRow)
-      .filter((row): row is string => row !== null);
-    return { text: finalize(listBlock('Найденные задачи', rows, { more: hasMore(data) })) };
+  project: (data: Paginated<TaskListItem>) => {
+    return {
+      text: finalize(listBlock('Найденные задачи', taskRows(data), { more: hasMore(data) })),
+    };
   },
 });
 
@@ -199,18 +215,18 @@ export const tasksStagesTool = defineTool({
     path: '/tasks/stages',
     query: { scope: input.scope, ...(input.typeId ? { typeId: input.typeId } : {}) },
   }),
-  project: (data) => {
+  project: (data: TaskStageWithCount[]) => {
     const rows = asArray(data).map((raw) => {
-      const stage = asRecord(raw);
+      const stage = asTyped<TaskStageWithCount>(raw);
       if (!stage) return null;
-      const name = str(stage.name) ?? '—';
-      const id = str(stage.id);
-      const type = str(stage.typeName);
       // id стадии — аргумент tasks.update (stageId): без него модель видит
       // только названия и не может сменить статус (живой отзыв 18.11.2026).
-      const labels = [type ? `тип «${type}»` : null, id ? `id ${id}` : null].filter(Boolean);
+      const labels = [
+        stage.typeName ? `тип «${stage.typeName}»` : null,
+        stage.id ? `id ${stage.id}` : null,
+      ].filter(Boolean);
       const suffix = labels.length > 0 ? ` (${labels.join(', ')})` : '';
-      return `«${name}»${suffix}: ${num(stage.count) ?? 0} задач${num(stage.overdueCount) ? `, просрочено ${num(stage.overdueCount)}` : ''}`;
+      return `«${stage.name}»${suffix}: ${stage.count} задач${stage.overdueCount ? `, просрочено ${stage.overdueCount}` : ''}`;
     });
     return {
       text: finalize(
@@ -242,16 +258,19 @@ export const tasksHistoryTool = defineTool({
   input: historyInput,
   api: { method: 'GET', path: '/tasks/:id/history' },
   build: (input) => ({ path: `/tasks/${input.id}/history`, query: { limit: String(input.limit) } }),
-  project: (data) => {
-    const rows = itemsOf(data).map((raw) => {
-      const entry = asRecord(raw);
+  project: (data: Paginated<TaskHistoryItem>) => {
+    const rows = pageItems<TaskHistoryItem>(data).map((raw) => {
+      const entry = asTyped<TaskHistoryItem>(raw);
       if (!entry) return null;
       const when = dateTime(entry.createdAt) ?? '—';
       const who = nameOf(entry.actor) ?? 'система';
+      // `summary`/`text`/`action` — алиасы старых записей истории; контракт
+      // TaskHistoryItem отдаёт `type` (+ payload). Цепочка приоритетов та же.
+      const legacy = asRecord(entry);
       const text =
-        str(entry.summary) ??
-        str(entry.text) ??
-        str(entry.action) ??
+        str(legacy?.summary) ??
+        str(legacy?.text) ??
+        str(legacy?.action) ??
         str(entry.type) ??
         'изменение';
       return `${when} — ${who}: ${clip(text, 200)}`;

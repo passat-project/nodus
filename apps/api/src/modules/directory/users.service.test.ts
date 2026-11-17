@@ -102,7 +102,9 @@ describe('UsersService: создание и правка сотрудника', 
       { fileContentUrl: vi.fn((id: string) => `/files/${id}/content`) } as never,
       guard,
       references,
+      { findParentChain: vi.fn(), findNamesByIds: vi.fn() } as never,
       { process: vi.fn() } as never,
+      { subordinateIds: vi.fn(), managerChainOf: vi.fn() } as never,
     );
   });
 

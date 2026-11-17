@@ -764,9 +764,39 @@ model FileObject {
 
   versions    FileVersion[]
   derivatives FileDerivative[]
+  textExtract FileTextExtract?
 
   @@index([ownerId])
   @@map("file_objects")
+}
+
+/// Кэш текста вложения для ИИ-агента (#922): PDF (текстовый слой) и DOCX,
+/// извлечение по запросу. Ключ — текущая версия файла: правка ONLYOFFICE
+/// создаёт новую версию и текст пересчитывается. Текст — данные портала:
+/// наружу только через API с проверкой прав контекста (FileAccessRegistry).
+model FileTextExtract {
+  id           String   @id @default(uuid()) @db.Uuid
+  fileId       String   @unique @map("file_id") @db.Uuid
+  /// Версия файла, для которой извлечён текст (file_objects.version).
+  version      Int
+  /// pdf | docx
+  kind         String
+  /// Текст по страницам: [{ page, text }] (DOCX — одна «страница»).
+  pages        Json
+  /// Всего страниц в документе; null — формат без страниц (DOCX).
+  totalPages   Int?     @map("total_pages")
+  /// Сколько знаков сохранено (после лимита).
+  chars        Int
+  /// Текст обрезан лимитом знаков/страниц.
+  truncated    Boolean  @default(false)
+  /// Номера страниц без текстового слоя (скан): содержимое не читается.
+  scannedPages Json     @default("[]") @map("scanned_pages")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  file FileObject @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@map("file_text_extracts")
 }
 
 /// Производная версия файла из конвейера #139: PDF-копия офисного документа
@@ -2260,9 +2290,10 @@ model AssistantSession {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages AssistantMessage[]
-  runs     AssistantRun[]
+  user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages      AssistantMessage[]
+  runs          AssistantRun[]
+  actionBatches AssistantActionBatch[]
 
   /// Список «мои сессии» (архив отдельно) и выбор последней при открытии.
   @@index([userId, archivedAt, lastMessageAt])
@@ -2284,14 +2315,43 @@ model AssistantMessage {
   errorCode String? @map("error_code")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  session   AssistantSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  run       AssistantRun?       @relation(fields: [runId], references: [id], onDelete: SetNull)
-  toolCalls AssistantToolCall[]
-  actions   AssistantAction[]
+  session     AssistantSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  run         AssistantRun?        @relation(fields: [runId], references: [id], onDelete: SetNull)
+  toolCalls   AssistantToolCall[]
+  actions     AssistantAction[]
+  actionBatch AssistantActionBatch?
 
   @@index([sessionId, createdAt])
   @@index([runId])
   @@map("assistant_messages")
+}
+
+/// Пачка карточек одного хода агента (#916): продолжение прогона после
+/// решений. Автопродолжение — ровно одно и только когда решены ВСЕ карточки;
+/// «Продолжить сейчас» и новое сообщение сотрудника закрывают пачку для
+/// автопродолжения (карточки при этом остаются рабочими).
+model AssistantActionBatch {
+  id        String @id @default(uuid()) @db.Uuid
+  /// Сообщение ассистента, в чей ход попали карточки пачки (уникально).
+  messageId String @unique @map("message_id") @db.Uuid
+  sessionId String @map("session_id") @db.Uuid
+  runId     String @map("run_id") @db.Uuid
+  userId    String @map("user_id") @db.Uuid
+  /// open | continued | closed. `continued` — автопродолжение или «сейчас».
+  state     String @default("open")
+  /// Прогон-продолжение: один на пачку (повторный клик вернёт его же).
+  continuationRunId String? @map("continuation_run_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  message         AssistantMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  session         AssistantSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  run             AssistantRun     @relation("BatchRun", fields: [runId], references: [id], onDelete: Cascade)
+  continuationRun AssistantRun?    @relation("BatchContinuation", fields: [continuationRunId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId, state])
+  @@index([userId, state])
+  @@map("assistant_action_batches")
 }
 
 /// Прогон — одна отправка сообщения: агентный цикл с инструментами до
@@ -2305,6 +2365,9 @@ model AssistantRun {
   /// Байпас подтверждений (ADR-0048): прогон запущен с включённым режимом
   /// «без вопросов». Снимок на прогон: следующий вопрос спрашивает снова.
   autoExecute Boolean @default(false) @map("auto_execute")
+  /// Пачка карточек, решения по которой запустили этот прогон (#916):
+  /// прогон-продолжение без нового вопроса сотрудника.
+  continuationOfMessageId String? @map("continuation_of_message_id") @db.Uuid
   /// Выбранный провайдер и модель на момент прогона (снимок — для аудита).
   providerId String? @map("provider_id") @db.Uuid
   modelId String? @map("model_id")
@@ -2316,13 +2379,15 @@ model AssistantRun {
   finishedAt DateTime? @map("finished_at") @db.Timestamptz()
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  session   AssistantSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user      User                @relation("AssistantRuns", fields: [userId], references: [id], onDelete: Cascade)
-  events    AssistantRunEvent[]
-  toolCalls AssistantToolCall[]
-  actions   AssistantAction[]
-  memories  AssistantMemory[]
-  messages  AssistantMessage[]
+  session            AssistantSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user               User                 @relation("AssistantRuns", fields: [userId], references: [id], onDelete: Cascade)
+  events             AssistantRunEvent[]
+  toolCalls          AssistantToolCall[]
+  actions            AssistantAction[]
+  memories           AssistantMemory[]
+  messages           AssistantMessage[]
+  actionBatches       AssistantActionBatch[] @relation("BatchRun")
+  continuationBatches AssistantActionBatch[] @relation("BatchContinuation")
 
   @@index([sessionId, createdAt])
   @@index([userId, createdAt])
@@ -2479,6 +2544,10 @@ model AssistantSettings {
   id String @id @default("global")
   defaultProviderId String? @map("default_provider_id") @db.Uuid
   defaultModelId String? @map("default_model_id")
+  /// Модель-диспетчер (#917): дешёвая LLM выбирает top-7 инструментов по
+  /// описаниям до основного цикла. NULL — диспетчер выключен (горячая полка).
+  routerProviderId String? @map("router_provider_id") @db.Uuid
+  routerModelId String? @map("router_model_id")
   instructions String @default("")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()

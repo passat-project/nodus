@@ -42,6 +42,7 @@ export function fakeRepository() {
         runStatus: 'running',
         toolCalls: [],
         actions: [],
+        actionBatch: null,
       };
       messages.push(row);
       return row;
@@ -150,6 +151,7 @@ export function build(
     actions as never,
     memory as never,
     bus,
+    { register: vi.fn(() => () => undefined), notify: vi.fn() } as never,
     logger as never,
   );
   return {

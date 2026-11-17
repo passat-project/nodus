@@ -156,6 +156,7 @@ describe('AgentRunnerService: цикл (#893)', () => {
       { propose: vi.fn() } as never,
       { promptLines: vi.fn(async () => []), port: vi.fn() } as never,
       bus2,
+      { register: vi.fn(() => () => undefined), notify: vi.fn() } as never,
       logger as never,
     );
     const streamDone = new Promise<RunEvent[]>((resolve) => {

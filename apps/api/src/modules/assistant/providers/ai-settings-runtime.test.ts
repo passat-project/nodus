@@ -57,6 +57,8 @@ function makeService(
     settings?: {
       defaultProviderId: string | null;
       defaultModelId: string | null;
+      routerProviderId?: string | null;
+      routerModelId?: string | null;
       instructions: string;
     };
     openResult?: string | null;
@@ -70,6 +72,8 @@ function makeService(
         overrides.settings ?? {
           defaultProviderId: PROVIDER_ID,
           defaultModelId: MODEL_ID,
+          routerProviderId: null,
+          routerModelId: null,
           instructions: 'Отвечай кратко',
         },
     ),
@@ -232,5 +236,53 @@ describe('AiSettingsService.resolveForRun: выбор провайдера (#894
     expect(resolved.provider).toBeTruthy();
     expect(logger.warn).toHaveBeenCalled();
     expect(providerState.options).toMatchObject({ apiKey: null });
+  });
+});
+
+describe('AiSettingsService.resolveRouter: модель-диспетчер (#917)', () => {
+  it('не настроена — null, прогон идёт по горячей полке', async () => {
+    const { service } = makeService();
+    await expect(service.resolveRouter()).resolves.toBeNull();
+  });
+
+  it('выключенный провайдер или чужая модель — null, без исключения', async () => {
+    const disabled = makeService({
+      providers: [{ ...row, enabled: false }],
+      settings: {
+        defaultProviderId: null,
+        defaultModelId: null,
+        routerProviderId: PROVIDER_ID,
+        routerModelId: MODEL_ID,
+        instructions: '',
+      },
+    });
+    await expect(disabled.service.resolveRouter()).resolves.toBeNull();
+
+    const missingModel = makeService({
+      settings: {
+        defaultProviderId: null,
+        defaultModelId: null,
+        routerProviderId: PROVIDER_ID,
+        routerModelId: 'выключенная-модель',
+        instructions: '',
+      },
+    });
+    await expect(missingModel.service.resolveRouter()).resolves.toBeNull();
+  });
+
+  it('настроенная пара отдаёт провайдера с ключом', async () => {
+    const { service } = makeService({
+      settings: {
+        defaultProviderId: null,
+        defaultModelId: null,
+        routerProviderId: PROVIDER_ID,
+        routerModelId: MODEL_ID,
+        instructions: '',
+      },
+    });
+    const router = await service.resolveRouter();
+    expect(router).toMatchObject({ providerId: PROVIDER_ID, modelId: MODEL_ID });
+    expect(router?.provider).toBeTruthy();
+    expect(providerState.options).toMatchObject({ apiKey: 'sk-live' });
   });
 });

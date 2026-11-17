@@ -1,42 +1,35 @@
 import { HttpResponse, http } from 'msw';
 import {
   ErrorCode,
-  Permission,
   ui,
   type AssistantMessage,
   type AssistantSession,
   type AssistantToolCall,
 } from '@nodus/contracts';
 
-import { useAuthStore } from '../../../../shared/auth-store.js';
+import { assistantActionHandlers } from './assistant-action-handlers.js';
+import {
+  batchStates,
+  demoAction,
+  refreshBatch,
+  runs,
+  sessionOf,
+  sessions,
+  type MockSession,
+} from './assistant-chat-store.js';
+import { canUse, forbidden, notFound, nowIso } from './assistant-mock-http.js';
 
 /**
  * Моки диалога ИИ-ассистента (#895): сессии, история, отправка и ПОТОК
  * прогона (SSE в `ReadableStream`). Интерфейс проверяется тем же кодом, что
  * и на живом API: `POST` → 202 `{ runId }`, поток → дельты, строка вызова,
  * финал. Ответы демонстрационные — портал честно говорит, что данных нет.
+ *
+ * Карточки действий и пачка (#916): на вопрос с глаголом действия прогон
+ * готовит одну демо-карточку; решения исполняются теми же маршрутами, что на
+ * API, и закрывают пачку продолжением — чтобы весь круговорот был виден на
+ * dev-сервере с моками (песочница всегда non-mock).
  */
-
-interface MockSession extends AssistantSession {
-  messages: AssistantMessage[];
-}
-
-const sessions: MockSession[] = [];
-const runs = new Map<string, { sessionId: string; question: string; cancelled: boolean }>();
-
-function canUse(): boolean {
-  return Boolean(useAuthStore.getState().user?.permissions.includes(Permission.ASSISTANT_USE));
-}
-
-function forbidden() {
-  return HttpResponse.json({ code: ErrorCode.FORBIDDEN, message: 'Forbidden' }, { status: 403 });
-}
-
-function notFound() {
-  return HttpResponse.json({ code: ErrorCode.NOT_FOUND, message: 'Not found' }, { status: 404 });
-}
-
-const nowIso = (): string => new Date().toISOString();
 
 function toDto(session: MockSession): AssistantSession {
   return {
@@ -152,7 +145,15 @@ export const assistantChatHandlers = [
     }
     const runId = crypto.randomUUID();
     const messageId = crypto.randomUUID();
-    runs.set(runId, { sessionId: session.id, question: text, cancelled: false });
+    // Новое сообщение = «Продолжить сейчас»: открытые пачки закрываются для
+    // автопродолжения, сами карточки остаются рабочими (#916, п. 4).
+    for (const item of session.messages) {
+      if (item.actionBatch?.state === 'open') {
+        batchStates.set(item.id, 'closed');
+        refreshBatch(item);
+      }
+    }
+    runs.set(runId, { sessionId: session.id, question: text, cancelled: false, action: null });
     session.messages.push({
       id: messageId,
       role: 'user',
@@ -164,6 +165,7 @@ export const assistantChatHandlers = [
       errorCode: null,
       toolCalls: [],
       actions: [],
+      actionBatch: null,
     });
     if (session.title === ui.assistant.newChat) session.title = text.slice(0, 80);
     session.lastMessageAt = nowIso();
@@ -176,6 +178,8 @@ export const assistantChatHandlers = [
     const runId = String(params.runId);
     const run = runs.get(runId);
     const step = demoStep(run?.question ?? '');
+    const session = run ? sessionOf(run.sessionId) : undefined;
+    const assistantMessageId = crypto.randomUUID();
     const encoder = new TextEncoder();
     const state = { seq: 0 };
     const stream = new ReadableStream<Uint8Array>({
@@ -189,7 +193,7 @@ export const assistantChatHandlers = [
           );
         };
         const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-        send('run.started', { messageId: crypto.randomUUID(), model: 'demo/model-flash' });
+        send('run.started', { messageId: assistantMessageId, model: 'demo/model-flash' });
         for (const word of 'Выбираю действие по вопросу.'.split(' ')) {
           if (run?.cancelled) {
             send('run.cancelled', {});
@@ -216,6 +220,14 @@ export const assistantChatHandlers = [
           href: null,
           hrefLabel: null,
         });
+        // Карточка пачки (#916): только на вопрос с глаголом действия.
+        const action = demoAction(run?.question ?? '');
+        if (action) {
+          action.messageId = assistantMessageId;
+          if (run) run.action = action;
+          send('action.proposed', { action });
+          await wait(120);
+        }
         for (const word of step.text.split(' ')) {
           if (run?.cancelled) {
             send('run.cancelled', {});
@@ -226,10 +238,31 @@ export const assistantChatHandlers = [
           await wait(18);
         }
         send('message.completed', {
-          messageId: crypto.randomUUID(),
+          messageId: assistantMessageId,
           text: step.text,
           reasoning: 'Выбираю действие по вопросу.',
         });
+        // Ответ сохраняется в историю, как на API: карточки живут в снимке
+        // сообщения, решения обновляют его же.
+        if (session && !run?.cancelled) {
+          const message: AssistantMessage = {
+            id: assistantMessageId,
+            role: 'assistant',
+            text: step.text,
+            reasoning: 'Выбираю действие по вопросу.',
+            createdAt: nowIso(),
+            runId,
+            streaming: false,
+            errorCode: null,
+            toolCalls: [step.tool],
+            actions: action ? [action] : [],
+            actionBatch: null,
+          };
+          if (action) refreshBatch(message);
+          session.messages.push(message);
+          session.lastMessageAt = nowIso();
+          session.messageCount = session.messages.length;
+        }
         send('run.completed', { inputTokens: 120, outputTokens: 80 });
         controller.close();
       },
@@ -277,4 +310,6 @@ export const assistantChatHandlers = [
       createdAt: nowIso(),
     });
   }),
+
+  ...assistantActionHandlers,
 ];

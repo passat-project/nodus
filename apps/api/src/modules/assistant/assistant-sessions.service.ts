@@ -18,6 +18,7 @@ import {
 import { FeatureFlagService } from '../../core/feature-flags/feature-flag.service.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
 import { AgentRunnerService } from './agent/agent-runner.service.js';
+import { AssistantContinuationService } from './agent/continuation.service.js';
 import { AssistantRepository } from './assistant.repository.js';
 import { toMessageDto, toSessionDto } from './assistant.serializers.js';
 import type { ScreenContext } from './tools/tool-definition.js';
@@ -37,6 +38,7 @@ export class AssistantSessionsService {
   constructor(
     private readonly repo: AssistantRepository,
     private readonly runner: AgentRunnerService,
+    private readonly continuation: AssistantContinuationService,
     private readonly featureFlags: FeatureFlagService,
   ) {}
 
@@ -83,10 +85,30 @@ export class AssistantSessionsService {
     body: SendAssistantMessageBody,
     authorization: string,
   ): Promise<SendAssistantMessageResponse> {
+    // Общий гейт стартов сессии: «свободна?» и запуск прогона атомарны
+    // относительно продолжений пачки (валидация 18.11.2026).
+    return this.continuation.runExclusive(id, () =>
+      this.sendMessageOnce(user, id, body, authorization),
+    );
+  }
+
+  private async sendMessageOnce(
+    user: AuthUser,
+    id: string,
+    body: SendAssistantMessageBody,
+    authorization: string,
+  ): Promise<SendAssistantMessageResponse> {
     const session = await this.repo.findSession(user.id, id);
     if (!session) throw DomainException.notFound('Диалог не найден');
     if (session.archivedAt) {
       throw new DomainException(ErrorCode.CONFLICT, 'Диалог в архиве: отправка недоступна');
+    }
+    // Один прогон на сессию (ADR-0043 п. 6): пока агент печатает или ждёт
+    // отложенное продолжение пачки, второй прогон писал бы параллельно.
+    // Текст возвращается в композер (ошибка мутации), «Продолжить сейчас»
+    // остаётся путём повтора.
+    if (this.runner.isSessionActive(id) || this.continuation.hasPendingResume(id)) {
+      throw new DomainException(ErrorCode.CONFLICT, 'Ответ ещё печатается — дождитесь завершения');
     }
 
     const text = body.text.trim();
@@ -94,6 +116,10 @@ export class AssistantSessionsService {
     // Байпас (ADR-0048) — снимок на прогон: следующий вопрос без него снова
     // спрашивает подтверждение. В БД — для аудита и восстановления картины.
     const autoExecute = body.bypass === true;
+    // Новое сообщение = «Продолжить сейчас» (#916, п. 4): открытые пачки
+    // закрываются для автопродолжения, карточки остаются рабочими, их
+    // состояния уйдут в историю следующего прогона.
+    await this.repo.closeOpenBatches(id, user.id);
     const runId = randomUUID();
     await this.repo.createRun({
       id: runId,

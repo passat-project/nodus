@@ -21,6 +21,8 @@ let settings: AiSettingsResponse = {
   providers: [],
   defaultProviderId: null,
   defaultModelId: null,
+  routerProviderId: null,
+  routerModelId: null,
   instructions: '',
   limits: { maxSteps: 12, maxRunSeconds: 120, maxToolResultChars: 16_000 },
 };
@@ -77,6 +79,8 @@ export const aiSettingsHandlers = [
       providers,
       defaultProviderId: defaultProvider?.id ?? null,
       defaultModelId: defaultProvider ? body.defaultModelId : null,
+      routerProviderId: body.routerProviderId ?? null,
+      routerModelId: body.routerModelId ?? null,
       instructions: body.instructions,
       limits: settings.limits,
     };

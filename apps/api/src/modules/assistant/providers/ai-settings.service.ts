@@ -2,25 +2,26 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
-import { z } from 'zod';
 import {
   AI_SETTINGS_LIMITS,
-  assistantHeaderSchema,
-  assistantModelSchema,
   ErrorCode,
   type AiSettingsBody,
   type AiSettingsResponse,
   type AssistantModel,
   type AssistantModelCatalogResponse,
-  type AssistantProvider,
   type AssistantProviderTestResponse,
 } from '@nodus/contracts';
 
 import { SecretBoxService } from '../../../core/crypto/secret-box.service.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { AiSettingsRepository, type ProviderRow } from './ai-settings.repository.js';
+import {
+  parseModels,
+  providerFailure,
+  providerForRow,
+  toProviderDto,
+} from './ai-settings.providers.js';
 import { LlmProviderError, type LlmProvider } from './llm-provider.port.js';
-import { OpenAiCompatibleProvider } from './openai-compatible.provider.js';
 
 /** Провайдер и модель, выбранные для прогона (внутренний контракт движка). */
 export interface ResolvedProvider {
@@ -30,20 +31,6 @@ export interface ResolvedProvider {
   model: AssistantModel;
   instructions: string;
   provider: LlmProvider;
-}
-
-const headersSchema = z.array(assistantHeaderSchema);
-const modelsSchema = z.array(assistantModelSchema);
-
-/** JSONB-колонки: битое значение = пустой список (портал не падает). */
-function parseHeaders(raw: unknown): { name: string; value: string }[] {
-  const parsed = headersSchema.safeParse(raw);
-  return parsed.success ? parsed.data : [];
-}
-
-function parseModels(raw: unknown): AssistantModel[] {
-  const parsed = modelsSchema.safeParse(raw);
-  return parsed.success ? parsed.data : [];
 }
 
 /** Таймаут проверки соединения: админ ждёт ответа на экране. */
@@ -73,9 +60,11 @@ export class AiSettingsService {
       this.repo.findSettings(),
     ]);
     return {
-      providers: providers.map((provider) => this.toDto(provider)),
+      providers: providers.map((provider) => toProviderDto(provider)),
       defaultProviderId: settings.defaultProviderId,
       defaultModelId: settings.defaultModelId,
+      routerProviderId: settings.routerProviderId,
+      routerModelId: settings.routerModelId,
       instructions: settings.instructions,
       limits: { ...AI_SETTINGS_LIMITS },
     };
@@ -130,10 +119,25 @@ export class AiSettingsService {
         );
       }
     }
+    // Диспетчер (#917): провайдер и модель — из настроенного набора; модель
+    // должна принадлежать провайдеру (иначе прогон молча падал бы в fallback).
+    if (body.routerProviderId && body.routerModelId) {
+      const routerProvider = providers.find((provider) => provider.id === body.routerProviderId);
+      const models = routerProvider ? parseModels(routerProvider.models) : [];
+      if (!routerProvider || !models.some((model) => model.id === body.routerModelId)) {
+        throw new DomainException(
+          ErrorCode.VALIDATION_FAILED,
+          'Модель-диспетчер не принадлежит выбранному провайдеру',
+          { field: 'routerModelId' },
+        );
+      }
+    }
 
     await this.repo.replaceAll(providers, {
       defaultProviderId: body.defaultProviderId,
       defaultModelId: body.defaultModelId,
+      routerProviderId: body.routerProviderId ?? null,
+      routerModelId: body.routerModelId ?? null,
       instructions: body.instructions.trim(),
     });
     return this.get();
@@ -142,13 +146,13 @@ export class AiSettingsService {
   /** Каталог `/models` провайдера — для кнопки «Загрузить модели». */
   async listModels(providerId: string): Promise<AssistantModelCatalogResponse> {
     const row = await this.requireProvider(providerId);
-    const provider = this.providerForRow(row);
+    const provider = providerForRow(row, this.providerDeps);
     try {
       return { models: await provider.listModels() };
     } catch (error) {
       // Доменная ошибка, а не «сырой» сбой провайдера: фильтр отдаёт 502
       // `ASSISTANT_PROVIDER_UNAVAILABLE`, а не 500 без причины.
-      const failure = this.providerFailure(error, 'Не удалось получить список моделей');
+      const failure = providerFailure(error, 'Не удалось получить список моделей', this.logger);
       throw new DomainException(ErrorCode.ASSISTANT_PROVIDER_UNAVAILABLE, failure.message);
     }
   }
@@ -160,7 +164,7 @@ export class AiSettingsService {
    */
   async test(providerId: string): Promise<AssistantProviderTestResponse> {
     const row = await this.requireProvider(providerId);
-    const provider = this.providerForRow(row);
+    const provider = providerForRow(row, this.providerDeps);
     const started = Date.now();
     let model = parseModels(row.models).find((item) => item.enabled)?.id ?? null;
     try {
@@ -203,7 +207,7 @@ export class AiSettingsService {
         errorMessage: null,
       };
     } catch (error) {
-      const failure = this.providerFailure(error, 'Проверка не прошла');
+      const failure = providerFailure(error, 'Проверка не прошла', this.logger);
       return {
         ok: false,
         latencyMs: Date.now() - started,
@@ -253,39 +257,39 @@ export class AiSettingsService {
       modelId: model.id,
       model,
       instructions: settings.instructions,
-      provider: this.providerForRow(row),
+      provider: providerForRow(row, this.providerDeps),
     };
   }
 
-  private toDto(row: ProviderRow): AssistantProvider {
+  /**
+   * Модель-диспетчер (#917): дешёвая LLM для выбора top-7 инструментов.
+   * `null` — не настроена/выключена: прогон идёт по горячей полке.
+   * Недоступность настройки не валит прогон — это запасной путь.
+   */
+  async resolveRouter(): Promise<{
+    providerId: string;
+    modelId: string;
+    provider: LlmProvider;
+  } | null> {
+    const [rows, settings] = await Promise.all([
+      this.repo.findProviders(),
+      this.repo.findSettings(),
+    ]);
+    if (!settings.routerProviderId || !settings.routerModelId) return null;
+    const row = rows.find((item) => item.id === settings.routerProviderId && item.enabled);
+    if (!row) return null;
+    const models = parseModels(row.models).filter((model) => model.enabled);
+    if (!models.some((model) => model.id === settings.routerModelId)) return null;
     return {
-      id: row.id,
-      name: row.name,
-      baseUrl: row.baseUrl,
-      apiFormat: 'openai-chat',
-      authType: row.authType === 'x-api-key' ? 'x-api-key' : 'bearer',
-      hasKey: Boolean(row.apiKeyCiphertext),
-      keyHint: row.apiKeyHint,
-      headers: parseHeaders(row.headers),
-      enabled: row.enabled,
-      models: parseModels(row.models),
+      providerId: row.id,
+      modelId: models.find((model) => model.id === settings.routerModelId)!.id,
+      provider: providerForRow(row, this.providerDeps),
     };
   }
 
-  /** Клиент провайдера с расшифрованным ключом (ключ живёт только здесь). */
-  private providerForRow(row: ProviderRow): LlmProvider {
-    const apiKey = row.apiKeyCiphertext ? this.secretBox.open(row.apiKeyCiphertext) : null;
-    if (row.apiKeyCiphertext && apiKey === null) {
-      // Ключ сохранён, но не расшифровывается (сменился материал шифрования):
-      // честная ошибка вместо тихого 401 от провайдера.
-      this.logger.warn({ providerId: row.id }, 'Provider api key cannot be decrypted');
-    }
-    return new OpenAiCompatibleProvider({
-      baseUrl: row.baseUrl,
-      authType: row.authType === 'x-api-key' ? 'x-api-key' : 'bearer',
-      apiKey,
-      headers: parseHeaders(row.headers),
-    });
+  /** Зависимости сборки клиента провайдера (ключ + лог). */
+  private get providerDeps(): { secretBox: SecretBoxService; logger: PinoLogger } {
+    return { secretBox: this.secretBox, logger: this.logger };
   }
 
   private async requireProvider(providerId: string): Promise<ProviderRow> {

@@ -220,6 +220,9 @@ export class OpenAiCompatibleProvider implements LlmProvider {
         headers,
         body: init.body ? JSON.stringify(init.body) : undefined,
         signal,
+        // 30x уводил бы запрос (и заголовки с ключом) на чужой хост:
+        // редирект провайдера — ошибка, а не переход (находка security #906).
+        redirect: 'error',
       });
     } catch (error) {
       // Отмена прогона не должна выглядеть как недоступность провайдера.
