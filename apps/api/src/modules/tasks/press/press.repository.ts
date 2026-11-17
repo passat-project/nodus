@@ -89,7 +89,16 @@ export class PressRepository {
       cycle: number;
       config: object;
       form: object;
-      entries: { userId: string; order: number }[];
+      entries: {
+        userId: string;
+        order: number;
+        state?: string;
+        pressedAt?: Date | null;
+        input?: unknown;
+        result?: unknown;
+        timeEntryId?: string | null;
+        returnReason?: string | null;
+      }[];
     },
   ) {
     return tx.pressRound.create({
@@ -102,7 +111,28 @@ export class PressRepository {
         cycle: data.cycle,
         config: data.config,
         form: data.form,
-        entries: { create: data.entries },
+        entries: {
+          create: data.entries.map((entry) => ({
+            userId: entry.userId,
+            order: entry.order,
+            ...(entry.state ? { state: entry.state } : {}),
+            ...(entry.pressedAt ? { pressedAt: entry.pressedAt } : {}),
+            ...(entry.input === undefined
+              ? {}
+              : {
+                  input:
+                    entry.input === null ? Prisma.DbNull : (entry.input as Prisma.InputJsonValue),
+                }),
+            ...(entry.result === undefined
+              ? {}
+              : {
+                  result:
+                    entry.result === null ? Prisma.DbNull : (entry.result as Prisma.InputJsonValue),
+                }),
+            ...(entry.timeEntryId !== undefined ? { timeEntryId: entry.timeEntryId } : {}),
+            ...(entry.returnReason !== undefined ? { returnReason: entry.returnReason } : {}),
+          })),
+        },
       },
       include: { entries: { orderBy: [{ order: 'asc' }, { id: 'asc' }] } },
     });

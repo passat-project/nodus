@@ -213,6 +213,7 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
     await this.press.ensureForStage(tx, taskId, {
       notify: true,
       actorId,
+      ...(meta.pressReturnUserIds ? { returnUserIds: meta.pressReturnUserIds } : {}),
     });
     // После решения решающий остаётся наблюдателем без звука (В2).
     if (meta.wasDeciderOfTransition && actorId) {

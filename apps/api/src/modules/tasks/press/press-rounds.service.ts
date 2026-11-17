@@ -62,7 +62,13 @@ export class PressRoundsService {
   async ensureForStage(
     tx: TransactionClient,
     taskId: string,
-    options: { notify?: boolean; actorId?: string | null } = {},
+    options: {
+      notify?: boolean;
+      actorId?: string | null;
+      /** Возврат в статус с коллективной кнопкой (#434, В2): кого вернуть;
+       *  остальные сохраняют отметки прошлого цикла. */
+      returnUserIds?: readonly string[];
+    } = {},
   ): Promise<PressStageState> {
     // Порядок блокировок (#434, В6): проект → задача.
     const preliminary = await this.tasks.findWithParticipants(taskId, tx);
@@ -97,7 +103,42 @@ export class PressRoundsService {
       }
       await this.repo.cancelOpenRound(tx, 'task', taskId, new Date());
     }
-    const entries = await this.sources.resolve(tx, taskId, transition.press);
+    const sourceEntries = await this.sources.resolve(tx, taskId, transition.press);
+    const previous = options.returnUserIds?.length
+      ? await this.repo.findLatestCompletedRound(tx, 'task', taskId)
+      : null;
+    // Возврат в тот же статус после полного сбора: выбранные снова видят
+    // кнопку, остальные сохраняют отметки прошлого цикла (В2, 16.11).
+    const seeded =
+      previous &&
+      previous.stageId === stageId &&
+      previous.transitionId === transition.id &&
+      previous.entries.length > 0
+        ? previous.entries.map((entry) => {
+            const selected = options.returnUserIds!.includes(entry.userId);
+            if (entry.state === 'excluded') {
+              return {
+                userId: entry.userId,
+                order: entry.order,
+                state: 'excluded',
+                returnReason: entry.returnReason ?? 'Снят из сбора',
+              };
+            }
+            return {
+              userId: entry.userId,
+              order: entry.order,
+              state: selected ? 'returned' : 'pressed',
+              pressedAt: entry.pressedAt,
+              input: entry.input,
+              result: entry.result,
+              timeEntryId: entry.timeEntryId,
+              ...(selected ? { returnReason: 'Возврат в статус' } : {}),
+            };
+          })
+        : null;
+    const entries =
+      seeded ??
+      sourceEntries.map((entry) => ({ ...entry, state: 'waiting' as string, input: null }));
     if (entries.length === 0) {
       this.logger.warn(`Источники сбора «${transition.name}» не дали участников — раунд не создан`);
       return { transitionId: transition.id, roundStarted: false, emptySources: true };
@@ -114,7 +155,10 @@ export class PressRoundsService {
       entries,
     });
     const broadcast = transition.press.sources.some((source) => source.kind === 'all_employees');
-    if (options.notify && !broadcast) {
+    const notifyIds = seeded
+      ? seeded.filter((entry) => entry.state === 'returned').map((entry) => entry.userId)
+      : entries.map((entry) => entry.userId);
+    if (options.notify && !broadcast && notifyIds.length > 0) {
       await this.events.emit(
         tx,
         TASK_EVENTS.PRESS_REQUESTED,
@@ -122,10 +166,10 @@ export class PressRoundsService {
           taskId,
           number: task.number,
           title: task.title,
-          audience: [...new Set([...audienceIds(task), ...entries.map((entry) => entry.userId)])],
+          audience: [...new Set([...audienceIds(task), ...notifyIds])],
           transitionName: transition.name,
           broadcast,
-          participantIds: entries.map((entry) => entry.userId),
+          participantIds: notifyIds,
         },
         { actorId: options.actorId ?? null, aggregateType: 'task', aggregateId: taskId },
       );

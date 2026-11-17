@@ -63,6 +63,22 @@ export function windowContextOf(
     scope: 'entity',
     customFieldDefinitions,
     customFieldRefs: task.customFieldRefs ?? [],
+    ...(task.press?.completed && task.press.entries.length > 0
+      ? {
+          pressReturn: {
+            candidates: task.press.entries
+              .filter((entry) => entry.state !== 'excluded')
+              .map((entry) => ({
+                userId: entry.userId,
+                displayName: entry.displayName,
+                state: entry.state,
+              })),
+            defaultUserIds: task.press.entries
+              .filter((entry) => entry.state === 'pressed')
+              .map((entry) => entry.userId),
+          },
+        }
+      : {}),
   };
 }
 

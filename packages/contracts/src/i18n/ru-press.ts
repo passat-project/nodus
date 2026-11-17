@@ -32,6 +32,8 @@ export const pressStrings = {
     excludeConfirm: 'Снять',
     excludedToast: 'Участник снят со сбора',
     selectAllPressed: 'Выбрать всех сдавших',
+    returnToTitle: 'Кому вернуть',
+    returnToHint: 'Остальные сохранят свои отметки — кнопку увидят только выбранные',
   },
   automation: {
     sectionTitle: 'Кнопку жмут несколько',

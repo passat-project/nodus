@@ -115,6 +115,8 @@ export interface WorkflowStageChangeMeta {
   wasDeciderOfTransition?: boolean;
   /** Решающие нового статуса (#433): payload `task.stage_changed`. */
   deciderIds?: readonly string[];
+  /** Возврат в статус с коллективной кнопкой (#434, В2): кого вернуть. */
+  pressReturnUserIds?: readonly string[];
   /** Строка общего журнала (#380): блок в чате пишется только с ней. */
   recordId?: string;
   /** Названия кнопки и исходного статуса — для блока перехода в чате. */

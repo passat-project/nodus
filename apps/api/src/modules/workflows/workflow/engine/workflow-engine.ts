@@ -236,6 +236,9 @@ export class WorkflowEngine implements WorkflowEnginePort {
       cause: 'transition',
       overriddenGates: pick.reasons.map((r) => r.kind),
       overrideReason: pick.reasons.length > 0 ? opts.reason?.trim() : undefined,
+      ...(opts.form?.pressReturnUserIds
+        ? { pressReturnUserIds: opts.form.pressReturnUserIds }
+        : {}),
       wasDeciderOfTransition:
         subject0.deciderFacts !== undefined &&
         pick.t.rules.conditions.some(

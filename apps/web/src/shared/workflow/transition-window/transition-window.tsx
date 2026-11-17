@@ -17,11 +17,11 @@ import {
 } from '@nodus/ui/components/dialog';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { Textarea } from '@nodus/ui/components/textarea';
-
 import { useMessagesLookup } from '../../chat/message-lookup-api.js';
 import { gateReasonsText } from '../../tasks/transition-error.js';
 import { buildExecuteBody } from './build-execute-body.js';
 import { ConditionsList } from './conditions-list.js';
+import { PressReturnSection } from './press-return-section.js';
 import type { GateDetailsHost } from './gate-details.js';
 import { SubmissionBlock } from './submission-block.js';
 import { useWindowDraft, draftMessageIds } from './use-window-draft.js';
@@ -109,6 +109,10 @@ export function TransitionWindow({
   } = useWindowDraft(effectiveContext, transition.formPrefill);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
+  const defaultReturn = effectiveContext?.pressReturn?.defaultUserIds;
+  const [pressReturnUserIds, setPressReturnUserIds] = useState<string[]>([
+    ...(defaultReturn ?? []),
+  ]);
 
   const sections = useMemo(() => {
     const all = effectiveWindowSections(transition.form, { validators: transition.validators });
@@ -184,13 +188,19 @@ export function TransitionWindow({
 
   function submit() {
     if (!api || !canSubmit || submitting || mode === 'preview') return;
-    const body = buildExecuteBody({ sections, context: api.context, draft });
+    const body = {
+      ...buildExecuteBody({ sections, context: api.context, draft }),
+      ...(pressReturnUserIds.length > 0 ? { pressReturnUserIds } : {}),
+    };
     onSubmit(body);
   }
 
   function submitOverride() {
     if (!api || submitting || !overrideReason.trim()) return;
-    const body = buildExecuteBody({ sections, context: api.context, draft });
+    const body = {
+      ...buildExecuteBody({ sections, context: api.context, draft }),
+      ...(pressReturnUserIds.length > 0 ? { pressReturnUserIds } : {}),
+    };
     onSubmit(body, { override: true, reason: overrideReason.trim() });
   }
 
@@ -224,6 +234,13 @@ export function TransitionWindow({
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
+          {variant === 'transition' && effectiveContext?.pressReturn ? (
+            <PressReturnSection
+              pressReturn={effectiveContext.pressReturn}
+              selected={pressReturnUserIds}
+              onChange={setPressReturnUserIds}
+            />
+          ) : null}
           {effectiveContext?.submission ? (
             <SubmissionBlock
               submission={effectiveContext.submission}
