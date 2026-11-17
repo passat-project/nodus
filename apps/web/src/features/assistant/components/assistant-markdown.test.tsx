@@ -3,6 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ui } from '@nodus/contracts';
 
+const bridge = vi.hoisted(() => ({ openCardFromHref: vi.fn() }));
+
+vi.mock('./assistant-tool-rows.js', () => ({
+  openCardFromHref: bridge.openCardFromHref,
+}));
+
 import { AssistantMarkdown } from './assistant-markdown.js';
 
 /**
@@ -67,6 +73,32 @@ describe('AssistantMarkdown: санитайзер (XSS-векторы не ис�
     }
   });
 
+  it('заголовки, цитата и разделитель рендерятся спокойными стилями', () => {
+    const { container } = render(
+      <AssistantMarkdown
+        text={
+          '# Большой заголовок\n\n## Средний\n\n### Малый\n\n> цитата\n\n---\n\nнумерованный:\n\n1. первый\n2. второй'
+        }
+      />,
+    );
+    expect(container.querySelector('h3')?.textContent).toBe('Большой заголовок');
+    expect(container.querySelectorAll('h3')).toHaveLength(2);
+    expect(container.querySelector('h4')?.textContent).toBe('Малый');
+    expect(container.querySelector('blockquote')?.textContent).toContain('цитата');
+    expect(container.querySelector('hr')).toBeTruthy();
+    expect(container.querySelectorAll('ol li')).toHaveLength(2);
+  });
+
+  it('внутренняя ?cards=-ссылка открывает карточку мостом, без новой вкладки', () => {
+    bridge.openCardFromHref.mockClear();
+    const href = '?cards=task:11111111-1111-4111-8111-111111111111';
+    render(<AssistantMarkdown text={`Открыть [задачу](${href})`} />);
+    const link = screen.getByRole('link', { name: 'задачу' });
+    expect(link.getAttribute('target')).toBeNull();
+    fireEvent.click(link);
+    expect(bridge.openCardFromHref).toHaveBeenCalledWith(href);
+  });
+
   it('внешняя http-ссылка открывается в новой вкладке с noopener', () => {
     render(<AssistantMarkdown text={'Смотри [источник](https://example.com/a)'} />);
     const link = screen.getByRole('link', { name: 'источник' });
@@ -83,6 +115,8 @@ describe('AssistantMarkdown: код-блок', () => {
     render(<AssistantMarkdown text={'```\nстрока 1\nстрока 2\n```'} />);
     fireEvent.click(screen.getByRole('button', { name: ui.assistant.markdownCopy }));
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    // Подтверждение копирования — текст и галочка, а не молчание кнопки.
+    expect(await screen.findByText(ui.assistant.markdownCopied)).toBeTruthy();
     expect(String((writeText.mock.calls[0] as unknown as [string])[0])).toContain('строка 1');
   });
 });
