@@ -16,5 +16,9 @@ describe('backfillManagerIds (#923)', () => {
     const query = client.$executeRaw.mock.calls[0]?.[0] as unknown as { sql?: string };
     expect(query.sql).toContain('UPDATE users');
     expect(query.sql).toContain('manager_id');
+    // Регресс-сторож правила «архив выпал из цепи» (#923): глава только у
+    // активного узла — и в старте цепи, и в рекурсии. Миграция заморожена,
+    // repository дублирует CTE — тест ловит рассинхрон копий.
+    expect(query.sql?.match(/is_active/g)?.length ?? 0).toBe(2);
   });
 });
