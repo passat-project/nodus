@@ -163,7 +163,7 @@ export function CreationFixedRows({
   return (
     <div className="flex min-w-0 flex-col gap-3 px-2" title={b.fixedRow}>
       <div className="flex min-w-0 items-center gap-1">
-        <span className="flex h-9 min-w-0 flex-1 items-center rounded-lg border border-input px-2.5 text-body-lg text-muted-foreground dark:bg-input/30">
+        <span className="flex h-9 min-w-0 flex-1 items-center rounded-lg border border-input px-2.5 text-body-lg text-muted-foreground dark:bg-transparent">
           {ui.taskCreate.titlePlaceholder}
         </span>
         <Popover>

@@ -79,7 +79,7 @@ export function EditorTrigger({
         'flex min-w-0 items-center gap-1.5 text-left text-sm transition-colors disabled:cursor-default',
         variant === 'inline'
           ? '-mx-1 min-h-7 rounded-md px-1 hover:bg-accent/40 focus-visible:bg-accent/40'
-          : 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 hover:bg-accent/40 dark:bg-input/30',
+          : 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 hover:bg-accent/40 dark:bg-transparent',
         multiline && variant === 'inline' && 'w-[calc(100%+0.5rem)] items-start py-1 leading-5',
         open && 'bg-accent/40',
       )}

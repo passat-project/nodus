@@ -53,7 +53,7 @@ export function ProjectTransferDialog({
           <button
             type="button"
             aria-label={ui.projects.transferTo}
-            className="flex h-8 w-full items-center gap-2 rounded-lg border border-input px-2.5 text-sm hover:bg-accent/40 dark:bg-input/30"
+            className="flex h-8 w-full items-center gap-2 rounded-lg border border-input px-2.5 text-sm hover:bg-accent/40 dark:bg-transparent"
           >
             {target ? (
               <>

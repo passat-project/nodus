@@ -122,7 +122,7 @@ export function DateTimePicker({
           <button
             type="button"
             aria-label={ariaLabel}
-            className="flex h-8 w-full items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm transition-colors hover:bg-accent/40 dark:bg-input/30"
+            className="flex h-8 w-full items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm transition-colors hover:bg-accent/40 dark:bg-transparent"
           >
             <Calendar className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
             <span

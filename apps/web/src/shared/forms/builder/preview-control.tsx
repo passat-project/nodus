@@ -30,7 +30,7 @@ export function PreviewControl({ kind, height }: { kind: PreviewKind; height?: F
     <span
       aria-hidden
       className={cn(
-        'flex w-full min-w-0 justify-end rounded-lg border border-input px-2.5 dark:bg-input/30',
+        'flex w-full min-w-0 justify-end rounded-lg border border-input px-2.5 dark:bg-transparent',
         kind === 'text'
           ? cn(HEIGHT_CLASS[height ?? 'lines'], 'items-start pt-2')
           : 'h-8 items-center',
