@@ -100,19 +100,9 @@ export const tasksListTool = defineTool({
     const rows = itemsOf(data)
       .map(taskRow)
       .filter((row): row is string => row !== null);
-    const first = asRecord(itemsOf(data)[0]);
-    return {
-      text: finalize(listBlock('Задачи', rows, { more: hasMore(data) })),
-      ...(first && str(first.id) && str(first.title)
-        ? {
-            entity: entityLink(
-              'task',
-              str(first.id)!,
-              `№${num(first.number) ?? ''} ${str(first.title)}`,
-            ),
-          }
-        : {}),
-    };
+    // Список — не одна сущность: ссылку «Открыть» даёт только карточка
+    // (tasks.get), иначе из 20 строк открывалась бы произвольная первая.
+    return { text: finalize(listBlock('Задачи', rows, { more: hasMore(data) })) };
   },
 });
 

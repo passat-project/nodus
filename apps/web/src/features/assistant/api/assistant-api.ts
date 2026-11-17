@@ -11,6 +11,7 @@ import type {
 import { api } from '../../../shared/api-client.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { useAssistantStore } from '../model/assistant-store.js';
+import { mergeLiveMessage } from '../model/assistant-merge.js';
 import { parseRunEventData, SseFrameParser, type StreamEvent } from '../model/assistant-stream.js';
 
 /** Ключи кэша ассистента: фабрика, руками строки не пишутся. */
@@ -69,7 +70,8 @@ export function useRenameAssistantSession() {
 
 /**
  * Отправка сообщения (I4: пузырь сотрудника появляется сразу): `POST`
- * отвечает `202 { runId }`, дальше поток прогона наполняет буфер стора.
+ * отвечает `202 { runId, messageId }`, дальше поток прогона наполняет буфер
+ * стора.
  */
 export function useSendAssistantMessage() {
   const queryClient = useQueryClient();
@@ -83,11 +85,47 @@ export function useSendAssistantMessage() {
         method: 'POST',
         body: { text: input.text, ...(input.context ? { context: input.context } : {}) },
       }),
+    // КАНОН МЕССЕНДЖЕРА (#48, I4): вопрос встаёт в ленту ДО запроса —
+    // временная строка живёт в кэше истории и откатывается ошибкой. Без
+    // этого ответ модели начинал печататься раньше самого вопроса.
+    onMutate: (input) => {
+      const key = assistantKeys.messages(input.sessionId);
+      const previous = queryClient.getQueryData<AssistantMessageList>(key);
+      const optimistic: AssistantMessage = {
+        id: `pending-${crypto.randomUUID()}`,
+        role: 'user',
+        text: input.text,
+        reasoning: null,
+        createdAt: new Date().toISOString(),
+        runId: null,
+        streaming: false,
+        errorCode: null,
+        toolCalls: [],
+      };
+      queryClient.setQueryData<AssistantMessageList>(key, (current) => ({
+        items: [...(current?.items ?? []), optimistic],
+        nextCursor: current?.nextCursor ?? null,
+      }));
+      return { key, previous, optimisticId: optimistic.id };
+    },
+    onError: (_error, _input, context) => {
+      if (!context) return;
+      // Откат: снимок истории до вставки; его не было (новая сессия) —
+      // временная строка удаляется вместе с пустым кэшем.
+      if (context.previous) queryClient.setQueryData(context.key, context.previous);
+      else queryClient.removeQueries({ queryKey: context.key });
+    },
     onSuccess: (response, input) => {
       useAssistantStore.getState().startLive({
         runId: response.runId,
         sessionId: input.sessionId,
+        userText: input.text,
+        userMessageId: response.messageId,
       });
+      // Вопрос и строка прогона уже в БД (POST их создал) — история
+      // подтягивается сразу, а не после ответа модели: временная строка
+      // сменяется серверной без мигания.
+      void queryClient.invalidateQueries({ queryKey: assistantKeys.messages(input.sessionId) });
       startRunStream(response.runId, input.sessionId, () => {
         void queryClient.invalidateQueries({ queryKey: assistantKeys.messages(input.sessionId) });
         void queryClient.invalidateQueries({ queryKey: assistantKeys.sessions() });
@@ -272,27 +310,7 @@ function toolFromEvent(
   };
 }
 
-/** Серверные сообщения + живой буфер открытой сессии (лента видит одно). */
-export function mergeLiveMessage(
-  messages: readonly AssistantMessage[],
-  live: ReturnType<typeof useAssistantStore.getState>['live'],
-  activeSessionId: string | null,
-): AssistantMessage[] {
-  if (!live || live.sessionId !== activeSessionId) return [...messages];
-  const withoutLive = messages.filter((message) => message.id !== live.messageId);
-  const placeholder: AssistantMessage = {
-    id: live.messageId ?? `live-${live.runId}`,
-    role: 'assistant',
-    text: live.text,
-    reasoning: live.reasoning || null,
-    createdAt: new Date().toISOString(),
-    runId: live.runId,
-    streaming: live.status === 'running',
-    errorCode: live.errorCode,
-    toolCalls: live.tools,
-  };
-  return [...withoutLive, placeholder];
-}
+export { mergeLiveMessage };
 
 /** Идёт ли прогон в этой сессии (кнопка «Стоп», точки набора). */
 export function useIsRunActive(sessionId: string | null): boolean {

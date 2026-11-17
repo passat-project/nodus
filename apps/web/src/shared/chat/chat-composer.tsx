@@ -1,8 +1,9 @@
-import { Paperclip, Smile } from 'lucide-react';
+import { Mic, Paperclip, Smile } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
+import { toast } from 'sonner';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useComposerInputActions, useGrown } from './composer-input-utils.js';
@@ -78,6 +79,11 @@ export function ChatComposer({
   disabledPlaceholder = null,
   /** Молния «Важное» (#177): false — кнопки нет (Заметки — чат с собой). */
   urgentEnabled = true,
+  emojiPicker = true,
+  alwaysShowSend = false,
+  running = false,
+  onStop,
+  stopLabel,
   className,
 }: {
   placeholder: string;
@@ -102,6 +108,15 @@ export function ChatComposer({
   disabledPlaceholder?: string | null;
   /** Молния «Важное» (#177): false — кнопки нет (Заметки). */
   urgentEnabled?: boolean;
+  /** Пикер эмодзи/стикеров: false — в его слоте микрофон. */
+  emojiPicker?: boolean;
+  /** Отправка видна всегда, даже на пустом поле. */
+  alwaysShowSend?: boolean;
+  /** Активный прогон хоста: слот отправки — «Остановить». */
+  running?: boolean;
+  onStop?: () => void;
+  /** Подпись «Остановить» из i18n хоста. */
+  stopLabel?: string;
   className?: string;
 }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -420,29 +435,49 @@ export function ChatComposer({
                   вставка эмодзи в каретку, стикер — мгновенная отправка;
                   попап не крадёт «вечный курсор». Стикеры недоступны в
                   режиме селекта/пересылки и без права поста. */}
-              <MediaPickerButton
-                onPickEmoji={insertEmoji}
-                onPickSticker={pickSticker}
-                closeOnStickerPick /* #288: стикер ушёл — панель закрыта, каретка в поле */
-                finalFocusRef={inputRef}
-                stickersDisabled={stickersDisabled}
-                onOpenChange={setMediaPickerOpen}
-              >
+              {emojiPicker ? (
+                <MediaPickerButton
+                  onPickEmoji={insertEmoji}
+                  onPickSticker={pickSticker}
+                  closeOnStickerPick /* #288: стикер ушёл — панель закрыта, каретка в поле */
+                  finalFocusRef={inputRef}
+                  stickersDisabled={stickersDisabled}
+                  onOpenChange={setMediaPickerOpen}
+                >
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn('shrink-0 text-muted-foreground', align)}
+                    aria-label={ui.chat.emoji}
+                    title={ui.chat.emoji}
+                  >
+                    <Smile strokeWidth={1.75} />
+                  </Button>
+                </MediaPickerButton>
+              ) : (
+                /* Голос вместо смайлов (вердикт владельца 17.11.2026):
+                   аудиозапись появится позже — сейчас честная заглушка. */
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   className={cn('shrink-0 text-muted-foreground', align)}
-                  aria-label={ui.chat.emoji}
-                  title={ui.chat.emoji}
+                  aria-label={ui.chat.voice}
+                  title={ui.chat.voice}
+                  onClick={() => toast(ui.chat.voiceSoon)}
                 >
-                  <Smile strokeWidth={1.75} />
+                  <Mic strokeWidth={1.75} />
                 </Button>
-              </MediaPickerButton>
+              )}
               <ComposerSendButton
                 sendVisible={sendVisible}
                 editing={draft.edit !== null}
                 align={align}
+                running={running}
+                onStop={onStop}
+                stopLabel={stopLabel}
+                alwaysVisible={alwaysShowSend}
               />
             </span>
           </span>

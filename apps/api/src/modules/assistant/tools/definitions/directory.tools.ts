@@ -73,7 +73,7 @@ export const directoryFindUsersTool = defineTool({
         .filter(Boolean)
         .join(', ');
     });
-    const first = asRecord(itemsOf(data)[0]);
+    // Ссылка «Открыть» — у карточки сотрудника (directory.get_user).
     return {
       text: finalize(
         listBlock(
@@ -82,9 +82,6 @@ export const directoryFindUsersTool = defineTool({
           { maxRows: 20, more: hasMore(data) },
         ),
       ),
-      ...(first && str(first.id)
-        ? { entity: entityLink('employee', str(first.id)!, nameOf(first) ?? 'Сотрудник') }
-        : {}),
     };
   },
 });
