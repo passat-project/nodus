@@ -88,6 +88,7 @@ import { PressService } from './press/press.service.js';
 import { PressSourcesService } from './press/press-sources.service.js';
 import { TaskPressController } from './press/press.controller.js';
 import { TaskPressUserDeactivatedHandler } from './press/task-press-user-deactivated.handler.js';
+import { WorkflowPublishedPressHandler } from './press/workflow-published-press.handler.js';
 import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
 
 /**
@@ -143,6 +144,8 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
     PressAdminService,
     // Деактивация сотрудника (#434, В3): авто-снятие из открытых раундов.
     TaskPressUserDeactivatedHandler,
+    // Публикация маршрута (#434, Б1): старт сбора для задач стадии.
+    WorkflowPublishedPressHandler,
     // Решающие (#433): факты актора, вакансии, видимость и адресаты.
     TaskDecidersRepository,
     TaskDeciderRecipients,

@@ -46,6 +46,18 @@ export class WorkflowPressReaderProvider implements WorkflowPressReader {
     );
   }
 
+  async pressStageIds(workflowId: string, tx?: TransactionClient): Promise<string[]> {
+    const loaded = await this.workflows.load(workflowId, tx);
+    return [
+      ...new Set(
+        loaded.transitions
+          .filter((transition) => transition.press)
+          .map((transition) => transition.fromStageId)
+          .filter((stageId): stageId is string => stageId !== null),
+      ),
+    ];
+  }
+
   async pressTransition(
     workflowId: string,
     transitionId: string,

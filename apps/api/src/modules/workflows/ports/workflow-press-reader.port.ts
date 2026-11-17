@@ -36,6 +36,9 @@ export interface WorkflowPressTransition {
 }
 
 export interface WorkflowPressReader {
+  /** Стадии, из которых выходит коллективная кнопка (для старта при публикации). */
+  pressStageIds(workflowId: string, tx?: TransactionClient): Promise<string[]>;
+
   /** Коллективные кнопки, выходящие из указанной стадии (обычно одна). */
   pressTransitionsForStage(
     workflowId: string,
