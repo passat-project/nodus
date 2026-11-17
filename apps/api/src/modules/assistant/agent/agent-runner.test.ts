@@ -63,6 +63,12 @@ describe('AgentRunnerService: цикл (#893)', () => {
     // Вызов инструмента сохранён с результатом и ссылкой «Открыть».
     const toolCall = [...fake.toolCalls.values()][0];
     expect(toolCall).toMatchObject({ status: 'done', href: '?cards=task:1' });
+    // Человекочитаемое название несётся и в started, и в finished: после
+    // выполнения строка не должна превращаться в сырой id (замечание владельца).
+    for (const type of ['tool.started', 'tool.finished']) {
+      const event = events.find((item) => item.type === type);
+      expect((event?.data as { title?: string }).title).toBe('Задачи: список');
+    }
   });
 
   it('отмена: стрим останавливается, частичный текст сохранён, статус cancelled', async () => {

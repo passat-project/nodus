@@ -6,6 +6,7 @@ import { cn } from '@nodus/ui/lib/utils';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { ChatMessageItem } from '../../../shared/chat/chat-message.js';
 import { AssistantMarkdown } from './assistant-markdown.js';
+import { AssistantMessageMenu } from './assistant-message-menu.js';
 import { DayChip } from '../../../shared/chat/day-chip.js';
 import {
   buildMessageRuns,
@@ -234,22 +235,24 @@ export function AssistantFeed({
                   )
                 }
                 renderItem={(message, attrs) => (
-                  <div style={attrs.style} className="min-w-0">
-                    <ChatMessageItem
-                      message={message}
-                      mine={segment.run.mine}
-                      avatarSlot="none"
-                      tail={attrs.tail}
-                      reactionsHidden
-                      receiptsHidden
-                      align="both"
-                      // Ответ агента — Markdown (ADR-0045, #897); вопрос
-                      // сотрудника остаётся простым текстом, как в мессенджере.
-                      textSlot={
-                        segment.run.mine ? undefined : <AssistantMarkdown text={message.text} />
-                      }
-                    />
-                  </div>
+                  <AssistantMessageMenu message={message}>
+                    <div style={attrs.style} className="min-w-0">
+                      <ChatMessageItem
+                        message={message}
+                        mine={segment.run.mine}
+                        avatarSlot="none"
+                        tail={attrs.tail}
+                        reactionsHidden
+                        receiptsHidden
+                        align="both"
+                        // Ответ агента — Markdown (ADR-0045, #897); вопрос
+                        // сотрудника остаётся простым текстом, как в мессенджере.
+                        textSlot={
+                          segment.run.mine ? undefined : <AssistantMarkdown text={message.text} />
+                        }
+                      />
+                    </div>
+                  </AssistantMessageMenu>
                 )}
               />
             ) : null}

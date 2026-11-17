@@ -344,25 +344,30 @@ export class AgentRunnerService {
       tool: AssistantToolDefinition | null;
       toolCallId: string;
       input: unknown;
+      humanTitle: string;
     }[] = [];
     for (const [index, call] of calls.entries()) {
       const tool = catalog.find((item) => item.id === call.function.name) ?? null;
       const args = parseArgs(call.function.arguments);
+      // Человекочитаемое название — ОДНО на весь жизненный цикл вызова:
+      // и «started», и «finished» несут его, иначе после выполнения строка
+      // превращалась в сырой id (ext.exa.web_search_exa) — замечание владельца.
+      const humanTitle = tool?.title ?? externalToolTitle(call.function.name) ?? call.function.name;
       const toolCallId = await this.repo.createToolCall({
         runId,
         messageId,
         seq: index,
         toolId: call.function.name,
-        title: tool?.title ?? externalToolTitle(call.function.name) ?? call.function.name,
+        title: humanTitle,
         args,
       });
       await this.bus.publish(runId, 'tool.started', {
         toolCallId,
         toolId: call.function.name,
-        title: tool?.title ?? externalToolTitle(call.function.name) ?? call.function.name,
+        title: humanTitle,
         args,
       });
-      prepared.push({ call, tool, toolCallId, input: args });
+      prepared.push({ call, tool, toolCallId, input: args, humanTitle });
     }
 
     const results = new Map<string, string>();
@@ -397,6 +402,7 @@ export class AgentRunnerService {
           await this.bus.publish(runId, 'tool.finished', {
             toolCallId: item.toolCallId,
             toolId: item.call.function.name,
+            title: item.humanTitle,
             status: execution.ok ? 'done' : 'error',
             resultPreview: clipPreview(resultText),
             durationMs,
