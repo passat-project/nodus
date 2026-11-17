@@ -4,6 +4,8 @@ import { PinoLogger } from 'nestjs-pino';
 import { ASSISTANT_LIMITS, ErrorCode } from '@nodus/contracts';
 
 import { DomainException } from '../../../core/errors/domain-exception.js';
+import { AssistantActionsService } from '../assistant-actions.service.js';
+import { AssistantMemoryService } from '../assistant-memory.service.js';
 import { AssistantRepository } from '../assistant.repository.js';
 import { McpSettingsService } from '../mcp/mcp-settings.service.js';
 import { AiSettingsService } from '../providers/ai-settings.service.js';
@@ -25,6 +27,14 @@ import type {
 import { toLlmTools } from '../tools/tool-schema.js';
 import { ToolExecutorService } from '../tools/tool-executor.service.js';
 import { toLlmHistory } from './history.js';
+import {
+  PROVIDER_RETRY_DELAYS_MS,
+  addTokens,
+  clipPreview,
+  describeCause,
+  isAbortError,
+  parseArgs,
+} from './agent-runner.utils.js';
 import { buildSystemPrompt, companyToday } from './system-prompt.js';
 
 /** Параметры прогона: всё, что нужно циклу, передаётся явно. */
@@ -37,6 +47,8 @@ export interface RunParams {
   permissions: readonly string[];
   features: readonly string[];
   screen: ScreenContext;
+  /** Байпас подтверждений (ADR-0048): действия исполняются сразу. */
+  autoExecute: boolean;
 }
 
 /** Активный прогон: отмена и таймаут различаются причиной. */
@@ -65,6 +77,8 @@ export class AgentRunnerService {
     private readonly settings: AiSettingsService,
     private readonly mcp: McpSettingsService,
     private readonly executor: ToolExecutorService,
+    private readonly actions: AssistantActionsService,
+    private readonly memory: AssistantMemoryService,
     private readonly bus: RunBusService,
     private readonly logger: PinoLogger,
   ) {
@@ -153,6 +167,9 @@ export class AgentRunnerService {
         return { tools: [], digest: [] };
       });
       const toolsAll = [...catalog, ...externalCatalog.tools];
+      // Личный блокнот сотрудника (#900): подставляется в промпт как факты
+      // о нём (не приказ) и доступен инструментам через порт прогона.
+      const memoryLines = await this.memory.promptLines(params.userId).catch(() => []);
       const prompt = buildSystemPrompt({
         today: companyToday(new Date(), 'Europe/Minsk'),
         hotTools: hotTools(toolsAll),
@@ -160,6 +177,7 @@ export class AgentRunnerService {
         instructions: resolved.instructions,
         external: externalCatalog.tools.length > 0,
         externalCatalog: externalCatalog.digest,
+        memories: memoryLines,
       });
       const messages: LlmMessage[] = [{ role: 'system', content: prompt }, ...priorMessages];
 
@@ -173,6 +191,11 @@ export class AgentRunnerService {
         activate: (ids) => {
           for (const id of ids) activeTools.add(id);
         },
+        // Имена вместо id в карточке действия: сотруднику показывается
+        // «исполнитель Иванов», а не uuid из аргументов модели.
+        read: (path) =>
+          this.executor.readJson(params.authorization, path, active.controller.signal),
+        memory: this.memory.port(params.userId, params.runId),
       };
 
       for (let step = 1; ; step += 1) {
@@ -233,7 +256,7 @@ export class AgentRunnerService {
           tool_calls: calls,
         });
         await this.runToolCalls(
-          params.runId,
+          params,
           message.id,
           calls,
           toolsAll,
@@ -329,9 +352,13 @@ export class AgentRunnerService {
    * Пакет вызовов инструментов: сначала все в статусе «выполняется» (UI видит
    * ход одновременно), затем результаты — параллельно, пачками по
    * `maxParallelToolCalls`, порядок строк детерминирован порядком модели.
+   *
+   * Запись (Ф2, ADR-0048) идёт НЕ через исполнитель: `kind: write` создаёт
+   * карточку подтверждения (или выполняется сразу при байпасе). Прямого
+   * вызова API с записью из цикла не существует.
    */
   private async runToolCalls(
-    runId: string,
+    params: RunParams,
     messageId: string,
     calls: readonly LlmToolCall[],
     catalog: readonly AssistantToolDefinition[],
@@ -339,35 +366,45 @@ export class AgentRunnerService {
     context: ToolContext,
     messages: LlmMessage[],
   ): Promise<void> {
-    const prepared: {
-      call: LlmToolCall;
-      tool: AssistantToolDefinition | null;
-      toolCallId: string;
-      input: unknown;
-      humanTitle: string;
-    }[] = [];
+    type Prepared =
+      | {
+          kind: 'read';
+          call: LlmToolCall;
+          tool: AssistantToolDefinition | null;
+          toolCallId: string;
+          input: unknown;
+          humanTitle: string;
+        }
+      | { kind: 'write'; call: LlmToolCall; tool: AssistantToolDefinition; input: unknown };
+    const prepared: Prepared[] = [];
     for (const [index, call] of calls.entries()) {
       const tool = catalog.find((item) => item.id === call.function.name) ?? null;
       const args = parseArgs(call.function.arguments);
+      if (tool?.kind === 'write') {
+        // Карточка действия — самостоятельный элемент ленты; строка вызова
+        // не дублирует её (иначе сотрудник видит действие дважды).
+        prepared.push({ kind: 'write', call, tool, input: args });
+        continue;
+      }
       // Человекочитаемое название — ОДНО на весь жизненный цикл вызова:
       // и «started», и «finished» несут его, иначе после выполнения строка
       // превращалась в сырой id (ext.exa.web_search_exa) — замечание владельца.
       const humanTitle = tool?.title ?? externalToolTitle(call.function.name) ?? call.function.name;
       const toolCallId = await this.repo.createToolCall({
-        runId,
+        runId: params.runId,
         messageId,
         seq: index,
         toolId: call.function.name,
         title: humanTitle,
         args,
       });
-      await this.bus.publish(runId, 'tool.started', {
+      await this.bus.publish(params.runId, 'tool.started', {
         toolCallId,
         toolId: call.function.name,
         title: humanTitle,
         args,
       });
-      prepared.push({ call, tool, toolCallId, input: args, humanTitle });
+      prepared.push({ kind: 'read', call, tool, toolCallId, input: args, humanTitle });
     }
 
     const results = new Map<string, string>();
@@ -379,6 +416,20 @@ export class AgentRunnerService {
       const batch = prepared.slice(offset, offset + ASSISTANT_LIMITS.maxParallelToolCalls);
       await Promise.all(
         batch.map(async (item) => {
+          if (item.kind === 'write') {
+            const proposal = await this.actions.propose({
+              runId: params.runId,
+              messageId,
+              userId: params.userId,
+              tool: item.tool,
+              rawInput: item.input,
+              automatic: params.autoExecute,
+              authorization: params.authorization,
+              ctx: context,
+            });
+            results.set(item.call.id, proposal.text);
+            return;
+          }
           const startedAt = Date.now();
           const execution = item.tool
             ? await this.executor.execute(item.tool, item.input, context)
@@ -399,7 +450,7 @@ export class AgentRunnerService {
             href: execution.ok ? (execution.entity?.href ?? null) : null,
             hrefLabel: execution.ok ? (execution.entity?.label ?? null) : null,
           });
-          await this.bus.publish(runId, 'tool.finished', {
+          await this.bus.publish(params.runId, 'tool.finished', {
             toolCallId: item.toolCallId,
             toolId: item.call.function.name,
             title: item.humanTitle,
@@ -533,24 +584,6 @@ function abortReason(active: ActiveRun): Error {
   );
 }
 
-/** Паузы перед повтором провайдера: две попытки после первой (всего три). */
-const PROVIDER_RETRY_DELAYS_MS: readonly number[] = [400, 1200];
-
-/** Причина сокетного сбоя строкой для лога: pino не сериализует `cause`. */
-function describeCause(error: unknown): string | undefined {
-  const cause = error instanceof Error ? error.cause : undefined;
-  if (!(cause instanceof Error)) return undefined;
-  const code = (cause as NodeJS.ErrnoException).code;
-  return code ? `${code}: ${cause.message}` : cause.message;
-}
-
-function isAbortError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (error.name === 'AbortError' || error.name === 'TimeoutError' || /aborted/i.test(error.message))
-  );
-}
-
 /**
  * Стартовый активный набор: горячая полка + `tools.search`.
  *
@@ -566,30 +599,4 @@ export function initialActiveToolIds(catalog: readonly AssistantToolDefinition[]
   const ids = new Set(hotTools(catalog).map((tool) => tool.id));
   if (catalog.some((tool) => tool.id === SEARCH_TOOL_ID)) ids.add(SEARCH_TOOL_ID);
   return ids;
-}
-
-function addTokens(current: number | null, delta: number | null): number | null {
-  if (delta === null) return current;
-  return (current ?? 0) + delta;
-}
-
-/** Аргументы вызова: строку JSON от модели разбираем молча (мусор → пусто). */
-function parseArgs(raw: string): unknown {
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Краткий результат для карточки в ленте (полный текст — только модели).
- * Переводы строк СОХРАНЯЮТСЯ: свёрнутая строка вызова вывода не показывает
- * вовсе, а раскрытая показывает список построчно, а не одной простынёй.
- */
-function clipPreview(text: string): string {
-  const lines = text.split('\n').map((line) => line.replace(/[ \t]+/g, ' ').trimEnd());
-  const clipped = lines.slice(0, 12).join('\n').trim();
-  return clipped.length > 600 ? `${clipped.slice(0, 600).trimEnd()}…` : clipped;
 }

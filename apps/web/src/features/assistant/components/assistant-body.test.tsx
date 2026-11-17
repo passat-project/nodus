@@ -47,6 +47,10 @@ vi.mock('./assistant-feed.js', () => ({
   },
 }));
 
+vi.mock('./assistant-memory-picker.js', () => ({
+  AssistantMemoryPicker: () => <button type="button">блокнот</button>,
+}));
+
 vi.mock('./assistant-session-picker.js', () => ({
   AssistantSessionPicker: () => <button type="button">выбрать диалог</button>,
 }));
@@ -232,6 +236,7 @@ describe('AssistantBody: пустое состояние и композер', (
         sessionId: 's-1',
         text: ui.assistant.suggestDay,
         context: { moduleId: 'tasks', cardKind: 'task', cardId: 'card-1' },
+        bypass: false,
       },
       expect.objectContaining({ onError: expect.any(Function) }),
     );

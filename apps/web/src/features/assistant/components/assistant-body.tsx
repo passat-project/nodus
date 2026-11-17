@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Zap } from 'lucide-react';
 import { ui, type AssistantMessage } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 
@@ -19,7 +19,9 @@ import {
 } from '../api/assistant-api.js';
 import { useAssistantStore } from '../model/assistant-store.js';
 import { useAssistantContext } from '../model/use-assistant-context.js';
+import { AssistantBypassButton } from './assistant-bypass-button.js';
 import { AssistantFeed, AssistantGlyph } from './assistant-feed.js';
+import { AssistantMemoryPicker } from './assistant-memory-picker.js';
 import { AssistantSessionPicker } from './assistant-session-picker.js';
 import { AssistantWelcome } from './assistant-welcome.js';
 
@@ -39,9 +41,12 @@ export function AssistantBody() {
   const activeId = useAssistantStore((state) => state.activeId);
   const live = useAssistantStore((state) => state.live);
   const pending = useAssistantStore((state) => state.pending);
+  const bypass = useAssistantStore((state) => state.bypass);
   const setActive = useAssistantStore((state) => state.setActive);
   const setOpen = useAssistantStore((state) => state.setOpen);
   const setPending = useAssistantStore((state) => state.setPending);
+  const setBypass = useAssistantStore((state) => state.setBypass);
+  const resetBypass = useAssistantStore((state) => state.resetBypass);
 
   const sessionsQuery = useAssistantSessions();
   const messagesQuery = useAssistantMessages(activeId);
@@ -107,6 +112,10 @@ export function AssistantBody() {
   async function ask(text: string, onFail?: () => void) {
     const prompt = text.trim();
     if (!prompt) return;
+    // Режим «без подтверждений» — снимок на ОТПРАВКУ: включённый байпас
+    // действует для этого вопроса, даже если диалог создаётся сейчас
+    // (ADR-0048; сброс режима — при смене диалога/закрытии окна).
+    const bypassOn = useAssistantStore.getState().bypass;
     // Двойной клик по «Отправить» (и Enter дважды) не рождает второй прогон:
     // пока POST в полёте, повтор молча отбрасывается.
     if (sendMessage.isPending || createSession.isPending) return;
@@ -144,6 +153,7 @@ export function AssistantBody() {
           cardKind: ctx.cardKind,
           cardId: ctx.cardId,
         },
+        bypass: bypassOn,
       },
       // Канон мессенджера #124/#248: поле очищается на сабмите (мгновенно,
       // модель Telegram), упавшая отправка возвращает текст в поле и снимает
@@ -164,6 +174,8 @@ export function AssistantBody() {
     stopRunStream();
     useAssistantStore.getState().clearLive();
     setActive(null);
+    // Новый диалог — новый режим: байпас не наследуется.
+    resetBypass();
   }
 
   function stop() {
@@ -184,6 +196,7 @@ export function AssistantBody() {
         <span className="min-w-0 flex-1 truncate text-label text-muted-foreground">
           {active?.title ?? strings.newChat}
         </span>
+        <AssistantMemoryPicker />
         <AssistantSessionPicker onNewChat={newChat} />
         <Button
           variant="ghost"
@@ -225,13 +238,30 @@ export function AssistantBody() {
             stickersEnabled={false}
             urgentEnabled={false}
             /* Вердикт владельца 17.11.2026: смайлов нет — их слот занимает
-               микрофон (аудиозапись в будущем); отправка видна всегда, во
-               время прогона в том же слоте — красный «Остановить». */
+                 микрофон (аудиозапись в будущем); отправка видна всегда, во
+                 время прогона в том же слоте — красный «Остановить». */
             emojiPicker={false}
             alwaysShowSend
             running={running}
             onStop={stop}
             stopLabel={strings.stop}
+            leadingControl={
+              <AssistantBypassButton
+                active={bypass}
+                onToggle={() => setBypass(!useAssistantStore.getState().bypass)}
+              />
+            }
+            /* Пометка режима внутри островка (ADR-0048): «без подтверждений»
+                 не прячется в иконке — сотрудник видит, что действия пойдут
+                 сразу. */
+            notice={
+              bypass ? (
+                <span className="flex items-center gap-1.5 px-1.5 pt-0.5 text-badge text-primary">
+                  <Zap className="size-3 shrink-0" strokeWidth={2} />
+                  {strings.bypassActive}
+                </span>
+              ) : null
+            }
             onSubmit={(submit) => {
               const text = submit.text.trim();
               if (!text) return;
@@ -265,5 +295,6 @@ function pendingAssistantMessage(pending: { text: string; at: number }): Assista
     streaming: false,
     errorCode: null,
     toolCalls: [],
+    actions: [],
   };
 }

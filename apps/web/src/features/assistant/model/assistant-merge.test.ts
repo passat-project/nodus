@@ -21,6 +21,7 @@ function baseLive(patch: Partial<AssistantLiveRun> = {}): AssistantLiveRun {
     text: '',
     reasoning: '',
     tools: [],
+    actions: [],
     status: 'running',
     errorCode: null,
     errorMessage: null,
@@ -42,6 +43,7 @@ function message(patch: Partial<AssistantMessage>): AssistantMessage {
     streaming: false,
     errorCode: null,
     toolCalls: [],
+    actions: [],
     ...patch,
   };
 }

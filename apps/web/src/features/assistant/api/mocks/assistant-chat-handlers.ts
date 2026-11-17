@@ -163,6 +163,7 @@ export const assistantChatHandlers = [
       streaming: false,
       errorCode: null,
       toolCalls: [],
+      actions: [],
     });
     if (session.title === ui.assistant.newChat) session.title = text.slice(0, 80);
     session.lastMessageAt = nowIso();

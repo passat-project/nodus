@@ -41,6 +41,7 @@ export function fakeRepository() {
         createdAt: new Date(),
         runStatus: 'running',
         toolCalls: [],
+        actions: [],
       };
       messages.push(row);
       return row;
@@ -127,15 +128,41 @@ export function build(
     }),
   };
   const mcp = options.mcp ?? mcpStub();
+  const actions = {
+    propose: vi.fn(async () => ({
+      text: 'Действие подготовлено и ждёт подтверждения',
+      action: null,
+    })),
+  };
+  const memory = {
+    promptLines: vi.fn(async () => [] as string[]),
+    port: vi.fn(() => ({
+      save: vi.fn(async (text: string) => ({ id: 'memory-1', text, duplicate: false })),
+      list: vi.fn(async () => []),
+      forget: vi.fn(async () => true),
+    })),
+  };
   const runner = new AgentRunnerService(
     fake.repo as unknown as AssistantRepository,
     settings as unknown as AiSettingsService,
     mcp as never,
     executor as unknown as ToolExecutorService,
+    actions as never,
+    memory as never,
     bus,
     logger as never,
   );
-  return { runner, bus, fake, executor, mcp, provider, requests: provider.requests };
+  return {
+    runner,
+    bus,
+    fake,
+    executor,
+    mcp,
+    provider,
+    requests: provider.requests,
+    actions,
+    memory,
+  };
 }
 
 export const params: RunParams = {
@@ -146,6 +173,7 @@ export const params: RunParams = {
   permissions: ['assistant.use'],
   features: ['tasks'],
   screen: { moduleId: 'tasks', cardKind: null, cardId: null },
+  autoExecute: false,
 };
 
 /** Дождаться терминального события прогона. */

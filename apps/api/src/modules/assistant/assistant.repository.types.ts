@@ -26,6 +26,31 @@ export interface ToolCallRow {
   hrefLabel: string | null;
 }
 
+export interface ActionRow {
+  id: string;
+  runId: string;
+  messageId: string | null;
+  userId: string;
+  toolId: string;
+  title: string;
+  summary: string;
+  fields: unknown;
+  consequences: string;
+  undoable: boolean;
+  automatic: boolean;
+  state: string;
+  args: unknown;
+  resultData: unknown;
+  resultPreview: string | null;
+  href: string | null;
+  hrefLabel: string | null;
+  errorCode: string | null;
+  executedAt: Date | null;
+  undoneAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface MessageRow {
   id: string;
   sessionId: string;
@@ -38,6 +63,17 @@ export interface MessageRow {
   /** Состояние прогона сообщения: `streaming` в DTO выводится из него. */
   runStatus: string | null;
   toolCalls: ToolCallRow[];
+  actions: ActionRow[];
+}
+
+export interface MemoryRow {
+  id: string;
+  userId: string;
+  text: string;
+  sourceRunId: string | null;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface RunRow {

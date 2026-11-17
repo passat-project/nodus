@@ -11,17 +11,20 @@ import type { Prisma } from '../../generated/prisma/client.js';
  */
 
 import {
+  type ActionRow,
   type EventRow,
+  type MemoryRow,
   type MessageRow,
   type RunRow,
   type SessionRow,
   type ToolCallRow,
 } from './assistant.repository.types.js';
 
-export type { EventRow, MessageRow, RunRow, SessionRow, ToolCallRow };
+export type { ActionRow, EventRow, MemoryRow, MessageRow, RunRow, SessionRow, ToolCallRow };
 
 const MESSAGE_INCLUDE = {
   toolCalls: { orderBy: { seq: 'asc' } },
+  actions: { orderBy: { createdAt: 'asc' } },
   run: { select: { status: true } },
 } as const;
 
@@ -176,6 +179,7 @@ export class AssistantRepository {
     userId: string;
     providerId: string | null;
     modelId: string | null;
+    autoExecute?: boolean;
   }): Promise<void> {
     await this.prisma.assistantRun.create({ data: input });
   }
@@ -280,6 +284,110 @@ export class AssistantRepository {
   ): Promise<void> {
     await this.prisma.assistantToolCall.update({ where: { id }, data: patch });
   }
+
+  // ----- Карточки действий (Ф2, ADR-0048) -----
+
+  async createAction(input: {
+    runId: string;
+    messageId: string | null;
+    userId: string;
+    toolId: string;
+    title: string;
+    summary: string;
+    fields: unknown;
+    consequences: string;
+    undoable: boolean;
+    automatic: boolean;
+    args: unknown;
+  }): Promise<ActionRow> {
+    const row = await this.prisma.assistantAction.create({
+      data: {
+        ...input,
+        fields: (input.fields ?? []) as Prisma.InputJsonValue,
+        args: (input.args ?? {}) as Prisma.InputJsonValue,
+      },
+    });
+    return mapAction(row);
+  }
+
+  async findAction(userId: string, id: string): Promise<ActionRow | null> {
+    const row = await this.prisma.assistantAction.findFirst({ where: { id, userId } });
+    return row ? mapAction(row) : null;
+  }
+
+  async countRunActions(runId: string): Promise<number> {
+    return this.prisma.assistantAction.count({ where: { runId } });
+  }
+
+  /**
+   * Атомарный захват карточки под исполнение: `updateMany` с фильтром
+   * состояния — второй параллельный клик получает 0 и не создаёт дубль.
+   */
+  async claimAction(id: string, from: readonly string[], to: string): Promise<boolean> {
+    const result = await this.prisma.assistantAction.updateMany({
+      where: { id, state: { in: [...from] } },
+      data: { state: to },
+    });
+    return result.count === 1;
+  }
+
+  async finishAction(
+    id: string,
+    patch: {
+      state: string;
+      resultData?: unknown;
+      resultPreview?: string | null;
+      href?: string | null;
+      hrefLabel?: string | null;
+      errorCode?: string | null;
+      executedAt?: Date | null;
+      undoneAt?: Date | null;
+    },
+  ): Promise<ActionRow | null> {
+    const { resultData, ...rest } = patch;
+    await this.prisma.assistantAction.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(resultData !== undefined ? { resultData: resultData as Prisma.InputJsonValue } : {}),
+      },
+    });
+    const row = await this.prisma.assistantAction.findUnique({ where: { id } });
+    return row ? mapAction(row) : null;
+  }
+
+  // ----- Личная память (#900) -----
+
+  async listMemories(userId: string, limit: number): Promise<MemoryRow[]> {
+    const rows = await this.prisma.assistantMemory.findMany({
+      where: { userId, archivedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+    return rows.map(mapMemory);
+  }
+
+  async countMemories(userId: string): Promise<number> {
+    return this.prisma.assistantMemory.count({ where: { userId, archivedAt: null } });
+  }
+
+  async createMemory(input: {
+    userId: string;
+    text: string;
+    sourceRunId: string | null;
+  }): Promise<MemoryRow> {
+    const row = await this.prisma.assistantMemory.create({ data: input });
+    return mapMemory(row);
+  }
+
+  /** Архивация записи владельца; чужая/несуществующая — false (404 наружу). */
+  async archiveMemory(userId: string, id: string): Promise<boolean> {
+    const result = await this.prisma.assistantMemory.updateMany({
+      where: { id, userId, archivedAt: null },
+      data: { archivedAt: new Date() },
+    });
+    return result.count === 1;
+  }
 }
 
 function mapMessage(row: {
@@ -307,6 +415,7 @@ function mapMessage(row: {
     href: string | null;
     hrefLabel: string | null;
   }[];
+  actions: ActionDbRow[];
 }): MessageRow {
   return {
     id: row.id,
@@ -333,6 +442,80 @@ function mapMessage(row: {
       href: call.href,
       hrefLabel: call.hrefLabel,
     })),
+    actions: row.actions.map(mapAction),
+  };
+}
+
+/** Строка карточки действия из Prisma (форма общая с `ActionRow`). */
+interface ActionDbRow {
+  id: string;
+  runId: string;
+  messageId: string | null;
+  userId: string;
+  toolId: string;
+  title: string;
+  summary: string;
+  fields: unknown;
+  consequences: string;
+  undoable: boolean;
+  automatic: boolean;
+  state: string;
+  args: unknown;
+  resultData: unknown;
+  resultPreview: string | null;
+  href: string | null;
+  hrefLabel: string | null;
+  errorCode: string | null;
+  executedAt: Date | null;
+  undoneAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function mapAction(row: ActionDbRow): ActionRow {
+  return {
+    id: row.id,
+    runId: row.runId,
+    messageId: row.messageId,
+    userId: row.userId,
+    toolId: row.toolId,
+    title: row.title,
+    summary: row.summary,
+    fields: row.fields,
+    consequences: row.consequences,
+    undoable: row.undoable,
+    automatic: row.automatic,
+    state: row.state,
+    args: row.args,
+    resultData: row.resultData,
+    resultPreview: row.resultPreview,
+    href: row.href,
+    hrefLabel: row.hrefLabel,
+    errorCode: row.errorCode,
+    executedAt: row.executedAt,
+    undoneAt: row.undoneAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function mapMemory(row: {
+  id: string;
+  userId: string;
+  text: string;
+  sourceRunId: string | null;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): MemoryRow {
+  return {
+    id: row.id,
+    userId: row.userId,
+    text: row.text,
+    sourceRunId: row.sourceRunId,
+    archivedAt: row.archivedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 

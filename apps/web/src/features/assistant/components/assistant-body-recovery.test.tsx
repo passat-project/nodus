@@ -47,6 +47,10 @@ vi.mock('./assistant-feed.js', () => ({
   },
 }));
 
+vi.mock('./assistant-memory-picker.js', () => ({
+  AssistantMemoryPicker: () => <button type="button">блокнот</button>,
+}));
+
 vi.mock('./assistant-session-picker.js', () => ({
   AssistantSessionPicker: () => <button type="button">выбрать диалог</button>,
 }));
@@ -133,6 +137,7 @@ function message(
     streaming: false,
     errorCode: null,
     toolCalls: [],
+    actions: [],
     ...overrides,
   };
 }

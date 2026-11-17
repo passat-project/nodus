@@ -28,6 +28,7 @@ describe('ассистент и сброс сессии', () => {
         text: 'чужой ответ',
         reasoning: '',
         tools: [],
+        actions: [],
         status: 'running',
         errorCode: null,
         errorMessage: null,

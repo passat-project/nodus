@@ -28,6 +28,7 @@ function bubble(text: string) {
       streaming: false,
       errorCode: null,
       toolCalls: [],
+      actions: [],
     },
     null,
   );

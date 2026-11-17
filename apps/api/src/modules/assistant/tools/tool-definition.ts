@@ -26,7 +26,9 @@ export const ASSISTANT_TOOL_MODULES = [
 ] as const;
 export type AssistantToolModule = (typeof ASSISTANT_TOOL_MODULES)[number];
 
-/** Режим каталога: в Ф1 — только чтение (запись появится в Ф2, ADR-0043 п. 5). */
+/** Режим инструмента: чтение или запись (Ф2, ADR-0048). Запись НЕ
+ *  исполняется из цикла напрямую — она готовит карточку подтверждения
+ *  (`card`), а запись в портал делает только сотрудник (или байпас). */
 export type ToolKind = 'read' | 'write';
 
 /** Контекст экрана, проверенный на допустимые значения (client → server). */
@@ -61,19 +63,64 @@ export interface ToolContext {
   available: readonly AssistantToolDefinition[];
   /** `tools.search` добавляет инструменты в активный набор следующего шага. */
   activate: (toolIds: readonly string[]) => void;
+  /**
+   * GET API портала от имени сотрудника — для подготовки карточки действия
+   * (имена вместо id: «исполнитель Иванов», а не uuid). Ошибки — исключением;
+   * карточка обязана собраться и без ответа (id показывается как есть).
+   */
+  read?: (path: string) => Promise<unknown>;
+  /** Личный блокнот агента (#900): порт прогона (владелец + прогон известны). */
+  memory?: {
+    save: (text: string) => Promise<{ id: string; text: string; duplicate: boolean }>;
+    list: () => Promise<{ id: string; text: string }[]>;
+    forget: (id: string) => Promise<boolean>;
+  };
 }
 
 /** Операция API, которую описывает инструмент — для проверки по OpenAPI. */
 export interface ToolApiOperation {
-  method: 'GET';
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   /** Шаблон пути без глобального префикса: `/tasks/:id`, `/dictionaries/:code/items`. */
   path: string;
 }
 
-/** Запрос исполнения: путь с подставленными параметрами + query. */
+/** Запрос исполнения: метод, путь с подставленными параметрами + query/body. */
 export interface ToolRequest {
+  /** По умолчанию — метод из `api` (у чтения GET). */
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   path: string;
   query?: Record<string, string>;
+  /** JSON-тело мутации; отсутствует у GET. */
+  body?: unknown;
+}
+
+/** Поле карточки подтверждения (человеческие подпись и значение). */
+export interface ToolActionField {
+  label: string;
+  value: string;
+}
+
+/**
+ * Описание карточки подтверждения (Ф2, ADR-0048): «что будет сделано».
+ * Собирается ДО записи в портал; сотрудник проверяет поля и жмёт
+ * «Выполнить». Функции могут дочитать имена по id (ctx.read) — карточка
+ * показывает «Иванов Иван», а не uuid.
+ */
+export interface ToolWriteCard {
+  /** Заголовок карточки: «Создать задачу». */
+  title: string;
+  /** Одна фраза о действии. */
+  summary: (input: Record<string, unknown>, ctx: ToolContext) => string | Promise<string>;
+  /** Ключевые поля столбиком. */
+  fields: (
+    input: Record<string, unknown>,
+    ctx: ToolContext,
+  ) => ToolActionField[] | Promise<ToolActionField[]>;
+  /** Последствия для сотрудника (куда попадёт запись, необратимость). */
+  consequences: string;
+  /** Запрос отмены выполненного: созданное удаляется. Нет функции — карточка
+   *  честно говорит, что отмена невозможна. */
+  undo?: (input: Record<string, unknown>, output: unknown) => ToolRequest | null;
 }
 
 /** Определение инструмента (одно на операцию API). */
@@ -102,6 +149,8 @@ export interface AssistantToolDefinition {
   build?: (input: Record<string, unknown>) => ToolRequest;
   /** Проекция ответа API в компактный текст. */
   project?: (data: unknown, input: Record<string, unknown>) => ToolResult;
+  /** Карточка подтверждения — обязательна для `kind: write` (фьюз каталога). */
+  card?: ToolWriteCard;
   /** Вычислимые инструменты без API-вызова. */
   handler?: (input: Record<string, unknown>, ctx: ToolContext) => ToolResult | Promise<ToolResult>;
 }
@@ -126,6 +175,13 @@ export function defineTool<S extends z.ZodType>(definition: {
   api?: ToolApiOperation;
   build?: (input: z.infer<S>) => ToolRequest;
   project?: (data: unknown, input: z.infer<S>) => ToolResult;
+  card?: {
+    title: string;
+    summary: (input: z.infer<S>, ctx: ToolContext) => string | Promise<string>;
+    fields: (input: z.infer<S>, ctx: ToolContext) => ToolActionField[] | Promise<ToolActionField[]>;
+    consequences: string;
+    undo?: (input: z.infer<S>, output: unknown) => ToolRequest | null;
+  };
   handler?: (input: z.infer<S>, ctx: ToolContext) => ToolResult | Promise<ToolResult>;
 }): AssistantToolDefinition {
   return definition as unknown as AssistantToolDefinition;

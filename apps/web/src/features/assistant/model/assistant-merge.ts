@@ -37,6 +37,7 @@ export function mergeLiveMessage(
     streaming: live.status === 'running',
     errorCode: live.errorCode,
     toolCalls: live.tools,
+    actions: live.actions,
   };
   const hasServerUser = messages.some((message) => message.id === live.userMessageId);
   const optimisticUser: AssistantMessage | null =
@@ -54,6 +55,7 @@ export function mergeLiveMessage(
           streaming: false,
           errorCode: null,
           toolCalls: [],
+          actions: [],
         }
       : null;
   return [...withoutLive, ...(optimisticUser ? [optimisticUser] : []), placeholder];

@@ -1,10 +1,16 @@
 import { Bot, ChevronRight, RotateCcw } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import { ui, type AssistantMessage, type AssistantToolCall } from '@nodus/contracts';
+import {
+  ui,
+  type AssistantAction,
+  type AssistantMessage,
+  type AssistantToolCall,
+} from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { ChatMessageItem } from '../../../shared/chat/chat-message.js';
+import { AssistantActionCard } from './assistant-action-card.js';
 import { AssistantMarkdown } from './assistant-markdown.js';
 import { AssistantMessageMenu } from './assistant-message-menu.js';
 import { DayChip } from '../../../shared/chat/day-chip.js';
@@ -97,6 +103,8 @@ export function AssistantReasoning({
 interface Segment {
   run: MessageRun;
   tools: AssistantToolCall[];
+  /** Карточки действий хода (Ф2): подтверждение/результат записи. */
+  actions: AssistantAction[];
   reasoning: string | null;
   streaming: boolean;
   errorCode: string | null;
@@ -133,6 +141,7 @@ function buildSegments(messages: readonly AssistantMessage[], meId: string | und
     return {
       run: runs[0]!,
       tools: first.role === 'assistant' ? first.toolCalls : [],
+      actions: group.flatMap((message) => message.actions),
       reasoning: first.role === 'assistant' ? first.reasoning : null,
       streaming: group.some((message) => message.streaming),
       errorCode: group.find((message) => message.errorCode)?.errorCode ?? null,
@@ -214,6 +223,17 @@ export function AssistantFeed({
             {segment.reasoning ? (
               <div className="pl-9">
                 <AssistantReasoning reasoning={segment.reasoning} streaming={segment.streaming} />
+              </div>
+            ) : null}
+            {segment.actions.length > 0 ? (
+              <div className="mb-1.5 flex flex-col gap-1.5 pl-9">
+                {segment.actions.map((action) => (
+                  <AssistantActionCard
+                    key={action.id}
+                    action={action}
+                    sessionId={activeSessionId}
+                  />
+                ))}
               </div>
             ) : null}
             {segment.visible ? (

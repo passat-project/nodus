@@ -166,6 +166,8 @@ model User {
   /// ИИ-агент (#889): сессии и прогоны принадлежат сотруднику.
   assistantSessions AssistantSession[]
   assistantRuns     AssistantRun[]   @relation("AssistantRuns")
+  /// Личный блокнот агента (#900): только владелец.
+  assistantMemories AssistantMemory[]
 
   /// Список сотрудников: фильтр по статусу + детерминированная сортировка курсора.
   @@index([status, lastName, firstName, id])
@@ -2229,6 +2231,7 @@ model AssistantMessage {
   session   AssistantSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   run       AssistantRun?       @relation(fields: [runId], references: [id], onDelete: SetNull)
   toolCalls AssistantToolCall[]
+  actions   AssistantAction[]
 
   @@index([sessionId, createdAt])
   @@index([runId])
@@ -2243,6 +2246,9 @@ model AssistantRun {
   userId String @map("user_id") @db.Uuid
   /// queued | running | completed | failed | cancelled (контракт contracts).
   status String @default("queued")
+  /// Байпас подтверждений (ADR-0048): прогон запущен с включённым режимом
+  /// «без вопросов». Снимок на прогон: следующий вопрос спрашивает снова.
+  autoExecute Boolean @default(false) @map("auto_execute")
   /// Выбранный провайдер и модель на момент прогона (снимок — для аудита).
   providerId String? @map("provider_id") @db.Uuid
   modelId String? @map("model_id")
@@ -2258,6 +2264,8 @@ model AssistantRun {
   user      User                @relation("AssistantRuns", fields: [userId], references: [id], onDelete: Cascade)
   events    AssistantRunEvent[]
   toolCalls AssistantToolCall[]
+  actions   AssistantAction[]
+  memories  AssistantMemory[]
   messages  AssistantMessage[]
 
   @@index([sessionId, createdAt])
@@ -2311,6 +2319,72 @@ model AssistantToolCall {
   @@index([runId, seq])
   @@index([messageId])
   @@map("assistant_tool_calls")
+}
+
+/// Карточка действия (Ф2, ADR-0048): предложение модели изменить данные
+/// портала. Запись исполняется ТОЛЬКО подтверждением сотрудника или
+/// байпасом прогона; идемпотентность — `Idempotency-Key` = id карточки.
+model AssistantAction {
+  id String @id @default(uuid()) @db.Uuid
+  runId String @map("run_id") @db.Uuid
+  /// Сообщение ассистента, в чей ход попала карточка.
+  messageId String? @map("message_id") @db.Uuid
+  /// Владелец действия — только он видит и исполняет карточку.
+  userId String @map("user_id") @db.Uuid
+  toolId String @map("tool_id")
+  title String
+  /// Что будет сделано одной фразой (человеческий текст).
+  summary String
+  /// Ключевые поля карточки: [{ label, value }] — столбиком в ленте.
+  fields Json @default("[]")
+  /// Последствия (необратимость, куда попадёт запись).
+  consequences String @default("")
+  /// API позволяет отменить выполненное (DELETE созданного).
+  undoable Boolean @default(false)
+  /// Выполнено автоматически (байпас без вопросов).
+  automatic Boolean @default(false)
+  /// proposed | executing | executed | cancelled | failed | undone
+  state String @default("proposed")
+  /// Аргументы инструмента (валидированы схемой до создания карточки).
+  args Json @default("{}")
+  /// Ответ API портала после выполнения — источник id для отмены.
+  resultData Json? @map("result_data")
+  resultPreview String? @map("result_preview")
+  href String?
+  hrefLabel String? @map("href_label")
+  errorCode String? @map("error_code")
+  executedAt DateTime? @map("executed_at") @db.Timestamptz()
+  undoneAt DateTime? @map("undone_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  run     AssistantRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  message AssistantMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([runId, createdAt])
+  @@index([messageId])
+  @@index([userId, state])
+  @@map("assistant_actions")
+}
+
+/// Личная память сотрудника (#900): блокнот агента. Видит только владелец;
+/// архив вместо удаления, лимит активных записей — `ASSISTANT_LIMITS`.
+model AssistantMemory {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  /// Одна запись: обобщённый факт или предпочтение (не содержимое писем).
+  text String
+  /// Прогон, в котором агент записал факт (для аудита).
+  sourceRunId String? @map("source_run_id") @db.Uuid
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceRun AssistantRun? @relation(fields: [sourceRunId], references: [id], onDelete: SetNull)
+
+  @@index([userId, archivedAt, createdAt])
+  @@map("assistant_memories")
 }
 
 /// Провайдер модели (OpenCode Go, OpenRouter, OpenAI, локальные Ollama/vLLM):

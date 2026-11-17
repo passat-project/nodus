@@ -42,6 +42,7 @@ function messageRow(overrides: Partial<MessageRow> = {}): MessageRow {
     createdAt: NOW,
     runStatus: 'running',
     toolCalls: [],
+    actions: [],
     ...overrides,
   };
 }

@@ -1,0 +1,50 @@
+import { date, nameOf } from '../projections.js';
+import type { ToolActionField, ToolContext } from '../tool-definition.js';
+
+/**
+ * Общие куски карточек подтверждения (Ф2, ADR-0048): имена вместо id,
+ * человеческие даты, поля-столбиком. Всё терпимо к недоступному имени —
+ * карточка обязана собраться даже без дочитывания (тогда id как есть).
+ */
+
+/** Имя сущности по адресу API; недоступно — null (покажем id). */
+export async function readName(ctx: ToolContext, path: string): Promise<string | null> {
+  if (!ctx.read) return null;
+  try {
+    return nameOf(await ctx.read(path));
+  } catch {
+    return null;
+  }
+}
+
+export function userName(ctx: ToolContext, id: string): Promise<string | null> {
+  return readName(ctx, `/directory/users/${id}`);
+}
+
+export function projectName(ctx: ToolContext, id: string): Promise<string | null> {
+  return readName(ctx, `/projects/${id}`);
+}
+
+export function conversationTitle(ctx: ToolContext, id: string): Promise<string | null> {
+  return readName(ctx, `/chat/conversations/${id}`);
+}
+
+/** Поле карточки: пустое значение не показываем вовсе. */
+export function field(label: string, value: string | null | undefined): ToolActionField | null {
+  const trimmed = value?.trim();
+  return trimmed ? { label, value: trimmed } : null;
+}
+
+export function fieldsOf(entries: readonly (ToolActionField | null)[]): ToolActionField[] {
+  return entries.filter((entry): entry is ToolActionField => entry !== null);
+}
+
+/** Срок человеческим текстом: «14 ноя 2026, 18:00» по UTC-дате портала. */
+export function humanDate(iso: string | null | undefined): string | null {
+  return date(iso);
+}
+
+/** Короткий id для карточки, когда имя дочитать не удалось. */
+export function shortId(id: string): string {
+  return id.slice(0, 8);
+}

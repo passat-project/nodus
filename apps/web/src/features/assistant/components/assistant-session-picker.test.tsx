@@ -47,14 +47,17 @@ describe('AssistantSessionPicker: команды строки (18.11)', () => {
     const input = screen.getByRole('textbox', { name: ui.assistant.sessionRename });
     fireEvent.change(input, { target: { value: 'Смета по проекту' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(h.renameMutate).toHaveBeenCalledWith({ id: 's-1', title: 'Смета по проекту' });
+    expect(h.renameMutate).toHaveBeenCalledWith(
+      { id: 's-1', title: 'Смета по проекту' },
+      expect.anything(),
+    );
   });
 
   it('крестик удаляет диалог; активный — сначала сбрасывается на новый', () => {
     useAssistantStore.setState({ activeId: 's-1' });
     openPicker();
     fireEvent.click(screen.getByRole('button', { name: ui.assistant.sessionDelete }));
-    expect(h.deleteMutate).toHaveBeenCalledWith('s-1');
+    expect(h.deleteMutate).toHaveBeenCalledWith('s-1', expect.anything());
     expect(useAssistantStore.getState().activeId).toBeNull();
   });
 });

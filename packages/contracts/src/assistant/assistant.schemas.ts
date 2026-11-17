@@ -74,6 +74,56 @@ export const assistantToolCallSchema = z.object({
 });
 export type AssistantToolCall = z.infer<typeof assistantToolCallSchema>;
 
+/** Состояние карточки действия (Ф2, ADR-0048): предложено → выполнено/
+ *  отменено/ошибка; `undone` — выполненное действие отменено сотрудником. */
+export const assistantActionStateSchema = z.enum([
+  'proposed',
+  'executing',
+  'executed',
+  'cancelled',
+  'failed',
+  'undone',
+]);
+export type AssistantActionState = z.infer<typeof assistantActionStateSchema>;
+
+/** Поле карточки подтверждения: подпись + значение (столбиком, как окно). */
+export const assistantActionFieldSchema = z.object({
+  label: z.string().min(1).max(60),
+  value: z.string().min(1).max(600),
+});
+export type AssistantActionField = z.infer<typeof assistantActionFieldSchema>;
+
+/**
+ * Карточка действия (ADR-0048): «что будет сделано» до записи в портал.
+ * Создаётся моделью (`kind: write`), исполняется только кнопкой
+ * «Выполнить» — либо сразу в режиме байпаса (пометка `automatic`).
+ */
+export const assistantActionSchema = z.object({
+  id: z.uuid(),
+  toolId: z.string().min(1),
+  /** Человеческое название («Задачи: создать»). */
+  title: z.string().min(1),
+  /** Что произойдёт одной фразой. */
+  summary: z.string().min(1).max(600),
+  /** Ключевые поля — столбиком, чтобы проверить перед выполнением. */
+  fields: z.array(assistantActionFieldSchema).max(24),
+  /** Последствия: необратимость, куда попадёт запись. */
+  consequences: z.string().min(1).max(400),
+  /** API позволяет отменить выполненное (иконка «Отменить» после). */
+  undoable: z.boolean(),
+  /** Выполнено автоматически (байпас без вопросов). */
+  automatic: z.boolean(),
+  state: assistantActionStateSchema,
+  resultPreview: z.string().nullable(),
+  href: z.string().nullable(),
+  hrefLabel: z.string().nullable(),
+  errorCode: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+  executedAt: z.iso.datetime().nullable(),
+  undoneAt: z.iso.datetime().nullable(),
+});
+export type AssistantAction = z.infer<typeof assistantActionSchema>;
+
 /** Сообщение ленты диалога. */
 export const assistantMessageSchema = z.object({
   id: z.uuid(),
@@ -90,6 +140,8 @@ export const assistantMessageSchema = z.object({
   /** Код ошибки прогона, если ответ не состоялся (UI переводит по коду). */
   errorCode: z.string().nullable(),
   toolCalls: z.array(assistantToolCallSchema),
+  /** Карточки действий (Ф2): подтверждение/результат записи в портал. */
+  actions: z.array(assistantActionSchema),
 });
 export type AssistantMessage = z.infer<typeof assistantMessageSchema>;
 
@@ -135,6 +187,13 @@ export type UpdateAssistantSessionBody = z.infer<typeof updateAssistantSessionBo
 export const sendAssistantMessageBodySchema = z.object({
   text: z.string().trim().min(1).max(ASSISTANT_LIMITS.maxPromptChars),
   context: assistantContextSchema.optional(),
+  /**
+   * Байпас подтверждений (ADR-0048): включён долгим нажатием в композере.
+   * Действия выполняются сразу, но остаются карточками с пометкой
+   * «выполнено автоматически» и аудитом «через ИИ». Флаг фиксируется на
+   * прогоне: следующий вопрос без байпаса снова спрашивает подтверждение.
+   */
+  bypass: z.boolean().optional(),
 });
 export type SendAssistantMessageBody = z.infer<typeof sendAssistantMessageBodySchema>;
 
@@ -172,6 +231,11 @@ export const assistantRunEventTypeSchema = z.enum([
   'reasoning.delta',
   'tool.started',
   'tool.finished',
+  'action.proposed',
+  'action.executed',
+  'action.cancelled',
+  'action.failed',
+  'action.undone',
   'message.completed',
   'run.completed',
   'run.error',
@@ -199,6 +263,11 @@ export const assistantRunEventDataSchema = z.discriminatedUnion('type', [
     type: z.literal('tool.finished'),
     toolCallId: z.uuid(),
     toolId: z.string(),
+    /** Человеческое название — то же, что в `tool.started`: без него лента
+     *  после выполнения подменяла подпись сырым id (`memory.save`,
+     *  `ext.exa.web_search_exa`) — замечание владельца 18.11.2026.
+     *  Необязательное: старые журналы событий писались без поля. */
+    title: z.string().optional(),
     status: assistantToolCallStatusSchema,
     resultPreview: z.string().nullable(),
     durationMs: z.number().int().nonnegative().nullable(),
@@ -206,6 +275,11 @@ export const assistantRunEventDataSchema = z.discriminatedUnion('type', [
     href: z.string().nullable(),
     hrefLabel: z.string().nullable(),
   }),
+  z.object({ type: z.literal('action.proposed'), action: assistantActionSchema }),
+  z.object({ type: z.literal('action.executed'), action: assistantActionSchema }),
+  z.object({ type: z.literal('action.cancelled'), action: assistantActionSchema }),
+  z.object({ type: z.literal('action.failed'), action: assistantActionSchema }),
+  z.object({ type: z.literal('action.undone'), action: assistantActionSchema }),
   z.object({
     type: z.literal('message.completed'),
     messageId: z.uuid(),

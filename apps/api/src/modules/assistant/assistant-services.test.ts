@@ -51,6 +51,7 @@ function messageRow(overrides: Partial<MessageRow> = {}): MessageRow {
     createdAt: NOW,
     runStatus: 'running',
     toolCalls: [],
+    actions: [],
     ...overrides,
   };
 }
@@ -183,6 +184,7 @@ describe('AssistantSessionsService (#893)', () => {
       userId: USER_ID,
       providerId: null,
       modelId: null,
+      autoExecute: false,
     });
     expect(repo.createMessage).toHaveBeenCalledWith({
       sessionId: SESSION_ID,
@@ -200,6 +202,7 @@ describe('AssistantSessionsService (#893)', () => {
       permissions: ['assistant.use'],
       features: ['tasks', 'chat'],
       screen: { moduleId: 'tasks', cardKind: null, cardId: null },
+      autoExecute: false,
     });
     expect(flags.enabledModules).toHaveBeenCalled();
   });

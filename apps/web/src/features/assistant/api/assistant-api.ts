@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
   AssistantMessageList,
   AssistantSession,
@@ -8,6 +8,7 @@ import type {
 } from '@nodus/contracts';
 
 import { api } from '../../../shared/api-client.js';
+import { assistantKeys, useAssistantMessages, useAssistantSessions } from './assistant-queries.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { queryClient } from '../../../shared/lib/query-client.js';
 import { registerSessionReset } from '../../../shared/session-reset.js';
@@ -15,21 +16,6 @@ import { useAssistantStore } from '../model/assistant-store.js';
 import { mergeLiveMessage } from '../model/assistant-merge.js';
 import { parseRunEventData, SseFrameParser, type StreamEvent } from '../model/assistant-stream.js';
 import { assistantToolLabel } from '../components/assistant-tool-label.js';
-
-/** Ключи кэша ассистента: фабрика, руками строки не пишутся. */
-export const assistantKeys = {
-  all: ['assistant'] as const,
-  sessions: () => [...assistantKeys.all, 'sessions'] as const,
-  messages: (sessionId: string) => [...assistantKeys.all, 'messages', sessionId] as const,
-};
-
-/** Сессии сотрудника (последние 50, новые сверху). */
-export function useAssistantSessions() {
-  return useQuery({
-    queryKey: assistantKeys.sessions(),
-    queryFn: () => api<AssistantSessionList>('/assistant/sessions'),
-  });
-}
 
 /**
  * Сброс сессии (AUD-005): выход или вход другим сотрудником в той же вкладке
@@ -40,17 +26,14 @@ export function useAssistantSessions() {
  */
 registerSessionReset(() => {
   stopRunStream();
-  useAssistantStore.setState({ open: false, activeId: null, pending: null, live: null });
-});
-
-/** История диалога: сообщения с вызовами инструментов. */
-export function useAssistantMessages(sessionId: string | null) {
-  return useQuery({
-    queryKey: assistantKeys.messages(sessionId ?? 'none'),
-    queryFn: () => api<AssistantMessageList>(`/assistant/sessions/${sessionId}/messages`),
-    enabled: Boolean(sessionId),
+  useAssistantStore.setState({
+    open: false,
+    activeId: null,
+    pending: null,
+    live: null,
+    bypass: false,
   });
-}
+});
 
 export function useCreateAssistantSession() {
   const queryClient = useQueryClient();
@@ -106,10 +89,16 @@ export function useSendAssistantMessage() {
       sessionId: string;
       text: string;
       context?: { moduleId?: string | null; cardKind?: string | null; cardId?: string | null };
+      /** Байпас подтверждений (ADR-0048): действия выполняются сразу. */
+      bypass?: boolean;
     }) =>
       api<SendAssistantMessageResponse>(`/assistant/sessions/${input.sessionId}/messages`, {
         method: 'POST',
-        body: { text: input.text, ...(input.context ? { context: input.context } : {}) },
+        body: {
+          text: input.text,
+          ...(input.context ? { context: input.context } : {}),
+          ...(input.bypass ? { bypass: true } : {}),
+        },
       }),
     // Канон оптимистичности (I4) с поправкой на НАБЛЮДАЕМОЕ мигание (18.11):
     // временная строка с клиентским id жила 50–150 мс, потом дважды меняла id
@@ -296,6 +285,13 @@ export function startRunStream(runId: string, sessionId: string, onDone: () => v
       case 'tool.finished':
         live.upsertTool(toolFromEvent(parsed.data, parsed.data.status));
         break;
+      case 'action.proposed':
+      case 'action.executed':
+      case 'action.cancelled':
+      case 'action.failed':
+      case 'action.undone':
+        live.upsertAction(parsed.data.action);
+        break;
       case 'message.completed':
         live.patchLive({
           text: parsed.data.text,
@@ -357,6 +353,7 @@ function toolFromEvent(
 }
 
 export { mergeLiveMessage };
+export { assistantKeys, useAssistantMessages, useAssistantSessions };
 
 /** Идёт ли прогон в этой сессии (кнопка «Стоп», точки набора). */
 export function useIsRunActive(sessionId: string | null): boolean {

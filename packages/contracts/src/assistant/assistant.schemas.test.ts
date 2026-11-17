@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ASSISTANT_LIMITS } from './assistant-limits.js';
 import {
+  assistantActionSchema,
   assistantMessageListSchema,
   assistantMessageSchema,
   assistantRunEventDataSchema,
@@ -48,6 +49,27 @@ const message = {
   streaming: false,
   errorCode: null,
   toolCalls: [toolCall],
+  actions: [],
+};
+
+/** Карточка действия Ф2 (ADR-0048): подтверждение записи в портал. */
+const action = {
+  id: UUID,
+  toolId: 'tasks.create',
+  title: 'Создать задачу',
+  summary: 'Задача «Смета»',
+  fields: [{ label: 'Название', value: 'Смета' }],
+  consequences: 'Появится в портале',
+  undoable: true,
+  automatic: false,
+  state: 'proposed',
+  resultPreview: null,
+  href: null,
+  hrefLabel: null,
+  errorCode: null,
+  createdAt: ISO,
+  executedAt: null,
+  undoneAt: null,
 };
 
 describe('assistantSessionSchema / списки (#889)', () => {
@@ -246,6 +268,22 @@ describe('assistantRunEventDataSchema: события SSE (#889)', () => {
     expect(assistantRunEventDataSchema.parse({ type: 'run.cancelled' }).type).toBe('run.cancelled');
   });
 
+  it('tool.finished несёт человеческое название (лента не показывает сырой id)', () => {
+    const parsed = assistantRunEventDataSchema.parse({
+      type: 'tool.finished',
+      toolCallId: UUID,
+      toolId: 'memory.save',
+      title: 'Блокнот: запомнить',
+      status: 'done',
+      resultPreview: 'Записано',
+      durationMs: 6,
+      errorCode: null,
+      href: null,
+      hrefLabel: null,
+    });
+    expect(parsed).toMatchObject({ title: 'Блокнот: запомнить' });
+  });
+
   it('неизвестный тип события отклоняется — клиент не рисует неизвестное', () => {
     expect(assistantRunEventDataSchema.safeParse({ type: 'run.exploded' }).success).toBe(false);
   });
@@ -254,5 +292,44 @@ describe('assistantRunEventDataSchema: события SSE (#889)', () => {
     const event = { seq: 7, type: 'message.delta', data: { text: 'при' }, createdAt: ISO };
     expect(assistantRunEventSchema.parse(event)).toEqual(event);
     expect(assistantRunEventSchema.safeParse({ ...event, seq: -1 }).success).toBe(false);
+  });
+});
+
+describe('карточка действия и байпас (Ф2, #899, ADR-0048)', () => {
+  it('карточка: поля-столбиком, состояния, результат и отмена', () => {
+    expect(assistantActionSchema.parse(action)).toEqual(action);
+    expect(
+      assistantActionSchema.parse({ ...action, state: 'executed', resultPreview: 'Готово' }).state,
+    ).toBe('executed');
+    expect(assistantActionSchema.safeParse({ ...action, state: 'unknown' }).success).toBe(false);
+    expect(
+      assistantActionSchema.safeParse({ ...action, fields: [{ label: '', value: 'x' }] }).success,
+    ).toBe(false);
+  });
+
+  it('сообщение несёт карточки действий', () => {
+    const withAction = { ...message, actions: [action] };
+    expect(assistantMessageSchema.parse(withAction).actions).toHaveLength(1);
+  });
+
+  it('события действий разбираются клиентом потока', () => {
+    for (const type of [
+      'action.proposed',
+      'action.executed',
+      'action.cancelled',
+      'action.failed',
+      'action.undone',
+    ] as const) {
+      expect(assistantRunEventDataSchema.parse({ type, action })).toMatchObject({ type });
+    }
+  });
+
+  it('байпас — флаг отправки: необязательный, без него тело прежнее', () => {
+    expect(sendAssistantMessageBodySchema.parse({ text: 'создай задачу' })).toEqual({
+      text: 'создай задачу',
+    });
+    expect(
+      sendAssistantMessageBodySchema.parse({ text: 'создай задачу', bypass: true }).bypass,
+    ).toBe(true);
   });
 });

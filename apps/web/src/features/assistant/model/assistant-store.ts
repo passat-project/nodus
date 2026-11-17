@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AssistantToolCall } from '@nodus/contracts';
+import type { AssistantAction, AssistantToolCall } from '@nodus/contracts';
 
 import { uiPx } from '../../../shared/ui/ui-scale.js';
 
@@ -27,6 +27,8 @@ export interface AssistantLiveRun {
   text: string;
   reasoning: string;
   tools: AssistantToolCall[];
+  /** Карточки действий прогона (Ф2): подтверждение/результат записи. */
+  actions: AssistantAction[];
   status: 'running' | 'done' | 'error' | 'cancelled';
   errorCode: string | null;
   errorMessage: string | null;
@@ -49,11 +51,16 @@ interface AssistantState {
   pending: { text: string; at: number } | null;
   /** Живой прогон вкладки: один на вкладку (второй вопрос останавливает первый). */
   live: AssistantLiveRun | null;
+  /** Байпас подтверждений (ADR-0048): включён долгим нажатием в композере.
+   *  Сбрасывается при смене диалога и закрытии окна — решение владельца. */
+  bypass: boolean;
   setOpen: (open: boolean) => void;
   setDragging: (dragging: boolean) => void;
   setWidth: (width: number) => void;
   setActive: (id: string | null) => void;
   setPending: (text: string | null) => void;
+  setBypass: (value: boolean) => void;
+  resetBypass: () => void;
   startLive: (run: {
     runId: string;
     sessionId: string;
@@ -63,6 +70,7 @@ interface AssistantState {
   patchLive: (patch: Partial<AssistantLiveRun>) => void;
   appendDelta: (kind: 'text' | 'reasoning', chunk: string) => void;
   upsertTool: (tool: AssistantToolCall) => void;
+  upsertAction: (action: AssistantAction) => void;
   finishLive: (
     status: AssistantLiveRun['status'],
     error?: { code: string; message: string },
@@ -99,11 +107,20 @@ export const useAssistantStore = create<AssistantState>()((set) => ({
   activeId: null,
   pending: null,
   live: null,
-  setOpen: (open) => set({ open }),
+  bypass: false,
+  setOpen: (open) =>
+    set({
+      open,
+      // Закрытие окна гасит байпас (решение владельца 17.11.2026): режим без
+      // подтверждений не должен «ждать» следующего открытия.
+      ...(open ? {} : { bypass: false }),
+    }),
   setDragging: (dragging) => set({ dragging }),
   setWidth: (width) => set({ width }),
   setActive: (activeId) => set({ activeId }),
   setPending: (text) => set({ pending: text ? { text, at: Date.now() } : null }),
+  setBypass: (bypass) => set({ bypass }),
+  resetBypass: () => set({ bypass: false }),
   startLive: ({ runId, sessionId, userText, userMessageId }) =>
     set({
       // Живой буфер с вопросом заменил временный пузырь — он больше не нужен.
@@ -118,6 +135,7 @@ export const useAssistantStore = create<AssistantState>()((set) => ({
         text: '',
         reasoning: '',
         tools: [],
+        actions: [],
         status: 'running',
         errorCode: null,
         errorMessage: null,
@@ -147,6 +165,16 @@ export const useAssistantStore = create<AssistantState>()((set) => ({
           ? [...state.live.tools, tool]
           : state.live.tools.map((item, index) => (index === existing ? tool : item));
       return { live: { ...state.live, tools } };
+    }),
+  upsertAction: (action) =>
+    set((state) => {
+      if (!state.live) return state;
+      const existing = state.live.actions.findIndex((item) => item.id === action.id);
+      const actions =
+        existing === -1
+          ? [...state.live.actions, action]
+          : state.live.actions.map((item, index) => (index === existing ? action : item));
+      return { live: { ...state.live, actions } };
     }),
   finishLive: (status, error) =>
     set((state) =>

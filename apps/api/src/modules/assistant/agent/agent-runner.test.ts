@@ -153,6 +153,8 @@ describe('AgentRunnerService: цикл (#893)', () => {
       settings as unknown as AiSettingsService,
       mcp2 as never,
       { execute: vi.fn() } as unknown as ToolExecutorService,
+      { propose: vi.fn() } as never,
+      { promptLines: vi.fn(async () => []), port: vi.fn() } as never,
       bus2,
       logger as never,
     );

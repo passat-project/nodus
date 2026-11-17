@@ -1,10 +1,11 @@
 # Модуль assistant — ИИ-агент портала
 
 **Назначение.** Диалог сотрудника с ИИ-агентом по данным портала в пределах его прав.
-Ф1 «Смотреть» — только чтение; Ф3 — интернет через облачный MCP Exa (ADR-0046);
-действия (Ф2), навыки (Ф4), знания (Ф5) — следующие фазы эпика #889. Канон
-архитектуры — ADR-0043 (каталог инструментов, сессии, границы), ADR-0044 (облачный
-провайдер — временное исключение I11), ADR-0046 (Exa — исключение I11 для поиска).
+Ф1 «Смотреть» — чтение; **Ф2 «Делать»** — карточки действий с подтверждением и
+байпасом (ADR-0048), включая личный блокнот сотрудника (#900); Ф3 — интернет через
+облачный MCP Exa (ADR-0046); навыки (Ф4), знания (Ф5) — следующие фазы эпика #889.
+Канон архитектуры — ADR-0043 (каталог, сессии, границы), ADR-0044 (облачный
+провайдер — временное исключение I11), ADR-0046/0047 (MCP), ADR-0048 (действия).
 
 ## Ключевое решение: инструмент = действие API портала
 
@@ -13,31 +14,42 @@
 `Authorization` сотрудника: проходят те же guard-ы, права, валидация и идемпотентность,
 что и из интерфейса. Второй бизнес-логики и сервисного токена нет (I2/I3/I8).
 
-Read-only — **жёсткий предохранитель** в реестре и исполнителе, не в промпте:
-`kind: write` не регистрируется и не исполняется (тест `catalog.test.ts`).
+Запись — **жёсткий предохранитель** в коде, не в промпте (ADR-0048): инструмент
+`kind: write` не вызывает API из цикла, а создаёт карточку `assistant_actions`
+(«что будет сделано»); запись выполняет только сотрудник кнопкой «Выполнить» или
+байпас прогона (`assistant_runs.auto_execute`). `ToolExecutorService.execute`
+отклоняет запись (`ASSISTANT_WRITE_NEEDS_CONFIRMATION`), прямой путь один —
+`executeWrite` из `AssistantActionsService`; `Idempotency-Key` = id карточки.
+Каталог не регистрирует запись без `card` (тест `catalog.test.ts`).
 
 ## API
 
 Все маршруты — под флагом `assistant` (I10) и правом `assistant.use` (I8), кроме
 настроек провайдеров (право `portal.settings.manage`).
 
-| Метод | Путь                                       | Назначение                                       |
-| ----- | ------------------------------------------ | ------------------------------------------------ |
-| GET   | `/api/v1/assistant/sessions`               | сессии сотрудника (последние 50)                 |
-| POST  | `/api/v1/assistant/sessions`               | новая сессия                                     |
-| PATCH | `/api/v1/assistant/sessions/:id`           | переименовать / архивировать                     |
-| GET   | `/api/v1/assistant/sessions/:id/messages`  | история диалога с вызовами инструментов          |
-| POST  | `/api/v1/assistant/sessions/:id/messages`  | отправить сообщение → `202 { runId, messageId }` |
-| GET   | `/api/v1/assistant/runs/:runId/stream`     | SSE прогона (`Last-Event-ID` для восстановления) |
-| GET   | `/api/v1/assistant/runs/:runId`            | статус прогона (fallback)                        |
-| POST  | `/api/v1/assistant/runs/:runId/cancel`     | остановить прогон                                |
-| GET   | `/api/v1/settings/ai`                      | провайдеры без ключей, дефолт, правила (админ)   |
-| PUT   | `/api/v1/settings/ai`                      | полная замена настроек (админ)                   |
-| GET   | `/api/v1/settings/ai/providers/:id/models` | каталог `/models` провайдера                     |
-| POST  | `/api/v1/settings/ai/providers/:id/test`   | проверка соединения и модели                     |
-| GET   | `/api/v1/settings/ai/mcp`                  | MCP-серверы без ключей, «по умолчанию» (админ)   |
-| PUT   | `/api/v1/settings/ai/mcp`                  | полная замена реестра MCP-серверов (админ)       |
-| POST  | `/api/v1/settings/ai/mcp/:id/test`         | handshake MCP и список инструментов сервера      |
+| Метод  | Путь                                       | Назначение                                       |
+| ------ | ------------------------------------------ | ------------------------------------------------ |
+| GET    | `/api/v1/assistant/sessions`               | сессии сотрудника (последние 50)                 |
+| POST   | `/api/v1/assistant/sessions`               | новая сессия                                     |
+| PATCH  | `/api/v1/assistant/sessions/:id`           | переименовать / архивировать                     |
+| DELETE | `/api/v1/assistant/sessions/:id`           | удалить диалог (каскад)                          |
+| GET    | `/api/v1/assistant/sessions/:id/messages`  | история: вызовы инструментов и карточки действий |
+| POST   | `/api/v1/assistant/sessions/:id/messages`  | отправить сообщение → `202 { runId, messageId }` |
+| POST   | `/api/v1/assistant/actions/:id/execute`    | выполнить карточку (идемпотентно по её id)       |
+| POST   | `/api/v1/assistant/actions/:id/cancel`     | отклонить карточку (записей нет)                 |
+| POST   | `/api/v1/assistant/actions/:id/undo`       | отменить выполненное (удалить созданное)         |
+| GET    | `/api/v1/assistant/memory`                 | блокнот сотрудника (до 50 записей)               |
+| DELETE | `/api/v1/assistant/memory/:id`             | удалить запись блокнота (архив)                  |
+| GET    | `/api/v1/assistant/runs/:runId/stream`     | SSE прогона (`Last-Event-ID` для восстановления) |
+| GET    | `/api/v1/assistant/runs/:runId`            | статус прогона (fallback)                        |
+| POST   | `/api/v1/assistant/runs/:runId/cancel`     | остановить прогон                                |
+| GET    | `/api/v1/settings/ai`                      | провайдеры без ключей, дефолт, правила (админ)   |
+| PUT    | `/api/v1/settings/ai`                      | полная замена настроек (админ)                   |
+| GET    | `/api/v1/settings/ai/providers/:id/models` | каталог `/models` провайдера                     |
+| POST   | `/api/v1/settings/ai/providers/:id/test`   | проверка соединения и модели                     |
+| GET    | `/api/v1/settings/ai/mcp`                  | MCP-серверы без ключей (равнозначные, админ)     |
+| PUT    | `/api/v1/settings/ai/mcp`                  | полная замена реестра MCP-серверов (админ)       |
+| POST   | `/api/v1/settings/ai/mcp/:id/test`         | handshake MCP и список инструментов сервера      |
 
 ## Внешние MCP-серверы (#902, Ф3)
 
@@ -142,16 +154,24 @@ OCR и текст не читаются — инструмент `letters.attach
 Решение владельца: квот запросов нет — только техническая защита от зацикливания
 (`@nodus/contracts` `ASSISTANT_LIMITS`): `maxSteps` 12, `maxRunSeconds` 120,
 `maxToolResultChars` 16 000, параллельные вызовы — 3, история — 30 сообщений.
-Интернет (Ф3): таймаут MCP-вызова 20 с, запрос ≤ 400 символов, чтение страницы —
-8 000 символов, выдача ≤ 10 результатов; кэша в v1 нет.
+Действия (Ф2): до 5 карточек на прогон, захват карточки атомарный, зависший
+`executing` перезахватывается через 60 с. Память (#900): 50 активных записей по
+300 знаков, в промпт — до 2 000 знаков. Интернет (Ф3): таймаут MCP-вызова 20 с,
+запрос ≤ 400 символов, чтение страницы — 8 000 символов, выдача ≤ 10 результатов;
+кэша в v1 нет.
 
 ## События и аудит
 
-Доменных событий модуль пока не публикует (Ф1 ничего не меняет — outbox не нужен).
-Аудит — `@Audit` на отправке сообщения, создании/архивации сессии, изменении настроек
-(`assistant.message_send`, `assistant.session_create`, `settings.ai_update`,
-`settings.ai_provider_test`). Вызовы инструментов — таблица `assistant_tool_calls`
-(имя, статус, длительность, краткий результат — без полного содержимого).
+Доменных событий в outbox модуль не публикует: изменения портала идут через API
+модулей-владельцев (их события — там). События ленты действий живут в журнале
+прогона: `action.proposed/executed/cancelled/failed/undone` (полный DTO карточки).
+
+Аудит — `@Audit` на сообщениях/сессиях/настройках и явные записи действий:
+`assistant.action_execute` / `assistant.action_failed` (в т.ч. при байпасе — там
+нет HTTP-маршрута), `assistant.action_cancel/undo`, `assistant.memory_save/forget`.
+В деталях — `viaAi: true`, инструмент, признак автоматического исполнения и прогон.
+Вызовы инструментов — `assistant_tool_calls` (без полного содержимого); карточки —
+`assistant_actions` (аргументы, результат, состояние).
 
 ## Проводники и секреты
 
@@ -167,5 +187,7 @@ Env `SECRETS_ENCRYPTION_KEY` задаёт ключ шифрования; без 
 
 `assistant.module.ts` — wiring; контроллеры — HTTP; `*.service.ts` — логика;
 `*.repository.ts` — единственная точка доступа к таблицам модуля;
-определения инструментов — `tools/definitions/<домен>.tools.ts`,
-провайдер моделей — `providers/`.
+`assistant-actions.*` — карточки действий (ADR-0048), `assistant-memory.*` —
+блокнот (#900), `agent/agent-runner.*` — цикл и его помощники;
+определения инструментов — `tools/definitions/<домен>.tools.ts` (запись —
+`*-write.tools.ts`), провайдер моделей — `providers/`.

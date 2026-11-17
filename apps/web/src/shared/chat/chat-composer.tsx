@@ -1,5 +1,12 @@
 import { Mic, Paperclip, Smile } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
@@ -84,6 +91,8 @@ export function ChatComposer({
   running = false,
   onStop,
   stopLabel,
+  leadingControl = null,
+  notice = null,
   className,
 }: {
   placeholder: string;
@@ -117,6 +126,11 @@ export function ChatComposer({
   onStop?: () => void;
   /** Подпись «Остановить» из i18n хоста. */
   stopLabel?: string;
+  /** Дополнительный контрол в слоте скрепки (хосты без вложений: ассистент —
+   *  переключатель «Без подтверждений»). */
+  leadingControl?: ReactNode;
+  /** Строка-пометка режима внутри островка (ассистент: «без подтверждений»). */
+  notice?: ReactNode;
   className?: string;
 }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -334,6 +348,7 @@ export function ChatComposer({
           // прозрачным и проявляется (composer-reveal), а не вспыхивает
           // скачком на финальной ширине островка.
           <span className="composer-reveal flex w-full flex-col gap-1">
+            {notice}
             {draft.reply || draft.edit ? (
               <ComposerBanner
                 draft={draft}
@@ -377,6 +392,8 @@ export function ChatComposer({
                   align={align}
                   disabled={pending !== null}
                 />
+              ) : leadingControl ? (
+                leadingControl
               ) : (
                 <Button
                   type="button"

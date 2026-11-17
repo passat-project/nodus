@@ -23,6 +23,7 @@ function message(partial: Partial<MessageRow>): MessageRow {
     createdAt: new Date(),
     runStatus: 'completed',
     toolCalls: [],
+    actions: [],
     ...partial,
   };
 }
@@ -66,8 +67,8 @@ describe('buildSystemPrompt', () => {
     instructions: 'Отвечай как помощник руководителя.',
   });
 
-  it('задаёт режим только-чтения и дату компании', () => {
-    expect(prompt).toContain('только чтение');
+  it('задаёт режим чтения и действий с подтверждением, дату компании', () => {
+    expect(prompt).toContain('карточку подтверждения');
     expect(prompt).toContain('17 ноября 2026');
     expect(prompt).toContain('tools.search');
   });

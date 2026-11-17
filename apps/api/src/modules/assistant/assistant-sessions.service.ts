@@ -91,6 +91,9 @@ export class AssistantSessionsService {
 
     const text = body.text.trim();
     const screen = normalizeScreenContext(body.context);
+    // Байпас (ADR-0048) — снимок на прогон: следующий вопрос без него снова
+    // спрашивает подтверждение. В БД — для аудита и восстановления картины.
+    const autoExecute = body.bypass === true;
     const runId = randomUUID();
     await this.repo.createRun({
       id: runId,
@@ -98,6 +101,7 @@ export class AssistantSessionsService {
       userId: user.id,
       providerId: null,
       modelId: null,
+      autoExecute,
     });
     const message = await this.repo.createMessage({
       sessionId: id,
@@ -121,6 +125,7 @@ export class AssistantSessionsService {
       permissions: user.permissions,
       features,
       screen,
+      autoExecute,
     });
     return { runId, messageId: message.id };
   }

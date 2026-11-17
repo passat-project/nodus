@@ -70,8 +70,8 @@ describe('ToolExecutorService: предохранители', () => {
     const result = await executor.execute(writeTool, {}, ctx);
     expect(result).toEqual({
       ok: false,
-      errorCode: 'ASSISTANT_READ_ONLY',
-      message: 'В этом режиме доступно только чтение',
+      errorCode: 'ASSISTANT_WRITE_NEEDS_CONFIRMATION',
+      message: 'Действие изменяет данные: нужно подтверждение в карточке',
     });
   });
 

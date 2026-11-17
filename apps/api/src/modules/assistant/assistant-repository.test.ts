@@ -59,6 +59,7 @@ function messageRow(overrides: Record<string, unknown> = {}) {
         hrefLabel: null,
       },
     ],
+    actions: [],
     ...overrides,
   };
 }

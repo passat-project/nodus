@@ -39,6 +39,7 @@ export function AssistantSessionPicker({ onNewChat }: { onNewChat: () => void })
   const sessions = useAssistantSessions().data?.items ?? [];
   const activeId = useAssistantStore((state) => state.activeId);
   const setActive = useAssistantStore((state) => state.setActive);
+  const resetBypass = useAssistantStore((state) => state.resetBypass);
   const rename = useRenameAssistantSession();
   const remove = useDeleteAssistantSession();
 
@@ -118,6 +119,9 @@ export function AssistantSessionPicker({ onNewChat }: { onNewChat: () => void })
                     type="button"
                     onClick={() => {
                       setActive(session.id);
+                      // Смена диалога гасит байпас: «без вопросов» не наследуется
+                      // новым разговором (решение владельца 17.11.2026).
+                      resetBypass();
                       setOpen(false);
                     }}
                     title={session.title}

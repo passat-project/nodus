@@ -98,4 +98,51 @@ describe('буфер прогона', () => {
       errorMessage: 'wait',
     });
   });
+
+  it('карточки действий живого прогона: добавление и обновление по id (Ф2)', () => {
+    const store = useAssistantStore.getState();
+    store.startLive({ runId: 'run-5', sessionId: 's-4', userText: 'создай', userMessageId: null });
+    const base = {
+      id: 'a-1',
+      toolId: 'tasks.create',
+      title: 'Создать задачу',
+      summary: 'Задача «Смета»',
+      fields: [],
+      consequences: 'Появится в портале',
+      undoable: true,
+      automatic: false,
+      state: 'proposed' as const,
+      resultPreview: null,
+      href: null,
+      hrefLabel: null,
+      errorCode: null,
+      createdAt: '2026-11-27T10:00:00.000Z',
+      executedAt: null,
+      undoneAt: null,
+    };
+    store.upsertAction(base);
+    store.upsertAction({ ...base, state: 'executed', resultPreview: 'Готово' });
+    const actions = useAssistantStore.getState().live?.actions ?? [];
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ state: 'executed', resultPreview: 'Готово' });
+  });
+});
+
+describe('байпас подтверждений (ADR-0048)', () => {
+  it('включается явно и сбрасывается закрытием окна', () => {
+    const store = useAssistantStore.getState();
+    store.setOpen(true);
+    store.setBypass(true);
+    expect(useAssistantStore.getState().bypass).toBe(true);
+
+    store.setOpen(false);
+    expect(useAssistantStore.getState().bypass).toBe(false);
+  });
+
+  it('resetBypass гасит режим (смена диалога делает хост)', () => {
+    const store = useAssistantStore.getState();
+    store.setBypass(true);
+    store.resetBypass();
+    expect(useAssistantStore.getState().bypass).toBe(false);
+  });
 });

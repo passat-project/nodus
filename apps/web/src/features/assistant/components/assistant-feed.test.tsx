@@ -39,6 +39,7 @@ function message(
     streaming: false,
     errorCode: null,
     toolCalls: [],
+    actions: [],
     ...overrides,
   };
 }
@@ -70,6 +71,7 @@ function live(overrides: Partial<AssistantLiveRun> = {}): AssistantLiveRun {
     text: '',
     reasoning: '',
     tools: [],
+    actions: [],
     status: 'running',
     errorCode: null,
     errorMessage: null,
