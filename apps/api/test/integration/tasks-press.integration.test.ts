@@ -276,7 +276,7 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks press (integration)', () => {
     });
   });
 
-  it('пустые источники — закрывающий переход запрещён (409)', async () => {
+  it('пустые источники — обычное нажатие ответственного (решение 16.11)', async () => {
     await fx.prisma.workflowTransition.update({
       where: { id: completeId },
       data: {
@@ -316,8 +316,8 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks press (integration)', () => {
       body: {},
       key: `press-fallback-complete-${fx.runId}`,
     });
-    // Решение 1: без участников кворум невозможен — обход не выполняется.
-    expect(executed.status).toBe(409);
-    expect(((await executed.json()) as { code: string }).code).toBe(ErrorCode.CONFLICT);
+    // Решение 16.11: без соисполнителей пустой состав — кнопка работает как
+    // обычная и закрывает ответственный; отказа «нет участников» нет.
+    expect(executed.status).toBe(200);
   });
 });
