@@ -219,3 +219,72 @@ describe('McpError', () => {
     expect(error.name).toBe('McpError');
   });
 });
+
+describe('McpClient: сбои и мусор в потоке', () => {
+  it('таймаут fetch превращается в McpError(timeout)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const error = new Error('The operation was aborted due to timeout');
+        error.name = 'TimeoutError';
+        throw error;
+      }),
+    );
+    await expect(new McpClient({ url, apiKey: null }).initialize()).rejects.toMatchObject({
+      kind: 'transport',
+      code: 'timeout',
+    });
+  });
+
+  it('ошибка сети без имени таймаута — transport/network', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('ECONNREFUSED');
+      }),
+    );
+    await expect(new McpClient({ url, apiKey: null }).initialize()).rejects.toMatchObject({
+      kind: 'transport',
+      code: 'network',
+    });
+  });
+
+  it('JSON-ответ не является объектом — понятная ошибка транспорта', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('null', {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    );
+    await expect(new McpClient({ url, apiKey: null }).initialize()).rejects.toMatchObject({
+      kind: 'transport',
+    });
+  });
+
+  it('мусорный кадр пропускается, следующий ответ дочитывается', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        const body = JSON.parse(String(init.body)) as { id?: number };
+        return sse([
+          'event: message\ndata: {битый json\n\n',
+          `data: {"jsonrpc":"2.0","id":${body.id},"result":{"tools":[]}}\n\n`,
+        ]);
+      }),
+    );
+    const tools = await new McpClient({ url, apiKey: null }).listTools();
+    expect(tools).toEqual([]);
+  });
+
+  it('поток закрылся без нашего id — ошибка «без ответа», а не зависание', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => sse(['data: {"jsonrpc":"2.0","id":999,"result":{}}\n\n'])),
+    );
+    await expect(new McpClient({ url, apiKey: null }).initialize()).rejects.toThrow(/без ответа/);
+  });
+});
