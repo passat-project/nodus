@@ -157,7 +157,7 @@ export class PressService {
       recordKind: 'press',
       participantId: user.id,
       comment: result.text || input.comment || null,
-      fields: input as unknown as Record<string, unknown>,
+      fields: this.recordFields(input),
       timeEntryId: timeEntry?.id ?? null,
     });
     const pressed = round.entries.filter(
@@ -214,6 +214,16 @@ export class PressService {
       await this.pressEvents.completionBlocked(tx, task, user.id, round, this.gateReasonsOf(error));
     }
     return null;
+  }
+
+  /** Проекция ввода для журнала — общая форма `{поле: {откуда, куда}}`.
+   *  Полный ввод отметки лежит в `press_entries.input` (#434, В7). */
+  private recordFields(input: TransitionFormInput): Record<string, unknown> {
+    return Object.fromEntries(
+      Object.entries(input)
+        .filter(([, value]) => value !== undefined)
+        .map(([key, value]) => [key, { from: null, to: value }]),
+    );
   }
 
   /** Причины отказа кнопки — человеческим текстом для уведомления. */

@@ -86,7 +86,7 @@ describe('press-api (#434)', () => {
     vi.unstubAllGlobals();
   });
 
-  it('submit: оптимистично ставит мою отметку и патчит карточку ответом', async () => {
+  it('submit: пессимистичная отправка, карточка патчится ответом', async () => {
     const { client, fetchMock } = setup();
     const { result: hook } = renderHook(() => useSubmitPress(TASK_ID), {
       wrapper: makeWrapper(client),
@@ -99,7 +99,39 @@ describe('press-api (#434)', () => {
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' });
   });
 
-  it('submit: ошибка откатывает оптимистичный кэш', async () => {
+  it('submit: ключ идемпотентности устойчив к повтору после обрыва', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(tasksKeys.detail(TASK_ID), detail);
+    let calls = 0;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      void init;
+      calls += 1;
+      if (calls === 1) throw new Error('network');
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { result: hook } = renderHook(() => useSubmitPress(TASK_ID), {
+      wrapper: makeWrapper(client),
+    });
+    await act(async () => {
+      hook.current.mutate({ result: { text: 'Итог', messageIds: [] } });
+    });
+    await waitFor(() => expect(hook.current.isError).toBe(true));
+    await act(async () => {
+      hook.current.mutate({ result: { text: 'Итог', messageIds: [] } });
+    });
+    await waitFor(() => expect(hook.current.isSuccess).toBe(true));
+    const keys = fetchMock.mock.calls.map((call) =>
+      new Headers((call as [string, RequestInit?])[1]?.headers).get('Idempotency-Key'),
+    );
+    expect(keys[0]).toBeTruthy();
+    expect(keys[0]).toBe(keys[1]);
+  });
+
+  it('submit: ошибка не трогает кэш (оптимистичной правки нет)', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(tasksKeys.detail(TASK_ID), detail);
     vi.stubGlobal(

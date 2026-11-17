@@ -1,12 +1,12 @@
+import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
   PressExcludeBody,
   PressExecuteResult,
   PressReturnBody,
   PressSubmitBody,
-  TaskDetail,
 } from '@nodus/contracts';
-import { pressEntryResultOf, ui } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api } from '../../../shared/api-client.js';
@@ -14,9 +14,11 @@ import { markFreshFromMutation } from '../../../shared/api/fresh-from-mutation.j
 import { tasksKeys } from '../../../shared/api/tasks-keys.js';
 import { transitionErrorText } from '../../../shared/tasks/transition-error.js';
 
-/** Коллективная кнопка (#434): сдача и отзыв своей отметки. Сдача
- *  оптимистична (I4) — кольцо и счётчик меняются до ответа; после кворума
- *  сервер уже выполнил обычный переход и вернул новую карточку. */
+/** Коллективная кнопка (#434): сдача и отзыв своей отметки. Сдача —
+ *  ПЕССИМИСТИЧНАЯ, как окно перехода (#380, Р7): кольцо и счётчик меняются
+ *  ответом сервера; оптимистичная правка потеряла бы ввод при отказе.
+ *  Один `Idempotency-Key` на попытку (ref): повтор после обрыва сети не
+ *  задвоит время, итог и строку журнала. */
 function patchPress(
   queryClient: ReturnType<typeof useQueryClient>,
   taskId: string,
@@ -32,47 +34,22 @@ function patchPress(
 
 export function useSubmitPress(taskId: string) {
   const queryClient = useQueryClient();
+  const idempotencyKey = useRef<string | null>(null);
   return useMutation({
-    mutationFn: (body: PressSubmitBody) =>
-      api<PressExecuteResult>(`/tasks/${taskId}/press/submit`, { method: 'POST', body }),
-    onMutate: async (body) => {
-      markFreshFromMutation(taskId);
-      await queryClient.cancelQueries({ queryKey: tasksKeys.detail(taskId) });
-      const previous = queryClient.getQueryData<TaskDetail>(tasksKeys.detail(taskId));
-      if (previous?.press && previous.press.myEntry) {
-        const press = previous.press;
-        const entries = press.entries.map((entry) =>
-          entry.userId === press.myEntry!.userId
-            ? {
-                ...entry,
-                state: 'pressed' as const,
-                pressedAt: new Date().toISOString(),
-                result: pressEntryResultOf(body),
-              }
-            : entry,
-        );
-        queryClient.setQueryData<TaskDetail>(tasksKeys.detail(taskId), {
-          ...previous,
-          press: {
-            ...press,
-            entries,
-            myEntry: entries.find((entry) => entry.userId === press.myEntry!.userId) ?? null,
-            pressed: press.pressed + 1,
-            canSubmit: false,
-            canWithdraw: true,
-          },
-        });
-      }
-      return { previous };
+    mutationFn: (body: PressSubmitBody) => {
+      idempotencyKey.current ??= crypto.randomUUID();
+      return api<PressExecuteResult>(`/tasks/${taskId}/press/submit`, {
+        method: 'POST',
+        body,
+        idempotencyKey: idempotencyKey.current,
+      });
     },
     onSuccess: (result) => {
+      idempotencyKey.current = null;
       patchPress(queryClient, taskId, result);
       toast.success(ui.tasks.press.saved);
     },
-    onError: (error, _body, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(tasksKeys.detail(taskId), context.previous);
-      }
+    onError: (error) => {
       toast.error(transitionErrorText(error));
     },
   });
