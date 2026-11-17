@@ -87,7 +87,7 @@ export function NodeKindFormSection({
 function NodeKindFixedRows({ kindName }: { kindName: string }) {
   return (
     <div className="flex min-w-0 flex-col gap-3 px-2" title={b.fixedRow}>
-      <span className="flex h-9 min-w-0 items-center rounded-lg border border-input px-2.5 text-body-lg text-muted-foreground dark:bg-input/30">
+      <span className="flex h-9 min-w-0 items-center rounded-lg border border-input px-2.5 text-body-lg text-muted-foreground dark:bg-transparent">
         {ui.structure.nodeName}
       </span>
       <div className="flex min-w-0 flex-col gap-1.5">

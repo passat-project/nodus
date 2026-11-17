@@ -23,7 +23,7 @@ import { useCreateProjectGroup } from '../api/project-catalog-mutations.js';
 export { ProjectDeadlineField } from './project-deadline-field.js';
 
 const triggerClass =
-  'flex h-8 w-full min-w-0 items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm transition-colors hover:bg-accent/40 dark:bg-input/30';
+  'flex h-8 w-full min-w-0 items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm transition-colors hover:bg-accent/40 dark:bg-transparent';
 
 /** Один сотрудник (руководитель проекта): поповер со справочником. */
 export function ManagerField({
@@ -100,7 +100,7 @@ export function PeopleMultiField({
           event.currentTarget.click();
         }}
         className={cn(
-          'flex min-h-8 w-full min-w-0 cursor-pointer flex-wrap items-center gap-1.5 rounded-lg border border-input px-2 py-1 text-sm transition-colors hover:bg-accent/40 dark:bg-input/30',
+          'flex min-h-8 w-full min-w-0 cursor-pointer flex-wrap items-center gap-1.5 rounded-lg border border-input px-2 py-1 text-sm transition-colors hover:bg-accent/40 dark:bg-transparent',
           disabled && 'pointer-events-none opacity-60',
         )}
       >
