@@ -34,6 +34,20 @@ Read-only — **жёсткий предохранитель** в реестре 
 | PUT   | `/api/v1/settings/ai`                      | полная замена настроек (админ)                   |
 | GET   | `/api/v1/settings/ai/providers/:id/models` | каталог `/models` провайдера                     |
 | POST  | `/api/v1/settings/ai/providers/:id/test`   | проверка соединения и модели                     |
+| GET   | `/api/v1/settings/ai/mcp`                  | MCP-серверы без ключей, «по умолчанию» (админ)   |
+| PUT   | `/api/v1/settings/ai/mcp`                  | полная замена реестра MCP-серверов (админ)       |
+| POST  | `/api/v1/settings/ai/mcp/:id/test`         | handshake MCP и список инструментов сервера      |
+
+## Внешние MCP-серверы (#902, Ф3)
+
+Реестр `assistant_mcp_servers` — настройка, а не код: первый сервер — Exa
+(hosted, Streamable HTTP), следующий подключается тем же реестром. Клиент
+`mcp/mcp-client.ts` минимальный (без SDK): `initialize` +
+`notifications/initialized`, `tools/list`, `tools/call`; транспорт по
+спецификации 2025-06-18 (`Accept` для JSON и SSE, `Mcp-Session-Id`,
+`MCP-Protocol-Version`, повтор handshake на 404). Ключ — шифр `core/crypto`,
+наружу только `hasKey`/`keyHint`; адрес — только https без query (ключ не
+попадает в URL и в логи прокси).
 
 Границы владения: сессия/прогон доступны только владельцу, чужая — **404** (не 403:
 существование не раскрываем).
