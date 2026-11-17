@@ -149,10 +149,13 @@ export class PressRoundsService {
                 timeEntryId: entry.timeEntryId,
               };
             }
+            // Невыбранный и не сдававший в прошлом цикле не должен снова
+            // видеть кнопку: он вне нового состава (В2, «только выбранные»).
             return {
               userId: entry.userId,
               order: entry.order,
-              state: 'waiting',
+              state: 'excluded',
+              returnReason: ui.tasks.press.excludedReason,
               input: null,
               result: null,
             };

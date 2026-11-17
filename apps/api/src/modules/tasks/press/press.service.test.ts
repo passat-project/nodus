@@ -154,6 +154,28 @@ describe('PressService (#434)', () => {
     expect(result).toBeNull();
   });
 
+  it('кворум «любой»: первая отметка выполняет переход (#434)', async () => {
+    const { service, engine } = setup('waiting', {
+      quorum: { kind: 'any' },
+      order: 'parallel',
+    });
+    await service.submit({ id: 'u1', permissions: [] } as never, 't1', {});
+    expect(engine.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('кворум N: до N отметок перехода нет (#434)', async () => {
+    const { service, engine, repo, round } = setup('waiting', {
+      quorum: { kind: 'count', count: 2 },
+      order: 'parallel',
+    } as never);
+    repo.findOpenRound.mockResolvedValue({
+      ...round,
+      entries: [entry('waiting'), { ...entry('waiting'), id: 'e2', userId: 'u2', order: 1 }],
+    });
+    await service.submit({ id: 'u1', permissions: [] } as never, 't1', {});
+    expect(engine.execute).not.toHaveBeenCalled();
+  });
+
   it('кворум, но проверки не прошли: отметка и раунд сохранены, ответственный уведомлён (В1)', async () => {
     const { service, engine, repo, pressEvents } = setup(undefined, {
       quorum: { kind: 'all' },

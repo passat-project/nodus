@@ -152,7 +152,7 @@ describe('PressRoundsService (#434)', () => {
         expect.objectContaining({ userId: 'u1', state: 'returned' }),
         expect.objectContaining({ userId: 'u2', state: 'pressed' }),
         expect.objectContaining({ userId: 'u3', state: 'excluded' }),
-        expect.objectContaining({ userId: 'u4', state: 'waiting' }),
+        expect.objectContaining({ userId: 'u4', state: 'excluded' }),
       ]),
     );
     expect(events.emit).toHaveBeenCalledWith(

@@ -158,7 +158,11 @@ export function TransitionWindow({
     (!effectiveContext?.pressReturn || pressReturnUserIds.length > 0);
   const allOk = lines.every((line) => line.ok);
   const canOverride =
-    variant === 'transition' && mode === 'live' && transition.canOverride && !allOk;
+    variant === 'transition' &&
+    mode === 'live' &&
+    transition.canOverride &&
+    !allOk &&
+    (!effectiveContext?.pressReturn || pressReturnUserIds.length > 0);
 
   const api: WindowSectionApi | null = effectiveContext
     ? {
@@ -197,6 +201,7 @@ export function TransitionWindow({
 
   function submitOverride() {
     if (!api || submitting || !overrideReason.trim()) return;
+    if (effectiveContext?.pressReturn && pressReturnUserIds.length === 0) return;
     onSubmit(bodyWithReturn(buildExecuteBody({ sections, context: api.context, draft })), {
       override: true,
       reason: overrideReason.trim(),

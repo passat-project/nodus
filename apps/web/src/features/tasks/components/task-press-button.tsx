@@ -41,9 +41,9 @@ function PressStatusContent({
       </div>
       {participants.length > 0 ? (
         <div className="flex flex-wrap gap-1 px-1.5 pb-1.5">
-          {participants.slice(0, 8).map((name) => (
+          {participants.slice(0, 8).map((name, index) => (
             <span
-              key={name}
+              key={`${name}-${index}`}
               title={name}
               className="inline-flex size-5 items-center justify-center rounded-full bg-accent text-[10px] font-medium text-foreground"
             >

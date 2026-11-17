@@ -130,6 +130,7 @@ describe('TaskActionBar: итог «Отклонена» (#430)', () => {
         total: 2,
         canSubmit: true,
         entries: [],
+        form: { enabled: false, sections: [] },
       },
     } as unknown as TaskDetail;
     state.transitions = [
@@ -169,6 +170,7 @@ describe('TaskActionBar: слоты панели (решение 16.11.2026)', (
         total: 3,
         canSubmit: true,
         entries: [],
+        form: { enabled: false, sections: [] },
       },
     } as unknown as TaskDetail;
     state.transitions = [

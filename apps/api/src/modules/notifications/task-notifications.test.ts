@@ -267,4 +267,26 @@ describe('taskNotices', () => {
       ),
     ).toEqual([{ userId: 'u1', kind: 'task.press_returned', preview: 'ПП-8 · Сдать отчёт' }]);
   });
+
+  it('все сдали, проверки не прошли — причины и сам ответственный (#434, В1)', () => {
+    expect(
+      taskNotices(
+        'task.press_blocked',
+        {
+          number: 8,
+          title: 'Сдать отчёт',
+          audience: ['me'],
+          transitionName: 'Завершить',
+          reasons: ['Не внесено затраченное время'],
+        },
+        'me',
+      ),
+    ).toEqual([
+      {
+        userId: 'me',
+        kind: 'task.press_blocked',
+        preview: 'ПП-8 · Сдать отчёт · Все сдали, мешает: Не внесено затраченное время',
+      },
+    ]);
+  });
 });

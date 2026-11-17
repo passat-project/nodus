@@ -28,7 +28,6 @@ const TASK_KINDS: readonly SourceKind[] = [
   'employees',
   'field',
 ];
-const LETTER_KINDS: readonly SourceKind[] = ['all_employees', 'role', 'employees', 'field'];
 
 function labelOf(kind: SourceKind): string {
   return ui.automation.press.sources[kind];
@@ -49,7 +48,7 @@ export function PressSourcesEditor({
   const users = useUsersList().data?.items ?? [];
   const definitions = useCustomFieldDefinitions('task').data ?? [];
   const userFields = definitions.filter((d) => d.type === 'user' || d.type === 'users');
-  const kinds = category === 'letter' ? LETTER_KINDS : TASK_KINDS;
+  const kinds = TASK_KINDS;
   const roles = WORKFLOW_ROLES_BY_CATEGORY[category] as readonly WorkflowActorRole[];
 
   const update = (index: number, next: PressSource) =>
