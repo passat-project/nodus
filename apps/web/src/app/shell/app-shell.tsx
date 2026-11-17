@@ -45,6 +45,7 @@ import { useCardStack, useOpenCard, useOpenCards, useReplaceTopCard } from './us
 import { useLinkInterception } from './use-link-interception.js';
 import { startChatDraftsSession } from '../../shared/chat/chat-drafts-session.js';
 import { startPreferencesSync } from '../../shared/preferences/ui-prefs-sync.js';
+import { startViewsSession } from '../../shared/views/views-session.js';
 
 function ShellFallback() {
   return (
@@ -94,6 +95,9 @@ export function AppShell() {
     // Черновики чата — на пользователя (AUD-005): вход читает ключ вошедшего,
     // выход не оставляет текст предыдущего сотрудника в памяти вкладки.
     startChatDraftsSession();
+    // Настройка колонок списков — тоже на пользователя (#876, AUD-005):
+    // чужой вид не применяется, повторный вход возвращает свой.
+    startViewsSession();
     return stopModalLayers;
   }, []);
   // (N) Nodus в заголовке вкладки (#124): сигнал фоновой вкладке.
