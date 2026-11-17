@@ -34,6 +34,8 @@ export const pressStrings = {
     selectAllPressed: 'Выбрать всех сдавших',
     returnToTitle: 'Кому вернуть',
     returnToHint: 'Остальные сохранят свои отметки — кнопку увидят только выбранные',
+    deactivatedReason: 'Сотрудник деактивирован',
+    quorumAfterRemovalReason: 'Кворум собран после снятия участника — нажмите кнопку',
   },
   automation: {
     sectionTitle: 'Кнопку жмут несколько',

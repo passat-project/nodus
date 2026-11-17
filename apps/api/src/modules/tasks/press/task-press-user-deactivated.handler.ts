@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   DIRECTORY_EVENTS,
   pressConfigSchema,
-  type AuthUser,
+  ui,
   type DomainEvent,
   type DomainEventHandler,
 } from '@nodus/contracts';
@@ -11,15 +11,10 @@ import {
   TransactionRunner,
   type TransactionClient,
 } from '../../../core/database/transaction-runner.js';
-import { DomainException } from '../../../core/errors/domain-exception.js';
 import {
   WORKFLOW_RECORD_WRITER,
   type WorkflowRecordWriter,
 } from '../../workflows/ports/workflow-record-writer.port.js';
-import {
-  WORKFLOW_ENGINE,
-  type WorkflowEnginePort,
-} from '../../workflows/ports/workflow-engine.port.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
 import { PressEvents } from './press-events.service.js';
 import { PressRepository } from './press.repository.js';
@@ -46,7 +41,6 @@ export class TaskPressUserDeactivatedHandler implements DomainEventHandler<UserD
     private readonly tasks: TasksRepository,
     private readonly pressEvents: PressEvents,
     @Inject(WORKFLOW_RECORD_WRITER) private readonly records: WorkflowRecordWriter,
-    @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
   ) {}
 
   async handle(event: DomainEvent<UserDeactivatedPayload>): Promise<void> {
@@ -66,7 +60,7 @@ export class TaskPressUserDeactivatedHandler implements DomainEventHandler<UserD
     await this.tasks.lock(tx, round.entityId);
     await this.repo.updateEntry(tx, entry.id, {
       state: 'excluded',
-      returnReason: 'Сотрудник деактивирован',
+      returnReason: ui.tasks.press.deactivatedReason,
       timeEntryId: null,
     });
     entry.state = 'excluded';
@@ -78,7 +72,7 @@ export class TaskPressUserDeactivatedHandler implements DomainEventHandler<UserD
       actorId: null,
       recordKind: 'exclude',
       participantId: userId,
-      comment: 'Сотрудник деактивирован',
+      comment: ui.tasks.press.deactivatedReason,
     });
     const config = pressConfigSchema.parse(round.config);
     const total = round.entries.filter((item) => item.state !== 'excluded').length;
@@ -95,39 +89,12 @@ export class TaskPressUserDeactivatedHandler implements DomainEventHandler<UserD
     if (pressed < required) return;
 
     const task = await this.tasks.findWithParticipants(round.entityId, tx);
+    // Кворум собран снятием: перехода «от имени» ответственного не делаем
+    // (это подмена личности в журнале/событиях). Раунд закрывается, кнопка
+    // становится обычной — ответственный нажимает сам.
     await this.repo.completeRound(tx, round.id, new Date());
-    const actor = {
-      id: task.assigneeId,
-      email: 'system@nodus.local',
-      displayName: 'Система',
-      permissions: [],
-    } as AuthUser;
-    await tx.$executeRawUnsafe('SAVEPOINT press_exclusion');
-    try {
-      await this.engine.execute(
-        tx,
-        round.entityId,
-        'task',
-        actor,
-        { transitionId: round.transitionId },
-        { pressCompletion: true },
-      );
-      await tx.$executeRawUnsafe('RELEASE SAVEPOINT press_exclusion');
-    } catch (error) {
-      await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT press_exclusion');
-      await this.pressEvents.completionBlocked(tx, task, actor.id, round, this.reasonsOf(error));
-    }
-  }
-
-  private reasonsOf(error: unknown): string[] {
-    if (!(error instanceof DomainException)) return [];
-    const details = error.details?.reasons;
-    if (!Array.isArray(details)) return [error.message];
-    return details.map((reason) => {
-      if (reason && typeof reason === 'object' && 'kind' in reason) {
-        return String((reason as { kind: unknown }).kind);
-      }
-      return error.message;
-    });
+    await this.pressEvents.completionBlocked(tx, task, null, round, [
+      ui.tasks.press.quorumAfterRemovalReason,
+    ]);
   }
 }

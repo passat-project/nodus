@@ -124,15 +124,37 @@ export class PressRoundsService {
                 returnReason: entry.returnReason ?? 'Снят из сбора',
               };
             }
+            // Выбранный начинает заново; невыбранный сохраняет отметку только
+            // если реально сдавал. Остальные снова ждут — иначе «сдал» без
+            // нажатия закрыл бы кворум нового цикла (security-аудит #707).
+            if (selected) {
+              return {
+                userId: entry.userId,
+                order: entry.order,
+                state: 'returned',
+                input: null,
+                result: null,
+                timeEntryId: null,
+                returnReason: 'Возврат в статус',
+              };
+            }
+            if (entry.state === 'pressed') {
+              return {
+                userId: entry.userId,
+                order: entry.order,
+                state: 'pressed',
+                pressedAt: entry.pressedAt,
+                input: entry.input,
+                result: entry.result,
+                timeEntryId: entry.timeEntryId,
+              };
+            }
             return {
               userId: entry.userId,
               order: entry.order,
-              state: selected ? 'returned' : 'pressed',
-              pressedAt: entry.pressedAt,
-              input: entry.input,
-              result: entry.result,
-              timeEntryId: entry.timeEntryId,
-              ...(selected ? { returnReason: 'Возврат в статус' } : {}),
+              state: 'waiting',
+              input: null,
+              result: null,
             };
           })
         : null;

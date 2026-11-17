@@ -51,6 +51,7 @@ function setup(overrides: Record<string, unknown> = {}) {
     { assertMembersAllowed: vi.fn() } as never,
     { lockedFieldIds: vi.fn(async () => new Set<string>()) } as never,
     { emit: vi.fn(async () => void 0) } as never,
+    { assertCanRemove: vi.fn(), syncAdded: vi.fn() } as never,
   );
   return { applier, tasks, writer, time, revisions, messages, formulas };
 }

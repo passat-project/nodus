@@ -119,7 +119,7 @@ export class PressEvents {
   async completionBlocked(
     tx: TransactionClient,
     task: PressTask,
-    actorId: string,
+    actorId: string | null,
     round: { transitionName: string },
     reasons: string[],
   ): Promise<void> {

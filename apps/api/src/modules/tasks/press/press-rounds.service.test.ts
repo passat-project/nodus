@@ -123,6 +123,16 @@ describe('PressRoundsService (#434)', () => {
           input: null,
           result: null,
         },
+        {
+          ...ROUND.entries[0]!,
+          id: 'e4',
+          userId: 'u4',
+          order: 3,
+          state: 'waiting',
+          pressedAt: null,
+          input: null,
+          result: null,
+        },
       ],
     } as never);
 
@@ -142,6 +152,7 @@ describe('PressRoundsService (#434)', () => {
         expect.objectContaining({ userId: 'u1', state: 'returned' }),
         expect.objectContaining({ userId: 'u2', state: 'pressed' }),
         expect.objectContaining({ userId: 'u3', state: 'excluded' }),
+        expect.objectContaining({ userId: 'u4', state: 'waiting' }),
       ]),
     );
     expect(events.emit).toHaveBeenCalledWith(
