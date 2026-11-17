@@ -21,6 +21,8 @@ export const ASSISTANT_TOOL_MODULES = [
   'dictionaries',
   'workflows',
   'system',
+  /** Внешние серверы MCP (`ext.exa.web_search_exa`, Ф3/#901). */
+  'ext',
 ] as const;
 export type AssistantToolModule = (typeof ASSISTANT_TOOL_MODULES)[number];
 

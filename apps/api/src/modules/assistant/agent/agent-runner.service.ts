@@ -5,6 +5,7 @@ import { ASSISTANT_LIMITS, ErrorCode } from '@nodus/contracts';
 
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { AssistantRepository } from '../assistant.repository.js';
+import { McpSettingsService } from '../mcp/mcp-settings.service.js';
 import { AiSettingsService } from '../providers/ai-settings.service.js';
 import {
   LlmProviderError,
@@ -14,6 +15,7 @@ import {
 } from '../providers/llm-provider.port.js';
 import { RunBusService } from '../run-bus.service.js';
 import { buildCatalog, hotTools } from '../tools/catalog.js';
+import { exaTools } from '../tools/definitions/exa.tools.js';
 import { asToolData } from '../tools/tool-data.js';
 import type {
   AssistantToolDefinition,
@@ -23,7 +25,7 @@ import type {
 import { toLlmTools } from '../tools/tool-schema.js';
 import { ToolExecutorService } from '../tools/tool-executor.service.js';
 import { toLlmHistory } from './history.js';
-import { buildSystemPrompt, companyToday } from './system-prompt.js';
+import { buildSystemPrompt, companyToday, type SystemPromptOptions } from './system-prompt.js';
 
 /** Параметры прогона: всё, что нужно циклу, передаётся явно. */
 export interface RunParams {
@@ -61,6 +63,7 @@ export class AgentRunnerService {
   constructor(
     private readonly repo: AssistantRepository,
     private readonly settings: AiSettingsService,
+    private readonly mcp: McpSettingsService,
     private readonly executor: ToolExecutorService,
     private readonly bus: RunBusService,
     private readonly logger: PinoLogger,
@@ -137,21 +140,35 @@ export class AgentRunnerService {
       );
       const priorMessages = toLlmHistory(history.filter((row) => row.id !== message.id));
       const catalog = buildCatalog({ permissions: params.permissions, features: params.features });
+      // Внешние инструменты (Ф3, #901): есть настроенный MCP-сервер с ключом —
+      // добавляем поиск/чтение интернета. Ошибка настроек не валит прогон:
+      // без интернета ассистент просто работает по порталу. Сервер без ключа
+      // инструментов не получает (Exa без ключа отвечает отказом), но модель
+      // узнаёт причину и объясняет её сотруднику, а не выдумывает поиск.
+      const search = await this.mcp.resolveForSearch().catch((error: unknown) => {
+        this.logger.warn({ err: error }, 'MCP search server unavailable');
+        return null;
+      });
+      const internet: SystemPromptOptions['internet'] =
+        search === null ? undefined : search.row.apiKeyCiphertext ? 'on' : 'no-key';
+      const externalTools = internet === 'on' && search ? exaTools(search.client) : [];
+      const toolsAll = [...catalog, ...externalTools];
       const prompt = buildSystemPrompt({
         today: companyToday(new Date(), 'Europe/Minsk'),
-        hotTools: hotTools(catalog),
-        hasHiddenTools: catalog.length > hotTools(catalog).length,
+        hotTools: hotTools(toolsAll),
+        hasHiddenTools: toolsAll.length > hotTools(toolsAll).length,
         instructions: resolved.instructions,
+        internet,
       });
       const messages: LlmMessage[] = [{ role: 'system', content: prompt }, ...priorMessages];
 
       /** Активный набор инструментов: горячая полка + найденные tools.search. */
-      const activeTools = initialActiveToolIds(catalog);
+      const activeTools = initialActiveToolIds(toolsAll);
       const toolContext: ToolContext = {
         authorization: params.authorization,
         screen: params.screen,
         signal: active.controller.signal,
-        available: catalog,
+        available: toolsAll,
         activate: (ids) => {
           for (const id of ids) activeTools.add(id);
         },
@@ -163,7 +180,7 @@ export class AgentRunnerService {
         }
         if (active.controller.signal.aborted) throw abortReason(active);
 
-        const tools = toLlmTools(catalog.filter((tool) => activeTools.has(tool.id)));
+        const tools = toLlmTools(toolsAll.filter((tool) => activeTools.has(tool.id)));
         const calls: LlmToolCall[] = [];
         let stepText = '';
         // Дельты шага: промежуточный текст (перед вызовом инструментов) идёт в
@@ -218,7 +235,7 @@ export class AgentRunnerService {
           params.runId,
           message.id,
           calls,
-          catalog,
+          toolsAll,
           activeTools,
           toolContext,
           messages,
