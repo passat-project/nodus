@@ -17,6 +17,13 @@ export interface AssistantLiveRun {
   sessionId: string;
   /** Сообщение ассистента на сервере (приходит в `run.started`). */
   messageId: string | null;
+  /** Вопрос сотрудника: пузырь рисуется из буфера ДО прихода истории
+   *  (оптимистичный UI, I4) — иначе ответ «думает» раньше вопроса. */
+  userText: string;
+  /** id сохранённого вопроса: с его приходом синтетический пузырь уходит. */
+  userMessageId: string | null;
+  /** Клиентская метка старта — время синтетического пузыря. */
+  startedAt: number;
   text: string;
   reasoning: string;
   tools: AssistantToolCall[];
@@ -37,13 +44,22 @@ interface AssistantState {
   width: number;
   /** Открытая сессия; null — ещё не открывали (при открытии — последняя). */
   activeId: string | null;
+  /** Вопрос до создания сессии: первый в «Новом диалоге» POST ждёт ответа
+   *  `POST /sessions`, а пузырь обязан появиться мгновенно (I4, канон чатов). */
+  pending: { text: string; at: number } | null;
   /** Живой прогон вкладки: один на вкладку (второй вопрос останавливает первый). */
   live: AssistantLiveRun | null;
   setOpen: (open: boolean) => void;
   setDragging: (dragging: boolean) => void;
   setWidth: (width: number) => void;
   setActive: (id: string | null) => void;
-  startLive: (run: { runId: string; sessionId: string }) => void;
+  setPending: (text: string | null) => void;
+  startLive: (run: {
+    runId: string;
+    sessionId: string;
+    userText: string;
+    userMessageId: string | null;
+  }) => void;
   patchLive: (patch: Partial<AssistantLiveRun>) => void;
   appendDelta: (kind: 'text' | 'reasoning', chunk: string) => void;
   upsertTool: (tool: AssistantToolCall) => void;
@@ -81,17 +97,24 @@ export const useAssistantStore = create<AssistantState>()((set) => ({
   dragging: false,
   width: readWidth(),
   activeId: null,
+  pending: null,
   live: null,
   setOpen: (open) => set({ open }),
   setDragging: (dragging) => set({ dragging }),
   setWidth: (width) => set({ width }),
   setActive: (activeId) => set({ activeId }),
-  startLive: ({ runId, sessionId }) =>
+  setPending: (text) => set({ pending: text ? { text, at: Date.now() } : null }),
+  startLive: ({ runId, sessionId, userText, userMessageId }) =>
     set({
+      // Живой буфер с вопросом заменил временный пузырь — он больше не нужен.
+      pending: null,
       live: {
         runId,
         sessionId,
         messageId: null,
+        userText,
+        userMessageId,
+        startedAt: Date.now(),
         text: '',
         reasoning: '',
         tools: [],

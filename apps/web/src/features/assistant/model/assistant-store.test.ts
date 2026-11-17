@@ -36,7 +36,7 @@ describe('геометрия окна', () => {
 describe('буфер прогона', () => {
   it('дельты текста и размышлений копятся раздельно', () => {
     const store = useAssistantStore.getState();
-    store.startLive({ runId: 'run-1', sessionId: 's-1' });
+    store.startLive({ runId: 'run-1', sessionId: 's-1', userText: 'вопрос', userMessageId: null });
     store.appendDelta('reasoning', 'думаю');
     store.appendDelta('text', 'Привет');
     store.appendDelta('text', ', мир');
@@ -47,7 +47,7 @@ describe('буфер прогона', () => {
 
   it('строки вызовов обновляются по id, а не дублируются', () => {
     const store = useAssistantStore.getState();
-    store.startLive({ runId: 'run-2', sessionId: 's-1' });
+    store.startLive({ runId: 'run-2', sessionId: 's-1', userText: 'вопрос', userMessageId: null });
     store.upsertTool({
       id: 'call-1',
       toolId: 'tasks.list',
@@ -79,7 +79,7 @@ describe('буфер прогона', () => {
 
   it('отмена сохраняет текст и закрывает приём дельт', () => {
     const store = useAssistantStore.getState();
-    store.startLive({ runId: 'run-3', sessionId: 's-2' });
+    store.startLive({ runId: 'run-3', sessionId: 's-2', userText: 'вопрос', userMessageId: null });
     store.appendDelta('text', 'Начал отвечать');
     store.finishLive('cancelled');
     store.appendDelta('text', ' — это уже не должно попасть');
@@ -90,7 +90,7 @@ describe('буфер прогона', () => {
 
   it('ошибка несёт код и сообщение для перевода в человеческий текст', () => {
     const store = useAssistantStore.getState();
-    store.startLive({ runId: 'run-4', sessionId: 's-3' });
+    store.startLive({ runId: 'run-4', sessionId: 's-3', userText: 'вопрос', userMessageId: null });
     store.finishLive('error', { code: 'provider_rate_limited', message: 'wait' });
     expect(useAssistantStore.getState().live).toMatchObject({
       status: 'error',

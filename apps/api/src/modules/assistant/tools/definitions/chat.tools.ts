@@ -67,7 +67,7 @@ export const chatConversationsTool = defineTool({
       parts.push(`id ${id}`);
       return parts.join(', ');
     });
-    const first = asRecord(itemsOf(data)[0]);
+    // Ссылка «Открыть» — у переписки (chat.messages), не у списка бесед.
     return {
       text: finalize(
         listBlock(
@@ -76,9 +76,6 @@ export const chatConversationsTool = defineTool({
           { more: hasMore(data) },
         ),
       ),
-      ...(first && str(first.id)
-        ? { entity: entityLink('messenger', str(first.id)!, str(first.title) ?? 'Беседа') }
-        : {}),
     };
   },
 });

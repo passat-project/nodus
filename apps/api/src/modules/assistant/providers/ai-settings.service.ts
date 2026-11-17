@@ -182,7 +182,7 @@ export class AiSettingsService {
           model,
           messages: [{ role: 'user', content: 'Ответь одним словом: работает' }],
           signal: controller.signal,
-          extra: { max_tokens: 32 },
+          extra: { max_tokens: 128 },
         })) {
           if (event.type === 'text.delta') sample += event.text;
           if (sample.length >= 120) break;

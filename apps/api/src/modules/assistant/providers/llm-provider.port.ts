@@ -64,8 +64,10 @@ export class LlmProviderError extends Error {
     message: string,
     /** HTTP-статус провайдера, если был ответ. */
     readonly status?: number,
+    /** Причина сокетного сбоя (`fetch` cause) — только для логов. */
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
     this.name = 'LlmProviderError';
   }
 }

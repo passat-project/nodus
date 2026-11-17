@@ -222,9 +222,21 @@ export class OpenAiCompatibleProvider implements LlmProvider {
       // Отмена прогона не должна выглядеть как недоступность провайдера.
       if (init.signal?.aborted) throw error;
       if (error instanceof DOMException && error.name === 'TimeoutError') {
-        throw new LlmProviderError('provider_unavailable', 'Провайдер не ответил вовремя');
+        throw new LlmProviderError(
+          'provider_unavailable',
+          'Провайдер не ответил вовремя',
+          undefined,
+          { cause: error },
+        );
       }
-      throw new LlmProviderError('provider_unavailable', 'Не удалось соединиться с провайдером');
+      // `cause` (ECONNRESET/ENOTFOUND/…) — в лог: без него сокетный сбой
+      // неотличим от отказа провайдера и живая диагностика слепа.
+      throw new LlmProviderError(
+        'provider_unavailable',
+        'Не удалось соединиться с провайдером',
+        undefined,
+        { cause: error },
+      );
     }
   }
 }

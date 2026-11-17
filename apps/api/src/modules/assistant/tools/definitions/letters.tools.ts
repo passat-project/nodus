@@ -89,19 +89,8 @@ export const lettersListTool = defineTool({
     const rows = itemsOf(data)
       .map(letterRow)
       .filter((row): row is string => row !== null);
-    const first = asRecord(itemsOf(data)[0]);
-    return {
-      text: finalize(listBlock('Письма', rows, { more: hasMore(data) })),
-      ...(first && str(first.id)
-        ? {
-            entity: entityLink(
-              'letter',
-              str(first.id)!,
-              str(first.regNumber) ?? str(first.subject) ?? 'Письмо',
-            ),
-          }
-        : {}),
-    };
+    // Ссылка «Открыть» — у карточки письма (letters.get), не у списка.
+    return { text: finalize(listBlock('Письма', rows, { more: hasMore(data) })) };
   },
 });
 

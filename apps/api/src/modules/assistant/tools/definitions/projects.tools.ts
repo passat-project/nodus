@@ -79,13 +79,8 @@ export const projectsListTool = defineTool({
     const rows = itemsOf(data)
       .map(projectRow)
       .filter((row): row is string => row !== null);
-    const first = asRecord(itemsOf(data)[0]);
-    return {
-      text: finalize(listBlock('Проекты', rows, { more: hasMore(data) })),
-      ...(first && str(first.id) && str(first.name)
-        ? { entity: entityLink('project', str(first.id)!, str(first.name)!) }
-        : {}),
-    };
+    // Ссылка «Открыть» — у карточки проекта (projects.get), не у списка.
+    return { text: finalize(listBlock('Проекты', rows, { more: hasMore(data) })) };
   },
 });
 
