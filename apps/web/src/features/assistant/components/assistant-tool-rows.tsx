@@ -5,6 +5,7 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { openCardViaBridge } from '../../../shared/lib/card-bridge.js';
 import { cardRefFromHref } from './assistant-card-link.js';
+import { assistantToolLabel } from './assistant-tool-label.js';
 
 const strings = ui.assistant;
 
@@ -81,7 +82,7 @@ function AssistantToolRow({ tool }: { tool: AssistantToolCall }) {
             tool.status === 'error' ? 'text-destructive' : 'text-foreground',
           )}
         >
-          {tool.title}
+          {assistantToolLabel(tool.toolId, tool.title)}
         </span>
         {tool.durationMs !== null ? (
           <span className="shrink-0 font-mono text-badge text-muted-foreground tabular-nums">

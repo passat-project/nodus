@@ -14,6 +14,7 @@ import { registerSessionReset } from '../../../shared/session-reset.js';
 import { useAssistantStore } from '../model/assistant-store.js';
 import { mergeLiveMessage } from '../model/assistant-merge.js';
 import { parseRunEventData, SseFrameParser, type StreamEvent } from '../model/assistant-stream.js';
+import { assistantToolLabel } from '../components/assistant-tool-label.js';
 
 /** Ключи кэша ассистента: фабрика, руками строки не пишутся. */
 export const assistantKeys = {
@@ -332,7 +333,7 @@ function toolFromEvent(
   return {
     id: payload.toolCallId,
     toolId: payload.toolId,
-    title: payload.title ?? payload.toolId,
+    title: assistantToolLabel(payload.toolId, payload.title),
     status,
     args: payload.args ?? null,
     resultPreview: payload.resultPreview ?? null,
