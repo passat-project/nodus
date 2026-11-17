@@ -2357,3 +2357,29 @@ model AssistantSettings {
 
   @@map("assistant_settings")
 }
+
+/// Внешний MCP-сервер ИИ-агента (#902, ADR-0043 п. 10): адрес, ключ и
+/// транспорт. Первый — Exa (hosted, Streamable HTTP); реестр — список,
+/// чтобы второй источник подключался настройкой, а не правкой кода.
+model AssistantMcpServer {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  /// Endpoint вида https://mcp.exa.ai/mcp — только https, без query.
+  url String
+  /// Транспорт: `streamable-http` (пока единственный).
+  transport String @default("streamable-http")
+  /// Шифртекст ключа (AES-256-GCM, core/crypto SecretBoxService).
+  /// NULL — сервер без ключа (keyless-режим Exa с ограничениями).
+  apiKeyCiphertext String? @map("api_key_ciphertext")
+  /// Хвост ключа для узнавания в интерфейсе (последние 4 символа).
+  apiKeyHint String? @map("api_key_hint")
+  enabled Boolean @default(true)
+  /// Сервер, которому адресуются поисковые запросы, когда их несколько.
+  defaultForSearch Boolean @default(false) @map("default_for_search")
+  sortOrder Int @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@map("assistant_mcp_servers")
+}
+
