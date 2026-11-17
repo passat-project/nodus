@@ -53,13 +53,10 @@ export type WindowSource = Pick<
 > & { toStageName?: string };
 
 /**
- * Окно перехода (#380): диалог по центру (≈640, радиус 14, канон диалогов),
- * разделы по настройке кнопки ∪ гейтам, живой список условий, пессимистичная
- * отправка. Закрытие — «Отмена» или Esc; клик мимо окна не закрывает.
- * `mode="preview"` — настоящее окно без данных (редактор маршрутов).
- * `variant="press"` — окно своей отметки коллективной кнопки (#434): те же
- * разделы настройки кнопки, но без гейтов (кворум проверяется при последнем
- * нажатии) и со своими заголовком/кнопкой.
+ * Окно перехода (#380): диалог по центру, разделы по настройке кнопки ∪
+ * гейтам, живой список условий, пессимистичная отправка. `mode="preview"` —
+ * настоящее окно без данных; `variant="press"` — окно своей отметки (#434):
+ * те же разделы, но без гейтов (кворум проверяется при последнем нажатии).
  */
 export function TransitionWindow({
   open,
@@ -186,22 +183,20 @@ export function TransitionWindow({
       }
     : null;
 
+  const bodyWithReturn = (body: ExecuteTransitionBody): ExecuteTransitionBody =>
+    pressReturnUserIds.length > 0 ? { ...body, pressReturnUserIds } : body;
+
   function submit() {
     if (!api || !canSubmit || submitting || mode === 'preview') return;
-    const body = {
-      ...buildExecuteBody({ sections, context: api.context, draft }),
-      ...(pressReturnUserIds.length > 0 ? { pressReturnUserIds } : {}),
-    };
-    onSubmit(body);
+    onSubmit(bodyWithReturn(buildExecuteBody({ sections, context: api.context, draft })));
   }
 
   function submitOverride() {
     if (!api || submitting || !overrideReason.trim()) return;
-    const body = {
-      ...buildExecuteBody({ sections, context: api.context, draft }),
-      ...(pressReturnUserIds.length > 0 ? { pressReturnUserIds } : {}),
-    };
-    onSubmit(body, { override: true, reason: overrideReason.trim() });
+    onSubmit(bodyWithReturn(buildExecuteBody({ sections, context: api.context, draft })), {
+      override: true,
+      reason: overrideReason.trim(),
+    });
   }
 
   return (

@@ -99,7 +99,10 @@ export function useTransitionRunner(task: TaskDetail, onOpenSubtask?: (id: strin
   function run(t: WorkflowTransition) {
     if (execute.isPending || submit.isPending) return;
     const route = routeTransition(t, task.access);
-    if (route === 'window') {
+    // Возврат в статус с коллективной кнопкой (#434, В2): даже кнопка без
+    // окна спрашивает «кому вернуть» — выбор участников прошлого цикла.
+    const pressReturn = Boolean(task.press?.completed && task.press.entries.length > 0);
+    if (route === 'window' || pressReturn) {
       submit.reset();
       setWindowTransition(t);
       return;
