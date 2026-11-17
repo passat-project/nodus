@@ -98,7 +98,12 @@ export function fileExtension(name: string): string {
 
 /** Инфо офисного формата по имени файла; null — не офисный. */
 export function officeFormat(name: string): OfficeFormatInfo | null {
-  return OFFICE_VIEW_FORMATS[fileExtension(name)] ?? null;
+  const extension = fileExtension(name);
+  // Своя таблица: без hasOwn обращение к «constructor»/«toString» вернуло бы
+  // прототип Object.prototype как формат.
+  return Object.hasOwn(OFFICE_VIEW_FORMATS, extension)
+    ? (OFFICE_VIEW_FORMATS[extension] ?? null)
+    : null;
 }
 
 /** Чисто текстовые форматы: документ-сервер сам НЕ определяет кодировку

@@ -47,7 +47,10 @@ export function ListEditor(props: EditorProps) {
     }
     // Повторный выбор того же варианта — не ручная запись (Р5 #632).
     if (props.value !== id) props.onCommit(id, refsFor([id]));
+    // Программное закрытие не идёт через onOpenChange — чистим поиск здесь,
+    // иначе поповер откроется со старым фильтром.
     setOpen(false);
+    setQuery('');
   }
 
   function refsFor(ids: readonly string[]) {

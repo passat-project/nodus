@@ -56,11 +56,7 @@ export function NumberRangeControl<T>({
   const parse = (text: string): number | undefined => {
     const trimmed = text.trim();
     if (trimmed === '') return undefined;
-    if (duration) {
-      const match = /^(\d{1,5})(?::(\d{1,2}))?$/.exec(trimmed);
-      if (!match) return undefined;
-      return Number(match[1]) * 60 + (match[2] ? Number(match[2]) : 0);
-    }
+    if (duration) return parseDurationFilter(trimmed);
     const normalized = trimmed.replace(/[\s\u00a0]/g, '').replace(',', '.');
     const n = Number(normalized);
     return Number.isFinite(n) ? n : undefined;
@@ -98,6 +94,15 @@ export function NumberRangeControl<T>({
       />
     </div>
   );
+}
+
+/** «ч:мм» → минуты; минуты только 0…59 («1:75» — не продолжительность). */
+export function parseDurationFilter(text: string): number | undefined {
+  const match = /^(\d{1,5})(?::(\d{1,2}))?$/.exec(text.trim());
+  if (!match) return undefined;
+  const minutes = match[2] ? Number(match[2]) : 0;
+  if (minutes > 59) return undefined;
+  return Number(match[1]) * 60 + minutes;
 }
 
 function formatDurationFilter(minutes: number): string {

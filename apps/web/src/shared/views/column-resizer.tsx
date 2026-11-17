@@ -46,9 +46,13 @@ export function ColumnResizer({
         drag.current = null;
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
+        // pointercancel завершает ресайз: иначе drag.current остаётся живым и
+        // колонка продолжает тянуться за курсором после отмены жеста.
+        window.removeEventListener('pointercancel', onUp);
       };
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
     },
     [width, clamp, onResize],
   );

@@ -97,7 +97,11 @@ function DataTableRowInner<T>({
         role="cell"
         className="flex items-center gap-1"
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          // Гасим только активацию строки; Esc и прочие клавиши должны
+          // всплывать — иначе карточка не закрывается из ведущей ячейки.
+          if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
+        }}
       >
         <Checkbox
           checked={isSelected}

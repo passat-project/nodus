@@ -78,6 +78,9 @@ export function CounterpartyEditor(props: EditorProps) {
                       },
                     ]);
                     setOpen(false);
+                    // Программное закрытие минует onOpenChange — строку поиска
+                    // чистим здесь (канон поповеров-пикеров).
+                    setText('');
                   }}
                   className={cn(
                     'flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-sm hover:bg-accent/60',

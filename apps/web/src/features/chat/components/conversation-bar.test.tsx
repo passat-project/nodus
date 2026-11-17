@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ui } from '@nodus/contracts';
 import type { ConversationListItem } from '@nodus/contracts';
 
 import { ConversationBar } from './conversation-bar.js';
@@ -141,5 +142,34 @@ describe('ConversationBar — кнопка сущности беседы (#753, 
   it('группа: кнопка «Добавить участников» на месте (право addMembers)', () => {
     renderBar(conversation({ type: 'group', myRole: 'owner' }));
     expect(screen.getByRole('button', { name: 'Добавить участников' })).toBeTruthy();
+  });
+});
+
+describe('ConversationBar: Esc в переименовании (#843)', () => {
+  it('Esc гасит только редактор заголовка — карточка под ним не закрывается', () => {
+    const onKeyDown = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <div onKeyDown={onKeyDown}>
+        <QueryClientProvider client={client}>
+          <ConversationBar
+            conversation={conversation({ myRole: 'owner' })}
+            panelOpen={false}
+            onPanelToggle={vi.fn()}
+            onOpenSearch={vi.fn()}
+            onOpenMembers={vi.fn()}
+            onAddMembers={vi.fn()}
+          />
+        </QueryClientProvider>
+      </div>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Беседа' }));
+    const input = screen.getByLabelText(ui.chat.renameTitle);
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    expect(screen.queryByLabelText(ui.chat.renameTitle)).toBeNull();
+    // Редактор погасил Esc сам — карточка под ним НЕ получает событие.
+    expect(onKeyDown).not.toHaveBeenCalled();
   });
 });

@@ -13,7 +13,7 @@ export const desktopConfigSchema = z.object({
    * минимума показывает экран «обновите приложение» и не пускает к порталу —
    * страховка от тихих поломок контрактов моста. `0.0.0` — ограничения нет.
    */
-  minShellVersion: z.string().regex(/^\d+\.\d+\.\d+/, 'semver major.minor.patch'),
+  minShellVersion: z.string().regex(/^\d+\.\d+\.\d+$/, 'semver major.minor.patch'),
 });
 
 export type DesktopConfig = z.infer<typeof desktopConfigSchema>;

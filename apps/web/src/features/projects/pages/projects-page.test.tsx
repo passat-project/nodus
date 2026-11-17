@@ -250,6 +250,8 @@ describe('журнал «Проекты»: кнопка «Портфели» (#5
 
     render(<ProjectsPage />);
     await waitFor(() => expect(trigger).not.toBeNull());
+    // Курсорная пагинация: есть следующая страница — счётчик честно «N+».
+    expect(screen.getByText('1+')).toBeTruthy();
     trigger!([{ isIntersecting: true }]);
 
     expect(fetchNextPage).toHaveBeenCalledTimes(1);

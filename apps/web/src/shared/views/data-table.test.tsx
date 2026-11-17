@@ -69,6 +69,21 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('DataTable: клавиши ведущей ячейки (#843)', () => {
+  it('Esc из ведущей ячейки всплывает до карточки, Enter/Space — нет', () => {
+    const onKeyDown = vi.fn();
+    render(<div onKeyDown={onKeyDown}>{table(countingDefs(new Map()))}</div>);
+
+    const checkbox = rowCheckbox(0);
+    fireEvent.keyDown(checkbox, { key: 'Escape' });
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+    // Активация строки из ведущей ячейки не должна срабатывать (канон A6-4).
+    fireEvent.keyDown(checkbox, { key: 'Enter' });
+    fireEvent.keyDown(checkbox, { key: ' ' });
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('DataTable: мемоизация строк (A6-4)', () => {
   it('выбор строки перерисовывает только её', () => {
     const counts = new Map<string, number>();

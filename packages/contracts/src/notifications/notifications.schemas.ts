@@ -153,9 +153,10 @@ export type UrgentPolicy = z.infer<typeof urgentPolicySchema>;
 /** Настройки уведомлений пользователя (DND-расписание; тосты гасятся, кроме urgent). */
 export const notificationSettingsSchema = z.object({
   dndEnabled: z.boolean(),
-  /** Начало/конец окна «не беспокоить», локальное «HH:mm». */
-  dndStart: z.string().regex(/^\d{2}:\d{2}$/),
-  dndEnd: z.string().regex(/^\d{2}:\d{2}$/),
+  /** Начало/конец окна «не беспокоить», локальное «ЧЧ:ММ» по 24-часовой
+   *  сетке (99:99 — не время). */
+  dndStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'time hh:mm'),
+  dndEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'time hh:mm'),
 });
 export type NotificationSettings = z.infer<typeof notificationSettingsSchema>;
 

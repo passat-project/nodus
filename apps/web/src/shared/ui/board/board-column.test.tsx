@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { DndContext } from '@dnd-kit/core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BoardColumn } from './board-column.js';
 
@@ -38,5 +38,43 @@ describe('BoardColumn — заглушка пустой колонки', () => {
     renderColumn({ count: 0, cardIds: ['t1'] });
     expect(screen.getByText('t1')).not.toBeNull();
     expect(screen.queryByText('Нет задач')).toBeNull();
+  });
+});
+
+describe('BoardColumn: Esc в быстром добавлении (#843)', () => {
+  afterEach(cleanup);
+
+  it('Esc гасит только инлайн-инпут, доска под ним не закрывается', () => {
+    const onKeyDown = vi.fn();
+    const onCreate = vi.fn();
+    render(
+      <div onKeyDown={onKeyDown}>
+        <DndContext>
+          <BoardColumn
+            stage={{ id: 's1', name: 'В работе', color: 'info' }}
+            count={0}
+            cardIds={[]}
+            hasNext={false}
+            loadingMore={false}
+            onLoadMore={() => undefined}
+            quickAdd={{ placeholder: 'Название', addButtonLabel: 'Добавить', onCreate }}
+            emptyLabel="Нет задач"
+            dropLabel="Отпустите здесь"
+          >
+            {null}
+          </BoardColumn>
+        </DndContext>
+      </div>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    const input = screen.getByPlaceholderText('Название');
+    fireEvent.change(input, { target: { value: 'Новая' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    expect(screen.queryByPlaceholderText('Название')).toBeNull();
+    expect(onCreate).not.toHaveBeenCalled();
+    // Инлайн-редактор погасил Esc — доска под ним событие не получает.
+    expect(onKeyDown).not.toHaveBeenCalled();
   });
 });

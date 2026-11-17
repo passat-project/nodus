@@ -148,6 +148,10 @@ export function BoardColumn({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') commitDraft();
                 if (e.key === 'Escape') {
+                  // Быстрое добавление гасит Esc само: доска под ним не
+                  // закрывается (канон инлайн-редакторов).
+                  e.preventDefault();
+                  e.stopPropagation();
                   setAddingCard(false);
                   setDraft('');
                 }

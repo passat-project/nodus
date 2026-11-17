@@ -300,7 +300,13 @@ function InlineAdd({
             e.preventDefault();
             onSubmit();
           }
-          if (e.key === 'Escape') onCancel();
+          if (e.key === 'Escape') {
+            // Инлайн-редактор гасит Esc сам: иначе клавиша всплывает до
+            // карточки/слайдера и закрывает её вместе с несохранённым вводом.
+            e.preventDefault();
+            e.stopPropagation();
+            onCancel();
+          }
         }}
         onBlur={onCancel}
         placeholder={ui.tasks.subtaskPlaceholder}
