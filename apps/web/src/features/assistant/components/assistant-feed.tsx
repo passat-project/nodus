@@ -5,6 +5,7 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { ChatMessageItem } from '../../../shared/chat/chat-message.js';
+import { AssistantMarkdown } from './assistant-markdown.js';
 import { DayChip } from '../../../shared/chat/day-chip.js';
 import {
   buildMessageRuns,
@@ -225,6 +226,11 @@ export function AssistantFeed({
                       reactionsHidden
                       receiptsHidden
                       align="both"
+                      // Ответ агента — Markdown (ADR-0045, #897); вопрос
+                      // сотрудника остаётся простым текстом, как в мессенджере.
+                      textSlot={
+                        segment.run.mine ? undefined : <AssistantMarkdown text={message.text} />
+                      }
                     />
                   </div>
                 )}

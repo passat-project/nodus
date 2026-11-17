@@ -80,8 +80,15 @@ sticky-аватар) + `ChatMessageItem` (пузыри bubble-*, хвосты, �
 `DayChip`; композер — канонический `ChatComposer` (островок, гексагон отправки).
 Сообщения диалога маппятся в `ChatMessage` (`model/assistant-messages.ts`).
 Аватар ассистента — глиф через опциональный `renderAvatar` у `MessageRunView`
-(дефолт не changed: мессенджер рисует `MessageAuthorAvatar`).
+(дефолт не меняется: мессенджер рисует `MessageAuthorAvatar`).
 Реакции/квитанции выключены (`reactionsHidden`/`receiptsHidden`).
+
+Ответ агента рендерится Markdown-ом через слот `textSlot` у `ChatMessageItem`
+(`components/assistant-markdown.tsx`, ADR-0045, #897): GFM-списки/таблицы/код,
+`rehype-sanitize` без `rehype-raw` (ответ модели недоверенный), внешние ссылки —
+`target="_blank"` + `noopener noreferrer`, внутренние `?cards=` — мостом карточек,
+код-блок с «Копировать», таблица со скроллом внутри пузыря. Вопрос сотрудника
+идёт простым текстом — канон мессенджера не меняется (мессенджер слот не передаёт).
 
 ## Моки
 

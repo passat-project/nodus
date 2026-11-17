@@ -138,6 +138,19 @@ describe('AssistantFeed: сегменты и выравнивание', () => {
     expect(container.querySelectorAll('[data-slot="message-run-avatar"]')).toHaveLength(2);
   });
 
+  it('ответ агента — Markdown, вопрос сотрудника — простой текст (#897)', () => {
+    const { container } = renderFeed([
+      message('user', { text: '**не жирный**' }),
+      message('assistant', { text: '**жирный** и список:\n\n- раз\n- два' }),
+    ]);
+
+    // Вопрос остаётся как в мессенджере: звёздочки видны, разметки нет.
+    expect(screen.getByText('**не жирный**')).toBeTruthy();
+    // Ответ разобран: сильный акцент и элементы списка.
+    expect(container.querySelector('strong')?.textContent).toBe('жирный');
+    expect(container.querySelectorAll('li')).toHaveLength(2);
+  });
+
   it('подряд идущие реплики одного автора — одна серия (без дублей аватара)', () => {
     const { container } = renderFeed([
       message('user', { text: 'Первый вопрос' }),

@@ -69,6 +69,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   nameSuffix,
   reactionsRow,
   reactionPicker,
+  textSlot,
   align: alignProp,
 }: {
   message: ChatMessage;
@@ -97,6 +98,9 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   /** Форс выравнивания хостом (ИИ-ассистент: 'both'); дефолт — настройка
    *  пользователя chat-prefs. */
   align?: 'one' | 'both';
+  /** Замена текста сообщения (ИИ-ассистент: markdown-рендер ответа, #897).
+   *  Мессенджер не передаёт слот — его текст остаётся простым (канон #48). */
+  textSlot?: ReactNode;
 }) {
   const prefAlign = useChatPrefs((s) => s.align);
   const align = alignProp ?? prefAlign;
@@ -340,7 +344,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
                 hasReactionsRow && 'pb-[2px]',
               )}
             >
-              <MessageText text={message.text} />
+              {textSlot ?? <MessageText text={message.text} />}
               {hasReactionsRow || entityRow || linkRow ? null : (
                 <MetaGhost message={message} mine={mine} noReceipts={receiptsHidden} />
               )}
