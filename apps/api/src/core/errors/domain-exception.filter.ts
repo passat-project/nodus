@@ -175,8 +175,8 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.ASSISTANT_PROVIDER_NOT_FOUND]: HttpStatus.NOT_FOUND,
   [ErrorCode.ASSISTANT_RUN_ALREADY_FINISHED]: HttpStatus.CONFLICT,
   [ErrorCode.ASSISTANT_PROVIDER_UNAVAILABLE]: HttpStatus.BAD_GATEWAY,
-  // MCP-сервер (#902): не найден — 404, не ответил на проверке — 502 (тот же
-  // класс деградации внешнего сервиса, что у провайдера моделей).
+  // MCP-сервер (#902): не найден — 404. Сбой проверки соединения — не ошибка
+  // HTTP-конвейера: ответ проверки приходит данными `ok: false`.
   [ErrorCode.ASSISTANT_MCP_NOT_FOUND]: HttpStatus.NOT_FOUND,
 };
 

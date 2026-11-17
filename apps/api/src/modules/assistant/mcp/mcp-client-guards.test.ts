@@ -74,9 +74,24 @@ describe('assertAllowedEndpoint: адрес с ключом — только н�
       'https://[fd00::1]/mcp',
       'https://[fe80::1]/mcp',
       'https://[::ffff:127.0.0.1]/mcp',
+      // Алиасы, нормализуемые в loopback (ревью 17.11.2026): FQDN-точка,
+      // docker-имена и приватный IPv4, зашитый в публичное имя.
+      'https://localhost./mcp',
+      'https://LOCALHOST./mcp',
+      'https://ip6-localhost/mcp',
+      'https://ip6-loopback/mcp',
+      'https://localhost.localdomain/mcp',
+      'https://metadata.google.internal./mcp',
+      'https://10.0.0.1.nip.io/mcp',
+      'https://127.0.0.1.nip.io/mcp',
     ]) {
       expect(() => assertAllowedEndpoint(bad), bad).toThrow(/внутреннюю сеть/);
     }
+  });
+
+  it('публичный IP в wildcard-DNS имени не блокируется (гвард не перегибает)', () => {
+    expect(() => assertAllowedEndpoint('https://8.8.8.8.nip.io/mcp')).not.toThrow();
+    expect(() => assertAllowedEndpoint('https://mcp.exa.ai./mcp')).not.toThrow();
   });
 
   it('isPrivateAddress: диапазоны и публичные адреса', () => {
