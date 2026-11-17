@@ -1,10 +1,10 @@
 import type { DepartmentNode, UserListItem } from '@nodus/contracts';
 
 /**
- * Поиск по структуре (#768): подразделения и АКТИВНЫЕ сотрудники одной
+ * Поиск по структуре (#768): отделы и АКТИВНЫЕ сотрудники одной
  * строкой. Дерево не фильтруется — выбор результата раскрывает предков,
  * центрирует канвас и открывает панель. Сотрудник без управленческого
- * подразделения (или с архивным) показывается в главной карточке компании.
+ * отдела (или с архивным) показывается в главной карточке компании.
  */
 
 export interface StructureSearchResults {
@@ -25,7 +25,7 @@ export function flattenDepartmentNodes(roots: DepartmentNode[]): DepartmentNode[
   return list;
 }
 
-/** Id всех активных подразделений дерева (для «без подразделения»). */
+/** Id всех активных отделов дерева (для «без отдела»). */
 export function activeDepartmentIds(roots: DepartmentNode[]): Set<string> {
   return new Set(flattenDepartmentNodes(roots).map((node) => node.id));
 }
@@ -36,8 +36,8 @@ export function mainDepartmentId(roots: DepartmentNode[]): string | null {
 }
 
 /**
- * Подразделение, в котором сотрудник показан в структуре: своё активное
- * управленческое, иначе главная карточка компании (нет/архив). Данные
+ * Отдел, в котором сотрудник показан в структуре: свой активный
+ * управленческий, иначе главная карточка компании (нет/архив). Данные
  * `departmentId`/`managerId` при этом не переписываются — это отображение.
  */
 export function structureDepartmentOf(
@@ -49,7 +49,7 @@ export function structureDepartmentOf(
   return mainId;
 }
 
-/** Живой поиск по названиям подразделений и ФИО/должностям активных. */
+/** Живой поиск по названиям отделов и ФИО/должностям активных. */
 export function searchStructure(
   roots: DepartmentNode[],
   users: readonly UserListItem[],

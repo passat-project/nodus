@@ -22,17 +22,17 @@ import { StructurePanelHeader } from './structure-panel-header.js';
 import { StructureSidePanel } from './structure-side-panel.js';
 
 /**
- * Правая панель подразделения (#768, вердикты владельца 12–13.11.2026):
+ * Правая панель отдела (#768, вердикты владельца 12–13.11.2026):
  * постоянная — не выезжает, не закрывается крестиком и повторным кликом по
  * карточке; поиск сотрудника сверху, ниже две группы — «Руководители»
- * (руководитель + зам, даже если они не члены подразделения) и «Подчинённые»
+ * (руководитель + зам, даже если они не члены отдела) и «Подчинённые»
  * (остальные активные члены). В главной карточке компании в «Подчинённых»
- * дополнительно видны сотрудники без управленческого подразделения и с
+ * дополнительно видны сотрудники без управленческого отдела и с
  * архивным. Секции «Подчинённые руководителя» по managerId здесь больше нет
  * (она осталась в карточке сотрудника). Руководитель/зам не дублируются в
  * «Подчинённых»; уволенные в структуре не показываются. Действия — только
  * администратору; главная карточка компании не архивируется, архив успешен
- * только у пустого подразделения (409 has_children иначе).
+ * только у пустого отдела (409 has_children иначе).
  */
 export function DepartmentPanel({
   mainCard,
@@ -43,7 +43,6 @@ export function DepartmentPanel({
   topShift,
   onArchived,
   onInvite,
-  onCreateChild,
   onEdit,
   canManage,
 }: {
@@ -55,10 +54,9 @@ export function DepartmentPanel({
   /** Сотрудник, выбранный поиском: строку подсветить и показать в скролле. */
   highlightUserId: string | null;
   topShift: number;
-  /** Подразделение архивировано: панель переключается на родителя. */
+  /** Отдел архивирован: панель переключается на родителя. */
   onArchived: (node: DepartmentNode) => void;
   onInvite: () => void;
-  onCreateChild: (parentId: string) => void;
   onEdit: (node: DepartmentNode) => void;
   /** Право `directory.manage`: админ-действия панели (без права — просмотр). */
   canManage: boolean;
@@ -93,7 +91,7 @@ export function DepartmentPanel({
     row?.scrollIntoView({ block: 'nearest' });
   }, [highlightUserId, filtered]);
 
-  function personRow(person: UserListItem) {
+  function personRow(person: UserListItem, role?: string) {
     const highlighted = highlightUserId === person.id;
     return (
       <button
@@ -113,14 +111,28 @@ export function DepartmentPanel({
           avatarUrl={person.avatarUrl}
           className="size-6 shrink-0"
         />
-        <span className="min-w-0">
+        <span className="min-w-0 flex-1">
           <span className="block truncate text-sm">{person.displayName}</span>
           <span className="block truncate text-xs text-muted-foreground">
             {person.positionName ?? ''}
           </span>
         </span>
+        {/* Роль в группе «Руководители»: руководитель и заместитель рядом, без
+            подписи их не различить (вердикт 17.11.2026). */}
+        {role ? (
+          <span className="shrink-0 text-label-xs tracking-wide text-muted-foreground uppercase">
+            {role}
+          </span>
+        ) : null}
       </button>
     );
+  }
+
+  /** Подпись роли в «Руководителях»: руководитель и заместитель (нет — пусто). */
+  function headRole(person: UserListItem): string | undefined {
+    if (node.headId === person.id) return ui.employees.fieldHead;
+    if (node.deputyId === person.id) return ui.employees.fieldDeputy;
+    return undefined;
   }
 
   return (
@@ -150,9 +162,6 @@ export function DepartmentPanel({
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={onInvite}>
                     {ui.employees.inviteToDepartment}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onCreateChild(node.id)}>
-                    {ui.employees.addSubdepartment}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => onEdit(node)}>
                     {ui.employees.editDepartmentAction}
@@ -188,13 +197,17 @@ export function DepartmentPanel({
         {filtered.heads.length > 0 && (
           <section className="flex flex-col gap-1">
             <NodeLabel label={ui.employees.panelHeads} count={groups.heads.length} />
-            <div className="flex flex-col gap-0.5">{filtered.heads.map(personRow)}</div>
+            <div className="flex flex-col gap-0.5">
+              {filtered.heads.map((person) => personRow(person, headRole(person)))}
+            </div>
           </section>
         )}
         {filtered.subordinates.length > 0 && (
           <section className="flex flex-col gap-1">
             <NodeLabel label={ui.employees.subordinates} count={groups.subordinates.length} />
-            <div className="flex flex-col gap-0.5">{filtered.subordinates.map(personRow)}</div>
+            <div className="flex flex-col gap-0.5">
+              {filtered.subordinates.map((person) => personRow(person))}
+            </div>
           </section>
         )}
         {search.trim() && filteredShown === 0 && totalShown > 0 && (

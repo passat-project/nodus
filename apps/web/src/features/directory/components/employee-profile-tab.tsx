@@ -66,7 +66,7 @@ export function EmployeeProfileTab({
   users: UserListItem[];
   /** Своя карточка (#186): фото кликабельно — загрузка/смена/удаление. */
   canEditAvatar?: boolean;
-  /** Право `directory.manage` (#441): правка подразделения/должности/руководителя. */
+  /** Право `directory.manage` (#441): правка отдела/должности/руководителя. */
   canManage?: boolean;
 }) {
   const openCard = useOpenCard();

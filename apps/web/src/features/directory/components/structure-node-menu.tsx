@@ -36,7 +36,7 @@ export function StructureNodeMenu({
           <MoreHorizontal className="size-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-auto">
+      <DropdownMenuContent side="right" align="start" sideOffset={6} className="w-auto">
         <DropdownMenuItem onClick={() => onEdit(node)}>
           {ui.employees.editDepartmentAction}
         </DropdownMenuItem>

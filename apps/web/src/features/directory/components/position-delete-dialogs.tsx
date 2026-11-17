@@ -25,11 +25,6 @@ function PositionCombobox({
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const fromPointer = useRef(false);
-  // Гард указательного устройства для ТРИГГЕРА: focus приходит на mousedown,
-  // слой монтируется между pointerdown и click — завершающий click той же мыши
-  // дисмиссит поповер (gotcha frontend «Radix Popover из фокуса»). Канон:
-  // мышь открывает по onClick, клавиатура — по onFocus без указательного флага.
-  const triggerPointer = useRef(false);
   const anchorRef = useRef<HTMLDivElement>(null);
   const selected = targets.find((target) => target.id === value) ?? null;
   const q = text.trim().toLocaleLowerCase('ru');
@@ -64,26 +59,24 @@ function PositionCombobox({
             value={open ? text : (selected?.name ?? '')}
             placeholder={ui.employees.positionReassignSearch}
             aria-label={ui.employees.positionReassignTarget}
-            onPointerDown={() => {
-              triggerPointer.current = true;
-            }}
+            // Список открывается по клику/вводу/ArrowDown, НЕ по фокусу:
+            // окно ставит фокус программно, и список «мигал» при открытии.
+            onClick={() => setOpen(true)}
             onChange={(event) => {
               setText(event.target.value);
               setOpen(true);
             }}
-            onFocus={() => {
-              if (!triggerPointer.current) setOpen(true);
-            }}
-            onClick={() => {
-              triggerPointer.current = false;
-              setOpen(true);
-            }}
             onKeyDown={(event) => {
-              if (event.key === 'Escape') {
+              if (event.key === 'Escape' && open) {
                 // Esc закрывает список, а не диалог.
                 event.stopPropagation();
                 setOpen(false);
                 setText('');
+                return;
+              }
+              if (event.key === 'ArrowDown' && !open) {
+                event.preventDefault();
+                setOpen(true);
                 return;
               }
               if (event.key === 'Enter' && open && filtered[0]) {

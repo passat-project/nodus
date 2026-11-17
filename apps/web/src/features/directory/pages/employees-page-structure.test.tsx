@@ -216,6 +216,16 @@ describe('EmployeesPage: вкладки и структура (#768)', () => {
     expect(state.divisions?.selectedId).toBe('bim');
   });
 
+  it('без отдела бейдж «Ваш отдел» — на главной карточке компании (видят все)', async () => {
+    state.view = 'structure';
+    state.users = [person('me', 'Маторин Артём')];
+    render(<EmployeesPage />);
+
+    await waitFor(() => expect(state.divisions).toBeTruthy());
+    // myDepartmentId = своё активное подразделение, иначе главная карточка.
+    expect(state.divisions?.myDepartmentId).toBe('main');
+  });
+
   it('«⋯» карточки открывает правку отдела', async () => {
     state.view = 'structure';
     render(<EmployeesPage />);

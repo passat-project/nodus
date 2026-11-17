@@ -2,7 +2,7 @@ import { Permission } from '@nodus/contracts';
 
 import { useAuthStore } from '../../../shared/auth-store.js';
 
-/** Право правки оргструктуры (#441): форма сотрудника, диалоги подразделений,
+/** Право правки оргструктуры (#441): форма сотрудника, диалоги отделов,
  *  отчёт проверки данных. Права проверяет и API (I8) — UI лишь прячет
  *  недоступные действия. */
 export function useCanManageDirectory(): boolean {

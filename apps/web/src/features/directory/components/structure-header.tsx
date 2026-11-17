@@ -1,8 +1,7 @@
-import { Briefcase, UserPlus } from 'lucide-react';
+import { IdCard, UserPlus } from 'lucide-react';
 import type { DepartmentNode, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@nodus/ui/components/tooltip';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { uiPx } from '../../../shared/ui/ui-scale.js';
@@ -16,7 +15,7 @@ const PANEL_RESERVE = uiPx(320);
 /**
  * Шапка вкладки «Структура» (#768, вердикты владельца 12–13.11.2026):
  * заголовок со штатом, primary «Пригласить» слева (только администратор),
- * поиск по подразделениям и сотрудникам (по ширине — как в «Списке»), справа
+ * поиск по отделам и сотрудникам (по ширине — как в «Списке»), справа
  * «Список должностей» иконкой с подсказкой при наведении/фокусе (вердикт
  * 16.11.2026: текстовая кнопка перекашивала шапку против панели). Панель
  * постоянна, поэтому шапка всегда резервирует её ширину — инструменты не
@@ -81,24 +80,23 @@ export function StructureHeader({
         onPickEmployee={onPickEmployee}
       />
       <span className="flex-1" />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'shrink-0',
-              positionsOpen ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-            )}
-            aria-label={ui.employees.positionsList}
-            aria-pressed={positionsOpen}
-            onClick={onTogglePositions}
-          >
-            <Briefcase className="size-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{ui.employees.positionsList}</TooltipContent>
-      </Tooltip>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={cn(
+          'shrink-0',
+          positionsOpen ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+        )}
+        // Нативная подсказка, как у «Найти меня» и масштаба (вердикт 17.11.2026):
+        // Radix-тултип в шапке дублировал роль обычного title.
+        title={ui.employees.positionsList}
+        aria-label={ui.employees.positionsList}
+        aria-pressed={positionsOpen}
+        onClick={onTogglePositions}
+      >
+        {/* IdCard — карточка сотрудника (вердикт владельца 17.11.2026), не портфель. */}
+        <IdCard className="size-4" strokeWidth={1.75} />
+      </Button>
     </div>
   );
 }

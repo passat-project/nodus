@@ -56,8 +56,8 @@ type RightPanel = 'dept' | 'positions';
 /**
  * Сотрудники (#768, вердикты 12–13.11.2026): «Список» (дефолт, каноническая
  * таблица) и «Структура» (управленческое дерево, главная карточка компании,
- * постоянная правая панель подразделения/должностей). Панель ПОСТОЯННА, как в
- * Битриксе: клик по карточке только выбирает подразделение, «Должности»
+ * постоянная правая панель отдела/должностей). Панель ПОСТОЯННА, как в
+ * Битриксе: клик по карточке только выбирает отдел, «Должности»
  * подменяют содержимое — канвас и шапка не сдвигаются. Старые адреса
  * нормализуются заменой URL; карточка сотрудника — стек карточек (ADR-0009).
  * >300 строк с обоснованием (I5, цель ≤ 200): страница держит композицию двух
@@ -140,16 +140,20 @@ export function EmployeesPage() {
   const selectedNode = selectedDeptId ? findDepartment(roots, selectedDeptId) : null;
   const positionsOpen = tab === 'structure' && rightPanel === 'positions';
   const deptOpen = tab === 'structure' && !positionsOpen && selectedNode !== null;
-  // Моё активное подразделение — бейдж «Ваш отдел» и вход в структуру.
-  const myDepartmentId =
-    meItem?.departmentId && activeIds.has(meItem.departmentId) ? meItem.departmentId : null;
+  // Бейдж «Ваш отдел»: свой активный отдел, иначе главная карточка —
+  // сотрудник без отдела (или с архивным) показан там, и бейдж видят все
+  // (вердикт 17.11.2026). Нет дерева/меня — бейджа нет.
+  const myDepartmentId = useMemo(
+    () => (meItem ? structureDepartmentOf(meItem, activeIds, mainId) : null),
+    [meItem, activeIds, mainId],
+  );
 
   const enterStructure = useCallback(() => {
     const mine = myDepartmentId;
     const previous =
       selectedDeptId && findDepartment(roots, selectedDeptId) ? selectedDeptId : null;
-    // Панель постоянна — у неё всегда есть содержимое: ранее выбранное
-    // подразделение, моё, главная карточка, первый корень.
+    // Панель постоянна — у неё всегда есть содержимое: ранее выбранный
+    // отдел, мой, главная карточка, первый корень.
     const target = previous ?? mine ?? mainId ?? roots[0]?.id ?? null;
     focusToken.current += 1;
     setSelectedDeptId(target);
@@ -157,7 +161,7 @@ export function EmployeesPage() {
     setFocus({ id: target, token: focusToken.current });
   }, [myDepartmentId, selectedDeptId, roots, mainId]);
 
-  // Вход на вкладку «Структура» — один раз на вход: моё подразделение (или
+  // Вход на вкладку «Структура» — один раз на вход: мой отдел (или
   // ранее выбранное) центрируется, его панель открыта. Возврат с «Списка»
   // повторяет центрирование; фоновые рефетчи дерева его не дёргают.
   useEffect(() => {
@@ -177,7 +181,7 @@ export function EmployeesPage() {
     setFocus({ id, token: focusToken.current });
   }
 
-  /** Клик по карточке только выбирает подразделение: панель постоянна и не
+  /** Клик по карточке только выбирает отдел: панель постоянна и не
    *  скрывается повторным кликом, канвас не перецентрируется (Битрикс). */
   function selectDepartment(id: string) {
     setSelectedDeptId(id);
@@ -255,7 +259,11 @@ export function EmployeesPage() {
             rowKey={(user) => user.id}
             isLoading={isLoading}
             onOpenRow={openEmployee}
-            rowMenu={(user) => makeCardRowMenuItems({ kind: 'employee', id: user.id }, openCard)}
+            rowMenu={(user) =>
+              makeCardRowMenuItems({ kind: 'employee', id: user.id }, openCard, {
+                openLabel: ui.employees.openProfile,
+              })
+            }
           />
         ) : isLoading || tree.isLoading ? (
           <div className="flex flex-col items-center gap-10 p-6">
@@ -337,7 +345,6 @@ export function EmployeesPage() {
             setHighlightUserId(null);
           }}
           onInvite={() => setInviteOpen(true)}
-          onCreateChild={(parentId) => setDeptDialog({ open: true, parentId, editing: null })}
           onEdit={(node) => setDeptDialog({ open: true, parentId: null, editing: node })}
           canManage={canManage}
         />

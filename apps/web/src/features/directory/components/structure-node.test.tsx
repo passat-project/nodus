@@ -261,10 +261,14 @@ describe('StructureNode: композиция карточки (#768)', () => {
     expect(screen.queryByRole('button', { name: ui.employees.departmentActions })).toBeNull();
   });
 
-  it('бейдж «Ваш отдел» — только на моей карточке, верхним краем', () => {
+  it('бейдж «Ваш отдел» — только на моей карточке, верхним краем, нейтральным тоном', () => {
     mount({ subject: bim, myDepartmentId: 'bim' });
     expect(screen.getByText(ui.employees.myDepartment)).toBeTruthy();
-    expect(card().querySelector('[data-my-department]')?.className).toContain('-top-2');
+    const badge = card().querySelector('[data-my-department]');
+    expect(badge?.className).toContain('-top-2');
+    // Нейтральный (не акцентный) тон — вердикт 17.11.2026.
+    expect(badge?.className).toContain('bg-foreground');
+    expect(badge?.className).not.toContain('bg-primary');
     cleanup();
 
     mount({ subject: bim, mainId: 'bim', myDepartmentId: 'bim' });

@@ -20,12 +20,15 @@ import type { RowMenuItem } from './row-menu.js';
 export function makeCardRowMenuItems<K extends string>(
   ref: { kind: K; id: string },
   openCard: (ref: { kind: K; id: string }) => void,
+  /** Подпись пункта «открыть»: модуль уточняет действие (например, у
+   *  сотрудника это «Открыть профиль»); по умолчанию — общее «Открыть». */
+  options: { openLabel?: string } = {},
 ): RowMenuItem[] {
   return [
     {
       id: 'open',
       icon: <SquareArrowOutUpRight className="size-3.5" />,
-      label: ui.common.open,
+      label: options.openLabel ?? ui.common.open,
       onSelect: () => openCard(ref),
     },
     {

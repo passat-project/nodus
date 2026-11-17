@@ -9,9 +9,14 @@ import { cn } from '@nodus/ui/lib/utils';
 /**
  * Автокомплит сотрудника (textbox с подсказками — та же модель и тот же
  * указательный гард Radix Popover, что у CounterpartyCombobox/FilterCombobox):
- * ввод фильтрует по имени и должности; выбор — руководитель/зам подразделения
- * в диалоге подразделения (#84). Без создания «на лету»: сотрудников приглашают
+ * ввод фильтрует по имени и должности; выбор — руководитель/зам отдела
+ * в диалоге отдела (#84). Без создания «на лету»: сотрудников приглашают
  * отдельным потоком (InviteDialog).
+ *
+ * Список открывается КЛИКОМ, вводом или ArrowDown — не по фокусу (вердикт
+ * 17.11.2026): окно, программно ставящее фокус в поле, «мигало» списком сразу
+ * после открытия. Esc закрывает список, а не диалог; список раскрывается только
+ * вниз и ограничен высотой с прокруткой.
  */
 export function EmployeeCombobox({
   value,
@@ -72,11 +77,28 @@ export function EmployeeCombobox({
             aria-label={ariaLabel}
             value={open ? text : (selected?.displayName ?? '')}
             placeholder={placeholder ?? ariaLabel}
+            onClick={() => setOpen(true)}
             onChange={(e) => {
               setText(e.target.value);
               setOpen(true);
             }}
-            onFocus={() => setOpen(true)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && open) {
+                // Esc закрывает список, а не окно отдела.
+                event.stopPropagation();
+                setOpen(false);
+                setText('');
+                return;
+              }
+              if (event.key === 'ArrowDown' && !open) {
+                event.preventDefault();
+                setOpen(true);
+              }
+              if (event.key === 'Enter' && open && filtered[0]) {
+                event.preventDefault();
+                choose(filtered[0].id);
+              }
+            }}
             className={cn('h-8 text-sm', selected && !open && 'pr-8')}
           />
         </PopoverAnchor>
@@ -93,6 +115,10 @@ export function EmployeeCombobox({
       </div>
       <PopoverContent
         align="start"
+        side="bottom"
+        // Всегда вниз: у поля достаточно места под ним, а переворот вверх в
+        // диалоге читался как «список уехал» (вердикт 13.11.2026).
+        avoidCollisions={false}
         // Фокус остаётся в поле ввода: без guard'а Radix переносил фокус в
         // список, и после первой буквы ввод уходил из поля (#768).
         onOpenAutoFocus={(event) => event.preventDefault()}

@@ -62,6 +62,8 @@ describe('StructureHeader (#768)', () => {
     const button = screen.getByRole('button', { name: ui.employees.positionsList });
     expect(button.dataset.variant).toBe('ghost');
     expect(button.getAttribute('aria-pressed')).toBe('false');
+    // Подсказка — нативная (title), как у «Найти меня» и масштаба.
+    expect(button.getAttribute('title')).toBe(ui.employees.positionsList);
   });
 
   it('панель постоянна: шапка всегда резервирует её ширину, инструменты не двигаются', () => {

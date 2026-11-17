@@ -1,6 +1,6 @@
 import type { DepartmentNode, UpdateDepartmentDto } from '@nodus/contracts';
 
-/** Чистые операции над деревом подразделений (#84, #768): UI-виды и
+/** Чистые операции над деревом отделов (#84, #768): UI-виды и
  *  оптимистичные мутации кэша (I4) — из этих функций, без состояния. */
 
 /** Путь от корня до узла включительно (для раскрытия предков при центрировании
@@ -14,7 +14,7 @@ export function departmentPath(roots: DepartmentNode[], id: string): DepartmentN
   return null;
 }
 
-/** Узел по id (панель подразделения) или null. */
+/** Узел по id (панель отдела) или null. */
 export function findDepartment(roots: DepartmentNode[], id: string): DepartmentNode | null {
   return departmentPath(roots, id)?.at(-1) ?? null;
 }
@@ -25,7 +25,7 @@ export interface DepartmentLink {
   child: string;
 }
 
-/** Маршрут от корня до выбранного подразделения рёбрами — по нему бежит
+/** Маршрут от корня до выбранного отдела рёбрами — по нему бежит
  *  точка-импульс и остаётся закрашенный след (`StructureTrace`). */
 export function departmentTrail(roots: DepartmentNode[], id: string): DepartmentLink[] {
   const path = departmentPath(roots, id);
