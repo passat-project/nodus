@@ -100,6 +100,8 @@ export function DepartmentDialog({
   // (сервер дополнительно защищает от циклов).
   const excluded = editing ? collectSubtreeIds(editing) : new Set<string>();
   const parentOptions = departmentOptions.filter((option) => !excluded.has(option.id));
+  // Создание из карточки: родитель задан контекстом — показываем его имя.
+  const parentName = departmentOptions.find((option) => option.id === parentDraft)?.name ?? null;
 
   function submit() {
     if (!valid || pending) return;
@@ -146,22 +148,32 @@ export function DepartmentDialog({
             />
           </Field>
           <Field label={ui.employees.parentDepartment}>
-            <Select
-              value={parentDraft ?? NO_PARENT}
-              onValueChange={(value) => setParentDraft(value === NO_PARENT ? null : value)}
-            >
-              <SelectTrigger size="sm" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_PARENT}>{ui.employees.noParent}</SelectItem>
-                {parentOptions.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {`${'— '.repeat(option.depth)}${option.name}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {editing ? (
+              <Select
+                value={parentDraft ?? NO_PARENT}
+                onValueChange={(value) => setParentDraft(value === NO_PARENT ? null : value)}
+              >
+                <SelectTrigger size="sm" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_PARENT}>{ui.employees.noParent}</SelectItem>
+                  {parentOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              // Создание — родитель задан контекстом (карточка/пустое
+              // состояние): только имя, без выбора и тире уровней (#768).
+              <span className="flex h-8 min-w-0 items-center text-sm text-foreground">
+                <span className="truncate" title={parentName ?? ui.employees.noParent}>
+                  {parentName ?? ui.employees.noParent}
+                </span>
+              </span>
+            )}
           </Field>
           <Field label={ui.employees.fieldHead}>
             <EmployeeCombobox

@@ -147,7 +147,7 @@ describe('OpenAPI: генерация из кода и публикация /api
       '/api/v1/directory/departments/{id}/archive',
       '/api/v1/directory/positions',
       '/api/v1/directory/positions/{id}',
-      '/api/v1/directory/positions/{id}/archive',
+      '/api/v1/directory/positions/{id}/reassign',
       '/api/v1/directory/roles',
       '/api/v1/directory/roles/{id}',
       '/api/v1/directory/roles/{id}/members',

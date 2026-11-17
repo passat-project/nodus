@@ -13,6 +13,10 @@ import {
 import { Permission, permissionsOfModule, ui, type AccessModule } from '@nodus/contracts';
 
 import { resolveLettersTab } from '../../features/correspondence/lib/letters-tab.js';
+import {
+  employeesTabSearch,
+  resolveEmployeesTab,
+} from '../../features/directory/lib/employees-tab.js';
 import { assistantAvailable } from '../../shared/api/assistant-available.js';
 import { registriesAvailable } from '../../shared/api/registries-available.js';
 
@@ -194,25 +198,19 @@ export const NAV_MODULES: NavModuleDef[] = [
     label: ui.nav.employees,
     icon: Users,
     tabs: [
-      // #84: «Подразделения» (дерево + панель) — дефолт вместо графа людей:
-      // сотни карточек сотрудников непросматриваемы (вердикт владельца 23.09).
-      {
-        id: 'divisions',
-        label: ui.employees.viewDivisions,
-        search: {},
-        isActive: (s) => (s.get('view') ?? 'divisions') === 'divisions',
-      },
-      {
-        id: 'subordination',
-        label: ui.employees.viewSubordination,
-        search: { view: 'subordination' },
-        isActive: (s) => s.get('view') === 'subordination',
-      },
+      // #768: две вкладки — «Список» (дефолт) и «Структура» (управленческая).
+      // Старые адреса нормализует страница (divisions/subordination → structure).
       {
         id: 'list',
         label: ui.employees.viewList,
-        search: { view: 'list' },
-        isActive: (s) => s.get('view') === 'list',
+        search: {},
+        isActive: (s) => resolveEmployeesTab(s.get('view') ?? undefined) === 'list',
+      },
+      {
+        id: 'structure',
+        label: ui.employees.structure,
+        search: employeesTabSearch('structure'),
+        isActive: (s) => resolveEmployeesTab(s.get('view') ?? undefined) === 'structure',
       },
     ],
   },

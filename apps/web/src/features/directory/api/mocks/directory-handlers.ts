@@ -2,9 +2,12 @@ import { http, HttpResponse } from 'msw';
 import {
   createDepartmentSchema,
   createInvitationSchema,
+  createPositionSchema,
   departmentTreeQuerySchema,
   listUsersQuerySchema,
+  reassignPositionSchema,
   updateDepartmentSchema,
+  updatePositionSchema,
 } from '@nodus/contracts';
 
 import {
@@ -31,19 +34,94 @@ import { demoPositions } from '../../../../shared/mocks/data/positions.js';
  * схемами contracts.
  */
 let departmentState = demoDepartments;
+let positionState = demoPositions;
+let userState = demoUserListItems;
 
 export const directoryHandlers = [
-  // Должности (#441/#433): редактор маршрутов считает держателей должности
-  // и показывает предупреждение «на должности никого нет».
+  // Должности (#441/#433/#768): справочник управленческих и юридических;
+  // удаление/переназначение — как на сервере (держатели, деактивация строки).
   http.get('/api/v1/directory/positions', ({ request }) => {
     const url = new URL(request.url);
     const kind = url.searchParams.get('kind') === 'legal' ? 'legal' : 'management';
-    return HttpResponse.json(demoPositions.filter((position) => position.kind === kind));
+    return HttpResponse.json(
+      positionState.filter((position) => position.kind === kind && position.isActive),
+    );
+  }),
+  http.post('/api/v1/directory/positions', async ({ request }) => {
+    const parsed = createPositionSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return HttpResponse.json(
+        { code: 'VALIDATION_FAILED', message: 'Invalid position payload' },
+        { status: 400 },
+      );
+    }
+    const position = { id: crypto.randomUUID(), isActive: true, ...parsed.data };
+    positionState = [...positionState, position];
+    return HttpResponse.json(position, { status: 201 });
+  }),
+  http.patch('/api/v1/directory/positions/:id', async ({ params, request }) => {
+    const parsed = updatePositionSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return HttpResponse.json(
+        { code: 'VALIDATION_FAILED', message: 'Invalid position patch' },
+        { status: 400 },
+      );
+    }
+    const current = positionState.find((position) => position.id === params.id);
+    if (!current) {
+      return HttpResponse.json(
+        { code: 'NOT_FOUND', message: 'Position not found' },
+        { status: 404 },
+      );
+    }
+    const next = { ...current, ...parsed.data };
+    positionState = positionState.map((position) => (position.id === next.id ? next : position));
+    return HttpResponse.json(next);
+  }),
+  http.post('/api/v1/directory/positions/:id/reassign', async ({ params, request }) => {
+    const parsed = reassignPositionSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return HttpResponse.json(
+        { code: 'VALIDATION_FAILED', message: 'Invalid reassign payload' },
+        { status: 400 },
+      );
+    }
+    // Как на сервере (#768): переносятся ВСЕ держатели, включая уволенных —
+    // отдельного архива должностей у уволенных нет (вердикт 13.11.2026).
+    userState = userState.map((user) =>
+      user.positionId === params.id ? { ...user, positionId: parsed.data.targetId } : user,
+    );
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.delete('/api/v1/directory/positions/:id', ({ params }) => {
+    const current = positionState.find((position) => position.id === params.id);
+    if (!current) {
+      return HttpResponse.json(
+        { code: 'NOT_FOUND', message: 'Position not found' },
+        { status: 404 },
+      );
+    }
+    // Считаем ВСЕХ держателей, как сервер: уволенные тоже ссылаются на строку.
+    const holders = userState.filter((user) => user.positionId === params.id).length;
+    if (holders > 0) {
+      return HttpResponse.json(
+        {
+          code: 'DIRECTORY_POSITION_IN_USE',
+          message: 'Position has holders',
+          details: { positionId: params.id, reason: 'holders', holders },
+        },
+        { status: 409 },
+      );
+    }
+    positionState = positionState.map((position) =>
+      position.id === params.id ? { ...position, isActive: false } : position,
+    );
+    return new HttpResponse(null, { status: 204 });
   }),
   http.get('/api/v1/directory/users', ({ request }) => {
     const url = new URL(request.url);
     const query = listUsersQuerySchema.safeParse(Object.fromEntries(url.searchParams));
-    let items = demoUserListItems;
+    let items = userState;
     if (query.success && query.data.departmentId) {
       const department = departmentState.find((d) => d.id === query.data.departmentId);
       if (department)
@@ -67,7 +145,7 @@ export const directoryHandlers = [
     const kind = query.success ? query.data.kind : 'management';
     // Дерево — из concept-state (departmentState), иначе POST/PATCH теряются
     // на рефетче после оптимистичной мутации (валидация 24.09).
-    return HttpResponse.json(buildDepartmentTree(kind, demoUserListItems, departmentState));
+    return HttpResponse.json(buildDepartmentTree(kind, userState, departmentState));
   }),
   http.post('/api/v1/directory/departments', async ({ request }) => {
     const parsed = createDepartmentSchema.safeParse(await request.json());

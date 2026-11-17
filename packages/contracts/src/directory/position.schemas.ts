@@ -42,3 +42,16 @@ export const updatePositionSchema = z
   .refine((value) => Object.keys(value).length > 0, { message: 'at least one field required' });
 
 export type UpdatePositionDto = z.infer<typeof updatePositionSchema>;
+
+/**
+ * Переназначение сотрудников должности (#768): ВСЕ сотрудники, включая
+ * уволенных, переводятся на другую активную должность того же вида —
+ * отдельного архива должностей у уволенных нет, после переназначения на
+ * прежнюю должность не ссылается никто и её можно удалить.
+ * Целевая должность — не та же самая (проверка на сервере).
+ */
+export const reassignPositionSchema = z.object({
+  targetId: z.uuid(),
+});
+
+export type ReassignPositionDto = z.infer<typeof reassignPositionSchema>;

@@ -1,186 +1,259 @@
-import { ChevronDown, ChevronUp, Folder, UserRound, Users } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { LocateFixed } from 'lucide-react';
 import type { DepartmentNode } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
-import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
-import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { filterTreeByName, totalEmployees } from '../lib/department-tree.js';
+import { uiPx } from '../../../shared/ui/ui-scale.js';
+import { INITIAL_VIEW, centerAtPoint } from '../lib/canvas-view.js';
+import type { DepartmentCardStats } from '../lib/department-card-stats.js';
+import { departmentTrail } from '../lib/department-tree.js';
+import { useCanvasView } from '../lib/use-canvas-view.js';
+import { useStructureExpansion } from '../lib/use-structure-expansion.js';
 import { useTreeEdges, type TreeLink } from '../lib/use-tree-edges.js';
+import { StructureDots } from './structure-dots.js';
+import { StructureNode } from './structure-node.js';
+import { StructureTrace } from './structure-trace.js';
+
+/** Ширина постоянной правой панели (w-80) в дизайн-px: канвас резервирует её
+ *  ВСЕГДА (панель не выезжает и не скрывается — модель Битрикса, вердикт
+ *  13.11.2026), поэтому дерево не дёргается при выборе подразделения. */
+const PANEL_INSET_PX = uiPx(320);
+
+/** Запрос центрирования: id узла или null — центрировать корни. */
+export interface StructureFocus {
+  id: string | null;
+  /** Новая метка = новый запрос (повторный выбор того же узла тоже центрирует). */
+  token: number;
+}
 
 /**
- * Вид «Подразделения» (#84, референс — дерево карточек отделов Битрикса):
- * канвас дерева карточек-подразделений в грамматике контура (node-панели,
- * ортогональные рёбра use-tree-edges, snapPx). Карточка = подразделение
- * (название, руководитель, счётчики сотрудников с подподразделами и подотделов),
- * клик — правая панель подразделения; шеврон — свернуть/развернуть подотделы
- * (дефолт: свёрнуто от 3-го уровня — сотни людей не бывают на канвасе ВООБЩЕ).
- * Поиск фильтрует ветки. Рёбра следуют только за РАСКРЫТЫМИ узлами.
+ * Вид «Структура» (#768, вердикты владельца 12–16.11.2026): канвас дерева
+ * карточек-подразделений в грамматике контура. Раскладка — ФИКСИРОВАННЫЕ
+ * СЛОТЫ: слот узла равен карточке, ряд детей — абсолютный слой под родителем,
+ * поэтому раскрытие не двигает карточки других уровней. Раскрытие —
+ * АККОРДЕОН ПО УРОВНЯМ, как в Битриксе: главная карточка и её прямые
+ * подразделения видны по умолчанию; на каждом следующем уровне раскрыт один
+ * узел — цепочка от главной карточки к выбранному. Клик по соседу на уровне
+ * закрывает прежнюю ветку, клик по уже раскрытому предку глубокие уровни НЕ
+ * закрывает, клик по выбранному — no-op. Шеврон футера сворачивает ветку
+ * целиком и переносит выбор на свою карточку, если выбранный был внутри.
+ * Маршрут к выбранному подсвечивается (предки — тон маршрута, выбранная —
+ * толстый контур с кольцом), по нему бежит точка-импульс со следом
+ * (`StructureTrace`). Полотно двигается как в редакторе: Ctrl/⌘+колесо — зум к
+ * курсору, колесо — панорама, ЛКМ по пустому месту — перетаскивание; текст на
+ * карточках при этом не выделяется. Центрирование — ТОЛЬКО по явному запросу
+ * (вход на вкладку, выбор из поиска, сброс масштаба): раскрытие, шеврон и
+ * выбор подразделения экран не двигают. Фон — точечная сетка как в
+ * автоматизации (`StructureDots`): живёт во вьюпорте и едет с полотном;
+ * «Найти меня» слева от масштаба выбирает меня через поиск (вердикт
+ * 16.11.2026).
  */
 export function DivisionsView({
   roots,
   selectedId,
+  mainId,
+  myDepartmentId,
+  focus,
+  canManage,
+  statsById,
   onSelect,
-  query,
+  onCreateChild,
+  onEdit,
+  onLocateMe,
 }: {
   roots: DepartmentNode[];
   selectedId: string | null;
+  /** Главная карточка компании (первый корень дерева). */
+  mainId: string | null;
+  /** Моё активное подразделение — бейдж «Ваш отдел» на карточке. */
+  myDepartmentId: string | null;
+  focus: StructureFocus | null;
+  canManage: boolean;
+  /** Данные карточек (руководитель, замы, подчинённые, чип) — считает страница. */
+  statsById: ReadonlyMap<string, DepartmentCardStats>;
   onSelect: (id: string) => void;
-  query: string;
+  onCreateChild: (parentId: string) => void;
+  /** «⋯» карточки: правка отдела (полное меню действий — #881). */
+  onEdit: (node: DepartmentNode) => void;
+  /** «Найти меня»: выбор себя через поиск (нет обработчика — нет кнопки). */
+  onLocateMe?: () => void;
 }) {
+  const viewportRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const nodeRefs = useRef(new Map<string, HTMLDivElement>());
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
+  const [pendingCenter, setPendingCenter] = useState<StructureFocus | null>(null);
+  const { view, setView, panning, handlers } = useCanvasView(viewportRef);
+  /** Раскрытие/шеврон/выбор и контуры маршрута — отдельный хук
+   *  (`lib/use-structure-expansion.ts`): канвас держит раскладку и полотно. */
+  const { expandedIds, routeIds, childrenOf, selectNode, toggleNode } = useStructureExpansion({
+    roots,
+    selectedId,
+    mainId,
+    onSelect,
+  });
 
-  const searching = query.trim().length > 0;
-  const visible = useMemo(() => filterTreeByName(roots, query), [roots, query]);
-
-  // Дефолт свёрнутости — узлы глубже 2-го уровня (корень + отделы видны сразу).
+  // Центрирование — только по явному запросу (вход/поиск/сброс масштаба).
   useEffect(() => {
-    const deep = new Set<string>();
-    const walk = (nodes: DepartmentNode[], depth: number) => {
-      for (const node of nodes) {
-        if (depth >= 2 && node.children.length > 0) deep.add(node.id);
-        walk(node.children, depth + 1);
-      }
-    };
-    walk(roots, 0);
-    setCollapsed(deep);
-  }, [roots]);
+    if (focus) setPendingCenter(focus);
+  }, [focus]);
+
+  // Полотно живёт в transform, поэтому сдвигаем view на дельту между текущим
+  // центром цели и центром свободной части вьюпорта (работает при любом
+  // масштабе: rects уже отмасштабированы).
+  useLayoutEffect(() => {
+    if (!pendingCenter) return;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const box = viewport.getBoundingClientRect();
+    const free = { width: Math.max(0, box.width - PANEL_INSET_PX), height: box.height };
+    const targets = pendingCenter.id
+      ? [nodeRefs.current.get(pendingCenter.id)].filter(
+          (el): el is HTMLDivElement => el !== undefined,
+        )
+      : roots
+          .map((node) => nodeRefs.current.get(node.id))
+          .filter((el): el is HTMLDivElement => el !== undefined);
+    if (targets.length === 0) {
+      setPendingCenter(null);
+      return;
+    }
+    const rects = targets.map((element) => element.getBoundingClientRect());
+    const center = rects.reduce(
+      (acc, rect) => ({
+        x: acc.x + (rect.left + rect.width / 2 - box.left) / rects.length,
+        y: acc.y + (rect.top + rect.height / 2 - box.top) / rects.length,
+      }),
+      { x: 0, y: 0 },
+    );
+    setView((current) => centerAtPoint(current, center, free));
+    setPendingCenter(null);
+  }, [pendingCenter, roots, setView]);
 
   const links = useMemo(() => {
     const list: TreeLink[] = [];
     const walk = (nodes: DepartmentNode[]) => {
       for (const node of nodes) {
-        if (searching || !collapsed.has(node.id)) {
-          for (const child of node.children) list.push({ parent: node.id, child: child.id });
-        }
-        walk(node.children);
+        const children = childrenOf(node);
+        for (const child of children) list.push({ parent: node.id, child: child.id });
+        walk(children);
       }
     };
-    walk(visible);
+    walk(roots);
     return list;
-  }, [visible, collapsed, searching]);
+  }, [roots, childrenOf]);
 
-  const { segments, ports, portRadius } = useTreeEdges(rootRef, nodeRefs, links);
+  const { segments, ports, routes, portRadius } = useTreeEdges(rootRef, nodeRefs, links, view.zoom);
 
-  // Поиск без совпадений — не пустой канвас: сообщаем, что веток нет.
-  if (searching && visible.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center p-6">
-        <Empty className="max-w-sm">
-          <EmptyTitle>{ui.employees.searchNoResults}</EmptyTitle>
-        </Empty>
-      </div>
-    );
-  }
+  const trail = useMemo(
+    () => (selectedId ? departmentTrail(roots, selectedId) : []),
+    [roots, selectedId],
+  );
+  /** Новый ключ = новый пробег следа: смена выбора или повторный выбор из
+   *  поиска (focus.token), клики по карточкам экран не двигают. */
+  const traceKey = `${selectedId ?? ''}:${focus?.token ?? 0}`;
 
-  function toggle(node: DepartmentNode) {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(node.id)) next.delete(node.id);
-      else next.add(node.id);
-      return next;
+  /** Сброс масштаба: 100% и центрирование выбранного (или главной карточки). */
+  function resetView() {
+    setView(INITIAL_VIEW);
+    setPendingCenter({
+      id: selectedId ?? mainId ?? roots[0]?.id ?? null,
+      token: Date.now(),
     });
   }
 
-  function renderNode(node: DepartmentNode): React.ReactNode {
-    const open = searching || !collapsed.has(node.id);
-    const total = totalEmployees(node);
-    return (
-      <div key={node.id} className="flex flex-col items-center gap-10">
-        {/* Карточка — контейнер node-panel; кликабельная область и шеврон —
-            СОСЕДНИЕ кнопки (не вложенные: интерактив внутри role=button
-            нарушает ARIA, замечание валидации 24.09). */}
+  return (
+    <div
+      ref={viewportRef}
+      data-structure-canvas
+      className={cn(
+        // overflow-clip, НЕ overflow-hidden: hidden остаётся скролл-контейнером,
+        // и фокус на кнопке карточки авто-скроллит полотно при росте ветки —
+        // «экран уезжает» на половину прибавки (репро #768, 15.11.2026).
+        'relative h-full touch-none overflow-clip select-none',
+        panning ? 'cursor-grabbing' : 'cursor-grab',
+      )}
+      onDragStart={(event) => event.preventDefault()}
+      {...handlers}
+    >
+      <StructureDots x={view.x} y={view.y} zoom={view.zoom} />
+      <div
+        data-structure-canvas-content
+        className="absolute top-0 left-0 w-full origin-top-left"
+        style={{ transform: `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.zoom})` }}
+      >
+        {/* Ширина = вьюпорт, а не контент: раскрытие ветки не перецентрирует
+            всё дерево (иначе карточки «прыгают» на месте). */}
         <div
-          ref={(el) => {
-            if (!el) return;
-            nodeRefs.current.set(node.id, el);
-            return () => {
-              nodeRefs.current.delete(node.id);
-            };
-          }}
-          className={cn(
-            'node-panel relative w-60 transition-colors hover:border-input',
-            selectedId === node.id && 'border-input bg-accent/40',
-          )}
+          ref={rootRef}
+          data-structure-root
+          style={{ paddingRight: PANEL_INSET_PX }}
+          className="relative w-full py-12"
         >
+          <svg
+            className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+            aria-hidden="true"
+          >
+            {segments.map((segment) => (
+              <path
+                key={segment.key}
+                d={segment.d}
+                fill="none"
+                stroke="var(--edge)"
+                strokeWidth={1}
+              />
+            ))}
+            {ports.map((port) => (
+              <circle key={port.key} cx={port.x} cy={port.y} r={portRadius} fill="var(--port)" />
+            ))}
+            <StructureTrace routes={routes} trail={trail} runKey={traceKey} />
+          </svg>
+          <div className="flex justify-center gap-6 px-6">
+            {roots.map((node) => (
+              <StructureNode
+                key={node.id}
+                node={node}
+                depth={0}
+                mainId={mainId}
+                myDepartmentId={myDepartmentId}
+                selectedId={selectedId}
+                routeIds={routeIds}
+                expandedIds={expandedIds}
+                canManage={canManage}
+                childrenOf={childrenOf}
+                statsById={statsById}
+                nodeRefs={nodeRefs}
+                onSelect={selectNode}
+                onToggle={toggleNode}
+                onCreateChild={onCreateChild}
+                onEdit={onEdit}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2">
+        {onLocateMe ? (
           <button
             type="button"
-            onClick={() => onSelect(node.id)}
-            className="block w-full px-3 py-2.5 pr-9 text-left"
+            onClick={onLocateMe}
+            title={ui.employees.locateMe}
+            aria-label={ui.employees.locateMe}
+            data-locate-me
+            className="flex size-7 items-center justify-center rounded-lg border border-border bg-card/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:text-foreground"
           >
-            <span className="block truncate text-sm font-medium">{node.name}</span>
-            {node.headName ? (
-              <span className="mt-1.5 flex items-center gap-1.5">
-                <PersonAvatar name={node.headName} avatarUrl={null} className="size-5 shrink-0" />
-                <span className="truncate text-xs text-muted-foreground">{node.headName}</span>
-              </span>
-            ) : (
-              <span className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <UserRound className="size-5 shrink-0" strokeWidth={1.5} aria-hidden />
-                <span className="truncate">{ui.employees.noHead}</span>
-              </span>
-            )}
-            <span className="mt-2 flex items-center gap-3 font-mono text-label-sm text-muted-foreground tabular-nums">
-              <span
-                className="flex items-center gap-1"
-                title={`${ui.employees.employeesCount}: ${total}`}
-              >
-                <Users className="size-3.5" strokeWidth={1.75} aria-hidden />
-                {total}
-              </span>
-              {node.children.length > 0 && (
-                <span
-                  className="flex items-center gap-1"
-                  title={`${ui.employees.subdepartmentsCount}: ${node.children.length}`}
-                >
-                  <Folder className="size-3.5" strokeWidth={1.75} aria-hidden />
-                  {node.children.length}
-                </span>
-              )}
-            </span>
+            <LocateFixed className="size-4" />
           </button>
-          {node.children.length > 0 && (
-            <button
-              type="button"
-              aria-label={open ? ui.employees.collapseDepartment : ui.employees.expandDepartment}
-              onClick={() => toggle(node)}
-              className="absolute top-2 right-1.5 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-            </button>
-          )}
-        </div>
-        {open && node.children.length > 0 && (
-          <div className="flex items-start gap-4">{node.children.map(renderNode)}</div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-full overflow-auto">
-      <div ref={rootRef} className="relative w-max min-w-full py-6">
-        <svg
-          className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
-          aria-hidden="true"
+        ) : null}
+        <button
+          type="button"
+          onClick={resetView}
+          title={ui.employees.zoomReset}
+          aria-label={ui.employees.zoomReset}
+          className="rounded-lg border border-border bg-card/90 px-2 py-1 font-mono text-label-sm text-muted-foreground tabular-nums shadow-sm backdrop-blur transition-colors hover:text-foreground"
         >
-          {segments.map((segment) => (
-            <path
-              key={segment.key}
-              d={segment.d}
-              fill="none"
-              stroke="var(--edge)"
-              strokeWidth={1}
-            />
-          ))}
-          {ports.map((port) => (
-            <circle key={port.key} cx={port.x} cy={port.y} r={portRadius} fill="var(--port)" />
-          ))}
-        </svg>
-        <div className="flex justify-center gap-6 px-6">{visible.map(renderNode)}</div>
+          {Math.round(view.zoom * 100)}%
+        </button>
       </div>
     </div>
   );

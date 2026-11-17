@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -15,10 +15,12 @@ import {
   createPositionSchema,
   orgUnitKindSchema,
   Permission,
+  reassignPositionSchema,
   updatePositionSchema,
   type CreatePositionDto,
   type OrgUnitKind,
   type Position,
+  type ReassignPositionDto,
   type UpdatePositionDto,
 } from '@nodus/contracts';
 
@@ -35,7 +37,7 @@ const listQuerySchema = z.object({
   includeArchived: z.stringbool().default(false),
 });
 
-/** Должности (`/api/v1/directory/positions`): справочник, CRUD, архивация. */
+/** Должности (`/api/v1/directory/positions`): справочник, CRUD, удаление. */
 @ApiTags('directory')
 @ApiBearerAuth()
 @Controller('directory/positions')
@@ -84,7 +86,7 @@ export class PositionsController {
   @ApiOkResponse({ standardSchema: positionSchema })
   @ApiErrors(400, 401, 403, 404, 409)
   update(
-    @Param('id') id: string,
+    @Param('id', new ZodValidationPipe(z.uuid())) id: string,
     @Body({ schema: updatePositionSchema, pipes: [new ZodValidationPipe(updatePositionSchema)] })
     dto: UpdatePositionDto,
     @GetUser() actor: AuthUser,
@@ -92,20 +94,48 @@ export class PositionsController {
     return this.positionsService.update(id, dto, actor.id);
   }
 
-  @Post(':id/archive')
+  @Post(':id/reassign')
   @HttpCode(204)
   @RequirePermissions(Permission.DIRECTORY_MANAGE)
-  @Audit({ action: 'directory.position.archive', entity: 'position' })
-  @ApiOperation({ summary: 'Архивация должности (без удаления, I15)' })
+  @Audit({ action: 'directory.position.reassign', entity: 'position' })
+  @ApiOperation({ summary: 'Переназначить активных держателей на другую должность' })
   @ApiParam({
     name: 'id',
     description: 'UUID должности',
     schema: { type: 'string', format: 'uuid' },
   })
-  @ApiNoContentResponse({ description: 'Должность архивирована' })
-  @ApiErrors(401, 403, 404)
+  @ApiNoContentResponse({ description: 'Держатели переназначены' })
+  @ApiErrors(400, 401, 403, 404)
   @ApiIdempotencyKey()
-  archive(@Param('id') id: string, @GetUser() actor: AuthUser): Promise<void> {
-    return this.positionsService.archive(id, actor.id);
+  reassign(
+    @Param('id', new ZodValidationPipe(z.uuid())) id: string,
+    @Body({
+      schema: reassignPositionSchema,
+      pipes: [new ZodValidationPipe(reassignPositionSchema)],
+    })
+    dto: ReassignPositionDto,
+    @GetUser() actor: AuthUser,
+  ): Promise<void> {
+    return this.positionsService.reassign(id, dto, actor.id);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @RequirePermissions(Permission.DIRECTORY_MANAGE)
+  @Audit({ action: 'directory.position.delete', entity: 'position' })
+  @ApiOperation({ summary: 'Удаление должности (строка деактивируется, I15)' })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID должности',
+    schema: { type: 'string', format: 'uuid' },
+  })
+  @ApiNoContentResponse({ description: 'Должность удалена' })
+  @ApiErrors(400, 401, 403, 404, 409)
+  @ApiIdempotencyKey()
+  delete(
+    @Param('id', new ZodValidationPipe(z.uuid())) id: string,
+    @GetUser() actor: AuthUser,
+  ): Promise<void> {
+    return this.positionsService.delete(id, actor.id);
   }
 }

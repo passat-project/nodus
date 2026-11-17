@@ -121,7 +121,7 @@ export function useUserCard(id: string) {
 }
 
 /** Справочник должностей вида (GET /directory/positions?kind=, #441):
- *  выбор должности при правке сотрудника и отчёт «должности без сотрудников».
+ *  источник значений поля «Должность» в карточке и правке сотрудника.
  *  Хук живёт в shared (#433): его использует и редактор маршрутов. */
 export { usePositions } from '../../../shared/api/positions.js';
 
@@ -184,14 +184,14 @@ export function useActivateUser(id: string) {
   });
 }
 
-/** Должности вида — мутации администратора (#441): создание, переименование,
- *  архивация (I15: удаления нет). Инвалидация справочника и отчёта данных. */
+/** Создание должности вида — мутация администратора (#441, #768). Ошибки
+ *  разбирает диалог создания (дубль названия — подсказкой в поле, остальные —
+ *  тостом), поэтому общий тост здесь не дублируется. */
 export function useCreatePosition(kind: OrgUnitKind) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: CreatePositionDto) =>
       api<Position>('/directory/positions', { method: 'POST', body }),
-    onError: (error) => toastApiError(error),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: [...directoryKeys.all, 'positions', kind] });
       // Список сотрудников несёт денормализованный positionName — освежаем.
@@ -214,10 +214,29 @@ export function useUpdatePosition(kind: OrgUnitKind) {
   });
 }
 
-export function useArchivePosition(kind: OrgUnitKind) {
+/** Удаление должности (#768, право `directory.manage`): сервер отказывает,
+ *  если на должности остались сотрудники (включая уволенных) —
+ *  `DIRECTORY_POSITION_IN_USE`; UI открывает переназначение. */
+export function useDeletePosition(kind: OrgUnitKind) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api<void>(`/directory/positions/${id}/archive`, { method: 'POST' }),
+    mutationFn: (id: string) => api<void>(`/directory/positions/${id}`, { method: 'DELETE' }),
+    // Причина отказа (держатели) разбирается панелью диалогом — общий тост
+    // здесь дублировал бы её.
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: [...directoryKeys.all, 'positions', kind] });
+      void queryClient.invalidateQueries({ queryKey: directoryKeys.users() });
+    },
+  });
+}
+
+/** Переназначение сотрудников должности (включая уволенных) на другую (#768):
+ *  после успеха должность можно удалить — счётчик станет нулевым. */
+export function useReassignPosition(kind: OrgUnitKind) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, targetId }: { id: string; targetId: string }) =>
+      api<void>(`/directory/positions/${id}/reassign`, { method: 'POST', body: { targetId } }),
     onError: (error) => toastApiError(error),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: [...directoryKeys.all, 'positions', kind] });

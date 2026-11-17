@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PositionsService } from './positions.service.js';
 
@@ -17,8 +17,13 @@ describe('PositionsService', () => {
   const positions = {
     findAllByKind: vi.fn(),
     findById: vi.fn(),
+    findByName: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    lockForUpdate: vi.fn(),
+    lockMany: vi.fn(),
+    countHolders: vi.fn(),
+    reassignHolders: vi.fn(),
   };
   const tx = { run: vi.fn((cb: (t: string) => unknown) => cb('tx-handle')) };
   const eventBus = { emit: vi.fn() };
@@ -27,6 +32,10 @@ describe('PositionsService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    positions.lockMany.mockResolvedValue(undefined);
+    positions.lockForUpdate.mockResolvedValue(true);
+    positions.findById.mockResolvedValue(position({ kind: 'management' }));
+    positions.findByName.mockResolvedValue(null);
     service = new PositionsService(positions as never, tx as never, eventBus as never);
   });
 
@@ -71,5 +80,241 @@ describe('PositionsService', () => {
     });
     expect(positions.update).not.toHaveBeenCalled();
     expect(eventBus.emit).not.toHaveBeenCalled();
+  });
+
+  describe('создание должности (#768, вердикт 13.11.2026)', () => {
+    it('свободное имя — создаёт строку и пишет событие created', async () => {
+      positions.create.mockResolvedValue(
+        position({ id: 'pos-9', name: 'Архитектор', kind: 'management' }),
+      );
+
+      const created = await service.create(
+        { name: 'Архитектор', kind: 'management', sortOrder: 0 },
+        'admin-1',
+      );
+
+      expect(positions.create).toHaveBeenCalledWith(
+        { name: 'Архитектор', kind: 'management', sortOrder: 0 },
+        'tx-handle',
+      );
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'tx-handle',
+        'directory.position.created',
+        { positionId: 'pos-9', kind: 'management' },
+        expect.objectContaining({ actorId: 'admin-1' }),
+      );
+      expect(created.id).toBe('pos-9');
+    });
+
+    it('активная должность с тем же именем → DIRECTORY_POSITION_EXISTS, без вставки', async () => {
+      positions.findByName.mockResolvedValue(position({ id: 'pos-1', isActive: true }));
+
+      await expect(
+        service.create({ name: 'Инженер', kind: 'management', sortOrder: 0 }, 'admin-1'),
+      ).rejects.toMatchObject({
+        code: 'DIRECTORY_POSITION_EXISTS',
+        details: { positionId: 'pos-1' },
+      });
+      expect(positions.create).not.toHaveBeenCalled();
+      expect(eventBus.emit).not.toHaveBeenCalled();
+    });
+
+    it('неактивная строка с тем же именем — восстанавливается, дубль не плодится', async () => {
+      positions.findByName.mockResolvedValue(position({ id: 'pos-1', isActive: false }));
+      positions.update.mockResolvedValue(position({ id: 'pos-1', isActive: true }));
+
+      const restored = await service.create(
+        { name: 'Инженер', kind: 'management', sortOrder: 0 },
+        'admin-1',
+      );
+
+      expect(positions.update).toHaveBeenCalledWith('pos-1', { isActive: true }, 'tx-handle');
+      expect(positions.create).not.toHaveBeenCalled();
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'tx-handle',
+        'directory.position.updated',
+        { positionId: 'pos-1', changedFields: ['isActive'] },
+        expect.objectContaining({ actorId: 'admin-1' }),
+      );
+      expect(restored.isActive).toBe(true);
+    });
+  });
+
+  it('переименование в занятое имя → DIRECTORY_POSITION_EXISTS, без записи', async () => {
+    positions.findById.mockResolvedValue(position({ id: 'pos-1', kind: 'management' }));
+    positions.findByName.mockResolvedValue(
+      position({ id: 'pos-2', kind: 'management', name: 'ГИП' }),
+    );
+
+    await expect(service.update('pos-1', { name: 'ГИП' }, 'admin-1')).rejects.toMatchObject({
+      code: 'DIRECTORY_POSITION_EXISTS',
+      details: { positionId: 'pos-2' },
+    });
+    expect(positions.update).not.toHaveBeenCalled();
+  });
+
+  it('переименование в своё же имя — не дубль', async () => {
+    positions.findById.mockResolvedValue(position({ id: 'pos-1', kind: 'management' }));
+    positions.findByName.mockResolvedValue(
+      position({ id: 'pos-1', kind: 'management', name: 'Инженер-проектировщик' }),
+    );
+    positions.update.mockResolvedValue(position({ id: 'pos-1' }));
+
+    await service.update('pos-1', { name: 'Инженер-проектировщик' }, 'admin-1');
+
+    expect(positions.update).toHaveBeenCalledWith(
+      'pos-1',
+      { name: 'Инженер-проектировщик' },
+      'tx-handle',
+    );
+  });
+
+  describe('удаление должности (#768)', () => {
+    it('есть сотрудники (включая уволенных) → 409 holders, строка не трогается', async () => {
+      positions.countHolders.mockResolvedValue(3);
+
+      await expect(service.delete('pos-1', 'admin-1')).rejects.toMatchObject({
+        code: 'DIRECTORY_POSITION_IN_USE',
+        details: { positionId: 'pos-1', reason: 'holders', holders: 3 },
+      });
+      expect(positions.update).not.toHaveBeenCalled();
+      expect(eventBus.emit).not.toHaveBeenCalled();
+    });
+
+    it('нет сотрудников → строка деактивируется, событие archived', async () => {
+      positions.countHolders.mockResolvedValue(0);
+
+      await service.delete('pos-1', 'admin-1');
+
+      expect(positions.lockForUpdate).toHaveBeenCalledWith('pos-1', 'tx-handle');
+      expect(positions.update).toHaveBeenCalledWith('pos-1', { isActive: false }, 'tx-handle');
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'tx-handle',
+        'directory.position.archived',
+        { positionId: 'pos-1' },
+        expect.objectContaining({ actorId: 'admin-1' }),
+      );
+    });
+
+    it('строку забрал конкурент → NOT_FOUND, без записи и события', async () => {
+      positions.countHolders.mockResolvedValue(0);
+      positions.lockForUpdate.mockResolvedValue(false);
+
+      await expect(service.delete('pos-1', 'admin-1')).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(positions.update).not.toHaveBeenCalled();
+      expect(eventBus.emit).not.toHaveBeenCalled();
+    });
+
+    it('повторное удаление уже неактивной строки — идемпотентно, без события', async () => {
+      positions.findById.mockResolvedValue(position({ isActive: false }));
+
+      await service.delete('pos-1', 'admin-1');
+
+      expect(positions.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('переназначение сотрудников (#768)', () => {
+    it('переводит всех сотрудников, включая уволенных, на активную должность того же вида', async () => {
+      positions.findById.mockImplementation((id: string) =>
+        Promise.resolve(
+          id === 'pos-1'
+            ? position({ id: 'pos-1', kind: 'management' })
+            : position({ id: 'pos-2', kind: 'management', name: 'ГИП' }),
+        ),
+      );
+      positions.reassignHolders.mockResolvedValue(4);
+
+      await service.reassign('pos-1', { targetId: 'pos-2' }, 'admin-1');
+
+      expect(positions.lockMany).toHaveBeenCalledWith(['pos-1', 'pos-2'], 'tx-handle');
+      expect(positions.reassignHolders).toHaveBeenCalledWith(
+        'pos-1',
+        'pos-2',
+        'management',
+        'tx-handle',
+      );
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'tx-handle',
+        'directory.position.updated',
+        {
+          positionId: 'pos-1',
+          changedFields: ['holders'],
+          targetId: 'pos-2',
+          reassigned: 4,
+        },
+        expect.objectContaining({ actorId: 'admin-1' }),
+      );
+    });
+
+    it('та же должность → DIRECTORY_REFERENCE_INVALID self', async () => {
+      await expect(
+        service.reassign('pos-1', { targetId: 'pos-1' }, 'admin-1'),
+      ).rejects.toMatchObject({
+        code: 'DIRECTORY_REFERENCE_INVALID',
+        details: { field: 'targetId', reason: 'self' },
+      });
+      expect(positions.reassignHolders).not.toHaveBeenCalled();
+    });
+
+    it('неактивный источник → NOT_FOUND, без записи', async () => {
+      positions.findById.mockResolvedValue(position({ isActive: false }));
+
+      await expect(
+        service.reassign('pos-1', { targetId: 'pos-2' }, 'admin-1'),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(positions.lockMany).not.toHaveBeenCalled();
+      expect(positions.reassignHolders).not.toHaveBeenCalled();
+    });
+
+    it('целевая должность другого вида → kind_mismatch', async () => {
+      positions.findById.mockImplementation((id: string) =>
+        Promise.resolve(
+          id === 'pos-1'
+            ? position({ id: 'pos-1', kind: 'management' })
+            : position({ id: 'pos-2', kind: 'legal' }),
+        ),
+      );
+
+      await expect(
+        service.reassign('pos-1', { targetId: 'pos-2' }, 'admin-1'),
+      ).rejects.toMatchObject({
+        code: 'DIRECTORY_REFERENCE_INVALID',
+        details: { field: 'targetId', reason: 'kind_mismatch' },
+      });
+      expect(positions.reassignHolders).not.toHaveBeenCalled();
+    });
+
+    it('неактивная целевая должность → inactive', async () => {
+      positions.findById.mockImplementation((id: string) =>
+        Promise.resolve(
+          id === 'pos-1'
+            ? position({ id: 'pos-1', kind: 'management' })
+            : position({ id: 'pos-2', kind: 'management', isActive: false }),
+        ),
+      );
+
+      await expect(
+        service.reassign('pos-1', { targetId: 'pos-2' }, 'admin-1'),
+      ).rejects.toMatchObject({
+        code: 'DIRECTORY_REFERENCE_INVALID',
+        details: { field: 'targetId', reason: 'inactive' },
+      });
+    });
+
+    it('несуществующая целевая должность → not_found', async () => {
+      positions.findById.mockImplementation((id: string) =>
+        Promise.resolve(id === 'pos-1' ? position({ id: 'pos-1' }) : null),
+      );
+
+      await expect(
+        service.reassign('pos-1', { targetId: 'missing' }, 'admin-1'),
+      ).rejects.toMatchObject({
+        code: 'DIRECTORY_REFERENCE_INVALID',
+        details: { field: 'targetId', reason: 'not_found' },
+      });
+    });
   });
 });

@@ -16,6 +16,15 @@ interface Port {
   y: number;
 }
 
+/** Маршрут «родитель → ребёнок» одной линией: по нему при раскрытии бежит
+ *  точка-импульс (вердикт 13.11.2026 — как при переключении вкладок модулей). */
+export interface TreeRoute {
+  parent: string;
+  child: string;
+  d: string;
+  length: number;
+}
+
 export interface TreeLink {
   parent: string;
   child: string;
@@ -31,16 +40,22 @@ export interface TreeLink {
  * Координаты — snapPx (равномерная яркость hairline на любом зуме); порты r=3
  * только на целевом конце. Замер — по фактическим rect узлов (ResizeObserver):
  * рендерятся только раскрытые узлы, рёбра следуют за видимым деревом.
+ * Канвас масштабируется CSS-transform'ом (#768): rects приходят уже в
+ * экранных px масштаба, поэтому дельты делятся на `scale` — SVG живёт в
+ * непреобразованном пространстве полотна.
  */
 export function useTreeEdges(
   rootRef: RefObject<HTMLDivElement | null>,
   nodeRefs: RefObject<Map<string, HTMLElement>>,
   links: TreeLink[],
-): { segments: Segment[]; ports: Port[]; portRadius: number } {
+  scale = 1,
+): { segments: Segment[]; ports: Port[]; routes: TreeRoute[]; portRadius: number } {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [ports, setPorts] = useState<Port[]>([]);
+  const [routes, setRoutes] = useState<TreeRoute[]>([]);
 
   useLayoutEffect(() => {
+    const factor = scale || 1;
     function measure() {
       const root = rootRef.current;
       if (!root) return;
@@ -49,9 +64,9 @@ export function useTreeEdges(
       for (const [id, node] of nodeRefs.current ?? []) {
         const rect = node.getBoundingClientRect();
         pos.set(id, {
-          x: rect.left + rect.width / 2 - box.left,
-          y: rect.top - box.top,
-          h: rect.height,
+          x: (rect.left + rect.width / 2 - box.left) / factor,
+          y: (rect.top - box.top) / factor,
+          h: rect.height / factor,
         });
       }
       const childrenOf = new Map<string, string[]>();
@@ -62,6 +77,7 @@ export function useTreeEdges(
       }
       const nextSegments: Segment[] = [];
       const nextPorts: Port[] = [];
+      const nextRoutes: TreeRoute[] = [];
       for (const [parentId, childIds] of childrenOf) {
         const from = pos.get(parentId);
         const childPos = childIds
@@ -73,9 +89,13 @@ export function useTreeEdges(
         const trunkX = snapPx(Math.round(from.x));
         const only = childPos.length === 1 ? childPos[0] : undefined;
         if (only && Math.abs(only.x - from.x) < 1) {
-          nextSegments.push({
-            key: `trunk-${parentId}`,
-            d: `M ${trunkX} ${y0} V ${y1 - PORT_GAP}`,
+          const d = `M ${trunkX} ${y0} V ${y1 - PORT_GAP}`;
+          nextSegments.push({ key: `trunk-${parentId}`, d });
+          nextRoutes.push({
+            parent: parentId,
+            child: childIds[0]!,
+            d,
+            length: Math.abs(y1 - PORT_GAP - y0),
           });
           nextPorts.push({ key: `port-${childIds[0]}`, x: trunkX, y: y1 - 1 });
           continue;
@@ -90,27 +110,54 @@ export function useTreeEdges(
           const to = pos.get(childId);
           if (!to) continue;
           const x = snapPx(Math.round(to.x));
-          nextSegments.push({ key: `drop-${childId}`, d: `M ${x} ${busY} V ${to.y - PORT_GAP}` });
+          const endY = to.y - PORT_GAP;
+          nextSegments.push({ key: `drop-${childId}`, d: `M ${x} ${busY} V ${endY}` });
+          nextRoutes.push({
+            parent: parentId,
+            child: childId,
+            d: `M ${trunkX} ${y0} V ${busY} H ${x} V ${endY}`,
+            length: Math.abs(busY - y0) + Math.abs(x - trunkX) + Math.abs(endY - busY),
+          });
           nextPorts.push({ key: `port-${childId}`, x, y: to.y - 1 });
         }
       }
+      // Сравнение — не только геометрия, но и ИДЕНТИЧНОСТЬ (#768): после
+      // оптимистичной вставки узел приходит с `temp-…`, рефетч — с реальным
+      // id при том же rect. Старое сравнение «только d» оставляло прежний
+      // ключ, и след/импульс не находили ребро выбранного узла.
       setSegments((prev) =>
-        prev.length === nextSegments.length && prev.every((s, i) => s.d === nextSegments[i]?.d)
+        prev.length === nextSegments.length &&
+        prev.every((s, i) => s.key === nextSegments[i]?.key && s.d === nextSegments[i]?.d)
           ? prev
           : nextSegments,
       );
       setPorts((prev) =>
         prev.length === nextPorts.length &&
-        prev.every((p, i) => p.x === nextPorts[i]?.x && p.y === nextPorts[i]?.y)
+        prev.every(
+          (p, i) =>
+            p.key === nextPorts[i]?.key && p.x === nextPorts[i]?.x && p.y === nextPorts[i]?.y,
+        )
           ? prev
           : nextPorts,
+      );
+      setRoutes((prev) =>
+        prev.length === nextRoutes.length &&
+        prev.every(
+          (r, i) =>
+            r.parent === nextRoutes[i]?.parent &&
+            r.child === nextRoutes[i]?.child &&
+            r.d === nextRoutes[i]?.d &&
+            r.length === nextRoutes[i]?.length,
+        )
+          ? prev
+          : nextRoutes,
       );
     }
     measure();
     const observer = new ResizeObserver(measure);
     if (rootRef.current) observer.observe(rootRef.current);
     return () => observer.disconnect();
-  }, [links, nodeRefs, rootRef]);
+  }, [links, nodeRefs, rootRef, scale]);
 
-  return { segments, ports, portRadius: PORT_R };
+  return { segments, ports, routes, portRadius: PORT_R };
 }

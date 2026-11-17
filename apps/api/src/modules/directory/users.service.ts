@@ -89,9 +89,11 @@ export class UsersService {
     return this.tx.run(async (tx) => {
       // Ссылки оргструктуры (#441): руководитель, подразделения и должности —
       // только существующие активные объекты своего вида структуры. Внутри
-      // транзакции — без окна TOCTOU между проверкой и записью.
+      // транзакции — без окна TOCTOU между проверкой и записью. Строки
+      // должностей предварительно лочатся: параллельное удаление ждёт коммита.
       await this.references.ensureActiveUser(dto.managerId, 'managerId', tx);
       await this.references.ensureDepartment(dto.departmentId, 'management', 'departmentId', tx);
+      await this.references.lockPositions([dto.positionId, dto.legalPositionId], tx);
       await this.references.ensurePosition(dto.positionId, 'management', 'positionId', tx);
       await this.references.ensureDepartment(
         dto.legalDepartmentId,
@@ -161,6 +163,8 @@ export class UsersService {
       await this.references.ensureNoManagerCycle(id, dto.managerId, tx);
       await this.references.ensureActiveUser(dto.managerId, 'managerId', tx);
       await this.references.ensureDepartment(dto.departmentId, 'management', 'departmentId', tx);
+      // Замки должностей до проверки: удаление должности ждёт коммита назначения.
+      await this.references.lockPositions([dto.positionId, dto.legalPositionId], tx);
       await this.references.ensurePosition(dto.positionId, 'management', 'positionId', tx);
       await this.references.ensureDepartment(
         dto.legalDepartmentId,

@@ -68,6 +68,18 @@ export class ReferenceGuard {
     if (position.kind !== kind) this.fail(field, 'kind_mismatch');
   }
 
+  /** Замки строк должностей перед проверкой ссылок (#768): параллельное
+   *  удаление должности ждёт коммита назначения и затем видит её держателя;
+   *  порядок захватов — по id (`lockMany`), встречные назначения без дедлока. */
+  async lockPositions(
+    ids: ReadonlyArray<string | null | undefined>,
+    tx: TransactionClient,
+  ): Promise<void> {
+    const list = ids.filter((id): id is string => typeof id === 'string');
+    if (list.length === 0) return;
+    await this.positions.lockMany(list, tx);
+  }
+
   /** Руководитель сотрудника не может быть им самим (цикл длины 1). */
   ensureNotSelf(employeeId: string, managerId: string | null | undefined, field: string): void {
     if (managerId === employeeId) this.fail(field, 'self');

@@ -93,32 +93,37 @@ export function EmployeeCombobox({
       </div>
       <PopoverContent
         align="start"
-        className="max-h-60 w-(--radix-popover-trigger-width) overflow-auto p-1"
+        // Фокус остаётся в поле ввода: без guard'а Radix переносил фокус в
+        // список, и после первой буквы ввод уходил из поля (#768).
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        className="w-(--radix-popover-trigger-width) overflow-hidden p-1"
         onPointerDown={() => {
           fromPointer.current = true;
         }}
       >
-        {filtered.length === 0 && (
-          <span className="block px-2 py-1.5 text-xs text-muted-foreground">
-            {ui.filters.notFound}
-          </span>
-        )}
-        {filtered.map((user) => (
-          <button
-            key={user.id}
-            type="button"
-            onClick={() => choose(user.id)}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
-          >
-            <span className="min-w-0 flex-1">
-              <span className="block truncate">{user.displayName}</span>
-              <span className="block truncate text-xs text-muted-foreground">
-                {user.positionName ?? ''}
-              </span>
+        <div className="max-h-60 overflow-y-auto">
+          {filtered.length === 0 && (
+            <span className="block px-2 py-1.5 text-xs text-muted-foreground">
+              {ui.filters.notFound}
             </span>
-            {user.id === value && <Check className="size-3.5 shrink-0 text-muted-foreground" />}
-          </button>
-        ))}
+          )}
+          {filtered.map((user) => (
+            <button
+              key={user.id}
+              type="button"
+              onClick={() => choose(user.id)}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{user.displayName}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {user.positionName ?? ''}
+                </span>
+              </span>
+              {user.id === value && <Check className="size-3.5 shrink-0 text-muted-foreground" />}
+            </button>
+          ))}
+        </div>
       </PopoverContent>
     </Popover>
   );

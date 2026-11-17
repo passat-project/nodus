@@ -1,6 +1,6 @@
-import { MoreHorizontal, Search, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import type { DepartmentNode, OrgUnitKind, UserListItem } from '@nodus/contracts';
+import { Building2, MoreHorizontal, Search } from 'lucide-react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { DepartmentNode, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@nodus/ui/components/dialog';
@@ -15,41 +15,48 @@ import { NodeLabel } from '@nodus/ui/components/node-label';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
-import { activeStaffCount } from '../../../shared/lib/staff-count.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { useArchiveDepartment } from '../api/directory-api.js';
+import { structurePanelGroups } from '../lib/department-groups.js';
+import { StructurePanelHeader } from './structure-panel-header.js';
+import { StructureSidePanel } from './structure-side-panel.js';
 
 /**
- * Правая панель выбранного подразделения (#84, референс — правая колонка окна
- * структуры Битрикса): руководитель и зам (кликабельны — карточка сотрудника
- * в стеке, ADR-0009), сотрудники подразделения ТЕКУЩЕЙ структуры (поиск по
- * имени/должности), подчинённые руководителя по managerId — ВОЗМОЖНЫ из других
- * подразделений и это нормально (кейс «группы ГИПов», требование 1 #18).
- * Вталкивающая колонка: обёртка монтирована постоянно (w-0), раскрытие —
- * transition-[width] 200ms (закон выдвижных поверхностей, навык nodus-ui-style);
- * вертикальная граница — структурная линия зоны (канон сепараторов 24.09).
+ * Правая панель подразделения (#768, вердикты владельца 12–13.11.2026):
+ * постоянная — не выезжает, не закрывается крестиком и повторным кликом по
+ * карточке; поиск сотрудника сверху, ниже две группы — «Руководители»
+ * (руководитель + зам, даже если они не члены подразделения) и «Подчинённые»
+ * (остальные активные члены). В главной карточке компании в «Подчинённых»
+ * дополнительно видны сотрудники без управленческого подразделения и с
+ * архивным. Секции «Подчинённые руководителя» по managerId здесь больше нет
+ * (она осталась в карточке сотрудника). Руководитель/зам не дублируются в
+ * «Подчинённых»; уволенные в структуре не показываются. Действия — только
+ * администратору; главная карточка компании не архивируется, архив успешен
+ * только у пустого подразделения (409 has_children иначе).
  */
 export function DepartmentPanel({
-  kind,
+  mainCard,
   node,
   users,
+  activeDepartmentIds,
+  highlightUserId,
   topShift,
-  onClose,
+  onArchived,
   onInvite,
   onCreateChild,
   onEdit,
   canManage,
 }: {
-  kind: OrgUnitKind;
-  node: DepartmentNode | null;
-  users: UserListItem[];
-  /** Сдвиг верха панели к оси контура (axisY measureCircuit минус верх корня
-   *  страницы, считает страница): верхняя граница идёт В ОДНУ ГОРИЗОНТАЛЬ со
-   *  связью модуль→разделы (вердикт владельца 24.09) — вертикали бордера
-   *  упираются в ось, геометрия замыкается. Панель — в потоке ряда: правый
-   *  край ЧУТЬ левее границы мягкой рамы (mr 8), низ — mb 8 (вердикт 24.09). */
+  /** Первый корень дерева — главная карточка компании. */
+  mainCard: boolean;
+  node: DepartmentNode;
+  users: readonly UserListItem[];
+  activeDepartmentIds: ReadonlySet<string>;
+  /** Сотрудник, выбранный поиском: строку подсветить и показать в скролле. */
+  highlightUserId: string | null;
   topShift: number;
-  onClose: () => void;
+  /** Подразделение архивировано: панель переключается на родителя. */
+  onArchived: (node: DepartmentNode) => void;
   onInvite: () => void;
   onCreateChild: (parentId: string) => void;
   onEdit: (node: DepartmentNode) => void;
@@ -57,45 +64,49 @@ export function DepartmentPanel({
   canManage: boolean;
 }) {
   const openCard = useOpenCard();
-  const archive = useArchiveDepartment(kind);
+  const archive = useArchiveDepartment('management');
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [search, setSearch] = useState('');
-  // Кэш последнего узла: контент не мигает пустотой на схлопывании.
-  const [cached, setCached] = useState<DepartmentNode | null>(node);
-  useEffect(() => {
-    if (node) setCached(node);
-  }, [node]);
+  const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     setSearch('');
-  }, [node?.id]);
+  }, [node.id]);
 
-  const shown = node ?? cached;
-  const members = useMemo(() => {
-    if (!shown) return [];
-    const q = search.trim().toLowerCase();
-    return users
-      .filter((u) => (kind === 'management' ? u.departmentId : u.legalDepartmentId) === shown.id)
-      .filter(
-        (u) =>
-          !q ||
-          u.displayName.toLowerCase().includes(q) ||
-          (u.positionName ?? '').toLowerCase().includes(q),
-      );
-  }, [shown, users, kind, search]);
-  const reports = useMemo(
-    () => (shown?.headId ? users.filter((u) => u.managerId === shown.headId) : []),
-    [shown, users],
+  const groups = useMemo(
+    () => structurePanelGroups(node, users, { mainCard, activeDepartmentIds }),
+    [node, users, mainCard, activeDepartmentIds],
   );
+  const filtered = useMemo(
+    () => structurePanelGroups(node, users, { mainCard, activeDepartmentIds, query: search }),
+    [node, users, mainCard, activeDepartmentIds, search],
+  );
+  const totalShown = groups.heads.length + groups.subordinates.length;
+  const filteredShown = filtered.heads.length + filtered.subordinates.length;
+
+  // Выбранный поиском сотрудник — в поле зрения панели (строка не теряется
+  // ниже скролла). Выделение живёт до следующего выбора.
+  useLayoutEffect(() => {
+    if (!highlightUserId) return;
+    const row = bodyRef.current?.querySelector(
+      `[data-employee-id="${highlightUserId}"]`,
+    ) as HTMLElement | null;
+    row?.scrollIntoView({ block: 'nearest' });
+  }, [highlightUserId, filtered]);
 
   function personRow(person: UserListItem) {
+    const highlighted = highlightUserId === person.id;
     return (
       <button
         key={person.id}
         type="button"
+        data-employee-id={person.id}
         onClick={(e) =>
           openCard({ kind: 'employee', id: person.id }, e.currentTarget.getBoundingClientRect())
         }
-        className="flex items-center gap-2.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-accent"
+        className={cn(
+          'flex items-center gap-2.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-accent',
+          highlighted && 'bg-accent/60',
+        )}
       >
         <PersonAvatar
           name={person.displayName}
@@ -113,159 +124,87 @@ export function DepartmentPanel({
   }
 
   return (
-    <div
-      aria-hidden={node === null}
-      style={{ top: topShift }}
-      className={cn(
-        // Дополнительная мягкая область с бордером по периметру (вердикт
-        // владельца 24.09): absolute в корне страницы — верх ТОЧНО на
-        // горизонтали оси контура (topShift = axisY − верх корня), правый край
-        // чуть левее границы мягкой рамы (right 8), низ bottom 8; радиус
-        // ступени поверхностей 14px; ширину резервирует padding корня, ширина
-        // панели анимируется (закон выдвижных поверхностей).
-        'absolute right-2 bottom-2 z-10 overflow-hidden transition-[width] duration-200 ease-out',
-        node ? 'w-80' : 'w-0',
-      )}
-    >
-      <div className="flex h-full w-80 flex-col gap-4 overflow-hidden rounded-[14px] border border-border bg-card p-4">
-        {shown && (
-          <>
-            <div className="flex items-start gap-2">
-              <div className="min-w-0 flex-1">
-                <h2 className="truncate text-base font-semibold">{shown.name}</h2>
-                <span className="text-xs text-muted-foreground">
-                  {kind === 'management' ? ui.employees.kindManagement : ui.employees.kindLegal}
-                </span>
-              </div>
-              {canManage && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      aria-label={ui.employees.departmentActions}
+    <StructureSidePanel
+      topShift={topShift}
+      header={
+        <StructurePanelHeader
+          title={node.name}
+          leading={
+            mainCard ? (
+              <Building2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            ) : undefined
+          }
+          actions={
+            canManage ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={ui.employees.departmentActions}
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={onInvite}>
+                    {ui.employees.inviteToDepartment}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onCreateChild(node.id)}>
+                    {ui.employees.addSubdepartment}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onEdit(node)}>
+                    {ui.employees.editDepartmentAction}
+                  </DropdownMenuItem>
+                  {/* Главную карточку компании не архивируем (вердикт 12.11);
+                      непустой узел не архивируется (409 has_children). */}
+                  {!mainCard && node.children.length === 0 && (
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => setArchiveOpen(true)}
                     >
-                      <MoreHorizontal className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={onInvite}>
-                      {ui.employees.inviteToDepartment}
+                      {ui.employees.archiveDepartment}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onCreateChild(shown.id)}>
-                      {ui.employees.addSubdepartment}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onEdit(shown)}>
-                      {ui.employees.editDepartmentAction}
-                    </DropdownMenuItem>
-                    {/* Непустой узел не архивируется (409 has_children): активные
-                        дети archived-родителя выпали бы из дерева вида. */}
-                    {shown.children.length === 0 && (
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onClick={() => setArchiveOpen(true)}
-                      >
-                        {ui.employees.archiveDepartment}
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-              {/* Крестик закрытия панели — У КРАЯ справа (вердикт 24.09). */}
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-foreground"
-                aria-label={ui.common.close}
-                onClick={onClose}
-              >
-                <X className="size-4" />
-              </Button>
-            </div>
-            <div className="flex flex-col gap-3">
-              <section className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-muted-foreground">
-                  {ui.employees.panelHead}
-                </span>
-                {shown.headId && shown.headName ? (
-                  personRow(
-                    users.find((u) => u.id === shown.headId) ?? {
-                      id: shown.headId,
-                      displayName: shown.headName,
-                      status: 'active',
-                      avatarUrl: null,
-                      positionName: null,
-                      departmentName: null,
-                      email: '',
-                      managerId: null,
-                      departmentId: null,
-                      legalDepartmentId: null,
-                      positionId: null,
-                      legalPositionId: null,
-                    },
-                  )
-                ) : (
-                  <span className="px-2 text-xs text-muted-foreground">{ui.common.notSet}</span>
-                )}
-              </section>
-              {shown.deputyName && (
-                <section className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {ui.employees.panelDeputy}
-                  </span>
-                  {personRow(
-                    users.find((u) => u.id === shown.deputyId) ?? {
-                      id: shown.deputyId ?? '',
-                      displayName: shown.deputyName,
-                      status: 'active',
-                      avatarUrl: null,
-                      positionName: null,
-                      departmentName: null,
-                      email: '',
-                      managerId: null,
-                      departmentId: null,
-                      legalDepartmentId: null,
-                      positionId: null,
-                      legalPositionId: null,
-                    },
                   )}
-                </section>
-              )}
-            </div>
-            <section className="flex min-h-0 flex-1 flex-col gap-2">
-              {/* Счётчик — штат (#723): строки уволенных остаются в списке
-                  (их карточки открываются), но в число не входят — как
-                  memberCount подразделения на API. */}
-              <NodeLabel label={ui.employees.panelMembers} count={activeStaffCount(members)} />
-              <div className="relative">
-                <Search className="absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={ui.employees.searchMembers}
-                  className="h-8 pl-7 text-sm"
-                />
-              </div>
-              <div className="min-h-0 flex-1 overflow-auto">
-                {members.length > 0 ? (
-                  <div className="flex flex-col gap-0.5">{members.map(personRow)}</div>
-                ) : (
-                  <span className="px-2 text-sm text-muted-foreground">
-                    {ui.employees.emptyDepartment}
-                  </span>
-                )}
-              </div>
-            </section>
-            {reports.length > 0 && (
-              <section className="flex shrink-0 flex-col gap-1.5">
-                <NodeLabel label={ui.employees.panelReports} count={activeStaffCount(reports)} />
-                <div className="flex flex-col gap-0.5">{reports.map(personRow)}</div>
-              </section>
-            )}
-          </>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : undefined
+          }
+        />
+      }
+    >
+      <div className="relative shrink-0">
+        <Search className="absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={ui.employees.searchMembers}
+          className="h-8 pl-7 text-sm"
+        />
+      </div>
+
+      <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
+        {filtered.heads.length > 0 && (
+          <section className="flex flex-col gap-1">
+            <NodeLabel label={ui.employees.panelHeads} count={groups.heads.length} />
+            <div className="flex flex-col gap-0.5">{filtered.heads.map(personRow)}</div>
+          </section>
+        )}
+        {filtered.subordinates.length > 0 && (
+          <section className="flex flex-col gap-1">
+            <NodeLabel label={ui.employees.subordinates} count={groups.subordinates.length} />
+            <div className="flex flex-col gap-0.5">{filtered.subordinates.map(personRow)}</div>
+          </section>
+        )}
+        {search.trim() && filteredShown === 0 && totalShown > 0 && (
+          <span className="px-2 text-sm text-muted-foreground">{ui.filters.notFound}</span>
+        )}
+        {totalShown === 0 && (
+          <span className="px-2 text-sm text-muted-foreground">{ui.employees.emptyDepartment}</span>
         )}
       </div>
+
       <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
         <DialogContent className="w-full bg-card sm:max-w-sm">
           <DialogTitle className="text-base font-semibold text-foreground">
@@ -280,11 +219,10 @@ export function DepartmentPanel({
               variant="destructive"
               disabled={archive.isPending}
               onClick={() => {
-                if (!shown) return;
-                archive.mutate(shown.id, {
+                archive.mutate(node.id, {
                   onSuccess: () => {
                     setArchiveOpen(false);
-                    onClose();
+                    onArchived(node);
                   },
                 });
               }}
@@ -294,6 +232,6 @@ export function DepartmentPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </StructureSidePanel>
   );
 }

@@ -36,6 +36,8 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   // Ссылка оргструктуры (руководитель/подразделение/должность) негодна — 400
   // с details { field, reason } (#441).
   [ErrorCode.DIRECTORY_REFERENCE_INVALID]: HttpStatus.BAD_REQUEST,
+  [ErrorCode.DIRECTORY_POSITION_IN_USE]: HttpStatus.CONFLICT,
+  [ErrorCode.DIRECTORY_POSITION_EXISTS]: HttpStatus.CONFLICT,
   // Удаление единственной личной стадии «Моего плана» — конфликт состояния.
   [ErrorCode.TASK_LAST_STAGE]: HttpStatus.CONFLICT,
   // Маршрут задачи (ADR-0020): переход недоступен / гейт не пройден — конфликт
