@@ -1,14 +1,23 @@
 import { z } from 'zod';
 
+import type {
+  LetterAttachment,
+  LetterDetail,
+  LetterListItem,
+  LetterTreeNode,
+  LetterTreeResponse,
+  Paginated,
+  WorkflowTransition,
+} from '@nodus/contracts';
+
 import { defineTool } from '../tool-definition.js';
 import {
   asArray,
-  asRecord,
+  asTyped,
   date,
   entityLink,
   finalize,
   hasMore,
-  itemsOf,
   listBlock,
   nameOf,
   num,
@@ -33,8 +42,7 @@ const listInput = z.object({
   limit: z.number().int().min(1).max(20).default(20),
 });
 
-function letterRow(raw: unknown): string | null {
-  const letter = asRecord(raw);
+function letterRow(letter: LetterListItem | null): string | null {
   if (!letter) return null;
   const id = str(letter.id);
   if (!id) return null;
@@ -42,10 +50,9 @@ function letterRow(raw: unknown): string | null {
     str(letter.regNumber) ? `№${str(letter.regNumber)}` : 'без номера',
     str(letter.subject) ? `«${str(letter.subject)}»` : '(без темы)',
     `направление ${letter.direction === 'outgoing' ? 'исходящее' : 'входящее'}`,
-    `стадия «${str(asRecord(letter.stage)?.name) ?? '—'}»`,
+    `стадия «${str(letter.stage?.name) ?? '—'}»`,
   ];
-  const counterparty = asRecord(letter.counterparty);
-  if (counterparty) parts.push(`корреспондент «${nameOf(counterparty) ?? '—'}»`);
+  if (letter.counterparty) parts.push(`корреспондент «${nameOf(letter.counterparty) ?? '—'}»`);
   if (str(letter.regDate)) parts.push(`дата ${date(letter.regDate)}`);
   if (str(letter.responseDeadline)) parts.push(`срок ответа ${date(letter.responseDeadline)}`);
   const attachments = num(letter.attachmentCount);
@@ -85,9 +92,9 @@ export const lettersListTool = defineTool({
       ...(input.counterpartyId ? { counterpartyId: input.counterpartyId } : {}),
     },
   }),
-  project: (data) => {
-    const rows = itemsOf(data)
-      .map(letterRow)
+  project: (data: Paginated<LetterListItem>) => {
+    const rows = asArray(data.items)
+      .map((raw) => letterRow(asTyped<LetterListItem>(raw)))
       .filter((row): row is string => row !== null);
     // Ссылка «Открыть» — у карточки письма (letters.get), не у списка.
     return { text: finalize(listBlock('Письма', rows, { more: hasMore(data) })) };
@@ -109,15 +116,15 @@ export const lettersGetTool = defineTool({
   input: getInput,
   api: { method: 'GET', path: '/letters/:id' },
   build: (input) => ({ path: `/letters/${input.id}` }),
-  project: (data) => {
-    const letter = asRecord(data);
+  project: (data: LetterDetail) => {
+    const letter = asTyped<LetterDetail>(data);
     const id = str(letter?.id);
     if (!letter || !id) return { text: 'Письмо не найдено или недоступно' };
     const attachments = asArray(letter.attachments);
     const lines = [
       `${str(letter.regNumber) ? `№${str(letter.regNumber)}` : 'Без номера'} «${str(letter.subject) ?? '(без темы)'}» (id ${id})`,
       `Направление: ${letter.direction === 'outgoing' ? 'исходящее' : 'входящее'}`,
-      `Стадия: «${str(asRecord(letter.stage)?.name) ?? '—'}»`,
+      `Стадия: «${str(letter.stage?.name) ?? '—'}»`,
       `Корреспондент: ${nameOf(letter.counterparty) ?? '—'}`,
       `Адресат: ${nameOf(letter.addressee) ?? '—'}`,
       `Номер и дата корреспондента: ${str(letter.theirNumber) ?? '—'} от ${str(letter.theirDate) ? date(letter.theirDate) : '—'}`,
@@ -128,7 +135,7 @@ export const lettersGetTool = defineTool({
       ...attachments
         .slice(0, 10)
         .map((raw) => {
-          const file = asRecord(raw);
+          const file = asTyped<LetterAttachment>(raw);
           if (!file) return null;
           const size = num(file.size);
           const fileId = str(file.fileId);
@@ -158,9 +165,9 @@ export const lettersTransitionsTool = defineTool({
   input: transitionsInput,
   api: { method: 'GET', path: '/letters/:id/transitions' },
   build: (input) => ({ path: `/letters/${input.id}/transitions` }),
-  project: (data) => {
+  project: (data: WorkflowTransition[]) => {
     const rows = asArray(data).map((raw) => {
-      const transition = asRecord(raw);
+      const transition = asTyped<WorkflowTransition>(raw);
       if (!transition) return null;
       const blocked = asArray(transition.blockedBy).length;
       return `«${str(transition.name) ?? '—'}» → стадия «${str(transition.toStageName) ?? '—'}»${blocked ? ` (заблокировано: ${blocked})` : ''}${transition.canOverride ? ', обходимо с причиной' : ''}`;
@@ -192,25 +199,25 @@ export const lettersRelationsTool = defineTool({
   input: relationsInput,
   api: { method: 'GET', path: '/letters/:id/tree' },
   build: (input) => ({ path: `/letters/${input.id}/tree` }),
-  project: (data) => {
+  project: (data: LetterTreeResponse) => {
     // Форма `GET /letters/:id/tree` — `{ root: { children: […] }, truncated }`
     // (контракт letterTreeResponseSchema): обходим дерево в глубину, а не
     // читаем плоский список (иначе «связей нет» на любой переписке).
-    const root = asRecord(asRecord(data)?.root);
-    const truncated = asRecord(data)?.truncated === true;
+    const tree = asTyped<LetterTreeResponse>(data);
+    const truncated = tree?.truncated === true;
     const rows: string[] = [];
-    const walk = (node: Record<string, unknown> | null, depth: number): void => {
+    const walk = (node: LetterTreeNode | null, depth: number): void => {
       for (const raw of asArray(node?.children)) {
-        const child = asRecord(raw);
+        const child = asTyped<LetterTreeNode>(raw);
         if (!child) continue;
         const reg = str(child.regNumber) ? `№${str(child.regNumber)}` : 'без номера';
         const subject = str(child.subject) ?? '(без темы)';
-        const kind = str(child.relationKind) === 'reply_to' ? 'ответ' : 'вложено в цепочку';
+        const kind = child.relationKind === 'reply_to' ? 'ответ' : 'вложено в цепочку';
         rows.push(`${'  '.repeat(depth)}${reg} «${subject}» — ${kind}`);
         walk(child, depth + 1);
       }
     };
-    walk(root, 0);
+    walk(tree?.root ?? null, 0);
     if (truncated) rows.push('… дерево обрезано: показаны не все связи');
     return {
       text: finalize(listBlock('Связанные письма', rows, { maxRows: 20 })),
@@ -234,12 +241,12 @@ export const lettersAttachmentsTool = defineTool({
   /** Отдельного маршрута вложений нет: опись берётся из карточки письма. */
   api: { method: 'GET', path: '/letters/:id' },
   build: (input) => ({ path: `/letters/${input.id}` }),
-  project: (data, input) => {
-    const letter = asRecord(data);
+  project: (data: LetterDetail, input) => {
+    const letter = asTyped<LetterDetail>(data);
     const attachments = asArray(letter?.attachments);
     if (attachments.length === 0) return { text: 'У письма нет вложений' };
     const rows = attachments.map((raw) => {
-      const file = asRecord(raw);
+      const file = asTyped<LetterAttachment>(raw);
       if (!file) return null;
       const size = num(file.size);
       const fileId = str(file.fileId);
@@ -247,9 +254,9 @@ export const lettersAttachmentsTool = defineTool({
       // Подписанные `url`/`pdfUrl` не выводятся — только опись и id файла
       // для files.extract_text. Конфиденциальность — у письма, не у файла.
       const role =
-        str(file.role) === 'main'
+        file.role === 'main'
           ? 'основной документ'
-          : str(file.role) === 'body_pdf'
+          : file.role === 'body_pdf'
             ? 'PDF-копия тела'
             : file.inline === true
               ? 'встроено в тело'

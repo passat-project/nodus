@@ -64,6 +64,10 @@ describe('runExtractionInWorker', () => {
     await expect(promise).resolves.toEqual(extracted);
     expect(worker.terminate).toHaveBeenCalled();
     expect(worker.url.pathname).toContain('file-text.worker.js');
+    // Потолок кучи воркера: OOM не должен ронять процесс API.
+    expect(worker.options).toMatchObject({
+      resourceLimits: { maxOldGenerationSizeMb: 512, maxYoungGenerationSizeMb: 64 },
+    });
   });
 
   it('код ошибки разбора доезжает до сервиса', async () => {

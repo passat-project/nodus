@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
+import type { Dictionary, DictionaryItem, Paginated } from '@nodus/contracts';
+
 import { defineTool } from '../tool-definition.js';
-import { asRecord, finalize, hasMore, itemsOf, listBlock, num, str } from '../projections.js';
+import { asArray, asTyped, finalize, hasMore, listBlock, num, str } from '../projections.js';
 
 /**
  * Инструменты справочников (I15, #892): список бизнес-списков портала и
@@ -23,9 +25,9 @@ export const dictionariesListTool = defineTool({
   input: listInput,
   api: { method: 'GET', path: '/dictionaries' },
   build: (input) => ({ path: '/dictionaries', query: { limit: String(input.limit) } }),
-  project: (data) => {
-    const rows = itemsOf(data).map((raw) => {
-      const dictionary = asRecord(raw);
+  project: (data: Paginated<Dictionary>) => {
+    const rows = asArray(data.items).map((raw) => {
+      const dictionary = asTyped<Dictionary>(raw);
       if (!dictionary) return null;
       return `«${str(dictionary.name) ?? '—'}» — код ${str(dictionary.code) ?? '—'}${dictionary.hierarchical ? ', иерархический' : ''}`;
     });
@@ -70,9 +72,9 @@ export const dictionariesItemsTool = defineTool({
     path: `/dictionaries/${input.code}/items`,
     query: { limit: String(input.limit), includeArchived: String(input.includeArchived) },
   }),
-  project: (data) => {
-    const rows = itemsOf(data).map((raw) => {
-      const item = asRecord(raw);
+  project: (data: Paginated<DictionaryItem>) => {
+    const rows = asArray(data.items).map((raw) => {
+      const item = asTyped<DictionaryItem>(raw);
       if (!item) return null;
       const archived = item.isActive === false;
       return `${str(item.name) ?? '—'}${str(item.code) ? ` (${str(item.code)})` : ''}${archived ? ' — архивный' : ''}${num(item.sortOrder) !== null ? `, порядок ${num(item.sortOrder)}` : ''}`;

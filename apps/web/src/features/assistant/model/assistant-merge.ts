@@ -26,6 +26,10 @@ export function mergeLiveMessage(
   const withoutLive = messages.filter(
     (message) => message.id !== live.messageId && !message.id.startsWith('pending-'),
   );
+  // Состояние пачки живёт только в серверной строке: заглушка обязана его
+  // сохранить, иначе после решения по карточке липкая строка пачки исчезает
+  // до перезагрузки (блокер валидации 18.11.2026).
+  const serverAssistant = messages.find((message) => message.id === live.messageId);
   const createdAt = new Date(live.startedAt).toISOString();
   const placeholder: AssistantMessage = {
     id: live.messageId ?? `live-${live.runId}`,
@@ -38,7 +42,7 @@ export function mergeLiveMessage(
     errorCode: live.errorCode,
     toolCalls: live.tools,
     actions: live.actions,
-    actionBatch: null,
+    actionBatch: serverAssistant?.actionBatch ?? null,
   };
   const hasServerUser = messages.some((message) => message.id === live.userMessageId);
   const optimisticUser: AssistantMessage | null =

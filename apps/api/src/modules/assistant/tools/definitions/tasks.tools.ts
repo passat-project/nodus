@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import type { Paginated, TaskDetail, TaskListItem, TaskStageWithCount } from '@nodus/contracts';
+import type {
+  Paginated,
+  TaskDetail,
+  TaskHistoryItem,
+  TaskListItem,
+  TaskStageWithCount,
+} from '@nodus/contracts';
 
 import { defineTool } from '../tool-definition.js';
 import {
@@ -13,7 +19,6 @@ import {
   finalize,
   hasMore,
   isOverdue,
-  itemsOf,
   listBlock,
   nameOf,
   str,
@@ -252,16 +257,19 @@ export const tasksHistoryTool = defineTool({
   input: historyInput,
   api: { method: 'GET', path: '/tasks/:id/history' },
   build: (input) => ({ path: `/tasks/${input.id}/history`, query: { limit: String(input.limit) } }),
-  project: (data) => {
-    const rows = itemsOf(data).map((raw) => {
-      const entry = asRecord(raw);
+  project: (data: Paginated<TaskHistoryItem>) => {
+    const rows = asArray(data.items).map((raw) => {
+      const entry = asTyped<TaskHistoryItem>(raw);
       if (!entry) return null;
       const when = dateTime(entry.createdAt) ?? '—';
       const who = nameOf(entry.actor) ?? 'система';
+      // `summary`/`text`/`action` — алиасы старых записей истории; контракт
+      // TaskHistoryItem отдаёт `type` (+ payload). Цепочка приоритетов та же.
+      const legacy = asRecord(entry);
       const text =
-        str(entry.summary) ??
-        str(entry.text) ??
-        str(entry.action) ??
+        str(legacy?.summary) ??
+        str(legacy?.text) ??
+        str(legacy?.action) ??
         str(entry.type) ??
         'изменение';
       return `${when} — ${who}: ${clip(text, 200)}`;

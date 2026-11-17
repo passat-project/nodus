@@ -100,6 +100,22 @@ describe('AiDefaultModelsBar (#917)', () => {
     });
   });
 
+  it('провайдер без включённых моделей очищает пару диспетчера целиком', () => {
+    const onChange = vi.fn();
+    const disabled = provider({
+      models: [{ id: 'm-off', tools: true, vision: false, enabled: false }],
+    });
+    render(<AiDefaultModelsBar draft={draft()} providers={[disabled]} onChange={onChange} />);
+    const routerTrigger = screen.getAllByRole('combobox')[2]!;
+    fireEvent.keyDown(routerTrigger, { key: 'ArrowDown' });
+    const option = screen
+      .getAllByRole('option')
+      .find((item) => item.textContent?.includes('OpenRouter'));
+    fireEvent.click(option!);
+    // Без модели пара невалидна для PUT (refine) — провайдер тоже снимается.
+    expect(onChange).toHaveBeenCalledWith({ routerProviderId: null, routerModelId: null });
+  });
+
   it('без провайдеров полоса пустая — не рисует пустые пары', () => {
     const { container } = render(
       <AiDefaultModelsBar draft={draft()} providers={[]} onChange={() => undefined} />,

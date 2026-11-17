@@ -231,7 +231,13 @@ export function AssistantFeed({
                 {segment.actions.length > 0 ? (
                   <div className="mb-1.5 flex flex-col gap-2 pl-9">
                     {groupActionsByMessage(segment.actions).map(([messageId, actions]) => (
-                      <div key={messageId} className="flex flex-col gap-1.5">
+                      // Якорь «К карточкам» липкой строки: существует и для
+                      // одиночной карточки, у которой полосы пачки нет.
+                      <div
+                        key={messageId}
+                        data-assistant-batch={messageId}
+                        className="flex flex-col gap-1.5"
+                      >
                         <AssistantActionBatchBar
                           messageId={messageId}
                           sessionId={activeSessionId}

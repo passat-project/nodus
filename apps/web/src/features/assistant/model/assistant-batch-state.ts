@@ -21,18 +21,22 @@ export function groupActionsByMessage(
 /**
  * Состояние пачки для полосы над карточками: серверный снимок (если история
  * уже перечитана) либо расчёт по карточкам живого потока — иначе полоса не
- * появилась бы до конца прогона.
+ * появилась бы до конца прогона. `null` — серверной пачки нет и сообщение не
+ * печатается: это байпас (действия уже исполнены) или история до появления
+ * пачек; «Выполнить все» для такой группы вернуло бы 404 (валидация 18.11.2026).
  */
 export function batchFor(
   messageId: string,
   actions: readonly AssistantAction[],
   messages: readonly AssistantMessage[],
-): AssistantActionBatch {
-  const server = messages.find((message) => message.id === messageId)?.actionBatch;
-  if (server) return server;
+): AssistantActionBatch | null {
+  const message = messages.find((entry) => entry.id === messageId);
+  if (message?.actionBatch) return message.actionBatch;
+  if (!message?.streaming) return null;
   const pending = actions.filter(
     (action) => action.state === 'proposed' || action.state === 'executing',
   ).length;
+  if (pending === 0) return null;
   return {
     state: 'open',
     total: actions.length,

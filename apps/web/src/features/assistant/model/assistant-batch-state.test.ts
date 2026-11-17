@@ -71,9 +71,9 @@ describe('batchFor (#916)', () => {
     expect(batchFor(MESSAGE_ID, [action()], [message({ actionBatch: server })])).toEqual(server);
   });
 
-  it('без снимка считает по состояниям карточек живого потока', () => {
+  it('без снимка считает по состояниям карточек, пока ответ печатается', () => {
     const actions = [action({ state: 'executed' }), action({ state: 'proposed' })];
-    expect(batchFor(MESSAGE_ID, actions, [])).toEqual({
+    expect(batchFor(MESSAGE_ID, actions, [message({ streaming: true })])).toEqual({
       state: 'open',
       total: 2,
       decided: 1,
@@ -82,6 +82,18 @@ describe('batchFor (#916)', () => {
   });
 
   it('executing тоже считается ожидающей карточкой', () => {
-    expect(batchFor(MESSAGE_ID, [action({ state: 'executing' })], []).pending).toBe(1);
+    const batch = batchFor(
+      MESSAGE_ID,
+      [action({ state: 'executing' })],
+      [message({ streaming: true })],
+    );
+    expect(batch?.pending).toBe(1);
+  });
+
+  it('без серверной пачки вне живого потока — null (байпас/история)', () => {
+    // Байпас исполняет карточки сразу, пачка не создаётся: полоса
+    // «Выполнить все» вела бы в 404 (валидация 18.11.2026).
+    expect(batchFor(MESSAGE_ID, [action({ state: 'executed' })], [message()])).toBeNull();
+    expect(batchFor('чужое-сообщение', [action()], [])).toBeNull();
   });
 });

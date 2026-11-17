@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
+import type { ChatMessage, ConversationListItem } from '@nodus/contracts';
+
 import { defineTool } from '../tool-definition.js';
-import { asArray, asRecord, clip, str } from '../projections.js';
+import { asArray, asRecord, asTyped, clip, str } from '../projections.js';
 import { conversationTitle, field, fieldsOf, shortId, userName } from './write-cards.js';
 
 /**
@@ -25,8 +27,8 @@ export const chatTaskConversationTool = defineTool({
   input: taskConversationInput,
   api: { method: 'GET', path: '/chat/conversations/by-task/:taskId' },
   build: (input) => ({ path: `/chat/conversations/by-task/${input.taskId}` }),
-  project: (data) => {
-    const conversation = asRecord(data);
+  project: (data: ConversationListItem) => {
+    const conversation = asTyped<ConversationListItem>(data);
     const id = str(conversation?.id);
     if (!id) return { text: 'Чат задачи недоступен' };
     const title = str(conversation?.title) ?? 'Чат задачи';
@@ -65,8 +67,8 @@ export const chatSendTool = defineTool({
     path: `/chat/conversations/${input.conversationId}/messages`,
     body: { text: input.text },
   }),
-  project: (data, input) => {
-    const message = asRecord(data);
+  project: (data: ChatMessage, input) => {
+    const message = asTyped<ChatMessage>(data);
     const id = str(message?.id);
     return {
       text: `Сообщение отправлено${id ? ` (id ${id})` : ''}`,
@@ -148,10 +150,10 @@ export const chatDirectMessageTool = defineTool({
         }
       : null;
   },
-  project: (data, input, steps) => {
-    const conversation = asRecord(steps?.[0]);
-    const conversationId = str(conversation?.id) ?? str(asRecord(data)?.conversationId);
-    const message = asRecord(data);
+  project: (data: ChatMessage, input, steps) => {
+    const conversation = asTyped<ConversationListItem>(steps?.[0]);
+    const message = asTyped<ChatMessage>(data);
+    const conversationId = str(conversation?.id) ?? str(message?.conversationId);
     const messageId = str(message?.id);
     const title = str(conversation?.title);
     return {

@@ -228,6 +228,51 @@ describe('parseAttachmentText: DOCX', () => {
     });
   });
 
+  it('ZIP64-обход через disk-поля EOCD — FILE_TEXT_TOO_LARGE/INVALID', async () => {
+    // JSZip включает ZIP64 по 0xFFFF любого из шести полей EOCD, включая
+    // entries-on-disk: бюджет обязан сверять их все (security-ревью 18.11.2026).
+    const entriesOnDisk = zipBuffer([
+      { name: 'word/document.xml', data: Buffer.from('<document>Текст</document>') },
+    ]);
+    const entriesEocd = entriesOnDisk.length - 22;
+    entriesOnDisk.writeUInt16LE(0xffff, entriesEocd + 8);
+    await expect(parseAttachmentText(entriesOnDisk, 'docx')).rejects.toMatchObject({
+      code: 'FILE_TEXT_TOO_LARGE',
+    });
+
+    const disk = zipBuffer([
+      { name: 'word/document.xml', data: Buffer.from('<document>Текст</document>') },
+    ]);
+    disk.writeUInt16LE(1, disk.length - 22 + 4);
+    await expect(parseAttachmentText(disk, 'docx')).rejects.toMatchObject({
+      code: 'FILE_TEXT_INVALID',
+    });
+
+    const mismatch = zipBuffer([
+      { name: 'word/document.xml', data: Buffer.from('<document>Текст</document>') },
+      { name: 'word/styles.xml', data: Buffer.from('<styles/>') },
+    ]);
+    mismatch.writeUInt16LE(1, mismatch.length - 22 + 8);
+    await expect(parseAttachmentText(mismatch, 'docx')).rejects.toMatchObject({
+      code: 'FILE_TEXT_INVALID',
+    });
+  });
+
+  it('ZIP64-локатор в комментарии EOCD — FILE_TEXT_INVALID', async () => {
+    const base = zipBuffer([
+      { name: 'word/document.xml', data: Buffer.from('<document>Текст</document>') },
+    ]);
+    // Локатор ZIP64 дописан комментарием: JSZip нашёл бы скрытый каталог.
+    const locator = Buffer.from([
+      0x50, 0x4b, 0x06, 0x07, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ]);
+    const buffer = Buffer.concat([base, locator]);
+    buffer.writeUInt16LE(locator.length, base.length - 22 + 20);
+    await expect(parseAttachmentText(buffer, 'docx')).rejects.toMatchObject({
+      code: 'FILE_TEXT_INVALID',
+    });
+  });
+
   it('magic: DOCX по ZIP-сигнатуре', () => {
     expect(magicMatches(DOCX_BUFFER, 'docx')).toBe(true);
     expect(magicMatches(Buffer.from('nope'), 'docx')).toBe(false);

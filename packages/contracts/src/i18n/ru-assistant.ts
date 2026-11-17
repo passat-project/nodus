@@ -78,6 +78,7 @@ export const assistantStrings = {
   batchContinueError: 'Не удалось продолжить',
   batchExecuteAll: 'Выполнить все',
   batchCancelAll: 'Отменить все',
+  batchActionError: 'Не удалось применить решение к пачке',
   batchAllDone: 'Все карточки решены',
   batchWaiting: 'Продолжаю…',
   batchContinued: 'Продолжение запущено',

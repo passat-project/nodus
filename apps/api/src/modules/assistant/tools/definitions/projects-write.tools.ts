@@ -1,8 +1,10 @@
 import { z } from 'zod';
 
+import type { ProjectDetail, ProjectNode } from '@nodus/contracts';
+
 import { defineTool } from '../tool-definition.js';
 import type { ToolContext } from '../tool-definition.js';
-import { asArray, asRecord, clip, str } from '../projections.js';
+import { asArray, asRecord, asTyped, clip, str } from '../projections.js';
 import { field, fieldsOf, projectName, shortId, userName } from './write-cards.js';
 
 /**
@@ -41,8 +43,8 @@ export const projectsUpdateTool = defineTool({
       ...(input.description !== undefined ? { description: input.description } : {}),
     },
   }),
-  project: (data) => {
-    const project = asRecord(data);
+  project: (data: ProjectDetail) => {
+    const project = asTyped<ProjectDetail>(data);
     const id = str(project?.id);
     if (!id) return { text: 'Проект изменён' };
     const name = str(project?.name) ?? 'Проект';
@@ -100,7 +102,8 @@ export const projectsAddMemberTool = defineTool({
     path: `/projects/${input.id}/members`,
     body: { userId: input.userId, kind: input.kind },
   }),
-  project: (data, input) => {
+  // API отвечает 201 без тела (Promise<void>): id берём из входа.
+  project: (data: void, input) => {
     const id = str(asRecord(data)?.id) ?? input.id;
     return {
       text: `Участник добавлен в проект (id ${id})`,
@@ -164,8 +167,8 @@ export const projectsAddNodeTool = defineTool({
       ...(input.parentId ? { parentId: input.parentId } : {}),
     },
   }),
-  project: (data, input) => {
-    const node = asRecord(data);
+  project: (data: ProjectNode, input) => {
+    const node = asTyped<ProjectNode>(data);
     const id = str(node?.id);
     const name = str(node?.name) ?? 'Папка';
     if (!id) return { text: 'Папка создана' };

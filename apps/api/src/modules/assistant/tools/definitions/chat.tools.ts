@@ -1,15 +1,21 @@
 import { z } from 'zod';
 
+import type {
+  ChatMessage,
+  ConversationListItem,
+  MessageAttachment,
+  Paginated,
+} from '@nodus/contracts';
+
 import { defineTool } from '../tool-definition.js';
 import {
   asArray,
-  asRecord,
+  asTyped,
   clip,
   dateTime,
   entityLink,
   finalize,
   hasMore,
-  itemsOf,
   listBlock,
   nameOf,
   num,
@@ -54,13 +60,13 @@ export const chatConversationsTool = defineTool({
       ...(input.cursor ? { cursor: input.cursor } : {}),
     },
   }),
-  project: (data) => {
+  project: (data: Paginated<ConversationListItem>) => {
     // Форма `GET /chat/conversations` — conversationListItemSchema:
     // `membersPreview` (превью участников) и `lastActivityAt` (момент
     // активности; `lastMessage` — только превью). Полей `members`/
     // `lastMessageAt` в контракте нет.
-    const rows = itemsOf(data).map((raw) => {
-      const conversation = asRecord(raw);
+    const rows = asArray(data.items).map((raw) => {
+      const conversation = asTyped<ConversationListItem>(raw);
       if (!conversation) return null;
       const id = str(conversation.id);
       if (!id) return null;
@@ -110,17 +116,16 @@ export const chatMessagesTool = defineTool({
     path: `/chat/conversations/${input.conversationId}/messages`,
     query: { limit: String(input.limit) },
   }),
-  project: (data, input) => {
-    const messages = itemsOf(data);
-    const rows = messages.map((raw) => {
-      const message = asRecord(raw);
+  project: (data: Paginated<ChatMessage>, input) => {
+    const rows = asArray(data.items).map((raw) => {
+      const message = asTyped<ChatMessage>(raw);
       if (!message) return null;
       const author = nameOf(message.author) ?? '—';
       const when = dateTime(message.createdAt) ?? '—';
       // Вложения — имя + fileId: по нему files.extract_text читает PDF/DOCX.
       const attachments = asArray(message.attachments)
         .map((file) => {
-          const record = asRecord(file);
+          const record = asTyped<MessageAttachment>(file);
           const name = str(record?.name);
           if (!name) return null;
           const fileId = str(record?.fileId);

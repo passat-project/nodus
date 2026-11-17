@@ -23,7 +23,7 @@
 | `directory.departments` | Сотрудники: оргструктура | чтение | directory | GET /directory/departments/tree | directory.read | — | нет |
 | `directory.find_users` | Сотрудники: поиск | чтение | directory | GET /directory/users | directory.read | — | да |
 | `directory.get_user` | Сотрудники: карточка | чтение | directory | GET /directory/users/:id | directory.read | — | нет |
-| `files.extract_text` | Вложения: прочитать текст | чтение | files | GET /files/:id/text | — | — | да |
+| `files.extract_text` | Вложения: прочитать текст | чтение | files | GET /files/:id/text | — | assistant | да |
 | `letters.attachments` | Письма: вложения | чтение | letters | GET /letters/:id | — | correspondence | да |
 | `letters.get` | Письма: карточка | чтение | letters | GET /letters/:id | — | correspondence | да |
 | `letters.list` | Письма: реестр | чтение | letters | GET /letters | — | correspondence | да |

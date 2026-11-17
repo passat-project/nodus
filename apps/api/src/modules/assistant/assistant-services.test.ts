@@ -96,7 +96,21 @@ describe('AssistantSessionsService (#893)', () => {
       closeOpenBatches: vi.fn(async () => undefined),
     };
     const runner = { start: vi.fn(), isSessionActive: vi.fn(() => false) };
-    const continuation = { hasPendingResume: vi.fn(() => false) };
+    // Тот же контракт гейта, что у AssistantContinuationService: очередь по
+    // сессии, чтобы тест параллельных отправок проверял настоящее поведение.
+    const chains = new Map<string, Promise<unknown>>();
+    const continuation = {
+      hasPendingResume: vi.fn(() => false),
+      runExclusive: vi.fn(<T>(sessionId: string, work: () => Promise<T>): Promise<T> => {
+        const previous = chains.get(sessionId) ?? Promise.resolve();
+        const task = previous.catch(() => undefined).then(work);
+        chains.set(
+          sessionId,
+          task.catch(() => undefined),
+        );
+        return task;
+      }),
+    };
     const flags = { enabledModules: vi.fn(async () => ['tasks', 'chat']) };
     const service = new AssistantSessionsService(
       repo as never,

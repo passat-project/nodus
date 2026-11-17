@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { CheckCheck, XCircle } from 'lucide-react';
 import { ui, type AssistantActionBatch } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
@@ -20,12 +21,13 @@ export function AssistantActionBatchBar({
   className,
 }: {
   messageId: string;
-  batch: AssistantActionBatch;
+  batch: AssistantActionBatch | null;
   sessionId: string | null;
   className?: string;
 }) {
-  // Одиночная карточка полосу не получает (и хуки мутаций не нужны).
-  if (batch.total < 2) return null;
+  // Серверной пачки нет (байпас/история до пачек) или карточка одна:
+  // полосы нет — у одиночной карточки свои кнопки.
+  if (!batch || batch.total < 2) return null;
   return (
     <BatchBarView messageId={messageId} batch={batch} sessionId={sessionId} className={className} />
   );
@@ -46,10 +48,10 @@ function BatchBarView({
   const cancelAll = useAssistantBatchDecision(sessionId, 'cancel-all');
   const pending = executeAll.isPending || cancelAll.isPending;
   const open = batch.state === 'open';
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <div
-      data-assistant-batch={messageId}
       className={cn(
         'flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-muted/50 px-2 py-1.5 text-label text-muted-foreground',
         className,
@@ -58,6 +60,7 @@ function BatchBarView({
       <span className="min-w-0 flex-1 truncate">
         {strings.batchTitle} · {strings.batchProgress} {batch.decided} {strings.batchOf}{' '}
         {batch.total}
+        {error ? <span className="text-destructive"> · {error}</span> : null}
       </span>
       {open ? (
         <>
@@ -67,7 +70,12 @@ function BatchBarView({
             variant="ghost"
             className="h-6 gap-1 px-1.5 text-label"
             disabled={pending}
-            onClick={() => executeAll.mutate(messageId)}
+            onClick={() => {
+              setError(null);
+              executeAll.mutate(messageId, {
+                onError: () => setError(strings.batchActionError),
+              });
+            }}
           >
             <CheckCheck className="size-3" />
             {strings.batchExecuteAll}
@@ -78,7 +86,12 @@ function BatchBarView({
             variant="ghost"
             className="h-6 gap-1 px-1.5 text-label text-muted-foreground"
             disabled={pending}
-            onClick={() => cancelAll.mutate(messageId)}
+            onClick={() => {
+              setError(null);
+              cancelAll.mutate(messageId, {
+                onError: () => setError(strings.batchActionError),
+              });
+            }}
           >
             <XCircle className="size-3" />
             {strings.batchCancelAll}

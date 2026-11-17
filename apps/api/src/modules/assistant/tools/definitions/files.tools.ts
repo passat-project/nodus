@@ -36,6 +36,9 @@ export const filesExtractTextTool = defineTool({
   ],
   module: 'files',
   kind: 'read',
+  // Маршрут текста живёт под флагом ассистента (ADR-0050 п.1): без него
+  // инструмент не должен попадать в каталог и карту поверхностей.
+  featureFlag: 'assistant',
   hot: true,
   input: z.object({ fileId: z.uuid() }),
   api: { method: 'GET', path: '/files/:id/text' },

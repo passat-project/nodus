@@ -70,15 +70,21 @@ export function AiDefaultModelsBar({
         modelId={draft.routerModelId ?? null}
         noneLabel={strings.routerOff}
         models={modelsOf(routerProvider).map((model) => model.id)}
-        onProvider={(id) =>
+        onProvider={(id) => {
+          // Пара «диспетчер» обязательна целиком (refine aiSettingsBodySchema):
+          // провайдер без включённых моделей оставил бы modelId=null и PUT
+          // падал бы — выбираем первую модель или очищаем ОБА поля.
+          const first = id
+            ? (modelsOf(providers.find((item) => item.id === id) ?? null)[0]?.id ?? null)
+            : null;
           onChange({
-            routerProviderId: id,
-            routerModelId: id
-              ? (modelsOf(providers.find((item) => item.id === id) ?? null)[0]?.id ?? null)
-              : null,
-          })
+            routerProviderId: first ? id : null,
+            routerModelId: first,
+          });
+        }}
+        onModel={(id) =>
+          onChange(id ? { routerModelId: id } : { routerProviderId: null, routerModelId: null })
         }
-        onModel={(id) => onChange({ routerModelId: id })}
       />
     </div>
   );

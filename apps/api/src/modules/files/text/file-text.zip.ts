@@ -15,22 +15,46 @@ import { FILE_TEXT_LIMITS, FileTextError } from './file-text.config.js';
 const ZIP_EOCD = 0x06054b50;
 const ZIP_CENTRAL = 0x02014b50;
 const ZIP_LOCAL = 0x04034b50;
+const ZIP64_EOCD = Buffer.from([0x50, 0x4b, 0x06, 0x06]);
+const ZIP64_LOCATOR = Buffer.from([0x50, 0x4b, 0x06, 0x07]);
 
 export function assertZipBudget(buffer: Buffer): void {
   const eocd = findEocd(buffer);
   if (eocd === null) throw new FileTextError('FILE_TEXT_INVALID');
+  const diskNumber = buffer.readUInt16LE(eocd + 4);
+  const centralDisk = buffer.readUInt16LE(eocd + 6);
+  const entriesOnDisk = buffer.readUInt16LE(eocd + 8);
   const declaredEntries = buffer.readUInt16LE(eocd + 10);
   const centralSize = buffer.readUInt32LE(eocd + 12);
   const centralOffset = buffer.readUInt32LE(eocd + 16);
-  // ZIP64 не разбираем: DOCX его не использует, а непроверяемый архив опасен.
+  const commentLength = buffer.readUInt16LE(eocd + 20);
+  // ZIP64 JSZip включает по 0xFFFF ЛЮБОГО из шести полей EOCD, включая
+  // disk/entries-on-disk, которые бюджет раньше не читал: подменив одно из
+  // них, атакующий заставляет JSZip прочитать СКРЫТЫЙ каталог из комментария
+  // EOCD в обход фактической распаковки (security-ревью 18.11.2026).
+  // DOCX ZIP64 не использует — отвергаем и все поля, и ZIP64-записи.
   if (
     declaredEntries === 0xffff ||
+    entriesOnDisk === 0xffff ||
     centralSize === 0xffffffff ||
     centralOffset === 0xffffffff ||
     declaredEntries === 0 ||
     declaredEntries > FILE_TEXT_LIMITS.maxZipEntries
   ) {
     throw new FileTextError(declaredEntries === 0 ? 'FILE_TEXT_INVALID' : 'FILE_TEXT_TOO_LARGE');
+  }
+  // Многотомный архив и расхождение счётчиков — не наш формат.
+  if (diskNumber !== 0 || centralDisk !== 0 || entriesOnDisk !== declaredEntries) {
+    throw new FileTextError('FILE_TEXT_INVALID');
+  }
+  // Комментарий EOCD идёт до конца файла, и ZIP64-локатор в нём — признак
+  // подмены каталога (PK\x06\x06 — EOCD64, PK\x06\x07 — локатор).
+  if (eocd + 22 + commentLength !== buffer.length) {
+    throw new FileTextError('FILE_TEXT_INVALID');
+  }
+  const tail = buffer.subarray(eocd + 22, buffer.length);
+  if (tail.includes(ZIP64_EOCD) || tail.includes(ZIP64_LOCATOR)) {
+    throw new FileTextError('FILE_TEXT_INVALID');
   }
   const centralEnd = centralOffset + centralSize;
   if (centralEnd > buffer.length) throw new FileTextError('FILE_TEXT_INVALID');

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ui, type AssistantActionBatch } from '@nodus/contracts';
 
 import { AssistantActionBatchBar } from './assistant-action-batch.js';
@@ -14,15 +14,20 @@ import { AssistantActionBatchBar } from './assistant-action-batch.js';
 
 const strings = ui.assistant;
 
+const mutate = vi.hoisted(() => vi.fn());
+
 vi.mock('../api/assistant-actions-api.js', () => ({
-  useAssistantBatchDecision: () => ({ mutate: vi.fn(), isPending: false }),
+  useAssistantBatchDecision: () => ({ mutate, isPending: false }),
 }));
 
 function batch(overrides: Partial<AssistantActionBatch> = {}): AssistantActionBatch {
   return { state: 'open', total: 2, decided: 1, pending: 1, ...overrides };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mutate.mockReset();
+});
 
 function renderBar(value: AssistantActionBatch) {
   render(<AssistantActionBatchBar messageId="m-1" batch={value} sessionId="s-1" />);
@@ -66,5 +71,21 @@ describe('AssistantActionBatchBar: терминальные подписи (#916
       />,
     );
     expect(container.textContent).toBe('');
+  });
+
+  it('нет серверной пачки (байпас/история) — полосы нет', () => {
+    const { container } = render(
+      <AssistantActionBatchBar messageId="m-1" batch={null} sessionId="s-1" />,
+    );
+    expect(container.textContent).toBe('');
+  });
+
+  it('ошибка решения видна сотруднику, а не теряется молча', () => {
+    mutate.mockImplementation((_id: string, options?: { onError?: () => void }) => {
+      options?.onError?.();
+    });
+    renderBar(batch());
+    fireEvent.click(screen.getByRole('button', { name: strings.batchExecuteAll }));
+    expect(screen.getByText(new RegExp(strings.batchActionError))).toBeTruthy();
   });
 });

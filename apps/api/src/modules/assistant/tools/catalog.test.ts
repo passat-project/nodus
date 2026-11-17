@@ -145,7 +145,7 @@ describe('фильтры каталога (#892)', () => {
     'task.create',
     'project.view_secret',
   ];
-  const allFeatures = ['tasks', 'projects', 'correspondence', 'chat'];
+  const allFeatures = ['tasks', 'projects', 'correspondence', 'chat', 'assistant'];
 
   it('без права directory.read справочник сотрудников недоступен', () => {
     const catalog = buildCatalog({ permissions: ['task.create'], features: allFeatures });

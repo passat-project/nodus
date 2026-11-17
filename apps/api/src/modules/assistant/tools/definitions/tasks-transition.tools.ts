@@ -156,9 +156,10 @@ export const tasksTransitionTool = defineTool({
       const comment = form?.comment ?? input.comment;
       const time = form?.time;
       const values = form?.fields;
-      const assignee = values?.assigneeId
-        ? ((await readDisplayName(ctx, values.assigneeId)) ?? `id ${values.assigneeId}`)
-        : null;
+      const [assignee, attributeNames] = await Promise.all([
+        values?.assigneeId ? readDisplayName(ctx, values.assigneeId) : Promise.resolve(null),
+        values?.customFields ? readAttributeNames(ctx) : Promise.resolve(new Map<string, string>()),
+      ]);
       return fieldsOf([
         field(
           'Задача',
@@ -169,12 +170,12 @@ export const tasksTransitionTool = defineTool({
         field('Требует заполнить', transition?.requirements),
         field('Описание', values?.description ? clip(values.description, 400) : null),
         field('Срок', values?.deadline ? date(values.deadline) : null),
-        field('Исполнитель', assignee),
+        field('Исполнитель', values?.assigneeId ? (assignee ?? `id ${values.assigneeId}`) : null),
         field(
           'План, мин',
           values?.plannedMinutes !== undefined ? String(values.plannedMinutes) : null,
         ),
-        field('Атрибуты', customFieldsLine(values?.customFields)),
+        field('Атрибуты', customFieldsLine(values?.customFields, attributeNames)),
         field('Итог', form?.result?.text ? clip(form.result.text, 400) : null),
         field(
           'Трудозатраты',
@@ -254,11 +255,29 @@ async function readDisplayName(ctx: ToolContext, id: string): Promise<string | n
   }
 }
 
+/** Названия атрибутов по id определения (карточка показывает имена, не uuid). */
+async function readAttributeNames(ctx: ToolContext): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  try {
+    for (const raw of asArray(await ctx.read?.('/custom-fields/definitions'))) {
+      const definition = asRecord(raw);
+      const id = str(definition?.id);
+      const name = str(definition?.name);
+      if (id && name) names.set(id, name);
+    }
+  } catch {
+    // Каталог атрибутов недоступен — карточка покажет id как есть.
+  }
+  return names;
+}
+
 /** Значения атрибутов окна человеческими строками (ключ — id определения). */
-function customFieldsLine(value: unknown): string | null {
+function customFieldsLine(value: unknown, names: ReadonlyMap<string, string>): string | null {
   const record = asRecord(value);
   if (!record) return null;
-  const rows = Object.entries(record).map(([key, raw]) => `${key}: ${valueText(raw)}`);
+  const rows = Object.entries(record).map(
+    ([key, raw]) => `${names.get(key) ?? key}: ${valueText(raw)}`,
+  );
   return rows.length > 0 ? clip(rows.join('; '), 600) : null;
 }
 

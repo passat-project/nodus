@@ -1,16 +1,25 @@
 import { z } from 'zod';
 
+import type {
+  NodeKind,
+  Paginated,
+  ProjectDetail,
+  ProjectListItem,
+  ProjectMember,
+  ProjectStructureResponse,
+} from '@nodus/contracts';
+
 import { defineTool } from '../tool-definition.js';
 import {
   asArray,
   asRecord,
+  asTyped,
   clip,
   date,
   dateTime,
   entityLink,
   finalize,
   hasMore,
-  itemsOf,
   listBlock,
   nameOf,
   num,
@@ -32,8 +41,7 @@ const listInput = z.object({
   limit: z.number().int().min(1).max(20).default(20),
 });
 
-function projectRow(raw: unknown): string | null {
-  const project = asRecord(raw);
+function projectRow(project: ProjectListItem | null): string | null {
   if (!project) return null;
   const id = str(project.id);
   const name = str(project.name);
@@ -45,8 +53,7 @@ function projectRow(raw: unknown): string | null {
     `участников ${num(project.membersCount) ?? 0}`,
   ];
   if (str(project.endDate)) parts.push(`срок ${date(project.endDate)}`);
-  const client = asRecord(project.client);
-  if (client) parts.push(`заказчик «${nameOf(client) ?? '—'}»`);
+  if (project.client) parts.push(`заказчик «${nameOf(project.client) ?? '—'}»`);
   if (project.visibility === 'secret') parts.push('секретный');
   parts.push(`id ${id}`);
   return parts.join(', ');
@@ -75,9 +82,9 @@ export const projectsListTool = defineTool({
       ...(input.memberId ? { memberId: input.memberId } : {}),
     },
   }),
-  project: (data) => {
-    const rows = itemsOf(data)
-      .map(projectRow)
+  project: (data: Paginated<ProjectListItem>) => {
+    const rows = asArray(data.items)
+      .map((raw) => projectRow(asTyped<ProjectListItem>(raw)))
       .filter((row): row is string => row !== null);
     // Ссылка «Открыть» — у карточки проекта (projects.get), не у списка.
     return { text: finalize(listBlock('Проекты', rows, { more: hasMore(data) })) };
@@ -99,12 +106,15 @@ export const projectsGetTool = defineTool({
   input: getInput,
   api: { method: 'GET', path: '/projects/:id' },
   build: (input) => ({ path: `/projects/${input.id}` }),
-  project: (data) => {
-    const project = asRecord(data);
+  project: (data: ProjectDetail) => {
+    const project = asTyped<ProjectDetail>(data);
     const id = str(project?.id);
     const name = str(project?.name);
     if (!project || !id || !name) return { text: 'Проект не найден или недоступен' };
-    const members = asArray(project.members ?? project.membersPreview)
+    // `members` — алиас плоского ответа старой карточки; в контракте
+    // ProjectDetail состав приходит только `membersPreview` (наследство
+    // ProjectListItem). Приоритет полей сохранён как был.
+    const members = asArray(asRecord(data)?.members ?? project.membersPreview)
       .map(nameOf)
       .filter(Boolean);
     const lines = [
@@ -183,14 +193,14 @@ export const projectsStructureTool = defineTool({
   input: structureInput,
   api: { method: 'GET', path: '/projects/:id/structure' },
   build: (input) => ({ path: `/projects/${input.id}/structure` }),
-  project: (data, input) => {
-    const root = asRecord(data);
+  project: (data: ProjectStructureResponse, input) => {
+    const root = asTyped<ProjectStructureResponse>(data);
     const flat = asArray(root?.nodes)
       .map((raw) => asRecord(raw))
       .filter((node): node is Record<string, unknown> => node !== null);
     const kindNames = new Map<string, string>();
     for (const raw of asArray(root?.kinds)) {
-      const kind = asRecord(raw);
+      const kind = asTyped<NodeKind>(raw);
       const id = str(kind?.id);
       if (id) kindNames.set(id, str(kind?.name) ?? 'раздел');
     }
@@ -229,12 +239,12 @@ export const projectsMembersTool = defineTool({
     path: `/projects/${input.id}/members`,
     query: { limit: String(input.limit) },
   }),
-  project: (data) => {
+  project: (data: Paginated<ProjectMember>) => {
     // Форма `GET /projects/:id/members` — `{ user, source, observerKind }`
     // (projectMemberSchema): роли выводятся из источника участия, а не из
     // несуществующего поля `role`.
-    const rows = itemsOf(data).map((raw) => {
-      const member = asRecord(raw);
+    const rows = asArray(data.items).map((raw) => {
+      const member = asTyped<ProjectMember>(raw);
       if (!member) return null;
       const user = asRecord(member.user) ?? member;
       const source = str(member.source);

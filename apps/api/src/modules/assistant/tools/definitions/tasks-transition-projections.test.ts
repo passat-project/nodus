@@ -35,6 +35,9 @@ const ctx = {
     if (path.includes('/directory/users/')) {
       return { id: '99999999-9999-4999-8999-999999999999', displayName: 'Петров Пётр' };
     }
+    if (path === '/custom-fields/definitions') {
+      return [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'Сметная стоимость' }];
+    }
     return { id: TASK_ID, number: 165, title: 'Смонтировать узел' };
   },
 } as ToolContext;
@@ -203,7 +206,7 @@ describe('tasks.transition: выполнение перехода (#920)', () =>
         { label: 'Срок', value: '20 ноя 2026' },
         { label: 'Исполнитель', value: 'Петров Пётр' },
         { label: 'План, мин', value: '120' },
-        { label: 'Атрибуты', value: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa: Значение атрибута' },
+        { label: 'Атрибуты', value: 'Сметная стоимость: Значение атрибута' },
       ]),
     );
   });

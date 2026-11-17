@@ -82,4 +82,17 @@ describe('mergeLiveMessage', () => {
     const history = [message({ id: 'a', role: 'assistant', text: 'старый ответ' })];
     expect(mergeLiveMessage(history, baseLive({ sessionId: 's-2' }), 's-1')).toEqual(history);
   });
+
+  it('состояние пачки серверной строки переживает вытеснение живым буфером', () => {
+    // Блокер валидации 18.11.2026: заглушка с actionBatch=null прятала
+    // липкую строку «Продолжить сейчас» до перезагрузки страницы.
+    const batch = { state: 'open' as const, total: 2, decided: 1, pending: 1 };
+    const merged = mergeLiveMessage(
+      [message({ id: 'answer-1', text: 'Готово', actionBatch: batch })],
+      baseLive({ messageId: 'answer-1', text: 'Готово', status: 'done' }),
+      's-1',
+    );
+    expect(merged.filter((item) => item.role === 'assistant')).toHaveLength(1);
+    expect(merged.at(-1)?.actionBatch).toEqual(batch);
+  });
 });

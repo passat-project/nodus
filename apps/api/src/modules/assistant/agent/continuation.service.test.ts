@@ -206,13 +206,16 @@ describe('AssistantContinuationService: «Продолжить сейчас» (#
     expect(runner.start).not.toHaveBeenCalled();
   });
 
-  it('гонка двух кликов: проигравший удаляет прогон и возвращает прогон победителя', async () => {
+  it('гонка двух кликов: второй видит прогон победителя и не создаёт свой', async () => {
     const { service, repo, runner } = build({ claimContinueNow: false });
     repo.findActionBatch
       .mockResolvedValueOnce(batch())
       .mockResolvedValueOnce(batch({ state: 'closed', continuationRunId: 'run-winner' }));
     await expect(service.continueNow(USER, 'Bearer token', MESSAGE_ID)).resolves.toBe('run-winner');
-    expect(repo.deleteRun).toHaveBeenCalledTimes(1);
+    // Пачку перечитали под гейтом, прогон победителя уже записан — дубль не
+    // создаётся и удалять нечего.
+    expect(repo.createRun).not.toHaveBeenCalled();
+    expect(repo.deleteRun).not.toHaveBeenCalled();
     expect(runner.start).not.toHaveBeenCalled();
   });
 

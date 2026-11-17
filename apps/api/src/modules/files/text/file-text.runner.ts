@@ -32,6 +32,10 @@ export async function runExtractionInWorker(
   if (signal?.aborted) throw new FileTextError('FILE_TEXT_TIMEOUT');
   const worker = new Worker(new URL('./file-text.worker.js', import.meta.url), {
     workerData: { kind, bytes: new Uint8Array(buffer) },
+    // Потолок кучи воркера: PDF.js распаковывает потоки без своего лимита, и
+    // без resourceLimits OOM воркера мог уронить весь процесс API. При
+    // превышении поток получает ERR_WORKER_OUT_OF_MEMORY и уничтожается.
+    resourceLimits: { maxOldGenerationSizeMb: 512, maxYoungGenerationSizeMb: 64 },
   });
   try {
     return await waitForWorker(worker, signal);
