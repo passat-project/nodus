@@ -195,12 +195,18 @@ export function AiMcpSection({
           emptyTitle={q ? ui.customFields.page.emptySearch : strings.mcpEmpty}
           onOpenRow={(server) => setDialog({ kind: 'edit', server })}
           rowMenu={(server) => [
-            {
-              id: 'test',
-              icon: <PlugZap className="size-3.5" strokeWidth={1.75} />,
-              label: testingId === server.id ? strings.mcpTesting : strings.mcpTest,
-              onSelect: () => void testServer(server.id),
-            },
+            // Новый сервер ещё летит в PUT: проверка дала бы 404 (как у
+            // провайдеров — пункт появляется только у сохранённого).
+            ...(server.persisted
+              ? [
+                  {
+                    id: 'test',
+                    icon: <PlugZap className="size-3.5" strokeWidth={1.75} />,
+                    label: testingId === server.id ? strings.mcpTesting : strings.mcpTest,
+                    onSelect: () => void testServer(server.id),
+                  },
+                ]
+              : []),
             ...(server.id === defaultId
               ? []
               : [

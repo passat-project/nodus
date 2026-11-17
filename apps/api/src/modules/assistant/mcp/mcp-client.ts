@@ -70,6 +70,9 @@ const MAX_RESPONSE_BYTES = 1_000_000;
 const MAX_TOOL_PAGES = 20;
 /** Потолок инструментов одного сервера: каталог, а не дамп. */
 const MAX_TOOLS = 200;
+/** Потолок текстовых полей дескриптора: имя и описание — внешний ввод. */
+const MAX_TOOL_NAME_CHARS = 200;
+const MAX_TOOL_DESCRIPTION_CHARS = 1_000;
 
 export class McpClient {
   private sessionId: string | null = null;
@@ -85,23 +88,20 @@ export class McpClient {
 
   /** Handshake: `initialize` + `notifications/initialized`. */
   async initialize(): Promise<McpServerInfo> {
-    const response = await this.post({
-      jsonrpc: '2.0',
-      id: this.nextId++,
-      method: 'initialize',
-      params: {
+    // Через `request`, а не `post`: JSON-RPC ошибка handshake — исключение,
+    // а не «успех с пустым protocolVersion» (находка теста 17.11.2026).
+    const result = asRecord(
+      await this.request('initialize', {
         protocolVersion: PROTOCOL_VERSION,
         capabilities: {},
         clientInfo: {
           name: this.options.clientName ?? 'nodus',
           version: this.options.clientVersion ?? '1.0.0',
         },
-      },
-    });
-    const result = asRecord(response.message.result);
+      }),
+    );
     const server = asRecord(result?.serverInfo);
     this.protocolVersion = str(result?.protocolVersion) ?? PROTOCOL_VERSION;
-    this.sessionId = response.sessionId ?? this.sessionId;
 
     // Нотификация обязательна: без неё часть серверов не переходит в
     // рабочую фазу и отвергает последующие запросы.
@@ -136,8 +136,10 @@ export class McpClient {
         const name = str(tool?.name);
         if (!name) continue;
         tools.push({
-          name,
-          description: str(tool?.description),
+          name: name.slice(0, MAX_TOOL_NAME_CHARS),
+          // Каталог сервера — тоже внешний ввод: длинные описания не должны
+          // раздувать ответ проверки и кэш идемпотентности (ревью 17.11.2026).
+          description: str(tool?.description)?.slice(0, MAX_TOOL_DESCRIPTION_CHARS) ?? null,
           inputSchema: asRecord(tool?.inputSchema),
         });
         if (tools.length >= MAX_TOOLS) return tools;
@@ -183,11 +185,11 @@ export class McpClient {
     this.sessionId = response.sessionId ?? this.sessionId;
     const error = response.message.error;
     if (error) {
-      throw new McpError(
-        error.message ?? `Ошибка протокола MCP (${String(error.code ?? 'unknown')})`,
-        'protocol',
-        error.code !== undefined ? String(error.code) : null,
-      );
+      // Текст внешней ошибки не переносим: сервер может вернуть эхо наших же
+      // заголовков (включая ключ), а ответ проверки кэшируется идемпотентностью
+      // на 24 ч — секрет осел бы в Redis открытым текстом (ревью 17.11.2026).
+      const code = error.code !== undefined ? String(error.code) : null;
+      throw new McpError(`Ошибка протокола MCP${code ? ` (код ${code})` : ''}`, 'protocol', code);
     }
     return response.message.result;
   }

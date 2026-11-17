@@ -6,11 +6,32 @@ import { McpError } from './mcp-error.js';
 const PRIVATE_HOST_SUFFIXES = ['.localhost', '.local', '.internal'];
 
 /**
+ * Имена, которые нормализуются в loopback (Docker пишет их в `/etc/hosts`):
+ * `localhost` и `localhost.` (FQDN-вид), `ip6-localhost`/`ip6-loopback` из
+ * Alpine-образов, `localhost.localdomain` из старых дистрибутивов.
+ */
+const LOOPBACK_HOSTS = new Set([
+  'localhost',
+  'ip6-localhost',
+  'ip6-loopback',
+  'localhost.localdomain',
+]);
+
+/**
  * Гвард адреса MCP-сервера (находка security-ревью 17.11.2026): ключ уходит
  * на этот адрес, поэтому наружу — только https, порт 443 и публичный хост.
  * Loopback, приватные и link-local литературы блокируются здесь, а не только
  * схемой настроек: защита в глубину (адрес задаёт администратор портала).
- * DNS-резолв не проверяется — для этого нужен кастомный lookup.
+ *
+ * Закрыты и алиасы, нормализуемые в loopback: FQDN-точка (`localhost.`),
+ * docker-имена `ip6-localhost`/`ip6-loopback`, `localhost.localdomain` и
+ * приватный IPv4, зашитый в имя (`10.0.0.1.nip.io`).
+ *
+ * Остаточный риск (осознанно): DNS-резолв не проверяется — имя, которое
+ * сейчас резолвится в публичный адрес, может позже указывать во внутренний
+ * (rebinding). Полное закрытие требует пиннинга адреса через кастомный
+ * `lookup`; пока адрес задаёт только администратор с правом
+ * `portal.settings.manage`, TLS-проверка и порт 443 ограничивают риск.
  */
 export function assertAllowedEndpoint(raw: string): void {
   let url: URL;
@@ -29,11 +50,18 @@ export function assertAllowedEndpoint(raw: string): void {
   if (url.port && url.port !== '443') {
     throw new McpError('MCP-сервер доступен только на порту 443', 'transport', 'url');
   }
-  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  // Точка в конце — валидный FQDN-вид (`localhost.` = `localhost`), поэтому
+  // нормализуем её ДО сравнений: иначе `https://localhost./` проходил гвард
+  // и резолвился в loopback (находка security-ревью 17.11.2026).
+  const host = url.hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.+$/, '');
   if (
-    host === 'localhost' ||
+    LOOPBACK_HOSTS.has(host) ||
     PRIVATE_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix)) ||
-    isPrivateAddress(host)
+    isPrivateAddress(host) ||
+    embedsPrivateIpv4(host)
   ) {
     throw new McpError(
       'Адрес MCP-сервера указывает во внутреннюю сеть',
@@ -41,6 +69,23 @@ export function assertAllowedEndpoint(raw: string): void {
       'private_address',
     );
   }
+}
+
+/**
+ * Приватный IPv4, зашитый в имя хоста: сервисы вида `nip.io`/`sslip.io`
+ * раздают DNS-имена на любой адрес (`10.0.0.1.nip.io` = `10.0.0.1`). Ищем
+ * четыре подряд числовых метки и проверяем их как IP — так закрывается класс
+ * «публичное имя → внутренний адрес» без чёрного списка сервисов.
+ */
+function embedsPrivateIpv4(host: string): boolean {
+  const labels = host.split('.');
+  for (let index = 0; index + 3 < labels.length; index += 1) {
+    const candidate = labels.slice(index, index + 4);
+    if (!candidate.every((label) => /^\d{1,3}$/.test(label) && Number(label) <= 255)) continue;
+    const address = candidate.map(Number).join('.');
+    if (isIP(address) === 4 && isPrivateAddress(address)) return true;
+  }
+  return false;
 }
 
 /** Литерал приватного/служебного IP (IPv4/IPv6). Резолв DNS — вне гварда. */

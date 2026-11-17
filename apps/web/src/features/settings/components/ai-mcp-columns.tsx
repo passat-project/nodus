@@ -9,7 +9,7 @@ const strings = ui.assistant.settings;
  *  (генерирует клиент, чтобы «по умолчанию» можно было выбрать до PUT). */
 export interface McpServerDraft extends AssistantMcpServerInput {
   id: string;
-  /** Признак «уже в портале»: только тогда можно проверять соединение. */
+  /** Признак «уже в портале»: только тогда доступна проверка соединения. */
   persisted: boolean;
   /** Состояние ключа на сервере (в ответе только признак и хвост). */
   hasKey: boolean;
