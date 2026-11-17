@@ -20,8 +20,7 @@ function makeService(
       | 'engine'
       | 'cells'
       | 'projects'
-      | 'events'
-      | 'press',
+      | 'events',
       unknown
     >
   >,
@@ -37,13 +36,6 @@ function makeService(
     (deps.projects ?? { lockProject: vi.fn() }) as never,
     (deps.events ?? {}) as never,
     log as never,
-    (deps.press ?? {
-      ensureForStage: vi.fn(async () => ({
-        transitionId: null,
-        roundStarted: false,
-        emptySources: false,
-      })),
-    }) as never,
   );
 }
 
@@ -114,24 +106,19 @@ describe('TaskTransitionsService — сценарии API кнопок марш�
     expect(taskService.listItem).toHaveBeenCalledWith(expect.objectContaining({ id: 'bob' }), 't1');
   });
 
-  it('executeFor: пустые источники коллективной кнопки — 409, движок не работает (#434)', async () => {
+  it('executeFor: пустые источники коллективной кнопки — обычное нажатие (#434, решение 16.11)', async () => {
     const row = { id: 't1', creatorId: 'alice', assigneeId: 'bob', participants: [] };
     const query = { visibleRow: vi.fn(async () => row) };
     const placements = { prepare: vi.fn(async () => void 0) };
-    const engine = { execute: vi.fn(), available: vi.fn() };
-    const press = {
-      ensureForStage: vi.fn(async () => ({
-        transitionId: 'tr1',
-        roundStarted: false,
-        emptySources: true,
-      })),
+    const engine = {
+      execute: vi.fn(async () => ({ stage: { id: 's2', systemState: 'active' }, recordId: 'r' })),
+      available: vi.fn(async () => []),
     };
-    const service = makeService({ query, placements, engine, press });
+    const taskService = { listItem: vi.fn(async () => ({ id: 't1' })) };
+    const service = makeService({ query, placements, engine, taskService });
 
-    await expect(service.executeFor(USER, 't1', 'tr1', {})).rejects.toMatchObject({
-      code: 'CONFLICT',
-    });
-    expect(engine.execute).not.toHaveBeenCalled();
+    await expect(service.executeFor(USER, 't1', 'tr1', {})).resolves.toBeDefined();
+    expect(engine.execute).toHaveBeenCalled();
   });
 
   it('listFor: чужая задача — 404 до транзакции', async () => {

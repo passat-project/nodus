@@ -172,7 +172,7 @@ describe('TaskEditService.movePersonal (#402)', () => {
     });
   });
 
-  it('пустые источники сбора: закрывающий PATCH — 409, движок не выполняется (#434)', async () => {
+  it('пустые источники сбора: закрывающий PATCH идёт обычным переходом (#434, решение 16.11)', async () => {
     const { service, engine, catalog, press } = setup();
     press.ensureForStage.mockResolvedValueOnce({
       transitionId: 'tr-press',
@@ -184,11 +184,13 @@ describe('TaskEditService.movePersonal (#402)', () => {
       systemState: 'closed',
       outcome: 'success',
     } as never);
+    engine.execute.mockResolvedValueOnce({
+      stage: { id: 's2', systemState: 'closed', outcome: 'success' },
+      recordId: 'r',
+    } as never);
 
-    await expect(service.update(USER, 't1', { stageId: 's2' })).rejects.toMatchObject({
-      code: 'CONFLICT',
-    });
-    expect(engine.execute).not.toHaveBeenCalled();
+    await expect(service.update(USER, 't1', { stageId: 's2' })).resolves.toBeDefined();
+    expect(engine.execute).toHaveBeenCalled();
   });
 });
 

@@ -165,10 +165,9 @@ export class TasksQueryService {
 
   async detail(user: AuthUser, id: string): Promise<TaskDetail> {
     const row = await this.visibleRow(user, id);
-    // Ленивый старт раунда сбора (#434) для задач, вошедших в стадию до
-    // релиза: карточка сразу видит прогресс, а не «мёртвую» коллективную
-    // кнопку. Повторный вызов идемпотентен (открытый раунд уже есть).
-    await this.txRunner.run(async (tx) => this.press.ensureForStage(tx, id));
+    // Чтение карточки ничего не пишет и не блокирует задачу (Б1 аудита):
+    // раунд сбора стартует только из мутаций — вход в статус, публикация,
+    // смена состава источника.
     const viewer = await this.viewer(user);
     const [full, children, result] = await Promise.all([
       this.reads.findDetail(id),

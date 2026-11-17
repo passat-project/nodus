@@ -113,18 +113,12 @@ export class PressSourcesService {
         return this.activeInOrder(source.userIds, tx);
       case 'field':
         return this.fieldIds(tx, task, source.field);
-      case 'all_employees':
-        if (task.confidential) {
-          this.logger.warn(`Сбор «Все сотрудники» пропущен для конфиденциальной задачи ${task.id}`);
-          return [];
-        }
-        if (task.projectId) {
-          // Секретный проект не раскрываем всему штату: для проектных задач
-          // используются явные источники (сотрудники/роль).
-          this.logger.warn(`Сбор «Все сотрудники» пропущен для задачи проекта ${task.id}`);
-          return [];
-        }
+      case 'all_employees': {
+        // «Все сотрудники» — весь штат; видимость режет `visibleOnly`:
+        // конфиденциальная задача — только её роли, секретный проект — только
+        // участники проекта, открытый проект — весь штат (Б4, 16.11.2026).
         return this.users.listActiveIds(tx);
+      }
       case 'letter_recipients':
         // Источник писем (#463/#464) на задаче не разворачивается: категория
         // проверяется публикацией, здесь — безопасный ноль.

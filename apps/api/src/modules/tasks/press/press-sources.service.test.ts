@@ -87,20 +87,35 @@ describe('PressSourcesService (#434)', () => {
     ]);
   });
 
-  it('«Все сотрудники» на конфиденциальной задаче не раскрывается', async () => {
+  it('«Все сотрудники» на конфиденциальной задаче — только её роли', async () => {
     const { sources, users } = service({ confidential: true });
     await expect(
-      sources.resolve({} as never, 't1', config([{ kind: 'all_employees' }])),
-    ).resolves.toEqual([]);
-    expect(users.listActiveIds).not.toHaveBeenCalled();
+      sources.resolve({} as never, 't1', config([{ kind: 'all_employees' }], false)),
+    ).resolves.toEqual([{ userId: 'creator', order: 0 }]);
+    expect(users.listActiveIds).toHaveBeenCalled();
   });
 
-  it('«Все сотрудники» на задаче проекта не раскрывается', async () => {
+  it('«Все сотрудники» в открытом проекте — весь штат (Б4)', async () => {
     const { sources, users } = service({ projectId: 'project-1' });
     await expect(
       sources.resolve({} as never, 't1', config([{ kind: 'all_employees' }])),
-    ).resolves.toEqual([]);
-    expect(users.listActiveIds).not.toHaveBeenCalled();
+    ).resolves.toEqual([
+      { userId: 'u1', order: 0 },
+      { userId: 'u2', order: 1 },
+    ]);
+    expect(users.listActiveIds).toHaveBeenCalled();
+  });
+
+  it('«Все сотрудники» в секретном проекте — только участники проекта', async () => {
+    const { sources, users, projects } = service({ projectId: 'project-1' });
+    users.listActiveIds.mockResolvedValue(['u1', 'u2', 'creator', 'co1', 'co2']);
+    projects.visibilityOf.mockResolvedValue('secret');
+    await expect(
+      sources.resolve({} as never, 't1', config([{ kind: 'all_employees' }])),
+    ).resolves.toEqual([
+      { userId: 'co1', order: 0 },
+      { userId: 'co2', order: 1 },
+    ]);
   });
 
   it('конкретные сотрудники сохраняют порядок источника (очередь)', async () => {

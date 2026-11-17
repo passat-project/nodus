@@ -10,11 +10,10 @@ import type {
   WorkflowAction,
   WorkflowTransition,
 } from '@nodus/contracts';
-import { TASK_EVENTS, customFieldIdOfKey, CUSTOM_FIELD_LIMITS, ErrorCode } from '@nodus/contracts';
+import { TASK_EVENTS, customFieldIdOfKey, CUSTOM_FIELD_LIMITS } from '@nodus/contracts';
 
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
-import { DomainException } from '../../../core/errors/domain-exception.js';
 import { EventBus } from '../../../core/events/event-bus.js';
 import { FORMULA_CELLS, type FormulaCells } from '../../custom-fields/ports/formula-cells.port.js';
 import {
@@ -23,7 +22,6 @@ import {
 } from '../../workflows/ports/workflow-engine.port.js';
 import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
 import { actorRoles, audienceIds, planHolderIds, taskAccess } from '../access/task-access.js';
-import { PressRoundsService } from '../press/press-rounds.service.js';
 import { Placements } from '../personal/placements.js';
 import { TasksQueryService } from '../tasks/tasks-query.service.js';
 import { TasksService } from '../tasks/tasks.service.js';
@@ -70,7 +68,6 @@ export class TaskTransitionsService {
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     private readonly events: EventBus,
     private readonly logger: PinoLogger,
-    private readonly press: PressRoundsService,
   ) {
     this.logger.setContext(TaskTransitionsService.name);
   }
@@ -81,10 +78,6 @@ export class TaskTransitionsService {
   async listFor(user: AuthUser, taskId: string): Promise<WorkflowTransition[]> {
     await this.query.visibleRow(user, taskId);
     return this.txRunner.run(async (tx) => {
-      // Ленивый старт раунда (#434): задачи, вошедшие в стадию до релиза,
-      // получают раунд при первом открытии карточки, а не остаются с
-      // коллективной кнопкой без права прямого нажатия.
-      await this.press.ensureForStage(tx, taskId);
       const transitions = await this.engine.available(tx, taskId, 'task', user);
       return this.withPrefill(transitions, taskId, user, tx);
     });
@@ -196,16 +189,8 @@ export class TaskTransitionsService {
       // (задача уже под FOR UPDATE движка) и правка задачи (проект → задача)
       // дают deadlock 40P01.
       if (row.projectId) await this.projects.lockProject(tx, row.projectId);
-      // Ленивый старт раунда (#434) и защита прямого нажатия: если источники
-      // дали участников, движок увидит открытый раунд и откажет обычному
-      // переходу; пустые источники — явный 409, а не «тихое» закрытие без
-      // единой отметки (решение владельца 1).
-      const pressState = await this.press.ensureForStage(tx, taskId);
-      if (pressState.transitionId === transitionId && !pressState.roundStarted) {
-        throw new DomainException(ErrorCode.CONFLICT, 'Press round has no participants', {
-          transitionId,
-        });
-      }
+      // Прямое нажатие коллективной кнопки в обход сбора закрывает движок:
+      // при открытом раунде обычный переход отклоняется (ADR-0025 п.5).
       const execution = await this.engine.execute(tx, taskId, 'task', user, { transitionId }, body);
       assignedNumbers = execution.assignedNumbers;
       // Кнопки после действия уезжают в кэш веба — с тем же префиллом, что
