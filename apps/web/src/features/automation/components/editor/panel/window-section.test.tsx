@@ -77,6 +77,19 @@ describe('раздел «Окно перехода» инспектора кно
     expect(screen.getByText(`${b.titles.transition} «Выдать в печать»`)).toBeTruthy();
   });
 
+  it('без полей сводка не начинается с «0 полей»', () => {
+    renderSection(
+      transition({
+        locks: [],
+        sections: [{ kind: 'comment', label: 'Причина отказа', required: true }],
+      }),
+    );
+
+    const link = screen.getByRole('button', { name: new RegExp(b.edit) });
+    expect(link.textContent).toContain('Причина отказа');
+    expect(link.textContent).not.toContain(b.summary(0, 0));
+  });
+
   it('заголовок окна правится в черновике кнопки', () => {
     renderSection();
 

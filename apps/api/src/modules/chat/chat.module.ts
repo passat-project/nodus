@@ -79,6 +79,11 @@ import { TaskTransitionBlockHandler } from './task-chat/task-transition-block.ha
 import { TaskTransitionBlockService } from './task-chat/task-transition-block.service.js';
 import { TaskActionBlockHandler } from './task-chat/task-action-block.handler.js';
 import { TaskActionBlockService } from './task-chat/task-action-block.service.js';
+import {
+  TaskPressReturnedBlockHandler,
+  TaskPressSubmittedBlockHandler,
+} from './task-chat/task-press-block.handler.js';
+import { TaskPressBlockService } from './task-chat/task-press-block.service.js';
 import { FavoritesController } from './favorites/favorites.controller.js';
 import { FavoriteCardMapper } from './favorites/favorite-card.mapper.js';
 import { FavoritesRepository } from './favorites/favorites.repository.js';
@@ -209,6 +214,10 @@ import {
     // Блок действия без смены статуса (#633): kind='task_action'.
     TaskActionBlockService,
     TaskActionBlockHandler,
+    // Блоки отметок сбора (#434): kind='task_press' — сдача/возврат.
+    TaskPressBlockService,
+    TaskPressSubmittedBlockHandler,
+    TaskPressReturnedBlockHandler,
     TaskCreatedChatHandler,
     TaskAssignedChatHandler,
     TaskParticipantsChatHandler,

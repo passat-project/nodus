@@ -5,7 +5,7 @@ import type {
   TransitionBlockReason,
   WorkflowTransition,
 } from '@nodus/contracts';
-import { effectiveWindowSections, ui } from '@nodus/contracts';
+import { effectiveWindowSections, PRESS_WINDOW_SECTION_KINDS, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import {
   Dialog,
@@ -17,11 +17,11 @@ import {
 } from '@nodus/ui/components/dialog';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { Textarea } from '@nodus/ui/components/textarea';
-
 import { useMessagesLookup } from '../../chat/message-lookup-api.js';
 import { gateReasonsText } from '../../tasks/transition-error.js';
 import { buildExecuteBody } from './build-execute-body.js';
 import { ConditionsList } from './conditions-list.js';
+import { PressReturnSection } from './press-return-section.js';
 import type { GateDetailsHost } from './gate-details.js';
 import { SubmissionBlock } from './submission-block.js';
 import { useWindowDraft, draftMessageIds } from './use-window-draft.js';
@@ -53,10 +53,10 @@ export type WindowSource = Pick<
 > & { toStageName?: string };
 
 /**
- * Окно перехода (#380): диалог по центру (≈640, радиус 14, канон диалогов),
- * разделы по настройке кнопки ∪ гейтам, живой список условий, пессимистичная
- * отправка. Закрытие — «Отмена» или Esc; клик мимо окна не закрывает.
- * `mode="preview"` — настоящее окно без данных (редактор маршрутов).
+ * Окно перехода (#380): диалог по центру, разделы по настройке кнопки ∪
+ * гейтам, живой список условий, пессимистичная отправка. `mode="preview"` —
+ * настоящее окно без данных; `variant="press"` — окно своей отметки (#434):
+ * те же разделы, но без гейтов (кворум проверяется при последнем нажатии).
  */
 export function TransitionWindow({
   open,
@@ -71,6 +71,9 @@ export function TransitionWindow({
   onOpenSubtasks,
   gate,
   renderSection,
+  variant = 'transition',
+  title,
+  submitLabel,
 }: {
   open: boolean;
   mode: 'live' | 'preview';
@@ -85,6 +88,9 @@ export function TransitionWindow({
   gate?: GateDetailsHost;
   /** Разделы сущности, которые рисует хост (регистрация письма, #55). */
   renderSection?: RenderWindowSection;
+  variant?: 'transition' | 'press';
+  title?: string;
+  submitLabel?: string;
 }) {
   const effectiveContext = mode === 'preview' ? (context ?? PREVIEW_CONTEXT) : context;
   const {
@@ -100,11 +106,21 @@ export function TransitionWindow({
   } = useWindowDraft(effectiveContext, transition.formPrefill);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
+  const defaultReturn = effectiveContext?.pressReturn?.defaultUserIds;
+  const [pressReturnUserIds, setPressReturnUserIds] = useState<string[]>([
+    ...(defaultReturn ?? []),
+  ]);
 
-  const sections = useMemo(
-    () => effectiveWindowSections(transition.form, { validators: transition.validators }),
-    [transition.form, transition.validators],
-  );
+  const sections = useMemo(() => {
+    const all = effectiveWindowSections(transition.form, { validators: transition.validators });
+    return variant === 'press'
+      ? all.filter(
+          (section) =>
+            section.origin === 'form' &&
+            (PRESS_WINDOW_SECTION_KINDS as readonly string[]).includes(section.kind),
+        )
+      : all;
+  }, [transition.form, transition.validators, variant]);
   const conversationId = effectiveContext?.conversationId ?? null;
   const resultIds = draftMessageIds(draft);
   const { data: resultMessages } = useMessagesLookup(
@@ -120,7 +136,7 @@ export function TransitionWindow({
 
   const lines = useMemo<WindowConditionLine[]>(
     () =>
-      effectiveContext
+      variant === 'transition' && effectiveContext
         ? windowConditionLines({
             transition,
             context: effectiveContext,
@@ -128,18 +144,25 @@ export function TransitionWindow({
             attachmentCount,
           })
         : [],
-    [transition, effectiveContext, draft, attachmentCount],
+    [variant, transition, effectiveContext, draft, attachmentCount],
   );
-  const canSubmit = effectiveContext
-    ? windowCanSubmit({
-        sections,
-        lines,
-        draft,
-        spentMinutes: effectiveContext.spentMinutes,
-      })
-    : false;
+  const canSubmit =
+    (effectiveContext
+      ? windowCanSubmit({
+          sections,
+          lines,
+          draft,
+          spentMinutes: effectiveContext.spentMinutes,
+        })
+      : false) &&
+    (!effectiveContext?.pressReturn || pressReturnUserIds.length > 0);
   const allOk = lines.every((line) => line.ok);
-  const canOverride = mode === 'live' && transition.canOverride && !allOk;
+  const canOverride =
+    variant === 'transition' &&
+    mode === 'live' &&
+    transition.canOverride &&
+    !allOk &&
+    (!effectiveContext?.pressReturn || pressReturnUserIds.length > 0);
 
   const api: WindowSectionApi | null = effectiveContext
     ? {
@@ -166,16 +189,23 @@ export function TransitionWindow({
       }
     : null;
 
+  const bodyWithReturn = (body: ExecuteTransitionBody): ExecuteTransitionBody =>
+    pressReturnUserIds.length > 0
+      ? { ...body, form: { ...(body.form ?? {}), pressReturnUserIds } }
+      : body;
+
   function submit() {
     if (!api || !canSubmit || submitting || mode === 'preview') return;
-    const body = buildExecuteBody({ sections, context: api.context, draft });
-    onSubmit(body);
+    onSubmit(bodyWithReturn(buildExecuteBody({ sections, context: api.context, draft })));
   }
 
   function submitOverride() {
     if (!api || submitting || !overrideReason.trim()) return;
-    const body = buildExecuteBody({ sections, context: api.context, draft });
-    onSubmit(body, { override: true, reason: overrideReason.trim() });
+    if (effectiveContext?.pressReturn && pressReturnUserIds.length === 0) return;
+    onSubmit(bodyWithReturn(buildExecuteBody({ sections, context: api.context, draft })), {
+      override: true,
+      reason: overrideReason.trim(),
+    });
   }
 
   return (
@@ -198,7 +228,7 @@ export function TransitionWindow({
         className="flex max-h-[90vh] max-w-[640px] flex-col gap-4 overflow-hidden rounded-[14px] p-5 sm:max-w-[640px]"
       >
         <DialogHeader className="shrink-0">
-          <DialogTitle>{transition.form?.title || transition.name}</DialogTitle>
+          <DialogTitle>{title ?? (transition.form?.title || transition.name)}</DialogTitle>
           {transition.toStageName ? (
             <DialogDescription>
               {effectiveContext?.currentStageName} {ui.tasks.window.stageArrow}{' '}
@@ -208,6 +238,13 @@ export function TransitionWindow({
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
+          {variant === 'transition' && effectiveContext?.pressReturn ? (
+            <PressReturnSection
+              pressReturn={effectiveContext.pressReturn}
+              selected={pressReturnUserIds}
+              onChange={setPressReturnUserIds}
+            />
+          ) : null}
           {effectiveContext?.submission ? (
             <SubmissionBlock
               submission={effectiveContext.submission}
@@ -285,7 +322,7 @@ export function TransitionWindow({
               aria-busy={submitting || undefined}
             >
               {submitting ? <Loader2 className="size-4 animate-spin" strokeWidth={1.75} /> : null}
-              {transition.name}
+              {submitLabel ?? transition.name}
             </Button>
           </DialogFooter>
           {mode === 'preview' ? (

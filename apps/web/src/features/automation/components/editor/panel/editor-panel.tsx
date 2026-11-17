@@ -14,6 +14,7 @@ import { SidePanel } from '../../../../../shared/ui/panel/side-panel.js';
 import { StageActionsSection } from './stage-actions-section.js';
 import { StageButtonsSection } from './stage-buttons-section.js';
 import { StagePanel } from './stage-panel.js';
+import { TransitionPressSection } from './transition-press-section.js';
 import { TransitionPanel, type TransitionSection } from './transition-panel.js';
 import { ConditionsSection, RulesSection } from './transition-sections.js';
 import { RolesSection } from './transition-roles-section.js';
@@ -27,6 +28,7 @@ type PanelSection = TransitionSection | 'buttons' | 'actions';
 const SECTION_TITLE: Record<Exclude<PanelSection, 'root'>, string> = {
   roles: ui.automation.panel.sectionWhoSees,
   deciders: ui.automation.deciders.sectionTitle,
+  press: ui.automation.press.sectionTitle,
   conditions: ui.automation.panel.sectionConditions,
   rules: ui.automation.panel.sectionRules,
   window: ui.automation.panel.sectionWindow,
@@ -159,6 +161,13 @@ export function EditorPanel({
           kind="action"
           scope={scope}
           typeId={type.id}
+          readOnly={readOnly}
+          category={type.category}
+        />
+      ) : null}
+      {transition && section === 'press' && type.category === 'task' ? (
+        <TransitionPressSection
+          transition={transition}
           readOnly={readOnly}
           category={type.category}
         />

@@ -23,6 +23,7 @@ import { stickerAttachmentOf, StickerMessageView } from './sticker-message.js';
 import { TombstoneBubble } from './tombstone.js';
 import { TransitionBlock } from './transition-block.js';
 import { MessageAuthorAvatar } from './message-avatar.js';
+import { PressBlock } from './press-block.js';
 import { MediaMessage, MetaGhost, MetaPin } from './message-media-bubble.js';
 import { hasEntityPreviews } from './message-text.js';
 import { UrgentChips } from './urgent-chips.js';
@@ -132,8 +133,12 @@ export const ChatMessageItem = memo(function ChatMessageItem({
     );
   }
 
-  // Блок перехода задачи (#380), письма (#55) и действия без смены статуса
-  // (#633): запись журнала, не пузырь — компактный блок во всех хостах.
+  // Блок перехода задачи (#380), письма (#55), действия без смены статуса
+  // (#633) и отметки сбора (#434): запись журнала, не пузырь — компактный
+  // блок во всех хостах (карточки и «Чаты задач и писем»).
+  if (message.kind === 'task_press' && message.block) {
+    return <PressBlock message={message} mine={mine} showName={showName} avatarSlot={avatarSlot} />;
+  }
   if (
     (message.kind === 'task_transition' ||
       message.kind === 'letter_transition' ||

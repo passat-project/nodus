@@ -24,6 +24,7 @@ import { ResultRevisions } from '../activity/result-revisions.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
 import { TaskFieldsWriter, type TaskFieldsWrite } from '../tasks/task-fields.writer.js';
 import { TaskFormulaService } from '../tasks/task-formula.service.js';
+import { PressRoundsService } from '../press/press-rounds.service.js';
 import { TimeService } from '../time/time.service.js';
 
 /**
@@ -45,6 +46,7 @@ export class TaskFormApplier {
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     @Inject(FORMULA_CELLS) private readonly formulaCells: FormulaCells,
     private readonly eventBus: EventBus,
+    private readonly press: PressRoundsService,
   ) {}
 
   async apply(
@@ -92,6 +94,9 @@ export class TaskFormApplier {
       if (input.fields.assigneeId !== undefined && input.fields.assigneeId !== task.assigneeId) {
         // Секретный проект: новый ответственный — только участник проекта;
         // лок строки проекта исключает гонку с open→secret (#541).
+        // Открытый раунд сбора: прежний ответственный не может быть снят
+        // молча — иначе он сохранит доступ и право закрыть задачу (#434).
+        await this.press.assertCanRemove(tx, taskId, [task.assigneeId]);
         if (task.projectId) {
           await this.projects.lockProject(tx, task.projectId);
           await this.projects.assertMembersAllowed(task.projectId, [input.fields.assigneeId]);
@@ -134,6 +139,8 @@ export class TaskFormApplier {
             written.customFieldChanges.map((change) => change.fieldId),
           );
         }
+        // Новый ответственный входит в открытый раунд, если его даёт источник.
+        if (patch.assigneeId) await this.press.syncAdded(tx, taskId, patch.assigneeId);
         // Смена ответственного меняет права на СЛЕДУЮЩИЕ разделы: время и
         // итог перепроверяются по свежим ролям (иначе актор, передавший
         // задачу, дописал бы время/итог уже после передачи).
@@ -144,7 +151,9 @@ export class TaskFormApplier {
     }
 
     if (input.time) {
-      if (!access.canLogTime) throw DomainException.forbidden('Time logging not allowed');
+      if (!access.canLogTime && !meta?.pressCompletion) {
+        throw DomainException.forbidden('Time logging not allowed');
+      }
       const entry = await this.time.addManualInTx(
         tx,
         actor.id,
@@ -155,7 +164,9 @@ export class TaskFormApplier {
     }
 
     if (input.result) {
-      if (!access.canCheck) throw DomainException.forbidden('Result change not allowed');
+      if (!access.canCheck && !meta?.pressCompletion) {
+        throw DomainException.forbidden('Result change not allowed');
+      }
       const messageIds = [...new Set(input.result.messageIds)];
       // Чужое/удалённое/чужая беседа — одинаковый 404 (без оракула).
       const snaps = await this.messages.taskMessages(taskId, messageIds, actor.id, tx);

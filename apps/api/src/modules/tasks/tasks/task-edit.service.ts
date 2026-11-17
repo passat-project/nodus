@@ -30,6 +30,7 @@ import { Placements } from '../personal/placements.js';
 import { PlacementsRepository } from '../personal/placements.repository.js';
 import type { TaskListRow } from './task-row.js';
 import { TaskFieldsWriter } from './task-fields.writer.js';
+import { PressRoundsService } from '../press/press-rounds.service.js';
 import { TaskFormulaService } from './task-formula.service.js';
 import { TasksQueryService } from './tasks-query.service.js';
 import { TasksRepository } from './tasks.repository.js';
@@ -74,6 +75,7 @@ export class TaskEditService {
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
+    private readonly press: PressRoundsService,
   ) {}
 
   async update(user: AuthUser, id: string, body: TaskEditBody): Promise<TaskListItem> {
@@ -141,32 +143,51 @@ export class TaskEditService {
     await this.txRunner.run(async (tx) => {
       // Состав перепроверяется под локом проекта (#541) — только когда правка
       // реально меняет ответственного/проект: заголовок/срок в «наследном»
-      // секретном проекте не должны упираться в чужую роль 422.
-      const assigneeAfter = body.assigneeId ?? row.assigneeId;
-      const changingProject = body.projectId !== undefined && body.projectId !== row.projectId;
-      const changingAssignee = body.assigneeId !== undefined && body.assigneeId !== row.assigneeId;
-      const effectiveProjectId = body.projectId ?? row.projectId;
-      if (effectiveProjectId && (changingProject || changingAssignee)) {
-        await this.projects.lockProject(tx, effectiveProjectId);
+      // секретном проекте не должны упираться в чужую роль 422. Лок проекта —
+      // первым шагом, до строки задачи (единый порядок, иначе deadlock 40P01).
+      const lockProjectId = body.projectId !== undefined ? body.projectId : row.projectId;
+      if (lockProjectId) await this.projects.lockProject(tx, lockProjectId);
+      // Смена ответственного при открытом раунде (#434, security): проверка
+      // идёт под FOR UPDATE и по свежей строке — иначе параллельный старт
+      // раунда оставит старого ответственного в сборе.
+      await this.repo.lock(tx, id);
+      const fresh = await this.query.visibleRow(user, id);
+      const targetProjectId = body.projectId === undefined ? fresh.projectId : body.projectId;
+      const assigneeAfter = body.assigneeId ?? fresh.assigneeId;
+      const changingProject = body.projectId !== undefined && body.projectId !== fresh.projectId;
+      const changingAssignee =
+        body.assigneeId !== undefined && body.assigneeId !== fresh.assigneeId;
+      if (targetProjectId && (changingProject || changingAssignee)) {
         if (changingProject) await this.projects.assertTaskProjectVisible(user, body.projectId!);
         await this.projects.assertMembersAllowed(
-          effectiveProjectId,
+          targetProjectId,
           changingProject
             ? [
-                row.creatorId,
+                fresh.creatorId,
                 assigneeAfter,
                 // Наблюдатель прав на задачу не получает — состав секретного
                 // проекта его не ограничивает (#541, security-аудит).
-                ...row.participants.filter((p) => p.role === 'coexecutor').map((p) => p.userId),
+                ...fresh.participants.filter((p) => p.role === 'coexecutor').map((p) => p.userId),
               ]
             : [assigneeAfter],
         );
       }
-      if (fields.length > 0 || hasCustomFields) await this.applyFields(tx, user, row, body, fields);
+      if (changingAssignee) {
+        await this.press.assertCanRemove(tx, id, [fresh.assigneeId]);
+      }
+      if (fields.length > 0 || hasCustomFields) {
+        await this.applyFields(tx, user, fresh, body, fields);
+      }
+      if (body.assigneeId && body.assigneeId !== fresh.assigneeId) {
+        await this.press.syncAdded(tx, id, body.assigneeId);
+      }
+      // Смена стадии не должна обходить сбор (#434): раунд по настройке
+      // текущей стадии стартует здесь, в мутации, а не при чтении карточки.
+      if (body.stageId || body.personalStageId) await this.press.ensureForStage(tx, id);
       if (body.stageId)
-        await this.moveGlobal(tx, user, row, body.stageId, body.index, access.canEdit);
+        await this.moveGlobal(tx, user, fresh, body.stageId, body.index, access.canEdit);
       if (body.personalStageId)
-        await this.movePersonal(tx, user, row, body.personalStageId, body.index);
+        await this.movePersonal(tx, user, fresh, body.personalStageId, body.index);
     });
     return this.tasks.listItem(user, id);
   }

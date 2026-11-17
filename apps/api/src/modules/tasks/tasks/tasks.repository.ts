@@ -60,6 +60,20 @@ export class TasksRepository {
     await tx.$executeRaw`SELECT 1 FROM tasks WHERE id = ${taskId}::uuid FOR UPDATE`;
   }
 
+  /** Живые задачи маршрута в указанных стадиях — старт сбора после публикации. */
+  async liveIdsInStages(workflowId: string, stageIds: readonly string[]): Promise<string[]> {
+    if (stageIds.length === 0) return [];
+    const rows = await this.prisma.task.findMany({
+      where: {
+        workflowId,
+        stageId: { in: [...stageIds] },
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
+
   /** Дедуп «В задачу»: живая задача постановщика по сообщению чата. */
   async findLiveIdBySource(creatorId: string, messageId: string): Promise<string | null> {
     const found = await this.prisma.task.findFirst({

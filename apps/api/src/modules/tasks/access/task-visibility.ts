@@ -8,6 +8,7 @@ import {
 } from '../../../core/ports/org-structure.port.js';
 import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
 import { TaskDeciders } from './task-deciders.service.js';
+import { PressRepository } from '../press/press.repository.js';
 
 /** Кто смотрит: id + права (из JWT) + подчинённые по оргструктуре +
  *  множества проектов (Р3: видимые — задачи открытых и моих секретных). */
@@ -20,6 +21,9 @@ export interface Viewer {
   /** Задачи, где актор — решающий текущего шага (#433). Необязательно:
    *  старые фикстуры и тесты не обязаны заполнять. */
   deciderTaskIds?: readonly string[];
+  /** Задачи с ожидающей/возвращённой отметкой сбора (#434): сотрудник не
+   *  участник задачи, но обязан видеть карточку, чтобы нажать кнопку. */
+  pressTaskIds?: readonly string[];
 }
 
 function involves(userIds: readonly string[]): Prisma.TaskWhereInput[] {
@@ -70,7 +74,21 @@ export function visibleTasksWhere(
   // (removeManual, open→secret) не сохраняет доступ к его задачам через
   // роль постановщика/ответственного (вердикт 29.10).
   const mineGated: Prisma.TaskWhereInput = gate ? { AND: [{ OR: mine }, gate] } : { OR: mine };
-  if (scope === 'mine') return { ...alive, ...mineGated };
+  // Участник сбора (#434): карточка нужна, чтобы нажать свою кнопку. Явный
+  // источник может быть и вне ролей задачи; скрытый секретный проект закрыт
+  // той же щелью. В «Мои задачи» ветка тоже нужна — иначе внешний сотрудник
+  // не найдёт запрос, пока идёт сбор.
+  const pressIds = viewer.pressTaskIds ?? [];
+  // Внешний участник сбора видит карточку для нажатия, но конфиденциальная
+  // задача (#461) остаётся только участникам — свою видимость они получают
+  // веткой mineGated, а не этой щелью.
+  const pressBranch: Prisma.TaskWhereInput | null =
+    pressIds.length > 0
+      ? { AND: [{ id: { in: [...pressIds] } }, openOnly, ...(gate ? [gate] : [])] }
+      : null;
+  if (scope === 'mine') {
+    return pressBranch ? { ...alive, OR: [mineGated, pressBranch] } : { ...alive, ...mineGated };
+  }
   const or: Prisma.TaskWhereInput[] = [mineGated];
   // Решающий видит задачу, даже не участвуя (#433): только не конфиденциальную
   // и не из скрытого секретного проекта — те же гейты, что у руководителей.
@@ -89,6 +107,7 @@ export function visibleTasksWhere(
     or.push({ AND: [{ projectId: { in: [...viewer.visibleProjectIds] } }, openOnly] });
   }
   if (deciderBranch) or.push(deciderBranch);
+  if (pressBranch) or.push(pressBranch);
   if (viewer.permissions.includes(Permission.TASK_VIEW_ALL)) {
     // Не ранний return: task.view_all не открывает чужие секретные проекты
     // (Т1) и конфиденциальные задачи (#461) — гейты остаются и у админа.
@@ -97,7 +116,12 @@ export function visibleTasksWhere(
     const rest = gate ? { AND: [gate, openOnly] } : openOnly;
     return {
       ...alive,
-      OR: [mineGated, rest, ...(deciderBranch ? [deciderBranch] : [])],
+      OR: [
+        mineGated,
+        rest,
+        ...(deciderBranch ? [deciderBranch] : []),
+        ...(pressBranch ? [pressBranch] : []),
+      ],
     };
   }
   return { ...alive, OR: or };
@@ -109,13 +133,15 @@ export class ViewerResolver {
     @Inject(ORG_STRUCTURE_READER) private readonly org: OrgStructureReader,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     private readonly deciders: TaskDeciders,
+    private readonly press: PressRepository,
   ) {}
 
   async resolve(user: { id: AuthUser['id']; permissions: readonly string[] }): Promise<Viewer> {
-    const [subordinateIds, scope, deciderTaskIds] = await Promise.all([
+    const [subordinateIds, scope, deciderTaskIds, pressTaskIds] = await Promise.all([
       this.org.subordinateIds(user.id),
       this.projects.viewScopeFor(user),
       this.deciders.taskIdsFor(user.id),
+      this.press.waitingTaskIds(user.id),
     ]);
     return {
       id: user.id,
@@ -124,6 +150,7 @@ export class ViewerResolver {
       visibleProjectIds: scope.visibleProjectIds,
       hiddenProjectIds: scope.hiddenProjectIds,
       deciderTaskIds,
+      pressTaskIds,
     };
   }
 }

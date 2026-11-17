@@ -78,6 +78,13 @@ export interface WorkflowActorSubject {
   /** Переходы текущей стадии, у которых ВСЕ источники решающих пусты (#433):
    *  показываются только с правом обхода и причиной. */
   vacantDeciderTransitionIds?: ReadonlySet<string>;
+  /** Коллективная кнопка, которую актор сейчас вправе нажать (#434):
+   *  показывается независимо от условий «кто» — источник сбора сам определяет
+   *  участников; выполнить её напрямую движок не даст (pressCompletion). */
+  pressTransitionIds?: ReadonlySet<string>;
+  /** Есть ли у сущности открытый раунд сбора (#434): false — источники не
+   *  дали участников, коллективная кнопка работает как обычная (fallback). */
+  pressRoundExists?: boolean;
   facts: WorkflowGateFacts;
 }
 
@@ -108,6 +115,8 @@ export interface WorkflowStageChangeMeta {
   wasDeciderOfTransition?: boolean;
   /** Решающие нового статуса (#433): payload `task.stage_changed`. */
   deciderIds?: readonly string[];
+  /** Возврат в статус с коллективной кнопкой (#434, В2): кого вернуть. */
+  pressReturnUserIds?: readonly string[];
   /** Строка общего журнала (#380): блок в чате пишется только с ней. */
   recordId?: string;
   /** Названия кнопки и исходного статуса — для блока перехода в чате. */
@@ -173,6 +182,9 @@ export interface WorkflowActor {
  *  ДО окна — адаптер не пересобирает грамматику окон. */
 export interface WorkflowFormMeta {
   writableKeys: ReadonlySet<string>;
+  /** Завершение раунда сбора (#434): право записать итог даёт сама отметка,
+   *  а не роль задачи (участник из «Все сотрудники» не соисполнитель). */
+  pressCompletion?: boolean;
 }
 
 /** Нажатая кнопка для замков (#496, Р4): имя на момент нажатия — подпись

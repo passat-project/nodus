@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Permission } from '@nodus/contracts';
 
-import { visibleTasksWhere } from './task-visibility.js';
+import { visibleTasksWhere, ViewerResolver } from './task-visibility.js';
 
 const viewer = {
   id: 'me',
@@ -12,6 +12,27 @@ const viewer = {
 };
 
 describe('visibleTasksWhere (#37 + #52 Р3)', () => {
+  it('сбор не раскрывает конфиденциальную задачу внешнему нажавшему (#434)', () => {
+    const where = visibleTasksWhere({ ...viewer, pressTaskIds: ['press1'] }, 'mine');
+    const branch = (where.OR as Record<string, unknown>[]).find((item) =>
+      JSON.stringify(item).includes('press1'),
+    );
+    expect(JSON.stringify(branch)).toContain('"confidential":false');
+  });
+  it('ViewerResolver собирает подчинённых, проекты, решающих и участников сбора (#434)', async () => {
+    const resolver = new ViewerResolver(
+      { subordinateIds: async () => ['sub'] } as never,
+      { viewScopeFor: async () => ({ visibleProjectIds: ['p1'], hiddenProjectIds: [] }) } as never,
+      { taskIdsFor: async () => ['d1'] } as never,
+      { waitingTaskIds: async () => ['press1'] } as never,
+    );
+    await expect(resolver.resolve({ id: 'me', permissions: [] })).resolves.toMatchObject({
+      subordinateIds: ['sub'],
+      visibleProjectIds: ['p1'],
+      deciderTaskIds: ['d1'],
+      pressTaskIds: ['press1'],
+    });
+  });
   it('mine — только собственное участие, удалённые скрыты', () => {
     const where = visibleTasksWhere({ ...viewer, subordinateIds: ['sub'] }, 'mine');
     expect(where.deletedAt).toBeNull();

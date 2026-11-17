@@ -1,6 +1,7 @@
 import type { WorkflowDetail } from '@nodus/contracts';
 import { customFieldKey } from '@nodus/contracts';
 
+import { requestDocument } from './request-workflow-document.js';
 import { quickDocument, simpleDocument, standardDocument } from './workflows-documents.js';
 import { stageInProgress } from './task-stages.js';
 import { letterWorkflowDetails } from './letter-catalog.js';
@@ -12,6 +13,7 @@ import {
   KOMPLEKT_WORKFLOW_ID,
   OVERTIME_WORKFLOW_ID,
   QUICK_WORKFLOW_ID,
+  REQUEST_WORKFLOW_ID,
   STANDARD_WORKFLOW_ID,
   archivedDemoType,
   changeType,
@@ -19,6 +21,7 @@ import {
   komplektType,
   overtimeCreationForm,
   quickTypeDto,
+  requestType,
   standardProcessType,
   overtimeType,
   hrType,
@@ -142,6 +145,17 @@ export const demoWorkflowDetails: Record<string, WorkflowDetail> = {
         },
       ],
     },
+    stageEntityCounts: {},
+  },
+  // «Заявка» (#434): обычный тип с коллективной кнопкой «Ознакомлен» —
+  // кворум всех сотрудников, после последнего нажатия задача закрывается.
+  [REQUEST_WORKFLOW_ID]: {
+    id: REQUEST_WORKFLOW_ID,
+    typeIds: [requestType.id],
+    version: 1,
+    publishedAt,
+    publishedBy,
+    document: requestDocument,
     stageEntityCounts: {},
   },
   [ARCHIVED_WORKFLOW_ID]: {

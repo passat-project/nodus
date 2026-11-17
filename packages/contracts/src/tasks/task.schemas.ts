@@ -11,6 +11,7 @@ import { userRefSchema } from '../directory/user-ref.schema.js';
 import { lockReasonSchema, taskFieldLockSchema } from '../forms/field-lock.js';
 import { cursorQuerySchema } from '../pagination/paginated.schema.js';
 import { projectRefSchema } from '../projects/project.schemas.js';
+import { pressRoundViewSchema } from '../workflows/press.js';
 import { processTypeRefSchema } from '../workflows/process-type.schemas.js';
 import { taskCardLayoutSchema } from '../workflows/process-type-config.js';
 import { workflowTransitionSchema } from '../workflows/workflow.schemas.js';
@@ -201,10 +202,22 @@ export const taskDetailSchema = taskListItemSchema.extend({
   /** Закреплённые поля (#496, Р10): только ключи текущего типа; `canEdit`
    *  считает сервер. Список и канбан замков не несут — отказ 422 тостом. */
   fieldLocks: z.array(taskFieldLockSchema).max(40),
+  /** Активный/последний раунд сбора отметок (#434): прогресс, моя отметка,
+   *  права и настройка. null/нет — сбора нет. */
+  press: pressRoundViewSchema.nullable().optional(),
   createdAt: z.iso.datetime(),
 });
 
 export type TaskDetail = z.infer<typeof taskDetailSchema>;
+
+/** Ответ коллективного нажатия (#434): новый раунд, карточка и кнопки —
+ *  как ответ перехода; после кворума переход уже выполнен сервером. */
+export const pressExecuteResultSchema = z.object({
+  press: pressRoundViewSchema.nullable(),
+  task: taskDetailSchema,
+  transitions: z.array(workflowTransitionSchema),
+});
+export type PressExecuteResult = z.infer<typeof pressExecuteResultSchema>;
 
 export const createSubtaskBodySchema = z.object({
   title: z.string().trim().min(1).max(200),

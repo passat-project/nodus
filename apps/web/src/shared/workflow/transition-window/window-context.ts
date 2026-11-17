@@ -47,4 +47,9 @@ export interface TransitionWindowContext {
   customFieldDefinitions: readonly CustomFieldDefinition[];
   /** Ссылки значений (имя/аватар) — показ выбранного до ответа сервера. */
   customFieldRefs: readonly CustomFieldRef[];
+  /** Возврат в статус с коллективной кнопкой (#434, В2): кому вернуть. */
+  pressReturn?: {
+    candidates: readonly { userId: string; displayName: string; state: string }[];
+    defaultUserIds: readonly string[];
+  };
 }

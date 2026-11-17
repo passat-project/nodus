@@ -24,10 +24,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
   'chat: надёжность — гонки и гарантии (integration)',
   () => {
     let fx: ChatTestFixture<'alice' | 'bob' | 'carol' | 'dave' | 'eve'>;
-    let messages: MessagesService;
-    let conversations: ConversationsService;
-    let actions: MessageActionsService;
-    let nextConv = 0;
+    let nextConv = 0,
+      messages: MessagesService,
+      conversations: ConversationsService,
+      actions: MessageActionsService;
 
     beforeAll(async () => {
       fx = await setupChatFixture(['alice', 'bob', 'carol', 'dave', 'eve']);

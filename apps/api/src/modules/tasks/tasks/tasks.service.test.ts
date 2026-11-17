@@ -153,12 +153,13 @@ describe('TasksService', () => {
   });
 
   it('удаление: дети — к ближайшему ЖИВОМУ предку под очередью дерева', async () => {
-    const { service, repo, placementsRepo } = setup();
+    const { service, repo, placementsRepo, press } = setup();
     await service.remove({ ...USER, id: 'alice' }, 't1');
     expect(repo.lockTree).toHaveBeenCalledWith(TX);
     expect(repo.liveAncestorId).toHaveBeenCalledWith(TX, 't1');
     expect(repo.reparentChildren).toHaveBeenCalledWith(TX, 't1', 'grand');
     expect(placementsRepo.removeAllForTask).toHaveBeenCalledWith(TX, 't1');
+    expect(press.cancelForTask).toHaveBeenCalledWith(TX, 't1');
     expect(repo.lockTree.mock.invocationCallOrder[0]).toBeLessThan(
       repo.liveAncestorId.mock.invocationCallOrder[0]!,
     );

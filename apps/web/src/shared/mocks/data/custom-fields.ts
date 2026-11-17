@@ -301,6 +301,11 @@ export const demoTaskCustomFields: Record<string, CustomFieldValues> = {
     [fieldIds.marka]: markIdOf('КМ'),
     [fieldIds.komplektNumber]: 2,
   },
+  // Демо коллективной кнопки (#434): «№ накладной» уже заполнен — гейт
+  // «Завершить» проходит, участники подтверждают отчёты.
+  [tid(17)]: {
+    [fieldIds.invoiceNumber]: '№ 119-2026',
+  },
 };
 
 /** Подразделение автора — снимок для умолчания (Р5): текущий пользователь

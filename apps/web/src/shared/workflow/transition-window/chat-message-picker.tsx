@@ -31,7 +31,8 @@ export function ChatMessagePicker({
           !m.deletedAt &&
           m.kind !== 'task_transition' &&
           m.kind !== 'letter_transition' &&
-          m.kind !== 'task_action',
+          m.kind !== 'task_action' &&
+          m.kind !== 'task_press',
       )
       .filter(
         (m) =>

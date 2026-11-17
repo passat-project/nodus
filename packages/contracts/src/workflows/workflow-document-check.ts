@@ -6,6 +6,7 @@ import { checkActionProblems } from './workflow-document-actions-check.js';
 import { checkCategoryDictionary } from './workflow-document-category-check.js';
 import { checkDeciderRules } from './workflow-document-deciders.js';
 import { checkExtraRules } from './workflow-document-extra-checks.js';
+import { checkPressRules } from './workflow-document-press-check.js';
 import { checkFormulaSlots } from './workflow-document-formula-check.js';
 import { windowFieldKeys } from './transition-form.schemas.js';
 import { checkWindowLayoutAndLocks } from './workflow-document-window-check.js';
@@ -227,6 +228,16 @@ export function checkWorkflowDocument(
   // --- Конструктор окна: оформление и замки (#496, Р8) --------------------
 
   problems.push(...checkWindowLayoutAndLocks(doc, opts.customFields));
+
+  // --- Коллективная кнопка (#434) -----------------------------------------
+
+  problems.push(
+    ...checkPressRules(transitions, {
+      category: opts.category,
+      customFields: opts.customFields,
+      definitions: opts.definitions,
+    }),
+  );
 
   // --- Кастомные поля в окне и гейтах (#431, Р7) ---------------------------
 

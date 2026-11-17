@@ -189,6 +189,8 @@ export class TaskTransitionsService {
       // (задача уже под FOR UPDATE движка) и правка задачи (проект → задача)
       // дают deadlock 40P01.
       if (row.projectId) await this.projects.lockProject(tx, row.projectId);
+      // Прямое нажатие коллективной кнопки в обход сбора закрывает движок:
+      // при открытом раунде обычный переход отклоняется (ADR-0025 п.5).
       const execution = await this.engine.execute(tx, taskId, 'task', user, { transitionId }, body);
       assignedNumbers = execution.assignedNumbers;
       // Кнопки после действия уезжают в кэш веба — с тем же префиллом, что

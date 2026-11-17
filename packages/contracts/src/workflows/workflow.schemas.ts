@@ -29,34 +29,15 @@ import {
 
 const PERMISSION_VALUES = Object.values(Permission) as [Permission, ...Permission[]];
 
-/** Роль пользователя относительно сущности процесса (вход условий переходов
- *  и прав). Словарь ролей задаёт адаптер категории (ADR-0024): у задачи —
- *  постановщик/ответственный/соисполнитель/наблюдатель, у письма —
- *  регистратор/адресат/исполнитель/расписавший/автор/участник (#55, Р6);
- *  движок ролей не знает, сравнивает с условиями маршрута. Какие роли
- *  допустимы в маршруте категории — `WORKFLOW_ROLES_BY_CATEGORY`. */
-export const workflowActorRoleSchema = z.enum([
-  'creator',
-  'assignee',
-  'coexecutor',
-  'observer',
-  'registrar',
-  'addressee',
-  'executor',
-  'resolver',
-  'author',
-  'participant',
-]);
-export type WorkflowActorRole = z.infer<typeof workflowActorRoleSchema>;
-
-/** Словарь ролей по категории типа (Р6): редактор предлагает только свои
- *  роли, проверка документа ловит чужие (`role_not_in_category`). У письма
- *  в #55 адаптер знает регистратора, адресата, участника и автора;
- *  исполнитель и расписавший наполнятся в #463. */
-export const WORKFLOW_ROLES_BY_CATEGORY = {
-  task: ['creator', 'assignee', 'coexecutor', 'observer'],
-  letter: ['registrar', 'addressee', 'executor', 'resolver', 'author', 'participant'],
-} as const satisfies Record<ProcessCategory, readonly WorkflowActorRole[]>;
+// Роли актора и словарь по категориям вынесены в `workflow-roles.ts`, чтобы
+// схемы сбора отметок (#434) ссылались на них без цикла импортов. Реэкспорт
+// сохраняет прежние импорты `@nodus/contracts`.
+export {
+  workflowActorRoleSchema,
+  WORKFLOW_ROLES_BY_CATEGORY,
+  type WorkflowActorRole,
+} from './workflow-roles.js';
+import { workflowActorRoleSchema } from './workflow-roles.js';
 
 /** Поля сущности, которые могут требовать гейты `fields_required` (DoR/DoD).
  *  Реестр полей — словарь категории: адаптер отдаёт заполненность по имени. */

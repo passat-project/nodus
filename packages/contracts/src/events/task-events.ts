@@ -42,6 +42,17 @@ export const TASK_EVENTS = {
   COMMENTS_COUNTED: 'task.comments_counted',
   /** Задачное: смена типа у задачи (audience — участники, #378). */
   TYPE_CHANGED: 'task.type_changed',
+  /** Старт сбора отметок (#434): участникам нужно сдать своё. Для
+   *  «Все сотрудники» событие не эмитится — запрос виден в «Моих задачах». */
+  PRESS_REQUESTED: 'task.press_requested',
+  /** Участник сдал отметку (#434): компактный блок в чате малых раундов. */
+  PRESS_SUBMITTED: 'task.press_submitted',
+  /** Ответственный вернул результаты на доработку (#434): адресное
+   *  уведомление участникам и блок в чате малых раундов. */
+  PRESS_RETURNED: 'task.press_returned',
+  /** Все сдали, но проверки кнопки не прошли (#434, В1): отметка последнего
+   *  сохранена, ответственному нужно устранить причину и нажать самому. */
+  PRESS_BLOCKED: 'task.press_blocked',
 } as const;
 
 export type TaskEventType = (typeof TASK_EVENTS)[keyof typeof TASK_EVENTS];
@@ -250,3 +261,49 @@ export const taskTypeChangedPayloadSchema = taskEventBaseSchema.extend({
   stageName: z.string(),
 });
 export type TaskTypeChangedPayload = z.infer<typeof taskTypeChangedPayloadSchema>;
+
+/** Старт сбора (#434). `broadcast` — источник «Все сотрудники»: персональные
+ *  уведомления не рассылаются (анти-спам), запрос виден в «Моих задачах». */
+export const taskPressRequestedPayloadSchema = taskEventBaseSchema.extend({
+  title: z.string(),
+  transitionName: z.string().min(1).max(32),
+  broadcast: z.boolean(),
+  participantIds: z.array(z.uuid()).min(1).max(500),
+});
+export type TaskPressRequestedPayload = z.infer<typeof taskPressRequestedPayloadSchema>;
+
+/** Сдача отметки (#434): компактный блок в чате малых раундов. Текст
+ *  результата обрезан до 500 — блок не заменяет окно и аналитику. */
+export const taskPressSubmittedPayloadSchema = taskEventBaseSchema.extend({
+  title: z.string(),
+  transitionName: z.string().min(1).max(32),
+  broadcast: z.boolean(),
+  result: z.object({
+    text: z.string().max(500),
+    fileCount: z.number().int().min(0),
+    minutes: z.number().int().min(0).nullable(),
+  }),
+  pressed: z.number().int().min(0),
+  total: z.number().int().min(0),
+});
+export type TaskPressSubmittedPayload = z.infer<typeof taskPressSubmittedPayloadSchema>;
+
+/** Выборочный возврат (#434): адресаты — возвращённые участники; причина
+ *  обязательна. `broadcast` — малый раунд vs «Все сотрудники». */
+export const taskPressReturnedPayloadSchema = taskEventBaseSchema.extend({
+  title: z.string(),
+  transitionName: z.string().min(1).max(32),
+  broadcast: z.boolean(),
+  userIds: z.array(z.uuid()).min(1).max(500),
+  reason: z.string().trim().min(1).max(500),
+});
+export type TaskPressReturnedPayload = z.infer<typeof taskPressReturnedPayloadSchema>;
+
+/** Кворум собран, но кнопка не прошла проверки (#434, В1): ответственный
+ *  получает причины и нажимает сам; повторного сбора нет. */
+export const taskPressBlockedPayloadSchema = taskEventBaseSchema.extend({
+  title: z.string(),
+  transitionName: z.string().min(1).max(32),
+  reasons: z.array(z.string().max(200)).max(20),
+});
+export type TaskPressBlockedPayload = z.infer<typeof taskPressBlockedPayloadSchema>;

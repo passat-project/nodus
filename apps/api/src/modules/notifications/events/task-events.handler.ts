@@ -104,3 +104,8 @@ export class TaskParticipantsNotifyHandler extends handlerFor(TASK_EVENTS.PARTIC
 export class TaskStageNotifyHandler extends handlerFor(TASK_EVENTS.STAGE_CHANGED) {}
 @Injectable()
 export class TaskOverdueNotifyHandler extends handlerFor(TASK_EVENTS.OVERDUE) {}
+@Injectable()
+export class TaskPressRequestedNotifyHandler extends handlerFor(TASK_EVENTS.PRESS_REQUESTED) {}
+@Injectable()
+export class TaskPressReturnedNotifyHandler extends handlerFor(TASK_EVENTS.PRESS_RETURNED) {}
+export class TaskPressBlockedNotifyHandler extends handlerFor(TASK_EVENTS.PRESS_BLOCKED) {}

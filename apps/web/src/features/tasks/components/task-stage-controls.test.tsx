@@ -2,8 +2,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Check, X } from 'lucide-react';
-import type { TaskDetail, WorkflowTransition } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
+import type { TaskDetail, WorkflowTransition } from '@nodus/contracts';
+
+const state = vi.hoisted(() => ({
+  transitions: [] as WorkflowTransition[],
+  submit: vi.fn(),
+}));
 
 const mocks = vi.hoisted(() => ({
   actionRun: vi.fn(),
@@ -13,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/transitions-api.js', () => ({
-  useWorkflowTransitions: () => ({ data: mocks.transitions }),
+  useWorkflowTransitions: () => ({ data: [...mocks.transitions, ...state.transitions] }),
   gateReasonsText: () => 'нет отметки',
 }));
 vi.mock('./task-transition-dialog.js', () => ({
@@ -27,6 +32,17 @@ vi.mock('./task-action-runner.js', () => ({
     dialog: null,
   }),
 }));
+vi.mock('../api/press-api.js', () => ({
+  useSubmitPress: () => ({ mutate: state.submit }),
+  useWithdrawPress: () => ({ mutate: vi.fn() }),
+  useReturnPress: () => ({ mutate: vi.fn(), isPending: false }),
+  useExcludePress: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+vi.mock('./task-press-dialogs.js', () => ({
+  PressAnalyticsDialog: () => null,
+  PressSubmitDialog: () => null,
+  pressHasWindow: () => false,
+}));
 vi.mock('./task-time.js', () => ({ TaskTimerButton: () => null }));
 
 import { TaskActionBar, transitionIcon } from './task-stage-controls.js';
@@ -37,6 +53,8 @@ afterEach(() => {
   mocks.transitions = [];
   mocks.actionRun.mockClear();
   mocks.transitionRun.mockClear();
+  state.transitions = [];
+  state.submit.mockClear();
 });
 
 const transition = (outcome: 'success' | 'cancelled' | 'rejected' | null): WorkflowTransition =>
@@ -98,11 +116,76 @@ describe('TaskActionBar: итог «Отклонена» (#430)', () => {
   it('закрытая задача с итогом rejected показывает отказ, а не успех', () => {
     render(<TaskActionBar task={task} showTime={false} />);
     expect(screen.getByText('Отклонена')).toBeTruthy();
-    expect(screen.getByText(ui.tasks.processNoActions)).toBeTruthy();
+    expect(screen.getByText('Нет доступных действий')).toBeTruthy();
+  });
+
+  it('коллективная кнопка: нажатие без окна и статус после сдачи', () => {
+    const pressTask = {
+      ...task,
+      stage: { name: 'В работе', systemState: 'active', outcome: null },
+      press: {
+        transitionId: 'tr-press',
+        transitionName: 'Завершить',
+        pressed: 1,
+        total: 2,
+        canSubmit: true,
+        entries: [],
+        form: { enabled: false, sections: [] },
+      },
+    } as unknown as TaskDetail;
+    state.transitions = [
+      {
+        id: 'tr-press',
+        name: 'Завершить',
+        toStageState: 'active',
+        toStageName: 'В работе',
+        display: 'primary',
+        blockedBy: [],
+      } as unknown as WorkflowTransition,
+    ];
+    const { unmount } = render(<TaskActionBar task={pressTask} showTime={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Завершить' }));
+    expect(state.submit).toHaveBeenCalledWith({});
+    unmount();
+
+    state.transitions = [];
+    render(
+      <TaskActionBar
+        task={{ ...pressTask, press: { ...pressTask.press, canSubmit: false } } as TaskDetail}
+        showTime={false}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Статусы участников: 1 \/ 2/ })).toBeTruthy();
   });
 });
 
 describe('TaskActionBar: слоты панели (решение 16.11.2026)', () => {
+  it('коллективная кнопка не прячется в список: первая во второстепенных', async () => {
+    const pressTask = {
+      ...activeTask,
+      press: {
+        transitionId: 'tp',
+        transitionName: 'Завершить',
+        pressed: 1,
+        total: 3,
+        canSubmit: true,
+        entries: [],
+        form: { enabled: false, sections: [] },
+      },
+    } as unknown as TaskDetail;
+    state.transitions = [
+      transitionOf('t1', 'В работу', 'primary'),
+      transitionOf('t2', 'На проверку', 'button'),
+      transitionOf('tp', 'Завершить', 'menu'),
+    ];
+    render(<TaskActionBar task={pressTask} showTime={false} />);
+
+    // Даже с показом `menu` коллективная кнопка видна сразу, с кольцом.
+    expect(screen.getByRole('button', { name: 'Завершить' })).toBeTruthy();
+    const menu = await openSlot(ui.tasks.moreActions);
+    expect(within(menu).queryByRole('menuitem', { name: /Завершить/ })).toBeNull();
+  });
+
   it('одно действие — обычная кнопка без стрелки, клик уходит в раннер', () => {
     mocks.actions = [action('a1', 'Запросить уточнение')];
     render(<TaskActionBar task={activeTask} showTime={false} />);

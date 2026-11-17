@@ -331,6 +331,9 @@ export const transitionFormInputSchema = z
       })
       .optional(),
     comment: z.string().trim().min(1).max(2000).optional(),
+    /** Возврат в статус с коллективной кнопкой (#434, В2): кого снова
+     *  пригласить. Остальные участники прошлого раунда сохраняют отметки. */
+    pressReturnUserIds: z.array(z.uuid()).max(500).optional(),
   })
   .strict();
 export type TransitionFormInput = z.infer<typeof transitionFormInputSchema>;

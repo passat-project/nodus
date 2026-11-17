@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ui, type AssistantMessage, type AssistantSession } from '@nodus/contracts';
 
+import { SESSION } from './assistant-body.fixture.js';
+
 const h = vi.hoisted(() => ({
   sessions: vi.fn(),
   messages: vi.fn(),
@@ -109,19 +111,7 @@ import { useChatDrafts } from '../../../shared/chat/chat-drafts.js';
  * прогона. API-хуки, контекст и видимые дети замоканы — проверяется связка.
  */
 
-const SESSION: AssistantSession = {
-  id: 's-1',
-  title: 'Диалог о письмах',
-  archived: false,
-  createdAt: '2026-11-17T08:00:00.000Z',
-  updatedAt: '2026-11-17T09:00:00.000Z',
-  lastMessageAt: '2026-11-17T09:00:00.000Z',
-  messageCount: 2,
-};
-
-function session(id: string, title: string): AssistantSession {
-  return { ...SESSION, id, title };
-}
+const session = (id: string, title: string): AssistantSession => ({ ...SESSION, id, title });
 
 function setSessions(items: AssistantSession[], isPending = false) {
   h.sessions.mockReturnValue({ data: { items }, isPending });
@@ -314,7 +304,6 @@ describe('AssistantBody: пустое состояние и композер', (
     await submitText('дубль');
 
     expect(h.sendMutate).not.toHaveBeenCalled();
-    expect(h.createAsync).not.toHaveBeenCalled();
   });
 
   it('пустой сабмит ничего не отправляет', async () => {

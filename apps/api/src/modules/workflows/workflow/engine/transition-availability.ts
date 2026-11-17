@@ -27,6 +27,7 @@ export interface AvailabilitySubject {
   canOverrideGates: boolean;
   deciderFacts?: WorkflowDeciderFacts;
   vacantDeciderTransitionIds?: ReadonlySet<string>;
+  pressTransitionIds?: ReadonlySet<string>;
 }
 
 /** Кнопки текущего статуса с причинами блокировки (#433): чистый сборщик,
@@ -105,6 +106,9 @@ export function canShow(
   transition: { id: string; rules: WorkflowTransitionRules },
   subject: AvailabilitySubject,
 ): boolean {
+  // Коллективная кнопка (#434): состав участников задаёт сам сбор, а не
+  // обычные условия «кто»; кнопка видна, пока отметка не сдана.
+  if (subject.pressTransitionIds?.has(transition.id)) return true;
   if (conditionsWithoutBypass(transition.rules, subject)) return true;
   if (subject.vacantDeciderTransitionIds?.has(transition.id)) return subject.canOverrideGates;
   return subject.bypassConditions;

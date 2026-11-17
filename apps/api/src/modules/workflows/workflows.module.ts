@@ -4,6 +4,7 @@ import { USER_PROFILE_READER } from '../../core/ports/user-profile.port.js';
 import { UserProfileProvider } from '../../core/ports/user-profile.provider.js';
 import { CatalogBootstrap } from './catalog/catalog.bootstrap.js';
 import { CatalogRepository } from './catalog/catalog.repository.js';
+import { TasksPortsModule } from '../tasks/tasks-ports.module.js';
 import { WorkflowPublishedHandler } from './events/workflow-published.handler.js';
 import { ProcessTypeCreationCleanupHandler } from './events/process-type-creation-cleanup.handler.js';
 import { ProcessTypesController } from './types/process-types.controller.js';
@@ -29,7 +30,7 @@ import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.mo
 @Module({
   // Реестр атрибутов (#431): публикация проверяет ключи `cf.<id>` окна и
   // гейтов по определениям области маршрута.
-  imports: [WorkflowsPortsModule, CustomFieldsPortsModule],
+  imports: [WorkflowsPortsModule, CustomFieldsPortsModule, TasksPortsModule],
   controllers: [ProcessTypesController, WorkflowEditorController, WorkflowStageNamesController],
   providers: [
     UserProfileProvider,

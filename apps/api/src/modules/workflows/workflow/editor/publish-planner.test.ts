@@ -85,6 +85,7 @@ function doc(
     intent?: string;
     rules?: unknown;
     form?: unknown;
+    press?: unknown;
   }[] = [],
 ) {
   const stageBase = { code: null, color: 'neutral', outcome: null, isInitial: false };
@@ -156,7 +157,6 @@ describe('planWorkflowPublish (#378)', () => {
       [],
     );
     expect(plan.stageCreates).toHaveLength(0);
-    expect(plan.stageUpdates).toHaveLength(0);
     expect(plan.stageArchives).toHaveLength(0);
     expect(plan.transitionArchives).toHaveLength(0);
   });

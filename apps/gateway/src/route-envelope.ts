@@ -240,10 +240,14 @@ function withoutAudience(
   envelope: RealtimeEnvelope,
   payload: Record<string, unknown>,
 ): RealtimeEnvelope {
-  if (!('audience' in payload) && !('deciderIds' in payload)) return envelope;
+  if (!('audience' in payload) && !('deciderIds' in payload) && !('participantIds' in payload)) {
+    return envelope;
+  }
   const visible = { ...payload };
   delete visible.audience;
   delete visible.deciderIds;
+  // #434: адресный список участников сбора — тот же служебный класс.
+  delete visible.participantIds;
   return { ...envelope, payload: visible };
 }
 

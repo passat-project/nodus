@@ -27,8 +27,8 @@ function makeService(
   log = logger(),
 ) {
   return new TaskTransitionsService(
-    (deps.txRunner ?? {}) as never,
-    (deps.query ?? {}) as never,
+    (deps.txRunner ?? { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn(TX)) }) as never,
+    (deps.query ?? { visibleRow: vi.fn(async () => ({ stageId: 's1' })) }) as never,
     (deps.placements ?? {}) as never,
     (deps.taskService ?? {}) as never,
     (deps.engine ?? {}) as never,
@@ -104,6 +104,21 @@ describe('TaskTransitionsService — сценарии API кнопок марш�
     );
     expect(engine.available).toHaveBeenCalledWith(TX, 't1', 'task', USER);
     expect(taskService.listItem).toHaveBeenCalledWith(expect.objectContaining({ id: 'bob' }), 't1');
+  });
+
+  it('executeFor: пустые источники коллективной кнопки — обычное нажатие (#434, решение 16.11)', async () => {
+    const row = { id: 't1', creatorId: 'alice', assigneeId: 'bob', participants: [] };
+    const query = { visibleRow: vi.fn(async () => row) };
+    const placements = { prepare: vi.fn(async () => void 0) };
+    const engine = {
+      execute: vi.fn(async () => ({ stage: { id: 's2', systemState: 'active' }, recordId: 'r' })),
+      available: vi.fn(async () => []),
+    };
+    const taskService = { listItem: vi.fn(async () => ({ id: 't1' })) };
+    const service = makeService({ query, placements, engine, taskService });
+
+    await expect(service.executeFor(USER, 't1', 'tr1', {})).resolves.toBeDefined();
+    expect(engine.execute).toHaveBeenCalled();
   });
 
   it('listFor: чужая задача — 404 до транзакции', async () => {

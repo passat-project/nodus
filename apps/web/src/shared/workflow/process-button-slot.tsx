@@ -23,6 +23,8 @@ export interface ProcessSlotItem {
   title?: string;
   /** Показ `menu`: в списке слота — в конце, под разделителем (решение 16.11). */
   rare?: boolean;
+  /** Коллективная кнопка: готовая составная кнопка (кольцо + название). */
+  pressNode?: ReactNode;
   onSelect: () => void;
 }
 
@@ -57,7 +59,9 @@ export function ProcessButtonSlot({
   const ordered = [...items.filter((item) => !item.rare), ...items.filter((item) => item.rare)];
   if (ordered.length === 0) return null;
   const [first, ...rest] = ordered;
-  if (ordered.length === 1 && first) return <SlotButton item={first} main={main} />;
+  if (ordered.length === 1 && first) {
+    return first.pressNode ? <>{first.pressNode}</> : <SlotButton item={first} main={main} />;
+  }
   if (!first) return null;
 
   const firstRareIndex = rest.findIndex((item) => item.rare);
@@ -65,7 +69,7 @@ export function ProcessButtonSlot({
   return (
     <DropdownMenu>
       <div className="inline-flex items-stretch" role="group" aria-label={slotLabel}>
-        <SlotButton item={first} main={main} attached />
+        {first.pressNode ?? <SlotButton item={first} main={main} attached />}
         <DropdownMenuTrigger
           aria-label={slotLabel}
           title={slotLabel}
