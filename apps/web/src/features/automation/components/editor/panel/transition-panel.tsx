@@ -31,8 +31,10 @@ import {
   Segmented,
   focusName,
 } from '../../../../../shared/ui/panel/panel-kit.js';
+import { pressSummary } from './transition-press-section.js';
 
-export type TransitionSection = 'root' | 'roles' | 'deciders' | 'conditions' | 'rules' | 'window';
+export type TransitionSection =
+  'root' | 'roles' | 'deciders' | 'press' | 'conditions' | 'rules' | 'window';
 
 const ANY = 'any';
 const DISPLAYS: readonly TransitionDisplay[] = ['primary', 'button', 'menu'];
@@ -81,6 +83,7 @@ export function sectionSummaries(
   const routeIf = routeIfOf(transition.rules);
   return {
     roles: rolesSummary(transition.rules, category),
+    press: pressSummary(transition),
     deciders:
       deciderSources.length === 0
         ? ui.automation.deciders.summaryEmpty
@@ -262,6 +265,11 @@ export function TransitionPanel({
             onClick={() => onOpenSection('deciders')}
           />
         ) : null}
+        <SectionLink
+          title={ui.automation.press.sectionTitle}
+          summary={summaries.press}
+          onClick={() => onOpenSection('press')}
+        />
         {category === 'task' ? (
           <SectionLink
             title={ui.automation.panel.sectionConditions}

@@ -35,6 +35,7 @@ export async function publishSnapshot(
       sortOrder: t.sortOrder,
       rules: t.rules,
       form: t.form,
+      press: t.press ?? null,
     })),
     actions: (loaded.actions ?? []).map((a) => ({
       id: a.id,

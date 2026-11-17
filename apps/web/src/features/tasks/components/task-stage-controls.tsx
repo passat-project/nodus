@@ -13,6 +13,7 @@ import { cn } from '@nodus/ui/lib/utils';
 import type { LucideIcon } from 'lucide-react';
 
 import { gateReasonsText, useWorkflowTransitions } from '../api/transitions-api.js';
+import { useSubmitPress } from '../api/press-api.js';
 import { PauseGlyph } from '../../../shared/ui/pause-glyph.js';
 import { stageTone } from '../../../shared/ui/board/stage-tone.js';
 import { groupProcessButtons } from '../../../shared/workflow/process-buttons.js';
@@ -22,6 +23,9 @@ import {
   ProcessButtonSlot,
   type ProcessSlotItem,
 } from '../../../shared/workflow/process-button-slot.js';
+import { PressAnalyticsDialog, PressSubmitDialog, pressHasWindow } from './task-press-dialogs.js';
+import { TaskPressButton, TaskPressStatus } from './task-press-button.js';
+import { PressRing } from './task-press.js';
 import { useActionRunner } from './task-action-runner.js';
 import { TaskTimerButton } from './task-time.js';
 import { useTransitionRunner } from './task-transition-dialog.js';
@@ -79,6 +83,13 @@ export function TaskActionBar({
   const { data: transitions } = useWorkflowTransitions(task.id);
   const runner = useTransitionRunner(task, onOpenSubtask);
   const actionRunner = useActionRunner(task);
+  const submitPress = useSubmitPress(task.id);
+  const [pressOpen, setPressOpen] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const press = task.press;
+  const pressTransition = press
+    ? (transitions?.find((t) => t.id === press.transitionId) ?? null)
+    : null;
 
   if (!transitions) {
     return (
@@ -89,11 +100,27 @@ export function TaskActionBar({
     );
   }
 
+  // Окно сбора — окно самой кнопки (#496): есть разделы — показываем его,
+  // нет — нажатие сразу записывает отметку без пустого диалога.
+  const openPress = () => {
+    if (pressTransition && pressHasWindow(pressTransition)) setPressOpen(true);
+    else submitPress.mutate({});
+  };
+
   const { primary, visible, menu } = groupProcessButtons(transitions);
   // Три слота (решение 16.11.2026): главная → второстепенные → действия.
   // «В меню» у перехода и у действия = «в конце списка»: значение `display`
   // в данных не меняется, опубликованные маршруты не мигрируются.
-  const secondary = [...visible, ...menu];
+  const orderedTransitions = [...visible, ...menu];
+  // Коллективная кнопка никогда не прячется в список: в слоте второстепенных
+  // она занимает видимое место первой, независимо от порядка в маршруте.
+  const secondary =
+    press && press.canSubmit
+      ? [
+          ...orderedTransitions.filter((t) => t.id === press.transitionId),
+          ...orderedTransitions.filter((t) => t.id !== press.transitionId),
+        ]
+      : orderedTransitions;
   // Внутри слота действий обычные кнопки идут первыми, «в конце списка» —
   // последними (серверный порядок внутри групп сохраняется).
   const orderedActions = [
@@ -124,7 +151,30 @@ export function TaskActionBar({
     };
   };
 
-  const transitionItem = (t: WorkflowTransition): ProcessSlotItem => {
+  const transitionItem = (t: WorkflowTransition, main = false): ProcessSlotItem | null => {
+    const isPress = press?.transitionId === t.id;
+    // Коллективная кнопка: уже нажавшему/не-участнику кнопку не показываем —
+    // прогресс остаётся в чипе «Статусы участников».
+    if (isPress && press) {
+      if (!press.canSubmit) return null;
+      return {
+        id: t.id,
+        name: t.name,
+        icon: <PressRing pressed={press.pressed} total={press.total} />,
+        pressNode: (
+          <TaskPressButton
+            name={t.name}
+            pressed={press.pressed}
+            total={press.total}
+            main={main}
+            onPress={openPress}
+            onOpenStatuses={() => setAnalyticsOpen(true)}
+          />
+        ),
+        title: t.name,
+        onSelect: openPress,
+      };
+    }
     const blocked = t.blockedBy.length > 0;
     const Icon = transitionIcon(t);
     return {
@@ -146,12 +196,35 @@ export function TaskActionBar({
   const cancelled = closed && task.stage.outcome === 'cancelled';
   const rejected = closed && task.stage.outcome === 'rejected';
   const negative = cancelled || rejected;
-  const noButtons = orderedActions.length === 0 && primary === null && secondary.length === 0;
+  const primaryItem = primary ? transitionItem(primary, true) : null;
+  const secondaryItems = secondary
+    .map((t) => transitionItem(t))
+    .filter((item): item is ProcessSlotItem => item !== null);
+  const noButtons =
+    orderedActions.length === 0 && primaryItem === null && secondaryItems.length === 0 && !press;
 
   return (
     <div className="flex w-full min-w-0 flex-nowrap items-center gap-1.5">
       {runner.dialog}
       {actionRunner.dialog}
+      {press ? (
+        <>
+          {pressTransition ? (
+            <PressSubmitDialog
+              task={task}
+              transition={pressTransition}
+              open={pressOpen}
+              onClose={() => setPressOpen(false)}
+            />
+          ) : null}
+          <PressAnalyticsDialog
+            taskId={task.id}
+            press={press}
+            open={analyticsOpen}
+            onClose={() => setAnalyticsOpen(false)}
+          />
+        </>
+      ) : null}
       {closed ? (
         <span
           className={cn(
@@ -168,24 +241,28 @@ export function TaskActionBar({
         </span>
       ) : null}
       {/* 1. Главная: один переход либо (если переходов нет) первое действие. */}
-      {primary ? (
-        <ProcessButtonSlot items={[transitionItem(primary)]} main slotLabel={primary.name} />
+      {primaryItem ? (
+        <ProcessButtonSlot items={[primaryItem]} main slotLabel={primaryItem.name} />
       ) : null}
       {mainAction ? (
         <ProcessButtonSlot items={[actionItem(mainAction)]} main slotLabel={mainAction.name} />
       ) : null}
       {/* 2. Второстепенные: первая нажимается сразу, остальные — по стрелке. */}
-      {secondary.length > 0 ? (
-        <ProcessButtonSlot
-          items={secondary.map(transitionItem)}
-          slotLabel={processSlotLabels.secondary}
-        />
+      {secondaryItems.length > 0 ? (
+        <ProcessButtonSlot items={secondaryItems} slotLabel={processSlotLabels.secondary} />
       ) : null}
       {/* 3. Действия без смены статуса: одно — кнопкой, два и больше — со списком. */}
       {slotActions.length > 0 ? (
         <ProcessButtonSlot
           items={slotActions.map(actionItem)}
           slotLabel={processSlotLabels.actions}
+        />
+      ) : null}
+      {press && !press.canSubmit ? (
+        <TaskPressStatus
+          pressed={press.pressed}
+          total={press.total}
+          onOpenStatuses={() => setAnalyticsOpen(true)}
         />
       ) : null}
       {noButtons ? (
@@ -213,6 +290,7 @@ export function TaskStageField({
   const runner = useTransitionRunner(task, onOpenSubtask);
   const [routeOpen, setRouteOpen] = useState(false);
   const tone = stageTone[task.stage.color];
+  const shown = transitions?.filter((t) => t.id !== task.press?.transitionId);
 
   return (
     <>
@@ -235,7 +313,7 @@ export function TaskStageField({
             <span className="truncate">{task.stage.name}</span>
             <Check className="ml-auto size-3.5 shrink-0 text-port" strokeWidth={2} />
           </DropdownMenuItem>
-          {transitions?.map((t) => {
+          {shown?.map((t) => {
             const color = t.toStageColor;
             return (
               <DropdownMenuItem

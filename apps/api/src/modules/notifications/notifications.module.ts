@@ -32,6 +32,8 @@ import {
   TaskNotificationWriter,
   TaskOverdueNotifyHandler,
   TaskParticipantsNotifyHandler,
+  TaskPressRequestedNotifyHandler,
+  TaskPressReturnedNotifyHandler,
   TaskStageNotifyHandler,
 } from './events/task-events.handler.js';
 import { NotificationsController } from './notifications.controller.js';
@@ -87,6 +89,8 @@ import { UrgentRepeatWorker } from './urgent-repeat.worker.js';
     TaskParticipantsNotifyHandler,
     TaskStageNotifyHandler,
     TaskOverdueNotifyHandler,
+    TaskPressRequestedNotifyHandler,
+    TaskPressReturnedNotifyHandler,
     // Снят с задачи — её уведомления уходят (#311; состав — read-порт задач).
     TaskAccessLostWriter,
     TaskParticipantsAccessLostHandler,

@@ -54,11 +54,22 @@ function setup(opts: { placementStage?: string } = {}) {
       }),
     ),
   };
+  const press = {
+    assertCanRemove: vi.fn(),
+    syncAdded: vi.fn(),
+    ensureForStage: vi.fn(async () => ({
+      transitionId: null,
+      roundStarted: false,
+      emptySources: false,
+    })),
+  };
   const service = new TaskEditService(
     { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn(TX)) } as never,
     { emit: vi.fn() } as never,
     {
       stageIdOf: vi.fn(async () => 's1'),
+      lock: vi.fn(async () => void 0),
+      findWithParticipants: vi.fn(async () => ROW),
     } as never,
     {
       visibleRow: vi.fn(async () => ROW),
@@ -77,8 +88,9 @@ function setup(opts: { placementStage?: string } = {}) {
     {} as never,
     engine as never,
     catalog as never,
+    press as never,
   );
-  return { service, engine, placementsRepo, boards, catalog, formulasMock };
+  return { service, engine, placementsRepo, boards, catalog, formulasMock, press };
 }
 
 describe('TaskEditService.movePersonal (#402)', () => {
@@ -158,6 +170,25 @@ describe('TaskEditService.movePersonal (#402)', () => {
     await expect(service.update(USER, 't1', { stageId: 's2', index: 0 })).rejects.toMatchObject({
       code: 'WORKFLOW_TRANSITION_NOT_ALLOWED',
     });
+  });
+
+  it('пустые источники сбора: закрывающий PATCH — 409, движок не выполняется (#434)', async () => {
+    const { service, engine, catalog, press } = setup();
+    press.ensureForStage.mockResolvedValueOnce({
+      transitionId: 'tr-press',
+      roundStarted: false,
+      emptySources: true,
+    } as never);
+    catalog.findLiveStage.mockResolvedValueOnce({
+      id: 's2',
+      systemState: 'closed',
+      outcome: 'success',
+    } as never);
+
+    await expect(service.update(USER, 't1', { stageId: 's2' })).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    expect(engine.execute).not.toHaveBeenCalled();
   });
 });
 

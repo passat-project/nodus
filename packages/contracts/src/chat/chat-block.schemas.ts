@@ -15,8 +15,9 @@ import { stageColorSchema } from '../workflows/workflow-primitives.schemas.js';
 export const chatMessageKindSchema = z.enum([
   'text',
   'task_transition',
-  'letter_transition',
   'task_action',
+  'task_press',
+  'letter_transition',
 ]);
 export type ChatMessageKind = z.infer<typeof chatMessageKindSchema>;
 
@@ -39,6 +40,20 @@ export const taskTransitionBlockSchema = z.object({
     .nullable(),
 });
 export type TaskTransitionBlock = z.infer<typeof taskTransitionBlockSchema>;
+
+/** Блок отметки сбора в ленте (#434): участник сдал результат или
+ *  ответственный вернул его на доработку. Пишется только для адресных
+ *  раундов; «Все сотрудники» блоков не создаёт (анти-спам). */
+export const taskPressBlockSchema = z.object({
+  kind: z.literal('task_press'),
+  taskId: z.uuid(),
+  transitionName: z.string().min(1).max(32),
+  state: z.enum(['pressed', 'returned']),
+  fileCount: z.number().int().min(0).nullable(),
+  /** Сколько сотрудников возвращено одной операцией (state='returned'). */
+  returnCount: z.number().int().min(0).nullable(),
+});
+export type TaskPressBlock = z.infer<typeof taskPressBlockSchema>;
 
 /** Блок перехода письма (#55, Р10): из payload `correspondence.letter_stage_changed`
  *  (запись журнала `recordId`); текст сообщения — причина. Цвет цели — чип
@@ -78,6 +93,7 @@ export type TaskActionBlock = z.infer<typeof taskActionBlockSchema>;
 /** Реестр блоков — закрытый union по виду (#313: + system). */
 export const chatMessageBlockSchema = z.discriminatedUnion('kind', [
   taskTransitionBlockSchema,
+  taskPressBlockSchema,
   letterTransitionBlockSchema,
   taskActionBlockSchema,
 ]);

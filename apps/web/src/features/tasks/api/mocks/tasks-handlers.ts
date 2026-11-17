@@ -31,6 +31,7 @@ import { tasksChecklistHandlers } from './tasks-checklist-handlers.js';
 import { tasksListHandlers } from './tasks-list-handlers.js';
 import { tasksParticipantsHandlers } from './tasks-participants-handlers.js';
 import { tasksPersonalStagesHandlers } from './tasks-personal-stages-handlers.js';
+import { tasksPressHandlers } from './tasks-press-handlers.js';
 import { tasksTransitionsHandlers } from './tasks-transitions-handlers.js';
 import { tasksActionsHandlers } from './tasks-actions-handlers.js';
 import { tasksWorkHandlers } from './tasks-work-handlers.js';
@@ -77,7 +78,10 @@ export const tasksHandlers = [
   ...tasksChecklistHandlers,
   // Кнопки маршрута карточки (ADR-0020).
   ...tasksTransitionsHandlers,
+  ...tasksTransitionsHandlers,
   ...tasksActionsHandlers,
+  // Сбор отметок (#434) — ДО '/api/v1/tasks/:id'.
+  ...tasksPressHandlers,
   // Типы, время/таймер, результат, bulk (#311) — ДО '/api/v1/tasks/:id'.
   ...tasksWorkHandlers,
 

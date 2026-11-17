@@ -215,4 +215,56 @@ describe('taskNotices', () => {
       ),
     ).toEqual([]);
   });
+
+  it('старт сбора — участникам «нужно сдать», автор исключён (#434)', () => {
+    expect(
+      taskNotices(
+        'task.press_requested',
+        {
+          number: 8,
+          title: 'Сдать отчёт',
+          transitionName: 'Завершить',
+          broadcast: false,
+          participantIds: ['u1', 'u2', 'me'],
+        },
+        'me',
+      ),
+    ).toEqual([
+      { userId: 'u1', kind: 'action.press', preview: 'ПП-8 · Сдать отчёт' },
+      { userId: 'u2', kind: 'action.press', preview: 'ПП-8 · Сдать отчёт' },
+    ]);
+  });
+
+  it('старт «Все сотрудники» — без персональных уведомлений (анти-спам)', () => {
+    expect(
+      taskNotices(
+        'task.press_requested',
+        {
+          number: 8,
+          title: 'Ознакомление',
+          transitionName: 'Ознакомлен',
+          broadcast: true,
+          participantIds: ['u1', 'u2'],
+        },
+        'me',
+      ),
+    ).toEqual([]);
+  });
+
+  it('возврат отметки — адресно возвращённым (#434)', () => {
+    expect(
+      taskNotices(
+        'task.press_returned',
+        {
+          number: 8,
+          title: 'Сдать отчёт',
+          transitionName: 'Завершить',
+          broadcast: true,
+          userIds: ['u1', 'me'],
+          reason: 'Доработать',
+        },
+        'me',
+      ),
+    ).toEqual([{ userId: 'u1', kind: 'task.press_returned', preview: 'ПП-8 · Сдать отчёт' }]);
+  });
 });

@@ -20,15 +20,16 @@ function makeService(
       | 'engine'
       | 'cells'
       | 'projects'
-      | 'events',
+      | 'events'
+      | 'press',
       unknown
     >
   >,
   log = logger(),
 ) {
   return new TaskTransitionsService(
-    (deps.txRunner ?? {}) as never,
-    (deps.query ?? {}) as never,
+    (deps.txRunner ?? { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn(TX)) }) as never,
+    (deps.query ?? { visibleRow: vi.fn(async () => ({ stageId: 's1' })) }) as never,
     (deps.placements ?? {}) as never,
     (deps.taskService ?? {}) as never,
     (deps.engine ?? {}) as never,
@@ -36,6 +37,13 @@ function makeService(
     (deps.projects ?? { lockProject: vi.fn() }) as never,
     (deps.events ?? {}) as never,
     log as never,
+    (deps.press ?? {
+      ensureForStage: vi.fn(async () => ({
+        transitionId: null,
+        roundStarted: false,
+        emptySources: false,
+      })),
+    }) as never,
   );
 }
 
@@ -104,6 +112,26 @@ describe('TaskTransitionsService — сценарии API кнопок марш�
     );
     expect(engine.available).toHaveBeenCalledWith(TX, 't1', 'task', USER);
     expect(taskService.listItem).toHaveBeenCalledWith(expect.objectContaining({ id: 'bob' }), 't1');
+  });
+
+  it('executeFor: пустые источники коллективной кнопки — 409, движок не работает (#434)', async () => {
+    const row = { id: 't1', creatorId: 'alice', assigneeId: 'bob', participants: [] };
+    const query = { visibleRow: vi.fn(async () => row) };
+    const placements = { prepare: vi.fn(async () => void 0) };
+    const engine = { execute: vi.fn(), available: vi.fn() };
+    const press = {
+      ensureForStage: vi.fn(async () => ({
+        transitionId: 'tr1',
+        roundStarted: false,
+        emptySources: true,
+      })),
+    };
+    const service = makeService({ query, placements, engine, press });
+
+    await expect(service.executeFor(USER, 't1', 'tr1', {})).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    expect(engine.execute).not.toHaveBeenCalled();
   });
 
   it('listFor: чужая задача — 404 до транзакции', async () => {

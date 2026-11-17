@@ -13,11 +13,12 @@ import { isoAgo } from './dates.js';
 import { lid } from './letter-ids.js';
 import { personalNew } from './personal-stages.js';
 import { demoPlannedMinutes } from './task-item-factory.js';
+import { pressOf } from './press.js';
 import { demoTasks, kjSubtask, tid } from './task-items.js';
-import { stageNew, systemProcessType } from './task-stages.js';
+import { requestProcessType, stageNew, systemProcessType } from './task-stages.js';
 import { layoutOf } from './task-layout.js';
 import { fieldLocksDto } from './task-locks.js';
-import { QUICK_WORKFLOW_ID, STANDARD_WORKFLOW_ID } from './workflows.js';
+import { QUICK_WORKFLOW_ID, REQUEST_WORKFLOW_ID, STANDARD_WORKFLOW_ID } from './workflows.js';
 import { quickProcessType } from './task-stages.js';
 import { currentAuthUser, userIds, userRef } from './users.js';
 
@@ -170,10 +171,20 @@ export function taskDetailOf(task: TaskListItem): TaskDetail {
     customFieldRefs: demoRefsForValues(customFields),
     subtasks: demoSubtasks[task.id] ?? [],
     chain: chainOf(task),
-    workflowId: task.type.id === quickProcessType.id ? QUICK_WORKFLOW_ID : STANDARD_WORKFLOW_ID,
+    workflowId:
+      task.type.id === requestProcessType.id
+        ? REQUEST_WORKFLOW_ID
+        : task.type.id === quickProcessType.id
+          ? QUICK_WORKFLOW_ID
+          : STANDARD_WORKFLOW_ID,
     plannedMinutes: extra.plannedMinutes ?? demoPlannedMinutes[task.id] ?? null,
     acceptRequired: extra.acceptRequired ?? false,
     result: extra.result ?? null,
+    press:
+      pressOf(task.id, currentAuthUser.id, task.assignee?.id === currentAuthUser.id)?.stageId ===
+      task.stage.id
+        ? pressOf(task.id, currentAuthUser.id, task.assignee?.id === currentAuthUser.id)
+        : null,
     completedAt: closed ? task.updatedAt : null,
     // Состав карточки по типу (#432): блоки, названия ролей, обязательные поля.
     layout: layoutOf(task),

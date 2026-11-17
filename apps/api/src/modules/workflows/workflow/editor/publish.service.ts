@@ -33,6 +33,10 @@ import {
   CUSTOM_FIELD_REGISTRY,
   type CustomFieldRegistry,
 } from '../../../custom-fields/ports/custom-field-registry.port.js';
+import {
+  WORKFLOW_PRESS_ROUNDS_READER,
+  type WorkflowPressRoundsReader,
+} from '../../ports/workflow-press-rounds.port.js';
 import { assertLetterCatalogEditable } from '../../catalog/letter-lock.js';
 import { documentOf } from './document-of.js';
 import { applyActionPlan } from './publish-actions.js';
@@ -75,6 +79,7 @@ export class WorkflowEditorService {
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
     @Inject(ROLE_MEMBERSHIP_READER) private readonly membership: RoleMembershipReader,
     private readonly types: ProcessTypesRepository,
+    @Inject(WORKFLOW_PRESS_ROUNDS_READER) private readonly pressRounds: WorkflowPressRoundsReader,
   ) {}
 
   /** GET /workflows/:id — документ живого маршрута + счётчики. Маршрут
@@ -159,6 +164,18 @@ export class WorkflowEditorService {
 
       const snapshot = await this.snapshotOf(tx, loaded, category);
       const plan = planWorkflowPublish(snapshot, body.document, body.migrations);
+      // Коллективная кнопка (#434): пока раунд открыт, менять/архивировать её
+      // нельзя — движок при кворуме выполнил бы уже другой переход.
+      const openPress = await this.pressRounds.openTransitionIds(workflowId, tx);
+      const touched = [
+        ...plan.transitionArchives.map((archive) => archive.transitionId),
+        ...plan.transitionUpdates.map((update) => update.id),
+      ].filter((transitionId) => openPress.has(transitionId));
+      if (touched.length > 0) {
+        throw new DomainException(ErrorCode.CONFLICT, 'Press rounds are open for changed buttons', {
+          transitionIds: touched,
+        });
+      }
       const gaps = missingMigrations(plan);
       if (gaps.length > 0) {
         throw new DomainException(
@@ -305,6 +322,8 @@ export class WorkflowEditorService {
       ) as Prisma.InputJsonValue,
       form: (document.transitions.find((t) => t.id === write.id)?.form ??
         DEFAULT_TRANSITION_FORM) as Prisma.InputJsonValue,
+      press: (document.transitions.find((t) => t.id === write.id)?.press ??
+        null) as Prisma.InputJsonValue | null,
     });
     for (const write of plan.transitionCreates) {
       transitions.set(write.id, await this.writes.createTransition(tx, workflowId, rowOf(write)));
