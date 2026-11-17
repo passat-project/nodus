@@ -110,5 +110,11 @@ sticky-аватар) + `ChatMessageItem` (пузыри bubble-*, хвосты, �
 - `components/assistant-body.tsx` — шапка сессии, лента, композер.
 - `components/assistant-session-picker.tsx` — поповер выбора сессий.
 - `components/assistant-feed.tsx` — канон-лента, глиф ассистента.
+- `components/assistant-markdown.tsx` — Markdown ответа (ADR-0045): GFM,
+  санитайзер, без изображений, кнопка «Копировать».
+- `components/assistant-card-link.ts` — разбор внутреннего `?cards=kind:<uuid>`
+  для ссылок ответа и строк инструментов (внешний URL и не-UUID отсекаются).
+- `components/assistant-tool-rows.tsx` — строки вызовов инструментов и
+  переходы в карточки под ответом.
 - `components/assistant-welcome.tsx` — пустой диалог, подсказки.
 - `components/assistant-entry.tsx` — Ctrl+J.

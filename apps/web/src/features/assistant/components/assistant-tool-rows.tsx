@@ -4,6 +4,7 @@ import { ui, type AssistantToolCall } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { openCardViaBridge } from '../../../shared/lib/card-bridge.js';
+import { cardRefFromHref } from './assistant-card-link.js';
 
 const strings = ui.assistant;
 
@@ -156,16 +157,10 @@ function ToolStatusIcon({ status }: { status: AssistantToolCall['status'] }) {
  * Переход «Открыть»: адрес приходит с сервера в форме `?cards=kind:id`
  * (собран из проверенных вида и id, не из текста модели). Разбираем и
  * открываем карточку через мост каркаса — без редиректов и внешних ссылок.
+ * Разбор один на ленту и markdown-ссылки: внешний URL и не-UUID отсекаются
+ * (`assistant-card-link.ts`).
  */
 export function openCardFromHref(href: string): void {
-  const query = href.includes('?') ? href.slice(href.indexOf('?') + 1) : href;
-  const value = new URLSearchParams(query).get('cards');
-  if (!value) return;
-  const ref = value.split(',').at(-1) ?? '';
-  const separator = ref.indexOf(':');
-  if (separator <= 0) return;
-  const kind = ref.slice(0, separator);
-  const id = ref.slice(separator + 1);
-  if (!id) return;
-  openCardViaBridge({ kind, id });
+  const ref = cardRefFromHref(href);
+  if (ref) openCardViaBridge(ref);
 }
