@@ -70,7 +70,9 @@ export function ProcessButtonSlot({
           aria-label={slotLabel}
           title={slotLabel}
           className={cn(
-            'group/slot inline-flex h-9 w-7 shrink-0 items-center justify-center rounded-r-md border border-l border-transparent border-l-border/60 text-muted-foreground',
+            // Разделителя между кнопкой и стрелкой нет (замечание владельца
+            // 17.11): полоска «резала» панель рядом с «Приостановить».
+            'group/slot inline-flex h-9 w-7 shrink-0 items-center justify-center rounded-r-md border border-transparent text-muted-foreground',
             'hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground',
             focusRing,
           )}
