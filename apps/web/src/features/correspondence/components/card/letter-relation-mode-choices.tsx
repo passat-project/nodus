@@ -55,22 +55,34 @@ export function RelationModeChoices({
   ];
   return (
     <>
-      <ModeChoices
-        value={kind}
-        options={kinds}
-        disabled={disabled}
-        ariaLabel={ui.letters.relations.kindLabel}
-        onChange={onKind}
-      />
+      {/* Видимые подписи групп (#611): без них четыре строки читаются как один
+          список, и «Ответ на» выглядит направлением, а не видом связи. */}
+      <div className="flex min-w-0 flex-col gap-1">
+        <span className="text-xs font-medium text-muted-foreground">
+          {ui.letters.relations.kindLabel}
+        </span>
+        <ModeChoices
+          value={kind}
+          options={kinds}
+          disabled={disabled}
+          ariaLabel={ui.letters.relations.kindLabel}
+          onChange={onKind}
+        />
+      </div>
       {/* Направление (#611): «вложить в этот конверт уже зарегистрированное
           письмо» — без ухода с карточки; предпросмотр показывает местами. */}
-      <ModeChoices
-        value={direction}
-        options={directions}
-        disabled={disabled}
-        ariaLabel={ui.letters.relations.directionLabel}
-        onChange={onDirection}
-      />
+      <div className="flex min-w-0 flex-col gap-1">
+        <span className="text-xs font-medium text-muted-foreground">
+          {ui.letters.relations.directionLabel}
+        </span>
+        <ModeChoices
+          value={direction}
+          options={directions}
+          disabled={disabled}
+          ariaLabel={ui.letters.relations.directionLabel}
+          onChange={onDirection}
+        />
+      </div>
     </>
   );
 }
