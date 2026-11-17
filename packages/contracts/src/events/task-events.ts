@@ -50,6 +50,9 @@ export const TASK_EVENTS = {
   /** Ответственный вернул результаты на доработку (#434): адресное
    *  уведомление участникам и блок в чате малых раундов. */
   PRESS_RETURNED: 'task.press_returned',
+  /** Все сдали, но проверки кнопки не прошли (#434, В1): отметка последнего
+   *  сохранена, ответственному нужно устранить причину и нажать самому. */
+  PRESS_BLOCKED: 'task.press_blocked',
 } as const;
 
 export type TaskEventType = (typeof TASK_EVENTS)[keyof typeof TASK_EVENTS];
@@ -295,3 +298,12 @@ export const taskPressReturnedPayloadSchema = taskEventBaseSchema.extend({
   reason: z.string().trim().min(1).max(500),
 });
 export type TaskPressReturnedPayload = z.infer<typeof taskPressReturnedPayloadSchema>;
+
+/** Кворум собран, но кнопка не прошла проверки (#434, В1): ответственный
+ *  получает причины и нажимает сам; повторного сбора нет. */
+export const taskPressBlockedPayloadSchema = taskEventBaseSchema.extend({
+  title: z.string(),
+  transitionName: z.string().min(1).max(32),
+  reasons: z.array(z.string().max(200)).max(20),
+});
+export type TaskPressBlockedPayload = z.infer<typeof taskPressBlockedPayloadSchema>;

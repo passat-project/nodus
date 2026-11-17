@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ErrorCode } from '@nodus/contracts';
 
+import { DomainException } from '../../../core/errors/domain-exception.js';
 import { PressService } from './press.service.js';
 
 const TASK = {
@@ -74,6 +76,7 @@ function setup(state = 'waiting', config = { quorum: { kind: 'all' }, order: 'pa
     updated: vi.fn(async () => void 0),
     submitted: vi.fn(async () => void 0),
     returned: vi.fn(async () => void 0),
+    completionBlocked: vi.fn(async () => void 0),
   };
   const messages = {
     taskMessages: vi.fn(async (_taskId: string, ids: string[]) =>
@@ -84,7 +87,9 @@ function setup(state = 'waiting', config = { quorum: { kind: 'all' }, order: 'pa
   const engine = { execute: vi.fn(async () => ({ stage: {}, recordId: 'rec' })) };
   const reader = { checkPressInput: vi.fn(() => ({ missing: [], unexpected: [] })) };
   const service = new PressService(
-    { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn({})) } as never,
+    {
+      run: vi.fn(async (fn: (tx: unknown) => unknown) => fn({ $executeRawUnsafe: vi.fn() })),
+    } as never,
     repo as never,
     rounds as never,
     tasks as never,
@@ -146,6 +151,34 @@ describe('PressService (#434)', () => {
       expect.objectContaining({ pressCompletion: true }),
     );
     expect(result).toBeNull();
+  });
+
+  it('кворум, но проверки не прошли: отметка и раунд сохранены, ответственный уведомлён (В1)', async () => {
+    const { service, engine, repo, pressEvents } = setup(undefined, {
+      quorum: { kind: 'all' },
+      order: 'parallel',
+    });
+    engine.execute.mockRejectedValueOnce(
+      new DomainException(ErrorCode.WORKFLOW_TRANSITION_BLOCKED, 'gates', {
+        reasons: [{ kind: 'time_logged' }],
+      }),
+    );
+    const result = await service.submit({ id: 'u1', permissions: [] } as never, 't1', {});
+    expect(result).toBeNull();
+    // Отметка и закрытие раунда не откатились: повторного сбора не будет.
+    expect(repo.updateEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      'e1',
+      expect.objectContaining({ state: 'pressed' }),
+    );
+    expect(repo.completeRound).toHaveBeenCalledTimes(1);
+    expect(pressEvents.completionBlocked).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      'u1',
+      expect.anything(),
+      ['Не внесено затраченное время'],
+    );
   });
 
   it('отзыв нажатой отметки удаляет запись времени', async () => {

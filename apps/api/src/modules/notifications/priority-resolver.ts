@@ -53,6 +53,7 @@ export const KIND_PRIORITY: Record<NotificationKind, NotificationPriority> = {
   'action.press': 'medium',
   // Возврат результата отметки — участнику, обычный приоритет.
   'task.press_returned': 'medium',
+  'task.press_blocked': 'high',
   'task.completed': 'medium',
   'task.returned': 'medium',
   // #378: утверждение — наравне с выполнением; отмена — фоновая, но не

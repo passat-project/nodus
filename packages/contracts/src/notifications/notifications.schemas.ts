@@ -39,6 +39,7 @@ export const notificationKindSchema = z.enum([
   'action.press',
   /** Результат отметки возвращён на доработку (#434). */
   'task.press_returned',
+  'task.press_blocked',
   /** Задача выполнена без утверждения (из работы сразу в «Итог») —
    *  постановщику (#37). */
   'task.completed',

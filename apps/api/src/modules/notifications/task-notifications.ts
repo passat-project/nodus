@@ -87,6 +87,11 @@ export function taskNotices(type: string, p: Payload, actorId: string | null): T
       // (ответственный) себе не уведомляется общим правилом add.
       for (const id of ids(p.userIds)) add(id, 'task.press_returned');
       break;
+    case 'task.press_blocked':
+      // Кворум собран, но кнопка не прошла проверки (#434, В1): уведомление
+      // ответственному или автору — без повторного сбора.
+      for (const id of ids(p.audience)) add(id, 'task.press_blocked');
+      break;
   }
   return [...out.values()];
 }

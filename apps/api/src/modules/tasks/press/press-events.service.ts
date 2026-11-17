@@ -113,6 +113,31 @@ export class PressEvents {
     );
   }
 
+  /** Кворум собран, но проверки кнопки не прошли (#434, В1): отметка
+   *  последнего сохранена, ответственному — причины и просьба нажать самому.
+   *  Повторного сбора нет: раунд уже закрыт. */
+  async completionBlocked(
+    tx: TransactionClient,
+    task: PressTask,
+    actorId: string,
+    round: { transitionName: string },
+    reasons: string[],
+  ): Promise<void> {
+    await this.events.emit(
+      tx,
+      TASK_EVENTS.PRESS_BLOCKED,
+      {
+        taskId: task.id,
+        number: task.number,
+        title: task.title,
+        audience: [task.assigneeId],
+        transitionName: round.transitionName,
+        reasons: reasons.slice(0, 20),
+      },
+      { actorId, aggregateType: 'task', aggregateId: task.id },
+    );
+  }
+
   private audience(task: PressTask, round: RoundEntries, broadcast: boolean): string[] {
     return [
       ...new Set([

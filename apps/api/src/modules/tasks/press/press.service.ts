@@ -4,6 +4,7 @@ import {
   pressConfigSchema,
   pressEntryResultOf,
   transitionFormSchema,
+  ui,
   type AuthUser,
   type PressRoundView,
   type TransitionFormInput,
@@ -187,21 +188,47 @@ export class PressService {
       return this.rounds.viewForTask(taskId, round.stageId, user.id, canManage, tx);
     }
 
-    // Кворум: переход выполняет движок, ввод закрывающего — итог и блок в чате.
+    // Кворум: раунд закрывается сразу. Если проверки кнопки не пройдут,
+    // повторного сбора не будет — ответственный нажмёт обычной кнопкой
+    // (решение владельца 16.11, В1).
     await this.repo.completeRound(tx, round.id, new Date());
     const closing: TransitionFormInput = {
       ...(input.result ? { result: input.result } : {}),
       ...(input.comment ? { comment: input.comment } : {}),
     };
-    await this.engine.execute(
-      tx,
-      taskId,
-      'task',
-      user,
-      { transitionId: round.transitionId },
-      { pressCompletion: true, ...(Object.keys(closing).length > 0 ? { form: closing } : {}) },
-    );
+    // Savepoint: сбой проверок откатывает только эффекты движка, но не
+    // отметку последнего участника и не закрытие раунда.
+    await tx.$executeRawUnsafe('SAVEPOINT press_completion');
+    try {
+      await this.engine.execute(
+        tx,
+        taskId,
+        'task',
+        user,
+        { transitionId: round.transitionId },
+        { pressCompletion: true, ...(Object.keys(closing).length > 0 ? { form: closing } : {}) },
+      );
+      await tx.$executeRawUnsafe('RELEASE SAVEPOINT press_completion');
+    } catch (error) {
+      await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT press_completion');
+      await this.pressEvents.completionBlocked(tx, task, user.id, round, this.gateReasonsOf(error));
+    }
     return null;
+  }
+
+  /** Причины отказа кнопки — человеческим текстом для уведомления. */
+  private gateReasonsOf(error: unknown): string[] {
+    if (!(error instanceof DomainException)) return [];
+    const details = error.details?.reasons;
+    if (!Array.isArray(details)) return [error.message];
+    const labels = ui.tasks.gate as Record<string, string>;
+    return details.map((reason) => {
+      const kind =
+        reason && typeof reason === 'object' && 'kind' in reason
+          ? String((reason as { kind: unknown }).kind)
+          : '';
+      return labels[kind] ?? error.message;
+    });
   }
 
   private async withdrawInTx(

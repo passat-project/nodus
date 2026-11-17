@@ -60,6 +60,7 @@ export const notificationsStrings = {
     'action.decision': 'Ждёт вашего решения',
     'action.press': 'Нужно сдать результат',
     'task.press_returned': 'Результат возвращён',
+    'task.press_blocked': 'Сбор завершён — проверьте условия',
     'task.completed': 'Задача выполнена',
     'task.returned': 'Возврат в работу',
     'task.awaiting_approval': 'Ждёт утверждения',
