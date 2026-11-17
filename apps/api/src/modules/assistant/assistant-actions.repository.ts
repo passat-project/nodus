@@ -93,17 +93,21 @@ export abstract class AssistantActionsRepository {
 
   // ----- Пачки карточек (#916) -----
 
-  /** Пачка создаётся первым предложением карточки хода; повтор не переоткрывает. */
+  /**
+   * Пачка создаётся первым предложением карточки хода; повтор не переоткрывает.
+   * `createMany … skipDuplicates` = `INSERT … ON CONFLICT DO NOTHING`: модель
+   * может вызвать несколько записей ОДНИМ пакетом (Promise.all), и `upsert`
+   * в этой гонке падал на unique(message_id) — прогон с пачкой умирал (#916).
+   */
   async ensureActionBatch(input: {
     messageId: string;
     sessionId: string;
     runId: string;
     userId: string;
   }): Promise<void> {
-    await this.prisma.assistantActionBatch.upsert({
-      where: { messageId: input.messageId },
-      create: input,
-      update: {},
+    await this.prisma.assistantActionBatch.createMany({
+      data: [input],
+      skipDuplicates: true,
     });
   }
 

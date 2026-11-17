@@ -76,7 +76,7 @@ function makeRepo() {
       ]),
     },
     assistantActionBatch: {
-      upsert: vi.fn(async () => undefined),
+      createMany: vi.fn(async () => ({ count: 1 })),
       findFirst: vi.fn(async (): Promise<Record<string, unknown> | null> => batchRow()),
       findUnique: vi.fn(async (): Promise<Record<string, unknown> | null> => batchRow()),
       updateMany: vi.fn(async () => ({ count: 1 })),
@@ -170,7 +170,7 @@ describe('AssistantRepository: карточки действий (#916)', () => 
 });
 
 describe('AssistantRepository: пачки карточек (#916)', () => {
-  it('ensureActionBatch: upsert не переоткрывает существующую пачку', async () => {
+  it('ensureActionBatch: ON CONFLICT DO NOTHING не переоткрывает пачку', async () => {
     const { repo, prisma } = makeRepo();
     await repo.ensureActionBatch({
       messageId: MESSAGE_ID,
@@ -178,10 +178,9 @@ describe('AssistantRepository: пачки карточек (#916)', () => {
       runId: RUN_ID,
       userId: USER_ID,
     });
-    expect(prisma.assistantActionBatch.upsert).toHaveBeenCalledWith({
-      where: { messageId: MESSAGE_ID },
-      create: { messageId: MESSAGE_ID, sessionId: SESSION_ID, runId: RUN_ID, userId: USER_ID },
-      update: {},
+    expect(prisma.assistantActionBatch.createMany).toHaveBeenCalledWith({
+      data: [{ messageId: MESSAGE_ID, sessionId: SESSION_ID, runId: RUN_ID, userId: USER_ID }],
+      skipDuplicates: true,
     });
   });
 

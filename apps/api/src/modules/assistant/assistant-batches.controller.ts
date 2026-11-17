@@ -78,7 +78,9 @@ export class AssistantBatchesController {
     @Param('id', uuidPipe) id: string,
     @Headers('authorization') authorization: string | undefined,
   ): Promise<AssistantContinueResponse> {
-    const runId = await this.continuation.continueNow(user, id, authorization ?? '');
+    // Порядок аргументов сервиса: (user, authorization, messageId) — окно
+    // закрывается fresh-токеном запроса решения (#916).
+    const runId = await this.continuation.continueNow(user, authorization ?? '', id);
     return { runId };
   }
 }
