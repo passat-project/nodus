@@ -60,22 +60,47 @@ function stripComments(source: string): string {
   return result;
 }
 
-/** Ключи декораторов и подозрительные не-литералы (инвентаризация их слепа). */
-function requireFeatureKeys(): { keys: string[]; invalid: string[] } {
+/** Ключи флагов из кода: декораторы `@RequireFeature('…')` И чтения
+ *  `FeatureFlagService.isEnabled('…')` (#878/AUD-017). Второй путь раньше
+ *  был вне инвентаризации: новый модуль с isEnabled-only флагом мог остаться
+ *  без миграции незамеченным. Не-литералы — в `invalid` (страж их слеп). */
+export function collectFlagKeys(rawSource: string): { keys: string[]; invalid: string[] } {
+  // Комментарии не считаем: `@RequireFeature('…')` в JSDoc — не инвентаризация.
+  const source = stripComments(rawSource);
   const decorator = /@RequireFeature\(\s*([^)]*?)\s*\)/g;
+  const enabledCall = /\.isEnabled\(\s*([^)]*?)\s*\)/g;
   const keys = new Set<string>();
   const invalid: string[] = [];
-  for (const file of sourceFiles(SRC)) {
-    const source = stripComments(readFileSync(file, 'utf8'));
-    for (const match of source.matchAll(decorator)) {
+  const collect = (pattern: RegExp, label: string): void => {
+    for (const match of source.matchAll(pattern)) {
       const arg = match[1] ?? '';
       const literal = /^(['"])([^'"]+)\1$/.exec(arg);
       if (!literal) {
-        invalid.push(`${relative(SRC, file)}: @RequireFeature(${arg})`);
+        invalid.push(`${label}(${arg})`);
         continue;
       }
       keys.add(literal[2]!);
     }
+  };
+  collect(decorator, '@RequireFeature');
+  collect(enabledCall, '.isEnabled');
+  return { keys: [...keys].sort(), invalid };
+}
+
+/** Файлы, где `isEnabled` вызывается с ключом из декоратора: сам гейт
+ *  флагов. Его аргумент — переменная, но ключ всё равно в инвентаризации
+ *  (через `@RequireFeature`), поэтому это не слепое место. */
+const DYNAMIC_IS_ENABLED = new Set([join('core', 'guards', 'feature-flag.guard.ts')]);
+
+/** Ключи флагов по всем исходникам API (без тестов) и их файлы — для подсказки. */
+function codeFlagKeys(): { keys: string[]; invalid: string[] } {
+  const keys = new Set<string>();
+  const invalid: string[] = [];
+  for (const file of sourceFiles(SRC)) {
+    if (DYNAMIC_IS_ENABLED.has(relative(SRC, file))) continue;
+    const found = collectFlagKeys(readFileSync(file, 'utf8'));
+    for (const key of found.keys) keys.add(key);
+    for (const problem of found.invalid) invalid.push(`${relative(SRC, file)}: ${problem}`);
   }
   return { keys: [...keys].sort(), invalid };
 }
@@ -95,22 +120,37 @@ function migrationFlagKeys(): string[] {
   return [...keys].sort();
 }
 
-describe('Фичефлаги в миграциях (I10, #866/AUD-017)', () => {
+describe('Фичефлаги в миграциях (I10, #866/AUD-017, #878)', () => {
   it('находит декораторы и вставки (страж не проходит вхолостую)', () => {
-    expect(requireFeatureKeys().keys.length).toBeGreaterThan(0);
+    expect(codeFlagKeys().keys.length).toBeGreaterThan(0);
     expect(migrationFlagKeys().length).toBeGreaterThan(0);
   });
 
-  it('ключ @RequireFeature — строковый литерал (иначе инвентаризация слепа)', () => {
-    expect(requireFeatureKeys().invalid).toEqual([]);
+  it('ключ @RequireFeature и isEnabled — строковый литерал (иначе инвентаризация слепа)', () => {
+    expect(codeFlagKeys().invalid).toEqual([]);
   });
 
-  it('каждый ключ @RequireFeature создаётся миграцией (прод = migrate deploy без seed)', () => {
+  it('каждый ключ из кода создаётся миграцией (прод = migrate deploy без seed)', () => {
     const created = new Set(migrationFlagKeys());
-    const missing = requireFeatureKeys().keys.filter((key) => !created.has(key));
+    const missing = codeFlagKeys().keys.filter((key) => !created.has(key));
     expect(
       missing,
       'добавь INSERT INTO "feature_flags" … ON CONFLICT ("key") DO NOTHING в новую миграцию',
     ).toEqual([]);
+  });
+
+  it('флаг, читаемый только через isEnabled, тоже попадает в инвентаризацию (#878)', () => {
+    const { keys, invalid } = collectFlagKeys(`
+      if (!(await this.flags.isEnabled('mail-reception'))) return;
+      // .isEnabled('в-комментарии') не считается
+      /* @RequireFeature('тоже-комментарий') */
+    `);
+    expect(keys).toEqual(['mail-reception']);
+    expect(invalid).toEqual([]);
+  });
+
+  it('не-литерал в isEnabled — страж не молчит', () => {
+    const { invalid } = collectFlagKeys(`await flags.isEnabled(key);`);
+    expect(invalid).toEqual(['.isEnabled(key)']);
   });
 });
