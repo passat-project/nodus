@@ -181,6 +181,18 @@ export class FilesRepository {
     return this.prisma.fileTextExtract.findUnique({ where: { fileId } });
   }
 
+  /**
+   * Снять кэш текста вложений: письмо стало конфиденциальным или удалено —
+   * текст не должен оставаться at rest (ADR-0050, приватность).
+   */
+  async deleteTextExtracts(fileIds: readonly string[]): Promise<number> {
+    if (fileIds.length === 0) return 0;
+    const result = await this.prisma.fileTextExtract.deleteMany({
+      where: { fileId: { in: [...fileIds] } },
+    });
+    return result.count;
+  }
+
   /** Запись кэша текста: новая версия файла пересчитывает текст (upsert). */
   async saveTextExtract(input: {
     fileId: string;

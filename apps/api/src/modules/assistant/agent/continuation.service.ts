@@ -125,6 +125,9 @@ export class AssistantContinuationService implements OnModuleInit {
       const { pending } = await this.repo.countActionsByMessage(messageId, user.id);
       if (pending > 0) return null;
 
+      // Модули читаем ДО захвата пачки: сбой чтения не должен оставлять
+      // `continued` с прогоном, который никто не стартует.
+      const features = await this.featureFlags.enabledModules();
       const runId = randomUUID();
       await this.repo.createRun({
         id: runId,
@@ -147,7 +150,7 @@ export class AssistantContinuationService implements OnModuleInit {
         this.pendingResumes.set(current.sessionId, { user, authorization, messageId, runId });
         return runId;
       }
-      await this.start(user, authorization, current, runId, 0);
+      await this.start(user, authorization, current, runId, 0, features);
       return runId;
     });
   }
@@ -183,6 +186,8 @@ export class AssistantContinuationService implements OnModuleInit {
       // кликов решается атомарным updateMany — проигравший удаляет свой прогон
       // и возвращает прогон победителя (I7, повторный клик без дубля).
       const { pending } = await this.repo.countActionsByMessage(messageId, user.id);
+      // Модули — до захвата пачки: сбой чтения не оставит мёртвый `closed`.
+      const features = await this.featureFlags.enabledModules();
       const runId = randomUUID();
       await this.repo.createRun({
         id: runId,
@@ -204,7 +209,7 @@ export class AssistantContinuationService implements OnModuleInit {
           'Пачка уже закрыта: агент ответит на сообщение',
         );
       }
-      await this.start(user, authorization, batch, runId, pending);
+      await this.start(user, authorization, batch, runId, pending, features);
       return runId;
     });
   }
@@ -230,6 +235,8 @@ export class AssistantContinuationService implements OnModuleInit {
         // В сессии уже мог начаться другой прогон (новый вопрос сотрудника):
         // ждём его завершения — notifier позовёт снова.
         if (this.runner.isSessionActive(sessionId)) return;
+        // Модули читаем до снятия резерва: сбой не оставит пачку в `continued`.
+        const features = await this.featureFlags.enabledModules();
         this.pendingResumes.delete(sessionId);
         // «Стоп» мог отменить зарезервированный прогон, пока печатался
         // исходный: стартовать отменённый нельзя (иначе кнопка «Стоп»
@@ -241,12 +248,13 @@ export class AssistantContinuationService implements OnModuleInit {
           await this.repo.deleteRun(pending.runId);
           return;
         }
-        await this.start(pending.user, pending.authorization, batch, pending.runId, 0);
+        await this.start(pending.user, pending.authorization, batch, pending.runId, 0, features);
       });
     } catch (error) {
-      // Отложенное продолжение не должно ронять завершённый прогон; лента
-      // остаётся с пачкой «Продолжение запущено» — ответ придёт после
-      // повторного запроса/перезагрузки.
+      // Сбой старта не должен оставлять вечный резерв: снимаем его и
+      // возвращаем пачку в работу («Продолжить сейчас» остаётся у сотрудника).
+      this.pendingResumes.delete(sessionId);
+      await this.repo.cancelQueuedRun(waiting.runId).catch(() => undefined);
       this.logger.warn(
         { err: error, sessionId, messageId: waiting.messageId },
         'Deferred continuation failed',
@@ -261,19 +269,25 @@ export class AssistantContinuationService implements OnModuleInit {
     batch: ActionBatchRow,
     runId: string,
     pendingCards: number,
+    features: readonly string[],
   ): Promise<void> {
-    const features = await this.featureFlags.enabledModules();
-    this.runner.start({
-      runId,
-      sessionId: batch.sessionId,
-      userId: user.id,
-      authorization,
-      permissions: user.permissions,
-      features,
-      screen: EMPTY_SCREEN,
-      autoExecute: false,
-      continuation: { ofMessageId: batch.messageId, pendingCards },
-    });
+    try {
+      this.runner.start({
+        runId,
+        sessionId: batch.sessionId,
+        userId: user.id,
+        authorization,
+        permissions: user.permissions,
+        features,
+        screen: EMPTY_SCREEN,
+        autoExecute: false,
+        continuation: { ofMessageId: batch.messageId, pendingCards },
+      });
+    } catch (error) {
+      // Синхронный сбой старта: снимаем резерв и возвращаем пачку в работу.
+      await this.repo.cancelQueuedRun(runId).catch(() => undefined);
+      throw error;
+    }
     this.logger.info(
       { runId, messageId: batch.messageId, pendingCards },
       'Assistant continuation started',

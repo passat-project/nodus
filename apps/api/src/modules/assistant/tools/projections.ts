@@ -1,4 +1,4 @@
-import { ASSISTANT_LIMITS } from '@nodus/contracts';
+import { ASSISTANT_LIMITS, type Paginated } from '@nodus/contracts';
 
 /**
  * Компактные проекции ответов API для промпта (ADR-0043: «списки — до 20
@@ -27,6 +27,19 @@ export function asTyped<T>(value: unknown): T | null {
 
 export function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+/**
+ * Элементы страницы `{ items, nextCursor }` с охранником границы: пустое или
+ * не-JSON тело 200 (`parseBody` → null) не роняет прогон `TypeError`, а даёт
+ * пустой список (ADR-0049). Тип `Paginated<T>` держит компиляцию: переименование
+ * `items` в контракте ломает tsc.
+ */
+export function pageItems<T>(page: Paginated<T> | null | undefined): T[] {
+  const rows = asTyped<Paginated<T>>(page)?.items;
+  return asArray(rows)
+    .map((raw) => asTyped<T>(raw))
+    .filter((row): row is T => row !== null);
 }
 
 export function str(value: unknown): string | null {

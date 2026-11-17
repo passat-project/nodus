@@ -11,6 +11,7 @@ import { defineTool } from '../tool-definition.js';
 import {
   asArray,
   asTyped,
+  pageItems,
   clip,
   dateTime,
   entityLink,
@@ -65,7 +66,7 @@ export const chatConversationsTool = defineTool({
     // `membersPreview` (превью участников) и `lastActivityAt` (момент
     // активности; `lastMessage` — только превью). Полей `members`/
     // `lastMessageAt` в контракте нет.
-    const rows = asArray(data.items).map((raw) => {
+    const rows = pageItems<ConversationListItem>(data).map((raw) => {
       const conversation = asTyped<ConversationListItem>(raw);
       if (!conversation) return null;
       const id = str(conversation.id);
@@ -117,7 +118,7 @@ export const chatMessagesTool = defineTool({
     query: { limit: String(input.limit) },
   }),
   project: (data: Paginated<ChatMessage>, input) => {
-    const rows = asArray(data.items).map((raw) => {
+    const rows = pageItems<ChatMessage>(data).map((raw) => {
       const message = asTyped<ChatMessage>(raw);
       if (!message) return null;
       const author = nameOf(message.author) ?? '—';

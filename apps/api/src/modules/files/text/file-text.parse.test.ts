@@ -273,6 +273,41 @@ describe('parseAttachmentText: DOCX', () => {
     });
   });
 
+  it('остальные ZIP64-поля EOCD и записи отвергаются', async () => {
+    const entries = (): Buffer =>
+      zipBuffer([{ name: 'word/document.xml', data: Buffer.from('<document>Текст</document>') }]);
+    // declaredEntries = 0xFFFF (любое из шести полей включает ZIP64 в JSZip).
+    const declared = entries();
+    declared.writeUInt16LE(0xffff, declared.length - 22 + 10);
+    await expect(parseAttachmentText(declared, 'docx')).rejects.toMatchObject({
+      code: 'FILE_TEXT_TOO_LARGE',
+    });
+    // centralSize / centralOffset = 0xFFFFFFFF.
+    for (const shift of [12, 16]) {
+      const buffer = entries();
+      buffer.writeUInt32LE(0xffffffff, buffer.length - 22 + shift);
+      await expect(parseAttachmentText(buffer, 'docx')).rejects.toMatchObject({
+        code: 'FILE_TEXT_TOO_LARGE',
+      });
+    }
+    // ZIP64-размеры записи центрального каталога.
+    const sizes = entries();
+    const eocd = sizes.length - 22;
+    const central = sizes.readUInt32LE(eocd + 16);
+    sizes.writeUInt32LE(0xffffffff, central + 20);
+    sizes.writeUInt32LE(0xffffffff, central + 24);
+    await expect(parseAttachmentText(sizes, 'docx')).rejects.toMatchObject({
+      code: 'FILE_TEXT_TOO_LARGE',
+    });
+    // ZIP64 EOCD (PK\x06\x06) в комментарии — как и локатор, признак подмены.
+    const eocd64 = Buffer.concat([Buffer.from([0x50, 0x4b, 0x06, 0x06]), Buffer.alloc(16)]);
+    const commented = Buffer.concat([entries(), eocd64]);
+    commented.writeUInt16LE(eocd64.length, entries().length - 22 + 20);
+    await expect(parseAttachmentText(commented, 'docx')).rejects.toMatchObject({
+      code: 'FILE_TEXT_INVALID',
+    });
+  });
+
   it('magic: DOCX по ZIP-сигнатуре', () => {
     expect(magicMatches(DOCX_BUFFER, 'docx')).toBe(true);
     expect(magicMatches(Buffer.from('nope'), 'docx')).toBe(false);

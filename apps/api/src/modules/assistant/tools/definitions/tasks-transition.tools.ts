@@ -148,17 +148,19 @@ export const tasksTransitionTool = defineTool({
       return `Переход${transition ? ` «${transition.name}»` : ''} задачи ${label}`;
     },
     fields: async (input, ctx) => {
-      const [task, transition] = await Promise.all([
+      // Имена атрибутов нужны и значениям формы, и строке «Требует заполнить»
+      // (в окне перехода ключи cf.<uuid> — модель/сотрудник видят названия).
+      const [attributeNames, task] = await Promise.all([
+        readAttributeNames(ctx),
         readTask(ctx, input.id),
-        readTransition(ctx, input.id, input.transitionId),
       ]);
       const form = input.form;
       const comment = form?.comment ?? input.comment;
       const time = form?.time;
       const values = form?.fields;
-      const [assignee, attributeNames] = await Promise.all([
+      const [transition, assignee] = await Promise.all([
+        readTransition(ctx, input.id, input.transitionId, attributeNames),
         values?.assigneeId ? readDisplayName(ctx, values.assigneeId) : Promise.resolve(null),
-        values?.customFields ? readAttributeNames(ctx) : Promise.resolve(new Map<string, string>()),
       ]);
       return fieldsOf([
         field(
@@ -205,6 +207,7 @@ async function readTransition(
   ctx: ToolContext,
   taskId: string,
   transitionId: string,
+  attributeNames?: ReadonlyMap<string, string>,
 ): Promise<TransitionInfo | null> {
   try {
     const rows = asArray(await ctx.read?.(`/tasks/${taskId}/transitions`));
@@ -213,7 +216,7 @@ async function readTransition(
       if (str(transition?.id) !== transitionId) continue;
       const typed = asTyped<WorkflowTransition>(transition);
       const reasons = asArray(transition?.blockedBy)
-        .map((reason) => gateLabel(reason))
+        .map((reason) => gateLabel(reason, attributeNames))
         .filter((label): label is string => label !== null);
       return {
         name: str(transition?.name) ?? 'Переход',
@@ -222,7 +225,7 @@ async function readTransition(
           reasons.length > 0
             ? `есть ограничения: ${reasons.join('; ')}${typed?.canOverride ? ' (можно обойти с причиной)' : ''}`
             : null,
-        requirements: formRequirements(transition?.form),
+        requirements: formRequirements(transition?.form, attributeNames),
       };
     }
   } catch {

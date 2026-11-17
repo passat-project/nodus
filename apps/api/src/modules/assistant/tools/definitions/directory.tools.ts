@@ -11,13 +11,12 @@ import {
 import { defineTool } from '../tool-definition.js';
 import {
   asArray,
-  asRecord,
   asTyped,
+  pageItems,
   entityLink,
   finalize,
   hasMore,
   listBlock,
-  nameOf,
   num,
   str,
 } from '../projections.js';
@@ -63,7 +62,7 @@ export const directoryFindUsersTool = defineTool({
     },
   }),
   project: (data: Paginated<UserListItem>) => {
-    const rows = asArray(data.items).map((raw) => {
+    const rows = pageItems<UserListItem>(data).map((raw) => {
       const user = asTyped<UserListItem>(raw);
       if (!user) return null;
       const id = str(user.id);
@@ -148,12 +147,10 @@ function walkDepartments(nodes: unknown[], depth: number, out: string[], limit: 
     const node = asTyped<DepartmentNode>(raw);
     if (!node) continue;
     const name = str(node.name) ?? '—';
-    // `head`/`employeesCount` — алиасы плоских ответов, в контракте
-    // DepartmentNode их нет (`headName`/`memberCount`); проекция читает ровно
-    // те же поля, что и раньше, — текст для модели не меняется.
-    const legacy = asRecord(node);
-    const head = nameOf(legacy?.head);
-    const employees = num(legacy?.employeesCount ?? node.memberCount);
+    // Контракт DepartmentNode: `headName`/`memberCount`. Алиасов `head`/
+    // `employeesCount` API не отдаёт — прежние ветки молча давали пусто.
+    const head = node.headName ? node.headName : null;
+    const employees = num(node.memberCount);
     out.push(
       `${'  '.repeat(Math.min(depth, 6))}${name}${head ? ` (руководитель: ${head})` : ''}${employees !== null ? ` — сотрудников ${employees}` : ''}`,
     );

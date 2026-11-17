@@ -28,6 +28,10 @@ import { StaleMultipartSweeper } from './storage/stale-multipart.sweeper.js';
 import { StaleMultipartUploadsJob } from './storage/stale-multipart.job.js';
 import { AttachmentSentHandler } from './events/attachment-sent.handler.js';
 import { LetterReceivedHandler } from './events/letter-received.handler.js';
+import {
+  LetterConfidentialTextHandler,
+  LetterDeletedTextHandler,
+} from './events/letter-text-cache.handler.js';
 import { FileTextService } from './text/file-text.service.js';
 
 /**
@@ -82,6 +86,10 @@ import { FileTextService } from './text/file-text.service.js';
     // chat.message_sent — связь модулей событием (I3).
     AttachmentSentHandler,
     LetterReceivedHandler,
+    // Приватность кэша текста (#922): конфиденциальность/удаление письма
+    // сносит извлечённый текст (ADR-0050), иначе он остаётся at rest.
+    LetterConfidentialTextHandler,
+    LetterDeletedTextHandler,
     { provide: FILE_STORAGE, useExisting: FileStorageProvider },
     // Аватарки (#186): порт для chat/directory (I3 — модули не импортируют
     // друг друга), реализация — AvatarService (см. avatars/).

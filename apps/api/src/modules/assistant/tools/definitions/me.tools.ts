@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Permission, type MyOrganization, type UserListItem } from '@nodus/contracts';
 
 import { defineTool } from '../tool-definition.js';
-import { clip, entityLink, finalize } from '../projections.js';
+import { asTyped, clip, entityLink, finalize } from '../projections.js';
 
 /**
  * «Кто я» (#919): профиль текущего сотрудника, его руководитель,
@@ -39,7 +39,10 @@ export const meGetTool = defineTool({
   api: { method: 'GET', path: '/directory/users/me/organization' },
   build: () => ({ path: '/directory/users/me/organization' }),
   project: (data: MyOrganization) => {
-    const { user, department, manager, subordinates, subordinatesTotal } = data;
+    // Пустое/не-JSON тело 200 не должно ронять прогон TypeError-ом (ADR-0049).
+    const org = asTyped<MyOrganization>(data);
+    if (!org) return { text: 'Профиль сотрудника недоступен' };
+    const { user, department, manager, subordinates, subordinatesTotal } = org;
     if (!user?.id) return { text: 'Профиль сотрудника недоступен' };
     const path = department?.path.map((item) => item.name) ?? [];
     const lines = [

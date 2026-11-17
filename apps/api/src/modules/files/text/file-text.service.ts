@@ -50,6 +50,8 @@ export class FileTextService {
   private readonly hits = new Map<string, number[]>();
   /** Извлечения, реально идущие прямо сейчас (кэш не считается). */
   private running = 0;
+  /** Активные извлечения по сотрудникам: один актор не занимает все слоты. */
+  private readonly runningByUser = new Map<string, number>();
 
   constructor(
     private readonly repo: FilesRepository,
@@ -92,7 +94,7 @@ export class FileTextService {
     this.assertAllowed(userId);
     const controller = new AbortController();
     const entry: InflightExtraction = { controller, waiters: 0, promise: undefined as never };
-    entry.promise = this.track(() => this.extractFresh(file, controller.signal))
+    entry.promise = this.track(userId, () => this.extractFresh(file, controller.signal))
       .catch((error: unknown) => {
         throw mapExtractError(error);
       })
@@ -131,6 +133,16 @@ export class FileTextService {
         429,
       );
     }
+    // Одно извлечение на сотрудника: иначе он двумя запросами занимает все
+    // слоты процесса и остальные получают 429 (starvation, security-ревью).
+    if ((this.runningByUser.get(userId) ?? 0) >= 1) {
+      throw new DomainException(
+        ErrorCode.RATE_LIMITED,
+        'Another text extraction is already running',
+        undefined,
+        429,
+      );
+    }
     const now = Date.now();
     const windowStart = now - 60_000;
     const recent = (this.hits.get(userId) ?? []).filter((at) => at > windowStart);
@@ -154,12 +166,16 @@ export class FileTextService {
   }
 
   /** Счётчик активных извлечений: уменьшается в любом исходе. */
-  private async track<T>(work: () => Promise<T>): Promise<T> {
+  private async track<T>(userId: string, work: () => Promise<T>): Promise<T> {
     this.running += 1;
+    this.runningByUser.set(userId, (this.runningByUser.get(userId) ?? 0) + 1);
     try {
       return await work();
     } finally {
       this.running -= 1;
+      const left = (this.runningByUser.get(userId) ?? 1) - 1;
+      if (left > 0) this.runningByUser.set(userId, left);
+      else this.runningByUser.delete(userId);
     }
   }
 

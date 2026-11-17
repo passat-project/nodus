@@ -67,10 +67,9 @@ export const lettersTransitionTool = defineTool({
     const id = str(letter?.id);
     if (!letter || !id) return { text: 'Переход выполнен' };
     const subject = str(letter.subject);
-    // `number`/`registeredNumber` — алиасы старого ответа карточки; в контракте
-    // письма номер — `regNumber`. Проекция сохраняет прежнее поведение.
-    const legacy = asRecord(letter);
-    const number = str(legacy?.number) ?? str(legacy?.registeredNumber);
+    // Номер письма в контракте — `regNumber` (алиасов `number`/
+    // `registeredNumber` API не отдаёт — прежняя ветка молча давала пусто).
+    const number = str(letter.regNumber);
     return {
       text: `Письмо обновлено: ${number ? `№${number} ` : ''}«${subject ?? '—'}», id ${id}`,
       entity: {

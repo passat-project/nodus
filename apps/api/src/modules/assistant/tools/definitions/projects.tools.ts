@@ -14,6 +14,7 @@ import {
   asArray,
   asRecord,
   asTyped,
+  pageItems,
   clip,
   date,
   dateTime,
@@ -83,7 +84,7 @@ export const projectsListTool = defineTool({
     },
   }),
   project: (data: Paginated<ProjectListItem>) => {
-    const rows = asArray(data.items)
+    const rows = pageItems<ProjectListItem>(data)
       .map((raw) => projectRow(asTyped<ProjectListItem>(raw)))
       .filter((row): row is string => row !== null);
     // Ссылка «Открыть» — у карточки проекта (projects.get), не у списка.
@@ -243,7 +244,7 @@ export const projectsMembersTool = defineTool({
     // Форма `GET /projects/:id/members` — `{ user, source, observerKind }`
     // (projectMemberSchema): роли выводятся из источника участия, а не из
     // несуществующего поля `role`.
-    const rows = asArray(data.items).map((raw) => {
+    const rows = pageItems<ProjectMember>(data).map((raw) => {
       const member = asTyped<ProjectMember>(raw);
       if (!member) return null;
       const user = asRecord(member.user) ?? member;

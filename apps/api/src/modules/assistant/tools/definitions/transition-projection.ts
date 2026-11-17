@@ -47,23 +47,29 @@ export const OUTCOME_LABELS: Record<string, string> = {
 };
 
 /** Ограничения перехода человеческими подписями + возможность обхода. */
-export function blockedSummary(transition: WorkflowTransition): string | null {
+export function blockedSummary(
+  transition: WorkflowTransition,
+  attributeNames?: ReadonlyMap<string, string>,
+): string | null {
   const reasons = asArray(transition.blockedBy)
-    .map((raw) => gateLabel(raw))
+    .map((raw) => gateLabel(raw, attributeNames))
     .filter((label): label is string => label !== null);
   if (reasons.length === 0) return null;
   const override = transition.canOverride ? ' (можно обойти с причиной)' : '';
   return `ограничения: ${reasons.join('; ')}${override}`;
 }
 
-export function gateLabel(raw: unknown): string | null {
+export function gateLabel(
+  raw: unknown,
+  attributeNames?: ReadonlyMap<string, string>,
+): string | null {
   const record = asRecord(raw);
   const kind = str(record?.kind);
   if (!kind) return null;
   const base = GATE_LABELS[kind] ?? kind;
   if (kind === 'fields_required') {
     const fields = asArray(record?.fields)
-      .map((fieldKey) => fieldLabel(fieldKey))
+      .map((fieldKey) => fieldLabel(fieldKey, attributeNames))
       .filter((label): label is string => label !== null);
     if (fields.length > 0) return `${base}: ${fields.join(', ')}`;
   }
@@ -75,7 +81,10 @@ export function gateLabel(raw: unknown): string | null {
 }
 
 /** Требования окна перехода — подписи разделов и полей (не сырые коды). */
-export function formRequirements(form: unknown): string | null {
+export function formRequirements(
+  form: unknown,
+  attributeNames?: ReadonlyMap<string, string>,
+): string | null {
   const record = asRecord(form);
   if (!record || record.enabled !== true) return null;
   const parts: string[] = [];
@@ -86,7 +95,7 @@ export function formRequirements(form: unknown): string | null {
     const label = str(section?.label) ?? SECTION_LABELS[kind] ?? kind;
     if (kind === 'fields') {
       const fields = asArray(section?.fields)
-        .map((item) => fieldLabel(item))
+        .map((item) => fieldLabel(item, attributeNames))
         .filter((item): item is string => item !== null);
       parts.push(fields.length > 0 ? `${label}: ${fields.join(', ')}` : label);
     } else if (kind === 'comment' || kind === 'result_messages') {
@@ -99,19 +108,22 @@ export function formRequirements(form: unknown): string | null {
 }
 
 /** Подпись поля окна: строковый ключ (наследие) или объект с `label`. */
-function fieldLabel(raw: unknown): string | null {
-  if (typeof raw === 'string') return keyLabel(raw);
+function fieldLabel(raw: unknown, attributeNames?: ReadonlyMap<string, string>): string | null {
+  if (typeof raw === 'string') return keyLabel(raw, attributeNames);
   const record = asRecord(raw);
   if (!record) return null;
   const label = str(record.label);
   if (label) return label;
   const key = str(record.key);
-  return key ? keyLabel(key) : null;
+  return key ? keyLabel(key, attributeNames) : null;
 }
 
-function keyLabel(key: string): string {
+function keyLabel(key: string, attributeNames?: ReadonlyMap<string, string>): string {
   if (FIELD_LABELS[key]) return FIELD_LABELS[key];
   // Полный id определения: по обрезанному нельзя собрать customFields.
-  if (key.startsWith('cf.')) return `атрибут ${key.slice(3)}`;
+  if (key.startsWith('cf.')) {
+    const id = key.slice(3);
+    return attributeNames?.get(id) ?? `атрибут ${id}`;
+  }
   return key;
 }

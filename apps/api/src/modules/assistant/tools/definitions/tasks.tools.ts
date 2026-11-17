@@ -12,6 +12,7 @@ import {
   asArray,
   asRecord,
   asTyped,
+  pageItems,
   clip,
   date,
   dateTime,
@@ -67,7 +68,7 @@ function taskRow(task: TaskListItem): string | null {
 
 /** Строки пагинированного ответа: мусор отбрасывается, типы — контракта. */
 function taskRows(data: Paginated<TaskListItem>): string[] {
-  return asArray(data.items)
+  return pageItems<TaskListItem>(data)
     .map((raw) => asTyped<TaskListItem>(raw))
     .flatMap((task) => {
       const row = task ? taskRow(task) : null;
@@ -258,7 +259,7 @@ export const tasksHistoryTool = defineTool({
   api: { method: 'GET', path: '/tasks/:id/history' },
   build: (input) => ({ path: `/tasks/${input.id}/history`, query: { limit: String(input.limit) } }),
   project: (data: Paginated<TaskHistoryItem>) => {
-    const rows = asArray(data.items).map((raw) => {
+    const rows = pageItems<TaskHistoryItem>(data).map((raw) => {
       const entry = asTyped<TaskHistoryItem>(raw);
       if (!entry) return null;
       const when = dateTime(entry.createdAt) ?? '—';

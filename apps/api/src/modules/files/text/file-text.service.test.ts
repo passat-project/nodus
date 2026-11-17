@@ -76,11 +76,14 @@ function build(
     get: vi.fn(async () => Readable.from([Buffer.from('%PDF-1.7\n')])),
   };
   const office = {
-    resolveAccess: vi.fn(async () => ({
-      file: { ...FILE, ...options.file },
-      canEdit: false,
-      textDenied: options.textDenied ?? false,
-    })),
+    resolveAccess: vi.fn(async (fileId: string) => {
+      void fileId;
+      return {
+        file: { ...FILE, ...options.file },
+        canEdit: false,
+        textDenied: options.textDenied ?? false,
+      };
+    }),
   };
   const logger = { setContext: vi.fn(), info: vi.fn() };
   const service = new FileTextService(
@@ -89,7 +92,7 @@ function build(
     office as never,
     logger as never,
   );
-  return { service, repo, driver };
+  return { service, repo, driver, office };
 }
 
 describe('FileTextService.extract (#922)', () => {
@@ -179,6 +182,33 @@ describe('FileTextService.extract (#922)', () => {
       code: ErrorCode.RATE_LIMITED,
       httpStatus: 429,
     });
+  });
+
+  it('один сотрудник не занимает оба слота: второй параллельный разбор — 429', async () => {
+    let release!: (value: typeof EXTRACTED) => void;
+    // История вызовов старше этого теста: waitFor должен ждать ИМЕННО наш разбор.
+    extract.mockClear();
+    extract.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const { service, office } = build();
+    office.resolveAccess.mockImplementation(async (fileId: string) => ({
+      file: { ...FILE, id: fileId, key: `files/${fileId}` },
+      canEdit: false,
+      textDenied: false,
+    }));
+    const first = service.extract('file-a', 'u-1');
+    // Дождаться фактического старта разбора: до этого гейт ещё не занят.
+    await vi.waitFor(() => expect(extract).toHaveBeenCalled());
+    await expect(service.extract('file-b', 'u-1')).rejects.toMatchObject({
+      code: ErrorCode.RATE_LIMITED,
+      httpStatus: 429,
+    });
+    release(EXTRACTED);
+    await expect(first).resolves.toBeTruthy();
   });
 
   it('неподдерживаемый формат и таймаут парсера — коды контракта', async () => {

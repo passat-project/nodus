@@ -14,6 +14,7 @@ import { defineTool } from '../tool-definition.js';
 import {
   asArray,
   asTyped,
+  pageItems,
   date,
   entityLink,
   finalize,
@@ -93,7 +94,7 @@ export const lettersListTool = defineTool({
     },
   }),
   project: (data: Paginated<LetterListItem>) => {
-    const rows = asArray(data.items)
+    const rows = pageItems<LetterListItem>(data)
       .map((raw) => letterRow(asTyped<LetterListItem>(raw)))
       .filter((row): row is string => row !== null);
     // Ссылка «Открыть» — у карточки письма (letters.get), не у списка.
