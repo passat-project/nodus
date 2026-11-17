@@ -137,7 +137,7 @@ describe('AssistantEntityLinks: переход в карточку под отв
           tool({ toolId: 'ui.open_entity', href: null }),
           tool({
             toolId: 'ui.open_entity',
-            href: '?cards=task:abc',
+            href: '?cards=task:11111111-1111-4111-8111-111111111111',
             hrefLabel: '№12 Проверить',
           }),
         ]}
@@ -146,7 +146,10 @@ describe('AssistantEntityLinks: переход в карточку под отв
 
     const button = screen.getByRole('button', { name: `${ui.assistant.open}: №12 Проверить` });
     fireEvent.click(button);
-    expect(bridge.openCardViaBridge).toHaveBeenCalledWith({ kind: 'task', id: 'abc' });
+    expect(bridge.openCardViaBridge).toHaveBeenCalledWith({
+      kind: 'task',
+      id: '11111111-1111-4111-8111-111111111111',
+    });
   });
 
   it('пусто — блока нет', () => {
@@ -156,11 +159,12 @@ describe('AssistantEntityLinks: переход в карточку под отв
 });
 
 describe('openCardFromHref: разбор внутреннего адреса', () => {
+  const task = '11111111-1111-4111-8111-111111111111';
+  const project = '22222222-2222-4222-8222-222222222222';
   it.each([
-    ['?cards=task:abc', { kind: 'task', id: 'abc' }],
-    ['/tasks?cards=task:abc', { kind: 'task', id: 'abc' }],
+    [`?cards=task:${task}`, { kind: 'task', id: task }],
     // Последняя карточка стека: предыдущие элементы отбрасываются.
-    ['?cards=project:p1,task:abc', { kind: 'task', id: 'abc' }],
+    [`?cards=project:${project},task:${task}`, { kind: 'task', id: task }],
   ])('%s → %o', (href, expected) => {
     openCardFromHref(href as string);
     expect(bridge.openCardViaBridge).toHaveBeenCalledWith(expected);
@@ -168,10 +172,15 @@ describe('openCardFromHref: разбор внутреннего адреса', (
 
   it.each([
     ['/tasks'], // нет параметра
+    ['/tasks?cards=task:' + task], // абсолютный путь — не адрес ассистента
     ['?cards='], // пусто
     ['?cards=broken'], // нет разделителя kind:id
     ['?cards=:abc'], // пустой вид
     ['?cards=task:'], // пустой id
+    ['?cards=task:abc'], // id не UUID — путь API карточки подставил бы мусор
+    ['?cards=task:../directory/users'], // path traversal
+    [`?cards=admin:${task}`], // вид вне белого списка
+    [`https://evil.example/?cards=task:${task}`], // внешний URL — не карточка
   ])('%s — мост не вызывается', (href) => {
     openCardFromHref(href);
     expect(bridge.openCardViaBridge).not.toHaveBeenCalled();

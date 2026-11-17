@@ -99,6 +99,30 @@ describe('AssistantMarkdown: санитайзер (XSS-векторы не ис�
     expect(bridge.openCardFromHref).toHaveBeenCalledWith(href);
   });
 
+  it('недоверенный href с cards= не считается карточкой: чужой вид, не-UUID, внешний URL', () => {
+    bridge.openCardFromHref.mockClear();
+    for (const href of [
+      '?cards=task:../directory/users',
+      '?cards=admin:11111111-1111-4111-8111-111111111111',
+      'https://evil.example/?cards=task:11111111-1111-4111-8111-111111111111',
+    ]) {
+      render(<AssistantMarkdown text={`[ссылка](${href})`} />);
+      const link = screen.getByRole('link', { name: 'ссылка' });
+      expect(link.getAttribute('target'), href).toBe('_blank');
+      fireEvent.click(link);
+      expect(bridge.openCardFromHref, href).not.toHaveBeenCalled();
+      cleanup();
+    }
+  });
+
+  it('markdown-изображения не рендерятся (нет автозагрузки внешнего URL)', () => {
+    const { container } = render(
+      <AssistantMarkdown text={'![график](https://tracker.example/beacon.png?task=42)'} />,
+    );
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.innerHTML).not.toContain('tracker.example');
+  });
+
   it('внешняя http-ссылка открывается в новой вкладке с noopener', () => {
     render(<AssistantMarkdown text={'Смотри [источник](https://example.com/a)'} />);
     const link = screen.getByRole('link', { name: 'источник' });
