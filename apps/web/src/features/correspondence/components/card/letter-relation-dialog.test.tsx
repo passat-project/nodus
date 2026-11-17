@@ -1,8 +1,10 @@
 ﻿// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { LetterListItem, LetterTreeNode } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
+
+import { ApiError } from '../../../../shared/api-client.js';
 
 const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
@@ -135,5 +137,60 @@ describe('Окно связи: направление (#611)', () => {
     fireEvent.click(screen.getByRole('radio', { name: /Выбранное → этому/ }));
     expect(screen.getByText(ui.letters.relations.addTitle)).toBeTruthy();
     expect(screen.getByRole('button', { name: ui.letters.relations.submit })).toBeTruthy();
+  });
+
+  /** Ответ мутации с ошибкой: окно вызывает свой onError. */
+  function failLastMutation(error: unknown) {
+    const options = mocks.mutate.mock.calls.at(-1)?.[1] as
+      { onError?: (error: unknown) => void } | undefined;
+    act(() => options?.onError?.(error));
+  }
+
+  const alreadyLinked = () =>
+    new ApiError('LETTER_RELATION_INVALID', 'Letter relation is invalid', 422, {
+      reason: 'already_linked',
+    });
+
+  it('в обратном направлении при already_linked объясняет, где заменить связь', () => {
+    mocks.letters = [PICKED];
+    renderDialog();
+    pickLetter();
+    fireEvent.click(screen.getByRole('radio', { name: /Выбранное → этому/ }));
+    fireEvent.click(screen.getByRole('button', { name: ui.letters.relations.submit }));
+
+    failLastMutation(alreadyLinked());
+    expect(screen.getByRole('alert').textContent).toBe(ui.letters.relations.alreadyLinkedTarget);
+  });
+
+  it('в прямом направлении already_linked переводит окно в замену', () => {
+    mocks.letters = [PICKED];
+    renderDialog();
+    pickLetter();
+    fireEvent.click(screen.getByRole('button', { name: ui.letters.relations.submit }));
+
+    failLastMutation(alreadyLinked());
+    expect(screen.getByText(ui.letters.relations.replaceUnknown)).toBeTruthy();
+    expect(screen.getByRole('button', { name: ui.letters.relations.submitReplace })).toBeTruthy();
+  });
+
+  it('прочие ошибки показываются под полем', () => {
+    mocks.letters = [PICKED];
+    renderDialog();
+    pickLetter();
+    fireEvent.click(screen.getByRole('button', { name: ui.letters.relations.submit }));
+
+    failLastMutation(new ApiError('LETTER_RELATION_INVALID', 'cycle', 422, { reason: 'cycle' }));
+    expect(screen.getByRole('alert').textContent).toBe('Связь недопустима');
+  });
+
+  it('снятие выбранного письма возвращает поиск', () => {
+    mocks.letters = [PICKED];
+    renderDialog();
+    pickLetter();
+    expect(screen.queryByRole('option')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: ui.common.remove }));
+    expect(screen.getByRole('option')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: ui.common.remove })).toBeNull();
   });
 });
