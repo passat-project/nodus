@@ -141,9 +141,12 @@ async function discoverIds(base, token) {
   const fileFromAttachments = (attachments) =>
     (attachments ?? []).find(isExtractable)?.fileId ?? null;
   for (const letterId of letterIds) {
-    const file = await grab(`/letters/${letterId}`, (body) =>
-      fileFromAttachments(body?.attachments),
-    );
+    const file = await grab(`/letters/${letterId}`, (body) => {
+      // Конфиденциальные письма ИИ не читает (403 по замыслу, #922):
+      // фикстура смоука — только обычное письмо.
+      if (body?.confidential) return null;
+      return fileFromAttachments(body?.attachments);
+    });
     if (file) {
       ids.file = file;
       break;
