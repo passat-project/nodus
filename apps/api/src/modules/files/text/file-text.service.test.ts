@@ -22,7 +22,13 @@ const errorClass = vi.hoisted(() => {
 });
 
 vi.mock('./file-text.extractors.js', () => ({
-  FILE_TEXT_LIMITS: { maxBytes: 20 * 1024 * 1024, maxPages: 100, maxChars: 60_000 },
+  FILE_TEXT_LIMITS: {
+    maxBytes: 20 * 1024 * 1024,
+    maxPages: 100,
+    maxChars: 60_000,
+    requestsPerMinute: 10,
+    maxConcurrent: 2,
+  },
   FileTextError: errorClass,
   detectAttachmentKind: detect,
   extractAttachmentText: extract,
@@ -51,7 +57,13 @@ const EXTRACTED = {
   scannedPages: [],
 };
 
-function build(options: { cached?: unknown; file?: Partial<typeof FILE> } = {}) {
+function build(
+  options: {
+    cached?: unknown;
+    file?: Partial<typeof FILE>;
+    textDenied?: boolean;
+  } = {},
+) {
   const repo = {
     findTextExtract: vi.fn(async () =>
       options.cached === undefined
@@ -64,7 +76,11 @@ function build(options: { cached?: unknown; file?: Partial<typeof FILE> } = {}) 
     get: vi.fn(async () => Readable.from([Buffer.from('%PDF-1.7\n')])),
   };
   const office = {
-    resolveAccess: vi.fn(async () => ({ file: { ...FILE, ...options.file }, canEdit: false })),
+    resolveAccess: vi.fn(async () => ({
+      file: { ...FILE, ...options.file },
+      canEdit: false,
+      textDenied: options.textDenied ?? false,
+    })),
   };
   const logger = { setContext: vi.fn(), info: vi.fn() };
   const service = new FileTextService(
@@ -132,6 +148,37 @@ describe('FileTextService.extract (#922)', () => {
     const { service, driver } = build({ file: { size: 21 * 1024 * 1024 } });
     await expect(service.extract(FILE.id, 'u-1')).rejects.toMatchObject({ httpStatus: 413 });
     expect(driver.get).not.toHaveBeenCalled();
+  });
+
+  it('конфиденциальное письмо — 403 FILE_TEXT_FORBIDDEN до кэша и парсинга', async () => {
+    const { service, repo, driver } = build({
+      textDenied: true,
+      cached: {
+        pages: [{ page: 1, text: 'Секрет' }],
+        totalPages: 1,
+        chars: 6,
+        truncated: false,
+        scannedPages: [],
+      },
+    });
+    await expect(service.extract(FILE.id, 'u-1')).rejects.toMatchObject({
+      code: ErrorCode.FILE_TEXT_FORBIDDEN,
+      httpStatus: 403,
+    });
+    expect(repo.findTextExtract).not.toHaveBeenCalled();
+    expect(driver.get).not.toHaveBeenCalled();
+  });
+
+  it('лимит извлечений на сотрудника — 429 RATE_LIMITED', async () => {
+    extract.mockResolvedValue(EXTRACTED);
+    const { service } = build();
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await expect(service.extract(FILE.id, 'u-1')).resolves.toBeTruthy();
+    }
+    await expect(service.extract(FILE.id, 'u-1')).rejects.toMatchObject({
+      code: ErrorCode.RATE_LIMITED,
+      httpStatus: 429,
+    });
   });
 
   it('неподдерживаемый формат и таймаут парсера — коды контракта', async () => {

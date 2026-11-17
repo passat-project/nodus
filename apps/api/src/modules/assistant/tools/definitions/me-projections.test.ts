@@ -1,31 +1,49 @@
 import { describe, expect, it } from 'vitest';
+import type { UserListItem } from '@nodus/contracts';
 
 import { meGetTool } from './me.tools.js';
 
 /**
  * me.get (#919): «кто я» — профиль, путь подразделения, руководитель,
- * подчинённые. Проекция — факты для модели, без сырого DTO.
+ * подчинённые. Проекция типизирована контрактом (ADR-0049): фикстуры — полные
+ * `UserListItem`, переименование поля в DTO ломает сборку теста.
  */
 
-const USER = {
+function user(
+  overrides: Partial<UserListItem> & Pick<UserListItem, 'id' | 'displayName'>,
+): UserListItem {
+  return {
+    status: 'active',
+    avatarUrl: null,
+    positionName: null,
+    departmentName: null,
+    email: 'user@example.com',
+    managerId: null,
+    departmentId: null,
+    legalDepartmentId: null,
+    positionId: null,
+    legalPositionId: null,
+    ...overrides,
+  };
+}
+
+const USER = user({
   id: '11111111-1111-4111-8111-111111111111',
   displayName: 'Иванов Иван',
   positionName: 'Главный инженер',
   departmentName: 'Проектный отдел',
   email: 'ivanov@example.com',
-  status: 'active',
-};
+});
 
 describe('me.get: профиль и оргструктура (#919)', () => {
   it('собирает профиль, путь подразделения, руководителя и подчинённых', () => {
     const { text, entity } = meGetTool.project!(
       {
         user: USER,
-        manager: {
-          ...USER,
+        manager: user({
           id: '22222222-2222-4222-8222-222222222222',
           displayName: 'Петров Пётр',
-        },
+        }),
         department: {
           id: '33333333-3333-4333-8333-333333333333',
           name: 'Проектный отдел',
@@ -35,13 +53,13 @@ describe('me.get: профиль и оргструктура (#919)', () => {
           ],
         },
         subordinates: [
-          {
+          user({
             id: '55555555-5555-4555-8555-555555555555',
             displayName: 'Сидоров Сидор',
             positionName: 'Инженер',
             departmentName: 'Проектный отдел',
             email: 'sidorov@example.com',
-          },
+          }),
         ],
         subordinatesTotal: 1,
       },
@@ -61,7 +79,7 @@ describe('me.get: профиль и оргструктура (#919)', () => {
   it('без руководителя и подразделения — честные подписи', () => {
     const { text } = meGetTool.project!(
       {
-        user: { id: USER.id, displayName: 'Иванов Иван' },
+        user: USER,
         manager: null,
         department: null,
         subordinates: [],
@@ -75,6 +93,6 @@ describe('me.get: профиль и оргструктура (#919)', () => {
   });
 
   it('пустой ответ — понятная ошибка без падения', () => {
-    expect(meGetTool.project!({}, {}).text).toBe('Профиль сотрудника недоступен');
+    expect(meGetTool.project!({} as never, {}).text).toBe('Профиль сотрудника недоступен');
   });
 });

@@ -7,7 +7,8 @@ import type { ActionBatchRow } from '../assistant.repository.js';
 /**
  * Продолжение после карточек (#916): старт ровно одного прогона и только
  * когда решены ВСЕ карточки пачки; частичное решение не двигает чат;
- * «Продолжить сейчас» закрывает пачку и упоминает ожидающие.
+ * «Продолжить сейчас» закрывает пачку атомарно (два клика — один прогон);
+ * решение во время печати откладывается до завершения прогона.
  */
 
 const USER: AuthUser = {
@@ -18,12 +19,13 @@ const USER: AuthUser = {
 };
 
 const MESSAGE_ID = '22222222-2222-4222-8222-222222222222';
+const SESSION_ID = '33333333-3333-4333-8333-333333333333';
 
 function batch(overrides: Partial<ActionBatchRow> = {}): ActionBatchRow {
   return {
     id: 'batch-1',
     messageId: MESSAGE_ID,
-    sessionId: '33333333-3333-4333-8333-333333333333',
+    sessionId: SESSION_ID,
     runId: '44444444-4444-4444-8444-444444444444',
     userId: USER.id,
     state: 'open',
@@ -34,25 +36,52 @@ function batch(overrides: Partial<ActionBatchRow> = {}): ActionBatchRow {
   };
 }
 
-function build(options: { batch?: ActionBatchRow | null; pending?: number } = {}) {
+function build(
+  options: {
+    batch?: ActionBatchRow | null;
+    pending?: number;
+    sessionActive?: boolean;
+    claimContinuation?: boolean;
+    claimContinueNow?: boolean;
+  } = {},
+) {
   const repo = {
     findActionBatch: vi.fn(async () => (options.batch === undefined ? batch() : options.batch)),
     countActionsByMessage: vi.fn(async () => ({ total: 3, pending: options.pending ?? 0 })),
     createRun: vi.fn(async () => undefined),
-    claimBatchContinuation: vi.fn(async () => true),
+    claimBatchContinuation: vi.fn(async () => options.claimContinuation ?? true),
     deleteRun: vi.fn(async () => undefined),
-    claimBatchContinueNow: vi.fn(async () => batch({ state: 'closed' })),
+    claimBatchContinueNow: vi.fn(async () => options.claimContinueNow ?? true),
   };
-  const runner = { isActive: vi.fn(() => false), start: vi.fn() };
+  const runner = {
+    isActive: vi.fn(() => false),
+    isSessionActive: vi.fn(() => options.sessionActive ?? false),
+    start: vi.fn(),
+  };
   const flags = { enabledModules: vi.fn(async () => ['tasks']) };
   const logger = { setContext: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  let onFinished: ((sessionId: string) => void) | null = null;
+  const completion = {
+    register: vi.fn((handler: (sessionId: string) => void) => {
+      onFinished = handler;
+      return () => undefined;
+    }),
+    notify: vi.fn(),
+  };
   const service = new AssistantContinuationService(
     repo as never,
     runner as never,
     flags as never,
+    completion as never,
     logger as never,
   );
-  return { service, repo, runner };
+  return {
+    service,
+    repo,
+    runner,
+    completion,
+    finishRun: (sessionId = SESSION_ID) => onFinished?.(sessionId),
+  };
 }
 
 describe('AssistantContinuationService: автопродолжение (#916)', () => {
@@ -63,7 +92,7 @@ describe('AssistantContinuationService: автопродолжение (#916)', 
     expect(repo.createRun).toHaveBeenCalledWith(
       expect.objectContaining({ continuationOfMessageId: MESSAGE_ID, autoExecute: false }),
     );
-    expect(repo.claimBatchContinuation).toHaveBeenCalledWith(MESSAGE_ID, runId);
+    expect(repo.claimBatchContinuation).toHaveBeenCalledWith(MESSAGE_ID, USER.id, runId);
     expect(runner.start).toHaveBeenCalledWith(
       expect.objectContaining({
         runId,
@@ -91,17 +120,36 @@ describe('AssistantContinuationService: автопродолжение (#916)', 
   });
 
   it('гонка решений: пачку продолжил другой запрос — прогон удаляется', async () => {
-    const { service, repo, runner } = build();
-    repo.claimBatchContinuation.mockResolvedValueOnce(false);
+    const { service, repo, runner } = build({ claimContinuation: false });
     expect(await service.afterDecision(USER, 'Bearer token', MESSAGE_ID)).toBeNull();
     expect(repo.deleteRun).toHaveBeenCalled();
     expect(runner.start).not.toHaveBeenCalled();
   });
 
-  it('исходный прогон ещё печатает — автопродолжение не стартует', async () => {
-    const { service, runner } = build();
-    runner.isActive.mockReturnValueOnce(true);
+  it('исходный прогон ещё печатает — продолжение откладывается до завершения', async () => {
+    const { service, runner, finishRun } = build({ sessionActive: true });
     expect(await service.afterDecision(USER, 'Bearer token', MESSAGE_ID)).toBeNull();
+    expect(runner.start).not.toHaveBeenCalled();
+
+    // Прогон завершился: сессия свободна — отложенное продолжение стартует.
+    runner.isSessionActive.mockReturnValue(false);
+    finishRun();
+    await vi.waitFor(() => expect(runner.start).toHaveBeenCalledTimes(1));
+    expect(runner.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authorization: 'Bearer token',
+        continuation: { ofMessageId: MESSAGE_ID, pendingCards: 0 },
+      }),
+    );
+  });
+
+  it('за время печати пачку закрыли новым сообщением — отложенное не стартует', async () => {
+    const { service, repo, runner, finishRun } = build({ sessionActive: true });
+    expect(await service.afterDecision(USER, 'Bearer token', MESSAGE_ID)).toBeNull();
+    repo.findActionBatch.mockResolvedValue(batch({ state: 'closed' }));
+    runner.isSessionActive.mockReturnValue(false);
+    finishRun();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(runner.start).not.toHaveBeenCalled();
   });
 });
@@ -110,7 +158,7 @@ describe('AssistantContinuationService: «Продолжить сейчас» (#
   it('открытая пачка закрывается и агент продолжает с ожидающими карточками', async () => {
     const { service, repo, runner } = build({ pending: 1 });
     const runId = await service.continueNow(USER, 'Bearer token', MESSAGE_ID);
-    expect(repo.claimBatchContinueNow).toHaveBeenCalledWith(MESSAGE_ID);
+    expect(repo.claimBatchContinueNow).toHaveBeenCalledWith(MESSAGE_ID, USER.id, runId);
     expect(runner.start).toHaveBeenCalledWith(
       expect.objectContaining({ continuation: { ofMessageId: MESSAGE_ID, pendingCards: 1 } }),
     );
@@ -125,12 +173,21 @@ describe('AssistantContinuationService: «Продолжить сейчас» (#
     expect(runner.start).not.toHaveBeenCalled();
   });
 
+  it('гонка двух кликов: проигравший удаляет прогон и возвращает прогон победителя', async () => {
+    const { service, repo, runner } = build({ claimContinueNow: false });
+    repo.findActionBatch
+      .mockResolvedValueOnce(batch())
+      .mockResolvedValueOnce(batch({ state: 'closed', continuationRunId: 'run-winner' }));
+    await expect(service.continueNow(USER, 'Bearer token', MESSAGE_ID)).resolves.toBe('run-winner');
+    expect(repo.deleteRun).toHaveBeenCalledTimes(1);
+    expect(runner.start).not.toHaveBeenCalled();
+  });
+
   it('закрытая пачка — конфликт; идущий ответ — конфликт', async () => {
     const closed = build({ batch: batch({ state: 'closed' }) });
     await expect(closed.service.continueNow(USER, 'Bearer token', MESSAGE_ID)).rejects.toThrow();
 
-    const active = build();
-    active.runner.isActive.mockReturnValue(true);
+    const active = build({ sessionActive: true });
     await expect(active.service.continueNow(USER, 'Bearer token', MESSAGE_ID)).rejects.toThrow();
     expect(active.runner.start).not.toHaveBeenCalled();
   });

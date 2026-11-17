@@ -29,7 +29,14 @@ export class AssistantBatchesService {
     await this.requireBatch(user.id, messageId);
     for (const card of await this.repo.findActionsByMessage(user.id, messageId)) {
       if (card.state === 'proposed' || card.state === 'failed') {
-        await this.actions.execute(user.id, card.id, authorization);
+        // Одна карточка не должна останавливать пачку: конфликт состояния
+        // (параллельный клик) виден в итоговых состояниях карточек, а
+        // остальные решения применяются, и продолжение запускается по ним.
+        try {
+          await this.actions.execute(user.id, card.id, authorization);
+        } catch {
+          // состояние карточки уже зафиксировано сервисом действий/БД
+        }
       }
     }
     const continuationRunId = await this.continuation.afterDecision(user, authorization, messageId);
@@ -44,7 +51,11 @@ export class AssistantBatchesService {
     await this.requireBatch(user.id, messageId);
     for (const card of await this.repo.findActionsByMessage(user.id, messageId)) {
       if (card.state === 'proposed' || card.state === 'failed') {
-        await this.actions.cancel(user.id, card.id);
+        try {
+          await this.actions.cancel(user.id, card.id);
+        } catch {
+          // см. executeAll: пачка доводится до конца
+        }
       }
     }
     const continuationRunId = await this.continuation.afterDecision(user, authorization, messageId);

@@ -86,7 +86,11 @@ function BatchBarView({
         </>
       ) : (
         <span className="text-badge opacity-80">
-          {batch.state === 'continued' ? strings.batchWaiting : strings.batchAllDone}
+          {batch.state === 'continued'
+            ? strings.batchContinued
+            : batch.pending > 0
+              ? `${strings.batchClosed} · ${batch.pending} ${strings.batchStillPending}`
+              : strings.batchAllDone}
         </span>
       )}
     </div>

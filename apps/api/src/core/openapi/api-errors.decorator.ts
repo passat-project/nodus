@@ -14,7 +14,7 @@ type ErrorStatus =
 const ERROR_DESCRIPTIONS: Record<ErrorStatus, string> = {
   400: 'Ошибка валидации (VALIDATION_FAILED) или доменного правила',
   401: 'Нет или просрочена аутентификация (UNAUTHENTICATED)',
-  403: 'Недостаточно прав (FORBIDDEN)',
+  403: 'Недостаточно прав (FORBIDDEN); конфиденциальное вложение — FILE_TEXT_FORBIDDEN (#922)',
   404: 'Сущность не найдена или нет доступа (NOT_FOUND)',
   409: 'Конфликт состояния, в т.ч. идемпотентность с иным телом (CONFLICT)',
   410: 'Ресурс больше недоступен (файл в карантине, FILE_QUARANTINED)',

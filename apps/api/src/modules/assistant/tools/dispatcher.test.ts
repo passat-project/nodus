@@ -24,7 +24,16 @@ describe('buildRouterMessages: каталог данными, ответ стр�
 
   it('длинный запрос обрезается, данные портала не подставляются', () => {
     const messages = buildRouterMessages('я'.repeat(5_000), SCREEN, ALL_TOOLS);
-    expect(String(messages[1]!.content).length).toBeLessThan(14_000);
+    // Каталог + ключевые слова (#917) — в пределах контекста диспетчера;
+    // запрос 5 000 знаков не попадает целиком.
+    expect(String(messages[1]!.content).length).toBeLessThan(16_000);
+  });
+
+  it('каталог диспетчера несёт ключевые слова инструмента (#917)', () => {
+    const tool = ALL_TOOLS.find((item) => item.keywords && item.keywords.length > 0)!;
+    const user = String(buildRouterMessages('запрос', SCREEN, [tool])[1]!.content);
+    expect(user).toContain('Ключи:');
+    expect(user).toContain(tool.keywords![0]!);
   });
 });
 

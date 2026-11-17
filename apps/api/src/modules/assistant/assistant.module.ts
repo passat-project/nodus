@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { AgentRunnerService } from './agent/agent-runner.service.js';
 import { AssistantContinuationService } from './agent/continuation.service.js';
+import { RunCompletionNotifier } from './agent/run-completion.js';
 import { AssistantActionsController } from './assistant-actions.controller.js';
 import { AssistantActionsService } from './assistant-actions.service.js';
 import { AssistantBatchesController } from './assistant-batches.controller.js';
@@ -50,6 +51,7 @@ import { ToolExecutorService } from './tools/tool-executor.service.js';
     AssistantActionsService,
     AssistantBatchesService,
     AssistantContinuationService,
+    RunCompletionNotifier,
     AssistantMemoryService,
     AgentRunnerService,
     ToolExecutorService,

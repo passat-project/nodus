@@ -51,7 +51,7 @@ afterEach(() => {
 });
 
 describe('findOpenBatch', () => {
-  it('берёт самую свежую открытую пачку с ожидающими карточками', () => {
+  it('берёт самую свежую открытую пачку, в т.ч. когда все карточки решены', () => {
     const older = message({
       actionBatch: { state: 'open', total: 2, decided: 1, pending: 1 },
     });
@@ -61,7 +61,10 @@ describe('findOpenBatch', () => {
     const pendingNone = message({
       actionBatch: { state: 'open', total: 2, decided: 2, pending: 0 },
     });
-    expect(findOpenBatch([older, closed, pendingNone])?.id).toBe(older.id);
+    // Решения пришли, пока агент печатал: пачка открыта, pending = 0 —
+    // строка «Продолжить сейчас» остаётся запасным путём (#916).
+    expect(findOpenBatch([older, closed, pendingNone])?.id).toBe(pendingNone.id);
+    expect(findOpenBatch([older])?.id).toBe(older.id);
     expect(findOpenBatch([closed])).toBeNull();
     expect(findOpenBatch([])).toBeNull();
   });
@@ -88,6 +91,16 @@ describe('AssistantBatchStrip', () => {
       actionBatch: { state: 'open', total: 2, decided: 1, pending: 1 },
     });
     render(<AssistantBatchStrip messages={[target]} sessionId="s-1" busy={false} />);
+    fireEvent.click(screen.getByRole('button', { name: strings.batchContinue }));
+    expect(mutate).toHaveBeenCalledWith(target.id, expect.any(Object));
+  });
+
+  it('все карточки решены, пачка открыта — «Продолжить сейчас» доступно', () => {
+    const target = message({
+      actionBatch: { state: 'open', total: 2, decided: 2, pending: 0 },
+    });
+    render(<AssistantBatchStrip messages={[target]} sessionId="s-1" busy={false} />);
+    expect(screen.getByText(new RegExp(strings.batchAllDone))).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: strings.batchContinue }));
     expect(mutate).toHaveBeenCalledWith(target.id, expect.any(Object));
   });

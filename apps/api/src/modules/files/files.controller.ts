@@ -13,6 +13,7 @@ import { SignedUrlService } from '../../core/crypto/signed-url.service.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
 import { GetUser } from '../../core/decorators/get-user.decorator.js';
 import { Public } from '../../core/decorators/public.decorator.js';
+import { RequireFeature } from '../../core/decorators/require-feature.decorator.js';
 import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { FilesRepository } from './files.repository.js';
@@ -59,11 +60,14 @@ export class FilesController {
    * Текст вложения для ИИ-агента (#922): PDF с текстовым слоем и DOCX.
    * НЕ по подписи: обычная авторизация сотрудника + резолвер прав контекста
    * (владение, участник беседы, видимое письмо). Текст в лог не пишется.
+   * Маршрут живёт под фичефлагом `assistant` (I10): без ассистента это лишняя
+   * поверхность чтения документов; конфиденциальные письма — 403.
    */
   @Get(':id/text')
+  @RequireFeature('assistant')
   @ApiOperation({ summary: 'Текст вложения (PDF/DOCX) для ответов ассистента' })
   @ApiOkResponse({ standardSchema: fileTextResponseSchema })
-  @ApiErrors(401, 403, 404, 410, 413, 415, 422, 504)
+  @ApiErrors(401, 403, 404, 410, 413, 415, 422, 429, 504)
   text(
     @Param('id', new ZodValidationPipe(z.uuid())) id: string,
     @GetUser() user: AuthUser,

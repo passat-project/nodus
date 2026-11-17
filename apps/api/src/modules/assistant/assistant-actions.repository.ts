@@ -122,40 +122,53 @@ export abstract class AssistantActionsRepository {
    * Атомарный захват автопродолжения: только одна гонка (два последних
    * решения одновременно) получает `true` и запускает прогон.
    */
-  async claimBatchContinuation(messageId: string, continuationRunId: string): Promise<boolean> {
+  async claimBatchContinuation(
+    messageId: string,
+    userId: string,
+    continuationRunId: string,
+  ): Promise<boolean> {
     const result = await this.prisma.assistantActionBatch.updateMany({
-      where: { messageId, state: 'open' },
+      where: { messageId, userId, state: 'open' },
       data: { state: 'continued', continuationRunId },
     });
     return result.count === 1;
   }
 
-  /** «Продолжить сейчас» закрывает пачку; уже продолженная возвращает свой прогон. */
-  async claimBatchContinueNow(messageId: string): Promise<ActionBatchRow | null> {
-    const batch = await this.prisma.assistantActionBatch.findUnique({ where: { messageId } });
-    if (!batch) return null;
-    if (batch.state !== 'open') return mapBatch(batch);
-    await this.prisma.assistantActionBatch.updateMany({
-      where: { messageId, state: 'open' },
-      data: { state: 'closed' },
+  /**
+   * «Продолжить сейчас»: закрывает пачку одной атомарной операцией и сразу
+   * записывает прогон. `false` — пачку уже закрыл другой запрос (повторный
+   * клик/новое сообщение): вызывающий перечитывает состояние и решает,
+   * вернуть существующий прогон или 409. Два параллельных клика не создают
+   * два прогона (I7, #916).
+   */
+  async claimBatchContinueNow(
+    messageId: string,
+    userId: string,
+    continuationRunId: string,
+  ): Promise<boolean> {
+    const result = await this.prisma.assistantActionBatch.updateMany({
+      where: { messageId, userId, state: 'open' },
+      data: { state: 'closed', continuationRunId },
     });
-    const updated = await this.prisma.assistantActionBatch.findUnique({ where: { messageId } });
-    return updated ? mapBatch(updated) : null;
+    return result.count === 1;
   }
 
   /** Новое сообщение сотрудника закрывает открытые пачки сессии (#916, п. 4). */
-  async closeOpenBatches(sessionId: string): Promise<void> {
+  async closeOpenBatches(sessionId: string, userId?: string): Promise<void> {
     await this.prisma.assistantActionBatch.updateMany({
-      where: { sessionId, state: 'open' },
+      where: { sessionId, ...(userId ? { userId } : {}), state: 'open' },
       data: { state: 'closed' },
     });
   }
 
   /** Счётчики карточек пачки: `pending` — ждут решения (proposed/executing). */
-  async countActionsByMessage(messageId: string): Promise<{ total: number; pending: number }> {
+  async countActionsByMessage(
+    messageId: string,
+    userId?: string,
+  ): Promise<{ total: number; pending: number }> {
     const rows = await this.prisma.assistantAction.groupBy({
       by: ['state'],
-      where: { messageId },
+      where: { messageId, ...(userId ? { userId } : {}) },
       _count: { _all: true },
     });
     let total = 0;

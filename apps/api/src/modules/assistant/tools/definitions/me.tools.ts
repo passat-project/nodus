@@ -1,15 +1,18 @@
 import { z } from 'zod';
 
-import { Permission } from '@nodus/contracts';
+import { Permission, type MyOrganization, type UserListItem } from '@nodus/contracts';
 
 import { defineTool } from '../tool-definition.js';
-import { asArray, asRecord, clip, entityLink, finalize, nameOf, str } from '../projections.js';
+import { clip, entityLink, finalize } from '../projections.js';
 
 /**
  * «Кто я» (#919): профиль текущего сотрудника, его руководитель,
  * подразделение с путём от корня и подчинённые. Один read-инструмент поверх
  * одного маршрута `/directory/users/me/organization` — права проверяет API
  * (`directory.read`), чужие данные инструментом не запрашиваются.
+ *
+ * Проекция типизирована контрактом (ADR-0049): переименование поля в
+ * `MyOrganization`/`UserListItem` ломает сборку, а не даёт пустую строку.
  */
 export const meGetTool = defineTool({
   id: 'me.get',
@@ -35,47 +38,35 @@ export const meGetTool = defineTool({
   input: z.object({}),
   api: { method: 'GET', path: '/directory/users/me/organization' },
   build: () => ({ path: '/directory/users/me/organization' }),
-  project: (data) => {
-    const org = asRecord(data);
-    const user = asRecord(org?.user);
-    const id = str(user?.id);
-    if (!org || !user || !id) return { text: 'Профиль сотрудника недоступен' };
-    const path = asArray(asRecord(org.department)?.path)
-      .map((item) => nameOf(asRecord(item)))
-      .filter((name): name is string => Boolean(name));
-    const manager = asRecord(org.manager);
-    const subordinates = asArray(org.subordinates)
-      .map(userLine)
-      .filter((line): line is string => line !== null);
-    const total = Number(org.subordinatesTotal) || subordinates.length;
+  project: (data: MyOrganization) => {
+    const { user, department, manager, subordinates, subordinatesTotal } = data;
+    if (!user?.id) return { text: 'Профиль сотрудника недоступен' };
+    const path = department?.path.map((item) => item.name) ?? [];
     const lines = [
-      `Я: ${userLine(user) ?? nameOf(user) ?? '—'}`,
-      `Подразделение: ${
-        path.length > 0 ? path.join(' → ') : (str(asRecord(org.department)?.name) ?? 'не назначено')
-      }`,
-      `Руководитель: ${manager ? (userLine(manager) ?? nameOf(manager) ?? '—') : 'не назначен'}`,
-      `Подчинённые: ${total}`,
-      ...subordinates.slice(0, 30).map((line, index) => `${index + 1}) ${line}`),
-      total > Math.min(subordinates.length, 30) ? '… список обрезан (много подчинённых)' : null,
+      `Я: ${userLine(user)}`,
+      `Подразделение: ${path.length > 0 ? path.join(' → ') : (department?.name ?? 'не назначено')}`,
+      `Руководитель: ${manager ? userLine(manager) : 'не назначен'}`,
+      `Подчинённые: ${subordinatesTotal}`,
+      ...subordinates.slice(0, 30).map((line, index) => `${index + 1}) ${userLine(line)}`),
+      subordinatesTotal > Math.min(subordinates.length, 30)
+        ? '… список обрезан (много подчинённых)'
+        : null,
     ].filter((line): line is string => line !== null);
     return {
       text: finalize(lines.join('\n')),
-      entity: entityLink('employee', id, nameOf(user) ?? 'Мой профиль'),
+      entity: entityLink('employee', user.id, user.displayName),
     };
   },
 });
 
 /** Одна строка сотрудника: ФИО, должность, подразделение, почта, id. */
-function userLine(raw: unknown): string | null {
-  const user = asRecord(raw);
-  const id = str(user?.id);
-  if (!user || !id) return null;
+function userLine(user: UserListItem): string {
   return [
-    nameOf(user) ?? '—',
-    str(user.positionName) ? `должность: ${clip(str(user.positionName)!, 80)}` : null,
-    str(user.departmentName) ? `подразделение: ${clip(str(user.departmentName)!, 80)}` : null,
-    str(user.email) ? `почта: ${str(user.email)}` : null,
-    `id ${id}`,
+    user.displayName,
+    user.positionName ? `должность: ${clip(user.positionName, 80)}` : null,
+    user.departmentName ? `подразделение: ${clip(user.departmentName, 80)}` : null,
+    user.email ? `почта: ${user.email}` : null,
+    `id ${user.id}`,
   ]
     .filter(Boolean)
     .join(', ');

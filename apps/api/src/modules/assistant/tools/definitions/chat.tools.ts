@@ -117,9 +117,16 @@ export const chatMessagesTool = defineTool({
       if (!message) return null;
       const author = nameOf(message.author) ?? '—';
       const when = dateTime(message.createdAt) ?? '—';
+      // Вложения — имя + fileId: по нему files.extract_text читает PDF/DOCX.
       const attachments = asArray(message.attachments)
-        .map((file) => str(asRecord(file)?.name))
-        .filter(Boolean);
+        .map((file) => {
+          const record = asRecord(file);
+          const name = str(record?.name);
+          if (!name) return null;
+          const fileId = str(record?.fileId);
+          return fileId ? `${name} (fileId ${fileId})` : name;
+        })
+        .filter((file): file is string => file !== null);
       const text = clip(str(message.text) ?? '(без текста)', 300);
       const files = attachments.length > 0 ? ` [вложения: ${attachments.join(', ')}]` : '';
       return `${when} ${author}: ${text}${files}`;

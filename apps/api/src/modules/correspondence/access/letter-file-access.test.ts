@@ -3,9 +3,17 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { LetterFileAccess } from './letter-file-access.js';
 
-const REGISTERED = [{ registeredAt: new Date('2026-10-01T08:00:00.000Z'), deletedAt: null }];
-const UNREGISTERED = [{ registeredAt: null, deletedAt: null }];
-const TOMBSTONE = [{ registeredAt: new Date('2026-10-01T08:00:00.000Z'), deletedAt: new Date() }];
+const REGISTERED = [
+  { registeredAt: new Date('2026-10-01T08:00:00.000Z'), deletedAt: null, confidential: false },
+];
+const UNREGISTERED = [{ registeredAt: null, deletedAt: null, confidential: false }];
+const TOMBSTONE = [
+  {
+    registeredAt: new Date('2026-10-01T08:00:00.000Z'),
+    deletedAt: new Date(),
+    confidential: false,
+  },
+];
 const CONFIDENTIAL = [
   {
     registeredAt: new Date('2026-10-01T08:00:00.000Z'),
@@ -17,7 +25,7 @@ const CONFIDENTIAL = [
   },
 ];
 
-type Row = { registeredAt: Date | null; deletedAt: Date | null };
+type Row = { registeredAt: Date | null; deletedAt: Date | null; confidential?: boolean };
 
 function setup(letters: Row[], permissions: string[]) {
   const repo = { visibilityByFile: vi.fn(async () => letters) };
@@ -32,6 +40,7 @@ describe('LetterFileAccess (#55, B5; #461 конфиденциальность �
       canView: true,
       canEdit: false,
       immutable: true,
+      textDenied: false,
     });
   });
 
@@ -41,29 +50,34 @@ describe('LetterFileAccess (#55, B5; #461 конфиденциальность �
       canView: false,
       canEdit: false,
       deny: true,
+      textDenied: false,
     });
     const registrar = setup(UNREGISTERED, [Permission.CORRESPONDENCE_REGISTER]);
     expect(await registrar.access.check('file-1', 'u1')).toEqual({
       canView: true,
       canEdit: false,
       immutable: true,
+      textDenied: false,
     });
   });
 
   it('конфиденциальное: участник видит, чужой получает ВЕТО (не только false)', async () => {
     const outsider = setup(CONFIDENTIAL, []);
     // deny — чтобы владение файлом (ownerId загрузившего) не обходило круг
-    // участников в движке просмотра офиса.
+    // участников в движке просмотра офиса. textDenied — текст такого письма
+    // не читает ИИ ни при каком режиме (#922, граница эпика #889).
     expect(await outsider.access.check('file-1', 'u1')).toEqual({
       canView: false,
       canEdit: false,
       deny: true,
+      textDenied: true,
     });
     const participant = setup(CONFIDENTIAL, []);
     expect(await participant.access.check('file-1', 'guest')).toEqual({
       canView: true,
       canEdit: false,
       immutable: true,
+      textDenied: true,
     });
     const addressee = setup(CONFIDENTIAL, []);
     expect((await addressee.access.check('file-1', 'addressee'))?.canView).toBe(true);

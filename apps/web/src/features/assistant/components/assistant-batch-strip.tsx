@@ -6,12 +6,17 @@ import { useState } from 'react';
 
 const strings = ui.assistant;
 
-/** Открытая пачка с ожидающими карточками — самая свежая в ленте. */
+/**
+ * Открытая пачка — самая свежая в ленте. Показываем и пачку с `pending = 0`:
+ * все карточки могли решиться, пока агент ещё печатал ответ, — тогда
+ * автопродолжение отложено до конца прогона, а строка остаётся запасным
+ * путём «Продолжить сейчас» (#916).
+ */
 export function findOpenBatch(messages: readonly AssistantMessage[]): AssistantMessage | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]!;
     const batch = message.actionBatch;
-    if (batch && batch.state === 'open' && batch.pending > 0) return message;
+    if (batch && batch.state === 'open') return message;
   }
   return null;
 }
@@ -47,7 +52,7 @@ function BatchStripView({
 }) {
   const continuation = useContinueAssistantBatch(sessionId);
   const [error, setError] = useState<string | null>(null);
-  const { decided, total } = message.actionBatch!;
+  const { decided, total, pending } = message.actionBatch!;
 
   function toCards() {
     document
@@ -65,7 +70,9 @@ function BatchStripView({
   return (
     <div className="flex shrink-0 items-center gap-2 border-t border-border bg-card/60 px-3 py-1.5">
       <span className="min-w-0 flex-1 truncate text-label text-muted-foreground">
-        {strings.batchProgress} {decided} {strings.batchOf} {total}
+        {pending > 0
+          ? `${strings.batchProgress} ${decided} ${strings.batchOf} ${total}`
+          : strings.batchAllDone}
         {error ? <span className="text-destructive"> · {error}</span> : null}
       </span>
       <button

@@ -38,6 +38,9 @@ export class LetterFileAccess implements FileAccessContributor {
     // загрузившего.
     const alive = letters.filter((letter) => letter.deletedAt === null);
     if (alive.length === 0) return { canView: false, canEdit: false, deny: true };
+    // Конфиденциальное вложение не читает ИИ ни при каком режиме (граница
+    // эпика #889): право/участие даёт просмотр в портале, но не текст агенту.
+    const textDenied = alive.some((letter) => letter.confidential);
     const visible = alive.some((letter) =>
       canViewLetter({ id: userId, permissions }, letter, new Set(letter.participants)),
     );
@@ -45,7 +48,7 @@ export class LetterFileAccess implements FileAccessContributor {
     // файл письма, которое ему больше не видно (конфиденциальность, чужой
     // круг участников), — иначе `ownerId` в движке просмотра обходил бы
     // видимость. immutable — тот же капкан для ПРАВКИ (security-ревью #55).
-    if (!visible) return { canView: false, canEdit: false, deny: true };
-    return { canView: true, canEdit: false, immutable: true };
+    if (!visible) return { canView: false, canEdit: false, deny: true, textDenied };
+    return { canView: true, canEdit: false, immutable: true, textDenied };
   }
 }

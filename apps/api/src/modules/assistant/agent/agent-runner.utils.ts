@@ -47,3 +47,14 @@ export function clipPreview(text: string): string {
   const clipped = lines.slice(0, 12).join('\n').trim();
   return clipped.length > 600 ? `${clipped.slice(0, 600).trimEnd()}…` : clipped;
 }
+
+/**
+ * Превью для результатов, текст которых — персональные данные (#922,
+ * ADR-0050): в журнал `assistant_tool_calls.result_preview` и события
+ * прогона уходит ТОЛЬКО первая строка (шапка файла), а не содержимое
+ * документа. Полный текст видит лишь модель в рамках прогона.
+ */
+export function clipSafePreview(text: string): string {
+  const [header = ''] = text.split('\n', 1);
+  return clipPreview(header).slice(0, 240);
+}

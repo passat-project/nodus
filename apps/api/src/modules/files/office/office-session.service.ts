@@ -28,11 +28,12 @@ export class OfficeSessionService {
   ) {}
 
   /** Общий резолвер прав (сессия и список версий): NOT_FOUND прячет чужие
-   *  файлы (не раскрываем существование, как у бесед чата). */
+   *  файлы (не раскрываем существование, как у бесед чата). `textDenied` —
+   *  вето на чтение текста ИИ (конфиденциальное письмо, #922). */
   async resolveAccess(
     fileId: string,
     userId: string,
-  ): Promise<{ file: FileObjectRow; canEdit: boolean }> {
+  ): Promise<{ file: FileObjectRow; canEdit: boolean; textDenied: boolean }> {
     const file = await this.repository.findById(fileId);
     if (!file) throw DomainException.notFound('File not found');
     const isOwner = file.ownerId === userId;
@@ -40,6 +41,7 @@ export class OfficeSessionService {
     let contextCanEdit = false;
     let immutable = false;
     let denied = false;
+    let textDenied = false;
     for (const contributor of this.fileAccess.contributors()) {
       const decision = await contributor.check(fileId, userId);
       if (decision) {
@@ -53,12 +55,15 @@ export class OfficeSessionService {
         // решение другого контекста остаётся в силе — решающий задачи (#433)
         // читает вложение из беседы задачи, не состоя в ней.
         denied ||= decision.deny === true;
+        // Чтение текста ИИ — отдельное вето контекста (#922): конфиденциальное
+        // вложение не читается даже тем, кому письмо видно.
+        textDenied ||= decision.textDenied === true;
       }
     }
     const canView = contextCanView || (isOwner && !denied);
     const canEdit = (contextCanEdit || (isOwner && !denied)) && !immutable;
     if (!canView) throw DomainException.notFound('File not found');
-    return { file, canEdit };
+    return { file, canEdit, textDenied };
   }
 
   /** Список версий (сохранения DS), новые сверху; права те же, что у сессии. */

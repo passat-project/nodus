@@ -39,6 +39,60 @@ vi.mock('mammoth', () => ({
 
 const PDF_BUFFER = Buffer.from('%PDF-1.7\n');
 
+interface ZipEntry {
+  name: string;
+  method?: 0 | 8;
+  data: Buffer;
+  /** Ложный размер в каталоге (бомба с подменой заголовка). */
+  declaredUncompressed?: number;
+}
+
+/** Минимальный ZIP (stored или deflate) — фикстура бюджета DOCX. */
+function zipBuffer(entries: readonly ZipEntry[]): Buffer {
+  const locals: Buffer[] = [];
+  const centrals: Buffer[] = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name, 'utf8');
+    const method = entry.method ?? 0;
+    const uncompressed = entry.declaredUncompressed ?? entry.data.length;
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0, 6);
+    local.writeUInt16LE(method, 8);
+    local.writeUInt32LE(0, 14); // CRC не проверяется бюджетом
+    local.writeUInt32LE(entry.data.length, 18);
+    local.writeUInt32LE(uncompressed, 22);
+    local.writeUInt16LE(name.length, 26);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0, 8);
+    central.writeUInt16LE(method, 10);
+    central.writeUInt32LE(entry.data.length, 20);
+    central.writeUInt32LE(uncompressed, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(offset, 42);
+    locals.push(local, name, entry.data);
+    centrals.push(central, name);
+    offset += 30 + name.length + entry.data.length;
+  }
+  const centralBuffer = Buffer.concat(centrals);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(centralBuffer.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, centralBuffer, eocd]);
+}
+
+const DOCX_BUFFER = zipBuffer([
+  { name: 'word/document.xml', data: Buffer.from('<document>Текст акта</document>') },
+]);
+
 describe('detectAttachmentKind / magicMatches', () => {
   it('PDF и DOCX по mime и расширению; прочее — null', () => {
     expect(detectAttachmentKind('акт.pdf', 'application/octet-stream')).toBe('pdf');
@@ -93,9 +147,46 @@ describe('extractAttachmentText: PDF', () => {
 
 describe('extractAttachmentText: DOCX', () => {
   it('отдаёт текст одной страницей без числа страниц', async () => {
-    const result = await extractAttachmentText(Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00]), 'docx');
+    const result = await extractAttachmentText(DOCX_BUFFER, 'docx');
     expect(result.kind).toBe('docx');
     expect(result.totalPages).toBeNull();
     expect(result.pages).toEqual([{ page: 1, text: 'Текст акта' }]);
+  });
+
+  it('архив без word/document.xml — FILE_TEXT_INVALID', async () => {
+    const broken = zipBuffer([{ name: 'word/styles.xml', data: Buffer.from('<styles/>') }]);
+    await expect(extractAttachmentText(broken, 'docx')).rejects.toMatchObject({
+      code: 'FILE_TEXT_INVALID',
+    });
+  });
+
+  it('ZIP-бомба по заявленному размеру — FILE_TEXT_TOO_LARGE', async () => {
+    const bomb = zipBuffer([
+      {
+        name: 'word/document.xml',
+        data: Buffer.from('<document>Текст</document>'),
+        declaredUncompressed: FILE_TEXT_LIMITS.maxUncompressedBytes + 1,
+      },
+    ]);
+    await expect(extractAttachmentText(bomb, 'docx')).rejects.toMatchObject({
+      code: 'FILE_TEXT_TOO_LARGE',
+    });
+  });
+
+  it('бомба с ложным размером в заголовке — фактическая распаковка под потолком', async () => {
+    const { deflateRawSync } = await import('node:zlib');
+    // 70 МБ нулей сжимаются в ~70 КБ; заголовок врёт, что распакуется 100 байт.
+    const packed = deflateRawSync(Buffer.alloc(70 * 1024 * 1024));
+    const bomb = zipBuffer([
+      {
+        name: 'word/document.xml',
+        method: 8,
+        data: packed,
+        declaredUncompressed: 100,
+      },
+    ]);
+    await expect(extractAttachmentText(bomb, 'docx')).rejects.toMatchObject({
+      code: 'FILE_TEXT_TOO_LARGE',
+    });
   });
 });

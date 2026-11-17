@@ -80,6 +80,9 @@ export const assistantStrings = {
   batchCancelAll: 'Отменить все',
   batchAllDone: 'Все карточки решены',
   batchWaiting: 'Продолжаю…',
+  batchContinued: 'Продолжение запущено',
+  batchClosed: 'Пачка закрыта',
+  batchStillPending: 'ждут решения',
   batchContinuePending: 'Агент продолжит с уже принятыми решениями',
   /** Байпас (ADR-0048): долгое нажатие ≥ 400 мс, состояние видно. */
   bypassTitle: 'Без подтверждений',

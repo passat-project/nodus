@@ -25,6 +25,7 @@ const STATUS_BY_CODE: Record<string, number> = {
   FILE_TEXT_UNSUPPORTED: 415,
   FILE_TEXT_INVALID: 422,
   FILE_TEXT_TIMEOUT: 504,
+  FILE_TEXT_FORBIDDEN: 403,
 };
 
 /**
@@ -32,13 +33,23 @@ const STATUS_BY_CODE: Record<string, number> = {
  *
  * Права — существующий резолвер files (`FileAccessRegistry`): владение,
  * участник беседы, видимое письмо; чужой файл — 404 (существование не
- * раскрываем). Текст ходит только через API от имени сотрудника; кэш —
- * данные портала, при смене версии пересчитывается.
+ * раскрываем). Конфиденциальное письмо — 403 `FILE_TEXT_FORBIDDEN` до кэша и
+ * парсинга: граница эпика #889 «не читается ни при каком режиме». Текст ходит
+ * только через API от имени сотрудника; кэш — данные портала, при смене
+ * версии пересчитывается.
+ *
+ * Нагрузка: кэш не считается, а извлечение ограничено на сотрудника
+ * (`requestsPerMinute`) и на процесс (`maxConcurrent`) — авторизованный
+ * сотрудник не должен класть портал тяжёлыми документами.
  */
 @Injectable()
 export class FileTextService {
   /** Параллельные запросы одного файла не парсят документ дважды. */
   private readonly inflight = new Map<string, Promise<FileTextResponse>>();
+  /** Окна запросов извлечения по сотрудникам (без кэша). */
+  private readonly hits = new Map<string, number[]>();
+  /** Извлечения, реально идущие прямо сейчас (кэш не считается). */
+  private running = 0;
 
   constructor(
     private readonly repo: FilesRepository,
@@ -51,7 +62,17 @@ export class FileTextService {
 
   async extract(fileId: string, userId: string): Promise<FileTextResponse> {
     // 404 для чужих файлов: тот же резолвер, что у просмотра/редактора.
-    const { file } = await this.office.resolveAccess(fileId, userId);
+    const { file, textDenied } = await this.office.resolveAccess(fileId, userId);
+    // Конфиденциальное письмо: отказ ДО кэша — текст не отдаётся ИИ даже
+    // участнику и держателю права просмотра (граница эпика #889).
+    if (textDenied) {
+      throw new DomainException(
+        ErrorCode.FILE_TEXT_FORBIDDEN,
+        'Text of confidential attachment is not available to AI',
+        undefined,
+        403,
+      );
+    }
     if (file.scanStatus === 'infected') {
       throw new DomainException(ErrorCode.FILE_QUARANTINED, 'File is quarantined', undefined, 410);
     }
@@ -68,13 +89,56 @@ export class FileTextService {
     const key = `${file.id}:${file.version}`;
     const existing = this.inflight.get(key);
     if (existing) return existing;
-    const task = this.extractFresh(file)
+    this.assertAllowed(userId);
+    const task = this.track(() => this.extractFresh(file))
       .catch((error: unknown) => {
         throw mapExtractError(error);
       })
       .finally(() => this.inflight.delete(key));
     this.inflight.set(key, task);
     return task;
+  }
+
+  /** Частота на сотрудника и параллелизм процесса: 429 RATE_LIMITED. */
+  private assertAllowed(userId: string): void {
+    if (this.running >= FILE_TEXT_LIMITS.maxConcurrent) {
+      throw new DomainException(
+        ErrorCode.RATE_LIMITED,
+        'Too many concurrent text extractions',
+        undefined,
+        429,
+      );
+    }
+    const now = Date.now();
+    const windowStart = now - 60_000;
+    const recent = (this.hits.get(userId) ?? []).filter((at) => at > windowStart);
+    if (recent.length >= FILE_TEXT_LIMITS.requestsPerMinute) {
+      this.hits.set(userId, recent);
+      throw new DomainException(
+        ErrorCode.RATE_LIMITED,
+        'Too many text extractions per minute',
+        undefined,
+        429,
+      );
+    }
+    recent.push(now);
+    this.hits.set(userId, recent);
+    // Карта не растёт бесконечно: на каждом вызове подчищаем пустые окна.
+    if (this.hits.size > 5_000) {
+      for (const [id, window] of this.hits) {
+        if (window.every((at) => at <= windowStart)) this.hits.delete(id);
+      }
+    }
+  }
+
+  /** Счётчик активных извлечений: уменьшается в любом исходе. */
+  private async track<T>(work: () => Promise<T>): Promise<T> {
+    this.running += 1;
+    try {
+      return await work();
+    } finally {
+      this.running -= 1;
+    }
   }
 
   private async extractFresh(file: FileObjectRow): Promise<FileTextResponse> {

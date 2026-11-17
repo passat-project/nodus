@@ -97,7 +97,7 @@ export class AssistantSessionsService {
     // Новое сообщение = «Продолжить сейчас» (#916, п. 4): открытые пачки
     // закрываются для автопродолжения, карточки остаются рабочими, их
     // состояния уйдут в историю следующего прогона.
-    await this.repo.closeOpenBatches(id);
+    await this.repo.closeOpenBatches(id, user.id);
     const runId = randomUUID();
     await this.repo.createRun({
       id: runId,

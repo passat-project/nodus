@@ -24,10 +24,12 @@ export const ROUTER_MIN_SCORE = 0.15;
 /** Потолок ожидания диспетчера: ответ модели важнее экономии секунды. */
 export const ROUTER_TIMEOUT_MS = 8_000;
 
-/** Один инструмент глазами диспетчера: id, название, модуль, вид, описание. */
+/** Один инструмент глазами диспетчера: id, название, модуль, вид, описание,
+ *  ключевые слова (#917: по ним модель ловит разговорные формулировки). */
 function describe(tool: AssistantToolDefinition): string {
   const kind = tool.kind === 'write' ? 'запись (карточка подтверждения)' : 'чтение';
-  return `- ${tool.id} — ${tool.title} [${tool.module}, ${kind}]: ${clip(tool.description, 200)}`;
+  const keywords = (tool.keywords ?? []).slice(0, 6).join(', ');
+  return `- ${tool.id} — ${tool.title} [${tool.module}, ${kind}]: ${clip(tool.description, 200)}${keywords ? ` Ключи: ${clip(keywords, 160)}.` : ''}`;
 }
 
 /**

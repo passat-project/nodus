@@ -17,12 +17,13 @@ import {
 
 /**
  * Инструменты корреспонденции (#892): реестр писем, карточка, кнопки маршрута,
- * связи-ответы и вложения — ТОЛЬКО МЕТАДАННЫЕ.
+ * связи-ответы и вложения.
  *
- * Границы данных (ADR-0043 п. 8, ADR-0044 п. 5): содержимое вложений не
- * читается — ни `url`, ни `pdfUrl`, ни текст письма. `letters.attachments`
- * отдаёт имя, формат, размер, дату и признак конфиденциальности; это
- * закреплено тестом (attempt чтения файлов невозможен by design).
+ * Границы данных (ADR-0043 п. 8, ADR-0044 п. 5, ADR-0050): подписанные ссылки
+ * (`url`, `pdfUrl`) и тело письма наружу не отдаются. Вложения — метаданные
+ * (имя, формат, размер, роль) + `fileId`: по нему `files.extract_text` читает
+ * текст PDF/DOCX, кроме конфиденциальных писем — их не читает ИИ ни при каком
+ * режиме (граница эпика #889, тест `letters-attachments.test.ts`).
  */
 
 const listInput = z.object({
@@ -123,14 +124,15 @@ export const lettersGetTool = defineTool({
       `Дата регистрации: ${str(letter.regDate) ? date(letter.regDate) : 'не зарегистрировано'}`,
       `Срок ответа: ${str(letter.responseDeadline) ? date(letter.responseDeadline) : 'не задан'}`,
       letter.confidential ? 'Признак: КОНФИДЕНЦИАЛЬНО' : 'Признак: обычное',
-      `Вложений: ${attachments.length} (содержимое не читается, только метаданные)`,
+      `Вложений: ${attachments.length} (PDF/DOCX читает files.extract_text по fileId)`,
       ...attachments
         .slice(0, 10)
         .map((raw) => {
           const file = asRecord(raw);
           if (!file) return null;
           const size = num(file.size);
-          return `— ${str(file.name) ?? 'файл'}, ${str(file.mime) ?? '—'}, ${size ? `${Math.round(size / 1024)} КБ` : 'размер неизвестен'}`;
+          const fileId = str(file.fileId);
+          return `— ${str(file.name) ?? 'файл'}, ${str(file.mime) ?? '—'}, ${size ? `${Math.round(size / 1024)} КБ` : 'размер неизвестен'}${fileId ? `, файл ${fileId}` : ''}`;
         })
         .filter((line): line is string => line !== null),
     ];
@@ -222,7 +224,7 @@ export const lettersAttachmentsTool = defineTool({
   id: 'letters.attachments',
   title: 'Письма: вложения',
   description:
-    'Метаданные вложений письма по id: имя файла, формат (MIME), размер, дата. Содержимое файлов не читается и не показывается — только опись.',
+    'Метаданные вложений письма по id: имя файла, формат (MIME), размер, роль и fileId. Текст PDF/DOCX читается отдельно — files.extract_text по fileId; конфиденциальные письма ассистенту не читаются.',
   keywords: ['вложения', 'файлы', 'документы', 'опись', 'attachments'],
   module: 'letters',
   kind: 'read',
@@ -240,9 +242,10 @@ export const lettersAttachmentsTool = defineTool({
       const file = asRecord(raw);
       if (!file) return null;
       const size = num(file.size);
-      // Форма `letterAttachmentSchema`: name/mime/size/role/inline. Полей
-      // `createdAt`/`confidential` у вложения нет (конфиденциальность — у
-      // письма), поэтому выводим РОЛЬ и inline-признак.
+      const fileId = str(file.fileId);
+      // Форма `letterAttachmentSchema`: name/mime/size/role/inline/fileId.
+      // Подписанные `url`/`pdfUrl` не выводятся — только опись и id файла
+      // для files.extract_text. Конфиденциальность — у письма, не у файла.
       const role =
         str(file.role) === 'main'
           ? 'основной документ'
@@ -256,12 +259,15 @@ export const lettersAttachmentsTool = defineTool({
         str(file.mime) ?? 'формат неизвестен',
         size !== null ? `${Math.round(size / 1024)} КБ` : 'размер неизвестен',
         role,
-      ].join(', ');
+        fileId ? `fileId ${fileId}` : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(', ');
     });
     return {
       text: finalize(
         listBlock(
-          'Вложения письма (только метаданные)',
+          'Вложения письма (метаданные; текст — files.extract_text по fileId)',
           rows.filter((row): row is string => row !== null),
           { maxRows: 30 },
         ),

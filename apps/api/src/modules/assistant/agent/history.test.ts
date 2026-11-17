@@ -160,7 +160,7 @@ describe('сводка карточек в истории (#916)', () => {
     };
   }
 
-  it('состояния решений идут служебным system-сообщением после ответа', () => {
+  it('состояния решений идут служебным блоком в роли user после ответа', () => {
     const history = toLlmHistory([
       message({
         role: 'assistant',
@@ -174,7 +174,10 @@ describe('сводка карточек в истории (#916)', () => {
       }),
     ]);
     const summary = String(history.at(-1)!.content);
-    expect(history.at(-1)!.role).toBe('system');
+    // Сводка содержит управляемые данные портала — авторитет ниже system
+    // (security-ревью 18.11.2026): роль user + явный блок «это данные».
+    expect(history.at(-1)!.role).toBe('user');
+    expect(summary).toContain('СЛУЖЕБНАЯ СВОДКА');
     expect(summary).toContain('assistant_actions');
     expect(summary).toContain('ВЫПОЛНЕНО: Задача №5 создана');
     expect(summary).toContain('ОТМЕНЕНО сотрудником');

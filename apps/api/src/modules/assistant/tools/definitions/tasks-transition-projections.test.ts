@@ -16,9 +16,10 @@ const transition = {
   name: 'Завершить',
   toStageId: '33333333-3333-4333-8333-333333333333',
   toStageName: 'Готово',
-  toStageOutcome: 'completed',
+  toStageOutcome: 'success',
+  canOverride: false,
   blockedBy: [],
-  form: { enabled: true, sections: [{ title: 'Комментарий', kind: 'comment' }] },
+  form: { enabled: true, sections: [{ kind: 'comment', required: false }] },
 };
 
 const ctx = {
@@ -52,11 +53,30 @@ describe('tasks.transitions: доступные переходы (#920)', () => 
     );
     expect(text).toContain('«Завершить» → стадия «Готово»');
     expect(text).toContain(`id ${TRANSITION_ID}`);
-    expect(text).toContain('окно ввода: Комментарий');
-    expect(text).toContain('завершает задачу');
+    expect(text).toContain('окно: Комментарий');
+    expect(text).toContain('завершает задачу (успешно)');
     expect(text).toContain('«Вернуть» → стадия «В работе»');
-    expect(text).toContain('ЕСТЬ ОГРАНИЧЕНИЯ');
+    expect(text).toContain('ограничения: не заполнены обязательные поля: Срок');
     expect(entity).toEqual({ href: `?cards=task:${TASK_ID}`, label: 'Задача' });
+  });
+
+  it('окно: поля и обязательный комментарий — человеческими подписями', () => {
+    const { text } = tasksTransitionsTool.project!(
+      [
+        {
+          ...transition,
+          form: {
+            enabled: true,
+            sections: [
+              { kind: 'fields', fields: [{ key: 'deadline' }, { key: 'cf.abc12345' }] },
+              { kind: 'comment', required: true },
+            ],
+          },
+        },
+      ],
+      { id: TASK_ID },
+    );
+    expect(text).toContain('окно: Поля: Срок, атрибут abc12345; Комментарий (обязательно)');
   });
 
   it('пустой список — честная причина, а не выдуманный переход', () => {
@@ -89,6 +109,34 @@ describe('tasks.transition: выполнение перехода (#920)', () =>
     });
   });
 
+  it('build: поля окна (итог/время/поля), обход гейта с причиной', () => {
+    expect(
+      tasksTransitionTool.build!({
+        id: TASK_ID,
+        transitionId: TRANSITION_ID,
+        form: {
+          result: { text: 'Смонтировано', messageIds: [] },
+          time: { minutes: 30, date: '2026-11-18' },
+          fields: { deadline: '2026-11-20T10:00:00.000Z' },
+        },
+        override: true,
+        reason: 'Согласовано руководителем',
+      }),
+    ).toEqual({
+      method: 'POST',
+      path: `/tasks/${TASK_ID}/transitions/${TRANSITION_ID}`,
+      body: {
+        form: {
+          result: { text: 'Смонтировано', messageIds: [] },
+          time: { minutes: 30, date: '2026-11-18' },
+          fields: { deadline: '2026-11-20T10:00:00.000Z' },
+        },
+        override: true,
+        reason: 'Согласовано руководителем',
+      },
+    });
+  });
+
   it('project: называет задачу и новую стадию из ответа портала', () => {
     const { text, entity } = tasksTransitionTool.project!(
       {
@@ -117,7 +165,8 @@ describe('tasks.transition: выполнение перехода (#920)', () =>
       expect.arrayContaining([
         { label: 'Переход', value: 'Завершить' },
         { label: 'Новая стадия', value: 'Готово' },
-        { label: 'Ограничения', value: 'есть ограничения: checklist_complete' },
+        { label: 'Требует заполнить', value: 'Комментарий' },
+        { label: 'Ограничения', value: 'есть ограничения: не все пункты чек-листа выполнены' },
         { label: 'Комментарий', value: 'Готово' },
       ]),
     );

@@ -30,9 +30,11 @@ import {
   PROVIDER_RETRY_DELAYS_MS,
   addTokens,
   clipPreview,
+  clipSafePreview,
   describeCause,
   parseArgs,
 } from './agent-runner.utils.js';
+import { RunCompletionNotifier } from './run-completion.js';
 import {
   SEARCH_TOOL_ID,
   continuationPrompt,
@@ -44,6 +46,10 @@ import { abortReason, AssistantRunError, failRun, type ActiveRun } from './run-f
 import { buildSystemPrompt, companyToday } from './system-prompt.js';
 
 export { SEARCH_TOOL_ID, continuationPrompt, initialActiveToolIds } from './run-routing.js';
+
+/** Результаты этих инструментов содержат персональные данные документа:
+ *  в журнал прогона идёт только шапка, не текст (#922, ADR-0050). */
+const PRIVATE_PREVIEW_TOOLS: ReadonlySet<string> = new Set(['files.extract_text']);
 
 /** Параметры прогона: всё, что нужно циклу, передаётся явно. */
 export interface RunParams {
@@ -89,6 +95,7 @@ export class AgentRunnerService {
     private readonly actions: AssistantActionsService,
     private readonly memory: AssistantMemoryService,
     private readonly bus: RunBusService,
+    private readonly completion: RunCompletionNotifier,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(AgentRunnerService.name);
@@ -105,6 +112,14 @@ export class AgentRunnerService {
     return this.active.has(runId);
   }
 
+  /** Есть ли в сессии идущий прогон (два прогона одной сессии — конфликт). */
+  isSessionActive(sessionId: string): boolean {
+    for (const run of this.active.values()) {
+      if (run.sessionId === sessionId) return true;
+    }
+    return false;
+  }
+
   /** Отмена сотрудником: откладываем причину, чтобы отличить от таймаута. */
   cancel(runId: string): boolean {
     const run = this.active.get(runId);
@@ -115,7 +130,11 @@ export class AgentRunnerService {
   }
 
   private async execute(params: RunParams): Promise<void> {
-    const active: ActiveRun = { controller: new AbortController(), reason: null };
+    const active: ActiveRun = {
+      controller: new AbortController(),
+      reason: null,
+      sessionId: params.sessionId,
+    };
     this.active.set(params.runId, active);
     const timer = setTimeout(() => {
       active.reason = 'timeout';
@@ -339,6 +358,8 @@ export class AgentRunnerService {
       clearTimeout(timer);
       this.active.delete(params.runId);
       this.bus.close(params.runId);
+      // Сессия свободна: отложенное продолжение пачки (#916) может стартовать.
+      this.completion.notify(params.sessionId);
     }
   }
 
@@ -483,9 +504,13 @@ export class AgentRunnerService {
           const resultText = execution.ok
             ? execution.text
             : `Ошибка (${execution.errorCode}): ${execution.message}`;
+          // Текст вложения не пишется в журнал/аудит: только шапка файла.
+          const resultPreview = PRIVATE_PREVIEW_TOOLS.has(item.call.function.name)
+            ? clipSafePreview(resultText)
+            : clipPreview(resultText);
           await this.repo.finishToolCall(item.toolCallId, {
             status: execution.ok ? 'done' : 'error',
-            resultPreview: clipPreview(resultText),
+            resultPreview,
             durationMs,
             errorCode: execution.ok ? null : execution.errorCode,
             href: execution.ok ? (execution.entity?.href ?? null) : null,
@@ -496,7 +521,7 @@ export class AgentRunnerService {
             toolId: item.call.function.name,
             title: item.humanTitle,
             status: execution.ok ? 'done' : 'error',
-            resultPreview: clipPreview(resultText),
+            resultPreview,
             durationMs,
             errorCode: execution.ok ? null : execution.errorCode,
             href: execution.ok ? (execution.entity?.href ?? null) : null,

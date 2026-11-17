@@ -18,6 +18,7 @@
 | --------------------------------------------------------------- | ------------------ | ------------------------------------------------------- |
 | `GET /users`                                                    | directory.read     | Список: `?cursor=&limit=&search=&departmentId=&status=` |
 | `GET /users/:id`                                                | directory.read     | Карточка сотрудника                                     |
+| `GET /users/me/organization`                                    | directory.read     | «Кто я»: профиль, руководитель, отдел с путём, подчинённые (#919) |
 | `PATCH /users/me`                                               | auth               | Саморедактирование контактного блока                    |
 | `POST/DELETE /users/me/avatar`                                  | auth               | Аватар СВОЕГО профиля: multipart → WebP-дериват (#186)  |
 | `POST /users`, `PATCH /users/:id`, `POST /users/:id/deactivate` | directory.manage   | Управление сотрудниками                                 |

@@ -162,7 +162,7 @@ describe('AssistantRepository: карточки действий (#916)', () => 
 
   it('countActionsByMessage: pending — proposed/executing, прочие только в total', async () => {
     const { repo } = makeRepo();
-    await expect(repo.countActionsByMessage(MESSAGE_ID)).resolves.toEqual({
+    await expect(repo.countActionsByMessage(MESSAGE_ID, USER_ID)).resolves.toEqual({
       total: 3,
       pending: 2,
     });
@@ -197,42 +197,34 @@ describe('AssistantRepository: пачки карточек (#916)', () => {
     expect(await repo.findActionBatch(USER_ID, MESSAGE_ID)).toBeNull();
   });
 
-  it('claimBatchContinuation: только open → continued, гонка получает false', async () => {
+  it('claimBatchContinuation: только open+владелец → continued, гонка получает false', async () => {
     const { repo, prisma } = makeRepo();
-    expect(await repo.claimBatchContinuation(MESSAGE_ID, 'run-2')).toBe(true);
+    expect(await repo.claimBatchContinuation(MESSAGE_ID, USER_ID, 'run-2')).toBe(true);
     expect(prisma.assistantActionBatch.updateMany).toHaveBeenCalledWith({
-      where: { messageId: MESSAGE_ID, state: 'open' },
+      where: { messageId: MESSAGE_ID, userId: USER_ID, state: 'open' },
       data: { state: 'continued', continuationRunId: 'run-2' },
     });
     prisma.assistantActionBatch.updateMany.mockResolvedValueOnce({ count: 0 });
-    expect(await repo.claimBatchContinuation(MESSAGE_ID, 'run-3')).toBe(false);
+    expect(await repo.claimBatchContinuation(MESSAGE_ID, USER_ID, 'run-3')).toBe(false);
   });
 
-  it('claimBatchContinueNow: уже не open — возвращает как есть, open — закрывает', async () => {
+  it('claimBatchContinueNow: атомарно закрывает open и пишет прогон, гонка — false', async () => {
     const { repo, prisma } = makeRepo();
-    const open = await repo.claimBatchContinueNow(MESSAGE_ID);
+    expect(await repo.claimBatchContinueNow(MESSAGE_ID, USER_ID, 'run-2')).toBe(true);
     expect(prisma.assistantActionBatch.updateMany).toHaveBeenCalledWith({
-      where: { messageId: MESSAGE_ID, state: 'open' },
-      data: { state: 'closed' },
+      where: { messageId: MESSAGE_ID, userId: USER_ID, state: 'open' },
+      data: { state: 'closed', continuationRunId: 'run-2' },
     });
-    expect(open?.state).toBe('open');
 
-    prisma.assistantActionBatch.findUnique.mockResolvedValueOnce(
-      batchRow({ state: 'continued', continuationRunId: 'run-2' }),
-    );
-    const continued = await repo.claimBatchContinueNow(MESSAGE_ID);
-    expect(continued).toMatchObject({ state: 'continued', continuationRunId: 'run-2' });
-    expect(prisma.assistantActionBatch.updateMany).toHaveBeenCalledTimes(1);
-
-    prisma.assistantActionBatch.findUnique.mockResolvedValueOnce(null);
-    expect(await repo.claimBatchContinueNow(MESSAGE_ID)).toBeNull();
+    prisma.assistantActionBatch.updateMany.mockResolvedValueOnce({ count: 0 });
+    expect(await repo.claimBatchContinueNow(MESSAGE_ID, USER_ID, 'run-3')).toBe(false);
   });
 
-  it('closeOpenBatches: новое сообщение закрывает открытые пачки сессии', async () => {
+  it('closeOpenBatches: новое сообщение закрывает открытые пачки сессии владельца', async () => {
     const { repo, prisma } = makeRepo();
-    await repo.closeOpenBatches(SESSION_ID);
+    await repo.closeOpenBatches(SESSION_ID, USER_ID);
     expect(prisma.assistantActionBatch.updateMany).toHaveBeenCalledWith({
-      where: { sessionId: SESSION_ID, state: 'open' },
+      where: { sessionId: SESSION_ID, userId: USER_ID, state: 'open' },
       data: { state: 'closed' },
     });
   });

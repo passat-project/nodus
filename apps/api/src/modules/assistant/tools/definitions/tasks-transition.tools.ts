@@ -14,6 +14,12 @@ import {
   num,
   str,
 } from '../projections.js';
+import {
+  OUTCOME_LABELS,
+  blockedSummary,
+  formRequirements,
+  gateLabel,
+} from './transition-projection.js';
 import { field, fieldsOf, shortId } from './write-cards.js';
 
 /**
@@ -21,15 +27,20 @@ import { field, fieldsOf, shortId } from './write-cards.js';
  * Симметрия с письмами: у задач уже был маршрут
  * `POST /tasks/:id/transitions/:transitionId`, но каталог отдавал только
  * `stageId` — модель гадала стадию. Теперь «заверши задачу» идёт через
- * доступный переход (гейты, окно, целевая стадия), запись — карточкой
+ * доступный переход (гейты, окно ввода, целевая стадия), запись — карточкой
  * подтверждения (ADR-0048).
+ *
+ * Окно перехода (#380): `tasks.transitions` отдаёт требования человеческими
+ * подписями (какие поля, обязателен ли комментарий, нужны ли итог/время);
+ * `tasks.transition` принимает эти поля телом `form` — сервер повторно
+ * валидирует состав окна (лишнее/пропущенное обязательное → 422).
  */
 
 export const tasksTransitionsTool = defineTool({
   id: 'tasks.transitions',
   title: 'Задачи: доступные переходы',
   description:
-    'Доступные переходы задачи: id перехода, название, целевая стадия, ограничения и поля окна. Всегда вызывай перед tasks.transition: id перехода не угадывается, а берётся отсюда.',
+    'Доступные переходы задачи: id перехода, название, целевая стадия, ограничения и требования окна (какие поля/комментарий/итог нужны). Всегда вызывай перед tasks.transition: id перехода не угадывается, а берётся отсюда.',
   keywords: [
     'переходы',
     'сменить статус',
@@ -49,16 +60,15 @@ export const tasksTransitionsTool = defineTool({
     const rows = asArray(data).map((raw) => {
       const transition = asTyped<WorkflowTransition>(raw);
       if (!transition?.id || !transition.name) return null;
-      const blocked = asArray(transition.blockedBy).length > 0;
-      const form = asRecord(transition.form);
-      const sections = asArray(form?.sections)
-        .map((section) => str(asRecord(section)?.title) ?? str(asRecord(section)?.kind))
-        .filter((title): title is string => Boolean(title));
+      const blocked = blockedSummary(transition);
+      const requirements = formRequirements(transition.form);
       return [
         `«${transition.name}» → стадия «${transition.toStageName ?? '—'}» (id ${transition.id})`,
-        blocked ? 'ЕСТЬ ОГРАНИЧЕНИЯ' : null,
-        form?.enabled ? `окно ввода: ${sections.join(', ') || 'поля формы'}` : null,
-        transition.toStageOutcome ? 'завершает задачу' : null,
+        requirements ? `окно: ${requirements}` : null,
+        blocked,
+        transition.toStageOutcome
+          ? (OUTCOME_LABELS[transition.toStageOutcome] ?? 'завершает задачу')
+          : null,
       ]
         .filter(Boolean)
         .join(', ');
@@ -80,18 +90,55 @@ export const tasksTransitionsTool = defineTool({
   },
 });
 
+const transitionFormInput = z.object({
+  /** Комментарий перехода (раздел «Комментарий»). */
+  comment: z.string().trim().min(1).max(2_000).optional(),
+  /** Итог задачи (раздел «Итог»): текст и id сообщений-вложений. */
+  result: z
+    .object({
+      text: z.string().trim().max(5_000),
+      messageIds: z.array(z.uuid()).max(50).default([]),
+    })
+    .optional(),
+  /** Трудозатраты (раздел «Время»). */
+  time: z
+    .object({
+      minutes: z.number().int().min(1).max(1_440),
+      date: z.iso.date(),
+      comment: z.string().trim().max(500).optional(),
+    })
+    .optional(),
+  /** Поля карточки (раздел «Поля»): системные и атрибуты `cf.<id>`. */
+  fields: z
+    .object({
+      description: z.string().trim().min(1).max(5_000).optional(),
+      deadline: z.iso.datetime().optional(),
+      assigneeId: z.uuid().optional(),
+      plannedMinutes: z.number().int().min(1).max(100_000).optional(),
+      customFields: z
+        .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]))
+        .optional(),
+    })
+    .optional(),
+});
+
 const transitionInput = z.object({
   id: z.uuid(),
   transitionId: z.uuid(),
-  /** Комментарий перехода — если окно перехода его требует/принимает. */
+  /** Поля окна перехода: сервер валидирует состав (422 при расхождении). */
+  form: transitionFormInput.optional(),
+  /** Короткая форма комментария (совместимость): уходит в `form.comment`. */
   comment: z.string().trim().max(2_000).optional(),
+  /** Обход гейта: только если `tasks.transitions` сказал «можно обойти». */
+  override: z.boolean().optional(),
+  reason: z.string().trim().min(1).max(500).optional(),
 });
 
 export const tasksTransitionTool = defineTool({
   id: 'tasks.transition',
   title: 'Задачи: выполнить переход',
   description:
-    'Выполнить доступный переход задачи по id (из tasks.transitions): смена стадии по маршруту типа. Действие появится карточкой подтверждения; права и ограничения перехода проверяет API.',
+    'Выполнить доступный переход задачи по id (из tasks.transitions): смена стадии по маршруту типа. Обязательные поля окна передавай в form (comment, result.text, time, fields) — сервер валидирует. Действие появится карточкой подтверждения; права и ограничения проверяет API.',
   keywords: [
     'завершить задачу',
     'закрыть задачу',
@@ -106,11 +153,18 @@ export const tasksTransitionTool = defineTool({
   hot: true,
   input: transitionInput,
   api: { method: 'POST', path: '/tasks/:id/transitions/:transitionId' },
-  build: (input) => ({
-    method: 'POST',
-    path: `/tasks/${input.id}/transitions/${input.transitionId}`,
-    body: input.comment ? { form: { comment: input.comment } } : {},
-  }),
+  build: (input) => {
+    const form = formBody(input.form, input.comment);
+    return {
+      method: 'POST',
+      path: `/tasks/${input.id}/transitions/${input.transitionId}`,
+      body: {
+        ...(form ? { form } : {}),
+        ...(input.override === true ? { override: true } : {}),
+        ...(input.reason ? { reason: input.reason } : {}),
+      },
+    };
+  },
   project: (data: ExecuteTransitionResult, input) => {
     const task = asTyped<ExecuteTransitionResult['task']>(asRecord(data)?.task);
     const id = task?.id ?? input.id;
@@ -140,6 +194,9 @@ export const tasksTransitionTool = defineTool({
         readTask(ctx, input.id),
         readTransition(ctx, input.id, input.transitionId),
       ]);
+      const form = input.form;
+      const comment = form?.comment ?? input.comment;
+      const time = form?.time;
       return fieldsOf([
         field(
           'Задача',
@@ -147,7 +204,16 @@ export const tasksTransitionTool = defineTool({
         ),
         field('Переход', transition?.name),
         field('Новая стадия', transition?.toStageName),
-        field('Комментарий', input.comment ? clip(input.comment, 400) : null),
+        field('Требует заполнить', transition?.requirements),
+        field('Итог', form?.result?.text ? clip(form.result.text, 400) : null),
+        field(
+          'Трудозатраты',
+          time
+            ? `${time.minutes} мин, ${time.date}${time.comment ? `, ${time.comment}` : ''}`
+            : null,
+        ),
+        field('Комментарий', comment ? clip(comment, 400) : null),
+        field('Обход гейта', input.reason ? clip(input.reason, 300) : null),
         field('Ограничения', transition?.blocked),
       ]);
     },
@@ -156,13 +222,24 @@ export const tasksTransitionTool = defineTool({
   },
 });
 
+/** Тело `form` без пустых ключей; короткий `comment` уходит в него же. */
+function formBody(
+  form: z.infer<typeof transitionFormInput> | undefined,
+  comment: string | undefined,
+): Record<string, unknown> | null {
+  const body: Record<string, unknown> = { ...(form ?? {}) };
+  if (!body.comment && comment) body.comment = comment;
+  return Object.keys(body).length > 0 ? body : null;
+}
+
 interface TransitionInfo {
   name: string;
   toStageName: string | null;
   blocked: string | null;
+  requirements: string | null;
 }
 
-/** Переход из живого каталога: название, стадия и человеческие ограничения. */
+/** Переход из живого каталога: название, стадия, ограничения и окно. */
 async function readTransition(
   ctx: ToolContext,
   taskId: string,
@@ -173,13 +250,18 @@ async function readTransition(
     for (const raw of rows) {
       const transition = asRecord(raw);
       if (str(transition?.id) !== transitionId) continue;
-      const blocked = asArray(transition?.blockedBy)
-        .map((reason) => str(asRecord(reason)?.kind))
-        .filter((kind): kind is string => Boolean(kind));
+      const typed = asTyped<WorkflowTransition>(transition);
+      const reasons = asArray(transition?.blockedBy)
+        .map((reason) => gateLabel(reason))
+        .filter((label): label is string => label !== null);
       return {
         name: str(transition?.name) ?? 'Переход',
         toStageName: str(transition?.toStageName),
-        blocked: blocked.length > 0 ? `есть ограничения: ${blocked.join(', ')}` : null,
+        blocked:
+          reasons.length > 0
+            ? `есть ограничения: ${reasons.join('; ')}${typed?.canOverride ? ' (можно обойти с причиной)' : ''}`
+            : null,
+        requirements: formRequirements(transition?.form),
       };
     }
   } catch {

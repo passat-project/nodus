@@ -18,6 +18,8 @@ import { isAbortError } from './agent-runner.utils.js';
 export interface ActiveRun {
   controller: AbortController;
   reason: 'user' | 'timeout' | null;
+  /** Сессия нужна завершению прогона: отложенное продолжение (#916). */
+  sessionId: string;
 }
 
 /** Ошибка прогона с кодом для интерфейса (лимит шагов и подобные). */
