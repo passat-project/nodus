@@ -20,6 +20,10 @@ echo "DB: $DB / $EMPTY_DB"
 for dir in $(ls apps/api/prisma/migrations | sort); do
   [ -d "apps/api/prisma/migrations/$dir" ] || continue
   [ "$dir" = "20261125130000_remove_position_deciders" ] && continue
+  # Поздняя миграция #768 снимает колонку positions.is_active, на которой
+  # держатся фикстуры старой модели этого replay — в цепочку не входит:
+  # воспроизводится только эффект #806 на модели своего времени.
+  [ "$dir" = "20261127090000_positions_hard_delete" ] && continue
   "${PG[@]}" -d "$DB" -1 -f - < "apps/api/prisma/migrations/$dir/migration.sql"
   "${PG[@]}" -d "$EMPTY_DB" -1 -f - < "apps/api/prisma/migrations/$dir/migration.sql"
 done

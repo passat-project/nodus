@@ -1,9 +1,9 @@
 # Модуль directory (ядро)
 
-Пользователи, отделы (дерево оргструктуры), должности, роли; карточка сотрудника.
+Пользователи, подразделения (дерево оргструктуры), должности, роли; карточка сотрудника.
 Модель — эпик M2 (#18), требования владельца:
 
-- **Гибкие связи**: `managerId` у сотрудника — подчинённость в пределах группы (ГИП ↔ помощник) без фиктивных отделов.
+- **Гибкие связи**: `managerId` у сотрудника — подчинённость в пределах группы (ГИП ↔ помощник) без фиктивных подразделений.
 - **Двойная структура**: управленческая (`kind=management`) и юридическая (`kind=legal`) пары должность/подразделение — первоклассные справочники (I15), не кастомные поля.
 - **Руководитель и заместитель** у подразделения (`headId`, `deputyId`) — задел под переадресацию при отсутствиях (модуль замещения — позже, схема готова).
 - **Расширяемость профиля**: ядро карточки стабильно; кастомные поля — модуль custom-fields (M10), геймификация/HR — отдельные модули по `user_id`.
@@ -14,26 +14,27 @@
 
 ## Эндпоинты (`/api/v1/directory`)
 
-| Маршрут                                                           | Права              | Назначение                                              |
-| ----------------------------------------------------------------- | ------------------ | ------------------------------------------------------- |
-| `GET /users`                                                      | directory.read     | Список: `?cursor=&limit=&search=&departmentId=&status=` |
-| `GET /users/:id`                                                  | directory.read     | Карточка сотрудника                                     |
-| `PATCH /users/me`                                                 | auth               | Саморедактирование контактного блока                    |
-| `POST/DELETE /users/me/avatar`                                    | auth               | Аватар СВОЕГО профиля: multipart → WebP-дериват (#186)  |
-| `POST /users`, `PATCH /users/:id`, `POST /users/:id/deactivate`   | directory.manage   | Управление сотрудниками                                 |
-| `POST /users/:id/activate`                                        | directory.manage   | Возврат уволенного в работу (AUD-016)                   |
-| `GET /departments/tree?kind=`                                     | directory.read     | Дерево оргструктуры (head/deputy/memberCount)           |
-| `POST/PATCH /departments/:id`, `POST /:id/archive`                | directory.manage   | Управление деревом (защита от циклов)                   |
-| `GET /positions?kind=`, `POST`, `PATCH /:id`, `POST /:id/archive` | read / manage      | Справочник должностей                                   |
-| `GET /roles`, `POST`, `PATCH /:id`, `DELETE /:id`                 | read / role.manage | Роли и состав прав                                      |
-| `PUT/DELETE /roles/:id/permissions/:permission`                   | role.manage        | Точечная выдача/отзыв права (#379, идемпотентно)        |
-| `GET /roles/:id/members`                                          | directory.read     | Состав роли: сотрудники и подразделения                 |
-| `PUT/DELETE /roles/:id/members/users/:userId`                     | role.manage        | Добавить/убрать сотрудника (#379)                       |
-| `PUT/DELETE /roles/:id/members/departments/:departmentId`         | role.manage        | Привязать/отвязать подразделение (#379)                 |
+| Маршрут                                                         | Права              | Назначение                                              |
+| --------------------------------------------------------------- | ------------------ | ------------------------------------------------------- |
+| `GET /users`                                                    | directory.read     | Список: `?cursor=&limit=&search=&departmentId=&status=` |
+| `GET /users/:id`                                                | directory.read     | Карточка сотрудника                                     |
+| `PATCH /users/me`                                               | auth               | Саморедактирование контактного блока                    |
+| `POST/DELETE /users/me/avatar`                                  | auth               | Аватар СВОЕГО профиля: multipart → WebP-дериват (#186)  |
+| `POST /users`, `PATCH /users/:id`, `POST /users/:id/deactivate` | directory.manage   | Управление сотрудниками                                 |
+| `POST /users/:id/activate`                                      | directory.manage   | Возврат уволенного в работу (AUD-016)                   |
+| `GET /departments/tree?kind=`                                   | directory.read     | Дерево оргструктуры (head/deputy/memberCount)           |
+| `POST/PATCH /departments/:id`, `POST /:id/archive`              | directory.manage   | Управление деревом (защита от циклов)                   |
+| `GET /positions?kind=`, `POST`, `PATCH /:id`, `DELETE /:id`     | read / manage      | Справочник должностей                                   |
+| `POST /positions/:id/reassign`                                  | directory.manage   | Перевести всех сотрудников (перед удалением)            |
+| `GET /roles`, `POST`, `PATCH /:id`, `DELETE /:id`               | read / role.manage | Роли и состав прав                                      |
+| `PUT/DELETE /roles/:id/permissions/:permission`                 | role.manage        | Точечная выдача/отзыв права (#379, идемпотентно)        |
+| `GET /roles/:id/members`                                        | directory.read     | Состав роли: сотрудники и подразделения                 |
+| `PUT/DELETE /roles/:id/members/users/:userId`                   | role.manage        | Добавить/убрать сотрудника (#379)                       |
+| `PUT/DELETE /roles/:id/members/departments/:departmentId`       | role.manage        | Привязать/отвязать подразделение (#379)                 |
 
 ## События (outbox, I9)
 
-Все имена — из `DIRECTORY_EVENTS` контрактов (литералов в коде нет): `directory.user.created` / `directory.user.updated` (payload: userId, changedFields) / `directory.user.deactivated` (payload: userId — auth отзывает сессии) / `directory.user.activated` (payload: userId — парное деактивации, подписчиков нет: сессии не восстанавливаются, вход заново; AUD-016); `directory.department.created` / `updated` / `archived`; `directory.position.created` / `updated` / `archived`; `directory.role.created` / `updated` (только `name`/`description`) / `deleted`; `directory.role.permissions_changed` `{roleId, permission, granted}` — по событию на реально изменённое право; `directory.role.members_changed` `{roleId, kind, targetId, added}` — при реальном изменении состава; `directory.role.access_changed` `{roleId, reason: 'membership'|'permissions', userIds}` — у этих сотрудников изменился набор действующих прав (аудитория — прямые участники и сотрудники подразделений роли), auth отзывает их access-токены (#866, AUD-002). Gateway эти события пока не маршрутизирует (подписчиков у клиентов нет — #382).
+Все имена — из `DIRECTORY_EVENTS` контрактов (литералов в коде нет): `directory.user.created` / `directory.user.updated` (payload: userId, changedFields) / `directory.user.deactivated` (payload: userId — auth отзывает сессии) / `directory.user.activated` (payload: userId — парное деактивации, подписчиков нет: сессии не восстанавливаются, вход заново; AUD-016); `directory.department.created` / `updated` / `archived`; `directory.position.created` / `updated` / `archived`; `directory.role.created` / `updated` (только `name`/`description`) / `deleted`; `directory.role.permissions_changed` `{roleId, permission, granted}` — по событию на реально изменённое право; `directory.role.members_changed` `{roleId, kind, targetId, added}` — при реальном изменении состава; `directory.role.access_changed` `{roleId, reason: 'membership'|'permissions', userIds}` — у этих сотрудников изменился набор действующих прав (аудитория — прямые участники и сотрудники подразделений роли), auth отзывает их access-токены (#866, AUD-002). Должности: `position.updated` на переназначении сотрудников несёт `changedFields: ['holders']`, `targetId`, `reassigned` (счётчик) и `userIds` (кого перевели — по счётчику не восстановить кадровые поля, I7); удаление строки — `position.deleted` (`{ positionId, kind, name }` — название в payload, потому что строка исчезает безвозвратно; `position.archived` осталось в каталоге историей). Gateway эти события пока не маршрутизирует (подписчиков у клиентов нет — #382).
 
 ## Правила
 
@@ -41,7 +42,7 @@
 - Email уникален **без учёта регистра** (#321): контракт входа (`emailInputSchema`) приводит адрес к `trim + lower`, БД хранит только нормализованную форму (CHECK `users_email_normalized`), поэтому обычный unique `users.email` регистронезависим; предпроверка → `DIRECTORY_EMAIL_TAKEN` (409).
 - **Частичная правка — только присланные поля** (#492): `updateDepartmentSchema`/`updatePositionSchema` — явные `optional()`-поля без значений по умолчанию (Zod 4 подставляет `.default()` и в необязательные поля, из-за чего `PATCH { name }` затирал родителя, руководителя, вида и порядка). Пустое тело → `400 VALIDATION_FAILED`; `changedFields` события — реально присланные ключи. Страж — `packages/contracts/src/update-schemas.guard.test.ts` (все схемы правки).
 - **Перенос подразделения сериализуется локом дерева** (#544): смена `parentId` и проверка цикла идут в одной транзакции под `pg_advisory_xact_lock(hashtext('nodus:departments:tree'))`; построчный `FOR UPDATE` лочит разные строки и не мешает двум встречным переносам образовать цикл. Тот же приём, что в дереве задач (`TasksRepository.lockTree`); `findParentChain` читает через `tx`. Перенос меняет действующие роли сотрудников поддерева — `directory.role.access_changed` отзывает их access-токены (#866).
-- Архивация вместо удаления: пользователи (status), отделы и должности (isActive), роли — удаляются только несистемные и неназначенные.
+- Архивация вместо удаления: пользователи (status), подразделения (isActive), роли — удаляются только несистемные и неназначенные. **Должность удаляется жёстко** (вердикт 17.11.2026, #768): строка исчезает, имя снова свободно, события `position.deleted`. Перед удалением на должности не должно быть сотрудников → `409 DIRECTORY_POSITION_IN_USE` (`details.reason = 'holders'`, `holders`) — сначала `POST /positions/:id/reassign` переводит ВСЕХ сотрудников своей колонки вида, включая уволенных, на другую должность того же вида (цель проверяется: существует, другой вид запрещён), поэтому висячих ссылок не остаётся. `holders` считается по ОБЕИМ колонкам (`position_id` и `legal_position_id`): при аномальной ссылке не того вида удаление упирается в 409 вместо тихого `SetNull` от FK — такие строки разбираются вручную. Миграция снятия `is_active` делает ранее архивные строки обычными видимыми должностями (держатели сохраняются) — перед выкаткой на живую базу их список снимается и решается судьба. Должность больше не источник решающего (#806), предохранитель маршрутов снят. **Дубли имён**: создание и переименование сравнивают название без учёта регистра → `409 DIRECTORY_POSITION_EXISTS` (`details.positionId`); после удаления имя свободно и создаётся новая строка. Удаление и переназначение берут строки `FOR UPDATE` в порядке id — встречные переназначения не дают дедлок.
 - **Архивация подразделения**: непустой узел (есть активные дети) → `409 CONFLICT` (`details.reason = 'has_children'`) — сначала архивируются/переносятся дети; иначе активные дети archived-родителя выпали бы из дерева вида (#441). Создание ребёнка и перенос под родителя лочат строку родителя (`FOR UPDATE`) — гонка с архивацией закрыта. Роли, привязанные к узлу, перестают действовать — `directory.role.access_changed` отзывает токены сотрудников поддерева (#866).
 - Роли — данные, не код: права из каталога `Permission` контрактов. Права сотрудника считает порт `ROLE_MEMBERSHIP_READER` (прямые роли ∪ роли управленческого подразделения и всех его предков) — единственный источник для входа, refresh и `/auth/me` (#379, ADR-0034).
 - **«Администратор» неизменяем**: `PUT/DELETE …/permissions` и `PATCH` с `permissions` → `409 ROLE_LOCKED`; имя и описание менять можно. Состав роли `admin` — только конкретные сотрудники: подразделение → `409 ROLE_LOCKED` (`details.reason = 'departments'`).
@@ -51,12 +52,12 @@
 - **Удаление роли**: системная → `409 CONFLICT`. Пользовательская удаляется вместе с составом: назначения сотрудникам и привязки подразделений снимаются каскадом (`ON DELETE CASCADE`), люди просто теряют роль — это и есть смысл удаления (решение владельца 26.10; запрет «сначала уберите всех» убран как лишний шаг). Состав фиксируется ДО удаления, после `role.deleted` уходит `role.access_changed` — выданные ранее токены участников отзываются (#866).
 - **Порядок и форма**: `GET /roles` — `isSystem desc, createdAt asc, id asc`, права по алфавиту, счётчики — активные прямые участники и активные подразделения, `preview` — до 4 аватаров. Права вне каталога отфильтровываются: ответ всегда соответствует схеме.
 - **Идемпотентность и сериализация**: каждая мутация — `Idempotency-Key` (core-интерсептор); строка роли берётся `SELECT … FOR UPDATE`, поэтому правки прав, состава и удаление одной роли не теряются при параллельных запросах. Аудит — на каждый вызов (`directory.role.permission_grant|permission_revoke|member_add|member_remove`).
-- **Подразделения в ролях**: `department_roles` (expand-миграция). Роль, привязанная к управленческому подразделению, действует на его сотрудников и сотрудников всех вложенных; юридическая структура не участвует, архивная привязка прав не даёт. Переключателя «только сам отдел» нет — исключения решаются назначением людей.
+- **Подразделения в ролях**: `department_roles` (expand-миграция). Роль, привязанная к управленческому подразделению, действует на его сотрудников и сотрудников всех вложенных; юридическая структура не участвует, архивная привязка прав не даёт. Переключателя «только само подразделение» нет — исключения решаются назначением людей.
 
 ## Лимиты
 
 - Список пользователей — курсорная пагинация ≤ 100 (по умолчанию 50), поиск по ФИО/email.
-- Дерево отделов — целиком (десятки узлов; ленивые уровни — при росте > 1000).
+- Дерево подразделений — целиком (десятки узлов; ленивые уровни — при росте > 1000).
 - Замещение (временный зам с периодом) и календарь отсутствий — отдельный issue эпика M2; таблица замещений появится там.
 
 ## Документация (OpenAPI, I2)

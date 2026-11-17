@@ -20,6 +20,9 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.DIRECTORY_EMAIL_TAKEN]: 'Пользователь с таким email уже существует',
   [ErrorCode.DIRECTORY_REFERENCE_INVALID]:
     'Выбранный объект не существует, неактивен или не подходит по виду структуры',
+  [ErrorCode.DIRECTORY_POSITION_IN_USE]:
+    'Должность используется: сначала переведите сотрудников на другую должность',
+  [ErrorCode.DIRECTORY_POSITION_EXISTS]: 'Должность с таким названием уже есть',
   [ErrorCode.TASK_LAST_STAGE]: 'Единственную стадию удалить нельзя',
   [ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED]: 'Такой переход сейчас недоступен',
   [ErrorCode.WORKFLOW_TRANSITION_BLOCKED]: 'Переход заблокирован: не выполнены условия',

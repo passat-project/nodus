@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type {
   DepartmentNode,
   OrgUnitKind,
@@ -44,11 +44,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /**
- * Создание/правка подразделения (#84): название + руководитель + зам
+ * Создание/правка отдела (#84): название + руководитель + зам
  * (автокомплит сотрудников). Тела — zod-схемы contracts (create/update
  * DepartmentDto), мутации оптимистичны (I4): карточка дерева появляется/
  * меняется до ответа, откат при ошибке. Kind = текущая структура вида:
- * подразделение рождается в ТОЙ структуре, из которой его создали.
+ * отдел рождается в ТОЙ структуре, из которой его создали.
  */
 export function DepartmentDialog({
   open,
@@ -75,6 +75,10 @@ export function DepartmentDialog({
   const [headId, setHeadId] = useState<string | null>(null);
   const [deputyId, setDeputyId] = useState<string | null>(null);
   const [parentDraft, setParentDraft] = useState<string | null>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  // Окно открылось — до первого действия пользователя гасим авто-выделение
+  // текста, которое Radix FocusScope делает, возвращая фокус в поле.
+  const autoSelectGuard = useRef(false);
 
   // Черновик сбрасывается/наполняется на каждом открытии (рендер-тайм, #45).
   const [prevOpen, setPrevOpen] = useState(open);
@@ -100,6 +104,8 @@ export function DepartmentDialog({
   // (сервер дополнительно защищает от циклов).
   const excluded = editing ? collectSubtreeIds(editing) : new Set<string>();
   const parentOptions = departmentOptions.filter((option) => !excluded.has(option.id));
+  // Создание из карточки: родитель задан контекстом — показываем его имя.
+  const parentName = departmentOptions.find((option) => option.id === parentDraft)?.name ?? null;
 
   function submit() {
     if (!valid || pending) return;
@@ -132,6 +138,21 @@ export function DepartmentDialog({
         // (канон окон с заполняемыми данными); закрытие — «Отмена» или Esc.
         showCloseButton={false}
         onInteractOutside={(event) => event.preventDefault()}
+        // Radix ставит фокус первым полем и ВЫДЕЛЯЕТ текст: курсор — «в конце без
+        // выделения», иначе первое нажатие клавиши стирало название (#768).
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          autoSelectGuard.current = true;
+          // Каретку ставим следующим кадром: FocusScope возвращает фокус в поле
+          // с `select()` уже после обработчика (закрытие меню «⋯»).
+          requestAnimationFrame(() => {
+            const input = nameRef.current;
+            if (!input || !input.isConnected) return;
+            input.focus();
+            const end = input.value.length;
+            input.setSelectionRange(end, end);
+          });
+        }}
       >
         <DialogTitle className="text-base font-semibold text-foreground">
           {editing ? ui.employees.editDepartmentTitle : ui.employees.createDepartment}
@@ -139,29 +160,66 @@ export function DepartmentDialog({
         <div className="flex flex-col gap-3">
           <Field label={ui.employees.fieldDepartmentName}>
             <Input
-              autoFocus
+              ref={nameRef}
               value={name}
               onChange={(e) => setName(e.target.value)}
+              onFocus={(event) => {
+                // FocusScope при возврате фокуса в поле зовёт `element.select()`
+                // (уход фокуса из окна при закрытии меню «⋯»): снимаем выделение
+                // следующим кадром, пока пользователь не начал работать.
+                const input = event.currentTarget;
+                if (!autoSelectGuard.current) return;
+                requestAnimationFrame(() => {
+                  if (!autoSelectGuard.current || !input.isConnected) return;
+                  if (input.selectionStart === 0 && input.selectionEnd === input.value.length) {
+                    const end = input.value.length;
+                    input.setSelectionRange(end, end);
+                  }
+                });
+              }}
+              onPointerDown={() => {
+                autoSelectGuard.current = false;
+              }}
+              onKeyDown={() => {
+                autoSelectGuard.current = false;
+              }}
               className="h-8 text-sm"
             />
           </Field>
           <Field label={ui.employees.parentDepartment}>
-            <Select
-              value={parentDraft ?? NO_PARENT}
-              onValueChange={(value) => setParentDraft(value === NO_PARENT ? null : value)}
-            >
-              <SelectTrigger size="sm" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_PARENT}>{ui.employees.noParent}</SelectItem>
-                {parentOptions.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {`${'— '.repeat(option.depth)}${option.name}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {editing ? (
+              <Select
+                value={parentDraft ?? NO_PARENT}
+                onValueChange={(value) => setParentDraft(value === NO_PARENT ? null : value)}
+              >
+                <SelectTrigger size="sm" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  side="bottom"
+                  // Только вниз и с прокруткой: иначе список родителей
+                  // раздувал окно и уезжал вверх за край (вердикт 17.11.2026).
+                  avoidCollisions={false}
+                  className="max-h-60"
+                >
+                  <SelectItem value={NO_PARENT}>{ui.employees.noParent}</SelectItem>
+                  {parentOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              // Создание — родитель задан контекстом (карточка/пустое
+              // состояние): только имя, без выбора и тире уровней (#768).
+              <span className="flex h-8 min-w-0 items-center text-sm text-foreground">
+                <span className="truncate" title={parentName ?? ui.employees.noParent}>
+                  {parentName ?? ui.employees.noParent}
+                </span>
+              </span>
+            )}
           </Field>
           <Field label={ui.employees.fieldHead}>
             <EmployeeCombobox

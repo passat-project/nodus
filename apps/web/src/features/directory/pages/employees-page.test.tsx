@@ -37,6 +37,7 @@ const demo = vi.hoisted(() => {
 
 vi.mock('@tanstack/react-router', () => ({
   useSearch: () => ({}),
+  useNavigate: () => vi.fn(),
   useRouterState: ({ select }: { select: (state: unknown) => unknown }) =>
     select({ location: { pathname: '/directory' } }),
 }));
@@ -52,14 +53,17 @@ vi.mock('../lib/use-header-geometry.js', () => ({
   useHeaderGeometry: () => ({ rootRef: { current: null }, topShift: 0, rowWidth: 1200 }),
 }));
 vi.mock('../../../app/shell/use-card-stack.js', () => ({ useOpenCard: () => vi.fn() }));
+// Страница по умолчанию открывает «Список»: таблица не участвует в проверке
+// счётчика, а её движок требует ResizeObserver в jsdom.
+vi.mock('../../../shared/views/data-table.js', () => ({ DataTable: () => null }));
 vi.mock('../../../shared/auth-store.js', () => ({
   useAuthStore: (selector: (state: { user: null }) => unknown) => selector({ user: null }),
 }));
 // Тяжёлые оверлеи страницы не участвуют в проверке счётчика.
-vi.mock('../components/data-check-dialog.js', () => ({ DataCheckDialog: () => null }));
 vi.mock('../components/department-dialog.js', () => ({ DepartmentDialog: () => null }));
+vi.mock('../components/department-panel.js', () => ({ DepartmentPanel: () => null }));
 vi.mock('../components/invite-dialog.js', () => ({ InviteDialog: () => null }));
-vi.mock('../components/positions-dialog.js', () => ({ PositionsDialog: () => null }));
+vi.mock('../components/positions-panel.js', () => ({ PositionsPanel: () => null }));
 
 afterEach(() => {
   cleanup();

@@ -40,7 +40,7 @@ export const directoryKeys = {
 /**
  * Дерево оргструктуры вида (#84, #540): лес корней DepartmentNode по
  * контрактному пути `/directory/departments/tree` (единая константа
- * `DEPARTMENTS_TREE_PATH`, страж-тест). Вид «Подразделения» и панель рисуются
+ * `DEPARTMENTS_TREE_PATH`, страж-тест). Дерево и панель отдела рисуются
  * из него.
  */
 export function useDepartmentTree(kind: OrgUnitKind) {
@@ -50,7 +50,7 @@ export function useDepartmentTree(kind: OrgUnitKind) {
   });
 }
 
-/** Создание подразделения: оптимистичная вставка узла в дерево вида (I4) —
+/** Создание отдела: оптимистичная вставка узла в дерево вида (I4) —
  *  карточка появляется до ответа, откат при ошибке; имена руководителя/зама
  *  и счётчики доносит инвалидация после ответа. */
 export function useCreateDepartment(kind: OrgUnitKind) {
@@ -89,7 +89,7 @@ export function useCreateDepartment(kind: OrgUnitKind) {
   });
 }
 
-/** Правка подразделения (название/руководитель/зам): оптимистичный патч узла (I4). */
+/** Правка отдела (название/руководитель/зам): оптимистичный патч узла (I4). */
 export function useUpdateDepartment(kind: OrgUnitKind) {
   const queryClient = useQueryClient();
   const key = directoryKeys.departments(kind);
@@ -121,12 +121,12 @@ export function useUserCard(id: string) {
 }
 
 /** Справочник должностей вида (GET /directory/positions?kind=, #441):
- *  выбор должности при правке сотрудника и отчёт «должности без сотрудников».
+ *  источник значений поля «Должность» в карточке и правке сотрудника.
  *  Хук живёт в shared (#433): его использует и редактор маршрутов. */
 export { usePositions } from '../../../shared/api/positions.js';
 
 /** Правка оргструктурных полей сотрудника (#441, право directory.manage):
- *  подразделение, должность, руководитель (свободная ссылка — кейс ГИПов).
+ *  отдел, должность, руководитель (свободная ссылка — кейс ГИПов).
  *  Оптимистичный патч карточки (I4), откат при ошибке, инвалидация дерева и
  *  списков после ответа (имена/счётчики считает сервер). */
 export function useUpdateUser(id: string) {
@@ -184,14 +184,14 @@ export function useActivateUser(id: string) {
   });
 }
 
-/** Должности вида — мутации администратора (#441): создание, переименование,
- *  архивация (I15: удаления нет). Инвалидация справочника и отчёта данных. */
+/** Создание должности вида — мутация администратора (#441, #768). Ошибки
+ *  разбирает диалог создания (дубль названия — подсказкой в поле, остальные —
+ *  тостом), поэтому общий тост здесь не дублируется. */
 export function useCreatePosition(kind: OrgUnitKind) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: CreatePositionDto) =>
       api<Position>('/directory/positions', { method: 'POST', body }),
-    onError: (error) => toastApiError(error),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: [...directoryKeys.all, 'positions', kind] });
       // Список сотрудников несёт денормализованный positionName — освежаем.
@@ -214,10 +214,29 @@ export function useUpdatePosition(kind: OrgUnitKind) {
   });
 }
 
-export function useArchivePosition(kind: OrgUnitKind) {
+/** Удаление должности (#768, право `directory.manage`): сервер отказывает,
+ *  если на должности остались сотрудники (включая уволенных) —
+ *  `DIRECTORY_POSITION_IN_USE`; UI открывает переназначение. */
+export function useDeletePosition(kind: OrgUnitKind) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api<void>(`/directory/positions/${id}/archive`, { method: 'POST' }),
+    mutationFn: (id: string) => api<void>(`/directory/positions/${id}`, { method: 'DELETE' }),
+    // Причина отказа (держатели) разбирается панелью диалогом — общий тост
+    // здесь дублировал бы её.
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: [...directoryKeys.all, 'positions', kind] });
+      void queryClient.invalidateQueries({ queryKey: directoryKeys.users() });
+    },
+  });
+}
+
+/** Переназначение сотрудников должности (включая уволенных) на другую (#768):
+ *  после успеха должность можно удалить — счётчик станет нулевым. */
+export function useReassignPosition(kind: OrgUnitKind) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, targetId }: { id: string; targetId: string }) =>
+      api<void>(`/directory/positions/${id}/reassign`, { method: 'POST', body: { targetId } }),
     onError: (error) => toastApiError(error),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: [...directoryKeys.all, 'positions', kind] });
@@ -226,7 +245,7 @@ export function useArchivePosition(kind: OrgUnitKind) {
   });
 }
 
-/** Архивация подразделения (#441, I15: не удаление): дерево вида рефечится —
+/** Архивация отдела (#441, I15: не удаление): дерево вида рефечится —
  *  поддерево уходит из структуры, история и привязки ролей сохраняются. */
 export function useArchiveDepartment(kind: OrgUnitKind) {
   const queryClient = useQueryClient();
