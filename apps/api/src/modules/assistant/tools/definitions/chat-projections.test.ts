@@ -70,6 +70,20 @@ describe('chat.conversations: беседы сотрудника (#892)', () => {
       query: { scope: 'all', limit: '20' },
     });
   });
+
+  it('личная переписка: scope=direct + имя собеседника, следующая страница по cursor', () => {
+    // Личный чат живёт в общем списке по активности и на большом аккаунте
+    // уходит за первую страницу (живой разбор 17.11: 51 беседа с Анной,
+    // личная — 48-я). Поэтому точечный фильтр и пагинация — не роскошь.
+    expect(chatConversationsTool.build!({ scope: 'direct', search: 'Анна', limit: 20 })).toEqual({
+      path: '/chat/conversations',
+      query: { scope: 'direct', limit: '20', search: 'Анна' },
+    });
+    expect(chatConversationsTool.build!({ scope: 'chats', cursor: 'c2', limit: 20 })).toEqual({
+      path: '/chat/conversations',
+      query: { scope: 'chats', limit: '20', cursor: 'c2' },
+    });
+  });
 });
 
 describe('chat.messages: сообщения беседы (#892)', () => {

@@ -37,8 +37,9 @@ interface ListOpts {
   searchTitle?: string;
   searchUserIds?: string[];
   /** Вкладка мессенджера (#252): chats — люди и каналы, entities — чаты
-   *  задач и писем; all — без фильтра (пикеры, пересылка). */
-  scope?: 'all' | 'chats' | 'entities';
+   *  задач и писем; all — без фильтра (пикеры, пересылка); direct — только
+   *  личные (точечный поиск собеседника, не тонет в списке по активности). */
+  scope?: 'all' | 'chats' | 'entities' | 'direct';
 }
 
 /**
@@ -80,6 +81,10 @@ export class ConversationsRepository {
       conditions.push(Prisma.sql`c.type IN ('task', 'letter')`);
     } else if (opts.scope === 'chats') {
       conditions.push(Prisma.sql`c.type NOT IN ('task', 'letter')`);
+    } else if (opts.scope === 'direct') {
+      // Точечный поиск собеседника: без фильтра личный чат стоит по
+      // активности и на большом аккаунте уходит за первую страницу.
+      conditions.push(Prisma.sql`c.type = 'direct'`);
     }
     // Ось сортировки = выдаваемая last_activity_at (#215: «Избранное» живёт
     // и звёздами) — порядок/курсор совпадают с порядком клиента.

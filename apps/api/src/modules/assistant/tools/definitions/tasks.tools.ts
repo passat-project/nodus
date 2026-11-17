@@ -187,8 +187,8 @@ export const tasksStagesTool = defineTool({
   id: 'tasks.stages',
   title: 'Задачи: стадии',
   description:
-    'Стадии задач со счётчиками: сколько задач и сколько просрочено в каждой. Отвечает на «что горит», «где застряли задачи».',
-  keywords: ['стадии', 'колонки', 'канбан', 'счётчики', 'застряло', 'stages'],
+    'Стадии задач со счётчиками: сколько задач и сколько просрочено в каждой. Отдаёт id стадии — он нужен для смены статуса (tasks.update, stageId). Отвечает на «что горит», «где застряли задачи».',
+  keywords: ['стадии', 'колонки', 'канбан', 'счётчики', 'застряло', 'stages', 'статус'],
   module: 'tasks',
   kind: 'read',
   featureFlag: 'tasks',
@@ -204,7 +204,13 @@ export const tasksStagesTool = defineTool({
       const stage = asRecord(raw);
       if (!stage) return null;
       const name = str(stage.name) ?? '—';
-      return `«${name}»: ${num(stage.count) ?? 0} задач${num(stage.overdueCount) ? `, просрочено ${num(stage.overdueCount)}` : ''}`;
+      const id = str(stage.id);
+      const type = str(stage.typeName);
+      // id стадии — аргумент tasks.update (stageId): без него модель видит
+      // только названия и не может сменить статус (живой отзыв 18.11.2026).
+      const labels = [type ? `тип «${type}»` : null, id ? `id ${id}` : null].filter(Boolean);
+      const suffix = labels.length > 0 ? ` (${labels.join(', ')})` : '';
+      return `«${name}»${suffix}: ${num(stage.count) ?? 0} задач${num(stage.overdueCount) ? `, просрочено ${num(stage.overdueCount)}` : ''}`;
     });
     return {
       text: finalize(

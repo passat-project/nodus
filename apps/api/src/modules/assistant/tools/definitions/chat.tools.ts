@@ -25,7 +25,9 @@ import {
 
 const conversationsInput = z.object({
   search: z.string().trim().min(1).max(128).optional(),
-  scope: z.enum(['all', 'chats', 'entities']).default('all'),
+  scope: z.enum(['all', 'chats', 'entities', 'direct']).default('all'),
+  /** Следующая страница из ответа («… есть следующая страница (cursor)»). */
+  cursor: z.string().trim().min(1).max(512).optional(),
   limit: z.number().int().min(1).max(20).default(20),
 });
 
@@ -33,7 +35,9 @@ export const chatConversationsTool = defineTool({
   id: 'chat.conversations',
   title: 'Мессенджер: беседы',
   description:
-    'Беседы сотрудника: личные, группы, чаты задач и писем. Отдаёт название/участников, тип, последнюю активность, непрочитанные и id для chat.messages.',
+    'Беседы сотрудника: личные, группы, чаты задач и писем. Отдаёт название/участников, тип, последнюю активность, непрочитанные и id для chat.messages. ' +
+    'Для личной переписки с конкретным человеком передай scope=direct и search по имени: без этого фильтра личный чат стоит в общем списке по активности и легко уходит за первую страницу. ' +
+    'Если в ответе «… есть следующая страница (cursor)» — продолжай с параметром cursor.',
   keywords: ['беседы', 'чаты', 'мессенджер', 'переписка', 'непрочитанные', 'conversations'],
   module: 'chat',
   kind: 'read',
@@ -47,6 +51,7 @@ export const chatConversationsTool = defineTool({
       scope: input.scope,
       limit: String(input.limit),
       ...(input.search ? { search: input.search } : {}),
+      ...(input.cursor ? { cursor: input.cursor } : {}),
     },
   }),
   project: (data) => {
