@@ -217,6 +217,7 @@ export class PressService {
       await tx.$executeRawUnsafe('RELEASE SAVEPOINT press_completion');
     } catch (error) {
       await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT press_completion');
+      if (!(error instanceof DomainException)) throw error;
       await this.pressEvents.completionBlocked(tx, task, user.id, round, this.gateReasonsOf(error));
     }
     return null;

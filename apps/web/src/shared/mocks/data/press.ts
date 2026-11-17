@@ -49,6 +49,7 @@ const base = {
   cycle: 1,
   order: 'parallel' as const,
   quorum: { kind: 'all' as const },
+  form: { enabled: false, sections: [] },
 };
 
 const allUsers = Object.values(userIds).filter((id) => id !== userIds.matorin);

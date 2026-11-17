@@ -27,6 +27,7 @@ const press = {
   pressed: 0,
   order: 'parallel' as const,
   quorum: { kind: 'all' as const },
+  form: { enabled: false, sections: [] },
   entries: [
     {
       userId: USER_ID,

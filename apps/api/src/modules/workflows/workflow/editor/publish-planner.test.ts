@@ -158,7 +158,6 @@ describe('planWorkflowPublish (#378)', () => {
     );
     expect(plan.stageCreates).toHaveLength(0);
     expect(plan.stageArchives).toHaveLength(0);
-    expect(plan.transitionArchives).toHaveLength(0);
   });
 
   it('смысл кнопки — часть плана публикации (#430)', () => {

@@ -87,11 +87,19 @@ export function taskNotices(type: string, p: Payload, actorId: string | null): T
       // (ответственный) себе не уведомляется общим правилом add.
       for (const id of ids(p.userIds)) add(id, 'task.press_returned');
       break;
-    case 'task.press_blocked':
-      // Кворум собран, но кнопка не прошла проверки (#434, В1): уведомление
-      // ответственному или автору — без повторного сбора.
-      for (const id of ids(p.audience)) add(id, 'task.press_blocked');
+    case 'task.press_blocked': {
+      // В1: ответственному — «Все сдали, мешает: …». Он мог нажать последним,
+      // поэтому общий фильтр self-notify здесь не применяем.
+      const reasons = Array.isArray(p.reasons)
+        ? p.reasons.filter((reason): reason is string => typeof reason === 'string')
+        : [];
+      const preview =
+        reasons.length > 0 ? `${label} · Все сдали, мешает: ${reasons.join('; ')}` : label;
+      for (const id of ids(p.audience)) {
+        if (id) out.set(id, { userId: id, kind: 'task.press_blocked', preview });
+      }
       break;
+    }
   }
   return [...out.values()];
 }

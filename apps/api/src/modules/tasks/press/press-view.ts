@@ -1,4 +1,9 @@
-import { pressConfigSchema, pressEntryResultSchema, type PressRoundView } from '@nodus/contracts';
+import {
+  pressConfigSchema,
+  pressEntryResultSchema,
+  transitionFormSchema,
+  type PressRoundView,
+} from '@nodus/contracts';
 
 import type { PressRoundRow } from './press.repository.js';
 
@@ -41,6 +46,7 @@ export function pressRoundViewOf(
     pressed: active.filter((entry) => entry.state === 'pressed').length,
     order: config.order,
     quorum: config.quorum,
+    form: transitionFormSchema.parse(round.form),
     entries,
     myEntry,
     canSubmit:

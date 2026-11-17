@@ -129,6 +129,7 @@ describe('TaskActionBar: итог «Отклонена» (#430)', () => {
         pressed: 1,
         total: 2,
         canSubmit: true,
+        entries: [],
       },
     } as unknown as TaskDetail;
     state.transitions = [
@@ -167,6 +168,7 @@ describe('TaskActionBar: слоты панели (решение 16.11.2026)', (
         pressed: 1,
         total: 3,
         canSubmit: true,
+        entries: [],
       },
     } as unknown as TaskDetail;
     state.transitions = [

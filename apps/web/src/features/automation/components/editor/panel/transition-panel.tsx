@@ -265,11 +265,13 @@ export function TransitionPanel({
             onClick={() => onOpenSection('deciders')}
           />
         ) : null}
-        <SectionLink
-          title={ui.automation.press.sectionTitle}
-          summary={summaries.press}
-          onClick={() => onOpenSection('press')}
-        />
+        {category === 'task' ? (
+          <SectionLink
+            title={ui.automation.press.sectionTitle}
+            summary={summaries.press}
+            onClick={() => onOpenSection('press')}
+          />
+        ) : null}
         {category === 'task' ? (
           <SectionLink
             title={ui.automation.panel.sectionConditions}

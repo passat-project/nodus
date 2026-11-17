@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { pressConfigSchema, TASK_EVENTS, type PressRoundView } from '@nodus/contracts';
+import { pressConfigSchema, TASK_EVENTS, ui, type PressRoundView } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
@@ -121,7 +121,7 @@ export class PressRoundsService {
                 userId: entry.userId,
                 order: entry.order,
                 state: 'excluded',
-                returnReason: entry.returnReason ?? 'Снят из сбора',
+                returnReason: entry.returnReason ?? ui.tasks.press.excludedReason,
               };
             }
             // Выбранный начинает заново; невыбранный сохраняет отметку только
@@ -135,7 +135,7 @@ export class PressRoundsService {
                 input: null,
                 result: null,
                 timeEntryId: null,
-                returnReason: 'Возврат в статус',
+                returnReason: ui.tasks.press.returnedReason,
               };
             }
             if (entry.state === 'pressed') {

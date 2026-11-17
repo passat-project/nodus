@@ -1,7 +1,11 @@
 import { z } from 'zod';
 
 import { customFieldKeySchema } from '../custom-fields/custom-field-key.js';
-import { transitionFormInputSchema, type TransitionFormInput } from './transition-form.schemas.js';
+import {
+  transitionFormInputSchema,
+  transitionFormSchema,
+  type TransitionFormInput,
+} from './transition-form.schemas.js';
 import { workflowActorRoleSchema } from './workflow-roles.js';
 
 /**
@@ -126,6 +130,8 @@ export const pressRoundViewSchema = z.object({
   pressed: z.number().int().min(0),
   order: pressOrderSchema,
   quorum: pressQuorumSchema,
+  /** Снимок окна кнопки на старте раунда: сдача проверяется и рисуется по нему. */
+  form: transitionFormSchema,
   entries: z.array(pressEntryViewSchema),
   myEntry: pressEntryViewSchema.nullable(),
   canSubmit: z.boolean(),

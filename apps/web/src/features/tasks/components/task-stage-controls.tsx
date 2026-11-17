@@ -87,6 +87,9 @@ export function TaskActionBar({
   const [pressOpen, setPressOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const press = task.press;
+  const pressedNames = press
+    ? press.entries.filter((entry) => entry.state === 'pressed').map((entry) => entry.displayName)
+    : [];
   const pressTransition = press
     ? (transitions?.find((t) => t.id === press.transitionId) ?? null)
     : null;
@@ -166,6 +169,7 @@ export function TaskActionBar({
             name={t.name}
             pressed={press.pressed}
             total={press.total}
+            participants={pressedNames}
             main={main}
             onPress={openPress}
             onOpenStatuses={() => setAnalyticsOpen(true)}
@@ -212,7 +216,7 @@ export function TaskActionBar({
           {pressTransition ? (
             <PressSubmitDialog
               task={task}
-              transition={pressTransition}
+              transition={{ ...pressTransition, form: press.form }}
               open={pressOpen}
               onClose={() => setPressOpen(false)}
             />
@@ -262,6 +266,7 @@ export function TaskActionBar({
         <TaskPressStatus
           pressed={press.pressed}
           total={press.total}
+          participants={pressedNames}
           onOpenStatuses={() => setAnalyticsOpen(true)}
         />
       ) : null}

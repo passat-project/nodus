@@ -304,9 +304,20 @@ export function PublishDialog({
           </div>
         ) : null}
         {otherError ? (
-          <p role="alert" className="text-sm text-danger">
-            {(error ? errorMessages[error.code as ErrorCode] : undefined) ?? ui.common.saveError}
-          </p>
+          <div role="alert" className="flex flex-col gap-1 text-sm text-danger">
+            <p>{error ? errorMessages[error.code as ErrorCode] : ui.common.saveError}</p>
+            {error?.code === ErrorCode.CONFLICT && Array.isArray(error.details?.tasks) ? (
+              <ul className="list-disc pl-5">
+                <li className="list-none text-muted-foreground">{ui.automation.pressHeldTasks}:</li>
+                {(error.details.tasks as { number: number; title: string }[]).map((task) => (
+                  <li key={`${task.number}-${task.title}`}>
+                    {ui.tasks.press.taskNumberPrefix}
+                    {task.number} · {task.title}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         ) : null}
 
         <div className="flex justify-end gap-2">

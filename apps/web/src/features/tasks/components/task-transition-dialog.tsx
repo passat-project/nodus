@@ -33,6 +33,7 @@ export function windowContextOf(
   task: TaskDetail,
   conversationId: string | null,
   customFieldDefinitions: TransitionWindowContext['customFieldDefinitions'],
+  targetStageId?: string,
 ): TransitionWindowContext {
   return {
     entityId: task.id,
@@ -63,7 +64,9 @@ export function windowContextOf(
     scope: 'entity',
     customFieldDefinitions,
     customFieldRefs: task.customFieldRefs ?? [],
-    ...(task.press?.completed && task.press.entries.length > 0
+    ...(task.press?.completed &&
+    task.press.entries.length > 0 &&
+    targetStageId === task.press.stageId
       ? {
           pressReturn: {
             candidates: task.press.entries
@@ -101,7 +104,9 @@ export function useTransitionRunner(task: TaskDetail, onOpenSubtask?: (id: strin
     const route = routeTransition(t, task.access);
     // Возврат в статус с коллективной кнопкой (#434, В2): даже кнопка без
     // окна спрашивает «кому вернуть» — выбор участников прошлого цикла.
-    const pressReturn = Boolean(task.press?.completed && task.press.entries.length > 0);
+    const pressReturn = Boolean(
+      task.press?.completed && task.press.entries.length > 0 && t.toStageId === task.press.stageId,
+    );
     if (route === 'window' || pressReturn) {
       submit.reset();
       setWindowTransition(t);
@@ -137,7 +142,12 @@ export function useTransitionRunner(task: TaskDetail, onOpenSubtask?: (id: strin
           open
           mode="live"
           transition={windowTransition}
-          context={windowContextOf(task, conversation?.id ?? null, taskDefinitions)}
+          context={windowContextOf(
+            task,
+            conversation?.id ?? null,
+            taskDefinitions,
+            windowTransition.toStageId,
+          )}
           submitting={submit.isPending}
           error={submit.error ? transitionWindowError(submit.error) : null}
           onCancel={closeWindow}

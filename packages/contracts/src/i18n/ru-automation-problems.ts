@@ -67,8 +67,8 @@ export const problemStrings = {
   // Коллективное нажатие (#434).
   press_not_in_category: 'Коллективное нажатие доступно только задачам',
   press_source_empty: 'У коллективной кнопки не выбран ни один источник',
-  press_source_invalid: 'Этот источник сбора не подходит задаче',
-  press_role_not_in_category: 'В источниках сбора роль другой категории процесса',
+  press_source_invalid: 'Этот источник отметок не подходит задаче',
+  press_role_not_in_category: 'В источниках отметок роль другой категории процесса',
   press_field_not_user: 'Источник «Поле» должен быть атрибутом «Сотрудник» или «Сотрудники»',
   press_multiple_per_stage: 'В одном статусе две коллективные кнопки — оставьте одну',
   press_button_invalid:

@@ -146,14 +146,16 @@ export function TransitionWindow({
         : [],
     [variant, transition, effectiveContext, draft, attachmentCount],
   );
-  const canSubmit = effectiveContext
-    ? windowCanSubmit({
-        sections,
-        lines,
-        draft,
-        spentMinutes: effectiveContext.spentMinutes,
-      })
-    : false;
+  const canSubmit =
+    (effectiveContext
+      ? windowCanSubmit({
+          sections,
+          lines,
+          draft,
+          spentMinutes: effectiveContext.spentMinutes,
+        })
+      : false) &&
+    (!effectiveContext?.pressReturn || pressReturnUserIds.length > 0);
   const allOk = lines.every((line) => line.ok);
   const canOverride =
     variant === 'transition' && mode === 'live' && transition.canOverride && !allOk;

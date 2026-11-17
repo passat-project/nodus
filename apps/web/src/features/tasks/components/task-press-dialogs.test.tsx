@@ -58,6 +58,7 @@ const round = (overrides: Partial<PressRoundView> = {}): PressRoundView =>
     pressed: 1,
     order: 'parallel',
     quorum: { kind: 'all' },
+    form: { enabled: false, sections: [] },
     entries: [
       {
         userId: 'u1',
@@ -100,14 +101,14 @@ describe('PressAnalyticsDialog (#434)', () => {
     expect(screen.getAllByRole('checkbox')).toHaveLength(2); // header + Борис
     fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Снять с сбора' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Снять участника' }));
     expect(screen.getByText('Причина снятия')).toBeTruthy();
     expect(screen.getAllByRole('checkbox')).toHaveLength(3); // header + оба
   });
 
   it('снятие: выбор, причина и вызов exclude', () => {
     render(<PressAnalyticsDialog taskId="task-1" press={round()} open onClose={() => void 0} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Снять с сбора' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Снять участника' }));
     fireEvent.click(screen.getAllByRole('checkbox')[2]!);
     fireEvent.change(screen.getByPlaceholderText('Почему участник больше не нужен'), {
       target: { value: 'Уволен' },

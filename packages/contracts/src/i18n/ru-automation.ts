@@ -105,6 +105,7 @@ export const automationStrings = {
   addTransitionLabel: 'Добавить переход',
   problemsChip: 'Проблемы',
   problemsFixFirst: 'Исправьте проблемы:',
+  pressHeldTasks: 'Задачи, которые держат кнопку',
   /** Инспектор статуса. */
   isInitial: 'Начальный статус',
   isInitialHint: 'Новая карточка создаётся в этом статусе',

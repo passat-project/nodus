@@ -10,6 +10,7 @@ import { PressRing } from './task-press.js';
 function PressStatusContent({
   pressed,
   total,
+  participants = [],
   onOpenStatuses,
   onMouseEnter,
   onMouseLeave,
@@ -17,6 +18,7 @@ function PressStatusContent({
 }: {
   pressed: number;
   total: number;
+  participants?: readonly string[];
   onOpenStatuses: () => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -37,6 +39,23 @@ function PressStatusContent({
           {pressed} / {total}
         </span>
       </div>
+      {participants.length > 0 ? (
+        <div className="flex flex-wrap gap-1 px-1.5 pb-1.5">
+          {participants.slice(0, 8).map((name) => (
+            <span
+              key={name}
+              title={name}
+              className="inline-flex size-5 items-center justify-center rounded-full bg-accent text-[10px] font-medium text-foreground"
+            >
+              {name
+                .split(/\s+/)
+                .slice(0, 2)
+                .map((part) => part[0])
+                .join('')}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <Button
         type="button"
         variant="ghost"
@@ -59,10 +78,12 @@ function PressStatusContent({
 export function TaskPressStatus({
   pressed,
   total,
+  participants = [],
   onOpenStatuses,
 }: {
   pressed: number;
   total: number;
+  participants?: readonly string[];
   onOpenStatuses: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -111,6 +132,7 @@ export function TaskPressStatus({
       <PressStatusContent
         pressed={pressed}
         total={total}
+        participants={participants}
         onOpenStatuses={() => {
           setOpen(false);
           onOpenStatuses();
@@ -136,6 +158,7 @@ export function TaskPressButton({
   name,
   pressed,
   total,
+  participants = [],
   main,
   onPress,
   onOpenStatuses,
@@ -143,6 +166,7 @@ export function TaskPressButton({
   name: string;
   pressed: number;
   total: number;
+  participants?: readonly string[];
   main: boolean;
   onPress: () => void;
   onOpenStatuses: () => void;
@@ -211,6 +235,7 @@ export function TaskPressButton({
         <PressStatusContent
           pressed={pressed}
           total={total}
+          participants={participants}
           onOpenStatuses={() => {
             setOpen(false);
             onOpenStatuses();
