@@ -69,6 +69,16 @@ export function assertAllowedEndpoint(raw: string): void {
       'private_address',
     );
   }
+  // Односоставное имя (`https://api/mcp`) резолвится docker/corporate DNS во
+  // внутренний сервис: публичный хост обязан быть полным доменным именем
+  // (находка security-ревью #901).
+  if (!host.includes('.')) {
+    throw new McpError(
+      'Адрес MCP-сервера должен быть полным доменным именем',
+      'transport',
+      'private_address',
+    );
+  }
 }
 
 /**

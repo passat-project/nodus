@@ -162,11 +162,24 @@ describe('McpSettingsService.test', () => {
 });
 
 describe('McpSettingsService.resolveForSearch', () => {
-  it('берёт сервер «по умолчанию», иначе первый включённый; выключенные пропускает', async () => {
-    const disabled = { ...stored, id: '44444444-4444-4444-8444-444444444444', enabled: false };
-    const first = { ...stored, defaultForSearch: false };
-    const resolved = await makeService([disabled, first]).service.resolveForSearch();
-    expect(resolved?.row.id).toBe(first.id);
+  it('берёт только включённый сервер «по умолчанию»; без флага поиска нет', async () => {
+    const disabled = {
+      ...stored,
+      id: '44444444-4444-4444-8444-444444444444',
+      enabled: false,
+      defaultForSearch: true,
+    };
+    const notDefault = { ...stored, defaultForSearch: false };
+    // Fallback «первый включённый» убран: иначе поиск уходил бы на сервер,
+    // который администратор не выбирал (находка security-ревью #901).
+    const noDefault = await makeService([disabled, notDefault]).service.resolveForSearch();
+    expect(noDefault).toBeNull();
+
+    const chosen = await makeService([
+      notDefault,
+      { ...stored, enabled: true, defaultForSearch: true },
+    ]).service.resolveForSearch();
+    expect(chosen?.row.id).toBe(stored.id);
 
     const empty = await makeService([]).service.resolveForSearch();
     expect(empty).toBeNull();

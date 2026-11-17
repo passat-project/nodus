@@ -142,4 +142,42 @@ describe('McpClient: внешние тексты в каталоге и ошиб
     const tools = await client.listTools();
     expect(tools[0]?.description?.length).toBe(1_000);
   });
+
+  it('сигнал прогона обрывает летящий вызов MCP — код aborted', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { id?: number; method?: string };
+      if (body.method === 'initialize') {
+        const frame = `data: {"jsonrpc":"2.0","id":${String(body.id)},"result":{"protocolVersion":"2025-06-18","serverInfo":{"name":"x"}}}\n\n`;
+        return sse([frame]);
+      }
+      if (body.method === 'notifications/initialized') {
+        return new Response(null, { status: 202 });
+      }
+      // Запрос инструмента: сигнал обязан нести отмену прогона, иначе
+      // «Стоп» ждал бы ответа сервера до 20 с (находка reviewer #901).
+      expect(init.signal?.aborted).toBe(true);
+      throw new DOMException('The operation was aborted', 'AbortError');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = new McpClient({ url, apiKey: null });
+    await client.initialize();
+    controller.abort();
+    await expect(
+      client.callTool('web_search_exa', { query: 'x' }, controller.signal),
+    ).rejects.toMatchObject({ code: 'aborted', kind: 'transport' });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('redact вырезает ключ и ставит потолок внешнего текста', () => {
+    const client = new McpClient({ url, apiKey: 'sk-live-secret' });
+    const text = `echo sk-live-secret ${'я'.repeat(500)}`;
+    const safe = client.redact(text);
+    expect(safe).not.toContain('sk-live-secret');
+    expect(safe).toContain('[ключ]');
+    expect(safe.length).toBe(301);
+    expect(client.redact('короткий текст')).toBe('короткий текст');
+    expect(new McpClient({ url, apiKey: null }).redact('sk-live-secret')).toBe('sk-live-secret');
+  });
 });
