@@ -22,6 +22,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '../src/generated/prisma/client.js';
 import { GRANTED_ADMIN_PERMISSIONS } from './all-permissions.js';
 import { seedFormulaWorld } from './seed-formulas.js';
+import { backfillManagerIds } from '../src/modules/directory/manager-derivation.sql.js';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -258,7 +259,6 @@ async function main(): Promise<void> {
     middleName?: string;
     departmentId?: string;
     positionId?: string;
-    managerId?: string;
     roleId: string;
   }) {
     // #132: displayName без отчества («Фамилия Имя») — отчество живёт только
@@ -280,7 +280,6 @@ async function main(): Promise<void> {
         displayName,
         departmentId: data.departmentId ?? null,
         positionId: data.positionId ?? null,
-        managerId: data.managerId ?? null,
       },
     });
     if (!existing && data.generatedPassword) {
@@ -327,9 +326,9 @@ async function main(): Promise<void> {
   }
   const head = pilotRecords[0]!;
   await prisma.department.update({ where: { id: bimGroup.id }, data: { headId: head.id } });
-  for (const member of pilotRecords.slice(1)) {
-    await prisma.user.update({ where: { id: member.id }, data: { managerId: head.id } });
-  }
+  // #923: руководитель — производное поле; после назначения главы отделов
+  // пересчитываем всех тем же правилом, что миграция (сид обходит сервисы).
+  await backfillManagerIds(prisma);
 
   await prisma.featureFlag.upsert({
     where: { key: 'chat' },

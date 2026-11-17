@@ -73,7 +73,6 @@ export const employeesStrings = {
   managerComputedHint: 'Вычисляется из структуры: руководитель подразделения',
   managerComputedTag: 'вычисляется',
   profileSaved: 'Профиль обновлён',
-  adminRole: 'Администратор',
   deactivateEmployee: 'Уволить',
   deactivateTitle: 'Уволить сотрудника?',
   deactivateText:

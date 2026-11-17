@@ -8,13 +8,16 @@
 -- Цепочка предков строится от КАЖДОГО подразделения (даже без главы): иначе
 -- отдел без назначенного главы обрывал бы обход, и сотрудник получал бы null
 -- вместо ближайшего главы выше (найдено интеграционным тестом #923).
+-- Глава архивного узла руководителем НЕ считается (архив выпал из структуры,
+-- как в OrgStructureProvider): члены архивного отдела находят ближайшего
+-- главу в активном предке.
 WITH RECURSIVE
   dept_chain(start_id, current_id, head_id, depth) AS (
-    SELECT d.id, d.id, d.head_id, 0
+    SELECT d.id, d.id, CASE WHEN d.is_active THEN d.head_id END, 0
     FROM departments d
     WHERE d.kind = 'management'
     UNION ALL
-    SELECT c.start_id, p.id, p.head_id, c.depth + 1
+    SELECT c.start_id, p.id, CASE WHEN p.is_active THEN p.head_id END, c.depth + 1
     FROM dept_chain c
     JOIN departments cur ON cur.id = c.current_id
     JOIN departments p ON p.id = cur.parent_id

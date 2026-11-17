@@ -45,7 +45,8 @@ describe('employeeProfileDefs — иконки полей', () => {
       ...base,
       listItem: { managerId: null, positionName: 'Инженер' } as UserListItem,
     }).find((def) => def.key === 'position');
-    expect(filled?.render()).toBeTruthy();
+    const node = filled?.render() as ReactElement<{ className?: string }>;
+    expect(node.props.className).toContain('text-info');
   });
 
   it('руководитель — переход в его карточку стеком (#923)', () => {

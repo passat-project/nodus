@@ -46,9 +46,22 @@ describe('Производный руководитель и профиль (#92
   };
 
   const card = async (id: string) => {
-    const response = await f.api(f.users.employee, 'GET', `/directory/users/${id}`);
+    // Читаем «админским» токеном набора: токены сотрудников после переводов
+    // между отделами законно попадают в стоп-лист (#866: смена подразделения
+    // обесценивает access-токены), а читать карточки в тесте это не мешает.
+    const response = await f.api(f.users.directory, 'GET', `/directory/users/${id}`);
     expect(response.status).toBe(200);
     return userCardSchema.parse(await response.json());
+  };
+
+  const archiveDepartment = async (id: string) => {
+    const response = await f.api(
+      f.users.directory,
+      'POST',
+      `/directory/departments/${id}/archive`,
+      { key: randomUUID() },
+    );
+    expect(response.status).toBe(204);
   };
 
   beforeAll(async () => {
@@ -130,6 +143,27 @@ describe('Производный руководитель и профиль (#92
     expect(parent).toBeTruthy();
   });
 
+  it('архивация отдела: подчинённые находят главу ближайшего активного предка', async () => {
+    const parent = await createDepartment({
+      name: `Архив-родитель ${f.runId}`,
+      kind: 'management',
+      headId: f.users.manager.id,
+    });
+    const child = await createDepartment({
+      name: `Архив-отдел ${f.runId}`,
+      kind: 'management',
+      parentId: parent.id,
+      headId: f.users.directory.id,
+    });
+    await moveEmployee(f.users.employee.id, child.id);
+    expect((await card(f.users.employee.id)).managerId).toBe(f.users.directory.id);
+
+    await archiveDepartment(child.id);
+
+    // Глава архивного узла выпал из структуры — руководитель = глава активного предка.
+    expect((await card(f.users.employee.id)).managerId).toBe(f.users.manager.id);
+  });
+
   it('себя уволить нельзя — 409 DIRECTORY_SELF_DEACTIVATE', async () => {
     const response = await f.api(
       f.users.directory,
@@ -144,7 +178,11 @@ describe('Производный руководитель и профиль (#92
   });
 
   it('self-edit: ФИО правится, структура и HR — отказ 400', async () => {
-    const renamed = await f.api(f.users.employee, 'PATCH', '/directory/users/me', {
+    // Не `employee`: его токен обесценен законным ROLE_ACCESS_CHANGED при
+    // переводе в другой отдел (отзыв access-токенов, #866/#923) — берём
+    // сотрудника, чьи роли в наборе не менялись.
+    const self = f.users.directory;
+    const renamed = await f.api(self, 'PATCH', '/directory/users/me', {
       body: { firstName: 'Переименован' },
       key: randomUUID(),
     });
@@ -154,7 +192,7 @@ describe('Производный руководитель и профиль (#92
     expect(card.displayName).toContain('Переименован');
 
     for (const forbidden of [{ departmentId: departmentIds[0] }, { workRate: 0.5 }]) {
-      const response = await f.api(f.users.employee, 'PATCH', '/directory/users/me', {
+      const response = await f.api(self, 'PATCH', '/directory/users/me', {
         body: forbidden,
         key: randomUUID(),
       });
