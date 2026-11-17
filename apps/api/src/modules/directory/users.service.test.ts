@@ -71,7 +71,7 @@ describe('UsersService: создание и правка сотрудника', 
     findRef: vi.fn(),
   };
   const departments = { findRef: vi.fn() };
-  const positions = { findRef: vi.fn() };
+  const positions = { findRef: vi.fn(), lockMany: vi.fn() };
   const roles = {
     countByIds: vi.fn(),
     permissionsByIds: vi.fn(),

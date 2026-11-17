@@ -54,7 +54,9 @@ export class ReferenceGuard {
     if (department.kind !== kind) this.fail(field, 'kind_mismatch');
   }
 
-  /** Активная должность нужного вида структуры (positionId/legalPositionId). */
+  /** Должность нужного вида структуры (positionId/legalPositionId). Удаление
+   *  строки жёсткое (#768): «неактивных» должностей не бывает — только
+   *  существующие или отсутствующие. */
   async ensurePosition(
     id: string | null | undefined,
     kind: OrgUnitKind,
@@ -64,8 +66,19 @@ export class ReferenceGuard {
     if (id === null || id === undefined) return;
     const position = await this.positions.findRef(id, tx);
     if (!position) this.fail(field, 'not_found');
-    if (!position.isActive) this.fail(field, 'inactive');
     if (position.kind !== kind) this.fail(field, 'kind_mismatch');
+  }
+
+  /** Замки строк должностей перед проверкой ссылок (#768): параллельное
+   *  удаление должности ждёт коммита назначения и затем видит её держателя;
+   *  порядок захватов — по id (`lockMany`), встречные назначения без дедлока. */
+  async lockPositions(
+    ids: ReadonlyArray<string | null | undefined>,
+    tx: TransactionClient,
+  ): Promise<void> {
+    const list = ids.filter((id): id is string => typeof id === 'string');
+    if (list.length === 0) return;
+    await this.positions.lockMany(list, tx);
   }
 
   /** Руководитель сотрудника не может быть им самим (цикл длины 1). */

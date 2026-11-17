@@ -124,22 +124,22 @@ if (mode === 'full') {
     await page.waitForTimeout(700);
   });
 
-  // Сотрудники: журнал + карточка (дефолтный вид — структура, переключаем)
+  // Сотрудники (#768): дефолт — «Список»; структура — отдельной вкладкой.
   await page.goto(`${base}/employees`);
-  await shot('employees-org');
-  await tryStep('employees-list', async () => {
-    await page
-      .getByRole('tab', { name: /Список/ })
-      .or(page.getByText('Список', { exact: true }))
-      .first()
-      .click();
-    await shot('employees-list', 1200);
-  });
+  await shot('employees-list', 1200);
   await tryStep('employee-card', async () => {
     await page.locator('[role="row"]').nth(1).locator('span.truncate').first().click();
     await shot('employee-card', 1600);
     await page.keyboard.press('Escape');
     await page.waitForTimeout(700);
+  });
+  await tryStep('employees-org', async () => {
+    await page
+      .getByRole('tab', { name: /Структура/ })
+      .or(page.getByText('Структура', { exact: true }))
+      .first()
+      .click();
+    await shot('employees-org');
   });
 }
 

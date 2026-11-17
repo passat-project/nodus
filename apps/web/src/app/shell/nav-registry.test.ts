@@ -39,6 +39,19 @@ describe('реестр навигации: вкладка «Права дост�
     // строкой `...accessTab('tasks')`, пока её нет (скоуп #379: «Автоматизация»).
     expect(tasks.tabs.map((tab) => tab.id)).not.toContain('access');
   });
+
+  it('«Сотрудники»: «Список» — дефолт, «Структура» — по view (#768)', () => {
+    const employees = NAV_MODULES.find((module) => module.id === 'employees')!;
+    expect(employees.tabs.map((tab) => tab.id)).toEqual(['list', 'structure']);
+    const list = employees.tabs[0]!;
+    const structure = employees.tabs[1]!;
+    expect(list.isActive(new URLSearchParams(''), [])).toBe(true);
+    expect(list.isActive(new URLSearchParams('view=settings'), [])).toBe(true);
+    expect(list.isActive(new URLSearchParams('view=structure'), [])).toBe(false);
+    expect(structure.isActive(new URLSearchParams('view=structure'), [])).toBe(true);
+    expect(structure.isActive(new URLSearchParams('view=divisions'), [])).toBe(true);
+    expect(structure.isActive(new URLSearchParams(''), [])).toBe(false);
+  });
 });
 
 describe('портфели — папки журнала «Проекты» (#559)', () => {

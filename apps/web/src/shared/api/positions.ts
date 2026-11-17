@@ -15,7 +15,7 @@ export const positionsKeys = {
   kind: (kind: OrgUnitKind) => [...positionsKeys.all, kind] as const,
 };
 
-/** Должности одного вида (management/legal), включая архивные при запросе. */
+/** Должности одного вида (management/legal): архива у справочника нет (#768). */
 export function usePositions(kind: OrgUnitKind) {
   return useQuery({
     queryKey: positionsKeys.kind(kind),

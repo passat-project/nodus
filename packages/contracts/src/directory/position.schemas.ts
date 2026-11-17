@@ -5,7 +5,8 @@ import { orgUnitKindSchema } from './department.schemas.js';
 /**
  * Должности (directory.Position) — плоский справочник с kind:
  * management (управленческая, видна в интерфейсе) и legal (юридическая,
- * по трудовой книжке). Удаления нет — только архивация (isActive, I15).
+ * по трудовой книжке). Удаление жёсткое (вердикт 17.11.2026): имени нет —
+ * строки нет; держатели предварительно переназначаются.
  */
 
 export const positionSchema = z.object({
@@ -13,7 +14,6 @@ export const positionSchema = z.object({
   name: z.string().min(1),
   kind: orgUnitKindSchema,
   sortOrder: z.number().int(),
-  isActive: z.boolean(),
 });
 
 export type Position = z.infer<typeof positionSchema>;
@@ -42,3 +42,16 @@ export const updatePositionSchema = z
   .refine((value) => Object.keys(value).length > 0, { message: 'at least one field required' });
 
 export type UpdatePositionDto = z.infer<typeof updatePositionSchema>;
+
+/**
+ * Переназначение сотрудников должности (#768): ВСЕ сотрудники, включая
+ * уволенных, переводятся на другую активную должность того же вида —
+ * отдельного архива должностей у уволенных нет, после переназначения на
+ * прежнюю должность не ссылается никто и её можно удалить.
+ * Целевая должность — не та же самая (проверка на сервере).
+ */
+export const reassignPositionSchema = z.object({
+  targetId: z.uuid(),
+});
+
+export type ReassignPositionDto = z.infer<typeof reassignPositionSchema>;

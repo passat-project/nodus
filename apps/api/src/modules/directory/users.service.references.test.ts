@@ -72,7 +72,7 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
   };
   const roles = { countByIds: vi.fn() };
   const departments = { findRef: vi.fn() };
-  const positions = { findRef: vi.fn() };
+  const positions = { findRef: vi.fn(), lockMany: vi.fn() };
   const membership = { effectiveRoleIds: vi.fn() };
   const passwords = { hash: vi.fn() };
   const tx = { run: vi.fn((cb: (t: string) => unknown) => cb('tx-handle')) };
@@ -138,16 +138,19 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
     expect(users.update).not.toHaveBeenCalled();
   });
 
-  it('updateUser: неактивная должность → 400 inactive', async () => {
+  it('updateUser: назначение лочит строки должностей до проверки (гонка с удалением)', async () => {
     users.findCardById.mockResolvedValue(cardRow());
-    positions.findRef.mockResolvedValue({ id: 'pos-1', kind: 'management', isActive: false });
+    positions.findRef.mockImplementation((id: string) =>
+      Promise.resolve({
+        id,
+        kind: id === 'pos-1' ? 'management' : 'legal',
+      }),
+    );
 
-    await expect(
-      service.updateUser('user-1', { positionId: 'pos-1' }, actor()),
-    ).rejects.toMatchObject({
-      code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
-      details: { field: 'positionId', reason: 'inactive' },
-    });
+    await service.updateUser('user-1', { positionId: 'pos-1', legalPositionId: 'pos-2' }, actor());
+
+    // Порядок захватов — по id внутри lockMany; обе должности под замком.
+    expect(positions.lockMany).toHaveBeenCalledWith(['pos-1', 'pos-2'], 'tx-handle');
   });
 
   it('updateUser: очистка ссылок (null) проходит без проверок', async () => {

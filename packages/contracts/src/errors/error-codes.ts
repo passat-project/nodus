@@ -38,6 +38,12 @@ export const ErrorCode = {
   /** Ссылка оргструктуры на несуществующий/неактивный объект или чужой вид
    *  структуры (руководитель, подразделение, должность) — 400, details.field. */
   DIRECTORY_REFERENCE_INVALID: 'DIRECTORY_REFERENCE_INVALID',
+  /** Удалить должность нельзя (409, #768): `details.reason = 'holders'` — на
+   *  должности есть сотрудники, включая уволенных (`details.holders`). */
+  DIRECTORY_POSITION_IN_USE: 'DIRECTORY_POSITION_IN_USE',
+  /** Должность с таким названием уже есть в справочнике (409, #768):
+   *  сравнение без учёта регистра, `details.positionId` — существующая строка. */
+  DIRECTORY_POSITION_EXISTS: 'DIRECTORY_POSITION_EXISTS',
   /** Удаление единственной личной стадии «Моего плана» запрещено (ADR-0008). */
   TASK_LAST_STAGE: 'TASK_LAST_STAGE',
   /** Перехода в целевую стадию нет в маршруте или условия «кто» не пройдены
