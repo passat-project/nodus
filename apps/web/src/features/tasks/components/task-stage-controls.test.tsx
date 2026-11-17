@@ -158,6 +158,30 @@ describe('TaskActionBar: итог «Отклонена» (#430)', () => {
 });
 
 describe('TaskActionBar: слоты панели (решение 16.11.2026)', () => {
+  it('коллективная кнопка не прячется в список: первая во второстепенных', async () => {
+    const pressTask = {
+      ...activeTask,
+      press: {
+        transitionId: 'tp',
+        transitionName: 'Завершить',
+        pressed: 1,
+        total: 3,
+        canSubmit: true,
+      },
+    } as unknown as TaskDetail;
+    state.transitions = [
+      transitionOf('t1', 'В работу', 'primary'),
+      transitionOf('t2', 'На проверку', 'button'),
+      transitionOf('tp', 'Завершить', 'menu'),
+    ];
+    render(<TaskActionBar task={pressTask} showTime={false} />);
+
+    // Даже с показом `menu` коллективная кнопка видна сразу, с кольцом.
+    expect(screen.getByRole('button', { name: 'Завершить' })).toBeTruthy();
+    const menu = await openSlot(ui.tasks.moreActions);
+    expect(within(menu).queryByRole('menuitem', { name: /Завершить/ })).toBeNull();
+  });
+
   it('одно действие — обычная кнопка без стрелки, клик уходит в раннер', () => {
     mocks.actions = [action('a1', 'Запросить уточнение')];
     render(<TaskActionBar task={activeTask} showTime={false} />);
