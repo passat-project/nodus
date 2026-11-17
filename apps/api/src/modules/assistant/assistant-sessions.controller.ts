@@ -18,6 +18,7 @@ import {
   type UpdateAssistantSessionBody,
 } from '@nodus/contracts';
 import type { AuthUser } from '@nodus/contracts';
+import { z } from 'zod';
 
 import { Audit } from '../../core/decorators/audit.decorator.js';
 import { GetUser } from '../../core/decorators/get-user.decorator.js';
@@ -27,6 +28,9 @@ import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../core/openapi/api-idempotency.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { AssistantSessionsService } from './assistant-sessions.service.js';
+
+/** Path-параметр: не-UUID — 400 `VALIDATION_FAILED`, не 500 из Prisma. */
+const uuidPipe = new ZodValidationPipe(z.uuid());
 
 /**
  * Диалоги ИИ-ассистента (`/api/v1/assistant`, эпик #889, ADR-0043).
@@ -76,7 +80,7 @@ export class AssistantSessionsController {
   @ApiIdempotencyKey()
   update(
     @GetUser() user: AuthUser,
-    @Param('id') id: string,
+    @Param('id', uuidPipe) id: string,
     @Body({
       schema: updateAssistantSessionBodySchema,
       pipes: [new ZodValidationPipe(updateAssistantSessionBodySchema)],
@@ -90,7 +94,10 @@ export class AssistantSessionsController {
   @ApiOperation({ summary: 'История диалога с вызовами инструментов' })
   @ApiOkResponse({ standardSchema: assistantMessageListSchema })
   @ApiErrors(401, 403, 404)
-  messages(@GetUser() user: AuthUser, @Param('id') id: string): Promise<AssistantMessageList> {
+  messages(
+    @GetUser() user: AuthUser,
+    @Param('id', uuidPipe) id: string,
+  ): Promise<AssistantMessageList> {
     return this.sessions.messages(user, id);
   }
 
@@ -103,7 +110,7 @@ export class AssistantSessionsController {
   @ApiIdempotencyKey()
   send(
     @GetUser() user: AuthUser,
-    @Param('id') id: string,
+    @Param('id', uuidPipe) id: string,
     @Headers('authorization') authorization: string | undefined,
     @Body({
       schema: sendAssistantMessageBodySchema,

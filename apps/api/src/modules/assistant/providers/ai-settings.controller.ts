@@ -11,6 +11,7 @@ import {
   type AssistantModelCatalogResponse,
   type AssistantProviderTestResponse,
 } from '@nodus/contracts';
+import { z } from 'zod';
 
 import { Audit } from '../../../core/decorators/audit.decorator.js';
 import { RequireFeature } from '../../../core/decorators/require-feature.decorator.js';
@@ -19,6 +20,9 @@ import { ApiErrors } from '../../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../../core/openapi/api-idempotency.decorator.js';
 import { ZodValidationPipe } from '../../../core/pipes/zod-validation.pipe.js';
 import { AiSettingsService } from './ai-settings.service.js';
+
+/** Path-параметр: не-UUID — 400 `VALIDATION_FAILED`, не 500 из Prisma. */
+const uuidPipe = new ZodValidationPipe(z.uuid());
 
 /**
  * Настройки ИИ-агента (`/api/v1/settings/ai`, #891/#894, ADR-0044): провайдеры
@@ -64,7 +68,7 @@ export class AiSettingsController {
   @ApiOperation({ summary: 'Каталог моделей провайдера (нормализованный)' })
   @ApiOkResponse({ standardSchema: assistantModelCatalogResponseSchema })
   @ApiErrors(401, 403, 404, 502)
-  listModels(@Param('id') id: string): Promise<AssistantModelCatalogResponse> {
+  listModels(@Param('id', uuidPipe) id: string): Promise<AssistantModelCatalogResponse> {
     return this.settings.listModels(id);
   }
 
@@ -75,7 +79,7 @@ export class AiSettingsController {
   @ApiOkResponse({ standardSchema: assistantProviderTestResponseSchema })
   @ApiErrors(401, 403, 404)
   @ApiIdempotencyKey()
-  test(@Param('id') id: string): Promise<AssistantProviderTestResponse> {
+  test(@Param('id', uuidPipe) id: string): Promise<AssistantProviderTestResponse> {
     return this.settings.test(id);
   }
 }

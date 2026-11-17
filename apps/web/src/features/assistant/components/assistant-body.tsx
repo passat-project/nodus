@@ -7,6 +7,7 @@ import { ChatComposer } from '../../../shared/chat/chat-composer.js';
 import { useChatDrafts } from '../../../shared/chat/chat-drafts.js';
 import {
   mergeLiveMessage,
+  recoverAssistantRun,
   stopRunStream,
   useAssistantMessages,
   useAssistantSessions,
@@ -72,6 +73,21 @@ export function AssistantBody() {
   useEffect(() => {
     if (!open) stopRunStream();
   }, [open]);
+
+  // Незавершённый прогон (закрыли окно/перезагрузили во время ответа):
+  // последнее сообщение ещё `streaming` — подцепляемся к его потоку, иначе
+  // лента навсегда осталась бы с пустым «печатается» без стопа и без текста.
+  const recoveredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open || !activeId || messagesQuery.isPending) return;
+    // Смотрим СЕРВЕРНУЮ историю: `streaming` ставит сервер, а живой буфер —
+    // следствие подхвата (по нему второй подхват не нужен).
+    const last = messagesQuery.data?.items.at(-1);
+    if (!last || last.role !== 'assistant' || !last.streaming || !last.runId) return;
+    if (recoveredRef.current === last.runId || live?.runId === last.runId) return;
+    recoveredRef.current = last.runId;
+    recoverAssistantRun(last.runId, activeId, last.id);
+  }, [open, activeId, messagesQuery.isPending, messagesQuery.data, live]);
 
   const lastUserText =
     [...messages].reverse().find((message) => message.role === 'user')?.text ?? '';

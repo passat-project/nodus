@@ -296,6 +296,10 @@ export const currentAuthUser: AuthUser = {
     Permission.PROJECT_CREATE,
     Permission.PROJECT_MANAGE,
     Permission.PROJECT_SETUP_MANAGE,
+    // ИИ-ассистент (#889): право выдано всем существующим ролям миграцией —
+    // в демо-режиме окно обязано работать так же (иначе вход на моках даёт
+    // «нет доступа» и пустые ответы).
+    Permission.ASSISTANT_USE,
   ],
 };
 

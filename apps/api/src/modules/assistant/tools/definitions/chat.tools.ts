@@ -50,20 +50,24 @@ export const chatConversationsTool = defineTool({
     },
   }),
   project: (data) => {
+    // Форма `GET /chat/conversations` — conversationListItemSchema:
+    // `membersPreview` (превью участников) и `lastActivityAt` (момент
+    // активности; `lastMessage` — только превью). Полей `members`/
+    // `lastMessageAt` в контракте нет.
     const rows = itemsOf(data).map((raw) => {
       const conversation = asRecord(raw);
       if (!conversation) return null;
       const id = str(conversation.id);
       if (!id) return null;
-      const members = asArray(conversation.members)
+      const members = asArray(conversation.membersPreview)
         .map(nameOf)
         .filter((name): name is string => Boolean(name));
       const title = str(conversation.title) ?? (members.length > 0 ? members.join(', ') : 'Беседа');
       const parts = [title, `тип ${str(conversation.type) ?? '—'}`];
       const unread = num(conversation.unreadCount);
       if (unread) parts.push(`непрочитанных ${unread}`);
-      if (str(conversation.lastMessageAt))
-        parts.push(`последнее ${dateTime(conversation.lastMessageAt)}`);
+      if (str(conversation.lastActivityAt))
+        parts.push(`активность ${dateTime(conversation.lastActivityAt)}`);
       parts.push(`id ${id}`);
       return parts.join(', ');
     });

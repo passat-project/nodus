@@ -105,15 +105,22 @@ export const directoryGetUserTool = defineTool({
     const user = asRecord(data);
     const id = str(user?.id);
     if (!user || !id) return { text: 'Сотрудник не найден или недоступен' };
+    // Карточка (userCardSchema) отдаёт контакты и id оргструктуры, но НЕ
+    // названия подразделения/должности — их даёт список сотрудников (там
+    // поля денормализованы). Вместо пустых «—» — id и подсказка, где взять
+    // названия (иначе модель уверенно сообщала бы «должность неизвестна»).
+    const org = [
+      `подразделение ${str(user.departmentId) ?? '—'}`,
+      `должность ${str(user.positionId) ?? '—'}`,
+      `руководитель ${str(user.managerId) ?? '—'}`,
+    ].join(', ');
     const lines = [
       `${nameOf(user) ?? '—'} (id ${id})`,
-      `Должность: ${str(user.positionName) ?? '—'}`,
-      `Подразделение: ${str(user.departmentName) ?? '—'}`,
       `Почта: ${str(user.email) ?? '—'}`,
       `Телефон: ${str(user.mobilePhone) ?? '—'}`,
-      `Руководитель: ${nameOf(user.manager) ?? '—'}`,
       `Город / кабинет: ${str(user.city) ?? '—'}${str(user.officeLocation) ? `, ${str(user.officeLocation)}` : ''}`,
-      user.status === 'deactivated' ? 'Статус: уволен' : 'Статус: работает',
+      `Статус: ${user.status === 'deactivated' ? 'уволен' : 'работает'}`,
+      `Оргструктура (id): ${org}. Названия — в списке сотрудников (поиск по ФИО).`,
     ];
     return {
       text: finalize(lines.join('\n')),

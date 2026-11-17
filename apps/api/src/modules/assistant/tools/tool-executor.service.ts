@@ -46,6 +46,10 @@ export class ToolExecutorService {
         message: 'В этом режиме доступно только чтение',
       };
     }
+    // «Стоп» мог нажаться до старта вызова: не тратим запрос впустую.
+    if (ctx.signal.aborted) {
+      return { ok: false, errorCode: 'ASSISTANT_TOOL_ABORTED', message: 'Прогон остановлен' };
+    }
 
     const parsed = tool.input.safeParse(rawInput ?? {});
     if (!parsed.success) {
@@ -63,6 +67,9 @@ export class ToolExecutorService {
 
     if (tool.handler) {
       const result = await tool.handler(input, ctx);
+      if (ctx.signal.aborted) {
+        return { ok: false, errorCode: 'ASSISTANT_TOOL_ABORTED', message: 'Прогон остановлен' };
+      }
       return { ok: true, text: finalize(result.text), entity: result.entity };
     }
     if (!tool.api || !tool.build || !tool.project) {
@@ -71,7 +78,7 @@ export class ToolExecutorService {
 
     const request = tool.build(input);
     const url = toUrl(request);
-    const response = await this.inject(url, ctx.authorization);
+    const response = await this.inject(url, ctx.authorization, ctx.signal);
     if ('error' in response) return response.error;
 
     const data = parseBody(response.body);
@@ -97,6 +104,7 @@ export class ToolExecutorService {
   private async inject(
     url: string,
     authorization: string,
+    signal: AbortSignal,
   ): Promise<{ status: number; body: string } | { error: ToolExecution }> {
     const fastify = this.adapterHost.httpAdapter?.getInstance<FastifyInstance>();
     if (!fastify) {
@@ -112,17 +120,33 @@ export class ToolExecutorService {
       method: 'GET',
       url,
       headers: { authorization, accept: 'application/json' },
+      // Отмена прогона рвёт и запрос в API, а не только поток провайдера.
+      signal,
     });
     const timeout = new Promise<'timeout'>((resolve) =>
       setTimeout(() => resolve('timeout'), TOOL_TIMEOUT_MS).unref?.(),
     );
-    const settled = await Promise.race([call, timeout]);
+    // Отмена — отдельный исход: не «ошибка инструмента», а остановка прогона.
+    const aborted = new Promise<'aborted'>((resolve) => {
+      if (signal.aborted) resolve('aborted');
+      signal.addEventListener('abort', () => resolve('aborted'), { once: true });
+    });
+    const settled = await Promise.race([call.catch(() => 'aborted' as const), timeout, aborted]);
     if (settled === 'timeout') {
       return {
         error: {
           ok: false,
           errorCode: 'ASSISTANT_TOOL_TIMEOUT',
           message: 'Действие не ответило вовремя',
+        },
+      };
+    }
+    if (settled === 'aborted' || signal.aborted) {
+      return {
+        error: {
+          ok: false,
+          errorCode: 'ASSISTANT_TOOL_ABORTED',
+          message: 'Прогон остановлен',
         },
       };
     }

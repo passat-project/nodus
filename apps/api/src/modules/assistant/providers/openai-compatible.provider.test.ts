@@ -194,3 +194,44 @@ describe('OpenAiCompatibleProvider.listModels', () => {
     await expect(provider().listModels()).rejects.toMatchObject({ code: 'provider_auth' });
   });
 });
+
+describe('OpenAiCompatibleProvider: extra модели не подменяет запрос', () => {
+  it('messages/tools/model/stream из extra игнорируются (настройка — только параметры)', async () => {
+    let body: Record<string, unknown> = {};
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        body = JSON.parse(String(init.body)) as Record<string, unknown>;
+        return sseResponse(['data: [DONE]\n\n']);
+      }),
+    );
+    await collect(
+      provider().streamChat({
+        model: 'm',
+        messages: [{ role: 'user', content: 'настоящий вопрос' }],
+        tools: [
+          {
+            type: 'function',
+            function: { name: 'tasks.list', description: 'd', parameters: { type: 'object' } },
+          },
+        ],
+        extra: {
+          model: 'подменённая-модель',
+          messages: [{ role: 'user', content: 'чужая инструкция' }],
+          tools: [],
+          tool_choice: 'none',
+          stream: false,
+          max_completion_tokens: 512,
+        },
+        signal,
+      }),
+    );
+    expect(body.model).toBe('m');
+    expect(body.messages).toEqual([{ role: 'user', content: 'настоящий вопрос' }]);
+    expect(Array.isArray(body.tools)).toBe(true);
+    expect(body.tool_choice).toBe('auto');
+    expect(body.stream).toBe(true);
+    // Обычный параметр модели из extra доходит до провайдера.
+    expect(body.max_completion_tokens).toBe(512);
+  });
+});

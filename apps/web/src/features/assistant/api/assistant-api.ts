@@ -10,6 +10,8 @@ import type {
 
 import { api } from '../../../shared/api-client.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
+import { queryClient } from '../../../shared/lib/query-client.js';
+import { registerSessionReset } from '../../../shared/session-reset.js';
 import { useAssistantStore } from '../model/assistant-store.js';
 import { mergeLiveMessage } from '../model/assistant-merge.js';
 import { parseRunEventData, SseFrameParser, type StreamEvent } from '../model/assistant-stream.js';
@@ -28,6 +30,18 @@ export function useAssistantSessions() {
     queryFn: () => api<AssistantSessionList>('/assistant/sessions'),
   });
 }
+
+/**
+ * Сброс сессии (AUD-005): выход или вход другим сотрудником в той же вкладке
+ * обязан стереть диалог предыдущего из памяти вкладки. В буфере прогона —
+ * его вопрос и ответ ассистента, в `activeId` — чужая сессия: без сброса
+ * следующий вошедший увидел бы чужой диалог, а живой поток продолжал бы
+ * дописывать дельты от имени предыдущего (находка security-ревью 17.11.2026).
+ */
+registerSessionReset(() => {
+  stopRunStream();
+  useAssistantStore.setState({ open: false, activeId: null, pending: null, live: null });
+});
 
 /** История диалога: сообщения с вызовами инструментов. */
 export function useAssistantMessages(sessionId: string | null) {
@@ -88,8 +102,12 @@ export function useSendAssistantMessage() {
     // КАНОН МЕССЕНДЖЕРА (#48, I4): вопрос встаёт в ленту ДО запроса —
     // временная строка живёт в кэше истории и откатывается ошибкой. Без
     // этого ответ модели начинал печататься раньше самого вопроса.
-    onMutate: (input) => {
+    onMutate: async (input) => {
       const key = assistantKeys.messages(input.sessionId);
+      // In-flight запрос истории (idle-загрузка сразу после выбора сессии)
+      // мог бы вернуться ПОСЛЕ вставки и затереть оптимистичный пузырь —
+      // отменяем его до снимка (канон optimistic update, patterns.md).
+      await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<AssistantMessageList>(key);
       const optimistic: AssistantMessage = {
         id: `pending-${crypto.randomUUID()}`,
@@ -138,6 +156,28 @@ export function useSendAssistantMessage() {
 export function useCancelAssistantRun() {
   return useMutation({
     mutationFn: (runId: string) => api(`/assistant/runs/${runId}/cancel`, { method: 'POST' }),
+  });
+}
+
+/**
+ * Подхват незавершённого прогона (скоуп #895): окно закрыли/перезагрузили
+ * во время ответа — сервер прогон доведёт, но клиент об этом не знает.
+ * Найденное `streaming`-сообщение с `runId` подключаем к потоку с начала
+ * журнала (`Last-Event-ID: 0`): дельты пересобирают текст, `tool.*` —
+ * строки вызовов; на завершении история перечитывается и живой буфер
+ * уступает сохранённой строке по `messageId`.
+ */
+export function recoverAssistantRun(
+  runId: string,
+  sessionId: string,
+  messageId: string | null,
+): void {
+  const store = useAssistantStore.getState();
+  store.startLive({ runId, sessionId, userText: '', userMessageId: null });
+  store.patchLive({ messageId });
+  startRunStream(runId, sessionId, () => {
+    void queryClient.invalidateQueries({ queryKey: assistantKeys.messages(sessionId) });
+    void queryClient.invalidateQueries({ queryKey: assistantKeys.sessions() });
   });
 }
 
