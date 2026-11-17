@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 import { ErrorCode, type AuthUser } from '@nodus/contracts';
 
@@ -36,12 +36,14 @@ interface PendingResume {
  * решения, а не висящий SSE: окно можно закрыть, ответ сохранится в истории.
  *
  * Решение могло прийти, пока агент ещё печатал ответ. Два прогона одной
- * сессии писали бы параллельно, поэтому продолжение ОТКЛАДЫВАЕТСЯ до
- * завершения текущего прогона (`RunCompletionNotifier`), а сотруднику
- * доступна липкая строка «Продолжить сейчас» — запасной путь без таймеров.
+ * сессии писали бы параллельно, поэтому продолжение РЕЗЕРВИРУЕТСЯ (прогон и
+ * захват пачки) и стартует по `RunCompletionNotifier` — без таймеров. Клиент
+ * подписывается на зарезервированный прогон после завершения текущего потока.
+ * «Стоп» отменяет и резерв; перезапуск API закрывает осиротевшие `queued`
+ * (`onModuleInit`), возвращая пачки в `open`.
  */
 @Injectable()
-export class AssistantContinuationService {
+export class AssistantContinuationService implements OnModuleInit {
   /** Продолжения, ждущие завершения активного прогона сессии. */
   private readonly pendingResumes = new Map<string, PendingResume>();
 
@@ -56,6 +58,25 @@ export class AssistantContinuationService {
     this.completion.register((sessionId) => {
       void this.resumeAfterRun(sessionId);
     });
+  }
+
+  /**
+   * Резерв продолжения живёт только в памяти: после рестарта `queued`-прогоны
+   * никогда не стартуют. Закрываем их `interrupted` и возвращаем пачки в
+   * `open`, иначе «Продолжить сейчас» отдавал бы мёртвый runId.
+   */
+  async onModuleInit(): Promise<void> {
+    try {
+      const recovered = await this.repo.recoverQueuedRuns();
+      if (recovered > 0) {
+        this.logger.warn(
+          { runs: recovered },
+          'Зарезервированные продолжения прерваны перезапуском — пачки возвращены в работу',
+        );
+      }
+    } catch (error) {
+      this.logger.error({ err: error }, 'Не удалось восстановить queued-прогоны ассистента');
+    }
   }
 
   /**
@@ -191,6 +212,11 @@ export class AssistantContinuationService {
         this.pendingResumes.set(sessionId, pending);
         return;
       }
+      // «Стоп» мог отменить зарезервированный прогон, пока печатался
+      // исходный: стартовать отменённый нельзя (иначе updateRun вернул бы
+      // его в running и кнопка «Стоп» ничего не останавливала бы).
+      const reserved = await this.repo.findRunById(pending.runId);
+      if (!reserved || reserved.status !== 'queued') return;
       const batch = await this.repo.findActionBatch(pending.user.id, pending.messageId);
       if (!batch || batch.state !== 'continued' || batch.continuationRunId !== pending.runId) {
         await this.repo.deleteRun(pending.runId);

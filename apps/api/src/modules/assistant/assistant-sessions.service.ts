@@ -35,6 +35,14 @@ const MODULE_ID_PATTERN = /^[a-z][a-z0-9-]{0,39}$/;
  */
 @Injectable()
 export class AssistantSessionsService {
+  /**
+   * Очередь отправок по сессии: проверка «прогон уже идёт» и старт нового
+   * прогона не атомарны между собой, а два параллельных POST одного
+   * сотрудника иначе могли бы оба пройти проверку (гонка валидации
+   * 18.11.2026). Цепочка в процессе API — единственный backend (I1).
+   */
+  private readonly sends = new Map<string, Promise<unknown>>();
+
   constructor(
     private readonly repo: AssistantRepository,
     private readonly runner: AgentRunnerService,
@@ -80,6 +88,28 @@ export class AssistantSessionsService {
    * без ожидания и отвечаем `202 { runId, messageId }`.
    */
   async sendMessage(
+    user: AuthUser,
+    id: string,
+    body: SendAssistantMessageBody,
+    authorization: string,
+  ): Promise<SendAssistantMessageResponse> {
+    // Отправки одной сессии сериализуются: вторая видит уже запущенный прогон.
+    const previous = this.sends.get(id) ?? Promise.resolve();
+    const task = previous
+      .catch(() => undefined)
+      .then(() => this.sendMessageOnce(user, id, body, authorization));
+    // Хвост цепочки не должен нести reject (иначе unhandled): ошибку получает
+    // только вызывающий через `task`, очередь продолжается.
+    const tracked = task
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.sends.get(id) === tracked) this.sends.delete(id);
+      });
+    this.sends.set(id, tracked);
+    return task;
+  }
+
+  private async sendMessageOnce(
     user: AuthUser,
     id: string,
     body: SendAssistantMessageBody,

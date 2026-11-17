@@ -1,19 +1,22 @@
-import { Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, Header, Param, Query, Req, Res } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   ErrorCode,
+  Permission,
   fileTextResponseSchema,
   type AuthUser,
   type FileTextResponse,
 } from '@nodus/contracts';
 
 import { SignedUrlService } from '../../core/crypto/signed-url.service.js';
+import { Audit } from '../../core/decorators/audit.decorator.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
 import { GetUser } from '../../core/decorators/get-user.decorator.js';
 import { Public } from '../../core/decorators/public.decorator.js';
 import { RequireFeature } from '../../core/decorators/require-feature.decorator.js';
+import { RequirePermissions } from '../../core/decorators/require-permissions.decorator.js';
 import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { FilesRepository } from './files.repository.js';
@@ -65,14 +68,29 @@ export class FilesController {
    */
   @Get(':id/text')
   @RequireFeature('assistant')
+  @RequirePermissions(Permission.ASSISTANT_USE)
+  // Текст документа — чувствительные данные: не кэшируется прокси и общими
+  // профилями браузера; чтение фиксируется в audit_logs (I7, ADR-0050 п. 8).
+  @Header('Cache-Control', 'no-store')
+  @Audit({ action: 'files.text_read', entity: 'file' })
   @ApiOperation({ summary: 'Текст вложения (PDF/DOCX) для ответов ассистента' })
   @ApiOkResponse({ standardSchema: fileTextResponseSchema })
   @ApiErrors(401, 403, 404, 410, 413, 415, 422, 429, 504)
   text(
     @Param('id', new ZodValidationPipe(z.uuid())) id: string,
     @GetUser() user: AuthUser,
+    @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<FileTextResponse> {
-    return this.fileText.extract(id, user.id);
+    // Обрыв клиента останавливает разбор: worker уничтожается, если результат
+    // больше никто не ждёт (security-ревью 18.11.2026).
+    const controller = new AbortController();
+    const onClose = (): void => {
+      if (!reply.raw.writableEnded) controller.abort();
+    };
+    reply.raw.on('close', onClose);
+    return this.fileText.extract(id, user.id, controller.signal).finally(() => {
+      reply.raw.off('close', onClose);
+    });
   }
 
   @Public()

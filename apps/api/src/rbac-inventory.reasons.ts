@@ -159,7 +159,6 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'GET /custom-fields/numbering/host/:kind/:id':
     'номера записи видны тем, кто видит саму запись (проверка в сервисе)',
   'GET /files/:id/office-session': FILE_ACCESS,
-  'GET /files/:id/text': FILE_ACCESS,
   'GET /files/:id/versions': FILE_ACCESS,
   'GET /home/summary': HOME,
   'GET /tasks': TASK_VISIBILITY,

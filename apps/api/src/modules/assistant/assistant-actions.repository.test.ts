@@ -62,6 +62,8 @@ function batchRow(overrides: Record<string, unknown> = {}) {
 
 function makeRepo() {
   const prisma = {
+    $executeRaw: vi.fn(async () => 1),
+    $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(prisma)),
     assistantAction: {
       create: vi.fn(async () => actionRow()),
       findFirst: vi.fn(async (): Promise<Record<string, unknown> | null> => actionRow()),
@@ -105,6 +107,52 @@ describe('AssistantRepository: карточки действий (#916)', () => 
       data: expect.objectContaining({ fields: [], args: {}, messageId: MESSAGE_ID }),
     });
     expect(action).toMatchObject({ id: ACTION_ID, messageId: MESSAGE_ID, state: 'proposed' });
+  });
+
+  it('createActionWithinLimit: count и вставка под локом прогона', async () => {
+    const { repo, prisma } = makeRepo();
+    const action = await repo.createActionWithinLimit(
+      {
+        runId: RUN_ID,
+        messageId: MESSAGE_ID,
+        userId: USER_ID,
+        toolId: 'tasks.create',
+        title: 'Задачи: создать',
+        summary: 'Создать задачу',
+        fields: null,
+        consequences: 'Появится в журнале',
+        undoable: true,
+        automatic: false,
+        args: null,
+      },
+      5,
+    );
+    expect(prisma.$executeRaw).toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalled();
+    expect(action).toMatchObject({ id: ACTION_ID });
+  });
+
+  it('createActionWithinLimit: лимит исчерпан — null без вставки', async () => {
+    const { repo, prisma } = makeRepo();
+    prisma.assistantAction.count.mockResolvedValueOnce(5);
+    const action = await repo.createActionWithinLimit(
+      {
+        runId: RUN_ID,
+        messageId: MESSAGE_ID,
+        userId: USER_ID,
+        toolId: 'tasks.create',
+        title: 'Задачи: создать',
+        summary: 'Создать задачу',
+        fields: null,
+        consequences: 'Появится в журнале',
+        undoable: true,
+        automatic: false,
+        args: null,
+      },
+      5,
+    );
+    expect(action).toBeNull();
+    expect(prisma.assistantAction.create).not.toHaveBeenCalled();
   });
 
   it('findAction: фильтр владельца, чужая — null', async () => {

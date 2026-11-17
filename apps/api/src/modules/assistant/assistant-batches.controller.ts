@@ -10,6 +10,7 @@ import {
 } from '@nodus/contracts';
 import { z } from 'zod';
 
+import { Audit } from '../../core/decorators/audit.decorator.js';
 import { GetUser } from '../../core/decorators/get-user.decorator.js';
 import { RequireFeature } from '../../core/decorators/require-feature.decorator.js';
 import { RequirePermissions } from '../../core/decorators/require-permissions.decorator.js';
@@ -57,6 +58,7 @@ export class AssistantBatchesController {
 
   @Post(':id/actions/cancel-all')
   @HttpCode(200)
+  @Audit({ action: 'assistant.batch_cancel', entity: 'assistant_message' })
   @ApiOperation({ summary: 'Отменить нерешённые карточки пачки и подвести итог' })
   @ApiOkResponse({ standardSchema: assistantBatchDecisionSchema })
   @ApiErrors(400, 401, 403, 404, 409)

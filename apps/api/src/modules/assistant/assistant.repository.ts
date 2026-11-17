@@ -208,6 +208,74 @@ export class AssistantRepository extends AssistantActionsRepository {
     await this.prisma.assistantRun.deleteMany({ where: { id, status: 'queued' } });
   }
 
+  /**
+   * «Стоп» останавливает и зарезервированное продолжение пачки: прогон
+   * закрывается, пачка возвращается в `open` — решение остаётся за
+   * сотрудником («Продолжить сейчас» после остановки ответа).
+   */
+  async cancelQueuedRuns(sessionId: string): Promise<number> {
+    const ids = await this.queuedRunIds({ sessionId });
+    return this.releaseQueuedRuns(ids, 'cancelled', 'cancelled', 'Прогон остановлен сотрудником');
+  }
+
+  /** Отмена одного зарезервированного прогона (кнопкой «Стоп» по нему). */
+  async cancelQueuedRun(runId: string): Promise<boolean> {
+    const ids = await this.queuedRunIds({ id: runId });
+    return (
+      (await this.releaseQueuedRuns(
+        ids,
+        'cancelled',
+        'cancelled',
+        'Прогон остановлен сотрудником',
+      )) > 0
+    );
+  }
+
+  /**
+   * Перезапуск API: отложенное продолжение жило в памяти процесса и не
+   * переживает рестарт (окно — до конца печати исходного ответа). Прогон
+   * закрывается `failed` (`interrupted`), пачка возвращается в `open`,
+   * чтобы «Продолжить сейчас» работал, а не вёл в мёртвый прогон.
+   */
+  async recoverQueuedRuns(): Promise<number> {
+    const ids = await this.queuedRunIds({});
+    return this.releaseQueuedRuns(
+      ids,
+      'failed',
+      'interrupted',
+      'Прогон прерван перезапуском сервера',
+    );
+  }
+
+  /** `queued` — только зарезервированные продолжения (#916): других нет. */
+  private async queuedRunIds(where: { id?: string; sessionId?: string }): Promise<string[]> {
+    const rows = await this.prisma.assistantRun.findMany({
+      where: { ...where, status: 'queued' },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
+
+  private async releaseQueuedRuns(
+    ids: readonly string[],
+    status: string,
+    errorCode: string,
+    errorMessage: string,
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const [runs] = await this.prisma.$transaction([
+      this.prisma.assistantRun.updateMany({
+        where: { id: { in: [...ids] }, status: 'queued' },
+        data: { status, finishedAt: new Date(), errorCode, errorMessage },
+      }),
+      this.prisma.assistantActionBatch.updateMany({
+        where: { continuationRunId: { in: [...ids] }, state: { in: ['continued', 'closed'] } },
+        data: { state: 'open', continuationRunId: null },
+      }),
+    ]);
+    return runs.count;
+  }
+
   async findRun(userId: string, id: string): Promise<RunRow | null> {
     const row = await this.prisma.assistantRun.findFirst({ where: { id, userId } });
     return row ? mapRun(row) : null;

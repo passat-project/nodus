@@ -26,14 +26,39 @@ export abstract class AssistantActionsRepository {
     automatic: boolean;
     args: unknown;
   }): Promise<ActionRow> {
-    const row = await this.prisma.assistantAction.create({
-      data: {
-        ...input,
-        fields: (input.fields ?? []) as Prisma.InputJsonValue,
-        args: (input.args ?? {}) as Prisma.InputJsonValue,
-      },
-    });
+    const row = await this.prisma.assistantAction.create({ data: actionData(input) });
     return mapAction(row);
+  }
+
+  /**
+   * Создание карточки с АТОМАРНЫМ лимитом прогона (#916, security-ревью
+   * 18.11.2026): count и insert идут под advisory-локом прогона. Параллельные
+   * write-вызовы шага (maxParallelToolCalls: 3) больше не проскакивают лимит
+   * «карточек на прогон» гонкой; `null` — лимит исчерпан.
+   */
+  async createActionWithinLimit(
+    input: {
+      runId: string;
+      messageId: string | null;
+      userId: string;
+      toolId: string;
+      title: string;
+      summary: string;
+      fields: unknown;
+      consequences: string;
+      undoable: boolean;
+      automatic: boolean;
+      args: unknown;
+    },
+    max: number,
+  ): Promise<ActionRow | null> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.runId}))`;
+      const count = await tx.assistantAction.count({ where: { runId: input.runId } });
+      if (count >= max) return null;
+      const row = await tx.assistantAction.create({ data: actionData(input) });
+      return mapAction(row);
+    });
   }
 
   async findAction(userId: string, id: string): Promise<ActionRow | null> {
@@ -180,6 +205,27 @@ export abstract class AssistantActionsRepository {
     }
     return { total, pending };
   }
+}
+
+/** Данные вставки карточки: JSONB-поля не допускают `undefined`. */
+function actionData(input: {
+  runId: string;
+  messageId: string | null;
+  userId: string;
+  toolId: string;
+  title: string;
+  summary: string;
+  fields: unknown;
+  consequences: string;
+  undoable: boolean;
+  automatic: boolean;
+  args: unknown;
+}): Prisma.AssistantActionUncheckedCreateInput {
+  return {
+    ...input,
+    fields: (input.fields ?? []) as Prisma.InputJsonValue,
+    args: (input.args ?? {}) as Prisma.InputJsonValue,
+  };
 }
 
 /** Строка пачки из Prisma (`ActionBatchRow`). */

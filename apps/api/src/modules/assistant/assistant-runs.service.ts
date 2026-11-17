@@ -52,8 +52,9 @@ export class AssistantRunsService {
 
   /**
    * Отмена: живой прогон останавливает `AbortController` (провайдер и
-   * инструменты), завершённый — конфликт состояния. Зависший после
-   * перезапуска прогон (нет в памяти) закрывается записью в БД.
+   * инструменты), зарезервированное продолжение пачки закрывается вместе с
+   * текущим, завершённый — конфликт состояния. Зависший после перезапуска
+   * прогон (нет в памяти) закрывается записью в БД.
    */
   async cancel(user: AuthUser, runId: string): Promise<AssistantRun> {
     const row = await this.repo.findRun(user.id, runId);
@@ -61,13 +62,20 @@ export class AssistantRunsService {
     if (TERMINAL_RUN_STATUSES.includes(toRunDto(row).status)) {
       throw new DomainException(ErrorCode.ASSISTANT_RUN_ALREADY_FINISHED, 'Прогон уже завершён');
     }
-    if (!this.runner.cancel(runId)) {
-      await this.repo.updateRun(runId, {
-        status: 'cancelled',
-        finishedAt: new Date(),
-        errorCode: 'cancelled',
-        errorMessage: 'Прогон остановлен сотрудником',
-      });
+    // Резерв продолжения: его нет в памяти раннера, но пачка уже захвачена —
+    // без этой ветки «Стоп» оставлял бы `continued` с мёртвым runId.
+    const cancelledQueued = await this.repo.cancelQueuedRun(runId);
+    if (!cancelledQueued) {
+      if (!this.runner.cancel(runId)) {
+        await this.repo.updateRun(runId, {
+          status: 'cancelled',
+          finishedAt: new Date(),
+          errorCode: 'cancelled',
+          errorMessage: 'Прогон остановлен сотрудником',
+        });
+      }
+      // Остановка ответа останавливает и отложенное продолжение пачки.
+      await this.repo.cancelQueuedRuns(row.sessionId);
     }
     return toRunDto((await this.repo.findRun(user.id, runId)) ?? row);
   }

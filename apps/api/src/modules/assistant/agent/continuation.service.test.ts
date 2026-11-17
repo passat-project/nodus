@@ -52,6 +52,8 @@ function build(
     claimBatchContinuation: vi.fn(async () => options.claimContinuation ?? true),
     deleteRun: vi.fn(async () => undefined),
     claimBatchContinueNow: vi.fn(async () => options.claimContinueNow ?? true),
+    findRunById: vi.fn(async () => ({ status: 'queued' })),
+    recoverQueuedRuns: vi.fn(async () => 0),
   };
   const runner = {
     isActive: vi.fn(() => false),
@@ -80,6 +82,7 @@ function build(
     repo,
     runner,
     completion,
+    logger,
     finishRun: (sessionId = SESSION_ID) => onFinished?.(sessionId),
   };
 }
@@ -162,6 +165,25 @@ describe('AssistantContinuationService: автопродолжение (#916)', 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(repo.deleteRun).toHaveBeenCalledWith(runId);
     expect(runner.start).not.toHaveBeenCalled();
+  });
+
+  it('резерв отменён кнопкой «Стоп» — продолжение не стартует', async () => {
+    const { service, repo, runner, finishRun } = build({ sessionActive: true });
+    const runId = await service.afterDecision(USER, 'Bearer token', MESSAGE_ID);
+    repo.findActionBatch.mockResolvedValue(batch({ state: 'continued', continuationRunId: runId }));
+    repo.findRunById.mockResolvedValue({ status: 'cancelled' });
+    runner.isSessionActive.mockReturnValue(false);
+    finishRun();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(runner.start).not.toHaveBeenCalled();
+  });
+
+  it('рестарт API: осиротевшие резервы закрываются, пачки возвращаются в работу', async () => {
+    const { service, repo, logger } = build();
+    repo.recoverQueuedRuns.mockResolvedValue(2);
+    await service.onModuleInit();
+    expect(repo.recoverQueuedRuns).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalled();
   });
 });
 

@@ -45,7 +45,7 @@ const STATUS_BY_CODE: Record<string, number> = {
 @Injectable()
 export class FileTextService {
   /** Параллельные запросы одного файла не парсят документ дважды. */
-  private readonly inflight = new Map<string, Promise<FileTextResponse>>();
+  private readonly inflight = new Map<string, InflightExtraction>();
   /** Окна запросов извлечения по сотрудникам (без кэша). */
   private readonly hits = new Map<string, number[]>();
   /** Извлечения, реально идущие прямо сейчас (кэш не считается). */
@@ -60,7 +60,7 @@ export class FileTextService {
     this.logger.setContext(FileTextService.name);
   }
 
-  async extract(fileId: string, userId: string): Promise<FileTextResponse> {
+  async extract(fileId: string, userId: string, signal?: AbortSignal): Promise<FileTextResponse> {
     // 404 для чужих файлов: тот же резолвер, что у просмотра/редактора.
     const { file, textDenied } = await this.office.resolveAccess(fileId, userId);
     // Конфиденциальное письмо: отказ ДО кэша — текст не отдаётся ИИ даже
@@ -88,15 +88,37 @@ export class FileTextService {
     }
     const key = `${file.id}:${file.version}`;
     const existing = this.inflight.get(key);
-    if (existing) return existing;
+    if (existing) return this.joinExtraction(existing, signal);
     this.assertAllowed(userId);
-    const task = this.track(() => this.extractFresh(file))
+    const controller = new AbortController();
+    const entry: InflightExtraction = { controller, waiters: 0, promise: undefined as never };
+    entry.promise = this.track(() => this.extractFresh(file, controller.signal))
       .catch((error: unknown) => {
         throw mapExtractError(error);
       })
       .finally(() => this.inflight.delete(key));
-    this.inflight.set(key, task);
-    return task;
+    this.inflight.set(key, entry);
+    return this.joinExtraction(entry, signal);
+  }
+
+  /**
+   * Ожидание общего извлечения: обрыв СВОЕГО запроса не отменяет разбор,
+   * пока его ждёт кто-то ещё; последний ушедший убивает worker (job больше
+   * никому не нужен, CPU и память освобождаются сразу).
+   */
+  private async joinExtraction(
+    entry: InflightExtraction,
+    signal?: AbortSignal,
+  ): Promise<FileTextResponse> {
+    entry.waiters += 1;
+    try {
+      return signal ? await abortable(entry.promise, signal) : await entry.promise;
+    } catch (error) {
+      throw error instanceof FileTextError ? mapExtractError(error) : error;
+    } finally {
+      entry.waiters -= 1;
+      if (signal?.aborted && entry.waiters === 0) entry.controller.abort();
+    }
   }
 
   /** Частота на сотрудника и параллелизм процесса: 429 RATE_LIMITED. */
@@ -141,14 +163,14 @@ export class FileTextService {
     }
   }
 
-  private async extractFresh(file: FileObjectRow): Promise<FileTextResponse> {
+  private async extractFresh(file: FileObjectRow, signal: AbortSignal): Promise<FileTextResponse> {
     const kind = detectAttachmentKind(file.name, file.mime);
     if (!kind) {
       throw new FileTextError('FILE_TEXT_UNSUPPORTED');
     }
     const startedAt = Date.now();
     const buffer = await readLimited(await this.driver.get(file.key), FILE_TEXT_LIMITS.maxBytes);
-    const extracted = await extractAttachmentText(buffer, kind);
+    const extracted = await extractAttachmentText(buffer, kind, signal);
     await this.repo.saveTextExtract({
       fileId: file.id,
       version: file.version,
@@ -186,6 +208,26 @@ export class FileTextService {
       scannedPages: extracted.scannedPages,
     };
   }
+}
+
+/** Общее извлечение одного файла и версии: разбор делится между запросами. */
+interface InflightExtraction {
+  promise: Promise<FileTextResponse>;
+  controller: AbortController;
+  /** Сколько запросов ещё ждут результат (последний ушедший убивает worker). */
+  waiters: number;
+}
+
+/** Ожидание с обрывом: локальный отказ, разбор продолжается для остальных. */
+function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new FileTextError('FILE_TEXT_TIMEOUT'));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => {
+      reject(new FileTextError('FILE_TEXT_TIMEOUT'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
 }
 
 /** Строка кэша → ответ контракта (JSONB терпим к старым записям). */

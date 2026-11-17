@@ -2,14 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AuthUser } from '@nodus/contracts';
 
 import { AssistantSessionsService, normalizeScreenContext } from './assistant-sessions.service.js';
-import { AssistantRunsService } from './assistant-runs.service.js';
-import type { MessageRow, RunRow, SessionRow } from './assistant.repository.js';
+import type { MessageRow, SessionRow } from './assistant.repository.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
 
 /**
- * Сервисы сессий и прогонов (#893, #896): владение диалогом (чужая — 404),
- * отказ отправки в архив, контекст экрана без доверия клиенту, отмена живого
- * и «зависшего» прогона.
+ * Сессии ассистента (#893, #896): владение диалогом (чужая — 404), отказ
+ * отправки в архив, контекст экрана без доверия клиенту, 409 при активном и
+ * отложенном прогоне. Прогоны — `assistant-runs.service.test.ts`.
  */
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -53,26 +52,6 @@ function messageRow(overrides: Partial<MessageRow> = {}): MessageRow {
     toolCalls: [],
     actions: [],
     actionBatch: null,
-    ...overrides,
-  };
-}
-
-function runRow(overrides: Partial<RunRow> = {}): RunRow {
-  return {
-    id: RUN_ID,
-    sessionId: SESSION_ID,
-    userId: USER_ID,
-    status: 'running',
-    continuationOfMessageId: null,
-    providerId: null,
-    modelId: 'm1',
-    inputTokens: null,
-    outputTokens: null,
-    errorCode: null,
-    errorMessage: null,
-    startedAt: NOW,
-    finishedAt: null,
-    createdAt: NOW,
     ...overrides,
   };
 }
@@ -249,87 +228,19 @@ describe('AssistantSessionsService (#893)', () => {
       expect(repo.closeOpenBatches).not.toHaveBeenCalled();
     }
   });
-});
 
-describe('AssistantRunsService (#893)', () => {
-  function makeService(run: RunRow | null = runRow()) {
-    const repo = {
-      findRun: vi.fn(async () => run),
-      updateRun: vi.fn(async () => undefined),
-    };
-    const bus = { stream: vi.fn(() => ({ pipe: vi.fn(() => 'stream') })) };
-    const runner = { cancel: vi.fn(() => true) };
-    const service = new AssistantRunsService(repo as never, bus as never, runner as never);
-    return { service, repo, bus, runner };
-  }
-
-  it('get: прогон владельца, иначе 404', async () => {
-    const { service } = makeService();
-    expect((await service.get(user, RUN_ID)).id).toBe(RUN_ID);
-    const missing = makeService(null);
-    await expectNotFound(missing.service.get(user, RUN_ID));
-  });
-
-  it('stream: нормализует Last-Event-ID (NaN и отрицательный → 0)', async () => {
-    const { service, bus } = makeService();
-    await service.stream(user, RUN_ID, Number.NaN);
-    expect(bus.stream).toHaveBeenCalledWith(RUN_ID, 0, { terminal: false });
-    await service.stream(user, RUN_ID, -5);
-    expect(bus.stream).toHaveBeenLastCalledWith(RUN_ID, 0, { terminal: false });
-    await service.stream(user, RUN_ID, 42);
-    expect(bus.stream).toHaveBeenLastCalledWith(RUN_ID, 42, { terminal: false });
-  });
-
-  it('stream: завершённый прогон отдаёт журнал как терминальный', async () => {
-    const { service, bus } = makeService(runRow({ status: 'completed' }));
-    await service.stream(user, RUN_ID, 0);
-    expect(bus.stream).toHaveBeenCalledWith(RUN_ID, 0, { terminal: true });
-  });
-
-  it('stream: чужой прогон — 404 до открытия потока', async () => {
-    const { service, bus } = makeService(null);
-    await expectNotFound(service.stream(user, RUN_ID, 0));
-    expect(bus.stream).not.toHaveBeenCalled();
-  });
-
-  it('cancel: завершённый прогон — 409 ASSISTANT_RUN_ALREADY_FINISHED', async () => {
-    const { service, runner } = makeService(runRow({ status: 'failed' }));
-    await expect(service.cancel(user, RUN_ID)).rejects.toMatchObject({
-      code: expect.stringContaining('ALREADY_FINISHED'),
-    });
-    expect(runner.cancel).not.toHaveBeenCalled();
-  });
-
-  it('cancel: живой прогон останавливает раннер и перечитывает статус', async () => {
+  it('два параллельных сообщения одной сессии: старт ровно один', async () => {
     const { service, repo, runner } = makeService();
-    repo.findRun
-      .mockResolvedValueOnce(runRow())
-      .mockResolvedValueOnce(runRow({ status: 'cancelled' }));
-    const result = await service.cancel(user, RUN_ID);
-    expect(runner.cancel).toHaveBeenCalledWith(RUN_ID);
-    expect(repo.updateRun).not.toHaveBeenCalled();
-    expect(result.status).toBe('cancelled');
-  });
-
-  it('cancel: прогона нет в памяти — закрывает запись в БД', async () => {
-    const { service, repo, runner } = makeService();
-    runner.cancel.mockReturnValueOnce(false);
-    repo.findRun
-      .mockResolvedValueOnce(runRow())
-      .mockResolvedValueOnce(runRow({ status: 'cancelled' }));
-    await service.cancel(user, RUN_ID);
-    expect(repo.updateRun).toHaveBeenCalledWith(RUN_ID, {
-      status: 'cancelled',
-      finishedAt: expect.any(Date),
-      errorCode: 'cancelled',
-      errorMessage: 'Прогон остановлен сотрудником',
+    let active = false;
+    runner.isSessionActive.mockImplementation(() => active);
+    runner.start.mockImplementation(() => {
+      active = true;
     });
-  });
-
-  it('cancel: перечитывание не удалось — отдаёт прежнюю строку', async () => {
-    const { service, repo } = makeService();
-    repo.findRun.mockResolvedValueOnce(runRow()).mockResolvedValueOnce(null);
-    const result = await service.cancel(user, RUN_ID);
-    expect(result.id).toBe(RUN_ID);
+    const results = await Promise.allSettled([
+      service.sendMessage(user, SESSION_ID, { text: 'первый' }, 'Bearer token'),
+      service.sendMessage(user, SESSION_ID, { text: 'второй' }, 'Bearer token'),
+    ]);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(repo.createRun).toHaveBeenCalledTimes(1);
   });
 });

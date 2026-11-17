@@ -66,12 +66,11 @@ export class AssistantActionsService {
         action: null,
       };
     }
+    // Быстрая проверка до чтения имён/сборки карточки; окончательную держит
+    // атомарная вставка ниже (параллельные write-вызовы шага).
     const count = await this.repo.countRunActions(proposal.runId);
     if (count >= ASSISTANT_LIMITS.maxActionsPerRun) {
-      return {
-        text: `Ошибка (ASSISTANT_TOO_MANY_ACTIONS): за прогон можно предложить не больше ${ASSISTANT_LIMITS.maxActionsPerRun} действий — объясни сотруднику план и попроси уточнить`,
-        action: null,
-      };
+      return { text: tooManyActionsText(), action: null };
     }
     const parsed = parseToolInput(tool, proposal.rawInput);
     if (!parsed.ok) {
@@ -84,19 +83,23 @@ export class AssistantActionsService {
     // Карточка собирается из человеческих значений: имена по id дочитываются
     // от имени сотрудника; недоступное имя не валит карточку (id как есть).
     const { summary, fields } = await buildCard(tool, parsed.input, ctx);
-    const row = await this.repo.createAction({
-      runId: proposal.runId,
-      messageId: proposal.messageId,
-      userId: proposal.userId,
-      toolId: tool.id,
-      title: tool.card.title,
-      summary,
-      fields,
-      consequences: tool.card.consequences,
-      undoable: Boolean(tool.card.undo),
-      automatic: proposal.automatic,
-      args: parsed.input,
-    });
+    const row = await this.repo.createActionWithinLimit(
+      {
+        runId: proposal.runId,
+        messageId: proposal.messageId,
+        userId: proposal.userId,
+        toolId: tool.id,
+        title: tool.card.title,
+        summary,
+        fields,
+        consequences: tool.card.consequences,
+        undoable: Boolean(tool.card.undo),
+        automatic: proposal.automatic,
+        args: parsed.input,
+      },
+      ASSISTANT_LIMITS.maxActionsPerRun,
+    );
+    if (!row) return { text: tooManyActionsText(), action: null };
     // Пачка (#916): карточки одного хода решаются вместе, продолжение —
     // после всех. Байпас в пачку не входит: действия уже выполнены.
     if (!proposal.automatic && proposal.messageId) {
@@ -314,6 +317,11 @@ async function buildCard(
 }
 
 /** Текст исхода для модели: выполнено или причина отказа. */
+/** Текст модели при исчерпанном лимите карточек прогона (ранний и атомарный). */
+function tooManyActionsText(): string {
+  return `Ошибка (ASSISTANT_TOO_MANY_ACTIONS): за прогон можно предложить не больше ${ASSISTANT_LIMITS.maxActionsPerRun} действий — объясни сотруднику план и попроси уточнить`;
+}
+
 function describeOutcome(row: ActionRow): string {
   if (row.state === 'executed') {
     return `Действие выполнено (карточка ${row.id}): ${row.resultPreview ?? row.title}`;
