@@ -71,6 +71,27 @@ export const assistantStrings = {
       'Провайдеров нет. Добавьте OpenCode Go, OpenRouter или свою OpenAI-совместимую модель.',
     addProvider: 'Добавить провайдера',
     presetLabel: 'Готовые настройки',
+    /** Окно провайдера: создание — выбор пресета строками, правка — поля. */
+    createTitle: 'Новый провайдер',
+    editTitle: 'Поля провайдера',
+    /** Дефолт портала — в окне провайдера (тумблер + модель). */
+    defaultSwitch: 'Использовать по умолчанию',
+    defaultModelRequired: 'Выберите модель по умолчанию',
+    /** Правила ассистента — общие для портала, живут в окне провайдера. */
+    instructionsScope: 'Общие для всех провайдеров',
+    searchPlaceholder: 'Название, адрес или модель',
+    presetCustom: 'Свой адрес',
+    presetCustomHint: 'OpenAI-совместимая модель на своём сервере',
+    pickPreset: 'Выберите готовую настройку или свой адрес',
+    /** Колонки реестра провайдеров. */
+    columnState: 'Состояние',
+    defaultSet: 'Сделать по умолчанию',
+    defaultAssign: 'Назначить',
+    deleteSelected: 'Удалить выбранные',
+    deleteConfirmTitle: 'Удалить провайдера?',
+    deleteConfirmBulk: 'Удалить выбранных провайдеров?',
+    deleteConfirmHint: 'Удаление применится после сохранения настроек.',
+    deleteAction: 'Удалить',
     name: 'Название',
     baseUrl: 'Адрес API',
     baseUrlHint: 'Например, https://opencode.ai/zen/go/v1 — без /chat/completions на конце',

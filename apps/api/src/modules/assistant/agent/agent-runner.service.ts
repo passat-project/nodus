@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- агентный цикл (#893): провайдер → вызовы инструментов → терминальное событие — одна связная машина состояний; разрез по фазам потерял бы порядок и отмену */
 import { Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 import { ASSISTANT_LIMITS, ErrorCode } from '@nodus/contracts';
@@ -8,6 +9,7 @@ import { AiSettingsService } from '../providers/ai-settings.service.js';
 import {
   LlmProviderError,
   type LlmMessage,
+  type LlmStreamEvent,
   type LlmToolCall,
 } from '../providers/llm-provider.port.js';
 import { RunBusService } from '../run-bus.service.js';
@@ -95,6 +97,14 @@ export class AgentRunnerService {
 
     let messageId: string | null = null;
     let text = '';
+    /**
+     * Лучший текст шага: модели перемежают ответ вызовами инструментов
+     * («…ответ… → ui.open_entity → „Карточка готова“»). Финальным ответом
+     * считается САМЫЙ СОДЕРЖАТЕЛЬНЫЙ блок (по длине), а не последний: иначе
+     * короткая служебная фраза последнего шага затирала ответ (находка живой
+     * проверки 17.11.2026). Склейка всех шагов давала дубли ответов.
+     */
+    let bestText = '';
     let reasoning = '';
     let inputTokens: number | null = null;
     let outputTokens: number | null = null;
@@ -154,17 +164,30 @@ export class AgentRunnerService {
         const tools = toLlmTools(catalog.filter((tool) => activeTools.has(tool.id)));
         const calls: LlmToolCall[] = [];
         let stepText = '';
+        // Дельты шага: промежуточный текст (перед вызовом инструментов) идёт в
+        // поток, но финальным ответом считается текст ПОСЛЕДНЕГО шага — иначе
+        // в сообщении склеивались бы ответы всех шагов (дубль, находка живой
+        // проверки 17.11.2026).
+        text = '';
 
-        for await (const event of resolved.provider.streamChat({
-          model: resolved.modelId,
-          messages,
-          tools,
-          extra: resolved.model.extra,
-          signal: active.controller.signal,
-        })) {
+        // Транзиентный сбой сети/провайдера до первого события — один
+        // повтор: соединение с внешним API рвётся (keep-alive закрыт,
+        // 502 на входе), а ответ ещё не начат, дублей не будет.
+        let received = false;
+        const stream = this.streamWithRetry(
+          resolved,
+          { model: resolved.modelId, messages, tools, extra: resolved.model.extra },
+          active,
+          () => received,
+          () => {
+            received = true;
+          },
+        );
+        for await (const event of stream) {
           // Отмена проверяется на каждом событии, а не только силами
           // провайдера: «Стоп» обязан остановить и медленный поток.
           if (active.controller.signal.aborted) throw abortReason(active);
+          received = true;
           if (event.type === 'text.delta') {
             text += event.text;
             stepText += event.text;
@@ -180,6 +203,7 @@ export class AgentRunnerService {
           }
         }
 
+        if (stepText.trim().length > bestText.trim().length) bestText = stepText;
         if (calls.length === 0) break;
 
         // Модель попросила действия: её сообщение с tool_calls — в историю.
@@ -199,8 +223,10 @@ export class AgentRunnerService {
         );
       }
 
+      const finalText =
+        text.trim().length >= bestText.trim().length ? text : bestText;
       await this.repo.finishMessage(message.id, {
-        text,
+        text: finalText,
         reasoning: reasoning || null,
         errorCode: null,
       });
@@ -212,7 +238,7 @@ export class AgentRunnerService {
       });
       await this.bus.publish(params.runId, 'message.completed', {
         messageId: message.id,
-        text,
+        text: finalText,
         reasoning: reasoning || null,
       });
       await this.bus.publish(params.runId, 'run.completed', { inputTokens, outputTokens });
@@ -231,6 +257,46 @@ export class AgentRunnerService {
       clearTimeout(timer);
       this.active.delete(params.runId);
       this.bus.close(params.runId);
+    }
+  }
+
+  /**
+   * Поток провайдера с повторами, пока шаг не начал печатать (текст не
+   * начат — повтор безопасен): сетевой сбой OpenRouter/Cloudflare на живых
+   * прогонах встречался в ~30% попыток, и мгновенный повтор попадал в то же
+   * окно. Пауза между попытками — экспоненциальная, отмена и таймаут прогона
+   * прерывают ожидание.
+   */
+  private async *streamWithRetry(
+    resolved: { provider: { streamChat: (request: never) => AsyncIterable<LlmStreamEvent> }; modelId: string },
+    request: Record<string, unknown>,
+    active: ActiveRun,
+    hasReceived: () => boolean,
+    markReceived: () => void,
+  ): AsyncIterable<LlmStreamEvent> {
+    let attempt = 0;
+    for (;;) {
+      attempt += 1;
+      try {
+        for await (const event of resolved.provider.streamChat({ ...request, signal: active.controller.signal } as never)) {
+          markReceived();
+          yield event;
+        }
+        return;
+      } catch (error) {
+        const transient =
+          error instanceof LlmProviderError &&
+          (error.code === 'provider_unavailable' || error.code === 'provider_error');
+        const delay = PROVIDER_RETRY_DELAYS_MS[attempt - 1];
+        if (delay === undefined || hasReceived() || !transient) throw error;
+        if (active.controller.signal.aborted) throw abortReason(active);
+        this.logger.warn(
+          { err: error, cause: describeCause(error), attempt },
+          'Provider step failed before first event, retrying',
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        if (active.controller.signal.aborted) throw abortReason(active);
+      }
     }
   }
 
@@ -362,6 +428,8 @@ export class AgentRunnerService {
     } else if (error instanceof LlmProviderError) {
       code = error.code;
       message = error.message;
+      // Диагностика: код уходит в UI, причина — в лог (наружу тело не отдаём).
+      this.logger.warn({ err: error, runId: params.runId, code }, 'Provider call failed');
     } else if (error instanceof DomainException) {
       code =
         error.code === ErrorCode.ASSISTANT_PROVIDER_NOT_CONFIGURED ? 'no_provider' : 'internal';
@@ -428,6 +496,17 @@ function abortReason(active: ActiveRun): Error {
   );
 }
 
+/** Паузы перед повтором провайдера: две попытки после первой (всего три). */
+const PROVIDER_RETRY_DELAYS_MS: readonly number[] = [400, 1200];
+
+/** Причина сокетного сбоя строкой для лога: pino не сериализует `cause`. */
+function describeCause(error: unknown): string | undefined {
+  const cause = error instanceof Error ? error.cause : undefined;
+  if (!(cause instanceof Error)) return undefined;
+  const code = (cause as NodeJS.ErrnoException).code;
+  return code ? `${code}: ${cause.message}` : cause.message;
+}
+
 function isAbortError(error: unknown): boolean {
   return (
     error instanceof Error &&
@@ -450,8 +529,15 @@ function parseArgs(raw: string): unknown {
   }
 }
 
-/** Краткий результат для карточки в ленте (полный текст — только модели). */
+/**
+ * Краткий результат для карточки в ленте (полный текст — только модели).
+ * Переводы строк СОХРАНЯЮТСЯ: свёрнутая строка вызова вывода не показывает
+ * вовсе, а раскрытая показывает список построчно, а не одной простынёй.
+ */
 function clipPreview(text: string): string {
-  const normalized = text.replace(/\s+/g, ' ').trim();
-  return normalized.length > 400 ? `${normalized.slice(0, 400)}…` : normalized;
+  const lines = text
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trimEnd());
+  const clipped = lines.slice(0, 12).join('\n').trim();
+  return clipped.length > 600 ? `${clipped.slice(0, 600).trimEnd()}…` : clipped;
 }
