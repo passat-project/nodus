@@ -261,6 +261,17 @@ async function up(mode, mock) {
       API_PORT: String(PORTS.api),
       NODE_ENV: 'development',
       COOKIE_SECURE: 'false',
+      // TLS песочницы: на dev-хосте Kaspersky перехватывает HTTPS (его корень
+      // стоит в хранилище Windows), а Node по умолчанию доверяет только
+      // ВСТРОЕННОМУ списку Mozilla → внешние вызовы api (провайдер моделей,
+      // Exa, почта) падают с `self-signed certificate in certificate chain`.
+      // `NODE_USE_SYSTEM_CA=1` — штатный механизм Node (v22.19+/v24.6+,
+      // https://nodejs.org/learn/http/enterprise-network-configuration):
+      // проверка сертификата ОСТАЁТСЯ включённой, добавляются лишь корни ОС
+      // (не путать с NODE_TLS_REJECT_UNAUTHORIZED=0 — тот отключает проверку).
+      // Только песочница: прод-контейнеры запускаются своим compose и живут
+      // в контуре без Kaspersky.
+      NODE_USE_SYSTEM_CA: '1',
       // e2e-прогоны подряд с двух браузеров выбивают дефолт 3000/мин с NAT-IP.
       RATE_LIMIT_MAX: '30000',
       // Почтовый контур песочницы — только тестовый ящик (MAIL_TEST_*),
