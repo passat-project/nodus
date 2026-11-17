@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import {
   assistantMcpBodySchema,
   assistantMcpResponseSchema,
@@ -65,7 +66,9 @@ export class McpSettingsController {
   @ApiOkResponse({ standardSchema: assistantMcpTestResponseSchema })
   @ApiErrors(401, 403, 404)
   @ApiIdempotencyKey()
-  test(@Param('id') id: string): Promise<AssistantMcpTestResponse> {
+  test(
+    @Param('id', new ZodValidationPipe(z.uuid())) id: string,
+  ): Promise<AssistantMcpTestResponse> {
     return this.settings.test(id);
   }
 }

@@ -14,6 +14,7 @@ import { parseAiSettingsSection } from './ai-section-switcher.js';
 
 const mocks = vi.hoisted(() => ({
   search: {} as { tab?: string; section?: string },
+  navigate: vi.fn(),
   providers: {
     data: {
       providers: [
@@ -62,7 +63,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@tanstack/react-router', () => ({
   useSearch: () => mocks.search,
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mocks.navigate,
 }));
 
 vi.mock('../api/ai-settings.js', () => ({
@@ -70,10 +71,12 @@ vi.mock('../api/ai-settings.js', () => ({
   useUpdateAiSettings: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
+const mcpMutations = vi.hoisted(() => ({ save: vi.fn(), test: vi.fn() }));
+
 vi.mock('../api/mcp-settings.js', () => ({
   useMcpSettingsQuery: () => mocks.mcp,
-  useUpdateMcpSettings: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useTestMcpServer: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateMcpSettings: () => ({ mutateAsync: mcpMutations.save, isPending: false }),
+  useTestMcpServer: () => ({ mutateAsync: mcpMutations.test, isPending: false }),
 }));
 
 beforeEach(() => {

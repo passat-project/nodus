@@ -87,8 +87,20 @@ describe('McpSettingsService.put', () => {
     await expect(
       service.put({
         servers: [
-          { name: 'A', url: 'https://a.example/mcp', defaultForSearch: true },
-          { name: 'B', url: 'https://b.example/mcp', defaultForSearch: true },
+          {
+            name: 'A',
+            url: 'https://a.example/mcp',
+            transport: 'streamable-http',
+            enabled: true,
+            defaultForSearch: true,
+          },
+          {
+            name: 'B',
+            url: 'https://b.example/mcp',
+            transport: 'streamable-http',
+            enabled: true,
+            defaultForSearch: true,
+          },
         ],
       }),
     ).rejects.toBeInstanceOf(DomainException);
