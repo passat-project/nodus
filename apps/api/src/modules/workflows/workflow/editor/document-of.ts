@@ -1,4 +1,4 @@
-import type { WorkflowDocument } from '@nodus/contracts';
+import type { WorkflowDocument, WorkflowDraftAction } from '@nodus/contracts';
 
 import { maskCreationForm } from '../../types/process-type.mapper.js';
 import { liveLayout } from './layout.js';
@@ -39,6 +39,20 @@ export function documentOf(
       sortOrder: t.sortOrder,
       rules: t.rules,
       form: t.form ?? { enabled: false, sections: [] },
+    })),
+    actions: (row.actions ?? []).map((a) => ({
+      id: a.id,
+      code: null,
+      name: a.name,
+      stageId: a.stageId,
+      display: a.display,
+      sortOrder: a.sortOrder,
+      rules: a.rules,
+      form: (a.form as WorkflowDraftAction['form']) ?? {
+        enabled: false,
+        sections: [],
+      },
+      steps: (a.steps as WorkflowDraftAction['steps']) ?? [],
     })),
     layout: liveLayout(layout, {
       stageIds: new Set(row.stages.map((s) => s.id)),

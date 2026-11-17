@@ -97,4 +97,18 @@ describe('RouteToolbar — действия в узком холсте (#497)', 
     expect(chip.getAttribute('title')).toBe(`${ui.automation.problemsChip} · 1`);
     expect(chip.textContent).toContain('1');
   });
+
+  it('пустое окно действия — ошибка блокирует «Опубликовать» с объяснением', () => {
+    // Кнопка публикации остаётся доступной для нажатия только когда правок
+    // нет и ошибок нет; здесь правка есть, но ошибка схемы сильнее.
+    renderToolbar({
+      dirty: true,
+      publishBlocked: false,
+      problems: [{ code: 'action_window_empty', severity: 'error', actionId: 'a1' }],
+    });
+
+    const publish = screen.getByRole('button', { name: ui.automation.publish });
+    expect((publish as HTMLButtonElement).disabled).toBe(true);
+    expect(publish.getAttribute('title')).toBe(`${ui.automation.problemsFixFirst} 1`);
+  });
 });

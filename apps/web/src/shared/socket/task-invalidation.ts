@@ -144,6 +144,15 @@ export function pushTaskKeys(
       batcher.push(tasksKeys.timeEntries(taskId), 'feed');
       batcher.push(tasksKeys.timer(), 'feed');
     }
+    // Действия привязаны к статусу (аудит Б1): чужой переход обязан сменить
+    // кнопки в панели сразу, а не после истечения staleTime.
+    if (type === TASK_EVENTS.STAGE_CHANGED || type === TASK_EVENTS.STATUS_CHANGED) {
+      batcher.push(tasksKeys.actions(taskId), 'feed');
+    }
+    // Нажатие действия — новая строка «Истории» (аудит Б3) у всех участников.
+    if (type === TASK_EVENTS.ACTION_PRESSED) {
+      batcher.push(tasksKeys.history(taskId), 'feed');
+    }
     // Связь меняет обе карточки: сервер шлёт relation_changed по каждой
     // стороне со своей аудиторией (#317) — список связей живёт отдельным ключом.
     if (type === TASK_EVENTS.RELATION_CHANGED) {

@@ -208,7 +208,8 @@ export function arrange(doc: WorkflowDraftDocument): WorkflowDraftDocument {
   return { ...doc, layout: { stages, transitions: {} } };
 }
 
-/** Удаление статусов и кнопок одним шагом (кнопки удалённых статусов — тоже). */
+/** Удаление статусов и кнопок одним шагом (кнопки и действия удалённых
+ *  статусов — тоже: иначе действие осталось бы призраком архивной стадии). */
 export function removeElements(
   doc: WorkflowDraftDocument,
   stageIds: readonly string[],
@@ -225,6 +226,7 @@ export function removeElements(
         !stages.has(t.toStageId) &&
         !(t.fromStageId !== null && stages.has(t.fromStageId)),
     ),
+    actions: (doc.actions ?? []).filter((a) => a.stageId === null || !stages.has(a.stageId)),
   });
 }
 

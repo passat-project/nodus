@@ -17,6 +17,7 @@ export const formsStrings = {
     titles: {
       creation: 'Окно создания',
       transition: 'Окно кнопки',
+      action: 'Окно действия',
       folder: 'Окно папки',
       project: 'Окно проекта',
       registry: 'Окно строки реестра',

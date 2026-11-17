@@ -1,4 +1,4 @@
-import { expect, vi } from 'vitest';
+﻿import { expect, vi } from 'vitest';
 
 import type {
   WorkflowActorSubject,
@@ -9,6 +9,7 @@ import { WorkflowEngine } from './workflow-engine.js';
 import type { TransitionDef } from '../transition-rules.js';
 import { parseRules } from '../transition-rules.js';
 import { parseForm } from '../transition-form.js';
+import type { ActionDef } from '../workflow.repository.js';
 import { gateFacts } from '../gate-facts.test-helper.js';
 
 export const TX = { tx: true } as never;
@@ -50,6 +51,8 @@ export function transition(partial: Partial<TransitionDef>): TransitionDef {
 export function setup(
   transitions: TransitionDef[],
   subjectFacts: () => typeof facts = () => facts,
+  actions: readonly ActionDef[] = [],
+  subjectOverrides: Partial<{ stageId: string; canOverrideGates: boolean }> = {},
 ) {
   const order: string[] = [];
   let applied = false;
@@ -61,6 +64,7 @@ export function setup(
       stage(DONE, 'Завершена', 'closed'),
     ],
     transitions,
+    actions,
   };
   const adapter = {
     lock: vi.fn(async () => void order.push('lock')),
@@ -69,10 +73,10 @@ export function setup(
       return {
         workflowId: 'wf',
         typeId: 'type',
-        stageId: ACTIVE,
+        stageId: subjectOverrides.stageId ?? ACTIVE,
         roles: new Set(['assignee']),
         bypassConditions: false,
-        canOverrideGates: false,
+        canOverrideGates: subjectOverrides.canOverrideGates ?? false,
         actsWithoutConditions: true,
         facts: subjectFacts(),
       };

@@ -408,6 +408,15 @@ export const letterHistoryEntrySchema = z.discriminatedUnion('kind', [
     comment: z.string().optional(),
   }),
   z.object({ ...historyEntryBase, kind: z.literal('participant_joined') }),
+  /** Нажатие действия без смены статуса (#633, аудит В1): имя кнопки и статус,
+   *  в котором нажали; статус письма при этом не менялся. */
+  z.object({
+    ...historyEntryBase,
+    kind: z.literal('action_pressed'),
+    actionName: z.string().min(1),
+    stageName: z.string().min(1),
+    comment: z.string().optional(),
+  }),
   /** Связь писем поставлена/снята/заменена (#461, Р6): номер второй стороны
    *  гидрирует сервер (ссылка, не текст). */
   z.object({

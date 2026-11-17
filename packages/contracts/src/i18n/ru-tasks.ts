@@ -73,6 +73,10 @@ export const tasksStrings = {
   tabChat: 'Чат',
   aboutTask: 'О задаче',
   history: 'История',
+  /** Строка журнала нажатия действия (#633): «Действие: X · в статусе Y». */
+  historyAction: 'Действие',
+  historyInStage: 'в статусе',
+  historyMore: 'Показать ещё',
   favorite: 'В избранное',
   created: 'Задача создана',
   updated: 'Обновлена',
@@ -215,6 +219,14 @@ export const tasksStrings = {
    *  кнопок задаёт маршрут, главная слева, «Ещё ⋯» — меню. */
   processObserving: 'Вы наблюдаете за задачей',
   processNoActions: 'Нет доступных действий',
+  /** Действие без смены статуса (#633): тост после нажатия. */
+  actionDone: 'Действие выполнено',
+  /** Действия карточки (#633): их 2+ — панель показывает одну кнопку с меню. */
+  actionsMenu: 'Действия',
+  /** Сдвоенная кнопка (модель Битрикс24): левая часть — выполнить, правая — все. */
+  actionRunLabel: 'Выполнить:',
+  allActionsLabel: 'Все действия:',
+  actionOpensWindow: 'Откроется окно',
   processRouteView: 'Схема маршрута',
   processBlockedMissing: 'Не хватает:',
   processOutcomeSuccess: 'Завершена',

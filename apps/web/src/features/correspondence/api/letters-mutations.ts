@@ -1,10 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
 import type {
+  ExecuteActionBody,
   ExecuteLetterTransitionResult,
   ExecuteTransitionBody,
   LetterDetail,
   UpdateLetterBody,
+  WorkflowAction,
   WorkflowTransition,
 } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -67,6 +69,36 @@ export function useExecuteLetterTransition() {
     },
     onError: (error) => {
       if (registrationIssueOf(error) || alreadyRegisteredNumber(error) !== null) return;
+      toast.error(letterErrorText(error));
+    },
+  });
+}
+
+/** Нажатие действия письма (#633, аудит В1): окно пишет данные, статус прежний.
+ *  Ответ — письмо и свежие кнопки; история перезапрашивается (аудит Б3). */
+export function usePressLetterAction() {
+  const queryClient = useQueryClient();
+  const attempts = useRef(new Map<string, string>());
+  return useMutation({
+    mutationFn: (vars: { letterId: string; action: WorkflowAction; body: ExecuteActionBody }) => {
+      const slot = `${vars.letterId}:${vars.action.id}`;
+      const idempotencyKey = attempts.current.get(slot) ?? crypto.randomUUID();
+      attempts.current.set(slot, idempotencyKey);
+      return api<ExecuteLetterTransitionResult>(
+        `/letters/${vars.letterId}/actions/${vars.action.id}/press`,
+        { method: 'POST', body: vars.body, idempotencyKey },
+      );
+    },
+    onSuccess: (result, vars) => {
+      attempts.current.delete(`${vars.letterId}:${vars.action.id}`);
+      applyLetter(queryClient, result.letter);
+      queryClient.setQueryData(lettersKeys.transitions(result.letter.id), result.transitions);
+      void queryClient.invalidateQueries({ queryKey: lettersKeys.actions(result.letter.id) });
+      void queryClient.invalidateQueries({ queryKey: lettersKeys.history(result.letter.id) });
+      void queryClient.invalidateQueries({ queryKey: chatKeys.byLetter(result.letter.id) });
+      listsStale(queryClient);
+    },
+    onError: (error) => {
       toast.error(letterErrorText(error));
     },
   });

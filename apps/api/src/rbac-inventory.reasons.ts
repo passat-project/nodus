@@ -131,6 +131,10 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'POST /letters/:id/join': LETTER_VISIBLE_ONE,
   'GET /letters/:id/transitions': LETTER_VISIBLE_ONE,
   'POST /letters/:id/transitions/:transitionId': LETTER_VISIBLE_ONE,
+  // Действия письма без смены статуса (#633, аудит В1): та же граница, что у
+  // кнопок перехода — видимость письма проверяет сервис (404 чужому).
+  'GET /letters/:id/actions': LETTER_VISIBLE_ONE,
+  'POST /letters/:id/actions/:actionId/press': LETTER_VISIBLE_ONE,
   'GET /letters/:id/history': LETTER_VISIBLE_ONE,
   // Дерево «ёлочки» (#461, Р2): видимость письма в сервисе, невидимый корень —
   // 404 без оракула; дочерние узлы фильтруются той же функцией.
@@ -165,6 +169,9 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'GET /tasks/:id/history': TASK_VISIBLE_ONE,
   'GET /tasks/:id/time-entries': TASK_VISIBLE_ONE,
   'GET /tasks/:id/transitions': TASK_VISIBLE_ONE,
+  // Действия без смены статуса (#633): список — зрителю задачи (видимость и
+  // исполняемость фильтрует движок), нажатие — праву действий задачи.
+  'GET /tasks/:id/actions': TASK_VISIBLE_ONE,
   // Формулы ячеек атрибутов (#632): чтение — зрителю задачи, мутации и
   // dry-run переноса — праву правки задачи (canEdit) в сервисе.
   'GET /tasks/:id/custom-fields/:fieldId/formula': TASK_VISIBLE_ONE,
@@ -231,6 +238,7 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'DELETE /tasks/:id/relations/:relationId': TASK_ACCESS,
   'POST /tasks/:id/results': TASK_ACCESS,
   'POST /tasks/:id/transitions/:transitionId': TASK_ACCESS,
+  'POST /tasks/:id/actions/:actionId/press': TASK_ACCESS,
   'POST /tasks/:id/type': TASK_ACCESS,
   'POST /tasks/:id/time-entries': TASK_ACCESS,
   'DELETE /tasks/time-entries/:entryId': TASK_ACCESS,

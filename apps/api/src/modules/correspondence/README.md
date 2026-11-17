@@ -90,6 +90,13 @@ resume). Секреты — только `.env` владельца/песочн�
   в той же транзакции (`NumberSeriesService`), откат перехода не сдвигает
   счётчик — номеров без пропусков. Формат «Вх-2026/118», год — по
   `COMPANY_TIMEZONE` (Минск).
+- **Действия письма без смены статуса** (#633, аудит В1):
+  `GET /letters/:id/actions` и `POST /letters/:id/actions/:actionId/press` —
+  тот же движок, что у задачи (`availableActions` / `pressAction`, категория
+  `letter`), тело `executeActionBodySchema` (окно, обход с причиной). Журнал —
+  `transition_records.record_kind = 'action'`, событие
+  `correspondence.letter_action_pressed` (история письма и второй канал).
+  Раздел «Регистрация» в окне действия запрещён проверкой публикации.
 - **Видимость** (`access/letter-access.ts`): зарегистрированное — всем,
   незарегистрированное — держателям `correspondence.register`; невидимое —
   404 без оракула. Той же функцией пользуются мост чата, файлы, дерево связей

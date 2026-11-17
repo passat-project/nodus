@@ -38,7 +38,7 @@ import {
 import { addTaskLocks } from '../../../../shared/mocks/data/task-locks.js';
 import { currentAuthUser } from '../../../../shared/mocks/data/users.js';
 
-function findTask(id: string): TaskListItem | undefined {
+export function findTask(id: string): TaskListItem | undefined {
   return (
     demoTasks.find((t) => t.id === id) ??
     Object.values(demoSubtasks)
@@ -54,14 +54,14 @@ function findTask(id: string): TaskListItem | undefined {
  *  встроенное правило «итог → итог» прячет «Отменить» у закрытых. */
 /** Маршруты типов с собственным документом: «Комплект» (#632), «Изменение»
  *  с кнопкой «Выдать в печать» (#630). */
-function documentOfTask(task: TaskListItem) {
+export function documentOfTask(task: TaskListItem) {
   if (task.type.id === quickProcessType.id) return quickDocument;
   if (task.type.id === komplektType.id) return demoWorkflowDetails[KOMPLEKT_WORKFLOW_ID]!.document;
   if (task.type.id === changeType.id) return demoWorkflowDetails[CHANGE_WORKFLOW_ID]!.document;
   return standardDocument;
 }
 
-function transitionsOf(task: TaskListItem): WorkflowTransition[] {
+export function transitionsOf(task: TaskListItem): WorkflowTransition[] {
   const route = documentOfTask(task);
   const closed = isFinalState(task.stage.systemState);
   const stageIds = new Set(route.stages.map((s) => s.id));

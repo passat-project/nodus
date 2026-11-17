@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
 import type {
+  ExecuteActionBody,
   ExecuteTransitionBody,
   ExecuteTransitionResult,
   TaskDetail,
   TaskListItem,
   TaskStage,
+  WorkflowAction,
   WorkflowTransition,
   TransitionBlockReason,
 } from '@nodus/contracts';
@@ -32,6 +34,56 @@ export function useWorkflowTransitions(taskId: string) {
     queryKey: tasksKeys.transitions(taskId),
     queryFn: () => api<WorkflowTransition[]>(`/tasks/${taskId}/transitions`),
     staleTime: 30_000,
+  });
+}
+
+/** Доступные текущему пользователю действия без смены статуса (#633):
+ *  кнопки панели процесса, которые пишут журнал, но не меняют стадию. */
+export function useWorkflowActions(taskId: string) {
+  return useQuery({
+    queryKey: tasksKeys.actions(taskId),
+    queryFn: () => api<WorkflowAction[]>(`/tasks/${taskId}/actions`),
+    staleTime: 30_000,
+  });
+}
+
+/** Нажатие действия (#633): пессимистично (окно может собирать данные),
+ *  затем тост и обновление журнала/кнопок. Стадия не меняется — патч задачи
+ *  только из ответа сервера. */
+export function usePressAction(taskId: string) {
+  const queryClient = useQueryClient();
+  const idempotencyKey = useRef<string | null>(null);
+  return useMutation({
+    mutationFn: (vars: { action: WorkflowAction; body: ExecuteActionBody }) => {
+      idempotencyKey.current ??= crypto.randomUUID();
+      return api<ExecuteTransitionResult>(`/tasks/${taskId}/actions/${vars.action.id}/press`, {
+        method: 'POST',
+        body: vars.body,
+        idempotencyKey: idempotencyKey.current,
+      });
+    },
+    onSuccess: (result) => {
+      idempotencyKey.current = null;
+      markFreshFromMutation(taskId);
+      patchTask(queryClient, taskId, result.task);
+      queryClient.setQueryData(tasksKeys.transitions(taskId), result.transitions);
+      void queryClient.invalidateQueries({ queryKey: tasksKeys.actions(taskId) });
+      void queryClient.invalidateQueries({ queryKey: tasksKeys.history(taskId) });
+      void queryClient.invalidateQueries({ queryKey: tasksKeys.detail(taskId) });
+      void queryClient.invalidateQueries({ queryKey: tasksKeys.timeEntries(taskId) });
+      for (const key of [
+        tasksKeys.listPages(),
+        tasksKeys.kanbanAll(),
+        tasksKeys.personalStages(),
+      ]) {
+        void queryClient.invalidateQueries({ queryKey: key, refetchType: 'none' });
+      }
+      toast.success(ui.tasks.actionDone);
+    },
+    onError: (error) => {
+      // Окно остаётся открытым: 422/409 показывается внутри, остальное — тостом.
+      if (!transitionWindowError(error)) toast.error(transitionErrorText(error));
+    },
   });
 }
 
@@ -107,6 +159,9 @@ export function useSubmitTransitionWindow(taskId: string) {
       markFreshFromMutation(taskId);
       patchTask(queryClient, taskId, result.task);
       queryClient.setQueryData(tasksKeys.transitions(taskId), result.transitions);
+      // Действия зависят от статуса (аудит Б1): после перехода панель обязана
+      // показать кнопки нового статуса, а не старого до истечения staleTime.
+      void queryClient.invalidateQueries({ queryKey: tasksKeys.actions(taskId) });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.detail(taskId) });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.timeEntries(taskId) });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.transitions(taskId) });
@@ -163,6 +218,9 @@ export function useExecuteTransition(taskId: string) {
       markFreshFromMutation(taskId);
       patchTask(queryClient, taskId, result.task);
       queryClient.setQueryData(tasksKeys.transitions(taskId), result.transitions);
+      // Действия нового статуса (аудит Б1): кэш старого статуса сбрасывается
+      // сразу — иначе в панели остаются кнопки, которых уже нет.
+      void queryClient.invalidateQueries({ queryKey: tasksKeys.actions(taskId) });
       // Тост с номером — письменный паттерн (#630, Р6): «Присвоен номер …».
       const numbers = result.assignedNumbers ?? [];
       if (numbers.length > 0) {

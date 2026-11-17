@@ -1,5 +1,5 @@
-import { CornerDownRight } from 'lucide-react';
-import type { ChatMessage, TaskTransitionBlock } from '@nodus/contracts';
+import { CornerDownRight, Zap } from 'lucide-react';
+import type { ChatMessage } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
@@ -62,12 +62,26 @@ export function TransitionBlock({
         ) : null}
         <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-muted/30 px-3 py-2">
           <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-            <CornerDownRight className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-            <span className="font-medium text-foreground">{block.transitionName}</span>
+            {block.kind === 'task_action' ? (
+              <Zap className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            ) : (
+              <CornerDownRight className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            )}
+            <span className="font-medium text-foreground">
+              {block.kind === 'task_action'
+                ? `${ui.chat.transitionBlock.action}: ${block.actionName}`
+                : block.transitionName}
+            </span>
             <span aria-hidden>·</span>
             <span>
-              {block.fromStageName} {ui.chat.transitionBlock.arrow}
-              {block.kind === 'task_transition' ? ` ${block.toStageName}` : null}
+              {block.kind === 'task_action' ? (
+                block.stageName
+              ) : (
+                <>
+                  {block.fromStageName} {ui.chat.transitionBlock.arrow}
+                  {block.kind === 'task_transition' ? ` ${block.toStageName}` : null}
+                </>
+              )}
             </span>
             {block.kind === 'letter_transition' ? (
               <StageChip name={block.toStageName} color={block.toStageColor} />
@@ -81,7 +95,7 @@ export function TransitionBlock({
               <LinkifiedText text={message.text} />
             </p>
           ) : null}
-          {block.kind === 'task_transition' && block.result ? (
+          {block.kind !== 'letter_transition' && block.result ? (
             <ResultLine result={block.result} />
           ) : null}
           <p className="text-[11px] text-muted-foreground">
@@ -93,7 +107,7 @@ export function TransitionBlock({
   );
 }
 
-function ResultLine({ result }: { result: NonNullable<TaskTransitionBlock['result']> }) {
+function ResultLine({ result }: { result: { fileCount: number; messageCount: number } }) {
   const parts: string[] = [];
   if (result.fileCount > 0) {
     parts.push(`${result.fileCount} ${plural(result.fileCount, ui.chat.transitionBlock.files)}`);

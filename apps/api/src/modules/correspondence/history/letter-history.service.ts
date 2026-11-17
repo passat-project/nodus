@@ -141,6 +141,14 @@ export class LetterHistoryService {
           relatedLetter: related ?? { id: relatedLetterId, regNumber: null, subject: null },
         };
       }
+      case CORRESPONDENCE_EVENTS.LETTER_ACTION_PRESSED:
+        return {
+          ...base,
+          kind: 'action_pressed',
+          actionName: String(payload.actionName ?? 'Действие'),
+          stageName: String(payload.stageName ?? '—'),
+          ...(payload.comment ? { comment: String(payload.comment) } : {}),
+        };
       case CORRESPONDENCE_EVENTS.LETTER_PARTICIPANTS_CHANGED: {
         // В историю идёт только личное присоединение (актор = добавленный);
         // синхронизация состава при регистрации — не событие карточки.

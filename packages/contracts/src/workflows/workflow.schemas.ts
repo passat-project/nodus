@@ -244,3 +244,18 @@ export const executeTransitionBodySchema = z
   })
   .strict();
 export type ExecuteTransitionBody = z.infer<typeof executeTransitionBodySchema>;
+
+/**
+ * Тело нажатия действия (#633, аудит В3): окно и — как у перехода — обход
+ * гейта с причиной. Полей, которых у действия нет, здесь нет: сервер не
+ * принимает молча то, чего не исполняет (номер выдаётся переходом, а не
+ * действием, поэтому `confirmEmptyNumberParts` действию недоступен).
+ */
+export const executeActionBodySchema = z
+  .object({
+    override: z.boolean().optional(),
+    reason: z.string().trim().min(1).max(500).optional(),
+    form: transitionFormInputSchema.optional(),
+  })
+  .strict();
+export type ExecuteActionBody = z.infer<typeof executeActionBodySchema>;

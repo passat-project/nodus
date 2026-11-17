@@ -6,12 +6,18 @@ import { stageColorSchema } from '../workflows/workflow-primitives.schemas.js';
  * Виды сообщений и блоки ленты (#380): `text` — обычное; `task_transition` —
  * блок перехода задачи (причина/итог окна); `letter_transition` — блок
  * перехода письма (#55, Р10: «Закрыть без регистрации», «Отменить
- * регистрацию» с причиной). Реестр блоков — закрытый union по виду; #313
- * добавит `system` без переделки. Вынесено из chat.schemas.ts (I5: файл
- * агрегата перерос 300 строк).
+ * регистрацию» с причиной); `task_action` — нажатие действия без смены
+ * статуса (#633). Реестр блоков — закрытый union по виду; #313 добавит
+ * `system` без переделки. Вынесено из chat.schemas.ts (I5: файл агрегата
+ * перерос 300 строк).
  */
 
-export const chatMessageKindSchema = z.enum(['text', 'task_transition', 'letter_transition']);
+export const chatMessageKindSchema = z.enum([
+  'text',
+  'task_transition',
+  'letter_transition',
+  'task_action',
+]);
 export type ChatMessageKind = z.infer<typeof chatMessageKindSchema>;
 
 /** Блок перехода задачи в ленте (#380): данные из payload события
@@ -49,10 +55,31 @@ export const letterTransitionBlockSchema = z.object({
 });
 export type LetterTransitionBlock = z.infer<typeof letterTransitionBlockSchema>;
 
+/** Блок действия задачи (#633): нажата кнопка без смены статуса. Данные из
+ *  payload события `task.action_pressed`; текст — комментарий окна. Статус
+ *  не меняется, поэтому в строке только название действия и статус, в
+ *  котором нажали. */
+export const taskActionBlockSchema = z.object({
+  kind: z.literal('task_action'),
+  taskId: z.uuid(),
+  recordId: z.uuid(),
+  actionName: z.string().min(1).max(40),
+  stageName: z.string().min(1).max(40),
+  commentLabel: z.string().max(60).nullable(),
+  result: z
+    .object({
+      fileCount: z.number().int().min(0),
+      messageCount: z.number().int().min(0),
+    })
+    .nullable(),
+});
+export type TaskActionBlock = z.infer<typeof taskActionBlockSchema>;
+
 /** Реестр блоков — закрытый union по виду (#313: + system). */
 export const chatMessageBlockSchema = z.discriminatedUnion('kind', [
   taskTransitionBlockSchema,
   letterTransitionBlockSchema,
+  taskActionBlockSchema,
 ]);
 export type ChatMessageBlock = z.infer<typeof chatMessageBlockSchema>;
 

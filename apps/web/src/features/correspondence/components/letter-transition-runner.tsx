@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import type {
   ExecuteLetterTransitionResult,
   LetterDetail,
@@ -14,8 +14,9 @@ import { useExecuteLetterTransition } from '../api/letters-mutations.js';
 import { RegistrationSection } from './registration/registration-section.js';
 
 /** Контекст окна для письма: окно знает только стадию и вложения карточки;
- *  поля задачи (описание, сроки, время) у письма не участвуют. */
-function windowContextOf(letter: LetterDetail): TransitionWindowContext {
+ *  поля задачи (описание, сроки, время) у письма не участвуют. Экспорт —
+ *  окно действия письма (#633) берёт тот же контекст. */
+export function letterWindowContextOf(letter: LetterDetail): TransitionWindowContext {
   return {
     entityId: letter.id,
     conversationId: null,
@@ -84,7 +85,7 @@ export function useLetterTransitionRunner(
         open
         mode="live"
         transition={open}
-        context={windowContextOf(letter)}
+        context={letterWindowContextOf(letter)}
         submitting={execute.isPending}
         onCancel={close}
         onSubmit={(body) =>

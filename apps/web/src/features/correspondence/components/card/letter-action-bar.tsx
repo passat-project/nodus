@@ -7,6 +7,7 @@ import {
   Trash2,
   UserPlus,
   X,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -25,12 +26,19 @@ import { toast } from 'sonner';
 
 import { ApiError } from '../../../../shared/api-client.js';
 import { lettersKeys } from '../../../../shared/api/letters-keys.js';
+import { gateReasonsText } from '../../../../shared/tasks/transition-error.js';
 import { stageTone } from '../../../../shared/ui/board/stage-tone.js';
+import {
+  processSlotLabels,
+  ProcessButtonSlot,
+  type ProcessSlotItem,
+} from '../../../../shared/workflow/process-button-slot.js';
 import { groupProcessButtons } from '../../../../shared/workflow/process-buttons.js';
 import { alreadyRegisteredNumber, registrationIssueOf } from '../../api/letters-cache.js';
 import { useExecuteLetterTransition } from '../../api/letters-mutations.js';
 import { useLetterTransitions, useReceiptMethods } from '../../api/letters-queries.js';
 import { letterRegistrationInput } from '../../lib/registration-draft.js';
+import { useLetterActionRunner } from '../letter-action-runner.js';
 import { toastLetterTransition, useLetterTransitionRunner } from '../letter-transition-runner.js';
 
 /* Кнопки бара — одной высоты h-8 (канон панели процесса задачи); важность —
@@ -76,12 +84,38 @@ export function LetterActionBar({
 }) {
   const { data: transitions } = useLetterTransitions(letter.id);
   const runner = useLetterTransitionRunner(letter);
+  const actionRunner = useLetterActionRunner(letter);
   const execute = useExecuteLetterTransition();
   const { data: methods = [] } = useReceiptMethods();
   const queryClient = useQueryClient();
   const [directId, setDirectId] = useState<string | null>(null);
   const closed = isFinalState(letter.stage.systemState);
   const { primary, visible, menu } = groupProcessButtons(transitions ?? []);
+  // Действия (#633, аудит В1): обычные первыми, показ `menu` — в конце слота.
+  const orderedActions = [
+    ...actionRunner.actions.filter((action) => action.display !== 'menu'),
+    ...actionRunner.actions.filter((action) => action.display === 'menu'),
+  ];
+  const mainAction = !primary && visible.length === 0 ? (orderedActions[0] ?? null) : null;
+  const slotActions = mainAction
+    ? orderedActions.filter((action) => action.id !== mainAction.id)
+    : orderedActions;
+  const actionItem = (action: (typeof orderedActions)[number]): ProcessSlotItem => {
+    const blocked = action.blockedBy.length > 0;
+    return {
+      id: action.id,
+      name: action.name,
+      icon: <Zap className="size-4 shrink-0" strokeWidth={1.75} />,
+      blocked,
+      ...(blocked
+        ? { blockedText: `${ui.tasks.processBlockedMissing} ${gateReasonsText(action.blockedBy)}` }
+        : {}),
+      running: actionRunner.runningId === action.id,
+      title: action.name,
+      rare: action.display === 'menu',
+      onSelect: () => actionRunner.run(action),
+    };
+  };
   const hasMenu = menu.length > 0 || letter.access.canDeleteSpam || letter.access.canEdit;
 
   /** Регистрация из карточки-формы (редизайн #56): обязательное заполнено —
@@ -174,6 +208,18 @@ export function LetterActionBar({
       ) : null}
       {primary ? renderButton(primary, true) : null}
       {visible.map((t) => renderButton(t, false))}
+      {/* Действия письма без смены статуса (#633, аудит В1): слот панели,
+          одно — кнопкой, два и больше — первая сразу, остальные по стрелке. */}
+      {actionRunner.dialog}
+      {mainAction ? (
+        <ProcessButtonSlot items={[actionItem(mainAction)]} main slotLabel={mainAction.name} />
+      ) : null}
+      {slotActions.length > 0 ? (
+        <ProcessButtonSlot
+          items={slotActions.map(actionItem)}
+          slotLabel={processSlotLabels.actions}
+        />
+      ) : null}
       {hasMenu ? (
         <DropdownMenu>
           <DropdownMenuTrigger

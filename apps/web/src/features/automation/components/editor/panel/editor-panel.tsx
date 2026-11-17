@@ -8,8 +8,10 @@ import type {
 import { ui } from '@nodus/contracts';
 
 import { useRouteDocStore, type SelectionRef } from '../../../model/route-doc-store.js';
+import { ActionPanel } from './action-panel.js';
 import { CreationPanel } from './creation-panel.js';
 import { SidePanel } from '../../../../../shared/ui/panel/side-panel.js';
+import { StageActionsSection } from './stage-actions-section.js';
 import { StageButtonsSection } from './stage-buttons-section.js';
 import { StagePanel } from './stage-panel.js';
 import { TransitionPanel, type TransitionSection } from './transition-panel.js';
@@ -19,8 +21,8 @@ import { DecidersSection } from './transition-deciders-section.js';
 import { WindowSection } from './window-section.js';
 
 /** Раздел панели: корень или переход внутрь (у кнопки — три раздела, у
- *  статуса — «Кнопки из статуса»). */
-type PanelSection = TransitionSection | 'buttons';
+ *  статуса — «Действия» и «Кнопки из статуса», у действия — роли и окно). */
+type PanelSection = TransitionSection | 'buttons' | 'actions';
 
 const SECTION_TITLE: Record<Exclude<PanelSection, 'root'>, string> = {
   roles: ui.automation.panel.sectionWhoSees,
@@ -29,6 +31,7 @@ const SECTION_TITLE: Record<Exclude<PanelSection, 'root'>, string> = {
   rules: ui.automation.panel.sectionRules,
   window: ui.automation.panel.sectionWindow,
   buttons: ui.automation.panel.sectionButtons,
+  actions: ui.automation.panel.sectionActions,
 };
 
 const keyOf = (ref: SelectionRef) => (ref ? `${ref.kind}:${ref.id}` : null);
@@ -84,21 +87,29 @@ export function EditorPanel({
     shown?.kind === 'stage' ? (doc.stages.find((s) => s.id === shown.id) ?? null) : null;
   const transition =
     shown?.kind === 'transition' ? (doc.transitions.find((t) => t.id === shown.id) ?? null) : null;
+  const action =
+    shown?.kind === 'action' ? ((doc.actions ?? []).find((a) => a.id === shown.id) ?? null) : null;
   const creation = shown?.kind === 'creation';
-  const open = selection !== null && (stage !== null || transition !== null || creation);
+  const open =
+    selection !== null && (stage !== null || transition !== null || action !== null || creation);
 
   const close = useCallback(() => useRouteDocStore.getState().select(null), []);
   const back = useCallback(() => setSection('root'), []);
-  const inSection = (stage !== null || transition !== null) && section !== 'root';
+  const inSection =
+    (stage !== null || transition !== null || action !== null) && section !== 'root';
 
   // Шапка — вид элемента или раздел; название — первое поле панели.
   const title = inSection
-    ? SECTION_TITLE[section as Exclude<PanelSection, 'root'>]
+    ? action && section === 'window'
+      ? ui.automation.panel.actionWindow
+      : SECTION_TITLE[section as Exclude<PanelSection, 'root'>]
     : creation
       ? ui.automation.creation.title
       : stage
         ? ui.automation.panel.kindStage
-        : ui.automation.panel.kindTransition;
+        : action
+          ? ui.automation.panel.kindAction
+          : ui.automation.panel.kindTransition;
 
   return (
     <SidePanel open={open} title={title} onClose={close} onBack={inSection ? back : undefined}>
@@ -112,12 +123,45 @@ export function EditorPanel({
           readOnly={readOnly}
           autoFocusName={freshId === stage.id}
           onOpenButtons={() => setSection('buttons')}
+          onOpenActions={() => setSection('actions')}
           stageNameSuggestions={stageNameSuggestions}
           stageNameLoading={stageNameLoading}
         />
       ) : null}
       {stage && section === 'buttons' ? (
         <StageButtonsSection stage={stage} document={doc} readOnly={readOnly} />
+      ) : null}
+      {stage && section === 'actions' ? (
+        <StageActionsSection stage={stage} document={doc} readOnly={readOnly} />
+      ) : null}
+      {action && section === 'root' ? (
+        <ActionPanel
+          key={action.id}
+          action={action}
+          document={doc}
+          readOnly={readOnly}
+          category={type.category}
+          autoFocusName={freshId === action.id}
+          onOpenSection={setSection}
+        />
+      ) : null}
+      {action && section === 'roles' ? (
+        <RolesSection
+          transition={action}
+          kind="action"
+          readOnly={readOnly}
+          category={type.category}
+        />
+      ) : null}
+      {action && section === 'window' ? (
+        <WindowSection
+          transition={action}
+          kind="action"
+          scope={scope}
+          typeId={type.id}
+          readOnly={readOnly}
+          category={type.category}
+        />
       ) : null}
       {transition && section === 'root' ? (
         <TransitionPanel
