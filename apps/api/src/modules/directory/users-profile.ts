@@ -9,7 +9,7 @@ import { DomainException } from '../../core/errors/domain-exception.js';
 import type { EventBus } from '../../core/events/event-bus.js';
 import type { TransactionRunner } from '../../core/database/transaction-runner.js';
 import type { RolesRepository } from './roles.repository.js';
-import { toUserCard } from './user-dto.js';
+import { buildDisplayName, toUserCard } from './user-dto.js';
 import type { UsersRepository } from './users.repository.js';
 
 /**
@@ -25,7 +25,8 @@ export interface ProfileDeps {
   avatarUrlOf: (fileId: string | null) => string | null;
 }
 
-/** Правка своего профиля: только разрешённые поля, событие в той же tx. */
+/** Правка своего профиля (#923): только разрешённые поля по strict-allowlist,
+ *  displayName пересчитывается из ФИО, событие — в той же транзакции. */
 export async function updateMyProfileOf(
   userId: string,
   dto: UpdateMyProfileDto,
@@ -35,8 +36,15 @@ export async function updateMyProfileOf(
   if (!before) {
     throw DomainException.notFound('User not found');
   }
+  const names = {
+    lastName: dto.lastName ?? before.lastName,
+    firstName: dto.firstName ?? before.firstName,
+    middleName: dto.middleName === undefined ? before.middleName : dto.middleName,
+  };
   return deps.tx.run(async (tx) => {
-    await deps.users.update(userId, { ...dto }, tx);
+    // displayName — денормализация ФИО для всех ~40 мест UI: смена имени в
+    // профиле обязана обновить топбар и списки (событие ниже).
+    await deps.users.update(userId, { ...dto, displayName: buildDisplayName(names) }, tx);
     await deps.eventBus.emit(
       tx,
       DIRECTORY_EVENTS.USER_UPDATED,

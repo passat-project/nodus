@@ -10,7 +10,7 @@ import { UsersRepository } from './users.repository.js';
 /** Вид структуры: должности и подразделения живут в двух деревьях (ADR-0001). */
 type OrgUnitKind = 'management' | 'legal';
 
-type ReferenceReason = 'not_found' | 'inactive' | 'kind_mismatch' | 'self' | 'cycle';
+type ReferenceReason = 'not_found' | 'inactive' | 'kind_mismatch';
 
 /**
  * Проверки ссылок оргструктуры (#441): руководитель и зам подразделения,
@@ -79,26 +79,6 @@ export class ReferenceGuard {
     const list = ids.filter((id): id is string => typeof id === 'string');
     if (list.length === 0) return;
     await this.positions.lockMany(list, tx);
-  }
-
-  /** Руководитель сотрудника не может быть им самим (цикл длины 1). */
-  ensureNotSelf(employeeId: string, managerId: string | null | undefined, field: string): void {
-    if (managerId === employeeId) this.fail(field, 'self');
-  }
-
-  /** Циклы руководителей запрещены (#441): руководитель не может быть
-   *  подчинённым своего подчинённого. Идём по цепочке `managerId` вверх от
-   *  нового руководителя — если встречаем самого сотрудника, это кольцо.
-   *  Вызывать под advisory-локом графа (`lockManagerTree`) — иначе два
-   *  встречных PATCH проходят проверку до чужих записей. */
-  async ensureNoManagerCycle(
-    employeeId: string,
-    managerId: string | null | undefined,
-    tx?: TransactionClient,
-  ): Promise<void> {
-    if (managerId === null || managerId === undefined) return;
-    const chain = await this.users.managerChainIds(managerId, tx);
-    if (chain.includes(employeeId)) this.fail('managerId', 'cycle');
   }
 
   private fail(field: string, reason: ReferenceReason): never {

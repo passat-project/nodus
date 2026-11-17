@@ -146,4 +146,33 @@ export class DepartmentsRepository {
       where: { parentId: id, isActive: true },
     });
   }
+
+  /**
+   * Снять сотрудника с ролей главы/зама во всех подразделениях (#923):
+   * уволенный не может оставаться руководителем. Строки читаются под
+   * `FOR UPDATE` — параллельная смена главы сериализуется. Возвращает
+   * затронутые подразделения: по ним пересчитываются производные руководители
+   * поддерева и эмитятся `directory.department.updated`.
+   */
+  async clearHeadAndDeputy(
+    userId: string,
+    tx: TransactionClient,
+  ): Promise<{ id: string; head: boolean; deputy: boolean }[]> {
+    const rows = await tx.$queryRaw<
+      { id: string; headId: string | null; deputyId: string | null }[]
+    >(Prisma.sql`
+      SELECT id, head_id AS "headId", deputy_id AS "deputyId"
+      FROM departments
+      WHERE head_id = ${userId}::uuid OR deputy_id = ${userId}::uuid
+      FOR UPDATE
+    `);
+    if (rows.length === 0) return [];
+    await tx.department.updateMany({ where: { headId: userId }, data: { headId: null } });
+    await tx.department.updateMany({ where: { deputyId: userId }, data: { deputyId: null } });
+    return rows.map((row) => ({
+      id: row.id,
+      head: row.headId === userId,
+      deputy: row.deputyId === userId,
+    }));
+  }
 }

@@ -7,6 +7,8 @@ import { RoleMembershipProvider } from '../../core/ports/role-membership.provide
 import { DepartmentsController } from './departments.controller.js';
 import { DepartmentsRepository } from './departments.repository.js';
 import { DepartmentsService } from './departments.service.js';
+import { ManagerDerivationRepository } from './manager-derivation.repository.js';
+import { ManagerDerivationService } from './manager-derivation.service.js';
 import { PositionsController } from './positions.controller.js';
 import { PositionsRepository } from './positions.repository.js';
 import { PositionsService } from './positions.service.js';
@@ -33,6 +35,8 @@ import { UsersService } from './users.service.js';
     UsersRepository,
     DepartmentsService,
     DepartmentsRepository,
+    ManagerDerivationService,
+    ManagerDerivationRepository,
     PositionsService,
     PositionsRepository,
     RolesService,

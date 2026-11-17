@@ -52,7 +52,14 @@ export function employeeProfileDefs(args: {
       key: 'position',
       icon: <Briefcase className="size-3.5" />,
       label: ui.employees.position,
-      render: () => listItem.positionName ?? ui.common.notSet,
+      // #923: подразделение и должность — структурные поля, синим в обеих
+      // темах (карточка их не правит: «Редактировать профиль» у админа).
+      render: () =>
+        listItem.positionName ? (
+          <span className="text-sm text-info">{listItem.positionName}</span>
+        ) : (
+          ui.common.notSet
+        ),
     },
     {
       key: 'department',

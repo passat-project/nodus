@@ -4,10 +4,13 @@ import {
   createInvitationSchema,
   createPositionSchema,
   departmentTreeQuerySchema,
+  ErrorCode,
   listUsersQuerySchema,
   reassignPositionSchema,
   updateDepartmentSchema,
+  updateMyProfileSchema,
   updatePositionSchema,
+  updateUserSchema,
 } from '@nodus/contracts';
 
 import {
@@ -22,6 +25,8 @@ import {
   demoUserListItems,
 } from '../../../../shared/mocks/data/users.js';
 import { demoPositions } from '../../../../shared/mocks/data/positions.js';
+import { demoRoles } from '../../../../shared/mocks/data/roles.js';
+import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 
 /**
  * MSW-слой справочника (ADR-0001): контракты — источник формы ответов.
@@ -211,6 +216,77 @@ export const directoryHandlers = [
     return HttpResponse.json(next);
   }),
   http.get('/api/v1/directory/presence', () => HttpResponse.json(demoPresence)),
+  /** Саморедактирование профиля (#923): только self-поля по строгому
+   *  allowlist; демо-стор мутируется на время сессии (как подразделения). */
+  http.patch('/api/v1/directory/users/me', async ({ request }) => {
+    const parsed = updateMyProfileSchema.safeParse(await request.json());
+    if (!parsed.success)
+      return HttpResponse.json(
+        { code: ErrorCode.VALIDATION_FAILED, message: 'Invalid profile payload' },
+        { status: 400 },
+      );
+    const actor = getMockActor();
+    const card = demoUserCards.find((u) => u.id === actor.id);
+    if (!card)
+      return HttpResponse.json({ code: 'NOT_FOUND', message: 'User not found' }, { status: 404 });
+    Object.assign(card, parsed.data);
+    card.displayName = [card.lastName, card.firstName].filter(Boolean).join(' ');
+    userState = userState.map((user) =>
+      user.id === actor.id ? { ...user, displayName: card.displayName } : user,
+    );
+    return HttpResponse.json(card);
+  }),
+  /** Правка карточки администратором (#923): поля + роли одной ручкой. */
+  http.patch('/api/v1/directory/users/:id', async ({ params, request }) => {
+    const parsed = updateUserSchema.safeParse(await request.json());
+    if (!parsed.success)
+      return HttpResponse.json(
+        { code: ErrorCode.VALIDATION_FAILED, message: 'Invalid user payload' },
+        { status: 400 },
+      );
+    const id = String(params.id);
+    const card = demoUserCards.find((u) => u.id === id);
+    if (!card)
+      return HttpResponse.json({ code: 'NOT_FOUND', message: 'User not found' }, { status: 404 });
+    const { roleIds, ...fields } = parsed.data;
+    Object.assign(card, fields);
+    card.displayName = [card.lastName, card.firstName].filter(Boolean).join(' ');
+    userState = userState.map((user) =>
+      user.id === id
+        ? {
+            ...user,
+            displayName: card.displayName,
+            departmentId: card.departmentId,
+            positionId: card.positionId,
+            legalDepartmentId: card.legalDepartmentId,
+            legalPositionId: card.legalPositionId,
+          }
+        : user,
+    );
+    if (roleIds) {
+      card.roles = demoRoles
+        .filter((role) => roleIds.includes(role.id))
+        .map((role) => ({ id: role.id, code: role.code, name: role.name }));
+    }
+    return HttpResponse.json(card);
+  }),
+  /** Увольнение (#923): себя — отказ, как на сервере. */
+  http.post('/api/v1/directory/users/:id/deactivate', ({ params }) => {
+    const id = String(params.id);
+    if (id === getMockActor().id)
+      return HttpResponse.json(
+        { code: ErrorCode.DIRECTORY_SELF_DEACTIVATE, message: 'Cannot deactivate yourself' },
+        { status: 409 },
+      );
+    const card = demoUserCards.find((u) => u.id === id);
+    if (!card)
+      return HttpResponse.json({ code: 'NOT_FOUND', message: 'User not found' }, { status: 404 });
+    card.status = 'deactivated';
+    userState = userState.map((user) =>
+      user.id === id ? { ...user, status: 'deactivated' as const } : user,
+    );
+    return HttpResponse.json(card);
+  }),
   /** Полная карточка сотрудника (UserCard: контактный блок, даты HR) —
    *  вкладка «Профиль» карточки сотрудника. */
   http.get('/api/v1/directory/users/:id', ({ params }) => {

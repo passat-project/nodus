@@ -6,9 +6,8 @@ import type {
   DepartmentNode,
   OrgUnitKind,
   Position,
-  PresenceEntry,
-  PresenceStatus,
   UpdateDepartmentDto,
+  UpdateMyProfileDto,
   UpdatePositionDto,
   UpdateUserDto,
   UserCard,
@@ -18,24 +17,18 @@ import { toast } from 'sonner';
 
 import { api } from '../../../shared/api-client.js';
 import { toastApiError } from '../../../shared/api/error-toast.js';
-import { isDomainMocked } from '../../../shared/api/api-mock-config.js';
+import { useAuthStore } from '../../../shared/auth-store.js';
 import { DEPARTMENTS_TREE_PATH } from '../../../shared/api/departments-list.js';
 import { invalidateChatAvatarCaches } from '../../../shared/chat/avatar-cache.js';
 import { uploadAvatar } from '../../../shared/chat/avatar-upload.js';
-import { useIsOnline } from '../../../shared/socket/presence-store.js';
 import { insertDepartment, patchDepartment } from '../lib/department-tree.js';
+import { directoryKeys } from './directory-keys.js';
 
 // Канонический хук справочника людей — shared (единый ключ/кэш); реэкспорт
 // для обратной совместимости импортов фичи.
 export { useUsersList } from '../../../shared/api/users-list.js';
-
-export const directoryKeys = {
-  all: ['directory'] as const,
-  users: () => [...directoryKeys.all, 'users'] as const,
-  userCard: (id: string) => [...directoryKeys.all, 'user', id] as const,
-  presence: () => [...directoryKeys.all, 'presence'] as const,
-  departments: (kind: OrgUnitKind) => [...directoryKeys.all, 'departments', kind] as const,
-};
+export { directoryKeys } from './directory-keys.js';
+export { useEmployeePresence, usePresence } from './presence.js';
 
 /**
  * Дерево оргструктуры вида (#84, #540): лес корней DepartmentNode по
@@ -125,11 +118,12 @@ export function useUserCard(id: string) {
  *  Хук живёт в shared (#433): его использует и редактор маршрутов. */
 export { usePositions } from '../../../shared/api/positions.js';
 
-/** Правка оргструктурных полей сотрудника (#441, право directory.manage):
- *  отдел, должность, руководитель (свободная ссылка — кейс ГИПов).
- *  Оптимистичный патч карточки (I4), откат при ошибке, инвалидация дерева и
- *  списков после ответа (имена/счётчики считает сервер). */
-export function useUpdateUser(id: string) {
+/** Правка карточки сотрудника администратором (#441, #923): ФИО, контакты,
+ *  HR-поля, подразделение/должность, роли. Руководитель не принимается — он
+ *  производное поле сервера. Оптимистичный патч карточки (I4), откат при
+ *  ошибке, инвалидация дерева и списков после ответа (имена/счётчики считает
+ *  сервер). */
+export function useUpdateUser(id: string, options?: { successMessage?: string }) {
   const queryClient = useQueryClient();
   const cardKey = directoryKeys.userCard(id);
   return useMutation({
@@ -138,7 +132,12 @@ export function useUpdateUser(id: string) {
     onMutate: async (body) => {
       await queryClient.cancelQueries({ queryKey: cardKey });
       const previous = queryClient.getQueryData<UserCard>(cardKey);
-      if (previous) queryClient.setQueryData(cardKey, { ...previous, ...body });
+      if (previous) {
+        // roleIds — не поле карточки: в оптимистичный кэш его не кладём.
+        const fields: Record<string, unknown> = { ...body };
+        delete fields.roleIds;
+        queryClient.setQueryData(cardKey, { ...previous, ...fields } as UserCard);
+      }
       return { previous };
     },
     onError: (_error, _body, context) => {
@@ -147,7 +146,75 @@ export function useUpdateUser(id: string) {
     },
     onSuccess: (card) => {
       queryClient.setQueryData(cardKey, card);
-      toast.success(ui.employees.editSaved);
+      toast.success(options?.successMessage ?? ui.employees.editSaved);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: directoryKeys.all });
+    },
+  });
+}
+
+/** Саморедактирование своего профиля (#923): ФИО и личные/контактные поля —
+ *  структура, email-логин, ставка/дата приёма и роли в схему не входят
+ *  (серверный allowlist, I8). Оптимистично патчит СВОЮ карточку; после ответа
+ *  обновляет auth-store — имя в топбаре меняется без перезагрузки. */
+export function useUpdateMyProfile() {
+  const queryClient = useQueryClient();
+  const meId = useAuthStore((s) => s.user?.id);
+  const cardKey = meId ? directoryKeys.userCard(meId) : null;
+  return useMutation({
+    mutationFn: (body: UpdateMyProfileDto) =>
+      api<UserCard>('/directory/users/me', { method: 'PATCH', body }),
+    onMutate: async (body) => {
+      if (!cardKey) return { previous: undefined };
+      await queryClient.cancelQueries({ queryKey: cardKey });
+      const previous = queryClient.getQueryData<UserCard>(cardKey);
+      if (previous) {
+        const next = { ...previous, ...body };
+        // Имя — денормализация ФИО в топбаре и списках.
+        if (body.lastName !== undefined || body.firstName !== undefined) {
+          next.displayName = [next.lastName, next.firstName].filter(Boolean).join(' ');
+        }
+        queryClient.setQueryData(cardKey, next as UserCard);
+      }
+      return { previous };
+    },
+    onError: (_error, _body, context) => {
+      if (cardKey && context?.previous) queryClient.setQueryData(cardKey, context.previous);
+      toastApiError(_error);
+    },
+    onSuccess: (card) => {
+      if (cardKey) queryClient.setQueryData(cardKey, card);
+      useAuthStore.getState().updateProfile({ displayName: card.displayName });
+      toast.success(ui.employees.profileSaved);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: directoryKeys.all });
+    },
+  });
+}
+
+/** Увольнение сотрудника (#923, право directory.manage): сервер снимает главу
+ *  и зама во всех подразделениях и отзывает сессии; оптимистично меняем чип
+ *  статуса, после ответа — серверная карточка и свежие списки. */
+export function useDeactivateUser(id: string) {
+  const queryClient = useQueryClient();
+  const cardKey = directoryKeys.userCard(id);
+  return useMutation({
+    mutationFn: () => api<UserCard>(`/directory/users/${id}/deactivate`, { method: 'POST' }),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: cardKey });
+      const previous = queryClient.getQueryData<UserCard>(cardKey);
+      if (previous) queryClient.setQueryData(cardKey, { ...previous, status: 'deactivated' });
+      return { previous };
+    },
+    onError: (error, _body, context) => {
+      if (context?.previous) queryClient.setQueryData(cardKey, context.previous);
+      toastApiError(error);
+    },
+    onSuccess: (card) => {
+      queryClient.setQueryData(cardKey, card);
+      toast.success(ui.employees.deactivateDone);
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: directoryKeys.all });
@@ -296,25 +363,4 @@ export function useRemoveMyAvatar() {
       invalidateChatAvatarCaches(queryClient);
     },
   });
-}
-
-/** REST presence — только мок-режим (живого эндпоинта в api нет: presence
- *  эфемерный и живёт в WS-gateway, #104). */
-export function usePresence() {
-  return useQuery({
-    queryKey: directoryKeys.presence(),
-    queryFn: () => api<PresenceEntry[]>('/directory/presence'),
-    enabled: isDomainMocked('directory'),
-  });
-}
-
-/** Статус сотрудника для чипа: мок — REST-моки, живой режим — WS presence
- *  (gateway, #104; онлайн = есть живые соединения). */
-export function useEmployeePresence(userId: string): PresenceStatus {
-  const { data: presence } = usePresence();
-  const wsOnline = useIsOnline(userId);
-  if (isDomainMocked('directory')) {
-    return presence?.find((p) => p.user.id === userId)?.status ?? 'offline';
-  }
-  return wsOnline ? 'online' : 'offline';
 }

@@ -1,11 +1,9 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PresenceStatus, UserCard, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
-import { Button } from '@nodus/ui/components/button';
 import { NodeChip } from '@nodus/ui/components/node-chip';
-import { NodeLabel } from '@nodus/ui/components/node-label';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -17,9 +15,9 @@ import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { avatarIssueMessage, validateAvatarFile } from '../../../shared/chat/avatar-upload.js';
 import { EntityFields } from '../../../shared/ui/entity-fields.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
-import { useRemoveMyAvatar, useActivateUser, useSetMyAvatar } from '../api/directory-api.js';
+import { useRemoveMyAvatar, useSetMyAvatar } from '../api/directory-api.js';
 import { employeeProfileDefs } from '../lib/employee-profile-fields.js';
-import { EmployeeEditDialog } from './employee-edit-dialog.js';
+import { ProfileSectionHeading } from './profile-section-heading.js';
 
 const VISIBILITY_KEY = 'nodus-employee-fields-v1';
 
@@ -36,16 +34,14 @@ function presenceLabel(status: PresenceStatus): string {
 }
 
 /**
- * Постоянная ЛЕВАЯ зона профиля карточки сотрудника (#750, вердикт владельца
- * 11.11.2026: профиль — не вкладка, а статичная зона): БОЛЬШАЯ фотография
- * (не аватарка в баре — общего бара с дублирующей инфой нет, полезная
- * высота — данным) с presence-чипом под ней; правее — поля-реестр полного
- * UserCard в режиме реестра (поля встают СПРАВА от фото, когда зона широкая;
- * на узкой — уходят под фото; 1↔2 колонки — по ширине зоны, как изначально) +
- * «Подчинённые»
- * (переход в их карточки стеком, ADR-0009). Скролл зоны — свой; по
- * горизонтали контент не скроллится (очень узкая карточка клипует фото —
- * вкладки справа не ломаются).
+ * Постоянная ЛЕВАЯ зона профиля карточки сотрудника (#750, #923): БОЛЬШАЯ
+ * фотография (камера — только своя карточка) с presence-чипом под ней и
+ * заголовок «Информация о сотруднике» над полями-реестром полного UserCard
+ * (1↔2 колонки по ширине зоны; на узкой поля уходят под фото), ниже —
+ * «Подчинённые» тем же стилем заголовка и сеткой 1↔2, переход в карточки
+ * стеком (ADR-0009). Кнопки правки и действий живут в нижней полосе зоны
+ * (`EmployeeProfileBar`), не здесь; скролл своей зоны, по горизонтали контент
+ * не скроллится.
  */
 export function EmployeeProfileTab({
   card,
@@ -53,29 +49,20 @@ export function EmployeeProfileTab({
   manager,
   subordinates,
   presenceStatus,
-  users,
   canEditAvatar = false,
-  canManage = false,
 }: {
   card: UserCard;
   listItem: UserListItem;
   manager: UserListItem | undefined;
   subordinates: UserListItem[];
   presenceStatus: PresenceStatus;
-  /** Полный список сотрудников — для выбора руководителя (#441). */
-  users: UserListItem[];
   /** Своя карточка (#186): фото кликабельно — загрузка/смена/удаление. */
   canEditAvatar?: boolean;
-  /** Право `directory.manage` (#441): правка отдела/должности/руководителя. */
-  canManage?: boolean;
 }) {
   const openCard = useOpenCard();
   const setAvatar = useSetMyAvatar();
   const removeAvatar = useRemoveMyAvatar();
-  // Возврат уволенного в работу (AUD-016) — рядом с действиями управления.
-  const activateEmployee = useActivateUser(card.id);
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const [editOpen, setEditOpen] = useState(false);
 
   function onAvatarPicked(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -100,15 +87,11 @@ export function EmployeeProfileTab({
 
   return (
     <div className="h-full overflow-x-hidden overflow-y-auto p-6">
-      {/* Колонка контента — как внутренняя колонка панели данных задачи
-          (#750, уточнение приёмки 11.11.2026): центрируется с потолком 4xl,
-          на широкой зоне лишняя ширина уходит в равные поля слева/справа. */}
       <div className="mx-auto w-full max-w-4xl">
         <div className="flex flex-wrap items-start gap-x-8 gap-y-0">
-          {/* Большое фото профиля (реф — карточка фото в профиле Битрикс24):
-              Ø176, инициалы крупно, когда фото нет; presence — чипом под
-              фото (точка + подпись). СВОЯ карточка (#186): клик — выбрать
-              фото, ПКМ — сменить/убрать (канон контекстных меню). */}
+          {/* Фото профиля: клик — выбрать, ПКМ — сменить/убрать (канон
+              контекстных меню). Кнопки правки из-под аватара убраны в нижнюю
+              полосу карточки (#923). */}
           <div className="flex shrink-0 flex-col items-center gap-2.5">
             {canEditAvatar ? (
               <ContextMenu>
@@ -162,35 +145,12 @@ export function EmployeeProfileTab({
               />
               {presenceLabel(presenceStatus)}
             </NodeChip>
-            {/* Правка оргструктуры — под идентичностью (фото + presence), а не
-                отдельной строкой над полями: в узкой зоне поля уходят под фото,
-                и кнопка «в воздухе» отрывалась от действия (ось 4). */}
-            {canManage ? (
-              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-                {ui.employees.editEmployee}
-              </Button>
-            ) : null}
-            {/* Возврат в работу (AUD-016): только уволенному и при праве
-                управления справочником; подсказка честно говорит, что состав
-                бесед и проектов активация не возвращает. */}
-            {canManage && card.status === 'deactivated' ? (
-              <Button
-                variant="outline"
-                size="sm"
-                title={ui.employees.activateHint}
-                onClick={() => activateEmployee.mutate()}
-                disabled={activateEmployee.isPending}
-              >
-                {ui.employees.activateEmployee}
-              </Button>
-            ) : null}
           </div>
           {/* Поля — справа от фото, когда зона широкая (flex-wrap поднимает их
-              на первую строку); на узкой уходят под фото. Воздух до кнопки
-              «Редактировать» — один mt-5 у реестра (ряд без своего gap-y),
-              чтобы не было двойного отступа (замечание 12.11.2026).
-              1↔2 колонки — `@min-[55rem]` по ширине ЗОНЫ (`@container` слева). */}
+              на первую строку); на узкой уходят под фото вместе с заголовком
+              секции (#923). 1↔2 колонки — `@min-[55rem]` по ширине ЗОНЫ. */}
           <div className="min-w-0 flex-1 basis-[30rem]">
+            <ProfileSectionHeading label={ui.employees.profileInfo} />
             <EntityFields
               defs={employeeProfileDefs({ card, listItem, manager, openCard })}
               storageKey={VISIBILITY_KEY}
@@ -198,9 +158,12 @@ export function EmployeeProfileTab({
           </div>
         </div>
         <div className="mt-8">
-          <NodeLabel label={ui.employees.subordinates} count={subordinates.length} />
+          <ProfileSectionHeading label={ui.employees.subordinates} count={subordinates.length} />
         </div>
-        <div className="mt-2.5 flex flex-col gap-1">
+        {/* Сетка подчинённых — та же container-query логика, что у полей:
+            узко 1 колонка (должность под именем), широко 2 (должность
+            справа, `min-w-0` + truncate — без горизонтального скролла). */}
+        <div className="mt-2.5 grid grid-cols-1 gap-x-12 gap-y-0.5 @min-[55rem]:grid-cols-2">
           {subordinates.length === 0 ? (
             <p className="text-sm text-muted-foreground">{ui.common.empty}</p>
           ) : null}
@@ -209,20 +172,19 @@ export function EmployeeProfileTab({
               key={person.id}
               type="button"
               onClick={() => openCard({ kind: 'employee', id: person.id })}
-              className="flex items-center gap-2.5 rounded-md px-1 py-1.5 text-left text-sm hover:bg-accent/50"
+              className="flex min-w-0 flex-col gap-0.5 rounded-md px-1 py-1.5 text-left hover:bg-accent/50 @min-[30rem]:flex-row @min-[30rem]:items-center @min-[30rem]:gap-2.5"
             >
-              <PersonAvatar name={person.displayName} className="size-7 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{person.displayName}</span>
-              <span className="shrink-0 text-xs text-muted-foreground">
+              <span className="flex min-w-0 items-center gap-2.5">
+                <PersonAvatar name={person.displayName} className="size-7 shrink-0" />
+                <span className="min-w-0 flex-1 truncate text-sm">{person.displayName}</span>
+              </span>
+              <span className="min-w-0 truncate pl-9.5 text-xs text-muted-foreground @min-[30rem]:ml-auto @min-[30rem]:pl-0">
                 {person.positionName ?? ''}
               </span>
             </button>
           ))}
         </div>
       </div>
-      {canManage ? (
-        <EmployeeEditDialog open={editOpen} onOpenChange={setEditOpen} card={card} users={users} />
-      ) : null}
     </div>
   );
 }

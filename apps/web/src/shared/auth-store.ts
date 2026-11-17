@@ -17,6 +17,9 @@ interface AuthState {
   /** Прозрачное обновление access по refresh-cookie; false — обновить не
    *  удалось (сессия мертва ИЛИ сервер недоступен — см. isSessionDead). */
   tryRefresh: () => Promise<boolean>;
+  /** Точечное обновление карточки вошедшего (#923): правка своего профиля
+   *  меняет имя в топбаре без перезагрузки. */
+  updateProfile: (patch: Partial<AuthUser>) => void;
   /** Стартовый bootstrap: есть ли живая сессия. */
   bootstrap: () => Promise<void>;
 }
@@ -60,6 +63,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // не оставляет «полувход» (токен без пользователя и статуса).
     const user = await api<AuthUser>('/auth/me', { bearer: tokens.accessToken });
     set({ status: 'authenticated', accessToken: tokens.accessToken, user });
+  },
+
+  updateProfile(patch) {
+    set((state) => (state.user ? { user: { ...state.user, ...patch } } : state));
   },
 
   async logout() {

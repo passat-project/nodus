@@ -11,7 +11,6 @@ const CREATE_DTO: CreateUserDto = {
   lastName: 'Новый',
   firstName: 'Сотрудник',
   middleName: null,
-  managerId: null,
   departmentId: null,
   positionId: null,
   legalDepartmentId: null,
@@ -71,6 +70,14 @@ describe('UsersService: создание и правка сотрудника', 
     findRef: vi.fn(),
   };
   const departments = { findRef: vi.fn() };
+  /** Репозиторий подразделений (#923 — снятие главы/зама; read-сценарии). */
+  const departmentsRepo = {
+    findParentChain: vi.fn(),
+    findNamesByIds: vi.fn(),
+    clearHeadAndDeputy: vi.fn(),
+  };
+  /** Производный руководитель (#923): пересчёт при смене подразделения. */
+  const managers = { recomputeUsers: vi.fn(), recomputeDepartments: vi.fn() };
   const positions = { findRef: vi.fn(), lockMany: vi.fn() };
   const roles = {
     countByIds: vi.fn(),
@@ -102,7 +109,8 @@ describe('UsersService: создание и правка сотрудника', 
       { fileContentUrl: vi.fn((id: string) => `/files/${id}/content`) } as never,
       guard,
       references,
-      { findParentChain: vi.fn(), findNamesByIds: vi.fn() } as never,
+      departmentsRepo as never,
+      managers as never,
       { process: vi.fn() } as never,
       { subordinateIds: vi.fn(), managerChainOf: vi.fn() } as never,
     );
