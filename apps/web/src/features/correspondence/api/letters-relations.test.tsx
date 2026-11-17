@@ -124,7 +124,8 @@ describe('связи писем — оптимистичны (#461, I4)', () => 
     await act(async () => {
       result.current.mutate({
         sourceId: ROOT,
-        target: listItem(TARGET),
+        targetId: TARGET,
+        parentNode: node(TARGET),
         kind: 'nested_in',
         replace: false,
       });
@@ -158,7 +159,8 @@ describe('связи писем — оптимистичны (#461, I4)', () => 
     await act(async () => {
       result.current.mutate({
         sourceId: ROOT,
-        target: listItem(TARGET),
+        targetId: TARGET,
+        parentNode: node(TARGET),
         kind: 'reply_to',
         replace: false,
       });

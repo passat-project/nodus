@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   LetterDetail,
-  LetterListItem,
   LetterRelationKind,
   LetterTreeResponse,
+  LetterTreeNode,
 } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { toast } from 'sonner';
@@ -12,7 +12,7 @@ import { ApiError, api } from '../../../shared/api-client.js';
 import { lettersKeys } from '../../../shared/api/letters-keys.js';
 import { applyLetter, letterErrorText } from './letters-cache.js';
 import { registrationReasonText, relationReasonText } from '../lib/registration-draft.js';
-import { treeNodeOf, withRelation, withoutRelation } from '../lib/letter-tree.js';
+import { withRelation, withoutRelation } from '../lib/letter-tree.js';
 
 /** Связи писем и «ёлочка» (#461, Р1/Р2): дерево сервера, постановка/замена/
  *  снятие — только канцелярия (сервер — истина, I8). Мутации оптимистичны
@@ -51,10 +51,13 @@ export function relationErrorText(error: unknown): string {
 }
 
 interface LinkVars {
-  /** Письмо-источник связи (для «Добавить» — текущее, для «Заменить» — узел). */
+  /** Письмо, которое получает связь: `POST /letters/:sourceId/relations`. */
   sourceId: string;
-  /** Цель — строка списка из окна поиска. */
-  target: LetterListItem;
+  /** Цель связи — письмо-родитель. */
+  targetId: string;
+  /** Узел родителя для оптимистичной вставки в дерево (в обратном
+   *  направлении родитель — открытое письмо, а не выбранное, #611). */
+  parentNode: LetterTreeNode;
   kind: LetterRelationKind;
   /** У источника уже есть связь этого вида — заменить. */
   replace: boolean;
@@ -69,7 +72,7 @@ export function useLinkLetterRelation(rootId: string) {
       api<LetterDetail>(`/letters/${vars.sourceId}/relations`, {
         method: 'POST',
         body: {
-          relatedLetterId: vars.target.id,
+          relatedLetterId: vars.targetId,
           kind: vars.kind,
           ...(vars.replace ? { replace: true } : {}),
         },
@@ -80,7 +83,7 @@ export function useLinkLetterRelation(rootId: string) {
       if (previous) {
         queryClient.setQueryData<LetterTreeResponse>(
           treeKey,
-          withRelation(previous, vars.sourceId, treeNodeOf(vars.target), vars.kind),
+          withRelation(previous, vars.sourceId, vars.parentNode, vars.kind),
         );
       }
       return { previous };
