@@ -167,12 +167,14 @@ export function EmployeeCard({ userId }: { userId: string }) {
       >
         {/* ЛЕВАЯ ЗОНА — профиль сотрудника, всегда на экране и со своим
             скроллом (регион для скринридеров); граница — структурная.
-            `@container` зоны — порог 1↔2 колонок полей профиля (исходная
+            `@container/zone` — ширина ЗОНЫ для того, что живёт вне колонки
+            полей (полоса действий, заголовок при переносе под фото).
+            Порог 1↔2 у самих полей считается по их колонке (исходная
             динамика #750: поля встают справа от фото, когда зона широкая). */}
         <div
           role="region"
           aria-label={ui.employees.tabProfile}
-          className="relative flex min-h-0 flex-col border-r border-border @container"
+          className="relative flex min-h-0 flex-col border-r border-border @container/zone"
         >
           <div className="content-fade min-h-0 flex-1 overflow-hidden">
             <EmployeeProfileTab

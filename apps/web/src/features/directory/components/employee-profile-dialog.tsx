@@ -69,12 +69,12 @@ export function EmployeeProfileDialog({
         showCloseButton={false}
         onInteractOutside={(event) => event.preventDefault()}
       >
-        <DialogTitle className="text-base font-semibold text-foreground">
+        <DialogTitle className="text-lg leading-tight font-semibold text-foreground">
           {isSelf ? ui.employees.editProfile : ui.employees.editEmployeeTitle}
         </DialogTitle>
         {/* Секции — в своей прокрутке: окно не растёт выше экрана на узких
             ноутбуках, кнопки футера всегда видны. */}
-        <div className="@container max-h-[65vh] overflow-y-auto pr-1">
+        <div className="@container max-h-[70vh] overflow-y-auto pr-1">
           <ProfileDialogSections
             card={card}
             draft={draft}

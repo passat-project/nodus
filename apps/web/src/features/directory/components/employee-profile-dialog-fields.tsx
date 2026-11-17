@@ -13,6 +13,7 @@ import { Switch } from '@nodus/ui/components/switch';
 import { useDepartmentsList } from '../../../shared/api/departments-list.js';
 import { usePositions } from '../api/directory-api.js';
 import type { ProfileDraft } from '../lib/profile-draft.js';
+import { ProfileSectionHeading } from './profile-section-heading.js';
 
 /** Sentinel Radix Select для «не выбрано» (пустая строка значением запрещена). */
 const NONE = '__none__';
@@ -20,26 +21,38 @@ const NONE = '__none__';
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-2.5">
-      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      <ProfileSectionHeading label={title} />
       {children}
     </section>
   );
 }
 
+/** Поле окна: метка и контрол одной колонкой. Пояснение живёт В МЕТКЕ
+ *  (`· логин`), не строкой под контролом — подпись снизу сдвигает метку и
+ *  ломает горизонталь «метка — поле» (канон форм, вердикт 07.11.2026); полный
+ *  текст пояснения — в title метки. */
 function Field({
   label,
   hint,
+  hintShort,
   children,
 }: {
   label: string;
   hint?: string;
+  hintShort?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex min-w-0 flex-col gap-1">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+    <label className="flex min-w-0 flex-col gap-1.5">
+      <span className="flex min-w-0 items-baseline gap-1.5 text-xs font-medium text-muted-foreground">
+        <span className="truncate">{label}</span>
+        {hintShort ? (
+          <span className="shrink-0 text-label-xs font-normal text-muted-foreground" title={hint}>
+            · {hintShort}
+          </span>
+        ) : null}
+      </span>
       {children}
-      {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
     </label>
   );
 }
@@ -102,8 +115,18 @@ export function ProfileDialogSections({
 
       <Section title={ui.employees.sectionContacts}>
         <div className="grid grid-cols-1 gap-3 @min-[32rem]:grid-cols-2">
-          <Field label={ui.employees.email} hint={ui.employees.emailLoginHint}>
-            <Input value={card.email} readOnly disabled />
+          <Field
+            label={ui.employees.email}
+            hint={ui.employees.emailLoginHint}
+            hintShort={ui.employees.emailLoginTag}
+          >
+            {/* Логин — не disabled, а readOnly: значение читаемо и копируется,
+                поле лишь не принимает ввод (заливка = «системное значение»). */}
+            <Input
+              value={card.email}
+              readOnly
+              className="cursor-default bg-secondary/50 text-foreground"
+            />
           </Field>
           <Field label={ui.employees.fieldPhone}>
             <Input value={draft.mobilePhone} onChange={set('mobilePhone')} inputMode="tel" />
@@ -115,7 +138,7 @@ export function ProfileDialogSections({
             <Input value={draft.officeLocation} onChange={set('officeLocation')} />
           </Field>
         </div>
-        <label className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+        <label className="flex min-h-8 items-center justify-between gap-3 rounded-lg bg-secondary/50 px-3 py-1">
           <span className="text-sm">{ui.employees.fieldRemote}</span>
           <Switch
             checked={draft.isRemote}
@@ -254,7 +277,11 @@ export function ProfileDialogSections({
             </Field>
           </div>
         )}
-        <Field label={ui.employees.fieldManager} hint={ui.employees.managerComputedHint}>
+        <Field
+          label={ui.employees.fieldManager}
+          hint={ui.employees.managerComputedHint}
+          hintShort={ui.employees.managerComputedTag}
+        >
           <ReadonlyValue value={manager?.displayName ?? ui.common.notSet} />
         </Field>
       </Section>

@@ -31,7 +31,13 @@ const monoValue = 'font-mono text-label-sm tabular-nums';
  *  M2), контакты (почта, телефон, город, кабинет, удалёнка), ставка, пол,
  *  HR-даты (день рождения, дата приёма, начало дня), руководитель — переход
  *  в его карточку стеком (openCard, ADR-0009), HR-статус. Видимость — «+
- *  Поле» (persist localStorage). */
+ *  Поле» (persist localStorage).
+ *
+ *  Порядок — сверху вниз от «кто где в компании» к личным данным: первый
+ *  экран карточки отвечает, чем человек занимается, где сидит и на кого
+ *  работает (структура синим), дальше контакты, кадровые данные, отчество —
+ *  последним (имя уже стоит в шапке карточки, дублировать его первым полем
+ *  незачем). */
 export function employeeProfileDefs(args: {
   card: UserCard;
   listItem: UserListItem;
@@ -40,14 +46,6 @@ export function employeeProfileDefs(args: {
 }): EntityFieldDef[] {
   const { card, listItem, manager, openCard } = args;
   return [
-    {
-      // #132: отчество — ПОЛЕ карточки (в displayName его больше нет);
-      // отображение отчеств в UI включается «Настройками портала» #133.
-      key: 'middleName',
-      icon: <User className="size-3.5" />,
-      label: ui.employees.middleName,
-      render: () => card.middleName ?? ui.common.notSet,
-    },
     {
       key: 'position',
       icon: <Briefcase className="size-3.5" />,
@@ -71,6 +69,30 @@ export function employeeProfileDefs(args: {
         ) : (
           ui.common.notSet
         ),
+    },
+    {
+      key: 'manager',
+      icon: <UserCog className="size-3.5" />,
+      label: ui.employees.fieldManager,
+      render: () =>
+        manager ? (
+          <button
+            type="button"
+            onClick={() => openCard({ kind: 'employee', id: manager.id })}
+            className="-mx-1 flex min-w-0 items-center gap-2 rounded px-1 hover:bg-accent/50 hover:underline"
+          >
+            <PersonAvatar name={manager.displayName} className="size-6 shrink-0" />
+            <span className="truncate">{manager.displayName}</span>
+          </button>
+        ) : (
+          ui.common.notSet
+        ),
+    },
+    {
+      key: 'status',
+      icon: <UserCheck className="size-3.5" />,
+      label: ui.employees.fieldStatus,
+      render: () => <UserStatusChip status={card.status} />,
     },
     {
       key: 'email',
@@ -162,28 +184,12 @@ export function employeeProfileDefs(args: {
         ),
     },
     {
-      key: 'manager',
-      icon: <UserCog className="size-3.5" />,
-      label: ui.employees.fieldManager,
-      render: () =>
-        manager ? (
-          <button
-            type="button"
-            onClick={() => openCard({ kind: 'employee', id: manager.id })}
-            className="flex min-w-0 items-center gap-2 hover:underline"
-          >
-            <PersonAvatar name={manager.displayName} className="size-6 shrink-0" />
-            <span className="truncate">{manager.displayName}</span>
-          </button>
-        ) : (
-          ui.common.notSet
-        ),
-    },
-    {
-      key: 'status',
-      icon: <UserCheck className="size-3.5" />,
-      label: ui.employees.fieldStatus,
-      render: () => <UserStatusChip status={card.status} />,
+      // #132: отчество — ПОЛЕ карточки (в displayName его больше нет);
+      // отображение отчеств в UI включается «Настройками портала» #133.
+      key: 'middleName',
+      icon: <User className="size-3.5" />,
+      label: ui.employees.middleName,
+      render: () => card.middleName ?? ui.common.notSet,
     },
   ];
 }

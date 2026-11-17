@@ -282,6 +282,31 @@ describe('UsersService: создание и правка сотрудника', 
       expect(eventBus.emit).toHaveBeenCalled();
     });
 
+    it('смена подразделения меняет действующие роли — access_changed по разнице (#923)', async () => {
+      users.findCardById.mockResolvedValue(cardRow());
+      departments.findRef.mockResolvedValue({ id: 'dep-1', kind: 'management', isActive: true });
+      membership.effectiveRoleIds
+        .mockResolvedValueOnce(['role-old'])
+        .mockResolvedValueOnce(['role-new'])
+        .mockResolvedValueOnce(['role-new']);
+      roles.permissionsByIds.mockResolvedValue(new Map([['role-new', [Permission.CRM_MANAGE]]]));
+
+      await service.updateUser('user-1', { departmentId: 'dep-1' }, actor([Permission.CRM_MANAGE]));
+
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'tx-handle',
+        'directory.role.access_changed',
+        { roleId: 'role-old', reason: 'membership', userIds: ['user-1'] },
+        expect.objectContaining({ actorId: 'admin-1' }),
+      );
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'tx-handle',
+        'directory.role.access_changed',
+        { roleId: 'role-new', reason: 'membership', userIds: ['user-1'] },
+        expect.objectContaining({ actorId: 'admin-1' }),
+      );
+    });
+
     it('последний администратор: снятие роли admin → 409 ROLE_LAST_ADMIN под замком', async () => {
       users.findCardById.mockResolvedValue(
         withRoles([{ id: 'role-admin', code: 'admin', name: 'Администратор' }]),

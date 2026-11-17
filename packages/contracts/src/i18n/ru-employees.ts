@@ -67,7 +67,11 @@ export const employeesStrings = {
   sectionWork: 'Работа',
   sectionStructure: 'Структура',
   emailLoginHint: 'Это логин — меняется отдельно, через администратора',
+  /** Короткая пометка у метки поля (полный текст — в title): пояснение живёт
+   *  в строке метки, а не подсказкой под полем (канон форм, 07.11.2026). */
+  emailLoginTag: 'логин, меняется отдельно',
   managerComputedHint: 'Вычисляется из структуры: руководитель подразделения',
+  managerComputedTag: 'вычисляется',
   profileSaved: 'Профиль обновлён',
   adminRole: 'Администратор',
   deactivateEmployee: 'Уволить',

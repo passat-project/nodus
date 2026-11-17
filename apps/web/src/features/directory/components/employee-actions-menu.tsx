@@ -45,12 +45,20 @@ export function EmployeeProfileBar({
   const editable = isSelf || canManage;
   if (!editable) return null;
   return (
-    <div className="flex h-16 shrink-0 items-center gap-2 border-t border-border px-5">
-      {/* Узкая зона (ниже ~11rem: карточка сжата до пола чата, #63): подпись
-          уходит, остаётся иконка с aria-label — кнопка не вылезает за зону. */}
-      <Button size="sm" className="min-w-0" onClick={onEdit} aria-label={ui.employees.editProfile}>
-        <Pencil data-icon="inline-start" className="shrink-0" />
-        <span className="hidden truncate @min-[11rem]:inline">{ui.employees.editProfile}</span>
+    <div className="flex h-16 shrink-0 items-center gap-2 border-t border-border px-5 @max-[16rem]/zone:px-3">
+      {/* Узкая зона (выжата ниже пола профиля 320dp — карточка сжата до пола
+          чата, #63): подпись главной уходит, остаётся иконка с aria-label —
+          кнопки не вылезают за зону ни на одной ширине. Калибр кнопок — как у
+          нижней панели задачи (h-9, 15px): главная в обоих местах нажимается
+          одинаково (#923). */}
+      <Button
+        size="lg"
+        className="min-w-0 px-3"
+        onClick={onEdit}
+        aria-label={ui.employees.editProfile}
+      >
+        <Pencil className="shrink-0" aria-hidden />
+        <span className="hidden truncate @min-[18rem]/zone:inline">{ui.employees.editProfile}</span>
       </Button>
       {canManage ? <EmployeeActionsMenu card={card} /> : null}
     </div>
@@ -115,8 +123,8 @@ export function EmployeeActionsMenu({ card }: { card: UserCard }) {
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
-            size="sm"
-            className="shrink-0"
+            size="lg"
+            className="shrink-0 px-2.5 text-muted-foreground"
             aria-label={ui.employees.actions}
             title={ui.employees.actions}
           >
@@ -163,9 +171,19 @@ export function EmployeeActionsMenu({ card }: { card: UserCard }) {
 
       <Dialog open={current !== null} onOpenChange={(open) => (open ? null : setConfirm(null))}>
         <DialogContent className="w-full bg-card sm:max-w-md" showCloseButton={false}>
-          <DialogTitle className="text-base font-semibold text-foreground">
+          <DialogTitle className="text-lg leading-tight font-semibold text-foreground">
             {current?.title}
           </DialogTitle>
+          {/* Подтверждение адресное: без имени непонятно, кого увольняем
+              (в меню карточка могла остаться от прошлого сотрудника). */}
+          {current ? (
+            <p
+              className="-mt-2 min-w-0 truncate text-sm font-medium text-foreground"
+              title={card.displayName}
+            >
+              {card.displayName}
+            </p>
+          ) : null}
           <p className="text-sm text-muted-foreground">{current?.text}</p>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConfirm(null)}>
