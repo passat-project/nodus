@@ -26,18 +26,16 @@ export class ManagerDerivationRepository {
     if (userIds.length === 0) return [];
     const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
       WITH RECURSIVE
-        dept_heads(start_id, current_id, head_id, depth) AS (
+        dept_chain(start_id, current_id, head_id, depth) AS (
           SELECT d.id, d.id, d.head_id, 0
           FROM departments d
-          JOIN users h ON h.id = d.head_id AND h.status = 'active'
           WHERE d.kind = 'management'
           UNION ALL
-          SELECT dh.start_id, p.id, p.head_id, dh.depth + 1
-          FROM dept_heads dh
-          JOIN departments cur ON cur.id = dh.current_id
+          SELECT c.start_id, p.id, p.head_id, c.depth + 1
+          FROM dept_chain c
+          JOIN departments cur ON cur.id = c.current_id
           JOIN departments p ON p.id = cur.parent_id
-          JOIN users h ON h.id = p.head_id AND h.status = 'active'
-          WHERE dh.depth < ${MAX_DEPTH} AND p.kind = 'management'
+          WHERE c.depth < ${MAX_DEPTH} AND p.kind = 'management'
         ),
         affected AS (
           SELECT u.id, u.department_id
@@ -46,12 +44,12 @@ export class ManagerDerivationRepository {
         ),
         derived AS (
           SELECT a.id,
-            (SELECT dh.head_id
-             FROM dept_heads dh
-             WHERE dh.start_id = a.department_id
-               AND dh.head_id IS NOT NULL
-               AND dh.head_id <> a.id
-             ORDER BY dh.depth
+            (SELECT c.head_id
+             FROM dept_chain c
+             JOIN users h ON h.id = c.head_id AND h.status = 'active'
+             WHERE c.start_id = a.department_id
+               AND c.head_id <> a.id
+             ORDER BY c.depth
              LIMIT 1) AS manager_id
           FROM affected a
         ),

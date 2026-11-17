@@ -81,6 +81,10 @@ describe('Производный руководитель и профиль (#92
       parentId: parent.id,
       headId: f.users.limited.id,
     });
+    // Главы состоят в своих подразделениях (как в жизни) — руководитель главы
+    // считается вверх от ЕГО подразделения, пропуская себя.
+    await moveEmployee(f.users.manager.id, parent.id);
+    await moveEmployee(f.users.limited.id, child.id);
 
     const moved = await moveEmployee(f.users.employee.id, child.id);
     // Сотрудник отдела получает главу своего отдела, а не главу компании.

@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { ChevronUp, Pencil, ShieldMinus, ShieldPlus, UserCheck, UserMinus } from 'lucide-react';
+import {
+  ChevronUp,
+  MoreHorizontal,
+  Pencil,
+  ShieldMinus,
+  ShieldPlus,
+  UserCheck,
+  UserMinus,
+} from 'lucide-react';
 import type { UserCard } from '@nodus/contracts';
 import { SystemRole, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
@@ -38,9 +46,11 @@ export function EmployeeProfileBar({
   if (!editable) return null;
   return (
     <div className="flex h-16 shrink-0 items-center gap-2 border-t border-border px-5">
-      <Button size="sm" onClick={onEdit}>
-        <Pencil data-icon="inline-start" />
-        {ui.employees.editProfile}
+      {/* Узкая зона (ниже ~11rem: карточка сжата до пола чата, #63): подпись
+          уходит, остаётся иконка с aria-label — кнопка не вылезает за зону. */}
+      <Button size="sm" className="min-w-0" onClick={onEdit} aria-label={ui.employees.editProfile}>
+        <Pencil data-icon="inline-start" className="shrink-0" />
+        <span className="hidden truncate @min-[11rem]:inline">{ui.employees.editProfile}</span>
       </Button>
       {canManage ? <EmployeeActionsMenu card={card} /> : null}
     </div>
@@ -103,9 +113,16 @@ export function EmployeeActionsMenu({ card }: { card: UserCard }) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm">
-            {ui.employees.actions}
-            <ChevronUp data-icon="inline-end" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="shrink-0"
+            aria-label={ui.employees.actions}
+            title={ui.employees.actions}
+          >
+            <MoreHorizontal className="size-4 @min-[26rem]:hidden" aria-hidden />
+            <span className="hidden @min-[26rem]:inline">{ui.employees.actions}</span>
+            <ChevronUp className="hidden @min-[26rem]:inline" data-icon="inline-end" aria-hidden />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-60">
