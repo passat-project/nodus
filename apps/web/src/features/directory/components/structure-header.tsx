@@ -94,8 +94,10 @@ export function StructureHeader({
         aria-pressed={positionsOpen}
         onClick={onTogglePositions}
       >
-        {/* IdCard — карточка сотрудника (вердикт владельца 17.11.2026), не портфель. */}
-        <IdCard className="size-4" strokeWidth={1.75} />
+        {/* IdCard — карточка сотрудника (вердикт владельца 17.11.2026), не портфель.
+            20px в дизайн-масштабе (≈25 экранных): 16px читались мельче соседних
+            иконок шапки; штрих чуть тоньше — крупная иконка не «жирнеет». */}
+        <IdCard className="size-5" strokeWidth={1.5} />
       </Button>
     </div>
   );

@@ -82,4 +82,33 @@ describe('useCanvasView (#768)', () => {
     expect(canvas.dataset.x).toBe('0');
     expect(canvas.dataset.y).toBe('0');
   });
+
+  it('жест по полотну снимает фокус с полей ВНЕ канваса (поиск структуры)', () => {
+    render(
+      <>
+        <input data-testid="search" />
+        <Probe />
+      </>,
+    );
+    const search = screen.getByTestId('search') as HTMLInputElement;
+    const canvas = screen.getByTestId('canvas');
+
+    // Клик/панорама по пустому месту — поле поиска перестаёт быть активным.
+    search.focus();
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 4, clientX: 5, clientY: 5 });
+    expect(document.activeElement).not.toBe(search);
+
+    // Колесо по полотну — тоже работа с канвасом.
+    search.focus();
+    fireEvent.wheel(canvas, { deltaY: 20 });
+    expect(document.activeElement).not.toBe(search);
+
+    // Клик по карточке (её собственное действие) фокус не трогает.
+    search.focus();
+    const card = document.createElement('button');
+    card.setAttribute('data-tree-node', 'y');
+    canvas.append(card);
+    fireEvent.pointerDown(card, { button: 0, pointerId: 5, clientX: 1, clientY: 1 });
+    expect(document.activeElement).toBe(search);
+  });
 });

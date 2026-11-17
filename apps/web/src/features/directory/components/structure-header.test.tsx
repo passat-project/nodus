@@ -64,6 +64,10 @@ describe('StructureHeader (#768)', () => {
     expect(button.getAttribute('aria-pressed')).toBe('false');
     // Подсказка — нативная (title), как у «Найти меня» и масштаба.
     expect(button.getAttribute('title')).toBe(ui.employees.positionsList);
+    // Иконка крупнее соседних действий шапки и не жирнее их (вердикт 17.11.2026).
+    const icon = button.querySelector('svg');
+    expect(icon?.getAttribute('class')).toContain('size-5');
+    expect(icon?.getAttribute('stroke-width')).toBe('1.5');
   });
 
   it('панель постоянна: шапка всегда резервирует её ширину, инструменты не двигаются', () => {
