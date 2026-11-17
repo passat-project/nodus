@@ -132,7 +132,7 @@ export function RightRail() {
         hidden ? 'pointer-events-none w-0 overflow-hidden opacity-0' : 'w-10',
       )}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 flex-1 flex-col">
         <div
           data-no-scrollbar
           className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pt-1 pb-1"
@@ -146,6 +146,17 @@ export function RightRail() {
             />
           ))}
         </div>
+        {/* Плавный переход списка к кнопке агента (замечание владельца
+            17.11.2026): при длинном списке аватарки обрезались жёсткой
+            горизонтальной границей у кнопки. Подложка-затухание в тон
+            периметра (--background = --sidebar, обе темы) растворяет нижние
+            аватарки ПОВЕРХ списка; pointer-events-none — клики проходят
+            к строкам. Градиент — служебное затухание, не декор (исключение
+            по замечанию владельца, как обои чата ADR-0040). */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background to-transparent"
+        />
       </div>
       {/* Кнопка агента внизу полосы (вместо шеврона раскрытия имён, вердикт
           владельца 16.11.2026): открывает окно ассистента поверх правой части

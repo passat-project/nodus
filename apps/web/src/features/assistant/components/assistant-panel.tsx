@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from 
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { useCircuitAxisY } from '../../../app/shell/use-circuit-axis.js';
 import { useElementWidth } from '../../../shared/ui/use-element-width.js';
 import { uiPx } from '../../../shared/ui/ui-scale.js';
 import { inputModality } from '../../../shared/lib/input-modality.js';
@@ -43,6 +44,16 @@ export function AssistantPanel() {
   const frameW = useElementWidth(frameRef);
   const { min: minW, max: maxW } = assistantLiveBounds(frameW);
   const effWidth = Math.min(Math.max(width, minW), maxW);
+
+  // Верх окна — НА живой оси контура (замечание владельца 17.11.2026): в шелле
+  // это низ топбара, под фулскрин-карточкой мессенджера — низ её хедера, поэтому
+  // нижняя линия шапки ассистента совпадает с разделителем карточки мессенджера,
+  // а линия графа ложится поверх верхнего бордюра. Ось viewport-Y переводим в
+  // координату рамы (позиционированный предок); до первого замера — калибр
+  // топбара uiPx(56), он же ось шелла.
+  const axisY = useCircuitAxisY();
+  const frameTop = frameRef.current?.getBoundingClientRect().top ?? 0;
+  const top = axisY !== null ? Math.max(0, axisY - frameTop) : uiPx(56);
 
   // Возврат фокуса на триггер при закрытии — только клавиатурному пользователю
   // (канон SliderPanel/input-modality): иначе focus-visible рамка на кнопке.
@@ -140,24 +151,30 @@ export function AssistantPanel() {
         // контур (z-60, позже в DOM) и оверлей-порталы/тосты (z-70) выше.
         // Ниже топбара (верх на оси контура): шапка целиком доступна, в т.ч.
         // переключатель темы во время диалога (вердикт владельца 16.11.2026).
-        // Элевация по темам (канон): светлая — направленная тень slider-shadow
-        // БЕЗ бордюра; тёмная — теней нет, край читается hairline-бордюром
-        // (ступень тона card/perimeter сливалась в шапке, вердикт владельца
-        // 16.11.2026) — как у карточек-слайдеров. Цвет кромки — токен
-        // --assistant-edge (transparent/бордер): dark:-утилиты в проекте
-        // мертвы (вариант .dark vs data-theme), токены — канон.
-        // Верхнего бордюра НЕТ: он сдвигал контент на 1px и линия шапки не
-        // совпадала с разделителем чата (вердикт 17.11.2026); верх окна
-        // отделяет ось графа (контур z-60 рисуется поверх окна). Правый
-        // нижний угол скруглён ПО РАДИУСУ РАМЫ — иначе hairline обрезался
-        // квадратным углом и дуга не прорисовывалась (вердикт 17.11.2026).
-        'slider-shadow absolute right-0 bottom-0 z-[60] overflow-hidden rounded-tl-2xl rounded-bl-2xl rounded-br-2xl border-b border-l border-r border-(--assistant-edge) bg-card',
+        // Элевация по темам (канон): светлая — направленная тень slider-shadow;
+        // тёмная — теней нет, край читается hairline-бордюром (ступень тона
+        // card/perimeter сливалась в шапке, вердикт владельца 16.11.2026) —
+        // как у карточек-слайдеров. Цвет кромки — токен --assistant-edge
+        // (бордер): dark:-утилиты в проекте мертвы (вариант .dark vs
+        // data-theme), токены — канон.
+        // Верхний бордюр ЕСТЬ (замечание владельца 17.11.2026): не во всех
+        // окнах сверху есть линия графа, и без бордюра верх оставался голым.
+        // Линия графа ПРИОРИТЕТНЕЕ: контур (z-60, позже в DOM) рисуется поверх
+        // бордюра на оси — верх окна стоит на оси (useCircuitAxisY), а 1px
+        // бордюра компенсирован высотой шапки (assistant-body), поэтому
+        // нижняя линия шапки совпадает с разделителем карточки мессенджера.
+        // Правый нижний угол скруглён ПО РАДИУСУ РАМЫ — иначе hairline
+        // обрезался квадратным углом и дуга не прорисовывалась (вердикт
+        // 17.11.2026).
+        'slider-shadow absolute right-0 bottom-0 z-[60] overflow-hidden rounded-tl-2xl rounded-bl-2xl rounded-br-2xl border border-(--assistant-edge) bg-card',
         // В покое w-0 + visibility hidden: ни полосы, ни переполнения;
         // выезд — шириной существующей обёртки, без transform-скролла шелла.
-        !dragging && 'transition-[width,visibility] duration-200 ease-out',
+        // top в transition — переезд оси при раскрытии/закрытии карточки
+        // мессенджера идёт плавно (закон выдвижных поверхностей).
+        !dragging && 'transition-[width,visibility,top] duration-200 ease-out',
         open ? 'visible' : 'pointer-events-none invisible w-0',
       )}
-      style={{ width: open ? effWidth : 0, top: uiPx(56) }}
+      style={{ width: open ? effWidth : 0, top }}
     >
       {/* Контент фиксированной ширины: текст не плющится в кадрах анимации.
           Проявление — content-fade (ТОЛЬКО opacity): animate-in/duration-150
