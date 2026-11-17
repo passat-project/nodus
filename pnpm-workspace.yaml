@@ -78,6 +78,11 @@ minimumReleaseAgeExclude:
 # Аудит зависимостей CI: braces GHSA-vfj7-8cjw-p6xm (high, патча нет —
 # dev-цепочка линтера eslint-plugin-boundaries>micromatch, не рантайм)
 # проигнорирован до выхода патченной версии (#187, 03.10.2026).
+# picomatch GHSA-fc5q-39xc-vjpf (high, CVE-2026-112366: ReDoS через
+# single-branch repeated extglobs; GitHub отревьюил 17.11.2026): патченной
+# версии нет (4.0.7 — последняя и уязвима), dev-цепочка сборки/линта/тестов
+# (vite/eslint/vitest), не рантайм портала — игнор до выхода патча (#924).
 auditConfig:
   ignoreGhsas:
     - GHSA-vfj7-8cjw-p6xm
+    - GHSA-fc5q-39xc-vjpf
