@@ -82,6 +82,18 @@ export function useRenameAssistantSession() {
   });
 }
 
+/** Удаление диалога «крестиком» в списке сессий (18.11): 204, каскад на сервере. */
+export function useDeleteAssistantSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<void>(`/assistant/sessions/${id}`, { method: 'DELETE' }),
+    onSuccess: (_data, id) => {
+      queryClient.removeQueries({ queryKey: assistantKeys.messages(id) });
+      void queryClient.invalidateQueries({ queryKey: assistantKeys.sessions() });
+    },
+  });
+}
+
 /**
  * Отправка сообщения (I4: пузырь сотрудника появляется сразу): `POST`
  * отвечает `202 { runId, messageId }`, дальше поток прогона наполняет буфер

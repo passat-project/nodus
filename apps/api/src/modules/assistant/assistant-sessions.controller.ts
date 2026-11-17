@@ -1,5 +1,21 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, Patch, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import {
   assistantMessageListSchema,
   assistantSessionListSchema,
@@ -88,6 +104,16 @@ export class AssistantSessionsController {
     body: UpdateAssistantSessionBody,
   ): Promise<AssistantSession> {
     return this.sessions.update(user, id, body);
+  }
+
+  @Delete('sessions/:id')
+  @HttpCode(204)
+  @Audit({ action: 'assistant.session_delete', entity: 'assistant_session' })
+  @ApiOperation({ summary: 'Удалить диалог (каскад сообщений и прогонов)' })
+  @ApiNoContentResponse()
+  @ApiErrors(400, 401, 403, 404)
+  async remove(@GetUser() user: AuthUser, @Param('id', uuidPipe) id: string): Promise<void> {
+    await this.sessions.remove(user, id);
   }
 
   @Get('sessions/:id/messages')

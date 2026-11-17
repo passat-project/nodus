@@ -100,6 +100,7 @@ describe('AssistantSessionsService (#893)', () => {
       listSessions: vi.fn(async () => [sessionRow({ title: 'Задачи', messageCount: 2 })]),
       createSession: vi.fn(async () => sessionRow({ title: 'Новый' })),
       updateSession: vi.fn(async () => session ?? null),
+      deleteSession: vi.fn(async () => session !== null),
       findSession: vi.fn(async () => session),
       listMessages: vi.fn(async () => [messageRow()]),
       createRun: vi.fn(async () => undefined),
@@ -131,6 +132,17 @@ describe('AssistantSessionsService (#893)', () => {
   it('update: чужая/несуществующая сессия — доменный 404', async () => {
     const { service } = makeService(null);
     await expect(service.update(user, SESSION_ID, { title: 'x' })).rejects.toMatchObject({
+      code: expect.stringContaining('NOT_FOUND'),
+    });
+  });
+
+  it('remove: своя сессия удаляется, чужая — доменный 404', async () => {
+    const own = makeService();
+    await own.service.remove(user, SESSION_ID);
+    expect(own.repo.deleteSession).toHaveBeenCalledWith(USER_ID, SESSION_ID);
+
+    const foreign = makeService(null);
+    await expect(foreign.service.remove(user, SESSION_ID)).rejects.toMatchObject({
       code: expect.stringContaining('NOT_FOUND'),
     });
   });

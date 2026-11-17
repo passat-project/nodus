@@ -60,6 +60,12 @@ export class AssistantSessionsService {
     return toSessionDto(row);
   }
 
+  /** Удаление диалога «крестиком» в списке (18.11): каскад сообщений/прогонов. */
+  async remove(user: AuthUser, id: string): Promise<void> {
+    const deleted = await this.repo.deleteSession(user.id, id);
+    if (!deleted) throw DomainException.notFound('Диалог не найден');
+  }
+
   async messages(user: AuthUser, id: string): Promise<AssistantMessageList> {
     const session = await this.repo.findSession(user.id, id);
     if (!session) throw DomainException.notFound('Диалог не найден');

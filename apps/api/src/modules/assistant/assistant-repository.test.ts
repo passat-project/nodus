@@ -89,6 +89,7 @@ function makeRepo() {
       findFirst: vi.fn(async (): Promise<Record<string, unknown> | null> => sessionRow()),
       create: vi.fn(async () => sessionRow()),
       update: vi.fn(async () => sessionRow()),
+      delete: vi.fn(async () => sessionRow()),
     },
     assistantMessage: {
       findMany: vi.fn(async () => [messageRow()]),
@@ -167,6 +168,16 @@ describe('AssistantRepository: сессии (#893)', () => {
     prisma.assistantSession.findFirst.mockResolvedValueOnce(null);
     expect(await repo.updateSession(USER_ID, SESSION_ID, { title: 'x' })).toBeNull();
     expect(prisma.assistantSession.update).toHaveBeenCalledTimes(2);
+  });
+
+  it('deleteSession: владелец — каскадное удаление; чужая/отсутствующая — false', async () => {
+    const { repo, prisma } = makeRepo();
+    expect(await repo.deleteSession(USER_ID, SESSION_ID)).toBe(true);
+    expect(prisma.assistantSession.delete).toHaveBeenCalledWith({ where: { id: SESSION_ID } });
+
+    prisma.assistantSession.findFirst.mockResolvedValueOnce(null);
+    expect(await repo.deleteSession(USER_ID, SESSION_ID)).toBe(false);
+    expect(prisma.assistantSession.delete).toHaveBeenCalledTimes(1);
   });
 
   it('touchSession пишет lastMessageAt и заголовок только при наличии', async () => {

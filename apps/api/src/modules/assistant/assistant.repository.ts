@@ -109,6 +109,14 @@ export class AssistantRepository {
     });
   }
 
+  /** Удалить диалог владельца; сообщения/прогоны/события/вызовы — каскадом. */
+  async deleteSession(userId: string, id: string): Promise<boolean> {
+    const existing = await this.findSession(userId, id);
+    if (!existing) return false;
+    await this.prisma.assistantSession.delete({ where: { id } });
+    return true;
+  }
+
   // ----- Сообщения -----
 
   async listMessages(sessionId: string, limit: number): Promise<MessageRow[]> {
