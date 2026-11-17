@@ -23,7 +23,7 @@ import {
   ProcessButtonSlot,
   type ProcessSlotItem,
 } from '../../../shared/workflow/process-button-slot.js';
-import { PressAnalyticsDialog, PressSubmitDialog } from './task-press-dialogs.js';
+import { PressAnalyticsDialog, PressSubmitDialog, pressHasWindow } from './task-press-dialogs.js';
 import { TaskPressButton, TaskPressStatus } from './task-press-button.js';
 import { PressRing } from './task-press.js';
 import { useActionRunner } from './task-action-runner.js';
@@ -106,9 +106,10 @@ export function TaskActionBar({
   // Окно сбора — окно самой кнопки (#496): есть разделы — показываем его,
   // нет — нажатие сразу записывает отметку без пустого диалога.
   const openPress = () => {
-    // Проверяем СНИМОК окна раунда, а не живой переход: правка окна кнопки
-    // посреди раунда не должна ломать сдачу (снимок — источник истины).
-    if (press?.form.enabled && press.form.sections.length > 0) setPressOpen(true);
+    // Снимок окна раунда — источник истины: правка окна кнопки посреди
+    // раунда не должна ломать сдачу (личные разделы проверяются по нему).
+    const snapshot = pressTransition && press ? { ...pressTransition, form: press.form } : null;
+    if (snapshot && pressHasWindow(snapshot)) setPressOpen(true);
     else submitPress.mutate({});
   };
 
