@@ -30,6 +30,25 @@ export class PressRepository {
     });
   }
 
+  /** Открытые раунды с отметкой сотрудника — реакция на деактивацию (#434). */
+  findOpenRoundsForUser(userId: string, tx?: TransactionClient) {
+    return (tx ?? this.prisma).pressRound.findMany({
+      where: {
+        completedAt: null,
+        cancelledAt: null,
+        entries: { some: { userId, state: { in: ['waiting', 'returned', 'pressed'] } } },
+      },
+      include: { entries: { orderBy: [{ order: 'asc' }, { id: 'asc' }] } },
+    });
+  }
+
+  findRoundById(tx: TransactionClient, roundId: string) {
+    return tx.pressRound.findUnique({
+      where: { id: roundId },
+      include: { entries: { orderBy: [{ order: 'asc' }, { id: 'asc' }] } },
+    });
+  }
+
   /** Последний завершённый раунд (аналитика/CSV после кворума — read-only,
    *  решение владельца 11.11.2026). */
   findLatestCompletedRound(
