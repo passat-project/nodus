@@ -45,7 +45,7 @@
    `UPDATE_ASSISTANT_STANDARD=1 … manifest.test.ts` — документация в том же
    коммите; README модуля обновляется вручную.
 
-## Каталог (66 инструментов)
+## Каталог (74 инструментов)
 
 | Инструмент | Название | Модуль | Вид | Эффект | Класс | Объект | API | Право | Флаг | Полка |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -71,12 +71,20 @@
 | `directory.find_users` | Сотрудники: поиск | directory | чтение | read | search | сотрудник | GET /directory/users | directory.read | — | да |
 | `directory.get_user` | Сотрудники: карточка | directory | чтение | read | get | сотрудник | GET /directory/users/:id | directory.read | — | нет |
 | `files.extract_text` | Вложения: прочитать текст | files | чтение | read | get | файл | GET /files/:id/text | — | assistant | да |
+| `letters.actions` | Письма: действия | letters | чтение | read | transitions | письмо | GET /letters/:id/actions | — | correspondence | нет |
+| `letters.add_participant` | Письма: пригласить в обсуждение | letters | запись | irreversible | create | участник | POST /letters/:id/participants | correspondence.register | correspondence | нет |
+| `letters.add_relation` | Письма: связать письма | letters | запись | irreversible | create | связь | POST /letters/:id/relations | correspondence.register | correspondence | нет |
 | `letters.attachments` | Письма: вложения | letters | чтение | read | attachments | вложение | GET /letters/:id | — | correspondence | да |
 | `letters.get` | Письма: карточка | letters | чтение | read | get | письмо | GET /letters/:id | — | correspondence | да |
+| `letters.history` | Письма: история | letters | чтение | read | history | письмо | GET /letters/:id/history | — | correspondence | нет |
+| `letters.join` | Письма: присоединиться к обсуждению | letters | запись | irreversible | update | письмо | POST /letters/:id/join | — | correspondence | нет |
 | `letters.list` | Письма: реестр | letters | чтение | read | list | письмо | GET /letters | — | correspondence | да |
+| `letters.press_action` | Письма: нажать действие | letters | запись | irreversible | transition | письмо | POST /letters/:id/actions/:actionId/press | — | correspondence | нет |
 | `letters.relations` | Письма: связи | letters | чтение | read | relations | связь | GET /letters/:id/tree | — | correspondence | нет |
+| `letters.set_main_document` | Письма: основной документ | letters | запись | irreversible | update | вложение | POST /letters/:id/main-document | correspondence.register | correspondence | нет |
 | `letters.transition` | Письма: резолюция/переход | letters | запись | irreversible | transition | письмо | POST /letters/:id/transitions/:transitionId | — | correspondence | да |
 | `letters.transitions` | Письма: маршрут | letters | чтение | read | transitions | письмо | GET /letters/:id/transitions | — | correspondence | нет |
+| `letters.update` | Письма: изменить реквизиты | letters | запись | irreversible | update | письмо | PATCH /letters/:id | correspondence.register | correspondence | нет |
 | `me.get` | Кто я: профиль и оргструктура | directory | чтение | read | get | профиль | GET /directory/users/me/organization | directory.read | — | да |
 | `memory.forget` | Блокнот: забыть | system | чтение | write | forget | заметка | — (вычислимый) | — | — | нет |
 | `memory.list` | Блокнот: записи | system | чтение | read | list | заметка | — (вычислимый) | — | — | да |

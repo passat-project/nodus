@@ -23,15 +23,6 @@ export const EMPLOYEE_CASES_2: readonly GoldenCase[] = [
       'Чат задачи — chat.task_conversation, сообщения — chat.messages; отправка не просили.',
   },
   {
-    id: 'emp-letters-01',
-    role: 'employee',
-    form: 'typo',
-    query: 'Пакажи вложения письма 128',
-    expectedTools: ['letters.list', 'letters.attachments'],
-    forbiddenTools: ['files.extract_text'],
-    rationale: 'Номер ищется letters.list, опись — letters.attachments; читать текст не просили.',
-  },
-  {
     id: 'emp-files-01',
     role: 'employee',
     form: 'official',

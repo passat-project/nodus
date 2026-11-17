@@ -43,6 +43,31 @@ export async function taskLabel(ctx: ToolContext, id: string): Promise<string | 
   }
 }
 
+/** Письмо карточкой: «№Вх-2026/118 «Тема»» (без номера — только тема). */
+export async function letterLabel(ctx: ToolContext, id: string): Promise<string | null> {
+  if (!ctx.read) return null;
+  try {
+    const letter = asRecord(await ctx.read(`/letters/${id}`));
+    const subject = str(letter?.subject);
+    if (!subject) return null;
+    const number = str(letter?.regNumber);
+    return `${number ? `№${number} ` : ''}«${subject}»`;
+  } catch {
+    return null;
+  }
+}
+
+/** Контрагент карточкой: краткое имя, иначе полное. */
+export async function counterpartyName(ctx: ToolContext, id: string): Promise<string | null> {
+  if (!ctx.read) return null;
+  try {
+    const counterparty = asRecord(await ctx.read(`/counterparties/${id}`));
+    return str(counterparty?.shortName) ?? str(counterparty?.fullName);
+  } catch {
+    return null;
+  }
+}
+
 /** Поле карточки: пустое значение не показываем вовсе. */
 export function field(label: string, value: string | null | undefined): ToolActionField | null {
   const trimmed = value?.trim();

@@ -8,7 +8,7 @@
 
 Обновить: `UPDATE_ASSISTANT_SURFACE=1 pnpm --filter @nodus/api exec vitest run src/modules/assistant/tools/surface.test.ts`
 
-Всего инструментов: **66** (запись: 28).
+Всего инструментов: **74** (запись: 34).
 
 | Инструмент | Название | Вид | Модуль | API | Право | Флаг | Горячая |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -34,12 +34,20 @@
 | `directory.find_users` | Сотрудники: поиск | чтение | directory | GET /directory/users | directory.read | — | да |
 | `directory.get_user` | Сотрудники: карточка | чтение | directory | GET /directory/users/:id | directory.read | — | нет |
 | `files.extract_text` | Вложения: прочитать текст | чтение | files | GET /files/:id/text | — | assistant | да |
+| `letters.actions` | Письма: действия | чтение | letters | GET /letters/:id/actions | — | correspondence | нет |
+| `letters.add_participant` | Письма: пригласить в обсуждение | запись | letters | POST /letters/:id/participants | correspondence.register | correspondence | нет |
+| `letters.add_relation` | Письма: связать письма | запись | letters | POST /letters/:id/relations | correspondence.register | correspondence | нет |
 | `letters.attachments` | Письма: вложения | чтение | letters | GET /letters/:id | — | correspondence | да |
 | `letters.get` | Письма: карточка | чтение | letters | GET /letters/:id | — | correspondence | да |
+| `letters.history` | Письма: история | чтение | letters | GET /letters/:id/history | — | correspondence | нет |
+| `letters.join` | Письма: присоединиться к обсуждению | запись | letters | POST /letters/:id/join | — | correspondence | нет |
 | `letters.list` | Письма: реестр | чтение | letters | GET /letters | — | correspondence | да |
+| `letters.press_action` | Письма: нажать действие | запись | letters | POST /letters/:id/actions/:actionId/press | — | correspondence | нет |
 | `letters.relations` | Письма: связи | чтение | letters | GET /letters/:id/tree | — | correspondence | нет |
+| `letters.set_main_document` | Письма: основной документ | запись | letters | POST /letters/:id/main-document | correspondence.register | correspondence | нет |
 | `letters.transition` | Письма: резолюция/переход | запись | letters | POST /letters/:id/transitions/:transitionId | — | correspondence | да |
 | `letters.transitions` | Письма: маршрут | чтение | letters | GET /letters/:id/transitions | — | correspondence | нет |
+| `letters.update` | Письма: изменить реквизиты | запись | letters | PATCH /letters/:id | correspondence.register | correspondence | нет |
 | `me.get` | Кто я: профиль и оргструктура | чтение | directory | GET /directory/users/me/organization | directory.read | — | да |
 | `memory.forget` | Блокнот: забыть | чтение | system | — | — | — | нет |
 | `memory.list` | Блокнот: записи | чтение | system | — | — | — | да |

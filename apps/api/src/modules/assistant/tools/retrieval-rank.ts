@@ -428,7 +428,12 @@ export function hasCapability(
   // создание проекта. Для глаголов без названного объекта («добавь Петрова в
   // беседу») объект задаёт сам инструмент — проверяем действие и модуль.
   const created = query.createdObject;
-  return writeIntents.some((intent) => {
+  // «Сделай письмо в Стройпроект» — просьба СОЗДАТЬ письмо; наличие правки
+  // реквизитов не делает операцию доступной. Если объект создания назван,
+  // проверяем именно create, а не любой записанный глагол.
+  const intentsToCheck =
+    created && writeIntents.includes('create') ? ['create' as ToolIntent] : writeIntents;
+  return intentsToCheck.some((intent) => {
     if (intent === 'send') {
       // Почта портала не отправляется ассистентом; чат — отправляется.
       if (query.modules.has('letters')) return false;
@@ -440,7 +445,10 @@ export function hasCapability(
       if ((tool.intent ?? inferIntent(tool)) !== intent) return false;
       if (!actionSupported(tool, actions)) return false;
       if (created) {
-        if (!subjectMatches(tool, created)) return false;
+        // Для «создай письмо» годится только инструмент, чей ГЛАВНЫЙ объект —
+        // письмо: смежные объекты («участник письма») создают не письмо.
+        const primary = tool.subject ?? inferSubject(tool);
+        if (!sameFamily(created, primary)) return false;
       }
       if (
         query.modules.size > 0 &&

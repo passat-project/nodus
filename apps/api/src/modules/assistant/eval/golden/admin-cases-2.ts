@@ -22,16 +22,6 @@ export const ADMIN_CASES_2: readonly GoldenCase[] = [
       'Сначала id проекта (projects.list), переименование — projects.update; папки не относятся.',
   },
   {
-    id: 'adm-projects-04',
-    role: 'admin',
-    form: 'official',
-    query: 'Добавь Петрова наблюдателем в проект «Северный»',
-    expectedTools: ['directory.find_users', 'projects.add_member'],
-    forbiddenTools: ['projects.update'],
-    rationale:
-      'Сначала id Петрова (directory.find_users), затем projects.add_member; правка названия неверна.',
-  },
-  {
     id: 'adm-projects-05',
     role: 'admin',
     form: 'typo',
@@ -105,15 +95,6 @@ export const ADMIN_CASES_2: readonly GoldenCase[] = [
     expectedTools: ['letters.list'],
     forbiddenTools: ['letters.transition'],
     rationale: 'Входящие — letters.list с box=incoming; переход по письму не просили.',
-  },
-  {
-    id: 'adm-letters-02',
-    role: 'admin',
-    form: 'colloquial',
-    query: 'Какие вложения в письме 128?',
-    expectedTools: ['letters.list', 'letters.attachments'],
-    forbiddenTools: ['files.extract_text'],
-    rationale: 'Номер ищется letters.list, опись — letters.attachments; читать текст не просили.',
   },
   {
     id: 'adm-no-tool-03',

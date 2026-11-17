@@ -3,16 +3,6 @@ import type { GoldenCase } from '../golden-set.types.js';
 /** Секретарь: сотрудники, беседы, задачи и проекты в ежедневной работе (часть 2). */
 export const SECRETARY_CASES_2: readonly GoldenCase[] = [
   {
-    id: 'sec-directory-02',
-    role: 'secretary',
-    form: 'official',
-    query: 'Покажи карточку сотрудника Петрова',
-    expectedTools: ['directory.find_users', 'directory.get_user'],
-    forbiddenTools: ['me.get'],
-    rationale:
-      'Сначала id через directory.find_users, карточка — directory.get_user; me.get только про себя.',
-  },
-  {
     id: 'sec-directory-03',
     role: 'secretary',
     form: 'colloquial',

@@ -13,25 +13,6 @@ export const GIP_CASES_1: readonly GoldenCase[] = [
       'Список своих задач с фильтром по сроку — tasks.list; отправка сообщения к запросу не относится.',
   },
   {
-    id: 'gip-tasks-02',
-    role: 'gip',
-    form: 'colloquial',
-    query: 'Чё у меня по задачам?',
-    expectedTools: ['tasks.list'],
-    forbiddenTools: ['tasks.create'],
-    rationale: 'Разговорный запрос про свои задачи — tasks.list; создавать задачу не просили.',
-  },
-  {
-    id: 'gip-tasks-03',
-    role: 'gip',
-    form: 'typo',
-    query: 'Какиие задачи у меня просрочены?',
-    expectedTools: ['tasks.list'],
-    forbiddenTools: ['tasks.stages'],
-    rationale:
-      'Просроченные свои задачи — tasks.list с overdue; стадии дают счётчики, а не список.',
-  },
-  {
     id: 'gip-tasks-04',
     role: 'gip',
     form: 'official',
@@ -40,15 +21,6 @@ export const GIP_CASES_1: readonly GoldenCase[] = [
     forbiddenTools: ['chat.send'],
     rationale:
       'Сначала id проекта (projects.list), затем задачи проекта (tasks.list); чат не нужен.',
-  },
-  {
-    id: 'gip-tasks-05',
-    role: 'gip',
-    form: 'official',
-    query: 'Открой карточку задачи №1042',
-    expectedTools: ['tasks.search', 'tasks.get'],
-    forbiddenTools: ['tasks.update'],
-    rationale: 'Номер ищется tasks.search, карточка — tasks.get; менять задачу не просили.',
   },
   {
     id: 'gip-tasks-06',
@@ -88,15 +60,6 @@ export const GIP_CASES_1: readonly GoldenCase[] = [
     expectedTools: ['tasks.stages'],
     forbiddenTools: ['tasks.transition'],
     rationale: 'Счётчики и просрочки по стадиям — tasks.stages; переходы задач не запрашивались.',
-  },
-  {
-    id: 'gip-tasks-10',
-    role: 'gip',
-    form: 'official',
-    query: 'Покажи историю изменений задачи №1042',
-    expectedTools: ['tasks.search', 'tasks.history'],
-    forbiddenTools: ['chat.send'],
-    rationale: 'Номер ищется tasks.search, хронология — tasks.history; сообщение в чат не нужно.',
   },
   {
     id: 'gip-projects-01',

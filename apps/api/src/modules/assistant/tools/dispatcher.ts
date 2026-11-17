@@ -31,8 +31,8 @@ function describe(tool: AssistantToolDefinition): string {
   const keywords = (tool.keywords ?? []).slice(0, 4).join(', ');
   // Диспетчеру нужна суть, а не пересказ API: «зачем» в одну фразу держит
   // промпт компактным при каталоге 40–100 инструментов (#926).
-  const essence = clip(tool.why ?? tool.description, tool.why ? 90 : 140);
-  return `- ${tool.id} — ${tool.title} [${tool.module}, ${kind}]: ${essence}${keywords ? ` Ключи: ${clip(keywords, 60)}.` : ''}`;
+  const essence = clip(tool.why ?? tool.description, tool.why ? 60 : 100);
+  return `- ${tool.id} — ${tool.title} [${tool.module}, ${kind}]: ${essence}${keywords ? ` Ключи: ${clip(keywords, 40)}.` : ''}`;
 }
 
 /**

@@ -41,15 +41,6 @@ export const SECRETARY_CASES_1: readonly GoldenCase[] = [
       'Номер ищется в реестре letters.list, карточка — letters.get; резолюция не запрашивалась.',
   },
   {
-    id: 'sec-letters-05',
-    role: 'secretary',
-    form: 'colloquial',
-    query: 'Что там в письме 128?',
-    expectedTools: ['letters.list', 'letters.get'],
-    forbiddenTools: ['chat.send'],
-    rationale: 'Карточка письма — letters.get после поиска номера; чат не относится.',
-  },
-  {
     id: 'sec-letters-06',
     role: 'secretary',
     form: 'official',

@@ -5,6 +5,8 @@ import { chatWriteTools } from './definitions/chat-write.tools.js';
 import { dictionariesTools } from './definitions/dictionaries.tools.js';
 import { directoryTools } from './definitions/directory.tools.js';
 import { filesTools } from './definitions/files.tools.js';
+import { lettersPartsReadTools } from './definitions/letters-parts.tools.js';
+import { lettersPartsWriteTools } from './definitions/letters-parts-write.tools.js';
 import { lettersTools } from './definitions/letters.tools.js';
 import { lettersWriteTools } from './definitions/letters-write.tools.js';
 import { meTools } from './definitions/me.tools.js';
@@ -46,6 +48,8 @@ export const ALL_TOOLS: readonly AssistantToolDefinition[] = [
   ...projectsCreateTools,
   ...lettersTools,
   ...lettersWriteTools,
+  ...lettersPartsReadTools,
+  ...lettersPartsWriteTools,
   ...chatTools,
   ...chatWriteTools,
   ...chatActionsTools,

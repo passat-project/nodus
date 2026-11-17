@@ -44,6 +44,7 @@ export interface QueryUnderstanding {
 const TYPO_FIXES: readonly (readonly [RegExp, string])[] = [
   [/проэкт/g, 'проект'],
   [/атправ/g, 'отправ'],
+  [/пастав/g, 'постав'],
   [/иссполн/g, 'исполн'],
 ];
 
@@ -258,7 +259,7 @@ const CREATED_SUBJECTS: ReadonlySet<string> = new Set([
 ]);
 
 const CREATION_VERBS =
-  /(?:^|\s)(?:созда[а-я]*|заведи|завести|сформиру[а-я]*|поставь|поставить|сделай|сделать)\s+(?:нов[а-я]+\s+)?([а-я-]+)/u;
+  /(?:^|\s)(?:созда[а-я]*|заведи|завести|сформиру[а-я]*|сделай|сделать)\s+(?:нов[а-я]+\s+)?([а-я-]+)/u;
 
 /** Объект создания («создай папку» → «папка»): сильный признак против соседей. */
 function detectCreatedObject(normalized: string): string | null {

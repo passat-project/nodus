@@ -3,15 +3,6 @@ import type { GoldenCase } from '../golden-set.types.js';
 /** Рядовой сотрудник: свои задачи, беседы, вложения, блокнот, отказы (часть 1). */
 export const EMPLOYEE_CASES_1: readonly GoldenCase[] = [
   {
-    id: 'emp-tasks-01',
-    role: 'employee',
-    form: 'official',
-    query: 'Покажи мои задачи на сегодня',
-    expectedTools: ['tasks.list'],
-    forbiddenTools: ['tasks.create'],
-    rationale: 'Свои задачи — tasks.list; создание задачи не просили.',
-  },
-  {
     id: 'emp-tasks-02',
     role: 'employee',
     form: 'colloquial',
@@ -39,16 +30,6 @@ export const EMPLOYEE_CASES_1: readonly GoldenCase[] = [
     rationale: 'Номер ищется tasks.search, карточка — tasks.get; менять задачу не просили.',
   },
   {
-    id: 'emp-tasks-05',
-    role: 'employee',
-    form: 'colloquial',
-    query: 'Что там по задаче 1042?',
-    expectedTools: ['tasks.search', 'tasks.get'],
-    forbiddenTools: ['tasks.update'],
-    rationale:
-      'Сначала найти задачу по номеру (tasks.search), затем карточка (tasks.get); менять не просили.',
-  },
-  {
     id: 'emp-tasks-06',
     role: 'employee',
     form: 'official',
@@ -67,16 +48,6 @@ export const EMPLOYEE_CASES_1: readonly GoldenCase[] = [
     rationale: 'Распределение по стадиям — tasks.stages; список задач не даёт счётчики.',
   },
   {
-    id: 'emp-tasks-08',
-    role: 'employee',
-    form: 'official',
-    query: 'Заверши задачу №1042',
-    expectedTools: ['tasks.transitions', 'tasks.transition'],
-    forbiddenTools: ['tasks.update'],
-    rationale:
-      'Завершение — переход маршрута (tasks.transitions, затем tasks.transition); tasks.update не знает гейтов.',
-  },
-  {
     id: 'emp-tasks-09',
     role: 'employee',
     form: 'colloquial',
@@ -84,24 +55,6 @@ export const EMPLOYEE_CASES_1: readonly GoldenCase[] = [
     expectedTools: ['tasks.update'],
     forbiddenTools: ['tasks.transition'],
     rationale: 'Срок меняет tasks.update; переход меняет стадию.',
-  },
-  {
-    id: 'emp-chat-01',
-    role: 'employee',
-    form: 'official',
-    query: 'Покажи мои беседы',
-    expectedTools: ['chat.conversations'],
-    forbiddenTools: ['chat.messages'],
-    rationale: 'Список бесед — chat.conversations; сообщения конкретной беседы не просили.',
-  },
-  {
-    id: 'emp-chat-02',
-    role: 'employee',
-    form: 'colloquial',
-    query: 'Что писали в беседе «Отдел»?',
-    expectedTools: ['chat.conversations', 'chat.messages'],
-    forbiddenTools: ['chat.send'],
-    rationale: 'Беседа ищется chat.conversations, переписка — chat.messages; отправка не просили.',
   },
   {
     id: 'emp-chat-03',
