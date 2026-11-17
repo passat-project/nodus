@@ -16,7 +16,7 @@ import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { usePersonAvatarUrl } from '../../../shared/ui/use-person-avatar-url.js';
 import type { AssistantLiveRun } from '../model/assistant-store.js';
 import { toChatMessage } from '../model/assistant-messages.js';
-import { AssistantToolRows } from './assistant-tool-rows.js';
+import { AssistantEntityLinks, AssistantToolRows } from './assistant-tool-rows.js';
 
 const strings = ui.assistant;
 
@@ -98,6 +98,9 @@ interface Segment {
   reasoning: string | null;
   streaming: boolean;
   errorCode: string | null;
+  /** Текст для пузыря: упавший прогон без текста показывает только строку
+   *  ошибки с «Повторить», а не пустой пузырь с временем. */
+  visible: boolean;
   showDay: boolean;
 }
 
@@ -131,6 +134,7 @@ function buildSegments(messages: readonly AssistantMessage[], meId: string | und
       reasoning: first.role === 'assistant' ? first.reasoning : null,
       streaming: group.some((message) => message.streaming),
       errorCode: group.find((message) => message.errorCode)?.errorCode ?? null,
+      visible: group.some((message) => message.text.trim().length > 0),
       showDay: previous
         ? new Date(previous.createdAt).toDateString() !== new Date(first.createdAt).toDateString()
         : true,
@@ -193,37 +197,42 @@ export function AssistantFeed({
                 <AssistantReasoning reasoning={segment.reasoning} streaming={segment.streaming} />
               </div>
             ) : null}
-            <MessageRunView
-              run={segment.run}
-              showName={false}
-              // Узкая колонка диалога с ИИ: сотрудник справа, агент слева
-              // (конвенция харнесов, вердикт владельца 17.11.2026).
-              align="both"
-              renderAvatar={(run) =>
-                run.mine ? (
-                  <PersonAvatar
-                    name={me?.displayName ?? strings.meFallback}
-                    avatarUrl={myAvatarUrl}
-                    className="size-7"
-                  />
-                ) : (
-                  <AssistantGlyph className="size-7 rounded-full" />
-                )
-              }
-              renderItem={(message, attrs) => (
-                <div style={attrs.style} className="min-w-0">
-                  <ChatMessageItem
-                    message={message}
-                    mine={segment.run.mine}
-                    avatarSlot="none"
-                    tail={attrs.tail}
-                    reactionsHidden
-                    receiptsHidden
-                    align="both"
-                  />
-                </div>
-              )}
-            />
+            {segment.visible ? (
+              <MessageRunView
+                run={segment.run}
+                showName={false}
+                // Узкая колонка диалога с ИИ: сотрудник справа, агент слева
+                // (конвенция харнесов, вердикт владельца 17.11.2026).
+                align="both"
+                renderAvatar={(run) =>
+                  run.mine ? (
+                    <PersonAvatar
+                      name={me?.displayName ?? strings.meFallback}
+                      avatarUrl={myAvatarUrl}
+                      className="size-7"
+                    />
+                  ) : (
+                    <AssistantGlyph className="size-7 rounded-full" />
+                  )
+                }
+                renderItem={(message, attrs) => (
+                  <div style={attrs.style} className="min-w-0">
+                    <ChatMessageItem
+                      message={message}
+                      mine={segment.run.mine}
+                      avatarSlot="none"
+                      tail={attrs.tail}
+                      reactionsHidden
+                      receiptsHidden
+                      align="both"
+                    />
+                  </div>
+                )}
+              />
+            ) : null}
+            {/* Навигация — ДЕЙСТВИЕ под ответом, не строка вызова (вердикт
+                владельца 17.11.2026: в туле карточку не открывают). */}
+            <AssistantEntityLinks tools={segment.tools} />
             {segment.errorCode ? (
               <div className="flex items-center gap-2 pl-9 text-label text-destructive">
                 <span>{errorText(segment.errorCode)}</span>

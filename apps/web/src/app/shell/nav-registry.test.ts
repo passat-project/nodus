@@ -67,15 +67,16 @@ describe('реестр навигации: «Настройки портала»
   const settings = NAV_MODULES.find((module) => module.id === 'settings')!;
   const manager = [Permission.PORTAL_SETTINGS_MANAGE];
 
-  it('страница — вне рейки, вкладки — «Файловые серверы» и «Права доступа»', () => {
+  it('страница — вне рейки, вкладки — «Файловые серверы», «ИИ-агент» и «Права доступа»', () => {
     expect(settings.rail).toBe(false);
     expect(settings.to).toBe('/settings');
-    expect(settings.tabs.map((tab) => tab.id)).toEqual(['file-servers', 'access']);
+    expect(settings.tabs.map((tab) => tab.id)).toEqual(['file-servers', 'ai', 'access']);
     expect(RAIL_MODULES.map((module) => module.id)).not.toContain('settings');
   });
 
-  it('«Файловые серверы» — вкладка по умолчанию; access — последняя', () => {
-    const [fileServers, access] = settings.tabs;
+  it('«Файловые серверы» — вкладка по умолчанию; access остаётся последней', () => {
+    const [fileServers] = settings.tabs;
+    const access = settings.tabs.at(-1)!;
     expect(fileServers!.isActive(new URLSearchParams(''), manager)).toBe(true);
     expect(fileServers!.isActive(new URLSearchParams('tab=access'), manager)).toBe(false);
     expect(access!.search).toEqual({ tab: 'access' });
@@ -84,6 +85,8 @@ describe('реестр навигации: «Настройки портала»
 
   it('без права страницы вкладки не видны', () => {
     expect(visibleNavTabs(settings, [])).toEqual([]);
+    // «ИИ-агент» дополнительно требует флаг модуля и право assistant.use —
+    // в голом реестре (без состояния) вкладка скрыта.
     expect(visibleNavTabs(settings, manager)).toHaveLength(2);
   });
 });
