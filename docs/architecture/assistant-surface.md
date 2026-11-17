@@ -8,7 +8,7 @@
 
 Обновить: `UPDATE_ASSISTANT_SURFACE=1 pnpm --filter @nodus/api exec vitest run src/modules/assistant/tools/surface.test.ts`
 
-Всего инструментов: **74** (запись: 34).
+Всего инструментов: **80** (запись: 40).
 
 | Инструмент | Название | Вид | Модуль | API | Право | Флаг | Горячая |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -58,12 +58,18 @@
 | `projects.create_group` | Проекты: создать портфель | запись | projects | POST /projects/groups | project.create | projects | нет |
 | `projects.get` | Проекты: карточка | чтение | projects | GET /projects/:id | — | projects | да |
 | `projects.groups` | Проекты: портфели | чтение | projects | GET /projects/groups | — | projects | нет |
+| `projects.join` | Проекты: присоединиться | запись | projects | POST /projects/:id/join | — | projects | нет |
+| `projects.leave` | Проекты: покинуть | запись | projects | POST /projects/:id/leave | — | projects | нет |
 | `projects.list` | Проекты: список | чтение | projects | GET /projects | — | projects | да |
 | `projects.members` | Проекты: участники | чтение | projects | GET /projects/:id/members | — | projects | нет |
+| `projects.move_node` | Проекты: перенести папку | запись | projects | POST /projects/:id/nodes/:nodeId/move | — | projects | нет |
 | `projects.node_kinds` | Проекты: виды папок | чтение | projects | GET /projects/node-kinds | — | projects | нет |
+| `projects.set_status` | Проекты: завершить или вернуть в работу | запись | projects | POST /projects/:id/status | — | projects | нет |
 | `projects.structure` | Проекты: структура | чтение | projects | GET /projects/:id/structure | — | projects | нет |
 | `projects.types` | Проекты: типы | чтение | projects | GET /projects/types | — | projects | нет |
 | `projects.update` | Проекты: изменить | запись | projects | PATCH /projects/:id | — | projects | нет |
+| `projects.update_group` | Проекты: переименовать портфель | запись | projects | PATCH /projects/groups/:id | — | projects | нет |
+| `projects.update_node` | Проекты: изменить папку | запись | projects | PATCH /projects/:id/nodes/:nodeId | — | projects | нет |
 | `tasks.actions` | Задачи: действия маршрута | чтение | tasks | GET /tasks/:id/actions | — | tasks | нет |
 | `tasks.add_participant` | Задачи: добавить участника | запись | tasks | POST /tasks/:id/participants | — | tasks | нет |
 | `tasks.add_relation` | Задачи: связать задачи | запись | tasks | POST /tasks/:id/relations | — | tasks | нет |

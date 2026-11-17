@@ -45,7 +45,7 @@
    `UPDATE_ASSISTANT_STANDARD=1 … manifest.test.ts` — документация в том же
    коммите; README модуля обновляется вручную.
 
-## Каталог (74 инструментов)
+## Каталог (80 инструментов)
 
 | Инструмент | Название | Модуль | Вид | Эффект | Класс | Объект | API | Право | Флаг | Полка |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -95,12 +95,18 @@
 | `projects.create_group` | Проекты: создать портфель | projects | запись | irreversible | create | портфель | POST /projects/groups | project.create | projects | нет |
 | `projects.get` | Проекты: карточка | projects | чтение | read | get | проект | GET /projects/:id | — | projects | да |
 | `projects.groups` | Проекты: портфели | projects | чтение | read | list | портфель | GET /projects/groups | — | projects | нет |
+| `projects.join` | Проекты: присоединиться | projects | запись | irreversible | update | проект | POST /projects/:id/join | — | projects | нет |
+| `projects.leave` | Проекты: покинуть | projects | запись | irreversible | update | проект | POST /projects/:id/leave | — | projects | нет |
 | `projects.list` | Проекты: список | projects | чтение | read | list | проект | GET /projects | — | projects | да |
 | `projects.members` | Проекты: участники | projects | чтение | read | members | участник | GET /projects/:id/members | — | projects | нет |
+| `projects.move_node` | Проекты: перенести папку | projects | запись | irreversible | update | папка | POST /projects/:id/nodes/:nodeId/move | — | projects | нет |
 | `projects.node_kinds` | Проекты: виды папок | projects | чтение | read | list | папка | GET /projects/node-kinds | — | projects | нет |
+| `projects.set_status` | Проекты: завершить или вернуть в работу | projects | запись | irreversible | transition | проект | POST /projects/:id/status | — | projects | нет |
 | `projects.structure` | Проекты: структура | projects | чтение | read | structure | структура | GET /projects/:id/structure | — | projects | нет |
 | `projects.types` | Проекты: типы | projects | чтение | read | list | справочник | GET /projects/types | — | projects | нет |
 | `projects.update` | Проекты: изменить | projects | запись | irreversible | update | проект | PATCH /projects/:id | — | projects | нет |
+| `projects.update_group` | Проекты: переименовать портфель | projects | запись | irreversible | update | портфель | PATCH /projects/groups/:id | — | projects | нет |
+| `projects.update_node` | Проекты: изменить папку | projects | запись | irreversible | update | папка | PATCH /projects/:id/nodes/:nodeId | — | projects | нет |
 | `tasks.actions` | Задачи: действия маршрута | tasks | чтение | read | transitions | задача | GET /tasks/:id/actions | — | tasks | нет |
 | `tasks.add_participant` | Задачи: добавить участника | tasks | запись | write | create | участник | POST /tasks/:id/participants | — | tasks | нет |
 | `tasks.add_relation` | Задачи: связать задачи | tasks | запись | write | create | связь | POST /tasks/:id/relations | — | tasks | нет |

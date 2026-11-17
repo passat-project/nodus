@@ -12,6 +12,7 @@ import { lettersWriteTools } from './definitions/letters-write.tools.js';
 import { meTools } from './definitions/me.tools.js';
 import { memoryTools } from './definitions/memory.tools.js';
 import { projectsCreateTools } from './definitions/projects-create.tools.js';
+import { projectsPartsTools } from './definitions/projects-parts.tools.js';
 import { projectsTools } from './definitions/projects.tools.js';
 import { projectsWriteTools } from './definitions/projects-write.tools.js';
 import { systemTools } from './definitions/system.tools.js';
@@ -46,6 +47,7 @@ export const ALL_TOOLS: readonly AssistantToolDefinition[] = [
   ...projectsTools,
   ...projectsWriteTools,
   ...projectsCreateTools,
+  ...projectsPartsTools,
   ...lettersTools,
   ...lettersWriteTools,
   ...lettersPartsReadTools,

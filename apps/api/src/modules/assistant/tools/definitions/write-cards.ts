@@ -57,6 +57,20 @@ export async function letterLabel(ctx: ToolContext, id: string): Promise<string 
   }
 }
 
+/** Проект карточкой: «шифр «Имя»», без шифра — «Имя». */
+export async function projectLabel(ctx: ToolContext, id: string): Promise<string | null> {
+  if (!ctx.read) return null;
+  try {
+    const project = asRecord(await ctx.read(`/projects/${id}`));
+    const name = str(project?.name);
+    if (!name) return null;
+    const code = str(project?.code);
+    return code ? `${code} «${name}»` : `«${name}»`;
+  } catch {
+    return null;
+  }
+}
+
 /** Контрагент карточкой: краткое имя, иначе полное. */
 export async function counterpartyName(ctx: ToolContext, id: string): Promise<string | null> {
   if (!ctx.read) return null;

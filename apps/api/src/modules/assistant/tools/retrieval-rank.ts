@@ -270,7 +270,7 @@ export function scoreTool(tool: AssistantToolDefinition, query: QueryUnderstandi
       'stages',
     ].includes(intent)
   ) {
-    score += 4;
+    score += 12;
   }
 
   // Просьба про содержимое приложенного документа требует и описи вложений.
