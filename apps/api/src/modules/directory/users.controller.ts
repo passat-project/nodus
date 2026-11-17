@@ -23,6 +23,7 @@ import type { MultipartFile } from '@fastify/multipart';
 import {
   createUserSchema,
   listUsersQuerySchema,
+  myOrganizationSchema,
   paginatedSchema,
   updateMyProfileSchema,
   updateUserSchema,
@@ -33,6 +34,7 @@ import {
   type AuthUser,
   type CreateUserDto,
   type ListUsersQuery,
+  type MyOrganization,
   type Paginated,
   type UpdateMyProfileDto,
   type UpdateUserDto,
@@ -70,6 +72,17 @@ export class UsersController {
     query: ListUsersQuery,
   ): Promise<Paginated<UserListItem>> {
     return this.usersService.listUsers(query);
+  }
+
+  @Get('me/organization')
+  @RequirePermissions(Permission.DIRECTORY_READ)
+  @ApiOperation({
+    summary: 'Кто я: профиль, руководитель, подразделение с путём, подчинённые',
+  })
+  @ApiOkResponse({ standardSchema: myOrganizationSchema })
+  @ApiErrors(401, 403, 404)
+  myOrganization(@GetUser() user: AuthUser): Promise<MyOrganization> {
+    return this.usersService.myOrganization(user.id);
   }
 
   @Patch('me')

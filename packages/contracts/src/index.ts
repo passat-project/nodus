@@ -82,6 +82,7 @@ export * from './chat/mention-tokens.js';
 export * from './chat/favorite.schemas.js';
 export * from './chat/sticker.schemas.js';
 export * from './chat/vault.schemas.js';
+export * from './files/file-text.schemas.js';
 export * from './files/office-formats.js';
 export * from './files/attachment-preview.js';
 export * from './files/office.schemas.js';

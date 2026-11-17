@@ -163,9 +163,12 @@ describe('AiProvidersSection: реестр провайдеров (регрес�
 
   it('поиск фильтрует строки реестра', async () => {
     render(<AiProvidersSection section="providers" onSection={() => undefined} />);
+    // Полоса «Модели по умолчанию» (#917) тоже показывает имя провайдера —
+    // считаем вхождения: фильтр убирает именно строку реестра.
+    const before = screen.getAllByText('OpenRouter').length;
     const search = screen.getByPlaceholderText(ui.assistant.settings.searchPlaceholder);
     fireEvent.change(search, { target: { value: 'нет-такого' } });
-    await waitFor(() => expect(screen.queryByText('OpenRouter')).toBeNull());
+    await waitFor(() => expect(screen.getAllByText('OpenRouter').length).toBe(before - 1));
   });
 });
 

@@ -15,6 +15,16 @@ export function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+/**
+ * Типизированный охранник границы (#918): ответ API приводится к типу
+ * контракта только после проверки «это объект». Дальше проекция читает поля
+ * типизированно — переименование DTO ломает компиляцию (ADR-0049), а мусор с
+ * границы по-прежнему даёт `null`, а не падение прогона.
+ */
+export function asTyped<T>(value: unknown): T | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as T) : null;
+}
+
 export function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }

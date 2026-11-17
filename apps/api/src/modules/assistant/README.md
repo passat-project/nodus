@@ -27,29 +27,73 @@
 Все маршруты — под флагом `assistant` (I10) и правом `assistant.use` (I8), кроме
 настроек провайдеров (право `portal.settings.manage`).
 
-| Метод  | Путь                                       | Назначение                                       |
-| ------ | ------------------------------------------ | ------------------------------------------------ |
-| GET    | `/api/v1/assistant/sessions`               | сессии сотрудника (последние 50)                 |
-| POST   | `/api/v1/assistant/sessions`               | новая сессия                                     |
-| PATCH  | `/api/v1/assistant/sessions/:id`           | переименовать / архивировать                     |
-| DELETE | `/api/v1/assistant/sessions/:id`           | удалить диалог (каскад)                          |
-| GET    | `/api/v1/assistant/sessions/:id/messages`  | история: вызовы инструментов и карточки действий |
-| POST   | `/api/v1/assistant/sessions/:id/messages`  | отправить сообщение → `202 { runId, messageId }` |
-| POST   | `/api/v1/assistant/actions/:id/execute`    | выполнить карточку (идемпотентно по её id)       |
-| POST   | `/api/v1/assistant/actions/:id/cancel`     | отклонить карточку (записей нет)                 |
-| POST   | `/api/v1/assistant/actions/:id/undo`       | отменить выполненное (удалить созданное)         |
-| GET    | `/api/v1/assistant/memory`                 | блокнот сотрудника (до 50 записей)               |
-| DELETE | `/api/v1/assistant/memory/:id`             | удалить запись блокнота (архив)                  |
-| GET    | `/api/v1/assistant/runs/:runId/stream`     | SSE прогона (`Last-Event-ID` для восстановления) |
-| GET    | `/api/v1/assistant/runs/:runId`            | статус прогона (fallback)                        |
-| POST   | `/api/v1/assistant/runs/:runId/cancel`     | остановить прогон                                |
-| GET    | `/api/v1/settings/ai`                      | провайдеры без ключей, дефолт, правила (админ)   |
-| PUT    | `/api/v1/settings/ai`                      | полная замена настроек (админ)                   |
-| GET    | `/api/v1/settings/ai/providers/:id/models` | каталог `/models` провайдера                     |
-| POST   | `/api/v1/settings/ai/providers/:id/test`   | проверка соединения и модели                     |
-| GET    | `/api/v1/settings/ai/mcp`                  | MCP-серверы без ключей (равнозначные, админ)     |
-| PUT    | `/api/v1/settings/ai/mcp`                  | полная замена реестра MCP-серверов (админ)       |
-| POST   | `/api/v1/settings/ai/mcp/:id/test`         | handshake MCP и список инструментов сервера      |
+| Метод  | Путь                                                 | Назначение                                               |
+| ------ | ---------------------------------------------------- | -------------------------------------------------------- |
+| GET    | `/api/v1/assistant/sessions`                         | сессии сотрудника (последние 50)                         |
+| POST   | `/api/v1/assistant/sessions`                         | новая сессия                                             |
+| PATCH  | `/api/v1/assistant/sessions/:id`                     | переименовать / архивировать                             |
+| DELETE | `/api/v1/assistant/sessions/:id`                     | удалить диалог (каскад)                                  |
+| GET    | `/api/v1/assistant/sessions/:id/messages`            | история: вызовы инструментов и карточки действий         |
+| POST   | `/api/v1/assistant/sessions/:id/messages`            | отправить сообщение → `202 { runId, messageId }`         |
+| POST   | `/api/v1/assistant/actions/:id/execute`              | выполнить карточку → `{ action, continuationRunId }`     |
+| POST   | `/api/v1/assistant/actions/:id/cancel`               | отклонить карточку (записей нет)                         |
+| POST   | `/api/v1/assistant/actions/:id/undo`                 | отменить выполненное (удалить созданное)                 |
+| POST   | `/api/v1/assistant/messages/:id/actions/execute-all` | «Выполнить все» пачки → `{ actions, continuationRunId }` |
+| POST   | `/api/v1/assistant/messages/:id/actions/cancel-all`  | «Отменить все» пачки → `{ actions, continuationRunId }`  |
+| POST   | `/api/v1/assistant/messages/:id/continue`            | «Продолжить сейчас» → `202 { runId }`                    |
+| GET    | `/api/v1/assistant/memory`                           | блокнот сотрудника (до 50 записей)                       |
+| DELETE | `/api/v1/assistant/memory/:id`                       | удалить запись блокнота (архив)                          |
+| GET    | `/api/v1/assistant/runs/:runId/stream`               | SSE прогона (`Last-Event-ID` для восстановления)         |
+| GET    | `/api/v1/assistant/runs/:runId`                      | статус прогона (fallback)                                |
+| POST   | `/api/v1/assistant/runs/:runId/cancel`               | остановить прогон                                        |
+| GET    | `/api/v1/settings/ai`                                | провайдеры без ключей, дефолт, правила (админ)           |
+| PUT    | `/api/v1/settings/ai`                                | полная замена настроек (админ)                           |
+| GET    | `/api/v1/settings/ai/providers/:id/models`           | каталог `/models` провайдера                             |
+| POST   | `/api/v1/settings/ai/providers/:id/test`             | проверка соединения и модели                             |
+| GET    | `/api/v1/settings/ai/mcp`                            | MCP-серверы без ключей (равнозначные, админ)             |
+| PUT    | `/api/v1/settings/ai/mcp`                            | полная замена реестра MCP-серверов (админ)               |
+| POST   | `/api/v1/settings/ai/mcp/:id/test`                   | handshake MCP и список инструментов сервера              |
+
+## Продолжение после решения (#916)
+
+Карточка — вопрос с последствиями, поэтому продолжение идёт **отдельным прогоном**
+с fresh `Authorization` из запроса решения (ADR-0048 п. 10): окно можно закрыть,
+ответ сохранится в истории.
+
+- **Пачка** — карточки одного сообщения агента: `assistant_action_batches`
+  (`message_id` уникален; `open` → `continued` → `closed`). Автопродолжение —
+  только когда решены ВСЕ карточки (`failed` считается решённой), максимум одно
+  на пачку; таймеров нет.
+- **Гонки:** продолжение не стартует, пока исходный прогон активен
+  (`runner.isActive`) — пачка остаётся открытой, UI предложит «Продолжить сейчас»;
+  захват пачки атомарный, параллельное решение не создаёт второй прогон.
+- **«Продолжить сейчас»** (`continueNow`) закрывает пачку для автопродолжения,
+  оставшиеся карточки остаются рабочими; повторный клик после автопродолжения
+  возвращает тот же `runId`, после закрытия — 409. Новое сообщение сотрудника
+  закрывает открытые пачки сессии (`closeOpenBatches`).
+- **История:** `agent/history.ts` добавляет после ответа с карточками системную
+  сводку `<data tool="assistant_actions">` (выполнено/отменено/ошибка/ждёт
+  решения) — модель видит результат в следующем ходе. Промпт получает блок
+  «Продолжение» с числом ожидающих карточек.
+- Продолжение запускается из КОНТРОЛЛЕРОВ (`assistant-actions.controller.ts`,
+  `assistant-batches.controller.ts`), а не из `AssistantActionsService` — иначе
+  DI-цикл runner → actions → continuation → runner. Ломать это осознанно.
+
+## Диспетчер инструментов (#917, ADR-0043 п. 4)
+
+Перед основным циклом дешёвая LLM («модель-диспетчер») по формулировке
+сотрудника и описаниям каталога выбирает top-7 инструментов
+(`tools/dispatcher.ts`: промпт, строгий JSON, парсер без доверия модели —
+fence/массив без обёртки/неизвестные id/clamp/порог 0.15/дедупликация).
+Таймаут 8 с, отмена вместе с прогоном; журнал — событие `tools.routed`
+(выбранные + fallback). Ошибка/пустой ответ — горячая полка.
+
+При успехе диспетчера активный набор = **выбранные + `tools.search` БЕЗ горячей
+полки**: 28 горячих + 7 выбранных превышают порог деградации выбора (~30 схем,
+Anthropic tool search / MCP routing). Настройка — пара `routerProviderId` /
+`routerModelId` в `assistant_settings` (раздел «Провайдеры», «Модели по
+умолчанию»); модель обязана принадлежать провайдеру (валидация PUT). Модель
+выключена/удалена — `resolveRouter()` → `null`, прогон по горячей полке.
 
 ## Внешние MCP-серверы (#902, Ф3)
 
@@ -113,26 +157,39 @@ handshake ограничен одной попыткой (404 внутри не�
 ## Каталог инструментов
 
 Имена — `module.action` (`tasks.list`), внешние — `ext.<server>.<tool>` (Ф3). Полка:
-15–18 горячих инструментов в промпте, остальные — через `tools.search` (лексический
-поиск; эмбеддинги — позже, на ядре #272).
+до 30 горячих инструментов в промпте (потолок — порог деградации выбора), остальные —
+через `tools.search` (лексический поиск; эмбеддинги — позже, на ядре #272). При
+настроенном диспетчере горячую полку заменяет его выбор (см. выше). Свежесть
+каталога — сканер фантомных id и карта поверхностей (ADR-0049,
+`docs/architecture/assistant-surface.md`).
 
-| Домен        | Инструменты                                              |
-| ------------ | -------------------------------------------------------- |
-| tasks        | `list`, `get`, `search`, `stages`, `history`             |
-| projects     | `list`, `get`, `structure`, `members`                    |
-| letters      | `list`, `get`, `transitions`, `relations`, `attachments` |
-| chat         | `conversations`, `messages`                              |
-| directory    | `find_users`, `get_user`, `departments`                  |
-| dictionaries | `list`, `items`                                          |
-| workflows    | `process_types`                                          |
-| служебные    | `context.get`, `tools.search`, `ui.open_entity`          |
-| ext (Ф3)     | `exa.web_search_exa`, `exa.web_fetch_exa`                |
+| Домен        | Инструменты                                                                |
+| ------------ | -------------------------------------------------------------------------- |
+| tasks        | `list`, `get`, `search`, `stages`, `history`, `transitions`, `transition`  |
+| projects     | `list`, `get`, `structure`, `members`                                      |
+| letters      | `list`, `get`, `transitions`, `relations`, `attachments`                   |
+| chat         | `conversations`, `messages`, `task_conversation`, `send`, `direct_message` |
+| files        | `extract_text` (PDF/DOCX, ADR-0050)                                        |
+| directory    | `find_users`, `get_user`, `departments`                                    |
+| me           | `get` (профиль, руководитель, отдел, подчинённые)                          |
+| dictionaries | `list`, `items`                                                            |
+| workflows    | `process_types`                                                            |
+| служебные    | `context.get`, `tools.search`, `ui.open_entity`                            |
+| ext (Ф3)     | `exa.web_search_exa`, `exa.web_fetch_exa`                                  |
 
-**Границы данных (ADR-0043 п. 8, ADR-0044 п. 5):** вложения — только метаданные
-(имя, формат/MIME, размер, дата, признак конфиденциальности). Содержимое файлов,
-OCR и текст не читаются — инструмент `letters.attachments` не отдаёт ни `url`, ни
-`pdfUrl`, и это закреплено тестом. Чаты — корпоративная переписка компании, доступ
-в пределах прав сотрудника; отдельного consent-переключателя нет.
+Карточки записи (#920/#921): `tasks.transition` (переход стадии, комментарий —
+`form.comment`, без undo — честно в последствиях) и `chat.direct_message`
+(личный чат одной карточкой: find-or-create + отправка; групповые беседы —
+только человеком).
+
+**Границы данных (ADR-0043 п. 8, ADR-0050, ADR-0044 п. 5):** вложения — метаданные
+всегда; текст PDF/DOCX читается инструментом `files.extract_text` через
+`GET /files/:id/text` **в пределах прав сотрудника** (`OfficeSessionService.resolveAccess`:
+владение, участник беседы, видимое письмо; чужой файл — 404). Сканы без текстового
+слоя не распознаются (OCR — позже) и честно помечаются. Вложения в письмах
+(`letters.attachments`) по-прежнему отдают только опись, без `url`/`pdfUrl`
+(закреплено тестом). Текст файла не пишется в логи. Чаты — корпоративная переписка
+компании, доступ в пределах прав сотрудника; отдельного consent-переключателя нет.
 
 Списки — компактные проекции: до 20 строк, обрезка по лимиту символов с пометкой
 «сокращено». Сырые JSON-простыни в промпт не попадают.
@@ -158,13 +215,17 @@ OCR и текст не читаются — инструмент `letters.attach
 `executing` перезахватывается через 60 с. Память (#900): 50 активных записей по
 300 знаков, в промпт — до 2 000 знаков. Интернет (Ф3): таймаут MCP-вызова 20 с,
 запрос ≤ 400 символов, чтение страницы — 8 000 символов, выдача ≤ 10 результатов;
-кэша в v1 нет.
+кэша в v1 нет. Текст вложений (#922, ADR-0050): размер ≤ 20 МБ, страниц ≤ 100,
+знаков ≤ 60 000, таймаут 25 с; проекция инструмента — до 14 000 знаков, кэш по
+версии файла (`file_text_extracts`). Диспетчер (#917): таймаут 8 с, ≤ 7
+инструментов, порог оценки 0.15.
 
 ## События и аудит
 
 Доменных событий в outbox модуль не публикует: изменения портала идут через API
 модулей-владельцев (их события — там). События ленты действий живут в журнале
-прогона: `action.proposed/executed/cancelled/failed/undone` (полный DTO карточки).
+прогона: `action.proposed/executed/cancelled/failed/undone` (полный DTO карточки),
+`tools.routed` (выбор диспетчера или fallback).
 
 Аудит — `@Audit` на сообщениях/сессиях/настройках и явные записи действий:
 `assistant.action_execute` / `assistant.action_failed` (в т.ч. при байпасе — там
@@ -187,7 +248,11 @@ Env `SECRETS_ENCRYPTION_KEY` задаёт ключ шифрования; без 
 
 `assistant.module.ts` — wiring; контроллеры — HTTP; `*.service.ts` — логика;
 `*.repository.ts` — единственная точка доступа к таблицам модуля;
-`assistant-actions.*` — карточки действий (ADR-0048), `assistant-memory.*` —
-блокнот (#900), `agent/agent-runner.*` — цикл и его помощники;
-определения инструментов — `tools/definitions/<домен>.tools.ts` (запись —
-`*-write.tools.ts`), провайдер моделей — `providers/`.
+`assistant-actions.*` — карточки действий (ADR-0048), `assistant-batches.*` —
+решения по пачке (#916), `assistant-memory.*` — блокнот (#900),
+`agent/agent-runner.*` — цикл и его помощники, `agent/continuation.service.ts` —
+прогон-продолжение, `tools/dispatcher.ts` — диспетчер top-7, `tools/surface.ts` —
+генератор карты поверхностей; определения инструментов —
+`tools/definitions/<домен>.tools.ts` (запись — `*-write.tools.ts`), провайдер
+моделей — `providers/`. Текст вложений живёт в модуле files:
+`apps/api/src/modules/files/text/`.

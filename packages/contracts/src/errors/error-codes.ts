@@ -117,6 +117,14 @@ export const ErrorCode = {
   FILE_OFFICE_UNSUPPORTED: 'FILE_OFFICE_UNSUPPORTED',
   /** Файл больше потолка открытия в редакторе (#138; открывается скачиванием). */
   FILE_OFFICE_TOO_LARGE: 'FILE_OFFICE_TOO_LARGE',
+  /** Вложение больше потолка чтения текста ИИ-агентом (#922). */
+  FILE_TEXT_TOO_LARGE: 'FILE_TEXT_TOO_LARGE',
+  /** Формат вложения не читается ассистентом: поддерживаются PDF и DOCX (#922). */
+  FILE_TEXT_UNSUPPORTED: 'FILE_TEXT_UNSUPPORTED',
+  /** Документ не удалось разобрать (битый/защищённый паролем, #922). */
+  FILE_TEXT_INVALID: 'FILE_TEXT_INVALID',
+  /** Извлечение текста не уложилось в потолок времени (#922). */
+  FILE_TEXT_TIMEOUT: 'FILE_TEXT_TIMEOUT',
   /** Контрагент с таким УНП уже есть в справочнике (в т.ч. в архиве);
    *  details — { counterpartyId, shortName, archived } (#460). */
   CRM_UNP_TAKEN: 'CRM_UNP_TAKEN',

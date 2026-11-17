@@ -42,6 +42,7 @@ export function fakeRepository() {
         runStatus: 'running',
         toolCalls: [],
         actions: [],
+        actionBatch: null,
       };
       messages.push(row);
       return row;

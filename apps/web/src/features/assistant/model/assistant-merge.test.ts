@@ -44,6 +44,7 @@ function message(patch: Partial<AssistantMessage>): AssistantMessage {
     errorCode: null,
     toolCalls: [],
     actions: [],
+    actionBatch: null,
     ...patch,
   };
 }

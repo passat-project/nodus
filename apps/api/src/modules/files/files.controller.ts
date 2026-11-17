@@ -1,17 +1,25 @@
 import { Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import {
+  ErrorCode,
+  fileTextResponseSchema,
+  type AuthUser,
+  type FileTextResponse,
+} from '@nodus/contracts';
 
 import { SignedUrlService } from '../../core/crypto/signed-url.service.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
-import { ErrorCode } from '@nodus/contracts';
+import { GetUser } from '../../core/decorators/get-user.decorator.js';
 import { Public } from '../../core/decorators/public.decorator.js';
+import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { FilesRepository } from './files.repository.js';
 import { DerivativesRepository } from './derivatives/derivatives.repository.js';
 import { MinioStorageDriver } from './storage/minio-storage.driver.js';
 import { needsTextNormalization, normalizeTextForOffice } from './office/text-normalizer.js';
+import { FileTextService } from './text/file-text.service.js';
 
 const contentQuerySchema = z.object({
   exp: z.coerce.number().int().positive(),
@@ -44,7 +52,24 @@ export class FilesController {
     private readonly derivatives: DerivativesRepository,
     private readonly driver: MinioStorageDriver,
     private readonly signedUrls: SignedUrlService,
+    private readonly fileText: FileTextService,
   ) {}
+
+  /**
+   * Текст вложения для ИИ-агента (#922): PDF с текстовым слоем и DOCX.
+   * НЕ по подписи: обычная авторизация сотрудника + резолвер прав контекста
+   * (владение, участник беседы, видимое письмо). Текст в лог не пишется.
+   */
+  @Get(':id/text')
+  @ApiOperation({ summary: 'Текст вложения (PDF/DOCX) для ответов ассистента' })
+  @ApiOkResponse({ standardSchema: fileTextResponseSchema })
+  @ApiErrors(401, 403, 404, 410, 413, 415, 422, 504)
+  text(
+    @Param('id', new ZodValidationPipe(z.uuid())) id: string,
+    @GetUser() user: AuthUser,
+  ): Promise<FileTextResponse> {
+    return this.fileText.extract(id, user.id);
+  }
 
   @Public()
   @Get(':id/content')

@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { Permission, taskPrioritySchema } from '@nodus/contracts';
+import { Permission, taskPrioritySchema, type TaskListItem } from '@nodus/contracts';
 
 import { defineTool } from '../tool-definition.js';
 import type { ToolContext } from '../tool-definition.js';
-import { asArray, asRecord, clip, nameOf, num, str } from '../projections.js';
+import { asArray, asRecord, asTyped, clip, nameOf, num, str } from '../projections.js';
 import { field, fieldsOf, humanDate, projectName, shortId, userName } from './write-cards.js';
 
 /**
@@ -65,17 +65,14 @@ export const tasksCreateTool = defineTool({
       ...(input.priority ? { priority: input.priority } : {}),
     },
   }),
-  project: (data) => {
-    const task = asRecord(data);
-    const id = str(task?.id);
-    const title = str(task?.title);
-    if (!task || !id) return { text: 'Задача создана, но ответ портала не разобран' };
-    const number = num(task.number);
+  project: (data: TaskListItem) => {
+    const task = asTyped<TaskListItem>(data);
+    if (!task?.id) return { text: 'Задача создана, но ответ портала не разобран' };
     return {
-      text: `Задача создана: ${number ? `№${number} ` : ''}«${title ?? '—'}», id ${id}`,
+      text: `Задача создана: ${task.number ? `№${task.number} ` : ''}«${task.title ?? '—'}», id ${task.id}`,
       entity: {
-        href: `?cards=task:${id}`,
-        label: `${number ? `№${number} ` : ''}${title ?? ''}`.trim(),
+        href: `?cards=task:${task.id}`,
+        label: `${task.number ? `№${task.number} ` : ''}${task.title ?? ''}`.trim(),
       },
     };
   },
@@ -154,17 +151,14 @@ export const tasksUpdateTool = defineTool({
       ...(input.priority ? { priority: input.priority } : {}),
     },
   }),
-  project: (data) => {
-    const task = asRecord(data);
-    const id = str(task?.id);
-    const title = str(task?.title);
-    if (!id) return { text: 'Задача изменена' };
-    const number = num(task?.number);
+  project: (data: TaskListItem) => {
+    const task = asTyped<TaskListItem>(data);
+    if (!task?.id) return { text: 'Задача изменена' };
     return {
-      text: `Задача обновлена: ${number ? `№${number} ` : ''}«${title ?? '—'}», id ${id}`,
+      text: `Задача обновлена: ${task.number ? `№${task.number} ` : ''}«${task.title ?? '—'}», id ${task.id}`,
       entity: {
-        href: `?cards=task:${id}`,
-        label: `${number ? `№${number} ` : ''}${title ?? ''}`.trim(),
+        href: `?cards=task:${task.id}`,
+        label: `${task.number ? `№${task.number} ` : ''}${task.title ?? ''}`.trim(),
       },
     };
   },

@@ -72,6 +72,15 @@ fileAccessContext` (`chat`, `letter`), DiscoveryService находит его с
   (`fileContentUrl` / `fileVersionUrl`). ETag `{id}-v{N}` → 304;
   Content-Disposition inline (image/*) / attachment; `scan_status=infected`
   → 410 `FILE_QUARANTINED` (сканер — фаза 2/M14, до него pending отдаётся).
+- **Текст для ассистента (#922, ADR-0050)**: `GET /api/v1/files/:id/text` —
+  обычная авторизация (не `@Public`, не HMAC): права через
+  `OfficeSessionService.resolveAccess` (владение / участник беседы / видимое
+  письмо), чужим — 404. PDF с текстовым слоем — `unpdf`, DOCX — `mammoth`;
+  magic-байты сверяются с расширением (`FILE_TEXT_INVALID`). Потолки: 20 МБ
+  (413), 100 страниц, 60 000 знаков, 25 с (504); сканы не распознаются и
+  помечаются (`scannedPages`). Кэш — `file_text_extracts` по версии файла
+  (новая версия пересчитывает), параллельные запросы дедуплицируются. Текст
+  в логи не пишется.
 - **ONLYOFFICE (#138)**: контейнер `documentserver` (CE 9.4, compose-профиль
   `office`, ADR-0014). Сессия `GET /files/:id/office-session?mode=view|edit`:
   право → конфиг `DocsAPI.DocEditor` целиком на сервере + JWT HS256

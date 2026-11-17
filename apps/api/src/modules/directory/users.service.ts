@@ -7,6 +7,7 @@ import {
   type AuthUser,
   type CreateUserDto,
   type ListUsersQuery,
+  type MyOrganization,
   type Paginated,
   type UpdateMyProfileDto,
   type UpdateUserDto,
@@ -20,12 +21,24 @@ import { TransactionRunner } from '../../core/database/transaction-runner.js';
 import { DomainException } from '../../core/errors/domain-exception.js';
 import { EventBus } from '../../core/events/event-bus.js';
 import { AVATAR_PROCESSOR, type AvatarProcessor } from '../../core/ports/avatar-processor.port.js';
+import {
+  ORG_STRUCTURE_READER,
+  type OrgStructureReader,
+} from '../../core/ports/org-structure.port.js';
 import { avatarUrlOf as signAvatarUrl } from './avatar-url.js';
+import { DepartmentsRepository } from './departments.repository.js';
 import { ReferenceGuard } from './reference-guard.service.js';
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
 import { RolesRepository } from './roles.repository.js';
 import { UsersRepository, type UserCardRow } from './users.repository.js';
-import { buildDisplayName, toListItem, toUserCard } from './user-dto.js';
+import { buildDisplayName, toUserCard } from './user-dto.js';
+import { assertRolesExist, updateMyProfileOf } from './users-profile.js';
+import {
+  listUsersOf,
+  myOrganizationOf,
+  userCardOf,
+  type OrganizationDeps,
+} from './users-organization.js';
 
 /** Прямая роль «Администратор» сотрудника, если есть (замок и последний админ). */
 function adminRoleOf(row: Pick<UserCardRow, 'roles'>): { id: string; code: string } | null {
@@ -51,7 +64,9 @@ export class UsersService {
     private readonly signedUrls: SignedUrlService,
     private readonly guard: RoleAssignmentGuard,
     private readonly references: ReferenceGuard,
+    private readonly departments: DepartmentsRepository,
     @Inject(AVATAR_PROCESSOR) private readonly avatars: AvatarProcessor,
+    @Inject(ORG_STRUCTURE_READER) private readonly org: OrgStructureReader,
   ) {}
 
   /** Аватар — файл-дериват (#186): подписная ссылка отдачи; null — инициалы.
@@ -59,31 +74,34 @@ export class UsersService {
   private readonly avatarUrlOf = (fileId: string | null): string | null =>
     signAvatarUrl(this.signedUrls, fileId);
 
-  async listUsers(query: ListUsersQuery): Promise<Paginated<UserListItem>> {
-    const page = await this.users.findPage(
-      { search: query.search, departmentId: query.departmentId, status: query.status },
-      query.cursor,
-      query.limit,
-    );
+  /** Зависимости read-сценариев справочника (список, «Кто я», карточка). */
+  private orgDeps(): OrganizationDeps {
     return {
-      items: page.items.map((row) => toListItem(row, this.avatarUrlOf)),
-      nextCursor: page.nextCursor,
+      users: this.users,
+      org: this.org,
+      departments: this.departments,
+      avatarUrlOf: this.avatarUrlOf,
     };
   }
 
+  async listUsers(query: ListUsersQuery): Promise<Paginated<UserListItem>> {
+    return listUsersOf(query, this.orgDeps());
+  }
+
+  /** «Кто я» (#919): профиль, руководитель, подразделение, подчинённые. */
+  async myOrganization(userId: string): Promise<MyOrganization> {
+    return myOrganizationOf(userId, this.orgDeps());
+  }
+
   async getUserCard(id: string): Promise<UserCard> {
-    const row = await this.users.findCardById(id);
-    if (!row) {
-      throw DomainException.notFound('User not found');
-    }
-    return toUserCard(row, this.avatarUrlOf);
+    return userCardOf(id, this.orgDeps());
   }
 
   async createUser(dto: CreateUserDto, actor: AuthUser): Promise<UserCard> {
     if (await this.users.emailExists(dto.email)) {
       throw new DomainException(ErrorCode.DIRECTORY_EMAIL_TAKEN, 'Email already registered');
     }
-    await this.ensureRolesExist(dto.roleIds);
+    await assertRolesExist(this.roles, dto.roleIds);
     const passwordHash = await this.passwords.hash(dto.password);
 
     return this.tx.run(async (tx) => {
@@ -140,7 +158,7 @@ export class UsersService {
       throw DomainException.notFound('User not found');
     }
     if (dto.roleIds) {
-      await this.ensureRolesExist(dto.roleIds);
+      await assertRolesExist(this.roles, dto.roleIds);
     }
     const names = {
       lastName: dto.lastName ?? before.lastName,
@@ -282,19 +300,11 @@ export class UsersService {
 
   /** Саморедактирование: только контактный блок (updateMyProfileSchema). */
   async updateMyProfile(userId: string, dto: UpdateMyProfileDto): Promise<UserCard> {
-    const before = await this.users.findCardById(userId);
-    if (!before) {
-      throw DomainException.notFound('User not found');
-    }
-    return this.tx.run(async (tx) => {
-      await this.users.update(userId, { ...dto }, tx);
-      await this.eventBus.emit(
-        tx,
-        DIRECTORY_EVENTS.USER_UPDATED,
-        { userId, changedFields: Object.keys(dto) },
-        { actorId: userId, aggregateType: 'user', aggregateId: userId },
-      );
-      return toUserCard((await this.users.findCardById(userId, tx))!, this.avatarUrlOf);
+    return updateMyProfileOf(userId, dto, {
+      users: this.users,
+      tx: this.tx,
+      eventBus: this.eventBus,
+      avatarUrlOf: this.avatarUrlOf,
     });
   }
 
@@ -345,13 +355,5 @@ export class UsersService {
       );
       return toUserCard((await this.users.findCardById(userId, tx))!, this.avatarUrlOf);
     });
-  }
-
-  private async ensureRolesExist(roleIds: string[]): Promise<void> {
-    if (roleIds.length === 0) return;
-    const found = await this.roles.countByIds(roleIds);
-    if (found !== roleIds.length) {
-      throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Unknown role ids', { roleIds });
-    }
   }
 }

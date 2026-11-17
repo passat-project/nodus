@@ -20,6 +20,7 @@ import {
 } from '../api/assistant-api.js';
 import { useAssistantStore } from '../model/assistant-store.js';
 import { useAssistantContext } from '../model/use-assistant-context.js';
+import { AssistantBatchStrip } from './assistant-batch-strip.js';
 import { AssistantBypassButton } from './assistant-bypass-button.js';
 import { ASSISTANT_SCROLL_SCOPE } from '../model/assistant-scroll.js';
 import { AssistantFeed, AssistantGlyph } from './assistant-feed.js';
@@ -237,6 +238,9 @@ export function AssistantBody() {
             onRetry={() => void ask(lastUserText)}
           />
         )}
+        {/* Пачка карточек (#916): часть решена, часть ждёт — сотрудник видит
+            это над композером и может вернуться к карточкам или продолжить. */}
+        <AssistantBatchStrip messages={base} sessionId={activeId} busy={running} />
         {open ? (
           <ChatComposer
             placeholder={strings.composerPlaceholder}
@@ -303,5 +307,6 @@ function pendingAssistantMessage(pending: { text: string; at: number }): Assista
     errorCode: null,
     toolCalls: [],
     actions: [],
+    actionBatch: null,
   };
 }

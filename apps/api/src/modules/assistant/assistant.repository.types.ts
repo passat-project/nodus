@@ -64,6 +64,22 @@ export interface MessageRow {
   runStatus: string | null;
   toolCalls: ToolCallRow[];
   actions: ActionRow[];
+  /** Пачка карточек хода (#916): состояние для липкой строки. */
+  actionBatch: { state: string } | null;
+}
+
+/** Пачка карточек одного хода агента (#916). */
+export interface ActionBatchRow {
+  id: string;
+  messageId: string;
+  sessionId: string;
+  runId: string;
+  userId: string;
+  /** open | continued | closed */
+  state: string;
+  continuationRunId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface MemoryRow {
@@ -81,6 +97,8 @@ export interface RunRow {
   sessionId: string;
   userId: string;
   status: string;
+  /** Прогон-продолжение: сообщение, чья пачка карточек его запустила (#916). */
+  continuationOfMessageId: string | null;
   providerId: string | null;
   modelId: string | null;
   inputTokens: number | null;

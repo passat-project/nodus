@@ -128,6 +128,13 @@ export const aiSettingsBodySchema = z
     providers: z.array(assistantProviderInputSchema).max(20),
     defaultProviderId: z.uuid().nullable(),
     defaultModelId: z.string().trim().min(1).max(200).nullable(),
+    /**
+     * Модель-диспетчер (#917): дешёвая LLM выбирает top-7 инструментов по
+     * описаниям до основного цикла. `null` — диспетчер выключен (сегодняшняя
+     * схема: горячая полка + tools.search).
+     */
+    routerProviderId: z.uuid().nullable().optional(),
+    routerModelId: z.string().trim().min(1).max(200).nullable().optional(),
     /** Дополнительные правила ассистента — попадают в системный промпт. */
     instructions: z.string().max(4_000),
   })
@@ -136,6 +143,16 @@ export const aiSettingsBodySchema = z
       value.defaultProviderId === null ||
       value.providers.some((provider) => provider.id === value.defaultProviderId),
     { message: 'Дефолтный провайдер должен быть в списке', path: ['defaultProviderId'] },
+  )
+  .refine(
+    (value) => Boolean(value.routerProviderId ?? null) === Boolean(value.routerModelId ?? null),
+    { message: 'Модель-диспетчер задаётся парой: провайдер и модель', path: ['routerModelId'] },
+  )
+  .refine(
+    (value) =>
+      !value.routerProviderId ||
+      value.providers.some((provider) => provider.id === value.routerProviderId),
+    { message: 'Провайдер модели-диспетчера должен быть в списке', path: ['routerProviderId'] },
   );
 export type AiSettingsBody = z.infer<typeof aiSettingsBodySchema>;
 
@@ -144,6 +161,8 @@ export const aiSettingsResponseSchema = z.object({
   providers: z.array(assistantProviderSchema),
   defaultProviderId: z.uuid().nullable(),
   defaultModelId: z.string().nullable(),
+  routerProviderId: z.uuid().nullable(),
+  routerModelId: z.string().nullable(),
   instructions: z.string(),
   limits: z.object({
     maxSteps: z.number().int(),

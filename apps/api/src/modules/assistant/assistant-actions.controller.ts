@@ -1,9 +1,11 @@
 import { Controller, Headers, HttpCode, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
+  assistantActionDecisionSchema,
   assistantActionSchema,
   Permission,
   type AssistantAction,
+  type AssistantActionDecision,
   type AuthUser,
 } from '@nodus/contracts';
 import { z } from 'zod';
@@ -15,6 +17,7 @@ import { RequirePermissions } from '../../core/decorators/require-permissions.de
 import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../core/openapi/api-idempotency.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
+import { AssistantContinuationService } from './agent/continuation.service.js';
 import { AssistantActionsService } from './assistant-actions.service.js';
 
 const uuidPipe = new ZodValidationPipe(z.uuid());
@@ -34,30 +37,51 @@ const uuidPipe = new ZodValidationPipe(z.uuid());
 @RequirePermissions(Permission.ASSISTANT_USE)
 @Controller('assistant/actions')
 export class AssistantActionsController {
-  constructor(private readonly actions: AssistantActionsService) {}
+  constructor(
+    private readonly actions: AssistantActionsService,
+    private readonly continuation: AssistantContinuationService,
+  ) {}
 
   @Post(':id/execute')
   @HttpCode(200)
   @ApiOperation({ summary: 'Выполнить карточку действия (повторный клик — без дубля)' })
-  @ApiOkResponse({ standardSchema: assistantActionSchema })
+  @ApiOkResponse({ standardSchema: assistantActionDecisionSchema })
   @ApiErrors(400, 401, 403, 404, 409)
   @ApiIdempotencyKey()
-  execute(
+  async execute(
     @GetUser() user: AuthUser,
     @Param('id', uuidPipe) id: string,
     @Headers('authorization') authorization: string | undefined,
-  ): Promise<AssistantAction> {
-    return this.actions.execute(user.id, id, authorization ?? '');
+  ): Promise<AssistantActionDecision> {
+    const action = await this.actions.execute(user.id, id, authorization ?? '');
+    // Последнее решение пачки запускает ОДНО продолжение (#916) — в том же
+    // запросе, чтобы клиент сразу подписался на поток.
+    const continuationRunId = await this.continuation.afterDecision(
+      user,
+      authorization ?? '',
+      action.messageId,
+    );
+    return { action, continuationRunId };
   }
 
   @Post(':id/cancel')
   @HttpCode(200)
   @Audit({ action: 'assistant.action_cancel', entity: 'assistant_action' })
   @ApiOperation({ summary: 'Отклонить карточку: записей в портале не появляется' })
-  @ApiOkResponse({ standardSchema: assistantActionSchema })
+  @ApiOkResponse({ standardSchema: assistantActionDecisionSchema })
   @ApiErrors(400, 401, 403, 404, 409)
-  cancel(@GetUser() user: AuthUser, @Param('id', uuidPipe) id: string): Promise<AssistantAction> {
-    return this.actions.cancel(user.id, id);
+  async cancel(
+    @GetUser() user: AuthUser,
+    @Param('id', uuidPipe) id: string,
+    @Headers('authorization') authorization: string | undefined,
+  ): Promise<AssistantActionDecision> {
+    const action = await this.actions.cancel(user.id, id);
+    const continuationRunId = await this.continuation.afterDecision(
+      user,
+      authorization ?? '',
+      action.messageId,
+    );
+    return { action, continuationRunId };
   }
 
   @Post(':id/undo')

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 
+import { ORG_STRUCTURE_READER } from '../../core/ports/org-structure.port.js';
+import { OrgStructureProvider } from '../../core/ports/org-structure.provider.js';
 import { ROLE_MEMBERSHIP_READER } from '../../core/ports/role-membership.port.js';
 import { RoleMembershipProvider } from '../../core/ports/role-membership.provider.js';
 import { DepartmentsController } from './departments.controller.js';
@@ -42,6 +44,9 @@ import { UsersService } from './users.service.js';
     // bind-правило #490 считает добавленные роли портом; биндинг токена —
     // в модуле-потребителе (ADR-0012, как в workflows-ports.module).
     { provide: ROLE_MEMBERSHIP_READER, useClass: RoleMembershipProvider },
+    // «Кто я» (#919): подчинённые и руководитель — тот же порт оргструктуры,
+    // что у видимости задач; directory — владелец данных, биндинг здесь.
+    { provide: ORG_STRUCTURE_READER, useClass: OrgStructureProvider },
   ],
 })
 export class DirectoryModule {}

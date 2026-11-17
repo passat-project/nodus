@@ -38,6 +38,7 @@ export function mergeLiveMessage(
     errorCode: live.errorCode,
     toolCalls: live.tools,
     actions: live.actions,
+    actionBatch: null,
   };
   const hasServerUser = messages.some((message) => message.id === live.userMessageId);
   const optimisticUser: AssistantMessage | null =
@@ -56,6 +57,7 @@ export function mergeLiveMessage(
           errorCode: null,
           toolCalls: [],
           actions: [],
+          actionBatch: null,
         }
       : null;
   return [...withoutLive, ...(optimisticUser ? [optimisticUser] : []), placeholder];

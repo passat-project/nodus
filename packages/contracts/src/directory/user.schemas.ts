@@ -99,6 +99,36 @@ export const userListItemSchema = z.object({
 
 export type UserListItem = z.infer<typeof userListItemSchema>;
 
+/** Элемент пути подразделения (от корня): для «в каком я подразделении». */
+export const departmentPathItemSchema = z.object({
+  id: z.uuid(),
+  name: z.string().min(1),
+});
+
+/**
+ * «Кто я» (#919): профиль сотрудника, его руководитель, подразделение с
+ * путём от корня и подчинённые по оргструктуре. Источник — существующие
+ * данные directory; новых ролей/таблиц нет. Права: `directory.read`
+ * (оргструктура и карточки уже видны всем сотрудникам портала).
+ */
+export const myOrganizationSchema = z.object({
+  user: userListItemSchema,
+  manager: userListItemSchema.nullable(),
+  department: z
+    .object({
+      id: z.uuid(),
+      name: z.string().min(1),
+      /** От корня к самому подразделению. */
+      path: z.array(departmentPathItemSchema),
+    })
+    .nullable(),
+  /** Подчинённые (по цепочке руководителей и руководству подразделениями). */
+  subordinates: z.array(userListItemSchema),
+  /** Сколько всего подчинённых (список может быть обрезан лимитом). */
+  subordinatesTotal: z.number().int().nonnegative(),
+});
+export type MyOrganization = z.infer<typeof myOrganizationSchema>;
+
 export const listUsersQuerySchema = cursorQuerySchema.extend({
   /** Поиск по ФИО и email (substring, case-insensitive). */
   search: z.string().trim().min(1).max(128).optional(),

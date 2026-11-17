@@ -113,17 +113,42 @@ export class ToolExecutorService {
     const parsed = parseToolInput(tool, rawInput);
     if (!parsed.ok) return parsed.error;
 
+    const abort = signal ?? neverAborted();
     const request: ToolRequest = { ...tool.build(parsed.input), method: tool.api.method };
-    const response = await this.inject(toUrl(request), authorization, signal ?? neverAborted(), {
+    const response = await this.inject(toUrl(request), authorization, abort, {
       method: request.method ?? 'POST',
       body: request.body,
       idempotencyKey,
     });
     if ('error' in response) return response.error;
-    const data = parseBody(response.body);
-    if (response.status >= 400) return this.errorOf(response.status, data);
-    const result = tool.project(data, parsed.input);
-    return { ok: true, text: finalize(result.text), entity: result.entity, data };
+    const steps: unknown[] = [parseBody(response.body)];
+    if (response.status >= 400) return this.errorOf(response.status, steps[0]);
+    // Цепочка записи (find-or-create → отправка): каждый шаг идемпотентен
+    // своим ключом, повтор карточки не создаёт второй чат/сообщение.
+    let data = steps[0];
+    // Максимум три шага: цепочка записи не должна превращаться в сценарий.
+    for (let next = tool.followUp?.(data, parsed.input) ?? null; next;) {
+      if (steps.length >= 3) break;
+      const followResponse = await this.inject(toUrl(next), authorization, abort, {
+        method: next.method ?? 'POST',
+        body: next.body,
+        idempotencyKey: `${idempotencyKey}:${steps.length + 1}`,
+      });
+      if ('error' in followResponse) return followResponse.error;
+      const step = parseBody(followResponse.body);
+      if (followResponse.status >= 400) return this.errorOf(followResponse.status, step);
+      steps.push(step);
+      data = step;
+      next = tool.followUp?.(data, parsed.input) ?? null;
+    }
+    const result = tool.project(data, parsed.input, steps);
+    return {
+      ok: true,
+      text: finalize(result.text),
+      entity: result.entity,
+      // Карточке (и «Отменить») нужны все шаги: чат — первый, сообщение — второй.
+      data: steps.length > 1 ? { steps, result: data } : data,
+    };
   }
 
   /** Запрос отмены выполненного действия (DELETE созданного): 204 — успех. */

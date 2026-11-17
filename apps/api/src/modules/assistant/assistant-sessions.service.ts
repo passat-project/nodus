@@ -94,6 +94,10 @@ export class AssistantSessionsService {
     // Байпас (ADR-0048) — снимок на прогон: следующий вопрос без него снова
     // спрашивает подтверждение. В БД — для аудита и восстановления картины.
     const autoExecute = body.bypass === true;
+    // Новое сообщение = «Продолжить сейчас» (#916, п. 4): открытые пачки
+    // закрываются для автопродолжения, карточки остаются рабочими, их
+    // состояния уйдут в историю следующего прогона.
+    await this.repo.closeOpenBatches(id);
     const runId = randomUUID();
     await this.repo.createRun({
       id: runId,

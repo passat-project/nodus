@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 import { defineTool } from '../tool-definition.js';
-import { asRecord, clip, str } from '../projections.js';
-import { conversationTitle, field, fieldsOf, shortId } from './write-cards.js';
+import { asArray, asRecord, clip, str } from '../projections.js';
+import { conversationTitle, field, fieldsOf, shortId, userName } from './write-cards.js';
 
 /**
  * Сообщения (Ф2, ADR-0048): отправка в СУЩЕСТВУЮЩУЮ беседу или чат задачи.
@@ -100,4 +100,92 @@ export const chatSendTool = defineTool({
   },
 });
 
-export const chatWriteTools = [chatTaskConversationTool, chatSendTool];
+const directInput = z.object({
+  userId: z.uuid(),
+  text: z.string().trim().min(1).max(4000),
+});
+
+/**
+ * Личное сообщение (#921): найти существующий личный чат или создать его и
+ * отправить текст — одной карточкой. Групповые чаты агент НЕ создаёт:
+ * там состав участников — решение человека.
+ */
+export const chatDirectMessageTool = defineTool({
+  id: 'chat.direct_message',
+  title: 'Написать сотруднику в личку',
+  description:
+    'Отправить личное сообщение сотруднику: если личного чата ещё нет, портал создаст его. Сотрудника найди через directory.find_users (нужен id). Действие появится карточкой подтверждения.',
+  keywords: [
+    'написать в личку',
+    'личное сообщение',
+    'написать сотруднику',
+    'в личные сообщения',
+    'direct message',
+  ],
+  module: 'chat',
+  kind: 'write',
+  featureFlag: 'chat',
+  hot: true,
+  input: directInput,
+  api: { method: 'POST', path: '/chat/conversations/direct/:userId' },
+  build: (input) => ({
+    method: 'POST',
+    path: `/chat/conversations/direct/${input.userId}`,
+  }),
+  // Второй шаг: отправка в найденный/созданный чат. Id карточки —
+  // идемпотентность первого шага; отправка — её суффикс `:2`.
+  followUp: (data, input) => {
+    const conversationId = str(asRecord(data)?.id);
+    return conversationId
+      ? {
+          method: 'POST',
+          path: `/chat/conversations/${conversationId}/messages`,
+          body: { text: String(input.text) },
+        }
+      : null;
+  },
+  project: (data, input, steps) => {
+    const conversation = asRecord(steps?.[0]);
+    const conversationId = str(conversation?.id) ?? str(asRecord(data)?.conversationId);
+    const message = asRecord(data);
+    const messageId = str(message?.id);
+    const title = str(conversation?.title);
+    return {
+      text: `Личное сообщение отправлено${title ? ` — «${title}»` : ''}${messageId ? ` (сообщение ${messageId})` : ''}`,
+      entity: conversationId
+        ? { href: `?cards=messenger:${conversationId}`, label: title ?? 'Личный чат' }
+        : undefined,
+    };
+  },
+  card: {
+    title: 'Написать сотруднику',
+    summary: async (input, ctx) => {
+      const name = await userName(ctx, input.userId);
+      return `Личное сообщение${name ? ` для ${name}` : ''}`;
+    },
+    fields: async (input, ctx) => {
+      const name = await userName(ctx, input.userId);
+      return fieldsOf([
+        field('Кому', name ?? input.userId),
+        field('Текст', clip(input.text, 600)),
+        field('Чат', 'существующий личный чат или будет создан'),
+      ]);
+    },
+    consequences:
+      'Сообщение сразу увидят собеседник; если личного чата не было, портал создаст его. Отправить можно только тому, кому разрешено писать.',
+    undo: (_input, output) => {
+      const steps = asArray(asRecord(output)?.steps);
+      const conversationId = str(asRecord(steps[0])?.id);
+      const message = asRecord(asRecord(output)?.result);
+      const messageId = str(message?.id) ?? str(asRecord(steps[1])?.id);
+      return conversationId && messageId
+        ? {
+            method: 'DELETE',
+            path: `/chat/conversations/${conversationId}/messages/${messageId}`,
+          }
+        : null;
+    },
+  },
+});
+
+export const chatWriteTools = [chatTaskConversationTool, chatSendTool, chatDirectMessageTool];

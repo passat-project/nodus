@@ -48,6 +48,8 @@ describe('OpenAiCompatibleProvider.streamChat', () => {
       const headers = init.headers as Record<string, string>;
       expect(headers.authorization).toBe('Bearer sk-test');
       expect(headers['HTTP-Referer']).toBe('https://nodus.by');
+      // #906: ключ не должен уезжать по 30x на чужой хост.
+      expect(init.redirect).toBe('error');
       const body = JSON.parse(String(init.body)) as Record<string, unknown>;
       expect(body.stream).toBe(true);
       expect(body.stream_options).toEqual({ include_usage: true });
@@ -167,6 +169,20 @@ describe('OpenAiCompatibleProvider.streamChat', () => {
     await expect(
       collect(provider().streamChat({ model: 'm', messages: [], signal })),
     ).rejects.toBeInstanceOf(LlmProviderError);
+  });
+
+  it('#906: редирект провайдера — provider_unavailable, ключ никуда не уходит', async () => {
+    // fetch с redirect:'error' на 30x отвечает TypeError'ом, не следуя.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        if (init.redirect !== 'error') throw new Error('redirect mode потерян');
+        throw new TypeError('fetch failed: unexpected redirect');
+      }),
+    );
+    await expect(provider().listModels()).rejects.toMatchObject({
+      code: 'provider_unavailable',
+    });
   });
 });
 

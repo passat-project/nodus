@@ -24,6 +24,7 @@ const RESULT_PREVIEW_CHARS = 600;
 /** Предложение действия из прогона: всё, что нужно карточке. */
 export interface ActionProposal {
   runId: string;
+  sessionId: string;
   messageId: string | null;
   userId: string;
   tool: AssistantToolDefinition;
@@ -96,6 +97,16 @@ export class AssistantActionsService {
       automatic: proposal.automatic,
       args: parsed.input,
     });
+    // Пачка (#916): карточки одного хода решаются вместе, продолжение —
+    // после всех. Байпас в пачку не входит: действия уже выполнены.
+    if (!proposal.automatic && proposal.messageId) {
+      await this.repo.ensureActionBatch({
+        messageId: proposal.messageId,
+        sessionId: proposal.sessionId,
+        runId: proposal.runId,
+        userId: proposal.userId,
+      });
+    }
     await this.publish(proposal.runId, 'action.proposed', row);
 
     if (!proposal.automatic) {

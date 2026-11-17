@@ -39,6 +39,15 @@ export class DepartmentsRepository {
     });
   }
 
+  /** Названия подразделений пачкой — путь «кто я» (#919), один запрос. */
+  async findNamesByIds(ids: readonly string[]): Promise<{ id: string; name: string }[]> {
+    if (ids.length === 0) return [];
+    return this.prisma.department.findMany({
+      where: { id: { in: [...ids] } },
+      select: { id: true, name: true },
+    });
+  }
+
   async findById(id: string, tx?: TransactionClient): Promise<DepartmentRow | null> {
     const client = tx ?? this.prisma;
     return client.department.findUnique({ where: { id }, include: departmentInclude });

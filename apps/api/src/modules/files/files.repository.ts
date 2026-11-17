@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../core/database/prisma.service.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 import type { TransactionClient } from '../../core/database/transaction-runner.js';
 
 export interface FileObjectRow {
@@ -16,6 +17,19 @@ export interface FileObjectRow {
   /** Дериват (превью #150): id файла-оригинала; null — пользовательский файл. */
   derivedFrom: string | null;
   createdAt: Date;
+}
+
+/** Кэш текста вложения (#922): ключ — файл + версия. */
+export interface FileTextExtractRow {
+  fileId: string;
+  version: number;
+  kind: string;
+  /** JSONB: [{ page, text }]. */
+  pages: unknown;
+  totalPages: number | null;
+  chars: number;
+  truncated: boolean;
+  scannedPages: unknown;
 }
 
 export interface FileVersionRow {
@@ -160,6 +174,38 @@ export class FilesRepository {
       data: { key: input.key, size: input.size, version: input.version },
     });
     return row;
+  }
+
+  /** Кэш текста вложения (#922): текст по версии файла. */
+  async findTextExtract(fileId: string): Promise<FileTextExtractRow | null> {
+    return this.prisma.fileTextExtract.findUnique({ where: { fileId } });
+  }
+
+  /** Запись кэша текста: новая версия файла пересчитывает текст (upsert). */
+  async saveTextExtract(input: {
+    fileId: string;
+    version: number;
+    kind: string;
+    pages: { page: number; text: string }[];
+    totalPages: number | null;
+    chars: number;
+    truncated: boolean;
+    scannedPages: number[];
+  }): Promise<void> {
+    const data = {
+      version: input.version,
+      kind: input.kind,
+      pages: input.pages as unknown as Prisma.InputJsonValue,
+      totalPages: input.totalPages,
+      chars: input.chars,
+      truncated: input.truncated,
+      scannedPages: input.scannedPages as unknown as Prisma.InputJsonValue,
+    };
+    await this.prisma.fileTextExtract.upsert({
+      where: { fileId: input.fileId },
+      create: { fileId: input.fileId, ...data },
+      update: data,
+    });
   }
 
   /** Строки (с ключами всех версий) для удаления объектов из хранилища.

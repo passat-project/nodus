@@ -28,6 +28,7 @@ import { StaleMultipartSweeper } from './storage/stale-multipart.sweeper.js';
 import { StaleMultipartUploadsJob } from './storage/stale-multipart.job.js';
 import { AttachmentSentHandler } from './events/attachment-sent.handler.js';
 import { LetterReceivedHandler } from './events/letter-received.handler.js';
+import { FileTextService } from './text/file-text.service.js';
 
 /**
  * Модуль files (M9, #57 ADR-0013 + #138 движок просмотра + #139 конвейер
@@ -58,6 +59,8 @@ import { LetterReceivedHandler } from './events/letter-received.handler.js';
     FileStorageProvider,
     OfficeTokenService,
     OfficeSessionService,
+    // Текст вложений для ИИ-агента (#922): PDF/DOCX, кэш по версии файла.
+    FileTextService,
     OfficeCallbackService,
     DerivativesRepository,
     DerivativesQueue,

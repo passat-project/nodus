@@ -138,6 +138,7 @@ function message(
     errorCode: null,
     toolCalls: [],
     actions: [],
+    actionBatch: null,
     ...overrides,
   };
 }

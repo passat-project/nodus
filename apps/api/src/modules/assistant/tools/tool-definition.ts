@@ -21,6 +21,8 @@ export const ASSISTANT_TOOL_MODULES = [
   'dictionaries',
   'workflows',
   'system',
+  /** Вложения: чтение текста PDF/DOCX (#922). */
+  'files',
   /** Внешние серверы MCP (`ext.exa.web_search_exa`, Ф3/#901). */
   'ext',
 ] as const;
@@ -147,8 +149,20 @@ export interface AssistantToolDefinition {
   api?: ToolApiOperation;
   /** Построение запроса из аргументов. */
   build?: (input: Record<string, unknown>) => ToolRequest;
-  /** Проекция ответа API в компактный текст. */
-  project?: (data: unknown, input: Record<string, unknown>) => ToolResult;
+  /**
+   * Второй шаг записи после успешного первого (например, «создать личный
+   * чат → отправить сообщение»). Выполняется ТОЛЬКО внутри `executeWrite`
+   * (карточка/байпас) с отдельным суффиксом идемпотентности; из цикла записи
+   * по-прежнему нет.
+   */
+  followUp?: (data: unknown, input: Record<string, unknown>) => ToolRequest | null;
+  /** Проекция ответа API в компактный текст. `steps` — ответы всех шагов
+   *  записи (первый — созданная сущность, последний — итоговая). */
+  project?: (
+    data: unknown,
+    input: Record<string, unknown>,
+    steps?: readonly unknown[],
+  ) => ToolResult;
   /** Карточка подтверждения — обязательна для `kind: write` (фьюз каталога). */
   card?: ToolWriteCard;
   /** Вычислимые инструменты без API-вызова. */
@@ -161,7 +175,7 @@ export interface AssistantToolDefinition {
  * безопасно: аргументы уже проверены `input.safeParse` в исполнителе —
  * типы внутри функции совпадают со схемой (единственный каст на весь модуль).
  */
-export function defineTool<S extends z.ZodType>(definition: {
+export function defineTool<S extends z.ZodType, TData = unknown>(definition: {
   id: string;
   title: string;
   description: string;
@@ -174,7 +188,14 @@ export function defineTool<S extends z.ZodType>(definition: {
   input: S;
   api?: ToolApiOperation;
   build?: (input: z.infer<S>) => ToolRequest;
-  project?: (data: unknown, input: z.infer<S>) => ToolResult;
+  followUp?: (data: unknown, input: z.infer<S>) => ToolRequest | null;
+  /**
+   * Проекция ответа. TData — тип ответа API из `@nodus/contracts` (например
+   * `Paginated<TaskListItem>`): переименование поля DTO ломает компиляцию
+   * проекции, а не тихо отдаёт «—» модели (#918, ADR-0049). Данные с границы
+   * всё равно проверяются охранником (`asTyped`), мусор не роняет прогон.
+   */
+  project?: (data: TData, input: z.infer<S>, steps?: readonly unknown[]) => ToolResult;
   card?: {
     title: string;
     summary: (input: z.infer<S>, ctx: ToolContext) => string | Promise<string>;

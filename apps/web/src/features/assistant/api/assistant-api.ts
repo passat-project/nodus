@@ -146,6 +146,21 @@ export function useCancelAssistantRun() {
 }
 
 /**
+ * Подписка на прогон, запущенный СЕРВЕРОМ без вопроса сотрудника (#916):
+ * продолжение после решений по карточкам. Живой буфер создаётся без текста
+ * вопроса — история уже содержит предыдущий ход, а новый ответ печатается
+ * в потоке и сохраняется в БД.
+ */
+export function attachAssistantRun(runId: string, sessionId: string): void {
+  const store = useAssistantStore.getState();
+  store.startLive({ runId, sessionId, userText: '', userMessageId: null });
+  startRunStream(runId, sessionId, () => {
+    void queryClient.invalidateQueries({ queryKey: assistantKeys.messages(sessionId) });
+    void queryClient.invalidateQueries({ queryKey: assistantKeys.sessions() });
+  });
+}
+
+/**
  * Подхват незавершённого прогона (скоуп #895): окно закрыли/перезагрузили
  * во время ответа — сервер прогон доведёт, но клиент об этом не знает.
  * Найденное `streaming`-сообщение с `runId` подключаем к потоку с начала

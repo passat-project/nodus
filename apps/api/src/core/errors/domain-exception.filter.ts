@@ -78,6 +78,12 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.FILE_OFFICE_DISABLED]: HttpStatus.SERVICE_UNAVAILABLE,
   [ErrorCode.FILE_OFFICE_UNSUPPORTED]: HttpStatus.BAD_REQUEST,
   [ErrorCode.FILE_OFFICE_TOO_LARGE]: HttpStatus.PAYLOAD_TOO_LARGE,
+  // Текст вложения для ассистента (#922): потолок — 413, формат — 415,
+  // неразбираемый/защищённый документ — 422, таймаут извлечения — 504.
+  [ErrorCode.FILE_TEXT_TOO_LARGE]: HttpStatus.PAYLOAD_TOO_LARGE,
+  [ErrorCode.FILE_TEXT_UNSUPPORTED]: HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+  [ErrorCode.FILE_TEXT_INVALID]: HttpStatus.UNPROCESSABLE_ENTITY,
+  [ErrorCode.FILE_TEXT_TIMEOUT]: HttpStatus.GATEWAY_TIMEOUT,
   // Редактор маршрутов (#378, ADR-0021): конфликт версии — 409; невалидный
   // документ и обязательный перенос — 422 (семантика документа, не поля);
   // блокировки системного типа и занятое имя — 409.

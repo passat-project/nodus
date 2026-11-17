@@ -182,6 +182,8 @@ describe('AiSettingsService.put: замена настроек (#894)', () => {
     expect(settings).toEqual({
       defaultProviderId: null,
       defaultModelId: null,
+      routerProviderId: null,
+      routerModelId: null,
       instructions: 'Отвечай кратко',
     });
   });
@@ -232,5 +234,33 @@ describe('AiSettingsService.put: замена настроек (#894)', () => {
       expect(error).toBeInstanceOf(DomainException);
       expect((error as DomainException).details).toEqual({ field: 'defaultModelId' });
     }
+  });
+
+  it('модель-диспетчер пары сохраняется в настройках (#917)', async () => {
+    const { service, repo } = makeService();
+    await service.put(body({ routerProviderId: PROVIDER_ID, routerModelId: MODEL_ID }));
+    const [, settings] = (repo.replaceAll as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      ProviderRow[],
+      Record<string, unknown>,
+    ];
+    expect(settings).toMatchObject({ routerProviderId: PROVIDER_ID, routerModelId: MODEL_ID });
+  });
+
+  it('модель-диспетчер не из выбранного провайдера — ошибка валидации, записи нет (#917)', async () => {
+    const { service, repo } = makeService();
+    await expect(
+      service.put(body({ routerProviderId: PROVIDER_ID, routerModelId: 'чужая-модель' })),
+    ).rejects.toMatchObject({ details: { field: 'routerModelId' } });
+    expect(repo.replaceAll).not.toHaveBeenCalled();
+  });
+
+  it('провайдер-диспетчер вне списка — ошибка валидации (#917)', async () => {
+    const { service, repo } = makeService();
+    await expect(
+      service.put(
+        body({ routerProviderId: '22222222-2222-4222-8222-222222222222', routerModelId: MODEL_ID }),
+      ),
+    ).rejects.toMatchObject({ details: { field: 'routerModelId' } });
+    expect(repo.replaceAll).not.toHaveBeenCalled();
   });
 });

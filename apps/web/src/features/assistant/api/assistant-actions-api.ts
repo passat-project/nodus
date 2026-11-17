@@ -1,9 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AssistantAction, AssistantMemoryList } from '@nodus/contracts';
+import type {
+  AssistantAction,
+  AssistantActionDecision,
+  AssistantBatchDecision,
+  AssistantContinueResponse,
+  AssistantMemoryList,
+} from '@nodus/contracts';
 
 import { api } from '../../../shared/api-client.js';
+import { attachAssistantRun, assistantKeys } from './assistant-api.js';
 import { useAssistantStore } from '../model/assistant-store.js';
-import { assistantKeys } from './assistant-api.js';
 
 /**
  * Карточки действий и блокнот агента (Ф2, ADR-0048; #900): решения по
@@ -11,18 +17,36 @@ import { assistantKeys } from './assistant-api.js';
  * прогона и лента остались одним файлом, а решения — своим.
  */
 
-/** Общая часть: после решения карточки история диалога перечитывается —
- *  состояние приходит из БД, а не собирается на клиенте. */
+/** Общая часть: после решения карточки история перечитывается — состояние
+ *  приходит из БД; если решение закрыло пачку, сервер запустил продолжение
+ *  (#916) — подписываемся на его поток сразу. */
+function applyDecision(
+  sessionId: string | null,
+  result: { continuationRunId: string | null },
+  actions: AssistantAction[],
+): void {
+  const store = useAssistantStore.getState();
+  for (const action of actions) store.upsertAction(action);
+  if (sessionId && result.continuationRunId) {
+    attachAssistantRun(result.continuationRunId, sessionId);
+  }
+}
+
 function useActionDecision(sessionId: string | null, decision: 'execute' | 'cancel' | 'undo') {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      api<AssistantAction>(`/assistant/actions/${id}/${decision}`, { method: 'POST' }),
-    onSuccess: (action) => {
-      // Живой буфер держит карточку до следующей отправки — обновляем её
-      // здесь же, иначе после завершённого прогона карточка оставалась бы
-      // «ждёт подтверждения» до перезагрузки страницы.
-      useAssistantStore.getState().upsertAction(action);
+      api<AssistantActionDecision | AssistantAction>(`/assistant/actions/${id}/${decision}`, {
+        method: 'POST',
+      }),
+    onSuccess: (result) => {
+      // Ответ-конверт (#916) для execute/cancel; undo остаётся карточкой.
+      const actions = 'action' in result ? [result.action] : [result];
+      applyDecision(
+        sessionId,
+        'continuationRunId' in result ? result : { continuationRunId: null },
+        actions,
+      );
       if (sessionId) {
         void queryClient.invalidateQueries({ queryKey: assistantKeys.messages(sessionId) });
       }
@@ -41,6 +65,47 @@ export function useCancelAssistantAction(sessionId: string | null) {
 
 export function useUndoAssistantAction(sessionId: string | null) {
   return useActionDecision(sessionId, 'undo');
+}
+
+/* ===== Пачка карточек (#916) ===== */
+
+/** «Выполнить все» / «Отменить все»: одна мутация на пачку. */
+export function useAssistantBatchDecision(
+  sessionId: string | null,
+  decision: 'execute-all' | 'cancel-all',
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (messageId: string) =>
+      api<AssistantBatchDecision>(`/assistant/messages/${messageId}/actions/${decision}`, {
+        method: 'POST',
+      }),
+    onSuccess: (result) => {
+      applyDecision(sessionId, result, result.actions);
+      if (sessionId) {
+        void queryClient.invalidateQueries({ queryKey: assistantKeys.messages(sessionId) });
+      }
+      void queryClient.invalidateQueries({ queryKey: assistantKeys.sessions() });
+    },
+  });
+}
+
+/** «Продолжить сейчас»: пачка закрывается, агент отвечает сразу. */
+export function useContinueAssistantBatch(sessionId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (messageId: string) =>
+      api<AssistantContinueResponse>(`/assistant/messages/${messageId}/continue`, {
+        method: 'POST',
+      }),
+    onSuccess: (result) => {
+      if (sessionId) {
+        attachAssistantRun(result.runId, sessionId);
+        void queryClient.invalidateQueries({ queryKey: assistantKeys.messages(sessionId) });
+      }
+      void queryClient.invalidateQueries({ queryKey: assistantKeys.sessions() });
+    },
+  });
 }
 
 /* ===== Блокнот агента (#900) ===== */

@@ -95,7 +95,9 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
       { fileContentUrl: vi.fn() } as never,
       guard,
       references,
+      { findParentChain: vi.fn(), findNamesByIds: vi.fn() } as never,
       { process: vi.fn() } as never,
+      { subordinateIds: vi.fn(), managerChainOf: vi.fn() } as never,
     );
   });
 

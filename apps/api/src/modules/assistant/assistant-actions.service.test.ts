@@ -70,6 +70,7 @@ function build(row: ActionRow = actionRow()) {
   let current = { ...row };
   const repo = {
     countRunActions: vi.fn(async () => 0),
+    ensureActionBatch: vi.fn(async () => undefined),
     createAction: vi.fn(async (input: Record<string, unknown>) => {
       void input;
       return row;
@@ -115,6 +116,7 @@ describe('AssistantActionsService: предложение (ADR-0048)', () => {
     const { service, repo, executor, bus } = build();
     const result = await service.propose({
       runId: RUN_ID,
+      sessionId: 'session-1',
       messageId: 'message-1',
       userId: USER_ID,
       tool: tools.create,
@@ -148,6 +150,7 @@ describe('AssistantActionsService: предложение (ADR-0048)', () => {
     const { service, executor, bus } = build(actionRow({ automatic: true }));
     const result = await service.propose({
       runId: RUN_ID,
+      sessionId: 'session-1',
       messageId: 'message-1',
       userId: USER_ID,
       tool: tools.create,
@@ -172,6 +175,7 @@ describe('AssistantActionsService: предложение (ADR-0048)', () => {
     repo.countRunActions.mockResolvedValueOnce(5);
     const overLimit = await service.propose({
       runId: RUN_ID,
+      sessionId: 'session-1',
       messageId: null,
       userId: USER_ID,
       tool: tools.create,
@@ -185,6 +189,7 @@ describe('AssistantActionsService: предложение (ADR-0048)', () => {
 
     const invalid = await service.propose({
       runId: RUN_ID,
+      sessionId: 'session-1',
       messageId: null,
       userId: USER_ID,
       tool: tools.create,

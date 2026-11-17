@@ -37,7 +37,9 @@ const STICKER_BY_ID =
   'любой неудалённый пак по id — раздача «из чата»; личные паки не секретны (осознанно, findPack)';
 const DIRECT_CHAT =
   'find-or-create личной беседы с сотрудником (канон мессенджера): новая — только с действующим, существующая — и с уволенным (история), #343';
-const FILE_ACCESS = 'доступ к файлу — resolveAccess (владелец или участник беседы вложения)';
+const FILE_ACCESS =
+  'доступ к файлу — resolveAccess по контекстам FileAccessRegistry (владелец, участник беседы, ' +
+  'видимое письмо/задача); чужим — 404';
 const PROJECTS_CATALOG =
   'общие справочники модуля проектов (типы, портфели) без персональных данных: нужны журналу, фильтрам и окну создания каждому; мутации — project.setup.manage / project.manage (#52)';
 const PROJECT_VISIBILITY =
@@ -157,6 +159,7 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'GET /custom-fields/numbering/host/:kind/:id':
     'номера записи видны тем, кто видит саму запись (проверка в сервисе)',
   'GET /files/:id/office-session': FILE_ACCESS,
+  'GET /files/:id/text': FILE_ACCESS,
   'GET /files/:id/versions': FILE_ACCESS,
   'GET /home/summary': HOME,
   'GET /tasks': TASK_VISIBILITY,
