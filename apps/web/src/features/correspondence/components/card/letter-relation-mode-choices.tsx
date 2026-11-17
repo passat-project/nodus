@@ -31,14 +31,14 @@ export function RelationModeChoices({
       label: ui.letters.relations.kindReplyTo,
       hint: fromCurrent
         ? ui.letters.relations.kindReplyToHint
-        : ui.letters.relations.directionToCurrentHint,
+        : ui.letters.relations.kindReplyToHintReverse,
     },
     {
       value: 'nested_in' as const,
       label: ui.letters.relations.kindNestedIn,
       hint: fromCurrent
         ? ui.letters.relations.kindNestedInHint
-        : ui.letters.relations.directionToCurrentHint,
+        : ui.letters.relations.kindNestedInHintReverse,
     },
   ];
   const directions = [
