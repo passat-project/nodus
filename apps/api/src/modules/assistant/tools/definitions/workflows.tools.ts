@@ -4,6 +4,7 @@ import type { ProcessType } from '@nodus/contracts';
 
 import { defineTool } from '../tool-definition.js';
 import { asArray, asTyped, finalize, listBlock, str } from '../projections.js';
+import { workflowsMeta } from './meta/workflows.meta.js';
 
 /**
  * Инструмент «Процессов» (#892): типы процессов (задач и писем) с их
@@ -17,11 +18,22 @@ const input = z.object({
 });
 
 export const workflowsProcessTypesTool = defineTool({
+  ...workflowsMeta['workflows.process_types'],
   id: 'workflows.process_types',
   title: 'Процессы: типы',
   description:
     'Типы процессов портала: названия, категория (задача или письмо), архивность. Нужны, чтобы предложить правильный вид поручения и назвать его как в портале.',
-  keywords: ['процессы', 'типы', 'виды задач', 'маршруты', 'категории', 'process types'],
+  keywords: [
+    'процессы',
+    'типы',
+    'виды задач',
+    'виды писем',
+    'виды поручений',
+    'настроенные процессы',
+    'маршруты',
+    'категории',
+    'process types',
+  ],
   module: 'workflows',
   kind: 'read',
   hot: false,

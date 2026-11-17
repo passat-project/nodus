@@ -6,6 +6,7 @@ import { defineTool } from '../tool-definition.js';
 import type { ToolContext } from '../tool-definition.js';
 import { asArray, asRecord, asTyped, clip, str } from '../projections.js';
 import { field, fieldsOf, humanDate, shortId, userName } from './write-cards.js';
+import { lettersMeta } from './meta/letters.meta.js';
 
 /**
  * Действия по письмам (Ф2, ADR-0048): выполнение перехода маршрута —
@@ -26,6 +27,7 @@ const transitionInput = z.object({
 });
 
 export const lettersTransitionTool = defineTool({
+  ...lettersMeta['letters.transition'],
   id: 'letters.transition',
   title: 'Письма: резолюция/переход',
   description:

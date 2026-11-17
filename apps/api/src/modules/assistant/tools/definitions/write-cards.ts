@@ -1,4 +1,4 @@
-import { date, nameOf } from '../projections.js';
+import { asRecord, date, nameOf, num, str } from '../projections.js';
 import type { ToolActionField, ToolContext } from '../tool-definition.js';
 
 /**
@@ -27,6 +27,20 @@ export function projectName(ctx: ToolContext, id: string): Promise<string | null
 
 export function conversationTitle(ctx: ToolContext, id: string): Promise<string | null> {
   return readName(ctx, `/chat/conversations/${id}`);
+}
+
+/** Задача карточкой: «№1042 «Проверить смету»» (номер + название). */
+export async function taskLabel(ctx: ToolContext, id: string): Promise<string | null> {
+  if (!ctx.read) return null;
+  try {
+    const task = asRecord(await ctx.read(`/tasks/${id}`));
+    const title = str(task?.title);
+    if (!title) return null;
+    const number = num(task?.number);
+    return number ? `№${number} «${title}»` : `«${title}»`;
+  } catch {
+    return null;
+  }
 }
 
 /** Поле карточки: пустое значение не показываем вовсе. */

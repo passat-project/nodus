@@ -22,6 +22,7 @@ import {
   num,
   str,
 } from '../projections.js';
+import { chatMeta } from './meta/chat.meta.js';
 
 /**
  * Инструменты мессенджера (#892): беседы сотрудника и сообщения беседы.
@@ -39,13 +40,22 @@ const conversationsInput = z.object({
 });
 
 export const chatConversationsTool = defineTool({
+  ...chatMeta['chat.conversations'],
   id: 'chat.conversations',
   title: 'Мессенджер: беседы',
   description:
     'Беседы сотрудника: личные, группы, чаты задач и писем. Отдаёт название/участников, тип, последнюю активность, непрочитанные и id для chat.messages. ' +
     'Для личной переписки с конкретным человеком передай scope=direct и search по имени: без этого фильтра личный чат стоит в общем списке по активности и легко уходит за первую страницу. ' +
     'Если в ответе «… есть следующая страница (cursor)» — продолжай с параметром cursor.',
-  keywords: ['беседы', 'чаты', 'мессенджер', 'переписка', 'непрочитанные', 'conversations'],
+  keywords: [
+    'беседы',
+    'чаты',
+    'мессенджер',
+    'переписка',
+    'непрочитанные',
+    'отправить сообщение',
+    'conversations',
+  ],
   module: 'chat',
   kind: 'read',
   featureFlag: 'chat',
@@ -102,11 +112,12 @@ const messagesInput = z.object({
 });
 
 export const chatMessagesTool = defineTool({
+  ...chatMeta['chat.messages'],
   id: 'chat.messages',
   title: 'Мессенджер: сообщения',
   description:
     'Последние сообщения беседы: автор, время, текст (обрезан), вложения по именам. Отвечает на «что писали», «о чём договорились», «кто ответил».',
-  keywords: ['сообщения', 'переписка', 'что писали', 'беседа', 'messages', 'тред'],
+  keywords: ['сообщения', 'переписка', 'что писали', 'беседа', 'в чате задачи', 'messages', 'тред'],
   module: 'chat',
   kind: 'read',
   featureFlag: 'chat',

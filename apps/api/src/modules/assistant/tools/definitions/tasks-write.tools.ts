@@ -5,6 +5,7 @@ import { defineTool } from '../tool-definition.js';
 import type { ToolContext } from '../tool-definition.js';
 import { asArray, asRecord, asTyped, clip, nameOf, num, str } from '../projections.js';
 import { field, fieldsOf, humanDate, projectName, shortId, userName } from './write-cards.js';
+import { tasksMeta } from './meta/tasks.meta.js';
 
 /**
  * Действия по задачам (Ф2, ADR-0048): создание и правка полей/стадии.
@@ -32,6 +33,7 @@ const createInput = z.object({
 });
 
 export const tasksCreateTool = defineTool({
+  ...tasksMeta['tasks.create'],
   id: 'tasks.create',
   title: 'Задачи: создать',
   description:
@@ -41,6 +43,7 @@ export const tasksCreateTool = defineTool({
     'поставить задачу',
     'поручение',
     'новая задача',
+    'новое поручение',
     'назначить',
     'create task',
   ],
@@ -120,6 +123,7 @@ const updateInput = z
   });
 
 export const tasksUpdateTool = defineTool({
+  ...tasksMeta['tasks.update'],
   id: 'tasks.update',
   title: 'Задачи: изменить',
   description:
@@ -129,6 +133,7 @@ export const tasksUpdateTool = defineTool({
     'сменить статус',
     'сменить стадию',
     'перенести задачу',
+    'перенести срок',
     'назначить исполнителя',
     'изменить срок',
     'update task',

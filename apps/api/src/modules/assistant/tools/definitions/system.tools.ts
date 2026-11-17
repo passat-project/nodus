@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { defineTool } from '../tool-definition.js';
 import { clip, entityLink, str } from '../projections.js';
 import { searchTools } from '../search.js';
+import { systemMeta } from './meta/system.meta.js';
 
 /**
  * Служебные инструменты (#892): контекст экрана, поиск по каталогу и ссылка
@@ -12,11 +13,12 @@ import { searchTools } from '../search.js';
  */
 
 export const contextGetTool = defineTool({
+  ...systemMeta['context.get'],
   id: 'context.get',
   title: 'Контекст экрана',
   description:
     'Где находится сотрудник: раздел портала и открытая карточка (тип и id). Вызывай первым, если вопрос начинается с «эта задача», «этот проект», «здесь».',
-  keywords: ['контекст', 'где я', 'открытая карточка', 'текущий раздел', 'context'],
+  keywords: ['контекст', 'где я', 'открытая карточка', 'текущий раздел', 'что открыто', 'context'],
   module: 'system',
   kind: 'read',
   hot: true,
@@ -54,6 +56,7 @@ const searchInput = z.object({
 });
 
 export const toolsSearchTool = defineTool({
+  ...systemMeta['tools.search'],
   id: 'tools.search',
   title: 'Поиск действий',
   description:
@@ -97,6 +100,7 @@ const CARD_KIND: Record<string, string> = {
 };
 
 export const uiOpenEntityTool = defineTool({
+  ...systemMeta['ui.open_entity'],
   id: 'ui.open_entity',
   title: 'Открыть сущность',
   description:

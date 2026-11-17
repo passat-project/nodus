@@ -1,0 +1,98 @@
+import type { GoldenCase } from '../golden-set.types.js';
+
+/** #929: действия в чатах — беседы, участники, роли, черновик, сообщения. */
+export const BATCH_929_CASES: readonly GoldenCase[] = [
+  {
+    id: 'gip-chat-create-01',
+    role: 'gip',
+    form: 'official',
+    query: 'Создай группу «Сметчики» для отдела ПТО',
+    expectedTools: ['chat.create_conversation'],
+    forbiddenTools: ['chat.direct_message', 'chat.send'],
+    rationale: 'Новая группа — chat.create_conversation; личный чат и отправка сообщения — другое.',
+  },
+  {
+    id: 'secretary-chat-members-01',
+    role: 'secretary',
+    form: 'colloquial',
+    query: 'Кто состоит в беседе «Приёмная»?',
+    expectedTools: ['chat.members'],
+    forbiddenTools: ['chat.add_members', 'chat.messages'],
+    rationale:
+      'Состав беседы — chat.members; добавление участников и лента сообщений не просились.',
+  },
+  {
+    id: 'gip-chat-add-members-01',
+    role: 'gip',
+    form: 'official',
+    query: 'Добавь Петрова в беседу «Сметчики»',
+    expectedTools: ['directory.find_users', 'chat.add_members'],
+    forbiddenTools: ['chat.create_conversation', 'chat.set_member_role'],
+    rationale:
+      'Сначала id сотрудника (directory.find_users), затем chat.add_members; создание беседы и смена роли — другое.',
+  },
+  {
+    id: 'adm-chat-role-01',
+    role: 'admin',
+    form: 'colloquial',
+    query: 'Сделай Петрова модератором в группе «Сметчики»',
+    expectedTools: ['directory.find_users', 'chat.set_member_role'],
+    forbiddenTools: ['chat.add_members', 'chat.create_conversation'],
+    rationale:
+      'Роль участника — chat.set_member_role; добавление в беседу и её создание не запрашивались.',
+  },
+  {
+    id: 'emp-chat-draft-01',
+    role: 'employee',
+    form: 'colloquial',
+    query: 'Сохрани черновик ответа в беседе «Приёмная», но не отправляй',
+    expectedTools: ['chat.save_draft'],
+    forbiddenTools: ['chat.send', 'chat.direct_message'],
+    rationale: 'Черновик без отправки — chat.save_draft; отправка — chat.send.',
+  },
+  {
+    id: 'emp-chat-edit-01',
+    role: 'employee',
+    form: 'typo',
+    query: 'Исправь моё сообщение в беседе «Сметчики» на «Смета согласована»',
+    expectedTools: ['chat.edit_message'],
+    forbiddenTools: ['chat.send', 'chat.forward_message'],
+    rationale: 'Правка своего сообщения — chat.edit_message; новое сообщение и пересылка — другое.',
+  },
+  {
+    id: 'emp-chat-pin-01',
+    role: 'employee',
+    form: 'official',
+    query: 'Закрепи сообщение о сроках в беседе «Сметчики»',
+    expectedTools: ['chat.pin_message'],
+    forbiddenTools: ['chat.unpin_message', 'chat.react'],
+    rationale: 'Закреп — chat.pin_message; откреп и реакция не просились.',
+  },
+  {
+    id: 'emp-chat-unpin-01',
+    role: 'employee',
+    form: 'colloquial',
+    query: 'Убери из закрепов сообщение о сроках в беседе «Сметчики»',
+    expectedTools: ['chat.unpin_message'],
+    forbiddenTools: ['chat.pin_message', 'chat.edit_message'],
+    rationale: 'Откреп — chat.unpin_message; закреп заново и правка текста не просились.',
+  },
+  {
+    id: 'emp-chat-react-01',
+    role: 'employee',
+    form: 'colloquial',
+    query: 'Поставь лайк на сообщение Петрова в беседе «Сметчики»',
+    expectedTools: ['chat.react'],
+    forbiddenTools: ['chat.send', 'chat.pin_message'],
+    rationale: 'Реакция на сообщение — chat.react; ответ текстом и закреп — другое.',
+  },
+  {
+    id: 'gip-chat-forward-01',
+    role: 'gip',
+    form: 'official',
+    query: 'Перешли сообщение про сроки в беседу «Проектировщики»',
+    expectedTools: ['chat.forward_message'],
+    forbiddenTools: ['chat.send', 'chat.direct_message'],
+    rationale: 'Пересылка в другую беседу — chat.forward_message; новое сообщение — chat.send.',
+  },
+];

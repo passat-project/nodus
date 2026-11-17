@@ -4,6 +4,7 @@ import type { Dictionary, DictionaryItem, Paginated } from '@nodus/contracts';
 
 import { defineTool } from '../tool-definition.js';
 import { asTyped, pageItems, finalize, hasMore, listBlock, num, str } from '../projections.js';
+import { dictionariesMeta } from './meta/dictionaries.meta.js';
 
 /**
  * Инструменты справочников (I15, #892): список бизнес-списков портала и
@@ -14,11 +15,20 @@ import { asTyped, pageItems, finalize, hasMore, listBlock, num, str } from '../p
 const listInput = z.object({ limit: z.number().int().min(1).max(50).default(30) });
 
 export const dictionariesListTool = defineTool({
+  ...dictionariesMeta['dictionaries.list'],
   id: 'dictionaries.list',
   title: 'Справочники: список',
   description:
     'Справочники портала (бизнес-списки): код, название, иерархичность. Код нужен для dictionaries.items.',
-  keywords: ['справочники', 'списки', 'классификаторы', 'варианты', 'dictionaries'],
+  keywords: [
+    'справочники',
+    'списки',
+    'классификаторы',
+    'варианты',
+    'перечень справочников',
+    'бизнес-списки',
+    'dictionaries',
+  ],
   module: 'dictionaries',
   kind: 'read',
   hot: true,
@@ -58,11 +68,12 @@ const itemsInput = z.object({
 });
 
 export const dictionariesItemsTool = defineTool({
+  ...dictionariesMeta['dictionaries.items'],
   id: 'dictionaries.items',
   title: 'Справочники: элементы',
   description:
     'Элементы справочника по коду: названия вариантов, сортировка, архивные. Используй, чтобы назвать вариант так, как он записан в портале.',
-  keywords: ['элементы', 'варианты', 'значения', 'справочник', 'items'],
+  keywords: ['элементы', 'варианты', 'значения', 'виды договоров', 'справочник', 'items'],
   module: 'dictionaries',
   kind: 'read',
   hot: true,

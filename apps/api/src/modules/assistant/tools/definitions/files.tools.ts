@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { FileTextResponse } from '@nodus/contracts';
 
 import { defineTool } from '../tool-definition.js';
+import { filesMeta } from './meta/files.meta.js';
 
 /**
  * Чтение вложения (#922): PDF с текстовым слоем и DOCX по `fileId` из
@@ -19,6 +20,7 @@ import { defineTool } from '../tool-definition.js';
 const PROJECTION_CHARS = 14_000;
 
 export const filesExtractTextTool = defineTool({
+  ...filesMeta['files.extract_text'],
   id: 'files.extract_text',
   title: 'Вложения: прочитать текст',
   description:
@@ -28,6 +30,7 @@ export const filesExtractTextTool = defineTool({
     'прочитать вложение',
     'текст файла',
     'что в акте',
+    'приложенный акт',
     'смета',
     'договор',
     'pdf',

@@ -3,6 +3,7 @@ import { ASSISTANT_LIMITS } from '@nodus/contracts';
 
 import { defineTool } from '../tool-definition.js';
 import { finalize } from '../projections.js';
+import { memoryMeta } from './meta/memory.meta.js';
 
 /**
  * Личная память сотрудника (#900): блокнот агента. Это НЕ данные портала —
@@ -20,6 +21,7 @@ const saveInput = z.object({
 });
 
 export const memorySaveTool = defineTool({
+  ...memoryMeta['memory.save'],
   id: 'memory.save',
   title: 'Блокнот: запомнить',
   description:
@@ -41,11 +43,19 @@ export const memorySaveTool = defineTool({
 });
 
 export const memoryListTool = defineTool({
+  ...memoryMeta['memory.list'],
   id: 'memory.list',
   title: 'Блокнот: записи',
   description:
     'Показать, что записано в личном блокноте сотрудника. Нужно, если он спрашивает «что ты обо мне помнишь» или перед записью нового факта.',
-  keywords: ['что помнишь', 'блокнот', 'записи памяти', 'memory list'],
+  keywords: [
+    'что помнишь',
+    'что обо мне помнишь',
+    'блокнот',
+    'записи памяти',
+    'записи блокнота',
+    'memory list',
+  ],
   module: 'system',
   kind: 'read',
   // На горячей полке: модель должна уметь проверить блокнот без поиска —
@@ -64,6 +74,7 @@ export const memoryListTool = defineTool({
 const forgetInput = z.object({ id: z.uuid() });
 
 export const memoryForgetTool = defineTool({
+  ...memoryMeta['memory.forget'],
   id: 'memory.forget',
   title: 'Блокнот: забыть',
   description:

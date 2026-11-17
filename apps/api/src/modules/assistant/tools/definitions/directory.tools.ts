@@ -20,6 +20,7 @@ import {
   num,
   str,
 } from '../projections.js';
+import { directoryMeta } from './meta/directory.meta.js';
 
 /**
  * Инструменты справочника сотрудников (#892): поиск людей, карточка,
@@ -34,6 +35,7 @@ const findInput = z.object({
 });
 
 export const directoryFindUsersTool = defineTool({
+  ...directoryMeta['directory.find_users'],
   id: 'directory.find_users',
   title: 'Сотрудники: поиск',
   description:
@@ -45,6 +47,10 @@ export const directoryFindUsersTool = defineTool({
     'кто такой',
     'телефон',
     'почта',
+    'добавить в проект',
+    'создать задачу на сотрудника',
+    'написать в личку',
+    'по фамилии',
     'directory',
   ],
   module: 'directory',
@@ -94,6 +100,7 @@ export const directoryFindUsersTool = defineTool({
 const getUserInput = z.object({ id: z.uuid() });
 
 export const directoryGetUserTool = defineTool({
+  ...directoryMeta['directory.get_user'],
   id: 'directory.get_user',
   title: 'Сотрудники: карточка',
   description:
@@ -159,6 +166,7 @@ function walkDepartments(nodes: unknown[], depth: number, out: string[], limit: 
 }
 
 export const directoryDepartmentsTool = defineTool({
+  ...directoryMeta['directory.departments'],
   id: 'directory.departments',
   title: 'Сотрудники: оргструктура',
   description:
@@ -169,6 +177,7 @@ export const directoryDepartmentsTool = defineTool({
     'отделы',
     'руководители',
     'структура компании',
+    'юридическая структура',
     'departments',
   ],
   module: 'directory',

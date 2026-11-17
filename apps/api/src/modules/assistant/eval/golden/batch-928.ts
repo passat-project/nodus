@@ -1,0 +1,98 @@
+import type { GoldenCase } from '../golden-set.types.js';
+
+/** #928: дневные действия по задачам — чек-лист, участники, связи, время. */
+export const BATCH_928_CASES: readonly GoldenCase[] = [
+  {
+    id: 'emp-task-checklist-add-01',
+    role: 'employee',
+    form: 'colloquial',
+    query: 'Добавь в задачу 1042 пункт чек-листа «Проверить смету»',
+    expectedTools: ['tasks.checklist_add'],
+    forbiddenTools: ['tasks.create', 'tasks.add_subtask'],
+    rationale: 'Пункт чек-листа — tasks.checklist_add; задача и подзадача — другие инструменты.',
+  },
+  {
+    id: 'emp-task-checklist-done-01',
+    role: 'employee',
+    form: 'official',
+    query: 'Отметь в задаче 1042 пункт «Собрать данные» выполненным',
+    expectedTools: ['tasks.checklist_update'],
+    forbiddenTools: ['tasks.transition', 'tasks.create'],
+    rationale: 'Отметка пункта — tasks.checklist_update; закрытие задачи и создание не просили.',
+  },
+  {
+    id: 'gip-task-participant-01',
+    role: 'gip',
+    form: 'official',
+    query: 'Назначь Петрова соисполнителем задачи 1042',
+    expectedTools: ['directory.find_users', 'tasks.add_participant'],
+    forbiddenTools: ['tasks.update', 'tasks.create'],
+    rationale:
+      'Сначала id сотрудника по имени (directory.find_users), затем tasks.add_participant; смена ответственного и новая задача — другое.',
+  },
+  {
+    id: 'gip-task-relation-01',
+    role: 'gip',
+    form: 'typo',
+    query: 'Свяжи задачу 1042 с задачей 1043 как блокирующую',
+    expectedTools: ['tasks.add_relation'],
+    forbiddenTools: ['tasks.update', 'tasks.add_subtask'],
+    rationale: 'Связь задач — tasks.add_relation; правка полей и подзадача не относятся.',
+  },
+  {
+    id: 'emp-task-relations-01',
+    role: 'employee',
+    form: 'colloquial',
+    query: 'С чем связана задача 1042?',
+    expectedTools: ['tasks.relations'],
+    forbiddenTools: ['tasks.history', 'tasks.add_relation'],
+    rationale: 'Чтение связей — tasks.relations; история и создание связи не запрашивались.',
+  },
+  {
+    id: 'emp-task-actions-01',
+    role: 'employee',
+    form: 'official',
+    query: 'Какие действия доступны по задаче 1042?',
+    expectedTools: ['tasks.actions'],
+    forbiddenTools: ['tasks.transitions', 'tasks.press_action'],
+    rationale:
+      'Кнопки действий маршрута — tasks.actions; переходы статуса и нажатие — другие шаги.',
+  },
+  {
+    id: 'gip-task-result-01',
+    role: 'gip',
+    form: 'official',
+    query: 'Запиши итог задачи 1042: смета проверена, замечания устранены',
+    expectedTools: ['tasks.add_result'],
+    forbiddenTools: ['chat.send', 'tasks.transition'],
+    rationale: 'Итог задачи — tasks.add_result; сообщение в чат и закрытие задачи не просили.',
+  },
+  {
+    id: 'emp-task-subtask-01',
+    role: 'employee',
+    form: 'colloquial',
+    query: 'Создай подзадачу «Собрать данные» в задаче 1042',
+    expectedTools: ['tasks.add_subtask'],
+    forbiddenTools: ['tasks.create', 'tasks.checklist_add'],
+    rationale: 'Подзадача — tasks.add_subtask; независимая задача и пункт чек-листа — другое.',
+  },
+  {
+    id: 'emp-task-time-01',
+    role: 'employee',
+    form: 'colloquial',
+    query: 'Залогируй 2 часа по задаче 1042 за сегодня',
+    expectedTools: ['tasks.log_time'],
+    forbiddenTools: ['tasks.update', 'tasks.add_result'],
+    rationale: 'Трудозатраты — tasks.log_time; срок задачи и итог не меняются.',
+  },
+  {
+    id: 'secretary-task-action-press-01',
+    role: 'secretary',
+    form: 'official',
+    query: 'Нажми «Согласовать» в задаче 1042',
+    expectedTools: ['tasks.actions', 'tasks.press_action'],
+    forbiddenTools: ['tasks.transition', 'tasks.update'],
+    rationale:
+      'Сначала id действия (tasks.actions), затем tasks.press_action; переход статуса — другой инструмент.',
+  },
+];
