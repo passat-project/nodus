@@ -86,6 +86,13 @@
 Не на полке, но частые: `projects.structure`, `directory.departments`, `chat.task_conversation`, `counterparties.list`.
 На полке, но не в предложении: `tasks.get`, `tasks.transitions`, `tasks.transition`, `tasks.create`, `tasks.update`, `projects.get`, `letters.get`, `letters.transition`, `chat.direct_message`, `me.get`, `files.extract_text`, `context.get`, `ui.open_entity`, `memory.save`, `memory.list`.
 
+| Размер полки (по частоте) | Покрытие ожидаемых | Кейсов полностью |
+| --- | --- | --- |
+| 12 | 41.6% | 24.8% |
+| 15 | 46.3% | 29.5% |
+| 18 | 51.1% | 33.3% |
+| 30 | 64.7% | 51.9% |
+
 | Инструмент | Ожиданий в наборе | На полке сейчас |
 | --- | --- | --- |
 | `projects.list` | 14 | да |

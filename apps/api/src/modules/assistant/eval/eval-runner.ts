@@ -57,6 +57,8 @@ export interface ShelfAnalysis {
   frequency: { id: string; count: number; hot: boolean }[];
   /** Предложение полки 12–15 по частоте золотого набора. */
   suggestedHot: string[];
+  /** Кривая покрытия по размеру полки: замер «12–15 vs 18–30» (ADR-0051). */
+  sizeCurve: { size: number; recall: number; caseCoverage: number }[];
   missingFromCurrentHot: string[];
   extraInCurrentHot: string[];
 }
@@ -217,6 +219,21 @@ function shelfOf(
     (sum, outcome) => sum + outcome.testCase.expectedTools.filter((id) => hotIds.has(id)).length,
     0,
   );
+  const sizeCurve = [12, 15, 18, 30].map((size) => {
+    const ids = new Set(frequency.slice(0, size).map((entry) => entry.id));
+    const hits = supported.reduce(
+      (sum, outcome) => sum + outcome.testCase.expectedTools.filter((id) => ids.has(id)).length,
+      0,
+    );
+    const full = supported.filter((outcome) =>
+      outcome.testCase.expectedTools.every((id) => ids.has(id)),
+    ).length;
+    return {
+      size,
+      recall: ratio(hits, expectedTotal),
+      caseCoverage: ratio(full, supported.length),
+    };
+  });
   return {
     hotSize: hot.length,
     hotRecall: ratio(hotExpected, expectedTotal),
@@ -227,6 +244,7 @@ function shelfOf(
     ),
     frequency,
     suggestedHot,
+    sizeCurve,
     missingFromCurrentHot: suggestedHot.filter((id) => !hotIds.has(id)),
     extraInCurrentHot: hot.map((tool) => tool.id).filter((id) => !suggestedSet.has(id)),
   };

@@ -105,6 +105,13 @@ Anthropic tool search / MCP routing). Настройка — пара `routerPro
 умолчанию»); модель обязана принадлежать провайдеру (валидация PUT). Модель
 выключена/удалена — `resolveRouter()` → `null`, прогон по горячей полке.
 
+Каталог в промпте диспетчера — одна компактная строка на инструмент (id,
+название, модуль, вид, «зачем» ≤ 48 знаков, 3 ключевых слова ≤ 30 знаков):
+при 88 инструментах полный каталог упирается в бюджет 16k символов
+(`dispatcher.test.ts`), поэтому описания в `meta` короткие, а подробности —
+в `whenToUse` основного цикла. Выбор диспетчера проверяется детерминированным
+симулятором в eval (recall@7 100%, неверный 1.6%).
+
 ## Внешние MCP-серверы (#902, Ф3)
 
 Реестр `assistant_mcp_servers` — настройка, а не код (ADR-0047): ВСЕ
@@ -167,28 +174,36 @@ handshake ограничен одной попыткой (404 внутри не�
 ## Каталог инструментов
 
 Имена — `module.action` (`tasks.list`), внешние — `ext.<server>.<tool>` (Ф3). Полка:
-до 30 горячих инструментов в промпте (потолок — порог деградации выбора), остальные —
-через `tools.search` (лексический поиск; эмбеддинги — позже, на ядре #272). При
-настроенном диспетчере горячую полку заменяет его выбор (см. выше). Свежесть
-каталога — сканер фантомных id и карта поверхностей (ADR-0049,
-`docs/architecture/assistant-surface.md`). Поведенческий дрейф ловит
+26 горячих инструментов в промпте (ADR-0051: рабочий диапазон 18–30, порог
+деградации выбора 30–50), остальные — через `tools.search` (лексический поиск;
+эмбеддинги — позже, на ядре #272). При настроенном диспетчере горячую полку
+заменяет его выбор (см. выше). Свежесть каталога — сканер фантомных id и карта
+поверхностей (ADR-0049, `docs/architecture/assistant-surface.md`), качество
+выбора — детерминированный eval (`eval/`, пороги ADR-0051,
+`docs/architecture/assistant-eval-report.md`). Поведенческий дрейф ловит
 `pnpm assistant:smoke` (`scripts/assistant-smoke.mjs`): read-маршруты по карте
 на песочнице `live-stack`, фикстурные id из живых данных, отчёт «проверено /
 пустых / пропущено / сбоев»; запуск ручной (ночное расписание — зона владельца).
 
-| Домен        | Инструменты                                                                |
-| ------------ | -------------------------------------------------------------------------- |
-| tasks        | `list`, `get`, `search`, `stages`, `history`, `transitions`, `transition`  |
-| projects     | `list`, `get`, `structure`, `members`                                      |
-| letters      | `list`, `get`, `transitions`, `relations`, `attachments`                   |
-| chat         | `conversations`, `messages`, `task_conversation`, `send`, `direct_message` |
-| files        | `extract_text` (PDF/DOCX, ADR-0050)                                        |
-| directory    | `find_users`, `get_user`, `departments`                                    |
-| me           | `get` (профиль, руководитель, отдел, подчинённые)                          |
-| dictionaries | `list`, `items`                                                            |
-| workflows    | `process_types`                                                            |
-| служебные    | `context.get`, `tools.search`, `ui.open_entity`                            |
-| ext (Ф3)     | `exa.web_search_exa`, `exa.web_fetch_exa`                                  |
+| Домен         | Инструменты                                                                                                                                                                                                                              |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tasks         | `list`, `get`, `search`, `stages`, `history`, `transitions`, `transition`, `relations`, `actions`, `checklist_add`, `checklist_update`, `add_participant`, `add_relation`, `add_result`, `add_subtask`, `log_time`, `press_action`       |
+| projects      | `list`, `get`, `structure`, `members`, `types`, `groups`, `node_kinds`, `create`, `create_group`, `set_status`, `join`, `leave`, `update_group`, `update_node`, `move_node`                                                              |
+| letters       | `list`, `get`, `transitions`, `relations`, `attachments`, `actions`, `history`, `update`, `set_main_document`, `add_participant`, `join`, `add_relation`, `press_action`                                                                 |
+| chat          | `conversations`, `messages`, `task_conversation`, `send`, `direct_message`, `members`, `create_conversation`, `add_members`, `set_member_role`, `save_draft`, `edit_message`, `pin_message`, `unpin_message`, `react`, `forward_message` |
+| files         | `extract_text` (PDF/DOCX, ADR-0050)                                                                                                                                                                                                      |
+| directory     | `find_users`, `get_user`, `departments`                                                                                                                                                                                                  |
+| me            | `get` (профиль, руководитель, отдел, подчинённые)                                                                                                                                                                                        |
+| crm           | `list`, `get`, `create`, `update` (контрагенты)                                                                                                                                                                                          |
+| dictionaries  | `list`, `items`, `item_create`, `item_update`                                                                                                                                                                                            |
+| notifications | `settings`, `update_settings` (режим «не беспокоить»)                                                                                                                                                                                    |
+| workflows     | `process_types`                                                                                                                                                                                                                          |
+| служебные     | `context.get`, `tools.search`, `ui.open_entity`                                                                                                                                                                                          |
+| ext (Ф3)      | `exa.web_search_exa`, `exa.web_fetch_exa`                                                                                                                                                                                                |
+
+Всего 88 инструментов (партии #927–#932). Опасные и необратимые операции —
+удаление, массовые действия, роли и права, публикация/архив процессов, формулы,
+смена типа — в каталог **не входят**: только отдельное решение владельца.
 
 Карточки записи (#920/#921): `tasks.transition` (переход стадии, комментарий —
 `form.comment`, без undo — честно в последствиях) и `chat.direct_message`
@@ -275,7 +290,11 @@ Env `SECRETS_ENCRYPTION_KEY` задаёт ключ шифрования; без 
 решения по пачке (#916), `assistant-memory.*` — блокнот (#900),
 `agent/agent-runner.*` — цикл и его помощники, `agent/continuation.service.ts` —
 прогон-продолжение, `tools/dispatcher.ts` — диспетчер top-7, `tools/surface.ts` —
-генератор карты поверхностей; определения инструментов —
-`tools/definitions/<домен>.tools.ts` (запись — `*-write.tools.ts`), провайдер
-моделей — `providers/`. Текст вложений живёт в модуле files:
-`apps/api/src/modules/files/text/`.
+генератор карты поверхностей, `tools/retrieval*.ts` — понимание запроса и скорер
+выбора (`retrieval-lang` — язык, `retrieval-rank` — оценка и симулятор диспетчера,
+`retrieval-lexicon` — лексика-данные), `tools/tool-standard.test.ts` — линтер
+стандарта; определения инструментов — `tools/definitions/<домен>.tools.ts`
+(запись — `*-write.tools.ts`), стандарт описаний —
+`tools/definitions/meta/<домен>.meta.ts`; eval — `eval/` (золотой набор,
+раннер, метрики, гейт, baseline); провайдер моделей — `providers/`. Текст
+вложений живёт в модуле files: `apps/api/src/modules/files/text/`.

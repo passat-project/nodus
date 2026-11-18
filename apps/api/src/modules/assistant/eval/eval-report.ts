@@ -211,6 +211,12 @@ export function renderEvalReport(
     `Не на полке, но частые: ${result.shelf.missingFromCurrentHot.map((id) => `\`${id}\``).join(', ') || '—'}.`,
     `На полке, но не в предложении: ${result.shelf.extraInCurrentHot.map((id) => `\`${id}\``).join(', ') || '—'}.`,
     '',
+    '| Размер полки (по частоте) | Покрытие ожидаемых | Кейсов полностью |',
+    '| --- | --- | --- |',
+    ...result.shelf.sizeCurve.map(
+      (row) => `| ${row.size} | ${pct(row.recall)} | ${pct(row.caseCoverage)} |`,
+    ),
+    '',
     '| Инструмент | Ожиданий в наборе | На полке сейчас |',
     '| --- | --- | --- |',
     ...frequency,
