@@ -1,12 +1,19 @@
 import {
+  COMPLETE_WORDS,
+  CREATED_SUBJECTS,
+  CREATION_VERBS,
   DEICTIC_TERMS,
   INTENT_TERMS,
   MODULE_TERMS,
   PHRASE_INTENTS,
   STOP_WORDS,
   SUBJECT_TERMS,
+  TYPO_FIXES,
 } from './retrieval-lexicon.js';
 import type { ToolIntent } from './tool-definition.js';
+
+/** Семья объекта нужна скореру: реэкспорт из данных лексики. */
+export { SUBJECT_FAMILY } from './retrieval-lexicon.js';
 
 /**
  * Языковой слой выбора инструмента (#926): нормализация живой русской фразы,
@@ -39,14 +46,6 @@ export interface QueryUnderstanding {
    */
   createdObject: string | null;
 }
-
-/** Частые опечатки домена: нормализуем до лексики, а не расширяем словарь. */
-const TYPO_FIXES: readonly (readonly [RegExp, string])[] = [
-  [/проэкт/g, 'проект'],
-  [/атправ/g, 'отправ'],
-  [/пастав/g, 'постав'],
-  [/иссполн/g, 'исполн'],
-];
 
 /** Нормализация: нижний регистр, ё→е, пунктуация → пробел. */
 export function normalizeQuery(text: string): string {
@@ -143,30 +142,6 @@ function hasTerm(normalized: string, tokens: readonly string[], term: string): b
   return tokens.some((token) => termMatchesToken(token, term));
 }
 
-/** Полные императивы: префикс не должен ловить «выполнил»/«удалил». */
-const COMPLETE_WORDS = new Set([
-  'выполни',
-  'удали',
-  'заверши',
-  'закрой',
-  'открой',
-  'напиши',
-  'покажи',
-  'найди',
-  'измени',
-  'добавь',
-  'создай',
-  'запомни',
-  'забудь',
-  'отправь',
-  'переведи',
-  'подпиши',
-  'расскажи',
-  'скинь',
-  'пришли',
-  'сообщи',
-]);
-
 export function matchesIntentPrefix(token: string, prefix: string): boolean {
   if (token === prefix) return true;
   if (COMPLETE_WORDS.has(prefix)) return token === `${prefix}те`;
@@ -210,60 +185,6 @@ function detectIntent(normalized: string, tokens: readonly string[]): Set<ToolIn
   }
   return intents;
 }
-
-export const SUBJECT_FAMILY: Readonly<Record<string, string>> = {
-  задача: 'задача',
-  проект: 'проект',
-  письмо: 'письмо',
-  резолюция: 'письмо',
-  вложение: 'вложение',
-  файл: 'файл',
-  текст: 'текст',
-  сообщение: 'чат',
-  'личное сообщение': 'чат',
-  чат: 'чат',
-  беседа: 'чат',
-  канал: 'чат',
-  сотрудник: 'человек',
-  профиль: 'человек',
-  доступ: 'доступ',
-  подразделение: 'подразделение',
-  справочник: 'справочник',
-  элемент: 'элемент',
-  контрагент: 'контрагент',
-  уведомление: 'уведомление',
-  портфель: 'портфель',
-  процесс: 'процесс',
-  папка: 'папка',
-  участник: 'участник',
-  стадия: 'стадия',
-  история: 'история',
-  связь: 'связь',
-  структура: 'структура',
-  контекст: 'контекст',
-  заметка: 'заметка',
-  ссылка: 'ссылка',
-  переход: 'переход',
-};
-
-/** Что сотрудник может попросить создать: объект после глагола создания. */
-const CREATED_SUBJECTS: ReadonlySet<string> = new Set([
-  'задача',
-  'проект',
-  'письмо',
-  'папка',
-  'портфель',
-  'справочник',
-  'заметка',
-  'чат',
-  'сообщение',
-  'файл',
-  'вложение',
-  'контрагент',
-]);
-
-const CREATION_VERBS =
-  /(?:^|\s)(?:созда[а-я]*|заведи|завести|сформиру[а-я]*|сделай|сделать)\s+(?:нов[а-я]+\s+)?([а-я-]+)/u;
 
 /** Объект создания («создай папку» → «папка»): сильный признак против соседей. */
 function detectCreatedObject(normalized: string): string | null {

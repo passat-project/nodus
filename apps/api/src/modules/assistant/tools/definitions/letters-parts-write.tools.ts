@@ -3,8 +3,6 @@ import { z } from 'zod';
 import {
   Permission,
   addLetterParticipantBodySchema,
-  executeActionBodySchema,
-  letterRelationCreateBodySchema,
   setLetterMainDocumentBodySchema,
   updateLetterBodySchema,
   type LetterDetail,
@@ -23,8 +21,9 @@ import {
   shortId,
   userName,
 } from './write-cards.js';
+import { letterEntity, names, successText } from './letters-write-cards.js';
+import { lettersRelationsActionsTools } from './letters-relations-actions-write.tools.js';
 import { lettersPartsMeta } from './meta/letters-parts.meta.js';
-import { letterResultText } from './letters-parts.tools.js';
 
 /**
  * Дневные действия по письмам (#930): правка реквизитов, основной документ,
@@ -32,11 +31,6 @@ import { letterResultText } from './letters-parts.tools.js';
  * подтверждения (ADR-0048); опасное (удаление, формулы, публикация) не
  * реализуется без отдельного решения владельца.
  */
-
-const RELATION_LABEL: Record<string, string> = {
-  reply_to: 'ответ на',
-  nested_in: 'вложено в',
-};
 
 const PATCH_LABEL: Record<string, string> = {
   counterpartyId: 'Контрагент',
@@ -52,21 +46,6 @@ const PATCH_LABEL: Record<string, string> = {
   attachedRefs: 'Приложенные письма',
   customFields: 'Атрибуты',
 };
-
-function successText(data: unknown, fallback: string): string {
-  const letter = letterResultText(data);
-  if (!letter.id) return fallback;
-  return `${fallback}: ${letter.number ? `№${letter.number} ` : ''}«${letter.subject ?? '—'}»`;
-}
-
-function letterEntity(data: unknown): { href: string; label: string } | undefined {
-  const letter = letterResultText(data);
-  if (!letter.id) return undefined;
-  return {
-    href: `?cards=letter:${letter.id}`,
-    label: `${letter.number ? `№${letter.number} ` : ''}${letter.subject ?? 'Письмо'}`.trim(),
-  };
-}
 
 export const lettersUpdateTool = defineTool({
   ...lettersPartsMeta['letters.update'],
@@ -264,129 +243,10 @@ export const lettersJoinTool = defineTool({
   },
 });
 
-export const lettersAddRelationTool = defineTool({
-  ...lettersPartsMeta['letters.add_relation'],
-  id: 'letters.add_relation',
-  title: 'Письма: связать письма',
-  description:
-    'Связать письмо с другим: «ответ на» или «вложено в». Действие появится карточкой подтверждения; права канцелярии и замену связи проверяет API.',
-  keywords: ['связать письма', 'ответ на письмо', 'вложено в письмо', 'связь писем'],
-  module: 'letters',
-  kind: 'write',
-  permission: Permission.CORRESPONDENCE_REGISTER,
-  featureFlag: 'correspondence',
-  hot: false,
-  input: letterRelationCreateBodySchema.extend({ letterId: z.uuid() }),
-  api: { method: 'POST', path: '/letters/:id/relations' },
-  build: (input) => ({
-    method: 'POST',
-    path: `/letters/${input.letterId}/relations`,
-    body: {
-      relatedLetterId: input.relatedLetterId,
-      kind: input.kind,
-      ...(input.replace !== undefined ? { replace: input.replace } : {}),
-    },
-  }),
-  project: (data: LetterDetail) => ({
-    text: successText(data, 'Связь письма установлена'),
-    entity: letterEntity(data),
-  }),
-  card: {
-    title: 'Связать письма',
-    summary: async (input, ctx) =>
-      `${(await letterLabel(ctx, input.letterId)) ?? shortId(input.letterId)} — ${RELATION_LABEL[input.kind] ?? input.kind} ${(await letterLabel(ctx, input.relatedLetterId)) ?? shortId(input.relatedLetterId)}`,
-    fields: async (input, ctx) =>
-      fieldsOf([
-        field('Письмо', await letterLabel(ctx, input.letterId)),
-        field('Связать с', await letterLabel(ctx, input.relatedLetterId)),
-        field('Вид связи', RELATION_LABEL[input.kind] ?? input.kind),
-        field('Заменить существующую', input.replace ? 'да' : null),
-      ]),
-    consequences:
-      'Связь появится в дереве писем («ответ на» / «вложено в»). Снять её можно в карточке письма; автоматической отмены нет.',
-  },
-});
-
-const pressInput = z.object({
-  letterId: z.uuid(),
-  actionId: z.uuid(),
-  ...executeActionBodySchema.shape,
-});
-
-export const lettersPressActionTool = defineTool({
-  ...lettersPartsMeta['letters.press_action'],
-  id: 'letters.press_action',
-  title: 'Письма: нажать действие',
-  description:
-    'Нажать кнопку действия письма без смены статуса: id из letters.actions, при необходимости — поля окна. Действие появится карточкой подтверждения.',
-  keywords: ['нажать действие', 'кнопка письма', 'press action', 'ознакомить'],
-  module: 'letters',
-  kind: 'write',
-  featureFlag: 'correspondence',
-  hot: false,
-  input: pressInput,
-  api: { method: 'POST', path: '/letters/:id/actions/:actionId/press' },
-  build: (input) => ({
-    method: 'POST',
-    path: `/letters/${input.letterId}/actions/${input.actionId}/press`,
-    body: {
-      ...(input.override !== undefined ? { override: input.override } : {}),
-      ...(input.reason ? { reason: input.reason } : {}),
-      ...(input.form ? { form: input.form } : {}),
-    },
-  }),
-  project: (data) => ({
-    text: successText(data, 'Действие выполнено'),
-    entity: letterEntity(data),
-  }),
-  card: {
-    title: 'Нажать действие письма',
-    summary: async (input, ctx) => {
-      const [letter, action] = await Promise.all([
-        letterLabel(ctx, input.letterId),
-        actionName(ctx, input.letterId, input.actionId),
-      ]);
-      return `${action ?? 'действие'} → ${letter ?? shortId(input.letterId)}`;
-    },
-    fields: async (input, ctx) =>
-      fieldsOf([
-        field('Письмо', await letterLabel(ctx, input.letterId)),
-        field('Действие', await actionName(ctx, input.letterId, input.actionId)),
-        field('Причина', input.reason ? clip(input.reason, 300) : null),
-      ]),
-    consequences:
-      'Действие зафиксируется в истории письма; статус письма не изменится. Автоматической отмены нет.',
-  },
-});
-
-async function actionName(
-  ctx: ToolContext,
-  letterId: string,
-  actionId: string,
-): Promise<string | null> {
-  if (!ctx.read) return null;
-  try {
-    for (const raw of asArray(await ctx.read(`/letters/${letterId}/actions`))) {
-      const action = asRecord(raw);
-      if (str(action?.id) === actionId) return str(action?.name);
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-async function names(ctx: ToolContext, ids: readonly string[]): Promise<string | null> {
-  if (ids.length === 0) return null;
-  const resolved = await Promise.all(ids.map((id) => userName(ctx, id)));
-  return resolved.map((name, index) => name ?? shortId(ids[index]!)).join(', ') || null;
-}
-
 export const lettersPartsWriteTools = [
   lettersUpdateTool,
   lettersSetMainDocumentTool,
   lettersAddParticipantTool,
   lettersJoinTool,
-  lettersAddRelationTool,
-  lettersPressActionTool,
+  ...lettersRelationsActionsTools,
 ];

@@ -10,13 +10,15 @@ import {
 } from './letters-parts.tools.js';
 import {
   lettersAddParticipantTool,
-  lettersAddRelationTool,
   lettersJoinTool,
   lettersPartsWriteTools,
-  lettersPressActionTool,
   lettersSetMainDocumentTool,
   lettersUpdateTool,
 } from './letters-parts-write.tools.js';
+import {
+  lettersAddRelationTool,
+  lettersPressActionTool,
+} from './letters-relations-actions-write.tools.js';
 
 /** #930: действия и история письма — карточки с именами, тела по контракту. */
 

@@ -5,12 +5,14 @@ import type { ToolContext } from '../tool-definition.js';
 import {
   projectsJoinTool,
   projectsLeaveTool,
-  projectsMoveNodeTool,
   projectsPartsTools,
   projectsSetStatusTool,
+} from './projects-parts.tools.js';
+import {
+  projectsMoveNodeTool,
   projectsUpdateGroupTool,
   projectsUpdateNodeTool,
-} from './projects-parts.tools.js';
+} from './projects-structure-write.tools.js';
 
 /** #931: безопасные действия проекта — карточки с именами, тела по контракту. */
 
