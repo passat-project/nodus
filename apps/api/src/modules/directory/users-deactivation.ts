@@ -46,6 +46,33 @@ export async function clearLeadershipOf(
   }
 }
 
+/** Перевод сотрудника в другое подразделение (#923): руководящая роль живёт
+ *  в СВОЁМ подразделении. Сотрудник ушёл — узел теряет главу/зама, подчинённые
+ *  переезжают к ближайшему главе выше (`managerId` пересчитывается), узел
+ *  сообщает об изменении событием. Снимаем только старый отдел: роль в других
+ *  узлах (аномалия старых данных) не трогаем — это дело увольнения. */
+export async function clearLeadershipInDepartment(
+  departmentId: string,
+  userId: string,
+  actorId: string,
+  tx: TransactionClient,
+  deps: DeactivationDeps,
+): Promise<void> {
+  const cleared = await deps.departments.clearLeadershipIn(departmentId, userId, tx);
+  if (cleared === null) return;
+  await deps.managers.recomputeDepartments([departmentId], tx);
+  const changedFields = [
+    ...(cleared.head ? ['headId'] : []),
+    ...(cleared.deputy ? ['deputyId'] : []),
+  ];
+  await deps.eventBus.emit(
+    tx,
+    DIRECTORY_EVENTS.DEPARTMENT_UPDATED,
+    { departmentId, changedFields },
+    { actorId, aggregateType: 'department', aggregateId: departmentId },
+  );
+}
+
 /** `directory.role.access_changed`: после смены подразделения или явных ролей
  *  действующие права сотрудника могли измениться — auth обесценивает его
  *  access-токены. Эмитим только реально изменившиеся роли. */

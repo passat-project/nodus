@@ -43,3 +43,58 @@ describe('DepartmentsRepository.clearHeadAndDeputy (#923)', () => {
     ]);
   });
 });
+
+/** Перевод главы/зама (#923): снимаем роль только в СТАРОМ подразделении —
+ *  один сотрудник одно место в структуре, остальные узлы не трогаются. */
+describe('DepartmentsRepository.clearLeadershipIn (#923)', () => {
+  const tx = {
+    $queryRaw: vi.fn(),
+    department: { updateMany: vi.fn() },
+  };
+  const repository = new DepartmentsRepository({} as never);
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('сотрудник в узле не глава и не зам — без записи', async () => {
+    tx.$queryRaw.mockResolvedValue([{ headId: 'other', deputyId: null }]);
+
+    await expect(repository.clearLeadershipIn('d1', 'u1', tx as never)).resolves.toBeNull();
+    expect(tx.department.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('узла нет — без записи', async () => {
+    tx.$queryRaw.mockResolvedValue([]);
+
+    await expect(repository.clearLeadershipIn('d1', 'u1', tx as never)).resolves.toBeNull();
+    expect(tx.department.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('глава — headId снимается адресно, зам-ссылка не тронута', async () => {
+    tx.$queryRaw.mockResolvedValue([{ headId: 'u1', deputyId: 'other' }]);
+
+    await expect(repository.clearLeadershipIn('d1', 'u1', tx as never)).resolves.toEqual({
+      head: true,
+      deputy: false,
+    });
+    expect(tx.department.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.department.updateMany).toHaveBeenCalledWith({
+      where: { id: 'd1', headId: 'u1' },
+      data: { headId: null },
+    });
+  });
+
+  it('зам — deputyId снимается адресно', async () => {
+    tx.$queryRaw.mockResolvedValue([{ headId: 'other', deputyId: 'u1' }]);
+
+    await expect(repository.clearLeadershipIn('d1', 'u1', tx as never)).resolves.toEqual({
+      head: false,
+      deputy: true,
+    });
+    expect(tx.department.updateMany).toHaveBeenCalledWith({
+      where: { id: 'd1', deputyId: 'u1' },
+      data: { deputyId: null },
+    });
+  });
+});

@@ -177,6 +177,52 @@ describe('Производный руководитель и профиль (#92
     );
   });
 
+  it('перевод главы/зама: старый отдел теряет роль, подчинённые пересчитаны (#923)', async () => {
+    const parent = await createDepartment({
+      name: `Перевод-родитель ${f.runId}`,
+      kind: 'management',
+      headId: f.users.directory.id,
+    });
+    const child = await createDepartment({
+      name: `Перевод-отдел ${f.runId}`,
+      kind: 'management',
+      parentId: parent.id,
+      headId: f.users.employee.id,
+    });
+    await moveEmployee(f.users.employee.id, child.id);
+    await moveEmployee(f.users.manager.id, child.id);
+    // Сотрудник в отделе — подчинённый его главы.
+    expect((await card(f.users.manager.id)).managerId).toBe(f.users.employee.id);
+
+    const moved = await moveEmployee(f.users.employee.id, parent.id);
+
+    expect(moved.departmentId).toBe(parent.id);
+    const headAfter = await f.api(f.users.directory, 'GET', `/directory/departments/${child.id}`);
+    expect(departmentNodeSchema.parse(await headAfter.json()).headId).toBeNull();
+    // Подчинённые старого отдела переехали к главе активного предка.
+    expect((await card(f.users.manager.id)).managerId).toBe(f.users.directory.id);
+    const headEvents = await f.prisma.event.findMany({
+      where: {
+        aggregateType: 'department',
+        aggregateId: child.id,
+        type: 'directory.department.updated',
+      },
+      select: { payload: true },
+    });
+    expect(
+      headEvents.some((event) =>
+        ((event.payload as { changedFields?: string[] }).changedFields ?? []).includes('headId'),
+      ),
+    ).toBe(true);
+
+    // Зам — та же логика: роль живёт в своём подразделении.
+    await patchDepartment(child.id, { deputyId: f.users.manager.id });
+    const deputyMoved = await moveEmployee(f.users.manager.id, parent.id);
+    expect(deputyMoved.departmentId).toBe(parent.id);
+    const deputyAfter = await f.api(f.users.directory, 'GET', `/directory/departments/${child.id}`);
+    expect(departmentNodeSchema.parse(await deputyAfter.json()).deputyId).toBeNull();
+  });
+
   it('self-edit: ФИО правится, структура и HR — отказ 400', async () => {
     // Не `employee`: его токен обесценен законным ROLE_ACCESS_CHANGED при
     // переводе в другой отдел (отзыв access-токенов, #866/#923) — берём

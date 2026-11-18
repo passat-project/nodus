@@ -34,7 +34,7 @@ import { RolesRepository } from './roles.repository.js';
 import { UsersRepository } from './users.repository.js';
 import { buildDisplayName, toUserCard } from './user-dto.js';
 import { assertRolesExist, updateMyProfileOf } from './users-profile.js';
-import { emitAccessChanged } from './users-deactivation.js';
+import { clearLeadershipInDepartment, emitAccessChanged } from './users-deactivation.js';
 import {
   activateUserOf,
   adminRoleOf,
@@ -225,6 +225,22 @@ export class UsersService {
         },
         tx,
       );
+      // #923: один сотрудник — одно место в управленческой структуре. Роль
+      // главы/зама принадлежит подразделению: при переводе (в другой отдел или
+      // `null`) старый узел теряет её, а его подчинённые переезжают к
+      // ближайшему главе выше. Снимаем ТОЛЬКО старый отдел; «то же
+      // подразделение» — no-op.
+      if (
+        dto.departmentId !== undefined &&
+        dto.departmentId !== before.departmentId &&
+        before.departmentId !== null
+      ) {
+        await clearLeadershipInDepartment(before.departmentId, id, actor.id, tx, {
+          departments: this.departments,
+          managers: this.managers,
+          eventBus: this.eventBus,
+        });
+      }
       // #923: смена подразделения меняет ближайшего главу — пересчитываем
       // производного руководителя в той же транзакции.
       if (dto.departmentId !== undefined) {

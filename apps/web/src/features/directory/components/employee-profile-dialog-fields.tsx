@@ -83,12 +83,17 @@ export function ProfileDialogSections({
   draft,
   users,
   canManage,
+  lastNameRef,
+  autoSelectGuard,
   onChange,
 }: {
   card: UserCard;
   draft: ProfileDraft;
   users: UserListItem[];
   canManage: boolean;
+  /** Фокус окна — в «Фамилию» без выделения (паттерн окна подразделения). */
+  lastNameRef?: React.RefObject<HTMLInputElement | null>;
+  autoSelectGuard?: React.MutableRefObject<boolean>;
   onChange: (patch: Partial<ProfileDraft>) => void;
 }) {
   const departments = useDepartmentsList();
@@ -102,7 +107,31 @@ export function ProfileDialogSections({
       <Section title={ui.employees.sectionPersonal}>
         <div className="grid grid-cols-1 gap-3 @min-[32rem]:grid-cols-3">
           <Field label={ui.employees.fieldLastName}>
-            <Input value={draft.lastName} onChange={set('lastName')} autoComplete="off" />
+            <Input
+              ref={lastNameRef}
+              value={draft.lastName}
+              onChange={set('lastName')}
+              autoComplete="off"
+              // FocusScope при возврате фокуса зовёт `element.select()`: снимаем
+              // выделение следующим кадром, пока пользователь не начал работать.
+              onFocus={(event) => {
+                if (!autoSelectGuard?.current) return;
+                const input = event.currentTarget;
+                requestAnimationFrame(() => {
+                  if (!autoSelectGuard.current || !input.isConnected) return;
+                  if (input.selectionStart === 0 && input.selectionEnd === input.value.length) {
+                    const end = input.value.length;
+                    input.setSelectionRange(end, end);
+                  }
+                });
+              }}
+              onPointerDown={() => {
+                if (autoSelectGuard) autoSelectGuard.current = false;
+              }}
+              onKeyDown={() => {
+                if (autoSelectGuard) autoSelectGuard.current = false;
+              }}
+            />
           </Field>
           <Field label={ui.employees.fieldFirstName}>
             <Input value={draft.firstName} onChange={set('firstName')} autoComplete="off" />
@@ -221,11 +250,10 @@ export function ProfileDialogSections({
                     </SelectItem>
                   ) : null}
                   {departments.map((department) => (
-                    <SelectItem
-                      key={department.id}
-                      value={department.id}
-                      style={{ paddingLeft: `${0.5 + department.depth * 0.8}rem` }}
-                    >
+                    // Плоский список (вердикт приёмки 18.11.2026): порядок
+                    // дерева сохранён, уровни отступами не рисуются — длинное
+                    // дерево читается как список без «лесенки».
+                    <SelectItem key={department.id} value={department.id}>
                       {department.name}
                     </SelectItem>
                   ))}

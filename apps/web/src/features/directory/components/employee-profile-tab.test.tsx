@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ui, type UserCard, type UserListItem } from '@nodus/contracts';
 
 import { demoUserCards, demoUserListItems } from '../../../shared/mocks/data/users.js';
+import { stubLoadedImage } from '../../../test/stub-loaded-image.js';
 import { EmployeeProfileTab } from './employee-profile-tab.js';
 
 /**
@@ -39,13 +40,20 @@ const subordinates: UserListItem[] = [
   { ...listItemOf(card.id), id: 'sub-2', displayName: 'Второй Подчинённый', positionName: null },
 ];
 
-function renderTab(options: { canEditAvatar?: boolean; subordinates?: UserListItem[] } = {}) {
+function renderTab(
+  options: {
+    canEditAvatar?: boolean;
+    subordinates?: UserListItem[];
+    deputyIds?: ReadonlySet<string>;
+  } = {},
+) {
   return render(
     <EmployeeProfileTab
       card={card}
       listItem={listItemOf(card.id)}
       manager={undefined}
       subordinates={options.subordinates ?? []}
+      deputyIds={options.deputyIds}
       presenceStatus="offline"
       canEditAvatar={options.canEditAvatar ?? false}
     />,
@@ -73,6 +81,24 @@ describe('EmployeeProfileTab: секции и подчинённые (#923)', ()
   it('пусто — одна строка «пусто», без сетки-мусора', () => {
     renderTab();
     expect(screen.getByText(ui.common.empty)).not.toBeNull();
+  });
+
+  it('подчинённый с загруженным фото рендерит фото, а не инициалы (#923)', () => {
+    const restore = stubLoadedImage();
+    try {
+      const withPhoto = [{ ...subordinates[0]!, avatarUrl: '/files/avatar/content' }];
+      const { container } = renderTab({ subordinates: withPhoto });
+      expect(container.querySelector('img')?.getAttribute('src')).toBe('/files/avatar/content');
+    } finally {
+      restore();
+    }
+  });
+
+  it('заместитель подразделения главы помечен в строке (#923)', () => {
+    renderTab({ subordinates, deputyIds: new Set(['sub-2']) });
+    expect(screen.getByText(ui.employees.deputyBadge)).not.toBeNull();
+    // Метка одна — у прямого подчинённого её нет.
+    expect(screen.getAllByText(ui.employees.deputyBadge)).toHaveLength(1);
   });
 
   it('камера аватара — только на своей карточке', () => {

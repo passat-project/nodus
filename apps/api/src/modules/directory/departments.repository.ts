@@ -175,4 +175,45 @@ export class DepartmentsRepository {
       deputy: row.deputyId === userId,
     }));
   }
+
+  /**
+   * Снять сотрудника с ролей главы/зама только в ОДНОМ подразделении (#923,
+   * перевод): один сотрудник — одно место в управленческой структуре, поэтому
+   * руководитель, ушедший в другой отдел, не остаётся главой прежнего. Строка
+   * читается под `FOR UPDATE` — параллельная смена главы сериализуется.
+   * Возвращает снятые роли (для `changedFields` события) или `null`, если
+   * сотрудник в этом подразделении никем не руководил.
+   */
+  async clearLeadershipIn(
+    departmentId: string,
+    userId: string,
+    tx: TransactionClient,
+  ): Promise<{ head: boolean; deputy: boolean } | null> {
+    const rows = await tx.$queryRaw<{ headId: string | null; deputyId: string | null }[]>(
+      Prisma.sql`
+        SELECT head_id AS "headId", deputy_id AS "deputyId"
+        FROM departments
+        WHERE id = ${departmentId}::uuid
+        FOR UPDATE
+      `,
+    );
+    const row = rows[0];
+    if (!row) return null;
+    const head = row.headId === userId;
+    const deputy = row.deputyId === userId;
+    if (!head && !deputy) return null;
+    if (head) {
+      await tx.department.updateMany({
+        where: { id: departmentId, headId: userId },
+        data: { headId: null },
+      });
+    }
+    if (deputy) {
+      await tx.department.updateMany({
+        where: { id: departmentId, deputyId: userId },
+        data: { deputyId: null },
+      });
+    }
+    return { head, deputy };
+  }
 }

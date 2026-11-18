@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
-import { ui, type UserCard, type UserListItem } from '@nodus/contracts';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { SystemRole, ui, type UserCard, type UserListItem } from '@nodus/contracts';
 
 import { employeeProfileDefs } from './employee-profile-fields.js';
 
@@ -15,6 +16,7 @@ describe('employeeProfileDefs — иконки полей', () => {
         email: 'u1@nodus.by',
         displayName: 'Иван Петров',
         avatarUrl: null,
+        roles: [] as UserCard['roles'],
       } as unknown as UserCard,
       listItem: {
         id: 'u1',
@@ -31,7 +33,13 @@ describe('employeeProfileDefs — иконки полей', () => {
 
   it('пустая должность — «не задано», заполненная — значение (синим, #923)', () => {
     const base = {
-      card: { id: 'u1', email: 'u1@nodus.by', displayName: 'Иван', avatarUrl: null } as UserCard,
+      card: {
+        id: 'u1',
+        email: 'u1@nodus.by',
+        displayName: 'Иван',
+        avatarUrl: null,
+        roles: [] as UserCard['roles'],
+      } as UserCard,
       manager: undefined,
       openCard: () => {},
     };
@@ -49,6 +57,47 @@ describe('employeeProfileDefs — иконки полей', () => {
     expect(node.props.className).toContain('text-info');
   });
 
+  it('отчество — первое поле карточки (порядок приёмки 18.11.2026, #923)', () => {
+    const defs = employeeProfileDefs({
+      card: {
+        id: 'u1',
+        email: 'u1@nodus.by',
+        displayName: 'Иван',
+        avatarUrl: null,
+        roles: [] as UserCard['roles'],
+      } as UserCard,
+      listItem: { managerId: null, positionName: null } as UserListItem,
+      manager: undefined,
+      openCard: () => {},
+    });
+    expect(defs[0]?.key).toBe('middleName');
+  });
+
+  it('администратор — строкой под статусом, включая свою карточку (#923)', () => {
+    const base = {
+      card: {
+        id: 'u1',
+        email: 'u1@nodus.by',
+        displayName: 'Иван',
+        avatarUrl: null,
+        roles: [] as UserCard['roles'],
+      } as UserCard,
+      listItem: { managerId: null, positionName: null } as UserListItem,
+      manager: undefined,
+      openCard: () => {},
+    };
+    const statusHtml = (roles: UserCard['roles']) => {
+      const def = employeeProfileDefs({ ...base, card: { ...base.card, roles } }).find(
+        (entry) => entry.key === 'status',
+      );
+      return renderToStaticMarkup(def!.render() as ReactElement);
+    };
+    const adminRole = [{ id: 'r1', code: SystemRole.ADMIN, name: 'Администратор' }];
+
+    expect(statusHtml(adminRole as UserCard['roles'])).toContain(ui.employees.adminBadge);
+    expect(statusHtml([])).not.toContain(ui.employees.adminBadge);
+  });
+
   it('руководитель — переход в его карточку стеком (#923)', () => {
     const openCard = vi.fn();
     const manager = {
@@ -57,7 +106,13 @@ describe('employeeProfileDefs — иконки полей', () => {
       avatarUrl: null,
     } as UserListItem;
     const def = employeeProfileDefs({
-      card: { id: 'u1', email: 'u1@nodus.by', displayName: 'Иван', avatarUrl: null } as UserCard,
+      card: {
+        id: 'u1',
+        email: 'u1@nodus.by',
+        displayName: 'Иван',
+        avatarUrl: null,
+        roles: [] as UserCard['roles'],
+      } as UserCard,
       listItem: { managerId: 'boss-1', positionName: null } as UserListItem,
       manager,
       openCard,
