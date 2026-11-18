@@ -53,7 +53,7 @@ const message = (threadRootId: string | null) =>
       authorName: 'Иван',
       createdAt: '2026-11-10T09:00:00.000Z',
     },
-  }) as unknown as SearchHit;
+  }) as unknown as Extract<SearchHit, { type: 'message' }>;
 
 beforeEach(() => {
   mocks.openCardViaBridge.mockReset();
@@ -101,5 +101,25 @@ describe('открытие результата поиска (#952 Р12)', () =>
     expect(mocks.stageMessengerConversation).toHaveBeenCalledTimes(1);
     expect(mocks.stageMessengerThread).not.toHaveBeenCalled();
     expect(useJumpStore.getState().target?.threadRootId).toBeNull();
+  });
+
+  it('письмо/проект/сотрудник открываются своими карточками', () => {
+    const { result } = renderHook(() => useOpenSearchHit());
+    for (const kind of ['letter', 'project', 'employee'] as const) {
+      mocks.openCardViaBridge.mockReset();
+      act(() =>
+        result.current({
+          ...base,
+          type: kind,
+          id: '55555555-5555-4555-8555-555555555555',
+          title: kind,
+          meta: {},
+        } as unknown as SearchHit),
+      );
+      expect(mocks.openCardViaBridge).toHaveBeenCalledWith({
+        kind,
+        id: '55555555-5555-4555-8555-555555555555',
+      });
+    }
   });
 });

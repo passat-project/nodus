@@ -104,6 +104,8 @@ export class SearchService {
       totalCapped: matched > SEARCH_LIMITS.totalCap,
       // Фасеты — по всем включённым типам, КРОМЕ выбранного фильтра:
       // панель показывает, что ещё доступно (мок-инвариант §6 #952).
+      // Количества — по полному предикату совпадения (SearchRepository),
+      // а не по окнам ног: «найдено» не упирается в окно FTS.
       facets: {
         types: Object.fromEntries(enabledTypes.map((type) => [type, counts.get(type) ?? 0])),
       },
