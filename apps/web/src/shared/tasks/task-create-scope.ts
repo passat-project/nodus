@@ -1,6 +1,8 @@
 import type { CreationScope, ProcessType } from '@nodus/contracts';
 import { typeAllowedInProjectType, typeConfigOf } from '@nodus/contracts';
 
+import { withNode, withType, withValue, type TaskCreateDraft } from './task-create-draft.js';
+
 /**
  * «Где создаётся» в окне создания задачи (#665, ADR-0041 п.9). Чистые
  * правила над настройкой типа — тот же смысл, что проверяет сервер; окно
@@ -59,4 +61,38 @@ export function typeAllowedAtPlace(
   if (place.projectTypeId !== null) return typeAllowedInProjectType(scope, place.projectTypeId);
   if (scope.withoutProject) return true;
   return singleProjectOf(scope, projects) !== null;
+}
+
+/**
+ * Черновик с допустимым типом и подставленным единственным проектом (#665).
+ * null — менять нечего. `autoType` запоминается окном: системный выбор типа
+ * не делает окно «грязным».
+ */
+export function syncDraftPlace(
+  draft: TaskCreateDraft,
+  shownType: ProcessType,
+  projectId: string | undefined,
+  projects: readonly ProjectPlaceRef[],
+): { draft: TaskCreateDraft; autoType: string } | null {
+  const forced = projectForType(shownType, projectId, projects);
+  if (draft.typeId === shownType.id && forced === null) return null;
+  const base = draft.typeId === shownType.id ? draft : withType(draft, shownType.id);
+  return {
+    draft: forced ? withValue(withNode(base, null), 'project', forced) : base,
+    autoType: shownType.id,
+  };
+}
+
+/** Выбор типа человеком: единственный проект подставляется сам. */
+export function chooseTypeAtPlace(
+  draft: TaskCreateDraft,
+  typeId: string,
+  types: readonly ProcessType[],
+  projectId: string | undefined,
+  projects: readonly ProjectPlaceRef[],
+): TaskCreateDraft {
+  const type = types.find((item) => item.id === typeId);
+  const forced = type ? projectForType(type, projectId, projects) : null;
+  const next = withType(draft, typeId);
+  return forced ? withValue(withNode(next, null), 'project', forced) : next;
 }

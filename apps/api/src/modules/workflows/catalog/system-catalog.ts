@@ -88,6 +88,9 @@ export interface CatalogProcessType {
   /** Можно создавать без проекта (#665): у документных работ внутри проекта
    *  (комплект, изменение) — false; по умолчанию true. */
   withoutProject?: boolean;
+  /** Вид папки, в котором создаётся тип (#665): посев привязывает к живому
+   *  виду с этим именем, если он есть. */
+  folderKindName?: string;
 }
 
 export const DEFAULT_SCHEME = { code: 'default', name: 'Схема по умолчанию' } as const;

@@ -232,8 +232,12 @@ export function buildCreateBody(
     // Узел структуры: выбор в окне создания (если у проекта есть узлы) или
     // пресет «+ задача» на узле; подзадача наследует узел родителя сервером.
     ...((draft.nodeId ?? prefill.nodeId) ? { nodeId: draft.nodeId ?? prefill.nodeId } : {}),
-    // Проект и ответственный из входа — если форма их не показала.
-    ...(!body.projectId && prefill.projectId ? { projectId: prefill.projectId } : {}),
+    // Проект и ответственный из входа — если форма их не показала. Проект,
+    // подставленный системой (единственный у типа, #665), живёт в значениях
+    // черновика — без этого он терялся в формах без слота «Проект».
+    ...(!body.projectId && (draft.values.project ?? prefill.projectId)
+      ? { projectId: (draft.values.project ?? prefill.projectId) as string }
+      : {}),
     ...(!body.assigneeId && prefill.assigneeId ? { assigneeId: prefill.assigneeId } : {}),
     ...(form.chips.includes('checklist') && draft.checklist.length > 0
       ? { checklist: draft.checklist.map((item) => item.text) }

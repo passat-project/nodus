@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { TaskDetail, TaskListItem, ProcessType } from '@nodus/contracts';
 import {
   DEFAULT_TASK_TYPE_CODE,
+  errorMessages,
+  typeConfigOf,
   typeViewerOf,
   ui,
   type CreationScope,
@@ -9,7 +11,7 @@ import {
 } from '@nodus/contracts';
 import { toast } from 'sonner';
 
-import { api } from '../api-client.js';
+import { api, ApiError } from '../api-client.js';
 import {
   isNumberConfirmCancelled,
   numberingErrorText,
@@ -84,16 +86,52 @@ export function useLiveProcessTypes(category: ProcessCategory) {
  */
 export function useUpdateTypeCreation() {
   const queryClient = useQueryClient();
+  const lists = () => queryClient.getQueriesData<ProcessType[]>({ queryKey: automationKeys.all });
   return useMutation({
+    // Мутации одного типа — по очереди: два быстрых тумблера не перетирают
+    // разделы друг друга (канон настроек типа, #432).
+    scope: { id: 'process-type-creation' },
     mutationFn: ({ typeId, creation }: { typeId: string; creation: CreationScope }) =>
       api<ProcessType>(`/workflows/types/${typeId}/config`, {
         method: 'PATCH',
         body: { creation },
       }),
-    onSuccess: () => {
+    onMutate: async ({ typeId, creation }) => {
+      await queryClient.cancelQueries({ queryKey: automationKeys.all });
+      const snapshots = lists().map(([key, data]) => ({ key, data }));
+      for (const [key, data] of lists()) {
+        if (!data) continue;
+        queryClient.setQueryData<ProcessType[]>(
+          key,
+          data.map((type) =>
+            type.id === typeId ? { ...type, config: { ...typeConfigOf(type), creation } } : type,
+          ),
+        );
+      }
+      return { snapshots };
+    },
+    onSuccess: (updated) => {
+      for (const [key, data] of lists()) {
+        if (!data) continue;
+        queryClient.setQueryData<ProcessType[]>(
+          key,
+          data.map((type) => (type.id === updated.id ? updated : type)),
+        );
+      }
+    },
+    onError: (error, _vars, context) => {
+      for (const snapshot of context?.snapshots ?? []) {
+        queryClient.setQueryData(snapshot.key, snapshot.data);
+      }
+      toast.error(
+        error instanceof ApiError && error.code in errorMessages
+          ? errorMessages[error.code as keyof typeof errorMessages]
+          : ui.common.saveError,
+      );
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: automationKeys.all });
     },
-    onError: () => toast.error(ui.common.saveError),
   });
 }
 
@@ -125,7 +163,12 @@ export function useChangeProcessType(taskId: string) {
     },
     onError: (error) => {
       if (isNumberConfirmCancelled(error)) return;
-      toast.error(numberingErrorText(error) ?? ui.common.saveError);
+      toast.error(
+        numberingErrorText(error) ??
+          (error instanceof ApiError && error.code in errorMessages
+            ? errorMessages[error.code as keyof typeof errorMessages]
+            : ui.common.saveError),
+      );
     },
   });
 }

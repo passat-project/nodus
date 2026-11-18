@@ -21,7 +21,6 @@ import {
   withChecklist,
   withNode,
   withTitle,
-  withType,
   withValue,
   type TaskCreateDraft,
   type TaskCreatePrefill,
@@ -32,7 +31,7 @@ import { FormSkeleton } from './task-create-skeleton.js';
 import { TaskCreateFailure } from './task-create-secret-members.js';
 import { useTaskCreateSecretFix } from './task-create-secret-fix.js';
 import { TaskCreateStructure, useTaskCreateStructure } from './task-create-structure.js';
-import { projectForType, typeAllowedAtPlace } from './task-create-scope.js';
+import { chooseTypeAtPlace, syncDraftPlace, typeAllowedAtPlace } from './task-create-scope.js';
 import { TaskCreateTypeField } from './task-create-type-field.js';
 import { useProjectPlaces } from './use-project-places.js';
 import { taskCreateSubmit } from './task-create-submit.js';
@@ -98,6 +97,9 @@ export function TaskCreateWindow({
   const touchedRef = useRef<Set<string>>(new Set());
   /** Название, подставленное формулой (#496, Р7): ре-эвал заменяет только его. */
   const autoTitleRef = useRef<string | null>(null);
+  /** Тип, выбранный системой (место/единственный проект, #665): не делает
+   *  окно «грязным» — шестерёнка не спрашивает про пустой ввод. */
+  const autoTypeRef = useRef<string | null>(null);
 
   // Чистое окно при каждом открытии и смене заполнения (плюсик другой
   // колонки) — рендер-тайм сброс, канон React (аудит #45). `seq` — сигнал
@@ -118,6 +120,7 @@ export function TaskCreateWindow({
       autoFilledRef.current = {};
       touchedRef.current = new Set();
       autoTitleRef.current = null;
+      autoTypeRef.current = null;
     }
   }
 
@@ -126,23 +129,21 @@ export function TaskCreateWindow({
     ? (structure.nodes.find((node) => node.id === draft.nodeId)?.kindId ?? null)
     : null;
   const projectTypeId = projectPlaces.find((item) => item.id === projectId)?.typeId ?? null;
-  const types = candidates.filter((type) =>
-    typeAllowedAtPlace(type, { projectTypeId, nodeKindId }, projectPlaces),
-  );
+  // Предпросмотр редактора показывает выбранный тип всегда: место ещё не
+  // выбрано, фильтровать нечего (#665).
+  const types = preview
+    ? candidates
+    : candidates.filter((type) =>
+        typeAllowedAtPlace(type, { projectTypeId, nodeKindId }, projectPlaces),
+      );
   const shownType: ProcessType | undefined =
     preview?.type ?? types.find((type) => type.id === draft.typeId) ?? defaultTaskType(types);
   // Текущий тип перестал быть допустимым (сменили проект) — черновик
   // переезжает на первый доступный; единственный проект подставляется сам.
-  const forcedProject = shownType ? projectForType(shownType, projectId, projectPlaces) : null;
-  if (
-    open &&
-    !preview &&
-    !resetPending &&
-    shownType &&
-    (draft.typeId !== shownType.id || forcedProject)
-  ) {
-    const base = draft.typeId === shownType.id ? draft : withType(draft, shownType.id);
-    setDraft(forcedProject ? withValue(withNode(base, null), 'project', forcedProject) : base);
+  const synced = shownType ? syncDraftPlace(draft, shownType, projectId, projectPlaces) : null;
+  if (open && !preview && !resetPending && synced) {
+    autoTypeRef.current = synced.autoType;
+    setDraft(synced.draft);
   }
   // Форма — из типа (эффективная форма опубликованного маршрута, Р2), в
   // предпросмотре — черновая форма редактора.
@@ -202,7 +203,10 @@ export function TaskCreateWindow({
     .filter(Boolean)
     .join(', ');
   const missingCount = missing.length + (missingStructure ? 1 : 0);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
+  const dirty =
+    JSON.stringify(
+      draft.typeId === autoTypeRef.current ? { ...draft, typeId: initial.typeId } : draft,
+    ) !== JSON.stringify(initial);
 
   const { submit, retryCreate, editDraft } = taskCreateSubmit({
     create,
@@ -262,10 +266,8 @@ export function TaskCreateWindow({
               showSettings={canManage && !preview}
               dirty={dirty}
               onChange={(typeId) => {
-                const type = types.find((item) => item.id === typeId);
-                const forced = type ? projectForType(type, projectId, projectPlaces) : null;
-                const next = withType(draft, typeId);
-                editDraft(forced ? withValue(withNode(next, null), 'project', forced) : next);
+                autoTypeRef.current = null;
+                editDraft(chooseTypeAtPlace(draft, typeId, types, projectId, projectPlaces));
                 setInvalidKeys(new Set());
               }}
               onLeave={onClose}

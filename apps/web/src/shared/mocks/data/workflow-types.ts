@@ -4,13 +4,19 @@ import { customFieldKey, DEFAULT_CREATION_SCOPE } from '@nodus/contracts';
 import { quickProcessType, requestProcessType, systemProcessType } from './task-stages.js';
 import { fieldIds } from './field-ids.js';
 import { processTypeIds } from './process-type-ids.js';
+import { nodeKindSeedIds } from './node-kind-ids.js';
 import { demoRoleIds } from './roles.js';
 import { letterProcessTypes } from './letter-catalog.js';
 
 /** «Где создаётся» (#665): по умолчанию — везде и без проекта. */
 const DEMO_CREATION = DEFAULT_CREATION_SCOPE;
-/** Документные работы внутри проекта (комплект, изменение) — без проекта нельзя. */
-const DEMO_CREATION_NO_PROJECT = { ...DEFAULT_CREATION_SCOPE, withoutProject: false };
+/** Документные работы внутри проекта (комплект, изменение) — без проекта
+ *  нельзя, а создаются только в папке вида «Комплект» (#665, ADR-0042 §11). */
+const DEMO_CREATION_NO_PROJECT = {
+  ...DEFAULT_CREATION_SCOPE,
+  withoutProject: false,
+  folderKindId: nodeKindSeedIds.komplekt,
+};
 
 /** Типы задач мок-библиотеки «Автоматизации» (ревизия 2, #378; формы и состав
  *  карточки — #432): два системных типа, «Переработка» и «Кадровый запрос»

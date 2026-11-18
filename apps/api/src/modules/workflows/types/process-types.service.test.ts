@@ -178,6 +178,7 @@ describe('ProcessTypesService: конфигурация типа и доступ
       TX,
       't',
       expect.objectContaining({ card: expect.objectContaining({ hiddenBlocks: ['chat'] }) }),
+      { markCustomized: true },
     );
     expect(emit).toHaveBeenCalledWith(
       TX,
