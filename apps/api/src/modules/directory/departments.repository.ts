@@ -146,4 +146,74 @@ export class DepartmentsRepository {
       where: { parentId: id, isActive: true },
     });
   }
+
+  /**
+   * Снять сотрудника с ролей главы/зама во всех подразделениях (#923):
+   * уволенный не может оставаться руководителем. Строки читаются под
+   * `FOR UPDATE` — параллельная смена главы сериализуется. Возвращает
+   * затронутые подразделения: по ним пересчитываются производные руководители
+   * поддерева и эмитятся `directory.department.updated`.
+   */
+  async clearHeadAndDeputy(
+    userId: string,
+    tx: TransactionClient,
+  ): Promise<{ id: string; head: boolean; deputy: boolean }[]> {
+    const rows = await tx.$queryRaw<
+      { id: string; headId: string | null; deputyId: string | null }[]
+    >(Prisma.sql`
+      SELECT id, head_id AS "headId", deputy_id AS "deputyId"
+      FROM departments
+      WHERE head_id = ${userId}::uuid OR deputy_id = ${userId}::uuid
+      FOR UPDATE
+    `);
+    if (rows.length === 0) return [];
+    await tx.department.updateMany({ where: { headId: userId }, data: { headId: null } });
+    await tx.department.updateMany({ where: { deputyId: userId }, data: { deputyId: null } });
+    return rows.map((row) => ({
+      id: row.id,
+      head: row.headId === userId,
+      deputy: row.deputyId === userId,
+    }));
+  }
+
+  /**
+   * Снять сотрудника с ролей главы/зама только в ОДНОМ подразделении (#923,
+   * перевод): один сотрудник — одно место в управленческой структуре, поэтому
+   * руководитель, ушедший в другой отдел, не остаётся главой прежнего. Строка
+   * читается под `FOR UPDATE` — параллельная смена главы сериализуется.
+   * Возвращает снятые роли (для `changedFields` события) или `null`, если
+   * сотрудник в этом подразделении никем не руководил.
+   */
+  async clearLeadershipIn(
+    departmentId: string,
+    userId: string,
+    tx: TransactionClient,
+  ): Promise<{ head: boolean; deputy: boolean } | null> {
+    const rows = await tx.$queryRaw<{ headId: string | null; deputyId: string | null }[]>(
+      Prisma.sql`
+        SELECT head_id AS "headId", deputy_id AS "deputyId"
+        FROM departments
+        WHERE id = ${departmentId}::uuid
+        FOR UPDATE
+      `,
+    );
+    const row = rows[0];
+    if (!row) return null;
+    const head = row.headId === userId;
+    const deputy = row.deputyId === userId;
+    if (!head && !deputy) return null;
+    if (head) {
+      await tx.department.updateMany({
+        where: { id: departmentId, headId: userId },
+        data: { headId: null },
+      });
+    }
+    if (deputy) {
+      await tx.department.updateMany({
+        where: { id: departmentId, deputyId: userId },
+        data: { deputyId: null },
+      });
+    }
+    return { head, deputy };
+  }
 }

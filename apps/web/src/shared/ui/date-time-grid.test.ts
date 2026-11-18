@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { monthGridCells, parseTime, quickOptionDate } from './date-time-grid.js';
+import {
+  formatDateRu,
+  monthGridCells,
+  parseIsoDate,
+  parseTime,
+  quickOptionDate,
+  timeSlots,
+} from './date-time-grid.js';
 
 // Сентябрь 2026: 1-е — вторник (15-е — тоже вторник, сверено с продом).
 describe('monthGridCells', () => {
@@ -52,5 +59,31 @@ describe('parseTime', () => {
     expect(parseTime('24:00')).toBeNull();
     expect(parseTime('17:60')).toBeNull();
     expect(parseTime('abc')).toBeNull();
+  });
+});
+
+describe('parseIsoDate / formatDateRu (#923)', () => {
+  it('ISO-дата контрактов → локальная дата и обратно', () => {
+    const date = parseIsoDate('1990-01-12');
+    expect(date?.getFullYear()).toBe(1990);
+    expect(date?.getMonth()).toBe(0);
+    expect(date?.getDate()).toBe(12);
+    expect(formatDateRu(date!)).toBe('12.01.1990');
+  });
+
+  it('пустое и нереальное (31.02) — null, не «3 марта»', () => {
+    expect(parseIsoDate('')).toBeNull();
+    expect(parseIsoDate('1990-02-31')).toBeNull();
+    expect(parseIsoDate('12.01.1990')).toBeNull();
+  });
+});
+
+describe('timeSlots (#923)', () => {
+  it('сетка 15 минут: от 00:00 до 23:45, 96 слотов', () => {
+    const slots = timeSlots(15);
+    expect(slots).toHaveLength(96);
+    expect(slots[0]).toBe('00:00');
+    expect(slots[1]).toBe('00:15');
+    expect(slots.at(-1)).toBe('23:45');
   });
 });

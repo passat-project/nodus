@@ -25,13 +25,16 @@ export function useDepartmentTreeManagement() {
 }
 
 /** Плоский список управленческих подразделений в порядке дерева (обход
- *  сверху вниз): подписи и уровни для выпадающих списков. */
+ *  сверху вниз): подписи и уровни для выпадающих списков; глава/зам — для
+ *  «Подчинённых» карточки сотрудника (#923: зам виден у своего главы). */
 export interface DepartmentOption {
   id: string;
   name: string;
   /** 0 — корень, 1 — подразделение верхнего уровня и т.д. */
   depth: number;
   isActive: boolean;
+  headId: string | null;
+  deputyId: string | null;
 }
 
 export function flattenDepartments(
@@ -39,7 +42,14 @@ export function flattenDepartments(
   depth = 0,
 ): DepartmentOption[] {
   return nodes.flatMap((node) => [
-    { id: node.id, name: node.name, depth, isActive: node.isActive },
+    {
+      id: node.id,
+      name: node.name,
+      depth,
+      isActive: node.isActive,
+      headId: node.headId,
+      deputyId: node.deputyId,
+    },
     ...flattenDepartments(node.children, depth + 1),
   ]);
 }

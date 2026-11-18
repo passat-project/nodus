@@ -26,12 +26,17 @@ import { UserStatusChip } from './employee-fields.js';
 
 const monoValue = 'font-mono text-label-sm tabular-nums';
 
-/** Поля-реестр вкладки «Профиль» карточки сотрудника (полный UserCard):
- *  должность/отдел (имена — из списка, id-справочники — с бэкендом
- *  M2), контакты (почта, телефон, город, кабинет, удалёнка), ставка, пол,
+/**
+ * Поля-реестр вкладки «Профиль» карточки сотрудника (полный UserCard):
+ *  должность/отдел (имена — из списка, id-справочники — с бэкендом M2),
+ *  контакты (почта, телефон, город, кабинет, удалёнка), ставка, пол,
  *  HR-даты (день рождения, дата приёма, начало дня), руководитель — переход
  *  в его карточку стеком (openCard, ADR-0009), HR-статус. Видимость — «+
- *  Поле» (persist localStorage). */
+ *  Поле» (persist localStorage).
+ *
+ *  Порядок — от ФИО к структуре и данным: отчество ПЕРВЫМ (вердикт владельца
+ *  на приёмке 18.11.2026), дальше «кто где в компании» (должность и
+ *  подразделение синим, руководитель), контакты и кадровые данные. */
 export function employeeProfileDefs(args: {
   card: UserCard;
   listItem: UserListItem;
@@ -52,7 +57,14 @@ export function employeeProfileDefs(args: {
       key: 'position',
       icon: <Briefcase className="size-3.5" />,
       label: ui.employees.position,
-      render: () => listItem.positionName ?? ui.common.notSet,
+      // #923: подразделение и должность — структурные поля, синим в обеих
+      // темах (карточка их не правит: «Редактировать профиль» у админа).
+      render: () =>
+        listItem.positionName ? (
+          <span className="text-sm text-info">{listItem.positionName}</span>
+        ) : (
+          ui.common.notSet
+        ),
     },
     {
       key: 'department',
@@ -64,6 +76,34 @@ export function employeeProfileDefs(args: {
         ) : (
           ui.common.notSet
         ),
+    },
+    {
+      key: 'manager',
+      icon: <UserCog className="size-3.5" />,
+      label: ui.employees.fieldManager,
+      render: () =>
+        manager ? (
+          <button
+            type="button"
+            onClick={() => openCard({ kind: 'employee', id: manager.id })}
+            className="-mx-1 flex min-w-0 items-center gap-2 rounded px-1 hover:bg-accent/50 hover:underline"
+          >
+            <PersonAvatar
+              name={manager.displayName}
+              avatarUrl={manager.avatarUrl}
+              className="size-6 shrink-0"
+            />
+            <span className="truncate">{manager.displayName}</span>
+          </button>
+        ) : (
+          ui.common.notSet
+        ),
+    },
+    {
+      key: 'status',
+      icon: <UserCheck className="size-3.5" />,
+      label: ui.employees.fieldStatus,
+      render: () => <UserStatusChip status={card.status} />,
     },
     {
       key: 'email',
@@ -153,30 +193,6 @@ export function employeeProfileDefs(args: {
         ) : (
           ui.common.notSet
         ),
-    },
-    {
-      key: 'manager',
-      icon: <UserCog className="size-3.5" />,
-      label: ui.employees.fieldManager,
-      render: () =>
-        manager ? (
-          <button
-            type="button"
-            onClick={() => openCard({ kind: 'employee', id: manager.id })}
-            className="flex min-w-0 items-center gap-2 hover:underline"
-          >
-            <PersonAvatar name={manager.displayName} className="size-6 shrink-0" />
-            <span className="truncate">{manager.displayName}</span>
-          </button>
-        ) : (
-          ui.common.notSet
-        ),
-    },
-    {
-      key: 'status',
-      icon: <UserCheck className="size-3.5" />,
-      label: ui.employees.fieldStatus,
-      render: () => <UserStatusChip status={card.status} />,
     },
   ];
 }

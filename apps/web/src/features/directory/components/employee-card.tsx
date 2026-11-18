@@ -5,6 +5,7 @@ import { Skeleton } from '@nodus/ui/components/skeleton';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { projectsAvailable } from '../../../shared/api/projects-available.js';
+import { useDepartmentsList } from '../../../shared/api/departments-list.js';
 import { useAssigneeTasks, useMemberProjects } from '../../../shared/api/user-relations.js';
 import { ApiError } from '../../../shared/api-client.js';
 import { useDirectConversation } from '../../../shared/chat/chat-queries.js';
@@ -20,9 +21,12 @@ import { ConversationPane } from '../../../shared/chat/conversation-pane.js';
 import { openTaskCreate } from '../../../shared/tasks/task-create-store.js';
 import { MIN_CHAT_W, useChatWidth } from '../../../shared/ui/use-chat-width.js';
 import { useEmployeePresence, useUserCard, useUsersList } from '../api/directory-api.js';
+import { profileSubordinates } from '../lib/profile-subordinates.js';
 import { useCanManageDirectory } from '../lib/use-can-manage-directory.js';
+import { EmployeeProfileBar } from './employee-actions-menu.js';
 import { EmployeeCardSkeleton } from './employee-card-skeleton.js';
 import { EmployeeCardWorkTabs, type EmployeeWorkTab } from './employee-card-work-tabs.js';
+import { EmployeeProfileDialog } from './employee-profile-dialog.js';
 import { EmployeeProfileTab } from './employee-profile-tab.js';
 
 /**
@@ -49,6 +53,8 @@ export function EmployeeCard({ userId }: { userId: string }) {
   // Активная вкладка правой зоны (память не вводим — личные настройки/engine,
   // #744/#746; дефолт всегда чат). Профиль слева — вне вкладок.
   const [tab, setTab] = useState<EmployeeWorkTab>('chat');
+  // Окно профиля — одно на карточку (#923); кнопка в нижней полосе левой зоны.
+  const [editOpen, setEditOpen] = useState(false);
   // Вкладка после первого показа не размонтируется: скролл/фильтры журналов
   // и черновик чата живут.
   const [visited, setVisited] = useState<readonly EmployeeWorkTab[]>(['chat']);
@@ -60,6 +66,7 @@ export function EmployeeCard({ userId }: { userId: string }) {
     setPrevUserId(userId);
     setTab('chat');
     setVisited(['chat']);
+    setEditOpen(false);
   }
   const panel = useChatSidePanel();
   // Панель беседы видна ТОЛЬКО на вкладке чата: уход на журнал её прячет,
@@ -104,7 +111,13 @@ export function EmployeeCard({ userId }: { userId: string }) {
   const items = useMemo(() => usersData?.items ?? [], [usersData]);
   const listItem = items.find((u) => u.id === userId);
   const manager = card?.managerId ? items.find((u) => u.id === card.managerId) : undefined;
-  const subordinates = useMemo(() => items.filter((u) => u.managerId === userId), [items, userId]);
+  // «Подчинённые» (#923): прямые по `managerId` + замы подразделений, где
+  // сотрудник глава (зам — роль отдела, в manager_id не входит).
+  const departments = useDepartmentsList();
+  const { list: subordinates, deputyIds } = useMemo(
+    () => profileSubordinates({ userId, users: items, departments }),
+    [items, userId, departments],
+  );
   const tasks = tasksQuery.data?.items ?? [];
   const projects = projectsQuery.data?.items ?? [];
   const presenceStatus = useEmployeePresence(userId);
@@ -162,12 +175,14 @@ export function EmployeeCard({ userId }: { userId: string }) {
       >
         {/* ЛЕВАЯ ЗОНА — профиль сотрудника, всегда на экране и со своим
             скроллом (регион для скринридеров); граница — структурная.
-            `@container` зоны — порог 1↔2 колонок полей профиля (исходная
+            `@container/zone` — ширина ЗОНЫ для того, что живёт вне колонки
+            полей (полоса действий, заголовок при переносе под фото).
+            Порог 1↔2 у самих полей считается по их колонке (исходная
             динамика #750: поля встают справа от фото, когда зона широкая). */}
         <div
           role="region"
           aria-label={ui.employees.tabProfile}
-          className="relative flex min-h-0 flex-col border-r border-border @container"
+          className="relative flex min-h-0 flex-col border-r border-border @container/zone"
         >
           <div className="content-fade min-h-0 flex-1 overflow-hidden">
             <EmployeeProfileTab
@@ -175,12 +190,24 @@ export function EmployeeCard({ userId }: { userId: string }) {
               listItem={listItem}
               manager={manager}
               subordinates={subordinates}
+              deputyIds={deputyIds}
               presenceStatus={presenceStatus}
-              users={items}
               canEditAvatar={card.id === meId}
-              canManage={canManage}
             />
           </div>
+
+          {/* Нижняя полоса левой зоны (#923): «Редактировать профиль» и
+              «Действия» (только админ), вне скролла; нет кнопок — нет полосы. */}
+          <EmployeeProfileBar card={card} canManage={canManage} onEdit={() => setEditOpen(true)} />
+          {editOpen ? (
+            <EmployeeProfileDialog
+              open={editOpen}
+              onOpenChange={setEditOpen}
+              card={card}
+              users={items}
+              canManage={canManage}
+            />
+          ) : null}
 
           {/* Ручка ресайза правой зоны: невидимый оверлей ПОВЕРХ структурной
               границы (память общая на все карточки — useChatWidth). */}

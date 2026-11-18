@@ -18,6 +18,7 @@ import { EventBus } from '../../core/events/event-bus.js';
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
 import { ReferenceGuard } from './reference-guard.service.js';
 import { DepartmentsRepository, type DepartmentRow } from './departments.repository.js';
+import { ManagerDerivationService } from './manager-derivation.service.js';
 import { RoleAudienceRepository } from './role-audience.repository.js';
 import { UsersRepository } from './users.repository.js';
 
@@ -54,6 +55,7 @@ export class DepartmentsService {
     private readonly tx: TransactionRunner,
     private readonly eventBus: EventBus,
     private readonly audience: RoleAudienceRepository,
+    private readonly managers: ManagerDerivationService,
   ) {}
 
   /** Дерево: корни — parentId null; сортировка sortOrder+name на каждом уровне. */
@@ -151,6 +153,12 @@ export class DepartmentsService {
       const beforeByIds = await this.escalationSnapshot(id, locked, dto, tx);
       const oldParentId = locked.parentId;
       const updated = await this.departments.update(id, dto, tx);
+      // #923: руководитель сотрудника — производное поле от дерева. Смена
+      // главы/зама/родителя меняет ближайшего главу у сотрудников поддерева —
+      // пересчитываем в той же транзакции, до события и bind-проверки.
+      if (dto.headId !== undefined || dto.deputyId !== undefined || dto.parentId !== undefined) {
+        await this.managers.recomputeDepartments([id], tx);
+      }
       if (beforeByIds !== null) {
         await this.guard.assertNoEscalationForUsers(
           actor,
@@ -205,6 +213,9 @@ export class DepartmentsService {
       const roleIds = await this.audience.roleIdsOfDepartments([id], tx);
       const userIds = await this.audience.departmentUserIds(id, tx);
       await this.departments.update(id, { isActive: false }, tx);
+      // #923: члены архивного узла больше не находят главу в нём — ближайший
+      // глава переезжает к родительскому подразделению.
+      await this.managers.recomputeDepartments([id], tx);
       await this.eventBus.emit(
         tx,
         DIRECTORY_EVENTS.DEPARTMENT_ARCHIVED,

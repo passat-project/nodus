@@ -38,6 +38,21 @@ export interface UserPageFilter {
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 
+/** Календарные поля Prisma `@db.Date` принимают только Date, а контракты
+ *  отдают «yyyy-mm-dd»: строка валилась PrismaClientValidationError (500) —
+ *  правка дня рождения/даты приёма не сохранялась (#923). Переводим в
+ *  UTC-полночь: чтение — `toISOString().slice(0,10)` (user-dto), день не съезжает. */
+function withDateOnly<T extends { birthDate?: unknown; hiredAt?: unknown }>(data: T): T {
+  const next = { ...data };
+  for (const field of ['birthDate', 'hiredAt'] as const) {
+    const value = next[field];
+    if (typeof value === 'string' && value.length > 0) {
+      (next as Record<string, unknown>)[field] = new Date(`${value}T00:00:00.000Z`);
+    }
+  }
+  return next;
+}
+
 /** Доступ к таблице users (карточка и список сотрудников, роли — здесь же). */
 @Injectable()
 export class UsersRepository {
@@ -106,6 +121,17 @@ export class UsersRepository {
     return client.user.findUnique({ where: { id }, include: userCardInclude });
   }
 
+  /** Текущий управленческий отдел сотрудника (#923): перевод читает его
+   *  В ТРАНЗАКЦИИ — снимок «до» мог устареть (параллельный перевод), и тогда
+   *  руководящую роль сняли бы не у того подразделения. */
+  async findDepartmentId(id: string, tx?: TransactionClient): Promise<string | null> {
+    const row = await (tx ?? this.prisma).user.findUnique({
+      where: { id },
+      select: { departmentId: true },
+    });
+    return row?.departmentId ?? null;
+  }
+
   async emailExists(email: string): Promise<boolean> {
     const count = await this.prisma.user.count({ where: { email } });
     return count > 0;
@@ -116,7 +142,7 @@ export class UsersRepository {
     tx?: TransactionClient,
   ): Promise<UserCardRow> {
     const client = tx ?? this.prisma;
-    return client.user.create({ data, include: userCardInclude });
+    return client.user.create({ data: withDateOnly(data), include: userCardInclude });
   }
 
   async update(
@@ -125,7 +151,11 @@ export class UsersRepository {
     tx?: TransactionClient,
   ): Promise<UserCardRow> {
     const client = tx ?? this.prisma;
-    return client.user.update({ where: { id }, data, include: userCardInclude });
+    return client.user.update({
+      where: { id },
+      data: withDateOnly(data),
+      include: userCardInclude,
+    });
   }
 
   /** Полная замена набора ролей сотрудника. */
@@ -167,35 +197,5 @@ export class UsersRepository {
       where: { id },
       select: { id: true, status: true },
     });
-  }
-
-  /** Цепочка `managerId` вверх от сотрудника (валидация циклов руководителей
-   *  #441): только прямые ссылки (без fallback на подразделения), защита от
-   *  зацикливания visited-множеством. Глубина — системный предел 32 (тот же в
-   *  `managerChainOf` и ролевом CTE): данные глубже — вне поддерживаемого
-   *  инварианта и не проверяются. */
-  async managerChainIds(startUserId: string, tx?: TransactionClient): Promise<string[]> {
-    const client = tx ?? this.prisma;
-    const chain: string[] = [];
-    const visited = new Set<string>();
-    let currentId: string | null = startUserId;
-    while (currentId && !visited.has(currentId) && chain.length < 32) {
-      visited.add(currentId);
-      chain.push(currentId);
-      const row: { managerId: string | null } | null = await client.user.findUnique({
-        where: { id: currentId },
-        select: { managerId: true },
-      });
-      currentId = row?.managerId ?? null;
-    }
-    return chain;
-  }
-
-  /** Граф руководителей под advisory-локом транзакции (#441): проверка циклов
-   *  `managerId` и запись сериализуются с другими правками руководителя —
-   *  построчные замки не мешают двум встречным PATCH создать кольцо A↔B
-   *  (тот же приём, что `lockTree` дерева подразделений, #544). */
-  async lockManagerTree(tx: TransactionClient): Promise<void> {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('nodus:users:manager-graph'))`;
   }
 }

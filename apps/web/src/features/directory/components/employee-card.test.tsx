@@ -48,6 +48,7 @@ vi.mock('../api/directory-api.js', () => ({
   useEmployeePresence: () => 'online',
 }));
 vi.mock('../lib/use-can-manage-directory.js', () => ({ useCanManageDirectory: () => false }));
+vi.mock('../../../shared/api/departments-list.js', () => ({ useDepartmentsList: () => [] }));
 vi.mock('../../../shared/api/user-relations.js', () => ({
   useAssigneeTasks: () => ({ data: { items: [] }, isLoading: false }),
   useMemberProjects: () => ({ data: { items: [] }, isLoading: false }),

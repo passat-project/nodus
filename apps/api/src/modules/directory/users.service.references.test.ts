@@ -6,7 +6,9 @@ import { ReferenceGuard } from './reference-guard.service.js';
 import { UsersService } from './users.service.js';
 
 /** Валидация ссылок оргструктуры (#441): вынесено из users.service.test.ts
- *  (лимит 300 строк) — проверки руководителя, подразделений и должностей. */
+ *  (лимит 300 строк) — проверки подразделений и должностей. Руководитель с
+ *  #923 — производное поле (ручное значение не принимается), циклы живут в
+ *  SQL-пересчёте `ManagerDerivationRepository`. */
 
 const CREATE_DTO: CreateUserDto = {
   email: 'new@nodus.by',
@@ -14,7 +16,6 @@ const CREATE_DTO: CreateUserDto = {
   lastName: 'Новый',
   firstName: 'Сотрудник',
   middleName: null,
-  managerId: null,
   departmentId: null,
   positionId: null,
   legalDepartmentId: null,
@@ -66,12 +67,18 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
     emailExists: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    setRoles: vi.fn(),
     findRef: vi.fn(),
-    managerChainIds: vi.fn(),
-    lockManagerTree: vi.fn(),
+    findDepartmentId: vi.fn(),
   };
   const roles = { countByIds: vi.fn() };
   const departments = { findRef: vi.fn() };
+  const departmentsRepo = {
+    findParentChain: vi.fn(),
+    findNamesByIds: vi.fn(),
+    clearHeadAndDeputy: vi.fn(),
+  };
+  const managers = { recomputeUsers: vi.fn(), recomputeDepartments: vi.fn() };
   const positions = { findRef: vi.fn(), lockMany: vi.fn() };
   const membership = { effectiveRoleIds: vi.fn() };
   const passwords = { hash: vi.fn() };
@@ -83,7 +90,7 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     membership.effectiveRoleIds.mockResolvedValue([]);
-    users.managerChainIds.mockResolvedValue([]);
+    users.findDepartmentId.mockResolvedValue(null);
     const guard = new RoleAssignmentGuard(roles as never, membership as never);
     const references = new ReferenceGuard(users as never, departments as never, positions as never);
     service = new UsersService(
@@ -95,22 +102,23 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
       { fileContentUrl: vi.fn() } as never,
       guard,
       references,
-      { findParentChain: vi.fn(), findNamesByIds: vi.fn() } as never,
+      departmentsRepo as never,
+      managers as never,
       { process: vi.fn() } as never,
       { subordinateIds: vi.fn(), managerChainOf: vi.fn() } as never,
     );
   });
 
-  it('createUser: ссылка на несуществующего руководителя → 400 not_found', async () => {
+  it('createUser: несуществующее подразделение → 400 not_found', async () => {
     users.emailExists.mockResolvedValue(false);
     roles.countByIds.mockResolvedValue(1);
-    users.findRef.mockResolvedValue(null);
+    departments.findRef.mockResolvedValue(null);
 
     await expect(
-      service.createUser({ ...CREATE_DTO, managerId: 'ghost' }, actor()),
+      service.createUser({ ...CREATE_DTO, departmentId: 'ghost' }, actor()),
     ).rejects.toMatchObject({
       code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
-      details: { field: 'managerId', reason: 'not_found' },
+      details: { field: 'departmentId', reason: 'not_found' },
     });
     expect(users.create).not.toHaveBeenCalled();
   });
@@ -126,18 +134,6 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
       code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
       details: { field: 'departmentId', reason: 'kind_mismatch' },
     });
-  });
-
-  it('updateUser: руководитель — сам сотрудник → 400 self', async () => {
-    users.findCardById.mockResolvedValue(cardRow());
-
-    await expect(
-      service.updateUser('user-1', { managerId: 'user-1' }, actor()),
-    ).rejects.toMatchObject({
-      code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
-      details: { field: 'managerId', reason: 'self' },
-    });
-    expect(users.update).not.toHaveBeenCalled();
   });
 
   it('updateUser: назначение лочит строки должностей до проверки (гонка с удалением)', async () => {
@@ -158,54 +154,25 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
   it('updateUser: очистка ссылок (null) проходит без проверок', async () => {
     users.findCardById.mockResolvedValue(cardRow());
 
-    await service.updateUser(
-      'user-1',
-      { managerId: null, departmentId: null, positionId: null },
-      actor(),
-    );
+    await service.updateUser('user-1', { departmentId: null, positionId: null }, actor());
 
-    expect(users.findRef).not.toHaveBeenCalled();
     expect(departments.findRef).not.toHaveBeenCalled();
     expect(positions.findRef).not.toHaveBeenCalled();
-    expect(users.lockManagerTree).not.toHaveBeenCalled();
     expect(users.update).toHaveBeenCalled();
   });
 
-  it('updateUser: цикл руководителей A→B→A → 400 cycle', async () => {
+  it('createUser: руководитель производный — пересчёт в той же транзакции', async () => {
+    users.emailExists.mockResolvedValue(false);
+    roles.countByIds.mockResolvedValue(1);
+    users.create.mockResolvedValue(cardRow());
     users.findCardById.mockResolvedValue(cardRow());
-    // Цепочка от нового руководителя уже содержит сотрудника — кольцо.
-    users.managerChainIds.mockResolvedValue(['user-2', 'user-1']);
 
-    await expect(
-      service.updateUser('user-1', { managerId: 'user-2' }, actor()),
-    ).rejects.toMatchObject({
-      code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
-      details: { field: 'managerId', reason: 'cycle' },
-    });
-    expect(users.lockManagerTree).toHaveBeenCalledWith('tx-handle');
-    expect(users.update).not.toHaveBeenCalled();
-  });
+    await service.createUser(CREATE_DTO, actor());
 
-  it('updateUser: длинная цепь с кольцом (3+) → 400 cycle', async () => {
-    users.findCardById.mockResolvedValue(cardRow());
-    users.managerChainIds.mockResolvedValue(['user-2', 'user-3', 'user-1']);
-
-    await expect(
-      service.updateUser('user-1', { managerId: 'user-2' }, actor()),
-    ).rejects.toMatchObject({
-      code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
-      details: { field: 'managerId', reason: 'cycle' },
-    });
-  });
-
-  it('updateUser: валидная цепь руководителей проходит', async () => {
-    users.findCardById.mockResolvedValue(cardRow());
-    users.managerChainIds.mockResolvedValue(['user-2', 'user-3']);
-    users.findRef.mockResolvedValue({ id: 'user-2', status: 'active' });
-    users.update.mockResolvedValue(cardRow());
-
-    await service.updateUser('user-1', { managerId: 'user-2' }, actor());
-
-    expect(users.update).toHaveBeenCalled();
+    expect(users.create).toHaveBeenCalledWith(
+      expect.not.objectContaining({ managerId: expect.anything() }),
+      'tx-handle',
+    );
+    expect(managers.recomputeUsers).toHaveBeenCalledWith(['user-1'], 'tx-handle');
   });
 });

@@ -74,6 +74,7 @@ describe('DepartmentsService', () => {
       tx as never,
       eventBus as never,
       audience as never,
+      { recomputeUsers: vi.fn(), recomputeDepartments: vi.fn() } as never,
     );
   });
 

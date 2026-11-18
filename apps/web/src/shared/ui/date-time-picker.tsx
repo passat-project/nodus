@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@nodus/ui/components/po
 import { cn } from '@nodus/ui/lib/utils';
 
 import {
+  formatDateRu,
   monthGridCells,
   parseTime,
   quickOptionDate,
@@ -59,6 +60,7 @@ export function DateTimePicker({
   children,
   clearLabel,
   withTime = true,
+  format = 'short',
 }: {
   value: Date | null;
   onChange: (value: Date | null) => void;
@@ -71,12 +73,18 @@ export function DateTimePicker({
   /** false — «только дата» (кастомные поля типа «Дата», #431): без поля
    *  времени, значение — локальная полночь выбранного дня. */
   withTime?: boolean;
+  /** Подпись триггера «только даты»: short — «12 января» (сроки), full —
+   *  «12.01.1990» (даты рождения и приёма: год обязателен, #923). */
+  format?: 'short' | 'full';
 }) {
   const [open, setOpen] = useState(false);
   // «Сейчас» — на момент открытия поповера (подсветка today, быстрые варианты).
   const [now, setNow] = useState(() => new Date());
   const [view, setView] = useState({ year: now.getFullYear(), month: now.getMonth() });
   const [timeStr, setTimeStr] = useState('17:00');
+  // Сетка выбора года (клик по «Месяц Год»): по умолчанию выключена, при
+  // открытии поповера сбрасывается — сначала всегда календарь месяца.
+  const [yearMode, setYearMode] = useState(false);
 
   // При каждом открытии — вид на месяц значения (или текущий), время значения.
   // Сброс во время рендера по переходу open (канон React, аудит #45).
@@ -87,6 +95,7 @@ export function DateTimePicker({
       const base = value ?? new Date();
       setNow(new Date());
       setView({ year: base.getFullYear(), month: base.getMonth() });
+      setYearMode(false);
       setTimeStr(
         value
           ? `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`
@@ -96,6 +105,13 @@ export function DateTimePicker({
   }
 
   const cells = useMemo(() => monthGridCells(view.year, view.month), [view]);
+  // Блок из 16 лет (4×4, во всю высоту сетки месяца): клик по году в шапке;
+  // стрелки листают блок целиком — до 1980-х два клика с пустой даты.
+  const yearBlockStart = Math.floor(view.year / 16) * 16;
+  const years = useMemo(
+    () => Array.from({ length: 16 }, (_, i) => yearBlockStart + i),
+    [yearBlockStart],
+  );
 
   function commit(day: Date) {
     if (!withTime) {
@@ -115,6 +131,11 @@ export function DateTimePicker({
     });
   }
 
+  /** Стрелки в режиме года листают блок из 16 лет. */
+  function shiftYearBlock(delta: number) {
+    setView((v) => ({ ...v, year: v.year + delta }));
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild aria-label={children ? ariaLabel : undefined}>
@@ -131,7 +152,9 @@ export function DateTimePicker({
               {value
                 ? withTime
                   ? `${dayMonthFmt.format(value)} ${valueTime(value)}`
-                  : dayMonthFmt.format(value)
+                  : format === 'full'
+                    ? formatDateRu(value)
+                    : dayMonthFmt.format(value)
                 : placeholder}
             </span>
             {value ? (
@@ -157,55 +180,87 @@ export function DateTimePicker({
             <div className="flex items-center justify-between pb-1.5">
               <button
                 type="button"
-                onClick={() => shiftMonth(-1)}
+                onClick={() => (yearMode ? shiftYearBlock(-16) : shiftMonth(-1))}
                 aria-label="‹"
                 className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <ChevronLeft className="size-4" strokeWidth={1.75} />
               </button>
-              <span className="text-sm font-medium first-letter:uppercase">
-                {monthYearFmt.format(new Date(view.year, view.month, 1))}
-              </span>
               <button
                 type="button"
-                onClick={() => shiftMonth(1)}
+                onClick={() => setYearMode((mode) => !mode)}
+                aria-expanded={yearMode}
+                aria-label={ui.common.pickYear}
+                className="rounded-md px-1.5 py-0.5 text-sm font-medium transition-colors first-letter:uppercase hover:bg-accent"
+              >
+                {yearMode
+                  ? `${yearBlockStart} – ${yearBlockStart + 15}`
+                  : monthYearFmt.format(new Date(view.year, view.month, 1))}
+              </button>
+              <button
+                type="button"
+                onClick={() => (yearMode ? shiftYearBlock(16) : shiftMonth(1))}
                 aria-label="›"
                 className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <ChevronRight className="size-4" strokeWidth={1.75} />
               </button>
             </div>
-            <div className="grid grid-cols-7 gap-0.5">
-              {ui.common.weekdaysShort.map((d) => (
-                <span
-                  key={d}
-                  className="flex h-7 items-center justify-center text-label-sm font-semibold tracking-wide text-muted-foreground uppercase"
-                >
-                  {d}
-                </span>
-              ))}
-              {cells.map((cell) => {
-                const selected = value !== null && sameDay(cell.date, value);
-                const today = sameDay(cell.date, now);
-                const weekend = cell.date.getDay() === 0 || cell.date.getDay() === 6;
-                return (
+            {yearMode ? (
+              <div className="grid h-[13rem] grid-cols-4 grid-rows-4 gap-0.5">
+                {years.map((year) => (
                   <button
-                    key={cell.date.toISOString()}
+                    key={year}
                     type="button"
-                    onClick={() => commit(cell.date)}
+                    onClick={() => {
+                      setView((v) => ({ ...v, year }));
+                      setYearMode(false);
+                    }}
                     className={cn(
-                      'flex h-7 items-center justify-center rounded-md text-xs transition-colors hover:bg-accent',
-                      !cell.inMonth && 'text-muted-foreground/50',
-                      cell.inMonth && weekend && !selected && 'text-muted-foreground',
-                      today && !selected && 'font-semibold text-primary',
-                      selected && 'bg-primary text-primary-foreground hover:bg-primary',
+                      'flex h-full items-center justify-center rounded-md text-sm tabular-nums transition-colors hover:bg-accent',
+                      year === view.year && 'bg-primary text-primary-foreground hover:bg-primary',
+                      year === now.getFullYear() &&
+                        year !== view.year &&
+                        'font-semibold text-primary',
                     )}
                   >
-                    {cell.date.getDate()}
+                    {year}
                   </button>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-7 gap-0.5">
+                {ui.common.weekdaysShort.map((d) => (
+                  <span
+                    key={d}
+                    className="flex h-7 items-center justify-center text-label-sm font-semibold tracking-wide text-muted-foreground uppercase"
+                  >
+                    {d}
+                  </span>
+                ))}
+                {cells.map((cell) => {
+                  const selected = value !== null && sameDay(cell.date, value);
+                  const today = sameDay(cell.date, now);
+                  const weekend = cell.date.getDay() === 0 || cell.date.getDay() === 6;
+                  return (
+                    <button
+                      key={cell.date.toISOString()}
+                      type="button"
+                      onClick={() => commit(cell.date)}
+                      className={cn(
+                        'flex h-7 items-center justify-center rounded-md text-sm tabular-nums transition-colors hover:bg-accent',
+                        !cell.inMonth && 'text-muted-foreground/50',
+                        cell.inMonth && weekend && !selected && 'text-muted-foreground',
+                        today && !selected && 'font-semibold text-primary',
+                        selected && 'bg-primary text-primary-foreground hover:bg-primary',
+                      )}
+                    >
+                      {cell.date.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {withTime ? (
               <div className="mt-2 flex items-center gap-2">
                 <span className="text-xs font-medium text-muted-foreground">

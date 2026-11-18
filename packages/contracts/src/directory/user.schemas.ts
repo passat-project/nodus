@@ -141,7 +141,9 @@ export const listUsersQuerySchema = cursorQuerySchema.extend({
 
 export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>;
 
-/** Создание сотрудника администратором (directory.manage). */
+/** Создание сотрудника администратором (directory.manage).
+ *  Руководитель НЕ принимается от клиента (#923): он производный — ближайший
+ *  глава вверх по дереву подразделений, сервер считает его сам. */
 export const createUserSchema = z.object({
   email: emailInputSchema,
   /** Начальный пароль — та же политика, что и при смене (сотрудник сменит при первом входе — V2). */
@@ -149,7 +151,6 @@ export const createUserSchema = z.object({
   lastName: z.string().trim().min(1).max(128),
   firstName: z.string().trim().min(1).max(128),
   middleName: z.string().trim().min(1).max(128).nullable().default(null),
-  managerId: z.uuid().nullable().default(null),
   departmentId: z.uuid().nullable().default(null),
   positionId: z.uuid().nullable().default(null),
   legalDepartmentId: z.uuid().nullable().default(null),
@@ -159,30 +160,52 @@ export const createUserSchema = z.object({
 
 export type CreateUserDto = z.infer<typeof createUserSchema>;
 
-/** Обновление карточки администратором (directory.manage), всё опционально. */
+/** Орг-поля карточки, доступные администратору при правке (#923):
+ *  `managerId` — производный (сервер), `displayName` — из ФИО. */
+const userOrgAdminShape = {
+  departmentId: userOrgSchema.shape.departmentId,
+  positionId: userOrgSchema.shape.positionId,
+  legalDepartmentId: userOrgSchema.shape.legalDepartmentId,
+  legalPositionId: userOrgSchema.shape.legalPositionId,
+};
+
+/** Обновление карточки администратором (directory.manage), всё опционально.
+ *  `avatarUrl` не принимается: фото ставится только конвейером аватара
+ *  (`POST/DELETE /users/me/avatar`), иначе админ мог бы записать произвольный
+ *  внешний URL в карточку (#923, security-аудит). */
 export const updateUserSchema = z
   .object({
     ...userNamesSchema.partial().shape,
-    ...userOrgSchema.shape,
-    ...userProfileSchema.shape,
-    displayName: z.string().trim().min(1).max(256),
+    ...userOrgAdminShape,
+    ...userProfileSchema.omit({ avatarUrl: true }).shape,
     roleIds: z.array(z.uuid()),
   })
   .partial();
 
 export type UpdateUserDto = z.infer<typeof updateUserSchema>;
 
-/** Саморедактирование профиля сотрудником — только контактный блок. */
-export const updateMyProfileSchema = userProfileSchema
-  .pick({
-    mobilePhone: true,
-    city: true,
-    officeLocation: true,
-    birthDate: true,
-    workdayStart: true,
-    avatarUrl: true,
+/**
+ * Саморедактирование профиля сотрудником (#923, матрица полей владельца):
+ * ФИО и личные/контактные поля. Структура (подразделение, должность,
+ * руководитель), email-логин, ставка/дата приёма (HR), роли и статус в схему
+ * НЕ входят — `.strict()` отвечает 400 на попытку прислать их (серверный
+ * allowlist, I8: скрытие в UI защитой не считается).
+ */
+export const updateMyProfileSchema = z
+  .object({
+    ...userNamesSchema.shape,
+    ...userProfileSchema.pick({
+      mobilePhone: true,
+      city: true,
+      officeLocation: true,
+      isRemote: true,
+      gender: true,
+      birthDate: true,
+      workdayStart: true,
+    }).shape,
   })
-  .partial();
+  .partial()
+  .strict();
 
 export type UpdateMyProfileDto = z.infer<typeof updateMyProfileSchema>;
 

@@ -129,11 +129,9 @@ describe('useUpdateUser — оптимистичность (#441)', () => {
     });
 
     await act(async () => {
-      result.current.mutate({ managerId: 'user-2' });
+      result.current.mutate({ city: 'Витебск' });
     });
-    expect((client.getQueryData(directoryKeys.userCard(USER_ID)) as UserCard).managerId).toBe(
-      'user-2',
-    );
+    expect((client.getQueryData(directoryKeys.userCard(USER_ID)) as UserCard).city).toBe('Витебск');
 
     await act(async () => {
       gate.resolve(
@@ -148,6 +146,6 @@ describe('useUpdateUser — оптимистичность (#441)', () => {
       );
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect((client.getQueryData(directoryKeys.userCard(USER_ID)) as UserCard).managerId).toBeNull();
+    expect((client.getQueryData(directoryKeys.userCard(USER_ID)) as UserCard).city).toBeNull();
   });
 });

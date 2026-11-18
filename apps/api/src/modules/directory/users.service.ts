@@ -27,24 +27,26 @@ import {
 } from '../../core/ports/org-structure.port.js';
 import { avatarUrlOf as signAvatarUrl } from './avatar-url.js';
 import { DepartmentsRepository } from './departments.repository.js';
+import { ManagerDerivationService } from './manager-derivation.service.js';
 import { ReferenceGuard } from './reference-guard.service.js';
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
 import { RolesRepository } from './roles.repository.js';
-import { UsersRepository, type UserCardRow } from './users.repository.js';
+import { UsersRepository } from './users.repository.js';
 import { buildDisplayName, toUserCard } from './user-dto.js';
 import { assertRolesExist, updateMyProfileOf } from './users-profile.js';
+import { clearLeadershipInDepartment, emitAccessChanged } from './users-deactivation.js';
+import {
+  activateUserOf,
+  adminRoleOf,
+  deactivateUserOf,
+  type LifecycleDeps,
+} from './users-lifecycle.js';
 import {
   listUsersOf,
   myOrganizationOf,
   userCardOf,
   type OrganizationDeps,
 } from './users-organization.js';
-
-/** Прямая роль «Администратор» сотрудника, если есть (замок и последний админ). */
-function adminRoleOf(row: Pick<UserCardRow, 'roles'>): { id: string; code: string } | null {
-  const match = row.roles.find((assignment) => assignment.role.code === SystemRole.ADMIN);
-  return match ? { id: match.role.id, code: match.role.code } : null;
-}
 
 /**
  * Сценарии справочника сотрудников. Prisma — только репозиторий;
@@ -65,6 +67,7 @@ export class UsersService {
     private readonly guard: RoleAssignmentGuard,
     private readonly references: ReferenceGuard,
     private readonly departments: DepartmentsRepository,
+    private readonly managers: ManagerDerivationService,
     @Inject(AVATAR_PROCESSOR) private readonly avatars: AvatarProcessor,
     @Inject(ORG_STRUCTURE_READER) private readonly org: OrgStructureReader,
   ) {}
@@ -80,6 +83,19 @@ export class UsersService {
       users: this.users,
       org: this.org,
       departments: this.departments,
+      avatarUrlOf: this.avatarUrlOf,
+    };
+  }
+
+  /** Зависимости жизненного цикла (увольнение/возврат, #923). */
+  private lifecycleDeps(): LifecycleDeps {
+    return {
+      users: this.users,
+      roles: this.roles,
+      tx: this.tx,
+      eventBus: this.eventBus,
+      departments: this.departments,
+      managers: this.managers,
       avatarUrlOf: this.avatarUrlOf,
     };
   }
@@ -105,11 +121,11 @@ export class UsersService {
     const passwordHash = await this.passwords.hash(dto.password);
 
     return this.tx.run(async (tx) => {
-      // Ссылки оргструктуры (#441): руководитель, подразделения и должности —
-      // только существующие активные объекты своего вида структуры. Внутри
-      // транзакции — без окна TOCTOU между проверкой и записью. Строки
-      // должностей предварительно лочатся: параллельное удаление ждёт коммита.
-      await this.references.ensureActiveUser(dto.managerId, 'managerId', tx);
+      // Ссылки оргструктуры (#441): подразделения и должности — только
+      // существующие объекты своего вида структуры. Внутри транзакции — без
+      // окна TOCTOU между проверкой и записью. Строки должностей предварительно
+      // лочатся: параллельное удаление ждёт коммита.
+      // Руководитель не принимается (#923): он производный, считается ниже.
       await this.references.ensureDepartment(dto.departmentId, 'management', 'departmentId', tx);
       await this.references.lockPositions([dto.positionId, dto.legalPositionId], tx);
       await this.references.ensurePosition(dto.positionId, 'management', 'positionId', tx);
@@ -128,7 +144,6 @@ export class UsersService {
           firstName: dto.firstName,
           middleName: dto.middleName,
           displayName: buildDisplayName(dto),
-          managerId: dto.managerId,
           departmentId: dto.departmentId,
           positionId: dto.positionId,
           legalDepartmentId: dto.legalDepartmentId,
@@ -136,6 +151,8 @@ export class UsersService {
         },
         tx,
       );
+      // #923: руководитель — ближайший глава подразделения сотрудника.
+      await this.managers.recomputeUsers([created.id], tx);
       if (dto.roleIds.length > 0) {
         await this.users.setRoles(created.id, dto.roleIds, tx);
       }
@@ -165,21 +182,20 @@ export class UsersService {
       firstName: dto.firstName ?? before.firstName,
       middleName: dto.middleName === undefined ? before.middleName : dto.middleName,
     };
+    // displayName — денормализация ФИО: пишем его только когда ФИО реально
+    // прислали. Иначе правка «город/ставка» из устаревшего снимка `before`
+    // откатывала бы имя, изменённое параллельной транзакцией (#923).
+    const namesProvided =
+      dto.lastName !== undefined || dto.firstName !== undefined || dto.middleName !== undefined;
     const { roleIds, ...fields } = dto;
     const membershipChanges = roleIds !== undefined || dto.departmentId !== undefined;
 
     return this.tx.run(async (tx) => {
       // Ссылки оргструктуры (#441): undefined — не трогаем, null — очистка.
       // Внутри транзакции — без окна TOCTOU между проверкой и записью.
-      // Гонка циклов руководителей: проверка цепи и запись сериализуются
-      // advisory-локом графа (как дерево подразделений в #544) — построчные
-      // замки не мешают двум встречным PATCH создать кольцо A↔B.
-      if (dto.managerId !== undefined && dto.managerId !== null) {
-        await this.users.lockManagerTree(tx);
-      }
-      this.references.ensureNotSelf(id, dto.managerId, 'managerId');
-      await this.references.ensureNoManagerCycle(id, dto.managerId, tx);
-      await this.references.ensureActiveUser(dto.managerId, 'managerId', tx);
+      // Руководитель здесь не принимается (#923): производное поле, ниже
+      // пересчитывается от подразделения (циклы при этом невозможны — обход
+      // всегда идёт вверх по дереву и пропускает самого сотрудника).
       await this.references.ensureDepartment(dto.departmentId, 'management', 'departmentId', tx);
       // Замки должностей до проверки: удаление должности ждёт коммита назначения.
       await this.references.lockPositions([dto.positionId, dto.legalPositionId], tx);
@@ -206,19 +222,58 @@ export class UsersService {
         }
       }
       const beforeRoleIds = membershipChanges ? await this.guard.effectiveRoleIds(id, tx) : null;
+      // #923: один сотрудник — одно место в управленческой структуре. Роль
+      // главы/зама принадлежит подразделению: при переводе (в другой отдел или
+      // `null`) старый узел теряет её, а его подчинённые переезжают к
+      // ближайшему главе выше. Снимаем ТОЛЬКО старый отдел; «то же
+      // подразделение» — no-op.
+      //
+      // Текущий отдел читаем В ТРАНЗАКЦИИ (снимок `before` мог устареть из-за
+      // параллельного перевода — сняли бы роль не у того узла) и сравниваем
+      // без учёта регистра (UUID в PostgreSQL регистронезависим, а zod пропускает
+      // верхний регистр — иначе «тот же отдел» выглядел бы переводом).
+      //
+      // Снимаем ДО записи сотрудника — порядок замков `departments → users`, как
+      // в DepartmentsService (правка/архивация узла): встречный порядок давал
+      // дедлок пары «перевод сотрудника» ↔ «правка подразделения».
+      if (dto.departmentId !== undefined) {
+        const previousDepartmentId = await this.users.findDepartmentId(id, tx);
+        const sameDepartment =
+          dto.departmentId !== null &&
+          previousDepartmentId !== null &&
+          dto.departmentId.toLowerCase() === previousDepartmentId.toLowerCase();
+        if (previousDepartmentId !== null && !sameDepartment) {
+          await clearLeadershipInDepartment(previousDepartmentId, id, actor.id, tx, {
+            departments: this.departments,
+            managers: this.managers,
+            eventBus: this.eventBus,
+          });
+        }
+      }
       await this.users.update(
         id,
         {
           ...fields,
-          displayName: dto.displayName ?? buildDisplayName(names),
+          ...(namesProvided ? { displayName: buildDisplayName(names) } : {}),
         },
         tx,
       );
+      // #923: смена подразделения меняет ближайшего главу — пересчитываем
+      // производного руководителя в той же транзакции.
+      if (dto.departmentId !== undefined) {
+        await this.managers.recomputeUsers([id], tx);
+      }
       if (roleIds) {
         await this.users.setRoles(id, roleIds, tx);
       }
       if (beforeRoleIds !== null) {
         await this.guard.assertEffectiveRolesHeld(actor, id, beforeRoleIds, tx);
+        // #923/AUD-002: состав действующих ролей изменился — access-токены
+        // сотрудника обесцениваются (права из JWT не живут до TTL, #866).
+        await emitAccessChanged(tx, id, beforeRoleIds, actor.id, {
+          guard: this.guard,
+          eventBus: this.eventBus,
+        });
       }
       if (
         adminRoleId !== null &&
@@ -240,65 +295,19 @@ export class UsersService {
 
   /** Деактивация (увольнение): статус + событие; сессии отзовёт подписчик auth. */
   async deactivateUser(id: string, actor: AuthUser): Promise<UserCard> {
-    const before = await this.users.findCardById(id);
-    if (!before) {
-      throw DomainException.notFound('User not found');
-    }
-    if (before.status === 'deactivated') {
-      return toUserCard(before, this.avatarUrlOf); // идемпотентно
-    }
-
-    return this.tx.run(async (tx) => {
-      // Замок строки admin (#490): деактивация последнего администратора
-      // сериализуется с правками состава роли; состав читается под замком.
-      let adminRoleId: string | null = null;
-      const lockedId = await this.roles.lockByCodeForUpdate(SystemRole.ADMIN, tx);
-      if (lockedId !== null) {
-        const current = (await this.users.findCardById(id, tx))!;
-        if (adminRoleOf(current) !== null) {
-          adminRoleId = lockedId;
-        }
-      }
-      await this.users.update(id, { status: 'deactivated' }, tx);
-      if (
-        adminRoleId !== null &&
-        (await this.roles.countActiveDirectMembers(adminRoleId, tx)) === 0
-      ) {
-        throw new DomainException(ErrorCode.ROLE_LAST_ADMIN, 'Last administrator', {
-          roleId: adminRoleId,
-        });
-      }
-      await this.eventBus.emit(
-        tx,
-        DIRECTORY_EVENTS.USER_DEACTIVATED,
-        { userId: id },
-        { actorId: actor.id, aggregateType: 'user', aggregateId: id },
-      );
-      return toUserCard((await this.users.findCardById(id, tx))!, this.avatarUrlOf);
-    });
+    return deactivateUserOf(id, actor, this.lifecycleDeps());
   }
 
   /** Возврат в работу (AUD-016): снятие деактивации + парное событие. Сессии
    *  не восстанавливаются — вход заново (стоп-лист допускает новые токены);
    *  роли и история сохраняются. Повторная активация — без записи и события. */
   async activateUser(id: string, actor: AuthUser): Promise<UserCard> {
-    const before = await this.users.findCardById(id);
-    if (!before) throw DomainException.notFound('User not found');
-    if (before.status === 'active') return toUserCard(before, this.avatarUrlOf); // идемпотентно
-
-    return this.tx.run(async (tx) => {
-      await this.users.update(id, { status: 'active' }, tx);
-      await this.eventBus.emit(
-        tx,
-        DIRECTORY_EVENTS.USER_ACTIVATED,
-        { userId: id },
-        { actorId: actor.id, aggregateType: 'user', aggregateId: id },
-      );
-      return toUserCard((await this.users.findCardById(id, tx))!, this.avatarUrlOf);
-    });
+    return activateUserOf(id, actor, this.lifecycleDeps());
   }
 
-  /** Саморедактирование: только контактный блок (updateMyProfileSchema). */
+  /** Саморедактирование (#923): ФИО и личные/контактные поля по строгому
+   *  allowlist (`updateMyProfileSchema`); структура, email, HR-данные, роли и
+   *  статус сюда не попадают — сервер отвечает 400 на попытку их прислать. */
   async updateMyProfile(userId: string, dto: UpdateMyProfileDto): Promise<UserCard> {
     return updateMyProfileOf(userId, dto, {
       users: this.users,

@@ -11,7 +11,6 @@ const CREATE_DTO: CreateUserDto = {
   lastName: 'Новый',
   firstName: 'Сотрудник',
   middleName: null,
-  managerId: null,
   departmentId: null,
   positionId: null,
   legalDepartmentId: null,
@@ -69,8 +68,17 @@ describe('UsersService: создание и правка сотрудника', 
     update: vi.fn(),
     setRoles: vi.fn(),
     findRef: vi.fn(),
+    findDepartmentId: vi.fn(),
   };
   const departments = { findRef: vi.fn() };
+  /** Репозиторий подразделений (#923 — снятие главы/зама; read-сценарии). */
+  const departmentsRepo = {
+    findParentChain: vi.fn(),
+    findNamesByIds: vi.fn(),
+    clearHeadAndDeputy: vi.fn(),
+  };
+  /** Производный руководитель (#923): пересчёт при смене подразделения. */
+  const managers = { recomputeUsers: vi.fn(), recomputeDepartments: vi.fn() };
   const positions = { findRef: vi.fn(), lockMany: vi.fn() };
   const roles = {
     countByIds: vi.fn(),
@@ -91,6 +99,7 @@ describe('UsersService: создание и правка сотрудника', 
     vi.resetAllMocks();
     membership.effectiveRoleIds.mockResolvedValue([]);
     roles.lockByCodeForUpdate.mockResolvedValue(null);
+    users.findDepartmentId.mockResolvedValue(null);
     const guard = new RoleAssignmentGuard(roles as never, membership as never);
     const references = new ReferenceGuard(users as never, departments as never, positions as never);
     service = new UsersService(
@@ -102,7 +111,8 @@ describe('UsersService: создание и правка сотрудника', 
       { fileContentUrl: vi.fn((id: string) => `/files/${id}/content`) } as never,
       guard,
       references,
-      { findParentChain: vi.fn(), findNamesByIds: vi.fn() } as never,
+      departmentsRepo as never,
+      managers as never,
       { process: vi.fn() } as never,
       { subordinateIds: vi.fn(), managerChainOf: vi.fn() } as never,
     );
@@ -209,6 +219,20 @@ describe('UsersService: создание и правка сотрудника', 
         expect.objectContaining({ userId: 'user-1' }),
         expect.anything(),
       );
+      // displayName — денормализация ФИО: без присланного ФИО не переписывается.
+      expect(users.update).toHaveBeenLastCalledWith(
+        'user-1',
+        { mobilePhone: '+375291234567' },
+        'tx-handle',
+      );
+
+      users.update.mockClear();
+      await service.updateUser('user-1', { lastName: 'Петров' }, actor());
+      expect(users.update).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ lastName: 'Петров', displayName: 'Петров Сотрудник' }),
+        'tx-handle',
+      );
     });
 
     it('добавляет роль, все права которой есть у актора', async () => {
@@ -272,6 +296,31 @@ describe('UsersService: создание и правка сотрудника', 
       await service.updateUser('user-1', { departmentId: 'dep-1' }, actor([Permission.CRM_MANAGE]));
 
       expect(eventBus.emit).toHaveBeenCalled();
+    });
+
+    it('смена подразделения меняет действующие роли — access_changed по разнице (#923)', async () => {
+      users.findCardById.mockResolvedValue(cardRow());
+      departments.findRef.mockResolvedValue({ id: 'dep-1', kind: 'management', isActive: true });
+      membership.effectiveRoleIds
+        .mockResolvedValueOnce(['role-old'])
+        .mockResolvedValueOnce(['role-new'])
+        .mockResolvedValueOnce(['role-new']);
+      roles.permissionsByIds.mockResolvedValue(new Map([['role-new', [Permission.CRM_MANAGE]]]));
+
+      await service.updateUser('user-1', { departmentId: 'dep-1' }, actor([Permission.CRM_MANAGE]));
+
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'tx-handle',
+        'directory.role.access_changed',
+        { roleId: 'role-old', reason: 'membership', userIds: ['user-1'] },
+        expect.objectContaining({ actorId: 'admin-1' }),
+      );
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'tx-handle',
+        'directory.role.access_changed',
+        { roleId: 'role-new', reason: 'membership', userIds: ['user-1'] },
+        expect.objectContaining({ actorId: 'admin-1' }),
+      );
     });
 
     it('последний администратор: снятие роли admin → 409 ROLE_LAST_ADMIN под замком', async () => {

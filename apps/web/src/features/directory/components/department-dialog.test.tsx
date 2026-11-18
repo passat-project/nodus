@@ -59,7 +59,16 @@ function dialog(open: boolean, editingNode: DepartmentNode | null = editing) {
       parentId={null}
       editing={editingNode}
       users={users}
-      departmentOptions={[{ id: 'dep-1', name: 'Проектный отдел', depth: 0, isActive: true }]}
+      departmentOptions={[
+        {
+          id: 'dep-1',
+          name: 'Проектный отдел',
+          depth: 0,
+          isActive: true,
+          headId: null,
+          deputyId: null,
+        },
+      ]}
     />
   );
 }
