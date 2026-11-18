@@ -198,7 +198,11 @@ export class ProcessTypesService {
   ): Promise<ProcessType> {
     const type = await this.repo.findById(id);
     if (!type) throw DomainException.notFound('Process type not found');
-    assertLetterCatalogEditable(type);
+    // Каталог писем системный (#55): маршрут, доступ и нумерация — только
+    // чтение до #463/#464. Исключение — «Где создаётся» (#665): связь с
+    // типами проектов письмам нужна уже сейчас, одна на оба вида записей.
+    const creationOnly = Object.keys(body).length === 1 && body.creation !== undefined;
+    if (!creationOnly) assertLetterCatalogEditable(type);
     const access = body.access;
     if (isDefaultProcessType(type) && access && (access.view !== null || access.create !== null)) {
       throw new DomainException(ErrorCode.PROCESS_TYPE_SYSTEM_LOCKED, 'Default type is locked', {

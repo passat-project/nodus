@@ -111,6 +111,15 @@ export const ErrorCode = {
   CUSTOM_FIELD_BINDING_INVALID: 'CUSTOM_FIELD_BINDING_INVALID',
   /** Название типа процесса уже занято живым типом (#378, #428). */
   PROCESS_TYPE_NAME_TAKEN: 'PROCESS_TYPE_NAME_TAKEN',
+  /** Тип процесса нельзя создать в проекте этого типа проекта (#665);
+   *  details — { typeId, projectTypeId }. */
+  PROCESS_TYPE_NOT_ALLOWED_IN_PROJECT: 'PROCESS_TYPE_NOT_ALLOWED_IN_PROJECT',
+  /** Тип создаётся только в проекте, а проект не выбран (#665);
+   *  details — { typeId }. */
+  PROCESS_TYPE_PROJECT_REQUIRED: 'PROCESS_TYPE_PROJECT_REQUIRED',
+  /** Тип создаётся только в папке определённого вида: папки нет или вид
+   *  другой (#665); details — { typeId, kindId, nodeId }. */
+  PROCESS_TYPE_FOLDER_KIND_REQUIRED: 'PROCESS_TYPE_FOLDER_KIND_REQUIRED',
   /** Вложение чата больше лимита (100 МБ на файл; серверная сверка, #57). */
   CHAT_ATTACHMENT_TOO_LARGE: 'CHAT_ATTACHMENT_TOO_LARGE',
   /** Больше 20 загруженных-но-неотправленных вложений у пользователя (#57). */

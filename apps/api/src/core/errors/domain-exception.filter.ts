@@ -116,6 +116,9 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.PROCESS_TYPE_FORBIDDEN]: HttpStatus.FORBIDDEN,
   [ErrorCode.PROCESS_TYPE_FIELDS_REQUIRED]: HttpStatus.UNPROCESSABLE_ENTITY,
   [ErrorCode.PROCESS_TYPE_PRESET_INVALID]: HttpStatus.UNPROCESSABLE_ENTITY,
+  [ErrorCode.PROCESS_TYPE_NOT_ALLOWED_IN_PROJECT]: HttpStatus.UNPROCESSABLE_ENTITY,
+  [ErrorCode.PROCESS_TYPE_PROJECT_REQUIRED]: HttpStatus.UNPROCESSABLE_ENTITY,
+  [ErrorCode.PROCESS_TYPE_FOLDER_KIND_REQUIRED]: HttpStatus.UNPROCESSABLE_ENTITY,
   [ErrorCode.CUSTOM_FIELD_BINDING_INVALID]: HttpStatus.UNPROCESSABLE_ENTITY,
   // CRM (#460): занятый УНП и мутация архивного контрагента — конфликт
   // состояния (запрос корректен, запись сейчас так менять нельзя).

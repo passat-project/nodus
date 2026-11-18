@@ -31,6 +31,7 @@ import { PlacementsRepository } from '../personal/placements.repository.js';
 import type { TaskListRow } from './task-row.js';
 import { TaskFieldsWriter } from './task-fields.writer.js';
 import { PressRoundsService } from '../press/press-rounds.service.js';
+import { TaskCreationScope } from './task-creation-scope.service.js';
 import { TaskFormulaService } from './task-formula.service.js';
 import { TasksQueryService } from './tasks-query.service.js';
 import { TasksRepository } from './tasks.repository.js';
@@ -76,6 +77,7 @@ export class TaskEditService {
     @Inject(WORKFLOW_ENGINE) private readonly engine: WorkflowEnginePort,
     @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
     private readonly press: PressRoundsService,
+    private readonly scope: TaskCreationScope,
   ) {}
 
   async update(user: AuthUser, id: string, body: TaskEditBody): Promise<TaskListItem> {
@@ -152,6 +154,12 @@ export class TaskEditService {
       // раунда оставит старого ответственного в сборе.
       await this.repo.lock(tx, id);
       const fresh = await this.query.visibleRow(user, id);
+      // «Где создаётся» (#665): перенос в проект/папку проверяется по
+      // итоговому месту — до записи; смена проекта узел обнуляет.
+      await this.scope.assertChange(
+        { typeId: fresh.typeId, projectId: fresh.projectId, nodeId: fresh.nodeId },
+        { projectId: body.projectId, nodeId: body.nodeId },
+      );
       const targetProjectId = body.projectId === undefined ? fresh.projectId : body.projectId;
       const assigneeAfter = body.assigneeId ?? fresh.assigneeId;
       const changingProject = body.projectId !== undefined && body.projectId !== fresh.projectId;

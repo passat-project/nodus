@@ -30,6 +30,7 @@ const type = (id: string, category: 'task' | 'letter', creatable = true): Proces
   config: {
     card: { hiddenBlocks: [], roleLabels: {} },
     access: { view: null, create: null },
+    creation: { excludedProjectTypeIds: [], folderKindId: null, withoutProject: true },
   },
   creationForm: { fields: [], chips: [] },
   viewer: { canView: true, canCreate: true },

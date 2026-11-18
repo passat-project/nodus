@@ -89,6 +89,7 @@ function setup(
     deps.taskService as never,
     { planOnCreate: async () => ({ ok: true, issue: async () => ({}) }) } as never,
     { ensureForStage: vi.fn(async () => void 0) } as never,
+    { assertCreate: vi.fn(async () => void 0) } as never,
   );
   return { service, ...deps };
 }

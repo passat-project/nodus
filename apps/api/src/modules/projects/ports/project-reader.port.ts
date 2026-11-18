@@ -88,6 +88,17 @@ export interface ProjectReader {
    *  PROJECT_NODE_INVALID без оракула существования (#467). */
   assertNodeAllowed(projectId: string, nodeId: string): Promise<void>;
 
+  /** Место создания записи (#665): тип проекта и его название. null — проекта
+   *  нет или модуль выключен (нейтрально, I10). */
+  projectTypeOf(
+    projectId: string,
+    tx?: TransactionClient,
+  ): Promise<{ id: string; name: string } | null>;
+
+  /** Вид папки, в которой стоит задача (#665): null — узла нет, он чужой
+   *  проекту или модуль выключен. Принадлежность проверяет assertNodeAllowed. */
+  nodeKindOf(projectId: string, nodeId: string): Promise<string | null>;
+
   /** Сериализует привязку задачи к узлу с мутациями структуры: тот же
    *  advisory-лок проекта, что create/move/delete узла (#467). Без него
    *  удаление пустого узла и параллельное назначение задачи дают висячий

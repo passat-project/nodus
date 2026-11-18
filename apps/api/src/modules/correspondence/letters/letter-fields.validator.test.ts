@@ -11,7 +11,15 @@ const RECEIPT_ID = '00000000-0000-4000-8000-000000000104';
 const ADDRESSEE_ID = '00000000-0000-4000-8000-000000000105';
 const DICTIONARY_ID = '00000000-0000-4000-8000-000000000106';
 
-function setup(overrides: { signer?: unknown; receipt?: unknown; active?: string[] } = {}) {
+function setup(
+  overrides: {
+    signer?: unknown;
+    receipt?: unknown;
+    active?: string[];
+    projectTypeId?: string | null;
+    catalogType?: unknown;
+  } = {},
+) {
   const counterparties = {
     activeRef: vi.fn(async () => ({ id: COUNTERPARTY_ID, name: 'ООО «Галур»' })),
     activeContact: vi.fn(async () =>
@@ -37,15 +45,24 @@ function setup(overrides: { signer?: unknown; receipt?: unknown; active?: string
     prepareCreate: vi.fn(async () => ({})),
     prepareUpdate: vi.fn(async () => ({ next: {}, changes: [] })),
   };
-  const projects = { assertProjectAttachable: vi.fn(async () => void 0) };
+  const projects = {
+    assertProjectAttachable: vi.fn(async () => void 0),
+    projectTypeOf: vi.fn(async () =>
+      overrides.projectTypeId === undefined || overrides.projectTypeId === null
+        ? null
+        : { id: overrides.projectTypeId, name: 'Договор' },
+    ),
+  };
+  const catalog = { typeById: vi.fn(async () => overrides.catalogType ?? null) };
   const validator = new LetterFieldsValidator(
     counterparties as never,
     dictionaries as never,
     profiles as never,
     customFields as never,
     projects as never,
+    catalog as never,
   );
-  return { validator, counterparties, dictionaries, profiles, customFields };
+  return { validator, counterparties, dictionaries, profiles, customFields, projects, catalog };
 }
 
 const input = (patch: Record<string, unknown> = {}) => ({
@@ -179,5 +196,29 @@ describe('правка регистрационных данных (#55, В3)', 
     );
     expect(changes).toContainEqual({ field: 'signerId', from: SIGNER_ID, to: null });
     expect(counterparties.activeContact).toHaveBeenCalled();
+  });
+
+  it('«Где создаётся»: тип письма, исключённый в типе проекта, не привязывается (#665)', async () => {
+    const projectTypeId = '00000000-0000-4000-8000-000000000107';
+    const projectId = '00000000-0000-4000-8000-000000000108';
+    const { validator } = setup({
+      projectTypeId,
+      catalogType: {
+        id: TYPE_ID,
+        config: {
+          creation: {
+            excludedProjectTypeIds: [projectTypeId],
+            folderKindId: null,
+            withoutProject: true,
+          },
+        },
+      },
+    });
+    await expect(
+      validator.patch(current, {}, { projectId }, TYPE_ID, '2026-10-27', {
+        id: 'u-registrar',
+        permissions: [],
+      }),
+    ).rejects.toMatchObject({ code: ErrorCode.PROCESS_TYPE_NOT_ALLOWED_IN_PROJECT });
   });
 });

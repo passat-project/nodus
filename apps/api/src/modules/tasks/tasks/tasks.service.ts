@@ -55,6 +55,7 @@ import {
 import type { NumberTarget } from '../../custom-fields/ports/number-host.port.js';
 import { DuplicateTaskSourceError, TasksRepository } from './tasks.repository.js';
 import { PressRoundsService } from '../press/press-rounds.service.js';
+import { TaskCreationScope } from './task-creation-scope.service.js';
 
 /**
  * Создание и удаление задач (правка и перенос — TaskEditService). Задача без
@@ -85,6 +86,7 @@ export class TasksService {
     private readonly policy: TaskCreatePolicy,
     @Inject(NUMBER_ISSUE) private readonly numberIssue: NumberIssue,
     private readonly press: PressRoundsService,
+    private readonly scope: TaskCreationScope,
   ) {}
 
   /** Подзадача/перепривязка: родителя правят только те, кто может править
@@ -151,6 +153,13 @@ export class TasksService {
       }
       await this.projects.assertNodeAllowed(body.projectId, body.nodeId);
     }
+    // «Где создаётся» (#665): тип проекта, папка и «без проекта» проверяются
+    // ПОСЛЕ наследования проекта/узла от родителя — проверяется фактическое
+    // место рождения задачи.
+    await this.scope.assertCreate(type, {
+      projectId: body.projectId ?? null,
+      nodeId: body.nodeId ?? null,
+    });
     const message = body.sourceMessageId
       ? await this.messages.snapshot(body.sourceMessageId, user.id)
       : null;

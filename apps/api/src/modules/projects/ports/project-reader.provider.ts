@@ -319,6 +319,24 @@ export class ProjectReaderProvider implements ProjectReader, ProjectChatReader {
     return project ? (project.visibility as 'open' | 'secret') : null;
   }
 
+  /** Место создания (#665): тип проекта — по нему решается «можно ли здесь
+   *  создавать записи этого типа». Флаг выключен — нейтрально (I10). */
+  async projectTypeOf(
+    projectId: string,
+    tx?: TransactionClient,
+  ): Promise<{ id: string; name: string } | null> {
+    if (!(await this.enabled())) return null;
+    const project = await this.projects.findById(projectId, tx);
+    return project ? { id: project.type.id, name: project.type.name } : null;
+  }
+
+  /** Вид папки задачи (#665): привязка работ к типу папки. */
+  async nodeKindOf(projectId: string, nodeId: string): Promise<string | null> {
+    if (!(await this.enabled())) return null;
+    const node = await this.nodes.findById(nodeId);
+    return node && node.projectId === projectId ? node.kindId : null;
+  }
+
   /** Роли сотрудника в проектах (#433): источник решающих «роль в проекте». */
   async rolesIn(
     userId: string,

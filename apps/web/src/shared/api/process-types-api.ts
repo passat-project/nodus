@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { TaskDetail, TaskListItem, ProcessType } from '@nodus/contracts';
-import { DEFAULT_TASK_TYPE_CODE, typeViewerOf, ui } from '@nodus/contracts';
+import {
+  DEFAULT_TASK_TYPE_CODE,
+  typeViewerOf,
+  ui,
+  type CreationScope,
+  type ProcessCategory,
+} from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api } from '../api-client.js';
@@ -54,6 +60,40 @@ export function useAliveProcessTypes() {
     staleTime: 60_000,
     select: (types: ProcessType[]) =>
       types.filter((t) => !t.archivedAt && t.category === 'task' && typeViewerOf(t).canView),
+  });
+}
+
+/**
+ * Живые типы категории для настроек (#665): «Что здесь можно создавать» в
+ * типе проекта и «Где создаётся» в типе процесса показывают ОДИН справочник
+ * с двух сторон. Доступ смотрящего здесь не фильтруется — это настройка.
+ */
+export function useLiveProcessTypes(category: ProcessCategory) {
+  return useQuery({
+    queryKey: automationKeys.types('exclude', category),
+    queryFn: () => api<ProcessType[]>(`/workflows/types?category=${category}`),
+    staleTime: 60_000,
+    select: (types: ProcessType[]) => types.filter((t) => !t.archivedAt && t.category === category),
+  });
+}
+
+/**
+ * «Где создаётся» (#665, ADR-0041 п.9): правка связи в настройках ТИПА —
+ * одна точка записи, поэтому обе стороны (тип проекта и тип процесса)
+ * показывают одно и то же. Раздел конфигурации заменяется целиком.
+ */
+export function useUpdateTypeCreation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ typeId, creation }: { typeId: string; creation: CreationScope }) =>
+      api<ProcessType>(`/workflows/types/${typeId}/config`, {
+        method: 'PATCH',
+        body: { creation },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: automationKeys.all });
+    },
+    onError: () => toast.error(ui.common.saveError),
   });
 }
 

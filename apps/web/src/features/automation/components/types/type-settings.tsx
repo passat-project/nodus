@@ -23,8 +23,9 @@ import { PanelField, SectionLink } from '../../../../shared/ui/panel/panel-kit.j
 import { SidePanel } from '../../../../shared/ui/panel/side-panel.js';
 import { TypeAccessSection } from '../editor/panel/type-settings-access.js';
 import { TypeBlocksSection, TypeRoleLabelsSection } from '../editor/panel/type-settings-card.js';
+import { TypeCreationScopeSection } from './type-creation-scope.js';
 
-type Section = 'root' | 'access' | 'blocks' | 'roles' | 'numbering';
+type Section = 'root' | 'access' | 'blocks' | 'roles' | 'numbering' | 'creation';
 
 const t = ui.automation.typeSettings;
 
@@ -87,6 +88,11 @@ export function TypeSettingsPanel({
               summary={accessSummary(type, roleName)}
               onClick={() => setSection('access')}
             />
+            <SectionLink
+              title={t.sections.creation}
+              summary={ui.automation.typeSettings.creationSummary}
+              onClick={() => setSection('creation')}
+            />
             {!task ? (
               <SectionLink
                 title={t.sections.numbering}
@@ -112,6 +118,7 @@ export function TypeSettingsPanel({
         </>
       ) : null}
       {section === 'access' ? <TypeAccessSection type={type} readOnly={canEdit} /> : null}
+      {section === 'creation' ? <TypeCreationScopeSection type={type} canSave={!readOnly} /> : null}
       {section === 'blocks' ? <TypeBlocksSection type={type} readOnly={canEdit} /> : null}
       {section === 'roles' ? <TypeRoleLabelsSection type={type} readOnly={canEdit} /> : null}
       {section === 'numbering' ? <TypeNumberingSection type={type} /> : null}

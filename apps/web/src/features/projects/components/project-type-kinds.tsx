@@ -1,13 +1,23 @@
 import { useState } from 'react';
-import { Plus, RotateCcw } from 'lucide-react';
+import { Check, Plus, RotateCcw } from 'lucide-react';
 import type { NodeKind, ProjectType } from '@nodus/contracts';
-import { allowedNodeKinds, ui } from '@nodus/contracts';
+import {
+  allowedNodeKinds,
+  typeAllowedInProjectType,
+  typeConfigOf,
+  ui,
+  withProjectTypeAllowed,
+} from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Input } from '@nodus/ui/components/input';
 import { NodeChip } from '@nodus/ui/components/node-chip';
 import { Switch } from '@nodus/ui/components/switch';
 
 import { PanelAction, PanelNote } from '../../../shared/ui/panel/panel-kit.js';
+import {
+  useLiveProcessTypes,
+  useUpdateTypeCreation,
+} from '../../../shared/api/process-types-api.js';
 import { useUpdateProjectType } from '../api/project-catalog-mutations.js';
 import { kindIdsAfterToggle, visibleTypeKinds } from '../lib/project-type-summary.js';
 import { useCreateNodeKind } from '../node-kinds/api/node-kinds-api.js';
@@ -34,6 +44,9 @@ export function ProjectTypeKindsSection({
 }) {
   const update = useUpdateProjectType();
   const createKind = useCreateNodeKind();
+  const tasks = useLiveProcessTypes('task');
+  const letters = useLiveProcessTypes('letter');
+  const updateTypeScope = useUpdateTypeCreation();
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -41,6 +54,26 @@ export function ProjectTypeKindsSection({
   const allowed = allowedNodeKinds(type.kindIds, visible);
   const allowedIds = allowed.map((kind) => kind.id);
   const explicit = type.kindIds !== null;
+
+  // «Отметил вид — предложено разрешить привязанные типы работ» (#665):
+  // у включённого вида есть работы, выключенные в этом типе проекта.
+  const boundWorks = [...(tasks.data ?? []), ...(letters.data ?? [])].filter((item) => {
+    const scope = typeConfigOf(item).creation;
+    return (
+      scope.folderKindId !== null &&
+      allowedIds.includes(scope.folderKindId) &&
+      !typeAllowedInProjectType(scope, type.id)
+    );
+  });
+
+  function allowBoundWorks(): void {
+    for (const item of boundWorks) {
+      updateTypeScope.mutate({
+        typeId: item.id,
+        creation: withProjectTypeAllowed(typeConfigOf(item).creation, type.id, true),
+      });
+    }
+  }
 
   function toggle(kindId: string, bound: boolean) {
     update.mutate({
@@ -159,6 +192,12 @@ export function ProjectTypeKindsSection({
       {canSetup && explicit && allowed.length < visible.length ? (
         <PanelAction icon={RotateCcw} onClick={() => update.mutate({ id: type.id, kindIds: null })}>
           {ui.projects.schemasResetKinds}
+        </PanelAction>
+      ) : null}
+
+      {canSetup && boundWorks.length > 0 ? (
+        <PanelAction icon={Check} onClick={allowBoundWorks}>
+          {ui.projects.schemasSuggestWorks}
         </PanelAction>
       ) : null}
     </>

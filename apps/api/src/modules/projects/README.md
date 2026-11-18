@@ -218,7 +218,9 @@ node_moved / node_deleted`; `node_updated` несёт `customFieldChanges` и
   `assertTaskProjectVisible` (422 #432), `assertMembersAllowed` (422),
   `projectTaskRights` (supervisor), `assertNodeAllowed(projectId, nodeId)`
   (узел этого проекта, иначе 422; архивный проект — 400, дерево заморожено #467), `lockNodeStructure(tx, projectId)`
-  (advisory-лок структуры на привязку задачи — не гоняется с удалением узла).
+  (advisory-лок структуры на привязку задачи — не гоняется с удалением узла),
+  `projectTypeOf(projectId)` (тип проекта и имя — «где создаётся», #665) и
+  `nodeKindOf(projectId, nodeId)` (вид папки задачи, #665).
   Выключенный флаг — нейтрален.
 - `PROJECT_CHAT_READER` (потребитель: chat): `roster`/`canView`/`canPost`/
   `refs` — канал проекта. `roster(projectId, tx?)` принимает соединение

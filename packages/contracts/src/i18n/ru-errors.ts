@@ -53,6 +53,9 @@ export const errorMessages: Record<ErrorCode, string> = {
     'Настройка типа ссылается на недоступное значение — обратитесь к администратору',
   [ErrorCode.CUSTOM_FIELD_BINDING_INVALID]: 'Место привязки недоступно — проверьте список мест',
   [ErrorCode.PROCESS_TYPE_NAME_TAKEN]: 'Тип с таким названием уже существует',
+  [ErrorCode.PROCESS_TYPE_NOT_ALLOWED_IN_PROJECT]: 'Этот тип нельзя создать в проекте такого типа',
+  [ErrorCode.PROCESS_TYPE_PROJECT_REQUIRED]: 'Этот тип создаётся только в проекте',
+  [ErrorCode.PROCESS_TYPE_FOLDER_KIND_REQUIRED]: 'Этот тип создаётся только в папке своего вида',
   [ErrorCode.CHAT_ATTACHMENT_TOO_LARGE]:
     'Файл больше 100 МБ — вложения такого размера не поддерживаются',
   [ErrorCode.CHAT_ATTACHMENT_TOO_MANY]:

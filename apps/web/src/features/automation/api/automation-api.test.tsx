@@ -32,6 +32,7 @@ const makeType = (n: string): ProcessType => ({
   config: {
     card: { hiddenBlocks: [], roleLabels: {} },
     access: { view: null, create: null },
+    creation: { excludedProjectTypeIds: [], folderKindId: null, withoutProject: true },
   },
   creationForm: { fields: [], chips: [] },
   viewer: { canView: true, canCreate: true },

@@ -208,6 +208,24 @@ export const automationStrings = {
   deleteTransition: 'Удалить кнопку',
   press: pressStrings.automation,
   creation: creationStrings,
+  /** «Где создаётся» (#665): одна связь «тип процесса × место создания»,
+   *  показанная с двух сторон — в типе проекта и в типе задачи/письма. */
+  creationScope: {
+    sectionTitle: 'Где создаётся',
+    projectSectionTitle: 'Что здесь можно создавать',
+    /** Шапка панели раздела: длинное название страницы не влезает в h-14. */
+    projectSectionHeader: 'Что создаётся',
+    projectSummary: 'Задачи и письма',
+    tasksGroup: 'Задачи',
+    lettersGroup: 'Письма',
+    empty: 'Живых типов нет — создайте тип в «Процессах»',
+    withoutProject: 'Без проекта',
+    folderKind: 'Вид папки',
+    folderKindAny: 'Где угодно',
+    projectTypeRow: 'Проекты',
+    projectTypesEmpty: 'Типов проектов нет',
+    allowAll: 'Разрешить во всех типах проектов',
+  },
   /** Правая панель редактора (#378 ред. 2): разделы с переходом внутрь. */
   panel: {
     assignNumberHint:

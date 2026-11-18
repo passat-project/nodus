@@ -1,11 +1,16 @@
 import type { CreationForm, ProcessType, ProcessTypeRef } from '@nodus/contracts';
-import { customFieldKey } from '@nodus/contracts';
+import { customFieldKey, DEFAULT_CREATION_SCOPE } from '@nodus/contracts';
 
 import { quickProcessType, requestProcessType, systemProcessType } from './task-stages.js';
 import { fieldIds } from './field-ids.js';
 import { processTypeIds } from './process-type-ids.js';
 import { demoRoleIds } from './roles.js';
 import { letterProcessTypes } from './letter-catalog.js';
+
+/** «Где создаётся» (#665): по умолчанию — везде и без проекта. */
+const DEMO_CREATION = DEFAULT_CREATION_SCOPE;
+/** Документные работы внутри проекта (комплект, изменение) — без проекта нельзя. */
+const DEMO_CREATION_NO_PROJECT = { ...DEFAULT_CREATION_SCOPE, withoutProject: false };
 
 /** Типы задач мок-библиотеки «Автоматизации» (ревизия 2, #378; формы и состав
  *  карточки — #432): два системных типа, «Переработка» и «Кадровый запрос»
@@ -49,7 +54,11 @@ export const standardProcessType: DemoProcessType = {
   workflowId: STANDARD_WORKFLOW_ID,
   numbering: null,
   // «Стандартный» — тип быстрых входов: доступ всем, карточка полная.
-  config: { card: { hiddenBlocks: [], roleLabels: {} }, access: allAccess },
+  config: {
+    card: { hiddenBlocks: [], roleLabels: {} },
+    access: allAccess,
+    creation: DEMO_CREATION,
+  },
 };
 
 export const quickTypeDto: DemoProcessType = {
@@ -67,7 +76,11 @@ export const quickTypeDto: DemoProcessType = {
   archivedAt: null,
   workflowId: QUICK_WORKFLOW_ID,
   numbering: null,
-  config: { card: { hiddenBlocks: [], roleLabels: {} }, access: allAccess },
+  config: {
+    card: { hiddenBlocks: [], roleLabels: {} },
+    access: allAccess,
+    creation: DEMO_CREATION,
+  },
 };
 
 /** Демонстратор модели владельца (критерии приёмки #432): свои атрибуты,
@@ -93,6 +106,7 @@ export const overtimeType: DemoProcessType = {
       roleLabels: { creator: 'Заявитель' },
     },
     access: allAccess,
+    creation: DEMO_CREATION,
   },
 };
 
@@ -116,6 +130,7 @@ export const hrType: DemoProcessType = {
   config: {
     card: { hiddenBlocks: [], roleLabels: {} },
     access: { view: [demoRoleIds.head], create: [demoRoleIds.head] },
+    creation: DEMO_CREATION,
   },
 };
 
@@ -136,7 +151,11 @@ export const komplektType: DemoProcessType = {
   archivedAt: null,
   workflowId: KOMPLEKT_WORKFLOW_ID,
   numbering: null,
-  config: { card: { hiddenBlocks: [], roleLabels: {} }, access: allAccess },
+  config: {
+    card: { hiddenBlocks: [], roleLabels: {} },
+    access: allAccess,
+    creation: DEMO_CREATION_NO_PROJECT,
+  },
 };
 
 /** Тип «Изменение» (#630): работа внутри папки «Комплект» — носитель
@@ -156,7 +175,11 @@ export const changeType: DemoProcessType = {
   archivedAt: null,
   workflowId: CHANGE_WORKFLOW_ID,
   numbering: null,
-  config: { card: { hiddenBlocks: [], roleLabels: {} }, access: allAccess },
+  config: {
+    card: { hiddenBlocks: [], roleLabels: {} },
+    access: allAccess,
+    creation: DEMO_CREATION_NO_PROJECT,
+  },
 };
 
 /** Тип «Заявка» (#434): обычный тип с коллективной кнопкой «Ознакомлен» —
@@ -176,7 +199,11 @@ export const requestType: DemoProcessType = {
   archivedAt: null,
   workflowId: REQUEST_WORKFLOW_ID,
   numbering: null,
-  config: { card: { hiddenBlocks: [], roleLabels: {} }, access: allAccess },
+  config: {
+    card: { hiddenBlocks: [], roleLabels: {} },
+    access: allAccess,
+    creation: DEMO_CREATION,
+  },
 };
 
 export const changeTypeRef: ProcessTypeRef = {
@@ -235,7 +262,11 @@ export const archivedDemoType: DemoProcessType = {
   archivedAt: '2026-10-01T10:00:00Z',
   workflowId: ARCHIVED_WORKFLOW_ID,
   numbering: null,
-  config: { card: { hiddenBlocks: [], roleLabels: {} }, access: allAccess },
+  config: {
+    card: { hiddenBlocks: [], roleLabels: {} },
+    access: allAccess,
+    creation: DEMO_CREATION,
+  },
 };
 
 export const demoProcessTypes: DemoProcessType[] = [

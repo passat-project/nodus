@@ -15,7 +15,10 @@ import { ApiError } from '../api-client.js';
 
 const h = vi.hoisted(() => {
   const creationForm: CreationForm = {
-    fields: [{ key: 'description', label: null, required: false, preset: null }],
+    fields: [
+      { key: 'description', label: null, required: false, preset: null },
+      { key: 'project', label: null, required: false, preset: null },
+    ],
     chips: [],
   };
   const type = { id: '20000000-0000-4000-8000-000000000901', category: 'task', creationForm };
@@ -27,6 +30,7 @@ const h = vi.hoisted(() => {
     project: {
       id: 'p-1',
       name: 'Тендер',
+      type: { id: 'pt-1', name: 'Тема' },
       myMembership: { manager: false, assistant: false, participant: false, observer: false },
     },
   };
@@ -60,6 +64,12 @@ vi.mock('../api/project-members.js', () => ({
   useAddProjectMembers: () => ({ mutate: h.addMembers.mutate, isPending: false }),
 }));
 vi.mock('../api/error-toast.js', () => ({ toastApiError: vi.fn() }));
+vi.mock('../api/projects-available.js', () => ({ projectsAvailable: () => true }));
+vi.mock('../ui/project-picker.js', () => ({
+  ProjectPicker: ({ value }: { value?: string }) => (
+    <span data-testid="project-picker">{value ?? 'none'}</span>
+  ),
+}));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { TaskCreateWindow } from './task-create-window.js';
@@ -201,5 +211,18 @@ describe('TaskCreateWindow — секретный проект (#674)', () => {
     expect(screen.queryByRole('button', { name: ui.taskCreate.secretMembersAdd })).toBeNull();
     expect(screen.getByRole('button', { name: ui.common.create })).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toContain(ui.projects.secretMembersCanAdd);
+  });
+
+  it('окно из проекта: подставленный проект не теряется при первом рендере (#665)', () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <TaskCreateWindow
+          open
+          prefill={{ projectId: 'p-1', title: 'Из проекта' }}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByTestId('project-picker').textContent).toBe('p-1');
   });
 });

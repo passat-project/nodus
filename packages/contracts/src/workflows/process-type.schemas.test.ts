@@ -61,6 +61,7 @@ describe('processTypeSchema', () => {
       config: {
         card: { hiddenBlocks: [], roleLabels: {} },
         access: { view: null, create: null },
+        creation: { excludedProjectTypeIds: [], folderKindId: null, withoutProject: true },
       },
       creationForm: { fields: [], chips: [] },
       viewer: { canView: true, canCreate: true },
@@ -90,6 +91,7 @@ describe('processTypeSchema', () => {
       config: {
         card: { hiddenBlocks: [], roleLabels: {} },
         access: { view: null, create: null },
+        creation: { excludedProjectTypeIds: [], folderKindId: null, withoutProject: true },
         numbering: { seriesId: '33333333-3333-4333-8333-333333333333' },
       },
       creationForm: { fields: [], chips: [] },

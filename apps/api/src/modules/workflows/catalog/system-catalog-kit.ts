@@ -90,6 +90,8 @@ export const KIT_PROCESS_TYPE: CatalogProcessType = {
   color: 'info',
   description: 'Маршрут комплектации документа: от разработки до госорганов',
   sortOrder: 2,
+  // Работа внутри проекта-комплекта: без проекта не создаётся (#665).
+  withoutProject: false,
 };
 
 export const CHG_PROCESS_TYPE: CatalogProcessType = {
@@ -100,6 +102,8 @@ export const CHG_PROCESS_TYPE: CatalogProcessType = {
   color: 'warning',
   description: 'Маршрут изменения: от разработки до госорганов',
   sortOrder: 3,
+  // Изменение живёт в папке-комплекте проекта (#665, ADR-0042 §11).
+  withoutProject: false,
 };
 
 export const KIT_CATALOG_PROCESS_TYPES: readonly {
