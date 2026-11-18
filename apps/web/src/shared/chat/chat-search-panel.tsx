@@ -365,7 +365,9 @@ export function ChatSearchPanel({
           </span>
         ) : !isFavorites && messageSearch.isError ? (
           <span className="px-2 py-2 text-xs text-muted-foreground/80">{ui.search.errorTitle}</span>
-        ) : !isFavorites && messageSearch.isFetching && shown.length === 0 ? (
+        ) : !isFavorites &&
+          (messageSearch.isFetching || debounced !== needle) &&
+          shown.length === 0 ? (
           <span className="px-2 py-2 text-xs text-muted-foreground/80">
             {ui.chat.searchLoading}
           </span>

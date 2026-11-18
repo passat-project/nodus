@@ -265,6 +265,13 @@ function projectMatches(doc: MockDocument, request: SearchRequest): boolean {
   return doc.projectId === request.projectId;
 }
 
+/** Поиск внутри открытой беседы (#956): `conversationId` сужает только
+ *  строки-сообщения — у задач/писем/проектов/сотрудников беседы нет. */
+function conversationMatches(doc: MockDocument, request: SearchRequest): boolean {
+  if (!request.conversationId) return true;
+  return doc.type === 'message' && doc.conversation?.id === request.conversationId;
+}
+
 /** Ответ мока: контракт `SearchResponse` (форма и правила — как у сервера). */
 export function runMockSearch(request: SearchRequest, actor: MockActor): SearchResponse {
   const started = Date.now();
@@ -283,7 +290,8 @@ export function runMockSearch(request: SearchRequest, actor: MockActor): SearchR
   }
 
   const documents = mockSearchDocuments(actor).filter(
-    (doc) => inPeriod(doc, request) && projectMatches(doc, request),
+    (doc) =>
+      inPeriod(doc, request) && projectMatches(doc, request) && conversationMatches(doc, request),
   );
 
   // Фасеты — по всем фильтрам, КРОМЕ выбранного types (чипы показывают,

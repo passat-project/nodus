@@ -11,7 +11,17 @@ export const searchHandlers = [
   http.get('/api/v1/search', ({ request }) => {
     const url = new URL(request.url);
     const raw: Record<string, string> = {};
-    for (const key of ['q', 'types', 'projectId', 'from', 'to', 'sort', 'cursor', 'limit']) {
+    for (const key of [
+      'q',
+      'types',
+      'projectId',
+      'conversationId',
+      'from',
+      'to',
+      'sort',
+      'cursor',
+      'limit',
+    ]) {
       const value = url.searchParams.get(key);
       if (value !== null) raw[key] = value;
     }

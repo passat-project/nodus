@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { ui } from '@nodus/contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const CONV = '8f1c1c1e-5a0f-4f2a-9d2e-3b7a6c1d0e11';
@@ -101,6 +102,15 @@ beforeEach(() => {
  * (беседа с собой) сохраняет прежний режим записей и закладок.
  */
 describe('ChatSearchPanel — поиск сообщений беседы (#956)', () => {
+  it('между вводом и debounce показывает «Ищем сообщения…», не «Ничего не найдено»', () => {
+    mount();
+
+    searchWith('смета');
+
+    expect(screen.getByText(ui.chat.searchLoading)).not.toBeNull();
+    expect(screen.queryByText(ui.chat.searchNoResults)).toBeNull();
+  });
+
   it('шлёт серверный запрос по беседе и показывает сниппет с подсветкой', async () => {
     searchState.data = { pages: [{ ...emptyPage, items: [messageHit], total: 1 }] };
     mount();

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { ConversationListItem } from '@nodus/contracts';
+import { ui, type ConversationListItem } from '@nodus/contracts';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,8 +14,10 @@ import { ConversationLevel } from './forward-dialog.js';
  */
 
 const { searchMock, searchState } = vi.hoisted(() => ({
-  searchMock: vi.fn(() => ({ data: { items: searchState.items } })),
-  searchState: { items: [] as ConversationListItem[] },
+  searchMock: vi.fn(() => ({
+    data: searchState.pending ? undefined : { items: searchState.items },
+  })),
+  searchState: { items: [] as ConversationListItem[], pending: false },
 }));
 
 vi.mock('@nodus/ui/components/dialog', () => ({
@@ -39,7 +41,7 @@ vi.mock('./conversation-avatar.js', () => ({ ConversationAvatar: () => null }));
 vi.mock('./conversations.js', () => ({
   conversationTitle: (conversation: ConversationListItem) => conversation.title ?? 'Чат',
   conversationSubtitle: () => 'подзаголовок',
-  isNotesConversation: () => false,
+  isNotesConversation: (conversation: ConversationListItem) => conversation.id === 'notes',
   sortByActivity: (items: ConversationListItem[]) => items,
 }));
 
@@ -78,6 +80,7 @@ function conversation(id: string, title: string): ConversationListItem {
 afterEach(() => {
   cleanup();
   searchState.items = [];
+  searchState.pending = false;
   searchMock.mockClear();
 });
 
@@ -116,5 +119,39 @@ describe('ConversationLevel — серверный поиск пикера пе�
 
     expect(searchMock).toHaveBeenCalledWith('');
     expect(screen.getByText('Общий чат')).not.toBeNull();
+  });
+
+  it('«Избранное» остаётся первой строкой при поиске и не дублируется', () => {
+    searchState.items = [conversation('notes', 'Избранное'), conversation('c-2', 'Смета проекта')];
+
+    render(
+      <ConversationLevel
+        conversations={[conversation('notes', 'Избранное'), conversation('c-1', 'Общий чат')]}
+        meId="me"
+        onPick={vi.fn()}
+        onDrill={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'смета' } });
+
+    expect(screen.getAllByText('Избранное')).toHaveLength(1);
+    expect(screen.getByText('Смета проекта')).not.toBeNull();
+  });
+
+  it('до первого ответа сервера показывает загруженный список, а не «ничего не найдено»', () => {
+    searchState.pending = true;
+
+    render(
+      <ConversationLevel
+        conversations={[conversation('c-1', 'Общий чат')]}
+        meId="me"
+        onPick={vi.fn()}
+        onDrill={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'смета' } });
+
+    expect(screen.getByText('Общий чат')).not.toBeNull();
+    expect(screen.queryByText(ui.chat.forwardEmpty)).toBeNull();
   });
 });

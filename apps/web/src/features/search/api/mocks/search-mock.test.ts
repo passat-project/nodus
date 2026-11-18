@@ -98,6 +98,36 @@ describe('мок поиска: контракт и правила фильтро
     }
   });
 
+  it('conversationId сужает сообщения до открытой беседы (#956)', () => {
+    const all = runMockSearch(request({ q: 'каркас', types: ['message'] }), actor);
+    const hit = all.items.find((entry) => entry.type === 'message');
+    expect(hit?.type).toBe('message');
+    if (hit?.type !== 'message') return;
+    const conversationId = hit.meta.conversationId;
+    expect(conversationId).not.toBe('');
+
+    const scoped = runMockSearch(
+      request({ q: 'каркас', types: ['message'], conversationId }),
+      actor,
+    );
+    expect(scoped.items.length).toBeGreaterThan(0);
+    expect(
+      scoped.items.every(
+        (entry) => entry.type === 'message' && entry.meta.conversationId === conversationId,
+      ),
+    ).toBe(true);
+
+    const foreign = runMockSearch(
+      request({
+        q: 'каркас',
+        types: ['message'],
+        conversationId: '11111111-1111-4111-8111-111111111111',
+      }),
+      actor,
+    );
+    expect(foreign.items).toEqual([]);
+  });
+
   it('конфиденциальное письмо не видит посторонний, но видит регистратор', () => {
     const letter = demoLetters.find(
       (entry) => entry.confidential && entry.subject !== null && entry.registeredAt !== null,

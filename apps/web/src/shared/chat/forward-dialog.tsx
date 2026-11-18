@@ -204,17 +204,20 @@ export function ConversationLevel({
   const [filter, setFilter] = useState<FilterId>('all');
   const filterTypes = FILTERS.find((f) => f.id === filter)?.types ?? null;
   // Поиск — серверный (#956): пикер пересылки раньше видел только первые 50
-  // бесед без догрузки. Debounce 250 мс; до ответа — прежние строки.
+  // бесед без догрузки. Debounce 250 мс; до первого ответа — загруженный
+  // список (пустое «ничего не найдено» на время запроса лгало бы).
   const search = useDebouncedValue(query.trim(), 250);
   const { data: searchData } = useConversationSearch(search);
-  const source = search ? (searchData?.items ?? []) : conversations;
+  const source = search ? (searchData?.items ?? conversations) : conversations;
   // «Избранное» — ВСЕГДА первая строка пикера (вердикт 04.10 р.9, канон
   // Telegram Saved Messages): выбор = автозвезда на оригиналы, пояснение —
-  // подзаголовком строки; из общего списка исключено (не дублируем).
-  const notes = source.find((c) => isNotesConversation(c, meId)) ?? null;
+  // подзаголовком строки; из общего списка исключено (не дублируем). Строка
+  // берётся из несфильтрованного списка — поиск её не прячет; сверка по id,
+  // потому что серверная выдача возвращает другой объект той же беседы.
+  const notes = conversations.find((c) => isNotesConversation(c, meId)) ?? null;
   // Подстроку уже применил сервер; на клиенте — только фильтр типов.
   const filtered = source.filter(
-    (c) => c !== notes && (filterTypes === null || filterTypes.includes(c.type)),
+    (c) => c.id !== notes?.id && (filterTypes === null || filterTypes.includes(c.type)),
   );
   return (
     <>
