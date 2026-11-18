@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertSafeDbTarget, databaseName, isMutatingPrismaCommand } from './db-target-guard.js';
+import {
+  assertSafeDbTarget,
+  databaseName,
+  isCiEnvironment,
+  isMutatingPrismaCommand,
+} from './db-target-guard.js';
 
 /**
  * Инцидент 18.11.2026: `prisma db execute` с хоста применил аддитивную
@@ -41,5 +46,16 @@ describe('предохранитель цели БД', () => {
       assertSafeDbTarget({ url: PROD, argv: ['db', 'execute'], env: { ALLOW_PROD_DB: '1' } }),
     ).toBeNull();
     expect(assertSafeDbTarget({ url: NIGHT, argv: ['db', 'execute'], env: {} })).toBeNull();
+  });
+
+  it('в CI предохранитель отключён: БД — эфемерный сервис-контейнер', () => {
+    expect(isCiEnvironment({ CI: 'true' })).toBe(true);
+    expect(isCiEnvironment({ CI: '1' })).toBe(true);
+    expect(isCiEnvironment({ CI: 'false' })).toBe(false);
+    expect(isCiEnvironment({})).toBe(false);
+    expect(isCiEnvironment(undefined)).toBe(false);
+    // GitHub Actions: DATABASE_URL тоже `.../nodus`, но это не прод.
+    expect(assertSafeDbTarget({ url: PROD, argv: ['db', 'seed'], env: { CI: 'true' } })).toBeNull();
+    expect(assertSafeDbTarget({ url: PROD, argv: ['db', 'seed'], env: {} })).toContain('STOP');
   });
 });
