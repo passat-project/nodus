@@ -9,9 +9,8 @@ import type { AuditRepository } from '../../core/audit/audit.repository.js';
 import { AssistantActionsService } from './assistant-actions.service.js';
 
 /**
- * Карточки действий (Ф2, #899, ADR-0048): предложение НЕ пишет в портал,
- * запись — только подтверждение/байпас, идемпотентность = id карточки,
- * чужая карточка — 404, отмена выполненного — DELETE созданного.
+ * Карточки действий (Ф2, #899, ADR-0048): предложение НЕ пишет в портал, запись — только
+ * подтверждение/байпас, идемпотентность = id карточки, чужая — 404, отмена — DELETE.
  */
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -190,7 +189,6 @@ describe('AssistantActionsService: предложение (ADR-0048)', () => {
     expect(result.text).toContain('выполнено');
     expect(bus.publish).toHaveBeenCalledWith(RUN_ID, 'action.executed', expect.anything());
   });
-
   it('байпас не исполняет необратимое: карточка ждёт человека (#926)', async () => {
     const { service, executor } = build();
     const result = await service.propose({
