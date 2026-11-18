@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { Permission } from '@nodus/contracts';
+
 import { buildCatalog } from '../catalog.js';
 import type { ToolContext } from '../tool-definition.js';
 import {
@@ -144,7 +146,10 @@ describe('портфель и папки', () => {
 
 describe('каталог', () => {
   it('инструменты партии доступны при включённом проекте', () => {
-    const catalog = buildCatalog({ permissions: ['assistant.use'], features: ['projects'] });
+    const catalog = buildCatalog({
+      permissions: ['assistant.use', Permission.PROJECT_MANAGE, Permission.PROJECT_CREATE],
+      features: ['projects'],
+    });
     const ids = catalog.map((tool) => tool.id);
     for (const tool of projectsPartsTools) {
       expect(ids, tool.id).toContain(tool.id);

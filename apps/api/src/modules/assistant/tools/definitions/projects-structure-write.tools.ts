@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import {
+  Permission,
   projectGroupUpdateBodySchema,
   updateProjectNodeBodySchema,
   type ProjectGroup,
@@ -27,6 +28,7 @@ export const projectsUpdateGroupTool = defineTool({
   keywords: ['переименовать портфель', 'переименовать группу проектов', 'название портфеля'],
   module: 'projects',
   kind: 'write',
+  permission: Permission.PROJECT_MANAGE,
   featureFlag: 'projects',
   hot: false,
   input: z.object({ groupId: z.uuid(), patch: projectGroupUpdateBodySchema }),
@@ -68,7 +70,14 @@ export const projectsUpdateNodeTool = defineTool({
   input: z.object({
     projectId: z.uuid(),
     nodeId: z.uuid(),
-    patch: updateProjectNodeBodySchema,
+    // Подтверждение пустого сегмента номера (#630) остаётся человеку в
+    // интерфейсе: модель не может подтвердить это за сотрудника.
+    patch: z.preprocess((value) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+      const copy = { ...(value as Record<string, unknown>) };
+      delete copy.confirmEmptyNumberParts;
+      return copy;
+    }, updateProjectNodeBodySchema),
   }),
   api: { method: 'PATCH', path: '/projects/:id/nodes/:nodeId' },
   build: (input) => ({

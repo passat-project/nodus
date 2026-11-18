@@ -74,7 +74,7 @@ export const tasksPartsMeta = {
       'Не для смены ответственного (tasks.update) и не для постановки новой задачи (tasks.create).',
     subject: 'участник',
     alsoSubjects: ['задача'],
-    effect: 'write',
+    effect: 'irreversible',
     example: {
       input: {
         taskId: '6b1e2a3c-4d5f-4a6b-8c7d-9e0f1a2b3c4d',
@@ -93,7 +93,7 @@ export const tasksPartsMeta = {
     whenNotToUse: 'Не для подзадачи (tasks.add_subtask) и не для смены статуса (tasks.transition).',
     subject: 'связь',
     alsoSubjects: ['задача'],
-    effect: 'write',
+    effect: 'irreversible',
     example: {
       input: {
         taskId: '6b1e2a3c-4d5f-4a6b-8c7d-9e0f1a2b3c4d',

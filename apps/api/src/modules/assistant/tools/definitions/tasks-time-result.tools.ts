@@ -13,9 +13,17 @@ import {
 
 import { defineTool } from '../tool-definition.js';
 import { asRecord, asTyped, clip, date, str } from '../projections.js';
-import { field, fieldsOf, humanDate, shortId, taskLabel, userName } from './write-cards.js';
+import {
+  field,
+  fieldsOf,
+  formValues,
+  humanDate,
+  shortId,
+  taskLabel,
+  userName,
+} from './write-cards.js';
 import { tasksPartsMeta } from './meta/tasks-parts.meta.js';
-import { actionName, clipForm } from './tasks-parts.tools.js';
+import { actionName } from './tasks-parts.tools.js';
 
 /**
  * Дневные действия по задаче (#928): итог, подзадача, трудозатраты и нажатие
@@ -231,7 +239,7 @@ export const tasksPressActionTool = defineTool({
       fieldsOf([
         field('Задача', await taskLabel(ctx, input.taskId)),
         field('Действие', await actionName(ctx, input.taskId, input.actionId)),
-        field('Окно', clipForm(input.form)),
+        field('Окно', formValues(input.form)),
         field('Причина обхода', input.reason),
       ]),
     consequences:

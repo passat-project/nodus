@@ -53,4 +53,4 @@ export const GOLDEN_SET_MIN = 100;
 export const GOLDEN_SET_MAX = 150;
 
 /** Целевой размер текущего набора. */
-export const GOLDEN_SET_SIZE = 120;
+export const GOLDEN_SET_SIZE = 150;

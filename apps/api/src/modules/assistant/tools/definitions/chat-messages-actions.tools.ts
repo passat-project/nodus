@@ -112,11 +112,7 @@ export const chatPinMessageTool = defineTool({
         field('Сообщение', await messagePreview(ctx, input.conversationId, input.messageId)),
       ]),
     consequences:
-      'Сообщение появится в ленте закрепов беседы. Закрепление можно отменить кнопкой «Отменить».',
-    undo: (input) => ({
-      method: 'DELETE',
-      path: `/chat/conversations/${input.conversationId}/messages/${input.messageId}/pin`,
-    }),
+      'Сообщение появится в ленте закрепов беседы. Автоматической отмены нет — снять закреп можно действием «Открепить сообщение».',
   },
 });
 
@@ -194,12 +190,8 @@ export const chatReactTool = defineTool({
         field('Реакция', input.emoji),
         field('Действие', input.remove ? 'снять' : 'поставить'),
       ]),
-    consequences: 'Реакцию увидят участники; повторное действие её снимает.',
-    undo: (input) => ({
-      method: 'POST',
-      path: `/chat/conversations/${input.conversationId}/messages/${input.messageId}/reactions`,
-      body: { emoji: input.emoji, remove: !input.remove },
-    }),
+    consequences:
+      'Реакцию увидят участники; повторное действие снимает её. Автоматической отмены нет.',
   },
 });
 
@@ -247,6 +239,10 @@ export const chatForwardMessageTool = defineTool({
         field('Откуда', await conversationTitle(ctx, input.sourceConversationId)),
         field('Куда', await conversationTitle(ctx, input.conversationId)),
         field('Сообщений', String(input.messageIds.length)),
+        field(
+          'Что пересылаем',
+          await forwardPreview(ctx, input.sourceConversationId, input.messageIds),
+        ),
         field('Комментарий', input.comment ? clip(input.comment, 400) : null),
       ]),
     consequences:
@@ -280,3 +276,31 @@ export const chatMessagesActionsTools = [
   chatReactTool,
   chatForwardMessageTool,
 ];
+
+/** Первые сообщения пересылки — сотрудник видит содержимое до подтверждения. */
+async function forwardPreview(
+  ctx: ToolContext,
+  conversationId: string,
+  messageIds: readonly string[],
+): Promise<string | null> {
+  if (!ctx.read || messageIds.length === 0) return null;
+  try {
+    const page = asRecord(
+      await ctx.read(`/chat/conversations/${conversationId}/messages?limit=100`),
+    );
+    const texts = new Map<string, string | null>();
+    for (const raw of asArray(page?.items)) {
+      const message = asRecord(raw);
+      const id = str(message?.id);
+      if (id) texts.set(id, str(message?.text));
+    }
+    const lines = messageIds.slice(0, 3).map((id, index) => {
+      const text = texts.get(id);
+      return `${index + 1}. ${text ? clip(text, 120) : '(без текста)'}`;
+    });
+    if (messageIds.length > 3) lines.push(`… и ещё ${messageIds.length - 3}`);
+    return lines.join('\n');
+  } catch {
+    return null;
+  }
+}

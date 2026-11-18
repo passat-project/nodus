@@ -25,7 +25,7 @@ export const chatMessagesMeta = {
     whenToUse: '«Закрепи сообщение», «добавь в закрепы», «важное сообщение в чате».',
     whenNotToUse: 'Не для открепа (chat.unpin_message) и не для реакции (chat.react).',
     subject: 'сообщение',
-    effect: 'write',
+    effect: 'irreversible',
     example: {
       input: {
         conversationId: '6b1e2a3c-4d5f-4a6b-8c7d-9e0f1a2b3c4d',
@@ -60,7 +60,7 @@ export const chatMessagesMeta = {
     whenToUse: '«Поставь лайк», «отреагируй 👍», «сними реакцию».',
     whenNotToUse: 'Не для ответа текстом (chat.send) и не для закрепа (chat.pin_message).',
     subject: 'сообщение',
-    effect: 'write',
+    effect: 'irreversible',
     example: {
       input: {
         conversationId: '6b1e2a3c-4d5f-4a6b-8c7d-9e0f1a2b3c4d',

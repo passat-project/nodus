@@ -192,11 +192,7 @@ export const tasksAddParticipantTool = defineTool({
         field('Причина', input.lockReason),
       ]),
     consequences:
-      'Сотрудник получит доступ к задаче по роли. Добавление можно отменить кнопкой «Отменить».',
-    undo: (input) => ({
-      method: 'DELETE',
-      path: `/tasks/${input.taskId}/participants/${input.userId}`,
-    }),
+      'Сотрудник получит доступ к задаче по роли (существующая роль будет изменена). Автоматической отмены нет — убрать участника можно в карточке задачи.',
   },
 });
 
@@ -246,15 +242,7 @@ export const tasksAddRelationTool = defineTool({
         field('Связанная задача', await taskLabel(ctx, input.toTaskId)),
       ]),
     consequences:
-      'Связь появится у обеих задач; её можно убрать кнопкой «Отменить» (удаление связи, не задач).',
-    undo: (input, output) => {
-      const relation = pageItems<TaskRelation>(output as Paginated<TaskRelation>).find(
-        (item) => item.task.id === input.toTaskId && item.kind === input.kind,
-      );
-      return relation
-        ? { method: 'DELETE', path: `/tasks/${input.taskId}/relations/${relation.id}` }
-        : null;
-    },
+      'Связь появится у обеих задач. Автоматической отмены нет — связь убирается в карточке задачи.',
   },
 });
 

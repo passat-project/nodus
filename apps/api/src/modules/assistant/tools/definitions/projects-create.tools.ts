@@ -117,7 +117,8 @@ export const projectsCreateTool = defineTool({
   permission: Permission.PROJECT_CREATE,
   featureFlag: 'projects',
   hot: false,
-  input: createProjectBodySchema,
+  // Пустой сегмент номера подтверждает человек в интерфейсе (#630), не модель.
+  input: createProjectBodySchema.omit({ confirmEmptyNumberParts: true }),
   api: { method: 'POST', path: '/projects' },
   build: (input) => ({ method: 'POST', path: '/projects', body: input }),
   project: (data: ProjectDetail) => {

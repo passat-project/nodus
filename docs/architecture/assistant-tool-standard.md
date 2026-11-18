@@ -57,8 +57,8 @@
 | `chat.forward_message` | Мессенджер: переслать сообщения | chat | запись | irreversible | send | сообщение | POST /chat/conversations/:id/forward | — | chat | нет |
 | `chat.members` | Мессенджер: участники беседы | chat | чтение | read | members | участник | GET /chat/conversations/:id/members | — | chat | нет |
 | `chat.messages` | Мессенджер: сообщения | chat | чтение | read | list | сообщение | GET /chat/conversations/:id/messages | — | chat | да |
-| `chat.pin_message` | Мессенджер: закрепить сообщение | chat | запись | write | update | сообщение | POST /chat/conversations/:id/messages/:messageId/pin | — | chat | нет |
-| `chat.react` | Мессенджер: поставить реакцию | chat | запись | write | create | сообщение | POST /chat/conversations/:id/messages/:messageId/reactions | — | chat | нет |
+| `chat.pin_message` | Мессенджер: закрепить сообщение | chat | запись | irreversible | update | сообщение | POST /chat/conversations/:id/messages/:messageId/pin | — | chat | нет |
+| `chat.react` | Мессенджер: поставить реакцию | chat | запись | irreversible | create | сообщение | POST /chat/conversations/:id/messages/:messageId/reactions | — | chat | нет |
 | `chat.save_draft` | Мессенджер: сохранить черновик | chat | запись | irreversible | create | сообщение | PUT /chat/conversations/:id/draft | — | chat | нет |
 | `chat.send` | Отправить сообщение | chat | запись | write | send | сообщение | POST /chat/conversations/:id/messages | — | chat | да |
 | `chat.set_member_role` | Мессенджер: сменить роль участника | chat | запись | irreversible | update | участник | PATCH /chat/conversations/:id/members/:userId | — | chat | нет |
@@ -113,11 +113,11 @@
 | `projects.structure` | Проекты: структура | projects | чтение | read | structure | структура | GET /projects/:id/structure | — | projects | нет |
 | `projects.types` | Проекты: типы | projects | чтение | read | list | справочник | GET /projects/types | — | projects | нет |
 | `projects.update` | Проекты: изменить | projects | запись | irreversible | update | проект | PATCH /projects/:id | — | projects | нет |
-| `projects.update_group` | Проекты: переименовать портфель | projects | запись | irreversible | update | портфель | PATCH /projects/groups/:id | — | projects | нет |
+| `projects.update_group` | Проекты: переименовать портфель | projects | запись | irreversible | update | портфель | PATCH /projects/groups/:id | project.manage | projects | нет |
 | `projects.update_node` | Проекты: изменить папку | projects | запись | irreversible | update | папка | PATCH /projects/:id/nodes/:nodeId | — | projects | нет |
 | `tasks.actions` | Задачи: действия маршрута | tasks | чтение | read | transitions | задача | GET /tasks/:id/actions | — | tasks | нет |
-| `tasks.add_participant` | Задачи: добавить участника | tasks | запись | write | create | участник | POST /tasks/:id/participants | — | tasks | нет |
-| `tasks.add_relation` | Задачи: связать задачи | tasks | запись | write | create | связь | POST /tasks/:id/relations | — | tasks | нет |
+| `tasks.add_participant` | Задачи: добавить участника | tasks | запись | irreversible | create | участник | POST /tasks/:id/participants | — | tasks | нет |
+| `tasks.add_relation` | Задачи: связать задачи | tasks | запись | irreversible | create | связь | POST /tasks/:id/relations | — | tasks | нет |
 | `tasks.add_result` | Задачи: записать итог | tasks | запись | irreversible | create | задача | POST /tasks/:id/results | — | tasks | нет |
 | `tasks.add_subtask` | Задачи: создать подзадачу | tasks | запись | write | create | задача | POST /tasks/:id/subtasks | task.create | tasks | нет |
 | `tasks.checklist_add` | Задачи: добавить пункт чек-листа | tasks | запись | write | create | задача | POST /tasks/:id/checklist | — | tasks | нет |

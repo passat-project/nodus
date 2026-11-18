@@ -10,7 +10,7 @@ import {
 import { defineTool } from '../tool-definition.js';
 import type { ToolContext } from '../tool-definition.js';
 import { asArray, asRecord, clip, str } from '../projections.js';
-import { field, fieldsOf, letterLabel, shortId } from './write-cards.js';
+import { field, fieldsOf, formValues, letterLabel, shortId } from './write-cards.js';
 import { letterEntity, successText } from './letters-write-cards.js';
 import { lettersPartsMeta } from './meta/letters-parts.meta.js';
 
@@ -112,6 +112,8 @@ export const lettersPressActionTool = defineTool({
       fieldsOf([
         field('Письмо', await letterLabel(ctx, input.letterId)),
         field('Действие', await actionName(ctx, input.letterId, input.actionId)),
+        field('Окно', formValues(input.form)),
+        field('Обход блокировки', input.override ? 'да' : null),
         field('Причина', input.reason ? clip(input.reason, 300) : null),
       ]),
     consequences:

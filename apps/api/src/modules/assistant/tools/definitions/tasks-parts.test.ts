@@ -1,6 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Paginated, TaskRelation } from '@nodus/contracts';
-
 import type { ToolContext } from '../tool-definition.js';
 import { tasksActionsTool, tasksRelationsTool } from './tasks-parts.tools.js';
 import {
@@ -91,7 +89,7 @@ describe('чек-лист', () => {
 });
 
 describe('участники и связи', () => {
-  it('участник: карточка с именем и ролью, отмена снимает участие', async () => {
+  it('участник: карточка с именем и ролью, автоматической отмены нет', async () => {
     const input = { taskId: T, userId: U, role: 'coexecutor' as const };
     expect(tasksAddParticipantTool.build!(input)).toEqual({
       method: 'POST',
@@ -105,13 +103,12 @@ describe('участники и связи', () => {
         { label: 'Роль', value: 'соисполнитель' },
       ]),
     );
-    expect(tasksAddParticipantTool.card!.undo!(input, {})).toEqual({
-      method: 'DELETE',
-      path: `/tasks/${T}/participants/${U}`,
-    });
+    // Upsert роли: «Отменить» удалил бы участника, а не вернул прежнюю роль.
+    expect(tasksAddParticipantTool.card!.undo).toBeUndefined();
+    expect(tasksAddParticipantTool.effect).toBe('irreversible');
   });
 
-  it('связь: карточка называет обе задачи, undo удаляет связь по id', async () => {
+  it('связь: карточка называет обе задачи, undo нет (связь могла существовать)', async () => {
     const input = { taskId: T, toTaskId: T2, kind: 'blocks' as const };
     expect(tasksAddRelationTool.build!(input)).toEqual({
       method: 'POST',
@@ -122,21 +119,8 @@ describe('участники и связи', () => {
     expect(summary).toContain('№1042 «Проверить смету»');
     expect(summary).toContain('№1043 «Согласовать»');
     expect(summary).toContain('блокирует');
-    const output: Paginated<TaskRelation> = {
-      items: [
-        {
-          id: REL,
-          kind: 'blocks',
-          direction: 'out',
-          task: { id: T2, number: 1043, title: 'Согласовать' },
-        },
-      ],
-      nextCursor: null,
-    };
-    expect(tasksAddRelationTool.card!.undo!(input, output)).toEqual({
-      method: 'DELETE',
-      path: `/tasks/${T}/relations/${REL}`,
-    });
+    expect(tasksAddRelationTool.card!.undo).toBeUndefined();
+    expect(tasksAddRelationTool.effect).toBe('irreversible');
   });
 });
 

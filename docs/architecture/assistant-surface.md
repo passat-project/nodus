@@ -76,7 +76,7 @@
 | `projects.structure` | Проекты: структура | чтение | projects | GET /projects/:id/structure | — | projects | нет |
 | `projects.types` | Проекты: типы | чтение | projects | GET /projects/types | — | projects | нет |
 | `projects.update` | Проекты: изменить | запись | projects | PATCH /projects/:id | — | projects | нет |
-| `projects.update_group` | Проекты: переименовать портфель | запись | projects | PATCH /projects/groups/:id | — | projects | нет |
+| `projects.update_group` | Проекты: переименовать портфель | запись | projects | PATCH /projects/groups/:id | project.manage | projects | нет |
 | `projects.update_node` | Проекты: изменить папку | запись | projects | PATCH /projects/:id/nodes/:nodeId | — | projects | нет |
 | `tasks.actions` | Задачи: действия маршрута | чтение | tasks | GET /tasks/:id/actions | — | tasks | нет |
 | `tasks.add_participant` | Задачи: добавить участника | запись | tasks | POST /tasks/:id/participants | — | tasks | нет |

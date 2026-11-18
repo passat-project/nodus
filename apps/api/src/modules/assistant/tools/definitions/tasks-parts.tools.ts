@@ -87,13 +87,4 @@ export async function actionName(
     return null;
   }
 }
-
-export function clipForm(form: unknown): string | null {
-  const record = asRecord(form);
-  if (!record) return null;
-  const fields = asRecord(record.fields);
-  const count = fields ? Object.keys(fields).length : 0;
-  return count > 0 ? `заполнено полей: ${count}` : null;
-}
-
 export const tasksPartsReadTools = [tasksRelationsTool, tasksActionsTool];

@@ -49,34 +49,30 @@ describe('правка сообщения', () => {
 });
 
 describe('закреп и реакция', () => {
-  it('закреп отменяется открепом того же сообщения', () => {
+  it('закреп и откреп — отдельные действия, автоматической отмены нет', () => {
     const input = { conversationId: C, messageId: M };
     expect(chatPinMessageTool.build!(input)).toEqual({
       method: 'POST',
       path: `/chat/conversations/${C}/messages/${M}/pin`,
     });
-    expect(chatPinMessageTool.card!.undo!(input, {})).toEqual({
-      method: 'DELETE',
-      path: `/chat/conversations/${C}/messages/${M}/pin`,
-    });
+    // Идемпотентный закреп: «Отменить» снял бы и чужой/прежний закреп.
+    expect(chatPinMessageTool.card!.undo).toBeUndefined();
+    expect(chatPinMessageTool.effect).toBe('irreversible');
     expect(chatUnpinMessageTool.build!(input)).toEqual({
       method: 'DELETE',
       path: `/chat/conversations/${C}/messages/${M}/pin`,
     });
   });
 
-  it('реакция переключается обратным действием', () => {
+  it('реакция: явное действие без обратного undo (защита предсуществующей)', () => {
     const input = { conversationId: C, messageId: M, emoji: '👍' };
     expect(chatReactTool.build!(input)).toEqual({
       method: 'POST',
       path: `/chat/conversations/${C}/messages/${M}/reactions`,
       body: { emoji: '👍' },
     });
-    expect(chatReactTool.card!.undo!(input, {})).toEqual({
-      method: 'POST',
-      path: `/chat/conversations/${C}/messages/${M}/reactions`,
-      body: { emoji: '👍', remove: true },
-    });
+    expect(chatReactTool.card!.undo).toBeUndefined();
+    expect(chatReactTool.effect).toBe('irreversible');
   });
 });
 
