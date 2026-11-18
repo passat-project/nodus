@@ -151,6 +151,7 @@ export function toRunDto(row: RunRow): AssistantRun {
     model: row.modelId,
     inputTokens: row.inputTokens,
     outputTokens: row.outputTokens,
+    contextTokens: row.contextTokens,
     errorCode: row.errorCode,
     errorMessage: row.errorMessage,
     startedAt: row.startedAt?.toISOString() ?? null,

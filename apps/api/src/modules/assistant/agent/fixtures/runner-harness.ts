@@ -143,6 +143,10 @@ export function build(
       forget: vi.fn(async () => true),
     })),
   };
+  const compaction = {
+    historyPrefix: vi.fn(async () => [] as never[]),
+    scheduleAfterRun: vi.fn(),
+  };
   const runner = new AgentRunnerService(
     fake.repo as unknown as AssistantRepository,
     settings as unknown as AiSettingsService,
@@ -150,6 +154,7 @@ export function build(
     executor as unknown as ToolExecutorService,
     actions as never,
     memory as never,
+    compaction as never,
     bus,
     { register: vi.fn(() => () => undefined), notify: vi.fn() } as never,
     logger as never,

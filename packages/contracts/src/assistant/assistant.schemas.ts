@@ -257,6 +257,8 @@ export const assistantRunSchema = z.object({
   model: z.string().nullable(),
   inputTokens: z.number().int().nonnegative().nullable(),
   outputTokens: z.number().int().nonnegative().nullable(),
+  /** Заполнение контекста последним запросом прогона (индикатор, #943). */
+  contextTokens: z.number().int().nonnegative().nullable(),
   errorCode: z.string().nullable(),
   errorMessage: z.string().nullable(),
   startedAt: z.iso.datetime().nullable(),
@@ -346,6 +348,8 @@ export const assistantRunEventDataSchema = z.discriminatedUnion('type', [
     type: z.literal('run.completed'),
     inputTokens: z.number().int().nonnegative().nullable(),
     outputTokens: z.number().int().nonnegative().nullable(),
+    /** Заполнение контекста последним запросом (#943); старые журналы — без поля. */
+    contextTokens: z.number().int().nonnegative().nullable().optional(),
   }),
   z.object({
     type: z.literal('run.error'),

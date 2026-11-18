@@ -155,6 +155,7 @@ describe('AgentRunnerService: цикл (#893)', () => {
       { execute: vi.fn() } as unknown as ToolExecutorService,
       { propose: vi.fn() } as never,
       { promptLines: vi.fn(async () => []), port: vi.fn() } as never,
+      { historyPrefix: vi.fn(async () => []), scheduleAfterRun: vi.fn() } as never,
       bus2,
       { register: vi.fn(() => () => undefined), notify: vi.fn() } as never,
       logger as never,

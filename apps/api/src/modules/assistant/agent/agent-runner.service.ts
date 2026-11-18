@@ -26,6 +26,8 @@ import type {
 import { toLlmTools } from '../tools/tool-schema.js';
 import { ToolExecutorService } from '../tools/tool-executor.service.js';
 import { toLlmHistory } from './history.js';
+import { AssistantCompactionService } from './compaction.service.js';
+import { clearOldToolResults, estimateMessagesTokens } from './context-budget.js';
 import {
   PROVIDER_RETRY_DELAYS_MS,
   addTokens,
@@ -94,6 +96,7 @@ export class AgentRunnerService {
     private readonly executor: ToolExecutorService,
     private readonly actions: AssistantActionsService,
     private readonly memory: AssistantMemoryService,
+    private readonly compaction: AssistantCompactionService,
     private readonly bus: RunBusService,
     private readonly completion: RunCompletionNotifier,
     private readonly logger: PinoLogger,
@@ -154,6 +157,12 @@ export class AgentRunnerService {
     let reasoning = '';
     let inputTokens: number | null = null;
     let outputTokens: number | null = null;
+    /**
+     * Заполнение контекста — токены ПОСЛЕДНЕГО запроса, не сумма по шагам:
+     * сумма отражает оплату, а не размер окна (#943). Нужна для индикатора
+     * и порога сжатия истории.
+     */
+    let lastInputTokens: number | null = null;
 
     try {
       await this.bus.open(params.runId);
@@ -181,7 +190,16 @@ export class AgentRunnerService {
         params.sessionId,
         ASSISTANT_LIMITS.maxHistoryMessages,
       );
-      const priorMessages = toLlmHistory(history.filter((row) => row.id !== message.id));
+      // Сжатая память сессии (#943): сегменты старых ответов + несжатые
+      // ранние вопросы. Дальше идут последние сообщения — всегда дословно.
+      const historyPrefix = await this.compaction.historyPrefix(
+        params.sessionId,
+        history[0] ?? null,
+      );
+      const priorMessages = [
+        ...historyPrefix,
+        ...toLlmHistory(history.filter((row) => row.id !== message.id)),
+      ];
       const catalog = buildCatalog({ permissions: params.permissions, features: params.features });
       // Внешние MCP-инструменты (ADR-0047): ВСЕ включённые серверы равнозначны
       // (поиск, Blender, GitHub — что угодно). Список инструментов сервера
@@ -299,6 +317,7 @@ export class AgentRunnerService {
           } else if (event.type === 'usage') {
             inputTokens = addTokens(inputTokens, event.inputTokens);
             outputTokens = addTokens(outputTokens, event.outputTokens);
+            if (event.inputTokens !== null) lastInputTokens = event.inputTokens;
           }
         }
 
@@ -320,9 +339,16 @@ export class AgentRunnerService {
           toolContext,
           messages,
         );
+        // Старые результаты инструментов — главный источник шума в прогоне:
+        // чистим, сохраняя последние и валидность пар tool_calls/tool (#943).
+        const cleared = clearOldToolResults(messages);
+        if (cleared > 0) {
+          this.logger.info({ runId: params.runId, cleared }, 'Old tool results cleared');
+        }
       }
 
       const finalText = text.trim().length >= bestText.trim().length ? text : bestText;
+      const contextTokens = lastInputTokens ?? estimateMessagesTokens(messages);
       await this.repo.finishMessage(message.id, {
         text: finalText,
         reasoning: reasoning || null,
@@ -333,13 +359,20 @@ export class AgentRunnerService {
         finishedAt: new Date(),
         inputTokens,
         outputTokens,
+        contextTokens,
       });
       await this.bus.publish(params.runId, 'message.completed', {
         messageId: message.id,
         text: finalText,
         reasoning: reasoning || null,
       });
-      await this.bus.publish(params.runId, 'run.completed', { inputTokens, outputTokens });
+      await this.bus.publish(params.runId, 'run.completed', {
+        inputTokens,
+        outputTokens,
+        contextTokens,
+      });
+      // Сжатие — после ответа: сотрудник не ждёт модель-суммаризатор.
+      this.compaction.scheduleAfterRun(params.sessionId, contextTokens);
     } catch (error) {
       await failRun({
         repo: this.repo,
