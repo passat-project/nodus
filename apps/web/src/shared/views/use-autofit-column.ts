@@ -1,6 +1,6 @@
 import { useCallback, type RefObject } from 'react';
 
-import { uiPx } from '../ui/ui-scale.js';
+import { cellContentWidth, COLUMN_BREATHING } from './column-content.js';
 
 /** Автоподбор ширины колонки по контенту (двойной клик на ручке, как в
  *  Excel): суммирует контентные ширины детей ячеек колонки (scrollWidth
@@ -17,20 +17,16 @@ export function useAutoFitColumn(
     (fieldIndex: number, fieldId: string, minWidth: number, maxWidth: number) => {
       const container = containerRef.current;
       if (!container) return;
-      const CELL_GAP = uiPx(8);
       let max = 0;
       for (const row of container.children) {
         const cell = row.children[fieldIndex + leadingOffset] as HTMLElement | undefined;
-        if (!cell) continue;
-        let content = 0;
-        for (const child of cell.children) {
-          content += (child as HTMLElement).scrollWidth;
-        }
-        content += Math.max(0, cell.children.length - 1) * CELL_GAP;
-        max = Math.max(max, content);
+        if (cell) max = Math.max(max, cellContentWidth(cell));
       }
       if (max > 0) {
-        setWidth(fieldId, Math.min(maxWidth, Math.max(minWidth, Math.ceil(max) + uiPx(24))));
+        setWidth(
+          fieldId,
+          Math.min(maxWidth, Math.max(minWidth, Math.ceil(max) + COLUMN_BREATHING)),
+        );
       }
     },
     [containerRef, leadingOffset, setWidth],

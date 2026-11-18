@@ -8,6 +8,7 @@ import { DataTableHeader } from './data-table-header.js';
 import { LEADING_COL_W, RowMenu, type RowMenuItem } from './row-menu.js';
 import { sortRows } from './sort-rows.js';
 import { useAutoFitColumn } from './use-autofit-column.js';
+import { useFittedColumnWidths } from './use-fitted-columns.js';
 import { useInfiniteSentinel } from './use-infinite-sentinel.js';
 import { useRowSelection, type RowSelection } from './use-row-selection.js';
 import { useViewFields, type FieldDef, type ViewField } from './use-view-fields.js';
@@ -124,6 +125,7 @@ function DataTableRowInner<T>({
         <span
           role="cell"
           className="flex items-center"
+          data-actions-cell=""
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
         >
@@ -142,10 +144,13 @@ const DataTableRow = memo(DataTableRowInner) as typeof DataTableRowInner;
  * Таблица-канон (модель AG Grid/Битрикса, references/views-customization.md) —
  * общая машина всех журналов/списков портала (потребители: журнал писем,
  * список проектов, задачи проекта, сотрудники):
- * — ВСЕ колонки — фиксированные px-треки (fr запрещён: резиновая колонка
- *   компенсирует дельту ресайза — ручка отрывается от курсора, gotchas);
- * — единый grid на хедер и строки, w-max min-w-full: пустое место справа,
- *   переполнение — горизонтальный скролл;
+ * — ВСЕ колонки — px-треки (fr запрещён: резиновая колонка компенсирует
+ *   дельту ресайза — ручка отрывается от курсора, gotchas), но ширины
+ *   СЧИТАЮТСЯ по содержимому и рабочей зоне (#937, `use-fitted-columns`):
+ *   скрыл колонку — оставшиеся подстроились под свой текст и заняли ширину
+ *   зоны; колонки, которым ширину задали ручкой/двойным кликом, не трогаются;
+ * — единый grid на хедер и строки, w-max min-w-full: переполнение —
+ *   горизонтальный скролл;
  * — ресайз ручкой на грани хедера (min под контент, max 640, 1:1 за курсором),
  *   dblclick — автоподбор по контенту (сумма scrollWidth ДЕТЕЙ ячеек);
  * — видимость/ширина колонок — шестерёнка ViewSettings того же viewKey,
@@ -212,7 +217,10 @@ export function DataTable<T>({
    *  передан — таблица держит выбор сама. Один механизм во всех реестрах. */
   selection?: RowSelection;
 }) {
-  const { visibleFields, sort, setWidth, cycleSort, commitOrder } = useViewFields(viewKey, defs);
+  const { visibleFields, sort, setWidth, cycleSort, commitOrder, widthSet } = useViewFields(
+    viewKey,
+    defs,
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
@@ -232,11 +240,34 @@ export function DataTable<T>({
   // Бесконечная подгрузка страниц: sentinel у дна контейнера (shared-хук).
   useInfiniteSentinel(containerRef, sentinelRef, { hasNextPage, isFetchingNextPage, onLoadMore });
 
+  // Ширины колонок по содержимому и на всю рабочую зону (#937): после
+  // скрытия/показа колонки остальные подстраиваются под свой текст, а не
+  // держат прежние px-треки. Ручные ширины (ручка, двойной клик) не трогаются.
+  const fittedWidths = useFittedColumnWidths({
+    containerRef,
+    fields: visibleFields,
+    widthSet,
+    fixedTracksPx: LEADING_COL_W,
+    fixedTracksCount: 1,
+    hasActions: actions !== undefined,
+    hasRows: sortedRows.length > 0,
+  });
+  /** Поля с подставленной шириной: хедер (ручка ресайза) и строки видят одно
+   *  и то же число, поэтому ручка начинает drag ровно с видимой ширины. */
+  const layoutFields = useMemo(
+    () =>
+      visibleFields.map((field) => {
+        const width = fittedWidths[field.id];
+        return width === undefined || width === field.width ? field : { ...field, width };
+      }),
+    [visibleFields, fittedWidths],
+  );
+
   const gridTemplateColumns = useMemo(() => {
-    const tracks = [`${LEADING_COL_W}px`, ...visibleFields.map((f) => `${f.width ?? uiPx(120)}px`)];
+    const tracks = [`${LEADING_COL_W}px`, ...layoutFields.map((f) => `${f.width ?? uiPx(120)}px`)];
     if (actions) tracks.push('auto');
     return tracks.join(' ');
-  }, [visibleFields, actions]);
+  }, [layoutFields, actions]);
 
   /** Автоподбор ширины (двойной клик на ручке): shared-хук, сдвиг на
    *  ведущую колонку (выбор + меню). */
@@ -299,7 +330,7 @@ export function DataTable<T>({
         {...edge.handlers}
       >
         <DataTableHeader
-          fields={visibleFields}
+          fields={layoutFields}
           sort={sort}
           headerChecked={headerChecked}
           hasActions={actions !== undefined}
@@ -318,7 +349,7 @@ export function DataTable<T>({
               row={row}
               rowKey={key}
               isSelected={selected.has(key)}
-              fields={visibleFields}
+              fields={layoutFields}
               gridTemplateColumns={gridTemplateColumns}
               onOpenRow={onOpenRow}
               onHoverRow={onHoverRow}

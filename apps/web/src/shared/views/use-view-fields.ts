@@ -107,6 +107,17 @@ export function useViewFields<T extends FieldDef>(viewKey: string, defs: T[]) {
     fields,
     visibleFields: useMemo(() => fields.filter((f) => f.visible), [fields]),
     sort,
+    /** Id полей, которым ширину задал человек (пресет хранит `width`):
+     *  авто-раскладка колонок (#937) такие ширины не трогает. */
+    widthSet: useMemo(
+      () =>
+        new Set(
+          Object.entries(stored ?? {})
+            .filter(([, prefs]) => prefs?.width !== undefined)
+            .map(([id]) => id),
+        ),
+      [stored],
+    ),
     // Стабильная идентичность: предикат уходит в memo-компоненты карточек
     // (канбан на объёме), новая стрелка на каждый рендер ломала бы memo.
     isVisible: useCallback(

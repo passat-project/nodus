@@ -24,9 +24,12 @@ import {
 import { openTaskCreate } from '../../../../shared/tasks/task-create-store.js';
 import { EdgeHints } from '../../../../shared/ui/board/board-scroller.js';
 import { useBoardEdgeScroll } from '../../../../shared/ui/board/use-board-edge-scroll.js';
+import { uiPx } from '../../../../shared/ui/ui-scale.js';
 import { DataTableHeader } from '../../../../shared/views/data-table-header.js';
 import { isActiveFilter } from '../../../../shared/views/list-filters.js';
+import { LEADING_COL_W } from '../../../../shared/views/row-menu.js';
 import { useAutoFitColumn } from '../../../../shared/views/use-autofit-column.js';
+import { useFittedColumnWidths } from '../../../../shared/views/use-fitted-columns.js';
 import { structureKeys, useMoveNode } from '../api/structure-api.js';
 import { useMoveTaskNode, useSetTasksNode } from '../api/structure-task-mutations.js';
 import { useProjectDetail } from '../../api/projects-api.js';
@@ -161,6 +164,29 @@ export function StructureTab({
   const noNodeRow = attributeView ? null : model.noNodeRow;
   const noNodeTasks = attributeView ? [] : model.noNodeTasks;
 
+  // Ширины колонок дерева — по содержимому и на всю рабочую зону (#937), как
+  // в журналах shared/views: ручные ширины (ручка, двойной клик) не трогаются.
+  const fittedWidths = useFittedColumnWidths({
+    containerRef,
+    fields: model.visibleFields,
+    widthSet: model.widthSet,
+    fixedTracksPx: LEADING_COL_W,
+    fixedTracksCount: 1,
+    hasRows: (attributeView ?? model.filtered).length > 0,
+  });
+  const layoutFields = useMemo(
+    () =>
+      model.visibleFields.map((field) => {
+        const width = fittedWidths[field.id];
+        return width === undefined || width === field.width ? field : { ...field, width };
+      }),
+    [model.visibleFields, fittedWidths],
+  );
+  const gridTemplateColumns = useMemo(
+    () => `${LEADING_COL_W}px ${layoutFields.map((f) => `${f.width ?? uiPx(120)}px`).join(' ')}`,
+    [layoutFields],
+  );
+
   /** Перенос задач в папку (DnD, меню, «Без папки»): одиночный — с диффом
    *  формул (превью → окно или сразу перенос), пачка — со СВОДНЫМ диффом по
    *  первым `BULK_PREVIEW_LIMIT` записям. Bulk больше не уходит в мутацию
@@ -251,12 +277,12 @@ export function StructureTab({
               ) : (
                 <>
                   <DataTableHeader
-                    fields={model.visibleFields}
+                    fields={layoutFields}
                     sort={model.sort}
                     headerChecked={model.selection.headerChecked}
                     hasActions={false}
                     showSelection={canEdit}
-                    style={{ gridTemplateColumns: model.gridTemplateColumns }}
+                    style={{ gridTemplateColumns }}
                     onToggleAll={model.selection.toggleAll}
                     onResize={model.setWidth}
                     onAutoFit={autoFitColumn}
@@ -270,10 +296,10 @@ export function StructureTab({
                     kindById={model.kindById}
                     collapsed={model.collapsed}
                     noNodeCollapsed={model.noNodeCollapsed}
-                    fields={model.visibleFields}
+                    fields={layoutFields}
                     attributes={model.attributeDefinitions}
                     refs={model.nodeRefs}
-                    grid={{ templateColumns: model.gridTemplateColumns }}
+                    grid={{ templateColumns: gridTemplateColumns }}
                     selection={model.selection}
                     dnd={dnd}
                     target={target}

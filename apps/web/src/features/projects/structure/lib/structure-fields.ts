@@ -3,8 +3,7 @@ import { ui } from '@nodus/contracts';
 
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { attributeFieldDefs } from '../../../../shared/views/attribute-fields.js';
-import { LEADING_COL_W } from '../../../../shared/views/row-menu.js';
-import type { FieldDef, ViewField } from '../../../../shared/views/use-view-fields.js';
+import type { FieldDef } from '../../../../shared/views/use-view-fields.js';
 
 /** Реестр колонок таблицы структуры (#467): узлы заполняют шифр/часы/сроки/
  *  прогресс поддерева, задачи — стадию/ответственного/срок/факт; общие
@@ -83,12 +82,6 @@ export const structureFields: FieldDef[] = [
     minWidth: 96,
   },
 ];
-
-/** Общий трек сетки строк и хедера: ведущая колонка + поля. Вложенность —
- *  отступами в ячейке названия (проводник), отдельной колонки графа нет. */
-export function structureGrid(fields: readonly ViewField<FieldDef>[]): string {
-  return `${LEADING_COL_W}px ${fields.map((f) => `${f.width ?? 120}px`).join(' ')}`;
-}
 
 /**
  * Колонки структуры + атрибуты (#632): в дереве живут ДВА носителя значений —

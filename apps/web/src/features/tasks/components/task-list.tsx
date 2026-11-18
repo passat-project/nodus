@@ -9,6 +9,7 @@ import { DataTableHeader } from '../../../shared/views/data-table-header.js';
 import { LEADING_COL_W, type RowMenuItem } from '../../../shared/views/row-menu.js';
 import { sortRows } from '../../../shared/views/sort-rows.js';
 import { useAutoFitColumn } from '../../../shared/views/use-autofit-column.js';
+import { useFittedColumnWidths } from '../../../shared/views/use-fitted-columns.js';
 import { useInfiniteSentinel } from '../../../shared/views/use-infinite-sentinel.js';
 import { useRowSelection } from '../../../shared/views/use-row-selection.js';
 import type { ActiveListFilter } from '../../../shared/views/list-filters.js';
@@ -67,7 +68,7 @@ export function TaskList({
    *  key перезапускает draw-on только нового раскрытия. */
   const [reveal, setReveal] = useState({ base: 0, key: 1 });
   const taskListFields = useTaskListFields();
-  const { visibleFields, sort, setWidth, cycleSort, commitOrder } = useViewFields(
+  const { visibleFields, sort, setWidth, cycleSort, commitOrder, widthSet } = useViewFields(
     'tasks.list',
     taskListFields,
   );
@@ -101,10 +102,36 @@ export function TaskList({
     onLoadMore: fetchNextPage ? () => void fetchNextPage() : undefined,
   });
 
-  const gridTemplateColumns = useMemo(() => {
-    const maxDepth = visible.reduce((max, row) => Math.max(max, row.depth), 0);
-    return `${LEADING_COL_W}px ${graphWidth(maxDepth)}px ${visibleFields.map((f) => `${f.width ?? uiPx(120)}px`).join(' ')}`;
-  }, [visibleFields, visible]);
+  const maxDepth = useMemo(
+    () => visible.reduce((max, row) => Math.max(max, row.depth), 0),
+    [visible],
+  );
+  // Ширины колонок по содержимому и на всю рабочую зону (#937): после
+  // скрытия/показа колонки оставшиеся подстраиваются под текст; ручные
+  // ширины (ручка, двойной клик) не трогаются. Служебные треки слева —
+  // ведущая ячейка и колонка графа.
+  const fittedWidths = useFittedColumnWidths({
+    containerRef,
+    fields: visibleFields,
+    widthSet,
+    fixedTracksPx: LEADING_COL_W + graphWidth(maxDepth),
+    fixedTracksCount: 2,
+    hasRows: visible.length > 0,
+  });
+  const layoutFields = useMemo(
+    () =>
+      visibleFields.map((field) => {
+        const width = fittedWidths[field.id];
+        return width === undefined || width === field.width ? field : { ...field, width };
+      }),
+    [visibleFields, fittedWidths],
+  );
+
+  const gridTemplateColumns = useMemo(
+    () =>
+      `${LEADING_COL_W}px ${graphWidth(maxDepth)}px ${layoutFields.map((f) => `${f.width ?? uiPx(120)}px`).join(' ')}`,
+    [layoutFields, maxDepth],
+  );
 
   /** Раскрытие/сворачивание ветки (стабильная ссылка — пропс строки). */
   const toggleBranch = useCallback(
@@ -190,7 +217,7 @@ export function TaskList({
         {...edge.handlers}
       >
         <DataTableHeader
-          fields={visibleFields}
+          fields={layoutFields}
           sort={sort}
           headerChecked={headerChecked}
           hasActions={false}
@@ -214,7 +241,7 @@ export function TaskList({
               row={row}
               isSelected={selected.has(row.task.id)}
               branchCollapsed={collapsed.has(row.task.id)}
-              fields={visibleFields}
+              fields={layoutFields}
               gridTemplateColumns={gridTemplateColumns}
               onOpen={openTask}
               onHover={prefetch}
