@@ -1,4 +1,4 @@
-import { Injectable, type OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable, type OnApplicationBootstrap, Inject } from '@nestjs/common';
 import { WORKFLOW_EVENTS } from '@nodus/contracts';
 import { PinoLogger } from 'nestjs-pino';
 
@@ -7,6 +7,7 @@ import {
   type TransactionClient,
 } from '../../../core/database/transaction-runner.js';
 import { EventBus } from '../../../core/events/event-bus.js';
+import { NODE_REF_READER, type NodeRefReader } from '../../projects/ports/node-ref-reader.port.js';
 import {
   CATALOG_PROCESS_TYPES,
   DEFAULT_SCHEME,
@@ -48,6 +49,8 @@ export class CatalogBootstrap implements OnApplicationBootstrap {
     private readonly repo: CatalogRepository,
     private readonly eventBus: EventBus,
     private readonly logger: PinoLogger,
+    // Вид папки для «где создаётся» (#665): читаем справочник проектов портом.
+    @Inject(NODE_REF_READER) private readonly nodeKinds: NodeRefReader,
   ) {
     this.logger.setContext(CatalogBootstrap.name);
   }
@@ -72,10 +75,13 @@ export class CatalogBootstrap implements OnApplicationBootstrap {
           : null;
         // «Где создаётся» (#665): посев новых типов — везде и без проекта,
         // кроме документных работ внутри проекта (комплект, изменение).
+        const folderKindId = typeDef.folderKindName
+          ? await this.nodeKinds.kindIdByName(typeDef.folderKindName)
+          : null;
         const config: Record<string, unknown> = {
           creation: {
             excludedProjectTypeIds: [],
-            folderKindId: null,
+            folderKindId,
             withoutProject: typeDef.withoutProject ?? true,
           },
           ...(series ? { numbering: { seriesId: series.id } } : {}),

@@ -20,6 +20,10 @@ export interface NodeRefReader {
   /** Узлы по id (удалённого нет — пусто в ответе). */
   refs(nodeIds: readonly string[]): Promise<NodeRefInfo[]>;
 
+  /** Живой вид папки по точному имени (#665): системные типы «Комплект» и
+   *  «Изменение» привязываются к виду «Комплект» при посеве. null — нет вида. */
+  kindIdByName(name: string): Promise<string | null>;
+
   /** Видим ли узел актёру: существует и проект виден (участие/надзор). */
   visibleFor(
     nodeId: string,

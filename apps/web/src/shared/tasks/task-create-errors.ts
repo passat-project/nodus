@@ -1,5 +1,5 @@
 import type { CreateTaskBody, CreationFieldKey } from '@nodus/contracts';
-import { ErrorCode, ui } from '@nodus/contracts';
+import { ErrorCode, errorMessages, ui } from '@nodus/contracts';
 
 import { ApiError } from '../api-client.js';
 import { isNumberConfirmCancelled, numberingErrorText } from '../custom-fields/number-confirm.js';
@@ -56,6 +56,12 @@ export function createFailureOf(error: unknown): CreateFailure {
     }
     case ErrorCode.PROCESS_TYPE_PRESET_INVALID:
       return fail(ui.taskCreate.presetInvalid);
+    // «Где создаётся» (#665): сервер отказал по месту — показываем его
+    // причину, а не общий «проверьте поля».
+    case ErrorCode.PROCESS_TYPE_NOT_ALLOWED_IN_PROJECT:
+    case ErrorCode.PROCESS_TYPE_PROJECT_REQUIRED:
+    case ErrorCode.PROCESS_TYPE_FOLDER_KIND_REQUIRED:
+      return fail(errorMessages[error.code], NONE, true);
     case ErrorCode.PROJECT_TASK_MEMBERS_INVALID: {
       const projectId =
         typeof error.details?.projectId === 'string' ? error.details.projectId : null;

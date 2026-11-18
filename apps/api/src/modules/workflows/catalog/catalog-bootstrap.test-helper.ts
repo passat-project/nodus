@@ -164,6 +164,7 @@ export function setup(state: Partial<DbState> = {}): CatalogBootstrapStand {
     repo as never,
     eventBus as never,
     logger as never,
+    { kindIdByName: vi.fn(async () => null) } as never,
   );
   return { bootstrap, repo, eventBus, logger, tx: TX };
 }

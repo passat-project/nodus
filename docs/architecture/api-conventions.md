@@ -121,13 +121,16 @@ INTERNAL_ERROR      # непредвиденное (без деталей нар
 422 PROCESS_TYPE_PRESET_INVALID  {typeId, fields: CreationFieldKey[]}  # пресет ссылается на уволенного
 422 CUSTOM_FIELD_VALUE_INVALID   {issues: [{fieldId, reason: 'not_in_type' | ...}]}
 422 CUSTOM_FIELD_BINDING_INVALID {targetKind, targetId}             # привязка к архиву/глобальной переменной; неизвестная цель — 404
+422 PROCESS_TYPE_NOT_ALLOWED_IN_PROJECT {typeId, projectId, projectTypeId}  # «где создаётся» (#665)
+422 PROCESS_TYPE_PROJECT_REQUIRED       {typeId}                    # тип только в проекте
+422 PROCESS_TYPE_FOLDER_KIND_REQUIRED   {typeId, nodeId, kindId}    # только в папке своего вида
 ```
 
 - **`clear`** приходит из трёх мест: `PATCH /tasks/:id` (срок, описание, атрибут), окно перехода (тот же писатель полей) и снятие последнего участника обязательной роли (`DELETE /tasks/:id/participants/:userId`).
 - **403, а не 409, на скрытый тип** (О7): клиент различает «нет доступа» (`view`) и «нельзя создавать» (`not_creatable`) — веб показывает разные подсказки. Внутренние вызовы без актора сохраняют 409.
 - **Смена типа** (`POST /tasks/:id/type`) требует доступа «создаёт» к целевому типу; обязательных полей не требует (О9).
 - **`GET /workflows/types`** отдаёт `config`, `creationForm` (эффективная форма опубликованного маршрута) и `viewer`; без `workflow.manage` — только видимые типы (О11). Мутации типов отвечают DTO типа.
-- **`PATCH /workflows/types/:id/config`** — разделы заменяются целиком (без `.default()`: gotcha Zod 4), событие `workflow.type_updated` с полями `config.card` / `config.access`.
+- **`PATCH /workflows/types/:id/config`** — разделы заменяются целиком (без `.default()`: gotcha Zod 4), событие `workflow.type_updated` с полями `config.card` / `config.access` / `config.creation`. `creation` (#665) — одна связь «где создаётся»: `excludedProjectTypeIds`, `folderKindId`, `withoutProject`; её правка не ставит `customizedAt` (каталог продолжает получать ревизии), а системным письмам разрешена только эта секция.
 - **`GET /tasks/:id` → `layout`** = `{hiddenBlocks, roleLabels, requiredKeys}` — собирает сервер из типа (работает и для невидимого зрителю типа).
 - **Привязки атрибутов** — `PUT`/`DELETE /custom-fields/definitions/:id/bindings/:kind/:targetId` (`kind`: `process-type|project-type|node-kind`), идемпотентны, аудит `custom_field.bind` / `custom_field.unbind`, событие `custom_field.definition_changed {fields: ['bindings']}`; снятие разрешено всегда (значения не стираются, опубликованные маршруты толерантны), bind к архивному типу процесса — 422. Полный набор привязок — `PATCH /custom-fields/definitions/:id {bindings}`.
 - **Каталог стадий** (`GET /tasks/stages`) не раскрывает типы, невидимые смотрящему (О11).

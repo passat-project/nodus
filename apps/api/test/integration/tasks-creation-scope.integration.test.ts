@@ -277,7 +277,7 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks: где создаётся (#6
       nodeId: folderNodeId,
     });
     expect(rightFolder.status).toBe(201);
-    expect(rightFolder.task?.nodeId ?? folderNodeId).toBe(folderNodeId);
+    expect(rightFolder.task?.nodeId).toBe(folderNodeId);
   });
 
   it('смена типа на запрещённый в проекте — 422, тип не меняется', async () => {

@@ -156,4 +156,22 @@ describe('TaskCreationScope (#665)', () => {
     ).rejects.toBeInstanceOf(DomainException);
     expect(projects.projectTypeOf).toHaveBeenCalledWith(PROJECT);
   });
+
+  it('перенос задачи в чужую папку или в корень — 422 по виду папки (#665)', async () => {
+    const { scope, catalog } = setup({ kindId: OTHER_KIND });
+    catalog.typeById.mockResolvedValue(type({ config: scopeOf({ folderKindId: KIND }) }));
+    const row = {
+      typeId: '66666666-6666-4666-8666-666666666666',
+      projectId: PROJECT,
+      nodeId: NODE,
+    };
+    // В другая папка того же проекта — вид не тот.
+    await expect(
+      scope.assertChange(row, { nodeId: '88888888-8888-4888-8888-888888888888' }),
+    ).rejects.toMatchObject({ code: ErrorCode.PROCESS_TYPE_FOLDER_KIND_REQUIRED });
+    // Вынос в корень проекта — папки нет вовсе.
+    await expect(scope.assertChange(row, { nodeId: null })).rejects.toMatchObject({
+      code: ErrorCode.PROCESS_TYPE_FOLDER_KIND_REQUIRED,
+    });
+  });
 });

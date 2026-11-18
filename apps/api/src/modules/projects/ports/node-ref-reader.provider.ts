@@ -26,6 +26,16 @@ export class NodeRefReaderProvider implements NodeRefReader {
     return rows.map((row) => ({ id: row.id, name: row.name, deleted: false }));
   }
 
+  /** Вид папки по имени (#665): первый живой — имена видов не уникальны. */
+  async kindIdByName(name: string): Promise<string | null> {
+    const row = await this.prisma.nodeKind.findFirst({
+      where: { name, archivedAt: null },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  }
+
   async visibleFor(
     nodeId: string,
     viewer: { id: string; permissions: readonly string[] },

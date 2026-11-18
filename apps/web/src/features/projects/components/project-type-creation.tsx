@@ -3,6 +3,7 @@ import { typeConfigOf, ui, withProjectTypeAllowed } from '@nodus/contracts';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { Switch } from '@nodus/ui/components/switch';
 import { cn } from '@nodus/ui/lib/utils';
+import { toast } from 'sonner';
 
 import {
   useLiveProcessTypes,
@@ -38,6 +39,13 @@ export function ProjectTypeCreationSection({
 
   function toggle(item: ProcessType, allowed: boolean): void {
     const scope = typeConfigOf(item).creation;
+    // Снятие работы, привязанной к включённому виду папки, — предупреждение:
+    // её нельзя будет создать даже в папке (issue #665).
+    const boundHere =
+      !allowed &&
+      scope.folderKindId !== null &&
+      (type.kindIds === null || type.kindIds.includes(scope.folderKindId));
+    if (boundHere) toast.warning(ui.automation.creationScope.unbindWarning);
     update.mutate({ typeId: item.id, creation: withProjectTypeAllowed(scope, type.id, allowed) });
   }
 
