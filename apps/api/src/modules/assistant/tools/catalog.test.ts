@@ -138,17 +138,20 @@ describe('состав каталога (#892, Ф2 #899)', () => {
 });
 
 describe('фильтры каталога (#892)', () => {
+  // Права и флаги — из определений: новый модуль/право не ломает счётчики.
   const allPermissions = [
-    'assistant.use',
-    'directory.read',
-    'task.view_all',
-    'task.create',
-    'project.view_secret',
+    ...new Set([
+      'assistant.use',
+      ...ALL_TOOLS.flatMap((tool) => (tool.permission ? [tool.permission] : [])),
+    ]),
   ];
-  const allFeatures = ['tasks', 'projects', 'correspondence', 'chat', 'assistant'];
+  const allFeatures = [
+    ...new Set(ALL_TOOLS.flatMap((tool) => (tool.featureFlag ? [tool.featureFlag] : []))),
+  ];
 
   it('без права directory.read справочник сотрудников недоступен', () => {
-    const catalog = buildCatalog({ permissions: ['task.create'], features: allFeatures });
+    const permissions = allPermissions.filter((permission) => permission !== 'directory.read');
+    const catalog = buildCatalog({ permissions, features: allFeatures });
     expect(catalog.some((tool) => tool.module === 'directory')).toBe(false);
     const directoryTools = ALL_TOOLS.filter((tool) => tool.module === 'directory').length;
     expect(catalog.length).toBe(ALL_TOOLS.length - directoryTools);

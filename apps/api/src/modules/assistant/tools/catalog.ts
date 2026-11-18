@@ -1,16 +1,29 @@
+import { chatActionsTools } from './definitions/chat-actions.tools.js';
+import { chatMessagesActionsTools } from './definitions/chat-messages-actions.tools.js';
 import { chatTools } from './definitions/chat.tools.js';
 import { chatWriteTools } from './definitions/chat-write.tools.js';
+import { counterpartiesReadTools } from './definitions/counterparties.tools.js';
+import { counterpartiesWriteTools } from './definitions/counterparties-write.tools.js';
 import { dictionariesTools } from './definitions/dictionaries.tools.js';
+import { dictionariesWriteTools } from './definitions/dictionaries-write.tools.js';
 import { directoryTools } from './definitions/directory.tools.js';
 import { filesTools } from './definitions/files.tools.js';
+import { lettersPartsReadTools } from './definitions/letters-parts.tools.js';
+import { lettersPartsWriteTools } from './definitions/letters-parts-write.tools.js';
 import { lettersTools } from './definitions/letters.tools.js';
 import { lettersWriteTools } from './definitions/letters-write.tools.js';
 import { meTools } from './definitions/me.tools.js';
 import { memoryTools } from './definitions/memory.tools.js';
+import { notificationsTools } from './definitions/notifications.tools.js';
+import { projectsCreateTools } from './definitions/projects-create.tools.js';
+import { projectsPartsTools } from './definitions/projects-parts.tools.js';
 import { projectsTools } from './definitions/projects.tools.js';
 import { projectsWriteTools } from './definitions/projects-write.tools.js';
 import { systemTools } from './definitions/system.tools.js';
 import { tasksTools } from './definitions/tasks.tools.js';
+import { tasksPartsReadTools } from './definitions/tasks-parts.tools.js';
+import { tasksPartsWriteTools } from './definitions/tasks-parts-write.tools.js';
+import { tasksTimeResultTools } from './definitions/tasks-time-result.tools.js';
 import { tasksTransitionTools } from './definitions/tasks-transition.tools.js';
 import { tasksWriteTools } from './definitions/tasks-write.tools.js';
 import { workflowsTools } from './definitions/workflows.tools.js';
@@ -30,17 +43,30 @@ import type { AssistantToolDefinition } from './tool-definition.js';
  */
 export const ALL_TOOLS: readonly AssistantToolDefinition[] = [
   ...tasksTools,
+  ...tasksPartsReadTools,
+  ...tasksPartsWriteTools,
+  ...tasksTimeResultTools,
   ...tasksTransitionTools,
   ...tasksWriteTools,
   ...projectsTools,
   ...projectsWriteTools,
+  ...projectsCreateTools,
+  ...projectsPartsTools,
   ...lettersTools,
   ...lettersWriteTools,
+  ...lettersPartsReadTools,
+  ...lettersPartsWriteTools,
   ...chatTools,
   ...chatWriteTools,
+  ...chatActionsTools,
+  ...chatMessagesActionsTools,
   ...directoryTools,
   ...meTools,
   ...dictionariesTools,
+  ...dictionariesWriteTools,
+  ...counterpartiesReadTools,
+  ...counterpartiesWriteTools,
+  ...notificationsTools,
   ...filesTools,
   ...workflowsTools,
   ...systemTools,

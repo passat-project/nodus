@@ -9,9 +9,8 @@ import type { AuditRepository } from '../../core/audit/audit.repository.js';
 import { AssistantActionsService } from './assistant-actions.service.js';
 
 /**
- * Карточки действий (Ф2, #899, ADR-0048): предложение НЕ пишет в портал,
- * запись — только подтверждение/байпас, идемпотентность = id карточки,
- * чужая карточка — 404, отмена выполненного — DELETE созданного.
+ * Карточки действий (Ф2, #899, ADR-0048): предложение НЕ пишет в портал, запись — только
+ * подтверждение/байпас, идемпотентность = id карточки, чужая — 404, отмена — DELETE.
  */
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -189,8 +188,22 @@ describe('AssistantActionsService: предложение (ADR-0048)', () => {
     );
     expect(result.text).toContain('выполнено');
     expect(bus.publish).toHaveBeenCalledWith(RUN_ID, 'action.executed', expect.anything());
-  });
 
+    // Необратимое байпасом не исполняется: та же карточка ждёт человека (#926).
+    const blocked = await service.propose({
+      runId: RUN_ID,
+      sessionId: 'session-1',
+      messageId: 'message-1',
+      userId: USER_ID,
+      tool: findAnyTool('tasks.add_participant') as AssistantToolDefinition,
+      rawInput: { taskId: RUN_ID, userId: USER_ID, role: 'observer' },
+      automatic: true,
+      authorization: 'Bearer user-token',
+      ctx,
+    });
+    expect(blocked.text).toContain('необратимо');
+    expect(executor.executeWrite).toHaveBeenCalledTimes(1);
+  });
   it('лимит карточек за прогон и неверные аргументы — понятный отказ модели', async () => {
     const { service, repo } = build();
     repo.countRunActions.mockResolvedValueOnce(5);

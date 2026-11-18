@@ -4,6 +4,7 @@ import { Permission, type MyOrganization, type UserListItem } from '@nodus/contr
 
 import { defineTool } from '../tool-definition.js';
 import { asTyped, clip, entityLink, finalize } from '../projections.js';
+import { directoryMeta } from './meta/directory.meta.js';
 
 /**
  * «Кто я» (#919): профиль текущего сотрудника, его руководитель,
@@ -15,6 +16,7 @@ import { asTyped, clip, entityLink, finalize } from '../projections.js';
  * `MyOrganization`/`UserListItem` ломает сборку, а не даёт пустую строку.
  */
 export const meGetTool = defineTool({
+  ...directoryMeta['me.get'],
   id: 'me.get',
   title: 'Кто я: профиль и оргструктура',
   description:

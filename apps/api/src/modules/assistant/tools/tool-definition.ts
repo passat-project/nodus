@@ -1,6 +1,8 @@
 import type { Permission } from '@nodus/contracts';
 import type { z } from 'zod';
 
+import { compileProjection, type ProjectionSpec } from './projection-spec.js';
+
 /**
  * Определение инструмента ИИ-агента (ADR-0043 п. 2–5): описание операции API
  * портала, а не кода доступа к данным. Инструмент исполняется от имени
@@ -19,6 +21,8 @@ export const ASSISTANT_TOOL_MODULES = [
   'chat',
   'directory',
   'dictionaries',
+  'crm',
+  'notifications',
   'workflows',
   'system',
   /** Вложения: чтение текста PDF/DOCX (#922). */
@@ -32,6 +36,77 @@ export type AssistantToolModule = (typeof ASSISTANT_TOOL_MODULES)[number];
  *  исполняется из цикла напрямую — она готовит карточку подтверждения
  *  (`card`), а запись в портал делает только сотрудник (или байпас). */
 export type ToolKind = 'read' | 'write';
+
+/**
+ * Класс действия инструмента (#926): по нему детерминированный измеритель
+ * понимает, отвечает ли инструмент на просьбу «покажи» / «создай» /
+ * «заверши». Не заменяет `kind`: `kind` — предохранитель записи, `intent` —
+ * смысл операции для выбора инструмента.
+ */
+export const TOOL_INTENTS = [
+  'list',
+  'get',
+  'search',
+  'history',
+  'attachments',
+  'relations',
+  'members',
+  'structure',
+  'stages',
+  'transitions',
+  'create',
+  'update',
+  'delete',
+  'transition',
+  'send',
+  'open',
+  'context',
+  'remember',
+  'forget',
+  'other',
+] as const;
+export type ToolIntent = (typeof TOOL_INTENTS)[number];
+
+/**
+ * Побочный эффект инструмента (#926, стандарт описания): что произойдёт с
+ * данными. `irreversible` — записи нет пути отмены (карточка честно говорит
+ * об этом); `external` — действие во внешнем MCP-сервисе.
+ */
+export type ToolEffect = 'read' | 'write' | 'irreversible' | 'external';
+
+/**
+ * Стандарт описания инструмента (#926, этап 1). Обязательные поля, по
+ * которым модель выбирает инструмент и по которым работает линтер каталога:
+ * человеческое «зачем», ситуации «да/нет», объект, эффект, права (поля
+ * `permission`/`featureFlag` самого определения), пример входа, форма
+ * ответа и следующий шаг.
+ */
+export interface ToolStandard {
+  /** Одно предложение «зачем инструмент» — без пересказа API. */
+  why: string;
+  /** Когда вызывать: живые формулировки сотрудников. */
+  whenToUse: string;
+  /** Когда НЕ вызывать и какой инструмент вместо. */
+  whenNotToUse: string;
+  /** Объект действия (главное существительное): «задача», «папка». */
+  subject: string;
+  /**
+   * Смежные объекты действия (#926): «добавить участника» действует и на
+   * беседу/проект/задачу. Нужны, чтобы запрос «добавь Петрова в беседу»
+   * находил инструмент участника, а не создание беседы.
+   */
+  alsoSubjects?: readonly string[];
+  /** Побочный эффект для данных. */
+  effect: ToolEffect;
+  /** Пример входа с реалистичными значениями (валидируется zod-схемой). */
+  example: { input: Record<string, unknown>; note: string };
+  /** Форма ответа: что именно увидит модель. */
+  returns: string;
+  /** Следующий шаг после ответа. */
+  nextStep: string;
+  /** Класс действия для роутинга и линтера. */
+  intent: ToolIntent;
+}
 
 /** Контекст экрана, проверенный на допустимые значения (client → server). */
 export interface ScreenContext {
@@ -81,7 +156,7 @@ export interface ToolContext {
 
 /** Операция API, которую описывает инструмент — для проверки по OpenAPI. */
 export interface ToolApiOperation {
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   /** Шаблон пути без глобального префикса: `/tasks/:id`, `/dictionaries/:code/items`. */
   path: string;
 }
@@ -89,7 +164,7 @@ export interface ToolApiOperation {
 /** Запрос исполнения: метод, путь с подставленными параметрами + query/body. */
 export interface ToolRequest {
   /** По умолчанию — метод из `api` (у чтения GET). */
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   path: string;
   query?: Record<string, string>;
   /** JSON-тело мутации; отсутствует у GET. */
@@ -167,6 +242,30 @@ export interface AssistantToolDefinition {
   card?: ToolWriteCard;
   /** Вычислимые инструменты без API-вызова. */
   handler?: (input: Record<string, unknown>, ctx: ToolContext) => ToolResult | Promise<ToolResult>;
+
+  // Стандарт описания (#926). Поля пока опциональны в типе ради миграции
+  // существующего каталога; линтер `tool-standard.test.ts` требует их у
+  // каждого инструмента и не даёт добавить новый без стандарта.
+  /** Одно предложение «зачем инструмент». */
+  why?: string;
+  /** Когда вызывать. */
+  whenToUse?: string;
+  /** Когда НЕ вызывать и что вместо. */
+  whenNotToUse?: string;
+  /** Объект действия (главное существительное). */
+  subject?: string;
+  /** Смежные объекты действия (см. `ToolStandard`). */
+  alsoSubjects?: readonly string[];
+  /** Побочный эффект для данных. */
+  effect?: ToolEffect;
+  /** Пример входа с реалистичными значениями. */
+  example?: { input: Record<string, unknown>; note: string };
+  /** Форма ответа. */
+  returns?: string;
+  /** Следующий шаг после ответа. */
+  nextStep?: string;
+  /** Класс действия для роутинга. */
+  intent?: ToolIntent;
 }
 
 /**
@@ -196,6 +295,11 @@ export function defineTool<S extends z.ZodType, TData = unknown>(definition: {
    * всё равно проверяются охранником (`asTyped`), мусор не роняет прогон.
    */
   project?: (data: TData, input: z.infer<S>, steps?: readonly unknown[]) => ToolResult;
+  /**
+   * Декларативная проекция для типовых чтений (#926): поля и форматы вместо
+   * функции. Компилируется в `project`; функция и декларация взаимоисключающи.
+   */
+  projection?: ProjectionSpec;
   card?: {
     title: string;
     summary: (input: z.infer<S>, ctx: ToolContext) => string | Promise<string>;
@@ -204,6 +308,26 @@ export function defineTool<S extends z.ZodType, TData = unknown>(definition: {
     undo?: (input: z.infer<S>, output: unknown) => ToolRequest | null;
   };
   handler?: (input: z.infer<S>, ctx: ToolContext) => ToolResult | Promise<ToolResult>;
+  why?: string;
+  whenToUse?: string;
+  whenNotToUse?: string;
+  subject?: string;
+  alsoSubjects?: readonly string[];
+  effect?: ToolEffect;
+  example?: { input: Record<string, unknown>; note: string };
+  returns?: string;
+  nextStep?: string;
+  intent?: ToolIntent;
 }): AssistantToolDefinition {
-  return definition as unknown as AssistantToolDefinition;
+  const { projection, ...rest } = definition;
+  const compiled = rest as unknown as AssistantToolDefinition;
+  if (projection) {
+    if (compiled.project) {
+      throw new Error(`${compiled.id}: project и projection взаимоисключающи`);
+    }
+    compiled.project = compileProjection(projection) as NonNullable<
+      AssistantToolDefinition['project']
+    >;
+  }
+  return compiled;
 }

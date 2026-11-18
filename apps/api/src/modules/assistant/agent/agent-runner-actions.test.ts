@@ -97,6 +97,43 @@ describe('AgentRunnerService: действия (Ф2)', () => {
     expect(executor.execute).toHaveBeenCalledTimes(1);
     expect(actions.propose).not.toHaveBeenCalled();
   });
+
+  it('вызов инструмента вне активного набора не исполняется (#926)', async () => {
+    const { runner, bus, actions, executor } = build([
+      [
+        {
+          type: 'tool_call',
+          call: {
+            id: 'call_out',
+            type: 'function',
+            function: {
+              name: 'counterparties.create',
+              arguments: '{"fullName":"ООО «Строй»","shortName":"Строй"}',
+            },
+          },
+        },
+        { type: 'done', finishReason: 'tool_calls' },
+      ],
+      [
+        { type: 'text.delta', text: 'Не могу.' },
+        { type: 'done', finishReason: 'stop' },
+      ],
+    ]);
+    const streamDone = drain(bus);
+    runner.start({
+      ...taskParams,
+      permissions: ['assistant.use', 'crm.create'],
+      features: ['crm'],
+    });
+    const events = await streamDone;
+
+    // Инструмент есть в каталоге, но не в активном наборе (не горячий,
+    // диспетчер не выбирал): модель не должна исполнять его в обход.
+    expect(actions.propose).not.toHaveBeenCalled();
+    expect(executor.execute).not.toHaveBeenCalled();
+    const finished = events.find((event) => event.type === 'tool.finished');
+    expect(finished?.data).toMatchObject({ errorCode: 'ASSISTANT_TOOL_UNKNOWN' });
+  });
 });
 
 describe('AgentRunnerService: память сотрудника (#900)', () => {

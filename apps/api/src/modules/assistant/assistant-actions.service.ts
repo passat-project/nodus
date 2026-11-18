@@ -83,6 +83,11 @@ export class AssistantActionsService {
     // Карточка собирается из человеческих значений: имена по id дочитываются
     // от имени сотрудника; недоступное имя не валит карточку (id как есть).
     const { summary, fields } = await buildCard(tool, parsed.input, ctx);
+    // Байпас (#920) исполняет только обратимые действия. Необратимые
+    // (эффект `irreversible`: удаление, участие, роли беседы, правка
+    // справочников и контрагентов) остаются карточкой даже в режиме «Без
+    // подтверждений» — решение #926/#932: опасное подтверждает человек.
+    const automatic = proposal.automatic && tool.effect !== 'irreversible';
     const row = await this.repo.createActionWithinLimit(
       {
         runId: proposal.runId,
@@ -94,7 +99,7 @@ export class AssistantActionsService {
         fields,
         consequences: tool.card.consequences,
         undoable: Boolean(tool.card.undo),
-        automatic: proposal.automatic,
+        automatic,
         args: parsed.input,
       },
       ASSISTANT_LIMITS.maxActionsPerRun,
@@ -102,7 +107,7 @@ export class AssistantActionsService {
     if (!row) return { text: tooManyActionsText(), action: null };
     // Пачка (#916): карточки одного хода решаются вместе, продолжение —
     // после всех. Байпас в пачку не входит: действия уже выполнены.
-    if (!proposal.automatic && proposal.messageId) {
+    if (!automatic && proposal.messageId) {
       await this.repo.ensureActionBatch({
         messageId: proposal.messageId,
         sessionId: proposal.sessionId,
@@ -112,9 +117,12 @@ export class AssistantActionsService {
     }
     await this.publish(proposal.runId, 'action.proposed', row);
 
-    if (!proposal.automatic) {
+    if (!automatic) {
+      const note = proposal.automatic
+        ? ' Действие необратимо: автоматическое исполнение для него отключено, подтвердите карточку вручную.'
+        : '';
       return {
-        text: `Действие подготовлено и ждёт подтверждения сотрудника: ${summary}. Карточка уже в ленте — не вызывай инструмент повторно и не утверждай, что действие выполнено.`,
+        text: `Действие подготовлено и ждёт подтверждения сотрудника: ${summary}.${note} Карточка уже в ленте — не вызывай инструмент повторно и не утверждай, что действие выполнено.`,
         action: row,
       };
     }

@@ -1,0 +1,81 @@
+import type { GoldenCase } from '../golden-set.types.js';
+
+/** Рядовой сотрудник: свои задачи, беседы, вложения, блокнот, отказы (часть 1). */
+export const EMPLOYEE_CASES_1: readonly GoldenCase[] = [
+  {
+    id: 'emp-tasks-02',
+    role: 'employee',
+    form: 'colloquial',
+    query: 'Чё у меня по задачам?',
+    expectedTools: ['tasks.list'],
+    forbiddenTools: ['tasks.stages'],
+    rationale: 'Разговорный запрос списка своих задач — tasks.list; стадии дают счётчики.',
+  },
+  {
+    id: 'emp-tasks-04',
+    role: 'employee',
+    form: 'official',
+    query: 'Открой карточку задачи №1042',
+    expectedTools: ['tasks.search', 'tasks.get'],
+    forbiddenTools: ['tasks.update'],
+    rationale: 'Номер ищется tasks.search, карточка — tasks.get; менять задачу не просили.',
+  },
+  {
+    id: 'emp-tasks-06',
+    role: 'employee',
+    form: 'official',
+    query: 'Покажи историю задачи №1042',
+    expectedTools: ['tasks.search', 'tasks.history'],
+    forbiddenTools: ['tasks.get'],
+    rationale: 'Хронология — tasks.history после поиска номера; карточка не показывает переходы.',
+  },
+  {
+    id: 'emp-tasks-07',
+    role: 'employee',
+    form: 'typo',
+    query: 'Пакажи стадии задач',
+    expectedTools: ['tasks.stages'],
+    forbiddenTools: ['tasks.list'],
+    rationale: 'Распределение по стадиям — tasks.stages; список задач не даёт счётчики.',
+  },
+  {
+    id: 'emp-tasks-09',
+    role: 'employee',
+    form: 'colloquial',
+    query: 'Перенеси срок 1042 на пятницу',
+    expectedTools: ['tasks.update'],
+    forbiddenTools: ['tasks.transition'],
+    rationale: 'Срок меняет tasks.update; переход меняет стадию.',
+  },
+  {
+    id: 'emp-chat-03',
+    role: 'employee',
+    form: 'typo',
+    query: 'Атправь в чат задачи 1042, что всё готово',
+    expectedTools: ['chat.task_conversation', 'chat.send'],
+    forbiddenTools: ['chat.direct_message'],
+    rationale:
+      'Чат задачи находится chat.task_conversation, отправляет chat.send; личка — другой канал.',
+  },
+  {
+    id: 'emp-no-tool-01',
+    role: 'employee',
+    form: 'official',
+    query: 'Подпиши акт электронной подписью',
+    expectedTools: [],
+    forbiddenTools: ['files.extract_text', 'letters.transition'],
+    noToolCase: true,
+    rationale:
+      'ЭЦП в каталоге нет; extract_text только читает файл, letters.transition двигает письмо.',
+  },
+  {
+    id: 'emp-clarify-01',
+    role: 'employee',
+    form: 'official',
+    query: 'Напиши Петрову, что я согласен',
+    expectedTools: [],
+    forbiddenTools: ['tasks.create'],
+    shouldClarify: true,
+    rationale: 'Неясно, какой Петров и с чем согласен; без уточнения адресата писать нельзя.',
+  },
+];

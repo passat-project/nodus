@@ -16,6 +16,7 @@ import {
   str,
 } from '../projections.js';
 import { formBody, transitionInput } from './tasks-transition.input.js';
+import { tasksMeta } from './meta/tasks.meta.js';
 import {
   OUTCOME_LABELS,
   blockedSummary,
@@ -39,6 +40,7 @@ import { field, fieldsOf, shortId } from './write-cards.js';
  */
 
 export const tasksTransitionsTool = defineTool({
+  ...tasksMeta['tasks.transitions'],
   id: 'tasks.transitions',
   title: 'Задачи: доступные переходы',
   description:
@@ -49,6 +51,7 @@ export const tasksTransitionsTool = defineTool({
     'завершить задачу',
     'вернуть задачу',
     'кнопки статуса',
+    'что дальше',
     'transitions',
   ],
   module: 'tasks',
@@ -93,6 +96,7 @@ export const tasksTransitionsTool = defineTool({
 });
 
 export const tasksTransitionTool = defineTool({
+  ...tasksMeta['tasks.transition'],
   id: 'tasks.transition',
   title: 'Задачи: выполнить переход',
   description:
@@ -102,6 +106,7 @@ export const tasksTransitionTool = defineTool({
     'закрыть задачу',
     'сменить статус',
     'перевести задачу',
+    'выполнить переход',
     'переход',
     'transition',
   ],

@@ -5,6 +5,7 @@ import type { ChatMessage, ConversationListItem } from '@nodus/contracts';
 import { defineTool } from '../tool-definition.js';
 import { asArray, asRecord, asTyped, clip, str } from '../projections.js';
 import { conversationTitle, field, fieldsOf, shortId, userName } from './write-cards.js';
+import { chatMeta } from './meta/chat.meta.js';
 
 /**
  * Сообщения (Ф2, ADR-0048): отправка в СУЩЕСТВУЮЩУЮ беседу или чат задачи.
@@ -15,11 +16,18 @@ import { conversationTitle, field, fieldsOf, shortId, userName } from './write-c
 const taskConversationInput = z.object({ taskId: z.uuid() });
 
 export const chatTaskConversationTool = defineTool({
+  ...chatMeta['chat.task_conversation'],
   id: 'chat.task_conversation',
   title: 'Мессенджер: чат задачи',
   description:
     'Беседа задачи по id: возвращает id беседы для chat.send. Если чат задачи ещё не открывали, портал создаст его — как при открытии карточки задачи.',
-  keywords: ['чат задачи', 'комментарий к задаче', 'обсуждение задачи', 'task chat'],
+  keywords: [
+    'чат задачи',
+    'комментарий к задаче',
+    'обсуждение задачи',
+    'в чате задачи',
+    'task chat',
+  ],
   module: 'chat',
   kind: 'read',
   featureFlag: 'chat',
@@ -45,6 +53,7 @@ const sendInput = z.object({
 });
 
 export const chatSendTool = defineTool({
+  ...chatMeta['chat.send'],
   id: 'chat.send',
   title: 'Отправить сообщение',
   description:
@@ -113,6 +122,7 @@ const directInput = z.object({
  * там состав участников — решение человека.
  */
 export const chatDirectMessageTool = defineTool({
+  ...chatMeta['chat.direct_message'],
   id: 'chat.direct_message',
   title: 'Написать сотруднику в личку',
   description:

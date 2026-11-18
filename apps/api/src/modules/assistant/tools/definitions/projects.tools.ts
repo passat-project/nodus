@@ -26,6 +26,7 @@ import {
   num,
   str,
 } from '../projections.js';
+import { projectsMeta } from './meta/projects.meta.js';
 
 /**
  * Инструменты проектов (#892): журнал, карточка, структура (дерево папок и
@@ -61,11 +62,12 @@ function projectRow(project: ProjectListItem | null): string | null {
 }
 
 export const projectsListTool = defineTool({
+  ...projectsMeta['projects.list'],
   id: 'projects.list',
   title: 'Проекты: список',
   description:
     'Список видимых проектов: мои/все, по роли, статусу, поиск по названию и шифру. Отдаёт название, шифр, статус, руководителя, состав и id.',
-  keywords: ['проекты', 'проект', 'договор', 'портфель', 'стройка', 'projects'],
+  keywords: ['проекты', 'проект', 'договор', 'портфель', 'стройка', 'объект', 'projects'],
   module: 'projects',
   kind: 'read',
   featureFlag: 'projects',
@@ -95,11 +97,12 @@ export const projectsListTool = defineTool({
 const getInput = z.object({ id: z.uuid() });
 
 export const projectsGetTool = defineTool({
+  ...projectsMeta['projects.get'],
   id: 'projects.get',
   title: 'Проекты: карточка',
   description:
     'Карточка проекта по id: тип, статус, руководство, состав, заказчик, сроки и описание. Нужен id из projects.list.',
-  keywords: ['проект', 'карточка', 'о проекте', 'детали', 'описание'],
+  keywords: ['проект', 'карточка', 'о проекте', 'детали', 'описание', 'что за проект'],
   module: 'projects',
   kind: 'read',
   featureFlag: 'projects',
@@ -182,6 +185,7 @@ function buildNodeTree(
 }
 
 export const projectsStructureTool = defineTool({
+  ...projectsMeta['projects.structure'],
   id: 'projects.structure',
   title: 'Проекты: структура',
   description:
@@ -225,6 +229,7 @@ const membersInput = z.object({
 });
 
 export const projectsMembersTool = defineTool({
+  ...projectsMeta['projects.members'],
   id: 'projects.members',
   title: 'Проекты: участники',
   description:

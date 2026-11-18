@@ -6,6 +6,7 @@ import { defineTool } from '../tool-definition.js';
 import type { ToolContext } from '../tool-definition.js';
 import { asArray, asRecord, asTyped, clip, str } from '../projections.js';
 import { field, fieldsOf, projectName, shortId, userName } from './write-cards.js';
+import { projectsMeta } from './meta/projects.meta.js';
 
 /**
  * Действия по проектам (Ф2, ADR-0048): название/описание, участник, папка
@@ -24,6 +25,7 @@ const updateInput = z
   });
 
 export const projectsUpdateTool = defineTool({
+  ...projectsMeta['projects.update'],
   id: 'projects.update',
   title: 'Проекты: изменить',
   description:
@@ -86,11 +88,19 @@ const memberInput = z.object({
 });
 
 export const projectsAddMemberTool = defineTool({
+  ...projectsMeta['projects.add_member'],
   id: 'projects.add_member',
   title: 'Проекты: добавить участника',
   description:
     'Добавить сотрудника в проект: participant («member») или наблюдатель («observer»). Действие появится карточкой на подтверждение; правило «в открытый — только наблюдатель» проверяет портал.',
-  keywords: ['добавить участника', 'наблюдатель', 'состав проекта', 'add member'],
+  keywords: [
+    'добавить участника',
+    'наблюдатель',
+    'наблюдателем',
+    'состав проекта',
+    'добавить сотрудника',
+    'add member',
+  ],
   module: 'projects',
   kind: 'write',
   featureFlag: 'projects',
@@ -131,11 +141,7 @@ export const projectsAddMemberTool = defineTool({
       ]);
     },
     consequences:
-      'Сотрудник получит доступ к проекту по своей роли. Добавление можно отменить кнопкой «Отменить».',
-    undo: (input) => ({
-      method: 'DELETE',
-      path: `/projects/${input.id}/members/${input.userId}`,
-    }),
+      'Сотрудник получит доступ к проекту по своей роли (существующая роль будет изменена). Автоматической отмены нет — состав меняется в карточке проекта.',
   },
 });
 
@@ -147,6 +153,7 @@ const nodeInput = z.object({
 });
 
 export const projectsAddNodeTool = defineTool({
+  ...projectsMeta['projects.add_node'],
   id: 'projects.add_node',
   title: 'Проекты: создать папку',
   description:

@@ -8,43 +8,90 @@
 
 Обновить: `UPDATE_ASSISTANT_SURFACE=1 pnpm --filter @nodus/api exec vitest run src/modules/assistant/tools/surface.test.ts`
 
-Всего инструментов: **41** (запись: 9).
+Всего инструментов: **88** (запись: 45).
 
 | Инструмент | Название | Вид | Модуль | API | Право | Флаг | Горячая |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| `chat.add_members` | Мессенджер: добавить участников | запись | chat | POST /chat/conversations/:id/members | — | chat | нет |
 | `chat.conversations` | Мессенджер: беседы | чтение | chat | GET /chat/conversations | — | chat | да |
+| `chat.create_conversation` | Мессенджер: создать беседу | запись | chat | POST /chat/conversations | — | chat | нет |
 | `chat.direct_message` | Написать сотруднику в личку | запись | chat | POST /chat/conversations/direct/:userId | — | chat | да |
+| `chat.edit_message` | Мессенджер: изменить сообщение | запись | chat | PATCH /chat/conversations/:id/messages/:messageId | — | chat | нет |
+| `chat.forward_message` | Мессенджер: переслать сообщения | запись | chat | POST /chat/conversations/:id/forward | — | chat | нет |
+| `chat.members` | Мессенджер: участники беседы | чтение | chat | GET /chat/conversations/:id/members | — | chat | нет |
 | `chat.messages` | Мессенджер: сообщения | чтение | chat | GET /chat/conversations/:id/messages | — | chat | да |
+| `chat.pin_message` | Мессенджер: закрепить сообщение | запись | chat | POST /chat/conversations/:id/messages/:messageId/pin | — | chat | нет |
+| `chat.react` | Мессенджер: поставить реакцию | запись | chat | POST /chat/conversations/:id/messages/:messageId/reactions | — | chat | нет |
+| `chat.save_draft` | Мессенджер: сохранить черновик | запись | chat | PUT /chat/conversations/:id/draft | — | chat | нет |
 | `chat.send` | Отправить сообщение | запись | chat | POST /chat/conversations/:id/messages | — | chat | да |
+| `chat.set_member_role` | Мессенджер: сменить роль участника | запись | chat | PATCH /chat/conversations/:id/members/:userId | — | chat | нет |
 | `chat.task_conversation` | Мессенджер: чат задачи | чтение | chat | GET /chat/conversations/by-task/:taskId | — | chat | нет |
+| `chat.unpin_message` | Мессенджер: открепить сообщение | запись | chat | DELETE /chat/conversations/:id/messages/:messageId/pin | — | chat | нет |
 | `context.get` | Контекст экрана | чтение | system | — | — | — | да |
+| `counterparties.create` | Контрагенты: создать | запись | crm | POST /counterparties | crm.create | crm | нет |
+| `counterparties.get` | Контрагенты: карточка | чтение | crm | GET /counterparties/:id | — | crm | нет |
+| `counterparties.list` | Контрагенты: реестр | чтение | crm | GET /counterparties | — | crm | нет |
+| `counterparties.update` | Контрагенты: изменить реквизиты | запись | crm | PATCH /counterparties/:id | crm.manage | crm | нет |
+| `dictionaries.item_create` | Справочники: добавить вариант | запись | dictionaries | POST /dictionaries/:code/items | dictionary.manage | — | нет |
+| `dictionaries.item_update` | Справочники: изменить вариант | запись | dictionaries | PATCH /dictionaries/:code/items/:id | dictionary.manage | — | нет |
 | `dictionaries.items` | Справочники: элементы | чтение | dictionaries | GET /dictionaries/:code/items | — | — | да |
 | `dictionaries.list` | Справочники: список | чтение | dictionaries | GET /dictionaries | — | — | да |
 | `directory.departments` | Сотрудники: оргструктура | чтение | directory | GET /directory/departments/tree | directory.read | — | нет |
 | `directory.find_users` | Сотрудники: поиск | чтение | directory | GET /directory/users | directory.read | — | да |
 | `directory.get_user` | Сотрудники: карточка | чтение | directory | GET /directory/users/:id | directory.read | — | нет |
 | `files.extract_text` | Вложения: прочитать текст | чтение | files | GET /files/:id/text | — | assistant | да |
+| `letters.actions` | Письма: действия | чтение | letters | GET /letters/:id/actions | — | correspondence | нет |
+| `letters.add_participant` | Письма: пригласить в обсуждение | запись | letters | POST /letters/:id/participants | correspondence.register | correspondence | нет |
+| `letters.add_relation` | Письма: связать письма | запись | letters | POST /letters/:id/relations | correspondence.register | correspondence | нет |
 | `letters.attachments` | Письма: вложения | чтение | letters | GET /letters/:id | — | correspondence | да |
 | `letters.get` | Письма: карточка | чтение | letters | GET /letters/:id | — | correspondence | да |
+| `letters.history` | Письма: история | чтение | letters | GET /letters/:id/history | — | correspondence | нет |
+| `letters.join` | Письма: присоединиться к обсуждению | запись | letters | POST /letters/:id/join | — | correspondence | нет |
 | `letters.list` | Письма: реестр | чтение | letters | GET /letters | — | correspondence | да |
+| `letters.press_action` | Письма: нажать действие | запись | letters | POST /letters/:id/actions/:actionId/press | — | correspondence | нет |
 | `letters.relations` | Письма: связи | чтение | letters | GET /letters/:id/tree | — | correspondence | нет |
+| `letters.set_main_document` | Письма: основной документ | запись | letters | POST /letters/:id/main-document | correspondence.register | correspondence | нет |
 | `letters.transition` | Письма: резолюция/переход | запись | letters | POST /letters/:id/transitions/:transitionId | — | correspondence | да |
 | `letters.transitions` | Письма: маршрут | чтение | letters | GET /letters/:id/transitions | — | correspondence | нет |
+| `letters.update` | Письма: изменить реквизиты | запись | letters | PATCH /letters/:id | correspondence.register | correspondence | нет |
 | `me.get` | Кто я: профиль и оргструктура | чтение | directory | GET /directory/users/me/organization | directory.read | — | да |
 | `memory.forget` | Блокнот: забыть | чтение | system | — | — | — | нет |
 | `memory.list` | Блокнот: записи | чтение | system | — | — | — | да |
 | `memory.save` | Блокнот: запомнить | чтение | system | — | — | — | да |
+| `notifications.settings` | Уведомления: настройки | чтение | notifications | GET /notifications/settings | — | notifications | нет |
+| `notifications.update_settings` | Уведомления: настроить режим тишины | запись | notifications | PATCH /notifications/settings | — | notifications | нет |
 | `projects.add_member` | Проекты: добавить участника | запись | projects | POST /projects/:id/members | — | projects | нет |
 | `projects.add_node` | Проекты: создать папку | запись | projects | POST /projects/:id/nodes | — | projects | нет |
+| `projects.create` | Проекты: создать | запись | projects | POST /projects | project.create | projects | нет |
+| `projects.create_group` | Проекты: создать портфель | запись | projects | POST /projects/groups | project.create | projects | нет |
 | `projects.get` | Проекты: карточка | чтение | projects | GET /projects/:id | — | projects | да |
+| `projects.groups` | Проекты: портфели | чтение | projects | GET /projects/groups | — | projects | нет |
+| `projects.join` | Проекты: присоединиться | запись | projects | POST /projects/:id/join | — | projects | нет |
+| `projects.leave` | Проекты: покинуть | запись | projects | POST /projects/:id/leave | — | projects | нет |
 | `projects.list` | Проекты: список | чтение | projects | GET /projects | — | projects | да |
 | `projects.members` | Проекты: участники | чтение | projects | GET /projects/:id/members | — | projects | нет |
+| `projects.move_node` | Проекты: перенести папку | запись | projects | POST /projects/:id/nodes/:nodeId/move | — | projects | нет |
+| `projects.node_kinds` | Проекты: виды папок | чтение | projects | GET /projects/node-kinds | — | projects | нет |
+| `projects.set_status` | Проекты: завершить или вернуть в работу | запись | projects | POST /projects/:id/status | — | projects | нет |
 | `projects.structure` | Проекты: структура | чтение | projects | GET /projects/:id/structure | — | projects | нет |
+| `projects.types` | Проекты: типы | чтение | projects | GET /projects/types | — | projects | нет |
 | `projects.update` | Проекты: изменить | запись | projects | PATCH /projects/:id | — | projects | нет |
+| `projects.update_group` | Проекты: переименовать портфель | запись | projects | PATCH /projects/groups/:id | project.manage | projects | нет |
+| `projects.update_node` | Проекты: изменить папку | запись | projects | PATCH /projects/:id/nodes/:nodeId | — | projects | нет |
+| `tasks.actions` | Задачи: действия маршрута | чтение | tasks | GET /tasks/:id/actions | — | tasks | нет |
+| `tasks.add_participant` | Задачи: добавить участника | запись | tasks | POST /tasks/:id/participants | — | tasks | нет |
+| `tasks.add_relation` | Задачи: связать задачи | запись | tasks | POST /tasks/:id/relations | — | tasks | нет |
+| `tasks.add_result` | Задачи: записать итог | запись | tasks | POST /tasks/:id/results | — | tasks | нет |
+| `tasks.add_subtask` | Задачи: создать подзадачу | запись | tasks | POST /tasks/:id/subtasks | task.create | tasks | нет |
+| `tasks.checklist_add` | Задачи: добавить пункт чек-листа | запись | tasks | POST /tasks/:id/checklist | — | tasks | нет |
+| `tasks.checklist_update` | Задачи: отметить пункт чек-листа | запись | tasks | PATCH /tasks/:id/checklist/:itemId | — | tasks | нет |
 | `tasks.create` | Задачи: создать | запись | tasks | POST /tasks | task.create | tasks | да |
 | `tasks.get` | Задачи: карточка | чтение | tasks | GET /tasks/:id | — | tasks | да |
 | `tasks.history` | Задачи: история | чтение | tasks | GET /tasks/:id/history | — | tasks | нет |
 | `tasks.list` | Задачи: список | чтение | tasks | GET /tasks | — | tasks | да |
+| `tasks.log_time` | Задачи: записать трудозатраты | запись | tasks | POST /tasks/:id/time-entries | — | tasks | нет |
+| `tasks.press_action` | Задачи: нажать действие маршрута | запись | tasks | POST /tasks/:id/actions/:actionId/press | — | tasks | нет |
+| `tasks.relations` | Задачи: связи | чтение | tasks | GET /tasks/:id/relations | — | tasks | нет |
 | `tasks.search` | Задачи: поиск | чтение | tasks | GET /tasks | — | tasks | да |
 | `tasks.stages` | Задачи: стадии | чтение | tasks | GET /tasks/stages | — | tasks | нет |
 | `tasks.transition` | Задачи: выполнить переход | запись | tasks | POST /tasks/:id/transitions/:transitionId | — | tasks | да |

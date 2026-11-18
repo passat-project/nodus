@@ -1,0 +1,152 @@
+import type { GoldenCase } from '../golden-set.types.js';
+
+/** Администратор: справочники, оргструктура, сотрудники, типы процессов (часть 1). */
+export const ADMIN_CASES_1: readonly GoldenCase[] = [
+  {
+    id: 'adm-dict-01',
+    role: 'admin',
+    form: 'official',
+    query: 'Покажи список справочников портала',
+    expectedTools: ['dictionaries.list'],
+    forbiddenTools: ['dictionaries.items'],
+    rationale: 'Список бизнес-списков — dictionaries.list; элементы нужны после выбора кода.',
+  },
+  {
+    id: 'adm-dict-02',
+    role: 'admin',
+    form: 'colloquial',
+    query: 'Какие справочники вообще есть?',
+    expectedTools: ['dictionaries.list'],
+    forbiddenTools: ['workflows.process_types'],
+    rationale: 'Перечень справочников — dictionaries.list; типы процессов — другой инструмент.',
+  },
+  {
+    id: 'adm-dict-03',
+    role: 'admin',
+    form: 'typo',
+    query: 'Пакажи элементы справочника видов договоров',
+    expectedTools: ['dictionaries.list', 'dictionaries.items'],
+    forbiddenTools: ['workflows.process_types'],
+    rationale:
+      'Сначала код справочника (dictionaries.list), затем элементы (dictionaries.items); типы процессов не заменяют справочник.',
+  },
+  {
+    id: 'adm-dict-04',
+    role: 'admin',
+    form: 'official',
+    query: 'Покажи элементы справочника document-types',
+    expectedTools: ['dictionaries.items'],
+    forbiddenTools: ['dictionaries.list'],
+    rationale:
+      'Код известен из запроса — сразу dictionaries.items; общий список справочников не нужен.',
+  },
+  {
+    id: 'adm-org-01',
+    role: 'admin',
+    form: 'official',
+    query: 'Покажи оргструктуру компании',
+    expectedTools: ['directory.departments'],
+    forbiddenTools: ['directory.find_users'],
+    rationale:
+      'Дерево подразделений — directory.departments; поиск людей не отвечает на структуру.',
+  },
+  {
+    id: 'adm-org-02',
+    role: 'admin',
+    form: 'colloquial',
+    query: 'Кто руководит отделом проектирования?',
+    expectedTools: ['directory.departments'],
+    forbiddenTools: ['me.get'],
+    rationale: 'Руководители отделов видны в directory.departments; me.get — только мой профиль.',
+  },
+  {
+    id: 'adm-org-03',
+    role: 'admin',
+    form: 'typo',
+    query: 'Пакажи юридическую структуру',
+    expectedTools: ['directory.departments'],
+    forbiddenTools: ['directory.get_user'],
+    rationale:
+      'Юридическая структура — directory.departments с kind=legal; карточка сотрудника не даёт дерево.',
+  },
+  {
+    id: 'adm-users-01',
+    role: 'admin',
+    form: 'official',
+    query: 'Найди сотрудника Петрова',
+    expectedTools: ['directory.find_users'],
+    forbiddenTools: ['directory.departments'],
+    rationale: 'Поиск по имени — directory.find_users; дерево отделов не ищет по фамилии.',
+  },
+  {
+    id: 'adm-users-02',
+    role: 'admin',
+    form: 'colloquial',
+    query: 'Какая почта у Петрова?',
+    expectedTools: ['directory.find_users', 'directory.get_user'],
+    forbiddenTools: ['chat.direct_message'],
+    rationale:
+      'Сначала id через directory.find_users, контакты — directory.get_user; писать ему не просили.',
+  },
+  {
+    id: 'adm-process-01',
+    role: 'admin',
+    form: 'official',
+    query: 'Какие типы процессов для задач настроены?',
+    expectedTools: ['workflows.process_types'],
+    forbiddenTools: ['tasks.list'],
+    rationale:
+      'Типы процессов — workflows.process_types с category=task; список задач не отвечает на маршруты.',
+  },
+  {
+    id: 'adm-process-02',
+    role: 'admin',
+    form: 'typo',
+    query: 'Какиие виды писем настроены в портале?',
+    expectedTools: ['workflows.process_types'],
+    forbiddenTools: ['letters.list'],
+    rationale:
+      'Типы процессов писем — workflows.process_types с category=letter; реестр писем не про виды.',
+  },
+  {
+    id: 'adm-projects-01',
+    role: 'admin',
+    form: 'official',
+    query: 'Покажи карточку проекта «Северный»',
+    expectedTools: ['projects.list', 'projects.get'],
+    forbiddenTools: ['projects.update'],
+    rationale: 'Сначала id проекта (projects.list), карточка — projects.get; изменение не просили.',
+  },
+  {
+    id: 'adm-no-tool-01',
+    role: 'admin',
+    form: 'official',
+    query: 'Создай справочник «Виды договоров»',
+    expectedTools: [],
+    forbiddenTools: ['dictionaries.list', 'dictionaries.items'],
+    noToolCase: true,
+    rationale: 'Создания справочников в каталоге нет; dictionaries.list и items только читают.',
+  },
+  {
+    id: 'adm-no-tool-02',
+    role: 'admin',
+    form: 'colloquial',
+    query: 'Опубликуй новый процесс для писем',
+    expectedTools: [],
+    forbiddenTools: ['workflows.process_types', 'letters.transition'],
+    noToolCase: true,
+    rationale:
+      'Публикации типов процессов нет; process_types читает, letters.transition двигает письмо.',
+  },
+  {
+    id: 'adm-clarify-01',
+    role: 'admin',
+    form: 'official',
+    query: 'Выдай Петрову доступ к проекту «Речной»',
+    expectedTools: [],
+    forbiddenTools: ['projects.update'],
+    shouldClarify: true,
+    rationale:
+      'Неясен уровень доступа (участник или наблюдатель) и речь может быть о правах, а не составе.',
+  },
+];

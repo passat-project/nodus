@@ -439,7 +439,12 @@ export class AgentRunnerService {
       | { kind: 'write'; call: LlmToolCall; tool: AssistantToolDefinition; input: unknown };
     const prepared: Prepared[] = [];
     for (const [index, call] of calls.entries()) {
-      const tool = catalog.find((item) => item.id === call.function.name) ?? null;
+      // Модель видит только активный набор (диспетчер/полка/поиск). Вызов
+      // инструмента вне набора — обход роутера: не исполняем (ниже
+      // ASSISTANT_TOOL_UNKNOWN), даже если id существует в каталоге.
+      const tool = activeTools.has(call.function.name)
+        ? (catalog.find((item) => item.id === call.function.name) ?? null)
+        : null;
       const args = parseArgs(call.function.arguments);
       if (tool?.kind === 'write') {
         // Карточка действия — самостоятельный элемент ленты; строка вызова

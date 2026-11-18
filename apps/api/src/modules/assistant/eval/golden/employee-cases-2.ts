@@ -1,0 +1,142 @@
+import type { GoldenCase } from '../golden-set.types.js';
+
+/** Рядовой сотрудник: личка, проекты, профиль, блокнот, ограниченные действия (часть 2). */
+export const EMPLOYEE_CASES_2: readonly GoldenCase[] = [
+  {
+    id: 'emp-chat-04',
+    role: 'employee',
+    form: 'official',
+    query: 'Напиши в личку Ивановой, что совещание переносится',
+    expectedTools: ['directory.find_users', 'chat.direct_message'],
+    forbiddenTools: ['chat.send'],
+    rationale:
+      'Для лички нужен id Ивановой (directory.find_users), отправляет chat.direct_message; chat.send требует id беседы.',
+  },
+  {
+    id: 'emp-chat-05',
+    role: 'employee',
+    form: 'colloquial',
+    query: 'Что в чате задачи 1042?',
+    expectedTools: ['chat.task_conversation', 'chat.messages'],
+    forbiddenTools: ['chat.send'],
+    rationale:
+      'Чат задачи — chat.task_conversation, сообщения — chat.messages; отправка не просили.',
+  },
+  {
+    id: 'emp-files-01',
+    role: 'employee',
+    form: 'official',
+    query: 'Прочитай текст акта во вложении',
+    expectedTools: ['letters.attachments', 'files.extract_text'],
+    forbiddenTools: ['letters.transition'],
+    rationale:
+      'Сначала fileId из описи (letters.attachments), текст читает files.extract_text; резолюция не нужна.',
+  },
+  {
+    id: 'emp-projects-01',
+    role: 'employee',
+    form: 'official',
+    query: 'Покажи, что за проект сейчас открыт',
+    expectedTools: ['context.get', 'projects.get'],
+    forbiddenTools: ['projects.list'],
+    rationale:
+      'Открытая карточка берётся context.get, затем projects.get; список проектов не отвечает про текущий экран.',
+  },
+  {
+    id: 'emp-projects-02',
+    role: 'employee',
+    form: 'official',
+    query: 'Покажи разделы проекта «Речной»',
+    expectedTools: ['projects.list', 'projects.structure'],
+    forbiddenTools: ['projects.add_node'],
+    rationale:
+      'Сначала id проекта (projects.list), разделы — projects.structure; создавать папку не просили.',
+  },
+  {
+    id: 'emp-projects-03',
+    role: 'employee',
+    form: 'typo',
+    query: 'Кто в проэкте «Северный»?',
+    expectedTools: ['projects.list', 'projects.members'],
+    forbiddenTools: ['projects.add_member'],
+    rationale: 'Состав — projects.members после поиска id; добавлять участника не просили.',
+  },
+  {
+    id: 'emp-me-01',
+    role: 'employee',
+    form: 'official',
+    query: 'Кто мой руководитель?',
+    expectedTools: ['me.get'],
+    forbiddenTools: ['directory.find_users'],
+    rationale: 'Руководитель текущего сотрудника — me.get, а не поиск по справочнику.',
+  },
+  {
+    id: 'emp-me-02',
+    role: 'employee',
+    form: 'official',
+    query: 'В каком подразделении я работаю?',
+    expectedTools: ['me.get'],
+    forbiddenTools: ['directory.departments'],
+    rationale: 'Своё подразделение — me.get; дерево всех отделов не отвечает про меня.',
+  },
+  {
+    id: 'emp-memory-01',
+    role: 'employee',
+    form: 'official',
+    query: 'Запомни, что отчёты я сдаю по пятницам',
+    expectedTools: ['memory.save'],
+    forbiddenTools: ['memory.list'],
+    rationale: 'Просьба запомнить факт — memory.save; показывать блокнот не просили.',
+  },
+  {
+    id: 'emp-memory-02',
+    role: 'employee',
+    form: 'colloquial',
+    query: 'Что ты обо мне помнишь?',
+    expectedTools: ['memory.list'],
+    forbiddenTools: ['directory.get_user'],
+    rationale: 'Записи личного блокнота — memory.list; карточка сотрудника не память агента.',
+  },
+  {
+    id: 'emp-memory-03',
+    role: 'employee',
+    form: 'typo',
+    query: 'Забудь запись из блокнота',
+    expectedTools: ['memory.list', 'memory.forget'],
+    forbiddenTools: ['memory.save'],
+    rationale:
+      'Сначала id записи (memory.list), затем memory.forget; memory.save добавляет, а не удаляет.',
+  },
+  {
+    id: 'emp-no-tool-03',
+    role: 'employee',
+    form: 'official',
+    query: 'Удали задачу №1042',
+    expectedTools: [],
+    forbiddenTools: ['tasks.update', 'tasks.transition'],
+    noToolCase: true,
+    rationale: 'Удаления задачи в каталоге нет; update и transition меняют, но не удаляют.',
+  },
+  {
+    id: 'emp-no-tool-04',
+    role: 'employee',
+    form: 'colloquial',
+    query: 'Прикрепи файл в чат',
+    expectedTools: [],
+    forbiddenTools: ['chat.send', 'files.extract_text'],
+    noToolCase: true,
+    rationale:
+      'Загрузки файлов в каталоге нет; chat.send отправляет текст, extract_text только читает.',
+  },
+  {
+    id: 'emp-clarify-02',
+    role: 'employee',
+    form: 'colloquial',
+    query: 'Закрой задачу по смете',
+    expectedTools: [],
+    forbiddenTools: ['tasks.create'],
+    shouldClarify: true,
+    rationale:
+      'Неясно, какая из задач по смете имеется в виду; без конкретной задачи переход не выбирается.',
+  },
+];

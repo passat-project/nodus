@@ -24,6 +24,7 @@ import {
   num,
   str,
 } from '../projections.js';
+import { lettersMeta } from './meta/letters.meta.js';
 
 /**
  * Инструменты корреспонденции (#892): реестр писем, карточка, кнопки маршрута,
@@ -64,6 +65,7 @@ function letterRow(letter: LetterListItem | null): string | null {
 }
 
 export const lettersListTool = defineTool({
+  ...lettersMeta['letters.list'],
   id: 'letters.list',
   title: 'Письма: реестр',
   description:
@@ -105,6 +107,7 @@ export const lettersListTool = defineTool({
 const getInput = z.object({ id: z.uuid() });
 
 export const lettersGetTool = defineTool({
+  ...lettersMeta['letters.get'],
   id: 'letters.get',
   title: 'Письма: карточка',
   description:
@@ -154,11 +157,21 @@ export const lettersGetTool = defineTool({
 const transitionsInput = z.object({ id: z.uuid() });
 
 export const lettersTransitionsTool = defineTool({
+  ...lettersMeta['letters.transitions'],
   id: 'letters.transitions',
   title: 'Письма: маршрут',
   description:
     'Доступные кнопки маршрута письма по id: куда можно перевести, какие гейты не пройдены и кто может действовать. Полезно для «что дальше с письмом».',
-  keywords: ['маршрут', 'переходы', 'кнопки', 'что дальше', 'резолюция', 'transitions'],
+  keywords: [
+    'маршрут',
+    'переходы',
+    'кнопки',
+    'что дальше',
+    'что дальше с письмом',
+    'зарегистрировать письмо',
+    'резолюция',
+    'transitions',
+  ],
   module: 'letters',
   kind: 'read',
   featureFlag: 'correspondence',
@@ -188,6 +201,7 @@ export const lettersTransitionsTool = defineTool({
 const relationsInput = z.object({ id: z.uuid() });
 
 export const lettersRelationsTool = defineTool({
+  ...lettersMeta['letters.relations'],
   id: 'letters.relations',
   title: 'Письма: связи',
   description:
@@ -229,11 +243,12 @@ export const lettersRelationsTool = defineTool({
 const attachmentsInput = z.object({ id: z.uuid() });
 
 export const lettersAttachmentsTool = defineTool({
+  ...lettersMeta['letters.attachments'],
   id: 'letters.attachments',
   title: 'Письма: вложения',
   description:
     'Метаданные вложений письма по id: имя файла, формат (MIME), размер, роль и fileId. Текст PDF/DOCX читается отдельно — files.extract_text по fileId; конфиденциальные письма ассистенту не читаются.',
-  keywords: ['вложения', 'файлы', 'документы', 'опись', 'attachments'],
+  keywords: ['вложения', 'файлы', 'документы', 'опись', 'приложенный акт', 'attachments'],
   module: 'letters',
   kind: 'read',
   featureFlag: 'correspondence',

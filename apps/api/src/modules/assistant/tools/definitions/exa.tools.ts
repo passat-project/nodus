@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { McpError, type McpClient } from '../../mcp/mcp-client.js';
 import { defineTool, type AssistantToolDefinition } from '../tool-definition.js';
+import { exaMeta } from './meta/exa.meta.js';
 
 /**
  * Внешние инструменты интернета через MCP-сервер (#901, ADR-0046): поиск и
@@ -85,6 +86,7 @@ function assertToolOk(
  */
 export function exaTools(client: McpClient): AssistantToolDefinition[] {
   const search = defineTool({
+    ...exaMeta['ext.exa.web_search_exa'],
     id: EXA_SEARCH_TOOL_ID,
     title: 'Интернет: поиск',
     description:
@@ -120,6 +122,7 @@ export function exaTools(client: McpClient): AssistantToolDefinition[] {
   });
 
   const fetch = defineTool({
+    ...exaMeta['ext.exa.web_fetch_exa'],
     id: EXA_FETCH_TOOL_ID,
     title: 'Интернет: страница',
     description:

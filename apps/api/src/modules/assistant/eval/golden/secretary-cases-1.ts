@@ -1,0 +1,142 @@
+import type { GoldenCase } from '../golden-set.types.js';
+
+/** Секретарь: реестр писем, карточка, резолюции, вложения, оргструктура (часть 1). */
+export const SECRETARY_CASES_1: readonly GoldenCase[] = [
+  {
+    id: 'sec-letters-01',
+    role: 'secretary',
+    form: 'official',
+    query: 'Покажи входящие письма за сегодня',
+    expectedTools: ['letters.list'],
+    forbiddenTools: ['chat.send'],
+    rationale: 'Входящие — letters.list с box=incoming; сообщение в чат не относится.',
+  },
+  {
+    id: 'sec-letters-02',
+    role: 'secretary',
+    form: 'colloquial',
+    query: 'Чё пришло нового?',
+    expectedTools: ['letters.list'],
+    forbiddenTools: ['chat.send', 'tasks.create'],
+    rationale:
+      'Новые незарегистрированные письма — letters.list с box=new; регистрировать не просили.',
+  },
+  {
+    id: 'sec-letters-03',
+    role: 'secretary',
+    form: 'typo',
+    query: 'Пакажи исходящие письма',
+    expectedTools: ['letters.list'],
+    forbiddenTools: ['chat.send'],
+    rationale: 'Исходящие — letters.list с box=outgoing; отправка сообщения в чат не относится.',
+  },
+  {
+    id: 'sec-letters-04',
+    role: 'secretary',
+    form: 'official',
+    query: 'Открой карточку письма №128',
+    expectedTools: ['letters.list', 'letters.get'],
+    forbiddenTools: ['letters.transition'],
+    rationale:
+      'Номер ищется в реестре letters.list, карточка — letters.get; резолюция не запрашивалась.',
+  },
+  {
+    id: 'sec-letters-06',
+    role: 'secretary',
+    form: 'official',
+    query: 'Поставь резолюцию по письму №128 на Петрова',
+    expectedTools: ['letters.transitions', 'letters.transition'],
+    forbiddenTools: ['tasks.create'],
+    rationale:
+      'Резолюция — переход письма: сначала letters.transitions, затем letters.transition; задачу создаёт портал по переходу.',
+  },
+  {
+    id: 'sec-letters-07',
+    role: 'secretary',
+    form: 'typo',
+    query: 'Зарегистрируй писмо 128',
+    expectedTools: ['letters.transitions', 'letters.transition'],
+    forbiddenTools: ['letters.list'],
+    rationale:
+      'Регистрация — переход маршрута (letters.transitions, затем letters.transition); реестр только читает.',
+  },
+  {
+    id: 'sec-letters-08',
+    role: 'secretary',
+    form: 'official',
+    query: 'Что дальше можно сделать с письмом №128?',
+    expectedTools: ['letters.list', 'letters.transitions'],
+    forbiddenTools: ['letters.transition'],
+    rationale:
+      'Номер ищется в реестре, доступные кнопки — letters.transitions; выполнять переход без выбора нельзя.',
+  },
+  {
+    id: 'sec-letters-09',
+    role: 'secretary',
+    form: 'colloquial',
+    query: 'Есть ли ответ на письмо 128?',
+    expectedTools: ['letters.list', 'letters.relations'],
+    forbiddenTools: ['letters.transition'],
+    rationale: 'Номер ищется letters.list, связи и ответы — letters.relations; переход не просили.',
+  },
+  {
+    id: 'sec-letters-10',
+    role: 'secretary',
+    form: 'official',
+    query: 'Покажи вложения письма №128',
+    expectedTools: ['letters.list', 'letters.attachments'],
+    forbiddenTools: ['files.extract_text'],
+    rationale: 'Опись вложений — letters.attachments после поиска номера; читать текст не просили.',
+  },
+  {
+    id: 'sec-letters-11',
+    role: 'secretary',
+    form: 'colloquial',
+    query: 'Прочитай, что в приложенном акте',
+    expectedTools: ['letters.attachments', 'files.extract_text'],
+    forbiddenTools: ['letters.transition'],
+    rationale:
+      'Сначала fileId из описи (letters.attachments), затем текст (files.extract_text); резолюция не нужна.',
+  },
+  {
+    id: 'sec-directory-01',
+    role: 'secretary',
+    form: 'typo',
+    query: 'Пакажи структуру отделов',
+    expectedTools: ['directory.departments'],
+    forbiddenTools: ['directory.find_users'],
+    rationale: 'Оргструктура — directory.departments; поиск людей не отвечает на дерево отделов.',
+  },
+  {
+    id: 'sec-no-tool-01',
+    role: 'secretary',
+    form: 'official',
+    query: 'Отправь письмо в «Стройпроект»',
+    expectedTools: [],
+    forbiddenTools: ['chat.send', 'letters.transition'],
+    noToolCase: true,
+    rationale:
+      'Отправки письма в каталоге нет; chat.send шлёт в чат, letters.transition двигает существующее письмо.',
+  },
+  {
+    id: 'sec-no-tool-02',
+    role: 'secretary',
+    form: 'colloquial',
+    query: 'Напомни мне завтра позвонить в «Стройпроект»',
+    expectedTools: [],
+    forbiddenTools: ['tasks.create'],
+    noToolCase: true,
+    rationale: 'Напоминаний в каталоге нет; tasks.create создаёт задачу, а не напоминание.',
+  },
+  {
+    id: 'sec-clarify-01',
+    role: 'secretary',
+    form: 'official',
+    query: 'Зарегистрируй письмо от Иванова',
+    expectedTools: [],
+    forbiddenTools: ['letters.transition'],
+    shouldClarify: true,
+    rationale:
+      'Неясно, какое из писем Иванова регистрировать; без номера или id переход выбирать нельзя.',
+  },
+];

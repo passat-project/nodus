@@ -24,6 +24,7 @@ import {
   nameOf,
   str,
 } from '../projections.js';
+import { tasksMeta } from './meta/tasks.meta.js';
 
 /**
  * Инструменты задач (#892): журнал, карточка, поиск, стадии, история.
@@ -77,6 +78,7 @@ function taskRows(data: Paginated<TaskListItem>): string[] {
 }
 
 export const tasksListTool = defineTool({
+  ...tasksMeta['tasks.list'],
   id: 'tasks.list',
   title: 'Задачи: список',
   description:
@@ -89,6 +91,7 @@ export const tasksListTool = defineTool({
     'просрочено',
     'дедлайн',
     'мои задачи',
+    'в работе',
     'tasks',
   ],
   module: 'tasks',
@@ -121,11 +124,12 @@ export const tasksListTool = defineTool({
 const getInput = z.object({ id: z.uuid() });
 
 export const tasksGetTool = defineTool({
+  ...tasksMeta['tasks.get'],
   id: 'tasks.get',
   title: 'Задачи: карточка',
   description:
     'Карточка задачи по id: описание, стадия, срок, исполнитель, участники, трудозатраты, чек-лист, связи. Нужен id из tasks.list или tasks.search.',
-  keywords: ['задача', 'карточка', 'детали', 'описание', 'трудозатраты'],
+  keywords: ['задача', 'карточка', 'детали', 'описание', 'трудозатраты', 'что там по задаче'],
   module: 'tasks',
   kind: 'read',
   featureFlag: 'tasks',
@@ -172,6 +176,7 @@ const searchInput = z.object({
 });
 
 export const tasksSearchTool = defineTool({
+  ...tasksMeta['tasks.search'],
   id: 'tasks.search',
   title: 'Задачи: поиск',
   description:
@@ -200,6 +205,7 @@ const stagesInput = z.object({
 });
 
 export const tasksStagesTool = defineTool({
+  ...tasksMeta['tasks.stages'],
   id: 'tasks.stages',
   title: 'Задачи: стадии',
   description:
@@ -246,6 +252,7 @@ const historyInput = z.object({
 });
 
 export const tasksHistoryTool = defineTool({
+  ...tasksMeta['tasks.history'],
   id: 'tasks.history',
   title: 'Задачи: история',
   description:
