@@ -13,7 +13,16 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      exclude: ['src/generated/**', 'src/**/*.test.ts', 'src/**/*.d.ts'],
+      exclude: [
+        'src/generated/**',
+        'src/**/*.test.ts',
+        'src/**/*.d.ts',
+        // Обслуживающие скрипты (бэкфилл-CLI, perf-харнесс) не входят в
+        // рантайм API: запускаются руками против живой БД, юнит-покрытия
+        // by design нет — гейт качества не должен их требовать.
+        'src/modules/search/cli/**',
+        'src/modules/search/perf/**',
+      ],
       reporter: ['text-summary', 'json-summary', 'lcov'],
       thresholds: {
         statements: 53,

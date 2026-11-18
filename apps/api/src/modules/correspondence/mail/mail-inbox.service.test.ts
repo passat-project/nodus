@@ -226,6 +226,19 @@ describe('MailInboxService: цикл приёма на фейке порта (#5
     );
   });
 
+  it('обслуживающий CLI не поднимает IMAP (MAIL_RECEPTION_DISABLED=1)', async () => {
+    const { service, state } = fakes([5n]);
+    process.env.MAIL_RECEPTION_DISABLED = '1';
+    try {
+      service.onModuleInit();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(state.connected).toBe(false);
+      expect(state.statusCalls).toBe(0);
+    } finally {
+      delete process.env.MAIL_RECEPTION_DISABLED;
+    }
+  });
+
   it('выключенный рубильник: цикл пропущен, соединение разорвано (I10)', async () => {
     const { service, state, warns } = fakes([5n], { flagOn: false });
     const result = await service.sync('poll');

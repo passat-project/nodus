@@ -44,6 +44,7 @@ import { LettersMutationService } from './letters/letters-mutation.service.js';
 import { LettersQueryService } from './letters/letters-query.service.js';
 import { LettersRelationService } from './letters/letters-relation.service.js';
 import { LettersRepository } from './letters/letters.repository.js';
+import { LetterSearchSourceProvider } from './search/letter-search-source.provider.js';
 import { LettersTreeService } from './letters/letters-tree.service.js';
 import { LetterThreadingService } from './letters/letter-threading.service.js';
 import { LetterBodyPdfQueue } from './mail/body-pdf/letter-body-pdf.queue.js';
@@ -87,6 +88,8 @@ import { LetterWorkflowAdapter } from './workflow/letter-workflow.adapter.js';
   providers: [
     UserProfileProvider,
     { provide: USER_PROFILE_READER, useClass: UserProfileProvider },
+    // Источник поисковой проекции «письмо» (#952): маркер searchSourceType.
+    LetterSearchSourceProvider,
     // Репозитории — единственная точка доступа к таблицам модуля (patterns.md).
     LettersRepository,
     LetterRelationsRepository,

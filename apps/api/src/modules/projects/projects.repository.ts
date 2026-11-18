@@ -5,13 +5,8 @@ import { NO_PORTFOLIO_FILTER, SYSTEM_FIELD_IDS } from '@nodus/contracts';
 import { Prisma } from '../../generated/prisma/client.js';
 
 import { PrismaService } from '../../core/database/prisma.service.js';
+import { escapeLikePattern as escapeLike } from '../../core/database/like-pattern.js';
 import type { TransactionClient } from '../../core/database/transaction-runner.js';
-
-/** Экранирование LIKE (`%`, `_`, `\`): «%» в поиске — литерал, не «всё»
- *  (security-ревью #460; копия локальна — импорт репозитория crm запрещён). */
-function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/gu, (ch) => `\\${ch}`);
-}
 
 /** Строка проекта для DTO и прав; участники — отдельно (mapper). */
 export const projectSelect = {

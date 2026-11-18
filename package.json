@@ -25,6 +25,8 @@
     "diff-coverage": "node scripts/diff-coverage.mjs --base origin/main --threshold 80",
     "lint": "eslint . --max-warnings 39",
     "live-stack": "node scripts/live-stack.mjs",
+    "search:reindex": "node apps/api/dist/modules/search/cli/reindex.js",
+    "search:perf": "node apps/api/dist/modules/search/perf/measure.js",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "node scripts/install-hooks.mjs",

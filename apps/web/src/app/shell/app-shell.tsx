@@ -9,6 +9,8 @@ import { TooltipProvider } from '@nodus/ui/components/tooltip';
 import { AssistantEdgeEntry } from '../../features/assistant/components/assistant-edge-entry.js';
 import { useAssistantHotkey } from '../../features/assistant/components/assistant-entry.js';
 import { AssistantPanel } from '../../features/assistant/components/assistant-panel.js';
+import { SearchCommand } from '../../features/search/components/search-command.js';
+import { useSearchStore } from '../../features/search/model/search-store.js';
 import { registerCardBridge, registerReplaceTopMessenger } from '../../shared/lib/card-bridge.js';
 import { SurfaceVisibilityProvider } from '../../shared/lib/surface-visibility.js';
 import { startAttentionTracking } from '../../shared/attention/attention-store.js';
@@ -32,7 +34,6 @@ import { PopupDebugBadge } from '../../shared/desktop/popup-diagnostics-badge.js
 import { FileServersSync } from '../../features/settings/components/file-servers-sync.js';
 import { CircuitFrame } from './circuit-frame.js';
 import { CardStackHost } from './card-stack-host.js';
-import { CommandPalette } from './command-palette.js';
 import { EdgeScrollbar } from './edge-scrollbar.js';
 import { LiveGraph } from './live-graph.js';
 import { startLayoutJitterLogger } from './layout-jitter-logger.js';
@@ -43,6 +44,7 @@ import { useShellStore } from './shell-store.js';
 import { TopBar } from './top-bar.js';
 import { useCardStack, useOpenCard, useOpenCards, useReplaceTopCard } from './use-card-stack.js';
 import { useLinkInterception } from './use-link-interception.js';
+import { startSearchSession } from '../../features/search/model/search-session.js';
 import { startChatDraftsSession } from '../../shared/chat/chat-drafts-session.js';
 import { startPreferencesSync } from '../../shared/preferences/ui-prefs-sync.js';
 import { startViewsSession } from '../../shared/views/views-session.js';
@@ -98,6 +100,9 @@ export function AppShell() {
     // Настройка колонок списков — тоже на пользователя (#876, AUD-005):
     // чужой вид не применяется, повторный вход возвращает свой.
     startViewsSession();
+    // Строка и фильтры поиска — на пользователя (#952, AUD-005): вышедший
+    // сотрудник не оставляет свой запрос следующему в этой вкладке.
+    startSearchSession();
     return stopModalLayers;
   }, []);
   // (N) Nodus в заголовке вкладки (#124): сигнал фоновой вкладке.
@@ -156,11 +161,14 @@ export function AppShell() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        useShellStore.getState().setCommandOpen(!useShellStore.getState().commandOpen);
+        // Ctrl+K — единое окно поиска (запрос и фильтры в общем сторе, #952).
+        useSearchStore.getState().toggle();
       }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+    };
   }, []);
 
   return (
@@ -221,7 +229,7 @@ export function AppShell() {
       {/* Диагностика попапов (#811): только ?wsdebug=1, журнал решений гейта. */}
       <PopupDebugBadge />
       <NotificationToasts />
-      <CommandPalette />
+      <SearchCommand />
       <WhatsNewPanel />
       <ChatDialogHosts />
       {/* Единое окно создания задачи (#432): один хост на все входы. */}

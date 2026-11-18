@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { UserRef } from '@nodus/contracts';
 
 import { SignedUrlService } from '../crypto/signed-url.service.js';
+import { escapeLikePattern } from '../database/like-pattern.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { TransactionClient } from '../database/transaction-runner.js';
 import type { UserProfileReader } from './user-profile.port.js';
@@ -43,7 +44,12 @@ export class UserProfileProvider implements UserProfileReader {
 
   async searchByDisplayName(query: string, limit: number): Promise<UserRef[]> {
     const rows = await this.prisma.user.findMany({
-      where: { displayName: { contains: query, mode: 'insensitive' }, status: 'active' },
+      // ФИО ищется подстрокой: `%`/`_` из запроса — литералы, а не wildcard
+      // (F1, #952), иначе «100%» находил бы всё подряд.
+      where: {
+        displayName: { contains: escapeLikePattern(query), mode: 'insensitive' },
+        status: 'active',
+      },
       select: userRefSelect,
       take: limit,
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],

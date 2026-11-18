@@ -11,6 +11,7 @@ import { FIELD_BINDING_FORM_CLEANER } from './ports/field-binding-form-cleaner.p
 import { ProjectFieldUsageProvider } from './ports/project-field-usage.provider.js';
 import { PROJECT_FIELD_USAGE_READER } from './ports/project-field-usage.port.js';
 import { ProjectReaderProvider } from './ports/project-reader.provider.js';
+import { ProjectSearchSourceProvider } from './ports/project-search-source.provider.js';
 import { ProjectNumberHostProvider } from './ports/number-host.provider.js';
 import { PROJECT_CHAT_READER, PROJECT_READER } from './ports/project-reader.port.js';
 import { NodeRefReaderProvider } from './ports/node-ref-reader.provider.js';
@@ -43,6 +44,9 @@ import {
     ProjectTypesRepository,
     ProjectReaderProvider,
     { provide: PROJECT_READER, useExisting: ProjectReaderProvider },
+    // Источник поисковой проекции «проект» (#952): маркер searchSourceType,
+    // шифр — тот же эффективный путь, что журнал (формулы типа).
+    ProjectSearchSourceProvider,
     // Носители номеров «проект» и «папка» (#630): DiscoveryService.
     ProjectNumberHostProvider,
     { provide: PROJECT_CHAT_READER, useExisting: ProjectReaderProvider },

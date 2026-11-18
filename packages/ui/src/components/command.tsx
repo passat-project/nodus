@@ -58,8 +58,12 @@ function CommandDialog({
 
 function CommandInput({
   className,
+  action,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Input>) {
+}: React.ComponentProps<typeof CommandPrimitive.Input> & {
+  /** Хвостовое действие поля (очистить/закрыть): слот справа внутри рамки. */
+  action?: React.ReactNode;
+}) {
   return (
     <div data-slot="command-input-wrapper" className="p-1 pb-0">
       <InputGroup className="h-8! rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-2!">
@@ -71,6 +75,11 @@ function CommandInput({
           )}
           {...props}
         />
+        {action ? (
+          <InputGroupAddon align="inline-end" className="pl-0">
+            {action}
+          </InputGroupAddon>
+        ) : null}
         <InputGroupAddon>
           <SearchIcon className="size-4 shrink-0 opacity-50" />
         </InputGroupAddon>

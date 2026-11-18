@@ -32,7 +32,16 @@ const ACCESS_REVOCATION_EVENTS: ReadonlySet<string> = new Set([
   DIRECTORY_EVENTS.USER_UPDATED,
 ]);
 
-type HandlerInstance = DomainEventHandler & { constructor: { eventType?: string; name: string } };
+type HandlerInstance = DomainEventHandler & {
+  constructor: {
+    eventType?: string;
+    /** Несколько типов одним обработчиком (#952, O1): например, индексатор
+     *  поиска слушает пять `task.*` — пятнадцать классов-обёрток были бы
+     *  шумом. Оба поля сливаются с дедупом. */
+    eventTypes?: readonly string[];
+    name: string;
+  };
+};
 
 interface RetryState {
   attempts: number;
@@ -105,12 +114,21 @@ export class EventDispatcher implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** Регистрация обработчиков: провайдеры со `static readonly eventType`. */
+  /** Регистрация обработчиков: провайдеры со `static readonly eventType`
+   *  и/или `static readonly eventTypes` (несколько типов, #952). */
   private registerHandlers(): void {
     for (const wrapper of this.discovery.getProviders()) {
       const instance = wrapper.instance as HandlerInstance | undefined;
-      const eventType = instance?.constructor?.eventType;
-      if (instance && typeof eventType === 'string' && typeof instance.handle === 'function') {
+      if (!instance || typeof instance.handle !== 'function') continue;
+      const types = new Set<string>();
+      if (typeof instance.constructor?.eventType === 'string') {
+        types.add(instance.constructor.eventType);
+      }
+      const extra = instance.constructor?.eventTypes;
+      for (const type of Array.isArray(extra) ? extra : []) {
+        if (typeof type === 'string') types.add(type);
+      }
+      for (const eventType of types) {
         const list = this.handlers.get(eventType) ?? [];
         list.push(instance);
         this.handlers.set(eventType, list);

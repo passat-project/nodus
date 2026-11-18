@@ -365,6 +365,9 @@ model Conversation {
   vaultStats ConversationVaultStats?
 
   @@index([lastMessageAt(sort: Desc), id])
+  /// Непрочитанные/поиск сообщений беседы задачи (#952): читаемые беседы
+  /// решающего выбираются по task_id.
+  @@index([taskId])
   @@map("conversations")
 }
 
@@ -1381,6 +1384,9 @@ model TransitionRecord {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
   @@index([entityKind, entityId, createdAt(sort: Desc)])
+  /// FK-индекс действия (#633): миграция `20261125140000_workflow_actions`
+  /// его создавала, схема не декларировала — дрейф `migrate diff` (#952 P0).
+  @@index([actionId])
   @@map("transition_records")
 }
 
@@ -2611,5 +2617,78 @@ model AssistantMcpServer {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   @@map("assistant_mcp_servers")
+}
+
+/// Поисковая проекция портала (#952): одна строка = один источник (задача,
+/// письмо, сообщение, проект, сотрудник). Заполняется провайдерами модулей
+/// через outbox-события; ядро `search` — единственный читатель.
+///
+/// tsvector — НЕ колонка: выражение `search_tsv(title, body, keywords)` в
+/// expression-GIN (миграция `20261201120000_search_core`), поэтому Prisma его
+/// не описывает. Запрос обязан использовать ту же функцию — иначе индекс не
+/// применится. Точные ноги (номер/рег. номер/шифр) — выраженные btree по
+/// `payload->>'…'`, их Prisma тоже не описывает. Заморожено после P0 (#952 §8).
+model SearchDocument {
+  /// task | letter | message | project | employee (closed set, contracts).
+  sourceType String @map("source_type")
+  sourceId   String @map("source_id") @db.Uuid
+  title      String @default("")
+  body       String @default("")
+  keywords   String @default("")
+  projectId      String? @map("project_id") @db.Uuid
+  conversationId String? @map("conversation_id") @db.Uuid
+  counterpartyId String? @map("counterparty_id") @db.Uuid
+  authorId       String? @map("author_id") @db.Uuid
+  /// Постановщик + ответственный + участники (задача) / участники + адресат +
+  /// регистратор (письмо); у сообщений доступ по беседе, массив пуст.
+  participantIds String[] @default([]) @map("participant_ids") @db.Uuid
+  /// Конфиденциальная задача/письмо: вне прямого участия не видна (#461).
+  confidential Boolean @default(false)
+  /// Письмо зарегистрировано (Новые видят только регистраторы).
+  registered Boolean @default(true)
+  /// portal | project | conversation | task | letter — формула видимости.
+  aclKind String @map("acl_kind")
+  /// Точные ключи источника: number, regNumber, code, seq, threadRootId…
+  payload Json @default("{}")
+  /// Дата создания источника (не правки): сортировка newest и фильтр периода.
+  sourceCreatedAt DateTime @map("source_created_at") @db.Timestamptz()
+  /// Версия источника: идемпотентный upsert отбрасывает устаревшие события.
+  sourceUpdatedAt DateTime @map("source_updated_at") @db.Timestamptz()
+  indexedAt       DateTime @default(now()) @map("indexed_at") @db.Timestamptz()
+
+  @@id([sourceType, sourceId])
+  @@index([sourceCreatedAt(sort: Desc), sourceType, sourceId], map: "search_documents_created_idx")
+  @@index([sourceType, sourceUpdatedAt, sourceId], map: "search_documents_scan_idx")
+  @@index([projectId], map: "search_documents_project_id_idx")
+  @@index([conversationId], map: "search_documents_conversation_id_idx")
+  @@index([counterpartyId], map: "search_documents_counterparty_id_idx")
+  @@index([participantIds], type: Gin, map: "search_documents_participant_ids_gin")
+  /// Триграммы — только по title (короткое поле; на body индекс неэффективен).
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "search_documents_title_trgm")
+  @@map("search_documents")
+}
+
+/// Аналитика поиска (#952, Р13): один заход на `GET /search`. Пишется
+/// best-effort после ответа (ошибка записи не ломает выдачу); клики и экран
+/// аналитики — отдельная задача (нужен queryId + мутация). Текст запроса —
+/// персонально чувствительный: доступа из UI нет, хранение 90 дней, чистка
+/// вручную по README модуля.
+model SearchQuery {
+  id      String @id @default(uuid()) @db.Uuid
+  actorId String @map("actor_id") @db.Uuid
+  query   String
+  types   String[] @default([])
+  projectId  String?   @map("project_id") @db.Uuid
+  periodFrom DateTime? @map("period_from") @db.Date
+  periodTo   DateTime? @map("period_to") @db.Date
+  /// total ответа (с учётом потолка счёта) — сигнал «слишком общий запрос».
+  resultCount Int @map("result_count")
+  tookMs      Int @map("took_ms")
+  /// stopwords | index_empty — подсказка ответа (null — обычная выдача).
+  hint      String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([createdAt(sort: Desc)], map: "search_queries_created_idx")
+  @@map("search_queries")
 }
 
