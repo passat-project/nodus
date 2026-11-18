@@ -221,4 +221,25 @@ describe('правка регистрационных данных (#55, В3)', 
       }),
     ).rejects.toMatchObject({ code: ErrorCode.PROCESS_TYPE_NOT_ALLOWED_IN_PROJECT });
   });
+
+  it('«Где создаётся»: при регистрации проект с чужим типом — 422 (#665)', async () => {
+    const projectTypeId = '00000000-0000-4000-8000-000000000107';
+    const projectId = '00000000-0000-4000-8000-000000000108';
+    const { validator } = setup({
+      projectTypeId,
+      catalogType: {
+        id: TYPE_ID,
+        config: {
+          creation: {
+            excludedProjectTypeIds: [projectTypeId],
+            folderKindId: null,
+            withoutProject: true,
+          },
+        },
+      },
+    });
+    await expect(
+      validator.registration(TYPE_ID, input({ projectId }), AUTHOR, '2026-10-27'),
+    ).rejects.toMatchObject({ code: ErrorCode.PROCESS_TYPE_NOT_ALLOWED_IN_PROJECT });
+  });
 });

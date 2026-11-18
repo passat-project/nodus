@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { normalizeTypeConfig, type ProcessType, type ProjectType } from '@nodus/contracts';
+import { normalizeTypeConfig, ui, type ProcessType, type ProjectType } from '@nodus/contracts';
 
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
 import { useUpdateTypeCreation } from '../../../../shared/api/process-types-api.js';
@@ -93,5 +93,14 @@ describe('«Где создаётся» (#665)', () => {
     setup({ ...type(), category: 'letter', direction: 'incoming' } as ProcessType);
     expect(screen.queryByRole('switch', { name: /Без проекта/ })).toBeNull();
     expect(screen.queryByText('Вид папки')).toBeNull();
+  });
+
+  it('«Разрешить во всех типах проектов» снимает все исключения', () => {
+    const { mutate } = setup(type({ excludedProjectTypeIds: [PROJECT_TYPE, OTHER_TYPE] }));
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.creationScope.allowAll }));
+    expect(mutate).toHaveBeenCalledWith({
+      typeId: '55555555-5555-4555-8555-555555555555',
+      creation: expect.objectContaining({ excludedProjectTypeIds: [] }),
+    });
   });
 });

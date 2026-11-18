@@ -1,7 +1,14 @@
 import { normalizeTypeConfig, type ProcessType } from '@nodus/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { singleProjectOf, projectForType, typeAllowedAtPlace } from './task-create-scope.js';
+import { emptyDraft } from './task-create-draft.js';
+import {
+  chooseTypeAtPlace,
+  projectForType,
+  singleProjectOf,
+  syncDraftPlace,
+  typeAllowedAtPlace,
+} from './task-create-scope.js';
 
 const PROJECT_TYPE = '11111111-1111-4111-8111-111111111111';
 const OTHER_PROJECT_TYPE = '22222222-2222-4222-8222-222222222222';
@@ -100,5 +107,33 @@ describe('окно создания: где предлагать тип (#665)',
     expect(projectForType(entity, 'p1', [projects[0]!])).toBeNull();
     // Тип, который можно без проекта, проект не навязывает.
     expect(projectForType(type(), undefined, [projects[0]!])).toBeNull();
+  });
+
+  it('syncDraftPlace: авто-тип без «грязного» окна и подстановка проекта', () => {
+    const draft = emptyDraft({ title: 'Проба' });
+    const synced = syncDraftPlace(draft, type({ withoutProject: false }), 'p2', [projects[0]!]);
+    expect(synced).not.toBeNull();
+    expect(synced!.autoType).toBe('55555555-5555-4555-8555-555555555555');
+    expect(synced!.draft.typeId).toBe('55555555-5555-4555-8555-555555555555');
+    expect(synced!.draft.values.project).toBe('p1');
+    // Тип уже выбран и проект не навязывается — менять нечего.
+    const settled = { ...draft, typeId: type().id, values: { project: 'p1' } };
+    expect(syncDraftPlace(settled, type(), 'p1', projects)).toBeNull();
+  });
+
+  it('chooseTypeAtPlace: единственный проект подставляется при выборе типа', () => {
+    const draft = emptyDraft({});
+    const next = chooseTypeAtPlace(
+      draft,
+      type({ withoutProject: false }).id,
+      [type({ withoutProject: false }), type()],
+      undefined,
+      [projects[0]!],
+    );
+    expect(next.typeId).toBe('55555555-5555-4555-8555-555555555555');
+    expect(next.values.project).toBe('p1');
+    // Обычному типу проект не навязывается.
+    const free = chooseTypeAtPlace(draft, type().id, [type()], undefined, projects);
+    expect(free.values.project).toBeUndefined();
   });
 });

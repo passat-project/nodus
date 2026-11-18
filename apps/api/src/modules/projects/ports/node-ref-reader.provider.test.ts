@@ -25,6 +25,7 @@ function make(
         args?.select?.projectId ? nodes : rows,
       ),
     },
+    nodeKind: { findFirst: vi.fn(async (): Promise<{ id: string } | null> => null) },
   };
   const scope = () => ({ visibleProjectIds: visible, hiddenProjectIds: [] });
   const projects = {
@@ -53,6 +54,18 @@ describe('NodeRefReaderProvider.refs (Р5 #631)', () => {
       { id: N1, name: 'Раздел 1', deleted: false },
       { id: N2, name: 'Комплект 2', deleted: false },
     ]);
+  });
+});
+
+describe('NodeRefReaderProvider.kindIdByName (#665)', () => {
+  it('живой вид по имени, иначе null', async () => {
+    const { provider, prisma } = make([], [], []);
+    prisma.nodeKind.findFirst.mockResolvedValueOnce({ id: 'k-1' });
+    expect(await provider.kindIdByName('Комплект')).toBe('k-1');
+    expect(prisma.nodeKind.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { name: 'Комплект', archivedAt: null } }),
+    );
+    expect(await provider.kindIdByName('Нет такого')).toBeNull();
   });
 });
 

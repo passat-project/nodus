@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ErrorCode, ui } from '@nodus/contracts';
+import { ErrorCode, errorMessages, ui } from '@nodus/contracts';
 
 import { ApiError } from '../api-client.js';
 import { createFailureOf, secretMemberKeys } from './task-create-errors.js';
@@ -31,6 +31,18 @@ describe('createFailureOf', () => {
     );
     expect([...failure.invalidKeys]).toEqual(['cf.abc']);
     expect(failure.refetchTypes).toBe(false);
+  });
+
+  it('«где создаётся» — текст причины и перечитать типы (#665)', () => {
+    for (const code of [
+      ErrorCode.PROCESS_TYPE_NOT_ALLOWED_IN_PROJECT,
+      ErrorCode.PROCESS_TYPE_PROJECT_REQUIRED,
+      ErrorCode.PROCESS_TYPE_FOLDER_KIND_REQUIRED,
+    ]) {
+      const failure = createFailureOf(apiError(code));
+      expect(failure.message).toBe(errorMessages[code]);
+      expect(failure.refetchTypes).toBe(true);
+    }
   });
 
   it('отказ перехода при создании в колонке — причина кнопки (#402)', () => {
