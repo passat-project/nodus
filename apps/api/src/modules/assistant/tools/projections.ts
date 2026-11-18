@@ -55,9 +55,18 @@ export function itemsOf(data: unknown): unknown[] {
   return asArray(asRecord(data)?.items);
 }
 
+/**
+ * Токен следующей страницы из канона `{ items, nextCursor }` (#938): модель
+ * получает его в тексте и продолжает список тем же инструментом, а не
+ * перебирает сущности по id.
+ */
+export function nextCursor(data: unknown): string | null {
+  return str(asRecord(data)?.nextCursor);
+}
+
 /** Есть ли следующая страница — модели полезно знать, что список неполный. */
 export function hasMore(data: unknown): boolean {
-  return Boolean(asRecord(data)?.nextCursor);
+  return nextCursor(data) !== null;
 }
 
 const MONTHS = [
@@ -125,7 +134,7 @@ export function clip(text: string, limit = 400): string {
 export function listBlock(
   title: string,
   rows: readonly string[],
-  options: { total?: number; maxRows?: number; more?: boolean } = {},
+  options: { total?: number; maxRows?: number; more?: boolean; cursor?: string | null } = {},
 ): string {
   const maxRows = options.maxRows ?? ASSISTANT_LIMITS.maxListRows;
   const shown = rows.slice(0, maxRows);
@@ -135,7 +144,13 @@ export function listBlock(
   const rest = total - shown.length;
   const lines = shown.map((row, index) => `${index + 1}. ${row}`);
   if (rest > 0) lines.push(`… ещё ${rest}`);
-  else if (options.more) lines.push('… есть следующая страница (cursor)');
+  else if (options.more) {
+    lines.push(
+      options.cursor
+        ? `… есть следующая страница; cursor: ${options.cursor}`
+        : '… есть следующая страница (cursor)',
+    );
+  }
   return [head, ...lines].join('\n');
 }
 

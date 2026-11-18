@@ -10,6 +10,7 @@ import {
   itemsOf,
   listBlock,
   nameOf,
+  nextCursor,
   num,
   pageItems,
   str,
@@ -45,6 +46,13 @@ describe('примитивы проекций', () => {
     expect(pageItems({ items: [{ id: 'a' }, null, 'x'], nextCursor: null })).toEqual([{ id: 'a' }]);
   });
 
+  it('nextCursor отдаёт токен страницы и терпит мусор (#938)', () => {
+    expect(nextCursor({ items: [], nextCursor: 'cursor-2' })).toBe('cursor-2');
+    expect(nextCursor({ items: [] })).toBeNull();
+    expect(nextCursor({ nextCursor: '' })).toBeNull();
+    expect(nextCursor(null)).toBeNull();
+  });
+
   it('даты: компактный вид без времени и с временем', () => {
     expect(date('2026-11-14T00:00:00.000Z')).toBe('14 ноя 2026');
     expect(dateTime('2026-11-14T15:30:00.000Z')).toBe('14 ноя 2026, 15:30');
@@ -70,6 +78,15 @@ describe('listBlock', () => {
   it('помечает следующую страницу и пустой результат', () => {
     expect(listBlock('Письма', ['одно'], { more: true })).toContain('есть следующая страница');
     expect(listBlock('Письма', [])).toContain('(пусто)');
+  });
+
+  it('печатает cursor следующей страницы, если токен известен (#938)', () => {
+    const text = listBlock('Задачи', ['одна'], { more: true, cursor: 'cursor-2' });
+    expect(text).toContain('… есть следующая страница; cursor: cursor-2');
+    // Без токена строка остаётся прежней — модель не получает пустой cursor.
+    expect(listBlock('Задачи', ['одна'], { more: true, cursor: null })).toContain(
+      'есть следующая страница (cursor)',
+    );
   });
 
   it('clip и finalize обрезают с честной пометкой', () => {
