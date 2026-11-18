@@ -14,9 +14,10 @@ export const tasksMeta = {
       input: { scope: 'mine', overdue: true, limit: 10 },
       note: 'мои просроченные задачи',
     },
-    returns: 'Строки задач: номер, название, стадия, срок, исполнитель, проект, id для tasks.get.',
+    returns:
+      'Строки задач: номер, название, стадия, срок, исполнитель, проект, id для tasks.get. Если задач больше страницы — в конце блока `cursor` следующей страницы.',
     nextStep:
-      'Для деталей — tasks.get по id; для хронологии — tasks.history; для смены стадии — tasks.transitions.',
+      'Для деталей — tasks.get по id; если в ответе есть `cursor` — повтори tasks.list с ним, чтобы добрать остальные задачи; для хронологии — tasks.history; для смены стадии — tasks.transitions.',
     intent: 'list',
   },
   'tasks.get': {
@@ -46,8 +47,10 @@ export const tasksMeta = {
     subject: 'задача',
     effect: 'read',
     example: { input: { query: 'смета', scope: 'mine', limit: 10 }, note: 'поиск по теме задачи' },
-    returns: 'Найденные задачи: номер, название, стадия, срок, исполнитель, id.',
-    nextStep: 'Возьми id и вызови tasks.get; для хронологии — tasks.history.',
+    returns:
+      'Найденные задачи: номер, название, стадия, срок, исполнитель, id. Если совпадений больше страницы — в конце блока `cursor` следующей страницы.',
+    nextStep:
+      'Возьми id и вызови tasks.get; если в ответе есть `cursor` — повтори tasks.search с ним; для хронологии — tasks.history.',
     intent: 'search',
   },
   'tasks.stages': {

@@ -22,6 +22,7 @@ import {
   isOverdue,
   listBlock,
   nameOf,
+  nextCursor,
   str,
 } from '../projections.js';
 import { tasksMeta } from './meta/tasks.meta.js';
@@ -42,6 +43,8 @@ const listInput = z.object({
   stageId: z.uuid().optional(),
   projectId: z.uuid().optional(),
   assigneeId: z.uuid().optional(),
+  /** Токен следующей страницы из предыдущего ответа («… есть следующая страница; cursor: …»). */
+  cursor: z.string().trim().min(1).max(512).optional(),
   limit: z.number().int().min(1).max(20).default(20),
 });
 
@@ -82,7 +85,8 @@ export const tasksListTool = defineTool({
   id: 'tasks.list',
   title: 'Задачи: список',
   description:
-    'Список видимых задач с фильтрами: мои/все, просроченные, по стадии, проекту, исполнителю, поиск по названию. Отдаёт номер, название, стадию, срок, исполнителя и id для tasks.get.',
+    'Список видимых задач с фильтрами: мои/все, просроченные, по стадии, проекту, исполнителю, поиск по названию. Отдаёт номер, название, стадию, срок, исполнителя и id для tasks.get. ' +
+    'Если в ответе «… есть следующая страница; cursor: …» — вызови инструмент снова с этим cursor, чтобы получить следующую страницу.',
   keywords: [
     'задачи',
     'задача',
@@ -112,12 +116,18 @@ export const tasksListTool = defineTool({
       ...(input.stageId ? { stageId: input.stageId } : {}),
       ...(input.projectId ? { projectId: input.projectId } : {}),
       ...(input.assigneeId ? { assigneeId: input.assigneeId } : {}),
+      ...(input.cursor ? { cursor: input.cursor } : {}),
     },
   }),
   project: (data: Paginated<TaskListItem>) => {
     // Список — не одна сущность: ссылку «Открыть» даёт только карточка
     // (tasks.get), иначе из 20 строк открывалась бы произвольная первая.
-    return { text: finalize(listBlock('Задачи', taskRows(data), { more: hasMore(data) })) };
+    // Курсор печатается в тексте (#938): без него модель видит только
+    // первые 20 и не может добрать «все» задачи.
+    const cursor = nextCursor(data);
+    return {
+      text: finalize(listBlock('Задачи', taskRows(data), { more: Boolean(cursor), cursor })),
+    };
   },
 });
 
@@ -172,6 +182,8 @@ export const tasksGetTool = defineTool({
 const searchInput = z.object({
   query: z.string().trim().min(1).max(128),
   scope: z.enum(['mine', 'all']).default('mine'),
+  /** Токен следующей страницы из предыдущего ответа. */
+  cursor: z.string().trim().min(1).max(512).optional(),
   limit: z.number().int().min(1).max(20).default(20),
 });
 
@@ -180,7 +192,8 @@ export const tasksSearchTool = defineTool({
   id: 'tasks.search',
   title: 'Задачи: поиск',
   description:
-    'Поиск задач по подстроке в номере и названии. Используй, когда сотрудник называет тему или номер задачи, но точного id нет.',
+    'Поиск задач по подстроке в номере и названии. Используй, когда сотрудник называет тему или номер задачи, но точного id нет. ' +
+    'Если в ответе «… есть следующая страница; cursor: …» — вызови инструмент снова с этим cursor, чтобы получить следующую страницу.',
   keywords: ['найти', 'поиск', 'задача', 'номер', 'тема', 'search'],
   module: 'tasks',
   kind: 'read',
@@ -190,11 +203,20 @@ export const tasksSearchTool = defineTool({
   api: { method: 'GET', path: '/tasks' },
   build: (input) => ({
     path: '/tasks',
-    query: { view: 'list', scope: input.scope, search: input.query, limit: String(input.limit) },
+    query: {
+      view: 'list',
+      scope: input.scope,
+      search: input.query,
+      limit: String(input.limit),
+      ...(input.cursor ? { cursor: input.cursor } : {}),
+    },
   }),
   project: (data: Paginated<TaskListItem>) => {
+    const cursor = nextCursor(data);
     return {
-      text: finalize(listBlock('Найденные задачи', taskRows(data), { more: hasMore(data) })),
+      text: finalize(
+        listBlock('Найденные задачи', taskRows(data), { more: Boolean(cursor), cursor }),
+      ),
     };
   },
 });

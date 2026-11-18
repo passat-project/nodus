@@ -77,9 +77,40 @@ describe('tasks.list / tasks.search: строки журнала (#892)', () => 
     );
   });
 
-  it('пометка о следующей странице берётся из nextCursor', () => {
+  it('печатает cursor следующей страницы из nextCursor (#938)', () => {
     const { text } = tasksListTool.project!({ items: [taskRow], nextCursor: 'cursor-2' }, {});
-    expect(text).toContain('есть следующая страница (cursor)');
+    expect(text).toContain('… есть следующая страница; cursor: cursor-2');
+  });
+
+  it('без nextCursor строки о следующей странице нет (#938)', () => {
+    const { text } = tasksListTool.project!({ items: [taskRow], nextCursor: null }, {});
+    expect(text).not.toContain('следующая страница');
+  });
+
+  it('вторая страница по курсору показывает новые строки без дублей (#938)', () => {
+    const second = {
+      ...taskRow,
+      id: '22222222-2222-4222-8222-222222222222',
+      number: 413,
+      title: 'Согласовать акт',
+    };
+    const firstPage = tasksListTool.project!(
+      { items: [taskRow], nextCursor: 'cursor-2' },
+      { scope: 'all', overdue: true, limit: 1 },
+    );
+    const secondPage = tasksListTool.project!(
+      { items: [second], nextCursor: null },
+      { scope: 'all', overdue: true, limit: 1, cursor: 'cursor-2' },
+    );
+
+    // Курсор из первой страницы дословно уходит в запрос второй.
+    expect(
+      tasksListTool.build!({ scope: 'all', overdue: true, limit: 1, cursor: 'cursor-2' }).query,
+    ).toMatchObject({ cursor: 'cursor-2' });
+    expect(firstPage.text).toContain(`id ${TASK_ID}`);
+    expect(secondPage.text).toContain(`id ${second.id}`);
+    expect(secondPage.text).not.toContain(`id ${TASK_ID}`);
+    expect(secondPage.text).not.toContain('следующая страница');
   });
 
   it('собирает запрос списка: view=list, фильтры только заданные, строковый limit', () => {
@@ -112,6 +143,13 @@ describe('tasks.list / tasks.search: строки журнала (#892)', () => 
       path: '/tasks',
       query: { view: 'list', scope: 'mine', limit: '20' },
     });
+    // cursor — только когда задан (пустая строка не попадает в запрос).
+    expect(
+      tasksListTool.build!({ scope: 'all', overdue: true, limit: 20, cursor: 'cursor-2' }),
+    ).toEqual({
+      path: '/tasks',
+      query: { view: 'list', scope: 'all', limit: '20', overdue: 'true', cursor: 'cursor-2' },
+    });
   });
 
   it('поиск задач: запрос и заголовок блока отличаются от журнала', () => {
@@ -119,8 +157,17 @@ describe('tasks.list / tasks.search: строки журнала (#892)', () => 
       path: '/tasks',
       query: { view: 'list', scope: 'all', search: 'смета', limit: '3' },
     });
+    expect(
+      tasksSearchTool.build!({ query: 'смета', scope: 'all', limit: 3, cursor: 'c2' }),
+    ).toEqual({
+      path: '/tasks',
+      query: { view: 'list', scope: 'all', search: 'смета', limit: '3', cursor: 'c2' },
+    });
     expect(tasksSearchTool.project!({ items: [taskRow] }, {}).text).toContain(
       'Найденные задачи: 1',
+    );
+    expect(tasksSearchTool.project!({ items: [taskRow], nextCursor: 'c2' }, {}).text).toContain(
+      '… есть следующая страница; cursor: c2',
     );
   });
 });
