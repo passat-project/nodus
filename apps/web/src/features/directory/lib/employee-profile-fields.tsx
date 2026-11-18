@@ -16,7 +16,7 @@ import {
   VenusAndMars,
 } from 'lucide-react';
 import type { UserCard, UserListItem } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { SystemRole, ui } from '@nodus/contracts';
 
 import type { CardRef } from '../../../app/shell/card-stack.js';
 import { formatDate } from '../../../shared/lib/format.js';
@@ -26,18 +26,17 @@ import { UserStatusChip } from './employee-fields.js';
 
 const monoValue = 'font-mono text-label-sm tabular-nums';
 
-/** Поля-реестр вкладки «Профиль» карточки сотрудника (полный UserCard):
- *  должность/отдел (имена — из списка, id-справочники — с бэкендом
- *  M2), контакты (почта, телефон, город, кабинет, удалёнка), ставка, пол,
+/**
+ * Поля-реестр вкладки «Профиль» карточки сотрудника (полный UserCard):
+ *  должность/отдел (имена — из списка, id-справочники — с бэкендом M2),
+ *  контакты (почта, телефон, город, кабинет, удалёнка), ставка, пол,
  *  HR-даты (день рождения, дата приёма, начало дня), руководитель — переход
  *  в его карточку стеком (openCard, ADR-0009), HR-статус. Видимость — «+
  *  Поле» (persist localStorage).
  *
- *  Порядок — сверху вниз от «кто где в компании» к личным данным: первый
- *  экран карточки отвечает, чем человек занимается, где сидит и на кого
- *  работает (структура синим), дальше контакты, кадровые данные, отчество —
- *  последним (имя уже стоит в шапке карточки, дублировать его первым полем
- *  незачем). */
+ *  Порядок — от ФИО к структуре и данным: отчество ПЕРВЫМ (вердикт владельца
+ *  на приёмке 18.11.2026), дальше «кто где в компании» (должность и
+ *  подразделение синим, руководитель), контакты и кадровые данные. */
 export function employeeProfileDefs(args: {
   card: UserCard;
   listItem: UserListItem;
@@ -45,7 +44,18 @@ export function employeeProfileDefs(args: {
   openCard: (ref: CardRef) => void;
 }): EntityFieldDef[] {
   const { card, listItem, manager, openCard } = args;
+  // #923: «Администратор» — строкой под статусом (вердикт приёмки 18.11.2026):
+  // роль видна сразу в карточке, в том числе на своей.
+  const isAdmin = card.roles.some((role) => role.code === SystemRole.ADMIN);
   return [
+    {
+      // #132: отчество — ПОЛЕ карточки (в displayName его больше нет);
+      // отображение отчеств в UI включается «Настройками портала» #133.
+      key: 'middleName',
+      icon: <User className="size-3.5" />,
+      label: ui.employees.middleName,
+      render: () => card.middleName ?? ui.common.notSet,
+    },
     {
       key: 'position',
       icon: <Briefcase className="size-3.5" />,
@@ -81,7 +91,11 @@ export function employeeProfileDefs(args: {
             onClick={() => openCard({ kind: 'employee', id: manager.id })}
             className="-mx-1 flex min-w-0 items-center gap-2 rounded px-1 hover:bg-accent/50 hover:underline"
           >
-            <PersonAvatar name={manager.displayName} className="size-6 shrink-0" />
+            <PersonAvatar
+              name={manager.displayName}
+              avatarUrl={manager.avatarUrl}
+              className="size-6 shrink-0"
+            />
             <span className="truncate">{manager.displayName}</span>
           </button>
         ) : (
@@ -92,7 +106,14 @@ export function employeeProfileDefs(args: {
       key: 'status',
       icon: <UserCheck className="size-3.5" />,
       label: ui.employees.fieldStatus,
-      render: () => <UserStatusChip status={card.status} />,
+      render: () => (
+        <span className="flex min-w-0 flex-col items-start gap-0.5">
+          <UserStatusChip status={card.status} />
+          {isAdmin ? (
+            <span className="text-xs text-muted-foreground">{ui.employees.adminBadge}</span>
+          ) : null}
+        </span>
+      ),
     },
     {
       key: 'email',
@@ -182,14 +203,6 @@ export function employeeProfileDefs(args: {
         ) : (
           ui.common.notSet
         ),
-    },
-    {
-      // #132: отчество — ПОЛЕ карточки (в displayName его больше нет);
-      // отображение отчеств в UI включается «Настройками портала» #133.
-      key: 'middleName',
-      icon: <User className="size-3.5" />,
-      label: ui.employees.middleName,
-      render: () => card.middleName ?? ui.common.notSet,
     },
   ];
 }

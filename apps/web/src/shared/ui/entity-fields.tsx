@@ -142,12 +142,28 @@ export function FieldRow({
  * Сетка на container queries зоны (@container у родителя): узко — 1 колонка,
  * широко — 2; зазор фикс, блок max-w-4xl центрируется (растут отступы).
  */
-export function EntityFields({ defs, storageKey }: { defs: EntityFieldDef[]; storageKey: string }) {
+export function EntityFields({
+  defs,
+  storageKey,
+  className,
+}: {
+  defs: EntityFieldDef[];
+  storageKey: string;
+  /** Дополнительная раскладка карточки-потребителя (профиль сотрудника:
+   *  порог 1↔2 по ширине ЗОНЫ, а не колонки полей, #923). Зазор по умолчанию
+   *  (`mt-5`) не меняется: карточки задач/писем живут на нём. */
+  className?: string;
+}) {
   const { hiddenKeys, toggle } = useFieldVisibility(storageKey);
   const visible = defs.filter((d) => !hiddenKeys.includes(d.key));
 
   return (
-    <div className="mx-auto mt-5 grid max-w-4xl grid-cols-1 gap-x-12 gap-y-0.5 @min-[55rem]:grid-cols-2">
+    <div
+      className={cn(
+        'mx-auto grid max-w-4xl grid-cols-1 gap-x-12 gap-y-0.5 @min-[55rem]:grid-cols-2',
+        className ?? 'mt-5',
+      )}
+    >
       {visible.map((def) => (
         <FieldRow
           key={def.key}

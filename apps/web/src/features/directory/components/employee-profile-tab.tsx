@@ -37,7 +37,8 @@ function presenceLabel(status: PresenceStatus): string {
  * Постоянная ЛЕВАЯ зона профиля карточки сотрудника (#750, #923): БОЛЬШАЯ
  * фотография (камера — только своя карточка) с presence-чипом под ней и
  * заголовок «Информация о сотруднике» над полями-реестром полного UserCard
- * (1↔2 колонки по ширине колонки полей; на узкой поля уходят под фото), ниже —
+ * (до 46rem зоны поля идут под фото, дальше — справа; 1↔2 колонки — по ширине
+ * колонки полей плюс стадия двух колонок по ширине зоны), ниже —
  * «Подчинённые» тем же стилем заголовка и сеткой 1↔2 по ширине зоны, переход в
  * карточки стеком (ADR-0009). Кнопки правки и действий живут в нижней полосе
  * зоны (`EmployeeProfileBar`), не здесь; скролл своей зоны, по горизонтали
@@ -48,6 +49,7 @@ export function EmployeeProfileTab({
   listItem,
   manager,
   subordinates,
+  deputyIds,
   presenceStatus,
   canEditAvatar = false,
 }: {
@@ -55,6 +57,9 @@ export function EmployeeProfileTab({
   listItem: UserListItem;
   manager: UserListItem | undefined;
   subordinates: UserListItem[];
+  /** Кто из подчинённых — зам подразделения главы (#923): строка помечается
+   *  «заместитель», чтобы глава другого отдела не выглядел рядовым сотрудником. */
+  deputyIds?: ReadonlySet<string>;
   presenceStatus: PresenceStatus;
   /** Своя карточка (#186): фото кликабельно — загрузка/смена/удаление. */
   canEditAvatar?: boolean;
@@ -88,7 +93,15 @@ export function EmployeeProfileTab({
   return (
     <div className="h-full overflow-x-hidden overflow-y-auto p-6">
       <div className="mx-auto w-full max-w-6xl">
-        <div className="flex flex-wrap items-start gap-x-8 gap-y-0">
+        {/* Фото и поля: до 46rem — колонкой с воздухом между блоками, дальше —
+            поля СПРАВА от фото. Порог детерминированный: прежний `flex-wrap`
+            переключался по фактическому переносу (~46-47rem), а заголовок по
+            `@max-[43rem]` уже получил отступ — в зазоре 43-46rem он прижимался
+            к аватару (приёмка 18.11.2026).
+            Поля — СВОЙ контейнер: базовая раскладка 1↔2 считается по их ширине;
+            в профиле второй порог (ширина ЗОНЫ) возвращает стадию двух колонок
+            на широкой зоне (#923, className у EntityFields). */}
+        <div className="flex flex-col gap-y-7 @min-[46rem]/zone:flex-row @min-[46rem]/zone:items-start @min-[46rem]/zone:gap-x-8 @min-[46rem]/zone:gap-y-0">
           {/* Фото профиля: клик — выбрать, ПКМ — сменить/убрать (канон
               контекстных меню). Кнопки правки из-под аватара убраны в нижнюю
               полосу карточки (#923). */}
@@ -146,28 +159,19 @@ export function EmployeeProfileTab({
               {presenceLabel(presenceStatus)}
             </NodeChip>
           </div>
-          {/* Поля — справа от фото, когда зона широкая (flex-wrap поднимает их
-              на первую строку); на узкой уходят под фото вместе с заголовком
-              секции (#923). Колонка — СВОЙ контейнер: порог 1↔2 считается по
-              её ширине, а не по зоне (фото съедает 260px, и на пороге зоны
-              ячейки были 307dp — метка и значение в каждой ячейке разъезжались
-              по разным строкам и пары читались крест-накрест). Заголовок при
-              переносе под фото получает воздух — меряется зоной (`/zone`).
-
-              Совсем узкая зона (пол профиля 320dp, #750): строка поля
-              разваливается на две, и стандартный ритм `FieldRow` делает
-              значение БЛИЖЕ к чужой метке, чем к своей (px-2 + min-h-8
-              значения). Здесь ритм подтягивается под пару «метка → значение»;
-              лечится это в самом `FieldRow` (общий примитив — вне скоупа
-              ui-writer), поэтому — компенсация только для узкой колонки. */}
-          <div className="@container min-w-0 max-w-[56rem] flex-1 basis-[30rem] @max-[28rem]:[&>div>div>span:last-child]:min-h-0 @max-[28rem]:[&>div>div]:gap-y-1 @max-[28rem]:[&>div>div]:py-1.5">
-            <ProfileSectionHeading
-              label={ui.employees.profileInfo}
-              className="@max-[43rem]/zone:mt-7"
-            />
+          {/* Поля — справа от фото на широкой зоне (#923). Совсем узкая зона
+              (пол профиля 320dp, #750): строка поля разваливается на две, и
+              стандартный ритм `FieldRow` делает значение БЛИЖЕ к чужой метке,
+              чем к своей (px-2 + min-h-8 значения). Здесь ритм подтягивается
+              под пару «метка → значение»; лечится это в самом `FieldRow`
+              (общий примитив — вне скоупа ui-writer), поэтому — компенсация
+              только для узкой колонки. */}
+          <div className="@container min-w-0 w-full max-w-[56rem] @min-[46rem]/zone:flex-1 @min-[46rem]/zone:basis-[30rem] @max-[28rem]:[&>div>div>span:last-child]:min-h-0 @max-[28rem]:[&>div>div]:gap-y-1 @max-[28rem]:[&>div>div]:py-1.5">
+            <ProfileSectionHeading label={ui.employees.profileInfo} />
             <EntityFields
               defs={employeeProfileDefs({ card, listItem, manager, openCard })}
               storageKey={VISIBILITY_KEY}
+              className="mt-1.5 @min-[55rem]/zone:grid-cols-2"
             />
           </div>
         </div>
@@ -176,32 +180,47 @@ export function EmployeeProfileTab({
         </div>
         {/* Сетка подчинённых — та же container-query логика, что у полей:
             узко 1 колонка (должность под именем), широко 2 (должность
-            справа, `min-w-0` + truncate — без горизонтального скролла). */}
+            справа, `min-w-0` + truncate — без горизонтального скролла).
+            Строка — всегда горизонтальная пара: аватар центрирован по всему
+            блоку «имя + должность», а не прижат к первой строке текста
+            (приёмка 18.11.2026). */}
         <div className="mt-1.5 grid grid-cols-1 gap-x-12 gap-y-0.5 @min-[55rem]:grid-cols-2">
           {subordinates.length === 0 ? (
             <p className="py-1 text-sm text-muted-foreground">{ui.common.empty}</p>
           ) : null}
-          {subordinates.map((person) => (
-            <button
-              key={person.id}
-              type="button"
-              onClick={() => openCard({ kind: 'employee', id: person.id })}
-              className="-mx-2 flex min-w-0 flex-col gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/50 @min-[30rem]:flex-row @min-[30rem]:items-center @min-[30rem]:gap-2.5"
-            >
-              <span className="flex min-w-0 items-center gap-2.5">
-                <PersonAvatar name={person.displayName} className="size-7 shrink-0" />
-                <span className="min-w-0 flex-1 truncate text-sm" title={person.displayName}>
-                  {person.displayName}
-                </span>
-              </span>
-              <span
-                className="min-w-0 truncate pl-9.5 text-xs text-muted-foreground @min-[30rem]:ml-auto @min-[30rem]:pl-0"
-                title={person.positionName ?? undefined}
+          {subordinates.map((person) => {
+            const isDeputy = deputyIds?.has(person.id) ?? false;
+            return (
+              <button
+                key={person.id}
+                type="button"
+                onClick={() => openCard({ kind: 'employee', id: person.id })}
+                className="-mx-2 flex min-w-0 items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/50"
               >
-                {person.positionName ?? ''}
-              </span>
-            </button>
-          ))}
+                <PersonAvatar
+                  name={person.displayName}
+                  avatarUrl={person.avatarUrl}
+                  className="size-7 shrink-0"
+                />
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5 @min-[30rem]:flex-row @min-[30rem]:items-center @min-[30rem]:gap-2.5">
+                  <span className="min-w-0 truncate text-sm" title={person.displayName}>
+                    {person.displayName}
+                  </span>
+                  {isDeputy ? (
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {ui.employees.deputyBadge}
+                    </span>
+                  ) : null}
+                  <span
+                    className="min-w-0 truncate text-xs text-muted-foreground @min-[30rem]:ml-auto"
+                    title={person.positionName ?? undefined}
+                  >
+                    {person.positionName ?? ''}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  ChevronUp,
   MoreHorizontal,
   Pencil,
   ShieldMinus,
@@ -29,7 +28,8 @@ type ConfirmAction = 'deactivate' | 'grant' | 'revoke';
 /**
  * Нижняя полоса профиля (#923) — только левая зона карточки, вне скролла:
  * главная кнопка «Редактировать профиль» и «Действия» для администратора
- * (меню открывается вверх, к содержимому карточки). Нет кнопок — нет полосы.
+ * (постоянная иконка «три точки» на любой ширине, меню открывается вверх, к
+ * содержимому карточки — вердикт приёмки 18.11.2026). Нет кнопок — нет полосы.
  */
 export function EmployeeProfileBar({
   card,
@@ -128,9 +128,9 @@ export function EmployeeActionsMenu({ card }: { card: UserCard }) {
             aria-label={ui.employees.actions}
             title={ui.employees.actions}
           >
-            <MoreHorizontal className="size-4 @min-[26rem]:hidden" aria-hidden />
-            <span className="hidden @min-[26rem]:inline">{ui.employees.actions}</span>
-            <ChevronUp className="hidden @min-[26rem]:inline" data-icon="inline-end" aria-hidden />
+            {/* Три точки — на любой ширине: подпись «Действия» и шеврон
+                убраны, меню открывается вверх (вердикт приёмки 18.11.2026). */}
+            <MoreHorizontal className="size-4" aria-hidden />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-60">

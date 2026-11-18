@@ -37,6 +37,8 @@ export const employeesStrings = {
   fieldEmployee: 'Сотрудник',
   fieldManager: 'Руководитель',
   fieldStatus: 'Статус',
+  /** Строка под статусом карточки: роль «Администратор» (#923). */
+  adminBadge: 'Администратор',
   statusActive: 'Работает',
   statusDeactivated: 'Уволен',
   tabProfile: 'Профиль',
@@ -92,6 +94,8 @@ export const employeesStrings = {
   revokeAdminDone: 'Права администратора сняты',
   subordinates: 'Подчинённые',
   deputies: 'Заместители',
+  /** Метка в строке подчинённого — зам подразделения главы (#923). */
+  deputyBadge: 'заместитель',
   noSubdepartments: 'Нет подразделений в подчинении',
   teamCount: 'Сотрудников в команде',
   departmentForms: ['подразделение', 'подразделения', 'подразделений'],

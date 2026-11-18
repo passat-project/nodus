@@ -5,6 +5,7 @@ import { Skeleton } from '@nodus/ui/components/skeleton';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { projectsAvailable } from '../../../shared/api/projects-available.js';
+import { useDepartmentsList } from '../../../shared/api/departments-list.js';
 import { useAssigneeTasks, useMemberProjects } from '../../../shared/api/user-relations.js';
 import { ApiError } from '../../../shared/api-client.js';
 import { useDirectConversation } from '../../../shared/chat/chat-queries.js';
@@ -20,6 +21,7 @@ import { ConversationPane } from '../../../shared/chat/conversation-pane.js';
 import { openTaskCreate } from '../../../shared/tasks/task-create-store.js';
 import { MIN_CHAT_W, useChatWidth } from '../../../shared/ui/use-chat-width.js';
 import { useEmployeePresence, useUserCard, useUsersList } from '../api/directory-api.js';
+import { profileSubordinates } from '../lib/profile-subordinates.js';
 import { useCanManageDirectory } from '../lib/use-can-manage-directory.js';
 import { EmployeeProfileBar } from './employee-actions-menu.js';
 import { EmployeeCardSkeleton } from './employee-card-skeleton.js';
@@ -109,7 +111,13 @@ export function EmployeeCard({ userId }: { userId: string }) {
   const items = useMemo(() => usersData?.items ?? [], [usersData]);
   const listItem = items.find((u) => u.id === userId);
   const manager = card?.managerId ? items.find((u) => u.id === card.managerId) : undefined;
-  const subordinates = useMemo(() => items.filter((u) => u.managerId === userId), [items, userId]);
+  // «Подчинённые» (#923): прямые по `managerId` + замы подразделений, где
+  // сотрудник глава (зам — роль отдела, в manager_id не входит).
+  const departments = useDepartmentsList();
+  const { list: subordinates, deputyIds } = useMemo(
+    () => profileSubordinates({ userId, users: items, departments }),
+    [items, userId, departments],
+  );
   const tasks = tasksQuery.data?.items ?? [];
   const projects = projectsQuery.data?.items ?? [];
   const presenceStatus = useEmployeePresence(userId);
@@ -182,6 +190,7 @@ export function EmployeeCard({ userId }: { userId: string }) {
               listItem={listItem}
               manager={manager}
               subordinates={subordinates}
+              deputyIds={deputyIds}
               presenceStatus={presenceStatus}
               canEditAvatar={card.id === meId}
             />

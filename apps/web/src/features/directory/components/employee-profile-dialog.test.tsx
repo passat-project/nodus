@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserCard } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -28,7 +28,16 @@ vi.mock('../api/directory-api.js', () => ({
 }));
 
 vi.mock('../../../shared/api/departments-list.js', () => ({
-  useDepartmentsList: () => [{ id: 'dep-1', name: 'BIM-отдел', depth: 0, isActive: true }],
+  useDepartmentsList: () => [
+    {
+      id: 'dep-1',
+      name: 'BIM-отдел',
+      depth: 0,
+      isActive: true,
+      headId: null,
+      deputyId: null,
+    },
+  ],
 }));
 
 const card = (overrides: Partial<UserCard> = {}): UserCard => ({
@@ -116,5 +125,33 @@ describe('EmployeeProfileDialog (#923)', () => {
     expect(
       (screen.getByRole('button', { name: ui.common.save }) as HTMLButtonElement).disabled,
     ).toBe(true);
+  });
+
+  it('фокус открытия — в «Фамилию» в конце, без выделения (#923)', async () => {
+    render(
+      <EmployeeProfileDialog
+        open
+        onOpenChange={vi.fn()}
+        card={card({ id: ME, lastName: 'Иванов' })}
+        users={[]}
+        canManage={false}
+      />,
+    );
+    const input = screen.getByLabelText(ui.employees.fieldLastName) as HTMLInputElement;
+    // Каретка ставится следующим кадром (rAF) — как в окне подразделения.
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    expect(input.selectionStart).toBe('Иванов'.length);
+    expect(input.selectionEnd).toBe('Иванов'.length);
+  });
+
+  it('подразделения — плоский список: дерево без отступов уровней (#923)', () => {
+    render(
+      <EmployeeProfileDialog open onOpenChange={vi.fn()} card={card()} users={[]} canManage />,
+    );
+    const trigger = screen.getByRole('combobox', { name: ui.employees.department });
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    const option = screen.getByRole('option', { name: 'BIM-отдел' });
+    // Уровни дерева списку не рисуются — отступа по глубине нет.
+    expect(option.getAttribute('style') ?? '').not.toContain('padding-left');
   });
 });

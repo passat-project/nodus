@@ -68,8 +68,8 @@ describe('дерево подразделений: контракт /tree (#540)
       parentId: node.id,
     };
     expect(flattenDepartments([{ ...node, children: [child] }])).toEqual([
-      { id: node.id, name: 'Управление', depth: 0, isActive: true },
-      { id: child.id, name: 'Отдел', depth: 1, isActive: true },
+      { id: node.id, name: 'Управление', depth: 0, isActive: true, headId: null, deputyId: null },
+      { id: child.id, name: 'Отдел', depth: 1, isActive: true, headId: null, deputyId: null },
     ]);
   });
 });

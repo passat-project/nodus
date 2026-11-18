@@ -98,6 +98,9 @@ describe('EmployeeProfileBar (#923)', () => {
     fireEvent.click(screen.getByRole('button', { name: ui.employees.editProfile }));
     expect(onEdit).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: ui.employees.actions })).not.toBeNull();
+    // «Действия» — постоянная иконка три точки: подпись не рендерится ни на
+    // какой ширине (вердикт приёмки 18.11.2026).
+    expect(screen.queryByText(ui.employees.actions)).toBeNull();
   });
 });
 

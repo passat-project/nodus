@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { UserCard, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
@@ -35,6 +35,11 @@ export function EmployeeProfileDialog({
   const updateSelf = useUpdateMyProfile();
   const updateUser = useUpdateUser(card.id);
   const [draft, setDraft] = useState<ProfileDraft>(() => draftOf(card));
+  // Фокус окна — в «Фамилию» В КОНЕЦ без выделения (вердикт приёмки
+  // 18.11.2026): Radix FocusScope фокусирует первый input и зовёт `select()`,
+  // первое нажатие клавиши стирало фамилию. Паттерн — окно подразделения.
+  const lastNameRef = useRef<HTMLInputElement>(null);
+  const autoSelectGuard = useRef(false);
 
   // Черновик наполняется на каждом открытии (рендер-тайм, канон #45).
   const [prevOpen, setPrevOpen] = useState(open);
@@ -68,6 +73,19 @@ export function EmployeeProfileDialog({
         // Форма с несохранёнными значениями: мимо-клик не должен её терять.
         showCloseButton={false}
         onInteractOutside={(event) => event.preventDefault()}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          autoSelectGuard.current = true;
+          // Каретку ставим следующим кадром: FocusScope возвращает фокус в поле
+          // с `select()` уже после обработчика (закрытие меню «⋯»).
+          requestAnimationFrame(() => {
+            const input = lastNameRef.current;
+            if (!input || !input.isConnected) return;
+            input.focus();
+            const end = input.value.length;
+            input.setSelectionRange(end, end);
+          });
+        }}
       >
         <DialogTitle className="text-lg leading-tight font-semibold text-foreground">
           {isSelf ? ui.employees.editProfile : ui.employees.editEmployeeTitle}
@@ -80,6 +98,8 @@ export function EmployeeProfileDialog({
             draft={draft}
             users={users}
             canManage={canManage}
+            lastNameRef={lastNameRef}
+            autoSelectGuard={autoSelectGuard}
             onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
           />
         </div>
