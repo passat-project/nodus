@@ -20,7 +20,9 @@ import {
 
 import { ModeChoices, PanelAction, PanelField } from '../../../shared/ui/panel/panel-kit.js';
 import type { ProviderDraft } from './ai-provider-columns.js';
+import { resolveProviderDefaults } from './ai-provider-defaults.js';
 import { ProviderEditBlock } from './ai-provider-edit-block.js';
+import { providerPresetOptions } from './ai-provider-presets.js';
 
 const strings = ui.assistant.settings;
 
@@ -36,15 +38,6 @@ interface FormState {
   models: ProviderDraft['models'];
 }
 
-const presetOptions = [
-  ...ASSISTANT_PROVIDER_PRESETS.map((preset) => ({
-    value: preset.key as string,
-    label: preset.name,
-    hint: preset.baseUrl,
-  })),
-  { value: 'custom', label: strings.presetCustom, hint: strings.presetCustomHint },
-];
-
 /**
  * Окно провайдера (замечание владельца 17.11.2026: канон окон сущностей,
  * как проект): создание — пресеты СТРОКАМИ (не ряд кнопок на экране),
@@ -57,6 +50,8 @@ export function AiProviderDialog({
   mode,
   defaultProviderId,
   defaultModelId,
+  routerProviderId,
+  routerModelId,
   instructions,
   onClose,
   onCreate,
@@ -65,6 +60,8 @@ export function AiProviderDialog({
   mode: ProviderDialogMode;
   defaultProviderId: string | null;
   defaultModelId: string | null;
+  routerProviderId: string | null;
+  routerModelId: string | null;
   instructions: string;
   onClose: () => void;
   onCreate: (
@@ -73,7 +70,12 @@ export function AiProviderDialog({
   onApply: (
     id: string,
     patch: Partial<ProviderDraft>,
-    defaults: { defaultProviderId: string | null; defaultModelId: string | null },
+    defaults: {
+      defaultProviderId: string | null;
+      defaultModelId: string | null;
+      routerProviderId: string | null;
+      routerModelId: string | null;
+    },
     instructions: string,
   ) => void;
 }) {
@@ -110,12 +112,20 @@ export function AiProviderDialog({
   const [pickedModel, setPickedModel] = useState<string | null>(
     editing?.id === defaultProviderId ? defaultModelId : null,
   );
+  const [isRouter, setIsRouter] = useState(editing?.id === routerProviderId);
+  const [routerModel, setRouterModel] = useState<string | null>(
+    editing?.id === routerProviderId ? routerModelId : null,
+  );
   const [rules, setRules] = useState(instructions);
 
   const patch = (next: Partial<FormState>) => setForm((current) => ({ ...current, ...next }));
   const urlOk = assistantProviderUrlSchema.safeParse(form.baseUrl).success;
   const enabledModels = form.models.filter((model) => model.enabled);
-  const canSubmit = form.name.trim().length > 0 && urlOk && (!isDefault || Boolean(pickedModel));
+  const canSubmit =
+    form.name.trim().length > 0 &&
+    urlOk &&
+    (!isDefault || Boolean(pickedModel)) &&
+    (!isRouter || Boolean(routerModel));
   const hasKey = editing?.hasKey && !clearKey;
 
   function pickPreset(value: string) {
@@ -128,13 +138,19 @@ export function AiProviderDialog({
     event.preventDefault();
     if (!canSubmit) return;
     if (editing) {
-      // Дефолт портала: тумблер окна назначает/снимает провайдера; модель
-      // обязательна при назначении (иначе ассистенту нечем отвечать).
-      const defaults = isDefault
-        ? { defaultProviderId: editing.id, defaultModelId: pickedModel }
-        : editing.id === defaultProviderId
-          ? { defaultProviderId: null, defaultModelId: null }
-          : { defaultProviderId, defaultModelId };
+      // Дефолт и диспетчер — две независимые пары; модель обязательна при
+      // назначении (иначе ассистенту нечем отвечать).
+      const defaults = resolveProviderDefaults({
+        editingId: editing.id,
+        defaultProviderId,
+        defaultModelId,
+        routerProviderId,
+        routerModelId,
+        isDefault,
+        pickedModel,
+        isRouter,
+        routerModel,
+      });
       onApply(
         editing.id,
         {
@@ -186,7 +202,7 @@ export function AiProviderDialog({
               <PanelField label={strings.presetLabel}>
                 <ModeChoices
                   value={preset}
-                  options={presetOptions}
+                  options={providerPresetOptions}
                   disabled={false}
                   ariaLabel={strings.pickPreset}
                   onChange={pickPreset}
@@ -275,6 +291,10 @@ export function AiProviderDialog({
                 onDefault={setIsDefault}
                 pickedModel={pickedModel}
                 onPickedModel={setPickedModel}
+                isRouter={isRouter}
+                onRouter={setIsRouter}
+                routerModel={routerModel}
+                onRouterModel={setRouterModel}
                 enabledModels={enabledModels}
                 headers={form.headers}
                 onHeaders={(headers) => patch({ headers })}

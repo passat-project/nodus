@@ -2294,6 +2294,7 @@ model AssistantSession {
   messages      AssistantMessage[]
   runs          AssistantRun[]
   actionBatches AssistantActionBatch[]
+  contextSegments AssistantContextSegment[]
 
   /// Список «мои сессии» (архив отдельно) и выбор последней при открытии.
   @@index([userId, archivedAt, lastMessageAt])
@@ -2324,6 +2325,35 @@ model AssistantMessage {
   @@index([sessionId, createdAt])
   @@index([runId])
   @@map("assistant_messages")
+}
+
+/// Сегмент сжатия истории (#943): старые ОТВЕТЫ ассистента заменяются
+/// сводкой, вопросы сотрудника остаются дословно. Оригиналы сообщений не
+/// удаляются — сегмент лишь говорит, что диапазон `from..to` уже сжат.
+/// `seq` — порядок сегментов в сессии; `@@unique([session_id, seq])` держит
+/// идемпотентность при повторной генерации.
+model AssistantContextSegment {
+  id            String @id @default(uuid()) @db.Uuid
+  sessionId     String @map("session_id") @db.Uuid
+  /// Первое и последнее сообщение диапазона (включительно).
+  fromMessageId String @map("from_message_id") @db.Uuid
+  toMessageId   String @map("to_message_id") @db.Uuid
+  /// Порядковый номер сегмента в сессии (1..n).
+  seq           Int
+  /// Готовый текст для промпта: вопросы дословно + сжатые ответы + факты.
+  digest        String
+  /// Оценка токенов исходного диапазона и сводки — для отчёта/индикатора.
+  tokensBefore  Int    @map("tokens_before")
+  tokensAfter   Int    @map("tokens_after")
+  /// Модель, сделавшая сводку (аудит; null — fallback-усечение).
+  modelId       String? @map("model_id")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  session AssistantSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, seq])
+  @@index([sessionId, createdAt])
+  @@map("assistant_context_segments")
 }
 
 /// Пачка карточек одного хода агента (#916): продолжение прогона после
@@ -2373,6 +2403,9 @@ model AssistantRun {
   modelId String? @map("model_id")
   inputTokens Int? @map("input_tokens")
   outputTokens Int? @map("output_tokens")
+  /// Заполнение контекста последним запросом прогона (#943): prompt tokens
+  /// финального шага, а не сумма по шагам. Источник индикатора и порога сжатия.
+  contextTokens Int? @map("context_tokens")
   errorCode String? @map("error_code")
   errorMessage String? @map("error_message")
   startedAt DateTime? @map("started_at") @db.Timestamptz()

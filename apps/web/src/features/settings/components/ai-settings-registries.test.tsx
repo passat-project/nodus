@@ -163,12 +163,31 @@ describe('AiProvidersSection: реестр провайдеров (регрес�
 
   it('поиск фильтрует строки реестра', async () => {
     render(<AiProvidersSection section="providers" onSection={() => undefined} />);
-    // Полоса «Модели по умолчанию» (#917) тоже показывает имя провайдера —
-    // считаем вхождения: фильтр убирает именно строку реестра.
-    const before = screen.getAllByText('OpenRouter').length;
+    expect(screen.queryAllByText('OpenRouter')).toHaveLength(1);
     const search = screen.getByPlaceholderText(ui.assistant.settings.searchPlaceholder);
     fireEvent.change(search, { target: { value: 'нет-такого' } });
-    await waitFor(() => expect(screen.getAllByText('OpenRouter').length).toBe(before - 1));
+    await waitFor(() => expect(screen.queryAllByText('OpenRouter')).toHaveLength(0));
+  });
+
+  it('колонка «Диспетчер» назначает провайдера с его первой моделью', async () => {
+    const original = mocks.providers[0]!;
+    mocks.providers[0] = {
+      ...original,
+      models: [{ id: 'm-1', tools: true, vision: false, enabled: true }],
+    } as unknown as (typeof mocks.providers)[number];
+    try {
+      render(<AiProvidersSection section="providers" onSection={() => undefined} />);
+      fireEvent.click(screen.getByTitle(ui.assistant.settings.routerSet));
+      await waitFor(() => expect(mocks.providerSave).toHaveBeenCalledTimes(1));
+      const body = mocks.providerSave.mock.calls[0]![0] as unknown as {
+        routerProviderId: string;
+        routerModelId: string;
+      };
+      expect(body.routerProviderId).toBe(original.id);
+      expect(body.routerModelId).toBe('m-1');
+    } finally {
+      mocks.providers[0] = original;
+    }
   });
 });
 

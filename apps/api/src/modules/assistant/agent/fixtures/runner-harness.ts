@@ -7,6 +7,7 @@ import type { LlmChatRequest, LlmStreamEvent } from '../../providers/llm-provide
 import type { ToolExecutorService } from '../../tools/tool-executor.service.js';
 import { AgentRunnerService } from '../agent-runner.service.js';
 import type { RunParams } from '../agent-runner.service.js';
+import type { AssistantCompactionService } from '../compaction.service.js';
 
 /**
  * Стенд агентного цикла (#893, #901): хранилище прогона в памяти, провайдер
@@ -143,6 +144,10 @@ export function build(
       forget: vi.fn(async () => true),
     })),
   };
+  const compaction = {
+    historyPrefix: vi.fn(async () => [] as never[]),
+    scheduleAfterRun: vi.fn(),
+  };
   const runner = new AgentRunnerService(
     fake.repo as unknown as AssistantRepository,
     settings as unknown as AiSettingsService,
@@ -150,6 +155,7 @@ export function build(
     executor as unknown as ToolExecutorService,
     actions as never,
     memory as never,
+    compaction as never,
     bus,
     { register: vi.fn(() => () => undefined), notify: vi.fn() } as never,
     logger as never,
@@ -164,6 +170,7 @@ export function build(
     requests: provider.requests,
     actions,
     memory,
+    compaction: compaction as unknown as AssistantCompactionService,
   };
 }
 

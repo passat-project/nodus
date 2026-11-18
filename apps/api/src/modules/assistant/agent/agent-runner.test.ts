@@ -17,7 +17,7 @@ import { build, drain, logger, params } from './fixtures/runner-harness.js';
 
 describe('AgentRunnerService: цикл (#893)', () => {
   it('вызов инструмента → результат → финальный текст и usage', async () => {
-    const { runner, bus, fake, executor } = build([
+    const { runner, bus, fake, executor, compaction } = build([
       [
         { type: 'reasoning.delta', text: 'Нужно посмотреть задачи. ' },
         {
@@ -60,6 +60,15 @@ describe('AgentRunnerService: цикл (#893)', () => {
     expect(finishedRun?.status).toBe('completed');
     expect(finishedRun?.inputTokens).toBe(250);
     expect(finishedRun?.outputTokens).toBe(50);
+    // Заполнение контекста — токены ПОСЛЕДНЕГО запроса (150), не сумма шагов
+    // (250): от этого зависит порог сжатия 50% (#943).
+    expect(finishedRun?.contextTokens).toBe(150);
+    expect(events.find((event) => event.type === 'run.completed')?.data).toMatchObject({
+      contextTokens: 150,
+    });
+    // Порог не достигнут (дефолтное окно 128k), но решение о сжатии принимает
+    // сервис — раннер обязан передать ему актуальное заполнение.
+    expect(vi.mocked(compaction.scheduleAfterRun)).toHaveBeenCalledWith('session-1', 150);
     // Вызов инструмента сохранён с результатом и ссылкой «Открыть».
     const toolCall = [...fake.toolCalls.values()][0];
     expect(toolCall).toMatchObject({ status: 'done', href: '?cards=task:1' });
@@ -155,6 +164,7 @@ describe('AgentRunnerService: цикл (#893)', () => {
       { execute: vi.fn() } as unknown as ToolExecutorService,
       { propose: vi.fn() } as never,
       { promptLines: vi.fn(async () => []), port: vi.fn() } as never,
+      { historyPrefix: vi.fn(async () => []), scheduleAfterRun: vi.fn() } as never,
       bus2,
       { register: vi.fn(() => () => undefined), notify: vi.fn() } as never,
       logger as never,

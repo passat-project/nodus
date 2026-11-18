@@ -103,10 +103,26 @@ export interface RunRow {
   modelId: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
+  /** Заполнение контекста последним запросом прогона (#943). */
+  contextTokens: number | null;
   errorCode: string | null;
   errorMessage: string | null;
   startedAt: Date | null;
   finishedAt: Date | null;
+  createdAt: Date;
+}
+
+/** Сегмент сжатия истории (#943): старые ответы заменены сводкой. */
+export interface ContextSegmentRow {
+  id: string;
+  sessionId: string;
+  fromMessageId: string;
+  toMessageId: string;
+  seq: number;
+  digest: string;
+  tokensBefore: number;
+  tokensAfter: number;
+  modelId: string | null;
   createdAt: Date;
 }
 

@@ -24,7 +24,9 @@ export interface ProviderDraft extends AssistantProviderInput {
  */
 export function providerColumns(
   defaultProviderId: string | null,
+  routerProviderId: string | null,
   onMakeDefault: (id: string) => void,
+  onMakeRouter: (id: string) => void,
 ): DataTableField<ProviderDraft>[] {
   return [
     {
@@ -104,6 +106,30 @@ export function providerColumns(
             }}
             onKeyDown={(event) => event.stopPropagation()}
             title={strings.defaultSet}
+          >
+            {strings.defaultAssign}
+          </button>
+        ),
+    },
+    {
+      id: 'router',
+      label: strings.routerColumn,
+      defaultVisible: true,
+      defaultWidth: 116,
+      minWidth: 106,
+      render: (provider) =>
+        provider.id === routerProviderId ? (
+          <span className="truncate text-sm text-primary">{strings.routerColumn}</span>
+        ) : (
+          <button
+            type="button"
+            className="truncate text-sm text-muted-foreground transition-colors hover:text-foreground"
+            onClick={(event) => {
+              event.stopPropagation();
+              onMakeRouter(provider.id);
+            }}
+            onKeyDown={(event) => event.stopPropagation()}
+            title={strings.routerSet}
           >
             {strings.defaultAssign}
           </button>

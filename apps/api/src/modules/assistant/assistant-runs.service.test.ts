@@ -34,6 +34,7 @@ function runRow(overrides: Partial<RunRow> = {}): RunRow {
     modelId: 'm1',
     inputTokens: null,
     outputTokens: null,
+    contextTokens: null,
     errorCode: null,
     errorMessage: null,
     startedAt: NOW,

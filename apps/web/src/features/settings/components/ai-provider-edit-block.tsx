@@ -24,6 +24,10 @@ export function ProviderEditBlock({
   onDefault,
   pickedModel,
   onPickedModel,
+  isRouter,
+  onRouter,
+  routerModel,
+  onRouterModel,
   enabledModels,
   headers,
   onHeaders,
@@ -39,6 +43,10 @@ export function ProviderEditBlock({
   onDefault: (isDefault: boolean) => void;
   pickedModel: string | null;
   onPickedModel: (model: string | null) => void;
+  isRouter: boolean;
+  onRouter: (isRouter: boolean) => void;
+  routerModel: string | null;
+  onRouterModel: (model: string | null) => void;
   enabledModels: ProviderDraft['models'];
   headers: AssistantHeader[];
   onHeaders: (headers: AssistantHeader[]) => void;
@@ -59,29 +67,32 @@ export function ProviderEditBlock({
         }}
       />
       {isDefault ? (
-        <PanelField label={strings.defaultModel}>
-          <Select
-            value={pickedModel ?? 'none'}
-            onValueChange={(value) => onPickedModel(value === 'none' ? null : value)}
-          >
-            <SelectTrigger aria-label={strings.defaultModel}>
-              <SelectValue placeholder={strings.defaultNone} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">{strings.defaultNone}</SelectItem>
-              {enabledModels.map((model) => (
-                <SelectItem key={model.id} value={model.id}>
-                  {model.label ?? model.id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {!pickedModel ? (
-            <span role="alert" className="text-xs text-destructive">
-              {strings.defaultModelRequired}
-            </span>
-          ) : null}
-        </PanelField>
+        <ModelChoice
+          label={strings.defaultModel}
+          value={pickedModel}
+          models={enabledModels}
+          requiredText={strings.defaultModelRequired}
+          onChange={onPickedModel}
+        />
+      ) : null}
+      <SwitchRow
+        title={strings.routerSwitch}
+        hint={strings.routerHint}
+        checked={isRouter}
+        onChange={(checked) => {
+          onRouter(checked);
+          if (checked && !routerModel) onRouterModel(enabledModels[0]?.id ?? null);
+          if (!checked) onRouterModel(null);
+        }}
+      />
+      {isRouter ? (
+        <ModelChoice
+          label={strings.routerModel}
+          value={routerModel}
+          models={enabledModels}
+          requiredText={strings.routerModelRequired}
+          onChange={onRouterModel}
+        />
       ) : null}
       <HeadersEditor headers={headers} onChange={onHeaders} />
       <AiProviderModels
@@ -100,5 +111,46 @@ export function ProviderEditBlock({
         />
       </PanelField>
     </>
+  );
+}
+
+/** Выбор одной модели провайдера: общий для основной и диспетчера. */
+function ModelChoice({
+  label,
+  value,
+  models,
+  requiredText,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  models: ProviderDraft['models'];
+  requiredText: string;
+  onChange: (value: string | null) => void;
+}) {
+  return (
+    <PanelField label={label}>
+      <Select
+        value={value ?? 'none'}
+        onValueChange={(next) => onChange(next === 'none' ? null : next)}
+      >
+        <SelectTrigger aria-label={label}>
+          <SelectValue placeholder={strings.defaultNone} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">{strings.defaultNone}</SelectItem>
+          {models.map((model) => (
+            <SelectItem key={model.id} value={model.id}>
+              {model.label ?? model.id}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {!value ? (
+        <span role="alert" className="text-xs text-destructive">
+          {requiredText}
+        </span>
+      ) : null}
+    </PanelField>
   );
 }

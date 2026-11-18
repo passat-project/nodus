@@ -269,6 +269,7 @@ export class AiSettingsService {
   async resolveRouter(): Promise<{
     providerId: string;
     modelId: string;
+    model: AssistantModel;
     provider: LlmProvider;
   } | null> {
     const [rows, settings] = await Promise.all([
@@ -279,10 +280,12 @@ export class AiSettingsService {
     const row = rows.find((item) => item.id === settings.routerProviderId && item.enabled);
     if (!row) return null;
     const models = parseModels(row.models).filter((model) => model.enabled);
-    if (!models.some((model) => model.id === settings.routerModelId)) return null;
+    const model = models.find((item) => item.id === settings.routerModelId);
+    if (!model) return null;
     return {
       providerId: row.id,
-      modelId: models.find((model) => model.id === settings.routerModelId)!.id,
+      modelId: model.id,
+      model,
       provider: providerForRow(row, this.providerDeps),
     };
   }

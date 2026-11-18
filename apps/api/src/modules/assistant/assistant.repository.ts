@@ -13,6 +13,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import {
   type ActionBatchRow,
   type ActionRow,
+  type ContextSegmentRow,
   type EventRow,
   type MemoryRow,
   type MessageRow,
@@ -29,6 +30,7 @@ import {
 export type {
   ActionBatchRow,
   ActionRow,
+  ContextSegmentRow,
   EventRow,
   MemoryRow,
   MessageRow,
@@ -159,6 +161,16 @@ export class AssistantRepository extends AssistantActionsRepository {
       include: MESSAGE_INCLUDE,
     });
     return rows.map(mapMessage).reverse();
+  }
+
+  /** Сообщения строго раньше указанного — источник для сжатия старых ходов. */
+  async messagesBefore(sessionId: string, before: { createdAt: Date }): Promise<MessageRow[]> {
+    const rows = await this.prisma.assistantMessage.findMany({
+      where: { sessionId, createdAt: { lt: before.createdAt } },
+      orderBy: { createdAt: 'asc' },
+      include: MESSAGE_INCLUDE,
+    });
+    return rows.map(mapMessage);
   }
 
   async createMessage(input: {
@@ -294,6 +306,7 @@ export class AssistantRepository extends AssistantActionsRepository {
       finishedAt?: Date;
       inputTokens?: number | null;
       outputTokens?: number | null;
+      contextTokens?: number | null;
       errorCode?: string | null;
       errorMessage?: string | null;
       providerId?: string | null;
@@ -501,6 +514,7 @@ function mapRun(row: {
   modelId: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
+  contextTokens: number | null;
   errorCode: string | null;
   errorMessage: string | null;
   startedAt: Date | null;
@@ -517,6 +531,7 @@ function mapRun(row: {
     modelId: row.modelId,
     inputTokens: row.inputTokens,
     outputTokens: row.outputTokens,
+    contextTokens: row.contextTokens,
     errorCode: row.errorCode,
     errorMessage: row.errorMessage,
     startedAt: row.startedAt,

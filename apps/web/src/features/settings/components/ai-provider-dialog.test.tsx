@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { ASSISTANT_PROVIDER_PRESETS, ui, type AssistantModel } from '@nodus/contracts';
+import { ASSISTANT_PROVIDER_PRESETS, ui } from '@nodus/contracts';
 
 vi.mock('./ai-provider-models.js', () => ({
   AiProviderModels: () => <div data-testid="provider-models">модели</div>,
@@ -9,36 +9,16 @@ vi.mock('./ai-provider-models.js', () => ({
 
 import { AiProviderDialog } from './ai-provider-dialog.js';
 import type { ProviderDraft } from './ai-provider-columns.js';
+import { model, provider } from './ai-provider-test-fixtures.js';
 
 /**
  * Окно провайдера (#894): создание через пресеты строками, правка полей,
- * дефолт портала (тумблер + обязательная модель), состояние ключа
- * («Заменить»/«Удалить»), адрес валидируется, отмена/ошибки не закрывают
- * окно мимо-кликом.
+ * дефолт портала и диспетчер (тумблеры + обязательная модель), состояние
+ * ключа («Заменить»/«Удалить»), адрес валидируется, отмена/ошибки не
+ * закрывают окно мимо-кликом.
  */
 
 const strings = ui.assistant.settings;
-
-function model(overrides: Partial<AssistantModel> = {}): AssistantModel {
-  return { id: 'm-1', tools: true, vision: false, enabled: true, ...overrides };
-}
-
-function provider(overrides: Partial<ProviderDraft> = {}): ProviderDraft {
-  return {
-    id: '11111111-1111-4111-8111-111111111111',
-    name: 'OpenRouter',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    apiFormat: 'openai-chat',
-    authType: 'bearer',
-    headers: [],
-    enabled: true,
-    models: [model()],
-    persisted: true,
-    hasKey: false,
-    keyHint: null,
-    ...overrides,
-  };
-}
 
 function renderCreate() {
   const onCreate = vi.fn();
@@ -49,6 +29,8 @@ function renderCreate() {
       mode={{ kind: 'create' }}
       defaultProviderId={null}
       defaultModelId={null}
+      routerProviderId={null}
+      routerModelId={null}
       instructions=""
       onClose={onClose}
       onCreate={onCreate}
@@ -60,7 +42,12 @@ function renderCreate() {
 
 function renderEdit(
   draft: ProviderDraft,
-  options: { defaultProviderId?: string | null; defaultModelId?: string | null } = {},
+  options: {
+    defaultProviderId?: string | null;
+    defaultModelId?: string | null;
+    routerProviderId?: string | null;
+    routerModelId?: string | null;
+  } = {},
 ) {
   const onCreate = vi.fn();
   const onApply = vi.fn();
@@ -70,6 +57,8 @@ function renderEdit(
       mode={{ kind: 'edit', provider: draft }}
       defaultProviderId={options.defaultProviderId ?? null}
       defaultModelId={options.defaultModelId ?? null}
+      routerProviderId={options.routerProviderId ?? null}
+      routerModelId={options.routerModelId ?? null}
       instructions="Будь краток"
       onClose={onClose}
       onCreate={onCreate}
@@ -230,7 +219,12 @@ describe('AiProviderDialog: правка', () => {
         enabled: true,
         models: draft.models,
       }),
-      { defaultProviderId: draft.id, defaultModelId: 'm-on' },
+      {
+        defaultProviderId: draft.id,
+        defaultModelId: 'm-on',
+        routerProviderId: null,
+        routerModelId: null,
+      },
       'Отвечай по-русски',
     );
     expect(onClose).toHaveBeenCalled();
@@ -261,9 +255,40 @@ describe('AiProviderDialog: правка', () => {
     expect(onApply).toHaveBeenCalledWith(
       draft.id,
       expect.any(Object),
-      { defaultProviderId: null, defaultModelId: null },
+      {
+        defaultProviderId: null,
+        defaultModelId: null,
+        routerProviderId: null,
+        routerModelId: null,
+      },
       'Будь краток',
     );
+  });
+
+  it('диспетчер: тумблер выбирает первую включённую модель и сохраняет пару', () => {
+    const draft = provider({ models: [model({ id: 'm-1' })] });
+    const { onApply } = renderEdit(draft);
+
+    fireEvent.click(screen.getAllByRole('switch')[2]!);
+
+    expect(screen.getByRole('combobox', { name: strings.routerModel }).textContent).toBe('m-1');
+    submit(ui.common.save);
+    expect(onApply).toHaveBeenCalledWith(
+      draft.id,
+      expect.any(Object),
+      expect.objectContaining({ routerProviderId: draft.id, routerModelId: 'm-1' }),
+      'Будь краток',
+    );
+  });
+
+  it('тумблер диспетчера без включённых моделей требует модель и блокирует сохранение', () => {
+    renderEdit(provider({ models: [model({ enabled: false })] }));
+    fireEvent.click(screen.getAllByRole('switch')[2]!);
+
+    expect(screen.getByRole('alert').textContent).toBe(strings.routerModelRequired);
+    expect(
+      (screen.getByRole('button', { name: ui.common.save }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   it('сохранённый ключ: «Заменить» показывает поле и новый ключ уходит в патч', () => {

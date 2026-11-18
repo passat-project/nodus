@@ -78,6 +78,7 @@ function runRow(overrides: Partial<RunRow> = {}): RunRow {
     modelId: 'm1',
     inputTokens: null,
     outputTokens: null,
+    contextTokens: null,
     errorCode: null,
     errorMessage: null,
     startedAt: NOW,
@@ -121,9 +122,11 @@ describe('сериализаторы: строки БД → контракты (
     expect(toRunDto(runRow())).toMatchObject({
       status: 'running',
       model: 'm1',
+      contextTokens: null,
       startedAt: NOW.toISOString(),
       finishedAt: null,
     });
+    expect(toRunDto(runRow({ contextTokens: 321 })).contextTokens).toBe(321);
     for (const status of ['completed', 'failed', 'cancelled'] as const) {
       expect(toRunDto(runRow({ status })).status).toBe(status);
     }
