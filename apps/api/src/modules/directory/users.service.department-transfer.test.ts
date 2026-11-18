@@ -59,6 +59,7 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
     create: vi.fn(),
     emailExists: vi.fn(),
     findRef: vi.fn(),
+    findDepartmentId: vi.fn(),
   };
   const departments = { findRef: vi.fn() };
   const departmentsRepo = {
@@ -90,6 +91,7 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
     departmentsRepo.clearLeadershipIn.mockResolvedValue(null);
     departments.findRef.mockResolvedValue({ id: 'dep-new', kind: 'management', isActive: true });
     users.findCardById.mockResolvedValue(cardRow());
+    users.findDepartmentId.mockResolvedValue('dep-old');
     const guard = new RoleAssignmentGuard(roles as never, membership as never);
     const references = new ReferenceGuard(users as never, departments as never, positions as never);
     service = new UsersService(
@@ -175,9 +177,53 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
     expect(managers.recomputeUsers).toHaveBeenCalledWith(['user-1'], 'tx-handle');
   });
 
+  it('тот же отдел в верхнем регистре — не перевод (UUID регистронезависим) (#923)', async () => {
+    users.findDepartmentId.mockResolvedValue('a1b2c3d4-0000-4000-8000-000000000001');
+
+    await service.updateUser(
+      'user-1',
+      { departmentId: 'A1B2C3D4-0000-4000-8000-000000000001' },
+      actor,
+    );
+
+    expect(departmentsRepo.clearLeadershipIn).not.toHaveBeenCalled();
+    expect(departmentEvents()).toEqual([]);
+  });
+
+  it('старый отдел читается в транзакции, а не из устаревшего снимка (#923)', async () => {
+    // Снимок `before` — dep-stale, актуальный отдел под транзакцией — dep-current.
+    users.findCardById.mockResolvedValue(cardRow({ departmentId: 'dep-stale' }));
+    users.findDepartmentId.mockResolvedValue('dep-current');
+    departmentsRepo.clearLeadershipIn.mockResolvedValue({ head: true, deputy: false });
+
+    await service.updateUser('user-1', { departmentId: 'dep-new' }, actor);
+
+    expect(departmentsRepo.clearLeadershipIn).toHaveBeenCalledWith(
+      'dep-current',
+      'user-1',
+      'tx-handle',
+    );
+    expect(departmentsRepo.clearLeadershipIn).not.toHaveBeenCalledWith(
+      'dep-stale',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('руководящая роль снимается ДО записи сотрудника (порядок замков, #923)', async () => {
+    departmentsRepo.clearLeadershipIn.mockResolvedValue({ head: true, deputy: false });
+
+    await service.updateUser('user-1', { departmentId: 'dep-new' }, actor);
+
+    expect(departmentsRepo.clearLeadershipIn.mock.invocationCallOrder[0]!).toBeLessThan(
+      users.update.mock.invocationCallOrder[0]!,
+    );
+  });
+
   it('правка без подразделения — руководящие ссылки не трогаются', async () => {
     await service.updateUser('user-1', { mobilePhone: '+375291234567' }, actor);
 
+    expect(users.findDepartmentId).not.toHaveBeenCalled();
     expect(departmentsRepo.clearLeadershipIn).not.toHaveBeenCalled();
     expect(managers.recomputeUsers).not.toHaveBeenCalled();
   });

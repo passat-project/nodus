@@ -105,6 +105,17 @@ export class UsersRepository {
     return client.user.findUnique({ where: { id }, include: userCardInclude });
   }
 
+  /** Текущий управленческий отдел сотрудника (#923): перевод читает его
+   *  В ТРАНЗАКЦИИ — снимок «до» мог устареть (параллельный перевод), и тогда
+   *  руководящую роль сняли бы не у того подразделения. */
+  async findDepartmentId(id: string, tx?: TransactionClient): Promise<string | null> {
+    const row = await (tx ?? this.prisma).user.findUnique({
+      where: { id },
+      select: { departmentId: true },
+    });
+    return row?.departmentId ?? null;
+  }
+
   async emailExists(email: string): Promise<boolean> {
     const count = await this.prisma.user.count({ where: { email } });
     return count > 0;

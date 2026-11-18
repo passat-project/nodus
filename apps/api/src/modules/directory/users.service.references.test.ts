@@ -69,6 +69,7 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
     update: vi.fn(),
     setRoles: vi.fn(),
     findRef: vi.fn(),
+    findDepartmentId: vi.fn(),
   };
   const roles = { countByIds: vi.fn() };
   const departments = { findRef: vi.fn() };
@@ -89,6 +90,7 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     membership.effectiveRoleIds.mockResolvedValue([]);
+    users.findDepartmentId.mockResolvedValue(null);
     const guard = new RoleAssignmentGuard(roles as never, membership as never);
     const references = new ReferenceGuard(users as never, departments as never, positions as never);
     service = new UsersService(

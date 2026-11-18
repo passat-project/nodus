@@ -68,6 +68,7 @@ describe('UsersService: создание и правка сотрудника', 
     update: vi.fn(),
     setRoles: vi.fn(),
     findRef: vi.fn(),
+    findDepartmentId: vi.fn(),
   };
   const departments = { findRef: vi.fn() };
   /** Репозиторий подразделений (#923 — снятие главы/зама; read-сценарии). */
@@ -98,6 +99,7 @@ describe('UsersService: создание и правка сотрудника', 
     vi.resetAllMocks();
     membership.effectiveRoleIds.mockResolvedValue([]);
     roles.lockByCodeForUpdate.mockResolvedValue(null);
+    users.findDepartmentId.mockResolvedValue(null);
     const guard = new RoleAssignmentGuard(roles as never, membership as never);
     const references = new ReferenceGuard(users as never, departments as never, positions as never);
     service = new UsersService(

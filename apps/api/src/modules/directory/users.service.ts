@@ -217,6 +217,34 @@ export class UsersService {
         }
       }
       const beforeRoleIds = membershipChanges ? await this.guard.effectiveRoleIds(id, tx) : null;
+      // #923: один сотрудник — одно место в управленческой структуре. Роль
+      // главы/зама принадлежит подразделению: при переводе (в другой отдел или
+      // `null`) старый узел теряет её, а его подчинённые переезжают к
+      // ближайшему главе выше. Снимаем ТОЛЬКО старый отдел; «то же
+      // подразделение» — no-op.
+      //
+      // Текущий отдел читаем В ТРАНЗАКЦИИ (снимок `before` мог устареть из-за
+      // параллельного перевода — сняли бы роль не у того узла) и сравниваем
+      // без учёта регистра (UUID в PostgreSQL регистронезависим, а zod пропускает
+      // верхний регистр — иначе «тот же отдел» выглядел бы переводом).
+      //
+      // Снимаем ДО записи сотрудника — порядок замков `departments → users`, как
+      // в DepartmentsService (правка/архивация узла): встречный порядок давал
+      // дедлок пары «перевод сотрудника» ↔ «правка подразделения».
+      if (dto.departmentId !== undefined) {
+        const previousDepartmentId = await this.users.findDepartmentId(id, tx);
+        const sameDepartment =
+          dto.departmentId !== null &&
+          previousDepartmentId !== null &&
+          dto.departmentId.toLowerCase() === previousDepartmentId.toLowerCase();
+        if (previousDepartmentId !== null && !sameDepartment) {
+          await clearLeadershipInDepartment(previousDepartmentId, id, actor.id, tx, {
+            departments: this.departments,
+            managers: this.managers,
+            eventBus: this.eventBus,
+          });
+        }
+      }
       await this.users.update(
         id,
         {
@@ -225,22 +253,6 @@ export class UsersService {
         },
         tx,
       );
-      // #923: один сотрудник — одно место в управленческой структуре. Роль
-      // главы/зама принадлежит подразделению: при переводе (в другой отдел или
-      // `null`) старый узел теряет её, а его подчинённые переезжают к
-      // ближайшему главе выше. Снимаем ТОЛЬКО старый отдел; «то же
-      // подразделение» — no-op.
-      if (
-        dto.departmentId !== undefined &&
-        dto.departmentId !== before.departmentId &&
-        before.departmentId !== null
-      ) {
-        await clearLeadershipInDepartment(before.departmentId, id, actor.id, tx, {
-          departments: this.departments,
-          managers: this.managers,
-          eventBus: this.eventBus,
-        });
-      }
       // #923: смена подразделения меняет ближайшего главу — пересчитываем
       // производного руководителя в той же транзакции.
       if (dto.departmentId !== undefined) {
