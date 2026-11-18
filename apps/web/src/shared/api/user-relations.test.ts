@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { assigneeTasksUrl, memberProjectsUrl } from './user-relations.js';
+import { assigneeTasksUrl, memberProjectsUrl, userRelationsKeys } from './user-relations.js';
 
 /** AUD-028 (#866): вкладки-связи карточки сотрудника не должны показывать
  *  пересечение со смотрящим — только его собственное участие. */
@@ -23,5 +23,24 @@ describe('адреса вкладок карточки сотрудника (#86
     expect(memberProjectsUrl(id, 'Смета')).toContain(`search=${encodeURIComponent('Смета')}`);
     // Пустой запрос не добавляет параметр (канонический URL без поиска).
     expect(assigneeTasksUrl(id, '  ')).not.toContain('search=');
+  });
+});
+
+describe('ключи вкладок карточки сотрудника (#956)', () => {
+  it('без поиска — канонический ключ, с поиском — отдельная ветка', () => {
+    expect(userRelationsKeys.tasks('u-1')).toEqual(['tasks', 'assignee', 'u-1']);
+    expect(userRelationsKeys.tasks('u-1', 'Смета')).toEqual([
+      'tasks',
+      'assignee',
+      'u-1',
+      { search: 'Смета' },
+    ]);
+    expect(userRelationsKeys.projects('u-1')).toEqual(['projects', 'member', 'u-1']);
+    expect(userRelationsKeys.projects('u-1', 'Смета')).toEqual([
+      'projects',
+      'member',
+      'u-1',
+      { search: 'Смета' },
+    ]);
   });
 });

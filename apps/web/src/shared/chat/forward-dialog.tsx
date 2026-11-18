@@ -187,7 +187,9 @@ function ForwardBody({ request, onDone }: { request: ForwardRequest; onDone: () 
   );
 }
 
-function ConversationLevel({
+/** Уровень выбора беседы: фильтры категорий + серверный поиск (#956).
+ *  Экспорт — для юнит-теста: диалог целиком требует роутера и живого стора. */
+export function ConversationLevel({
   conversations,
   meId,
   onPick,
