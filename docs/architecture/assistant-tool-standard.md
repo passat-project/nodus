@@ -97,7 +97,7 @@
 | `memory.save` | Блокнот: запомнить | system | чтение | write | remember | заметка | — (вычислимый) | — | — | да |
 | `notifications.settings` | Уведомления: настройки | notifications | чтение | read | get | уведомление | GET /notifications/settings | — | notifications | нет |
 | `notifications.update_settings` | Уведомления: настроить режим тишины | notifications | запись | irreversible | update | уведомление | PATCH /notifications/settings | — | notifications | нет |
-| `projects.add_member` | Проекты: добавить участника | projects | запись | write | create | участник | POST /projects/:id/members | — | projects | нет |
+| `projects.add_member` | Проекты: добавить участника | projects | запись | irreversible | create | участник | POST /projects/:id/members | — | projects | нет |
 | `projects.add_node` | Проекты: создать папку | projects | запись | write | create | папка | POST /projects/:id/nodes | — | projects | нет |
 | `projects.create` | Проекты: создать | projects | запись | irreversible | create | проект | POST /projects | project.create | projects | нет |
 | `projects.create_group` | Проекты: создать портфель | projects | запись | irreversible | create | портфель | POST /projects/groups | project.create | projects | нет |

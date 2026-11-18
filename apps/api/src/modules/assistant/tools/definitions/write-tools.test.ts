@@ -88,12 +88,10 @@ describe('карточки действий: имена и последстви�
     expect(tool.card!.undo).toBeUndefined();
   });
 
-  it('projects.add_member и add_node: undo возвращает состав/структуру', () => {
+  it('projects.add_member без undo (upsert роли), add_node — удаление созданного', () => {
     const member = card('projects.add_member');
-    expect(member.card!.undo!({ id: P, userId: U }, {})).toEqual({
-      method: 'DELETE',
-      path: `/projects/${P}/members/${U}`,
-    });
+    expect(member.card!.undo).toBeUndefined();
+    expect(member.effect).toBe('irreversible');
     const node = card('projects.add_node');
     expect(node.card!.undo!({ id: P }, { id: T })).toEqual({
       method: 'DELETE',

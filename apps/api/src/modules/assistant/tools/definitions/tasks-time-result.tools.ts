@@ -240,6 +240,7 @@ export const tasksPressActionTool = defineTool({
         field('Задача', await taskLabel(ctx, input.taskId)),
         field('Действие', await actionName(ctx, input.taskId, input.actionId)),
         field('Окно', formValues(input.form)),
+        field('Обход блокировки', input.override ? 'да' : null),
         field('Причина обхода', input.reason),
       ]),
     consequences:

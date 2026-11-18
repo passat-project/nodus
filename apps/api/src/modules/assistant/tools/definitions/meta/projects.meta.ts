@@ -95,7 +95,7 @@ export const projectsMeta = {
       'Не для показа состава (projects.members) и не для правки проекта (projects.update); сотрудника найди через directory.find_users.',
     subject: 'участник',
     alsoSubjects: ['проект'],
-    effect: 'write',
+    effect: 'irreversible',
     example: {
       input: {
         id: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
