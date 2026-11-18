@@ -77,13 +77,20 @@ export function EmployeeProfileDialog({
           event.preventDefault();
           autoSelectGuard.current = true;
           // Каретку ставим следующим кадром: FocusScope возвращает фокус в поле
-          // с `select()` уже после обработчика (закрытие меню «⋯»).
+          // с `select()` уже после обработчика (закрытие меню «⋯»). Второй кадр
+          // страхует поздний программный select — выделения быть не должно.
           requestAnimationFrame(() => {
             const input = lastNameRef.current;
             if (!input || !input.isConnected) return;
             input.focus();
             const end = input.value.length;
             input.setSelectionRange(end, end);
+            requestAnimationFrame(() => {
+              if (!input.isConnected || !autoSelectGuard.current) return;
+              if (input.selectionStart === 0 && input.selectionEnd === input.value.length) {
+                input.setSelectionRange(end, end);
+              }
+            });
           });
         }}
       >

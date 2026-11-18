@@ -223,6 +223,35 @@ describe('Производный руководитель и профиль (#92
     expect(departmentNodeSchema.parse(await deputyAfter.json()).deputyId).toBeNull();
   });
 
+  it('даты профиля сохраняются: день рождения, дата приёма, начало дня (#923)', async () => {
+    // Регрессия: Prisma @db.Date принимала только Date — строка «yyyy-mm-dd»
+    // валила PATCH в 500, и поля дат «не сохранялись».
+    const cardResponse = await f.api(
+      f.users.directory,
+      'PATCH',
+      `/directory/users/${f.users.employee.id}`,
+      {
+        body: { birthDate: '1990-01-12', hiredAt: '2024-03-01', workdayStart: '09:30' },
+        key: randomUUID(),
+      },
+    );
+    expect(cardResponse.status).toBe(200);
+    const card = userCardSchema.parse(await cardResponse.json());
+    expect(card.birthDate).toBe('1990-01-12');
+    expect(card.hiredAt).toBe('2024-03-01');
+    expect(card.workdayStart).toBe('09:30');
+
+    const self = f.users.directory;
+    const selfResponse = await f.api(self, 'PATCH', '/directory/users/me', {
+      body: { birthDate: '1991-02-03', workdayStart: '08:45' },
+      key: randomUUID(),
+    });
+    expect(selfResponse.status).toBe(200);
+    const selfCard = userCardSchema.parse(await selfResponse.json());
+    expect(selfCard.birthDate).toBe('1991-02-03');
+    expect(selfCard.workdayStart).toBe('08:45');
+  });
+
   it('self-edit: ФИО правится, структура и HR — отказ 400', async () => {
     // Не `employee`: его токен обесценен законным ROLE_ACCESS_CHANGED при
     // переводе в другой отдел (отзыв access-токенов, #866/#923) — берём

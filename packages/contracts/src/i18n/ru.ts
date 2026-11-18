@@ -80,6 +80,8 @@ export const ui = {
     dateInAWeek: 'Через неделю',
     dateEndOfMonth: 'В конце месяца',
     timeLabel: 'Время',
+    timePlaceholder: 'ЧЧ:ММ',
+    pickYear: 'Выбрать год',
     weekdaysShort: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'],
     of: 'из',
     searchPlaceholder: 'Поиск…',

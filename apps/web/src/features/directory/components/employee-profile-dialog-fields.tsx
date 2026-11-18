@@ -11,8 +11,15 @@ import {
 import { Switch } from '@nodus/ui/components/switch';
 
 import { useDepartmentsList } from '../../../shared/api/departments-list.js';
+import { DateTimePicker } from '../../../shared/ui/date-time-picker.js';
+import { localDateStr, parseIsoDate } from '../../../shared/ui/date-time-grid.js';
+import { TimePicker } from '../../../shared/ui/time-picker.js';
 import { usePositions } from '../api/directory-api.js';
 import type { ProfileDraft } from '../lib/profile-draft.js';
+import {
+  ProfileField as Field,
+  ProfileReadonlyValue as ReadonlyValue,
+} from './employee-profile-dialog-field.js';
 import { ProfileSectionHeading } from './profile-section-heading.js';
 
 /** Sentinel Radix Select для «не выбрано» (пустая строка значением запрещена). */
@@ -27,50 +34,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-/** Поле окна: метка и контрол одной колонкой. Пояснение живёт В МЕТКЕ
- *  (`· логин`), не строкой под контролом — подпись снизу сдвигает метку и
- *  ломает горизонталь «метка — поле» (канон форм, вердикт 07.11.2026); полный
- *  текст пояснения — в title метки. */
-function Field({
-  label,
-  hint,
-  hintShort,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  hintShort?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="flex min-w-0 flex-col gap-1.5">
-      <span className="flex min-w-0 items-baseline gap-1.5 text-xs font-medium text-muted-foreground">
-        <span className="truncate">{label}</span>
-        {hintShort ? (
-          <span className="shrink-0 text-label-xs font-normal text-muted-foreground" title={hint}>
-            · {hintShort}
-          </span>
-        ) : null}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-/** Значение только для чтения: в структуре — синим, как поле-реестр карточки. */
-function ReadonlyValue({ value, tone }: { value: string; tone?: 'info' }) {
-  return (
-    <span
-      className={
-        tone === 'info'
-          ? 'flex min-h-8 items-center text-sm text-info'
-          : 'flex min-h-8 items-center text-sm'
-      }
-    >
-      {value}
-    </span>
-  );
-}
+/** Поле и read-only значение окна вынесены в `employee-profile-dialog-field`
+ *  (лимит файла I5); здесь — только секции и их контролы. */
 
 /**
  * Секции окна профиля (#923) — чистый слой ввода: значения черновика живут в
@@ -124,6 +89,16 @@ export function ProfileDialogSections({
                     input.setSelectionRange(end, end);
                   }
                 });
+              }}
+              // Программный `select()` Radix не всегда сопровождается focus:
+              // ловим select-событие и снимаем полное выделение при открытии.
+              onSelect={(event) => {
+                if (!autoSelectGuard?.current) return;
+                const input = event.currentTarget;
+                if (input.selectionStart === 0 && input.selectionEnd === input.value.length) {
+                  const end = input.value.length;
+                  input.setSelectionRange(end, end);
+                }
               }}
               onPointerDown={() => {
                 if (autoSelectGuard) autoSelectGuard.current = false;
@@ -197,7 +172,14 @@ export function ProfileDialogSections({
           )}
           {canManage ? (
             <Field label={ui.employees.fieldHiredAt}>
-              <Input type="date" value={draft.hiredAt} onChange={set('hiredAt')} />
+              <DateTimePicker
+                value={parseIsoDate(draft.hiredAt)}
+                onChange={(date) => onChange({ hiredAt: date ? localDateStr(date) : '' })}
+                ariaLabel={ui.employees.fieldHiredAt}
+                placeholder={ui.common.notSet}
+                withTime={false}
+                format="full"
+              />
             </Field>
           ) : (
             <Field label={ui.employees.fieldHiredAt}>
@@ -222,10 +204,22 @@ export function ProfileDialogSections({
             </Select>
           </Field>
           <Field label={ui.employees.fieldBirthDate}>
-            <Input type="date" value={draft.birthDate} onChange={set('birthDate')} />
+            <DateTimePicker
+              value={parseIsoDate(draft.birthDate)}
+              onChange={(date) => onChange({ birthDate: date ? localDateStr(date) : '' })}
+              ariaLabel={ui.employees.fieldBirthDate}
+              placeholder={ui.common.notSet}
+              withTime={false}
+              format="full"
+            />
           </Field>
           <Field label={ui.employees.fieldWorkdayStart}>
-            <Input type="time" value={draft.workdayStart} onChange={set('workdayStart')} />
+            <TimePicker
+              value={draft.workdayStart || null}
+              onChange={(time) => onChange({ workdayStart: time ?? '' })}
+              ariaLabel={ui.employees.fieldWorkdayStart}
+              placeholder={ui.common.notSet}
+            />
           </Field>
         </div>
       </Section>

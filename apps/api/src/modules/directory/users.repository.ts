@@ -37,6 +37,21 @@ export interface UserPageFilter {
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 
+/** Календарные поля Prisma `@db.Date` принимают только Date, а контракты
+ *  отдают «yyyy-mm-dd»: строка валилась PrismaClientValidationError (500) —
+ *  правка дня рождения/даты приёма не сохранялась (#923). Переводим в
+ *  UTC-полночь: чтение — `toISOString().slice(0,10)` (user-dto), день не съезжает. */
+function withDateOnly<T extends { birthDate?: unknown; hiredAt?: unknown }>(data: T): T {
+  const next = { ...data };
+  for (const field of ['birthDate', 'hiredAt'] as const) {
+    const value = next[field];
+    if (typeof value === 'string' && value.length > 0) {
+      (next as Record<string, unknown>)[field] = new Date(`${value}T00:00:00.000Z`);
+    }
+  }
+  return next;
+}
+
 /** Доступ к таблице users (карточка и список сотрудников, роли — здесь же). */
 @Injectable()
 export class UsersRepository {
@@ -126,7 +141,7 @@ export class UsersRepository {
     tx?: TransactionClient,
   ): Promise<UserCardRow> {
     const client = tx ?? this.prisma;
-    return client.user.create({ data, include: userCardInclude });
+    return client.user.create({ data: withDateOnly(data), include: userCardInclude });
   }
 
   async update(
@@ -135,7 +150,11 @@ export class UsersRepository {
     tx?: TransactionClient,
   ): Promise<UserCardRow> {
     const client = tx ?? this.prisma;
-    return client.user.update({ where: { id }, data, include: userCardInclude });
+    return client.user.update({
+      where: { id },
+      data: withDateOnly(data),
+      include: userCardInclude,
+    });
   }
 
   /** Полная замена набора ролей сотрудника. */
