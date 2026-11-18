@@ -188,10 +188,9 @@ describe('AssistantActionsService: предложение (ADR-0048)', () => {
     );
     expect(result.text).toContain('выполнено');
     expect(bus.publish).toHaveBeenCalledWith(RUN_ID, 'action.executed', expect.anything());
-  });
-  it('байпас не исполняет необратимое: карточка ждёт человека (#926)', async () => {
-    const { service, executor } = build();
-    const result = await service.propose({
+
+    // Необратимое байпасом не исполняется: та же карточка ждёт человека (#926).
+    const blocked = await service.propose({
       runId: RUN_ID,
       sessionId: 'session-1',
       messageId: 'message-1',
@@ -202,10 +201,9 @@ describe('AssistantActionsService: предложение (ADR-0048)', () => {
       authorization: 'Bearer user-token',
       ctx,
     });
-    expect(executor.executeWrite).not.toHaveBeenCalled();
-    expect(result.text).toContain('необратимо');
+    expect(blocked.text).toContain('необратимо');
+    expect(executor.executeWrite).toHaveBeenCalledTimes(1);
   });
-
   it('лимит карточек за прогон и неверные аргументы — понятный отказ модели', async () => {
     const { service, repo } = build();
     repo.countRunActions.mockResolvedValueOnce(5);
