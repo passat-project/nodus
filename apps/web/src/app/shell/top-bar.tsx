@@ -65,7 +65,12 @@ export function TopBar() {
   // чёрного хэдера»).
   return (
     <header data-topbar className="flex h-14 shrink-0 items-center gap-3 px-4">
-      <nav className="flex h-full min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden">
+      {/* Навигация модуля: горизонтальная прокрутка вкладок без видимой полосы
+          (3-пиксельный скроллбар под вкладками читался «полоской» — #948). */}
+      <nav
+        data-no-scrollbar
+        className="flex h-full min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden"
+      >
         {/* Главная без вкладок: пустую полосу занимает приветствие — лента
             начинается выше (вердикт владельца 12.09.2026). «Настройки
             портала» (#558) — обычная страница с вкладками топбара

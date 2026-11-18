@@ -694,6 +694,15 @@
   [data-no-scrollbar]::-webkit-scrollbar {
     display: none;
   }
+  /* Открытая карточка накрывает раздел (ADR-0009): полосы прокрутки таблиц ЗА
+     карточкой не выглядывают в 8-пиксельную щель рамки — прокрутка страницы всё
+     равно недоступна (#948). Таблицы ВНУТРИ карточки не затрагиваются. */
+  html[data-card-open] #content [role='table'] {
+    scrollbar-width: none;
+  }
+  html[data-card-open] #content [role='table']::-webkit-scrollbar {
+    display: none;
+  }
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
