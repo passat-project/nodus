@@ -42,19 +42,18 @@ export function fitColumnWidths(
     widths.set(column.id, Math.round(clamp(target, column.min, column.max)));
   }
 
-  let free = Math.floor(available) - [...widths.values()].reduce((sum, w) => sum + w, 0);
+  const free = Math.floor(available) - [...widths.values()].reduce((sum, w) => sum + w, 0);
   if (!Number.isFinite(free) || free <= 0) return Object.fromEntries(widths);
 
-  // Сначала тянем колонки, которых человек не касался; ручные — если у тех
-  // не осталось запаса до maxWidth (свою ширину человек уже выбрал сам).
-  for (const locked of [false, true]) {
-    if (free <= 0) break;
-    free = grow(
-      columns.filter((c) => c.locked === locked && (widths.get(c.id) ?? 0) < c.max),
-      widths,
-      free,
-    );
-  }
+  // Свободное место получают ТОЛЬКО колонки без ручной ширины: ширину,
+  // которую человек выбрал сам, раскладка не трогает даже когда те упёрлись
+  // в свой предел (остаток просто остаётся полосой справа — это редкость и
+  // честнее, чем менять выбранную человеком ширину).
+  grow(
+    columns.filter((c) => !c.locked && (widths.get(c.id) ?? 0) < c.max),
+    widths,
+    free,
+  );
   return Object.fromEntries(widths);
 }
 

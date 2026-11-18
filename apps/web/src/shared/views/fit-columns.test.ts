@@ -72,7 +72,7 @@ describe('fitColumnWidths', () => {
     expect(widths(list, Number.NaN)).toEqual({ a: 124 });
   });
 
-  it('ручная ширина получает свободное место только после «свободных» колонок', () => {
+  it('свободное место не меняет ширину, заданную человеком', () => {
     const result = widths(
       [
         column({ id: 'auto', content: 100, max: 200 }),
@@ -80,10 +80,9 @@ describe('fitColumnWidths', () => {
       ],
       700,
     );
-    // «Свободная» упёрлась в свой предел, остаток ушёл ручной.
+    // «Свободная» упёрлась в свой предел, но ручную ширину раскладка не трогает.
     expect(result.auto).toBe(200);
-    expect(result.manual).toBe(500);
-    expect(Object.values(result).reduce((acc, w) => acc + w, 0)).toBe(700);
+    expect(result.manual).toBe(300);
   });
 
   it('все колонки на максимуме: остаток не раздувает их сверх предела', () => {
