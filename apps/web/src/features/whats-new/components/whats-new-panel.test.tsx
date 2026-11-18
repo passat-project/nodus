@@ -66,9 +66,12 @@ describe('панель «Что нового»', () => {
     const totalItems = dialog.querySelectorAll('li').length;
     expect(totalItems).toBe(LATEST_RELEASE!.items.length);
 
-    fireEvent.click(screen.getByRole('button', { name: ui.nav.chat }));
-    const chatItems = LATEST_RELEASE!.items.filter((i) => i.module === 'chat').length;
-    expect(dialog.querySelectorAll('li').length).toBe(chatItems);
+    // Модуль, который есть в свежем выпуске (у «Мессенджера» может не быть
+    // изменений — тогда панель честно показывает выпуск, где они были).
+    fireEvent.click(screen.getByRole('button', { name: ui.nav.tasks }));
+    const taskItems = LATEST_RELEASE!.items.filter((i) => i.module === 'tasks').length;
+    expect(taskItems).toBeGreaterThan(0);
+    expect(dialog.querySelectorAll('li').length).toBe(taskItems);
   });
 
   it('фильтр по модулю без изменений в свежем выпуске: первый показанный выпуск развёрнут', () => {
