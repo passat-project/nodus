@@ -89,6 +89,7 @@ function setup(opts: { placementStage?: string } = {}) {
     engine as never,
     catalog as never,
     press as never,
+    { assertChange: vi.fn(async () => void 0) } as never,
   );
   return { service, engine, placementsRepo, boards, catalog, formulasMock, press };
 }

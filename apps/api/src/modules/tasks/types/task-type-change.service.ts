@@ -21,6 +21,7 @@ import { TasksRepository } from '../tasks/tasks.repository.js';
 import { TasksService } from '../tasks/tasks.service.js';
 import { StageMover } from '../workflow/stage-mover.js';
 import { PressRoundsService } from '../press/press-rounds.service.js';
+import { TaskCreationScope } from '../tasks/task-creation-scope.service.js';
 import {
   NUMBER_ISSUE,
   numberingFailureException,
@@ -47,6 +48,7 @@ export class TaskTypeChangeService {
     private readonly taskService: TasksService,
     @Inject(NUMBER_ISSUE) private readonly numberIssue: NumberIssue,
     private readonly press: PressRoundsService,
+    private readonly scope: TaskCreationScope,
   ) {}
 
   async change(user: AuthUser, taskId: string, body: ChangeTaskTypeBody): Promise<TaskListItem> {
@@ -84,6 +86,12 @@ export class TaskTypeChangeService {
     await this.txRunner.run(async (tx) => {
       await this.tasks.lock(tx, taskId);
       const task = await this.tasks.findWithParticipants(taskId, tx);
+      // «Где создаётся» (#665): тип, запрещённый в текущем проекте/папке,
+      // не ставится и существующей задаче (старые записи живут).
+      await this.scope.assertCreate(nextType, {
+        projectId: task.projectId,
+        nodeId: task.nodeId,
+      });
       // Стадию перечитываем в транзакции: параллельная публикация могла
       // архивировать её после проверки выше (security #378, целостность).
       const freshTarget = await this.catalog.findLiveStage(stageId);

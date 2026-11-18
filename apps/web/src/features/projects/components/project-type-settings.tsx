@@ -13,11 +13,12 @@ import {
   useUpdateProjectType,
 } from '../api/project-catalog-mutations.js';
 import { kindsSummary } from '../lib/project-type-summary.js';
+import { ProjectTypeCreationSection } from './project-type-creation.js';
 import { ProjectTypeKindsSection } from './project-type-kinds.js';
 
 /** Разделы панели типа: корень и страницы поверх него (как «Настройки
  *  типа» в «Процессах» — раздел заменяет содержимое, «назад» в шапке). */
-export type ProjectTypeSection = 'root' | 'kinds';
+export type ProjectTypeSection = 'root' | 'kinds' | 'creation';
 
 /**
  * Настройки типа проекта (#556) — правая панель окна-сплита и та же
@@ -59,7 +60,13 @@ export function ProjectTypeSettingsPanel({
   return (
     <SidePanel
       open={open}
-      title={section === 'root' ? ui.projects.schemasTypeSettings : ui.projects.schemasKinds}
+      title={
+        section === 'root'
+          ? ui.projects.schemasTypeSettings
+          : section === 'kinds'
+            ? ui.projects.schemasKinds
+            : ui.automation.creationScope.projectSectionHeader
+      }
       leading={
         <span
           aria-hidden
@@ -76,13 +83,15 @@ export function ProjectTypeSettingsPanel({
     >
       {section === 'root' ? (
         <TypeRoot type={type} kinds={kinds} canSetup={canSetup} onSection={onSection} />
-      ) : (
+      ) : section === 'kinds' ? (
         <ProjectTypeKindsSection
           type={type}
           kinds={kinds}
           canSetup={canSetup}
           onOpenKind={onOpenKind}
         />
+      ) : (
+        <ProjectTypeCreationSection type={type} canSetup={canSetup} />
       )}
     </SidePanel>
   );
@@ -163,6 +172,11 @@ function TypeRoot({
       </PanelField>
 
       <div className="flex min-w-0 flex-col">
+        <SectionLink
+          title={ui.automation.creationScope.projectSectionTitle}
+          summary={ui.automation.creationScope.projectSummary}
+          onClick={() => onSection('creation')}
+        />
         <SectionLink
           title={ui.projects.schemasKinds}
           summary={kindsSummary(type, kinds)}

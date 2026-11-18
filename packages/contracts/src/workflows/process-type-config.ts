@@ -6,6 +6,11 @@ import {
   type CreationForm,
 } from './creation-form.js';
 import {
+  creationScopeSchema,
+  DEFAULT_CREATION_SCOPE,
+  normalizeCreationScope,
+} from './creation-scope.js';
+import {
   customFieldBindingsSchema,
   EMPTY_CUSTOM_FIELD_BINDINGS,
   type CustomFieldBindings,
@@ -100,6 +105,9 @@ export const processTypeConfigSchema = z
   .object({
     card: processTypeCardSchema,
     access: processTypeAccessSchema,
+    /** Где тип создаётся (#665): исключённые типы проектов, вид папки,
+     *  «без проекта». Показывается с двух сторон одной связью. */
+    creation: creationScopeSchema,
     numbering: processTypeNumberingConfigSchema.optional(),
   })
   .strict();
@@ -112,6 +120,7 @@ export const updateProcessTypeConfigBodySchema = z
   .object({
     card: processTypeCardSchema.optional(),
     access: processTypeAccessSchema.optional(),
+    creation: creationScopeSchema.optional(),
   })
   .strict()
   .refine((v) => Object.keys(v).length > 0, { message: 'empty update' });
@@ -125,10 +134,11 @@ export const processTypeViewerSchema = z.object({
 });
 export type ProcessTypeViewer = z.infer<typeof processTypeViewerSchema>;
 
-/** Умолчания конфигурации: карточка полная, доступ всем. */
+/** Умолчания конфигурации: карточка полная, доступ всем, создание везде. */
 export const DEFAULT_PROCESS_TYPE_CONFIG: ProcessTypeConfig = {
   card: { hiddenBlocks: [], roleLabels: {} },
   access: { view: null, create: null },
+  creation: DEFAULT_CREATION_SCOPE,
 };
 
 function parseOr<T>(schema: z.ZodType<T>, raw: unknown, fallback: T): T {
@@ -147,6 +157,7 @@ export function normalizeTypeConfig(raw: unknown): ProcessTypeConfig {
   return {
     card: parseOr(processTypeCardSchema, source.card, DEFAULT_PROCESS_TYPE_CONFIG.card),
     access: parseOr(processTypeAccessSchema, source.access, DEFAULT_PROCESS_TYPE_CONFIG.access),
+    creation: normalizeCreationScope(source.creation),
     ...(numbering.success ? { numbering: numbering.data } : {}),
   };
 }

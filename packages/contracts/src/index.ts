@@ -42,6 +42,7 @@ export * from './workflows/transition-form.schemas.js';
 export * from './workflows/transition-window.js';
 export * from './workflows/process-type.schemas.js';
 export * from './workflows/process-type-config.js';
+export * from './workflows/creation-scope.js';
 export * from './workflows/creation-form.js';
 export * from './workflows/workflow-roles.js';
 export * from './workflows/workflow.schemas.js';

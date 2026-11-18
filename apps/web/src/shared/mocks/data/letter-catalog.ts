@@ -5,7 +5,7 @@ import type {
   WorkflowDetail,
   WorkflowDocument,
 } from '@nodus/contracts';
-import { Permission } from '@nodus/contracts';
+import { Permission, DEFAULT_CREATION_SCOPE } from '@nodus/contracts';
 
 import { processTypeIds } from './process-type-ids.js';
 
@@ -184,7 +184,12 @@ export const incomingLetterType: LetterType = {
   archivedAt: null,
   workflowId: LETTER_INCOMING_WORKFLOW_ID,
   numbering: { seriesId: letterSeriesIds.incoming, prefix: 'Вх', reset: 'year' },
-  config: { card, access: allAccess, numbering: { seriesId: letterSeriesIds.incoming } },
+  config: {
+    card,
+    access: allAccess,
+    creation: DEFAULT_CREATION_SCOPE,
+    numbering: { seriesId: letterSeriesIds.incoming },
+  },
 };
 
 export const outgoingLetterType: LetterType = {
@@ -202,7 +207,12 @@ export const outgoingLetterType: LetterType = {
   archivedAt: null,
   workflowId: LETTER_OUTGOING_WORKFLOW_ID,
   numbering: { seriesId: letterSeriesIds.outgoing, prefix: 'Исх', reset: 'year' },
-  config: { card, access: allAccess, numbering: { seriesId: letterSeriesIds.outgoing } },
+  config: {
+    card,
+    access: allAccess,
+    creation: DEFAULT_CREATION_SCOPE,
+    numbering: { seriesId: letterSeriesIds.outgoing },
+  },
 };
 
 export const letterProcessTypes: LetterType[] = [incomingLetterType, outgoingLetterType];

@@ -176,6 +176,7 @@ export function useUpdateProcessTypeConfig(typeId: string) {
                   config: {
                     card: body.card ?? typeConfigOf(type).card,
                     access: body.access ?? typeConfigOf(type).access,
+                    creation: body.creation ?? typeConfigOf(type).creation,
                   },
                 }
               : type,

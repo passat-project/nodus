@@ -30,7 +30,9 @@ describe('CatalogBootstrap — письма (#55, Р5)', () => {
         code: 'letter-incoming',
         category: 'letter',
         direction: 'incoming',
-        config: { numbering: { seriesId: 'series-letter-incoming' } },
+        config: expect.objectContaining({
+          numbering: { seriesId: 'series-letter-incoming' },
+        }),
       }),
     );
 

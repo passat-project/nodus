@@ -4,6 +4,7 @@ import {
   ErrorCode,
   letterRegistrationInputSchema,
   letterRegistrationIssueSchema,
+  normalizeTypeConfig,
   SystemDictionary,
   type LetterAttachedRefInput,
   type LetterRegistrationField,
@@ -27,6 +28,10 @@ import {
   type CounterpartyReader,
 } from '../../crm/ports/counterparty-reader.port.js';
 import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
+import {
+  PROCESS_CATALOG_READER,
+  type ProcessCatalogReader,
+} from '../../workflows/ports/process-catalog-reader.port.js';
 import {
   DICTIONARY_READER,
   type DictionaryReader,
@@ -91,6 +96,7 @@ export class LetterFieldsValidator {
     @Inject(USER_PROFILE_READER) private readonly profiles: UserProfileReader,
     @Inject(CUSTOM_FIELD_REGISTRY) private readonly customFields: CustomFieldRegistry,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
+    @Inject(PROCESS_CATALOG_READER) private readonly catalog: ProcessCatalogReader,
   ) {}
 
   /** Регистрация: обязательные поля окна + даты + ссылки + атрибуты.
@@ -123,7 +129,11 @@ export class LetterFieldsValidator {
     await this.assertLinks(value, today);
     // Проект (#52 Р5): существует и не в архиве; видимость регистратора не
     // требуется — служебное действие канцелярии, DTO фильтрует смотрящим.
-    if (value.projectId) await this.projects.assertProjectAttachable(value.projectId);
+    if (value.projectId) {
+      await this.projects.assertProjectAttachable(value.projectId);
+      // «Где создаётся» (#665): тип письма разрешён в проекте этого типа.
+      await this.assertProjectAllowsType(typeId, value.projectId);
+    }
     const customFields = await this.customFields.prepareCreate({
       input: { ...current, ...(value.customFields ?? {}) },
       // Автор умолчаний «подразделение автора» — сам актор регистрации.
@@ -195,7 +205,11 @@ export class LetterFieldsValidator {
     if (body.subject !== undefined) set('subject', body.subject);
     if (body.projectId !== undefined) {
       // Тот же предикат регистрации (#52 Р5): живой не-архивный проект.
-      if (body.projectId) await this.projects.assertProjectAttachable(body.projectId);
+      if (body.projectId) {
+        await this.projects.assertProjectAttachable(body.projectId);
+        // «Где создаётся» (#665): у типа письма та же связь, что у задачи.
+        await this.assertProjectAllowsType(typeId, body.projectId);
+      }
       set('projectId', body.projectId);
     }
     if (body.theirDate !== undefined) {
@@ -277,6 +291,28 @@ export class LetterFieldsValidator {
     if (addresseeId === null) return;
     const active = await this.profiles.filterActiveUserIds([addresseeId]);
     if (active.length === 0) fail({ field: 'addresseeId', reason: 'inactive' });
+  }
+
+  /**
+   * «Где создаётся» (#665, ADR-0041 п.9): тип письма разрешён в проекте этого
+   * типа проекта — та же связь, что у задач, показанная со стороны письма.
+   * Письмо без проекта допустимо всегда (регистрация не требует договора).
+   */
+  private async assertProjectAllowsType(typeId: string, projectId: string): Promise<void> {
+    const type = await this.catalog.typeById(typeId);
+    if (!type) return;
+    const scope = normalizeTypeConfig(type.config).creation;
+    if (scope.excludedProjectTypeIds.length === 0) return;
+    const projectType = await this.projects.projectTypeOf(projectId);
+    // Модуль проектов выключен или проект не найден — привязку уже проверил
+    // assertProjectAttachable; здесь блокировать нечем.
+    if (!projectType) return;
+    if (!scope.excludedProjectTypeIds.includes(projectType.id)) return;
+    throw new DomainException(
+      ErrorCode.PROCESS_TYPE_NOT_ALLOWED_IN_PROJECT,
+      'Process type is not allowed in this project type',
+      { typeId, projectId, projectTypeId: projectType.id },
+    );
   }
 }
 

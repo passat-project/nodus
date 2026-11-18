@@ -70,6 +70,16 @@ export class CatalogBootstrap implements OnApplicationBootstrap {
         const series = typeDef.numbering
           ? await this.repo.ensureSeries(tx, typeDef.numbering)
           : null;
+        // «Где создаётся» (#665): посев новых типов — везде и без проекта,
+        // кроме документных работ внутри проекта (комплект, изменение).
+        const config: Record<string, unknown> = {
+          creation: {
+            excludedProjectTypeIds: [],
+            folderKindId: null,
+            withoutProject: typeDef.withoutProject ?? true,
+          },
+          ...(series ? { numbering: { seriesId: series.id } } : {}),
+        };
         const type = await this.repo.ensureType(tx, {
           code: typeDef.code,
           name: typeDef.name,
@@ -78,7 +88,7 @@ export class CatalogBootstrap implements OnApplicationBootstrap {
           icon: typeDef.icon,
           color: typeDef.color,
           description: typeDef.description,
-          ...(series ? { config: { numbering: { seriesId: series.id } } } : {}),
+          config,
         });
         if (!type) {
           // Имя занято пользовательским типом (своё «Комплект» до системного,

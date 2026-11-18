@@ -155,7 +155,10 @@ export const automationTypeHandlers = [
     if (!parsed.success) return validationFailed();
     const type = mockTypes.find((t) => t.id === params.id);
     if (!type) return notFound();
-    if (isLockedLetterType(type)) return letterCatalogLocked();
+    // Каталог писем системный; исключение — «где создаётся» (#665), как на сервере.
+    const creationOnly =
+      Object.keys(parsed.data).length === 1 && parsed.data.creation !== undefined;
+    if (isLockedLetterType(type) && !creationOnly) return letterCatalogLocked();
     // «Стандартный»: списки только «всем», создание только разрешено (О8).
     const access = parsed.data.access;
     if (isDefaultProcessType(type) && access && (access.view !== null || access.create !== null)) {

@@ -60,6 +60,7 @@ import { PersonalTemplateBootstrap } from './personal/personal-template.bootstra
 import { Placements } from './personal/placements.js';
 import { PlacementsRepository } from './personal/placements.repository.js';
 import { TaskCreatePolicy } from './tasks/task-create.policy.js';
+import { TaskCreationScope } from './tasks/task-creation-scope.service.js';
 import { TaskDtoMapper } from './tasks/task-dto.mapper.js';
 import { TaskFactsRepository } from './tasks/task-facts.repository.js';
 import { TaskEditService } from './tasks/task-edit.service.js';
@@ -158,6 +159,9 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
     // Политика создания по типу (#432): скрытые значения и обязательность
     // на всех путях создания — одна точка.
     TaskCreatePolicy,
+    // «Где создаётся» (#665): тип проекта, папка и «без проекта» — одна
+    // проверка на создание, перенос и смену типа.
+    TaskCreationScope,
     ResultRevisions,
     // Адаптер задач для движка «Процессов» (ADR-0024): регистрируется
     // DiscoveryService по статическому workflowCategory.

@@ -4,18 +4,15 @@ import type { ProcessType } from '@nodus/contracts';
 import { typeConfigOf, typeCreationFormOf, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 import { Button } from '@nodus/ui/components/button';
-import { Dialog, DialogClose, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
-import { Input } from '@nodus/ui/components/input';
-import { NodeLabel } from '@nodus/ui/components/node-label';
-import { X } from 'lucide-react';
+import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
 
 import { defaultTaskType, useCreatableProcessTypes } from '../api/process-types-api.js';
 import { useCreateTask } from '../api/task-create.js';
 import { useCanManageWorkflows } from '../api/use-can-manage-workflows.js';
 import { useCustomFieldDefinitions } from '../custom-fields/queries.js';
-import { ProcessTypeField } from './process-type-field.js';
 import { TaskChecklistSheet } from './task-checklist-sheet.js';
 import { TaskCreateChips } from './task-create-chips.js';
+import { TaskCreateHead } from './task-create-head.js';
 import {
   applyFormulaPrefill,
   emptyDraft,
@@ -35,6 +32,9 @@ import { FormSkeleton } from './task-create-skeleton.js';
 import { TaskCreateFailure } from './task-create-secret-members.js';
 import { useTaskCreateSecretFix } from './task-create-secret-fix.js';
 import { TaskCreateStructure, useTaskCreateStructure } from './task-create-structure.js';
+import { projectForType, typeAllowedAtPlace } from './task-create-scope.js';
+import { TaskCreateTypeField } from './task-create-type-field.js';
+import { useProjectPlaces } from './use-project-places.js';
 import { taskCreateSubmit } from './task-create-submit.js';
 import { useCreationFormulaPrefill } from './use-creation-formula-prefill.js';
 import {
@@ -88,6 +88,9 @@ export function TaskCreateWindow({
   const [checklistOpen, setChecklistOpen] = useState(false);
   const projectId = (draft.values.project as string | undefined) ?? prefill?.projectId;
   const structure = useTaskCreateStructure(projectId, prefill?.parentId);
+  // «Где создаётся» (#665): место решает, какие типы предлагать, и
+  // подставляет единственный проект под тип.
+  const projectPlaces = useProjectPlaces();
   // След формульного префилла (Р12): какие слоты подставлены формулой и
   // какие человек правил. Живёт в ref — ре-эвал не зависит от идентичности
   // объектов; сбрасывается при каждом открытии окна (A8-4).
@@ -101,7 +104,11 @@ export function TaskCreateWindow({
   // «черновик пересоздан»: эффект префилла обязан примениться заново, иначе
   // после переоткрытия окно останется без формульных значений.
   const [shownFor, setShownFor] = useState({ open, initial, seq: 0 });
-  if (shownFor.open !== open || (open && shownFor.initial !== initial)) {
+  // Сброс в этом же рендере: `draft` ещё старый, поэтому блок подстановки
+  // типа ниже обязан молчать — иначе он затрёт `initial` (проект из префилла)
+  // и окно покажет «Без проекта».
+  const resetPending = shownFor.open !== open || (open && shownFor.initial !== initial);
+  if (resetPending) {
     setShownFor({ open, initial, seq: shownFor.seq + 1 });
     if (open) {
       setDraft(initial);
@@ -114,11 +121,29 @@ export function TaskCreateWindow({
     }
   }
 
-  const types = preview ? [preview.type] : (creatable ?? []);
+  const candidates = preview ? [preview.type] : (creatable ?? []);
+  const nodeKindId = draft.nodeId
+    ? (structure.nodes.find((node) => node.id === draft.nodeId)?.kindId ?? null)
+    : null;
+  const projectTypeId = projectPlaces.find((item) => item.id === projectId)?.typeId ?? null;
+  const types = candidates.filter((type) =>
+    typeAllowedAtPlace(type, { projectTypeId, nodeKindId }, projectPlaces),
+  );
   const shownType: ProcessType | undefined =
-    preview?.type ??
-    creatable?.find((type) => type.id === draft.typeId) ??
-    defaultTaskType(creatable);
+    preview?.type ?? types.find((type) => type.id === draft.typeId) ?? defaultTaskType(types);
+  // Текущий тип перестал быть допустимым (сменили проект) — черновик
+  // переезжает на первый доступный; единственный проект подставляется сам.
+  const forcedProject = shownType ? projectForType(shownType, projectId, projectPlaces) : null;
+  if (
+    open &&
+    !preview &&
+    !resetPending &&
+    shownType &&
+    (draft.typeId !== shownType.id || forcedProject)
+  ) {
+    const base = draft.typeId === shownType.id ? draft : withType(draft, shownType.id);
+    setDraft(forcedProject ? withValue(withNode(base, null), 'project', forcedProject) : base);
+  }
   // Форма — из типа (эффективная форма опубликованного маршрута, Р2), в
   // предпросмотре — черновая форма редактора.
   const form = preview?.form ?? (shownType ? typeCreationFormOf(shownType) : EMPTY_FORM);
@@ -220,50 +245,31 @@ export function TaskCreateWindow({
           className="relative flex max-h-[80vh] min-w-0 flex-col"
         >
           <div className="flex flex-col gap-3 overflow-y-auto p-4 pb-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <Input
-                value={draft.title}
-                onChange={(event) => {
-                  touchedRef.current.add(TITLE_KEY);
-                  editDraft(withTitle(draft, event.target.value));
-                }}
-                placeholder={ui.taskCreate.titlePlaceholder}
-                aria-label={ui.taskCreate.titlePlaceholder}
-                className="h-9 min-w-0 flex-1 text-body-lg"
-              />
-              <DialogClose asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 text-muted-foreground"
-                  aria-label={ui.common.close}
-                  title={ui.common.close}
-                >
-                  <X className="size-4" strokeWidth={1.75} />
-                </Button>
-              </DialogClose>
-            </div>
+            <TaskCreateHead
+              title={draft.title}
+              contextLabel={prefill?.contextLabel}
+              onTitle={(title) => {
+                touchedRef.current.add(TITLE_KEY);
+                editDraft(withTitle(draft, title));
+              }}
+              onClose={onClose}
+            />
 
-            {prefill?.contextLabel ? (
-              <p className="text-xs text-muted-foreground">{prefill.contextLabel}</p>
-            ) : null}
-
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <NodeLabel label={ui.taskCreate.typeLabel} />
-              <ProcessTypeField
-                types={types}
-                value={shownType?.id ?? ''}
-                disabled={Boolean(preview) || typesLoading || types.length === 0}
-                showSettings={canManage && !preview}
-                dirty={dirty}
-                onChange={(typeId) => {
-                  editDraft(withType(draft, typeId));
-                  setInvalidKeys(new Set());
-                }}
-                onLeave={onClose}
-              />
-            </div>
+            <TaskCreateTypeField
+              types={types}
+              value={shownType?.id ?? ''}
+              disabled={Boolean(preview) || typesLoading || types.length === 0}
+              showSettings={canManage && !preview}
+              dirty={dirty}
+              onChange={(typeId) => {
+                const type = types.find((item) => item.id === typeId);
+                const forced = type ? projectForType(type, projectId, projectPlaces) : null;
+                const next = withType(draft, typeId);
+                editDraft(forced ? withValue(withNode(next, null), 'project', forced) : next);
+                setInvalidKeys(new Set());
+              }}
+              onLeave={onClose}
+            />
 
             {typesLoading ? (
               <FormSkeleton />

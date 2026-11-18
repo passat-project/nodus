@@ -159,6 +159,7 @@ export function setup(): TasksServiceFixture {
     new TaskCreatePolicy(profiles as never),
     { planOnCreate: async () => ({ ok: true, issue: async () => ({}) }) } as never,
     press as never,
+    { assertCreate: vi.fn(async () => void 0) } as never,
   );
   return {
     service,
