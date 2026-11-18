@@ -80,7 +80,8 @@ describe('DepartmentDialog: фокус и списки (#768)', () => {
     await mount();
     const input = screen.getByLabelText(ui.employees.fieldDepartmentName) as HTMLInputElement;
 
-    expect(document.activeElement).toBe(input);
+    // Фокус ставится следующим кадром (rAF): ждём его, а не микрозадачу.
+    await waitFor(() => expect(document.activeElement).toBe(input));
     expect(input.selectionStart).toBe('Проектный отдел'.length);
     expect(input.selectionEnd).toBe('Проектный отдел'.length);
   });
