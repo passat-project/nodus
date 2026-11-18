@@ -7,6 +7,7 @@ import type { LlmChatRequest, LlmStreamEvent } from '../../providers/llm-provide
 import type { ToolExecutorService } from '../../tools/tool-executor.service.js';
 import { AgentRunnerService } from '../agent-runner.service.js';
 import type { RunParams } from '../agent-runner.service.js';
+import type { AssistantCompactionService } from '../compaction.service.js';
 
 /**
  * Стенд агентного цикла (#893, #901): хранилище прогона в памяти, провайдер
@@ -169,6 +170,7 @@ export function build(
     requests: provider.requests,
     actions,
     memory,
+    compaction: compaction as unknown as AssistantCompactionService,
   };
 }
 

@@ -281,6 +281,16 @@ describe('AiProviderDialog: правка', () => {
     );
   });
 
+  it('тумблер диспетчера без включённых моделей требует модель и блокирует сохранение', () => {
+    renderEdit(provider({ models: [model({ enabled: false })] }));
+    fireEvent.click(screen.getAllByRole('switch')[2]!);
+
+    expect(screen.getByRole('alert').textContent).toBe(strings.routerModelRequired);
+    expect(
+      (screen.getByRole('button', { name: ui.common.save }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
   it('сохранённый ключ: «Заменить» показывает поле и новый ключ уходит в патч', () => {
     const draft = provider({ hasKey: true, keyHint: 'abcd' });
     const { onApply } = renderEdit(draft);

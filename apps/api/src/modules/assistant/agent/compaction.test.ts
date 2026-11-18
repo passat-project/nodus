@@ -4,6 +4,7 @@ import type { MessageRow } from '../assistant.repository.js';
 import {
   buildAnswerSummaryPrompt,
   buildDigest,
+  buildQuestionOnlyDigest,
   fallbackSummaries,
   groupTurns,
   parseAnswerSummaries,
@@ -109,5 +110,19 @@ describe('digest сегмента', () => {
     const digest = buildDigest([{ question: 'в'.repeat(10_000), answer: 'ответ' }], ['с'], 500);
     expect(digest.length).toBeLessThanOrEqual(500);
     expect(digest).toContain('[сокращено]');
+  });
+
+  it('минимальная сводка сохраняет вопросы и опускает ответы', () => {
+    const digest = buildQuestionOnlyDigest(
+      [
+        { question: 'Первый вопрос', answer: 'длинный ответ' },
+        { question: 'Второй вопрос', answer: 'ещё ответ' },
+      ],
+      2_000,
+    );
+    expect(digest).toContain('1. ВОПРОС: Первый вопрос');
+    expect(digest).toContain('2. ВОПРОС: Второй вопрос');
+    expect(digest).toContain('ответы ассистента опущены');
+    expect(digest).not.toContain('длинный ответ');
   });
 });

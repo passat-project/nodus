@@ -10,6 +10,7 @@ import { asToolData } from '../tools/tool-data.js';
 import {
   buildAnswerSummaryPrompt,
   buildDigest,
+  buildQuestionOnlyDigest,
   fallbackSummaries,
   groupTurns,
   parseAnswerSummaries,
@@ -23,9 +24,11 @@ import { contextWindowTokens, shouldCompact } from './context-budget.js';
  * сотрудника сохраняются дословно, полные оригиналы остаются в БД.
  *
  * Запуск — после успешного прогона, когда контекст дошёл до 50% окна;
- * асинхронно (ответ сотруднику не ждёт), ошибка не валит прогон: следующий
- * ход повторит попытку. В промпт попадают последние `contextMaxSegments`
- * сегментов — очень старая история остаётся в ленте, но не раздувает контекст.
+ * асинхронно (ответ сотруднику не ждёт). Сбой модели не валит прогон: сегмент
+ * создаётся с fallback-усечением (повторной генерации для этого диапазона
+ * нет); ошибка БД — попытка на следующем прогоне. В промпт попадают последние
+ * `contextMaxSegments` сегментов — очень старая история остаётся в ленте,
+ * но не раздувает контекст.
  */
 
 /** Таймаут сжатия: один вызов дешёвой модели, не часть основного прогона. */
@@ -171,7 +174,21 @@ export class AssistantCompactionService {
       if (turns.length === 0) break;
 
       const summary = await this.summarize(turns);
-      const digest = buildDigest(turns, summary.summaries, ASSISTANT_LIMITS.contextSegmentMaxChars);
+      const tokensBefore = turns.reduce(
+        (sum, turn) => sum + Math.ceil((turn.question.length + turn.answer.length) / 3),
+        0,
+      );
+      const fullDigest = buildDigest(
+        turns,
+        summary.summaries,
+        ASSISTANT_LIMITS.contextSegmentMaxChars,
+      );
+      // На коротких ответах пересказ может быть длиннее исходника: тогда
+      // сохраняем только вопросы — минимальное представление без раздувания.
+      const digest =
+        Math.ceil(fullDigest.length / 3) < tokensBefore
+          ? fullDigest
+          : buildQuestionOnlyDigest(turns, ASSISTANT_LIMITS.contextSegmentMaxChars);
       try {
         await this.contextRepo.createContextSegment({
           sessionId,
@@ -179,10 +196,7 @@ export class AssistantCompactionService {
           toMessageId: lastInChunk.id,
           seq: (last?.seq ?? 0) + 1,
           digest,
-          tokensBefore: turns.reduce(
-            (sum, turn) => sum + Math.ceil((turn.question.length + turn.answer.length) / 3),
-            0,
-          ),
+          tokensBefore,
           tokensAfter: Math.ceil(digest.length / 3),
           modelId: summary.modelId,
         });

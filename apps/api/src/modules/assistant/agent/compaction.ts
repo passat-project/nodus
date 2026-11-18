@@ -131,3 +131,19 @@ function hardClip(text: string, limit: number): string {
   if (text.length <= limit) return text;
   return `${text.slice(0, Math.max(0, limit - 14)).trimEnd()}… [сокращено]`;
 }
+
+/**
+ * Минимальная сводка для случая, когда полная не сокращает исходник (короткие
+ * ответы): вопросы остаются дословно, ответы опускаются. Гарантия «сжатие не
+ * раздувает контекст» важнее пересказа в этом редком случае.
+ */
+export function buildQuestionOnlyDigest(turns: readonly DigestTurn[], maxChars: number): string {
+  const lines: string[] = [
+    'Ранние ходы диалога (ответы ассистента опущены; вопросы сотрудника — дословно):',
+  ];
+  turns.forEach((turn, index) => {
+    if (!turn.question) return;
+    lines.push(`${index + 1}. ВОПРОС: ${hardClip(turn.question, MAX_QUESTION_CHARS)}`);
+  });
+  return hardClip(lines.join('\n'), maxChars);
+}

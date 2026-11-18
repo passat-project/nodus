@@ -157,7 +157,21 @@ describe('compactSession', () => {
     expect(await service.compactSession(SESSION)).toBe(1);
     const created = contextRepo.createContextSegment.mock.calls[0]?.[0];
     expect(created?.modelId).toBeNull();
-    expect(created?.digest).toContain('[сводка недоступна');
+    expect(created?.digest).toContain('ВОПРОС: Вопрос 0');
+    expect(created!.tokensAfter).toBeLessThan(created!.tokensBefore);
+  });
+
+  it('короткие ответы: вместо раздувающего пересказа остаются только вопросы', async () => {
+    const older = Array.from({ length: 32 }, (_, index) => ({
+      ...message(index),
+      text: index % 2 === 0 ? `Вопрос ${index}` : 'ок',
+    }));
+    const recent = Array.from({ length: 30 }, (_, index) => message(100 + index));
+    const { service, contextRepo } = build({ recent, older });
+    expect(await service.compactSession(SESSION)).toBe(1);
+    const created = contextRepo.createContextSegment.mock.calls[0]?.[0];
+    expect(created?.digest).toContain('ответы ассистента опущены');
+    expect(created?.digest).not.toContain('Сжатый ответ');
   });
 });
 
