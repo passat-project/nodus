@@ -11,7 +11,8 @@ import type {
 import { api } from '../../../shared/api-client.js';
 import { SEARCH_PERIOD_DAYS, type SearchPeriod } from '../model/search-store.js';
 
-/** Размер страницы выдачи: 20, «Показать ещё» листает до окна топ-100. */
+/** Размер страницы выдачи: 20; «Показать ещё» листает по курсору — до капа
+ *  выдачи на сервере (total ≤ 1000), а не до отдельного клиентского окна. */
 export const SEARCH_PAGE_SIZE = 20;
 
 /** Параметры окна поиска (стор) → запрос API. */
@@ -80,8 +81,21 @@ export function useSearchResults(params: SearchParams) {
   });
 }
 
+/** Строки всех загруженных страниц без повторов `type:id`: граница страниц
+ *  по курсору может отдать одну строку дважды при вставке события между
+ *  запросами (план R7). */
 export function searchHits(data: InfiniteData<SearchResponse> | undefined): SearchHit[] {
-  return data?.pages.flatMap((page) => page.items) ?? [];
+  const seen = new Set<string>();
+  const hits: SearchHit[] = [];
+  for (const page of data?.pages ?? []) {
+    for (const hit of page.items) {
+      const key = `${hit.type}:${hit.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      hits.push(hit);
+    }
+  }
+  return hits;
 }
 
 export function searchFacets(

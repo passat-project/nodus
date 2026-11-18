@@ -363,12 +363,6 @@ jobs:
           export SEED_DEMO_PASSWORD="$(node -p "require('./tests/e2e/e2e-users.json').second.password")"
           pnpm --filter @nodus/api db:deploy && pnpm --filter @nodus/api db:seed
 
-      - name: Бэкфилл поисковой проекции (#952)
-        # Сид создаёт сотрудников/справочники — без бэкфилла окно поиска на
-        # e2e-стенде пустое (hint index_empty). Сборка выше уже есть, CLI —
-        # штатный (идемпотентен, повторный прогон строк не меняет).
-        run: node apps/api/dist/modules/search/cli/reindex.js
-
       # S3 SILO (#57, форк MinIO): service-контейнеры GH Actions не умеют
       # command, а CMD образа без аргумента только печатает версию — поднимаем
       # обычным docker run; api ходит root-кредами (minio-init не нужен).
@@ -376,6 +370,22 @@ jobs:
         run: |
           docker run -d --name silo -p 9000:9000             -e MINIO_ROOT_USER=nodus_ci -e MINIO_ROOT_PASSWORD=nodus_ci_secret_min8             pgsty/silo:RELEASE.2026-09-16T00-00-00Z server /data
           timeout 30 bash -c 'until curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null; do sleep 1; done'
+
+      - name: Бэкфилл поисковой проекции (#952)
+        # Сид создаёт сотрудников/справочники — без бэкфилла окно поиска на
+        # e2e-стенде пустое (hint index_empty). Сборка выше уже есть, CLI —
+        # штатный (идемпотентен, повторный прогон строк не меняет). Идёт
+        # ПОСЛЕ S3 и с его env: AppModule при старте валидирует STORAGE_*
+        # (без них CLI падал до первой строки, CI e2e был гарантированно
+        # красным — блокер code-reviewer #952).
+        run: node apps/api/dist/modules/search/cli/reindex.js
+        env:
+          STORAGE_ENDPOINT: 127.0.0.1
+          STORAGE_PORT: '9000'
+          STORAGE_USE_SSL: 'false'
+          STORAGE_ACCESS_KEY: nodus_ci
+          STORAGE_SECRET_KEY: nodus_ci_secret_min8
+          STORAGE_URL_SECRET: ci-e2e-storage-url-secret-min-32-ch
 
       - name: Запуск API
         run: nohup node apps/api/dist/main.js > /tmp/nodus-api.log 2>&1 &

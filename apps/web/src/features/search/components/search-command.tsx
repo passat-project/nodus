@@ -104,7 +104,10 @@ export function SearchCommand() {
         className="overflow-hidden bg-popover p-0 text-popover-foreground sm:max-w-[880px]"
       >
         <DialogTitle className="sr-only">{ui.search.title}</DialogTitle>
-        <div className="flex h-[min(70vh,540px)] min-h-[320px]">
+        {/* Высота = содержимое панели фильтров с «Сбросить» под проектом
+            (577 px при базовом кегле): ни пустоты под панелью, ни скролла,
+            сдвигающего колонку (вердикт владельца 18.11.2026). */}
+        <div className="flex h-[min(80vh,580px)] min-h-[320px]">
           <SearchFilterRail facets={facets} />
           <div className="flex min-w-0 flex-1 flex-col">
             <Command shouldFilter={false} className="flex min-h-0 flex-1 flex-col p-0">

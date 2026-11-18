@@ -129,10 +129,13 @@ export function SearchFilterRail({ facets }: { facets: SearchFacetsValue['types'
       ) : null}
 
       {filtersActive ? (
+        // Текстовая строка без рамки и заливки — наш стиль тихих действий.
+        // Стоит сразу под выбором проекта (вердикт владельца 18.11.2026):
+        // без mt-auto, чтобы между фильтрами и сбросом не было пустоты.
         <button
           type="button"
           onClick={resetFilters}
-          className="mt-auto rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground hover:text-foreground"
+          className="rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:text-foreground"
         >
           {ui.search.filters.reset}
         </button>

@@ -19,7 +19,7 @@ export const SEARCH_PERIOD_DAYS: Record<Exclude<SearchPeriod, 'any'>, number> = 
 
 interface SearchState {
   open: boolean;
-  /** Строка запроса переживает закрытие: повторный Ctrl+K возвращает тот же. */
+  /** Сессионное намерение: закрытие окна очищает строку (вердикт владельца 18.11.2026). */
   query: string;
   /** Пусто — все включённые типы (типы выключенных модулей сервер не отдаёт). */
   types: SearchSourceType[];
@@ -46,9 +46,11 @@ export const useSearchStore = create<SearchState>()((set) => ({
   projectId: null,
   period: 'any',
   sort: 'relevance',
-  toggle: () => set((state) => ({ open: !state.open })),
+  // Закрытие сбрасывает строку: повторный Ctrl+K — чистое окно (фильтры
+  // остаются видимыми в панели — это состояние экрана, а не намерение).
+  toggle: () => set((state) => (state.open ? { open: false, query: '' } : { open: true })),
   openSearch: () => set({ open: true }),
-  close: () => set({ open: false }),
+  close: () => set({ open: false, query: '' }),
   setQuery: (query) => set({ query }),
   toggleType: (type) =>
     set((state) => ({

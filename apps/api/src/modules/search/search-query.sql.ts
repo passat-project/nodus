@@ -66,11 +66,17 @@ function baseFilter(p: SearchSqlParams): Prisma.Sql {
 
 /** Точная нога: полное совпадение title/номера/рег. номера/шифра или префикс.
  *  `regNumber`/`code` — равенство по выражению (btree P0); `lower()` здесь
- *  нельзя — выражение индекса перестанет совпадать (perf-замер P4). */
-function exactCondition(p: SearchSqlParams): Prisma.Sql {
+ *  нельзя — выражение индекса перестанет совпадать (perf-замер P4).
+ *  `ESCAPE '\\'` в шаблонной строке TS даёт SQL `ESCAPE '\'`: одинарный
+ *  слэш-escape съедался JS-литералом и в SQL уходило `ESCAPE ''` (нашёл
+ *  security-аудит #952) — тогда `\%`/`\_` из likePrefixPattern не
+ *  экранировали wildcard. */
+export function exactCondition(
+  p: Pick<SearchSqlParams, 'q' | 'likePrefix' | 'digits'>,
+): Prisma.Sql {
   return Prisma.sql`(
     lower(doc.title) = lower(${p.q})
-    OR doc.title ILIKE ${p.likePrefix} ESCAPE '\'
+    OR doc.title ILIKE ${p.likePrefix} ESCAPE '\\'
     ${p.digits ? Prisma.sql`OR (doc.source_type = 'task' AND doc.payload->>'number' = ${p.digits})` : Prisma.empty}
     OR doc.payload->>'regNumber' = ${p.q}
     OR doc.payload->>'code' = ${p.q}
@@ -144,13 +150,34 @@ function ctePrefix(p: SearchSqlParams): Prisma.Sql {
   `;
 }
 
-/** Счётчики по типам для `total`/фасетов — все фильтры, КРОМЕ выбранных типов. */
-export function buildCountsSql(p: SearchSqlParams): Prisma.Sql {
+/** Счётчики по типам для `total`/фасетов — все фильтры, КРОМЕ выбранных
+ *  типов, и полный предикат совпадения (без окон ног): иначе на общих словах
+ *  `total` упирался бы в окно FTS-ноги (300), а не в кап 1000 (Р14,
+ *  замечание code-reviewer #952). `includeTrigram` — вторая фаза: триграммы
+ *  участвуют только когда FTS дал < 5 строк, как и в выдаче. `fts_cnt` —
+ *  сколько из совпадений подтверждает FTS (по нему решается вторая фаза). */
+export function buildCountsSql(p: SearchSqlParams, includeTrigram: boolean): Prisma.Sql {
+  const trigram = includeTrigram ? Prisma.sql`OR doc.title <% ${p.q}` : Prisma.empty;
+  const counterparty =
+    p.counterpartyIds.length === 0
+      ? Prisma.empty
+      : Prisma.sql`OR doc.counterparty_id = ANY(${[...p.counterpartyIds]}::uuid[])`;
   return Prisma.sql`
-    ${ctePrefix(p)}
-    SELECT source_type, count(*)::int AS cnt
-    FROM merged
-    GROUP BY source_type
+    WITH tsq AS (SELECT websearch_to_tsquery('russian', ${p.q}) AS q)
+    SELECT doc.source_type,
+           count(*)::int AS cnt,
+           count(*) FILTER (
+             WHERE search_tsv(doc.title, doc.body, doc.keywords) @@ tsq.q
+           )::int AS fts_cnt
+    FROM search_documents doc, tsq
+    WHERE ${baseFilter(p)}
+      AND (
+        ${exactCondition(p)}
+        OR search_tsv(doc.title, doc.body, doc.keywords) @@ tsq.q
+        ${trigram}
+        ${counterparty}
+      )
+    GROUP BY doc.source_type
   `;
 }
 
@@ -196,7 +223,7 @@ export function buildPageSql(p: SearchSqlParams): Prisma.Sql {
            s.exact_leg, s.fts_leg, s.trgm_leg, s.cp_leg,
            (
              lower(s.title) = lower(${p.q})
-             OR s.title ILIKE ${p.likePrefix} ESCAPE '\'
+             OR s.title ILIKE ${p.likePrefix} ESCAPE '\\'
              OR to_tsvector('russian', s.title) @@ tsq.q
            ) AS title_hit,
            (to_tsvector('russian', s.body) @@ tsq.q) AS body_hit,

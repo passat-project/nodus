@@ -61,12 +61,14 @@ async function main(): Promise<void> {
     await app.close();
     // app.close() не рвёт фоновые Redis/BullMQ-соединения модулей — процесс
     // остаётся жить после работы (наблюдалось зависание CLI на 7+ минут).
-    // Для обслуживающей команды корректный выход важнее ожидания GC-handles.
-    process.exit(process.exitCode ?? 0);
+    // Выход — в then/catch ниже: тут exit выдал бы 0 и на ошибке (catch
+    // main() уже не выполнится).
   }
 }
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+main()
+  .then(() => process.exit(0))
+  .catch((error: unknown) => {
+    console.error(error);
+    process.exit(1);
+  });

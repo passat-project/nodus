@@ -48,11 +48,16 @@ test.describe('живой поиск по порталу (#952)', () => {
     await page.keyboard.press('Escape');
     await expect(search).toBeHidden();
 
-    // Повторное открытие с тем же запросом (состояние живёт в сторе) →
-    // клик открывает первый результат карточкой (окно поиска закрывается).
+    // Esc закрывает окно; повторное открытие — чистое поле (вердикт
+    // владельца 18.11.2026: запрос не переживает закрытие) → вводим снова
+    // и кликаем первый результат: карточка открывается, окно закрывается.
     await page.keyboard.press('Control+k');
     const reopened = page.locator('[data-slot="command"]');
     await expect(reopened).toBeVisible();
+    const reopenedInput = reopened.locator('[data-slot="command-input"]');
+    await expect(reopenedInput).toHaveValue('');
+    await reopenedInput.fill('Администратор');
+    await expect(reopened.getByRole('option').first()).toBeVisible({ timeout: 10_000 });
     await reopened.getByRole('option').first().click();
     await expect(reopened).toBeHidden();
     await expect(page.locator('[data-card-surface]')).toBeVisible();

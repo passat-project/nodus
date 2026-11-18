@@ -88,7 +88,9 @@ export class SearchIndexService {
     );
     await this.repository.apply(rows);
     for (const document of documents) {
-      if ('deleted' in document) await this.repository.remove(document.type, document.id);
+      if ('deleted' in document) {
+        await this.repository.remove(document.type, document.id, document.sourceUpdatedAt);
+      }
     }
   }
 }

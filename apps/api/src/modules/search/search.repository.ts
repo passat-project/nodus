@@ -31,6 +31,7 @@ export interface SearchResultRow {
 export interface SearchCountRow {
   source_type: SearchSourceType;
   cnt: number;
+  fts_cnt: number;
 }
 
 export interface SearchResultPage {
@@ -82,7 +83,13 @@ export class SearchRepository {
       return await this.prisma.$transaction(async (tx) => {
         await tx.$executeRawUnsafe(`SET LOCAL statement_timeout = '3000ms'`);
         await tx.$executeRawUnsafe(`SET LOCAL pg_trgm.word_similarity_threshold = 0.4`);
-        const counts = await tx.$queryRaw<SearchCountRow[]>(buildCountsSql(params));
+        // Фаза 1 — без триграмм; они участвуют только когда FTS дал < 5 строк
+        // (как в выдаче), поэтому при редком/опечатанном запросе — фаза 2.
+        let counts = await tx.$queryRaw<SearchCountRow[]>(buildCountsSql(params, false));
+        const ftsMatches = counts.reduce((sum, row) => sum + row.fts_cnt, 0);
+        if (ftsMatches < 5) {
+          counts = await tx.$queryRaw<SearchCountRow[]>(buildCountsSql(params, true));
+        }
         const rows = await tx.$queryRaw<SearchResultRow[]>(buildPageSql(params));
         return { rows, counts };
       });

@@ -58,11 +58,14 @@ export class SearchIndexRepository {
     });
   }
 
-  /** Tombstone: источника больше нет — строку удалить до любой записи. */
-  async remove(type: SearchSourceType, id: string): Promise<void> {
+  /** Tombstone: источника больше нет — удалить строку, но только если она не
+   *  новее самого tombstone. At-least-once доставка иначе стирала бы свежую
+   *  живую строку старым удалением (R6, замечание code-reviewer #952). */
+  async remove(type: SearchSourceType, id: string, sourceUpdatedAt: Date): Promise<void> {
     await this.prisma.$executeRaw(Prisma.sql`
       DELETE FROM search_documents
       WHERE source_type = ${type} AND source_id = ${id}::uuid
+        AND source_updated_at <= ${sourceUpdatedAt}
     `);
   }
 

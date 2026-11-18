@@ -63,7 +63,9 @@ Pre-filter до ранжирования и лимита: `ProjectViewScope`
 
 - `search_queries` хранит текст запроса (может содержать чувствительные
   строки): доступа из UI нет, хранение 90 дней, чистка вручную SQL по
-  `created_at`; в логи текст запроса не пишется.
+  `created_at`; в логи текст запроса не пишется — access-лог API вырезает
+  query string `/search` (`core/logging`, сериализатор req), nginx для
+  `/api/` access-log не ведёт (`infra/nginx/web.conf`, security-аудит #952).
 - Бэкфилл — CLI `pnpm search:reindex` (`--type=task|letter|message|project|employee`,
   `--rebuild`): скан провайдеров пачками 500, upsert идемпотентен; после
   выкатки — шаг runbook `docs/runbooks/prod-update.md`. Perf-замер —

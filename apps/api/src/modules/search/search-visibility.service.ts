@@ -33,8 +33,8 @@ const TYPE_BY_FLAG: ReadonlyArray<{ type: SearchSourceType; flag: string }> = [
  * Pre-filter видимости (#952, Р4): наборы берутся у модулей-владельцев
  * портами (никаких копий правил в SQL, кроме формул строки проекции), и
  * применяются ДО ранжирования и лимита — «пустой выдачи после отсева» не
- * бывает. Golden-матрица `search-visibility.test.ts` сверяет формулы с
- * `visibleTasksWhere`, `canViewLetter`, `readableConversationIds` и
+ * бывает. Golden-матрица `test/integration/search.integration.test.ts` сверяет
+ * формулы с `visibleTasksWhere`, `canViewLetter`, `readableConversationIds` и
  * `viewScopeFor`.
  *
  * Формулы строки (семантика полей — `search-source.port.ts`):

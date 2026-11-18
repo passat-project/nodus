@@ -15,21 +15,26 @@ const reset = () =>
 describe('стор поиска (#952)', () => {
   beforeEach(reset);
 
-  it('Ctrl+K открывает и закрывает окно, запрос сохраняется', () => {
+  it('Ctrl+K открывает и закрывает окно, закрытие очищает строку', () => {
     useSearchStore.getState().setQuery('труба');
     useSearchStore.getState().toggle();
     expect(useSearchStore.getState().open).toBe(true);
+    expect(useSearchStore.getState().query).toBe('труба');
     useSearchStore.getState().toggle();
-    const state = useSearchStore.getState();
-    expect(state.open).toBe(false);
-    expect(state.query).toBe('труба');
+    expect(useSearchStore.getState()).toMatchObject({ open: false, query: '' });
   });
 
-  it('openSearch и close управляют окном явно', () => {
-    useSearchStore.getState().openSearch();
-    expect(useSearchStore.getState().open).toBe(true);
-    useSearchStore.getState().close();
-    expect(useSearchStore.getState().open).toBe(false);
+  it('close очищает строку, но оставляет выбранные фильтры', () => {
+    const store = useSearchStore.getState();
+    store.openSearch();
+    store.setQuery('смета');
+    store.toggleType('task');
+    store.close();
+    expect(useSearchStore.getState()).toMatchObject({
+      open: false,
+      query: '',
+      types: ['task'],
+    });
   });
 
   it('тип переключается туда-обратно, пустой список — все типы', () => {

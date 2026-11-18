@@ -44,6 +44,7 @@ import { useShellStore } from './shell-store.js';
 import { TopBar } from './top-bar.js';
 import { useCardStack, useOpenCard, useOpenCards, useReplaceTopCard } from './use-card-stack.js';
 import { useLinkInterception } from './use-link-interception.js';
+import { startSearchSession } from '../../features/search/model/search-session.js';
 import { startChatDraftsSession } from '../../shared/chat/chat-drafts-session.js';
 import { startPreferencesSync } from '../../shared/preferences/ui-prefs-sync.js';
 import { startViewsSession } from '../../shared/views/views-session.js';
@@ -99,6 +100,9 @@ export function AppShell() {
     // Настройка колонок списков — тоже на пользователя (#876, AUD-005):
     // чужой вид не применяется, повторный вход возвращает свой.
     startViewsSession();
+    // Строка и фильтры поиска — на пользователя (#952, AUD-005): вышедший
+    // сотрудник не оставляет свой запрос следующему в этой вкладке.
+    startSearchSession();
     return stopModalLayers;
   }, []);
   // (N) Nodus в заголовке вкладки (#124): сигнал фоновой вкладке.

@@ -62,6 +62,8 @@ describe('Поиск по порталу (#952, P2)', () => {
     taskOpen: randomUUID(),
     taskConfidential: randomUUID(),
     taskSecret: randomUUID(),
+    taskPercent: randomUUID(),
+    taskUnderscore: randomUUID(),
     letterConfidential: randomUUID(),
     letterUnregistered: randomUUID(),
     conversation: randomUUID(),
@@ -196,6 +198,26 @@ describe('Поиск по порталу (#952, P2)', () => {
         creatorId: bob.id,
         assigneeId: bob.id,
         projectId: ids.secretProject,
+      },
+    });
+    // F1-фикстуры: `%`/`_` в запросе — литералы (LIKE-экранирование в точной
+    // ноге и title_hit); без ESCAPE эти строки находились только FTS-ногой.
+    await prisma.task.create({
+      data: {
+        ...taskBase,
+        id: ids.taskPercent,
+        title: `Скидка 100% на материалы ${RUN}`,
+        creatorId: alice.id,
+        assigneeId: alice.id,
+      },
+    });
+    await prisma.task.create({
+      data: {
+        ...taskBase,
+        id: ids.taskUnderscore,
+        title: `Смета лист_1 ${RUN}`,
+        creatorId: alice.id,
+        assigneeId: alice.id,
       },
     });
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import type { InfiniteData } from '@tanstack/react-query';
+import type { SearchHit, SearchResponse } from '@nodus/contracts';
 
-import { searchPath, searchRequestOf } from './search-api.js';
+import { searchHits, searchPath, searchRequestOf } from './search-api.js';
 
 describe('запрос поиска: стор → wire (#952)', () => {
   it('period переводится в from по UTC-дню, types — строкой через запятую', () => {
@@ -32,5 +34,28 @@ describe('запрос поиска: стор → wire (#952)', () => {
   it('cursor попадает в путь только при листании', () => {
     const request = searchRequestOf({ q: 'смета' });
     expect(searchPath({ ...request, cursor: '20' })).toContain('cursor=20');
+  });
+
+  it('страницы склеиваются без повторов type:id (граница курсора)', () => {
+    const hit = (id: string, type: 'task' | 'letter') =>
+      ({
+        id,
+        type,
+        title: id,
+        snippet: '',
+        score: 0.5,
+        match: 'exact',
+        reasons: ['title'],
+        sourceCreatedAt: '2026-11-10T09:00:00.000Z',
+        meta: {},
+      }) as unknown as SearchHit;
+    const data = {
+      pages: [
+        { items: [hit('a', 'task'), hit('b', 'letter')] },
+        { items: [hit('b', 'letter'), hit('c', 'task')] },
+      ],
+      pageParams: [null, 'cursor'],
+    } as unknown as InfiniteData<SearchResponse>;
+    expect(searchHits(data).map((item) => item.id)).toEqual(['a', 'b', 'c']);
   });
 });

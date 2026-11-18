@@ -28,6 +28,15 @@ const { SearchService } = await import('../search.service.js');
 const QUERIES = ['согласование', 'фасад', 'труба 57', 'Галур', 'смета', 'ПП-123', 'закупка'];
 
 async function main(): Promise<void> {
+  // Харнесс пишет реальные строки: только песочница (night-БД). Корневой
+  // .env по готче указывает на прод — без проверки прогон ушёл бы туда.
+  const dbName = new URL(process.env.DATABASE_URL ?? '').pathname.replace(/^\//u, '');
+  if (!dbName.endsWith('_night') && process.env.SEARCH_PERF_ALLOW_ANY_DB !== '1') {
+    throw new Error(
+      `Perf-харнесс пишет данные: нужна night-БД песочницы (nodus_night), сейчас «${dbName}». ` +
+        'Осознанное исключение — SEARCH_PERF_ALLOW_ANY_DB=1.',
+    );
+  }
   const args = process.argv.slice(2);
   const count = Number(args.find((arg) => arg.startsWith('--count='))?.split('=')[1] ?? 50_000);
   const keep = args.includes('--keep');
@@ -126,12 +135,13 @@ async function main(): Promise<void> {
       console.log('данные замера удалены (--keep оставляет)');
     }
     await app.close();
-    // См. CLI reindex: app.close() не рвёт фоновые соединения модулей.
-    process.exit(process.exitCode ?? 0);
+    // Выход — в then/catch ниже: exit в finally выдал бы 0 и на ошибке.
   }
 }
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+main()
+  .then(() => process.exit(0))
+  .catch((error: unknown) => {
+    console.error(error);
+    process.exit(1);
+  });

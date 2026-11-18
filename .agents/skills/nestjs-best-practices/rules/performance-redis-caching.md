@@ -128,9 +128,10 @@ import { CacheService } from '../../../core/redis/cache.service.js';
 
 @Injectable()
 export class TaskUpdatedCacheHandler {
-  // ✅ One handler class per catalog event; the core events module subscribes
-  //    every provider declaring `eventType` at bootstrap — decorators are banned
-  static readonly eventType = 'task.updated';
+  // ✅ Один обработчик на ГРУППУ каталожных событий: ядро подписывает все
+  //    типы из `eventTypes` на бутстрапе (декораторы запрещены; канон —
+  //    patterns.md, `eventTypes` на классе)
+  static readonly eventTypes = ['task.updated'];
 
   constructor(private readonly cache: CacheService) {}
 
@@ -141,7 +142,7 @@ export class TaskUpdatedCacheHandler {
 }
 ```
 
-Sibling files `task-status-changed.handler.ts` and `task-completed.handler.ts` look the same with their own `eventType` — one handler per event, all registered by core at bootstrap.
+Соседние события того же агрегата (`task.status_changed`, `task.completed`) добавляются строками в `eventTypes` того же обработчика, а не файлами-близнецами: группу событий одного агрегата обрабатывает один класс.
 
 For `dictionaries`, invalidation on the admin write — a direct `delByPrefix('nodus:dictionaries:')` in the admin mutation (a dedicated `directory.*` event would first go to the api-conventions catalog) — plus a long TTL (30–60 min) gives effectively instant consistency for near-static data.
 

@@ -42,6 +42,7 @@ export class SearchIndexRunner {
       case CORRESPONDENCE_EVENTS.LETTER_REGISTERED:
       case CORRESPONDENCE_EVENTS.LETTER_UPDATED:
       case CORRESPONDENCE_EVENTS.LETTER_PARTICIPANTS_CHANGED:
+      case CORRESPONDENCE_EVENTS.LETTER_RELATIONS_CHANGED:
       case CORRESPONDENCE_EVENTS.LETTER_DELETED:
         return this.one('letter', text(payload['letterId']));
 
@@ -139,6 +140,9 @@ export const SearchIndexLetterHandler = handlerFor('SearchIndexLetterHandler', [
   CORRESPONDENCE_EVENTS.LETTER_REGISTERED,
   CORRESPONDENCE_EVENTS.LETTER_UPDATED,
   CORRESPONDENCE_EVENTS.LETTER_PARTICIPANTS_CHANGED,
+  // Номера приложенных писем лежат в body (провайдер) — смена связей
+  // обязана переиндексировать источник (code-reviewer #952).
+  CORRESPONDENCE_EVENTS.LETTER_RELATIONS_CHANGED,
   CORRESPONDENCE_EVENTS.LETTER_DELETED,
 ]);
 
