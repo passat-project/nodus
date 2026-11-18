@@ -57,4 +57,14 @@ export class TaskChatReaderProvider implements TaskChatReader {
     if (!task) return false;
     return this.deciders.isDeciderNow(undefined, task, userId);
   }
+
+  /** Гейтованный набор решающего (#952): кандидаты `taskIdsFor` проходят ту
+   *  же видимость, что список задач, — конфиденциальная вне участия и
+   *  скрытый секретный проект не открывают чат через поиск. */
+  async deciderTaskIds(userId: string): Promise<string[]> {
+    const candidates = await this.deciders.taskIdsFor(userId);
+    if (candidates.length === 0) return [];
+    const viewer = await this.viewers.resolve({ id: userId, permissions: [] });
+    return this.reads.visibleIds(candidates, visibleTasksWhere(viewer, 'all'));
+  }
 }

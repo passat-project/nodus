@@ -28,6 +28,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { PreferencesModule } from './modules/preferences/preferences.module.js';
 import { PortalSettingsModule } from './modules/portal-settings/portal-settings.module.js';
 import { ProjectsModule } from './modules/projects/projects.module.js';
+import { SearchModule } from './modules/search/search.module.js';
 import { DesktopModule } from './modules/desktop/desktop.module.js';
 import { HomeModule } from './modules/home/home.module.js';
 import { TasksModule } from './modules/tasks/tasks.module.js';
@@ -81,6 +82,9 @@ import { WorkflowsModule } from './modules/workflows/workflows.module.js';
     // Задачи (#37): самостоятельные задачи; движок маршрутов — в workflows,
     // задачи подключаются адаптером сущности (ADR-0024).
     TasksModule,
+    // Поиск по порталу (#952): проекция search_documents и единое окно;
+    // ядро — фичефлага нет (I10); источники — провайдеры модулей (P2).
+    SearchModule,
     // Десктоп-оболочка (#254): публичный конфиг для тонкого клиента.
     DesktopModule,
   ],

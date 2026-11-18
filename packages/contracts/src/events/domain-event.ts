@@ -23,7 +23,9 @@ export interface DomainEvent<TPayload = Record<string, unknown>> {
 
 /**
  * Обработчик доменного события (канон — patterns.md):
- * файл `events/<событие>.handler.ts`, `static readonly eventType`, идемпотентен.
+ * файл `events/<событие>.handler.ts`, `static readonly eventType`
+ * (или `static readonly eventTypes` — несколько типов одним обработчиком,
+ * #952), идемпотентен.
  */
 export interface DomainEventHandler<TPayload = Record<string, unknown>> {
   handle(event: DomainEvent<TPayload>): Promise<void>;

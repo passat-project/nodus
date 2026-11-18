@@ -276,6 +276,9 @@ export const ErrorCode = {
   ASSISTANT_PROVIDER_UNAVAILABLE: 'ASSISTANT_PROVIDER_UNAVAILABLE',
   /** MCP-сервер из настроек не найден (удалён параллельно) — 404. */
   ASSISTANT_MCP_NOT_FOUND: 'ASSISTANT_MCP_NOT_FOUND',
+  /** Поиск по порталу (#952): запрос превысил `statement_timeout` (504;
+   *  Postgres 57014 / Prisma P2028) — интерфейс предлагает уточнить запрос. */
+  SEARCH_TIMEOUT: 'SEARCH_TIMEOUT',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

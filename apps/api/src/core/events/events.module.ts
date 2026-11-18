@@ -9,7 +9,9 @@ import { RedisStreamPublisher } from './redis-stream-publisher.js';
  * События (I9): EventBus (outbox-запись в той же транзакции) + EventDispatcher
  * (доставка подписчикам) + RedisStreamPublisher (фанут chat.* в Redis Stream
  * для WS-gateway, #104). Глобально: EventBus доступен всем модулям.
- * DiscoveryModule — скан провайдеров со `static readonly eventType` при bootstrap.
+ * DiscoveryModule — скан провайдеров со `static readonly eventType`
+ * (или `static readonly eventTypes` — несколько типов одним обработчиком,
+ * #952) при bootstrap.
  */
 @Global()
 @Module({

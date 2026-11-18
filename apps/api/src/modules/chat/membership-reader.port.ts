@@ -18,6 +18,15 @@ export interface ChatConversationState {
   members: ChatMemberState[];
 }
 
+/** Подпись беседы для выдачи поиска (#952): без имён участников. */
+export interface ChatConversationRef {
+  id: string;
+  type: ChatConversationState['type'];
+  title: string | null;
+  taskId: string | null;
+  letterId: string | null;
+}
+
 export const CHAT_MEMBERSHIP_READER = Symbol('CHAT_MEMBERSHIP_READER');
 
 export interface ChatMembershipReader {
@@ -26,4 +35,14 @@ export interface ChatMembershipReader {
 
   /** Наблюдатели треда (автор корня/реплаи/подписчики/@упомянутые). */
   threadWatcherIds(threadRootId: string): Promise<string[]>;
+
+  /** Беседы, сообщения которых пользователь вправе читать (#952):
+   *  членство БЕЗ фильтра hidden («скрытая» — только из списка, доступ есть)
+   *  ∪ чаты задач, где он решающий (гейтованный `TASK_CHAT_READER.deciderTaskIds`). */
+  readableConversationIds(userId: string): Promise<string[]>;
+
+  /** Подписи бесед для выдачи поиска: тип, название, id задачи/письма.
+   *  Права НЕ проверяет — вызывающий передаёт только ids из
+   *  `readableConversationIds` (чужие id здесь раскрыли бы название). */
+  conversationRefs(ids: string[]): Promise<ChatConversationRef[]>;
 }

@@ -42,6 +42,7 @@ function setup(opts: {
     refs: vi.fn(),
     canView: vi.fn().mockResolvedValue(opts.canView ?? true),
     isDecider: vi.fn().mockResolvedValue(false),
+    deciderTaskIds: vi.fn().mockResolvedValue([]),
   };
   const txRunner = {
     run: (fn: (tx: unknown) => unknown) => {

@@ -40,7 +40,7 @@
 | Коды ошибок / тип ответа | `ErrorCode`, `ApiErrorResponse` — `packages/contracts/src/errors/` | Базовый набор — `api-conventions.md`; доменные коды — по маске `MODULE_REASON` |
 | Транзакции | `TransactionRunner` — `core/database/transaction-runner.ts` | Сервис: `this.txRunner.run(async (tx) => …)`; tx передаётся в репозиторий и `eventBus.emit(tx, …)`. `PrismaService` — только в репозитории, `infra/` и самом runner |
 | Шина событий | `EventBus` — `core/events/event-bus.ts` | `emit(tx, 'module.action', payload)` — outbox-запись в той же транзакции; самодельные публикации запрещены |
-| Обработчик события | `events/<событие>.handler.ts`, `static readonly eventType` | Регистрируется core при bootstrap; декораторы подписки (`@OnEvent`) запрещены; обработчик идемпотентен (дедуп по event id) |
+| Обработчик события | `events/<событие>.handler.ts`, `static readonly eventType` (или `static readonly eventTypes` — несколько типов одним обработчиком, #952) | Регистрируется core при bootstrap; декораторы подписки (`@OnEvent`) запрещены; обработчик идемпотентен (дедуп по event id) |
 | Таблица outbox | `events`: id, type, actor_id, aggregate_type, aggregate_id, payload JSONB, created_at, published_at | Append-only, по `data-model.md`; пишется только через EventBus |
 | Валидация | `ZodValidationPipe` — `core/pipes/zod-validation.pipe.ts` | Схема из contracts передаётся явно: `@UsePipes(new ZodValidationPipe(createTaskSchema))` |
 | Текущий пользователь | `@GetUser()` декоратор; тип `AuthUser` — `packages/contracts` | Не `@CurrentUser`/`SessionUser` |
