@@ -46,5 +46,6 @@ export function SnippetText({ text, className }: { text: string; className?: str
   );
 }
 
-/** Класс сниппета в списках: две строки, обрез, muted. */
-export const snippetClassName = cn('line-clamp-2 text-xs text-muted-foreground');
+/** Класс сниппета в списке: ОДНА строка с обрезом (плотная строка выдачи —
+ *  два слоя текста, вердикт владельца 18.11.2026). */
+export const snippetClassName = cn('block truncate text-xs leading-4 text-muted-foreground');

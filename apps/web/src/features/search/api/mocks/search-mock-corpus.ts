@@ -6,7 +6,7 @@ import { demoLetters } from '../../../../shared/mocks/data/letters.js';
 import { canSeeLetter } from '../../../../shared/mocks/data/letters-model.js';
 import { canSeeProject } from '../../../../shared/mocks/data/project-views.js';
 import { demoProjectRows } from '../../../../shared/mocks/data/projects.js';
-import { demoTasks } from '../../../../shared/mocks/data/tasks.js';
+import { demoTasks, detailsExtra } from '../../../../shared/mocks/data/tasks.js';
 import { demoUserListItems } from '../../../../shared/mocks/data/users.js';
 import type { MockActor } from '../../../../shared/mocks/mock-actor.js';
 
@@ -65,7 +65,9 @@ function taskDocs(): MockDocument[] {
       type: 'task',
       id: task.id,
       title: task.title,
-      body: '',
+      // План Р10: body задачи = описание. В списочном TaskListItem его нет —
+      // берём из демо-деталей (не у всех задач описание задано).
+      body: detailsExtra[task.id]?.description ?? '',
       keywords: `ПП-${task.number}`,
       identifiers: [String(task.number), `ПП-${task.number}`],
       projectId: task.project?.id ?? null,

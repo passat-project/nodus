@@ -84,10 +84,6 @@ export function searchHits(data: InfiniteData<SearchResponse> | undefined): Sear
   return data?.pages.flatMap((page) => page.items) ?? [];
 }
 
-export function searchTotal(data: InfiniteData<SearchResponse> | undefined): number {
-  return data?.pages[0]?.total ?? 0;
-}
-
 export function searchFacets(
   data: InfiniteData<SearchResponse> | undefined,
 ): SearchFacets['types'] {
@@ -96,9 +92,4 @@ export function searchFacets(
 
 export function searchHint(data: InfiniteData<SearchResponse> | undefined) {
   return data?.pages[0]?.hint ?? null;
-}
-
-/** Окно релевантности исчерпано (топ-100): «Показать ещё» больше не нужно. */
-export function searchWindowExhausted(hits: readonly SearchHit[]): boolean {
-  return hits.length >= 100;
 }

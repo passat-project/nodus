@@ -39,7 +39,6 @@ import { LiveGraph } from './live-graph.js';
 import { startLayoutJitterLogger } from './layout-jitter-logger.js';
 import { NodeRail } from './node-rail.js';
 import { EDGE_W_COLLAPSED, RightRail } from './right-rail.js';
-import { SearchPanelHost } from './search-panel-host.js';
 import { useRailHidden } from './rail-visibility.js';
 import { useShellStore } from './shell-store.js';
 import { TopBar } from './top-bar.js';
@@ -158,28 +157,13 @@ export function AppShell() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        // Ctrl+K — компакт поиска; из рабочего окна закрывает его (запрос
-        // сохраняется в общем сторе, #952).
-        useSearchStore.getState().toggleCompact();
-      }
-    };
-    // Ctrl+Enter в компактном поиске — рабочее окно. Перехват в ФАЗЕ
-    // ПОГРУЖЕНИЯ: cmdk на Enter выбирает активную строку, и без перехвата
-    // открывалась первая карточка + окно (замечание владельца 18.11).
-    const onCapture = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.key !== 'Enter') return;
-      const search = useSearchStore.getState();
-      if (search.mode === 'compact') {
-        event.preventDefault();
-        event.stopPropagation();
-        search.openWorkspace();
+        // Ctrl+K — единое окно поиска (запрос и фильтры в общем сторе, #952).
+        useSearchStore.getState().toggle();
       }
     };
     window.addEventListener('keydown', onKey);
-    window.addEventListener('keydown', onCapture, true);
     return () => {
       window.removeEventListener('keydown', onKey);
-      window.removeEventListener('keydown', onCapture, true);
     };
   }, []);
 
@@ -228,9 +212,6 @@ export function AppShell() {
               {/* Окно ассистента: плавающий лист поверх правой части рамы
                   (внутри рамы — обрезка её скруглением, структура не едет). */}
               <AssistantPanel />
-              {/* Рабочее окно поиска (#952): лист во всю ширину рамы ниже
-                  шапки, z-62 — поверх ассистента (z-60). */}
-              <SearchPanelHost />
             </div>
             {/* Стек карточек сущностей поверх раздела (ADR-0009, ?cards=) */}
             <CardStackHost />

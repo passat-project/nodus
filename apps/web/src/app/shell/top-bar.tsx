@@ -36,7 +36,7 @@ export function TopBar() {
 
   const theme = useShellStore((s) => s.theme);
   const toggleTheme = useShellStore((s) => s.toggleTheme);
-  const openSearch = useSearchStore((s) => s.openCompact);
+  const openSearch = useSearchStore((s) => s.openSearch);
   const { data: unread } = useChatUnreadSummary();
   const permissions = useAuthStore((s) => s.user?.permissions ?? NO_PERMISSIONS);
 

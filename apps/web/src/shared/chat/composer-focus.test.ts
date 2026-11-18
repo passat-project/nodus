@@ -49,6 +49,40 @@ describe('composer-focus — «вечный курсор» и оверлей-с�
     expect(document.activeElement).toBe(composer);
   });
 
+  it('поле поиска (input) — такой же владелец каретки: клик по фильтру её возвращает', async () => {
+    // Строка поиска регистрируется тем же механизмом (#952): клик по панели
+    // фильтров не должен «убивать» каретку — продолжаем печатать.
+    const layer = document.createElement('div');
+    layer.setAttribute('role', 'dialog');
+    const input = document.createElement('input');
+    const filter = document.createElement('button');
+    layer.append(input, filter);
+    document.body.append(layer);
+    registerComposer('search-probe', input);
+    leftClick(filter);
+    await frame();
+    expect(document.activeElement).toBe(input);
+    unregisterComposer('search-probe', input);
+  });
+
+  it('role=listbox ВНУТРИ диалога-владельца — не чужой слой (список выдачи поиска)', async () => {
+    // CommandList (cmdk) сам role="listbox": клик по пустому месту списка
+    // не должен считаться «фокусом в чужом оверлее» (#952).
+    const layer = document.createElement('div');
+    layer.setAttribute('role', 'dialog');
+    const input = document.createElement('input');
+    const list = document.createElement('div');
+    list.setAttribute('role', 'listbox');
+    list.tabIndex = 0;
+    layer.append(input, list);
+    document.body.append(layer);
+    registerComposer('search-probe-list', input);
+    leftClick(list);
+    await frame();
+    expect(document.activeElement).toBe(input);
+    unregisterComposer('search-probe-list', input);
+  });
+
   it('ПОКА ЛКМ зажата — фокус не крадётся (нативное выделение текста живо, #132 р.4)', async () => {
     // mousedown на тексте ленты: фокус ушёл скроллеру (tabIndex) — steal
     // кадром позже убивал зарождающийся драг-селект; теперь ждём отпускания.

@@ -1,18 +1,15 @@
 /**
  * UI-строки единого поиска (#952). Секция вынесена из ru.ts (лимит строк,
- * I5): два состояния окна — компактное Ctrl+K и рабочее внутри рамы.
+ * I5): одно компактное окно Ctrl+K — панель фильтров слева, плотная выдача
+ * справа (решение владельца 18.11.2026, рабочего листа нет).
  */
 export const searchStrings = {
   title: 'Поиск',
   placeholder: 'Поиск по порталу: задачи, письма, сообщения, проекты, сотрудники',
-  placeholderCompact: 'Найти задачу, письмо, сообщение…',
-  openFull: 'Открыть поиск',
-  openFullHint: 'Ctrl+Enter',
-  openHint: 'Ctrl+K',
   close: 'Закрыть поиск',
+  clear: 'Очистить запрос',
   recent: 'Недавние запросы',
-  recentEmpty: 'Недавние запросы появятся здесь',
-  recentClear: 'Очистить недавние',
+  startHint: 'Начните вводить запрос — поиск идёт по всему порталу',
   types: {
     task: 'Задачи',
     letter: 'Письма',
@@ -21,15 +18,9 @@ export const searchStrings = {
     employee: 'Сотрудники',
   },
   matchSimilar: 'похоже на',
-  reasons: {
-    title: 'совпадение в названии',
-    body: 'совпадение в тексте',
-    number: 'номер',
-    counterparty: 'корреспондент',
-    recent: 'свежее',
-    participant: 'вы участвуете',
-  },
   filters: {
+    panel: 'Фильтры поиска',
+    types: 'Типы',
     allTypes: 'Все типы',
     project: 'Проект',
     anyProject: 'Любой проект',
@@ -44,8 +35,6 @@ export const searchStrings = {
     reset: 'Сбросить фильтры',
   },
   showMore: 'Показать ещё',
-  more: 'Ещё',
-  total: 'Найдено',
   emptyTitle: 'Ничего не найдено',
   emptyHint: 'Уточните запрос или снимите фильтры',
   hintStopwords: 'Запрос состоит только из служебных слов — добавьте значимое слово',
@@ -55,25 +44,6 @@ export const searchStrings = {
   timeoutTitle: 'Запрос слишком тяжёлый',
   timeoutHint: 'Уточните запрос — например, добавьте слово или выберите тип',
   retry: 'Повторить',
-  loading: 'Ищем…',
-  previewEmpty: 'Выберите результат, чтобы увидеть подробности',
   messageInTaskChat: 'чат задачи',
   messageInLetterChat: 'чат письма',
-  fields: {
-    number: 'Номер',
-    project: 'Проект',
-    deadline: 'Срок',
-    counterparty: 'Корреспондент',
-    direction: 'Направление',
-    incoming: 'Входящее',
-    outgoing: 'Исходящее',
-    conversation: 'Беседа',
-    author: 'Автор',
-    code: 'Шифр',
-    status: 'Статус',
-    position: 'Должность',
-    department: 'Подразделение',
-    email: 'Почта',
-    created: 'Создано',
-  },
 } as const;

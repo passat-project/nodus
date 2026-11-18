@@ -2,13 +2,12 @@ import { create } from 'zustand';
 import type { SearchSort, SearchSourceType } from '@nodus/contracts';
 
 /**
- * Состояние единого поиска (#952): два состояния одного окна — компактное
- * Ctrl+K и рабочее внутри рамы, плюс общие фильтры. Стор живёт в features/search
- * и не персистится (в отличие от темы/меню): запрос — сессионное намерение.
- * Недавние запросы — отдельно, в localStorage на пользователя
- * (`search-recent.ts`).
+ * Состояние единого поиска (#952): ОДНО компактное окно Ctrl+K с панелью
+ * фильтров слева (решение владельца 18.11.2026 — рабочего листа нет). Стор
+ * живёт в features/search и не персистится (в отличие от темы/меню): запрос —
+ * сессионное намерение. Недавние запросы — отдельно, в localStorage на
+ * пользователя (`search-recent.ts`).
  */
-export type SearchMode = 'closed' | 'compact' | 'workspace';
 export type SearchPeriod = 'any' | 'week' | 'month' | 'year';
 
 /** Дни периода для `from` (фильтр по дате создания источника). */
@@ -19,19 +18,17 @@ export const SEARCH_PERIOD_DAYS: Record<Exclude<SearchPeriod, 'any'>, number> = 
 };
 
 interface SearchState {
-  mode: SearchMode;
-  /** Строка запроса общая для обоих состояний: Ctrl+K из рабочего окна
-   *  закрывает его, повторное открытие возвращает тот же запрос. */
+  open: boolean;
+  /** Строка запроса переживает закрытие: повторный Ctrl+K возвращает тот же. */
   query: string;
   /** Пусто — все включённые типы (типы выключенных модулей сервер не отдаёт). */
   types: SearchSourceType[];
   projectId: string | null;
   period: SearchPeriod;
   sort: SearchSort;
-  /** Ctrl+K: открыть компакт или закрыть любое состояние (вердикт Д2). */
-  toggleCompact: () => void;
-  openCompact: () => void;
-  openWorkspace: () => void;
+  /** Ctrl+K: открыть окно поиска или закрыть его. */
+  toggle: () => void;
+  openSearch: () => void;
   close: () => void;
   setQuery: (query: string) => void;
   toggleType: (type: SearchSourceType) => void;
@@ -43,17 +40,15 @@ interface SearchState {
 }
 
 export const useSearchStore = create<SearchState>()((set) => ({
-  mode: 'closed',
+  open: false,
   query: '',
   types: [],
   projectId: null,
   period: 'any',
   sort: 'relevance',
-  toggleCompact: () => set((state) => ({ mode: state.mode === 'closed' ? 'compact' : 'closed' })),
-  openCompact: () => set({ mode: 'compact' }),
-  // Запрос и фильтры переезжают из компакта в рабочее окно как есть.
-  openWorkspace: () => set({ mode: 'workspace' }),
-  close: () => set({ mode: 'closed' }),
+  toggle: () => set((state) => ({ open: !state.open })),
+  openSearch: () => set({ open: true }),
+  close: () => set({ open: false }),
   setQuery: (query) => set({ query }),
   toggleType: (type) =>
     set((state) => ({

@@ -79,6 +79,13 @@ describe('мок поиска: контракт и правила фильтро
     expect(second.items[0]?.id).not.toBe(first.items[0]?.id);
   });
 
+  it('описание задачи индексируется (план Р10: body = description)', () => {
+    const response = runMockSearch(request({ q: 'лазерного', types: ['task'] }), actor);
+    const hit = response.items.find((entry) => entry.type === 'task');
+    expect(hit).toBeDefined();
+    expect(hit?.reasons).toContain('body');
+  });
+
   it('сообщение несёт мету беседы для прыжка и контрактную подпись', () => {
     const response = runMockSearch(request({ q: 'каркас', types: ['message'] }), actor);
     const hit = response.items.find((entry) => entry.type === 'message');

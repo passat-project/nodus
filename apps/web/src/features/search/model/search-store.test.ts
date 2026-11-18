@@ -4,7 +4,7 @@ import { useSearchStore } from './search-store.js';
 
 const reset = () =>
   useSearchStore.setState({
-    mode: 'closed',
+    open: false,
     query: '',
     types: [],
     projectId: null,
@@ -15,32 +15,21 @@ const reset = () =>
 describe('стор поиска (#952)', () => {
   beforeEach(reset);
 
-  it('Ctrl+K переключает компакт: закрыт → компакт → закрыт', () => {
-    useSearchStore.getState().toggleCompact();
-    expect(useSearchStore.getState().mode).toBe('compact');
-    useSearchStore.getState().toggleCompact();
-    expect(useSearchStore.getState().mode).toBe('closed');
-  });
-
-  it('Ctrl+K из рабочего окна закрывает его, запрос сохраняется', () => {
+  it('Ctrl+K открывает и закрывает окно, запрос сохраняется', () => {
     useSearchStore.getState().setQuery('труба');
-    useSearchStore.getState().openWorkspace();
-    useSearchStore.getState().toggleCompact();
-    expect(useSearchStore.getState().mode).toBe('closed');
-    expect(useSearchStore.getState().query).toBe('труба');
+    useSearchStore.getState().toggle();
+    expect(useSearchStore.getState().open).toBe(true);
+    useSearchStore.getState().toggle();
+    const state = useSearchStore.getState();
+    expect(state.open).toBe(false);
+    expect(state.query).toBe('труба');
   });
 
-  it('компакт → рабочее окно переносит запрос и фильтры', () => {
-    const store = useSearchStore.getState();
-    store.setQuery('галур');
-    store.toggleType('letter');
-    store.setPeriod('month');
-    store.openWorkspace();
-    const state = useSearchStore.getState();
-    expect(state.mode).toBe('workspace');
-    expect(state.query).toBe('галур');
-    expect(state.types).toEqual(['letter']);
-    expect(state.period).toBe('month');
+  it('openSearch и close управляют окном явно', () => {
+    useSearchStore.getState().openSearch();
+    expect(useSearchStore.getState().open).toBe(true);
+    useSearchStore.getState().close();
+    expect(useSearchStore.getState().open).toBe(false);
   });
 
   it('тип переключается туда-обратно, пустой список — все типы', () => {
@@ -54,8 +43,9 @@ describe('стор поиска (#952)', () => {
     expect(useSearchStore.getState().types).toEqual([]);
   });
 
-  it('сброс фильтров не трогает строку запроса', () => {
+  it('сброс фильтров не трогает строку запроса и состояние окна', () => {
     const store = useSearchStore.getState();
+    store.openSearch();
     store.setQuery('смета');
     store.toggleType('project');
     store.setProjectId('project-1');
@@ -64,6 +54,7 @@ describe('стор поиска (#952)', () => {
     store.resetFilters();
     const state = useSearchStore.getState();
     expect(state).toMatchObject({
+      open: true,
       query: 'смета',
       types: [],
       projectId: null,
