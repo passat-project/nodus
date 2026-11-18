@@ -184,7 +184,10 @@ export function EmployeeProfileTab({
             Строка — всегда горизонтальная пара: аватар центрирован по всему
             блоку «имя + должность», а не прижат к первой строке текста
             (приёмка 18.11.2026). */}
-        <div className="mt-1.5 grid grid-cols-1 gap-x-12 gap-y-0.5 @min-[55rem]:grid-cols-2">
+        <div
+          data-slot="profile-subordinates"
+          className="mt-1.5 grid grid-cols-1 gap-x-12 gap-y-0.5 @min-[55rem]:grid-cols-2"
+        >
           {subordinates.length === 0 ? (
             <p className="py-1 text-sm text-muted-foreground">{ui.common.empty}</p>
           ) : null}
@@ -194,6 +197,7 @@ export function EmployeeProfileTab({
               <button
                 key={person.id}
                 type="button"
+                data-slot="profile-subordinate"
                 onClick={() => openCard({ kind: 'employee', id: person.id })}
                 className="-mx-2 flex min-w-0 items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/50"
               >
