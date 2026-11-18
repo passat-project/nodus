@@ -29,6 +29,10 @@ export interface LetterChatReader {
   /** Ссылки на письма пачкой (превью ссылок, список бесед). */
   refs(ids: readonly string[]): Promise<LetterRef[]>;
 
+  /** id живых писем, чей номер/тема содержат запрос (#956): серверный
+   *  поиск бесед писем по названию сущности (чат фильтрует СВОИ letter_id). */
+  searchIds(query: string, limit: number): Promise<string[]>;
+
   /** Видимость письма той же функцией, что у карточки (Р7): невидимое —
    *  false без оракула (чат отвечает 404). */
   canView(letterId: string, viewer: LetterViewer): Promise<boolean>;

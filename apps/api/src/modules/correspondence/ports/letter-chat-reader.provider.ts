@@ -52,6 +52,12 @@ export class LetterChatReaderProvider implements LetterChatReader {
     return this.letters.refs(ids) as Promise<LetterRef[]>;
   }
 
+  /** Поиск бесед писем по номеру/теме (#956): id писем, дальше chat
+   *  фильтрует свои `letter_id` (кросс-модульного чтения нет). */
+  searchIds(query: string, limit: number): Promise<string[]> {
+    return this.letters.findIdsBySearch(query, limit);
+  }
+
   async canView(letterId: string, viewer: LetterViewer): Promise<boolean> {
     const row = await this.letters.findDetailById(letterId);
     // Надгробие спама невидимо никому — карточка уже 404 (Р13, #461).

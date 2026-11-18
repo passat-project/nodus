@@ -34,6 +34,15 @@ import { ConversationsWriteRepository } from './conversations-write.repository.j
 import { ConversationMembersRepository } from './conversation-members.repository.js';
 import { ConversationDraftsRepository } from './conversation-drafts.repository.js';
 import { TASK_CHAT_READER, type TaskChatReader } from '../../tasks/ports/task-chat-reader.port.js';
+import {
+  LETTER_CHAT_READER,
+  type LetterChatReader,
+} from '../../correspondence/ports/letter-chat-reader.port.js';
+
+/** Потолок сущностных совпадений в поиске бесед (#956): выше штата портала;
+ *  фильтр идёт по СВОИМ task_id/letter_id уже отфильтрованных по членству
+ *  строк, поэтому набор — только сужение, не расширение прав. */
+const SEARCH_ENTITY_LIMIT = 200;
 
 const conversationCursorSchema = z.object({
   at: z.string().nullable(),
@@ -60,6 +69,7 @@ export class ConversationsService {
     @Inject(AVATAR_PROCESSOR) private readonly avatars: AvatarProcessor,
     @Inject(USER_PROFILE_READER) private readonly userProfiles: UserProfileReader,
     @Inject(TASK_CHAT_READER) private readonly taskChat: TaskChatReader,
+    @Inject(LETTER_CHAT_READER) private readonly letterChat: LetterChatReader,
   ) {}
 
   async list(
@@ -68,12 +78,21 @@ export class ConversationsService {
   ): Promise<Paginated<ConversationListItem>> {
     let searchTitle: string | undefined;
     let searchUserIds: string[] | undefined;
+    let searchTaskIds: string[] | undefined;
+    let searchLetterIds: string[] | undefined;
     if (query.search) {
       // ILIKE-метасимволы экранируются (поиск «100%» не должен совпадать со всем).
       searchTitle = escapeLikePattern(query.search);
-      searchUserIds = (await this.userProfiles.searchByDisplayName(query.search, 100)).map(
-        (ref) => ref.id,
-      );
+      const [users, taskIds, letterIds] = await Promise.all([
+        this.userProfiles.searchByDisplayName(query.search, 100),
+        this.taskChat.searchIds(query.search, SEARCH_ENTITY_LIMIT),
+        this.letterChat.searchIds(query.search, SEARCH_ENTITY_LIMIT),
+      ]);
+      searchUserIds = users.map((ref) => ref.id);
+      // Названия чатов задач/писем в БД null (собираются из задачи/письма):
+      // серверный поиск ищет сущность у владельца и сужает СВОИ task_id/letter_id.
+      searchTaskIds = taskIds;
+      searchLetterIds = letterIds;
     }
     const cursor = query.cursor ? decodeCursor(query.cursor, conversationCursorSchema) : undefined;
     const rows = await this.repo.listForUser(userId, {
@@ -81,6 +100,8 @@ export class ConversationsService {
       cursor: cursor as ConversationListCursor | undefined,
       searchTitle,
       searchUserIds,
+      searchTaskIds,
+      searchLetterIds,
       scope: query.scope,
     });
     const hasMore = rows.length > query.limit;

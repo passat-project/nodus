@@ -63,6 +63,14 @@ describe('searchRequestSchema', () => {
     expect(searchRequestSchema.safeParse({ q: 'труба', from: '01.11.2026' }).success).toBe(false);
     expect(searchRequestSchema.safeParse({ q: 'труба', sort: 'popular' }).success).toBe(false);
   });
+
+  it('conversationId — uuid беседы для поиска внутри чата (#956)', () => {
+    const id = '8f1c1c1e-5a0f-4f2a-9d2e-3b7a6c1d0e11';
+    expect(searchRequestSchema.parse({ q: 'труба', conversationId: id }).conversationId).toBe(id);
+    expect(searchRequestSchema.safeParse({ q: 'труба', conversationId: 'not-uuid' }).success).toBe(
+      false,
+    );
+  });
 });
 
 describe('searchHitSchema', () => {

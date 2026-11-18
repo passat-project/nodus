@@ -117,3 +117,12 @@ describe('надгробие спама (#461)', () => {
     expect(await detail.provider.canView(LETTER, { id: 'stranger', permissions: [] })).toBe(true);
   });
 });
+
+describe('поиск бесед писем по названию (#956)', () => {
+  it('делегирует поиск id писем репозиторию', async () => {
+    const letters = { findIdsBySearch: vi.fn(async () => [LETTER]) };
+    const provider = new LetterChatReaderProvider(letters as never);
+    await expect(provider.searchIds('Смета', 200)).resolves.toEqual([LETTER]);
+    expect(letters.findIdsBySearch).toHaveBeenCalledWith('Смета', 200);
+  });
+});

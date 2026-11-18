@@ -81,6 +81,7 @@ export class SearchService {
       types,
       visibility: visibilitySql,
       projectId: request.projectId,
+      conversationId: request.conversationId,
       from: request.from ? new Date(`${request.from}T00:00:00.000Z`) : undefined,
       toExclusive: request.to ? addDays(`${request.to}T00:00:00.000Z`, 1) : undefined,
       counterpartyIds,

@@ -3,6 +3,7 @@ import type { LetterBox, LetterRef } from '@nodus/contracts';
 
 import { Prisma } from '../../../generated/prisma/client.js';
 import { PrismaService } from '../../../core/database/prisma.service.js';
+import { escapeLikePattern } from '../../../core/database/like-pattern.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import {
   letterAttachmentSelect,
@@ -287,6 +288,25 @@ export class LettersRepository {
       where: { id: { in: [...ids] } },
       select: { id: true, regNumber: true, subject: true },
     });
+  }
+
+  /** id живых писем, чей номер/тема содержат запрос (#956): поиск бесед
+   *  писем по названию сущности (чат фильтрует СВОИ letter_id). */
+  async findIdsBySearch(query: string, limit: number): Promise<string[]> {
+    const needle = escapeLikePattern(query);
+    const rows = await this.prisma.letter.findMany({
+      where: {
+        deletedAt: null,
+        OR: [
+          { regNumber: { contains: needle, mode: 'insensitive' } },
+          { subject: { contains: needle, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
   }
 
   // ===== Связи «ответ на» (#56, Р5; таблица letter_relations) =====

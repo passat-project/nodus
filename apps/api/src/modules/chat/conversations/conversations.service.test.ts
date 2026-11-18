@@ -69,7 +69,11 @@ describe('ConversationsService', () => {
     listMembers: vi.fn(),
     putDraft: vi.fn(),
   };
-  const taskChat = { isDecider: vi.fn(async () => false) };
+  const taskChat = {
+    isDecider: vi.fn(async () => false),
+    searchIds: vi.fn(async () => [] as string[]),
+  };
+  const letterChat = { searchIds: vi.fn(async () => [] as string[]) };
   const items = { toItem: vi.fn(), toItems: vi.fn() };
   const txRunner = { run: vi.fn((cb: (tx: string) => unknown) => cb(TX)) };
   const eventBus = { emit: vi.fn() };
@@ -106,6 +110,7 @@ describe('ConversationsService', () => {
       avatars as never,
       userProfiles as never,
       taskChat as never,
+      letterChat as never,
     );
   });
 
@@ -158,7 +163,28 @@ describe('ConversationsService', () => {
       expect(userProfiles.searchByDisplayName).toHaveBeenCalledWith('Петров', 100);
       expect(repo.listForUser).toHaveBeenCalledWith(
         'me-1',
-        expect.objectContaining({ searchTitle: 'Петров', searchUserIds: ['u-2', 'u-3'] }),
+        expect.objectContaining({
+          searchTitle: 'Петров',
+          searchUserIds: ['u-2', 'u-3'],
+          searchTaskIds: [],
+          searchLetterIds: [],
+        }),
+      );
+    });
+
+    it('названия чатов задач/писем ищутся у владельцев (#956)', async () => {
+      repo.listForUser.mockResolvedValue([]);
+      userProfiles.searchByDisplayName.mockResolvedValue([]);
+      taskChat.searchIds.mockResolvedValue(['task-1']);
+      letterChat.searchIds.mockResolvedValue(['letter-1']);
+
+      await service.list('me-1', { limit: 50, search: 'ПП-123' });
+
+      expect(taskChat.searchIds).toHaveBeenCalledWith('ПП-123', 200);
+      expect(letterChat.searchIds).toHaveBeenCalledWith('ПП-123', 200);
+      expect(repo.listForUser).toHaveBeenCalledWith(
+        'me-1',
+        expect.objectContaining({ searchTaskIds: ['task-1'], searchLetterIds: ['letter-1'] }),
       );
     });
 

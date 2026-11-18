@@ -36,3 +36,38 @@ describe('TasksQueryRepository.feedFilters', () => {
     ]);
   });
 });
+
+describe('TasksQueryRepository.findIdsBySearch (#956)', () => {
+  it('ищет живые задачи по номеру и названию, отдаёт id', async () => {
+    const findMany = vi.fn().mockResolvedValue([{ id: 'task-1' }, { id: 'task-2' }]);
+    const repo = new TasksQueryRepository({ task: { findMany } } as never);
+
+    await expect(repo.findIdsBySearch('ПП-12', 200)).resolves.toEqual(['task-1', 'task-2']);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          deletedAt: null,
+          OR: [{ title: { contains: 'ПП-12', mode: 'insensitive' } }, { number: 12 }],
+        },
+        take: 200,
+      }),
+    );
+  });
+
+  it('нечисловой запрос — только поиск по названию', async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const repo = new TasksQueryRepository({ task: { findMany } } as never);
+
+    await repo.findIdsBySearch('смета', 50);
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          deletedAt: null,
+          OR: [{ title: { contains: 'смета', mode: 'insensitive' } }],
+        },
+        take: 50,
+      }),
+    );
+  });
+});

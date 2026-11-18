@@ -27,3 +27,24 @@ describe('LettersRepository.removeCustomFieldValues (#582)', () => {
     expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('LettersRepository.findIdsBySearch (#956)', () => {
+  it('ищет живые письма по номеру/теме, экранирует LIKE-метасимволы', async () => {
+    const findMany = vi.fn().mockResolvedValue([{ id: 'letter-1' }]);
+    const repo = new LettersRepository({ letter: { findMany } } as never);
+
+    await expect(repo.findIdsBySearch('100%', 200)).resolves.toEqual(['letter-1']);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          deletedAt: null,
+          OR: [
+            { regNumber: { contains: '100\\%', mode: 'insensitive' } },
+            { subject: { contains: '100\\%', mode: 'insensitive' } },
+          ],
+        },
+        take: 200,
+      }),
+    );
+  });
+});

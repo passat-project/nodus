@@ -273,6 +273,27 @@ export class TasksQueryRepository {
     });
   }
 
+  /** id живых задач, чьё название/номер похожи на запрос (#956): поиск бесед
+   *  по названию сущности. Видимость здесь не фильтруется — chat выдаёт только
+   *  беседы, где пользователь состоит, поэтому утечки нет. */
+  async findIdsBySearch(query: string, limit: number): Promise<string[]> {
+    const n = Number(query.replace(/^ПП-/i, ''));
+    const needle = escapeLikePattern(query);
+    const rows = await this.prisma.task.findMany({
+      where: {
+        deletedAt: null,
+        OR: [
+          { title: { contains: needle, mode: 'insensitive' } },
+          ...(Number.isSafeInteger(n) && n > 0 ? [{ number: n }] : []),
+        ],
+      },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
+
   /** Видна ли задача по where видимости смотрящего. */
   async isVisible(taskId: string, visible: Prisma.TaskWhereInput): Promise<boolean> {
     const row = await this.prisma.task.findFirst({

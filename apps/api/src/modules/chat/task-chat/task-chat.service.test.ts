@@ -40,6 +40,7 @@ function setup(opts: {
   const reader: TaskChatReader = {
     roster,
     refs: vi.fn(),
+    searchIds: vi.fn().mockResolvedValue([]),
     canView: vi.fn().mockResolvedValue(opts.canView ?? true),
     isDecider: vi.fn().mockResolvedValue(false),
     deciderTaskIds: vi.fn().mockResolvedValue([]),

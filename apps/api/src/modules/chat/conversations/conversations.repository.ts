@@ -36,6 +36,10 @@ interface ListOpts {
   cursor?: ConversationListCursor;
   searchTitle?: string;
   searchUserIds?: string[];
+  /** Id задач/писем, найденных владельцем по названию (#956): у чатов
+   *  задач/писем `title` в БД null, поэтому поиск идёт по `task_id`/`letter_id`. */
+  searchTaskIds?: string[];
+  searchLetterIds?: string[];
   /** Вкладка мессенджера (#252): chats — люди и каналы, entities — чаты
    *  задач и писем; all — без фильтра (пикеры, пересылка); direct — только
    *  личные (точечный поиск собеседника, не тонет в списке по активности). */
@@ -68,6 +72,8 @@ export class ConversationsRepository {
     if (opts.searchTitle !== undefined) {
       const like = `%${opts.searchTitle}%`;
       const searchUserIds = opts.searchUserIds ?? [];
+      const searchTaskIds = opts.searchTaskIds ?? [];
+      const searchLetterIds = opts.searchLetterIds ?? [];
       conditions.push(Prisma.sql`(
         c.title ILIKE ${like}
         OR EXISTS (
@@ -75,6 +81,8 @@ export class ConversationsRepository {
           WHERE sm.conversation_id = c.id
             AND sm.user_id = ANY(${searchUserIds}::uuid[])
         )
+        ${searchTaskIds.length > 0 ? Prisma.sql`OR c.task_id = ANY(${searchTaskIds}::uuid[])` : Prisma.empty}
+        ${searchLetterIds.length > 0 ? Prisma.sql`OR c.letter_id = ANY(${searchLetterIds}::uuid[])` : Prisma.empty}
       )`);
     }
     if (opts.scope === 'entities') {
