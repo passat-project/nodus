@@ -40,6 +40,9 @@ export interface SearchSqlParams {
   /** Pre-filter видимости (SearchVisibilityService), алиас `doc`. */
   visibility: Prisma.Sql;
   projectId?: string;
+  /** Поиск внутри одной беседы (#956): фильтр строк проекции по
+   *  `conversation_id`; у остальных источников колонка null — они отсекаются. */
+  conversationId?: string;
   from?: Date;
   /** Верхняя граница периода не включается (`to` + 1 день). */
   toExclusive?: Date;
@@ -51,12 +54,13 @@ export interface SearchSqlParams {
 
 const HEADLINE_OPTIONS = `StartSel=${SEARCH_SNIPPET_START},StopSel=${SEARCH_SNIPPET_END},MaxWords=24,MinWords=8,MaxFragments=2`;
 
-/** Фильтры строки до ног: типы модулей, проект, период, видимость. */
+/** Фильтры строки до ног: типы модулей, проект, беседа, период, видимость. */
 function baseFilter(p: SearchSqlParams): Prisma.Sql {
   const dates = p.from !== undefined || p.toExclusive !== undefined;
   return Prisma.sql`
     doc.source_type = ANY(${[...p.enabledTypes]}::text[])
     ${p.projectId ? Prisma.sql`AND doc.project_id = ${p.projectId}::uuid` : Prisma.empty}
+    ${p.conversationId ? Prisma.sql`AND doc.conversation_id = ${p.conversationId}::uuid` : Prisma.empty}
     ${p.from ? Prisma.sql`AND doc.source_created_at >= ${p.from}` : Prisma.empty}
     ${p.toExclusive ? Prisma.sql`AND doc.source_created_at < ${p.toExclusive}` : Prisma.empty}
     ${dates ? Prisma.sql`AND doc.source_type <> 'employee'` : Prisma.empty}

@@ -84,3 +84,17 @@ describe('TaskChatReaderProvider.isDecider (#433)', () => {
     await expect(provider.isDecider('task-1', 'u1')).resolves.toBe(false);
   });
 });
+
+describe('TaskChatReaderProvider.searchIds (#956)', () => {
+  it('делегирует поиск задач по названию/номеру репозиторию', async () => {
+    const reads = { findIdsBySearch: vi.fn(async () => ['task-1']) };
+    const provider = new TaskChatReaderProvider(
+      reads as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    await expect(provider.searchIds('ПП-12', 200)).resolves.toEqual(['task-1']);
+    expect(reads.findIdsBySearch).toHaveBeenCalledWith('ПП-12', 200);
+  });
+});

@@ -16,6 +16,7 @@ import { api } from '../../../shared/api-client.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { useUsersList } from '../../../shared/api/users-list.js';
 import { chatKeys } from '../../../shared/chat/chat-keys.js';
+import { useDebouncedValue } from '../../../shared/lib/use-debounced-value.js';
 import {
   useActiveConversation,
   useScopedConversations,
@@ -26,7 +27,6 @@ import { withoutPatronymic } from '../../../shared/lib/format.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { openTaskCreate } from '../../../shared/tasks/task-create-store.js';
 import { useConversations } from '../api/chat-api.js';
-import { conversationSubtitle, conversationTitle } from '../lib/conversations.js';
 import { ChatCreateDialog, type CreateConversationKind } from './chat-create-dialog.js';
 import { ChatSettings } from './chat-settings.js';
 import { ChatWorkspace } from './chat-workspace.js';
@@ -75,19 +75,22 @@ export function MessengerBody({
    *  беседы (#719). Не передан — хост владеет вкладкой сам (страница `?tab=`). */
   onTabChange?: (tab: ChatTab) => void;
 }) {
+  // Локальный поиск людей + серверный поиск бесед (модель Битрикс24:
+  // «Найти сотрудника или чат»). Debounce 250 мс: сервер ищет по ВСЕЙ базе
+  // бесед (название, участники, название задачи/письма), а не по загруженным
+  // 50 строкам (#956).
+  const [query, setQuery] = useState('');
+  const search = useDebouncedValue(query.trim(), 250);
   // Общий список (scope=all) — для поиска активной беседы, открытой ссылкой
   // из другой вкладки; строки вкладки — свой серверный фильтр (#252).
   const { data, isError } = useConversations();
-  const tabQuery = useScopedConversations(tab === 'tasks' ? 'entities' : 'chats');
+  const tabQuery = useScopedConversations(tab === 'tasks' ? 'entities' : 'chats', search);
   const tabItems = useMemo(
     () => tabQuery.data?.pages.flatMap((p) => p.items) ?? [],
     [tabQuery.data],
   );
   const meId = useAuthStore((s) => s.user?.id);
-  // Локальный поиск по списку бесед (модель Битрикс24: «Найти сотрудника
-  // или чат»): подстрока по названию и подписи (последнее сообщение).
-  const [query, setQuery] = useState('');
-  // Создание группового чата/канала (#91, реф Bitrix24: кнопка СПРАВА от
+  // Создание группового чата/канала (#91, реф Битрикс24: кнопка СПРАВА от
   // поиска с попапом команд; команда открывает окно настройки чата).
   const [createKind, setCreateKind] = useState<CreateConversationKind | null>(null);
   // Создание задачи — кнопка СВОЕЙ вкладки (#96, вердикт владельца 24.09.2026):
@@ -146,13 +149,9 @@ export function MessengerBody({
 
   // Вкладка «Чаты задач и писем» — обсуждения сущностей (задачи + письма);
   // основная вкладка — люди и каналы (модель v2 корреспонденции, #69).
-  // Фильтр типа — серверный (scope, #252).
-  const items = tabItems.filter(
-    (c) =>
-      !q ||
-      conversationTitle(c, meId).toLowerCase().includes(q) ||
-      conversationSubtitle(c).toLowerCase().includes(q),
-  );
+  // Фильтр типа — серверный (scope, #252), поиск — тоже серверный (#956):
+  // клиентская подстрока теряла беседы за загруженной страницей.
+  const items = tabItems;
   // Deep-link на беседу за пределами загруженных страниц (#225): ищем по
   // страницам списка, а не показываем «Выберите беседу».
   const active = useActiveConversation(

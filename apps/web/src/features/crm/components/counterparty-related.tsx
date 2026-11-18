@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
-import type { LetterListItem, ProjectListItem } from '@nodus/contracts';
+import type { LetterListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { letterRows, useLettersInfinite } from '../../../shared/api/letters-list.js';
+import { useClientProjects } from '../../../shared/api/counterparty-relations.js';
 import { useDebouncedValue } from '../../../shared/lib/use-debounced-value.js';
 import { makeCardRowMenuItems } from '../../../shared/views/card-row-menu.js';
 import { DataTable } from '../../../shared/views/data-table.js';
@@ -13,31 +14,14 @@ import {
 } from '../../../shared/views/letter-filter-fields.js';
 import { useLetterTableFields } from '../../../shared/views/letter-table-fields.js';
 import { ListToolbar } from '../../../shared/views/list-toolbar.js';
-import type { ActiveListFilter, FilterFieldDef } from '../../../shared/views/list-filters.js';
+import type { ActiveListFilter } from '../../../shared/views/list-filters.js';
 import { useProjectTableFields } from '../../../shared/views/project-table-fields.js';
 import { useFilteredList, useListToolbar } from '../../../shared/views/use-list-toolbar.js';
 import { ViewSettings } from '../../../shared/views/view-settings.js';
 
 const LETTERS_VIEW = 'crm.letters';
 const PROJECTS_VIEW = 'crm.projects';
-const noProjectDefs: FilterFieldDef<ProjectListItem>[] = [];
 const letterKey = (letter: LetterListItem) => letter.id;
-
-const projectSearchText = (p: ProjectListItem) => `${p.code} ${p.name}`;
-
-function useSearch<T>(
-  viewKey: string,
-  items: T[],
-  defs: FilterFieldDef<T>[],
-  text: (row: T) => string,
-) {
-  const toolbar = useListToolbar(viewKey);
-  const filter = useMemo<ActiveListFilter<T>>(
-    () => ({ defs, state: toolbar.filters, query: toolbar.query, searchText: text }),
-    [defs, toolbar.filters, toolbar.query, text],
-  );
-  return { toolbar, rows: useFilteredList(items, filter) };
-}
 
 /**
  * Вкладка «Письма» карточки контрагента (#460, #55) — обратная связь:
@@ -111,21 +95,26 @@ export function CounterpartyLettersTab({
  * заказчик — поле проекта.
  */
 export function CounterpartyProjectsTab({
-  projects,
-  isLoading,
+  counterpartyId,
+  enabled,
 }: {
-  projects: ProjectListItem[];
-  isLoading: boolean;
+  counterpartyId: string;
+  /** Вкладка открыта и домен проектов доступен (см. карточку). */
+  enabled: boolean;
 }) {
   const openCard = useOpenCard();
+  const toolbar = useListToolbar(PROJECTS_VIEW);
+  const search = useDebouncedValue(toolbar.query.trim(), 250);
+  const { data, isLoading } = useClientProjects(counterpartyId, { enabled, search });
+  // Поиск уже применил сервер (#956): клиентской подстроки здесь нет.
+  const rows = data?.items ?? [];
   // Реестр колонок — хук: атрибуты портала (#632) приходят с сервера.
   const fields = useProjectTableFields();
-  const { toolbar, rows } = useSearch(PROJECTS_VIEW, projects, noProjectDefs, projectSearchText);
   return (
     <div className="flex h-full flex-col">
       <ListToolbar
         toolbar={toolbar}
-        defs={noProjectDefs}
+        defs={[]}
         right={<ViewSettings viewKey={PROJECTS_VIEW} defs={fields} />}
       />
       <div className="min-h-0 flex-1">

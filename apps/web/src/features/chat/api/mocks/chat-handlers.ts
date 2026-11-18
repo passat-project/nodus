@@ -16,6 +16,7 @@ import { demoUserListItems, userRef } from '../../../../shared/mocks/data/users.
 import { actorUserRef, getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import { chatMutationHandlers } from './chat-mutation-handlers.js';
 import { conversationMutationHandlers } from './conversation-mutation-handlers.js';
+import { matchesConversationSearch } from './conversation-search-mock.js';
 import { favoriteHandlers } from './favorite-handlers.js';
 import { letterConversationHandlers } from './letter-conversation-handlers.js';
 import { projectConversationHandlers } from './project-conversation-handlers.js';
@@ -44,15 +45,19 @@ const conversationHandlers = [
   ),
   /** Вкладки мессенджера (#252): scope=chats — люди и каналы, entities —
    *  чаты задач и писем, direct — только личные, без параметра — всё
-   *  (пикеры, гейт ленты). */
+   *  (пикеры, гейт ленты). Поиск (#956) — серверный: подстрока по названию,
+   *  участникам, названию/номеру задачи или письма (паритет с API). */
   http.get('/api/v1/chat/conversations', ({ request }) => {
-    const scope = new URL(request.url).searchParams.get('scope') ?? 'all';
+    const params = new URL(request.url).searchParams;
+    const scope = params.get('scope') ?? 'all';
+    const search = params.get('search') ?? '';
     const entity = (c: ConversationListItem) => c.type === 'task' || c.type === 'letter';
     const direct = (c: ConversationListItem) => c.type === 'direct';
     return HttpResponse.json({
       items: demoConversations.filter(
         (c) =>
           !hiddenConversations.has(c.id) &&
+          matchesConversationSearch(c, search) &&
           (scope === 'all' ||
             (scope === 'entities' ? entity(c) : scope === 'direct' ? direct(c) : !entity(c))),
       ),

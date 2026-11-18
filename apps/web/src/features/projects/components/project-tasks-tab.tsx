@@ -6,6 +6,7 @@ import { Button } from '@nodus/ui/components/button';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { openTaskCreate } from '../../../shared/tasks/task-create-store.js';
+import { useDebouncedValue } from '../../../shared/lib/use-debounced-value.js';
 import { CardTabToolbar } from '../../../shared/ui/entity-card/card-tab-toolbar.js';
 import { ListToolbar } from '../../../shared/views/list-toolbar.js';
 import type { ActiveListFilter } from '../../../shared/views/list-filters.js';
@@ -38,14 +39,18 @@ const tasksViews: { id: TasksView; label: string; icon: typeof List }[] = [
 export function ProjectTasksTab({ projectId }: { projectId: string }) {
   const [view, setView] = useState<TasksView>('list');
   const toolbar = useListToolbar('projects.tasks', taskBuiltinPresets);
+  // Серверный поиск (#956): задачи проекта пагинированы — клиентский фильтр
+  // видел только загруженную страницу.
+  const search = useDebouncedValue(toolbar.query.trim(), 250);
   const defs = useTaskFilterDefs({ projectVisible: false });
   // Реестры видов с атрибутами портала (#632): шестерёнка показывает их
   // вместе с системными полями; «Проект» скрыт — контекст очевиден.
   const listFields = useTaskTableFields({ projectVisible: false });
   const cardFields = useTaskCardFields({ projectVisible: false });
   const filter = useMemo<ActiveListFilter<TaskListItem>>(
-    () => ({ defs, state: toolbar.filters, query: toolbar.query, searchText: taskSearchText }),
-    [defs, toolbar.filters, toolbar.query],
+    // Запрос уже применил сервер: на клиенте — только атрибуты фильтра.
+    () => ({ defs, state: toolbar.filters, query: '', searchText: taskSearchText }),
+    [defs, toolbar.filters],
   );
 
   return (
@@ -100,9 +105,9 @@ export function ProjectTasksTab({ projectId }: { projectId: string }) {
       </CardTabToolbar>
       <div className="min-h-0 flex-1">
         {view === 'list' ? (
-          <ProjectTaskList projectId={projectId} filter={filter} />
+          <ProjectTaskList projectId={projectId} filter={filter} search={search} />
         ) : (
-          <ProjectKanban projectId={projectId} filter={filter} />
+          <ProjectKanban projectId={projectId} filter={filter} search={search} />
         )}
       </div>
     </div>

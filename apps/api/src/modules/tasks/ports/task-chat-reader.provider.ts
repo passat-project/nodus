@@ -39,6 +39,12 @@ export class TaskChatReaderProvider implements TaskChatReader {
     return this.reads.findRefs(taskIds);
   }
 
+  /** Поиск бесед задач по названию/номеру (#956): id задач, дальше chat
+   *  фильтрует свои `task_id` (кросс-модульного чтения нет). */
+  searchIds(query: string, limit: number): Promise<string[]> {
+    return this.reads.findIdsBySearch(query, limit);
+  }
+
   async canView(
     taskId: string,
     user: { id: string; permissions: readonly string[] },

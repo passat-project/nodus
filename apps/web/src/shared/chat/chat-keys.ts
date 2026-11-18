@@ -23,8 +23,14 @@ export const chatKeys = {
   /** Канал проекта (#52): find-or-create по проекту; не участнику — 404. */
   byProject: (projectId: string) => [...chatKeys.conversations(), 'project', projectId] as const,
   /** Вкладка мессенджера (#252): серверный фильтр и своя пагинация; под
-   *  префиксом conversations() — общие инвалидации списка её достают. */
-  scoped: (scope: ConversationScope) => [...chatKeys.conversations(), 'scope', scope] as const,
+   *  префиксом conversations() — общие инвалидации списка её достают.
+   *  `search` (#956) — серверный поиск: отдельная ветка той же вкладки. */
+  scoped: (scope: ConversationScope, search?: string) =>
+    search
+      ? ([...chatKeys.conversations(), 'scope', scope, { search }] as const)
+      : ([...chatKeys.conversations(), 'scope', scope] as const),
+  /** Поиск бесед для пикеров (пересылка, #956): один запрос, без пагинации. */
+  search: (q: string) => [...chatKeys.conversations(), 'search', q] as const,
   /** Сводка непрочитанных по вкладкам (#409): точная сумма по всем беседам;
    *  под префиксом conversations() — WS-инвалидации списка её достают. */
   unreadSummary: () => [...chatKeys.conversations(), 'unread-summary'] as const,

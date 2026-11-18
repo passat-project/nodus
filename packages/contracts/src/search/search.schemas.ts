@@ -93,13 +93,18 @@ const searchTypesParam = z.preprocess(
  * Запрос `GET /api/v1/search`. `q` обязателен (2..256, trim);
  * `types` — фильтр по источникам (`types=task,letter`), `projectId` — по
  * проекту (задачи, письма, проекты; сообщения в v1 проектом не фильтруются —
- * #952 N7), `from`/`to` — по `sourceCreatedAt` включительно (дни UTC),
- * `cursor` — из `nextCursor`.
+ * #952 N7), `conversationId` — по сообщениям одной беседы (поиск внутри
+ * открытого чата, #956): строки других типов без `conversation_id` в такую
+ * выдачу не попадают; `from`/`to` — по `sourceCreatedAt` включительно
+ * (дни UTC), `cursor` — из `nextCursor`.
  */
 export const searchRequestSchema = z.object({
   q: z.string().trim().min(SEARCH_LIMITS.queryMin).max(SEARCH_LIMITS.queryMax),
   types: searchTypesParam,
   projectId: z.uuid().optional(),
+  /** Фильтр «сообщения этой беседы» (#956). Видимость по-прежнему
+   *  pre-filter членства: чужая беседа даёт пустую выдачу (не 403). */
+  conversationId: z.uuid().optional(),
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
   sort: searchSortSchema.default('relevance'),

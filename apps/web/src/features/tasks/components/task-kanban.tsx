@@ -37,10 +37,13 @@ import { TasksEmpty } from './tasks-empty.js';
 export function TaskKanban({
   filter,
   onCreate,
+  search,
 }: {
   filter?: ActiveListFilter<TaskListItem>;
   /** Пустой «Мой план» — главное действие пустого состояния. */
   onCreate?: () => void;
+  /** Серверный поиск (#956): уже debounced; сужает фиды колонок на сервере. */
+  search?: string;
 }) {
   const { data: stages } = usePersonalStages();
   const updatePersonalStage = useUpdateTaskPersonalStage();
@@ -58,12 +61,15 @@ export function TaskKanban({
   const bump = (fromId: string, toId: string, d: 1 | -1) =>
     setCountDelta((prev) => bumpCountDelta(prev, fromId, toId, d));
 
+  const query = search?.trim() ?? '';
   const board = useKanbanBoard({
     axis: personalAxis,
     stages,
-    queryKey: tasksKeys.kanban('personal'),
+    queryKey: tasksKeys.kanban('personal', query || undefined),
     feedUrl: (stageId, cursor, limit) =>
-      `/tasks?personalStageId=${stageId}&limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`,
+      `/tasks?personalStageId=${stageId}&limit=${limit}${
+        query ? `&search=${encodeURIComponent(query)}` : ''
+      }${cursor ? `&cursor=${cursor}` : ''}`,
     onMove: (vars, opts) =>
       updatePersonalStage.mutate(
         { taskId: vars.taskId, personalStageId: vars.stageId, index: vars.index },
@@ -89,8 +95,10 @@ export function TaskKanban({
   // Локальный фильтр строки инструментов: сужает ТОЛЬКО отображение (DnD-логика
   // идёт по полному борду); при активном фильтре drag выключен — перестановка
   // по урезанному набору давала бы ложные индексы; шапки — «n из m».
+  // Поиск (#956) — серверный: фиды колонок уже вернули только совпадения,
+  // но DnD на урезанном наборе так же недопустим.
   const visibleItems = useFilteredList(board.items, filter);
-  const filtering = isFilteringActive(filter);
+  const filtering = isFilteringActive(filter) || query !== '';
 
   if (!board.ready) {
     // Скелетон зеркалит классы контейнера доски ниже (pt-0 поверх pt-3 базы).

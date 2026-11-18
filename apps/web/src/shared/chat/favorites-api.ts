@@ -66,13 +66,15 @@ async function fetchFavorites(
   return api<FavoritePage>(`/chat/favorites${qs ? `?${qs}` : ''}`);
 }
 
-/** Список карточек (страницами; витрина склеивает по nextCursor). */
-export function useFavorites(filters: FavoriteFilters = {}) {
+/** Список карточек (страницами; витрина склеивает по nextCursor). `enabled`
+ *  — панель чата не грузит закладки, когда показывает поиск сообщений (#956). */
+export function useFavorites(filters: FavoriteFilters = {}, options: { enabled?: boolean } = {}) {
   return useInfiniteQuery({
     queryKey: favoriteKeys.list(filters),
     queryFn: ({ pageParam }) => fetchFavorites(filters, pageParam),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
+    enabled: options.enabled ?? true,
   });
 }
 

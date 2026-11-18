@@ -43,10 +43,13 @@ export function TaskList({
   filter,
   onCreate,
   scope = 'mine',
+  search,
 }: {
   filter?: ActiveListFilter<TaskListItem>;
   onCreate?: () => void;
   scope?: 'mine' | 'all';
+  /** Серверный поиск (#956): приходит уже debounced из строки инструментов. */
+  search?: string;
 }) {
   // Пресет «Ждут моего решения» (#433) — серверный срез: role=decider,
   // scope принудительно all. Клиентский фильтр по странице соврёт на пагинации.
@@ -54,6 +57,7 @@ export function TaskList({
   const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useTasksPages(
     scope,
     deciderOnly ? 'decider' : undefined,
+    search,
   );
   const openCard = useOpenCard();
   const prefetch = usePrefetchTask();
@@ -76,9 +80,10 @@ export function TaskList({
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   const items = useMemo(() => data?.pages.flatMap((p) => p.items) ?? [], [data]);
-  // Локальный фильтр строки инструментов: сужает загруженное (дерево строится
-  // из видимого; родитель вне фильтра отображается корнем — ограничение
-  // клиентской фильтрации дерева, до серверной).
+  // Локальный фильтр строки инструментов применяет только АТРИБУТЫ: запрос
+  // поиска ушёл на сервер (#956) — иначе он видел бы лишь загруженные
+  // страницы и «врал» на пагинации. Дерево строится из видимого; родитель
+  // вне фильтра отображается корнем — ограничение клиентской фильтрации дерева.
   const filtered = useFilteredList(items, filter);
   // Сортировка (концепт #4): ПЛОСКИЙ список до построения дерева — получается
   // сортировка СИБЛИНГОВ внутри веток, структура дерева не ломается.

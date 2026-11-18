@@ -9,7 +9,12 @@ import { useNavigate } from '@tanstack/react-router';
 
 import { openCardViaBridge, replaceTopMessengerCard } from '../lib/card-bridge.js';
 import { useAuthStore } from '../auth-store.js';
-import { useConversations, useConversationMessages } from './chat-queries.js';
+import { useDebouncedValue } from '../lib/use-debounced-value.js';
+import {
+  useConversations,
+  useConversationMessages,
+  useConversationSearch,
+} from './chat-queries.js';
 import { focusComposer, hasVisibleComposer } from './composer-focus.js';
 import { ConversationAvatar } from './conversation-avatar.js';
 import {
@@ -182,7 +187,9 @@ function ForwardBody({ request, onDone }: { request: ForwardRequest; onDone: () 
   );
 }
 
-function ConversationLevel({
+/** Уровень выбора беседы: фильтры категорий + серверный поиск (#956).
+ *  Экспорт — для юнит-теста: диалог целиком требует роутера и живого стора. */
+export function ConversationLevel({
   conversations,
   meId,
   onPick,
@@ -196,15 +203,21 @@ function ConversationLevel({
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterId>('all');
   const filterTypes = FILTERS.find((f) => f.id === filter)?.types ?? null;
+  // Поиск — серверный (#956): пикер пересылки раньше видел только первые 50
+  // бесед без догрузки. Debounce 250 мс; до первого ответа — загруженный
+  // список (пустое «ничего не найдено» на время запроса лгало бы).
+  const search = useDebouncedValue(query.trim(), 250);
+  const { data: searchData } = useConversationSearch(search);
+  const source = search ? (searchData?.items ?? conversations) : conversations;
   // «Избранное» — ВСЕГДА первая строка пикера (вердикт 04.10 р.9, канон
   // Telegram Saved Messages): выбор = автозвезда на оригиналы, пояснение —
-  // подзаголовком строки; из общего списка исключено (не дублируем).
+  // подзаголовком строки; из общего списка исключено (не дублируем). Строка
+  // берётся из несфильтрованного списка — поиск её не прячет; сверка по id,
+  // потому что серверная выдача возвращает другой объект той же беседы.
   const notes = conversations.find((c) => isNotesConversation(c, meId)) ?? null;
-  const filtered = conversations.filter(
-    (c) =>
-      c !== notes &&
-      (filterTypes === null || filterTypes.includes(c.type)) &&
-      conversationTitle(c, meId).toLowerCase().includes(query.trim().toLowerCase()),
+  // Подстроку уже применил сервер; на клиенте — только фильтр типов.
+  const filtered = source.filter(
+    (c) => c.id !== notes?.id && (filterTypes === null || filterTypes.includes(c.type)),
   );
   return (
     <>

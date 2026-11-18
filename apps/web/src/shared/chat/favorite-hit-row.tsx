@@ -1,6 +1,7 @@
 import { Star } from 'lucide-react';
 import { ui } from '@nodus/contracts';
 
+import { SnippetText } from '../search/snippet-text.js';
 import { MentionSnippet } from './mention-chip.js';
 
 /** Вложение строки — словом, не рендером (реф Битрикс24, 04.10 р.5). */
@@ -23,6 +24,7 @@ export function FavoriteHitRow({
   snippet,
   attachments,
   favorited = true,
+  highlightSnippet = false,
   onJump,
 }: {
   author: string;
@@ -31,6 +33,8 @@ export function FavoriteHitRow({
   /** Индикатор «в избранном» — только у закладок; записи витрины — без
    *  звезды (сообщения самому себе — ещё не избранное, 04.10 р.7). */
   favorited?: boolean;
+  /** Сниппет серверного поиска: маркеры `\u0001/\u0002` → подсветка (#956). */
+  highlightSnippet?: boolean;
   onJump: () => void;
 }) {
   const words = attachments.map(attachmentWord).join(' · ');
@@ -43,7 +47,11 @@ export function FavoriteHitRow({
       <span className="w-full truncate text-sm font-semibold text-foreground">{author}</span>
       <span className="line-clamp-3 w-full text-sm leading-snug text-muted-foreground">
         {words ? `${words}\u00A0· ` : ''}
-        <MentionSnippet text={snippet || '\u00A0'} />
+        {highlightSnippet ? (
+          <SnippetText text={snippet || '\u00A0'} />
+        ) : (
+          <MentionSnippet text={snippet || '\u00A0'} />
+        )}
       </span>
       {/* Индикатор «в избранном» — залитая звезда справа внизу строки. */}
       {favorited ? (

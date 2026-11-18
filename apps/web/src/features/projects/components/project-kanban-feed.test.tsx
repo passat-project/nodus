@@ -14,8 +14,10 @@ type FeedUrl = (stageId: string, cursor: string | null, limit: number) => string
 
 const { feedUrlMock, state } = vi.hoisted(() => ({
   feedUrlMock: vi.fn(
-    (projectId: string, stageId: string, cursor: string | null, limit: number) =>
-      `/feed?project=${projectId}&stage=${stageId}&limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`,
+    (projectId: string, stageId: string, cursor: string | null, limit: number, search = '') =>
+      `/feed?project=${projectId}&stage=${stageId}&limit=${limit}${
+        search ? `&search=${encodeURIComponent(search)}` : ''
+      }${cursor ? `&cursor=${cursor}` : ''}`,
   ),
   state: { captured: null as null | { feedUrl: FeedUrl } },
 }));
@@ -51,10 +53,18 @@ describe('ProjectKanban: feedUrl прокидывает глубину коло�
     expect(state.captured).not.toBeNull();
 
     expect(state.captured?.feedUrl('s1', null, 42)).toBe('/feed?project=p1&stage=s1&limit=42');
-    expect(feedUrlMock).toHaveBeenCalledWith('p1', 's1', null, 42);
+    expect(feedUrlMock).toHaveBeenCalledWith('p1', 's1', null, 42, '');
 
     expect(state.captured?.feedUrl('s1', 'c1', 100)).toBe(
       '/feed?project=p1&stage=s1&limit=100&cursor=c1',
+    );
+  });
+
+  it('серверный поиск (#956) доходит до URL фида колонки', () => {
+    render(<ProjectKanban projectId="p1" search="Смета" />);
+
+    expect(state.captured?.feedUrl('s1', null, 42)).toBe(
+      '/feed?project=p1&stage=s1&limit=42&search=%D0%A1%D0%BC%D0%B5%D1%82%D0%B0',
     );
   });
 });

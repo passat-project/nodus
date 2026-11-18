@@ -27,3 +27,36 @@ describe('ConversationsRepository — читатель-решающий (#433)',
     await expect(repository.findTaskId('conv-2')).resolves.toBeNull();
   });
 });
+
+describe('ConversationsRepository — поиск бесед по сущностям (#956)', () => {
+  it('добавляет OR по task_id/letter_id только при непустых наборах', async () => {
+    const queryRaw = vi.fn().mockResolvedValue([]);
+    const repository = new ConversationsRepository({ $queryRaw: queryRaw } as never);
+
+    await repository.listForUser('me-1', {
+      limit: 10,
+      searchTitle: 'ПП-123',
+      searchUserIds: ['u-1'],
+      searchTaskIds: ['task-1'],
+      searchLetterIds: ['letter-1'],
+    });
+
+    const sql = queryRaw.mock.calls[0]?.[0] as unknown as { sql: string; values: unknown[] };
+    expect(sql.sql).toContain('c.task_id = ANY');
+    expect(sql.sql).toContain('c.letter_id = ANY');
+    // Prisma.join инлайнит массивы параметрами — разворачиваем вложенность.
+    expect(sql.values.flat(Infinity)).toEqual(expect.arrayContaining(['task-1', 'letter-1']));
+
+    queryRaw.mockClear();
+    await repository.listForUser('me-1', {
+      limit: 10,
+      searchTitle: 'ПП-123',
+      searchUserIds: [],
+      searchTaskIds: [],
+      searchLetterIds: [],
+    });
+    const empty = queryRaw.mock.calls[0]?.[0] as unknown as { sql: string };
+    expect(empty.sql).not.toContain('c.task_id = ANY');
+    expect(empty.sql).not.toContain('c.letter_id = ANY');
+  });
+});

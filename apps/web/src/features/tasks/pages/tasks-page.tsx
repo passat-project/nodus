@@ -9,6 +9,7 @@ import { cn } from '@nodus/ui/lib/utils';
 import { ListToolbar } from '../../../shared/views/list-toolbar.js';
 import type { ActiveListFilter } from '../../../shared/views/list-filters.js';
 import { useListToolbar } from '../../../shared/views/use-list-toolbar.js';
+import { useDebouncedValue } from '../../../shared/lib/use-debounced-value.js';
 import { ViewSettings } from '../../../shared/views/view-settings.js';
 import { useTaskStages } from '../../../shared/api/task-stages.js';
 import { projectsAvailable } from '../../../shared/api/projects-available.js';
@@ -54,13 +55,17 @@ function TasksSection({ view, overdueTotal }: { view: 'list' | 'kanban'; overdue
   // доска, журналы проектов/сотрудника — чужие фиды, серверного среза там нет.
   const presets = view === 'list' ? taskListPresets : taskBuiltinPresets;
   const toolbar = useListToolbar(viewKey, presets);
+  // Серверный поиск (#956): журнал и колонки пагинированы — клиентский
+  // фильтр видел только загруженные строки. Debounce — 250 мс, как у писем.
+  const search = useDebouncedValue(toolbar.query.trim(), 250);
   const defs = useTaskFilterDefs({
     projectVisible: projectsAvailable(),
     deciderVisible: view === 'list',
   });
   const filter = useMemo<ActiveListFilter<TaskListItem>>(
-    () => ({ defs, state: toolbar.filters, query: toolbar.query, searchText: taskSearchText }),
-    [defs, toolbar.filters, toolbar.query],
+    // Запрос уже применил сервер: на клиенте — только атрибуты фильтра.
+    () => ({ defs, state: toolbar.filters, query: '', searchText: taskSearchText }),
+    [defs, toolbar.filters],
   );
   const overdueActive = toolbar.filters.overdue === 'yes';
   const deciderActive = toolbar.filters.role === 'decider';
@@ -118,9 +123,14 @@ function TasksSection({ view, overdueTotal }: { view: 'list' | 'kanban'; overdue
       </div>
       <div className="relative min-h-0 flex-1">
         {view === 'list' ? (
-          <TaskList filter={filter} scope={scope} onCreate={() => openTaskCreate()} />
+          <TaskList
+            filter={filter}
+            scope={scope}
+            search={search}
+            onCreate={() => openTaskCreate()}
+          />
         ) : (
-          <TaskKanban filter={filter} onCreate={() => openTaskCreate()} />
+          <TaskKanban filter={filter} search={search} onCreate={() => openTaskCreate()} />
         )}
       </div>
     </>

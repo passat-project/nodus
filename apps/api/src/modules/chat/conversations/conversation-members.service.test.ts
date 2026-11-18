@@ -112,6 +112,7 @@ function makeServices() {
     avatars as never,
     userProfiles as never,
     { isDecider: vi.fn(async () => false) } as never,
+    { searchIds: vi.fn(async () => []) } as never,
   );
   const members = new ConversationMembersService(
     repo as never,

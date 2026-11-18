@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { assigneeTasksUrl, memberProjectsUrl } from './user-relations.js';
+import { assigneeTasksUrl, memberProjectsUrl, userRelationsKeys } from './user-relations.js';
 
 /** AUD-028 (#866): вкладки-связи карточки сотрудника не должны показывать
  *  пересечение со смотрящим — только его собственное участие. */
@@ -15,5 +15,32 @@ describe('адреса вкладок карточки сотрудника (#86
     const url = memberProjectsUrl('00000000-0000-4000-8000-000000000001');
     expect(url).toContain('memberId=00000000-0000-4000-8000-000000000001');
     expect(url).toContain('scope=all');
+  });
+
+  it('серверный поиск во вкладках (#956): search в обоих списках', () => {
+    const id = '00000000-0000-4000-8000-000000000001';
+    expect(assigneeTasksUrl(id, 'ПП-12')).toContain(`search=${encodeURIComponent('ПП-12')}`);
+    expect(memberProjectsUrl(id, 'Смета')).toContain(`search=${encodeURIComponent('Смета')}`);
+    // Пустой запрос не добавляет параметр (канонический URL без поиска).
+    expect(assigneeTasksUrl(id, '  ')).not.toContain('search=');
+  });
+});
+
+describe('ключи вкладок карточки сотрудника (#956)', () => {
+  it('без поиска — канонический ключ, с поиском — отдельная ветка', () => {
+    expect(userRelationsKeys.tasks('u-1')).toEqual(['tasks', 'assignee', 'u-1']);
+    expect(userRelationsKeys.tasks('u-1', 'Смета')).toEqual([
+      'tasks',
+      'assignee',
+      'u-1',
+      { search: 'Смета' },
+    ]);
+    expect(userRelationsKeys.projects('u-1')).toEqual(['projects', 'member', 'u-1']);
+    expect(userRelationsKeys.projects('u-1', 'Смета')).toEqual([
+      'projects',
+      'member',
+      'u-1',
+      { search: 'Смета' },
+    ]);
   });
 });

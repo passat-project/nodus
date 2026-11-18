@@ -28,6 +28,10 @@ export interface TaskChatReader {
   /** Ссылки на задачи (номер + название) для строк списка бесед. */
   refs(taskIds: string[]): Promise<TaskRef[]>;
 
+  /** id живых задач, чьё название/номер содержат запрос (#956): серверный
+   *  поиск бесед задач по названию сущности (чат фильтрует СВОИ task_id). */
+  searchIds(query: string, limit: number): Promise<string[]>;
+
   /** Видна ли задача пользователю (та же функция видимости модуля задач). */
   canView(taskId: string, user: { id: string; permissions: readonly string[] }): Promise<boolean>;
 

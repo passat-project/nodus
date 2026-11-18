@@ -43,12 +43,11 @@ function Harness({
         setVisited((prev) => (prev.includes(tab) ? prev : [...prev, tab]));
       }}
       isOwnCard={isOwnCard}
+      userId="user-1"
       chat={<div>лента диалога</div>}
       tasks={[]}
-      tasksLoading={false}
       onCreateTask={vi.fn()}
       projects={[]}
-      projectsLoading={false}
       panelOpen={false}
       onPanelToggle={onPanelToggle}
     />
@@ -114,12 +113,11 @@ describe('EmployeeCardWorkTabs — рабочая зона карточки со
             setVisited((prev) => (prev.includes(tab) ? prev : [...prev, tab]));
           }}
           isOwnCard={false}
+          userId="user-1"
           chat={<div>лента</div>}
           tasks={[{ id: 't1' } as never, { id: 't2' } as never, { id: 't3' } as never]}
-          tasksLoading={false}
           onCreateTask={vi.fn()}
           projects={[]}
-          projectsLoading={false}
           panelOpen={false}
           onPanelToggle={vi.fn()}
         />

@@ -77,8 +77,11 @@ export function useProjectHistory(id: string) {
 /** URL фида задач проекта: `scope=all` — дерево и список показывают ВСЕ
  *  задачи проекта, а не только «мои» (F-A, #467). Видимость проекта уже
  *  проверена сервером; для секретного проекта срез тот же. */
-export function projectTaskFeedUrl(projectId: string, cursor: string | null): string {
-  return `/tasks?projectId=${projectId}&scope=all&limit=100${cursor ? `&cursor=${cursor}` : ''}`;
+export function projectTaskFeedUrl(projectId: string, cursor: string | null, search = ''): string {
+  const query = search.trim();
+  return `/tasks?projectId=${projectId}&scope=all&limit=100${
+    query ? `&search=${encodeURIComponent(query)}` : ''
+  }${cursor ? `&cursor=${cursor}` : ''}`;
 }
 
 /** URL колонки проектного канбана — тот же `scope=all` (F-A). */
@@ -87,20 +90,31 @@ export function projectKanbanFeedUrl(
   stageId: string,
   cursor: string | null,
   limit: number,
+  search = '',
 ): string {
-  return `/tasks?stageId=${stageId}&projectId=${projectId}&scope=all&limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`;
+  const query = search.trim();
+  return `/tasks?stageId=${stageId}&projectId=${projectId}&scope=all&limit=${limit}${
+    query ? `&search=${encodeURIComponent(query)}` : ''
+  }${cursor ? `&cursor=${cursor}` : ''}`;
 }
 
 /** Задачи проекта (вид «Список»): те же сущности, фильтр projectId
- *  (плейбук §3.1 — один канбан и один список задач, а не два). */
-export function useProjectTaskPages(projectId: string) {
+ *  (плейбук §3.1 — один канбан и один список задач, а не два). Серверный
+ *  поиск (#956) — своя ветка кэша под префиксом журнала. */
+export function useProjectTaskPages(projectId: string, search?: string) {
+  const query = search?.trim() ?? '';
   return useInfiniteQuery({
-    queryKey: tasksKeys.listPages({ projectId, scope: 'all' }),
+    queryKey: tasksKeys.listPages({
+      projectId,
+      scope: 'all',
+      ...(query ? { search: query } : {}),
+    }),
     queryFn: ({ pageParam }) =>
-      api<Paginated<TaskListItem>>(projectTaskFeedUrl(projectId, pageParam)),
+      api<Paginated<TaskListItem>>(projectTaskFeedUrl(projectId, pageParam, query)),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     enabled: projectId.length > 0,
+    placeholderData: keepPreviousData,
   });
 }
 

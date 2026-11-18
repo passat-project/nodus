@@ -6,6 +6,8 @@ import { Button } from '@nodus/ui/components/button';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { projectsAvailable } from '../../../shared/api/projects-available.js';
+import { useAssigneeTasks, useMemberProjects } from '../../../shared/api/user-relations.js';
+import { useDebouncedValue } from '../../../shared/lib/use-debounced-value.js';
 import { CardTabToolbar } from '../../../shared/ui/entity-card/card-tab-toolbar.js';
 import { DataTable } from '../../../shared/views/data-table.js';
 import { ListToolbar } from '../../../shared/views/list-toolbar.js';
@@ -27,22 +29,25 @@ import { ViewSettings } from '../../../shared/views/view-settings.js';
 
 /**
  * Вкладки «Задачи»/«Проекты» карточки сотрудника — ПОЛНОЦЕННЫЕ журналы по
- * единому стандарту («модули не отличаются»): строка инструментов (локальный
- * поиск + фильтр с пресетами + шестерёнка полей) над канонической таблицей.
+ * единому стандарту («модули не отличаются»): строка инструментов (поиск +
+ * фильтр с пресетами + шестерёнка полей) над канонической таблицей.
+ * Поиск серверный (#956): список сотрудника может быть длиннее одной страницы,
+ * поэтому строка ищет по всей выдаче, а не по загруженным 100 строкам.
  * Фильтр «Ответственный» скрыт — список и так по сотруднику.
  */
 export function EmployeeTasksTab({
-  tasks,
-  isLoading,
+  userId,
   onCreateTask,
 }: {
-  tasks: TaskListItem[];
-  isLoading: boolean;
+  userId: string;
   /** «Создать» — экспресс-форма с исполнителем=сотрудник (вердикт 15.09.2026). */
   onCreateTask: () => void;
 }) {
   const openCard = useOpenCard();
   const toolbar = useListToolbar('directory.tasks', taskBuiltinPresets);
+  const search = useDebouncedValue(toolbar.query.trim(), 250);
+  const { data, isLoading } = useAssigneeTasks(userId, search);
+  const tasks = data?.items ?? [];
   // Реестр колонок — хук: атрибуты портала (#632) приходят с сервера.
   const fields = useTaskTableFields();
   const defs = useTaskFilterDefs({
@@ -50,8 +55,9 @@ export function EmployeeTasksTab({
     assigneeVisible: false,
   });
   const filter = useMemo<ActiveListFilter<TaskListItem>>(
-    () => ({ defs, state: toolbar.filters, query: toolbar.query, searchText: taskSearchText }),
-    [defs, toolbar.filters, toolbar.query],
+    // Запрос уже применил сервер: на клиенте — только атрибуты фильтра.
+    () => ({ defs, state: toolbar.filters, query: '', searchText: taskSearchText }),
+    [defs, toolbar.filters],
   );
   const rows = useFilteredList(tasks, filter);
 
@@ -97,21 +103,22 @@ export function EmployeeTasksTab({
   );
 }
 
-export function EmployeeProjectsTab({
-  projects,
-  isLoading,
-}: {
-  projects: ProjectListItem[];
-  isLoading: boolean;
-}) {
+export function EmployeeProjectsTab({ userId }: { userId: string }) {
   const openCard = useOpenCard();
   const toolbar = useListToolbar('directory.projects', projectBuiltinPresets);
+  const search = useDebouncedValue(toolbar.query.trim(), 250);
+  const { data, isLoading } = useMemberProjects(userId, {
+    enabled: projectsAvailable(),
+    search,
+  });
+  const projects = data?.items ?? [];
   // Реестр колонок — хук: атрибуты портала (#632) приходят с сервера.
   const fields = useProjectTableFields();
   const defs = useProjectFilterDefs();
   const filter = useMemo<ActiveListFilter<ProjectListItem>>(
-    () => ({ defs, state: toolbar.filters, query: toolbar.query, searchText: projectSearchText }),
-    [defs, toolbar.filters, toolbar.query],
+    // Запрос уже применил сервер: на клиенте — только атрибуты фильтра.
+    () => ({ defs, state: toolbar.filters, query: '', searchText: projectSearchText }),
+    [defs, toolbar.filters],
   );
   const rows = useFilteredList(projects, filter);
 

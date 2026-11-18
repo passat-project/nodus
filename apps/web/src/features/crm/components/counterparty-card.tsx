@@ -325,7 +325,10 @@ export function CounterpartyCard({ counterpartyId }: { counterpartyId: string })
             />
           ) : null}
           {tab === 'projects' ? (
-            <CounterpartyProjectsTab projects={projects} isLoading={projectsQuery.isLoading} />
+            <CounterpartyProjectsTab
+              counterpartyId={counterpartyId}
+              enabled={card !== undefined && (isDomainMocked('projects') || card.projectsCount > 0)}
+            />
           ) : null}
         </div>
       </div>
