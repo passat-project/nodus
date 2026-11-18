@@ -21,7 +21,15 @@ export function CardDataColumn({
   className?: string;
 }) {
   return (
-    <div className={cn('content-fade relative min-h-0 flex-1 overflow-y-auto p-6', className)}>
+    <div
+      className={cn(
+        // overflow-x-hidden — жёсткая гарантия: колонка данных карточки никогда
+        // не получает горизонтальную прокрутку (#948), даже на узкой панели;
+        // метки и значения ужимаются сами.
+        'content-fade relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-6',
+        className,
+      )}
+    >
       {gutter ? <div className="absolute top-6 left-[1.625rem]">{gutter}</div> : null}
       <div className={cn('mx-auto max-w-4xl pb-4 @max-[55rem]:max-w-[28rem]', gutter && 'pl-16')}>
         {children}

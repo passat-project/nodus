@@ -694,6 +694,24 @@
   [data-no-scrollbar]::-webkit-scrollbar {
     display: none;
   }
+  /* Открытая карточка накрывает раздел (ADR-0009): полосы прокрутки таблиц ЗА
+     карточкой не выглядывают в 8-пиксельную щель рамки — прокрутка страницы всё
+     равно недоступна (#948). Детект — по корню карточки (`section.slider-shadow`
+     из SliderPanel), таблицы ВНУТРИ карточки лежат вне #content. */
+  html:has(section.slider-shadow) #content [role='table'] {
+    scrollbar-width: none;
+  }
+  html:has(section.slider-shadow) #content [role='table']::-webkit-scrollbar {
+    display: none;
+  }
+  /* Вкладки модуля в топбаре прокручиваются колесом/треком без видимой
+     3-пиксельной полосы под ними (#948). */
+  [data-topbar] nav {
+    scrollbar-width: none;
+  }
+  [data-topbar] nav::-webkit-scrollbar {
+    display: none;
+  }
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
