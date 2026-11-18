@@ -236,14 +236,6 @@ export function CardStackHost() {
   // (CONTENT_FADE_MS) ДО схлопывания верхней — «провала» на фон нет.
   const cardClosing = useShellStore((s) => s.cardClosing);
   const revealFrom = stack.length - 1 - (cardClosing ? 1 : 0);
-  // Открытая карточка накрывает страницу (ADR-0009) — таблицы за ней не должны
-  // показывать свои полосы прокрутки в щели рамки (#948). Флаг на <html>,
-  // правило — в globals.css; таблицы ВНУТРИ карточки живут вне #content.
-  const cardOpen = stack.length > 0;
-  useEffect(() => {
-    document.documentElement.toggleAttribute('data-card-open', cardOpen);
-    return () => document.documentElement.removeAttribute('data-card-open');
-  }, [cardOpen]);
   return stack.map((cardRef, index) => (
     // index+kind в ключе (без id): одна сущность может встречаться в стеке
     // дважды (цепочка задача → подзадача); замена верхней (режим «Навигация»
